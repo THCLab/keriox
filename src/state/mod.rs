@@ -17,6 +17,14 @@ pub struct LastEstablishmentData {
     pub(crate) ba: Vec<BasicPrefix>,
 }
 
+#[derive(Default, PartialEq, Debug, Clone, Serialize, Deserialize)]
+pub struct WitnessConfig {
+    #[serde(rename = "bt", with = "SerHex::<Compact>")]
+    pub tally: u64,
+
+    #[serde(rename = "b")]
+    pub witnesses: Vec<BasicPrefix>,
+}
 /// Identifier State
 ///
 /// represents the accumulated state after applying events, based on section 13 of the paper
@@ -40,11 +48,8 @@ pub struct IdentifierState {
     #[serde(flatten)]
     pub current: KeyConfig,
 
-    #[serde(rename = "bt", with = "SerHex::<Compact>")]
-    pub tally: u64,
-
-    #[serde(rename = "b")]
-    pub witnesses: Vec<BasicPrefix>,
+    #[serde(flatten)]
+    pub witness_config: WitnessConfig,
 
     #[serde(rename = "di")]
     pub delegator: Option<IdentifierPrefix>,

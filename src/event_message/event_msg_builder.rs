@@ -7,7 +7,7 @@ use crate::{
             delegated::DelegatedInceptionEvent, interaction::InteractionEvent,
             rotation::RotationEvent,
         },
-        sections::{threshold::SignatureThreshold, WitnessConfig},
+        sections::{threshold::SignatureThreshold, RotationWitnessConfig},
         SerializationFormats,
     },
     event::{
@@ -189,7 +189,7 @@ impl EventMsgBuilder {
                 EventData::Rot(RotationEvent {
                     previous_event_hash: self.prev_event,
                     key_config,
-                    witness_config: WitnessConfig {
+                    witness_config: RotationWitnessConfig {
                         tally: self.witness_threshold,
                         prune: self.witness_to_remove,
                         graft: self.witness_to_add,
@@ -224,7 +224,7 @@ impl EventMsgBuilder {
                 let rotation_data = RotationEvent {
                     previous_event_hash: self.prev_event,
                     key_config,
-                    witness_config: WitnessConfig::default(),
+                    witness_config: RotationWitnessConfig::default(),
                     data: self.data,
                 };
                 Event::new(prefix, self.sn, EventData::Drt(rotation_data))
