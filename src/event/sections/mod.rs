@@ -8,7 +8,7 @@ pub mod threshold;
 
 pub use key_config::KeyConfig;
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
-pub struct WitnessConfig {
+pub struct RotationWitnessConfig {
     #[serde(rename = "bt", with = "SerHex::<Compact>")]
     pub tally: u64,
 

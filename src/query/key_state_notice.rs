@@ -48,8 +48,8 @@ impl Serialize for KeyStateNotice {
             "n",
             &self.state.current.threshold_key_digest.clone().unwrap(),
         )?;
-        em.serialize_field("bt", &self.state.tally.to_string())?;
-        em.serialize_field("b", &self.state.witnesses)?;
+        em.serialize_field("bt", &self.state.witness_config.tally.to_string())?;
+        em.serialize_field("b", &self.state.witness_config.witnesses)?;
         em.serialize_field("c", &self.config)?;
         em.serialize_field("ee", &self.state.last_est)?;
         em.serialize_field("di", &self.state.delegator.clone().unwrap_or_default())?;
