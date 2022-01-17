@@ -1,6 +1,9 @@
 use crate::{
     error::Error,
-    event::{event_data::EventData, sections::KeyConfig},
+    event::{
+        event_data::EventData,
+        sections::{threshold::SignatureThreshold, KeyConfig},
+    },
     event_message::EventTypeTag,
     prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix},
 };
@@ -19,8 +22,8 @@ pub struct LastEstablishmentData {
 
 #[derive(Default, PartialEq, Debug, Clone, Serialize, Deserialize)]
 pub struct WitnessConfig {
-    #[serde(rename = "bt", with = "SerHex::<Compact>")]
-    pub tally: u64,
+    #[serde(rename = "bt")]
+    pub tally: SignatureThreshold,
 
     #[serde(rename = "b")]
     pub witnesses: Vec<BasicPrefix>,

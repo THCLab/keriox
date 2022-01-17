@@ -113,7 +113,7 @@ fn test_update_identifier_state(
     assert_eq!(new_state.current.threshold, SignatureThreshold::Simple(1));
     assert_eq!(new_state.current.threshold_key_digest, Some(next_dig));
     assert_eq!(new_state.witness_config.witnesses, vec![]);
-    assert_eq!(new_state.witness_config.tally, 0);
+    assert_eq!(new_state.witness_config.tally, SignatureThreshold::Simple(0));
 
     let mut new_history = state_data.keys_history.clone();
     // If event_type is establishment event, append current key to keys
