@@ -11,7 +11,7 @@ use crate::{
         serialization_info::SerializationFormats, EventMessage, SaidEvent,
     },
     prefix::IdentifierPrefix,
-    state::{EventSemantics, IdentifierState, LastEstablishmentData, WitnessConfig},
+    state::{EventSemantics, IdentifierState, LastEstablishmentData},
 };
 use serde::{Deserialize, Serialize};
 
@@ -80,13 +80,10 @@ impl EventSemantics for InceptionEvent {
             br: vec![],
             ba: vec![],
         };
-        let witness_config = WitnessConfig {
-            tally: self.witness_config.tally,
-            witnesses: self.witness_config.initial_witnesses.clone(),
-        };
+
         Ok(IdentifierState {
             current: self.key_config.clone(),
-            witness_config,
+            witness_config: self.witness_config.clone().into(),
             last_est,
             ..state
         })

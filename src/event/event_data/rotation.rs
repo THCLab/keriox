@@ -42,7 +42,7 @@ impl EventSemantics for RotationEvent {
                     state.witness_config.witnesses.clone()
                 };
             let witness_config = WitnessConfig {
-                tally: self.witness_config.tally,
+                tally: self.witness_config.tally.clone(),
                 witnesses,
             };
             let last_est = LastEstablishmentData {
