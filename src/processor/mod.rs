@@ -340,7 +340,27 @@ impl EventProcessor {
                             Err(Error::SignatureVerificationError)
                         } else {
                             // TODO should check if there are enough receipts and probably escrow
-                            Ok(new_state)
+                            let receipts_couplets: Vec<_> = self
+                                .db
+                                .get_receipts_nt(&new_state.prefix)
+                                .map(|rcts| {
+                                    rcts.filter(|rct| {
+                                        rct.body.event.sn
+                                            == signed_event.event_message.event.get_sn()
+                                    })
+                                    .map(|rct| rct.couplets)
+                                    .flatten()
+                                    .collect()
+                                })
+                                .unwrap_or_default();
+                            if new_state
+                                .witness_config
+                                .enough_receipts(&receipts_couplets)?
+                            {
+                                Ok(new_state)
+                            } else {
+                                Err(Error::NotEnoughReceiptsError)
+                            }
                         }
                     }) {
                     Ok(state) => Ok(Some(state)),

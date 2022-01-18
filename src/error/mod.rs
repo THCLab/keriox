@@ -52,6 +52,9 @@ pub enum Error {
     #[error("Not enough signatures while verifying")]
     NotEnoughSigsError,
 
+    #[error("Not enough receipts")]
+    NotEnoughReceiptsError,
+
     #[error("Signature verification failed")]
     SignatureVerificationError,
 
