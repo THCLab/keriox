@@ -35,7 +35,7 @@ pub struct WitnessConfig {
 impl WitnessConfig {
     pub fn enough_receipts(
         &self,
-        receipts_couplets: &Vec<(BasicPrefix, SelfSigningPrefix)>,
+        receipts_couplets: &[(BasicPrefix, SelfSigningPrefix)],
     ) -> Result<bool, Error> {
         match self.tally.clone() {
             SignatureThreshold::Simple(t) => {

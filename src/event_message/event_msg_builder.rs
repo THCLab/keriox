@@ -145,6 +145,14 @@ impl EventMsgBuilder {
         }
     }
 
+    pub fn with_witness_threshold(self, witness_threshold: &SignatureThreshold) -> Self {
+        EventMsgBuilder {
+            witness_threshold: witness_threshold.clone(),
+            ..self
+        }
+    }
+
+
     pub fn build(self) -> Result<EventMessage<KeyEvent>, Error> {
         let next_key_hash =
             nxt_commitment(&self.next_key_threshold, &self.next_keys, &self.derivation);
