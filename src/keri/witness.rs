@@ -100,6 +100,17 @@ impl Witness {
         self.processor.compute_state(prefix)
     }
 
+    pub fn get_nt_receipts(
+        &self,
+        id: &IdentifierPrefix,
+    ) -> Result<Option<Vec<SignedNontransferableReceipt>>, Error> {
+        Ok(self
+            .processor
+            .db
+            .get_receipts_nt(id)
+            .map(|receipts| receipts.collect()))
+    }
+
     pub fn get_ksn_for_prefix(&self, prefix: &IdentifierPrefix) -> Result<SignedReply, Error> {
         let state = self.get_state_for_prefix(prefix)?.unwrap();
         let ksn = KeyStateNotice::new_ksn(state, SerializationFormats::JSON);
