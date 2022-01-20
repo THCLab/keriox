@@ -62,10 +62,10 @@ impl Witness {
     }
 
     fn process_one(&self, message: Message) -> Result<Option<SignedNontransferableReceipt>, Error> {
-        // Create witness receipt and add it to db
         if let Message::Event(ev) = message.clone() {
             match self.processor.process(message.to_owned()) {
                 Ok(_) | Err(Error::NotEnoughReceiptsError) => {
+                    // Create witness receipt and add it to db
                     let ser = ev.event_message.serialize()?;
                     let signature = self.signer.sign(&ser)?;
                     // .map_err(|e| Error::ProcessingError(e, sn, prefix.clone()))?;
@@ -84,7 +84,7 @@ impl Witness {
                         .process(Message::NontransferableRct(signed_rcp.clone()))?;
                     Ok(Some(signed_rcp))
                 }
-                _ => todo!(),
+                Err(e) => Err(e),
             }
         } else {
             // It's a receipt/query/
