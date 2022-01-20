@@ -115,7 +115,7 @@ fn test_direct_mode() -> Result<(), Error> {
     assert!(bobs_res.is_empty());
 
     // Rotation event.
-    let alice_rot = alice.rotate()?;
+    let alice_rot = alice.rotate(None, None, None)?;
     assert_eq!(alice.get_state()?.unwrap().sn, 1);
 
     // Send rotation event to bob.
@@ -316,7 +316,7 @@ pub fn test_key_state_notice() -> Result<(), Error> {
     alice.process_event(&bob_icp)?;
 
     // rotate bob's keys. Let alice process his rotation. She will have most recent bob's event.
-    let bob_rot = bob.rotate()?;
+    let bob_rot = bob.rotate(None, None, None)?;
     witness.processor.process_event(&bob_rot)?;
     alice.process_event(&bob_rot)?;
 
@@ -329,7 +329,7 @@ pub fn test_key_state_notice() -> Result<(), Error> {
     let res = alice.process_signed_reply(&new_reply);
     assert!(res.is_ok());
 
-    let new_bob_rot = bob.rotate()?;
+    let new_bob_rot = bob.rotate(None, None, None)?;
     witness.processor.process_event(&new_bob_rot)?;
     // Create transferable reply by bob and process it by alice.
     let trans_rpy = witness.get_ksn_for_prefix(&bob_pref)?;
