@@ -10,6 +10,7 @@ use crate::query::{
     ReplyType, Route,
 };
 
+use crate::signer::Signer;
 use crate::state::IdentifierState;
 use crate::{
     database::sled::SledEventDatabase,
@@ -18,18 +19,17 @@ use crate::{
     event::SerializationFormats,
     prefix::{BasicPrefix, IdentifierPrefix},
     processor::EventProcessor,
-    signer::{CryptoBox, KeyManager},
 };
 
 pub struct Witness {
     pub prefix: BasicPrefix,
-    signer: CryptoBox,
+    signer: Signer,
     pub processor: EventProcessor,
 }
 
 impl Witness {
     pub fn new(path: &Path) -> Result<Self, Error> {
-        let signer = CryptoBox::new()?;
+        let signer = Signer::new();
         let processor = {
             let witness_db = Arc::new(SledEventDatabase::new(path).unwrap());
             EventProcessor::new(witness_db.clone())
@@ -61,10 +61,7 @@ impl Witness {
         Ok((oks, errs))
     }
 
-    pub fn process_one(
-        &self,
-        message: Message,
-    ) -> Result<Option<SignedNontransferableReceipt>, Error> {
+    fn process_one(&self, message: Message) -> Result<Option<SignedNontransferableReceipt>, Error> {
         // Create witness receipt and add it to db
         if let Message::Event(ev) = message.clone() {
             match self.processor.process(message.to_owned()) {
