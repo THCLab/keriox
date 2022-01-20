@@ -413,7 +413,7 @@ pub fn test_reply_escrow() -> Result<(), Error> {
     kel_events.for_each(|ev| {
         event_processor.process(ev).unwrap();
     });
-    event_processor.process_escrow()?;
+    event_processor.process_reply_escrow()?;
 
     let escrow = event_processor.db.get_escrowed_replys(&identifier);
     assert_eq!(escrow.unwrap().collect::<Vec<_>>().len(), 0);
@@ -446,7 +446,7 @@ pub fn test_reply_escrow() -> Result<(), Error> {
     rest_of_kel.for_each(|ev| {
         event_processor.process(ev).unwrap();
     });
-    event_processor.process_escrow()?;
+    event_processor.process_reply_escrow()?;
 
     let escrow = event_processor.db.get_escrowed_replys(&identifier);
     assert_eq!(escrow.unwrap().collect::<Vec<_>>().len(), 0);

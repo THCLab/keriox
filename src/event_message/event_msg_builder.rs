@@ -152,7 +152,6 @@ impl EventMsgBuilder {
         }
     }
 
-
     pub fn build(self) -> Result<EventMessage<KeyEvent>, Error> {
         let next_key_hash =
             nxt_commitment(&self.next_key_threshold, &self.next_keys, &self.derivation);
