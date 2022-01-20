@@ -65,12 +65,12 @@ fn test_direct_mode() -> Result<(), Error> {
     // Init bob.
     let mut bob = Keri::new(Arc::clone(&db_bob), bob_key_manager.clone())?;
 
-    bob.incept(None).unwrap();
+    bob.incept(None, None).unwrap();
     let bob_state = bob.get_state()?;
     assert_eq!(bob_state.unwrap().sn, 0);
 
     // Get alice's inception event.
-    let alice_incepted = alice.incept(None)?;
+    let alice_incepted = alice.incept(None, None)?;
     let mut msg_to_bob = alice_incepted.serialize()?;
 
     // Send it to bob.
@@ -211,12 +211,12 @@ fn test_qry_rpy() -> Result<(), Error> {
     // Init bob.
     let mut bob = Keri::new(Arc::clone(&bob_db), Arc::clone(&bob_key_manager))?;
 
-    let bob_icp = bob.incept(None).unwrap();
+    let bob_icp = bob.incept(None, None).unwrap();
     // bob.rotate().unwrap();
 
     let bob_pref = bob.prefix();
 
-    let alice_icp = alice.incept(Some(vec![witness.prefix.clone()]))?;
+    let alice_icp = alice.incept(Some(vec![witness.prefix.clone()]), None)?;
     // send alices icp to witness
     let _rcps = witness.processor.process_event(&alice_icp)?;
     // send bobs icp to witness to have his keys
@@ -294,7 +294,9 @@ pub fn test_key_state_notice() -> Result<(), Error> {
         EventProcessor::new(db2)
     };
 
-    let bob_icp = bob.incept(Some(vec![witness.prefix.clone()])).unwrap();
+    let bob_icp = bob
+        .incept(Some(vec![witness.prefix.clone()]), None)
+        .unwrap();
     // bob.rotate().unwrap();
 
     let bob_pref = bob.prefix().clone();

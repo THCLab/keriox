@@ -10,7 +10,10 @@ use crate::{
     derivation::self_signing::SelfSigning,
     error::Error,
     event::sections::seal::{DigestSeal, Seal},
-    event::{event_data::EventData, receipt::Receipt, Event, EventMessage, SerializationFormats},
+    event::{
+        event_data::EventData, receipt::Receipt, sections::threshold::SignatureThreshold, Event,
+        EventMessage, SerializationFormats,
+    },
     event::{event_data::InteractionEvent, sections::seal::EventSeal},
     event_message::event_msg_builder::EventMsgBuilder,
     event_message::{
@@ -118,6 +121,7 @@ impl<K: KeyManager> Keri<K> {
     pub fn incept(
         &mut self,
         initial_witness: Option<Vec<BasicPrefix>>,
+        witness_threshold: Option<SignatureThreshold>,
     ) -> Result<SignedEventMessage, Error> {
         let km = self.key_manager.lock().map_err(|_| Error::MutexPoisoned)?;
         let icp = EventMsgBuilder::new(EventTypeTag::Icp)
@@ -125,6 +129,7 @@ impl<K: KeyManager> Keri<K> {
             .with_keys(vec![Basic::Ed25519.derive(km.public_key())])
             .with_next_keys(vec![Basic::Ed25519.derive(km.next_public_key())])
             .with_witness_list(&initial_witness.unwrap_or_default())
+            .with_witness_threshold(&witness_threshold.unwrap_or(SignatureThreshold::Simple(0)))
             .build()?;
 
         let signed = icp.sign(
@@ -136,7 +141,13 @@ impl<K: KeyManager> Keri<K> {
             None,
         );
 
-        self.processor.process(Message::Event(signed.clone()))?;
+        let result = self.processor.process(Message::Event(signed.clone()));
+        match result {
+            Err(Error::NotEnoughReceiptsError) => {
+                Ok(None)
+            }
+            anything => anything,
+        }?;
 
         self.prefix = icp.event.get_prefix();
 
