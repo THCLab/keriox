@@ -143,9 +143,7 @@ impl<K: KeyManager> Keri<K> {
 
         let result = self.processor.process(Message::Event(signed.clone()));
         match result {
-            Err(Error::NotEnoughReceiptsError) => {
-                Ok(None)
-            }
+            Err(Error::NotEnoughReceiptsError) => Ok(None),
             anything => anything,
         }?;
 
@@ -240,12 +238,17 @@ impl<K: KeyManager> Keri<K> {
         Ok(signed)
     }
 
-    pub fn rotate(&mut self) -> Result<SignedEventMessage, Error> {
+    pub fn rotate(
+        &mut self,
+        witness_to_add: Option<&[BasicPrefix]>,
+        witness_to_remove: Option<&[BasicPrefix]>,
+        witness_threshold: Option<SignatureThreshold>,
+    ) -> Result<SignedEventMessage, Error> {
         self.key_manager
             .lock()
             .map_err(|_| Error::MutexPoisoned)?
             .rotate()?;
-        let rot = self.make_rotation()?;
+        let rot = self.make_rotation(witness_to_add, witness_to_remove, witness_threshold)?;
         let rot = rot.sign(
             vec![AttachedSignaturePrefix::new(
                 SelfSigning::Ed25519Sha512,
@@ -258,12 +261,21 @@ impl<K: KeyManager> Keri<K> {
             None,
         );
 
-        self.processor.process(Message::Event(rot.clone()))?;
+        let result = self.processor.process(Message::Event(rot.clone()));
+        match result {
+            Err(Error::NotEnoughReceiptsError) => Ok(None),
+            anything => anything,
+        }?;
 
         Ok(rot)
     }
 
-    fn make_rotation(&self) -> Result<EventMessage<KeyEvent>, Error> {
+    fn make_rotation(
+        &self,
+        witness_to_add: Option<&[BasicPrefix]>,
+        witness_to_remove: Option<&[BasicPrefix]>,
+        witness_threshold: Option<SignatureThreshold>,
+    ) -> Result<EventMessage<KeyEvent>, Error> {
         let state = self
             .processor
             .compute_state(&self.prefix)?
@@ -275,6 +287,9 @@ impl<K: KeyManager> Keri<K> {
                 .with_previous_event(&state.last_event_digest)
                 .with_keys(vec![Basic::Ed25519.derive(kv.public_key())])
                 .with_next_keys(vec![Basic::Ed25519.derive(kv.next_public_key())])
+                .with_witness_to_add(witness_to_add.unwrap_or_default())
+                .with_witness_to_remove(witness_to_remove.unwrap_or_default())
+                .with_witness_threshold(&witness_threshold.unwrap_or(SignatureThreshold::Simple(0)))
                 .build(),
             Err(_) => Err(Error::MutexPoisoned),
         }

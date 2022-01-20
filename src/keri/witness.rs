@@ -259,6 +259,15 @@ fn test_fully_witnessed() -> Result<(), Error> {
 
     // Now fully witnessed, should be in kel
     assert_eq!(controller.get_state()?.map(|state| state.sn), Some(0));
+    assert_eq!(
+        controller
+            .get_state()?
+            .map(|state| state.witness_config.witnesses),
+        Some(vec![
+            first_witness.prefix.clone(),
+            second_witness.prefix.clone()
+        ])
+    );
 
     // Witnesses still don't have all receipts.
     assert_eq!(
@@ -289,6 +298,36 @@ fn test_fully_witnessed() -> Result<(), Error> {
             .get_state_for_prefix(&controller.prefix)?
             .map(|state| state.sn),
         Some(0)
+    );
+
+    let rotation_event = controller.rotate(
+        None,
+        Some(&[second_witness.prefix.clone()]),
+        Some(SignatureThreshold::Simple(1)),
+    );
+    // Rotation not yet accepted by controller, missing receipts
+    assert_eq!(controller.get_state()?.unwrap().sn, 0);
+    let first_receipt = first_witness.process(&[Message::Event(rotation_event?)])?.0;
+    // Receipt accepted by witness, because his the only designated witness
+    assert_eq!(
+        first_witness
+            .get_state_for_prefix(&controller.prefix)?
+            .unwrap()
+            .sn,
+        1
+    );
+
+    // process receipt by controller
+    controller
+        .processor
+        .process_witness_receipt(first_receipt.first().unwrap())?;
+    assert_eq!(controller.get_state()?.unwrap().sn, 1);
+
+    assert_eq!(
+        controller
+            .get_state()?
+            .map(|state| state.witness_config.witnesses),
+        Some(vec![first_witness.prefix.clone(),])
     );
 
     Ok(())
