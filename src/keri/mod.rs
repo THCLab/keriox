@@ -384,6 +384,7 @@ impl<K: KeyManager> Keri<K> {
                         Ok(buf)
                     }
                     Message::TransferableRct(_rct) => Ok(vec![]),
+                    Message::NontransferableRct(_rct) => Ok(vec![]),
                     // TODO: this should process properly
                     _ => todo!(),
                 }
