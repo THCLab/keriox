@@ -101,8 +101,13 @@ impl SledEventDatabase {
         event: SignedEventMessage,
         id: &IdentifierPrefix,
     ) -> Result<(), Error> {
-        self.partially_witnessed_events
-            .push(self.identifiers.designated_key(id), event.into())
+        let event = event.into();
+        if !self.partially_witnessed_events.contains_value(&event) {
+            self.partially_witnessed_events
+                .push(self.identifiers.designated_key(id), event)
+        } else {
+            Ok(())
+        }
     }
 
     pub fn get_partially_witnessed_events(
