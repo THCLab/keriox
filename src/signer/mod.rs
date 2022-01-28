@@ -83,6 +83,12 @@ impl Signer {
     }
 }
 
+impl Default for Signer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 fn generate_key_pair() -> Result<(PublicKey, PrivateKey), Error> {
     let kp = ed25519_dalek::Keypair::generate(&mut OsRng {});
     let (vk, sk) = (kp.public, kp.secret);

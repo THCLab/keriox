@@ -386,6 +386,7 @@ impl<K: KeyManager> Keri<K> {
                     Message::TransferableRct(_rct) => Ok(vec![]),
                     Message::NontransferableRct(_rct) => Ok(vec![]),
                     // TODO: this should process properly
+                    #[cfg(feature = "query")]
                     _ => todo!(),
                 }
             })
