@@ -208,8 +208,12 @@ impl SledEventDatabase {
         receipt: SignedNontransferableReceipt,
         id: &IdentifierPrefix,
     ) -> Result<(), Error> {
-        self.escrowed_receipts_nt
-            .push(self.identifiers.designated_key(id), receipt)
+        if !self.escrowed_receipts_nt.contains_value(&receipt) {
+            self.escrowed_receipts_nt
+                .push(self.identifiers.designated_key(id), receipt)
+        } else {
+            Ok(())
+        }
     }
 
     pub fn get_escrow_nt_receipts(
