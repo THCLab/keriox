@@ -544,11 +544,16 @@ pub fn test_query() -> Result<(), Error> {
 
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     let witness = Witness::new(root.path())?;
-
+    // Process inception event and its receipts. To accept inception event it must be fully witnessed.
+    let rcp0 = r#"{"v":"KERI10JSON000091_","t":"rct","d":"ESZVhKqI9F_UGQAQRYGNwqqdKOMjez7aupox9UZwZcBk","i":"ESZVhKqI9F_UGQAQRYGNwqqdKOMjez7aupox9UZwZcBk","s":"0"}-CABBGKVzj4ve0VSd8z_AmvhLg4lqcC_9WYX90k03q-R_Ydo0BFa01iWtg5DSwsF7XpACh-7OL3q_1lWu4D5uVimx0SFyu6xdCE2gXl-NtX9jY64BIDnTvOSEoY42lk1r6hFoJCw"#;
+    let rcp1 = r#"{"v":"KERI10JSON000091_","t":"rct","d":"ESZVhKqI9F_UGQAQRYGNwqqdKOMjez7aupox9UZwZcBk","i":"ESZVhKqI9F_UGQAQRYGNwqqdKOMjez7aupox9UZwZcBk","s":"0"}-CABBuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw0BPku5B06DZUT6t8rNXCnzJU9HUmFA0tkpjV5deSrqYd4L3gBuPtbSncpaw7MOz0yKwj8dYdO3ejVi8ciMRK5nCA"#;
+    let rcp2 = r#"{"v":"KERI10JSON000091_","t":"rct","d":"ESZVhKqI9F_UGQAQRYGNwqqdKOMjez7aupox9UZwZcBk","i":"ESZVhKqI9F_UGQAQRYGNwqqdKOMjez7aupox9UZwZcBk","s":"0"}-CABBgoq68HCmYNUDgOz4Skvlu306o_NY-NrYuKAVhk3Zh9c0BrMTUuXnZ1PzhsJgR4XER5eTHDwhBofSV45xMHpryXYRX2fSYgV5T5rIP4vT8NLAxUvunw62-yQo2dVRlOnMKCg"#;
     let icp_str = r#"{"v":"KERI10JSON0001ac_","t":"icp","d":"ESZVhKqI9F_UGQAQRYGNwqqdKOMjez7aupox9UZwZcBk","i":"ESZVhKqI9F_UGQAQRYGNwqqdKOMjez7aupox9UZwZcBk","s":"0","kt":"1","k":["DxH8nLaGIMllBp0mvGdN6JtbNuGRPyHb5i80bTojnP9A"],"n":"EmJ-3Y0pM0ogX8401rEziJhpql567YEdHDlylwfnxNIM","bt":"3","b":["BGKVzj4ve0VSd8z_AmvhLg4lqcC_9WYX90k03q-R_Ydo","BuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw","Bgoq68HCmYNUDgOz4Skvlu306o_NY-NrYuKAVhk3Zh9c"],"c":[],"a":[]}-AABAAGwlsKbtQjGUoKlYsBRksx5KmAiXWtNakJkxmxizV0aoN4d_GwtmnbNwpuuggc3CmoftruHIo_Q9CbWw-lUitDA"#;
-    let parsed = signed_message(icp_str.as_bytes()).unwrap().1;
-    let deserialized_icp = Message::try_from(parsed).unwrap();
-    witness.processor.process(deserialized_icp)?;
+    [rcp0, rcp1, rcp2, icp_str].iter().for_each(|event| {
+        let parsed = signed_message(event.as_bytes()).unwrap().1;
+        let deserialized_rcp = Message::try_from(parsed).unwrap();
+        witness.processor.process(deserialized_rcp).unwrap();
+    });
 
     let qry_str = r#"{"v":"KERI10JSON0000c9_","t":"qry","d":"EEFpGGlsAGe51BgyebzDUAs4ewWYz1HO9rytYVaxDo3c","dt":"2022-01-13T15:53:32.020709+00:00","r":"ksn","rr":"","q":{"i":"ESZVhKqI9F_UGQAQRYGNwqqdKOMjez7aupox9UZwZcBk"}}-VAj-HABESZVhKqI9F_UGQAQRYGNwqqdKOMjez7aupox9UZwZcBk-AABAAMOLeXG1ClCtSPP4hhtvyoWMLOvMvaiveHCepL3zh1OQcAyn2GzEh2TwjKFyKFGBXD6-blmvg8M8hDMr-yjv6Bw"#;
     let parsed = signed_message(qry_str.as_bytes()).unwrap().1;
