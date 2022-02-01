@@ -2,7 +2,9 @@ use std::path::Path;
 use std::sync::Arc;
 
 use crate::event_message::event_msg_builder::ReceiptBuilder;
-use crate::event_message::signed_event_message::{Message, SignedNontransferableReceipt};
+use crate::event_message::signed_event_message::{
+    Message, SignedNontransferableReceipt, TimestampedSignedEventMessage,
+};
 use crate::query::reply::{ReplyEvent, SignedReply};
 use crate::query::{
     key_state_notice::KeyStateNotice,
@@ -97,7 +99,23 @@ impl Witness {
         &self,
         prefix: &IdentifierPrefix,
     ) -> Result<Option<IdentifierState>, Error> {
-        self.processor.compute_state(prefix)
+        // Compute state using finalized events
+        let mut state = self.processor.compute_state(prefix)?.unwrap_or_default();
+        // Get not fully witness events receipted by witness
+        let mut not_fully_witnessed_events = self
+            .processor
+            .db
+            .get_partially_witnessed_events(prefix)
+            .map(|events| events.collect::<Vec<TimestampedSignedEventMessage>>())
+            .unwrap_or_default();
+        not_fully_witnessed_events.sort();
+        for event in not_fully_witnessed_events {
+            state = match state.clone().apply(&event.signed_event_message) {
+                Ok(s) => s,
+                Err(_e) => break,
+            };
+        }
+        Ok(Some(state))
     }
 
     pub fn get_nt_receipts(
@@ -240,15 +258,35 @@ fn test_fully_witnessed() -> Result<(), Error> {
         })
         .collect::<Vec<_>>();
 
-    // Witness don't accept inception event, because of missing receipts
+    // Witness updates state of identifier even if it hasn't all receipts
     assert_eq!(
-        first_witness.get_state_for_prefix(&controller.prefix)?,
-        None
+        first_witness
+            .get_state_for_prefix(&controller.prefix)?
+            .unwrap()
+            .sn,
+        0
     );
     assert_eq!(
-        second_witness.get_state_for_prefix(&controller.prefix)?,
-        None
+        second_witness
+            .get_state_for_prefix(&controller.prefix)?
+            .unwrap()
+            .sn,
+        0
     );
+
+    // Witness know that some of events aren't fully witnessed
+    let not_fully_witnessed_events = first_witness
+        .processor
+        .db
+        .get_partially_witnessed_events(&controller.prefix)
+        .unwrap();
+    assert_eq!(not_fully_witnessed_events.count(), 1);
+    let not_fully_witnessed_events = second_witness
+        .processor
+        .db
+        .get_partially_witnessed_events(&controller.prefix)
+        .unwrap();
+    assert_eq!(not_fully_witnessed_events.count(), 1);
 
     // process first receipt
     controller
@@ -277,16 +315,6 @@ fn test_fully_witnessed() -> Result<(), Error> {
         ])
     );
 
-    // Witnesses still don't have all receipts.
-    assert_eq!(
-        first_witness.get_state_for_prefix(&controller.prefix)?,
-        None
-    );
-    assert_eq!(
-        second_witness.get_state_for_prefix(&controller.prefix)?,
-        None
-    );
-
     // Process receipts by witnesses.
     let rcts: Vec<_> = receipts
         .into_iter()
@@ -307,6 +335,19 @@ fn test_fully_witnessed() -> Result<(), Error> {
             .map(|state| state.sn),
         Some(0)
     );
+
+    let not_fully_witnessed_events = first_witness
+        .processor
+        .db
+        .get_partially_witnessed_events(&controller.prefix)
+        .unwrap();
+    assert_eq!(not_fully_witnessed_events.count(), 0);
+    let not_fully_witnessed_events = second_witness
+        .processor
+        .db
+        .get_partially_witnessed_events(&controller.prefix)
+        .unwrap();
+    assert_eq!(not_fully_witnessed_events.count(), 0);
 
     let rotation_event = controller.rotate(
         None,
