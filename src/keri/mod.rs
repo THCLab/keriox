@@ -32,7 +32,7 @@ use crate::{
     prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     processor::EventProcessor,
     signer::KeyManager,
-    state::{EventSemantics, IdentifierState},
+    state::{IdentifierState, EventSemantics},
 };
 #[cfg(feature = "wallet")]
 use universal_wallet::prelude::{Content, UnlockedWallet};
@@ -110,6 +110,7 @@ impl<K: KeyManager> Keri<K> {
         Arc::clone(&self.processor.db)
     }
 
+    /// It just checks if event can be processed successfully. Doesn't save this event.
     pub fn process(&self, id: &IdentifierPrefix, event: impl EventSemantics) -> Result<(), Error> {
         match self.processor.process_actual_event(id, event) {
             Ok(Some(_)) => Ok(()),
@@ -278,7 +279,7 @@ impl<K: KeyManager> Keri<K> {
     ) -> Result<EventMessage<KeyEvent>, Error> {
         let state = self
             .processor
-            .compute_state(&self.prefix)?
+            .get_state(&self.prefix)?
             .ok_or_else(|| Error::SemanticError("There is no state".into()))?;
         match self.key_manager.lock() {
             Ok(kv) => EventMsgBuilder::new(EventTypeTag::Rot)
@@ -306,7 +307,7 @@ impl<K: KeyManager> Keri<K> {
         };
         let state = self
             .processor
-            .compute_state(&self.prefix)?
+            .get_state(&self.prefix)?
             .ok_or_else(|| Error::SemanticError("There is no state".into()))?;
 
         let ev = EventMsgBuilder::new(EventTypeTag::Ixn)
@@ -488,7 +489,7 @@ impl<K: KeyManager> Keri<K> {
     }
 
     pub fn get_state(&self) -> Result<Option<IdentifierState>, Error> {
-        self.processor.compute_state(&self.prefix)
+        self.processor.get_state(&self.prefix)
     }
 
     pub fn get_kerl(&self) -> Result<Option<Vec<u8>>, Error> {
@@ -499,7 +500,7 @@ impl<K: KeyManager> Keri<K> {
         &self,
         prefix: &IdentifierPrefix,
     ) -> Result<Option<IdentifierState>, Error> {
-        self.processor.compute_state(prefix)
+        self.processor.get_state(prefix)
     }
 
     pub fn get_state_for_seal(&self, seal: &EventSeal) -> Result<Option<IdentifierState>, Error> {

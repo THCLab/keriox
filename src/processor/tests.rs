@@ -1,9 +1,7 @@
-use super::EventProcessor;
-use crate::event::sections::seal::EventSeal;
 use crate::event_message::signed_event_message::Message;
-use crate::event_message::Digestible;
 use crate::event_parsing::message::{signed_event_stream, signed_message};
 use crate::prefix::IdentifierPrefix;
+use crate::processor::EventProcessor;
 use crate::{database::sled::SledEventDatabase, error::Error};
 use std::convert::TryFrom;
 use std::fs;
@@ -277,59 +275,6 @@ fn test_process_delegated() -> Result<(), Error> {
 }
 
 #[test]
-fn test_validate_seal() -> Result<(), Error> {
-    use tempfile::Builder;
-    // Create test db and event processor.
-    let root = Builder::new().prefix("test-db").tempdir().unwrap();
-    fs::create_dir_all(root.path()).unwrap();
-    let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-    let event_processor = EventProcessor::new(Arc::clone(&db));
-
-    // Events and sigs are from keripy `test_delegation` test.
-    // (keripy/tests/core/test_delegating.py:#test_delegation)
-
-    // Process icp.
-    let delegator_icp_raw= br#"{"v":"KERI10JSON000120_","t":"icp","d":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","i":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","s":"0","kt":"1","k":["DqI2cOZ06RwGNwCovYUWExmdKU983IasmUKMmZflvWdQ"],"n":"E7FuL3Z_KBgt_QAwuZi1lUFNC69wvyHSxnMFUsKjZHss","bt":"0","b":[],"c":[],"a":[]}-AABAAJEloPu7b4z8v1455StEJ1b7dMIz-P0tKJ_GBBCxQA8JEg0gm8qbS4TWGiHikLoZ2GtLA58l9dzIa2x_otJhoDA"#;
-    let parsed = signed_message(delegator_icp_raw).unwrap().1;
-    let deserialized_icp = Message::try_from(parsed).unwrap();
-    event_processor.process(deserialized_icp.clone())?.unwrap();
-    let delegator_id = "Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8".parse()?;
-
-    // Delegated inception event.
-    let dip_raw = br#"{"v":"KERI10JSON000154_","t":"dip","d":"Er4bHXd4piEtsQat1mquwsNZXItvuoj_auCUyICmwyXI","i":"Er4bHXd4piEtsQat1mquwsNZXItvuoj_auCUyICmwyXI","s":"0","kt":"1","k":["DuK1x8ydpucu3480Jpd1XBfjnCwb3dZ3x5b1CJmuUphA"],"n":"EWWkjZkZDXF74O2bOQ4H5hu4nXDlKg2m4CBEBkUxibiU","bt":"0","b":[],"c":[],"a":[],"di":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8"}-AABAA_zcT2-86Zll3FG-hwoQiVuFiT0X28Ft0t4fZGNFISgtZjH2DCrBGoceko604NDZ0QF0Z3bSgEkN_y0lBafD_Bw-GAB0AAAAAAAAAAAAAAAAAAAAAAQE1_-icBrwC_HhxyFwsQLV6hZEbApOc_McGUjhLONpQuc"#;
-    let parsed = signed_message(dip_raw).unwrap().1;
-    let msg = Message::try_from(parsed).unwrap();
-    if let Message::Event(dip) = msg {
-        let delegated_event_digest = dip.event_message.event.get_digest();
-        // Construct delegating seal.
-        let seal = EventSeal {
-            prefix: delegator_id,
-            sn: 1,
-            event_digest: delegated_event_digest,
-        };
-
-        // Try to validate seal before processing delegating event
-        assert!(matches!(
-            event_processor.validate_seal(seal.clone(), &dip.event_message),
-            Err(Error::EventOutOfOrderError)
-        ));
-
-        // Process delegating event.
-        let delegating_event_raw = br#"{"v":"KERI10JSON00013a_","t":"ixn","d":"E1_-icBrwC_HhxyFwsQLV6hZEbApOc_McGUjhLONpQuc","i":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","s":"1","p":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","a":[{"i":"Er4bHXd4piEtsQat1mquwsNZXItvuoj_auCUyICmwyXI","s":"0","d":"Er4bHXd4piEtsQat1mquwsNZXItvuoj_auCUyICmwyXI"}]}-AABAA6h5mD5stIwO_rwV9apMuhHXjxrKp2ATa35u-H6DM2X-BKo5NkJ1khzBdHo-VLQ6Zw_yajj2Ul_WOL8pFSk_ZDg"#;
-        let parsed = signed_message(delegating_event_raw).unwrap().1;
-        let deserialized_ixn = Message::try_from(parsed).unwrap();
-        event_processor.process(deserialized_ixn.clone())?;
-
-        // Validate seal again.
-        assert!(event_processor
-            .validate_seal(seal, &dip.event_message)
-            .is_ok());
-    };
-
-    Ok(())
-}
-
-#[test]
 fn test_compute_state_at_sn() -> Result<(), Error> {
     use crate::event::sections::seal::EventSeal;
     use tempfile::Builder;
@@ -389,7 +334,7 @@ pub fn test_not_fully_witnessed() -> Result<(), Error> {
     let res = event_processor.process(icp_msg.clone());
     assert!(matches!(res, Err(Error::NotEnoughReceiptsError)));
 
-    let state = event_processor.compute_state(id)?;
+    let state = event_processor.validator.compute_state(id)?;
     assert_eq!(state, None);
 
     // check if icp is in escrow
@@ -421,7 +366,7 @@ pub fn test_not_fully_witnessed() -> Result<(), Error> {
     assert_eq!(rcp_msg, Message::NontransferableRct(esc.next().unwrap()));
     assert!(esc.next().is_none());
 
-    let state = event_processor.compute_state(id)?;
+    let state = event_processor.validator.compute_state(id)?;
     assert_eq!(state, None);
 
     let receipt0_1 = br#"{"v":"KERI10JSON000091_","t":"rct","d":"E0FPXUh5T2WM2yro_NkR3ff3H5wp8HOTNf3lJTbxuGms","i":"Dbmaqh5RgFDCYVuhqMazU96S8hPVZDlfgMQ180o42dBo","s":"0"}-CABD1XMRrVoYzJdIZAuKLARnCvCCggJbRwdW-XXW7iLOvmU0BVdX4vdqjB1SZNPL6o2RwAV4L35mhIRHVgOwO7NWYCU9hRKWSBuchoZzUMbkaeQ-go8E4KKZWQFkof2tsJP-tAw"#;
@@ -437,7 +382,7 @@ pub fn test_not_fully_witnessed() -> Result<(), Error> {
     let mut esc = event_processor.db.get_escrow_nt_receipts(id).unwrap();
     assert!(esc.next().is_none());
 
-    let state = event_processor.compute_state(id)?.unwrap();
+    let state = event_processor.validator.compute_state(id)?.unwrap();
     assert_eq!(state.sn, 0);
 
     Ok(())
