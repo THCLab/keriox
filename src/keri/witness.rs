@@ -2,11 +2,9 @@ use std::path::Path;
 use std::sync::Arc;
 
 use crate::event_message::event_msg_builder::ReceiptBuilder;
-use crate::event_message::signed_event_message::{
-    Message, SignedNontransferableReceipt, TimestampedSignedEventMessage,
-};
+use crate::event_message::signed_event_message::{Message, SignedNontransferableReceipt};
 use crate::processor::event_storage::EventStorage;
-use crate::processor::EventProcessor;
+use crate::processor::witness_processor::WitnessProcessor;
 use crate::query::reply::{ReplyEvent, SignedReply};
 use crate::query::{
     key_state_notice::KeyStateNotice,
@@ -27,7 +25,7 @@ use crate::{
 pub struct Witness {
     pub prefix: BasicPrefix,
     signer: Signer,
-    processor: EventProcessor,
+    processor: WitnessProcessor,
     storage: EventStorage,
 }
 
@@ -37,7 +35,7 @@ impl Witness {
         let (processor, storage) = {
             let witness_db = Arc::new(SledEventDatabase::new(path).unwrap());
             (
-                EventProcessor::new(witness_db.clone()),
+                WitnessProcessor::new(witness_db.clone()),
                 EventStorage::new(witness_db.clone()),
             )
         };
@@ -105,31 +103,7 @@ impl Witness {
         &self,
         prefix: &IdentifierPrefix,
     ) -> Result<Option<IdentifierState>, Error> {
-        // Compute state using finalized events
-        let state = self.storage.get_state(prefix)?;
-        // Get not fully witness events receipted by witness
-        let not_fully_witnessed_events = self
-            .storage
-            .db
-            .get_partially_witnessed_events(prefix)
-            .map(|events| events.collect::<Vec<TimestampedSignedEventMessage>>());
-        if let Some(mut not_fully_witnessed_events) = not_fully_witnessed_events {
-            not_fully_witnessed_events.sort();
-            let mut state = state.unwrap_or_default();
-            for event in not_fully_witnessed_events {
-                state = match state.clone().apply(&event.signed_event_message) {
-                    Ok(s) => s,
-                    Err(_e) => break,
-                };
-            }
-            Ok(if state.clone() == IdentifierState::default() {
-                None
-            } else {
-                Some(state)
-            })
-        } else {
-            Ok(state)
-        }
+        self.storage.get_state(prefix)
     }
 
     pub fn get_nt_receipts(
@@ -290,20 +264,6 @@ fn test_witness_rotation() -> Result<(), Error> {
         0
     );
 
-    // Witness know that some of events aren't fully witnessed
-    let not_fully_witnessed_events = first_witness
-        .storage
-        .db
-        .get_partially_witnessed_events(&controller.prefix)
-        .unwrap();
-    assert_eq!(not_fully_witnessed_events.count(), 1);
-    let not_fully_witnessed_events = second_witness
-        .storage
-        .db
-        .get_partially_witnessed_events(&controller.prefix)
-        .unwrap();
-    assert_eq!(not_fully_witnessed_events.count(), 1);
-
     // process first receipt
     controller
         .processor
@@ -355,15 +315,13 @@ fn test_witness_rotation() -> Result<(), Error> {
     let not_fully_witnessed_events = first_witness
         .storage
         .db
-        .get_partially_witnessed_events(&controller.prefix)
-        .unwrap();
-    assert_eq!(not_fully_witnessed_events.count(), 0);
+        .get_partially_witnessed_events(&controller.prefix);
+    assert!(not_fully_witnessed_events.is_none());
     let not_fully_witnessed_events = second_witness
         .storage
         .db
-        .get_partially_witnessed_events(&controller.prefix)
-        .unwrap();
-    assert_eq!(not_fully_witnessed_events.count(), 0);
+        .get_partially_witnessed_events(&controller.prefix);
+    assert!(not_fully_witnessed_events.is_none());
 
     let rotation_event = controller.rotate(
         None,

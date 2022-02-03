@@ -14,6 +14,7 @@ pub mod event_storage;
 #[cfg(test)]
 mod tests;
 pub mod validator;
+pub mod witness_processor;
 
 #[cfg(feature = "query")]
 use crate::query::{reply::SignedReply, QueryError};
