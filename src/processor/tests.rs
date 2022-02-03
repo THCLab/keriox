@@ -368,6 +368,81 @@ fn test_compute_state_at_sn() -> Result<(), Error> {
     Ok(())
 }
 
+#[test]
+pub fn test_not_fully_witnessed() -> Result<(), Error> {
+    use tempfile::Builder;
+
+    // Create test db and event processor.
+    let root = Builder::new().prefix("test-db").tempdir().unwrap();
+    fs::create_dir_all(root.path()).unwrap();
+    let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
+    let event_processor = EventProcessor::new(Arc::clone(&db));
+
+    let id = &"Dbmaqh5RgFDCYVuhqMazU96S8hPVZDlfgMQ180o42dBo"
+        .parse()
+        .unwrap();
+
+    // process icp event without processing receipts.
+    let icp_raw = br#"{"v":"KERI10JSON00017d_","t":"icp","d":"Ego2XSftzxB5R33hFL-p-IjMxdb0qvVcXHGykcFKQEBY","i":"Dbmaqh5RgFDCYVuhqMazU96S8hPVZDlfgMQ180o42dBo","s":"0","kt":"1","k":["Dbmaqh5RgFDCYVuhqMazU96S8hPVZDlfgMQ180o42dBo"],"n":"EijOIM3i9G1INvjIAGNVHjoTgdAKkqSVS8FG3wM4Fcgk","bt":"2","b":["DRbNyuRzZcCLBb4tuCrx8QAuX4sLNcV3pyet6SmyYIjU","D1XMRrVoYzJdIZAuKLARnCvCCggJbRwdW-XXW7iLOvmU"],"c":[],"a":[]}-AABAAcaRHPu80dX5dxztV7x5zk1bHdqBzfRWqovEfjSkvy2NX4ZEmdkU8auD_0mZSKIShG7nsTONoIYoEBYZh3W2WAA"#;
+    let parsed_icp = signed_message(icp_raw).unwrap().1;
+    let icp_msg = Message::try_from(parsed_icp).unwrap();
+    let res = event_processor.process(icp_msg.clone());
+    assert!(matches!(res, Err(Error::NotEnoughReceiptsError)));
+
+    let state = event_processor.compute_state(id)?;
+    assert_eq!(state, None);
+
+    // check if icp is in escrow
+    let mut esc = event_processor.db.get_all_partially_witnessed().unwrap();
+    assert_eq!(
+        icp_msg,
+        Message::Event(esc.next().unwrap().signed_event_message)
+    );
+    assert!(esc.next().is_none());
+
+    let receipt0_0 = br#"{"v":"KERI10JSON000091_","t":"rct","d":"E0FPXUh5T2WM2yro_NkR3ff3H5wp8HOTNf3lJTbxuGms","i":"Dbmaqh5RgFDCYVuhqMazU96S8hPVZDlfgMQ180o42dBo","s":"0"}-CABDRbNyuRzZcCLBb4tuCrx8QAuX4sLNcV3pyet6SmyYIjU0BJrcCN2pRAXIDg5mMr7gE_gqRvcbnXSbt_CCU4-CainTxjaH1dQA72oy7d4uUMQKIm5CV8awB6BnKHviXTyQEAw"#;
+    let parsed_rcp = signed_message(receipt0_0).unwrap().1;
+    let rcp_msg = Message::try_from(parsed_rcp).unwrap();
+    event_processor.process(rcp_msg.clone())?;
+
+    // check if icp still in escrow
+    let mut esc = event_processor.db.get_all_partially_witnessed().unwrap();
+    assert_eq!(
+        icp_msg,
+        Message::Event(esc.next().unwrap().signed_event_message)
+    );
+    assert!(esc.next().is_none());
+
+    // check if receipt was escrowed
+    let id = &"Dbmaqh5RgFDCYVuhqMazU96S8hPVZDlfgMQ180o42dBo"
+        .parse()
+        .unwrap();
+    let mut esc = event_processor.db.get_escrow_nt_receipts(id).unwrap();
+    assert_eq!(rcp_msg, Message::NontransferableRct(esc.next().unwrap()));
+    assert!(esc.next().is_none());
+
+    let state = event_processor.compute_state(id)?;
+    assert_eq!(state, None);
+
+    let receipt0_1 = br#"{"v":"KERI10JSON000091_","t":"rct","d":"E0FPXUh5T2WM2yro_NkR3ff3H5wp8HOTNf3lJTbxuGms","i":"Dbmaqh5RgFDCYVuhqMazU96S8hPVZDlfgMQ180o42dBo","s":"0"}-CABD1XMRrVoYzJdIZAuKLARnCvCCggJbRwdW-XXW7iLOvmU0BVdX4vdqjB1SZNPL6o2RwAV4L35mhIRHVgOwO7NWYCU9hRKWSBuchoZzUMbkaeQ-go8E4KKZWQFkof2tsJP-tAw"#;
+    let parsed_rcp = signed_message(receipt0_1).unwrap().1;
+    let rcp_msg = Message::try_from(parsed_rcp).unwrap();
+    event_processor.process(rcp_msg.clone())?;
+
+    // check if icp still in escrow
+    let mut esc = event_processor.db.get_all_partially_witnessed().unwrap();
+    assert!(esc.next().is_none());
+
+    // check if receipt was escrowed
+    let mut esc = event_processor.db.get_escrow_nt_receipts(id).unwrap();
+    assert!(esc.next().is_none());
+
+    let state = event_processor.compute_state(id)?.unwrap();
+    assert_eq!(state.sn, 0);
+
+    Ok(())
+}
+
 #[cfg(feature = "query")]
 #[test]
 pub fn test_reply_escrow() -> Result<(), Error> {
@@ -413,7 +488,7 @@ pub fn test_reply_escrow() -> Result<(), Error> {
     kel_events.for_each(|ev| {
         event_processor.process(ev).unwrap();
     });
-    event_processor.process_escrow()?;
+    event_processor.process_reply_escrow()?;
 
     let escrow = event_processor.db.get_escrowed_replys(&identifier);
     assert_eq!(escrow.unwrap().collect::<Vec<_>>().len(), 0);
@@ -446,7 +521,7 @@ pub fn test_reply_escrow() -> Result<(), Error> {
     rest_of_kel.for_each(|ev| {
         event_processor.process(ev).unwrap();
     });
-    event_processor.process_escrow()?;
+    event_processor.process_reply_escrow()?;
 
     let escrow = event_processor.db.get_escrowed_replys(&identifier);
     assert_eq!(escrow.unwrap().collect::<Vec<_>>().len(), 0);
@@ -469,11 +544,16 @@ pub fn test_query() -> Result<(), Error> {
 
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     let witness = Witness::new(root.path())?;
-
+    // Process inception event and its receipts. To accept inception event it must be fully witnessed.
+    let rcp0 = r#"{"v":"KERI10JSON000091_","t":"rct","d":"ESZVhKqI9F_UGQAQRYGNwqqdKOMjez7aupox9UZwZcBk","i":"ESZVhKqI9F_UGQAQRYGNwqqdKOMjez7aupox9UZwZcBk","s":"0"}-CABBGKVzj4ve0VSd8z_AmvhLg4lqcC_9WYX90k03q-R_Ydo0BFa01iWtg5DSwsF7XpACh-7OL3q_1lWu4D5uVimx0SFyu6xdCE2gXl-NtX9jY64BIDnTvOSEoY42lk1r6hFoJCw"#;
+    let rcp1 = r#"{"v":"KERI10JSON000091_","t":"rct","d":"ESZVhKqI9F_UGQAQRYGNwqqdKOMjez7aupox9UZwZcBk","i":"ESZVhKqI9F_UGQAQRYGNwqqdKOMjez7aupox9UZwZcBk","s":"0"}-CABBuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw0BPku5B06DZUT6t8rNXCnzJU9HUmFA0tkpjV5deSrqYd4L3gBuPtbSncpaw7MOz0yKwj8dYdO3ejVi8ciMRK5nCA"#;
+    let rcp2 = r#"{"v":"KERI10JSON000091_","t":"rct","d":"ESZVhKqI9F_UGQAQRYGNwqqdKOMjez7aupox9UZwZcBk","i":"ESZVhKqI9F_UGQAQRYGNwqqdKOMjez7aupox9UZwZcBk","s":"0"}-CABBgoq68HCmYNUDgOz4Skvlu306o_NY-NrYuKAVhk3Zh9c0BrMTUuXnZ1PzhsJgR4XER5eTHDwhBofSV45xMHpryXYRX2fSYgV5T5rIP4vT8NLAxUvunw62-yQo2dVRlOnMKCg"#;
     let icp_str = r#"{"v":"KERI10JSON0001ac_","t":"icp","d":"ESZVhKqI9F_UGQAQRYGNwqqdKOMjez7aupox9UZwZcBk","i":"ESZVhKqI9F_UGQAQRYGNwqqdKOMjez7aupox9UZwZcBk","s":"0","kt":"1","k":["DxH8nLaGIMllBp0mvGdN6JtbNuGRPyHb5i80bTojnP9A"],"n":"EmJ-3Y0pM0ogX8401rEziJhpql567YEdHDlylwfnxNIM","bt":"3","b":["BGKVzj4ve0VSd8z_AmvhLg4lqcC_9WYX90k03q-R_Ydo","BuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw","Bgoq68HCmYNUDgOz4Skvlu306o_NY-NrYuKAVhk3Zh9c"],"c":[],"a":[]}-AABAAGwlsKbtQjGUoKlYsBRksx5KmAiXWtNakJkxmxizV0aoN4d_GwtmnbNwpuuggc3CmoftruHIo_Q9CbWw-lUitDA"#;
-    let parsed = signed_message(icp_str.as_bytes()).unwrap().1;
-    let deserialized_icp = Message::try_from(parsed).unwrap();
-    witness.processor.process(deserialized_icp)?;
+    [rcp0, rcp1, rcp2, icp_str].iter().for_each(|event| {
+        let parsed = signed_message(event.as_bytes()).unwrap().1;
+        let deserialized_rcp = Message::try_from(parsed).unwrap();
+        witness.processor.process(deserialized_rcp).unwrap();
+    });
 
     let qry_str = r#"{"v":"KERI10JSON0000c9_","t":"qry","d":"EEFpGGlsAGe51BgyebzDUAs4ewWYz1HO9rytYVaxDo3c","dt":"2022-01-13T15:53:32.020709+00:00","r":"ksn","rr":"","q":{"i":"ESZVhKqI9F_UGQAQRYGNwqqdKOMjez7aupox9UZwZcBk"}}-VAj-HABESZVhKqI9F_UGQAQRYGNwqqdKOMjez7aupox9UZwZcBk-AABAAMOLeXG1ClCtSPP4hhtvyoWMLOvMvaiveHCepL3zh1OQcAyn2GzEh2TwjKFyKFGBXD6-blmvg8M8hDMr-yjv6Bw"#;
     let parsed = signed_message(qry_str.as_bytes()).unwrap().1;

@@ -37,6 +37,8 @@ pub struct SledEventDatabase {
     receipts_t: SledEventTreeVec<SignedTransferableReceipt>,
     // "vres" tree
     escrowed_receipts_t: SledEventTreeVec<SignedTransferableReceipt>,
+    // "pdes" tree
+    partially_witnessed_events: SledEventTreeVec<TimestampedSignedEventMessage>,
 
     #[cfg(feature = "query")]
     accepted_rpy: SledEventTreeVec<SignedReply>,
@@ -60,6 +62,7 @@ impl SledEventDatabase {
             key_event_logs: SledEventTreeVec::new(db.open_tree(b"kels")?),
             likely_duplicious_events: SledEventTreeVec::new(db.open_tree(b"ldes")?),
             duplicitous_events: SledEventTreeVec::new(db.open_tree(b"dels")?),
+            partially_witnessed_events: SledEventTreeVec::new(db.open_tree(b"pdes")?),
             #[cfg(feature = "query")]
             accepted_rpy: SledEventTreeVec::new(db.open_tree(b"knas")?),
             #[cfg(feature = "query")]
@@ -91,6 +94,43 @@ impl SledEventDatabase {
     ) -> Result<(), Error> {
         self.key_event_logs
             .remove(self.identifiers.designated_key(id), &event.into())
+    }
+
+    pub fn add_partially_witnessed_event(
+        &self,
+        event: SignedEventMessage,
+        id: &IdentifierPrefix,
+    ) -> Result<(), Error> {
+        let event = event.into();
+        if !self.partially_witnessed_events.contains_value(&event) {
+            self.partially_witnessed_events
+                .push(self.identifiers.designated_key(id), event)
+        } else {
+            Ok(())
+        }
+    }
+
+    pub fn get_partially_witnessed_events(
+        &self,
+        id: &IdentifierPrefix,
+    ) -> Option<impl DoubleEndedIterator<Item = TimestampedSignedEventMessage>> {
+        self.partially_witnessed_events
+            .iter_values(self.identifiers.designated_key(id))
+    }
+
+    pub fn remove_parially_witnessed_event(
+        &self,
+        id: &IdentifierPrefix,
+        event: &SignedEventMessage,
+    ) -> Result<(), Error> {
+        self.partially_witnessed_events
+            .remove(self.identifiers.designated_key(id), &event.into())
+    }
+
+    pub fn get_all_partially_witnessed(
+        &self,
+    ) -> Option<impl DoubleEndedIterator<Item = TimestampedSignedEventMessage>> {
+        self.partially_witnessed_events.get_all()
     }
 
     pub fn add_receipt_t(
@@ -168,8 +208,12 @@ impl SledEventDatabase {
         receipt: SignedNontransferableReceipt,
         id: &IdentifierPrefix,
     ) -> Result<(), Error> {
-        self.escrowed_receipts_nt
-            .push(self.identifiers.designated_key(id), receipt)
+        if !self.escrowed_receipts_nt.contains_value(&receipt) {
+            self.escrowed_receipts_nt
+                .push(self.identifiers.designated_key(id), receipt)
+        } else {
+            Ok(())
+        }
     }
 
     pub fn get_escrow_nt_receipts(
@@ -178,6 +222,12 @@ impl SledEventDatabase {
     ) -> Option<impl DoubleEndedIterator<Item = SignedNontransferableReceipt>> {
         self.escrowed_receipts_nt
             .iter_values(self.identifiers.designated_key(id))
+    }
+
+    pub fn get_all_escrow_nt_receipts(
+        &self,
+    ) -> Option<impl DoubleEndedIterator<Item = SignedNontransferableReceipt>> {
+        self.escrowed_receipts_nt.get_all()
     }
 
     pub fn remove_escrow_nt_receipt(

@@ -46,11 +46,15 @@ impl EventProcessor {
     /// Returns the current State associated with
     /// the given Prefix
     pub fn compute_state(&self, id: &IdentifierPrefix) -> Result<Option<IdentifierState>, Error> {
-        // start with empty state
-        let mut state = IdentifierState::default();
         if let Some(events) = self.db.get_kel_finalized_events(id) {
+            // start with empty state
+            let mut state = IdentifierState::default();
             // we sort here to get inception first
             let mut sorted_events = events.collect::<Vec<TimestampedSignedEventMessage>>();
+            // TODO why identifier is in database if there are no events for it?
+            if sorted_events.is_empty() {
+                return Ok(None);
+            };
             sorted_events.sort();
             for event in sorted_events {
                 state = match state.clone().apply(&event.signed_event_message) {
@@ -64,11 +68,11 @@ impl EventProcessor {
                     },
                 };
             }
+            Ok(Some(state))
         } else {
             // no inception event, no state
-            return Ok(None);
+            Ok(None)
         }
-        Ok(Some(state))
     }
 
     /// Compute State for Prefix and sn
@@ -252,7 +256,7 @@ impl EventProcessor {
     pub fn process(&self, data: Message) -> Result<Option<IdentifierState>, Error> {
         match data {
             Message::Event(e) => self.process_event(&e),
-            Message::NontransferableRct(rct) => self.process_witness_receipt(rct),
+            Message::NontransferableRct(rct) => self.process_witness_receipt(&rct),
             Message::TransferableRct(rct) => self.process_validator_receipt(rct),
             #[cfg(feature = "query")]
             Message::KeyStateNotice(ksn_rpy) => self.process_signed_reply(&ksn_rpy),
@@ -339,14 +343,43 @@ impl EventProcessor {
                         if !result {
                             Err(Error::SignatureVerificationError)
                         } else {
-                            // TODO should check if there are enough receipts and probably escrow
-                            Ok(new_state)
+                            // check if there are enough receipts and escrow
+                            let receipts_couplets: Vec<_> = self
+                                .db
+                                .get_escrow_nt_receipts(&new_state.prefix)
+                                .map(|rcts| {
+                                    rcts.filter(|rct| {
+                                        rct.body.event.sn
+                                            == signed_event.event_message.event.get_sn()
+                                    })
+                                    .map(|rct| rct.couplets)
+                                    .flatten()
+                                    .collect()
+                                })
+                                .unwrap_or_default();
+                            if new_state
+                                .witness_config
+                                .enough_receipts(&receipts_couplets)?
+                            {
+                                Ok(new_state)
+                            } else {
+                                Err(Error::NotEnoughReceiptsError)
+                            }
                         }
                     }) {
-                    Ok(state) => Ok(Some(state)),
+                    Ok(state) => {
+                        self.process_nt_receipts_escrow()?;
+                        Ok(Some(state))
+                    }
                     Err(e) => {
-                        if let Error::EventDuplicateError = e {
-                            self.db.add_duplicious_event(signed_event.clone(), id)?
+                        match e {
+                            Error::EventDuplicateError => {
+                                self.db.add_duplicious_event(signed_event.clone(), id)?
+                            }
+                            Error::NotEnoughReceiptsError => self
+                                .db
+                                .add_partially_witnessed_event(signed_event.clone(), id)?,
+                            _ => (),
                         };
                         // remove last added event
                         self.db.remove_kel_finalized_event(id, signed_event)?;
@@ -398,7 +431,7 @@ impl EventProcessor {
     /// TODO improve checking and handling of errors!
     pub fn process_witness_receipt(
         &self,
-        rct: SignedNontransferableReceipt,
+        rct: &SignedNontransferableReceipt,
     ) -> Result<Option<IdentifierState>, Error> {
         // get event which is being receipted
         let id = &rct.body.event.prefix.to_owned();
@@ -411,14 +444,16 @@ impl EventProcessor {
                 .map(|(witness, receipt)| witness.verify(&serialized_event, &receipt))
                 .partition(Result::is_ok);
             if errors.is_empty() {
-                self.db.add_receipt_nt(rct, id)?
+                self.db.add_receipt_nt(rct.to_owned(), id)?
             } else {
                 let e = errors.pop().unwrap().unwrap_err();
                 return Err(e);
             }
         } else {
-            self.db.add_escrow_nt_receipt(rct, id)?
-        }
+            // There's no receipted event id database so we can't verify signatures
+            self.db.add_escrow_nt_receipt(rct.to_owned(), id)?
+        };
+        self.process_partially_witnessed_events()?;
         self.compute_state(id)
     }
 
@@ -644,6 +679,45 @@ impl EventProcessor {
         }
     }
 
+    pub fn process_partially_witnessed_events(&self) -> Result<(), Error> {
+        if let Some(esc) = self.db.get_all_partially_witnessed() {
+            esc.for_each(|event| {
+                match self.process_event(&event.signed_event_message) {
+                    Ok(_) | Err(Error::SignatureVerificationError) => {
+                        // remove from escrow
+                        self.db
+                            .remove_parially_witnessed_event(
+                                &event.signed_event_message.event_message.event.get_prefix(),
+                                &event.signed_event_message,
+                            )
+                            .unwrap();
+                    }
+                    Err(_e) => {} // keep in escrow,
+                }
+            })
+        };
+
+        Ok(())
+    }
+
+    pub fn process_nt_receipts_escrow(&self) -> Result<(), Error> {
+        if let Some(esc) = self.db.get_all_escrow_nt_receipts() {
+            esc.for_each(|sig_receipt| {
+                match self.process_witness_receipt(&sig_receipt) {
+                    Ok(_) | Err(Error::SignatureVerificationError) => {
+                        // remove from escrow
+                        self.db
+                            .remove_escrow_nt_receipt(&sig_receipt.body.event.prefix, &sig_receipt)
+                            .unwrap();
+                    }
+                    Err(_e) => {} // keep in escrow,
+                }
+            })
+        };
+
+        Ok(())
+    }
+
     #[cfg(feature = "query")]
     fn escrow_reply(&self, rpy: &SignedReply) -> Result<(), Error> {
         let id = rpy.reply.event.get_prefix();
@@ -651,7 +725,7 @@ impl EventProcessor {
     }
 
     #[cfg(feature = "query")]
-    pub fn process_escrow(&self) -> Result<(), Error> {
+    pub fn process_reply_escrow(&self) -> Result<(), Error> {
         self.db.get_all_escrowed_replys().map(|esc| {
             esc.for_each(|sig_rep| {
                 match self.process_signed_reply(&sig_rep) {

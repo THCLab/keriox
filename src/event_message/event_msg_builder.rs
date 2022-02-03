@@ -7,7 +7,7 @@ use crate::{
             delegated::DelegatedInceptionEvent, interaction::InteractionEvent,
             rotation::RotationEvent,
         },
-        sections::{threshold::SignatureThreshold, WitnessConfig},
+        sections::{threshold::SignatureThreshold, RotationWitnessConfig},
         SerializationFormats,
     },
     event::{
@@ -37,7 +37,7 @@ pub struct EventMsgBuilder {
     prev_event: SelfAddressingPrefix,
     data: Vec<Seal>,
     delegator: IdentifierPrefix,
-    witness_threshold: u64,
+    witness_threshold: SignatureThreshold,
     witnesses: Vec<BasicPrefix>,
     witness_to_add: Vec<BasicPrefix>,
     witness_to_remove: Vec<BasicPrefix>,
@@ -64,7 +64,7 @@ impl EventMsgBuilder {
             prev_event: SelfAddressing::Blake3_256.derive(&[0u8; 32]),
             data: vec![],
             delegator: IdentifierPrefix::default(),
-            witness_threshold: 0,
+            witness_threshold: SignatureThreshold::Simple(0),
             witnesses: vec![],
             witness_to_add: vec![],
             witness_to_remove: vec![],
@@ -145,6 +145,13 @@ impl EventMsgBuilder {
         }
     }
 
+    pub fn with_witness_threshold(self, witness_threshold: &SignatureThreshold) -> Self {
+        EventMsgBuilder {
+            witness_threshold: witness_threshold.clone(),
+            ..self
+        }
+    }
+
     pub fn build(self) -> Result<EventMessage<KeyEvent>, Error> {
         let next_key_hash =
             nxt_commitment(&self.next_key_threshold, &self.next_keys, &self.derivation);
@@ -189,7 +196,7 @@ impl EventMsgBuilder {
                 EventData::Rot(RotationEvent {
                     previous_event_hash: self.prev_event,
                     key_config,
-                    witness_config: WitnessConfig {
+                    witness_config: RotationWitnessConfig {
                         tally: self.witness_threshold,
                         prune: self.witness_to_remove,
                         graft: self.witness_to_add,
@@ -224,7 +231,7 @@ impl EventMsgBuilder {
                 let rotation_data = RotationEvent {
                     previous_event_hash: self.prev_event,
                     key_config,
-                    witness_config: WitnessConfig::default(),
+                    witness_config: RotationWitnessConfig::default(),
                     data: self.data,
                 };
                 Event::new(prefix, self.sn, EventData::Drt(rotation_data))

@@ -288,8 +288,8 @@ mod tests {
         assert_eq!(s0.current.public_keys[0], pref0);
         assert_eq!(s0.current.threshold, SignatureThreshold::Simple(1));
         assert_eq!(s0.current.threshold_key_digest, Some(nxt));
-        assert_eq!(s0.witnesses, vec![]);
-        assert_eq!(s0.tally, 0);
+        assert_eq!(s0.witness_config.witnesses, vec![]);
+        assert_eq!(s0.witness_config.tally, SignatureThreshold::Simple(0));
 
         Ok(())
     }
@@ -371,8 +371,8 @@ mod tests {
         assert_eq!(s0.current.public_keys[1], enc_pref_0);
         assert_eq!(s0.current.threshold, SignatureThreshold::default());
         assert_eq!(s0.current.threshold_key_digest, Some(nexter_pref));
-        assert_eq!(s0.witnesses, vec![]);
-        assert_eq!(s0.tally, 0);
+        assert_eq!(s0.witness_config.witnesses, vec![]);
+        assert_eq!(s0.witness_config.tally, SignatureThreshold::Simple(0));
 
         Ok(())
     }

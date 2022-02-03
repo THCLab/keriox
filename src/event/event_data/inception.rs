@@ -80,10 +80,10 @@ impl EventSemantics for InceptionEvent {
             br: vec![],
             ba: vec![],
         };
+
         Ok(IdentifierState {
             current: self.key_config.clone(),
-            witnesses: self.witness_config.initial_witnesses.clone(),
-            tally: self.witness_config.tally,
+            witness_config: self.witness_config.clone().into(),
             last_est,
             ..state
         })

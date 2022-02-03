@@ -10,7 +10,10 @@ use crate::{
     derivation::self_signing::SelfSigning,
     error::Error,
     event::sections::seal::{DigestSeal, Seal},
-    event::{event_data::EventData, receipt::Receipt, Event, EventMessage, SerializationFormats},
+    event::{
+        event_data::EventData, receipt::Receipt, sections::threshold::SignatureThreshold, Event,
+        EventMessage, SerializationFormats,
+    },
     event::{event_data::InteractionEvent, sections::seal::EventSeal},
     event_message::event_msg_builder::EventMsgBuilder,
     event_message::{
@@ -118,6 +121,7 @@ impl<K: KeyManager> Keri<K> {
     pub fn incept(
         &mut self,
         initial_witness: Option<Vec<BasicPrefix>>,
+        witness_threshold: Option<SignatureThreshold>,
     ) -> Result<SignedEventMessage, Error> {
         let km = self.key_manager.lock().map_err(|_| Error::MutexPoisoned)?;
         let icp = EventMsgBuilder::new(EventTypeTag::Icp)
@@ -125,6 +129,7 @@ impl<K: KeyManager> Keri<K> {
             .with_keys(vec![Basic::Ed25519.derive(km.public_key())])
             .with_next_keys(vec![Basic::Ed25519.derive(km.next_public_key())])
             .with_witness_list(&initial_witness.unwrap_or_default())
+            .with_witness_threshold(&witness_threshold.unwrap_or(SignatureThreshold::Simple(0)))
             .build()?;
 
         let signed = icp.sign(
@@ -136,7 +141,11 @@ impl<K: KeyManager> Keri<K> {
             None,
         );
 
-        self.processor.process(Message::Event(signed.clone()))?;
+        let result = self.processor.process(Message::Event(signed.clone()));
+        match result {
+            Err(Error::NotEnoughReceiptsError) => Ok(None),
+            anything => anything,
+        }?;
 
         self.prefix = icp.event.get_prefix();
 
@@ -229,12 +238,17 @@ impl<K: KeyManager> Keri<K> {
         Ok(signed)
     }
 
-    pub fn rotate(&mut self) -> Result<SignedEventMessage, Error> {
+    pub fn rotate(
+        &mut self,
+        witness_to_add: Option<&[BasicPrefix]>,
+        witness_to_remove: Option<&[BasicPrefix]>,
+        witness_threshold: Option<SignatureThreshold>,
+    ) -> Result<SignedEventMessage, Error> {
         self.key_manager
             .lock()
             .map_err(|_| Error::MutexPoisoned)?
             .rotate()?;
-        let rot = self.make_rotation()?;
+        let rot = self.make_rotation(witness_to_add, witness_to_remove, witness_threshold)?;
         let rot = rot.sign(
             vec![AttachedSignaturePrefix::new(
                 SelfSigning::Ed25519Sha512,
@@ -247,12 +261,21 @@ impl<K: KeyManager> Keri<K> {
             None,
         );
 
-        self.processor.process(Message::Event(rot.clone()))?;
+        let result = self.processor.process(Message::Event(rot.clone()));
+        match result {
+            Err(Error::NotEnoughReceiptsError) => Ok(None),
+            anything => anything,
+        }?;
 
         Ok(rot)
     }
 
-    fn make_rotation(&self) -> Result<EventMessage<KeyEvent>, Error> {
+    fn make_rotation(
+        &self,
+        witness_to_add: Option<&[BasicPrefix]>,
+        witness_to_remove: Option<&[BasicPrefix]>,
+        witness_threshold: Option<SignatureThreshold>,
+    ) -> Result<EventMessage<KeyEvent>, Error> {
         let state = self
             .processor
             .compute_state(&self.prefix)?
@@ -264,6 +287,9 @@ impl<K: KeyManager> Keri<K> {
                 .with_previous_event(&state.last_event_digest)
                 .with_keys(vec![Basic::Ed25519.derive(kv.public_key())])
                 .with_next_keys(vec![Basic::Ed25519.derive(kv.next_public_key())])
+                .with_witness_to_add(witness_to_add.unwrap_or_default())
+                .with_witness_to_remove(witness_to_remove.unwrap_or_default())
+                .with_witness_threshold(&witness_threshold.unwrap_or(SignatureThreshold::Simple(0)))
                 .build(),
             Err(_) => Err(Error::MutexPoisoned),
         }
@@ -358,7 +384,9 @@ impl<K: KeyManager> Keri<K> {
                         Ok(buf)
                     }
                     Message::TransferableRct(_rct) => Ok(vec![]),
+                    Message::NontransferableRct(_rct) => Ok(vec![]),
                     // TODO: this should process properly
+                    #[cfg(feature = "query")]
                     _ => todo!(),
                 }
             })

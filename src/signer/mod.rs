@@ -60,9 +60,9 @@ impl CryptoBox {
     }
 }
 
-struct Signer {
+pub struct Signer {
     priv_key: PrivateKey,
-    pub pub_key: PublicKey,
+    pub_key: PublicKey,
 }
 
 impl Signer {
@@ -76,6 +76,16 @@ impl Signer {
 
     pub fn sign(&self, msg: impl AsRef<[u8]>) -> Result<Vec<u8>, Error> {
         self.priv_key.sign_ed(msg.as_ref())
+    }
+
+    pub fn public_key(&self) -> PublicKey {
+        self.pub_key.clone()
+    }
+}
+
+impl Default for Signer {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

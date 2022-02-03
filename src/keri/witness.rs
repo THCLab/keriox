@@ -1,6 +1,8 @@
 use std::path::Path;
 use std::sync::Arc;
 
+use crate::event_message::event_msg_builder::ReceiptBuilder;
+use crate::event_message::signed_event_message::{Message, SignedNontransferableReceipt};
 use crate::query::reply::{ReplyEvent, SignedReply};
 use crate::query::{
     key_state_notice::KeyStateNotice,
@@ -8,6 +10,8 @@ use crate::query::{
     ReplyType, Route,
 };
 
+use crate::signer::Signer;
+use crate::state::IdentifierState;
 use crate::{
     database::sled::SledEventDatabase,
     derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
@@ -15,18 +19,17 @@ use crate::{
     event::SerializationFormats,
     prefix::{BasicPrefix, IdentifierPrefix},
     processor::EventProcessor,
-    signer::{CryptoBox, KeyManager},
 };
 
 pub struct Witness {
     pub prefix: BasicPrefix,
-    signer: CryptoBox,
+    signer: Signer,
     pub processor: EventProcessor,
 }
 
 impl Witness {
     pub fn new(path: &Path) -> Result<Self, Error> {
-        let signer = CryptoBox::new()?;
+        let signer = Signer::new();
         let processor = {
             let witness_db = Arc::new(SledEventDatabase::new(path).unwrap());
             EventProcessor::new(witness_db.clone())
@@ -39,8 +42,77 @@ impl Witness {
         })
     }
 
+    pub fn process(
+        &self,
+        event_messages: &[Message],
+    ) -> Result<(Vec<SignedNontransferableReceipt>, Vec<Error>), Error> {
+        let (oks, errs): (Vec<_>, Vec<_>) = event_messages
+            .into_iter()
+            .map(|message| self.process_one(message.to_owned()))
+            .partition(Result::is_ok);
+        let oks: Vec<_> = oks
+            .into_iter()
+            .map(Result::unwrap)
+            .filter(Option::is_some)
+            .map(Option::unwrap)
+            .collect();
+        let errs: Vec<_> = errs.into_iter().map(Result::unwrap_err).collect();
+
+        Ok((oks, errs))
+    }
+
+    fn process_one(&self, message: Message) -> Result<Option<SignedNontransferableReceipt>, Error> {
+        if let Message::Event(ev) = message.clone() {
+            match self.processor.process(message.to_owned()) {
+                Ok(_) | Err(Error::NotEnoughReceiptsError) => {
+                    // Create witness receipt and add it to db
+                    let ser = ev.event_message.serialize()?;
+                    let signature = self.signer.sign(&ser)?;
+                    // .map_err(|e| Error::ProcessingError(e, sn, prefix.clone()))?;
+                    let rcp = ReceiptBuilder::default()
+                        .with_receipted_event(ev.event_message)
+                        .build()?;
+
+                    let signature = SelfSigning::Ed25519Sha512.derive(signature);
+
+                    let signed_rcp = SignedNontransferableReceipt::new(
+                        &rcp,
+                        vec![(self.prefix.clone(), signature)],
+                    );
+
+                    self.processor
+                        .process(Message::NontransferableRct(signed_rcp.clone()))?;
+                    Ok(Some(signed_rcp))
+                }
+                Err(e) => Err(e),
+            }
+        } else {
+            // It's a receipt/query/
+            self.processor.process(message.to_owned())?;
+            Ok(None)
+        }
+    }
+
+    pub fn get_state_for_prefix(
+        &self,
+        prefix: &IdentifierPrefix,
+    ) -> Result<Option<IdentifierState>, Error> {
+        self.processor.compute_state(prefix)
+    }
+
+    pub fn get_nt_receipts(
+        &self,
+        id: &IdentifierPrefix,
+    ) -> Result<Option<Vec<SignedNontransferableReceipt>>, Error> {
+        Ok(self
+            .processor
+            .db
+            .get_receipts_nt(id)
+            .map(|receipts| receipts.collect()))
+    }
+
     pub fn get_ksn_for_prefix(&self, prefix: &IdentifierPrefix) -> Result<SignedReply, Error> {
-        let state = self.processor.compute_state(prefix).unwrap().unwrap();
+        let state = self.get_state_for_prefix(prefix)?.unwrap();
         let ksn = KeyStateNotice::new_ksn(state, SerializationFormats::JSON);
         let rpy = ReplyEvent::new_reply(
             ksn,
@@ -111,4 +183,160 @@ impl Witness {
             _ => todo!(),
         }
     }
+}
+
+#[test]
+fn test_fully_witnessed() -> Result<(), Error> {
+    use crate::event::sections::threshold::SignatureThreshold;
+    use crate::keri::Keri;
+    use std::sync::Mutex;
+    use tempfile::Builder;
+
+    let mut controller = {
+        // Create test db and event processor.
+        let root = Builder::new().prefix("test-db").tempdir().unwrap();
+        std::fs::create_dir_all(root.path()).unwrap();
+        let db_controller = Arc::new(SledEventDatabase::new(root.path()).unwrap());
+
+        let key_manager = {
+            use crate::signer::CryptoBox;
+            Arc::new(Mutex::new(CryptoBox::new()?))
+        };
+        Keri::new(Arc::clone(&db_controller), key_manager.clone())?
+    };
+
+    assert_eq!(controller.get_state()?, None);
+
+    let first_witness = {
+        let root_witness = Builder::new().prefix("test-db1").tempdir().unwrap();
+        std::fs::create_dir_all(root_witness.path()).unwrap();
+        Witness::new(root_witness.path())?
+    };
+
+    let second_witness = {
+        let root_witness = Builder::new().prefix("test-db1").tempdir().unwrap();
+        std::fs::create_dir_all(root_witness.path()).unwrap();
+        Witness::new(root_witness.path())?
+    };
+
+    // Get inception event.
+    let inception_event = controller.incept(
+        Some(vec![
+            first_witness.prefix.clone(),
+            second_witness.prefix.clone(),
+        ]),
+        Some(SignatureThreshold::Simple(2)),
+    )?;
+    // Shouldn't be accepted in controllers kel, because of missing witness receipts
+    assert_eq!(controller.get_state()?, None);
+
+    let receipts = [&first_witness, &second_witness]
+        .iter()
+        .map(|w| {
+            w.process_one(Message::Event(inception_event.clone()))
+                .unwrap()
+                .unwrap()
+                .clone()
+        })
+        .collect::<Vec<_>>();
+
+    // Witness don't accept inception event, because of missing receipts
+    assert_eq!(
+        first_witness.get_state_for_prefix(&controller.prefix)?,
+        None
+    );
+    assert_eq!(
+        second_witness.get_state_for_prefix(&controller.prefix)?,
+        None
+    );
+
+    // process first receipt
+    controller
+        .processor
+        .process_witness_receipt(&receipts[0])
+        .unwrap();
+
+    // Still not fully witnessed
+    assert_eq!(controller.get_state()?, None);
+
+    // process second receipt
+    controller
+        .processor
+        .process_witness_receipt(&receipts[1])
+        .unwrap();
+
+    // Now fully witnessed, should be in kel
+    assert_eq!(controller.get_state()?.map(|state| state.sn), Some(0));
+    assert_eq!(
+        controller
+            .get_state()?
+            .map(|state| state.witness_config.witnesses),
+        Some(vec![
+            first_witness.prefix.clone(),
+            second_witness.prefix.clone()
+        ])
+    );
+
+    // Witnesses still don't have all receipts.
+    assert_eq!(
+        first_witness.get_state_for_prefix(&controller.prefix)?,
+        None
+    );
+    assert_eq!(
+        second_witness.get_state_for_prefix(&controller.prefix)?,
+        None
+    );
+
+    // Process receipts by witnesses.
+    let rcts: Vec<_> = receipts
+        .into_iter()
+        .map(|r| Message::NontransferableRct(r))
+        .collect();
+    first_witness.process(&rcts)?;
+    second_witness.process(&rcts)?;
+
+    assert_eq!(
+        first_witness
+            .get_state_for_prefix(&controller.prefix)?
+            .map(|state| state.sn),
+        Some(0)
+    );
+    assert_eq!(
+        second_witness
+            .get_state_for_prefix(&controller.prefix)?
+            .map(|state| state.sn),
+        Some(0)
+    );
+
+    let rotation_event = controller.rotate(
+        None,
+        Some(&[second_witness.prefix.clone()]),
+        Some(SignatureThreshold::Simple(1)),
+    );
+    // Rotation not yet accepted by controller, missing receipts
+    assert_eq!(controller.get_state()?.unwrap().sn, 0);
+    let first_receipt = first_witness.process(&[Message::Event(rotation_event?)])?.0;
+    // Receipt accepted by witness, because his the only designated witness
+    assert_eq!(
+        first_witness
+            .get_state_for_prefix(&controller.prefix)?
+            .unwrap()
+            .sn,
+        1
+    );
+
+    // process receipt by controller
+    controller
+        .processor
+        .process_witness_receipt(first_receipt.first().unwrap())?;
+    assert_eq!(controller.get_state()?.unwrap().sn, 1);
+
+    assert_eq!(
+        controller
+            .get_state()?
+            .map(|state| state.witness_config.witnesses),
+        Some(vec![first_witness.prefix.clone(),])
+    );
+
+    Ok(())
 }

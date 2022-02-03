@@ -1,8 +1,8 @@
-use super::super::sections::{seal::*, KeyConfig, WitnessConfig};
+use super::super::sections::{seal::*, KeyConfig, RotationWitnessConfig};
 use crate::{
     error::Error,
     prefix::{BasicPrefix, SelfAddressingPrefix},
-    state::{EventSemantics, IdentifierState, LastEstablishmentData},
+    state::{EventSemantics, IdentifierState, LastEstablishmentData, WitnessConfig},
 };
 use serde::{Deserialize, Serialize};
 
@@ -18,7 +18,7 @@ pub struct RotationEvent {
     pub key_config: KeyConfig,
 
     #[serde(flatten)]
-    pub witness_config: WitnessConfig,
+    pub witness_config: RotationWitnessConfig,
 
     #[serde(rename = "a")]
     pub data: Vec<Seal>,
@@ -31,6 +31,7 @@ impl EventSemantics for RotationEvent {
             let witnesses =
                 if !self.witness_config.prune.is_empty() || !self.witness_config.graft.is_empty() {
                     let mut prunned = state
+                        .witness_config
                         .witnesses
                         .into_iter()
                         .filter(|e| !self.witness_config.prune.contains(e))
@@ -38,8 +39,12 @@ impl EventSemantics for RotationEvent {
                     prunned.append(&mut self.witness_config.graft.clone());
                     prunned
                 } else {
-                    state.witnesses.clone()
+                    state.witness_config.witnesses.clone()
                 };
+            let witness_config = WitnessConfig {
+                tally: self.witness_config.tally.clone(),
+                witnesses,
+            };
             let last_est = LastEstablishmentData {
                 sn: state.sn,
                 digest: state.last_event_digest.clone(),
@@ -49,8 +54,7 @@ impl EventSemantics for RotationEvent {
 
             Ok(IdentifierState {
                 current: self.key_config.clone(),
-                tally: self.witness_config.tally,
-                witnesses,
+                witness_config,
                 last_est,
                 ..state
             })

@@ -1,8 +1,14 @@
 use crate::{
     error::Error,
-    event::{event_data::EventData, sections::KeyConfig},
+    event::{
+        event_data::EventData,
+        sections::{threshold::SignatureThreshold, KeyConfig},
+    },
     event_message::EventTypeTag,
-    prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix},
+    prefix::{
+        AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix,
+        SelfSigningPrefix,
+    },
 };
 use serde::{Deserialize, Serialize};
 use serde_hex::{Compact, SerHex};
@@ -17,6 +23,49 @@ pub struct LastEstablishmentData {
     pub(crate) ba: Vec<BasicPrefix>,
 }
 
+#[derive(Default, PartialEq, Debug, Clone, Serialize, Deserialize)]
+pub struct WitnessConfig {
+    #[serde(rename = "bt")]
+    pub tally: SignatureThreshold,
+
+    #[serde(rename = "b")]
+    pub witnesses: Vec<BasicPrefix>,
+}
+
+impl WitnessConfig {
+    pub fn enough_receipts(
+        &self,
+        receipts_couplets: &[(BasicPrefix, SelfSigningPrefix)],
+    ) -> Result<bool, Error> {
+        match self.tally.clone() {
+            SignatureThreshold::Simple(t) => {
+                let proper_receipts = receipts_couplets
+                    .iter()
+                    .filter(|(witness, _sig)| self.witnesses.contains(witness))
+                    .count();
+                Ok(proper_receipts >= t as usize)
+            }
+            SignatureThreshold::Weighted(t) => {
+                let (attached_signatures, _rest): (Vec<Option<AttachedSignaturePrefix>>, _) =
+                    receipts_couplets
+                        .iter()
+                        .map(|(id, signature)| {
+                            let index = self.witnesses.iter().position(|wit| wit == id);
+                            index.map(|i| AttachedSignaturePrefix {
+                                index: i as u16,
+                                signature: signature.clone(),
+                            })
+                        })
+                        .partition(Option::is_some);
+                let atts = attached_signatures
+                    .into_iter()
+                    .map(Option::unwrap)
+                    .collect::<Vec<_>>();
+                t.enough_signatures(&atts)
+            }
+        }
+    }
+}
 /// Identifier State
 ///
 /// represents the accumulated state after applying events, based on section 13 of the paper
@@ -40,11 +89,8 @@ pub struct IdentifierState {
     #[serde(flatten)]
     pub current: KeyConfig,
 
-    #[serde(rename = "bt", with = "SerHex::<Compact>")]
-    pub tally: u64,
-
-    #[serde(rename = "b")]
-    pub witnesses: Vec<BasicPrefix>,
+    #[serde(flatten)]
+    pub witness_config: WitnessConfig,
 
     #[serde(rename = "di")]
     pub delegator: Option<IdentifierPrefix>,
