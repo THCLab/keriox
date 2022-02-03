@@ -220,7 +220,7 @@ impl Witness {
 }
 
 #[test]
-fn test_fully_witnessed() -> Result<(), Error> {
+fn test_witness_rotation() -> Result<(), Error> {
     use crate::event::sections::threshold::SignatureThreshold;
     use crate::keri::Keri;
     use std::sync::Mutex;

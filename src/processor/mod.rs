@@ -154,7 +154,7 @@ impl EventProcessor {
     fn process_reply_escrow(&self) -> Result<(), Error> {
         self.db.get_all_escrowed_replys().map(|esc| {
             esc.for_each(|sig_rep| {
-                match self.validator.process_signed_reply(&sig_rep) {
+                match self.process(Message::KeyStateNotice(sig_rep.clone())) {
                     Ok(_)
                     | Err(Error::SignatureVerificationError)
                     | Err(Error::QueryError(QueryError::StaleRpy)) => {
