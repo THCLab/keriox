@@ -5,6 +5,7 @@ use crate::event_message::event_msg_builder::ReceiptBuilder;
 use crate::event_message::signed_event_message::{
     Message, SignedNontransferableReceipt, TimestampedSignedEventMessage,
 };
+use crate::processor::event_storage::EventStorage;
 use crate::processor::EventProcessor;
 use crate::query::reply::{ReplyEvent, SignedReply};
 use crate::query::{
@@ -26,21 +27,26 @@ use crate::{
 pub struct Witness {
     pub prefix: BasicPrefix,
     signer: Signer,
-    pub processor: EventProcessor,
+    processor: EventProcessor,
+    storage: EventStorage,
 }
 
 impl Witness {
     pub fn new(path: &Path) -> Result<Self, Error> {
         let signer = Signer::new();
-        let processor = {
+        let (processor, storage) = {
             let witness_db = Arc::new(SledEventDatabase::new(path).unwrap());
-            EventProcessor::new(witness_db.clone())
+            (
+                EventProcessor::new(witness_db.clone()),
+                EventStorage::new(witness_db.clone()),
+            )
         };
         let prefix = Basic::Ed25519.derive(signer.public_key());
         Ok(Self {
             prefix,
             signer,
             processor,
+            storage,
         })
     }
 
@@ -100,10 +106,10 @@ impl Witness {
         prefix: &IdentifierPrefix,
     ) -> Result<Option<IdentifierState>, Error> {
         // Compute state using finalized events
-        let state = self.processor.get_state(prefix)?;
+        let state = self.storage.get_state(prefix)?;
         // Get not fully witness events receipted by witness
         let not_fully_witnessed_events = self
-            .processor
+            .storage
             .db
             .get_partially_witnessed_events(prefix)
             .map(|events| events.collect::<Vec<TimestampedSignedEventMessage>>());
@@ -131,7 +137,7 @@ impl Witness {
         id: &IdentifierPrefix,
     ) -> Result<Option<Vec<SignedNontransferableReceipt>>, Error> {
         Ok(self
-            .processor
+            .storage
             .db
             .get_receipts_nt(id)
             .map(|receipts| receipts.collect()))
@@ -162,7 +168,7 @@ impl Witness {
         let signatures = qr.signatures;
         // check signatures
         let kc = self
-            .processor
+            .storage
             .get_state(&qr.signer)?
             .ok_or(Error::SemanticError("No signer identifier in db".into()))?
             .current;
@@ -181,7 +187,7 @@ impl Witness {
     fn process_query(&self, route: Route, qr: QueryData) -> Result<ReplyType, Error> {
         match route {
             Route::Log => {
-                Ok(ReplyType::Kel(self.processor.get_kerl(&qr.data.i)?.ok_or(
+                Ok(ReplyType::Kel(self.storage.get_kel(&qr.data.i)?.ok_or(
                     Error::SemanticError("No identifier in db".into()),
                 )?))
             }
@@ -189,7 +195,7 @@ impl Witness {
                 let i = qr.data.i;
                 // return reply message with ksn inside
                 let state = self
-                    .processor
+                    .storage
                     .get_state(&i)
                     .unwrap()
                     .ok_or(Error::SemanticError("No id in database".into()))?;
@@ -286,13 +292,13 @@ fn test_fully_witnessed() -> Result<(), Error> {
 
     // Witness know that some of events aren't fully witnessed
     let not_fully_witnessed_events = first_witness
-        .processor
+        .storage
         .db
         .get_partially_witnessed_events(&controller.prefix)
         .unwrap();
     assert_eq!(not_fully_witnessed_events.count(), 1);
     let not_fully_witnessed_events = second_witness
-        .processor
+        .storage
         .db
         .get_partially_witnessed_events(&controller.prefix)
         .unwrap();
@@ -347,13 +353,13 @@ fn test_fully_witnessed() -> Result<(), Error> {
     );
 
     let not_fully_witnessed_events = first_witness
-        .processor
+        .storage
         .db
         .get_partially_witnessed_events(&controller.prefix)
         .unwrap();
     assert_eq!(not_fully_witnessed_events.count(), 0);
     let not_fully_witnessed_events = second_witness
-        .processor
+        .storage
         .db
         .get_partially_witnessed_events(&controller.prefix)
         .unwrap();

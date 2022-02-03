@@ -30,9 +30,9 @@ use crate::{
     keys::PublicKey,
     prefix::AttachedSignaturePrefix,
     prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
-    processor::EventProcessor,
+    processor::{event_storage::EventStorage, EventProcessor},
     signer::KeyManager,
-    state::{IdentifierState, EventSemantics},
+    state::IdentifierState,
 };
 #[cfg(feature = "wallet")]
 use universal_wallet::prelude::{Content, UnlockedWallet};
@@ -45,6 +45,7 @@ pub struct Keri<K: KeyManager + 'static> {
     prefix: IdentifierPrefix,
     key_manager: Arc<Mutex<K>>,
     processor: EventProcessor,
+    storage: EventStorage,
 }
 
 #[cfg(feature = "wallet")]
@@ -77,7 +78,8 @@ impl Keri<UnlockedWallet> {
         Ok(Keri {
             prefix,
             key_manager: Arc::new(Mutex::new(wallet)),
-            processor: EventProcessor::new(db),
+            processor: EventProcessor::new(db.clone()),
+            storage: EventStorage::new(db),
         })
     }
 }
@@ -88,7 +90,8 @@ impl<K: KeyManager> Keri<K> {
         Ok(Keri {
             prefix: IdentifierPrefix::default(),
             key_manager,
-            processor: EventProcessor::new(db),
+            processor: EventProcessor::new(db.clone()),
+            storage: EventStorage::new(db),
         })
     }
 
@@ -107,16 +110,7 @@ impl<K: KeyManager> Keri<K> {
     // Getter of the DB instance behind own processor
     ///
     pub fn db(&self) -> Arc<SledEventDatabase> {
-        Arc::clone(&self.processor.db)
-    }
-
-    /// It just checks if event can be processed successfully. Doesn't save this event.
-    pub fn process(&self, id: &IdentifierPrefix, event: impl EventSemantics) -> Result<(), Error> {
-        match self.processor.process_actual_event(id, event) {
-            Ok(Some(_)) => Ok(()),
-            Ok(None) => Err(Error::SemanticError("Unknown identifier.".into())),
-            Err(e) => Err(e),
-        }
+        Arc::clone(&self.storage.db)
     }
 
     pub fn incept(
@@ -198,7 +192,7 @@ impl<K: KeyManager> Keri<K> {
     /// Seal gets added to our KEL db and returned back as `SignedEventMessage`
     ///
     pub fn interact(&self, peer: IdentifierPrefix) -> Result<SignedEventMessage, Error> {
-        let next_sn = match self.processor.db.get_kel_finalized_events(&self.prefix) {
+        let next_sn = match self.storage.db.get_kel_finalized_events(&self.prefix) {
             Some(mut events) => match events.next_back() {
                 Some(db_event) => db_event.signed_event_message.event_message.event.get_sn() + 1,
                 None => return Err(Error::InvalidIdentifierStat),
@@ -233,7 +227,7 @@ impl<K: KeyManager> Keri<K> {
             0, // TODO: what is this?
         );
         let signed = SignedEventMessage::new(&event, vec![asp], None);
-        self.processor
+        self.storage
             .db
             .add_kel_finalized_event(signed.clone(), &self.prefix)?;
         Ok(signed)
@@ -278,7 +272,7 @@ impl<K: KeyManager> Keri<K> {
         witness_threshold: Option<SignatureThreshold>,
     ) -> Result<EventMessage<KeyEvent>, Error> {
         let state = self
-            .processor
+            .storage
             .get_state(&self.prefix)?
             .ok_or_else(|| Error::SemanticError("There is no state".into()))?;
         match self.key_manager.lock() {
@@ -306,7 +300,7 @@ impl<K: KeyManager> Keri<K> {
             None => vec![],
         };
         let state = self
-            .processor
+            .storage
             .get_state(&self.prefix)?
             .ok_or_else(|| Error::SemanticError("There is no state".into()))?;
 
@@ -347,36 +341,49 @@ impl<K: KeyManager> Keri<K> {
         }
     }
 
-    pub fn respond(&self, msg: &[u8]) -> Result<Vec<u8>, Error> {
+    pub fn process(&self, msg: &[u8]) -> Result<(Vec<Message>, Vec<Error>), Error> {
         let events = signed_event_stream(msg)
             .map_err(|e| Error::DeserializeError(e.to_string()))?
             .1;
 
-        let (processed_ok, _processed_failed): (Vec<_>, Vec<_>) = events
+        let (process_ok, process_failed): (Vec<_>, Vec<_>) = events
             .into_iter()
             .map(|event| {
                 let message = Message::try_from(event)?;
                 self.processor.process(message.clone()).map(|_| message)
             })
             .partition(Result::is_ok);
+        let oks = process_ok
+            .into_iter()
+            .map(Result::unwrap)
+            .collect::<Vec<_>>();
+        let errs = process_failed
+            .into_iter()
+            .map(Result::unwrap_err)
+            .collect::<Vec<_>>();
+
+        Ok((oks, errs))
+    }
+
+    pub fn respond(&self, msg: &[u8]) -> Result<Vec<u8>, Error> {
+        let (processed_ok, _processed_failed): (Vec<_>, Vec<_>) = self.process(msg)?;
 
         let response: Vec<u8> = processed_ok
             .into_iter()
-            .map(Result::unwrap)
             .map(|des_event| -> Result<Vec<u8>, Error> {
                 match des_event {
                     Message::Event(ev) => {
                         let mut buf = vec![];
                         if let EventData::Icp(_) = ev.event_message.event.get_event_data() {
-                            if !self.processor.has_receipt(
+                            if !self.storage.has_receipt(
                                 &self.prefix,
                                 0,
                                 &ev.event_message.event.get_prefix(),
                             )? {
                                 buf.append(
-                                    &mut self.processor.get_kerl(&self.prefix)?.ok_or_else(
-                                        || Error::SemanticError("KEL is empty".into()),
-                                    )?,
+                                    &mut self.storage.get_kel(&self.prefix)?.ok_or_else(|| {
+                                        Error::SemanticError("KEL is empty".into())
+                                    })?,
                                 )
                             }
                         }
@@ -408,7 +415,7 @@ impl<K: KeyManager> Keri<K> {
             .map_err(|_| Error::MutexPoisoned)?
             .sign(&ser)?;
         let validator_event_seal = self
-            .processor
+            .storage
             .get_last_establishment_event_seal(&self.prefix)?
             .ok_or_else(|| Error::SemanticError("No establishment event seal".into()))?;
         let rcp = Receipt {
@@ -470,7 +477,7 @@ impl<K: KeyManager> Keri<K> {
                         ))
                     }
                 } else if evt.witness_config.prune.contains(our_bp) {
-                    self.processor
+                    self.storage
                         .db
                         .remove_receipts_nt(&message.event.get_prefix())?;
                     Err(Error::SemanticError(
@@ -489,22 +496,22 @@ impl<K: KeyManager> Keri<K> {
     }
 
     pub fn get_state(&self) -> Result<Option<IdentifierState>, Error> {
-        self.processor.get_state(&self.prefix)
+        self.storage.get_state(&self.prefix)
     }
 
     pub fn get_kerl(&self) -> Result<Option<Vec<u8>>, Error> {
-        self.processor.get_kerl(&self.prefix)
+        self.storage.get_kel(&self.prefix)
     }
 
     pub fn get_state_for_prefix(
         &self,
         prefix: &IdentifierPrefix,
     ) -> Result<Option<IdentifierState>, Error> {
-        self.processor.get_state(prefix)
+        self.storage.get_state(prefix)
     }
 
     pub fn get_state_for_seal(&self, seal: &EventSeal) -> Result<Option<IdentifierState>, Error> {
-        self.processor.compute_state_at_sn(&seal.prefix, seal.sn)
+        self.storage.compute_state_at_sn(&seal.prefix, seal.sn)
     }
 
     fn generate_ntr(
@@ -528,7 +535,7 @@ impl<K: KeyManager> Keri<K> {
         }
         .to_message(SerializationFormats::JSON)?;
         let ntr = SignedNontransferableReceipt::new(&rcp, vec![(bp, ssp)]);
-        self.processor
+        self.storage
             .db
             .add_receipt_nt(ntr.clone(), &message.event.get_prefix())?;
         Ok(ntr)
