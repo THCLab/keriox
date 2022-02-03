@@ -20,53 +20,22 @@ use crate::{
         signature::Signature,
         signed_event_message::{
             SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
-            TimestampedSignedEventMessage,
         },
     },
     prefix::{IdentifierPrefix, SelfAddressingPrefix},
     state::{EventSemantics, IdentifierState},
 };
 
+use super::event_storage::EventStorage;
+
 pub struct EventValidator {
-    db: Arc<SledEventDatabase>,
+    event_storage: EventStorage,
 }
 
 impl EventValidator {
     pub fn new(db: Arc<SledEventDatabase>) -> Self {
-        Self { db }
-    }
-
-    /// Compute State for Prefix
-    ///
-    /// Returns the current State associated with
-    /// the given Prefix
-    pub fn compute_state(&self, id: &IdentifierPrefix) -> Result<Option<IdentifierState>, Error> {
-        if let Some(events) = self.db.get_kel_finalized_events(id) {
-            // start with empty state
-            let mut state = IdentifierState::default();
-            // we sort here to get inception first
-            let mut sorted_events = events.collect::<Vec<TimestampedSignedEventMessage>>();
-            // TODO why identifier is in database if there are no events for it?
-            if sorted_events.is_empty() {
-                return Ok(None);
-            };
-            sorted_events.sort();
-            for event in sorted_events {
-                state = match state.clone().apply(&event.signed_event_message) {
-                    Ok(s) => s,
-                    // will happen when a recovery has overridden some part of the KEL,
-                    Err(e) => match e {
-                        // skip out of order and partially signed events
-                        Error::EventOutOfOrderError | Error::NotEnoughSigsError => continue,
-                        // stop processing here
-                        _ => break,
-                    },
-                };
-            }
-            Ok(Some(state))
-        } else {
-            // no inception event, no state
-            Ok(None)
+        Self {
+            event_storage: EventStorage::new(db),
         }
     }
 
@@ -81,7 +50,7 @@ impl EventValidator {
         sn: u64,
         event_digest: &SelfAddressingPrefix,
     ) -> Result<Option<KeyConfig>, Error> {
-        if let Ok(Some(event)) = self.get_event_at_sn(id, sn) {
+        if let Ok(Some(event)) = self.event_storage.get_event_at_sn(id, sn) {
             // if it's the event we're looking for
             if event
                 .signed_event_message
@@ -100,8 +69,7 @@ impl EventValidator {
                         EventData::Rot(rot) => rot.key_config,
                         EventData::Dip(dip) => dip.inception_data.key_config,
                         EventData::Drt(drt) => drt.key_config,
-                        // the receipt has a binding but it's NOT an establishment event
-                        _ => return Err(Error::SemanticError("Receipt binding incorrect".into())),
+                        _ => return Err(Error::SemanticError("Not an establishment event".into())),
                     },
                 ))
             } else {
@@ -109,18 +77,6 @@ impl EventValidator {
             }
         } else {
             Err(Error::EventOutOfOrderError)
-        }
-    }
-
-    pub fn get_event_at_sn(
-        &self,
-        id: &IdentifierPrefix,
-        sn: u64,
-    ) -> Result<Option<TimestampedSignedEventMessage>, Error> {
-        if let Some(mut events) = self.db.get_kel_finalized_events(id) {
-            Ok(events.find(|event| event.signed_event_message.event_message.event.get_sn() == sn))
-        } else {
-            Ok(None)
         }
     }
 
@@ -134,7 +90,7 @@ impl EventValidator {
         delegated_event: &EventMessage<KeyEvent>,
     ) -> Result<(), Error> {
         // Check if event of seal's prefix and sn is in db.
-        if let Ok(Some(event)) = self.get_event_at_sn(&seal.prefix, seal.sn) {
+        if let Ok(Some(event)) = self.event_storage.get_event_at_sn(&seal.prefix, seal.sn) {
             // Extract prior_digest and data field from delegating event.
             let data = match event
                 .signed_event_message
@@ -163,7 +119,6 @@ impl EventValidator {
         Ok(())
     }
 
-
     fn get_delegator_seal(
         &self,
         signed_event: &SignedEventMessage,
@@ -184,7 +139,8 @@ impl EventValidator {
             }
             EventData::Drt(_drt) => {
                 let delegator = self
-                    .compute_state(&signed_event.event_message.event.get_prefix())?
+                    .event_storage
+                    .get_state(&signed_event.event_message.event.get_prefix())?
                     .ok_or_else(|| {
                         Error::SemanticError("Missing state of delegated identifier".into())
                     })?
@@ -210,7 +166,6 @@ impl EventValidator {
     /// Validates a Key Event against the latest state
     /// of the Identifier and applies it to update the state
     /// returns the updated state
-    /// TODO improve checking and handling of errors!
     pub fn process_event(
         &self,
         signed_event: &SignedEventMessage,
@@ -238,6 +193,7 @@ impl EventValidator {
                         } else {
                             // check if there are enough receipts and escrow
                             let receipts_couplets: Vec<_> = self
+                                .event_storage
                                 .db
                                 .get_escrow_nt_receipts(&new_state.prefix)
                                 .map(|rcts| {
@@ -268,12 +224,14 @@ impl EventValidator {
     /// Checks the receipt against the receipted event
     /// and the state of the validator, returns the state
     /// of the identifier being receipted
-    /// TODO improve checking and handling of errors!
     pub fn process_validator_receipt(
         &self,
         vrc: &SignedTransferableReceipt,
     ) -> Result<Option<IdentifierState>, Error> {
-        if let Ok(Some(event)) = self.get_event_at_sn(&vrc.body.event.prefix, vrc.body.event.sn) {
+        if let Ok(Some(event)) = self
+            .event_storage
+            .get_event_at_sn(&vrc.body.event.prefix, vrc.body.event.sn)
+        {
             let kp = self.get_keys_at_event(
                 &vrc.validator_seal.prefix,
                 vrc.validator_seal.sn,
@@ -292,7 +250,7 @@ impl EventValidator {
         } else {
             Err(Error::MissingEvent)
         }?;
-        self.compute_state(&vrc.body.event.prefix)
+        self.event_storage.get_state(&vrc.body.event.prefix)
     }
 
     /// Process Witness Receipt
@@ -300,14 +258,16 @@ impl EventValidator {
     /// Checks the receipt against the receipted event
     /// returns the state of the Identifier being receipted,
     /// which may have been updated by un-escrowing events
-    /// TODO improve checking and handling of errors!
     pub fn process_witness_receipt(
         &self,
         rct: &SignedNontransferableReceipt,
     ) -> Result<Option<IdentifierState>, Error> {
         // get event which is being receipted
         let id = &rct.body.event.prefix.to_owned();
-        if let Ok(Some(event)) = self.get_event_at_sn(&rct.body.event.prefix, rct.body.event.sn) {
+        if let Ok(Some(event)) = self
+            .event_storage
+            .get_event_at_sn(&rct.body.event.prefix, rct.body.event.sn)
+        {
             let serialized_event = event.signed_event_message.serialize()?;
             let (_, mut errors): (Vec<_>, Vec<Result<bool, Error>>) = rct
                 .clone()
@@ -326,12 +286,13 @@ impl EventValidator {
             // There's no receipted event id database so we can't verify signatures
             Err(Error::MissingEvent)
         }?;
-        self.compute_state(id)
+        self.event_storage.get_state(id)
     }
 
     fn apply_to_state(&self, event: &EventMessage<KeyEvent>) -> Result<IdentifierState, Error> {
         // get state for id (TODO cache?)
-        self.compute_state(&event.event.get_prefix())
+        self.event_storage
+            .get_state(&event.event.get_prefix())
             // get empty state if there is no state yet
             .map(|opt| opt.map_or_else(IdentifierState::default, |s| s))
             // process the event update
@@ -357,6 +318,7 @@ impl EventValidator {
     fn bada_logic(&self, new_rpy: &SignedReply) -> Result<(), Error> {
         use crate::query::{reply::ReplyEvent, Route};
         let accepted_replys = self
+            .event_storage
             .db
             .get_accepted_replys(&new_rpy.reply.event.get_prefix());
 
@@ -478,6 +440,7 @@ impl EventValidator {
         use crate::query::Route;
 
         match self
+            .event_storage
             .db
             .get_accepted_replys(pref)
             .ok_or(Error::QueryError(QueryError::OutOfOrderEventError))?
@@ -509,6 +472,7 @@ impl EventValidator {
         let ksn_sn = ksn.state.sn;
         let ksn_pre = ksn.state.prefix.clone();
         let event_from_db = self
+            .event_storage
             .get_event_at_sn(&ksn_pre, ksn_sn)?
             .ok_or(Error::QueryError(QueryError::OutOfOrderEventError))?
             .signed_event_message
@@ -528,7 +492,8 @@ impl EventValidator {
 
         // check new ksn with actual database state for that prefix
         let state = self
-            .compute_state(&ksn_pre)?
+            .event_storage
+            .get_state(&ksn_pre)?
             .ok_or::<Error>(QueryError::OutOfOrderEventError.into())?;
         if state.sn < ksn_sn {
             Err(QueryError::OutOfOrderEventError.into())

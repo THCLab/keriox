@@ -218,9 +218,9 @@ fn test_qry_rpy() -> Result<(), Error> {
 
     let alice_icp = alice.incept(Some(vec![witness.prefix.clone()]), None)?;
     // send alices icp to witness
-    let _rcps = witness.processor.process(Message::Event(alice_icp))?;
+    let _rcps = witness.process(&[Message::Event(alice_icp)])?;
     // send bobs icp to witness to have his keys
-    let _rcps = witness.processor.process(Message::Event(bob_icp))?;
+    let _rcps = witness.process(&[Message::Event(bob_icp)])?;
 
     let alice_pref = alice.prefix();
 
@@ -302,7 +302,7 @@ pub fn test_key_state_notice() -> Result<(), Error> {
     let bob_pref = bob.prefix().clone();
 
     // send bobs icp to witness to have his keys
-    witness.processor.process(Message::Event(bob_icp.clone()))?;
+    witness.process(&[Message::Event(bob_icp.clone())])?;
 
     // construct bobs ksn msg in rpy made by witness
     let signed_rpy = witness.get_ksn_for_prefix(&bob_pref)?;
@@ -317,7 +317,7 @@ pub fn test_key_state_notice() -> Result<(), Error> {
 
     // rotate bob's keys. Let alice process his rotation. She will have most recent bob's event.
     let bob_rot = bob.rotate(None, None, None)?;
-    witness.processor.process(Message::Event(bob_rot.clone()))?;
+    witness.process(&[Message::Event(bob_rot.clone())])?;
     alice.process(Message::Event(bob_rot.clone()))?;
 
     // try to process old reply message
@@ -330,9 +330,7 @@ pub fn test_key_state_notice() -> Result<(), Error> {
     assert!(res.is_ok());
 
     let new_bob_rot = bob.rotate(None, None, None)?;
-    witness
-        .processor
-        .process(Message::Event(new_bob_rot.clone()))?;
+    witness.process(&[Message::Event(new_bob_rot.clone())])?;
     // Create transferable reply by bob and process it by alice.
     let trans_rpy = witness.get_ksn_for_prefix(&bob_pref)?;
     let res = alice.process(Message::KeyStateNotice(trans_rpy.clone()));
