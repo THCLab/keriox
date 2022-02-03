@@ -218,9 +218,9 @@ fn test_qry_rpy() -> Result<(), Error> {
 
     let alice_icp = alice.incept(Some(vec![witness.prefix.clone()]), None)?;
     // send alices icp to witness
-    let _rcps = witness.processor.process_event(&alice_icp)?;
+    let _rcps = witness.processor.process(Message::Event(alice_icp))?;
     // send bobs icp to witness to have his keys
-    let _rcps = witness.processor.process_event(&bob_icp)?;
+    let _rcps = witness.processor.process(Message::Event(bob_icp))?;
 
     let alice_pref = alice.prefix();
 
@@ -288,7 +288,7 @@ pub fn test_key_state_notice() -> Result<(), Error> {
     };
 
     let alice = {
-        let root = Builder::new().prefix("test-db").tempdir().unwrap();
+        let root = Builder::new().prefix("test-db2").tempdir().unwrap();
         std::fs::create_dir_all(root.path()).unwrap();
         let db2 = Arc::new(SledEventDatabase::new(root.path()).unwrap());
         EventProcessor::new(db2)
@@ -302,46 +302,48 @@ pub fn test_key_state_notice() -> Result<(), Error> {
     let bob_pref = bob.prefix().clone();
 
     // send bobs icp to witness to have his keys
-    witness.processor.process_event(&bob_icp)?;
+    witness.processor.process(Message::Event(bob_icp.clone()))?;
 
     // construct bobs ksn msg in rpy made by witness
     let signed_rpy = witness.get_ksn_for_prefix(&bob_pref)?;
 
     // Process reply message before having any bob's events in db.
-    let res = alice.process_signed_reply(&signed_rpy.clone());
+    let res = alice.process(Message::KeyStateNotice(signed_rpy.clone()));
     assert!(matches!(
         res,
         Err(Error::QueryError(QueryError::OutOfOrderEventError))
     ));
-    alice.process_event(&bob_icp)?;
+    alice.process(Message::Event(bob_icp))?;
 
     // rotate bob's keys. Let alice process his rotation. She will have most recent bob's event.
     let bob_rot = bob.rotate(None, None, None)?;
-    witness.processor.process_event(&bob_rot)?;
-    alice.process_event(&bob_rot)?;
+    witness.processor.process(Message::Event(bob_rot.clone()))?;
+    alice.process(Message::Event(bob_rot.clone()))?;
 
     // try to process old reply message
-    let res = alice.process_signed_reply(&signed_rpy.clone());
+    let res = alice.process(Message::KeyStateNotice(signed_rpy.clone()));
     assert!(matches!(res, Err(Error::QueryError(QueryError::StaleKsn))));
 
     // now create new reply event by witness and process it by alice.
     let new_reply = witness.get_ksn_for_prefix(&bob_pref)?;
-    let res = alice.process_signed_reply(&new_reply);
+    let res = alice.process(Message::KeyStateNotice(new_reply.clone()));
     assert!(res.is_ok());
 
     let new_bob_rot = bob.rotate(None, None, None)?;
-    witness.processor.process_event(&new_bob_rot)?;
+    witness
+        .processor
+        .process(Message::Event(new_bob_rot.clone()))?;
     // Create transferable reply by bob and process it by alice.
     let trans_rpy = witness.get_ksn_for_prefix(&bob_pref)?;
-    let res = alice.process_signed_reply(&trans_rpy.clone());
+    let res = alice.process(Message::KeyStateNotice(trans_rpy.clone()));
     assert!(matches!(
         res,
         Err(Error::QueryError(QueryError::OutOfOrderEventError))
     ));
 
     // Now update bob's state in alice's db to most recent.
-    alice.process_event(&new_bob_rot)?;
-    let res = alice.process_signed_reply(&trans_rpy.clone());
+    alice.process(Message::Event(new_bob_rot))?;
+    let res = alice.process(Message::KeyStateNotice(trans_rpy.clone()));
     assert!(res.is_ok());
 
     Ok(())

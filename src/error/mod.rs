@@ -55,6 +55,9 @@ pub enum Error {
     #[error("Not enough receipts")]
     NotEnoughReceiptsError,
 
+    #[error("Event not yet in database")]
+    MissingEvent,
+
     #[error("Signature verification failed")]
     SignatureVerificationError,
 

@@ -5,6 +5,7 @@ use crate::event_message::event_msg_builder::ReceiptBuilder;
 use crate::event_message::signed_event_message::{
     Message, SignedNontransferableReceipt, TimestampedSignedEventMessage,
 };
+use crate::processor::EventProcessor;
 use crate::query::reply::{ReplyEvent, SignedReply};
 use crate::query::{
     key_state_notice::KeyStateNotice,
@@ -20,7 +21,6 @@ use crate::{
     error::Error,
     event::SerializationFormats,
     prefix::{BasicPrefix, IdentifierPrefix},
-    processor::EventProcessor,
 };
 
 pub struct Witness {
@@ -100,22 +100,30 @@ impl Witness {
         prefix: &IdentifierPrefix,
     ) -> Result<Option<IdentifierState>, Error> {
         // Compute state using finalized events
-        let mut state = self.processor.compute_state(prefix)?.unwrap_or_default();
+        let state = self.processor.get_state(prefix)?;
         // Get not fully witness events receipted by witness
-        let mut not_fully_witnessed_events = self
+        let not_fully_witnessed_events = self
             .processor
             .db
             .get_partially_witnessed_events(prefix)
-            .map(|events| events.collect::<Vec<TimestampedSignedEventMessage>>())
-            .unwrap_or_default();
-        not_fully_witnessed_events.sort();
-        for event in not_fully_witnessed_events {
-            state = match state.clone().apply(&event.signed_event_message) {
-                Ok(s) => s,
-                Err(_e) => break,
-            };
+            .map(|events| events.collect::<Vec<TimestampedSignedEventMessage>>());
+        if let Some(mut not_fully_witnessed_events) = not_fully_witnessed_events {
+            not_fully_witnessed_events.sort();
+            let mut state = state.unwrap_or_default();
+            for event in not_fully_witnessed_events {
+                state = match state.clone().apply(&event.signed_event_message) {
+                    Ok(s) => s,
+                    Err(_e) => break,
+                };
+            }
+            Ok(if state.clone() == IdentifierState::default() {
+                None
+            } else {
+                Some(state)
+            })
+        } else {
+            Ok(state)
         }
-        Ok(Some(state))
     }
 
     pub fn get_nt_receipts(
@@ -130,7 +138,9 @@ impl Witness {
     }
 
     pub fn get_ksn_for_prefix(&self, prefix: &IdentifierPrefix) -> Result<SignedReply, Error> {
-        let state = self.get_state_for_prefix(prefix)?.unwrap();
+        let state = self
+            .get_state_for_prefix(prefix)?
+            .ok_or(Error::SemanticError("No state in db".into()))?;
         let ksn = KeyStateNotice::new_ksn(state, SerializationFormats::JSON);
         let rpy = ReplyEvent::new_reply(
             ksn,
@@ -153,8 +163,8 @@ impl Witness {
         // check signatures
         let kc = self
             .processor
-            .compute_state(&qr.signer)?
-            .ok_or(Error::SemanticError("No identifier in db".into()))?
+            .get_state(&qr.signer)?
+            .ok_or(Error::SemanticError("No signer identifier in db".into()))?
             .current;
 
         if kc.verify(&qr.envelope.serialize().unwrap(), &signatures)? {
@@ -180,7 +190,7 @@ impl Witness {
                 // return reply message with ksn inside
                 let state = self
                     .processor
-                    .compute_state(&i)
+                    .get_state(&i)
                     .unwrap()
                     .ok_or(Error::SemanticError("No id in database".into()))?;
                 let ksn = KeyStateNotice::new_ksn(state, SerializationFormats::JSON);
@@ -291,7 +301,7 @@ fn test_fully_witnessed() -> Result<(), Error> {
     // process first receipt
     controller
         .processor
-        .process_witness_receipt(&receipts[0])
+        .process(Message::NontransferableRct(receipts[0].clone()))
         .unwrap();
 
     // Still not fully witnessed
@@ -300,7 +310,7 @@ fn test_fully_witnessed() -> Result<(), Error> {
     // process second receipt
     controller
         .processor
-        .process_witness_receipt(&receipts[1])
+        .process(Message::NontransferableRct(receipts[1].clone()))
         .unwrap();
 
     // Now fully witnessed, should be in kel
@@ -367,9 +377,9 @@ fn test_fully_witnessed() -> Result<(), Error> {
     );
 
     // process receipt by controller
-    controller
-        .processor
-        .process_witness_receipt(first_receipt.first().unwrap())?;
+    controller.processor.process(Message::NontransferableRct(
+        first_receipt.first().unwrap().to_owned(),
+    ))?;
     assert_eq!(controller.get_state()?.unwrap().sn, 1);
 
     assert_eq!(
