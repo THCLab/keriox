@@ -10,6 +10,7 @@ use crate::{
 
 #[cfg(feature = "async")]
 pub mod async_processing;
+pub mod escrow;
 pub mod event_storage;
 #[cfg(test)]
 mod tests;
@@ -42,12 +43,17 @@ impl EventProcessor {
                 match self.validator.process_event(&signed_event) {
                     Ok(_) => {
                         self.db.add_kel_finalized_event(signed_event.clone(), id)?;
-                        self.process_nt_receipts_escrow()
+                        // self.process_nt_receipts_escrow()
+                        escrow::process_nt_receipts_escrow(self)?;
+                        escrow::process_out_of_order_events(self, id)
                     }
                     Err(e) => {
                         match e {
                             Error::EventDuplicateError => {
                                 self.db.add_duplicious_event(signed_event.clone(), id)
+                            }
+                            Error::EventOutOfOrderError => {
+                                self.db.add_out_of_order_event(signed_event, id)
                             }
                             Error::NotEnoughReceiptsError => self
                                 .db
@@ -69,7 +75,7 @@ impl EventProcessor {
                     }
                     Err(e) => return Err(e),
                 };
-                self.process_partially_witnessed_events()?;
+                escrow::process_partially_witnessed_events(self)?;
                 Ok(compute_state(self.db.clone(), id)?)
             }
             Message::TransferableRct(vrc) => {
@@ -106,69 +112,10 @@ impl EventProcessor {
         }
     }
 
-    fn process_nt_receipts_escrow(&self) -> Result<(), Error> {
-        if let Some(esc) = self.db.get_all_escrow_nt_receipts() {
-            esc.for_each(|sig_receipt| {
-                match self.validator.process_witness_receipt(&sig_receipt) {
-                    Ok(_) | Err(Error::SignatureVerificationError) => {
-                        // remove from escrow
-                        self.db
-                            .remove_escrow_nt_receipt(&sig_receipt.body.event.prefix, &sig_receipt)
-                            .unwrap();
-                    }
-                    Err(_e) => {} // keep in escrow,
-                }
-            })
-        };
-
-        Ok(())
-    }
-
-    fn process_partially_witnessed_events(&self) -> Result<(), Error> {
-        if let Some(esc) = self.db.get_all_partially_witnessed() {
-            esc.for_each(|event| {
-                match self.process(Message::Event(event.signed_event_message.clone())) {
-                    Ok(_) | Err(Error::SignatureVerificationError) => {
-                        // remove from escrow
-                        self.db
-                            .remove_parially_witnessed_event(
-                                &event.signed_event_message.event_message.event.get_prefix(),
-                                &event.signed_event_message,
-                            )
-                            .unwrap();
-                    }
-                    Err(_e) => {} // keep in escrow,
-                }
-            })
-        };
-
-        Ok(())
-    }
-
     #[cfg(feature = "query")]
     fn escrow_reply(&self, rpy: &SignedReply) -> Result<(), Error> {
         let id = rpy.reply.event.get_prefix();
         self.db.add_escrowed_reply(rpy.clone(), &id)
-    }
-
-    #[cfg(feature = "query")]
-    fn process_reply_escrow(&self) -> Result<(), Error> {
-        self.db.get_all_escrowed_replys().map(|esc| {
-            esc.for_each(|sig_rep| {
-                match self.process(Message::KeyStateNotice(sig_rep.clone())) {
-                    Ok(_)
-                    | Err(Error::SignatureVerificationError)
-                    | Err(Error::QueryError(QueryError::StaleRpy)) => {
-                        // remove from escrow
-                        self.db
-                            .remove_escrowed_reply(&sig_rep.reply.event.get_prefix(), sig_rep)
-                            .unwrap();
-                    }
-                    Err(_e) => {} // keep in escrow,
-                }
-            })
-        });
-        Ok(())
     }
 }
 

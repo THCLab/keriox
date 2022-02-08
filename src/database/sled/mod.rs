@@ -25,6 +25,8 @@ pub struct SledEventDatabase {
     identifiers: SledEventTree<IdentifierPrefix>,
     // "kels" tree
     key_event_logs: SledEventTreeVec<TimestampedSignedEventMessage>,
+    // "ooes" tree
+    escrowed_out_of_order: SledEventTreeVec<TimestampedSignedEventMessage>,
     // "ldes" tree
     likely_duplicious_events: SledEventTreeVec<TimestampedEventMessage>,
     // "dels" tree
@@ -60,6 +62,7 @@ impl SledEventDatabase {
             escrowed_receipts_t: SledEventTreeVec::new(db.open_tree(b"vres")?),
             receipts_nt: SledEventTreeVec::new(db.open_tree(b"rcts")?),
             key_event_logs: SledEventTreeVec::new(db.open_tree(b"kels")?),
+            escrowed_out_of_order: SledEventTreeVec::new(db.open_tree(b"ooes")?),
             likely_duplicious_events: SledEventTreeVec::new(db.open_tree(b"ldes")?),
             duplicitous_events: SledEventTreeVec::new(db.open_tree(b"dels")?),
             partially_witnessed_events: SledEventTreeVec::new(db.open_tree(b"pdes")?),
@@ -96,6 +99,32 @@ impl SledEventDatabase {
             .remove(self.identifiers.designated_key(id), &event.into())
     }
 
+    pub fn add_out_of_order_event(
+        &self,
+        event: SignedEventMessage,
+        id: &IdentifierPrefix,
+    ) -> Result<(), Error> {
+        self.escrowed_out_of_order
+            .push(self.identifiers.designated_key(id), event.into())
+    }
+
+    pub fn get_out_of_order_events(
+        &self,
+        id: &IdentifierPrefix,
+    ) -> Option<impl DoubleEndedIterator<Item = TimestampedSignedEventMessage>> {
+        self.escrowed_out_of_order
+            .iter_values(self.identifiers.designated_key(id))
+    }
+
+    pub fn remove_out_of_order_event(
+        &self,
+        id: &IdentifierPrefix,
+        event: &SignedEventMessage,
+    ) -> Result<(), Error> {
+        self.escrowed_out_of_order
+            .remove(self.identifiers.designated_key(id), &event.into())
+    }
+
     pub fn add_partially_witnessed_event(
         &self,
         event: SignedEventMessage,
@@ -118,7 +147,7 @@ impl SledEventDatabase {
             .iter_values(self.identifiers.designated_key(id))
     }
 
-    pub fn remove_parially_witnessed_event(
+    pub fn remove_partially_witnessed_event(
         &self,
         id: &IdentifierPrefix,
         event: &SignedEventMessage,

@@ -396,7 +396,7 @@ pub fn test_not_fully_witnessed() -> Result<(), Error> {
 #[cfg(feature = "query")]
 #[test]
 pub fn test_reply_escrow() -> Result<(), Error> {
-    use crate::query::QueryError;
+    use crate::{processor::escrow, query::QueryError};
     use tempfile::Builder;
 
     // Create test db and event processor.
@@ -438,7 +438,7 @@ pub fn test_reply_escrow() -> Result<(), Error> {
     kel_events.for_each(|ev| {
         event_processor.process(ev).unwrap();
     });
-    event_processor.process_reply_escrow()?;
+    escrow::process_reply_escrow(&event_processor)?;
 
     let escrow = db.get_escrowed_replys(&identifier);
     assert_eq!(escrow.unwrap().collect::<Vec<_>>().len(), 0);
@@ -471,7 +471,8 @@ pub fn test_reply_escrow() -> Result<(), Error> {
     rest_of_kel.for_each(|ev| {
         event_processor.process(ev).unwrap();
     });
-    event_processor.process_reply_escrow()?;
+    // event_processor.process_reply_escrow()?;
+    escrow::process_reply_escrow(&event_processor)?;
 
     let escrow = db.get_escrowed_replys(&identifier);
     assert_eq!(escrow.unwrap().collect::<Vec<_>>().len(), 0);
@@ -518,6 +519,56 @@ pub fn test_query() -> Result<(), Error> {
     } else {
         assert!(false)
     }
+
+    Ok(())
+}
+
+#[test]
+fn test_out_of_order() -> Result<(), Error> {
+    let kel = br#"{"v":"KERI10JSON000120_","t":"icp","d":"EQVvqflDIGvD1V4dM9sKqVp-v6-MQkbL1Cawq-RKvaaQ","i":"D8XXdAHPRk0qe6qWaTaKoER8DRBQYHkLvWhk-s_5Crno","s":"0","kt":"1","k":["D8XXdAHPRk0qe6qWaTaKoER8DRBQYHkLvWhk-s_5Crno"],"n":"ENrscWQIZhtkD3kQf8rQzr9PPfFEuT9md81X6uktxVDs","bt":"0","b":[],"c":[],"a":[]}-AABAAgfL1ucigY3N7RZ53fOioz8qrIoH9NXe0VHZBzqzGIclDexzSzynIrh-LNvOCc15FVsSNI3LGeTu4x31IRNmDDA{"v":"KERI10JSON000155_","t":"rot","d":"EyZrS2KW_svCMH9HRGLapfHi-0_Be1pW1IC74X1jBylk","i":"D8XXdAHPRk0qe6qWaTaKoER8DRBQYHkLvWhk-s_5Crno","s":"1","p":"EQVvqflDIGvD1V4dM9sKqVp-v6-MQkbL1Cawq-RKvaaQ","kt":"1","k":["Dlclg4RtFYTWq5EPFLU3axAcKG5PIg9mgmAwm8ezI_0A"],"n":"EkI54PWiL__pKRorcBcsC57cfXV-vgmsG76vMg-wCsvU","bt":"0","br":[],"ba":[],"a":[]}-AABAANWwEE7CuFB8-JbwsJ2gp3CUktyxgkAS4gpw4aUZGWpapmUBRYGqn0eMDTzP_SsYndfC-_vpuaFpB7lvog8TmBQ{"v":"KERI10JSON0000cb_","t":"ixn","d":"EIQB_6sR80icl-p2ubRbSxGJUAgNZFlo8OE7Zcs3oGeU","i":"D8XXdAHPRk0qe6qWaTaKoER8DRBQYHkLvWhk-s_5Crno","s":"2","p":"EyZrS2KW_svCMH9HRGLapfHi-0_Be1pW1IC74X1jBylk","a":[]}-AABAAAtR7qJfHHS5zUsxDV6T0VOBe9r5clU5RmenMOk7Gre5OdqFHqJtIsugIeLkkn3OSVBMFV70FofouxEhTii5BAw"#;
+    let mut kell = signed_event_stream(kel)
+        .unwrap()
+        .1
+        .into_iter()
+        .map(|e| Message::try_from(e).unwrap());
+    let ev1 = kell.next().unwrap();
+    let ev2 = kell.next().unwrap();
+    let ev3 = kell.next().unwrap();
+
+    use tempfile::Builder;
+
+    let (processor, storage) = {
+        let witness_root = Builder::new().prefix("test-db").tempdir().unwrap();
+        let path = witness_root.path();
+        let witness_db = Arc::new(SledEventDatabase::new(path).unwrap());
+        std::fs::create_dir_all(path).unwrap();
+        (
+            EventProcessor::new(witness_db.clone()),
+            EventStorage::new(witness_db.clone()),
+        )
+    };
+    let id: IdentifierPrefix = "D8XXdAHPRk0qe6qWaTaKoER8DRBQYHkLvWhk-s_5Crno".parse()?;
+
+    processor.process(ev1)?;
+    assert_eq!(storage.get_state(&id).unwrap().unwrap().sn, 0);
+
+    assert!(matches!(
+        processor.process(ev3),
+        Err(Error::EventOutOfOrderError)
+    ));
+    assert_eq!(storage.get_state(&id).unwrap().unwrap().sn, 0);
+    // check out of order table
+    assert_eq!(storage.db.get_out_of_order_events(&id).unwrap().count(), 1);
+    processor.process(ev2)?;
+
+    assert_eq!(storage.get_state(&id).unwrap().unwrap().sn, 2);
+    // Check if out of order is empty
+    assert!(storage
+        .db
+        .get_out_of_order_events(&id)
+        .unwrap()
+        .next()
+        .is_none());
 
     Ok(())
 }
