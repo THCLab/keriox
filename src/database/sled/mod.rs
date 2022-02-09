@@ -11,7 +11,7 @@ use crate::{
         },
         TimestampedEventMessage,
     },
-    prefix::IdentifierPrefix,
+    prefix::{IdentifierPrefix, SelfAddressingPrefix},
 };
 use std::path::Path;
 use tables::{SledEventTree, SledEventTreeVec};
@@ -27,6 +27,8 @@ pub struct SledEventDatabase {
     key_event_logs: SledEventTreeVec<TimestampedSignedEventMessage>,
     // "ooes" tree
     escrowed_out_of_order: SledEventTreeVec<TimestampedSignedEventMessage>,
+    // "pses" tree
+    escrowed_partially_signed: SledEventTreeVec<TimestampedSignedEventMessage>,
     // "ldes" tree
     likely_duplicious_events: SledEventTreeVec<TimestampedEventMessage>,
     // "dels" tree
@@ -39,7 +41,7 @@ pub struct SledEventDatabase {
     receipts_t: SledEventTreeVec<SignedTransferableReceipt>,
     // "vres" tree
     escrowed_receipts_t: SledEventTreeVec<SignedTransferableReceipt>,
-    // "pdes" tree
+    // "pwes" tree
     partially_witnessed_events: SledEventTreeVec<TimestampedSignedEventMessage>,
 
     #[cfg(feature = "query")]
@@ -63,9 +65,10 @@ impl SledEventDatabase {
             receipts_nt: SledEventTreeVec::new(db.open_tree(b"rcts")?),
             key_event_logs: SledEventTreeVec::new(db.open_tree(b"kels")?),
             escrowed_out_of_order: SledEventTreeVec::new(db.open_tree(b"ooes")?),
+            escrowed_partially_signed: SledEventTreeVec::new(db.open_tree(b"pses")?),
             likely_duplicious_events: SledEventTreeVec::new(db.open_tree(b"ldes")?),
             duplicitous_events: SledEventTreeVec::new(db.open_tree(b"dels")?),
-            partially_witnessed_events: SledEventTreeVec::new(db.open_tree(b"pdes")?),
+            partially_witnessed_events: SledEventTreeVec::new(db.open_tree(b"pwes")?),
             #[cfg(feature = "query")]
             accepted_rpy: SledEventTreeVec::new(db.open_tree(b"knas")?),
             #[cfg(feature = "query")]
@@ -122,6 +125,34 @@ impl SledEventDatabase {
         event: &SignedEventMessage,
     ) -> Result<(), Error> {
         self.escrowed_out_of_order
+            .remove(self.identifiers.designated_key(id), &event.into())
+    }
+
+    pub fn add_partially_signed_event(
+        &self,
+        event: SignedEventMessage,
+        id: &IdentifierPrefix,
+    ) -> Result<(), Error> {
+        self.escrowed_partially_signed
+            .push(self.identifiers.designated_key(id), event.into())
+    }
+
+    pub fn get_partially_signed_events(
+        &self,
+        event: EventMessage<KeyEvent>
+    ) -> Option<impl DoubleEndedIterator<Item = TimestampedSignedEventMessage>> {
+        Some(self.escrowed_partially_signed
+            .iter_values(self.identifiers.designated_key(&event.event.get_prefix()))
+            .unwrap()
+            .filter(move |db_event| db_event.signed_event_message.event_message == event))
+    }
+
+    pub fn remove_partially_signed_event(
+        &self,
+        id: &IdentifierPrefix,
+        event: &SignedEventMessage,
+    ) -> Result<(), Error> {
+        self.escrowed_partially_signed
             .remove(self.identifiers.designated_key(id), &event.into())
     }
 
