@@ -99,7 +99,7 @@ impl EventProcessor {
                         self.notify(&Notification::ReceiptAccepted(rct.clone()))
                     }
                     Err(Error::MissingEvent) => {
-                        self.notify(&Notification::NontransReceiptOutOfOrder(rct.clone()))
+                        self.notify(&Notification::ReceiptOutOfOrder(rct.clone()))
                     }
                     Err(e) => return Err(e),
                 }?;
