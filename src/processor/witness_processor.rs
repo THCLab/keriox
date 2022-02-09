@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::{
     database::sled::SledEventDatabase, error::Error, event_message::signed_event_message::Message,
-    query::QueryError, state::IdentifierState,
+    state::IdentifierState,
 };
 
 use super::{compute_state, validator::EventValidator};
@@ -74,12 +74,7 @@ impl WitnessProcessor {
                     Err(Error::EventOutOfOrderError) => {
                         let id = rpy.reply.event.get_prefix();
                         self.db.add_escrowed_reply(rpy.clone(), &id)?;
-                        Err(Error::QueryError(QueryError::OutOfOrderEventError))
-                    }
-                    Err(Error::QueryError(QueryError::OutOfOrderEventError)) => {
-                        let id = rpy.reply.event.get_prefix();
-                        self.db.add_escrowed_reply(rpy.clone(), &id)?;
-                        Err(Error::QueryError(QueryError::OutOfOrderEventError))
+                        Err(Error::EventOutOfOrderError)
                     }
                     Err(anything) => Err(anything),
                 }?;

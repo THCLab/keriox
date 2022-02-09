@@ -17,9 +17,6 @@ mod tests;
 pub mod validator;
 pub mod witness_processor;
 
-#[cfg(feature = "query")]
-use crate::query::{reply::SignedReply, QueryError};
-
 use self::{
     escrow::{Escrow, Notification},
     validator::EventValidator,
@@ -131,11 +128,7 @@ impl EventProcessor {
                     },
                     Err(Error::EventOutOfOrderError) => {
                         self.notify(&Notification::ReplyOutOfOrder(rpy)).unwrap();
-                        Err(Error::QueryError(QueryError::OutOfOrderEventError))
-                    }
-                    Err(Error::QueryError(QueryError::OutOfOrderEventError)) => {
-                        self.notify(&Notification::ReplyOutOfOrder(rpy)).unwrap();
-                        Err(Error::QueryError(QueryError::OutOfOrderEventError))
+                        Err(Error::EventOutOfOrderError)
                     }
                     Err(anything) => Err(anything),
                 }?;

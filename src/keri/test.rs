@@ -311,7 +311,7 @@ pub fn test_key_state_notice() -> Result<(), Error> {
     let res = alice.process(Message::KeyStateNotice(signed_rpy.clone()));
     assert!(matches!(
         res,
-        Err(Error::QueryError(QueryError::OutOfOrderEventError))
+        Err(Error::EventOutOfOrderError)
     ));
     alice.process(Message::Event(bob_icp))?;
 
@@ -336,7 +336,7 @@ pub fn test_key_state_notice() -> Result<(), Error> {
     let res = alice.process(Message::KeyStateNotice(trans_rpy.clone()));
     assert!(matches!(
         res,
-        Err(Error::QueryError(QueryError::OutOfOrderEventError))
+        Err(Error::EventOutOfOrderError)
     ));
 
     // Now update bob's state in alice's db to most recent.

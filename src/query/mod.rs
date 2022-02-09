@@ -109,8 +109,6 @@ pub enum ReplyType {
 
 #[derive(Error, Debug)]
 pub enum QueryError {
-    #[error("Out of order query event")]
-    OutOfOrderEventError,
     #[error("Got stale key state notice")]
     StaleKsn,
     #[error("Got stale reply message")]

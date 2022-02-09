@@ -443,7 +443,7 @@ impl EventValidator {
             .event_storage
             .db
             .get_accepted_replys(pref)
-            .ok_or(Error::QueryError(QueryError::OutOfOrderEventError))?
+            .ok_or(Error::EventOutOfOrderError)?
             .find(|sr: &SignedReply| sr.reply.event.get_route() == Route::ReplyKsn(aid.clone()))
         {
             Some(old_ksn) => {
@@ -457,7 +457,7 @@ impl EventValidator {
             None => {
                 // TODO should be ok, if there's no old ksn in db?
                 // Ok(())
-                Err(QueryError::OutOfOrderEventError.into())
+                Err(Error::EventOutOfOrderError)
             }
         }
     }
@@ -474,7 +474,7 @@ impl EventValidator {
         let event_from_db = self
             .event_storage
             .get_event_at_sn(&ksn_pre, ksn_sn)?
-            .ok_or(Error::QueryError(QueryError::OutOfOrderEventError))?
+            .ok_or(Error::EventOutOfOrderError)?
             .signed_event_message
             .event_message;
         event_from_db
@@ -483,7 +483,7 @@ impl EventValidator {
             .ok_or::<Error>(Error::IncorrectDigest)?;
 
         match self.check_timestamp_with_last_ksn(ksn.timestamp, &ksn_pre, aid) {
-            Err(Error::QueryError(QueryError::OutOfOrderEventError)) => {
+            Err(Error::EventOutOfOrderError) => {
                 // no previous accepted ksn from that aid in db
                 Ok(())
             }
@@ -494,9 +494,9 @@ impl EventValidator {
         let state = self
             .event_storage
             .get_state(&ksn_pre)?
-            .ok_or::<Error>(QueryError::OutOfOrderEventError.into())?;
+            .ok_or::<Error>(Error::EventOutOfOrderError)?;
         if state.sn < ksn_sn {
-            Err(QueryError::OutOfOrderEventError.into())
+            Err(Error::EventOutOfOrderError)
         } else if state.sn == ksn_sn {
             Ok(Some(state))
         } else {

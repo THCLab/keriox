@@ -397,10 +397,10 @@ pub fn test_not_fully_witnessed() -> Result<(), Error> {
     Ok(())
 }
 
-#[cfg(feature = "query")]
+#[cfg(features = "query")]
 #[test]
 pub fn test_reply_escrow() -> Result<(), Error> {
-    use crate::{processor::escrow::{self, ReplyEscrow}, query::QueryError};
+    use crate::processor::escrow::ReplyEscrow;
     use tempfile::Builder;
 
     // Create test db and event processor.
@@ -430,7 +430,7 @@ pub fn test_reply_escrow() -> Result<(), Error> {
     // Try to process out of order reply
     assert!(matches!(
         event_processor.process(deserialized_old_rpy.clone()),
-        Err(Error::QueryError(QueryError::OutOfOrderEventError))
+        Err(Error::EventOutOfOrderError)
     ));
     let escrow = db.get_escrowed_replys(&identifier);
     assert_eq!(escrow.unwrap().collect::<Vec<_>>().len(), 1);
@@ -454,7 +454,7 @@ pub fn test_reply_escrow() -> Result<(), Error> {
     // reply event should be escrowed, accepted reply shouldn't change
     assert!(matches!(
         event_processor.process(deserialized_new_rpy.clone()),
-        Err(Error::QueryError(QueryError::OutOfOrderEventError))
+        Err(Error::EventOutOfOrderError)
     ));
     let mut escrow = db.get_escrowed_replys(&identifier).unwrap();
     assert_eq!(
