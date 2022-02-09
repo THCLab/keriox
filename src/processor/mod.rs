@@ -120,12 +120,11 @@ impl EventProcessor {
             Message::KeyStateNotice(rpy) => {
                 match self.validator.process_signed_reply(&rpy) {
                     Ok(_) => {
-                        self
-                        .db
-                        .update_accepted_reply(rpy.clone(), &rpy.reply.event.get_prefix()).unwrap();
+                        self.db
+                            .update_accepted_reply(rpy.clone(), &rpy.reply.event.get_prefix())
+                            .unwrap();
                         self.notify(&Notification::ReplyUpdated)
-                        
-                    },
+                    }
                     Err(Error::EventOutOfOrderError) => {
                         self.notify(&Notification::ReplyOutOfOrder(rpy)).unwrap();
                         Err(Error::EventOutOfOrderError)
