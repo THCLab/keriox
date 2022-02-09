@@ -16,12 +16,12 @@ pub trait Escrow {
 
 pub enum Notification {
     KelUpdated(IdentifierPrefix),
-    ReceiptAccepted(SignedNontransferableReceipt),
-    ReceiptEscrowed,
-    NontransReceiptOutOfOrder(SignedNontransferableReceipt),
-    TransReceiptOutOfOrder(SignedTransferableReceipt),
     OutOfOrder(SignedEventMessage),
     PartiallyWitnessed(SignedEventMessage),
+    ReceiptAccepted(SignedNontransferableReceipt),
+    ReceiptEscrowed,
+    ReceiptOutOfOrder(SignedNontransferableReceipt),
+    TransReceiptOutOfOrder(SignedTransferableReceipt),
     #[cfg(feature = "query")]
     ReplyOutOfOrder(SignedReply),
     #[cfg(feature = "query")]
@@ -30,6 +30,21 @@ pub enum Notification {
 
 #[derive(Default)]
 pub struct OutOfOrderEscrow;
+impl Escrow for OutOfOrderEscrow {
+    fn notify(&self, notification: &Notification, processor: &EventProcessor) -> Result<(), Error> {
+        match notification {
+            Notification::KelUpdated(id) => Self::process_out_of_order_events(processor, id),
+            Notification::OutOfOrder(signed_event) => {
+                let id = &signed_event.event_message.event.get_prefix();
+                processor
+                    .db
+                    .add_out_of_order_event(signed_event.clone(), id)
+            }
+            _ => Ok(()),
+        }
+    }
+}
+
 // TODO fix error handling
 impl OutOfOrderEscrow {
     pub fn process_out_of_order_events(
@@ -77,23 +92,28 @@ impl OutOfOrderEscrow {
         Ok(())
     }
 }
-impl Escrow for OutOfOrderEscrow {
+
+
+#[derive(Default)]
+pub struct PartiallyWitnessedEscrow;
+
+impl Escrow for PartiallyWitnessedEscrow {
     fn notify(&self, notification: &Notification, processor: &EventProcessor) -> Result<(), Error> {
         match notification {
-            Notification::KelUpdated(id) => Self::process_out_of_order_events(processor, id),
-            Notification::OutOfOrder(signed_event) => {
+            Notification::ReceiptAccepted(_) | Notification::ReceiptEscrowed => {
+                Self::process_partially_witnessed_events(processor)
+            }
+            Notification::PartiallyWitnessed(signed_event) => {
                 let id = &signed_event.event_message.event.get_prefix();
                 processor
                     .db
-                    .add_out_of_order_event(signed_event.clone(), id)
+                    .add_partially_witnessed_event(signed_event.clone(), id)
             }
             _ => Ok(()),
         }
     }
 }
 
-#[derive(Default)]
-pub struct PartiallyWitnessedEscrow;
 // TODO fix error handling
 impl PartiallyWitnessedEscrow {
     pub fn process_partially_witnessed_events(processor: &EventProcessor) -> Result<(), Error> {
@@ -139,25 +159,24 @@ impl PartiallyWitnessedEscrow {
         Ok(())
     }
 }
-impl Escrow for PartiallyWitnessedEscrow {
+
+#[derive(Default)]
+pub struct NontransReceiptsEscrow;
+
+impl Escrow for NontransReceiptsEscrow {
     fn notify(&self, notification: &Notification, processor: &EventProcessor) -> Result<(), Error> {
         match notification {
-            Notification::ReceiptAccepted(_) | Notification::ReceiptEscrowed => {
-                Self::process_partially_witnessed_events(processor)
-            }
-            Notification::PartiallyWitnessed(signed_event) => {
-                let id = &signed_event.event_message.event.get_prefix();
-                processor
-                    .db
-                    .add_partially_witnessed_event(signed_event.clone(), id)
+            Notification::KelUpdated(_id) => Self::process_nt_receipts_escrow(processor),
+            Notification::ReceiptOutOfOrder(receipt) => {
+                let id = &receipt.body.event.prefix;
+                processor.db.add_escrow_nt_receipt(receipt.clone(), id)?;
+                processor.notify(&Notification::ReceiptEscrowed)
             }
             _ => Ok(()),
         }
     }
 }
 
-#[derive(Default)]
-pub struct NontransReceiptsEscrow;
 // TODO fix error handling
 impl NontransReceiptsEscrow {
     pub fn process_nt_receipts_escrow(processor: &EventProcessor) -> Result<(), Error> {
@@ -193,19 +212,6 @@ impl NontransReceiptsEscrow {
         Ok(())
     }
 }
-impl Escrow for NontransReceiptsEscrow {
-    fn notify(&self, notification: &Notification, processor: &EventProcessor) -> Result<(), Error> {
-        match notification {
-            Notification::KelUpdated(_id) => Self::process_nt_receipts_escrow(processor),
-            Notification::NontransReceiptOutOfOrder(receipt) => {
-                let id = &receipt.body.event.prefix;
-                processor.db.add_escrow_nt_receipt(receipt.clone(), id)?;
-                processor.notify(&Notification::ReceiptEscrowed)
-            }
-            _ => Ok(()),
-        }
-    }
-}
 
 #[derive(Default)]
 pub struct TransReceiptsEscrow;
@@ -224,10 +230,26 @@ impl Escrow for TransReceiptsEscrow {
 
 #[cfg(features = "query")]
 pub struct ReplyEscrow;
+
+#[cfg(features = "query")]
+impl Escrow for ReplyEscrow {
+    fn notify(&self, notification: &Notification, processor: &EventProcessor) -> Result<(), Error> {
+        match notification {
+            Notification::ReplyOutOfOrder(rpy) => {
+                let id = rpy.reply.event.get_prefix();
+                processor.db.add_escrowed_reply(rpy.clone(), &id)
+            }
+            &Notification::KelUpdated(_) => ReplyEscrow::process_reply_escrow(processor),
+            _ => Ok(()),
+        }
+    }
+}
+
 #[cfg(features = "query")]
 impl ReplyEscrow {
     pub fn process_reply_escrow(processor: &EventProcessor) -> Result<(), Error> {
         use crate::query::QueryError;
+        use crate::event_message::signed_event_message::Message;
 
         processor.db.get_all_escrowed_replys().map(|esc| {
             esc.for_each(|sig_rep| {
@@ -249,16 +271,3 @@ impl ReplyEscrow {
     }
 }
 
-#[cfg(features = "query")]
-impl Escrow for ReplyEscrow {
-    fn notify(&self, notification: &Notification, processor: &EventProcessor) -> Result<(), Error> {
-        match notification {
-            Notification::ReplyOutOfOrder(rpy) => {
-                let id = rpy.reply.event.get_prefix();
-                processor.db.add_escrowed_reply(rpy.clone(), &id)
-            }
-            &Notification::KelUpdated(_) => ReplyEscrow::process_reply_escrow(processor),
-            _ => Ok(()),
-        }
-    }
-}
