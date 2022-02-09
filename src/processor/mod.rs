@@ -5,7 +5,7 @@ use crate::{
     error::Error,
     event_message::signed_event_message::{Message, TimestampedSignedEventMessage},
     prefix::IdentifierPrefix,
-    state::IdentifierState,
+    state::IdentifierState, processor::escrow::PartiallySignedEscrow,
 };
 
 #[cfg(feature = "async")]
@@ -33,6 +33,7 @@ impl EventProcessor {
         use self::escrow::{NontransReceiptsEscrow, OutOfOrderEscrow, PartiallyWitnessedEscrow};
         let mut processor = EventProcessor::new(db);
         processor.register_escrow(Box::new(OutOfOrderEscrow::default()));
+        processor.register_escrow(Box::new(PartiallySignedEscrow::default()));
         processor.register_escrow(Box::new(PartiallyWitnessedEscrow::default()));
         processor.register_escrow(Box::new(NontransReceiptsEscrow::default()));
         processor
@@ -82,6 +83,9 @@ impl EventProcessor {
                             }
                             Error::NotEnoughReceiptsError => {
                                 self.notify(&Notification::PartiallyWitnessed(signed_event))
+                            }
+                            Error::NotEnoughSigsError => {
+                                self.notify(&Notification::PartiallySigned(signed_event))
                             }
                             _ => Ok(()),
                         }?;

@@ -17,6 +17,7 @@ pub trait Escrow {
 pub enum Notification {
     KelUpdated(IdentifierPrefix),
     OutOfOrder(SignedEventMessage),
+    PartiallySigned(SignedEventMessage),
     PartiallyWitnessed(SignedEventMessage),
     ReceiptAccepted(SignedNontransferableReceipt),
     ReceiptEscrowed,
@@ -93,6 +94,57 @@ impl OutOfOrderEscrow {
     }
 }
 
+#[derive(Default)]
+pub struct PartiallySignedEscrow;
+impl Escrow for PartiallySignedEscrow {
+    fn notify(&self, notification: &Notification, processor: &EventProcessor) -> Result<(), Error> {
+        match notification {
+            Notification::PartiallySigned(ev) => Self::process_partially_signed_events(processor, ev),
+            _ => Ok(()),
+        }
+    }
+}
+
+// TODO fix error handling
+impl PartiallySignedEscrow {
+    pub fn process_partially_signed_events(
+        processor: &EventProcessor,
+        signed_event: &SignedEventMessage,
+    ) -> Result<(), Error> {
+        let id = signed_event.event_message.event.get_prefix();
+        if let Some(esc) = processor.db.get_partially_signed_events(signed_event.event_message.clone()) {
+            let sigs = esc.map(|ev| ev.signed_event_message.signatures).flatten().collect();
+            let new_event = SignedEventMessage {signatures: sigs, .. signed_event.to_owned()};
+
+            match processor
+                .validator
+                .process_event(&new_event)
+            {
+                Ok(_) => {
+                    // add to kel
+                    processor
+                        .db
+                        .add_kel_finalized_event(new_event.clone(), &id)?;
+                    // remove from escrow
+                    processor
+                        .db
+                        .remove_partially_signed_event(&id, &new_event)?;
+                    processor
+                        .notify(&Notification::KelUpdated(
+                            new_event.event_message.event.get_prefix(),
+                        ))?;
+                }
+                Err(_e) => (), // keep in escrow,
+            }
+        } else {
+            processor
+                    .db
+                    .add_partially_signed_event(signed_event.clone(), &id)?;
+        };
+
+        Ok(())
+    }
+}
 
 #[derive(Default)]
 pub struct PartiallyWitnessedEscrow;
