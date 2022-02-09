@@ -2,7 +2,7 @@ use super::EventProcessor;
 use crate::{
     error::Error,
     event_message::signed_event_message::{
-        Message, SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
+        SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
     },
     prefix::IdentifierPrefix,
 };
@@ -40,7 +40,7 @@ impl OutOfOrderEscrow {
             esc.try_for_each(|event| {
                 match processor
                     .validator
-                    .process_event(&event.signed_event_message.clone())
+                    .process_event(&event.signed_event_message)
                 {
                     Ok(_) => {
                         // add to kel
@@ -51,7 +51,7 @@ impl OutOfOrderEscrow {
                         // remove from escrow
                         processor
                             .db
-                            .remove_out_of_order_event(&id, &event.signed_event_message)
+                            .remove_out_of_order_event(id, &event.signed_event_message)
                             .expect("Database problem");
                         processor
                             .notify(&Notification::KelUpdated(
@@ -80,7 +80,7 @@ impl OutOfOrderEscrow {
 impl Escrow for OutOfOrderEscrow {
     fn notify(&self, notification: &Notification, processor: &EventProcessor) -> Result<(), Error> {
         match notification {
-            Notification::KelUpdated(id) => Self::process_out_of_order_events(processor, &id),
+            Notification::KelUpdated(id) => Self::process_out_of_order_events(processor, id),
             Notification::OutOfOrder(signed_event) => {
                 let id = &signed_event.event_message.event.get_prefix();
                 processor
@@ -102,7 +102,7 @@ impl PartiallyWitnessedEscrow {
                 let id = event.signed_event_message.event_message.event.get_prefix();
                 match processor
                     .validator
-                    .process_event(&event.signed_event_message.clone())
+                    .process_event(&event.signed_event_message)
                 {
                     Ok(_) => {
                         // add to kel
@@ -121,7 +121,7 @@ impl PartiallyWitnessedEscrow {
                             ))
                             .expect("Notification problem");
                         // stop processing the escrow if kel was updated. It needs to start again.
-                        return None;
+                        None
                     }
                     Err(Error::SignatureVerificationError) => {
                         // remove from escrow
@@ -222,8 +222,9 @@ impl Escrow for TransReceiptsEscrow {
     }
 }
 
-#[cfg(feature = "query")]
+#[cfg(features = "query")]
 pub struct ReplyEscrow;
+#[cfg(features = "query")]
 impl ReplyEscrow {
     pub fn process_reply_escrow(processor: &EventProcessor) -> Result<(), Error> {
         use crate::query::QueryError;
@@ -248,6 +249,7 @@ impl ReplyEscrow {
     }
 }
 
+#[cfg(features = "query")]
 impl Escrow for ReplyEscrow {
     fn notify(&self, notification: &Notification, processor: &EventProcessor) -> Result<(), Error> {
         match notification {
