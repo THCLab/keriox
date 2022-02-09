@@ -7,6 +7,9 @@ use crate::{
     prefix::IdentifierPrefix,
 };
 
+#[cfg(feature = "query")]
+use crate::query::reply::SignedReply;
+
 pub trait Escrow {
     fn notify(&self, notification: &Notification, processor: &EventProcessor) -> Result<(), Error>;
 }
@@ -19,6 +22,10 @@ pub enum Notification {
     TransReceiptOutOfOrder(SignedTransferableReceipt),
     OutOfOrder(SignedEventMessage),
     PartiallyWitnessed(SignedEventMessage),
+    #[cfg(feature = "query")]
+    ReplyOutOfOrder(SignedReply),
+    #[cfg(feature = "query")]
+    ReplyUpdated,
 }
 
 #[derive(Default)]
@@ -216,24 +223,41 @@ impl Escrow for TransReceiptsEscrow {
 }
 
 #[cfg(feature = "query")]
-pub fn process_reply_escrow(processor: &EventProcessor) -> Result<(), Error> {
-    use crate::query::QueryError;
+pub struct ReplyEscrow;
+impl ReplyEscrow {
+    pub fn process_reply_escrow(processor: &EventProcessor) -> Result<(), Error> {
+        use crate::query::QueryError;
 
-    processor.db.get_all_escrowed_replys().map(|esc| {
-        esc.for_each(|sig_rep| {
-            match processor.process(Message::KeyStateNotice(sig_rep.clone())) {
-                Ok(_)
-                | Err(Error::SignatureVerificationError)
-                | Err(Error::QueryError(QueryError::StaleRpy)) => {
-                    // remove from escrow
-                    processor
-                        .db
-                        .remove_escrowed_reply(&sig_rep.reply.event.get_prefix(), sig_rep)
-                        .unwrap();
+        processor.db.get_all_escrowed_replys().map(|esc| {
+            esc.for_each(|sig_rep| {
+                match processor.process(Message::KeyStateNotice(sig_rep.clone())) {
+                    Ok(_)
+                    | Err(Error::SignatureVerificationError)
+                    | Err(Error::QueryError(QueryError::StaleRpy)) => {
+                        // remove from escrow
+                        processor
+                            .db
+                            .remove_escrowed_reply(&sig_rep.reply.event.get_prefix(), sig_rep)
+                            .unwrap();
+                    }
+                    Err(_e) => {} // keep in escrow,
                 }
-                Err(_e) => {} // keep in escrow,
-            }
-        })
-    });
-    Ok(())
+            })
+        });
+        Ok(())
+    }
 }
+
+impl Escrow for ReplyEscrow {
+    fn notify(&self, notification: &Notification, processor: &EventProcessor) -> Result<(), Error> {
+        match notification {
+            Notification::ReplyOutOfOrder(rpy) => {
+                let id = rpy.reply.event.get_prefix();
+                processor.db.add_escrowed_reply(rpy.clone(), &id)
+            },
+            &Notification::KelUpdated(_) => ReplyEscrow::process_reply_escrow(processor),
+            _ => {Ok(())}
+        }
+        
+    }
+} 
