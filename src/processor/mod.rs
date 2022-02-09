@@ -20,17 +20,39 @@ pub mod witness_processor;
 #[cfg(feature = "query")]
 use crate::query::{reply::SignedReply, QueryError};
 
-use self::validator::EventValidator;
+use self::{
+    escrow::{
+        Escrow, NontransReceiptsEscrow, Notification, OutOfOrderEscrow, PartiallyWitnessedEscrow,
+    },
+    validator::EventValidator,
+};
 
 pub struct EventProcessor {
     db: Arc<SledEventDatabase>,
     validator: EventValidator,
+    escrows: Vec<Box<dyn Escrow>>,
 }
 
 impl EventProcessor {
     pub fn new(db: Arc<SledEventDatabase>) -> Self {
         let validator = EventValidator::new(db.clone());
-        Self { db, validator }
+        let mut escrows: Vec<Box<dyn Escrow>> = Vec::new();
+        escrows.push(Box::new(OutOfOrderEscrow::default()));
+        escrows.push(Box::new(PartiallyWitnessedEscrow::default()));
+        escrows.push(Box::new(NontransReceiptsEscrow::default()));
+
+        Self {
+            db,
+            validator,
+            escrows,
+        }
+    }
+
+    pub fn notify(&self, notification: &Notification) -> Result<(), Error> {
+        self.escrows.iter().for_each(|esc| {
+            esc.notify(notification, self).unwrap();
+        });
+        Ok(())
     }
 
     /// Process
@@ -43,9 +65,7 @@ impl EventProcessor {
                 match self.validator.process_event(&signed_event) {
                     Ok(_) => {
                         self.db.add_kel_finalized_event(signed_event.clone(), id)?;
-                        // self.process_nt_receipts_escrow()
-                        escrow::process_nt_receipts_escrow(self)?;
-                        escrow::process_out_of_order_events(self, id)
+                        self.notify(&Notification::KelUpdated(id.clone()))
                     }
                     Err(e) => {
                         match e {
@@ -53,11 +73,11 @@ impl EventProcessor {
                                 self.db.add_duplicious_event(signed_event.clone(), id)
                             }
                             Error::EventOutOfOrderError => {
-                                self.db.add_out_of_order_event(signed_event, id)
+                                self.notify(&Notification::OutOfOrder(signed_event))
                             }
-                            Error::NotEnoughReceiptsError => self
-                                .db
-                                .add_partially_witnessed_event(signed_event.clone(), id),
+                            Error::NotEnoughReceiptsError => {
+                                self.notify(&Notification::PartiallyWitnessed(signed_event))
+                            }
                             _ => Ok(()),
                         }?;
                         Err(e)
@@ -69,21 +89,23 @@ impl EventProcessor {
             Message::NontransferableRct(rct) => {
                 let id = &rct.body.event.prefix;
                 match self.validator.process_witness_receipt(&rct) {
-                    Ok(_) => self.db.add_receipt_nt(rct.to_owned(), id)?,
+                    Ok(_) => {
+                        self.db.add_receipt_nt(rct.to_owned(), id)?;
+                        self.notify(&Notification::ReceiptAccepted(rct.clone()))
+                    }
                     Err(Error::MissingEvent) => {
-                        self.db.add_escrow_nt_receipt(rct.to_owned(), id)?
+                        self.notify(&Notification::NontransReceiptOutOfOrder(rct.clone()))
                     }
                     Err(e) => return Err(e),
-                };
-                escrow::process_partially_witnessed_events(self)?;
+                }?;
                 Ok(compute_state(self.db.clone(), id)?)
             }
             Message::TransferableRct(vrc) => {
                 match self.validator.process_validator_receipt(&vrc) {
                     Ok(_) => self.db.add_receipt_t(vrc.clone(), &vrc.body.event.prefix),
-                    Err(Error::MissingEvent) => self
-                        .db
-                        .add_escrow_t_receipt(vrc.clone(), &vrc.body.event.prefix),
+                    Err(Error::MissingEvent) => {
+                        self.notify(&Notification::TransReceiptOutOfOrder(vrc.clone()))
+                    }
                     Err(e) => Err(e),
                 }?;
                 let id = vrc.body.event.prefix;
