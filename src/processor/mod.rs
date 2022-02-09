@@ -21,9 +21,7 @@ pub mod witness_processor;
 use crate::query::{reply::SignedReply, QueryError};
 
 use self::{
-    escrow::{
-        Escrow, NontransReceiptsEscrow, Notification, OutOfOrderEscrow, PartiallyWitnessedEscrow,
-    },
+    escrow::{Escrow, Notification},
     validator::EventValidator,
 };
 
@@ -34,18 +32,28 @@ pub struct EventProcessor {
 }
 
 impl EventProcessor {
+    pub fn with_default_escrow(db: Arc<SledEventDatabase>) -> Self {
+        use self::escrow::{NontransReceiptsEscrow, OutOfOrderEscrow, PartiallyWitnessedEscrow};
+        let mut processor = EventProcessor::new(db);
+        processor.register_escrow(Box::new(OutOfOrderEscrow::default()));
+        processor.register_escrow(Box::new(PartiallyWitnessedEscrow::default()));
+        processor.register_escrow(Box::new(NontransReceiptsEscrow::default()));
+        processor
+    }
+
     pub fn new(db: Arc<SledEventDatabase>) -> Self {
         let validator = EventValidator::new(db.clone());
-        let mut escrows: Vec<Box<dyn Escrow>> = Vec::new();
-        escrows.push(Box::new(OutOfOrderEscrow::default()));
-        escrows.push(Box::new(PartiallyWitnessedEscrow::default()));
-        escrows.push(Box::new(NontransReceiptsEscrow::default()));
+        let escrows: Vec<Box<dyn Escrow>> = Vec::new();
 
         Self {
             db,
             validator,
             escrows,
         }
+    }
+
+    pub fn register_escrow(&mut self, escrow: Box<dyn Escrow>) {
+        self.escrows.push(escrow);
     }
 
     pub fn notify(&self, notification: &Notification) -> Result<(), Error> {
@@ -114,15 +122,19 @@ impl EventProcessor {
             #[cfg(feature = "query")]
             Message::KeyStateNotice(rpy) => {
                 match self.validator.process_signed_reply(&rpy) {
-                    Ok(_) => self
+                    Ok(_) => {
+                        self
                         .db
-                        .update_accepted_reply(rpy.clone(), &rpy.reply.event.get_prefix()),
+                        .update_accepted_reply(rpy.clone(), &rpy.reply.event.get_prefix()).unwrap();
+                        self.notify(&Notification::ReplyUpdated)
+                        
+                    },
                     Err(Error::EventOutOfOrderError) => {
-                        self.escrow_reply(&rpy)?;
+                        self.notify(&Notification::ReplyOutOfOrder(rpy)).unwrap();
                         Err(Error::QueryError(QueryError::OutOfOrderEventError))
                     }
                     Err(Error::QueryError(QueryError::OutOfOrderEventError)) => {
-                        self.escrow_reply(&rpy)?;
+                        self.notify(&Notification::ReplyOutOfOrder(rpy)).unwrap();
                         Err(Error::QueryError(QueryError::OutOfOrderEventError))
                     }
                     Err(anything) => Err(anything),
@@ -132,12 +144,6 @@ impl EventProcessor {
             #[cfg(feature = "query")]
             Message::Query(_qry) => todo!(),
         }
-    }
-
-    #[cfg(feature = "query")]
-    fn escrow_reply(&self, rpy: &SignedReply) -> Result<(), Error> {
-        let id = rpy.reply.event.get_prefix();
-        self.db.add_escrowed_reply(rpy.clone(), &id)
     }
 }
 
