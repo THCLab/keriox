@@ -387,6 +387,10 @@ pub fn test_not_fully_witnessed() -> Result<(), Error> {
     let mut esc = db.get_escrow_nt_receipts(id).unwrap();
     assert!(esc.next().is_none());
 
+    // check if receipt was escrowed
+    let esc = db.get_receipts_nt(id).unwrap();
+    assert_eq!(esc.count(), 2);
+
     let state = event_storage.get_state(id)?.unwrap();
     assert_eq!(state.sn, 0);
 
@@ -525,7 +529,7 @@ pub fn test_query() -> Result<(), Error> {
 
 #[test]
 fn test_out_of_order() -> Result<(), Error> {
-    let kel = br#"{"v":"KERI10JSON000120_","t":"icp","d":"EQVvqflDIGvD1V4dM9sKqVp-v6-MQkbL1Cawq-RKvaaQ","i":"D8XXdAHPRk0qe6qWaTaKoER8DRBQYHkLvWhk-s_5Crno","s":"0","kt":"1","k":["D8XXdAHPRk0qe6qWaTaKoER8DRBQYHkLvWhk-s_5Crno"],"n":"ENrscWQIZhtkD3kQf8rQzr9PPfFEuT9md81X6uktxVDs","bt":"0","b":[],"c":[],"a":[]}-AABAAgfL1ucigY3N7RZ53fOioz8qrIoH9NXe0VHZBzqzGIclDexzSzynIrh-LNvOCc15FVsSNI3LGeTu4x31IRNmDDA{"v":"KERI10JSON000155_","t":"rot","d":"EyZrS2KW_svCMH9HRGLapfHi-0_Be1pW1IC74X1jBylk","i":"D8XXdAHPRk0qe6qWaTaKoER8DRBQYHkLvWhk-s_5Crno","s":"1","p":"EQVvqflDIGvD1V4dM9sKqVp-v6-MQkbL1Cawq-RKvaaQ","kt":"1","k":["Dlclg4RtFYTWq5EPFLU3axAcKG5PIg9mgmAwm8ezI_0A"],"n":"EkI54PWiL__pKRorcBcsC57cfXV-vgmsG76vMg-wCsvU","bt":"0","br":[],"ba":[],"a":[]}-AABAANWwEE7CuFB8-JbwsJ2gp3CUktyxgkAS4gpw4aUZGWpapmUBRYGqn0eMDTzP_SsYndfC-_vpuaFpB7lvog8TmBQ{"v":"KERI10JSON0000cb_","t":"ixn","d":"EIQB_6sR80icl-p2ubRbSxGJUAgNZFlo8OE7Zcs3oGeU","i":"D8XXdAHPRk0qe6qWaTaKoER8DRBQYHkLvWhk-s_5Crno","s":"2","p":"EyZrS2KW_svCMH9HRGLapfHi-0_Be1pW1IC74X1jBylk","a":[]}-AABAAAtR7qJfHHS5zUsxDV6T0VOBe9r5clU5RmenMOk7Gre5OdqFHqJtIsugIeLkkn3OSVBMFV70FofouxEhTii5BAw"#;
+    let kel = br#"{"v":"KERI10JSON000120_","t":"icp","d":"Ez_KqgGXKwITLEyHcrqWLRAAEEhwZiQPfo9C1od9KSmY","i":"DUlpESxNlTu1y_mYeJFoemZsy_brUM4-fkagyJpWThYM","s":"0","kt":"1","k":["DUlpESxNlTu1y_mYeJFoemZsy_brUM4-fkagyJpWThYM"],"n":"EcOvkhtpLOEWin2x8Wky5NY-gYA7ERtFm5gMQgwtfOKs","bt":"0","b":[],"c":[],"a":[]}-AABAAEBBRDdtuO9Rl7blGxFr9EJY7pW6lCeHJrV23EkKW21-Bbh_qKy0OxoUiapmHH1na62U4ugUWCb66Vv5iwDOUBg{"v":"KERI10JSON000155_","t":"rot","d":"Etq77HNNwylUL2VFG-YZJEomFx2VoDBxvGwJargEkPsk","i":"DUlpESxNlTu1y_mYeJFoemZsy_brUM4-fkagyJpWThYM","s":"1","p":"Ez_KqgGXKwITLEyHcrqWLRAAEEhwZiQPfo9C1od9KSmY","kt":"1","k":["DGmxdTuI1koJM6WxIvzMiZLB2dhF_lh580i77oWfu70c"],"n":"EraB77Z_1Wrbe5inZrNxEEoEUIzAZpAfxnhHNt5REQ_s","bt":"0","br":[],"ba":[],"a":[]}-AABAAOyjGtGUxiA5zIq8QaL1-j1QR_iK1lickyldeYBo9BCpsc-kPlHNz47nT2M6kOGC5sw-rdv0MFGdmvSP9pYeBAQ{"v":"KERI10JSON0000cb_","t":"ixn","d":"EYZTfLXu6aR9PFkJJtXgvsiozj7F3dt2N1_VTjPTv2po","i":"DUlpESxNlTu1y_mYeJFoemZsy_brUM4-fkagyJpWThYM","s":"2","p":"Etq77HNNwylUL2VFG-YZJEomFx2VoDBxvGwJargEkPsk","a":[]}-AABAAFGq2dnc7CmXzBo2v7sF-5XpfA4RwiiWiXpa330xufmUZZpwe_98E3Ygi55kcnbqIQv4D32I2VUWDHqrzpcwzDA{"v":"KERI10JSON000155_","t":"rot","d":"EmvZ-WzIltLCx1-VrbiR6al5yc9q_pCNd4Z2ndBSyxDw","i":"DUlpESxNlTu1y_mYeJFoemZsy_brUM4-fkagyJpWThYM","s":"3","p":"EYZTfLXu6aR9PFkJJtXgvsiozj7F3dt2N1_VTjPTv2po","kt":"1","k":["Dm-VjsOLa9w5f2Xl4CBBWHct5r-MSHoJ59LcPAwdGJ7I"],"n":"EKlMPSfxVSnN6L2MaCE4XAV3pRR03C_f775ATjuJTn2Q","bt":"0","br":[],"ba":[],"a":[]}-AABAACgyJ9NzPgGkq-fNFvDY4KLGaWu0bdAVlm1bWnYRQIHLhn7-Bz02cKiDDV87iHxlHzU48750NXD7NtbeumtlFBw{"v":"KERI10JSON000155_","t":"rot","d":"EDVDquFEwzjXoO5O5thVHcgWtcMzJHbnGrVCBc-lJGN4","i":"DUlpESxNlTu1y_mYeJFoemZsy_brUM4-fkagyJpWThYM","s":"4","p":"EmvZ-WzIltLCx1-VrbiR6al5yc9q_pCNd4Z2ndBSyxDw","kt":"1","k":["DbDuXMQndLtQCQxam3a5jCPaQsF6wlsW9QSGnl4t-5-0"],"n":"Eo23lzxgar_UxXYgH1R3QwGWC7RTTtaraAcGs4rIU2Mk","bt":"0","br":[],"ba":[],"a":[]}-AABAAQktnohI9XmOTdm5xpJCy25DL0_1f5hi2R-Xz3azMUMTiX0Fdb6OpyNaRqogPwjqiWwRXWh3HP2WVI_7D7y5yBQ"#;
     let mut kell = signed_event_stream(kel)
         .unwrap()
         .1
@@ -534,6 +538,8 @@ fn test_out_of_order() -> Result<(), Error> {
     let ev1 = kell.next().unwrap();
     let ev2 = kell.next().unwrap();
     let ev3 = kell.next().unwrap();
+    let ev4 = kell.next().unwrap();
+    let ev5 = kell.next().unwrap();
 
     use tempfile::Builder;
 
@@ -547,21 +553,29 @@ fn test_out_of_order() -> Result<(), Error> {
             EventStorage::new(witness_db.clone()),
         )
     };
-    let id: IdentifierPrefix = "D8XXdAHPRk0qe6qWaTaKoER8DRBQYHkLvWhk-s_5Crno".parse()?;
+    let id: IdentifierPrefix = "DUlpESxNlTu1y_mYeJFoemZsy_brUM4-fkagyJpWThYM".parse()?;
 
     processor.process(ev1)?;
     assert_eq!(storage.get_state(&id).unwrap().unwrap().sn, 0);
 
     assert!(matches!(
+        processor.process(ev4),
+        Err(Error::EventOutOfOrderError)
+    ));
+    assert!(matches!(
         processor.process(ev3),
+        Err(Error::EventOutOfOrderError)
+    ));
+    assert!(matches!(
+        processor.process(ev5),
         Err(Error::EventOutOfOrderError)
     ));
     assert_eq!(storage.get_state(&id).unwrap().unwrap().sn, 0);
     // check out of order table
-    assert_eq!(storage.db.get_out_of_order_events(&id).unwrap().count(), 1);
+    assert_eq!(storage.db.get_out_of_order_events(&id).unwrap().count(), 3);
     processor.process(ev2)?;
 
-    assert_eq!(storage.get_state(&id).unwrap().unwrap().sn, 2);
+    assert_eq!(storage.get_state(&id).unwrap().unwrap().sn, 4);
     // Check if out of order is empty
     assert!(storage
         .db
