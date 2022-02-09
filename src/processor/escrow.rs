@@ -256,10 +256,9 @@ impl Escrow for ReplyEscrow {
             Notification::ReplyOutOfOrder(rpy) => {
                 let id = rpy.reply.event.get_prefix();
                 processor.db.add_escrowed_reply(rpy.clone(), &id)
-            },
+            }
             &Notification::KelUpdated(_) => ReplyEscrow::process_reply_escrow(processor),
-            _ => {Ok(())}
+            _ => Ok(()),
         }
-        
     }
-} 
+}

@@ -90,7 +90,7 @@ impl<K: KeyManager> Keri<K> {
         Ok(Keri {
             prefix: IdentifierPrefix::default(),
             key_manager,
-            processor: EventProcessor::new(db.clone()),
+            processor: EventProcessor::with_default_escrow(db.clone()),
             storage: EventStorage::new(db),
         })
     }
