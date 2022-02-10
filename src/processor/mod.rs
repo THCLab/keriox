@@ -5,7 +5,8 @@ use crate::{
     error::Error,
     event_message::signed_event_message::{Message, TimestampedSignedEventMessage},
     prefix::IdentifierPrefix,
-    state::IdentifierState, processor::escrow::PartiallySignedEscrow,
+    processor::escrow::PartiallySignedEscrow,
+    state::IdentifierState,
 };
 
 #[cfg(feature = "async")]

@@ -1,6 +1,7 @@
 use crate::event_message::signed_event_message::Message;
 use crate::event_parsing::message::{signed_event_stream, signed_message};
-use crate::prefix::IdentifierPrefix;
+use crate::prefix::{IdentifierPrefix, Prefix};
+use crate::processor::escrow::PartiallySignedEscrow;
 use crate::processor::event_storage::EventStorage;
 use crate::processor::EventProcessor;
 use crate::{database::sled::SledEventDatabase, error::Error};
@@ -397,7 +398,7 @@ pub fn test_not_fully_witnessed() -> Result<(), Error> {
     Ok(())
 }
 
-#[cfg(features = "query")]
+#[cfg(feature = "query")]
 #[test]
 pub fn test_reply_escrow() -> Result<(), Error> {
     use crate::processor::escrow::ReplyEscrow;
@@ -582,5 +583,116 @@ fn test_out_of_order() -> Result<(), Error> {
         .next()
         .is_none());
 
+    Ok(())
+}
+
+#[test]
+fn test_partially_sign_escrow() -> Result<(), Error> {
+    use tempfile::Builder;
+
+    // events from keripy/tests/core/test_escrow.py::test_partial_signed_escrow
+    let (processor, storage) = {
+        let witness_root = Builder::new().prefix("test-db").tempdir().unwrap();
+        let path = witness_root.path();
+        let witness_db = Arc::new(SledEventDatabase::new(path).unwrap());
+        std::fs::create_dir_all(path).unwrap();
+        let mut processor = EventProcessor::new(witness_db.clone());
+        processor.register_escrow(Box::new(PartiallySignedEscrow::default()));
+
+        (processor, EventStorage::new(witness_db.clone()))
+    };
+
+    let parse_messagee = |raw_event| {
+        let parsed = signed_message(raw_event).unwrap().1;
+        Message::try_from(parsed).unwrap()
+    };
+
+    let id: IdentifierPrefix = "EZgXYINAQWXFpxAmWI9AwOwjVOYXzjyEE_-DdTfkEk8s".parse()?;
+    let icp_raw = br#"{"v":"KERI10JSON00018e_","t":"icp","d":"EZgXYINAQWXFpxAmWI9AwOwjVOYXzjyEE_-DdTfkEk8s","i":"EZgXYINAQWXFpxAmWI9AwOwjVOYXzjyEE_-DdTfkEk8s","s":"0","kt":["1/2","1/2","1/2"],"k":["DK4OJI8JOr6oEEUMeSF_X-SbKysfwpKwW-ho5KARvH5c","D1RZLgYke0GmfZm-CH8AsW4HoTU4m-2mFgu8kbwp8jQU","DBVwzum-jPfuUXUcHEWdplB4YcoL3BWGXK0TMoF_NeFU"],"n":"EhJGhyJQTpSlZ9oWfQT-lHNl1woMazLC42O89fRHocTI","bt":"0","b":[],"c":[],"a":[]}-AABAAo74mzRNAT5WEVRYaUWs4apfEY9oblVL2MtNSORwsEVFNoyH8Vh_w_WC9TGfH-_zqN8dISIy102JtmBwllvHnBA"#;
+    let icp_first_sig = parse_messagee(icp_raw);
+
+    let icp_raw = br#"{"v":"KERI10JSON00018e_","t":"icp","d":"EZgXYINAQWXFpxAmWI9AwOwjVOYXzjyEE_-DdTfkEk8s","i":"EZgXYINAQWXFpxAmWI9AwOwjVOYXzjyEE_-DdTfkEk8s","s":"0","kt":["1/2","1/2","1/2"],"k":["DK4OJI8JOr6oEEUMeSF_X-SbKysfwpKwW-ho5KARvH5c","D1RZLgYke0GmfZm-CH8AsW4HoTU4m-2mFgu8kbwp8jQU","DBVwzum-jPfuUXUcHEWdplB4YcoL3BWGXK0TMoF_NeFU"],"n":"EhJGhyJQTpSlZ9oWfQT-lHNl1woMazLC42O89fRHocTI","bt":"0","b":[],"c":[],"a":[]}-AABACInxprKSzFp2-LNPn7eVAAc8z0XO0KbUE26vv_PXt5IMwyx6S5A1nCC4DQrv6bYHmmXP0YQpkOIm-tRHrPCOuDg"#;
+    let icp_second_sig = parse_messagee(icp_raw);
+
+    assert!(matches!(
+        processor.process(icp_first_sig),
+        Err(Error::NotEnoughSigsError)
+    ));
+    // check if event was accepted into kel
+    assert_eq!(storage.get_state(&id).unwrap(), None);
+
+    // check escrow
+    assert_eq!(
+        storage
+            .db
+            .get_all_partially_signed_events()
+            .unwrap()
+            .count(),
+        1
+    );
+
+    // Proces the same event with another signature
+    assert!(matches!(
+        processor.process(icp_second_sig),
+        Err(Error::NotEnoughSigsError)
+    ));
+
+    // Now event is fully signed, check if escrow is emty
+    assert_eq!(
+        storage
+            .db
+            .get_all_partially_signed_events()
+            .unwrap()
+            .count(),
+        0
+    );
+    // check if event was accepted
+    assert!(storage.get_state(&id).unwrap().is_some());
+
+    let ixn = br#"{"v":"KERI10JSON0000cb_","t":"ixn","d":"E8LhfiGHj_YPjzZWu7xxMrla8Bz3Fn-L6tJFlQcgeA_0","i":"EZgXYINAQWXFpxAmWI9AwOwjVOYXzjyEE_-DdTfkEk8s","s":"1","p":"EZgXYINAQWXFpxAmWI9AwOwjVOYXzjyEE_-DdTfkEk8s","a":[]}-AABAB5LMjFgsQe_k-dxRgGcIBbEa30rPKkCOCNyqnjw56vl-V7RtOlAGIJ_KsyBrF0GD5vZp1NSGsmgTM5Ww36pqQAg"#;
+    let ixn_first_sig = parse_messagee(ixn);
+
+    let ixn2 = br#"{"v":"KERI10JSON0000cb_","t":"ixn","d":"E8LhfiGHj_YPjzZWu7xxMrla8Bz3Fn-L6tJFlQcgeA_0","i":"EZgXYINAQWXFpxAmWI9AwOwjVOYXzjyEE_-DdTfkEk8s","s":"1","p":"EZgXYINAQWXFpxAmWI9AwOwjVOYXzjyEE_-DdTfkEk8s","a":[]}-AABAAvVH0h_W7QuioTt0OmcRgtZSksfQ7MOTYMd4Nc14rdJ9U6j1ycr06YCtuGTM-J34d0ADnG3f_0F3t3dX_lZacBQ"#;
+    let ixn_second_sig = parse_messagee(ixn2);
+
+    assert!(matches!(
+        processor.process(ixn_first_sig),
+        Err(Error::NotEnoughSigsError)
+    ));
+    // check if event was accepted into kel
+    assert_eq!(storage.get_state(&id).unwrap().unwrap().sn, 0);
+
+    // check escrow
+    assert_eq!(
+        storage
+            .db
+            .get_all_partially_signed_events()
+            .unwrap()
+            .count(),
+        1
+    );
+
+    // Proces the same event with another signature
+    assert!(matches!(
+        processor.process(ixn_second_sig),
+        Err(Error::NotEnoughSigsError)
+    ));
+
+    // Now event is fully signed, check if escrow is empty
+    assert_eq!(
+        storage
+            .db
+            .get_all_partially_signed_events()
+            .unwrap()
+            .count(),
+        0
+    );
+    // check if event was accepted
+    assert_eq!(storage.get_state(&id).unwrap().unwrap().sn, 1);
+
+    let rot = parse_messagee(br#"{"v":"KERI10JSON0001c3_","t":"rot","d":"EYNBYvleStPRa_g6Nbrt6Tk6igkG3cY4U9fDVSpIs3EQ","i":"EZgXYINAQWXFpxAmWI9AwOwjVOYXzjyEE_-DdTfkEk8s","s":"2","p":"E8LhfiGHj_YPjzZWu7xxMrla8Bz3Fn-L6tJFlQcgeA_0","kt":["1/2","1/2","1/2"],"k":["DeonYM2bKnAwp6VZcuCXdX72kNFw56czlZ_Tc7XHHVGI","DQghKIy-2do9OkweSgazh3Ql1vCOt5bnc5QF8x50tRoU","DNAUn-5dxm6b8Njo01O0jlStMRCjo9FYQA2mfqFW1_JA"],"n":"EroRQvTYMvlD5hE2FVCm9LuOL_BxBgS8KykKpMUYofdw","bt":"0","br":[],"ba":[],"a":[]}-AADAAoNAH7cxJUMS2eIjUO-7HvdQw-M4abIBafOwbQPDF08swBKAhPbBY95tCcxocX215GWqeFG2XarHR7RpKnMEqCgABifbx08-ZPNxPZaRZcgYtNq5GTLj9UTH90FE_r9nvpbJ9jyZ_goUpX8_pl3szDpYOQTPrvH0KfK3K8ySzI9o7AwACi1l-1BucAAR06eqaVLo1gPO5cszE1X9FuyKqhujsoqoOubTnwT-Dzi2_WPCBeUnpvvAYhqpkDCGm2yWUZEOjCA"#);
+
+    processor.process(rot)?;
+    assert_eq!(storage.get_state(&id).unwrap().unwrap().sn, 2);
     Ok(())
 }

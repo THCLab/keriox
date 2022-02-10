@@ -137,23 +137,42 @@ impl SledEventDatabase {
             .push(self.identifiers.designated_key(id), event.into())
     }
 
+    pub fn get_all_partially_signed_events(
+        &self,
+    ) -> Option<impl DoubleEndedIterator<Item = TimestampedSignedEventMessage>> {
+        self.escrowed_partially_signed.get_all()
+    }
+
     pub fn get_partially_signed_events(
         &self,
-        event: EventMessage<KeyEvent>
+        event: EventMessage<KeyEvent>,
     ) -> Option<impl DoubleEndedIterator<Item = TimestampedSignedEventMessage>> {
-        Some(self.escrowed_partially_signed
+        match self
+            .escrowed_partially_signed
             .iter_values(self.identifiers.designated_key(&event.event.get_prefix()))
-            .unwrap()
-            .filter(move |db_event| db_event.signed_event_message.event_message == event))
+        {
+            Some(events) => Some(
+                events
+                    .filter(move |db_event| event.eq(&db_event.signed_event_message.event_message)),
+            ),
+            None => None,
+        }
     }
 
     pub fn remove_partially_signed_event(
         &self,
         id: &IdentifierPrefix,
-        event: &SignedEventMessage,
+        event: &EventMessage<KeyEvent>,
     ) -> Result<(), Error> {
-        self.escrowed_partially_signed
-            .remove(self.identifiers.designated_key(id), &event.into())
+        if let Some(partially_signed) =
+            self.get_partially_signed_events(event.clone())
+        {
+            for partially_event in partially_signed {
+                self.escrowed_partially_signed
+                    .remove(self.identifiers.designated_key(id), &partially_event)?;
+            }
+        }
+        Ok(())
     }
 
     pub fn add_partially_witnessed_event(
