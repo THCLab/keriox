@@ -89,13 +89,13 @@ impl<'de> Deserialize<'de> for Route {
     {
         let s = String::deserialize(deserializer)?;
         if s.starts_with("/ksn/") {
-            let id: &IdentifierPrefix = &s[5..].parse().unwrap();
+            let id: &IdentifierPrefix = &s[5..].parse().map_err(de::Error::custom)?;
             Ok(Route::ReplyKsn(id.clone()))
         } else {
             match &s[..] {
                 "ksn" => Ok(Route::Ksn),
                 "log" => Ok(Route::Log),
-                _ => Err(Error::SemanticError("".into())).map_err(de::Error::custom),
+                _ => Err(Error::SemanticError("Unknown route".into())).map_err(de::Error::custom),
             }
         }
     }

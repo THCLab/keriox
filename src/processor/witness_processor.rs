@@ -29,8 +29,7 @@ impl WitnessProcessor {
             let id = &signed_event.event_message.event.get_prefix();
             self.0.db.add_kel_finalized_event(signed_event, id)?;
             self.0
-                .notify(&Notification::KelUpdated(id.clone()))
-                .unwrap();
+                .notify(&Notification::KelUpdated(id.clone()))?;
             Ok(compute_state(self.0.db.clone(), id)?)
         } else {
             res

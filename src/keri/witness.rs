@@ -33,7 +33,7 @@ impl Witness {
     pub fn new(path: &Path) -> Result<Self, Error> {
         let signer = Signer::new();
         let (processor, storage) = {
-            let witness_db = Arc::new(SledEventDatabase::new(path).unwrap());
+            let witness_db = Arc::new(SledEventDatabase::new(path)?);
             (
                 WitnessProcessor::new(witness_db.clone()),
                 EventStorage::new(witness_db.clone()),
@@ -130,7 +130,7 @@ impl Witness {
         )?;
 
         let signature =
-            SelfSigning::Ed25519Sha512.derive(self.signer.sign(&rpy.serialize()?).unwrap());
+            SelfSigning::Ed25519Sha512.derive(self.signer.sign(&rpy.serialize()?)?);
         Ok(SignedReply::new_nontrans(
             rpy,
             self.prefix.clone(),
@@ -147,7 +147,7 @@ impl Witness {
             .ok_or(Error::SemanticError("No signer identifier in db".into()))?
             .current;
 
-        if kc.verify(&qr.envelope.serialize().unwrap(), &signatures)? {
+        if kc.verify(&qr.envelope.serialize()?, &signatures)? {
             // TODO check timestamps
             // unpack and check what's inside
             let route = qr.envelope.event.get_route();
@@ -170,8 +170,7 @@ impl Witness {
                 // return reply message with ksn inside
                 let state = self
                     .storage
-                    .get_state(&i)
-                    .unwrap()
+                    .get_state(&i)?
                     .ok_or(Error::SemanticError("No id in database".into()))?;
                 let ksn = KeyStateNotice::new_ksn(state, SerializationFormats::JSON);
                 let rpy = ReplyEvent::new_reply(

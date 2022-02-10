@@ -46,7 +46,7 @@ impl Escrow for OutOfOrderEscrow {
     }
 }
 
-// TODO fix error handling
+// TODO fix error handling and avoid unwraps
 impl OutOfOrderEscrow {
     pub fn process_out_of_order_events(
         processor: &EventProcessor,
@@ -63,17 +63,17 @@ impl OutOfOrderEscrow {
                         processor
                             .db
                             .add_kel_finalized_event(event.signed_event_message.clone(), id)
-                            .expect("Database problem");
+                            .unwrap();
                         // remove from escrow
                         processor
                             .db
                             .remove_out_of_order_event(id, &event.signed_event_message)
-                            .expect("Database problem");
+                            .unwrap();
                         processor
                             .notify(&Notification::KelUpdated(
                                 event.signed_event_message.event_message.event.get_prefix(),
                             ))
-                            .expect("Notification problem");
+                            .unwrap();
                         // stop processing the escrow if kel was updated. It needs to start again.
                         None
                     }
@@ -82,7 +82,7 @@ impl OutOfOrderEscrow {
                         processor
                             .db
                             .remove_out_of_order_event(id, &event.signed_event_message)
-                            .expect("Database problem");
+                            .unwrap();
                         Some(())
                     }
                     Err(_e) => Some(()), // keep in escrow,
@@ -107,7 +107,6 @@ impl Escrow for PartiallySignedEscrow {
     }
 }
 
-// TODO fix error handling
 impl PartiallySignedEscrow {
     pub fn process_partially_signed_events(
         processor: &EventProcessor,
@@ -179,7 +178,7 @@ impl Escrow for PartiallyWitnessedEscrow {
     }
 }
 
-// TODO fix error handling
+// TODO fix error handling and avoid unwraps
 impl PartiallyWitnessedEscrow {
     pub fn process_partially_witnessed_events(processor: &EventProcessor) -> Result<(), Error> {
         if let Some(mut esc) = processor.db.get_all_partially_witnessed() {
@@ -199,12 +198,12 @@ impl PartiallyWitnessedEscrow {
                         processor
                             .db
                             .remove_partially_witnessed_event(&id, &event.signed_event_message)
-                            .expect("Database problem");
+                            .unwrap();
                         processor
                             .notify(&Notification::KelUpdated(
                                 event.signed_event_message.event_message.event.get_prefix(),
                             ))
-                            .expect("Notification problem");
+                            .unwrap();
                         // stop processing the escrow if kel was updated. It needs to start again.
                         None
                     }
@@ -213,7 +212,7 @@ impl PartiallyWitnessedEscrow {
                         processor
                             .db
                             .remove_partially_witnessed_event(&id, &event.signed_event_message)
-                            .expect("Database problem");
+                            .unwrap();
                         Some(())
                     }
                     Err(_e) => Some(()), // keep in escrow,
