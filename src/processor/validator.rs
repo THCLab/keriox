@@ -106,7 +106,7 @@ impl EventValidator {
 
             // Check if event seal list contains delegating event seal.
             if !data.iter().any(|s| match s {
-                Seal::Event(es) => delegated_event.check_digest(&es.event_digest).unwrap(),
+                Seal::Event(es) => delegated_event.check_digest(&es.event_digest).unwrap_or(false),
                 _ => false,
             }) {
                 return Err(Error::SemanticError(

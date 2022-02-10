@@ -126,12 +126,11 @@ impl EventProcessor {
                 match self.validator.process_signed_reply(&rpy) {
                     Ok(_) => {
                         self.db
-                            .update_accepted_reply(rpy.clone(), &rpy.reply.event.get_prefix())
-                            .unwrap();
+                            .update_accepted_reply(rpy.clone(), &rpy.reply.event.get_prefix())?;
                         self.notify(&Notification::ReplyUpdated)
                     }
                     Err(Error::EventOutOfOrderError) => {
-                        self.notify(&Notification::ReplyOutOfOrder(rpy)).unwrap();
+                        self.notify(&Notification::ReplyOutOfOrder(rpy))?;
                         Err(Error::EventOutOfOrderError)
                     }
                     Err(anything) => Err(anything),
