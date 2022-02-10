@@ -99,7 +99,9 @@ pub struct PartiallySignedEscrow;
 impl Escrow for PartiallySignedEscrow {
     fn notify(&self, notification: &Notification, processor: &EventProcessor) -> Result<(), Error> {
         match notification {
-            Notification::PartiallySigned(ev) => Self::process_partially_signed_events(processor, ev),
+            Notification::PartiallySigned(ev) => {
+                Self::process_partially_signed_events(processor, ev)
+            }
             _ => Ok(()),
         }
     }
@@ -112,14 +114,21 @@ impl PartiallySignedEscrow {
         signed_event: &SignedEventMessage,
     ) -> Result<(), Error> {
         let id = signed_event.event_message.event.get_prefix();
-        if let Some(esc) = processor.db.get_partially_signed_events(signed_event.event_message.clone()) {
-            let sigs = esc.map(|ev| ev.signed_event_message.signatures).flatten().collect();
-            let new_event = SignedEventMessage {signatures: sigs, .. signed_event.to_owned()};
+        if let Some(esc) = processor
+            .db
+            .get_partially_signed_events(signed_event.event_message.clone())
+        {
+            let new_sigs: Vec<_> = esc
+                .map(|ev| ev.signed_event_message.signatures)
+                .flatten()
+                .chain(signed_event.signatures.clone().into_iter())
+                .collect();
+            let new_event = SignedEventMessage {
+                signatures: new_sigs,
+                ..signed_event.to_owned()
+            };
 
-            match processor
-                .validator
-                .process_event(&new_event)
-            {
+            match processor.validator.process_event(&new_event) {
                 Ok(_) => {
                     // add to kel
                     processor
@@ -128,18 +137,22 @@ impl PartiallySignedEscrow {
                     // remove from escrow
                     processor
                         .db
-                        .remove_partially_signed_event(&id, &new_event)?;
-                    processor
-                        .notify(&Notification::KelUpdated(
-                            new_event.event_message.event.get_prefix(),
-                        ))?;
+                        .remove_partially_signed_event(&id, &new_event.event_message)?;
+                    processor.notify(&Notification::KelUpdated(
+                        new_event.event_message.event.get_prefix(),
+                    ))?;
                 }
-                Err(_e) => (), // keep in escrow,
+                Err(_e) => {
+                    //keep in escrow and save new partially signed event
+                    processor
+                        .db
+                        .add_partially_signed_event(signed_event.clone(), &id)?;
+                }
             }
         } else {
             processor
-                    .db
-                    .add_partially_signed_event(signed_event.clone(), &id)?;
+                .db
+                .add_partially_signed_event(signed_event.clone(), &id)?;
         };
 
         Ok(())
@@ -280,10 +293,10 @@ impl Escrow for TransReceiptsEscrow {
     }
 }
 
-#[cfg(features = "query")]
+#[cfg(feature = "query")]
 pub struct ReplyEscrow;
 
-#[cfg(features = "query")]
+#[cfg(feature = "query")]
 impl Escrow for ReplyEscrow {
     fn notify(&self, notification: &Notification, processor: &EventProcessor) -> Result<(), Error> {
         match notification {
@@ -297,11 +310,11 @@ impl Escrow for ReplyEscrow {
     }
 }
 
-#[cfg(features = "query")]
+#[cfg(feature = "query")]
 impl ReplyEscrow {
     pub fn process_reply_escrow(processor: &EventProcessor) -> Result<(), Error> {
-        use crate::query::QueryError;
         use crate::event_message::signed_event_message::Message;
+        use crate::query::QueryError;
 
         processor.db.get_all_escrowed_replys().map(|esc| {
             esc.for_each(|sig_rep| {
@@ -322,4 +335,3 @@ impl ReplyEscrow {
         Ok(())
     }
 }
-
