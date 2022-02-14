@@ -32,11 +32,11 @@ pub struct EventProcessor {
 impl EventProcessor {
     pub fn with_default_escrow(db: Arc<SledEventDatabase>) -> Self {
         use self::escrow::{NontransReceiptsEscrow, OutOfOrderEscrow, PartiallyWitnessedEscrow};
-        let mut processor = EventProcessor::new(db);
-        processor.register_escrow(Box::new(OutOfOrderEscrow::default()));
-        processor.register_escrow(Box::new(PartiallySignedEscrow::default()));
-        processor.register_escrow(Box::new(PartiallyWitnessedEscrow::default()));
-        processor.register_escrow(Box::new(NontransReceiptsEscrow::default()));
+        let mut processor = EventProcessor::new(db.clone());
+        processor.register_observer(Box::new(OutOfOrderEscrow::new(db.clone())));
+        processor.register_observer(Box::new(PartiallySignedEscrow::new(db.clone())));
+        processor.register_observer(Box::new(PartiallyWitnessedEscrow::new(db.clone())));
+        processor.register_observer(Box::new(NontransReceiptsEscrow::new(db.clone())));
         processor
     }
 
@@ -51,7 +51,7 @@ impl EventProcessor {
         }
     }
 
-    pub fn register_escrow(&mut self, escrow: Box<dyn Escrow>) {
+    pub fn register_observer(&mut self, escrow: Box<dyn Escrow>) {
         self.escrows.push(escrow);
     }
 

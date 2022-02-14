@@ -12,9 +12,9 @@ pub struct WitnessProcessor(EventProcessor);
 impl WitnessProcessor {
     pub fn new(db: Arc<SledEventDatabase>) -> Self {
         use crate::processor::escrow::{OutOfOrderEscrow, PartiallySignedEscrow};
-        let mut processor = EventProcessor::new(db);
-        processor.register_escrow(Box::new(OutOfOrderEscrow::default()));
-        processor.register_escrow(Box::new(PartiallySignedEscrow::default()));
+        let mut processor = EventProcessor::new(db.clone());
+        processor.register_observer(Box::new(OutOfOrderEscrow::new(db.clone())));
+        processor.register_observer(Box::new(PartiallySignedEscrow::new(db.clone())));
         Self(processor)
     }
 
