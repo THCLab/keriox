@@ -129,8 +129,7 @@ impl Witness {
             SerializationFormats::JSON,
         )?;
 
-        let signature =
-            SelfSigning::Ed25519Sha512.derive(self.signer.sign(&rpy.serialize()?)?);
+        let signature = SelfSigning::Ed25519Sha512.derive(self.signer.sign(&rpy.serialize()?)?);
         Ok(SignedReply::new_nontrans(
             rpy,
             self.prefix.clone(),

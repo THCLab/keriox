@@ -1,6 +1,6 @@
 use crate::event_message::signed_event_message::Message;
 use crate::event_parsing::message::{signed_event_stream, signed_message};
-use crate::prefix::{IdentifierPrefix, Prefix};
+use crate::prefix::IdentifierPrefix;
 use crate::processor::escrow::PartiallySignedEscrow;
 use crate::processor::event_storage::EventStorage;
 use crate::processor::EventProcessor;

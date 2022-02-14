@@ -11,7 +11,7 @@ use crate::{
         },
         TimestampedEventMessage,
     },
-    prefix::{IdentifierPrefix, SelfAddressingPrefix},
+    prefix::IdentifierPrefix,
 };
 use std::path::Path;
 use tables::{SledEventTree, SledEventTreeVec};
@@ -147,16 +147,12 @@ impl SledEventDatabase {
         &self,
         event: EventMessage<KeyEvent>,
     ) -> Option<impl DoubleEndedIterator<Item = TimestampedSignedEventMessage>> {
-        match self
-            .escrowed_partially_signed
+        self.escrowed_partially_signed
             .iter_values(self.identifiers.designated_key(&event.event.get_prefix()))
-        {
-            Some(events) => Some(
+            .map(|events| {
                 events
-                    .filter(move |db_event| event.eq(&db_event.signed_event_message.event_message)),
-            ),
-            None => None,
-        }
+                    .filter(move |db_event| event.eq(&db_event.signed_event_message.event_message))
+            })
     }
 
     pub fn remove_partially_signed_event(
@@ -164,9 +160,7 @@ impl SledEventDatabase {
         id: &IdentifierPrefix,
         event: &EventMessage<KeyEvent>,
     ) -> Result<(), Error> {
-        if let Some(partially_signed) =
-            self.get_partially_signed_events(event.clone())
-        {
+        if let Some(partially_signed) = self.get_partially_signed_events(event.clone()) {
             for partially_event in partially_signed {
                 self.escrowed_partially_signed
                     .remove(self.identifiers.designated_key(id), &partially_event)?;

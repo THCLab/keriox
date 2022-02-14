@@ -3,18 +3,24 @@ use std::sync::Arc;
 use crate::{
     database::sled::SledEventDatabase,
     error::Error,
-    event::{event_data::EventData, sections::seal::EventSeal},
+    event::{
+        event_data::EventData,
+        sections::{seal::EventSeal, KeyConfig},
+    },
     event_message::signed_event_message::TimestampedSignedEventMessage,
-    prefix::IdentifierPrefix,
+    prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix, SelfSigningPrefix},
     state::{EventSemantics, IdentifierState},
 };
 
 use super::compute_state;
+#[cfg(feature = "query")]
+use crate::query::reply::SignedReply;
 
 pub struct EventStorage {
     pub db: Arc<SledEventDatabase>,
 }
 
+// Collection of methods for getting data from database.
 impl EventStorage {
     pub fn new(db: Arc<SledEventDatabase>) -> Self {
         Self { db }
@@ -118,6 +124,47 @@ impl EventStorage {
         Ok(Some(state))
     }
 
+    /// Get keys from Establishment Event
+    ///
+    /// Returns the current Key Config associated with
+    /// the given Prefix at the establishment event
+    /// represented by sn and Event Digest
+    pub fn get_keys_at_event(
+        &self,
+        id: &IdentifierPrefix,
+        sn: u64,
+        event_digest: &SelfAddressingPrefix,
+    ) -> Result<Option<KeyConfig>, Error> {
+        if let Ok(Some(event)) = self.get_event_at_sn(id, sn) {
+            // if it's the event we're looking for
+            if event
+                .signed_event_message
+                .event_message
+                .check_digest(event_digest)?
+            {
+                // return the config or error if it's not an establishment event
+                Ok(Some(
+                    match event
+                        .signed_event_message
+                        .event_message
+                        .event
+                        .get_event_data()
+                    {
+                        EventData::Icp(icp) => icp.key_config,
+                        EventData::Rot(rot) => rot.key_config,
+                        EventData::Dip(dip) => dip.inception_data.key_config,
+                        EventData::Drt(drt) => drt.key_config,
+                        _ => return Err(Error::SemanticError("Not an establishment event".into())),
+                    },
+                ))
+            } else {
+                Err(Error::SemanticError("Event digests doesn't match".into()))
+            }
+        } else {
+            Err(Error::EventOutOfOrderError)
+        }
+    }
+
     pub fn has_receipt(
         &self,
         id: &IdentifierPrefix,
@@ -133,8 +180,39 @@ impl EventStorage {
         })
     }
 
+    pub fn get_nt_receipts_signatures(
+        &self,
+        prefix: &IdentifierPrefix,
+        sn: u64,
+    ) -> Option<Vec<(BasicPrefix, SelfSigningPrefix)>> {
+        self.db.get_escrow_nt_receipts(prefix).map(|rcts| {
+            rcts.filter(|rct| rct.body.event.sn == sn)
+                .map(|rct| rct.couplets)
+                .flatten()
+                .collect()
+        })
+    }
+
+    #[cfg(feature = "query")]
+    pub fn get_last_reply(
+        &self,
+        creator_prefix: &IdentifierPrefix,
+        signer_prefix: &IdentifierPrefix,
+    ) -> Option<SignedReply> {
+        use crate::query::Route;
+
+        self.db
+            .get_accepted_replys(creator_prefix)
+            .and_then(|mut o| {
+                o.find(|r: &SignedReply| {
+                    r.reply.event.get_route() == Route::ReplyKsn(signer_prefix.to_owned())
+                })
+            })
+    }
+
     /// TODO Isn't it the same as `apply_to_state` function in validator?
-    /// it won't process inception event
+    /// it won't process inception event because compute_state returns None
+    /// in that case
     pub fn process_actual_event(
         &self,
         id: &IdentifierPrefix,

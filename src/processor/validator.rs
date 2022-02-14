@@ -9,10 +9,7 @@ use crate::{
     error::Error,
     event::{
         event_data::EventData,
-        sections::{
-            seal::{EventSeal, Seal},
-            KeyConfig,
-        },
+        sections::seal::{EventSeal, Seal},
         EventMessage,
     },
     event_message::{
@@ -22,7 +19,7 @@ use crate::{
             SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
         },
     },
-    prefix::{IdentifierPrefix, SelfAddressingPrefix},
+    prefix::IdentifierPrefix,
     state::{EventSemantics, IdentifierState},
 };
 
@@ -39,45 +36,151 @@ impl EventValidator {
         }
     }
 
-    /// Get keys from Establishment Event
+    /// Process Event
     ///
-    /// Returns the current Key Config associated with
-    /// the given Prefix at the establishment event
-    /// represented by sn and Event Digest
-    fn get_keys_at_event(
+    /// Validates a Key Event against the latest state
+    /// of the Identifier and applies it to update the state
+    /// returns the updated state
+    pub fn validate_event(
         &self,
-        id: &IdentifierPrefix,
-        sn: u64,
-        event_digest: &SelfAddressingPrefix,
-    ) -> Result<Option<KeyConfig>, Error> {
-        if let Ok(Some(event)) = self.event_storage.get_event_at_sn(id, sn) {
-            // if it's the event we're looking for
-            if event
-                .signed_event_message
-                .event_message
-                .check_digest(event_digest)?
+        signed_event: &SignedEventMessage,
+    ) -> Result<Option<IdentifierState>, Error> {
+        // If delegated event, check its delegator seal.
+        if let Some(seal) = self.get_delegator_seal(signed_event)? {
+            self.validate_seal(seal, &signed_event.event_message)?;
+        };
+
+        self.apply_to_state(&signed_event.event_message)
+            .and_then(|new_state| {
+                // match on verification result
+                new_state
+                    .current
+                    .verify(
+                        &signed_event.event_message.serialize()?,
+                        &signed_event.signatures,
+                    )
+                    .and_then(|result| {
+                        if !result {
+                            Err(Error::SignatureVerificationError)
+                        } else {
+                            // check if there are enough receipts and escrow
+                            let receipts_couplets: Vec<_> = self
+                                .event_storage
+                                .get_nt_receipts_signatures(
+                                    &new_state.prefix,
+                                    signed_event.event_message.event.get_sn(),
+                                )
+                                .unwrap_or_default();
+                            if new_state
+                                .witness_config
+                                .enough_receipts(&receipts_couplets)?
+                            {
+                                Ok(Some(new_state))
+                            } else {
+                                Err(Error::NotEnoughReceiptsError)
+                            }
+                        }
+                    })
+            })
+    }
+
+    /// Process Validator Receipt
+    ///
+    /// Checks the receipt against the receipted event
+    /// and the state of the validator, returns the state
+    /// of the identifier being receipted
+    pub fn validate_validator_receipt(
+        &self,
+        vrc: &SignedTransferableReceipt,
+    ) -> Result<Option<IdentifierState>, Error> {
+        if let Ok(Some(event)) = self
+            .event_storage
+            .get_event_at_sn(&vrc.body.event.prefix, vrc.body.event.sn)
+        {
+            let kp = self.event_storage.get_keys_at_event(
+                &vrc.validator_seal.prefix,
+                vrc.validator_seal.sn,
+                &vrc.validator_seal.event_digest,
+            )?;
+            if kp.is_some()
+                && kp.unwrap().verify(
+                    &event.signed_event_message.event_message.serialize()?,
+                    &vrc.signatures,
+                )?
             {
-                // return the config or error if it's not an establishment event
-                Ok(Some(
-                    match event
-                        .signed_event_message
-                        .event_message
-                        .event
-                        .get_event_data()
-                    {
-                        EventData::Icp(icp) => icp.key_config,
-                        EventData::Rot(rot) => rot.key_config,
-                        EventData::Dip(dip) => dip.inception_data.key_config,
-                        EventData::Drt(drt) => drt.key_config,
-                        _ => return Err(Error::SemanticError("Not an establishment event".into())),
-                    },
-                ))
+                Ok(())
             } else {
-                Err(Error::SemanticError("Event digests doesn't match".into()))
+                Err(Error::SignatureVerificationError)
             }
         } else {
-            Err(Error::EventOutOfOrderError)
+            Err(Error::MissingEvent)
+        }?;
+        self.event_storage.get_state(&vrc.body.event.prefix)
+    }
+
+    /// Process Witness Receipt
+    ///
+    /// Checks the receipt against the receipted event
+    /// returns the state of the Identifier being receipted,
+    /// which may have been updated by un-escrowing events
+    pub fn validate_witness_receipt(
+        &self,
+        rct: &SignedNontransferableReceipt,
+    ) -> Result<Option<IdentifierState>, Error> {
+        // get event which is being receipted
+        let id = &rct.body.event.prefix.to_owned();
+        if let Ok(Some(event)) = self
+            .event_storage
+            .get_event_at_sn(&rct.body.event.prefix, rct.body.event.sn)
+        {
+            let serialized_event = event.signed_event_message.serialize()?;
+            let (_, mut errors): (Vec<_>, Vec<Result<bool, Error>>) = rct
+                .clone()
+                .couplets
+                .into_iter()
+                .map(|(witness, receipt)| witness.verify(&serialized_event, &receipt))
+                .partition(Result::is_ok);
+            if errors.is_empty() {
+                Ok(())
+            } else {
+                // TODO
+                let e = errors.pop().unwrap().unwrap_err();
+                Err(e)
+            }
+        } else {
+            // There's no receipted event id database so we can't verify signatures
+            Err(Error::MissingEvent)
+        }?;
+        self.event_storage.get_state(id)
+    }
+
+    pub fn verify(&self, data: &[u8], sig: &Signature) -> Result<(), Error> {
+        match sig {
+            Signature::Transferable(seal, sigs) => {
+                let kp = self.event_storage.get_keys_at_event(
+                    &seal.prefix,
+                    seal.sn,
+                    &seal.event_digest,
+                )?;
+                (kp.is_some() && kp.unwrap().verify(data, sigs)?)
+                    .then(|| ())
+                    .ok_or(Error::SignatureVerificationError)
+            }
+            Signature::NonTransferable(bp, sign) => bp
+                .verify(data, sign)?
+                .then(|| ())
+                .ok_or(Error::SignatureVerificationError),
         }
+    }
+
+    fn apply_to_state(&self, event: &EventMessage<KeyEvent>) -> Result<IdentifierState, Error> {
+        // get state for id (TODO cache?)
+        self.event_storage
+            .get_state(&event.event.get_prefix())
+            // get empty state if there is no state yet
+            .map(|opt| opt.map_or_else(IdentifierState::default, |s| s))
+            // process the event update
+            .and_then(|state| event.apply_to(state))
     }
 
     /// Validate delegating event seal.
@@ -106,7 +209,9 @@ impl EventValidator {
 
             // Check if event seal list contains delegating event seal.
             if !data.iter().any(|s| match s {
-                Seal::Event(es) => delegated_event.check_digest(&es.event_digest).unwrap_or(false),
+                Seal::Event(es) => delegated_event
+                    .check_digest(&es.event_digest)
+                    .unwrap_or(false),
                 _ => false,
             }) {
                 return Err(Error::SemanticError(
@@ -160,168 +265,14 @@ impl EventValidator {
             _ => None,
         })
     }
+}
 
-    /// Process Event
-    ///
-    /// Validates a Key Event against the latest state
-    /// of the Identifier and applies it to update the state
-    /// returns the updated state
-    pub fn process_event(
-        &self,
-        signed_event: &SignedEventMessage,
-    ) -> Result<Option<IdentifierState>, Error> {
-        // If delegated event, check its delegator seal.
-        if let Some(seal) = self.get_delegator_seal(signed_event)? {
-            self.validate_seal(seal, &signed_event.event_message)?;
-        };
-
-        self.apply_to_state(&signed_event.event_message)
-            .and_then(|new_state| {
-                // add event from the get go and clean it up on failure later
-
-                // self.db.add_kel_finalized_event(signed_event.clone(), id)?;
-                // match on verification result
-                new_state
-                    .current
-                    .verify(
-                        &signed_event.event_message.serialize()?,
-                        &signed_event.signatures,
-                    )
-                    .and_then(|result| {
-                        if !result {
-                            Err(Error::SignatureVerificationError)
-                        } else {
-                            // check if there are enough receipts and escrow
-                            let receipts_couplets: Vec<_> = self
-                                .event_storage
-                                .db
-                                .get_escrow_nt_receipts(&new_state.prefix)
-                                .map(|rcts| {
-                                    rcts.filter(|rct| {
-                                        rct.body.event.sn
-                                            == signed_event.event_message.event.get_sn()
-                                    })
-                                    .map(|rct| rct.couplets)
-                                    .flatten()
-                                    .collect()
-                                })
-                                .unwrap_or_default();
-                            if new_state
-                                .witness_config
-                                .enough_receipts(&receipts_couplets)?
-                            {
-                                Ok(Some(new_state))
-                            } else {
-                                Err(Error::NotEnoughReceiptsError)
-                            }
-                        }
-                    })
-            })
-    }
-
-    /// Process Validator Receipt
-    ///
-    /// Checks the receipt against the receipted event
-    /// and the state of the validator, returns the state
-    /// of the identifier being receipted
-    pub fn process_validator_receipt(
-        &self,
-        vrc: &SignedTransferableReceipt,
-    ) -> Result<Option<IdentifierState>, Error> {
-        if let Ok(Some(event)) = self
-            .event_storage
-            .get_event_at_sn(&vrc.body.event.prefix, vrc.body.event.sn)
-        {
-            let kp = self.get_keys_at_event(
-                &vrc.validator_seal.prefix,
-                vrc.validator_seal.sn,
-                &vrc.validator_seal.event_digest,
-            )?;
-            if kp.is_some()
-                && kp.unwrap().verify(
-                    &event.signed_event_message.event_message.serialize()?,
-                    &vrc.signatures,
-                )?
-            {
-                Ok(())
-            } else {
-                Err(Error::SignatureVerificationError)
-            }
-        } else {
-            Err(Error::MissingEvent)
-        }?;
-        self.event_storage.get_state(&vrc.body.event.prefix)
-    }
-
-    /// Process Witness Receipt
-    ///
-    /// Checks the receipt against the receipted event
-    /// returns the state of the Identifier being receipted,
-    /// which may have been updated by un-escrowing events
-    pub fn process_witness_receipt(
-        &self,
-        rct: &SignedNontransferableReceipt,
-    ) -> Result<Option<IdentifierState>, Error> {
-        // get event which is being receipted
-        let id = &rct.body.event.prefix.to_owned();
-        if let Ok(Some(event)) = self
-            .event_storage
-            .get_event_at_sn(&rct.body.event.prefix, rct.body.event.sn)
-        {
-            let serialized_event = event.signed_event_message.serialize()?;
-            let (_, mut errors): (Vec<_>, Vec<Result<bool, Error>>) = rct
-                .clone()
-                .couplets
-                .into_iter()
-                .map(|(witness, receipt)| witness.verify(&serialized_event, &receipt))
-                .partition(Result::is_ok);
-            if errors.is_empty() {
-                Ok(())
-            } else {
-                // TODO
-                let e = errors.pop().unwrap().unwrap_err();
-                Err(e)
-            }
-        } else {
-            // There's no receipted event id database so we can't verify signatures
-            Err(Error::MissingEvent)
-        }?;
-        self.event_storage.get_state(id)
-    }
-
-    fn apply_to_state(&self, event: &EventMessage<KeyEvent>) -> Result<IdentifierState, Error> {
-        // get state for id (TODO cache?)
-        self.event_storage
-            .get_state(&event.event.get_prefix())
-            // get empty state if there is no state yet
-            .map(|opt| opt.map_or_else(IdentifierState::default, |s| s))
-            // process the event update
-            .and_then(|state| event.apply_to(state))
-    }
-
-    pub fn verify(&self, data: &[u8], sig: &Signature) -> Result<(), Error> {
-        match sig {
-            Signature::Transferable(seal, sigs) => {
-                let kp = self.get_keys_at_event(&seal.prefix, seal.sn, &seal.event_digest)?;
-                (kp.is_some() && kp.unwrap().verify(data, sigs)?)
-                    .then(|| ())
-                    .ok_or(Error::SignatureVerificationError)
-            }
-            Signature::NonTransferable(bp, sign) => bp
-                .verify(data, sign)?
-                .then(|| ())
-                .ok_or(Error::SignatureVerificationError),
-        }
-    }
-
+impl EventValidator {
     #[cfg(feature = "query")]
     fn bada_logic(&self, new_rpy: &SignedReply) -> Result<(), Error> {
-        use crate::query::{reply::ReplyEvent, Route};
-        let accepted_replys = self
-            .event_storage
-            .db
-            .get_accepted_replys(&new_rpy.reply.event.get_prefix());
+        use crate::query::reply::ReplyEvent;
 
+        let reply_prefix = new_rpy.reply.event.get_prefix();
         // helper function for reply timestamps checking
         fn check_dts(new_rpy: &ReplyEvent, old_rpy: &ReplyEvent) -> Result<(), Error> {
             let new_dt = new_rpy.get_timestamp();
@@ -344,11 +295,10 @@ impl EventValidator {
                 //     greater than old
 
                 // get last reply for prefix with route with sender_prefix
-                match accepted_replys.and_then(|mut o| {
-                    o.find(|r: &SignedReply| {
-                        r.reply.event.get_route() == Route::ReplyKsn(seal.prefix.clone())
-                    })
-                }) {
+                match self
+                    .event_storage
+                    .get_last_reply(&reply_prefix, &seal.prefix)
+                {
                     Some(old_rpy) => {
                         // check sns
                         let new_sn = seal.sn.clone();
@@ -374,12 +324,11 @@ impl EventValidator {
             }
             Signature::NonTransferable(bp, _sig) => {
                 //  If date-time-stamp of new is greater than old
-                match accepted_replys.and_then(|mut o| {
-                    o.find(|r| {
-                        r.reply.event.get_route()
-                            == Route::ReplyKsn(IdentifierPrefix::Basic(bp.clone()))
-                    })
-                }) {
+
+                match self
+                    .event_storage
+                    .get_last_reply(&reply_prefix, &IdentifierPrefix::Basic(bp))
+                {
                     Some(old_rpy) => check_dts(&new_rpy.reply.event, &old_rpy.reply.event),
                     None => Err(QueryError::NoSavedReply.into()),
                 }
@@ -401,11 +350,6 @@ impl EventValidator {
                 return Err(QueryError::Error("Wrong reply message signer".into()).into());
             };
             self.verify(&rpy.reply.serialize()?, &rpy.signature)?;
-            // if let Err(Error::EventOutOfOrderError) = verification_result {
-            //     self.escrow_reply(&rpy)?;
-            //     return Err(Error::QueryError(QueryError::OutOfOrderEventError));
-            // }
-            // verification_result?;
             rpy.reply.check_digest()?;
             let bada_result = self.bada_logic(&rpy);
             match bada_result {
@@ -418,12 +362,6 @@ impl EventValidator {
             // now unpack ksn and check its details
             let ksn = rpy.reply.event.get_reply_data();
             self.check_ksn(&ksn, aid)?;
-            // if let Err(Error::QueryError(QueryError::OutOfOrderEventError)) = ksn_checking_result {
-            //     self.escrow_reply(&rpy)?;
-            // };
-            // ksn_checking_result?;
-            // self.db
-            //     .update_accepted_reply(rpy.clone(), &rpy.reply.event.get_prefix())?;
             Ok(Some(rpy.reply.event.get_state()))
         } else {
             Err(Error::SemanticError("wrong route type".into()))
