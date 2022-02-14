@@ -2,6 +2,8 @@
 use crate::query::{key_state_notice::KeyStateNotice, reply::SignedReply, QueryError};
 #[cfg(feature = "query")]
 use chrono::{DateTime, FixedOffset};
+#[cfg(feature = "query")]
+use crate::prefix::IdentifierPrefix;
 use std::sync::Arc;
 
 use crate::{
@@ -19,7 +21,6 @@ use crate::{
             SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
         },
     },
-    prefix::IdentifierPrefix,
     state::{EventSemantics, IdentifierState},
 };
 

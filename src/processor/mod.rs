@@ -36,7 +36,7 @@ impl EventProcessor {
         processor.register_observer(Box::new(OutOfOrderEscrow::new(db.clone())));
         processor.register_observer(Box::new(PartiallySignedEscrow::new(db.clone())));
         processor.register_observer(Box::new(PartiallyWitnessedEscrow::new(db.clone())));
-        processor.register_observer(Box::new(NontransReceiptsEscrow::new(db.clone())));
+        processor.register_observer(Box::new(NontransReceiptsEscrow::new(db)));
         processor
     }
 

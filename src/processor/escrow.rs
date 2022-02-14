@@ -299,6 +299,7 @@ impl Escrow for TransReceiptsEscrow {
 
 #[cfg(feature = "query")]
 pub struct ReplyEscrow(Arc<SledEventDatabase>);
+#[cfg(feature = "query")]
 impl ReplyEscrow {
     pub fn new(db: Arc<SledEventDatabase>) -> Self {
         Self(db)
