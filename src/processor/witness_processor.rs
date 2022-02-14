@@ -11,10 +11,10 @@ pub struct WitnessProcessor(EventProcessor);
 
 impl WitnessProcessor {
     pub fn new(db: Arc<SledEventDatabase>) -> Self {
-        use crate::processor::escrow::{NontransReceiptsEscrow, OutOfOrderEscrow};
+        use crate::processor::escrow::{OutOfOrderEscrow, PartiallySignedEscrow};
         let mut processor = EventProcessor::new(db);
         processor.register_escrow(Box::new(OutOfOrderEscrow::default()));
-        processor.register_escrow(Box::new(NontransReceiptsEscrow::default()));
+        processor.register_escrow(Box::new(PartiallySignedEscrow::default()));
         Self(processor)
     }
 
@@ -28,8 +28,7 @@ impl WitnessProcessor {
         {
             let id = &signed_event.event_message.event.get_prefix();
             self.0.db.add_kel_finalized_event(signed_event, id)?;
-            self.0
-                .notify(&Notification::KelUpdated(id.clone()))?;
+            self.0.notify(&Notification::KelUpdated(id.clone()))?;
             Ok(compute_state(self.0.db.clone(), id)?)
         } else {
             res

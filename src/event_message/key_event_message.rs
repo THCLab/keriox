@@ -169,7 +169,12 @@ pub fn verify_identifier_binding(icp_event: &EventMessage<KeyEvent>) -> Result<b
     match event_data {
         EventData::Icp(icp) => match &icp_event.event.get_prefix() {
             IdentifierPrefix::Basic(bp) => Ok(icp.key_config.public_keys.len() == 1
-                && bp == icp.key_config.public_keys.first().ok_or(Error::SemanticError("Missing public key".into()))?),
+                && bp
+                    == icp
+                        .key_config
+                        .public_keys
+                        .first()
+                        .ok_or_else(|| Error::SemanticError("Missing public key".into()))?),
             IdentifierPrefix::SelfAddressing(sap) => {
                 Ok(icp_event.check_digest(sap)? && icp_event.get_digest().eq(sap))
             }

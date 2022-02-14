@@ -19,7 +19,7 @@ pub enum Notification {
     OutOfOrder(SignedEventMessage),
     PartiallySigned(SignedEventMessage),
     PartiallyWitnessed(SignedEventMessage),
-    ReceiptAccepted(SignedNontransferableReceipt),
+    ReceiptAccepted,
     ReceiptEscrowed,
     ReceiptOutOfOrder(SignedNontransferableReceipt),
     TransReceiptOutOfOrder(SignedTransferableReceipt),
@@ -56,7 +56,7 @@ impl OutOfOrderEscrow {
             esc.try_for_each(|event| {
                 match processor
                     .validator
-                    .process_event(&event.signed_event_message)
+                    .validate_event(&event.signed_event_message)
                 {
                     Ok(_) => {
                         // add to kel
@@ -127,7 +127,7 @@ impl PartiallySignedEscrow {
                 ..signed_event.to_owned()
             };
 
-            match processor.validator.process_event(&new_event) {
+            match processor.validator.validate_event(&new_event) {
                 Ok(_) => {
                     // add to kel
                     processor
@@ -164,7 +164,7 @@ pub struct PartiallyWitnessedEscrow;
 impl Escrow for PartiallyWitnessedEscrow {
     fn notify(&self, notification: &Notification, processor: &EventProcessor) -> Result<(), Error> {
         match notification {
-            Notification::ReceiptAccepted(_) | Notification::ReceiptEscrowed => {
+            Notification::ReceiptAccepted | Notification::ReceiptEscrowed => {
                 Self::process_partially_witnessed_events(processor)
             }
             Notification::PartiallyWitnessed(signed_event) => {
@@ -186,7 +186,7 @@ impl PartiallyWitnessedEscrow {
                 let id = event.signed_event_message.event_message.event.get_prefix();
                 match processor
                     .validator
-                    .process_event(&event.signed_event_message)
+                    .validate_event(&event.signed_event_message)
                 {
                     Ok(_) => {
                         // add to kel
@@ -247,7 +247,7 @@ impl NontransReceiptsEscrow {
         if let Some(mut esc) = processor.db.get_all_escrow_nt_receipts() {
             esc.try_for_each(|sig_receipt| {
                 let id = sig_receipt.body.event.prefix.clone();
-                match processor.validator.process_witness_receipt(&sig_receipt) {
+                match processor.validator.validate_witness_receipt(&sig_receipt) {
                     Ok(_) => {
                         // add to receipts
                         processor
@@ -259,9 +259,7 @@ impl NontransReceiptsEscrow {
                             .db
                             .remove_escrow_nt_receipt(&id, &sig_receipt)
                             .unwrap();
-                        processor.notify(&Notification::ReceiptAccepted(sig_receipt))
-                        // stop processing the escrow if kel was updated. It needs to start again.
-                        // return Some(());
+                        processor.notify(&Notification::ReceiptAccepted)
                     }
                     Err(Error::SignatureVerificationError) => {
                         // remove from escrow

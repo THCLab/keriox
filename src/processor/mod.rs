@@ -65,11 +65,12 @@ impl EventProcessor {
     /// Process
     ///
     /// Process a deserialized KERI message
+    /// Update database based on event validation result.
     pub fn process(&self, message: Message) -> Result<Option<IdentifierState>, Error> {
         match message {
             Message::Event(signed_event) => {
                 let id = &signed_event.event_message.event.get_prefix();
-                match self.validator.process_event(&signed_event) {
+                match self.validator.validate_event(&signed_event) {
                     Ok(_) => {
                         self.db.add_kel_finalized_event(signed_event.clone(), id)?;
                         self.notify(&Notification::KelUpdated(id.clone()))
@@ -98,10 +99,10 @@ impl EventProcessor {
 
             Message::NontransferableRct(rct) => {
                 let id = &rct.body.event.prefix;
-                match self.validator.process_witness_receipt(&rct) {
+                match self.validator.validate_witness_receipt(&rct) {
                     Ok(_) => {
                         self.db.add_receipt_nt(rct.to_owned(), id)?;
-                        self.notify(&Notification::ReceiptAccepted(rct.clone()))
+                        self.notify(&Notification::ReceiptAccepted)
                     }
                     Err(Error::MissingEvent) => {
                         self.notify(&Notification::ReceiptOutOfOrder(rct.clone()))
@@ -111,7 +112,7 @@ impl EventProcessor {
                 Ok(compute_state(self.db.clone(), id)?)
             }
             Message::TransferableRct(vrc) => {
-                match self.validator.process_validator_receipt(&vrc) {
+                match self.validator.validate_validator_receipt(&vrc) {
                     Ok(_) => self.db.add_receipt_t(vrc.clone(), &vrc.body.event.prefix),
                     Err(Error::MissingEvent) => {
                         self.notify(&Notification::TransReceiptOutOfOrder(vrc.clone()))
