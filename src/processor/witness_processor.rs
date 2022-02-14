@@ -14,7 +14,7 @@ impl WitnessProcessor {
         use crate::processor::escrow::{OutOfOrderEscrow, PartiallySignedEscrow};
         let mut processor = EventProcessor::new(db.clone());
         processor.register_observer(Box::new(OutOfOrderEscrow::new(db.clone())));
-        processor.register_observer(Box::new(PartiallySignedEscrow::new(db.clone())));
+        processor.register_observer(Box::new(PartiallySignedEscrow::new(db)));
         Self(processor)
     }
 
