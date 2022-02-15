@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, collections::HashMap};
 
 use crate::{
     database::sled::SledEventDatabase,
@@ -23,26 +23,61 @@ use self::{
     validator::EventValidator,
 };
 
+#[derive(PartialEq, Hash, Eq)]
+pub enum JustNotification {
+    KeyEventAdded,
+    OutOfOrder,
+    PartiallySigned,
+    PartiallyWitnessed,
+    ReceiptAccepted,
+    ReceiptEscrowed,
+    ReceiptOutOfOrder,
+    TransReceiptOutOfOrder,
+    #[cfg(feature = "query")]
+    ReplyOutOfOrder,
+    #[cfg(feature = "query")]
+    ReplyUpdated,
+}
+
+impl Into<JustNotification> for &Notification {
+    fn into(self) -> JustNotification {
+         match self {
+            Notification::KeyEventAdded(_) => JustNotification::KeyEventAdded,
+            Notification::OutOfOrder(_) => JustNotification::OutOfOrder,
+            Notification::PartiallySigned(_) => JustNotification::PartiallySigned,
+            Notification::PartiallyWitnessed(_) => JustNotification::PartiallyWitnessed,
+            Notification::ReceiptAccepted => JustNotification::ReceiptAccepted,
+            Notification::ReceiptEscrowed => JustNotification::ReceiptEscrowed,
+            Notification::ReceiptOutOfOrder(_) => JustNotification::ReceiptOutOfOrder,
+            Notification::TransReceiptOutOfOrder(_) => JustNotification::TransReceiptOutOfOrder,
+            #[cfg(feature = "query")]
+            Notification::ReplyOutOfOrder(_) => JustNotification::ReplyOutOfOrder,
+            #[cfg(feature = "query")]
+            Notification::ReplyUpdated => JustNotification::ReplyUpdated,
+        }
+    }
+}
+
 pub struct EventProcessor {
     db: Arc<SledEventDatabase>,
     validator: EventValidator,
-    escrows: Vec<Box<dyn Notifier>>,
+    escrows: HashMap<JustNotification, Vec<Box<dyn Notifier>>>,
 }
 
 impl EventProcessor {
     pub fn with_default_escrow(db: Arc<SledEventDatabase>) -> Self {
         use self::escrow::{NontransReceiptsEscrow, OutOfOrderEscrow, PartiallyWitnessedEscrow};
         let mut processor = EventProcessor::new(db.clone());
-        processor.register_observer(Box::new(OutOfOrderEscrow::new(db.clone())));
-        processor.register_observer(Box::new(PartiallySignedEscrow::new(db.clone())));
-        processor.register_observer(Box::new(PartiallyWitnessedEscrow::new(db.clone())));
-        processor.register_observer(Box::new(NontransReceiptsEscrow::new(db)));
+        processor.register_observer(OutOfOrderEscrow::new(db.clone()), vec![JustNotification::OutOfOrder, JustNotification::KeyEventAdded]);
+        processor.register_observer(PartiallySignedEscrow::new(db.clone()), vec![JustNotification::PartiallySigned]);
+        processor.register_observer(PartiallyWitnessedEscrow::new(db.clone()), vec![JustNotification::PartiallyWitnessed, JustNotification::ReceiptEscrowed, JustNotification::ReceiptAccepted]);
+        processor.register_observer(NontransReceiptsEscrow::new(db), vec![JustNotification::KeyEventAdded, JustNotification::ReceiptOutOfOrder]);
         processor
     }
 
     pub fn new(db: Arc<SledEventDatabase>) -> Self {
         let validator = EventValidator::new(db.clone());
-        let escrows: Vec<Box<dyn Notifier>> = Vec::new();
+        let escrows: HashMap<JustNotification, Vec<Box<dyn Notifier>>> = HashMap::new();
 
         Self {
             db,
@@ -51,12 +86,15 @@ impl EventProcessor {
         }
     }
 
-    pub fn register_observer(&mut self, escrow: Box<dyn Notifier>) {
-        self.escrows.push(escrow);
+    pub fn register_observer<N: Notifier + Clone + 'static>(&mut self, escrow: N, notification: Vec<JustNotification>) {
+        notification.into_iter().for_each(|notification| {
+		    self.escrows.entry(notification).or_insert(vec![]).push(Box::new(escrow.clone()));
+            }
+        );
     }
 
     pub fn notify(&self, notification: &Notification) -> Result<(), Error> {
-        self.escrows.iter().for_each(|esc| {
+        self.escrows.get(&notification.into()).unwrap_or(&Box::new(vec![])).iter().for_each(|esc| {
             esc.notify(notification, self).unwrap();
         });
         Ok(())

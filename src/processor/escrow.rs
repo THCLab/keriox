@@ -15,7 +15,8 @@ use crate::query::reply::SignedReply;
 pub trait Notifier {
     fn notify(&self, notification: &Notification, processor: &EventProcessor) -> Result<(), Error>;
 }
-
+ 
+#[derive(PartialEq)]
 pub enum Notification {
     KeyEventAdded(IdentifierPrefix),
     OutOfOrder(SignedEventMessage),
@@ -31,6 +32,7 @@ pub enum Notification {
     ReplyUpdated,
 }
 
+#[derive(Clone)]
 pub struct OutOfOrderEscrow(Arc<SledEventDatabase>);
 impl OutOfOrderEscrow {
     pub fn new(db: Arc<SledEventDatabase>) -> Self {
@@ -46,7 +48,7 @@ impl Notifier for OutOfOrderEscrow {
                 self.0
                     .add_out_of_order_event(signed_event.clone(), id)
             }
-            _ => Ok(()),
+            _ => Err(Error::SemanticError("Wrong notification".into())),
         }
     }
 }
@@ -97,7 +99,9 @@ impl OutOfOrderEscrow {
     }
 }
 
+#[derive(Clone)]
 pub struct PartiallySignedEscrow(Arc<SledEventDatabase>);
+
 impl PartiallySignedEscrow {
     pub fn new(db: Arc<SledEventDatabase>) -> Self {
         Self(db)
@@ -109,7 +113,7 @@ impl Notifier for PartiallySignedEscrow {
             Notification::PartiallySigned(ev) => {
                 self.process_partially_signed_events(processor, ev)
             }
-            _ => Ok(()),
+            _ => Err(Error::SemanticError("Wrong notification".into())),
         }
     }
 }
@@ -161,6 +165,7 @@ impl PartiallySignedEscrow {
     }
 }
 
+#[derive(Clone)]
 pub struct PartiallyWitnessedEscrow(Arc<SledEventDatabase>);
 impl PartiallyWitnessedEscrow {
     pub fn new(db: Arc<SledEventDatabase>) -> Self {
@@ -178,7 +183,7 @@ impl Notifier for PartiallyWitnessedEscrow {
                 self.0
                     .add_partially_witnessed_event(signed_event.clone(), id)
             }
-            _ => Ok(()),
+            _ => Err(Error::SemanticError("Wrong notification".into())),
         }
     }
 }
@@ -226,6 +231,7 @@ impl PartiallyWitnessedEscrow {
     }
 }
 
+#[derive(Clone)]
 pub struct NontransReceiptsEscrow(Arc<SledEventDatabase>);
 impl NontransReceiptsEscrow {
     pub fn new(db: Arc<SledEventDatabase>) -> Self {
@@ -241,7 +247,7 @@ impl Notifier for NontransReceiptsEscrow {
                 self.0.add_escrow_nt_receipt(receipt.clone(), id)?;
                 processor.notify(&Notification::ReceiptEscrowed)
             }
-            _ => Ok(()),
+            _ => Err(Error::SemanticError("Wrong notification".into())),
         }
     }
 }
@@ -278,6 +284,7 @@ impl NontransReceiptsEscrow {
     }
 }
 
+#[derive(Clone)]
 pub struct TransReceiptsEscrow(Arc<SledEventDatabase>);
 impl TransReceiptsEscrow {
     pub fn new(db: Arc<SledEventDatabase>) -> Self {
@@ -292,12 +299,13 @@ impl Notifier for TransReceiptsEscrow {
                 let id = &receipt.body.event.prefix;
                 self.0.add_escrow_t_receipt(receipt.to_owned(), id)
             }
-            _ => Ok(()),
+            _ => Err(Error::SemanticError("Wrong notification".into())),
         }
     }
 }
 
 #[cfg(feature = "query")]
+#[derive(Clone)]
 pub struct ReplyEscrow(Arc<SledEventDatabase>);
 #[cfg(feature = "query")]
 impl ReplyEscrow {
