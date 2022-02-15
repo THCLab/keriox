@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::{
     database::sled::SledEventDatabase, error::Error, event_message::signed_event_message::Message,
-    state::IdentifierState,
+    state::IdentifierState, processor::JustNotification,
 };
 
 use super::{compute_state, escrow::Notification, EventProcessor};
@@ -13,8 +13,8 @@ impl WitnessProcessor {
     pub fn new(db: Arc<SledEventDatabase>) -> Self {
         use crate::processor::escrow::{OutOfOrderEscrow, PartiallySignedEscrow};
         let mut processor = EventProcessor::new(db.clone());
-        processor.register_observer(Box::new(OutOfOrderEscrow::new(db.clone())));
-        processor.register_observer(Box::new(PartiallySignedEscrow::new(db)));
+        processor.register_observer(PartiallySignedEscrow::new(db.clone()), vec![JustNotification::PartiallySigned]);
+        processor.register_observer(OutOfOrderEscrow::new(db), vec![JustNotification::OutOfOrder, JustNotification::KeyEventAdded]);
         Self(processor)
     }
 
