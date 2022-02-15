@@ -19,14 +19,14 @@ pub mod validator;
 pub mod witness_processor;
 
 use self::{
-    escrow::{Escrow, Notification},
+    escrow::{Notifier, Notification},
     validator::EventValidator,
 };
 
 pub struct EventProcessor {
     db: Arc<SledEventDatabase>,
     validator: EventValidator,
-    escrows: Vec<Box<dyn Escrow>>,
+    escrows: Vec<Box<dyn Notifier>>,
 }
 
 impl EventProcessor {
@@ -42,7 +42,7 @@ impl EventProcessor {
 
     pub fn new(db: Arc<SledEventDatabase>) -> Self {
         let validator = EventValidator::new(db.clone());
-        let escrows: Vec<Box<dyn Escrow>> = Vec::new();
+        let escrows: Vec<Box<dyn Notifier>> = Vec::new();
 
         Self {
             db,
@@ -51,7 +51,7 @@ impl EventProcessor {
         }
     }
 
-    pub fn register_observer(&mut self, escrow: Box<dyn Escrow>) {
+    pub fn register_observer(&mut self, escrow: Box<dyn Notifier>) {
         self.escrows.push(escrow);
     }
 
@@ -73,7 +73,7 @@ impl EventProcessor {
                 match self.validator.validate_event(&signed_event) {
                     Ok(_) => {
                         self.db.add_kel_finalized_event(signed_event.clone(), id)?;
-                        self.notify(&Notification::KelUpdated(id.clone()))
+                        self.notify(&Notification::KeyEventAdded(id.clone()))
                     }
                     Err(e) => {
                         match e {
