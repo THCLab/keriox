@@ -17,7 +17,7 @@ fn test_process() -> Result<(), Error> {
     fs::create_dir_all(root.path()).unwrap();
 
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-    let event_processor = EventProcessor::new(Arc::clone(&db));
+    let event_processor = EventProcessor::with_default_escrow(Arc::clone(&db));
     let event_storage = EventStorage::new(Arc::clone(&db));
     // Events and sigs are from keripy `test_multisig_digprefix` test.
     // (keripy/tests/core/test_eventing.py#1138)
@@ -133,7 +133,7 @@ fn test_process_receipt() -> Result<(), Error> {
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     fs::create_dir_all(root.path()).unwrap();
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-    let event_processor = EventProcessor::new(Arc::clone(&db));
+    let event_processor = EventProcessor::with_default_escrow(Arc::clone(&db));
 
     // Events and sigs are from keripy `test_direct_mode` test.
     // (keripy/tests/core/test_eventing.py)
@@ -175,7 +175,7 @@ fn test_process_delegated() -> Result<(), Error> {
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     fs::create_dir_all(root.path()).unwrap();
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-    let event_processor = EventProcessor::new(Arc::clone(&db));
+    let event_processor = EventProcessor::with_default_escrow(Arc::clone(&db));
     let event_storage = EventStorage::new(Arc::clone(&db));
 
     // Events and sigs are from keripy `test_delegation` test.
@@ -286,7 +286,7 @@ fn test_compute_state_at_sn() -> Result<(), Error> {
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     fs::create_dir_all(root.path()).unwrap();
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-    let event_processor = EventProcessor::new(Arc::clone(&db));
+    let event_processor = EventProcessor::with_default_escrow(Arc::clone(&db));
     let event_storage = EventStorage::new(Arc::clone(&db));
 
     let kerl_str = br#"{"v":"KERI10JSON000120_","t":"icp","d":"EFM_0I1yFtoKJPy8L9QCN9ZBHHR-qIBSxSwHZG6uljqc","i":"Ddhxr2UX8Xl55KvOd20cBYjj5QSCVqTiINgA_VJQul30","s":"0","kt":"1","k":["Ddhxr2UX8Xl55KvOd20cBYjj5QSCVqTiINgA_VJQul30"],"n":"ESY1L4c7pxgQBuq76wUjwLdOWVfX8XLfi4unqjzBs3A4","bt":"0","b":[],"c":[],"a":[]}-AABAAqVXfmQsyme65lXrnUdx701IClRnO14wvdP00-CnTyYHetVUQEpWCS787bSNWlPG9HnroeEzfuM7ZhzM5VRCQDw{"v":"KERI10JSON000155_","t":"rot","d":"EI_rE4U5HPnLtJ-kNRBZKyTzw9dYq0yffywEoGEZZE0E","i":"Ddhxr2UX8Xl55KvOd20cBYjj5QSCVqTiINgA_VJQul30","s":"1","p":"EFM_0I1yFtoKJPy8L9QCN9ZBHHR-qIBSxSwHZG6uljqc","kt":"1","k":["DhSM7Cy_qC1y7jmmIu8A3lYedssBAVpHKJDfVbUXo_Nc"],"n":"EAMjC1FxUcVlPHFBcgMOTjLmlRsRNkHtXzUTFD5VaaU4","bt":"0","br":[],"ba":[],"a":[]}-AABAA6TMhDKzjpD574-xzs0A0VwD5x_VzcYcK0y9h_ttkVYQOQlocK4QpsV2kHbAHptKQg74tZxxcKuiqDg1SO9MTAA{"v":"KERI10JSON0000cb_","t":"ixn","d":"EeAgPgw8ewxtbE0zVRB92K5bLC_nmVQBgA9Ajz7TPTg0","i":"Ddhxr2UX8Xl55KvOd20cBYjj5QSCVqTiINgA_VJQul30","s":"2","p":"EI_rE4U5HPnLtJ-kNRBZKyTzw9dYq0yffywEoGEZZE0E","a":[]}-AABAArJjuMeasjy7gcTSZrDaVa8shiYoH4syJPXPZQMRLyaxCBFFynsWVyWrq-ZJFoWJETyX3Hi5U7AmPfWZsZfaaCw{"v":"KERI10JSON000155_","t":"rot","d":"E7YSxhPZMwGRxIP4E1POsqS7gK9jO00cE0IOr002lVPI","i":"Ddhxr2UX8Xl55KvOd20cBYjj5QSCVqTiINgA_VJQul30","s":"3","p":"EeAgPgw8ewxtbE0zVRB92K5bLC_nmVQBgA9Ajz7TPTg0","kt":"1","k":["D4cFZmRliumCFW5RnHvDFYCRTvNvuGMLWO1CqTaNEZZI"],"n":"Ew9LxnzhZHC6wri0dFdC5OQ_uhpAaO-wjbMtdt5ld0HQ","bt":"0","br":[],"ba":[],"a":[]}-AABAAWaOtr_k3Jk0GQn39Pc7WoZEcpeZk1m5yMScDq0yp5L4biNkSnyOA7AYO5G2n-HxZ3lM2IGeTLwN4XAdyVxRrBg{"v":"KERI10JSON000155_","t":"rot","d":"E6OMBom_RgVCE7paXEvdUBzg2rt6QRmEQ2q7Dq4FOG9o","i":"Ddhxr2UX8Xl55KvOd20cBYjj5QSCVqTiINgA_VJQul30","s":"4","p":"E7YSxhPZMwGRxIP4E1POsqS7gK9jO00cE0IOr002lVPI","kt":"1","k":["Dnljgftiq3x7IuF4mmMYfOzWoMNh98QDCdEU2bRSqUAQ"],"n":"EnlyNgrbZhysJ8mxSxoVuVv9QBAcB25RtVmm2A7yW7oY","bt":"0","br":[],"ba":[],"a":[]}-AABAApnOXmrsbhdRUHEg-x9CqeVKQdJIau0fTnQ8WT2uv1ueUwj7zMfWstZYEpRPkc9DAg5XqRKyMVOR2kq4sjAIpAQ{"v":"KERI10JSON0000cb_","t":"ixn","d":"ECpHwQLdPSwHBGR_QAXhlyzwyB-z8vNYuVRtTWak5kQw","i":"Ddhxr2UX8Xl55KvOd20cBYjj5QSCVqTiINgA_VJQul30","s":"5","p":"E6OMBom_RgVCE7paXEvdUBzg2rt6QRmEQ2q7Dq4FOG9o","a":[]}-AABAAwj0JqH6ae5vCOCxiAWmA_FKzM1g7ydxQpfgQio0Yj2DhOPKBU8kdUh0zAM2n6qi32diaJHYM15nm62Re1sK7CQ"#;
@@ -400,15 +400,22 @@ pub fn test_not_fully_witnessed() -> Result<(), Error> {
 #[cfg(feature = "query")]
 #[test]
 pub fn test_reply_escrow() -> Result<(), Error> {
-    use crate::processor::{escrow::ReplyEscrow, JustNotification};
+    use crate::processor::{escrow::ReplyEscrow, notification::NotificationBus, JustNotification};
     use tempfile::Builder;
 
     // Create test db and event processor.
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     fs::create_dir_all(root.path()).unwrap();
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-    let mut event_processor = EventProcessor::new(Arc::clone(&db));
-    event_processor.register_observer(ReplyEscrow::new(db.clone()), vec![JustNotification::ReplyOutOfOrder, JustNotification::KeyEventAdded]);
+    let mut bus = NotificationBus::new();
+    bus.register_observer(
+        ReplyEscrow::new(db.clone()),
+        vec![
+            JustNotification::ReplyOutOfOrder,
+            JustNotification::KeyEventAdded,
+        ],
+    );
+    let event_processor = EventProcessor::new(Arc::clone(&db), Some(bus));
 
     let identifier: IdentifierPrefix = "Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8".parse()?;
     let kel = r#"{"v":"KERI10JSON000120_","t":"icp","d":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","i":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","s":"0","kt":"1","k":["DqI2cOZ06RwGNwCovYUWExmdKU983IasmUKMmZflvWdQ"],"n":"E7FuL3Z_KBgt_QAwuZi1lUFNC69wvyHSxnMFUsKjZHss","bt":"0","b":[],"c":[],"a":[]}-AABAAJEloPu7b4z8v1455StEJ1b7dMIz-P0tKJ_GBBCxQA8JEg0gm8qbS4TWGiHikLoZ2GtLA58l9dzIa2x_otJhoDA{"v":"KERI10JSON000155_","t":"rot","d":"EoU_JzojCvenHLPza5-K7z59yU7efQVrzciNdXoVDmlk","i":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","s":"1","p":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","kt":"1","k":["Dyb48eeVVXD7JAarHFAUffKcgYGvCQ4KWX00myzNLgzU"],"n":"ElBleBp2wS0n927E6W63imv-lRzU10uLYTRKzHNn19IQ","bt":"0","br":[],"ba":[],"a":[]}-AABAAXcEQQlT3id8LpTRDkFKVzF7n0d0w-3n__xgdf7rxTpAWUVsHthZcPtovCVr1kca1MD9QbfFAMpEtUZ02LTi3AQ{"v":"KERI10JSON000155_","t":"rot","d":"EYhzp9WCvSNFT2dVryQpVFiTzuWGbFNhVHNKCqAqBI8A","i":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","s":"2","p":"EoU_JzojCvenHLPza5-K7z59yU7efQVrzciNdXoVDmlk","kt":"1","k":["DyN13SKiF1FsVoVR5C4r_15JJLUBxBXBmkleD5AYWplc"],"n":"Em4tcl6gRcT2OLjbON4iz-fsw0iWQGBtwWic0dJY4Gzo","bt":"0","br":[],"ba":[],"a":[]}-AABAAZgqx0nZk4y2NyxPGypIloZikDzaZMw8EwjisexXwn-nr08jdILP6wvMOKZcxmCbAHJ4kHL_SIugdB-_tEvhBDg{"v":"KERI10JSON000155_","t":"rot","d":"EsL4LnyvTGBqdYC_Ute3ag4XYbu8PdCj70un885pMYpA","i":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","s":"3","p":"EYhzp9WCvSNFT2dVryQpVFiTzuWGbFNhVHNKCqAqBI8A","kt":"1","k":["DrcAz_gmDTuWIHn_mOQDeSK_aJIRiw5IMzPD7igzEDb0"],"n":"E_Y2NMHE0nqrTQLe57VPcM0razmxdxRVbljRCSetdjjI","bt":"0","br":[],"ba":[],"a":[]}-AABAAkk_Z4jS76LBiKrTs8tL32DNMndq5UQJ-NoteiTyOuMZfyP8jgxJQU7AiR7zWQZxzmiF0mT1JureItwDkPli5DA"#;

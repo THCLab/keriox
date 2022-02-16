@@ -1,11 +1,10 @@
-use std::{sync::Arc, collections::HashMap};
+use std::sync::Arc;
 
 use crate::{
     database::sled::SledEventDatabase,
     error::Error,
     event_message::signed_event_message::{Message, TimestampedSignedEventMessage},
     prefix::IdentifierPrefix,
-    processor::escrow::PartiallySignedEscrow,
     state::IdentifierState,
 };
 
@@ -13,91 +12,36 @@ use crate::{
 pub mod async_processing;
 pub mod escrow;
 pub mod event_storage;
+pub mod notification;
 #[cfg(test)]
 mod tests;
 pub mod validator;
 pub mod witness_processor;
 
 use self::{
-    escrow::{Notifier, Notification},
+    notification::{JustNotification, Notification, NotificationBus},
     validator::EventValidator,
 };
-
-#[derive(PartialEq, Hash, Eq)]
-pub enum JustNotification {
-    KeyEventAdded,
-    OutOfOrder,
-    PartiallySigned,
-    PartiallyWitnessed,
-    ReceiptAccepted,
-    ReceiptEscrowed,
-    ReceiptOutOfOrder,
-    TransReceiptOutOfOrder,
-    #[cfg(feature = "query")]
-    ReplyOutOfOrder,
-    #[cfg(feature = "query")]
-    ReplyUpdated,
-}
-
-impl Into<JustNotification> for &Notification {
-    fn into(self) -> JustNotification {
-         match self {
-            Notification::KeyEventAdded(_) => JustNotification::KeyEventAdded,
-            Notification::OutOfOrder(_) => JustNotification::OutOfOrder,
-            Notification::PartiallySigned(_) => JustNotification::PartiallySigned,
-            Notification::PartiallyWitnessed(_) => JustNotification::PartiallyWitnessed,
-            Notification::ReceiptAccepted => JustNotification::ReceiptAccepted,
-            Notification::ReceiptEscrowed => JustNotification::ReceiptEscrowed,
-            Notification::ReceiptOutOfOrder(_) => JustNotification::ReceiptOutOfOrder,
-            Notification::TransReceiptOutOfOrder(_) => JustNotification::TransReceiptOutOfOrder,
-            #[cfg(feature = "query")]
-            Notification::ReplyOutOfOrder(_) => JustNotification::ReplyOutOfOrder,
-            #[cfg(feature = "query")]
-            Notification::ReplyUpdated => JustNotification::ReplyUpdated,
-        }
-    }
-}
 
 pub struct EventProcessor {
     db: Arc<SledEventDatabase>,
     validator: EventValidator,
-    escrows: HashMap<JustNotification, Vec<Box<dyn Notifier>>>,
+    escrows: NotificationBus,
 }
 
 impl EventProcessor {
     pub fn with_default_escrow(db: Arc<SledEventDatabase>) -> Self {
-        use self::escrow::{NontransReceiptsEscrow, OutOfOrderEscrow, PartiallyWitnessedEscrow};
-        let mut processor = EventProcessor::new(db.clone());
-        processor.register_observer(OutOfOrderEscrow::new(db.clone()), vec![JustNotification::OutOfOrder, JustNotification::KeyEventAdded]);
-        processor.register_observer(PartiallySignedEscrow::new(db.clone()), vec![JustNotification::PartiallySigned]);
-        processor.register_observer(PartiallyWitnessedEscrow::new(db.clone()), vec![JustNotification::PartiallyWitnessed, JustNotification::ReceiptEscrowed, JustNotification::ReceiptAccepted]);
-        processor.register_observer(NontransReceiptsEscrow::new(db), vec![JustNotification::KeyEventAdded, JustNotification::ReceiptOutOfOrder]);
-        processor
+        let bus = escrow::default_escrow_bus(db.clone());
+        EventProcessor::new(db, Some(bus))
     }
 
-    pub fn new(db: Arc<SledEventDatabase>) -> Self {
+    pub fn new(db: Arc<SledEventDatabase>, bus: Option<NotificationBus>) -> Self {
         let validator = EventValidator::new(db.clone());
-        let escrows: HashMap<JustNotification, Vec<Box<dyn Notifier>>> = HashMap::new();
-
         Self {
             db,
             validator,
-            escrows,
+            escrows: bus.unwrap_or(NotificationBus::new()),
         }
-    }
-
-    pub fn register_observer<N: Notifier + Clone + 'static>(&mut self, escrow: N, notification: Vec<JustNotification>) {
-        notification.into_iter().for_each(|notification| {
-		    self.escrows.entry(notification).or_insert(vec![]).push(Box::new(escrow.clone()));
-            }
-        );
-    }
-
-    pub fn notify(&self, notification: &Notification) -> Result<(), Error> {
-        self.escrows.get(&notification.into()).unwrap_or(&Box::new(vec![])).iter().for_each(|esc| {
-            esc.notify(notification, self).unwrap();
-        });
-        Ok(())
     }
 
     /// Process
@@ -111,7 +55,8 @@ impl EventProcessor {
                 match self.validator.validate_event(&signed_event) {
                     Ok(_) => {
                         self.db.add_kel_finalized_event(signed_event.clone(), id)?;
-                        self.notify(&Notification::KeyEventAdded(id.clone()))
+                        self.escrows
+                            .notify(&Notification::KeyEventAdded(id.clone()))
                     }
                     Err(e) => {
                         match e {
@@ -119,14 +64,14 @@ impl EventProcessor {
                                 self.db.add_duplicious_event(signed_event.clone(), id)
                             }
                             Error::EventOutOfOrderError => {
-                                self.notify(&Notification::OutOfOrder(signed_event))
+                                self.escrows.notify(&Notification::OutOfOrder(signed_event))
                             }
-                            Error::NotEnoughReceiptsError => {
-                                self.notify(&Notification::PartiallyWitnessed(signed_event))
-                            }
-                            Error::NotEnoughSigsError => {
-                                self.notify(&Notification::PartiallySigned(signed_event))
-                            }
+                            Error::NotEnoughReceiptsError => self
+                                .escrows
+                                .notify(&Notification::PartiallyWitnessed(signed_event)),
+                            Error::NotEnoughSigsError => self
+                                .escrows
+                                .notify(&Notification::PartiallySigned(signed_event)),
                             _ => Ok(()),
                         }?;
                         Err(e)
@@ -140,11 +85,11 @@ impl EventProcessor {
                 match self.validator.validate_witness_receipt(&rct) {
                     Ok(_) => {
                         self.db.add_receipt_nt(rct.to_owned(), id)?;
-                        self.notify(&Notification::ReceiptAccepted)
+                        self.escrows.notify(&Notification::ReceiptAccepted)
                     }
-                    Err(Error::MissingEvent) => {
-                        self.notify(&Notification::ReceiptOutOfOrder(rct.clone()))
-                    }
+                    Err(Error::MissingEvent) => self
+                        .escrows
+                        .notify(&Notification::ReceiptOutOfOrder(rct.clone())),
                     Err(e) => return Err(e),
                 }?;
                 Ok(compute_state(self.db.clone(), id)?)
@@ -152,9 +97,9 @@ impl EventProcessor {
             Message::TransferableRct(vrc) => {
                 match self.validator.validate_validator_receipt(&vrc) {
                     Ok(_) => self.db.add_receipt_t(vrc.clone(), &vrc.body.event.prefix),
-                    Err(Error::MissingEvent) => {
-                        self.notify(&Notification::TransReceiptOutOfOrder(vrc.clone()))
-                    }
+                    Err(Error::MissingEvent) => self
+                        .escrows
+                        .notify(&Notification::TransReceiptOutOfOrder(vrc.clone())),
                     Err(e) => Err(e),
                 }?;
                 let id = vrc.body.event.prefix;
@@ -166,10 +111,10 @@ impl EventProcessor {
                     Ok(_) => {
                         self.db
                             .update_accepted_reply(rpy.clone(), &rpy.reply.event.get_prefix())?;
-                        self.notify(&Notification::ReplyUpdated)
+                        self.escrows.notify(&Notification::ReplyUpdated)
                     }
                     Err(Error::EventOutOfOrderError) => {
-                        self.notify(&Notification::ReplyOutOfOrder(rpy))?;
+                        self.escrows.notify(&Notification::ReplyOutOfOrder(rpy))?;
                         Err(Error::EventOutOfOrderError)
                     }
                     Err(anything) => Err(anything),

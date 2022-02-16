@@ -1,35 +1,43 @@
 use std::sync::Arc;
 
-use super::EventProcessor;
+use super::{
+    notification::{JustNotification, Notification, NotificationBus, Notifier},
+    validator::EventValidator,
+};
 use crate::{
-    error::Error,
-    event_message::signed_event_message::{
-        SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
-    },
-    prefix::IdentifierPrefix, database::sled::SledEventDatabase,
+    database::sled::SledEventDatabase, error::Error,
+    event_message::signed_event_message::SignedEventMessage, prefix::IdentifierPrefix,
 };
 
-#[cfg(feature = "query")]
-use crate::query::reply::SignedReply;
-
-pub trait Notifier {
-    fn notify(&self, notification: &Notification, processor: &EventProcessor) -> Result<(), Error>;
-}
- 
-#[derive(PartialEq)]
-pub enum Notification {
-    KeyEventAdded(IdentifierPrefix),
-    OutOfOrder(SignedEventMessage),
-    PartiallySigned(SignedEventMessage),
-    PartiallyWitnessed(SignedEventMessage),
-    ReceiptAccepted,
-    ReceiptEscrowed,
-    ReceiptOutOfOrder(SignedNontransferableReceipt),
-    TransReceiptOutOfOrder(SignedTransferableReceipt),
-    #[cfg(feature = "query")]
-    ReplyOutOfOrder(SignedReply),
-    #[cfg(feature = "query")]
-    ReplyUpdated,
+pub fn default_escrow_bus(db: Arc<SledEventDatabase>) -> NotificationBus {
+    let mut bus = NotificationBus::new();
+    bus.register_observer(
+        OutOfOrderEscrow::new(db.clone()),
+        vec![
+            JustNotification::OutOfOrder,
+            JustNotification::KeyEventAdded,
+        ],
+    );
+    bus.register_observer(
+        PartiallySignedEscrow::new(db.clone()),
+        vec![JustNotification::PartiallySigned],
+    );
+    bus.register_observer(
+        PartiallyWitnessedEscrow::new(db.clone()),
+        vec![
+            JustNotification::PartiallyWitnessed,
+            JustNotification::ReceiptEscrowed,
+            JustNotification::ReceiptAccepted,
+        ],
+    );
+    bus.register_observer(
+        NontransReceiptsEscrow::new(db),
+        vec![
+            JustNotification::KeyEventAdded,
+            JustNotification::ReceiptOutOfOrder,
+        ],
+    );
+    bus
 }
 
 #[derive(Clone)]
@@ -40,13 +48,12 @@ impl OutOfOrderEscrow {
     }
 }
 impl Notifier for OutOfOrderEscrow {
-    fn notify(&self, notification: &Notification, processor: &EventProcessor) -> Result<(), Error> {
+    fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error> {
         match notification {
-            Notification::KeyEventAdded(id) => self.process_out_of_order_events(processor, id),
+            Notification::KeyEventAdded(id) => self.process_out_of_order_events(bus, id),
             Notification::OutOfOrder(signed_event) => {
                 let id = &signed_event.event_message.event.get_prefix();
-                self.0
-                    .add_out_of_order_event(signed_event.clone(), id)
+                self.0.add_out_of_order_event(signed_event.clone(), id)
             }
             _ => Err(Error::SemanticError("Wrong notification".into())),
         }
@@ -57,15 +64,13 @@ impl Notifier for OutOfOrderEscrow {
 impl OutOfOrderEscrow {
     pub fn process_out_of_order_events(
         &self,
-        processor: &EventProcessor,
+        bus: &NotificationBus,
         id: &IdentifierPrefix,
     ) -> Result<(), Error> {
         if let Some(mut esc) = self.0.get_out_of_order_events(id) {
             esc.try_for_each(|event| {
-                match processor
-                    .validator
-                    .validate_event(&event.signed_event_message)
-                {
+                let validator = EventValidator::new(self.0.clone());
+                match validator.validate_event(&event.signed_event_message) {
                     Ok(_) => {
                         // add to kel
                         self.0
@@ -75,11 +80,10 @@ impl OutOfOrderEscrow {
                         self.0
                             .remove_out_of_order_event(id, &event.signed_event_message)
                             .unwrap();
-                        processor
-                            .notify(&Notification::KeyEventAdded(
-                                event.signed_event_message.event_message.event.get_prefix(),
-                            ))
-                            .unwrap();
+                        bus.notify(&Notification::KeyEventAdded(
+                            event.signed_event_message.event_message.event.get_prefix(),
+                        ))
+                        .unwrap();
                         // stop processing the escrow if kel was updated. It needs to start again.
                         None
                     }
@@ -108,11 +112,9 @@ impl PartiallySignedEscrow {
     }
 }
 impl Notifier for PartiallySignedEscrow {
-    fn notify(&self, notification: &Notification, processor: &EventProcessor) -> Result<(), Error> {
+    fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error> {
         match notification {
-            Notification::PartiallySigned(ev) => {
-                self.process_partially_signed_events(processor, ev)
-            }
+            Notification::PartiallySigned(ev) => self.process_partially_signed_events(bus, ev),
             _ => Err(Error::SemanticError("Wrong notification".into())),
         }
     }
@@ -121,11 +123,12 @@ impl Notifier for PartiallySignedEscrow {
 impl PartiallySignedEscrow {
     pub fn process_partially_signed_events(
         &self,
-        processor: &EventProcessor,
+        bus: &NotificationBus,
         signed_event: &SignedEventMessage,
     ) -> Result<(), Error> {
         let id = signed_event.event_message.event.get_prefix();
-        if let Some(esc) = self.0
+        if let Some(esc) = self
+            .0
             .get_partially_signed_events(signed_event.event_message.clone())
         {
             let new_sigs: Vec<_> = esc
@@ -138,15 +141,15 @@ impl PartiallySignedEscrow {
                 ..signed_event.to_owned()
             };
 
-            match processor.validator.validate_event(&new_event) {
+            let validator = EventValidator::new(self.0.clone());
+            match validator.validate_event(&new_event) {
                 Ok(_) => {
                     // add to kel
-                    self.0
-                        .add_kel_finalized_event(new_event.clone(), &id)?;
+                    self.0.add_kel_finalized_event(new_event.clone(), &id)?;
                     // remove from escrow
                     self.0
                         .remove_partially_signed_event(&id, &new_event.event_message)?;
-                    processor.notify(&Notification::KeyEventAdded(
+                    bus.notify(&Notification::KeyEventAdded(
                         new_event.event_message.event.get_prefix(),
                     ))?;
                 }
@@ -173,10 +176,10 @@ impl PartiallyWitnessedEscrow {
     }
 }
 impl Notifier for PartiallyWitnessedEscrow {
-    fn notify(&self, notification: &Notification, processor: &EventProcessor) -> Result<(), Error> {
+    fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error> {
         match notification {
             Notification::ReceiptAccepted | Notification::ReceiptEscrowed => {
-                self.process_partially_witnessed_events(processor)
+                self.process_partially_witnessed_events(bus)
             }
             Notification::PartiallyWitnessed(signed_event) => {
                 let id = &signed_event.event_message.event.get_prefix();
@@ -190,14 +193,12 @@ impl Notifier for PartiallyWitnessedEscrow {
 
 // TODO fix error handling and avoid unwraps
 impl PartiallyWitnessedEscrow {
-    pub fn process_partially_witnessed_events(&self, processor: &EventProcessor) -> Result<(), Error> {
+    pub fn process_partially_witnessed_events(&self, bus: &NotificationBus) -> Result<(), Error> {
         if let Some(mut esc) = self.0.get_all_partially_witnessed() {
             esc.try_for_each(|event| {
                 let id = event.signed_event_message.event_message.event.get_prefix();
-                match processor
-                    .validator
-                    .validate_event(&event.signed_event_message)
-                {
+                let validator = EventValidator::new(self.0.clone());
+                match validator.validate_event(&event.signed_event_message) {
                     Ok(_) => {
                         // add to kel
                         self.0
@@ -207,11 +208,10 @@ impl PartiallyWitnessedEscrow {
                         self.0
                             .remove_partially_witnessed_event(&id, &event.signed_event_message)
                             .unwrap();
-                        processor
-                            .notify(&Notification::KeyEventAdded(
-                                event.signed_event_message.event_message.event.get_prefix(),
-                            ))
-                            .unwrap();
+                        bus.notify(&Notification::KeyEventAdded(
+                            event.signed_event_message.event_message.event.get_prefix(),
+                        ))
+                        .unwrap();
                         // stop processing the escrow if kel was updated. It needs to start again.
                         None
                     }
@@ -239,13 +239,13 @@ impl NontransReceiptsEscrow {
     }
 }
 impl Notifier for NontransReceiptsEscrow {
-    fn notify(&self, notification: &Notification, processor: &EventProcessor) -> Result<(), Error> {
+    fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error> {
         match notification {
-            Notification::KeyEventAdded(_id) => self.process_nt_receipts_escrow(processor),
+            Notification::KeyEventAdded(_id) => self.process_nt_receipts_escrow(bus),
             Notification::ReceiptOutOfOrder(receipt) => {
                 let id = &receipt.body.event.prefix;
                 self.0.add_escrow_nt_receipt(receipt.clone(), id)?;
-                processor.notify(&Notification::ReceiptEscrowed)
+                bus.notify(&Notification::ReceiptEscrowed)
             }
             _ => Err(Error::SemanticError("Wrong notification".into())),
         }
@@ -254,21 +254,18 @@ impl Notifier for NontransReceiptsEscrow {
 
 // TODO fix error handling
 impl NontransReceiptsEscrow {
-    pub fn process_nt_receipts_escrow(&self, processor: &EventProcessor) -> Result<(), Error> {
+    pub fn process_nt_receipts_escrow(&self, bus: &NotificationBus) -> Result<(), Error> {
         if let Some(mut esc) = self.0.get_all_escrow_nt_receipts() {
             esc.try_for_each(|sig_receipt| {
                 let id = sig_receipt.body.event.prefix.clone();
-                match processor.validator.validate_witness_receipt(&sig_receipt) {
+                let validator = EventValidator::new(self.0.clone());
+                match validator.validate_witness_receipt(&sig_receipt) {
                     Ok(_) => {
                         // add to receipts
-                        self.0
-                            .add_receipt_nt(sig_receipt.clone(), &id)
-                            .unwrap();
+                        self.0.add_receipt_nt(sig_receipt.clone(), &id).unwrap();
                         // remove from escrow
-                        self.0
-                            .remove_escrow_nt_receipt(&id, &sig_receipt)
-                            .unwrap();
-                        processor.notify(&Notification::ReceiptAccepted)
+                        self.0.remove_escrow_nt_receipt(&id, &sig_receipt).unwrap();
+                        bus.notify(&Notification::ReceiptAccepted)
                     }
                     Err(Error::SignatureVerificationError) => {
                         // remove from escrow
@@ -292,9 +289,9 @@ impl TransReceiptsEscrow {
     }
 }
 impl Notifier for TransReceiptsEscrow {
-    fn notify(&self, notification: &Notification, _processor: &EventProcessor) -> Result<(), Error> {
+    fn notify(&self, notification: &Notification, _bus: &NotificationBus) -> Result<(), Error> {
         match notification {
-            // Notification::KelUpdated(id) => process_t_receipts_escrow(processor),
+            // Notification::KelUpdated(id) => process_t_receipts_escrow(bus),
             Notification::TransReceiptOutOfOrder(receipt) => {
                 let id = &receipt.body.event.prefix;
                 self.0.add_escrow_t_receipt(receipt.to_owned(), id)
@@ -315,13 +312,13 @@ impl ReplyEscrow {
 }
 #[cfg(feature = "query")]
 impl Notifier for ReplyEscrow {
-    fn notify(&self, notification: &Notification, processor: &EventProcessor) -> Result<(), Error> {
+    fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error> {
         match notification {
             Notification::ReplyOutOfOrder(rpy) => {
                 let id = rpy.reply.event.get_prefix();
                 self.0.add_escrowed_reply(rpy.clone(), &id)
             }
-            &Notification::KeyEventAdded(_) => self.process_reply_escrow(processor),
+            &Notification::KeyEventAdded(_) => self.process_reply_escrow(bus),
             _ => Ok(()),
         }
     }
@@ -329,24 +326,29 @@ impl Notifier for ReplyEscrow {
 
 #[cfg(feature = "query")]
 impl ReplyEscrow {
-    pub fn process_reply_escrow(&self, processor: &EventProcessor) -> Result<(), Error> {
-        use crate::event_message::signed_event_message::Message;
+    pub fn process_reply_escrow(&self, bus: &NotificationBus) -> Result<(), Error> {
         use crate::query::QueryError;
 
-        self.0.get_all_escrowed_replys().map(|esc| {
-            esc.for_each(|sig_rep| {
-                match processor.process(Message::KeyStateNotice(sig_rep.clone())) {
-                    Ok(_)
-                    | Err(Error::SignatureVerificationError)
+        self.0.get_all_escrowed_replys().map(|mut esc| {
+            esc.try_for_each(|sig_rep| {
+                let validator = EventValidator::new(self.0.clone());
+                match validator.process_signed_reply(&sig_rep) {
+                    Ok(_) => {
+                        let id = sig_rep.reply.event.get_prefix();
+                        self.0.remove_escrowed_reply(&id, &sig_rep)?;
+                        self.0.update_accepted_reply(sig_rep, &id)?;
+                        bus.notify(&Notification::ReplyUpdated)
+                    }
+                    Err(Error::SignatureVerificationError)
                     | Err(Error::QueryError(QueryError::StaleRpy)) => {
                         // remove from escrow
                         self.0
-                            .remove_escrowed_reply(&sig_rep.reply.event.get_prefix(), sig_rep)
-                            .unwrap();
+                            .remove_escrowed_reply(&sig_rep.reply.event.get_prefix(), &sig_rep)
                     }
-                    Err(_e) => {} // keep in escrow,
+                    Err(_e) => Ok(()), // keep in escrow,
                 }
             })
+            .unwrap();
         });
         Ok(())
     }

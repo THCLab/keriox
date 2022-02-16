@@ -78,7 +78,7 @@ impl Keri<UnlockedWallet> {
         Ok(Keri {
             prefix,
             key_manager: Arc::new(Mutex::new(wallet)),
-            processor: EventProcessor::new(db.clone()),
+            processor: EventProcessor::with_default_escrow(db.clone()),
             storage: EventStorage::new(db),
         })
     }

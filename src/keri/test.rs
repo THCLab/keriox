@@ -291,7 +291,7 @@ pub fn test_key_state_notice() -> Result<(), Error> {
         let root = Builder::new().prefix("test-db2").tempdir().unwrap();
         std::fs::create_dir_all(root.path()).unwrap();
         let db2 = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-        EventProcessor::new(db2)
+        EventProcessor::with_default_escrow(db2)
     };
 
     let bob_icp = bob

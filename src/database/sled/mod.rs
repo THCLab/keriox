@@ -408,10 +408,10 @@ impl SledEventDatabase {
     pub fn remove_escrowed_reply(
         &self,
         id: &IdentifierPrefix,
-        rpy: SignedReply,
+        rpy: &SignedReply,
     ) -> Result<(), Error> {
         self.escrowed_replys
-            .remove(self.identifiers.designated_key(id), &rpy)
+            .remove(self.identifiers.designated_key(id), rpy)
     }
 
     #[cfg(feature = "query")]
