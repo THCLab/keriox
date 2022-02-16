@@ -407,7 +407,7 @@ pub fn test_reply_escrow() -> Result<(), Error> {
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     fs::create_dir_all(root.path()).unwrap();
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-    let mut bus = NotificationBus::new();
+    let mut bus = NotificationBus::default();
     bus.register_observer(
         ReplyEscrow::new(db.clone()),
         vec![

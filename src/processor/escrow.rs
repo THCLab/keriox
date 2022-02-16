@@ -10,7 +10,7 @@ use crate::{
 };
 
 pub fn default_escrow_bus(db: Arc<SledEventDatabase>) -> NotificationBus {
-    let mut bus = NotificationBus::new();
+    let mut bus = NotificationBus::default();
     bus.register_observer(
         OutOfOrderEscrow::new(db.clone()),
         vec![
