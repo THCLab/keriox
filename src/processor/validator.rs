@@ -135,18 +135,16 @@ impl EventValidator {
             .get_event_at_sn(&rct.body.event.prefix, rct.body.event.sn)
         {
             let serialized_event = event.signed_event_message.serialize()?;
-            let (_, mut errors): (Vec<_>, Vec<Result<bool, Error>>) = rct
+            let (_, errors): (Vec<_>, Vec<Result<bool, Error>>) = rct
                 .clone()
                 .couplets
                 .into_iter()
-                .map(|(witness, receipt)| witness.verify(&serialized_event, &receipt))
+                .map(|(witness, signature)| witness.verify(&serialized_event, &signature))
                 .partition(Result::is_ok);
             if errors.is_empty() {
                 Ok(())
             } else {
-                // TODO
-                let e = errors.pop().unwrap().unwrap_err();
-                Err(e)
+                Err(Error::SignatureVerificationError)
             }
         } else {
             // There's no receipted event id database so we can't verify signatures
@@ -393,11 +391,7 @@ impl EventValidator {
                     Ok(())
                 }
             }
-            None => {
-                // TODO should be ok, if there's no old ksn in db?
-                // Ok(())
-                Err(Error::EventOutOfOrderError)
-            }
+            None => Err(Error::EventOutOfOrderError),
         }
     }
 

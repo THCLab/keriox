@@ -60,43 +60,37 @@ impl Notifier for OutOfOrderEscrow {
     }
 }
 
-// TODO fix error handling and avoid unwraps
 impl OutOfOrderEscrow {
     pub fn process_out_of_order_events(
         &self,
         bus: &NotificationBus,
         id: &IdentifierPrefix,
     ) -> Result<(), Error> {
-        if let Some(mut esc) = self.0.get_out_of_order_events(id) {
-            esc.try_for_each(|event| {
+        if let Some(esc) = self.0.get_out_of_order_events(id) {
+            for event in esc {
                 let validator = EventValidator::new(self.0.clone());
                 match validator.validate_event(&event.signed_event_message) {
                     Ok(_) => {
                         // add to kel
                         self.0
-                            .add_kel_finalized_event(event.signed_event_message.clone(), id)
-                            .unwrap();
+                            .add_kel_finalized_event(event.signed_event_message.clone(), id)?;
                         // remove from escrow
                         self.0
-                            .remove_out_of_order_event(id, &event.signed_event_message)
-                            .unwrap();
+                            .remove_out_of_order_event(id, &event.signed_event_message)?;
                         bus.notify(&Notification::KeyEventAdded(
                             event.signed_event_message.event_message.event.get_prefix(),
-                        ))
-                        .unwrap();
+                        ))?;
                         // stop processing the escrow if kel was updated. It needs to start again.
-                        None
+                        break;
                     }
                     Err(Error::SignatureVerificationError) => {
                         // remove from escrow
                         self.0
-                            .remove_out_of_order_event(id, &event.signed_event_message)
-                            .unwrap();
-                        Some(())
+                            .remove_out_of_order_event(id, &event.signed_event_message)?;
                     }
-                    Err(_e) => Some(()), // keep in escrow,
+                    Err(_e) => (), // keep in escrow,
                 }
-            });
+            }
         };
 
         Ok(())
@@ -191,40 +185,34 @@ impl Notifier for PartiallyWitnessedEscrow {
     }
 }
 
-// TODO fix error handling and avoid unwraps
 impl PartiallyWitnessedEscrow {
     pub fn process_partially_witnessed_events(&self, bus: &NotificationBus) -> Result<(), Error> {
-        if let Some(mut esc) = self.0.get_all_partially_witnessed() {
-            esc.try_for_each(|event| {
+        if let Some(esc) = self.0.get_all_partially_witnessed() {
+            for event in esc {
                 let id = event.signed_event_message.event_message.event.get_prefix();
                 let validator = EventValidator::new(self.0.clone());
                 match validator.validate_event(&event.signed_event_message) {
                     Ok(_) => {
                         // add to kel
                         self.0
-                            .add_kel_finalized_event(event.signed_event_message.clone(), &id)
-                            .unwrap();
+                            .add_kel_finalized_event(event.signed_event_message.clone(), &id)?;
                         // remove from escrow
                         self.0
-                            .remove_partially_witnessed_event(&id, &event.signed_event_message)
-                            .unwrap();
+                            .remove_partially_witnessed_event(&id, &event.signed_event_message)?;
                         bus.notify(&Notification::KeyEventAdded(
                             event.signed_event_message.event_message.event.get_prefix(),
-                        ))
-                        .unwrap();
+                        ))?;
                         // stop processing the escrow if kel was updated. It needs to start again.
-                        None
+                        break;
                     }
                     Err(Error::SignatureVerificationError) => {
                         // remove from escrow
                         self.0
-                            .remove_partially_witnessed_event(&id, &event.signed_event_message)
-                            .unwrap();
-                        Some(())
+                            .remove_partially_witnessed_event(&id, &event.signed_event_message)?;
                     }
-                    Err(_e) => Some(()), // keep in escrow,
+                    Err(_e) => (), // keep in escrow,
                 }
-            });
+            }
         };
 
         Ok(())
@@ -252,19 +240,18 @@ impl Notifier for NontransReceiptsEscrow {
     }
 }
 
-// TODO fix error handling
 impl NontransReceiptsEscrow {
     pub fn process_nt_receipts_escrow(&self, bus: &NotificationBus) -> Result<(), Error> {
-        if let Some(mut esc) = self.0.get_all_escrow_nt_receipts() {
-            esc.try_for_each(|sig_receipt| {
+        if let Some(esc) = self.0.get_all_escrow_nt_receipts() {
+            for sig_receipt in esc {
                 let id = sig_receipt.body.event.prefix.clone();
                 let validator = EventValidator::new(self.0.clone());
                 match validator.validate_witness_receipt(&sig_receipt) {
                     Ok(_) => {
                         // add to receipts
-                        self.0.add_receipt_nt(sig_receipt.clone(), &id).unwrap();
+                        self.0.add_receipt_nt(sig_receipt.clone(), &id)?;
                         // remove from escrow
-                        self.0.remove_escrow_nt_receipt(&id, &sig_receipt).unwrap();
+                        self.0.remove_escrow_nt_receipt(&id, &sig_receipt)?;
                         bus.notify(&Notification::ReceiptAccepted)
                     }
                     Err(Error::SignatureVerificationError) => {
@@ -273,8 +260,8 @@ impl NontransReceiptsEscrow {
                         // Some(())
                     }
                     Err(e) => Err(e), // keep in escrow,
-                }
-            })?;
+                }?
+            }
         };
 
         Ok(())
@@ -329,8 +316,8 @@ impl ReplyEscrow {
     pub fn process_reply_escrow(&self, bus: &NotificationBus) -> Result<(), Error> {
         use crate::query::QueryError;
 
-        self.0.get_all_escrowed_replys().map(|mut esc| {
-            esc.try_for_each(|sig_rep| {
+        if let Some(esc) = self.0.get_all_escrowed_replys() {
+            for sig_rep in esc {
                 let validator = EventValidator::new(self.0.clone());
                 match validator.process_signed_reply(&sig_rep) {
                     Ok(_) => {
@@ -345,11 +332,11 @@ impl ReplyEscrow {
                         self.0
                             .remove_escrowed_reply(&sig_rep.reply.event.get_prefix(), &sig_rep)
                     }
-                    Err(_e) => Ok(()), // keep in escrow,
-                }
-            })
-            .unwrap();
-        });
+                    Err(Error::EventOutOfOrderError) => Ok(()), // keep in escrow,
+                    Err(e) => Err(e),
+                }?;
+            }
+        };
         Ok(())
     }
 }
