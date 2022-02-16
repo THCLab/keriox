@@ -1,25 +1,21 @@
 use std::collections::HashMap;
 
+#[cfg(feature = "query")]
+use crate::query::reply::SignedReply;
 use crate::{
     error::Error,
     event_message::signed_event_message::{
         SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
     },
     prefix::IdentifierPrefix,
-    query::reply::SignedReply,
 };
 
+#[derive(Default)]
 pub struct NotificationBus {
     observers: HashMap<JustNotification, Vec<Box<dyn Notifier>>>,
 }
 
 impl NotificationBus {
-    pub fn new() -> Self {
-        Self {
-            observers: HashMap::new(),
-        }
-    }
-
     pub fn register_observer<N: Notifier + Clone + 'static>(
         &mut self,
         escrow: N,
@@ -28,17 +24,17 @@ impl NotificationBus {
         notification.into_iter().for_each(|notification| {
             self.observers
                 .entry(notification)
-                .or_insert(vec![])
+                .or_insert_with(Vec::new)
                 .push(Box::new(escrow.clone()));
         });
     }
 
     pub fn notify(&self, notification: &Notification) -> Result<(), Error> {
-        self.observers.get(&notification.into()).map(|obs| {
+        if let Some(obs) = self.observers.get(&notification.into()) {
             obs.iter().for_each(|esc| {
                 esc.notify(notification, self).unwrap();
             })
-        });
+        };
         Ok(())
     }
 }
@@ -79,9 +75,9 @@ pub enum JustNotification {
     ReplyUpdated,
 }
 
-impl Into<JustNotification> for &Notification {
-    fn into(self) -> JustNotification {
-        match self {
+impl From<&Notification> for JustNotification {
+    fn from(notification: &Notification) -> Self {
+        match notification {
             Notification::KeyEventAdded(_) => JustNotification::KeyEventAdded,
             Notification::OutOfOrder(_) => JustNotification::OutOfOrder,
             Notification::PartiallySigned(_) => JustNotification::PartiallySigned,

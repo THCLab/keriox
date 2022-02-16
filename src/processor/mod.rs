@@ -40,7 +40,7 @@ impl EventProcessor {
         Self {
             db,
             validator,
-            escrows: bus.unwrap_or(NotificationBus::new()),
+            escrows: bus.unwrap_or_default(),
         }
     }
 
