@@ -1,20 +1,33 @@
 use std::sync::Arc;
 
 use crate::{
-    database::sled::SledEventDatabase, error::Error, event_message::signed_event_message::Message,
-    state::IdentifierState, processor::JustNotification,
+    database::sled::SledEventDatabase,
+    error::Error,
+    event_message::signed_event_message::Message,
+    processor::{notification::NotificationBus, JustNotification},
+    state::IdentifierState,
 };
 
-use super::{compute_state, escrow::Notification, EventProcessor};
+use super::{compute_state, notification::Notification, EventProcessor};
 
 pub struct WitnessProcessor(EventProcessor);
 
 impl WitnessProcessor {
     pub fn new(db: Arc<SledEventDatabase>) -> Self {
         use crate::processor::escrow::{OutOfOrderEscrow, PartiallySignedEscrow};
-        let mut processor = EventProcessor::new(db.clone());
-        processor.register_observer(PartiallySignedEscrow::new(db.clone()), vec![JustNotification::PartiallySigned]);
-        processor.register_observer(OutOfOrderEscrow::new(db), vec![JustNotification::OutOfOrder, JustNotification::KeyEventAdded]);
+        let mut bus = NotificationBus::new();
+        bus.register_observer(
+            PartiallySignedEscrow::new(db.clone()),
+            vec![JustNotification::PartiallySigned],
+        );
+        bus.register_observer(
+            OutOfOrderEscrow::new(db.clone()),
+            vec![
+                JustNotification::OutOfOrder,
+                JustNotification::KeyEventAdded,
+            ],
+        );
+        let processor = EventProcessor::new(db, Some(bus));
         Self(processor)
     }
 
@@ -28,7 +41,9 @@ impl WitnessProcessor {
         {
             let id = &signed_event.event_message.event.get_prefix();
             self.0.db.add_kel_finalized_event(signed_event, id)?;
-            self.0.notify(&Notification::KeyEventAdded(id.clone()))?;
+            self.0
+                .escrows
+                .notify(&Notification::KeyEventAdded(id.clone()))?;
             Ok(compute_state(self.0.db.clone(), id)?)
         } else {
             res

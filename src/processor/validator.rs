@@ -1,9 +1,9 @@
 #[cfg(feature = "query")]
+use crate::prefix::IdentifierPrefix;
+#[cfg(feature = "query")]
 use crate::query::{key_state_notice::KeyStateNotice, reply::SignedReply, QueryError};
 #[cfg(feature = "query")]
 use chrono::{DateTime, FixedOffset};
-#[cfg(feature = "query")]
-use crate::prefix::IdentifierPrefix;
 use std::sync::Arc;
 
 use crate::{
@@ -455,7 +455,7 @@ fn test_validate_seal() -> Result<(), Error> {
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     fs::create_dir_all(root.path()).unwrap();
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-    let event_processor = EventProcessor::new(Arc::clone(&db));
+    let event_processor = EventProcessor::with_default_escrow(Arc::clone(&db));
 
     // Events and sigs are from keripy `test_delegation` test.
     // (keripy/tests/core/test_delegating.py:#test_delegation)
