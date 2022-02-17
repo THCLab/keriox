@@ -31,9 +31,9 @@ impl NotificationBus {
 
     pub fn notify(&self, notification: &Notification) -> Result<(), Error> {
         if let Some(obs) = self.observers.get(&notification.into()) {
-            obs.iter().for_each(|esc| {
-                esc.notify(notification, self).unwrap();
-            })
+            for esc in obs.iter() {
+                esc.notify(notification, self)?;
+            }
         };
         Ok(())
     }

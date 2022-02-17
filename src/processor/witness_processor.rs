@@ -5,10 +5,9 @@ use crate::{
     error::Error,
     event_message::signed_event_message::Message,
     processor::{notification::NotificationBus, JustNotification},
-    state::IdentifierState,
 };
 
-use super::{compute_state, notification::Notification, EventProcessor};
+use super::{notification::Notification, EventProcessor};
 
 pub struct WitnessProcessor(EventProcessor);
 
@@ -35,7 +34,7 @@ impl WitnessProcessor {
     ///
     /// Process a deserialized KERI message.
     /// Ignore not fully witness error and accept not fully witnessed events.
-    pub fn process(&self, message: Message) -> Result<Option<IdentifierState>, Error> {
+    pub fn process(&self, message: Message) -> Result<(), Error> {
         let res = self.0.process(message.clone());
         if let (Err(Error::NotEnoughReceiptsError), Message::Event(signed_event)) = (&res, message)
         {
@@ -44,9 +43,7 @@ impl WitnessProcessor {
             self.0
                 .escrows
                 .notify(&Notification::KeyEventAdded(id.clone()))?;
-            Ok(compute_state(self.0.db.clone(), id)?)
-        } else {
-            res
-        }
+        };
+        Ok(()) 
     }
 }

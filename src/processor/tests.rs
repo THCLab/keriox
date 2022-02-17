@@ -32,7 +32,7 @@ fn test_process() -> Result<(), Error> {
     };
 
     // Process icp event.
-    event_processor.process(deserialized_icp)?.unwrap();
+    event_processor.process(deserialized_icp)?;
 
     // Check if processed event is in kel.
     let icp_from_db = event_storage.get_event_at_sn(&id, 0).unwrap();
@@ -48,7 +48,7 @@ fn test_process() -> Result<(), Error> {
     let deserialized_rot = Message::try_from(parsed).unwrap();
 
     // Process rotation event.
-    event_processor.process(deserialized_rot.clone())?.unwrap();
+    event_processor.process(deserialized_rot.clone())?;
     let rot_from_db = event_storage.get_event_at_sn(&id, 1).unwrap().unwrap();
     assert_eq!(
         rot_from_db.signed_event_message.serialize().unwrap(),
@@ -65,7 +65,7 @@ fn test_process() -> Result<(), Error> {
     let deserialized_ixn = Message::try_from(parsed).unwrap();
 
     // Process interaction event.
-    event_processor.process(deserialized_ixn.clone())?.unwrap();
+    event_processor.process(deserialized_ixn.clone())?;
 
     // Check if processed event is in db.
     let ixn_from_db = event_storage.get_event_at_sn(&id, 2).unwrap().unwrap();
@@ -265,7 +265,7 @@ fn test_process_delegated() -> Result<(), Error> {
     );
 
     // Process delegated rotation event once again.
-    event_processor.process(deserialized_drt.clone())?.unwrap();
+    event_processor.process(deserialized_drt.clone())?;
 
     // Check if processed drt event is in db.
     let drt_from_db = event_storage.get_event_at_sn(&child_prefix, 1)?.unwrap();
