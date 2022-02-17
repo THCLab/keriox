@@ -286,7 +286,7 @@ impl<K: KeyManager> Keri<K> {
 
     pub fn process(&self, msg: &[Message]) -> Result<(), Error> {
         let (process_ok, process_failed): (Vec<_>, Vec<_>) = msg
-            .into_iter()
+            .iter()
             .map(|message| {
                 self.processor
                     .process(message.clone())

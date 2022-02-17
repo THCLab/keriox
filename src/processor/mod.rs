@@ -69,7 +69,7 @@ impl EventProcessor {
                         Ok(Notification::ReceiptAccepted)
                     }
                     Err(Error::MissingEvent) => Ok(Notification::ReceiptOutOfOrder(rct.clone())),
-                    Err(e) => return Err(e),
+                    Err(e) => Err(e),
                 }
             }
             Message::TransferableRct(vrc) => {
