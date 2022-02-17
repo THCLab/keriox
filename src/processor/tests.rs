@@ -1,7 +1,9 @@
 use crate::event_message::signed_event_message::Message;
 use crate::event_parsing::message::{signed_event_stream, signed_message};
 use crate::prefix::IdentifierPrefix;
+use crate::processor::escrow::default_escrow_bus;
 use crate::processor::event_storage::EventStorage;
+use crate::processor::notification::Notification;
 use crate::processor::EventProcessor;
 use crate::{database::sled::SledEventDatabase, error::Error};
 use std::convert::TryFrom;
@@ -17,7 +19,7 @@ fn test_process() -> Result<(), Error> {
     fs::create_dir_all(root.path()).unwrap();
 
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-    let event_processor = EventProcessor::with_default_escrow(Arc::clone(&db));
+    let event_processor = EventProcessor::new(Arc::clone(&db));
     let event_storage = EventStorage::new(Arc::clone(&db));
     // Events and sigs are from keripy `test_multisig_digprefix` test.
     // (keripy/tests/core/test_eventing.py#1138)
@@ -56,9 +58,8 @@ fn test_process() -> Result<(), Error> {
     );
 
     // Process the same rotation event one more time.
-    let id_state = event_processor.process(deserialized_rot);
-    assert!(id_state.is_err());
-    assert!(matches!(id_state, Err(Error::EventDuplicateError)));
+    let notification = event_processor.process(deserialized_rot);
+    assert!(matches!(notification, Ok(Notification::DupliciousEvent(_))));
 
     let ixn_raw = br#"{"v":"KERI10JSON0000cb_","t":"ixn","d":"E2R3qlKVg96GqkpGGaIVgjEDy_3Zklm5l0JJaI2g7lqY","i":"ELYk-z-SuTIeDncLr6GhwVUKnv3n3F1bF18qkXNd2bpk","s":"2","p":"E0UUmo4JsLq9C6LDnerxTjV0PcegpXcPsT_m2J4SeQbE","a":[]}-AADAAUHrvRANKmre1dXRNpBeJFTRBouy4Wmj72QHjBrv74JtKBq7_JzYz17A5Kem6wk5IjOi7Q3gtoxQc4a3xDXHkBwABnHvoCVgqyZZxxdVRY74SHItB8IDVK9udSY8eID7m-oktOm6mtRSbazNRq0gsCh0IwzH_-7REtFvO7CO-noQgCwACr7Re0-LgCMTtBpsq5wK7YqwSpqP6-YLu1m9IOQWv5O9zGAp-z6Qbp1x9cpMGrpTEJTHLp2PNtdTzffvztWuBBQ"#;
     let parsed = signed_message(ixn_raw).unwrap().1;
@@ -92,8 +93,8 @@ fn test_process() -> Result<(), Error> {
     };
 
     // Process partially signed interaction event.
-    let id_state = event_processor.process(partially_signed_deserialized_ixn);
-    assert!(matches!(id_state, Err(Error::NotEnoughSigsError)));
+    let notification = event_processor.process(partially_signed_deserialized_ixn);
+    assert!(matches!(notification, Ok(Notification::PartiallySigned(_))));
 
     // Check if processed ixn event is in kel. It shouldn't because of not enough signatures.
     let ixn_from_db = event_storage.get_event_at_sn(&id, 3);
@@ -104,9 +105,8 @@ fn test_process() -> Result<(), Error> {
     let parsed = signed_message(out_of_order_rot_raw).unwrap().1;
     let out_of_order_rot = Message::try_from(parsed).unwrap();
 
-    let id_state = event_processor.process(out_of_order_rot);
-    assert!(id_state.is_err());
-    assert!(matches!(id_state, Err(Error::EventOutOfOrderError)));
+    let notification = event_processor.process(out_of_order_rot);
+    assert!(matches!(notification, Ok(Notification::OutOfOrder(_))));
 
     // Check if processed event is in kel. It shouldn't.
     let raw_from_db = event_storage.get_event_at_sn(&id, 4);
@@ -133,7 +133,7 @@ fn test_process_receipt() -> Result<(), Error> {
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     fs::create_dir_all(root.path()).unwrap();
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-    let event_processor = EventProcessor::with_default_escrow(Arc::clone(&db));
+    let event_processor = EventProcessor::new(Arc::clone(&db));
 
     // Events and sigs are from keripy `test_direct_mode` test.
     // (keripy/tests/core/test_eventing.py)
@@ -141,30 +141,41 @@ fn test_process_receipt() -> Result<(), Error> {
     let icp_raw = br#"{"v":"KERI10JSON000120_","t":"icp","d":"EsZuhYAPBDnexP3SOl9YsGvWBrYkjYcRjomUYmCcLAYY","i":"EsZuhYAPBDnexP3SOl9YsGvWBrYkjYcRjomUYmCcLAYY","s":"0","kt":"1","k":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA"],"n":"EPYuj8mq_PYYsoBKkzX1kxSPGYBWaIya3slgCOyOtlqU","bt":"0","b":[],"c":[],"a":[]}-AABAAWKO9bl3OhABTaevxYiXQ1poRIGfM9ndMPq4bvrKmU_3pTN3VLNDYOI8pJBeAQxRtajQn4CSWOqgdGnmeG6fBCQ"#;
     let parsed = signed_message(icp_raw).unwrap().1;
     let icp = Message::try_from(parsed).unwrap();
+    let controller_id =
+        "EsZuhYAPBDnexP3SOl9YsGvWBrYkjYcRjomUYmCcLAYY".parse::<IdentifierPrefix>()?;
 
-    let controller_id_state = event_processor.process(icp)?;
+    let notification = event_processor.process(icp)?;
+    assert!(matches!(notification, Notification::KeyEventAdded(_)));
+
+    let controller_id_state = EventStorage::new(db.clone()).get_state(&controller_id);
 
     // Parse receipt of controller's inception event.
     let vrc_raw = br#"{"v":"KERI10JSON000091_","t":"rct","d":"EsZuhYAPBDnexP3SOl9YsGvWBrYkjYcRjomUYmCcLAYY","i":"EsZuhYAPBDnexP3SOl9YsGvWBrYkjYcRjomUYmCcLAYY","s":"0"}-FABE7pB5IKuaYh3aIWKxtexyYFhpSjDNTEGSQuxeJbWiylg0AAAAAAAAAAAAAAAAAAAAAAAE7pB5IKuaYh3aIWKxtexyYFhpSjDNTEGSQuxeJbWiylg-AABAAlIts3z2kNyis9l0Pfu54HhVN_yZHEV7NWIVoSTzl5IABelbY8xi7VRyW42ZJvBaaFTGtiqwMOywloVNpG_ZHAQ'"#;
     let parsed = signed_message(vrc_raw).unwrap().1;
     let rcp = Message::try_from(parsed).unwrap();
 
-    let id_state = event_processor.process(rcp.clone());
+    let notification = event_processor.process(rcp.clone());
     // Validator not yet in db. Event should be escrowed.
-    assert!(id_state.is_err());
+    assert!(matches!(
+        notification,
+        Ok(Notification::TransReceiptOutOfOrder(_))
+    ));
 
     // Parse and process validator's inception event.
     let val_icp_raw = br#"{"v":"KERI10JSON000120_","t":"icp","d":"E7pB5IKuaYh3aIWKxtexyYFhpSjDNTEGSQuxeJbWiylg","i":"E7pB5IKuaYh3aIWKxtexyYFhpSjDNTEGSQuxeJbWiylg","s":"0","kt":"1","k":["D8KY1sKmgyjAiUDdUBPNPyrSz_ad_Qf9yzhDNZlEKiMc"],"n":"EOWDAJvex5dZzDxeHBANyaIoUG3F4-ic81G6GwtnC4f4","bt":"0","b":[],"c":[],"a":[]}-AABAAsnbd4AkK3mlX2Z3quAfTznEPmFJInT9CE9i0aisswqaSW7QNp6XlPHo3natTevQCmS0H9J4Kb-H_V-BtpqavBA"#;
     let parsed = signed_message(val_icp_raw).unwrap().1;
     let val_icp = Message::try_from(parsed).unwrap();
 
-    event_processor.process(val_icp)?;
+    let notification = event_processor.process(val_icp)?;
+    assert!(matches!(notification, Notification::KeyEventAdded(_)));
 
     // Process receipt once again.
-    let id_state = event_processor.process(rcp);
-    assert!(id_state.is_ok());
+    let notification = event_processor.process(rcp)?;
+    assert!(matches!(notification, Notification::ReceiptAccepted));
+
+    let id_state = EventStorage::new(db.clone()).get_state(&controller_id);
     // Controller's state shouldn't change after processing receipt.
-    assert_eq!(controller_id_state, id_state?);
+    assert_eq!(controller_id_state?, id_state?);
 
     Ok(())
 }
@@ -175,7 +186,7 @@ fn test_process_delegated() -> Result<(), Error> {
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     fs::create_dir_all(root.path()).unwrap();
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-    let event_processor = EventProcessor::with_default_escrow(Arc::clone(&db));
+    let event_processor = EventProcessor::new(Arc::clone(&db));
     let event_storage = EventStorage::new(Arc::clone(&db));
 
     // Events and sigs are from keripy `test_delegation` test.
@@ -193,8 +204,8 @@ fn test_process_delegated() -> Result<(), Error> {
     let deserialized_dip = Message::try_from(parsed).unwrap();
 
     // Process dip event before delegating ixn event.
-    let state = event_processor.process(deserialized_dip.clone());
-    assert!(matches!(state, Err(Error::EventOutOfOrderError)));
+    let notification = event_processor.process(deserialized_dip.clone());
+    assert!(matches!(notification, Ok(Notification::OutOfOrder(_))));
 
     let child_prefix: IdentifierPrefix = "Er4bHXd4piEtsQat1mquwsNZXItvuoj_auCUyICmwyXI".parse()?;
 
@@ -248,8 +259,11 @@ fn test_process_delegated() -> Result<(), Error> {
     let deserialized_drt = Message::try_from(parsed).unwrap();
 
     // Process drt event before delegating ixn event.
-    let child_state = event_processor.process(deserialized_drt.clone());
-    assert!(matches!(child_state, Err(Error::EventOutOfOrderError)));
+    let child_notification = event_processor.process(deserialized_drt.clone());
+    assert!(matches!(
+        child_notification,
+        Ok(Notification::OutOfOrder(_))
+    ));
 
     // Check if processed drt is in kel.
     let drt_from_db = event_storage.get_event_at_sn(&child_prefix, 1);
@@ -286,7 +300,7 @@ fn test_compute_state_at_sn() -> Result<(), Error> {
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     fs::create_dir_all(root.path()).unwrap();
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-    let event_processor = EventProcessor::with_default_escrow(Arc::clone(&db));
+    let event_processor = EventProcessor::new(Arc::clone(&db));
     let event_storage = EventStorage::new(Arc::clone(&db));
 
     let kerl_str = br#"{"v":"KERI10JSON000120_","t":"icp","d":"EFM_0I1yFtoKJPy8L9QCN9ZBHHR-qIBSxSwHZG6uljqc","i":"Ddhxr2UX8Xl55KvOd20cBYjj5QSCVqTiINgA_VJQul30","s":"0","kt":"1","k":["Ddhxr2UX8Xl55KvOd20cBYjj5QSCVqTiINgA_VJQul30"],"n":"ESY1L4c7pxgQBuq76wUjwLdOWVfX8XLfi4unqjzBs3A4","bt":"0","b":[],"c":[],"a":[]}-AABAAqVXfmQsyme65lXrnUdx701IClRnO14wvdP00-CnTyYHetVUQEpWCS787bSNWlPG9HnroeEzfuM7ZhzM5VRCQDw{"v":"KERI10JSON000155_","t":"rot","d":"EI_rE4U5HPnLtJ-kNRBZKyTzw9dYq0yffywEoGEZZE0E","i":"Ddhxr2UX8Xl55KvOd20cBYjj5QSCVqTiINgA_VJQul30","s":"1","p":"EFM_0I1yFtoKJPy8L9QCN9ZBHHR-qIBSxSwHZG6uljqc","kt":"1","k":["DhSM7Cy_qC1y7jmmIu8A3lYedssBAVpHKJDfVbUXo_Nc"],"n":"EAMjC1FxUcVlPHFBcgMOTjLmlRsRNkHtXzUTFD5VaaU4","bt":"0","br":[],"ba":[],"a":[]}-AABAA6TMhDKzjpD574-xzs0A0VwD5x_VzcYcK0y9h_ttkVYQOQlocK4QpsV2kHbAHptKQg74tZxxcKuiqDg1SO9MTAA{"v":"KERI10JSON0000cb_","t":"ixn","d":"EeAgPgw8ewxtbE0zVRB92K5bLC_nmVQBgA9Ajz7TPTg0","i":"Ddhxr2UX8Xl55KvOd20cBYjj5QSCVqTiINgA_VJQul30","s":"2","p":"EI_rE4U5HPnLtJ-kNRBZKyTzw9dYq0yffywEoGEZZE0E","a":[]}-AABAArJjuMeasjy7gcTSZrDaVa8shiYoH4syJPXPZQMRLyaxCBFFynsWVyWrq-ZJFoWJETyX3Hi5U7AmPfWZsZfaaCw{"v":"KERI10JSON000155_","t":"rot","d":"E7YSxhPZMwGRxIP4E1POsqS7gK9jO00cE0IOr002lVPI","i":"Ddhxr2UX8Xl55KvOd20cBYjj5QSCVqTiINgA_VJQul30","s":"3","p":"EeAgPgw8ewxtbE0zVRB92K5bLC_nmVQBgA9Ajz7TPTg0","kt":"1","k":["D4cFZmRliumCFW5RnHvDFYCRTvNvuGMLWO1CqTaNEZZI"],"n":"Ew9LxnzhZHC6wri0dFdC5OQ_uhpAaO-wjbMtdt5ld0HQ","bt":"0","br":[],"ba":[],"a":[]}-AABAAWaOtr_k3Jk0GQn39Pc7WoZEcpeZk1m5yMScDq0yp5L4biNkSnyOA7AYO5G2n-HxZ3lM2IGeTLwN4XAdyVxRrBg{"v":"KERI10JSON000155_","t":"rot","d":"E6OMBom_RgVCE7paXEvdUBzg2rt6QRmEQ2q7Dq4FOG9o","i":"Ddhxr2UX8Xl55KvOd20cBYjj5QSCVqTiINgA_VJQul30","s":"4","p":"E7YSxhPZMwGRxIP4E1POsqS7gK9jO00cE0IOr002lVPI","kt":"1","k":["Dnljgftiq3x7IuF4mmMYfOzWoMNh98QDCdEU2bRSqUAQ"],"n":"EnlyNgrbZhysJ8mxSxoVuVv9QBAcB25RtVmm2A7yW7oY","bt":"0","br":[],"ba":[],"a":[]}-AABAApnOXmrsbhdRUHEg-x9CqeVKQdJIau0fTnQ8WT2uv1ueUwj7zMfWstZYEpRPkc9DAg5XqRKyMVOR2kq4sjAIpAQ{"v":"KERI10JSON0000cb_","t":"ixn","d":"ECpHwQLdPSwHBGR_QAXhlyzwyB-z8vNYuVRtTWak5kQw","i":"Ddhxr2UX8Xl55KvOd20cBYjj5QSCVqTiINgA_VJQul30","s":"5","p":"E6OMBom_RgVCE7paXEvdUBzg2rt6QRmEQ2q7Dq4FOG9o","a":[]}-AABAAwj0JqH6ae5vCOCxiAWmA_FKzM1g7ydxQpfgQio0Yj2DhOPKBU8kdUh0zAM2n6qi32diaJHYM15nm62Re1sK7CQ"#;
@@ -325,8 +339,9 @@ pub fn test_not_fully_witnessed() -> Result<(), Error> {
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     fs::create_dir_all(root.path()).unwrap();
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-    let event_processor = EventProcessor::with_default_escrow(Arc::clone(&db));
+    let event_processor = EventProcessor::new(Arc::clone(&db));
     let event_storage = EventStorage::new(Arc::clone(&db));
+    let publisher = default_escrow_bus(db.clone());
 
     let id = &"Dbmaqh5RgFDCYVuhqMazU96S8hPVZDlfgMQ180o42dBo"
         .parse()
@@ -337,7 +352,8 @@ pub fn test_not_fully_witnessed() -> Result<(), Error> {
     let parsed_icp = signed_message(icp_raw).unwrap().1;
     let icp_msg = Message::try_from(parsed_icp).unwrap();
     let res = event_processor.process(icp_msg.clone());
-    assert!(matches!(res, Err(Error::NotEnoughReceiptsError)));
+    assert!(matches!(res, Ok(Notification::PartiallyWitnessed(_))));
+    publisher.notify(&res?)?;
 
     let state = event_storage.get_state(id)?;
     assert_eq!(state, None);
@@ -353,7 +369,9 @@ pub fn test_not_fully_witnessed() -> Result<(), Error> {
     let receipt0_0 = br#"{"v":"KERI10JSON000091_","t":"rct","d":"E0FPXUh5T2WM2yro_NkR3ff3H5wp8HOTNf3lJTbxuGms","i":"Dbmaqh5RgFDCYVuhqMazU96S8hPVZDlfgMQ180o42dBo","s":"0"}-CABDRbNyuRzZcCLBb4tuCrx8QAuX4sLNcV3pyet6SmyYIjU0BJrcCN2pRAXIDg5mMr7gE_gqRvcbnXSbt_CCU4-CainTxjaH1dQA72oy7d4uUMQKIm5CV8awB6BnKHviXTyQEAw"#;
     let parsed_rcp = signed_message(receipt0_0).unwrap().1;
     let rcp_msg = Message::try_from(parsed_rcp).unwrap();
-    event_processor.process(rcp_msg.clone())?;
+    let notification = event_processor.process(rcp_msg.clone())?;
+    assert!(matches!(notification, Notification::ReceiptOutOfOrder(_)));
+    publisher.notify(&notification)?;
 
     // check if icp still in escrow
     let mut esc = db.get_all_partially_witnessed().unwrap();
@@ -377,7 +395,8 @@ pub fn test_not_fully_witnessed() -> Result<(), Error> {
     let receipt0_1 = br#"{"v":"KERI10JSON000091_","t":"rct","d":"E0FPXUh5T2WM2yro_NkR3ff3H5wp8HOTNf3lJTbxuGms","i":"Dbmaqh5RgFDCYVuhqMazU96S8hPVZDlfgMQ180o42dBo","s":"0"}-CABD1XMRrVoYzJdIZAuKLARnCvCCggJbRwdW-XXW7iLOvmU0BVdX4vdqjB1SZNPL6o2RwAV4L35mhIRHVgOwO7NWYCU9hRKWSBuchoZzUMbkaeQ-go8E4KKZWQFkof2tsJP-tAw"#;
     let parsed_rcp = signed_message(receipt0_1).unwrap().1;
     let rcp_msg = Message::try_from(parsed_rcp).unwrap();
-    event_processor.process(rcp_msg.clone())?;
+    let notification = event_processor.process(rcp_msg.clone())?;
+    publisher.notify(&notification)?;
 
     // check if icp still in escrow
     let mut esc = db.get_all_partially_witnessed().unwrap();
@@ -407,15 +426,15 @@ pub fn test_reply_escrow() -> Result<(), Error> {
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     fs::create_dir_all(root.path()).unwrap();
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-    let mut bus = NotificationBus::default();
-    bus.register_observer(
-        ReplyEscrow::new(db.clone()),
+    let mut publisher = NotificationBus::new();
+    publisher.register_observer(
+        Arc::new(ReplyEscrow::new(db.clone())),
         vec![
             JustNotification::ReplyOutOfOrder,
             JustNotification::KeyEventAdded,
         ],
     );
-    let event_processor = EventProcessor::new(Arc::clone(&db), Some(bus));
+    let event_processor = EventProcessor::new(Arc::clone(&db));
 
     let identifier: IdentifierPrefix = "Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8".parse()?;
     let kel = r#"{"v":"KERI10JSON000120_","t":"icp","d":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","i":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","s":"0","kt":"1","k":["DqI2cOZ06RwGNwCovYUWExmdKU983IasmUKMmZflvWdQ"],"n":"E7FuL3Z_KBgt_QAwuZi1lUFNC69wvyHSxnMFUsKjZHss","bt":"0","b":[],"c":[],"a":[]}-AABAAJEloPu7b4z8v1455StEJ1b7dMIz-P0tKJ_GBBCxQA8JEg0gm8qbS4TWGiHikLoZ2GtLA58l9dzIa2x_otJhoDA{"v":"KERI10JSON000155_","t":"rot","d":"EoU_JzojCvenHLPza5-K7z59yU7efQVrzciNdXoVDmlk","i":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","s":"1","p":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","kt":"1","k":["Dyb48eeVVXD7JAarHFAUffKcgYGvCQ4KWX00myzNLgzU"],"n":"ElBleBp2wS0n927E6W63imv-lRzU10uLYTRKzHNn19IQ","bt":"0","br":[],"ba":[],"a":[]}-AABAAXcEQQlT3id8LpTRDkFKVzF7n0d0w-3n__xgdf7rxTpAWUVsHthZcPtovCVr1kca1MD9QbfFAMpEtUZ02LTi3AQ{"v":"KERI10JSON000155_","t":"rot","d":"EYhzp9WCvSNFT2dVryQpVFiTzuWGbFNhVHNKCqAqBI8A","i":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","s":"2","p":"EoU_JzojCvenHLPza5-K7z59yU7efQVrzciNdXoVDmlk","kt":"1","k":["DyN13SKiF1FsVoVR5C4r_15JJLUBxBXBmkleD5AYWplc"],"n":"Em4tcl6gRcT2OLjbON4iz-fsw0iWQGBtwWic0dJY4Gzo","bt":"0","br":[],"ba":[],"a":[]}-AABAAZgqx0nZk4y2NyxPGypIloZikDzaZMw8EwjisexXwn-nr08jdILP6wvMOKZcxmCbAHJ4kHL_SIugdB-_tEvhBDg{"v":"KERI10JSON000155_","t":"rot","d":"EsL4LnyvTGBqdYC_Ute3ag4XYbu8PdCj70un885pMYpA","i":"Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8","s":"3","p":"EYhzp9WCvSNFT2dVryQpVFiTzuWGbFNhVHNKCqAqBI8A","kt":"1","k":["DrcAz_gmDTuWIHn_mOQDeSK_aJIRiw5IMzPD7igzEDb0"],"n":"E_Y2NMHE0nqrTQLe57VPcM0razmxdxRVbljRCSetdjjI","bt":"0","br":[],"ba":[],"a":[]}-AABAAkk_Z4jS76LBiKrTs8tL32DNMndq5UQJ-NoteiTyOuMZfyP8jgxJQU7AiR7zWQZxzmiF0mT1JureItwDkPli5DA"#;
@@ -435,10 +454,9 @@ pub fn test_reply_escrow() -> Result<(), Error> {
     let deserialized_new_rpy = Message::try_from(parsed).unwrap();
 
     // Try to process out of order reply
-    assert!(matches!(
-        event_processor.process(deserialized_old_rpy.clone()),
-        Err(Error::EventOutOfOrderError)
-    ));
+    let notification = event_processor.process(deserialized_old_rpy.clone());
+    assert!(matches!(notification, Ok(Notification::ReplyOutOfOrder(_))));
+    publisher.notify(&notification?)?;
     let escrow = db.get_escrowed_replys(&identifier);
     assert_eq!(escrow.unwrap().collect::<Vec<_>>().len(), 1);
 
@@ -448,7 +466,8 @@ pub fn test_reply_escrow() -> Result<(), Error> {
     // process kel events and update escrow
     // reply event should be unescrowed and save as accepted
     kel_events.for_each(|ev| {
-        event_processor.process(ev).unwrap();
+        let not = event_processor.process(ev).unwrap();
+        publisher.notify(&not).unwrap();
     });
 
     let escrow = db.get_escrowed_replys(&identifier);
@@ -459,10 +478,9 @@ pub fn test_reply_escrow() -> Result<(), Error> {
 
     // Try to process new out of order reply
     // reply event should be escrowed, accepted reply shouldn't change
-    assert!(matches!(
-        event_processor.process(deserialized_new_rpy.clone()),
-        Err(Error::EventOutOfOrderError)
-    ));
+    let notification = event_processor.process(deserialized_new_rpy.clone());
+    assert!(matches!(notification, Ok(Notification::ReplyOutOfOrder(_))));
+    publisher.notify(&notification?)?;
     let mut escrow = db.get_escrowed_replys(&identifier).unwrap();
     assert_eq!(
         Message::KeyStateNotice(escrow.next().unwrap()),
@@ -480,7 +498,8 @@ pub fn test_reply_escrow() -> Result<(), Error> {
     // process rest of kel and update escrow
     // reply event should be unescrowed and save as accepted
     rest_of_kel.for_each(|ev| {
-        event_processor.process(ev).unwrap();
+        let not = event_processor.process(ev).unwrap();
+        publisher.notify(&not).unwrap();
     });
 
     let escrow = db.get_escrowed_replys(&identifier);
@@ -548,37 +567,41 @@ fn test_out_of_order() -> Result<(), Error> {
 
     use tempfile::Builder;
 
-    let (processor, storage) = {
+    let (processor, storage, publisher) = {
         let witness_root = Builder::new().prefix("test-db").tempdir().unwrap();
         let path = witness_root.path();
         let witness_db = Arc::new(SledEventDatabase::new(path).unwrap());
         std::fs::create_dir_all(path).unwrap();
         (
-            EventProcessor::with_default_escrow(witness_db.clone()),
+            EventProcessor::new(witness_db.clone()),
             EventStorage::new(witness_db.clone()),
+            default_escrow_bus(witness_db.clone()),
         )
     };
     let id: IdentifierPrefix = "DUlpESxNlTu1y_mYeJFoemZsy_brUM4-fkagyJpWThYM".parse()?;
 
-    processor.process(ev1)?;
+    let notification = processor.process(ev1)?;
+    publisher.notify(&notification)?;
     assert_eq!(storage.get_state(&id).unwrap().unwrap().sn, 0);
 
-    assert!(matches!(
-        processor.process(ev4),
-        Err(Error::EventOutOfOrderError)
-    ));
-    assert!(matches!(
-        processor.process(ev3),
-        Err(Error::EventOutOfOrderError)
-    ));
-    assert!(matches!(
-        processor.process(ev5),
-        Err(Error::EventOutOfOrderError)
-    ));
+    let notification = processor.process(ev4);
+    assert!(matches!(notification, Ok(Notification::OutOfOrder(_))));
+    publisher.notify(&notification?)?;
+
+    let notification = processor.process(ev3);
+    assert!(matches!(notification, Ok(Notification::OutOfOrder(_))));
+    publisher.notify(&notification?)?;
+
+    let notification = processor.process(ev5);
+    assert!(matches!(notification, Ok(Notification::OutOfOrder(_))));
+    publisher.notify(&notification?)?;
+
     assert_eq!(storage.get_state(&id).unwrap().unwrap().sn, 0);
     // check out of order table
     assert_eq!(storage.db.get_out_of_order_events(&id).unwrap().count(), 3);
-    processor.process(ev2)?;
+
+    let notification = processor.process(ev2)?;
+    publisher.notify(&notification)?;
 
     assert_eq!(storage.get_state(&id).unwrap().unwrap().sn, 4);
     // Check if out of order is empty
@@ -597,14 +620,18 @@ fn test_partially_sign_escrow() -> Result<(), Error> {
     use tempfile::Builder;
 
     // events from keripy/tests/core/test_escrow.py::test_partial_signed_escrow
-    let (processor, storage) = {
+    let (processor, storage, publisher) = {
         let witness_root = Builder::new().prefix("test-db").tempdir().unwrap();
         let path = witness_root.path();
         let witness_db = Arc::new(SledEventDatabase::new(path).unwrap());
         std::fs::create_dir_all(path).unwrap();
-        let processor = EventProcessor::with_default_escrow(witness_db.clone());
+        let processor = EventProcessor::new(witness_db.clone());
 
-        (processor, EventStorage::new(witness_db.clone()))
+        (
+            processor,
+            EventStorage::new(witness_db.clone()),
+            default_escrow_bus(witness_db.clone()),
+        )
     };
 
     let parse_messagee = |raw_event| {
@@ -619,10 +646,10 @@ fn test_partially_sign_escrow() -> Result<(), Error> {
     let icp_raw = br#"{"v":"KERI10JSON00018e_","t":"icp","d":"EZgXYINAQWXFpxAmWI9AwOwjVOYXzjyEE_-DdTfkEk8s","i":"EZgXYINAQWXFpxAmWI9AwOwjVOYXzjyEE_-DdTfkEk8s","s":"0","kt":["1/2","1/2","1/2"],"k":["DK4OJI8JOr6oEEUMeSF_X-SbKysfwpKwW-ho5KARvH5c","D1RZLgYke0GmfZm-CH8AsW4HoTU4m-2mFgu8kbwp8jQU","DBVwzum-jPfuUXUcHEWdplB4YcoL3BWGXK0TMoF_NeFU"],"n":"EhJGhyJQTpSlZ9oWfQT-lHNl1woMazLC42O89fRHocTI","bt":"0","b":[],"c":[],"a":[]}-AABACInxprKSzFp2-LNPn7eVAAc8z0XO0KbUE26vv_PXt5IMwyx6S5A1nCC4DQrv6bYHmmXP0YQpkOIm-tRHrPCOuDg"#;
     let icp_second_sig = parse_messagee(icp_raw);
 
-    assert!(matches!(
-        processor.process(icp_first_sig),
-        Err(Error::NotEnoughSigsError)
-    ));
+    let notification = processor.process(icp_first_sig);
+    assert!(matches!(notification, Ok(Notification::PartiallySigned(_))));
+    publisher.notify(&notification?)?;
+
     // check if event was accepted into kel
     assert_eq!(storage.get_state(&id).unwrap(), None);
 
@@ -637,10 +664,9 @@ fn test_partially_sign_escrow() -> Result<(), Error> {
     );
 
     // Proces the same event with another signature
-    assert!(matches!(
-        processor.process(icp_second_sig),
-        Err(Error::NotEnoughSigsError)
-    ));
+    let notification = processor.process(icp_second_sig);
+    assert!(matches!(notification, Ok(Notification::PartiallySigned(_))));
+    publisher.notify(&notification?)?;
 
     // Now event is fully signed, check if escrow is emty
     assert_eq!(
@@ -660,10 +686,10 @@ fn test_partially_sign_escrow() -> Result<(), Error> {
     let ixn2 = br#"{"v":"KERI10JSON0000cb_","t":"ixn","d":"E8LhfiGHj_YPjzZWu7xxMrla8Bz3Fn-L6tJFlQcgeA_0","i":"EZgXYINAQWXFpxAmWI9AwOwjVOYXzjyEE_-DdTfkEk8s","s":"1","p":"EZgXYINAQWXFpxAmWI9AwOwjVOYXzjyEE_-DdTfkEk8s","a":[]}-AABAAvVH0h_W7QuioTt0OmcRgtZSksfQ7MOTYMd4Nc14rdJ9U6j1ycr06YCtuGTM-J34d0ADnG3f_0F3t3dX_lZacBQ"#;
     let ixn_second_sig = parse_messagee(ixn2);
 
-    assert!(matches!(
-        processor.process(ixn_first_sig),
-        Err(Error::NotEnoughSigsError)
-    ));
+    let notification = processor.process(ixn_first_sig);
+    assert!(matches!(notification, Ok(Notification::PartiallySigned(_))));
+    publisher.notify(&notification?)?;
+
     // check if event was accepted into kel
     assert_eq!(storage.get_state(&id).unwrap().unwrap().sn, 0);
 
@@ -678,10 +704,9 @@ fn test_partially_sign_escrow() -> Result<(), Error> {
     );
 
     // Proces the same event with another signature
-    assert!(matches!(
-        processor.process(ixn_second_sig),
-        Err(Error::NotEnoughSigsError)
-    ));
+    let notification = processor.process(ixn_second_sig);
+    assert!(matches!(notification, Ok(Notification::PartiallySigned(_))));
+    publisher.notify(&notification?)?;
 
     // Now event is fully signed, check if escrow is empty
     assert_eq!(
@@ -697,7 +722,8 @@ fn test_partially_sign_escrow() -> Result<(), Error> {
 
     let rot = parse_messagee(br#"{"v":"KERI10JSON0001c3_","t":"rot","d":"EYNBYvleStPRa_g6Nbrt6Tk6igkG3cY4U9fDVSpIs3EQ","i":"EZgXYINAQWXFpxAmWI9AwOwjVOYXzjyEE_-DdTfkEk8s","s":"2","p":"E8LhfiGHj_YPjzZWu7xxMrla8Bz3Fn-L6tJFlQcgeA_0","kt":["1/2","1/2","1/2"],"k":["DeonYM2bKnAwp6VZcuCXdX72kNFw56czlZ_Tc7XHHVGI","DQghKIy-2do9OkweSgazh3Ql1vCOt5bnc5QF8x50tRoU","DNAUn-5dxm6b8Njo01O0jlStMRCjo9FYQA2mfqFW1_JA"],"n":"EroRQvTYMvlD5hE2FVCm9LuOL_BxBgS8KykKpMUYofdw","bt":"0","br":[],"ba":[],"a":[]}-AADAAoNAH7cxJUMS2eIjUO-7HvdQw-M4abIBafOwbQPDF08swBKAhPbBY95tCcxocX215GWqeFG2XarHR7RpKnMEqCgABifbx08-ZPNxPZaRZcgYtNq5GTLj9UTH90FE_r9nvpbJ9jyZ_goUpX8_pl3szDpYOQTPrvH0KfK3K8ySzI9o7AwACi1l-1BucAAR06eqaVLo1gPO5cszE1X9FuyKqhujsoqoOubTnwT-Dzi2_WPCBeUnpvvAYhqpkDCGm2yWUZEOjCA"#);
 
-    processor.process(rot)?;
+    let notification = processor.process(rot)?;
+    publisher.notify(&notification)?;
     assert_eq!(storage.get_state(&id).unwrap().unwrap().sn, 2);
     Ok(())
 }
