@@ -48,7 +48,7 @@ impl EventProcessor {
     ///
     /// Process a deserialized KERI message
     /// Update database based on event validation result.
-    pub fn process(&self, message: Message) -> Result<Option<IdentifierState>, Error> {
+    pub fn process(&self, message: Message) -> Result<(), Error> {
         match message {
             Message::Event(signed_event) => {
                 let id = &signed_event.event_message.event.get_prefix();
@@ -77,7 +77,6 @@ impl EventProcessor {
                         Err(e)
                     }
                 }?;
-                Ok(compute_state(self.db.clone(), id)?)
             }
 
             Message::NontransferableRct(rct) => {
@@ -92,7 +91,6 @@ impl EventProcessor {
                         .notify(&Notification::ReceiptOutOfOrder(rct.clone())),
                     Err(e) => return Err(e),
                 }?;
-                Ok(compute_state(self.db.clone(), id)?)
             }
             Message::TransferableRct(vrc) => {
                 match self.validator.validate_validator_receipt(&vrc) {
@@ -102,8 +100,6 @@ impl EventProcessor {
                         .notify(&Notification::TransReceiptOutOfOrder(vrc.clone())),
                     Err(e) => Err(e),
                 }?;
-                let id = vrc.body.event.prefix;
-                Ok(compute_state(self.db.clone(), &id)?)
             }
             #[cfg(feature = "query")]
             Message::KeyStateNotice(rpy) => {
@@ -119,11 +115,11 @@ impl EventProcessor {
                     }
                     Err(anything) => Err(anything),
                 }?;
-                Ok(None)
             }
             #[cfg(feature = "query")]
             Message::Query(_qry) => todo!(),
         }
+        Ok(())
     }
 }
 

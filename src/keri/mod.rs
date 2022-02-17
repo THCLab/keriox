@@ -138,7 +138,7 @@ impl<K: KeyManager> Keri<K> {
 
         let result = self.processor.process(Message::Event(signed.clone()));
         match result {
-            Err(Error::NotEnoughReceiptsError) => Ok(None),
+            Err(Error::NotEnoughReceiptsError) => Ok(()),
             anything => anything,
         }?;
 
@@ -258,7 +258,7 @@ impl<K: KeyManager> Keri<K> {
 
         let result = self.processor.process(Message::Event(rot.clone()));
         match result {
-            Err(Error::NotEnoughReceiptsError) => Ok(None),
+            Err(Error::NotEnoughReceiptsError) => Ok(()),
             anything => anything,
         }?;
 
@@ -334,9 +334,13 @@ impl<K: KeyManager> Keri<K> {
         let parsed = signed_message(msg).map_err(|e| Error::DeserializeError(e.to_string()))?;
         match Message::try_from(parsed.1) {
             Err(e) => Err(Error::DeserializeError(e.to_string())),
-            Ok(event) => match self.processor.process(event)? {
-                None => Err(Error::InvalidIdentifierStat),
-                Some(state) => Ok((state.prefix.clone(), serde_json::to_vec(&state)?)),
+            Ok(event) => {
+                let prefix = event.get_prefix();
+                self.processor.process(event)?;
+                match self.get_state_for_prefix(&prefix)? {
+                    None => Err(Error::InvalidIdentifierStat),
+                    Some(state) => Ok((prefix, serde_json::to_vec(&state)?)),
+                }
             },
         }
     }

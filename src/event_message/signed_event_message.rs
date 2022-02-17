@@ -4,6 +4,7 @@ use std::cmp::Ordering;
 
 use super::EventMessage;
 use super::{serializer::to_string, KeyEvent};
+use crate::prefix::IdentifierPrefix;
 use crate::{
     error::Error,
     event::{
@@ -29,6 +30,20 @@ pub enum Message {
     KeyStateNotice(SignedReply),
     #[cfg(feature = "query")]
     Query(SignedQuery),
+}
+
+impl Message {
+    pub fn get_prefix(&self) -> IdentifierPrefix {
+        match self {
+            Message::Event(ev) => ev.event_message.event.get_prefix(),
+            Message::NontransferableRct(rct) => rct.body.event.prefix.clone(),
+            Message::TransferableRct(rct) => rct.body.event.prefix.clone(),
+            #[cfg(feature = "query")]
+            Message::KeyStateNotice(ksn) => ksn.reply.event.get_prefix(),
+            #[cfg(feature = "query")]
+            Message::Query(_qry) => todo!(),
+        }
+    }
 }
 
 // KERI serializer should be used to serialize this
