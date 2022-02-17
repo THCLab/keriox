@@ -56,7 +56,7 @@ impl EventProcessor {
                     Ok(_) => {
                         self.db.add_kel_finalized_event(signed_event.clone(), id)?;
                         self.escrows
-                            .notify(&Notification::KeyEventAdded(id.clone()))
+                            .notify(&Notification::KeyEventAdded(signed_event))
                     }
                     Err(e) => {
                         match e {
