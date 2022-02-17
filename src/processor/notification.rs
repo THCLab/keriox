@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 #[cfg(feature = "query")]
 use crate::query::reply::SignedReply;
@@ -9,22 +9,26 @@ use crate::{
     },
 };
 
-#[derive(Default)]
 pub struct NotificationBus {
-    observers: HashMap<JustNotification, Vec<Box<dyn Notifier>>>,
+    observers: HashMap<JustNotification, Vec<Arc<dyn Notifier>>>,
 }
 
 impl NotificationBus {
-    pub fn register_observer<N: Notifier + Clone + 'static>(
+    pub fn new() -> Self {
+        Self {
+            observers: HashMap::new(),
+        }
+    }
+    pub fn register_observer(
         &mut self,
-        escrow: N,
+        escrow: Arc<dyn Notifier>,
         notification: Vec<JustNotification>,
     ) {
         notification.into_iter().for_each(|notification| {
             self.observers
                 .entry(notification)
                 .or_insert_with(Vec::new)
-                .push(Box::new(escrow.clone()));
+                .push(escrow.clone());
         });
     }
 
@@ -42,7 +46,7 @@ pub trait Notifier {
     fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error>;
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub enum Notification {
     KeyEventAdded(SignedEventMessage),
     OutOfOrder(SignedEventMessage),
@@ -52,6 +56,7 @@ pub enum Notification {
     ReceiptEscrowed,
     ReceiptOutOfOrder(SignedNontransferableReceipt),
     TransReceiptOutOfOrder(SignedTransferableReceipt),
+    DupliciousEvent(SignedEventMessage),
     #[cfg(feature = "query")]
     ReplyOutOfOrder(SignedReply),
     #[cfg(feature = "query")]
@@ -68,6 +73,7 @@ pub enum JustNotification {
     ReceiptEscrowed,
     ReceiptOutOfOrder,
     TransReceiptOutOfOrder,
+    DupliciousEvent,
     #[cfg(feature = "query")]
     ReplyOutOfOrder,
     #[cfg(feature = "query")]
@@ -89,6 +95,7 @@ impl From<&Notification> for JustNotification {
             Notification::ReplyOutOfOrder(_) => JustNotification::ReplyOutOfOrder,
             #[cfg(feature = "query")]
             Notification::ReplyUpdated => JustNotification::ReplyUpdated,
+            Notification::DupliciousEvent(_) => JustNotification::DupliciousEvent,
         }
     }
 }

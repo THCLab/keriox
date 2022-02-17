@@ -19,107 +19,84 @@ pub mod validator;
 pub mod witness_processor;
 
 use self::{
-    notification::{JustNotification, Notification, NotificationBus},
+    notification::{JustNotification, Notification},
     validator::EventValidator,
 };
 
 pub struct EventProcessor {
     db: Arc<SledEventDatabase>,
     validator: EventValidator,
-    escrows: NotificationBus,
 }
 
 impl EventProcessor {
-    pub fn with_default_escrow(db: Arc<SledEventDatabase>) -> Self {
-        let bus = escrow::default_escrow_bus(db.clone());
-        EventProcessor::new(db, Some(bus))
-    }
-
-    pub fn new(db: Arc<SledEventDatabase>, bus: Option<NotificationBus>) -> Self {
+    pub fn new(db: Arc<SledEventDatabase>) -> Self {
         let validator = EventValidator::new(db.clone());
-        Self {
-            db,
-            validator,
-            escrows: bus.unwrap_or_default(),
-        }
+        Self { db, validator }
     }
 
     /// Process
     ///
     /// Process a deserialized KERI message
     /// Update database based on event validation result.
-    pub fn process(&self, message: Message) -> Result<(), Error> {
+    pub fn process(&self, message: Message) -> Result<Notification, Error> {
         match message {
             Message::Event(signed_event) => {
                 let id = &signed_event.event_message.event.get_prefix();
                 match self.validator.validate_event(&signed_event) {
                     Ok(_) => {
                         self.db.add_kel_finalized_event(signed_event.clone(), id)?;
-                        self.escrows
-                            .notify(&Notification::KeyEventAdded(signed_event))
+                        Ok(Notification::KeyEventAdded(signed_event))
                     }
-                    Err(e) => {
-                        match e {
-                            Error::EventDuplicateError => {
-                                self.db.add_duplicious_event(signed_event.clone(), id)
-                            }
-                            Error::EventOutOfOrderError => {
-                                self.escrows.notify(&Notification::OutOfOrder(signed_event))
-                            }
-                            Error::NotEnoughReceiptsError => self
-                                .escrows
-                                .notify(&Notification::PartiallyWitnessed(signed_event)),
-                            Error::NotEnoughSigsError => self
-                                .escrows
-                                .notify(&Notification::PartiallySigned(signed_event)),
-                            _ => Ok(()),
-                        }?;
-                        Err(e)
+                    Err(Error::EventOutOfOrderError) => Ok(Notification::OutOfOrder(signed_event)),
+                    Err(Error::NotEnoughReceiptsError) => {
+                        Ok(Notification::PartiallyWitnessed(signed_event))
                     }
-                }?;
+                    Err(Error::NotEnoughSigsError) => {
+                        Ok(Notification::PartiallySigned(signed_event))
+                    }
+                    Err(Error::EventDuplicateError) => {
+                        self.db.add_duplicious_event(signed_event.clone(), id)?;
+                        Ok(Notification::DupliciousEvent(signed_event))
+                    }
+                    Err(e) => Err(e),
+                }
             }
-
             Message::NontransferableRct(rct) => {
                 let id = &rct.body.event.prefix;
                 match self.validator.validate_witness_receipt(&rct) {
                     Ok(_) => {
                         self.db.add_receipt_nt(rct.to_owned(), id)?;
-                        self.escrows.notify(&Notification::ReceiptAccepted)
+                        Ok(Notification::ReceiptAccepted)
                     }
-                    Err(Error::MissingEvent) => self
-                        .escrows
-                        .notify(&Notification::ReceiptOutOfOrder(rct.clone())),
+                    Err(Error::MissingEvent) => Ok(Notification::ReceiptOutOfOrder(rct.clone())),
                     Err(e) => return Err(e),
-                }?;
+                }
             }
             Message::TransferableRct(vrc) => {
                 match self.validator.validate_validator_receipt(&vrc) {
-                    Ok(_) => self.db.add_receipt_t(vrc.clone(), &vrc.body.event.prefix),
-                    Err(Error::MissingEvent) => self
-                        .escrows
-                        .notify(&Notification::TransReceiptOutOfOrder(vrc.clone())),
+                    Ok(_) => {
+                        self.db.add_receipt_t(vrc.clone(), &vrc.body.event.prefix)?;
+                        Ok(Notification::ReceiptAccepted)
+                    }
+                    Err(Error::MissingEvent) | Err(Error::EventOutOfOrderError) => {
+                        Ok(Notification::TransReceiptOutOfOrder(vrc.clone()))
+                    }
                     Err(e) => Err(e),
-                }?;
+                }
             }
             #[cfg(feature = "query")]
-            Message::KeyStateNotice(rpy) => {
-                match self.validator.process_signed_reply(&rpy) {
-                    Ok(_) => {
-                        self.db
-                            .update_accepted_reply(rpy.clone(), &rpy.reply.event.get_prefix())?;
-                        self.escrows.notify(&Notification::ReplyUpdated)
-                    }
-                    Err(Error::EventOutOfOrderError) => {
-                        self.escrows.notify(&Notification::ReplyOutOfOrder(rpy))?;
-                        Err(Error::EventOutOfOrderError)
-                    }
-                    Err(anything) => Err(anything),
-                }?;
-            }
+            Message::KeyStateNotice(rpy) => match self.validator.process_signed_reply(&rpy) {
+                Ok(_) => {
+                    self.db
+                        .update_accepted_reply(rpy.clone(), &rpy.reply.event.get_prefix())?;
+                    Ok(Notification::ReplyUpdated)
+                }
+                Err(Error::EventOutOfOrderError) => Ok(Notification::ReplyOutOfOrder(rpy)),
+                Err(anything) => Err(anything),
+            },
             #[cfg(feature = "query")]
             Message::Query(_qry) => todo!(),
         }
-        Ok(())
     }
 }
 

@@ -74,7 +74,8 @@ fn test_direct_mode() -> Result<(), Error> {
     let mut msg_to_bob = alice_incepted.serialize()?;
 
     // Send it to bob.
-    let mut msg_to_alice = bob.respond(&msg_to_bob)?;
+    bob.process(&msg_to_bob)?;
+    let mut msg_to_alice = bob.respond()?;
 
     // Check response
     let mut events_in_response = signed_event_stream(&msg_to_alice)
@@ -93,7 +94,8 @@ fn test_direct_mode() -> Result<(), Error> {
     assert_eq!(alice_state_in_bob, alice.get_state()?.unwrap());
 
     // Send message from bob to alice and get alice's receipts.
-    msg_to_bob = alice.respond(&msg_to_alice)?;
+    alice.process(&msg_to_alice)?;
+    msg_to_bob = alice.respond()?;
 
     // Check response. It should be transferable receipt message from alice.
     let mut events_in_response = signed_event_stream(&msg_to_bob)
@@ -111,7 +113,9 @@ fn test_direct_mode() -> Result<(), Error> {
     assert_eq!(bob_state_in_alice, bob.get_state()?.unwrap());
 
     // Send it to bob.
-    let bobs_res = bob.respond(&msg_to_bob)?;
+    bob.process(&msg_to_bob)?;
+    let bobs_res = bob.respond()?;
+
     assert!(bobs_res.is_empty());
 
     // Rotation event.
@@ -120,7 +124,8 @@ fn test_direct_mode() -> Result<(), Error> {
 
     // Send rotation event to bob.
     msg_to_bob = alice_rot.serialize()?;
-    msg_to_alice = bob.respond(&msg_to_bob)?;
+    bob.process(&msg_to_bob)?;
+    msg_to_alice = bob.respond()?;
 
     // Check response. It should be transferable receipt message from bob.
     let mut events_in_response = signed_event_stream(&msg_to_alice)
@@ -138,7 +143,8 @@ fn test_direct_mode() -> Result<(), Error> {
     assert_eq!(alice_state_in_bob, alice.get_state()?.unwrap());
 
     // Send bob's receipt to alice.
-    let alice_res = alice.respond(&msg_to_alice)?;
+    alice.process(&msg_to_alice)?;
+    let alice_res = alice.respond()?;
     assert!(alice_res.is_empty());
 
     // Interaction event.
@@ -147,7 +153,8 @@ fn test_direct_mode() -> Result<(), Error> {
 
     // Send interaction event to bob.
     msg_to_bob = alice_ixn.serialize()?;
-    msg_to_alice = bob.respond(&msg_to_bob)?;
+    bob.process(&msg_to_bob)?;
+    msg_to_alice = bob.respond()?;
 
     // Check response. It should be trnasferable receipt message from bob.
     let mut events_in_response = signed_event_stream(&msg_to_alice)
@@ -164,7 +171,8 @@ fn test_direct_mode() -> Result<(), Error> {
     let alice_state_in_bob = bob.get_state_for_prefix(&alice.prefix)?.unwrap();
     assert_eq!(alice_state_in_bob, alice.get_state()?.unwrap());
 
-    alice.respond(&msg_to_alice)?;
+    alice.process(&msg_to_alice)?;
+    alice.respond()?;
 
     Ok(())
 }
@@ -265,7 +273,10 @@ fn test_qry_rpy() -> Result<(), Error> {
 #[test]
 pub fn test_key_state_notice() -> Result<(), Error> {
     use crate::{
-        keri::witness::Witness, processor::EventProcessor, query::QueryError, signer::CryptoBox,
+        keri::witness::Witness,
+        processor::{notification::Notification, EventProcessor},
+        query::QueryError,
+        signer::CryptoBox,
     };
     use tempfile::Builder;
 
@@ -287,11 +298,11 @@ pub fn test_key_state_notice() -> Result<(), Error> {
         Keri::new(Arc::clone(&db), Arc::clone(&bob_key_manager))?
     };
 
-    let alice = {
+    let alice_processor = {
         let root = Builder::new().prefix("test-db2").tempdir().unwrap();
         std::fs::create_dir_all(root.path()).unwrap();
         let db2 = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-        EventProcessor::with_default_escrow(db2)
+        EventProcessor::new(db2.clone())
     };
 
     let bob_icp = bob
@@ -308,35 +319,35 @@ pub fn test_key_state_notice() -> Result<(), Error> {
     let signed_rpy = witness.get_ksn_for_prefix(&bob_pref)?;
 
     // Process reply message before having any bob's events in db.
-    let res = alice.process(Message::KeyStateNotice(signed_rpy.clone()));
-    assert!(matches!(res, Err(Error::EventOutOfOrderError)));
-    alice.process(Message::Event(bob_icp))?;
+    let res = alice_processor.process(Message::KeyStateNotice(signed_rpy.clone()));
+    assert!(matches!(res, Ok(Notification::ReplyOutOfOrder(_))));
+    alice_processor.process(Message::Event(bob_icp))?;
 
     // rotate bob's keys. Let alice process his rotation. She will have most recent bob's event.
     let bob_rot = bob.rotate(None, None, None)?;
     witness.process(&[Message::Event(bob_rot.clone())])?;
-    alice.process(Message::Event(bob_rot.clone()))?;
+    alice_processor.process(Message::Event(bob_rot.clone()))?;
 
     // try to process old reply message
-    let res = alice.process(Message::KeyStateNotice(signed_rpy.clone()));
+    let res = alice_processor.process(Message::KeyStateNotice(signed_rpy.clone()));
     assert!(matches!(res, Err(Error::QueryError(QueryError::StaleKsn))));
 
     // now create new reply event by witness and process it by alice.
     let new_reply = witness.get_ksn_for_prefix(&bob_pref)?;
-    let res = alice.process(Message::KeyStateNotice(new_reply.clone()));
+    let res = alice_processor.process(Message::KeyStateNotice(new_reply.clone()));
     assert!(res.is_ok());
 
     let new_bob_rot = bob.rotate(None, None, None)?;
     witness.process(&[Message::Event(new_bob_rot.clone())])?;
     // Create transferable reply by bob and process it by alice.
     let trans_rpy = witness.get_ksn_for_prefix(&bob_pref)?;
-    let res = alice.process(Message::KeyStateNotice(trans_rpy.clone()));
-    assert!(matches!(res, Err(Error::EventOutOfOrderError)));
+    let res = alice_processor.process(Message::KeyStateNotice(trans_rpy.clone()));
+    assert!(matches!(res, Ok(Notification::ReplyOutOfOrder(_))));
 
     // Now update bob's state in alice's db to most recent.
-    alice.process(Message::Event(new_bob_rot))?;
-    let res = alice.process(Message::KeyStateNotice(trans_rpy.clone()));
-    assert!(res.is_ok());
+    alice_processor.process(Message::Event(new_bob_rot))?;
+    let res = alice_processor.process(Message::KeyStateNotice(trans_rpy.clone()));
+    assert_eq!(res?, Notification::ReplyUpdated);
 
     Ok(())
 }
