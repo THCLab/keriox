@@ -1,16 +1,11 @@
 #[cfg(feature = "wallet")]
 use universal_wallet::prelude::UnlockedWallet;
 
+use crate::event_message::signed_event_message::Message;
 #[cfg(test)]
 use crate::{database::sled::SledEventDatabase, error::Error, keri::Keri};
-use crate::{
-    event_message::signed_event_message::Message, event_parsing::message::signed_event_stream,
-};
 
-use std::{
-    convert::TryFrom,
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 
 #[test]
 fn test_direct_mode() -> Result<(), Error> {
@@ -71,18 +66,14 @@ fn test_direct_mode() -> Result<(), Error> {
 
     // Get alice's inception event.
     let alice_incepted = alice.incept(None, None)?;
-    let mut msg_to_bob = alice_incepted.serialize()?;
+    let msg_to_bob = vec![Message::Event(alice_incepted)];
 
     // Send it to bob.
     bob.process(&msg_to_bob)?;
-    let mut msg_to_alice = bob.respond()?;
+    let msg_to_alice = bob.respond()?;
 
     // Check response
-    let mut events_in_response = signed_event_stream(&msg_to_alice)
-        .unwrap()
-        .1
-        .into_iter()
-        .map(|msg| Message::try_from(msg).unwrap());
+    let mut events_in_response = msg_to_alice.clone().into_iter();
     assert!(matches!(events_in_response.next(), Some(Message::Event(_))));
     assert!(matches!(
         events_in_response.next(),
@@ -95,14 +86,10 @@ fn test_direct_mode() -> Result<(), Error> {
 
     // Send message from bob to alice and get alice's receipts.
     alice.process(&msg_to_alice)?;
-    msg_to_bob = alice.respond()?;
+    let msg_to_bob = alice.respond()?;
 
     // Check response. It should be transferable receipt message from alice.
-    let mut events_in_response = signed_event_stream(&msg_to_bob)
-        .unwrap()
-        .1
-        .into_iter()
-        .map(|msg| Message::try_from(msg).unwrap());
+    let mut events_in_response = msg_to_bob.iter();
     assert!(matches!(
         events_in_response.next(),
         Some(Message::TransferableRct(_))
@@ -123,16 +110,12 @@ fn test_direct_mode() -> Result<(), Error> {
     assert_eq!(alice.get_state()?.unwrap().sn, 1);
 
     // Send rotation event to bob.
-    msg_to_bob = alice_rot.serialize()?;
-    bob.process(&msg_to_bob)?;
-    msg_to_alice = bob.respond()?;
+    let msg_to_bob = alice_rot.serialize()?;
+    bob.parse_and_process(&msg_to_bob)?;
+    let msg_to_alice = bob.respond()?;
 
     // Check response. It should be transferable receipt message from bob.
-    let mut events_in_response = signed_event_stream(&msg_to_alice)
-        .unwrap()
-        .1
-        .into_iter()
-        .map(|msg| Message::try_from(msg).unwrap());
+    let mut events_in_response = msg_to_alice.iter();
     assert!(matches!(
         events_in_response.next(),
         Some(Message::TransferableRct(_))
@@ -152,16 +135,12 @@ fn test_direct_mode() -> Result<(), Error> {
     assert_eq!(alice.get_state()?.unwrap().sn, 2);
 
     // Send interaction event to bob.
-    msg_to_bob = alice_ixn.serialize()?;
-    bob.process(&msg_to_bob)?;
-    msg_to_alice = bob.respond()?;
+    let msg_to_bob = alice_ixn.serialize()?;
+    bob.parse_and_process(&msg_to_bob)?;
+    let msg_to_alice = bob.respond()?;
 
     // Check response. It should be trnasferable receipt message from bob.
-    let mut events_in_response = signed_event_stream(&msg_to_alice)
-        .unwrap()
-        .1
-        .into_iter()
-        .map(|msg| Message::try_from(msg).unwrap());
+    let mut events_in_response = msg_to_alice.iter();
     assert!(matches!(
         events_in_response.next(),
         Some(Message::TransferableRct(_))
