@@ -7,7 +7,9 @@ use crate::{
         event_data::EventData,
         sections::{seal::EventSeal, KeyConfig},
     },
-    event_message::signed_event_message::TimestampedSignedEventMessage,
+    event_message::signed_event_message::{
+        Message, TimestampedSignedEventMessage,
+    },
     prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix, SelfSigningPrefix},
     state::{EventSemantics, IdentifierState},
 };
@@ -35,7 +37,7 @@ impl EventStorage {
 
     /// Get KERL for Prefix
     ///
-    /// Returns the current validated KEL for a given Prefix
+    /// Returns serialized current validated KEL for a given Prefix
     pub fn get_kel(&self, id: &IdentifierPrefix) -> Result<Option<Vec<u8>>, Error> {
         match self.db.get_kel_finalized_events(id) {
             Some(events) => Ok(Some(
@@ -45,6 +47,20 @@ impl EventStorage {
                         accum.extend(serialized_event);
                         accum
                     }),
+            )),
+            None => Ok(None),
+        }
+    }
+
+    /// Get KERL for Prefix
+    ///
+    /// Returns the current validated KEL for a given Prefix
+    pub fn get_kel_messages(&self, id: &IdentifierPrefix) -> Result<Option<Vec<Message>>, Error> {
+        match self.db.get_kel_finalized_events(id) {
+            Some(events) => Ok(Some(
+                events
+                    .map(|event| Message::Event(event.signed_event_message))
+                    .collect(),
             )),
             None => Ok(None),
         }
