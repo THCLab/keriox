@@ -7,9 +7,7 @@ use crate::{
         event_data::EventData,
         sections::{seal::EventSeal, KeyConfig},
     },
-    event_message::signed_event_message::{
-        Message, TimestampedSignedEventMessage,
-    },
+    event_message::signed_event_message::{Message, TimestampedSignedEventMessage},
     prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix, SelfSigningPrefix},
     state::{EventSemantics, IdentifierState},
 };

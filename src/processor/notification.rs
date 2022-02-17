@@ -42,6 +42,12 @@ impl NotificationBus {
     }
 }
 
+impl Default for NotificationBus {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub trait Notifier {
     fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error>;
 }

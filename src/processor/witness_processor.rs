@@ -35,7 +35,7 @@ impl WitnessProcessor {
     /// Process a deserialized KERI message.
     /// Ignore not fully witness error and accept not fully witnessed events.
     pub fn process(&self, message: Message) -> Result<Notification, Error> {
-        let res = self.0.process(message.clone())?;
+        let res = self.0.process(message)?;
         if let Notification::PartiallyWitnessed(signed_event) = res {
             let id = &signed_event.event_message.event.get_prefix();
             self.0
