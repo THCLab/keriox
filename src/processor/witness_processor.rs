@@ -39,10 +39,10 @@ impl WitnessProcessor {
         if let (Err(Error::NotEnoughReceiptsError), Message::Event(signed_event)) = (&res, message)
         {
             let id = &signed_event.event_message.event.get_prefix();
-            self.0.db.add_kel_finalized_event(signed_event, id)?;
+            self.0.db.add_kel_finalized_event(signed_event.clone(), id)?;
             self.0
                 .escrows
-                .notify(&Notification::KeyEventAdded(id.clone()))?;
+                .notify(&Notification::KeyEventAdded(signed_event))?;
         };
         Ok(()) 
     }

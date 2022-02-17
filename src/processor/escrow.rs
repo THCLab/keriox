@@ -50,7 +50,10 @@ impl OutOfOrderEscrow {
 impl Notifier for OutOfOrderEscrow {
     fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error> {
         match notification {
-            Notification::KeyEventAdded(id) => self.process_out_of_order_events(bus, id),
+            Notification::KeyEventAdded(ev_message) => {
+                let id = ev_message.event_message.event.get_prefix();
+                self.process_out_of_order_events(bus, &id)
+            },
             Notification::OutOfOrder(signed_event) => {
                 let id = &signed_event.event_message.event.get_prefix();
                 self.0.add_out_of_order_event(signed_event.clone(), id)
@@ -78,7 +81,7 @@ impl OutOfOrderEscrow {
                         self.0
                             .remove_out_of_order_event(id, &event.signed_event_message)?;
                         bus.notify(&Notification::KeyEventAdded(
-                            event.signed_event_message.event_message.event.get_prefix(),
+                            event.signed_event_message,
                         ))?;
                         // stop processing the escrow if kel was updated. It needs to start again.
                         break;
@@ -144,7 +147,7 @@ impl PartiallySignedEscrow {
                     self.0
                         .remove_partially_signed_event(&id, &new_event.event_message)?;
                     bus.notify(&Notification::KeyEventAdded(
-                        new_event.event_message.event.get_prefix(),
+                        new_event,
                     ))?;
                 }
                 Err(_e) => {
@@ -200,7 +203,7 @@ impl PartiallyWitnessedEscrow {
                         self.0
                             .remove_partially_witnessed_event(&id, &event.signed_event_message)?;
                         bus.notify(&Notification::KeyEventAdded(
-                            event.signed_event_message.event_message.event.get_prefix(),
+                            event.signed_event_message,
                         ))?;
                         // stop processing the escrow if kel was updated. It needs to start again.
                         break;

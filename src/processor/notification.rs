@@ -7,7 +7,6 @@ use crate::{
     event_message::signed_event_message::{
         SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
     },
-    prefix::IdentifierPrefix,
 };
 
 #[derive(Default)]
@@ -45,7 +44,7 @@ pub trait Notifier {
 
 #[derive(PartialEq)]
 pub enum Notification {
-    KeyEventAdded(IdentifierPrefix),
+    KeyEventAdded(SignedEventMessage),
     OutOfOrder(SignedEventMessage),
     PartiallySigned(SignedEventMessage),
     PartiallyWitnessed(SignedEventMessage),
