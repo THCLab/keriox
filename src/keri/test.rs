@@ -1,16 +1,11 @@
 #[cfg(feature = "wallet")]
 use universal_wallet::prelude::UnlockedWallet;
 
+use crate::event_message::signed_event_message::Message;
 #[cfg(test)]
 use crate::{database::sled::SledEventDatabase, error::Error, keri::Keri};
-use crate::{
-    event_message::signed_event_message::Message, event_parsing::message::signed_event_stream,
-};
 
-use std::{
-    convert::TryFrom,
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 
 #[test]
 fn test_direct_mode() -> Result<(), Error> {
@@ -71,17 +66,14 @@ fn test_direct_mode() -> Result<(), Error> {
 
     // Get alice's inception event.
     let alice_incepted = alice.incept(None, None)?;
-    let mut msg_to_bob = alice_incepted.serialize()?;
+    let msg_to_bob = vec![Message::Event(alice_incepted)];
 
     // Send it to bob.
-    let mut msg_to_alice = bob.respond(&msg_to_bob)?;
+    bob.process(&msg_to_bob)?;
+    let msg_to_alice = bob.respond()?;
 
     // Check response
-    let mut events_in_response = signed_event_stream(&msg_to_alice)
-        .unwrap()
-        .1
-        .into_iter()
-        .map(|msg| Message::try_from(msg).unwrap());
+    let mut events_in_response = msg_to_alice.clone().into_iter();
     assert!(matches!(events_in_response.next(), Some(Message::Event(_))));
     assert!(matches!(
         events_in_response.next(),
@@ -93,14 +85,11 @@ fn test_direct_mode() -> Result<(), Error> {
     assert_eq!(alice_state_in_bob, alice.get_state()?.unwrap());
 
     // Send message from bob to alice and get alice's receipts.
-    msg_to_bob = alice.respond(&msg_to_alice)?;
+    alice.process(&msg_to_alice)?;
+    let msg_to_bob = alice.respond()?;
 
     // Check response. It should be transferable receipt message from alice.
-    let mut events_in_response = signed_event_stream(&msg_to_bob)
-        .unwrap()
-        .1
-        .into_iter()
-        .map(|msg| Message::try_from(msg).unwrap());
+    let mut events_in_response = msg_to_bob.iter();
     assert!(matches!(
         events_in_response.next(),
         Some(Message::TransferableRct(_))
@@ -111,7 +100,9 @@ fn test_direct_mode() -> Result<(), Error> {
     assert_eq!(bob_state_in_alice, bob.get_state()?.unwrap());
 
     // Send it to bob.
-    let bobs_res = bob.respond(&msg_to_bob)?;
+    bob.process(&msg_to_bob)?;
+    let bobs_res = bob.respond()?;
+
     assert!(bobs_res.is_empty());
 
     // Rotation event.
@@ -119,15 +110,12 @@ fn test_direct_mode() -> Result<(), Error> {
     assert_eq!(alice.get_state()?.unwrap().sn, 1);
 
     // Send rotation event to bob.
-    msg_to_bob = alice_rot.serialize()?;
-    msg_to_alice = bob.respond(&msg_to_bob)?;
+    let msg_to_bob = alice_rot.serialize()?;
+    bob.parse_and_process(&msg_to_bob)?;
+    let msg_to_alice = bob.respond()?;
 
     // Check response. It should be transferable receipt message from bob.
-    let mut events_in_response = signed_event_stream(&msg_to_alice)
-        .unwrap()
-        .1
-        .into_iter()
-        .map(|msg| Message::try_from(msg).unwrap());
+    let mut events_in_response = msg_to_alice.iter();
     assert!(matches!(
         events_in_response.next(),
         Some(Message::TransferableRct(_))
@@ -138,7 +126,8 @@ fn test_direct_mode() -> Result<(), Error> {
     assert_eq!(alice_state_in_bob, alice.get_state()?.unwrap());
 
     // Send bob's receipt to alice.
-    let alice_res = alice.respond(&msg_to_alice)?;
+    alice.process(&msg_to_alice)?;
+    let alice_res = alice.respond()?;
     assert!(alice_res.is_empty());
 
     // Interaction event.
@@ -146,15 +135,12 @@ fn test_direct_mode() -> Result<(), Error> {
     assert_eq!(alice.get_state()?.unwrap().sn, 2);
 
     // Send interaction event to bob.
-    msg_to_bob = alice_ixn.serialize()?;
-    msg_to_alice = bob.respond(&msg_to_bob)?;
+    let msg_to_bob = alice_ixn.serialize()?;
+    bob.parse_and_process(&msg_to_bob)?;
+    let msg_to_alice = bob.respond()?;
 
     // Check response. It should be trnasferable receipt message from bob.
-    let mut events_in_response = signed_event_stream(&msg_to_alice)
-        .unwrap()
-        .1
-        .into_iter()
-        .map(|msg| Message::try_from(msg).unwrap());
+    let mut events_in_response = msg_to_alice.iter();
     assert!(matches!(
         events_in_response.next(),
         Some(Message::TransferableRct(_))
@@ -164,7 +150,8 @@ fn test_direct_mode() -> Result<(), Error> {
     let alice_state_in_bob = bob.get_state_for_prefix(&alice.prefix)?.unwrap();
     assert_eq!(alice_state_in_bob, alice.get_state()?.unwrap());
 
-    alice.respond(&msg_to_alice)?;
+    alice.process(&msg_to_alice)?;
+    alice.respond()?;
 
     Ok(())
 }
@@ -218,9 +205,9 @@ fn test_qry_rpy() -> Result<(), Error> {
 
     let alice_icp = alice.incept(Some(vec![witness.prefix.clone()]), None)?;
     // send alices icp to witness
-    let _rcps = witness.processor.process_event(&alice_icp)?;
+    let _rcps = witness.process(&[Message::Event(alice_icp)])?;
     // send bobs icp to witness to have his keys
-    let _rcps = witness.processor.process_event(&bob_icp)?;
+    let _rcps = witness.process(&[Message::Event(bob_icp)])?;
 
     let alice_pref = alice.prefix();
 
@@ -265,7 +252,10 @@ fn test_qry_rpy() -> Result<(), Error> {
 #[test]
 pub fn test_key_state_notice() -> Result<(), Error> {
     use crate::{
-        keri::witness::Witness, processor::EventProcessor, query::QueryError, signer::CryptoBox,
+        keri::witness::Witness,
+        processor::{notification::Notification, EventProcessor},
+        query::QueryError,
+        signer::CryptoBox,
     };
     use tempfile::Builder;
 
@@ -287,11 +277,11 @@ pub fn test_key_state_notice() -> Result<(), Error> {
         Keri::new(Arc::clone(&db), Arc::clone(&bob_key_manager))?
     };
 
-    let alice = {
-        let root = Builder::new().prefix("test-db").tempdir().unwrap();
+    let alice_processor = {
+        let root = Builder::new().prefix("test-db2").tempdir().unwrap();
         std::fs::create_dir_all(root.path()).unwrap();
         let db2 = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-        EventProcessor::new(db2)
+        EventProcessor::new(db2.clone())
     };
 
     let bob_icp = bob
@@ -302,47 +292,41 @@ pub fn test_key_state_notice() -> Result<(), Error> {
     let bob_pref = bob.prefix().clone();
 
     // send bobs icp to witness to have his keys
-    witness.processor.process_event(&bob_icp)?;
+    witness.process(&[Message::Event(bob_icp.clone())])?;
 
     // construct bobs ksn msg in rpy made by witness
     let signed_rpy = witness.get_ksn_for_prefix(&bob_pref)?;
 
     // Process reply message before having any bob's events in db.
-    let res = alice.process_signed_reply(&signed_rpy.clone());
-    assert!(matches!(
-        res,
-        Err(Error::QueryError(QueryError::OutOfOrderEventError))
-    ));
-    alice.process_event(&bob_icp)?;
+    let res = alice_processor.process(Message::KeyStateNotice(signed_rpy.clone()));
+    assert!(matches!(res, Ok(Notification::ReplyOutOfOrder(_))));
+    alice_processor.process(Message::Event(bob_icp))?;
 
     // rotate bob's keys. Let alice process his rotation. She will have most recent bob's event.
     let bob_rot = bob.rotate(None, None, None)?;
-    witness.processor.process_event(&bob_rot)?;
-    alice.process_event(&bob_rot)?;
+    witness.process(&[Message::Event(bob_rot.clone())])?;
+    alice_processor.process(Message::Event(bob_rot.clone()))?;
 
     // try to process old reply message
-    let res = alice.process_signed_reply(&signed_rpy.clone());
+    let res = alice_processor.process(Message::KeyStateNotice(signed_rpy.clone()));
     assert!(matches!(res, Err(Error::QueryError(QueryError::StaleKsn))));
 
     // now create new reply event by witness and process it by alice.
     let new_reply = witness.get_ksn_for_prefix(&bob_pref)?;
-    let res = alice.process_signed_reply(&new_reply);
+    let res = alice_processor.process(Message::KeyStateNotice(new_reply.clone()));
     assert!(res.is_ok());
 
     let new_bob_rot = bob.rotate(None, None, None)?;
-    witness.processor.process_event(&new_bob_rot)?;
+    witness.process(&[Message::Event(new_bob_rot.clone())])?;
     // Create transferable reply by bob and process it by alice.
     let trans_rpy = witness.get_ksn_for_prefix(&bob_pref)?;
-    let res = alice.process_signed_reply(&trans_rpy.clone());
-    assert!(matches!(
-        res,
-        Err(Error::QueryError(QueryError::OutOfOrderEventError))
-    ));
+    let res = alice_processor.process(Message::KeyStateNotice(trans_rpy.clone()));
+    assert!(matches!(res, Ok(Notification::ReplyOutOfOrder(_))));
 
     // Now update bob's state in alice's db to most recent.
-    alice.process_event(&new_bob_rot)?;
-    let res = alice.process_signed_reply(&trans_rpy.clone());
-    assert!(res.is_ok());
+    alice_processor.process(Message::Event(new_bob_rot))?;
+    let res = alice_processor.process(Message::KeyStateNotice(trans_rpy.clone()));
+    assert_eq!(res?, Notification::ReplyUpdated);
 
     Ok(())
 }

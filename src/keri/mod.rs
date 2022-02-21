@@ -1,4 +1,5 @@
 use std::{
+    collections::VecDeque,
     convert::TryFrom,
     sync::{Arc, Mutex},
 };
@@ -23,72 +24,48 @@ use crate::{
         },
         EventTypeTag,
     },
-    event_parsing::{
-        message::{signed_event_stream, signed_message},
-        SignedEventData,
-    },
-    keys::PublicKey,
+    event_parsing::message::{signed_event_stream, signed_message},
     prefix::AttachedSignaturePrefix,
     prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
-    processor::EventProcessor,
+    processor::{
+        escrow::default_escrow_bus,
+        event_storage::EventStorage,
+        notification::{JustNotification, Notification, NotificationBus, Notifier},
+        EventProcessor,
+    },
     signer::KeyManager,
-    state::{EventSemantics, IdentifierState},
+    state::IdentifierState,
 };
-#[cfg(feature = "wallet")]
-use universal_wallet::prelude::{Content, UnlockedWallet};
 
 #[cfg(test)]
 mod test;
 #[cfg(feature = "query")]
 pub mod witness;
+// pub mod wallet_feature;
 pub struct Keri<K: KeyManager + 'static> {
     prefix: IdentifierPrefix,
     key_manager: Arc<Mutex<K>>,
     processor: EventProcessor,
-}
-
-#[cfg(feature = "wallet")]
-impl Keri<UnlockedWallet> {
-    /// Instantiates KERI with freshly created and pre-populated wallet
-    /// Wallet has ECDSA and X25519 key pairs
-    /// Only available with crate `wallet` feature.
-    ///
-    pub fn new_with_fresh_wallet(
-        db: Arc<SledEventDatabase>,
-    ) -> Result<Keri<UnlockedWallet>, Error> {
-        use crate::{
-            prefix::Prefix,
-            signer::wallet::{incept_keys, CURRENT},
-        };
-        // instantiate wallet with random ID instead of static for security reasons
-        let mut wallet = UnlockedWallet::new(&generate_random_string());
-        incept_keys(&mut wallet)?;
-        let pk = match wallet.get_key(CURRENT).unwrap().content {
-            Content::PublicKey(pk) => pk.public_key,
-            Content::KeyPair(kp) => kp.public_key.public_key,
-            Content::Entropy(_) => {
-                return Err(Error::WalletError(universal_wallet::Error::KeyNotFound))
-            }
-        };
-        let prefix =
-            IdentifierPrefix::Basic(BasicPrefix::new(Basic::ECDSAsecp256k1, PublicKey::new(pk)));
-        // setting wallet's ID to prefix of identity instead of random string
-        wallet.id = prefix.to_str();
-        Ok(Keri {
-            prefix,
-            key_manager: Arc::new(Mutex::new(wallet)),
-            processor: EventProcessor::new(db),
-        })
-    }
+    storage: EventStorage,
+    notification_bus: NotificationBus,
+    response_queue: Arc<Responder>,
 }
 
 impl<K: KeyManager> Keri<K> {
     // incept a state and keys
     pub fn new(db: Arc<SledEventDatabase>, key_manager: Arc<Mutex<K>>) -> Result<Keri<K>, Error> {
+        let processor = EventProcessor::new(db.clone());
+        let mut not_bus = default_escrow_bus(db.clone());
+        let responder = Arc::new(Responder::default());
+        not_bus.register_observer(responder.clone(), vec![JustNotification::KeyEventAdded]);
+
         Ok(Keri {
             prefix: IdentifierPrefix::default(),
             key_manager,
-            processor: EventProcessor::new(db),
+            processor,
+            storage: EventStorage::new(db),
+            response_queue: responder,
+            notification_bus: not_bus,
         })
     }
 
@@ -107,15 +84,7 @@ impl<K: KeyManager> Keri<K> {
     // Getter of the DB instance behind own processor
     ///
     pub fn db(&self) -> Arc<SledEventDatabase> {
-        Arc::clone(&self.processor.db)
-    }
-
-    pub fn process(&self, id: &IdentifierPrefix, event: impl EventSemantics) -> Result<(), Error> {
-        match self.processor.process_actual_event(id, event) {
-            Ok(Some(_)) => Ok(()),
-            Ok(None) => Err(Error::SemanticError("Unknown identifier.".into())),
-            Err(e) => Err(e),
-        }
+        Arc::clone(&self.storage.db)
     }
 
     pub fn incept(
@@ -141,54 +110,11 @@ impl<K: KeyManager> Keri<K> {
             None,
         );
 
-        let result = self.processor.process(Message::Event(signed.clone()));
-        match result {
-            Err(Error::NotEnoughReceiptsError) => Ok(None),
-            anything => anything,
-        }?;
+        let notification = self.processor.process(Message::Event(signed.clone()))?;
+        self.notification_bus.notify(&notification)?;
 
         self.prefix = icp.event.get_prefix();
-
-        Ok(signed)
-    }
-
-    /// Incepts instance of KERI and includes EXTRA keys provided as parameter
-    /// CURRENT Public verification key is extracted directly from KeyManager
-    ///  - it should not be included into `extra_keys` set.
-    /// # Parameters
-    /// * `extra_keys` - iterator over tuples of `(keri::derivation::Basic, keri::keys::Key)`
-    /// # Returns
-    /// `Result<keri::event_message::SignedEventMessage, keri::error::Error>`
-    ///  where `SignedEventMessage` is ICP event including all provided keys + directly fetched
-    ///  verification key, signed with it's private key via KeyManager and serialized.
-    ///
-    pub fn incept_with_extra_keys(
-        &mut self,
-        extra_keys: impl IntoIterator<Item = (Basic, PublicKey)>,
-    ) -> Result<SignedEventMessage, Error> {
-        let mut keys: Vec<BasicPrefix> = extra_keys
-            .into_iter()
-            .map(|(key_type, key)| key_type.derive(key))
-            .collect();
-        // Signing key must be first
-        let km = self.key_manager.lock().map_err(|_| Error::MutexPoisoned)?;
-        keys.insert(0, Basic::Ed25519.derive(km.public_key()));
-        let icp = EventMsgBuilder::new(EventTypeTag::Icp)
-            .with_prefix(&self.prefix)
-            .with_keys(keys)
-            .with_next_keys(vec![Basic::Ed25519.derive(km.next_public_key())])
-            .build()?;
-
-        let signed = icp.sign(
-            vec![AttachedSignaturePrefix::new(
-                SelfSigning::Ed25519Sha512,
-                km.sign(&icp.serialize()?)?,
-                0,
-            )],
-            None,
-        );
-        self.processor.process(Message::Event(signed.clone()))?;
-        self.prefix = icp.event.get_prefix();
+        // No need to generate receipt
 
         Ok(signed)
     }
@@ -197,7 +123,7 @@ impl<K: KeyManager> Keri<K> {
     /// Seal gets added to our KEL db and returned back as `SignedEventMessage`
     ///
     pub fn interact(&self, peer: IdentifierPrefix) -> Result<SignedEventMessage, Error> {
-        let next_sn = match self.processor.db.get_kel_finalized_events(&self.prefix) {
+        let next_sn = match self.storage.db.get_kel_finalized_events(&self.prefix) {
             Some(mut events) => match events.next_back() {
                 Some(db_event) => db_event.signed_event_message.event_message.event.get_sn() + 1,
                 None => return Err(Error::InvalidIdentifierStat),
@@ -232,7 +158,7 @@ impl<K: KeyManager> Keri<K> {
             0, // TODO: what is this?
         );
         let signed = SignedEventMessage::new(&event, vec![asp], None);
-        self.processor
+        self.storage
             .db
             .add_kel_finalized_event(signed.clone(), &self.prefix)?;
         Ok(signed)
@@ -261,11 +187,8 @@ impl<K: KeyManager> Keri<K> {
             None,
         );
 
-        let result = self.processor.process(Message::Event(rot.clone()));
-        match result {
-            Err(Error::NotEnoughReceiptsError) => Ok(None),
-            anything => anything,
-        }?;
+        let notification = self.processor.process(Message::Event(rot.clone()))?;
+        self.notification_bus.notify(&notification)?;
 
         Ok(rot)
     }
@@ -277,8 +200,8 @@ impl<K: KeyManager> Keri<K> {
         witness_threshold: Option<SignatureThreshold>,
     ) -> Result<EventMessage<KeyEvent>, Error> {
         let state = self
-            .processor
-            .compute_state(&self.prefix)?
+            .storage
+            .get_state(&self.prefix)?
             .ok_or_else(|| Error::SemanticError("There is no state".into()))?;
         match self.key_manager.lock() {
             Ok(kv) => EventMsgBuilder::new(EventTypeTag::Rot)
@@ -305,8 +228,8 @@ impl<K: KeyManager> Keri<K> {
             None => vec![],
         };
         let state = self
-            .processor
-            .compute_state(&self.prefix)?
+            .storage
+            .get_state(&self.prefix)?
             .ok_or_else(|| Error::SemanticError("There is no state".into()))?;
 
         let ev = EventMsgBuilder::new(EventTypeTag::Ixn)
@@ -328,7 +251,8 @@ impl<K: KeyManager> Keri<K> {
             None,
         );
 
-        self.processor.process(Message::Event(ixn.clone()))?;
+        let notification = self.processor.process(Message::Event(ixn.clone()))?;
+        self.notification_bus.notify(&notification)?;
 
         Ok(ixn)
     }
@@ -339,60 +263,77 @@ impl<K: KeyManager> Keri<K> {
         let parsed = signed_message(msg).map_err(|e| Error::DeserializeError(e.to_string()))?;
         match Message::try_from(parsed.1) {
             Err(e) => Err(Error::DeserializeError(e.to_string())),
-            Ok(event) => match self.processor.process(event)? {
-                None => Err(Error::InvalidIdentifierStat),
-                Some(state) => Ok((state.prefix.clone(), serde_json::to_vec(&state)?)),
-            },
+            Ok(event) => {
+                let prefix = event.get_prefix();
+                self.processor.process(event)?;
+                match self.get_state_for_prefix(&prefix)? {
+                    None => Err(Error::InvalidIdentifierStat),
+                    Some(state) => Ok((prefix, serde_json::to_vec(&state)?)),
+                }
+            }
         }
     }
 
-    pub fn respond(&self, msg: &[u8]) -> Result<Vec<u8>, Error> {
-        let events = signed_event_stream(msg)
+    pub fn parse_and_process(&self, msg: &[u8]) -> Result<(), Error> {
+        let events: Vec<Message> = signed_event_stream(msg)
             .map_err(|e| Error::DeserializeError(e.to_string()))?
-            .1;
-
-        let (processed_ok, _processed_failed): (Vec<_>, Vec<_>) = events
+            .1
             .into_iter()
-            .map(|event| {
-                let message = Message::try_from(event)?;
-                self.processor.process(message.clone()).map(|_| message)
+            .map(|data| Message::try_from(data).unwrap())
+            .collect();
+        self.process(&events)
+    }
+
+    pub fn process(&self, msg: &[Message]) -> Result<(), Error> {
+        let (process_ok, process_failed): (Vec<_>, Vec<_>) = msg
+            .iter()
+            .map(|message| {
+                self.processor
+                    .process(message.clone())
+                    .and_then(|not| self.notification_bus.notify(&not))
             })
             .partition(Result::is_ok);
-
-        let response: Vec<u8> = processed_ok
+        let _oks = process_ok
             .into_iter()
             .map(Result::unwrap)
-            .map(|des_event| -> Result<Vec<u8>, Error> {
-                match des_event {
-                    Message::Event(ev) => {
-                        let mut buf = vec![];
-                        if let EventData::Icp(_) = ev.event_message.event.get_event_data() {
-                            if !self.processor.has_receipt(
-                                &self.prefix,
-                                0,
-                                &ev.event_message.event.get_prefix(),
-                            )? {
-                                buf.append(
-                                    &mut self.processor.get_kerl(&self.prefix)?.ok_or_else(
-                                        || Error::SemanticError("KEL is empty".into()),
-                                    )?,
-                                )
-                            }
-                        }
-                        let rcp: SignedEventData = self.make_rct(ev.event_message)?.into();
-                        buf.append(&mut rcp.to_cesr().unwrap());
-                        Ok(buf)
-                    }
-                    Message::TransferableRct(_rct) => Ok(vec![]),
-                    Message::NontransferableRct(_rct) => Ok(vec![]),
-                    // TODO: this should process properly
-                    #[cfg(feature = "query")]
-                    _ => todo!(),
-                }
-            })
-            .filter_map(|x| x.ok())
-            .flatten()
-            .collect();
+            .collect::<Vec<_>>();
+        let _errs = process_failed
+            .into_iter()
+            .map(Result::unwrap_err)
+            .collect::<Vec<_>>();
+
+        Ok(())
+    }
+
+    // Respond:
+    // check if we have receipt of self icp event from event creator, if
+    // we don't, append own kel to response.
+    // That's for direct mode
+    fn respond_one(&self, ev_msg: EventMessage<KeyEvent>) -> Result<Vec<Message>, Error> {
+        let mut response = vec![];
+        if !self
+            .storage
+            .has_receipt(&self.prefix, 0, &ev_msg.event.get_prefix())?
+        {
+            response.append(
+                &mut self
+                    .storage
+                    .get_kel_messages(&self.prefix)?
+                    .ok_or_else(|| Error::SemanticError("KEL is empty".into()))?,
+            )
+        };
+        response.push(Message::TransferableRct(self.make_rct(ev_msg)?));
+        Ok(response)
+    }
+
+    pub fn respond(&self) -> Result<Vec<Message>, Error> {
+        let mut response = Vec::new();
+        while let Some(event) = self.response_queue.get_data_to_respond() {
+            // ignore own events
+            if !event.event.get_prefix().eq(&self.prefix) {
+                response.append(&mut self.respond_one(event)?);
+            }
+        }
         Ok(response)
     }
 
@@ -407,13 +348,13 @@ impl<K: KeyManager> Keri<K> {
             .map_err(|_| Error::MutexPoisoned)?
             .sign(&ser)?;
         let validator_event_seal = self
-            .processor
+            .storage
             .get_last_establishment_event_seal(&self.prefix)?
             .ok_or_else(|| Error::SemanticError("No establishment event seal".into()))?;
         let rcp = Receipt {
             prefix: event.event.get_prefix(),
             sn: event.event.get_sn(),
-            receipted_event_digest: SelfAddressing::Blake3_256.derive(&ser),
+            receipted_event_digest: event.get_digest(),
         }
         .to_message(SerializationFormats::JSON)?;
 
@@ -469,7 +410,7 @@ impl<K: KeyManager> Keri<K> {
                         ))
                     }
                 } else if evt.witness_config.prune.contains(our_bp) {
-                    self.processor
+                    self.storage
                         .db
                         .remove_receipts_nt(&message.event.get_prefix())?;
                     Err(Error::SemanticError(
@@ -488,22 +429,22 @@ impl<K: KeyManager> Keri<K> {
     }
 
     pub fn get_state(&self) -> Result<Option<IdentifierState>, Error> {
-        self.processor.compute_state(&self.prefix)
+        self.storage.get_state(&self.prefix)
     }
 
     pub fn get_kerl(&self) -> Result<Option<Vec<u8>>, Error> {
-        self.processor.get_kerl(&self.prefix)
+        self.storage.get_kel(&self.prefix)
     }
 
     pub fn get_state_for_prefix(
         &self,
         prefix: &IdentifierPrefix,
     ) -> Result<Option<IdentifierState>, Error> {
-        self.processor.compute_state(prefix)
+        self.storage.get_state(prefix)
     }
 
     pub fn get_state_for_seal(&self, seal: &EventSeal) -> Result<Option<IdentifierState>, Error> {
-        self.processor.compute_state_at_sn(&seal.prefix, seal.sn)
+        self.storage.compute_state_at_sn(&seal.prefix, seal.sn)
     }
 
     fn generate_ntr(
@@ -527,37 +468,37 @@ impl<K: KeyManager> Keri<K> {
         }
         .to_message(SerializationFormats::JSON)?;
         let ntr = SignedNontransferableReceipt::new(&rcp, vec![(bp, ssp)]);
-        self.processor
+        self.storage
             .db
             .add_receipt_nt(ntr.clone(), &message.event.get_prefix())?;
         Ok(ntr)
     }
 }
-// Non re-allocating random `String` generator with output length of 10 char string
-#[cfg(feature = "wallet")]
-fn generate_random_string() -> String {
-    use rand::Rng;
-    const ALL: [char; 61] = [
-        'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R',
-        'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j',
-        'k', 'l', 'm', 'n', 'o', 'p', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '0', '9', '8',
-        '7', '6', '5', '4', '3', '2', '1',
-    ];
-    let mut ret = String::default();
-    for _ in 0..10 {
-        let n = rand::thread_rng().gen_range(0, ALL.len());
-        ret.push(ALL[n]);
-    }
-    ret
+
+// Helper struct for appending kel events that needs receipt generation.
+// Receipts should be then signed and send somewhere.
+#[derive(Default)]
+pub struct Responder {
+    needs_response: Mutex<VecDeque<EventMessage<KeyEvent>>>,
 }
 
-#[cfg(test)]
-#[cfg(feature = "wallet")]
-mod keri_wallet {
-    #[test]
-    fn random_string_test() {
-        let rst = super::generate_random_string();
-        assert!(!rst.is_empty());
-        assert!(rst != super::generate_random_string());
+impl Responder {
+    pub fn get_data_to_respond(&self) -> Option<EventMessage<KeyEvent>> {
+        self.needs_response.lock().unwrap().pop_front()
+    }
+}
+
+impl Notifier for Responder {
+    fn notify(&self, notification: &Notification, _bus: &NotificationBus) -> Result<(), Error> {
+        if let Notification::KeyEventAdded(ev_msg) = notification {
+            self.needs_response
+                .lock()
+                .unwrap()
+                .push_back(ev_msg.event_message.clone());
+
+            Ok(())
+        } else {
+            Err(Error::SemanticError("Wrong notification type".into()))
+        }
     }
 }
