@@ -1,5 +1,13 @@
 use super::event_msg_builder::EventMsgBuilder;
-use crate::{derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning}, error::Error, event::sections::{key_config::nxt_commitment, threshold::SignatureThreshold}, keys::{PrivateKey, PublicKey}, prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix }, state::IdentifierState, event_message::EventTypeTag};
+use crate::{
+    derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
+    error::Error,
+    event::sections::{key_config::nxt_commitment, threshold::SignatureThreshold},
+    event_message::EventTypeTag,
+    keys::{PrivateKey, PublicKey},
+    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix},
+    state::IdentifierState,
+};
 use ed25519_dalek::Keypair;
 use rand::rngs::OsRng;
 
@@ -85,7 +93,7 @@ fn test_update_identifier_state(
     };
 
     // Attach sign to event message.
-    let signed_event = event_msg.sign( vec![attached_sig.clone()], None);
+    let signed_event = event_msg.sign(vec![attached_sig.clone()], None);
 
     // Apply event to current IdentifierState.
     let new_state = state_data.state.apply(&signed_event)?;
@@ -113,7 +121,10 @@ fn test_update_identifier_state(
     assert_eq!(new_state.current.threshold, SignatureThreshold::Simple(1));
     assert_eq!(new_state.current.threshold_key_digest, Some(next_dig));
     assert_eq!(new_state.witness_config.witnesses, vec![]);
-    assert_eq!(new_state.witness_config.tally, SignatureThreshold::Simple(0));
+    assert_eq!(
+        new_state.witness_config.tally,
+        SignatureThreshold::Simple(0)
+    );
 
     let mut new_history = state_data.keys_history.clone();
     // If event_type is establishment event, append current key to keys

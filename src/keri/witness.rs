@@ -112,6 +112,14 @@ impl Witness {
         Ok(signed_rcp)
     }
 
+    pub fn get_kel_for_prefix(&self, id: &IdentifierPrefix) -> Result<Option<Vec<u8>>, Error> {
+        self.storage.get_kel(id)
+    }
+
+    pub fn get_receipts_for_prefix(&self, id: &IdentifierPrefix) -> Result<Option<Vec<u8>>, Error> {
+        self.storage.get_nt_receipts(id)
+    }
+
     pub fn get_state_for_prefix(
         &self,
         prefix: &IdentifierPrefix,

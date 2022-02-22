@@ -8,6 +8,7 @@ use crate::{
         sections::{seal::EventSeal, KeyConfig},
     },
     event_message::signed_event_message::{Message, TimestampedSignedEventMessage},
+    event_parsing::SignedEventData,
     prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix, SelfSigningPrefix},
     state::{EventSemantics, IdentifierState},
 };
@@ -192,6 +193,20 @@ impl EventStorage {
         } else {
             false
         })
+    }
+
+    pub fn get_nt_receipts(&self, prefix: &IdentifierPrefix) -> Result<Option<Vec<u8>>, Error> {
+        match self.db.get_escrow_nt_receipts(prefix) {
+            Some(events) => Ok(Some(
+                events
+                    .map(|event| SignedEventData::from(event).to_cesr().unwrap_or_default())
+                    .fold(vec![], |mut accum, serialized_event| {
+                        accum.extend(serialized_event);
+                        accum
+                    }),
+            )),
+            None => Ok(None),
+        }
     }
 
     pub fn get_nt_receipts_signatures(
