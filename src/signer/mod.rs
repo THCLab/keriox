@@ -66,12 +66,24 @@ pub struct Signer {
 }
 
 impl Signer {
+    /// Creates a new Signer with a random key.
     pub fn new() -> Self {
         let ed = ed25519_dalek::Keypair::generate(&mut OsRng);
         let pub_key = PublicKey::new(ed.public.to_bytes().to_vec());
         let priv_key = PrivateKey::new(ed.secret.to_bytes().to_vec());
 
         Signer { pub_key, priv_key }
+    }
+
+    /// Creates a new Signer with the given ED25519_dalek private key.
+    pub fn new_with_key(priv_key: &[u8]) -> Result<Self, ed25519_dalek::SignatureError> {
+        let priv_key = ed25519_dalek::SecretKey::from_bytes(priv_key)?;
+        let pub_key = ed25519_dalek::PublicKey::from(&priv_key);
+
+        Ok(Signer {
+            priv_key: PrivateKey::new(priv_key.as_bytes().to_vec()),
+            pub_key: PublicKey::new(pub_key.as_bytes().to_vec()),
+        })
     }
 
     pub fn sign(&self, msg: impl AsRef<[u8]>) -> Result<Vec<u8>, Error> {
