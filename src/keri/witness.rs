@@ -38,8 +38,19 @@ pub struct Witness {
 }
 
 impl Witness {
+    /// Creates a new Witness with a random private key.
     pub fn new(path: &Path) -> Result<Self, Error> {
         let signer = Signer::new();
+        Self::init(path, signer)
+    }
+
+    /// Creates a new Witness using specified private ED25519_dalek key.
+    pub fn new_with_key(path: &Path, priv_key: &[u8]) -> Result<Self, Error> {
+        let signer = Signer::new_with_key(priv_key)?;
+        Self::init(path, signer)
+    }
+
+    fn init(path: &Path, signer: Signer) -> Result<Self, Error> {
         let (processor, storage, mut publisher) = {
             let witness_db = Arc::new(SledEventDatabase::new(path)?);
             (
