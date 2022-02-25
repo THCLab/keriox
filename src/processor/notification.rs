@@ -10,7 +10,7 @@ use crate::{
 };
 
 pub struct NotificationBus {
-    observers: HashMap<JustNotification, Vec<Arc<dyn Notifier>>>,
+    observers: HashMap<JustNotification, Vec<Arc<dyn Notifier + Send + Sync>>>,
 }
 
 impl NotificationBus {
@@ -21,7 +21,7 @@ impl NotificationBus {
     }
     pub fn register_observer(
         &mut self,
-        escrow: Arc<dyn Notifier>,
+        escrow: Arc<dyn Notifier + Send + Sync>,
         notification: Vec<JustNotification>,
     ) {
         notification.into_iter().for_each(|notification| {
