@@ -4,6 +4,7 @@ use std::cmp::Ordering;
 
 use super::EventMessage;
 use super::{serializer::to_string, KeyEvent};
+use crate::event_parsing::SignedEventData;
 use crate::prefix::IdentifierPrefix;
 use crate::{
     error::Error,
@@ -32,7 +33,25 @@ pub enum Message {
     Query(SignedQuery),
 }
 
+impl From<Message> for SignedEventData {
+    fn from(message: Message) -> Self {
+        match message {
+            Message::Event(event) => SignedEventData::from(&event),
+            Message::NontransferableRct(rct) => SignedEventData::from(rct),
+            Message::TransferableRct(rct) => SignedEventData::from(rct),
+            #[cfg(feature = "query")]
+            Message::KeyStateNotice(ksn) => SignedEventData::from(ksn),
+            #[cfg(feature = "query")]
+            Message::Query(qry) => todo!(),
+        }
+    }
+}
+
 impl Message {
+    pub fn to_cesr(&self) -> Result<Vec<u8>, Error> {
+        SignedEventData::from(self.clone()).to_cesr()
+    }
+
     pub fn get_prefix(&self) -> IdentifierPrefix {
         match self {
             Message::Event(ev) => ev.event_message.event.get_prefix(),
