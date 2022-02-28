@@ -267,79 +267,11 @@ impl EventValidator {
 
 impl EventValidator {
     #[cfg(feature = "query")]
-    fn bada_logic(&self, new_rpy: &SignedReply) -> Result<(), Error> {
-        use crate::query::reply::ReplyEvent;
-
-        let reply_prefix = new_rpy.reply.event.get_prefix();
-        // helper function for reply timestamps checking
-        fn check_dts(new_rpy: &ReplyEvent, old_rpy: &ReplyEvent) -> Result<(), Error> {
-            let new_dt = new_rpy.get_timestamp();
-            let old_dt = old_rpy.get_timestamp();
-            if new_dt >= old_dt {
-                Ok(())
-            } else {
-                Err(QueryError::StaleRpy.into())
-            }
-        }
-        match new_rpy.signature.clone() {
-            Signature::Transferable(seal, _sigs) => {
-                // A) If sn (sequence number) of last (if forked) Est evt that provides
-                //  keys for signature(s) of new is greater than sn of last Est evt
-                //  that provides keys for signature(s) of old.
-
-                //  Or
-
-                //  B) If sn of new equals sn of old And date-time-stamp of new is
-                //     greater than old
-
-                // get last reply for prefix with route with sender_prefix
-                match self
-                    .event_storage
-                    .get_last_reply(&reply_prefix, &seal.prefix)
-                {
-                    Some(old_rpy) => {
-                        // check sns
-                        let new_sn = seal.sn.clone();
-                        let old_sn: u64 =
-                            if let Signature::Transferable(seal, _) = old_rpy.signature {
-                                seal.sn
-                            } else {
-                                return Err(QueryError::Error(
-                                    "Improper signature type. Should be transferable.".into(),
-                                )
-                                .into());
-                            };
-                        if old_sn < new_sn {
-                            Ok(())
-                        } else if old_sn == new_sn {
-                            check_dts(&new_rpy.reply.event, &old_rpy.reply.event)
-                        } else {
-                            Err(QueryError::StaleRpy.into())
-                        }
-                    }
-                    None => Err(QueryError::NoSavedReply.into()),
-                }
-            }
-            Signature::NonTransferable(bp, _sig) => {
-                //  If date-time-stamp of new is greater than old
-
-                match self
-                    .event_storage
-                    .get_last_reply(&reply_prefix, &IdentifierPrefix::Basic(bp))
-                {
-                    Some(old_rpy) => check_dts(&new_rpy.reply.event, &old_rpy.reply.event),
-                    None => Err(QueryError::NoSavedReply.into()),
-                }
-            }
-        }
-    }
-
-    #[cfg(feature = "query")]
-    pub fn process_signed_reply(
+    pub fn process_signed_ksn_reply(
         &self,
-        rpy: &SignedReply,
+        rpy: &SignedReply<KeyStateNotice>,
     ) -> Result<Option<IdentifierState>, Error> {
-        use crate::query::Route;
+        use crate::query::{reply::bada_logic, Route};
 
         let route = rpy.reply.event.get_route();
         // check if signature was made by ksn creator
@@ -349,14 +281,19 @@ impl EventValidator {
             };
             self.verify(&rpy.reply.serialize()?, &rpy.signature)?;
             rpy.reply.check_digest()?;
-            let bada_result = self.bada_logic(&rpy);
-            match bada_result {
-                Err(Error::QueryError(QueryError::NoSavedReply)) => {
-                    // no previous rpy event to compare
-                    Ok(())
+            let reply_prefix = rpy.reply.event.get_prefix();
+
+            match self
+                .event_storage
+                .get_last_ksn_reply(&reply_prefix, &rpy.signature.get_signer())
+            {
+                Some(old_rpy) => {
+                    bada_logic(&rpy, &old_rpy)?;
                 }
-                anything => anything,
-            }?;
+                 // no previous rpy event to compare
+                None => (),
+            };
+
             // now unpack ksn and check its details
             let ksn = rpy.reply.event.get_reply_data();
             self.check_ksn(&ksn, aid)?;
@@ -380,8 +317,9 @@ impl EventValidator {
             .db
             .get_accepted_replys(pref)
             .ok_or(Error::EventOutOfOrderError)?
-            .find(|sr: &SignedReply| sr.reply.event.get_route() == Route::ReplyKsn(aid.clone()))
-        {
+            .find(|sr: &SignedReply<KeyStateNotice>| {
+                sr.reply.event.get_route() == Route::ReplyKsn(aid.clone())
+            }) {
             Some(old_ksn) => {
                 let old_dt = old_ksn.reply.event.get_timestamp();
                 if old_dt > new_dt {

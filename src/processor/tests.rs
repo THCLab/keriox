@@ -447,7 +447,7 @@ pub fn test_reply_escrow() -> Result<(), Error> {
     publisher.register_observer(
         Arc::new(ReplyEscrow::new(db.clone())),
         vec![
-            JustNotification::ReplyOutOfOrder,
+            JustNotification::KsnOutOfOrder,
             JustNotification::KeyEventAdded,
         ],
     );
@@ -472,7 +472,7 @@ pub fn test_reply_escrow() -> Result<(), Error> {
 
     // Try to process out of order reply
     let notification = event_processor.process(deserialized_old_rpy.clone());
-    assert!(matches!(notification, Ok(Notification::ReplyOutOfOrder(_))));
+    assert!(matches!(notification, Ok(Notification::KsnOutOfOrder(_))));
     publisher.notify(&notification?)?;
     let escrow = db.get_escrowed_replys(&identifier);
     assert_eq!(escrow.unwrap().collect::<Vec<_>>().len(), 1);
@@ -496,7 +496,7 @@ pub fn test_reply_escrow() -> Result<(), Error> {
     // Try to process new out of order reply
     // reply event should be escrowed, accepted reply shouldn't change
     let notification = event_processor.process(deserialized_new_rpy.clone());
-    assert!(matches!(notification, Ok(Notification::ReplyOutOfOrder(_))));
+    assert!(matches!(notification, Ok(Notification::KsnOutOfOrder(_))));
     publisher.notify(&notification?)?;
     let mut escrow = db.get_escrowed_replys(&identifier).unwrap();
     assert_eq!(

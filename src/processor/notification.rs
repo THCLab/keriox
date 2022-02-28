@@ -7,6 +7,7 @@ use crate::{
     event_message::signed_event_message::{
         SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
     },
+    query::key_state_notice::KeyStateNotice,
 };
 
 pub struct NotificationBus {
@@ -64,7 +65,7 @@ pub enum Notification {
     TransReceiptOutOfOrder(SignedTransferableReceipt),
     DupliciousEvent(SignedEventMessage),
     #[cfg(feature = "query")]
-    ReplyOutOfOrder(SignedReply),
+    KsnOutOfOrder(SignedReply<KeyStateNotice>),
     #[cfg(feature = "query")]
     ReplyUpdated,
 }
@@ -81,9 +82,9 @@ pub enum JustNotification {
     TransReceiptOutOfOrder,
     DupliciousEvent,
     #[cfg(feature = "query")]
-    ReplyOutOfOrder,
+    KsnOutOfOrder,
     #[cfg(feature = "query")]
-    ReplyUpdated,
+    KsnUpdated,
 }
 
 impl From<&Notification> for JustNotification {
@@ -98,9 +99,9 @@ impl From<&Notification> for JustNotification {
             Notification::ReceiptOutOfOrder(_) => JustNotification::ReceiptOutOfOrder,
             Notification::TransReceiptOutOfOrder(_) => JustNotification::TransReceiptOutOfOrder,
             #[cfg(feature = "query")]
-            Notification::ReplyOutOfOrder(_) => JustNotification::ReplyOutOfOrder,
+            Notification::KsnOutOfOrder(_) => JustNotification::KsnOutOfOrder,
             #[cfg(feature = "query")]
-            Notification::ReplyUpdated => JustNotification::ReplyUpdated,
+            Notification::ReplyUpdated => JustNotification::KsnUpdated,
             Notification::DupliciousEvent(_) => JustNotification::DupliciousEvent,
         }
     }

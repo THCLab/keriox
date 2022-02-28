@@ -9,7 +9,7 @@ use crate::processor::escrow::default_escrow_bus;
 use crate::processor::event_storage::EventStorage;
 use crate::processor::notification::{JustNotification, NotificationBus};
 use crate::processor::witness_processor::WitnessProcessor;
-use crate::query::reply::{ReplyEvent, SignedReply};
+use crate::query::reply::{ReplyKsnEvent, SignedReply};
 use crate::query::{
     key_state_notice::KeyStateNotice,
     query::{QueryData, SignedQuery},
@@ -141,12 +141,15 @@ impl Witness {
         self.storage.get_state(prefix)
     }
 
-    pub fn get_ksn_for_prefix(&self, prefix: &IdentifierPrefix) -> Result<SignedReply, Error> {
+    pub fn get_ksn_for_prefix(
+        &self,
+        prefix: &IdentifierPrefix,
+    ) -> Result<SignedReply<KeyStateNotice>, Error> {
         let state = self
             .get_state_for_prefix(prefix)?
             .ok_or(Error::SemanticError("No state in db".into()))?;
         let ksn = KeyStateNotice::new_ksn(state, SerializationFormats::JSON);
-        let rpy = ReplyEvent::new_reply(
+        let rpy = ReplyKsnEvent::new_reply(
             ksn,
             Route::ReplyKsn(IdentifierPrefix::Basic(self.prefix.clone())),
             SelfAddressing::Blake3_256,
@@ -196,7 +199,7 @@ impl Witness {
                     .get_state(&i)?
                     .ok_or(Error::SemanticError("No id in database".into()))?;
                 let ksn = KeyStateNotice::new_ksn(state, SerializationFormats::JSON);
-                let rpy = ReplyEvent::new_reply(
+                let rpy = ReplyKsnEvent::new_reply(
                     ksn,
                     Route::ReplyKsn(IdentifierPrefix::Basic(self.prefix.clone())),
                     SelfAddressing::Blake3_256,

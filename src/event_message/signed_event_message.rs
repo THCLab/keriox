@@ -6,6 +6,7 @@ use super::EventMessage;
 use super::{serializer::to_string, KeyEvent};
 use crate::event_parsing::SignedEventData;
 use crate::prefix::IdentifierPrefix;
+use crate::query::key_state_notice::KeyStateNotice;
 use crate::{
     error::Error,
     event::{
@@ -28,7 +29,7 @@ pub enum Message {
     NontransferableRct(SignedNontransferableReceipt),
     TransferableRct(SignedTransferableReceipt),
     #[cfg(feature = "query")]
-    KeyStateNotice(SignedReply),
+    KeyStateNotice(SignedReply<KeyStateNotice>),
     #[cfg(feature = "query")]
     Query(SignedQuery),
 }
@@ -42,7 +43,7 @@ impl From<Message> for SignedEventData {
             #[cfg(feature = "query")]
             Message::KeyStateNotice(ksn) => SignedEventData::from(ksn),
             #[cfg(feature = "query")]
-            Message::Query(qry) => todo!(),
+            Message::Query(_qry) => todo!(),
         }
     }
 }

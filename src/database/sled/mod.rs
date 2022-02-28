@@ -1,5 +1,6 @@
 mod tables;
 
+use crate::query::key_state_notice::KeyStateNotice;
 use crate::{
     error::Error,
     event::EventMessage,
@@ -45,10 +46,10 @@ pub struct SledEventDatabase {
     partially_witnessed_events: SledEventTreeVec<TimestampedSignedEventMessage>,
 
     #[cfg(feature = "query")]
-    accepted_rpy: SledEventTreeVec<SignedReply>,
+    accepted_rpy: SledEventTreeVec<SignedReply<KeyStateNotice>>,
 
     #[cfg(feature = "query")]
-    escrowed_replys: SledEventTreeVec<SignedReply>,
+    escrowed_replys: SledEventTreeVec<SignedReply<KeyStateNotice>>,
 }
 
 impl SledEventDatabase {
@@ -349,7 +350,7 @@ impl SledEventDatabase {
     #[cfg(feature = "query")]
     pub fn update_accepted_reply(
         &self,
-        rpy: SignedReply,
+        rpy: SignedReply<KeyStateNotice>,
         id: &IdentifierPrefix,
     ) -> Result<(), Error> {
         match self
@@ -374,7 +375,7 @@ impl SledEventDatabase {
     pub fn get_accepted_replys(
         &self,
         id: &IdentifierPrefix,
-    ) -> Option<impl DoubleEndedIterator<Item = SignedReply>> {
+    ) -> Option<impl DoubleEndedIterator<Item = SignedReply<KeyStateNotice>>> {
         self.accepted_rpy
             .iter_values(self.identifiers.designated_key(id))
     }
@@ -383,14 +384,18 @@ impl SledEventDatabase {
     pub fn remove_accepted_reply(
         &self,
         id: &IdentifierPrefix,
-        rpy: SignedReply,
+        rpy: SignedReply<KeyStateNotice>,
     ) -> Result<(), Error> {
         self.accepted_rpy
             .remove(self.identifiers.designated_key(id), &rpy)
     }
 
     #[cfg(feature = "query")]
-    pub fn add_escrowed_reply(&self, rpy: SignedReply, id: &IdentifierPrefix) -> Result<(), Error> {
+    pub fn add_escrowed_reply(
+        &self,
+        rpy: SignedReply<KeyStateNotice>,
+        id: &IdentifierPrefix,
+    ) -> Result<(), Error> {
         self.escrowed_replys
             .push(self.identifiers.designated_key(id), rpy)
     }
@@ -399,7 +404,7 @@ impl SledEventDatabase {
     pub fn get_escrowed_replys(
         &self,
         id: &IdentifierPrefix,
-    ) -> Option<impl DoubleEndedIterator<Item = SignedReply>> {
+    ) -> Option<impl DoubleEndedIterator<Item = SignedReply<KeyStateNotice>>> {
         self.escrowed_replys
             .iter_values(self.identifiers.designated_key(id))
     }
@@ -408,14 +413,16 @@ impl SledEventDatabase {
     pub fn remove_escrowed_reply(
         &self,
         id: &IdentifierPrefix,
-        rpy: &SignedReply,
+        rpy: &SignedReply<KeyStateNotice>,
     ) -> Result<(), Error> {
         self.escrowed_replys
             .remove(self.identifiers.designated_key(id), rpy)
     }
 
     #[cfg(feature = "query")]
-    pub fn get_all_escrowed_replys(&self) -> Option<impl DoubleEndedIterator<Item = SignedReply>> {
+    pub fn get_all_escrowed_replys(
+        &self,
+    ) -> Option<impl DoubleEndedIterator<Item = SignedReply<KeyStateNotice>>> {
         self.escrowed_replys.get_all()
     }
 }

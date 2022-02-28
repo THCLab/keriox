@@ -85,13 +85,13 @@ impl EventProcessor {
                 }
             }
             #[cfg(feature = "query")]
-            Message::KeyStateNotice(rpy) => match self.validator.process_signed_reply(&rpy) {
+            Message::KeyStateNotice(rpy) => match self.validator.process_signed_ksn_reply(&rpy) {
                 Ok(_) => {
                     self.db
                         .update_accepted_reply(rpy.clone(), &rpy.reply.event.get_prefix())?;
                     Ok(Notification::ReplyUpdated)
                 }
-                Err(Error::EventOutOfOrderError) => Ok(Notification::ReplyOutOfOrder(rpy)),
+                Err(Error::EventOutOfOrderError) => Ok(Notification::KsnOutOfOrder(rpy)),
                 Err(anything) => Err(anything),
             },
             #[cfg(feature = "query")]

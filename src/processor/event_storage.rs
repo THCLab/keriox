@@ -20,7 +20,7 @@ use crate::{
 
 use super::compute_state;
 #[cfg(feature = "query")]
-use crate::query::reply::SignedReply;
+use crate::query::{key_state_notice::KeyStateNotice, reply::SignedReply};
 
 pub struct EventStorage {
     pub db: Arc<SledEventDatabase>,
@@ -271,17 +271,17 @@ impl EventStorage {
     }
 
     #[cfg(feature = "query")]
-    pub fn get_last_reply(
+    pub fn get_last_ksn_reply(
         &self,
         creator_prefix: &IdentifierPrefix,
         signer_prefix: &IdentifierPrefix,
-    ) -> Option<SignedReply> {
+    ) -> Option<SignedReply<KeyStateNotice>> {
         use crate::query::Route;
 
         self.db
             .get_accepted_replys(creator_prefix)
             .and_then(|mut o| {
-                o.find(|r: &SignedReply| {
+                o.find(|r: &SignedReply<KeyStateNotice>| {
                     r.reply.event.get_route() == Route::ReplyKsn(signer_prefix.to_owned())
                 })
             })
