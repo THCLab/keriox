@@ -8,7 +8,7 @@ use crate::{
 use chrono::{DateTime, FixedOffset, SecondsFormat, Utc};
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 
-use self::reply::SignedReply;
+use self::{key_state_notice::KeyStateNotice, reply::SignedReply};
 
 use thiserror::Error;
 
@@ -103,7 +103,7 @@ impl<'de> Deserialize<'de> for Route {
 
 #[derive(Debug)]
 pub enum ReplyType {
-    Rep(SignedReply),
+    Rep(SignedReply<KeyStateNotice>),
     Kel(Vec<u8>),
 }
 

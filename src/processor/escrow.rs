@@ -336,7 +336,7 @@ impl ReplyEscrow {
 impl Notifier for ReplyEscrow {
     fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error> {
         match notification {
-            Notification::ReplyOutOfOrder(rpy) => {
+            Notification::KsnOutOfOrder(rpy) => {
                 let id = rpy.reply.event.get_prefix();
                 self.0.add_escrowed_reply(rpy.clone(), &id)
             }
@@ -354,7 +354,7 @@ impl ReplyEscrow {
         if let Some(esc) = self.0.get_all_escrowed_replys() {
             for sig_rep in esc {
                 let validator = EventValidator::new(self.0.clone());
-                match validator.process_signed_reply(&sig_rep) {
+                match validator.process_signed_ksn_reply(&sig_rep) {
                     Ok(_) => {
                         let id = sig_rep.reply.event.get_prefix();
                         self.0.remove_escrowed_reply(&id, &sig_rep)?;

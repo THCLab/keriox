@@ -14,10 +14,11 @@ use crate::prefix::{
     AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix,
 };
 
+use crate::query::key_state_notice::KeyStateNotice;
 #[cfg(feature = "query")]
 use crate::query::{
     query::QueryEvent,
-    reply::{ReplyEvent, SignedReply},
+    reply::{ReplyKeyEvent, SignedReply},
 };
 use crate::{error::Error, event::event_data::EventData};
 
@@ -140,7 +141,7 @@ pub enum EventType {
     #[cfg(feature = "query")]
     Qry(EventMessage<QueryEvent>),
     #[cfg(feature = "query")]
-    Rpy(EventMessage<ReplyEvent>),
+    RpyKsn(EventMessage<ReplyKeyEvent>),
 }
 
 impl EventType {
@@ -151,7 +152,7 @@ impl EventType {
             #[cfg(feature = "query")]
             EventType::Qry(qry) => qry.serialize(),
             #[cfg(feature = "query")]
-            EventType::Rpy(rpy) => rpy.serialize(),
+            EventType::RpyKsn(rpy) => rpy.serialize(),
         }
     }
 }
@@ -220,8 +221,8 @@ impl From<SignedTransferableReceipt> for SignedEventData {
 }
 
 #[cfg(feature = "query")]
-impl From<SignedReply> for SignedEventData {
-    fn from(ev: SignedReply) -> Self {
+impl From<SignedReply<KeyStateNotice>> for SignedEventData {
+    fn from(ev: SignedReply<KeyStateNotice>) -> Self {
         use crate::event_message::signature::Signature;
         let attachments = vec![match ev.signature.clone() {
             Signature::Transferable(seal, sig) => {
@@ -231,7 +232,7 @@ impl From<SignedReply> for SignedEventData {
         }];
 
         SignedEventData {
-            deserialized_event: EventType::Rpy(ev.reply),
+            deserialized_event: EventType::RpyKsn(ev.reply),
             attachments,
         }
     }
@@ -247,14 +248,14 @@ impl TryFrom<SignedEventData> for Message {
             #[cfg(feature = "query")]
             EventType::Qry(qry) => signed_query(qry, value.attachments),
             #[cfg(feature = "query")]
-            EventType::Rpy(rpy) => signed_reply(rpy, value.attachments),
+            EventType::RpyKsn(rpy) => signed_reply(rpy, value.attachments),
         }
     }
 }
 
 #[cfg(feature = "query")]
 fn signed_reply(
-    rpy: EventMessage<ReplyEvent>,
+    rpy: EventMessage<ReplyKeyEvent>,
     mut attachments: Vec<Attachment>,
 ) -> Result<Message, Error> {
     match attachments

@@ -78,17 +78,17 @@ pub fn query_message<'a>(s: &'a [u8]) -> nom::IResult<&[u8], EventType> {
 }
 
 #[cfg(feature = "query")]
-pub fn reply_message<'a>(s: &'a [u8]) -> nom::IResult<&[u8], EventType> {
-    use crate::query::reply::ReplyData;
+pub fn reply_ksn_message<'a>(s: &'a [u8]) -> nom::IResult<&[u8], EventType> {
+    use crate::query::{key_state_notice::KeyStateNotice, reply::ReplyData};
 
-    envelope::<ReplyData>(s).map(|d| (d.0, EventType::Rpy(d.1)))
+    envelope::<ReplyData<KeyStateNotice>>(s).map(|d| (d.0, EventType::RpyKsn(d.1)))
 }
 
 pub fn signed_message(s: &[u8]) -> nom::IResult<&[u8], SignedEventData> {
     #[cfg(feature = "query")]
     let (rest, event) = alt((
         key_event_message,
-        reply_message,
+        reply_ksn_message,
         query_message,
         receipt_message,
     ))(s)?;
@@ -229,8 +229,8 @@ fn test_reply() {
     let rest = "something more";
     let stream = [rpy, rest].join("");
 
-    let (_extra, event) = reply_message(stream.as_bytes()).unwrap();
-    assert!(matches!(event, EventType::Rpy(_)));
+    let (_extra, event) = reply_ksn_message(stream.as_bytes()).unwrap();
+    assert!(matches!(event, EventType::RpyKsn(_)));
 }
 
 #[cfg(feature = "query")]

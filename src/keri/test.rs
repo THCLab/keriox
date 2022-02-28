@@ -303,7 +303,7 @@ pub fn test_key_state_notice() -> Result<(), Error> {
 
     // Process reply message before having any bob's events in db.
     let res = alice_processor.process(Message::KeyStateNotice(signed_rpy.clone()));
-    assert!(matches!(res, Ok(Notification::ReplyOutOfOrder(_))));
+    assert!(matches!(res, Ok(Notification::KsnOutOfOrder(_))));
     alice_processor.process(Message::Event(bob_icp))?;
 
     // rotate bob's keys. Let alice process his rotation. She will have most recent bob's event.
@@ -325,7 +325,7 @@ pub fn test_key_state_notice() -> Result<(), Error> {
     // Create transferable reply by bob and process it by alice.
     let trans_rpy = witness.get_ksn_for_prefix(&bob_pref)?;
     let res = alice_processor.process(Message::KeyStateNotice(trans_rpy.clone()));
-    assert!(matches!(res, Ok(Notification::ReplyOutOfOrder(_))));
+    assert!(matches!(res, Ok(Notification::KsnOutOfOrder(_))));
 
     // Now update bob's state in alice's db to most recent.
     alice_processor.process(Message::Event(new_bob_rot))?;
