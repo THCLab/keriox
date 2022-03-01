@@ -7,7 +7,7 @@ use crate::{
     event_message::signed_event_message::{
         SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
     },
-    query::key_state_notice::KeyStateNotice,
+    query::{key_state_notice::KeyStateNotice, reply::ReplyEvent}, oobi::Oobi, event::EventMessage,
 };
 
 pub struct NotificationBus {
@@ -68,6 +68,9 @@ pub enum Notification {
     KsnOutOfOrder(SignedReply<KeyStateNotice>),
     #[cfg(feature = "query")]
     ReplyUpdated,
+    #[cfg(feature = "oobi")]
+    GotOobi(EventMessage<ReplyEvent<Oobi>>),
+    GotSignedOobi(SignedReply<Oobi>)
 }
 
 #[derive(PartialEq, Hash, Eq)]
@@ -85,6 +88,9 @@ pub enum JustNotification {
     KsnOutOfOrder,
     #[cfg(feature = "query")]
     KsnUpdated,
+    #[cfg(feature = "oobi")]
+    GotOobi,
+    GotSignedOobi,
 }
 
 impl From<&Notification> for JustNotification {
@@ -103,6 +109,9 @@ impl From<&Notification> for JustNotification {
             #[cfg(feature = "query")]
             Notification::ReplyUpdated => JustNotification::KsnUpdated,
             Notification::DupliciousEvent(_) => JustNotification::DupliciousEvent,
+            #[cfg(feature = "oobi")]
+            Notification::GotOobi(_) => JustNotification::GotOobi,
+            Notification::GotSignedOobi(_) => JustNotification::GotSignedOobi,
         }
     }
 }

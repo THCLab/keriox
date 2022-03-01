@@ -5,6 +5,7 @@ use std::cmp::Ordering;
 use super::EventMessage;
 use super::{serializer::to_string, KeyEvent};
 use crate::event_parsing::SignedEventData;
+use crate::oobi::Oobi;
 use crate::prefix::IdentifierPrefix;
 use crate::query::key_state_notice::KeyStateNotice;
 use crate::{
@@ -32,6 +33,9 @@ pub enum Message {
     KeyStateNotice(SignedReply<KeyStateNotice>),
     #[cfg(feature = "query")]
     Query(SignedQuery),
+    #[cfg(feature = "oobi")]
+    SignedOobi(SignedReply<Oobi>),
+    
 }
 
 impl From<Message> for SignedEventData {
@@ -44,6 +48,8 @@ impl From<Message> for SignedEventData {
             Message::KeyStateNotice(ksn) => SignedEventData::from(ksn),
             #[cfg(feature = "query")]
             Message::Query(_qry) => todo!(),
+            #[cfg(feature = "oobi")]
+            Message::SignedOobi(oobi) => SignedEventData::from(oobi),
         }
     }
 }
@@ -62,6 +68,8 @@ impl Message {
             Message::KeyStateNotice(ksn) => ksn.reply.event.get_prefix(),
             #[cfg(feature = "query")]
             Message::Query(_qry) => todo!(),
+            #[cfg(feature = "oobi")]
+            Message::SignedOobi(_) => todo!(),
         }
     }
 }
