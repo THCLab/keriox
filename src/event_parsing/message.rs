@@ -84,6 +84,13 @@ pub fn reply_ksn_message<'a>(s: &'a [u8]) -> nom::IResult<&[u8], EventType> {
     envelope::<ReplyData<KeyStateNotice>>(s).map(|d| (d.0, EventType::RpyKsn(d.1)))
 }
 
+#[cfg(feature = "oobi")]
+pub fn reply_oobi_message<'a>(s: &'a [u8]) -> nom::IResult<&[u8], EventType> {
+    use crate::{query::reply::ReplyData, oobi::Oobi};
+
+    envelope::<ReplyData<Oobi>>(s).map(|d| (d.0, EventType::RpyOobi(d.1)))
+}
+
 pub fn signed_message(s: &[u8]) -> nom::IResult<&[u8], SignedEventData> {
     #[cfg(feature = "query")]
     let (rest, event) = alt((
@@ -91,8 +98,10 @@ pub fn signed_message(s: &[u8]) -> nom::IResult<&[u8], SignedEventData> {
         reply_ksn_message,
         query_message,
         receipt_message,
+        #[cfg(feature = "oobi")]
+        reply_oobi_message,
     ))(s)?;
-    #[cfg(not(feature = "query"))]
+    #[cfg(not(all(feature = "query", feature = "oobi")))]
     let (rest, event) = alt((key_event_message, receipt_message))(s)?;
     let (rest, attachments): (&[u8], Vec<Attachment>) =
         fold_many0(attachment, vec![], |mut acc: Vec<_>, item| {

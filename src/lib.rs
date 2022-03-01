@@ -13,3 +13,6 @@ pub mod state;
 
 #[cfg(feature = "query")]
 pub mod query;
+
+#[cfg(feature = "query")]
+pub mod oobi;

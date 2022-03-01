@@ -96,6 +96,8 @@ impl EventProcessor {
             },
             #[cfg(feature = "query")]
             Message::Query(_qry) => todo!(),
+            #[cfg(feature = "oobi")]
+            Message::SignedOobi(oobi_rpy) => Ok(Notification::GotOobi(oobi_rpy.reply)),
         }
     }
 }

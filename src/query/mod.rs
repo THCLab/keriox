@@ -67,6 +67,7 @@ pub enum Route {
     Log,
     Ksn,
     ReplyKsn(IdentifierPrefix),
+    ReplyOobi,
 }
 
 impl Serialize for Route {
@@ -78,6 +79,7 @@ impl Serialize for Route {
             Route::Log => "log".into(),
             Route::Ksn => "ksn".into(),
             Route::ReplyKsn(id) => ["/ksn/", &id.to_str()].join(""),
+            Route::ReplyOobi => "/loc/scheme".into(),
         })
     }
 }
@@ -95,6 +97,7 @@ impl<'de> Deserialize<'de> for Route {
             match &s[..] {
                 "ksn" => Ok(Route::Ksn),
                 "log" => Ok(Route::Log),
+                "/loc/scheme" => Ok(Route::ReplyOobi),
                 _ => Err(Error::SemanticError("Unknown route".into())).map_err(de::Error::custom),
             }
         }
