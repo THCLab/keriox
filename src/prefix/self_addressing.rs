@@ -5,7 +5,7 @@ use base64::decode_config;
 use core::{fmt, str::FromStr};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-#[derive(Debug, PartialEq, Clone, Hash)]
+#[derive(Debug, PartialEq, Clone, Hash, Eq)]
 pub struct SelfAddressingPrefix {
     pub derivation: SelfAddressing,
     pub digest: Vec<u8>,
