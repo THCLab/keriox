@@ -7,7 +7,7 @@ use base64::decode_config;
 use core::str::FromStr;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-#[derive(Debug, PartialEq, Clone, Hash)]
+#[derive(Debug, PartialEq, Clone, Hash, Eq)]
 pub struct SelfSigningPrefix {
     pub derivation: SelfSigning,
     pub signature: Vec<u8>,
