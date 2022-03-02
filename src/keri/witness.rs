@@ -5,6 +5,7 @@ use crate::event::EventMessage;
 use crate::event_message::event_msg_builder::ReceiptBuilder;
 use crate::event_message::key_event_message::KeyEvent;
 use crate::event_message::signed_event_message::{Message, SignedNontransferableReceipt};
+use crate::keys::PublicKey;
 use crate::processor::escrow::default_escrow_bus;
 use crate::processor::event_storage::EventStorage;
 use crate::processor::notification::{JustNotification, NotificationBus};
@@ -30,7 +31,7 @@ use super::Responder;
 
 pub struct Witness {
     pub prefix: BasicPrefix,
-    signer: Signer,
+    // signer: Signer,
     processor: WitnessProcessor,
     storage: EventStorage,
     publisher: NotificationBus,
@@ -38,19 +39,7 @@ pub struct Witness {
 }
 
 impl Witness {
-    /// Creates a new Witness with a random private key.
-    pub fn new(path: &Path) -> Result<Self, Error> {
-        let signer = Signer::new();
-        Self::init(path, signer)
-    }
-
-    /// Creates a new Witness using specified private ED25519_dalek key.
-    pub fn new_with_key(path: &Path, priv_key: &[u8]) -> Result<Self, Error> {
-        let signer = Signer::new_with_key(priv_key)?;
-        Self::init(path, signer)
-    }
-
-    fn init(path: &Path, signer: Signer) -> Result<Self, Error> {
+    pub fn new(path: &Path, pk: PublicKey) -> Result<Self, Error> {
         let (processor, storage, mut publisher) = {
             let witness_db = Arc::new(SledEventDatabase::new(path)?);
             (
@@ -59,13 +48,12 @@ impl Witness {
                 default_escrow_bus(witness_db.clone()),
             )
         };
-        let prefix = Basic::Ed25519.derive(signer.public_key());
+        let prefix = Basic::Ed25519.derive(pk);
         let responder = Arc::new(Responder::default());
         publisher.register_observer(responder.clone(), vec![JustNotification::KeyEventAdded]);
 
         Ok(Self {
             prefix,
-            signer,
             processor,
             storage,
             publisher,
@@ -73,10 +61,10 @@ impl Witness {
         })
     }
 
-    pub fn respond(&self) -> Result<Vec<Message>, Error> {
+    pub fn respond(&self, signer: Arc<Signer>) -> Result<Vec<Message>, Error> {
         let mut response = Vec::new();
         while let Some(event) = self.responder.get_data_to_respond() {
-            let non_trans_receipt = self.respond_one(event)?.into();
+            let non_trans_receipt = self.respond_one(event, signer.clone())?.into();
             response.push(Message::NontransferableRct(non_trans_receipt));
         }
         Ok(response)
@@ -104,11 +92,11 @@ impl Witness {
     fn respond_one(
         &self,
         event_message: EventMessage<KeyEvent>,
+        signer: Arc<Signer>
     ) -> Result<SignedNontransferableReceipt, Error> {
         // Create witness receipt and add it to db
         let ser = event_message.serialize()?;
-        let signature = self.signer.sign(&ser)?;
-        // .map_err(|e| Error::ProcessingError(e, sn, prefix.clone()))?;
+        let signature = signer.sign(&ser)?;
         let rcp = ReceiptBuilder::default()
             .with_receipted_event(event_message)
             .build()?;
@@ -144,6 +132,7 @@ impl Witness {
     pub fn get_ksn_for_prefix(
         &self,
         prefix: &IdentifierPrefix,
+        signer: Arc<Signer>
     ) -> Result<SignedReply<KeyStateNotice>, Error> {
         let state = self
             .get_state_for_prefix(prefix)?
@@ -156,7 +145,7 @@ impl Witness {
             SerializationFormats::JSON,
         )?;
 
-        let signature = SelfSigning::Ed25519Sha512.derive(self.signer.sign(&rpy.serialize()?)?);
+        let signature = SelfSigning::Ed25519Sha512.derive(signer.sign(&rpy.serialize()?)?);
         Ok(SignedReply::new_nontrans(
             rpy,
             self.prefix.clone(),
@@ -164,7 +153,7 @@ impl Witness {
         ))
     }
 
-    pub fn process_signed_query(&self, qr: SignedQuery) -> Result<ReplyType, Error> {
+    pub fn process_signed_query(&self, qr: SignedQuery, signer: Arc<Signer>) -> Result<ReplyType, Error> {
         let signatures = qr.signatures;
         // check signatures
         let kc = self
@@ -177,14 +166,14 @@ impl Witness {
             // TODO check timestamps
             // unpack and check what's inside
             let route = qr.envelope.event.get_route();
-            self.process_query(route, qr.envelope.event.get_query_data())
+            self.process_query(route, qr.envelope.event.get_query_data(),signer)
         } else {
             Err(Error::SignatureVerificationError)
         }
     }
 
     #[cfg(feature = "query")]
-    fn process_query(&self, route: Route, qr: QueryData) -> Result<ReplyType, Error> {
+    fn process_query(&self, route: Route, qr: QueryData, signer: Arc<Signer>) -> Result<ReplyType, Error> {
         match route {
             Route::Log => {
                 Ok(ReplyType::Kel(self.storage.get_kel(&qr.data.i)?.ok_or(
@@ -205,7 +194,7 @@ impl Witness {
                     SelfAddressing::Blake3_256,
                     SerializationFormats::JSON,
                 )?;
-                let signature = self.signer.sign(&rpy.serialize()?)?;
+                let signature = signer.sign(&rpy.serialize()?)?;
                 let rpy = SignedReply::new_nontrans(
                     rpy,
                     self.prefix.clone(),
@@ -228,8 +217,8 @@ pub fn test_query() -> Result<(), Error> {
     use tempfile::Builder;
 
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
-    let witness = Witness::new(root.path())?;
-
+    let signer_arc = Arc::new(Signer::new());
+    let witness = Witness::new(root.path(), signer_arc.clone().public_key())?;
     // Process inception event and its receipts. To accept inception event it must be fully witnessed.
     let rcps = r#"{"v":"KERI10JSON000091_","t":"rct","d":"E6OK2wFYp6x0Jx48xX0GCTwAzJUTWtYEvJSykVhtAnaM","i":"E6OK2wFYp6x0Jx48xX0GCTwAzJUTWtYEvJSykVhtAnaM","s":"0"}-BADAAI_M_762PE-i9uhbB_Ynxsx4mfvCA73OHM96U8SQtsgV0co4kGuSw0tMtiQWBYwA9bvDZ7g-ZfhFLtXJPorbtDwABDsQTBpHVpNI-orK8606K5oUSr5sv5LYvyuEHW3dymwVIDRYWUVxMITMp_st7Ee4PjD9nIQCzAeXHDcZ6c14jBQACPySjFKPkqeu5eiB0YfcYLQpvo0vnu6WEQ4XJnzNWWrV9JuOQ2AfWVeIc0D7fuK4ofXMRhTxAXm-btkqTrm0tBA"#;
 
@@ -249,7 +238,7 @@ pub fn test_query() -> Result<(), Error> {
     let deserialized_qy = Message::try_from(parsed).unwrap();
 
     if let Message::Query(qry) = deserialized_qy {
-        let res = witness.process_signed_query(qry)?;
+        let res = witness.process_signed_query(qry, signer_arc)?;
         assert!(matches!(res, ReplyType::Rep(_)));
     } else {
         assert!(false)
@@ -264,6 +253,9 @@ fn test_witness_rotation() -> Result<(), Error> {
     use crate::keri::Keri;
     use std::sync::Mutex;
     use tempfile::Builder;
+
+    let signer_arc = Arc::new(Signer::new());
+    let signer_arc2 = Arc::new(Signer::new());
 
     let mut controller = {
         // Create test db and event processor.
@@ -283,13 +275,13 @@ fn test_witness_rotation() -> Result<(), Error> {
     let first_witness = {
         let root_witness = Builder::new().prefix("test-db1").tempdir().unwrap();
         std::fs::create_dir_all(root_witness.path()).unwrap();
-        Witness::new(root_witness.path())?
+        Witness::new(root_witness.path(), signer_arc.clone().public_key())?
     };
 
     let second_witness = {
         let root_witness = Builder::new().prefix("test-db1").tempdir().unwrap();
         std::fs::create_dir_all(root_witness.path()).unwrap();
-        Witness::new(root_witness.path())?
+        Witness::new(root_witness.path(), signer_arc2.clone().public_key())?
     };
 
     // Get inception event.
@@ -308,7 +300,7 @@ fn test_witness_rotation() -> Result<(), Error> {
         .map(|w| {
             w.process(&vec![Message::Event(inception_event.clone())])
                 .unwrap();
-            w.respond().unwrap().clone()
+            w.respond(signer_arc.clone()).unwrap().clone()
         })
         .flatten()
         .collect::<Vec<_>>();
@@ -386,7 +378,7 @@ fn test_witness_rotation() -> Result<(), Error> {
     // Rotation not yet accepted by controller, missing receipts
     assert_eq!(controller.get_state()?.unwrap().sn, 0);
     first_witness.process(&[Message::Event(rotation_event?)])?;
-    let first_receipt = first_witness.respond()?;
+    let first_receipt = first_witness.respond(signer_arc)?;
     // Receipt accepted by witness, because his the only designated witness
     assert_eq!(
         first_witness
