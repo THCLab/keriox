@@ -170,7 +170,7 @@ fn test_qry_rpy() -> Result<(), Error> {
             query::{QueryArgs, QueryEvent, SignedQuery},
             ReplyType, Route,
         },
-        signer::KeyManager,
+        signer::{KeyManager, Signer},
     };
 
     // Create test db and event processor.
@@ -180,7 +180,9 @@ fn test_qry_rpy() -> Result<(), Error> {
     let bob_db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
 
     let witness_root = Builder::new().prefix("test-db").tempdir().unwrap();
-    let witness = Witness::new(witness_root.path())?;
+    let signer = Signer::new();
+    let signer_arc = Arc::new(signer);
+    let witness = Witness::new(witness_root.path(), signer_arc.clone().public_key())?;
 
     let alice_key_manager = Arc::new(Mutex::new({
         use crate::signer::CryptoBox;
@@ -237,7 +239,7 @@ fn test_qry_rpy() -> Result<(), Error> {
     let s = SignedQuery::new(qry, bob_pref.to_owned(), vec![signature]);
 
     // ask witness about alice's key state notice
-    let rep = witness.process_signed_query(s)?;
+    let rep = witness.process_signed_query(s, signer_arc)?;
 
     match rep {
         ReplyType::Rep(rep) => {
@@ -259,15 +261,17 @@ pub fn test_key_state_notice() -> Result<(), Error> {
         keri::witness::Witness,
         processor::{notification::Notification, EventProcessor},
         query::QueryError,
-        signer::CryptoBox,
+        signer::{CryptoBox, Signer},
     };
     use tempfile::Builder;
 
+    let signer = Signer::new();
+    let signer_arc = Arc::new(signer);
     let witness = {
         let witness_root = Builder::new().prefix("test-db").tempdir().unwrap();
         let path = witness_root.path();
         std::fs::create_dir_all(path).unwrap();
-        Witness::new(path)?
+        Witness::new(path, signer_arc.clone().public_key())?
     };
 
     // Init bob.
@@ -299,7 +303,7 @@ pub fn test_key_state_notice() -> Result<(), Error> {
     witness.process(&[Message::Event(bob_icp.clone())])?;
 
     // construct bobs ksn msg in rpy made by witness
-    let signed_rpy = witness.get_ksn_for_prefix(&bob_pref)?;
+    let signed_rpy = witness.get_ksn_for_prefix(&bob_pref, signer_arc.clone())?;
 
     // Process reply message before having any bob's events in db.
     let res = alice_processor.process(Message::KeyStateNotice(signed_rpy.clone()));
@@ -316,14 +320,14 @@ pub fn test_key_state_notice() -> Result<(), Error> {
     assert!(matches!(res, Err(Error::QueryError(QueryError::StaleKsn))));
 
     // now create new reply event by witness and process it by alice.
-    let new_reply = witness.get_ksn_for_prefix(&bob_pref)?;
+    let new_reply = witness.get_ksn_for_prefix(&bob_pref, signer_arc.clone())?;
     let res = alice_processor.process(Message::KeyStateNotice(new_reply.clone()));
     assert!(res.is_ok());
 
     let new_bob_rot = bob.rotate(None, None, None)?;
     witness.process(&[Message::Event(new_bob_rot.clone())])?;
     // Create transferable reply by bob and process it by alice.
-    let trans_rpy = witness.get_ksn_for_prefix(&bob_pref)?;
+    let trans_rpy = witness.get_ksn_for_prefix(&bob_pref, signer_arc)?;
     let res = alice_processor.process(Message::KeyStateNotice(trans_rpy.clone()));
     assert!(matches!(res, Ok(Notification::KsnOutOfOrder(_))));
 
