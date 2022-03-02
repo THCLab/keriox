@@ -14,6 +14,10 @@ pub struct Oobi {
 }
 
 impl Oobi {
+    pub fn new(eid: IdentifierPrefix, scheme: Scheme, url: String) -> Self {
+        Self { eid, scheme, url }
+    }
+
     pub fn get_eid(&self) -> IdentifierPrefix {
         self.eid.clone()
     }
@@ -210,3 +214,4 @@ async fn test_obi_save() -> Result<(), Error> {
 
     Ok(())
 }
+
