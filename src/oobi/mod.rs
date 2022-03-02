@@ -2,7 +2,7 @@ use std::{collections::{HashMap, VecDeque}, convert::TryFrom, sync::Mutex};
 
 use serde::{Deserialize, Serialize};
 
-use crate::{prefix::IdentifierPrefix, event_parsing::message::{signed_event_stream}, query::{reply::{SignedReply, bada_logic}, Route}, event_message::signed_event_message::Message, processor::{validator::EventValidator, notification::{Notifier, Notification, NotificationBus}}};
+use crate::{prefix::IdentifierPrefix, event_parsing::message::{signed_event_stream}, query::{reply::{SignedReply, bada_logic, ReplyEvent}, Route}, event_message::signed_event_message::Message, processor::{validator::{EventValidator, self}, notification::{Notifier, Notification, NotificationBus}}, keri::Keri, signer::CryptoBox, event::EventMessage};
 
 use self::error::Error;
 
@@ -129,6 +129,10 @@ impl OobiManager {
             });
         }
         Ok(())
+    }
+
+    pub fn get_oobi(&self, id: &IdentifierPrefix) -> Option<EventMessage<ReplyEvent<Oobi>>> {
+        self.store.get(id).map(|e| e.reply.clone() )
     }
 }
 mod error {
