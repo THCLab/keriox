@@ -13,6 +13,20 @@ pub struct Oobi {
     url: String,
 }
 
+impl Oobi {
+    pub fn get_eid(&self) -> IdentifierPrefix {
+        self.eid.clone()
+    }
+
+    pub fn get_scheme(&self) -> Scheme {
+        self.scheme.clone()
+    }
+
+    pub fn get_url(&self) -> String {
+        self.url.clone()
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum Scheme {
