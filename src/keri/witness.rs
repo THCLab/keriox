@@ -61,6 +61,10 @@ impl Witness {
         })
     }
 
+    pub fn get_db_ref(&self) -> Arc<SledEventDatabase> {
+        self.storage.db.clone()
+    }
+
     pub fn respond(&self, signer: Arc<Signer>) -> Result<Vec<Message>, Error> {
         let mut response = Vec::new();
         while let Some(event) = self.responder.get_data_to_respond() {
