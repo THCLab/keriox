@@ -48,7 +48,7 @@ impl Witness {
                 default_escrow_bus(witness_db.clone()),
             )
         };
-        let prefix = Basic::Ed25519.derive(pk);
+        let prefix = Basic::Ed25519NT.derive(pk);
         let responder = Arc::new(Responder::default());
         publisher.register_observer(responder.clone(), vec![JustNotification::KeyEventAdded]);
 
