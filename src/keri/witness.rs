@@ -35,7 +35,7 @@ pub struct Witness {
     processor: WitnessProcessor,
     storage: EventStorage,
     publisher: NotificationBus,
-    responder: Arc<Responder>,
+    responder: Arc<Responder<EventMessage<KeyEvent>>>,
 }
 
 impl Witness {
@@ -49,7 +49,7 @@ impl Witness {
             )
         };
         let prefix = Basic::Ed25519NT.derive(pk);
-        let responder = Arc::new(Responder::default());
+        let responder = Arc::new(Responder::new());
         publisher.register_observer(responder.clone(), vec![JustNotification::KeyEventAdded]);
 
         Ok(Self {
