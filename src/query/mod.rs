@@ -8,13 +8,13 @@ use crate::{
 use chrono::{DateTime, FixedOffset, SecondsFormat, Utc};
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 
-use self::{key_state_notice::KeyStateNotice, reply::SignedReply};
+use self::{key_state_notice::KeyStateNotice, reply_event::SignedReply};
 
 use thiserror::Error;
 
 pub mod key_state_notice;
-pub mod query;
-pub mod reply;
+pub mod query_event;
+pub mod reply_event;
 
 pub type TimeStamp = DateTime<FixedOffset>;
 
@@ -90,9 +90,9 @@ impl<'de> Deserialize<'de> for Route {
         D: Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
-        if s.starts_with("/ksn/") {
-            let id: &IdentifierPrefix = &s[5..].parse().map_err(de::Error::custom)?;
-            Ok(Route::ReplyKsn(id.clone()))
+        if let Some(id_prefix) = s.strip_prefix("/ksn/") {
+            let id: IdentifierPrefix = id_prefix.parse().map_err(de::Error::custom)?;
+            Ok(Route::ReplyKsn(id))
         } else {
             match &s[..] {
                 "ksn" => Ok(Route::Ksn),

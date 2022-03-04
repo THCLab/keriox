@@ -11,17 +11,15 @@ use crate::{
     event::EventMessage,
     event_message::signed_event_message::Message,
     event_parsing::message::signed_event_stream,
-    keri::Keri,
     prefix::{IdentifierPrefix, Prefix},
     processor::{
         notification::{Notification, NotificationBus, Notifier},
-        validator::{self, EventValidator},
+        validator::EventValidator,
     },
     query::{
-        reply::{bada_logic, ReplyEvent, SignedReply},
+        reply_event::{bada_logic, ReplyEvent, SignedReply},
         Route,
     },
-    signer::CryptoBox,
 };
 
 use self::error::Error;
@@ -56,36 +54,37 @@ impl TryFrom<url::Url> for Oobi {
 
     fn try_from(value: url::Url) -> Result<Self, Self::Error> {
         let scheme = Scheme::try_from(value.scheme())
-            .map_err(|e| Error::OobiError("Wrong scheme".into()))?;
+            .map_err(|e| Error::OobiError(format!("Wrong scheme: {}", e)))?;
         let url = format!(
             "{}://{}:{:?}",
             value.scheme(),
             value
                 .host_str()
-                .ok_or(Error::OobiError("Wrong host".into()))?,
-            value.port().ok_or(Error::OobiError("Wrong port".into()))?
+                .ok_or_else(|| Error::OobiError("Wrong host".into()))?,
+            value
+                .port()
+                .ok_or_else(|| Error::OobiError("Wrong port".into()))?
         );
         let mut path_iterator = value
             .path_segments()
-            .ok_or(Error::OobiError("No identifier prefix".into()))?;
+            .ok_or_else(|| Error::OobiError("No identifier prefix".into()))?;
         path_iterator.next();
         let eid = path_iterator
             .next()
-            .ok_or(Error::OobiError("No identifier prefix".into()))?
+            .ok_or_else(|| Error::OobiError("No identifier prefix".into()))?
             .parse::<IdentifierPrefix>()
-            .map_err(|e| Error::OobiError("Wrong identifier prefix".into()))?;
+            .map_err(|e| Error::OobiError(format!("Wrong identifier prefix: {}", e)))?;
 
         Ok(Self { eid, scheme, url })
     }
 }
 
+#[allow(clippy::from_over_into)]
 impl Into<url::Url> for Oobi {
     fn into(self) -> url::Url {
         url::Url::parse(&format!("{}/oobi/{}", self.url, self.eid.to_str())).unwrap()
     }
 }
-
-
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, EnumString)]
 #[serde(rename_all = "lowercase")]
@@ -127,7 +126,9 @@ impl Notifier for OobiManager {
     ) -> Result<(), crate::error::Error> {
         if let Notification::GotOobi(oobi_rpy) = notification {
             let url = oobi_rpy.event.content.data.data.url.clone();
-            self.queue.append(&url);
+            self.queue
+                .append(&url)
+                .map_err(|_e| crate::error::Error::SemanticError("Can't save oobi".into()))?;
 
             Ok(())
         } else {
@@ -154,7 +155,7 @@ impl OobiManager {
         let oobi_id = rpy.reply.event.content.data.data.eid.clone();
         if let Route::ReplyOobi = route {
             if rpy.signature.get_signer() != oobi_id {
-                return Err(Error::OobiError("Wrong reply message signer".into()).into());
+                return Err(Error::OobiError("Wrong reply message signer".into()));
             };
             // check signature
             self.validator
@@ -164,12 +165,8 @@ impl OobiManager {
             rpy.reply.check_digest().unwrap();
 
             // check bada logic
-            match self.store.get(&oobi_id) {
-                Some(old_rpy) => {
-                    bada_logic(&rpy, &old_rpy).unwrap();
-                }
-                // no previous rpy event to compare
-                None => (),
+            if let Some(old_rpy) = self.store.get(&oobi_id) {
+                bada_logic(rpy, old_rpy).unwrap();
             }
         };
 
@@ -189,7 +186,7 @@ impl OobiManager {
                 .text()
                 .await
                 .unwrap();
-            let events = signed_event_stream(resp.as_bytes())
+            let _events = signed_event_stream(resp.as_bytes())
                 .unwrap()
                 .1
                 .into_iter()

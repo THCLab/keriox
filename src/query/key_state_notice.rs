@@ -62,14 +62,12 @@ impl KeyStateNotice {
     pub fn new_ksn(state: IdentifierState, serialization: SerializationFormats) -> Self {
         let dt: DateTime<FixedOffset> = DateTime::from(Utc::now());
 
-        let ksn = KeyStateNotice {
+        KeyStateNotice {
             serialization_info: SerializationInfo::new(serialization, 0),
             timestamp: dt,
             state,
             first_seen_sn: 0,
             config: vec![],
-        };
-
-        ksn.clone()
+        }
     }
 }

@@ -18,7 +18,7 @@ use std::path::Path;
 use tables::{SledEventTree, SledEventTreeVec};
 
 #[cfg(feature = "query")]
-use crate::query::reply::SignedReply;
+use crate::query::reply_event::SignedReply;
 
 pub struct SledEventDatabase {
     // "iids" tree

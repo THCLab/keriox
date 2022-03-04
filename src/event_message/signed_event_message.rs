@@ -20,7 +20,7 @@ use crate::{
 };
 
 #[cfg(feature = "query")]
-use crate::query::{query::SignedQuery, reply::SignedReply};
+use crate::query::{query_event::SignedQuery, reply_event::SignedReply};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Message {

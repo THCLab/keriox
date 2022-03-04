@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 #[cfg(feature = "query")]
-use crate::query::reply::SignedReply;
+use crate::query::reply_event::SignedReply;
 use crate::{
     error::Error,
     event::EventMessage,
@@ -9,7 +9,7 @@ use crate::{
         SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
     },
     oobi::Oobi,
-    query::{key_state_notice::KeyStateNotice, reply::ReplyEvent},
+    query::{key_state_notice::KeyStateNotice, reply_event::ReplyEvent},
 };
 
 pub struct NotificationBus {

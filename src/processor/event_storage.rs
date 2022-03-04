@@ -20,7 +20,7 @@ use crate::{
 
 use super::compute_state;
 #[cfg(feature = "query")]
-use crate::query::{key_state_notice::KeyStateNotice, reply::SignedReply};
+use crate::query::{key_state_notice::KeyStateNotice, reply_event::SignedReply};
 
 pub struct EventStorage {
     pub db: Arc<SledEventDatabase>,
