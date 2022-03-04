@@ -1,8 +1,4 @@
-use std::{
-    collections::{HashMap, VecDeque},
-    convert::TryFrom,
-    sync::Mutex,
-};
+use std::{collections::HashMap, convert::TryFrom};
 
 use serde::{Deserialize, Serialize};
 use strum::EnumString;
@@ -11,6 +7,7 @@ use crate::{
     event::EventMessage,
     event_message::signed_event_message::Message,
     event_parsing::message::signed_event_stream,
+    keri::Responder,
     prefix::{IdentifierPrefix, Prefix},
     processor::{
         notification::{Notification, NotificationBus, Notifier},
@@ -94,28 +91,10 @@ pub enum Scheme {
     Tcp,
 }
 
-// Helper struct for appending kel events that needs receipt generation.
-// Receipts should be then signed and send somewhere.
-#[derive(Default)]
-pub struct Responder {
-    needs_response: Mutex<VecDeque<String>>,
-}
-
-impl Responder {
-    pub fn get_data_to_respond(&self) -> Option<String> {
-        self.needs_response.lock().unwrap().pop_front()
-    }
-
-    pub fn append(&self, oobi: &str) -> Result<(), Error> {
-        self.needs_response.lock().unwrap().push_back(oobi.into());
-        Ok(())
-    }
-}
-
 pub struct OobiManager {
     validator: EventValidator,
     store: HashMap<IdentifierPrefix, SignedReply<Oobi>>,
-    queue: Responder,
+    queue: Responder<String>,
 }
 
 impl Notifier for OobiManager {
@@ -127,7 +106,7 @@ impl Notifier for OobiManager {
         if let Notification::GotOobi(oobi_rpy) = notification {
             let url = oobi_rpy.event.content.data.data.url.clone();
             self.queue
-                .append(&url)
+                .append(url)
                 .map_err(|_e| crate::error::Error::SemanticError("Can't save oobi".into()))?;
 
             Ok(())
@@ -174,7 +153,9 @@ impl OobiManager {
     }
 
     pub fn process_oobi(&self, oobi_str: &str) -> Result<(), Error> {
-        self.queue.append(oobi_str)
+        self.queue
+            .append(oobi_str.to_string())
+            .map_err(|e| Error::OobiError(e.to_string()))
     }
 
     /// Check oobi and saves
