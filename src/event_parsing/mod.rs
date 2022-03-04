@@ -243,7 +243,6 @@ impl From<SignedReply<KeyStateNotice>> for SignedEventData {
     }
 }
 
-
 #[cfg(feature = "oobi")]
 impl From<SignedReply<Oobi>> for SignedEventData {
     fn from(ev: SignedReply<Oobi>) -> Self {
@@ -352,9 +351,7 @@ fn signed_oobi_reply(
                 .last()
                 .ok_or_else(|| Error::SemanticError("More than one seal".into()))?
                 .to_owned();
-            Ok(Message::SignedOobi(SignedReply::new_trans(
-                rpy, seal, sigs,
-            )))
+            Ok(Message::SignedOobi(SignedReply::new_trans(rpy, seal, sigs)))
         }
         Attachment::Frame(atts) => signed_oobi_reply(rpy, atts),
         _ => {

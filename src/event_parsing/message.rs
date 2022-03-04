@@ -86,7 +86,7 @@ pub fn reply_ksn_message<'a>(s: &'a [u8]) -> nom::IResult<&[u8], EventType> {
 
 #[cfg(feature = "oobi")]
 pub fn reply_oobi_message<'a>(s: &'a [u8]) -> nom::IResult<&[u8], EventType> {
-    use crate::{query::reply::ReplyData, oobi::Oobi};
+    use crate::{oobi::Oobi, query::reply::ReplyData};
 
     envelope::<ReplyData<Oobi>>(s).map(|d| (d.0, EventType::RpyOobi(d.1)))
 }

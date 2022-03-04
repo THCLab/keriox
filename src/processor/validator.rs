@@ -290,7 +290,7 @@ impl EventValidator {
                 Some(old_rpy) => {
                     bada_logic(&rpy, &old_rpy)?;
                 }
-                 // no previous rpy event to compare
+                // no previous rpy event to compare
                 None => (),
             };
 

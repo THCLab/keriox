@@ -35,7 +35,6 @@ pub enum Message {
     Query(SignedQuery),
     #[cfg(feature = "oobi")]
     SignedOobi(SignedReply<Oobi>),
-    
 }
 
 impl From<Message> for SignedEventData {
