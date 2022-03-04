@@ -1,4 +1,4 @@
-use std::{collections::HashMap, convert::TryFrom};
+use std::{collections::HashMap, convert::TryFrom, sync::Mutex};
 
 use serde::{Deserialize, Serialize};
 use strum::EnumString;
@@ -9,10 +9,7 @@ use crate::{
     event_parsing::message::signed_event_stream,
     keri::Responder,
     prefix::{IdentifierPrefix, Prefix},
-    processor::{
-        notification::{Notification, NotificationBus, Notifier},
-        validator::EventValidator,
-    },
+    processor::validator::EventValidator,
     query::{
         reply_event::{bada_logic, ReplyEvent, SignedReply},
         Route,
@@ -93,36 +90,15 @@ pub enum Scheme {
 
 pub struct OobiManager {
     validator: EventValidator,
-    store: HashMap<IdentifierPrefix, SignedReply<Oobi>>,
+    store: Mutex<HashMap<IdentifierPrefix, SignedReply<Oobi>>>,
     queue: Responder<String>,
-}
-
-impl Notifier for OobiManager {
-    fn notify(
-        &self,
-        notification: &Notification,
-        _bus: &NotificationBus,
-    ) -> Result<(), crate::error::Error> {
-        if let Notification::GotOobi(oobi_rpy) = notification {
-            let url = oobi_rpy.event.content.data.data.url.clone();
-            self.queue
-                .append(url)
-                .map_err(|_e| crate::error::Error::SemanticError("Can't save oobi".into()))?;
-
-            Ok(())
-        } else {
-            Err(crate::error::Error::SemanticError(
-                "Wrong notification type".into(),
-            ))
-        }
-    }
 }
 
 impl OobiManager {
     pub fn new(validator: EventValidator) -> Self {
         Self {
             validator,
-            store: HashMap::new(),
+            store: Mutex::new(HashMap::new()),
             queue: Responder::default(),
         }
     }
@@ -144,7 +120,7 @@ impl OobiManager {
             rpy.reply.check_digest().unwrap();
 
             // check bada logic
-            if let Some(old_rpy) = self.store.get(&oobi_id) {
+            if let Some(old_rpy) = self.store.lock().unwrap().get(&oobi_id) {
                 bada_logic(rpy, old_rpy).unwrap();
             }
         };
@@ -159,7 +135,7 @@ impl OobiManager {
     }
 
     /// Check oobi and saves
-    pub async fn load(&mut self) -> Result<(), Error> {
+    pub async fn load(&self) -> Result<(), Error> {
         while let Some(oobi) = self.queue.get_data_to_respond() {
             let resp = reqwest::get(oobi.clone())
                 .await
@@ -178,7 +154,7 @@ impl OobiManager {
                             let pref = oobi_rpy.reply.event.content.data.data.eid.clone();
                             match self.check_oobi_reply(&oobi_rpy) {
                                 Ok(_) => {
-                                    self.store.insert(pref, oobi_rpy);
+                                    self.store.lock().unwrap().insert(pref, oobi_rpy);
                                     Ok(())
                                 } // add to db,
                                 Err(_) => Err(Error::OobiError("Obi validation error".into())),
@@ -193,7 +169,7 @@ impl OobiManager {
     }
 
     pub fn get_oobi(&self, id: &IdentifierPrefix) -> Option<EventMessage<ReplyEvent<Oobi>>> {
-        self.store.get(id).map(|e| e.reply.clone())
+        self.store.lock().unwrap().get(id).map(|e| e.reply.clone())
     }
 }
 mod error {
