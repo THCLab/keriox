@@ -96,7 +96,7 @@ impl Witness {
     fn respond_one(
         &self,
         event_message: EventMessage<KeyEvent>,
-        signer: Arc<Signer>
+        signer: Arc<Signer>,
     ) -> Result<SignedNontransferableReceipt, Error> {
         // Create witness receipt and add it to db
         let ser = event_message.serialize()?;
@@ -136,7 +136,7 @@ impl Witness {
     pub fn get_ksn_for_prefix(
         &self,
         prefix: &IdentifierPrefix,
-        signer: Arc<Signer>
+        signer: Arc<Signer>,
     ) -> Result<SignedReply<KeyStateNotice>, Error> {
         let state = self
             .get_state_for_prefix(prefix)?
@@ -157,7 +157,11 @@ impl Witness {
         ))
     }
 
-    pub fn process_signed_query(&self, qr: SignedQuery, signer: Arc<Signer>) -> Result<ReplyType, Error> {
+    pub fn process_signed_query(
+        &self,
+        qr: SignedQuery,
+        signer: Arc<Signer>,
+    ) -> Result<ReplyType, Error> {
         let signatures = qr.signatures;
         // check signatures
         let kc = self
@@ -170,14 +174,19 @@ impl Witness {
             // TODO check timestamps
             // unpack and check what's inside
             let route = qr.envelope.event.get_route();
-            self.process_query(route, qr.envelope.event.get_query_data(),signer)
+            self.process_query(route, qr.envelope.event.get_query_data(), signer)
         } else {
             Err(Error::SignatureVerificationError)
         }
     }
 
     #[cfg(feature = "query")]
-    fn process_query(&self, route: Route, qr: QueryData, signer: Arc<Signer>) -> Result<ReplyType, Error> {
+    fn process_query(
+        &self,
+        route: Route,
+        qr: QueryData,
+        signer: Arc<Signer>,
+    ) -> Result<ReplyType, Error> {
         match route {
             Route::Log => {
                 Ok(ReplyType::Kel(self.storage.get_kel(&qr.data.i)?.ok_or(

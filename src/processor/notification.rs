@@ -4,10 +4,12 @@ use std::{collections::HashMap, sync::Arc};
 use crate::query::reply::SignedReply;
 use crate::{
     error::Error,
+    event::EventMessage,
     event_message::signed_event_message::{
         SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
     },
-    query::{key_state_notice::KeyStateNotice, reply::ReplyEvent}, oobi::Oobi, event::EventMessage,
+    oobi::Oobi,
+    query::{key_state_notice::KeyStateNotice, reply::ReplyEvent},
 };
 
 pub struct NotificationBus {
@@ -70,7 +72,7 @@ pub enum Notification {
     ReplyUpdated,
     #[cfg(feature = "oobi")]
     GotOobi(EventMessage<ReplyEvent<Oobi>>),
-    GotSignedOobi(SignedReply<Oobi>)
+    GotSignedOobi(SignedReply<Oobi>),
 }
 
 #[derive(PartialEq, Hash, Eq)]
