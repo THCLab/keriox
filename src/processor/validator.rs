@@ -1,7 +1,7 @@
 #[cfg(feature = "query")]
 use crate::prefix::IdentifierPrefix;
 #[cfg(feature = "query")]
-use crate::query::{key_state_notice::KeyStateNotice, reply::SignedReply, QueryError};
+use crate::query::{key_state_notice::KeyStateNotice, reply_event::SignedReply, QueryError};
 #[cfg(feature = "query")]
 use chrono::{DateTime, FixedOffset};
 use std::sync::Arc;
@@ -271,7 +271,7 @@ impl EventValidator {
         &self,
         rpy: &SignedReply<KeyStateNotice>,
     ) -> Result<Option<IdentifierState>, Error> {
-        use crate::query::{reply::bada_logic, Route};
+        use crate::query::{reply_event::bada_logic, Route};
 
         let route = rpy.reply.event.get_route();
         // check if signature was made by ksn creator
@@ -283,15 +283,12 @@ impl EventValidator {
             rpy.reply.check_digest()?;
             let reply_prefix = rpy.reply.event.get_prefix();
 
-            match self
+            // check if there's previous reply to compare
+            if let Some(old_rpy) = self
                 .event_storage
                 .get_last_ksn_reply(&reply_prefix, &rpy.signature.get_signer())
             {
-                Some(old_rpy) => {
-                    bada_logic(&rpy, &old_rpy)?;
-                }
-                // no previous rpy event to compare
-                None => (),
+                bada_logic(rpy, &old_rpy)?;
             };
 
             // now unpack ksn and check its details
@@ -338,6 +335,8 @@ impl EventValidator {
         ksn: &KeyStateNotice,
         aid: &IdentifierPrefix,
     ) -> Result<Option<IdentifierState>, Error> {
+        use std::cmp::Ordering;
+
         // check ksn digest
         let ksn_sn = ksn.state.sn;
         let ksn_pre = ksn.state.prefix.clone();
@@ -365,12 +364,11 @@ impl EventValidator {
             .event_storage
             .get_state(&ksn_pre)?
             .ok_or::<Error>(Error::EventOutOfOrderError)?;
-        if state.sn < ksn_sn {
-            Err(Error::EventOutOfOrderError)
-        } else if state.sn == ksn_sn {
-            Ok(Some(state))
-        } else {
-            Err(QueryError::StaleKsn.into())
+
+        match state.sn.cmp(&ksn_sn) {
+            Ordering::Less => Err(Error::EventOutOfOrderError),
+            Ordering::Equal => Ok(Some(state)),
+            Ordering::Greater => Err(QueryError::StaleKsn.into()),
         }
     }
 }

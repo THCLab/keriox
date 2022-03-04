@@ -16,11 +16,11 @@ use crate::prefix::{
 };
 
 use crate::query::key_state_notice::KeyStateNotice;
-use crate::query::reply::ReplyEvent;
+use crate::query::reply_event::ReplyEvent;
 #[cfg(feature = "query")]
 use crate::query::{
-    query::QueryEvent,
-    reply::{ReplyKsnEvent, SignedReply},
+    query_event::QueryEvent,
+    reply_event::{ReplyKsnEvent, SignedReply},
 };
 use crate::{error::Error, event::event_data::EventData};
 
@@ -143,8 +143,8 @@ pub enum EventType {
     #[cfg(feature = "query")]
     Qry(EventMessage<QueryEvent>),
     #[cfg(feature = "query")]
-    RpyKsn(EventMessage<ReplyKsnEvent>),
-    #[cfg(feature = "query")]
+    RpyKsn(EventMessage<ReplyEvent<KeyStateNotice>>),
+    #[cfg(feature = "oobi")]
     RpyOobi(EventMessage<ReplyEvent<Oobi>>),
 }
 
@@ -157,6 +157,7 @@ impl EventType {
             EventType::Qry(qry) => qry.serialize(),
             #[cfg(feature = "query")]
             EventType::RpyKsn(rpy) => rpy.serialize(),
+            #[cfg(feature = "oobi")]
             EventType::RpyOobi(oobi) => oobi.serialize(),
         }
     }
@@ -366,7 +367,7 @@ fn signed_query(
     qry: EventMessage<QueryEvent>,
     mut attachments: Vec<Attachment>,
 ) -> Result<Message, Error> {
-    use crate::query::query::SignedQuery;
+    use crate::query::query_event::SignedQuery;
 
     match attachments
         .pop()

@@ -33,7 +33,7 @@ impl<D: Serialize + Clone> ReplyEvent<D> {
         serialization: SerializationFormats,
     ) -> Result<EventMessage<ReplyEvent<D>>, Error> {
         let rpy_data = ReplyData { data: ksn };
-        let env = Envelope::new(route.clone(), rpy_data);
+        let env = Envelope::new(route, rpy_data);
         env.to_message(serialization, &self_addressing)
     }
 }
@@ -83,6 +83,8 @@ pub fn bada_logic<D: Serialize + Clone>(
     new_rpy: &SignedReply<D>,
     old_rpy: &SignedReply<D>,
 ) -> Result<(), Error> {
+    use std::cmp::Ordering;
+
     use crate::query::QueryError;
 
     // helper function for reply timestamps checking
@@ -110,7 +112,7 @@ pub fn bada_logic<D: Serialize + Clone>(
             //     greater than old
 
             // check sns
-            let new_sn = seal.sn.clone();
+            let new_sn = seal.sn;
             let old_sn: u64 = if let Signature::Transferable(ref seal, _) = old_rpy.signature {
                 seal.sn
             } else {
@@ -119,12 +121,11 @@ pub fn bada_logic<D: Serialize + Clone>(
                 )
                 .into());
             };
-            if old_sn < new_sn {
-                Ok(())
-            } else if old_sn == new_sn {
-                check_dts(&new_rpy.reply.event, &old_rpy.reply.event)
-            } else {
-                Err(QueryError::StaleRpy.into())
+
+            match old_sn.cmp(&new_sn) {
+                Ordering::Less => Ok(()),
+                Ordering::Equal => check_dts(&new_rpy.reply.event, &old_rpy.reply.event),
+                Ordering::Greater => Err(QueryError::StaleRpy.into()),
             }
         }
         Signature::NonTransferable(_bp, _sig) => {

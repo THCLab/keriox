@@ -10,10 +10,10 @@ use crate::processor::escrow::default_escrow_bus;
 use crate::processor::event_storage::EventStorage;
 use crate::processor::notification::{JustNotification, NotificationBus};
 use crate::processor::witness_processor::WitnessProcessor;
-use crate::query::reply::{ReplyKsnEvent, SignedReply};
+use crate::query::reply_event::{ReplyKsnEvent, SignedReply};
 use crate::query::{
     key_state_notice::KeyStateNotice,
-    query::{QueryData, SignedQuery},
+    query_event::{QueryData, SignedQuery},
     ReplyType, Route,
 };
 
@@ -45,7 +45,7 @@ impl Witness {
             (
                 WitnessProcessor::new(witness_db.clone()),
                 EventStorage::new(witness_db.clone()),
-                default_escrow_bus(witness_db.clone()),
+                default_escrow_bus(witness_db),
             )
         };
         let prefix = Basic::Ed25519NT.derive(pk);
@@ -68,7 +68,7 @@ impl Witness {
     pub fn respond(&self, signer: Arc<Signer>) -> Result<Vec<Message>, Error> {
         let mut response = Vec::new();
         while let Some(event) = self.responder.get_data_to_respond() {
-            let non_trans_receipt = self.respond_one(event, signer.clone())?.into();
+            let non_trans_receipt = self.respond_one(event, signer.clone())?;
             response.push(Message::NontransferableRct(non_trans_receipt));
         }
         Ok(response)
@@ -76,7 +76,7 @@ impl Witness {
 
     pub fn process(&self, events: &[Message]) -> Result<Option<Vec<Error>>, Error> {
         let (_oks, errs): (Vec<_>, Vec<_>) = events
-            .into_iter()
+            .iter()
             .map(|message| {
                 self.processor
                     .process(message.clone())
@@ -140,7 +140,7 @@ impl Witness {
     ) -> Result<SignedReply<KeyStateNotice>, Error> {
         let state = self
             .get_state_for_prefix(prefix)?
-            .ok_or(Error::SemanticError("No state in db".into()))?;
+            .ok_or_else(|| Error::SemanticError("No state in db".into()))?;
         let ksn = KeyStateNotice::new_ksn(state, SerializationFormats::JSON);
         let rpy = ReplyKsnEvent::new_reply(
             ksn,
@@ -167,7 +167,7 @@ impl Witness {
         let kc = self
             .storage
             .get_state(&qr.signer)?
-            .ok_or(Error::SemanticError("No signer identifier in db".into()))?
+            .ok_or_else(|| Error::SemanticError("No signer identifier in db".into()))?
             .current;
 
         if kc.verify(&qr.envelope.serialize()?, &signatures)? {
@@ -188,18 +188,18 @@ impl Witness {
         signer: Arc<Signer>,
     ) -> Result<ReplyType, Error> {
         match route {
-            Route::Log => {
-                Ok(ReplyType::Kel(self.storage.get_kel(&qr.data.i)?.ok_or(
-                    Error::SemanticError("No identifier in db".into()),
-                )?))
-            }
+            Route::Log => Ok(ReplyType::Kel(
+                self.storage
+                    .get_kel(&qr.data.i)?
+                    .ok_or_else(|| Error::SemanticError("No identifier in db".into()))?,
+            )),
             Route::Ksn => {
                 let i = qr.data.i;
                 // return reply message with ksn inside
                 let state = self
                     .storage
                     .get_state(&i)?
-                    .ok_or(Error::SemanticError("No id in database".into()))?;
+                    .ok_or_else(|| Error::SemanticError("No id in database".into()))?;
                 let ksn = KeyStateNotice::new_ksn(state, SerializationFormats::JSON);
                 let rpy = ReplyKsnEvent::new_reply(
                     ksn,
