@@ -88,8 +88,7 @@ impl TryFrom<Oobi> for url::Url {
     type Error = Error;
     fn try_from(oobi: Oobi) -> Result<Self, Self::Error> {
         url::Url::parse(&format!(
-            "{}://{}/oobi/{}",
-            oobi.scheme,
+            "{}oobi/{}",
             oobi.url,
             oobi.eid.to_str()
         ))
