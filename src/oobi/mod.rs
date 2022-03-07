@@ -1,7 +1,8 @@
 use std::{collections::HashMap, convert::TryFrom, sync::Mutex};
 
 use serde::{Deserialize, Serialize};
-use strum::EnumString;
+use strum::{Display, EnumString};
+use url::Url;
 
 use crate::{
     event::EventMessage,
@@ -18,15 +19,22 @@ use crate::{
 
 use self::error::Error;
 
+pub type ReplyOobiEvent = EventMessage<ReplyEvent<Oobi>>;
+
+impl ReplyOobiEvent {
+    pub fn get_oobi(&self) -> Oobi {
+        self.event.content.data.data.clone()
+    }
+}
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Oobi {
     eid: IdentifierPrefix,
     scheme: Scheme,
-    url: String,
+    url: Url,
 }
 
 impl Oobi {
-    pub fn new(eid: IdentifierPrefix, scheme: Scheme, url: String) -> Self {
+    pub fn new(eid: IdentifierPrefix, scheme: Scheme, url: Url) -> Self {
         Self { eid, scheme, url }
     }
 
@@ -38,7 +46,7 @@ impl Oobi {
         self.scheme.clone()
     }
 
-    pub fn get_url(&self) -> String {
+    pub fn get_url(&self) -> Url {
         self.url.clone()
     }
 }
@@ -46,22 +54,21 @@ impl Oobi {
 impl TryFrom<url::Url> for Oobi {
     type Error = Error;
 
-    fn try_from(value: url::Url) -> Result<Self, Self::Error> {
-        let scheme = Scheme::try_from(value.scheme())
+    fn try_from(url: url::Url) -> Result<Self, Self::Error> {
+        let scheme = Scheme::try_from(url.scheme())
             .map_err(|e| Error::OobiError(format!("Wrong scheme: {}", e)))?;
-        let url = format!(
+        let url_address = Url::parse(&format!(
             "{}://{}:{:?}",
-            value.scheme(),
-            value
-                .host_str()
+            url.scheme(),
+            url.host_str()
                 .ok_or_else(|| Error::OobiError("Wrong host".into()))?,
-            value
-                .port()
+            url.port()
                 .ok_or_else(|| Error::OobiError("Wrong port".into()))?
-        );
-        let mut path_iterator = value
+        ))?;
+        let mut path_iterator = url
             .path_segments()
             .ok_or_else(|| Error::OobiError("No identifier prefix".into()))?;
+        // skip oobi string
         path_iterator.next();
         let eid = path_iterator
             .next()
@@ -69,18 +76,28 @@ impl TryFrom<url::Url> for Oobi {
             .parse::<IdentifierPrefix>()
             .map_err(|e| Error::OobiError(format!("Wrong identifier prefix: {}", e)))?;
 
-        Ok(Self { eid, scheme, url })
+        Ok(Self {
+            eid,
+            scheme,
+            url: url_address,
+        })
     }
 }
 
-#[allow(clippy::from_over_into)]
-impl Into<url::Url> for Oobi {
-    fn into(self) -> url::Url {
-        url::Url::parse(&format!("{}/oobi/{}", self.url, self.eid.to_str())).unwrap()
+impl TryFrom<Oobi> for url::Url {
+    type Error = Error;
+    fn try_from(oobi: Oobi) -> Result<Self, Self::Error> {
+        url::Url::parse(&format!(
+            "{}://{}/oobi/{}",
+            oobi.scheme,
+            oobi.url,
+            oobi.eid.to_str()
+        ))
+        .map_err(|e| e.into())
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, EnumString)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, EnumString, Display)]
 #[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
 pub enum Scheme {
@@ -179,6 +196,8 @@ mod error {
     pub enum Error {
         #[error("{0}")]
         OobiError(String),
+        #[error("Error while parsing url")]
+        UrlParsingError(#[from] url::ParseError),
     }
 }
 
@@ -191,7 +210,7 @@ pub fn test_oobi_from_url() {
         "BMOaOdnrbEP-MSQE_CaL7BhGXvqvIdoHEMYcOnUAWjOE"
     );
     assert_eq!(oobi.scheme, Scheme::Http);
-    assert_eq!(oobi.url.to_string(), "http://127.0.0.1:3232");
+    assert_eq!(oobi.url.to_string(), "http://127.0.0.1:3232/");
 }
 
 #[test]
