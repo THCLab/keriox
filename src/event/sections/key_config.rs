@@ -18,8 +18,12 @@ pub struct NextKeysData {
 }
 
 impl NextKeysData {
-     pub fn verify_next(&self, next: &KeyConfig) -> bool {
-        let check_keys = self.next_key_hashes.iter().zip(next.public_keys.iter()).all(|(hash, key)| hash.verify_binding(key.to_str().as_bytes()));
+    pub fn verify_next(&self, next: &KeyConfig) -> bool {
+        let check_keys = self
+            .next_key_hashes
+            .iter()
+            .zip(next.public_keys.iter())
+            .all(|(hash, key)| hash.verify_binding(key.to_str().as_bytes()));
         self.threshold == next.threshold && check_keys
     }
 }
@@ -34,7 +38,6 @@ pub struct KeyConfig {
 
     #[serde(flatten)]
     pub next_keys_data: NextKeysData,
-    
 }
 
 impl KeyConfig {
@@ -117,9 +120,14 @@ pub fn nxt_commitment(
     keys: &[BasicPrefix],
     derivation: &SelfAddressing,
 ) -> NextKeysData {
-    let next_key_hashes = keys.iter().map(|bp| derivation.derive(bp.to_str().as_bytes())).collect();
-    NextKeysData { threshold, next_key_hashes }
-
+    let next_key_hashes = keys
+        .iter()
+        .map(|bp| derivation.derive(bp.to_str().as_bytes()))
+        .collect();
+    NextKeysData {
+        threshold,
+        next_key_hashes,
+    }
 }
 
 // mod empty_string_as_none {
