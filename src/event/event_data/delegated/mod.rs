@@ -74,13 +74,13 @@ fn test_delegated_inception_data_derivation() -> Result<(), Error> {
         .unwrap()];
 
     let next_key_hash = nxt_commitment(
-        &SignatureThreshold::Simple(1),
+        SignatureThreshold::Simple(1),
         &next_keys,
         &SelfAddressing::Blake3_256,
     );
     let key_config = KeyConfig::new(
         keys,
-        Some(next_key_hash),
+        next_key_hash,
         Some(SignatureThreshold::Simple(1)),
     );
     let dip_data = DelegatedInceptionEvent {

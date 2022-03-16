@@ -94,7 +94,7 @@ mod tests {
     use super::*;
     use serde_json;
 
-    #[test]
+     #[test]
     fn ser_der() -> Result<(), serde_json::Error> {
         let event_str = "{
   \"i\": \"DXq5YqaL6L48pf0fu7IUhL0JRaU2_RxFP0AL43wYn148\",
@@ -107,7 +107,15 @@ mod tests {
     \"B8tr54sHON1vWVrTkep6H-4HAl6FEQt27fThWoNZsa88\",
     \"BVrTkep6HHA8tr54sHON1Qt27fThWoNZsa88-4vWl6FE\"
   ],
-  \"n\": \"FWoNZsa88VrTkep6HQt27fTh-4HA8tr54sHON1vWl6FE\",
+  \"nt\": \"3\",
+  \"n\" : 
+    [
+      \"ETNZH3ULvYawyZ-i0d8JZU6JR2nmAoAfSVPzhzS6b5CM\", 
+      \"EYAfSVPzhzaU6JR2nmoTNZH3ULvwyZb6b5CMi0d8JZAS\",
+      \"EnmwyZdi0d8JZAoTNZYAfSVPzhzaU6JR2H3ULvS6b5CM\",
+      \"ETNZH3ULvS6bYAfSVPzhzaU6JR2nmwyZfi0d8JZ5s8bk\",                       
+      \"EJR2nmwyZ2i0dzaU6ULvS6b5CM8JZAoTNZH3YAfSVPzh\"
+    ],
   \"bt\": \"2\",
   \"b\":
   [

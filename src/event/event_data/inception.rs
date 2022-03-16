@@ -123,13 +123,13 @@ fn test_inception_data_derivation() -> Result<(), Error> {
     ];
 
     let next_key_hash = nxt_commitment(
-        &SignatureThreshold::Simple(2),
+        SignatureThreshold::Simple(2),
         &next_keys,
         &SelfAddressing::Blake3_256,
     );
     let key_config = KeyConfig::new(
         keys,
-        Some(next_key_hash),
+        next_key_hash,
         Some(SignatureThreshold::Simple(2)),
     );
     let icp_data = InceptionEvent::new(key_config.clone(), None, None)
