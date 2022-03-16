@@ -81,19 +81,19 @@ fn test_delegated_inception_data_derivation() -> Result<(), Error> {
     let key_config = KeyConfig::new(keys, next_key_hash, Some(SignatureThreshold::Simple(1)));
     let dip_data = DelegatedInceptionEvent {
         inception_data: InceptionEvent::new(key_config.clone(), None, None),
-        delegator: "Et78eYkh8A3H9w6Q87EC5OcijiVEJT8KyNtEGdpPVWV8".parse()?,
+        delegator: "E7YbTIkWWyNwOxZQTTnrs6qn8jFbu2A8zftQ33JYQFQ0".parse()?,
     }
     .incept_self_addressing(SelfAddressing::Blake3_256, SerializationFormats::JSON)?;
 
     assert_eq!(
-        "Er4bHXd4piEtsQat1mquwsNZXItvuoj_auCUyICmwyXI",
+        "ESVGDRnpHMCAESkvj2bxKGAmMloX6K6vxfcmBLTOCM0A",
         dip_data.event.get_prefix().to_str()
     );
     assert_eq!(
-        "Er4bHXd4piEtsQat1mquwsNZXItvuoj_auCUyICmwyXI",
+        "ESVGDRnpHMCAESkvj2bxKGAmMloX6K6vxfcmBLTOCM0A",
         dip_data.event.get_digest().to_str()
     );
-    assert_eq!("KERI10JSON000154_", dip_data.serialization_info.to_str());
+    assert_eq!("KERI10JSON00015f_", dip_data.serialization_info.to_str());
 
     Ok(())
 }
