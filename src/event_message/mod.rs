@@ -214,7 +214,7 @@ mod tests {
         derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
         event::{
             event_data::{inception::InceptionEvent, EventData},
-            sections::{KeyConfig, key_config::nxt_commitment},
+            sections::{key_config::nxt_commitment, KeyConfig},
             sections::{threshold::SignatureThreshold, InceptionWitnessConfig},
             Event,
         },
@@ -244,7 +244,11 @@ mod tests {
 
         // initial control key hash prefix
         let pref1 = Basic::Ed25519.derive(pub_key1);
-        let nxt =  nxt_commitment(SignatureThreshold::Simple(1), &vec![pref1], &SelfAddressing::Blake3_256);
+        let nxt = nxt_commitment(
+            SignatureThreshold::Simple(1),
+            &vec![pref1],
+            &SelfAddressing::Blake3_256,
+        );
 
         // create a simple inception event
         let icp = Event::new(
@@ -329,8 +333,10 @@ mod tests {
 
         // next key set pre-commitment
         let nexter_pref = nxt_commitment(
-            SignatureThreshold::default(), &[sig_pref_1, enc_pref_1],
-         &SelfAddressing::Blake3_256);
+            SignatureThreshold::default(),
+            &[sig_pref_1, enc_pref_1],
+            &SelfAddressing::Blake3_256,
+        );
 
         let icp = InceptionEvent::new(
             KeyConfig::new(

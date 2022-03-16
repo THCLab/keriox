@@ -48,10 +48,7 @@ impl Serialize for KeyStateNotice {
             "n",
             &self.state.current.next_keys_data.next_key_hashes.clone(),
         )?;
-        em.serialize_field(
-            "nt",
-            &self.state.current.next_keys_data.threshold,
-        )?;
+        em.serialize_field("nt", &self.state.current.next_keys_data.threshold)?;
         em.serialize_field("bt", &self.state.witness_config.tally)?;
         em.serialize_field("b", &self.state.witness_config.witnesses)?;
         em.serialize_field("c", &self.config)?;
