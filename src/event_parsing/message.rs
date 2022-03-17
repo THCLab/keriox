@@ -225,7 +225,7 @@ fn test_qry() {
 #[cfg(feature = "query")]
 #[test]
 fn test_reply() {
-    let rpy = r#"{"v":"KERI10JSON00029d_","t":"rpy","d":"EIgqNqtNe06ngzIzB6lp8nsyYYG3xb41UZGRMjZ_TOD0","dt":"2021-01-01T00:00:00.000000+00:00","r":"/ksn/E7YbTIkWWyNwOxZQTTnrs6qn8jFbu2A8zftQ33JYQFQ0","a":{"v":"KERI10JSON0001e2_","i":"E7YbTIkWWyNwOxZQTTnrs6qn8jFbu2A8zftQ33JYQFQ0","s":"8","p":"EdQ_x7-gzmnNc6Ey8gTUXWG_pmBR_krsJvHzmcAyNspA","d":"EHjIAl52sHElD94gCtKAdBqMUvDy04r0u35zMa4HJpFU","f":"8","dt":"2021-01-01T00:00:00.000000+00:00","et":"rot","kt":"1","k":["DOedRyfIQe4Z-GNSlbgA8txIKyx4Li2tJ1S0Yhy7l2T8"],"nt":"1","n":["EbB6xA74q3sWQFwFbfhIpfW_UFdmvdTv-Z1iKQ9ZQXHI"],"bt":"0","b":[],"c":[],"ee":{"s":"8","d":"EHjIAl52sHElD94gCtKAdBqMUvDy04r0u35zMa4HJpFU","br":[],"ba":[]}}}"#; 
+    let rpy = r#"{"v":"KERI10JSON00029d_","t":"rpy","d":"EIgqNqtNe06ngzIzB6lp8nsyYYG3xb41UZGRMjZ_TOD0","dt":"2021-01-01T00:00:00.000000+00:00","r":"/ksn/E7YbTIkWWyNwOxZQTTnrs6qn8jFbu2A8zftQ33JYQFQ0","a":{"v":"KERI10JSON0001e2_","i":"E7YbTIkWWyNwOxZQTTnrs6qn8jFbu2A8zftQ33JYQFQ0","s":"8","p":"EdQ_x7-gzmnNc6Ey8gTUXWG_pmBR_krsJvHzmcAyNspA","d":"EHjIAl52sHElD94gCtKAdBqMUvDy04r0u35zMa4HJpFU","f":"8","dt":"2021-01-01T00:00:00.000000+00:00","et":"rot","kt":"1","k":["DOedRyfIQe4Z-GNSlbgA8txIKyx4Li2tJ1S0Yhy7l2T8"],"nt":"1","n":["EbB6xA74q3sWQFwFbfhIpfW_UFdmvdTv-Z1iKQ9ZQXHI"],"bt":"0","b":[],"c":[],"ee":{"s":"8","d":"EHjIAl52sHElD94gCtKAdBqMUvDy04r0u35zMa4HJpFU","br":[],"ba":[]}}}"#;
     let rest = "something more";
     let stream = [rpy, rest].join("");
 

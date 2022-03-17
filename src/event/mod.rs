@@ -110,11 +110,9 @@ mod tests {
   \"nt\": \"3\",
   \"n\" : 
     [
-      \"ETNZH3ULvYawyZ-i0d8JZU6JR2nmAoAfSVPzhzS6b5CM\", 
-      \"EYAfSVPzhzaU6JR2nmoTNZH3ULvwyZb6b5CMi0d8JZAS\",
+      \"ETNZH3ULvYawyZ-i0d8JZU6JR2nmAoAfSVPzhzS6b5CM\",
       \"EnmwyZdi0d8JZAoTNZYAfSVPzhzaU6JR2H3ULvS6b5CM\",
-      \"ETNZH3ULvS6bYAfSVPzhzaU6JR2nmwyZfi0d8JZ5s8bk\",                       
-      \"EJR2nmwyZ2i0dzaU6ULvS6b5CM8JZAoTNZH3YAfSVPzh\"
+      \"ETNZH3ULvS6bYAfSVPzhzaU6JR2nmwyZfi0d8JZ5s8bk\"
     ],
   \"bt\": \"2\",
   \"b\":

@@ -93,9 +93,7 @@ impl EventSemantics for InceptionEvent {
 #[test]
 fn test_inception_data_derivation() -> Result<(), Error> {
     use crate::event::sections::{
-        key_config::KeyConfig,
-        threshold::SignatureThreshold,
-        key_config::NextKeysData
+        key_config::KeyConfig, key_config::NextKeysData, threshold::SignatureThreshold,
     };
     use crate::event_message::Digestible;
     use crate::prefix::{BasicPrefix, Prefix, SelfAddressingPrefix};
@@ -123,7 +121,10 @@ fn test_inception_data_derivation() -> Result<(), Error> {
             .unwrap(),
     ];
 
-    let next_keys_data = NextKeysData { threshold: SignatureThreshold::Simple(2), next_key_hashes: next_keys_hashes };
+    let next_keys_data = NextKeysData {
+        threshold: SignatureThreshold::Simple(2),
+        next_key_hashes: next_keys_hashes,
+    };
     let key_config = KeyConfig::new(keys, next_keys_data, Some(SignatureThreshold::Simple(2)));
     let icp_data = InceptionEvent::new(key_config.clone(), None, None)
         .incept_self_addressing(SelfAddressing::Blake3_256, SerializationFormats::JSON)?;
