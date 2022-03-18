@@ -30,7 +30,7 @@ impl Serialize for KeyStateNotice {
     where
         S: Serializer,
     {
-        let mut em = serializer.serialize_struct("Envelope", 15)?;
+        let mut em = serializer.serialize_struct("Envelope", 17)?;
         em.serialize_field("v", &self.serialization_info)?;
         em.serialize_field("i", &self.state.prefix)?;
         em.serialize_field("s", &self.state.sn.to_string())?;
@@ -44,11 +44,11 @@ impl Serialize for KeyStateNotice {
         em.serialize_field("et", &self.state.last_event_type)?;
         em.serialize_field("kt", &self.state.current.threshold)?;
         em.serialize_field("k", &self.state.current.public_keys)?;
+        em.serialize_field("nt", &self.state.current.next_keys_data.threshold)?;
         em.serialize_field(
             "n",
             &self.state.current.next_keys_data.next_key_hashes.clone(),
         )?;
-        em.serialize_field("nt", &self.state.current.next_keys_data.threshold)?;
         em.serialize_field("bt", &self.state.witness_config.tally)?;
         em.serialize_field("b", &self.state.witness_config.witnesses)?;
         em.serialize_field("c", &self.config)?;
