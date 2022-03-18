@@ -130,34 +130,6 @@ pub fn nxt_commitment(
     }
 }
 
-// mod empty_string_as_none {
-//     use serde::{de::IntoDeserializer, Deserialize, Deserializer, Serializer};
-
-//     pub fn deserialize<'d, D, T>(de: D) -> Result<Option<T>, D::Error>
-//     where
-//         D: Deserializer<'d>,
-//         T: Deserialize<'d>,
-//     {
-//         let opt = Option::<String>::deserialize(de)?;
-//         let opt = opt.as_deref();
-//         match opt {
-//             None | Some("") => Ok(None),
-//             Some(s) => T::deserialize(s.into_deserializer()).map(Some),
-//         }
-//     }
-
-//     pub fn serialize<S, T>(t: &Option<T>, s: S) -> Result<S::Ok, S::Error>
-//     where
-//         S: Serializer,
-//         T: ToString,
-//     {
-//         s.serialize_str(&match &t {
-//             Some(v) => v.to_string(),
-//             None => "".into(),
-//         })
-//     }
-// }
-
 #[test]
 fn test_next_commitment() {
     // test data taken from keripy
