@@ -4,7 +4,7 @@ use crate::{
     database::sled::SledEventDatabase,
     error::Error,
     event_message::signed_event_message::{Message, TimestampedSignedEventMessage},
-    prefix::{IdentifierPrefix},
+    prefix::IdentifierPrefix,
     state::IdentifierState,
 };
 

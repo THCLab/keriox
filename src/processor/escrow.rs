@@ -134,8 +134,7 @@ impl PartiallySignedEscrow {
             .get_partially_signed_events(signed_event.event_message.clone())
         {
             let new_sigs: Vec<_> = esc
-                .map(|ev| ev.signed_event_message.signatures)
-                .flatten()
+                .flat_map(|ev| ev.signed_event_message.signatures)
                 .chain(signed_event.signatures.clone().into_iter())
                 .collect();
             let new_event = SignedEventMessage {

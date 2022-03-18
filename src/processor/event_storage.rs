@@ -216,8 +216,7 @@ impl EventStorage {
     ) -> Option<Vec<(BasicPrefix, SelfSigningPrefix)>> {
         self.db.get_escrow_nt_receipts(prefix).map(|rcts| {
             rcts.filter(|rct| rct.body.event.sn == sn)
-                .map(|rct| rct.couplets)
-                .flatten()
+                .flat_map(|rct| rct.couplets)
                 .collect()
         })
     }
