@@ -20,7 +20,10 @@ impl ThresholdFraction {
 
 impl fmt::Display for ThresholdFraction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.fraction)
+        if self.fraction == Fraction::from(1) {
+            write!(f, "1/1")
+        } else {
+        write!(f, "{}", self.fraction)}
     }
 }
 
@@ -60,7 +63,12 @@ impl Serialize for ThresholdFraction {
     where
         S: Serializer,
     {
-        serializer.serialize_str(&format!("{}", self.fraction))
+        let frac = if self.fraction == Fraction::from(1) {
+            "1/1".into()
+        } else {
+            self.fraction.to_string()
+        };
+        serializer.serialize_str(&format!("{}", frac))
     }
 }
 
@@ -249,7 +257,8 @@ pub fn test_weighted_treshold_serialization() -> Result<(), Error> {
     let multi_threshold = r#"[["1"],["1/2","1/2","1/2"]]"#.to_string();
     let wt: WeightedThreshold = serde_json::from_str(&multi_threshold)?;
     assert!(matches!(wt, WeightedThreshold::Multi(_)));
-    assert_eq!(serde_json::to_string(&wt).unwrap(), multi_threshold);
+    // assert_eq!(serde_json::to_string(&wt).unwrap(), multi_threshold);
+    assert_eq!(serde_json::to_string(&wt).unwrap(), r#"[["1/1"],["1/2","1/2","1/2"]]"#.to_string());
 
     let single_threshold = r#"["1/2","1/2","1/2"]"#.to_string();
     let wt: WeightedThreshold = serde_json::from_str(&single_threshold)?;
