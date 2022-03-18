@@ -23,7 +23,8 @@ impl fmt::Display for ThresholdFraction {
         if self.fraction == Fraction::from(1) {
             write!(f, "1/1")
         } else {
-        write!(f, "{}", self.fraction)}
+            write!(f, "{}", self.fraction)
+        }
     }
 }
 
@@ -63,12 +64,7 @@ impl Serialize for ThresholdFraction {
     where
         S: Serializer,
     {
-        let frac = if self.fraction == Fraction::from(1) {
-            "1/1".into()
-        } else {
-            self.fraction.to_string()
-        };
-        serializer.serialize_str(&format!("{}", frac))
+        serializer.serialize_str(&self.to_string())
     }
 }
 
@@ -204,8 +200,8 @@ impl MultiClauses {
             .fold(Ok((0, true)), |acc, clause| -> Result<_, Error> {
                 let (start, enough) = acc?;
                 let sigs: Vec<AttachedSignaturePrefix> = sigs
-                    .to_owned()
-                    .into_iter()
+                    .iter()
+                    .cloned()
                     .filter(|sig| sig.index >= start && sig.index < start + clause.0.len() as u16)
                     .collect();
                 Ok((
@@ -258,7 +254,10 @@ pub fn test_weighted_treshold_serialization() -> Result<(), Error> {
     let wt: WeightedThreshold = serde_json::from_str(&multi_threshold)?;
     assert!(matches!(wt, WeightedThreshold::Multi(_)));
     // assert_eq!(serde_json::to_string(&wt).unwrap(), multi_threshold);
-    assert_eq!(serde_json::to_string(&wt).unwrap(), r#"[["1/1"],["1/2","1/2","1/2"]]"#.to_string());
+    assert_eq!(
+        serde_json::to_string(&wt).unwrap(),
+        r#"[["1/1"],["1/2","1/2","1/2"]]"#.to_string()
+    );
 
     let single_threshold = r#"["1/2","1/2","1/2"]"#.to_string();
     let wt: WeightedThreshold = serde_json::from_str(&single_threshold)?;

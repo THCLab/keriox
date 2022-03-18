@@ -344,7 +344,7 @@ pub fn test_not_fully_witnessed() -> Result<(), Error> {
     let event_storage = EventStorage::new(Arc::clone(&db));
     let publisher = default_escrow_bus(db.clone());
 
-      // check if receipt was escrowed
+    // check if receipt was escrowed
     let id = &"E1EyzzujHLiQbj9kcJ9wI2lVjOkiNbNn7t4Y2MhRjn_U"
         .parse()
         .unwrap();
@@ -383,7 +383,6 @@ pub fn test_not_fully_witnessed() -> Result<(), Error> {
     );
     assert!(esc.next().is_none());
 
-  
     let mut esc = db.get_escrow_nt_receipts(id).unwrap();
     assert_eq!(rcp_msg, Message::NontransferableRct(esc.next().unwrap()));
     assert!(esc.next().is_none());

@@ -119,8 +119,7 @@ where
             self.tree
                 .into_iter()
                 .flatten()
-                .map(|(_key, values)| serde_cbor::from_slice::<Vec<T>>(&values).unwrap())
-                .flatten(),
+                .flat_map(|(_key, values)| serde_cbor::from_slice::<Vec<T>>(&values).unwrap()),
         )
     }
 }
