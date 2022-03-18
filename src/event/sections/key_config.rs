@@ -160,24 +160,6 @@ pub fn nxt_commitment(
 
 #[test]
 fn test_next_commitment() {
-    // test data taken from kid0003
-    let keys: Vec<BasicPrefix> = [
-        "BrHLayDN-mXKv62DAjFLX1_Y5yEUe0vA9YPe_ihiKYHE",
-        "BujP_71bmWFVcvFmkE9uS8BTZ54GIstZ20nj_UloF8Rk",
-        "B8T4xkb8En6o0Uo5ZImco1_08gT5zcYnXzizUPVNzicw",
-    ]
-    .iter()
-    .map(|k| k.parse().unwrap())
-    .collect();
-
-    let sith = SignatureThreshold::Simple(2);
-    let nxt = nxt_commitment(sith, &keys, &SelfAddressing::Blake3_256);
-
-    // assert_eq!(
-    //     &nxt.to_str(),
-    //     "ED8YvDrXvGuaIVZ69XsBVA5YN2pNTfQOFwgeloVHeWKs"
-    // );
-
     // test data taken from keripy
     // (keripy/tests/core/test_weighted_threshold.py::test_weighted)
     // Set weighted threshold to [1/2, 1/2, 1/2]
@@ -191,7 +173,24 @@ fn test_next_commitment() {
     .map(|x| x.parse().unwrap())
     .collect();
     let nxt = nxt_commitment(sith, &next_keys, &SelfAddressing::Blake3_256);
-    // assert_eq!(nxt.to_str(), "EhJGhyJQTpSlZ9oWfQT-lHNl1woMazLC42O89fRHocTI");
+
+    let threshold = SignatureThreshold::multi_weighted(vec![vec![(1, 2), (1, 2), (1, 2)]]);
+    let next_key_hashes: Vec<SelfAddressingPrefix> = [
+        "E9tzF91cgL0Xu4UkCqlCbDxXK-HnxmmTIwTi_ySgjGLc",
+        "Ez53UFJ6euROznsDhnPr4auhJGgzeM5ln5i-Tlp8V3L4",
+        "EPF1apCK5AUL7k4AlFG4pSEgQX0h-kosQ_tfUtPJ_Ti0",
+    ]
+    .iter()
+    .map(|sai| sai.parse().unwrap())
+    .collect();
+
+    assert_eq!(
+        nxt,
+        NextKeysData {
+            threshold,
+            next_key_hashes,
+        }
+    );
 }
 
 #[test]
