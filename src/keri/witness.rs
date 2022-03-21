@@ -115,8 +115,11 @@ impl Witness {
 
         let signature = SelfSigning::Ed25519Sha512.derive(signature);
 
-        let signed_rcp =
-            SignedNontransferableReceipt::new(&rcp, vec![(self.prefix.clone(), signature)]);
+        let signed_rcp = SignedNontransferableReceipt::new(
+            &rcp,
+            Some(vec![(self.prefix.clone(), signature)]),
+            None,
+        );
 
         self.processor
             .process(Message::NontransferableRct(signed_rcp.clone()))?;
@@ -223,12 +226,12 @@ pub fn test_query() -> Result<(), Error> {
 
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     let witness = Witness::new(root.path())?;
+
     // Process inception event and its receipts. To accept inception event it must be fully witnessed.
-    let rcp0 = r#"{"v":"KERI10JSON000091_","t":"rct","d":"ESZVhKqI9F_UGQAQRYGNwqqdKOMjez7aupox9UZwZcBk","i":"ESZVhKqI9F_UGQAQRYGNwqqdKOMjez7aupox9UZwZcBk","s":"0"}-CABBGKVzj4ve0VSd8z_AmvhLg4lqcC_9WYX90k03q-R_Ydo0BFa01iWtg5DSwsF7XpACh-7OL3q_1lWu4D5uVimx0SFyu6xdCE2gXl-NtX9jY64BIDnTvOSEoY42lk1r6hFoJCw"#;
-    let rcp1 = r#"{"v":"KERI10JSON000091_","t":"rct","d":"ESZVhKqI9F_UGQAQRYGNwqqdKOMjez7aupox9UZwZcBk","i":"ESZVhKqI9F_UGQAQRYGNwqqdKOMjez7aupox9UZwZcBk","s":"0"}-CABBuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw0BPku5B06DZUT6t8rNXCnzJU9HUmFA0tkpjV5deSrqYd4L3gBuPtbSncpaw7MOz0yKwj8dYdO3ejVi8ciMRK5nCA"#;
-    let rcp2 = r#"{"v":"KERI10JSON000091_","t":"rct","d":"ESZVhKqI9F_UGQAQRYGNwqqdKOMjez7aupox9UZwZcBk","i":"ESZVhKqI9F_UGQAQRYGNwqqdKOMjez7aupox9UZwZcBk","s":"0"}-CABBgoq68HCmYNUDgOz4Skvlu306o_NY-NrYuKAVhk3Zh9c0BrMTUuXnZ1PzhsJgR4XER5eTHDwhBofSV45xMHpryXYRX2fSYgV5T5rIP4vT8NLAxUvunw62-yQo2dVRlOnMKCg"#;
-    let icp_str = r#"{"v":"KERI10JSON0001ac_","t":"icp","d":"ESZVhKqI9F_UGQAQRYGNwqqdKOMjez7aupox9UZwZcBk","i":"ESZVhKqI9F_UGQAQRYGNwqqdKOMjez7aupox9UZwZcBk","s":"0","kt":"1","k":["DxH8nLaGIMllBp0mvGdN6JtbNuGRPyHb5i80bTojnP9A"],"n":"EmJ-3Y0pM0ogX8401rEziJhpql567YEdHDlylwfnxNIM","bt":"3","b":["BGKVzj4ve0VSd8z_AmvhLg4lqcC_9WYX90k03q-R_Ydo","BuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw","Bgoq68HCmYNUDgOz4Skvlu306o_NY-NrYuKAVhk3Zh9c"],"c":[],"a":[]}-AABAAGwlsKbtQjGUoKlYsBRksx5KmAiXWtNakJkxmxizV0aoN4d_GwtmnbNwpuuggc3CmoftruHIo_Q9CbWw-lUitDA"#;
-    let to_process: Vec<_> = [rcp0, rcp1, rcp2, icp_str]
+    let rcps = r#"{"v":"KERI10JSON000091_","t":"rct","d":"E6OK2wFYp6x0Jx48xX0GCTwAzJUTWtYEvJSykVhtAnaM","i":"E6OK2wFYp6x0Jx48xX0GCTwAzJUTWtYEvJSykVhtAnaM","s":"0"}-BADAAI_M_762PE-i9uhbB_Ynxsx4mfvCA73OHM96U8SQtsgV0co4kGuSw0tMtiQWBYwA9bvDZ7g-ZfhFLtXJPorbtDwABDsQTBpHVpNI-orK8606K5oUSr5sv5LYvyuEHW3dymwVIDRYWUVxMITMp_st7Ee4PjD9nIQCzAeXHDcZ6c14jBQACPySjFKPkqeu5eiB0YfcYLQpvo0vnu6WEQ4XJnzNWWrV9JuOQ2AfWVeIc0D7fuK4ofXMRhTxAXm-btkqTrm0tBA"#;
+
+    let icp_str = r#"{"v":"KERI10JSON0001b7_","t":"icp","d":"E6OK2wFYp6x0Jx48xX0GCTwAzJUTWtYEvJSykVhtAnaM","i":"E6OK2wFYp6x0Jx48xX0GCTwAzJUTWtYEvJSykVhtAnaM","s":"0","kt":"1","k":["DWow4n8Wxqf_UTvzoSnWOrxELM3ptd-mbtZC146khE4w"],"nt":"1","n":["EcjtYj92jg7qK_T1-5bWUlnBU6bdVWP-yMxBHjr_Quo8"],"bt":"3","b":["BGKVzj4ve0VSd8z_AmvhLg4lqcC_9WYX90k03q-R_Ydo","BuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw","Bgoq68HCmYNUDgOz4Skvlu306o_NY-NrYuKAVhk3Zh9c"],"c":[],"a":[]}-AABAA0Dn5vYNWAz8uN1N9cCR-HfBQhDIhb-Crt_1unJY7KTAfz0iwa9FPWHFLTgvTkd0yUSw3AZuNc5Xbr-VMzQDhBw"#;
+    let to_process: Vec<_> = [rcps, icp_str]
         .iter()
         .map(|event| {
             let parsed = signed_message(event.as_bytes()).unwrap().1;
@@ -237,7 +240,8 @@ pub fn test_query() -> Result<(), Error> {
         .collect();
     witness.process(to_process.as_slice()).unwrap();
 
-    let qry_str = r#"{"v":"KERI10JSON0000c9_","t":"qry","d":"EEFpGGlsAGe51BgyebzDUAs4ewWYz1HO9rytYVaxDo3c","dt":"2022-01-13T15:53:32.020709+00:00","r":"ksn","rr":"","q":{"i":"ESZVhKqI9F_UGQAQRYGNwqqdKOMjez7aupox9UZwZcBk"}}-VAj-HABESZVhKqI9F_UGQAQRYGNwqqdKOMjez7aupox9UZwZcBk-AABAAMOLeXG1ClCtSPP4hhtvyoWMLOvMvaiveHCepL3zh1OQcAyn2GzEh2TwjKFyKFGBXD6-blmvg8M8hDMr-yjv6Bw"#;
+    let qry_str = r#"{"v":"KERI10JSON000104_","t":"qry","d":"ErXRrwRbUFylKDiuOp8a1wO2XPAY4KiMX4TzYWZ1iAGE","dt":"2022-03-21T11:42:58.123955+00:00","r":"ksn","rr":"","q":{"s":0,"i":"E6OK2wFYp6x0Jx48xX0GCTwAzJUTWtYEvJSykVhtAnaM","src":"BGKVzj4ve0VSd8z_AmvhLg4lqcC_9WYX90k03q-R_Ydo"}}-VAj-HABE6OK2wFYp6x0Jx48xX0GCTwAzJUTWtYEvJSykVhtAnaM-AABAAk-Hyv8gpUZNpPYDGJc5F5vrLNWlGM26523Sgb6tKN1CtP4QxUjEApJCRxfm9TN8oW2nQ40QVM_IuZlrly1eLBA"#;
+
     let parsed = signed_message(qry_str.as_bytes()).unwrap().1;
     let deserialized_qy = Message::try_from(parsed).unwrap();
 

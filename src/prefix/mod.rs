@@ -4,8 +4,8 @@ use crate::{
 };
 use base64::encode_config;
 use core::str::FromStr;
-use std::fmt::Display;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::fmt::Display;
 
 pub mod attached_signature;
 pub mod basic;

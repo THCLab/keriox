@@ -135,9 +135,8 @@ impl EventValidator {
             .get_event_at_sn(&rct.body.event.prefix, rct.body.event.sn)
         {
             let serialized_event = event.signed_event_message.serialize()?;
-            let (_, errors): (Vec<_>, Vec<Result<bool, Error>>) = rct
-                .clone()
-                .couplets
+            let signer_couplets = self.event_storage.get_receipt_couplets(rct)?;
+            let (_, errors): (Vec<_>, Vec<Result<bool, Error>>) = signer_couplets
                 .into_iter()
                 .map(|(witness, signature)| witness.verify(&serialized_event, &signature))
                 .partition(Result::is_ok);

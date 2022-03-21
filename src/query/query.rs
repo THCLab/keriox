@@ -21,7 +21,11 @@ pub struct QueryData {
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct QueryArgs {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub s: Option<u64>,
     pub i: IdentifierPrefix,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub src: Option<IdentifierPrefix>,
 }
 
 pub type QueryEvent = SaidEvent<Envelope<QueryData>>;
@@ -29,13 +33,13 @@ pub type QueryEvent = SaidEvent<Envelope<QueryData>>;
 impl QueryEvent {
     pub fn new_query(
         route: Route,
-        id: &IdentifierPrefix,
+        args: QueryArgs,
         serialization_format: SerializationFormats,
         derivation: &SelfAddressing,
     ) -> Result<EventMessage<Self>, Error> {
         let message = QueryData {
             reply_route: "route".into(),
-            data: QueryArgs { i: id.clone() },
+            data: args,
         };
 
         let env = Envelope::new(route, message);
