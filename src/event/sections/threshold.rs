@@ -90,21 +90,6 @@ impl WeightedThreshold {
             WeightedThreshold::Multi(clauses) => clauses.enough_signatures(sigs),
         }
     }
-
-    /// Serialize For Commitment
-    ///
-    /// Serializes a threshold into the form required
-    /// for next keys commitment.
-    /// Example:
-    ///     [["1/2", "1/2", "1/4", "1/4", "1/4"], ["1", "1"]]
-    ///     is serialized to
-    ///     '1/2,1/2,1/4,1/4,1/4&1,1'
-    pub fn extract_threshold(&self) -> String {
-        match self {
-            WeightedThreshold::Single(clause) => clause.extract_threshold(),
-            WeightedThreshold::Multi(clauses) => clauses.extract_threshold(),
-        }
-    }
 }
 
 impl SignatureThreshold {
@@ -162,14 +147,6 @@ impl ThresholdClause {
             acc + self.0[(sig.index - start_index) as usize].fraction
         }) >= One::one())
     }
-
-    pub fn extract_threshold(&self) -> String {
-        self.0
-            .iter()
-            .map(|fr| fr.to_string())
-            .collect::<Vec<_>>()
-            .join(",")
-    }
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
@@ -210,14 +187,6 @@ impl MultiClauses {
                 ))
             })?
             .1)
-    }
-
-    pub fn extract_threshold(&self) -> String {
-        self.0
-            .iter()
-            .map(|clause| clause.extract_threshold())
-            .collect::<Vec<_>>()
-            .join("&")
     }
 }
 
