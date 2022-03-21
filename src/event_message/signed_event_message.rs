@@ -221,17 +221,20 @@ impl SignedTransferableReceipt {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SignedNontransferableReceipt {
     pub body: EventMessage<Receipt>,
-    pub couplets: Vec<(BasicPrefix, SelfSigningPrefix)>,
+    pub couplets: Option<Vec<(BasicPrefix, SelfSigningPrefix)>>,
+    pub indexed_sigs: Option<Vec<AttachedSignaturePrefix>>,
 }
 
 impl SignedNontransferableReceipt {
     pub fn new(
         message: &EventMessage<Receipt>,
-        couplets: Vec<(BasicPrefix, SelfSigningPrefix)>,
+        couplets: Option<Vec<(BasicPrefix, SelfSigningPrefix)>>,
+        indexed_sigs: Option<Vec<AttachedSignaturePrefix>>,
     ) -> Self {
         Self {
             body: message.clone(),
             couplets,
+            indexed_sigs,
         }
     }
 }

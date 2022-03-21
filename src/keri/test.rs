@@ -167,7 +167,7 @@ fn test_qry_rpy() -> Result<(), Error> {
         keri::witness::Witness,
         prefix::AttachedSignaturePrefix,
         query::{
-            query::{QueryEvent, SignedQuery},
+            query::{QueryEvent, SignedQuery, QueryArgs},
             ReplyType, Route,
         },
         signer::KeyManager,
@@ -209,13 +209,13 @@ fn test_qry_rpy() -> Result<(), Error> {
     // send bobs icp to witness to have his keys
     let _rcps = witness.process(&[Message::Event(bob_icp)])?;
 
-    let alice_pref = alice.prefix();
+    let query_args = QueryArgs { s: None, i: alice.prefix().clone(), src: None };
 
     // Bob asks about alices key state
     // construct qry message to ask of alice key state message
     let qry = QueryEvent::new_query(
         Route::Ksn,
-        alice_pref,
+        query_args,
         SerializationFormats::JSON,
         &SelfAddressing::Blake3_256,
     )?;

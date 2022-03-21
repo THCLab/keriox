@@ -188,7 +188,16 @@ impl From<&SignedEventMessage> for SignedEventData {
 
 impl From<SignedNontransferableReceipt> for SignedEventData {
     fn from(rcp: SignedNontransferableReceipt) -> SignedEventData {
-        let attachments = [Attachment::ReceiptCouplets(rcp.couplets)].into();
+        let attachments: Vec<_> = match (rcp.couplets, rcp.indexed_sigs) {
+            (None, None) => vec![],
+            (None, Some(indexed_sigs)) => [Attachment::AttachedSignatures(indexed_sigs)].into(),
+            (Some(couplets), None) => [Attachment::ReceiptCouplets(couplets)].into(),
+            (Some(couplets), Some(indexed_sigs)) => [
+                Attachment::ReceiptCouplets(couplets),
+                Attachment::AttachedSignatures(indexed_sigs),
+            ]
+            .into(),
+        };
         SignedEventData {
             deserialized_event: EventType::Receipt(rcp.body),
             attachments,
@@ -376,7 +385,8 @@ fn signed_receipt(
         Attachment::ReceiptCouplets(couplets) => {
             Ok(Message::NontransferableRct(SignedNontransferableReceipt {
                 body: event_message,
-                couplets,
+                couplets: Some(couplets),
+                indexed_sigs: None,
             }))
         }
         Attachment::SealSignaturesGroups(data) => {
@@ -391,6 +401,13 @@ fn signed_receipt(
                 seal,
                 sigs,
             )))
+        }
+        Attachment::AttachedSignatures(sigs) => {
+            Ok(Message::NontransferableRct(SignedNontransferableReceipt {
+                body: event_message,
+                couplets: None,
+                indexed_sigs: Some(sigs),
+            }))
         }
         Attachment::Frame(atts) => signed_receipt(event_message, atts),
         _ => {
@@ -472,7 +489,15 @@ fn test_deserialize_signed_receipt() {
 
     // Nontrans receipt with alternative attachment with -B payload type. Not implemented yet.
     // takien from keripy/tests/core/test_witness.py::test_indexed_witness_reply
-    // let wintess_receipts = r#"{"v":"KERI10JSON000091_","t":"rct","d":"EHz9RXAr9JiJn-3wkBvsUo1Qq3hvMQPaITxzcfJND8NM","i":"EHz9RXAr9JiJn-3wkBvsUo1Qq3hvMQPaITxzcfJND8NM","s":"0"}-BADAAdgQkf11JTyF2WVA1Vji1ZhXD8di4AJsfro-sN_jURM1SUioeOleik7w8lkDldKtg0-Nr1X32V9Q8tk8RvBGxDgABZmkRun-qNliRA8WR2fIUnVeB8eFLF7aLFtn2hb31iW7wYSYafR0kT3fV_r1wNNdjm9dkBw-_2xsxThTGfO5UAwACRGJiRPFe4ClvpqZL3LHcEAeT396WVrYV10EaTdt0trINT8rPbz96deSFT32z3myNPVwLlNcq4FzIaQCooM2HDQ"#;
-    // let msg = signed_message(witness_receipts.as_bytes());
-    // assert!(msg.is_ok());
+    let witness_receipts = r#"{"v":"KERI10JSON000091_","t":"rct","d":"EHz9RXAr9JiJn-3wkBvsUo1Qq3hvMQPaITxzcfJND8NM","i":"EHz9RXAr9JiJn-3wkBvsUo1Qq3hvMQPaITxzcfJND8NM","s":"0"}-BADAAdgQkf11JTyF2WVA1Vji1ZhXD8di4AJsfro-sN_jURM1SUioeOleik7w8lkDldKtg0-Nr1X32V9Q8tk8RvBGxDgABZmkRun-qNliRA8WR2fIUnVeB8eFLF7aLFtn2hb31iW7wYSYafR0kT3fV_r1wNNdjm9dkBw-_2xsxThTGfO5UAwACRGJiRPFe4ClvpqZL3LHcEAeT396WVrYV10EaTdt0trINT8rPbz96deSFT32z3myNPVwLlNcq4FzIaQCooM2HDQ"#;
+    let parsed_witness_receipt = signed_message(witness_receipts.as_bytes()).unwrap();
+    assert!(parsed_witness_receipt.0.is_empty());
+
+    let msg = Message::try_from(parsed_witness_receipt.1);
+    assert!(msg.is_ok());
+    if let Ok(Message::NontransferableRct(rct)) = msg {
+        assert_eq!(3, rct.indexed_sigs.unwrap().len());
+    } else {
+        assert!(false)
+    };
 }

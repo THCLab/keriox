@@ -123,6 +123,10 @@ pub fn attachment(s: &[u8]) -> nom::IResult<&[u8], Attachment> {
             let (rest, sigs) = signatures(rest)?;
             Ok((rest, Attachment::AttachedSignatures(sigs)))
         }
+        PayloadType::MB => {
+            let (rest, sigs) = signatures(rest)?;
+            Ok((rest, Attachment::AttachedSignatures(sigs)))
+        }
         PayloadType::MC => {
             let (rest, couplets) = couplets(rest)?;
             Ok((rest, Attachment::ReceiptCouplets(couplets)))

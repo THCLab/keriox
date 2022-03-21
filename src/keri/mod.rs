@@ -467,7 +467,7 @@ impl<K: KeyManager> Keri<K> {
             receipted_event_digest: SelfAddressing::Blake3_256.derive(&message.serialize()?),
         }
         .to_message(SerializationFormats::JSON)?;
-        let ntr = SignedNontransferableReceipt::new(&rcp, vec![(bp, ssp)]);
+        let ntr = SignedNontransferableReceipt::new(&rcp, Some(vec![(bp, ssp)]), None);
         self.storage
             .db
             .add_receipt_nt(ntr.clone(), &message.event.get_prefix())?;
