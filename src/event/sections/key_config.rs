@@ -97,7 +97,7 @@ impl KeyConfig {
     /// Verify Next
     ///
     /// Verifies that the given next KeyConfig matches that which is committed
-    /// to in the threshold_key_digest of this KeyConfig
+    /// to in next_keys_data of this KeyConfig
     pub fn verify_next(&self, next: &KeyConfig) -> bool {
         self.next_keys_data.verify_next(next)
     }
@@ -113,8 +113,7 @@ impl KeyConfig {
 
 /// Serialize For Commitment
 ///
-/// Serializes a threshold and key set into the form
-/// required for threshold key digest creation
+/// Creates NextKeysData from given threshold and public keys set.
 pub fn nxt_commitment(
     threshold: SignatureThreshold,
     keys: &[BasicPrefix],
