@@ -9,6 +9,26 @@ use crate::{
 use super::threshold::SignatureThreshold;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
+pub struct NextKeysData {
+    #[serde(rename = "nt")]
+    pub threshold: SignatureThreshold,
+
+    #[serde(rename = "n")]
+    pub next_key_hashes: Vec<SelfAddressingPrefix>,
+}
+
+impl NextKeysData {
+    pub fn verify_next(&self, next: &KeyConfig) -> bool {
+        let check_keys = self
+            .next_key_hashes
+            .iter()
+            .zip(next.public_keys.iter())
+            .all(|(hash, key)| hash.verify_binding(key.to_str().as_bytes()));
+        self.threshold == next.threshold && check_keys
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 pub struct KeyConfig {
     #[serde(rename = "kt")]
     pub threshold: SignatureThreshold,
@@ -16,14 +36,14 @@ pub struct KeyConfig {
     #[serde(rename = "k")]
     pub public_keys: Vec<BasicPrefix>,
 
-    #[serde(rename = "n", with = "empty_string_as_none")]
-    pub threshold_key_digest: Option<SelfAddressingPrefix>,
+    #[serde(flatten)]
+    pub next_keys_data: NextKeysData,
 }
 
 impl KeyConfig {
     pub fn new(
         public_keys: Vec<BasicPrefix>,
-        threshold_key_digest: Option<SelfAddressingPrefix>,
+        next_keys_data: NextKeysData,
         threshold: Option<SignatureThreshold>,
     ) -> Self {
         Self {
@@ -32,7 +52,7 @@ impl KeyConfig {
                 |t| t,
             ),
             public_keys,
-            threshold_key_digest,
+            next_keys_data,
         }
     }
 
@@ -77,99 +97,40 @@ impl KeyConfig {
     /// Verify Next
     ///
     /// Verifies that the given next KeyConfig matches that which is committed
-    /// to in the threshold_key_digest of this KeyConfig
+    /// to in next_keys_data of this KeyConfig
     pub fn verify_next(&self, next: &KeyConfig) -> bool {
-        match &self.threshold_key_digest {
-            Some(n) => n == &next.commit(&n.derivation),
-            None => false,
-        }
+        self.next_keys_data.verify_next(next)
     }
 
     /// Serialize For Next
     ///
     /// Serializes the KeyConfig for creation or verification of a threshold
     /// key digest commitment
-    pub fn commit(&self, derivation: &SelfAddressing) -> SelfAddressingPrefix {
-        nxt_commitment(&self.threshold, &self.public_keys, derivation)
+    pub fn commit(&self, derivation: &SelfAddressing) -> NextKeysData {
+        nxt_commitment(self.threshold.clone(), &self.public_keys, derivation)
     }
 }
 
 /// Serialize For Commitment
 ///
-/// Serializes a threshold and key set into the form
-/// required for threshold key digest creation
+/// Creates NextKeysData from given threshold and public keys set.
 pub fn nxt_commitment(
-    threshold: &SignatureThreshold,
+    threshold: SignatureThreshold,
     keys: &[BasicPrefix],
     derivation: &SelfAddressing,
-) -> SelfAddressingPrefix {
-    let extracted_threshold = match threshold {
-        SignatureThreshold::Simple(n) => format!("{:x}", n),
-        SignatureThreshold::Weighted(thresh) => thresh.extract_threshold(),
-    };
-    keys.iter().fold(
-        derivation.derive(extracted_threshold.as_bytes()),
-        |acc, pk| {
-            SelfAddressingPrefix::new(
-                derivation.to_owned(),
-                acc.derivative()
-                    .iter()
-                    .zip(derivation.derive(pk.to_str().as_bytes()).derivative())
-                    .map(|(acc_byte, pk_byte)| acc_byte ^ pk_byte)
-                    .collect(),
-            )
-        },
-    )
-}
-
-mod empty_string_as_none {
-    use serde::{de::IntoDeserializer, Deserialize, Deserializer, Serializer};
-
-    pub fn deserialize<'d, D, T>(de: D) -> Result<Option<T>, D::Error>
-    where
-        D: Deserializer<'d>,
-        T: Deserialize<'d>,
-    {
-        let opt = Option::<String>::deserialize(de)?;
-        let opt = opt.as_deref();
-        match opt {
-            None | Some("") => Ok(None),
-            Some(s) => T::deserialize(s.into_deserializer()).map(Some),
-        }
-    }
-
-    pub fn serialize<S, T>(t: &Option<T>, s: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-        T: ToString,
-    {
-        s.serialize_str(&match &t {
-            Some(v) => v.to_string(),
-            None => "".into(),
-        })
+) -> NextKeysData {
+    let next_key_hashes = keys
+        .iter()
+        .map(|bp| derivation.derive(bp.to_str().as_bytes()))
+        .collect();
+    NextKeysData {
+        threshold,
+        next_key_hashes,
     }
 }
 
 #[test]
 fn test_next_commitment() {
-    // test data taken from kid0003
-    let keys: Vec<BasicPrefix> = [
-        "BrHLayDN-mXKv62DAjFLX1_Y5yEUe0vA9YPe_ihiKYHE",
-        "BujP_71bmWFVcvFmkE9uS8BTZ54GIstZ20nj_UloF8Rk",
-        "B8T4xkb8En6o0Uo5ZImco1_08gT5zcYnXzizUPVNzicw",
-    ]
-    .iter()
-    .map(|k| k.parse().unwrap())
-    .collect();
-
-    let sith = SignatureThreshold::Simple(2);
-    let nxt = nxt_commitment(&sith, &keys, &SelfAddressing::Blake3_256);
-
-    assert_eq!(
-        &nxt.to_str(),
-        "ED8YvDrXvGuaIVZ69XsBVA5YN2pNTfQOFwgeloVHeWKs"
-    );
-
     // test data taken from keripy
     // (keripy/tests/core/test_weighted_threshold.py::test_weighted)
     // Set weighted threshold to [1/2, 1/2, 1/2]
@@ -182,8 +143,25 @@ fn test_next_commitment() {
     .iter()
     .map(|x| x.parse().unwrap())
     .collect();
-    let nxt = nxt_commitment(&sith, &next_keys, &SelfAddressing::Blake3_256);
-    assert_eq!(nxt.to_str(), "EhJGhyJQTpSlZ9oWfQT-lHNl1woMazLC42O89fRHocTI");
+    let nxt = nxt_commitment(sith, &next_keys, &SelfAddressing::Blake3_256);
+
+    let threshold = SignatureThreshold::multi_weighted(vec![vec![(1, 2), (1, 2), (1, 2)]]);
+    let next_key_hashes: Vec<SelfAddressingPrefix> = [
+        "E9tzF91cgL0Xu4UkCqlCbDxXK-HnxmmTIwTi_ySgjGLc",
+        "Ez53UFJ6euROznsDhnPr4auhJGgzeM5ln5i-Tlp8V3L4",
+        "EPF1apCK5AUL7k4AlFG4pSEgQX0h-kosQ_tfUtPJ_Ti0",
+    ]
+    .iter()
+    .map(|sai| sai.parse().unwrap())
+    .collect();
+
+    assert_eq!(
+        nxt,
+        NextKeysData {
+            threshold,
+            next_key_hashes,
+        }
+    );
 }
 
 #[test]
@@ -214,9 +192,9 @@ fn test_threshold() -> Result<(), Error> {
                 Basic::Ed25519.derive(PublicKey::new(kp.public.to_bytes().to_vec()))
             })
             .collect();
-        nxt_commitment(&next_threshold, &next_keys, &SelfAddressing::Blake3_256)
+        nxt_commitment(next_threshold, &next_keys, &SelfAddressing::Blake3_256)
     };
-    let key_config = KeyConfig::new(pub_keys, Some(next_key_hash), Some(current_threshold));
+    let key_config = KeyConfig::new(pub_keys, next_key_hash, Some(current_threshold));
 
     let msg_to_sign = "message to signed".as_bytes();
 
@@ -278,7 +256,7 @@ fn test_verify() -> Result<(), Error> {
 
     // test data taken from keripy
     // (keripy/tests/core/test_weighted_threshold.py::test_weighted)
-    let ev = br#"{"v":"KERI10JSON00018e_","t":"icp","d":"EZgXYINAQWXFpxAmWI9AwOwjVOYXzjyEE_-DdTfkEk8s","i":"EZgXYINAQWXFpxAmWI9AwOwjVOYXzjyEE_-DdTfkEk8s","s":"0","kt":["1/2","1/2","1/2"],"k":["DK4OJI8JOr6oEEUMeSF_X-SbKysfwpKwW-ho5KARvH5c","D1RZLgYke0GmfZm-CH8AsW4HoTU4m-2mFgu8kbwp8jQU","DBVwzum-jPfuUXUcHEWdplB4YcoL3BWGXK0TMoF_NeFU"],"n":"EhJGhyJQTpSlZ9oWfQT-lHNl1woMazLC42O89fRHocTI","bt":"0","b":[],"c":[],"a":[]}-AADAAo74mzRNAT5WEVRYaUWs4apfEY9oblVL2MtNSORwsEVFNoyH8Vh_w_WC9TGfH-_zqN8dISIy102JtmBwllvHnBAABYQAmtsf2yhqi0zvF--TVWp7kfzVRy3BQkTdYmJrfOZFnvp0kbXlG-PCXPO7OXbKM0ZLJ1Ga_qVJ_y-ERIMacCwACInxprKSzFp2-LNPn7eVAAc8z0XO0KbUE26vv_PXt5IMwyx6S5A1nCC4DQrv6bYHmmXP0YQpkOIm-tRHrPCOuDg'"#;
+    let ev = br#"{"v":"KERI10JSON000207_","t":"icp","d":"EOsgPPbBijCbpu3R9N-TMdURgcoFqrjUf3rQiIaJ5L7M","i":"EOsgPPbBijCbpu3R9N-TMdURgcoFqrjUf3rQiIaJ5L7M","s":"0","kt":["1/2","1/2","1/2"],"k":["DK4OJI8JOr6oEEUMeSF_X-SbKysfwpKwW-ho5KARvH5c","D1RZLgYke0GmfZm-CH8AsW4HoTU4m-2mFgu8kbwp8jQU","DBVwzum-jPfuUXUcHEWdplB4YcoL3BWGXK0TMoF_NeFU"],"nt":["1/2","1/2","1/2"],"n":["E9tzF91cgL0Xu4UkCqlCbDxXK-HnxmmTIwTi_ySgjGLc","Ez53UFJ6euROznsDhnPr4auhJGgzeM5ln5i-Tlp8V3L4","EPF1apCK5AUL7k4AlFG4pSEgQX0h-kosQ_tfUtPJ_Ti0"],"bt":"0","b":[],"c":[],"a":[]}-AADAAjCyfd63fzueQfpOHGgSl4YvEXsc3IYpdlvXDKfpbicV8pGj2v-TWBDyFqkzIdB7hMhG1iR3IeS7vy3a3catGDgABhGYRTHmUMPIj2LV5iJLe6BtaO_ohLAVyP9mW0U4DdYT0Uiqh293sGFJ6e47uCkOqoLu9B6dF7wl-llurp3o5BAACJz5biC59pvOpb3aUadlNr_BZb-laG1zgX7FtO5Q0M_HPJObtlhVtUghTBythEb8FpoLze8WnEWUayJnpLsYjAA"#;
     let parsed = signed_message(ev).unwrap().1;
     let signed_msg = Message::try_from(parsed).unwrap();
     match signed_msg {
@@ -292,7 +270,7 @@ fn test_verify() -> Result<(), Error> {
         _ => (),
     };
 
-    let ev = br#"{"v":"KERI10JSON000231_","t":"rot","d":"EDK-dx1__PH_ZJXeZBfxVnodjUsaczSocKCNluEV6Cec","i":"EZgXYINAQWXFpxAmWI9AwOwjVOYXzjyEE_-DdTfkEk8s","s":"4","p":"Ebhb0Fnink_-r0JfJQIVr15G0Ew8upPjo94-cT3SzdlU","kt":[["1/2","1/2","1/2"],["1/1","1/1"]],"k":["DToUWoemnetqJoLFIqDI7lxIJEfF0W7xG5ZlqAseVUQc","Drz-IZjko61q-sPMDIW6n-0NGFubbXiZhzWZrO_BZ0Wc","DiGwL3hjQqiUgQlFPeA6kRR1EBXX0vSLm9b6QhPS8IkQ","Dxj5pcStgZ6CbQ2YktNaj8KLE_g9YAOZF6AL9fyLcWQw","DE5zr5eH8EUVQXyAaxWfQUWkGCId-QDCvvxMT77ibj2Q"],"n":"E3in3Z14va0kk4Wqd3vcCAojKNtQq7ZTrQaavR8x0yu4","bt":"0","br":[],"ba":[],"a":[]}-AAFAAt2EjEPyJOMqtUdrp2EaRenlwriXviQ0hJ4Wx0agCok1sU3QMFS5hRdwX_NEFca9OnKGVjOag6K_F4yOs1BiuDQABN30bxBTVoemwfv6bPMqi9aIBKAuqm5IjcXFpS6vdnSdcQiz5VWb5DzpjhBztZyTiBbmxihl4tGyJ8xMTlIcmAwACq5YQaTJ45Smm2UwhyX5YLVkvxeJxt9oewmGAhOxyp-_tu0KAe2mehFHa6s9BlcqE-401mQh5EcniFbdHx3eAAQADR8Mtsn-7UKC-LjWq45-tKJfV8QVTaAXGiQsXye6DC7cf5iKQeUw7NXIcuxb-CXLL3AIMg3ZfhYy44-wW6pq6BgAEPtQg63EnWDfhwQjqgIlAHGupkeE_2hZhEp2Lcx0m5x4w0S6XqR9_Lx86RMnrzc3G9W3CJ_V5iEJhNQAqdTFqCw"#;
+    let ev  = br#"{"v":"KERI10JSON0002aa_","t":"rot","d":"EpaAOKbdwjjI7CAikCJDCr6rzmN14frB_cwif4MBnsTk","i":"EOsgPPbBijCbpu3R9N-TMdURgcoFqrjUf3rQiIaJ5L7M","s":"3","p":"EXlVGTrAuFlYjj1o1389Vfr1SecFYKJq4J9HkjlPyVqY","kt":["1/2","1/2","1/2"],"k":["D7WWKDLVwYxYMLAjDceIEs66xPMY4Afzx-RQw2x0mQzI","Dmg6Aah8qyKKDiQyNXTiO71QJwizjZfGM61BA-s0A5F4","DS3fhKpvPCDL5WmfN4_PkmJMMsSCdRTxG24OQuf_EmHQ"],"nt":[["1/2","1/2","1/2"],["1/1","1/1"]],"n":["Ehru1umWyy696CK10v2ROEOv8csx-S4KtYZHF4RbV3gc","EdsEn6HJLVLrhle11lqgImN0s7BQV03CfqxYpxs0qcrg","ED2DjOJWZyGUxGr_CFKA45dsmV72LvIvJWcB1xpuVGvM","EMwx5v3RMAjQ0GHdg5VR7XG2-2Cg4Kgslmn2lMCJ-oYs","EHN09tKWiJl83SPiBB_KDN1TKDutErXADGnl3TSx7ZLk"],"bt":"0","br":[],"ba":[],"a":[]}-AADAAHjkEbbFN_QkGinYurCnQphjMOgfDdfuIyVNgn9krq-vYuJSlwhilVWquumLiJL7oCOJmF6aFDWcKKScNKiPHDgABQsjiEna5VZ7vE5ayRPswdjW2z19xRUyg4pktVGGw3yv9OvP6XUDRbvxUs36hndwWE6y894bVbx5XUWWe5jDnCgACMMQCX8qjNcbHik2ukkv9mV45p3wgcxhuk_LMpXwt8KUT0eRwBHtnYuhFvXHYIDvaLTao4RxBg8AJhx8L-OdsDg"#;
     let parsed = signed_message(ev).unwrap().1;
     let signed_msg = Message::try_from(parsed).unwrap();
     match signed_msg {

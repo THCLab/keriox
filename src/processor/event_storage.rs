@@ -7,9 +7,14 @@ use crate::{
         event_data::EventData,
         sections::{seal::EventSeal, KeyConfig},
     },
-    event_message::signed_event_message::{Message, TimestampedSignedEventMessage},
+    event_message::signed_event_message::{
+        Message, SignedNontransferableReceipt, TimestampedSignedEventMessage,
+    },
     event_parsing::SignedEventData,
-    prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix, SelfSigningPrefix},
+    prefix::{
+        AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix,
+        SelfSigningPrefix,
+    },
     state::{EventSemantics, IdentifierState},
 };
 
@@ -209,16 +214,57 @@ impl EventStorage {
         }
     }
 
+    pub fn get_receipt_couplets(
+        &self,
+        rct: &SignedNontransferableReceipt,
+    ) -> Result<Vec<(BasicPrefix, SelfSigningPrefix)>, Error> {
+        let get_witness_couplets = |storage: &EventStorage,
+                                    receipt: &SignedNontransferableReceipt,
+                                    indexed_signatures: &[AttachedSignaturePrefix]|
+         -> Result<Vec<_>, Error> {
+            let pref = receipt.body.event.prefix.clone();
+            let witnesses = storage
+                .get_state(&pref)?
+                // if there is no state for id, receipt is out of order.
+                .ok_or(Error::EventOutOfOrderError)?
+                .witness_config
+                .witnesses;
+            indexed_signatures
+                .into_iter()
+                .map(|sig| -> Result<_, _> {
+                    Ok((
+                        witnesses
+                            .get(sig.index as usize)
+                            .ok_or(Error::SemanticError("No witness of given index".into()))?
+                            .clone(),
+                        sig.signature.clone(),
+                    ))
+                })
+                .collect::<Result<Vec<_>, _>>()
+        };
+        match (&rct.couplets, &rct.indexed_sigs) {
+            (None, None) => Ok(vec![]),
+            (None, Some(indexed_sigs)) => get_witness_couplets(self, &rct, &indexed_sigs),
+            (Some(coups), None) => Ok(coups.clone()),
+            (Some(coups), Some(indexed_sigs)) => {
+                let mut out = get_witness_couplets(self, &rct, &indexed_sigs)?;
+                out.append(&mut coups.clone());
+                Ok(out)
+            }
+        }
+    }
+
     pub fn get_nt_receipts_signatures(
         &self,
         prefix: &IdentifierPrefix,
         sn: u64,
     ) -> Option<Vec<(BasicPrefix, SelfSigningPrefix)>> {
         self.db.get_escrow_nt_receipts(prefix).map(|rcts| {
-            rcts.filter(|rct| rct.body.event.sn == sn)
-                .map(|rct| rct.couplets)
-                .flatten()
-                .collect()
+            let (oks, _errs): (Vec<_>, Vec<_>) = rcts
+                .filter(|rct| rct.body.event.sn == sn)
+                .map(|rct| -> Result<Vec<(_, _)>, _> { self.get_receipt_couplets(&rct) })
+                .partition(Result::is_ok);
+            oks.into_iter().map(|e| e.unwrap()).flatten().collect()
         })
     }
 

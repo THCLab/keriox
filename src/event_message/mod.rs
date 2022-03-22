@@ -214,12 +214,12 @@ mod tests {
         derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
         event::{
             event_data::{inception::InceptionEvent, EventData},
-            sections::KeyConfig,
+            sections::{key_config::nxt_commitment, KeyConfig},
             sections::{threshold::SignatureThreshold, InceptionWitnessConfig},
             Event,
         },
         keys::{PrivateKey, PublicKey},
-        prefix::{AttachedSignaturePrefix, IdentifierPrefix, Prefix},
+        prefix::{AttachedSignaturePrefix, IdentifierPrefix},
         state::IdentifierState,
     };
     use ed25519_dalek::Keypair;
@@ -244,7 +244,11 @@ mod tests {
 
         // initial control key hash prefix
         let pref1 = Basic::Ed25519.derive(pub_key1);
-        let nxt = SelfAddressing::Blake3_256.derive(pref1.to_str().as_bytes());
+        let nxt = nxt_commitment(
+            SignatureThreshold::Simple(1),
+            &vec![pref1],
+            &SelfAddressing::Blake3_256,
+        );
 
         // create a simple inception event
         let icp = Event::new(
@@ -253,7 +257,7 @@ mod tests {
             EventData::Icp(InceptionEvent {
                 key_config: KeyConfig::new(
                     vec![pref0.clone()],
-                    Some(nxt.clone()),
+                    nxt.clone(),
                     Some(SignatureThreshold::Simple(1)),
                 ),
                 witness_config: InceptionWitnessConfig::default(),
@@ -287,7 +291,7 @@ mod tests {
         assert_eq!(s0.current.public_keys.len(), 1);
         assert_eq!(s0.current.public_keys[0], pref0);
         assert_eq!(s0.current.threshold, SignatureThreshold::Simple(1));
-        assert_eq!(s0.current.threshold_key_digest, Some(nxt));
+        assert_eq!(s0.current.next_keys_data, nxt);
         assert_eq!(s0.witness_config.witnesses, vec![]);
         assert_eq!(s0.witness_config.tally, SignatureThreshold::Simple(0));
 
@@ -328,16 +332,16 @@ mod tests {
         let enc_pref_1 = Basic::X25519.derive(enc_key_1);
 
         // next key set pre-commitment
-        let nexter_pref = SelfAddressing::Blake3_256.derive(
-            [sig_pref_1.to_str(), enc_pref_1.to_str()]
-                .join("")
-                .as_bytes(),
+        let nexter_pref = nxt_commitment(
+            SignatureThreshold::default(),
+            &[sig_pref_1, enc_pref_1],
+            &SelfAddressing::Blake3_256,
         );
 
         let icp = InceptionEvent::new(
             KeyConfig::new(
                 vec![sig_pref_0.clone(), enc_pref_0.clone()],
-                Some(nexter_pref.clone()),
+                nexter_pref.clone(),
                 Some(SignatureThreshold::default()),
             ),
             None,
@@ -370,7 +374,7 @@ mod tests {
         assert_eq!(s0.current.public_keys[0], sig_pref_0);
         assert_eq!(s0.current.public_keys[1], enc_pref_0);
         assert_eq!(s0.current.threshold, SignatureThreshold::default());
-        assert_eq!(s0.current.threshold_key_digest, Some(nexter_pref));
+        assert_eq!(s0.current.next_keys_data, nexter_pref);
         assert_eq!(s0.witness_config.witnesses, vec![]);
         assert_eq!(s0.witness_config.tally, SignatureThreshold::Simple(0));
 

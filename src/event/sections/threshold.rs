@@ -20,7 +20,11 @@ impl ThresholdFraction {
 
 impl fmt::Display for ThresholdFraction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.fraction)
+        if self.fraction == One::one() {
+            write!(f, "1/1")
+        } else {
+            write!(f, "{}", self.fraction)
+        }
     }
 }
 
@@ -60,7 +64,7 @@ impl Serialize for ThresholdFraction {
     where
         S: Serializer,
     {
-        serializer.serialize_str(&format!("{}", self.fraction))
+        serializer.serialize_str(&self.to_string())
     }
 }
 
@@ -84,21 +88,6 @@ impl WeightedThreshold {
         match self {
             WeightedThreshold::Single(clause) => clause.enough_signatures(0, sigs),
             WeightedThreshold::Multi(clauses) => clauses.enough_signatures(sigs),
-        }
-    }
-
-    /// Serialize For Commitment
-    ///
-    /// Serializes a threshold into the form required
-    /// for next keys commitment.
-    /// Example:
-    ///     [["1/2", "1/2", "1/4", "1/4", "1/4"], ["1", "1"]]
-    ///     is serialized to
-    ///     '1/2,1/2,1/4,1/4,1/4&1,1'
-    pub fn extract_threshold(&self) -> String {
-        match self {
-            WeightedThreshold::Single(clause) => clause.extract_threshold(),
-            WeightedThreshold::Multi(clauses) => clauses.extract_threshold(),
         }
     }
 }
@@ -158,14 +147,6 @@ impl ThresholdClause {
             acc + self.0[(sig.index - start_index) as usize].fraction
         }) >= One::one())
     }
-
-    pub fn extract_threshold(&self) -> String {
-        self.0
-            .iter()
-            .map(|fr| fr.to_string())
-            .collect::<Vec<_>>()
-            .join(",")
-    }
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
@@ -196,8 +177,8 @@ impl MultiClauses {
             .fold(Ok((0, true)), |acc, clause| -> Result<_, Error> {
                 let (start, enough) = acc?;
                 let sigs: Vec<AttachedSignaturePrefix> = sigs
-                    .to_owned()
-                    .into_iter()
+                    .iter()
+                    .cloned()
                     .filter(|sig| sig.index >= start && sig.index < start + clause.0.len() as u16)
                     .collect();
                 Ok((
@@ -206,14 +187,6 @@ impl MultiClauses {
                 ))
             })?
             .1)
-    }
-
-    pub fn extract_threshold(&self) -> String {
-        self.0
-            .iter()
-            .map(|clause| clause.extract_threshold())
-            .collect::<Vec<_>>()
-            .join("&")
     }
 }
 
@@ -249,7 +222,11 @@ pub fn test_weighted_treshold_serialization() -> Result<(), Error> {
     let multi_threshold = r#"[["1"],["1/2","1/2","1/2"]]"#.to_string();
     let wt: WeightedThreshold = serde_json::from_str(&multi_threshold)?;
     assert!(matches!(wt, WeightedThreshold::Multi(_)));
-    assert_eq!(serde_json::to_string(&wt).unwrap(), multi_threshold);
+    // assert_eq!(serde_json::to_string(&wt).unwrap(), multi_threshold);
+    assert_eq!(
+        serde_json::to_string(&wt).unwrap(),
+        r#"[["1/1"],["1/2","1/2","1/2"]]"#.to_string()
+    );
 
     let single_threshold = r#"["1/2","1/2","1/2"]"#.to_string();
     let wt: WeightedThreshold = serde_json::from_str(&single_threshold)?;

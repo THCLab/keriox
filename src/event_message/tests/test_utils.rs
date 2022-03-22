@@ -66,8 +66,8 @@ fn test_update_identifier_state(
 
     let current_key_pref = Basic::Ed25519.derive(cur_pk.clone());
     let next_key_prefix = Basic::Ed25519.derive(next_pk.clone());
-    let next_dig = nxt_commitment(
-        &SignatureThreshold::Simple(1),
+    let next_keys_data = nxt_commitment(
+        SignatureThreshold::Simple(1),
         &[next_key_prefix.clone()],
         &SelfAddressing::Blake3_256,
     );
@@ -119,7 +119,7 @@ fn test_update_identifier_state(
     assert_eq!(new_state.current.public_keys.len(), 1);
     assert_eq!(new_state.current.public_keys[0], current_key_pref);
     assert_eq!(new_state.current.threshold, SignatureThreshold::Simple(1));
-    assert_eq!(new_state.current.threshold_key_digest, Some(next_dig));
+    assert_eq!(new_state.current.next_keys_data, next_keys_data);
     assert_eq!(new_state.witness_config.witnesses, vec![]);
     assert_eq!(
         new_state.witness_config.tally,

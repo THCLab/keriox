@@ -5,6 +5,7 @@ use crate::{
 use base64::encode_config;
 use core::str::FromStr;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::fmt::Display;
 
 pub mod attached_signature;
 pub mod basic;
@@ -39,6 +40,12 @@ pub enum IdentifierPrefix {
     Basic(BasicPrefix),
     SelfAddressing(SelfAddressingPrefix),
     SelfSigning(SelfSigningPrefix),
+}
+
+impl Display for IdentifierPrefix {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.to_str())
+    }
 }
 
 impl FromStr for IdentifierPrefix {

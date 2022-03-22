@@ -188,7 +188,16 @@ impl From<&SignedEventMessage> for SignedEventData {
 
 impl From<SignedNontransferableReceipt> for SignedEventData {
     fn from(rcp: SignedNontransferableReceipt) -> SignedEventData {
-        let attachments = [Attachment::ReceiptCouplets(rcp.couplets)].into();
+        let attachments: Vec<_> = match (rcp.couplets, rcp.indexed_sigs) {
+            (None, None) => vec![],
+            (None, Some(indexed_sigs)) => [Attachment::AttachedSignatures(indexed_sigs)].into(),
+            (Some(couplets), None) => [Attachment::ReceiptCouplets(couplets)].into(),
+            (Some(couplets), Some(indexed_sigs)) => [
+                Attachment::ReceiptCouplets(couplets),
+                Attachment::AttachedSignatures(indexed_sigs),
+            ]
+            .into(),
+        };
         SignedEventData {
             deserialized_event: EventType::Receipt(rcp.body),
             attachments,
@@ -376,7 +385,8 @@ fn signed_receipt(
         Attachment::ReceiptCouplets(couplets) => {
             Ok(Message::NontransferableRct(SignedNontransferableReceipt {
                 body: event_message,
-                couplets,
+                couplets: Some(couplets),
+                indexed_sigs: None,
             }))
         }
         Attachment::SealSignaturesGroups(data) => {
@@ -392,6 +402,13 @@ fn signed_receipt(
                 sigs,
             )))
         }
+        Attachment::AttachedSignatures(sigs) => {
+            Ok(Message::NontransferableRct(SignedNontransferableReceipt {
+                body: event_message,
+                couplets: None,
+                indexed_sigs: Some(sigs),
+            }))
+        }
         Attachment::Frame(atts) => signed_receipt(event_message, atts),
         _ => {
             // Improper payload type
@@ -404,7 +421,7 @@ fn signed_receipt(
 fn test_stream1() {
     use crate::event_parsing;
     // taken from KERIPY: tests/core/test_kevery.py#62
-    let stream = br#"{"v":"KERI10JSON000120_","t":"icp","d":"EG4EuTsxPiRM7soX10XXzNsS1KqXKUp8xsQ-kW_tWHoI","i":"DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","s":"0","kt":"1","k":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA"],"n":"EPYuj8mq_PYYsoBKkzX1kxSPGYBWaIya3slgCOyOtlqU","bt":"0","b":[],"c":[],"a":[]}-AABAA0aSisI4ZZTH_6JCqsvAsEpuf_Jq6bDbvPWj_eCDnAGbSARqYHipNs-9W7MHnwnMfIXwLpcoJkKGrQ-SiaklhAw"#;
+    let stream = br#"{"v":"KERI10JSON00012b_","t":"icp","d":"ELeMG3OOxWi5n1Zud603_Bn6Hzm3hIRZXlQnSgC5lU7A","i":"DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","s":"0","kt":"1","k":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA"],"nt":"1","n":["E67B6WkwQrEfSA2MylxmF28HJc_HxfHRyK1kRXSYeMiI"],"bt":"0","b":[],"c":[],"a":[]}-AABAAw6czYydWCMpfs-XpUPi-h2OuBHP6ji5IU7YbK0pnsQt237sI4jaALv7Guc30y1zh8j5hrou-zOoUrVINlhSICw"#;
 
     let parsed = event_parsing::message::signed_message(stream).unwrap().1;
     let msg = Message::try_from(parsed).unwrap();
@@ -430,7 +447,7 @@ fn test_stream1() {
 fn test_stream2() {
     use crate::event_parsing;
     // taken from KERIPY: tests/core/test_eventing.py::test_multisig_digprefix#2256
-    let stream = br#"{"v":"KERI10JSON00017e_","t":"icp","d":"ELYk-z-SuTIeDncLr6GhwVUKnv3n3F1bF18qkXNd2bpk","i":"ELYk-z-SuTIeDncLr6GhwVUKnv3n3F1bF18qkXNd2bpk","s":"0","kt":"2","k":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","DVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI","DT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8"],"n":"E9izzBkXX76sqt0N-tfLzJeRqj0W56p4pDQ_ZqNCDpyw","bt":"0","b":[],"c":[],"a":[]}-AADAA39j08U7pcU66OPKsaPExhBuHsL5rO1Pjq5zMgt_X6jRbezevis6YBUg074ZNKAGdUwHLqvPX_kse4buuuSUpAQABphobpuQEZ6EhKLhBuwgJmIQu80ZUV1GhBL0Ht47Hsl1rJiMwE2yW7-yi8k3idw2ahlpgdd9ka9QOP9yQmMWGAQACM7yfK1b86p1H62gonh1C7MECDCFBkoH0NZRjHKAEHebvd2_LLz6cpCaqKWDhbM2Rq01f9pgyDTFNLJMxkC-fAQ"#;
+    let stream = br#"{"v":"KERI10JSON0001e7_","t":"icp","d":"EZrJQSdhdiyXNpEzHo-dR0EEbLfcIopBSImdLnQGOKkg","i":"EZrJQSdhdiyXNpEzHo-dR0EEbLfcIopBSImdLnQGOKkg","s":"0","kt":"2","k":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","DVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI","DT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8"],"nt":"2","n":["E_IkdcjsIFrFba-LS1sJDjpec_4vM3XtIPa6D51GcUIw","EU28GjHFKeXzncPxgwlHQZ0iO7f09Y89vy-3VkZ23bBI","E2PRzip7UZ5UTA_1ucb5eoAzxeRS3sIThrSbZhdRaZY8"],"bt":"0","b":[],"c":[],"a":[]}-AADAAzclB26m4VWp5R8ANlTU2qhqE6GA9siAK_vhtqtNNR6qhVed-xEoXRadnL5Jc0kxPZi8XUqSk5KSaOnke_SxXDAABX--x4JGI0Dp0Ran-t1LMg3NEgizu1Jb85LTImofYqD6jz9w5TTPNAmj7rfIFvd4mfJ_ioH0Z0mzLWuIvTIFCBAACQTiHacY3flY9y_Wup66bNzcyQvJUT-WGkv4CPgqkMwq5mOEFf2ps74bur1AE9OSGgrEBlcOQ9HWuTcr80FMKCg"#;
 
     let parsed = event_parsing::message::signed_message(stream).unwrap().1;
     let msg = Message::try_from(parsed);
@@ -472,7 +489,15 @@ fn test_deserialize_signed_receipt() {
 
     // Nontrans receipt with alternative attachment with -B payload type. Not implemented yet.
     // takien from keripy/tests/core/test_witness.py::test_indexed_witness_reply
-    // let wintess_receipts = r#"{"v":"KERI10JSON000091_","t":"rct","d":"EHz9RXAr9JiJn-3wkBvsUo1Qq3hvMQPaITxzcfJND8NM","i":"EHz9RXAr9JiJn-3wkBvsUo1Qq3hvMQPaITxzcfJND8NM","s":"0"}-BADAAdgQkf11JTyF2WVA1Vji1ZhXD8di4AJsfro-sN_jURM1SUioeOleik7w8lkDldKtg0-Nr1X32V9Q8tk8RvBGxDgABZmkRun-qNliRA8WR2fIUnVeB8eFLF7aLFtn2hb31iW7wYSYafR0kT3fV_r1wNNdjm9dkBw-_2xsxThTGfO5UAwACRGJiRPFe4ClvpqZL3LHcEAeT396WVrYV10EaTdt0trINT8rPbz96deSFT32z3myNPVwLlNcq4FzIaQCooM2HDQ"#;
-    // let msg = signed_message(witness_receipts.as_bytes());
-    // assert!(msg.is_ok());
+    let witness_receipts = r#"{"v":"KERI10JSON000091_","t":"rct","d":"EHz9RXAr9JiJn-3wkBvsUo1Qq3hvMQPaITxzcfJND8NM","i":"EHz9RXAr9JiJn-3wkBvsUo1Qq3hvMQPaITxzcfJND8NM","s":"0"}-BADAAdgQkf11JTyF2WVA1Vji1ZhXD8di4AJsfro-sN_jURM1SUioeOleik7w8lkDldKtg0-Nr1X32V9Q8tk8RvBGxDgABZmkRun-qNliRA8WR2fIUnVeB8eFLF7aLFtn2hb31iW7wYSYafR0kT3fV_r1wNNdjm9dkBw-_2xsxThTGfO5UAwACRGJiRPFe4ClvpqZL3LHcEAeT396WVrYV10EaTdt0trINT8rPbz96deSFT32z3myNPVwLlNcq4FzIaQCooM2HDQ"#;
+    let parsed_witness_receipt = signed_message(witness_receipts.as_bytes()).unwrap();
+    assert!(parsed_witness_receipt.0.is_empty());
+
+    let msg = Message::try_from(parsed_witness_receipt.1);
+    assert!(msg.is_ok());
+    if let Ok(Message::NontransferableRct(rct)) = msg {
+        assert_eq!(3, rct.indexed_sigs.unwrap().len());
+    } else {
+        assert!(false)
+    };
 }

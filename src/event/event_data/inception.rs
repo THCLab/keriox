@@ -93,54 +93,48 @@ impl EventSemantics for InceptionEvent {
 #[test]
 fn test_inception_data_derivation() -> Result<(), Error> {
     use crate::event::sections::{
-        key_config::{nxt_commitment, KeyConfig},
-        threshold::SignatureThreshold,
+        key_config::KeyConfig, key_config::NextKeysData, threshold::SignatureThreshold,
     };
     use crate::event_message::Digestible;
-    use crate::prefix::{BasicPrefix, Prefix};
+    use crate::prefix::{BasicPrefix, Prefix, SelfAddressingPrefix};
 
     let keys: Vec<BasicPrefix> = vec![
-        "DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA"
+        "DRd2QdFHY2ymPlzOwW8o5r5mcbMwwUbkwtoGV7X1on2M"
             .parse()
             .unwrap(),
-        "DVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI"
+        "DvhIXMDz2Wz9q4iohJ_hRtJAbE09z3LxnZSs8Nm6kSww"
             .parse()
             .unwrap(),
-        "DT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8"
+        "DRHHGMFBQPicaJqKgGWqDyqmRGMksYx7rs491WwcVqtA"
             .parse()
             .unwrap(),
     ];
-    let next_keys: Vec<BasicPrefix> = vec![
-        "DKPE5eeJRzkRTMOoRGVd2m18o8fLqM2j9kaxLhV3x8AQ"
+    let next_keys_hashes: Vec<SelfAddressingPrefix> = vec![
+        "ExKDRQLyYUS3O1xme1pbKenP73WqpbKTMopvUSQFRRSw"
             .parse()
             .unwrap(),
-        "D1kcBE7h0ImWW6_Sp7MQxGYSshZZz6XM7OiUE5DXm0dU"
+        "E2e7tLvlVlER4kkV3bw36SN8Gz3fJ-3QR2xadxKyed10"
             .parse()
             .unwrap(),
-        "D4JDgo3WNSUpt-NG14Ni31_GCmrU0r38yo7kgDuyGkQM"
+        "Ekhos3Fx8IfwKdfQrfZ_FicfrYiXmvZodQcHV3KNOSlU"
             .parse()
             .unwrap(),
     ];
 
-    let next_key_hash = nxt_commitment(
-        &SignatureThreshold::Simple(2),
-        &next_keys,
-        &SelfAddressing::Blake3_256,
-    );
-    let key_config = KeyConfig::new(
-        keys,
-        Some(next_key_hash),
-        Some(SignatureThreshold::Simple(2)),
-    );
+    let next_keys_data = NextKeysData {
+        threshold: SignatureThreshold::Simple(2),
+        next_key_hashes: next_keys_hashes,
+    };
+    let key_config = KeyConfig::new(keys, next_keys_data, Some(SignatureThreshold::Simple(2)));
     let icp_data = InceptionEvent::new(key_config.clone(), None, None)
         .incept_self_addressing(SelfAddressing::Blake3_256, SerializationFormats::JSON)?;
 
     assert_eq!(
-        "ELYk-z-SuTIeDncLr6GhwVUKnv3n3F1bF18qkXNd2bpk",
+        "EfFRznBFTCjE6L4Muo0mJ3rPpf-31ytLhe7ZW5FGLpaY",
         icp_data.event.get_prefix().to_str()
     );
     assert_eq!(
-        "ELYk-z-SuTIeDncLr6GhwVUKnv3n3F1bF18qkXNd2bpk",
+        "EfFRznBFTCjE6L4Muo0mJ3rPpf-31ytLhe7ZW5FGLpaY",
         icp_data.event.get_digest().to_str()
     );
 

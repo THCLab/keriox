@@ -107,7 +107,13 @@ mod tests {
     \"B8tr54sHON1vWVrTkep6H-4HAl6FEQt27fThWoNZsa88\",
     \"BVrTkep6HHA8tr54sHON1Qt27fThWoNZsa88-4vWl6FE\"
   ],
-  \"n\": \"FWoNZsa88VrTkep6HQt27fTh-4HA8tr54sHON1vWl6FE\",
+  \"nt\": \"3\",
+  \"n\" : 
+    [
+      \"ETNZH3ULvYawyZ-i0d8JZU6JR2nmAoAfSVPzhzS6b5CM\",
+      \"EnmwyZdi0d8JZAoTNZYAfSVPzhzaU6JR2H3ULvS6b5CM\",
+      \"ETNZH3ULvS6bYAfSVPzhzaU6JR2nmwyZfi0d8JZ5s8bk\"
+    ],
   \"bt\": \"2\",
   \"b\":
   [

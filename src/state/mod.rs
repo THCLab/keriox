@@ -19,7 +19,9 @@ pub struct LastEstablishmentData {
     pub(crate) sn: u64,
     #[serde(rename = "d")]
     pub(crate) digest: SelfAddressingPrefix,
+    #[serde(rename = "br")]
     pub(crate) br: Vec<BasicPrefix>,
+    #[serde(rename = "ba")]
     pub(crate) ba: Vec<BasicPrefix>,
 }
 
@@ -92,11 +94,39 @@ pub struct IdentifierState {
     #[serde(flatten)]
     pub witness_config: WitnessConfig,
 
-    #[serde(rename = "di")]
+    #[serde(rename = "di", with = "empty_string_as_none")]
     pub delegator: Option<IdentifierPrefix>,
 
     #[serde(rename = "ee")]
     pub last_est: LastEstablishmentData,
+}
+
+mod empty_string_as_none {
+    use serde::{de::IntoDeserializer, Deserialize, Deserializer, Serializer};
+
+    pub fn deserialize<'d, D, T>(de: D) -> Result<Option<T>, D::Error>
+    where
+        D: Deserializer<'d>,
+        T: Deserialize<'d>,
+    {
+        let opt = Option::<String>::deserialize(de)?;
+        let opt = opt.as_deref();
+        match opt {
+            None | Some("") => Ok(None),
+            Some(s) => T::deserialize(s.into_deserializer()).map(Some),
+        }
+    }
+
+    pub fn serialize<S, T>(t: &Option<T>, s: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+        T: ToString,
+    {
+        s.serialize_str(&match &t {
+            Some(v) => v.to_string(),
+            None => "".into(),
+        })
+    }
 }
 
 impl EventTypeTag {
