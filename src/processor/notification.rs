@@ -72,6 +72,7 @@ pub enum Notification {
     ReplyUpdated,
     #[cfg(feature = "oobi")]
     GotOobi(EventMessage<ReplyEvent<Oobi>>),
+    #[cfg(feature = "oobi")]
     GotSignedOobi(SignedReply<Oobi>),
 }
 
@@ -106,13 +107,14 @@ impl From<&Notification> for JustNotification {
             Notification::ReceiptEscrowed => JustNotification::ReceiptEscrowed,
             Notification::ReceiptOutOfOrder(_) => JustNotification::ReceiptOutOfOrder,
             Notification::TransReceiptOutOfOrder(_) => JustNotification::TransReceiptOutOfOrder,
+            Notification::DupliciousEvent(_) => JustNotification::DupliciousEvent,
             #[cfg(feature = "query")]
             Notification::KsnOutOfOrder(_) => JustNotification::KsnOutOfOrder,
             #[cfg(feature = "query")]
             Notification::ReplyUpdated => JustNotification::KsnUpdated,
-            Notification::DupliciousEvent(_) => JustNotification::DupliciousEvent,
             #[cfg(feature = "oobi")]
             Notification::GotOobi(_) => JustNotification::GotOobi,
+            #[cfg(feature = "oobi")]
             Notification::GotSignedOobi(_) => JustNotification::GotSignedOobi,
         }
     }

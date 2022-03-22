@@ -14,5 +14,5 @@ pub mod state;
 #[cfg(feature = "query")]
 pub mod query;
 
-#[cfg(feature = "query")]
+#[cfg(feature = "oobi")]
 pub mod oobi;

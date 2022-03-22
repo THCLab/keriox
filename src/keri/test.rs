@@ -167,7 +167,7 @@ fn test_qry_rpy() -> Result<(), Error> {
         keri::witness::Witness,
         prefix::AttachedSignaturePrefix,
         query::{
-            query::{QueryArgs, QueryEvent, SignedQuery},
+            query_event::{QueryArgs, QueryEvent, SignedQuery},
             ReplyType, Route,
         },
         signer::{KeyManager, Signer},
