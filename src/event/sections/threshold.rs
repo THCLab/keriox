@@ -20,7 +20,7 @@ impl ThresholdFraction {
 
 impl fmt::Display for ThresholdFraction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if self.fraction == Fraction::from(1) {
+        if self.fraction == One::one() {
             write!(f, "1/1")
         } else {
             write!(f, "{}", self.fraction)
