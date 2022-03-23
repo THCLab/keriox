@@ -1,4 +1,4 @@
-mod tables;
+pub(crate) mod tables;
 
 use crate::query::key_state_notice::KeyStateNotice;
 use crate::{
