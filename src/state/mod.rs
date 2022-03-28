@@ -62,6 +62,7 @@ impl WitnessConfig {
                 let atts = attached_signatures
                     .into_iter()
                     .map(Option::unwrap)
+                    .map(|att| att.index as usize)
                     .collect::<Vec<_>>();
                 t.enough_signatures(&atts)
             }
