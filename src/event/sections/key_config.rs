@@ -18,27 +18,21 @@ pub struct NextKeysData {
 }
 
 impl NextKeysData {
-    pub fn verify_next(&self, next: &KeyConfig) -> bool {
-        // let check_keys = self
-        //     .next_key_hashes
-        //     .iter()
-        //     .zip(next.public_keys.iter())
-        //     .all(|(hash, key)| hash.verify_binding(key.to_str().as_bytes()));
+    pub fn verify_next(&self, next: &KeyConfig) -> Result<bool, Error> {
         let mut indexes = vec![];
         for key in &next.public_keys {
-            let sigs_indexes = self.next_key_hashes
+            let sigs_indexes = self
+                .next_key_hashes
                 .iter()
-                .enumerate()
-                .find(|(i, dig)| 
-                    dig.verify_binding(key.to_str().as_bytes())
-                ).ok_or(Error::SemanticError("No such public key in next keys hashes".into())).unwrap();
-                indexes.push(sigs_indexes.0);
-            
-        };
+                .position(|dig| dig.verify_binding(key.to_str().as_bytes()))
+                .ok_or(Error::SemanticError(
+                    "No such public key in next keys hashes".into(),
+                ))?;
+            indexes.push(sigs_indexes);
+        }
         // check previous next threshold
-        self.threshold.enough_signatures(&indexes).unwrap()
+        self.threshold.enough_signatures(&indexes)
         // TODO check current threshold?
-        // self.threshold == next.threshold && check_keys
     }
 }
 
@@ -76,7 +70,12 @@ impl KeyConfig {
     /// Public Keys, according to the indexes in the sigs.
     pub fn verify(&self, message: &[u8], sigs: &[AttachedSignaturePrefix]) -> Result<bool, Error> {
         // ensure there's enough sigs
-        if !self.threshold.enough_signatures(&sigs.iter().map(|sig| sig.index as usize).collect::<Vec<_>>())? {
+        if !self.threshold.enough_signatures(
+            &sigs
+                .iter()
+                .map(|sig| sig.index as usize)
+                .collect::<Vec<_>>(),
+        )? {
             Err(Error::NotEnoughSigsError)
         } else if
         // and that there are not too many
@@ -112,7 +111,7 @@ impl KeyConfig {
     ///
     /// Verifies that the given next KeyConfig matches that which is committed
     /// to in next_keys_data of this KeyConfig
-    pub fn verify_next(&self, next: &KeyConfig) -> bool {
+    pub fn verify_next(&self, next: &KeyConfig) -> Result<bool, Error> {
         self.next_keys_data.verify_next(next)
     }
 
