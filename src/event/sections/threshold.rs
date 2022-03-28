@@ -1,6 +1,6 @@
 use std::{fmt, str::FromStr};
 
-use crate::{error::Error, prefix::AttachedSignaturePrefix};
+use crate::error::Error;
 use fraction::{Fraction, One, Zero};
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use serde_hex::{Compact, SerHex};
@@ -143,9 +143,17 @@ impl ThresholdClause {
         start_index: usize,
         sigs_indexes: &[usize],
     ) -> Result<bool, Error> {
-        Ok(sigs_indexes.iter().fold(Zero::zero(), |acc: Fraction, sig_index| {
-            acc + self.0[(sig_index - start_index) as usize].fraction
-        }) >= One::one())
+        Ok(sigs_indexes
+            .iter()
+            .fold(Some(Zero::zero()), |acc: Option<Fraction>, sig_index| {
+                if let (Some(element), Some(sum)) = (self.0.get(sig_index - start_index), acc) {
+                    Some(sum + element.fraction)
+                } else {
+                    None
+                }
+            })
+            .ok_or(Error::SemanticError("signature index out of bound".into()))?
+            >= One::one())
     }
 }
 
@@ -179,7 +187,9 @@ impl MultiClauses {
                 let sigs: Vec<usize> = sigs_indexes
                     .iter()
                     .cloned()
-                    .filter(|sig_index| sig_index >= &start && sig_index < &(start + clause.0.len()))
+                    .filter(|sig_index| {
+                        sig_index >= &start && sig_index < &(start + clause.0.len())
+                    })
                     .collect();
                 Ok((
                     start + clause.0.len(),
@@ -192,7 +202,6 @@ impl MultiClauses {
 
 #[test]
 fn test_enough_sigs() -> Result<(), Error> {
-    use crate::derivation::self_signing::SelfSigning;
     // Threshold: [[1/1], [1/2, 1/2, 1/2], [1/2,1/2]]
     let wt = MultiClauses::new_from_tuples(vec![vec![(1, 1)], vec![(1, 2), (1, 2), (1, 2)]]);
     let sigs_indexes: Vec<_> = vec![0, 1, 2, 3];
