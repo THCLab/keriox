@@ -1,10 +1,17 @@
+use crate::derivation::basic::Basic;
+use crate::derivation::self_signing::SelfSigning;
+use crate::event::sections::threshold::SignatureThreshold;
+use crate::event_message::event_msg_builder::EventMsgBuilder;
+use crate::event_message::key_event_message::KeyEvent;
 use crate::event_message::signed_event_message::Message;
+use crate::event_message::{EventTypeTag, Digestible};
 use crate::event_parsing::message::{signed_event_stream, signed_message};
-use crate::prefix::IdentifierPrefix;
+use crate::prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SeedPrefix, Prefix};
 use crate::processor::escrow::default_escrow_bus;
 use crate::processor::event_storage::EventStorage;
 use crate::processor::notification::Notification;
 use crate::processor::EventProcessor;
+use crate::signer::Signer;
 use crate::{database::sled::SledEventDatabase, error::Error};
 use std::convert::TryFrom;
 use std::fs;
@@ -700,5 +707,127 @@ fn test_partially_sign_escrow() -> Result<(), Error> {
     let notification = processor.process(rot)?;
     publisher.notify(&notification)?;
     assert_eq!(storage.get_state(&id).unwrap().unwrap().sn, 2);
+    Ok(())
+}
+
+#[test]
+pub fn test_partial_rotation() -> Result<(), Error> {
+    use tempfile::Builder;
+    let (processor, storage, publisher) = {
+        let witness_root = Builder::new().prefix("test-db").tempdir().unwrap();
+        let path = witness_root.path();
+        let witness_db = Arc::new(SledEventDatabase::new(path).unwrap());
+        std::fs::create_dir_all(path).unwrap();
+        let processor = EventProcessor::new(witness_db.clone());
+
+        (
+            processor,
+            EventStorage::new(witness_db.clone()),
+            default_escrow_bus(witness_db.clone()),
+        )
+    };
+    // setup signers
+    let signers = vec![
+        "ArwXoACJgOleVZ2PY7kXn7rA0II0mHYDhc6WrBH8fDAc",
+        "A6zz7M08-HQSFq92sJ8KJOT2cZ47x7pXFQLPB0pckB3Q",
+        "AcwFTk-wgk3ZT2buPRIbK-zxgPx-TKbaegQvPEivN90Y",
+        "Alntkt3u6dDgiQxTATr01dy8M72uuaZEf9eTdM-70Gk8",
+        "A1-QxDkso9-MR1A8rZz_Naw6fgaAtayda8hrbkRVVu1E",
+        "AKuYMe09COczwf2nIoD5AE119n7GLFOVFlNLxZcKuswc",
+        "AxFfJTcSuEE11FINfXMqWttkZGnUZ8KaREhrnyAXTsjw",
+        "ALq-w1UKkdrppwZzGTtz4PWYEeWm0-sDHzOv5sq96xJY",
+        "AAD8sznuHWMw7cl6eZJQLm8PGBKvCjQzDH1Ui9ygH0Uo",
+        "ANqQNn_9UjfayUJNdQobmixrH9qJF1cltKDwDMVkiLg8",
+        "A1t7ix1GuZIP48r6ljsoo8jPsB9dEnnWNfhy2XNl1r-c",
+        "AhzCysVY12fWXfkH1QkAOCY6oYbVwXOaUjf7YPtIfC8U",
+        "A4HrsYq9XfxYK76ffoceNzj9n8tBkXrWNBIXUNdoe5ME",
+        "AhpAiPtDqDcEeU_eXlJ8Bk3kJE0g0jdezyXZdBKfXslU",
+        "AzN9fKZAZEIn9jMN2fZ2B35MNMQJPAZrNrJQRMi_S_8g",
+        "AkNrzLqnqRx9WCpJAwTAOE5oNaDlOgOYiuM9bL4HM9R0",
+        "ALjR-EE3jUF2yXW7Tq7WJSh3OFc6-BNxXJ9jGdfwA6Bs",
+        "AvpsEhige2ssBrMxskK2xXpeKfed4cvcZCIdRh7fhgiI",
+    ]
+    .iter()
+    .map(|key| {
+        let (pk, sk) = key
+            .parse::<SeedPrefix>()
+            .unwrap()
+            .derive_key_pair()
+            .unwrap();
+        Signer::new_with_key(&sk.key()).unwrap()
+    })
+    .collect::<Vec<_>>();
+
+    let keys = vec![Basic::Ed25519.derive(signers[0].public_key())];
+    let next_keys = vec![
+        &signers[1],
+        &signers[2],
+        &signers[3],
+        &signers[4],
+        &signers[5],
+    ];
+    let next_pks = next_keys
+        .iter()
+        .map(|signer| Basic::Ed25519.derive(signer.public_key()))
+        .collect::<Vec<_>>();
+    // build inception event
+    let icp = EventMsgBuilder::new(EventTypeTag::Icp)
+        .with_keys(keys)
+        .with_threshold(&SignatureThreshold::Simple(1))
+        .with_next_keys(next_pks)
+        .with_next_threshold(&SignatureThreshold::Simple(2))
+        .build()
+        .unwrap();
+    let id_prefix = icp.event.get_prefix();
+    let icp_digest = icp.event.get_digest();
+    assert_eq!(id_prefix, IdentifierPrefix::SelfAddressing(icp_digest)); 
+    assert_eq!(id_prefix.to_str(), "Eozz_fD_4KNiIZAggGCPcCEbV-mDbvLH_UfVMsC83yLo");
+    // {"v":"KERI10JSON0001e7_","t":"icp","d":"Eozz_fD_4KNiIZAggGCPcCEbV-mDbvLH_UfVMsC83yLo","i":"Eozz_fD_4KNiIZAggGCPcCEbV-mDbvLH_UfVMsC83yLo","s":"0","kt":"1","k":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA"],"nt":"2","n":["E67B6WkwQrEfSA2MylxmF28HJc_HxfHRyK1kRXSYeMiI","EL-1w3eYVzNy0-RQV6r2ZORG-Y4gmOF-S7t9aeZMERXU","E_IkdcjsIFrFba-LS1sJDjpec_4vM3XtIPa6D51GcUIw","EU28GjHFKeXzncPxgwlHQZ0iO7f09Y89vy-3VkZ23bBI","E2PRzip7UZ5UTA_1ucb5eoAzxeRS3sIThrSbZhdRaZY8"],"bt":"0","b":[],"c":[],"a":[]}
+    let msg = signers[0].sign(icp.serialize().unwrap())?;
+    let signed_icp = icp.sign(
+        vec![AttachedSignaturePrefix::new(
+            SelfSigning::Ed25519Sha512,
+            msg,
+            0,
+        )],
+        None,
+    );
+
+    let not = processor.process(Message::Event(signed_icp))?;
+    assert!(matches!(not, Notification::KeyEventAdded(_)));
+
+    // create partial rotation event
+    // let current_signers_indexes = [2, 4, 5];
+    let current_signers = [&signers[2], &signers[4], &signers[5]];
+    let current_public_keys = current_signers
+        .iter()
+        .map(|sig| Basic::Ed25519.derive(sig.public_key()))
+        .collect::<Vec<_>>();
+    let next_public_keys = signers[6..10]
+        .iter()
+        .map(|sig| Basic::Ed25519.derive(sig.public_key()))
+        .collect::<Vec<_>>();
+    let rotation = EventMsgBuilder::new(EventTypeTag::Rot)
+        .with_prefix(&id_prefix)
+        .with_previous_event(&icp_digest)
+        .with_keys(current_public_keys)
+        .with_threshold(&SignatureThreshold::Simple(3))
+        .with_next_keys(next_public_keys)
+        .with_next_threshold(&SignatureThreshold::Simple(4))
+        .build()?;
+
+    let signatures = current_signers
+        .iter()
+        .enumerate()
+        .map(|(index, sig)| {
+            let signature = sig.sign(rotation.serialize().unwrap()).unwrap();
+            AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, signature, index as u16)
+        }).collect::<Vec<_>>();
+
+    let signed_rotation = rotation.sign(signatures, None);
+
+    let not = processor.process(Message::Event(signed_rotation))?;
+    assert!(matches!(not, Notification::KeyEventAdded(_)));
+    
     Ok(())
 }
