@@ -1,4 +1,9 @@
 #![cfg(feature = "gossip")]
+//! Gossip server can be used to share some data across different program instances over the network.
+//!
+//! First create instance with some initial data and call [`Server::start`].
+//! Then call [`Server::bootstrap`] to join a network.
+//! You can use [`Server::update_data`] to update the local data and [`Server::get_peers`] to access data associated with other peers.
 
 use std::{
     collections::{hash_map::Entry, HashMap},
@@ -21,7 +26,7 @@ pub struct Server<T: Clone> {
 
 impl<T> Server<T>
 where
-    T: Clone + Serialize + for<'de> Deserialize<'de>,
+    T: Clone + Send + Sync + Serialize + for<'de> Deserialize<'de>,
 {
     /// Initializes a new Gossip server instance with initial local data.
     /// Opens a UDP socket immediately.
@@ -33,11 +38,42 @@ where
 
     /// Begins sending and receiving gossip messages.
     /// Stops when the future is dropped.
-    pub async fn start(self) -> Result<(), Error> {
+    pub async fn start(&self) -> Result<(), Error> {
         futures::future::select(Box::pin(self.recv_loop()), Box::pin(self.send_loop()))
             .await
             .factor_first()
             .0
+    }
+
+    /// Joins a gossip network.
+    /// Requires an address of one other participant.
+    pub async fn bootstrap(&self, peer_addr: SocketAddr) -> Result<(), Error> {
+        self.send(peer_addr).await
+    }
+
+    /// Modifies the data associated with local peer.
+    pub async fn update_data(&self, update_fn: impl FnOnce(&mut T)) {
+        let mut network = self.network.lock().await;
+        network.local_version += 1;
+        update_fn(&mut network.local_data);
+    }
+
+    /// Returns data about all the peers including local peer.
+    pub async fn get_peers(&self) -> PeerMap<T> {
+        let network = self.network.lock().await;
+        network.peers.clone()
+    }
+
+    /// Returns the data associated with local peer.
+    pub async fn get_data(&self) -> T {
+        let network = self.network.lock().await;
+        network.local_data.clone()
+    }
+
+    /// Returns ID of the local peer.
+    pub async fn get_id(&self) -> Uuid {
+        let network = self.network.lock().await;
+        network.local_id
     }
 
     /// Starts the receiving loop.
@@ -152,7 +188,7 @@ struct Network<T: Clone> {
 
 impl<T> Network<T>
 where
-    T: Clone + Serialize + for<'de> Deserialize<'de>,
+    T: Clone + Send + Sync + Serialize + for<'de> Deserialize<'de>,
 {
     pub fn new(data: T) -> Self {
         Self {
@@ -174,7 +210,7 @@ type PeerMap<T> = HashMap<Uuid, Peer<T>>;
 
 /// Snapshot of other peer's state.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct Peer<T: Clone> {
+pub struct Peer<T: Clone> {
     id: Uuid,
     addr: SocketAddr,
     version: u32,
