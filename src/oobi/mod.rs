@@ -33,11 +33,27 @@ pub struct Oobi {
     eid: IdentifierPrefix,
     scheme: Scheme,
     url: Url,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    role: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cid: Option<IdentifierPrefix>,
 }
 
 impl Oobi {
-    pub fn new(eid: IdentifierPrefix, scheme: Scheme, url: Url) -> Self {
-        Self { eid, scheme, url }
+    pub fn new(
+        eid: IdentifierPrefix,
+        scheme: Scheme,
+        url: Url,
+        cid: Option<IdentifierPrefix>,
+        role: Option<String>,
+    ) -> Self {
+        Self {
+            eid,
+            scheme,
+            url,
+            cid,
+            role,
+        }
     }
 
     pub fn get_eid(&self) -> IdentifierPrefix {
@@ -72,16 +88,27 @@ impl TryFrom<url::Url> for Oobi {
             .ok_or_else(|| Error::OobiError("No identifier prefix".into()))?;
         // skip oobi string
         path_iterator.next();
-        let eid = path_iterator
+        let id = path_iterator
             .next()
             .ok_or_else(|| Error::OobiError("No identifier prefix".into()))?
             .parse::<IdentifierPrefix>()
             .map_err(|e| Error::OobiError(format!("Wrong identifier prefix: {}", e)))?;
+        let role = path_iterator.next().map(|r| r.to_string());
+        let second_id = path_iterator
+            .next()
+            .map(|id| id.parse::<IdentifierPrefix>().unwrap());
+        let (eid, cid) = if let Some(eid) = second_id {
+            (eid, Some(id))
+        } else {
+            (id, None)
+        };
 
         Ok(Self {
             eid,
             scheme,
             url: url_address,
+            role,
+            cid,
         })
     }
 }
@@ -89,7 +116,19 @@ impl TryFrom<url::Url> for Oobi {
 impl TryFrom<Oobi> for url::Url {
     type Error = Error;
     fn try_from(oobi: Oobi) -> Result<Self, Self::Error> {
-        url::Url::parse(&format!("{}oobi/{}", oobi.url, oobi.eid.to_str())).map_err(|e| e.into())
+        if let (Some(cid), Some(role)) = (oobi.cid, oobi.role) {
+            url::Url::parse(&format!(
+                "{}oobi/{}/{}/{}",
+                oobi.url,
+                cid.to_str(),
+                role,
+                oobi.eid.to_str()
+            ))
+            .map_err(|e| e.into())
+        } else {
+            url::Url::parse(&format!("{}oobi/{}", oobi.url, oobi.eid.to_str()))
+                .map_err(|e| e.into())
+        }
     }
 }
 
@@ -216,6 +255,21 @@ pub fn test_oobi_from_url() {
     );
     assert_eq!(oobi.scheme, Scheme::Http);
     assert_eq!(oobi.url.to_string(), "http://127.0.0.1:3232/");
+
+    let oobi_url = "http://127.0.0.1:5642/oobi/EozYHef4je02EkMOA1IKM65WkIdSjfrL7XWDk_JzJL9o/witness/BGKVzj4ve0VSd8z_AmvhLg4lqcC_9WYX90k03q-R_Ydo";
+    let oobi = Oobi::try_from(url::Url::parse(oobi_url).unwrap()).unwrap();
+    assert_eq!(
+        oobi.eid.to_str(),
+        "BGKVzj4ve0VSd8z_AmvhLg4lqcC_9WYX90k03q-R_Ydo"
+    );
+    assert_eq!(
+        oobi.cid.map(|p| p.to_str()),
+        Some("EozYHef4je02EkMOA1IKM65WkIdSjfrL7XWDk_JzJL9o".into())
+    );
+    assert_eq!(oobi.role, Some("witness".into()));
+
+    assert_eq!(oobi.scheme, Scheme::Http);
+    assert_eq!(oobi.url.to_string(), "http://127.0.0.1:5642/");
 }
 
 #[test]
