@@ -10,17 +10,17 @@ use crate::event_message::signed_event_message::{
     Message, SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
 };
 use crate::event_parsing::payload_size::PayloadType;
+#[cfg(feature = "oobi")]
 use crate::oobi::Oobi;
 use crate::prefix::{
     AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix,
 };
 
-use crate::query::key_state_notice::KeyStateNotice;
-use crate::query::reply_event::ReplyEvent;
 #[cfg(feature = "query")]
 use crate::query::{
+    key_state_notice::KeyStateNotice,
     query_event::QueryEvent,
-    reply_event::{ReplyKsnEvent, SignedReply},
+    reply_event::{ReplyEvent, ReplyKsnEvent, SignedReply},
 };
 use crate::{error::Error, event::event_data::EventData};
 
@@ -291,6 +291,7 @@ impl TryFrom<SignedEventData> for Message {
             EventType::Qry(qry) => signed_query(qry, value.attachments),
             #[cfg(feature = "query")]
             EventType::RpyKsn(rpy) => signed_ksn_reply(rpy, value.attachments),
+            #[cfg(feature = "oobi")]
             EventType::RpyOobi(rpy) => signed_oobi_reply(rpy, value.attachments),
         }
     }

@@ -5,9 +5,9 @@ use std::cmp::Ordering;
 use super::EventMessage;
 use super::{serializer::to_string, KeyEvent};
 use crate::event_parsing::SignedEventData;
+#[cfg(feature = "oobi")]
 use crate::oobi::Oobi;
 use crate::prefix::IdentifierPrefix;
-use crate::query::key_state_notice::KeyStateNotice;
 use crate::{
     error::Error,
     event::{
@@ -20,7 +20,9 @@ use crate::{
 };
 
 #[cfg(feature = "query")]
-use crate::query::{query_event::SignedQuery, reply_event::SignedReply};
+use crate::query::{
+    key_state_notice::KeyStateNotice, query_event::SignedQuery, reply_event::SignedReply,
+};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Message {

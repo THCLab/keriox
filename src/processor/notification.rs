@@ -1,17 +1,19 @@
 use std::{collections::HashMap, sync::Arc};
 
+#[cfg(feature = "oobi")]
+use crate::event::EventMessage;
+#[cfg(feature = "oobi")]
+use crate::oobi::Oobi;
 #[cfg(feature = "query")]
-use crate::query::reply_event::SignedReply;
+use crate::query::{
+    key_state_notice::KeyStateNotice, reply_event::ReplyEvent, reply_event::SignedReply,
+};
 use crate::{
     error::Error,
-    event::EventMessage,
     event_message::signed_event_message::{
         SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
     },
-    oobi::Oobi,
-    query::{key_state_notice::KeyStateNotice, reply_event::ReplyEvent},
 };
-
 pub struct NotificationBus {
     observers: HashMap<JustNotification, Vec<Arc<dyn Notifier + Send + Sync>>>,
 }
