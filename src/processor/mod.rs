@@ -94,11 +94,10 @@ impl EventProcessor {
                 Err(Error::EventOutOfOrderError) => Ok(Notification::KsnOutOfOrder(rpy)),
                 Err(anything) => Err(anything),
             },
-            _ => todo!()
-            // #[cfg(feature = "query")]
-            // Message::Query(_qry) => todo!(),
-            // #[cfg(feature = "oobi")]
-            // Message::SignedOobi(oobi_rpy) => Ok(Notification::GotOobi(oobi_rpy.reply)),
+            #[cfg(feature = "query")]
+            Message::Query(_qry) => todo!(),
+            #[cfg(feature = "oobi")]
+            Message::SignedOobi(oobi_rpy) => Ok(Notification::GotOobi(oobi_rpy.reply)),
         }
     }
 }

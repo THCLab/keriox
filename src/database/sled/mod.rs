@@ -1,6 +1,5 @@
 pub(crate) mod tables;
 
-use crate::query::key_state_notice::KeyStateNotice;
 use crate::{
     error::Error,
     event::EventMessage,
@@ -18,7 +17,7 @@ use std::path::Path;
 use tables::{SledEventTree, SledEventTreeVec};
 
 #[cfg(feature = "query")]
-use crate::query::reply_event::SignedReply;
+use crate::query::{key_state_notice::KeyStateNotice, reply_event::SignedReply};
 
 pub struct SledEventDatabase {
     // "iids" tree
