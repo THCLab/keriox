@@ -25,14 +25,13 @@ impl NextKeysData {
                 .next_key_hashes
                 .iter()
                 .position(|dig| dig.verify_binding(key.to_str().as_bytes()))
-                .ok_or(Error::SemanticError(
-                    "No such public key in next keys hashes".into(),
-                ))?;
+                .ok_or_else(|| {
+                    Error::SemanticError("No such public key in next keys hashes".into())
+                })?;
             indexes.push(sigs_indexes);
         }
         // check previous next threshold
         self.threshold.enough_signatures(&indexes)
-        // TODO check current threshold?
     }
 }
 
