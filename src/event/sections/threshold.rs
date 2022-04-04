@@ -152,7 +152,7 @@ impl ThresholdClause {
                     None
                 }
             })
-            .ok_or(Error::SemanticError("signature index out of bound".into()))?
+            .ok_or_else(|| Error::SemanticError("signature index out of bound".into()))?
             >= One::one())
     }
 }

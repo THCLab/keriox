@@ -59,12 +59,12 @@ impl WitnessConfig {
                             })
                         })
                         .partition(Option::is_some);
-                let atts = attached_signatures
+                let signatures_indexes = attached_signatures
                     .into_iter()
                     .map(Option::unwrap)
                     .map(|att| att.index as usize)
                     .collect::<Vec<_>>();
-                t.enough_signatures(&atts)
+                t.enough_signatures(&signatures_indexes)
             }
         }
     }

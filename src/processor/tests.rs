@@ -994,8 +994,7 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
         .collect::<Vec<_>>();
 
     //  Partial rotation that will fail because it does not have enough sigs for
-    //  prior threshold (`nt`). Next threshold in last roatation event was set
-    //  to 4.
+    //  prior threshold (`nt`).
     let rotation = EventMsgBuilder::new(EventTypeTag::Rot)
         .with_prefix(&id_prefix)
         .with_keys(current_public_keys)
