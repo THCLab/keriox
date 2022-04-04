@@ -157,13 +157,9 @@ impl EventMsgBuilder {
             nxt_commitment(self.next_key_threshold, &self.next_keys, &self.derivation);
         let key_config = KeyConfig::new(self.keys, next_key_hash, Some(self.key_threshold));
         let prefix = if self.prefix == IdentifierPrefix::default() {
-            if key_config.public_keys.len() == 1 {
-                IdentifierPrefix::Basic(key_config.public_keys[0].clone())
-            } else {
-                let icp_data = InceptionEvent::new(key_config.clone(), None, None)
-                    .incept_self_addressing(self.derivation.clone(), self.format)?;
-                icp_data.event.get_prefix()
-            }
+            let icp_data = InceptionEvent::new(key_config.clone(), None, None)
+                .incept_self_addressing(self.derivation.clone(), self.format)?;
+            icp_data.event.get_prefix()
         } else {
             self.prefix
         };

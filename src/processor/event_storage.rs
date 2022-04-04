@@ -230,12 +230,14 @@ impl EventStorage {
                 .witness_config
                 .witnesses;
             indexed_signatures
-                .into_iter()
+                .iter()
                 .map(|sig| -> Result<_, _> {
                     Ok((
                         witnesses
                             .get(sig.index as usize)
-                            .ok_or(Error::SemanticError("No witness of given index".into()))?
+                            .ok_or_else(|| {
+                                Error::SemanticError("No witness of given index".into())
+                            })?
                             .clone(),
                         sig.signature.clone(),
                     ))
@@ -244,10 +246,10 @@ impl EventStorage {
         };
         match (&rct.couplets, &rct.indexed_sigs) {
             (None, None) => Ok(vec![]),
-            (None, Some(indexed_sigs)) => get_witness_couplets(self, &rct, &indexed_sigs),
+            (None, Some(indexed_sigs)) => get_witness_couplets(self, rct, indexed_sigs),
             (Some(coups), None) => Ok(coups.clone()),
             (Some(coups), Some(indexed_sigs)) => {
-                let mut out = get_witness_couplets(self, &rct, &indexed_sigs)?;
+                let mut out = get_witness_couplets(self, rct, indexed_sigs)?;
                 out.append(&mut coups.clone());
                 Ok(out)
             }
@@ -264,7 +266,7 @@ impl EventStorage {
                 .filter(|rct| rct.body.event.sn == sn)
                 .map(|rct| -> Result<Vec<(_, _)>, _> { self.get_receipt_couplets(&rct) })
                 .partition(Result::is_ok);
-            oks.into_iter().map(|e| e.unwrap()).flatten().collect()
+            oks.into_iter().flat_map(|e| e.unwrap()).collect()
         })
     }
 

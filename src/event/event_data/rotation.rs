@@ -26,7 +26,7 @@ pub struct RotationEvent {
 
 impl EventSemantics for RotationEvent {
     fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
-        if state.current.verify_next(&self.key_config) {
+        if state.current.verify_next(&self.key_config)? {
             // witness rotation processing
             let witnesses =
                 if !self.witness_config.prune.is_empty() || !self.witness_config.graft.is_empty() {

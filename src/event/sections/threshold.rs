@@ -1,6 +1,6 @@
 use std::{fmt, str::FromStr};
 
-use crate::{error::Error, prefix::AttachedSignaturePrefix};
+use crate::error::Error;
 use fraction::{Fraction, One, Zero};
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use serde_hex::{Compact, SerHex};
@@ -84,10 +84,10 @@ pub enum WeightedThreshold {
 }
 
 impl WeightedThreshold {
-    pub fn enough_signatures(&self, sigs: &[AttachedSignaturePrefix]) -> Result<bool, Error> {
+    pub fn enough_signatures(&self, sigs_indexes: &[usize]) -> Result<bool, Error> {
         match self {
-            WeightedThreshold::Single(clause) => clause.enough_signatures(0, sigs),
-            WeightedThreshold::Multi(clauses) => clauses.enough_signatures(sigs),
+            WeightedThreshold::Single(clause) => clause.enough_signatures(0, sigs_indexes),
+            WeightedThreshold::Multi(clauses) => clauses.enough_signatures(sigs_indexes),
         }
     }
 }
@@ -109,10 +109,10 @@ impl SignatureThreshold {
         )))
     }
 
-    pub fn enough_signatures(&self, sigs: &[AttachedSignaturePrefix]) -> Result<bool, Error> {
+    pub fn enough_signatures(&self, sigs_indexes: &[usize]) -> Result<bool, Error> {
         match self {
-            SignatureThreshold::Simple(ref t) => Ok((sigs.len() as u64) >= *t),
-            SignatureThreshold::Weighted(ref thresh) => thresh.enough_signatures(sigs),
+            SignatureThreshold::Simple(ref t) => Ok((sigs_indexes.len() as u64) >= *t),
+            SignatureThreshold::Weighted(ref thresh) => thresh.enough_signatures(sigs_indexes),
         }
     }
 }
@@ -140,12 +140,20 @@ impl ThresholdClause {
 
     pub fn enough_signatures(
         &self,
-        start_index: u16,
-        sigs: &[AttachedSignaturePrefix],
+        start_index: usize,
+        sigs_indexes: &[usize],
     ) -> Result<bool, Error> {
-        Ok(sigs.iter().fold(Zero::zero(), |acc: Fraction, sig| {
-            acc + self.0[(sig.index - start_index) as usize].fraction
-        }) >= One::one())
+        Ok(sigs_indexes
+            .iter()
+            .fold(Some(Zero::zero()), |acc: Option<Fraction>, sig_index| {
+                if let (Some(element), Some(sum)) = (self.0.get(sig_index - start_index), acc) {
+                    Some(sum + element.fraction)
+                } else {
+                    None
+                }
+            })
+            .ok_or_else(|| Error::SemanticError("signature index out of bound".into()))?
+            >= One::one())
     }
 }
 
@@ -170,19 +178,21 @@ impl MultiClauses {
         MultiClauses(wt)
     }
 
-    pub fn enough_signatures(&self, sigs: &[AttachedSignaturePrefix]) -> Result<bool, Error> {
+    pub fn enough_signatures(&self, sigs_indexes: &[usize]) -> Result<bool, Error> {
         Ok(self
             .0
             .iter()
             .fold(Ok((0, true)), |acc, clause| -> Result<_, Error> {
                 let (start, enough) = acc?;
-                let sigs: Vec<AttachedSignaturePrefix> = sigs
+                let sigs: Vec<usize> = sigs_indexes
                     .iter()
                     .cloned()
-                    .filter(|sig| sig.index >= start && sig.index < start + clause.0.len() as u16)
+                    .filter(|sig_index| {
+                        sig_index >= &start && sig_index < &(start + clause.0.len())
+                    })
                     .collect();
                 Ok((
-                    start + clause.0.len() as u16,
+                    start + clause.0.len(),
                     enough && clause.enough_signatures(start, &sigs)?,
                 ))
             })?
@@ -192,26 +202,22 @@ impl MultiClauses {
 
 #[test]
 fn test_enough_sigs() -> Result<(), Error> {
-    use crate::derivation::self_signing::SelfSigning;
     // Threshold: [[1/1], [1/2, 1/2, 1/2], [1/2,1/2]]
     let wt = MultiClauses::new_from_tuples(vec![vec![(1, 1)], vec![(1, 2), (1, 2), (1, 2)]]);
-    let dump_signatures: Vec<_> = vec![0, 1, 2, 3]
-        .iter()
-        .map(|x| AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, vec![], x.to_owned()))
-        .collect();
+    let sigs_indexes: Vec<_> = vec![0, 1, 2, 3];
 
     // All signatures.
-    assert!(wt.enough_signatures(&dump_signatures.clone())?);
+    assert!(wt.enough_signatures(&sigs_indexes.clone())?);
 
     // Enough signatures.
     let enough = vec![
-        dump_signatures[0].clone(),
-        dump_signatures[1].clone(),
-        dump_signatures[3].clone(),
+        sigs_indexes[0].clone(),
+        sigs_indexes[1].clone(),
+        sigs_indexes[3].clone(),
     ];
     assert!(wt.enough_signatures(&enough.clone())?);
 
-    let not_enough = vec![dump_signatures[0].clone()];
+    let not_enough = vec![sigs_indexes[0].clone()];
     assert!(!wt.enough_signatures(&not_enough.clone())?);
 
     Ok(())
