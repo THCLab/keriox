@@ -115,7 +115,7 @@ fn libsodium_to_ed25519_dalek_compat() {
     let sodium_sig = sign::sign(msg, &sodium_sk);
 
     assert!(sign::verify_detached(
-        &sign::ed25519::Signature::new(dalek_sig.to_bytes()),
+        &sign::ed25519::Signature::from_bytes(&dalek_sig.to_bytes()).unwrap(),
         msg,
         &sodium_pk
     ));
@@ -123,7 +123,7 @@ fn libsodium_to_ed25519_dalek_compat() {
     assert!(kp
         .verify(
             msg,
-            &Signature::new(arrayref::array_ref!(sodium_sig, 0, 64).to_owned())
+            &Signature::from_bytes(&arrayref::array_ref!(sodium_sig, 0, 64).to_owned()).unwrap()
         )
         .is_ok());
 }
