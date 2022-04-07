@@ -155,10 +155,9 @@ impl OobiManager {
         }
     }
 
-    // TODO maybe this should be in reply module?
     pub fn check_oobi_reply(&self, rpy: &SignedReply<Oobi>) -> Result<(), Error> {
         let route = rpy.reply.event.get_route();
-        // check if signature was made by ksn creator
+        // check if signature was made by oobi creator
         let oobi_id = rpy.reply.event.content.data.data.eid.clone();
         if let Route::ReplyOobi = route {
             if rpy.signature.get_signer() != oobi_id {
@@ -316,10 +315,7 @@ async fn test_obi_save() -> Result<(), Error> {
     assert_eq!(res, None);
 
     oobi_manager.parse_and_save(body)?;
-    // oobi_manager.process_oobi(
-    //     "http://127.0.0.1:5643/oobi/BuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw/controller",
-    // )?;
-    // oobi_manager.load().await?;
+
     let res = oobi_manager.store.get_urls(
         &"BuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw"
             .parse::<IdentifierPrefix>()
