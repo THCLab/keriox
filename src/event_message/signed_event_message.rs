@@ -7,6 +7,7 @@ use super::{serializer::to_string, KeyEvent};
 use crate::event_parsing::SignedEventData;
 #[cfg(feature = "oobi")]
 use crate::oobi::Oobi;
+
 use crate::prefix::IdentifierPrefix;
 use crate::{
     error::Error,
@@ -70,7 +71,7 @@ impl Message {
             #[cfg(feature = "query")]
             Message::Query(_qry) => todo!(),
             #[cfg(feature = "oobi")]
-            Message::SignedOobi(_) => todo!(),
+            Message::SignedOobi(oobi) => oobi.reply.event.content.data.data.get_eid(),
         }
     }
 }

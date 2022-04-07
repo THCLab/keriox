@@ -475,8 +475,7 @@ impl<K: KeyManager> Keri<K> {
     }
 }
 
-// Helper struct for appending kel events that needs receipt generation.
-// Receipts should be then signed and send somewhere.
+// Helper struct for appending data that need response.
 #[derive(Default)]
 pub struct Responder<D> {
     needs_response: Mutex<VecDeque<D>>,
@@ -501,6 +500,7 @@ impl<D> Responder<D> {
 
 impl Notifier for Responder<EventMessage<KeyEvent>> {
     fn notify(&self, notification: &Notification, _bus: &NotificationBus) -> Result<(), Error> {
+        // save event that was added to kel to make receipt.
         if let Notification::KeyEventAdded(ev_msg) = notification {
             self.needs_response
                 .lock()
