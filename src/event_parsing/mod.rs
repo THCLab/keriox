@@ -254,10 +254,7 @@ impl TryFrom<SignedEventData> for Message {
 }
 
 #[cfg(any(feature = "query", feature = "oobi"))]
-fn signed_reply(
-    rpy: ReplyEvent,
-    mut attachments: Vec<Attachment>,
-) -> Result<Message, Error> {
+fn signed_reply(rpy: ReplyEvent, mut attachments: Vec<Attachment>) -> Result<Message, Error> {
     match attachments
         .pop()
         .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?
@@ -286,10 +283,7 @@ fn signed_reply(
 }
 
 #[cfg(feature = "query")]
-fn signed_query(
-    qry: QueryEvent,
-    mut attachments: Vec<Attachment>,
-) -> Result<Message, Error> {
+fn signed_query(qry: QueryEvent, mut attachments: Vec<Attachment>) -> Result<Message, Error> {
     use crate::query::query_event::SignedQuery;
 
     match attachments

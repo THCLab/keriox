@@ -20,7 +20,7 @@ use crate::{
 
 use super::compute_state;
 #[cfg(feature = "query")]
-use crate::query::{reply_event::SignedReply};
+use crate::query::reply_event::SignedReply;
 
 pub struct EventStorage {
     pub db: Arc<SledEventDatabase>,
@@ -276,7 +276,7 @@ impl EventStorage {
         creator_prefix: &IdentifierPrefix,
         signer_prefix: &IdentifierPrefix,
     ) -> Option<SignedReply> {
-        use crate::query::{reply_event::ReplyRoute};
+        use crate::query::reply_event::ReplyRoute;
 
         self.db
             .get_accepted_replys(creator_prefix)

@@ -14,7 +14,7 @@ use crate::query::reply_event::{ReplyEvent, ReplyRoute, SignedReply};
 use crate::query::{
     key_state_notice::KeyStateNotice,
     query_event::{QueryData, SignedQuery},
-    ReplyType, QueryRoute,
+    QueryRoute, ReplyType,
 };
 
 use crate::signer::Signer;
@@ -186,7 +186,6 @@ impl Witness {
         qr: QueryData,
         signer: Arc<Signer>,
     ) -> Result<ReplyType, Error> {
-
         match route {
             QueryRoute::Log => Ok(ReplyType::Kel(
                 self.storage

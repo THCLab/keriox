@@ -5,6 +5,7 @@ use strum::{Display, EnumString};
 use url::Url;
 
 use crate::{
+    derivation::self_addressing::SelfAddressing,
     event::EventMessage,
     event_message::signed_event_message::Message,
     event_parsing::message::signed_event_stream,
@@ -12,7 +13,7 @@ use crate::{
     prefix::{IdentifierPrefix, Prefix},
     processor::validator::EventValidator,
     query::{
-        reply_event::{bada_logic, ReplyEvent, SignedReply},
+        reply_event::{bada_logic, ReplyEvent, ReplyRoute, SignedReply},
         QueryRoute,
     },
 };
@@ -36,16 +37,8 @@ pub struct EndRole {
 }
 
 impl LocationScheme {
-    pub fn new(
-        eid: IdentifierPrefix,
-        scheme: Scheme,
-        url: Url,
-    ) -> Self {
-        Self {
-            eid,
-            scheme,
-            url,
-        }
+    pub fn new(eid: IdentifierPrefix, scheme: Scheme, url: Url) -> Self {
+        Self { eid, scheme, url }
     }
 
     pub fn get_eid(&self) -> IdentifierPrefix {
@@ -145,29 +138,29 @@ impl OobiManager {
         }
     }
 
-    // pub fn check_oobi_reply(&self, rpy: &SignedReply<LocationScheme>) -> Result<(), Error> {
-    //     let route = rpy.reply.event.get_route();
-    //     // check if signature was made by oobi creator
-    //     let oobi_id = rpy.reply.event.content.data.data.eid.clone();
-    //     if let Route::LocScheme = route {
-    //         if rpy.signature.get_signer() != oobi_id {
-    //             return Err(Error::OobiError("Wrong reply message signer".into()));
-    //         };
-    //         // check signature
-    //         self.validator
-    //             .verify(&rpy.reply.serialize()?, &rpy.signature)?;
-    //         // check digest
-    //         rpy.reply.check_digest()?;
+    pub fn check_oobi_reply(&self, rpy: &SignedReply) -> Result<(), Error> {
+        match rpy.reply.get_route() {
+            // check if signature was made by oobi creator
+            ReplyRoute::LocScheme(lc) => {
+                if rpy.signature.get_signer() != lc.get_eid() {
+                    return Err(Error::OobiError("Wrong reply message signer".into()));
+                };
+                // check signature
+                self.validator
+                    .verify(&rpy.reply.serialize()?, &rpy.signature)?;
+                // check digest
+                rpy.reply.check_digest()?;
 
-    //         // check bada logic
-    //         if let Some(old_rpy) = self.store.get_last_eid_oobi(&oobi_id)? {
-    //             // TODO what if last isn't the most recent?
-    //             bada_logic(rpy, &old_rpy.last().unwrap())?;
-    //         }
-    //     };
-
-    //     Ok(())
-    // }
+                // check bada logic
+                if let Some(old_rpy) = self.store.get_last_loc_scheme(lc)? {
+                    bada_logic(rpy, &old_rpy)?;
+                };
+                Ok(())
+            }
+            ReplyRoute::EndRole(_) => todo!(),
+            _ => Err(Error::OobiError("Wrong oobi type".into())),
+        }
+    }
 
     pub fn process_oobi(&self, oobi_str: &str) -> Result<(), Error> {
         self.queue
@@ -175,46 +168,43 @@ impl OobiManager {
             .map_err(|e| Error::OobiError(e.to_string()))
     }
 
-    // fn parse_and_save(&self, stream: &str) -> Result<(), Error> {
-    //     let _events = signed_event_stream(stream.as_bytes())
-    //         .map_err(|e| Error::OobiError(e.to_string()))?
-    //         .1
-    //         .into_iter()
-    //         .try_for_each(|sed| {
-    //             let msg = Message::try_from(sed).unwrap();
-    //             match msg {
-    //                 Message::SignedLocationOobi(oobi_rpy) => {
-    //                     self.check_oobi_reply(&oobi_rpy)?;
-    //                     self.store.save(oobi_rpy)?;
-    //                     Ok(())
-    //                 }
-    //                 _ => Err(Error::OobiError("Wrong reply type".into())),
-    //             }
-    //         })?;
-    //     Ok(())
-    // }
+    fn parse_and_save(&self, stream: &str) -> Result<(), Error> {
+        let _events = signed_event_stream(stream.as_bytes())
+            .map_err(|e| Error::OobiError(e.to_string()))?
+            .1
+            .into_iter()
+            .try_for_each(|sed| {
+                let msg = Message::try_from(sed).unwrap();
+                match msg {
+                    Message::Reply(oobi_rpy) => {
+                        self.check_oobi_reply(&oobi_rpy)?;
+                        self.store.save_oobi(oobi_rpy)?;
+                        Ok(())
+                    }
+                    _ => Err(Error::OobiError("Wrong reply type".into())),
+                }
+            })?;
+        Ok(())
+    }
 
-    // /// Check oobi and saves
-    // pub async fn load(&self) -> Result<(), Error> {
-    //     while let Some(oobi) = self.queue.get_data_to_respond() {
-    //         let resp = reqwest::get(oobi.clone())
-    //             .await
-    //             .map_err(|e| Error::OobiError(e.to_string()))?
-    //             .text()
-    //             .await
-    //             .map_err(|e| Error::OobiError(e.to_string()))?;
-    //         self.parse_and_save(&resp)?;
-    //     }
-    //     Ok(())
-    // }
+    /// Check oobi and saves
+    pub async fn load(&self) -> Result<(), Error> {
+        while let Some(oobi) = self.queue.get_data_to_respond() {
+            let resp = reqwest::get(oobi.clone())
+                .await
+                .map_err(|e| Error::OobiError(e.to_string()))?
+                .text()
+                .await
+                .map_err(|e| Error::OobiError(e.to_string()))?;
+            self.parse_and_save(&resp)?;
+        }
+        Ok(())
+    }
 
-    pub fn get_oobi(
-        &self,
-        id: &IdentifierPrefix,
-    ) -> Result<Option<Vec<ReplyEvent>>, Error> {
+    pub fn get_oobi(&self, id: &IdentifierPrefix) -> Result<Option<Vec<ReplyEvent>>, Error> {
         Ok(self
             .store
-            .get_last_eid_oobi(id)?
+            .get_oobis_for_eid(id)?
             .map(|e_list| e_list.into_iter().map(|e| e.reply).collect()))
     }
 }
@@ -263,16 +253,11 @@ mod error {
 
 #[test]
 fn test_oobi_deserialize() -> Result<(), Error> {
-    // let body = br#"{"v":"KERI10JSON0000fa_","t":"rpy","d":"EJq4dQQdqg8aK7VyGnfSibxPyW8Zk2zO1qbVRD6flOvE","dt":"2022-02-28T17:23:20.336207+00:00","r":"/loc/scheme","a":{"eid":"BuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw","scheme":"http","url":"http://127.0.0.1:5643/"}}-VAi-CABBuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw0BAPJ5p_IpUFdmq8uupehsL8DzxWDeaU_SjeiwfmRZ6i9pqddraItmCOAysdXdTEQZ1hEM60iDEWvK16g68TrcAw{"v":"KERI10JSON0000f8_","t":"rpy","d":"ExSR01j5noF2LnGcGFUbLnq-U8JuYBr9WWEMt8d2fb1Y","dt":"2022-02-28T17:23:20.337272+00:00","r":"/loc/scheme","a":{"eid":"BuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw","scheme":"tcp","url":"tcp://127.0.0.1:5633/"}}-VAi-CABBuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw0BZtIhK6Nh6Zk1zPmkJYiFVz0RimQRiubshmSmqAzxzhT4KpGMAH7sbNlFP-0-lKjTawTReKv4L7N3TR7jxXaEBg{"v":"KERI10JSON000116_","t":"rpy","d":"EcZ1I4nKy6gIkWxjq1LmIivoPGv32lvlSuMVsWnOPwSc","dt":"2022-02-28T17:23:20.338355+00:00","r":"/end/role/add","a":{"cid":"BuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw","role":"controller","eid":"BuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw"}}-VAi-CABBuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw0B9ccIiMxdwurRjGvUUUdXsxhseo58onhE4bJddKuyPaSpBHXdRKKuiFE0SmLAogMQGJ0iN6f1V_2E_MVfMc3sAA"#;
-    // let stream = signed_event_stream(body);
-    // assert_eq!(stream.unwrap().1.len(), 2);
-
     let oobi = r#"{"cid":"BuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw","role":"controller","eid":"BuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw"}"#;
-    let o: LocationScheme = serde_json::from_str(oobi).unwrap();
+    let o: EndRole = serde_json::from_str(oobi).unwrap();
 
-    let endrole = br#"{"v":"KERI10JSON000116_","t":"rpy","d":"EcZ1I4nKy6gIkWxjq1LmIivoPGv32lvlSuMVsWnOPwSc","dt":"2022-02-28T17:23:20.338355+00:00","r":"/end/role/add","a":{"cid":"BuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw","role":"controller","eid":"BuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw"}}-VAi-CABBuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw0B9ccIiMxdwurRjGvUUUdXsxhseo58onhE4bJddKuyPaSpBHXdRKKuiFE0SmLAogMQGJ0iN6f1V_2E_MVfMc3sAA"#;
-    let stream = signed_event_stream(endrole);
-    assert_eq!(stream.unwrap().1.len(), 1);
+    let oobi = r#"{"eid":"BuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw","scheme":"http","url":"http://127.0.0.1:5643/"}"#;
+    let o: LocationScheme = serde_json::from_str(oobi).unwrap();
 
     Ok(())
 }

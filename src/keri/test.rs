@@ -169,7 +169,7 @@ fn test_qry_rpy() -> Result<(), Error> {
         query::{
             query_event::{QueryArgs, QueryEvent, SignedQuery},
             reply_event::ReplyRoute,
-            ReplyType, QueryRoute,
+            QueryRoute, ReplyType,
         },
         signer::{KeyManager, Signer},
     };
@@ -328,7 +328,7 @@ pub fn test_key_state_notice() -> Result<(), Error> {
     witness.process(&[Message::Event(new_bob_rot.clone())])?;
     // Create transferable reply by bob and process it by alice.
     let trans_rpy = witness.get_ksn_for_prefix(&bob_pref, signer_arc)?;
-   
+
     let res = alice_processor.process(Message::Reply(trans_rpy.clone()));
     assert!(matches!(res, Ok(Notification::KsnOutOfOrder(_))));
 

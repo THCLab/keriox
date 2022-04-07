@@ -33,12 +33,30 @@ impl OobiStorage {
         })
     }
 
-    pub fn get_last_eid_oobi(
+    pub fn get_oobis_for_eid(
         &self,
         id: &IdentifierPrefix,
     ) -> Result<Option<Vec<SignedReply>>, Error> {
         let key = self.identifiers.designated_key(id);
         Ok(self.oobis.get(key)?)
+    }
+
+    pub fn get_last_loc_scheme(
+        &self,
+        loc_scheme: LocationScheme,
+    ) -> Result<Option<SignedReply>, Error> {
+        let rpy = self
+            .get_oobis_for_eid(&loc_scheme.eid)?
+            .unwrap()
+            .into_iter()
+            .find(|rpy| {
+                if let ReplyRoute::LocScheme(lc) = rpy.reply.get_route() {
+                    lc.scheme == loc_scheme.scheme
+                } else {
+                    false
+                }
+            });
+        Ok(rpy)
     }
 
     pub fn get_eid_for_cid(
@@ -58,14 +76,13 @@ impl OobiStorage {
     }
 
     pub fn get_urls(&self, id: &IdentifierPrefix) -> Result<Option<Vec<url::Url>>, Error> {
-        let oobi_rpy = self.get_last_eid_oobi(id);
+        let oobi_rpy = self.get_oobis_for_eid(id);
         oobi_rpy.map(|some_reply| {
             some_reply.map(|oobi_rpy_list| {
                 oobi_rpy_list
                     .into_iter()
                     .map(|oobi_rpy| {
-                        if let ReplyRoute::LocScheme(loc_scheme) = oobi_rpy.reply.get_route()
-                        {
+                        if let ReplyRoute::LocScheme(loc_scheme) = oobi_rpy.reply.get_route() {
                             loc_scheme.url
                         } else {
                             todo!()
@@ -81,7 +98,6 @@ impl OobiStorage {
             ReplyRoute::Ksn(_, _) => todo!(),
             ReplyRoute::LocScheme(loc_scheme) => {
                 let key = self.identifiers.designated_key(&loc_scheme.eid);
-                // TODO sholud update if oobi for given eid and role exists
                 let oobi = oobi_reply.reply.event.content.clone();
 
                 // update last saved reply for given schema with the new one

@@ -1,9 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 #[cfg(feature = "query")]
-use crate::query::{
-    reply_event::ReplyEvent, reply_event::SignedReply,
-};
+use crate::query::{reply_event::ReplyEvent, reply_event::SignedReply};
 use crate::{
     error::Error,
     event_message::signed_event_message::{

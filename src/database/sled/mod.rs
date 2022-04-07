@@ -17,7 +17,7 @@ use std::path::Path;
 use tables::{SledEventTree, SledEventTreeVec};
 
 #[cfg(feature = "query")]
-use crate::query::{reply_event::SignedReply};
+use crate::query::reply_event::SignedReply;
 
 pub struct SledEventDatabase {
     // "iids" tree
@@ -360,14 +360,10 @@ impl SledEventDatabase {
         {
             Some(rpys) => {
                 let filtered = rpys
-                    .filter(
-                        |s| match (s.reply.get_route(), rpy.reply.get_route()) {
-                            (ReplyRoute::Ksn(id1, _), ReplyRoute::Ksn(id2, _)) => {
-                                id1 != id2
-                            }
-                            _ => true,
-                        },
-                    )
+                    .filter(|s| match (s.reply.get_route(), rpy.reply.get_route()) {
+                        (ReplyRoute::Ksn(id1, _), ReplyRoute::Ksn(id2, _)) => id1 != id2,
+                        _ => true,
+                    })
                     .chain(Some(rpy.clone()).into_iter())
                     .collect();
                 self.accepted_rpy

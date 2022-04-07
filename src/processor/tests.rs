@@ -521,7 +521,10 @@ pub fn test_reply_escrow() -> Result<(), Error> {
 
     let mut accepted_rpys = db.get_accepted_replys(&identifier).unwrap();
 
-    assert_eq!(Message::Reply(accepted_rpys.next().unwrap()), deserialized_new_rpy);
+    assert_eq!(
+        Message::Reply(accepted_rpys.next().unwrap()),
+        deserialized_new_rpy
+    );
     assert!(accepted_rpys.next().is_none());
 
     Ok(())

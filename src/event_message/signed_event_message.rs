@@ -6,7 +6,6 @@ use super::EventMessage;
 use super::{serializer::to_string, KeyEvent};
 use crate::event_parsing::SignedEventData;
 #[cfg(feature = "oobi")]
-
 use crate::prefix::IdentifierPrefix;
 use crate::{
     error::Error,
@@ -20,9 +19,7 @@ use crate::{
 };
 
 #[cfg(feature = "query")]
-use crate::query::{
-    query_event::SignedQuery, reply_event::SignedReply,
-};
+use crate::query::{query_event::SignedQuery, reply_event::SignedReply};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Message {

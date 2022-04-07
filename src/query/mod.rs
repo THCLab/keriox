@@ -7,7 +7,7 @@ use crate::{
 use chrono::{DateTime, FixedOffset, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize, Serializer};
 
-use self::{reply_event::SignedReply};
+use self::reply_event::SignedReply;
 
 use thiserror::Error;
 
