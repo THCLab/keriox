@@ -269,19 +269,19 @@ impl EventValidator {
     #[cfg(feature = "query")]
     pub fn process_signed_ksn_reply(
         &self,
-        rpy: &SignedReply<KeyStateNotice>,
+        rpy: &SignedReply,
     ) -> Result<Option<IdentifierState>, Error> {
-        use crate::query::{reply_event::bada_logic, Route};
+        use crate::query::reply_event::{bada_logic, ReplyRoute};
 
-        let route = rpy.reply.event.get_route();
+        let route = rpy.reply.get_route();
         // check if signature was made by ksn creator
-        if let Route::ReplyKsn(ref aid) = route {
-            if &rpy.signature.get_signer() != aid {
+        if let ReplyRoute::Ksn(signer_id, ksn) = route {
+            if &rpy.signature.get_signer() != &signer_id {
                 return Err(QueryError::Error("Wrong reply message signer".into()).into());
             };
             self.verify(&rpy.reply.serialize()?, &rpy.signature)?;
             rpy.reply.check_digest()?;
-            let reply_prefix = rpy.reply.event.get_prefix();
+            let reply_prefix = ksn.state.prefix.clone();
 
             // check if there's previous reply to compare
             if let Some(old_rpy) = self
@@ -292,9 +292,8 @@ impl EventValidator {
             };
 
             // now unpack ksn and check its details
-            let ksn = rpy.reply.event.get_reply_data();
-            self.check_ksn(&ksn, aid)?;
-            Ok(Some(rpy.reply.event.get_state()))
+            self.check_ksn(&ksn, &signer_id)?;
+            Ok(Some(ksn.state))
         } else {
             Err(Error::SemanticError("wrong route type".into()))
         }
@@ -307,18 +306,9 @@ impl EventValidator {
         pref: &IdentifierPrefix,
         aid: &IdentifierPrefix,
     ) -> Result<(), Error> {
-        use crate::query::Route;
-
-        match self
-            .event_storage
-            .db
-            .get_accepted_replys(pref)
-            .ok_or(Error::EventOutOfOrderError)?
-            .find(|sr: &SignedReply<KeyStateNotice>| {
-                sr.reply.event.get_route() == Route::ReplyKsn(aid.clone())
-            }) {
+        match self.event_storage.get_last_ksn_reply(pref, aid) {
             Some(old_ksn) => {
-                let old_dt = old_ksn.reply.event.get_timestamp();
+                let old_dt = old_ksn.reply.get_timestamp();
                 if old_dt > new_dt {
                     Err(QueryError::StaleKsn.into())
                 } else {

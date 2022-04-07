@@ -10,11 +10,11 @@ use crate::processor::escrow::default_escrow_bus;
 use crate::processor::event_storage::EventStorage;
 use crate::processor::notification::{JustNotification, NotificationBus};
 use crate::processor::witness_processor::WitnessProcessor;
-use crate::query::reply_event::{ReplyKsnEvent, SignedReply};
+use crate::query::reply_event::{ReplyEvent, ReplyRoute, SignedReply};
 use crate::query::{
     key_state_notice::KeyStateNotice,
     query_event::{QueryData, SignedQuery},
-    ReplyType, Route,
+    ReplyType, QueryRoute,
 };
 
 use crate::signer::Signer;
@@ -137,14 +137,13 @@ impl Witness {
         &self,
         prefix: &IdentifierPrefix,
         signer: Arc<Signer>,
-    ) -> Result<SignedReply<KeyStateNotice>, Error> {
+    ) -> Result<SignedReply, Error> {
         let state = self
             .get_state_for_prefix(prefix)?
             .ok_or_else(|| Error::SemanticError("No state in db".into()))?;
         let ksn = KeyStateNotice::new_ksn(state, SerializationFormats::JSON);
-        let rpy = ReplyKsnEvent::new_reply(
-            ksn,
-            Route::ReplyKsn(IdentifierPrefix::Basic(self.prefix.clone())),
+        let rpy = ReplyEvent::new_reply(
+            ReplyRoute::Ksn(IdentifierPrefix::Basic(self.prefix.clone()), ksn),
             SelfAddressing::Blake3_256,
             SerializationFormats::JSON,
         )?;
@@ -170,11 +169,11 @@ impl Witness {
             .ok_or_else(|| Error::SemanticError("No signer identifier in db".into()))?
             .current;
 
-        if kc.verify(&qr.envelope.serialize()?, &signatures)? {
+        if kc.verify(&qr.query.serialize()?, &signatures)? {
             // TODO check timestamps
             // unpack and check what's inside
-            let route = qr.envelope.event.get_route();
-            self.process_query(route, qr.envelope.event.get_query_data(), signer)
+            let route = qr.query.get_route();
+            self.process_query(route, qr.query.get_query_data(), signer)
         } else {
             Err(Error::SignatureVerificationError)
         }
@@ -183,17 +182,18 @@ impl Witness {
     #[cfg(feature = "query")]
     fn process_query(
         &self,
-        route: Route,
+        route: QueryRoute,
         qr: QueryData,
         signer: Arc<Signer>,
     ) -> Result<ReplyType, Error> {
+
         match route {
-            Route::Log => Ok(ReplyType::Kel(
+            QueryRoute::Log => Ok(ReplyType::Kel(
                 self.storage
                     .get_kel(&qr.data.i)?
                     .ok_or_else(|| Error::SemanticError("No identifier in db".into()))?,
             )),
-            Route::Ksn => {
+            QueryRoute::Ksn => {
                 let i = qr.data.i;
                 // return reply message with ksn inside
                 let state = self
@@ -201,9 +201,8 @@ impl Witness {
                     .get_state(&i)?
                     .ok_or_else(|| Error::SemanticError("No id in database".into()))?;
                 let ksn = KeyStateNotice::new_ksn(state, SerializationFormats::JSON);
-                let rpy = ReplyKsnEvent::new_reply(
-                    ksn,
-                    Route::ReplyKsn(IdentifierPrefix::Basic(self.prefix.clone())),
+                let rpy = ReplyEvent::new_reply(
+                    ReplyRoute::Ksn(IdentifierPrefix::Basic(self.prefix.clone()), ksn),
                     SelfAddressing::Blake3_256,
                     SerializationFormats::JSON,
                 )?;
@@ -215,7 +214,6 @@ impl Witness {
                 );
                 Ok(ReplyType::Rep(rpy))
             }
-            _ => todo!(),
         }
     }
 }

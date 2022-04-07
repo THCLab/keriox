@@ -5,6 +5,7 @@ use crate::{
     error::Error,
     event_message::signed_event_message::{Message, TimestampedSignedEventMessage},
     prefix::IdentifierPrefix,
+    query::reply_event::ReplyRoute,
     state::IdentifierState,
 };
 
@@ -85,19 +86,21 @@ impl EventProcessor {
                 }
             }
             #[cfg(feature = "query")]
-            Message::KeyStateNotice(rpy) => match self.validator.process_signed_ksn_reply(&rpy) {
-                Ok(_) => {
-                    self.db
-                        .update_accepted_reply(rpy.clone(), &rpy.reply.event.get_prefix())?;
-                    Ok(Notification::ReplyUpdated)
-                }
-                Err(Error::EventOutOfOrderError) => Ok(Notification::KsnOutOfOrder(rpy)),
-                Err(anything) => Err(anything),
+            Message::Reply(rpy) => match rpy.reply.get_route() {
+                ReplyRoute::Ksn(_, _) => match self.validator.process_signed_ksn_reply(&rpy)
+                {
+                    Ok(_) => {
+                        self.db
+                            .update_accepted_reply(rpy.clone(), &rpy.reply.get_prefix())?;
+                        Ok(Notification::ReplyUpdated)
+                    }
+                    Err(Error::EventOutOfOrderError) => Ok(Notification::KsnOutOfOrder(rpy)),
+                    Err(anything) => Err(anything),
+                },
+                _ => Ok(Notification::GotOobi(rpy.reply)),
             },
             #[cfg(feature = "query")]
             Message::Query(_qry) => todo!(),
-            #[cfg(feature = "oobi")]
-            Message::SignedOobi(oobi_rpy) => Ok(Notification::GotOobi(oobi_rpy.reply)),
         }
     }
 }
