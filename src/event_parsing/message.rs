@@ -79,9 +79,7 @@ pub fn query_message(s: &[u8]) -> nom::IResult<&[u8], EventType> {
 
 #[cfg(any(feature = "query", feature("oobi")))]
 pub fn reply_message(s: &[u8]) -> nom::IResult<&[u8], EventType> {
-    use crate::query::{
-        reply_event::ReplyRoute,
-    };
+    use crate::query::reply_event::ReplyRoute;
 
     timestamped::<ReplyRoute>(s).map(|d| (d.0, EventType::Rpy(d.1)))
 }

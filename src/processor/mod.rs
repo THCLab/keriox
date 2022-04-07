@@ -87,8 +87,7 @@ impl EventProcessor {
             }
             #[cfg(feature = "query")]
             Message::Reply(rpy) => match rpy.reply.get_route() {
-                ReplyRoute::Ksn(_, _) => match self.validator.process_signed_ksn_reply(&rpy)
-                {
+                ReplyRoute::Ksn(_, _) => match self.validator.process_signed_ksn_reply(&rpy) {
                     Ok(_) => {
                         self.db
                             .update_accepted_reply(rpy.clone(), &rpy.reply.get_prefix())?;

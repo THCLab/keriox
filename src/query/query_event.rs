@@ -8,7 +8,7 @@ use crate::{
     prefix::{AttachedSignaturePrefix, IdentifierPrefix},
 };
 
-use super::{Timestamped, QueryRoute};
+use super::{QueryRoute, Timestamped};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct QueryData {
