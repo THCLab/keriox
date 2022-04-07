@@ -6,7 +6,6 @@ use super::EventMessage;
 use super::{serializer::to_string, KeyEvent};
 use crate::event_parsing::SignedEventData;
 #[cfg(feature = "oobi")]
-use crate::oobi::Oobi;
 
 use crate::prefix::IdentifierPrefix;
 use crate::{
@@ -22,7 +21,7 @@ use crate::{
 
 #[cfg(feature = "query")]
 use crate::query::{
-    key_state_notice::KeyStateNotice, query_event::SignedQuery, reply_event::SignedReply,
+    query_event::SignedQuery, reply_event::SignedReply,
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -33,11 +32,9 @@ pub enum Message {
     NontransferableRct(SignedNontransferableReceipt),
     TransferableRct(SignedTransferableReceipt),
     #[cfg(feature = "query")]
-    KeyStateNotice(SignedReply<KeyStateNotice>),
-    #[cfg(feature = "query")]
+    Reply(SignedReply),
+    #[cfg(any(feature = "query", feature = "oobi"))]
     Query(SignedQuery),
-    #[cfg(feature = "oobi")]
-    SignedOobi(SignedReply<Oobi>),
 }
 
 impl From<Message> for SignedEventData {
@@ -47,11 +44,9 @@ impl From<Message> for SignedEventData {
             Message::NontransferableRct(rct) => SignedEventData::from(rct),
             Message::TransferableRct(rct) => SignedEventData::from(rct),
             #[cfg(feature = "query")]
-            Message::KeyStateNotice(ksn) => SignedEventData::from(ksn),
+            Message::Reply(ksn) => SignedEventData::from(ksn),
             #[cfg(feature = "query")]
             Message::Query(_qry) => todo!(),
-            #[cfg(feature = "oobi")]
-            Message::SignedOobi(oobi) => SignedEventData::from(oobi),
         }
     }
 }
@@ -67,11 +62,9 @@ impl Message {
             Message::NontransferableRct(rct) => rct.body.event.prefix.clone(),
             Message::TransferableRct(rct) => rct.body.event.prefix.clone(),
             #[cfg(feature = "query")]
-            Message::KeyStateNotice(ksn) => ksn.reply.event.get_prefix(),
+            Message::Reply(reply) => reply.reply.get_prefix(),
             #[cfg(feature = "query")]
             Message::Query(_qry) => todo!(),
-            #[cfg(feature = "oobi")]
-            Message::SignedOobi(oobi) => oobi.reply.event.content.data.data.get_eid(),
         }
     }
 }

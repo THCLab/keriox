@@ -13,7 +13,7 @@ use crate::event_message::serialization_info::SerializationInfo;
 #[cfg(feature = "query")]
 use crate::event_message::{SaidEvent, Typeable};
 #[cfg(feature = "query")]
-use crate::query::Envelope;
+use crate::query::Timestamped;
 use crate::{
     event::{receipt::Receipt, EventMessage},
     event_message::{key_event_message::KeyEvent, Digestible},
@@ -64,42 +64,35 @@ pub fn receipt_message(s: &[u8]) -> nom::IResult<&[u8], EventType> {
 }
 
 #[cfg(feature = "query")]
-fn envelope<'a, D: Serialize + Deserialize<'a> + Typeable>(
+fn timestamped<'a, D: Serialize + Deserialize<'a> + Typeable>(
     s: &'a [u8],
-) -> nom::IResult<&[u8], EventMessage<SaidEvent<Envelope<D>>>> {
-    message::<SaidEvent<Envelope<D>>>(s).map(|d| (d.0, d.1))
+) -> nom::IResult<&[u8], EventMessage<SaidEvent<Timestamped<D>>>> {
+    message::<SaidEvent<Timestamped<D>>>(s).map(|d| (d.0, d.1))
 }
 
 #[cfg(feature = "query")]
 pub fn query_message(s: &[u8]) -> nom::IResult<&[u8], EventType> {
     use crate::query::query_event::QueryData;
 
-    envelope::<QueryData>(s).map(|d| (d.0, EventType::Qry(d.1)))
+    timestamped::<QueryData>(s).map(|d| (d.0, EventType::Qry(d.1)))
 }
 
-#[cfg(feature = "query")]
-pub fn reply_ksn_message(s: &[u8]) -> nom::IResult<&[u8], EventType> {
-    use crate::query::{key_state_notice::KeyStateNotice, reply_event::ReplyData};
+#[cfg(any(feature = "query", feature("oobi")))]
+pub fn reply_message(s: &[u8]) -> nom::IResult<&[u8], EventType> {
+    use crate::query::{
+        reply_event::ReplyRoute,
+    };
 
-    envelope::<ReplyData<KeyStateNotice>>(s).map(|d| (d.0, EventType::RpyKsn(d.1)))
-}
-
-#[cfg(feature = "oobi")]
-pub fn reply_oobi_message(s: &[u8]) -> nom::IResult<&[u8], EventType> {
-    use crate::{oobi::Oobi, query::reply_event::ReplyData};
-
-    envelope::<ReplyData<Oobi>>(s).map(|d| (d.0, EventType::RpyOobi(d.1)))
+    timestamped::<ReplyRoute>(s).map(|d| (d.0, EventType::Rpy(d.1)))
 }
 
 pub fn signed_message(s: &[u8]) -> nom::IResult<&[u8], SignedEventData> {
-    #[cfg(feature = "query")]
+    #[cfg(any(feature = "query", feature = "oobi"))]
     let (rest, event) = alt((
         key_event_message,
-        reply_ksn_message,
+        reply_message,
         query_message,
         receipt_message,
-        #[cfg(feature = "oobi")]
-        reply_oobi_message,
     ))(s)?;
     #[cfg(not(all(feature = "query", feature = "oobi")))]
     let (rest, event) = alt((key_event_message, receipt_message))(s)?;
@@ -238,8 +231,8 @@ fn test_reply() {
     let rest = "something more";
     let stream = [rpy, rest].join("");
 
-    let (_extra, event) = reply_ksn_message(stream.as_bytes()).unwrap();
-    assert!(matches!(event, EventType::RpyKsn(_)));
+    let (_extra, event) = reply_message(stream.as_bytes()).unwrap();
+    assert!(matches!(event, EventType::Rpy(_)));
 }
 
 #[cfg(feature = "query")]

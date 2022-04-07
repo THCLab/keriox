@@ -499,15 +499,12 @@ pub fn test_reply_escrow() -> Result<(), Error> {
     assert!(matches!(notification, Ok(Notification::KsnOutOfOrder(_))));
     publisher.notify(&notification?)?;
     let mut escrow = db.get_escrowed_replys(&identifier).unwrap();
-    assert_eq!(
-        Message::KeyStateNotice(escrow.next().unwrap()),
-        deserialized_new_rpy
-    );
+    assert_eq!(Message::Reply(escrow.next().unwrap()), deserialized_new_rpy);
     assert!(escrow.next().is_none());
 
     let mut accepted_rpys = db.get_accepted_replys(&identifier).unwrap();
     assert_eq!(
-        Message::KeyStateNotice(accepted_rpys.next().unwrap()),
+        Message::Reply(accepted_rpys.next().unwrap()),
         deserialized_old_rpy
     );
     assert!(accepted_rpys.next().is_none());
@@ -523,10 +520,8 @@ pub fn test_reply_escrow() -> Result<(), Error> {
     assert_eq!(escrow.unwrap().collect::<Vec<_>>().len(), 0);
 
     let mut accepted_rpys = db.get_accepted_replys(&identifier).unwrap();
-    assert_eq!(
-        Message::KeyStateNotice(accepted_rpys.next().unwrap()),
-        deserialized_new_rpy
-    );
+
+    assert_eq!(Message::Reply(accepted_rpys.next().unwrap()), deserialized_new_rpy);
     assert!(accepted_rpys.next().is_none());
 
     Ok(())

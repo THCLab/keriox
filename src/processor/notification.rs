@@ -1,12 +1,8 @@
 use std::{collections::HashMap, sync::Arc};
 
-#[cfg(feature = "oobi")]
-use crate::event::EventMessage;
-#[cfg(feature = "oobi")]
-use crate::oobi::Oobi;
 #[cfg(feature = "query")]
 use crate::query::{
-    key_state_notice::KeyStateNotice, reply_event::ReplyEvent, reply_event::SignedReply,
+    reply_event::ReplyEvent, reply_event::SignedReply,
 };
 use crate::{
     error::Error,
@@ -69,13 +65,13 @@ pub enum Notification {
     TransReceiptOutOfOrder(SignedTransferableReceipt),
     DupliciousEvent(SignedEventMessage),
     #[cfg(feature = "query")]
-    KsnOutOfOrder(SignedReply<KeyStateNotice>),
+    KsnOutOfOrder(SignedReply),
     #[cfg(feature = "query")]
     ReplyUpdated,
     #[cfg(feature = "oobi")]
-    GotOobi(EventMessage<ReplyEvent<Oobi>>),
+    GotOobi(ReplyEvent),
     #[cfg(feature = "oobi")]
-    GotSignedOobi(SignedReply<Oobi>),
+    GotSignedOobi(SignedReply),
 }
 
 #[derive(PartialEq, Hash, Eq)]

@@ -17,7 +17,7 @@ use std::path::Path;
 use tables::{SledEventTree, SledEventTreeVec};
 
 #[cfg(feature = "query")]
-use crate::query::{key_state_notice::KeyStateNotice, reply_event::SignedReply};
+use crate::query::{reply_event::SignedReply};
 
 pub struct SledEventDatabase {
     // "iids" tree
@@ -45,10 +45,10 @@ pub struct SledEventDatabase {
     partially_witnessed_events: SledEventTreeVec<TimestampedSignedEventMessage>,
 
     #[cfg(feature = "query")]
-    accepted_rpy: SledEventTreeVec<SignedReply<KeyStateNotice>>,
+    accepted_rpy: SledEventTreeVec<SignedReply>,
 
     #[cfg(feature = "query")]
-    escrowed_replys: SledEventTreeVec<SignedReply<KeyStateNotice>>,
+    escrowed_replys: SledEventTreeVec<SignedReply>,
 }
 
 impl SledEventDatabase {
@@ -349,16 +349,25 @@ impl SledEventDatabase {
     #[cfg(feature = "query")]
     pub fn update_accepted_reply(
         &self,
-        rpy: SignedReply<KeyStateNotice>,
+        rpy: SignedReply,
         id: &IdentifierPrefix,
     ) -> Result<(), Error> {
+        use crate::query::reply_event::ReplyRoute;
+
         match self
             .accepted_rpy
             .iter_values(self.identifiers.designated_key(id))
         {
             Some(rpys) => {
                 let filtered = rpys
-                    .filter(|s| s.reply.event.get_route() != rpy.reply.event.get_route())
+                    .filter(
+                        |s| match (s.reply.get_route(), rpy.reply.get_route()) {
+                            (ReplyRoute::Ksn(id1, _), ReplyRoute::Ksn(id2, _)) => {
+                                id1 != id2
+                            }
+                            _ => true,
+                        },
+                    )
                     .chain(Some(rpy.clone()).into_iter())
                     .collect();
                 self.accepted_rpy
@@ -374,7 +383,7 @@ impl SledEventDatabase {
     pub fn get_accepted_replys(
         &self,
         id: &IdentifierPrefix,
-    ) -> Option<impl DoubleEndedIterator<Item = SignedReply<KeyStateNotice>>> {
+    ) -> Option<impl DoubleEndedIterator<Item = SignedReply>> {
         self.accepted_rpy
             .iter_values(self.identifiers.designated_key(id))
     }
@@ -383,18 +392,14 @@ impl SledEventDatabase {
     pub fn remove_accepted_reply(
         &self,
         id: &IdentifierPrefix,
-        rpy: SignedReply<KeyStateNotice>,
+        rpy: SignedReply,
     ) -> Result<(), Error> {
         self.accepted_rpy
             .remove(self.identifiers.designated_key(id), &rpy)
     }
 
     #[cfg(feature = "query")]
-    pub fn add_escrowed_reply(
-        &self,
-        rpy: SignedReply<KeyStateNotice>,
-        id: &IdentifierPrefix,
-    ) -> Result<(), Error> {
+    pub fn add_escrowed_reply(&self, rpy: SignedReply, id: &IdentifierPrefix) -> Result<(), Error> {
         self.escrowed_replys
             .push(self.identifiers.designated_key(id), rpy)
     }
@@ -403,7 +408,7 @@ impl SledEventDatabase {
     pub fn get_escrowed_replys(
         &self,
         id: &IdentifierPrefix,
-    ) -> Option<impl DoubleEndedIterator<Item = SignedReply<KeyStateNotice>>> {
+    ) -> Option<impl DoubleEndedIterator<Item = SignedReply>> {
         self.escrowed_replys
             .iter_values(self.identifiers.designated_key(id))
     }
@@ -412,16 +417,14 @@ impl SledEventDatabase {
     pub fn remove_escrowed_reply(
         &self,
         id: &IdentifierPrefix,
-        rpy: &SignedReply<KeyStateNotice>,
+        rpy: &SignedReply,
     ) -> Result<(), Error> {
         self.escrowed_replys
             .remove(self.identifiers.designated_key(id), rpy)
     }
 
     #[cfg(feature = "query")]
-    pub fn get_all_escrowed_replys(
-        &self,
-    ) -> Option<impl DoubleEndedIterator<Item = SignedReply<KeyStateNotice>>> {
+    pub fn get_all_escrowed_replys(&self) -> Option<impl DoubleEndedIterator<Item = SignedReply>> {
         self.escrowed_replys.get_all()
     }
 }

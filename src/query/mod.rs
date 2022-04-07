@@ -3,12 +3,11 @@ use crate::{
     error::Error,
     event::{EventMessage, SerializationFormats},
     event_message::{EventTypeTag, SaidEvent, Typeable},
-    prefix::{IdentifierPrefix, Prefix},
 };
 use chrono::{DateTime, FixedOffset, SecondsFormat, Utc};
-use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize, Serializer};
 
-use self::{key_state_notice::KeyStateNotice, reply_event::SignedReply};
+use self::{reply_event::SignedReply};
 
 use thiserror::Error;
 
@@ -19,12 +18,9 @@ pub mod reply_event;
 pub type TimeStamp = DateTime<FixedOffset>;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct Envelope<D: Serialize + Typeable> {
+pub struct Timestamped<D: Serialize> {
     #[serde(rename = "dt", serialize_with = "serialize_timestamp")]
     pub timestamp: DateTime<FixedOffset>,
-
-    #[serde(rename = "r")]
-    pub route: Route,
 
     #[serde(flatten)]
     pub data: D,
@@ -37,76 +33,39 @@ where
     s.serialize_str(&timestamp.to_rfc3339_opts(SecondsFormat::Micros, false))
 }
 
-impl<D: Serialize + Typeable + Clone> Envelope<D> {
-    pub fn new(route: Route, data: D) -> Self {
+impl<D: Serialize + Typeable + Clone> Timestamped<D> {
+    pub fn new(data: D) -> Self {
         let timestamp: DateTime<FixedOffset> = Utc::now().into();
-        Envelope {
-            timestamp,
-            route,
-            data,
-        }
+        Timestamped { timestamp, data }
     }
 
     fn to_message(
         self,
         format: SerializationFormats,
         derivation: &SelfAddressing,
-    ) -> Result<EventMessage<SaidEvent<Envelope<D>>>, Error> {
+    ) -> Result<EventMessage<SaidEvent<Timestamped<D>>>, Error> {
         SaidEvent::<Self>::to_message(self, format, derivation)
     }
 }
 
-impl<D: Serialize + Typeable> Typeable for Envelope<D> {
+impl<D: Serialize + Typeable> Typeable for Timestamped<D> {
     fn get_type(&self) -> EventTypeTag {
         self.data.get_type()
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum Route {
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+// #[serde(tag = "r", content = "a")]
+pub enum QueryRoute {
+    #[serde(rename = "log")]
     Log,
+    #[serde(rename = "ksn")]
     Ksn,
-    ReplyKsn(IdentifierPrefix),
-    ReplyOobi,
-}
-
-impl Serialize for Route {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_str(&match self {
-            Route::Log => "log".into(),
-            Route::Ksn => "ksn".into(),
-            Route::ReplyKsn(id) => ["/ksn/", &id.to_str()].join(""),
-            Route::ReplyOobi => "/loc/scheme".into(),
-        })
-    }
-}
-
-impl<'de> Deserialize<'de> for Route {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        if let Some(id_prefix) = s.strip_prefix("/ksn/") {
-            let id: IdentifierPrefix = id_prefix.parse().map_err(de::Error::custom)?;
-            Ok(Route::ReplyKsn(id))
-        } else {
-            match &s[..] {
-                "ksn" => Ok(Route::Ksn),
-                "log" => Ok(Route::Log),
-                "/loc/scheme" => Ok(Route::ReplyOobi),
-                _ => Err(Error::SemanticError("Unknown route".into())).map_err(de::Error::custom),
-            }
-        }
-    }
 }
 
 #[derive(Debug)]
 pub enum ReplyType {
-    Rep(SignedReply<KeyStateNotice>),
+    Rep(SignedReply),
     Kel(Vec<u8>),
 }
 

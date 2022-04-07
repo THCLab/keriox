@@ -1,5 +1,6 @@
+
 use chrono::{DateTime, FixedOffset};
-use serde::{Deserialize, Serialize};
+use serde::{de, ser::SerializeStruct, Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::{
     derivation::self_addressing::SelfAddressing,
@@ -9,60 +10,121 @@ use crate::{
         dummy_event::DummyEventMessage, signature::Signature, Digestible, EventTypeTag, SaidEvent,
         Typeable,
     },
-    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
-    state::IdentifierState,
+    oobi::{EndRole, LocationScheme},
+    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix},
 };
 
-use super::{key_state_notice::KeyStateNotice, Envelope, Route};
+use super::{key_state_notice::KeyStateNotice, Timestamped};
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
-pub struct ReplyData<D> {
-    #[serde(rename = "a")]
-    pub data: D,
+#[derive(Clone, PartialEq, Debug)]
+pub enum ReplyRoute {
+    Ksn(IdentifierPrefix, KeyStateNotice),
+    LocScheme(LocationScheme),
+    EndRole(EndRole),
 }
 
-pub type ReplyEvent<D> = SaidEvent<Envelope<ReplyData<D>>>;
-pub type ReplyKsnEvent = ReplyEvent<KeyStateNotice>;
-// pub type Reply = Envelope<ReplyData>;
+impl Serialize for ReplyRoute {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut em = serializer.serialize_struct("ReplyRoute", 2)?;
+        match self {
+            ReplyRoute::Ksn(id, ksn) => {
+                em.serialize_field("r", &format!("/ksn/{}", id.to_str()))?;
+                em.serialize_field("a", &ksn)?;
+            }
+            ReplyRoute::LocScheme(loc_scheme) => {
+                em.serialize_field("r", "/loc/scheme")?;
+                em.serialize_field("a", &loc_scheme)?;
+            }
+            ReplyRoute::EndRole(end_role) => {
+                em.serialize_field("r", "/end/role/add")?;
+                em.serialize_field("a", &end_role)?;
+            }
+        };
+        em.end()
+    }
+}
 
-impl<D: Serialize + Clone> ReplyEvent<D> {
+impl<'de> Deserialize<'de> for ReplyRoute {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Debug, Deserialize)]
+        struct Mapping {
+            #[serde(rename = "r")]
+            tag: String,
+            #[serde(rename = "a")]
+            ksn: Option<KeyStateNotice>,
+            #[serde(rename = "a")]
+            loc_scheme: Option<LocationScheme>,
+            #[serde(rename = "a")]
+            end_role: Option<EndRole>,
+        }
+
+        let Mapping {
+            tag,
+            ksn,
+            loc_scheme,
+            end_role,
+        } = Mapping::deserialize(deserializer)?;
+
+        if let Some(id_prefix) = tag.strip_prefix("/ksn/") {
+            let id: IdentifierPrefix = id_prefix.parse().map_err(de::Error::custom)?;
+            Ok(ReplyRoute::Ksn(id, ksn.unwrap()))
+        } else {
+            match &tag[..] {
+                "/loc/scheme" => Ok(ReplyRoute::LocScheme(loc_scheme.unwrap())),
+                "/end/role/add" => Ok(ReplyRoute::EndRole(end_role.unwrap())),
+                _ => Err(Error::SemanticError("Unknown route".into())).map_err(de::Error::custom),
+            }
+        }
+    }
+}
+
+
+
+pub type ReplyEvent = EventMessage<SaidEvent<Timestamped<ReplyRoute>>>;
+// pub type ReplyKsnEvent = ReplyEvent<KeyStateNotice>;
+// pub type Reply = Envelope<ReplyData>;
+impl Typeable for ReplyRoute {
+    fn get_type(&self) -> EventTypeTag {
+        EventTypeTag::Rpy
+    }
+}
+
+impl ReplyEvent {
     pub fn new_reply(
-        ksn: D,
-        route: Route,
+        route: ReplyRoute,
         self_addressing: SelfAddressing,
         serialization: SerializationFormats,
-    ) -> Result<EventMessage<ReplyEvent<D>>, Error> {
-        let rpy_data = ReplyData { data: ksn };
-        let env = Envelope::new(route, rpy_data);
+    ) -> Result<ReplyEvent, Error> {
+        let env = Timestamped::new(route);
         env.to_message(serialization, &self_addressing)
     }
 }
 
-impl<D: Serialize> ReplyEvent<D> {
+impl ReplyEvent {
     pub fn get_timestamp(&self) -> DateTime<FixedOffset> {
-        self.content.timestamp
+        self.event.content.timestamp
     }
 
-    pub fn get_route(&self) -> Route {
-        self.content.route.clone()
+    pub fn get_route(&self) -> ReplyRoute {
+        self.event.content.data.clone()
     }
-}
 
-impl ReplyEvent<KeyStateNotice> {
     pub fn get_prefix(&self) -> IdentifierPrefix {
-        self.content.data.data.state.prefix.clone()
-    }
-
-    pub fn get_state(&self) -> IdentifierState {
-        self.content.data.data.state.clone()
-    }
-
-    pub fn get_reply_data(&self) -> KeyStateNotice {
-        self.content.data.data.clone()
+        match &self.event.content.data {
+            ReplyRoute::Ksn(_, ksn) => ksn.state.prefix.clone(),
+            ReplyRoute::LocScheme(loc) => loc.get_eid(),
+            ReplyRoute::EndRole(endrole) => endrole.cid.clone(),
+        }
     }
 }
 
-impl<D: Serialize + Clone> EventMessage<ReplyEvent<D>> {
+impl ReplyEvent {
     pub fn check_digest(&self) -> Result<(), Error> {
         let dummy = DummyEventMessage::dummy_event(
             self.event.clone(),
@@ -79,19 +141,13 @@ impl<D: Serialize + Clone> EventMessage<ReplyEvent<D>> {
 }
 
 #[cfg(feature = "query")]
-pub fn bada_logic<D: Serialize + Clone>(
-    new_rpy: &SignedReply<D>,
-    old_rpy: &SignedReply<D>,
-) -> Result<(), Error> {
+pub fn bada_logic(new_rpy: &SignedReply, old_rpy: &SignedReply) -> Result<(), Error> {
     use std::cmp::Ordering;
 
     use crate::query::QueryError;
 
     // helper function for reply timestamps checking
-    fn check_dts<D: Serialize>(
-        new_rpy: &ReplyEvent<D>,
-        old_rpy: &ReplyEvent<D>,
-    ) -> Result<(), Error> {
+    fn check_dts(new_rpy: &ReplyEvent, old_rpy: &ReplyEvent) -> Result<(), Error> {
         let new_dt = new_rpy.get_timestamp();
         let old_dt = old_rpy.get_timestamp();
         if new_dt >= old_dt {
@@ -124,44 +180,38 @@ pub fn bada_logic<D: Serialize + Clone>(
 
             match old_sn.cmp(&new_sn) {
                 Ordering::Less => Ok(()),
-                Ordering::Equal => check_dts(&new_rpy.reply.event, &old_rpy.reply.event),
+                Ordering::Equal => check_dts(&new_rpy.reply, &old_rpy.reply),
                 Ordering::Greater => Err(QueryError::StaleRpy.into()),
             }
         }
         Signature::NonTransferable(_bp, _sig) => {
             //  If date-time-stamp of new is greater than old
-            check_dts(&new_rpy.reply.event, &old_rpy.reply.event)
+            check_dts(&new_rpy.reply, &old_rpy.reply)
         }
     }
 }
 
-impl<D> Typeable for ReplyData<D> {
-    fn get_type(&self) -> EventTypeTag {
-        EventTypeTag::Rpy
-    }
-}
-
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct SignedReply<D: Serialize + Clone> {
-    pub reply: EventMessage<ReplyEvent<D>>,
+pub struct SignedReply {
+    pub reply: ReplyEvent,
     pub signature: Signature,
 }
 
-impl<D: Serialize + Clone> SignedReply<D> {
+impl SignedReply {
     pub fn new_nontrans(
-        envelope: EventMessage<ReplyEvent<D>>,
+        reply: ReplyEvent,
         signer: BasicPrefix,
         signature: SelfSigningPrefix,
     ) -> Self {
         let signature = Signature::NonTransferable(signer, signature);
         Self {
-            reply: envelope,
+            reply,
             signature,
         }
     }
 
     pub fn new_trans(
-        envelope: EventMessage<ReplyEvent<D>>,
+        envelope: ReplyEvent,
         signer_seal: EventSeal,
         signatures: Vec<AttachedSignaturePrefix>,
     ) -> Self {
@@ -171,4 +221,18 @@ impl<D: Serialize + Clone> SignedReply<D> {
             signature,
         }
     }
+}
+
+#[test]
+pub fn reply_parse() {
+    use crate::event_parsing::message::signed_message;
+    use crate::event_message::signed_event_message::Message;
+    use std::convert::TryFrom;
+    let rpy = r#"{"v":"KERI10JSON00029d_","t":"rpy","d":"EYFMuK9IQmHvq9KaJ1r67_MMCq5GnQEgLyN9YPamR3r0","dt":"2021-01-01T00:00:00.000000+00:00","r":"/ksn/E7YbTIkWWyNwOxZQTTnrs6qn8jFbu2A8zftQ33JYQFQ0","a":{"v":"KERI10JSON0001e2_","i":"E7YbTIkWWyNwOxZQTTnrs6qn8jFbu2A8zftQ33JYQFQ0","s":"3","p":"EF7f4gNFCbJz6ZHLacIi_bbIq7kaWAFOzX7ncU_vs5Qg","d":"EOPSPvHHVmU9IIdHa5ksisoVrOnmHRps_tx3OsZSQQ30","f":"3","dt":"2021-01-01T00:00:00.000000+00:00","et":"rot","kt":"1","k":["DrcAz_gmDTuWIHn_mOQDeSK_aJIRiw5IMzPD7igzEDb0"],"nt":"1","n":["EK7ZUmFebD2st48Yvtzc9LajV3Yg2mkeeDzVRL-7uKrU"],"bt":"0","b":[],"c":[],"ee":{"s":"3","d":"EOPSPvHHVmU9IIdHa5ksisoVrOnmHRps_tx3OsZSQQ30","br":[],"ba":[]},"di":""}}-VA0-FABE7YbTIkWWyNwOxZQTTnrs6qn8jFbu2A8zftQ33JYQFQ00AAAAAAAAAAAAAAAAAAAAAAwEOPSPvHHVmU9IIdHa5ksisoVrOnmHRps_tx3OsZSQQ30-AABAAYsqumzPM0bIo04gJ4Ln0zAOsGVnjHZrFjjjS49hGx_nQKbXuD1D4J_jNoEa4TPtPDnQ8d0YcJ4TIRJb-XouJBg"#;
+
+    let parsed = signed_message(rpy.as_bytes()).unwrap().1;
+    let deserialized_rpy = Message::try_from(parsed).unwrap();
+
+    assert!(matches!(deserialized_rpy, Message::Reply(_)));
+
 }

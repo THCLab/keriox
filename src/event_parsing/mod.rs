@@ -11,16 +11,14 @@ use crate::event_message::signed_event_message::{
 };
 use crate::event_parsing::payload_size::PayloadType;
 #[cfg(feature = "oobi")]
-use crate::oobi::Oobi;
 use crate::prefix::{
     AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix,
 };
 
 #[cfg(feature = "query")]
 use crate::query::{
-    key_state_notice::KeyStateNotice,
     query_event::QueryEvent,
-    reply_event::{ReplyEvent, ReplyKsnEvent, SignedReply},
+    reply_event::{ReplyEvent, SignedReply},
 };
 use crate::{error::Error, event::event_data::EventData};
 
@@ -141,11 +139,9 @@ pub enum EventType {
     KeyEvent(EventMessage<KeyEvent>),
     Receipt(EventMessage<Receipt>),
     #[cfg(feature = "query")]
-    Qry(EventMessage<QueryEvent>),
-    #[cfg(feature = "query")]
-    RpyKsn(EventMessage<ReplyEvent<KeyStateNotice>>),
-    #[cfg(feature = "oobi")]
-    RpyOobi(EventMessage<ReplyEvent<Oobi>>),
+    Qry(QueryEvent),
+    #[cfg(any(feature = "query", feature = "oobi"))]
+    Rpy(ReplyEvent),
 }
 
 impl EventType {
@@ -156,9 +152,7 @@ impl EventType {
             #[cfg(feature = "query")]
             EventType::Qry(qry) => qry.serialize(),
             #[cfg(feature = "query")]
-            EventType::RpyKsn(rpy) => rpy.serialize(),
-            #[cfg(feature = "oobi")]
-            EventType::RpyOobi(oobi) => oobi.serialize(),
+            EventType::Rpy(rpy) => rpy.serialize(),
         }
     }
 }
@@ -227,8 +221,8 @@ impl From<SignedTransferableReceipt> for SignedEventData {
 }
 
 #[cfg(feature = "query")]
-impl From<SignedReply<KeyStateNotice>> for SignedEventData {
-    fn from(ev: SignedReply<KeyStateNotice>) -> Self {
+impl From<SignedReply> for SignedEventData {
+    fn from(ev: SignedReply) -> Self {
         use crate::event_message::signature::Signature;
         let attachments = vec![match ev.signature.clone() {
             Signature::Transferable(seal, sig) => {
@@ -238,44 +232,8 @@ impl From<SignedReply<KeyStateNotice>> for SignedEventData {
         }];
 
         SignedEventData {
-            deserialized_event: EventType::RpyKsn(ev.reply),
+            deserialized_event: EventType::Rpy(ev.reply),
             attachments,
-        }
-    }
-}
-
-#[cfg(feature = "oobi")]
-impl From<SignedReply<Oobi>> for SignedEventData {
-    fn from(ev: SignedReply<Oobi>) -> Self {
-        use crate::event_message::signature::Signature;
-        let attachments = vec![match ev.signature.clone() {
-            Signature::Transferable(seal, sig) => {
-                Attachment::SealSignaturesGroups(vec![(seal, sig)])
-            }
-            Signature::NonTransferable(pref, sig) => Attachment::ReceiptCouplets(vec![(pref, sig)]),
-        }];
-
-        SignedEventData {
-            deserialized_event: EventType::RpyOobi(ev.reply),
-            attachments,
-        }
-    }
-}
-
-#[cfg(feature = "oobi")]
-impl From<EventMessage<ReplyEvent<Oobi>>> for SignedEventData {
-    fn from(ev: EventMessage<ReplyEvent<Oobi>>) -> Self {
-        // use crate::event_message::signature::Signature;
-        // let attachments = vec![match ev.signature.clone() {
-        //     Signature::Transferable(seal, sig) => {
-        //         Attachment::SealSignaturesGroups(vec![(seal, sig)])
-        //     }
-        //     Signature::NonTransferable(pref, sig) => Attachment::ReceiptCouplets(vec![(pref, sig)]),
-        // }];
-
-        SignedEventData {
-            deserialized_event: EventType::RpyOobi(ev),
-            attachments: vec![],
         }
     }
 }
@@ -289,17 +247,15 @@ impl TryFrom<SignedEventData> for Message {
             EventType::Receipt(rct) => signed_receipt(rct, value.attachments),
             #[cfg(feature = "query")]
             EventType::Qry(qry) => signed_query(qry, value.attachments),
-            #[cfg(feature = "query")]
-            EventType::RpyKsn(rpy) => signed_ksn_reply(rpy, value.attachments),
-            #[cfg(feature = "oobi")]
-            EventType::RpyOobi(rpy) => signed_oobi_reply(rpy, value.attachments),
+            #[cfg(any(feature = "query", feature = "oobi"))]
+            EventType::Rpy(rpy) => signed_reply(rpy, value.attachments),
         }
     }
 }
 
-#[cfg(feature = "query")]
-fn signed_ksn_reply(
-    rpy: EventMessage<ReplyKsnEvent>,
+#[cfg(any(feature = "query", feature = "oobi"))]
+fn signed_reply(
+    rpy: ReplyEvent,
     mut attachments: Vec<Attachment>,
 ) -> Result<Message, Error> {
     match attachments
@@ -309,7 +265,7 @@ fn signed_ksn_reply(
         Attachment::ReceiptCouplets(couplets) => {
             let signer = couplets[0].0.clone();
             let signature = couplets[0].1.clone();
-            Ok(Message::KeyStateNotice(SignedReply::new_nontrans(
+            Ok(Message::Reply(SignedReply::new_nontrans(
                 rpy, signer, signature,
             )))
         }
@@ -319,43 +275,9 @@ fn signed_ksn_reply(
                 .last()
                 .ok_or_else(|| Error::SemanticError("More than one seal".into()))?
                 .to_owned();
-            Ok(Message::KeyStateNotice(SignedReply::new_trans(
-                rpy, seal, sigs,
-            )))
+            Ok(Message::Reply(SignedReply::new_trans(rpy, seal, sigs)))
         }
-        Attachment::Frame(atts) => signed_ksn_reply(rpy, atts),
-        _ => {
-            // Improper payload type
-            Err(Error::SemanticError("Improper payload type".into()))
-        }
-    }
-}
-
-#[cfg(feature = "oobi")]
-fn signed_oobi_reply(
-    rpy: EventMessage<ReplyEvent<Oobi>>,
-    mut attachments: Vec<Attachment>,
-) -> Result<Message, Error> {
-    match attachments
-        .pop()
-        .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?
-    {
-        Attachment::ReceiptCouplets(couplets) => {
-            let signer = couplets[0].0.clone();
-            let signature = couplets[0].1.clone();
-            Ok(Message::SignedOobi(SignedReply::new_nontrans(
-                rpy, signer, signature,
-            )))
-        }
-        Attachment::SealSignaturesGroups(data) => {
-            let (seal, sigs) = data
-                // TODO what if more than one?
-                .last()
-                .ok_or_else(|| Error::SemanticError("More than one seal".into()))?
-                .to_owned();
-            Ok(Message::SignedOobi(SignedReply::new_trans(rpy, seal, sigs)))
-        }
-        Attachment::Frame(atts) => signed_oobi_reply(rpy, atts),
+        Attachment::Frame(atts) => signed_reply(rpy, atts),
         _ => {
             // Improper payload type
             Err(Error::SemanticError("Improper payload type".into()))
@@ -365,7 +287,7 @@ fn signed_oobi_reply(
 
 #[cfg(feature = "query")]
 fn signed_query(
-    qry: EventMessage<QueryEvent>,
+    qry: QueryEvent,
     mut attachments: Vec<Attachment>,
 ) -> Result<Message, Error> {
     use crate::query::query_event::SignedQuery;
@@ -377,7 +299,7 @@ fn signed_query(
         Attachment::LastEstSignaturesGroups(groups) => {
             let (signer, signatures) = groups[0].clone();
             Ok(Message::Query(SignedQuery {
-                envelope: qry,
+                query: qry,
                 signer,
                 signatures,
             }))
