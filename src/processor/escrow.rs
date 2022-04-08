@@ -4,10 +4,11 @@ use super::{
     notification::{JustNotification, Notification, NotificationBus, Notifier},
     validator::EventValidator,
 };
+#[cfg(feature = "query")]
+use crate::query::reply_event::ReplyRoute;
 use crate::{
     database::sled::SledEventDatabase, error::Error,
     event_message::signed_event_message::SignedEventMessage, prefix::IdentifierPrefix,
-    query::reply_event::ReplyRoute,
 };
 
 pub fn default_escrow_bus(db: Arc<SledEventDatabase>) -> NotificationBus {

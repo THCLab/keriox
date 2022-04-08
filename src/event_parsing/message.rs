@@ -63,7 +63,7 @@ pub fn receipt_message(s: &[u8]) -> nom::IResult<&[u8], EventType> {
     message::<Receipt>(s).map(|d| (d.0, EventType::Receipt(d.1)))
 }
 
-#[cfg(feature = "query")]
+#[cfg(any(feature = "query", feature = "oobi"))]
 fn timestamped<'a, D: Serialize + Deserialize<'a> + Typeable>(
     s: &'a [u8],
 ) -> nom::IResult<&[u8], EventMessage<SaidEvent<Timestamped<D>>>> {
@@ -77,7 +77,7 @@ pub fn query_message(s: &[u8]) -> nom::IResult<&[u8], EventType> {
     timestamped::<QueryData>(s).map(|d| (d.0, EventType::Qry(d.1)))
 }
 
-#[cfg(any(feature = "query", feature("oobi")))]
+#[cfg(any(feature = "query", feature = "oobi"))]
 pub fn reply_message(s: &[u8]) -> nom::IResult<&[u8], EventType> {
     use crate::query::reply_event::ReplyRoute;
 
@@ -92,7 +92,7 @@ pub fn signed_message(s: &[u8]) -> nom::IResult<&[u8], SignedEventData> {
         query_message,
         receipt_message,
     ))(s)?;
-    #[cfg(not(all(feature = "query", feature = "oobi")))]
+    #[cfg(not(any(feature = "query", feature = "oobi")))]
     let (rest, event) = alt((key_event_message, receipt_message))(s)?;
     let (rest, attachments): (&[u8], Vec<Attachment>) =
         fold_many0(attachment, vec![], |mut acc: Vec<_>, item| {

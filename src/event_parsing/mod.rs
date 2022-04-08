@@ -10,10 +10,8 @@ use crate::event_message::signed_event_message::{
     Message, SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
 };
 use crate::event_parsing::payload_size::PayloadType;
-#[cfg(feature = "oobi")]
-use crate::prefix::{
-    AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix,
-};
+use crate::prefix::Prefix;
+use crate::prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix};
 
 #[cfg(feature = "query")]
 use crate::query::{

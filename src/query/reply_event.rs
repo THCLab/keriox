@@ -1,6 +1,8 @@
 use chrono::{DateTime, FixedOffset};
 use serde::{de, ser::SerializeStruct, Deserialize, Deserializer, Serialize, Serializer};
 
+#[cfg(feature = "oobi")]
+use crate::oobi::{EndRole, LocationScheme};
 use crate::{
     derivation::self_addressing::SelfAddressing,
     error::Error,
@@ -9,7 +11,6 @@ use crate::{
         dummy_event::DummyEventMessage, signature::Signature, Digestible, EventTypeTag, SaidEvent,
         Typeable,
     },
-    oobi::{EndRole, LocationScheme},
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix},
 };
 
@@ -18,7 +19,9 @@ use super::{key_state_notice::KeyStateNotice, Timestamped};
 #[derive(Clone, PartialEq, Debug)]
 pub enum ReplyRoute {
     Ksn(IdentifierPrefix, KeyStateNotice),
+    #[cfg(feature = "oobi")]
     LocScheme(LocationScheme),
+    #[cfg(feature = "oobi")]
     EndRole(EndRole),
 }
 
@@ -33,10 +36,12 @@ impl Serialize for ReplyRoute {
                 em.serialize_field("r", &format!("/ksn/{}", id.to_str()))?;
                 em.serialize_field("a", &ksn)?;
             }
+            #[cfg(feature = "oobi")]
             ReplyRoute::LocScheme(loc_scheme) => {
                 em.serialize_field("r", "/loc/scheme")?;
                 em.serialize_field("a", &loc_scheme)?;
             }
+            #[cfg(feature = "oobi")]
             ReplyRoute::EndRole(end_role) => {
                 em.serialize_field("r", "/end/role/add")?;
                 em.serialize_field("a", &end_role)?;
@@ -55,7 +60,9 @@ impl<'de> Deserialize<'de> for ReplyRoute {
         #[serde(untagged)]
         enum ReplyType {
             K(KeyStateNotice),
+            #[cfg(feature = "oobi")]
             L(LocationScheme),
+            #[cfg(feature = "oobi")]
             R(EndRole),
         }
         #[derive(Debug, Deserialize)]
@@ -78,7 +85,9 @@ impl<'de> Deserialize<'de> for ReplyRoute {
             Ok(ReplyRoute::Ksn(id, ksn))
         } else {
             match (&tag[..], reply_data) {
+                #[cfg(feature = "oobi")]
                 ("/loc/scheme", ReplyType::L(loc_scheme)) => Ok(ReplyRoute::LocScheme(loc_scheme)),
+                #[cfg(feature = "oobi")]
                 ("/end/role/add", ReplyType::R(end_role)) => Ok(ReplyRoute::EndRole(end_role)),
                 _ => Err(Error::SemanticError("Wrong route".into())).map_err(de::Error::custom),
             }
@@ -87,8 +96,7 @@ impl<'de> Deserialize<'de> for ReplyRoute {
 }
 
 pub type ReplyEvent = EventMessage<SaidEvent<Timestamped<ReplyRoute>>>;
-// pub type ReplyKsnEvent = ReplyEvent<KeyStateNotice>;
-// pub type Reply = Envelope<ReplyData>;
+
 impl Typeable for ReplyRoute {
     fn get_type(&self) -> EventTypeTag {
         EventTypeTag::Rpy
@@ -118,7 +126,9 @@ impl ReplyEvent {
     pub fn get_prefix(&self) -> IdentifierPrefix {
         match &self.event.content.data {
             ReplyRoute::Ksn(_, ksn) => ksn.state.prefix.clone(),
+            #[cfg(feature = "oobi")]
             ReplyRoute::LocScheme(loc) => loc.get_eid(),
+            #[cfg(feature = "oobi")]
             ReplyRoute::EndRole(endrole) => endrole.cid.clone(),
         }
     }
@@ -223,7 +233,7 @@ impl SignedReply {
 #[test]
 pub fn reply_parse() {
     use crate::event_message::signed_event_message::Message;
-    use crate::event_parsing::message::{signed_event_stream, signed_message};
+    use crate::event_parsing::message::signed_message;
     use std::convert::TryFrom;
     let rpy = r#"{"v":"KERI10JSON00029d_","t":"rpy","d":"EYFMuK9IQmHvq9KaJ1r67_MMCq5GnQEgLyN9YPamR3r0","dt":"2021-01-01T00:00:00.000000+00:00","r":"/ksn/E7YbTIkWWyNwOxZQTTnrs6qn8jFbu2A8zftQ33JYQFQ0","a":{"v":"KERI10JSON0001e2_","i":"E7YbTIkWWyNwOxZQTTnrs6qn8jFbu2A8zftQ33JYQFQ0","s":"3","p":"EF7f4gNFCbJz6ZHLacIi_bbIq7kaWAFOzX7ncU_vs5Qg","d":"EOPSPvHHVmU9IIdHa5ksisoVrOnmHRps_tx3OsZSQQ30","f":"3","dt":"2021-01-01T00:00:00.000000+00:00","et":"rot","kt":"1","k":["DrcAz_gmDTuWIHn_mOQDeSK_aJIRiw5IMzPD7igzEDb0"],"nt":"1","n":["EK7ZUmFebD2st48Yvtzc9LajV3Yg2mkeeDzVRL-7uKrU"],"bt":"0","b":[],"c":[],"ee":{"s":"3","d":"EOPSPvHHVmU9IIdHa5ksisoVrOnmHRps_tx3OsZSQQ30","br":[],"ba":[]},"di":""}}-VA0-FABE7YbTIkWWyNwOxZQTTnrs6qn8jFbu2A8zftQ33JYQFQ00AAAAAAAAAAAAAAAAAAAAAAwEOPSPvHHVmU9IIdHa5ksisoVrOnmHRps_tx3OsZSQQ30-AABAAYsqumzPM0bIo04gJ4Ln0zAOsGVnjHZrFjjjS49hGx_nQKbXuD1D4J_jNoEa4TPtPDnQ8d0YcJ4TIRJb-XouJBg"#;
 
@@ -231,6 +241,14 @@ pub fn reply_parse() {
     let deserialized_rpy = Message::try_from(parsed).unwrap();
 
     assert!(matches!(deserialized_rpy, Message::Reply(_)));
+}
+
+#[cfg(feature = "oobi")]
+#[test]
+pub fn oobi_reply_parse() {
+    use crate::event_message::signed_event_message::Message;
+    use crate::event_parsing::message::{signed_event_stream, signed_message};
+    use std::convert::TryFrom;
 
     let endrole = br#"{"v":"KERI10JSON000116_","t":"rpy","d":"EcZ1I4nKy6gIkWxjq1LmIivoPGv32lvlSuMVsWnOPwSc","dt":"2022-02-28T17:23:20.338355+00:00","r":"/end/role/add","a":{"cid":"BuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw","role":"controller","eid":"BuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw"}}-VAi-CABBuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw0B9ccIiMxdwurRjGvUUUdXsxhseo58onhE4bJddKuyPaSpBHXdRKKuiFE0SmLAogMQGJ0iN6f1V_2E_MVfMc3sAA"#;
     let parsed = signed_message(endrole).unwrap().1;

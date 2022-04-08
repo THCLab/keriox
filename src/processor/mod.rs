@@ -1,11 +1,12 @@
 use std::sync::Arc;
 
+#[cfg(feature = "query")]
+use crate::query::reply_event::ReplyRoute;
 use crate::{
     database::sled::SledEventDatabase,
     error::Error,
     event_message::signed_event_message::{Message, TimestampedSignedEventMessage},
     prefix::IdentifierPrefix,
-    query::reply_event::ReplyRoute,
     state::IdentifierState,
 };
 
@@ -96,6 +97,7 @@ impl EventProcessor {
                     Err(Error::EventOutOfOrderError) => Ok(Notification::KsnOutOfOrder(rpy)),
                     Err(anything) => Err(anything),
                 },
+                #[cfg(feature = "oobi")]
                 _ => Ok(Notification::GotOobi(rpy.reply)),
             },
             #[cfg(feature = "query")]
