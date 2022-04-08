@@ -5,7 +5,6 @@ use std::cmp::Ordering;
 use super::EventMessage;
 use super::{serializer::to_string, KeyEvent};
 use crate::event_parsing::SignedEventData;
-#[cfg(feature = "oobi")]
 use crate::prefix::IdentifierPrefix;
 use crate::{
     error::Error,
