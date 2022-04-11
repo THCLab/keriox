@@ -140,7 +140,7 @@ impl OobiManager {
                 };
                 Ok(())
             }
-            ReplyRoute::EndRole(_) => {
+            ReplyRoute::EndRoleAdd(_) | ReplyRoute::EndRoleCut(_) => {
                 // check signature
                 self.validator
                     .verify(&rpy.reply.serialize()?, &rpy.signature)?;
