@@ -22,7 +22,9 @@ pub enum ReplyRoute {
     #[cfg(feature = "oobi")]
     LocScheme(LocationScheme),
     #[cfg(feature = "oobi")]
-    EndRole(EndRole),
+    EndRoleAdd(EndRole),
+    #[cfg(feature = "oobi")]
+    EndRoleCut(EndRole),
 }
 
 impl Serialize for ReplyRoute {
@@ -42,8 +44,12 @@ impl Serialize for ReplyRoute {
                 em.serialize_field("a", &loc_scheme)?;
             }
             #[cfg(feature = "oobi")]
-            ReplyRoute::EndRole(end_role) => {
+            ReplyRoute::EndRoleAdd(end_role) => {
                 em.serialize_field("r", "/end/role/add")?;
+                em.serialize_field("a", &end_role)?;
+            }
+            ReplyRoute::EndRoleCut(end_role) => {
+                em.serialize_field("r", "/end/role/cut")?;
                 em.serialize_field("a", &end_role)?;
             }
         };
@@ -88,7 +94,9 @@ impl<'de> Deserialize<'de> for ReplyRoute {
                 #[cfg(feature = "oobi")]
                 ("/loc/scheme", ReplyType::L(loc_scheme)) => Ok(ReplyRoute::LocScheme(loc_scheme)),
                 #[cfg(feature = "oobi")]
-                ("/end/role/add", ReplyType::R(end_role)) => Ok(ReplyRoute::EndRole(end_role)),
+                ("/end/role/add", ReplyType::R(end_role)) => Ok(ReplyRoute::EndRoleAdd(end_role)),
+                #[cfg(feature = "oobi")]
+                ("/end/role/cut", ReplyType::R(end_role)) => Ok(ReplyRoute::EndRoleCut(end_role)),
                 _ => Err(Error::SemanticError("Wrong route".into())).map_err(de::Error::custom),
             }
         }
@@ -129,7 +137,9 @@ impl ReplyEvent {
             #[cfg(feature = "oobi")]
             ReplyRoute::LocScheme(loc) => loc.get_eid(),
             #[cfg(feature = "oobi")]
-            ReplyRoute::EndRole(endrole) => endrole.cid.clone(),
+            ReplyRoute::EndRoleAdd(endrole) | ReplyRoute::EndRoleCut(endrole) => {
+                endrole.cid.clone()
+            }
         }
     }
 }
@@ -254,7 +264,21 @@ pub fn oobi_reply_parse() {
     let parsed = signed_message(endrole).unwrap().1;
     let deserialized_rpy = Message::try_from(parsed).unwrap();
 
-    assert!(matches!(deserialized_rpy, Message::Reply(_)));
+    if let Message::Reply(reply) = deserialized_rpy {
+        assert!(matches!(reply.reply.get_route(), ReplyRoute::EndRoleAdd(_)));
+    } else {
+        assert!(false)
+    };
+
+    let endrole = br#"{"v":"KERI10JSON000113_","t":"rpy","d":"EwZH6wJVwwqb2tmhYKYa-GyiO75k4MqkuMKyG2XWpP7Y","dt":"2021-01-01T00:00:01.000000+00:00","r":"/end/role/cut","a":{"cid":"Bsr9jFyYr-wCxJbUJs0smX8UDSDDQUoO4-v_FTApyPvI","role":"watcher","eid":"BXphIkYC1U2ardvt2kGLThDRh2q9N-yT08WSRlpHwtGs"}}-VAi-CABBsr9jFyYr-wCxJbUJs0smX8UDSDDQUoO4-v_FTApyPvI0BUrzk2jcq5YtdMuW4s4U6FuGrfHNZZAn4pzfzzsEcfIsgfMbhJ1ozpWlYPYdR3wbryWUkxfWqtbNwDWlBdTblAQ"#;
+    let parsed = signed_message(endrole).unwrap().1;
+    let deserialized_rpy = Message::try_from(parsed).unwrap();
+
+    if let Message::Reply(reply) = deserialized_rpy {
+        assert!(matches!(reply.reply.get_route(), ReplyRoute::EndRoleCut(_)));
+    } else {
+        assert!(false)
+    };
 
     let body = br#"{"v":"KERI10JSON0000fa_","t":"rpy","d":"EJq4dQQdqg8aK7VyGnfSibxPyW8Zk2zO1qbVRD6flOvE","dt":"2022-02-28T17:23:20.336207+00:00","r":"/loc/scheme","a":{"eid":"BuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw","scheme":"http","url":"http://127.0.0.1:5643/"}}-VAi-CABBuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw0BAPJ5p_IpUFdmq8uupehsL8DzxWDeaU_SjeiwfmRZ6i9pqddraItmCOAysdXdTEQZ1hEM60iDEWvK16g68TrcAw{"v":"KERI10JSON0000f8_","t":"rpy","d":"ExSR01j5noF2LnGcGFUbLnq-U8JuYBr9WWEMt8d2fb1Y","dt":"2022-02-28T17:23:20.337272+00:00","r":"/loc/scheme","a":{"eid":"BuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw","scheme":"tcp","url":"tcp://127.0.0.1:5633/"}}-VAi-CABBuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw0BZtIhK6Nh6Zk1zPmkJYiFVz0RimQRiubshmSmqAzxzhT4KpGMAH7sbNlFP-0-lKjTawTReKv4L7N3TR7jxXaEBg{"v":"KERI10JSON000116_","t":"rpy","d":"EcZ1I4nKy6gIkWxjq1LmIivoPGv32lvlSuMVsWnOPwSc","dt":"2022-02-28T17:23:20.338355+00:00","r":"/end/role/add","a":{"cid":"BuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw","role":"controller","eid":"BuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw"}}-VAi-CABBuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw0B9ccIiMxdwurRjGvUUUdXsxhseo58onhE4bJddKuyPaSpBHXdRKKuiFE0SmLAogMQGJ0iN6f1V_2E_MVfMc3sAA"#;
     let stream = signed_event_stream(body).unwrap();
