@@ -27,7 +27,7 @@ pub struct LocationScheme {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct EndRole {
     pub eid: IdentifierPrefix,
-    pub role: String,
+    pub role: Role,
     pub cid: IdentifierPrefix,
 }
 
@@ -104,6 +104,15 @@ impl LocationScheme {
 pub enum Scheme {
     Http,
     Tcp,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, EnumString, Display)]
+#[serde(rename_all = "lowercase")]
+#[strum(serialize_all = "lowercase")]
+pub enum Role {
+    Controller,
+    Witness,
+    Watcher,
 }
 
 pub struct OobiManager {

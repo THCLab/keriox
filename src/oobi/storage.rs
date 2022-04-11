@@ -7,7 +7,7 @@ use crate::query::reply_event::ReplyRoute;
 use crate::{prefix::IdentifierPrefix, query::reply_event::SignedReply};
 
 use super::error::Error;
-use super::Scheme;
+use super::{Scheme, Role};
 
 pub struct OobiStorage {
     identifiers: SledEventTree<IdentifierPrefix>,
@@ -55,14 +55,14 @@ impl OobiStorage {
     pub fn get_end_role(
         &self,
         cid: &IdentifierPrefix,
-        role: &str,
+        role: Role,
     ) -> Result<Option<Vec<SignedReply>>, Error> {
         let key = self.identifiers.designated_key(cid);
         Ok(self.cids.get(key)?.map(|r| {
             r.into_iter()
                 .filter(|oobi| {
                     if let ReplyRoute::EndRoleAdd(er) = oobi.reply.get_route() {
-                        er.role == role.to_string()
+                        er.role == role
                     } else {
                         false
                     }
