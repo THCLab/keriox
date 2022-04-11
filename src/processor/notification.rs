@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 #[cfg(feature = "query")]
-use crate::query::{reply_event::ReplyEvent, reply_event::SignedReply};
+use crate::query::reply_event::SignedReply;
 use crate::{
     error::Error,
     event_message::signed_event_message::{
@@ -67,9 +67,7 @@ pub enum Notification {
     #[cfg(feature = "query")]
     ReplyUpdated,
     #[cfg(feature = "oobi")]
-    GotOobi(ReplyEvent),
-    #[cfg(feature = "oobi")]
-    GotSignedOobi(SignedReply),
+    GotOobi(SignedReply),
 }
 
 #[derive(PartialEq, Hash, Eq)]
@@ -89,7 +87,6 @@ pub enum JustNotification {
     KsnUpdated,
     #[cfg(feature = "oobi")]
     GotOobi,
-    GotSignedOobi,
 }
 
 impl From<&Notification> for JustNotification {
@@ -110,8 +107,6 @@ impl From<&Notification> for JustNotification {
             Notification::ReplyUpdated => JustNotification::KsnUpdated,
             #[cfg(feature = "oobi")]
             Notification::GotOobi(_) => JustNotification::GotOobi,
-            #[cfg(feature = "oobi")]
-            Notification::GotSignedOobi(_) => JustNotification::GotSignedOobi,
         }
     }
 }
