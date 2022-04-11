@@ -98,7 +98,16 @@ impl EventProcessor {
                     Err(anything) => Err(anything),
                 },
                 #[cfg(feature = "oobi")]
-                _ => Ok(Notification::GotOobi(rpy)),
+                ReplyRoute::EndRoleAdd(_)
+                | ReplyRoute::EndRoleCut(_)
+                | ReplyRoute::LocScheme(_) => {
+                    // check signature
+                    self.validator
+                        .verify(&rpy.reply.serialize()?, &rpy.signature)?;
+                    // check digest
+                    rpy.reply.check_digest()?;
+                    Ok(Notification::GotOobi(rpy))
+                }
             },
             #[cfg(feature = "query")]
             Message::Query(_qry) => todo!(),

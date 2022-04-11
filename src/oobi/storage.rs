@@ -7,7 +7,7 @@ use crate::query::reply_event::ReplyRoute;
 use crate::{prefix::IdentifierPrefix, query::reply_event::SignedReply};
 
 use super::error::Error;
-use super::{Scheme, Role};
+use super::{Role, Scheme};
 
 pub struct OobiStorage {
     identifiers: SledEventTree<IdentifierPrefix>,
