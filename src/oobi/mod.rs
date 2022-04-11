@@ -1,7 +1,6 @@
 use std::{convert::TryFrom, path::Path};
 
 use serde::{Deserialize, Serialize};
-use strum::{Display, EnumString};
 use url::Url;
 
 use crate::{
@@ -49,66 +48,15 @@ impl LocationScheme {
     }
 }
 
-// impl TryFrom<url::Url> for LocationScheme {
-//     type Error = Error;
-
-//     fn try_from(url: url::Url) -> Result<Self, Self::Error> {
-//         let scheme = Scheme::try_from(url.scheme())
-//             .map_err(|e| Error::OobiError(format!("Wrong scheme: {}", e)))?;
-//         let url_address = Url::parse(&format!(
-//             "{}://{}:{:?}",
-//             url.scheme(),
-//             url.host_str()
-//                 .ok_or_else(|| Error::OobiError("Wrong host".into()))?,
-//             url.port()
-//                 .ok_or_else(|| Error::OobiError("Wrong port".into()))?
-//         ))?;
-//         let mut path_iterator = url
-//             .path_segments()
-//             .ok_or_else(|| Error::OobiError("No identifier prefix".into()))?;
-//         // skip oobi string
-//         path_iterator.next();
-//         let id = path_iterator
-//             .next()
-//             .ok_or_else(|| Error::OobiError("No identifier prefix".into()))?
-//             .parse::<IdentifierPrefix>()
-//             .map_err(|e| Error::OobiError(format!("Wrong identifier prefix: {}", e)))?;
-//         let role = path_iterator.next().map(|r| r.to_string());
-//         let second_id = path_iterator
-//             .next()
-//             .map(|id| id.parse::<IdentifierPrefix>().unwrap());
-//         let (eid, cid) = if let Some(eid) = second_id {
-//             (eid, Some(id))
-//         } else {
-//             (id, None)
-//         };
-
-//         Ok(Self {
-//             eid,
-//             scheme,
-//             url: url_address,
-//         })
-//     }
-// }
-
-// impl TryFrom<LocationScheme> for url::Url {
-//     type Error = Error;
-//     fn try_from(oobi: LocationScheme) -> Result<Self, Self::Error> {
-//         url::Url::parse(&format!("{}oobi/{}", oobi.url, oobi.eid.to_str())).map_err(|e| e.into())
-//     }
-// }
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, EnumString, Display)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq )]
 #[serde(rename_all = "lowercase")]
-#[strum(serialize_all = "lowercase")]
 pub enum Scheme {
     Http,
     Tcp,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, EnumString, Display)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "lowercase")]
-#[strum(serialize_all = "lowercase")]
 pub enum Role {
     Controller,
     Witness,
@@ -220,33 +168,6 @@ mod error {
         SledError(#[from] sled::Error),
     }
 }
-
-// #[test]
-// pub fn test_oobi_from_url() {
-//     let oobi_url = "http://127.0.0.1:3232/oobi/BMOaOdnrbEP-MSQE_CaL7BhGXvqvIdoHEMYcOnUAWjOE";
-//     let oobi = LocationScheme::try_from(url::Url::parse(oobi_url).unwrap()).unwrap();
-//     assert_eq!(
-//         oobi.eid.to_str(),
-//         "BMOaOdnrbEP-MSQE_CaL7BhGXvqvIdoHEMYcOnUAWjOE"
-//     );
-//     assert_eq!(oobi.scheme, Scheme::Http);
-//     assert_eq!(oobi.url.to_string(), "http://127.0.0.1:3232/");
-
-//     let oobi_url = "http://127.0.0.1:5642/oobi/EozYHef4je02EkMOA1IKM65WkIdSjfrL7XWDk_JzJL9o/witness/BGKVzj4ve0VSd8z_AmvhLg4lqcC_9WYX90k03q-R_Ydo";
-//     let oobi = LocationScheme::try_from(url::Url::parse(oobi_url).unwrap()).unwrap();
-//     assert_eq!(
-//         oobi.eid.to_str(),
-//         "BGKVzj4ve0VSd8z_AmvhLg4lqcC_9WYX90k03q-R_Ydo"
-//     );
-//     assert_eq!(
-//         oobi.cid.map(|p| p.to_str()),
-//         Some("EozYHef4je02EkMOA1IKM65WkIdSjfrL7XWDk_JzJL9o".into())
-//     );
-//     assert_eq!(oobi.role, Some("witness".into()));
-
-//     assert_eq!(oobi.scheme, Scheme::Http);
-//     assert_eq!(oobi.url.to_string(), "http://127.0.0.1:5642/");
-// }
 
 #[cfg(test)]
 mod tests {

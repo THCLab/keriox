@@ -98,7 +98,7 @@ impl EventProcessor {
                     Err(anything) => Err(anything),
                 },
                 #[cfg(feature = "oobi")]
-                _ => Ok(Notification::GotOobi(rpy.reply)),
+                _ => Ok(Notification::GotOobi(rpy)),
             },
             #[cfg(feature = "query")]
             Message::Query(_qry) => todo!(),
