@@ -6,8 +6,8 @@ use crate::database::sled::tables::{SledEventTree, SledEventTreeVec};
 use crate::query::reply_event::ReplyRoute;
 use crate::{prefix::IdentifierPrefix, query::reply_event::SignedReply};
 
-use super::error::Error;
 use super::{Role, Scheme};
+use crate::error::Error;
 
 pub struct OobiStorage {
     identifiers: SledEventTree<IdentifierPrefix>,

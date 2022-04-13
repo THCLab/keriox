@@ -25,6 +25,7 @@ use crate::{
         EventTypeTag,
     },
     event_parsing::message::{signed_event_stream, signed_message},
+    oobi::OobiManager,
     prefix::AttachedSignaturePrefix,
     prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     processor::{
@@ -46,7 +47,7 @@ pub struct Keri<K: KeyManager + 'static> {
     prefix: IdentifierPrefix,
     key_manager: Arc<Mutex<K>>,
     processor: EventProcessor,
-    storage: EventStorage,
+    pub storage: EventStorage,
     notification_bus: NotificationBus,
     response_queue: Arc<Responder<Notification>>,
 }
@@ -85,6 +86,12 @@ impl<K: KeyManager> Keri<K> {
     ///
     pub fn db(&self) -> Arc<SledEventDatabase> {
         Arc::clone(&self.storage.db)
+    }
+
+    pub fn register_oobi_manager(&mut self, oobi_manager: Arc<OobiManager>) -> Result<(), Error> {
+        self.notification_bus
+            .register_observer(oobi_manager, vec![JustNotification::GotOobi]);
+        Ok(())
     }
 
     pub fn incept(
@@ -464,8 +471,8 @@ impl<K: KeyManager> Keri<K> {
         self.storage.get_state(&self.prefix)
     }
 
-    pub fn get_kerl(&self) -> Result<Option<Vec<u8>>, Error> {
-        self.storage.get_kel(&self.prefix)
+    pub fn get_kel(&self, id: &IdentifierPrefix) -> Result<Option<Vec<u8>>, Error> {
+        self.storage.get_kel(id)
     }
 
     pub fn get_state_for_prefix(

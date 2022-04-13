@@ -9,6 +9,7 @@ use crate::event_message::key_event_message::KeyEvent;
 use crate::event_message::signed_event_message::{Message, SignedNontransferableReceipt};
 use crate::event_parsing::message::signed_event_stream;
 use crate::keys::PublicKey;
+use crate::oobi::OobiManager;
 use crate::processor::escrow::default_escrow_bus;
 use crate::processor::event_storage::EventStorage;
 use crate::processor::notification::{JustNotification, Notification, NotificationBus};
@@ -64,6 +65,11 @@ impl Witness {
             publisher,
             responder,
         })
+    }
+
+    pub fn register_oobi_manager(&mut self, oobi_manager: Arc<OobiManager>) {
+        self.publisher
+            .register_observer(oobi_manager, vec![JustNotification::GotOobi]);
     }
 
     pub fn get_db_ref(&self) -> Arc<SledEventDatabase> {

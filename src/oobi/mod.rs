@@ -1,9 +1,12 @@
 use std::{convert::TryFrom, path::Path};
 
 use serde::{Deserialize, Serialize};
+use strum_macros::EnumString;
 use url::Url;
 
+use self::error::Error as OobiError;
 use crate::{
+    error::Error,
     event_message::signed_event_message::Message,
     event_parsing::message::signed_event_stream,
     prefix::IdentifierPrefix,
@@ -13,7 +16,7 @@ use crate::{
 
 pub mod storage;
 
-use self::{error::Error, storage::OobiStorage};
+use self::storage::OobiStorage;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct LocationScheme {
@@ -24,9 +27,9 @@ pub struct LocationScheme {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct EndRole {
-    pub eid: IdentifierPrefix,
-    pub role: Role,
     pub cid: IdentifierPrefix,
+    pub role: Role,
+    pub eid: IdentifierPrefix,
 }
 
 impl LocationScheme {
@@ -47,18 +50,23 @@ impl LocationScheme {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, EnumString)]
 #[serde(rename_all = "lowercase")]
 pub enum Scheme {
+    #[strum(serialize = "http")]
     Http,
+    #[strum(serialize = "tcp")]
     Tcp,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, EnumString)]
 #[serde(rename_all = "lowercase")]
 pub enum Role {
+    #[strum(serialize = "controller")]
     Controller,
+    #[strum(serialize = "witness")]
     Witness,
+    #[strum(serialize = "watcher")]
     Watcher,
 }
 
@@ -80,7 +88,7 @@ impl OobiManager {
             // check if signature was made by oobi creator
             ReplyRoute::LocScheme(lc) => {
                 if rpy.signature.get_signer() != lc.get_eid() {
-                    return Err(Error::OobiError("Wrong reply message signer".into()));
+                    return Err(OobiError::Error("Wrong reply message signer".into()).into());
                 };
 
                 if let Some(old_rpy) = self.store.get_last_loc_scheme(&lc.eid, &lc.scheme)? {
@@ -90,7 +98,7 @@ impl OobiManager {
             }
             ReplyRoute::EndRoleAdd(er) | ReplyRoute::EndRoleCut(er) => {
                 if rpy.signature.get_signer() != er.cid {
-                    return Err(Error::OobiError("Wrong reply message signer".into()));
+                    return Err(OobiError::Error("Wrong reply message signer".into()).into());
                 };
                 if let Some(old_rpy) = self
                     .store
@@ -101,16 +109,16 @@ impl OobiManager {
                 };
                 Ok(())
             }
-            _ => Err(Error::OobiError("Wrong oobi type".into())),
+            _ => Err(OobiError::Error("Wrong oobi type".into()).into()),
         }
     }
 
     fn parse_and_save(&self, stream: &str) -> Result<(), Error> {
         let _events = signed_event_stream(stream.as_bytes())
-            .map_err(|e| Error::OobiError(e.to_string()))?
+            .map_err(|e| OobiError::Error(e.to_string()))?
             .1
             .into_iter()
-            .try_for_each(|sed| {
+            .try_for_each(|sed| -> Result<_, Error> {
                 let msg = Message::try_from(sed).unwrap();
                 match msg {
                     Message::Reply(oobi_rpy) => {
@@ -118,17 +126,29 @@ impl OobiManager {
                         self.store.save_oobi(oobi_rpy)?;
                         Ok(())
                     }
-                    _ => Err(Error::OobiError("Wrong reply type".into())),
+                    _ => Err(OobiError::Error("Wrong reply type".into()).into()),
                 }
             })?;
         Ok(())
     }
+    pub fn save_oobi(&self, signed_oobi: SignedReply) -> Result<(), Error> {
+        self.store.save_oobi(signed_oobi)
+    }
 
-    pub fn get_oobi(&self, id: &IdentifierPrefix) -> Result<Option<Vec<ReplyEvent>>, Error> {
+    pub fn get_loc_scheme(&self, id: &IdentifierPrefix) -> Result<Option<Vec<ReplyEvent>>, Error> {
         Ok(self
             .store
             .get_oobis_for_eid(id)?
             .map(|e_list| e_list.into_iter().map(|e| e.reply).collect()))
+    }
+
+    pub fn get_end_role(
+        &self,
+        id: &IdentifierPrefix,
+        role: Role,
+    ) -> Result<Option<Vec<SignedReply>>, Error> {
+        self.store.get_end_role(id, role)
+        // .map(|e_list| e_list.into_iter().map(|e| e.reply).collect()))
     }
 }
 
@@ -154,17 +174,15 @@ impl Notifier for OobiManager {
         }
     }
 }
-mod error {
+pub(crate) mod error {
     use thiserror::Error;
 
     #[derive(Error, Debug)]
     pub enum Error {
         #[error("{0}")]
-        OobiError(String),
+        Error(String),
         #[error("Error while parsing url")]
         UrlParsingError(#[from] url::ParseError),
-        #[error("Keri error occured")]
-        KeriError(#[from] crate::error::Error),
         #[error(transparent)]
         SledError(#[from] sled::Error),
     }
@@ -174,10 +192,8 @@ mod error {
 mod tests {
 
     use crate::{
-        event_parsing::message::signed_event_stream,
-        oobi::{error::Error, OobiManager},
-        prefix::IdentifierPrefix,
-        query::reply_event::ReplyRoute,
+        error::Error, event_parsing::message::signed_event_stream, oobi::OobiManager,
+        prefix::IdentifierPrefix, query::reply_event::ReplyRoute,
     };
 
     use super::{EndRole, LocationScheme};
