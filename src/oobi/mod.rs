@@ -73,7 +73,7 @@ impl OobiManager {
         }
     }
 
-    /// Checks oobi signer and bada logic. Assumes signatures already 
+    /// Checks oobi signer and bada logic. Assumes signatures already
     /// verified.
     pub fn check_oobi_reply(&self, rpy: &SignedReply) -> Result<(), Error> {
         match rpy.reply.get_route() {
