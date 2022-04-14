@@ -48,6 +48,7 @@ impl Serialize for ReplyRoute {
                 em.serialize_field("r", "/end/role/add")?;
                 em.serialize_field("a", &end_role)?;
             }
+            #[cfg(feature = "oobi")]
             ReplyRoute::EndRoleCut(end_role) => {
                 em.serialize_field("r", "/end/role/cut")?;
                 em.serialize_field("a", &end_role)?;
