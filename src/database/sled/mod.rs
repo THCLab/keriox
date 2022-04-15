@@ -1,4 +1,4 @@
-mod tables;
+pub(crate) mod tables;
 
 use crate::{
     error::Error,
@@ -17,7 +17,7 @@ use std::path::Path;
 use tables::{SledEventTree, SledEventTreeVec};
 
 #[cfg(feature = "query")]
-use crate::query::reply::SignedReply;
+use crate::query::reply_event::SignedReply;
 
 pub struct SledEventDatabase {
     // "iids" tree
@@ -352,13 +352,18 @@ impl SledEventDatabase {
         rpy: SignedReply,
         id: &IdentifierPrefix,
     ) -> Result<(), Error> {
+        use crate::query::reply_event::ReplyRoute;
+
         match self
             .accepted_rpy
             .iter_values(self.identifiers.designated_key(id))
         {
             Some(rpys) => {
                 let filtered = rpys
-                    .filter(|s| s.reply.event.get_route() != rpy.reply.event.get_route())
+                    .filter(|s| match (s.reply.get_route(), rpy.reply.get_route()) {
+                        (ReplyRoute::Ksn(id1, _), ReplyRoute::Ksn(id2, _)) => id1 != id2,
+                        _ => true,
+                    })
                     .chain(Some(rpy.clone()).into_iter())
                     .collect();
                 self.accepted_rpy

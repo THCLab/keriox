@@ -48,7 +48,7 @@ pub struct Keri<K: KeyManager + 'static> {
     processor: EventProcessor,
     storage: EventStorage,
     notification_bus: NotificationBus,
-    response_queue: Arc<Responder>,
+    response_queue: Arc<Responder<EventMessage<KeyEvent>>>,
 }
 
 impl<K: KeyManager> Keri<K> {
@@ -56,7 +56,7 @@ impl<K: KeyManager> Keri<K> {
     pub fn new(db: Arc<SledEventDatabase>, key_manager: Arc<Mutex<K>>) -> Result<Keri<K>, Error> {
         let processor = EventProcessor::new(db.clone());
         let mut not_bus = default_escrow_bus(db.clone());
-        let responder = Arc::new(Responder::default());
+        let responder = Arc::new(Responder::new());
         not_bus.register_observer(responder.clone(), vec![JustNotification::KeyEventAdded]);
 
         Ok(Keri {
@@ -475,21 +475,32 @@ impl<K: KeyManager> Keri<K> {
     }
 }
 
-// Helper struct for appending kel events that needs receipt generation.
-// Receipts should be then signed and send somewhere.
+// Helper struct for appending data that need response.
 #[derive(Default)]
-pub struct Responder {
-    needs_response: Mutex<VecDeque<EventMessage<KeyEvent>>>,
+pub struct Responder<D> {
+    needs_response: Mutex<VecDeque<D>>,
 }
 
-impl Responder {
-    pub fn get_data_to_respond(&self) -> Option<EventMessage<KeyEvent>> {
+impl<D> Responder<D> {
+    pub fn new() -> Self {
+        Self {
+            needs_response: Mutex::new(VecDeque::new()),
+        }
+    }
+
+    pub fn get_data_to_respond(&self) -> Option<D> {
         self.needs_response.lock().unwrap().pop_front()
+    }
+
+    pub fn append(&self, element: D) -> Result<(), Error> {
+        self.needs_response.lock().unwrap().push_back(element);
+        Ok(())
     }
 }
 
-impl Notifier for Responder {
+impl Notifier for Responder<EventMessage<KeyEvent>> {
     fn notify(&self, notification: &Notification, _bus: &NotificationBus) -> Result<(), Error> {
+        // save event that was added to kel to make receipt.
         if let Notification::KeyEventAdded(ev_msg) = notification {
             self.needs_response
                 .lock()

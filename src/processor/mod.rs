@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+#[cfg(feature = "query")]
+use crate::query::reply_event::ReplyRoute;
 use crate::{
     database::sled::SledEventDatabase,
     error::Error,
@@ -85,14 +87,27 @@ impl EventProcessor {
                 }
             }
             #[cfg(feature = "query")]
-            Message::KeyStateNotice(rpy) => match self.validator.process_signed_reply(&rpy) {
-                Ok(_) => {
-                    self.db
-                        .update_accepted_reply(rpy.clone(), &rpy.reply.event.get_prefix())?;
-                    Ok(Notification::ReplyUpdated)
+            Message::Reply(rpy) => match rpy.reply.get_route() {
+                ReplyRoute::Ksn(_, _) => match self.validator.process_signed_ksn_reply(&rpy) {
+                    Ok(_) => {
+                        self.db
+                            .update_accepted_reply(rpy.clone(), &rpy.reply.get_prefix())?;
+                        Ok(Notification::ReplyUpdated)
+                    }
+                    Err(Error::EventOutOfOrderError) => Ok(Notification::KsnOutOfOrder(rpy)),
+                    Err(anything) => Err(anything),
+                },
+                #[cfg(feature = "oobi")]
+                ReplyRoute::EndRoleAdd(_)
+                | ReplyRoute::EndRoleCut(_)
+                | ReplyRoute::LocScheme(_) => {
+                    // check signature
+                    self.validator
+                        .verify(&rpy.reply.serialize()?, &rpy.signature)?;
+                    // check digest
+                    rpy.reply.check_digest()?;
+                    Ok(Notification::GotOobi(rpy))
                 }
-                Err(Error::EventOutOfOrderError) => Ok(Notification::ReplyOutOfOrder(rpy)),
-                Err(anything) => Err(anything),
             },
             #[cfg(feature = "query")]
             Message::Query(_qry) => todo!(),

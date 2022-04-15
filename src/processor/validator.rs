@@ -1,7 +1,7 @@
 #[cfg(feature = "query")]
 use crate::prefix::IdentifierPrefix;
 #[cfg(feature = "query")]
-use crate::query::{key_state_notice::KeyStateNotice, reply::SignedReply, QueryError};
+use crate::query::{key_state_notice::KeyStateNotice, reply_event::SignedReply, QueryError};
 #[cfg(feature = "query")]
 use chrono::{DateTime, FixedOffset};
 use std::sync::Arc;
@@ -267,100 +267,33 @@ impl EventValidator {
 
 impl EventValidator {
     #[cfg(feature = "query")]
-    fn bada_logic(&self, new_rpy: &SignedReply) -> Result<(), Error> {
-        use crate::query::reply::ReplyEvent;
-
-        let reply_prefix = new_rpy.reply.event.get_prefix();
-        // helper function for reply timestamps checking
-        fn check_dts(new_rpy: &ReplyEvent, old_rpy: &ReplyEvent) -> Result<(), Error> {
-            let new_dt = new_rpy.get_timestamp();
-            let old_dt = old_rpy.get_timestamp();
-            if new_dt >= old_dt {
-                Ok(())
-            } else {
-                Err(QueryError::StaleRpy.into())
-            }
-        }
-        match new_rpy.signature.clone() {
-            Signature::Transferable(seal, _sigs) => {
-                // A) If sn (sequence number) of last (if forked) Est evt that provides
-                //  keys for signature(s) of new is greater than sn of last Est evt
-                //  that provides keys for signature(s) of old.
-
-                //  Or
-
-                //  B) If sn of new equals sn of old And date-time-stamp of new is
-                //     greater than old
-
-                // get last reply for prefix with route with sender_prefix
-                match self
-                    .event_storage
-                    .get_last_reply(&reply_prefix, &seal.prefix)
-                {
-                    Some(old_rpy) => {
-                        // check sns
-                        let new_sn = seal.sn.clone();
-                        let old_sn: u64 =
-                            if let Signature::Transferable(seal, _) = old_rpy.signature {
-                                seal.sn
-                            } else {
-                                return Err(QueryError::Error(
-                                    "Improper signature type. Should be transferable.".into(),
-                                )
-                                .into());
-                            };
-                        if old_sn < new_sn {
-                            Ok(())
-                        } else if old_sn == new_sn {
-                            check_dts(&new_rpy.reply.event, &old_rpy.reply.event)
-                        } else {
-                            Err(QueryError::StaleRpy.into())
-                        }
-                    }
-                    None => Err(QueryError::NoSavedReply.into()),
-                }
-            }
-            Signature::NonTransferable(bp, _sig) => {
-                //  If date-time-stamp of new is greater than old
-
-                match self
-                    .event_storage
-                    .get_last_reply(&reply_prefix, &IdentifierPrefix::Basic(bp))
-                {
-                    Some(old_rpy) => check_dts(&new_rpy.reply.event, &old_rpy.reply.event),
-                    None => Err(QueryError::NoSavedReply.into()),
-                }
-            }
-        }
-    }
-
-    #[cfg(feature = "query")]
-    pub fn process_signed_reply(
+    pub fn process_signed_ksn_reply(
         &self,
         rpy: &SignedReply,
     ) -> Result<Option<IdentifierState>, Error> {
-        use crate::query::Route;
+        use crate::query::reply_event::{bada_logic, ReplyRoute};
 
-        let route = rpy.reply.event.get_route();
+        let route = rpy.reply.get_route();
         // check if signature was made by ksn creator
-        if let Route::ReplyKsn(ref aid) = route {
-            if &rpy.signature.get_signer() != aid {
+        if let ReplyRoute::Ksn(signer_id, ksn) = route {
+            if &rpy.signature.get_signer() != &signer_id {
                 return Err(QueryError::Error("Wrong reply message signer".into()).into());
             };
             self.verify(&rpy.reply.serialize()?, &rpy.signature)?;
             rpy.reply.check_digest()?;
-            let bada_result = self.bada_logic(&rpy);
-            match bada_result {
-                Err(Error::QueryError(QueryError::NoSavedReply)) => {
-                    // no previous rpy event to compare
-                    Ok(())
-                }
-                anything => anything,
-            }?;
+            let reply_prefix = ksn.state.prefix.clone();
+
+            // check if there's previous reply to compare
+            if let Some(old_rpy) = self
+                .event_storage
+                .get_last_ksn_reply(&reply_prefix, &rpy.signature.get_signer())
+            {
+                bada_logic(rpy, &old_rpy)?;
+            };
+
             // now unpack ksn and check its details
-            let ksn = rpy.reply.event.get_reply_data();
-            self.check_ksn(&ksn, aid)?;
-            Ok(Some(rpy.reply.event.get_state()))
+            self.check_ksn(&ksn, &signer_id)?;
+            Ok(Some(ksn.state))
         } else {
             Err(Error::SemanticError("wrong route type".into()))
         }
@@ -373,17 +306,9 @@ impl EventValidator {
         pref: &IdentifierPrefix,
         aid: &IdentifierPrefix,
     ) -> Result<(), Error> {
-        use crate::query::Route;
-
-        match self
-            .event_storage
-            .db
-            .get_accepted_replys(pref)
-            .ok_or(Error::EventOutOfOrderError)?
-            .find(|sr: &SignedReply| sr.reply.event.get_route() == Route::ReplyKsn(aid.clone()))
-        {
+        match self.event_storage.get_last_ksn_reply(pref, aid) {
             Some(old_ksn) => {
-                let old_dt = old_ksn.reply.event.get_timestamp();
+                let old_dt = old_ksn.reply.get_timestamp();
                 if old_dt > new_dt {
                     Err(QueryError::StaleKsn.into())
                 } else {
@@ -400,6 +325,8 @@ impl EventValidator {
         ksn: &KeyStateNotice,
         aid: &IdentifierPrefix,
     ) -> Result<Option<IdentifierState>, Error> {
+        use std::cmp::Ordering;
+
         // check ksn digest
         let ksn_sn = ksn.state.sn;
         let ksn_pre = ksn.state.prefix.clone();
@@ -427,12 +354,11 @@ impl EventValidator {
             .event_storage
             .get_state(&ksn_pre)?
             .ok_or::<Error>(Error::EventOutOfOrderError)?;
-        if state.sn < ksn_sn {
-            Err(Error::EventOutOfOrderError)
-        } else if state.sn == ksn_sn {
-            Ok(Some(state))
-        } else {
-            Err(QueryError::StaleKsn.into())
+
+        match state.sn.cmp(&ksn_sn) {
+            Ordering::Less => Err(Error::EventOutOfOrderError),
+            Ordering::Equal => Ok(Some(state)),
+            Ordering::Greater => Err(QueryError::StaleKsn.into()),
         }
     }
 }

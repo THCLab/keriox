@@ -13,7 +13,7 @@ use crate::event_message::serialization_info::SerializationInfo;
 #[cfg(feature = "query")]
 use crate::event_message::{SaidEvent, Typeable};
 #[cfg(feature = "query")]
-use crate::query::Envelope;
+use crate::query::Timestamped;
 use crate::{
     event::{receipt::Receipt, EventMessage},
     event_message::{key_event_message::KeyEvent, Digestible},
@@ -63,36 +63,36 @@ pub fn receipt_message(s: &[u8]) -> nom::IResult<&[u8], EventType> {
     message::<Receipt>(s).map(|d| (d.0, EventType::Receipt(d.1)))
 }
 
-#[cfg(feature = "query")]
-fn envelope<'a, D: Serialize + Deserialize<'a> + Typeable>(
+#[cfg(any(feature = "query", feature = "oobi"))]
+fn timestamped<'a, D: Serialize + Deserialize<'a> + Typeable>(
     s: &'a [u8],
-) -> nom::IResult<&[u8], EventMessage<SaidEvent<Envelope<D>>>> {
-    message::<SaidEvent<Envelope<D>>>(s).map(|d| (d.0, d.1))
+) -> nom::IResult<&[u8], EventMessage<SaidEvent<Timestamped<D>>>> {
+    message::<SaidEvent<Timestamped<D>>>(s).map(|d| (d.0, d.1))
 }
 
 #[cfg(feature = "query")]
-pub fn query_message<'a>(s: &'a [u8]) -> nom::IResult<&[u8], EventType> {
-    use crate::query::query::QueryData;
+pub fn query_message(s: &[u8]) -> nom::IResult<&[u8], EventType> {
+    use crate::query::query_event::QueryData;
 
-    envelope::<QueryData>(s).map(|d| (d.0, EventType::Qry(d.1)))
+    timestamped::<QueryData>(s).map(|d| (d.0, EventType::Qry(d.1)))
 }
 
-#[cfg(feature = "query")]
-pub fn reply_message<'a>(s: &'a [u8]) -> nom::IResult<&[u8], EventType> {
-    use crate::query::reply::ReplyData;
+#[cfg(any(feature = "query", feature = "oobi"))]
+pub fn reply_message(s: &[u8]) -> nom::IResult<&[u8], EventType> {
+    use crate::query::reply_event::ReplyRoute;
 
-    envelope::<ReplyData>(s).map(|d| (d.0, EventType::Rpy(d.1)))
+    timestamped::<ReplyRoute>(s).map(|d| (d.0, EventType::Rpy(d.1)))
 }
 
 pub fn signed_message(s: &[u8]) -> nom::IResult<&[u8], SignedEventData> {
-    #[cfg(feature = "query")]
+    #[cfg(any(feature = "query", feature = "oobi"))]
     let (rest, event) = alt((
         key_event_message,
         reply_message,
         query_message,
         receipt_message,
     ))(s)?;
-    #[cfg(not(feature = "query"))]
+    #[cfg(not(any(feature = "query", feature = "oobi")))]
     let (rest, event) = alt((key_event_message, receipt_message))(s)?;
     let (rest, attachments): (&[u8], Vec<Attachment>) =
         fold_many0(attachment, vec![], |mut acc: Vec<_>, item| {

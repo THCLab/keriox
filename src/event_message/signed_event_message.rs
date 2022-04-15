@@ -4,6 +4,7 @@ use std::cmp::Ordering;
 
 use super::EventMessage;
 use super::{serializer::to_string, KeyEvent};
+use crate::event_parsing::SignedEventData;
 use crate::prefix::IdentifierPrefix;
 use crate::{
     error::Error,
@@ -17,7 +18,7 @@ use crate::{
 };
 
 #[cfg(feature = "query")]
-use crate::query::{query::SignedQuery, reply::SignedReply};
+use crate::query::{query_event::SignedQuery, reply_event::SignedReply};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Message {
@@ -27,19 +28,37 @@ pub enum Message {
     NontransferableRct(SignedNontransferableReceipt),
     TransferableRct(SignedTransferableReceipt),
     #[cfg(feature = "query")]
-    KeyStateNotice(SignedReply),
-    #[cfg(feature = "query")]
+    Reply(SignedReply),
+    #[cfg(any(feature = "query", feature = "oobi"))]
     Query(SignedQuery),
 }
 
+impl From<Message> for SignedEventData {
+    fn from(message: Message) -> Self {
+        match message {
+            Message::Event(event) => SignedEventData::from(&event),
+            Message::NontransferableRct(rct) => SignedEventData::from(rct),
+            Message::TransferableRct(rct) => SignedEventData::from(rct),
+            #[cfg(feature = "query")]
+            Message::Reply(ksn) => SignedEventData::from(ksn),
+            #[cfg(feature = "query")]
+            Message::Query(_qry) => todo!(),
+        }
+    }
+}
+
 impl Message {
+    pub fn to_cesr(&self) -> Result<Vec<u8>, Error> {
+        SignedEventData::from(self.clone()).to_cesr()
+    }
+
     pub fn get_prefix(&self) -> IdentifierPrefix {
         match self {
             Message::Event(ev) => ev.event_message.event.get_prefix(),
             Message::NontransferableRct(rct) => rct.body.event.prefix.clone(),
             Message::TransferableRct(rct) => rct.body.event.prefix.clone(),
             #[cfg(feature = "query")]
-            Message::KeyStateNotice(ksn) => ksn.reply.event.get_prefix(),
+            Message::Reply(reply) => reply.reply.get_prefix(),
             #[cfg(feature = "query")]
             Message::Query(_qry) => todo!(),
         }

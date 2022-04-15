@@ -4,6 +4,8 @@ use super::{
     notification::{JustNotification, Notification, NotificationBus, Notifier},
     validator::EventValidator,
 };
+#[cfg(feature = "query")]
+use crate::query::reply_event::ReplyRoute;
 use crate::{
     database::sled::SledEventDatabase, error::Error,
     event_message::signed_event_message::SignedEventMessage, prefix::IdentifierPrefix,
@@ -336,9 +338,12 @@ impl ReplyEscrow {
 impl Notifier for ReplyEscrow {
     fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error> {
         match notification {
-            Notification::ReplyOutOfOrder(rpy) => {
-                let id = rpy.reply.event.get_prefix();
-                self.0.add_escrowed_reply(rpy.clone(), &id)
+            Notification::KsnOutOfOrder(rpy) => {
+                if let ReplyRoute::Ksn(_id, ksn) = rpy.reply.get_route() {
+                    let id = ksn.state.prefix;
+                    self.0.add_escrowed_reply(rpy.clone(), &id)?;
+                };
+                Ok(())
             }
             &Notification::KeyEventAdded(_) => self.process_reply_escrow(bus),
             _ => Ok(()),
@@ -354,9 +359,13 @@ impl ReplyEscrow {
         if let Some(esc) = self.0.get_all_escrowed_replys() {
             for sig_rep in esc {
                 let validator = EventValidator::new(self.0.clone());
-                match validator.process_signed_reply(&sig_rep) {
+                let id = if let ReplyRoute::Ksn(_id, ksn) = sig_rep.reply.get_route() {
+                    Ok(ksn.state.prefix)
+                } else {
+                    Err(Error::SemanticError("Wrong event type".into()))
+                }?;
+                match validator.process_signed_ksn_reply(&sig_rep) {
                     Ok(_) => {
-                        let id = sig_rep.reply.event.get_prefix();
                         self.0.remove_escrowed_reply(&id, &sig_rep)?;
                         self.0.update_accepted_reply(sig_rep, &id)?;
                         bus.notify(&Notification::ReplyUpdated)
@@ -364,8 +373,7 @@ impl ReplyEscrow {
                     Err(Error::SignatureVerificationError)
                     | Err(Error::QueryError(QueryError::StaleRpy)) => {
                         // remove from escrow
-                        self.0
-                            .remove_escrowed_reply(&sig_rep.reply.event.get_prefix(), &sig_rep)
+                        self.0.remove_escrowed_reply(&id, &sig_rep)
                     }
                     Err(Error::EventOutOfOrderError) => Ok(()), // keep in escrow,
                     Err(e) => Err(e),

@@ -10,14 +10,13 @@ use crate::event_message::signed_event_message::{
     Message, SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
 };
 use crate::event_parsing::payload_size::PayloadType;
-use crate::prefix::{
-    AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix,
-};
+use crate::prefix::Prefix;
+use crate::prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix};
 
 #[cfg(feature = "query")]
 use crate::query::{
-    query::QueryEvent,
-    reply::{ReplyEvent, SignedReply},
+    query_event::QueryEvent,
+    reply_event::{ReplyEvent, SignedReply},
 };
 use crate::{error::Error, event::event_data::EventData};
 
@@ -138,9 +137,9 @@ pub enum EventType {
     KeyEvent(EventMessage<KeyEvent>),
     Receipt(EventMessage<Receipt>),
     #[cfg(feature = "query")]
-    Qry(EventMessage<QueryEvent>),
-    #[cfg(feature = "query")]
-    Rpy(EventMessage<ReplyEvent>),
+    Qry(QueryEvent),
+    #[cfg(any(feature = "query", feature = "oobi"))]
+    Rpy(ReplyEvent),
 }
 
 impl EventType {
@@ -246,17 +245,14 @@ impl TryFrom<SignedEventData> for Message {
             EventType::Receipt(rct) => signed_receipt(rct, value.attachments),
             #[cfg(feature = "query")]
             EventType::Qry(qry) => signed_query(qry, value.attachments),
-            #[cfg(feature = "query")]
+            #[cfg(any(feature = "query", feature = "oobi"))]
             EventType::Rpy(rpy) => signed_reply(rpy, value.attachments),
         }
     }
 }
 
-#[cfg(feature = "query")]
-fn signed_reply(
-    rpy: EventMessage<ReplyEvent>,
-    mut attachments: Vec<Attachment>,
-) -> Result<Message, Error> {
+#[cfg(any(feature = "query", feature = "oobi"))]
+fn signed_reply(rpy: ReplyEvent, mut attachments: Vec<Attachment>) -> Result<Message, Error> {
     match attachments
         .pop()
         .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?
@@ -264,7 +260,7 @@ fn signed_reply(
         Attachment::ReceiptCouplets(couplets) => {
             let signer = couplets[0].0.clone();
             let signature = couplets[0].1.clone();
-            Ok(Message::KeyStateNotice(SignedReply::new_nontrans(
+            Ok(Message::Reply(SignedReply::new_nontrans(
                 rpy, signer, signature,
             )))
         }
@@ -274,9 +270,7 @@ fn signed_reply(
                 .last()
                 .ok_or_else(|| Error::SemanticError("More than one seal".into()))?
                 .to_owned();
-            Ok(Message::KeyStateNotice(SignedReply::new_trans(
-                rpy, seal, sigs,
-            )))
+            Ok(Message::Reply(SignedReply::new_trans(rpy, seal, sigs)))
         }
         Attachment::Frame(atts) => signed_reply(rpy, atts),
         _ => {
@@ -287,11 +281,8 @@ fn signed_reply(
 }
 
 #[cfg(feature = "query")]
-fn signed_query(
-    qry: EventMessage<QueryEvent>,
-    mut attachments: Vec<Attachment>,
-) -> Result<Message, Error> {
-    use crate::query::query::SignedQuery;
+fn signed_query(qry: QueryEvent, mut attachments: Vec<Attachment>) -> Result<Message, Error> {
+    use crate::query::query_event::SignedQuery;
 
     match attachments
         .pop()
@@ -300,7 +291,7 @@ fn signed_query(
         Attachment::LastEstSignaturesGroups(groups) => {
             let (signer, signatures) = groups[0].clone();
             Ok(Message::Query(SignedQuery {
-                envelope: qry,
+                query: qry,
                 signer,
                 signatures,
             }))

@@ -1,14 +1,13 @@
 use std::{collections::HashMap, sync::Arc};
 
 #[cfg(feature = "query")]
-use crate::query::reply::SignedReply;
+use crate::query::reply_event::SignedReply;
 use crate::{
     error::Error,
     event_message::signed_event_message::{
         SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
     },
 };
-
 pub struct NotificationBus {
     observers: HashMap<JustNotification, Vec<Arc<dyn Notifier + Send + Sync>>>,
 }
@@ -64,9 +63,11 @@ pub enum Notification {
     TransReceiptOutOfOrder(SignedTransferableReceipt),
     DupliciousEvent(SignedEventMessage),
     #[cfg(feature = "query")]
-    ReplyOutOfOrder(SignedReply),
+    KsnOutOfOrder(SignedReply),
     #[cfg(feature = "query")]
     ReplyUpdated,
+    #[cfg(feature = "oobi")]
+    GotOobi(SignedReply),
 }
 
 #[derive(PartialEq, Hash, Eq)]
@@ -81,9 +82,11 @@ pub enum JustNotification {
     TransReceiptOutOfOrder,
     DupliciousEvent,
     #[cfg(feature = "query")]
-    ReplyOutOfOrder,
+    KsnOutOfOrder,
     #[cfg(feature = "query")]
-    ReplyUpdated,
+    KsnUpdated,
+    #[cfg(feature = "oobi")]
+    GotOobi,
 }
 
 impl From<&Notification> for JustNotification {
@@ -97,11 +100,13 @@ impl From<&Notification> for JustNotification {
             Notification::ReceiptEscrowed => JustNotification::ReceiptEscrowed,
             Notification::ReceiptOutOfOrder(_) => JustNotification::ReceiptOutOfOrder,
             Notification::TransReceiptOutOfOrder(_) => JustNotification::TransReceiptOutOfOrder,
-            #[cfg(feature = "query")]
-            Notification::ReplyOutOfOrder(_) => JustNotification::ReplyOutOfOrder,
-            #[cfg(feature = "query")]
-            Notification::ReplyUpdated => JustNotification::ReplyUpdated,
             Notification::DupliciousEvent(_) => JustNotification::DupliciousEvent,
+            #[cfg(feature = "query")]
+            Notification::KsnOutOfOrder(_) => JustNotification::KsnOutOfOrder,
+            #[cfg(feature = "query")]
+            Notification::ReplyUpdated => JustNotification::KsnUpdated,
+            #[cfg(feature = "oobi")]
+            Notification::GotOobi(_) => JustNotification::GotOobi,
         }
     }
 }
