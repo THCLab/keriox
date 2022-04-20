@@ -1,4 +1,5 @@
 use base64::URL_SAFE_NO_PAD;
+use chrono::{DateTime, FixedOffset, SecondsFormat};
 use serde::Deserialize;
 use std::convert::TryFrom;
 
@@ -37,6 +38,8 @@ pub enum Attachment {
     LastEstSignaturesGroups(Vec<(IdentifierPrefix, Vec<AttachedSignaturePrefix>)>),
     // Frame codes
     Frame(Vec<Attachment>),
+    // Count of attached qualified Base64 first seen replay couples fn+dt
+    FirstSeenReply(Vec<(u64, DateTime<FixedOffset>)>),
 }
 
 impl Attachment {
@@ -98,6 +101,19 @@ impl Attachment {
                     packed_attachments.len(),
                     packed_attachments,
                 )
+            }
+            Attachment::FirstSeenReply(couplets) => {
+                let packed_couplets =
+                    couplets.iter().fold("".into(), |acc, (first_seen_sn, dt)| {
+                        [
+                            acc,
+                            first_seen_sn.to_string(),
+                            dt.to_rfc3339_opts(SecondsFormat::Micros, false),
+                        ]
+                        .join("")
+                    });
+
+                (PayloadType::ME, couplets.len(), packed_couplets)
             }
         };
         [
@@ -350,7 +366,14 @@ fn signed_key_event(
                 .first()
                 .cloned()
                 .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?;
-            if let Attachment::AttachedSignatures(sigs) = sigs {
+            let attachments = if let Attachment::Frame(atts) = sigs {
+                atts.first()
+                    .cloned()
+                    .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?
+            } else {
+                sigs
+            };
+            if let Attachment::AttachedSignatures(sigs) = attachments {
                 Ok(Message::Event(SignedEventMessage::new(
                     &event_message,
                     sigs.to_vec(),

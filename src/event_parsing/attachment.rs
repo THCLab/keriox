@@ -1,5 +1,6 @@
 use std::convert::TryFrom;
 
+use chrono::{DateTime, FixedOffset};
 use nom::{
     bytes::complete::take,
     combinator::map,
@@ -103,6 +104,36 @@ fn seal_signatures(
     )(rest)
 }
 
+fn first_seen_sn(s: &[u8]) -> nom::IResult<&[u8], Vec<(u64, DateTime<FixedOffset>)>> {
+    let (rest, sc) = b64_count(s)?;
+    count(nom::sequence::tuple((attached_sn, timestamp)), sc as usize)(rest)
+}
+
+pub fn timestamp(s: &[u8]) -> nom::IResult<&[u8], DateTime<FixedOffset>> {
+    let (more, type_c) = take(4u8)(s)?;
+
+    const a: &[u8] = "1AAG".as_bytes();
+
+    match type_c {
+        a => {
+            let (rest, parsed_timestamp) = take(32u8)(more)?;
+
+            let timestamp = {
+                let dt_str = String::from_utf8(parsed_timestamp.to_vec())
+                    .unwrap()
+                    .replace("c", ":")
+                    .replace("d", ".")
+                    .replace("p", "+");
+                let dt: DateTime<FixedOffset> = dt_str.parse().unwrap();
+                dt
+            };
+
+            Ok((rest, timestamp))
+        }
+        _ => Err(nom::Err::Error((type_c, ErrorKind::IsNot))),
+    }
+}
+
 pub fn attachment(s: &[u8]) -> nom::IResult<&[u8], Attachment> {
     let (rest, payload_type) = take(2u8)(s)?;
     let payload_type: PayloadType = PayloadType::try_from(
@@ -156,7 +187,10 @@ pub fn attachment(s: &[u8]) -> nom::IResult<&[u8], Attachment> {
                 Err(e) => Err(e),
             }
         }
-
+        PayloadType::ME => {
+            let (rest, sc) = first_seen_sn(rest)?;
+            Ok((rest, Attachment::FirstSeenReply(sc)))
+        }
         _ => todo!(),
     }
 }
