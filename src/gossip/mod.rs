@@ -35,8 +35,8 @@ where
 {
     /// Initializes a new Gossip server instance with initial local data.
     /// Opens a UDP socket immediately.
-    pub async fn new(data: T, port: u16) -> io::Result<Self> {
-        let socket = UdpSocket::bind(SocketAddr::from(([0, 0, 0, 0], port))).await?;
+    pub async fn new(data: T, addr: impl Into<SocketAddr>) -> io::Result<Self> {
+        let socket = UdpSocket::bind(addr.into()).await?;
         let network = Network::new(data);
         Ok(Self { socket, network })
     }
@@ -54,6 +54,11 @@ where
     /// Requires an address of one other participant.
     pub async fn bootstrap(&self, peer_addr: SocketAddr) -> Result<(), Error> {
         self.send(peer_addr).await
+    }
+
+    /// Returns local listening address
+    pub fn addr(&self) -> io::Result<SocketAddr> {
+        self.socket.local_addr()
     }
 
     /// Returns data about all the known peers.
