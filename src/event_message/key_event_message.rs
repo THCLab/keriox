@@ -46,9 +46,10 @@ impl EventMessage<KeyEvent> {
     pub fn sign(
         &self,
         sigs: Vec<AttachedSignaturePrefix>,
+        witness_sigs: Option<Vec<AttachedSignaturePrefix>>,
         delegator_seal: Option<SourceSeal>,
     ) -> SignedEventMessage {
-        SignedEventMessage::new(self, sigs, delegator_seal)
+        SignedEventMessage::new(self, sigs, witness_sigs, delegator_seal)
     }
 
     pub fn check_digest(&self, sai: &SelfAddressingPrefix) -> Result<bool, Error> {

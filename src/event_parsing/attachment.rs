@@ -156,7 +156,7 @@ pub fn attachment(s: &[u8]) -> nom::IResult<&[u8], Attachment> {
         }
         PayloadType::MB => {
             let (rest, sigs) = signatures(rest)?;
-            Ok((rest, Attachment::AttachedSignatures(sigs)))
+            Ok((rest, Attachment::AttachedWitnessSignatures(sigs)))
         }
         PayloadType::MC => {
             let (rest, couplets) = couplets(rest)?;

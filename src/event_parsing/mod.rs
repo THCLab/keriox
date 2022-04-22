@@ -31,15 +31,16 @@ pub enum Attachment {
     // Count codes
     SealSourceCouplets(Vec<SourceSeal>),
     AttachedSignatures(Vec<AttachedSignaturePrefix>),
+    AttachedWitnessSignatures(Vec<AttachedSignaturePrefix>),
     ReceiptCouplets(Vec<(BasicPrefix, SelfSigningPrefix)>),
+    // Count of attached qualified Base64 first seen replay couples fn+dt
+    FirstSeenReply(Vec<(u64, DateTime<FixedOffset>)>),
     // Group codes
     SealSignaturesGroups(Vec<(EventSeal, Vec<AttachedSignaturePrefix>)>),
     // List of signatures made using keys from last establishment event od identifier of prefix
     LastEstSignaturesGroups(Vec<(IdentifierPrefix, Vec<AttachedSignaturePrefix>)>),
     // Frame codes
     Frame(Vec<Attachment>),
-    // Count of attached qualified Base64 first seen replay couples fn+dt
-    FirstSeenReply(Vec<(u64, DateTime<FixedOffset>)>),
 }
 
 impl Attachment {
@@ -73,6 +74,12 @@ impl Attachment {
                     .iter()
                     .fold("".into(), |acc, sig| [acc, sig.to_str()].join(""));
                 (PayloadType::MA, sigs.len(), serialized_sigs)
+            }
+            Attachment::AttachedWitnessSignatures(sigs) => {
+                let serialized_sigs = sigs
+                    .iter()
+                    .fold("".into(), |acc, sig| [acc, sig.to_str()].join(""));
+                (PayloadType::MB, sigs.len(), serialized_sigs)
             }
             Attachment::ReceiptCouplets(couplets) => {
                 let packed_couplets = couplets.iter().fold("".into(), |acc, (bp, sp)| {
@@ -358,31 +365,45 @@ fn signed_key_event(
             Ok(Message::Event(SignedEventMessage::new(
                 &event_message,
                 sigs,
+                None,
                 delegator_seal?,
             )))
         }
         _ => {
-            let sigs = attachments
+            let signatures = if let Attachment::Frame(atts) = attachments
                 .first()
                 .cloned()
-                .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?;
-            let attachments = if let Attachment::Frame(atts) = sigs {
-                atts.first()
-                    .cloned()
-                    .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?
+                .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?
+            {
+                atts
             } else {
-                sigs
+                attachments
             };
-            if let Attachment::AttachedSignatures(sigs) = attachments {
-                Ok(Message::Event(SignedEventMessage::new(
-                    &event_message,
-                    sigs.to_vec(),
-                    None,
-                )))
-            } else {
-                // Improper attachment type
-                Err(Error::SemanticError("Improper attachment type".into()))
-            }
+            let controller_sigs = signatures
+                .iter()
+                .cloned()
+                .find_map(|att| {
+                    if let Attachment::AttachedSignatures(sigs) = att {
+                        Some(sigs)
+                    } else {
+                        None
+                    }
+                })
+                .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?;
+            let witness_sigs = signatures.into_iter().find_map(|att| {
+                if let Attachment::AttachedWitnessSignatures(sigs) = att {
+                    Some(sigs)
+                } else {
+                    None
+                }
+            });
+
+            Ok(Message::Event(SignedEventMessage::new(
+                &event_message,
+                controller_sigs,
+                witness_sigs,
+                None,
+            )))
         }
     }
 }
@@ -416,7 +437,7 @@ fn signed_receipt(
                 sigs,
             )))
         }
-        Attachment::AttachedSignatures(sigs) => {
+        Attachment::AttachedWitnessSignatures(sigs) => {
             Ok(Message::NontransferableRct(SignedNontransferableReceipt {
                 body: event_message,
                 couplets: None,

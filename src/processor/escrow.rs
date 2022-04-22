@@ -25,20 +25,23 @@ pub fn default_escrow_bus(db: Arc<SledEventDatabase>) -> NotificationBus {
         vec![JustNotification::PartiallySigned],
     );
     bus.register_observer(
+        Arc::new(NontransReceiptsEscrow::new(db.clone())),
+        vec![
+            JustNotification::KeyEventAdded,
+            JustNotification::ReceiptOutOfOrder,
+            JustNotification::PartiallyWitnessed,
+        ],
+    );
+    bus.register_observer(
         Arc::new(PartiallyWitnessedEscrow::new(db.clone())),
         vec![
             JustNotification::PartiallyWitnessed,
             JustNotification::ReceiptEscrowed,
             JustNotification::ReceiptAccepted,
-        ],
-    );
-    bus.register_observer(
-        Arc::new(NontransReceiptsEscrow::new(db.clone())),
-        vec![
-            JustNotification::KeyEventAdded,
             JustNotification::ReceiptOutOfOrder,
         ],
     );
+
     bus.register_observer(
         Arc::new(TransReceiptsEscrow::new(db)),
         vec![
@@ -179,9 +182,9 @@ impl PartiallyWitnessedEscrow {
 impl Notifier for PartiallyWitnessedEscrow {
     fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error> {
         match notification {
-            Notification::ReceiptAccepted | Notification::ReceiptEscrowed => {
-                self.process_partially_witnessed_events(bus)
-            }
+            Notification::ReceiptAccepted
+            | Notification::ReceiptEscrowed
+            | Notification::ReceiptOutOfOrder(_) => self.process_partially_witnessed_events(bus),
             Notification::PartiallyWitnessed(signed_event) => {
                 let id = &signed_event.event_message.event.get_prefix();
                 self.0
@@ -234,7 +237,9 @@ impl NontransReceiptsEscrow {
 impl Notifier for NontransReceiptsEscrow {
     fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error> {
         match notification {
-            Notification::KeyEventAdded(_id) => self.process_nt_receipts_escrow(bus),
+            Notification::KeyEventAdded(_) | Notification::PartiallyWitnessed(_) => {
+                self.process_nt_receipts_escrow(bus)
+            }
             Notification::ReceiptOutOfOrder(receipt) => {
                 let id = &receipt.body.event.prefix;
                 self.0.add_escrow_nt_receipt(receipt.clone(), id)?;
