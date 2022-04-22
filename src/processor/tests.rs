@@ -788,6 +788,7 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
             0,
         )],
         None,
+        None,
     );
 
     let not = processor.process(Message::Event(signed_icp))?;
@@ -825,7 +826,7 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
         })
         .collect::<Vec<_>>();
 
-    let signed_rotation = rotation.sign(signatures, None);
+    let signed_rotation = rotation.sign(signatures, None, None);
 
     let not = processor.process(Message::Event(signed_rotation))?;
     assert!(matches!(not, Notification::KeyEventAdded(_)));
@@ -862,7 +863,7 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
         })
         .collect::<Vec<_>>();
 
-    let signed_rotation = rotation.sign(signatures, None);
+    let signed_rotation = rotation.sign(signatures, None, None);
     let result = processor.process(Message::Event(signed_rotation));
     assert!(result.is_err());
 
@@ -924,6 +925,7 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
             0,
         )],
         None,
+        None,
     );
 
     let not = processor.process(Message::Event(signed_icp))?;
@@ -972,7 +974,7 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
         })
         .collect::<Vec<_>>();
 
-    let signed_rotation = rotation.sign(signatures, None);
+    let signed_rotation = rotation.sign(signatures, None, None);
 
     let not = processor.process(Message::Event(signed_rotation))?;
     assert!(matches!(not, Notification::KeyEventAdded(_)));
@@ -1012,7 +1014,7 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
         })
         .collect::<Vec<_>>();
 
-    let signed_rotation = rotation.sign(signatures, None);
+    let signed_rotation = rotation.sign(signatures, None, None);
     let result = processor.process(Message::Event(signed_rotation));
     assert!(result.is_err());
 

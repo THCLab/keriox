@@ -277,7 +277,7 @@ mod tests {
 
         assert!(pref0.verify(&ser, &attached_sig.signature)?);
 
-        let signed_event = icp_m.sign(vec![attached_sig], None);
+        let signed_event = icp_m.sign(vec![attached_sig], None, None);
 
         let s_ = IdentifierState::default();
 
@@ -359,7 +359,7 @@ mod tests {
 
         assert!(sig_pref_0.verify(&serialized, &attached_sig.signature)?);
 
-        let signed_event = icp.sign(vec![attached_sig], None);
+        let signed_event = icp.sign(vec![attached_sig], None, None);
 
         let s_ = IdentifierState::default();
 

@@ -108,6 +108,7 @@ impl<K: KeyManager> Keri<K> {
                 0,
             )],
             None,
+            None,
         );
 
         let notification = self.processor.process(Message::Event(signed.clone()))?;
@@ -157,7 +158,7 @@ impl<K: KeyManager> Keri<K> {
             signature,
             0, // TODO: what is this?
         );
-        let signed = SignedEventMessage::new(&event, vec![asp], None);
+        let signed = SignedEventMessage::new(&event, vec![asp], None, None);
         self.storage
             .db
             .add_kel_finalized_event(signed.clone(), &self.prefix)?;
@@ -184,6 +185,7 @@ impl<K: KeyManager> Keri<K> {
                     .sign(&rot.serialize()?)?,
                 0,
             )],
+            None,
             None,
         );
 
@@ -249,6 +251,7 @@ impl<K: KeyManager> Keri<K> {
                 0,
             )],
             None,
+            None,
         );
 
         let notification = self.processor.process(Message::Event(ixn.clone()))?;
@@ -275,13 +278,33 @@ impl<K: KeyManager> Keri<K> {
     }
 
     pub fn parse_and_process(&self, msg: &[u8]) -> Result<(), Error> {
-        let events: Vec<Message> = signed_event_stream(msg)
+        let events = signed_event_stream(msg)
             .map_err(|e| Error::DeserializeError(e.to_string()))?
             .1
             .into_iter()
-            .map(|data| Message::try_from(data).unwrap())
-            .collect();
-        self.process(&events)
+            .map(|data| Message::try_from(data).unwrap());
+        events.clone().for_each(|msg| {
+            self.process(&vec![msg.clone()]).unwrap();
+            // check if receipts are attached
+            if let Message::Event(ev) = msg {
+                if let Some(witness_receipts) = ev.witness_receipts {
+                    let id = ev.event_message.event.get_prefix();
+                    let receipt = Receipt {
+                        receipted_event_digest: ev.event_message.get_digest(),
+                        prefix: id,
+                        sn: ev.event_message.event.get_sn(),
+                    };
+                    let signed_receipt = SignedNontransferableReceipt::new(
+                        &receipt.to_message(SerializationFormats::JSON).unwrap(),
+                        None,
+                        Some(witness_receipts),
+                    );
+                    self.process(&vec![Message::NontransferableRct(signed_receipt)])
+                        .unwrap();
+                }
+            }
+        });
+        Ok(())
     }
 
     pub fn process(&self, msg: &[Message]) -> Result<(), Error> {
