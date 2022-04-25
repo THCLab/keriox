@@ -5,7 +5,7 @@ use crate::prefix::{BasicPrefix, SelfSigningPrefix};
 use crate::query::{key_state_notice::KeyStateNotice, reply_event::SignedReply, QueryError};
 #[cfg(feature = "query")]
 use chrono::{DateTime, FixedOffset};
-use std::sync::Arc;
+use std::{iter, sync::Arc};
 
 use crate::{
     database::sled::SledEventDatabase,
@@ -69,20 +69,17 @@ impl EventValidator {
                             let receipts = self
                                 .event_storage
                                 .get_nt_receipts_for_sn(&new_state.prefix, new_state.sn);
-                            let couplets = match receipts {
-                                Some(rct_list) => rct_list
+                                let couplets = match receipts {
+                                    Some(rct_list) => rct_list
                                     .iter()
                                     .map(|rct| -> Result<_, _> { self.get_receipt_couplets(rct) })
                                     .collect::<Result<Vec<_>, _>>()?
                                     .into_iter()
                                     .flatten()
                                     .collect(),
-                                None => vec![],
-                            };
-                            if new_state
-                                .witness_config
-                                .enough_receipts(&couplets)?
-                            {
+                                    None => vec![],
+                                };
+                            if new_state.witness_config.enough_receipts(&couplets)? {
                                 Ok(Some(new_state))
                             } else {
                                 Err(Error::NotEnoughReceiptsError)
@@ -144,7 +141,7 @@ impl EventValidator {
                         .get_all_partially_witnessed()
                         .unwrap()
                         .find(|event| {
-                            (event.signed_event_message.event_message.event.content.sn == sn
+                            event.signed_event_message.event_message.event.content.sn == sn
                                 && event
                                     .signed_event_message
                                     .event_message
@@ -153,7 +150,7 @@ impl EventValidator {
                                     .prefix
                                     == id
                                 && event.signed_event_message.event_message.get_digest()
-                                    == receipted_event_digest)
+                                    == receipted_event_digest
                         });
                     let new_state =
                         st.apply(&escrowed_partially_witnessed.unwrap().signed_event_message);
@@ -170,7 +167,7 @@ impl EventValidator {
                     .get_all_partially_witnessed()
                     .unwrap()
                     .find(|event| {
-                        (event.signed_event_message.event_message.event.content.sn == sn
+                        event.signed_event_message.event_message.event.content.sn == sn
                             && event
                                 .signed_event_message
                                 .event_message
@@ -179,7 +176,7 @@ impl EventValidator {
                                 .prefix
                                 == id
                             && event.signed_event_message.event_message.get_digest()
-                                == receipted_event_digest)
+                                == receipted_event_digest
                     });
                 let new_state = IdentifierState::default().apply(
                     &escrowed_partially_witnessed
@@ -191,17 +188,20 @@ impl EventValidator {
         };
 
         let (couplets, attached_signatures) = (rct.couplets.clone(), rct.indexed_sigs.clone());
-        let rrr = attached_signatures.clone().unwrap().into_iter().map(|att| {
-            (
-                witnesses.get(att.index as usize).unwrap().clone(),
-                att.signature.clone(),
-            )
-        });
-        Ok(couplets
-            .unwrap_or_default()
-            .into_iter()
-            .chain(rrr)
-            .collect())
+
+        let c = couplets.unwrap_or_default();
+        Ok(match attached_signatures {
+            Some(attached) => {
+                let atts = attached.into_iter().map(|att| {
+                    (
+                        witnesses.get(att.index as usize).unwrap().clone(),
+                        att.signature.clone(),
+                    )
+                });
+                c.into_iter().chain(atts).collect::<Vec<_>>()
+            }
+            None => c,
+        })
     }
 
     /// Process Witness Receipt
@@ -232,6 +232,7 @@ impl EventValidator {
             }
         } else {
             // There's no receipted event id database so we can't verify signatures
+            println!("Missing event");
             Err(Error::MissingEvent)
         }?;
         self.event_storage.get_state(id)

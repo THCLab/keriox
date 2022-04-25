@@ -24,14 +24,7 @@ pub fn default_escrow_bus(db: Arc<SledEventDatabase>) -> NotificationBus {
         Arc::new(PartiallySignedEscrow::new(db.clone())),
         vec![JustNotification::PartiallySigned],
     );
-    bus.register_observer(
-        Arc::new(NontransReceiptsEscrow::new(db.clone())),
-        vec![
-            JustNotification::KeyEventAdded,
-            JustNotification::ReceiptOutOfOrder,
-            JustNotification::PartiallyWitnessed,
-        ],
-    );
+
     bus.register_observer(
         Arc::new(PartiallyWitnessedEscrow::new(db.clone())),
         vec![
@@ -42,6 +35,15 @@ pub fn default_escrow_bus(db: Arc<SledEventDatabase>) -> NotificationBus {
         ],
     );
 
+    bus.register_observer(
+        Arc::new(NontransReceiptsEscrow::new(db.clone())),
+        vec![
+            JustNotification::KeyEventAdded,
+            JustNotification::ReceiptOutOfOrder,
+            JustNotification::PartiallyWitnessed,
+        ],
+    );
+    
     bus.register_observer(
         Arc::new(TransReceiptsEscrow::new(db)),
         vec![
