@@ -313,7 +313,10 @@ impl<K: KeyManager> Keri<K> {
             .map(|message| {
                 self.processor
                     .process(message.clone())
-                    .and_then(|not| self.notification_bus.notify(&not))
+                    .and_then(|not| {
+                        println!("\nnot: {:?}\n", not);
+                        self.notification_bus.notify(&not)
+                    })
             })
             .partition(Result::is_ok);
         let _oks = process_ok
