@@ -481,9 +481,7 @@ impl<K: KeyManager> Keri<K> {
         sn: u64,
         digest: &SelfAddressingPrefix,
     ) -> Result<Option<SignedNontransferableReceipt>, Error> {
-        self
-            .storage
-            .get_nt_receipts(id, sn, digest)
+        self.storage.get_nt_receipts(id, sn, digest)
     }
 
     pub fn get_state_for_prefix(

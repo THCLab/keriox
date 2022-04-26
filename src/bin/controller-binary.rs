@@ -181,12 +181,15 @@ impl Controller {
     }
 
     /// Publish key event to witnesses
-    /// 
+    ///
     ///  1. send it to all witnesses
     ///  2. collect witness receipts and process them
     ///  3. get processed receipts from db and send it to all witnesses
-    async fn publish(&self, witness_prefixes: &[BasicPrefix], message: &SignedEventMessage) -> Result<()> {
-       
+    async fn publish(
+        &self,
+        witness_prefixes: &[BasicPrefix],
+        message: &SignedEventMessage,
+    ) -> Result<()> {
         let msg = SignedEventData::from(message).to_cesr().unwrap();
         let collected_receipts = join_all(witness_prefixes.iter().map(|prefix| {
             self.send_to(
@@ -221,8 +224,9 @@ impl Controller {
                 &message.event_message.event.get_prefix(),
                 0,
                 &message.event_message.event.get_digest(),
-            ).unwrap()
-            .map(|rct|SignedEventData::from(rct).to_cesr().unwrap())
+            )
+            .unwrap()
+            .map(|rct| SignedEventData::from(rct).to_cesr().unwrap())
             .unwrap();
         println!(
             "\nreceipts: {}",
@@ -240,7 +244,6 @@ impl Controller {
         .await;
         Ok(())
     }
-
 }
 
 #[actix_web::main]
@@ -272,7 +275,11 @@ async fn main() -> std::io::Result<()> {
             .iter()
             .zip(witness_addresses.iter())
             .map(|(prefix, address)| {
-                let lc = LocationScheme::new(IdentifierPrefix::Basic(prefix.clone()), Scheme::Http, url::Url::parse(address).unwrap());
+                let lc = LocationScheme::new(
+                    IdentifierPrefix::Basic(prefix.clone()),
+                    Scheme::Http,
+                    url::Url::parse(address).unwrap(),
+                );
                 controller.resolve(lc)
             }),
     )

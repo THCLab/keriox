@@ -7,6 +7,7 @@ use crate::{
     event_message::signed_event_message::{
         SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
     },
+    prefix::IdentifierPrefix,
 };
 pub struct NotificationBus {
     observers: HashMap<JustNotification, Vec<Arc<dyn Notifier + Send + Sync>>>,
@@ -69,7 +70,9 @@ pub enum Notification {
     #[cfg(feature = "oobi")]
     GotOobi(SignedReply),
     #[cfg(feature = "query")]
-    GotQuery(SignedQuery),
+    ReplayLog(IdentifierPrefix),
+    #[cfg(feature = "query")]
+    ReplyKsn(SignedReply),
 }
 
 #[derive(PartialEq, Hash, Eq)]
@@ -90,7 +93,9 @@ pub enum JustNotification {
     #[cfg(feature = "oobi")]
     GotOobi,
     #[cfg(feature = "query")]
-    GotQuery,
+    ReplayLog,
+    #[cfg(feature = "query")]
+    ReplyKsn,
 }
 
 impl From<&Notification> for JustNotification {
@@ -112,7 +117,9 @@ impl From<&Notification> for JustNotification {
             #[cfg(feature = "oobi")]
             Notification::GotOobi(_) => JustNotification::GotOobi,
             #[cfg(feature = "query")]
-            Notification::GotQuery(_) => JustNotification::GotQuery,
+            Notification::ReplayLog(_) => JustNotification::ReplayLog,
+            #[cfg(feature = "query")]
+            Notification::ReplyKsn(_) => JustNotification::ReplyKsn,
         }
     }
 }

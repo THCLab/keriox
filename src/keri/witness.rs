@@ -55,7 +55,11 @@ impl Witness {
         let responder = Arc::new(Responder::new());
         publisher.register_observer(
             responder.clone(),
-            vec![JustNotification::KeyEventAdded, JustNotification::GotQuery],
+            vec![
+                JustNotification::KeyEventAdded,
+                JustNotification::ReplayLog,
+                JustNotification::ReplyKsn,
+            ],
         );
 
         Ok(Self {
@@ -85,12 +89,11 @@ impl Witness {
                         self.respond_to_key_event(event.event_message, signer.clone())?;
                     response.push(Message::NontransferableRct(non_trans_receipt))
                 }
-                Notification::GotQuery(query) => {
-                    match self.process_signed_query(query, signer.clone())? {
-                        ReplyType::Rep(reply) => response.push(Message::Reply(reply)),
-                        ReplyType::Kel(mut kel) => response.append(&mut kel),
-                    }
+                Notification::ReplayLog(id) => {
+                    let mut kel = self.storage.get_kel_messages(&id).unwrap().unwrap();
+                    response.append(&mut kel)
                 }
+                Notification::ReplyKsn(signed_reply) => response.push(Message::Reply(signed_reply)),
                 _ => return Err(Error::SemanticError("Wrong notification type".into())),
             }
         }

@@ -17,8 +17,8 @@ crate-type = ["cdylib", "rlib"]
 
 [[bin]]         
 name = "witness-binary"    
-required-features = ["build-binary"]   
-
+required-features = ["build-binary"]
+ 
 [features]
 # lmdb = ["rkv", "bincode"] # deprecated since 0.7
 sled-db = ["sled", "fixed"]
