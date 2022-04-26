@@ -43,7 +43,7 @@ pub fn default_escrow_bus(db: Arc<SledEventDatabase>) -> NotificationBus {
             JustNotification::PartiallyWitnessed,
         ],
     );
-    
+
     bus.register_observer(
         Arc::new(TransReceiptsEscrow::new(db)),
         vec![

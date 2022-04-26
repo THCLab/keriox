@@ -282,12 +282,14 @@ impl<K: KeyManager> Keri<K> {
             .map_err(|e| Error::DeserializeError(e.to_string()))?
             .1
             .into_iter()
-            .map(|data| Message::try_from(data).unwrap());
-        events.clone().for_each(|msg| {
-            self.process(&vec![msg.clone()]).unwrap();
+            .map(|data| Message::try_from(data));
+        events.clone().try_for_each(|msg| {
+            let msg = msg?;
+            self.process(&vec![msg.clone()])?;
             // check if receipts are attached
             if let Message::Event(ev) = msg {
                 if let Some(witness_receipts) = ev.witness_receipts {
+                    // Create and process witness receipts
                     let id = ev.event_message.event.get_prefix();
                     let receipt = Receipt {
                         receipted_event_digest: ev.event_message.get_digest(),
@@ -295,16 +297,18 @@ impl<K: KeyManager> Keri<K> {
                         sn: ev.event_message.event.get_sn(),
                     };
                     let signed_receipt = SignedNontransferableReceipt::new(
-                        &receipt.to_message(SerializationFormats::JSON).unwrap(),
+                        &receipt.to_message(SerializationFormats::JSON)?,
                         None,
                         Some(witness_receipts),
                     );
                     self.process(&vec![Message::NontransferableRct(signed_receipt)])
-                        .unwrap();
+                } else {
+                    Ok(())
                 }
+            } else {
+                Ok(())
             }
-        });
-        Ok(())
+        })
     }
 
     pub fn process(&self, msg: &[Message]) -> Result<(), Error> {
@@ -313,10 +317,7 @@ impl<K: KeyManager> Keri<K> {
             .map(|message| {
                 self.processor
                     .process(message.clone())
-                    .and_then(|not| {
-                        println!("\nnot: {:?}\n", not);
-                        self.notification_bus.notify(&not)
-                    })
+                    .and_then(|not| self.notification_bus.notify(&not))
             })
             .partition(Result::is_ok);
         let _oks = process_ok

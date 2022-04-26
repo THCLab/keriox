@@ -389,7 +389,9 @@ fn signed_key_event(
                         None
                     }
                 })
-                .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?;
+                .ok_or_else(|| {
+                    Error::SemanticError("Missing controller signatures attachment".into())
+                })?;
             let witness_sigs = signatures.into_iter().find_map(|att| {
                 if let Attachment::AttachedWitnessSignatures(sigs) = att {
                     Some(sigs)
@@ -402,6 +404,7 @@ fn signed_key_event(
                 &event_message,
                 controller_sigs,
                 witness_sigs,
+                // TODO parse delegator seal attachment
                 None,
             )))
         }
