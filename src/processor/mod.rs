@@ -110,13 +110,7 @@ impl EventProcessor {
                 }
             },
             #[cfg(feature = "query")]
-            Message::Query(qry) => match qry.query.get_route() {
-                crate::query::QueryRoute::Log => {
-                    let pref = qry.query.get_query_data().data.i;
-                    Ok(Notification::ReplayLog(pref))
-                }
-                crate::query::QueryRoute::Ksn => todo!(),
-            },
+            Message::Query(qry) => Ok(Notification::GotQuery(qry)),
         }
     }
 }
