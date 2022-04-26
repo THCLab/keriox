@@ -16,7 +16,7 @@ use crate::prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Self
 
 #[cfg(feature = "query")]
 use crate::query::{
-    query_event::QueryEvent,
+    query_event::{QueryEvent, SignedQuery},
     reply_event::{ReplyEvent, SignedReply},
 };
 use crate::{error::Error, event::event_data::EventData};
@@ -259,6 +259,21 @@ impl From<SignedReply> for SignedEventData {
     }
 }
 
+#[cfg(feature = "query")]
+impl From<SignedQuery> for SignedEventData {
+    fn from(ev: SignedQuery) -> Self {
+        let attachments = vec![Attachment::LastEstSignaturesGroups(vec![(
+            ev.signer,
+            ev.signatures,
+        )])];
+
+        SignedEventData {
+            deserialized_event: EventType::Qry(ev.query),
+            attachments,
+        }
+    }
+}
+
 impl TryFrom<SignedEventData> for Message {
     type Error = Error;
 
@@ -305,7 +320,6 @@ fn signed_reply(rpy: ReplyEvent, mut attachments: Vec<Attachment>) -> Result<Mes
 
 #[cfg(feature = "query")]
 fn signed_query(qry: QueryEvent, mut attachments: Vec<Attachment>) -> Result<Message, Error> {
-    use crate::query::query_event::SignedQuery;
 
     match attachments
         .pop()

@@ -7,6 +7,7 @@ use crate::{
     event_message::signed_event_message::{
         SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
     },
+    prefix::IdentifierPrefix,
 };
 pub struct NotificationBus {
     observers: HashMap<JustNotification, Vec<Arc<dyn Notifier + Send + Sync>>>,
@@ -51,7 +52,7 @@ pub trait Notifier {
     fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error>;
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum Notification {
     KeyEventAdded(SignedEventMessage),
     OutOfOrder(SignedEventMessage),
@@ -68,6 +69,10 @@ pub enum Notification {
     ReplyUpdated,
     #[cfg(feature = "oobi")]
     GotOobi(SignedReply),
+    #[cfg(feature = "query")]
+    ReplayLog(IdentifierPrefix),
+    #[cfg(feature = "query")]
+    ReplyKsn(SignedReply),
 }
 
 #[derive(PartialEq, Hash, Eq)]
@@ -87,6 +92,10 @@ pub enum JustNotification {
     KsnUpdated,
     #[cfg(feature = "oobi")]
     GotOobi,
+    #[cfg(feature = "query")]
+    ReplayLog,
+    #[cfg(feature = "query")]
+    ReplyKsn,
 }
 
 impl From<&Notification> for JustNotification {
@@ -107,6 +116,10 @@ impl From<&Notification> for JustNotification {
             Notification::ReplyUpdated => JustNotification::KsnUpdated,
             #[cfg(feature = "oobi")]
             Notification::GotOobi(_) => JustNotification::GotOobi,
+            #[cfg(feature = "query")]
+            Notification::ReplayLog(_) => JustNotification::ReplayLog,
+            #[cfg(feature = "query")]
+            Notification::ReplyKsn(_) => JustNotification::ReplyKsn,
         }
     }
 }
