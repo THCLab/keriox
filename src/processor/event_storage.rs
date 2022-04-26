@@ -11,10 +11,7 @@ use crate::{
         Message, SignedNontransferableReceipt, TimestampedSignedEventMessage,
     },
     event_parsing::SignedEventData,
-    prefix::{
-        AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix,
-        SelfSigningPrefix,
-    },
+    prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix},
     state::{EventSemantics, IdentifierState},
 };
 
@@ -243,6 +240,59 @@ impl EventStorage {
                     }
                 })
             })
+    }
+
+    fn compute_escrowed_state_at_event(
+        &self,
+        sn: u64,
+        id: &IdentifierPrefix,
+        event_digest: &SelfAddressingPrefix,
+    ) -> Result<IdentifierState, Error> {
+        // if receipted event is newer than current state, try to find receipted
+        // event in partially witnessed escrow and apply it to state. Then we
+        // can get current witness set.
+        let escrowed_partially_witnessed = self
+            .db
+            .get_all_partially_witnessed()
+            .and_then(|mut events| {
+                events.find(|event| {
+                    event.signed_event_message.event_message.event.content.sn == sn
+                        && &event
+                            .signed_event_message
+                            .event_message
+                            .event
+                            .content
+                            .prefix
+                            == id
+                        && &event.signed_event_message.event_message.get_digest() == event_digest
+                })
+            })
+            .ok_or(Error::SemanticError("No escrowed event found".into()))?;
+        let new_state = self
+            .get_state(&id)?
+            .unwrap_or_default()
+            .apply(&escrowed_partially_witnessed.signed_event_message)?;
+        Ok(new_state)
+    }
+
+    /// Get current witness list for event
+    ///
+    /// Return current witnesses list for event identifier prefix, sn and
+    /// digest. Also if event is escrowed as not fully witnessed.
+    pub fn get_witnesses_at_event(
+        &self,
+        sn: u64,
+        id: &IdentifierPrefix,
+        event_digest: &SelfAddressingPrefix,
+    ) -> Result<Vec<BasicPrefix>, Error> {
+        let state = match self.get_state(&id)? {
+            Some(state) if state.sn < sn => {
+                self.compute_escrowed_state_at_event(sn, id, event_digest)?
+            }
+            None => self.compute_escrowed_state_at_event(sn, id, event_digest)?,
+            Some(state) => state,
+        };
+        Ok(state.witness_config.witnesses)
     }
 
     /// TODO Isn't it the same as `apply_to_state` function in validator?

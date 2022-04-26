@@ -5,7 +5,7 @@ use crate::prefix::{BasicPrefix, SelfSigningPrefix};
 use crate::query::{key_state_notice::KeyStateNotice, reply_event::SignedReply, QueryError};
 #[cfg(feature = "query")]
 use chrono::{DateTime, FixedOffset};
-use std::{iter, sync::Arc};
+use std::sync::Arc;
 
 use crate::{
     database::sled::SledEventDatabase,
@@ -69,16 +69,16 @@ impl EventValidator {
                             let receipts = self
                                 .event_storage
                                 .get_nt_receipts_for_sn(&new_state.prefix, new_state.sn);
-                                let couplets = match receipts {
-                                    Some(rct_list) => rct_list
+                            let couplets = match receipts {
+                                Some(rct_list) => rct_list
                                     .iter()
                                     .map(|rct| -> Result<_, _> { self.get_receipt_couplets(rct) })
                                     .collect::<Result<Vec<_>, _>>()?
                                     .into_iter()
                                     .flatten()
                                     .collect(),
-                                    None => vec![],
-                                };
+                                None => vec![],
+                            };
                             if new_state.witness_config.enough_receipts(&couplets)? {
                                 Ok(Some(new_state))
                             } else {
@@ -130,77 +130,33 @@ impl EventValidator {
         let id = rct.body.event.prefix.clone();
         let sn = rct.body.event.sn;
         let receipted_event_digest = rct.body.event.receipted_event_digest.clone();
-        let state = self.event_storage.get_state(&id)?;
-        let witnesses = match state {
-            Some(st) => {
-                if st.sn < sn {
-                    // look for event in partially signed events
-                    let escrowed_partially_witnessed = self
-                        .event_storage
-                        .db
-                        .get_all_partially_witnessed()
-                        .unwrap()
-                        .find(|event| {
-                            event.signed_event_message.event_message.event.content.sn == sn
-                                && event
-                                    .signed_event_message
-                                    .event_message
-                                    .event
-                                    .content
-                                    .prefix
-                                    == id
-                                && event.signed_event_message.event_message.get_digest()
-                                    == receipted_event_digest
-                        });
-                    let new_state =
-                        st.apply(&escrowed_partially_witnessed.unwrap().signed_event_message);
-                    new_state.unwrap().witness_config.witnesses
-                } else {
-                    st.witness_config.witnesses
-                }
-            }
-            None => {
-                // look for event in partially signed events
-                let escrowed_partially_witnessed = self
-                    .event_storage
-                    .db
-                    .get_all_partially_witnessed()
-                    .unwrap()
-                    .find(|event| {
-                        event.signed_event_message.event_message.event.content.sn == sn
-                            && event
-                                .signed_event_message
-                                .event_message
-                                .event
-                                .content
-                                .prefix
-                                == id
-                            && event.signed_event_message.event_message.get_digest()
-                                == receipted_event_digest
-                    });
-                let new_state = IdentifierState::default().apply(
-                    &escrowed_partially_witnessed
-                        .ok_or(Error::EventOutOfOrderError)?
-                        .signed_event_message,
-                );
-                new_state.unwrap().witness_config.witnesses
-            }
-        };
 
-        let (couplets, attached_signatures) = (rct.couplets.clone(), rct.indexed_sigs.clone());
+        let witnesses =
+            self.event_storage
+                .get_witnesses_at_event(sn, &id, &receipted_event_digest)?;
 
-        let c = couplets.unwrap_or_default();
+        let (couplets, attached_signatures) = (
+            rct.couplets.clone().unwrap_or_default(),
+            rct.indexed_sigs.clone(),
+        );
+
         Ok(match attached_signatures {
-            Some(attached) => {
-                let atts = attached.into_iter().map(|att| {
-                    (
-                        witnesses.get(att.index as usize).unwrap().clone(),
-                        att.signature.clone(),
-                    )
-                });
-                c.into_iter().chain(atts).collect::<Vec<_>>()
+            Some(signatures) => {
+                let attached: Result<Vec<_>, Error> = signatures
+                    .into_iter()
+                    .map(|att| -> Result<_, _> {
+                        Ok((
+                            witnesses
+                                .get(att.index as usize)
+                                .ok_or(Error::SemanticError("No matching witness prefix".into()))?
+                                .clone(),
+                            att.signature.clone(),
+                        ))
+                    })
+                    .collect();
+                couplets.into_iter().chain(attached?.into_iter()).collect()
             }
-            None => c,
+            None => couplets,
         })
     }
 
@@ -220,7 +176,7 @@ impl EventValidator {
             .get_event_at_sn(&rct.body.event.prefix, rct.body.event.sn)
         {
             let serialized_event = event.signed_event_message.serialize()?;
-            let signer_couplets = self.get_receipt_couplets(&rct)?;
+            let signer_couplets = self.get_receipt_couplets(rct)?;
             let (_, errors): (Vec<_>, Vec<Result<bool, Error>>) = signer_couplets
                 .into_iter()
                 .map(|(witness, signature)| witness.verify(&serialized_event, &signature))
@@ -232,7 +188,6 @@ impl EventValidator {
             }
         } else {
             // There's no receipted event id database so we can't verify signatures
-            println!("Missing event");
             Err(Error::MissingEvent)
         }?;
         self.event_storage.get_state(id)

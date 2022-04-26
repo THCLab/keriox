@@ -1,9 +1,9 @@
 #[cfg(feature = "wallet")]
 use universal_wallet::prelude::UnlockedWallet;
 
-use crate::{event_message::signed_event_message::Message, event_parsing::attachment};
 #[cfg(test)]
 use crate::{database::sled::SledEventDatabase, error::Error, keri::Keri};
+use crate::{event_message::signed_event_message::Message, event_parsing::attachment};
 
 use std::sync::{Arc, Mutex};
 
@@ -348,73 +348,74 @@ fn interop() -> Result<(), Error> {
     let _witness1 = br#"{"v":"KERI10JSON0000fd_","t":"icp","d":"Eie2UH5m4ti4QNAa4Yct8ISFVtHBNKjX7gJ0ZEc_IBIM","i":"Bgoq68HCmYNUDgOz4Skvlu306o_NY-NrYuKAVhk3Zh9c","s":"0","kt":"1","k":["Bgoq68HCmYNUDgOz4Skvlu306o_NY-NrYuKAVhk3Zh9c"],"nt":"0","n":[],"bt":"0","b":[],"c":[],"a":[]}-VAn-AABAAgMfAHPyZHqGvBMrASQ7j8LMelEVjZaUdtfdQJKjvayrXxdtF6ZpolH6WD2efVNStyWLCstgn1dVolzqN9Wf2Bw-EAB0AAAAAAAAAAAAAAAAAAAAAAA1AAG2022-04-11T20c50c12d027186p00c00"#;
     let _witness2 = br#"{"v":"KERI10JSON0000fd_","t":"icp","d":"Ez7jRMWuy9UWweIF3RkLHecF7yH2jGceWqQYMDhyEECU","i":"BuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw","s":"0","kt":"1","k":["BuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw"],"nt":"0","n":[],"bt":"0","b":[],"c":[],"a":[]}-VAn-AABAAtMr9S7-k6zJr7-nmI0R_uCR189M_a09b2bDGOMbyFCmI6CZd76wKULESRFcHqpKYMRaJzj6Nqghceh4dxT_zAw-EAB0AAAAAAAAAAAAAAAAAAAAAAA1AAG2022-04-11T20c50c11d949552p00c00"#;
     let _witness3 = br#"{"v":"KERI10JSON0000fd_","t":"icp","d":"Erch8-EoKKuPgwH_O90xzU44DIx-hi6Yq_0yC7PZG0RQ","i":"BGKVzj4ve0VSd8z_AmvhLg4lqcC_9WYX90k03q-R_Ydo","s":"0","kt":"1","k":["BGKVzj4ve0VSd8z_AmvhLg4lqcC_9WYX90k03q-R_Ydo"],"nt":"0","n":[],"bt":"0","b":[],"c":[],"a":[]}-VAn-AABAAet3jlqpjTnkIrUUu8MqDmJSejeOSsHnfhyLR9gUHOiemBX0FqDatVQzzisXcXSW3E9Bys4_Oj7OBoczLTSwUBA-EAB0AAAAAAAAAAAAAAAAAAAAAAA1AAG2022-04-11T20c50c11d870386p00c00"#;
-    
+
     use tempfile::Builder;
     // Create test db and event processor.
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     let alice_db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-    
+
     let alice_key_manager = Arc::new(Mutex::new({
         use crate::signer::CryptoBox;
         CryptoBox::new()?
     }));
-    
+
     // Init controller.
     let controller = Keri::new(Arc::clone(&alice_db), Arc::clone(&alice_key_manager))?;
-    
+
     controller.parse_and_process(issuer_kel_str)?;
     let state = controller
-    .get_state_for_prefix(
-        &"Ew-o5dU5WjDrxDBK4b4HrF82_rYb6MX6xsegjq4n0Y7M"
-        .parse()
-        .unwrap(),
-    )
-    .unwrap()
-    .unwrap();
-    
+        .get_state_for_prefix(
+            &"Ew-o5dU5WjDrxDBK4b4HrF82_rYb6MX6xsegjq4n0Y7M"
+                .parse()
+                .unwrap(),
+        )
+        .unwrap()
+        .unwrap();
+
     assert_eq!(state.sn, 2);
     let pk = state.current.public_keys;
-    
+
     assert_eq!(
         pk[0],
         "DruZ2ykSgEmw2EHm34wIiEGsUa_1QkYlsCAidBSzUkTU"
             .parse()
             .unwrap()
-        );
-        
-        controller.parse_and_process(holder_kel_str)?;
-        let pk = controller
+    );
+
+    controller.parse_and_process(holder_kel_str)?;
+    let pk = controller
         .get_state_for_prefix(
             &"EeWTHzoGK_dNn71CmJh-4iILvqHGXcqEoKGF4VUc6ZXI"
-            .parse()
-            .unwrap(),
+                .parse()
+                .unwrap(),
         )
         .unwrap()
         .unwrap()
         .current
         .public_keys;
-        
-        assert_eq!(
-            pk[0],
-            "DaUjZzbtZLpCZUrRUqA0LZIC83_Gbsj2BHMEOe7ChMsc"
+
+    assert_eq!(
+        pk[0],
+        "DaUjZzbtZLpCZUrRUqA0LZIC83_Gbsj2BHMEOe7ChMsc"
             .parse()
             .unwrap()
-        );
-        
-        let credential = br#"{"v":"ACDC10JSON00019e_","d":"EzSVC7-SuizvdVkpXmHQx5FhUElLjUOjCbgN81ymeWOE","s":"EWCeT9zTxaZkaC_3-amV2JtG6oUxNA36sCC0P5MI7Buw","i":"Ew-o5dU5WjDrxDBK4b4HrF82_rYb6MX6xsegjq4n0Y7M","a":{"d":"EbFNz3vOMBbzp5xmYRd6rijvq08DCe07bOR-DA5fzO6g","i":"EeWTHzoGK_dNn71CmJh-4iILvqHGXcqEoKGF4VUc6ZXI","dt":"2022-04-11T20:50:23.722739+00:00","LEI":"5493001KJTIIGC8Y1R17"},"e":{},"ri":"EoLNCdag8PlHpsIwzbwe7uVNcPE1mTr-e1o9nCIDPWgM"}"#;
-        let sign = br#"-FABEw-o5dU5WjDrxDBK4b4HrF82_rYb6MX6xsegjq4n0Y7M0AAAAAAAAAAAAAAAAAAAAAAAEw-o5dU5WjDrxDBK4b4HrF82_rYb6MX6xsegjq4n0Y7M-AABAAKcvAE-GzYu4_aboNjC0vNOcyHZkm5Vw9-oGGtpZJ8pNdzVEOWhnDpCWYIYBAMVvzkwowFVkriY3nCCiBAf8JDw"#;
-        let sig = attachment::attachment(sign).unwrap().1;
-        if let Attachment::SealSignaturesGroups(atts) = sig {
-            let keys = atts.iter()
-                .map(|(seal, sigs)| 
-                    controller.storage
-                        .get_keys_at_event(&seal.prefix, seal.sn, &seal.event_digest)
-                        .unwrap().unwrap()
-                        .verify(credential, &sigs).unwrap()
-                    );
-            println!("keys: {:?}", keys.collect::<Vec<_>>());
-        };
-        
-        Ok(())
-    }
-    
+    );
+
+    let credential = br#"{"v":"ACDC10JSON00019e_","d":"EzSVC7-SuizvdVkpXmHQx5FhUElLjUOjCbgN81ymeWOE","s":"EWCeT9zTxaZkaC_3-amV2JtG6oUxNA36sCC0P5MI7Buw","i":"Ew-o5dU5WjDrxDBK4b4HrF82_rYb6MX6xsegjq4n0Y7M","a":{"d":"EbFNz3vOMBbzp5xmYRd6rijvq08DCe07bOR-DA5fzO6g","i":"EeWTHzoGK_dNn71CmJh-4iILvqHGXcqEoKGF4VUc6ZXI","dt":"2022-04-11T20:50:23.722739+00:00","LEI":"5493001KJTIIGC8Y1R17"},"e":{},"ri":"EoLNCdag8PlHpsIwzbwe7uVNcPE1mTr-e1o9nCIDPWgM"}"#;
+    let sign = br#"-FABEw-o5dU5WjDrxDBK4b4HrF82_rYb6MX6xsegjq4n0Y7M0AAAAAAAAAAAAAAAAAAAAAAAEw-o5dU5WjDrxDBK4b4HrF82_rYb6MX6xsegjq4n0Y7M-AABAAKcvAE-GzYu4_aboNjC0vNOcyHZkm5Vw9-oGGtpZJ8pNdzVEOWhnDpCWYIYBAMVvzkwowFVkriY3nCCiBAf8JDw"#;
+    let sig = attachment::attachment(sign).unwrap().1;
+    if let Attachment::SealSignaturesGroups(atts) = sig {
+        let keys = atts.iter().map(|(seal, sigs)| {
+            controller
+                .storage
+                .get_keys_at_event(&seal.prefix, seal.sn, &seal.event_digest)
+                .unwrap()
+                .unwrap()
+                .verify(credential, &sigs)
+                .unwrap()
+        });
+        println!("keys: {:?}", keys.collect::<Vec<_>>());
+    };
+
+    Ok(())
+}
