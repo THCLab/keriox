@@ -95,5 +95,5 @@ fn test_query_deserialize() {
 
     let qr = qr.unwrap();
 
-    assert_eq!(serde_json::to_string(&qr).unwrap(), input_query);
+    assert_eq!(qr.serialize().unwrap(), input_query.as_bytes());
 }

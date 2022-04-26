@@ -320,7 +320,6 @@ fn signed_reply(rpy: ReplyEvent, mut attachments: Vec<Attachment>) -> Result<Mes
 
 #[cfg(feature = "query")]
 fn signed_query(qry: QueryEvent, mut attachments: Vec<Attachment>) -> Result<Message, Error> {
-
     match attachments
         .pop()
         .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?

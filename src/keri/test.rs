@@ -169,7 +169,7 @@ fn test_qry_rpy() -> Result<(), Error> {
         query::{
             query_event::{QueryArgs, QueryEvent, SignedQuery},
             reply_event::ReplyRoute,
-            QueryRoute, ReplyType,
+            QueryRoute
         },
         signer::{KeyManager, Signer},
     };
@@ -208,18 +208,19 @@ fn test_qry_rpy() -> Result<(), Error> {
 
     let alice_icp = alice.incept(Some(vec![witness.prefix.clone()]), None)?;
     // send alices icp to witness
-    let _rcps = witness.process(&[Message::Event(alice_icp)])?;
+    witness.process(&[Message::Event(alice_icp)])?;
     // send bobs icp to witness to have his keys
-    let _rcps = witness.process(&[Message::Event(bob_icp)])?;
-
+    witness.process(&[Message::Event(bob_icp)])?;
+    let _receipts = witness.respond(signer_arc.clone());
+    
+    // Bob asks about alices key state
+    // construct qry message to ask of alice key state message
     let query_args = QueryArgs {
         s: None,
         i: alice.prefix().clone(),
         src: None,
     };
-
-    // Bob asks about alices key state
-    // construct qry message to ask of alice key state message
+    
     let qry = QueryEvent::new_query(
         QueryRoute::Ksn,
         query_args,
@@ -237,19 +238,53 @@ fn test_qry_rpy() -> Result<(), Error> {
         0,
     );
     // Qry message signed by Bob
-    let s = SignedQuery::new(qry, bob_pref.to_owned(), vec![signature]);
+    let query_message = Message::Query(SignedQuery::new(qry, bob_pref.to_owned(), vec![signature]));
 
-    // ask witness about alice's key state notice
-    let rep = witness.process_signed_query(s, signer_arc)?;
+    witness.process(&vec![query_message])?;
 
-    match rep {
-        ReplyType::Rep(rep) => {
-            if let ReplyRoute::Ksn(_id, ksn) = rep.reply.get_route() {
+    let response = witness.respond(signer_arc.clone())?;
+    // assert_eq!(response.len(), 1);
+    match &response[0] {
+        Message::Reply(rpy) => {
+            if let ReplyRoute::Ksn(_id, ksn) = rpy.reply.get_route() {
                 assert_eq!(&ksn.state, &alice.get_state().unwrap().unwrap())
             }
-        }
-        ReplyType::Kel(_) => assert!(false),
+        },
+        _ => unreachable!(),
     }
+
+    // Bob asks about alices kel
+    // construct qry message to ask of alice kel
+    let query_args = QueryArgs {
+        s: None,
+        i: alice.prefix().clone(),
+        src: None,
+    };
+    let qry = QueryEvent::new_query(
+        QueryRoute::Log,
+        query_args,
+        SerializationFormats::JSON,
+        &SelfAddressing::Blake3_256,
+    )?;
+
+    // sign message by bob
+    let signature = AttachedSignaturePrefix::new(
+        SelfSigning::Ed25519Sha512,
+        Arc::clone(&bob_key_manager)
+            .lock()
+            .unwrap()
+            .sign(&serde_json::to_vec(&qry).unwrap())?,
+        0,
+    );
+    // Qry message signed by Bob
+    let query_message = Message::Query(SignedQuery::new(qry, bob_pref.to_owned(), vec![signature]));
+
+    witness.process(&vec![query_message])?;
+
+    let response = witness.respond(signer_arc.clone())?;
+    
+    let alice_kel = alice.storage.get_kel_messages(alice.prefix())?;
+    assert_eq!(response, alice_kel.unwrap());
 
     Ok(())
 }

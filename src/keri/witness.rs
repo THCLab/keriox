@@ -1,10 +1,13 @@
+use std::convert::TryFrom;
 use std::path::Path;
 use std::sync::Arc;
 
+use crate::event::receipt::Receipt;
 use crate::event::EventMessage;
 use crate::event_message::event_msg_builder::ReceiptBuilder;
 use crate::event_message::key_event_message::KeyEvent;
 use crate::event_message::signed_event_message::{Message, SignedNontransferableReceipt};
+use crate::event_parsing::message::signed_event_stream;
 use crate::keys::PublicKey;
 use crate::processor::escrow::default_escrow_bus;
 use crate::processor::event_storage::EventStorage;
@@ -31,7 +34,6 @@ use super::Responder;
 
 pub struct Witness {
     pub prefix: BasicPrefix,
-    // signer: Signer,
     processor: WitnessProcessor,
     storage: EventStorage,
     publisher: NotificationBus,
@@ -52,11 +54,7 @@ impl Witness {
         let responder = Arc::new(Responder::new());
         publisher.register_observer(
             responder.clone(),
-            vec![
-                JustNotification::KeyEventAdded,
-                JustNotification::ReplayLog,
-                JustNotification::ReplyKsn,
-            ],
+            vec![JustNotification::KeyEventAdded, JustNotification::GotQuery],
         );
 
         Ok(Self {
@@ -81,34 +79,16 @@ impl Witness {
                         self.respond_to_key_event(event.event_message, signer.clone())?;
                     response.push(Message::NontransferableRct(non_trans_receipt))
                 }
-                Notification::ReplayLog(id) => {
-                    let mut kel = self.storage.get_kel_messages(&id).unwrap().unwrap();
-                    response.append(&mut kel)
+                Notification::GotQuery(query) => {
+                    match self.process_signed_query(query, signer.clone())? {
+                        ReplyType::Rep(reply) => response.push(Message::Reply(reply)),
+                        ReplyType::Kel(mut kel) => response.append(&mut kel),
+                    }
                 }
-                Notification::ReplyKsn(signed_reply) => response.push(Message::Reply(signed_reply)),
                 _ => return Err(Error::SemanticError("Wrong notification type".into())),
             }
         }
         Ok(response)
-    }
-
-    pub fn process(&self, events: &[Message]) -> Result<Option<Vec<Error>>, Error> {
-        let (_oks, errs): (Vec<_>, Vec<_>) = events
-            .iter()
-            .map(|message| {
-                self.processor
-                    .process(message.clone())
-                    .and_then(|not| self.publisher.notify(&not))
-            })
-            .partition(Result::is_ok);
-
-        let errs = if errs.is_empty() {
-            None
-        } else {
-            Some(errs.into_iter().map(Result::unwrap_err).collect())
-        };
-
-        Ok(errs)
     }
 
     fn respond_to_key_event(
@@ -134,6 +114,63 @@ impl Witness {
         self.processor
             .process(Message::NontransferableRct(signed_rcp.clone()))?;
         Ok(signed_rcp)
+    }
+
+    pub fn parse_and_process(&self, msg: &[u8]) -> Result<(), Error> {
+        let events = signed_event_stream(msg)
+            .map_err(|e| Error::DeserializeError(e.to_string()))?
+            .1
+            .into_iter()
+            .map(|data| Message::try_from(data));
+        events.clone().try_for_each(|msg| {
+            let msg = msg?;
+            self.process(&vec![msg.clone()])?;
+            // check if receipts are attached
+            match msg {
+                Message::Event(ev) => {
+                    if let Some(witness_receipts) = ev.witness_receipts {
+                        // Create and process witness receipts
+                        // TODO What timestamp should be set?
+                        let id = ev.event_message.event.get_prefix();
+                        let receipt = Receipt {
+                            receipted_event_digest: ev.event_message.get_digest(),
+                            prefix: id,
+                            sn: ev.event_message.event.get_sn(),
+                        };
+                        let signed_receipt = SignedNontransferableReceipt::new(
+                            &receipt.to_message(SerializationFormats::JSON)?,
+                            None,
+                            Some(witness_receipts),
+                        );
+                        self.process(&vec![Message::NontransferableRct(signed_receipt)])
+                    } else {
+                        Ok(())
+                    }
+                }
+                _ => Ok(()),
+            }
+        })
+    }
+
+    pub fn process(&self, msg: &[Message]) -> Result<(), Error> {
+        let (process_ok, process_failed): (Vec<_>, Vec<_>) = msg
+            .iter()
+            .map(|message| {
+                self.processor
+                    .process(message.clone())
+                    .and_then(|not| self.publisher.notify(&not))
+            })
+            .partition(Result::is_ok);
+        let _oks = process_ok
+            .into_iter()
+            .map(Result::unwrap)
+            .collect::<Vec<_>>();
+        let _errs = process_failed
+            .into_iter()
+            .map(Result::unwrap_err)
+            .collect::<Vec<_>>();
+
+        Ok(())
     }
 
     pub fn get_kel_for_prefix(&self, id: &IdentifierPrefix) -> Result<Option<Vec<u8>>, Error> {
@@ -207,7 +244,7 @@ impl Witness {
         match route {
             QueryRoute::Log => Ok(ReplyType::Kel(
                 self.storage
-                    .get_kel(&qr.data.i)?
+                    .get_kel_messages(&qr.data.i)?
                     .ok_or_else(|| Error::SemanticError("No identifier in db".into()))?,
             )),
             QueryRoute::Ksn => {
@@ -259,18 +296,28 @@ pub fn test_query() -> Result<(), Error> {
         })
         .collect();
     witness.process(to_process.as_slice()).unwrap();
+    let response = witness.respond(signer_arc.clone())?;
+    // should respond with one receipt event
+    assert_eq!(response.len(), 1);
 
     let qry_str = r#"{"v":"KERI10JSON000104_","t":"qry","d":"ErXRrwRbUFylKDiuOp8a1wO2XPAY4KiMX4TzYWZ1iAGE","dt":"2022-03-21T11:42:58.123955+00:00","r":"ksn","rr":"","q":{"s":0,"i":"E6OK2wFYp6x0Jx48xX0GCTwAzJUTWtYEvJSykVhtAnaM","src":"BGKVzj4ve0VSd8z_AmvhLg4lqcC_9WYX90k03q-R_Ydo"}}-VAj-HABE6OK2wFYp6x0Jx48xX0GCTwAzJUTWtYEvJSykVhtAnaM-AABAAk-Hyv8gpUZNpPYDGJc5F5vrLNWlGM26523Sgb6tKN1CtP4QxUjEApJCRxfm9TN8oW2nQ40QVM_IuZlrly1eLBA"#;
 
     let parsed = signed_message(qry_str.as_bytes()).unwrap().1;
-    let deserialized_qy = Message::try_from(parsed).unwrap();
+    let deserialized_qry = Message::try_from(parsed).unwrap();
 
-    if let Message::Query(qry) = deserialized_qy {
-        let res = witness.process_signed_query(qry, signer_arc)?;
-        assert!(matches!(res, ReplyType::Rep(_)));
-    } else {
-        assert!(false)
+    witness.process(&vec![deserialized_qry])?;
+    let r = witness.respond(signer_arc.clone())?;
+    // should respond with reply message 
+    assert_eq!(r.len(), 1);
+    if let Message::Reply(rpy) = &r[0] {
+        if let ReplyRoute::Ksn(id, ksn) = &rpy.reply.event.content.data {
+            assert_eq!(id, &IdentifierPrefix::Basic(witness.prefix));
+            assert_eq!(ksn.state.prefix, "E6OK2wFYp6x0Jx48xX0GCTwAzJUTWtYEvJSykVhtAnaM".parse().unwrap());
+            assert_eq!(ksn.state.sn, 0);
+        }
     }
+
+    
 
     Ok(())
 }
