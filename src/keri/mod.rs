@@ -48,7 +48,7 @@ pub struct Keri<K: KeyManager + 'static> {
     processor: EventProcessor,
     storage: EventStorage,
     notification_bus: NotificationBus,
-    response_queue: Arc<Responder<EventMessage<KeyEvent>>>,
+    response_queue: Arc<Responder<Notification>>,
 }
 
 impl<K: KeyManager> Keri<K> {
@@ -355,10 +355,15 @@ impl<K: KeyManager> Keri<K> {
 
     pub fn respond(&self) -> Result<Vec<Message>, Error> {
         let mut response = Vec::new();
-        while let Some(event) = self.response_queue.get_data_to_respond() {
-            // ignore own events
-            if !event.event.get_prefix().eq(&self.prefix) {
-                response.append(&mut self.respond_one(event)?);
+        while let Some(notification) = self.response_queue.get_data_to_respond() {
+            match notification {
+                Notification::KeyEventAdded(event) => {
+                    // ignore own events
+                    if !event.event_message.event.get_prefix().eq(&self.prefix) {
+                        response.append(&mut self.respond_one(event.event_message)?);
+                    }
+                }
+                _ => todo!(),
             }
         }
         Ok(response)
@@ -525,18 +530,12 @@ impl<D> Responder<D> {
     }
 }
 
-impl Notifier for Responder<EventMessage<KeyEvent>> {
+impl Notifier for Responder<Notification> {
     fn notify(&self, notification: &Notification, _bus: &NotificationBus) -> Result<(), Error> {
-        // save event that was added to kel to make receipt.
-        if let Notification::KeyEventAdded(ev_msg) = notification {
-            self.needs_response
-                .lock()
-                .unwrap()
-                .push_back(ev_msg.event_message.clone());
-
-            Ok(())
-        } else {
-            Err(Error::SemanticError("Wrong notification type".into()))
-        }
+        self.needs_response
+            .lock()
+            .unwrap()
+            .push_back((*notification).clone());
+        Ok(())
     }
 }

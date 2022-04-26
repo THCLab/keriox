@@ -8,7 +8,7 @@ use crate::event_message::signed_event_message::{Message, SignedNontransferableR
 use crate::keys::PublicKey;
 use crate::processor::escrow::default_escrow_bus;
 use crate::processor::event_storage::EventStorage;
-use crate::processor::notification::{JustNotification, NotificationBus};
+use crate::processor::notification::{JustNotification, Notification, NotificationBus};
 use crate::processor::witness_processor::WitnessProcessor;
 use crate::query::reply_event::{ReplyEvent, ReplyRoute, SignedReply};
 use crate::query::{
@@ -35,7 +35,7 @@ pub struct Witness {
     processor: WitnessProcessor,
     storage: EventStorage,
     publisher: NotificationBus,
-    responder: Arc<Responder<EventMessage<KeyEvent>>>,
+    responder: Arc<Responder<Notification>>,
 }
 
 impl Witness {
@@ -50,7 +50,14 @@ impl Witness {
         };
         let prefix = Basic::Ed25519NT.derive(pk);
         let responder = Arc::new(Responder::new());
-        publisher.register_observer(responder.clone(), vec![JustNotification::KeyEventAdded]);
+        publisher.register_observer(
+            responder.clone(),
+            vec![
+                JustNotification::KeyEventAdded,
+                JustNotification::ReplayLog,
+                JustNotification::ReplyKsn,
+            ],
+        );
 
         Ok(Self {
             prefix,
@@ -68,8 +75,19 @@ impl Witness {
     pub fn respond(&self, signer: Arc<Signer>) -> Result<Vec<Message>, Error> {
         let mut response = Vec::new();
         while let Some(event) = self.responder.get_data_to_respond() {
-            let non_trans_receipt = self.respond_one(event, signer.clone())?;
-            response.push(Message::NontransferableRct(non_trans_receipt));
+            match event {
+                Notification::KeyEventAdded(event) => {
+                    let non_trans_receipt =
+                        self.respond_to_key_event(event.event_message, signer.clone())?;
+                    response.push(Message::NontransferableRct(non_trans_receipt))
+                }
+                Notification::ReplayLog(id) => {
+                    let mut kel = self.storage.get_kel_messages(&id).unwrap().unwrap();
+                    response.append(&mut kel)
+                }
+                Notification::ReplyKsn(signed_reply) => response.push(Message::Reply(signed_reply)),
+                _ => return Err(Error::SemanticError("Wrong notification type".into())),
+            }
         }
         Ok(response)
     }
@@ -93,7 +111,7 @@ impl Witness {
         Ok(errs)
     }
 
-    fn respond_one(
+    fn respond_to_key_event(
         &self,
         event_message: EventMessage<KeyEvent>,
         signer: Arc<Signer>,
