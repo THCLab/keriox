@@ -278,12 +278,12 @@ impl<K: KeyManager> Keri<K> {
     }
 
     pub fn parse_and_process(&self, msg: &[u8]) -> Result<(), Error> {
-        let events = signed_event_stream(msg)
+        let mut events = signed_event_stream(msg)
             .map_err(|e| Error::DeserializeError(e.to_string()))?
             .1
             .into_iter()
-            .map(|data| Message::try_from(data));
-        events.clone().try_for_each(|msg| {
+            .map(Message::try_from);
+        events.try_for_each(|msg| {
             let msg = msg?;
             self.process(&vec![msg.clone()])?;
             // check if receipts are attached
