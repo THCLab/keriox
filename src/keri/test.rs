@@ -169,7 +169,7 @@ fn test_qry_rpy() -> Result<(), Error> {
         query::{
             query_event::{QueryArgs, QueryEvent, SignedQuery},
             reply_event::ReplyRoute,
-            QueryRoute
+            QueryRoute,
         },
         signer::{KeyManager, Signer},
     };
@@ -212,7 +212,7 @@ fn test_qry_rpy() -> Result<(), Error> {
     // send bobs icp to witness to have his keys
     witness.process(&[Message::Event(bob_icp)])?;
     let _receipts = witness.respond(signer_arc.clone());
-    
+
     // Bob asks about alices key state
     // construct qry message to ask of alice key state message
     let query_args = QueryArgs {
@@ -220,7 +220,7 @@ fn test_qry_rpy() -> Result<(), Error> {
         i: alice.prefix().clone(),
         src: None,
     };
-    
+
     let qry = QueryEvent::new_query(
         QueryRoute::Ksn,
         query_args,
@@ -249,7 +249,7 @@ fn test_qry_rpy() -> Result<(), Error> {
             if let ReplyRoute::Ksn(_id, ksn) = rpy.reply.get_route() {
                 assert_eq!(&ksn.state, &alice.get_state().unwrap().unwrap())
             }
-        },
+        }
         _ => unreachable!(),
     }
 
@@ -282,7 +282,7 @@ fn test_qry_rpy() -> Result<(), Error> {
     witness.process(&vec![query_message])?;
 
     let response = witness.respond(signer_arc.clone())?;
-    
+
     let alice_kel = alice.storage.get_kel_messages(alice.prefix())?;
     assert_eq!(response, alice_kel.unwrap());
 
