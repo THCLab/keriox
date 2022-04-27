@@ -278,7 +278,7 @@ pub fn test_query() -> Result<(), Error> {
     use std::convert::TryFrom;
 
     use crate::event_parsing::message::signed_message;
-    use crate::{keri::witness::Witness, query::ReplyType};
+    use crate::keri::witness::Witness;
     use tempfile::Builder;
 
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
@@ -307,17 +307,20 @@ pub fn test_query() -> Result<(), Error> {
 
     witness.process(&vec![deserialized_qry])?;
     let r = witness.respond(signer_arc.clone())?;
-    // should respond with reply message 
+    // should respond with reply message
     assert_eq!(r.len(), 1);
     if let Message::Reply(rpy) = &r[0] {
         if let ReplyRoute::Ksn(id, ksn) = &rpy.reply.event.content.data {
             assert_eq!(id, &IdentifierPrefix::Basic(witness.prefix));
-            assert_eq!(ksn.state.prefix, "E6OK2wFYp6x0Jx48xX0GCTwAzJUTWtYEvJSykVhtAnaM".parse().unwrap());
+            assert_eq!(
+                ksn.state.prefix,
+                "E6OK2wFYp6x0Jx48xX0GCTwAzJUTWtYEvJSykVhtAnaM"
+                    .parse()
+                    .unwrap()
+            );
             assert_eq!(ksn.state.sn, 0);
         }
     }
-
-    
 
     Ok(())
 }
@@ -367,6 +370,7 @@ fn test_witness_rotation() -> Result<(), Error> {
         ]),
         Some(SignatureThreshold::Simple(2)),
     )?;
+
     // Shouldn't be accepted in controllers kel, because of missing witness receipts
     assert_eq!(controller.get_state()?, None);
 
