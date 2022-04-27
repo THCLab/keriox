@@ -121,9 +121,9 @@ pub fn timestamp(s: &[u8]) -> nom::IResult<&[u8], DateTime<FixedOffset>> {
             let timestamp = {
                 let dt_str = String::from_utf8(parsed_timestamp.to_vec())
                     .unwrap()
-                    .replace("c", ":")
-                    .replace("d", ".")
-                    .replace("p", "+");
+                    .replace('c', ":")
+                    .replace('d', ".")
+                    .replace('p', "+");
                 let dt: DateTime<FixedOffset> = dt_str.parse().unwrap();
                 dt
             };

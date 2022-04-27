@@ -267,9 +267,9 @@ impl EventStorage {
                         && &event.signed_event_message.event_message.get_digest() == event_digest
                 })
             })
-            .ok_or(Error::SemanticError("No escrowed event found".into()))?;
+            .ok_or_else(|| Error::SemanticError("No escrowed event found".into()))?;
         let new_state = self
-            .get_state(&id)?
+            .get_state(id)?
             .unwrap_or_default()
             .apply(&escrowed_partially_witnessed.signed_event_message)?;
         Ok(new_state)
@@ -285,7 +285,7 @@ impl EventStorage {
         id: &IdentifierPrefix,
         event_digest: &SelfAddressingPrefix,
     ) -> Result<Vec<BasicPrefix>, Error> {
-        let state = match self.get_state(&id)? {
+        let state = match self.get_state(id)? {
             Some(state) if state.sn < sn => {
                 self.compute_escrowed_state_at_event(sn, id, event_digest)?
             }

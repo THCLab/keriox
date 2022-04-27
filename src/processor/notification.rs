@@ -1,13 +1,12 @@
 use std::{collections::HashMap, sync::Arc};
 
 #[cfg(feature = "query")]
-use crate::query::reply_event::SignedReply;
+use crate::query::{query_event::SignedQuery, reply_event::SignedReply};
 use crate::{
     error::Error,
     event_message::signed_event_message::{
         SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
     },
-    query::query_event::SignedQuery,
 };
 pub struct NotificationBus {
     observers: HashMap<JustNotification, Vec<Arc<dyn Notifier + Send + Sync>>>,

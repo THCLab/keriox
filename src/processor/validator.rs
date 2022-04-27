@@ -148,9 +148,11 @@ impl EventValidator {
                         Ok((
                             witnesses
                                 .get(att.index as usize)
-                                .ok_or(Error::SemanticError("No matching witness prefix".into()))?
+                                .ok_or_else(|| {
+                                    Error::SemanticError("No matching witness prefix".into())
+                                })?
                                 .clone(),
-                            att.signature.clone(),
+                            att.signature,
                         ))
                     })
                     .collect();
