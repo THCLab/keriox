@@ -2,7 +2,7 @@ use crate::{
     derivation::self_addressing::SelfAddressing,
     error::Error,
     event::{EventMessage, SerializationFormats},
-    event_message::{EventTypeTag, SaidEvent, Typeable},
+    event_message::{signed_event_message::Message, EventTypeTag, SaidEvent, Typeable},
 };
 use chrono::{DateTime, FixedOffset, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize, Serializer};
@@ -66,7 +66,7 @@ pub enum QueryRoute {
 #[derive(Debug)]
 pub enum ReplyType {
     Rep(SignedReply),
-    Kel(Vec<u8>),
+    Kel(Vec<Message>),
 }
 
 #[derive(Error, Debug)]

@@ -1,4 +1,5 @@
 use base64::URL_SAFE_NO_PAD;
+use chrono::{DateTime, FixedOffset, SecondsFormat};
 use serde::Deserialize;
 use std::convert::TryFrom;
 
@@ -15,7 +16,7 @@ use crate::prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Self
 
 #[cfg(feature = "query")]
 use crate::query::{
-    query_event::QueryEvent,
+    query_event::{QueryEvent, SignedQuery},
     reply_event::{ReplyEvent, SignedReply},
 };
 use crate::{error::Error, event::event_data::EventData};
@@ -30,7 +31,10 @@ pub enum Attachment {
     // Count codes
     SealSourceCouplets(Vec<SourceSeal>),
     AttachedSignatures(Vec<AttachedSignaturePrefix>),
+    AttachedWitnessSignatures(Vec<AttachedSignaturePrefix>),
     ReceiptCouplets(Vec<(BasicPrefix, SelfSigningPrefix)>),
+    // Count of attached qualified Base64 first seen replay couples fn+dt
+    FirstSeenReply(Vec<(u64, DateTime<FixedOffset>)>),
     // Group codes
     SealSignaturesGroups(Vec<(EventSeal, Vec<AttachedSignaturePrefix>)>),
     // List of signatures made using keys from last establishment event od identifier of prefix
@@ -71,6 +75,12 @@ impl Attachment {
                     .fold("".into(), |acc, sig| [acc, sig.to_str()].join(""));
                 (PayloadType::MA, sigs.len(), serialized_sigs)
             }
+            Attachment::AttachedWitnessSignatures(sigs) => {
+                let serialized_sigs = sigs
+                    .iter()
+                    .fold("".into(), |acc, sig| [acc, sig.to_str()].join(""));
+                (PayloadType::MB, sigs.len(), serialized_sigs)
+            }
             Attachment::ReceiptCouplets(couplets) => {
                 let packed_couplets = couplets.iter().fold("".into(), |acc, (bp, sp)| {
                     [acc, bp.to_str(), sp.to_str()].join("")
@@ -98,6 +108,19 @@ impl Attachment {
                     packed_attachments.len(),
                     packed_attachments,
                 )
+            }
+            Attachment::FirstSeenReply(couplets) => {
+                let packed_couplets =
+                    couplets.iter().fold("".into(), |acc, (first_seen_sn, dt)| {
+                        [
+                            acc,
+                            first_seen_sn.to_string(),
+                            dt.to_rfc3339_opts(SecondsFormat::Micros, false),
+                        ]
+                        .join("")
+                    });
+
+                (PayloadType::ME, couplets.len(), packed_couplets)
             }
         };
         [
@@ -236,6 +259,21 @@ impl From<SignedReply> for SignedEventData {
     }
 }
 
+#[cfg(feature = "query")]
+impl From<SignedQuery> for SignedEventData {
+    fn from(ev: SignedQuery) -> Self {
+        let attachments = vec![Attachment::LastEstSignaturesGroups(vec![(
+            ev.signer,
+            ev.signatures,
+        )])];
+
+        SignedEventData {
+            deserialized_event: EventType::Qry(ev.query),
+            attachments,
+        }
+    }
+}
+
 impl TryFrom<SignedEventData> for Message {
     type Error = Error;
 
@@ -282,8 +320,6 @@ fn signed_reply(rpy: ReplyEvent, mut attachments: Vec<Attachment>) -> Result<Mes
 
 #[cfg(feature = "query")]
 fn signed_query(qry: QueryEvent, mut attachments: Vec<Attachment>) -> Result<Message, Error> {
-    use crate::query::query_event::SignedQuery;
-
     match attachments
         .pop()
         .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?
@@ -342,24 +378,48 @@ fn signed_key_event(
             Ok(Message::Event(SignedEventMessage::new(
                 &event_message,
                 sigs,
+                None,
                 delegator_seal?,
             )))
         }
         _ => {
-            let sigs = attachments
+            let signatures = if let Attachment::Frame(atts) = attachments
                 .first()
                 .cloned()
-                .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?;
-            if let Attachment::AttachedSignatures(sigs) = sigs {
-                Ok(Message::Event(SignedEventMessage::new(
-                    &event_message,
-                    sigs.to_vec(),
-                    None,
-                )))
+                .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?
+            {
+                atts
             } else {
-                // Improper attachment type
-                Err(Error::SemanticError("Improper attachment type".into()))
-            }
+                attachments
+            };
+            let controller_sigs = signatures
+                .iter()
+                .cloned()
+                .find_map(|att| {
+                    if let Attachment::AttachedSignatures(sigs) = att {
+                        Some(sigs)
+                    } else {
+                        None
+                    }
+                })
+                .ok_or_else(|| {
+                    Error::SemanticError("Missing controller signatures attachment".into())
+                })?;
+            let witness_sigs = signatures.into_iter().find_map(|att| {
+                if let Attachment::AttachedWitnessSignatures(sigs) = att {
+                    Some(sigs)
+                } else {
+                    None
+                }
+            });
+
+            Ok(Message::Event(SignedEventMessage::new(
+                &event_message,
+                controller_sigs,
+                witness_sigs,
+                // TODO parse delegator seal attachment
+                None,
+            )))
         }
     }
 }
@@ -393,7 +453,7 @@ fn signed_receipt(
                 sigs,
             )))
         }
-        Attachment::AttachedSignatures(sigs) => {
+        Attachment::AttachedWitnessSignatures(sigs) => {
             Ok(Message::NontransferableRct(SignedNontransferableReceipt {
                 body: event_message,
                 couplets: None,

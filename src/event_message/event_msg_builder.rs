@@ -240,7 +240,6 @@ impl EventMsgBuilder {
 
 pub struct ReceiptBuilder {
     format: SerializationFormats,
-    derivation: SelfAddressing,
     receipted_event: EventMessage<KeyEvent>,
 }
 
@@ -249,7 +248,6 @@ impl Default for ReceiptBuilder {
         let default_event = EventMsgBuilder::new(EventTypeTag::Icp).build().unwrap();
         Self {
             format: SerializationFormats::JSON,
-            derivation: SelfAddressing::Blake3_256,
             receipted_event: default_event,
         }
     }
@@ -258,10 +256,6 @@ impl Default for ReceiptBuilder {
 impl ReceiptBuilder {
     pub fn with_format(self, format: SerializationFormats) -> Self {
         Self { format, ..self }
-    }
-
-    pub fn with_derivation(self, derivation: SelfAddressing) -> Self {
-        Self { derivation, ..self }
     }
 
     pub fn with_receipted_event(self, receipted_event: EventMessage<KeyEvent>) -> Self {
@@ -274,7 +268,7 @@ impl ReceiptBuilder {
     pub fn build(&self) -> Result<EventMessage<Receipt>, Error> {
         let prefix = self.receipted_event.event.get_prefix();
         let sn = self.receipted_event.event.get_sn();
-        let receipted_event_digest = self.derivation.derive(&self.receipted_event.serialize()?);
+        let receipted_event_digest = self.receipted_event.get_digest();
         Receipt {
             receipted_event_digest,
             sn,

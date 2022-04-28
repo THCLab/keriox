@@ -1,5 +1,6 @@
 #[cfg(feature = "query")]
 use crate::prefix::IdentifierPrefix;
+use crate::prefix::{BasicPrefix, SelfSigningPrefix};
 #[cfg(feature = "query")]
 use crate::query::{key_state_notice::KeyStateNotice, reply_event::SignedReply, QueryError};
 #[cfg(feature = "query")]
@@ -65,17 +66,20 @@ impl EventValidator {
                             Err(Error::SignatureVerificationError)
                         } else {
                             // check if there are enough receipts and escrow
-                            let receipts_couplets: Vec<_> = self
+                            let receipts = self
                                 .event_storage
-                                .get_nt_receipts_signatures(
-                                    &new_state.prefix,
-                                    signed_event.event_message.event.get_sn(),
-                                )
-                                .unwrap_or_default();
-                            if new_state
-                                .witness_config
-                                .enough_receipts(&receipts_couplets)?
-                            {
+                                .get_nt_receipts_for_sn(&new_state.prefix, new_state.sn);
+                            let couplets = match receipts {
+                                Some(rct_list) => rct_list
+                                    .iter()
+                                    .map(|rct| -> Result<_, _> { self.get_receipt_couplets(rct) })
+                                    .collect::<Result<Vec<_>, _>>()?
+                                    .into_iter()
+                                    .flatten()
+                                    .collect(),
+                                None => vec![],
+                            };
+                            if new_state.witness_config.enough_receipts(&couplets)? {
                                 Ok(Some(new_state))
                             } else {
                                 Err(Error::NotEnoughReceiptsError)
@@ -119,6 +123,45 @@ impl EventValidator {
         self.event_storage.get_state(&vrc.body.event.prefix)
     }
 
+    pub fn get_receipt_couplets(
+        &self,
+        rct: &SignedNontransferableReceipt,
+    ) -> Result<Vec<(BasicPrefix, SelfSigningPrefix)>, Error> {
+        let id = rct.body.event.prefix.clone();
+        let sn = rct.body.event.sn;
+        let receipted_event_digest = rct.body.event.receipted_event_digest.clone();
+
+        let witnesses =
+            self.event_storage
+                .get_witnesses_at_event(sn, &id, &receipted_event_digest)?;
+
+        let (couplets, attached_signatures) = (
+            rct.couplets.clone().unwrap_or_default(),
+            rct.indexed_sigs.clone(),
+        );
+
+        Ok(match attached_signatures {
+            Some(signatures) => {
+                let attached: Result<Vec<_>, Error> = signatures
+                    .into_iter()
+                    .map(|att| -> Result<_, _> {
+                        Ok((
+                            witnesses
+                                .get(att.index as usize)
+                                .ok_or_else(|| {
+                                    Error::SemanticError("No matching witness prefix".into())
+                                })?
+                                .clone(),
+                            att.signature,
+                        ))
+                    })
+                    .collect();
+                couplets.into_iter().chain(attached?.into_iter()).collect()
+            }
+            None => couplets,
+        })
+    }
+
     /// Process Witness Receipt
     ///
     /// Checks the receipt against the receipted event
@@ -135,7 +178,7 @@ impl EventValidator {
             .get_event_at_sn(&rct.body.event.prefix, rct.body.event.sn)
         {
             let serialized_event = event.signed_event_message.serialize()?;
-            let signer_couplets = self.event_storage.get_receipt_couplets(rct)?;
+            let signer_couplets = self.get_receipt_couplets(rct)?;
             let (_, errors): (Vec<_>, Vec<Result<bool, Error>>) = signer_couplets
                 .into_iter()
                 .map(|(witness, signature)| witness.verify(&serialized_event, &signature))

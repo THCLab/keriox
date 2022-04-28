@@ -48,7 +48,7 @@ pub struct Keri<K: KeyManager + 'static> {
     processor: EventProcessor,
     storage: EventStorage,
     notification_bus: NotificationBus,
-    response_queue: Arc<Responder<EventMessage<KeyEvent>>>,
+    response_queue: Arc<Responder<Notification>>,
 }
 
 impl<K: KeyManager> Keri<K> {
@@ -108,6 +108,7 @@ impl<K: KeyManager> Keri<K> {
                 0,
             )],
             None,
+            None,
         );
 
         let notification = self.processor.process(Message::Event(signed.clone()))?;
@@ -157,7 +158,7 @@ impl<K: KeyManager> Keri<K> {
             signature,
             0, // TODO: what is this?
         );
-        let signed = SignedEventMessage::new(&event, vec![asp], None);
+        let signed = SignedEventMessage::new(&event, vec![asp], None, None);
         self.storage
             .db
             .add_kel_finalized_event(signed.clone(), &self.prefix)?;
@@ -184,6 +185,7 @@ impl<K: KeyManager> Keri<K> {
                     .sign(&rot.serialize()?)?,
                 0,
             )],
+            None,
             None,
         );
 
@@ -249,6 +251,7 @@ impl<K: KeyManager> Keri<K> {
                 0,
             )],
             None,
+            None,
         );
 
         let notification = self.processor.process(Message::Event(ixn.clone()))?;
@@ -275,13 +278,37 @@ impl<K: KeyManager> Keri<K> {
     }
 
     pub fn parse_and_process(&self, msg: &[u8]) -> Result<(), Error> {
-        let events: Vec<Message> = signed_event_stream(msg)
+        let mut events = signed_event_stream(msg)
             .map_err(|e| Error::DeserializeError(e.to_string()))?
             .1
             .into_iter()
-            .map(|data| Message::try_from(data).unwrap())
-            .collect();
-        self.process(&events)
+            .map(Message::try_from);
+        events.try_for_each(|msg| {
+            let msg = msg?;
+            self.process(&vec![msg.clone()])?;
+            // check if receipts are attached
+            if let Message::Event(ev) = msg {
+                if let Some(witness_receipts) = ev.witness_receipts {
+                    // Create and process witness receipts
+                    let id = ev.event_message.event.get_prefix();
+                    let receipt = Receipt {
+                        receipted_event_digest: ev.event_message.get_digest(),
+                        prefix: id,
+                        sn: ev.event_message.event.get_sn(),
+                    };
+                    let signed_receipt = SignedNontransferableReceipt::new(
+                        &receipt.to_message(SerializationFormats::JSON)?,
+                        None,
+                        Some(witness_receipts),
+                    );
+                    self.process(&vec![Message::NontransferableRct(signed_receipt)])
+                } else {
+                    Ok(())
+                }
+            } else {
+                Ok(())
+            }
+        })
     }
 
     pub fn process(&self, msg: &[Message]) -> Result<(), Error> {
@@ -328,10 +355,15 @@ impl<K: KeyManager> Keri<K> {
 
     pub fn respond(&self) -> Result<Vec<Message>, Error> {
         let mut response = Vec::new();
-        while let Some(event) = self.response_queue.get_data_to_respond() {
-            // ignore own events
-            if !event.event.get_prefix().eq(&self.prefix) {
-                response.append(&mut self.respond_one(event)?);
+        while let Some(notification) = self.response_queue.get_data_to_respond() {
+            match notification {
+                Notification::KeyEventAdded(event) => {
+                    // ignore own events
+                    if !event.event_message.event.get_prefix().eq(&self.prefix) {
+                        response.append(&mut self.respond_one(event.event_message)?);
+                    }
+                }
+                _ => todo!(),
             }
         }
         Ok(response)
@@ -498,18 +530,12 @@ impl<D> Responder<D> {
     }
 }
 
-impl Notifier for Responder<EventMessage<KeyEvent>> {
+impl Notifier for Responder<Notification> {
     fn notify(&self, notification: &Notification, _bus: &NotificationBus) -> Result<(), Error> {
-        // save event that was added to kel to make receipt.
-        if let Notification::KeyEventAdded(ev_msg) = notification {
-            self.needs_response
-                .lock()
-                .unwrap()
-                .push_back(ev_msg.event_message.clone());
-
-            Ok(())
-        } else {
-            Err(Error::SemanticError("Wrong notification type".into()))
-        }
+        self.needs_response
+            .lock()
+            .unwrap()
+            .push_back((*notification).clone());
+        Ok(())
     }
 }

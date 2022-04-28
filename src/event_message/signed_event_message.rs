@@ -72,6 +72,8 @@ pub struct SignedEventMessage {
     #[serde(skip_serializing)]
     pub signatures: Vec<AttachedSignaturePrefix>,
     #[serde(skip_serializing)]
+    pub witness_receipts: Option<Vec<AttachedSignaturePrefix>>,
+    #[serde(skip_serializing)]
     pub delegator_seal: Option<SourceSeal>,
 }
 
@@ -184,11 +186,13 @@ impl SignedEventMessage {
     pub fn new(
         message: &EventMessage<KeyEvent>,
         sigs: Vec<AttachedSignaturePrefix>,
+        witness_receipts: Option<Vec<AttachedSignaturePrefix>>,
         delegator_seal: Option<SourceSeal>,
     ) -> Self {
         Self {
             event_message: message.clone(),
             signatures: sigs,
+            witness_receipts,
             delegator_seal,
         }
     }

@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 #[cfg(feature = "query")]
-use crate::query::reply_event::SignedReply;
+use crate::query::{query_event::SignedQuery, reply_event::SignedReply};
 use crate::{
     error::Error,
     event_message::signed_event_message::{
@@ -51,7 +51,7 @@ pub trait Notifier {
     fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error>;
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum Notification {
     KeyEventAdded(SignedEventMessage),
     OutOfOrder(SignedEventMessage),
@@ -68,6 +68,8 @@ pub enum Notification {
     ReplyUpdated,
     #[cfg(feature = "oobi")]
     GotOobi(SignedReply),
+    #[cfg(feature = "query")]
+    GotQuery(SignedQuery),
 }
 
 #[derive(PartialEq, Hash, Eq)]
@@ -87,6 +89,8 @@ pub enum JustNotification {
     KsnUpdated,
     #[cfg(feature = "oobi")]
     GotOobi,
+    #[cfg(feature = "query")]
+    GotQuery,
 }
 
 impl From<&Notification> for JustNotification {
@@ -107,6 +111,8 @@ impl From<&Notification> for JustNotification {
             Notification::ReplyUpdated => JustNotification::KsnUpdated,
             #[cfg(feature = "oobi")]
             Notification::GotOobi(_) => JustNotification::GotOobi,
+            #[cfg(feature = "query")]
+            Notification::GotQuery(_) => JustNotification::GotQuery,
         }
     }
 }

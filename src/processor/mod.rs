@@ -110,7 +110,7 @@ impl EventProcessor {
                 }
             },
             #[cfg(feature = "query")]
-            Message::Query(_qry) => todo!(),
+            Message::Query(qry) => Ok(Notification::GotQuery(qry)),
         }
     }
 }

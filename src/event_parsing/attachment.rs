@@ -1,5 +1,6 @@
 use std::convert::TryFrom;
 
+use chrono::{DateTime, FixedOffset};
 use nom::{
     bytes::complete::take,
     combinator::map,
@@ -103,6 +104,35 @@ fn seal_signatures(
     )(rest)
 }
 
+fn first_seen_sn(s: &[u8]) -> nom::IResult<&[u8], Vec<(u64, DateTime<FixedOffset>)>> {
+    let (rest, sc) = b64_count(s)?;
+    count(nom::sequence::tuple((attached_sn, timestamp)), sc as usize)(rest)
+}
+
+pub fn timestamp(s: &[u8]) -> nom::IResult<&[u8], DateTime<FixedOffset>> {
+    let (more, type_c) = take(4u8)(s)?;
+
+    match type_c {
+        b"1AAG" => {
+            let (rest, parsed_timestamp) = take(32u8)(more)?;
+
+            let timestamp = {
+                let dt_str = String::from_utf8(parsed_timestamp.to_vec())
+                    .map_err(|_e| nom::Err::Error((s, ErrorKind::IsNot)))?
+                    .replace('c', ":")
+                    .replace('d', ".")
+                    .replace('p', "+");
+                dt_str
+                    .parse::<DateTime<FixedOffset>>()
+                    .map_err(|_e| nom::Err::Error((s, ErrorKind::IsNot)))?
+            };
+
+            Ok((rest, timestamp))
+        }
+        _ => Err(nom::Err::Error((type_c, ErrorKind::IsNot))),
+    }
+}
+
 pub fn attachment(s: &[u8]) -> nom::IResult<&[u8], Attachment> {
     let (rest, payload_type) = take(2u8)(s)?;
     let payload_type: PayloadType = PayloadType::try_from(
@@ -125,7 +155,7 @@ pub fn attachment(s: &[u8]) -> nom::IResult<&[u8], Attachment> {
         }
         PayloadType::MB => {
             let (rest, sigs) = signatures(rest)?;
-            Ok((rest, Attachment::AttachedSignatures(sigs)))
+            Ok((rest, Attachment::AttachedWitnessSignatures(sigs)))
         }
         PayloadType::MC => {
             let (rest, couplets) = couplets(rest)?;
@@ -156,7 +186,10 @@ pub fn attachment(s: &[u8]) -> nom::IResult<&[u8], Attachment> {
                 Err(e) => Err(e),
             }
         }
-
+        PayloadType::ME => {
+            let (rest, sc) = first_seen_sn(rest)?;
+            Ok((rest, Attachment::FirstSeenReply(sc)))
+        }
         _ => todo!(),
     }
 }

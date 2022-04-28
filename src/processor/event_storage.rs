@@ -11,10 +11,7 @@ use crate::{
         Message, SignedNontransferableReceipt, TimestampedSignedEventMessage,
     },
     event_parsing::SignedEventData,
-    prefix::{
-        AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix,
-        SelfSigningPrefix,
-    },
+    prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix},
     state::{EventSemantics, IdentifierState},
 };
 
@@ -214,60 +211,14 @@ impl EventStorage {
         }
     }
 
-    pub fn get_receipt_couplets(
-        &self,
-        rct: &SignedNontransferableReceipt,
-    ) -> Result<Vec<(BasicPrefix, SelfSigningPrefix)>, Error> {
-        let get_witness_couplets = |storage: &EventStorage,
-                                    receipt: &SignedNontransferableReceipt,
-                                    indexed_signatures: &[AttachedSignaturePrefix]|
-         -> Result<Vec<_>, Error> {
-            let pref = receipt.body.event.prefix.clone();
-            let witnesses = storage
-                .get_state(&pref)?
-                // if there is no state for id, receipt is out of order.
-                .ok_or(Error::EventOutOfOrderError)?
-                .witness_config
-                .witnesses;
-            indexed_signatures
-                .iter()
-                .map(|sig| -> Result<_, _> {
-                    Ok((
-                        witnesses
-                            .get(sig.index as usize)
-                            .ok_or_else(|| {
-                                Error::SemanticError("No witness of given index".into())
-                            })?
-                            .clone(),
-                        sig.signature.clone(),
-                    ))
-                })
-                .collect::<Result<Vec<_>, _>>()
-        };
-        match (&rct.couplets, &rct.indexed_sigs) {
-            (None, None) => Ok(vec![]),
-            (None, Some(indexed_sigs)) => get_witness_couplets(self, rct, indexed_sigs),
-            (Some(coups), None) => Ok(coups.clone()),
-            (Some(coups), Some(indexed_sigs)) => {
-                let mut out = get_witness_couplets(self, rct, indexed_sigs)?;
-                out.append(&mut coups.clone());
-                Ok(out)
-            }
-        }
-    }
-
-    pub fn get_nt_receipts_signatures(
+    pub fn get_nt_receipts_for_sn(
         &self,
         prefix: &IdentifierPrefix,
         sn: u64,
-    ) -> Option<Vec<(BasicPrefix, SelfSigningPrefix)>> {
-        self.db.get_escrow_nt_receipts(prefix).map(|rcts| {
-            let (oks, _errs): (Vec<_>, Vec<_>) = rcts
-                .filter(|rct| rct.body.event.sn == sn)
-                .map(|rct| -> Result<Vec<(_, _)>, _> { self.get_receipt_couplets(&rct) })
-                .partition(Result::is_ok);
-            oks.into_iter().flat_map(|e| e.unwrap()).collect()
-        })
+    ) -> Option<Vec<SignedNontransferableReceipt>> {
+        self.db
+            .get_escrow_nt_receipts(prefix)
+            .map(|rcts| rcts.filter(|rct| rct.body.event.sn == sn).collect())
     }
 
     #[cfg(feature = "query")]
@@ -289,6 +240,59 @@ impl EventStorage {
                     }
                 })
             })
+    }
+
+    fn compute_escrowed_state_at_event(
+        &self,
+        sn: u64,
+        id: &IdentifierPrefix,
+        event_digest: &SelfAddressingPrefix,
+    ) -> Result<IdentifierState, Error> {
+        // if receipted event is newer than current state, try to find receipted
+        // event in partially witnessed escrow and apply it to state. Then we
+        // can get current witness set.
+        let escrowed_partially_witnessed = self
+            .db
+            .get_all_partially_witnessed()
+            .and_then(|mut events| {
+                events.find(|event| {
+                    event.signed_event_message.event_message.event.content.sn == sn
+                        && &event
+                            .signed_event_message
+                            .event_message
+                            .event
+                            .content
+                            .prefix
+                            == id
+                        && &event.signed_event_message.event_message.get_digest() == event_digest
+                })
+            })
+            .ok_or_else(|| Error::SemanticError("No escrowed event found".into()))?;
+        let new_state = self
+            .get_state(id)?
+            .unwrap_or_default()
+            .apply(&escrowed_partially_witnessed.signed_event_message)?;
+        Ok(new_state)
+    }
+
+    /// Get current witness list for event
+    ///
+    /// Return current witnesses list for event identifier prefix, sn and
+    /// digest. Also if event is escrowed as not fully witnessed.
+    pub fn get_witnesses_at_event(
+        &self,
+        sn: u64,
+        id: &IdentifierPrefix,
+        event_digest: &SelfAddressingPrefix,
+    ) -> Result<Vec<BasicPrefix>, Error> {
+        let state = match self.get_state(id)? {
+            Some(state) if state.sn < sn => {
+                self.compute_escrowed_state_at_event(sn, id, event_digest)?
+            }
+            None => self.compute_escrowed_state_at_event(sn, id, event_digest)?,
+            Some(state) => state,
+        };
+        Ok(state.witness_config.witnesses)
     }
 
     /// TODO Isn't it the same as `apply_to_state` function in validator?
