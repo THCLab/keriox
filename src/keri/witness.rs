@@ -1,5 +1,6 @@
 use std::convert::TryFrom;
 use std::path::Path;
+use std::slice;
 use std::sync::Arc;
 
 use crate::event::receipt::Receipt;
@@ -30,19 +31,16 @@ use crate::{
     prefix::{BasicPrefix, IdentifierPrefix},
 };
 
-use super::Responder;
-
 pub struct Witness {
     pub prefix: BasicPrefix,
     processor: WitnessProcessor,
     storage: EventStorage,
     publisher: NotificationBus,
-    responder: Arc<Responder<Notification>>,
 }
 
 impl Witness {
     pub fn new(path: &Path, pk: PublicKey) -> Result<Self, Error> {
-        let (processor, storage, mut publisher) = {
+        let (processor, storage, publisher) = {
             let witness_db = Arc::new(SledEventDatabase::new(path)?);
             (
                 WitnessProcessor::new(witness_db.clone()),
@@ -51,18 +49,12 @@ impl Witness {
             )
         };
         let prefix = Basic::Ed25519NT.derive(pk);
-        let responder = Arc::new(Responder::new());
-        publisher.register_observer(
-            responder.clone(),
-            vec![JustNotification::KeyEventAdded, JustNotification::GotQuery],
-        );
 
         Ok(Self {
             prefix,
             processor,
             storage,
             publisher,
-            responder,
         })
     }
 
@@ -70,10 +62,14 @@ impl Witness {
         self.storage.db.clone()
     }
 
-    pub fn respond(&self, signer: Arc<Signer>) -> Result<Vec<Message>, Error> {
+    pub fn respond(
+        &self,
+        ns: Vec<Notification>,
+        signer: Arc<Signer>,
+    ) -> Result<Vec<Message>, Error> {
         let mut response = Vec::new();
-        while let Some(event) = self.responder.get_data_to_respond() {
-            match event {
+        for n in ns {
+            match n {
                 Notification::KeyEventAdded(event) => {
                     let non_trans_receipt =
                         self.respond_to_key_event(event.event_message, signer.clone())?;
@@ -85,7 +81,7 @@ impl Witness {
                         ReplyType::Kel(mut kel) => response.append(&mut kel),
                     }
                 }
-                _ => return Err(Error::SemanticError("Wrong notification type".into())),
+                _ => {}
             }
         }
         Ok(response)
@@ -116,61 +112,48 @@ impl Witness {
         Ok(signed_rcp)
     }
 
-    pub fn parse_and_process(&self, msg: &[u8]) -> Result<(), Error> {
-        let events = signed_event_stream(msg)
-            .map_err(|e| Error::DeserializeError(e.to_string()))?
-            .1
-            .into_iter()
-            .map(|data| Message::try_from(data));
-        events.clone().try_for_each(|msg| {
-            let msg = msg?;
-            self.process(&vec![msg.clone()])?;
+    pub fn parse_and_process(&self, msg: &[u8]) -> Result<Vec<Notification>, Error> {
+        let mut ns = Vec::new();
+
+        let (_, events) =
+            signed_event_stream(msg).map_err(|e| Error::DeserializeError(e.to_string()))?;
+        for ev in events {
+            let msg = Message::try_from(ev)?;
+            let n = self.process(slice::from_ref(&msg))?;
+            ns.extend(n);
             // check if receipts are attached
-            match msg {
-                Message::Event(ev) => {
-                    if let Some(witness_receipts) = ev.witness_receipts {
-                        // Create and process witness receipts
-                        // TODO What timestamp should be set?
-                        let id = ev.event_message.event.get_prefix();
-                        let receipt = Receipt {
-                            receipted_event_digest: ev.event_message.get_digest(),
-                            prefix: id,
-                            sn: ev.event_message.event.get_sn(),
-                        };
-                        let signed_receipt = SignedNontransferableReceipt::new(
-                            &receipt.to_message(SerializationFormats::JSON)?,
-                            None,
-                            Some(witness_receipts),
-                        );
-                        self.process(&vec![Message::NontransferableRct(signed_receipt)])
-                    } else {
-                        Ok(())
-                    }
+            if let Message::Event(ev) = msg {
+                if let Some(witness_receipts) = ev.witness_receipts {
+                    // Create and process witness receipts
+                    // TODO What timestamp should be set?
+                    let id = ev.event_message.event.get_prefix();
+                    let receipt = Receipt {
+                        receipted_event_digest: ev.event_message.get_digest(),
+                        prefix: id,
+                        sn: ev.event_message.event.get_sn(),
+                    };
+                    let signed_receipt = SignedNontransferableReceipt::new(
+                        &receipt.to_message(SerializationFormats::JSON)?,
+                        None,
+                        Some(witness_receipts),
+                    );
+                    let n = self.process(&[Message::NontransferableRct(signed_receipt)])?;
+                    ns.extend(n);
                 }
-                _ => Ok(()),
             }
-        })
+        }
+
+        Ok(ns)
     }
 
-    pub fn process(&self, msg: &[Message]) -> Result<(), Error> {
-        let (process_ok, process_failed): (Vec<_>, Vec<_>) = msg
-            .iter()
-            .map(|message| {
-                self.processor
-                    .process(message.clone())
-                    .and_then(|not| self.publisher.notify(&not))
-            })
-            .partition(Result::is_ok);
-        let _oks = process_ok
-            .into_iter()
-            .map(Result::unwrap)
-            .collect::<Vec<_>>();
-        let _errs = process_failed
-            .into_iter()
-            .map(Result::unwrap_err)
-            .collect::<Vec<_>>();
-
-        Ok(())
+    pub fn process(&self, msgs: &[Message]) -> Result<Vec<Notification>, Error> {
+        let mut ns = Vec::new();
+        for msg in msgs {
+            let n = self.processor.process(msg.clone())?;
+            self.publisher.notify(&n)?;
+            ns.push(n);
+        }
+        Ok(ns)
     }
 
     pub fn get_kel_for_prefix(&self, id: &IdentifierPrefix) -> Result<Option<Vec<u8>>, Error> {
@@ -295,8 +278,8 @@ pub fn test_query() -> Result<(), Error> {
             Message::try_from(parsed).unwrap()
         })
         .collect();
-    witness.process(to_process.as_slice()).unwrap();
-    let response = witness.respond(signer_arc.clone())?;
+    let n = witness.process(to_process.as_slice()).unwrap();
+    let response = witness.respond(n, signer_arc.clone())?;
     // should respond with one receipt event
     assert_eq!(response.len(), 1);
 
@@ -305,8 +288,8 @@ pub fn test_query() -> Result<(), Error> {
     let parsed = signed_message(qry_str.as_bytes()).unwrap().1;
     let deserialized_qry = Message::try_from(parsed).unwrap();
 
-    witness.process(&vec![deserialized_qry])?;
-    let r = witness.respond(signer_arc.clone())?;
+    let n = witness.process(&vec![deserialized_qry])?;
+    let r = witness.respond(n, signer_arc.clone())?;
     // should respond with reply message
     assert_eq!(r.len(), 1);
     if let Message::Reply(rpy) = &r[0] {
@@ -377,9 +360,10 @@ fn test_witness_rotation() -> Result<(), Error> {
     let receipts = [&first_witness, &second_witness]
         .iter()
         .map(|w| {
-            w.process(&vec![Message::Event(inception_event.clone())])
+            let n = w
+                .process(&vec![Message::Event(inception_event.clone())])
                 .unwrap();
-            w.respond(signer_arc.clone()).unwrap().clone()
+            w.respond(n, signer_arc.clone()).unwrap().clone()
         })
         .flatten()
         .collect::<Vec<_>>();
@@ -456,8 +440,8 @@ fn test_witness_rotation() -> Result<(), Error> {
     );
     // Rotation not yet accepted by controller, missing receipts
     assert_eq!(controller.get_state()?.unwrap().sn, 0);
-    first_witness.process(&[Message::Event(rotation_event?)])?;
-    let first_receipt = first_witness.respond(signer_arc)?;
+    let n = first_witness.process(&[Message::Event(rotation_event?)])?;
+    let first_receipt = first_witness.respond(n, signer_arc)?;
     // Receipt accepted by witness, because his the only designated witness
     assert_eq!(
         first_witness

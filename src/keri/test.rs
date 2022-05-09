@@ -210,8 +210,8 @@ fn test_qry_rpy() -> Result<(), Error> {
     // send alices icp to witness
     witness.process(&[Message::Event(alice_icp)])?;
     // send bobs icp to witness to have his keys
-    witness.process(&[Message::Event(bob_icp)])?;
-    let _receipts = witness.respond(signer_arc.clone());
+    let n = witness.process(&[Message::Event(bob_icp)])?;
+    let _receipts = witness.respond(n, signer_arc.clone());
 
     // Bob asks about alices key state
     // construct qry message to ask of alice key state message
@@ -240,9 +240,9 @@ fn test_qry_rpy() -> Result<(), Error> {
     // Qry message signed by Bob
     let query_message = Message::Query(SignedQuery::new(qry, bob_pref.to_owned(), vec![signature]));
 
-    witness.process(&vec![query_message])?;
+    let n = witness.process(&vec![query_message])?;
 
-    let response = witness.respond(signer_arc.clone())?;
+    let response = witness.respond(n, signer_arc.clone())?;
     // assert_eq!(response.len(), 1);
     match &response[0] {
         Message::Reply(rpy) => {
@@ -279,9 +279,9 @@ fn test_qry_rpy() -> Result<(), Error> {
     // Qry message signed by Bob
     let query_message = Message::Query(SignedQuery::new(qry, bob_pref.to_owned(), vec![signature]));
 
-    witness.process(&vec![query_message])?;
+    let n = witness.process(&vec![query_message])?;
 
-    let response = witness.respond(signer_arc.clone())?;
+    let response = witness.respond(n, signer_arc.clone())?;
 
     let alice_kel = alice.storage.get_kel_messages(alice.prefix())?;
     assert_eq!(response, alice_kel.unwrap());
