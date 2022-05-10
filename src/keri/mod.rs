@@ -27,7 +27,7 @@ use crate::{
     event_parsing::message::{signed_event_stream, signed_message},
     oobi::OobiManager,
     prefix::AttachedSignaturePrefix,
-    prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+    prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix, SelfSigningPrefix},
     processor::{
         escrow::default_escrow_bus,
         event_storage::EventStorage,
@@ -473,6 +473,17 @@ impl<K: KeyManager> Keri<K> {
 
     pub fn get_kel(&self, id: &IdentifierPrefix) -> Result<Option<Vec<u8>>, Error> {
         self.storage.get_kel(id)
+    }
+
+    pub fn get_nt_receipts(
+        &self,
+        id: &IdentifierPrefix,
+        sn: u64,
+        digest: &SelfAddressingPrefix,
+    ) -> Result<Option<SignedNontransferableReceipt>, Error> {
+        self
+            .storage
+            .get_nt_receipts(id, sn, digest)
     }
 
     pub fn get_state_for_prefix(

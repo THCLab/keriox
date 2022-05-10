@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use futures::AsyncReadExt;
+use futures::{future::join_all, AsyncReadExt};
 use std::{
     path::Path,
     sync::{Arc, Mutex},
@@ -10,6 +10,7 @@ use keri::{
     database::sled::SledEventDatabase,
     derivation::{self_addressing::SelfAddressing, self_signing::SelfSigning},
     event::{sections::threshold::SignatureThreshold, SerializationFormats},
+    event_message::{signed_event_message::SignedEventMessage, Digestible},
     event_parsing::SignedEventData,
     keri::Keri,
     oobi::{EndRole, LocationScheme, OobiManager, Role, Scheme},
@@ -35,7 +36,8 @@ impl Controller {
             oobi_manager: oobi_manager.clone(),
         }
     }
-    async fn resolve(&self, url: &str) -> Result<()> {
+    async fn resolve(&self, lc: LocationScheme) -> Result<()> {
+        let url = format!("{}oobi/{}", lc.url, lc.eid);
         let oobis = reqwest::get(url).await.unwrap().text().await.unwrap();
         println!("\ngot via http: {}", oobis);
 
@@ -62,32 +64,51 @@ impl Controller {
             .collect())
     }
 
-    async fn send_to(&self, wit_id: &IdentifierPrefix, schema: Scheme, msg: &[u8]) -> Result<()> {
-        let addresses = self.get_loc_schemas(wit_id)?;
+    async fn send_to(
+        &self,
+        wit_id: IdentifierPrefix,
+        schema: Scheme,
+        msg: Vec<u8>,
+    ) -> Result<Option<String>> {
+        let addresses = self.get_loc_schemas(&wit_id)?;
         match addresses
             .iter()
             .find(|loc| loc.scheme == schema)
             .map(|lc| &lc.url)
         {
-            Some(address) => {
-                let mut stream = TcpStream::connect(format!(
-                    "{}:{}",
-                    address
-                        .host()
-                        .ok_or(anyhow!("Wrong url, missing host {:?}", schema))?,
-                    address
-                        .port()
-                        .ok_or(anyhow!("Wrong url, missing port {:?}", schema))?
-                ))
-                .await?;
-                stream.write(&msg)
-                .await?;
-                println!("Sending message to witness {}", wit_id.to_str());
-                let mut buf = vec![];
-                let resp = stream.read(&mut buf);
-                println!("Got response: {}", String::from_utf8(buf).unwrap());
-                Ok(())
-            }
+            Some(address) => match schema {
+                Scheme::Http => {
+                    let client = reqwest::Client::new();
+                    let response = client
+                        .post(format!("{}process", address))
+                        .body(msg)
+                        .send()
+                        .await?
+                        .text()
+                        .await?;
+
+                    println!("\ngot response: {}", response);
+                    Ok(Some(response))
+                }
+                Scheme::Tcp => {
+                    let mut stream = TcpStream::connect(format!(
+                        "{}:{}",
+                        address
+                            .host()
+                            .ok_or(anyhow!("Wrong url, missing host {:?}", schema))?,
+                        address
+                            .port()
+                            .ok_or(anyhow!("Wrong url, missing port {:?}", schema))?
+                    ))
+                    .await?;
+                    stream.write(&msg).await?;
+                    println!("Sending message to witness {}", wit_id.to_str());
+                    let mut buf = vec![];
+                    stream.read(&mut buf).await?;
+                    println!("Got response: {}", String::from_utf8(buf).unwrap());
+                    Ok(None)
+                }
+            },
             _ => Err(anyhow!("No address for scheme {:?}", schema)),
         }
     }
@@ -136,6 +157,8 @@ impl Controller {
                 .unwrap(),
             att_signature,
         );
+        self.oobi_manager.save_oobi(signed_rpy.clone()).unwrap();
+
         Ok(signed_rpy)
     }
 
@@ -143,7 +166,7 @@ impl Controller {
         let rep: SignedEventData = self
             .generate_end_role(watcher_id, Role::Watcher, true)?
             .into();
-        self.send_to(watcher_id, Scheme::Tcp, &rep.to_cesr().unwrap())
+        self.send_to(watcher_id.clone(), Scheme::Tcp, rep.to_cesr().unwrap())
             .await?;
         Ok(())
     }
@@ -152,10 +175,72 @@ impl Controller {
         let rep: SignedEventData = self
             .generate_end_role(watcher_id, Role::Watcher, false)?
             .into();
-        self.send_to(watcher_id, Scheme::Tcp, &rep.to_cesr().unwrap())
+        self.send_to(watcher_id.clone(), Scheme::Tcp, rep.to_cesr().unwrap())
             .await?;
         Ok(())
     }
+
+    /// Publish key event to witnesses
+    /// 
+    ///  1. send it to all witnesses
+    ///  2. collect witness receipts and process them
+    ///  3. get processed receipts from db and send it to all witnesses
+    async fn publish(&self, witness_prefixes: &[BasicPrefix], message: &SignedEventMessage) -> Result<()> {
+       
+        let msg = SignedEventData::from(message).to_cesr().unwrap();
+        let collected_receipts = join_all(witness_prefixes.iter().map(|prefix| {
+            self.send_to(
+                IdentifierPrefix::Basic(prefix.clone()),
+                Scheme::Http,
+                msg.clone(),
+            )
+        }))
+        .await
+        .into_iter()
+        .fold(String::default(), |acc, res| {
+            [acc, res.unwrap().unwrap()].join("")
+        });
+
+        // Kel should be empty because event is not fully witnessed
+        assert!(self.keri.get_kel(self.keri.prefix()).unwrap().is_none());
+
+        // process collected receipts
+        self.keri
+            .parse_and_process(collected_receipts.as_bytes())
+            .unwrap();
+
+        // Now event is fully witnessed
+        assert!(self.keri.get_kel(self.keri.prefix()).unwrap().is_some());
+
+        // Get processed receipts from database to send all of them to witnesses. It
+        // will return one receipt with all witness signatures as one attachment,
+        // not three separate receipts as in `collected_receipts`.
+        let rcts_from_db = self
+            .keri
+            .get_nt_receipts(
+                &message.event_message.event.get_prefix(),
+                0,
+                &message.event_message.event.get_digest(),
+            ).unwrap()
+            .map(|rct|SignedEventData::from(rct).to_cesr().unwrap())
+            .unwrap();
+        println!(
+            "\nreceipts: {}",
+            String::from_utf8(rcts_from_db.clone()).unwrap()
+        );
+
+        // send receipts to all witnesses
+        join_all(witness_prefixes.iter().map(|prefix| {
+            self.send_to(
+                IdentifierPrefix::Basic(prefix.clone()),
+                Scheme::Http,
+                rcts_from_db.clone(),
+            )
+        }))
+        .await;
+        Ok(())
+    }
+
 }
 
 #[actix_web::main]
@@ -165,52 +250,62 @@ async fn main() -> std::io::Result<()> {
     let oobi_root = Builder::new().prefix("oobi-db").tempdir().unwrap();
     let event_db_root = Builder::new().prefix("test-db").tempdir().unwrap();
     let mut controller = Controller::new(event_db_root.path(), oobi_root.path());
-    let witness_prefix: BasicPrefix = "BMOaOdnrbEP-MSQE_CaL7BhGXvqvIdoHEMYcOnUAWjOE"
-        .parse()
-        .unwrap();
+
+    let witness_prefixes = vec![
+        "BMOaOdnrbEP-MSQE_CaL7BhGXvqvIdoHEMYcOnUAWjOE",
+        "BZFIYlHDQAHxHH3TJsjMhZFbVR_knDzSc3na_VHBZSBs",
+        "BYSUc5ahFNbTaqesfY-6YJwzALaXSx-_Mvbs6y3I74js",
+    ]
+    .iter()
+    .map(|prefix_str| prefix_str.parse::<BasicPrefix>().unwrap())
+    .collect::<Vec<_>>();
+
+    let witness_addresses = vec![
+        "http://localhost:3232",
+        "http://localhost:3234",
+        "http://localhost:3235",
+    ];
 
     // Resolve oobi to know how to find witness
-    controller
-        .resolve(&format!(
-            "http://localhost:3232/oobi/{}",
-            witness_prefix.to_str()
-        ))
-        .await
-        .unwrap();
+    join_all(
+        witness_prefixes
+            .iter()
+            .zip(witness_addresses.iter())
+            .map(|(prefix, address)| {
+                let lc = LocationScheme::new(IdentifierPrefix::Basic(prefix.clone()), Scheme::Http, url::Url::parse(address).unwrap());
+                controller.resolve(lc)
+            }),
+    )
+    .await;
 
-    let loc_schemes = controller
-        .get_loc_schemas(&IdentifierPrefix::Basic(witness_prefix.clone()))
-        .unwrap();
-    assert!(!loc_schemes.is_empty());
-
-    controller
+    let icp = controller
         .keri
         .incept(
-            Some(vec![witness_prefix.clone()]),
-            Some(SignatureThreshold::Simple(0)),
+            Some(witness_prefixes.clone()),
+            Some(SignatureThreshold::Simple(3)),
         )
         .unwrap();
 
-    // send kel to witness to be able to verify end role message
+    // send inception event to witness to be able to verify end role message
     // TODO should watcher find kel by itself?
-    let msg: Vec<_> = controller
-        .keri
-        .get_kel(controller.keri.prefix())
-        .unwrap()
-        .unwrap();
+    controller.publish(&witness_prefixes, &icp).await;
 
-    controller
-        .send_to(
-            &IdentifierPrefix::Basic(witness_prefix.clone()),
-            Scheme::Tcp,
-            &msg,
+    // send end role oobi to witness
+    join_all(witness_prefixes.into_iter().map(|witness| {
+        let end_role_license = controller
+            .generate_end_role(
+                &IdentifierPrefix::Basic(witness.clone()),
+                Role::Witness,
+                true,
+            )
+            .unwrap();
+        controller.send_to(
+            IdentifierPrefix::Basic(witness),
+            Scheme::Http,
+            SignedEventData::from(end_role_license).to_cesr().unwrap(),
         )
-        .await
-        .unwrap();
+    }))
+    .await;
 
-    controller
-        .add_watcher(&IdentifierPrefix::Basic(witness_prefix))
-        .await
-        .unwrap();
     Ok(())
 }

@@ -1,0 +1,9 @@
+{
+	"witness_db_path": "db/BYSUc5ahFNbTaqesfY-6YJwzALaXSx-_Mvbs6y3I74js",
+	"oobis_db_path": "db/BYSUc5ahFNbTaqesfY-6YJwzALaXSx-_Mvbs6y3I74js/oobis",
+	"http_host": "127.0.0.1",
+	"http_port": 3235,
+	"tcp_host": "127.0.0.1",
+	"tcp_port": 3335,
+	"priv_key": [107, 66, 86, 169, 103, 190, 166, 119, 253, 194, 127, 101, 140, 29, 112, 201, 217, 34, 102, 103, 85, 88, 142, 121, 235, 187, 182, 26, 91, 53, 222, 194]
+}

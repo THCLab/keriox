@@ -197,7 +197,38 @@ impl EventStorage {
         })
     }
 
-    pub fn get_nt_receipts(&self, prefix: &IdentifierPrefix) -> Result<Option<Vec<u8>>, Error> {
+    pub fn get_nt_receipts(
+        &self,
+        prefix: &IdentifierPrefix,
+        sn: u64,
+        digest: &SelfAddressingPrefix,
+    ) -> Result<Option<SignedNontransferableReceipt>, Error> {
+        match self.db.get_receipts_nt(prefix) {
+            Some(events) => Ok(events
+                .filter(|rcp| rcp.body.event.sn == sn && &rcp.body.get_digest() == digest)
+                .reduce(|acc, rct| {
+                    let new_signatures = match (acc.couplets, rct.couplets) {
+                        (None, None) => None,
+                        (None, Some(new_couplets)) => Some(new_couplets),
+                        (Some(couplets), None) => Some(couplets),
+                        (Some(mut couplets), Some(mut new_coups)) => {
+                            couplets.append(&mut new_coups);
+                            Some(couplets)
+                        }
+                    };
+                    SignedNontransferableReceipt {
+                        couplets: new_signatures,
+                        ..acc
+                    }
+                })),
+            None => Ok(None),
+        }
+    }
+
+    pub fn get_escrowed_nt_receipts(
+        &self,
+        prefix: &IdentifierPrefix,
+    ) -> Result<Option<Vec<u8>>, Error> {
         match self.db.get_escrow_nt_receipts(prefix) {
             Some(events) => Ok(Some(
                 events

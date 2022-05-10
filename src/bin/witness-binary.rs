@@ -35,10 +35,12 @@ impl WitneddData {
         address: url::Url,
         event_db_path: &Path,
         oobi_db_path: &Path,
-        priv_key: Option<Vec<u8>>
+        priv_key: Option<Vec<u8>>,
     ) -> Result<Self, Error> {
         let oobi_manager = Arc::new(OobiManager::new(oobi_db_path));
-        let signer = priv_key.map(|key| Signer::new_with_key(&key)).unwrap_or(Ok(Signer::new()))?;
+        let signer = priv_key
+            .map(|key| Signer::new_with_key(&key))
+            .unwrap_or(Ok(Signer::new()))?;
         let mut witness = Witness::new(event_db_path, signer.public_key())?;
         // construct witness loc scheme oobi
         let loc_scheme = LocationScheme::new(
@@ -66,6 +68,7 @@ impl WitneddData {
         })
     }
 
+    // TODO stop using url, use loc scheme oobi
     async fn resolve(&self, url: &str) -> Result<(), Error> {
         let oobis = reqwest::get(String::from_utf8(url.as_bytes().to_vec()).unwrap())
             .await
@@ -89,12 +92,14 @@ impl WitneddData {
             self.controller.prefix.clone(),
             self.oobi_manager.clone(),
             self.signer.clone(),
+            self.controller.clone(),
         ));
         HttpServer::new(move || {
             App::new()
                 .app_data(state.clone())
                 .service(http_handlers::get_eid_oobi)
                 .service(http_handlers::get_cid_oobi)
+                .service(http_handlers::process_stream)
             // .service(resolve)
         })
         .bind((host, port))
@@ -186,10 +191,11 @@ pub mod http_handlers {
     use anyhow::Result;
     use std::sync::Arc;
 
-    use actix_web::{get, http::header::ContentType, web, HttpResponse, Responder};
+    use actix_web::{get, http::header::ContentType, post, web, HttpResponse, Responder};
     use keri::{
         derivation::self_signing::SelfSigning,
         event_parsing::SignedEventData,
+        keri::witness::Witness,
         oobi::{OobiManager, Role},
         prefix::{BasicPrefix, IdentifierPrefix, Prefix},
         query::reply_event::SignedReply,
@@ -200,6 +206,7 @@ pub mod http_handlers {
         prefix: BasicPrefix,
         oobi_manager: Arc<OobiManager>,
         signer: Arc<Signer>,
+        event_processor: Arc<Witness>,
     }
 
     impl OobiResolving {
@@ -207,11 +214,13 @@ pub mod http_handlers {
             prefix: BasicPrefix,
             oobi_manager: Arc<OobiManager>,
             signer: Arc<Signer>,
+            event_processor: Arc<Witness>,
         ) -> Self {
             Self {
                 prefix,
                 oobi_manager,
                 signer,
+                event_processor,
             }
         }
 
@@ -241,6 +250,13 @@ pub mod http_handlers {
                 ),
                 None => None,
             })
+        }
+
+        pub fn parse_and_process(&self, input_stream: &[u8]) -> Result<()> {
+            self.event_processor
+                .parse_and_process(input_stream)
+                .unwrap();
+            Ok(())
         }
     }
 
@@ -288,6 +304,23 @@ pub mod http_handlers {
             .content_type(ContentType::plaintext())
             .body(String::from_utf8(oobis).unwrap())
     }
+
+    #[post("/process")]
+    async fn process_stream(post_data: String, data: web::Data<OobiResolving>) -> impl Responder {
+        println!("\nget via http, post: {}", post_data);
+        data.parse_and_process(post_data.as_bytes()).unwrap();
+        let resp = data
+            .event_processor
+            .respond(data.signer.clone())
+            .unwrap()
+            .iter()
+            .map(|msg| msg.to_cesr().unwrap())
+            .flatten()
+            .collect::<Vec<_>>();
+        HttpResponse::Ok()
+            .content_type(ContentType::plaintext())
+            .body(String::from_utf8(resp).unwrap())
+    }
 }
 
 #[derive(Deserialize)]
@@ -333,10 +366,10 @@ async fn main() -> Result<()> {
     let http_address = format!("http://{}:{}", http_host, http_port);
 
     let wit_data = WitneddData::setup(
-        url::Url::parse(&tcp_address).unwrap(),
+        url::Url::parse(&http_address).unwrap(),
         event_db_root.path(),
         oobi_root.path(),
-        priv_key
+        priv_key,
     )
     .unwrap();
     let wit_prefix = wit_data.controller.prefix.clone();
