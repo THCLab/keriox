@@ -11,7 +11,7 @@ use crate::{
         Message, SignedNontransferableReceipt, TimestampedSignedEventMessage,
     },
     event_parsing::SignedEventData,
-    prefix::{IdentifierPrefix, SelfAddressingPrefix},
+    prefix::{IdentifierPrefix, SelfAddressingPrefix, SelfSigningPrefix, BasicPrefix, AttachedSignaturePrefix},
     state::{EventSemantics, IdentifierState},
 };
 

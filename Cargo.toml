@@ -28,7 +28,7 @@ wallet = ["universal_wallet"]
 default = ["sled-db"]
 query = []
 oobi = ["query", "reqwest", "url", "strum_macros", "strum"]
-build-binary = ["tempfile", "actix-web", "reqwest", "oobi", "anyhow", "figment"]
+build-binary = ["tempfile", "actix-web", "reqwest", "oobi", "anyhow", "figment", "async-std", "futures", "structopt"]
 
 [dependencies]
 ed25519-dalek = "1.0.1"

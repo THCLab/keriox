@@ -1,25 +1,11 @@
+use std::{sync::{Arc, Mutex}, path::Path};
+
+use crate::{signer::{CryptoBox, KeyManager}, oobi::{OobiManager, LocationScheme, Scheme, Role, EndRole}, keri::Keri, database::sled::SledEventDatabase, prefix::{IdentifierPrefix, Prefix, AttachedSignaturePrefix, BasicPrefix}, query::reply_event::{ReplyRoute, ReplyEvent, SignedReply}, event::SerializationFormats, derivation::{self_addressing::SelfAddressing, self_signing::SelfSigning}, event_parsing::SignedEventData, event_message::{signed_event_message::SignedEventMessage, Digestible}};
 use anyhow::{anyhow, Result};
-use futures::{future::join_all, AsyncReadExt};
-use std::{
-    path::Path,
-    sync::{Arc, Mutex},
-};
+use async_std::{net::TcpStream, io::{WriteExt, ReadExt}};
+use futures::future::join_all;
 
-use async_std::{io::WriteExt, net::TcpStream};
-use keri::{
-    database::sled::SledEventDatabase,
-    derivation::{self_addressing::SelfAddressing, self_signing::SelfSigning},
-    event::{sections::threshold::SignatureThreshold, SerializationFormats},
-    event_message::{signed_event_message::SignedEventMessage, Digestible},
-    event_parsing::SignedEventData,
-    keri::Keri,
-    oobi::{EndRole, LocationScheme, OobiManager, Role, Scheme},
-    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix},
-    query::reply_event::{ReplyEvent, ReplyRoute, SignedReply},
-    signer::{CryptoBox, KeyManager},
-};
-
-struct Controller {
+pub struct Controller {
     pub keri: Keri<CryptoBox>,
     oobi_manager: Arc<OobiManager>,
 }
@@ -36,7 +22,7 @@ impl Controller {
             oobi_manager: oobi_manager.clone(),
         }
     }
-    async fn resolve(&self, lc: LocationScheme) -> Result<()> {
+    pub async fn resolve(&self, lc: LocationScheme) -> Result<()> {
         let url = format!("{}oobi/{}", lc.url, lc.eid);
         let oobis = reqwest::get(url).await.unwrap().text().await.unwrap();
         println!("\ngot via http: {}", oobis);
@@ -46,7 +32,7 @@ impl Controller {
         Ok(())
     }
 
-    fn get_loc_schemas(&self, id: &IdentifierPrefix) -> Result<Vec<LocationScheme>> {
+    pub fn get_loc_schemas(&self, id: &IdentifierPrefix) -> Result<Vec<LocationScheme>> {
         Ok(self
             .oobi_manager
             .get_loc_scheme(id)
@@ -64,7 +50,7 @@ impl Controller {
             .collect())
     }
 
-    async fn send_to(
+    pub async fn send_to(
         &self,
         wit_id: IdentifierPrefix,
         schema: Scheme,
@@ -113,7 +99,7 @@ impl Controller {
         }
     }
 
-    fn generate_end_role(
+    pub fn generate_end_role(
         &self,
         watcher_id: &IdentifierPrefix,
         role: Role,
@@ -185,7 +171,7 @@ impl Controller {
     ///  1. send it to all witnesses
     ///  2. collect witness receipts and process them
     ///  3. get processed receipts from db and send it to all witnesses
-    async fn publish(
+    pub async fn publish(
         &self,
         witness_prefixes: &[BasicPrefix],
         message: &SignedEventMessage,
@@ -244,75 +230,4 @@ impl Controller {
         .await;
         Ok(())
     }
-}
-
-#[actix_web::main]
-async fn main() -> std::io::Result<()> {
-    use tempfile::Builder;
-
-    let oobi_root = Builder::new().prefix("oobi-db").tempdir().unwrap();
-    let event_db_root = Builder::new().prefix("test-db").tempdir().unwrap();
-    let mut controller = Controller::new(event_db_root.path(), oobi_root.path());
-
-    let witness_prefixes = vec![
-        "BMOaOdnrbEP-MSQE_CaL7BhGXvqvIdoHEMYcOnUAWjOE",
-        "BZFIYlHDQAHxHH3TJsjMhZFbVR_knDzSc3na_VHBZSBs",
-        "BYSUc5ahFNbTaqesfY-6YJwzALaXSx-_Mvbs6y3I74js",
-    ]
-    .iter()
-    .map(|prefix_str| prefix_str.parse::<BasicPrefix>().unwrap())
-    .collect::<Vec<_>>();
-
-    let witness_addresses = vec![
-        "http://localhost:3232",
-        "http://localhost:3234",
-        "http://localhost:3235",
-    ];
-
-    // Resolve oobi to know how to find witness
-    join_all(
-        witness_prefixes
-            .iter()
-            .zip(witness_addresses.iter())
-            .map(|(prefix, address)| {
-                let lc = LocationScheme::new(
-                    IdentifierPrefix::Basic(prefix.clone()),
-                    Scheme::Http,
-                    url::Url::parse(address).unwrap(),
-                );
-                controller.resolve(lc)
-            }),
-    )
-    .await;
-
-    let icp = controller
-        .keri
-        .incept(
-            Some(witness_prefixes.clone()),
-            Some(SignatureThreshold::Simple(3)),
-        )
-        .unwrap();
-
-    // send inception event to witness to be able to verify end role message
-    // TODO should watcher find kel by itself?
-    controller.publish(&witness_prefixes, &icp).await;
-
-    // send end role oobi to witness
-    join_all(witness_prefixes.into_iter().map(|witness| {
-        let end_role_license = controller
-            .generate_end_role(
-                &IdentifierPrefix::Basic(witness.clone()),
-                Role::Witness,
-                true,
-            )
-            .unwrap();
-        controller.send_to(
-            IdentifierPrefix::Basic(witness),
-            Scheme::Http,
-            SignedEventData::from(end_role_license).to_cesr().unwrap(),
-        )
-    }))
-    .await;
-
-    Ok(())
 }
