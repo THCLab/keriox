@@ -14,7 +14,6 @@ use crate::event_parsing::payload_size::PayloadType;
 use crate::prefix::Prefix;
 use crate::prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix};
 
-use crate::query::query_event::SignedQuery;
 #[cfg(feature = "query")]
 use crate::query::{
     query_event::{QueryEvent, SignedQuery},
