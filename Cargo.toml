@@ -18,6 +18,18 @@ crate-type = ["cdylib", "rlib"]
 [[bin]]         
 name = "witness-binary"    
 required-features = ["build-binary"]
+
+[[bin]]         
+name = "watcher-binary"    
+required-features = ["build-binary"]
+
+[[bin]]         
+name = "verifier-binary"    
+required-features = ["build-binary"]
+
+[[bin]]         
+name = "issuer-binary"    
+required-features = ["build-binary"]
  
 [features]
 # lmdb = ["rkv", "bincode"] # deprecated since 0.7
@@ -28,7 +40,7 @@ wallet = ["universal_wallet"]
 default = ["sled-db"]
 query = []
 oobi = ["query", "reqwest", "url", "strum_macros", "strum"]
-build-binary = ["tempfile", "actix-web", "reqwest", "oobi", "anyhow", "figment", "async-std", "futures", "structopt"]
+build-binary = ["actix-web", "reqwest", "oobi", "anyhow", "figment", "async-std", "futures", "structopt"]
 
 [dependencies]
 ed25519-dalek = "1.0.1"
@@ -75,8 +87,8 @@ strum_macros = { version = "0.24", optional = true }
 strum = { version = "0.24", optional = true }
 
 # build-binary-dependencies
-reqwest = { version = "0.11", features = ["json"], optional = true }
-tempfile = { version = "3.1", optional = true }
+reqwest = { version = "0.11", features = ["json", "rustls-tls"], default-features = false, optional = true }
+tempfile = { version = "3.1"}
 actix-web = { version = "4", optional = true }
 anyhow = { version = "1.0.56", optional = true }
 figment = {version = "0.10.6", features = ["json"], optional = true }

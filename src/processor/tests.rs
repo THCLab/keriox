@@ -1026,6 +1026,7 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
     Ok(())
 }
 
+#[cfg(feature = "oobi")]
 #[test]
 fn processs_oobi() -> Result<(), Error> {
     use crate::oobi::OobiManager;

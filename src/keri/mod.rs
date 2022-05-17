@@ -25,7 +25,6 @@ use crate::{
         EventTypeTag,
     },
     event_parsing::message::{signed_event_stream, signed_message},
-    oobi::OobiManager,
     prefix::AttachedSignaturePrefix,
     prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix, SelfSigningPrefix},
     processor::{
@@ -37,6 +36,8 @@ use crate::{
     signer::KeyManager,
     state::IdentifierState,
 };
+#[cfg(feature = "oobi")]
+use crate::oobi::OobiManager;
 
 #[cfg(test)]
 mod test;
@@ -88,6 +89,7 @@ impl<K: KeyManager> Keri<K> {
         Arc::clone(&self.storage.db)
     }
 
+    #[cfg(feature = "oobi")]
     pub fn register_oobi_manager(&mut self, oobi_manager: Arc<OobiManager>) -> Result<(), Error> {
         self.notification_bus
             .register_observer(oobi_manager, vec![JustNotification::GotOobi]);

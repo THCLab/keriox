@@ -99,7 +99,6 @@ pub fn event_message(s: &[u8]) -> nom::IResult<&[u8], EventType> {
 }
 
 pub fn signed_message(s: &[u8]) -> nom::IResult<&[u8], SignedEventData> {
-    #[cfg(any(feature = "query", feature = "oobi"))]
     let (rest, event) = event_message(s)?;
     let (rest, attachments): (&[u8], Vec<Attachment>) =
         fold_many0(attachment, vec![], |mut acc: Vec<_>, item| {
