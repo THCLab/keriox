@@ -80,11 +80,10 @@ impl Controller {
                         .ok_or(anyhow!("Wrong url, missing port {:?}", schema))?
                 ))
                 .await?;
-                stream.write(&msg)
-                .await?;
+                stream.write(&msg).await?;
                 println!("Sending message to witness {}", wit_id.to_str());
                 let mut buf = vec![];
-                let resp = stream.read(&mut buf);
+                let _resp = stream.read(&mut buf);
                 println!("Got response: {}", String::from_utf8(buf).unwrap());
                 Ok(())
             }

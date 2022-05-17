@@ -1026,14 +1026,11 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
     Ok(())
 }
 
+#[cfg(feature = "oobi")]
 #[test]
 fn processs_oobi() -> Result<(), Error> {
     use crate::oobi::OobiManager;
     use crate::processor::notification::{JustNotification, NotificationBus};
-
-    // let oobi_rpy = br#"{"v":"KERI10JSON0000fa_","t":"rpy","d":"EB5uj_uSRehWiZuR3JgonxGjmGY2kEWYgcXV8pMSDZEY","dt":"2022-04-12T08:08:51.257221+00:00","r":"/loc/scheme","a":{"eid":"Bgoq68HCmYNUDgOz4Skvlu306o_NY-NrYuKAVhk3Zh9c","scheme":"http","url":"http://127.0.0.1:5644/"}}-VAi-CABBgoq68HCmYNUDgOz4Skvlu306o_NY-NrYuKAVhk3Zh9c0BlFqVwcreTTLw4MWwvjgH0LZbedfsHuiDJBjnIwTt9DgCV-enw6yzSraCyfxuEPze6y2XQe09_84EZnHIJDaXCg{"v":"KERI10JSON0000f8_","t":"rpy","d":"ElOypltH-hYCcrNOkmaWXtHF4epjiC6fzXXEQZbbrZDM","dt":"2022-04-12T08:08:51.258253+00:00","r":"/loc/scheme","a":{"eid":"Bgoq68HCmYNUDgOz4Skvlu306o_NY-NrYuKAVhk3Zh9c","scheme":"tcp","url":"tcp://127.0.0.1:5634/"}}-VAi-CABBgoq68HCmYNUDgOz4Skvlu306o_NY-NrYuKAVhk3Zh9c0BqYaL5KsBi81es7w1KnqrZpSTC5c_P0OnrYund7TuO38f28LIJny9AIkkE7QgMOxB_OlguqdTuaguG_gYtct6BQ"#;
-    // br#"{"v":"KERI10JSON0000fa_","t":"rpy","d":"EjZ2m6Q930Khm71ujTI-SCjMVCeLwv3iq5IqPog3og0Y","dt":"2022-04-12T08:27:47.007206+00:00","r":"/loc/scheme","a":{"eid":"Bgoq68HCmYNUDgOz4Skvlu306o_NY-NrYuKAVhk3Zh9c","scheme":"http","url":"http://127.0.0.1:5644/"}}-VAi-CABBgoq68HCmYNUDgOz4Skvlu306o_NY-NrYuKAVhk3Zh9c0BkZa5qxTJp3Cr2MP1_GZmvMfXaIusxp9HyZ5YuKZNAo-7UWSAxYMDWiN2T0_uNUtbYXq_SpkcGhVlU2_6o1sMBw{"v":"KERI10JSON0000f8_","t":"rpy","d":"EkPkmPGeTKBf7daulc3oZkKkA_uPzIAOiIvb0_b3CyIs","dt":"2022-04-12T08:27:47.008254+00:00","r":"/loc/scheme","a":{"eid":"Bgoq68HCmYNUDgOz4Skvlu306o_NY-NrYuKAVhk3Zh9c","scheme":"tcp","url":"tcp://127.0.0.1:5634/"}}-VAi-CABBgoq68HCmYNUDgOz4Skvlu306o_NY-NrYuKAVhk3Zh9c0BkJUgivzXPE3IDsc9CONDzWiZ0J5uqZNmtMJz1lJSn2MTEsCT9YSs7oY6fkCONAp_xMyKoIznU5aNvsu_eZp6Ag
-    // let oobi_rpy = br#"{"v":"KERI10JSON000116_","t":"rpy","d":"EZuWRhrNl9gNIck0BcLiPegTJTw3Ng_Hq3WTF8BOQ-sk","dt":"2022-04-12T08:27:47.009114+00:00","r":"/end/role/add","a":{"cid":"Bgoq68HCmYNUDgOz4Skvlu306o_NY-NrYuKAVhk3Zh9c","role":"controller","eid":"Bgoq68HCmYNUDgOz4Skvlu306o_NY-NrYuKAVhk3Zh9c"}}-VAi-CABBgoq68HCmYNUDgOz4Skvlu306o_NY-NrYuKAVhk3Zh9c0Bke1uKEan_LNlP3e5huCO7zHEi50L18FB1-DdskAEyuehw9gMjNMhex73C9Yr0WlkP1B1-JjNIKDVm816zCgmCw"#;
     let oobi_rpy = r#"{"v":"KERI10JSON000116_","t":"rpy","d":"EZuWRhrNl9gNIck0BcLiPegTJTw3Ng_Hq3WTF8BOQ-sk","dt":"2022-04-12T08:27:47.009114+00:00","r":"/end/role/add","a":{"cid":"Bgoq68HCmYNUDgOz4Skvlu306o_NY-NrYuKAVhk3Zh9c","role":"controller","eid":"Bgoq68HCmYNUDgOz4Skvlu306o_NY-NrYuKAVhk3Zh9c"}}-VAi-CABBgoq68HCmYNUDgOz4Skvlu306o_NY-NrYuKAVhk3Zh9c0Bke1uKEan_LNlP3e5huCO7zHEi50L18FB1-DdskAEyuehw9gMjNMhex73C9Yr0WlkP1B1-JjNIKDVm816zCgmCw"#;
 
     fn setup() -> (
@@ -1059,11 +1056,11 @@ fn processs_oobi() -> Result<(), Error> {
             oobi_manager,
         )
     }
-    let (processor, storage, publisher, oobi_manager) = setup();
+    let (processor, _storage, _publisher, _oobi_manager) = setup();
     let events = signed_event_stream(oobi_rpy.as_bytes()).unwrap().1;
     for event in events {
         let event = Message::try_from(event)?;
-        let s: SignedEventData = event.clone().into();
+        let _s: SignedEventData = event.clone().into();
         let not = processor.process(event)?;
         println!("{:?}", not);
     }

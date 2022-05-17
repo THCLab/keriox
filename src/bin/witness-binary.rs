@@ -35,10 +35,12 @@ impl WitneddData {
         address: url::Url,
         event_db_path: &Path,
         oobi_db_path: &Path,
-        priv_key: Option<Vec<u8>>
+        priv_key: Option<Vec<u8>>,
     ) -> Result<Self, Error> {
         let oobi_manager = Arc::new(OobiManager::new(oobi_db_path));
-        let signer = priv_key.map(|key| Signer::new_with_key(&key)).unwrap_or(Ok(Signer::new()))?;
+        let signer = priv_key
+            .map(|key| Signer::new_with_key(&key))
+            .unwrap_or(Ok(Signer::new()))?;
         let mut witness = Witness::new(event_db_path, signer.public_key())?;
         // construct witness loc scheme oobi
         let loc_scheme = LocationScheme::new(
@@ -336,7 +338,7 @@ async fn main() -> Result<()> {
         url::Url::parse(&tcp_address).unwrap(),
         event_db_root.path(),
         oobi_root.path(),
-        priv_key
+        priv_key,
     )
     .unwrap();
     let wit_prefix = wit_data.controller.prefix.clone();
