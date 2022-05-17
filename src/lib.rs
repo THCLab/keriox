@@ -11,6 +11,8 @@ pub mod prefix;
 pub mod processor;
 pub mod signer;
 pub mod state;
+
+#[cfg(feature = "build-binary")]
 pub mod controller;
 
 #[cfg(feature = "query")]
