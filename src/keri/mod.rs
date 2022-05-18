@@ -4,6 +4,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+#[cfg(feature = "oobi")]
+use crate::oobi::OobiManager;
 use crate::{
     database::sled::SledEventDatabase,
     derivation::basic::Basic,
@@ -36,8 +38,6 @@ use crate::{
     signer::KeyManager,
     state::IdentifierState,
 };
-#[cfg(feature = "oobi")]
-use crate::oobi::OobiManager;
 
 #[cfg(test)]
 mod test;
@@ -354,7 +354,7 @@ impl<K: KeyManager> Keri<K> {
             response.append(
                 &mut self
                     .storage
-                    .get_kel_messages(&self.prefix)?
+                    .get_kel_messages_with_receipts(&self.prefix)?
                     .ok_or_else(|| Error::SemanticError("KEL is empty".into()))?,
             )
         };

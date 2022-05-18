@@ -7,11 +7,16 @@ use crate::{
         event_data::EventData,
         sections::{seal::EventSeal, KeyConfig},
     },
-    event_message::signed_event_message::{
-        Message, SignedNontransferableReceipt, TimestampedSignedEventMessage,
+    event_message::{
+        signed_event_message::{
+            Message, SignedNontransferableReceipt, TimestampedSignedEventMessage,
+        },
+        Digestible,
     },
     event_parsing::SignedEventData,
-    prefix::{IdentifierPrefix, SelfAddressingPrefix, SelfSigningPrefix, BasicPrefix, AttachedSignaturePrefix},
+    prefix::{
+        BasicPrefix, IdentifierPrefix, SelfAddressingPrefix,
+    },
     state::{EventSemantics, IdentifierState},
 };
 
@@ -63,6 +68,36 @@ impl EventStorage {
                     .map(|event| Message::Event(event.signed_event_message))
                     .collect(),
             )),
+            None => Ok(None),
+        }
+    }
+
+    pub fn get_kel_messages_with_receipts(
+        &self,
+        id: &IdentifierPrefix,
+    ) -> Result<Option<Vec<Message>>, Error> {
+        match self.db.get_kel_finalized_events(id) {
+            Some(events) => {
+                let e = events
+                    .map(|event| {
+                        let rcts_from_db = self
+                            .get_nt_receipts(
+                                &event.signed_event_message.event_message.event.get_prefix(),
+                                event.signed_event_message.event_message.event.get_sn(),
+                                &event.signed_event_message.event_message.event.get_digest(),
+                            )
+                            .unwrap()
+                            .map(|rct| Message::NontransferableRct(rct));
+                        match rcts_from_db {
+                            Some(rct) => vec![Message::Event(event.into()), rct],
+                            None => vec![Message::Event(event.into())],
+                        }
+                        
+                    })
+                    .flatten()
+                    .collect();
+                Ok(Some(e))
+            }
             None => Ok(None),
         }
     }

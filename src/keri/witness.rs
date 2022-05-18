@@ -90,7 +90,11 @@ impl Witness {
                     response.push(Message::NontransferableRct(non_trans_receipt))
                 }
                 Notification::ReplayLog(id) => {
-                    let mut kel = self.storage.get_kel_messages(&id).unwrap().unwrap();
+                    let mut kel = self
+                        .storage
+                        .get_kel_messages_with_receipts(&id)
+                        .unwrap()
+                        .unwrap();
                     response.append(&mut kel)
                 }
                 Notification::ReplyKsn(signed_reply) => response.push(Message::Reply(signed_reply)),
@@ -253,7 +257,7 @@ impl Witness {
         match route {
             QueryRoute::Log => Ok(ReplyType::Kel(
                 self.storage
-                    .get_kel_messages(&qr.data.i)?
+                    .get_kel_messages_with_receipts(&qr.data.i)?
                     .ok_or_else(|| Error::SemanticError("No identifier in db".into()))?,
             )),
             QueryRoute::Ksn => {

@@ -1,13 +1,12 @@
-use futures::{future::join_all};
+use futures::future::join_all;
 
 use keri::{
-    event::{sections::threshold::SignatureThreshold},
+    controller::Controller,
+    event::sections::threshold::SignatureThreshold,
     event_parsing::SignedEventData,
     oobi::{LocationScheme, Role, Scheme},
-    prefix::{BasicPrefix, IdentifierPrefix}, controller::Controller,
+    prefix::{BasicPrefix, IdentifierPrefix},
 };
-
-
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -38,7 +37,11 @@ async fn main() -> std::io::Result<()> {
             .iter()
             .zip(witness_addresses.iter())
             .map(|(prefix, address)| {
-                let lc = LocationScheme::new(IdentifierPrefix::Basic(prefix.clone()), Scheme::Http, url::Url::parse(address).unwrap());
+                let lc = LocationScheme::new(
+                    IdentifierPrefix::Basic(prefix.clone()),
+                    Scheme::Http,
+                    url::Url::parse(address).unwrap(),
+                );
                 controller.resolve(lc)
             }),
     )
@@ -54,7 +57,7 @@ async fn main() -> std::io::Result<()> {
 
     // send inception event to witness to be able to verify end role message
     // TODO should watcher find kel by itself?
-    controller.publish(&witness_prefixes, &icp).await;
+    controller.publish(&witness_prefixes, &icp).await.unwrap();
 
     // send end role oobi to witness
     join_all(witness_prefixes.into_iter().map(|witness| {

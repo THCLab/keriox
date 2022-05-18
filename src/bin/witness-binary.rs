@@ -76,7 +76,6 @@ impl WitneddData {
             .text()
             .await
             .unwrap();
-        println!("\ngot via http: {}", oobis);
 
         self.controller.parse_and_process(oobis.as_bytes()).unwrap();
 
@@ -275,6 +274,11 @@ pub mod http_handlers {
             .flatten()
             .collect();
 
+        println!(
+            "\nSending {} oobi: \n {}",
+            &eid.to_str(),
+            String::from_utf8(oobis.clone()).unwrap_or_default()
+        );
         HttpResponse::Ok()
             .content_type(ContentType::plaintext())
             .body(String::from_utf8(oobis).unwrap())
@@ -286,28 +290,39 @@ pub mod http_handlers {
         data: web::Data<OobiResolving>,
     ) -> impl Responder {
         let (cid, role, eid) = path.into_inner();
-        println!("cid: {}, eid: {}\n", cid.to_str(), eid.to_str());
 
         let end_role = data.get_cid_end_role(&cid, role).unwrap().unwrap_or(vec![]);
         let loc_scheme = data.get_eid_loc_scheme(&eid).unwrap().unwrap_or(vec![]);
-        let oobis: Vec<u8> = end_role
+        // TODO (for now) Append controller kel to be able to verify end role signature.
+        let cont_kel = data
+            .event_processor
+            .get_kel_for_prefix(&cid)
+            .unwrap()
+            .unwrap_or_default();
+        let oobis = end_role
             .into_iter()
             .chain(loc_scheme.into_iter())
             .map(|sr| {
                 let sed: SignedEventData = sr.into();
                 sed.to_cesr().unwrap()
             })
-            .flatten()
-            .collect();
+            .flatten();
+        let res: Vec<u8> = cont_kel.into_iter().chain(oobis).collect();
+        println!(
+            "\nSending {} obi from its witness {}:\n{}",
+            cid.to_str(),
+            eid.to_str(),
+            String::from_utf8(res.clone()).unwrap()
+        );
 
         HttpResponse::Ok()
             .content_type(ContentType::plaintext())
-            .body(String::from_utf8(oobis).unwrap())
+            .body(String::from_utf8(res).unwrap())
     }
 
     #[post("/process")]
     async fn process_stream(post_data: String, data: web::Data<OobiResolving>) -> impl Responder {
-        println!("\nget via http, post: {}", post_data);
+        println!("\nGot events to process: \n{}", post_data);
         data.parse_and_process(post_data.as_bytes()).unwrap();
         let resp = data
             .event_processor
@@ -377,10 +392,9 @@ async fn main() -> Result<()> {
     let wit_ref2 = wit_ref.clone();
 
     println!(
-        "Witness {} is listening. \n\toobis: {} \n\tevents: {}",
+        "\nWitness {} is listening on {}",
         wit_prefix.to_str(),
         http_address,
-        tcp_address
     );
     // run http server for oobi resolving
     let http_handle = wit_ref.listen_http(url::Url::parse(&http_address).unwrap());

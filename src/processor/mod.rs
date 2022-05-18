@@ -102,8 +102,8 @@ impl EventProcessor {
                 | ReplyRoute::EndRoleCut(_)
                 | ReplyRoute::LocScheme(_) => {
                     // check signature
-                    // self.validator
-                    //     .verify(&rpy.reply.serialize()?, &rpy.signature)?;
+                    self.validator
+                        .verify(&rpy.reply.serialize()?, &rpy.signature)?;
                     // check digest
                     rpy.reply.check_digest()?;
                     Ok(Notification::GotOobi(rpy))

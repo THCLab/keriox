@@ -1,8 +1,25 @@
-use std::{sync::{Arc, Mutex}, path::Path};
+use std::{
+    path::Path,
+    sync::{Arc, Mutex},
+};
 
-use crate::{signer::{CryptoBox, KeyManager}, oobi::{OobiManager, LocationScheme, Scheme, Role, EndRole}, keri::Keri, database::sled::SledEventDatabase, prefix::{IdentifierPrefix, Prefix, AttachedSignaturePrefix, BasicPrefix}, query::reply_event::{ReplyRoute, ReplyEvent, SignedReply}, event::SerializationFormats, derivation::{self_addressing::SelfAddressing, self_signing::SelfSigning}, event_parsing::SignedEventData, event_message::{signed_event_message::SignedEventMessage, Digestible}};
+use crate::{
+    database::sled::SledEventDatabase,
+    derivation::{self_addressing::SelfAddressing, self_signing::SelfSigning},
+    event::SerializationFormats,
+    event_message::{signed_event_message::SignedEventMessage, Digestible},
+    event_parsing::SignedEventData,
+    keri::Keri,
+    oobi::{EndRole, LocationScheme, OobiManager, Role, Scheme},
+    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix},
+    query::reply_event::{ReplyEvent, ReplyRoute, SignedReply},
+    signer::{CryptoBox, KeyManager},
+};
 use anyhow::{anyhow, Result};
-use async_std::{net::TcpStream, io::{WriteExt, ReadExt}};
+use async_std::{
+    io::{ReadExt, WriteExt},
+    net::TcpStream,
+};
 use futures::future::join_all;
 
 pub struct Controller {
