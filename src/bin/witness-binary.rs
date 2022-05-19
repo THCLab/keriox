@@ -346,10 +346,6 @@ pub struct WitnessConfig {
     http_host: String,
     /// Witness listen port.
     http_port: u16,
-    /// Witness listen host.
-    tcp_host: String,
-    /// Witness listen port.
-    tcp_port: u16,
     /// Witness private key
     priv_key: Option<String>,
 }
@@ -369,15 +365,12 @@ async fn main() -> Result<()> {
         oobis_db_path,
         http_host,
         http_port,
-        tcp_host,
-        tcp_port,
         priv_key,
     } = Figment::new().join(Json::file(config_file)).extract()?;
 
     use tempfile::Builder;
     let oobi_root = Builder::new().prefix("oobi-db").tempdir().unwrap();
     let event_db_root = Builder::new().prefix("test-db").tempdir().unwrap();
-    let tcp_address = format!("tcp://{}:{}", tcp_host, tcp_port);
     let http_address = format!("http://{}:{}", http_host, http_port);
 
     let wit_data = WitnessData::setup(

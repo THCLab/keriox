@@ -1,9 +1,7 @@
 {
-	"witness_db_path": "db/BZFIYlHDQAHxHH3TJsjMhZFbVR_knDzSc3na_VHBZSBs",
-	"oobis_db_path": "db/BZFIYlHDQAHxHH3TJsjMhZFbVR_knDzSc3na_VHBZSBs/oobis",
+	"witness_db_path": "db/BVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI",
+	"oobis_db_path": "db/BVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI/oobis",
 	"http_host": "127.0.0.1",
 	"http_port": 3234,
-	"tcp_host": "127.0.0.1",
-	"tcp_port": 3334,
 	"priv_key": "A6zz7M08-HQSFq92sJ8KJOT2cZ47x7pXFQLPB0pckB3Q"
 }
