@@ -23,23 +23,23 @@ use keri::{
     signer::Signer,
 };
 
-struct WitneddData {
+struct WitnessData {
     tcp_address: url::Url,
     signer: Arc<Signer>,
     controller: Arc<Witness>,
     oobi_manager: Arc<OobiManager>,
 }
 
-impl WitneddData {
+impl WitnessData {
     pub fn setup(
         address: url::Url,
         event_db_path: &Path,
         oobi_db_path: &Path,
-        priv_key: Option<Vec<u8>>,
+        priv_key: Option<String>,
     ) -> Result<Self, Error> {
         let oobi_manager = Arc::new(OobiManager::new(oobi_db_path));
         let signer = priv_key
-            .map(|key| Signer::new_with_key(&key))
+            .map(|key| Signer::new_with_seed(&key.parse()?))
             .unwrap_or(Ok(Signer::new()))?;
         let mut witness = Witness::new(event_db_path, signer.public_key())?;
         // construct witness loc scheme oobi
@@ -60,7 +60,7 @@ impl WitneddData {
         );
         oobi_manager.save_oobi(signed_reply)?;
         witness.register_oobi_manager(oobi_manager.clone());
-        Ok(WitneddData {
+        Ok(WitnessData {
             tcp_address: address,
             controller: Arc::new(witness),
             oobi_manager,
@@ -351,7 +351,7 @@ pub struct WitnessConfig {
     /// Witness listen port.
     tcp_port: u16,
     /// Witness private key
-    priv_key: Option<Vec<u8>>,
+    priv_key: Option<String>,
 }
 
 #[derive(Debug, StructOpt)]
@@ -380,7 +380,7 @@ async fn main() -> Result<()> {
     let tcp_address = format!("tcp://{}:{}", tcp_host, tcp_port);
     let http_address = format!("http://{}:{}", http_host, http_port);
 
-    let wit_data = WitneddData::setup(
+    let wit_data = WitnessData::setup(
         url::Url::parse(&http_address).unwrap(),
         event_db_root.path(),
         oobi_root.path(),

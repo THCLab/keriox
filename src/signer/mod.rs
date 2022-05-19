@@ -1,6 +1,6 @@
 use crate::{
     error::Error,
-    keys::{PrivateKey, PublicKey},
+    keys::{PrivateKey, PublicKey}, prefix::SeedPrefix,
 };
 use rand::rngs::OsRng;
 
@@ -83,6 +83,15 @@ impl Signer {
         Ok(Signer {
             priv_key: PrivateKey::new(priv_key.as_bytes().to_vec()),
             pub_key: PublicKey::new(pub_key.as_bytes().to_vec()),
+        })
+    }
+
+    pub fn new_with_seed(seed: &SeedPrefix) -> Result<Self, Error> {
+        let (public_key, private_key) = seed.derive_key_pair()?;
+
+        Ok(Signer {
+            priv_key: private_key,
+            pub_key: public_key,
         })
     }
 

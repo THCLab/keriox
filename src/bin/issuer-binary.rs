@@ -17,13 +17,14 @@ async fn main() -> std::io::Result<()> {
     let mut controller = Controller::new(event_db_root.path(), oobi_root.path());
 
     let witness_prefixes = vec![
-        "BMOaOdnrbEP-MSQE_CaL7BhGXvqvIdoHEMYcOnUAWjOE",
-        "BZFIYlHDQAHxHH3TJsjMhZFbVR_knDzSc3na_VHBZSBs",
-        "BYSUc5ahFNbTaqesfY-6YJwzALaXSx-_Mvbs6y3I74js",
+        "BSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA",
+        "BVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI",
+        "BT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8",
     ]
     .iter()
     .map(|prefix_str| prefix_str.parse::<BasicPrefix>().unwrap())
     .collect::<Vec<_>>();
+
 
     let witness_addresses = vec![
         "http://localhost:3232",

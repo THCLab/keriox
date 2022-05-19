@@ -35,11 +35,11 @@ impl WatcherData {
         address: url::Url,
         event_db_path: &Path,
         oobi_db_path: &Path,
-        priv_key: Option<Vec<u8>>,
+        priv_key: Option<String>,
     ) -> Result<Self, Error> {
         let oobi_manager = Arc::new(OobiManager::new(oobi_db_path));
         let signer = priv_key
-            .map(|key| Signer::new_with_key(&key))
+            .map(|key| Signer::new_with_seed(&key.parse()?))
             .unwrap_or(Ok(Signer::new()))?;
         let mut witness = Witness::new(event_db_path, signer.public_key())?;
         // construct witness loc scheme oobi
@@ -325,6 +325,7 @@ pub mod http_handlers {
             keri::prefix::IdentifierPrefix::Basic(data.controller.prefix.clone()),
             signatures,
         );
+        // Get witnesses, and TODO choose one randomly.
         let cid = &data.get_cid_end_role(&id, Role::Witness).unwrap().unwrap()[0]
             .reply
             .event
@@ -432,7 +433,7 @@ pub struct WitnessConfig {
     /// Witness listen port.
     tcp_port: u16,
     /// Witness private key
-    priv_key: Option<Vec<u8>>,
+    priv_key: Option<String>,
 }
 
 #[derive(Debug, StructOpt)]
@@ -474,9 +475,9 @@ async fn main() -> Result<()> {
 
     // resolve witnesses oobis
     let witness_prefixes = vec![
-        "BMOaOdnrbEP-MSQE_CaL7BhGXvqvIdoHEMYcOnUAWjOE",
-        "BZFIYlHDQAHxHH3TJsjMhZFbVR_knDzSc3na_VHBZSBs",
-        "BYSUc5ahFNbTaqesfY-6YJwzALaXSx-_Mvbs6y3I74js",
+        "BSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA",
+        "BVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI",
+        "BT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8",
     ]
     .iter()
     .map(|prefix_str| prefix_str.parse::<IdentifierPrefix>().unwrap())
