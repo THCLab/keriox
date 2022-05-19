@@ -73,7 +73,7 @@ impl WatcherData {
         Ok(())
     }
 
-    pub async fn resolve(&self, lc: LocationScheme) -> Result<()> {
+    pub async fn resolve(&self, lc: &LocationScheme) -> Result<()> {
         let url = format!("{}oobi/{}", lc.url, lc.eid);
         let oobis = reqwest::get(url).await.unwrap().text().await.unwrap();
 
@@ -434,6 +434,7 @@ pub struct WitnessConfig {
     tcp_port: u16,
     /// Witness private key
     priv_key: Option<String>,
+    initial_oobis: Vec<LocationScheme>
 }
 
 #[derive(Debug, StructOpt)]
@@ -454,6 +455,7 @@ async fn main() -> Result<()> {
         tcp_host,
         tcp_port,
         priv_key,
+        initial_oobis,
     } = Figment::new().join(Json::file(config_file)).extract()?;
 
     use tempfile::Builder;
@@ -470,52 +472,16 @@ async fn main() -> Result<()> {
     )
     .unwrap();
     let wit_prefix = wit_data.controller.prefix.clone();
-    // let wit_ref = Arc::new(wit_data);
-    // let wit_ref2 = wit_ref.clone();
-
-    // resolve witnesses oobis
-    let witness_prefixes = vec![
-        "BSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA",
-        "BVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI",
-        "BT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8",
-    ]
-    .iter()
-    .map(|prefix_str| prefix_str.parse::<IdentifierPrefix>().unwrap())
-    .collect::<Vec<_>>();
-
-    let witness_addresses = vec![
-        "http://localhost:3232",
-        "http://localhost:3234",
-        "http://localhost:3235",
-    ];
 
     // Resolve oobi to know how to find witness
     join_all(
-        witness_prefixes
+        initial_oobis
             .iter()
-            .zip(witness_addresses.iter())
-            .map(|(prefix, address)| {
-                let lc = LocationScheme::new(
-                    prefix.clone(),
-                    Scheme::Http,
-                    url::Url::parse(address).unwrap(),
-                );
+            .map(|lc| {
                 wit_data.resolve(lc)
             }),
     )
     .await;
-
-    // let issuer_id = "EMI1a7MCfDG_BwE4kGTt5K7fmF3pbKHKy4xE-Ajb1u_Y";
-    // // resolve issuer oobi
-    // let iss_oobi = EndRole {
-    //         cid: issuer_id.parse().unwrap(),
-    //         role: Role::Witness,
-    //         eid: "BMOaOdnrbEP-MSQE_CaL7BhGXvqvIdoHEMYcOnUAWjOE".parse().unwrap()
-    //     };
-
-    // println!("issuer_oobi: {}", serde_json::to_string(&iss_oobi).unwrap());
-    // wit_data
-    //     .resolve_end_role(iss_oobi).await.unwrap();
 
     println!(
         "Watcher {} is listening on {}",

@@ -3,5 +3,10 @@
 	"http_port": 3236,
 	"tcp_host": "127.0.0.1",
 	"tcp_port": 3336,
-	"priv_key": "Alntkt3u6dDgiQxTATr01dy8M72uuaZEf9eTdM-70Gk8" 
+	"priv_key": "Alntkt3u6dDgiQxTATr01dy8M72uuaZEf9eTdM-70Gk8",
+	"initial_oobis": [
+		{"eid":"BSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","scheme":"http","url":"http://localhost:3232/"},
+		{"eid":"BVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI","scheme":"http","url":"http://localhost:3234/"},
+		{"eid":"BT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8","scheme":"http","url":"http://localhost:3235/"}
+    ] 
 }
