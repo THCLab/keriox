@@ -341,14 +341,13 @@ pub mod http_handlers {
 
 #[derive(Deserialize)]
 pub struct WitnessConfig {
-    witness_db_path: PathBuf,
-    oobis_db_path: PathBuf,
+    db_path: PathBuf,
     /// Witness listen host.
     http_host: String,
     /// Witness listen port.
     http_port: u16,
-    /// Witness private key
-    priv_key: Option<String>,
+    /// Witness keypair seed
+    seed: Option<String>,
 }
 
 #[derive(Debug, StructOpt)]
@@ -362,23 +361,23 @@ async fn main() -> Result<()> {
     let Opts { config_file } = Opts::from_args();
 
     let WitnessConfig {
-        witness_db_path,
-        oobis_db_path,
+        db_path,
         http_host,
         http_port,
-        priv_key,
+        seed,
     } = Figment::new().join(Json::file(config_file)).extract()?;
 
-    use tempfile::Builder;
-    let oobi_root = Builder::new().prefix("oobi-db").tempdir().unwrap();
-    let event_db_root = Builder::new().prefix("test-db").tempdir().unwrap();
     let http_address = format!("http://{}:{}", http_host, http_port);
+    let mut oobi_path = db_path.clone();
+    oobi_path.push("oobi");
+    let mut event_path = db_path.clone();
+    event_path.push("events");
 
     let wit_data = WitnessData::setup(
         url::Url::parse(&http_address).unwrap(),
-        event_db_root.path(),
-        oobi_root.path(),
-        priv_key,
+        event_path.as_path(),
+        oobi_path.as_path(),
+        seed,
     )
     .unwrap();
     let wit_prefix = wit_data.controller.prefix.clone();

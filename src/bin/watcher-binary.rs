@@ -7,7 +7,7 @@ use figment::{
 use futures::future::join_all;
 use serde::Deserialize;
 use std::{
-    path::Path,
+    path::{Path, PathBuf},
     sync::Arc,
 };
 use structopt::StructOpt;
@@ -422,14 +422,13 @@ pub mod http_handlers {
 
 #[derive(Deserialize)]
 pub struct WitnessConfig {
-    // witness_db_path: PathBuf,
-    // oobis_db_path: PathBuf,
+    db_path: PathBuf,
     /// Witness listen host.
     http_host: String,
     /// Witness listen port.
     http_port: u16,
     /// Witness private key
-    priv_key: Option<String>,
+    seed: Option<String>,
     initial_oobis: Vec<LocationScheme>
 }
 
@@ -444,24 +443,24 @@ async fn main() -> Result<()> {
     let Opts { config_file } = Opts::from_args();
 
     let WitnessConfig {
-        // witness_db_path,
-        // oobis_db_path,
+        db_path,
         http_host,
         http_port,
-        priv_key,
+        seed,
         initial_oobis,
     } = Figment::new().join(Json::file(config_file)).extract()?;
 
-    use tempfile::Builder;
-    let oobi_root = Builder::new().prefix("oobi-db").tempdir().unwrap();
-    let event_db_root = Builder::new().prefix("test-db").tempdir().unwrap();
     let http_address = format!("http://{}:{}", http_host, http_port);
+    let mut oobi_path = db_path.clone();
+    oobi_path.push("oobi");
+    let mut event_path = db_path.clone();
+    event_path.push("events");
 
     let wit_data = WatcherData::setup(
         url::Url::parse(&http_address).unwrap(),
-        event_db_root.path(),
-        oobi_root.path(),
-        priv_key,
+        oobi_path.as_path(),
+        event_path.as_path(),
+        seed,
     )
     .unwrap();
     let wit_prefix = wit_data.controller.prefix.clone();
