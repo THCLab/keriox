@@ -7,11 +7,16 @@ use crate::{
         event_data::EventData,
         sections::{seal::EventSeal, KeyConfig},
     },
-    event_message::signed_event_message::{
-        Message, SignedNontransferableReceipt, TimestampedSignedEventMessage,
+    event_message::{
+        signed_event_message::{
+            Message, SignedNontransferableReceipt, TimestampedSignedEventMessage,
+        },
+        Digestible,
     },
     event_parsing::SignedEventData,
-    prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix},
+    prefix::{
+        BasicPrefix, IdentifierPrefix, SelfAddressingPrefix,
+    },
     state::{EventSemantics, IdentifierState},
 };
 
@@ -63,6 +68,36 @@ impl EventStorage {
                     .map(|event| Message::Event(event.signed_event_message))
                     .collect(),
             )),
+            None => Ok(None),
+        }
+    }
+
+    pub fn get_kel_messages_with_receipts(
+        &self,
+        id: &IdentifierPrefix,
+    ) -> Result<Option<Vec<Message>>, Error> {
+        match self.db.get_kel_finalized_events(id) {
+            Some(events) => {
+                let e = events
+                    .map(|event| {
+                        let rcts_from_db = self
+                            .get_nt_receipts(
+                                &event.signed_event_message.event_message.event.get_prefix(),
+                                event.signed_event_message.event_message.event.get_sn(),
+                                &event.signed_event_message.event_message.event.get_digest(),
+                            )
+                            .unwrap()
+                            .map(|rct| Message::NontransferableRct(rct));
+                        match rcts_from_db {
+                            Some(rct) => vec![Message::Event(event.into()), rct],
+                            None => vec![Message::Event(event.into())],
+                        }
+                        
+                    })
+                    .flatten()
+                    .collect();
+                Ok(Some(e))
+            }
             None => Ok(None),
         }
     }
@@ -197,7 +232,38 @@ impl EventStorage {
         })
     }
 
-    pub fn get_nt_receipts(&self, prefix: &IdentifierPrefix) -> Result<Option<Vec<u8>>, Error> {
+    pub fn get_nt_receipts(
+        &self,
+        prefix: &IdentifierPrefix,
+        sn: u64,
+        digest: &SelfAddressingPrefix,
+    ) -> Result<Option<SignedNontransferableReceipt>, Error> {
+        match self.db.get_receipts_nt(prefix) {
+            Some(events) => Ok(events
+                .filter(|rcp| rcp.body.event.sn == sn && &rcp.body.get_digest() == digest)
+                .reduce(|acc, rct| {
+                    let new_signatures = match (acc.couplets, rct.couplets) {
+                        (None, None) => None,
+                        (None, Some(new_couplets)) => Some(new_couplets),
+                        (Some(couplets), None) => Some(couplets),
+                        (Some(mut couplets), Some(mut new_coups)) => {
+                            couplets.append(&mut new_coups);
+                            Some(couplets)
+                        }
+                    };
+                    SignedNontransferableReceipt {
+                        couplets: new_signatures,
+                        ..acc
+                    }
+                })),
+            None => Ok(None),
+        }
+    }
+
+    pub fn get_escrowed_nt_receipts(
+        &self,
+        prefix: &IdentifierPrefix,
+    ) -> Result<Option<Vec<u8>>, Error> {
         match self.db.get_escrow_nt_receipts(prefix) {
             Some(events) => Ok(Some(
                 events

@@ -5,6 +5,7 @@ use crate::event_message::event_msg_builder::EventMsgBuilder;
 use crate::event_message::signed_event_message::Message;
 use crate::event_message::{Digestible, EventTypeTag};
 use crate::event_parsing::message::{signed_event_stream, signed_message};
+use crate::event_parsing::SignedEventData;
 use crate::prefix::{AttachedSignaturePrefix, IdentifierPrefix, Prefix, SeedPrefix};
 use crate::processor::escrow::default_escrow_bus;
 use crate::processor::event_storage::EventStorage;
@@ -1022,5 +1023,46 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
     let state = storage.get_state(&id_prefix)?.unwrap();
     assert_eq!(state.sn, 1);
 
+    Ok(())
+}
+
+#[cfg(feature = "oobi")]
+#[test]
+fn processs_oobi() -> Result<(), Error> {
+    use crate::oobi::OobiManager;
+    use crate::processor::notification::{JustNotification, NotificationBus};
+
+    let oobi_rpy = r#"{"v":"KERI10JSON000116_","t":"rpy","d":"EZuWRhrNl9gNIck0BcLiPegTJTw3Ng_Hq3WTF8BOQ-sk","dt":"2022-04-12T08:27:47.009114+00:00","r":"/end/role/add","a":{"cid":"Bgoq68HCmYNUDgOz4Skvlu306o_NY-NrYuKAVhk3Zh9c","role":"controller","eid":"Bgoq68HCmYNUDgOz4Skvlu306o_NY-NrYuKAVhk3Zh9c"}}-VAi-CABBgoq68HCmYNUDgOz4Skvlu306o_NY-NrYuKAVhk3Zh9c0Bke1uKEan_LNlP3e5huCO7zHEi50L18FB1-DdskAEyuehw9gMjNMhex73C9Yr0WlkP1B1-JjNIKDVm816zCgmCw"#;
+
+    fn setup() -> (
+        EventProcessor,
+        EventStorage,
+        NotificationBus,
+        Arc<OobiManager>,
+    ) {
+        use tempfile::Builder;
+
+        let oobi_root = Builder::new().prefix("oobi-db").tempdir().unwrap();
+        let oobi_manager = Arc::new(OobiManager::new(oobi_root.path()));
+        let witness_root = Builder::new().prefix("test-db").tempdir().unwrap();
+        let path = witness_root.path();
+        let witness_db = Arc::new(SledEventDatabase::new(path).unwrap());
+        std::fs::create_dir_all(path).unwrap();
+        let mut publisher = default_escrow_bus(witness_db.clone());
+        publisher.register_observer(oobi_manager.clone(), vec![JustNotification::GotOobi]);
+        (
+            EventProcessor::new(witness_db.clone()),
+            EventStorage::new(witness_db.clone()),
+            publisher,
+            oobi_manager,
+        )
+    }
+    let (processor, _storage, _publisher, _oobi_manager) = setup();
+    let events = signed_event_stream(oobi_rpy.as_bytes()).unwrap().1;
+    for event in events {
+        let event = Message::try_from(event)?;
+        let not = processor.process(event)?;
+        println!("{:?}", not);
+    }
     Ok(())
 }

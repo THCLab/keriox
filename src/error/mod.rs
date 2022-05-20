@@ -114,4 +114,8 @@ pub enum Error {
     #[cfg(feature = "query")]
     #[error(transparent)]
     QueryError(#[from] crate::query::QueryError),
+
+    #[cfg(feature = "oobi")]
+    #[error(transparent)]
+    OobiError(#[from] crate::oobi::error::Error),
 }

@@ -84,16 +84,22 @@ pub fn reply_message(s: &[u8]) -> nom::IResult<&[u8], EventType> {
     timestamped::<ReplyRoute>(s).map(|d| (d.0, EventType::Rpy(d.1)))
 }
 
-pub fn signed_message(s: &[u8]) -> nom::IResult<&[u8], SignedEventData> {
+pub fn event_message(s: &[u8]) -> nom::IResult<&[u8], EventType> {
     #[cfg(any(feature = "query", feature = "oobi"))]
-    let (rest, event) = alt((
+    let result = alt((
         key_event_message,
         reply_message,
         query_message,
         receipt_message,
-    ))(s)?;
+    ))(s);
     #[cfg(not(any(feature = "query", feature = "oobi")))]
-    let (rest, event) = alt((key_event_message, receipt_message))(s)?;
+    let result = alt((key_event_message, receipt_message))(s);
+
+    result
+}
+
+pub fn signed_message(s: &[u8]) -> nom::IResult<&[u8], SignedEventData> {
+    let (rest, event) = event_message(s)?;
     let (rest, attachments): (&[u8], Vec<Attachment>) =
         fold_many0(attachment, vec![], |mut acc: Vec<_>, item| {
             acc.push(item);

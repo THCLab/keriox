@@ -283,7 +283,9 @@ fn test_qry_rpy() -> Result<(), Error> {
 
     let response = witness.respond(signer_arc.clone())?;
 
-    let alice_kel = alice.storage.get_kel_messages(alice.prefix())?;
+    let alice_kel = alice
+        .storage
+        .get_kel_messages_with_receipts(alice.prefix())?;
     assert_eq!(response, alice_kel.unwrap());
 
     Ok(())

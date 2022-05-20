@@ -42,7 +42,7 @@ impl From<Message> for SignedEventData {
             #[cfg(feature = "query")]
             Message::Reply(ksn) => SignedEventData::from(ksn),
             #[cfg(feature = "query")]
-            Message::Query(_qry) => todo!(),
+            Message::Query(qry) => SignedEventData::from(qry),
         }
     }
 }
@@ -60,7 +60,7 @@ impl Message {
             #[cfg(feature = "query")]
             Message::Reply(reply) => reply.reply.get_prefix(),
             #[cfg(feature = "query")]
-            Message::Query(_qry) => todo!(),
+            Message::Query(qry) => qry.query.event.content.data.data.i.clone(),
         }
     }
 }

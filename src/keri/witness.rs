@@ -9,6 +9,7 @@ use crate::event_message::key_event_message::KeyEvent;
 use crate::event_message::signed_event_message::{Message, SignedNontransferableReceipt};
 use crate::event_parsing::message::signed_event_stream;
 use crate::keys::PublicKey;
+use crate::oobi::OobiManager;
 use crate::processor::escrow::default_escrow_bus;
 use crate::processor::event_storage::EventStorage;
 use crate::processor::notification::{JustNotification, Notification, NotificationBus};
@@ -54,7 +55,11 @@ impl Witness {
         let responder = Arc::new(Responder::new());
         publisher.register_observer(
             responder.clone(),
-            vec![JustNotification::KeyEventAdded, JustNotification::GotQuery],
+            vec![
+                JustNotification::KeyEventAdded,
+                JustNotification::ReplayLog,
+                JustNotification::ReplyKsn,
+            ],
         );
 
         Ok(Self {
@@ -64,6 +69,11 @@ impl Witness {
             publisher,
             responder,
         })
+    }
+
+    pub fn register_oobi_manager(&mut self, oobi_manager: Arc<OobiManager>) {
+        self.publisher
+            .register_observer(oobi_manager, vec![JustNotification::GotOobi]);
     }
 
     pub fn get_db_ref(&self) -> Arc<SledEventDatabase> {
@@ -79,12 +89,15 @@ impl Witness {
                         self.respond_to_key_event(event.event_message, signer.clone())?;
                     response.push(Message::NontransferableRct(non_trans_receipt))
                 }
-                Notification::GotQuery(query) => {
-                    match self.process_signed_query(query, signer.clone())? {
-                        ReplyType::Rep(reply) => response.push(Message::Reply(reply)),
-                        ReplyType::Kel(mut kel) => response.append(&mut kel),
-                    }
+                Notification::ReplayLog(id) => {
+                    let mut kel = self
+                        .storage
+                        .get_kel_messages_with_receipts(&id)
+                        .unwrap()
+                        .unwrap();
+                    response.append(&mut kel)
                 }
+                Notification::ReplyKsn(signed_reply) => response.push(Message::Reply(signed_reply)),
                 _ => return Err(Error::SemanticError("Wrong notification type".into())),
             }
         }
@@ -178,7 +191,7 @@ impl Witness {
     }
 
     pub fn get_receipts_for_prefix(&self, id: &IdentifierPrefix) -> Result<Option<Vec<u8>>, Error> {
-        self.storage.get_nt_receipts(id)
+        self.storage.get_escrowed_nt_receipts(id)
     }
 
     pub fn get_state_for_prefix(
@@ -244,7 +257,7 @@ impl Witness {
         match route {
             QueryRoute::Log => Ok(ReplyType::Kel(
                 self.storage
-                    .get_kel_messages(&qr.data.i)?
+                    .get_kel_messages_with_receipts(&qr.data.i)?
                     .ok_or_else(|| Error::SemanticError("No identifier in db".into()))?,
             )),
             QueryRoute::Ksn => {
