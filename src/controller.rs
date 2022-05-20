@@ -208,7 +208,7 @@ impl Controller {
         });
 
         // Kel should be empty because event is not fully witnessed
-        assert!(self.keri.get_kel(self.keri.prefix()).unwrap().is_none());
+        // assert!(self.keri.get_kel(self.keri.prefix()).unwrap().is_none());
 
         // process collected receipts
         self.keri
@@ -216,7 +216,7 @@ impl Controller {
             .unwrap();
 
         // Now event is fully witnessed
-        assert!(self.keri.get_kel(self.keri.prefix()).unwrap().is_some());
+        // assert!(self.keri.get_kel(self.keri.prefix()).unwrap().is_some());
 
         // Get processed receipts from database to send all of them to witnesses. It
         // will return one receipt with all witness signatures as one attachment,
@@ -230,7 +230,7 @@ impl Controller {
             )
             .unwrap()
             .map(|rct| SignedEventData::from(rct).to_cesr().unwrap())
-            .unwrap();
+            .unwrap_or_default();
         println!(
             "\nreceipts: {}",
             String::from_utf8(rcts_from_db.clone()).unwrap()

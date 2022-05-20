@@ -3,10 +3,11 @@ use futures::future::join_all;
 use keri::{
     controller::Controller,
     event::sections::threshold::SignatureThreshold,
-    event_parsing::SignedEventData,
-    oobi::{LocationScheme, Role, Scheme},
-    prefix::{BasicPrefix, IdentifierPrefix},
+    event_parsing::Attachment,
+    oobi::{LocationScheme, Scheme},
+    prefix::{BasicPrefix, IdentifierPrefix, AttachedSignaturePrefix}, signer::KeyManager, derivation::self_signing::SelfSigning,
 };
+use serde::{Deserialize, Serialize};
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -18,8 +19,8 @@ async fn main() -> std::io::Result<()> {
 
     let witness_prefixes = vec![
         "BSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA",
-        "BVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI",
-        "BT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8",
+        // "BVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI",
+        // "BT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8",
     ]
     .iter()
     .map(|prefix_str| prefix_str.parse::<BasicPrefix>().unwrap())
@@ -28,8 +29,8 @@ async fn main() -> std::io::Result<()> {
 
     let witness_addresses = vec![
         "http://localhost:3232",
-        "http://localhost:3234",
-        "http://localhost:3235",
+        // "http://localhost:3234",
+        // "http://localhost:3235",
     ];
 
     // Resolve oobi to know how to find witness
@@ -52,7 +53,7 @@ async fn main() -> std::io::Result<()> {
         .keri
         .incept(
             Some(witness_prefixes.clone()),
-            Some(SignatureThreshold::Simple(3)),
+            Some(SignatureThreshold::Simple(1)),
         )
         .unwrap();
 
@@ -60,23 +61,36 @@ async fn main() -> std::io::Result<()> {
     // TODO should watcher find kel by itself?
     controller.publish(&witness_prefixes, &icp).await.unwrap();
 
-    // send end role oobi to witness
-    join_all(witness_prefixes.into_iter().map(|witness| {
-        let end_role_license = controller
-            .generate_end_role(
-                &IdentifierPrefix::Basic(witness.clone()),
-                Role::Witness,
-                true,
-            )
-            .unwrap();
-        controller.send_to(
-            IdentifierPrefix::Basic(witness),
-            Scheme::Http,
-            SignedEventData::from(end_role_license).to_cesr().unwrap(),
-        )
-    }))
-    .await;
     println!("\nissuer id: {}", controller.keri.prefix().to_string());
+
+    #[derive(Serialize, Deserialize)]
+    struct BasicAcdc {
+        issuer: IdentifierPrefix,
+        data: String
+    }
+    let acdc = BasicAcdc { issuer: controller.keri.prefix().clone(), data: "EjLNcJrUEs8PX0LLFFowS-_e9dpX3SEf3C4U1CdhJFUE".into() };
+
+    let acdc_str = serde_json::to_string(&acdc)?;
+    let signature = controller.keri.key_manager().clone().lock().unwrap().sign(&acdc_str.as_bytes()).unwrap();
+    let attached_signature = AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, signature, 0);
+
+    let event_seal = controller.keri.storage.get_last_establishment_event_seal(controller.keri.prefix()).unwrap().unwrap();
+    let att = Attachment::SealSignaturesGroups(vec![(event_seal, vec![attached_signature])]);
+
+    println!("acdc: {}{}", acdc_str, att.to_cesr());
+
+    // Rotate keys
+    let rot = controller
+        .keri
+        .rotate(
+            None,
+            None,
+            None
+        )
+        .unwrap();
+
+    controller.publish(&witness_prefixes, &rot).await.unwrap();
+
 
     Ok(())
 }
