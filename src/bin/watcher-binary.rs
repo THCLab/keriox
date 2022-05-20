@@ -1,5 +1,5 @@
 use actix_web::{dev::Server, web, App, HttpServer};
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use figment::{
     providers::{Format, Json},
     Figment,
@@ -73,29 +73,28 @@ impl WatcherData {
         Ok(())
     }
 
-    pub async fn resolve(&self, lc: &LocationScheme) -> Result<()> {
-        let url = format!("{}oobi/{}", lc.url, lc.eid);
-        let oobis = reqwest::get(url).await.unwrap().text().await.unwrap();
-
-        self.parse_and_process(oobis.as_bytes()).unwrap();
-
-        Ok(())
-    }
-
-    pub async fn resolve_end_role(&self, lc: EndRole) -> Result<()> {
-        let url = match self.get_eid_loc_scheme(&lc.eid.clone())?.unwrap()[0]
+    pub async fn resolve_end_role(&self, er: EndRole) -> Result<()> {
+        // find endpoint data of endpoint provider identifier
+        let loc_scheme = self.get_eid_loc_scheme(&er.eid.clone())?.unwrap()[0]
             .reply
             .event
             .content
             .data
-            .clone()
-        {
-            ReplyRoute::Ksn(_, _) => todo!(),
-            ReplyRoute::LocScheme(lc) => lc.url,
-            ReplyRoute::EndRoleAdd(_) => todo!(),
-            ReplyRoute::EndRoleCut(_) => todo!(),
-        };
-        let url = format!("{}oobi/{}/{}/{}", url, lc.cid, "witness", lc.eid);
+            .clone();
+
+        if let ReplyRoute::LocScheme(lc) = loc_scheme {
+            let url = format!("{}oobi/{}/{}/{}", lc.url, er.cid, "witness", er.eid);
+            let oobis = reqwest::get(url).await.unwrap().text().await.unwrap();
+
+            self.parse_and_process(oobis.as_bytes()).unwrap();
+            Ok(())
+        } else {
+            Err(anyhow!("Wrong oobi type"))
+        }
+    }
+
+    pub async fn resolve_loc_scheme(&self, lc: &LocationScheme) -> Result<()> {
+        let url = format!("{}oobi/{}", lc.url, lc.eid);
         let oobis = reqwest::get(url).await.unwrap().text().await.unwrap();
 
         self.parse_and_process(oobis.as_bytes()).unwrap();
@@ -105,7 +104,6 @@ impl WatcherData {
 
 
     fn get_loc_schemas(&self, id: &IdentifierPrefix) -> Result<Vec<LocationScheme>> {
-        use anyhow::anyhow;
         Ok(self
             .oobi_manager
             .get_loc_scheme(id)
@@ -129,7 +127,6 @@ impl WatcherData {
         schema: Scheme,
         msg: Vec<u8>,
     ) -> Result<Option<String>> {
-        use anyhow::anyhow;
         let addresses = self.get_loc_schemas(&wit_id)?;
         match addresses
             .iter()
@@ -230,7 +227,7 @@ pub mod http_handlers {
         derivation::{self_addressing::SelfAddressing, self_signing::SelfSigning},
         event_message::signed_event_message::Message,
         event_parsing::SignedEventData,
-        oobi::{EndRole, Role},
+        oobi::{EndRole, Role, LocationScheme},
         prefix::{AttachedSignaturePrefix, IdentifierPrefix, Prefix},
         query::{
             query_event::{QueryArgs, QueryEvent, SignedQuery},
@@ -325,20 +322,16 @@ pub mod http_handlers {
             keri::prefix::IdentifierPrefix::Basic(data.controller.prefix.clone()),
             signatures,
         );
-        // Get witnesses, and TODO choose one randomly.
-        let cid = &data.get_cid_end_role(&id, Role::Witness).unwrap().unwrap()[0]
-            .reply
-            .event
-            .content
-            .data;
 
-        let witness_id = match cid {
-            keri::query::reply_event::ReplyRoute::Ksn(_, _) => todo!(),
-            keri::query::reply_event::ReplyRoute::LocScheme(_) => todo!(),
-            keri::query::reply_event::ReplyRoute::EndRoleAdd(endrole) => endrole.eid.clone(),
-            keri::query::reply_event::ReplyRoute::EndRoleCut(_) => todo!(),
-        };
-        // get witness adress and send there query
+        // Get witnesses, and TODO choose one randomly.
+        let witnesses = data.controller.get_state_for_prefix(&id)
+            .unwrap()
+            .unwrap()
+            .witness_config
+            .witnesses;
+        let witness_id = IdentifierPrefix::Basic(witnesses[0].clone());
+      
+        // get witness address and send there query
         let qry_str = Message::Query(signed_qry).to_cesr().unwrap();
         println!(
             "\nSending query to {}: \n{}",
@@ -359,12 +352,19 @@ pub mod http_handlers {
     #[post("/resolve")]
     async fn resolve_oobi(body: web::Bytes, data: web::Data<WatcherData>) -> impl Responder {
         println!(
-            "\nGot end role to resolve: \n{}",
+            "\nGot oobi to resolve: \n{}",
             String::from_utf8(body.to_vec()).unwrap()
         );
-        let end_role: EndRole =
-            serde_json::from_str(&String::from_utf8(body.to_vec()).unwrap()).unwrap();
-        data.resolve_end_role(end_role).await.unwrap();
+
+        match serde_json::from_str::<EndRole>(&String::from_utf8(body.to_vec()).unwrap()) {
+            Ok(end_role) => {
+                data.resolve_end_role(end_role).await.unwrap()
+            },
+            Err(_) => {
+                let lc = serde_json::from_str::<LocationScheme>(&String::from_utf8(body.to_vec()).unwrap()).unwrap();
+                data.resolve_loc_scheme(&lc).await.unwrap()
+            },
+        };
 
         HttpResponse::Ok()
     }
@@ -471,7 +471,7 @@ async fn main() -> Result<()> {
         initial_oobis
             .iter()
             .map(|lc| {
-                wit_data.resolve(lc)
+                wit_data.resolve_loc_scheme(lc)
             }),
     )
     .await;

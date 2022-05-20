@@ -293,7 +293,8 @@ pub mod http_handlers {
 
         let end_role = data.get_cid_end_role(&cid, role).unwrap().unwrap_or(vec![]);
         let loc_scheme = data.get_eid_loc_scheme(&eid).unwrap().unwrap_or(vec![]);
-        // TODO (for now) Append controller kel to be able to verify end role signature.
+        // (for now) Append controller kel to be able to verify end role signature.
+        // TODO use ksn instead
         let cont_kel = data
             .event_processor
             .get_kel_for_prefix(&cid)
