@@ -14,4 +14,4 @@ This implementation is still in an early stage. The planned outcomes of this eff
 
 ## Example
 
-See this [repo](https://github.com/THCLab/dkms-demo/blob/main/README.md) that demonstrates the DKMS components usage along with sample apps.
+See this [repo](https://github.com/THCLab/dkms-demo) that demonstrates the DKMS components usage along with sample apps.
