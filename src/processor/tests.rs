@@ -5,7 +5,6 @@ use crate::event_message::event_msg_builder::EventMsgBuilder;
 use crate::event_message::signed_event_message::Message;
 use crate::event_message::{Digestible, EventTypeTag};
 use crate::event_parsing::message::{signed_event_stream, signed_message};
-use crate::event_parsing::SignedEventData;
 use crate::prefix::{AttachedSignaturePrefix, IdentifierPrefix, Prefix, SeedPrefix};
 use crate::processor::escrow::default_escrow_bus;
 use crate::processor::event_storage::EventStorage;

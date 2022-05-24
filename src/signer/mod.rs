@@ -1,6 +1,7 @@
 use crate::{
     error::Error,
-    keys::{PrivateKey, PublicKey}, prefix::SeedPrefix,
+    keys::{PrivateKey, PublicKey},
+    prefix::SeedPrefix,
 };
 use rand::rngs::OsRng;
 

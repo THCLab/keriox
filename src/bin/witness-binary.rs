@@ -1,10 +1,9 @@
 use actix_web::{dev::Server, web, App, HttpServer};
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use figment::{
     providers::{Format, Json},
     Figment,
 };
-use futures::future;
 use serde::Deserialize;
 use std::{
     path::{Path, PathBuf},
@@ -24,7 +23,6 @@ use keri::{
 };
 
 struct WitnessData {
-    tcp_address: url::Url,
     signer: Arc<Signer>,
     controller: Arc<Witness>,
     oobi_manager: Arc<OobiManager>,
@@ -61,7 +59,6 @@ impl WitnessData {
         oobi_manager.save_oobi(signed_reply)?;
         witness.register_oobi_manager(oobi_manager.clone());
         Ok(WitnessData {
-            tcp_address: address,
             controller: Arc::new(witness),
             oobi_manager,
             signer: Arc::new(signer),
@@ -104,19 +101,6 @@ impl WitnessData {
         .bind((host, port))
         .unwrap()
         .run()
-    }
-
-    async fn listen_tcp(&self) -> Result<()> {
-        use tcp_handlers::KelUpdating;
-        let (host, port) = (
-            self.tcp_address.host().unwrap().to_string(),
-            self.tcp_address.port().unwrap(),
-        );
-        let data = Arc::new(KelUpdating::new(
-            self.controller.clone(),
-            self.signer.clone(),
-        ));
-        tcp_handlers::accept_loop(data, format!("{}:{}", host, port)).await
     }
 }
 
@@ -352,7 +336,7 @@ pub struct WitnessConfig {
 
 #[derive(Debug, StructOpt)]
 struct Opts {
-    #[structopt(short = "c", long, default_value = "./src/bin/config.json")]
+    #[structopt(short = "c", long, default_value = "./src/bin/configs/witness.json")]
     config_file: String,
 }
 
@@ -365,7 +349,9 @@ async fn main() -> Result<()> {
         http_host,
         http_port,
         seed,
-    } = Figment::new().join(Json::file(config_file)).extract()?;
+    } = Figment::new().join(Json::file(config_file))
+        .extract()
+        .map_err(|_e| anyhow!("Missing arguments: `db_path`, `http_host`, `http_port`. Set config file path with -c option."))?;
 
     let http_address = format!("http://{}:{}", http_host, http_port);
     let mut oobi_path = db_path.clone();
@@ -382,7 +368,6 @@ async fn main() -> Result<()> {
     .unwrap();
     let wit_prefix = wit_data.controller.prefix.clone();
     let wit_ref = Arc::new(wit_data);
-    let wit_ref2 = wit_ref.clone();
 
     println!(
         "\nWitness {} is listening on {}",
@@ -391,9 +376,7 @@ async fn main() -> Result<()> {
     );
     // run http server for oobi resolving
     let http_handle = wit_ref.listen_http(url::Url::parse(&http_address).unwrap());
-    // run tcp server for getting events
-    let tcp_handle = wit_ref2.listen_tcp();
-    future::join(http_handle, tcp_handle).await;
+    http_handle.await?;
 
     Ok(())
 }

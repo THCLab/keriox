@@ -1,5 +1,5 @@
 use actix_web::{dev::Server, web, App, HttpServer};
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 use figment::{
     providers::{Format, Json},
     Figment,
@@ -24,7 +24,6 @@ use keri::{
 };
 
 struct WatcherData {
-    http_address: url::Url,
     signer: Arc<Signer>,
     pub controller: Arc<Witness>,
     oobi_manager: Arc<OobiManager>,
@@ -61,7 +60,6 @@ impl WatcherData {
         oobi_manager.save_oobi(signed_reply)?;
         witness.register_oobi_manager(oobi_manager.clone());
         Ok(WatcherData {
-            http_address: address,
             controller: Arc::new(witness),
             oobi_manager,
             signer: Arc::new(signer),
@@ -101,7 +99,6 @@ impl WatcherData {
 
         Ok(())
     }
-
 
     fn get_loc_schemas(&self, id: &IdentifierPrefix) -> Result<Vec<LocationScheme>> {
         Ok(self
@@ -227,7 +224,7 @@ pub mod http_handlers {
         derivation::{self_addressing::SelfAddressing, self_signing::SelfSigning},
         event_message::signed_event_message::Message,
         event_parsing::SignedEventData,
-        oobi::{EndRole, Role, LocationScheme},
+        oobi::{EndRole, LocationScheme, Role},
         prefix::{AttachedSignaturePrefix, IdentifierPrefix, Prefix},
         query::{
             query_event::{QueryArgs, QueryEvent, SignedQuery},
@@ -324,13 +321,15 @@ pub mod http_handlers {
         );
 
         // Get witnesses, and TODO choose one randomly.
-        let witnesses = data.controller.get_state_for_prefix(&id)
+        let witnesses = data
+            .controller
+            .get_state_for_prefix(&id)
             .unwrap()
             .unwrap()
             .witness_config
             .witnesses;
         let witness_id = IdentifierPrefix::Basic(witnesses[0].clone());
-      
+
         // get witness address and send there query
         let qry_str = Message::Query(signed_qry).to_cesr().unwrap();
         println!(
@@ -357,13 +356,14 @@ pub mod http_handlers {
         );
 
         match serde_json::from_str::<EndRole>(&String::from_utf8(body.to_vec()).unwrap()) {
-            Ok(end_role) => {
-                data.resolve_end_role(end_role).await.unwrap()
-            },
+            Ok(end_role) => data.resolve_end_role(end_role).await.unwrap(),
             Err(_) => {
-                let lc = serde_json::from_str::<LocationScheme>(&String::from_utf8(body.to_vec()).unwrap()).unwrap();
+                let lc = serde_json::from_str::<LocationScheme>(
+                    &String::from_utf8(body.to_vec()).unwrap(),
+                )
+                .unwrap();
                 data.resolve_loc_scheme(&lc).await.unwrap()
-            },
+            }
         };
 
         HttpResponse::Ok()
@@ -421,7 +421,7 @@ pub mod http_handlers {
 }
 
 #[derive(Deserialize)]
-pub struct WitnessConfig {
+pub struct WatcherConfig {
     db_path: PathBuf,
     /// Witness listen host.
     http_host: String,
@@ -429,7 +429,7 @@ pub struct WitnessConfig {
     http_port: u16,
     /// Witness private key
     seed: Option<String>,
-    initial_oobis: Vec<LocationScheme>
+    initial_oobis: Vec<LocationScheme>,
 }
 
 #[derive(Debug, StructOpt)]
@@ -442,13 +442,14 @@ struct Opts {
 async fn main() -> Result<()> {
     let Opts { config_file } = Opts::from_args();
 
-    let WitnessConfig {
+    let WatcherConfig {
         db_path,
         http_host,
         http_port,
         seed,
         initial_oobis,
-    } = Figment::new().join(Json::file(config_file)).extract()?;
+    } = Figment::new().join(Json::file(config_file)).extract()
+        .map_err(|_e| anyhow!("Missing arguments: `db_path`, `http_host`, `http_port`. Set config file path with -c option."))?;
 
     let http_address = format!("http://{}:{}", http_host, http_port);
     let mut oobi_path = db_path.clone();
@@ -469,9 +470,7 @@ async fn main() -> Result<()> {
     join_all(
         initial_oobis
             .iter()
-            .map(|lc| {
-                wit_data.resolve_loc_scheme(lc)
-            }),
+            .map(|lc| wit_data.resolve_loc_scheme(lc)),
     )
     .await;
 

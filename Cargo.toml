@@ -22,14 +22,6 @@ required-features = ["build-binary"]
 [[bin]]         
 name = "watcher-binary"    
 required-features = ["build-binary"]
-
-[[bin]]         
-name = "verifier-binary"    
-required-features = ["build-binary"]
-
-[[bin]]         
-name = "issuer-binary"    
-required-features = ["build-binary"]
  
 [features]
 # lmdb = ["rkv", "bincode"] # deprecated since 0.7

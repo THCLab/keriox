@@ -14,9 +14,7 @@ use crate::{
         Digestible,
     },
     event_parsing::SignedEventData,
-    prefix::{
-        BasicPrefix, IdentifierPrefix, SelfAddressingPrefix,
-    },
+    prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix},
     state::{EventSemantics, IdentifierState},
 };
 
@@ -92,7 +90,6 @@ impl EventStorage {
                             Some(rct) => vec![Message::Event(event.into()), rct],
                             None => vec![Message::Event(event.into())],
                         }
-                        
                     })
                     .flatten()
                     .collect();
