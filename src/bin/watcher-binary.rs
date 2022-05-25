@@ -32,6 +32,7 @@ struct WatcherData {
 impl WatcherData {
     pub fn setup(
         address: url::Url,
+        public_address: Option<String>,
         event_db_path: &Path,
         oobi_db_path: &Path,
         priv_key: Option<String>,
@@ -42,10 +43,15 @@ impl WatcherData {
             .unwrap_or(Ok(Signer::new()))?;
         let mut witness = Witness::new(event_db_path, signer.public_key())?;
         // construct witness loc scheme oobi
+         let pub_address = if let Some(pub_address) = public_address {
+            url::Url::parse(&format!("http://{}", pub_address)).unwrap()
+        } else {
+            address.clone()
+        };
         let loc_scheme = LocationScheme::new(
             IdentifierPrefix::Basic(witness.prefix.clone()),
-            address.scheme().parse().unwrap(),
-            address.clone(),
+            pub_address.scheme().parse().unwrap(),
+            pub_address.clone(),
         );
         let reply = ReplyEvent::new_reply(
             ReplyRoute::LocScheme(loc_scheme),
@@ -453,11 +459,8 @@ async fn main() -> Result<()> {
     } = Figment::new().join(Json::file(config_file)).extract()
         .map_err(|_e| anyhow!("Missing arguments: `db_path`, `http_host`, `http_port`. Set config file path with -c option."))?;
 
-    let http_address = if let Some(address) = public_address {
-        format!("http://{}", address)
-    } else {
-        format!("http://{}:{}", http_host, http_port)
-    };
+    let http_address = format!("http://{}:{}", http_host, http_port);
+
     let mut oobi_path = db_path.clone();
     oobi_path.push("oobi");
     let mut event_path = db_path.clone();
@@ -465,6 +468,7 @@ async fn main() -> Result<()> {
 
     let wit_data = WatcherData::setup(
         url::Url::parse(&http_address).unwrap(),
+        public_address,
         oobi_path.as_path(),
         event_path.as_path(),
         seed,
