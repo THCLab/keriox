@@ -167,9 +167,8 @@ fn test_qry_rpy() -> Result<(), Error> {
         keri::witness::Witness,
         prefix::AttachedSignaturePrefix,
         query::{
-            query_event::{QueryArgs, QueryEvent, SignedQuery},
+            query_event::{QueryArgs, QueryEvent, QueryRoute, SignedQuery},
             reply_event::ReplyRoute,
-            QueryRoute,
         },
         signer::{KeyManager, Signer},
     };
@@ -183,7 +182,7 @@ fn test_qry_rpy() -> Result<(), Error> {
     let witness_root = Builder::new().prefix("test-db").tempdir().unwrap();
     let signer = Signer::new();
     let signer_arc = Arc::new(signer);
-    let witness = Witness::new(witness_root.path(), signer_arc.clone().public_key())?;
+    let witness = Witness::new(witness_root.path(), signer_arc.public_key())?;
 
     let alice_key_manager = Arc::new(Mutex::new({
         use crate::signer::CryptoBox;
@@ -222,8 +221,7 @@ fn test_qry_rpy() -> Result<(), Error> {
     };
 
     let qry = QueryEvent::new_query(
-        QueryRoute::Ksn,
-        query_args,
+        QueryRoute::Ksn { args: query_args },
         SerializationFormats::JSON,
         &SelfAddressing::Blake3_256,
     )?;
@@ -261,8 +259,7 @@ fn test_qry_rpy() -> Result<(), Error> {
         src: None,
     };
     let qry = QueryEvent::new_query(
-        QueryRoute::Log,
-        query_args,
+        QueryRoute::Log { args: query_args },
         SerializationFormats::JSON,
         &SelfAddressing::Blake3_256,
     )?;
@@ -281,7 +278,7 @@ fn test_qry_rpy() -> Result<(), Error> {
 
     witness.process(&vec![query_message])?;
 
-    let response = witness.respond(signer_arc.clone())?;
+    let response = witness.respond(signer_arc)?;
 
     let alice_kel = alice
         .storage

@@ -1,7 +1,8 @@
 use std::{collections::HashMap, sync::Arc};
 
 #[cfg(feature = "query")]
-use crate::query::reply_event::SignedReply;
+use crate::query::{query_event::QueryArgsMbx, reply_event::SignedReply};
+
 use crate::{
     error::Error,
     event_message::signed_event_message::{
@@ -9,6 +10,7 @@ use crate::{
     },
     prefix::IdentifierPrefix,
 };
+
 pub struct NotificationBus {
     observers: HashMap<JustNotification, Vec<Arc<dyn Notifier + Send + Sync>>>,
 }
@@ -73,6 +75,8 @@ pub enum Notification {
     ReplayLog(IdentifierPrefix),
     #[cfg(feature = "query")]
     ReplyKsn(SignedReply),
+    #[cfg(feature = "query")]
+    GetMailbox(QueryArgsMbx),
 }
 
 #[derive(PartialEq, Hash, Eq)]
@@ -96,6 +100,8 @@ pub enum JustNotification {
     ReplayLog,
     #[cfg(feature = "query")]
     ReplyKsn,
+    #[cfg(feature = "query")]
+    GetMailbox,
 }
 
 impl From<&Notification> for JustNotification {
@@ -120,6 +126,8 @@ impl From<&Notification> for JustNotification {
             Notification::ReplayLog(_) => JustNotification::ReplayLog,
             #[cfg(feature = "query")]
             Notification::ReplyKsn(_) => JustNotification::ReplyKsn,
+            #[cfg(feature = "query")]
+            Notification::GetMailbox(_) => JustNotification::GetMailbox,
         }
     }
 }

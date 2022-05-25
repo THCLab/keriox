@@ -49,6 +49,9 @@ pub struct SledEventDatabase {
 
     #[cfg(feature = "query")]
     escrowed_replys: SledEventTreeVec<SignedReply>,
+
+    #[cfg(feature = "query")]
+    mailbox_receipts: SledEventTreeVec<SignedNontransferableReceipt>,
 }
 
 impl SledEventDatabase {
@@ -73,6 +76,8 @@ impl SledEventDatabase {
             accepted_rpy: SledEventTreeVec::new(db.open_tree(b"knas")?),
             #[cfg(feature = "query")]
             escrowed_replys: SledEventTreeVec::new(db.open_tree(b"knes")?),
+            #[cfg(feature = "query")]
+            mailbox_receipts: SledEventTreeVec::new(db.open_tree(b"mbxr")?),
         })
     }
 
@@ -422,5 +427,28 @@ impl SledEventDatabase {
     #[cfg(feature = "query")]
     pub fn get_all_escrowed_replys(&self) -> Option<impl DoubleEndedIterator<Item = SignedReply>> {
         self.escrowed_replys.get_all()
+    }
+
+    #[cfg(feature = "query")]
+    pub fn add_mailbox_receipt(
+        &self,
+        receipt: SignedNontransferableReceipt,
+        id: &IdentifierPrefix,
+    ) -> Result<(), Error> {
+        if !self.mailbox_receipts.contains_value(&receipt) {
+            self.mailbox_receipts
+                .push(self.identifiers.designated_key(id), receipt)
+        } else {
+            Ok(())
+        }
+    }
+
+    #[cfg(feature = "query")]
+    pub fn get_mailbox_receipts(
+        &self,
+        id: &IdentifierPrefix,
+    ) -> Option<impl DoubleEndedIterator<Item = SignedNontransferableReceipt>> {
+        self.mailbox_receipts
+            .iter_values(self.identifiers.designated_key(id))
     }
 }

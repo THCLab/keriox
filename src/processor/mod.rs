@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 #[cfg(feature = "query")]
-use crate::query::reply_event::ReplyRoute;
+use crate::query::{query_event::QueryRoute, reply_event::ReplyRoute};
 use crate::{
     database::sled::SledEventDatabase,
     error::Error,
@@ -110,13 +110,14 @@ impl EventProcessor {
                 }
             },
             #[cfg(feature = "query")]
-            Message::Query(qry) => match qry.query.get_route() {
-                crate::query::QueryRoute::Log => {
-                    let pref = qry.query.get_query_data().data.i;
-                    println!("Respond with {} key event log.", pref.to_string());
+            Message::Query(qry) => match qry.query.event.content.data.route {
+                QueryRoute::Log { args } => {
+                    let pref = args.i;
+                    println!("Respond with {} key event log.", pref);
                     Ok(Notification::ReplayLog(pref))
                 }
-                crate::query::QueryRoute::Ksn => todo!(),
+                QueryRoute::Ksn { .. } => todo!(),
+                QueryRoute::Mbx { args } => Ok(Notification::GetMailbox(args)),
             },
         }
     }

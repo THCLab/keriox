@@ -232,10 +232,7 @@ pub mod http_handlers {
         event_parsing::SignedEventData,
         oobi::{EndRole, LocationScheme, Role},
         prefix::{AttachedSignaturePrefix, IdentifierPrefix, Prefix},
-        query::{
-            query_event::{QueryArgs, QueryEvent, SignedQuery},
-            QueryRoute,
-        },
+        query::query_event::{QueryArgs, QueryEvent, QueryRoute, SignedQuery},
     };
 
     use crate::WatcherData;
@@ -308,8 +305,7 @@ pub mod http_handlers {
             src: None,
         };
         let qry_message = QueryEvent::new_query(
-            QueryRoute::Log,
-            qr,
+            QueryRoute::Log { args: qr },
             keri::event::SerializationFormats::JSON,
             &SelfAddressing::Blake3_256,
         )

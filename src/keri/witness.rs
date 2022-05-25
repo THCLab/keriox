@@ -1,5 +1,6 @@
 use std::convert::TryFrom;
 use std::path::Path;
+use std::slice;
 use std::sync::Arc;
 
 use crate::event::receipt::Receipt;
@@ -18,7 +19,7 @@ use crate::query::reply_event::{ReplyEvent, ReplyRoute, SignedReply};
 use crate::query::{
     key_state_notice::KeyStateNotice,
     query_event::{QueryData, SignedQuery},
-    QueryRoute, ReplyType,
+    ReplyType,
 };
 
 use crate::signer::Signer;
@@ -59,6 +60,7 @@ impl Witness {
                 JustNotification::KeyEventAdded,
                 JustNotification::ReplayLog,
                 JustNotification::ReplyKsn,
+                JustNotification::GetMailbox,
             ],
         );
 
@@ -87,7 +89,7 @@ impl Witness {
                 Notification::KeyEventAdded(event) => {
                     let non_trans_receipt =
                         self.respond_to_key_event(event.event_message, signer.clone())?;
-                    response.push(Message::NontransferableRct(non_trans_receipt))
+                    self.storage.add_mailbox_receipt(non_trans_receipt)?;
                 }
                 Notification::ReplayLog(id) => {
                     let mut kel = self
@@ -98,6 +100,10 @@ impl Witness {
                     response.append(&mut kel)
                 }
                 Notification::ReplyKsn(signed_reply) => response.push(Message::Reply(signed_reply)),
+                Notification::GetMailbox(args) => {
+                    let mut mail = self.storage.get_mailbox_events(args)?;
+                    response.append(&mut mail)
+                }
                 _ => return Err(Error::SemanticError("Wrong notification type".into())),
             }
         }
@@ -130,39 +136,33 @@ impl Witness {
     }
 
     pub fn parse_and_process(&self, msg: &[u8]) -> Result<(), Error> {
-        let events = signed_event_stream(msg)
-            .map_err(|e| Error::DeserializeError(e.to_string()))?
-            .1
-            .into_iter()
-            .map(|data| Message::try_from(data));
-        events.clone().try_for_each(|msg| {
-            let msg = msg?;
-            self.process(&vec![msg.clone()])?;
+        let (_, msgs) =
+            signed_event_stream(msg).map_err(|e| Error::DeserializeError(e.to_string()))?;
+
+        for msg in msgs {
+            let msg = Message::try_from(msg)?;
+            self.process(slice::from_ref(&msg))?;
             // check if receipts are attached
-            match msg {
-                Message::Event(ev) => {
-                    if let Some(witness_receipts) = ev.witness_receipts {
-                        // Create and process witness receipts
-                        // TODO What timestamp should be set?
-                        let id = ev.event_message.event.get_prefix();
-                        let receipt = Receipt {
-                            receipted_event_digest: ev.event_message.get_digest(),
-                            prefix: id,
-                            sn: ev.event_message.event.get_sn(),
-                        };
-                        let signed_receipt = SignedNontransferableReceipt::new(
-                            &receipt.to_message(SerializationFormats::JSON)?,
-                            None,
-                            Some(witness_receipts),
-                        );
-                        self.process(&vec![Message::NontransferableRct(signed_receipt)])
-                    } else {
-                        Ok(())
-                    }
+            if let Message::Event(ev) = msg {
+                if let Some(witness_receipts) = ev.witness_receipts {
+                    // Create and process witness receipts
+                    // TODO What timestamp should be set?
+                    let id = ev.event_message.event.get_prefix();
+                    let receipt = Receipt {
+                        receipted_event_digest: ev.event_message.get_digest(),
+                        prefix: id,
+                        sn: ev.event_message.event.get_sn(),
+                    };
+                    let signed_receipt = SignedNontransferableReceipt::new(
+                        &receipt.to_message(SerializationFormats::JSON)?,
+                        None,
+                        Some(witness_receipts),
+                    );
+                    self.process(&[Message::NontransferableRct(signed_receipt)])?;
                 }
-                _ => Ok(()),
             }
-        })
+        }
+        Ok(())
     }
 
     pub fn process(&self, msg: &[Message]) -> Result<(), Error> {
@@ -240,28 +240,24 @@ impl Witness {
         if kc.verify(&qr.query.serialize()?, &signatures)? {
             // TODO check timestamps
             // unpack and check what's inside
-            let route = qr.query.get_route();
-            self.process_query(route, qr.query.get_query_data(), signer)
+            self.process_query(qr.query.get_query_data(), signer)
         } else {
             Err(Error::SignatureVerificationError)
         }
     }
 
     #[cfg(feature = "query")]
-    fn process_query(
-        &self,
-        route: QueryRoute,
-        qr: QueryData,
-        signer: Arc<Signer>,
-    ) -> Result<ReplyType, Error> {
-        match route {
-            QueryRoute::Log => Ok(ReplyType::Kel(
+    fn process_query(&self, qr: QueryData, signer: Arc<Signer>) -> Result<ReplyType, Error> {
+        use crate::query::query_event::QueryRoute;
+
+        match qr.route {
+            QueryRoute::Log { args: data } => Ok(ReplyType::Kel(
                 self.storage
-                    .get_kel_messages_with_receipts(&qr.data.i)?
+                    .get_kel_messages_with_receipts(&data.i)?
                     .ok_or_else(|| Error::SemanticError("No identifier in db".into()))?,
             )),
-            QueryRoute::Ksn => {
-                let i = qr.data.i;
+            QueryRoute::Ksn { args: data } => {
+                let i = data.i;
                 // return reply message with ksn inside
                 let state = self
                     .storage
@@ -280,6 +276,10 @@ impl Witness {
                     SelfSigning::Ed25519Sha512.derive(signature),
                 );
                 Ok(ReplyType::Rep(rpy))
+            }
+            QueryRoute::Mbx { .. } => {
+                // TODO: remove whole fn?
+                todo!("process MBX query")
             }
         }
     }

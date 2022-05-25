@@ -45,12 +45,13 @@ pub fn default_escrow_bus(db: Arc<SledEventDatabase>) -> NotificationBus {
     );
 
     bus.register_observer(
-        Arc::new(TransReceiptsEscrow::new(db)),
+        Arc::new(TransReceiptsEscrow::new(db.clone())),
         vec![
             JustNotification::KeyEventAdded,
             JustNotification::TransReceiptOutOfOrder,
         ],
     );
+
     bus
 }
 

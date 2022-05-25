@@ -60,7 +60,7 @@ impl Message {
             #[cfg(feature = "query")]
             Message::Reply(reply) => reply.reply.get_prefix(),
             #[cfg(feature = "query")]
-            Message::Query(qry) => qry.query.event.content.data.data.i.clone(),
+            Message::Query(qry) => qry.query.get_prefix(),
         }
     }
 }

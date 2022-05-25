@@ -19,8 +19,9 @@ use crate::{
 };
 
 use super::compute_state;
+
 #[cfg(feature = "query")]
-use crate::query::reply_event::SignedReply;
+use crate::query::{query_event::QueryArgsMbx, reply_event::SignedReply};
 
 pub struct EventStorage {
     pub db: Arc<SledEventDatabase>,
@@ -85,7 +86,7 @@ impl EventStorage {
                                 &event.signed_event_message.event_message.event.get_digest(),
                             )
                             .unwrap()
-                            .map(|rct| Message::NontransferableRct(rct));
+                            .map(Message::NontransferableRct);
                         match rcts_from_db {
                             Some(rct) => vec![Message::Event(event.into()), rct],
                             None => vec![Message::Event(event.into())],
@@ -109,6 +110,34 @@ impl EventStorage {
         } else {
             Ok(None)
         }
+    }
+
+    #[cfg(feature = "query")]
+    pub fn add_mailbox_receipt(&self, receipt: SignedNontransferableReceipt) -> Result<(), Error> {
+        let id = receipt.body.event.prefix.clone();
+        self.db.add_mailbox_receipt(receipt, &id)?;
+
+        Ok(())
+    }
+
+    #[cfg(feature = "query")]
+    pub fn get_mailbox_events(&self, args: QueryArgsMbx) -> Result<Vec<Message>, Error> {
+        let id = args.pre.clone();
+
+        let mut messages = Vec::new();
+
+        // query receipts
+        messages.extend(
+            self.db
+                .get_mailbox_receipts(&id)
+                .into_iter()
+                .flatten()
+                .filter(|rec| rec.body.event.sn >= args.topics.receipt)
+                .map(|rec| Message::NontransferableRct(rec)),
+        );
+
+        // TODO: query and return the rest of topics
+        Ok(messages)
     }
 
     /// Get last establishment event seal for Prefix
