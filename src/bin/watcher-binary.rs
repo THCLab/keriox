@@ -423,6 +423,7 @@ pub mod http_handlers {
 #[derive(Deserialize)]
 pub struct WatcherConfig {
     db_path: PathBuf,
+    public_address: Option<String>,
     /// Witness listen host.
     http_host: String,
     /// Witness listen port.
@@ -444,6 +445,7 @@ async fn main() -> Result<()> {
 
     let WatcherConfig {
         db_path,
+        public_address,
         http_host,
         http_port,
         seed,
@@ -451,7 +453,11 @@ async fn main() -> Result<()> {
     } = Figment::new().join(Json::file(config_file)).extract()
         .map_err(|_e| anyhow!("Missing arguments: `db_path`, `http_host`, `http_port`. Set config file path with -c option."))?;
 
-    let http_address = format!("http://{}:{}", http_host, http_port);
+    let http_address = if let Some(address) = public_address {
+        format!("http://{}", address)
+    } else {
+        format!("http://{}:{}", http_host, http_port)
+    };
     let mut oobi_path = db_path.clone();
     oobi_path.push("oobi");
     let mut event_path = db_path.clone();
