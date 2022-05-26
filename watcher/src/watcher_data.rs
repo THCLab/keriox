@@ -1,10 +1,7 @@
 use actix_web::{dev::Server, web, App, HttpServer};
 use anyhow::{anyhow, Result};
 use keri_actors::witness::Witness;
-use std::{
-    path::Path, 
-    sync::Arc,
-};
+use std::{path::Path, sync::Arc};
 
 use keri::{
     derivation::{self_addressing::SelfAddressing, self_signing::SelfSigning},
@@ -35,7 +32,7 @@ impl WatcherData {
             .unwrap_or(Ok(Signer::new()))?;
         let mut witness = Witness::new(event_db_path, signer.public_key())?;
         // construct witness loc scheme oobi
-         let pub_address = if let Some(pub_address) = public_address {
+        let pub_address = if let Some(pub_address) = public_address {
             url::Url::parse(&format!("http://{}", pub_address)).unwrap()
         } else {
             address.clone()
@@ -230,38 +227,6 @@ pub mod http_handlers {
     use super::WatcherData;
 
 
-    // pub async fn accept_loop(data: Arc<KelUpdating>, addr: impl ToSocketAddrs) -> Result<()> {
-    //     let listener = TcpListener::bind(addr).await?;
-    //     let mut incoming = listener.incoming();
-    //     while let Some(stream) = incoming.next().await {
-    //         let stream = stream?;
-    //         println!("Accepting from: {}", stream.peer_addr()?);
-    //         let _handle = task::spawn(handle_connection(stream, data.clone()));
-    //     }
-    //     Ok(())
-    // }
-
-    // async fn handle_connection(stream: TcpStream, data: Arc<KelUpdating>) -> Result<()> {
-    //     let reader = BufReader::new(&stream);
-    //     let mut lines = reader.lines();
-
-    //     while let Some(line) = lines.next().await {
-    //         println!("\ngot via tcp: {}\n", line.as_deref().unwrap());
-    //         data.parse_and_process(line.unwrap().as_bytes()).unwrap();
-    //     }
-    //     let resp = data
-    //         .event_processor
-    //         .respond(data.signer.clone())
-    //         .unwrap()
-    //         .iter()
-    //         .map(|msg| msg.to_cesr().unwrap())
-    //         .flatten()
-    //         .collect::<Vec<_>>();
-    //     stream.clone().write_all(&resp).await?;
-
-    //     Ok(())
-    // }
-
     #[post("/process")]
     async fn process_stream(body: web::Bytes, data: web::Data<WatcherData>) -> impl Responder {
         println!(
@@ -414,4 +379,3 @@ pub mod http_handlers {
             .body(String::from_utf8(oobis).unwrap())
     }
 }
-

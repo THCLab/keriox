@@ -341,11 +341,10 @@ pub fn test_query() -> Result<(), Error> {
 
 #[test]
 fn test_witness_rotation() -> Result<(), Error> {
+    use crate::controller::Controller;
     use keri::event::sections::threshold::SignatureThreshold;
     use std::sync::Mutex;
     use tempfile::Builder;
-    use crate::controller::Controller;
-    
 
     let signer_arc = Arc::new(Signer::new());
     let signer_arc2 = Arc::new(Signer::new());

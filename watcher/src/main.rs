@@ -1,11 +1,14 @@
 use std::path::PathBuf;
 
-use figment::{Figment, providers::{Json, Format}};
+use anyhow::{anyhow, Result};
+use figment::{
+    providers::{Format, Json},
+    Figment,
+};
+use futures::future::join_all;
 use keri::{oobi::LocationScheme, prefix::Prefix};
 use serde::Deserialize;
 use structopt::StructOpt;
-use anyhow::{Result, anyhow};
-use futures::future::join_all;
 
 use crate::watcher_data::WatcherData;
 

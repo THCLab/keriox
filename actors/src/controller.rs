@@ -50,7 +50,10 @@ pub struct Controller<K: KeyManager + 'static> {
 
 impl<K: KeyManager> Controller<K> {
     // incept a state and keys
-    pub fn new(db: Arc<SledEventDatabase>, key_manager: Arc<Mutex<K>>) -> Result<Controller<K>, Error> {
+    pub fn new(
+        db: Arc<SledEventDatabase>,
+        key_manager: Arc<Mutex<K>>,
+    ) -> Result<Controller<K>, Error> {
         let processor = EventProcessor::new(db.clone());
         let mut not_bus = default_escrow_bus(db.clone());
         let responder = Arc::new(Responder::new());
