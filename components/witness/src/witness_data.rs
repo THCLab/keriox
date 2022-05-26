@@ -1,6 +1,6 @@
 use actix_web::{dev::Server, web, App, HttpServer};
 use anyhow::Result;
-use keri_actors::witness::Witness;
+use super::witness::Witness;
 use std::{path::Path, sync::Arc};
 
 use keri::{
@@ -18,10 +18,6 @@ pub struct WitnessListener {
 }
 
 impl WitnessListener {
-    pub fn new(witness_data: Arc<WitnessData>) -> Self {
-        Self { witness_data }
-    }
-
     pub fn setup(
         address: url::Url,
         public_address: Option<String>,
@@ -107,7 +103,7 @@ impl WitnessData {
     }
 
     // TODO stop using url, use loc scheme oobi
-    async fn resolve(&self, url: &str) -> Result<(), Error> {
+    async fn _resolve(&self, url: &str) -> Result<(), Error> {
         let oobis = reqwest::get(String::from_utf8(url.as_bytes().to_vec()).unwrap())
             .await
             .unwrap()

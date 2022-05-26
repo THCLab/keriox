@@ -9,9 +9,12 @@ use keri::prefix::Prefix;
 use serde::Deserialize;
 use structopt::StructOpt;
 
-use crate::witness_data::WitnessListener;
+#[cfg(test)]
+mod tests;
 
-pub mod witness_data;
+pub(crate) mod witness;
+mod witness_data;
+use crate::witness_data::WitnessListener;
 
 #[derive(Deserialize)]
 pub struct WitnessConfig {

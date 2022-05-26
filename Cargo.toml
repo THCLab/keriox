@@ -1,9 +1,9 @@
 [workspace]
 
 members = [
-    "keri_core",
-    "witness",
-    "watcher",
-    "gossip",
-    "actors",
+    "keriox_core",
+    "support/gossip",
+    "components/controller",
+    "components/witness",
+    "components/watcher",
 ]

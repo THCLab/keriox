@@ -12,6 +12,8 @@ use structopt::StructOpt;
 use crate::watcher_data::WatcherListener;
 
 mod watcher_data;
+mod watcher;
+
 #[derive(Deserialize)]
 pub struct WatcherConfig {
     db_path: PathBuf,

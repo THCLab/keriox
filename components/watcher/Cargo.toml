@@ -6,8 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-keri = {path = "../keri_core", features = ["oobi"]}
-keri_actors = {path = "../actors"}
+keri = {path = "../../keriox_core", features = ["oobi"]}
 serde = { version = "1.0", features = ["derive"] }
 structopt = { version = "0.3.25"}
 actix-web = { version = "4"}
@@ -17,3 +16,4 @@ url = { version = "2.2.2", features = ["serde"]}
 reqwest = { version = "0.11", features = ["json", "rustls-tls"], default-features = false }
 serde_json = "1.0"
 futures = { version = "0.3.13" }
+tempfile = { version = "3.1"}

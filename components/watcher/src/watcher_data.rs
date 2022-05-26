@@ -1,7 +1,6 @@
 use actix_web::{dev::Server, web, App, HttpServer};
 use anyhow::{anyhow, Result};
 use futures::future::join_all;
-use keri_actors::witness::Witness;
 use std::{path::Path, sync::Arc};
 
 use keri::{
@@ -12,6 +11,8 @@ use keri::{
     query::reply_event::{ReplyEvent, ReplyRoute, SignedReply},
     signer::Signer,
 };
+
+use crate::watcher::Watcher;
 
 pub struct WatcherListener {
     watcher_data: WatcherData,
@@ -75,7 +76,7 @@ impl WatcherListener {
 
 pub struct WatcherData {
     signer: Arc<Signer>,
-    pub controller: Arc<Witness>,
+    pub controller: Arc<Watcher>,
     oobi_manager: Arc<OobiManager>,
 }
 
@@ -90,7 +91,7 @@ impl WatcherData {
         let signer = priv_key
             .map(|key| Signer::new_with_seed(&key.parse()?))
             .unwrap_or(Ok(Signer::new()))?;
-        let mut witness = Witness::new(event_db_path, signer.public_key())?;
+        let mut witness = Watcher::new(event_db_path, signer.public_key())?;
 
         // construct witness loc scheme oobi
         let loc_scheme = LocationScheme::new(

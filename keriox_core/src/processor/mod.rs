@@ -15,6 +15,7 @@ use crate::{
 pub mod escrow;
 pub mod event_storage;
 pub mod notification;
+pub mod responder;
 #[cfg(test)]
 mod tests;
 pub mod validator;

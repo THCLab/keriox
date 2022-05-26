@@ -1,4 +1,3 @@
-pub mod witness;
 // pub mod wallet_feature;
 pub mod controller;
 
