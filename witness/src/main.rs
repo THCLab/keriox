@@ -66,7 +66,7 @@ async fn main() -> Result<()> {
         witness_listener.get_prefix().to_str(),
         http_address,
     );
-    
+
     let http_handle = witness_listener.listen_http(url::Url::parse(&http_address).unwrap());
     http_handle.await?;
 

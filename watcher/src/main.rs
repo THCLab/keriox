@@ -5,12 +5,11 @@ use figment::{
     providers::{Format, Json},
     Figment,
 };
-use futures::future::join_all;
 use keri::{oobi::LocationScheme, prefix::Prefix};
 use serde::Deserialize;
 use structopt::StructOpt;
 
-use crate::watcher_data::WatcherData;
+use crate::watcher_data::WatcherListener;
 
 mod watcher_data;
 #[derive(Deserialize)]
@@ -28,7 +27,7 @@ pub struct WatcherConfig {
 
 #[derive(Debug, StructOpt)]
 struct Opts {
-    #[structopt(short = "c", long, default_value = "./src/bin/configs/watcher.json")]
+    #[structopt(short = "c", long, default_value = "./watcher.json")]
     config_file: String,
 }
 
@@ -44,7 +43,7 @@ async fn main() -> Result<()> {
         seed,
         initial_oobis,
     } = Figment::new().join(Json::file(config_file)).extract()
-        .map_err(|_e| anyhow!("Missing arguments: `db_path`, `http_host`, `http_port`. Set config file path with -c option."))?;
+        .map_err(|_e| anyhow!("Improper `config.json` structure. Should contain fields: `db_path`, `http_host`, `http_port`. Set config file path with -c option."))?;
 
     let http_address = format!("http://{}:{}", http_host, http_port);
 
@@ -53,7 +52,7 @@ async fn main() -> Result<()> {
     let mut event_path = db_path.clone();
     event_path.push("events");
 
-    let wit_data = WatcherData::setup(
+    let watcher_listener = WatcherListener::setup(
         url::Url::parse(&http_address).unwrap(),
         public_address,
         oobi_path.as_path(),
@@ -61,23 +60,20 @@ async fn main() -> Result<()> {
         seed,
     )
     .unwrap();
-    let wit_prefix = wit_data.controller.prefix.clone();
 
     // Resolve oobi to know how to find witness
-    join_all(
-        initial_oobis
-            .iter()
-            .map(|lc| wit_data.resolve_loc_scheme(lc)),
-    )
-    .await;
+    watcher_listener
+        .resolve_initial_oobis(&initial_oobis)
+        .await
+        .unwrap();
 
     println!(
         "Watcher {} is listening on {}",
-        wit_prefix.to_str(),
+        watcher_listener.get_prefix().to_str(),
         http_address,
     );
 
-    wit_data
+    watcher_listener
         .listen_http(url::Url::parse(&http_address).unwrap())
         .await?;
 
