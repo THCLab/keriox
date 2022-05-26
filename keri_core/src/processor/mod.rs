@@ -10,8 +10,8 @@ use crate::{
     state::IdentifierState,
 };
 
-#[cfg(feature = "async")]
-pub mod async_processing;
+// #[cfg(feature = "async")]
+// pub mod async_processing;
 pub mod escrow;
 pub mod event_storage;
 pub mod notification;

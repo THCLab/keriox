@@ -3,28 +3,28 @@ use std::path::Path;
 use std::slice;
 use std::sync::Arc;
 
-use crate::event::receipt::Receipt;
-use crate::event::EventMessage;
-use crate::event_message::event_msg_builder::ReceiptBuilder;
-use crate::event_message::key_event_message::KeyEvent;
-use crate::event_message::signed_event_message::{Message, SignedNontransferableReceipt};
-use crate::event_parsing::message::signed_event_stream;
-use crate::keys::PublicKey;
-use crate::oobi::OobiManager;
-use crate::processor::escrow::default_escrow_bus;
-use crate::processor::event_storage::EventStorage;
-use crate::processor::notification::{JustNotification, Notification, NotificationBus};
-use crate::processor::witness_processor::WitnessProcessor;
-use crate::query::reply_event::{ReplyEvent, ReplyRoute, SignedReply};
-use crate::query::{
+use keri::event::receipt::Receipt;
+use keri::event::EventMessage;
+use keri::event_message::event_msg_builder::ReceiptBuilder;
+use keri::event_message::key_event_message::KeyEvent;
+use keri::event_message::signed_event_message::{Message, SignedNontransferableReceipt};
+use keri::event_parsing::message::signed_event_stream;
+use keri::keys::PublicKey;
+use keri::oobi::OobiManager;
+use keri::processor::escrow::default_escrow_bus;
+use keri::processor::event_storage::EventStorage;
+use keri::processor::notification::{JustNotification, Notification, NotificationBus};
+use keri::processor::witness_processor::WitnessProcessor;
+use keri::query::reply_event::{ReplyEvent, ReplyRoute, SignedReply};
+use keri::query::{
     key_state_notice::KeyStateNotice,
     query_event::{QueryData, SignedQuery},
     ReplyType,
 };
 
-use crate::signer::Signer;
-use crate::state::IdentifierState;
-use crate::{
+use keri::signer::Signer;
+use keri::state::IdentifierState;
+use keri::{
     database::sled::SledEventDatabase,
     derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
     error::Error,
@@ -32,7 +32,9 @@ use crate::{
     prefix::{BasicPrefix, IdentifierPrefix},
 };
 
-use super::Responder;
+use crate::controller::Responder;
+
+// use super::Responder;
 
 pub struct Witness {
     pub prefix: BasicPrefix,
@@ -246,9 +248,8 @@ impl Witness {
         }
     }
 
-    #[cfg(feature = "query")]
     fn process_query(&self, qr: QueryData, signer: Arc<Signer>) -> Result<ReplyType, Error> {
-        use crate::query::query_event::QueryRoute;
+        use keri::query::query_event::QueryRoute;
 
         match qr.route {
             QueryRoute::Log { args: data } => Ok(ReplyType::Kel(
@@ -290,8 +291,8 @@ impl Witness {
 pub fn test_query() -> Result<(), Error> {
     use std::convert::TryFrom;
 
-    use crate::event_parsing::message::signed_message;
-    use crate::keri::witness::Witness;
+    use keri::event_parsing::message::signed_message;
+    use keri::keri::witness::Witness;
     use tempfile::Builder;
 
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
@@ -340,10 +341,11 @@ pub fn test_query() -> Result<(), Error> {
 
 #[test]
 fn test_witness_rotation() -> Result<(), Error> {
-    use crate::event::sections::threshold::SignatureThreshold;
-    use crate::keri::Keri;
+    use keri::event::sections::threshold::SignatureThreshold;
     use std::sync::Mutex;
     use tempfile::Builder;
+    use crate::controller::Controller;
+    
 
     let signer_arc = Arc::new(Signer::new());
     let signer_arc2 = Arc::new(Signer::new());
@@ -355,10 +357,10 @@ fn test_witness_rotation() -> Result<(), Error> {
         let db_controller = Arc::new(SledEventDatabase::new(root.path()).unwrap());
 
         let key_manager = {
-            use crate::signer::CryptoBox;
+            use keri::signer::CryptoBox;
             Arc::new(Mutex::new(CryptoBox::new()?))
         };
-        Keri::new(Arc::clone(&db_controller), key_manager.clone())?
+        Controller::new(Arc::clone(&db_controller), key_manager.clone())?
     };
 
     assert_eq!(controller.get_state()?, None);
@@ -400,14 +402,14 @@ fn test_witness_rotation() -> Result<(), Error> {
     // Witness updates state of identifier even if it hasn't all receipts
     assert_eq!(
         first_witness
-            .get_state_for_prefix(&controller.prefix)?
+            .get_state_for_prefix(&controller.prefix())?
             .unwrap()
             .sn,
         0
     );
     assert_eq!(
         second_witness
-            .get_state_for_prefix(&controller.prefix)?
+            .get_state_for_prefix(&controller.prefix())?
             .unwrap()
             .sn,
         0
@@ -440,13 +442,13 @@ fn test_witness_rotation() -> Result<(), Error> {
 
     assert_eq!(
         first_witness
-            .get_state_for_prefix(&controller.prefix)?
+            .get_state_for_prefix(&controller.prefix())?
             .map(|state| state.sn),
         Some(0)
     );
     assert_eq!(
         second_witness
-            .get_state_for_prefix(&controller.prefix)?
+            .get_state_for_prefix(&controller.prefix())?
             .map(|state| state.sn),
         Some(0)
     );
@@ -454,12 +456,12 @@ fn test_witness_rotation() -> Result<(), Error> {
     let not_fully_witnessed_events = first_witness
         .storage
         .db
-        .get_partially_witnessed_events(&controller.prefix);
+        .get_partially_witnessed_events(&controller.prefix());
     assert!(not_fully_witnessed_events.is_none());
     let not_fully_witnessed_events = second_witness
         .storage
         .db
-        .get_partially_witnessed_events(&controller.prefix);
+        .get_partially_witnessed_events(&controller.prefix());
     assert!(not_fully_witnessed_events.is_none());
 
     let rotation_event = controller.rotate(
@@ -474,7 +476,7 @@ fn test_witness_rotation() -> Result<(), Error> {
     // Receipt accepted by witness, because his the only designated witness
     assert_eq!(
         first_witness
-            .get_state_for_prefix(&controller.prefix)?
+            .get_state_for_prefix(&controller.prefix())?
             .unwrap()
             .sn,
         1

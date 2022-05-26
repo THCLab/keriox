@@ -6,7 +6,7 @@ use std::{
 
 #[cfg(feature = "oobi")]
 use crate::oobi::OobiManager;
-use crate::{
+use keri::{
     database::sled::SledEventDatabase,
     derivation::basic::Basic,
     derivation::self_addressing::SelfAddressing,
@@ -39,12 +39,7 @@ use crate::{
     state::IdentifierState,
 };
 
-#[cfg(test)]
-mod test;
-#[cfg(feature = "query")]
-pub mod witness;
-// pub mod wallet_feature;
-pub struct Keri<K: KeyManager + 'static> {
+pub struct Controller<K: KeyManager + 'static> {
     prefix: IdentifierPrefix,
     key_manager: Arc<Mutex<K>>,
     processor: EventProcessor,
@@ -53,15 +48,15 @@ pub struct Keri<K: KeyManager + 'static> {
     response_queue: Arc<Responder<Notification>>,
 }
 
-impl<K: KeyManager> Keri<K> {
+impl<K: KeyManager> Controller<K> {
     // incept a state and keys
-    pub fn new(db: Arc<SledEventDatabase>, key_manager: Arc<Mutex<K>>) -> Result<Keri<K>, Error> {
+    pub fn new(db: Arc<SledEventDatabase>, key_manager: Arc<Mutex<K>>) -> Result<Controller<K>, Error> {
         let processor = EventProcessor::new(db.clone());
         let mut not_bus = default_escrow_bus(db.clone());
         let responder = Arc::new(Responder::new());
         not_bus.register_observer(responder.clone(), vec![JustNotification::KeyEventAdded]);
 
-        Ok(Keri {
+        Ok(Controller {
             prefix: IdentifierPrefix::default(),
             key_manager,
             processor,

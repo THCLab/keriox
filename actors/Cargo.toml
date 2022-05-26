@@ -1,0 +1,11 @@
+[package]
+name = "keri_actors"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+keri = {path = "../keri_core", features = ["oobi"]}
+serde_json = "1.0"
+tempfile = { version = "3.1"}

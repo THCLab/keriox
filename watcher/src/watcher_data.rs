@@ -1,29 +1,21 @@
 use actix_web::{dev::Server, web, App, HttpServer};
 use anyhow::{anyhow, Result};
-use figment::{
-    providers::{Format, Json},
-    Figment,
-};
-use futures::future::join_all;
-use serde::Deserialize;
+use keri_actors::witness::Witness;
 use std::{
-    path::{Path, PathBuf},
+    path::Path, 
     sync::Arc,
 };
-use structopt::StructOpt;
 
 use keri::{
-    self,
     derivation::{self_addressing::SelfAddressing, self_signing::SelfSigning},
     error::Error,
-    keri::witness::Witness,
     oobi::{EndRole, LocationScheme, OobiManager, Role, Scheme},
-    prefix::{IdentifierPrefix, Prefix},
+    prefix::IdentifierPrefix,
     query::reply_event::{ReplyEvent, ReplyRoute, SignedReply},
     signer::Signer,
 };
 
-struct WatcherData {
+pub struct WatcherData {
     signer: Arc<Signer>,
     pub controller: Arc<Witness>,
     oobi_manager: Arc<OobiManager>,
@@ -202,7 +194,7 @@ impl WatcherData {
         })
     }
 
-    fn listen_http(self, address: url::Url) -> Server {
+    pub fn listen_http(self, address: url::Url) -> Server {
         let host = address.host().unwrap().to_string();
         let port = address.port().unwrap();
 
@@ -235,7 +227,8 @@ pub mod http_handlers {
         query::query_event::{QueryArgs, QueryEvent, QueryRoute, SignedQuery},
     };
 
-    use crate::WatcherData;
+    use super::WatcherData;
+
 
     // pub async fn accept_loop(data: Arc<KelUpdating>, addr: impl ToSocketAddrs) -> Result<()> {
     //     let listener = TcpListener::bind(addr).await?;
@@ -422,73 +415,3 @@ pub mod http_handlers {
     }
 }
 
-#[derive(Deserialize)]
-pub struct WatcherConfig {
-    db_path: PathBuf,
-    public_address: Option<String>,
-    /// Witness listen host.
-    http_host: String,
-    /// Witness listen port.
-    http_port: u16,
-    /// Witness private key
-    seed: Option<String>,
-    initial_oobis: Vec<LocationScheme>,
-}
-
-#[derive(Debug, StructOpt)]
-struct Opts {
-    #[structopt(short = "c", long, default_value = "./src/bin/configs/watcher.json")]
-    config_file: String,
-}
-
-#[actix_web::main]
-async fn main() -> Result<()> {
-    let Opts { config_file } = Opts::from_args();
-
-    let WatcherConfig {
-        db_path,
-        public_address,
-        http_host,
-        http_port,
-        seed,
-        initial_oobis,
-    } = Figment::new().join(Json::file(config_file)).extract()
-        .map_err(|_e| anyhow!("Missing arguments: `db_path`, `http_host`, `http_port`. Set config file path with -c option."))?;
-
-    let http_address = format!("http://{}:{}", http_host, http_port);
-
-    let mut oobi_path = db_path.clone();
-    oobi_path.push("oobi");
-    let mut event_path = db_path.clone();
-    event_path.push("events");
-
-    let wit_data = WatcherData::setup(
-        url::Url::parse(&http_address).unwrap(),
-        public_address,
-        oobi_path.as_path(),
-        event_path.as_path(),
-        seed,
-    )
-    .unwrap();
-    let wit_prefix = wit_data.controller.prefix.clone();
-
-    // Resolve oobi to know how to find witness
-    join_all(
-        initial_oobis
-            .iter()
-            .map(|lc| wit_data.resolve_loc_scheme(lc)),
-    )
-    .await;
-
-    println!(
-        "Watcher {} is listening on {}",
-        wit_prefix.to_str(),
-        http_address,
-    );
-
-    wit_data
-        .listen_http(url::Url::parse(&http_address).unwrap())
-        .await?;
-
-    Ok(())
-}
