@@ -1,6 +1,6 @@
+use super::witness::Witness;
 use actix_web::{dev::Server, web, App, HttpServer};
 use anyhow::Result;
-use super::witness::Witness;
 use std::{path::Path, sync::Arc};
 
 use keri::{

@@ -1,7 +1,10 @@
 use std::sync::{Arc, Mutex};
 
 use controller::controller::Controller;
-use keri::{error::Error, signer::Signer, database::sled::SledEventDatabase, event_message::signed_event_message::Message};
+use keri::{
+    database::sled::SledEventDatabase, error::Error, event_message::signed_event_message::Message,
+    signer::Signer,
+};
 
 use crate::witness::Witness;
 

@@ -11,8 +11,8 @@ use structopt::StructOpt;
 
 use crate::watcher_data::WatcherListener;
 
-mod watcher_data;
 mod watcher;
+mod watcher_data;
 
 #[derive(Deserialize)]
 pub struct WatcherConfig {

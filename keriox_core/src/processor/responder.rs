@@ -2,8 +2,7 @@ use std::{collections::VecDeque, sync::Mutex};
 
 use crate::error::Error;
 
-use super::notification::{Notifier, Notification, NotificationBus};
-
+use super::notification::{Notification, NotificationBus, Notifier};
 
 // Helper struct for appending data that need response.
 #[derive(Default)]

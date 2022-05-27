@@ -34,8 +34,6 @@ use keri::{
 };
 
 
-// use super::Responder;
-
 pub struct Witness {
     pub prefix: BasicPrefix,
     processor: WitnessProcessor,
@@ -336,4 +334,3 @@ pub fn test_query() -> Result<(), Error> {
 
     Ok(())
 }
-
