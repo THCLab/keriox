@@ -225,7 +225,10 @@ fn test_qry() {
 
     let (_extra, event) = query_message(stream.as_bytes()).unwrap();
     assert!(matches!(event, EventType::Qry(_)));
-    assert_eq!(event.serialize().unwrap(), qry_event.as_bytes());
+    assert_eq!(
+        String::from_utf8_lossy(&event.serialize().unwrap()),
+        qry_event
+    );
 }
 
 #[cfg(feature = "query")]

@@ -33,7 +33,6 @@ use keri::{
     prefix::{BasicPrefix, IdentifierPrefix},
 };
 
-
 pub struct Witness {
     pub prefix: BasicPrefix,
     processor: WitnessProcessor,
@@ -250,13 +249,13 @@ impl Witness {
         use keri::query::query_event::QueryRoute;
 
         match qr.route {
-            QueryRoute::Log { args: data } => Ok(ReplyType::Kel(
+            QueryRoute::Log { args, .. } => Ok(ReplyType::Kel(
                 self.storage
-                    .get_kel_messages_with_receipts(&data.i)?
+                    .get_kel_messages_with_receipts(&args.i)?
                     .ok_or_else(|| Error::SemanticError("No identifier in db".into()))?,
             )),
-            QueryRoute::Ksn { args: data } => {
-                let i = data.i;
+            QueryRoute::Ksn { args, .. } => {
+                let i = args.i;
                 // return reply message with ksn inside
                 let state = self
                     .storage

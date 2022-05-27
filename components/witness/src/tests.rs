@@ -227,7 +227,10 @@ fn test_qry_rpy() -> Result<(), Error> {
     };
 
     let qry = QueryEvent::new_query(
-        QueryRoute::Ksn { args: query_args },
+        QueryRoute::Ksn {
+            args: query_args,
+            reply_route: String::from(""),
+        },
         SerializationFormats::JSON,
         &SelfAddressing::Blake3_256,
     )?;
@@ -265,7 +268,10 @@ fn test_qry_rpy() -> Result<(), Error> {
         src: None,
     };
     let qry = QueryEvent::new_query(
-        QueryRoute::Log { args: query_args },
+        QueryRoute::Log {
+            args: query_args,
+            reply_route: String::from(""),
+        },
         SerializationFormats::JSON,
         &SelfAddressing::Blake3_256,
     )?;

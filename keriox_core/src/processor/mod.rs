@@ -112,13 +112,13 @@ impl EventProcessor {
             },
             #[cfg(feature = "query")]
             Message::Query(qry) => match qry.query.event.content.data.route {
-                QueryRoute::Log { args } => {
+                QueryRoute::Log { args, .. } => {
                     let pref = args.i;
                     println!("Respond with {} key event log.", pref);
                     Ok(Notification::ReplayLog(pref))
                 }
                 QueryRoute::Ksn { .. } => todo!(),
-                QueryRoute::Mbx { args } => Ok(Notification::GetMailbox(args)),
+                QueryRoute::Mbx { args, .. } => Ok(Notification::GetMailbox(args)),
             },
         }
     }

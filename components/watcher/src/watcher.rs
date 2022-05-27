@@ -249,12 +249,12 @@ impl Watcher {
         use keri::query::query_event::QueryRoute;
 
         match qr.route {
-            QueryRoute::Log { args: data } => Ok(ReplyType::Kel(
+            QueryRoute::Log { args: data, .. } => Ok(ReplyType::Kel(
                 self.storage
                     .get_kel_messages_with_receipts(&data.i)?
                     .ok_or_else(|| Error::SemanticError("No identifier in db".into()))?,
             )),
-            QueryRoute::Ksn { args: data } => {
+            QueryRoute::Ksn { args: data, .. } => {
                 let i = data.i;
                 // return reply message with ksn inside
                 let state = self
