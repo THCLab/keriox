@@ -262,6 +262,14 @@ fn test_qry_rpy() -> Result<(), Error> {
     let alice_icp = alice.incept(Some(vec![witness.prefix.clone()]), None)?;
     // send alices icp to witness
     witness.process(&[Message::Event(alice_icp)])?;
+    witness.respond(signer_arc.clone())?;
+    // send receipts to alice
+    let receipt_to_alice = witness
+        .storage
+        .db
+        .get_mailbox_receipts(alice.prefix()).unwrap().map(|e| Message::NontransferableRct(e)).collect::<Vec<_>>();
+    alice.process(&receipt_to_alice)?;
+    
     // send bobs icp to witness to have his keys
     witness.process(&[Message::Event(bob_icp)])?;
     let _receipts = witness.respond(signer_arc.clone());
