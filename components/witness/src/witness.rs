@@ -306,8 +306,8 @@ pub fn test_query() -> Result<(), Error> {
         .collect();
     witness.process(to_process.as_slice()).unwrap();
     let response = witness.respond(signer_arc.clone())?;
-    // should respond with one receipt event
-    assert_eq!(response.len(), 1);
+    // shouldn't respond with receipt immediately
+    assert_eq!(response.len(), 0);
 
     let qry_str = r#"{"v":"KERI10JSON000104_","t":"qry","d":"ErXRrwRbUFylKDiuOp8a1wO2XPAY4KiMX4TzYWZ1iAGE","dt":"2022-03-21T11:42:58.123955+00:00","r":"ksn","rr":"","q":{"s":0,"i":"E6OK2wFYp6x0Jx48xX0GCTwAzJUTWtYEvJSykVhtAnaM","src":"BGKVzj4ve0VSd8z_AmvhLg4lqcC_9WYX90k03q-R_Ydo"}}-VAj-HABE6OK2wFYp6x0Jx48xX0GCTwAzJUTWtYEvJSykVhtAnaM-AABAAk-Hyv8gpUZNpPYDGJc5F5vrLNWlGM26523Sgb6tKN1CtP4QxUjEApJCRxfm9TN8oW2nQ40QVM_IuZlrly1eLBA"#;
 
@@ -333,3 +333,5 @@ pub fn test_query() -> Result<(), Error> {
 
     Ok(())
 }
+
+// TODO: test_query_mbx

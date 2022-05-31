@@ -2,7 +2,13 @@ use std::sync::{Arc, Mutex};
 
 use controller::controller::Controller;
 use keri::{
-    database::sled::SledEventDatabase, error::Error, event_message::signed_event_message::Message,
+    database::sled::SledEventDatabase,
+    derivation::{self_addressing::SelfAddressing, self_signing::SelfSigning},
+    error::Error,
+    event::SerializationFormats,
+    event_message::signed_event_message::Message,
+    prefix::{AttachedSignaturePrefix, IdentifierPrefix},
+    query::query_event::{QueryArgsMbx, QueryEvent, QueryRoute, QueryTopics, SignedQuery},
     signer::Signer,
 };
 
@@ -57,7 +63,8 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
     // Shouldn't be accepted in controllers kel, because of missing witness receipts
     assert_eq!(controller.get_state()?, None);
 
-    let receipts = [&first_witness, &second_witness]
+    // TODO: Witness doesn't respond with receipts anymore. Need to use mailbox query.
+    let _receipts = [&first_witness, &second_witness]
         .iter()
         .map(|w| {
             w.process(&vec![Message::Event(inception_event.clone())])
@@ -66,6 +73,47 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
         })
         .flatten()
         .collect::<Vec<_>>();
+
+    // WIP: Get receipts using mbx query
+    let receipts = [&first_witness, &second_witness]
+        .iter()
+        .flat_map(|wit| {
+            let qry_msg = QueryEvent::new_query(
+                QueryRoute::Mbx {
+                    args: QueryArgsMbx {
+                        i: IdentifierPrefix::Basic(wit.prefix.clone()),
+                        pre: IdentifierPrefix::Basic(wit.prefix.clone()),
+                        src: IdentifierPrefix::Basic(wit.prefix.clone()),
+                        topics: QueryTopics {
+                            credential: 0,
+                            receipt: 0,
+                            replay: 0,
+                            multisig: 0,
+                            delegate: 0,
+                        },
+                    },
+                    reply_route: "".to_string(),
+                },
+                SerializationFormats::JSON,
+                &SelfAddressing::Blake3_256,
+            )
+            .unwrap();
+            let signature = signer_arc.sign(qry_msg.serialize().unwrap()).unwrap();
+            let signatures = vec![AttachedSignaturePrefix::new(
+                SelfSigning::Ed25519Sha512,
+                signature,
+                0,
+            )];
+            let mbx_msg = Message::Query(SignedQuery::new(
+                qry_msg,
+                controller.prefix().clone(),
+                signatures,
+            ));
+            wit.process(&[mbx_msg]).unwrap();
+            wit.respond(signer_arc.clone()).unwrap()
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(receipts.len(), 2);
 
     // Witness updates state of identifier even if it hasn't all receipts
     assert_eq!(
