@@ -98,7 +98,10 @@ impl Watcher {
                         .unwrap();
                     response.append(&mut kel)
                 }
-                Notification::ReplyKsn(signed_reply) => response.push(Message::Reply(signed_reply)),
+                Notification::ReplyKsn(ksn_prefix) => {
+                    let reply = self.get_ksn_for_prefix(&ksn_prefix, signer.clone())?;
+                    response.push(Message::Reply(reply))
+                }
                 Notification::GetMailbox(args) => {
                     let mut mail = self.storage.get_mailbox_events(args)?;
                     response.append(&mut mail)

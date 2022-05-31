@@ -117,7 +117,10 @@ impl EventProcessor {
                     println!("Respond with {} key event log.", pref);
                     Ok(Notification::ReplayLog(pref))
                 }
-                QueryRoute::Ksn { .. } => todo!(),
+                QueryRoute::Ksn {
+                    reply_route: _,
+                    args,
+                } => Ok(Notification::ReplyKsn(args.i)),
                 QueryRoute::Mbx { args, .. } => Ok(Notification::GetMailbox(args)),
             },
         }

@@ -53,7 +53,6 @@ pub struct QueryArgsMbx {
     pub i: IdentifierPrefix,
     /// To which witness given query message reply will be sent
     pub src: IdentifierPrefix,
-
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
