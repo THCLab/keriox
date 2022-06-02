@@ -1,4 +1,3 @@
-#![cfg(feature = "gossip")]
 //! Gossip server can be used to share some data across different program instances over the network.
 //!
 //! First create instance with some initial data and call [`Server::start`].

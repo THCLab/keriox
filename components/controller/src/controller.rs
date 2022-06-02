@@ -1,12 +1,11 @@
 use std::{
-    collections::VecDeque,
     convert::TryFrom,
     sync::{Arc, Mutex},
 };
 
 #[cfg(feature = "oobi")]
 use crate::oobi::OobiManager;
-use crate::{
+use keri::{
     database::sled::SledEventDatabase,
     derivation::basic::Basic,
     derivation::self_addressing::SelfAddressing,
@@ -32,19 +31,15 @@ use crate::{
     processor::{
         escrow::default_escrow_bus,
         event_storage::EventStorage,
-        notification::{JustNotification, Notification, NotificationBus, Notifier},
+        notification::{JustNotification, Notification, NotificationBus},
+        responder::Responder,
         EventProcessor,
     },
     signer::KeyManager,
     state::IdentifierState,
 };
 
-#[cfg(test)]
-mod test;
-#[cfg(feature = "query")]
-pub mod witness;
-// pub mod wallet_feature;
-pub struct Keri<K: KeyManager + 'static> {
+pub struct Controller<K: KeyManager + 'static> {
     prefix: IdentifierPrefix,
     key_manager: Arc<Mutex<K>>,
     processor: EventProcessor,
@@ -53,15 +48,18 @@ pub struct Keri<K: KeyManager + 'static> {
     response_queue: Arc<Responder<Notification>>,
 }
 
-impl<K: KeyManager> Keri<K> {
+impl<K: KeyManager> Controller<K> {
     // incept a state and keys
-    pub fn new(db: Arc<SledEventDatabase>, key_manager: Arc<Mutex<K>>) -> Result<Keri<K>, Error> {
+    pub fn new(
+        db: Arc<SledEventDatabase>,
+        key_manager: Arc<Mutex<K>>,
+    ) -> Result<Controller<K>, Error> {
         let processor = EventProcessor::new(db.clone());
         let mut not_bus = default_escrow_bus(db.clone());
         let responder = Arc::new(Responder::new());
         not_bus.register_observer(responder.clone(), vec![JustNotification::KeyEventAdded]);
 
-        Ok(Keri {
+        Ok(Controller {
             prefix: IdentifierPrefix::default(),
             key_manager,
             processor,
@@ -522,38 +520,5 @@ impl<K: KeyManager> Keri<K> {
             .db
             .add_receipt_nt(ntr.clone(), &message.event.get_prefix())?;
         Ok(ntr)
-    }
-}
-
-// Helper struct for appending data that need response.
-#[derive(Default)]
-pub struct Responder<D> {
-    needs_response: Mutex<VecDeque<D>>,
-}
-
-impl<D> Responder<D> {
-    pub fn new() -> Self {
-        Self {
-            needs_response: Mutex::new(VecDeque::new()),
-        }
-    }
-
-    pub fn get_data_to_respond(&self) -> Option<D> {
-        self.needs_response.lock().unwrap().pop_front()
-    }
-
-    pub fn append(&self, element: D) -> Result<(), Error> {
-        self.needs_response.lock().unwrap().push_back(element);
-        Ok(())
-    }
-}
-
-impl Notifier for Responder<Notification> {
-    fn notify(&self, notification: &Notification, _bus: &NotificationBus) -> Result<(), Error> {
-        self.needs_response
-            .lock()
-            .unwrap()
-            .push_back((*notification).clone());
-        Ok(())
     }
 }

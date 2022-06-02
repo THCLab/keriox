@@ -1,38 +1,88 @@
 use actix_web::{dev::Server, web, App, HttpServer};
 use anyhow::{anyhow, Result};
-use figment::{
-    providers::{Format, Json},
-    Figment,
-};
 use futures::future::join_all;
-use serde::Deserialize;
-use std::{
-    path::{Path, PathBuf},
-    sync::Arc,
-};
-use structopt::StructOpt;
+use std::{path::Path, sync::Arc};
 
 use keri::{
-    self,
     derivation::{self_addressing::SelfAddressing, self_signing::SelfSigning},
     error::Error,
-    keri::witness::Witness,
     oobi::{EndRole, LocationScheme, OobiManager, Role, Scheme},
-    prefix::{IdentifierPrefix, Prefix},
+    prefix::{BasicPrefix, IdentifierPrefix},
     query::reply_event::{ReplyEvent, ReplyRoute, SignedReply},
     signer::Signer,
 };
 
-struct WatcherData {
+use crate::watcher::Watcher;
+
+pub struct WatcherListener {
+    watcher_data: WatcherData,
+}
+
+impl WatcherListener {
+    pub fn setup(
+        address: url::Url,
+        public_address: Option<String>,
+        event_db_path: &Path,
+        oobi_db_path: &Path,
+        priv_key: Option<String>,
+    ) -> Result<Self, Error> {
+        let pub_address = if let Some(pub_address) = public_address {
+            url::Url::parse(&format!("http://{}", pub_address)).unwrap()
+        } else {
+            address.clone()
+        };
+
+        WatcherData::setup(pub_address, event_db_path, oobi_db_path, priv_key)
+            .map(|watcher_data| Self { watcher_data })
+    }
+
+    pub fn listen_http(self, address: url::Url) -> Server {
+        let host = address.host().unwrap().to_string();
+        let port = address.port().unwrap();
+
+        let state = web::Data::new(self.watcher_data);
+        HttpServer::new(move || {
+            App::new()
+                .app_data(state.clone())
+                .service(http_handlers::get_eid_oobi)
+                .service(http_handlers::get_cid_oobi)
+                .service(http_handlers::get_kel)
+                .service(http_handlers::resolve_oobi)
+                .service(http_handlers::process_stream)
+            // .service(resolve)
+        })
+        .bind((host, port))
+        .unwrap()
+        .run()
+    }
+
+    pub async fn resolve_initial_oobis(
+        &self,
+        initial_oobis: &[LocationScheme],
+    ) -> Result<(), Error> {
+        join_all(
+            initial_oobis
+                .iter()
+                .map(|lc| self.watcher_data.resolve_loc_scheme(lc)),
+        )
+        .await;
+        Ok(())
+    }
+
+    pub fn get_prefix(&self) -> BasicPrefix {
+        self.watcher_data.controller.prefix.clone()
+    }
+}
+
+pub struct WatcherData {
     signer: Arc<Signer>,
-    pub controller: Arc<Witness>,
+    pub controller: Arc<Watcher>,
     oobi_manager: Arc<OobiManager>,
 }
 
 impl WatcherData {
     pub fn setup(
-        address: url::Url,
-        public_address: Option<String>,
+        public_address: url::Url,
         event_db_path: &Path,
         oobi_db_path: &Path,
         priv_key: Option<String>,
@@ -41,17 +91,13 @@ impl WatcherData {
         let signer = priv_key
             .map(|key| Signer::new_with_seed(&key.parse()?))
             .unwrap_or(Ok(Signer::new()))?;
-        let mut witness = Witness::new(event_db_path, signer.public_key())?;
+        let mut witness = Watcher::new(event_db_path, signer.public_key())?;
+
         // construct witness loc scheme oobi
-         let pub_address = if let Some(pub_address) = public_address {
-            url::Url::parse(&format!("http://{}", pub_address)).unwrap()
-        } else {
-            address.clone()
-        };
         let loc_scheme = LocationScheme::new(
             IdentifierPrefix::Basic(witness.prefix.clone()),
-            pub_address.scheme().parse().unwrap(),
-            pub_address.clone(),
+            public_address.scheme().parse().unwrap(),
+            public_address.clone(),
         );
         let reply = ReplyEvent::new_reply(
             ReplyRoute::LocScheme(loc_scheme),
@@ -151,22 +197,6 @@ impl WatcherData {
                     Ok(Some(response))
                 }
                 Scheme::Tcp => {
-                    // let mut stream = TcpStream::connect(format!(
-                    //     "{}:{}",
-                    //     address
-                    //         .host()
-                    //         .ok_or(anyhow!("Wrong url, missing host {:?}", schema))?,
-                    //     address
-                    //         .port()
-                    //         .ok_or(anyhow!("Wrong url, missing port {:?}", schema))?
-                    // ))
-                    // .await?;
-                    // stream.write(&msg).await?;
-                    // println!("Sending message to witness {}", wit_id.to_str());
-                    // let mut buf = vec![];
-                    // stream.read(&mut buf).await?;
-                    // println!("Got response: {}", String::from_utf8(buf).unwrap());
-                    // Ok(None)
                     todo!()
                 }
             },
@@ -174,7 +204,7 @@ impl WatcherData {
         }
     }
 
-    fn get_cid_end_role(
+    fn get_end_role_for_id(
         &self,
         cid: &IdentifierPrefix,
         role: Role,
@@ -201,26 +231,6 @@ impl WatcherData {
             None => None,
         })
     }
-
-    fn listen_http(self, address: url::Url) -> Server {
-        let host = address.host().unwrap().to_string();
-        let port = address.port().unwrap();
-
-        let state = web::Data::new(self);
-        HttpServer::new(move || {
-            App::new()
-                .app_data(state.clone())
-                .service(http_handlers::get_eid_oobi)
-                .service(http_handlers::get_cid_oobi)
-                .service(http_handlers::get_kel)
-                .service(http_handlers::resolve_oobi)
-                .service(http_handlers::process_stream)
-            // .service(resolve)
-        })
-        .bind((host, port))
-        .unwrap()
-        .run()
-    }
 }
 
 pub mod http_handlers {
@@ -235,39 +245,7 @@ pub mod http_handlers {
         query::query_event::{QueryArgs, QueryEvent, QueryRoute, SignedQuery},
     };
 
-    use crate::WatcherData;
-
-    // pub async fn accept_loop(data: Arc<KelUpdating>, addr: impl ToSocketAddrs) -> Result<()> {
-    //     let listener = TcpListener::bind(addr).await?;
-    //     let mut incoming = listener.incoming();
-    //     while let Some(stream) = incoming.next().await {
-    //         let stream = stream?;
-    //         println!("Accepting from: {}", stream.peer_addr()?);
-    //         let _handle = task::spawn(handle_connection(stream, data.clone()));
-    //     }
-    //     Ok(())
-    // }
-
-    // async fn handle_connection(stream: TcpStream, data: Arc<KelUpdating>) -> Result<()> {
-    //     let reader = BufReader::new(&stream);
-    //     let mut lines = reader.lines();
-
-    //     while let Some(line) = lines.next().await {
-    //         println!("\ngot via tcp: {}\n", line.as_deref().unwrap());
-    //         data.parse_and_process(line.unwrap().as_bytes()).unwrap();
-    //     }
-    //     let resp = data
-    //         .event_processor
-    //         .respond(data.signer.clone())
-    //         .unwrap()
-    //         .iter()
-    //         .map(|msg| msg.to_cesr().unwrap())
-    //         .flatten()
-    //         .collect::<Vec<_>>();
-    //     stream.clone().write_all(&resp).await?;
-
-    //     Ok(())
-    // }
+    use super::WatcherData;
 
     #[post("/process")]
     async fn process_stream(body: web::Bytes, data: web::Data<WatcherData>) -> impl Responder {
@@ -305,7 +283,10 @@ pub mod http_handlers {
             src: None,
         };
         let qry_message = QueryEvent::new_query(
-            QueryRoute::Log { args: qr },
+            QueryRoute::Log {
+                args: qr,
+                reply_route: String::from(""),
+            },
             keri::event::SerializationFormats::JSON,
             &SelfAddressing::Blake3_256,
         )
@@ -398,7 +379,10 @@ pub mod http_handlers {
     ) -> impl Responder {
         let (cid, role, eid) = path.into_inner();
 
-        let end_role = data.get_cid_end_role(&cid, role).unwrap().unwrap_or(vec![]);
+        let end_role = data
+            .get_end_role_for_id(&cid, role)
+            .unwrap()
+            .unwrap_or(vec![]);
         let loc_scheme = data.get_eid_loc_scheme(&eid).unwrap().unwrap_or(vec![]);
         let oobis: Vec<u8> = end_role
             .into_iter()
@@ -420,75 +404,4 @@ pub mod http_handlers {
             .content_type(ContentType::plaintext())
             .body(String::from_utf8(oobis).unwrap())
     }
-}
-
-#[derive(Deserialize)]
-pub struct WatcherConfig {
-    db_path: PathBuf,
-    public_address: Option<String>,
-    /// Witness listen host.
-    http_host: String,
-    /// Witness listen port.
-    http_port: u16,
-    /// Witness private key
-    seed: Option<String>,
-    initial_oobis: Vec<LocationScheme>,
-}
-
-#[derive(Debug, StructOpt)]
-struct Opts {
-    #[structopt(short = "c", long, default_value = "./src/bin/configs/watcher.json")]
-    config_file: String,
-}
-
-#[actix_web::main]
-async fn main() -> Result<()> {
-    let Opts { config_file } = Opts::from_args();
-
-    let WatcherConfig {
-        db_path,
-        public_address,
-        http_host,
-        http_port,
-        seed,
-        initial_oobis,
-    } = Figment::new().join(Json::file(config_file)).extract()
-        .map_err(|_e| anyhow!("Missing arguments: `db_path`, `http_host`, `http_port`. Set config file path with -c option."))?;
-
-    let http_address = format!("http://{}:{}", http_host, http_port);
-
-    let mut oobi_path = db_path.clone();
-    oobi_path.push("oobi");
-    let mut event_path = db_path.clone();
-    event_path.push("events");
-
-    let wit_data = WatcherData::setup(
-        url::Url::parse(&http_address).unwrap(),
-        public_address,
-        oobi_path.as_path(),
-        event_path.as_path(),
-        seed,
-    )
-    .unwrap();
-    let wit_prefix = wit_data.controller.prefix.clone();
-
-    // Resolve oobi to know how to find witness
-    join_all(
-        initial_oobis
-            .iter()
-            .map(|lc| wit_data.resolve_loc_scheme(lc)),
-    )
-    .await;
-
-    println!(
-        "Watcher {} is listening on {}",
-        wit_prefix.to_str(),
-        http_address,
-    );
-
-    wit_data
-        .listen_http(url::Url::parse(&http_address).unwrap())
-        .await?;
-
-    Ok(())
 }

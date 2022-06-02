@@ -74,7 +74,7 @@ pub enum Notification {
     #[cfg(feature = "query")]
     ReplayLog(IdentifierPrefix),
     #[cfg(feature = "query")]
-    ReplyKsn(SignedReply),
+    ReplyKsn(IdentifierPrefix),
     #[cfg(feature = "query")]
     GetMailbox(QueryArgsMbx),
 }

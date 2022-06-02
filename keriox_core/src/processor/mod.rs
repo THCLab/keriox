@@ -10,11 +10,12 @@ use crate::{
     state::IdentifierState,
 };
 
-#[cfg(feature = "async")]
-pub mod async_processing;
+// #[cfg(feature = "async")]
+// pub mod async_processing;
 pub mod escrow;
 pub mod event_storage;
 pub mod notification;
+pub mod responder;
 #[cfg(test)]
 mod tests;
 pub mod validator;
@@ -111,13 +112,16 @@ impl EventProcessor {
             },
             #[cfg(feature = "query")]
             Message::Query(qry) => match qry.query.event.content.data.route {
-                QueryRoute::Log { args } => {
+                QueryRoute::Log { args, .. } => {
                     let pref = args.i;
                     println!("Respond with {} key event log.", pref);
                     Ok(Notification::ReplayLog(pref))
                 }
-                QueryRoute::Ksn { .. } => todo!(),
-                QueryRoute::Mbx { args } => Ok(Notification::GetMailbox(args)),
+                QueryRoute::Ksn {
+                    reply_route: _,
+                    args,
+                } => Ok(Notification::ReplyKsn(args.i)),
+                QueryRoute::Mbx { args, .. } => Ok(Notification::GetMailbox(args)),
             },
         }
     }

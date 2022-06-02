@@ -3,28 +3,29 @@ use std::path::Path;
 use std::slice;
 use std::sync::Arc;
 
-use crate::event::receipt::Receipt;
-use crate::event::EventMessage;
-use crate::event_message::event_msg_builder::ReceiptBuilder;
-use crate::event_message::key_event_message::KeyEvent;
-use crate::event_message::signed_event_message::{Message, SignedNontransferableReceipt};
-use crate::event_parsing::message::signed_event_stream;
-use crate::keys::PublicKey;
-use crate::oobi::OobiManager;
-use crate::processor::escrow::default_escrow_bus;
-use crate::processor::event_storage::EventStorage;
-use crate::processor::notification::{JustNotification, Notification, NotificationBus};
-use crate::processor::witness_processor::WitnessProcessor;
-use crate::query::reply_event::{ReplyEvent, ReplyRoute, SignedReply};
-use crate::query::{
+use keri::event::receipt::Receipt;
+use keri::event::EventMessage;
+use keri::event_message::event_msg_builder::ReceiptBuilder;
+use keri::event_message::key_event_message::KeyEvent;
+use keri::event_message::signed_event_message::{Message, SignedNontransferableReceipt};
+use keri::event_parsing::message::signed_event_stream;
+use keri::keys::PublicKey;
+use keri::oobi::OobiManager;
+use keri::processor::escrow::default_escrow_bus;
+use keri::processor::event_storage::EventStorage;
+use keri::processor::notification::{JustNotification, Notification, NotificationBus};
+use keri::processor::responder::Responder;
+use keri::processor::witness_processor::WitnessProcessor;
+use keri::query::reply_event::{ReplyEvent, ReplyRoute, SignedReply};
+use keri::query::{
     key_state_notice::KeyStateNotice,
     query_event::{QueryData, SignedQuery},
     ReplyType,
 };
 
-use crate::signer::Signer;
-use crate::state::IdentifierState;
-use crate::{
+use keri::signer::Signer;
+use keri::state::IdentifierState;
+use keri::{
     database::sled::SledEventDatabase,
     derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
     error::Error,
@@ -32,12 +33,10 @@ use crate::{
     prefix::{BasicPrefix, IdentifierPrefix},
 };
 
-use super::Responder;
-
 pub struct Witness {
     pub prefix: BasicPrefix,
     processor: WitnessProcessor,
-    storage: EventStorage,
+    pub storage: EventStorage,
     publisher: NotificationBus,
     responder: Arc<Responder<Notification>>,
 }
@@ -99,7 +98,10 @@ impl Witness {
                         .unwrap();
                     response.append(&mut kel)
                 }
-                Notification::ReplyKsn(signed_reply) => response.push(Message::Reply(signed_reply)),
+                Notification::ReplyKsn(ksn_prefix) => {
+                    let reply = self.get_ksn_for_prefix(&ksn_prefix, signer.clone())?;
+                    response.push(Message::Reply(reply))
+                }
                 Notification::GetMailbox(args) => {
                     let mut mail = self.storage.get_mailbox_events(args)?;
                     response.append(&mut mail)
@@ -246,18 +248,17 @@ impl Witness {
         }
     }
 
-    #[cfg(feature = "query")]
     fn process_query(&self, qr: QueryData, signer: Arc<Signer>) -> Result<ReplyType, Error> {
-        use crate::query::query_event::QueryRoute;
+        use keri::query::query_event::QueryRoute;
 
         match qr.route {
-            QueryRoute::Log { args: data } => Ok(ReplyType::Kel(
+            QueryRoute::Log { args, .. } => Ok(ReplyType::Kel(
                 self.storage
-                    .get_kel_messages_with_receipts(&data.i)?
+                    .get_kel_messages_with_receipts(&args.i)?
                     .ok_or_else(|| Error::SemanticError("No identifier in db".into()))?,
             )),
-            QueryRoute::Ksn { args: data } => {
-                let i = data.i;
+            QueryRoute::Ksn { args, .. } => {
+                let i = args.i;
                 // return reply message with ksn inside
                 let state = self
                     .storage
@@ -285,13 +286,11 @@ impl Witness {
     }
 }
 
-#[cfg(feature = "query")]
 #[test]
 pub fn test_query() -> Result<(), Error> {
     use std::convert::TryFrom;
 
-    use crate::event_parsing::message::signed_message;
-    use crate::keri::witness::Witness;
+    use keri::event_parsing::message::signed_message;
     use tempfile::Builder;
 
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
@@ -310,8 +309,8 @@ pub fn test_query() -> Result<(), Error> {
         .collect();
     witness.process(to_process.as_slice()).unwrap();
     let response = witness.respond(signer_arc.clone())?;
-    // should respond with one receipt event
-    assert_eq!(response.len(), 1);
+    // shouldn't respond with receipt immediately
+    assert_eq!(response.len(), 0);
 
     let qry_str = r#"{"v":"KERI10JSON000104_","t":"qry","d":"ErXRrwRbUFylKDiuOp8a1wO2XPAY4KiMX4TzYWZ1iAGE","dt":"2022-03-21T11:42:58.123955+00:00","r":"ksn","rr":"","q":{"s":0,"i":"E6OK2wFYp6x0Jx48xX0GCTwAzJUTWtYEvJSykVhtAnaM","src":"BGKVzj4ve0VSd8z_AmvhLg4lqcC_9WYX90k03q-R_Ydo"}}-VAj-HABE6OK2wFYp6x0Jx48xX0GCTwAzJUTWtYEvJSykVhtAnaM-AABAAk-Hyv8gpUZNpPYDGJc5F5vrLNWlGM26523Sgb6tKN1CtP4QxUjEApJCRxfm9TN8oW2nQ40QVM_IuZlrly1eLBA"#;
 
@@ -338,158 +337,4 @@ pub fn test_query() -> Result<(), Error> {
     Ok(())
 }
 
-#[test]
-fn test_witness_rotation() -> Result<(), Error> {
-    use crate::event::sections::threshold::SignatureThreshold;
-    use crate::keri::Keri;
-    use std::sync::Mutex;
-    use tempfile::Builder;
-
-    let signer_arc = Arc::new(Signer::new());
-    let signer_arc2 = Arc::new(Signer::new());
-
-    let mut controller = {
-        // Create test db and event processor.
-        let root = Builder::new().prefix("test-db").tempdir().unwrap();
-        std::fs::create_dir_all(root.path()).unwrap();
-        let db_controller = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-
-        let key_manager = {
-            use crate::signer::CryptoBox;
-            Arc::new(Mutex::new(CryptoBox::new()?))
-        };
-        Keri::new(Arc::clone(&db_controller), key_manager.clone())?
-    };
-
-    assert_eq!(controller.get_state()?, None);
-
-    let first_witness = {
-        let root_witness = Builder::new().prefix("test-db1").tempdir().unwrap();
-        std::fs::create_dir_all(root_witness.path()).unwrap();
-        Witness::new(root_witness.path(), signer_arc.clone().public_key())?
-    };
-
-    let second_witness = {
-        let root_witness = Builder::new().prefix("test-db1").tempdir().unwrap();
-        std::fs::create_dir_all(root_witness.path()).unwrap();
-        Witness::new(root_witness.path(), signer_arc2.clone().public_key())?
-    };
-
-    // Get inception event.
-    let inception_event = controller.incept(
-        Some(vec![
-            first_witness.prefix.clone(),
-            second_witness.prefix.clone(),
-        ]),
-        Some(SignatureThreshold::Simple(2)),
-    )?;
-
-    // Shouldn't be accepted in controllers kel, because of missing witness receipts
-    assert_eq!(controller.get_state()?, None);
-
-    let receipts = [&first_witness, &second_witness]
-        .iter()
-        .map(|w| {
-            w.process(&vec![Message::Event(inception_event.clone())])
-                .unwrap();
-            w.respond(signer_arc.clone()).unwrap().clone()
-        })
-        .flatten()
-        .collect::<Vec<_>>();
-
-    // Witness updates state of identifier even if it hasn't all receipts
-    assert_eq!(
-        first_witness
-            .get_state_for_prefix(&controller.prefix)?
-            .unwrap()
-            .sn,
-        0
-    );
-    assert_eq!(
-        second_witness
-            .get_state_for_prefix(&controller.prefix)?
-            .unwrap()
-            .sn,
-        0
-    );
-
-    // process first receipt
-    controller.process(&[receipts[0].clone()]).unwrap();
-
-    // Still not fully witnessed
-    assert_eq!(controller.get_state()?, None);
-
-    // process second receipt
-    controller.process(&[receipts[1].clone()]).unwrap();
-
-    // Now fully witnessed, should be in kel
-    assert_eq!(controller.get_state()?.map(|state| state.sn), Some(0));
-    assert_eq!(
-        controller
-            .get_state()?
-            .map(|state| state.witness_config.witnesses),
-        Some(vec![
-            first_witness.prefix.clone(),
-            second_witness.prefix.clone()
-        ])
-    );
-
-    // Process receipts by witnesses.
-    first_witness.process(receipts.as_slice())?;
-    second_witness.process(receipts.as_slice())?;
-
-    assert_eq!(
-        first_witness
-            .get_state_for_prefix(&controller.prefix)?
-            .map(|state| state.sn),
-        Some(0)
-    );
-    assert_eq!(
-        second_witness
-            .get_state_for_prefix(&controller.prefix)?
-            .map(|state| state.sn),
-        Some(0)
-    );
-
-    let not_fully_witnessed_events = first_witness
-        .storage
-        .db
-        .get_partially_witnessed_events(&controller.prefix);
-    assert!(not_fully_witnessed_events.is_none());
-    let not_fully_witnessed_events = second_witness
-        .storage
-        .db
-        .get_partially_witnessed_events(&controller.prefix);
-    assert!(not_fully_witnessed_events.is_none());
-
-    let rotation_event = controller.rotate(
-        None,
-        Some(&[second_witness.prefix.clone()]),
-        Some(SignatureThreshold::Simple(1)),
-    );
-    // Rotation not yet accepted by controller, missing receipts
-    assert_eq!(controller.get_state()?.unwrap().sn, 0);
-    first_witness.process(&[Message::Event(rotation_event?)])?;
-    let first_receipt = first_witness.respond(signer_arc)?;
-    // Receipt accepted by witness, because his the only designated witness
-    assert_eq!(
-        first_witness
-            .get_state_for_prefix(&controller.prefix)?
-            .unwrap()
-            .sn,
-        1
-    );
-
-    // process receipt by controller
-    controller.process(first_receipt.as_slice())?;
-    assert_eq!(controller.get_state()?.unwrap().sn, 1);
-
-    assert_eq!(
-        controller
-            .get_state()?
-            .map(|state| state.witness_config.witnesses),
-        Some(vec![first_witness.prefix.clone(),])
-    );
-
-    Ok(())
-}
+// TODO: test_query_mbx
