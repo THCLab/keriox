@@ -63,23 +63,21 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
     // Shouldn't be accepted in controllers kel, because of missing witness receipts
     assert_eq!(controller.get_state()?, None);
 
-    for w in [&first_witness, &second_witness] {
-        w.process(&vec![Message::Event(inception_event.clone())])
-            .unwrap();
-        w.respond(signer_arc.clone()).unwrap();
-    }
+    let receipts = [&first_witness, &second_witness]
+        .iter()
+        .flat_map(|w| {
+            w.process(&vec![Message::Event(inception_event.clone())])
+                .unwrap();
+            w.respond(signer_arc.clone()).unwrap();
+            w.storage
+                .db
+                .get_mailbox_receipts(controller.prefix())
+                .into_iter()
+                .flatten()
+        })
+        .map(Message::NontransferableRct)
+        .collect::<Vec<_>>();
 
-    let ctrl_prefix = controller.prefix().clone();
-
-    // WIP: Get receipts using mbx query
-    // TODO: Take receipts directly from witness' DB
-    let receipts = [
-        (&first_witness, signer_arc.clone()),
-        (&second_witness, signer_arc2.clone()),
-    ]
-    .into_iter()
-    .flat_map(|(wit, signer)| get_receipts(wit, signer, ctrl_prefix.clone()))
-    .collect::<Vec<_>>();
     assert_eq!(receipts.len(), 2);
 
     // Witness updates state of identifier even if it hasn't all receipts
@@ -156,7 +154,14 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
     assert_eq!(controller.get_state()?.unwrap().sn, 0);
     first_witness.process(&[Message::Event(rotation_event?)])?;
     first_witness.respond(signer_arc.clone())?;
-    let first_receipt = get_receipts(&first_witness, signer_arc.clone(), ctrl_prefix);
+    let first_receipt = first_witness
+        .storage
+        .db
+        .get_mailbox_receipts(controller.prefix())
+        .unwrap()
+        .map(Message::NontransferableRct)
+        .collect::<Vec<_>>();
+
     // Receipt accepted by witness, because his the only designated witness
     assert_eq!(
         first_witness
@@ -167,7 +172,7 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
     );
 
     // process receipt by controller
-    controller.process(first_receipt.as_slice())?;
+    controller.process(&first_receipt)?;
     assert_eq!(controller.get_state()?.unwrap().sn, 1);
 
     assert_eq!(
@@ -452,31 +457,12 @@ fn test_mbx() {
         .unwrap();
     witness.respond(signer.clone()).unwrap();
 
-    let receipts = get_receipts(&witness, signer, controller.prefix().clone());
-
-    assert_eq!(receipts.len(), 1);
-    let receipt = receipts[0].clone();
-
-    let receipt = if let Message::NontransferableRct(receipt) = receipt {
-        receipt
-    } else {
-        panic!("didn't receive a receipt")
-    };
-
-    assert_eq!(receipt.body.event.sn, 0);
-    assert_eq!(receipt.body.event.prefix, controller.prefix().clone());
-}
-
-/// Helper function to get receipts using query mbx.
-// TODO: Inline this into test_mbx.
-#[cfg(test)]
-fn get_receipts(wit: &Witness, signer: Arc<Signer>, ctrl_prefix: IdentifierPrefix) -> Vec<Message> {
     let qry_msg = QueryEvent::new_query(
         QueryRoute::Mbx {
             args: QueryArgsMbx {
-                i: IdentifierPrefix::Basic(wit.prefix.clone()),
-                pre: ctrl_prefix.clone(),
-                src: IdentifierPrefix::Basic(wit.prefix.clone()),
+                i: IdentifierPrefix::Basic(witness.prefix.clone()),
+                pre: controller.prefix().clone(),
+                src: IdentifierPrefix::Basic(witness.prefix.clone()),
                 topics: QueryTopics {
                     credential: 0,
                     receipt: 0,
@@ -499,8 +485,24 @@ fn get_receipts(wit: &Witness, signer: Arc<Signer>, ctrl_prefix: IdentifierPrefi
         0,
     )];
 
-    let mbx_msg = Message::Query(SignedQuery::new(qry_msg, ctrl_prefix.clone(), signatures));
+    let mbx_msg = Message::Query(SignedQuery::new(
+        qry_msg,
+        controller.prefix().clone().clone(),
+        signatures,
+    ));
 
-    wit.process(&[mbx_msg]).unwrap();
-    wit.respond(signer.clone()).unwrap()
+    witness.process(&[mbx_msg]).unwrap();
+    let receipts = &witness.respond(signer.clone()).unwrap();
+
+    assert_eq!(receipts.len(), 1);
+    let receipt = receipts[0].clone();
+
+    let receipt = if let Message::NontransferableRct(receipt) = receipt {
+        receipt
+    } else {
+        panic!("didn't receive a receipt")
+    };
+
+    assert_eq!(receipt.body.event.sn, 0);
+    assert_eq!(receipt.body.event.prefix, controller.prefix().clone());
 }
