@@ -33,7 +33,6 @@ use keri::{
     prefix::{BasicPrefix, IdentifierPrefix},
 };
 
-
 pub struct Witness {
     pub prefix: BasicPrefix,
     processor: WitnessProcessor,
@@ -99,7 +98,10 @@ impl Witness {
                         .unwrap();
                     response.append(&mut kel)
                 }
-                Notification::ReplyKsn(signed_reply) => response.push(Message::Reply(signed_reply)),
+                Notification::ReplyKsn(ksn_prefix) => {
+                    let reply = self.get_ksn_for_prefix(&ksn_prefix, signer.clone())?;
+                    response.push(Message::Reply(reply))
+                }
                 Notification::GetMailbox(args) => {
                     let mut mail = self.storage.get_mailbox_events(args)?;
                     response.append(&mut mail)
@@ -250,13 +252,13 @@ impl Witness {
         use keri::query::query_event::QueryRoute;
 
         match qr.route {
-            QueryRoute::Log { args: data } => Ok(ReplyType::Kel(
+            QueryRoute::Log { args, .. } => Ok(ReplyType::Kel(
                 self.storage
-                    .get_kel_messages_with_receipts(&data.i)?
+                    .get_kel_messages_with_receipts(&args.i)?
                     .ok_or_else(|| Error::SemanticError("No identifier in db".into()))?,
             )),
-            QueryRoute::Ksn { args: data } => {
-                let i = data.i;
+            QueryRoute::Ksn { args, .. } => {
+                let i = args.i;
                 // return reply message with ksn inside
                 let state = self
                     .storage
@@ -307,8 +309,8 @@ pub fn test_query() -> Result<(), Error> {
         .collect();
     witness.process(to_process.as_slice()).unwrap();
     let response = witness.respond(signer_arc.clone())?;
-    // should respond with one receipt event
-    assert_eq!(response.len(), 1);
+    // shouldn't respond with receipt immediately
+    assert_eq!(response.len(), 0);
 
     let qry_str = r#"{"v":"KERI10JSON000104_","t":"qry","d":"ErXRrwRbUFylKDiuOp8a1wO2XPAY4KiMX4TzYWZ1iAGE","dt":"2022-03-21T11:42:58.123955+00:00","r":"ksn","rr":"","q":{"s":0,"i":"E6OK2wFYp6x0Jx48xX0GCTwAzJUTWtYEvJSykVhtAnaM","src":"BGKVzj4ve0VSd8z_AmvhLg4lqcC_9WYX90k03q-R_Ydo"}}-VAj-HABE6OK2wFYp6x0Jx48xX0GCTwAzJUTWtYEvJSykVhtAnaM-AABAAk-Hyv8gpUZNpPYDGJc5F5vrLNWlGM26523Sgb6tKN1CtP4QxUjEApJCRxfm9TN8oW2nQ40QVM_IuZlrly1eLBA"#;
 
@@ -334,3 +336,5 @@ pub fn test_query() -> Result<(), Error> {
 
     Ok(())
 }
+
+// TODO: test_query_mbx

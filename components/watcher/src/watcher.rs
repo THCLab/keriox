@@ -98,7 +98,10 @@ impl Watcher {
                         .unwrap();
                     response.append(&mut kel)
                 }
-                Notification::ReplyKsn(signed_reply) => response.push(Message::Reply(signed_reply)),
+                Notification::ReplyKsn(ksn_prefix) => {
+                    let reply = self.get_ksn_for_prefix(&ksn_prefix, signer.clone())?;
+                    response.push(Message::Reply(reply))
+                }
                 Notification::GetMailbox(args) => {
                     let mut mail = self.storage.get_mailbox_events(args)?;
                     response.append(&mut mail)
@@ -249,12 +252,12 @@ impl Watcher {
         use keri::query::query_event::QueryRoute;
 
         match qr.route {
-            QueryRoute::Log { args: data } => Ok(ReplyType::Kel(
+            QueryRoute::Log { args: data, .. } => Ok(ReplyType::Kel(
                 self.storage
                     .get_kel_messages_with_receipts(&data.i)?
                     .ok_or_else(|| Error::SemanticError("No identifier in db".into()))?,
             )),
-            QueryRoute::Ksn { args: data } => {
+            QueryRoute::Ksn { args: data, .. } => {
                 let i = data.i;
                 // return reply message with ksn inside
                 let state = self

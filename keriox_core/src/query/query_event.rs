@@ -15,9 +15,6 @@ use super::Timestamped;
 pub struct QueryData {
     #[serde(flatten)]
     pub route: QueryRoute,
-
-    #[serde(rename = "rr")]
-    pub reply_route: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -25,16 +22,22 @@ pub struct QueryData {
 pub enum QueryRoute {
     #[serde(rename = "log")]
     Log {
+        #[serde(rename = "rr")]
+        reply_route: String,
         #[serde(rename = "q")]
         args: QueryArgs,
     },
     #[serde(rename = "ksn")]
     Ksn {
+        #[serde(rename = "rr")]
+        reply_route: String,
         #[serde(rename = "q")]
         args: QueryArgs,
     },
     #[serde(rename = "mbx")]
     Mbx {
+        #[serde(rename = "rr")]
+        reply_route: String,
         #[serde(rename = "q")]
         args: QueryArgsMbx,
     },
@@ -42,14 +45,14 @@ pub enum QueryRoute {
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct QueryArgsMbx {
-    /// Controller's currently used indentifier
-    pub i: IdentifierPrefix,
     /// Identifier to be queried
     pub pre: IdentifierPrefix,
+    /// Types of mail to query and their minimum serial number
+    pub topics: QueryTopics,
+    /// Controller's currently used indentifier
+    pub i: IdentifierPrefix,
     /// To which witness given query message reply will be sent
     pub src: IdentifierPrefix,
-
-    pub topics: QueryTopics,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -83,10 +86,7 @@ impl QueryEvent {
         serialization_format: SerializationFormats,
         derivation: &SelfAddressing,
     ) -> Result<Self, Error> {
-        let message = QueryData {
-            reply_route: "route".into(),
-            route,
-        };
+        let message = QueryData { route };
 
         let env = Timestamped::new(message);
         env.to_message(serialization_format, derivation)
@@ -98,8 +98,8 @@ impl QueryEvent {
 
     pub fn get_prefix(&self) -> IdentifierPrefix {
         match self.event.content.data.route {
-            QueryRoute::Log { ref args } | QueryRoute::Ksn { ref args } => args.i.clone(),
-            QueryRoute::Mbx { ref args } => args.i.clone(),
+            QueryRoute::Log { ref args, .. } | QueryRoute::Ksn { ref args, .. } => args.i.clone(),
+            QueryRoute::Mbx { ref args, .. } => args.i.clone(),
         }
     }
 }
@@ -144,6 +144,11 @@ fn test_query_deserialize() {
             ..
         }
     ));
+
+    assert_eq!(
+        input_query,
+        &String::from_utf8_lossy(&qr.serialize().unwrap())
+    );
 }
 
 #[test]
@@ -164,9 +169,14 @@ fn test_query_mbx_deserialize() {
                         delegate: 0
                     },
                     ..
-                }
+                },
+                ..
             },
-            ..
         }
     ));
+
+    assert_eq!(
+        input_query,
+        &String::from_utf8_lossy(&qr.serialize().unwrap())
+    );
 }

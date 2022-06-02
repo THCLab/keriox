@@ -283,7 +283,10 @@ pub mod http_handlers {
             src: None,
         };
         let qry_message = QueryEvent::new_query(
-            QueryRoute::Log { args: qr },
+            QueryRoute::Log {
+                args: qr,
+                reply_route: String::from(""),
+            },
             keri::event::SerializationFormats::JSON,
             &SelfAddressing::Blake3_256,
         )
