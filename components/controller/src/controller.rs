@@ -29,11 +29,9 @@ use keri::{
     prefix::AttachedSignaturePrefix,
     prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix, SelfSigningPrefix},
     processor::{
-        escrow::default_escrow_bus,
         event_storage::EventStorage,
-        notification::{JustNotification, Notification, NotificationBus},
-        responder::Responder,
-        EventProcessor,
+        notification::{Notification},
+        responder::Responder, BasicProcessor,
     },
     signer::KeyManager,
     state::IdentifierState,
@@ -42,9 +40,8 @@ use keri::{
 pub struct Controller<K: KeyManager + 'static> {
     prefix: IdentifierPrefix,
     key_manager: Arc<Mutex<K>>,
-    processor: EventProcessor,
+    processor: BasicProcessor,
     pub storage: EventStorage,
-    notification_bus: NotificationBus,
     response_queue: Arc<Responder<Notification>>,
 }
 
@@ -54,10 +51,10 @@ impl<K: KeyManager> Controller<K> {
         db: Arc<SledEventDatabase>,
         key_manager: Arc<Mutex<K>>,
     ) -> Result<Controller<K>, Error> {
-        let processor = EventProcessor::new(db.clone());
-        let mut not_bus = default_escrow_bus(db.clone());
+        let processor = BasicProcessor::new(db.clone());
+        // let mut not_bus = default_escrow_bus(db.clone());
         let responder = Arc::new(Responder::new());
-        not_bus.register_observer(responder.clone(), vec![JustNotification::KeyEventAdded]);
+        // not_bus.register_observer(responder.clone(), vec![JustNotification::KeyEventAdded]);
 
         Ok(Controller {
             prefix: IdentifierPrefix::default(),
@@ -65,7 +62,6 @@ impl<K: KeyManager> Controller<K> {
             processor,
             storage: EventStorage::new(db),
             response_queue: responder,
-            notification_bus: not_bus,
         })
     }
 
@@ -118,8 +114,7 @@ impl<K: KeyManager> Controller<K> {
             None,
         );
 
-        let notification = self.processor.process(Message::Event(signed.clone()))?;
-        self.notification_bus.notify(&notification)?;
+        self.processor.process(Message::Event(signed.clone()))?;
 
         self.prefix = icp.event.get_prefix();
         // No need to generate receipt
@@ -196,8 +191,7 @@ impl<K: KeyManager> Controller<K> {
             None,
         );
 
-        let notification = self.processor.process(Message::Event(rot.clone()))?;
-        self.notification_bus.notify(&notification)?;
+        self.processor.process(Message::Event(rot.clone()))?;
 
         Ok(rot)
     }
@@ -261,8 +255,7 @@ impl<K: KeyManager> Controller<K> {
             None,
         );
 
-        let notification = self.processor.process(Message::Event(ixn.clone()))?;
-        self.notification_bus.notify(&notification)?;
+        self.processor.process(Message::Event(ixn.clone()))?;
 
         Ok(ixn)
     }
@@ -319,22 +312,21 @@ impl<K: KeyManager> Controller<K> {
     }
 
     pub fn process(&self, msg: &[Message]) -> Result<(), Error> {
-        let (process_ok, process_failed): (Vec<_>, Vec<_>) = msg
+        let (_process_ok, _process_failed): (Vec<_>, Vec<_>) = msg
             .iter()
             .map(|message| {
                 self.processor
                     .process(message.clone())
-                    .and_then(|not| self.notification_bus.notify(&not))
             })
             .partition(Result::is_ok);
-        let _oks = process_ok
-            .into_iter()
-            .map(Result::unwrap)
-            .collect::<Vec<_>>();
-        let _errs = process_failed
-            .into_iter()
-            .map(Result::unwrap_err)
-            .collect::<Vec<_>>();
+        // let _oks = process_ok
+        //     .into_iter()
+        //     .map(Result::unwrap)
+        //     .collect::<Vec<_>>();
+        // let _errs = process_failed
+        //     .into_iter()
+        //     .map(Result::unwrap_err)
+        //     .collect::<Vec<_>>();
 
         Ok(())
     }

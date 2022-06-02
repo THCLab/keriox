@@ -9,7 +9,7 @@ use crate::prefix::{AttachedSignaturePrefix, IdentifierPrefix, Prefix, SeedPrefi
 use crate::processor::escrow::default_escrow_bus;
 use crate::processor::event_storage::EventStorage;
 use crate::processor::notification::Notification;
-use crate::processor::EventProcessor;
+use crate::processor::{EventProcessor, BasicProcessor};
 use crate::signer::Signer;
 use crate::{database::sled::SledEventDatabase, error::Error};
 use std::convert::TryFrom;
@@ -25,7 +25,7 @@ fn test_process() -> Result<(), Error> {
     fs::create_dir_all(root.path()).unwrap();
 
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-    let event_processor = EventProcessor::new(Arc::clone(&db));
+    let event_processor = BasicProcessor::new(Arc::clone(&db));
     let event_storage = EventStorage::new(Arc::clone(&db));
     // Events and sigs are from keripy `test_multisig_digprefix` test.
     // (keripy/tests/core/test_eventing.py#1138)

@@ -3,11 +3,11 @@ use std::sync::Arc;
 use crate::{
     database::sled::SledEventDatabase,
     error::Error,
-    event_message::signed_event_message::Message,
+    event_message::signed_event_message::{Message, SignedEventMessage},
     processor::{notification::NotificationBus, JustNotification},
 };
 
-use super::{notification::Notification, EventProcessor};
+use super::{notification::Notification, EventProcessor, validator::EventValidator};
 
 pub struct WitnessProcessor(EventProcessor);
 
@@ -26,24 +26,43 @@ impl WitnessProcessor {
                 JustNotification::KeyEventAdded,
             ],
         );
-        let processor = EventProcessor::new(db);
+        let processor = EventProcessor::new(db, bus);
         Self(processor)
+    }
+
+    fn witness_processing_strategy(db: Arc<SledEventDatabase>, publisher: &NotificationBus, signed_event: SignedEventMessage) -> Result<(), Error> {
+        let id = &signed_event.event_message.event.get_prefix();
+        let validator = EventValidator::new(db.clone());
+        match validator.validate_event(&signed_event) {
+            Ok(_) => {
+                db.add_kel_finalized_event(signed_event.clone(), id)?;
+                publisher
+                    .notify(&Notification::KeyEventAdded(signed_event))
+            }
+            Err(Error::EventOutOfOrderError) => publisher
+                .notify(&Notification::OutOfOrder(signed_event)),
+            Err(Error::NotEnoughReceiptsError) => {
+                db.add_kel_finalized_event(signed_event.clone(), id)?;
+            publisher
+                    .notify(&Notification::KeyEventAdded(signed_event))
+            },
+            Err(Error::NotEnoughSigsError) => publisher
+                .notify(&Notification::PartiallySigned(signed_event)),
+            Err(Error::EventDuplicateError) => {
+                db.add_duplicious_event(signed_event.clone(), id)?;
+                publisher
+                    .notify(&Notification::DupliciousEvent(signed_event))
+            }
+            Err(e) => Err(e),
+        }
     }
 
     /// Process
     ///
     /// Process a deserialized KERI message.
     /// Ignore not fully witness error and accept not fully witnessed events.
-    pub fn process(&self, message: Message) -> Result<Notification, Error> {
-        let res = self.0.process(message)?;
-        if let Notification::PartiallyWitnessed(signed_event) = res {
-            let id = &signed_event.event_message.event.get_prefix();
-            self.0
-                .db
-                .add_kel_finalized_event(signed_event.clone(), id)?;
-            Ok(Notification::KeyEventAdded(signed_event))
-        } else {
-            Ok(res)
-        }
+    pub fn process(&self, message: Message) -> Result<(), Error> {
+        self.0.process(message, WitnessProcessor::witness_processing_strategy)?;
+        Ok(())
     }
 }

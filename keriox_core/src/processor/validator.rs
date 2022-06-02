@@ -1,6 +1,6 @@
 #[cfg(feature = "query")]
 use crate::prefix::IdentifierPrefix;
-use crate::prefix::{BasicPrefix, SelfSigningPrefix};
+use crate::{prefix::{BasicPrefix, SelfSigningPrefix}, processor::BasicProcessor};
 #[cfg(feature = "query")]
 use crate::query::{key_state_notice::KeyStateNotice, reply_event::SignedReply, QueryError};
 #[cfg(feature = "query")]
@@ -410,14 +410,14 @@ impl EventValidator {
 fn test_validate_seal() -> Result<(), Error> {
     use crate::event_message::Digestible;
     use crate::event_parsing::message::signed_message;
-    use crate::processor::{EventProcessor, Message};
+    use crate::processor::Message;
     use std::{convert::TryFrom, fs, sync::Arc};
     use tempfile::Builder;
     // Create test db and event processor.
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     fs::create_dir_all(root.path()).unwrap();
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-    let event_processor = EventProcessor::new(Arc::clone(&db));
+    let event_processor = BasicProcessor::new(Arc::clone(&db));
 
     // Events and sigs are from keripy `test_delegation` test.
     // (keripy/tests/core/test_delegating.py:#test_delegation)
