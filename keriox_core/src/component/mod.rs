@@ -16,9 +16,7 @@ use crate::{
     oobi::{LocationScheme, OobiManager, Role},
     prefix::{BasicPrefix, IdentifierPrefix},
     processor::{
-        event_processor::Processor,
-        event_storage::EventStorage,
-        notification::Notification,
+        event_processor::Processor, event_storage::EventStorage, notification::Notification,
         responder::Responder,
     },
     query::{
@@ -198,10 +196,7 @@ impl<P: Processor> NontransferableActor<P> {
                 }
             }
             Message::Query(qry) => {
-                let response = self
-                    .actor
-                    .process_signed_query(qry)
-                    .unwrap();
+                let response = self.actor.process_signed_query(qry).unwrap();
                 match response {
                     ReplyType::Ksn(ksn) => {
                         let rpy = ReplyEvent::new_reply(
@@ -219,7 +214,7 @@ impl<P: Processor> NontransferableActor<P> {
                         ));
                         responses.push(reply);
                     }
-                    ReplyType::Kel(msgs) | ReplyType::Mbx(msgs)  => responses.extend(msgs),
+                    ReplyType::Kel(msgs) | ReplyType::Mbx(msgs) => responses.extend(msgs),
                 };
             }
             Message::NontransferableRct(_) => self.actor.process(&msg).unwrap(),
@@ -234,16 +229,22 @@ impl<P: Processor> NontransferableActor<P> {
         Ok(responses)
     }
 
-    pub fn parse_and_process(&self, input_stream: &[u8]) -> Result<(), Error> {
+    pub fn parse_and_process(&self, input_stream: &[u8]) -> Result<Vec<Message>, Error> {
         let (_, msgs) = signed_event_stream(input_stream)
             .map_err(|e| Error::DeserializeError(e.to_string()))
             .unwrap();
 
-        for msg in msgs {
-            let msg = Message::try_from(msg).unwrap();
-            self.process(msg)?;
-        }
-        Ok(())
+        let output = msgs
+            .into_iter()
+            .map(|msg| -> Result<_, _> {
+                let msg = Message::try_from(msg)?;
+                self.process(msg)
+            })
+            // TODO: avoid unwrap
+            .map(|d| d.unwrap())
+            .flatten()
+            .collect();
+        Ok(output)
     }
 }
 
@@ -262,10 +263,7 @@ impl<P: Processor> Actor<P> {
             )
         };
 
-        Ok(Self {
-            processor,
-            storage,
-        })
+        Ok(Self { processor, storage })
     }
 
     pub fn get_db_ref(&self) -> Arc<SledEventDatabase> {
@@ -299,10 +297,7 @@ impl<P: Processor> Actor<P> {
         Ok(ksn)
     }
 
-    pub fn process_signed_query(
-        &self,
-        qr: SignedQuery,
-    ) -> Result<ReplyType, Error> {
+    pub fn process_signed_query(&self, qr: SignedQuery) -> Result<ReplyType, Error> {
         let signatures = qr.signatures;
         // check signatures
         let kc = self

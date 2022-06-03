@@ -3,9 +3,7 @@ use std::sync::Arc;
 use crate::{
     database::sled::SledEventDatabase,
     error::Error,
-    event_message::{
-        signed_event_message::{Message, SignedEventMessage},
-    },
+    event_message::signed_event_message::{Message, SignedEventMessage},
     query::reply_event::ReplyRoute,
 };
 
@@ -96,7 +94,6 @@ impl EventProcessor {
                     rpy.reply.check_digest()?;
                     // self.publisher.notify(&Notification::GotOobi(rpy))
                     Ok(())
-                    
                 }
             },
             #[cfg(feature = "query")]

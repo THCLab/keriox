@@ -51,7 +51,7 @@ impl WitnessListener {
     }
 
     pub fn get_prefix(&self) -> BasicPrefix {
-        self.witness_data.actor.prefix.clone()
+        self.witness_data.prefix.clone()
     }
 }
 
@@ -133,8 +133,13 @@ pub mod http_handlers {
     #[post("/process")]
     pub async fn process_stream(post_data: String, data: web::Data<WitnessData>) -> impl Responder {
         println!("\nGot events to process: \n{}", post_data);
-        data.parse_and_process(post_data.as_bytes()).unwrap();
-        let resp = data.respond().unwrap();
+        let resp = data
+            .parse_and_process(post_data.as_bytes())
+            .unwrap()
+            .iter()
+            .map(|msg| msg.to_cesr().unwrap())
+            .flatten()
+            .collect();
         HttpResponse::Ok()
             .content_type(ContentType::plaintext())
             .body(String::from_utf8(resp).unwrap())

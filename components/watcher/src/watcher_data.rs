@@ -73,7 +73,7 @@ impl WatcherListener {
     }
 
     pub fn get_prefix(&self) -> BasicPrefix {
-        self.watcher_data.0.actor.prefix.clone()
+        self.watcher_data.0.prefix.clone()
     }
 }
 
@@ -187,12 +187,9 @@ pub mod http_handlers {
             "\nGot events to process: \n{}",
             String::from_utf8(body.to_vec()).unwrap()
         );
-        data.0.parse_and_process(&body).unwrap();
-
         let resp = data
             .0
-            .actor
-            .respond(data.0.signer.clone())
+            .parse_and_process(&body)
             .unwrap()
             .iter()
             .map(|msg| msg.to_cesr().unwrap())
@@ -237,7 +234,7 @@ pub mod http_handlers {
         )];
         let signed_qry = SignedQuery::new(
             qry_message,
-            keri::prefix::IdentifierPrefix::Basic(data.0.actor.prefix.clone()),
+            keri::prefix::IdentifierPrefix::Basic(data.0.prefix.clone()),
             signatures,
         );
 

@@ -1,10 +1,8 @@
 #[cfg(feature = "query")]
 use crate::prefix::IdentifierPrefix;
+use crate::prefix::{BasicPrefix, SelfSigningPrefix};
 #[cfg(feature = "query")]
 use crate::query::{key_state_notice::KeyStateNotice, reply_event::SignedReply, QueryError};
-use crate::{
-    prefix::{BasicPrefix, SelfSigningPrefix},
-};
 #[cfg(feature = "query")]
 use chrono::{DateTime, FixedOffset};
 use std::sync::Arc;
