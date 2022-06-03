@@ -4,10 +4,9 @@ use crate::{
     database::sled::SledEventDatabase,
     error::Error,
     event_message::{
-        signature::Signature,
         signed_event_message::{Message, SignedEventMessage},
     },
-    query::{query_event::QueryRoute, reply_event::ReplyRoute},
+    query::reply_event::ReplyRoute,
 };
 
 use super::{
@@ -100,27 +99,12 @@ impl EventProcessor {
                     
                 }
             },
-            // #[cfg(feature = "query")]
-            Message::Query(qry) => {
+            #[cfg(feature = "query")]
+            Message::Query(_) => {
                 // TODO should do nothing?
+                // It doesn't update database
                 Ok(())
             }
-            //    self.validator.verify(&qry.query.serialize()?, &Signature::Transferable(qry.signatures)) 
-                // match qry.query.event.content.data.route {
-                // QueryRoute::Log { args, .. } => {
-                //     let pref = args.i;
-                //     println!("Respond with {} key event log.", pref);
-                //     self.publisher.notify(&Notification::ReplayLog(pref))
-                // }
-                // QueryRoute::Ksn {
-                //     reply_route: _,
-                //     args,
-                // } => self.publisher.notify(&Notification::ReplyKsn(args.i)),
-                // QueryRoute::Mbx { args, .. } => {
-                //     self.publisher.notify(&Notification::GetMailbox(args))
-                // }
-        //     }
-        // },
         }
     }
 }

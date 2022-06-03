@@ -361,7 +361,7 @@ impl Notifier for ReplyEscrow {
 
 #[cfg(feature = "query")]
 impl ReplyEscrow {
-    pub fn process_reply_escrow(&self, bus: &NotificationBus) -> Result<(), Error> {
+    pub fn process_reply_escrow(&self, _bus: &NotificationBus) -> Result<(), Error> {
         use crate::query::QueryError;
 
         if let Some(esc) = self.0.get_all_escrowed_replys() {
@@ -376,7 +376,6 @@ impl ReplyEscrow {
                     Ok(_) => {
                         self.0.remove_escrowed_reply(&id, &sig_rep)?;
                         self.0.update_accepted_reply(sig_rep, &id)
-                        // bus.notify(&Notification::ReplyUpdated)
                     }
                     Err(Error::SignatureVerificationError)
                     | Err(Error::QueryError(QueryError::StaleRpy)) => {

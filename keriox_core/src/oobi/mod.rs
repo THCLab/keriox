@@ -10,7 +10,6 @@ use crate::{
     event_message::signed_event_message::Message,
     event_parsing::message::signed_event_stream,
     prefix::IdentifierPrefix,
-    processor::notification::{Notification, Notifier},
     query::reply_event::{bada_logic, ReplyEvent, ReplyRoute, SignedReply},
 };
 

@@ -4,7 +4,6 @@ use crate::prefix::IdentifierPrefix;
 use crate::query::{key_state_notice::KeyStateNotice, reply_event::SignedReply, QueryError};
 use crate::{
     prefix::{BasicPrefix, SelfSigningPrefix},
-    processor::BasicProcessor,
 };
 #[cfg(feature = "query")]
 use chrono::{DateTime, FixedOffset};
