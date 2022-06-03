@@ -12,7 +12,6 @@ use structopt::StructOpt;
 #[cfg(test)]
 mod tests;
 
-pub(crate) mod witness;
 mod witness_data;
 use crate::witness_data::WitnessListener;
 

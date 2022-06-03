@@ -10,7 +10,7 @@ use crate::{
     event_message::signed_event_message::Message,
     event_parsing::message::signed_event_stream,
     prefix::IdentifierPrefix,
-    processor::notification::Notifier,
+    processor::notification::{Notification, Notifier},
     query::reply_event::{bada_logic, ReplyEvent, ReplyRoute, SignedReply},
 };
 
@@ -150,30 +150,18 @@ impl OobiManager {
         self.store.get_end_role(id, role)
         // .map(|e_list| e_list.into_iter().map(|e| e.reply).collect()))
     }
-}
 
-impl Notifier for OobiManager {
-    fn notify(
-        &self,
-        notification: &crate::processor::notification::Notification,
-        _bus: &crate::processor::notification::NotificationBus,
-    ) -> Result<(), crate::error::Error> {
-        match notification {
-            crate::processor::notification::Notification::GotOobi(reply) => {
-                // Assumes that signatures were verified.
-                self.check_oobi_reply(reply)
-                    .map_err(|e| crate::error::Error::SemanticError(e.to_string()))?;
-                self.store
-                    .save_oobi(reply.clone())
-                    .map_err(|e| crate::error::Error::SemanticError(e.to_string()))?;
-                Ok(())
-            }
-            _ => Err(crate::error::Error::SemanticError(
-                "Wrong notification".into(),
-            )),
-        }
+    pub fn process_oobi(&self, oobi_rpy: SignedReply) -> Result<(), Error> {
+        // Assumes that signatures were verified.
+        self.check_oobi_reply(&oobi_rpy)
+            .map_err(|e| crate::error::Error::SemanticError(e.to_string()))?;
+        self.store
+            .save_oobi(oobi_rpy)
+            .map_err(|e| crate::error::Error::SemanticError(e.to_string()))?;
+        Ok(())
     }
 }
+
 pub(crate) mod error {
     use thiserror::Error;
 

@@ -1,8 +1,24 @@
 use std::sync::Arc;
 
-use crate::{database::sled::SledEventDatabase, error::Error, event_message::signed_event_message::{SignedEventMessage, Message}, query::{reply_event::ReplyRoute, query_event::QueryRoute}};
+use crate::{
+    database::sled::SledEventDatabase,
+    error::Error,
+    event_message::{
+        signature::Signature,
+        signed_event_message::{Message, SignedEventMessage},
+    },
+    query::{query_event::QueryRoute, reply_event::ReplyRoute},
+};
 
-use super::{validator::EventValidator, notification::{NotificationBus, Notification}};
+use super::{
+    notification::{Notification, NotificationBus},
+    validator::EventValidator,
+};
+
+pub trait Processor {
+    fn new(db_path: Arc<SledEventDatabase>) -> Self;
+    fn process(&self, message: Message) -> Result<(), Error>;
+}
 
 pub struct EventProcessor {
     db: Arc<SledEventDatabase>,
@@ -24,8 +40,10 @@ impl EventProcessor {
     ///
     /// Process a deserialized KERI message
     /// Update database based on event validation result.
-    pub fn process<F>(&self, message: Message, processing_strategy: F) -> Result<(), Error> 
-    where F: Fn(Arc<SledEventDatabase>, &NotificationBus, SignedEventMessage) -> Result<(), Error> {
+    pub fn process<F>(&self, message: Message, processing_strategy: F) -> Result<(), Error>
+    where
+        F: Fn(Arc<SledEventDatabase>, &NotificationBus, SignedEventMessage) -> Result<(), Error>,
+    {
         match message {
             Message::Event(signed_event) => {
                 processing_strategy(self.db.clone(), &self.publisher, signed_event)
@@ -60,8 +78,8 @@ impl EventProcessor {
                 ReplyRoute::Ksn(_, _) => match self.validator.process_signed_ksn_reply(&rpy) {
                     Ok(_) => {
                         self.db
-                            .update_accepted_reply(rpy.clone(), &rpy.reply.get_prefix())?;
-                        self.publisher.notify(&Notification::ReplyUpdated)
+                            .update_accepted_reply(rpy.clone(), &rpy.reply.get_prefix())
+                        // self.publisher.notify(&Notification::ReplyUpdated)
                     }
                     Err(Error::EventOutOfOrderError) => {
                         self.publisher.notify(&Notification::KsnOutOfOrder(rpy))
@@ -77,24 +95,32 @@ impl EventProcessor {
                         .verify(&rpy.reply.serialize()?, &rpy.signature)?;
                     // check digest
                     rpy.reply.check_digest()?;
-                    self.publisher.notify(&Notification::GotOobi(rpy))
+                    // self.publisher.notify(&Notification::GotOobi(rpy))
+                    Ok(())
+                    
                 }
             },
-            #[cfg(feature = "query")]
-            Message::Query(qry) => match qry.query.event.content.data.route {
-                QueryRoute::Log { args, .. } => {
-                    let pref = args.i;
-                    println!("Respond with {} key event log.", pref);
-                    self.publisher.notify(&Notification::ReplayLog(pref))
-                }
-                QueryRoute::Ksn {
-                    reply_route: _,
-                    args,
-                } => self.publisher.notify(&Notification::ReplyKsn(args.i)),
-                QueryRoute::Mbx { args, .. } => {
-                    self.publisher.notify(&Notification::GetMailbox(args))
-                }
-            },
+            // #[cfg(feature = "query")]
+            Message::Query(qry) => {
+                // TODO should do nothing?
+                Ok(())
+            }
+            //    self.validator.verify(&qry.query.serialize()?, &Signature::Transferable(qry.signatures)) 
+                // match qry.query.event.content.data.route {
+                // QueryRoute::Log { args, .. } => {
+                //     let pref = args.i;
+                //     println!("Respond with {} key event log.", pref);
+                //     self.publisher.notify(&Notification::ReplayLog(pref))
+                // }
+                // QueryRoute::Ksn {
+                //     reply_route: _,
+                //     args,
+                // } => self.publisher.notify(&Notification::ReplyKsn(args.i)),
+                // QueryRoute::Mbx { args, .. } => {
+                //     self.publisher.notify(&Notification::GetMailbox(args))
+                // }
+        //     }
+        // },
         }
     }
 }

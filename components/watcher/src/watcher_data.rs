@@ -1,21 +1,21 @@
 use actix_web::{dev::Server, web, App, HttpServer};
 use anyhow::{anyhow, Result};
 use futures::future::join_all;
-use std::{path::Path, sync::Arc};
+use std::path::Path;
 
 use keri::{
-    derivation::{self_addressing::SelfAddressing, self_signing::SelfSigning},
+    component::NontransferableActor,
     error::Error,
-    oobi::{EndRole, LocationScheme, OobiManager, Role, Scheme},
+    oobi::{EndRole, LocationScheme, Scheme},
     prefix::{BasicPrefix, IdentifierPrefix},
-    query::reply_event::{ReplyEvent, ReplyRoute, SignedReply},
-    signer::Signer,
+    processor::BasicProcessor,
+    query::reply_event::ReplyRoute,
 };
 
-use crate::watcher::Watcher;
+pub type WatcherData = NontransferableActor<BasicProcessor>;
 
 pub struct WatcherListener {
-    watcher_data: WatcherData,
+    watcher_data: Communication,
 }
 
 impl WatcherListener {
@@ -32,8 +32,11 @@ impl WatcherListener {
             address.clone()
         };
 
-        WatcherData::setup(pub_address, event_db_path, oobi_db_path, priv_key)
-            .map(|watcher_data| Self { watcher_data })
+        WatcherData::setup(pub_address, event_db_path, oobi_db_path, priv_key).map(|watcher_data| {
+            Self {
+                watcher_data: Communication(watcher_data),
+            }
+        })
     }
 
     pub fn listen_http(self, address: url::Url) -> Server {
@@ -70,62 +73,20 @@ impl WatcherListener {
     }
 
     pub fn get_prefix(&self) -> BasicPrefix {
-        self.watcher_data.controller.prefix.clone()
+        self.watcher_data.0.actor.prefix.clone()
     }
 }
 
-pub struct WatcherData {
-    signer: Arc<Signer>,
-    pub controller: Arc<Watcher>,
-    oobi_manager: Arc<OobiManager>,
-}
+pub struct Communication(WatcherData);
 
-impl WatcherData {
-    pub fn setup(
-        public_address: url::Url,
-        event_db_path: &Path,
-        oobi_db_path: &Path,
-        priv_key: Option<String>,
-    ) -> Result<Self, Error> {
-        let oobi_manager = Arc::new(OobiManager::new(oobi_db_path));
-        let signer = priv_key
-            .map(|key| Signer::new_with_seed(&key.parse()?))
-            .unwrap_or(Ok(Signer::new()))?;
-        let mut witness = Watcher::new(event_db_path, signer.public_key())?;
-
-        // construct witness loc scheme oobi
-        let loc_scheme = LocationScheme::new(
-            IdentifierPrefix::Basic(witness.prefix.clone()),
-            public_address.scheme().parse().unwrap(),
-            public_address.clone(),
-        );
-        let reply = ReplyEvent::new_reply(
-            ReplyRoute::LocScheme(loc_scheme),
-            SelfAddressing::Blake3_256,
-            keri::event::SerializationFormats::JSON,
-        )?;
-        let signed_reply = SignedReply::new_nontrans(
-            reply.clone(),
-            witness.prefix.clone(),
-            SelfSigning::Ed25519Sha512.derive(signer.sign(reply.serialize()?)?),
-        );
-        oobi_manager.save_oobi(signed_reply)?;
-        witness.register_oobi_manager(oobi_manager.clone());
-        Ok(WatcherData {
-            controller: Arc::new(witness),
-            oobi_manager,
-            signer: Arc::new(signer),
-        })
-    }
-
-    pub fn parse_and_process(&self, input_stream: &[u8]) -> Result<()> {
-        self.controller.parse_and_process(input_stream).unwrap();
-        Ok(())
-    }
-
+impl Communication {
     pub async fn resolve_end_role(&self, er: EndRole) -> Result<()> {
         // find endpoint data of endpoint provider identifier
-        let loc_scheme = self.get_eid_loc_scheme(&er.eid.clone())?.unwrap()[0]
+        let loc_scheme = self
+            .0
+            .get_loc_scheme_for_id(&er.eid.clone())
+            .unwrap()
+            .unwrap()[0]
             .reply
             .event
             .content
@@ -136,7 +97,7 @@ impl WatcherData {
             let url = format!("{}oobi/{}/{}/{}", lc.url, er.cid, "witness", er.eid);
             let oobis = reqwest::get(url).await.unwrap().text().await.unwrap();
 
-            self.parse_and_process(oobis.as_bytes()).unwrap();
+            self.0.parse_and_process(oobis.as_bytes()).unwrap();
             Ok(())
         } else {
             Err(anyhow!("Wrong oobi type"))
@@ -147,13 +108,14 @@ impl WatcherData {
         let url = format!("{}oobi/{}", lc.url, lc.eid);
         let oobis = reqwest::get(url).await.unwrap().text().await.unwrap();
 
-        self.parse_and_process(oobis.as_bytes()).unwrap();
+        self.0.parse_and_process(oobis.as_bytes()).unwrap();
 
         Ok(())
     }
 
     fn get_loc_schemas(&self, id: &IdentifierPrefix) -> Result<Vec<LocationScheme>> {
         Ok(self
+            .0
             .oobi_manager
             .get_loc_scheme(id)
             .unwrap()
@@ -203,34 +165,6 @@ impl WatcherData {
             _ => Err(anyhow!("No address for scheme {:?}", schema)),
         }
     }
-
-    fn get_end_role_for_id(
-        &self,
-        cid: &IdentifierPrefix,
-        role: Role,
-    ) -> Result<Option<Vec<SignedReply>>> {
-        Ok(self.oobi_manager.get_end_role(cid, role).unwrap())
-    }
-
-    fn get_eid_loc_scheme(&self, eid: &IdentifierPrefix) -> Result<Option<Vec<SignedReply>>> {
-        Ok(match self.oobi_manager.get_loc_scheme(eid).unwrap() {
-            Some(oobis_to_sign) => Some(
-                oobis_to_sign
-                    .iter()
-                    .map(|oobi_to_sing| {
-                        let signature =
-                            self.signer.sign(oobi_to_sing.serialize().unwrap()).unwrap();
-                        SignedReply::new_nontrans(
-                            oobi_to_sing.clone(),
-                            self.controller.prefix.clone(),
-                            SelfSigning::Ed25519Sha512.derive(signature),
-                        )
-                    })
-                    .collect(),
-            ),
-            None => None,
-        })
-    }
 }
 
 pub mod http_handlers {
@@ -245,20 +179,20 @@ pub mod http_handlers {
         query::query_event::{QueryArgs, QueryEvent, QueryRoute, SignedQuery},
     };
 
-    use super::WatcherData;
+    use super::{Communication, WatcherData};
 
     #[post("/process")]
-    async fn process_stream(body: web::Bytes, data: web::Data<WatcherData>) -> impl Responder {
+    async fn process_stream(body: web::Bytes, data: web::Data<Communication>) -> impl Responder {
         println!(
             "\nGot events to process: \n{}",
             String::from_utf8(body.to_vec()).unwrap()
         );
-        data.parse_and_process(&body).unwrap();
+        data.0.parse_and_process(&body).unwrap();
 
         let resp = data
-            .controller
-            .clone()
-            .respond(data.signer.clone())
+            .0
+            .actor
+            .respond(data.0.signer.clone())
             .unwrap()
             .iter()
             .map(|msg| msg.to_cesr().unwrap())
@@ -273,7 +207,7 @@ pub mod http_handlers {
     #[get("/query/{id}")]
     async fn get_kel(
         eid: web::Path<IdentifierPrefix>,
-        data: web::Data<WatcherData>,
+        data: web::Data<Communication>,
     ) -> impl Responder {
         // generate query message here
         let id = eid.clone();
@@ -291,7 +225,11 @@ pub mod http_handlers {
             &SelfAddressing::Blake3_256,
         )
         .unwrap();
-        let signature = data.signer.sign(qry_message.serialize().unwrap()).unwrap();
+        let signature = data
+            .0
+            .signer
+            .sign(qry_message.serialize().unwrap())
+            .unwrap();
         let signatures = vec![AttachedSignaturePrefix::new(
             SelfSigning::Ed25519Sha512,
             signature,
@@ -299,13 +237,14 @@ pub mod http_handlers {
         )];
         let signed_qry = SignedQuery::new(
             qry_message,
-            keri::prefix::IdentifierPrefix::Basic(data.controller.prefix.clone()),
+            keri::prefix::IdentifierPrefix::Basic(data.0.actor.prefix.clone()),
             signatures,
         );
 
         // Get witnesses, and TODO choose one randomly.
         let witnesses = data
-            .controller
+            .0
+            .actor
             .get_state_for_prefix(&id)
             .unwrap()
             .unwrap()
@@ -332,7 +271,7 @@ pub mod http_handlers {
     }
 
     #[post("/resolve")]
-    async fn resolve_oobi(body: web::Bytes, data: web::Data<WatcherData>) -> impl Responder {
+    async fn resolve_oobi(body: web::Bytes, data: web::Data<Communication>) -> impl Responder {
         println!(
             "\nGot oobi to resolve: \n{}",
             String::from_utf8(body.to_vec()).unwrap()
@@ -357,7 +296,7 @@ pub mod http_handlers {
         eid: web::Path<IdentifierPrefix>,
         data: web::Data<WatcherData>,
     ) -> impl Responder {
-        let loc_scheme = data.get_eid_loc_scheme(&eid).unwrap().unwrap_or(vec![]);
+        let loc_scheme = data.get_loc_scheme_for_id(&eid).unwrap().unwrap_or(vec![]);
         let oobis: Vec<u8> = loc_scheme
             .into_iter()
             .map(|sr| {
@@ -383,7 +322,7 @@ pub mod http_handlers {
             .get_end_role_for_id(&cid, role)
             .unwrap()
             .unwrap_or(vec![]);
-        let loc_scheme = data.get_eid_loc_scheme(&eid).unwrap().unwrap_or(vec![]);
+        let loc_scheme = data.get_loc_scheme_for_id(&eid).unwrap().unwrap_or(vec![]);
         let oobis: Vec<u8> = end_role
             .into_iter()
             .chain(loc_scheme.into_iter())

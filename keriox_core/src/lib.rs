@@ -1,3 +1,4 @@
+pub mod component;
 pub mod database;
 pub mod derivation;
 pub mod error;

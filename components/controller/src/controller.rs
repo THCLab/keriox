@@ -29,9 +29,8 @@ use keri::{
     prefix::AttachedSignaturePrefix,
     prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix, SelfSigningPrefix},
     processor::{
-        event_storage::EventStorage,
-        notification::{Notification},
-        responder::Responder, BasicProcessor,
+        event_storage::EventStorage, notification::Notification, responder::Responder,
+        BasicProcessor,
     },
     signer::KeyManager,
     state::IdentifierState,
@@ -314,19 +313,8 @@ impl<K: KeyManager> Controller<K> {
     pub fn process(&self, msg: &[Message]) -> Result<(), Error> {
         let (_process_ok, _process_failed): (Vec<_>, Vec<_>) = msg
             .iter()
-            .map(|message| {
-                self.processor
-                    .process(message.clone())
-            })
+            .map(|message| self.processor.process(message.clone()))
             .partition(Result::is_ok);
-        // let _oks = process_ok
-        //     .into_iter()
-        //     .map(Result::unwrap)
-        //     .collect::<Vec<_>>();
-        // let _errs = process_failed
-        //     .into_iter()
-        //     .map(Result::unwrap_err)
-        //     .collect::<Vec<_>>();
 
         Ok(())
     }

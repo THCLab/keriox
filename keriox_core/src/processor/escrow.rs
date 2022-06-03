@@ -375,8 +375,8 @@ impl ReplyEscrow {
                 match validator.process_signed_ksn_reply(&sig_rep) {
                     Ok(_) => {
                         self.0.remove_escrowed_reply(&id, &sig_rep)?;
-                        self.0.update_accepted_reply(sig_rep, &id)?;
-                        bus.notify(&Notification::ReplyUpdated)
+                        self.0.update_accepted_reply(sig_rep, &id)
+                        // bus.notify(&Notification::ReplyUpdated)
                     }
                     Err(Error::SignatureVerificationError)
                     | Err(Error::QueryError(QueryError::StaleRpy)) => {
