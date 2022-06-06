@@ -25,15 +25,9 @@ pub struct Component<P: Processor> {
 }
 
 impl<P: Processor> Component<P> {
-    pub fn new(path: &Path, oobi_db_path: &Path) -> Result<Self, Error> {
+    pub fn new(db: Arc<SledEventDatabase>, oobi_db_path: &Path) -> Result<Self, Error> {
         let oobi_manager = Arc::new(OobiManager::new(oobi_db_path));
-        let (processor, storage) = {
-            let witness_db = Arc::new(SledEventDatabase::new(path)?);
-            (
-                P::new(witness_db.clone()),
-                EventStorage::new(witness_db.clone()),
-            )
-        };
+        let (processor, storage) = { (P::new(db.clone()), EventStorage::new(db.clone())) };
 
         Ok(Self {
             processor,

@@ -19,6 +19,13 @@ impl Processor for WitnessProcessor {
     fn new(db: Arc<SledEventDatabase>) -> Self {
         Self::new(db)
     }
+
+    fn register_observer(
+        &mut self,
+        observer: Arc<dyn super::notification::Notifier + Send + Sync>,
+    ) -> Result<(), Error> {
+        self.0.register_observer(observer)
+    }
 }
 
 impl WitnessProcessor {

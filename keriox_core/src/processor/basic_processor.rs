@@ -5,7 +5,7 @@ use crate::event_message::signed_event_message::{Message, SignedEventMessage};
 use crate::{database::sled::SledEventDatabase, error::Error};
 
 use super::{
-    notification::{Notification, NotificationBus},
+    notification::{Notification, NotificationBus, Notifier},
     validator::EventValidator,
     EventProcessor, Processor,
 };
@@ -19,6 +19,13 @@ impl Processor for BasicProcessor {
 
     fn new(db: Arc<SledEventDatabase>) -> Self {
         Self::new(db)
+    }
+
+    fn register_observer(
+        &mut self,
+        observer: Arc<dyn Notifier + Send + Sync>,
+    ) -> Result<(), Error> {
+        self.0.register_observer(observer)
     }
 }
 

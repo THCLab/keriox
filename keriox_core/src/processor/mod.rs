@@ -6,7 +6,6 @@ pub mod basic_processor;
 pub mod escrow;
 pub mod event_storage;
 pub mod notification;
-pub mod responder;
 #[cfg(test)]
 mod tests;
 pub mod validator;
@@ -25,13 +24,15 @@ use crate::{
 };
 
 use self::{
-    notification::{Notification, NotificationBus},
+    notification::{JustNotification, Notification, NotificationBus, Notifier},
     validator::EventValidator,
 };
 
 pub trait Processor {
     fn new(db_path: Arc<SledEventDatabase>) -> Self;
     fn process(&self, message: Message) -> Result<(), Error>;
+    fn register_observer(&mut self, observer: Arc<dyn Notifier + Send + Sync>)
+        -> Result<(), Error>;
 }
 
 pub struct EventProcessor {
@@ -48,6 +49,15 @@ impl EventProcessor {
             validator,
             publisher,
         }
+    }
+
+    pub fn register_observer(
+        &mut self,
+        observer: Arc<dyn Notifier + Send + Sync>,
+    ) -> Result<(), Error> {
+        self.publisher
+            .register_observer(observer, vec![JustNotification::KeyEventAdded]);
+        Ok(())
     }
 
     /// Process
