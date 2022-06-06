@@ -3,14 +3,14 @@ use std::{convert::TryFrom, path::Path, sync::Arc};
 use crate::{
     derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
     error::Error,
-    event::{receipt::Receipt, EventMessage, SerializationFormats},
+    event::{EventMessage, SerializationFormats},
     event_message::{
         event_msg_builder::ReceiptBuilder,
         key_event_message::KeyEvent,
         signed_event_message::{Message, SignedNontransferableReceipt},
     },
     event_parsing::message::signed_event_stream,
-    oobi::{LocationScheme, OobiManager, Role},
+    oobi::LocationScheme,
     prefix::{BasicPrefix, IdentifierPrefix},
     processor::{notification::Notification, responder::Responder, Processor},
     query::{
@@ -26,7 +26,6 @@ pub struct NontransferableComponent<P: Processor> {
     pub prefix: BasicPrefix,
     pub component: Component<P>,
     pub signer: Arc<Signer>,
-    pub oobi_manager: Arc<OobiManager>,
     responder: Arc<Responder<Notification>>,
 }
 
@@ -37,12 +36,11 @@ impl<P: Processor> NontransferableComponent<P> {
         oobi_db_path: &Path,
         priv_key: Option<String>,
     ) -> Result<Self, Error> {
-        let oobi_manager = Arc::new(OobiManager::new(oobi_db_path));
         let signer = priv_key
             .map(|key| Signer::new_with_seed(&key.parse()?))
             .unwrap_or(Ok(Signer::new()))?;
         let prefix = Basic::Ed25519.derive(signer.public_key());
-        let witness = Component::<P>::new(event_db_path)?;
+        let witness = Component::<P>::new(event_db_path, oobi_db_path)?;
         // construct witness loc scheme oobi
         let loc_scheme = LocationScheme::new(
             IdentifierPrefix::Basic(prefix.clone()),
@@ -59,12 +57,11 @@ impl<P: Processor> NontransferableComponent<P> {
             prefix.clone(),
             SelfSigning::Ed25519Sha512.derive(signer.sign(reply.serialize()?)?),
         );
-        oobi_manager.save_oobi(signed_reply)?;
+        witness.oobi_manager.save_oobi(signed_reply)?;
         let responder = Arc::new(Responder::new());
         Ok(Self {
             prefix,
             component: witness,
-            oobi_manager,
             signer: Arc::new(signer),
             responder,
         })
@@ -113,6 +110,29 @@ impl<P: Processor> NontransferableComponent<P> {
         Ok(signed_rcp)
     }
 
+    pub fn get_loc_scheme_for_id(
+        &self,
+        eid: &IdentifierPrefix,
+    ) -> Result<Option<Vec<SignedReply>>, Error> {
+        Ok(match self.component.oobi_manager.get_loc_scheme(eid)? {
+            Some(oobis_to_sign) => Some(
+                oobis_to_sign
+                    .iter()
+                    .map(|oobi_to_sing| {
+                        let signature =
+                            self.signer.sign(oobi_to_sing.serialize().unwrap()).unwrap();
+                        SignedReply::new_nontrans(
+                            oobi_to_sing.clone(),
+                            self.prefix.clone(),
+                            SelfSigning::Ed25519Sha512.derive(signature),
+                        )
+                    })
+                    .collect(),
+            ),
+            None => None,
+        })
+    }
+
     pub fn get_signed_ksn_for_prefix(
         &self,
         prefix: &IdentifierPrefix,
@@ -133,63 +153,10 @@ impl<P: Processor> NontransferableComponent<P> {
         ))
     }
 
-    pub fn get_end_role_for_id(
-        &self,
-        cid: &IdentifierPrefix,
-        role: Role,
-    ) -> Result<Option<Vec<SignedReply>>, Error> {
-        Ok(self.oobi_manager.get_end_role(cid, role).unwrap())
-    }
-
-    pub fn get_loc_scheme_for_id(
-        &self,
-        eid: &IdentifierPrefix,
-    ) -> Result<Option<Vec<SignedReply>>, Error> {
-        Ok(match self.oobi_manager.get_loc_scheme(eid).unwrap() {
-            Some(oobis_to_sign) => Some(
-                oobis_to_sign
-                    .iter()
-                    .map(|oobi_to_sing| {
-                        let signature =
-                            self.signer.sign(oobi_to_sing.serialize().unwrap()).unwrap();
-                        SignedReply::new_nontrans(
-                            oobi_to_sing.clone(),
-                            self.prefix.clone(),
-                            SelfSigning::Ed25519Sha512.derive(signature),
-                        )
-                    })
-                    .collect(),
-            ),
-            None => None,
-        })
-    }
-
     // Returns messages if they can be returned immediately, i.e. for query message
     pub fn process(&self, msg: Message) -> Result<Vec<Message>, Error> {
         let mut responses = Vec::new();
         match msg.clone() {
-            Message::Event(ev) => {
-                self.component.process(&msg).unwrap();
-                // check if receipts are attached
-                if let Some(witness_receipts) = ev.witness_receipts {
-                    // Create and process witness receipts
-                    // TODO What timestamp should be set?
-                    let id = ev.event_message.event.get_prefix();
-                    let receipt = Receipt {
-                        receipted_event_digest: ev.event_message.get_digest(),
-                        prefix: id,
-                        sn: ev.event_message.event.get_sn(),
-                    };
-                    let signed_receipt = SignedNontransferableReceipt::new(
-                        &receipt.to_message(SerializationFormats::JSON).unwrap(),
-                        None,
-                        Some(witness_receipts),
-                    );
-                    self.component
-                        .process(&Message::NontransferableRct(signed_receipt))
-                        .unwrap();
-                }
-            }
             Message::Query(qry) => {
                 let response = self.component.process_signed_query(qry).unwrap();
                 match response {
@@ -211,15 +178,10 @@ impl<P: Processor> NontransferableComponent<P> {
                     }
                     ReplyType::Kel(msgs) | ReplyType::Mbx(msgs) => responses.extend(msgs),
                 };
+                Ok(())
             }
-            Message::Reply(reply) => match reply.reply.get_route() {
-                ReplyRoute::Ksn(_, _) => self.component.process(&msg).unwrap(),
-                ReplyRoute::LocScheme(_)
-                | ReplyRoute::EndRoleAdd(_)
-                | ReplyRoute::EndRoleCut(_) => self.oobi_manager.process_oobi(reply).unwrap(),
-            },
-            _ => self.component.process(&msg).unwrap(),
-        };
+            _ => self.component.process(msg),
+        }?;
         Ok(responses)
     }
 

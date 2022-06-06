@@ -4,11 +4,13 @@ use crate::{
     database::sled::SledEventDatabase,
     error::Error,
     event_message::{serialization_info::SerializationFormats, signed_event_message::Message},
+    oobi::{OobiManager, Role},
     prefix::IdentifierPrefix,
-    processor::{event_storage::EventStorage, Processor},
+    processor::{event_storage::EventStorage, validator::EventValidator, Processor},
     query::{
         key_state_notice::KeyStateNotice,
         query_event::{QueryData, SignedQuery},
+        reply_event::{ReplyRoute, SignedReply},
         ReplyType,
     },
     state::IdentifierState,
@@ -19,10 +21,12 @@ pub mod nontransferable_component;
 pub struct Component<P: Processor> {
     processor: P,
     pub storage: EventStorage,
+    pub oobi_manager: Arc<OobiManager>,
 }
 
 impl<P: Processor> Component<P> {
-    pub fn new(path: &Path) -> Result<Self, Error> {
+    pub fn new(path: &Path, oobi_db_path: &Path) -> Result<Self, Error> {
+        let oobi_manager = Arc::new(OobiManager::new(oobi_db_path));
         let (processor, storage) = {
             let witness_db = Arc::new(SledEventDatabase::new(path)?);
             (
@@ -31,7 +35,11 @@ impl<P: Processor> Component<P> {
             )
         };
 
-        Ok(Self { processor, storage })
+        Ok(Self {
+            processor,
+            storage,
+            oobi_manager,
+        })
     }
 
     pub fn get_db_ref(&self) -> Arc<SledEventDatabase> {
@@ -53,6 +61,14 @@ impl<P: Processor> Component<P> {
         self.storage.get_state(prefix)
     }
 
+    pub fn get_end_role_for_id(
+        &self,
+        cid: &IdentifierPrefix,
+        role: Role,
+    ) -> Result<Option<Vec<SignedReply>>, Error> {
+        Ok(self.oobi_manager.get_end_role(cid, role).unwrap())
+    }
+
     pub fn get_ksn_for_prefix(&self, prefix: &IdentifierPrefix) -> Result<KeyStateNotice, Error> {
         let state = self
             .get_state_for_prefix(prefix)?
@@ -62,8 +78,25 @@ impl<P: Processor> Component<P> {
     }
 
     /// Process for events that updates database
-    pub fn process(&self, msg: &Message) -> Result<(), Error> {
-        self.processor.process(msg.clone())
+    pub fn process(&self, msg: Message) -> Result<(), Error> {
+        match msg.clone() {
+            Message::Reply(sr) => match sr.reply.get_route() {
+                ReplyRoute::LocScheme(_)
+                | ReplyRoute::EndRoleAdd(_)
+                | ReplyRoute::EndRoleCut(_) => {
+                    let validator = EventValidator::new(self.get_db_ref());
+                    // check signature
+                    validator.verify(&sr.reply.serialize()?, &sr.signature)?;
+                    // check digest
+                    sr.reply.check_digest()?;
+                    // save
+                    self.oobi_manager.process_oobi(sr)
+                }
+                ReplyRoute::Ksn(_, _) => self.processor.process(msg),
+            },
+
+            _ => self.processor.process(msg),
+        }
     }
 
     pub fn process_signed_query(&self, qr: SignedQuery) -> Result<ReplyType, Error> {

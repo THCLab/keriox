@@ -15,8 +15,9 @@ pub mod witness_processor;
 use crate::{
     database::sled::SledEventDatabase,
     error::Error,
+    event::{receipt::Receipt, SerializationFormats},
     event_message::signed_event_message::{
-        Message, SignedEventMessage, TimestampedSignedEventMessage,
+        Message, SignedEventMessage, SignedNontransferableReceipt, TimestampedSignedEventMessage,
     },
     prefix::IdentifierPrefix,
     query::reply_event::ReplyRoute,
@@ -59,7 +60,29 @@ impl EventProcessor {
     {
         match message {
             Message::Event(signed_event) => {
-                processing_strategy(self.db.clone(), &self.publisher, signed_event)
+                processing_strategy(self.db.clone(), &self.publisher, signed_event.clone())?;
+                // check if receipts are attached
+                if let Some(witness_receipts) = signed_event.witness_receipts {
+                    // Create and process witness receipts
+                    // TODO What timestamp should be set?
+                    let id = signed_event.event_message.event.get_prefix();
+                    let receipt = Receipt {
+                        receipted_event_digest: signed_event.event_message.get_digest(),
+                        prefix: id,
+                        sn: signed_event.event_message.event.get_sn(),
+                    };
+                    let signed_receipt = SignedNontransferableReceipt::new(
+                        &receipt.to_message(SerializationFormats::JSON).unwrap(),
+                        None,
+                        Some(witness_receipts),
+                    );
+                    self.process(
+                        Message::NontransferableRct(signed_receipt),
+                        processing_strategy,
+                    )
+                } else {
+                    Ok(())
+                }
             }
             Message::NontransferableRct(rct) => {
                 let id = &rct.body.event.prefix;
@@ -89,28 +112,15 @@ impl EventProcessor {
             #[cfg(feature = "query")]
             Message::Reply(rpy) => match rpy.reply.get_route() {
                 ReplyRoute::Ksn(_, _) => match self.validator.process_signed_ksn_reply(&rpy) {
-                    Ok(_) => {
-                        self.db
-                            .update_accepted_reply(rpy.clone(), &rpy.reply.get_prefix())
-                        // self.publisher.notify(&Notification::ReplyUpdated)
-                    }
+                    Ok(_) => self
+                        .db
+                        .update_accepted_reply(rpy.clone(), &rpy.reply.get_prefix()),
                     Err(Error::EventOutOfOrderError) => {
                         self.publisher.notify(&Notification::KsnOutOfOrder(rpy))
                     }
                     Err(anything) => Err(anything),
                 },
-                #[cfg(feature = "oobi")]
-                ReplyRoute::EndRoleAdd(_)
-                | ReplyRoute::EndRoleCut(_)
-                | ReplyRoute::LocScheme(_) => {
-                    // check signature
-                    self.validator
-                        .verify(&rpy.reply.serialize()?, &rpy.signature)?;
-                    // check digest
-                    rpy.reply.check_digest()?;
-                    // self.publisher.notify(&Notification::GotOobi(rpy))
-                    Ok(())
-                }
+                _ => Ok(()),
             },
             #[cfg(feature = "query")]
             Message::Query(_) => {
