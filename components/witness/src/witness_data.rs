@@ -3,11 +3,11 @@ use anyhow::Result;
 use std::{path::Path, sync::Arc};
 
 use keri::{
-    self, component::NontransferableActor, error::Error, prefix::BasicPrefix,
+    self, component::NontransferableComponent, error::Error, prefix::BasicPrefix,
     processor::witness_processor::WitnessProcessor,
 };
 
-pub type WitnessData = NontransferableActor<WitnessProcessor>;
+pub type WitnessData = NontransferableComponent<WitnessProcessor>;
 
 pub struct WitnessListener {
     witness_data: Arc<WitnessData>,

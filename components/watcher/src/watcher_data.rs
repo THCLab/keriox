@@ -4,7 +4,7 @@ use futures::future::join_all;
 use std::path::Path;
 
 use keri::{
-    component::NontransferableActor,
+    component::NontransferableComponent,
     error::Error,
     oobi::{EndRole, LocationScheme, Scheme},
     prefix::{BasicPrefix, IdentifierPrefix},
@@ -12,7 +12,7 @@ use keri::{
     query::reply_event::ReplyRoute,
 };
 
-pub type WatcherData = NontransferableActor<BasicProcessor>;
+pub type WatcherData = NontransferableComponent<BasicProcessor>;
 
 pub struct WatcherListener {
     watcher_data: Communication,

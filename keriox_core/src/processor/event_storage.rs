@@ -18,10 +18,10 @@ use crate::{
     state::{EventSemantics, IdentifierState},
 };
 
-use super::compute_state;
-
 #[cfg(feature = "query")]
 use crate::query::{query_event::QueryArgsMbx, reply_event::SignedReply};
+
+use super::compute_state;
 
 pub struct EventStorage {
     pub db: Arc<SledEventDatabase>,

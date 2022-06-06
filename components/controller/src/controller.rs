@@ -28,10 +28,7 @@ use keri::{
     event_parsing::message::{signed_event_stream, signed_message},
     prefix::AttachedSignaturePrefix,
     prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix, SelfSigningPrefix},
-    processor::{
-        event_storage::EventStorage, notification::Notification, responder::Responder,
-        BasicProcessor,
-    },
+    processor::{event_storage::EventStorage, notification::Notification, responder::Responder},
     signer::KeyManager,
     state::IdentifierState,
 };

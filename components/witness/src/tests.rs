@@ -1,29 +1,38 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    path::Path,
+    sync::{Arc, Mutex},
+};
 
 use controller::controller::Controller;
 use keri::{
-    component::NontransferableActor,
+    component::{Component, NontransferableComponent},
     database::sled::SledEventDatabase,
-    derivation::{self_addressing::SelfAddressing, self_signing::SelfSigning},
+    derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
     error::Error,
     event::SerializationFormats,
     event_message::signed_event_message::Message,
-    prefix::{AttachedSignaturePrefix, IdentifierPrefix},
-    processor::{witness_processor::WitnessProcessor, BasicProcessor},
+    oobi::OobiManager,
+    prefix::{AttachedSignaturePrefix, IdentifierPrefix, SeedPrefix},
+    processor::{responder::Responder, witness_processor::WitnessProcessor, BasicProcessor},
     query::query_event::{QueryArgsMbx, QueryEvent, QueryRoute, QueryTopics, SignedQuery},
     signer::{CryptoBox, Signer},
 };
 
-struct Witness(NontransferableActor<WitnessProcessor>);
+struct Witness(NontransferableComponent<WitnessProcessor>);
 
 impl Witness {
-    fn new(db_path: &Path, signer: Signer) -> Self {
-        let ac = NontransferableActor::<WitnessProcessor>::setup(
-            public_address,
-            event_db_path,
-            oobi_db_path,
-            priv_key,
-        );
+    fn new(db_path: &Path, oobi_path: &Path, signer: Arc<Signer>) -> Self {
+        let wit = Component::<WitnessProcessor>::new(db_path).unwrap();
+        let oobi_manager = Arc::new(OobiManager::new(oobi_path));
+        let prefix = Basic::Ed25519.derive(signer.public_key());
+
+        Witness(NontransferableComponent {
+            prefix,
+            actor: wit,
+            signer,
+            oobi_manager,
+            responder: Arc::new(Responder::new()),
+        })
     }
 }
 
@@ -222,7 +231,7 @@ fn test_qry_rpy() -> Result<(), Error> {
     let witness_root = Builder::new().prefix("test-db").tempdir().unwrap();
     let signer = Signer::new();
     let signer_arc = Arc::new(signer);
-    let witness = Witness::new(witness_root.path(), signer_arc.public_key())?;
+    let witness = Witness::new(witness_root.path(), signer_arc.public_key());
 
     let alice_key_manager = Arc::new(Mutex::new({
         use keri::signer::CryptoBox;
