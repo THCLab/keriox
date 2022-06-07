@@ -55,8 +55,13 @@ impl EventProcessor {
         &mut self,
         observer: Arc<dyn Notifier + Send + Sync>,
     ) -> Result<(), Error> {
-        self.publisher
-            .register_observer(observer, vec![JustNotification::KeyEventAdded]);
+        self.publisher.register_observer(
+            observer,
+            vec![
+                JustNotification::KeyEventAdded,
+                JustNotification::KsnOutOfOrder,
+            ],
+        );
         Ok(())
     }
 

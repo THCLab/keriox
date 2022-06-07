@@ -1,11 +1,13 @@
 use std::{
     convert::TryFrom,
-    sync::{Arc, Mutex}, path::Path,
+    path::Path,
+    sync::{Arc, Mutex},
 };
 
 #[cfg(feature = "oobi")]
 use crate::oobi::OobiManager;
 use keri::{
+    component::Component,
     database::sled::SledEventDatabase,
     derivation::basic::Basic,
     derivation::self_addressing::SelfAddressing,
@@ -28,9 +30,9 @@ use keri::{
     event_parsing::message::{signed_event_stream, signed_message},
     prefix::AttachedSignaturePrefix,
     prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix, SelfSigningPrefix},
-    processor::{event_storage::EventStorage, basic_processor::BasicProcessor},
+    processor::{basic_processor::BasicProcessor, event_storage::EventStorage},
     signer::KeyManager,
-    state::IdentifierState, component::Component,
+    state::IdentifierState,
 };
 
 pub struct Controller<K: KeyManager + 'static> {
@@ -315,7 +317,7 @@ impl<K: KeyManager> Controller<K> {
     // Respond:
     // check if we have receipt of self icp event from event creator, if
     // we don't, append own kel to response.
-    // // That's for direct mode
+    // That's for direct mode
     // fn respond_one(&self, ev_msg: EventMessage<KeyEvent>) -> Result<Vec<Message>, Error> {
     //     let mut response = vec![];
     //     if !self

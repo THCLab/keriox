@@ -178,7 +178,7 @@ pub mod http_handlers {
 
     use crate::watcher::Watcher;
 
-    use super::{Communication};
+    use super::Communication;
 
     #[post("/process")]
     async fn process_stream(body: web::Bytes, data: web::Data<Communication>) -> impl Responder {

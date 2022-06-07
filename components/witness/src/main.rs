@@ -12,8 +12,8 @@ use structopt::StructOpt;
 #[cfg(test)]
 mod tests;
 
-mod witness_listener;
 mod witness;
+mod witness_listener;
 use crate::witness_listener::WitnessListener;
 
 #[derive(Deserialize)]

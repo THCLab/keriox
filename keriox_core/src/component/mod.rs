@@ -6,11 +6,13 @@ use crate::{
     event_message::{serialization_info::SerializationFormats, signed_event_message::Message},
     oobi::{OobiManager, Role},
     prefix::IdentifierPrefix,
-    processor::{event_storage::EventStorage, validator::EventValidator, Processor, notification::Notifier},
+    processor::{
+        event_storage::EventStorage, notification::Notifier, validator::EventValidator, Processor,
+    },
     query::{
         key_state_notice::KeyStateNotice,
         query_event::{QueryData, SignedQuery},
-        reply_event::{ReplyRoute, SignedReply, ReplyEvent},
+        reply_event::{ReplyEvent, ReplyRoute, SignedReply},
         ReplyType,
     },
     state::IdentifierState,
@@ -36,9 +38,11 @@ impl<P: Processor> Component<P> {
         })
     }
 
-    pub fn register_observer(&mut self, observer: Arc<dyn Notifier + Send + Sync>)
-        -> Result<(), Error> {
-            self.processor.register_observer(observer)
+    pub fn register_observer(
+        &mut self,
+        observer: Arc<dyn Notifier + Send + Sync>,
+    ) -> Result<(), Error> {
+        self.processor.register_observer(observer)
     }
 
     pub fn save_oobi(&self, signed_oobi: SignedReply) -> Result<(), Error> {
@@ -71,7 +75,6 @@ impl<P: Processor> Component<P> {
     ) -> Result<Option<Vec<SignedReply>>, Error> {
         Ok(self.oobi_manager.get_end_role(cid, role).unwrap())
     }
-
 
     pub fn get_loc_scheme_for_id(
         &self,
@@ -218,5 +221,32 @@ pub fn test_ksn_query() -> Result<(), Error> {
         _ => panic!("Wrong event type"),
     };
 
+    Ok(())
+}
+
+#[cfg(feature = "oobi")]
+#[test]
+fn processs_oobi() -> Result<(), Error> {
+    use std::convert::TryFrom;
+
+    use crate::{
+        component::Component, event_parsing::message::signed_event_stream,
+        processor::basic_processor::BasicProcessor,
+    };
+    use tempfile::Builder;
+
+    let oobi_rpy = r#"{"v":"KERI10JSON000116_","t":"rpy","d":"EZuWRhrNl9gNIck0BcLiPegTJTw3Ng_Hq3WTF8BOQ-sk","dt":"2022-04-12T08:27:47.009114+00:00","r":"/end/role/add","a":{"cid":"Bgoq68HCmYNUDgOz4Skvlu306o_NY-NrYuKAVhk3Zh9c","role":"controller","eid":"Bgoq68HCmYNUDgOz4Skvlu306o_NY-NrYuKAVhk3Zh9c"}}-VAi-CABBgoq68HCmYNUDgOz4Skvlu306o_NY-NrYuKAVhk3Zh9c0Bke1uKEan_LNlP3e5huCO7zHEi50L18FB1-DdskAEyuehw9gMjNMhex73C9Yr0WlkP1B1-JjNIKDVm816zCgmCw"#;
+
+    let oobi_root = Builder::new().prefix("oobi-db").tempdir().unwrap();
+    let root = Builder::new().prefix("oobi-db").tempdir().unwrap();
+    let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
+
+    let component = Component::<BasicProcessor>::new(db, oobi_root.path())?;
+    let events = signed_event_stream(oobi_rpy.as_bytes()).unwrap().1;
+    for event in events {
+        let event = Message::try_from(event)?;
+        let res = component.process(event);
+        assert!(res.is_ok())
+    }
     Ok(())
 }

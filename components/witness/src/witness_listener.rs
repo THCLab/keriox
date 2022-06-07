@@ -2,9 +2,7 @@ use actix_web::{dev::Server, web, App, HttpServer};
 use anyhow::Result;
 use std::{path::Path, sync::Arc};
 
-use keri::{
-    self, error::Error, prefix::BasicPrefix,
-};
+use keri::{self, error::Error, prefix::BasicPrefix};
 
 use crate::witness::Witness;
 

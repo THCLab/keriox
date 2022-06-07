@@ -1,6 +1,4 @@
-use std::{
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 
 use controller::controller::Controller;
 use keri::{
@@ -10,8 +8,9 @@ use keri::{
     event::SerializationFormats,
     event_message::signed_event_message::Message,
     prefix::{AttachedSignaturePrefix, IdentifierPrefix},
+    processor::{basic_processor::BasicProcessor, event_storage::EventStorage},
     query::query_event::{QueryArgsMbx, QueryEvent, QueryRoute, QueryTopics, SignedQuery},
-    signer::Signer, processor::{basic_processor::BasicProcessor, event_storage::EventStorage},
+    signer::Signer,
 };
 
 use crate::witness::Witness;
@@ -26,9 +25,6 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
     let seed1 = "ArwXoACJgOleVZ2PY7kXn7rA0II0mHYDhc6WrBH8fDAc";
     let seed2 = "A6zz7M08-HQSFq92sJ8KJOT2cZ47x7pXFQLPB0pckB3Q";
 
-    let signer_arc = Arc::new(Signer::new_with_seed(&seed1.parse().unwrap()));
-    let signer_arc2 = Arc::new(Signer::new_with_seed(&seed2.parse().unwrap()));
-
     let mut controller = {
         // Create test db and event processor.
         let root = Builder::new().prefix("test-db").tempdir().unwrap();
@@ -41,7 +37,11 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
             use keri::signer::CryptoBox;
             Arc::new(Mutex::new(CryptoBox::new()?))
         };
-        Controller::new(Arc::clone(&db_controller), key_manager.clone(), oobi_root.path())?
+        Controller::new(
+            Arc::clone(&db_controller),
+            key_manager.clone(),
+            oobi_root.path(),
+        )?
     };
 
     assert_eq!(controller.get_state()?, None);
@@ -50,15 +50,24 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
         let root_witness = Builder::new().prefix("test-db1").tempdir().unwrap();
         let oobi_root = Builder::new().prefix("test-db_oobi").tempdir().unwrap();
         std::fs::create_dir_all(root_witness.path()).unwrap();
-        Witness::setup(url::Url::parse("http://some/url").unwrap(), root_witness.path(), &oobi_root.path(), Some(seed1.into()))?
+        Witness::setup(
+            url::Url::parse("http://some/url").unwrap(),
+            root_witness.path(),
+            &oobi_root.path(),
+            Some(seed1.into()),
+        )?
     };
 
     let second_witness = {
         let root_witness = Builder::new().prefix("test-db1").tempdir().unwrap();
         let oobi_root = Builder::new().prefix("test-db_oobi").tempdir().unwrap();
         std::fs::create_dir_all(root_witness.path()).unwrap();
-        Witness::setup(url::Url::parse("http://some/url").unwrap(), root_witness.path(), &oobi_root.path(), Some(seed1.into()))?
-
+        Witness::setup(
+            url::Url::parse("http://some/url").unwrap(),
+            root_witness.path(),
+            &oobi_root.path(),
+            Some(seed1.into()),
+        )?
     };
 
     // Get inception event.
@@ -76,10 +85,9 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
     let receipts = [&first_witness, &second_witness]
         .iter()
         .flat_map(|w| {
-            w.process(Message::Event(inception_event.clone()))
-                .unwrap();
-            // w.respond(signer_arc.clone()).unwrap();
-            w.component.get_db_ref()
+            w.process(Message::Event(inception_event.clone())).unwrap();
+            w.component
+                .get_db_ref()
                 .get_mailbox_receipts(controller.prefix())
                 .into_iter()
                 .flatten()
@@ -92,7 +100,7 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
     // Witness updates state of identifier even if it hasn't all receipts
     assert_eq!(
         first_witness
-        .component
+            .component
             .get_state_for_prefix(&controller.prefix())?
             .unwrap()
             .sn,
@@ -100,7 +108,7 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
     );
     assert_eq!(
         second_witness
-        .component
+            .component
             .get_state_for_prefix(&controller.prefix())?
             .unwrap()
             .sn,
@@ -129,10 +137,15 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
     );
 
     // Process receipts by witnesses.
-    receipts.clone().into_iter().map(|rct| first_witness.process(rct)).collect::<Result<Vec<_>,_>>()?;
-    receipts.into_iter().map(|rct| second_witness.process(rct)).collect::<Result<Vec<_>,_>>()?;
-    // first_witness.process(receipts.as_slice())?;
-    // second_witness.process(receipts.as_slice())?;
+    receipts
+        .clone()
+        .into_iter()
+        .map(|rct| first_witness.process(rct))
+        .collect::<Result<Vec<_>, _>>()?;
+    receipts
+        .into_iter()
+        .map(|rct| second_witness.process(rct))
+        .collect::<Result<Vec<_>, _>>()?;
 
     assert_eq!(
         first_witness
@@ -150,11 +163,13 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
     );
 
     let not_fully_witnessed_events = first_witness
-        .component.get_db_ref()
+        .component
+        .get_db_ref()
         .get_partially_witnessed_events(&controller.prefix());
     assert!(not_fully_witnessed_events.is_none());
     let not_fully_witnessed_events = second_witness
-        .component.get_db_ref()
+        .component
+        .get_db_ref()
         .get_partially_witnessed_events(&controller.prefix());
     assert!(not_fully_witnessed_events.is_none());
 
@@ -168,7 +183,8 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
     first_witness.process(Message::Event(rotation_event?))?;
     // first_witness.respond(signer_arc.clone())?;
     let first_receipt = first_witness
-        .component.get_db_ref()
+        .component
+        .get_db_ref()
         .get_mailbox_receipts(controller.prefix())
         .unwrap()
         .map(Message::NontransferableRct)
@@ -233,7 +249,11 @@ fn test_qry_rpy() -> Result<(), Error> {
     }));
 
     // Init alice.
-    let mut alice = Controller::new(Arc::clone(&alice_db), Arc::clone(&alice_key_manager), alice_oobi_root.path())?;
+    let mut alice = Controller::new(
+        Arc::clone(&alice_db),
+        Arc::clone(&alice_key_manager),
+        alice_oobi_root.path(),
+    )?;
 
     let bob_key_manager = Arc::new(Mutex::new({
         use keri::signer::CryptoBox;
@@ -241,7 +261,11 @@ fn test_qry_rpy() -> Result<(), Error> {
     }));
 
     // Init bob.
-    let mut bob = Controller::new(Arc::clone(&bob_db), Arc::clone(&bob_key_manager), bob_oobi_root.path())?;
+    let mut bob = Controller::new(
+        Arc::clone(&bob_db),
+        Arc::clone(&bob_key_manager),
+        bob_oobi_root.path(),
+    )?;
 
     let bob_icp = bob.incept(None, None).unwrap();
     // bob.rotate().unwrap();
@@ -252,7 +276,9 @@ fn test_qry_rpy() -> Result<(), Error> {
     // send alices icp to witness
     witness.process(Message::Event(alice_icp))?;
     // send receipts to alice
-    let receipt_to_alice = witness.component.get_db_ref()
+    let receipt_to_alice = witness
+        .component
+        .get_db_ref()
         .get_mailbox_receipts(alice.prefix())
         .unwrap()
         .map(|e| Message::NontransferableRct(e))
@@ -344,7 +370,6 @@ fn test_qry_rpy() -> Result<(), Error> {
 #[test]
 pub fn test_key_state_notice() -> Result<(), Error> {
     use keri::{
-        processor::notification::Notification,
         query::QueryError,
         signer::{CryptoBox, Signer},
     };
@@ -369,14 +394,21 @@ pub fn test_key_state_notice() -> Result<(), Error> {
         let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
 
         let bob_key_manager = Arc::new(Mutex::new(CryptoBox::new()?));
-        Controller::new(Arc::clone(&db), Arc::clone(&bob_key_manager), oobi_root.path())?
+        Controller::new(
+            Arc::clone(&db),
+            Arc::clone(&bob_key_manager),
+            oobi_root.path(),
+        )?
     };
 
     let (alice_processor, alice_storage) = {
         let root = Builder::new().prefix("test-db2").tempdir().unwrap();
         std::fs::create_dir_all(root.path()).unwrap();
         let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-        (BasicProcessor::new(db.clone()), EventStorage::new(db.clone()))
+        (
+            BasicProcessor::new(db.clone()),
+            EventStorage::new(db.clone()),
+        )
     };
 
     let bob_icp = bob
@@ -394,7 +426,10 @@ pub fn test_key_state_notice() -> Result<(), Error> {
 
     // Process reply message before having any bob's events in db.
     alice_processor.process(Message::Reply(signed_rpy.clone()))?;
-    let ksn_db = alice_storage.get_last_ksn_reply(&signed_rpy.reply.get_prefix(), &signed_rpy.signature.get_signer());
+    let ksn_db = alice_storage.get_last_ksn_reply(
+        &signed_rpy.reply.get_prefix(),
+        &signed_rpy.signature.get_signer(),
+    );
     assert!(matches!(ksn_db, None));
     alice_processor.process(Message::Event(bob_icp))?;
 
@@ -410,9 +445,12 @@ pub fn test_key_state_notice() -> Result<(), Error> {
     // now create new reply event by witness and process it by alice.
     let new_reply = witness.get_signed_ksn_for_prefix(&bob_pref, signer_arc.clone())?;
     alice_processor.process(Message::Reply(new_reply.clone()))?;
-    let ksn_db = alice_storage.get_last_ksn_reply(&signed_rpy.reply.get_prefix(), &signed_rpy.signature.get_signer());
+    let ksn_db = alice_storage.get_last_ksn_reply(
+        &signed_rpy.reply.get_prefix(),
+        &signed_rpy.signature.get_signer(),
+    );
     assert!(matches!(ksn_db, Some(_)));
-    
+
     let ksn_from_db_digest = ksn_db.unwrap().reply.get_digest();
     let processed_ksn_digest = new_reply.reply.get_digest();
     assert_eq!(ksn_from_db_digest, processed_ksn_digest);
@@ -424,7 +462,10 @@ pub fn test_key_state_notice() -> Result<(), Error> {
 
     alice_processor.process(Message::Reply(trans_rpy.clone()))?;
     // Reply was out of order so saved reply shouldn't be updated
-    let ksn_db = alice_storage.get_last_ksn_reply(&signed_rpy.reply.get_prefix(), &signed_rpy.signature.get_signer());
+    let ksn_db = alice_storage.get_last_ksn_reply(
+        &signed_rpy.reply.get_prefix(),
+        &signed_rpy.signature.get_signer(),
+    );
     assert!(matches!(ksn_db, Some(_)));
     let ksn_from_db_digest = ksn_db.unwrap().reply.get_digest();
     let out_of_order_ksn_digest = trans_rpy.reply.get_digest();
@@ -435,8 +476,11 @@ pub fn test_key_state_notice() -> Result<(), Error> {
     alice_processor.process(Message::Event(new_bob_rot))?;
     alice_processor.process(Message::Reply(trans_rpy.clone()))?;
 
-     // Reply should be updated 
-    let ksn_db = alice_storage.get_last_ksn_reply(&signed_rpy.reply.get_prefix(), &signed_rpy.signature.get_signer());
+    // Reply should be updated
+    let ksn_db = alice_storage.get_last_ksn_reply(
+        &signed_rpy.reply.get_prefix(),
+        &signed_rpy.signature.get_signer(),
+    );
     assert!(matches!(ksn_db, Some(_)));
     let ksn_from_db_digest = ksn_db.unwrap().reply.get_digest();
     assert_eq!(ksn_from_db_digest, out_of_order_ksn_digest);

@@ -4,21 +4,18 @@ use keri::{
     database::sled::SledEventDatabase,
     derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
     error::Error,
-    event::{SerializationFormats},
-    event_message::{
-        signed_event_message::{Message},
-    },
+    event::SerializationFormats,
+    event_message::signed_event_message::Message,
     event_parsing::message::signed_event_stream,
     oobi::LocationScheme,
     prefix::{BasicPrefix, IdentifierPrefix},
-    processor::{
-        basic_processor::BasicProcessor,
-    },
+    processor::basic_processor::BasicProcessor,
     query::{
         reply_event::{ReplyEvent, ReplyRoute, SignedReply},
         ReplyType,
     },
-    signer::Signer, state::IdentifierState,
+    signer::Signer,
+    state::IdentifierState,
 };
 
 use keri::component::Component;
@@ -111,7 +108,10 @@ impl Watcher {
         ))
     }
 
-    pub fn get_state_for_prefix(&self, id: &IdentifierPrefix) -> Result<Option<IdentifierState>, Error> {
+    pub fn get_state_for_prefix(
+        &self,
+        id: &IdentifierPrefix,
+    ) -> Result<Option<IdentifierState>, Error> {
         self.component.get_state_for_prefix(id)
     }
 

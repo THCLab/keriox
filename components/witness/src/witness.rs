@@ -15,7 +15,7 @@ use keri::{
     prefix::{BasicPrefix, IdentifierPrefix},
     processor::{
         event_storage::EventStorage,
-        notification::{Notification, Notifier, NotificationBus},
+        notification::{Notification, NotificationBus, Notifier},
         witness_processor::WitnessProcessor,
     },
     query::{
@@ -34,11 +34,7 @@ pub struct WitnessReceiptGenerator {
 }
 
 impl Notifier for WitnessReceiptGenerator {
-    fn notify(
-        &self,
-        notification: &Notification,
-        bus: &NotificationBus,
-    ) -> Result<(), Error> {
+    fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error> {
         match notification {
             Notification::KeyEventAdded(event) => {
                 let non_trans_receipt =
@@ -103,10 +99,9 @@ impl Witness {
         let prefix = Basic::Ed25519.derive(signer.public_key());
         let db = Arc::new(SledEventDatabase::new(event_path)?);
         let mut witness = Component::<WitnessProcessor>::new(db.clone(), oobi_path)?;
-        
+
         let receipt_generator = Arc::new(WitnessReceiptGenerator::new(signer.clone(), db.clone()));
-        witness
-            .register_observer(receipt_generator.clone())?;
+        witness.register_observer(receipt_generator.clone())?;
         Ok(Self {
             prefix,
             component: witness,
@@ -146,8 +141,7 @@ impl Witness {
         );
         witness.oobi_manager.save_oobi(signed_reply)?;
         let receipt_generator = Arc::new(WitnessReceiptGenerator::new(signer.clone(), db.clone()));
-        witness
-            .register_observer(receipt_generator.clone())?;
+        witness.register_observer(receipt_generator.clone())?;
         Ok(Self {
             prefix,
             component: witness,
@@ -178,7 +172,6 @@ impl Witness {
             None => None,
         })
     }
-
 
     pub fn get_signed_ksn_for_prefix(
         &self,

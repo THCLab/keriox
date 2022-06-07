@@ -5,6 +5,7 @@ use crate::event_message::signed_event_message::{Message, SignedEventMessage};
 use crate::{database::sled::SledEventDatabase, error::Error};
 
 use super::{
+    escrow::default_escrow_bus,
     notification::{Notification, NotificationBus, Notifier},
     validator::EventValidator,
     EventProcessor, Processor,
@@ -31,7 +32,7 @@ impl Processor for BasicProcessor {
 
 impl BasicProcessor {
     pub fn new(db: Arc<SledEventDatabase>) -> Self {
-        let processor = EventProcessor::new(db, NotificationBus::default());
+        let processor = EventProcessor::new(db.clone(), default_escrow_bus(db));
         Self(processor)
     }
 
