@@ -486,7 +486,14 @@ fn test_mbx() {
         )
         .unwrap();
 
-        let signature = signer.sign(qry_msg.serialize().unwrap()).unwrap();
+        use keri::signer::KeyManager;
+        let signature = controller
+            .key_manager()
+            .lock()
+            .unwrap()
+            .sign(&qry_msg.serialize().unwrap())
+            .unwrap();
+
         let signatures = vec![AttachedSignaturePrefix::new(
             SelfSigning::Ed25519Sha512,
             signature,
