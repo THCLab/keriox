@@ -7,7 +7,8 @@ use crate::{
     oobi::{OobiManager, Role},
     prefix::IdentifierPrefix,
     processor::{
-        event_storage::EventStorage, notification::Notifier, validator::EventValidator, Processor,
+        event_storage::EventStorage, notification::Notifier,
+        validator::EventValidator, Processor,
     },
     query::{
         key_state_notice::KeyStateNotice,
@@ -17,8 +18,6 @@ use crate::{
     },
     state::IdentifierState,
 };
-
-pub mod nontransferable_component;
 
 pub struct Component<P: Processor> {
     processor: P,
@@ -160,27 +159,18 @@ impl<P: Processor> Component<P> {
 
 #[test]
 pub fn test_ksn_query() -> Result<(), Error> {
-    use crate::{
-        component::nontransferable_component::NontransferableComponent,
-        event_message::signed_event_message::Message, prefix::IdentifierPrefix,
-        query::reply_event::ReplyRoute,
-    };
+    use crate::event_message::signed_event_message::Message;
     use std::convert::TryFrom;
 
     use crate::event_parsing::message::signed_message;
-    use crate::processor::witness_processor::WitnessProcessor;
+    use crate::processor::basic_processor::BasicProcessor;
     use tempfile::Builder;
-    use url;
 
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     let oobi_root = Builder::new().prefix("test-db2").tempdir().unwrap();
+    let db = Arc::new(SledEventDatabase::new(root.path())?);
 
-    let witness = NontransferableComponent::<WitnessProcessor>::setup(
-        url::Url::parse("http://localhost").unwrap(),
-        root.path(),
-        oobi_root.path(),
-        None,
-    )?;
+    let controller = Component::<BasicProcessor>::new(db, oobi_root.path())?;
     // Process inception event and its receipts. To accept inception event it must be fully witnessed.
     let rcps = r#"{"v":"KERI10JSON000091_","t":"rct","d":"E6OK2wFYp6x0Jx48xX0GCTwAzJUTWtYEvJSykVhtAnaM","i":"E6OK2wFYp6x0Jx48xX0GCTwAzJUTWtYEvJSykVhtAnaM","s":"0"}-BADAAI_M_762PE-i9uhbB_Ynxsx4mfvCA73OHM96U8SQtsgV0co4kGuSw0tMtiQWBYwA9bvDZ7g-ZfhFLtXJPorbtDwABDsQTBpHVpNI-orK8606K5oUSr5sv5LYvyuEHW3dymwVIDRYWUVxMITMp_st7Ee4PjD9nIQCzAeXHDcZ6c14jBQACPySjFKPkqeu5eiB0YfcYLQpvo0vnu6WEQ4XJnzNWWrV9JuOQ2AfWVeIc0D7fuK4ofXMRhTxAXm-btkqTrm0tBA"#;
 
@@ -193,33 +183,27 @@ pub fn test_ksn_query() -> Result<(), Error> {
         })
         .collect();
     for msg in to_process {
-        witness.process(msg).unwrap();
+        controller.process(msg).unwrap();
     }
 
     let qry_str = r#"{"v":"KERI10JSON000104_","t":"qry","d":"ErXRrwRbUFylKDiuOp8a1wO2XPAY4KiMX4TzYWZ1iAGE","dt":"2022-03-21T11:42:58.123955+00:00","r":"ksn","rr":"","q":{"s":0,"i":"E6OK2wFYp6x0Jx48xX0GCTwAzJUTWtYEvJSykVhtAnaM","src":"BGKVzj4ve0VSd8z_AmvhLg4lqcC_9WYX90k03q-R_Ydo"}}-VAj-HABE6OK2wFYp6x0Jx48xX0GCTwAzJUTWtYEvJSykVhtAnaM-AABAAk-Hyv8gpUZNpPYDGJc5F5vrLNWlGM26523Sgb6tKN1CtP4QxUjEApJCRxfm9TN8oW2nQ40QVM_IuZlrly1eLBA"#;
 
     let parsed = signed_message(qry_str.as_bytes()).unwrap().1;
-    let deserialized_qry = Message::try_from(parsed).unwrap();
+    if let Message::Query(signed_query) = Message::try_from(parsed).unwrap() {
+        let r = controller.process_signed_query(signed_query)?;
 
-    let r = witness.process(deserialized_qry)?;
-    // should respond with reply message
-    assert_eq!(r.len(), 1);
-
-    match &r[0] {
-        Message::Reply(signed_reply) => {
-            if let ReplyRoute::Ksn(id, ksn) = &signed_reply.reply.event.content.data {
-                assert_eq!(id, &IdentifierPrefix::Basic(witness.prefix));
-                assert_eq!(
-                    ksn.state.prefix,
-                    "E6OK2wFYp6x0Jx48xX0GCTwAzJUTWtYEvJSykVhtAnaM"
-                        .parse()
-                        .unwrap()
-                );
-                assert_eq!(ksn.state.sn, 0);
-            }
+        if let ReplyType::Ksn(ksn) = r {
+            assert_eq!(
+                ksn.state.prefix,
+                "E6OK2wFYp6x0Jx48xX0GCTwAzJUTWtYEvJSykVhtAnaM"
+                    .parse()
+                    .unwrap()
+            );
+            assert_eq!(ksn.state.sn, 0);
+        } else {
+            panic!("Wrong reply")
         }
-        _ => panic!("Wrong event type"),
-    };
+    }
 
     Ok(())
 }

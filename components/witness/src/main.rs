@@ -14,6 +14,7 @@ mod tests;
 
 mod witness;
 mod witness_listener;
+mod witness_processor;
 use crate::witness_listener::WitnessListener;
 
 #[derive(Deserialize)]

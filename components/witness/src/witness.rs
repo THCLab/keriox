@@ -16,7 +16,6 @@ use keri::{
     processor::{
         event_storage::EventStorage,
         notification::{Notification, NotificationBus, Notifier},
-        witness_processor::WitnessProcessor,
     },
     query::{
         reply_event::{ReplyEvent, ReplyRoute, SignedReply},
@@ -26,6 +25,8 @@ use keri::{
 };
 
 use keri::component::Component;
+
+use crate::witness_processor::WitnessProcessor;
 
 pub struct WitnessReceiptGenerator {
     pub prefix: BasicPrefix,

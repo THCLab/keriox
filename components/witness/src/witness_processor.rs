@@ -1,13 +1,14 @@
 use std::sync::Arc;
 
-use crate::{
+use keri::{
     database::sled::SledEventDatabase,
     error::Error,
     event_message::signed_event_message::{Message, SignedEventMessage},
-    processor::notification::{JustNotification, NotificationBus},
+    processor::notification::{JustNotification, NotificationBus, Notifier},
+    processor::escrow::{OutOfOrderEscrow, PartiallySignedEscrow}
 };
 
-use super::{notification::Notification, validator::EventValidator, EventProcessor, Processor};
+use keri::processor::{notification::Notification, validator::EventValidator, EventProcessor, Processor};
 
 pub struct WitnessProcessor(EventProcessor);
 
@@ -22,7 +23,7 @@ impl Processor for WitnessProcessor {
 
     fn register_observer(
         &mut self,
-        observer: Arc<dyn super::notification::Notifier + Send + Sync>,
+        observer: Arc<dyn Notifier + Send + Sync>,
     ) -> Result<(), Error> {
         self.0.register_observer(observer)
     }
@@ -30,7 +31,6 @@ impl Processor for WitnessProcessor {
 
 impl WitnessProcessor {
     pub fn new(db: Arc<SledEventDatabase>) -> Self {
-        use crate::processor::escrow::{OutOfOrderEscrow, PartiallySignedEscrow};
         let mut bus = NotificationBus::new();
         bus.register_observer(
             Arc::new(PartiallySignedEscrow::new(db.clone())),

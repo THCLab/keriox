@@ -9,7 +9,6 @@ pub mod notification;
 #[cfg(test)]
 mod tests;
 pub mod validator;
-pub mod witness_processor;
 
 use crate::{
     database::sled::SledEventDatabase,
