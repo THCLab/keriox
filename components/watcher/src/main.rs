@@ -9,9 +9,10 @@ use keri::{oobi::LocationScheme, prefix::Prefix};
 use serde::Deserialize;
 use structopt::StructOpt;
 
-use crate::watcher_data::WatcherListener;
+use crate::watcher_listener::WatcherListener;
 
-mod watcher_data;
+mod watcher_listener;
+mod watcher;
 
 #[derive(Deserialize)]
 pub struct WatcherConfig {

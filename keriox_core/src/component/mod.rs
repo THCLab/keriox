@@ -6,11 +6,11 @@ use crate::{
     event_message::{serialization_info::SerializationFormats, signed_event_message::Message},
     oobi::{OobiManager, Role},
     prefix::IdentifierPrefix,
-    processor::{event_storage::EventStorage, validator::EventValidator, Processor},
+    processor::{event_storage::EventStorage, validator::EventValidator, Processor, notification::Notifier},
     query::{
         key_state_notice::KeyStateNotice,
         query_event::{QueryData, SignedQuery},
-        reply_event::{ReplyRoute, SignedReply},
+        reply_event::{ReplyRoute, SignedReply, ReplyEvent},
         ReplyType,
     },
     state::IdentifierState,
@@ -34,6 +34,15 @@ impl<P: Processor> Component<P> {
             storage,
             oobi_manager,
         })
+    }
+
+    pub fn register_observer(&mut self, observer: Arc<dyn Notifier + Send + Sync>)
+        -> Result<(), Error> {
+            self.processor.register_observer(observer)
+    }
+
+    pub fn save_oobi(&self, signed_oobi: SignedReply) -> Result<(), Error> {
+        self.oobi_manager.save_oobi(signed_oobi)
     }
 
     pub fn get_db_ref(&self) -> Arc<SledEventDatabase> {
@@ -61,6 +70,14 @@ impl<P: Processor> Component<P> {
         role: Role,
     ) -> Result<Option<Vec<SignedReply>>, Error> {
         Ok(self.oobi_manager.get_end_role(cid, role).unwrap())
+    }
+
+
+    pub fn get_loc_scheme_for_id(
+        &self,
+        eid: &IdentifierPrefix,
+    ) -> Result<Option<Vec<ReplyEvent>>, Error> {
+        Ok(self.oobi_manager.get_loc_scheme(eid)?)
     }
 
     pub fn get_ksn_for_prefix(&self, prefix: &IdentifierPrefix) -> Result<KeyStateNotice, Error> {

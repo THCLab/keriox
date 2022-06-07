@@ -3,14 +3,13 @@ use anyhow::Result;
 use std::{path::Path, sync::Arc};
 
 use keri::{
-    self, component::NontransferableComponent, error::Error, prefix::BasicPrefix,
-    processor::witness_processor::WitnessProcessor,
+    self, error::Error, prefix::BasicPrefix,
 };
 
-pub type WitnessData = NontransferableComponent<WitnessProcessor>;
+use crate::witness::Witness;
 
 pub struct WitnessListener {
-    witness_data: Arc<WitnessData>,
+    witness_data: Arc<Witness>,
 }
 
 impl WitnessListener {
@@ -27,7 +26,7 @@ impl WitnessListener {
             address.clone()
         };
 
-        WitnessData::setup(pub_address, event_db_path, oobi_db_path, priv_key).map(|wd| Self {
+        Witness::setup(pub_address, event_db_path, oobi_db_path, priv_key).map(|wd| Self {
             witness_data: Arc::new(wd),
         })
     }
@@ -63,12 +62,12 @@ pub mod http_handlers {
         prefix::{IdentifierPrefix, Prefix},
     };
 
-    use super::WitnessData;
+    use crate::witness::Witness;
 
     #[get("/oobi/{id}")]
     pub async fn get_eid_oobi(
         eid: web::Path<IdentifierPrefix>,
-        data: web::Data<WitnessData>,
+        data: web::Data<Witness>,
     ) -> impl Responder {
         let loc_scheme = data.get_loc_scheme_for_id(&eid).unwrap().unwrap_or(vec![]);
         let oobis: Vec<u8> = loc_scheme
@@ -93,11 +92,12 @@ pub mod http_handlers {
     #[get("/oobi/{cid}/{role}/{eid}")]
     pub async fn get_cid_oobi(
         path: web::Path<(IdentifierPrefix, Role, IdentifierPrefix)>,
-        data: web::Data<WitnessData>,
+        data: web::Data<Witness>,
     ) -> impl Responder {
         let (cid, role, eid) = path.into_inner();
 
         let end_role = data
+            .component
             .get_end_role_for_id(&cid, role)
             .unwrap()
             .unwrap_or(vec![]);
@@ -105,7 +105,7 @@ pub mod http_handlers {
         // (for now) Append controller kel to be able to verify end role signature.
         // TODO use ksn instead
         let cont_kel = data
-            .actor
+            .component
             .get_kel_for_prefix(&cid)
             .unwrap()
             .unwrap_or_default();
@@ -131,7 +131,7 @@ pub mod http_handlers {
     }
 
     #[post("/process")]
-    pub async fn process_stream(post_data: String, data: web::Data<WitnessData>) -> impl Responder {
+    pub async fn process_stream(post_data: String, data: web::Data<Witness>) -> impl Responder {
         println!("\nGot events to process: \n{}", post_data);
         let resp = data
             .parse_and_process(post_data.as_bytes())

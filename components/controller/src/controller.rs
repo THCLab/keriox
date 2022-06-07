@@ -1,6 +1,6 @@
 use std::{
     convert::TryFrom,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex}, path::Path,
 };
 
 #[cfg(feature = "oobi")]
@@ -28,17 +28,16 @@ use keri::{
     event_parsing::message::{signed_event_stream, signed_message},
     prefix::AttachedSignaturePrefix,
     prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix, SelfSigningPrefix},
-    processor::{event_storage::EventStorage, notification::Notification},
+    processor::{event_storage::EventStorage, basic_processor::BasicProcessor},
     signer::KeyManager,
-    state::IdentifierState,
+    state::IdentifierState, component::Component,
 };
 
 pub struct Controller<K: KeyManager + 'static> {
     prefix: IdentifierPrefix,
     key_manager: Arc<Mutex<K>>,
-    processor: BasicProcessor,
+    processor: Component<BasicProcessor>,
     pub storage: EventStorage,
-    response_queue: Arc<Responder<Notification>>,
 }
 
 impl<K: KeyManager> Controller<K> {
@@ -46,18 +45,15 @@ impl<K: KeyManager> Controller<K> {
     pub fn new(
         db: Arc<SledEventDatabase>,
         key_manager: Arc<Mutex<K>>,
+        oobi_db_path: &Path,
     ) -> Result<Controller<K>, Error> {
-        let processor = BasicProcessor::new(db.clone());
-        // let mut not_bus = default_escrow_bus(db.clone());
-        let responder = Arc::new(Responder::new());
-        // not_bus.register_observer(responder.clone(), vec![JustNotification::KeyEventAdded]);
+        let processor = Component::new(db.clone(), oobi_db_path)?;
 
         Ok(Controller {
             prefix: IdentifierPrefix::default(),
             key_manager,
             processor,
             storage: EventStorage::new(db),
-            response_queue: responder,
         })
     }
 
@@ -319,39 +315,39 @@ impl<K: KeyManager> Controller<K> {
     // Respond:
     // check if we have receipt of self icp event from event creator, if
     // we don't, append own kel to response.
-    // That's for direct mode
-    fn respond_one(&self, ev_msg: EventMessage<KeyEvent>) -> Result<Vec<Message>, Error> {
-        let mut response = vec![];
-        if !self
-            .storage
-            .has_receipt(&self.prefix, 0, &ev_msg.event.get_prefix())?
-        {
-            response.append(
-                &mut self
-                    .storage
-                    .get_kel_messages_with_receipts(&self.prefix)?
-                    .ok_or_else(|| Error::SemanticError("KEL is empty".into()))?,
-            )
-        };
-        response.push(Message::TransferableRct(self.make_rct(ev_msg)?));
-        Ok(response)
-    }
+    // // That's for direct mode
+    // fn respond_one(&self, ev_msg: EventMessage<KeyEvent>) -> Result<Vec<Message>, Error> {
+    //     let mut response = vec![];
+    //     if !self
+    //         .storage
+    //         .has_receipt(&self.prefix, 0, &ev_msg.event.get_prefix())?
+    //     {
+    //         response.append(
+    //             &mut self
+    //                 .storage
+    //                 .get_kel_messages_with_receipts(&self.prefix)?
+    //                 .ok_or_else(|| Error::SemanticError("KEL is empty".into()))?,
+    //         )
+    //     };
+    //     response.push(Message::TransferableRct(self.make_rct(ev_msg)?));
+    //     Ok(response)
+    // }
 
-    pub fn respond(&self) -> Result<Vec<Message>, Error> {
-        let mut response = Vec::new();
-        while let Some(notification) = self.response_queue.get_data_to_respond() {
-            match notification {
-                Notification::KeyEventAdded(event) => {
-                    // ignore own events
-                    if !event.event_message.event.get_prefix().eq(&self.prefix) {
-                        response.append(&mut self.respond_one(event.event_message)?);
-                    }
-                }
-                _ => todo!(),
-            }
-        }
-        Ok(response)
-    }
+    // pub fn respond(&self) -> Result<Vec<Message>, Error> {
+    //     let mut response = Vec::new();
+    //     while let Some(notification) = self.response_queue.get_data_to_respond() {
+    //         match notification {
+    //             Notification::KeyEventAdded(event) => {
+    //                 // ignore own events
+    //                 if !event.event_message.event.get_prefix().eq(&self.prefix) {
+    //                     response.append(&mut self.respond_one(event.event_message)?);
+    //                 }
+    //             }
+    //             _ => todo!(),
+    //         }
+    //     }
+    //     Ok(response)
+    // }
 
     pub fn make_rct(
         &self,

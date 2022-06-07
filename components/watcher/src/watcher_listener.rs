@@ -4,15 +4,13 @@ use futures::future::join_all;
 use std::path::Path;
 
 use keri::{
-    component::NontransferableComponent,
     error::Error,
     oobi::{EndRole, LocationScheme, Scheme},
     prefix::{BasicPrefix, IdentifierPrefix},
-    processor::BasicProcessor,
     query::reply_event::ReplyRoute,
 };
 
-pub type WatcherData = NontransferableComponent<BasicProcessor>;
+use crate::watcher::Watcher;
 
 pub struct WatcherListener {
     watcher_data: Communication,
@@ -32,7 +30,7 @@ impl WatcherListener {
             address.clone()
         };
 
-        WatcherData::setup(pub_address, event_db_path, oobi_db_path, priv_key).map(|watcher_data| {
+        Watcher::setup(pub_address, event_db_path, oobi_db_path, priv_key).map(|watcher_data| {
             Self {
                 watcher_data: Communication(watcher_data),
             }
@@ -77,7 +75,7 @@ impl WatcherListener {
     }
 }
 
-pub struct Communication(WatcherData);
+pub struct Communication(Watcher);
 
 impl Communication {
     pub async fn resolve_end_role(&self, er: EndRole) -> Result<()> {
@@ -116,13 +114,12 @@ impl Communication {
     fn get_loc_schemas(&self, id: &IdentifierPrefix) -> Result<Vec<LocationScheme>> {
         Ok(self
             .0
-            .oobi_manager
-            .get_loc_scheme(id)
+            .get_loc_scheme_for_id(id)
             .unwrap()
             .unwrap()
             .iter()
             .filter_map(|lc| {
-                if let ReplyRoute::LocScheme(loc_scheme) = lc.get_route() {
+                if let ReplyRoute::LocScheme(loc_scheme) = lc.reply.get_route() {
                     Ok(loc_scheme)
                 } else {
                     Err(anyhow!("Wrong route type"))
@@ -179,7 +176,9 @@ pub mod http_handlers {
         query::query_event::{QueryArgs, QueryEvent, QueryRoute, SignedQuery},
     };
 
-    use super::{Communication, WatcherData};
+    use crate::watcher::Watcher;
+
+    use super::{Communication};
 
     #[post("/process")]
     async fn process_stream(body: web::Bytes, data: web::Data<Communication>) -> impl Responder {
@@ -241,7 +240,6 @@ pub mod http_handlers {
         // Get witnesses, and TODO choose one randomly.
         let witnesses = data
             .0
-            .actor
             .get_state_for_prefix(&id)
             .unwrap()
             .unwrap()
@@ -291,7 +289,7 @@ pub mod http_handlers {
     #[get("/oobi/{id}")]
     async fn get_eid_oobi(
         eid: web::Path<IdentifierPrefix>,
-        data: web::Data<WatcherData>,
+        data: web::Data<Watcher>,
     ) -> impl Responder {
         let loc_scheme = data.get_loc_scheme_for_id(&eid).unwrap().unwrap_or(vec![]);
         let oobis: Vec<u8> = loc_scheme
@@ -311,11 +309,12 @@ pub mod http_handlers {
     #[get("/oobi/{cid}/{role}/{eid}")]
     async fn get_cid_oobi(
         path: web::Path<(IdentifierPrefix, Role, IdentifierPrefix)>,
-        data: web::Data<WatcherData>,
+        data: web::Data<Watcher>,
     ) -> impl Responder {
         let (cid, role, eid) = path.into_inner();
 
         let end_role = data
+            .component
             .get_end_role_for_id(&cid, role)
             .unwrap()
             .unwrap_or(vec![]);
