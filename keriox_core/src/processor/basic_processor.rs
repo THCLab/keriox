@@ -68,7 +68,6 @@ impl BasicProcessor {
     /// Process
     ///
     /// Process a deserialized KERI message.
-    /// Ignore not fully witness error and accept not fully witnessed events.
     pub fn process(&self, message: Message) -> Result<(), Error> {
         self.0
             .process(message, BasicProcessor::basic_processing_strategy)?;

@@ -47,6 +47,9 @@ impl WitnessProcessor {
         Self(processor)
     }
 
+    /// Witness processing strategy
+    ///
+    /// Ignore not fully witness error and accept not fully witnessed events.
     fn witness_processing_strategy(
         db: Arc<SledEventDatabase>,
         publisher: &NotificationBus,
@@ -80,7 +83,6 @@ impl WitnessProcessor {
     /// Process
     ///
     /// Process a deserialized KERI message.
-    /// Ignore not fully witness error and accept not fully witnessed events.
     pub fn process(&self, message: Message) -> Result<(), Error> {
         self.0
             .process(message, WitnessProcessor::witness_processing_strategy)?;

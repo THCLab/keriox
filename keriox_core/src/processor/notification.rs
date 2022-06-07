@@ -107,16 +107,6 @@ impl From<&Notification> for JustNotification {
             Notification::DupliciousEvent(_) => JustNotification::DupliciousEvent,
             #[cfg(feature = "query")]
             Notification::KsnOutOfOrder(_) => JustNotification::KsnOutOfOrder,
-            // #[cfg(feature = "query")]
-            // Notification::ReplyUpdated => JustNotification::KsnUpdated,
-            // #[cfg(feature = "oobi")]
-            // Notification::GotOobi(_) => JustNotification::GotOobi,
-            // #[cfg(feature = "query")]
-            // Notification::ReplayLog(_) => JustNotification::ReplayLog,
-            // #[cfg(feature = "query")]
-            // Notification::ReplyKsn(_) => JustNotification::ReplyKsn,
-            // #[cfg(feature = "query")]
-            // Notification::GetMailbox(_) => JustNotification::GetMailbox,
         }
     }
 }
