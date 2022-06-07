@@ -363,7 +363,7 @@ impl Notifier for ReplyEscrow {
     fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error> {
         match notification {
             Notification::KsnOutOfOrder(rpy) => {
-                if let ReplyRoute::Ksn(id, ksn) = rpy.reply.get_route() {
+                if let ReplyRoute::Ksn(id, _ksn) = rpy.reply.get_route() {
                     // let id = ksn.state.prefix;
                     self.0.add_escrowed_reply(rpy.clone(), &id)?;
                 };

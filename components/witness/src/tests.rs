@@ -503,10 +503,19 @@ fn test_mbx() {
                 .prefix(&format!("test-ctrl-{i}"))
                 .tempdir()
                 .unwrap();
+            let oobi_root = tempfile::Builder::new()
+                .prefix(&format!("test-ctrl-{i}"))
+                .tempdir()
+                .unwrap();
             std::fs::create_dir_all(root.path()).unwrap();
             let db_controller = Arc::new(SledEventDatabase::new(root.path()).unwrap());
             let key_manager = Arc::new(Mutex::new(CryptoBox::new().unwrap()));
-            Controller::new(Arc::clone(&db_controller), key_manager.clone()).unwrap()
+            Controller::new(
+                Arc::clone(&db_controller),
+                key_manager.clone(),
+                oobi_root.path(),
+            )
+            .unwrap()
         })
         .collect::<Vec<_>>();
 
@@ -515,8 +524,12 @@ fn test_mbx() {
             .prefix("test-witness")
             .tempdir()
             .unwrap();
+        let oobi_root = tempfile::Builder::new()
+            .prefix(&format!("test-oobi"))
+            .tempdir()
+            .unwrap();
         std::fs::create_dir_all(root.path()).unwrap();
-        Witness::new(root.path(), signer.clone().public_key()).unwrap()
+        Witness::new(signer, root.path(), oobi_root.path()).unwrap()
     };
 
     // create inception events
@@ -530,9 +543,8 @@ fn test_mbx() {
 
         // send to witness
         witness
-            .process(&vec![Message::Event(incept_event.clone())])
+            .process(Message::Event(incept_event.clone()))
             .unwrap();
-        witness.respond(signer.clone()).unwrap();
     }
 
     // query witness
@@ -578,8 +590,7 @@ fn test_mbx() {
             signatures,
         ));
 
-        witness.process(&[mbx_msg]).unwrap();
-        let receipts = &witness.respond(signer.clone()).unwrap();
+        let receipts = witness.process(mbx_msg).unwrap();
 
         assert_eq!(receipts.len(), 1);
         let receipt = receipts[0].clone();
