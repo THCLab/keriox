@@ -1,3 +1,4 @@
+use anyhow::{anyhow, Result};
 use std::{convert::TryFrom, path::Path, sync::Arc};
 
 use keri::{
@@ -7,7 +8,7 @@ use keri::{
     event::SerializationFormats,
     event_message::signed_event_message::Message,
     event_parsing::message::signed_event_stream,
-    oobi::LocationScheme,
+    oobi::{EndRole, LocationScheme, Scheme},
     prefix::{BasicPrefix, IdentifierPrefix},
     processor::basic_processor::BasicProcessor,
     query::{
@@ -20,13 +21,13 @@ use keri::{
 
 use keri::component::Component;
 
-pub struct Watcher {
+pub struct WatcherData {
     pub prefix: BasicPrefix,
     pub component: Component<BasicProcessor>,
     pub signer: Arc<Signer>,
 }
 
-impl Watcher {
+impl WatcherData {
     pub fn setup(
         public_address: url::Url,
         event_db_path: &Path,
@@ -163,5 +164,94 @@ impl Watcher {
             .flatten()
             .collect();
         Ok(output)
+    }
+}
+
+pub struct Watcher(pub WatcherData);
+
+impl Watcher {
+    pub async fn resolve_end_role(&self, er: EndRole) -> Result<()> {
+        // find endpoint data of endpoint provider identifier
+        let loc_scheme = self
+            .0
+            .get_loc_scheme_for_id(&er.eid.clone())
+            .unwrap()
+            .unwrap()[0]
+            .reply
+            .event
+            .content
+            .data
+            .clone();
+
+        if let ReplyRoute::LocScheme(lc) = loc_scheme {
+            let url = format!("{}oobi/{}/{}/{}", lc.url, er.cid, "witness", er.eid);
+            let oobis = reqwest::get(url).await.unwrap().text().await.unwrap();
+
+            self.0.parse_and_process(oobis.as_bytes()).unwrap();
+            Ok(())
+        } else {
+            Err(anyhow!("Wrong oobi type"))
+        }
+    }
+
+    pub async fn resolve_loc_scheme(&self, lc: &LocationScheme) -> Result<()> {
+        let url = format!("{}oobi/{}", lc.url, lc.eid);
+        let oobis = reqwest::get(url).await.unwrap().text().await.unwrap();
+
+        self.0.parse_and_process(oobis.as_bytes()).unwrap();
+
+        Ok(())
+    }
+
+    fn get_loc_schemas(&self, id: &IdentifierPrefix) -> Result<Vec<LocationScheme>> {
+        Ok(self
+            .0
+            .get_loc_scheme_for_id(id)
+            .unwrap()
+            .unwrap()
+            .iter()
+            .filter_map(|lc| {
+                if let ReplyRoute::LocScheme(loc_scheme) = lc.reply.get_route() {
+                    Ok(loc_scheme)
+                } else {
+                    Err(anyhow!("Wrong route type"))
+                }
+                .ok()
+            })
+            .collect())
+    }
+
+    pub async fn send_to(
+        &self,
+        wit_id: IdentifierPrefix,
+        schema: Scheme,
+        msg: Vec<u8>,
+    ) -> Result<Option<String>> {
+        let addresses = self.get_loc_schemas(&wit_id)?;
+        match addresses
+            .iter()
+            .find(|loc| loc.scheme == schema)
+            .map(|lc| &lc.url)
+        {
+            Some(address) => match schema {
+                Scheme::Http => {
+                    let client = reqwest::Client::new();
+                    let response = client
+                        .post(format!("{}process", address))
+                        .body(msg)
+                        .send()
+                        .await?
+                        .text()
+                        .await?;
+
+                    println!("\ngot response: {}", response);
+                    Ok(Some(response))
+                }
+                Scheme::Tcp => {
+                    todo!()
+                }
+            },
+            _ => Err(anyhow!("No address for scheme {:?}", schema)),
+        }
     }
 }

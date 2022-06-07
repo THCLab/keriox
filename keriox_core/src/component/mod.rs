@@ -7,8 +7,7 @@ use crate::{
     oobi::{OobiManager, Role},
     prefix::IdentifierPrefix,
     processor::{
-        event_storage::EventStorage, notification::Notifier,
-        validator::EventValidator, Processor,
+        event_storage::EventStorage, notification::Notifier, validator::EventValidator, Processor,
     },
     query::{
         key_state_notice::KeyStateNotice,

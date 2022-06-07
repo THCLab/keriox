@@ -4,11 +4,13 @@ use keri::{
     database::sled::SledEventDatabase,
     error::Error,
     event_message::signed_event_message::{Message, SignedEventMessage},
+    processor::escrow::{OutOfOrderEscrow, PartiallySignedEscrow},
     processor::notification::{JustNotification, NotificationBus, Notifier},
-    processor::escrow::{OutOfOrderEscrow, PartiallySignedEscrow}
 };
 
-use keri::processor::{notification::Notification, validator::EventValidator, EventProcessor, Processor};
+use keri::processor::{
+    notification::Notification, validator::EventValidator, EventProcessor, Processor,
+};
 
 pub struct WitnessProcessor(EventProcessor);
 

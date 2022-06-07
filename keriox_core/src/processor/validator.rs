@@ -1,11 +1,8 @@
 #[cfg(feature = "query")]
 use crate::prefix::IdentifierPrefix;
+use crate::prefix::{BasicPrefix, SelfSigningPrefix};
 #[cfg(feature = "query")]
 use crate::query::{key_state_notice::KeyStateNotice, reply_event::SignedReply, QueryError};
-use crate::{
-    prefix::{BasicPrefix, SelfSigningPrefix},
-    processor::basic_processor::BasicProcessor,
-};
 #[cfg(feature = "query")]
 use chrono::{DateTime, FixedOffset};
 use std::sync::Arc;
@@ -411,9 +408,10 @@ impl EventValidator {
 
 #[test]
 fn test_validate_seal() -> Result<(), Error> {
+    use crate::event_message::signed_event_message::Message;
     use crate::event_message::Digestible;
     use crate::event_parsing::message::signed_message;
-    use crate::processor::Message;
+    use crate::processor::basic_processor::BasicProcessor;
     use std::{convert::TryFrom, fs, sync::Arc};
     use tempfile::Builder;
     // Create test db and event processor.

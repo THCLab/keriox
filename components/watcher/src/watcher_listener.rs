@@ -1,19 +1,14 @@
 use actix_web::{dev::Server, web, App, HttpServer};
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use futures::future::join_all;
 use std::path::Path;
 
-use keri::{
-    error::Error,
-    oobi::{EndRole, LocationScheme, Scheme},
-    prefix::{BasicPrefix, IdentifierPrefix},
-    query::reply_event::ReplyRoute,
-};
+use keri::{error::Error, oobi::LocationScheme, prefix::BasicPrefix};
 
-use crate::watcher::Watcher;
+use crate::watcher::{Watcher, WatcherData};
 
 pub struct WatcherListener {
-    watcher_data: Communication,
+    watcher_data: Watcher,
 }
 
 impl WatcherListener {
@@ -30,9 +25,9 @@ impl WatcherListener {
             address.clone()
         };
 
-        Watcher::setup(pub_address, event_db_path, oobi_db_path, priv_key).map(|watcher_data| {
+        WatcherData::setup(pub_address, event_db_path, oobi_db_path, priv_key).map(|watcher_data| {
             Self {
-                watcher_data: Communication(watcher_data),
+                watcher_data: Watcher(watcher_data),
             }
         })
     }
@@ -75,95 +70,6 @@ impl WatcherListener {
     }
 }
 
-pub struct Communication(Watcher);
-
-impl Communication {
-    pub async fn resolve_end_role(&self, er: EndRole) -> Result<()> {
-        // find endpoint data of endpoint provider identifier
-        let loc_scheme = self
-            .0
-            .get_loc_scheme_for_id(&er.eid.clone())
-            .unwrap()
-            .unwrap()[0]
-            .reply
-            .event
-            .content
-            .data
-            .clone();
-
-        if let ReplyRoute::LocScheme(lc) = loc_scheme {
-            let url = format!("{}oobi/{}/{}/{}", lc.url, er.cid, "witness", er.eid);
-            let oobis = reqwest::get(url).await.unwrap().text().await.unwrap();
-
-            self.0.parse_and_process(oobis.as_bytes()).unwrap();
-            Ok(())
-        } else {
-            Err(anyhow!("Wrong oobi type"))
-        }
-    }
-
-    pub async fn resolve_loc_scheme(&self, lc: &LocationScheme) -> Result<()> {
-        let url = format!("{}oobi/{}", lc.url, lc.eid);
-        let oobis = reqwest::get(url).await.unwrap().text().await.unwrap();
-
-        self.0.parse_and_process(oobis.as_bytes()).unwrap();
-
-        Ok(())
-    }
-
-    fn get_loc_schemas(&self, id: &IdentifierPrefix) -> Result<Vec<LocationScheme>> {
-        Ok(self
-            .0
-            .get_loc_scheme_for_id(id)
-            .unwrap()
-            .unwrap()
-            .iter()
-            .filter_map(|lc| {
-                if let ReplyRoute::LocScheme(loc_scheme) = lc.reply.get_route() {
-                    Ok(loc_scheme)
-                } else {
-                    Err(anyhow!("Wrong route type"))
-                }
-                .ok()
-            })
-            .collect())
-    }
-
-    async fn send_to(
-        &self,
-        wit_id: IdentifierPrefix,
-        schema: Scheme,
-        msg: Vec<u8>,
-    ) -> Result<Option<String>> {
-        let addresses = self.get_loc_schemas(&wit_id)?;
-        match addresses
-            .iter()
-            .find(|loc| loc.scheme == schema)
-            .map(|lc| &lc.url)
-        {
-            Some(address) => match schema {
-                Scheme::Http => {
-                    let client = reqwest::Client::new();
-                    let response = client
-                        .post(format!("{}process", address))
-                        .body(msg)
-                        .send()
-                        .await?
-                        .text()
-                        .await?;
-
-                    println!("\ngot response: {}", response);
-                    Ok(Some(response))
-                }
-                Scheme::Tcp => {
-                    todo!()
-                }
-            },
-            _ => Err(anyhow!("No address for scheme {:?}", schema)),
-        }
-    }
-}
-
 pub mod http_handlers {
 
     use actix_web::{get, http::header::ContentType, post, web, HttpResponse, Responder};
@@ -176,12 +82,10 @@ pub mod http_handlers {
         query::query_event::{QueryArgs, QueryEvent, QueryRoute, SignedQuery},
     };
 
-    use crate::watcher::Watcher;
-
-    use super::Communication;
+    use crate::watcher::{Watcher, WatcherData};
 
     #[post("/process")]
-    async fn process_stream(body: web::Bytes, data: web::Data<Communication>) -> impl Responder {
+    async fn process_stream(body: web::Bytes, data: web::Data<Watcher>) -> impl Responder {
         println!(
             "\nGot events to process: \n{}",
             String::from_utf8(body.to_vec()).unwrap()
@@ -201,10 +105,7 @@ pub mod http_handlers {
     }
 
     #[get("/query/{id}")]
-    async fn get_kel(
-        eid: web::Path<IdentifierPrefix>,
-        data: web::Data<Communication>,
-    ) -> impl Responder {
+    async fn get_kel(eid: web::Path<IdentifierPrefix>, data: web::Data<Watcher>) -> impl Responder {
         // generate query message here
         let id = eid.clone();
         let qr = QueryArgs {
@@ -266,7 +167,7 @@ pub mod http_handlers {
     }
 
     #[post("/resolve")]
-    async fn resolve_oobi(body: web::Bytes, data: web::Data<Communication>) -> impl Responder {
+    async fn resolve_oobi(body: web::Bytes, data: web::Data<Watcher>) -> impl Responder {
         println!(
             "\nGot oobi to resolve: \n{}",
             String::from_utf8(body.to_vec()).unwrap()
@@ -289,7 +190,7 @@ pub mod http_handlers {
     #[get("/oobi/{id}")]
     async fn get_eid_oobi(
         eid: web::Path<IdentifierPrefix>,
-        data: web::Data<Watcher>,
+        data: web::Data<WatcherData>,
     ) -> impl Responder {
         let loc_scheme = data.get_loc_scheme_for_id(&eid).unwrap().unwrap_or(vec![]);
         let oobis: Vec<u8> = loc_scheme
@@ -309,7 +210,7 @@ pub mod http_handlers {
     #[get("/oobi/{cid}/{role}/{eid}")]
     async fn get_cid_oobi(
         path: web::Path<(IdentifierPrefix, Role, IdentifierPrefix)>,
-        data: web::Data<Watcher>,
+        data: web::Data<WatcherData>,
     ) -> impl Responder {
         let (cid, role, eid) = path.into_inner();
 
