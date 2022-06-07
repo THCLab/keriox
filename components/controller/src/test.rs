@@ -1,9 +1,9 @@
 #[cfg(feature = "wallet")]
 use universal_wallet::prelude::UnlockedWallet;
 
+use keri::event_parsing::attachment;
 #[cfg(test)]
 use keri::{database::sled::SledEventDatabase, error::Error};
-use keri::{event_message::signed_event_message::Message, event_parsing::attachment};
 
 use std::sync::{Arc, Mutex};
 

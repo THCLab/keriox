@@ -8,10 +8,8 @@ use super::{
 #[cfg(feature = "query")]
 use crate::query::reply_event::ReplyRoute;
 use crate::{
-    database::sled::SledEventDatabase,
-    error::Error,
-    event_message::signed_event_message::{Message, SignedEventMessage},
-    prefix::{IdentifierPrefix, Prefix},
+    database::sled::SledEventDatabase, error::Error,
+    event_message::signed_event_message::SignedEventMessage, prefix::IdentifierPrefix,
 };
 
 pub fn default_escrow_bus(db: Arc<SledEventDatabase>) -> NotificationBus {
@@ -122,7 +120,7 @@ impl OutOfOrderEscrow {
                         self.0
                             .remove_out_of_order_event(id, &event.signed_event_message)?;
                     }
-                    Err(e) => (), // keep in escrow,
+                    Err(_e) => (), // keep in escrow,
                 }
             }
         };

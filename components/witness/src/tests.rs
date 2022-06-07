@@ -66,7 +66,7 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
             url::Url::parse("http://some/url").unwrap(),
             root_witness.path(),
             &oobi_root.path(),
-            Some(seed1.into()),
+            Some(seed2.into()),
         )?
     };
 

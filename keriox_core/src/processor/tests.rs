@@ -7,7 +7,6 @@ use crate::event_message::{Digestible, EventTypeTag};
 use crate::event_parsing::message::{signed_event_stream, signed_message};
 use crate::prefix::{AttachedSignaturePrefix, IdentifierPrefix, Prefix, SeedPrefix};
 use crate::processor::basic_processor::BasicProcessor;
-use crate::processor::escrow::default_escrow_bus;
 use crate::processor::event_storage::EventStorage;
 use crate::signer::Signer;
 use crate::{database::sled::SledEventDatabase, error::Error};
@@ -656,18 +655,14 @@ fn test_partially_sign_escrow() -> Result<(), Error> {
     use tempfile::Builder;
 
     // events from keripy/tests/core/test_escrow.py::test_partial_signed_escrow
-    let (processor, storage, publisher) = {
+    let (processor, storage) = {
         let witness_root = Builder::new().prefix("test-db").tempdir().unwrap();
         let path = witness_root.path();
         let witness_db = Arc::new(SledEventDatabase::new(path).unwrap());
         std::fs::create_dir_all(path).unwrap();
         let processor = BasicProcessor::new(witness_db.clone());
 
-        (
-            processor,
-            EventStorage::new(witness_db.clone()),
-            default_escrow_bus(witness_db.clone()),
-        )
+        (processor, EventStorage::new(witness_db.clone()))
     };
 
     let parse_messagee = |raw_event| {
