@@ -1,8 +1,9 @@
 use std::{path::Path, sync::Arc};
 
+use keri::base::process_signed_query;
+use keri::oobi::OobiManager;
 use keri::prelude::*;
 use keri::{
-    database::sled::SledEventDatabase,
     derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
     error::Error,
     event::{EventMessage, SerializationFormats},
@@ -13,10 +14,7 @@ use keri::{
     },
     oobi::LocationScheme,
     prefix::{BasicPrefix, IdentifierPrefix},
-    processor::{
-        event_storage::EventStorage,
-        notification::{Notification, NotificationBus, Notifier},
-    },
+    processor::notification::{Notification, NotificationBus, Notifier},
     query::{
         reply_event::{ReplyEvent, ReplyRoute, SignedReply},
         ReplyType,
@@ -88,7 +86,9 @@ impl WitnessReceiptGenerator {
 
 pub struct Witness {
     pub prefix: BasicPrefix,
-    pub component: Component<WitnessProcessor>,
+    pub processor: WitnessProcessor,
+    pub event_storage: EventStorage,
+    pub oobi_manager: OobiManager,
     pub signer: Arc<Signer>,
     pub receipt_generator: Arc<WitnessReceiptGenerator>,
 }
@@ -97,15 +97,18 @@ impl Witness {
     pub fn new(signer: Arc<Signer>, event_path: &Path, oobi_path: &Path) -> Result<Self, Error> {
         let prefix = Basic::Ed25519.derive(signer.public_key());
         let db = Arc::new(SledEventDatabase::new(event_path)?);
-        let mut witness = Component::<WitnessProcessor>::new(db.clone(), oobi_path)?;
+        let mut witness_processor = WitnessProcessor::new(db.clone());
+        let event_storage = EventStorage::new(db.clone());
 
         let receipt_generator = Arc::new(WitnessReceiptGenerator::new(signer.clone(), db.clone()));
-        witness.register_observer(receipt_generator.clone())?;
+        witness_processor.register_observer(receipt_generator.clone())?;
         Ok(Self {
             prefix,
-            component: witness,
+            processor: witness_processor,
             signer: signer,
+            event_storage,
             receipt_generator,
+            oobi_manager: OobiManager::new(oobi_path),
         })
     }
     pub fn setup(
@@ -120,8 +123,7 @@ impl Witness {
                 .unwrap_or(Ok(Signer::new()))?,
         );
         let prefix = Basic::Ed25519.derive(signer.public_key());
-        let db = Arc::new(SledEventDatabase::new(event_db_path)?);
-        let mut witness = Component::<WitnessProcessor>::new(db.clone(), oobi_db_path)?;
+        let witness = Witness::new(signer.clone(), event_db_path, oobi_db_path)?;
         // construct witness loc scheme oobi
         let loc_scheme = LocationScheme::new(
             IdentifierPrefix::Basic(prefix.clone()),
@@ -139,21 +141,14 @@ impl Witness {
             SelfSigning::Ed25519Sha512.derive(signer.sign(reply.serialize()?)?),
         );
         witness.oobi_manager.save_oobi(signed_reply)?;
-        let receipt_generator = Arc::new(WitnessReceiptGenerator::new(signer.clone(), db.clone()));
-        witness.register_observer(receipt_generator.clone())?;
-        Ok(Self {
-            prefix,
-            component: witness,
-            signer: signer,
-            receipt_generator,
-        })
+        Ok(witness)
     }
 
     pub fn get_loc_scheme_for_id(
         &self,
         eid: &IdentifierPrefix,
     ) -> Result<Option<Vec<SignedReply>>, Error> {
-        Ok(match self.component.get_loc_scheme_for_id(eid)? {
+        Ok(match self.oobi_manager.get_loc_scheme(eid)? {
             Some(oobis_to_sign) => Some(
                 oobis_to_sign
                     .iter()
@@ -177,7 +172,9 @@ impl Witness {
         prefix: &IdentifierPrefix,
         signer: Arc<Signer>,
     ) -> Result<SignedReply, Error> {
-        let ksn = self.component.get_ksn_for_prefix(prefix)?;
+        let ksn = self
+            .event_storage
+            .get_ksn_for_prefix(prefix, SerializationFormats::JSON)?;
         let rpy = ReplyEvent::new_reply(
             ReplyRoute::Ksn(IdentifierPrefix::Basic(self.prefix.clone()), ksn),
             SelfAddressing::Blake3_256,
@@ -197,7 +194,7 @@ impl Witness {
         let mut responses = Vec::new();
         match msg.clone() {
             Message::Query(qry) => {
-                let response = self.component.process_signed_query(qry).unwrap();
+                let response = process_signed_query(qry, &self.event_storage).unwrap();
                 match response {
                     ReplyType::Ksn(ksn) => {
                         let rpy = ReplyEvent::new_reply(
@@ -219,7 +216,12 @@ impl Witness {
                 };
                 Ok(())
             }
-            _ => self.component.process(msg),
+            _ => process_event(
+                msg,
+                &self.oobi_manager,
+                &self.processor,
+                &self.event_storage,
+            ),
         }?;
         Ok(responses)
     }

@@ -7,7 +7,6 @@ use std::{
 #[cfg(feature = "oobi")]
 use crate::oobi::OobiManager;
 use keri::{
-    component::Component,
     database::sled::SledEventDatabase,
     derivation::basic::Basic,
     derivation::self_addressing::SelfAddressing,
@@ -28,6 +27,7 @@ use keri::{
         EventTypeTag,
     },
     event_parsing::message::{signed_event_stream, signed_message},
+    oobi::OobiManager,
     prefix::AttachedSignaturePrefix,
     prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix, SelfSigningPrefix},
     processor::{basic_processor::BasicProcessor, event_storage::EventStorage},
@@ -35,10 +35,13 @@ use keri::{
     state::IdentifierState,
 };
 
+use keri::prelude::*;
+
 pub struct Controller<K: KeyManager + 'static> {
     prefix: IdentifierPrefix,
     key_manager: Arc<Mutex<K>>,
-    processor: Component<BasicProcessor>,
+    processor: BasicProcessor,
+    oobi_manager: OobiManager,
     pub storage: EventStorage,
 }
 
@@ -49,12 +52,13 @@ impl<K: KeyManager> Controller<K> {
         key_manager: Arc<Mutex<K>>,
         oobi_db_path: &Path,
     ) -> Result<Controller<K>, Error> {
-        let processor = Component::new(db.clone(), oobi_db_path)?;
+        let processor = BasicProcessor::new(db.clone());
 
         Ok(Controller {
             prefix: IdentifierPrefix::default(),
             key_manager,
             processor,
+            oobi_manager: OobiManager::new(oobi_db_path),
             storage: EventStorage::new(db),
         })
     }
@@ -108,7 +112,12 @@ impl<K: KeyManager> Controller<K> {
             None,
         );
 
-        self.processor.process(Message::Event(signed.clone()))?;
+        process_event(
+            Message::Event(signed.clone()),
+            &self.oobi_manager,
+            &self.processor,
+            &self.storage,
+        )?;
 
         self.prefix = icp.event.get_prefix();
         // No need to generate receipt
@@ -185,7 +194,12 @@ impl<K: KeyManager> Controller<K> {
             None,
         );
 
-        self.processor.process(Message::Event(rot.clone()))?;
+        process_event(
+            Message::Event(rot.clone()),
+            &self.oobi_manager,
+            &self.processor,
+            &self.storage,
+        )?;
 
         Ok(rot)
     }
@@ -249,7 +263,12 @@ impl<K: KeyManager> Controller<K> {
             None,
         );
 
-        self.processor.process(Message::Event(ixn.clone()))?;
+        process_event(
+            Message::Event(ixn.clone()),
+            &self.oobi_manager,
+            &self.processor,
+            &self.storage,
+        )?;
 
         Ok(ixn)
     }
@@ -262,7 +281,7 @@ impl<K: KeyManager> Controller<K> {
             Err(e) => Err(Error::DeserializeError(e.to_string())),
             Ok(event) => {
                 let prefix = event.get_prefix();
-                self.processor.process(event)?;
+                process_event(event, &self.oobi_manager, &self.processor, &self.storage)?;
                 match self.get_state_for_prefix(&prefix)? {
                     None => Err(Error::InvalidIdentifierStat),
                     Some(state) => Ok((prefix, serde_json::to_vec(&state)?)),
@@ -308,7 +327,14 @@ impl<K: KeyManager> Controller<K> {
     pub fn process(&self, msg: &[Message]) -> Result<(), Error> {
         let (_process_ok, _process_failed): (Vec<_>, Vec<_>) = msg
             .iter()
-            .map(|message| self.processor.process(message.clone()))
+            .map(|message| {
+                process_event(
+                    message.clone(),
+                    &self.oobi_manager,
+                    &self.processor,
+                    &self.storage,
+                )
+            })
             .partition(Result::is_ok);
 
         Ok(())
@@ -342,8 +368,12 @@ impl<K: KeyManager> Controller<K> {
         )];
         let signed_rcp = SignedTransferableReceipt::new(rcp, validator_event_seal, signatures);
 
-        self.processor
-            .process(Message::TransferableRct(signed_rcp.clone()))?;
+        process_event(
+            Message::TransferableRct(signed_rcp.clone()),
+            &self.oobi_manager,
+            &self.processor,
+            &self.storage,
+        )?;
 
         Ok(signed_rcp)
     }

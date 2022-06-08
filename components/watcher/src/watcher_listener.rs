@@ -215,8 +215,8 @@ pub mod http_handlers {
         let (cid, role, eid) = path.into_inner();
 
         let end_role = data
-            .component
-            .get_end_role_for_id(&cid, role)
+            .oobi_manager
+            .get_end_role(&cid, role)
             .unwrap()
             .unwrap_or(vec![]);
         let loc_scheme = data.get_loc_scheme_for_id(&eid).unwrap().unwrap_or(vec![]);

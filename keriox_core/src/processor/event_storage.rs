@@ -6,6 +6,7 @@ use crate::{
     event::{
         event_data::EventData,
         sections::{seal::EventSeal, KeyConfig},
+        SerializationFormats,
     },
     event_message::{
         signed_event_message::{
@@ -15,6 +16,7 @@ use crate::{
     },
     event_parsing::SignedEventData,
     prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix},
+    query::key_state_notice::KeyStateNotice,
     state::{EventSemantics, IdentifierState},
 };
 
@@ -400,5 +402,16 @@ impl EventStorage {
         } else {
             Ok(None)
         }
+    }
+
+    pub fn get_ksn_for_prefix(
+        &self,
+        prefix: &IdentifierPrefix,
+        format: SerializationFormats,
+    ) -> Result<KeyStateNotice, Error> {
+        let state = self
+            .get_state(prefix)?
+            .ok_or_else(|| Error::SemanticError("No state in db".into()))?;
+        Ok(KeyStateNotice::new_ksn(state, format))
     }
 }

@@ -86,8 +86,8 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
         .iter()
         .flat_map(|w| {
             w.process(Message::Event(inception_event.clone())).unwrap();
-            w.component
-                .get_db_ref()
+            w.event_storage
+                .db
                 .get_mailbox_receipts(controller.prefix())
                 .into_iter()
                 .flatten()
@@ -100,16 +100,16 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
     // Witness updates state of identifier even if it hasn't all receipts
     assert_eq!(
         first_witness
-            .component
-            .get_state_for_prefix(&controller.prefix())?
+            .event_storage
+            .get_state(&controller.prefix())?
             .unwrap()
             .sn,
         0
     );
     assert_eq!(
         second_witness
-            .component
-            .get_state_for_prefix(&controller.prefix())?
+            .event_storage
+            .get_state(&controller.prefix())?
             .unwrap()
             .sn,
         0
@@ -149,27 +149,27 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
 
     assert_eq!(
         first_witness
-            .component
-            .get_state_for_prefix(&controller.prefix())?
+            .event_storage
+            .get_state(&controller.prefix())?
             .map(|state| state.sn),
         Some(0)
     );
     assert_eq!(
         second_witness
-            .component
-            .get_state_for_prefix(&controller.prefix())?
+            .event_storage
+            .get_state(&controller.prefix())?
             .map(|state| state.sn),
         Some(0)
     );
 
     let not_fully_witnessed_events = first_witness
-        .component
-        .get_db_ref()
+        .event_storage
+        .db
         .get_partially_witnessed_events(&controller.prefix());
     assert!(not_fully_witnessed_events.is_none());
     let not_fully_witnessed_events = second_witness
-        .component
-        .get_db_ref()
+        .event_storage
+        .db
         .get_partially_witnessed_events(&controller.prefix());
     assert!(not_fully_witnessed_events.is_none());
 
@@ -183,8 +183,8 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
     first_witness.process(Message::Event(rotation_event?))?;
     // first_witness.respond(signer_arc.clone())?;
     let first_receipt = first_witness
-        .component
-        .get_db_ref()
+        .event_storage
+        .db
         .get_mailbox_receipts(controller.prefix())
         .unwrap()
         .map(Message::NontransferableRct)
@@ -193,8 +193,8 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
     // Receipt accepted by witness, because his the only designated witness
     assert_eq!(
         first_witness
-            .component
-            .get_state_for_prefix(&controller.prefix())?
+            .event_storage
+            .get_state(&controller.prefix())?
             .unwrap()
             .sn,
         1
@@ -277,8 +277,8 @@ fn test_qry_rpy() -> Result<(), Error> {
     witness.process(Message::Event(alice_icp))?;
     // send receipts to alice
     let receipt_to_alice = witness
-        .component
-        .get_db_ref()
+        .event_storage
+        .db
         .get_mailbox_receipts(alice.prefix())
         .unwrap()
         .map(|e| Message::NontransferableRct(e))

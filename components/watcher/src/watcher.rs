@@ -2,14 +2,12 @@ use anyhow::{anyhow, Result};
 use std::{path::Path, sync::Arc};
 
 use keri::{
-    database::sled::SledEventDatabase,
     derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
     error::Error,
     event::SerializationFormats,
     event_message::signed_event_message::Message,
-    oobi::{EndRole, LocationScheme, Scheme},
+    oobi::{EndRole, LocationScheme, OobiManager, Scheme},
     prefix::{BasicPrefix, IdentifierPrefix},
-    processor::basic_processor::BasicProcessor,
     query::{
         reply_event::{ReplyEvent, ReplyRoute, SignedReply},
         ReplyType,
@@ -22,7 +20,9 @@ use keri::prelude::*;
 
 pub struct WatcherData {
     pub prefix: BasicPrefix,
-    pub component: Component<BasicProcessor>,
+    pub processor: BasicProcessor,
+    event_storage: EventStorage,
+    pub oobi_manager: OobiManager,
     pub signer: Arc<Signer>,
 }
 
@@ -40,7 +40,8 @@ impl WatcherData {
         );
         let prefix = Basic::Ed25519.derive(signer.public_key());
         let db = Arc::new(SledEventDatabase::new(event_db_path)?);
-        let watcher = Component::<BasicProcessor>::new(db.clone(), oobi_db_path)?;
+        let processor = BasicProcessor::new(db.clone());
+        let storage = EventStorage::new(db.clone());
         // construct witness loc scheme oobi
         let loc_scheme = LocationScheme::new(
             IdentifierPrefix::Basic(prefix.clone()),
@@ -57,11 +58,14 @@ impl WatcherData {
             prefix.clone(),
             SelfSigning::Ed25519Sha512.derive(signer.sign(reply.serialize()?)?),
         );
-        watcher.oobi_manager.save_oobi(signed_reply)?;
+        let oobi_manager = OobiManager::new(oobi_db_path);
+        oobi_manager.save_oobi(signed_reply)?;
         Ok(Self {
             prefix,
-            component: watcher,
+            processor,
+            event_storage: storage,
             signer: signer,
+            oobi_manager,
         })
     }
 
@@ -69,7 +73,7 @@ impl WatcherData {
         &self,
         eid: &IdentifierPrefix,
     ) -> Result<Option<Vec<SignedReply>>, Error> {
-        Ok(match self.component.get_loc_scheme_for_id(eid)? {
+        Ok(match self.oobi_manager.get_loc_scheme(eid)? {
             Some(oobis_to_sign) => Some(
                 oobis_to_sign
                     .iter()
@@ -93,7 +97,9 @@ impl WatcherData {
         prefix: &IdentifierPrefix,
         signer: Arc<Signer>,
     ) -> Result<SignedReply, Error> {
-        let ksn = self.component.get_ksn_for_prefix(prefix)?;
+        let ksn = self
+            .event_storage
+            .get_ksn_for_prefix(prefix, SerializationFormats::JSON)?;
         let rpy = ReplyEvent::new_reply(
             ReplyRoute::Ksn(IdentifierPrefix::Basic(self.prefix.clone()), ksn),
             SelfAddressing::Blake3_256,
@@ -112,7 +118,7 @@ impl WatcherData {
         &self,
         id: &IdentifierPrefix,
     ) -> Result<Option<IdentifierState>, Error> {
-        self.component.get_state_for_prefix(id)
+        self.event_storage.get_state(id)
     }
 
     // Returns messages if they can be returned immediately, i.e. for query message
@@ -120,7 +126,7 @@ impl WatcherData {
         let mut responses = Vec::new();
         match msg.clone() {
             Message::Query(qry) => {
-                let response = self.component.process_signed_query(qry).unwrap();
+                let response = process_signed_query(qry, &self.event_storage).unwrap();
                 match response {
                     ReplyType::Ksn(ksn) => {
                         let rpy = ReplyEvent::new_reply(
@@ -142,7 +148,12 @@ impl WatcherData {
                 };
                 Ok(())
             }
-            _ => self.component.process(msg),
+            _ => process_event(
+                msg,
+                &self.oobi_manager,
+                &self.processor,
+                &self.event_storage,
+            ),
         }?;
         Ok(responses)
     }

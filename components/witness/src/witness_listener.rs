@@ -95,16 +95,16 @@ pub mod http_handlers {
         let (cid, role, eid) = path.into_inner();
 
         let end_role = data
-            .component
-            .get_end_role_for_id(&cid, role)
+            .oobi_manager
+            .get_end_role(&cid, role)
             .unwrap()
             .unwrap_or(vec![]);
         let loc_scheme = data.get_loc_scheme_for_id(&eid).unwrap().unwrap_or(vec![]);
         // (for now) Append controller kel to be able to verify end role signature.
         // TODO use ksn instead
         let cont_kel = data
-            .component
-            .get_kel_for_prefix(&cid)
+            .event_storage
+            .get_kel(&cid)
             .unwrap()
             .unwrap_or_default();
         let oobis = end_role
