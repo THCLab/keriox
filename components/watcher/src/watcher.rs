@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use std::{convert::TryFrom, path::Path, sync::Arc};
+use std::{path::Path, sync::Arc};
 
 use keri::{
     database::sled::SledEventDatabase,
@@ -7,7 +7,6 @@ use keri::{
     error::Error,
     event::SerializationFormats,
     event_message::signed_event_message::Message,
-    event_parsing::message::signed_event_stream,
     oobi::{EndRole, LocationScheme, Scheme},
     prefix::{BasicPrefix, IdentifierPrefix},
     processor::basic_processor::BasicProcessor,
@@ -19,7 +18,7 @@ use keri::{
     state::IdentifierState,
 };
 
-use keri::component::Component;
+use keri::prelude::*;
 
 pub struct WatcherData {
     pub prefix: BasicPrefix,
@@ -149,21 +148,13 @@ impl WatcherData {
     }
 
     pub fn parse_and_process(&self, input_stream: &[u8]) -> Result<Vec<Message>, Error> {
-        let (_, msgs) = signed_event_stream(input_stream)
-            .map_err(|e| Error::DeserializeError(e.to_string()))
-            .unwrap();
-
-        let output = msgs
+        Ok(parse_event_stream(input_stream)?
             .into_iter()
-            .map(|msg| -> Result<_, _> {
-                let msg = Message::try_from(msg)?;
-                self.process(msg)
-            })
+            .map(|message| self.process(message))
             // TODO: avoid unwrap
             .map(|d| d.unwrap())
             .flatten()
-            .collect();
-        Ok(output)
+            .collect())
     }
 }
 

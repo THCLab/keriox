@@ -1,5 +1,6 @@
-use std::{convert::TryFrom, path::Path, sync::Arc};
+use std::{path::Path, sync::Arc};
 
+use keri::prelude::*;
 use keri::{
     database::sled::SledEventDatabase,
     derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
@@ -10,7 +11,6 @@ use keri::{
         key_event_message::KeyEvent,
         signed_event_message::{Message, SignedNontransferableReceipt},
     },
-    event_parsing::message::signed_event_stream,
     oobi::LocationScheme,
     prefix::{BasicPrefix, IdentifierPrefix},
     processor::{
@@ -23,8 +23,6 @@ use keri::{
     },
     signer::Signer,
 };
-
-use keri::component::Component;
 
 use crate::witness_processor::WitnessProcessor;
 
@@ -227,20 +225,12 @@ impl Witness {
     }
 
     pub fn parse_and_process(&self, input_stream: &[u8]) -> Result<Vec<Message>, Error> {
-        let (_, msgs) = signed_event_stream(input_stream)
-            .map_err(|e| Error::DeserializeError(e.to_string()))
-            .unwrap();
-
-        let output = msgs
+        Ok(parse_event_stream(input_stream)?
             .into_iter()
-            .map(|msg| -> Result<_, _> {
-                let msg = Message::try_from(msg)?;
-                self.process(msg)
-            })
+            .map(|message| self.process(message))
             // TODO: avoid unwrap
             .map(|d| d.unwrap())
             .flatten()
-            .collect();
-        Ok(output)
+            .collect())
     }
 }

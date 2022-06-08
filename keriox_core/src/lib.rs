@@ -15,3 +15,9 @@ pub mod state;
 
 #[cfg(feature = "oobi")]
 pub mod oobi;
+
+pub mod prelude {
+    pub use crate::component::{parse_event_stream, Component};
+    pub use crate::processor::{basic_processor::BasicProcessor, Processor};
+    pub use crate::query::ReplyType;
+}
