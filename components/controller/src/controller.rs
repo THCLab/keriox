@@ -314,43 +314,6 @@ impl<K: KeyManager> Controller<K> {
         Ok(())
     }
 
-    // Respond:
-    // check if we have receipt of self icp event from event creator, if
-    // we don't, append own kel to response.
-    // That's for direct mode
-    // fn respond_one(&self, ev_msg: EventMessage<KeyEvent>) -> Result<Vec<Message>, Error> {
-    //     let mut response = vec![];
-    //     if !self
-    //         .storage
-    //         .has_receipt(&self.prefix, 0, &ev_msg.event.get_prefix())?
-    //     {
-    //         response.append(
-    //             &mut self
-    //                 .storage
-    //                 .get_kel_messages_with_receipts(&self.prefix)?
-    //                 .ok_or_else(|| Error::SemanticError("KEL is empty".into()))?,
-    //         )
-    //     };
-    //     response.push(Message::TransferableRct(self.make_rct(ev_msg)?));
-    //     Ok(response)
-    // }
-
-    // pub fn respond(&self) -> Result<Vec<Message>, Error> {
-    //     let mut response = Vec::new();
-    //     while let Some(notification) = self.response_queue.get_data_to_respond() {
-    //         match notification {
-    //             Notification::KeyEventAdded(event) => {
-    //                 // ignore own events
-    //                 if !event.event_message.event.get_prefix().eq(&self.prefix) {
-    //                     response.append(&mut self.respond_one(event.event_message)?);
-    //                 }
-    //             }
-    //             _ => todo!(),
-    //         }
-    //     }
-    //     Ok(response)
-    // }
-
     pub fn make_rct(
         &self,
         event: EventMessage<KeyEvent>,
