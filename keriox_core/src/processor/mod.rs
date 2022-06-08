@@ -29,7 +29,7 @@ use self::{
 
 pub trait Processor {
     fn new(db_path: Arc<SledEventDatabase>) -> Self;
-    fn process(&self, message: Message) -> Result<(), Error>;
+    fn process(&self, message: &Message) -> Result<(), Error>;
     fn register_observer(&mut self, observer: Arc<dyn Notifier + Send + Sync>)
         -> Result<(), Error>;
 }
@@ -68,15 +68,15 @@ impl EventProcessor {
     ///
     /// Process a deserialized KERI message
     /// Update database based on event validation result.
-    pub fn process<F>(&self, message: Message, processing_strategy: F) -> Result<(), Error>
+    pub fn process<F>(&self, message: &Message, processing_strategy: F) -> Result<(), Error>
     where
         F: Fn(Arc<SledEventDatabase>, &NotificationBus, SignedEventMessage) -> Result<(), Error>,
     {
-        match message {
+        match &message {
             Message::Event(signed_event) => {
                 processing_strategy(self.db.clone(), &self.publisher, signed_event.clone())?;
                 // check if receipts are attached
-                if let Some(witness_receipts) = signed_event.witness_receipts {
+                if let Some(witness_receipts) = &signed_event.witness_receipts {
                     // Create and process witness receipts
                     // TODO What timestamp should be set?
                     let id = signed_event.event_message.event.get_prefix();
@@ -88,10 +88,10 @@ impl EventProcessor {
                     let signed_receipt = SignedNontransferableReceipt::new(
                         &receipt.to_message(SerializationFormats::JSON).unwrap(),
                         None,
-                        Some(witness_receipts),
+                        Some(witness_receipts.clone()),
                     );
                     self.process(
-                        Message::NontransferableRct(signed_receipt),
+                        &Message::NontransferableRct(signed_receipt),
                         processing_strategy,
                     )
                 } else {
@@ -129,9 +129,9 @@ impl EventProcessor {
                     Ok(_) => self
                         .db
                         .update_accepted_reply(rpy.clone(), &rpy.reply.get_prefix()),
-                    Err(Error::EventOutOfOrderError) => {
-                        self.publisher.notify(&Notification::KsnOutOfOrder(rpy))
-                    }
+                    Err(Error::EventOutOfOrderError) => self
+                        .publisher
+                        .notify(&Notification::KsnOutOfOrder(rpy.clone())),
                     Err(anything) => Err(anything),
                 },
                 _ => Ok(()),

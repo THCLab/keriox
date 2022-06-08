@@ -8,7 +8,7 @@ use crate::{
     processor::{event_storage::EventStorage, validator::EventValidator, Processor},
     query::{
         key_state_notice::KeyStateNotice,
-        query_event::{QueryData, SignedQuery},
+        query_event::{Query, SignedQuery},
         reply_event::{ReplyRoute, SignedReply},
         ReplyType,
     },
@@ -30,20 +30,20 @@ pub fn process_event<P: Processor>(
     processor: &P,
     event_storage: &EventStorage,
 ) -> Result<(), Error> {
-    match msg.clone() {
+    match &msg {
         Message::Reply(sr) => match sr.reply.get_route() {
             ReplyRoute::LocScheme(_) | ReplyRoute::EndRoleAdd(_) | ReplyRoute::EndRoleCut(_) => {
-                process_signed_oobi(sr, oobi_manager, event_storage)
+                process_signed_oobi(&sr, oobi_manager, event_storage)
             }
-            ReplyRoute::Ksn(_, _) => processor.process(msg),
+            ReplyRoute::Ksn(_, _) => processor.process(&msg),
         },
 
-        _ => processor.process(msg),
+        _ => processor.process(&msg),
     }
 }
 
 pub fn process_signed_oobi(
-    signed_oobi: SignedReply,
+    signed_oobi: &SignedReply,
     oobi_manager: &OobiManager,
     event_storage: &EventStorage,
 ) -> Result<(), Error> {
@@ -53,7 +53,7 @@ pub fn process_signed_oobi(
     // check digest
     signed_oobi.reply.check_digest()?;
     // save
-    oobi_manager.process_oobi(signed_oobi)
+    oobi_manager.process_oobi(&signed_oobi)
 }
 
 pub fn process_signed_query(qr: SignedQuery, storage: &EventStorage) -> Result<ReplyType, Error> {
@@ -73,7 +73,7 @@ pub fn process_signed_query(qr: SignedQuery, storage: &EventStorage) -> Result<R
     }
 }
 
-fn process_query(qr: QueryData, storage: &EventStorage) -> Result<ReplyType, Error> {
+fn process_query(qr: Query, storage: &EventStorage) -> Result<ReplyType, Error> {
     use crate::query::query_event::QueryRoute;
 
     match qr.route {

@@ -38,7 +38,7 @@ fn test_process() -> Result<(), Error> {
     };
 
     // Process icp event.
-    event_processor.process(deserialized_icp)?;
+    event_processor.process(&deserialized_icp)?;
 
     // Check if processed event is in kel.
     let icp_from_db = event_storage.get_event_at_sn(&id, 0).unwrap();
@@ -54,7 +54,7 @@ fn test_process() -> Result<(), Error> {
     let deserialized_rot = Message::try_from(parsed).unwrap();
 
     // Process rotation event.
-    event_processor.process(deserialized_rot.clone())?;
+    event_processor.process(&deserialized_rot.clone())?;
     let rot_from_db = event_storage.get_event_at_sn(&id, 1).unwrap().unwrap();
     assert_eq!(
         rot_from_db.signed_event_message.serialize().unwrap(),
@@ -62,7 +62,7 @@ fn test_process() -> Result<(), Error> {
     );
 
     // Process the same rotation event one more time.
-    event_processor.process(deserialized_rot)?;
+    event_processor.process(&deserialized_rot)?;
     // should be saved as duplicious event
     assert_eq!(
         event_storage.db.get_duplicious_events(&id).unwrap().count(),
@@ -74,7 +74,7 @@ fn test_process() -> Result<(), Error> {
     let deserialized_ixn = Message::try_from(parsed).unwrap();
 
     // Process interaction event.
-    event_processor.process(deserialized_ixn.clone())?;
+    event_processor.process(&deserialized_ixn)?;
 
     // Check if processed event is in db.
     let ixn_from_db = event_storage.get_event_at_sn(&id, 2).unwrap().unwrap();
@@ -101,7 +101,7 @@ fn test_process() -> Result<(), Error> {
     };
 
     // Process partially signed interaction event.
-    event_processor.process(partially_signed_deserialized_ixn.clone())?;
+    event_processor.process(&partially_signed_deserialized_ixn)?;
     if let Message::Event(ev) = partially_signed_deserialized_ixn {
         // should be saved in partially signed escrow
         assert_eq!(
@@ -123,7 +123,7 @@ fn test_process() -> Result<(), Error> {
     let parsed = signed_message(out_of_order_rot_raw).unwrap().1;
     let out_of_order_rot = Message::try_from(parsed).unwrap();
 
-    event_processor.process(out_of_order_rot)?;
+    event_processor.process(&out_of_order_rot)?;
     // should be saved in out of order escrow
     assert_eq!(
         event_storage
@@ -171,7 +171,7 @@ fn test_process_receipt() -> Result<(), Error> {
     let controller_id =
         "EdwS_D6wppLqfIp5LSgly8GTScg5OWBaa7thzEnBqHvw".parse::<IdentifierPrefix>()?;
 
-    event_processor.process(icp)?;
+    event_processor.process(&icp)?;
     let controller_id_state = event_storage.get_state(&controller_id)?;
     assert_eq!(controller_id_state.clone().unwrap().sn, 0);
 
@@ -180,7 +180,7 @@ fn test_process_receipt() -> Result<(), Error> {
     let parsed = signed_message(vrc_raw).unwrap().1;
     let rcp = Message::try_from(parsed).unwrap();
 
-    event_processor.process(rcp.clone())?;
+    event_processor.process(&rcp.clone())?;
     // Validator not yet in db. Event should be escrowed.
     let validator_id = "E0VtKUgXnnXq9EtfgKAd_l5lhyhx_Rlf0Uj1XejaNNoo".parse()?;
     assert_eq!(
@@ -197,7 +197,7 @@ fn test_process_receipt() -> Result<(), Error> {
     let parsed = signed_message(val_icp_raw).unwrap().1;
     let val_icp = Message::try_from(parsed).unwrap();
 
-    event_processor.process(val_icp)?;
+    event_processor.process(&val_icp)?;
     let validator_id_state = event_storage.get_state(&validator_id)?;
     assert_eq!(validator_id_state.unwrap().sn, 0);
 
@@ -359,7 +359,7 @@ fn test_compute_state_at_sn() -> Result<(), Error> {
         .into_iter()
         .for_each(|event| {
             event_processor
-                .process(Message::try_from(event.clone()).unwrap())
+                .process(&Message::try_from(event.clone()).unwrap())
                 .unwrap();
         });
 
@@ -400,7 +400,7 @@ pub fn test_not_fully_witnessed() -> Result<(), Error> {
     let icp_raw = br#"{"v":"KERI10JSON000273_","t":"icp","d":"E1EyzzujHLiQbj9kcJ9wI2lVjOkiNbNn7t4Y2MhRjn_U","i":"E1EyzzujHLiQbj9kcJ9wI2lVjOkiNbNn7t4Y2MhRjn_U","s":"0","kt":"2","k":["DtD9PUcL_NlTlvc2xiEJBRfRz0bDJlbtTynOQpNwVKh0","Dxb9OSQWxq59UsjRthaNPtTzNn8VXs8SJEXdbxFUZ-lA","DkQFb_911LXVQaFj-Ch9rj89QTpIZT3AcV-TjcBhbXOw"],"nt":"2","n":["EmigdEgCEjPPykB-u4_oW6xENmrnr1M0dNlkIUsx3dEI","EwnTsM2S1AKDnSjrnQF2OWRoPkcpH7aY1-3TtEJwnBMs","Eywk7noH2HheSFbjI-sids93CyzP4LUyJSOUBe7OAQbo"],"bt":"2","b":["B389hKezugU2LFKiFVbitoHAxXqJh6HQ8Rn9tH7fxd68","Bed2Tpxc8KeCEWoq3_RKKRjU_3P-chSser9J4eAtAK6I","BljDbmdNfb63KOpGV4mmPKwyyp3OzDsRzpNrdL1BRQts"],"c":[],"a":[]}-AADAAhZMZp-TpUuGjfO-_s3gSh_aDpuK38b7aVh54W0LzgrOvA5Q3eULEch0hW8Ct6jHfLXSNCrsNSynT3D2UvymdCQABiDU4uO1sZcKh7_qlkVylf_jZDOAWlcJFY_ImBOIcfEZbNthQefZOL6EDzuxdUMEScKTnO_n1q3Ms8rufcz8lDwACQuxdJRTtPypGECC3nHdVkJeQojfRvkRZU7n15111NFbLAY2GpMAOnvptzIVUiv9ONOSCXBCWNFC4kNQmtDWOBg"#;
     let parsed_icp = signed_message(icp_raw).unwrap().1;
     let icp_msg = Message::try_from(parsed_icp).unwrap();
-    event_processor.process(icp_msg.clone())?;
+    event_processor.process(&icp_msg.clone())?;
 
     let state = event_storage.get_state(&id)?;
     assert_eq!(state, None);
@@ -416,7 +416,7 @@ pub fn test_not_fully_witnessed() -> Result<(), Error> {
     let receipt0_0 = br#"{"v":"KERI10JSON000091_","t":"rct","d":"E1EyzzujHLiQbj9kcJ9wI2lVjOkiNbNn7t4Y2MhRjn_U","i":"E1EyzzujHLiQbj9kcJ9wI2lVjOkiNbNn7t4Y2MhRjn_U","s":"0"}-CABB389hKezugU2LFKiFVbitoHAxXqJh6HQ8Rn9tH7fxd680BlnRQL6bqNGJZNNGGwA4xZhBwtzY1SgAMdIFky-sUiq6bU-DGbp1OHSXQzKGQWlhohRxfcjtDjql8s9B_n5DdDw"#;
     let parsed_rcp = signed_message(receipt0_0).unwrap().1;
     let rcp_msg = Message::try_from(parsed_rcp).unwrap();
-    event_processor.process(rcp_msg.clone())?;
+    event_processor.process(&rcp_msg.clone())?;
 
     // // check if icp still in escrow
     let mut esc = db.get_all_partially_witnessed().unwrap();
@@ -436,7 +436,7 @@ pub fn test_not_fully_witnessed() -> Result<(), Error> {
     let receipt0_1 = br#"{"v":"KERI10JSON000091_","t":"rct","d":"E1EyzzujHLiQbj9kcJ9wI2lVjOkiNbNn7t4Y2MhRjn_U","i":"E1EyzzujHLiQbj9kcJ9wI2lVjOkiNbNn7t4Y2MhRjn_U","s":"0"}-CABBed2Tpxc8KeCEWoq3_RKKRjU_3P-chSser9J4eAtAK6I0BC69-inoBzibkf_HOUfn31sP3FOCukY0VqqOnnm6pxPWeBR2N7AhdN146OsHVuWfrzzuDSuJl3GpIPYCIynuEDA"#;
     let parsed_rcp = signed_message(receipt0_1).unwrap().1;
     let rcp_msg = Message::try_from(parsed_rcp).unwrap();
-    event_processor.process(rcp_msg.clone())?;
+    event_processor.process(&rcp_msg.clone())?;
 
     // check if icp still in escrow
     let mut esc = db.get_all_partially_witnessed().unwrap();
@@ -456,7 +456,7 @@ pub fn test_not_fully_witnessed() -> Result<(), Error> {
     let receipt0_2 = br#"{"v":"KERI10JSON000091_","t":"rct","d":"E1EyzzujHLiQbj9kcJ9wI2lVjOkiNbNn7t4Y2MhRjn_U","i":"E1EyzzujHLiQbj9kcJ9wI2lVjOkiNbNn7t4Y2MhRjn_U","s":"0"}-CABBljDbmdNfb63KOpGV4mmPKwyyp3OzDsRzpNrdL1BRQts0BoXmoK-pNlcmdAzgWadjnhhfr2eAKiNxCqoWvx05tQyeZZazJx9rW-wQ_jjLieC7OsKDs6c0rEDHFaVgI9SfkDg"#;
     let parsed_rcp = signed_message(receipt0_2).unwrap().1;
     let rcp_msg = Message::try_from(parsed_rcp).unwrap();
-    event_processor.process(rcp_msg.clone())?;
+    event_processor.process(&rcp_msg.clone())?;
 
     // check if receipt was escrowed
     let mut esc = db.get_escrow_nt_receipts(&id).unwrap();
@@ -499,7 +499,7 @@ pub fn test_reply_escrow() -> Result<(), Error> {
     let deserialized_new_rpy = Message::try_from(parsed).unwrap();
 
     // Try to process out of order reply
-    event_processor.process(deserialized_old_rpy.clone())?;
+    event_processor.process(&deserialized_old_rpy.clone())?;
 
     let escrow = db.get_escrowed_replys(&identifier);
     assert_eq!(escrow.unwrap().collect::<Vec<_>>().len(), 1);
@@ -510,7 +510,7 @@ pub fn test_reply_escrow() -> Result<(), Error> {
     // process kel events and update escrow
     // reply event should be unescrowed and save as accepted
     kel_events.for_each(|ev| {
-        event_processor.process(ev).unwrap();
+        event_processor.process(&ev).unwrap();
     });
 
     let escrow = db.get_escrowed_replys(&identifier);
@@ -521,7 +521,7 @@ pub fn test_reply_escrow() -> Result<(), Error> {
 
     // Try to process new out of order reply
     // reply event should be escrowed, accepted reply shouldn't change
-    event_processor.process(deserialized_new_rpy.clone())?;
+    event_processor.process(&deserialized_new_rpy.clone())?;
     let mut escrow = db.get_escrowed_replys(&identifier).unwrap();
     assert_eq!(Message::Reply(escrow.next().unwrap()), deserialized_new_rpy);
     assert!(escrow.next().is_none());
@@ -536,7 +536,7 @@ pub fn test_reply_escrow() -> Result<(), Error> {
     // process rest of kel and update escrow
     // reply event should be unescrowed and save as accepted
     rest_of_kel.for_each(|ev| {
-        event_processor.process(ev).unwrap();
+        event_processor.process(&ev).unwrap();
     });
 
     let escrow = db.get_escrowed_replys(&identifier);
@@ -581,10 +581,10 @@ fn test_out_of_order() -> Result<(), Error> {
     };
     let id: IdentifierPrefix = "DW-CM1BxXJO2fgMGqgvJBbi0UfxGFI0mpxDBVBNxXKoA".parse()?;
 
-    processor.process(ev1.clone())?;
+    processor.process(&ev1)?;
     assert_eq!(storage.get_state(&id).unwrap().unwrap().sn, 0);
 
-    processor.process(ev4.clone())?;
+    processor.process(&ev4.clone())?;
     let mut escrowed = storage.db.get_out_of_order_events(&id).unwrap();
     assert_eq!(
         escrowed
@@ -594,7 +594,7 @@ fn test_out_of_order() -> Result<(), Error> {
     );
     assert!(escrowed.next().is_none());
 
-    processor.process(ev3.clone())?;
+    processor.process(&ev3.clone())?;
     let mut escrowed = storage.db.get_out_of_order_events(&id).unwrap();
     assert_eq!(
         escrowed
@@ -610,7 +610,7 @@ fn test_out_of_order() -> Result<(), Error> {
     );
     assert!(escrowed.next().is_none());
 
-    processor.process(ev5.clone())?;
+    processor.process(&ev5.clone())?;
     let mut escrowed = storage.db.get_out_of_order_events(&id).unwrap();
     assert_eq!(
         escrowed
@@ -636,7 +636,7 @@ fn test_out_of_order() -> Result<(), Error> {
     // check out of order table
     assert_eq!(storage.db.get_out_of_order_events(&id).unwrap().count(), 3);
 
-    processor.process(ev2)?;
+    processor.process(&ev2)?;
 
     assert_eq!(storage.get_state(&id).unwrap().unwrap().sn, 4);
     // Check if out of order is empty
@@ -677,7 +677,7 @@ fn test_partially_sign_escrow() -> Result<(), Error> {
     let icp_raw = br#"{"v":"KERI10JSON000207_","t":"icp","d":"EOsgPPbBijCbpu3R9N-TMdURgcoFqrjUf3rQiIaJ5L7M","i":"EOsgPPbBijCbpu3R9N-TMdURgcoFqrjUf3rQiIaJ5L7M","s":"0","kt":["1/2","1/2","1/2"],"k":["DK4OJI8JOr6oEEUMeSF_X-SbKysfwpKwW-ho5KARvH5c","D1RZLgYke0GmfZm-CH8AsW4HoTU4m-2mFgu8kbwp8jQU","DBVwzum-jPfuUXUcHEWdplB4YcoL3BWGXK0TMoF_NeFU"],"nt":["1/2","1/2","1/2"],"n":["E9tzF91cgL0Xu4UkCqlCbDxXK-HnxmmTIwTi_ySgjGLc","Ez53UFJ6euROznsDhnPr4auhJGgzeM5ln5i-Tlp8V3L4","EPF1apCK5AUL7k4AlFG4pSEgQX0h-kosQ_tfUtPJ_Ti0"],"bt":"0","b":[],"c":[],"a":[]}-AABACJz5biC59pvOpb3aUadlNr_BZb-laG1zgX7FtO5Q0M_HPJObtlhVtUghTBythEb8FpoLze8WnEWUayJnpLsYjAA"#;
     let icp_second_sig = parse_messagee(icp_raw);
 
-    processor.process(icp_first_sig.clone())?;
+    processor.process(&icp_first_sig)?;
     let icp_event = if let Message::Event(ev) = icp_first_sig.clone() {
         Some(ev.event_message)
     } else {
@@ -708,7 +708,7 @@ fn test_partially_sign_escrow() -> Result<(), Error> {
     );
 
     // Proces the same event with another signature
-    processor.process(icp_second_sig)?;
+    processor.process(&icp_second_sig)?;
 
     // Now event is fully signed, check if escrow is emty
     assert_eq!(
@@ -728,7 +728,7 @@ fn test_partially_sign_escrow() -> Result<(), Error> {
     let ixn2 = br#"{"v":"KERI10JSON0000cb_","t":"ixn","d":"ErcMMcfO4fdplItWB_42GwyY21u0pJkQEVDvMmrLVgFc","i":"EOsgPPbBijCbpu3R9N-TMdURgcoFqrjUf3rQiIaJ5L7M","s":"1","p":"EOsgPPbBijCbpu3R9N-TMdURgcoFqrjUf3rQiIaJ5L7M","a":[]}-AABAAye1jlp6iz6h5raVAavZEEahPQ7mUVHxegfjgZCjaWA-UcSQi5ic59-PKQ0tlEHlNHaeKIPts0lvONpW71dgOAg"#;
     let ixn_second_sig = parse_messagee(ixn2);
 
-    processor.process(ixn_first_sig)?;
+    processor.process(&ixn_first_sig)?;
 
     // check if event was accepted into kel
     assert_eq!(storage.get_state(&id).unwrap().unwrap().sn, 0);
@@ -744,7 +744,7 @@ fn test_partially_sign_escrow() -> Result<(), Error> {
     );
 
     // Proces the same event with another signature
-    processor.process(ixn_second_sig)?;
+    processor.process(&ixn_second_sig)?;
 
     // Now event is fully signed, check if escrow is empty
     assert_eq!(
@@ -760,7 +760,7 @@ fn test_partially_sign_escrow() -> Result<(), Error> {
 
     let rot = parse_messagee(br#"{"v":"KERI10JSON0002aa_","t":"rot","d":"Ep2O4Nr3NDhQjPe5IfEQmfW1MExEIj1nUN55ZxboaaQI","i":"EOsgPPbBijCbpu3R9N-TMdURgcoFqrjUf3rQiIaJ5L7M","s":"2","p":"ErcMMcfO4fdplItWB_42GwyY21u0pJkQEVDvMmrLVgFc","kt":["1/2","1/2","1/2"],"k":["DeonYM2bKnAwp6VZcuCXdX72kNFw56czlZ_Tc7XHHVGI","DQghKIy-2do9OkweSgazh3Ql1vCOt5bnc5QF8x50tRoU","DNAUn-5dxm6b8Njo01O0jlStMRCjo9FYQA2mfqFW1_JA"],"nt":[["1/2","1/2","1/2"],["1/1","1/1"]],"n":["ERDESHlo0cEajbxFhWuS8fTBIkYdSlKs3qXm7hNKZV94","E6O7UqeJdpNR99CAFGLMRxvzVWRjrITDW2pLvSQpH_do","EcsXdhvTdA_Si7zimi9ihxlos3Fg_YDKb9J-Qj8XeH50","E8voIy-QfZ3N20SdeOobrTgBgFrmd6BDg3vGuMkkCyGc","EImFU5Xrt6Cv7n8wug9xkJL8_5WwhaI5sXfLZT9Ql9_o"],"bt":"0","br":[],"ba":[],"a":[]}-AADAA1nZhgIcktY781gpGGAb757ylwmaAYi6zsQkEk5Y9wNU-zaEWSXY4ycG3w_Wxt8Xr2zzicMSh6maehmKFx8sMDgABRKx6GPksk0FbaP7w_t6rtoOK-JsBqq6D_-p9t9t79VxEHy8fGCbRUJVxb3TjBckgnqwyjmLVd3RIK3idOYC6DgACszQvR87NLPEcujHLnFgBOGgudSEVXWdnuHfxCBLvSCm3JrELZkpOa5bzAy84PSGeu9MFj0HeuEYj0y4MF9PYCw"#);
 
-    processor.process(rot)?;
+    processor.process(&rot)?;
     assert_eq!(storage.get_state(&id).unwrap().unwrap().sn, 2);
     Ok(())
 }
@@ -847,7 +847,7 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
         None,
     );
 
-    processor.process(Message::Event(signed_icp))?;
+    processor.process(&Message::Event(signed_icp))?;
 
     // create partial rotation event. Subset of keys set in inception event as
     // next keys
@@ -883,7 +883,7 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
 
     let signed_rotation = rotation.sign(signatures, None, None);
 
-    processor.process(Message::Event(signed_rotation))?;
+    processor.process(&Message::Event(signed_rotation))?;
     let state = EventStorage::new(db.clone()).get_state(&id_prefix)?;
     assert_eq!(state.unwrap().sn, 1);
 
@@ -920,7 +920,7 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
         .collect::<Vec<_>>();
 
     let signed_rotation = rotation.sign(signatures, None, None);
-    let result = processor.process(Message::Event(signed_rotation));
+    let result = processor.process(&Message::Event(signed_rotation));
     assert!(result.is_err());
     let state = EventStorage::new(db.clone()).get_state(&id_prefix)?;
     assert_eq!(state.unwrap().sn, 1);
@@ -986,7 +986,7 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
         None,
     );
 
-    processor.process(Message::Event(signed_icp))?;
+    processor.process(&Message::Event(signed_icp))?;
 
     // create partial rotation event. Subset of keys set in inception event as
     // next keys
@@ -1033,7 +1033,7 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
 
     let signed_rotation = rotation.sign(signatures, None, None);
 
-    processor.process(Message::Event(signed_rotation))?;
+    processor.process(&Message::Event(signed_rotation))?;
     let state = storage.get_state(&id_prefix)?.unwrap();
     assert_eq!(state.sn, 1);
     assert_eq!(&state.current.public_keys, &current_public_keys);
@@ -1071,7 +1071,7 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
         .collect::<Vec<_>>();
 
     let signed_rotation = rotation.sign(signatures, None, None);
-    let result = processor.process(Message::Event(signed_rotation));
+    let result = processor.process(&Message::Event(signed_rotation));
     assert!(result.is_err());
 
     // State shouldn't be updated.

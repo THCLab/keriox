@@ -122,7 +122,7 @@ impl OobiManager {
                 match msg {
                     Message::Reply(oobi_rpy) => {
                         self.check_oobi_reply(&oobi_rpy)?;
-                        self.store.save_oobi(oobi_rpy)?;
+                        self.store.save_oobi(&oobi_rpy)?;
                         Ok(())
                     }
                     _ => Err(OobiError::Error("Wrong reply type".into()).into()),
@@ -130,7 +130,7 @@ impl OobiManager {
             })?;
         Ok(())
     }
-    pub fn save_oobi(&self, signed_oobi: SignedReply) -> Result<(), Error> {
+    pub fn save_oobi(&self, signed_oobi: &SignedReply) -> Result<(), Error> {
         self.store.save_oobi(signed_oobi)
     }
 
@@ -150,9 +150,9 @@ impl OobiManager {
         // .map(|e_list| e_list.into_iter().map(|e| e.reply).collect()))
     }
 
-    pub fn process_oobi(&self, oobi_rpy: SignedReply) -> Result<(), Error> {
+    pub fn process_oobi(&self, oobi_rpy: &SignedReply) -> Result<(), Error> {
         // Assumes that signatures were verified.
-        self.check_oobi_reply(&oobi_rpy)
+        self.check_oobi_reply(oobi_rpy)
             .map_err(|e| crate::error::Error::SemanticError(e.to_string()))?;
         self.store
             .save_oobi(oobi_rpy)

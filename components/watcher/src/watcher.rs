@@ -59,7 +59,7 @@ impl WatcherData {
             SelfSigning::Ed25519Sha512.derive(signer.sign(reply.serialize()?)?),
         );
         let oobi_manager = OobiManager::new(oobi_db_path);
-        oobi_manager.save_oobi(signed_reply)?;
+        oobi_manager.save_oobi(&signed_reply)?;
         Ok(Self {
             prefix,
             processor,

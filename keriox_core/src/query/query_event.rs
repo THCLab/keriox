@@ -12,7 +12,7 @@ use super::Timestamped;
 
 // TODO: make enum with different query args
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct QueryData {
+pub struct Query {
     #[serde(flatten)]
     pub route: QueryRoute,
 }
@@ -78,7 +78,7 @@ pub struct QueryArgs {
     pub src: Option<IdentifierPrefix>,
 }
 
-pub type QueryEvent = EventMessage<SaidEvent<Timestamped<QueryData>>>;
+pub type QueryEvent = EventMessage<SaidEvent<Timestamped<Query>>>;
 
 impl QueryEvent {
     pub fn new_query(
@@ -86,13 +86,13 @@ impl QueryEvent {
         serialization_format: SerializationFormats,
         derivation: &SelfAddressing,
     ) -> Result<Self, Error> {
-        let message = QueryData { route };
+        let message = Query { route };
 
         let env = Timestamped::new(message);
         env.to_message(serialization_format, derivation)
     }
 
-    pub fn get_query_data(&self) -> QueryData {
+    pub fn get_query_data(&self) -> Query {
         self.event.content.data.clone()
     }
 
@@ -104,7 +104,7 @@ impl QueryEvent {
     }
 }
 
-impl Typeable for QueryData {
+impl Typeable for Query {
     fn get_type(&self) -> EventTypeTag {
         EventTypeTag::Qry
     }
@@ -139,7 +139,7 @@ fn test_query_deserialize() {
 
     assert!(matches!(
         qr.event.content.data,
-        QueryData {
+        Query {
             route: QueryRoute::Log { .. },
             ..
         }
@@ -158,7 +158,7 @@ fn test_query_mbx_deserialize() {
 
     assert!(matches!(
         qr.event.content.data,
-        QueryData {
+        Query {
             route: QueryRoute::Mbx {
                 args: QueryArgsMbx {
                     topics: QueryTopics {

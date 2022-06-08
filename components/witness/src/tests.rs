@@ -425,26 +425,26 @@ pub fn test_key_state_notice() -> Result<(), Error> {
     let signed_rpy = witness.get_signed_ksn_for_prefix(&bob_pref, signer_arc.clone())?;
 
     // Process reply message before having any bob's events in db.
-    alice_processor.process(Message::Reply(signed_rpy.clone()))?;
+    alice_processor.process(&Message::Reply(signed_rpy.clone()))?;
     let ksn_db = alice_storage.get_last_ksn_reply(
         &signed_rpy.reply.get_prefix(),
         &signed_rpy.signature.get_signer(),
     );
     assert!(matches!(ksn_db, None));
-    alice_processor.process(Message::Event(bob_icp))?;
+    alice_processor.process(&Message::Event(bob_icp))?;
 
     // rotate bob's keys. Let alice process his rotation. She will have most recent bob's event.
     let bob_rot = bob.rotate(None, None, None)?;
     witness.process(Message::Event(bob_rot.clone()))?;
-    alice_processor.process(Message::Event(bob_rot.clone()))?;
+    alice_processor.process(&Message::Event(bob_rot.clone()))?;
 
     // try to process old reply message
-    let res = alice_processor.process(Message::Reply(signed_rpy.clone()));
+    let res = alice_processor.process(&Message::Reply(signed_rpy.clone()));
     assert!(matches!(res, Err(Error::QueryError(QueryError::StaleKsn))));
 
     // now create new reply event by witness and process it by alice.
     let new_reply = witness.get_signed_ksn_for_prefix(&bob_pref, signer_arc.clone())?;
-    alice_processor.process(Message::Reply(new_reply.clone()))?;
+    alice_processor.process(&Message::Reply(new_reply.clone()))?;
     let ksn_db = alice_storage.get_last_ksn_reply(
         &signed_rpy.reply.get_prefix(),
         &signed_rpy.signature.get_signer(),
@@ -460,7 +460,7 @@ pub fn test_key_state_notice() -> Result<(), Error> {
     // Create transferable reply by bob and process it by alice.
     let trans_rpy = witness.get_signed_ksn_for_prefix(&bob_pref, signer_arc)?;
 
-    alice_processor.process(Message::Reply(trans_rpy.clone()))?;
+    alice_processor.process(&Message::Reply(trans_rpy.clone()))?;
     // Reply was out of order so saved reply shouldn't be updated
     let ksn_db = alice_storage.get_last_ksn_reply(
         &signed_rpy.reply.get_prefix(),
@@ -473,8 +473,8 @@ pub fn test_key_state_notice() -> Result<(), Error> {
     assert_eq!(ksn_from_db_digest, processed_ksn_digest);
 
     // Now update bob's state in alice's db to most recent.
-    alice_processor.process(Message::Event(new_bob_rot))?;
-    alice_processor.process(Message::Reply(trans_rpy.clone()))?;
+    alice_processor.process(&Message::Event(new_bob_rot))?;
+    alice_processor.process(&Message::Reply(trans_rpy.clone()))?;
 
     // Reply should be updated
     let ksn_db = alice_storage.get_last_ksn_reply(

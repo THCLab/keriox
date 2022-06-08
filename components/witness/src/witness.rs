@@ -140,7 +140,7 @@ impl Witness {
             prefix.clone(),
             SelfSigning::Ed25519Sha512.derive(signer.sign(reply.serialize()?)?),
         );
-        witness.oobi_manager.save_oobi(signed_reply)?;
+        witness.oobi_manager.save_oobi(&signed_reply)?;
         Ok(witness)
     }
 

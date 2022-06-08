@@ -15,7 +15,7 @@ use keri::processor::{
 pub struct WitnessProcessor(EventProcessor);
 
 impl Processor for WitnessProcessor {
-    fn process(&self, message: Message) -> Result<(), Error> {
+    fn process(&self, message: &Message) -> Result<(), Error> {
         self.process(message)
     }
 
@@ -85,7 +85,7 @@ impl WitnessProcessor {
     /// Process
     ///
     /// Process a deserialized KERI message.
-    pub fn process(&self, message: Message) -> Result<(), Error> {
+    pub fn process(&self, message: &Message) -> Result<(), Error> {
         self.0
             .process(message, WitnessProcessor::witness_processing_strategy)?;
         Ok(())

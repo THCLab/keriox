@@ -14,7 +14,7 @@ use super::{
 pub struct BasicProcessor(EventProcessor);
 
 impl Processor for BasicProcessor {
-    fn process(&self, message: Message) -> Result<(), Error> {
+    fn process(&self, message: &Message) -> Result<(), Error> {
         self.process(message)
     }
 
@@ -68,7 +68,7 @@ impl BasicProcessor {
     /// Process
     ///
     /// Process a deserialized KERI message.
-    pub fn process(&self, message: Message) -> Result<(), Error> {
+    pub fn process(&self, message: &Message) -> Result<(), Error> {
         self.0
             .process(message, BasicProcessor::basic_processing_strategy)?;
         Ok(())
