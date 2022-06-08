@@ -425,84 +425,100 @@ fn test_mbx() {
 
     let signer = Arc::new(Signer::new());
 
-    let mut controller = {
-        let root = tempfile::Builder::new()
-            .prefix("test-ctrl")
-            .tempdir()
-            .unwrap();
-        std::fs::create_dir_all(root.path()).unwrap();
-        let db_controller = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-        let key_manager = Arc::new(Mutex::new(CryptoBox::new().unwrap()));
-        Controller::new(Arc::clone(&db_controller), key_manager.clone()).unwrap()
-    };
+    let mut controllers = (0..2)
+        .map(|i| {
+            let root = tempfile::Builder::new()
+                .prefix(&format!("test-ctrl-{i}"))
+                .tempdir()
+                .unwrap();
+            std::fs::create_dir_all(root.path()).unwrap();
+            let db_controller = Arc::new(SledEventDatabase::new(root.path()).unwrap());
+            let key_manager = Arc::new(Mutex::new(CryptoBox::new().unwrap()));
+            Controller::new(Arc::clone(&db_controller), key_manager.clone()).unwrap()
+        })
+        .collect::<Vec<_>>();
 
     let witness = {
-        let root_witness = tempfile::Builder::new()
+        let root = tempfile::Builder::new()
             .prefix("test-witness")
             .tempdir()
             .unwrap();
-        std::fs::create_dir_all(root_witness.path()).unwrap();
-        Witness::new(root_witness.path(), signer.clone().public_key()).unwrap()
+        std::fs::create_dir_all(root.path()).unwrap();
+        Witness::new(root.path(), signer.clone().public_key()).unwrap()
     };
 
-    let inception_event = controller
-        .incept(
-            Some(vec![witness.prefix.clone()]),
-            Some(SignatureThreshold::Simple(1)),
+    // create inception events
+    for controller in &mut controllers {
+        let incept_event = controller
+            .incept(
+                Some(vec![witness.prefix.clone()]),
+                Some(SignatureThreshold::Simple(1)),
+            )
+            .unwrap();
+
+        // send to witness
+        witness
+            .process(&vec![Message::Event(incept_event.clone())])
+            .unwrap();
+        witness.respond(signer.clone()).unwrap();
+    }
+
+    // query witness
+    for controller in controllers {
+        let qry_msg = QueryEvent::new_query(
+            QueryRoute::Mbx {
+                args: QueryArgsMbx {
+                    i: IdentifierPrefix::Basic(witness.prefix.clone()),
+                    pre: controller.prefix().clone(),
+                    src: IdentifierPrefix::Basic(witness.prefix.clone()),
+                    topics: QueryTopics {
+                        credential: 0,
+                        receipt: 0,
+                        replay: 0,
+                        multisig: 0,
+                        delegate: 0,
+                    },
+                },
+                reply_route: "".to_string(),
+            },
+            SerializationFormats::JSON,
+            &SelfAddressing::Blake3_256,
         )
         .unwrap();
 
-    witness
-        .process(&vec![Message::Event(inception_event.clone())])
-        .unwrap();
-    witness.respond(signer.clone()).unwrap();
+        use keri::signer::KeyManager;
+        let signature = controller
+            .key_manager()
+            .lock()
+            .unwrap()
+            .sign(&qry_msg.serialize().unwrap())
+            .unwrap();
 
-    let qry_msg = QueryEvent::new_query(
-        QueryRoute::Mbx {
-            args: QueryArgsMbx {
-                i: IdentifierPrefix::Basic(witness.prefix.clone()),
-                pre: controller.prefix().clone(),
-                src: IdentifierPrefix::Basic(witness.prefix.clone()),
-                topics: QueryTopics {
-                    credential: 0,
-                    receipt: 0,
-                    replay: 0,
-                    multisig: 0,
-                    delegate: 0,
-                },
-            },
-            reply_route: "".to_string(),
-        },
-        SerializationFormats::JSON,
-        &SelfAddressing::Blake3_256,
-    )
-    .unwrap();
+        let signatures = vec![AttachedSignaturePrefix::new(
+            SelfSigning::Ed25519Sha512,
+            signature,
+            0,
+        )];
 
-    let signature = signer.sign(qry_msg.serialize().unwrap()).unwrap();
-    let signatures = vec![AttachedSignaturePrefix::new(
-        SelfSigning::Ed25519Sha512,
-        signature,
-        0,
-    )];
+        let mbx_msg = Message::Query(SignedQuery::new(
+            qry_msg,
+            controller.prefix().clone().clone(),
+            signatures,
+        ));
 
-    let mbx_msg = Message::Query(SignedQuery::new(
-        qry_msg,
-        controller.prefix().clone().clone(),
-        signatures,
-    ));
+        witness.process(&[mbx_msg]).unwrap();
+        let receipts = &witness.respond(signer.clone()).unwrap();
 
-    witness.process(&[mbx_msg]).unwrap();
-    let receipts = &witness.respond(signer.clone()).unwrap();
+        assert_eq!(receipts.len(), 1);
+        let receipt = receipts[0].clone();
 
-    assert_eq!(receipts.len(), 1);
-    let receipt = receipts[0].clone();
+        let receipt = if let Message::NontransferableRct(receipt) = receipt {
+            receipt
+        } else {
+            panic!("didn't receive a receipt")
+        };
 
-    let receipt = if let Message::NontransferableRct(receipt) = receipt {
-        receipt
-    } else {
-        panic!("didn't receive a receipt")
-    };
-
-    assert_eq!(receipt.body.event.sn, 0);
-    assert_eq!(receipt.body.event.prefix, controller.prefix().clone());
+        assert_eq!(receipt.body.event.sn, 0);
+        assert_eq!(receipt.body.event.prefix, controller.prefix().clone());
+    }
 }
