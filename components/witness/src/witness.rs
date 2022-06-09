@@ -1,12 +1,12 @@
 use std::{path::Path, sync::Arc};
 
-use keri::base::process_signed_query;
+use keri::actor::prelude::*;
+use keri::actor::process_signed_query;
 use keri::oobi::OobiManager;
-use keri::prelude::*;
 use keri::{
     derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
     error::Error,
-    event::{EventMessage, SerializationFormats},
+    event::EventMessage,
     event_message::{
         event_msg_builder::ReceiptBuilder,
         key_event_message::KeyEvent,

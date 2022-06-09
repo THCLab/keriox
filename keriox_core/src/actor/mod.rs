@@ -97,3 +97,16 @@ fn process_query(qr: Query, storage: &EventStorage) -> Result<ReplyType, Error> 
         }
     }
 }
+
+pub mod prelude {
+    pub use crate::actor::{
+        parse_event_stream, process_event, process_signed_oobi, process_signed_query,
+    };
+    pub use crate::database::sled::SledEventDatabase;
+    pub use crate::event::SerializationFormats;
+    pub use crate::event_message::signed_event_message::Message;
+    pub use crate::processor::{
+        basic_processor::BasicProcessor, event_storage::EventStorage, Processor,
+    };
+    pub use crate::query::ReplyType;
+}

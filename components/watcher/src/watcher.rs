@@ -4,8 +4,6 @@ use std::{path::Path, sync::Arc};
 use keri::{
     derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
     error::Error,
-    event::SerializationFormats,
-    event_message::signed_event_message::Message,
     oobi::{EndRole, LocationScheme, OobiManager, Scheme},
     prefix::{BasicPrefix, IdentifierPrefix},
     query::{
@@ -16,7 +14,7 @@ use keri::{
     state::IdentifierState,
 };
 
-use keri::prelude::*;
+use keri::actor::prelude::*;
 
 pub struct WatcherData {
     pub prefix: BasicPrefix,

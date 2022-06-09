@@ -1,8 +1,8 @@
+use keri::actor::prelude::*;
 use std::sync::Arc;
 
 use keri::{
-    database::sled::SledEventDatabase, error::Error, prelude::*,
-    processor::event_storage::EventStorage,
+    database::sled::SledEventDatabase, error::Error, processor::event_storage::EventStorage,
 };
 #[test]
 pub fn test_ksn_query() -> Result<(), Error> {
