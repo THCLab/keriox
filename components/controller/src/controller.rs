@@ -35,7 +35,7 @@ use keri::{
     state::IdentifierState,
 };
 
-use keri::prelude::*;
+use keri::actor::prelude::*;
 
 pub struct Controller<K: KeyManager + 'static> {
     prefix: IdentifierPrefix,
