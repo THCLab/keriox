@@ -1,67 +1,101 @@
 use std::sync::Arc;
 
-#[cfg(feature = "query")]
-use crate::query::{query_event::QueryRoute, reply_event::ReplyRoute};
-use crate::{
-    database::sled::SledEventDatabase,
-    error::Error,
-    event_message::signed_event_message::{Message, TimestampedSignedEventMessage},
-    prefix::IdentifierPrefix,
-    state::IdentifierState,
-};
-
 // #[cfg(feature = "async")]
 // pub mod async_processing;
+pub mod basic_processor;
 pub mod escrow;
 pub mod event_storage;
 pub mod notification;
-pub mod responder;
 #[cfg(test)]
 mod tests;
 pub mod validator;
-pub mod witness_processor;
+
+use crate::{
+    database::sled::SledEventDatabase,
+    error::Error,
+    event::{receipt::Receipt, SerializationFormats},
+    event_message::signed_event_message::{
+        Message, SignedEventMessage, SignedNontransferableReceipt, TimestampedSignedEventMessage,
+    },
+    prefix::IdentifierPrefix,
+    query::reply_event::ReplyRoute,
+    state::IdentifierState,
+};
 
 use self::{
-    notification::{JustNotification, Notification},
+    notification::{JustNotification, Notification, NotificationBus, Notifier},
     validator::EventValidator,
 };
+
+pub trait Processor {
+    fn new(db_path: Arc<SledEventDatabase>) -> Self;
+    fn process(&self, message: &Message) -> Result<(), Error>;
+    fn register_observer(&mut self, observer: Arc<dyn Notifier + Send + Sync>)
+        -> Result<(), Error>;
+}
 
 pub struct EventProcessor {
     db: Arc<SledEventDatabase>,
     validator: EventValidator,
+    publisher: NotificationBus,
 }
 
 impl EventProcessor {
-    pub fn new(db: Arc<SledEventDatabase>) -> Self {
+    pub fn new(db: Arc<SledEventDatabase>, publisher: NotificationBus) -> Self {
         let validator = EventValidator::new(db.clone());
-        Self { db, validator }
+        Self {
+            db,
+            validator,
+            publisher,
+        }
+    }
+
+    pub fn register_observer(
+        &mut self,
+        observer: Arc<dyn Notifier + Send + Sync>,
+    ) -> Result<(), Error> {
+        self.publisher.register_observer(
+            observer,
+            vec![
+                JustNotification::KeyEventAdded,
+                JustNotification::KsnOutOfOrder,
+            ],
+        );
+        Ok(())
     }
 
     /// Process
     ///
     /// Process a deserialized KERI message
     /// Update database based on event validation result.
-    pub fn process(&self, message: Message) -> Result<Notification, Error> {
-        match message {
+    pub fn process<F>(&self, message: &Message, processing_strategy: F) -> Result<(), Error>
+    where
+        F: Fn(Arc<SledEventDatabase>, &NotificationBus, SignedEventMessage) -> Result<(), Error>,
+    {
+        match &message {
             Message::Event(signed_event) => {
-                let id = &signed_event.event_message.event.get_prefix();
-                match self.validator.validate_event(&signed_event) {
-                    Ok(_) => {
-                        self.db.add_kel_finalized_event(signed_event.clone(), id)?;
-                        Ok(Notification::KeyEventAdded(signed_event))
-                    }
-                    Err(Error::EventOutOfOrderError) => Ok(Notification::OutOfOrder(signed_event)),
-                    Err(Error::NotEnoughReceiptsError) => {
-                        Ok(Notification::PartiallyWitnessed(signed_event))
-                    }
-                    Err(Error::NotEnoughSigsError) => {
-                        Ok(Notification::PartiallySigned(signed_event))
-                    }
-                    Err(Error::EventDuplicateError) => {
-                        self.db.add_duplicious_event(signed_event.clone(), id)?;
-                        Ok(Notification::DupliciousEvent(signed_event))
-                    }
-                    Err(e) => Err(e),
+                processing_strategy(self.db.clone(), &self.publisher, signed_event.clone())?;
+                // check if receipts are attached
+                if let Some(witness_receipts) = &signed_event.witness_receipts {
+                    // Create and process witness receipts
+                    // TODO What timestamp should be set?
+                    let id = signed_event.event_message.event.get_prefix();
+                    let receipt = Receipt {
+                        receipted_event_digest: signed_event.event_message.get_digest(),
+                        prefix: id,
+                        sn: signed_event.event_message.event.get_sn(),
+                    };
+                    let signed_receipt = SignedNontransferableReceipt::new(
+                        &receipt.to_message(SerializationFormats::JSON).unwrap(),
+                        None,
+                        Some(witness_receipts.clone()),
+                    );
+                    self.process(
+                        &Message::NontransferableRct(signed_receipt),
+                        processing_strategy,
+                    )
+                } else {
+                    Ok(())
                 }
             }
             Message::NontransferableRct(rct) => {
@@ -69,9 +103,11 @@ impl EventProcessor {
                 match self.validator.validate_witness_receipt(&rct) {
                     Ok(_) => {
                         self.db.add_receipt_nt(rct.to_owned(), id)?;
-                        Ok(Notification::ReceiptAccepted)
+                        self.publisher.notify(&Notification::ReceiptAccepted)
                     }
-                    Err(Error::MissingEvent) => Ok(Notification::ReceiptOutOfOrder(rct.clone())),
+                    Err(Error::MissingEvent) => self
+                        .publisher
+                        .notify(&Notification::ReceiptOutOfOrder(rct.clone())),
                     Err(e) => Err(e),
                 }
             }
@@ -79,50 +115,33 @@ impl EventProcessor {
                 match self.validator.validate_validator_receipt(&vrc) {
                     Ok(_) => {
                         self.db.add_receipt_t(vrc.clone(), &vrc.body.event.prefix)?;
-                        Ok(Notification::ReceiptAccepted)
+                        self.publisher.notify(&Notification::ReceiptAccepted)
                     }
-                    Err(Error::MissingEvent) | Err(Error::EventOutOfOrderError) => {
-                        Ok(Notification::TransReceiptOutOfOrder(vrc.clone()))
-                    }
+                    Err(Error::MissingEvent) | Err(Error::EventOutOfOrderError) => self
+                        .publisher
+                        .notify(&Notification::TransReceiptOutOfOrder(vrc.clone())),
                     Err(e) => Err(e),
                 }
             }
             #[cfg(feature = "query")]
             Message::Reply(rpy) => match rpy.reply.get_route() {
                 ReplyRoute::Ksn(_, _) => match self.validator.process_signed_ksn_reply(&rpy) {
-                    Ok(_) => {
-                        self.db
-                            .update_accepted_reply(rpy.clone(), &rpy.reply.get_prefix())?;
-                        Ok(Notification::ReplyUpdated)
-                    }
-                    Err(Error::EventOutOfOrderError) => Ok(Notification::KsnOutOfOrder(rpy)),
+                    Ok(_) => self
+                        .db
+                        .update_accepted_reply(rpy.clone(), &rpy.reply.get_prefix()),
+                    Err(Error::EventOutOfOrderError) => self
+                        .publisher
+                        .notify(&Notification::KsnOutOfOrder(rpy.clone())),
                     Err(anything) => Err(anything),
                 },
-                #[cfg(feature = "oobi")]
-                ReplyRoute::EndRoleAdd(_)
-                | ReplyRoute::EndRoleCut(_)
-                | ReplyRoute::LocScheme(_) => {
-                    // check signature
-                    self.validator
-                        .verify(&rpy.reply.serialize()?, &rpy.signature)?;
-                    // check digest
-                    rpy.reply.check_digest()?;
-                    Ok(Notification::GotOobi(rpy))
-                }
+                _ => Ok(()),
             },
             #[cfg(feature = "query")]
-            Message::Query(qry) => match qry.query.event.content.data.route {
-                QueryRoute::Log { args, .. } => {
-                    let pref = args.i;
-                    println!("Respond with {} key event log.", pref);
-                    Ok(Notification::ReplayLog(pref))
-                }
-                QueryRoute::Ksn {
-                    reply_route: _,
-                    args,
-                } => Ok(Notification::ReplyKsn(args.i)),
-                QueryRoute::Mbx { args, .. } => Ok(Notification::GetMailbox(args)),
-            },
+            Message::Query(_) => {
+                // TODO should do nothing?
+                // It doesn't update database
+                Ok(())
+            }
         }
     }
 }

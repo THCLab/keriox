@@ -2,15 +2,12 @@ use crate::{
     derivation::self_addressing::SelfAddressing,
     error::Error,
     event::{EventMessage, SerializationFormats},
-    event_message::{
-        signed_event_message::{Message, SignedNontransferableReceipt},
-        EventTypeTag, SaidEvent, Typeable,
-    },
+    event_message::{signed_event_message::Message, EventTypeTag, SaidEvent, Typeable},
 };
 use chrono::{DateTime, FixedOffset, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize, Serializer};
 
-use self::reply_event::SignedReply;
+use self::key_state_notice::KeyStateNotice;
 
 use thiserror::Error;
 
@@ -59,9 +56,9 @@ impl<D: Serialize + Typeable> Typeable for Timestamped<D> {
 
 #[derive(Debug)]
 pub enum ReplyType {
-    Rep(SignedReply),
+    Ksn(KeyStateNotice),
     Kel(Vec<Message>),
-    Mbx(Vec<SignedNontransferableReceipt>),
+    Mbx(Vec<Message>),
 }
 
 #[derive(Error, Debug)]

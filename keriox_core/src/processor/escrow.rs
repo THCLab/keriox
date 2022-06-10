@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use super::{
+    event_storage::EventStorage,
     notification::{JustNotification, Notification, NotificationBus, Notifier},
     validator::EventValidator,
 };
@@ -70,8 +71,23 @@ impl Notifier for OutOfOrderEscrow {
                 self.process_out_of_order_events(bus, &id)
             }
             Notification::OutOfOrder(signed_event) => {
-                let id = &signed_event.event_message.event.get_prefix();
-                self.0.add_out_of_order_event(signed_event.clone(), id)
+                let id = match signed_event.event_message.event.get_event_data() {
+                    crate::event::event_data::EventData::Dip(dip) => dip.delegator,
+                    crate::event::event_data::EventData::Drt(_) => {
+                        let id = signed_event.event_message.event.get_prefix();
+                        if let Some(state) = EventStorage::new(self.0.clone()).get_state(&id)? {
+                            match state.delegator {
+                                Some(id) => id,
+                                None => id,
+                            }
+                        } else {
+                            id
+                        }
+                    }
+                    _ => signed_event.event_message.event.get_prefix(),
+                };
+
+                self.0.add_out_of_order_event(signed_event.clone(), &id)
             }
             _ => Err(Error::SemanticError("Wrong notification".into())),
         }
@@ -295,8 +311,8 @@ impl Notifier for TransReceiptsEscrow {
                 self.process_t_receipts_escrow(&event.event_message.event.get_prefix(), bus)
             }
             Notification::TransReceiptOutOfOrder(receipt) => {
-                let id = &receipt.body.event.prefix;
-                self.0.add_escrow_t_receipt(receipt.to_owned(), id)
+                let id = receipt.validator_seal.prefix.clone();
+                self.0.add_escrow_t_receipt(receipt.to_owned(), &id)
             }
             _ => Err(Error::SemanticError("Wrong notification".into())),
         }
@@ -310,7 +326,7 @@ impl TransReceiptsEscrow {
     ) -> Result<(), Error> {
         if let Some(esc) = self.0.get_escrow_t_receipts(id) {
             for sig_receipt in esc {
-                let id = sig_receipt.body.event.prefix.clone();
+                // let id = sig_receipt.body.event.prefix.clone();
                 let validator = EventValidator::new(self.0.clone());
                 match validator.validate_validator_receipt(&sig_receipt) {
                     Ok(_) => {
@@ -347,8 +363,8 @@ impl Notifier for ReplyEscrow {
     fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error> {
         match notification {
             Notification::KsnOutOfOrder(rpy) => {
-                if let ReplyRoute::Ksn(_id, ksn) = rpy.reply.get_route() {
-                    let id = ksn.state.prefix;
+                if let ReplyRoute::Ksn(id, _ksn) = rpy.reply.get_route() {
+                    // let id = ksn.state.prefix;
                     self.0.add_escrowed_reply(rpy.clone(), &id)?;
                 };
                 Ok(())
@@ -361,7 +377,7 @@ impl Notifier for ReplyEscrow {
 
 #[cfg(feature = "query")]
 impl ReplyEscrow {
-    pub fn process_reply_escrow(&self, bus: &NotificationBus) -> Result<(), Error> {
+    pub fn process_reply_escrow(&self, _bus: &NotificationBus) -> Result<(), Error> {
         use crate::query::QueryError;
 
         if let Some(esc) = self.0.get_all_escrowed_replys() {
@@ -375,8 +391,7 @@ impl ReplyEscrow {
                 match validator.process_signed_ksn_reply(&sig_rep) {
                     Ok(_) => {
                         self.0.remove_escrowed_reply(&id, &sig_rep)?;
-                        self.0.update_accepted_reply(sig_rep, &id)?;
-                        bus.notify(&Notification::ReplyUpdated)
+                        self.0.update_accepted_reply(sig_rep, &id)
                     }
                     Err(Error::SignatureVerificationError)
                     | Err(Error::QueryError(QueryError::StaleRpy)) => {

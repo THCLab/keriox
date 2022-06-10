@@ -1,5 +1,6 @@
 use std::{
     convert::TryFrom,
+    path::Path,
     sync::{Arc, Mutex},
 };
 
@@ -26,26 +27,22 @@ use keri::{
         EventTypeTag,
     },
     event_parsing::message::{signed_event_stream, signed_message},
+    oobi::OobiManager,
     prefix::AttachedSignaturePrefix,
     prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix, SelfSigningPrefix},
-    processor::{
-        escrow::default_escrow_bus,
-        event_storage::EventStorage,
-        notification::{JustNotification, Notification, NotificationBus},
-        responder::Responder,
-        EventProcessor,
-    },
+    processor::{basic_processor::BasicProcessor, event_storage::EventStorage},
     signer::KeyManager,
     state::IdentifierState,
 };
 
+use keri::actor::prelude::*;
+
 pub struct Controller<K: KeyManager + 'static> {
     prefix: IdentifierPrefix,
     key_manager: Arc<Mutex<K>>,
-    processor: EventProcessor,
+    processor: BasicProcessor,
+    oobi_manager: OobiManager,
     pub storage: EventStorage,
-    notification_bus: NotificationBus,
-    response_queue: Arc<Responder<Notification>>,
 }
 
 impl<K: KeyManager> Controller<K> {
@@ -53,19 +50,16 @@ impl<K: KeyManager> Controller<K> {
     pub fn new(
         db: Arc<SledEventDatabase>,
         key_manager: Arc<Mutex<K>>,
+        oobi_db_path: &Path,
     ) -> Result<Controller<K>, Error> {
-        let processor = EventProcessor::new(db.clone());
-        let mut not_bus = default_escrow_bus(db.clone());
-        let responder = Arc::new(Responder::new());
-        not_bus.register_observer(responder.clone(), vec![JustNotification::KeyEventAdded]);
+        let processor = BasicProcessor::new(db.clone());
 
         Ok(Controller {
             prefix: IdentifierPrefix::default(),
             key_manager,
             processor,
+            oobi_manager: OobiManager::new(oobi_db_path),
             storage: EventStorage::new(db),
-            response_queue: responder,
-            notification_bus: not_bus,
         })
     }
 
@@ -118,8 +112,12 @@ impl<K: KeyManager> Controller<K> {
             None,
         );
 
-        let notification = self.processor.process(Message::Event(signed.clone()))?;
-        self.notification_bus.notify(&notification)?;
+        process_event(
+            Message::Event(signed.clone()),
+            &self.oobi_manager,
+            &self.processor,
+            &self.storage,
+        )?;
 
         self.prefix = icp.event.get_prefix();
         // No need to generate receipt
@@ -196,8 +194,12 @@ impl<K: KeyManager> Controller<K> {
             None,
         );
 
-        let notification = self.processor.process(Message::Event(rot.clone()))?;
-        self.notification_bus.notify(&notification)?;
+        process_event(
+            Message::Event(rot.clone()),
+            &self.oobi_manager,
+            &self.processor,
+            &self.storage,
+        )?;
 
         Ok(rot)
     }
@@ -261,8 +263,12 @@ impl<K: KeyManager> Controller<K> {
             None,
         );
 
-        let notification = self.processor.process(Message::Event(ixn.clone()))?;
-        self.notification_bus.notify(&notification)?;
+        process_event(
+            Message::Event(ixn.clone()),
+            &self.oobi_manager,
+            &self.processor,
+            &self.storage,
+        )?;
 
         Ok(ixn)
     }
@@ -275,7 +281,7 @@ impl<K: KeyManager> Controller<K> {
             Err(e) => Err(Error::DeserializeError(e.to_string())),
             Ok(event) => {
                 let prefix = event.get_prefix();
-                self.processor.process(event)?;
+                process_event(event, &self.oobi_manager, &self.processor, &self.storage)?;
                 match self.get_state_for_prefix(&prefix)? {
                     None => Err(Error::InvalidIdentifierStat),
                     Some(state) => Ok((prefix, serde_json::to_vec(&state)?)),
@@ -319,61 +325,19 @@ impl<K: KeyManager> Controller<K> {
     }
 
     pub fn process(&self, msg: &[Message]) -> Result<(), Error> {
-        let (process_ok, process_failed): (Vec<_>, Vec<_>) = msg
+        let (_process_ok, _process_failed): (Vec<_>, Vec<_>) = msg
             .iter()
             .map(|message| {
-                self.processor
-                    .process(message.clone())
-                    .and_then(|not| self.notification_bus.notify(&not))
+                process_event(
+                    message.clone(),
+                    &self.oobi_manager,
+                    &self.processor,
+                    &self.storage,
+                )
             })
             .partition(Result::is_ok);
-        let _oks = process_ok
-            .into_iter()
-            .map(Result::unwrap)
-            .collect::<Vec<_>>();
-        let _errs = process_failed
-            .into_iter()
-            .map(Result::unwrap_err)
-            .collect::<Vec<_>>();
 
         Ok(())
-    }
-
-    // Respond:
-    // check if we have receipt of self icp event from event creator, if
-    // we don't, append own kel to response.
-    // That's for direct mode
-    fn respond_one(&self, ev_msg: EventMessage<KeyEvent>) -> Result<Vec<Message>, Error> {
-        let mut response = vec![];
-        if !self
-            .storage
-            .has_receipt(&self.prefix, 0, &ev_msg.event.get_prefix())?
-        {
-            response.append(
-                &mut self
-                    .storage
-                    .get_kel_messages_with_receipts(&self.prefix)?
-                    .ok_or_else(|| Error::SemanticError("KEL is empty".into()))?,
-            )
-        };
-        response.push(Message::TransferableRct(self.make_rct(ev_msg)?));
-        Ok(response)
-    }
-
-    pub fn respond(&self) -> Result<Vec<Message>, Error> {
-        let mut response = Vec::new();
-        while let Some(notification) = self.response_queue.get_data_to_respond() {
-            match notification {
-                Notification::KeyEventAdded(event) => {
-                    // ignore own events
-                    if !event.event_message.event.get_prefix().eq(&self.prefix) {
-                        response.append(&mut self.respond_one(event.event_message)?);
-                    }
-                }
-                _ => todo!(),
-            }
-        }
-        Ok(response)
     }
 
     pub fn make_rct(
@@ -404,8 +368,12 @@ impl<K: KeyManager> Controller<K> {
         )];
         let signed_rcp = SignedTransferableReceipt::new(rcp, validator_event_seal, signatures);
 
-        self.processor
-            .process(Message::TransferableRct(signed_rcp.clone()))?;
+        process_event(
+            Message::TransferableRct(signed_rcp.clone()),
+            &self.oobi_manager,
+            &self.processor,
+            &self.storage,
+        )?;
 
         Ok(signed_rcp)
     }

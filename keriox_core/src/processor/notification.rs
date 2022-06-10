@@ -1,14 +1,13 @@
 use std::{collections::HashMap, sync::Arc};
 
 #[cfg(feature = "query")]
-use crate::query::{query_event::QueryArgsMbx, reply_event::SignedReply};
+use crate::query::reply_event::SignedReply;
 
 use crate::{
     error::Error,
     event_message::signed_event_message::{
         SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
     },
-    prefix::IdentifierPrefix,
 };
 
 pub struct NotificationBus {
@@ -67,16 +66,6 @@ pub enum Notification {
     DupliciousEvent(SignedEventMessage),
     #[cfg(feature = "query")]
     KsnOutOfOrder(SignedReply),
-    #[cfg(feature = "query")]
-    ReplyUpdated,
-    #[cfg(feature = "oobi")]
-    GotOobi(SignedReply),
-    #[cfg(feature = "query")]
-    ReplayLog(IdentifierPrefix),
-    #[cfg(feature = "query")]
-    ReplyKsn(IdentifierPrefix),
-    #[cfg(feature = "query")]
-    GetMailbox(QueryArgsMbx),
 }
 
 #[derive(PartialEq, Hash, Eq)]
@@ -118,16 +107,6 @@ impl From<&Notification> for JustNotification {
             Notification::DupliciousEvent(_) => JustNotification::DupliciousEvent,
             #[cfg(feature = "query")]
             Notification::KsnOutOfOrder(_) => JustNotification::KsnOutOfOrder,
-            #[cfg(feature = "query")]
-            Notification::ReplyUpdated => JustNotification::KsnUpdated,
-            #[cfg(feature = "oobi")]
-            Notification::GotOobi(_) => JustNotification::GotOobi,
-            #[cfg(feature = "query")]
-            Notification::ReplayLog(_) => JustNotification::ReplayLog,
-            #[cfg(feature = "query")]
-            Notification::ReplyKsn(_) => JustNotification::ReplyKsn,
-            #[cfg(feature = "query")]
-            Notification::GetMailbox(_) => JustNotification::GetMailbox,
         }
     }
 }

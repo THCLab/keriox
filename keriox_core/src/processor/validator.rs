@@ -408,16 +408,17 @@ impl EventValidator {
 
 #[test]
 fn test_validate_seal() -> Result<(), Error> {
+    use crate::event_message::signed_event_message::Message;
     use crate::event_message::Digestible;
     use crate::event_parsing::message::signed_message;
-    use crate::processor::{EventProcessor, Message};
+    use crate::processor::basic_processor::BasicProcessor;
     use std::{convert::TryFrom, fs, sync::Arc};
     use tempfile::Builder;
     // Create test db and event processor.
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     fs::create_dir_all(root.path()).unwrap();
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-    let event_processor = EventProcessor::new(Arc::clone(&db));
+    let event_processor = BasicProcessor::new(Arc::clone(&db));
 
     // Events and sigs are from keripy `test_delegation` test.
     // (keripy/tests/core/test_delegating.py:#test_delegation)
@@ -426,7 +427,7 @@ fn test_validate_seal() -> Result<(), Error> {
     let delegator_icp_raw= br#"{"v":"KERI10JSON00012b_","t":"icp","d":"E7YbTIkWWyNwOxZQTTnrs6qn8jFbu2A8zftQ33JYQFQ0","i":"E7YbTIkWWyNwOxZQTTnrs6qn8jFbu2A8zftQ33JYQFQ0","s":"0","kt":"1","k":["DqI2cOZ06RwGNwCovYUWExmdKU983IasmUKMmZflvWdQ"],"nt":"1","n":["EOmBSdblll8qB4324PEmETrFN-DhElyZ0BcBH1q1qukw"],"bt":"0","b":[],"c":[],"a":[]}-AABAAotHSmS5LuCg2LXwlandbAs3MFR0yTC5BbE2iSW_35U2qA0hP9gp66G--mHhiFmfHEIbBKrs3tjcc8ySvYcpiBg"#;
     let parsed = signed_message(delegator_icp_raw).unwrap().1;
     let deserialized_icp = Message::try_from(parsed).unwrap();
-    event_processor.process(deserialized_icp.clone())?;
+    event_processor.process(&deserialized_icp)?;
     let delegator_id = "E7YbTIkWWyNwOxZQTTnrs6qn8jFbu2A8zftQ33JYQFQ0".parse()?;
 
     // Delegated inception event.
@@ -442,11 +443,10 @@ fn test_validate_seal() -> Result<(), Error> {
             event_digest: delegated_event_digest,
         };
 
+        let validator = EventValidator::new(db.clone());
         // Try to validate seal before processing delegating event
         assert!(matches!(
-            event_processor
-                .validator
-                .validate_seal(seal.clone(), &dip.event_message),
+            validator.validate_seal(seal.clone(), &dip.event_message),
             Err(Error::EventOutOfOrderError)
         ));
 
@@ -454,13 +454,10 @@ fn test_validate_seal() -> Result<(), Error> {
         let delegating_event_raw = br#"{"v":"KERI10JSON00013a_","t":"ixn","d":"E4ncGiiaG9wbKMHrACX9iPxb7fMSSeBSnngBNIRoZ2_A","i":"E7YbTIkWWyNwOxZQTTnrs6qn8jFbu2A8zftQ33JYQFQ0","s":"1","p":"E7YbTIkWWyNwOxZQTTnrs6qn8jFbu2A8zftQ33JYQFQ0","a":[{"i":"ESVGDRnpHMCAESkvj2bxKGAmMloX6K6vxfcmBLTOCM0A","s":"0","d":"ESVGDRnpHMCAESkvj2bxKGAmMloX6K6vxfcmBLTOCM0A"}]}-AABAARpc88hIeWV9Z2IvzDl7dRHP-g1-EOYZLiDKyjNZB9PDSeGcNTj_SUXgWIVNdssPL7ajYvglbvxRwIU8teoFHCA"#;
         let parsed = signed_message(delegating_event_raw).unwrap().1;
         let deserialized_ixn = Message::try_from(parsed).unwrap();
-        event_processor.process(deserialized_ixn.clone())?;
+        event_processor.process(&deserialized_ixn)?;
 
         // Validate seal again.
-        assert!(event_processor
-            .validator
-            .validate_seal(seal, &dip.event_message)
-            .is_ok());
+        assert!(validator.validate_seal(seal, &dip.event_message).is_ok());
     };
 
     Ok(())

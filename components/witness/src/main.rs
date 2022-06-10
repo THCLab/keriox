@@ -12,9 +12,10 @@ use structopt::StructOpt;
 #[cfg(test)]
 mod tests;
 
-pub(crate) mod witness;
-mod witness_data;
-use crate::witness_data::WitnessListener;
+mod witness;
+mod witness_listener;
+mod witness_processor;
+use crate::witness_listener::WitnessListener;
 
 #[derive(Deserialize)]
 pub struct WitnessConfig {

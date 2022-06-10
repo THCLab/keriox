@@ -1,162 +1,13 @@
 #[cfg(feature = "wallet")]
 use universal_wallet::prelude::UnlockedWallet;
 
+use keri::event_parsing::attachment;
 #[cfg(test)]
 use keri::{database::sled::SledEventDatabase, error::Error};
-use keri::{event_message::signed_event_message::Message, event_parsing::attachment};
 
 use std::sync::{Arc, Mutex};
 
 use crate::controller::Controller;
-
-#[test]
-fn test_direct_mode() -> Result<(), Error> {
-    use tempfile::Builder;
-
-    // Create test db and event processor.
-    let root = Builder::new().prefix("test-db").tempdir().unwrap();
-    std::fs::create_dir_all(root.path()).unwrap();
-    let db_alice = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-
-    // Create test db and event processor.
-    let root = Builder::new().prefix("test-db").tempdir().unwrap();
-    std::fs::create_dir_all(root.path()).unwrap();
-    let db_bob = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-
-    let alice_key_manager = {
-        #[cfg(feature = "wallet")]
-        {
-            let mut alice_key_manager = UnlockedWallet::new("alice");
-            crate::signer::wallet::incept_keys(&mut alice_key_manager)?;
-            Arc::new(Mutex::new(alice_key_manager))
-        }
-        #[cfg(not(feature = "wallet"))]
-        {
-            use keri::signer::CryptoBox;
-            Arc::new(Mutex::new(CryptoBox::new()?))
-        }
-    };
-
-    // Init alice.
-    let mut alice = Controller::new(Arc::clone(&db_alice), alice_key_manager.clone())?;
-
-    assert_eq!(alice.get_state()?, None);
-
-    //lazy_static! {
-    //  static ref BK: Arc<Mutex<dyn KeyManager>> = {
-    let bob_key_manager = {
-        #[cfg(feature = "wallet")]
-        {
-            let mut bob_key_manager = UnlockedWallet::new("alice");
-            crate::signer::wallet::incept_keys(&mut bob_key_manager)?;
-            Arc::new(Mutex::new(bob_key_manager))
-        }
-        #[cfg(not(feature = "wallet"))]
-        {
-            use keri::signer::CryptoBox;
-            Arc::new(Mutex::new(CryptoBox::new().unwrap()))
-        }
-    };
-    //}
-
-    // Init bob.
-    let mut bob = Controller::new(Arc::clone(&db_bob), bob_key_manager.clone())?;
-
-    bob.incept(None, None).unwrap();
-    let bob_state = bob.get_state()?;
-    assert_eq!(bob_state.unwrap().sn, 0);
-
-    // Get alice's inception event.
-    let alice_incepted = alice.incept(None, None)?;
-    let msg_to_bob = vec![Message::Event(alice_incepted)];
-
-    // Send it to bob.
-    bob.process(&msg_to_bob)?;
-    let msg_to_alice = bob.respond()?;
-
-    // Check response
-    let mut events_in_response = msg_to_alice.clone().into_iter();
-    assert!(matches!(events_in_response.next(), Some(Message::Event(_))));
-    assert!(matches!(
-        events_in_response.next(),
-        Some(Message::TransferableRct(_))
-    ));
-
-    // Check if bob's state of alice is the same as current alice state.
-    let alice_state_in_bob = bob.get_state_for_prefix(&alice.prefix())?.unwrap();
-    assert_eq!(alice_state_in_bob, alice.get_state()?.unwrap());
-
-    // Send message from bob to alice and get alice's receipts.
-    alice.process(&msg_to_alice)?;
-    let msg_to_bob = alice.respond()?;
-
-    // Check response. It should be transferable receipt message from alice.
-    let mut events_in_response = msg_to_bob.iter();
-    assert!(matches!(
-        events_in_response.next(),
-        Some(Message::TransferableRct(_))
-    ));
-
-    // Check if alice's state of bob is the same as current bob state.
-    let bob_state_in_alice = alice.get_state_for_prefix(&bob.prefix())?.unwrap();
-    assert_eq!(bob_state_in_alice, bob.get_state()?.unwrap());
-
-    // Send it to bob.
-    bob.process(&msg_to_bob)?;
-    let bobs_res = bob.respond()?;
-
-    assert!(bobs_res.is_empty());
-
-    // Rotation event.
-    let alice_rot = alice.rotate(None, None, None)?;
-    assert_eq!(alice.get_state()?.unwrap().sn, 1);
-
-    // Send rotation event to bob.
-    let msg_to_bob = alice_rot.serialize()?;
-    bob.parse_and_process(&msg_to_bob)?;
-    let msg_to_alice = bob.respond()?;
-
-    // Check response. It should be transferable receipt message from bob.
-    let mut events_in_response = msg_to_alice.iter();
-    assert!(matches!(
-        events_in_response.next(),
-        Some(Message::TransferableRct(_))
-    ));
-
-    // Check if bob's state of alice is the same as current alice state.
-    let alice_state_in_bob = bob.get_state_for_prefix(&alice.prefix())?.unwrap();
-    assert_eq!(alice_state_in_bob, alice.get_state()?.unwrap());
-
-    // Send bob's receipt to alice.
-    alice.process(&msg_to_alice)?;
-    let alice_res = alice.respond()?;
-    assert!(alice_res.is_empty());
-
-    // Interaction event.
-    let alice_ixn = alice.make_ixn(None)?;
-    assert_eq!(alice.get_state()?.unwrap().sn, 2);
-
-    // Send interaction event to bob.
-    let msg_to_bob = alice_ixn.serialize()?;
-    bob.parse_and_process(&msg_to_bob)?;
-    let msg_to_alice = bob.respond()?;
-
-    // Check response. It should be trnasferable receipt message from bob.
-    let mut events_in_response = msg_to_alice.iter();
-    assert!(matches!(
-        events_in_response.next(),
-        Some(Message::TransferableRct(_))
-    ));
-
-    // Check if bob's state of alice is the same as current alice state.
-    let alice_state_in_bob = bob.get_state_for_prefix(&alice.prefix())?.unwrap();
-    assert_eq!(alice_state_in_bob, alice.get_state()?.unwrap());
-
-    alice.process(&msg_to_alice)?;
-    alice.respond()?;
-
-    Ok(())
-}
 
 #[test]
 fn interop() -> Result<(), Error> {
@@ -170,6 +21,7 @@ fn interop() -> Result<(), Error> {
     use tempfile::Builder;
     // Create test db and event processor.
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
+    let oobi_root = Builder::new().prefix("oobi-db").tempdir().unwrap();
     let alice_db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
 
     let alice_key_manager = Arc::new(Mutex::new({
@@ -178,7 +30,11 @@ fn interop() -> Result<(), Error> {
     }));
 
     // Init controller.
-    let controller = Controller::new(Arc::clone(&alice_db), Arc::clone(&alice_key_manager))?;
+    let controller = Controller::new(
+        Arc::clone(&alice_db),
+        Arc::clone(&alice_key_manager),
+        oobi_root.path(),
+    )?;
 
     controller.parse_and_process(issuer_kel_str)?;
     let state = controller

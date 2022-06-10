@@ -72,9 +72,9 @@ fn timestamped<'a, D: Serialize + Deserialize<'a> + Typeable>(
 
 #[cfg(feature = "query")]
 pub fn query_message(s: &[u8]) -> nom::IResult<&[u8], EventType> {
-    use crate::query::query_event::QueryData;
+    use crate::query::query_event::Query;
 
-    timestamped::<QueryData>(s).map(|d| (d.0, EventType::Qry(d.1)))
+    timestamped::<Query>(s).map(|d| (d.0, EventType::Qry(d.1)))
 }
 
 #[cfg(any(feature = "query", feature = "oobi"))]

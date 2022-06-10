@@ -71,7 +71,7 @@ impl OobiStorage {
         }))
     }
 
-    pub fn save_oobi(&self, signed_reply: SignedReply) -> Result<(), Error> {
+    pub fn save_oobi(&self, signed_reply: &SignedReply) -> Result<(), Error> {
         match signed_reply.reply.get_route() {
             ReplyRoute::Ksn(_, _) => todo!(),
             ReplyRoute::LocScheme(loc_scheme) => {
@@ -85,16 +85,16 @@ impl OobiStorage {
                                 oobi_rpy.reply.get_route()
                                     != ReplyRoute::LocScheme(loc_scheme.clone())
                             })
-                            .chain(vec![signed_reply])
+                            .chain(vec![signed_reply.clone()])
                             .collect::<Vec<_>>();
                         self.oobis.put(key, value)
                     }
-                    None => self.oobis.push(key, signed_reply),
+                    None => self.oobis.push(key, signed_reply.clone()),
                 }?;
             }
             ReplyRoute::EndRoleAdd(end_role) | ReplyRoute::EndRoleCut(end_role) => {
                 let key = self.identifiers.designated_key(&end_role.cid);
-                self.cids.push(key, signed_reply)?
+                self.cids.push(key, signed_reply.clone())?
             }
         };
         Ok(())
