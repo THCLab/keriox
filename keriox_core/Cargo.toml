@@ -23,7 +23,8 @@ async = ["async-std", "pin-project", "futures-core", "bitpat"]
 wallet = ["universal_wallet"]
 default = ["sled-db"]
 query = []
-oobi = ["query", "reqwest", "url", "strum_macros", "strum"]
+oobi = ["query", "url", "strum_macros", "strum"]
+controller = ["oobi", "reqwest"]
 
 [dependencies]
 ed25519-dalek = "1.0.1"
@@ -68,7 +69,7 @@ bincode = { version = "1.3.1", optional = true }
 url = { version = "2.2.2", features = ["serde"], optional = true }
 strum_macros = { version = "0.24", optional = true }
 strum = { version = "0.24", optional = true }
-reqwest = { version = "0.11", features = ["json", "rustls-tls"], default-features = false, optional = true }
+reqwest = { version = "0.11", features = ["json", "rustls-tls", "blocking"], default-features = false, optional = true }
 
 [dev-dependencies]
 sodiumoxide = "0.2.6"
