@@ -18,7 +18,7 @@ use crate::{
 
 use crate::controller::error::ControllerError;
 
-// todo: add setting signing threshold
+// todo add setting signing threshold
 pub fn incept(
     public_keys: Vec<BasicPrefix>,
     next_pub_keys: Vec<BasicPrefix>,
@@ -31,11 +31,12 @@ pub fn incept(
         .with_witness_list(witnesses.as_slice())
         .with_witness_threshold(&SignatureThreshold::Simple(witness_threshold))
         .build()
-        .map_err(|_e| ControllerError::InceptionError)?
+        .map_err(|e| ControllerError::EventGenerationError(e.to_string()))?
         .serialize()
-        .map_err(|_e| ControllerError::InceptionError)?;
+        .map_err(|e| ControllerError::EventGenerationError(e.to_string()))?;
 
-    let icp = String::from_utf8(serialized_icp).map_err(|_e| ControllerError::InceptionError)?;
+    let icp = String::from_utf8(serialized_icp)
+        .map_err(|e| ControllerError::EventGenerationError(e.to_string()))?;
     Ok(icp)
 }
 
@@ -56,8 +57,8 @@ pub fn rotate(
         witness_threshold,
     )?
     .serialize()
-    .map_err(|_e| ControllerError::RotationError)?;
-    String::from_utf8(rot).map_err(|_e| ControllerError::RotationError)
+    .map_err(|e| ControllerError::EventGenerationError(e.to_string()))?;
+    String::from_utf8(rot).map_err(|e| ControllerError::EventGenerationError(e.to_string()))
 }
 
 fn make_rotation(
@@ -78,7 +79,7 @@ fn make_rotation(
         .with_witness_to_remove(&witness_to_remove)
         .with_witness_threshold(&SignatureThreshold::Simple(witness_threshold))
         .build()
-        .map_err(|_e| ControllerError::RotationError)
+        .map_err(|e| ControllerError::EventGenerationError(e.to_string()))
 }
 
 pub fn anchor(
@@ -98,7 +99,8 @@ pub fn anchor(
         .with_sn(state.sn + 1)
         .with_previous_event(&state.last_event_digest)
         .with_seal(seal_list)
-        .build()?;
+        .build()
+        .map_err(|e| ControllerError::EventGenerationError(e.to_string()))?;
     Ok(ev)
 }
 
@@ -111,7 +113,8 @@ pub fn anchor_with_seal(
         .with_sn(state.sn + 1)
         .with_previous_event(&state.last_event_digest)
         .with_seal(seal_list.to_owned())
-        .build()?;
+        .build()
+        .map_err(|e| ControllerError::EventGenerationError(e.to_string()))?;
     Ok(ev)
 }
 
@@ -138,5 +141,5 @@ pub fn generate_end_role(
         SelfAddressing::Blake3_256,
         SerializationFormats::JSON,
     )
-    .map_err(|e| ControllerError::GeneralError(e.to_string()))
+    .map_err(|e| ControllerError::EventGenerationError(e.to_string()))
 }

@@ -1,8 +1,8 @@
 use std::{path::PathBuf, sync::Arc};
 
+pub mod error;
 pub mod event_generator;
 pub mod identifier_controller;
-pub mod error;
 pub mod utils;
 
 use crate::{
@@ -26,11 +26,14 @@ use crate::{
     query::reply_event::{ReplyEvent, ReplyRoute, SignedReply},
 };
 
-use self::{error::ControllerError, utils::{OptionalConfig, Topic}};
+use self::{
+    error::ControllerError,
+    utils::{OptionalConfig, Topic},
+};
 
 pub struct Controller {
     processor: BasicProcessor,
-    storage: EventStorage,
+    pub storage: EventStorage,
     oobi_manager: OobiManager,
 }
 impl Controller {
@@ -80,7 +83,10 @@ impl Controller {
         self.process_stream(oobis.as_bytes())
     }
 
-    fn get_watchers(&self, id: &IdentifierPrefix) -> Result<Vec<IdentifierPrefix>, ControllerError> {
+    fn get_watchers(
+        &self,
+        id: &IdentifierPrefix,
+    ) -> Result<Vec<IdentifierPrefix>, ControllerError> {
         Ok(self
             .oobi_manager
             .get_end_role(id, Role::Watcher)?
@@ -125,7 +131,7 @@ impl Controller {
     }
 
     /// Parse and process events stream
-    fn process_stream(&self, stream: &[u8]) -> Result<(), ControllerError> {
+    pub fn process_stream(&self, stream: &[u8]) -> Result<(), ControllerError> {
         let messages = crate::actor::parse_event_stream(stream)?;
 
         messages
@@ -135,7 +141,10 @@ impl Controller {
     }
 
     /// Returns identifier contact information.
-    pub fn get_loc_schemas(&self, id: &IdentifierPrefix) -> Result<Vec<LocationScheme>, ControllerError> {
+    pub fn get_loc_schemas(
+        &self,
+        id: &IdentifierPrefix,
+    ) -> Result<Vec<LocationScheme>, ControllerError> {
         Ok(self
             .oobi_manager
             .get_loc_scheme(id)?
@@ -145,7 +154,7 @@ impl Controller {
                 if let ReplyRoute::LocScheme(loc_scheme) = lc.get_route() {
                     Ok(loc_scheme)
                 } else {
-                    Err(ControllerError::GeneralError("Wrong route type".into()))
+                    Err(ControllerError::WrongEventTypeError)
                 }
                 .ok()
             })
@@ -188,7 +197,7 @@ impl Controller {
                             .send()
                             .map_err(|e| ControllerError::CommunicationError(e.to_string()))?
                             .text()
-                            .map_err(|e| ControllerError::CommunicationError(e.to_string()))?
+                            .map_err(|e| ControllerError::CommunicationError(e.to_string()))?,
                     };
 
                     Ok(response)
@@ -197,7 +206,7 @@ impl Controller {
                     todo!()
                 }
             },
-            _ => Err(ControllerError::GeneralError(format!(
+            _ => Err(ControllerError::CommunicationError(format!(
                 "No address for scheme {:?}",
                 schema
             ))),
@@ -275,9 +284,7 @@ impl Controller {
                 if let IdentifierPrefix::Basic(bp) = &wit.eid {
                     Ok(bp.clone())
                 } else {
-                    Err(ControllerError::GeneralError(
-                        "Improper witness prefix, should be basic prefix".into(),
-                    ))
+                    Err(ControllerError::WrongWitnessPrefixError)
                 }
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -295,25 +302,25 @@ impl Controller {
         sig: Vec<SelfSigningPrefix>,
     ) -> Result<IdentifierPrefix, ControllerError> {
         let (_, parsed_event) =
-            key_event_message(&event).map_err(|e| ControllerError::ParseEventError(e.to_string()))?;
+            key_event_message(&event).map_err(|_e| ControllerError::EventParseError)?;
         match parsed_event {
             EventType::KeyEvent(ke) => {
                 if let EventData::Icp(_) = &ke.event.get_event_data() {
                     self.finalize_key_event(&ke, sig)?;
                     Ok(ke.event.get_prefix())
                 } else {
-                    Err(ControllerError::ParseEventError(
+                    Err(ControllerError::InceptionError(
                         "Wrong event type, should be inception event".into(),
                     ))
                 }
             }
-            _ => Err(ControllerError::ParseEventError(
+            _ => Err(ControllerError::InceptionError(
                 "Wrong event type, should be inception event".into(),
             )),
         }
     }
 
-    pub(crate) fn rotate(
+    pub fn rotate(
         &self,
         id: IdentifierPrefix,
         current_keys: Vec<BasicPrefix>,
@@ -329,9 +336,7 @@ impl Controller {
                 if let IdentifierPrefix::Basic(bp) = &wit.eid {
                     Ok(bp.clone())
                 } else {
-                    Err(ControllerError::GeneralError(
-                        "Improper witness prefix, should be basic prefix".into(),
-                    ))
+                    Err(ControllerError::WrongWitnessPrefixError)
                 }
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -351,7 +356,7 @@ impl Controller {
         )?)
     }
 
-    pub(crate) fn anchor(
+    pub fn anchor(
         &self,
         id: IdentifierPrefix,
         payload: &[SelfAddressingPrefix],
@@ -363,7 +368,7 @@ impl Controller {
         Ok(event_generator::anchor(state, payload)?)
     }
 
-    pub(crate) fn anchor_with_seal(
+    pub fn anchor_with_seal(
         &self,
         id: IdentifierPrefix,
         payload: &[Seal],
@@ -376,14 +381,14 @@ impl Controller {
     }
 
     /// Check signatures, updates database and send events to watcher or witnesses.
-    pub(crate) fn finalize_event(
+    pub fn finalize_event(
         &self,
         id: &IdentifierPrefix,
         event: &[u8],
         sig: Vec<SelfSigningPrefix>,
     ) -> Result<(), ControllerError> {
         let parsed_event = event_message(event)
-            .map_err(|e| ControllerError::ParseEventError(e.to_string()))?
+            .map_err(|_e| ControllerError::EventParseError)?
             .1;
         match parsed_event {
             EventType::KeyEvent(ke) => Ok(self.finalize_key_event(&ke, sig)?),
@@ -392,7 +397,7 @@ impl Controller {
             EventType::Rpy(rpy) => match rpy.get_route() {
                 ReplyRoute::EndRoleAdd(_) => Ok(self.finalize_add_role(id, rpy, sig)?),
                 ReplyRoute::EndRoleCut(_) => todo!(),
-                _ => Err(ControllerError::GeneralError("Wrong event type".into())),
+                _ => Err(ControllerError::WrongEventTypeError),
             },
         }
     }

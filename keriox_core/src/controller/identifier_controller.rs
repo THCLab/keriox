@@ -10,7 +10,7 @@ use crate::{
     prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix, SelfSigningPrefix},
 };
 
-use crate::controller::{event_generator, error::ControllerError, Controller};
+use crate::controller::{error::ControllerError, event_generator, Controller};
 
 pub struct IdentifierController {
     pub id: IdentifierPrefix,
@@ -40,16 +40,14 @@ impl IdentifierController {
         witness_to_remove: Vec<BasicPrefix>,
         witness_threshold: u64,
     ) -> Result<String, ControllerError> {
-        self.source
-            .rotate(
-                self.id.clone(),
-                current_keys,
-                new_next_keys,
-                witness_to_add,
-                witness_to_remove,
-                witness_threshold,
-            )
-            .map_err(|e| ControllerError::GeneralError(e.to_string()))
+        self.source.rotate(
+            self.id.clone(),
+            current_keys,
+            new_next_keys,
+            witness_to_add,
+            witness_to_remove,
+            witness_threshold,
+        )
     }
 
     pub fn anchor(
@@ -59,7 +57,10 @@ impl IdentifierController {
         self.source.anchor(self.id.clone(), payload)
     }
 
-    pub fn anchor_with_seal(&self, seal_list: &[Seal]) -> Result<EventMessage<KeyEvent>, ControllerError> {
+    pub fn anchor_with_seal(
+        &self,
+        seal_list: &[Seal],
+    ) -> Result<EventMessage<KeyEvent>, ControllerError> {
         self.source.anchor_with_seal(self.id.clone(), seal_list)
     }
 
