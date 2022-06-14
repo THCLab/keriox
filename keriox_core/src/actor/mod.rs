@@ -12,7 +12,7 @@ use crate::{
     query::{
         key_state_notice::KeyStateNotice,
         query_event::{Query, SignedQuery},
-        reply_event::{self, ReplyRoute, SignedReply},
+        reply_event::{ReplyRoute, SignedReply},
         ReplyType,
     },
 };

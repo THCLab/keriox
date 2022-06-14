@@ -5,7 +5,7 @@ use keri::{
     actor::prelude::*,
     derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
     error::Error,
-    event_message::signed_event_message::{Notice, Op},
+    event_message::signed_event_message::Op,
     oobi::{EndRole, LocationScheme, OobiManager, Scheme},
     prefix::{BasicPrefix, IdentifierPrefix},
     query::{
