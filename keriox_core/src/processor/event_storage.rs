@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use super::compute_state;
 use crate::{
     database::sled::SledEventDatabase,
     error::Error,
@@ -9,9 +10,7 @@ use crate::{
         SerializationFormats,
     },
     event_message::{
-        signed_event_message::{
-            Message, SignedNontransferableReceipt, TimestampedSignedEventMessage,
-        },
+        signed_event_message::{SignedNontransferableReceipt, TimestampedSignedEventMessage},
         Digestible,
     },
     event_parsing::SignedEventData,
@@ -19,11 +18,11 @@ use crate::{
     query::key_state_notice::KeyStateNotice,
     state::{EventSemantics, IdentifierState},
 };
-
 #[cfg(feature = "query")]
-use crate::query::{query_event::QueryArgsMbx, reply_event::SignedReply};
-
-use super::compute_state;
+use crate::{
+    event_message::signed_event_message::Notice,
+    query::{query_event::QueryArgsMbx, reply_event::SignedReply},
+};
 
 pub struct EventStorage {
     pub db: Arc<SledEventDatabase>,
@@ -62,11 +61,11 @@ impl EventStorage {
     /// Get KERL for Prefix
     ///
     /// Returns the current validated KEL for a given Prefix
-    pub fn get_kel_messages(&self, id: &IdentifierPrefix) -> Result<Option<Vec<Message>>, Error> {
+    pub fn get_kel_messages(&self, id: &IdentifierPrefix) -> Result<Option<Vec<Notice>>, Error> {
         match self.db.get_kel_finalized_events(id) {
             Some(events) => Ok(Some(
                 events
-                    .map(|event| Message::Event(event.signed_event_message))
+                    .map(|event| Notice::Event(event.signed_event_message))
                     .collect(),
             )),
             None => Ok(None),
@@ -76,7 +75,7 @@ impl EventStorage {
     pub fn get_kel_messages_with_receipts(
         &self,
         id: &IdentifierPrefix,
-    ) -> Result<Option<Vec<Message>>, Error> {
+    ) -> Result<Option<Vec<Notice>>, Error> {
         match self.db.get_kel_finalized_events(id) {
             Some(events) => {
                 let e = events
@@ -88,10 +87,10 @@ impl EventStorage {
                                 &event.signed_event_message.event_message.event.get_digest(),
                             )
                             .unwrap()
-                            .map(Message::NontransferableRct);
+                            .map(Notice::NontransferableRct);
                         match rcts_from_db {
-                            Some(rct) => vec![Message::Event(event.into()), rct],
-                            None => vec![Message::Event(event.into())],
+                            Some(rct) => vec![Notice::Event(event.into()), rct],
+                            None => vec![Notice::Event(event.into())],
                         }
                     })
                     .flatten()
@@ -123,7 +122,7 @@ impl EventStorage {
     }
 
     #[cfg(feature = "query")]
-    pub fn get_mailbox_events(&self, args: QueryArgsMbx) -> Result<Vec<Message>, Error> {
+    pub fn get_mailbox_messages(&self, args: QueryArgsMbx) -> Result<Vec<Notice>, Error> {
         let id = args.pre.clone();
 
         let mut messages = Vec::new();
@@ -135,7 +134,7 @@ impl EventStorage {
                 .into_iter()
                 .flatten()
                 .filter(|rec| rec.body.event.sn >= args.topics.receipt)
-                .map(|rec| Message::NontransferableRct(rec)),
+                .map(|rec| Notice::NontransferableRct(rec)),
         );
 
         // TODO: query and return the rest of topics

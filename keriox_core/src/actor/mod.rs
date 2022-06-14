@@ -2,14 +2,17 @@ use std::convert::TryFrom;
 
 use crate::{
     error::Error,
-    event_message::{serialization_info::SerializationFormats, signed_event_message::Message},
+    event_message::{
+        serialization_info::SerializationFormats,
+        signed_event_message::{Message, Notice, Op},
+    },
     event_parsing::message::signed_event_stream,
     oobi::OobiManager,
     processor::{event_storage::EventStorage, validator::EventValidator, Processor},
     query::{
         key_state_notice::KeyStateNotice,
         query_event::{Query, SignedQuery},
-        reply_event::{ReplyRoute, SignedReply},
+        reply_event::{self, ReplyRoute, SignedReply},
         ReplyType,
     },
 };
@@ -23,22 +26,38 @@ pub fn parse_event_stream(stream: &[u8]) -> Result<Vec<Message>, Error> {
         .collect::<Result<_, _>>()
 }
 
-/// Process key events and oobi events.
-pub fn process_event<P: Processor>(
+pub fn process_message<P: Processor>(
     msg: Message,
     oobi_manager: &OobiManager,
     processor: &P,
     event_storage: &EventStorage,
 ) -> Result<(), Error> {
-    match &msg {
-        Message::Reply(sr) => match sr.reply.get_route() {
-            ReplyRoute::LocScheme(_) | ReplyRoute::EndRoleAdd(_) | ReplyRoute::EndRoleCut(_) => {
-                process_signed_oobi(&sr, oobi_manager, event_storage)
+    match msg {
+        Message::Notice(notice) => process_notice(notice, processor)?,
+        Message::Op(op) => {
+            if let Op::Reply(reply) = op {
+                process_reply(reply, oobi_manager, processor, event_storage)?;
             }
-            ReplyRoute::Ksn(_, _) => processor.process(&msg),
-        },
+        }
+    };
+    Ok(())
+}
 
-        _ => processor.process(&msg),
+pub fn process_notice<P: Processor>(msg: Notice, processor: &P) -> Result<(), Error> {
+    processor.process_notice(&msg)
+}
+
+pub fn process_reply<P: Processor>(
+    sr: SignedReply,
+    oobi_manager: &OobiManager,
+    processor: &P,
+    event_storage: &EventStorage,
+) -> Result<(), Error> {
+    match sr.reply.get_route() {
+        ReplyRoute::LocScheme(_) | ReplyRoute::EndRoleAdd(_) | ReplyRoute::EndRoleCut(_) => {
+            process_signed_oobi(&sr, oobi_manager, event_storage)
+        }
+        ReplyRoute::Ksn(_, _) => processor.process_op_reply(&sr),
     }
 }
 
@@ -80,7 +99,10 @@ fn process_query(qr: Query, storage: &EventStorage) -> Result<ReplyType, Error> 
         QueryRoute::Log { args, .. } => Ok(ReplyType::Kel(
             storage
                 .get_kel_messages_with_receipts(&args.i)?
-                .ok_or_else(|| Error::SemanticError("No identifier in db".into()))?,
+                .ok_or_else(|| Error::SemanticError("No identifier in db".into()))?
+                .into_iter()
+                .map(Message::Notice)
+                .collect(),
         )),
         QueryRoute::Ksn { args, .. } => {
             let i = args.i;
@@ -92,21 +114,26 @@ fn process_query(qr: Query, storage: &EventStorage) -> Result<ReplyType, Error> 
             Ok(ReplyType::Ksn(ksn))
         }
         QueryRoute::Mbx { args, .. } => {
-            let mail = storage.get_mailbox_events(args)?;
+            let mail = storage
+                .get_mailbox_messages(args)?
+                .into_iter()
+                .map(Message::Notice)
+                .collect();
             Ok(ReplyType::Mbx(mail))
         }
     }
 }
 
 pub mod prelude {
-    pub use crate::actor::{
-        parse_event_stream, process_event, process_signed_oobi, process_signed_query,
+    pub use crate::{
+        actor::{
+            parse_event_stream, process_message, process_notice, process_reply,
+            process_signed_oobi, process_signed_query,
+        },
+        database::sled::SledEventDatabase,
+        event::SerializationFormats,
+        event_message::signed_event_message::Message,
+        processor::{basic_processor::BasicProcessor, event_storage::EventStorage, Processor},
+        query::ReplyType,
     };
-    pub use crate::database::sled::SledEventDatabase;
-    pub use crate::event::SerializationFormats;
-    pub use crate::event_message::signed_event_message::Message;
-    pub use crate::processor::{
-        basic_processor::BasicProcessor, event_storage::EventStorage, Processor,
-    };
-    pub use crate::query::ReplyType;
 }

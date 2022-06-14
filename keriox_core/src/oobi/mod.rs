@@ -7,7 +7,7 @@ use url::Url;
 use self::error::Error as OobiError;
 use crate::{
     error::Error,
-    event_message::signed_event_message::Message,
+    event_message::signed_event_message::{Message, Op},
     event_parsing::message::signed_event_stream,
     prefix::IdentifierPrefix,
     query::reply_event::{bada_logic, ReplyEvent, ReplyRoute, SignedReply},
@@ -120,7 +120,7 @@ impl OobiManager {
             .try_for_each(|sed| -> Result<_, Error> {
                 let msg = Message::try_from(sed).unwrap();
                 match msg {
-                    Message::Reply(oobi_rpy) => {
+                    Message::Op(Op::Reply(oobi_rpy)) => {
                         self.check_oobi_reply(&oobi_rpy)?;
                         self.store.save_oobi(&oobi_rpy)?;
                         Ok(())

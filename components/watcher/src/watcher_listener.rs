@@ -1,8 +1,8 @@
+use std::path::Path;
+
 use actix_web::{dev::Server, web, App, HttpServer};
 use anyhow::Result;
 use futures::future::join_all;
-use std::path::Path;
-
 use keri::{error::Error, oobi::LocationScheme, prefix::BasicPrefix};
 
 use crate::watcher::{Watcher, WatcherData};
@@ -75,7 +75,7 @@ pub mod http_handlers {
     use actix_web::{get, http::header::ContentType, post, web, HttpResponse, Responder};
     use keri::{
         derivation::{self_addressing::SelfAddressing, self_signing::SelfSigning},
-        event_message::signed_event_message::Message,
+        event_message::signed_event_message::{Message, Op},
         event_parsing::SignedEventData,
         oobi::{EndRole, LocationScheme, Role},
         prefix::{AttachedSignaturePrefix, IdentifierPrefix, Prefix},
@@ -149,7 +149,7 @@ pub mod http_handlers {
         let witness_id = IdentifierPrefix::Basic(witnesses[0].clone());
 
         // get witness address and send there query
-        let qry_str = Message::Query(signed_qry).to_cesr().unwrap();
+        let qry_str = Message::Op(Op::Query(signed_qry)).to_cesr().unwrap();
         println!(
             "\nSending query to {}: \n{}",
             witness_id.to_str(),

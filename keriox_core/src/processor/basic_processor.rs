@@ -1,23 +1,21 @@
 use std::sync::Arc;
 
-use crate::event_message::signed_event_message::{Message, SignedEventMessage};
-#[cfg(feature = "query")]
-use crate::{database::sled::SledEventDatabase, error::Error};
-
 use super::{
     escrow::default_escrow_bus,
     notification::{Notification, NotificationBus, Notifier},
     validator::EventValidator,
     EventProcessor, Processor,
 };
+#[cfg(feature = "query")]
+use crate::{database::sled::SledEventDatabase, error::Error};
+use crate::{
+    event_message::signed_event_message::{Notice, SignedEventMessage},
+    query::reply_event::SignedReply,
+};
 
 pub struct BasicProcessor(EventProcessor);
 
 impl Processor for BasicProcessor {
-    fn process(&self, message: &Message) -> Result<(), Error> {
-        self.process(message)
-    }
-
     fn new(db: Arc<SledEventDatabase>) -> Self {
         Self::new(db)
     }
@@ -27,6 +25,17 @@ impl Processor for BasicProcessor {
         observer: Arc<dyn Notifier + Send + Sync>,
     ) -> Result<(), Error> {
         self.0.register_observer(observer)
+    }
+
+    fn process_notice(&self, notice: &Notice) -> Result<(), Error> {
+        self.0
+            .process_notice(notice, BasicProcessor::basic_processing_strategy)?;
+        Ok(())
+    }
+
+    fn process_op_reply(&self, reply: &SignedReply) -> Result<(), Error> {
+        self.0.process_op_reply(reply)?;
+        Ok(())
     }
 }
 
@@ -63,14 +72,5 @@ impl BasicProcessor {
             }
             Err(e) => Err(e),
         }
-    }
-
-    /// Process
-    ///
-    /// Process a deserialized KERI message.
-    pub fn process(&self, message: &Message) -> Result<(), Error> {
-        self.0
-            .process(message, BasicProcessor::basic_processing_strategy)?;
-        Ok(())
     }
 }
