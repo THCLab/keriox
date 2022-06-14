@@ -77,6 +77,7 @@ impl EventProcessor {
             observer,
             vec![
                 JustNotification::KeyEventAdded,
+                #[cfg(feature = "query")]
                 JustNotification::KsnOutOfOrder,
             ],
         );

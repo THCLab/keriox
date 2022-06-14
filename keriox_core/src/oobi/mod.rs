@@ -170,8 +170,6 @@ pub(crate) mod error {
         Error(String),
         #[error("Error while parsing url")]
         UrlParsingError(#[from] url::ParseError),
-        #[error(transparent)]
-        SledError(#[from] sled::Error),
     }
 }
 

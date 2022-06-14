@@ -7,7 +7,10 @@ use crate::{
         signed_event_message::{Message, Notice, Op},
     },
     event_parsing::message::signed_event_stream,
-    oobi::OobiManager,
+};
+
+#[cfg(feature = "query")]
+use crate::{
     processor::{event_storage::EventStorage, validator::EventValidator, Processor},
     query::{
         key_state_notice::KeyStateNotice,
@@ -16,6 +19,9 @@ use crate::{
         ReplyType,
     },
 };
+
+#[cfg(feature = "oobi")]
+use crate::oobi::OobiManager;
 
 pub fn parse_event_stream(stream: &[u8]) -> Result<Vec<Message>, Error> {
     let (_rest, events) =
@@ -61,6 +67,7 @@ pub fn process_reply<P: Processor>(
     }
 }
 
+#[cfg(feature = "oobi")]
 pub fn process_signed_oobi(
     signed_oobi: &SignedReply,
     oobi_manager: &OobiManager,
@@ -74,7 +81,7 @@ pub fn process_signed_oobi(
     // save
     oobi_manager.process_oobi(&signed_oobi)
 }
-
+#[cfg(feature = "query")]
 pub fn process_signed_query(qr: SignedQuery, storage: &EventStorage) -> Result<ReplyType, Error> {
     let signatures = qr.signatures;
     // check signatures
@@ -92,6 +99,7 @@ pub fn process_signed_query(qr: SignedQuery, storage: &EventStorage) -> Result<R
     }
 }
 
+#[cfg(feature = "query")]
 fn process_query(qr: Query, storage: &EventStorage) -> Result<ReplyType, Error> {
     use crate::query::query_event::QueryRoute;
 

@@ -20,7 +20,6 @@ crate-type = ["cdylib", "rlib"]
 # lmdb = ["rkv", "bincode"] # deprecated since 0.7
 sled-db = ["sled", "fixed"]
 async = ["async-std", "pin-project", "futures-core", "bitpat"]
-wallet = ["universal_wallet"]
 default = ["sled-db"]
 query = []
 oobi = ["query", "url", "strum_macros", "strum"]

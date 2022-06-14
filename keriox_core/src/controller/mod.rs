@@ -10,7 +10,7 @@ use crate::{
     event::{event_data::EventData, sections::seal::Seal, EventMessage},
     event_message::{
         key_event_message::KeyEvent,
-        signed_event_message::{Message, SignedEventMessage},
+        signed_event_message::{Message, SignedEventMessage, Op, Notice},
         Digestible,
     },
     event_parsing::{
@@ -22,7 +22,7 @@ use crate::{
         AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix,
         SelfSigningPrefix,
     },
-    processor::{basic_processor::BasicProcessor, event_storage::EventStorage},
+    processor::{basic_processor::BasicProcessor, event_storage::EventStorage, Processor},
     query::reply_event::{ReplyEvent, ReplyRoute, SignedReply},
 };
 
@@ -130,13 +130,34 @@ impl Controller {
         self.process_stream(to_parse.as_bytes())
     }
 
+    // Returns messages if they can be returned immediately, i.e. for query message
+    pub fn process(&self, msg: &Message) -> Result<Option<Vec<Message>>, ControllerError> {
+        let response = match msg.clone() {
+            Message::Op(op) => match op {
+                Op::Reply(rpy) => {
+                    self.processor.process_op_reply(&rpy)?;
+                    None
+                },
+                Op::Query(_) => {
+                    // TODO: Should controller respond to queries?
+                    None
+                },
+            }, 
+            Message::Notice(notice) => {
+                self.processor.process_notice(&notice)?;
+                None
+            }
+        };
+
+        Ok(response)
+    }
+
     /// Parse and process events stream
     pub fn process_stream(&self, stream: &[u8]) -> Result<(), ControllerError> {
         let messages = crate::actor::parse_event_stream(stream)?;
-
-        messages
-            .iter()
-            .try_for_each(|ev| self.processor.process(ev))?;
+        for message in messages {
+            self.process(&message);
+        };
         Ok(())
     }
 
@@ -429,8 +450,7 @@ impl Controller {
             .collect();
 
         let signed_message = event.sign(sigs, None, None);
-        self.processor
-            .process(&Message::Event(signed_message.clone()))?;
+        self.process(&Message::Notice(Notice::Event(signed_message.clone())))?;
 
         let wits = match event.event.get_event_data() {
             EventData::Icp(icp) => icp.witness_config.initial_witnesses,
