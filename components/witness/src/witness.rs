@@ -8,7 +8,7 @@ use keri::{
     event_message::{
         event_msg_builder::ReceiptBuilder,
         key_event_message::KeyEvent,
-        signed_event_message::{Message, Op, SignedNontransferableReceipt},
+        signed_event_message::{Message, Notice, Op, SignedNontransferableReceipt},
     },
     oobi::{LocationScheme, OobiManager},
     prefix::{BasicPrefix, IdentifierPrefix},
@@ -200,7 +200,11 @@ impl Witness {
         Ok(response)
     }
 
-    fn process_op(&self, op: Op) -> Result<Vec<Message>, Error> {
+    pub fn process_notice(&self, notice: Notice) -> Result<(), Error> {
+        self.processor.process_notice(&notice)
+    }
+
+    pub fn process_op(&self, op: Op) -> Result<Vec<Message>, Error> {
         let mut responses = Vec::new();
 
         match op {

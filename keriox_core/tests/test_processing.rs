@@ -1,9 +1,10 @@
-use keri::actor::prelude::*;
 use std::sync::Arc;
 
 use keri::{
-    database::sled::SledEventDatabase, error::Error, processor::event_storage::EventStorage,
+    actor::prelude::*, database::sled::SledEventDatabase, error::Error,
+    event_message::signed_event_message::Op, processor::event_storage::EventStorage,
 };
+
 #[test]
 pub fn test_ksn_query() -> Result<(), Error> {
     use keri::event_message::signed_event_message::Message;
@@ -32,7 +33,7 @@ pub fn test_ksn_query() -> Result<(), Error> {
     let qry_str = r#"{"v":"KERI10JSON000104_","t":"qry","d":"ErXRrwRbUFylKDiuOp8a1wO2XPAY4KiMX4TzYWZ1iAGE","dt":"2022-03-21T11:42:58.123955+00:00","r":"ksn","rr":"","q":{"s":0,"i":"E6OK2wFYp6x0Jx48xX0GCTwAzJUTWtYEvJSykVhtAnaM","src":"BGKVzj4ve0VSd8z_AmvhLg4lqcC_9WYX90k03q-R_Ydo"}}-VAj-HABE6OK2wFYp6x0Jx48xX0GCTwAzJUTWtYEvJSykVhtAnaM-AABAAk-Hyv8gpUZNpPYDGJc5F5vrLNWlGM26523Sgb6tKN1CtP4QxUjEApJCRxfm9TN8oW2nQ40QVM_IuZlrly1eLBA"#;
 
     let parsed = parse_event_stream(qry_str.as_bytes()).unwrap();
-    if let Message::Query(signed_query) = parsed.get(0).unwrap().clone() {
+    if let Message::Op(Op::Query(signed_query)) = parsed.get(0).unwrap().clone() {
         let r = process_signed_query(signed_query, &storage)?;
 
         if let ReplyType::Ksn(ksn) = r {
@@ -70,7 +71,7 @@ fn processs_oobi() -> Result<(), Error> {
     );
     let events = parse_event_stream(oobi_rpy.as_bytes()).unwrap();
     for event in events {
-        let res = process_event(event, &oobi_manager, &processor, &storage);
+        let res = process_message(event, &oobi_manager, &processor, &storage);
         assert!(res.is_ok())
     }
     Ok(())

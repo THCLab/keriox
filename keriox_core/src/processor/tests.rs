@@ -1,18 +1,20 @@
-use crate::derivation::basic::Basic;
-use crate::derivation::self_signing::SelfSigning;
-use crate::event::sections::threshold::SignatureThreshold;
-use crate::event_message::event_msg_builder::EventMsgBuilder;
-use crate::event_message::signed_event_message::Message;
-use crate::event_message::{Digestible, EventTypeTag};
-use crate::event_parsing::message::{signed_event_stream, signed_message};
-use crate::prefix::{AttachedSignaturePrefix, IdentifierPrefix, Prefix, SeedPrefix};
-use crate::processor::basic_processor::BasicProcessor;
-use crate::processor::event_storage::EventStorage;
-use crate::signer::Signer;
-use crate::{database::sled::SledEventDatabase, error::Error};
-use std::convert::TryFrom;
-use std::fs;
-use std::sync::Arc;
+use std::{convert::TryFrom, fs, sync::Arc};
+
+use crate::{
+    database::sled::SledEventDatabase,
+    derivation::{basic::Basic, self_signing::SelfSigning},
+    error::Error,
+    event::sections::threshold::SignatureThreshold,
+    event_message::{
+        event_msg_builder::EventMsgBuilder,
+        signed_event_message::{Message, Notice},
+        Digestible, EventTypeTag,
+    },
+    event_parsing::message::{signed_event_stream, signed_message},
+    prefix::{AttachedSignaturePrefix, IdentifierPrefix, Prefix, SeedPrefix},
+    processor::{basic_processor::BasicProcessor, event_storage::EventStorage, Processor},
+    signer::Signer,
+};
 
 #[test]
 fn test_process() -> Result<(), Error> {
@@ -33,7 +35,7 @@ fn test_process() -> Result<(), Error> {
     let deserialized_icp = Message::try_from(parsed).unwrap();
 
     let id = match &deserialized_icp {
-        Message::Event(e) => e.event_message.event.get_prefix(),
+        Message::Notice(Notice::Event(e)) => e.event_message.event.get_prefix(),
         _ => Err(Error::SemanticError("bad deser".into()))?,
     };
 
@@ -79,7 +81,7 @@ fn test_process() -> Result<(), Error> {
     // Check if processed event is in db.
     let ixn_from_db = event_storage.get_event_at_sn(&id, 2).unwrap().unwrap();
     match deserialized_ixn {
-        Message::Event(evt) => assert_eq!(
+        Message::Notice(Notice::Event(evt)) => assert_eq!(
             ixn_from_db.signed_event_message.event_message.event,
             evt.event_message.event
         ),
@@ -92,17 +94,17 @@ fn test_process() -> Result<(), Error> {
     let deserialized_ixn = Message::try_from(parsed).unwrap();
     // Make event partially signed.
     let partially_signed_deserialized_ixn = match deserialized_ixn {
-        Message::Event(mut e) => {
+        Message::Notice(Notice::Event(mut e)) => {
             let sigs = e.signatures[1].clone();
             e.signatures = vec![sigs];
-            Message::Event(e)
+            Notice::Event(e)
         }
         _ => Err(Error::SemanticError("bad deser".into()))?,
     };
 
     // Process partially signed interaction event.
-    event_processor.process(&partially_signed_deserialized_ixn)?;
-    if let Message::Event(ev) = partially_signed_deserialized_ixn {
+    event_processor.process_notice(&partially_signed_deserialized_ixn)?;
+    if let Notice::Event(ev) = partially_signed_deserialized_ixn {
         // should be saved in partially signed escrow
         assert_eq!(
             event_storage
@@ -341,8 +343,9 @@ fn test_process_receipt() -> Result<(), Error> {
 
 #[test]
 fn test_compute_state_at_sn() -> Result<(), Error> {
-    use crate::event::sections::seal::EventSeal;
     use tempfile::Builder;
+
+    use crate::event::sections::seal::EventSeal;
 
     // Create test db and event processor.
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
@@ -409,7 +412,7 @@ pub fn test_not_fully_witnessed() -> Result<(), Error> {
     let mut esc = db.get_all_partially_witnessed().unwrap();
     assert_eq!(
         icp_msg,
-        Message::Event(esc.next().unwrap().signed_event_message)
+        Message::Notice(Notice::Event(esc.next().unwrap().signed_event_message))
     );
     assert!(esc.next().is_none());
 
@@ -422,12 +425,15 @@ pub fn test_not_fully_witnessed() -> Result<(), Error> {
     let mut esc = db.get_all_partially_witnessed().unwrap();
     assert_eq!(
         icp_msg,
-        Message::Event(esc.next().unwrap().signed_event_message)
+        Message::Notice(Notice::Event(esc.next().unwrap().signed_event_message))
     );
     assert!(esc.next().is_none());
 
     let mut esc = db.get_escrow_nt_receipts(&id).unwrap();
-    assert_eq!(rcp_msg, Message::NontransferableRct(esc.next().unwrap()));
+    assert_eq!(
+        rcp_msg,
+        Message::Notice(Notice::NontransferableRct(esc.next().unwrap()))
+    );
     assert!(esc.next().is_none());
 
     let state = event_storage.get_state(&id)?;
@@ -471,8 +477,12 @@ pub fn test_not_fully_witnessed() -> Result<(), Error> {
 #[cfg(feature = "query")]
 #[test]
 pub fn test_reply_escrow() -> Result<(), Error> {
-    use crate::processor::{escrow::ReplyEscrow, Processor};
     use tempfile::Builder;
+
+    use crate::{
+        event_message::signed_event_message::Op,
+        processor::{escrow::ReplyEscrow, Processor},
+    };
 
     // Create test db and event processor.
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
@@ -523,12 +533,15 @@ pub fn test_reply_escrow() -> Result<(), Error> {
     // reply event should be escrowed, accepted reply shouldn't change
     event_processor.process(&deserialized_new_rpy.clone())?;
     let mut escrow = db.get_escrowed_replys(&identifier).unwrap();
-    assert_eq!(Message::Reply(escrow.next().unwrap()), deserialized_new_rpy);
+    assert_eq!(
+        Message::Op(Op::Reply(escrow.next().unwrap())),
+        deserialized_new_rpy
+    );
     assert!(escrow.next().is_none());
 
     let mut accepted_rpys = db.get_accepted_replys(&identifier).unwrap();
     assert_eq!(
-        Message::Reply(accepted_rpys.next().unwrap()),
+        Message::Op(Op::Reply(accepted_rpys.next().unwrap())),
         deserialized_old_rpy
     );
     assert!(accepted_rpys.next().is_none());
@@ -545,7 +558,7 @@ pub fn test_reply_escrow() -> Result<(), Error> {
     let mut accepted_rpys = db.get_accepted_replys(&identifier).unwrap();
 
     assert_eq!(
-        Message::Reply(accepted_rpys.next().unwrap()),
+        Message::Op(Op::Reply(accepted_rpys.next().unwrap())),
         deserialized_new_rpy
     );
     assert!(accepted_rpys.next().is_none());
@@ -589,7 +602,7 @@ fn test_out_of_order() -> Result<(), Error> {
     assert_eq!(
         escrowed
             .next()
-            .map(|e| Message::Event(e.signed_event_message)),
+            .map(|e| Message::Notice(Notice::Event(e.signed_event_message))),
         Some(ev4.clone())
     );
     assert!(escrowed.next().is_none());
@@ -599,13 +612,13 @@ fn test_out_of_order() -> Result<(), Error> {
     assert_eq!(
         escrowed
             .next()
-            .map(|e| Message::Event(e.signed_event_message)),
+            .map(|e| Message::Notice(Notice::Event(e.signed_event_message))),
         Some(ev4.clone())
     );
     assert_eq!(
         escrowed
             .next()
-            .map(|e| Message::Event(e.signed_event_message)),
+            .map(|e| Message::Notice(Notice::Event(e.signed_event_message))),
         Some(ev3.clone())
     );
     assert!(escrowed.next().is_none());
@@ -615,19 +628,19 @@ fn test_out_of_order() -> Result<(), Error> {
     assert_eq!(
         escrowed
             .next()
-            .map(|e| Message::Event(e.signed_event_message)),
+            .map(|e| Message::Notice(Notice::Event(e.signed_event_message))),
         Some(ev4.clone())
     );
     assert_eq!(
         escrowed
             .next()
-            .map(|e| Message::Event(e.signed_event_message)),
+            .map(|e| Message::Notice(Notice::Event(e.signed_event_message))),
         Some(ev3.clone())
     );
     assert_eq!(
         escrowed
             .next()
-            .map(|e| Message::Event(e.signed_event_message)),
+            .map(|e| Message::Notice(Notice::Event(e.signed_event_message))),
         Some(ev5.clone())
     );
     assert!(escrowed.next().is_none());
@@ -678,7 +691,7 @@ fn test_partially_sign_escrow() -> Result<(), Error> {
     let icp_second_sig = parse_messagee(icp_raw);
 
     processor.process(&icp_first_sig)?;
-    let icp_event = if let Message::Event(ev) = icp_first_sig.clone() {
+    let icp_event = if let Message::Notice(Notice::Event(ev)) = icp_first_sig.clone() {
         Some(ev.event_message)
     } else {
         None
@@ -689,7 +702,7 @@ fn test_partially_sign_escrow() -> Result<(), Error> {
     assert_eq!(
         escrowed
             .next()
-            .map(|e| Message::Event(e.signed_event_message)),
+            .map(|e| Message::Notice(Notice::Event(e.signed_event_message))),
         Some(icp_first_sig.clone())
     );
     assert!(escrowed.next().is_none());
@@ -847,7 +860,7 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
         None,
     );
 
-    processor.process(&Message::Event(signed_icp))?;
+    processor.process_notice(&Notice::Event(signed_icp))?;
 
     // create partial rotation event. Subset of keys set in inception event as
     // next keys
@@ -883,7 +896,7 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
 
     let signed_rotation = rotation.sign(signatures, None, None);
 
-    processor.process(&Message::Event(signed_rotation))?;
+    processor.process_notice(&Notice::Event(signed_rotation))?;
     let state = EventStorage::new(db.clone()).get_state(&id_prefix)?;
     assert_eq!(state.unwrap().sn, 1);
 
@@ -920,7 +933,7 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
         .collect::<Vec<_>>();
 
     let signed_rotation = rotation.sign(signatures, None, None);
-    let result = processor.process(&Message::Event(signed_rotation));
+    let result = processor.process_notice(&Notice::Event(signed_rotation));
     assert!(result.is_err());
     let state = EventStorage::new(db.clone()).get_state(&id_prefix)?;
     assert_eq!(state.unwrap().sn, 1);
@@ -986,7 +999,7 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
         None,
     );
 
-    processor.process(&Message::Event(signed_icp))?;
+    processor.process_notice(&Notice::Event(signed_icp))?;
 
     // create partial rotation event. Subset of keys set in inception event as
     // next keys
@@ -1033,7 +1046,7 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
 
     let signed_rotation = rotation.sign(signatures, None, None);
 
-    processor.process(&Message::Event(signed_rotation))?;
+    processor.process_notice(&Notice::Event(signed_rotation))?;
     let state = storage.get_state(&id_prefix)?.unwrap();
     assert_eq!(state.sn, 1);
     assert_eq!(&state.current.public_keys, &current_public_keys);
@@ -1071,7 +1084,7 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
         .collect::<Vec<_>>();
 
     let signed_rotation = rotation.sign(signatures, None, None);
-    let result = processor.process(&Message::Event(signed_rotation));
+    let result = processor.process_notice(&Notice::Event(signed_rotation));
     assert!(result.is_err());
 
     // State shouldn't be updated.

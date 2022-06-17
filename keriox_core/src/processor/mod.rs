@@ -19,8 +19,7 @@ use crate::{
     error::Error,
     event::{receipt::Receipt, SerializationFormats},
     event_message::signed_event_message::{
-        Notice, SignedEventMessage, SignedNontransferableReceipt,
-        TimestampedSignedEventMessage,
+        Notice, SignedEventMessage, SignedNontransferableReceipt, TimestampedSignedEventMessage,
     },
     prefix::IdentifierPrefix,
     query::reply_event::{ReplyRoute, SignedReply},
@@ -37,6 +36,21 @@ pub trait Processor {
 
     fn register_observer(&mut self, observer: Arc<dyn Notifier + Send + Sync>)
         -> Result<(), Error>;
+
+    fn process(
+        &self,
+        msg: &crate::event_message::signed_event_message::Message,
+    ) -> Result<(), Error> {
+        use crate::event_message::signed_event_message::{Message, Op};
+
+        match msg {
+            Message::Notice(notice) => self.process_notice(notice),
+            Message::Op(op) => match op {
+                Op::Query(_query) => panic!("processor can't handle query op"),
+                Op::Reply(reply) => self.process_op_reply(reply),
+            },
+        }
+    }
 }
 
 pub struct EventProcessor {

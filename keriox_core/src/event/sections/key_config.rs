@@ -1,12 +1,11 @@
 use serde::{Deserialize, Serialize};
 
+use super::threshold::SignatureThreshold;
 use crate::{
     derivation::self_addressing::SelfAddressing,
     error::Error,
     prefix::{AttachedSignaturePrefix, BasicPrefix, Prefix, SelfAddressingPrefix},
 };
-
-use super::threshold::SignatureThreshold;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 pub struct NextKeysData {
@@ -178,10 +177,13 @@ fn test_next_commitment() {
 
 #[test]
 fn test_threshold() -> Result<(), Error> {
-    use crate::derivation::{basic::Basic, self_signing::SelfSigning};
-    use crate::keys::{PrivateKey, PublicKey};
     use ed25519_dalek::Keypair;
     use rand::rngs::OsRng;
+
+    use crate::{
+        derivation::{basic::Basic, self_signing::SelfSigning},
+        keys::{PrivateKey, PublicKey},
+    };
 
     let (pub_keys, priv_keys): (Vec<BasicPrefix>, Vec<PrivateKey>) = [0, 1, 2]
         .iter()
@@ -261,10 +263,13 @@ fn test_threshold() -> Result<(), Error> {
 
 #[test]
 fn test_verify() -> Result<(), Error> {
-    use crate::event::event_data::EventData;
-    use crate::event_message::signed_event_message::Message;
-    use crate::event_parsing::message::signed_message;
     use std::convert::TryFrom;
+
+    use crate::{
+        event::event_data::EventData,
+        event_message::signed_event_message::{Message, Notice},
+        event_parsing::message::signed_message,
+    };
 
     // test data taken from keripy
     // (keripy/tests/core/test_weighted_threshold.py::test_weighted)
@@ -272,7 +277,7 @@ fn test_verify() -> Result<(), Error> {
     let parsed = signed_message(ev).unwrap().1;
     let signed_msg = Message::try_from(parsed).unwrap();
     match signed_msg {
-        Message::Event(ref e) => {
+        Message::Notice(Notice::Event(ref e)) => {
             if let EventData::Icp(icp) = e.to_owned().event_message.event.get_event_data() {
                 let kc = icp.key_config;
                 let msg = e.event_message.serialize()?;
@@ -286,7 +291,7 @@ fn test_verify() -> Result<(), Error> {
     let parsed = signed_message(ev).unwrap().1;
     let signed_msg = Message::try_from(parsed).unwrap();
     match signed_msg {
-        Message::Event(ref e) => {
+        Message::Notice(Notice::Event(ref e)) => {
             if let EventData::Icp(icp) = e.to_owned().event_message.event.get_event_data() {
                 let kc = icp.key_config;
                 let msg = e.event_message.serialize()?;
