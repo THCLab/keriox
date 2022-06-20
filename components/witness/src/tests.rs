@@ -21,16 +21,16 @@ mod controller_helper {
     };
 
     use keri::{
-        actor::process_event,
+        actor::process_message,
         controller::event_generator,
         database::sled::SledEventDatabase,
         derivation::{basic::Basic, self_signing::SelfSigning},
         error::Error,
-        event_message::signed_event_message::{Message, SignedEventMessage},
+        event_message::signed_event_message::{Message, Notice, SignedEventMessage},
         event_parsing::{message::key_event_message, EventType},
         oobi::OobiManager,
         prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix},
-        processor::{basic_processor::BasicProcessor, event_storage::EventStorage},
+        processor::{basic_processor::BasicProcessor, event_storage::EventStorage, Processor},
         signer::KeyManager,
         state::IdentifierState,
     };
@@ -97,7 +97,8 @@ mod controller_helper {
                 unreachable!()
             };
 
-            self.processor.process(&Message::Event(signed.clone()))?;
+            self.processor
+                .process_notice(&Notice::Event(signed.clone()))?;
 
             self.prefix = signed.event_message.event.get_prefix();
             // No need to generate receipt
@@ -131,7 +132,8 @@ mod controller_helper {
                 unreachable!()
             };
 
-            self.processor.process(&Message::Event(signed.clone()))?;
+            self.processor
+                .process_notice(&Notice::Event(signed.clone()))?;
 
             Ok(signed)
         }
@@ -164,7 +166,7 @@ mod controller_helper {
             let (_process_ok, _process_failed): (Vec<_>, Vec<_>) = msg
                 .iter()
                 .map(|message| {
-                    process_event(
+                    process_message(
                         message.clone(),
                         &self.oobi_manager,
                         &self.processor,
@@ -186,8 +188,6 @@ mod controller_helper {
 fn test_not_fully_witnessed() -> Result<(), Error> {
     use std::sync::Mutex;
 
-    use controller::controller::Controller;
-    use keri::event::sections::threshold::SignatureThreshold;
     use tempfile::Builder;
 
     let seed1 = "ArwXoACJgOleVZ2PY7kXn7rA0II0mHYDhc6WrBH8fDAc";
@@ -666,8 +666,7 @@ pub fn test_key_state_notice() -> Result<(), Error> {
 fn test_mbx() {
     use std::sync::Mutex;
 
-    use controller::controller::Controller;
-    use keri::{event::sections::threshold::SignatureThreshold, signer::CryptoBox};
+    use keri::signer::CryptoBox;
 
     let signer = Arc::new(Signer::new());
 

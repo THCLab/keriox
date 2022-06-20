@@ -10,7 +10,7 @@ use crate::{
     event::{event_data::EventData, sections::seal::Seal, EventMessage},
     event_message::{
         key_event_message::KeyEvent,
-        signed_event_message::{Message, SignedEventMessage, Op, Notice},
+        signed_event_message::{Message, Notice, Op, SignedEventMessage},
         Digestible,
     },
     event_parsing::{
@@ -137,12 +137,12 @@ impl Controller {
                 Op::Reply(rpy) => {
                     self.processor.process_op_reply(&rpy)?;
                     None
-                },
+                }
                 Op::Query(_) => {
                     // TODO: Should controller respond to queries?
                     None
-                },
-            }, 
+                }
+            },
             Message::Notice(notice) => {
                 self.processor.process_notice(&notice)?;
                 None
@@ -156,8 +156,8 @@ impl Controller {
     pub fn process_stream(&self, stream: &[u8]) -> Result<(), ControllerError> {
         let messages = crate::actor::parse_event_stream(stream)?;
         for message in messages {
-            self.process(&message);
-        };
+            self.process(&message)?;
+        }
         Ok(())
     }
 
