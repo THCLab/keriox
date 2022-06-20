@@ -1,12 +1,9 @@
-#[cfg(feature = "query")]
-use crate::prefix::IdentifierPrefix;
-use crate::prefix::{BasicPrefix, SelfSigningPrefix};
-#[cfg(feature = "query")]
-use crate::query::{key_state_notice::KeyStateNotice, reply_event::SignedReply, QueryError};
-#[cfg(feature = "query")]
-use chrono::{DateTime, FixedOffset};
 use std::sync::Arc;
 
+#[cfg(feature = "query")]
+use chrono::{DateTime, FixedOffset};
+
+use super::event_storage::EventStorage;
 use crate::{
     database::sled::SledEventDatabase,
     error::Error,
@@ -22,10 +19,14 @@ use crate::{
             SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
         },
     },
+    prefix::{BasicPrefix, SelfSigningPrefix},
     state::{EventSemantics, IdentifierState},
 };
-
-use super::event_storage::EventStorage;
+#[cfg(feature = "query")]
+use crate::{
+    prefix::IdentifierPrefix,
+    query::{key_state_notice::KeyStateNotice, reply_event::SignedReply, QueryError},
+};
 
 pub struct EventValidator {
     event_storage: EventStorage,
@@ -408,12 +409,19 @@ impl EventValidator {
 
 #[test]
 fn test_validate_seal() -> Result<(), Error> {
-    use crate::event_message::signed_event_message::Message;
-    use crate::event_message::Digestible;
-    use crate::event_parsing::message::signed_message;
-    use crate::processor::basic_processor::BasicProcessor;
     use std::{convert::TryFrom, fs, sync::Arc};
+
     use tempfile::Builder;
+
+    use crate::{
+        event_message::{
+            signed_event_message::{Message, Notice},
+            Digestible,
+        },
+        event_parsing::message::signed_message,
+        processor::{basic_processor::BasicProcessor, Processor},
+    };
+
     // Create test db and event processor.
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     fs::create_dir_all(root.path()).unwrap();
@@ -434,7 +442,7 @@ fn test_validate_seal() -> Result<(), Error> {
     let dip_raw = br#"{"v":"KERI10JSON00015f_","t":"dip","d":"ESVGDRnpHMCAESkvj2bxKGAmMloX6K6vxfcmBLTOCM0A","i":"ESVGDRnpHMCAESkvj2bxKGAmMloX6K6vxfcmBLTOCM0A","s":"0","kt":"1","k":["DuK1x8ydpucu3480Jpd1XBfjnCwb3dZ3x5b1CJmuUphA"],"nt":"1","n":["Ej1L6zmDszZ8GmBdYGeUYmAwoT90h3Dt9kRAS90nRyqI"],"bt":"0","b":[],"c":[],"a":[],"di":"E7YbTIkWWyNwOxZQTTnrs6qn8jFbu2A8zftQ33JYQFQ0"}-AABAAbb1dks4dZCRcibL74840WKKtk9wsdMLLlmNFkjb1s7hBfevCqpN8nkZaewQFZu5QWR-rbZtN-Y8DDQ8lh_1WDA-GAB0AAAAAAAAAAAAAAAAAAAAAAQE4ncGiiaG9wbKMHrACX9iPxb7fMSSeBSnngBNIRoZ2_A"#;
     let parsed = signed_message(dip_raw).unwrap().1;
     let msg = Message::try_from(parsed).unwrap();
-    if let Message::Event(dip) = msg {
+    if let Message::Notice(Notice::Event(dip)) = msg {
         let delegated_event_digest = dip.event_message.event.get_digest();
         // Construct delegating seal.
         let seal = EventSeal {

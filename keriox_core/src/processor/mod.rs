@@ -10,28 +10,47 @@ pub mod notification;
 mod tests;
 pub mod validator;
 
+use self::{
+    notification::{JustNotification, Notification, NotificationBus, Notifier},
+    validator::EventValidator,
+};
 use crate::{
     database::sled::SledEventDatabase,
     error::Error,
     event::{receipt::Receipt, SerializationFormats},
     event_message::signed_event_message::{
-        Message, SignedEventMessage, SignedNontransferableReceipt, TimestampedSignedEventMessage,
+        Notice, SignedEventMessage, SignedNontransferableReceipt, TimestampedSignedEventMessage,
     },
     prefix::IdentifierPrefix,
-    query::reply_event::ReplyRoute,
+    query::reply_event::{ReplyRoute, SignedReply},
     state::IdentifierState,
-};
-
-use self::{
-    notification::{JustNotification, Notification, NotificationBus, Notifier},
-    validator::EventValidator,
 };
 
 pub trait Processor {
     fn new(db_path: Arc<SledEventDatabase>) -> Self;
-    fn process(&self, message: &Message) -> Result<(), Error>;
+
+    fn process_notice(&self, notice: &Notice) -> Result<(), Error>;
+
+    #[cfg(feature = "query")]
+    fn process_op_reply(&self, reply: &SignedReply) -> Result<(), Error>;
+
     fn register_observer(&mut self, observer: Arc<dyn Notifier + Send + Sync>)
         -> Result<(), Error>;
+
+    fn process(
+        &self,
+        msg: &crate::event_message::signed_event_message::Message,
+    ) -> Result<(), Error> {
+        use crate::event_message::signed_event_message::{Message, Op};
+
+        match msg {
+            Message::Notice(notice) => self.process_notice(notice),
+            Message::Op(op) => match op {
+                Op::Query(_query) => panic!("processor can't handle query op"),
+                Op::Reply(reply) => self.process_op_reply(reply),
+            },
+        }
+    }
 }
 
 pub struct EventProcessor {
@@ -64,16 +83,28 @@ impl EventProcessor {
         Ok(())
     }
 
-    /// Process
-    ///
-    /// Process a deserialized KERI message
-    /// Update database based on event validation result.
-    pub fn process<F>(&self, message: &Message, processing_strategy: F) -> Result<(), Error>
+    #[cfg(feature = "query")]
+    pub fn process_op_reply(&self, rpy: &SignedReply) -> Result<(), Error> {
+        match rpy.reply.get_route() {
+            ReplyRoute::Ksn(_, _) => match self.validator.process_signed_ksn_reply(&rpy) {
+                Ok(_) => self
+                    .db
+                    .update_accepted_reply(rpy.clone(), &rpy.reply.get_prefix()),
+                Err(Error::EventOutOfOrderError) => self
+                    .publisher
+                    .notify(&Notification::KsnOutOfOrder(rpy.clone())),
+                Err(anything) => Err(anything),
+            },
+            _ => Ok(()),
+        }
+    }
+
+    pub fn process_notice<F>(&self, notice: &Notice, processing_strategy: F) -> Result<(), Error>
     where
         F: Fn(Arc<SledEventDatabase>, &NotificationBus, SignedEventMessage) -> Result<(), Error>,
     {
-        match &message {
-            Message::Event(signed_event) => {
+        match notice {
+            Notice::Event(signed_event) => {
                 processing_strategy(self.db.clone(), &self.publisher, signed_event.clone())?;
                 // check if receipts are attached
                 if let Some(witness_receipts) = &signed_event.witness_receipts {
@@ -90,15 +121,15 @@ impl EventProcessor {
                         None,
                         Some(witness_receipts.clone()),
                     );
-                    self.process(
-                        &Message::NontransferableRct(signed_receipt),
+                    self.process_notice(
+                        &Notice::NontransferableRct(signed_receipt),
                         processing_strategy,
                     )
                 } else {
                     Ok(())
                 }
             }
-            Message::NontransferableRct(rct) => {
+            Notice::NontransferableRct(rct) => {
                 let id = &rct.body.event.prefix;
                 match self.validator.validate_witness_receipt(&rct) {
                     Ok(_) => {
@@ -111,37 +142,16 @@ impl EventProcessor {
                     Err(e) => Err(e),
                 }
             }
-            Message::TransferableRct(vrc) => {
-                match self.validator.validate_validator_receipt(&vrc) {
-                    Ok(_) => {
-                        self.db.add_receipt_t(vrc.clone(), &vrc.body.event.prefix)?;
-                        self.publisher.notify(&Notification::ReceiptAccepted)
-                    }
-                    Err(Error::MissingEvent) | Err(Error::EventOutOfOrderError) => self
-                        .publisher
-                        .notify(&Notification::TransReceiptOutOfOrder(vrc.clone())),
-                    Err(e) => Err(e),
+            Notice::TransferableRct(vrc) => match self.validator.validate_validator_receipt(&vrc) {
+                Ok(_) => {
+                    self.db.add_receipt_t(vrc.clone(), &vrc.body.event.prefix)?;
+                    self.publisher.notify(&Notification::ReceiptAccepted)
                 }
-            }
-            #[cfg(feature = "query")]
-            Message::Reply(rpy) => match rpy.reply.get_route() {
-                ReplyRoute::Ksn(_, _) => match self.validator.process_signed_ksn_reply(&rpy) {
-                    Ok(_) => self
-                        .db
-                        .update_accepted_reply(rpy.clone(), &rpy.reply.get_prefix()),
-                    Err(Error::EventOutOfOrderError) => self
-                        .publisher
-                        .notify(&Notification::KsnOutOfOrder(rpy.clone())),
-                    Err(anything) => Err(anything),
-                },
-                _ => Ok(()),
+                Err(Error::MissingEvent) | Err(Error::EventOutOfOrderError) => self
+                    .publisher
+                    .notify(&Notification::TransReceiptOutOfOrder(vrc.clone())),
+                Err(e) => Err(e),
             },
-            #[cfg(feature = "query")]
-            Message::Query(_) => {
-                // TODO should do nothing?
-                // It doesn't update database
-                Ok(())
-            }
         }
     }
 }

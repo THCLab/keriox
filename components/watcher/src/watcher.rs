@@ -1,9 +1,11 @@
-use anyhow::{anyhow, Result};
 use std::{path::Path, sync::Arc};
 
+use anyhow::{anyhow, Result};
 use keri::{
+    actor::prelude::*,
     derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
     error::Error,
+    event_message::signed_event_message::Op,
     oobi::{EndRole, LocationScheme, OobiManager, Scheme},
     prefix::{BasicPrefix, IdentifierPrefix},
     query::{
@@ -13,8 +15,6 @@ use keri::{
     signer::Signer,
     state::IdentifierState,
 };
-
-use keri::actor::prelude::*;
 
 pub struct WatcherData {
     pub prefix: BasicPrefix,
@@ -120,10 +120,21 @@ impl WatcherData {
     }
 
     // Returns messages if they can be returned immediately, i.e. for query message
-    pub fn process(&self, msg: Message) -> Result<Vec<Message>, Error> {
+    pub fn process(&self, msg: Message) -> Result<Option<Vec<Message>>, Error> {
+        let response = match msg.clone() {
+            Message::Op(op) => Some(self.process_op(op)?),
+            Message::Notice(notice) => {
+                process_notice(notice, &self.processor)?;
+                None
+            }
+        };
+        Ok(response)
+    }
+
+    fn process_op(&self, op: Op) -> Result<Vec<Message>, Error> {
         let mut responses = Vec::new();
-        match msg.clone() {
-            Message::Query(qry) => {
+        match op {
+            Op::Query(qry) => {
                 let response = process_signed_query(qry, &self.event_storage).unwrap();
                 match response {
                     ReplyType::Ksn(ksn) => {
@@ -135,24 +146,25 @@ impl WatcherData {
 
                         let signature =
                             SelfSigning::Ed25519Sha512.derive(self.signer.sign(&rpy.serialize()?)?);
-                        let reply = Message::Reply(SignedReply::new_nontrans(
+                        let reply = Message::Op(Op::Reply(SignedReply::new_nontrans(
                             rpy,
                             self.prefix.clone(),
                             signature,
-                        ));
+                        )));
                         responses.push(reply);
                     }
                     ReplyType::Kel(msgs) | ReplyType::Mbx(msgs) => responses.extend(msgs),
                 };
-                Ok(())
             }
-            _ => process_event(
-                msg,
-                &self.oobi_manager,
-                &self.processor,
-                &self.event_storage,
-            ),
-        }?;
+            Op::Reply(reply) => {
+                process_reply(
+                    reply,
+                    &self.oobi_manager,
+                    &self.processor,
+                    &self.event_storage,
+                )?;
+            }
+        }
         Ok(responses)
     }
 
@@ -162,6 +174,7 @@ impl WatcherData {
             .map(|message| self.process(message))
             // TODO: avoid unwrap
             .map(|d| d.unwrap())
+            .flatten()
             .flatten()
             .collect())
     }

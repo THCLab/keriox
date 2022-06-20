@@ -3,22 +3,19 @@ use std::sync::Arc;
 use keri::{
     database::sled::SledEventDatabase,
     error::Error,
-    event_message::signed_event_message::{Message, SignedEventMessage},
-    processor::escrow::{OutOfOrderEscrow, PartiallySignedEscrow},
-    processor::notification::{JustNotification, NotificationBus, Notifier},
-};
-
-use keri::processor::{
-    notification::Notification, validator::EventValidator, EventProcessor, Processor,
+    event_message::signed_event_message::{Notice, SignedEventMessage},
+    processor::{
+        escrow::{OutOfOrderEscrow, PartiallySignedEscrow},
+        notification::{JustNotification, Notification, NotificationBus, Notifier},
+        validator::EventValidator,
+        EventProcessor, Processor,
+    },
+    query::reply_event::SignedReply,
 };
 
 pub struct WitnessProcessor(EventProcessor);
 
 impl Processor for WitnessProcessor {
-    fn process(&self, message: &Message) -> Result<(), Error> {
-        self.process(message)
-    }
-
     fn new(db: Arc<SledEventDatabase>) -> Self {
         Self::new(db)
     }
@@ -28,6 +25,17 @@ impl Processor for WitnessProcessor {
         observer: Arc<dyn Notifier + Send + Sync>,
     ) -> Result<(), Error> {
         self.0.register_observer(observer)
+    }
+
+    fn process_notice(&self, notice: &Notice) -> Result<(), Error> {
+        self.0
+            .process_notice(notice, WitnessProcessor::witness_processing_strategy)?;
+        Ok(())
+    }
+
+    fn process_op_reply(&self, reply: &SignedReply) -> Result<(), Error> {
+        self.0.process_op_reply(reply)?;
+        Ok(())
     }
 }
 
@@ -80,14 +88,5 @@ impl WitnessProcessor {
             }
             Err(e) => Err(e),
         }
-    }
-
-    /// Process
-    ///
-    /// Process a deserialized KERI message.
-    pub fn process(&self, message: &Message) -> Result<(), Error> {
-        self.0
-            .process(message, WitnessProcessor::witness_processing_strategy)?;
-        Ok(())
     }
 }

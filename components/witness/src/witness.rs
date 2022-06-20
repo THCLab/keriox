@@ -1,18 +1,16 @@
 use std::{path::Path, sync::Arc};
 
-use keri::actor::prelude::*;
-use keri::actor::process_signed_query;
-use keri::oobi::OobiManager;
 use keri::{
+    actor::{prelude::*, process_reply, process_signed_query},
     derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
     error::Error,
     event::EventMessage,
     event_message::{
         event_msg_builder::ReceiptBuilder,
         key_event_message::KeyEvent,
-        signed_event_message::{Message, SignedNontransferableReceipt},
+        signed_event_message::{Message, Notice, Op, SignedNontransferableReceipt},
     },
-    oobi::LocationScheme,
+    oobi::{LocationScheme, OobiManager},
     prefix::{BasicPrefix, IdentifierPrefix},
     processor::notification::{Notification, NotificationBus, Notifier},
     query::{
@@ -190,10 +188,27 @@ impl Witness {
     }
 
     // Returns messages if they can be returned immediately, i.e. for query message
-    pub fn process(&self, msg: Message) -> Result<Vec<Message>, Error> {
+    pub fn process(&self, msg: Message) -> Result<Option<Vec<Message>>, Error> {
+        let response = match msg.clone() {
+            Message::Op(op) => Some(self.process_op(op)?),
+            Message::Notice(notice) => {
+                self.processor.process_notice(&notice)?;
+                None
+            }
+        };
+
+        Ok(response)
+    }
+
+    pub fn process_notice(&self, notice: Notice) -> Result<(), Error> {
+        self.processor.process_notice(&notice)
+    }
+
+    pub fn process_op(&self, op: Op) -> Result<Vec<Message>, Error> {
         let mut responses = Vec::new();
-        match msg.clone() {
-            Message::Query(qry) => {
+
+        match op {
+            Op::Query(qry) => {
                 let response = process_signed_query(qry, &self.event_storage).unwrap();
                 match response {
                     ReplyType::Ksn(ksn) => {
@@ -205,24 +220,26 @@ impl Witness {
 
                         let signature =
                             SelfSigning::Ed25519Sha512.derive(self.signer.sign(&rpy.serialize()?)?);
-                        let reply = Message::Reply(SignedReply::new_nontrans(
+                        let reply = Message::Op(Op::Reply(SignedReply::new_nontrans(
                             rpy,
                             self.prefix.clone(),
                             signature,
-                        ));
+                        )));
                         responses.push(reply);
                     }
                     ReplyType::Kel(msgs) | ReplyType::Mbx(msgs) => responses.extend(msgs),
                 };
-                Ok(())
             }
-            _ => process_event(
-                msg,
-                &self.oobi_manager,
-                &self.processor,
-                &self.event_storage,
-            ),
-        }?;
+            Op::Reply(rpy) => {
+                process_reply(
+                    rpy,
+                    &self.oobi_manager,
+                    &self.processor,
+                    &self.event_storage,
+                )?;
+            }
+        }
+
         Ok(responses)
     }
 
@@ -232,6 +249,7 @@ impl Witness {
             .map(|message| self.process(message))
             // TODO: avoid unwrap
             .map(|d| d.unwrap())
+            .flatten()
             .flatten()
             .collect())
     }

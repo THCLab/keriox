@@ -4,38 +4,42 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-#[cfg(feature = "oobi")]
-use crate::oobi::OobiManager;
 use keri::{
+    actor::prelude::*,
     database::sled::SledEventDatabase,
-    derivation::basic::Basic,
-    derivation::self_addressing::SelfAddressing,
-    derivation::self_signing::SelfSigning,
+    derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
     error::Error,
-    event::sections::seal::{DigestSeal, Seal},
     event::{
-        event_data::EventData, receipt::Receipt, sections::threshold::SignatureThreshold, Event,
-        EventMessage, SerializationFormats,
+        event_data::{EventData, InteractionEvent},
+        receipt::Receipt,
+        sections::{
+            seal::{DigestSeal, EventSeal, Seal},
+            threshold::SignatureThreshold,
+        },
+        Event, EventMessage, SerializationFormats,
     },
-    event::{event_data::InteractionEvent, sections::seal::EventSeal},
-    event_message::event_msg_builder::EventMsgBuilder,
     event_message::{
+        event_msg_builder::EventMsgBuilder,
         key_event_message::KeyEvent,
         signed_event_message::{
-            Message, SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
+            Message, Notice, SignedEventMessage, SignedNontransferableReceipt,
+            SignedTransferableReceipt,
         },
         EventTypeTag,
     },
     event_parsing::message::{signed_event_stream, signed_message},
     oobi::OobiManager,
-    prefix::AttachedSignaturePrefix,
-    prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix, SelfSigningPrefix},
+    prefix::{
+        AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix,
+        SelfSigningPrefix,
+    },
     processor::{basic_processor::BasicProcessor, event_storage::EventStorage},
     signer::KeyManager,
     state::IdentifierState,
 };
 
-use keri::actor::prelude::*;
+#[cfg(feature = "oobi")]
+use crate::oobi::OobiManager;
 
 pub struct Controller<K: KeyManager + 'static> {
     prefix: IdentifierPrefix,
@@ -112,12 +116,7 @@ impl<K: KeyManager> Controller<K> {
             None,
         );
 
-        process_event(
-            Message::Event(signed.clone()),
-            &self.oobi_manager,
-            &self.processor,
-            &self.storage,
-        )?;
+        process_notice(Notice::Event(signed.clone()), &self.processor)?;
 
         self.prefix = icp.event.get_prefix();
         // No need to generate receipt
@@ -194,12 +193,7 @@ impl<K: KeyManager> Controller<K> {
             None,
         );
 
-        process_event(
-            Message::Event(rot.clone()),
-            &self.oobi_manager,
-            &self.processor,
-            &self.storage,
-        )?;
+        process_notice(Notice::Event(rot.clone()), &self.processor)?;
 
         Ok(rot)
     }
@@ -263,12 +257,7 @@ impl<K: KeyManager> Controller<K> {
             None,
         );
 
-        process_event(
-            Message::Event(ixn.clone()),
-            &self.oobi_manager,
-            &self.processor,
-            &self.storage,
-        )?;
+        process_notice(Notice::Event(ixn.clone()), &self.processor)?;
 
         Ok(ixn)
     }
@@ -281,7 +270,7 @@ impl<K: KeyManager> Controller<K> {
             Err(e) => Err(Error::DeserializeError(e.to_string())),
             Ok(event) => {
                 let prefix = event.get_prefix();
-                process_event(event, &self.oobi_manager, &self.processor, &self.storage)?;
+                process_message(event, &self.oobi_manager, &self.processor, &self.storage)?;
                 match self.get_state_for_prefix(&prefix)? {
                     None => Err(Error::InvalidIdentifierStat),
                     Some(state) => Ok((prefix, serde_json::to_vec(&state)?)),
@@ -300,7 +289,7 @@ impl<K: KeyManager> Controller<K> {
             let msg = msg?;
             self.process(&vec![msg.clone()])?;
             // check if receipts are attached
-            if let Message::Event(ev) = msg {
+            if let Message::Notice(Notice::Event(ev)) = msg {
                 if let Some(witness_receipts) = ev.witness_receipts {
                     // Create and process witness receipts
                     let id = ev.event_message.event.get_prefix();
@@ -314,7 +303,7 @@ impl<K: KeyManager> Controller<K> {
                         None,
                         Some(witness_receipts),
                     );
-                    self.process(&vec![Message::NontransferableRct(signed_receipt)])
+                    self.process(&vec![Message::Notice(Notice::NontransferableRct(signed_receipt))])
                 } else {
                     Ok(())
                 }
@@ -328,7 +317,7 @@ impl<K: KeyManager> Controller<K> {
         let (_process_ok, _process_failed): (Vec<_>, Vec<_>) = msg
             .iter()
             .map(|message| {
-                process_event(
+                process_message(
                     message.clone(),
                     &self.oobi_manager,
                     &self.processor,
@@ -368,11 +357,9 @@ impl<K: KeyManager> Controller<K> {
         )];
         let signed_rcp = SignedTransferableReceipt::new(rcp, validator_event_seal, signatures);
 
-        process_event(
-            Message::TransferableRct(signed_rcp.clone()),
-            &self.oobi_manager,
+        process_notice(
+            Notice::TransferableRct(signed_rcp.clone()),
             &self.processor,
-            &self.storage,
         )?;
 
         Ok(signed_rcp)

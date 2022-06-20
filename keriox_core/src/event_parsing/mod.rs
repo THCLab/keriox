@@ -1,25 +1,32 @@
+use std::convert::TryFrom;
+
 use base64::URL_SAFE_NO_PAD;
 use chrono::{DateTime, FixedOffset, SecondsFormat};
 use serde::Deserialize;
-use std::convert::TryFrom;
-
-use crate::event::receipt::Receipt;
-use crate::event::sections::seal::{EventSeal, SourceSeal};
-use crate::event::EventMessage;
-use crate::event_message::key_event_message::KeyEvent;
-use crate::event_message::signed_event_message::{
-    Message, SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
-};
-use crate::event_parsing::payload_size::PayloadType;
-use crate::prefix::Prefix;
-use crate::prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix};
 
 #[cfg(feature = "query")]
 use crate::query::{
     query_event::{QueryEvent, SignedQuery},
     reply_event::{ReplyEvent, SignedReply},
 };
-use crate::{error::Error, event::event_data::EventData};
+use crate::{
+    error::Error,
+    event::{
+        event_data::EventData,
+        receipt::Receipt,
+        sections::seal::{EventSeal, SourceSeal},
+        EventMessage,
+    },
+    event_message::{
+        key_event_message::KeyEvent,
+        signed_event_message::{
+            Message, Notice, Op, SignedEventMessage, SignedNontransferableReceipt,
+            SignedTransferableReceipt,
+        },
+    },
+    event_parsing::payload_size::PayloadType,
+    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix},
+};
 
 pub mod attachment;
 pub mod message;
@@ -278,19 +285,20 @@ impl TryFrom<SignedEventData> for Message {
     type Error = Error;
 
     fn try_from(value: SignedEventData) -> Result<Self, Self::Error> {
-        match value.deserialized_event {
-            EventType::KeyEvent(ev) => signed_key_event(ev, value.attachments),
-            EventType::Receipt(rct) => signed_receipt(rct, value.attachments),
+        let msg = match value.deserialized_event {
+            EventType::KeyEvent(ev) => Message::Notice(signed_key_event(ev, value.attachments)?),
+            EventType::Receipt(rct) => Message::Notice(signed_receipt(rct, value.attachments)?),
             #[cfg(feature = "query")]
-            EventType::Qry(qry) => signed_query(qry, value.attachments),
+            EventType::Qry(qry) => Message::Op(signed_query(qry, value.attachments)?),
             #[cfg(any(feature = "query", feature = "oobi"))]
-            EventType::Rpy(rpy) => signed_reply(rpy, value.attachments),
-        }
+            EventType::Rpy(rpy) => Message::Op(signed_reply(rpy, value.attachments)?),
+        };
+        Ok(msg)
     }
 }
 
 #[cfg(any(feature = "query", feature = "oobi"))]
-fn signed_reply(rpy: ReplyEvent, mut attachments: Vec<Attachment>) -> Result<Message, Error> {
+fn signed_reply(rpy: ReplyEvent, mut attachments: Vec<Attachment>) -> Result<Op, Error> {
     match attachments
         .pop()
         .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?
@@ -298,9 +306,7 @@ fn signed_reply(rpy: ReplyEvent, mut attachments: Vec<Attachment>) -> Result<Mes
         Attachment::ReceiptCouplets(couplets) => {
             let signer = couplets[0].0.clone();
             let signature = couplets[0].1.clone();
-            Ok(Message::Reply(SignedReply::new_nontrans(
-                rpy, signer, signature,
-            )))
+            Ok(Op::Reply(SignedReply::new_nontrans(rpy, signer, signature)))
         }
         Attachment::SealSignaturesGroups(data) => {
             let (seal, sigs) = data
@@ -308,7 +314,7 @@ fn signed_reply(rpy: ReplyEvent, mut attachments: Vec<Attachment>) -> Result<Mes
                 .last()
                 .ok_or_else(|| Error::SemanticError("More than one seal".into()))?
                 .to_owned();
-            Ok(Message::Reply(SignedReply::new_trans(rpy, seal, sigs)))
+            Ok(Op::Reply(SignedReply::new_trans(rpy, seal, sigs)))
         }
         Attachment::Frame(atts) => signed_reply(rpy, atts),
         _ => {
@@ -319,14 +325,14 @@ fn signed_reply(rpy: ReplyEvent, mut attachments: Vec<Attachment>) -> Result<Mes
 }
 
 #[cfg(feature = "query")]
-fn signed_query(qry: QueryEvent, mut attachments: Vec<Attachment>) -> Result<Message, Error> {
+fn signed_query(qry: QueryEvent, mut attachments: Vec<Attachment>) -> Result<Op, Error> {
     match attachments
         .pop()
         .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?
     {
         Attachment::LastEstSignaturesGroups(groups) => {
             let (signer, signatures) = groups[0].clone();
-            Ok(Message::Query(SignedQuery {
+            Ok(Op::Query(SignedQuery {
                 query: qry,
                 signer,
                 signatures,
@@ -345,7 +351,7 @@ fn signed_query(qry: QueryEvent, mut attachments: Vec<Attachment>) -> Result<Mes
 fn signed_key_event(
     event_message: EventMessage<KeyEvent>,
     mut attachments: Vec<Attachment>,
-) -> Result<Message, Error> {
+) -> Result<Notice, Error> {
     match event_message.event.get_event_data() {
         EventData::Dip(_) | EventData::Drt(_) => {
             let (att1, att2) = (
@@ -375,7 +381,7 @@ fn signed_key_event(
                 _ => Err(Error::SemanticError("Too many seals".into())),
             };
 
-            Ok(Message::Event(SignedEventMessage::new(
+            Ok(Notice::Event(SignedEventMessage::new(
                 &event_message,
                 sigs,
                 None,
@@ -413,7 +419,7 @@ fn signed_key_event(
                 }
             });
 
-            Ok(Message::Event(SignedEventMessage::new(
+            Ok(Notice::Event(SignedEventMessage::new(
                 &event_message,
                 controller_sigs,
                 witness_sigs,
@@ -427,14 +433,14 @@ fn signed_key_event(
 fn signed_receipt(
     event_message: EventMessage<Receipt>,
     mut attachments: Vec<Attachment>,
-) -> Result<Message, Error> {
+) -> Result<Notice, Error> {
     let att = attachments
         .pop()
         .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?;
     match att {
         // Should be nontransferable receipt
         Attachment::ReceiptCouplets(couplets) => {
-            Ok(Message::NontransferableRct(SignedNontransferableReceipt {
+            Ok(Notice::NontransferableRct(SignedNontransferableReceipt {
                 body: event_message,
                 couplets: Some(couplets),
                 indexed_sigs: None,
@@ -447,14 +453,14 @@ fn signed_receipt(
                 .last()
                 .ok_or_else(|| Error::SemanticError("More than one seal".into()))?
                 .to_owned();
-            Ok(Message::TransferableRct(SignedTransferableReceipt::new(
+            Ok(Notice::TransferableRct(SignedTransferableReceipt::new(
                 event_message,
                 seal,
                 sigs,
             )))
         }
         Attachment::AttachedWitnessSignatures(sigs) => {
-            Ok(Message::NontransferableRct(SignedNontransferableReceipt {
+            Ok(Notice::NontransferableRct(SignedNontransferableReceipt {
                 body: event_message,
                 couplets: None,
                 indexed_sigs: Some(sigs),
@@ -476,10 +482,10 @@ fn test_stream1() {
 
     let parsed = event_parsing::message::signed_message(stream).unwrap().1;
     let msg = Message::try_from(parsed).unwrap();
-    assert!(matches!(msg, Message::Event(_)));
+    assert!(matches!(msg, Message::Notice(Notice::Event(_))));
 
     match msg {
-        Message::Event(signed_event) => {
+        Message::Notice(Notice::Event(signed_event)) => {
             assert_eq!(
                 signed_event.event_message.serialize().unwrap().len(),
                 signed_event.event_message.serialization_info.size
@@ -503,10 +509,10 @@ fn test_stream2() {
     let parsed = event_parsing::message::signed_message(stream).unwrap().1;
     let msg = Message::try_from(parsed);
     assert!(msg.is_ok());
-    assert!(matches!(msg, Ok(Message::Event(_))));
+    assert!(matches!(msg, Ok(Message::Notice(Notice::Event(_)))));
 
     match msg.unwrap() {
-        Message::Event(signed_event) => {
+        Message::Notice(Notice::Event(signed_event)) => {
             assert_eq!(
                 signed_event.event_message.serialize().unwrap().len(),
                 signed_event.event_message.serialization_info.size
@@ -528,7 +534,10 @@ fn test_deserialize_signed_receipt() {
     let trans_receipt_event = br#"{"v":"KERI10JSON000091_","t":"rct","d":"EsZuhYAPBDnexP3SOl9YsGvWBrYkjYcRjomUYmCcLAYY","i":"EsZuhYAPBDnexP3SOl9YsGvWBrYkjYcRjomUYmCcLAYY","s":"0"}-FABE7pB5IKuaYh3aIWKxtexyYFhpSjDNTEGSQuxeJbWiylg0AAAAAAAAAAAAAAAAAAAAAAAE7pB5IKuaYh3aIWKxtexyYFhpSjDNTEGSQuxeJbWiylg-AABAAlIts3z2kNyis9l0Pfu54HhVN_yZHEV7NWIVoSTzl5IABelbY8xi7VRyW42ZJvBaaFTGtiqwMOywloVNpG_ZHAQ"#;
     let parsed_trans_receipt = signed_message(trans_receipt_event).unwrap().1;
     let msg = Message::try_from(parsed_trans_receipt);
-    assert!(matches!(msg, Ok(Message::TransferableRct(_))));
+    assert!(matches!(
+        msg,
+        Ok(Message::Notice(Notice::TransferableRct(_)))
+    ));
     assert!(msg.is_ok());
 
     // Taken from keripy/core/test_witness.py::test_nonindexed_witness_receipts
@@ -536,7 +545,10 @@ fn test_deserialize_signed_receipt() {
     let parsed_nontrans_receipt = signed_message(nontrans_rcp).unwrap().1;
     let msg = Message::try_from(parsed_nontrans_receipt);
     assert!(msg.is_ok());
-    assert!(matches!(msg, Ok(Message::NontransferableRct(_))));
+    assert!(matches!(
+        msg,
+        Ok(Message::Notice(Notice::NontransferableRct(_)))
+    ));
 
     // Nontrans receipt with alternative attachment with -B payload type. Not implemented yet.
     // takien from keripy/tests/core/test_witness.py::test_indexed_witness_reply
@@ -546,7 +558,7 @@ fn test_deserialize_signed_receipt() {
 
     let msg = Message::try_from(parsed_witness_receipt.1);
     assert!(msg.is_ok());
-    if let Ok(Message::NontransferableRct(rct)) = msg {
+    if let Ok(Message::Notice(Notice::NontransferableRct(rct))) = msg {
         assert_eq!(3, rct.indexed_sigs.unwrap().len());
     } else {
         assert!(false)

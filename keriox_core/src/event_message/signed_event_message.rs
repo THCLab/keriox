@@ -1,32 +1,39 @@
-use chrono::{DateTime, Local};
-use serde::{ser::SerializeStruct, Deserialize, Serialize};
 use std::cmp::Ordering;
 
-use super::EventMessage;
-use super::{serializer::to_string, KeyEvent};
-use crate::event_parsing::SignedEventData;
-use crate::prefix::IdentifierPrefix;
+use chrono::{DateTime, Local};
+use serde::{ser::SerializeStruct, Deserialize, Serialize};
+
+use super::{key_event_message::KeyEvent, serializer::to_string, EventMessage};
+#[cfg(feature = "query")]
+use crate::query::{query_event::SignedQuery, reply_event::SignedReply};
 use crate::{
     error::Error,
     event::{
         receipt::Receipt,
         sections::seal::{EventSeal, SourceSeal},
     },
-    event_parsing::Attachment,
-    prefix::{AttachedSignaturePrefix, BasicPrefix, SelfSigningPrefix},
+    event_parsing::{Attachment, SignedEventData},
+    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     state::{EventSemantics, IdentifierState},
 };
 
-#[cfg(feature = "query")]
-use crate::query::{query_event::SignedQuery, reply_event::SignedReply};
-
 #[derive(Clone, Debug, PartialEq)]
 pub enum Message {
+    Notice(Notice),
+    Op(Op),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Notice {
     Event(SignedEventMessage),
     // Rct's have an alternative appended signature structure,
     // use SignedNontransferableReceipt and SignedTransferableReceipt
     NontransferableRct(SignedNontransferableReceipt),
     TransferableRct(SignedTransferableReceipt),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Op {
     #[cfg(feature = "query")]
     Reply(SignedReply),
     #[cfg(any(feature = "query", feature = "oobi"))]
@@ -36,13 +43,29 @@ pub enum Message {
 impl From<Message> for SignedEventData {
     fn from(message: Message) -> Self {
         match message {
-            Message::Event(event) => SignedEventData::from(&event),
-            Message::NontransferableRct(rct) => SignedEventData::from(rct),
-            Message::TransferableRct(rct) => SignedEventData::from(rct),
+            Message::Notice(notice) => SignedEventData::from(notice),
+            Message::Op(op) => SignedEventData::from(op),
+        }
+    }
+}
+
+impl From<Notice> for SignedEventData {
+    fn from(notice: Notice) -> Self {
+        match notice {
+            Notice::Event(event) => SignedEventData::from(&event),
+            Notice::NontransferableRct(rct) => SignedEventData::from(rct),
+            Notice::TransferableRct(rct) => SignedEventData::from(rct),
+        }
+    }
+}
+
+impl From<Op> for SignedEventData {
+    fn from(op: Op) -> Self {
+        match op {
             #[cfg(feature = "query")]
-            Message::Reply(ksn) => SignedEventData::from(ksn),
+            Op::Reply(ksn) => SignedEventData::from(ksn),
             #[cfg(feature = "query")]
-            Message::Query(qry) => SignedEventData::from(qry),
+            Op::Query(qry) => SignedEventData::from(qry),
         }
     }
 }
@@ -54,13 +77,29 @@ impl Message {
 
     pub fn get_prefix(&self) -> IdentifierPrefix {
         match self {
-            Message::Event(ev) => ev.event_message.event.get_prefix(),
-            Message::NontransferableRct(rct) => rct.body.event.prefix.clone(),
-            Message::TransferableRct(rct) => rct.body.event.prefix.clone(),
+            Message::Notice(notice) => notice.get_prefix(),
+            Message::Op(op) => op.get_prefix(),
+        }
+    }
+}
+
+impl Notice {
+    pub fn get_prefix(&self) -> IdentifierPrefix {
+        match self {
+            Notice::Event(ev) => ev.event_message.event.get_prefix(),
+            Notice::NontransferableRct(rct) => rct.body.event.prefix.clone(),
+            Notice::TransferableRct(rct) => rct.body.event.prefix.clone(),
+        }
+    }
+}
+
+impl Op {
+    pub fn get_prefix(&self) -> IdentifierPrefix {
+        match self {
             #[cfg(feature = "query")]
-            Message::Reply(reply) => reply.reply.get_prefix(),
+            Op::Reply(reply) => reply.reply.get_prefix(),
             #[cfg(feature = "query")]
-            Message::Query(qry) => qry.query.get_prefix(),
+            Op::Query(qry) => qry.query.get_prefix(),
         }
     }
 }

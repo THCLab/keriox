@@ -6,9 +6,9 @@ use keri::{
     derivation::{self_addressing::SelfAddressing, self_signing::SelfSigning},
     error::Error,
     event::SerializationFormats,
-    event_message::signed_event_message::Message,
+    event_message::signed_event_message::{Message, Notice, Op},
     prefix::{AttachedSignaturePrefix, IdentifierPrefix},
-    processor::{basic_processor::BasicProcessor, event_storage::EventStorage},
+    processor::{basic_processor::BasicProcessor, event_storage::EventStorage, Processor},
     query::query_event::{QueryArgsMbx, QueryEvent, QueryRoute, QueryTopics, SignedQuery},
     signer::Signer,
 };
@@ -17,9 +17,10 @@ use crate::witness::Witness;
 
 #[test]
 fn test_not_fully_witnessed() -> Result<(), Error> {
+    use std::sync::Mutex;
+
     use controller::controller::Controller;
     use keri::event::sections::threshold::SignatureThreshold;
-    use std::sync::Mutex;
     use tempfile::Builder;
 
     let seed1 = "ArwXoACJgOleVZ2PY7kXn7rA0II0mHYDhc6WrBH8fDAc";
@@ -85,14 +86,15 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
     let receipts = [&first_witness, &second_witness]
         .iter()
         .flat_map(|w| {
-            w.process(Message::Event(inception_event.clone())).unwrap();
+            w.process_notice(Notice::Event(inception_event.clone()))
+                .unwrap();
             w.event_storage
                 .db
                 .get_mailbox_receipts(controller.prefix())
                 .into_iter()
                 .flatten()
         })
-        .map(Message::NontransferableRct)
+        .map(Notice::NontransferableRct)
         .collect::<Vec<_>>();
 
     assert_eq!(receipts.len(), 2);
@@ -116,13 +118,17 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
     );
 
     // process first receipt
-    controller.process(&[receipts[0].clone()]).unwrap();
+    controller
+        .process(&[Message::Notice(receipts[0].clone())])
+        .unwrap();
 
     // Still not fully witnessed
     assert_eq!(controller.get_state()?, None);
 
     // process second receipt
-    controller.process(&[receipts[1].clone()]).unwrap();
+    controller
+        .process(&[Message::Notice(receipts[1].clone())])
+        .unwrap();
 
     // Now fully witnessed, should be in kel
     assert_eq!(controller.get_state()?.map(|state| state.sn), Some(0));
@@ -140,11 +146,11 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
     receipts
         .clone()
         .into_iter()
-        .map(|rct| first_witness.process(rct))
+        .map(|rct| first_witness.process_notice(rct))
         .collect::<Result<Vec<_>, _>>()?;
     receipts
         .into_iter()
-        .map(|rct| second_witness.process(rct))
+        .map(|rct| second_witness.process_notice(rct))
         .collect::<Result<Vec<_>, _>>()?;
 
     assert_eq!(
@@ -180,14 +186,15 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
     );
     // Rotation not yet accepted by controller, missing receipts
     assert_eq!(controller.get_state()?.unwrap().sn, 0);
-    first_witness.process(Message::Event(rotation_event?))?;
+    first_witness.process_notice(Notice::Event(rotation_event?))?;
     // first_witness.respond(signer_arc.clone())?;
     let first_receipt = first_witness
         .event_storage
         .db
         .get_mailbox_receipts(controller.prefix())
         .unwrap()
-        .map(Message::NontransferableRct)
+        .map(Notice::NontransferableRct)
+        .map(Message::Notice)
         .collect::<Vec<_>>();
 
     // Receipt accepted by witness, because his the only designated witness
@@ -216,8 +223,6 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
 
 #[test]
 fn test_qry_rpy() -> Result<(), Error> {
-    use tempfile::Builder;
-
     use keri::{
         derivation::{self_addressing::SelfAddressing, self_signing::SelfSigning},
         event::SerializationFormats,
@@ -228,6 +233,7 @@ fn test_qry_rpy() -> Result<(), Error> {
         },
         signer::{KeyManager, Signer},
     };
+    use tempfile::Builder;
 
     // Create test db and event processor.
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
@@ -274,19 +280,20 @@ fn test_qry_rpy() -> Result<(), Error> {
 
     let alice_icp = alice.incept(Some(vec![witness.prefix.clone()]), None)?;
     // send alices icp to witness
-    witness.process(Message::Event(alice_icp))?;
+    witness.process_notice(Notice::Event(alice_icp))?;
     // send receipts to alice
     let receipt_to_alice = witness
         .event_storage
         .db
         .get_mailbox_receipts(alice.prefix())
         .unwrap()
-        .map(|e| Message::NontransferableRct(e))
+        .map(Notice::NontransferableRct)
+        .map(Message::Notice)
         .collect::<Vec<_>>();
     alice.process(&receipt_to_alice)?;
 
     // send bobs icp to witness to have his keys
-    witness.process(Message::Event(bob_icp))?;
+    witness.process_notice(Notice::Event(bob_icp))?;
 
     // Bob asks about alices key state
     // construct qry message to ask of alice key state message
@@ -315,13 +322,13 @@ fn test_qry_rpy() -> Result<(), Error> {
         0,
     );
     // Qry message signed by Bob
-    let query_message = Message::Query(SignedQuery::new(qry, bob_pref.to_owned(), vec![signature]));
+    let query = Op::Query(SignedQuery::new(qry, bob_pref.to_owned(), vec![signature]));
 
-    let response = witness.process(query_message)?;
+    let response = witness.process_op(query)?;
 
     // assert_eq!(response.len(), 1);
     match &response[0] {
-        Message::Reply(rpy) => {
+        Message::Op(Op::Reply(rpy)) => {
             if let ReplyRoute::Ksn(_id, ksn) = rpy.reply.get_route() {
                 assert_eq!(&ksn.state, &alice.get_state().unwrap().unwrap())
             }
@@ -355,14 +362,18 @@ fn test_qry_rpy() -> Result<(), Error> {
         0,
     );
     // Qry message signed by Bob
-    let query_message = Message::Query(SignedQuery::new(qry, bob_pref.to_owned(), vec![signature]));
+    let query = Op::Query(SignedQuery::new(qry, bob_pref.to_owned(), vec![signature]));
 
-    let response = witness.process(query_message)?;
+    let response = witness.process_op(query)?;
 
     let alice_kel = alice
         .storage
-        .get_kel_messages_with_receipts(alice.prefix())?;
-    assert_eq!(response, alice_kel.unwrap());
+        .get_kel_messages_with_receipts(alice.prefix())?
+        .into_iter()
+        .flatten()
+        .map(Message::Notice)
+        .collect::<Vec<_>>();
+    assert_eq!(response, alice_kel);
 
     Ok(())
 }
@@ -419,32 +430,32 @@ pub fn test_key_state_notice() -> Result<(), Error> {
     let bob_pref = bob.prefix().clone();
 
     // send bobs icp to witness to have his keys
-    witness.process(Message::Event(bob_icp.clone()))?;
+    witness.process_notice(Notice::Event(bob_icp.clone()))?;
 
     // construct bobs ksn msg in rpy made by witness
     let signed_rpy = witness.get_signed_ksn_for_prefix(&bob_pref, signer_arc.clone())?;
 
     // Process reply message before having any bob's events in db.
-    alice_processor.process(&Message::Reply(signed_rpy.clone()))?;
+    alice_processor.process_op_reply(&signed_rpy)?;
     let ksn_db = alice_storage.get_last_ksn_reply(
         &signed_rpy.reply.get_prefix(),
         &signed_rpy.signature.get_signer(),
     );
     assert!(matches!(ksn_db, None));
-    alice_processor.process(&Message::Event(bob_icp))?;
+    alice_processor.process_notice(&Notice::Event(bob_icp))?;
 
     // rotate bob's keys. Let alice process his rotation. She will have most recent bob's event.
     let bob_rot = bob.rotate(None, None, None)?;
-    witness.process(Message::Event(bob_rot.clone()))?;
-    alice_processor.process(&Message::Event(bob_rot.clone()))?;
+    witness.process_notice(Notice::Event(bob_rot.clone()))?;
+    alice_processor.process_notice(&Notice::Event(bob_rot.clone()))?;
 
     // try to process old reply message
-    let res = alice_processor.process(&Message::Reply(signed_rpy.clone()));
+    let res = alice_processor.process_op_reply(&signed_rpy);
     assert!(matches!(res, Err(Error::QueryError(QueryError::StaleKsn))));
 
     // now create new reply event by witness and process it by alice.
     let new_reply = witness.get_signed_ksn_for_prefix(&bob_pref, signer_arc.clone())?;
-    alice_processor.process(&Message::Reply(new_reply.clone()))?;
+    alice_processor.process_op_reply(&new_reply)?;
     let ksn_db = alice_storage.get_last_ksn_reply(
         &signed_rpy.reply.get_prefix(),
         &signed_rpy.signature.get_signer(),
@@ -456,11 +467,11 @@ pub fn test_key_state_notice() -> Result<(), Error> {
     assert_eq!(ksn_from_db_digest, processed_ksn_digest);
 
     let new_bob_rot = bob.rotate(None, None, None)?;
-    witness.process(Message::Event(new_bob_rot.clone()))?;
+    witness.process_notice(Notice::Event(new_bob_rot.clone()))?;
     // Create transferable reply by bob and process it by alice.
     let trans_rpy = witness.get_signed_ksn_for_prefix(&bob_pref, signer_arc)?;
 
-    alice_processor.process(&Message::Reply(trans_rpy.clone()))?;
+    alice_processor.process_op_reply(&trans_rpy)?;
     // Reply was out of order so saved reply shouldn't be updated
     let ksn_db = alice_storage.get_last_ksn_reply(
         &signed_rpy.reply.get_prefix(),
@@ -473,8 +484,8 @@ pub fn test_key_state_notice() -> Result<(), Error> {
     assert_eq!(ksn_from_db_digest, processed_ksn_digest);
 
     // Now update bob's state in alice's db to most recent.
-    alice_processor.process(&Message::Event(new_bob_rot))?;
-    alice_processor.process(&Message::Reply(trans_rpy.clone()))?;
+    alice_processor.process_notice(&Notice::Event(new_bob_rot))?;
+    alice_processor.process_op_reply(&trans_rpy)?;
 
     // Reply should be updated
     let ksn_db = alice_storage.get_last_ksn_reply(
@@ -490,10 +501,10 @@ pub fn test_key_state_notice() -> Result<(), Error> {
 
 #[test]
 fn test_mbx() {
-    use controller::controller::Controller;
-    use keri::event::sections::threshold::SignatureThreshold;
-    use keri::signer::CryptoBox;
     use std::sync::Mutex;
+
+    use controller::controller::Controller;
+    use keri::{event::sections::threshold::SignatureThreshold, signer::CryptoBox};
 
     let signer = Arc::new(Signer::new());
 
@@ -543,7 +554,7 @@ fn test_mbx() {
 
         // send to witness
         witness
-            .process(Message::Event(incept_event.clone()))
+            .process_notice(Notice::Event(incept_event.clone()))
             .unwrap();
     }
 
@@ -584,18 +595,18 @@ fn test_mbx() {
             0,
         )];
 
-        let mbx_msg = Message::Query(SignedQuery::new(
+        let mbx_msg = Op::Query(SignedQuery::new(
             qry_msg,
             controller.prefix().clone().clone(),
             signatures,
         ));
 
-        let receipts = witness.process(mbx_msg).unwrap();
+        let receipts = witness.process_op(mbx_msg).unwrap();
 
         assert_eq!(receipts.len(), 1);
         let receipt = receipts[0].clone();
 
-        let receipt = if let Message::NontransferableRct(receipt) = receipt {
+        let receipt = if let Message::Notice(Notice::NontransferableRct(receipt)) = receipt {
             receipt
         } else {
             panic!("didn't receive a receipt")
