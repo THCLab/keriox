@@ -6,6 +6,7 @@ pub mod identifier_controller;
 pub mod utils;
 
 use crate::{
+    actor,
     database::sled::SledEventDatabase,
     event::{event_data::EventData, sections::seal::Seal, EventMessage},
     event_message::{
@@ -135,7 +136,7 @@ impl Controller {
         let response = match msg.clone() {
             Message::Op(op) => match op {
                 Op::Reply(rpy) => {
-                    self.processor.process_op_reply(&rpy)?;
+                    actor::process_reply(rpy, &self.oobi_manager, &self.processor, &self.storage)?;
                     None
                 }
                 Op::Query(_) => {
@@ -184,11 +185,11 @@ impl Controller {
 
     fn send_to(
         &self,
-        watcher_id: &IdentifierPrefix,
+        id: &IdentifierPrefix,
         schema: Scheme,
         topic: Topic,
     ) -> Result<String, ControllerError> {
-        let addresses = self.get_loc_schemas(&watcher_id)?;
+        let addresses = self.get_loc_schemas(&id)?;
         match addresses
             .iter()
             // TODO It uses first found address that match schema
