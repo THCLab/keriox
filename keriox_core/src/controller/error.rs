@@ -17,6 +17,9 @@ pub enum ControllerError {
     #[error("Can't parse event")]
     EventParseError,
 
+    #[error("Wrong event format")]
+    EventFormatError,
+
     #[error("Can't parse attachment")]
     AttachmentParseError,
 

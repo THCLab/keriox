@@ -23,13 +23,13 @@ impl IdentifierController {
     }
 
     pub fn get_kel(&self) -> Result<String, ControllerError> {
-        Ok(String::from_utf8(
+        String::from_utf8(
             self.source
                 .storage
                 .get_kel(&self.id)?
                 .ok_or(ControllerError::UnknownIdentifierError)?,
         )
-        .unwrap())
+        .map_err(|_e| ControllerError::EventFormatError)
     }
 
     pub fn rotate(
@@ -61,24 +61,20 @@ impl IdentifierController {
         self.source.anchor_with_seal(self.id.clone(), seal_list)
     }
 
-    pub fn add_watcher(&self, watcher_id: IdentifierPrefix) -> String {
+    pub fn add_watcher(&self, watcher_id: IdentifierPrefix) -> Result<String, ControllerError> {
         String::from_utf8(
-            event_generator::generate_end_role(&self.id, &watcher_id, Role::Watcher, true)
-                .unwrap()
-                .serialize()
-                .unwrap(),
+            event_generator::generate_end_role(&self.id, &watcher_id, Role::Watcher, true)?
+                .serialize()?,
         )
-        .unwrap()
+        .map_err(|_e| ControllerError::EventFormatError)
     }
 
-    pub fn remove_watcher(&self, watcher_id: IdentifierPrefix) -> String {
+    pub fn remove_watcher(&self, watcher_id: IdentifierPrefix) -> Result<String, ControllerError> {
         String::from_utf8(
-            event_generator::generate_end_role(&self.id, &watcher_id, Role::Watcher, false)
-                .unwrap()
-                .serialize()
-                .unwrap(),
+            event_generator::generate_end_role(&self.id, &watcher_id, Role::Watcher, false)?
+                .serialize()?,
         )
-        .unwrap()
+        .map_err(|_e| ControllerError::EventFormatError)
     }
 
     /// Check signatures, updates database and send events to watcher or witnesses.
@@ -87,7 +83,7 @@ impl IdentifierController {
         event: &[u8],
         sig: Vec<SelfSigningPrefix>,
     ) -> Result<(), ControllerError> {
-        Ok(self.source.finalize_event(&self.id, event, sig).unwrap())
+        self.source.finalize_event(&self.id, event, sig)
     }
 
     pub fn get_last_establishment_event_seal(&self) -> Result<EventSeal, ControllerError> {
