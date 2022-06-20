@@ -382,12 +382,12 @@ impl Controller {
         &self,
         id: IdentifierPrefix,
         payload: &[SelfAddressingPrefix],
-    ) -> Result<EventMessage<KeyEvent>, ControllerError> {
+    ) -> Result<String, ControllerError> {
         let state = self
             .storage
             .get_state(&id)?
             .ok_or(ControllerError::UnknownIdentifierError)?;
-        Ok(event_generator::anchor(state, payload)?)
+        event_generator::anchor(state, payload)
     }
 
     pub fn anchor_with_seal(

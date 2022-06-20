@@ -85,7 +85,7 @@ fn make_rotation(
 pub fn anchor(
     state: IdentifierState,
     payload: &[SelfAddressingPrefix],
-) -> Result<EventMessage<KeyEvent>, ControllerError> {
+) -> Result<String, ControllerError> {
     let seal_list = payload
         .iter()
         .map(|seal| {
@@ -94,14 +94,16 @@ pub fn anchor(
             })
         })
         .collect();
-    let ev = EventMsgBuilder::new(EventTypeTag::Ixn)
+    let ixn = EventMsgBuilder::new(EventTypeTag::Ixn)
         .with_prefix(&state.prefix)
         .with_sn(state.sn + 1)
         .with_previous_event(&state.last_event_digest)
         .with_seal(seal_list)
         .build()
+        .map_err(|e| ControllerError::EventGenerationError(e.to_string()))?
+        .serialize()
         .map_err(|e| ControllerError::EventGenerationError(e.to_string()))?;
-    Ok(ev)
+    String::from_utf8(ixn).map_err(|e| ControllerError::EventGenerationError(e.to_string()))
 }
 
 pub fn anchor_with_seal(

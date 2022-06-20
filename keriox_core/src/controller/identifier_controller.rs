@@ -50,10 +50,7 @@ impl IdentifierController {
         )
     }
 
-    pub fn anchor(
-        &self,
-        payload: &[SelfAddressingPrefix],
-    ) -> Result<EventMessage<KeyEvent>, ControllerError> {
+    pub fn anchor(&self, payload: &[SelfAddressingPrefix]) -> Result<String, ControllerError> {
         self.source.anchor(self.id.clone(), payload)
     }
 
