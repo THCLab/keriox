@@ -491,22 +491,21 @@ impl Controller {
             ReplyRoute::EndRoleAdd(role) => role.eid.clone(),
             ReplyRoute::EndRoleCut(role) => role.eid.clone(),
         };
-        let signed_rpy = SignedReply::new_trans(
+        let signed_rpy = Message::Op(Op::Reply(SignedReply::new_trans(
             event,
             self.storage
                 .get_last_establishment_event_seal(signer_prefix)?
                 .ok_or(ControllerError::UnknownIdentifierError)?,
             sigs,
-        );
-        self.oobi_manager.save_oobi(&signed_rpy.clone()).unwrap();
+        )));
         let mut kel = self
             .storage
             .get_kel(&signer_prefix)?
             .ok_or(ControllerError::UnknownIdentifierError)?;
-        let end_role = SignedEventData::from(signed_rpy).to_cesr()?;
-        kel.extend(end_role.iter());
+        kel.extend(signed_rpy.to_cesr()?);
 
         self.send_to(&dest_prefix, Scheme::Http, Topic::Process(kel))?;
+        self.process(&signed_rpy)?;
         Ok(())
     }
 }
