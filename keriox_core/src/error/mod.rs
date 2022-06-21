@@ -59,6 +59,9 @@ pub enum Error {
     #[error("Event not yet in database")]
     MissingEvent,
 
+    #[error("Event has no signatures")]
+    MissingSignatures,
+
     #[error("Signature verification failed")]
     SignatureVerificationError,
 

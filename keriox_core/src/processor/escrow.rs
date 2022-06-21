@@ -71,23 +71,25 @@ impl Notifier for OutOfOrderEscrow {
                 self.process_out_of_order_events(bus, &id)?;
             }
             Notification::OutOfOrder(signed_event) => {
-                let id = match signed_event.event_message.event.get_event_data() {
-                    crate::event::event_data::EventData::Dip(dip) => dip.delegator,
-                    crate::event::event_data::EventData::Drt(_) => {
-                        let id = signed_event.event_message.event.get_prefix();
-                        if let Some(state) = EventStorage::new(self.0.clone()).get_state(&id)? {
-                            match state.delegator {
-                                Some(id) => id,
-                                None => id,
+                // ignore events with no signatures
+                if !signed_event.signatures.is_empty() {
+                    let id = match signed_event.event_message.event.get_event_data() {
+                        crate::event::event_data::EventData::Dip(dip) => dip.delegator,
+                        crate::event::event_data::EventData::Drt(_) => {
+                            let id = signed_event.event_message.event.get_prefix();
+                            if let Some(state) = EventStorage::new(self.0.clone()).get_state(&id)? {
+                                match state.delegator {
+                                    Some(id) => id,
+                                    None => id,
+                                }
+                            } else {
+                                id
                             }
-                        } else {
-                            id
                         }
-                    }
-                    _ => signed_event.event_message.event.get_prefix(),
-                };
-
-                self.0.add_out_of_order_event(signed_event.clone(), &id)?;
+                        _ => signed_event.event_message.event.get_prefix(),
+                    };
+                    self.0.add_out_of_order_event(signed_event.clone(), &id)?;
+                }
             }
             _ => return Err(Error::SemanticError("Wrong notification".into())),
         }
@@ -142,7 +144,14 @@ impl PartiallySignedEscrow {
 impl Notifier for PartiallySignedEscrow {
     fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error> {
         match notification {
-            Notification::PartiallySigned(ev) => self.process_partially_signed_events(bus, ev),
+            Notification::PartiallySigned(ev) => {
+                if ev.signatures.is_empty() {
+                    // ignore events with no signatures
+                    Ok(())
+                } else {
+                    self.process_partially_signed_events(bus, ev)
+                }
+            }
             _ => Err(Error::SemanticError("Wrong notification".into())),
         }
     }
@@ -209,13 +218,14 @@ impl Notifier for PartiallyWitnessedEscrow {
                 self.process_partially_witnessed_events(bus)?;
             }
             Notification::PartiallyWitnessed(signed_event) => {
-                let id = &signed_event.event_message.event.get_prefix();
-                self.0
-                    .add_partially_witnessed_event(signed_event.clone(), id)?;
+                // ignore events with no signatures
+                if !signed_event.signatures.is_empty() {
+                    let id = &signed_event.event_message.event.get_prefix();
+                    self.0
+                        .add_partially_witnessed_event(signed_event.clone(), id)?;
+                }
             }
-            _ => {
-                return Err(Error::SemanticError("Wrong notification".into()));
-            }
+            _ => return Err(Error::SemanticError("Wrong notification".into()))
         }
 
         Ok(())
@@ -268,9 +278,14 @@ impl Notifier for NontransReceiptsEscrow {
                 self.process_nt_receipts_escrow(bus)
             }
             Notification::ReceiptOutOfOrder(receipt) => {
-                let id = &receipt.body.event.prefix;
-                self.0.add_escrow_nt_receipt(receipt.clone(), id)?;
-                bus.notify(&Notification::ReceiptEscrowed)
+                if receipt.couplets.is_none() {
+                    // ignore events with no signatures
+                    Ok(())
+                } else {
+                    let id = &receipt.body.event.prefix;
+                    self.0.add_escrow_nt_receipt(receipt.clone(), id)?;
+                    bus.notify(&Notification::ReceiptEscrowed)
+                }
             }
             _ => Err(Error::SemanticError("Wrong notification".into())),
         }
@@ -319,8 +334,11 @@ impl Notifier for TransReceiptsEscrow {
                 self.process_t_receipts_escrow(&event.event_message.event.get_prefix(), bus)?;
             }
             Notification::TransReceiptOutOfOrder(receipt) => {
-                let id = receipt.validator_seal.prefix.clone();
-                self.0.add_escrow_t_receipt(receipt.to_owned(), &id)?;
+                // ignore events with no signatures
+                if !receipt.signatures.is_empty() {
+                    let id = receipt.validator_seal.prefix.clone();
+                    self.0.add_escrow_t_receipt(receipt.to_owned(), &id)?;
+                }
             }
             _ => return Err(Error::SemanticError("Wrong notification".into())),
         }
