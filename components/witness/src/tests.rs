@@ -1,6 +1,5 @@
 use std::sync::{Arc, Mutex};
 
-use controller::controller::Controller;
 use keri::{
     database::sled::SledEventDatabase,
     derivation::{self_addressing::SelfAddressing, self_signing::SelfSigning},
@@ -10,17 +9,185 @@ use keri::{
     prefix::{AttachedSignaturePrefix, IdentifierPrefix},
     processor::{basic_processor::BasicProcessor, event_storage::EventStorage, Processor},
     query::query_event::{QueryArgsMbx, QueryEvent, QueryRoute, QueryTopics, SignedQuery},
-    signer::Signer,
+    signer::{KeyManager, Signer},
 };
 
-use crate::witness::Witness;
+use crate::{tests::controller_helper::Controller, witness::Witness};
+
+mod controller_helper {
+    use std::{
+        path::Path,
+        sync::{Arc, Mutex},
+    };
+
+    use keri::{
+        actor::process_message,
+        controller::event_generator,
+        database::sled::SledEventDatabase,
+        derivation::{basic::Basic, self_signing::SelfSigning},
+        error::Error,
+        event_message::signed_event_message::{Message, Notice, SignedEventMessage},
+        event_parsing::{message::key_event_message, EventType},
+        oobi::OobiManager,
+        prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix},
+        processor::{basic_processor::BasicProcessor, event_storage::EventStorage, Processor},
+        signer::KeyManager,
+        state::IdentifierState,
+    };
+
+    /// Helper struct for events generation, signing and processing.
+    pub struct Controller<K: KeyManager + 'static> {
+        prefix: IdentifierPrefix,
+        pub key_manager: Arc<Mutex<K>>,
+        processor: BasicProcessor,
+        oobi_manager: OobiManager,
+        pub storage: EventStorage,
+    }
+
+    impl<K: KeyManager> Controller<K> {
+        // incept a state and keys
+        pub fn new(
+            db: Arc<SledEventDatabase>,
+            key_manager: Arc<Mutex<K>>,
+            oobi_db_path: &Path,
+        ) -> Result<Controller<K>, Error> {
+            let processor = BasicProcessor::new(db.clone());
+
+            Ok(Controller {
+                prefix: IdentifierPrefix::default(),
+                key_manager,
+                oobi_manager: OobiManager::new(oobi_db_path),
+                processor,
+                storage: EventStorage::new(db),
+            })
+        }
+
+        /// Getter of the instance prefix
+        ///
+        pub fn prefix(&self) -> &IdentifierPrefix {
+            &self.prefix
+        }
+
+        pub fn incept(
+            &mut self,
+            initial_witness: Option<Vec<BasicPrefix>>,
+            witness_threshold: Option<u64>,
+        ) -> Result<SignedEventMessage, Error> {
+            let km = self.key_manager.lock().map_err(|_| Error::MutexPoisoned)?;
+            let icp = event_generator::incept(
+                vec![Basic::Ed25519.derive(km.public_key())],
+                vec![Basic::Ed25519.derive(km.next_public_key())],
+                initial_witness.unwrap_or_default(),
+                witness_threshold.unwrap_or(0),
+            )
+            .unwrap();
+            let signature = km.sign(icp.as_bytes())?;
+            let (_, key_event) = key_event_message(icp.as_bytes()).unwrap();
+            let signed = if let EventType::KeyEvent(icp) = key_event {
+                icp.sign(
+                    vec![AttachedSignaturePrefix::new(
+                        SelfSigning::Ed25519Sha512,
+                        signature,
+                        0,
+                    )],
+                    None,
+                    None,
+                )
+            } else {
+                unreachable!()
+            };
+
+            self.processor
+                .process_notice(&Notice::Event(signed.clone()))?;
+
+            self.prefix = signed.event_message.event.get_prefix();
+            // No need to generate receipt
+
+            Ok(signed)
+        }
+
+        pub fn rotate(
+            &mut self,
+            witness_to_add: Option<&[BasicPrefix]>,
+            witness_to_remove: Option<&[BasicPrefix]>,
+            witness_threshold: Option<u64>,
+        ) -> Result<SignedEventMessage, Error> {
+            let rot = self.make_rotation(witness_to_add, witness_to_remove, witness_threshold)?;
+            let km = self.key_manager.lock().map_err(|_| Error::MutexPoisoned)?;
+            let signature = km.sign(rot.as_bytes())?;
+
+            let (_, key_event) = key_event_message(rot.as_bytes()).unwrap();
+
+            let signed = if let EventType::KeyEvent(rot) = key_event {
+                rot.sign(
+                    vec![AttachedSignaturePrefix::new(
+                        SelfSigning::Ed25519Sha512,
+                        signature,
+                        0,
+                    )],
+                    None,
+                    None,
+                )
+            } else {
+                unreachable!()
+            };
+
+            self.processor
+                .process_notice(&Notice::Event(signed.clone()))?;
+
+            Ok(signed)
+        }
+
+        fn make_rotation(
+            &self,
+            witness_to_add: Option<&[BasicPrefix]>,
+            witness_to_remove: Option<&[BasicPrefix]>,
+            witness_threshold: Option<u64>,
+        ) -> Result<String, Error> {
+            let mut km = self.key_manager.lock().map_err(|_| Error::MutexPoisoned)?;
+            km.rotate()?;
+            let state = self
+                .storage
+                .get_state(&self.prefix)?
+                .ok_or_else(|| Error::SemanticError("There is no state".into()))?;
+
+            Ok(event_generator::rotate(
+                state,
+                vec![Basic::Ed25519.derive(km.public_key())],
+                vec![Basic::Ed25519.derive(km.next_public_key())],
+                witness_to_add.unwrap_or_default().to_vec(),
+                witness_to_remove.unwrap_or_default().into(),
+                witness_threshold.unwrap_or(0),
+            )
+            .unwrap())
+        }
+
+        pub fn process(&self, msg: &[Message]) -> Result<(), Error> {
+            let (_process_ok, _process_failed): (Vec<_>, Vec<_>) = msg
+                .iter()
+                .map(|message| {
+                    process_message(
+                        message.clone(),
+                        &self.oobi_manager,
+                        &self.processor,
+                        &self.storage,
+                    )
+                })
+                .partition(Result::is_ok);
+
+            Ok(())
+        }
+
+        pub fn get_state(&self) -> Result<Option<IdentifierState>, Error> {
+            self.storage.get_state(&self.prefix)
+        }
+    }
+}
 
 #[test]
 fn test_not_fully_witnessed() -> Result<(), Error> {
     use std::sync::Mutex;
 
-    use controller::controller::Controller;
-    use keri::event::sections::threshold::SignatureThreshold;
     use tempfile::Builder;
 
     let seed1 = "ArwXoACJgOleVZ2PY7kXn7rA0II0mHYDhc6WrBH8fDAc";
@@ -77,7 +244,7 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
             first_witness.prefix.clone(),
             second_witness.prefix.clone(),
         ]),
-        Some(SignatureThreshold::Simple(2)),
+        Some(2),
     )?;
 
     // Shouldn't be accepted in controllers kel, because of missing witness receipts
@@ -179,11 +346,7 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
         .get_partially_witnessed_events(&controller.prefix());
     assert!(not_fully_witnessed_events.is_none());
 
-    let rotation_event = controller.rotate(
-        None,
-        Some(&[second_witness.prefix.clone()]),
-        Some(SignatureThreshold::Simple(1)),
-    );
+    let rotation_event = controller.rotate(None, Some(&[second_witness.prefix.clone()]), Some(1));
     // Rotation not yet accepted by controller, missing receipts
     assert_eq!(controller.get_state()?.unwrap().sn, 0);
     first_witness.process_notice(Notice::Event(rotation_event?))?;
@@ -236,10 +399,10 @@ fn test_qry_rpy() -> Result<(), Error> {
     use tempfile::Builder;
 
     // Create test db and event processor.
-    let root = Builder::new().prefix("test-db").tempdir().unwrap();
+    let root = Builder::new().prefix("test-alice-db").tempdir().unwrap();
     let alice_oobi_root = Builder::new().prefix("test-db").tempdir().unwrap();
     let alice_db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-    let root = Builder::new().prefix("test-db").tempdir().unwrap();
+    let root = Builder::new().prefix("test_bob-db").tempdir().unwrap();
     let bob_oobi_root = Builder::new().prefix("test-db").tempdir().unwrap();
     let bob_db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
 
@@ -274,7 +437,7 @@ fn test_qry_rpy() -> Result<(), Error> {
     )?;
 
     let bob_icp = bob.incept(None, None).unwrap();
-    // bob.rotate().unwrap();
+    // bob.rotate(None, None, None).unwrap();
 
     let bob_pref = bob.prefix();
 
@@ -503,8 +666,7 @@ pub fn test_key_state_notice() -> Result<(), Error> {
 fn test_mbx() {
     use std::sync::Mutex;
 
-    use controller::controller::Controller;
-    use keri::{event::sections::threshold::SignatureThreshold, signer::CryptoBox};
+    use keri::signer::CryptoBox;
 
     let signer = Arc::new(Signer::new());
 
@@ -546,10 +708,7 @@ fn test_mbx() {
     // create inception events
     for controller in &mut controllers {
         let incept_event = controller
-            .incept(
-                Some(vec![witness.prefix.clone()]),
-                Some(SignatureThreshold::Simple(1)),
-            )
+            .incept(Some(vec![witness.prefix.clone()]), Some(1))
             .unwrap();
 
         // send to witness
@@ -581,9 +740,8 @@ fn test_mbx() {
         )
         .unwrap();
 
-        use keri::signer::KeyManager;
         let signature = controller
-            .key_manager()
+            .key_manager
             .lock()
             .unwrap()
             .sign(&qry_msg.serialize().unwrap())

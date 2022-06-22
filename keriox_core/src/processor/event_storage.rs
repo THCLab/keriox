@@ -7,7 +7,6 @@ use crate::{
     event::{
         event_data::EventData,
         sections::{seal::EventSeal, KeyConfig},
-        SerializationFormats,
     },
     event_message::{
         signed_event_message::{SignedNontransferableReceipt, TimestampedSignedEventMessage},
@@ -15,13 +14,15 @@ use crate::{
     },
     event_parsing::SignedEventData,
     prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix},
-    query::key_state_notice::KeyStateNotice,
     state::{EventSemantics, IdentifierState},
 };
 #[cfg(feature = "query")]
 use crate::{
+    event::SerializationFormats,
     event_message::signed_event_message::Notice,
-    query::{query_event::QueryArgsMbx, reply_event::SignedReply},
+    query::{
+        key_state_notice::KeyStateNotice, query_event::QueryArgsMbx, reply_event::SignedReply,
+    },
 };
 
 pub struct EventStorage {
@@ -403,6 +404,7 @@ impl EventStorage {
         }
     }
 
+    #[cfg(feature = "query")]
     pub fn get_ksn_for_prefix(
         &self,
         prefix: &IdentifierPrefix,

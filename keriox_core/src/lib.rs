@@ -15,3 +15,6 @@ pub mod state;
 
 #[cfg(feature = "oobi")]
 pub mod oobi;
+
+#[cfg(feature = "controller")]
+pub mod controller;
