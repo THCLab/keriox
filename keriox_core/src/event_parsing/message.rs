@@ -1,15 +1,13 @@
 use std::io::Cursor;
 
-use nom::{
-    branch::alt,
-    error::ErrorKind,
-    multi::{fold_many0, many0},
-};
+use nom::{branch::alt, combinator::map, error::ErrorKind, map, multi::many0, sequence::pair};
+use rmp_serde as serde_mgpk;
 use serde::Deserialize;
+#[cfg(feature = "query")]
+use serde::Serialize;
 
 #[cfg(feature = "async")]
 use crate::event_message::serialization_info::SerializationInfo;
-
 #[cfg(feature = "query")]
 use crate::event_message::{SaidEvent, Typeable};
 #[cfg(feature = "query")]
@@ -19,9 +17,6 @@ use crate::{
     event_message::{key_event_message::KeyEvent, Digestible},
     event_parsing::{attachment::attachment, Attachment, EventType, SignedEventData},
 };
-use rmp_serde as serde_mgpk;
-#[cfg(feature = "query")]
-use serde::Serialize;
 
 fn json_message<'a, D: Deserialize<'a> + Digestible>(
     s: &'a [u8],
@@ -86,37 +81,66 @@ pub fn reply_message(s: &[u8]) -> nom::IResult<&[u8], EventType> {
 
 pub fn event_message(s: &[u8]) -> nom::IResult<&[u8], EventType> {
     #[cfg(any(feature = "query", feature = "oobi"))]
-    let result = alt((
-        key_event_message,
-        reply_message,
-        query_message,
-        receipt_message,
-    ))(s);
+    {
+        alt((notice_message, op_message))(s)
+    }
     #[cfg(not(any(feature = "query", feature = "oobi")))]
-    let result = alt((key_event_message, receipt_message))(s);
+    {
+        notice_message(s)
+    }
+}
 
-    result
+#[cfg(any(feature = "query", feature = "oobi"))]
+pub fn op_message(s: &[u8]) -> nom::IResult<&[u8], EventType> {
+    alt((query_message, reply_message))(s)
+}
+
+pub fn notice_message(s: &[u8]) -> nom::IResult<&[u8], EventType> {
+    alt((key_event_message, receipt_message))(s)
 }
 
 pub fn signed_message(s: &[u8]) -> nom::IResult<&[u8], SignedEventData> {
-    let (rest, event) = event_message(s)?;
-    let (rest, attachments): (&[u8], Vec<Attachment>) =
-        fold_many0(attachment, vec![], |mut acc: Vec<_>, item| {
-            acc.push(item);
-            acc
-        })(rest)?;
-
-    Ok((
-        rest,
-        SignedEventData {
+    map(
+        pair(event_message, many0(attachment)),
+        |(event, attachments)| SignedEventData {
             deserialized_event: event,
             attachments,
         },
-    ))
+    )(s)
+}
+
+pub fn signed_notice(s: &[u8]) -> nom::IResult<&[u8], SignedEventData> {
+    map(
+        pair(notice_message, many0(attachment)),
+        |(event, attachments)| SignedEventData {
+            deserialized_event: event,
+            attachments,
+        },
+    )(s)
+}
+
+#[cfg(any(feature = "query", feature = "oobi"))]
+pub fn signed_op(s: &[u8]) -> nom::IResult<&[u8], SignedEventData> {
+    map(
+        pair(op_message, many0(attachment)),
+        |(event, attachments)| SignedEventData {
+            deserialized_event: event,
+            attachments,
+        },
+    )(s)
 }
 
 pub fn signed_event_stream(s: &[u8]) -> nom::IResult<&[u8], Vec<SignedEventData>> {
     many0(signed_message)(s)
+}
+
+pub fn signed_notice_stream(s: &[u8]) -> nom::IResult<&[u8], Vec<SignedEventData>> {
+    many0(signed_notice)(s)
+}
+
+#[cfg(any(feature = "query", feature = "oobi"))]
+pub fn signed_op_stream(s: &[u8]) -> nom::IResult<&[u8], Vec<SignedEventData>> {
+    many0(signed_op)(s)
 }
 
 // TESTED: OK

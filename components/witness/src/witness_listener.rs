@@ -1,7 +1,7 @@
-use actix_web::{dev::Server, web, App, HttpServer};
-use anyhow::Result;
 use std::{path::Path, sync::Arc};
 
+use actix_web::{dev::Server, web, App, HttpServer};
+use anyhow::Result;
 use keri::{self, error::Error, prefix::BasicPrefix};
 
 use crate::witness::Witness;
@@ -39,7 +39,8 @@ impl WitnessListener {
                 .app_data(state.clone())
                 .service(http_handlers::get_eid_oobi)
                 .service(http_handlers::get_cid_oobi)
-                .service(http_handlers::process_stream)
+                .service(http_handlers::process_notice)
+                .service(http_handlers::process_op)
             // .service(resolve)
         })
         .bind((host, port))
@@ -128,11 +129,21 @@ pub mod http_handlers {
             .body(String::from_utf8(res).unwrap())
     }
 
-    #[post("/process")]
-    pub async fn process_stream(post_data: String, data: web::Data<Witness>) -> impl Responder {
-        println!("\nGot events to process: \n{}", post_data);
+    #[post("/notice")]
+    pub async fn process_notice(post_data: String, data: web::Data<Witness>) -> impl Responder {
+        println!("\nGot notice to process: \n{}", post_data);
+        data.parse_and_process_notices(post_data.as_bytes())
+            .unwrap();
+        HttpResponse::Ok()
+            .content_type(ContentType::plaintext())
+            .body(())
+    }
+
+    #[post("/op")]
+    pub async fn process_op(post_data: String, data: web::Data<Witness>) -> impl Responder {
+        println!("\nGot op to process: \n{}", post_data);
         let resp = data
-            .parse_and_process(post_data.as_bytes())
+            .parse_and_process_ops(post_data.as_bytes())
             .unwrap()
             .iter()
             .map(|msg| msg.to_cesr().unwrap())

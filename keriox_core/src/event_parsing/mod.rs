@@ -297,6 +297,36 @@ impl TryFrom<SignedEventData> for Message {
     }
 }
 
+impl TryFrom<SignedEventData> for Notice {
+    type Error = Error;
+
+    fn try_from(value: SignedEventData) -> Result<Self, Self::Error> {
+        match value.deserialized_event {
+            EventType::KeyEvent(ev) => signed_key_event(ev, value.attachments),
+            EventType::Receipt(rct) => signed_receipt(rct, value.attachments),
+            _ => Err(Error::SemanticError(
+                "Cannot convert SignedEventData to Notice".to_string(),
+            )),
+        }
+    }
+}
+
+impl TryFrom<SignedEventData> for Op {
+    type Error = Error;
+
+    fn try_from(value: SignedEventData) -> Result<Self, Self::Error> {
+        match value.deserialized_event {
+            #[cfg(feature = "query")]
+            EventType::Qry(qry) => signed_query(qry, value.attachments),
+            #[cfg(any(feature = "query", feature = "oobi"))]
+            EventType::Rpy(rpy) => signed_reply(rpy, value.attachments),
+            _ => Err(Error::SemanticError(
+                "Cannot convert SignedEventData to Op".to_string(),
+            )),
+        }
+    }
+}
+
 #[cfg(any(feature = "query", feature = "oobi"))]
 fn signed_reply(rpy: ReplyEvent, mut attachments: Vec<Attachment>) -> Result<Op, Error> {
     match attachments

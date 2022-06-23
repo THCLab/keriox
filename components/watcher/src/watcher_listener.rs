@@ -44,7 +44,8 @@ impl WatcherListener {
                 .service(http_handlers::get_cid_oobi)
                 .service(http_handlers::get_kel)
                 .service(http_handlers::resolve_oobi)
-                .service(http_handlers::process_stream)
+                .service(http_handlers::process_notice)
+                .service(http_handlers::process_op)
             // .service(resolve)
         })
         .bind((host, port))
@@ -84,15 +85,28 @@ pub mod http_handlers {
 
     use crate::watcher::{Watcher, WatcherData};
 
-    #[post("/process")]
-    async fn process_stream(body: web::Bytes, data: web::Data<Watcher>) -> impl Responder {
+    #[post("/notice")]
+    async fn process_notice(body: web::Bytes, data: web::Data<Watcher>) -> impl Responder {
+        println!(
+            "\nGot events to process: \n{}",
+            String::from_utf8(body.to_vec()).unwrap()
+        );
+        data.0.parse_and_process_notices(&body).unwrap();
+
+        HttpResponse::Ok()
+            .content_type(ContentType::plaintext())
+            .body(())
+    }
+
+    #[post("/op")]
+    async fn process_op(body: web::Bytes, data: web::Data<Watcher>) -> impl Responder {
         println!(
             "\nGot events to process: \n{}",
             String::from_utf8(body.to_vec()).unwrap()
         );
         let resp = data
             .0
-            .parse_and_process(&body)
+            .parse_and_process_ops(&body)
             .unwrap()
             .iter()
             .map(|msg| msg.to_cesr().unwrap())

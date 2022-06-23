@@ -1,7 +1,9 @@
 use std::{path::Path, sync::Arc};
 
 use keri::{
-    actor::{prelude::*, process_reply, process_signed_query},
+    actor::{
+        parse_notice_stream, parse_op_stream, prelude::*, process_reply, process_signed_query,
+    },
     derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
     error::Error,
     event::EventMessage,
@@ -243,14 +245,20 @@ impl Witness {
         Ok(responses)
     }
 
-    pub fn parse_and_process(&self, input_stream: &[u8]) -> Result<Vec<Message>, Error> {
-        Ok(parse_event_stream(input_stream)?
+    pub fn parse_and_process_notices(&self, input_stream: &[u8]) -> Result<(), Error> {
+        parse_notice_stream(input_stream)?
             .into_iter()
-            .map(|message| self.process(message))
-            // TODO: avoid unwrap
-            .map(|d| d.unwrap())
-            .flatten()
-            .flatten()
-            .collect())
+            .map(|notice| self.process_notice(notice))
+            .collect()
+    }
+
+    pub fn parse_and_process_ops(&self, input_stream: &[u8]) -> Result<Vec<Message>, Error> {
+        parse_op_stream(input_stream)?
+            .into_iter()
+            .flat_map(|op| match self.process_op(op) {
+                Ok(msgs) => msgs.into_iter().map(Ok).collect(),
+                Err(e) => vec![Err(e)],
+            })
+            .collect()
     }
 }

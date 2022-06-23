@@ -1,14 +1,15 @@
 use std::convert::TryFrom;
 
+#[cfg(feature = "oobi")]
+use crate::oobi::OobiManager;
 use crate::{
     error::Error,
     event_message::{
         serialization_info::SerializationFormats,
         signed_event_message::{Message, Notice, Op},
     },
-    event_parsing::message::signed_event_stream,
+    event_parsing::message::{signed_event_stream, signed_notice_stream},
 };
-
 #[cfg(feature = "query")]
 use crate::{
     processor::{event_storage::EventStorage, validator::EventValidator, Processor},
@@ -20,16 +21,25 @@ use crate::{
     },
 };
 
-#[cfg(feature = "oobi")]
-use crate::oobi::OobiManager;
-
 pub fn parse_event_stream(stream: &[u8]) -> Result<Vec<Message>, Error> {
     let (_rest, events) =
         signed_event_stream(stream).map_err(|e| Error::DeserializeError(e.to_string()))?;
-    events
-        .into_iter()
-        .map(|event_data| Message::try_from(event_data))
-        .collect::<Result<_, _>>()
+    events.into_iter().map(Message::try_from).collect()
+}
+
+pub fn parse_notice_stream(stream: &[u8]) -> Result<Vec<Notice>, Error> {
+    let (_rest, notices) =
+        signed_notice_stream(stream).map_err(|e| Error::DeserializeError(e.to_string()))?;
+    notices.into_iter().map(Notice::try_from).collect()
+}
+
+#[cfg(any(feature = "query", feature = "oobi"))]
+pub fn parse_op_stream(stream: &[u8]) -> Result<Vec<Op>, Error> {
+    use crate::event_parsing::message::signed_op_stream;
+
+    let (_rest, ops) =
+        signed_op_stream(stream).map_err(|e| Error::DeserializeError(e.to_string()))?;
+    ops.into_iter().map(Op::try_from).collect()
 }
 
 pub fn process_message<P: Processor>(
