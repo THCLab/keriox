@@ -123,16 +123,22 @@ impl Serialize for SignedEventMessage {
     {
         // if JSON - we pack qb64 KERI
         if serializer.is_human_readable() {
-            let mut em = serializer.serialize_struct("EventMessage", 2)?;
+            let mut em = serializer.serialize_struct("EventMessage", 3)?;
             em.serialize_field("", &self.event_message)?;
             let att_sigs = Attachment::AttachedSignatures(self.signatures.clone());
             em.serialize_field("-", &att_sigs.to_cesr())?;
+            if let Some(ref seal) = self.delegator_seal {
+                let att_seal = Attachment::SealSourceCouplets(vec![seal.clone()]);
+                em.serialize_field("", &att_seal.to_cesr())?;
+            }
+
             em.end()
         // . else - we pack as it is for DB / CBOR purpose
         } else {
-            let mut em = serializer.serialize_struct("SignedEventMessage", 2)?;
+            let mut em = serializer.serialize_struct("SignedEventMessage", 3)?;
             em.serialize_field("event_message", &self.event_message)?;
             em.serialize_field("signatures", &self.signatures)?;
+            em.serialize_field("delegator_seal", &self.delegator_seal)?;
             em.end()
         }
     }
