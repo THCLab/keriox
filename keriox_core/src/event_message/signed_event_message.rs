@@ -1,6 +1,6 @@
 use std::cmp::Ordering;
 
-use chrono::{DateTime, Local};
+use chrono::{DateTime, Duration, Local};
 use serde::{ser::SerializeStruct, Deserialize, Serialize};
 
 use super::{key_event_message::KeyEvent, serializer::to_string, EventMessage};
@@ -162,6 +162,12 @@ impl TimestampedSignedEventMessage {
             timestamp: Local::now(),
             signed_event_message: event,
         }
+    }
+
+    pub fn is_stale(&self, duration: std::time::Duration) -> Result<bool, Error> {
+        Ok(Local::now() - self.timestamp
+            > Duration::from_std(duration)
+                .map_err(|_e| Error::SemanticError("Improper duration".into()))?)
     }
 }
 

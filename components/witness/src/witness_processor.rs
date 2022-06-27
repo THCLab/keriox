@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use keri::{
     database::sled::SledEventDatabase,
@@ -47,7 +47,7 @@ impl WitnessProcessor {
             vec![JustNotification::PartiallySigned],
         );
         bus.register_observer(
-            Arc::new(OutOfOrderEscrow::new(db.clone())),
+            Arc::new(OutOfOrderEscrow::new(db.clone(), Duration::from_secs(60))),
             vec![
                 JustNotification::OutOfOrder,
                 JustNotification::KeyEventAdded,

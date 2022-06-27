@@ -1,4 +1,4 @@
-use std::{convert::TryFrom, fs, sync::Arc};
+use std::{convert::TryFrom, fs, sync::Arc, thread, time::Duration};
 
 use crate::{
     database::sled::SledEventDatabase,
@@ -1131,6 +1131,89 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
     // State shouldn't be updated.
     let state = storage.get_state(&id_prefix)?.unwrap();
     assert_eq!(state.sn, 1);
+
+    Ok(())
+}
+
+#[test]
+fn test_out_of_order_cleanup() -> Result<(), Error> {
+    let kel = br#"{"v":"KERI10JSON00012b_","t":"icp","d":"EWzkqMDJfu5F78Xgw-WWhBChv7zNHJu6oa9UuWR3YARQ","i":"DW-CM1BxXJO2fgMGqgvJBbi0UfxGFI0mpxDBVBNxXKoA","s":"0","kt":"1","k":["DW-CM1BxXJO2fgMGqgvJBbi0UfxGFI0mpxDBVBNxXKoA"],"nt":"1","n":["EIGzh8BtHEKJ2b8tCpT6ViPg_BG1C24J6H1-x3kZgujM"],"bt":"0","b":[],"c":[],"a":[]}-AABAANivtUYYh6eDXCV_B-Bn0hoXhUb1QIKj12v4qEvyfP5Ivv9ptqYECIp1Jh8AGWeQ5jsvvF0Qg4oYr9iRXwTOgDA{"v":"KERI10JSON000160_","t":"rot","d":"EhgEE5xyPyDvZaa61YpXv9olrlgTuYfRAd3eSAxs38tE","i":"DW-CM1BxXJO2fgMGqgvJBbi0UfxGFI0mpxDBVBNxXKoA","s":"1","p":"EWzkqMDJfu5F78Xgw-WWhBChv7zNHJu6oa9UuWR3YARQ","kt":"1","k":["Dv3nISHlvrOn7UjG2YIgBsVsDBnbYBtkmntEMhU3h5Y0"],"nt":"1","n":["E8KLV_FkyNHuhQJWvMWPY1iq69quTjQMqS2h0GJOM8so"],"bt":"0","br":[],"ba":[],"a":[]}-AABAAPagtTdU6s0pzR-rzc2kaw3nl7sVdqALpa73iH5jfphOo-yBP-678rd3CjNUMmaf5l82qI_DUeArUz14y_BGVCA{"v":"KERI10JSON0000cb_","t":"ixn","d":"EWCY9lCq1CmlO-bxxz2xHr3ZRWmpxPaPg9MYOsJe84-4","i":"DW-CM1BxXJO2fgMGqgvJBbi0UfxGFI0mpxDBVBNxXKoA","s":"2","p":"EhgEE5xyPyDvZaa61YpXv9olrlgTuYfRAd3eSAxs38tE","a":[]}-AABAAxMLK-Y1TJ4SZNlEZ-wbGHnmzj_xGLeACwYxdxuFXK8jELRKv1sOYxh-cONWzX3MBr8Tw-CUQcXjdX72urYPJAg{"v":"KERI10JSON000160_","t":"rot","d":"Epkwu4R--j3r_FR2JoDRku4bHk8F824FJAs1JtJr0niY","i":"DW-CM1BxXJO2fgMGqgvJBbi0UfxGFI0mpxDBVBNxXKoA","s":"3","p":"EWCY9lCq1CmlO-bxxz2xHr3ZRWmpxPaPg9MYOsJe84-4","kt":"1","k":["DSrbxtHTjT7h2TKzahHmoPLMUwo_EUM-UAZLhamDbwDo"],"nt":"1","n":["EcoDGJfkoo_db4Q6_eysxz3U-pHE_2PlC7haQx4bYvgA"],"bt":"0","br":[],"ba":[],"a":[]}-AABAAaWu4AEHtTJlZmkKCxsWQzYVgDBPBK2Q-QltsqzNXMexvQZSZ6nbRLXKOl3L8e03ibGCdjgfE68TSaej35gv4CA{"v":"KERI10JSON000160_","t":"rot","d":"EJRFvIIsjIkxcS82a3z5iDnfIG7pFS_sfE42KHdEMas8","i":"DW-CM1BxXJO2fgMGqgvJBbi0UfxGFI0mpxDBVBNxXKoA","s":"4","p":"Epkwu4R--j3r_FR2JoDRku4bHk8F824FJAs1JtJr0niY","kt":"1","k":["DgFazXLwbkgvWpG1C7CkbFIJ73xYXTYsz5ls7Reay9_Q"],"nt":"1","n":["EAsZ5c_oWSgcUnrSOnJGGK_N-rJOG8ZPy8Nf0XYg9Vxc"],"bt":"0","br":[],"ba":[],"a":[]}-AABAAC4-A5mqR3Qe-aQ7kpz2TYIn95Iq3tEQIPhAJFfLDyEpDEwa62sk9mxTsbr71bKCNCZW0QFIcQlNqENBeCx1GBA{"v":"KERI10JSON0000ff_","t":"ixn","d":"EIxaIr-vj-evDQTV9jYu1zGQXm0x4W4sCgnXij0H_mRM","i":"DW-CM1BxXJO2fgMGqgvJBbi0UfxGFI0mpxDBVBNxXKoA","s":"5","p":"EJRFvIIsjIkxcS82a3z5iDnfIG7pFS_sfE42KHdEMas8","a":[,{"d""E7JCRX6JqsBKomojsyLR-TddsSt_Wq9H8EOMhsPyhjR0"}]}-AABAAVWwMR7338dUwKV1hDxHGVyMO91hDBaRDiI2EoxC3kkOlWWRUD_YWwc3dlxDPD8_nPvEkRL7ravw-Cfn9K_BpBQ"#;
+    let mut kell = signed_event_stream(kel)
+        .unwrap()
+        .1
+        .into_iter()
+        .map(|e| Message::try_from(e).unwrap());
+    let ev1 = kell.next().unwrap();
+    let ev2 = kell.next().unwrap();
+    let ev3 = kell.next().unwrap();
+    let ev4 = kell.next().unwrap();
+    let _ev5 = kell.next().unwrap();
+
+    use tempfile::Builder;
+
+    let (processor, storage) = {
+        let witness_root = Builder::new().prefix("test-db").tempdir().unwrap();
+        let path = witness_root.path();
+        let witness_db = Arc::new(SledEventDatabase::new(path).unwrap());
+        std::fs::create_dir_all(path).unwrap();
+        (
+            BasicProcessor::new(witness_db.clone()),
+            EventStorage::new(witness_db.clone()),
+        )
+    };
+    let id: IdentifierPrefix = "DW-CM1BxXJO2fgMGqgvJBbi0UfxGFI0mpxDBVBNxXKoA".parse()?;
+
+    processor.process(&ev1)?;
+    assert_eq!(storage.get_state(&id).unwrap().unwrap().sn, 0);
+
+    // Process out of order event and check escrow.
+    processor.process(&ev4.clone())?;
+    let mut escrowed = storage.db.get_out_of_order_events(&id).unwrap();
+    assert_eq!(
+        escrowed
+            .next()
+            .map(|e| Message::Notice(Notice::Event(e.signed_event_message))),
+        Some(ev4.clone())
+    );
+    assert!(escrowed.next().is_none());
+
+    // Process one more out of order event.
+    processor.process(&ev3.clone())?;
+
+    // Wait until escrowed events become stale.
+    thread::sleep(Duration::from_secs(10));
+
+    // Process inorder missing event.
+    processor.process(&ev2.clone())?;
+
+    // Escrow should be empty
+    let mut escrowed = storage.db.get_out_of_order_events(&id).unwrap();
+    assert!(escrowed.next().is_none());
+
+    // Stale events shouldn't be save in the kel.
+    assert_eq!(storage.get_state(&id).unwrap().unwrap().sn, 1);
+
+    // Process out of order events once again and check escrow.
+    processor.process(&ev4.clone())?;
+    let mut escrowed = storage.db.get_out_of_order_events(&id).unwrap();
+
+    assert_eq!(
+        escrowed
+            .next()
+            .map(|e| Message::Notice(Notice::Event(e.signed_event_message))),
+        Some(ev4.clone())
+    );
+    assert!(escrowed.next().is_none());
+
+    // Process inorder missing event.
+    processor.process(&ev3.clone())?;
+
+    // Escrow should be empty
+    let mut escrowed = storage.db.get_out_of_order_events(&id).unwrap();
+    assert!(escrowed.next().is_none());
+
+    // Events should be accepted, they're not stale..
+    assert_eq!(storage.get_state(&id).unwrap().unwrap().sn, 3);
 
     Ok(())
 }
