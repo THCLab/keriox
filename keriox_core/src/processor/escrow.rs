@@ -290,7 +290,7 @@ impl Notifier for NontransReceiptsEscrow {
                 self.process_nt_receipts_escrow(bus)
             }
             Notification::ReceiptOutOfOrder(receipt) => {
-                if receipt.couplets.is_none() {
+                if receipt.couplets.is_none() && receipt.indexed_sigs.is_none() {
                     // ignore events with no signatures
                     Ok(())
                 } else {
