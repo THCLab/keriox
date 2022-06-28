@@ -1,6 +1,6 @@
 pub(crate) mod tables;
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use self::tables::{SledEventTree, SledEventTreeVec};
 #[cfg(feature = "query")]
@@ -59,25 +59,35 @@ impl SledEventDatabase {
     where
         P: Into<&'a Path>,
     {
-        let db = sled::open(path.into())?;
+        let mut events_path = PathBuf::new();
+        events_path.push(&path.into());
+        let mut escrow_path = events_path.clone();
+
+        events_path.push("events");
+        escrow_path.push("escrow");
+        
+        let db = sled::open(events_path.as_path())?;
+        let escrows_db = sled::open(escrow_path.as_path())?;
+
         Ok(Self {
             identifiers: SledEventTree::new(db.open_tree(b"iids")?),
-            escrowed_receipts_nt: SledEventTreeVec::new(db.open_tree(b"ures")?),
             receipts_t: SledEventTreeVec::new(db.open_tree(b"vrcs")?),
-            escrowed_receipts_t: SledEventTreeVec::new(db.open_tree(b"vres")?),
             receipts_nt: SledEventTreeVec::new(db.open_tree(b"rcts")?),
             key_event_logs: SledEventTreeVec::new(db.open_tree(b"kels")?),
-            escrowed_out_of_order: SledEventTreeVec::new(db.open_tree(b"ooes")?),
-            escrowed_partially_signed: SledEventTreeVec::new(db.open_tree(b"pses")?),
             likely_duplicious_events: SledEventTreeVec::new(db.open_tree(b"ldes")?),
             duplicitous_events: SledEventTreeVec::new(db.open_tree(b"dels")?),
-            partially_witnessed_events: SledEventTreeVec::new(db.open_tree(b"pwes")?),
             #[cfg(feature = "query")]
             accepted_rpy: SledEventTreeVec::new(db.open_tree(b"knas")?),
             #[cfg(feature = "query")]
-            escrowed_replys: SledEventTreeVec::new(db.open_tree(b"knes")?),
-            #[cfg(feature = "query")]
             mailbox_receipts: SledEventTreeVec::new(db.open_tree(b"mbxr")?),
+
+            escrowed_out_of_order: SledEventTreeVec::new(escrows_db.open_tree(b"ooes")?),
+            escrowed_partially_signed: SledEventTreeVec::new(escrows_db.open_tree(b"pses")?),
+            partially_witnessed_events: SledEventTreeVec::new(escrows_db.open_tree(b"pwes")?),
+            escrowed_receipts_nt: SledEventTreeVec::new(escrows_db.open_tree(b"ures")?),
+            escrowed_receipts_t: SledEventTreeVec::new(escrows_db.open_tree(b"vres")?),
+            #[cfg(feature = "query")]
+            escrowed_replys: SledEventTreeVec::new(escrows_db.open_tree(b"knes")?),
         })
     }
 

@@ -15,7 +15,6 @@ impl WatcherListener {
         address: url::Url,
         public_address: Option<String>,
         event_db_path: &Path,
-        oobi_db_path: &Path,
         priv_key: Option<String>,
     ) -> Result<Self, Error> {
         let pub_address = if let Some(pub_address) = public_address {
@@ -24,7 +23,7 @@ impl WatcherListener {
             address.clone()
         };
 
-        WatcherData::setup(pub_address, event_db_path, oobi_db_path, priv_key).map(|watcher_data| {
+        WatcherData::setup(pub_address, event_db_path, priv_key).map(|watcher_data| {
             Self {
                 watcher_data: Watcher(watcher_data),
             }

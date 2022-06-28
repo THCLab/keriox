@@ -1,8 +1,8 @@
-use std::{path::Path, sync::Arc};
+use std::{path::{Path, PathBuf}, sync::Arc};
 
 use derive_more::{Display, Error, From};
 use keri::{
-    actor::{parse_notice_stream, parse_op_stream, prelude::*},
+    actor::{prelude::*, parse_notice_stream, parse_op_stream},
     derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
     error::Error,
     event_message::signed_event_message::{Notice, Op},
@@ -28,7 +28,6 @@ impl WatcherData {
     pub fn setup(
         public_address: url::Url,
         event_db_path: &Path,
-        oobi_db_path: &Path,
         priv_key: Option<String>,
     ) -> Result<Self, Error> {
         let signer = Arc::new(
@@ -36,6 +35,10 @@ impl WatcherData {
                 .map(|key| Signer::new_with_seed(&key.parse()?))
                 .unwrap_or(Ok(Signer::new()))?,
         );
+        let mut oobi_path = PathBuf::new();
+        oobi_path.push(event_db_path);
+        oobi_path.push("oobi");
+
         let prefix = Basic::Ed25519.derive(signer.public_key());
         let db = Arc::new(SledEventDatabase::new(event_db_path)?);
         let processor = BasicProcessor::new(db.clone());
@@ -56,7 +59,7 @@ impl WatcherData {
             prefix.clone(),
             SelfSigning::Ed25519Sha512.derive(signer.sign(reply.serialize()?)?),
         );
-        let oobi_manager = OobiManager::new(oobi_db_path);
+        let oobi_manager = OobiManager::new(&oobi_path);
         oobi_manager.save_oobi(&signed_reply)?;
         Ok(Self {
             prefix,
