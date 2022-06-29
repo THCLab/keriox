@@ -1,4 +1,10 @@
-use std::{convert::TryFrom, fs, sync::Arc, thread::{self, sleep}, time::Duration};
+use std::{
+    convert::TryFrom,
+    fs,
+    sync::Arc,
+    thread::{self, sleep},
+    time::Duration,
+};
 
 use crate::{
     database::sled::SledEventDatabase,
@@ -59,7 +65,7 @@ pub fn test_not_fully_witnessed() -> Result<(), Error> {
     let mut esc = db.get_escrow_nt_receipts(&id).unwrap();
     assert_eq!(
         rcp_msg,
-        Message::Notice(Notice::NontransferableRct(esc.next().unwrap()))
+        Message::Notice(Notice::NontransferableRct(esc.next().unwrap().into()))
     );
     assert!(esc.next().is_none());
 
@@ -619,7 +625,7 @@ fn test_partially_sign_escrow_cleanup() -> Result<(), Error> {
     // check if event was accepted into kel
     assert_eq!(storage.get_state(&id).unwrap(), None);
 
-	// Proces the same event with another signature
+    // Proces the same event with another signature
     processor.process(&icp_first_sig)?;
 
     Ok(())
@@ -667,7 +673,7 @@ pub fn test_partially_witnessed_escrow_cleanup() -> Result<(), Error> {
     let mut esc = db.get_escrow_nt_receipts(&id).unwrap();
     assert_eq!(
         rcp_msg,
-        Message::Notice(Notice::NontransferableRct(esc.next().unwrap()))
+        Message::Notice(Notice::NontransferableRct(esc.next().unwrap().into()))
     );
     assert!(esc.next().is_none());
 

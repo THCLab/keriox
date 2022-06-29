@@ -11,7 +11,7 @@ use crate::{
         key_event_message::KeyEvent,
         signed_event_message::{
             SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
-            TimestampedSignedEventMessage,
+            TimestampedNontransReceipt, TimestampedSignedEventMessage,
         },
         TimestampedEventMessage,
     },
@@ -35,7 +35,7 @@ pub struct SledEventDatabase {
     // "rcts" tree
     receipts_nt: SledEventTreeVec<SignedNontransferableReceipt>,
     // "ures" tree
-    escrowed_receipts_nt: SledEventTreeVec<SignedNontransferableReceipt>,
+    escrowed_receipts_nt: SledEventTreeVec<TimestampedNontransReceipt>,
     // "vrcs" tree
     receipts_t: SledEventTreeVec<SignedTransferableReceipt>,
     // "vres" tree
@@ -300,6 +300,7 @@ impl SledEventDatabase {
         receipt: SignedNontransferableReceipt,
         id: &IdentifierPrefix,
     ) -> Result<(), DbError> {
+        let receipt: TimestampedNontransReceipt = receipt.into();
         if !self.escrowed_receipts_nt.contains_value(&receipt) {
             self.escrowed_receipts_nt
                 .push(self.identifiers.designated_key(id)?, receipt)
@@ -311,14 +312,14 @@ impl SledEventDatabase {
     pub fn get_escrow_nt_receipts(
         &self,
         id: &IdentifierPrefix,
-    ) -> Option<impl DoubleEndedIterator<Item = SignedNontransferableReceipt>> {
+    ) -> Option<impl DoubleEndedIterator<Item = TimestampedNontransReceipt>> {
         self.escrowed_receipts_nt
             .iter_values(self.identifiers.designated_key(id).ok()?)
     }
 
     pub fn get_all_escrow_nt_receipts(
         &self,
-    ) -> Option<impl DoubleEndedIterator<Item = SignedNontransferableReceipt>> {
+    ) -> Option<impl DoubleEndedIterator<Item = TimestampedNontransReceipt>> {
         self.escrowed_receipts_nt.get_all()
     }
 
@@ -328,7 +329,7 @@ impl SledEventDatabase {
         receipt: &SignedNontransferableReceipt,
     ) -> Result<(), DbError> {
         self.escrowed_receipts_nt
-            .remove(self.identifiers.designated_key(id)?, receipt)
+            .remove(self.identifiers.designated_key(id)?, &receipt.into())
     }
 
     pub fn add_likely_duplicious_event(

@@ -151,13 +151,13 @@ impl PartialEq for SignedEventMessage {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct TimestampedSignedEventMessage {
+pub struct Timestamped<M> {
     pub timestamp: DateTime<Local>,
-    pub signed_event_message: SignedEventMessage,
+    pub signed_event_message: M,
 }
 
-impl TimestampedSignedEventMessage {
-    pub fn new(event: SignedEventMessage) -> Self {
+impl<M> Timestamped<M> {
+    pub fn new(event: M) -> Self {
         Self {
             timestamp: Local::now(),
             signed_event_message: event,
@@ -171,31 +171,37 @@ impl TimestampedSignedEventMessage {
     }
 }
 
-impl From<TimestampedSignedEventMessage> for SignedEventMessage {
-    fn from(event: TimestampedSignedEventMessage) -> SignedEventMessage {
+impl From<Timestamped<SignedEventMessage>> for SignedEventMessage {
+    fn from(event: Timestamped<SignedEventMessage>) -> SignedEventMessage {
         event.signed_event_message
     }
 }
 
-impl From<SignedEventMessage> for TimestampedSignedEventMessage {
-    fn from(event: SignedEventMessage) -> TimestampedSignedEventMessage {
-        TimestampedSignedEventMessage::new(event)
+impl From<Timestamped<SignedNontransferableReceipt>> for SignedNontransferableReceipt {
+    fn from(event: Timestamped<SignedNontransferableReceipt>) -> SignedNontransferableReceipt {
+        event.signed_event_message
     }
 }
 
-impl From<&SignedEventMessage> for TimestampedSignedEventMessage {
-    fn from(event: &SignedEventMessage) -> TimestampedSignedEventMessage {
-        TimestampedSignedEventMessage::new(event.clone())
+impl<M> From<M> for Timestamped<M> {
+    fn from(event: M) -> Timestamped<M> {
+        Timestamped::new(event)
     }
 }
 
-impl PartialEq for TimestampedSignedEventMessage {
+impl<M: Clone> From<&M> for Timestamped<M> {
+    fn from(event: &M) -> Timestamped<M> {
+        Timestamped::new(event.clone())
+    }
+}
+
+impl<M: PartialEq> PartialEq for Timestamped<M> {
     fn eq(&self, other: &Self) -> bool {
         self.signed_event_message == other.signed_event_message
     }
 }
 
-impl PartialOrd for TimestampedSignedEventMessage {
+impl PartialOrd for Timestamped<SignedEventMessage> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(
             match self.signed_event_message.event_message.event.get_sn()
@@ -215,7 +221,7 @@ impl PartialOrd for TimestampedSignedEventMessage {
     }
 }
 
-impl Ord for TimestampedSignedEventMessage {
+impl Ord for Timestamped<SignedEventMessage> {
     fn cmp(&self, other: &Self) -> Ordering {
         match self.signed_event_message.event_message.event.get_sn()
             == other.signed_event_message.event_message.event.get_sn()
@@ -231,7 +237,9 @@ impl Ord for TimestampedSignedEventMessage {
     }
 }
 
-impl Eq for TimestampedSignedEventMessage {}
+impl Eq for Timestamped<SignedEventMessage> {}
+
+pub type TimestampedSignedEventMessage = Timestamped<SignedEventMessage>;
 
 impl SignedEventMessage {
     pub fn new(
@@ -312,3 +320,5 @@ impl SignedNontransferableReceipt {
         }
     }
 }
+
+pub type TimestampedNontransReceipt = Timestamped<SignedNontransferableReceipt>;
