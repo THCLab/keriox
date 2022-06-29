@@ -546,3 +546,81 @@ fn test_out_of_order_cleanup() -> Result<(), Error> {
 
     Ok(())
 }
+
+#[test]
+fn test_partially_sign_escrow_cleanup() -> Result<(), Error> {
+    use tempfile::Builder;
+
+    // events from keripy/tests/core/test_escrow.py::test_partial_signed_escrow
+    let (processor, storage) = {
+        let witness_root = Builder::new().prefix("test-db").tempdir().unwrap();
+        let path = witness_root.path();
+        let witness_db = Arc::new(SledEventDatabase::new(path).unwrap());
+        std::fs::create_dir_all(path).unwrap();
+        let processor = BasicProcessor::new(witness_db.clone());
+
+        (processor, EventStorage::new(witness_db.clone()))
+    };
+
+    let parse_messagee = |raw_event| {
+        let parsed = signed_message(raw_event).unwrap().1;
+        Message::try_from(parsed).unwrap()
+    };
+
+    let id: IdentifierPrefix = "EOsgPPbBijCbpu3R9N-TMdURgcoFqrjUf3rQiIaJ5L7M".parse()?;
+    let icp_raw = br#"{"v":"KERI10JSON000207_","t":"icp","d":"EOsgPPbBijCbpu3R9N-TMdURgcoFqrjUf3rQiIaJ5L7M","i":"EOsgPPbBijCbpu3R9N-TMdURgcoFqrjUf3rQiIaJ5L7M","s":"0","kt":["1/2","1/2","1/2"],"k":["DK4OJI8JOr6oEEUMeSF_X-SbKysfwpKwW-ho5KARvH5c","D1RZLgYke0GmfZm-CH8AsW4HoTU4m-2mFgu8kbwp8jQU","DBVwzum-jPfuUXUcHEWdplB4YcoL3BWGXK0TMoF_NeFU"],"nt":["1/2","1/2","1/2"],"n":["E9tzF91cgL0Xu4UkCqlCbDxXK-HnxmmTIwTi_ySgjGLc","Ez53UFJ6euROznsDhnPr4auhJGgzeM5ln5i-Tlp8V3L4","EPF1apCK5AUL7k4AlFG4pSEgQX0h-kosQ_tfUtPJ_Ti0"],"bt":"0","b":[],"c":[],"a":[]}-AABAAjCyfd63fzueQfpOHGgSl4YvEXsc3IYpdlvXDKfpbicV8pGj2v-TWBDyFqkzIdB7hMhG1iR3IeS7vy3a3catGDg"#;
+    let icp_first_sig = parse_messagee(icp_raw);
+
+    let icp_raw = br#"{"v":"KERI10JSON000207_","t":"icp","d":"EOsgPPbBijCbpu3R9N-TMdURgcoFqrjUf3rQiIaJ5L7M","i":"EOsgPPbBijCbpu3R9N-TMdURgcoFqrjUf3rQiIaJ5L7M","s":"0","kt":["1/2","1/2","1/2"],"k":["DK4OJI8JOr6oEEUMeSF_X-SbKysfwpKwW-ho5KARvH5c","D1RZLgYke0GmfZm-CH8AsW4HoTU4m-2mFgu8kbwp8jQU","DBVwzum-jPfuUXUcHEWdplB4YcoL3BWGXK0TMoF_NeFU"],"nt":["1/2","1/2","1/2"],"n":["E9tzF91cgL0Xu4UkCqlCbDxXK-HnxmmTIwTi_ySgjGLc","Ez53UFJ6euROznsDhnPr4auhJGgzeM5ln5i-Tlp8V3L4","EPF1apCK5AUL7k4AlFG4pSEgQX0h-kosQ_tfUtPJ_Ti0"],"bt":"0","b":[],"c":[],"a":[]}-AABACJz5biC59pvOpb3aUadlNr_BZb-laG1zgX7FtO5Q0M_HPJObtlhVtUghTBythEb8FpoLze8WnEWUayJnpLsYjAA"#;
+    let icp_second_sig = parse_messagee(icp_raw);
+
+    processor.process(&icp_first_sig)?;
+    let icp_event = if let Message::Notice(Notice::Event(ev)) = icp_first_sig.clone() {
+        Some(ev.event_message)
+    } else {
+        None
+    }
+    .unwrap();
+
+    let mut escrowed = storage
+        .db
+        .get_partially_signed_events(icp_event.clone())
+        .unwrap();
+    assert_eq!(
+        escrowed
+            .next()
+            .map(|e| Message::Notice(Notice::Event(e.signed_event_message))),
+        Some(icp_first_sig.clone())
+    );
+    assert!(escrowed.next().is_none());
+
+    // check if event was accepted into kel
+    assert_eq!(storage.get_state(&id).unwrap(), None);
+
+    // Wait until escrowed events become stale.
+    thread::sleep(Duration::from_secs(10));
+
+    // Proces the same event with another signature
+    processor.process(&icp_second_sig)?;
+
+    // check escrow
+    let mut escrowed = storage
+        .db
+        .get_partially_signed_events(icp_event.clone())
+        .unwrap();
+    assert_eq!(
+        escrowed
+            .next()
+            .map(|e| Message::Notice(Notice::Event(e.signed_event_message))),
+        Some(icp_second_sig.clone())
+    );
+    assert!(escrowed.next().is_none());
+
+    // check if event was accepted into kel
+    assert_eq!(storage.get_state(&id).unwrap(), None);
+
+	// Proces the same event with another signature
+    processor.process(&icp_first_sig)?;
+
+    Ok(())
+}
