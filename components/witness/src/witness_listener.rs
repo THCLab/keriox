@@ -54,8 +54,15 @@ impl WitnessListener {
 }
 
 pub mod http_handlers {
-    use actix_web::{get, http::header::ContentType, post, web, HttpResponse, Responder};
+    use actix_web::{
+        get,
+        http::{header::ContentType, StatusCode},
+        post, web, HttpResponse, Responder, ResponseError,
+    };
+    use derive_more::{Display, Error, From};
+    use itertools::Itertools;
     use keri::{
+        error::Error,
         event_parsing::SignedEventData,
         oobi::Role,
         prefix::{IdentifierPrefix, Prefix},
@@ -67,90 +74,109 @@ pub mod http_handlers {
     pub async fn get_eid_oobi(
         eid: web::Path<IdentifierPrefix>,
         data: web::Data<Witness>,
-    ) -> impl Responder {
-        let loc_scheme = data.get_loc_scheme_for_id(&eid).unwrap().unwrap_or(vec![]);
+    ) -> Result<impl Responder, ApiError> {
+        let loc_scheme = data.get_loc_scheme_for_id(&eid)?.unwrap_or(vec![]);
         let oobis: Vec<u8> = loc_scheme
             .into_iter()
             .map(|sr| {
                 let sed: SignedEventData = sr.into();
-                sed.to_cesr().unwrap()
+                sed.to_cesr()
             })
-            .flatten()
-            .collect();
+            .flatten_ok()
+            .try_collect()?;
 
         println!(
             "\nSending {} oobi: \n {}",
             &eid.to_str(),
             String::from_utf8(oobis.clone()).unwrap_or_default()
         );
-        HttpResponse::Ok()
+        Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())
-            .body(String::from_utf8(oobis).unwrap())
+            .body(String::from_utf8(oobis).unwrap()))
     }
 
     #[get("/oobi/{cid}/{role}/{eid}")]
     pub async fn get_cid_oobi(
         path: web::Path<(IdentifierPrefix, Role, IdentifierPrefix)>,
         data: web::Data<Witness>,
-    ) -> impl Responder {
+    ) -> Result<impl Responder, ApiError> {
         let (cid, role, eid) = path.into_inner();
 
         let end_role = data
             .oobi_manager
-            .get_end_role(&cid, role)
-            .unwrap()
+            .get_end_role(&cid, role)?
             .unwrap_or(vec![]);
-        let loc_scheme = data.get_loc_scheme_for_id(&eid).unwrap().unwrap_or(vec![]);
+        let loc_scheme = data.get_loc_scheme_for_id(&eid)?.unwrap_or(vec![]);
         // (for now) Append controller kel to be able to verify end role signature.
         // TODO use ksn instead
-        let cont_kel = data
-            .event_storage
-            .get_kel(&cid)
-            .unwrap()
-            .unwrap_or_default();
+        let cont_kel = data.event_storage.get_kel(&cid)?.unwrap_or_default();
         let oobis = end_role
             .into_iter()
             .chain(loc_scheme.into_iter())
             .map(|sr| {
                 let sed: SignedEventData = sr.into();
-                sed.to_cesr().unwrap()
+                sed.to_cesr()
             })
-            .flatten();
+            .flatten_ok()
+            .collect::<Result<Vec<_>, _>>()?;
         let res: Vec<u8> = cont_kel.into_iter().chain(oobis).collect();
         println!(
             "\nSending {} obi from its witness {}:\n{}",
             cid.to_str(),
             eid.to_str(),
-            String::from_utf8(res.clone()).unwrap()
+            String::from_utf8_lossy(&res)
         );
 
-        HttpResponse::Ok()
+        Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())
-            .body(String::from_utf8(res).unwrap())
+            .body(String::from_utf8(res).unwrap()))
     }
 
-    #[post("/notice")]
-    pub async fn process_notice(post_data: String, data: web::Data<Witness>) -> impl Responder {
+    #[post("/process")]
+    pub async fn process_notice(
+        post_data: String,
+        data: web::Data<Witness>,
+    ) -> Result<impl Responder, ApiError> {
         println!("\nGot notice to process: \n{}", post_data);
-        data.parse_and_process_notices(post_data.as_bytes())
-            .unwrap();
-        HttpResponse::Ok()
+        data.parse_and_process_notices(post_data.as_bytes())?;
+        Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())
-            .body(())
+            .body(()))
     }
 
-    #[post("/op")]
-    pub async fn process_op(post_data: String, data: web::Data<Witness>) -> impl Responder {
+    #[post("/query")]
+    pub async fn process_op(
+        post_data: String,
+        data: web::Data<Witness>,
+    ) -> Result<impl Responder, ApiError> {
         println!("\nGot op to process: \n{}", post_data);
         let resp = data
-            .parse_and_process_ops(post_data.as_bytes())
-            .unwrap()
+            .parse_and_process_ops(post_data.as_bytes())?
             .iter()
-            .map(|msg| msg.to_cesr().unwrap())
-            .flatten()
-            .collect();
-        HttpResponse::Ok()
+            .map(|msg| msg.to_cesr())
+            .flatten_ok()
+            .try_collect()?;
+        Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())
-            .body(String::from_utf8(resp).unwrap())
+            .body(String::from_utf8(resp).unwrap()))
+    }
+
+    #[derive(Debug, Display, Error, From)]
+    pub struct ApiError(Error);
+
+    impl ResponseError for ApiError {
+        fn status_code(&self) -> StatusCode {
+            match self.0 {
+                Error::Base64DecodingError { .. }
+                | Error::DeserializeError(_)
+                | Error::IncorrectDigest => StatusCode::BAD_REQUEST,
+
+                Error::Ed25519DalekSignatureError(_)
+                | Error::FaultySignatureVerification
+                | Error::SignatureVerificationError => StatusCode::FORBIDDEN,
+
+                _ => StatusCode::INTERNAL_SERVER_ERROR,
+            }
+        }
     }
 }

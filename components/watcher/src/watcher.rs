@@ -119,18 +119,6 @@ impl WatcherData {
         self.event_storage.get_state(id)
     }
 
-    // Returns messages if they can be returned immediately, i.e. for query message
-    pub fn process(&self, msg: Message) -> Result<Option<Vec<Message>>, Error> {
-        let response = match msg.clone() {
-            Message::Op(op) => Some(self.process_op(op)?),
-            Message::Notice(notice) => {
-                process_notice(notice, &self.processor)?;
-                None
-            }
-        };
-        Ok(response)
-    }
-
     fn process_notice(&self, notice: Notice) -> Result<(), Error> {
         process_notice(notice, &self.processor)
     }

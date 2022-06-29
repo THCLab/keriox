@@ -145,7 +145,7 @@ fn process_query(qr: Query, storage: &EventStorage) -> Result<ReplyType, Error> 
 pub mod prelude {
     pub use crate::{
         actor::{
-            parse_event_stream, process_message, process_notice, process_reply,
+            process_message, process_notice, process_reply,
             process_signed_oobi, process_signed_query,
         },
         database::sled::SledEventDatabase,

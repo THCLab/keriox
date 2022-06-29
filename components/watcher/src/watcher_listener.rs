@@ -73,53 +73,67 @@ impl WatcherListener {
 
 pub mod http_handlers {
 
-    use actix_web::{get, http::header::ContentType, post, web, HttpResponse, Responder};
+    use actix_web::{
+        get, http::header::ContentType, post, web, HttpResponse, Responder, ResponseError,
+    };
+    use derive_more::{Display, Error, From};
+    use itertools::Itertools;
     use keri::{
         derivation::{self_addressing::SelfAddressing, self_signing::SelfSigning},
+        error::Error,
         event_message::signed_event_message::{Message, Op},
         event_parsing::SignedEventData,
         oobi::{EndRole, LocationScheme, Role},
         prefix::{AttachedSignaturePrefix, IdentifierPrefix, Prefix},
         query::query_event::{QueryArgs, QueryEvent, QueryRoute, SignedQuery},
     };
+    use reqwest::StatusCode;
 
-    use crate::watcher::{Watcher, WatcherData};
+    use crate::watcher::{self, Watcher, WatcherData};
 
-    #[post("/notice")]
-    async fn process_notice(body: web::Bytes, data: web::Data<Watcher>) -> impl Responder {
+    #[post("/process")]
+    async fn process_notice(
+        body: web::Bytes,
+        data: web::Data<Watcher>,
+    ) -> Result<impl Responder, ApiError> {
         println!(
             "\nGot events to process: \n{}",
-            String::from_utf8(body.to_vec()).unwrap()
+            String::from_utf8_lossy(&body)
         );
-        data.0.parse_and_process_notices(&body).unwrap();
+        data.0.parse_and_process_notices(&body)?;
 
-        HttpResponse::Ok()
+        Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())
-            .body(())
+            .body(()))
     }
 
-    #[post("/op")]
-    async fn process_op(body: web::Bytes, data: web::Data<Watcher>) -> impl Responder {
+    #[post("/query")]
+    async fn process_op(
+        body: web::Bytes,
+        data: web::Data<Watcher>,
+    ) -> Result<impl Responder, ApiError> {
         println!(
             "\nGot events to process: \n{}",
-            String::from_utf8(body.to_vec()).unwrap()
+            String::from_utf8_lossy(&body)
         );
         let resp = data
             .0
-            .parse_and_process_ops(&body)
-            .unwrap()
+            .parse_and_process_ops(&body)?
             .iter()
-            .map(|msg| msg.to_cesr().unwrap())
-            .flatten()
-            .collect::<Vec<_>>();
+            .map(|msg| msg.to_cesr())
+            .flatten_ok()
+            .try_collect()?;
 
-        HttpResponse::Ok()
+        Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())
-            .body(String::from_utf8(resp).unwrap())
+            .body(String::from_utf8(resp).unwrap()))
     }
 
     #[get("/query/{id}")]
-    async fn get_kel(eid: web::Path<IdentifierPrefix>, data: web::Data<Watcher>) -> impl Responder {
+    async fn get_kel(
+        eid: web::Path<IdentifierPrefix>,
+        data: web::Data<Watcher>,
+    ) -> Result<impl Responder, ApiError> {
         // generate query message here
         let id = eid.clone();
         let qr = QueryArgs {
@@ -134,13 +148,8 @@ pub mod http_handlers {
             },
             keri::event::SerializationFormats::JSON,
             &SelfAddressing::Blake3_256,
-        )
-        .unwrap();
-        let signature = data
-            .0
-            .signer
-            .sign(qry_message.serialize().unwrap())
-            .unwrap();
+        )?;
+        let signature = data.0.signer.sign(qry_message.serialize()?)?;
         let signatures = vec![AttachedSignaturePrefix::new(
             SelfSigning::Ed25519Sha512,
             signature,
@@ -155,33 +164,35 @@ pub mod http_handlers {
         // Get witnesses, and TODO choose one randomly.
         let witnesses = data
             .0
-            .get_state_for_prefix(&id)
-            .unwrap()
-            .unwrap()
+            .get_state_for_prefix(&id)?
+            .ok_or_else(|| ApiError::NoStateForPrefix { prefix: id })?
             .witness_config
             .witnesses;
         let witness_id = IdentifierPrefix::Basic(witnesses[0].clone());
 
         // get witness address and send there query
-        let qry_str = Message::Op(Op::Query(signed_qry)).to_cesr().unwrap();
+        let qry_str = Message::Op(Op::Query(signed_qry)).to_cesr()?;
         println!(
             "\nSending query to {}: \n{}",
             witness_id.to_str(),
-            String::from_utf8(qry_str.clone()).unwrap()
+            String::from_utf8_lossy(&qry_str)
         );
         let resp = data
-            .send_to(witness_id, keri::oobi::Scheme::Http, qry_str)
+            .send_to(witness_id.clone(), keri::oobi::Scheme::Http, qry_str)
             .await
-            .unwrap()
-            .unwrap();
+            .map_err(|_| ApiError::WatcherError)?
+            .ok_or_else(|| ApiError::NoResponse { witness_id })?;
 
-        HttpResponse::Ok()
+        Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())
-            .body(resp)
+            .body(resp))
     }
 
     #[post("/resolve")]
-    async fn resolve_oobi(body: web::Bytes, data: web::Data<Watcher>) -> impl Responder {
+    async fn resolve_oobi(
+        body: web::Bytes,
+        data: web::Data<Watcher>,
+    ) -> Result<impl Responder, ApiError> {
         println!(
             "\nGot oobi to resolve: \n{}",
             String::from_utf8(body.to_vec()).unwrap()
@@ -198,7 +209,7 @@ pub mod http_handlers {
             }
         };
 
-        HttpResponse::Ok()
+        Ok(HttpResponse::Ok())
     }
 
     #[get("/oobi/{id}")]
@@ -253,5 +264,50 @@ pub mod http_handlers {
         HttpResponse::Ok()
             .content_type(ContentType::plaintext())
             .body(String::from_utf8(oobis).unwrap())
+    }
+
+    #[derive(Debug, Display, Error, From)]
+    pub enum ApiError {
+        KeriError(Error),
+
+        // TODO: add from watcher error impl (don't use anyhow)
+        #[display(fmt = "watcher error")]
+        WatcherError,
+
+        #[display(fmt = "no state for prefix {}", prefix)]
+        #[from(ignore)]
+        NoStateForPrefix {
+            prefix: IdentifierPrefix,
+        },
+
+        #[display(fmt = "no response from witness {}", witness_id)]
+        #[from(ignore)]
+        NoResponse {
+            witness_id: IdentifierPrefix,
+        },
+    }
+
+    impl ResponseError for ApiError {
+        fn status_code(&self) -> StatusCode {
+            match self {
+                ApiError::KeriError(err) => match err {
+                    Error::Base64DecodingError { .. }
+                    | Error::DeserializeError(_)
+                    | Error::IncorrectDigest => StatusCode::BAD_REQUEST,
+
+                    Error::Ed25519DalekSignatureError(_)
+                    | Error::FaultySignatureVerification
+                    | Error::SignatureVerificationError => StatusCode::FORBIDDEN,
+
+                    _ => StatusCode::INTERNAL_SERVER_ERROR,
+                },
+
+                ApiError::WatcherError => StatusCode::BAD_GATEWAY,
+
+                ApiError::NoStateForPrefix { .. } => StatusCode::BAD_GATEWAY,
+
+                ApiError::NoResponse { .. } => StatusCode::BAD_GATEWAY,
+            }
+        }
     }
 }

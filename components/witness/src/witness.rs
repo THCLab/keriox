@@ -189,19 +189,6 @@ impl Witness {
         ))
     }
 
-    // Returns messages if they can be returned immediately, i.e. for query message
-    pub fn process(&self, msg: Message) -> Result<Option<Vec<Message>>, Error> {
-        let response = match msg.clone() {
-            Message::Op(op) => Some(self.process_op(op)?),
-            Message::Notice(notice) => {
-                self.processor.process_notice(&notice)?;
-                None
-            }
-        };
-
-        Ok(response)
-    }
-
     pub fn process_notice(&self, notice: Notice) -> Result<(), Error> {
         self.processor.process_notice(&notice)
     }
@@ -211,7 +198,7 @@ impl Witness {
 
         match op {
             Op::Query(qry) => {
-                let response = process_signed_query(qry, &self.event_storage).unwrap();
+                let response = process_signed_query(qry, &self.event_storage)?;
                 match response {
                     ReplyType::Ksn(ksn) => {
                         let rpy = ReplyEvent::new_reply(
