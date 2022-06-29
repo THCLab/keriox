@@ -8,8 +8,10 @@ use super::{
 #[cfg(feature = "query")]
 use crate::query::reply_event::ReplyRoute;
 use crate::{
-    database::sled::SledEventDatabase, error::Error,
-    event_message::signed_event_message::SignedEventMessage, prefix::IdentifierPrefix,
+    database::sled::SledEventDatabase,
+    error::Error,
+    event_message::signed_event_message::{SignedEventMessage, TimestampedSignedEventMessage},
+    prefix::IdentifierPrefix,
 };
 
 pub fn default_escrow_bus(db: Arc<SledEventDatabase>, duration: Duration) -> NotificationBus {
@@ -22,7 +24,7 @@ pub fn default_escrow_bus(db: Arc<SledEventDatabase>, duration: Duration) -> Not
         ],
     );
     bus.register_observer(
-        Arc::new(PartiallySignedEscrow::new(db.clone())),
+        Arc::new(PartiallySignedEscrow::new(db.clone(), duration)),
         vec![JustNotification::PartiallySigned],
     );
 
@@ -146,11 +148,14 @@ impl OutOfOrderEscrow {
 }
 
 #[derive(Clone)]
-pub struct PartiallySignedEscrow(Arc<SledEventDatabase>);
+pub struct PartiallySignedEscrow {
+    db: Arc<SledEventDatabase>,
+    duration: Duration,
+}
 
 impl PartiallySignedEscrow {
-    pub fn new(db: Arc<SledEventDatabase>) -> Self {
-        Self(db)
+    pub fn new(db: Arc<SledEventDatabase>, duration: Duration) -> Self {
+        Self { db, duration }
     }
 }
 impl Notifier for PartiallySignedEscrow {
@@ -177,36 +182,57 @@ impl PartiallySignedEscrow {
     ) -> Result<(), Error> {
         let id = signed_event.event_message.event.get_prefix();
         if let Some(esc) = self
-            .0
+            .db
             .get_partially_signed_events(signed_event.event_message.clone())
         {
-            let new_sigs: Vec<_> = esc
+            let mut errors = vec![];
+            // Remove stale events
+            let new_sigs = esc
+                .map(|ev: TimestampedSignedEventMessage| -> Result<_, Error> {
+                    if ev.is_stale(self.duration)? {
+                        self.db.remove_partially_signed_event(
+                            &id,
+                            &ev.signed_event_message.event_message,
+                        )?;
+                        Ok(None)
+                    } else {
+                        Ok(Some(ev))
+                    }
+                })
+                // Collect errors and filtered out removed events
+                .filter_map(|r| r.map_err(|e| errors.push(e)).ok().and_then(|e| e))
                 .flat_map(|ev| ev.signed_event_message.signatures)
                 .chain(signed_event.signatures.clone().into_iter())
                 .collect();
+            if !errors.is_empty() {
+                return Err(Error::SemanticError(format!(
+                    "Error while escrow cleanup: {:?}",
+                    errors
+                )));
+            }
             let new_event = SignedEventMessage {
                 signatures: new_sigs,
                 ..signed_event.to_owned()
             };
 
-            let validator = EventValidator::new(self.0.clone());
+            let validator = EventValidator::new(self.db.clone());
             match validator.validate_event(&new_event) {
                 Ok(_) => {
                     // add to kel
-                    self.0.add_kel_finalized_event(new_event.clone(), &id)?;
+                    self.db.add_kel_finalized_event(new_event.clone(), &id)?;
                     // remove from escrow
-                    self.0
+                    self.db
                         .remove_partially_signed_event(&id, &new_event.event_message)?;
                     bus.notify(&Notification::KeyEventAdded(new_event))?;
                 }
                 Err(_e) => {
                     //keep in escrow and save new partially signed event
-                    self.0
+                    self.db
                         .add_partially_signed_event(signed_event.clone(), &id)?;
                 }
             }
         } else {
-            self.0
+            self.db
                 .add_partially_signed_event(signed_event.clone(), &id)?;
         };
 

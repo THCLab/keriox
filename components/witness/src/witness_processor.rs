@@ -43,7 +43,10 @@ impl WitnessProcessor {
     pub fn new(db: Arc<SledEventDatabase>) -> Self {
         let mut bus = NotificationBus::new();
         bus.register_observer(
-            Arc::new(PartiallySignedEscrow::new(db.clone())),
+            Arc::new(PartiallySignedEscrow::new(
+                db.clone(),
+                Duration::from_secs(60),
+            )),
             vec![JustNotification::PartiallySigned],
         );
         bus.register_observer(

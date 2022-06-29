@@ -23,10 +23,8 @@ impl WatcherListener {
             address.clone()
         };
 
-        WatcherData::setup(pub_address, event_db_path, priv_key).map(|watcher_data| {
-            Self {
-                watcher_data: Watcher(watcher_data),
-            }
+        WatcherData::setup(pub_address, event_db_path, priv_key).map(|watcher_data| Self {
+            watcher_data: Watcher(watcher_data),
         })
     }
 

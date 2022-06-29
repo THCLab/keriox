@@ -65,7 +65,7 @@ impl SledEventDatabase {
 
         events_path.push("events");
         escrow_path.push("escrow");
-        
+
         let db = sled::open(events_path.as_path())?;
         let escrows_db = sled::open(escrow_path.as_path())?;
 
