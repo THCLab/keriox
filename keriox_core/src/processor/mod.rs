@@ -1,13 +1,14 @@
 use std::sync::Arc;
 
-// #[cfg(feature = "async")]
-// pub mod async_processing;
 pub mod basic_processor;
 pub mod escrow;
+#[cfg(test)]
+mod escrow_tests;
 pub mod event_storage;
 pub mod notification;
 #[cfg(test)]
-mod tests;
+mod processor_tests;
+
 pub mod validator;
 
 use self::{
