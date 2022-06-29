@@ -29,7 +29,7 @@ pub fn default_escrow_bus(db: Arc<SledEventDatabase>, duration: Duration) -> Not
     );
 
     bus.register_observer(
-        Arc::new(PartiallyWitnessedEscrow::new(db.clone())),
+        Arc::new(PartiallyWitnessedEscrow::new(db.clone(), duration)),
         vec![
             JustNotification::PartiallyWitnessed,
             JustNotification::ReceiptEscrowed,
@@ -241,10 +241,14 @@ impl PartiallySignedEscrow {
 }
 
 #[derive(Clone)]
-pub struct PartiallyWitnessedEscrow(Arc<SledEventDatabase>);
+pub struct PartiallyWitnessedEscrow {
+    db: Arc<SledEventDatabase>,
+    duration: Duration,
+}
+
 impl PartiallyWitnessedEscrow {
-    pub fn new(db: Arc<SledEventDatabase>) -> Self {
-        Self(db)
+    pub fn new(db: Arc<SledEventDatabase>, duration: Duration) -> Self {
+        Self{db, duration}
     }
 }
 impl Notifier for PartiallyWitnessedEscrow {
@@ -259,7 +263,7 @@ impl Notifier for PartiallyWitnessedEscrow {
                 // ignore events with no signatures
                 if !signed_event.signatures.is_empty() {
                     let id = &signed_event.event_message.event.get_prefix();
-                    self.0
+                    self.db
                         .add_partially_witnessed_event(signed_event.clone(), id)?;
                 }
             }
@@ -272,28 +276,34 @@ impl Notifier for PartiallyWitnessedEscrow {
 
 impl PartiallyWitnessedEscrow {
     pub fn process_partially_witnessed_events(&self, bus: &NotificationBus) -> Result<(), Error> {
-        if let Some(esc) = self.0.get_all_partially_witnessed() {
+        if let Some(esc) = self.db.get_all_partially_witnessed() {
             for event in esc {
+                // Remove stale events
                 let id = event.signed_event_message.event_message.event.get_prefix();
-                let validator = EventValidator::new(self.0.clone());
-                match validator.validate_event(&event.signed_event_message) {
-                    Ok(_) => {
-                        // add to kel
-                        self.0
-                            .add_kel_finalized_event(event.signed_event_message.clone(), &id)?;
-                        // remove from escrow
-                        self.0
-                            .remove_partially_witnessed_event(&id, &event.signed_event_message)?;
-                        bus.notify(&Notification::KeyEventAdded(event.signed_event_message))?;
-                        // stop processing the escrow if kel was updated. It needs to start again.
-                        break;
+                if event.is_stale(self.duration)? {
+                    self.db
+                    .remove_partially_witnessed_event(&id, &event.signed_event_message)?;
+                } else {
+                    let validator = EventValidator::new(self.db.clone());
+                    match validator.validate_event(&event.signed_event_message) {
+                        Ok(_) => {
+                            // add to kel
+                            self.db
+                                .add_kel_finalized_event(event.signed_event_message.clone(), &id)?;
+                            // remove from escrow
+                            self.db
+                                .remove_partially_witnessed_event(&id, &event.signed_event_message)?;
+                            bus.notify(&Notification::KeyEventAdded(event.signed_event_message))?;
+                            // stop processing the escrow if kel was updated. It needs to start again.
+                            break;
+                        }
+                        Err(Error::SignatureVerificationError) => {
+                            // remove from escrow
+                            self.db
+                                .remove_partially_witnessed_event(&id, &event.signed_event_message)?;
+                        }
+                        Err(_e) => (), // keep in escrow,
                     }
-                    Err(Error::SignatureVerificationError) => {
-                        // remove from escrow
-                        self.0
-                            .remove_partially_witnessed_event(&id, &event.signed_event_message)?;
-                    }
-                    Err(_e) => (), // keep in escrow,
                 }
             }
         };

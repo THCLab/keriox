@@ -1,4 +1,4 @@
-use std::{convert::TryFrom, fs, sync::Arc, thread, time::Duration};
+use std::{convert::TryFrom, fs, sync::Arc, thread::{self, sleep}, time::Duration};
 
 use crate::{
     database::sled::SledEventDatabase,
@@ -621,6 +621,74 @@ fn test_partially_sign_escrow_cleanup() -> Result<(), Error> {
 
 	// Proces the same event with another signature
     processor.process(&icp_first_sig)?;
+
+    Ok(())
+}
+
+#[test]
+pub fn test_partially_witnessed_escrow_cleanup() -> Result<(), Error> {
+    use tempfile::Builder;
+
+    // Create test db and event processor.
+    // events taken from keripy/tests/core/test_witness.py:def test_indexed_witness_replay():
+    let root = Builder::new().prefix("test-db").tempdir().unwrap();
+    fs::create_dir_all(root.path()).unwrap();
+    let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
+    let event_processor = BasicProcessor::new(Arc::clone(&db));
+    let event_storage = EventStorage::new(Arc::clone(&db));
+
+    // check if receipt was escrowed
+    let id: IdentifierPrefix = "E1EyzzujHLiQbj9kcJ9wI2lVjOkiNbNn7t4Y2MhRjn_U"
+        .parse()
+        .unwrap();
+
+    // process icp event without processing receipts.
+    let icp_raw = br#"{"v":"KERI10JSON000273_","t":"icp","d":"E1EyzzujHLiQbj9kcJ9wI2lVjOkiNbNn7t4Y2MhRjn_U","i":"E1EyzzujHLiQbj9kcJ9wI2lVjOkiNbNn7t4Y2MhRjn_U","s":"0","kt":"2","k":["DtD9PUcL_NlTlvc2xiEJBRfRz0bDJlbtTynOQpNwVKh0","Dxb9OSQWxq59UsjRthaNPtTzNn8VXs8SJEXdbxFUZ-lA","DkQFb_911LXVQaFj-Ch9rj89QTpIZT3AcV-TjcBhbXOw"],"nt":"2","n":["EmigdEgCEjPPykB-u4_oW6xENmrnr1M0dNlkIUsx3dEI","EwnTsM2S1AKDnSjrnQF2OWRoPkcpH7aY1-3TtEJwnBMs","Eywk7noH2HheSFbjI-sids93CyzP4LUyJSOUBe7OAQbo"],"bt":"2","b":["B389hKezugU2LFKiFVbitoHAxXqJh6HQ8Rn9tH7fxd68","Bed2Tpxc8KeCEWoq3_RKKRjU_3P-chSser9J4eAtAK6I","BljDbmdNfb63KOpGV4mmPKwyyp3OzDsRzpNrdL1BRQts"],"c":[],"a":[]}-AADAAhZMZp-TpUuGjfO-_s3gSh_aDpuK38b7aVh54W0LzgrOvA5Q3eULEch0hW8Ct6jHfLXSNCrsNSynT3D2UvymdCQABiDU4uO1sZcKh7_qlkVylf_jZDOAWlcJFY_ImBOIcfEZbNthQefZOL6EDzuxdUMEScKTnO_n1q3Ms8rufcz8lDwACQuxdJRTtPypGECC3nHdVkJeQojfRvkRZU7n15111NFbLAY2GpMAOnvptzIVUiv9ONOSCXBCWNFC4kNQmtDWOBg"#;
+    let parsed_icp = signed_message(icp_raw).unwrap().1;
+    let icp_msg = Message::try_from(parsed_icp).unwrap();
+    event_processor.process(&icp_msg.clone())?;
+
+    let state = event_storage.get_state(&id)?;
+    assert_eq!(state, None);
+
+    let receipt0_0 = br#"{"v":"KERI10JSON000091_","t":"rct","d":"E1EyzzujHLiQbj9kcJ9wI2lVjOkiNbNn7t4Y2MhRjn_U","i":"E1EyzzujHLiQbj9kcJ9wI2lVjOkiNbNn7t4Y2MhRjn_U","s":"0"}-CABB389hKezugU2LFKiFVbitoHAxXqJh6HQ8Rn9tH7fxd680BlnRQL6bqNGJZNNGGwA4xZhBwtzY1SgAMdIFky-sUiq6bU-DGbp1OHSXQzKGQWlhohRxfcjtDjql8s9B_n5DdDw"#;
+    let parsed_rcp = signed_message(receipt0_0).unwrap().1;
+    let rcp_msg = Message::try_from(parsed_rcp).unwrap();
+    event_processor.process(&rcp_msg.clone())?;
+
+    // check if icp is in escrow
+    let mut esc = db.get_all_partially_witnessed().unwrap();
+    assert_eq!(
+        icp_msg,
+        Message::Notice(Notice::Event(esc.next().unwrap().signed_event_message))
+    );
+    assert!(esc.next().is_none());
+
+    let mut esc = db.get_escrow_nt_receipts(&id).unwrap();
+    assert_eq!(
+        rcp_msg,
+        Message::Notice(Notice::NontransferableRct(esc.next().unwrap()))
+    );
+    assert!(esc.next().is_none());
+
+    let state = event_storage.get_state(&id)?;
+    assert_eq!(state, None);
+
+    // Wait until escrowed events become stale.
+    sleep(Duration::from_secs(10));
+
+    let receipt0_1 = br#"{"v":"KERI10JSON000091_","t":"rct","d":"E1EyzzujHLiQbj9kcJ9wI2lVjOkiNbNn7t4Y2MhRjn_U","i":"E1EyzzujHLiQbj9kcJ9wI2lVjOkiNbNn7t4Y2MhRjn_U","s":"0"}-CABBed2Tpxc8KeCEWoq3_RKKRjU_3P-chSser9J4eAtAK6I0BC69-inoBzibkf_HOUfn31sP3FOCukY0VqqOnnm6pxPWeBR2N7AhdN146OsHVuWfrzzuDSuJl3GpIPYCIynuEDA"#;
+    let parsed_rcp = signed_message(receipt0_1).unwrap().1;
+    let rcp_msg = Message::try_from(parsed_rcp).unwrap();
+    event_processor.process(&rcp_msg.clone())?;
+
+    // check if icp still in escrow
+    let mut esc = db.get_all_partially_witnessed().unwrap();
+    assert!(esc.next().is_none());
+
+    // check if event was accepted into kel
+    let state = event_storage.get_state(&id)?;
+    assert_eq!(state, None);
 
     Ok(())
 }
