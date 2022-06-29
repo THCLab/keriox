@@ -1,15 +1,19 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    result,
+    sync::{Arc, Mutex},
+};
 
 use keri::{
     database::sled::SledEventDatabase,
-    derivation::{self_addressing::SelfAddressing, self_signing::SelfSigning},
+    derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
     error::Error,
     event::SerializationFormats,
     event_message::signed_event_message::{Message, Notice, Op},
-    prefix::{AttachedSignaturePrefix, IdentifierPrefix},
+    keys::PublicKey,
+    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix},
     processor::{basic_processor::BasicProcessor, event_storage::EventStorage, Processor},
     query::query_event::{QueryArgsMbx, QueryEvent, QueryRoute, QueryTopics, SignedQuery},
-    signer::{KeyManager, Signer},
+    signer::{CryptoBox, KeyManager, Signer},
 };
 
 use crate::{tests::controller_helper::Controller, witness::Witness};
@@ -593,7 +597,10 @@ pub fn test_key_state_notice() -> Result<(), Error> {
     let bob_pref = bob.prefix().clone();
 
     // send bobs icp to witness to have his keys
-    witness.process_notice(Notice::Event(bob_icp.clone()))?;
+    let bob_icp_msg = Message::Notice(Notice::Event(bob_icp.clone()))
+        .to_cesr()
+        .unwrap();
+    witness.parse_and_process_notices(&bob_icp_msg)?;
 
     // construct bobs ksn msg in rpy made by witness
     let signed_rpy = witness.get_signed_ksn_for_prefix(&bob_pref, signer_arc.clone())?;
@@ -719,47 +726,9 @@ fn test_mbx() {
 
     // query witness
     for controller in controllers {
-        let qry_msg = QueryEvent::new_query(
-            QueryRoute::Mbx {
-                args: QueryArgsMbx {
-                    i: IdentifierPrefix::Basic(witness.prefix.clone()),
-                    pre: controller.prefix().clone(),
-                    src: IdentifierPrefix::Basic(witness.prefix.clone()),
-                    topics: QueryTopics {
-                        credential: 0,
-                        receipt: 0,
-                        replay: 0,
-                        multisig: 0,
-                        delegate: 0,
-                    },
-                },
-                reply_route: "".to_string(),
-            },
-            SerializationFormats::JSON,
-            &SelfAddressing::Blake3_256,
-        )
-        .unwrap();
-
-        let signature = controller
-            .key_manager
-            .lock()
-            .unwrap()
-            .sign(&qry_msg.serialize().unwrap())
-            .unwrap();
-
-        let signatures = vec![AttachedSignaturePrefix::new(
-            SelfSigning::Ed25519Sha512,
-            signature,
-            0,
-        )];
-
-        let mbx_msg = Op::Query(SignedQuery::new(
-            qry_msg,
-            controller.prefix().clone().clone(),
-            signatures,
-        ));
-
-        let receipts = witness.process_op(mbx_msg).unwrap();
+        let mbx_msg = create_mbx_msg(&witness, &controller);
+        let mbx_msg = Message::Op(mbx_msg).to_cesr().unwrap();
+        let receipts = witness.parse_and_process_ops(&mbx_msg).unwrap();
 
         assert_eq!(receipts.len(), 1);
         let receipt = receipts[0].clone();
@@ -773,4 +742,122 @@ fn test_mbx() {
         assert_eq!(receipt.body.event.sn, 0);
         assert_eq!(receipt.body.event.prefix, controller.prefix().clone());
     }
+}
+
+#[test]
+fn test_invalid_notice() {
+    use std::sync::Mutex;
+
+    use keri::signer::CryptoBox;
+
+    let signer = Arc::new(Signer::new());
+
+    let mut controllers = (0..2)
+        .map(|i| {
+            let root = tempfile::Builder::new()
+                .prefix(&format!("test-ctrl-{i}"))
+                .tempdir()
+                .unwrap();
+            let oobi_root = tempfile::Builder::new()
+                .prefix(&format!("test-ctrl-{i}"))
+                .tempdir()
+                .unwrap();
+            std::fs::create_dir_all(root.path()).unwrap();
+            let db_controller = Arc::new(SledEventDatabase::new(root.path()).unwrap());
+            let key_manager = Arc::new(Mutex::new(CryptoBox::new().unwrap()));
+            Controller::new(
+                Arc::clone(&db_controller),
+                key_manager.clone(),
+                oobi_root.path(),
+            )
+            .unwrap()
+        })
+        .collect::<Vec<_>>();
+
+    let witness = {
+        let root = tempfile::Builder::new()
+            .prefix("test-witness")
+            .tempdir()
+            .unwrap();
+        let oobi_root = tempfile::Builder::new()
+            .prefix(&format!("test-oobi"))
+            .tempdir()
+            .unwrap();
+        std::fs::create_dir_all(root.path()).unwrap();
+        Witness::new(signer, root.path(), oobi_root.path()).unwrap()
+    };
+
+    // create invalid inception events
+    for controller in &mut controllers {
+        let incept_event = controller
+            .incept(Some(vec![witness.prefix.clone()]), Some(1))
+            .unwrap();
+
+        // change identifier
+        let mut invalid_event = incept_event.clone();
+        invalid_event.event_message.event.content.prefix = IdentifierPrefix::Basic(
+            BasicPrefix::new(Basic::Ed25519, PublicKey::new(vec![0; 32])),
+        );
+        let result = witness.process_notice(Notice::Event(invalid_event));
+        assert!(matches!(result, Err(Error::SemanticError(_))));
+
+        // remove signatures
+        let mut incept_event_unsigned = incept_event.clone();
+        incept_event_unsigned.signatures.clear();
+
+        let result = witness.process_notice(Notice::Event(incept_event_unsigned));
+
+        assert!(matches!(result, Ok(())));
+    }
+
+    // query witness
+    for controller in controllers {
+        let mbx_msg = create_mbx_msg(&witness, &controller);
+        let mbx_msg = Message::Op(mbx_msg).to_cesr().unwrap();
+        let result = witness.parse_and_process_ops(&mbx_msg);
+
+        // should return no receipts because they had no signatures
+        // TODO: better error variant
+        assert!(matches!(result, Err(Error::SemanticError(_))));
+    }
+}
+
+fn create_mbx_msg(witness: &Witness, controller: &Controller<CryptoBox>) -> Op {
+    let qry_msg = QueryEvent::new_query(
+        QueryRoute::Mbx {
+            args: QueryArgsMbx {
+                i: IdentifierPrefix::Basic(witness.prefix.clone()),
+                pre: controller.prefix().clone(),
+                src: IdentifierPrefix::Basic(witness.prefix.clone()),
+                topics: QueryTopics {
+                    credential: 0,
+                    receipt: 0,
+                    replay: 0,
+                    multisig: 0,
+                    delegate: 0,
+                },
+            },
+            reply_route: "".to_string(),
+        },
+        SerializationFormats::JSON,
+        &SelfAddressing::Blake3_256,
+    )
+    .unwrap();
+    let signature = controller
+        .key_manager
+        .lock()
+        .unwrap()
+        .sign(&qry_msg.serialize().unwrap())
+        .unwrap();
+    let signatures = vec![AttachedSignaturePrefix::new(
+        SelfSigning::Ed25519Sha512,
+        signature,
+        0,
+    )];
+    let mbx_msg = Op::Query(SignedQuery::new(
+        qry_msg,
+        controller.prefix().clone().clone(),
+        signatures,
+    ));
+    mbx_msg
 }

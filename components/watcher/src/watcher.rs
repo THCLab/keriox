@@ -2,10 +2,10 @@ use std::{path::Path, sync::Arc};
 
 use anyhow::{anyhow, Result};
 use keri::{
-    actor::prelude::*,
+    actor::{parse_notice_stream, parse_op_stream, prelude::*},
     derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
     error::Error,
-    event_message::signed_event_message::Op,
+    event_message::signed_event_message::{Notice, Op},
     oobi::{EndRole, LocationScheme, OobiManager, Scheme},
     prefix::{BasicPrefix, IdentifierPrefix},
     query::{
@@ -119,16 +119,8 @@ impl WatcherData {
         self.event_storage.get_state(id)
     }
 
-    // Returns messages if they can be returned immediately, i.e. for query message
-    pub fn process(&self, msg: Message) -> Result<Option<Vec<Message>>, Error> {
-        let response = match msg.clone() {
-            Message::Op(op) => Some(self.process_op(op)?),
-            Message::Notice(notice) => {
-                process_notice(notice, &self.processor)?;
-                None
-            }
-        };
-        Ok(response)
+    fn process_notice(&self, notice: Notice) -> Result<(), Error> {
+        process_notice(notice, &self.processor)
     }
 
     fn process_op(&self, op: Op) -> Result<Vec<Message>, Error> {
@@ -168,15 +160,21 @@ impl WatcherData {
         Ok(responses)
     }
 
-    pub fn parse_and_process(&self, input_stream: &[u8]) -> Result<Vec<Message>, Error> {
-        Ok(parse_event_stream(input_stream)?
+    pub fn parse_and_process_notices(&self, input_stream: &[u8]) -> Result<(), Error> {
+        parse_notice_stream(input_stream)?
             .into_iter()
-            .map(|message| self.process(message))
-            // TODO: avoid unwrap
-            .map(|d| d.unwrap())
-            .flatten()
-            .flatten()
-            .collect())
+            .map(|notice| self.process_notice(notice))
+            .collect()
+    }
+
+    pub fn parse_and_process_ops(&self, input_stream: &[u8]) -> Result<Vec<Message>, Error> {
+        parse_op_stream(input_stream)?
+            .into_iter()
+            .flat_map(|op| match self.process_op(op) {
+                Ok(msgs) => msgs.into_iter().map(Ok).collect(),
+                Err(e) => vec![Err(e)],
+            })
+            .collect()
     }
 }
 
@@ -200,7 +198,7 @@ impl Watcher {
             let url = format!("{}oobi/{}/{}/{}", lc.url, er.cid, "witness", er.eid);
             let oobis = reqwest::get(url).await.unwrap().text().await.unwrap();
 
-            self.0.parse_and_process(oobis.as_bytes()).unwrap();
+            self.0.parse_and_process_ops(oobis.as_bytes()).unwrap();
             Ok(())
         } else {
             Err(anyhow!("Wrong oobi type"))
@@ -211,7 +209,7 @@ impl Watcher {
         let url = format!("{}oobi/{}", lc.url, lc.eid);
         let oobis = reqwest::get(url).await.unwrap().text().await.unwrap();
 
-        self.0.parse_and_process(oobis.as_bytes()).unwrap();
+        self.0.parse_and_process_ops(oobis.as_bytes()).unwrap();
 
         Ok(())
     }
