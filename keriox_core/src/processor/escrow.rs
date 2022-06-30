@@ -11,7 +11,7 @@ use crate::{
     database::sled::SledEventDatabase,
     error::Error,
     event_message::signed_event_message::{
-        SignedEventMessage, Timestamped, TimestampedSignedEventMessage,
+        SignedEventMessage, TimestampedSignedEventMessage,
     },
     prefix::IdentifierPrefix,
 };
