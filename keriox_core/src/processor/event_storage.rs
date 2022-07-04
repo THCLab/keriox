@@ -348,9 +348,7 @@ impl EventStorage {
         id: &IdentifierPrefix,
         event_digest: &SelfAddressingPrefix,
     ) -> Result<IdentifierState, Error> {
-        let new_state = self
-            .get_state(id)?
-            .unwrap_or_default();
+        let new_state = self.get_state(id)?.unwrap_or_default();
         // if receipted event is newer than current state, try to find receipted
         // event in partially witnessed escrow and apply it to state. Then we
         // can get current witness set.
@@ -370,9 +368,12 @@ impl EventStorage {
                         && &event.signed_event_message.event_message.get_digest() == event_digest
                 })
             }) {
-                Some(escrowed_partially_witnessed) => new_state.apply(&escrowed_partially_witnessed.signed_event_message),
-                None => Ok(new_state),
+            Some(escrowed_partially_witnessed) => {
+                new_state.apply(&escrowed_partially_witnessed.signed_event_message)
             }
+
+            None => Ok(new_state),
+        }
     }
 
     /// Get current witness list for event

@@ -5,7 +5,7 @@ use std::{
 
 use derive_more::{Display, Error, From};
 use keri::{
-    actor::{prelude::*, parse_notice_stream, parse_op_stream},
+    actor::{parse_notice_stream, parse_op_stream, prelude::*},
     derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
     error::Error,
     event_message::signed_event_message::{Notice, Op},

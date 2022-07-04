@@ -10,9 +10,7 @@ use crate::query::reply_event::ReplyRoute;
 use crate::{
     database::sled::SledEventDatabase,
     error::Error,
-    event_message::signed_event_message::{
-        SignedEventMessage, TimestampedSignedEventMessage,
-    },
+    event_message::signed_event_message::{SignedEventMessage, TimestampedSignedEventMessage},
     prefix::IdentifierPrefix,
 };
 
@@ -335,6 +333,7 @@ impl Notifier for NontransReceiptsEscrow {
                 self.process_nt_receipts_escrow(bus)
             }
             Notification::ReceiptOutOfOrder(receipt) => {
+                self.nontrans_escrow_cleanup()?;
                 if receipt.couplets.is_none() && receipt.indexed_sigs.is_none() {
                     // ignore events with no signatures
                     Ok(())
@@ -350,6 +349,24 @@ impl Notifier for NontransReceiptsEscrow {
 }
 
 impl NontransReceiptsEscrow {
+    pub fn nontrans_escrow_cleanup(&self) -> Result<(), Error> {
+        if let Some(esc) = self.db.get_all_escrow_nt_receipts() {
+            for timestamped_receipt in esc {
+                let id = timestamped_receipt
+                    .signed_event_message
+                    .body
+                    .event
+                    .prefix
+                    .clone();
+                if timestamped_receipt.is_stale(self.duration)? {
+                    self.db
+                        .remove_escrow_nt_receipt(&id, &timestamped_receipt.signed_event_message)?;
+                }
+            }
+        };
+        Ok(())
+    }
+
     pub fn process_nt_receipts_escrow(&self, bus: &NotificationBus) -> Result<(), Error> {
         if let Some(esc) = self.db.get_all_escrow_nt_receipts() {
             for timestamped_receipt in esc {

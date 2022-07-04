@@ -150,7 +150,7 @@ impl PartialEq for SignedEventMessage {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Timestamped<M> {
     pub timestamp: DateTime<Local>,
     pub signed_event_message: M,
@@ -166,7 +166,7 @@ impl<M> Timestamped<M> {
 
     pub fn is_stale(&self, duration: std::time::Duration) -> Result<bool, Error> {
         Ok(Local::now() - self.timestamp
-            > Duration::from_std(duration)
+            >= Duration::from_std(duration)
                 .map_err(|_e| Error::SemanticError("Improper duration".into()))?)
     }
 }
