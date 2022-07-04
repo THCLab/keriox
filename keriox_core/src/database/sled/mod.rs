@@ -11,7 +11,7 @@ use crate::{
         key_event_message::KeyEvent,
         signed_event_message::{
             SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
-            TimestampedNontransReceipt, TimestampedSignedEventMessage,
+            TimestampedNontransReceipt, TimestampedSignedEventMessage, TimestampedTransReceipt,
         },
         TimestampedEventMessage,
     },
@@ -39,7 +39,7 @@ pub struct SledEventDatabase {
     // "vrcs" tree
     receipts_t: SledEventTreeVec<SignedTransferableReceipt>,
     // "vres" tree
-    escrowed_receipts_t: SledEventTreeVec<SignedTransferableReceipt>,
+    escrowed_receipts_t: SledEventTreeVec<TimestampedTransReceipt>,
     // "pwes" tree
     partially_witnessed_events: SledEventTreeVec<TimestampedSignedEventMessage>,
 
@@ -275,13 +275,13 @@ impl SledEventDatabase {
         id: &IdentifierPrefix,
     ) -> Result<(), DbError> {
         self.escrowed_receipts_t
-            .push(self.identifiers.designated_key(id)?, receipt)
+            .push(self.identifiers.designated_key(id)?, receipt.into())
     }
 
     pub fn get_escrow_t_receipts(
         &self,
         id: &IdentifierPrefix,
-    ) -> Option<impl DoubleEndedIterator<Item = SignedTransferableReceipt>> {
+    ) -> Option<impl DoubleEndedIterator<Item = TimestampedTransReceipt>> {
         self.escrowed_receipts_t
             .iter_values(self.identifiers.designated_key(id).ok()?)
     }
@@ -292,7 +292,7 @@ impl SledEventDatabase {
         receipt: &SignedTransferableReceipt,
     ) -> Result<(), DbError> {
         self.escrowed_receipts_t
-            .remove(self.identifiers.designated_key(id)?, receipt)
+            .remove(self.identifiers.designated_key(id)?, &receipt.into())
     }
 
     pub fn add_escrow_nt_receipt(

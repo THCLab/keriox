@@ -183,6 +183,12 @@ impl From<Timestamped<SignedNontransferableReceipt>> for SignedNontransferableRe
     }
 }
 
+impl From<Timestamped<SignedTransferableReceipt>> for SignedTransferableReceipt {
+    fn from(event: Timestamped<SignedTransferableReceipt>) -> SignedTransferableReceipt {
+        event.signed_event_message
+    }
+}
+
 impl<M> From<M> for Timestamped<M> {
     fn from(event: M) -> Timestamped<M> {
         Timestamped::new(event)
@@ -322,3 +328,4 @@ impl SignedNontransferableReceipt {
 }
 
 pub type TimestampedNontransReceipt = Timestamped<SignedNontransferableReceipt>;
+pub type TimestampedTransReceipt = Timestamped<SignedTransferableReceipt>;
