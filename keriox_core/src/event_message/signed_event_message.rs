@@ -326,6 +326,3 @@ impl SignedNontransferableReceipt {
         }
     }
 }
-
-pub type TimestampedNontransReceipt = Timestamped<SignedNontransferableReceipt>;
-pub type TimestampedTransReceipt = Timestamped<SignedTransferableReceipt>;

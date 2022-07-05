@@ -4,7 +4,7 @@ version = "0.8.0"
 authors = [
     "Decentralized Identity Foundation",
     "Charles Cunningham <charles@jolocom.io>",
-    "Ivan Temchenko <ivan@jolocom.io",
+    "Ivan Temchenko <ivan@jolocom.io>",
 	"Edyta Pawlak <edyta.pawlak@opensoftware.pl>"
 ]
 edition = "2018"

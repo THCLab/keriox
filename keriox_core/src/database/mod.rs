@@ -1,6 +1,7 @@
+pub(crate) mod escrow;
 pub(crate) mod tables;
 
-use std::path::{Path, PathBuf};
+use std::{path::{Path, PathBuf}, time::Duration};
 
 use self::tables::{SledEventTree, SledEventTreeVec};
 #[cfg(feature = "query")]
@@ -11,12 +12,14 @@ use crate::{
         key_event_message::KeyEvent,
         signed_event_message::{
             SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
-            TimestampedNontransReceipt, TimestampedSignedEventMessage, TimestampedTransReceipt,
+            TimestampedSignedEventMessage,
         },
         TimestampedEventMessage,
     },
     prefix::IdentifierPrefix,
 };
+
+use self::escrow::Escrow;
 
 pub struct SledEventDatabase {
     // "iids" tree
@@ -24,27 +27,27 @@ pub struct SledEventDatabase {
     identifiers: SledEventTree<IdentifierPrefix>,
     // "kels" tree
     key_event_logs: SledEventTreeVec<TimestampedSignedEventMessage>,
+    // "vrcs" tree
+    receipts_t: SledEventTreeVec<SignedTransferableReceipt>,
+    // "rcts" tree
+    receipts_nt: SledEventTreeVec<SignedNontransferableReceipt>,
+    #[cfg(feature = "query")]
+    accepted_rpy: SledEventTreeVec<SignedReply>,
+
     // "ooes" tree
-    escrowed_out_of_order: SledEventTreeVec<TimestampedSignedEventMessage>,
+    escrowed_out_of_order: Escrow<SignedEventMessage>,
     // "pses" tree
-    escrowed_partially_signed: SledEventTreeVec<TimestampedSignedEventMessage>,
+    escrowed_partially_signed: Escrow<SignedEventMessage>,
+    // "pwes" tree
+    partially_witnessed_events: Escrow<SignedEventMessage>,
     // "ldes" tree
     likely_duplicious_events: SledEventTreeVec<TimestampedEventMessage>,
     // "dels" tree
     duplicitous_events: SledEventTreeVec<TimestampedSignedEventMessage>,
-    // "rcts" tree
-    receipts_nt: SledEventTreeVec<SignedNontransferableReceipt>,
     // "ures" tree
-    escrowed_receipts_nt: SledEventTreeVec<TimestampedNontransReceipt>,
-    // "vrcs" tree
-    receipts_t: SledEventTreeVec<SignedTransferableReceipt>,
+    escrowed_receipts_nt: Escrow<SignedNontransferableReceipt>,
     // "vres" tree
-    escrowed_receipts_t: SledEventTreeVec<TimestampedTransReceipt>,
-    // "pwes" tree
-    partially_witnessed_events: SledEventTreeVec<TimestampedSignedEventMessage>,
-
-    #[cfg(feature = "query")]
-    accepted_rpy: SledEventTreeVec<SignedReply>,
+    escrowed_receipts_t: Escrow<SignedTransferableReceipt>,
 
     #[cfg(feature = "query")]
     escrowed_replys: SledEventTreeVec<SignedReply>,
@@ -81,11 +84,26 @@ impl SledEventDatabase {
             #[cfg(feature = "query")]
             mailbox_receipts: SledEventTreeVec::new(db.open_tree(b"mbxr")?),
 
-            escrowed_out_of_order: SledEventTreeVec::new(escrows_db.open_tree(b"ooes")?),
-            escrowed_partially_signed: SledEventTreeVec::new(escrows_db.open_tree(b"pses")?),
-            partially_witnessed_events: SledEventTreeVec::new(escrows_db.open_tree(b"pwes")?),
-            escrowed_receipts_nt: SledEventTreeVec::new(escrows_db.open_tree(b"ures")?),
-            escrowed_receipts_t: SledEventTreeVec::new(escrows_db.open_tree(b"vres")?),
+            escrowed_out_of_order: Escrow::new(
+                escrows_db.open_tree(b"ooes")?,
+                Duration::from_secs(10),
+            ),
+            escrowed_partially_signed: Escrow::new(
+                escrows_db.open_tree(b"pses")?,
+                Duration::from_secs(10),
+            ),
+            partially_witnessed_events: Escrow::new(
+                escrows_db.open_tree(b"pwes")?,
+                Duration::from_secs(10),
+            ),
+            escrowed_receipts_nt: Escrow::new(
+                escrows_db.open_tree(b"ures")?,
+                Duration::from_secs(10),
+            ),
+            escrowed_receipts_t: Escrow::new(
+                escrows_db.open_tree(b"vres")?,
+                Duration::from_secs(10),
+            ),
             #[cfg(feature = "query")]
             escrowed_replys: SledEventTreeVec::new(escrows_db.open_tree(b"knes")?),
         })
@@ -123,15 +141,15 @@ impl SledEventDatabase {
         id: &IdentifierPrefix,
     ) -> Result<(), DbError> {
         self.escrowed_out_of_order
-            .push(self.identifiers.designated_key(id)?, event.into())
+            .add(self.identifiers.designated_key(id)?, event.into())
     }
 
     pub fn get_out_of_order_events(
         &self,
         id: &IdentifierPrefix,
-    ) -> Option<impl DoubleEndedIterator<Item = TimestampedSignedEventMessage>> {
+    ) -> Option<impl DoubleEndedIterator<Item = SignedEventMessage>> {
         self.escrowed_out_of_order
-            .iter_values(self.identifiers.designated_key(id).ok()?)
+            .get(self.identifiers.designated_key(id).ok()?)
     }
 
     pub fn remove_out_of_order_event(
@@ -140,7 +158,7 @@ impl SledEventDatabase {
         event: &SignedEventMessage,
     ) -> Result<(), DbError> {
         self.escrowed_out_of_order
-            .remove(self.identifiers.designated_key(id)?, &event.into())
+            .remove(self.identifiers.designated_key(id)?, &event)
     }
 
     pub fn add_partially_signed_event(
@@ -149,29 +167,22 @@ impl SledEventDatabase {
         id: &IdentifierPrefix,
     ) -> Result<(), DbError> {
         self.escrowed_partially_signed
-            .push(self.identifiers.designated_key(id)?, event.into())
+            .add(self.identifiers.designated_key(id)?, event)
     }
 
     pub fn get_all_partially_signed_events(
         &self,
-    ) -> Option<impl DoubleEndedIterator<Item = TimestampedSignedEventMessage>> {
+    ) -> Option<impl DoubleEndedIterator<Item = SignedEventMessage>> {
         self.escrowed_partially_signed.get_all()
     }
 
     pub fn get_partially_signed_events(
         &self,
         event: EventMessage<KeyEvent>,
-    ) -> Option<impl DoubleEndedIterator<Item = TimestampedSignedEventMessage>> {
+    ) -> Option<impl DoubleEndedIterator<Item = SignedEventMessage>> {
         self.escrowed_partially_signed
-            .iter_values(
-                self.identifiers
-                    .designated_key(&event.event.get_prefix())
-                    .ok()?,
-            )
-            .map(|events| {
-                events
-                    .filter(move |db_event| event.eq(&db_event.signed_event_message.event_message))
-            })
+            .get(self.identifiers.designated_key(&event.event.get_prefix()).ok()?)
+            .map(|events| events.filter(move |db_event| event.eq(&db_event.event_message)))
     }
 
     pub fn remove_partially_signed_event(
@@ -193,21 +204,16 @@ impl SledEventDatabase {
         event: SignedEventMessage,
         id: &IdentifierPrefix,
     ) -> Result<(), DbError> {
-        let event = event.into();
-        if !self.partially_witnessed_events.contains_value(&event) {
-            self.partially_witnessed_events
-                .push(self.identifiers.designated_key(id)?, event)
-        } else {
-            Ok(())
-        }
+        self.partially_witnessed_events
+            .add(self.identifiers.designated_key(id)?, event)
     }
 
     pub fn get_partially_witnessed_events(
         &self,
         id: &IdentifierPrefix,
-    ) -> Option<impl DoubleEndedIterator<Item = TimestampedSignedEventMessage>> {
+    ) -> Option<impl DoubleEndedIterator<Item = SignedEventMessage>> {
         self.partially_witnessed_events
-            .iter_values(self.identifiers.designated_key(id).ok()?)
+            .get(self.identifiers.designated_key(id).ok()?)
     }
 
     pub fn remove_partially_witnessed_event(
@@ -216,12 +222,12 @@ impl SledEventDatabase {
         event: &SignedEventMessage,
     ) -> Result<(), DbError> {
         self.partially_witnessed_events
-            .remove(self.identifiers.designated_key(id)?, &event.into())
+            .remove(self.identifiers.designated_key(id)?, event)
     }
 
     pub fn get_all_partially_witnessed(
         &self,
-    ) -> Option<impl DoubleEndedIterator<Item = TimestampedSignedEventMessage>> {
+    ) -> Option<impl DoubleEndedIterator<Item = SignedEventMessage>> {
         self.partially_witnessed_events.get_all()
     }
 
@@ -275,15 +281,15 @@ impl SledEventDatabase {
         id: &IdentifierPrefix,
     ) -> Result<(), DbError> {
         self.escrowed_receipts_t
-            .push(self.identifiers.designated_key(id)?, receipt.into())
+            .add(self.identifiers.designated_key(id)?, receipt)
     }
 
     pub fn get_escrow_t_receipts(
         &self,
         id: &IdentifierPrefix,
-    ) -> Option<impl DoubleEndedIterator<Item = TimestampedTransReceipt>> {
+    ) -> Option<impl DoubleEndedIterator<Item = SignedTransferableReceipt>> {
         self.escrowed_receipts_t
-            .iter_values(self.identifiers.designated_key(id).ok()?)
+            .get(self.identifiers.designated_key(id).ok()?)
     }
 
     pub fn remove_escrow_t_receipt(
@@ -292,7 +298,7 @@ impl SledEventDatabase {
         receipt: &SignedTransferableReceipt,
     ) -> Result<(), DbError> {
         self.escrowed_receipts_t
-            .remove(self.identifiers.designated_key(id)?, &receipt.into())
+            .remove(self.identifiers.designated_key(id)?, &receipt)
     }
 
     pub fn add_escrow_nt_receipt(
@@ -300,26 +306,21 @@ impl SledEventDatabase {
         receipt: SignedNontransferableReceipt,
         id: &IdentifierPrefix,
     ) -> Result<(), DbError> {
-        let receipt: TimestampedNontransReceipt = receipt.into();
-        if !self.escrowed_receipts_nt.contains_value(&receipt) {
-            self.escrowed_receipts_nt
-                .push(self.identifiers.designated_key(id)?, receipt)
-        } else {
-            Ok(())
-        }
+        self.escrowed_receipts_nt
+            .add(self.identifiers.designated_key(id)?, receipt)
     }
 
     pub fn get_escrow_nt_receipts(
         &self,
         id: &IdentifierPrefix,
-    ) -> Option<impl DoubleEndedIterator<Item = TimestampedNontransReceipt>> {
+    ) -> Option<impl DoubleEndedIterator<Item = SignedNontransferableReceipt>> {
         self.escrowed_receipts_nt
-            .iter_values(self.identifiers.designated_key(id).ok()?)
+            .get(self.identifiers.designated_key(id).ok()?)
     }
 
     pub fn get_all_escrow_nt_receipts(
         &self,
-    ) -> Option<impl DoubleEndedIterator<Item = TimestampedNontransReceipt>> {
+    ) -> Option<impl DoubleEndedIterator<Item = SignedNontransferableReceipt>> {
         self.escrowed_receipts_nt.get_all()
     }
 
@@ -329,7 +330,7 @@ impl SledEventDatabase {
         receipt: &SignedNontransferableReceipt,
     ) -> Result<(), DbError> {
         self.escrowed_receipts_nt
-            .remove(self.identifiers.designated_key(id)?, &receipt.into())
+            .remove(self.identifiers.designated_key(id)?, &receipt)
     }
 
     pub fn add_likely_duplicious_event(

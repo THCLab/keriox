@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use super::{
     event_storage::EventStorage,
@@ -8,28 +8,26 @@ use super::{
 #[cfg(feature = "query")]
 use crate::query::reply_event::ReplyRoute;
 use crate::{
-    database::SledEventDatabase,
-    error::Error,
-    event_message::signed_event_message::{SignedEventMessage, TimestampedSignedEventMessage},
-    prefix::IdentifierPrefix,
+    database::SledEventDatabase, error::Error,
+    event_message::signed_event_message::SignedEventMessage, prefix::IdentifierPrefix,
 };
 
-pub fn default_escrow_bus(db: Arc<SledEventDatabase>, duration: Duration) -> NotificationBus {
+pub fn default_escrow_bus(db: Arc<SledEventDatabase>) -> NotificationBus {
     let mut bus = NotificationBus::new();
     bus.register_observer(
-        Arc::new(OutOfOrderEscrow::new(db.clone(), duration)),
+        Arc::new(OutOfOrderEscrow::new(db.clone())),
         vec![
             JustNotification::OutOfOrder,
             JustNotification::KeyEventAdded,
         ],
     );
     bus.register_observer(
-        Arc::new(PartiallySignedEscrow::new(db.clone(), duration)),
+        Arc::new(PartiallySignedEscrow::new(db.clone())),
         vec![JustNotification::PartiallySigned],
     );
 
     bus.register_observer(
-        Arc::new(PartiallyWitnessedEscrow::new(db.clone(), duration)),
+        Arc::new(PartiallyWitnessedEscrow::new(db.clone())),
         vec![
             JustNotification::PartiallyWitnessed,
             JustNotification::ReceiptEscrowed,
@@ -39,7 +37,7 @@ pub fn default_escrow_bus(db: Arc<SledEventDatabase>, duration: Duration) -> Not
     );
 
     bus.register_observer(
-        Arc::new(NontransReceiptsEscrow::new(db.clone(), duration)),
+        Arc::new(NontransReceiptsEscrow::new(db.clone())),
         vec![
             JustNotification::KeyEventAdded,
             JustNotification::ReceiptOutOfOrder,
@@ -48,7 +46,7 @@ pub fn default_escrow_bus(db: Arc<SledEventDatabase>, duration: Duration) -> Not
     );
 
     bus.register_observer(
-        Arc::new(TransReceiptsEscrow::new(db.clone(), duration)),
+        Arc::new(TransReceiptsEscrow::new(db.clone())),
         vec![
             JustNotification::KeyEventAdded,
             JustNotification::TransReceiptOutOfOrder,
@@ -61,12 +59,11 @@ pub fn default_escrow_bus(db: Arc<SledEventDatabase>, duration: Duration) -> Not
 #[derive(Clone)]
 pub struct OutOfOrderEscrow {
     db: Arc<SledEventDatabase>,
-    duration: Duration,
 }
 
 impl OutOfOrderEscrow {
-    pub fn new(db: Arc<SledEventDatabase>, duration: std::time::Duration) -> Self {
-        Self { db, duration }
+    pub fn new(db: Arc<SledEventDatabase>) -> Self {
+        Self { db }
     }
 }
 impl Notifier for OutOfOrderEscrow {
@@ -115,30 +112,21 @@ impl OutOfOrderEscrow {
         if let Some(esc) = self.db.get_out_of_order_events(id) {
             for event in esc {
                 let validator = EventValidator::new(self.db.clone());
-                // Remove stale events
-                if event.is_stale(self.duration)? {
-                    self.db
-                        .remove_out_of_order_event(id, &event.signed_event_message)?;
-                } else {
-                    match validator.validate_event(&event.signed_event_message) {
-                        Ok(_) => {
-                            // add to kel
-                            self.db
-                                .add_kel_finalized_event(event.signed_event_message.clone(), id)?;
-                            // remove from escrow
-                            self.db
-                                .remove_out_of_order_event(id, &event.signed_event_message)?;
-                            bus.notify(&Notification::KeyEventAdded(event.signed_event_message))?;
-                            // stop processing the escrow if kel was updated. It needs to start again.
-                            break;
-                        }
-                        Err(Error::SignatureVerificationError) => {
-                            // remove from escrow
-                            self.db
-                                .remove_out_of_order_event(id, &event.signed_event_message)?;
-                        }
-                        Err(_e) => (), // keep in escrow,
+                match validator.validate_event(&event) {
+                    Ok(_) => {
+                        // add to kel
+                        self.db.add_kel_finalized_event(event.clone(), id)?;
+                        // remove from escrow
+                        self.db.remove_out_of_order_event(id, &event)?;
+                        bus.notify(&Notification::KeyEventAdded(event))?;
+                        // stop processing the escrow if kel was updated. It needs to start again.
+                        break;
                     }
+                    Err(Error::SignatureVerificationError) => {
+                        // remove from escrow
+                        self.db.remove_out_of_order_event(id, &event)?;
+                    }
+                    Err(_e) => (), // keep in escrow,
                 }
             }
         };
@@ -150,12 +138,11 @@ impl OutOfOrderEscrow {
 #[derive(Clone)]
 pub struct PartiallySignedEscrow {
     db: Arc<SledEventDatabase>,
-    duration: Duration,
 }
 
 impl PartiallySignedEscrow {
-    pub fn new(db: Arc<SledEventDatabase>, duration: Duration) -> Self {
-        Self { db, duration }
+    pub fn new(db: Arc<SledEventDatabase>) -> Self {
+        Self { db }
     }
 }
 impl Notifier for PartiallySignedEscrow {
@@ -185,31 +172,11 @@ impl PartiallySignedEscrow {
             .db
             .get_partially_signed_events(signed_event.event_message.clone())
         {
-            let mut errors = vec![];
-            // Remove stale events
             let new_sigs = esc
-                .map(|ev: TimestampedSignedEventMessage| -> Result<_, Error> {
-                    if ev.is_stale(self.duration)? {
-                        self.db.remove_partially_signed_event(
-                            &id,
-                            &ev.signed_event_message.event_message,
-                        )?;
-                        Ok(None)
-                    } else {
-                        Ok(Some(ev))
-                    }
-                })
-                // Collect errors and filtered out removed events
-                .filter_map(|r| r.map_err(|e| errors.push(e)).ok().and_then(|e| e))
-                .flat_map(|ev| ev.signed_event_message.signatures)
+                .flat_map(|ev| ev.signatures)
                 .chain(signed_event.signatures.clone().into_iter())
                 .collect();
-            if !errors.is_empty() {
-                return Err(Error::SemanticError(format!(
-                    "Error while escrow cleanup: {:?}",
-                    errors
-                )));
-            }
+
             let new_event = SignedEventMessage {
                 signatures: new_sigs,
                 ..signed_event.to_owned()
@@ -243,12 +210,11 @@ impl PartiallySignedEscrow {
 #[derive(Clone)]
 pub struct PartiallyWitnessedEscrow {
     db: Arc<SledEventDatabase>,
-    duration: Duration,
 }
 
 impl PartiallyWitnessedEscrow {
-    pub fn new(db: Arc<SledEventDatabase>, duration: Duration) -> Self {
-        Self { db, duration }
+    pub fn new(db: Arc<SledEventDatabase>) -> Self {
+        Self { db }
     }
 }
 impl Notifier for PartiallyWitnessedEscrow {
@@ -278,36 +244,24 @@ impl PartiallyWitnessedEscrow {
     pub fn process_partially_witnessed_events(&self, bus: &NotificationBus) -> Result<(), Error> {
         if let Some(esc) = self.db.get_all_partially_witnessed() {
             for event in esc {
-                // Remove stale events
-                let id = event.signed_event_message.event_message.event.get_prefix();
-                if event.is_stale(self.duration)? {
-                    self.db
-                        .remove_partially_witnessed_event(&id, &event.signed_event_message)?;
-                } else {
-                    let validator = EventValidator::new(self.db.clone());
-                    match validator.validate_event(&event.signed_event_message) {
-                        Ok(_) => {
-                            // add to kel
-                            self.db
-                                .add_kel_finalized_event(event.signed_event_message.clone(), &id)?;
-                            // remove from escrow
-                            self.db.remove_partially_witnessed_event(
-                                &id,
-                                &event.signed_event_message,
-                            )?;
-                            bus.notify(&Notification::KeyEventAdded(event.signed_event_message))?;
-                            // stop processing the escrow if kel was updated. It needs to start again.
-                            break;
-                        }
-                        Err(Error::SignatureVerificationError) => {
-                            // remove from escrow
-                            self.db.remove_partially_witnessed_event(
-                                &id,
-                                &event.signed_event_message,
-                            )?;
-                        }
-                        Err(_e) => (), // keep in escrow,
+                let id = event.event_message.event.get_prefix();
+
+                let validator = EventValidator::new(self.db.clone());
+                match validator.validate_event(&event) {
+                    Ok(_) => {
+                        // add to kel
+                        self.db.add_kel_finalized_event(event.clone(), &id)?;
+                        // remove from escrow
+                        self.db.remove_partially_witnessed_event(&id, &event)?;
+                        bus.notify(&Notification::KeyEventAdded(event))?;
+                        // stop processing the escrow if kel was updated. It needs to start again.
+                        break;
                     }
+                    Err(Error::SignatureVerificationError) => {
+                        // remove from escrow
+                        self.db.remove_partially_witnessed_event(&id, &event)?;
+                    }
+                    Err(_e) => (), // keep in escrow,
                 }
             }
         };
@@ -319,11 +273,10 @@ impl PartiallyWitnessedEscrow {
 #[derive(Clone)]
 pub struct NontransReceiptsEscrow {
     db: Arc<SledEventDatabase>,
-    duration: Duration,
 }
 impl NontransReceiptsEscrow {
-    pub fn new(db: Arc<SledEventDatabase>, duration: Duration) -> Self {
-        Self { db, duration }
+    pub fn new(db: Arc<SledEventDatabase>) -> Self {
+        Self { db }
     }
 }
 impl Notifier for NontransReceiptsEscrow {
@@ -333,7 +286,6 @@ impl Notifier for NontransReceiptsEscrow {
                 self.process_nt_receipts_escrow(bus)
             }
             Notification::ReceiptOutOfOrder(receipt) => {
-                self.nontrans_escrow_cleanup()?;
                 if receipt.couplets.is_none() && receipt.indexed_sigs.is_none() {
                     // ignore events with no signatures
                     Ok(())
@@ -349,54 +301,24 @@ impl Notifier for NontransReceiptsEscrow {
 }
 
 impl NontransReceiptsEscrow {
-    pub fn nontrans_escrow_cleanup(&self) -> Result<(), Error> {
-        if let Some(esc) = self.db.get_all_escrow_nt_receipts() {
-            for timestamped_receipt in esc {
-                let id = timestamped_receipt
-                    .signed_event_message
-                    .body
-                    .event
-                    .prefix
-                    .clone();
-                if timestamped_receipt.is_stale(self.duration)? {
-                    self.db
-                        .remove_escrow_nt_receipt(&id, &timestamped_receipt.signed_event_message)?;
-                }
-            }
-        };
-        Ok(())
-    }
-
     pub fn process_nt_receipts_escrow(&self, bus: &NotificationBus) -> Result<(), Error> {
         if let Some(esc) = self.db.get_all_escrow_nt_receipts() {
-            for timestamped_receipt in esc {
-                let id = timestamped_receipt
-                    .signed_event_message
-                    .body
-                    .event
-                    .prefix
-                    .clone();
-                if timestamped_receipt.is_stale(self.duration)? {
-                    self.db
-                        .remove_escrow_nt_receipt(&id, &timestamped_receipt.signed_event_message)?;
-                } else {
-                    let validator = EventValidator::new(self.db.clone());
-                    let sig_receipt = timestamped_receipt.signed_event_message;
-                    match validator.validate_witness_receipt(&sig_receipt) {
-                        Ok(_) => {
-                            // add to receipts
-                            self.db.add_receipt_nt(sig_receipt.clone(), &id)?;
-                            // remove from escrow
-                            self.db.remove_escrow_nt_receipt(&id, &sig_receipt)?;
-                            bus.notify(&Notification::ReceiptAccepted)?;
-                        }
-                        Err(Error::SignatureVerificationError) => {
-                            // remove from escrow
-                            self.db.remove_escrow_nt_receipt(&id, &sig_receipt)?;
-                            // Some(())
-                        }
-                        Err(e) => return Err(e), // keep in escrow,
-                    };
+            for signed_receipt in esc {
+                let id = signed_receipt.body.event.prefix.clone();
+                let validator = EventValidator::new(self.db.clone());
+                match validator.validate_witness_receipt(&signed_receipt) {
+                    Ok(_) => {
+                        // add to receipts
+                        self.db.add_receipt_nt(signed_receipt.clone(), &id)?;
+                        // remove from escrow
+                        self.db.remove_escrow_nt_receipt(&id, &signed_receipt)?;
+                        bus.notify(&Notification::ReceiptAccepted)?;
+                    }
+                    Err(Error::SignatureVerificationError) => {
+                        // remove from escrow
+                        self.db.remove_escrow_nt_receipt(&id, &signed_receipt)?;
+                    }
+                    Err(e) => return Err(e), // keep in escrow,
                 }
             }
         };
@@ -408,11 +330,10 @@ impl NontransReceiptsEscrow {
 #[derive(Clone)]
 pub struct TransReceiptsEscrow {
     db: Arc<SledEventDatabase>,
-    duration: Duration,
 }
 impl TransReceiptsEscrow {
-    pub fn new(db: Arc<SledEventDatabase>, duration: Duration) -> Self {
-        Self { db, duration }
+    pub fn new(db: Arc<SledEventDatabase>) -> Self {
+        Self { db }
     }
 }
 impl Notifier for TransReceiptsEscrow {
@@ -425,7 +346,6 @@ impl Notifier for TransReceiptsEscrow {
                 // ignore events with no signatures
                 if !receipt.signatures.is_empty() {
                     let id = receipt.validator_seal.prefix.clone();
-                    self.trans_escrow_cleanup(&id)?;
                     self.db.add_escrow_t_receipt(receipt.to_owned(), &id)?;
                 }
             }
@@ -435,17 +355,6 @@ impl Notifier for TransReceiptsEscrow {
     }
 }
 impl TransReceiptsEscrow {
-    pub fn trans_escrow_cleanup(&self, id: &IdentifierPrefix) -> Result<(), Error> {
-        if let Some(esc) = self.db.get_escrow_t_receipts(id) {
-            for timestamped_receipt in esc {
-                if timestamped_receipt.is_stale(self.duration)? {
-                    self.db
-                        .remove_escrow_t_receipt(&id, &timestamped_receipt.signed_event_message)?;
-                }
-            }
-        };
-        Ok(())
-    }
     pub fn process_t_receipts_escrow(
         &self,
         id: &IdentifierPrefix,
@@ -453,37 +362,20 @@ impl TransReceiptsEscrow {
     ) -> Result<(), Error> {
         if let Some(esc) = self.db.get_escrow_t_receipts(id) {
             for timestamped_receipt in esc {
-                if timestamped_receipt.is_stale(self.duration)? {
-                    self.db
-                        .remove_escrow_t_receipt(&id, &timestamped_receipt.signed_event_message)?;
-                } else {
-                    // let id = sig_receipt.body.event.prefix.clone();
-                    let validator = EventValidator::new(self.db.clone());
-                    match validator
-                        .validate_validator_receipt(&timestamped_receipt.signed_event_message)
-                    {
-                        Ok(_) => {
-                            // add to receipts
-                            self.db.add_receipt_t(
-                                timestamped_receipt.signed_event_message.clone(),
-                                &id,
-                            )?;
-                            // remove from escrow
-                            self.db.remove_escrow_t_receipt(
-                                &id,
-                                &timestamped_receipt.signed_event_message,
-                            )?;
-                            bus.notify(&Notification::ReceiptAccepted)?;
-                        }
-                        Err(Error::SignatureVerificationError) => {
-                            // remove from escrow
-                            self.db.remove_escrow_t_receipt(
-                                &id,
-                                &timestamped_receipt.signed_event_message,
-                            )?;
-                        }
-                        Err(e) => return Err(e), // keep in escrow,
+                let validator = EventValidator::new(self.db.clone());
+                match validator.validate_validator_receipt(&timestamped_receipt) {
+                    Ok(_) => {
+                        // add to receipts
+                        self.db.add_receipt_t(timestamped_receipt.clone(), &id)?;
+                        // remove from escrow
+                        self.db.remove_escrow_t_receipt(&id, &timestamped_receipt)?;
+                        bus.notify(&Notification::ReceiptAccepted)?;
                     }
+                    Err(Error::SignatureVerificationError) => {
+                        // remove from escrow
+                        self.db.remove_escrow_t_receipt(&id, &timestamped_receipt)?;
+                    }
+                    Err(e) => return Err(e), // keep in escrow,
                 }
             }
         };

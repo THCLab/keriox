@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use super::{
     escrow::default_escrow_bus,
@@ -41,8 +41,7 @@ impl Processor for BasicProcessor {
 
 impl BasicProcessor {
     pub fn new(db: Arc<SledEventDatabase>) -> Self {
-        let processor =
-            EventProcessor::new(db.clone(), default_escrow_bus(db, Duration::from_secs(10)));
+        let processor = EventProcessor::new(db.clone(), default_escrow_bus(db));
         Self(processor)
     }
 

@@ -43,10 +43,7 @@ pub fn test_not_fully_witnessed() -> Result<(), Error> {
 
     // check if icp is in escrow
     let mut esc = db.get_all_partially_witnessed().unwrap();
-    assert_eq!(
-        icp_msg,
-        Message::Notice(Notice::Event(esc.next().unwrap().signed_event_message))
-    );
+    assert_eq!(icp_msg, Message::Notice(Notice::Event(esc.next().unwrap())));
     assert!(esc.next().is_none());
 
     let receipt0_0 = br#"{"v":"KERI10JSON000091_","t":"rct","d":"E1EyzzujHLiQbj9kcJ9wI2lVjOkiNbNn7t4Y2MhRjn_U","i":"E1EyzzujHLiQbj9kcJ9wI2lVjOkiNbNn7t4Y2MhRjn_U","s":"0"}-CABB389hKezugU2LFKiFVbitoHAxXqJh6HQ8Rn9tH7fxd680BlnRQL6bqNGJZNNGGwA4xZhBwtzY1SgAMdIFky-sUiq6bU-DGbp1OHSXQzKGQWlhohRxfcjtDjql8s9B_n5DdDw"#;
@@ -56,10 +53,7 @@ pub fn test_not_fully_witnessed() -> Result<(), Error> {
 
     // // check if icp still in escrow
     let mut esc = db.get_all_partially_witnessed().unwrap();
-    assert_eq!(
-        icp_msg,
-        Message::Notice(Notice::Event(esc.next().unwrap().signed_event_message))
-    );
+    assert_eq!(icp_msg, Message::Notice(Notice::Event(esc.next().unwrap())));
     assert!(esc.next().is_none());
 
     let mut esc = db.get_escrow_nt_receipts(&id).unwrap();
@@ -234,9 +228,7 @@ fn test_out_of_order() -> Result<(), Error> {
     processor.process(&ev4.clone())?;
     let mut escrowed = storage.db.get_out_of_order_events(&id).unwrap();
     assert_eq!(
-        escrowed
-            .next()
-            .map(|e| Message::Notice(Notice::Event(e.signed_event_message))),
+        escrowed.next().map(|e| Message::Notice(Notice::Event(e))),
         Some(ev4.clone())
     );
     assert!(escrowed.next().is_none());
@@ -244,15 +236,11 @@ fn test_out_of_order() -> Result<(), Error> {
     processor.process(&ev3.clone())?;
     let mut escrowed = storage.db.get_out_of_order_events(&id).unwrap();
     assert_eq!(
-        escrowed
-            .next()
-            .map(|e| Message::Notice(Notice::Event(e.signed_event_message))),
+        escrowed.next().map(|e| Message::Notice(Notice::Event(e))),
         Some(ev4.clone())
     );
     assert_eq!(
-        escrowed
-            .next()
-            .map(|e| Message::Notice(Notice::Event(e.signed_event_message))),
+        escrowed.next().map(|e| Message::Notice(Notice::Event(e))),
         Some(ev3.clone())
     );
     assert!(escrowed.next().is_none());
@@ -260,21 +248,15 @@ fn test_out_of_order() -> Result<(), Error> {
     processor.process(&ev5.clone())?;
     let mut escrowed = storage.db.get_out_of_order_events(&id).unwrap();
     assert_eq!(
-        escrowed
-            .next()
-            .map(|e| Message::Notice(Notice::Event(e.signed_event_message))),
+        escrowed.next().map(|e| Message::Notice(Notice::Event(e))),
         Some(ev4.clone())
     );
     assert_eq!(
-        escrowed
-            .next()
-            .map(|e| Message::Notice(Notice::Event(e.signed_event_message))),
+        escrowed.next().map(|e| Message::Notice(Notice::Event(e))),
         Some(ev3.clone())
     );
     assert_eq!(
-        escrowed
-            .next()
-            .map(|e| Message::Notice(Notice::Event(e.signed_event_message))),
+        escrowed.next().map(|e| Message::Notice(Notice::Event(e))),
         Some(ev5.clone())
     );
     assert!(escrowed.next().is_none());
@@ -392,9 +374,7 @@ fn test_partially_sign_escrow() -> Result<(), Error> {
 
     let mut escrowed = storage.db.get_partially_signed_events(icp_event).unwrap();
     assert_eq!(
-        escrowed
-            .next()
-            .map(|e| Message::Notice(Notice::Event(e.signed_event_message))),
+        escrowed.next().map(|e| Message::Notice(Notice::Event(e))),
         Some(icp_first_sig.clone())
     );
     assert!(escrowed.next().is_none());
@@ -505,9 +485,7 @@ fn test_out_of_order_cleanup() -> Result<(), Error> {
     processor.process(&ev4.clone())?;
     let mut escrowed = storage.db.get_out_of_order_events(&id).unwrap();
     assert_eq!(
-        escrowed
-            .next()
-            .map(|e| Message::Notice(Notice::Event(e.signed_event_message))),
+        escrowed.next().map(|e| Message::Notice(Notice::Event(e))),
         Some(ev4.clone())
     );
     assert!(escrowed.next().is_none());
@@ -533,9 +511,7 @@ fn test_out_of_order_cleanup() -> Result<(), Error> {
     let mut escrowed = storage.db.get_out_of_order_events(&id).unwrap();
 
     assert_eq!(
-        escrowed
-            .next()
-            .map(|e| Message::Notice(Notice::Event(e.signed_event_message))),
+        escrowed.next().map(|e| Message::Notice(Notice::Event(e))),
         Some(ev4.clone())
     );
     assert!(escrowed.next().is_none());
@@ -593,9 +569,7 @@ fn test_partially_sign_escrow_cleanup() -> Result<(), Error> {
         .get_partially_signed_events(icp_event.clone())
         .unwrap();
     assert_eq!(
-        escrowed
-            .next()
-            .map(|e| Message::Notice(Notice::Event(e.signed_event_message))),
+        escrowed.next().map(|e| Message::Notice(Notice::Event(e))),
         Some(icp_first_sig.clone())
     );
     assert!(escrowed.next().is_none());
@@ -606,6 +580,13 @@ fn test_partially_sign_escrow_cleanup() -> Result<(), Error> {
     // Wait until escrowed events become stale.
     thread::sleep(Duration::from_secs(10));
 
+    // Check if stale event was removed
+    let mut escrowed = storage
+        .db
+        .get_partially_signed_events(icp_event.clone())
+        .unwrap();
+    assert!(escrowed.next().is_none());
+
     // Proces the same event with another signature
     processor.process(&icp_second_sig)?;
 
@@ -615,9 +596,7 @@ fn test_partially_sign_escrow_cleanup() -> Result<(), Error> {
         .get_partially_signed_events(icp_event.clone())
         .unwrap();
     assert_eq!(
-        escrowed
-            .next()
-            .map(|e| Message::Notice(Notice::Event(e.signed_event_message))),
+        escrowed.next().map(|e| Message::Notice(Notice::Event(e))),
         Some(icp_second_sig.clone())
     );
     assert!(escrowed.next().is_none());
@@ -664,10 +643,7 @@ pub fn test_partially_witnessed_escrow_cleanup() -> Result<(), Error> {
 
     // check if icp is in escrow
     let mut esc = db.get_all_partially_witnessed().unwrap();
-    assert_eq!(
-        icp_msg,
-        Message::Notice(Notice::Event(esc.next().unwrap().signed_event_message))
-    );
+    assert_eq!(icp_msg, Message::Notice(Notice::Event(esc.next().unwrap())));
     assert!(esc.next().is_none());
 
     let mut esc = db.get_escrow_nt_receipts(&id).unwrap();
@@ -682,11 +658,6 @@ pub fn test_partially_witnessed_escrow_cleanup() -> Result<(), Error> {
 
     // Wait until escrowed events become stale.
     sleep(Duration::from_secs(10));
-
-    let receipt0_1 = br#"{"v":"KERI10JSON000091_","t":"rct","d":"E1EyzzujHLiQbj9kcJ9wI2lVjOkiNbNn7t4Y2MhRjn_U","i":"E1EyzzujHLiQbj9kcJ9wI2lVjOkiNbNn7t4Y2MhRjn_U","s":"0"}-CABBed2Tpxc8KeCEWoq3_RKKRjU_3P-chSser9J4eAtAK6I0BC69-inoBzibkf_HOUfn31sP3FOCukY0VqqOnnm6pxPWeBR2N7AhdN146OsHVuWfrzzuDSuJl3GpIPYCIynuEDA"#;
-    let parsed_rcp = signed_message(receipt0_1).unwrap().1;
-    let rcp_msg = Message::try_from(parsed_rcp).unwrap();
-    event_processor.process(&rcp_msg.clone())?;
 
     // check if icp still in escrow
     let mut esc = db.get_all_partially_witnessed().unwrap();
@@ -734,6 +705,10 @@ pub fn test_nt_receipt_escrow_cleanup() -> Result<(), Error> {
     // Wait until receipt become stale
     thread::sleep(Duration::from_secs(10));
 
+    // Check escrow. Old receipt should be removed because it is stale.
+    let mut esc = db.get_escrow_nt_receipts(&id).unwrap();
+    assert!(esc.next().is_none());
+
     // Process one more receipt
     let receipt0_1 = br#"{"v":"KERI10JSON000091_","t":"rct","d":"E1EyzzujHLiQbj9kcJ9wI2lVjOkiNbNn7t4Y2MhRjn_U","i":"E1EyzzujHLiQbj9kcJ9wI2lVjOkiNbNn7t4Y2MhRjn_U","s":"0"}-CABBed2Tpxc8KeCEWoq3_RKKRjU_3P-chSser9J4eAtAK6I0BC69-inoBzibkf_HOUfn31sP3FOCukY0VqqOnnm6pxPWeBR2N7AhdN146OsHVuWfrzzuDSuJl3GpIPYCIynuEDA"#;
     let parsed_rcp = signed_message(receipt0_1).unwrap().1;
@@ -743,7 +718,6 @@ pub fn test_nt_receipt_escrow_cleanup() -> Result<(), Error> {
     let state = event_storage.get_state(&id)?;
     assert_eq!(state, None);
 
-    // Check escrow. Old receipt should be removed because it is stale.
     let mut esc = db.get_escrow_nt_receipts(&id).unwrap();
 
     assert_eq!(
