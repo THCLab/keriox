@@ -2,16 +2,13 @@ use std::sync::Arc;
 
 use super::compute_state;
 use crate::{
-    database::SledEventDatabase,
+    database::{timestamped::TimestampedSignedEventMessage, SledEventDatabase},
     error::Error,
     event::{
         event_data::EventData,
         sections::{seal::EventSeal, KeyConfig},
     },
-    event_message::{
-        signed_event_message::{SignedNontransferableReceipt, TimestampedSignedEventMessage},
-        Digestible,
-    },
+    event_message::{signed_event_message::SignedNontransferableReceipt, Digestible},
     event_parsing::SignedEventData,
     prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix},
     state::{EventSemantics, IdentifierState},

@@ -1,11 +1,8 @@
-use std::time::Duration;
-
 use serde::{de::DeserializeOwned, Serialize};
 use sled::Tree;
+use std::time::Duration;
 
-use crate::{event_message::signed_event_message::Timestamped};
-
-use super::{tables::SledEventTreeVec, DbError};
+use super::{tables::SledEventTreeVec, timestamped::Timestamped, DbError};
 
 /// Collection of values, which removes values older than `duration`
 ///

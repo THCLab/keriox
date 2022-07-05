@@ -1,5 +1,6 @@
 pub(crate) mod escrow;
 pub(crate) mod tables;
+pub(crate) mod timestamped;
 
 use std::{path::{Path, PathBuf}, time::Duration};
 
@@ -12,14 +13,13 @@ use crate::{
         key_event_message::KeyEvent,
         signed_event_message::{
             SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
-            TimestampedSignedEventMessage,
         },
         TimestampedEventMessage,
     },
     prefix::IdentifierPrefix,
 };
 
-use self::escrow::Escrow;
+use self::{escrow::Escrow, timestamped::TimestampedSignedEventMessage};
 
 pub struct SledEventDatabase {
     // "iids" tree

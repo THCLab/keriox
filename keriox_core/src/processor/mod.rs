@@ -16,11 +16,11 @@ use self::{
     validator::EventValidator,
 };
 use crate::{
-    database::SledEventDatabase,
+    database::{timestamped::TimestampedSignedEventMessage, SledEventDatabase},
     error::Error,
     event::{receipt::Receipt, SerializationFormats},
     event_message::signed_event_message::{
-        Notice, SignedEventMessage, SignedNontransferableReceipt, TimestampedSignedEventMessage,
+        Notice, SignedEventMessage, SignedNontransferableReceipt,
     },
     prefix::IdentifierPrefix,
     query::reply_event::{ReplyRoute, SignedReply},
