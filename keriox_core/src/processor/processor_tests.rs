@@ -1,7 +1,7 @@
 use std::{convert::TryFrom, fs, sync::Arc};
 
 use crate::{
-    database::sled::SledEventDatabase,
+    database::SledEventDatabase,
     derivation::{basic::Basic, self_signing::SelfSigning},
     error::Error,
     event::sections::threshold::SignatureThreshold,

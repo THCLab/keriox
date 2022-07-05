@@ -11,7 +11,7 @@ use self::{
 };
 use crate::{
     actor,
-    database::sled::SledEventDatabase,
+    database::SledEventDatabase,
     event::{event_data::EventData, sections::seal::Seal, EventMessage},
     event_message::{
         key_event_message::KeyEvent,

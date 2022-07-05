@@ -152,7 +152,7 @@ pub mod prelude {
             process_message, process_notice, process_reply, process_signed_oobi,
             process_signed_query,
         },
-        database::sled::SledEventDatabase,
+        database::SledEventDatabase,
         event::SerializationFormats,
         event_message::signed_event_message::Message,
         processor::{basic_processor::BasicProcessor, event_storage::EventStorage, Processor},

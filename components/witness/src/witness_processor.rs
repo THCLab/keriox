@@ -1,7 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use keri::{
-    database::sled::SledEventDatabase,
+    database::SledEventDatabase,
     error::Error,
     event_message::signed_event_message::{Notice, SignedEventMessage},
     processor::{

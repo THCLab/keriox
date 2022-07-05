@@ -10,6 +10,7 @@ use structopt::StructOpt;
 
 use crate::watcher_listener::WatcherListener;
 
+
 mod watcher;
 mod watcher_listener;
 

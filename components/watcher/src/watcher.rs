@@ -279,7 +279,7 @@ pub enum WatcherError {
 
     #[display(fmt = "DB error")]
     #[from]
-    DbError(keri::database::sled::DbError),
+    DbError(keri::database::DbError),
 
     #[display(fmt = "OOBI error")]
     #[from]

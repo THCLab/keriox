@@ -4,7 +4,7 @@ use std::{
 };
 
 use keri::{
-    database::sled::SledEventDatabase,
+    database::SledEventDatabase,
     derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
     error::Error,
     event::SerializationFormats,
@@ -27,7 +27,7 @@ mod controller_helper {
     use keri::{
         actor::process_message,
         controller::event_generator,
-        database::sled::SledEventDatabase,
+        database::SledEventDatabase,
         derivation::{basic::Basic, self_signing::SelfSigning},
         error::Error,
         event_message::signed_event_message::{Message, Notice, SignedEventMessage},

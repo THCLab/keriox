@@ -16,7 +16,7 @@ use self::{
     validator::EventValidator,
 };
 use crate::{
-    database::sled::SledEventDatabase,
+    database::SledEventDatabase,
     error::Error,
     event::{receipt::Receipt, SerializationFormats},
     event_message::signed_event_message::{

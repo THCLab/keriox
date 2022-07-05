@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use keri::{
     actor::{parse_event_stream, prelude::*},
-    database::sled::SledEventDatabase,
+    database::SledEventDatabase,
     error::Error,
     event_message::signed_event_message::Op,
     processor::event_storage::EventStorage,

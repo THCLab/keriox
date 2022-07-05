@@ -7,7 +7,7 @@ use std::{
 };
 
 use crate::{
-    database::sled::SledEventDatabase,
+    database::SledEventDatabase,
     error::Error,
     event_message::signed_event_message::{Message, Notice, SignedEventMessage},
     event_parsing::message::{signed_event_stream, signed_message},

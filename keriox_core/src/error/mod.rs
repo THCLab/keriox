@@ -116,5 +116,5 @@ pub enum Error {
     QueryError(#[from] crate::query::QueryError),
 
     #[error(transparent)]
-    DbError(#[from] crate::database::sled::DbError),
+    DbError(#[from] crate::database::DbError),
 }

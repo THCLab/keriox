@@ -4,9 +4,8 @@ use sled::Db;
 
 use super::{Role, Scheme};
 use crate::{
-    database::sled::{
-        tables::{SledEventTree, SledEventTreeVec},
-        DbError,
+    database::{
+        tables::{SledEventTree, SledEventTreeVec}, DbError,
     },
     error::Error,
     prefix::IdentifierPrefix,

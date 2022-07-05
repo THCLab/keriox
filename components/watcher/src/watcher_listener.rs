@@ -270,7 +270,7 @@ pub mod http_handlers {
     pub enum ApiError {
         #[display(fmt = "DB error")]
         #[from]
-        DbError(keri::database::sled::DbError),
+        DbError(keri::database::DbError),
 
         #[display(fmt = "deserialize error")]
         #[from]

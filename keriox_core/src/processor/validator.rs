@@ -5,7 +5,7 @@ use chrono::{DateTime, FixedOffset};
 
 use super::event_storage::EventStorage;
 use crate::{
-    database::sled::SledEventDatabase,
+    database::SledEventDatabase,
     error::Error,
     event::{
         event_data::EventData,

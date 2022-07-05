@@ -7,7 +7,7 @@ use super::{
     EventProcessor, Processor,
 };
 #[cfg(feature = "query")]
-use crate::{database::sled::SledEventDatabase, error::Error};
+use crate::{database::SledEventDatabase, error::Error};
 use crate::{
     event_message::signed_event_message::{Notice, SignedEventMessage},
     query::reply_event::SignedReply,

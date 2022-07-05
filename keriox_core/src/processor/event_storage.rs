@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use super::compute_state;
 use crate::{
-    database::sled::SledEventDatabase,
+    database::SledEventDatabase,
     error::Error,
     event::{
         event_data::EventData,

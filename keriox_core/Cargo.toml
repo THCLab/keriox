@@ -17,7 +17,6 @@ license = "EUPL-1.2"
 crate-type = ["cdylib", "rlib"]
  
 [features]
-# lmdb = ["rkv", "bincode"] # deprecated since 0.7
 sled-db = ["sled", "fixed"]
 async = ["async-std", "pin-project", "futures-core", "bitpat"]
 default = ["sled-db"]

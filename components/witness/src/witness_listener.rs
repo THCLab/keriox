@@ -170,7 +170,7 @@ pub mod http_handlers {
         KeriError(keri::error::Error),
 
         #[display(fmt = "DB error")]
-        DbError(keri::database::sled::DbError),
+        DbError(keri::database::DbError),
     }
 
     impl ResponseError for ApiError {
