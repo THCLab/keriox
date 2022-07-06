@@ -97,6 +97,7 @@ impl Witness {
     pub fn new(signer: Arc<Signer>, event_path: &Path, oobi_path: &Path) -> Result<Self, Error> {
 
         use keri::database::escrow::EscrowDb;
+        use keri::processor::notification::JustNotification;
         let mut events_path = PathBuf::new();
         events_path.push(&event_path);
         let mut escrow_path = events_path.clone();
@@ -111,7 +112,7 @@ impl Witness {
         let event_storage = EventStorage::new(db.clone());
 
         let receipt_generator = Arc::new(WitnessReceiptGenerator::new(signer.clone(), db.clone()));
-        witness_processor.register_observer(receipt_generator.clone())?;
+        witness_processor.register_observer(receipt_generator.clone(), &[JustNotification::KeyEventAdded])?;
         Ok(Self {
             prefix,
             processor: witness_processor,

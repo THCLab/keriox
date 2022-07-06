@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use super::{
-    notification::{Notification, NotificationBus, Notifier},
+    notification::{Notification, NotificationBus, Notifier, JustNotification},
     validator::EventValidator,
     EventProcessor, Processor,
 };
@@ -15,15 +15,12 @@ use crate::{
 pub struct BasicProcessor(EventProcessor);
 
 impl Processor for BasicProcessor {
-    // fn new(db: Arc<SledEventDatabase>) -> Self {
-    //     Self::new(db, None)
-    // }
-
     fn register_observer(
         &mut self,
         observer: Arc<dyn Notifier + Send + Sync>,
+        notification: &[JustNotification]
     ) -> Result<(), Error> {
-        self.0.register_observer(observer)
+        self.0.register_observer(observer, notification.to_vec())
     }
 
     fn process_notice(&self, notice: &Notice) -> Result<(), Error> {

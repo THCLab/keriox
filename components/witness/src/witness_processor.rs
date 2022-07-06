@@ -20,8 +20,9 @@ impl Processor for WitnessProcessor {
     fn register_observer(
         &mut self,
         observer: Arc<dyn Notifier + Send + Sync>,
+        notifications: &[JustNotification]
     ) -> Result<(), Error> {
-        self.0.register_observer(observer)
+        self.0.register_observer(observer, notifications.to_vec())
     }
 
     fn process_notice(&self, notice: &Notice) -> Result<(), Error> {
@@ -40,7 +41,7 @@ impl WitnessProcessor {
     pub fn new(db: Arc<SledEventDatabase>, escrow_db: Arc<EscrowDb>) -> Self {
         let mut bus = NotificationBus::new();
         bus.register_observer(
-            Arc::new(PartiallySignedEscrow::new(db.clone())),
+            Arc::new(PartiallySignedEscrow::new(db.clone(), escrow_db.clone(), Duration::from_secs(10))),
             vec![JustNotification::PartiallySigned],
         );
         bus.register_observer(

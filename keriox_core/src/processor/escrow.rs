@@ -10,17 +10,17 @@ use crate::query::reply_event::ReplyRoute;
 use crate::{
     database::{escrow::{Escrow, EscrowDb}, SledEventDatabase},
     error::Error,
-    event_message::signed_event_message::SignedEventMessage,
-    prefix::IdentifierPrefix,
+    event_message::{signed_event_message::SignedEventMessage, key_event_message::KeyEvent},
+    prefix::IdentifierPrefix, event::EventMessage,
 };
 
-pub fn default_escrow_bus(event_db: Arc<SledEventDatabase>, escrow_db: Arc<EscrowDb>) -> (NotificationBus, Arc<OutOfOrderEscrow>) {
+pub fn default_escrow_bus(event_db: Arc<SledEventDatabase>, escrow_db: Arc<EscrowDb>) -> (NotificationBus, (Arc<OutOfOrderEscrow>, Arc<PartiallySignedEscrow>)) {
     let mut bus = NotificationBus::new();
 
     // Register out of order escrow, to save and reprocess out of order events
     let ooo_escrow = Arc::new(OutOfOrderEscrow::new(
         event_db.clone(),
-        escrow_db,
+        escrow_db.clone(),
         Duration::from_secs(10),
     ));
     bus.register_observer(ooo_escrow.clone(), vec![
@@ -28,8 +28,9 @@ pub fn default_escrow_bus(event_db: Arc<SledEventDatabase>, escrow_db: Arc<Escro
             JustNotification::KeyEventAdded,
         ]);
 
+    let ps_escrow = Arc::new(PartiallySignedEscrow::new(event_db.clone(), escrow_db.clone(), Duration::from_secs(10)));
     bus.register_observer(
-        Arc::new(PartiallySignedEscrow::new(event_db.clone())),
+        ps_escrow.clone(),
         vec![JustNotification::PartiallySigned],
     );
 
@@ -60,7 +61,7 @@ pub fn default_escrow_bus(event_db: Arc<SledEventDatabase>, escrow_db: Arc<Escro
         ],
     );
 
-    (bus, ooo_escrow)
+    (bus, (ooo_escrow, ps_escrow))
 }
 
 pub struct OutOfOrderEscrow {
@@ -146,14 +147,34 @@ impl OutOfOrderEscrow {
     }
 }
 
-#[derive(Clone)]
 pub struct PartiallySignedEscrow {
     db: Arc<SledEventDatabase>,
+    pub escrowed_partially_signed: Escrow<SignedEventMessage>,
 }
 
 impl PartiallySignedEscrow {
-    pub fn new(db: Arc<SledEventDatabase>) -> Self {
-        Self { db }
+    pub fn new(db: Arc<SledEventDatabase>, escrow_db: Arc<EscrowDb>, duration: Duration) -> Self {
+        let escrow = Escrow::new(b"pses", duration, escrow_db);
+        Self {
+            db,
+            escrowed_partially_signed: escrow,
+        }
+    }
+
+    pub fn get_partially_signed_for_event(&self, event: EventMessage<KeyEvent>) -> Option<impl DoubleEndedIterator<Item = SignedEventMessage>> {
+        let id = event.event.get_prefix();
+        self.escrowed_partially_signed
+            .get(&id)
+            .map(|events| events.filter(move |ev| ev.event_message == event))
+    }
+
+    fn remove_partially_signed(&self, event: &EventMessage<KeyEvent>) -> Result<(), Error> {
+        let id = event.event.get_prefix();
+        self.escrowed_partially_signed
+            .get(&id)
+            .map(|events| events.filter(|ev| &ev.event_message == event)
+                .try_for_each(|ev| {self.escrowed_partially_signed.remove(&id, &ev)}));
+            Ok(())
     }
 }
 impl Notifier for PartiallySignedEscrow {
@@ -180,8 +201,9 @@ impl PartiallySignedEscrow {
     ) -> Result<(), Error> {
         let id = signed_event.event_message.event.get_prefix();
         if let Some(esc) = self
-            .db
-            .get_partially_signed_events(signed_event.event_message.clone())
+            .escrowed_partially_signed.get(&id)
+            .map(|events|
+                events.filter(|event| event.event_message == signed_event.event_message))
         {
             let new_sigs = esc
                 .flat_map(|ev| ev.signatures)
@@ -199,19 +221,18 @@ impl PartiallySignedEscrow {
                     // add to kel
                     self.db.add_kel_finalized_event(new_event.clone(), &id)?;
                     // remove from escrow
-                    self.db
-                        .remove_partially_signed_event(&id, &new_event.event_message)?;
+                    self.remove_partially_signed(&new_event.event_message)?;
                     bus.notify(&Notification::KeyEventAdded(new_event))?;
                 }
                 Err(_e) => {
                     //keep in escrow and save new partially signed event
-                    self.db
-                        .add_partially_signed_event(signed_event.clone(), &id)?;
+                    self.escrowed_partially_signed
+                        .add(&id, signed_event.clone())?;
                 }
             }
         } else {
-            self.db
-                .add_partially_signed_event(signed_event.clone(), &id)?;
+            self.escrowed_partially_signed
+                        .add(&id, signed_event.clone())?;
         };
 
         Ok(())
