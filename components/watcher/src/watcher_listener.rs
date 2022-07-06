@@ -89,7 +89,7 @@ pub mod http_handlers {
     };
     use reqwest::StatusCode;
 
-    use crate::watcher::{self, Watcher, WatcherData};
+    use crate::watcher::{Watcher, WatcherData, WatcherError};
 
     #[post("/process")]
     async fn process_notice(
@@ -179,8 +179,7 @@ pub mod http_handlers {
         );
         let resp = data
             .send_to(witness_id.clone(), keri::oobi::Scheme::Http, qry_str)
-            .await
-            .map_err(|_| ApiError::WatcherError)?
+            .await?
             .ok_or_else(|| ApiError::NoResponse { witness_id })?;
 
         Ok(HttpResponse::Ok()
@@ -268,20 +267,21 @@ pub mod http_handlers {
 
     #[derive(Debug, Display, Error, From)]
     pub enum ApiError {
+        #[display(fmt = "keri error")]
+        #[from]
         KeriError(Error),
 
         // TODO: add from watcher error impl (don't use anyhow)
         #[display(fmt = "watcher error")]
-        WatcherError,
+        #[from]
+        WatcherError(WatcherError),
 
         #[display(fmt = "no state for prefix {}", prefix)]
-        #[from(ignore)]
         NoStateForPrefix {
             prefix: IdentifierPrefix,
         },
 
         #[display(fmt = "no response from witness {}", witness_id)]
-        #[from(ignore)]
         NoResponse {
             witness_id: IdentifierPrefix,
         },
@@ -302,7 +302,7 @@ pub mod http_handlers {
                     _ => StatusCode::INTERNAL_SERVER_ERROR,
                 },
 
-                ApiError::WatcherError => StatusCode::BAD_GATEWAY,
+                ApiError::WatcherError(_) => StatusCode::BAD_GATEWAY,
 
                 ApiError::NoStateForPrefix { .. } => StatusCode::BAD_GATEWAY,
 

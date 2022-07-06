@@ -1,5 +1,6 @@
-use base64::DecodeError;
 use core::num::ParseIntError;
+
+use base64::DecodeError;
 use ed25519_dalek;
 use rmp_serde as serde_mgpk;
 use serde_cbor;
@@ -113,5 +114,8 @@ pub enum Error {
 
     #[cfg(feature = "oobi")]
     #[error(transparent)]
-    OobiError(#[from] crate::oobi::error::Error),
+    OobiError(#[from] crate::oobi::error::OobiError),
+
+    #[error(transparent)]
+    DbError(#[from] crate::database::sled::DbError),
 }

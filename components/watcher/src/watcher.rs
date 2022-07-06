@@ -1,6 +1,7 @@
 use std::{path::Path, sync::Arc};
 
-use anyhow::{anyhow, Result};
+use anyhow::anyhow;
+use derive_more::{Display, Error, From};
 use keri::{
     actor::{parse_notice_stream, parse_op_stream, prelude::*},
     derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
@@ -67,24 +68,24 @@ impl WatcherData {
         })
     }
 
+    /// Get location scheme from OOBI manager and sign it.
     pub fn get_loc_scheme_for_id(
         &self,
         eid: &IdentifierPrefix,
-    ) -> Result<Option<Vec<SignedReply>>, Error> {
+    ) -> Result<Option<Vec<SignedReply>>, WatcherError> {
         Ok(match self.oobi_manager.get_loc_scheme(eid)? {
             Some(oobis_to_sign) => Some(
                 oobis_to_sign
                     .iter()
                     .map(|oobi_to_sing| {
-                        let signature =
-                            self.signer.sign(oobi_to_sing.serialize().unwrap()).unwrap();
-                        SignedReply::new_nontrans(
+                        let signature = self.signer.sign(oobi_to_sing.serialize().unwrap())?;
+                        Ok(SignedReply::new_nontrans(
                             oobi_to_sing.clone(),
                             self.prefix.clone(),
                             SelfSigning::Ed25519Sha512.derive(signature),
-                        )
+                        ))
                     })
-                    .collect(),
+                    .collect::<Result<_, Error>>()?,
             ),
             None => None,
         })
@@ -181,7 +182,7 @@ impl WatcherData {
 pub struct Watcher(pub WatcherData);
 
 impl Watcher {
-    pub async fn resolve_end_role(&self, er: EndRole) -> Result<()> {
+    pub async fn resolve_end_role(&self, er: EndRole) -> anyhow::Result<()> {
         // find endpoint data of endpoint provider identifier
         let loc_scheme = self
             .0
@@ -205,7 +206,7 @@ impl Watcher {
         }
     }
 
-    pub async fn resolve_loc_scheme(&self, lc: &LocationScheme) -> Result<()> {
+    pub async fn resolve_loc_scheme(&self, lc: &LocationScheme) -> anyhow::Result<()> {
         let url = format!("{}oobi/{}", lc.url, lc.eid);
         let oobis = reqwest::get(url).await.unwrap().text().await.unwrap();
 
@@ -214,22 +215,19 @@ impl Watcher {
         Ok(())
     }
 
-    fn get_loc_schemas(&self, id: &IdentifierPrefix) -> Result<Vec<LocationScheme>> {
-        Ok(self
-            .0
-            .get_loc_scheme_for_id(id)
-            .unwrap()
-            .unwrap()
+    fn get_loc_schemas(&self, id: &IdentifierPrefix) -> Result<Vec<LocationScheme>, WatcherError> {
+        self.0
+            .get_loc_scheme_for_id(id)?
+            .ok_or(WatcherError::NoLocation)?
             .iter()
-            .filter_map(|lc| {
+            .map(|lc| {
                 if let ReplyRoute::LocScheme(loc_scheme) = lc.reply.get_route() {
                     Ok(loc_scheme)
                 } else {
-                    Err(anyhow!("Wrong route type"))
+                    Err(WatcherError::WrongReplyRoute)
                 }
-                .ok()
             })
-            .collect())
+            .collect()
     }
 
     pub async fn send_to(
@@ -237,7 +235,7 @@ impl Watcher {
         wit_id: IdentifierPrefix,
         schema: Scheme,
         msg: Vec<u8>,
-    ) -> Result<Option<String>> {
+    ) -> Result<Option<String>, WatcherError> {
         let addresses = self.get_loc_schemas(&wit_id)?;
         match addresses
             .iter()
@@ -262,7 +260,25 @@ impl Watcher {
                     todo!()
                 }
             },
-            _ => Err(anyhow!("No address for scheme {:?}", schema)),
+            _ => Err(WatcherError::NoLocation),
         }
     }
+}
+
+#[derive(Debug, Display, Error, From)]
+pub enum WatcherError {
+    #[display(fmt = "HTTP request failed")]
+    RequestFailed(reqwest::Error),
+
+    #[display(fmt = "keri error")]
+    KeriError(keri::error::Error),
+
+    #[display(fmt = "DB error")]
+    DbError(keri::database::sled::DbError),
+
+    #[display(fmt = "no location scheme for witness ID")]
+    NoLocation,
+
+    #[display(fmt = "wrong reply route")]
+    WrongReplyRoute,
 }

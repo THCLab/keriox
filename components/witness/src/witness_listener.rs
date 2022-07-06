@@ -162,20 +162,29 @@ pub mod http_handlers {
     }
 
     #[derive(Debug, Display, Error, From)]
-    pub struct ApiError(Error);
+    pub enum ApiError {
+        #[display(fmt = "keri error")]
+        KeriError(keri::error::Error),
+
+        #[display(fmt = "DB error")]
+        DbError(keri::database::sled::DbError),
+    }
 
     impl ResponseError for ApiError {
         fn status_code(&self) -> StatusCode {
-            match self.0 {
-                Error::Base64DecodingError { .. }
-                | Error::DeserializeError(_)
-                | Error::IncorrectDigest => StatusCode::BAD_REQUEST,
+            match self {
+                ApiError::KeriError(err) => match err {
+                    Error::Base64DecodingError { .. }
+                    | Error::DeserializeError(_)
+                    | Error::IncorrectDigest => StatusCode::BAD_REQUEST,
 
-                Error::Ed25519DalekSignatureError(_)
-                | Error::FaultySignatureVerification
-                | Error::SignatureVerificationError => StatusCode::FORBIDDEN,
+                    Error::Ed25519DalekSignatureError(_)
+                    | Error::FaultySignatureVerification
+                    | Error::SignatureVerificationError => StatusCode::FORBIDDEN,
 
-                _ => StatusCode::INTERNAL_SERVER_ERROR,
+                    _ => StatusCode::INTERNAL_SERVER_ERROR,
+                },
+                ApiError::DbError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             }
         }
     }

@@ -1,8 +1,11 @@
 #![allow(dead_code)]
-use crate::error::Error;
+use std::marker::PhantomData;
+
 use arrayref::array_ref;
 use serde::{de::DeserializeOwned, Serialize};
-use std::marker::PhantomData;
+
+use super::DbError;
+use crate::error::Error;
 
 /// Imitates collection table per key
 ///
@@ -30,8 +33,8 @@ where
 {
     /// Gets all elements for given `key` as Vec<T>
     ///
-    pub fn get(&self, key: u64) -> Result<Option<Vec<T>>, Error> {
-        if let Ok(Some(v)) = self.tree.get(key_bytes(key)) {
+    pub fn get(&self, key: u64) -> Result<Option<Vec<T>>, DbError> {
+        if let Some(v) = self.tree.get(key_bytes(key))? {
             let set: Vec<T> = serde_cbor::from_slice(&v)?;
             Ok(Some(set))
         } else {
@@ -41,7 +44,7 @@ where
 
     /// Overwrites or adds new key<->value into the tree
     ///
-    pub fn put(&self, key: u64, value: Vec<T>) -> Result<(), Error> {
+    pub fn put(&self, key: u64, value: Vec<T>) -> Result<(), DbError> {
         self.tree
             .insert(key_bytes(key), serde_cbor::to_vec(&value)?)?;
         Ok(())
@@ -50,7 +53,7 @@ where
     /// Pushes element to existing set of T
     /// or creates new one with single element
     ///
-    pub fn push(&self, key: u64, value: T) -> Result<(), Error> {
+    pub fn push(&self, key: u64, value: T) -> Result<(), DbError> {
         if let Ok(Some(mut set)) = self.get(key) {
             set.push(value);
             self.put(key, set)
@@ -61,7 +64,7 @@ where
 
     /// Removes value `T` if present
     ///
-    pub fn remove(&self, key: u64, value: &T) -> Result<(), Error>
+    pub fn remove(&self, key: u64, value: &T) -> Result<(), DbError>
     where
         T: PartialEq,
     {
@@ -75,7 +78,7 @@ where
     /// Appends one `Vec<T>` into DB present one
     /// or `put()`s it if not present as is.
     ///
-    pub fn append(&self, key: u64, value: Vec<T>) -> Result<(), Error>
+    pub fn append(&self, key: u64, value: Vec<T>) -> Result<(), DbError>
     where
         T: ToOwned + Clone,
     {
@@ -218,22 +221,22 @@ where
         }
     }
 
+    /// Returns key for value or inserts new one if not present.
     /// combination of `get_key_by_value()` and `get_next_key()`
     /// also expensive...
     /// to be used when unsure if identifier is present in the db
     ///
-    pub fn designated_key(&self, identifier: &T) -> u64
+    pub fn designated_key(&self, identifier: &T) -> Result<u64, DbError>
     where
         T: Serialize,
     {
         if let Ok(Some(key)) = self.get_key_by_value(identifier) {
-            key
+            Ok(key)
         } else {
             let key = self.get_next_key();
             self.tree
-                .insert(key_bytes(key), serde_cbor::to_vec(identifier).unwrap())
-                .unwrap();
-            key
+                .insert(key_bytes(key), serde_cbor::to_vec(identifier)?)?;
+            Ok(key)
         }
     }
 }

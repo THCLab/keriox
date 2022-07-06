@@ -4,8 +4,9 @@ use serde::{Deserialize, Serialize};
 use strum_macros::EnumString;
 use url::Url;
 
-use self::error::Error as OobiError;
+use self::error::OobiError;
 use crate::{
+    database::sled::DbError,
     error::Error,
     event_message::signed_event_message::{Message, Op},
     event_parsing::message::signed_event_stream,
@@ -82,12 +83,12 @@ impl OobiManager {
 
     /// Checks oobi signer and bada logic. Assumes signatures already
     /// verified.
-    pub fn check_oobi_reply(&self, rpy: &SignedReply) -> Result<(), Error> {
+    pub fn check_oobi_reply(&self, rpy: &SignedReply) -> Result<(), OobiError> {
         match rpy.reply.get_route() {
             // check if signature was made by oobi creator
             ReplyRoute::LocScheme(lc) => {
                 if rpy.signature.get_signer() != lc.get_eid() {
-                    return Err(OobiError::Error("Wrong reply message signer".into()).into());
+                    return Err(OobiError::SignerMismatch);
                 };
 
                 if let Some(old_rpy) = self.store.get_last_loc_scheme(&lc.eid, &lc.scheme)? {
@@ -97,7 +98,7 @@ impl OobiManager {
             }
             ReplyRoute::EndRoleAdd(er) | ReplyRoute::EndRoleCut(er) => {
                 if rpy.signature.get_signer() != er.cid {
-                    return Err(OobiError::Error("Wrong reply message signer".into()).into());
+                    return Err(OobiError::SignerMismatch);
                 };
                 if let Some(old_rpy) = self
                     .store
@@ -108,16 +109,16 @@ impl OobiManager {
                 };
                 Ok(())
             }
-            _ => Err(OobiError::Error("Wrong oobi type".into()).into()),
+            _ => Err(OobiError::InvalidMessageType),
         }
     }
 
-    fn parse_and_save(&self, stream: &str) -> Result<(), Error> {
+    fn parse_and_save(&self, stream: &str) -> Result<(), OobiError> {
         let _events = signed_event_stream(stream.as_bytes())
             .map_err(|e| OobiError::Error(e.to_string()))?
             .1
             .into_iter()
-            .try_for_each(|sed| -> Result<_, Error> {
+            .try_for_each(|sed| -> Result<_, OobiError> {
                 let msg = Message::try_from(sed).unwrap();
                 match msg {
                     Message::Op(Op::Reply(oobi_rpy)) => {
@@ -125,27 +126,30 @@ impl OobiManager {
                         self.store.save_oobi(&oobi_rpy)?;
                         Ok(())
                     }
-                    _ => Err(OobiError::Error("Wrong reply type".into()).into()),
+                    _ => Err(OobiError::InvalidMessageType),
                 }
             })?;
         Ok(())
     }
-    pub fn save_oobi(&self, signed_oobi: &SignedReply) -> Result<(), Error> {
+    pub fn save_oobi(&self, signed_oobi: &SignedReply) -> Result<(), DbError> {
         self.store.save_oobi(signed_oobi)
     }
 
-    pub fn get_loc_scheme(&self, id: &IdentifierPrefix) -> Result<Option<Vec<ReplyEvent>>, Error> {
+    pub fn get_loc_scheme(
+        &self,
+        id: &IdentifierPrefix,
+    ) -> Result<Option<Vec<ReplyEvent>>, DbError> {
         Ok(self
             .store
             .get_oobis_for_eid(id)?
-            .map(|e_list| e_list.into_iter().map(|e| e.reply).collect()))
+            .map(|replies| replies.into_iter().map(|e| e.reply).collect()))
     }
 
     pub fn get_end_role(
         &self,
         id: &IdentifierPrefix,
         role: Role,
-    ) -> Result<Option<Vec<SignedReply>>, Error> {
+    ) -> Result<Option<Vec<SignedReply>>, DbError> {
         self.store.get_end_role(id, role)
         // .map(|e_list| e_list.into_iter().map(|e| e.reply).collect()))
     }
@@ -165,9 +169,22 @@ pub(crate) mod error {
     use thiserror::Error;
 
     #[derive(Error, Debug)]
-    pub enum Error {
+    pub enum OobiError {
+        #[error("DB error")]
+        Db(#[from] crate::database::sled::DbError),
+
+        #[error("query error")]
+        Query(#[from] crate::query::QueryError),
+
+        #[error("signer ID mismatch")]
+        SignerMismatch,
+
+        #[error("invalid message type")]
+        InvalidMessageType,
+
         #[error("{0}")]
         Error(String),
+
         #[error("Error while parsing url")]
         UrlParsingError(#[from] url::ParseError),
     }
@@ -176,12 +193,11 @@ pub(crate) mod error {
 #[cfg(test)]
 mod tests {
 
+    use super::{EndRole, LocationScheme};
     use crate::{
         error::Error, event_parsing::message::signed_event_stream, oobi::OobiManager,
         prefix::IdentifierPrefix, query::reply_event::ReplyRoute,
     };
-
-    use super::{EndRole, LocationScheme};
     #[test]
     fn test_oobi_deserialize() -> Result<(), Error> {
         let oobi = r#"{"cid":"BuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw","role":"controller","eid":"BuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw"}"#;
@@ -195,6 +211,7 @@ mod tests {
 
     fn setup_oobi_manager() -> OobiManager {
         use std::fs;
+
         use tempfile::Builder;
 
         // Create test db and event processor.
