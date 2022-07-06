@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use super::{
     event_storage::EventStorage,
@@ -8,26 +8,33 @@ use super::{
 #[cfg(feature = "query")]
 use crate::query::reply_event::ReplyRoute;
 use crate::{
-    database::SledEventDatabase, error::Error,
-    event_message::signed_event_message::SignedEventMessage, prefix::IdentifierPrefix,
+    database::{escrow::{Escrow, EscrowDb}, SledEventDatabase},
+    error::Error,
+    event_message::signed_event_message::SignedEventMessage,
+    prefix::IdentifierPrefix,
 };
 
-pub fn default_escrow_bus(db: Arc<SledEventDatabase>) -> NotificationBus {
+pub fn default_escrow_bus(event_db: Arc<SledEventDatabase>, escrow_db: Arc<EscrowDb>) -> (NotificationBus, Arc<OutOfOrderEscrow>) {
     let mut bus = NotificationBus::new();
-    bus.register_observer(
-        Arc::new(OutOfOrderEscrow::new(db.clone())),
-        vec![
+
+    // Register out of order escrow, to save and reprocess out of order events
+    let ooo_escrow = Arc::new(OutOfOrderEscrow::new(
+        event_db.clone(),
+        escrow_db,
+        Duration::from_secs(10),
+    ));
+    bus.register_observer(ooo_escrow.clone(), vec![
             JustNotification::OutOfOrder,
             JustNotification::KeyEventAdded,
-        ],
-    );
+        ]);
+
     bus.register_observer(
-        Arc::new(PartiallySignedEscrow::new(db.clone())),
+        Arc::new(PartiallySignedEscrow::new(event_db.clone())),
         vec![JustNotification::PartiallySigned],
     );
 
     bus.register_observer(
-        Arc::new(PartiallyWitnessedEscrow::new(db.clone())),
+        Arc::new(PartiallyWitnessedEscrow::new(event_db.clone())),
         vec![
             JustNotification::PartiallyWitnessed,
             JustNotification::ReceiptEscrowed,
@@ -37,7 +44,7 @@ pub fn default_escrow_bus(db: Arc<SledEventDatabase>) -> NotificationBus {
     );
 
     bus.register_observer(
-        Arc::new(NontransReceiptsEscrow::new(db.clone())),
+        Arc::new(NontransReceiptsEscrow::new(event_db.clone())),
         vec![
             JustNotification::KeyEventAdded,
             JustNotification::ReceiptOutOfOrder,
@@ -46,24 +53,28 @@ pub fn default_escrow_bus(db: Arc<SledEventDatabase>) -> NotificationBus {
     );
 
     bus.register_observer(
-        Arc::new(TransReceiptsEscrow::new(db.clone())),
+        Arc::new(TransReceiptsEscrow::new(event_db.clone())),
         vec![
             JustNotification::KeyEventAdded,
             JustNotification::TransReceiptOutOfOrder,
         ],
     );
 
-    bus
+    (bus, ooo_escrow)
 }
 
-#[derive(Clone)]
 pub struct OutOfOrderEscrow {
     db: Arc<SledEventDatabase>,
+    pub escrowed_out_of_order: Escrow<SignedEventMessage>,
 }
 
 impl OutOfOrderEscrow {
-    pub fn new(db: Arc<SledEventDatabase>) -> Self {
-        Self { db }
+    pub fn new(db: Arc<SledEventDatabase>, escrow_db: Arc<EscrowDb>, duration: Duration) -> Self {
+        let escrow = Escrow::new(b"ooes", duration, escrow_db);
+        Self {
+            db,
+            escrowed_out_of_order: escrow,
+        }
     }
 }
 impl Notifier for OutOfOrderEscrow {
@@ -93,7 +104,7 @@ impl Notifier for OutOfOrderEscrow {
                         }
                         _ => signed_event.event_message.event.get_prefix(),
                     };
-                    self.db.add_out_of_order_event(signed_event.clone(), &id)?;
+                    self.escrowed_out_of_order.add(&id, signed_event.clone())?;
                 }
             }
             _ => return Err(Error::SemanticError("Wrong notification".into())),
@@ -109,7 +120,7 @@ impl OutOfOrderEscrow {
         bus: &NotificationBus,
         id: &IdentifierPrefix,
     ) -> Result<(), Error> {
-        if let Some(esc) = self.db.get_out_of_order_events(id) {
+        if let Some(esc) = self.escrowed_out_of_order.get(id) {
             for event in esc {
                 let validator = EventValidator::new(self.db.clone());
                 match validator.validate_event(&event) {
@@ -117,14 +128,14 @@ impl OutOfOrderEscrow {
                         // add to kel
                         self.db.add_kel_finalized_event(event.clone(), id)?;
                         // remove from escrow
-                        self.db.remove_out_of_order_event(id, &event)?;
+                        self.escrowed_out_of_order.remove(id, &event)?;
                         bus.notify(&Notification::KeyEventAdded(event))?;
                         // stop processing the escrow if kel was updated. It needs to start again.
                         break;
                     }
                     Err(Error::SignatureVerificationError) => {
                         // remove from escrow
-                        self.db.remove_out_of_order_event(id, &event)?;
+                        self.escrowed_out_of_order.remove(id, &event)?;
                     }
                     Err(_e) => (), // keep in escrow,
                 }

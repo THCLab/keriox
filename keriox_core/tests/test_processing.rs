@@ -17,7 +17,7 @@ pub fn test_ksn_query() -> Result<(), Error> {
     let db = Arc::new(SledEventDatabase::new(root.path())?);
 
     let (processor, storage) = (
-        BasicProcessor::new(db.clone()),
+        BasicProcessor::new(db.clone(), None),
         EventStorage::new(db.clone()),
     );
     // Process inception event and its receipts. To accept inception event it must be fully witnessed.
@@ -70,7 +70,7 @@ fn processs_oobi() -> Result<(), Error> {
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
 
     let (processor, storage, oobi_manager) = (
-        BasicProcessor::new(db.clone()),
+        BasicProcessor::new(db.clone(), None),
         EventStorage::new(db.clone()),
         OobiManager::new(oobi_root.path()),
     );

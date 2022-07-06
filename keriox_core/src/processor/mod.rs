@@ -28,8 +28,6 @@ use crate::{
 };
 
 pub trait Processor {
-    fn new(db_path: Arc<SledEventDatabase>) -> Self;
-
     fn process_notice(&self, notice: &Notice) -> Result<(), Error>;
 
     #[cfg(feature = "query")]
@@ -77,6 +75,7 @@ impl EventProcessor {
         self.publisher.register_observer(
             observer,
             vec![
+                JustNotification::OutOfOrder,
                 JustNotification::KeyEventAdded,
                 #[cfg(feature = "query")]
                 JustNotification::KsnOutOfOrder,

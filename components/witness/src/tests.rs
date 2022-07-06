@@ -55,7 +55,7 @@ mod controller_helper {
             key_manager: Arc<Mutex<K>>,
             oobi_db_path: &Path,
         ) -> Result<Controller<K>, Error> {
-            let processor = BasicProcessor::new(db.clone());
+            let processor = BasicProcessor::new(db.clone(), None);
 
             Ok(Controller {
                 prefix: IdentifierPrefix::default(),
@@ -584,7 +584,7 @@ pub fn test_key_state_notice() -> Result<(), Error> {
         std::fs::create_dir_all(root.path()).unwrap();
         let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
         (
-            BasicProcessor::new(db.clone()),
+            BasicProcessor::new(db.clone(), None),
             EventStorage::new(db.clone()),
         )
     };

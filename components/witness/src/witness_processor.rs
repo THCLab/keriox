@@ -1,7 +1,7 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use keri::{
-    database::SledEventDatabase,
+    database::{SledEventDatabase, escrow::EscrowDb},
     error::Error,
     event_message::signed_event_message::{Notice, SignedEventMessage},
     processor::{
@@ -16,9 +16,6 @@ use keri::{
 pub struct WitnessProcessor(EventProcessor);
 
 impl Processor for WitnessProcessor {
-    fn new(db: Arc<SledEventDatabase>) -> Self {
-        Self::new(db)
-    }
 
     fn register_observer(
         &mut self,
@@ -40,14 +37,14 @@ impl Processor for WitnessProcessor {
 }
 
 impl WitnessProcessor {
-    pub fn new(db: Arc<SledEventDatabase>) -> Self {
+    pub fn new(db: Arc<SledEventDatabase>, escrow_db: Arc<EscrowDb>) -> Self {
         let mut bus = NotificationBus::new();
         bus.register_observer(
             Arc::new(PartiallySignedEscrow::new(db.clone())),
             vec![JustNotification::PartiallySigned],
         );
         bus.register_observer(
-            Arc::new(OutOfOrderEscrow::new(db.clone())),
+            Arc::new(OutOfOrderEscrow::new(db.clone(), escrow_db.clone(), Duration::from_secs(10))),
             vec![
                 JustNotification::OutOfOrder,
                 JustNotification::KeyEventAdded,

@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use super::{
-    escrow::default_escrow_bus,
     notification::{Notification, NotificationBus, Notifier},
     validator::EventValidator,
     EventProcessor, Processor,
@@ -16,9 +15,9 @@ use crate::{
 pub struct BasicProcessor(EventProcessor);
 
 impl Processor for BasicProcessor {
-    fn new(db: Arc<SledEventDatabase>) -> Self {
-        Self::new(db)
-    }
+    // fn new(db: Arc<SledEventDatabase>) -> Self {
+    //     Self::new(db, None)
+    // }
 
     fn register_observer(
         &mut self,
@@ -40,8 +39,9 @@ impl Processor for BasicProcessor {
 }
 
 impl BasicProcessor {
-    pub fn new(db: Arc<SledEventDatabase>) -> Self {
-        let processor = EventProcessor::new(db.clone(), default_escrow_bus(db));
+    pub fn new(db: Arc<SledEventDatabase>, notification_bus: Option<NotificationBus>) -> Self {
+        // TODO should we set some default publisher?
+        let processor = EventProcessor::new(db.clone(), notification_bus.unwrap_or(NotificationBus::new()));
         Self(processor)
     }
 

@@ -1,7 +1,7 @@
 use std::{convert::TryFrom, fs, sync::Arc};
 
 use crate::{
-    database::SledEventDatabase,
+    database::{SledEventDatabase, escrow::EscrowDb},
     derivation::{basic::Basic, self_signing::SelfSigning},
     error::Error,
     event::sections::threshold::SignatureThreshold,
@@ -12,7 +12,7 @@ use crate::{
     },
     event_parsing::message::{signed_event_stream, signed_message},
     prefix::{AttachedSignaturePrefix, IdentifierPrefix, Prefix, SeedPrefix},
-    processor::{basic_processor::BasicProcessor, event_storage::EventStorage, Processor},
+    processor::{basic_processor::BasicProcessor, event_storage::EventStorage, Processor, escrow::default_escrow_bus},
     signer::Signer,
 };
 
@@ -22,10 +22,13 @@ fn test_process() -> Result<(), Error> {
 
     // Create test db and event processor.
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
+    let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
     fs::create_dir_all(root.path()).unwrap();
 
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-    let event_processor = BasicProcessor::new(Arc::clone(&db));
+    let escrow_db = Arc::new(EscrowDb::new(escrow_root.path()).unwrap());
+	let (not_bus, ooo_escrow) = default_escrow_bus(db.clone(), escrow_db);
+    let event_processor = BasicProcessor::new(Arc::clone(&db), Some(not_bus));
     let event_storage = EventStorage::new(Arc::clone(&db));
     // Events and sigs are from keripy `test_multisig_digprefix` test.
     // (keripy/tests/core/test_eventing.py#1138)
@@ -128,9 +131,7 @@ fn test_process() -> Result<(), Error> {
     event_processor.process(&out_of_order_rot)?;
     // should be saved in out of order escrow
     assert_eq!(
-        event_storage
-            .db
-            .get_out_of_order_events(&id)
+        ooo_escrow.escrowed_out_of_order.get(&id)
             .unwrap()
             .count(),
         1
@@ -161,7 +162,13 @@ fn test_process_receipt() -> Result<(), Error> {
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     fs::create_dir_all(root.path()).unwrap();
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-    let event_processor = BasicProcessor::new(Arc::clone(&db));
+
+	let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
+    fs::create_dir_all(root.path()).unwrap();
+    let escrow_db = Arc::new(EscrowDb::new(escrow_root.path()).unwrap());
+
+	let (not_bus, _ooo_escrow) = default_escrow_bus(db.clone(), escrow_db);
+    let event_processor = BasicProcessor::new(Arc::clone(&db), Some(not_bus));
     let event_storage = EventStorage::new(Arc::clone(&db));
 
     // Events and sigs are from keripy `test_direct_mode` test.
@@ -235,7 +242,14 @@ fn test_process_delegated() -> Result<(), Error> {
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     fs::create_dir_all(root.path()).unwrap();
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-    let event_processor = BasicProcessor::new(Arc::clone(&db));
+
+	let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
+    fs::create_dir_all(root.path()).unwrap();
+    let escrow_db = Arc::new(EscrowDb::new(escrow_root.path()).unwrap());
+
+	let (not_bus, _ooo_escrow) = default_escrow_bus(db.clone(), escrow_db);
+
+    let event_processor = BasicProcessor::new(Arc::clone(&db), Some(not_bus));
     let event_storage = EventStorage::new(Arc::clone(&db));
 
     // Events and sigs are from keripy `test_delegation` test.
@@ -334,7 +348,14 @@ fn test_compute_state_at_sn() -> Result<(), Error> {
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     fs::create_dir_all(root.path()).unwrap();
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-    let event_processor = BasicProcessor::new(Arc::clone(&db));
+
+	let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
+    fs::create_dir_all(root.path()).unwrap();
+    let escrow_db = Arc::new(EscrowDb::new(escrow_root.path()).unwrap());
+
+	let (not_bus, _ooo_escrow) = default_escrow_bus(db.clone(), escrow_db);
+
+    let event_processor = BasicProcessor::new(Arc::clone(&db), Some(not_bus));
     let event_storage = EventStorage::new(Arc::clone(&db));
 
     let kerl_str = br#"{"v":"KERI10JSON00012b_","t":"icp","d":"EkLoyrMO5Og4tEGE3jbFa2ztBuKBsvSoWd-B3AWavA8s","i":"DvcMUsxdQ8skME1osztYfxT0ASRinIWWY9PXA1HZEBhc","s":"0","kt":"1","k":["DvcMUsxdQ8skME1osztYfxT0ASRinIWWY9PXA1HZEBhc"],"nt":"1","n":["EOYC7yD8JWxYErTdyDMP0mnb3enVKcaHb2qlhm0oiurY"],"bt":"0","b":[],"c":[],"a":[]}-AABAALNELI5umSx1AeALticKkicNXdBIgMH_--M6ZTvX3s-yZVphIYqGHUaoy3tyR4HEPaU5lPIQyShuxif-N4qbSBw{"v":"KERI10JSON000160_","t":"rot","d":"EA9Wn0fVikmvkEcgRawMvNMg_sJixXaYtVN4lYbyDRfw","i":"DvcMUsxdQ8skME1osztYfxT0ASRinIWWY9PXA1HZEBhc","s":"1","p":"EkLoyrMO5Og4tEGE3jbFa2ztBuKBsvSoWd-B3AWavA8s","kt":"1","k":["DUerfH5Qj2ZWaFgF2ChQhOghv1msuvy_P2ECYvhBfwK8"],"nt":"1","n":["EyCbKISRNYTwBH0qJe0TYB6WRTXhuwX967OXtTBBlvGg"],"bt":"0","br":[],"ba":[],"a":[]}-AABAA_w_oPn_RVuITn_sZ8UlU4kIHAvuhHNPKKD79VTcejupV6hrpjK5af1v41l5Mwv9-PwGjE2AtJXOTXvvnNUFcBQ{"v":"KERI10JSON0000cb_","t":"ixn","d":"EAlNAhOj7ykfmJPk7K3H0LZAYsn2oz9C9gllFPZ-9ymA","i":"DvcMUsxdQ8skME1osztYfxT0ASRinIWWY9PXA1HZEBhc","s":"2","p":"EA9Wn0fVikmvkEcgRawMvNMg_sJixXaYtVN4lYbyDRfw","a":[]}-AABAAZ7dC36qpZxrk3udl9srq6-5HqnAIU8BBhHzI0R5qK7uE8SH_6fwTNi-ovv4fLlVGPOaXT2EDRLXYcZ6aWhriAQ{"v":"KERI10JSON000160_","t":"rot","d":"ELuakEDF_SP8heFB-TpGpoGPU9oedU-KouMOGDq0PcCo","i":"DvcMUsxdQ8skME1osztYfxT0ASRinIWWY9PXA1HZEBhc","s":"3","p":"EAlNAhOj7ykfmJPk7K3H0LZAYsn2oz9C9gllFPZ-9ymA","kt":"1","k":["DB9gO1ODrHs4AVUdX1iE8D55qGrWYaLVsNbUWEtIQhQA"],"nt":"1","n":["EWyOIQNEBTv-FrkS82g7uI6kIWAU2nSZHDUcnw7_wEHc"],"bt":"0","br":[],"ba":[],"a":[]}-AABAAAAu3pjs210AwLQFDLaM41VZtL9gLsaddziRmKPyDx_pESM8BwP81Rcl0ZMc96IN1CVDODc0a9I1AqSXix2_MCw{"v":"KERI10JSON000160_","t":"rot","d":"EMaJomeq41pa3lNAi16ll4PoyjnO_dJ3Dce8c7KGoXJU","i":"DvcMUsxdQ8skME1osztYfxT0ASRinIWWY9PXA1HZEBhc","s":"4","p":"ELuakEDF_SP8heFB-TpGpoGPU9oedU-KouMOGDq0PcCo","kt":"1","k":["DVPbgLTKwPeDQfwaCwNM0LtTKcJbnPlurjVvpP4G4WYw"],"nt":"1","n":["EjiEf0Atq-NcEEGXLRBU4SZs_mRWvjBfSuGWv6kj1akU"],"bt":"0","br":[],"ba":[],"a":[]}-AABAAcXhQ8FeRY8QIT14Y7_1dIsvoO6na9ZbdhSav_DV80t2k-6zPJbiLjjaBCqdQik-Vk5vK5EDwMZQ1L2mJBUutBA{"v":"KERI10JSON0000ff_","t":"ixn","d":"ECKCfB0GL7AHZxPDHkDHszMBONJkixVkSbd8hXWdjeLU","i":"DvcMUsxdQ8skME1osztYfxT0ASRinIWWY9PXA1HZEBhc","s":"5","p":"EMaJomeq41pa3lNAi16ll4PoyjnO_dJ3Dce8c7KGoXJU","a":[,{"d""E7JCRX6JqsBKomojsyLR-TddsSt_Wq9H8EOMhsPyhjR0"}]}-AABAAO9jAkJAGSTcaY_FYT0p3MFbTdKuZO1IJoJbNZVh2nlhvPRLYEFWStT2XiG_8m_Y7ecA9U92eP6-N7X1cCYG8Ag"#;
@@ -406,7 +427,13 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
     let path = db_root.path();
     std::fs::create_dir_all(path).unwrap();
     let db = Arc::new(SledEventDatabase::new(path).unwrap());
-    let processor = BasicProcessor::new(db.clone());
+
+	let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
+    let escrow_db = Arc::new(EscrowDb::new(escrow_root.path()).unwrap());
+
+	let (not_bus, _ooo_escrow) = default_escrow_bus(db.clone(), escrow_db);
+
+    let processor = BasicProcessor::new(db.clone(), Some(not_bus));
     // setup keypairs
     let signers = setup_signers();
 
@@ -536,8 +563,13 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
         let path = db_root.path();
         std::fs::create_dir_all(path).unwrap();
         let db = Arc::new(SledEventDatabase::new(path).unwrap());
+
+		let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
+		let escrow_db = Arc::new(EscrowDb::new(escrow_root.path()).unwrap());
+
+		let (not_bus, _ooo_escrow) = default_escrow_bus(db.clone(), escrow_db);
         (
-            BasicProcessor::new(db.clone()),
+            BasicProcessor::new(db.clone(), Some(not_bus)),
             EventStorage::new(db.clone()),
         )
     };

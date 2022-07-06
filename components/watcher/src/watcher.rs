@@ -44,7 +44,7 @@ impl WatcherData {
 
         let prefix = Basic::Ed25519.derive(signer.public_key());
         let db = Arc::new(SledEventDatabase::new(event_db_path)?);
-        let processor = BasicProcessor::new(db.clone());
+        let processor = BasicProcessor::new(db.clone(), None);
         let storage = EventStorage::new(db.clone());
         // construct witness loc scheme oobi
         let loc_scheme = LocationScheme::new(

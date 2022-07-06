@@ -1,28 +1,35 @@
 use serde::{de::DeserializeOwned, Serialize};
-use sled::Tree;
-use std::time::Duration;
+use sled::{Tree, Db};
+use std::{sync::Arc, time::Duration, path::Path};
 
-use super::{tables::SledEventTreeVec, timestamped::Timestamped, DbError};
+use crate::prefix::IdentifierPrefix;
+
+use super::{tables::{SledEventTreeVec, SledEventTree}, timestamped::Timestamped, DbError};
 
 /// Collection of values, which removes values older than `duration`
 ///
 pub struct Escrow<T> {
+    escrow_db: Arc<EscrowDb>,
     tree: SledEventTreeVec<Timestamped<T>>,
     duration: Duration,
 }
 
 impl<'a, T: Serialize + DeserializeOwned + PartialEq + Clone> Escrow<T> {
-    pub fn new(sled_tree: Tree, duration: Duration) -> Self {
+    pub fn new<V>(name: V, duration: Duration, escrow_db: Arc<EscrowDb>) -> Self
+    where
+        V: AsRef<[u8]>,
+    {
         Self {
-            tree: SledEventTreeVec::new(sled_tree),
+            tree: SledEventTreeVec::new(escrow_db.add_bucket(name).unwrap()),
             duration,
+            escrow_db,
         }
     }
 
-    pub fn add(&self, id: u64, event: T) -> Result<(), DbError> {
+    pub fn add(&self, id: &IdentifierPrefix, event: T) -> Result<(), DbError> {
         let event = event.into();
         if !self.tree.contains_value(&event) {
-            self.tree.push(id, event)
+            self.tree.push(self.escrow_db.get_key(id)?, event)
         } else {
             Ok(())
         }
@@ -40,16 +47,18 @@ impl<'a, T: Serialize + DeserializeOwned + PartialEq + Clone> Escrow<T> {
         Ok(())
     }
 
-    pub fn get(&self, id: u64) -> Option<impl DoubleEndedIterator<Item = T>> {
+    pub fn get(&self, id: &IdentifierPrefix) -> Option<impl DoubleEndedIterator<Item = T>> {
         // TODO should return result?
-        self.cleanup(id).ok();
+        let id_key = self.escrow_db.get_key(id).ok()?;
+        self.cleanup(id_key).ok();
         self.tree
-            .iter_values(id)
+            .iter_values(id_key)
             .map(|t| t.map(|t| t.signed_event_message))
     }
 
-    pub fn remove(&self, id: u64, event: &T) -> Result<(), DbError> {
-        self.tree.remove(id, &event.into())
+    pub fn remove(&self, id: &IdentifierPrefix, event: &T) -> Result<(), DbError> {
+        let id_key = self.escrow_db.get_key(id)?;
+        self.tree.remove(id_key, &event.into())
     }
 
     pub fn get_all(&self) -> Option<impl DoubleEndedIterator<Item = T>> {
@@ -59,5 +68,36 @@ impl<'a, T: Serialize + DeserializeOwned + PartialEq + Clone> Escrow<T> {
         self.tree
             .get_all()
             .map(|t| t.map(|t| t.signed_event_message))
+    }
+}
+
+pub struct EscrowDb {
+    // "iids" tree
+    // this thing is expensive, but everything else is cheeeeeep
+    identifiers: SledEventTree<IdentifierPrefix>,
+    db: Db,
+}
+
+impl EscrowDb {
+    pub fn new<'a, P>(path: P) -> Result<Self, DbError>
+    where
+        P: Into<&'a Path>,
+    {
+        let db = sled::open(path.into())?;
+        Ok(Self {
+            identifiers: SledEventTree::new(db.open_tree(b"iids")?),
+            db,
+        })
+    }
+
+    pub fn add_bucket<V>(&self, name: V) -> Result<Tree, DbError>
+    where
+        V: AsRef<[u8]>,
+    {
+        Ok(self.db.open_tree(name)?)
+    }
+
+    pub fn get_key(&self, id: &IdentifierPrefix) -> Result<u64, DbError> {
+        self.identifiers.designated_key(id)
     }
 }

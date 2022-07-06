@@ -7,12 +7,17 @@ use std::{
 };
 
 use crate::{
-    database::SledEventDatabase,
+    database::{SledEventDatabase, escrow::EscrowDb},
     error::Error,
     event_message::signed_event_message::{Message, Notice, SignedEventMessage},
     event_parsing::message::{signed_event_stream, signed_message},
     prefix::IdentifierPrefix,
-    processor::{basic_processor::BasicProcessor, event_storage::EventStorage, Processor},
+    processor::{
+        basic_processor::BasicProcessor,
+        escrow::{OutOfOrderEscrow},
+        event_storage::EventStorage,
+        Processor,
+    },
 };
 
 #[test]
@@ -24,7 +29,7 @@ pub fn test_not_fully_witnessed() -> Result<(), Error> {
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     fs::create_dir_all(root.path()).unwrap();
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-    let event_processor = BasicProcessor::new(Arc::clone(&db));
+    let event_processor = BasicProcessor::new(Arc::clone(&db), None);
     let event_storage = EventStorage::new(Arc::clone(&db));
 
     // check if receipt was escrowed
@@ -116,7 +121,7 @@ pub fn test_reply_escrow() -> Result<(), Error> {
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     fs::create_dir_all(root.path()).unwrap();
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-    let mut event_processor = BasicProcessor::new(Arc::clone(&db));
+    let mut event_processor = BasicProcessor::new(Arc::clone(&db), None);
     event_processor.register_observer(Arc::new(ReplyEscrow::new(db.clone())))?;
 
     let identifier: IdentifierPrefix = "E7YbTIkWWyNwOxZQTTnrs6qn8jFbu2A8zftQ33JYQFQ0".parse()?;
@@ -210,15 +215,22 @@ fn test_out_of_order() -> Result<(), Error> {
 
     use tempfile::Builder;
 
-    let (processor, storage) = {
+    let (processor, storage, ooo_escrow) = {
         let witness_root = Builder::new().prefix("test-db").tempdir().unwrap();
         let path = witness_root.path();
         let witness_db = Arc::new(SledEventDatabase::new(path).unwrap());
-        std::fs::create_dir_all(path).unwrap();
-        (
-            BasicProcessor::new(witness_db.clone()),
-            EventStorage::new(witness_db.clone()),
-        )
+        let mut processor = BasicProcessor::new(witness_db.clone(), None);
+
+        // Register out of order escrow, to save and reprocess out of order events
+        let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
+        let escrow_db = Arc::new(EscrowDb::new(escrow_root.path())?);
+        let ooo_escrow = Arc::new(OutOfOrderEscrow::new(
+            witness_db.clone(),
+            escrow_db,
+            Duration::from_secs(10),
+        ));
+        processor.register_observer(ooo_escrow.clone())?;
+        (processor, EventStorage::new(witness_db.clone()), ooo_escrow)
     };
     let id: IdentifierPrefix = "DW-CM1BxXJO2fgMGqgvJBbi0UfxGFI0mpxDBVBNxXKoA".parse()?;
 
@@ -226,7 +238,7 @@ fn test_out_of_order() -> Result<(), Error> {
     assert_eq!(storage.get_state(&id).unwrap().unwrap().sn, 0);
 
     processor.process(&ev4.clone())?;
-    let mut escrowed = storage.db.get_out_of_order_events(&id).unwrap();
+    let mut escrowed = ooo_escrow.escrowed_out_of_order.get(&id).unwrap();
     assert_eq!(
         escrowed.next().map(|e| Message::Notice(Notice::Event(e))),
         Some(ev4.clone())
@@ -234,7 +246,7 @@ fn test_out_of_order() -> Result<(), Error> {
     assert!(escrowed.next().is_none());
 
     processor.process(&ev3.clone())?;
-    let mut escrowed = storage.db.get_out_of_order_events(&id).unwrap();
+    let mut escrowed = ooo_escrow.escrowed_out_of_order.get(&id).unwrap();
     assert_eq!(
         escrowed.next().map(|e| Message::Notice(Notice::Event(e))),
         Some(ev4.clone())
@@ -246,7 +258,7 @@ fn test_out_of_order() -> Result<(), Error> {
     assert!(escrowed.next().is_none());
 
     processor.process(&ev5.clone())?;
-    let mut escrowed = storage.db.get_out_of_order_events(&id).unwrap();
+    let mut escrowed = ooo_escrow.escrowed_out_of_order.get(&id).unwrap();
     assert_eq!(
         escrowed.next().map(|e| Message::Notice(Notice::Event(e))),
         Some(ev4.clone())
@@ -263,18 +275,17 @@ fn test_out_of_order() -> Result<(), Error> {
 
     assert_eq!(storage.get_state(&id).unwrap().unwrap().sn, 0);
     // check out of order table
-    assert_eq!(storage.db.get_out_of_order_events(&id).unwrap().count(), 3);
+    assert_eq!(
+        ooo_escrow.escrowed_out_of_order.get(&id).unwrap().count(),
+        3
+    );
 
     processor.process(&ev2)?;
 
     assert_eq!(storage.get_state(&id).unwrap().unwrap().sn, 4);
     // Check if out of order is empty
-    assert!(storage
-        .db
-        .get_out_of_order_events(&id)
-        .unwrap()
-        .next()
-        .is_none());
+    let mut escrowed = ooo_escrow.escrowed_out_of_order.get(&id).unwrap();
+    assert!(escrowed.next().is_none());
 
     Ok(())
 }
@@ -307,14 +318,27 @@ fn test_escrow_missing_signatures() -> Result<(), Error> {
 
     use tempfile::Builder;
 
-    let (processor, storage) = {
+    let (processor, storage, ooo_escrow) = {
         let witness_root = Builder::new().prefix("test-db").tempdir().unwrap();
         let path = witness_root.path();
         let witness_db = Arc::new(SledEventDatabase::new(path).unwrap());
+        let mut processor = BasicProcessor::new(witness_db.clone(), None);
+
+        // Register out of order escrow, to save and reprocess out of order events
+        let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
+        let escrow_db = Arc::new(EscrowDb::new(escrow_root.path())?);
+        let ooo_escrow = Arc::new(OutOfOrderEscrow::new(
+            witness_db.clone(),
+            escrow_db,
+            Duration::from_secs(10),
+        ));
+        processor.register_observer(ooo_escrow.clone())?;
+
         std::fs::create_dir_all(path).unwrap();
         (
-            BasicProcessor::new(witness_db.clone()),
+            BasicProcessor::new(witness_db.clone(), None),
             EventStorage::new(witness_db.clone()),
+            ooo_escrow,
         )
     };
     let id: IdentifierPrefix = "DW-CM1BxXJO2fgMGqgvJBbi0UfxGFI0mpxDBVBNxXKoA".parse()?;
@@ -325,7 +349,7 @@ fn test_escrow_missing_signatures() -> Result<(), Error> {
     // Process out of order event without signatures
     processor.process(&event_without_signatures)?;
 
-    assert!(storage.db.get_out_of_order_events(&id).is_none(),);
+    assert!(ooo_escrow.escrowed_out_of_order.get(&id).is_none(),);
 
     // try to process unsigned event, but in order
     processor.process(&ev2)?;
@@ -347,7 +371,7 @@ fn test_partially_sign_escrow() -> Result<(), Error> {
         let path = witness_root.path();
         let witness_db = Arc::new(SledEventDatabase::new(path).unwrap());
         std::fs::create_dir_all(path).unwrap();
-        let processor = BasicProcessor::new(witness_db.clone());
+        let processor = BasicProcessor::new(witness_db.clone(), None);
 
         (processor, EventStorage::new(witness_db.clone()))
     };
@@ -466,14 +490,27 @@ fn test_out_of_order_cleanup() -> Result<(), Error> {
 
     use tempfile::Builder;
 
-    let (processor, storage) = {
+    let (processor, storage, ooo_escrow) = {
         let witness_root = Builder::new().prefix("test-db").tempdir().unwrap();
         let path = witness_root.path();
         let witness_db = Arc::new(SledEventDatabase::new(path).unwrap());
+        let mut processor = BasicProcessor::new(witness_db.clone(), None);
+
+        // Register out of order escrow, to save and reprocess out of order events
+        let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
+        let escrow_db = Arc::new(EscrowDb::new(escrow_root.path())?);
+        let ooo_escrow = Arc::new(OutOfOrderEscrow::new(
+            witness_db.clone(),
+            escrow_db,
+            Duration::from_secs(10),
+        ));
+        processor.register_observer(ooo_escrow.clone())?;
+
         std::fs::create_dir_all(path).unwrap();
         (
-            BasicProcessor::new(witness_db.clone()),
+            processor,
             EventStorage::new(witness_db.clone()),
+            ooo_escrow
         )
     };
     let id: IdentifierPrefix = "DW-CM1BxXJO2fgMGqgvJBbi0UfxGFI0mpxDBVBNxXKoA".parse()?;
@@ -483,7 +520,7 @@ fn test_out_of_order_cleanup() -> Result<(), Error> {
 
     // Process out of order event and check escrow.
     processor.process(&ev4.clone())?;
-    let mut escrowed = storage.db.get_out_of_order_events(&id).unwrap();
+    let mut escrowed = ooo_escrow.escrowed_out_of_order.get(&id).unwrap();
     assert_eq!(
         escrowed.next().map(|e| Message::Notice(Notice::Event(e))),
         Some(ev4.clone())
@@ -500,7 +537,7 @@ fn test_out_of_order_cleanup() -> Result<(), Error> {
     processor.process(&ev2.clone())?;
 
     // Escrow should be empty
-    let mut escrowed = storage.db.get_out_of_order_events(&id).unwrap();
+    let mut escrowed = ooo_escrow.escrowed_out_of_order.get(&id).unwrap();
     assert!(escrowed.next().is_none());
 
     // Stale events shouldn't be save in the kel.
@@ -508,7 +545,7 @@ fn test_out_of_order_cleanup() -> Result<(), Error> {
 
     // Process out of order events once again and check escrow.
     processor.process(&ev4.clone())?;
-    let mut escrowed = storage.db.get_out_of_order_events(&id).unwrap();
+    let mut escrowed = ooo_escrow.escrowed_out_of_order.get(&id).unwrap();
 
     assert_eq!(
         escrowed.next().map(|e| Message::Notice(Notice::Event(e))),
@@ -520,7 +557,7 @@ fn test_out_of_order_cleanup() -> Result<(), Error> {
     processor.process(&ev3.clone())?;
 
     // Escrow should be empty
-    let mut escrowed = storage.db.get_out_of_order_events(&id).unwrap();
+    let mut escrowed = ooo_escrow.escrowed_out_of_order.get(&id).unwrap();
     assert!(escrowed.next().is_none());
 
     // Events should be accepted, they're not stale..
@@ -539,7 +576,7 @@ fn test_partially_sign_escrow_cleanup() -> Result<(), Error> {
         let path = witness_root.path();
         let witness_db = Arc::new(SledEventDatabase::new(path).unwrap());
         std::fs::create_dir_all(path).unwrap();
-        let processor = BasicProcessor::new(witness_db.clone());
+        let processor = BasicProcessor::new(witness_db.clone(), None);
 
         (processor, EventStorage::new(witness_db.clone()))
     };
@@ -619,7 +656,7 @@ pub fn test_partially_witnessed_escrow_cleanup() -> Result<(), Error> {
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     fs::create_dir_all(root.path()).unwrap();
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-    let event_processor = BasicProcessor::new(Arc::clone(&db));
+    let event_processor = BasicProcessor::new(Arc::clone(&db), None);
     let event_storage = EventStorage::new(Arc::clone(&db));
 
     // check if receipt was escrowed
@@ -679,7 +716,7 @@ pub fn test_nt_receipt_escrow_cleanup() -> Result<(), Error> {
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     fs::create_dir_all(root.path()).unwrap();
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-    let event_processor = BasicProcessor::new(Arc::clone(&db));
+    let event_processor = BasicProcessor::new(Arc::clone(&db), None);
     let event_storage = EventStorage::new(Arc::clone(&db));
 
     let id: IdentifierPrefix = "E1EyzzujHLiQbj9kcJ9wI2lVjOkiNbNn7t4Y2MhRjn_U"

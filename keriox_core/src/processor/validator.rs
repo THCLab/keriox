@@ -426,7 +426,7 @@ fn test_validate_seal() -> Result<(), Error> {
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     fs::create_dir_all(root.path()).unwrap();
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-    let event_processor = BasicProcessor::new(Arc::clone(&db));
+    let event_processor = BasicProcessor::new(Arc::clone(&db), None);
 
     // Events and sigs are from keripy `test_delegation` test.
     // (keripy/tests/core/test_delegating.py:#test_delegation)

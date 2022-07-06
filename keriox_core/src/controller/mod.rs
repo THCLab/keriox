@@ -54,7 +54,7 @@ impl Controller {
         let db = Arc::new(SledEventDatabase::new(events_db.as_path())?);
 
         let controller = Self {
-            processor: BasicProcessor::new(db.clone()),
+            processor: BasicProcessor::new(db.clone(), None),
             storage: EventStorage::new(db),
             oobi_manager: OobiManager::new(&oobis_db),
         };
