@@ -5,6 +5,10 @@ pub mod event_generator;
 pub mod identifier_controller;
 pub mod utils;
 
+use self::{
+    error::ControllerError,
+    utils::{OptionalConfig, Topic},
+};
 use crate::{
     actor,
     database::sled::SledEventDatabase,
@@ -25,11 +29,6 @@ use crate::{
     },
     processor::{basic_processor::BasicProcessor, event_storage::EventStorage, Processor},
     query::reply_event::{ReplyEvent, ReplyRoute, SignedReply},
-};
-
-use self::{
-    error::ControllerError,
-    utils::{OptionalConfig, Topic},
 };
 
 pub struct Controller {
@@ -91,7 +90,6 @@ impl Controller {
         Ok(self
             .oobi_manager
             .get_end_role(id, Role::Watcher)?
-            .ok_or_else(|| ControllerError::UnknownIdentifierError)?
             .into_iter()
             .filter_map(|r| {
                 if let ReplyRoute::EndRoleAdd(adds) = r.reply.get_route() {

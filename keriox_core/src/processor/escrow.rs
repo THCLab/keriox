@@ -68,7 +68,7 @@ impl Notifier for OutOfOrderEscrow {
         match notification {
             Notification::KeyEventAdded(ev_message) => {
                 let id = ev_message.event_message.event.get_prefix();
-                self.process_out_of_order_events(bus, &id);
+                self.process_out_of_order_events(bus, &id)?;
             }
             Notification::OutOfOrder(signed_event) => {
                 let id = match signed_event.event_message.event.get_event_data() {

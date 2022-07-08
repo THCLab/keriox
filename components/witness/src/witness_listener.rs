@@ -102,10 +102,7 @@ pub mod http_handlers {
     ) -> Result<impl Responder, ApiError> {
         let (cid, role, eid) = path.into_inner();
 
-        let end_role = data
-            .oobi_manager
-            .get_end_role(&cid, role)?
-            .unwrap_or(vec![]);
+        let end_role = data.oobi_manager.get_end_role(&cid, role)?;
         let loc_scheme = data.get_loc_scheme_for_id(&eid)?.unwrap_or(vec![]);
         // (for now) Append controller kel to be able to verify end role signature.
         // TODO use ksn instead

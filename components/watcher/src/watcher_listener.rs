@@ -1,7 +1,6 @@
 use std::path::Path;
 
 use actix_web::{dev::Server, web, App, HttpServer};
-use anyhow::Result;
 use futures::future::join_all;
 use keri::{error::Error, oobi::LocationScheme, prefix::BasicPrefix};
 
@@ -83,11 +82,12 @@ pub mod http_handlers {
         error::Error,
         event_message::signed_event_message::{Message, Op},
         event_parsing::SignedEventData,
-        oobi::{EndRole, LocationScheme, Role},
+        oobi::{error::OobiError, EndRole, LocationScheme, Role},
         prefix::{AttachedSignaturePrefix, IdentifierPrefix, Prefix},
         query::query_event::{QueryArgs, QueryEvent, QueryRoute, SignedQuery},
     };
     use reqwest::StatusCode;
+    use serde::Deserialize;
 
     use crate::watcher::{Watcher, WatcherData, WatcherError};
 
@@ -124,11 +124,14 @@ pub mod http_handlers {
             .flatten_ok()
             .try_collect()?;
 
+        // TODO: check if query cid in oobi_manager - end_role watcher
+
         Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())
             .body(String::from_utf8(resp).unwrap()))
     }
 
+    // TODO: merge with above method
     #[get("/query/{id}")]
     async fn get_kel(
         eid: web::Path<IdentifierPrefix>,
@@ -194,19 +197,24 @@ pub mod http_handlers {
     ) -> Result<impl Responder, ApiError> {
         println!(
             "\nGot oobi to resolve: \n{}",
-            String::from_utf8(body.to_vec()).unwrap()
+            String::from_utf8_lossy(&body)
         );
 
-        match serde_json::from_str::<EndRole>(&String::from_utf8(body.to_vec()).unwrap()) {
-            Ok(end_role) => data.resolve_end_role(end_role).await.unwrap(),
-            Err(_) => {
-                let lc = serde_json::from_str::<LocationScheme>(
-                    &String::from_utf8(body.to_vec()).unwrap(),
-                )
-                .unwrap();
-                data.resolve_loc_scheme(&lc).await.unwrap()
+        #[derive(Debug, Deserialize)]
+        #[serde(untagged)]
+        enum RequestData {
+            EndRole(EndRole),
+            LocationScheme(LocationScheme),
+        }
+
+        match serde_json::from_slice(&body)? {
+            RequestData::EndRole(end_role) => {
+                data.resolve_end_role(end_role).await?;
             }
-        };
+            RequestData::LocationScheme(loc_scheme) => {
+                data.resolve_loc_scheme(&loc_scheme).await?;
+            }
+        }
 
         Ok(HttpResponse::Ok())
     }
@@ -215,8 +223,8 @@ pub mod http_handlers {
     async fn get_eid_oobi(
         eid: web::Path<IdentifierPrefix>,
         data: web::Data<WatcherData>,
-    ) -> impl Responder {
-        let loc_scheme = data.get_loc_scheme_for_id(&eid).unwrap().unwrap_or(vec![]);
+    ) -> Result<impl Responder, ApiError> {
+        let loc_scheme = data.get_loc_scheme_for_id(&eid)?;
         let oobis: Vec<u8> = loc_scheme
             .into_iter()
             .map(|sr| {
@@ -226,24 +234,20 @@ pub mod http_handlers {
             .flatten()
             .collect();
 
-        HttpResponse::Ok()
+        Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())
-            .body(String::from_utf8(oobis).unwrap())
+            .body(String::from_utf8(oobis).unwrap()))
     }
 
     #[get("/oobi/{cid}/{role}/{eid}")]
     async fn get_cid_oobi(
         path: web::Path<(IdentifierPrefix, Role, IdentifierPrefix)>,
         data: web::Data<WatcherData>,
-    ) -> impl Responder {
+    ) -> Result<impl Responder, ApiError> {
         let (cid, role, eid) = path.into_inner();
 
-        let end_role = data
-            .oobi_manager
-            .get_end_role(&cid, role)
-            .unwrap()
-            .unwrap_or(vec![]);
-        let loc_scheme = data.get_loc_scheme_for_id(&eid).unwrap().unwrap_or(vec![]);
+        let end_role = data.oobi_manager.get_end_role(&cid, role)?;
+        let loc_scheme = data.get_loc_scheme_for_id(&eid)?;
         let oobis: Vec<u8> = end_role
             .into_iter()
             .chain(loc_scheme.into_iter())
@@ -257,39 +261,46 @@ pub mod http_handlers {
             "\nSending {} obi from its watcher {}:\n{}",
             cid.to_str(),
             eid.to_str(),
-            String::from_utf8(oobis.clone()).unwrap()
+            String::from_utf8_lossy(&oobis)
         );
 
-        HttpResponse::Ok()
+        Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())
-            .body(String::from_utf8(oobis).unwrap())
+            .body(String::from_utf8(oobis).unwrap()))
     }
 
     #[derive(Debug, Display, Error, From)]
     pub enum ApiError {
+        #[display(fmt = "DB error")]
+        #[from]
+        DbError(keri::database::sled::DbError),
+
+        #[display(fmt = "deserialize error")]
+        #[from]
+        DeserializeError(serde_json::Error),
+
         #[display(fmt = "keri error")]
         #[from]
         KeriError(Error),
 
-        // TODO: add from watcher error impl (don't use anyhow)
         #[display(fmt = "watcher error")]
         #[from]
         WatcherError(WatcherError),
 
         #[display(fmt = "no state for prefix {}", prefix)]
-        NoStateForPrefix {
-            prefix: IdentifierPrefix,
-        },
+        NoStateForPrefix { prefix: IdentifierPrefix },
 
         #[display(fmt = "no response from witness {}", witness_id)]
-        NoResponse {
-            witness_id: IdentifierPrefix,
-        },
+        NoResponse { witness_id: IdentifierPrefix },
     }
 
     impl ResponseError for ApiError {
         fn status_code(&self) -> StatusCode {
             match self {
+                ApiError::DbError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+
+                ApiError::DeserializeError(_) => StatusCode::BAD_REQUEST,
+
                 ApiError::KeriError(err) => match err {
                     Error::Base64DecodingError { .. }
                     | Error::DeserializeError(_)
@@ -302,7 +313,15 @@ pub mod http_handlers {
                     _ => StatusCode::INTERNAL_SERVER_ERROR,
                 },
 
-                ApiError::WatcherError(_) => StatusCode::BAD_GATEWAY,
+                ApiError::WatcherError(err) => match err {
+                    WatcherError::OobiError(err) => match err {
+                        OobiError::SignerMismatch => StatusCode::FORBIDDEN,
+
+                        _ => StatusCode::INTERNAL_SERVER_ERROR,
+                    },
+
+                    _ => StatusCode::INTERNAL_SERVER_ERROR,
+                },
 
                 ApiError::NoStateForPrefix { .. } => StatusCode::BAD_GATEWAY,
 

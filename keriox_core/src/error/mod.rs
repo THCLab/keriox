@@ -112,10 +112,6 @@ pub enum Error {
     #[error(transparent)]
     QueryError(#[from] crate::query::QueryError),
 
-    #[cfg(feature = "oobi")]
-    #[error(transparent)]
-    OobiError(#[from] crate::oobi::error::OobiError),
-
     #[error(transparent)]
     DbError(#[from] crate::database::sled::DbError),
 }
