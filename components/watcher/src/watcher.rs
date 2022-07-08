@@ -1,12 +1,12 @@
 use std::{path::Path, sync::Arc};
 
-use anyhow::{anyhow, Result};
+use derive_more::{Display, Error, From};
 use keri::{
     actor::{parse_notice_stream, parse_op_stream, prelude::*},
     derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
     error::Error,
     event_message::signed_event_message::{Notice, Op},
-    oobi::{EndRole, LocationScheme, OobiManager, Scheme},
+    oobi::{error::OobiError, EndRole, LocationScheme, OobiManager, Scheme},
     prefix::{BasicPrefix, IdentifierPrefix},
     query::{
         reply_event::{ReplyEvent, ReplyRoute, SignedReply},
@@ -67,26 +67,24 @@ impl WatcherData {
         })
     }
 
+    /// Get location scheme from OOBI manager and sign it.
     pub fn get_loc_scheme_for_id(
         &self,
         eid: &IdentifierPrefix,
-    ) -> Result<Option<Vec<SignedReply>>, Error> {
+    ) -> Result<Vec<SignedReply>, WatcherError> {
         Ok(match self.oobi_manager.get_loc_scheme(eid)? {
-            Some(oobis_to_sign) => Some(
-                oobis_to_sign
-                    .iter()
-                    .map(|oobi_to_sing| {
-                        let signature =
-                            self.signer.sign(oobi_to_sing.serialize().unwrap()).unwrap();
-                        SignedReply::new_nontrans(
-                            oobi_to_sing.clone(),
-                            self.prefix.clone(),
-                            SelfSigning::Ed25519Sha512.derive(signature),
-                        )
-                    })
-                    .collect(),
-            ),
-            None => None,
+            Some(oobis_to_sign) => oobis_to_sign
+                .iter()
+                .map(|oobi_to_sing| {
+                    let signature = self.signer.sign(oobi_to_sing.serialize().unwrap())?;
+                    Ok(SignedReply::new_nontrans(
+                        oobi_to_sing.clone(),
+                        self.prefix.clone(),
+                        SelfSigning::Ed25519Sha512.derive(signature),
+                    ))
+                })
+                .collect::<Result<_, Error>>()?,
+            None => return Err(WatcherError::NoLocation { id: eid.clone() }),
         })
     }
 
@@ -181,13 +179,13 @@ impl WatcherData {
 pub struct Watcher(pub WatcherData);
 
 impl Watcher {
-    pub async fn resolve_end_role(&self, er: EndRole) -> Result<()> {
+    pub async fn resolve_end_role(&self, er: EndRole) -> Result<(), WatcherError> {
         // find endpoint data of endpoint provider identifier
         let loc_scheme = self
             .0
-            .get_loc_scheme_for_id(&er.eid.clone())
-            .unwrap()
-            .unwrap()[0]
+            .get_loc_scheme_for_id(&er.eid.clone())?
+            .get(0)
+            .ok_or(WatcherError::NoLocation { id: er.eid.clone() })?
             .reply
             .event
             .content
@@ -196,55 +194,51 @@ impl Watcher {
 
         if let ReplyRoute::LocScheme(lc) = loc_scheme {
             let url = format!("{}oobi/{}/{}/{}", lc.url, er.cid, "witness", er.eid);
-            let oobis = reqwest::get(url).await.unwrap().text().await.unwrap();
+            let oobis = reqwest::get(url).await.unwrap().text().await?;
 
-            self.0.parse_and_process_ops(oobis.as_bytes()).unwrap();
+            self.0.parse_and_process_ops(oobis.as_bytes())?;
             Ok(())
         } else {
-            Err(anyhow!("Wrong oobi type"))
+            Err(OobiError::InvalidMessageType)?
         }
     }
 
-    pub async fn resolve_loc_scheme(&self, lc: &LocationScheme) -> Result<()> {
+    pub async fn resolve_loc_scheme(&self, lc: &LocationScheme) -> Result<(), WatcherError> {
         let url = format!("{}oobi/{}", lc.url, lc.eid);
-        let oobis = reqwest::get(url).await.unwrap().text().await.unwrap();
+        let oobis = reqwest::get(url).await?.text().await?;
 
-        self.0.parse_and_process_ops(oobis.as_bytes()).unwrap();
+        self.0.parse_and_process_ops(oobis.as_bytes())?;
 
         Ok(())
     }
 
-    fn get_loc_schemas(&self, id: &IdentifierPrefix) -> Result<Vec<LocationScheme>> {
-        Ok(self
-            .0
-            .get_loc_scheme_for_id(id)
-            .unwrap()
-            .unwrap()
+    fn get_loc_schemas(&self, id: &IdentifierPrefix) -> Result<Vec<LocationScheme>, WatcherError> {
+        self.0
+            .get_loc_scheme_for_id(id)?
             .iter()
-            .filter_map(|lc| {
+            .map(|lc| {
                 if let ReplyRoute::LocScheme(loc_scheme) = lc.reply.get_route() {
                     Ok(loc_scheme)
                 } else {
-                    Err(anyhow!("Wrong route type"))
+                    Err(WatcherError::WrongReplyRoute)
                 }
-                .ok()
             })
-            .collect())
+            .collect()
     }
 
     pub async fn send_to(
         &self,
         wit_id: IdentifierPrefix,
-        schema: Scheme,
+        scheme: Scheme,
         msg: Vec<u8>,
-    ) -> Result<Option<String>> {
+    ) -> Result<Option<String>, WatcherError> {
         let addresses = self.get_loc_schemas(&wit_id)?;
         match addresses
             .iter()
-            .find(|loc| loc.scheme == schema)
+            .find(|loc| loc.scheme == scheme)
             .map(|lc| &lc.url)
         {
-            Some(address) => match schema {
+            Some(address) => match scheme {
                 Scheme::Http => {
                     let client = reqwest::Client::new();
                     let response = client
@@ -262,7 +256,38 @@ impl Watcher {
                     todo!()
                 }
             },
-            _ => Err(anyhow!("No address for scheme {:?}", schema)),
+            _ => Err(WatcherError::UnsupportedScheme { id: wit_id, scheme })?,
         }
     }
+}
+
+#[derive(Debug, Display, Error, From)]
+pub enum WatcherError {
+    #[display(fmt = "HTTP request failed")]
+    #[from]
+    RequestFailed(reqwest::Error),
+
+    #[display(fmt = "keri error")]
+    #[from]
+    KeriError(keri::error::Error),
+
+    #[display(fmt = "DB error")]
+    #[from]
+    DbError(keri::database::sled::DbError),
+
+    #[display(fmt = "OOBI error")]
+    #[from]
+    OobiError(keri::oobi::error::OobiError),
+
+    #[display(fmt = "location not found for {id:?}")]
+    NoLocation { id: IdentifierPrefix },
+
+    #[display(fmt = "unsupported scheme {scheme:?} for {id:?}")]
+    UnsupportedScheme {
+        id: IdentifierPrefix,
+        scheme: Scheme,
+    },
+
+    #[display(fmt = "wrong reply route")]
+    WrongReplyRoute,
 }

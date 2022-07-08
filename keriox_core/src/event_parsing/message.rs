@@ -1,6 +1,6 @@
 use std::io::Cursor;
 
-use nom::{branch::alt, combinator::map, error::ErrorKind, map, multi::many0, sequence::pair};
+use nom::{branch::alt, combinator::map, error::ErrorKind, multi::many0, sequence::pair};
 use rmp_serde as serde_mgpk;
 use serde::Deserialize;
 #[cfg(feature = "query")]
@@ -15,7 +15,7 @@ use crate::query::Timestamped;
 use crate::{
     event::{receipt::Receipt, EventMessage},
     event_message::{key_event_message::KeyEvent, Digestible},
-    event_parsing::{attachment::attachment, Attachment, EventType, SignedEventData},
+    event_parsing::{attachment::attachment, EventType, SignedEventData},
 };
 
 fn json_message<'a, D: Deserialize<'a> + Digestible>(

@@ -13,6 +13,7 @@ use crate::{
         Typeable,
     },
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix},
+    query::QueryError,
 };
 
 #[derive(Clone, PartialEq, Debug)]
@@ -161,13 +162,11 @@ impl ReplyEvent {
 }
 
 #[cfg(feature = "query")]
-pub fn bada_logic(new_rpy: &SignedReply, old_rpy: &SignedReply) -> Result<(), Error> {
+pub fn bada_logic(new_rpy: &SignedReply, old_rpy: &SignedReply) -> Result<(), QueryError> {
     use std::cmp::Ordering;
 
-    use crate::query::QueryError;
-
     // helper function for reply timestamps checking
-    fn check_dts(new_rpy: &ReplyEvent, old_rpy: &ReplyEvent) -> Result<(), Error> {
+    fn check_dts(new_rpy: &ReplyEvent, old_rpy: &ReplyEvent) -> Result<(), QueryError> {
         let new_dt = new_rpy.get_timestamp();
         let old_dt = old_rpy.get_timestamp();
         if new_dt >= old_dt {

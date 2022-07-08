@@ -68,7 +68,7 @@ impl Notifier for OutOfOrderEscrow {
         match notification {
             Notification::KeyEventAdded(ev_message) => {
                 let id = ev_message.event_message.event.get_prefix();
-                self.process_out_of_order_events(bus, &id)
+                self.process_out_of_order_events(bus, &id)?;
             }
             Notification::OutOfOrder(signed_event) => {
                 let id = match signed_event.event_message.event.get_event_data() {
@@ -87,10 +87,12 @@ impl Notifier for OutOfOrderEscrow {
                     _ => signed_event.event_message.event.get_prefix(),
                 };
 
-                self.0.add_out_of_order_event(signed_event.clone(), &id)
+                self.0.add_out_of_order_event(signed_event.clone(), &id)?;
             }
-            _ => Err(Error::SemanticError("Wrong notification".into())),
+            _ => return Err(Error::SemanticError("Wrong notification".into())),
         }
+
+        Ok(())
     }
 }
 
@@ -203,14 +205,20 @@ impl Notifier for PartiallyWitnessedEscrow {
         match notification {
             Notification::ReceiptAccepted
             | Notification::ReceiptEscrowed
-            | Notification::ReceiptOutOfOrder(_) => self.process_partially_witnessed_events(bus),
+            | Notification::ReceiptOutOfOrder(_) => {
+                self.process_partially_witnessed_events(bus)?;
+            }
             Notification::PartiallyWitnessed(signed_event) => {
                 let id = &signed_event.event_message.event.get_prefix();
                 self.0
-                    .add_partially_witnessed_event(signed_event.clone(), id)
+                    .add_partially_witnessed_event(signed_event.clone(), id)?;
             }
-            _ => Err(Error::SemanticError("Wrong notification".into())),
+            _ => {
+                return Err(Error::SemanticError("Wrong notification".into()));
+            }
         }
+
+        Ok(())
     }
 }
 
@@ -281,15 +289,15 @@ impl NontransReceiptsEscrow {
                         self.0.add_receipt_nt(sig_receipt.clone(), &id)?;
                         // remove from escrow
                         self.0.remove_escrow_nt_receipt(&id, &sig_receipt)?;
-                        bus.notify(&Notification::ReceiptAccepted)
+                        bus.notify(&Notification::ReceiptAccepted)?;
                     }
                     Err(Error::SignatureVerificationError) => {
                         // remove from escrow
-                        self.0.remove_escrow_nt_receipt(&id, &sig_receipt)
+                        self.0.remove_escrow_nt_receipt(&id, &sig_receipt)?;
                         // Some(())
                     }
-                    Err(e) => Err(e), // keep in escrow,
-                }?
+                    Err(e) => return Err(e), // keep in escrow,
+                }
             }
         };
 
@@ -308,14 +316,15 @@ impl Notifier for TransReceiptsEscrow {
     fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error> {
         match notification {
             Notification::KeyEventAdded(event) => {
-                self.process_t_receipts_escrow(&event.event_message.event.get_prefix(), bus)
+                self.process_t_receipts_escrow(&event.event_message.event.get_prefix(), bus)?;
             }
             Notification::TransReceiptOutOfOrder(receipt) => {
                 let id = receipt.validator_seal.prefix.clone();
-                self.0.add_escrow_t_receipt(receipt.to_owned(), &id)
+                self.0.add_escrow_t_receipt(receipt.to_owned(), &id)?;
             }
-            _ => Err(Error::SemanticError("Wrong notification".into())),
+            _ => return Err(Error::SemanticError("Wrong notification".into())),
         }
+        Ok(())
     }
 }
 impl TransReceiptsEscrow {
@@ -334,14 +343,14 @@ impl TransReceiptsEscrow {
                         self.0.add_receipt_t(sig_receipt.clone(), &id)?;
                         // remove from escrow
                         self.0.remove_escrow_t_receipt(&id, &sig_receipt)?;
-                        bus.notify(&Notification::ReceiptAccepted)
+                        bus.notify(&Notification::ReceiptAccepted)?;
                     }
                     Err(Error::SignatureVerificationError) => {
                         // remove from escrow
-                        self.0.remove_escrow_t_receipt(&id, &sig_receipt)
+                        self.0.remove_escrow_t_receipt(&id, &sig_receipt)?;
                     }
-                    Err(e) => Err(e), // keep in escrow,
-                }?
+                    Err(e) => return Err(e), // keep in escrow,
+                }
             }
         };
 
@@ -391,16 +400,16 @@ impl ReplyEscrow {
                 match validator.process_signed_ksn_reply(&sig_rep) {
                     Ok(_) => {
                         self.0.remove_escrowed_reply(&id, &sig_rep)?;
-                        self.0.update_accepted_reply(sig_rep, &id)
+                        self.0.update_accepted_reply(sig_rep, &id)?;
                     }
                     Err(Error::SignatureVerificationError)
                     | Err(Error::QueryError(QueryError::StaleRpy)) => {
                         // remove from escrow
-                        self.0.remove_escrowed_reply(&id, &sig_rep)
+                        self.0.remove_escrowed_reply(&id, &sig_rep)?;
                     }
-                    Err(Error::EventOutOfOrderError) => Ok(()), // keep in escrow,
-                    Err(e) => Err(e),
-                }?;
+                    Err(Error::EventOutOfOrderError) => (), // keep in escrow,
+                    Err(e) => return Err(e),
+                };
             }
         };
         Ok(())

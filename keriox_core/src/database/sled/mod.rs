@@ -1,7 +1,11 @@
 pub(crate) mod tables;
 
+use std::path::Path;
+
+use self::tables::{SledEventTree, SledEventTreeVec};
+#[cfg(feature = "query")]
+use crate::query::reply_event::SignedReply;
 use crate::{
-    error::Error,
     event::EventMessage,
     event_message::{
         key_event_message::KeyEvent,
@@ -13,11 +17,6 @@ use crate::{
     },
     prefix::IdentifierPrefix,
 };
-use std::path::Path;
-use tables::{SledEventTree, SledEventTreeVec};
-
-#[cfg(feature = "query")]
-use crate::query::reply_event::SignedReply;
 
 pub struct SledEventDatabase {
     // "iids" tree
@@ -54,8 +53,9 @@ pub struct SledEventDatabase {
     mailbox_receipts: SledEventTreeVec<SignedNontransferableReceipt>,
 }
 
+// TODO: remove all the `.ok()`s
 impl SledEventDatabase {
-    pub fn new<'a, P>(path: P) -> Result<Self, Error>
+    pub fn new<'a, P>(path: P) -> Result<Self, DbError>
     where
         P: Into<&'a Path>,
     {
@@ -85,9 +85,9 @@ impl SledEventDatabase {
         &self,
         event: SignedEventMessage,
         id: &IdentifierPrefix,
-    ) -> Result<(), Error> {
+    ) -> Result<(), DbError> {
         self.key_event_logs
-            .push(self.identifiers.designated_key(id), event.into())
+            .push(self.identifiers.designated_key(id)?, event.into())
     }
 
     pub fn get_kel_finalized_events(
@@ -95,25 +95,25 @@ impl SledEventDatabase {
         id: &IdentifierPrefix,
     ) -> Option<impl DoubleEndedIterator<Item = TimestampedSignedEventMessage>> {
         self.key_event_logs
-            .iter_values(self.identifiers.designated_key(id))
+            .iter_values(self.identifiers.designated_key(id).ok()?)
     }
 
     pub fn remove_kel_finalized_event(
         &self,
         id: &IdentifierPrefix,
         event: &SignedEventMessage,
-    ) -> Result<(), Error> {
+    ) -> Result<(), DbError> {
         self.key_event_logs
-            .remove(self.identifiers.designated_key(id), &event.into())
+            .remove(self.identifiers.designated_key(id)?, &event.into())
     }
 
     pub fn add_out_of_order_event(
         &self,
         event: SignedEventMessage,
         id: &IdentifierPrefix,
-    ) -> Result<(), Error> {
+    ) -> Result<(), DbError> {
         self.escrowed_out_of_order
-            .push(self.identifiers.designated_key(id), event.into())
+            .push(self.identifiers.designated_key(id)?, event.into())
     }
 
     pub fn get_out_of_order_events(
@@ -121,25 +121,25 @@ impl SledEventDatabase {
         id: &IdentifierPrefix,
     ) -> Option<impl DoubleEndedIterator<Item = TimestampedSignedEventMessage>> {
         self.escrowed_out_of_order
-            .iter_values(self.identifiers.designated_key(id))
+            .iter_values(self.identifiers.designated_key(id).ok()?)
     }
 
     pub fn remove_out_of_order_event(
         &self,
         id: &IdentifierPrefix,
         event: &SignedEventMessage,
-    ) -> Result<(), Error> {
+    ) -> Result<(), DbError> {
         self.escrowed_out_of_order
-            .remove(self.identifiers.designated_key(id), &event.into())
+            .remove(self.identifiers.designated_key(id)?, &event.into())
     }
 
     pub fn add_partially_signed_event(
         &self,
         event: SignedEventMessage,
         id: &IdentifierPrefix,
-    ) -> Result<(), Error> {
+    ) -> Result<(), DbError> {
         self.escrowed_partially_signed
-            .push(self.identifiers.designated_key(id), event.into())
+            .push(self.identifiers.designated_key(id)?, event.into())
     }
 
     pub fn get_all_partially_signed_events(
@@ -153,7 +153,11 @@ impl SledEventDatabase {
         event: EventMessage<KeyEvent>,
     ) -> Option<impl DoubleEndedIterator<Item = TimestampedSignedEventMessage>> {
         self.escrowed_partially_signed
-            .iter_values(self.identifiers.designated_key(&event.event.get_prefix()))
+            .iter_values(
+                self.identifiers
+                    .designated_key(&event.event.get_prefix())
+                    .ok()?,
+            )
             .map(|events| {
                 events
                     .filter(move |db_event| event.eq(&db_event.signed_event_message.event_message))
@@ -164,11 +168,11 @@ impl SledEventDatabase {
         &self,
         id: &IdentifierPrefix,
         event: &EventMessage<KeyEvent>,
-    ) -> Result<(), Error> {
+    ) -> Result<(), DbError> {
         if let Some(partially_signed) = self.get_partially_signed_events(event.clone()) {
             for partially_event in partially_signed {
                 self.escrowed_partially_signed
-                    .remove(self.identifiers.designated_key(id), &partially_event)?;
+                    .remove(self.identifiers.designated_key(id)?, &partially_event)?;
             }
         }
         Ok(())
@@ -178,11 +182,11 @@ impl SledEventDatabase {
         &self,
         event: SignedEventMessage,
         id: &IdentifierPrefix,
-    ) -> Result<(), Error> {
+    ) -> Result<(), DbError> {
         let event = event.into();
         if !self.partially_witnessed_events.contains_value(&event) {
             self.partially_witnessed_events
-                .push(self.identifiers.designated_key(id), event)
+                .push(self.identifiers.designated_key(id)?, event)
         } else {
             Ok(())
         }
@@ -193,16 +197,16 @@ impl SledEventDatabase {
         id: &IdentifierPrefix,
     ) -> Option<impl DoubleEndedIterator<Item = TimestampedSignedEventMessage>> {
         self.partially_witnessed_events
-            .iter_values(self.identifiers.designated_key(id))
+            .iter_values(self.identifiers.designated_key(id).ok()?)
     }
 
     pub fn remove_partially_witnessed_event(
         &self,
         id: &IdentifierPrefix,
         event: &SignedEventMessage,
-    ) -> Result<(), Error> {
+    ) -> Result<(), DbError> {
         self.partially_witnessed_events
-            .remove(self.identifiers.designated_key(id), &event.into())
+            .remove(self.identifiers.designated_key(id)?, &event.into())
     }
 
     pub fn get_all_partially_witnessed(
@@ -215,9 +219,9 @@ impl SledEventDatabase {
         &self,
         receipt: SignedTransferableReceipt,
         id: &IdentifierPrefix,
-    ) -> Result<(), Error> {
+    ) -> Result<(), DbError> {
         self.receipts_t
-            .push(self.identifiers.designated_key(id), receipt)
+            .push(self.identifiers.designated_key(id)?, receipt)
     }
 
     pub fn get_receipts_t(
@@ -225,16 +229,16 @@ impl SledEventDatabase {
         id: &IdentifierPrefix,
     ) -> Option<impl DoubleEndedIterator<Item = SignedTransferableReceipt>> {
         self.receipts_t
-            .iter_values(self.identifiers.designated_key(id))
+            .iter_values(self.identifiers.designated_key(id).ok()?)
     }
 
     pub fn add_receipt_nt(
         &self,
         receipt: SignedNontransferableReceipt,
         id: &IdentifierPrefix,
-    ) -> Result<(), Error> {
+    ) -> Result<(), DbError> {
         self.receipts_nt
-            .push(self.identifiers.designated_key(id), receipt)
+            .push(self.identifiers.designated_key(id)?, receipt)
     }
 
     pub fn get_receipts_nt(
@@ -242,14 +246,14 @@ impl SledEventDatabase {
         id: &IdentifierPrefix,
     ) -> Option<impl DoubleEndedIterator<Item = SignedNontransferableReceipt>> {
         self.receipts_nt
-            .iter_values(self.identifiers.designated_key(id))
+            .iter_values(self.identifiers.designated_key(id).ok()?)
     }
 
-    pub fn remove_receipts_nt(&self, id: &IdentifierPrefix) -> Result<(), Error> {
+    pub fn remove_receipts_nt(&self, id: &IdentifierPrefix) -> Result<(), DbError> {
         if let Some(receipts) = self.get_receipts_nt(id) {
             for receipt in receipts {
                 self.receipts_nt
-                    .remove(self.identifiers.designated_key(id), &receipt)?;
+                    .remove(self.identifiers.designated_key(id)?, &receipt)?;
             }
         }
         Ok(())
@@ -259,9 +263,9 @@ impl SledEventDatabase {
         &self,
         receipt: SignedTransferableReceipt,
         id: &IdentifierPrefix,
-    ) -> Result<(), Error> {
+    ) -> Result<(), DbError> {
         self.escrowed_receipts_t
-            .push(self.identifiers.designated_key(id), receipt)
+            .push(self.identifiers.designated_key(id)?, receipt)
     }
 
     pub fn get_escrow_t_receipts(
@@ -269,26 +273,26 @@ impl SledEventDatabase {
         id: &IdentifierPrefix,
     ) -> Option<impl DoubleEndedIterator<Item = SignedTransferableReceipt>> {
         self.escrowed_receipts_t
-            .iter_values(self.identifiers.designated_key(id))
+            .iter_values(self.identifiers.designated_key(id).ok()?)
     }
 
     pub fn remove_escrow_t_receipt(
         &self,
         id: &IdentifierPrefix,
         receipt: &SignedTransferableReceipt,
-    ) -> Result<(), Error> {
+    ) -> Result<(), DbError> {
         self.escrowed_receipts_t
-            .remove(self.identifiers.designated_key(id), receipt)
+            .remove(self.identifiers.designated_key(id)?, receipt)
     }
 
     pub fn add_escrow_nt_receipt(
         &self,
         receipt: SignedNontransferableReceipt,
         id: &IdentifierPrefix,
-    ) -> Result<(), Error> {
+    ) -> Result<(), DbError> {
         if !self.escrowed_receipts_nt.contains_value(&receipt) {
             self.escrowed_receipts_nt
-                .push(self.identifiers.designated_key(id), receipt)
+                .push(self.identifiers.designated_key(id)?, receipt)
         } else {
             Ok(())
         }
@@ -299,7 +303,7 @@ impl SledEventDatabase {
         id: &IdentifierPrefix,
     ) -> Option<impl DoubleEndedIterator<Item = SignedNontransferableReceipt>> {
         self.escrowed_receipts_nt
-            .iter_values(self.identifiers.designated_key(id))
+            .iter_values(self.identifiers.designated_key(id).ok()?)
     }
 
     pub fn get_all_escrow_nt_receipts(
@@ -312,18 +316,18 @@ impl SledEventDatabase {
         &self,
         id: &IdentifierPrefix,
         receipt: &SignedNontransferableReceipt,
-    ) -> Result<(), Error> {
+    ) -> Result<(), DbError> {
         self.escrowed_receipts_nt
-            .remove(self.identifiers.designated_key(id), receipt)
+            .remove(self.identifiers.designated_key(id)?, receipt)
     }
 
     pub fn add_likely_duplicious_event(
         &self,
         event: EventMessage<KeyEvent>,
         id: &IdentifierPrefix,
-    ) -> Result<(), Error> {
+    ) -> Result<(), DbError> {
         self.likely_duplicious_events
-            .push(self.identifiers.designated_key(id), event.into())
+            .push(self.identifiers.designated_key(id)?, event.into())
     }
 
     pub fn get_likely_duplicitous_events(
@@ -331,16 +335,16 @@ impl SledEventDatabase {
         id: &IdentifierPrefix,
     ) -> Option<impl DoubleEndedIterator<Item = TimestampedEventMessage>> {
         self.likely_duplicious_events
-            .iter_values(self.identifiers.designated_key(id))
+            .iter_values(self.identifiers.designated_key(id).ok()?)
     }
 
     pub fn add_duplicious_event(
         &self,
         event: SignedEventMessage,
         id: &IdentifierPrefix,
-    ) -> Result<(), Error> {
+    ) -> Result<(), DbError> {
         self.duplicitous_events
-            .push(self.identifiers.designated_key(id), event.into())
+            .push(self.identifiers.designated_key(id)?, event.into())
     }
 
     pub fn get_duplicious_events(
@@ -348,7 +352,7 @@ impl SledEventDatabase {
         id: &IdentifierPrefix,
     ) -> Option<impl DoubleEndedIterator<Item = TimestampedSignedEventMessage>> {
         self.duplicitous_events
-            .iter_values(self.identifiers.designated_key(id))
+            .iter_values(self.identifiers.designated_key(id).ok()?)
     }
 
     #[cfg(feature = "query")]
@@ -356,12 +360,12 @@ impl SledEventDatabase {
         &self,
         rpy: SignedReply,
         id: &IdentifierPrefix,
-    ) -> Result<(), Error> {
+    ) -> Result<(), DbError> {
         use crate::query::reply_event::ReplyRoute;
 
         match self
             .accepted_rpy
-            .iter_values(self.identifiers.designated_key(id))
+            .iter_values(self.identifiers.designated_key(id)?)
         {
             Some(rpys) => {
                 let filtered = rpys
@@ -372,11 +376,11 @@ impl SledEventDatabase {
                     .chain(Some(rpy.clone()).into_iter())
                     .collect();
                 self.accepted_rpy
-                    .put(self.identifiers.designated_key(id), filtered)
+                    .put(self.identifiers.designated_key(id)?, filtered)
             }
             None => self
                 .accepted_rpy
-                .push(self.identifiers.designated_key(id), rpy),
+                .push(self.identifiers.designated_key(id)?, rpy),
         }
     }
 
@@ -386,7 +390,7 @@ impl SledEventDatabase {
         id: &IdentifierPrefix,
     ) -> Option<impl DoubleEndedIterator<Item = SignedReply>> {
         self.accepted_rpy
-            .iter_values(self.identifiers.designated_key(id))
+            .iter_values(self.identifiers.designated_key(id).ok()?)
     }
 
     #[cfg(feature = "query")]
@@ -394,15 +398,19 @@ impl SledEventDatabase {
         &self,
         id: &IdentifierPrefix,
         rpy: SignedReply,
-    ) -> Result<(), Error> {
+    ) -> Result<(), DbError> {
         self.accepted_rpy
-            .remove(self.identifiers.designated_key(id), &rpy)
+            .remove(self.identifiers.designated_key(id)?, &rpy)
     }
 
     #[cfg(feature = "query")]
-    pub fn add_escrowed_reply(&self, rpy: SignedReply, id: &IdentifierPrefix) -> Result<(), Error> {
+    pub fn add_escrowed_reply(
+        &self,
+        rpy: SignedReply,
+        id: &IdentifierPrefix,
+    ) -> Result<(), DbError> {
         self.escrowed_replys
-            .push(self.identifiers.designated_key(id), rpy)
+            .push(self.identifiers.designated_key(id)?, rpy)
     }
 
     #[cfg(feature = "query")]
@@ -411,7 +419,7 @@ impl SledEventDatabase {
         id: &IdentifierPrefix,
     ) -> Option<impl DoubleEndedIterator<Item = SignedReply>> {
         self.escrowed_replys
-            .iter_values(self.identifiers.designated_key(id))
+            .iter_values(self.identifiers.designated_key(id).ok()?)
     }
 
     #[cfg(feature = "query")]
@@ -419,9 +427,9 @@ impl SledEventDatabase {
         &self,
         id: &IdentifierPrefix,
         rpy: &SignedReply,
-    ) -> Result<(), Error> {
+    ) -> Result<(), DbError> {
         self.escrowed_replys
-            .remove(self.identifiers.designated_key(id), rpy)
+            .remove(self.identifiers.designated_key(id)?, rpy)
     }
 
     #[cfg(feature = "query")]
@@ -434,10 +442,10 @@ impl SledEventDatabase {
         &self,
         receipt: SignedNontransferableReceipt,
         id: &IdentifierPrefix,
-    ) -> Result<(), Error> {
+    ) -> Result<(), DbError> {
         if !self.mailbox_receipts.contains_value(&receipt) {
             self.mailbox_receipts
-                .push(self.identifiers.designated_key(id), receipt)
+                .push(self.identifiers.designated_key(id)?, receipt)
         } else {
             Ok(())
         }
@@ -449,6 +457,14 @@ impl SledEventDatabase {
         id: &IdentifierPrefix,
     ) -> Option<impl DoubleEndedIterator<Item = SignedNontransferableReceipt>> {
         self.mailbox_receipts
-            .iter_values(self.identifiers.designated_key(id))
+            .iter_values(self.identifiers.designated_key(id).ok()?)
     }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum DbError {
+    #[error("sled error: {0}")]
+    Sled(#[from] sled::Error),
+    #[error("serde error: {0}")]
+    Serde(#[from] serde_cbor::Error),
 }

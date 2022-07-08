@@ -2,12 +2,16 @@ use std::path::Path;
 
 use sled::Db;
 
-use crate::database::sled::tables::{SledEventTree, SledEventTreeVec};
-use crate::query::reply_event::ReplyRoute;
-use crate::{prefix::IdentifierPrefix, query::reply_event::SignedReply};
-
 use super::{Role, Scheme};
-use crate::error::Error;
+use crate::{
+    database::sled::{
+        tables::{SledEventTree, SledEventTreeVec},
+        DbError,
+    },
+    error::Error,
+    prefix::IdentifierPrefix,
+    query::reply_event::{ReplyRoute, SignedReply},
+};
 
 pub struct OobiStorage {
     identifiers: SledEventTree<IdentifierPrefix>,
@@ -30,8 +34,8 @@ impl OobiStorage {
     pub fn get_oobis_for_eid(
         &self,
         id: &IdentifierPrefix,
-    ) -> Result<Option<Vec<SignedReply>>, Error> {
-        let key = self.identifiers.designated_key(id);
+    ) -> Result<Option<Vec<SignedReply>>, DbError> {
+        let key = self.identifiers.designated_key(id)?;
         Ok(self.oobis.get(key)?)
     }
 
@@ -39,7 +43,7 @@ impl OobiStorage {
         &self,
         eid: &IdentifierPrefix,
         scheme: &Scheme,
-    ) -> Result<Option<SignedReply>, Error> {
+    ) -> Result<Option<SignedReply>, DbError> {
         Ok(match self.get_oobis_for_eid(eid)? {
             Some(oobis) => oobis.into_iter().find(|rpy| {
                 if let ReplyRoute::LocScheme(lc) = rpy.reply.get_route() {
@@ -56,8 +60,8 @@ impl OobiStorage {
         &self,
         cid: &IdentifierPrefix,
         role: Role,
-    ) -> Result<Option<Vec<SignedReply>>, Error> {
-        let key = self.identifiers.designated_key(cid);
+    ) -> Result<Option<Vec<SignedReply>>, DbError> {
+        let key = self.identifiers.designated_key(cid)?;
         Ok(self.cids.get(key)?.map(|r| {
             r.into_iter()
                 .filter(|oobi| {
@@ -71,11 +75,11 @@ impl OobiStorage {
         }))
     }
 
-    pub fn save_oobi(&self, signed_reply: &SignedReply) -> Result<(), Error> {
+    pub fn save_oobi(&self, signed_reply: &SignedReply) -> Result<(), DbError> {
         match signed_reply.reply.get_route() {
             ReplyRoute::Ksn(_, _) => todo!(),
             ReplyRoute::LocScheme(loc_scheme) => {
-                let key = self.identifiers.designated_key(&loc_scheme.get_eid());
+                let key = self.identifiers.designated_key(&loc_scheme.get_eid())?;
 
                 // update last saved reply for given schema with the new one
                 match self.oobis.iter_values(key) {
@@ -87,16 +91,16 @@ impl OobiStorage {
                             })
                             .chain(vec![signed_reply.clone()])
                             .collect::<Vec<_>>();
-                        self.oobis.put(key, value)
+                        self.oobis.put(key, value)?;
                     }
-                    None => self.oobis.push(key, signed_reply.clone()),
-                }?;
+                    None => self.oobis.push(key, signed_reply.clone())?,
+                }
             }
             ReplyRoute::EndRoleAdd(end_role) | ReplyRoute::EndRoleCut(end_role) => {
-                let key = self.identifiers.designated_key(&end_role.cid);
-                self.cids.push(key, signed_reply.clone())?
+                let key = self.identifiers.designated_key(&end_role.cid)?;
+                self.cids.push(key, signed_reply.clone())?;
             }
-        };
+        }
         Ok(())
     }
 }

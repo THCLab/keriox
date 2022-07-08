@@ -88,16 +88,19 @@ impl EventProcessor {
     pub fn process_op_reply(&self, rpy: &SignedReply) -> Result<(), Error> {
         match rpy.reply.get_route() {
             ReplyRoute::Ksn(_, _) => match self.validator.process_signed_ksn_reply(&rpy) {
-                Ok(_) => self
-                    .db
-                    .update_accepted_reply(rpy.clone(), &rpy.reply.get_prefix()),
-                Err(Error::EventOutOfOrderError) => self
-                    .publisher
-                    .notify(&Notification::KsnOutOfOrder(rpy.clone())),
-                Err(anything) => Err(anything),
+                Ok(_) => {
+                    self.db
+                        .update_accepted_reply(rpy.clone(), &rpy.reply.get_prefix())?;
+                }
+                Err(Error::EventOutOfOrderError) => {
+                    self.publisher
+                        .notify(&Notification::KsnOutOfOrder(rpy.clone()))?;
+                }
+                Err(anything) => return Err(anything),
             },
-            _ => Ok(()),
+            _ => {}
         }
+        Ok(())
     }
 
     pub fn process_notice<F>(&self, notice: &Notice, processing_strategy: F) -> Result<(), Error>

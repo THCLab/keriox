@@ -89,7 +89,11 @@ pub fn process_signed_oobi(
     // check digest
     signed_oobi.reply.check_digest()?;
     // save
-    oobi_manager.process_oobi(&signed_oobi)
+    oobi_manager
+        .process_oobi(signed_oobi)
+        .map_err(|e| Error::SemanticError(e.to_string()))?;
+
+    Ok(())
 }
 #[cfg(feature = "query")]
 pub fn process_signed_query(qr: SignedQuery, storage: &EventStorage) -> Result<ReplyType, Error> {
@@ -145,8 +149,8 @@ fn process_query(qr: Query, storage: &EventStorage) -> Result<ReplyType, Error> 
 pub mod prelude {
     pub use crate::{
         actor::{
-            process_message, process_notice, process_reply,
-            process_signed_oobi, process_signed_query,
+            process_message, process_notice, process_reply, process_signed_oobi,
+            process_signed_query,
         },
         database::sled::SledEventDatabase,
         event::SerializationFormats,

@@ -1,6 +1,5 @@
 use std::path::PathBuf;
 
-use anyhow::{anyhow, Result};
 use figment::{
     providers::{Format, Json},
     Figment,
@@ -34,7 +33,7 @@ struct Opts {
 }
 
 #[actix_web::main]
-async fn main() -> Result<()> {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let Opts { config_file } = Opts::from_args();
 
     let WatcherConfig {
@@ -44,8 +43,7 @@ async fn main() -> Result<()> {
         http_port,
         seed,
         initial_oobis,
-    } = Figment::new().join(Json::file(config_file)).extract()
-        .map_err(|_e| anyhow!("Improper `config.json` structure. Should contain fields: `db_path`, `http_host`, `http_port`. Set config file path with -c option."))?;
+    } = Figment::new().join(Json::file(config_file)).extract()?;
 
     let http_address = format!("http://{}:{}", http_host, http_port);
 
