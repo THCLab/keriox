@@ -7,7 +7,6 @@ use url::Url;
 use self::error::OobiError;
 use crate::{
     database::sled::DbError,
-    error::Error,
     event_message::signed_event_message::{Message, Op},
     event_parsing::message::signed_event_stream,
     prefix::IdentifierPrefix,
@@ -118,7 +117,7 @@ impl OobiManager {
     }
 
     fn parse_and_save(&self, stream: &str) -> Result<(), OobiError> {
-        let _events = signed_event_stream(stream.as_bytes())
+        signed_event_stream(stream.as_bytes())
             .map_err(|_| OobiError::Parse)?
             .1
             .into_iter()
