@@ -33,8 +33,11 @@ pub trait Processor {
     #[cfg(feature = "query")]
     fn process_op_reply(&self, reply: &SignedReply) -> Result<(), Error>;
 
-    fn register_observer(&mut self, observer: Arc<dyn Notifier + Send + Sync>, notifications: &[JustNotification])
-        -> Result<(), Error>;
+    fn register_observer(
+        &mut self,
+        observer: Arc<dyn Notifier + Send + Sync>,
+        notifications: &[JustNotification],
+    ) -> Result<(), Error>;
 
     fn process(
         &self,
@@ -71,12 +74,9 @@ impl EventProcessor {
     pub fn register_observer(
         &mut self,
         observer: Arc<dyn Notifier + Send + Sync>,
-        notifications: Vec<JustNotification>
+        notifications: Vec<JustNotification>,
     ) -> Result<(), Error> {
-        self.publisher.register_observer(
-            observer,
-            notifications,
-        );
+        self.publisher.register_observer(observer, notifications);
         Ok(())
     }
 

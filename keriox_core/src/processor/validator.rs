@@ -20,7 +20,7 @@ use crate::{
         },
     },
     prefix::{BasicPrefix, SelfSigningPrefix},
-    state::{EventSemantics, IdentifierState},
+    state::{EventSemantics, IdentifierState}
 };
 #[cfg(feature = "query")]
 use crate::{
@@ -39,7 +39,7 @@ impl EventValidator {
         }
     }
 
-    /// Process Event
+    /// Validate Event
     ///
     /// Validates a Key Event against the latest state
     /// of the Identifier and applies it to update the state
@@ -48,6 +48,15 @@ impl EventValidator {
         &self,
         signed_event: &SignedEventMessage,
     ) -> Result<Option<IdentifierState>, Error> {
+        self.validate_event_with_receipts(signed_event, [])
+    }
+
+    pub fn validate_event_with_receipts<I>(
+        &self,
+        signed_event: &SignedEventMessage,
+        receipt_couplets: I,
+    ) -> Result<Option<IdentifierState>, Error>
+    where I: IntoIterator<Item=(BasicPrefix, SelfSigningPrefix)> {
         // If delegated event, check its delegator seal.
         if let Some(seal) = self.get_delegator_seal(signed_event)? {
             self.validate_seal(seal, &signed_event.event_message)?;
@@ -67,20 +76,10 @@ impl EventValidator {
                             Err(Error::SignatureVerificationError)
                         } else {
                             // check if there are enough receipts and escrow
-                            let receipts = self
-                                .event_storage
-                                .get_nt_receipts_for_sn(&new_state.prefix, new_state.sn);
-                            let couplets = match receipts {
-                                Some(rct_list) => rct_list
-                                    .iter()
-                                    .map(|rct| -> Result<_, _> { self.get_receipt_couplets(rct) })
-                                    .collect::<Result<Vec<_>, _>>()?
-                                    .into_iter()
-                                    .flatten()
-                                    .collect(),
-                                None => vec![],
-                            };
-                            if new_state.witness_config.enough_receipts(&couplets)? {
+                            if new_state
+                                .witness_config
+                                .enough_receipts(receipt_couplets)?
+                            {
                                 Ok(Some(new_state))
                             } else {
                                 Err(Error::NotEnoughReceiptsError)
@@ -132,9 +131,12 @@ impl EventValidator {
         let sn = rct.body.event.sn;
         let receipted_event_digest = rct.body.event.receipted_event_digest.clone();
 
-        let witnesses =
-            self.event_storage
-                .get_witnesses_at_event(sn, &id, &receipted_event_digest)?;
+        let witnesses = self
+            .event_storage
+            .compute_state_at_event(sn, &id, &receipted_event_digest)?
+            .ok_or(Error::MissingEvent)?
+            .witness_config
+            .witnesses;
 
         let (couplets, attached_signatures) = (
             rct.couplets.clone().unwrap_or_default(),

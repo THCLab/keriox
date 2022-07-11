@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use super::{
-    notification::{Notification, NotificationBus, Notifier, JustNotification},
+    notification::{JustNotification, Notification, NotificationBus, Notifier},
     validator::EventValidator,
     EventProcessor, Processor,
 };
@@ -18,7 +18,7 @@ impl Processor for BasicProcessor {
     fn register_observer(
         &mut self,
         observer: Arc<dyn Notifier + Send + Sync>,
-        notification: &[JustNotification]
+        notification: &[JustNotification],
     ) -> Result<(), Error> {
         self.0.register_observer(observer, notification.to_vec())
     }
@@ -38,7 +38,10 @@ impl Processor for BasicProcessor {
 impl BasicProcessor {
     pub fn new(db: Arc<SledEventDatabase>, notification_bus: Option<NotificationBus>) -> Self {
         // TODO should we set some default publisher?
-        let processor = EventProcessor::new(db.clone(), notification_bus.unwrap_or(NotificationBus::new()));
+        let processor = EventProcessor::new(
+            db.clone(),
+            notification_bus.unwrap_or(NotificationBus::new()),
+        );
         Self(processor)
     }
 

@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crate::{
     error::Error,
     event::{
@@ -35,24 +37,26 @@ pub struct WitnessConfig {
 }
 
 impl WitnessConfig {
-    pub fn enough_receipts(
+    pub fn enough_receipts<I>(
         &self,
-        receipts_couplets: &[(BasicPrefix, SelfSigningPrefix)],
-    ) -> Result<bool, Error> {
+        receipts_couplets: I,
+    ) -> Result<bool, Error> 
+    where I: IntoIterator<Item=(BasicPrefix, SelfSigningPrefix)> {
         match self.tally.clone() {
             SignatureThreshold::Simple(t) => {
-                let proper_receipts = receipts_couplets
-                    .iter()
+                let mut unique = HashSet::new();
+               receipts_couplets
+                    .into_iter()
                     .filter(|(witness, _sig)| self.witnesses.contains(witness))
-                    .count();
-                Ok(proper_receipts >= t as usize)
+                    .for_each(|(witness_id, _witness_sig)| {unique.insert(witness_id);});
+                Ok(unique.len() >= t as usize)
             }
             SignatureThreshold::Weighted(t) => {
                 let (attached_signatures, _rest): (Vec<Option<AttachedSignaturePrefix>>, _) =
                     receipts_couplets
-                        .iter()
+                        .into_iter()
                         .map(|(id, signature)| {
-                            let index = self.witnesses.iter().position(|wit| wit == id);
+                            let index = self.witnesses.iter().position(|wit| wit == &id);
                             index.map(|i| AttachedSignaturePrefix {
                                 index: i as u16,
                                 signature: signature.clone(),

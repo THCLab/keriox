@@ -7,16 +7,17 @@ use std::{
 };
 
 use crate::{
-    database::{SledEventDatabase, escrow::EscrowDb},
+    database::{escrow::EscrowDb, SledEventDatabase},
     error::Error,
     event_message::signed_event_message::{Message, Notice, SignedEventMessage},
     event_parsing::message::{signed_event_stream, signed_message},
     prefix::IdentifierPrefix,
     processor::{
         basic_processor::BasicProcessor,
-        escrow::{OutOfOrderEscrow, PartiallySignedEscrow},
+        escrow::{OutOfOrderEscrow, PartiallySignedEscrow, PartiallyWitnessedEscrow},
         event_storage::EventStorage,
-        Processor, notification::JustNotification,
+        notification::JustNotification,
+        Processor,
     },
 };
 
@@ -29,9 +30,27 @@ pub fn test_not_fully_witnessed() -> Result<(), Error> {
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     fs::create_dir_all(root.path()).unwrap();
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-    let event_processor = BasicProcessor::new(Arc::clone(&db), None);
+    let mut event_processor = BasicProcessor::new(Arc::clone(&db), None);
     let event_storage = EventStorage::new(Arc::clone(&db));
 
+    // Register not fully witnessed escrow, to save and reprocess events
+    let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
+    let escrow_db = Arc::new(EscrowDb::new(escrow_root.path())?);
+    let partially_witnessed_escrow = Arc::new(PartiallyWitnessedEscrow::new(
+        db.clone(),
+        escrow_db,
+        Duration::from_secs(10),
+    ));
+    event_processor.register_observer(
+        partially_witnessed_escrow.clone(),
+        &[
+            JustNotification::PartiallyWitnessed,
+            // JustNotification::ReceiptAccepted,
+            // JustNotification::ReceiptEscrowed,
+            JustNotification::ReceiptOutOfOrder,
+        ],
+    )?;
+    
     // check if receipt was escrowed
     let id: IdentifierPrefix = "E1EyzzujHLiQbj9kcJ9wI2lVjOkiNbNn7t4Y2MhRjn_U"
         .parse()
@@ -47,7 +66,10 @@ pub fn test_not_fully_witnessed() -> Result<(), Error> {
     assert_eq!(state, None);
 
     // check if icp is in escrow
-    let mut esc = db.get_all_partially_witnessed().unwrap();
+    let mut esc = partially_witnessed_escrow
+        .escrowed_partially_witnessed
+        .get_all()
+        .unwrap();
     assert_eq!(icp_msg, Message::Notice(Notice::Event(esc.next().unwrap())));
     assert!(esc.next().is_none());
 
@@ -56,12 +78,18 @@ pub fn test_not_fully_witnessed() -> Result<(), Error> {
     let rcp_msg = Message::try_from(parsed_rcp).unwrap();
     event_processor.process(&rcp_msg.clone())?;
 
-    // // check if icp still in escrow
-    let mut esc = db.get_all_partially_witnessed().unwrap();
+    // check if icp still in escrow
+    let mut esc = partially_witnessed_escrow
+        .escrowed_partially_witnessed
+        .get_all()
+        .unwrap();
     assert_eq!(icp_msg, Message::Notice(Notice::Event(esc.next().unwrap())));
     assert!(esc.next().is_none());
 
-    let mut esc = db.get_escrow_nt_receipts(&id).unwrap();
+    let mut esc = partially_witnessed_escrow
+        .escrowed_nontranferable_receipts
+        .get_all()
+        .unwrap();
     assert_eq!(
         rcp_msg,
         Message::Notice(Notice::NontransferableRct(esc.next().unwrap().into()))
@@ -77,15 +105,21 @@ pub fn test_not_fully_witnessed() -> Result<(), Error> {
     event_processor.process(&rcp_msg.clone())?;
 
     // check if icp still in escrow
-    let mut esc = db.get_all_partially_witnessed().unwrap();
+    let mut esc = partially_witnessed_escrow
+        .escrowed_partially_witnessed
+        .get_all()
+        .unwrap();
     assert!(esc.next().is_none());
 
     // check if receipt was escrowed
-    let mut esc = db.get_escrow_nt_receipts(&id).unwrap();
+    let mut esc = partially_witnessed_escrow
+        .escrowed_nontranferable_receipts
+        .get_all()
+        .unwrap();
     assert!(esc.next().is_none());
 
-    // check if receipt was escrowed
-    let esc = db.get_receipts_nt(&id).unwrap();
+    // check if receipt was accepted 
+    let esc = db.get_receipts_nt(&id).unwrap(); 
     assert_eq!(esc.count(), 2);
 
     let state = event_storage.get_state(&id)?.unwrap();
@@ -97,7 +131,10 @@ pub fn test_not_fully_witnessed() -> Result<(), Error> {
     event_processor.process(&rcp_msg.clone())?;
 
     // check if receipt was escrowed
-    let mut esc = db.get_escrow_nt_receipts(&id).unwrap();
+    let mut esc = partially_witnessed_escrow
+        .escrowed_nontranferable_receipts
+        .get_all()
+        .unwrap();
     assert!(esc.next().is_none());
 
     let esc = db.get_receipts_nt(&id).unwrap();
@@ -114,7 +151,7 @@ pub fn test_reply_escrow() -> Result<(), Error> {
     use crate::{
         event_message::signed_event_message::Op,
         event_parsing::message::signed_event_stream,
-        processor::{escrow::ReplyEscrow, Processor, notification::JustNotification},
+        processor::{escrow::ReplyEscrow, notification::JustNotification, Processor},
     };
 
     // Create test db and event processor.
@@ -122,11 +159,14 @@ pub fn test_reply_escrow() -> Result<(), Error> {
     fs::create_dir_all(root.path()).unwrap();
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
     let mut event_processor = BasicProcessor::new(Arc::clone(&db), None);
-    event_processor.register_observer(Arc::new(ReplyEscrow::new(db.clone())), &[
-                JustNotification::KeyEventAdded,
-                #[cfg(feature = "query")]
-                JustNotification::KsnOutOfOrder,
-            ],)?;
+    event_processor.register_observer(
+        Arc::new(ReplyEscrow::new(db.clone())),
+        &[
+            JustNotification::KeyEventAdded,
+            #[cfg(feature = "query")]
+            JustNotification::KsnOutOfOrder,
+        ],
+    )?;
 
     let identifier: IdentifierPrefix = "E7YbTIkWWyNwOxZQTTnrs6qn8jFbu2A8zftQ33JYQFQ0".parse()?;
     let kel = r#"{"v":"KERI10JSON00012b_","t":"icp","d":"E7YbTIkWWyNwOxZQTTnrs6qn8jFbu2A8zftQ33JYQFQ0","i":"E7YbTIkWWyNwOxZQTTnrs6qn8jFbu2A8zftQ33JYQFQ0","s":"0","kt":"1","k":["DqI2cOZ06RwGNwCovYUWExmdKU983IasmUKMmZflvWdQ"],"nt":"1","n":["EOmBSdblll8qB4324PEmETrFN-DhElyZ0BcBH1q1qukw"],"bt":"0","b":[],"c":[],"a":[]}-AABAAotHSmS5LuCg2LXwlandbAs3MFR0yTC5BbE2iSW_35U2qA0hP9gp66G--mHhiFmfHEIbBKrs3tjcc8ySvYcpiBg{"v":"KERI10JSON000160_","t":"rot","d":"EFE9Je3kPu4PrLZg7_ixdD_ISn7FopBVfnSj2dvRgi6Q","i":"E7YbTIkWWyNwOxZQTTnrs6qn8jFbu2A8zftQ33JYQFQ0","s":"1","p":"E7YbTIkWWyNwOxZQTTnrs6qn8jFbu2A8zftQ33JYQFQ0","kt":"1","k":["Dyb48eeVVXD7JAarHFAUffKcgYGvCQ4KWX00myzNLgzU"],"nt":"1","n":["EQiKHrrsf2ogDeMCsAckDhB2qVNFejbAd1BOgetxGUAM"],"bt":"0","br":[],"ba":[],"a":[]}-AABAAQOn_2iHAT0Z_WH_C2mrlMA5F2x0EhnUlvzvjQUk-CMSR5YDV2v6YtABlsvvpcLES7m6D3hbsTxZTlKiQDQVSCA{"v":"KERI10JSON000160_","t":"rot","d":"EF7f4gNFCbJz6ZHLacIi_bbIq7kaWAFOzX7ncU_vs5Qg","i":"E7YbTIkWWyNwOxZQTTnrs6qn8jFbu2A8zftQ33JYQFQ0","s":"2","p":"EFE9Je3kPu4PrLZg7_ixdD_ISn7FopBVfnSj2dvRgi6Q","kt":"1","k":["DyN13SKiF1FsVoVR5C4r_15JJLUBxBXBmkleD5AYWplc"],"nt":"1","n":["ETbCFP46-4PxwjUdYbexS5xk_wcH7R0m1wyYnEpOLv70"],"bt":"0","br":[],"ba":[],"a":[]}-AABAAAwBxL1dmS_lnOBXW8SAI5kFenwrjd40KJ3cQfY9OCa1KtmtYN7PC19zSHdjxUWd_-8xphzRIEjgS1TlfBsy-Bw{"v":"KERI10JSON000160_","t":"rot","d":"EOPSPvHHVmU9IIdHa5ksisoVrOnmHRps_tx3OsZSQQ30","i":"E7YbTIkWWyNwOxZQTTnrs6qn8jFbu2A8zftQ33JYQFQ0","s":"3","p":"EF7f4gNFCbJz6ZHLacIi_bbIq7kaWAFOzX7ncU_vs5Qg","kt":"1","k":["DrcAz_gmDTuWIHn_mOQDeSK_aJIRiw5IMzPD7igzEDb0"],"nt":"1","n":["EK7ZUmFebD2st48Yvtzc9LajV3Yg2mkeeDzVRL-7uKrU"],"bt":"0","br":[],"ba":[],"a":[]}-AABAAKxPycYU7BbajlGN3sFjOBalZLwV38eXjcgvzNSetT7WARTgxsUpMStd242T09egL1wS_--d0xtOo1wLDXIbRAQ"#;
@@ -233,7 +273,13 @@ fn test_out_of_order() -> Result<(), Error> {
             escrow_db,
             Duration::from_secs(10),
         ));
-        processor.register_observer(ooo_escrow.clone(), &[JustNotification::OutOfOrder, JustNotification::KeyEventAdded])?;
+        processor.register_observer(
+            ooo_escrow.clone(),
+            &[
+                JustNotification::OutOfOrder,
+                JustNotification::KeyEventAdded,
+            ],
+        )?;
         (processor, EventStorage::new(witness_db.clone()), ooo_escrow)
     };
     let id: IdentifierPrefix = "DW-CM1BxXJO2fgMGqgvJBbi0UfxGFI0mpxDBVBNxXKoA".parse()?;
@@ -306,7 +352,7 @@ fn test_escrow_missing_signatures() -> Result<(), Error> {
         .map(|e| Message::try_from(e).unwrap());
     let ev1 = kell.next().unwrap();
     let ev2 = kell.next().unwrap();
-    let (event_without_signatures, event) =
+    let (event_without_signatures, _event) =
         match event_message(event_without_signature_str).unwrap().1 {
             EventType::KeyEvent(event) => (
                 Message::Notice(Notice::Event(SignedEventMessage {
@@ -336,14 +382,26 @@ fn test_escrow_missing_signatures() -> Result<(), Error> {
             escrow_db.clone(),
             Duration::from_secs(10),
         ));
-        processor.register_observer(ooo_escrow.clone(), &[JustNotification::OutOfOrder, JustNotification::KeyEventAdded])?;
+        processor.register_observer(
+            ooo_escrow.clone(),
+            &[
+                JustNotification::OutOfOrder,
+                JustNotification::KeyEventAdded,
+            ],
+        )?;
 
         let ps_escrow = Arc::new(PartiallySignedEscrow::new(
             witness_db.clone(),
             escrow_db.clone(),
             Duration::from_secs(10),
         ));
-        processor.register_observer(ps_escrow.clone(), &[JustNotification::PartiallySigned, JustNotification::KeyEventAdded])?;
+        processor.register_observer(
+            ps_escrow.clone(),
+            &[
+                JustNotification::PartiallySigned,
+                JustNotification::KeyEventAdded,
+            ],
+        )?;
 
         std::fs::create_dir_all(path).unwrap();
         (
@@ -385,7 +443,7 @@ fn test_partially_sign_escrow() -> Result<(), Error> {
         std::fs::create_dir_all(path).unwrap();
         let mut processor = BasicProcessor::new(witness_db.clone(), None);
 
-         // Register partially signed escrow, to save and reprocess partially signed events
+        // Register partially signed escrow, to save and reprocess partially signed events
         let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
         let escrow_db = Arc::new(EscrowDb::new(escrow_root.path())?);
         let ps_escrow = Arc::new(PartiallySignedEscrow::new(
@@ -418,7 +476,9 @@ fn test_partially_sign_escrow() -> Result<(), Error> {
     }
     .unwrap();
 
-    let mut escrowed = ps_escrow.get_partially_signed_for_event(icp_event.clone()).unwrap();
+    let mut escrowed = ps_escrow
+        .get_partially_signed_for_event(icp_event.clone())
+        .unwrap();
     assert_eq!(
         escrowed.next().map(|e| Message::Notice(Notice::Event(e))),
         Some(icp_first_sig.clone())
@@ -430,7 +490,9 @@ fn test_partially_sign_escrow() -> Result<(), Error> {
 
     // check escrow
     assert_eq!(
-       ps_escrow.get_partially_signed_for_event(icp_event.clone()).unwrap() 
+        ps_escrow
+            .get_partially_signed_for_event(icp_event.clone())
+            .unwrap()
             .count(),
         1
     );
@@ -440,7 +502,9 @@ fn test_partially_sign_escrow() -> Result<(), Error> {
 
     // Now event is fully signed, check if escrow is emty
     assert_eq!(
-       ps_escrow.get_partially_signed_for_event(icp_event.clone()).unwrap()
+        ps_escrow
+            .get_partially_signed_for_event(icp_event.clone())
+            .unwrap()
             .count(),
         0
     );
@@ -460,7 +524,10 @@ fn test_partially_sign_escrow() -> Result<(), Error> {
 
     // check escrow
     assert_eq!(
-       ps_escrow.escrowed_partially_signed.get_all().unwrap() 
+        ps_escrow
+            .escrowed_partially_signed
+            .get_all()
+            .unwrap()
             .count(),
         1
     );
@@ -470,7 +537,9 @@ fn test_partially_sign_escrow() -> Result<(), Error> {
 
     // Now event is fully signed, check if escrow is empty
     assert_eq!(
-        ps_escrow.get_partially_signed_for_event(icp_event).unwrap()
+        ps_escrow
+            .get_partially_signed_for_event(icp_event)
+            .unwrap()
             .count(),
         0
     );
@@ -514,14 +583,16 @@ fn test_out_of_order_cleanup() -> Result<(), Error> {
             escrow_db,
             Duration::from_secs(10),
         ));
-        processor.register_observer(ooo_escrow.clone(), &[JustNotification::KeyEventAdded, JustNotification::OutOfOrder])?;
+        processor.register_observer(
+            ooo_escrow.clone(),
+            &[
+                JustNotification::KeyEventAdded,
+                JustNotification::OutOfOrder,
+            ],
+        )?;
 
         std::fs::create_dir_all(path).unwrap();
-        (
-            processor,
-            EventStorage::new(witness_db.clone()),
-            ooo_escrow
-        )
+        (processor, EventStorage::new(witness_db.clone()), ooo_escrow)
     };
     let id: IdentifierPrefix = "DW-CM1BxXJO2fgMGqgvJBbi0UfxGFI0mpxDBVBNxXKoA".parse()?;
 
@@ -588,7 +659,7 @@ fn test_partially_sign_escrow_cleanup() -> Result<(), Error> {
         std::fs::create_dir_all(path).unwrap();
         let mut processor = BasicProcessor::new(witness_db.clone(), None);
 
-          // Register partially signed escrow, to save and reprocess partially signed events
+        // Register partially signed escrow, to save and reprocess partially signed events
         let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
         let escrow_db = Arc::new(EscrowDb::new(escrow_root.path())?);
         let ps_escrow = Arc::new(PartiallySignedEscrow::new(
@@ -621,7 +692,8 @@ fn test_partially_sign_escrow_cleanup() -> Result<(), Error> {
     }
     .unwrap();
 
-    let mut escrowed = ps_escrow.get_partially_signed_for_event(icp_event.clone())
+    let mut escrowed = ps_escrow
+        .get_partially_signed_for_event(icp_event.clone())
         .unwrap();
     assert_eq!(
         escrowed.next().map(|e| Message::Notice(Notice::Event(e))),
@@ -636,7 +708,8 @@ fn test_partially_sign_escrow_cleanup() -> Result<(), Error> {
     thread::sleep(Duration::from_secs(10));
 
     // Check if stale event was removed
-    let mut escrowed = ps_escrow.get_partially_signed_for_event(icp_event.clone())
+    let mut escrowed = ps_escrow
+        .get_partially_signed_for_event(icp_event.clone())
         .unwrap();
     assert!(escrowed.next().is_none());
 
@@ -644,7 +717,8 @@ fn test_partially_sign_escrow_cleanup() -> Result<(), Error> {
     processor.process(&icp_second_sig)?;
 
     // check escrow
-    let mut escrowed = ps_escrow.get_partially_signed_for_event(icp_event.clone())
+    let mut escrowed = ps_escrow
+        .get_partially_signed_for_event(icp_event.clone())
         .unwrap();
     assert_eq!(
         escrowed.next().map(|e| Message::Notice(Notice::Event(e))),
@@ -670,8 +744,23 @@ pub fn test_partially_witnessed_escrow_cleanup() -> Result<(), Error> {
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     fs::create_dir_all(root.path()).unwrap();
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-    let event_processor = BasicProcessor::new(Arc::clone(&db), None);
+    let mut event_processor = BasicProcessor::new(Arc::clone(&db), None);
     let event_storage = EventStorage::new(Arc::clone(&db));
+    // Register not fully witnessed escrow, to save and reprocess events
+    let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
+    let escrow_db = Arc::new(EscrowDb::new(escrow_root.path())?);
+    let partially_witnessed_escrow = Arc::new(PartiallyWitnessedEscrow::new(
+        db.clone(),
+        escrow_db,
+        Duration::from_secs(10),
+    ));
+    event_processor.register_observer(
+        partially_witnessed_escrow.clone(),
+        &[
+            JustNotification::PartiallyWitnessed,
+            JustNotification::ReceiptOutOfOrder,
+        ],
+    )?;
 
     // check if receipt was escrowed
     let id: IdentifierPrefix = "E1EyzzujHLiQbj9kcJ9wI2lVjOkiNbNn7t4Y2MhRjn_U"
@@ -693,11 +782,14 @@ pub fn test_partially_witnessed_escrow_cleanup() -> Result<(), Error> {
     event_processor.process(&rcp_msg.clone())?;
 
     // check if icp is in escrow
-    let mut esc = db.get_all_partially_witnessed().unwrap();
+    let mut esc = partially_witnessed_escrow
+        .escrowed_partially_witnessed
+        .get_all()
+        .unwrap();
     assert_eq!(icp_msg, Message::Notice(Notice::Event(esc.next().unwrap())));
     assert!(esc.next().is_none());
 
-    let mut esc = db.get_escrow_nt_receipts(&id).unwrap();
+    let mut esc = partially_witnessed_escrow.escrowed_nontranferable_receipts.get_all().unwrap();
     assert_eq!(
         rcp_msg,
         Message::Notice(Notice::NontransferableRct(esc.next().unwrap().into()))
@@ -711,7 +803,10 @@ pub fn test_partially_witnessed_escrow_cleanup() -> Result<(), Error> {
     sleep(Duration::from_secs(10));
 
     // check if icp still in escrow
-    let mut esc = db.get_all_partially_witnessed().unwrap();
+    let mut esc = partially_witnessed_escrow
+        .escrowed_partially_witnessed
+        .get_all()
+        .unwrap();
     assert!(esc.next().is_none());
 
     // check if event was accepted into kel
@@ -730,8 +825,24 @@ pub fn test_nt_receipt_escrow_cleanup() -> Result<(), Error> {
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     fs::create_dir_all(root.path()).unwrap();
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-    let event_processor = BasicProcessor::new(Arc::clone(&db), None);
+    let mut event_processor = BasicProcessor::new(Arc::clone(&db), None);
     let event_storage = EventStorage::new(Arc::clone(&db));
+
+    // Register not fully witnessed escrow, to save and reprocess events
+    let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
+    let escrow_db = Arc::new(EscrowDb::new(escrow_root.path())?);
+    let partially_witnessed_escrow = Arc::new(PartiallyWitnessedEscrow::new(
+        db.clone(),
+        escrow_db,
+        Duration::from_secs(10),
+    ));
+    event_processor.register_observer(
+        partially_witnessed_escrow.clone(),
+        &[
+            JustNotification::PartiallyWitnessed,
+            JustNotification::ReceiptOutOfOrder,
+        ],
+    )?;
 
     let id: IdentifierPrefix = "E1EyzzujHLiQbj9kcJ9wI2lVjOkiNbNn7t4Y2MhRjn_U"
         .parse()
@@ -743,7 +854,7 @@ pub fn test_nt_receipt_escrow_cleanup() -> Result<(), Error> {
     event_processor.process(&rcp_msg.clone())?;
 
     // check if receipt was escrowed
-    let mut esc = db.get_escrow_nt_receipts(&id).unwrap();
+    let mut esc = partially_witnessed_escrow.escrowed_nontranferable_receipts.get_all().unwrap();
     assert_eq!(
         rcp_msg,
         Message::Notice(Notice::NontransferableRct(esc.next().unwrap().into()))
@@ -757,7 +868,7 @@ pub fn test_nt_receipt_escrow_cleanup() -> Result<(), Error> {
     thread::sleep(Duration::from_secs(10));
 
     // Check escrow. Old receipt should be removed because it is stale.
-    let mut esc = db.get_escrow_nt_receipts(&id).unwrap();
+    let mut esc = partially_witnessed_escrow.escrowed_nontranferable_receipts.get_all().unwrap();
     assert!(esc.next().is_none());
 
     // Process one more receipt
@@ -769,7 +880,7 @@ pub fn test_nt_receipt_escrow_cleanup() -> Result<(), Error> {
     let state = event_storage.get_state(&id)?;
     assert_eq!(state, None);
 
-    let mut esc = db.get_escrow_nt_receipts(&id).unwrap();
+    let mut esc = partially_witnessed_escrow.escrowed_nontranferable_receipts.get_all().unwrap();
 
     assert_eq!(
         rcp_msg,

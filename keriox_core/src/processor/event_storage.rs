@@ -9,7 +9,6 @@ use crate::{
         sections::{seal::EventSeal, KeyConfig},
     },
     event_message::{signed_event_message::SignedNontransferableReceipt, Digestible},
-    event_parsing::SignedEventData,
     prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix},
     state::{EventSemantics, IdentifierState},
 };
@@ -285,33 +284,6 @@ impl EventStorage {
         }
     }
 
-    pub fn get_escrowed_nt_receipts(
-        &self,
-        prefix: &IdentifierPrefix,
-    ) -> Result<Option<Vec<u8>>, Error> {
-        match self.db.get_escrow_nt_receipts(prefix) {
-            Some(events) => Ok(Some(
-                events
-                    .map(|event| SignedEventData::from(event).to_cesr().unwrap_or_default())
-                    .fold(vec![], |mut accum, serialized_event| {
-                        accum.extend(serialized_event);
-                        accum
-                    }),
-            )),
-            None => Ok(None),
-        }
-    }
-
-    pub fn get_nt_receipts_for_sn(
-        &self,
-        prefix: &IdentifierPrefix,
-        sn: u64,
-    ) -> Option<Vec<SignedNontransferableReceipt>> {
-        self.db
-            .get_escrow_nt_receipts(prefix)
-            .map(|rcts| rcts.filter(|rct| rct.body.event.sn == sn).collect())
-    }
-
     #[cfg(feature = "query")]
     pub fn get_last_ksn_reply(
         &self,
@@ -333,49 +305,50 @@ impl EventStorage {
             })
     }
 
-    fn compute_escrowed_state_at_event(
+    /// Compute state at event given by sn and digest.
+    ///
+    /// Return current state for event identifier prefix, sn and
+    /// digest.
+    pub fn compute_state_at_event(
         &self,
         sn: u64,
         id: &IdentifierPrefix,
         event_digest: &SelfAddressingPrefix,
-    ) -> Result<IdentifierState, Error> {
-        let new_state = self.get_state(id)?.unwrap_or_default();
-        // if receipted event is newer than current state, try to find receipted
-        // event in partially witnessed escrow and apply it to state. Then we
-        // can get current witness set.
-        match self
-            .db
-            .get_all_partially_witnessed()
-            .and_then(|mut events| {
-                events.find(|event| {
-                    event.event_message.event.content.sn == sn
-                        && &event.event_message.event.content.prefix == id
-                        && &event.event_message.get_digest() == event_digest
-                })
-            }) {
-            Some(escrowed_partially_witnessed) => new_state.apply(&escrowed_partially_witnessed),
-
-            None => Ok(new_state),
+    ) -> Result<Option<IdentifierState>, Error> {
+        let new_state = self.compute_state_at_sn(id, sn)?;
+        if let Some(ref state) = new_state {
+            if &state.last_event_digest == event_digest {
+                Ok(new_state)
+            } else {
+                Err(Error::SemanticError(
+                    "Event digest doesn't match last event digest".into(),
+                ))
+            }
+        } else {
+            Ok(None)
         }
     }
 
     /// Get current witness list for event
     ///
     /// Return current witnesses list for event identifier prefix, sn and
-    /// digest. Also if event is escrowed as not fully witnessed.
+    /// digest.
     pub fn get_witnesses_at_event(
         &self,
         sn: u64,
         id: &IdentifierPrefix,
         event_digest: &SelfAddressingPrefix,
     ) -> Result<Vec<BasicPrefix>, Error> {
-        let state = match self.get_state(id)? {
-            Some(state) if state.sn < sn => {
-                self.compute_escrowed_state_at_event(sn, id, event_digest)?
-            }
-            None => self.compute_escrowed_state_at_event(sn, id, event_digest)?,
-            Some(state) => state,
-        };
+        // let state = match self.get_state(id)? {
+        //     Some(state) if state.sn < sn => {
+        //         self.compute_escrowed_state_at_event(sn, id, event_digest)?
+        //     }
+        //     None => self.compute_escrowed_state_at_event(sn, id, event_digest)?,
+        //     Some(state) => state,
+        // };
+        let state = self
+            .compute_state_at_event(sn, id, event_digest)?
+            .ok_or(Error::MissingEvent)?;
         Ok(state.witness_config.witnesses)
     }
 

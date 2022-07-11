@@ -1,7 +1,6 @@
 use std::{convert::TryFrom, fs, sync::Arc};
 
 use crate::{
-    database::{SledEventDatabase, escrow::EscrowDb},
     derivation::{basic::Basic, self_signing::SelfSigning},
     error::Error,
     event::sections::threshold::SignatureThreshold,
@@ -12,8 +11,11 @@ use crate::{
     },
     event_parsing::message::{signed_event_stream, signed_message},
     prefix::{AttachedSignaturePrefix, IdentifierPrefix, Prefix, SeedPrefix},
-    processor::{basic_processor::BasicProcessor, event_storage::EventStorage, Processor, escrow::default_escrow_bus},
-    signer::Signer,
+    processor::{
+        basic_processor::BasicProcessor, escrow::default_escrow_bus, event_storage::EventStorage,
+        Processor,
+    },
+    signer::Signer, database::{SledEventDatabase, escrow::EscrowDb},
 };
 
 #[test]
@@ -27,7 +29,7 @@ fn test_process() -> Result<(), Error> {
 
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
     let escrow_db = Arc::new(EscrowDb::new(escrow_root.path()).unwrap());
-	let (not_bus, (ooo_escrow, ps_escrow)) = default_escrow_bus(db.clone(), escrow_db);
+    let (not_bus, (ooo_escrow, ps_escrow)) = default_escrow_bus(db.clone(), escrow_db);
     let event_processor = BasicProcessor::new(Arc::clone(&db), Some(not_bus));
     let event_storage = EventStorage::new(Arc::clone(&db));
     // Events and sigs are from keripy `test_multisig_digprefix` test.
@@ -110,7 +112,8 @@ fn test_process() -> Result<(), Error> {
     if let Notice::Event(ev) = partially_signed_deserialized_ixn {
         // should be saved in partially signed escrow
         assert_eq!(
-            ps_escrow.get_partially_signed_for_event(ev.event_message)
+            ps_escrow
+                .get_partially_signed_for_event(ev.event_message)
                 .unwrap()
                 .count(),
             1
@@ -129,9 +132,7 @@ fn test_process() -> Result<(), Error> {
     event_processor.process(&out_of_order_rot)?;
     // should be saved in out of order escrow
     assert_eq!(
-        ooo_escrow.escrowed_out_of_order.get(&id)
-            .unwrap()
-            .count(),
+        ooo_escrow.escrowed_out_of_order.get(&id).unwrap().count(),
         1
     );
 
@@ -161,11 +162,11 @@ fn test_process_receipt() -> Result<(), Error> {
     fs::create_dir_all(root.path()).unwrap();
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
 
-	let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
+    let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
     fs::create_dir_all(root.path()).unwrap();
     let escrow_db = Arc::new(EscrowDb::new(escrow_root.path()).unwrap());
 
-	let (not_bus, _ooo_escrow) = default_escrow_bus(db.clone(), escrow_db);
+    let (not_bus, _ooo_escrow) = default_escrow_bus(db.clone(), escrow_db);
     let event_processor = BasicProcessor::new(Arc::clone(&db), Some(not_bus));
     let event_storage = EventStorage::new(Arc::clone(&db));
 
@@ -241,11 +242,11 @@ fn test_process_delegated() -> Result<(), Error> {
     fs::create_dir_all(root.path()).unwrap();
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
 
-	let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
+    let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
     fs::create_dir_all(root.path()).unwrap();
     let escrow_db = Arc::new(EscrowDb::new(escrow_root.path()).unwrap());
 
-	let (not_bus, _ooo_escrow) = default_escrow_bus(db.clone(), escrow_db);
+    let (not_bus, _ooo_escrow) = default_escrow_bus(db.clone(), escrow_db);
 
     let event_processor = BasicProcessor::new(Arc::clone(&db), Some(not_bus));
     let event_storage = EventStorage::new(Arc::clone(&db));
@@ -347,11 +348,11 @@ fn test_compute_state_at_sn() -> Result<(), Error> {
     fs::create_dir_all(root.path()).unwrap();
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
 
-	let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
+    let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
     fs::create_dir_all(root.path()).unwrap();
     let escrow_db = Arc::new(EscrowDb::new(escrow_root.path()).unwrap());
 
-	let (not_bus, _ooo_escrow) = default_escrow_bus(db.clone(), escrow_db);
+    let (not_bus, _ooo_escrow) = default_escrow_bus(db.clone(), escrow_db);
 
     let event_processor = BasicProcessor::new(Arc::clone(&db), Some(not_bus));
     let event_storage = EventStorage::new(Arc::clone(&db));
@@ -426,10 +427,10 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
     std::fs::create_dir_all(path).unwrap();
     let db = Arc::new(SledEventDatabase::new(path).unwrap());
 
-	let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
+    let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
     let escrow_db = Arc::new(EscrowDb::new(escrow_root.path()).unwrap());
 
-	let (not_bus, _ooo_escrow) = default_escrow_bus(db.clone(), escrow_db);
+    let (not_bus, _ooo_escrow) = default_escrow_bus(db.clone(), escrow_db);
 
     let processor = BasicProcessor::new(db.clone(), Some(not_bus));
     // setup keypairs
@@ -562,10 +563,10 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
         std::fs::create_dir_all(path).unwrap();
         let db = Arc::new(SledEventDatabase::new(path).unwrap());
 
-		let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
-		let escrow_db = Arc::new(EscrowDb::new(escrow_root.path()).unwrap());
+        let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
+        let escrow_db = Arc::new(EscrowDb::new(escrow_root.path()).unwrap());
 
-		let (not_bus, _ooo_escrow) = default_escrow_bus(db.clone(), escrow_db);
+        let (not_bus, _ooo_escrow) = default_escrow_bus(db.clone(), escrow_db);
         (
             BasicProcessor::new(db.clone(), Some(not_bus)),
             EventStorage::new(db.clone()),

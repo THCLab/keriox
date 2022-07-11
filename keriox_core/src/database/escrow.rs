@@ -1,10 +1,13 @@
 use serde::{de::DeserializeOwned, Serialize};
-use sled::{Tree, Db};
-use std::{sync::Arc, time::Duration, path::Path};
+use sled::{Db, Tree};
+use std::{path::Path, sync::Arc, time::Duration};
 
 use crate::prefix::IdentifierPrefix;
 
-use super::{tables::{SledEventTreeVec, SledEventTree}, timestamped::Timestamped, DbError};
+use super::{
+    tables::{SledEventTree, SledEventTreeVec},
+    timestamped::Timestamped, DbError,
+};
 
 /// Collection of values, which removes values older than `duration`
 ///

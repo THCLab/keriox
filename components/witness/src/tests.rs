@@ -339,17 +339,6 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
         Some(0)
     );
 
-    let not_fully_witnessed_events = first_witness
-        .event_storage
-        .db
-        .get_partially_witnessed_events(&controller.prefix());
-    assert!(not_fully_witnessed_events.is_none());
-    let not_fully_witnessed_events = second_witness
-        .event_storage
-        .db
-        .get_partially_witnessed_events(&controller.prefix());
-    assert!(not_fully_witnessed_events.is_none());
-
     let rotation_event = controller.rotate(None, Some(&[second_witness.prefix.clone()]), Some(1));
     // Rotation not yet accepted by controller, missing receipts
     assert_eq!(controller.get_state()?.unwrap().sn, 0);
