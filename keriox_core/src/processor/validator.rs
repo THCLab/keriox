@@ -20,7 +20,7 @@ use crate::{
         },
     },
     prefix::{BasicPrefix, SelfSigningPrefix},
-    state::{EventSemantics, IdentifierState}
+    state::{EventSemantics, IdentifierState},
 };
 #[cfg(feature = "query")]
 use crate::{
@@ -56,7 +56,9 @@ impl EventValidator {
         signed_event: &SignedEventMessage,
         receipt_couplets: I,
     ) -> Result<Option<IdentifierState>, Error>
-    where I: IntoIterator<Item=(BasicPrefix, SelfSigningPrefix)> {
+    where
+        I: IntoIterator<Item = (BasicPrefix, SelfSigningPrefix)>,
+    {
         // If delegated event, check its delegator seal.
         if let Some(seal) = self.get_delegator_seal(signed_event)? {
             self.validate_seal(seal, &signed_event.event_message)?;
@@ -76,10 +78,7 @@ impl EventValidator {
                             Err(Error::SignatureVerificationError)
                         } else {
                             // check if there are enough receipts and escrow
-                            if new_state
-                                .witness_config
-                                .enough_receipts(receipt_couplets)?
-                            {
+                            if new_state.witness_config.enough_receipts(receipt_couplets)? {
                                 Ok(Some(new_state))
                             } else {
                                 Err(Error::NotEnoughReceiptsError)

@@ -2,7 +2,7 @@ pub mod escrow;
 pub(crate) mod tables;
 pub(crate) mod timestamped;
 
-use std::{path::{Path, PathBuf}, time::Duration, sync::Arc};
+use std::path::{Path, PathBuf};
 
 use self::tables::{SledEventTree, SledEventTreeVec};
 #[cfg(feature = "query")]
@@ -19,10 +19,7 @@ use crate::{
     prefix::IdentifierPrefix,
 };
 
-use self::{
-    escrow::{Escrow, EscrowDb},
-    timestamped::TimestampedSignedEventMessage,
-};
+use self::timestamped::TimestampedSignedEventMessage;
 
 pub struct SledEventDatabase {
     // "iids" tree
@@ -41,9 +38,6 @@ pub struct SledEventDatabase {
     likely_duplicious_events: SledEventTreeVec<TimestampedEventMessage>,
     // "dels" tree
     duplicitous_events: SledEventTreeVec<TimestampedSignedEventMessage>,
-  
-    // "vres" tree
-    escrowed_receipts_t: Escrow<SignedTransferableReceipt>,
 
     #[cfg(feature = "query")]
     escrowed_replys: SledEventTreeVec<SignedReply>,
@@ -67,8 +61,6 @@ impl SledEventDatabase {
 
         let db = sled::open(events_path.as_path())?;
 
-        let escrows_db = Arc::new(EscrowDb::new(escrow_path.as_path())?);
-
         Ok(Self {
             identifiers: SledEventTree::new(db.open_tree(b"iids")?),
             receipts_t: SledEventTreeVec::new(db.open_tree(b"vrcs")?),
@@ -81,9 +73,6 @@ impl SledEventDatabase {
             #[cfg(feature = "query")]
             mailbox_receipts: SledEventTreeVec::new(db.open_tree(b"mbxr")?),
 
-            // TODO remove all escrows from here
-
-            escrowed_receipts_t: Escrow::new(b"vres", Duration::from_secs(10), escrows_db.clone()),
             #[cfg(feature = "query")]
             escrowed_replys: SledEventTreeVec::new(db.open_tree(b"knes")?),
         })
@@ -157,29 +146,6 @@ impl SledEventDatabase {
             }
         }
         Ok(())
-    }
-
-    pub fn add_escrow_t_receipt(
-        &self,
-        receipt: SignedTransferableReceipt,
-        id: &IdentifierPrefix,
-    ) -> Result<(), DbError> {
-        self.escrowed_receipts_t.add(id, receipt)
-    }
-
-    pub fn get_escrow_t_receipts(
-        &self,
-        id: &IdentifierPrefix,
-    ) -> Option<impl DoubleEndedIterator<Item = SignedTransferableReceipt>> {
-        self.escrowed_receipts_t.get(id)
-    }
-
-    pub fn remove_escrow_t_receipt(
-        &self,
-        id: &IdentifierPrefix,
-        receipt: &SignedTransferableReceipt,
-    ) -> Result<(), DbError> {
-        self.escrowed_receipts_t.remove(id, &receipt)
     }
 
     pub fn add_likely_duplicious_event(

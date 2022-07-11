@@ -14,12 +14,107 @@ use crate::{
     prefix::IdentifierPrefix,
     processor::{
         basic_processor::BasicProcessor,
-        escrow::{OutOfOrderEscrow, PartiallySignedEscrow, PartiallyWitnessedEscrow},
+        escrow::{
+            OutOfOrderEscrow, PartiallySignedEscrow, PartiallyWitnessedEscrow, TransReceiptsEscrow,
+        },
         event_storage::EventStorage,
         notification::JustNotification,
         Processor,
     },
 };
+
+#[test]
+fn test_process_transferable_receipt() -> Result<(), Error> {
+    use tempfile::Builder;
+
+    // Create test db and event processor.
+    let root = Builder::new().prefix("test-db").tempdir().unwrap();
+    fs::create_dir_all(root.path()).unwrap();
+    let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
+
+    // let (not_bus, _ooo_escrow) = default_escrow_bus(db.clone(), escrow_db);
+    let mut event_processor = BasicProcessor::new(Arc::clone(&db), None);
+    let event_storage = EventStorage::new(Arc::clone(&db));
+
+    // Register transferable receipts escrow, to save and reprocess out of order receipts events
+    let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
+    let escrow_db = Arc::new(EscrowDb::new(escrow_root.path())?);
+    let trans_receipts_escrow = Arc::new(TransReceiptsEscrow::new(
+        db.clone(),
+        escrow_db,
+        Duration::from_secs(10),
+    ));
+    event_processor.register_observer(
+        trans_receipts_escrow.clone(),
+        &[
+            JustNotification::TransReceiptOutOfOrder,
+            JustNotification::KeyEventAdded,
+        ],
+    )?;
+
+    // Events and sigs are from keripy `test_direct_mode` test.
+    // (keripy/tests/core/test_eventing.py)
+    // Parse and process controller's inception event.
+    let icp_raw = br#"{"v":"KERI10JSON00012b_","t":"icp","d":"EdwS_D6wppLqfIp5LSgly8GTScg5OWBaa7thzEnBqHvw","i":"EdwS_D6wppLqfIp5LSgly8GTScg5OWBaa7thzEnBqHvw","s":"0","kt":"1","k":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA"],"nt":"1","n":["E67B6WkwQrEfSA2MylxmF28HJc_HxfHRyK1kRXSYeMiI"],"bt":"0","b":[],"c":[],"a":[]}-AABAAEtmk7qXsdCpK8UhruVzPpIITUg4UPodQuzNsR29tUIT1sCWnjXOEVUC_mlYrgquYSZSE1Xq8r9OOlI3ELJEMAw"#;
+    let parsed = signed_message(icp_raw).unwrap().1;
+    let icp = Message::try_from(parsed).unwrap();
+    let controller_id =
+        "EdwS_D6wppLqfIp5LSgly8GTScg5OWBaa7thzEnBqHvw".parse::<IdentifierPrefix>()?;
+
+    event_processor.process(&icp)?;
+    let controller_id_state = event_storage.get_state(&controller_id)?;
+    assert_eq!(controller_id_state.clone().unwrap().sn, 0);
+
+    // Parse receipt of controller's inception event.
+    let vrc_raw = br#"{"v":"KERI10JSON000091_","t":"rct","d":"EdwS_D6wppLqfIp5LSgly8GTScg5OWBaa7thzEnBqHvw","i":"EdwS_D6wppLqfIp5LSgly8GTScg5OWBaa7thzEnBqHvw","s":"0"}-FABE0VtKUgXnnXq9EtfgKAd_l5lhyhx_Rlf0Uj1XejaNNoo0AAAAAAAAAAAAAAAAAAAAAAAE0VtKUgXnnXq9EtfgKAd_l5lhyhx_Rlf0Uj1XejaNNoo-AABAAhqa4qdyKUYl0gphqZp9511p3NfDecpUMvedi7pPxIVnufTeg3NpQ77GD9FNHTTtXZnQkZ2r8j_1-Iqi7ZMPlBg"#;
+    let parsed = signed_message(vrc_raw).unwrap().1;
+    let rcp = Message::try_from(parsed).unwrap();
+
+    event_processor.process(&rcp.clone())?;
+    // Validator not yet in db. Event should be escrowed.
+    let validator_id = "E0VtKUgXnnXq9EtfgKAd_l5lhyhx_Rlf0Uj1XejaNNoo".parse()?;
+    assert_eq!(
+        trans_receipts_escrow
+            .escrowed_trans_receipts
+            .get(&validator_id)
+            .unwrap()
+            .count(),
+        1
+    );
+
+    // Parse and process validator's inception event.
+    let val_icp_raw = br#"{"v":"KERI10JSON00012b_","t":"icp","d":"E0VtKUgXnnXq9EtfgKAd_l5lhyhx_Rlf0Uj1XejaNNoo","i":"E0VtKUgXnnXq9EtfgKAd_l5lhyhx_Rlf0Uj1XejaNNoo","s":"0","kt":"1","k":["D8KY1sKmgyjAiUDdUBPNPyrSz_ad_Qf9yzhDNZlEKiMc"],"nt":"1","n":["E71sZjtEedBeNrGYRXmeTdmgbCJUTpXX5TW-VpNxxRXk"],"bt":"0","b":[],"c":[],"a":[]}-AABAAxXn_f_GuWg9ON12x59DXir636vEsdwAozFRDcLgx_TmTY8WuhRbW_zWAEFX7d_YYMtYNNVk7uoxp7s5U8m4FDA"#;
+    let parsed = signed_message(val_icp_raw).unwrap().1;
+    let val_icp = Message::try_from(parsed).unwrap();
+
+    event_processor.process(&val_icp)?;
+    let validator_id_state = event_storage.get_state(&validator_id)?;
+    assert_eq!(validator_id_state.unwrap().sn, 0);
+
+    // Escrowed receipt should be removed and accepted
+    assert_eq!(
+        trans_receipts_escrow
+            .escrowed_trans_receipts
+            .get(&validator_id)
+            .unwrap()
+            .count(),
+        0
+    );
+    assert_eq!(
+        event_storage
+            .db
+            .get_receipts_t(&validator_id)
+            .unwrap()
+            .count(),
+        1
+    );
+
+    let id_state = EventStorage::new(db.clone()).get_state(&controller_id)?;
+    // Controller's state shouldn't change after processing receipt.
+    assert_eq!(controller_id_state, id_state);
+
+    Ok(())
+}
 
 #[test]
 pub fn test_not_fully_witnessed() -> Result<(), Error> {
@@ -45,12 +140,10 @@ pub fn test_not_fully_witnessed() -> Result<(), Error> {
         partially_witnessed_escrow.clone(),
         &[
             JustNotification::PartiallyWitnessed,
-            // JustNotification::ReceiptAccepted,
-            // JustNotification::ReceiptEscrowed,
             JustNotification::ReceiptOutOfOrder,
         ],
     )?;
-    
+
     // check if receipt was escrowed
     let id: IdentifierPrefix = "E1EyzzujHLiQbj9kcJ9wI2lVjOkiNbNn7t4Y2MhRjn_U"
         .parse()
@@ -118,8 +211,8 @@ pub fn test_not_fully_witnessed() -> Result<(), Error> {
         .unwrap();
     assert!(esc.next().is_none());
 
-    // check if receipt was accepted 
-    let esc = db.get_receipts_nt(&id).unwrap(); 
+    // check if receipt was accepted
+    let esc = db.get_receipts_nt(&id).unwrap();
     assert_eq!(esc.count(), 2);
 
     let state = event_storage.get_state(&id)?.unwrap();
@@ -789,7 +882,10 @@ pub fn test_partially_witnessed_escrow_cleanup() -> Result<(), Error> {
     assert_eq!(icp_msg, Message::Notice(Notice::Event(esc.next().unwrap())));
     assert!(esc.next().is_none());
 
-    let mut esc = partially_witnessed_escrow.escrowed_nontranferable_receipts.get_all().unwrap();
+    let mut esc = partially_witnessed_escrow
+        .escrowed_nontranferable_receipts
+        .get_all()
+        .unwrap();
     assert_eq!(
         rcp_msg,
         Message::Notice(Notice::NontransferableRct(esc.next().unwrap().into()))
@@ -854,7 +950,10 @@ pub fn test_nt_receipt_escrow_cleanup() -> Result<(), Error> {
     event_processor.process(&rcp_msg.clone())?;
 
     // check if receipt was escrowed
-    let mut esc = partially_witnessed_escrow.escrowed_nontranferable_receipts.get_all().unwrap();
+    let mut esc = partially_witnessed_escrow
+        .escrowed_nontranferable_receipts
+        .get_all()
+        .unwrap();
     assert_eq!(
         rcp_msg,
         Message::Notice(Notice::NontransferableRct(esc.next().unwrap().into()))
@@ -868,7 +967,10 @@ pub fn test_nt_receipt_escrow_cleanup() -> Result<(), Error> {
     thread::sleep(Duration::from_secs(10));
 
     // Check escrow. Old receipt should be removed because it is stale.
-    let mut esc = partially_witnessed_escrow.escrowed_nontranferable_receipts.get_all().unwrap();
+    let mut esc = partially_witnessed_escrow
+        .escrowed_nontranferable_receipts
+        .get_all()
+        .unwrap();
     assert!(esc.next().is_none());
 
     // Process one more receipt
@@ -880,7 +982,10 @@ pub fn test_nt_receipt_escrow_cleanup() -> Result<(), Error> {
     let state = event_storage.get_state(&id)?;
     assert_eq!(state, None);
 
-    let mut esc = partially_witnessed_escrow.escrowed_nontranferable_receipts.get_all().unwrap();
+    let mut esc = partially_witnessed_escrow
+        .escrowed_nontranferable_receipts
+        .get_all()
+        .unwrap();
 
     assert_eq!(
         rcp_msg,

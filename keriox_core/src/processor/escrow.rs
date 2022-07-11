@@ -16,7 +16,9 @@ use crate::{
     event::EventMessage,
     event_message::{
         key_event_message::KeyEvent,
-        signed_event_message::{SignedEventMessage, SignedNontransferableReceipt},
+        signed_event_message::{
+            SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
+        },
     },
     prefix::{IdentifierPrefix, SelfAddressingPrefix},
 };
@@ -64,7 +66,11 @@ pub fn default_escrow_bus(
     );
 
     bus.register_observer(
-        Arc::new(TransReceiptsEscrow::new(event_db.clone())),
+        Arc::new(TransReceiptsEscrow::new(
+            event_db.clone(),
+            escrow_db.clone(),
+            Duration::from_secs(10),
+        )),
         vec![
             JustNotification::KeyEventAdded,
             JustNotification::TransReceiptOutOfOrder,
@@ -278,8 +284,7 @@ impl PartiallyWitnessedEscrow {
         id: &IdentifierPrefix,
         event_digest: &SelfAddressingPrefix,
     ) -> Option<SignedEventMessage> {
-        self
-            .escrowed_partially_witnessed
+        self.escrowed_partially_witnessed
             .get(id)
             .and_then(|mut events| {
                 events.find(|event| {
@@ -290,15 +295,16 @@ impl PartiallyWitnessedEscrow {
             })
     }
 
-    fn get_escrowed_receipts(&self, id: &IdentifierPrefix, sn: u64) -> Option<Vec<SignedNontransferableReceipt>> {
-        self
-            .escrowed_nontranferable_receipts
-            .get(&id)
-            .map(|r| {
-                r.filter(|rct| rct.body.event.sn == sn)
-                    // TODO avoid collect
-                    .collect()
-            })
+    fn get_escrowed_receipts(
+        &self,
+        id: &IdentifierPrefix,
+        sn: u64,
+    ) -> Option<Vec<SignedNontransferableReceipt>> {
+        self.escrowed_nontranferable_receipts.get(&id).map(|r| {
+            r.filter(|rct| rct.body.event.sn == sn)
+                // TODO avoid collect
+                .collect()
+        })
     }
 
     /// Saves nontransferable receipt in escrow.
@@ -327,7 +333,8 @@ impl Notifier for PartiallyWitnessedEscrow {
                 let sn = ooo.body.event.sn;
                 let id = ooo.body.event.prefix.clone();
                 // look for receipted event in partially witnessed
-                let receipted_event = self.get_event_by_sn_and_digest(sn, &id, &ooo.body.get_digest());
+                let receipted_event =
+                    self.get_event_by_sn_and_digest(sn, &id, &ooo.body.get_digest());
                 // look for other receipts in escrowed receipts
                 let escrowed_receipts: Option<Vec<_>> = self.get_escrowed_receipts(&id, sn);
 
@@ -336,7 +343,7 @@ impl Notifier for PartiallyWitnessedEscrow {
                     (None, _) => {
                         // No receipted event. Escrow receipt
                         self.escrow_receipt(ooo.clone(), bus)?;
-                    },
+                    }
                     (Some(receipted_event), escrowed_receipts) => {
                         let mut all_receipts = escrowed_receipts.unwrap_or_default();
                         all_receipts.push(ooo.to_owned());
@@ -346,7 +353,8 @@ impl Notifier for PartiallyWitnessedEscrow {
                             .map(|rec| rec.couplets.unwrap())
                             .flatten()
                             .collect::<Vec<(_, _)>>();
-                        let res = validator.validate_event_with_receipts(&receipted_event, receipted_couplets);
+                        let res = validator
+                            .validate_event_with_receipts(&receipted_event, receipted_couplets);
                         match res {
                             // if yes, accept event and remove receipts
                             Ok(Some(_)) => {
@@ -377,16 +385,20 @@ impl Notifier for PartiallyWitnessedEscrow {
                             // save receipt in escrow
                             Err(_e) => {
                                 self.escrow_receipt(ooo.clone(), bus)?;
-                            },
-                    }}};
+                            }
+                        }
+                    }
+                };
                 Ok(())
-            },
+            }
             Notification::PartiallyWitnessed(signed_event) => {
                 // ignore events with no signatures
                 if !signed_event.signatures.is_empty() {
                     let id = signed_event.event_message.event.get_prefix();
                     let sn = signed_event.event_message.event.get_sn();
-                    let receipt_couplets = self.get_escrowed_receipts(&id, sn).unwrap_or_default()
+                    let receipt_couplets = self
+                        .get_escrowed_receipts(&id, sn)
+                        .unwrap_or_default()
                         .into_iter()
                         .map(|rct| rct.couplets.unwrap())
                         .flatten();
@@ -397,31 +409,36 @@ impl Notifier for PartiallyWitnessedEscrow {
                         Ok(Some(_)) => {
                             self.escrowed_partially_witnessed
                                 .add(&id, signed_event.clone())?;
-                        },
+                        }
                         Err(Error::SignatureVerificationError) => (),
-                        Err(_) | Ok(None) => {self.escrowed_partially_witnessed.add(&id, signed_event.clone())?;},
+                        Err(_) | Ok(None) => {
+                            self.escrowed_partially_witnessed
+                                .add(&id, signed_event.clone())?;
+                        }
                     };
                     Ok(())
 
-                // if yes, accept, otherwise save in parially witnessed escrow
-            } else {
-                
+                    // if yes, accept, otherwise save in parially witnessed escrow
+                } else {
                     Ok(())
                 }
             }
             _ => Err(Error::SemanticError("Wrong notification".into())),
-            // _ => Ok(()) 
+            // _ => Ok(())
         }
     }
 }
 
-#[derive(Clone)]
 pub struct TransReceiptsEscrow {
     db: Arc<SledEventDatabase>,
+    pub(crate) escrowed_trans_receipts: Escrow<SignedTransferableReceipt>,
 }
 impl TransReceiptsEscrow {
-    pub fn new(db: Arc<SledEventDatabase>) -> Self {
-        Self { db }
+    pub fn new(db: Arc<SledEventDatabase>, escrow_db: Arc<EscrowDb>, duration: Duration) -> Self {
+        Self {
+            db,
+            escrowed_trans_receipts: Escrow::new(b"vres", duration, escrow_db.clone()),
+        }
     }
 }
 impl Notifier for TransReceiptsEscrow {
@@ -434,7 +451,7 @@ impl Notifier for TransReceiptsEscrow {
                 // ignore events with no signatures
                 if !receipt.signatures.is_empty() {
                     let id = receipt.validator_seal.prefix.clone();
-                    self.db.add_escrow_t_receipt(receipt.to_owned(), &id)?;
+                    self.escrowed_trans_receipts.add(&id, receipt.to_owned())?;
                 }
             }
             _ => return Err(Error::SemanticError("Wrong notification".into())),
@@ -448,7 +465,7 @@ impl TransReceiptsEscrow {
         id: &IdentifierPrefix,
         bus: &NotificationBus,
     ) -> Result<(), Error> {
-        if let Some(esc) = self.db.get_escrow_t_receipts(id) {
+        if let Some(esc) = self.escrowed_trans_receipts.get(id) {
             for timestamped_receipt in esc {
                 let validator = EventValidator::new(self.db.clone());
                 match validator.validate_validator_receipt(&timestamped_receipt) {
@@ -456,12 +473,14 @@ impl TransReceiptsEscrow {
                         // add to receipts
                         self.db.add_receipt_t(timestamped_receipt.clone(), &id)?;
                         // remove from escrow
-                        self.db.remove_escrow_t_receipt(&id, &timestamped_receipt)?;
+                        self.escrowed_trans_receipts
+                            .remove(&id, &timestamped_receipt)?;
                         bus.notify(&Notification::ReceiptAccepted)?;
                     }
                     Err(Error::SignatureVerificationError) => {
                         // remove from escrow
-                        self.db.remove_escrow_t_receipt(&id, &timestamped_receipt)?;
+                        self.escrowed_trans_receipts
+                            .remove(&id, &timestamped_receipt)?;
                     }
                     Err(e) => return Err(e), // keep in escrow,
                 }

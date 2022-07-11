@@ -37,18 +37,19 @@ pub struct WitnessConfig {
 }
 
 impl WitnessConfig {
-    pub fn enough_receipts<I>(
-        &self,
-        receipts_couplets: I,
-    ) -> Result<bool, Error> 
-    where I: IntoIterator<Item=(BasicPrefix, SelfSigningPrefix)> {
+    pub fn enough_receipts<I>(&self, receipts_couplets: I) -> Result<bool, Error>
+    where
+        I: IntoIterator<Item = (BasicPrefix, SelfSigningPrefix)>,
+    {
         match self.tally.clone() {
             SignatureThreshold::Simple(t) => {
                 let mut unique = HashSet::new();
-               receipts_couplets
+                receipts_couplets
                     .into_iter()
                     .filter(|(witness, _sig)| self.witnesses.contains(witness))
-                    .for_each(|(witness_id, _witness_sig)| {unique.insert(witness_id);});
+                    .for_each(|(witness_id, _witness_sig)| {
+                        unique.insert(witness_id);
+                    });
                 Ok(unique.len() >= t as usize)
             }
             SignatureThreshold::Weighted(t) => {
