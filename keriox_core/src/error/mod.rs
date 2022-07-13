@@ -65,6 +65,9 @@ pub enum Error {
     #[error("Signature verification failed")]
     SignatureVerificationError,
 
+    #[error("Receipt signature verification failed")]
+    ReceiptVerificationError,
+
     #[error("Deserialize error: {0}")]
     DeserializeError(String),
 

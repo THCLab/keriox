@@ -674,7 +674,7 @@ fn test_out_of_order_cleanup() -> Result<(), Error> {
         let ooo_escrow = Arc::new(OutOfOrderEscrow::new(
             witness_db.clone(),
             escrow_db,
-            Duration::from_secs(10),
+            Duration::from_secs(1),
         ));
         processor.register_observer(
             ooo_escrow.clone(),
@@ -705,7 +705,7 @@ fn test_out_of_order_cleanup() -> Result<(), Error> {
     processor.process(&ev3.clone())?;
 
     // Wait until escrowed events become stale.
-    thread::sleep(Duration::from_secs(10));
+    thread::sleep(Duration::from_secs(1));
 
     // Process inorder missing event.
     processor.process(&ev2.clone())?;
@@ -758,7 +758,7 @@ fn test_partially_sign_escrow_cleanup() -> Result<(), Error> {
         let ps_escrow = Arc::new(PartiallySignedEscrow::new(
             witness_db.clone(),
             escrow_db,
-            Duration::from_secs(10),
+            Duration::from_secs(1),
         ));
         processor.register_observer(ps_escrow.clone(), &[JustNotification::PartiallySigned])?;
 
@@ -798,7 +798,7 @@ fn test_partially_sign_escrow_cleanup() -> Result<(), Error> {
     assert_eq!(storage.get_state(&id).unwrap(), None);
 
     // Wait until escrowed events become stale.
-    thread::sleep(Duration::from_secs(10));
+    thread::sleep(Duration::from_secs(1));
 
     // Check if stale event was removed
     let mut escrowed = ps_escrow
@@ -845,7 +845,7 @@ pub fn test_partially_witnessed_escrow_cleanup() -> Result<(), Error> {
     let partially_witnessed_escrow = Arc::new(PartiallyWitnessedEscrow::new(
         db.clone(),
         escrow_db,
-        Duration::from_secs(10),
+        Duration::from_secs(1),
     ));
     event_processor.register_observer(
         partially_witnessed_escrow.clone(),
@@ -896,7 +896,7 @@ pub fn test_partially_witnessed_escrow_cleanup() -> Result<(), Error> {
     assert_eq!(state, None);
 
     // Wait until escrowed events become stale.
-    sleep(Duration::from_secs(10));
+    sleep(Duration::from_secs(1));
 
     // check if icp still in escrow
     let mut esc = partially_witnessed_escrow
@@ -930,7 +930,7 @@ pub fn test_nt_receipt_escrow_cleanup() -> Result<(), Error> {
     let partially_witnessed_escrow = Arc::new(PartiallyWitnessedEscrow::new(
         db.clone(),
         escrow_db,
-        Duration::from_secs(10),
+        Duration::from_secs(1),
     ));
     event_processor.register_observer(
         partially_witnessed_escrow.clone(),
@@ -964,7 +964,7 @@ pub fn test_nt_receipt_escrow_cleanup() -> Result<(), Error> {
     assert_eq!(state, None);
 
     // Wait until receipt become stale
-    thread::sleep(Duration::from_secs(10));
+    thread::sleep(Duration::from_secs(1));
 
     // Check escrow. Old receipt should be removed because it is stale.
     let mut esc = partially_witnessed_escrow
@@ -992,6 +992,118 @@ pub fn test_nt_receipt_escrow_cleanup() -> Result<(), Error> {
         Message::Notice(Notice::NontransferableRct(esc.next().unwrap().into()))
     );
     assert!(esc.next().is_none());
+
+    Ok(())
+}
+
+#[test]
+pub fn test_escrow_receipt_with_wrong_signature() -> Result<(), Error> {
+    use tempfile::Builder;
+
+    // Create test db and event processor.
+    // events taken from keripy/tests/core/test_witness.py:def test_indexed_witness_replay():
+    let root = Builder::new().prefix("test-db").tempdir().unwrap();
+    fs::create_dir_all(root.path()).unwrap();
+    let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
+    let mut event_processor = BasicProcessor::new(Arc::clone(&db), None);
+    let event_storage = EventStorage::new(Arc::clone(&db));
+
+    // Register not fully witnessed escrow, to save and reprocess events
+    let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
+    let escrow_db = Arc::new(EscrowDb::new(escrow_root.path())?);
+    let partially_witnessed_escrow = Arc::new(PartiallyWitnessedEscrow::new(
+        db.clone(),
+        escrow_db,
+        Duration::from_secs(10),
+    ));
+    event_processor.register_observer(
+        partially_witnessed_escrow.clone(),
+        &[
+            JustNotification::PartiallyWitnessed,
+            JustNotification::ReceiptOutOfOrder,
+        ],
+    )?;
+
+    // check if receipt was escrowed
+    let id: IdentifierPrefix = "E1EyzzujHLiQbj9kcJ9wI2lVjOkiNbNn7t4Y2MhRjn_U"
+        .parse()
+        .unwrap();
+
+    // process icp event without processing receipts.
+    let icp_raw = br#"{"v":"KERI10JSON000273_","t":"icp","d":"E1EyzzujHLiQbj9kcJ9wI2lVjOkiNbNn7t4Y2MhRjn_U","i":"E1EyzzujHLiQbj9kcJ9wI2lVjOkiNbNn7t4Y2MhRjn_U","s":"0","kt":"2","k":["DtD9PUcL_NlTlvc2xiEJBRfRz0bDJlbtTynOQpNwVKh0","Dxb9OSQWxq59UsjRthaNPtTzNn8VXs8SJEXdbxFUZ-lA","DkQFb_911LXVQaFj-Ch9rj89QTpIZT3AcV-TjcBhbXOw"],"nt":"2","n":["EmigdEgCEjPPykB-u4_oW6xENmrnr1M0dNlkIUsx3dEI","EwnTsM2S1AKDnSjrnQF2OWRoPkcpH7aY1-3TtEJwnBMs","Eywk7noH2HheSFbjI-sids93CyzP4LUyJSOUBe7OAQbo"],"bt":"2","b":["B389hKezugU2LFKiFVbitoHAxXqJh6HQ8Rn9tH7fxd68","Bed2Tpxc8KeCEWoq3_RKKRjU_3P-chSser9J4eAtAK6I","BljDbmdNfb63KOpGV4mmPKwyyp3OzDsRzpNrdL1BRQts"],"c":[],"a":[]}-AADAAhZMZp-TpUuGjfO-_s3gSh_aDpuK38b7aVh54W0LzgrOvA5Q3eULEch0hW8Ct6jHfLXSNCrsNSynT3D2UvymdCQABiDU4uO1sZcKh7_qlkVylf_jZDOAWlcJFY_ImBOIcfEZbNthQefZOL6EDzuxdUMEScKTnO_n1q3Ms8rufcz8lDwACQuxdJRTtPypGECC3nHdVkJeQojfRvkRZU7n15111NFbLAY2GpMAOnvptzIVUiv9ONOSCXBCWNFC4kNQmtDWOBg"#;
+    let parsed_icp = signed_message(icp_raw).unwrap().1;
+    let icp_msg = Message::try_from(parsed_icp).unwrap();
+    event_processor.process(&icp_msg.clone())?;
+
+    let state = event_storage.get_state(&id)?;
+    assert_eq!(state, None);
+
+    // check if icp is in escrow
+    let mut esc = partially_witnessed_escrow
+        .escrowed_partially_witnessed
+        .get_all()
+        .unwrap();
+    assert_eq!(icp_msg, Message::Notice(Notice::Event(esc.next().unwrap())));
+    assert!(esc.next().is_none());
+
+    // receipt with ok signature
+    let receipt0_0 = br#"{"v":"KERI10JSON000091_","t":"rct","d":"E1EyzzujHLiQbj9kcJ9wI2lVjOkiNbNn7t4Y2MhRjn_U","i":"E1EyzzujHLiQbj9kcJ9wI2lVjOkiNbNn7t4Y2MhRjn_U","s":"0"}-CABB389hKezugU2LFKiFVbitoHAxXqJh6HQ8Rn9tH7fxd680BlnRQL6bqNGJZNNGGwA4xZhBwtzY1SgAMdIFky-sUiq6bU-DGbp1OHSXQzKGQWlhohRxfcjtDjql8s9B_n5DdDw"#;
+    let parsed_rcp = signed_message(receipt0_0).unwrap().1;
+    let rcp_msg_0 = Message::try_from(parsed_rcp).unwrap();
+    event_processor.process(&rcp_msg_0.clone())?;
+
+    // check if icp still in escrow
+    let mut esc = partially_witnessed_escrow
+        .escrowed_partially_witnessed
+        .get_all()
+        .unwrap();
+    assert_eq!(icp_msg, Message::Notice(Notice::Event(esc.next().unwrap())));
+    assert!(esc.next().is_none());
+
+    let mut esc = partially_witnessed_escrow
+        .escrowed_nontranferable_receipts
+        .get_all()
+        .unwrap();
+    assert_eq!(
+        rcp_msg_0,
+        Message::Notice(Notice::NontransferableRct(esc.next().unwrap().into()))
+    );
+    assert!(esc.next().is_none());
+
+    let state = event_storage.get_state(&id)?;
+    assert_eq!(state, None);
+
+    // receipt with wrong signature
+    let receipt0_1 = br#"{"v":"KERI10JSON000091_","t":"rct","d":"E1EyzzujHLiQbj9kcJ9wI2lVjOkiNbNn7t4Y2MhRjn_U","i":"E1EyzzujHLiQbj9kcJ9wI2lVjOkiNbNn7t4Y2MhRjn_U","s":"0"}-CABBed2Tpxc8KeCEWoq3_RKKRjU_3P-chSser9J4eAtAK6I0BC69-inoBzibkf_rOUfn31sP3FOCukY0VqqOnnm6pxrWeBR2N7AhdN146OsHVuWfrzzuDSuJl3GpIPYCIynuEDA"#;
+    let parsed_rcp = signed_message(receipt0_1).unwrap().1;
+    let rcp_msg_1 = Message::try_from(parsed_rcp).unwrap();
+    event_processor.process(&rcp_msg_1.clone())?;
+
+    // check if icp still in escrow
+    let mut esc = partially_witnessed_escrow
+        .escrowed_partially_witnessed
+        .get_all()
+        .unwrap();
+    assert_eq!(icp_msg, Message::Notice(Notice::Event(esc.next().unwrap())));
+    assert!(esc.next().is_none());
+
+    // check if receipt was escrowed
+    let mut esc = partially_witnessed_escrow
+        .escrowed_nontranferable_receipts
+        .get_all()
+        .unwrap();
+    assert_eq!(
+        rcp_msg_0,
+        Message::Notice(Notice::NontransferableRct(esc.next().unwrap().into()))
+    );
+    assert!(esc.next().is_none());
+
+    // check if receipt was accepted
+    let esc = db.get_receipts_nt(&id);
+    assert!(esc.is_none());
+
+    let state = event_storage.get_state(&id)?;
+    assert_eq!(state, None);
 
     Ok(())
 }

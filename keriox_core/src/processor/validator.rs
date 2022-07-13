@@ -20,7 +20,7 @@ use crate::{
         },
         Digestible,
     },
-    prefix::{AttachedSignaturePrefix, BasicPrefix, SelfSigningPrefix},
+    prefix::{BasicPrefix, SelfSigningPrefix},
     state::{EventSemantics, IdentifierState},
 };
 #[cfg(feature = "query")]
@@ -49,30 +49,6 @@ impl EventValidator {
         &self,
         signed_event: &SignedEventMessage,
     ) -> Result<Option<IdentifierState>, Error> {
-        let sn = signed_event.event_message.event.get_sn();
-        let prefix = &signed_event.event_message.event.get_prefix();
-        let digest = &signed_event.event_message.event.get_digest();
-
-        let (couplets, indexed) = match self.event_storage.get_nt_receipts(prefix, sn, digest)? {
-            Some(rcts) => (
-                rcts.couplets.unwrap_or_default(),
-                rcts.indexed_sigs.unwrap_or_default(),
-            ),
-            None => (vec![], vec![]),
-        };
-        self.validate_event_with_receipts(signed_event, couplets, indexed)
-    }
-
-    pub fn validate_event_with_receipts<R, I>(
-        &self,
-        signed_event: &SignedEventMessage,
-        receipt_couplets: I,
-        indexed_receipts: R,
-    ) -> Result<Option<IdentifierState>, Error>
-    where
-        R: IntoIterator<Item = AttachedSignaturePrefix>,
-        I: IntoIterator<Item = (BasicPrefix, SelfSigningPrefix)>,
-    {
         // If delegated event, check its delegator seal.
         if let Some(seal) = self.get_delegator_seal(signed_event)? {
             self.validate_seal(seal, &signed_event.event_message)?;
@@ -91,11 +67,22 @@ impl EventValidator {
                         if !result {
                             Err(Error::SignatureVerificationError)
                         } else {
-
                             // check if there are enough receipts and escrow
+                            let sn = signed_event.event_message.event.get_sn();
+                            let prefix = &signed_event.event_message.event.get_prefix();
+                            let digest = &signed_event.event_message.event.get_digest();
+
+                            let (couplets, indexed) =
+                                match self.event_storage.get_nt_receipts(prefix, sn, digest)? {
+                                    Some(rcts) => (
+                                        rcts.couplets.unwrap_or_default(),
+                                        rcts.indexed_sigs.unwrap_or_default(),
+                                    ),
+                                    None => (vec![], vec![]),
+                                };
                             if new_state
                                 .witness_config
-                                .enough_receipts(receipt_couplets, indexed_receipts)?
+                                .enough_receipts(couplets, indexed)?
                             {
                                 Ok(Some(new_state))
                             } else {
@@ -197,17 +184,16 @@ impl EventValidator {
             .event_storage
             .get_event_at_sn(&rct.body.event.prefix, rct.body.event.sn)
         {
-            let serialized_event = event.signed_event_message.serialize()?;
+            let serialized_event = event.signed_event_message.event_message.serialize()?;
             let signer_couplets = self.get_receipt_couplets(rct)?;
-            let (_, errors): (Vec<_>, Vec<Result<bool, Error>>) = signer_couplets
+            signer_couplets
                 .into_iter()
-                .map(|(witness, signature)| witness.verify(&serialized_event, &signature))
-                .partition(Result::is_ok);
-            if errors.is_empty() {
-                Ok(())
-            } else {
-                Err(Error::SignatureVerificationError)
-            }
+                .map(|(witness, signature)| {
+                    (witness.verify(&serialized_event, &signature)?)
+                        .then(|| ())
+                        .ok_or(Error::SignatureVerificationError)
+                })
+                .collect::<Result<_, Error>>()
         } else {
             // There's no receipted event id database so we can't verify signatures
             Err(Error::MissingEvent)

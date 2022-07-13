@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-use std::{marker::PhantomData, convert::TryInto};
+use std::{convert::TryInto, marker::PhantomData};
 
 use arrayref::array_ref;
 use serde::{de::DeserializeOwned, Serialize};
