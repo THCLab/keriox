@@ -4,7 +4,7 @@ use std::{
 };
 
 use keri::{
-    database::SledEventDatabase,
+    database::{escrow::EscrowDb, SledEventDatabase},
     derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
     error::Error,
     event::SerializationFormats,
@@ -27,14 +27,17 @@ mod controller_helper {
     use keri::{
         actor::process_message,
         controller::event_generator,
-        database::SledEventDatabase,
+        database::{escrow::EscrowDb, SledEventDatabase},
         derivation::{basic::Basic, self_signing::SelfSigning},
         error::Error,
         event_message::signed_event_message::{Message, Notice, SignedEventMessage},
         event_parsing::{message::key_event_message, EventType},
         oobi::OobiManager,
         prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix},
-        processor::{basic_processor::BasicProcessor, event_storage::EventStorage, Processor},
+        processor::{
+            basic_processor::BasicProcessor, escrow::default_escrow_bus,
+            event_storage::EventStorage, Processor,
+        },
         signer::KeyManager,
         state::IdentifierState,
     };
@@ -52,10 +55,12 @@ mod controller_helper {
         // incept a state and keys
         pub fn new(
             db: Arc<SledEventDatabase>,
+            escrow_db: Arc<EscrowDb>,
             key_manager: Arc<Mutex<K>>,
             oobi_db_path: &Path,
         ) -> Result<Controller<K>, Error> {
-            let processor = BasicProcessor::new(db.clone(), None);
+            let (not_bus, _) = default_escrow_bus(db.clone(), escrow_db);
+            let processor = BasicProcessor::new(db.clone(), Some(not_bus));
 
             Ok(Controller {
                 prefix: IdentifierPrefix::default(),
@@ -203,6 +208,9 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
         std::fs::create_dir_all(root.path()).unwrap();
         let db_controller = Arc::new(SledEventDatabase::new(root.path()).unwrap());
 
+        let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
+        let escrow_db = Arc::new(EscrowDb::new(escrow_root.path()).unwrap());
+
         let oobi_root = Builder::new().prefix("test-db").tempdir().unwrap();
 
         let key_manager = {
@@ -211,6 +219,7 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
         };
         Controller::new(
             Arc::clone(&db_controller),
+            escrow_db,
             key_manager.clone(),
             oobi_root.path(),
         )?
@@ -395,9 +404,11 @@ fn test_qry_rpy() -> Result<(), Error> {
     let root = Builder::new().prefix("test-alice-db").tempdir().unwrap();
     let alice_oobi_root = Builder::new().prefix("test-db").tempdir().unwrap();
     let alice_db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
+    let alice_escrow_db = Arc::new(EscrowDb::new(root.path())?);
     let root = Builder::new().prefix("test_bob-db").tempdir().unwrap();
     let bob_oobi_root = Builder::new().prefix("test-db").tempdir().unwrap();
     let bob_db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
+    let bob_escrow_db = Arc::new(EscrowDb::new(root.path())?);
 
     let witness_root = Builder::new().prefix("test-db").tempdir().unwrap();
     let witness_oobi_root = Builder::new().prefix("test-db").tempdir().unwrap();
@@ -413,6 +424,7 @@ fn test_qry_rpy() -> Result<(), Error> {
     // Init alice.
     let mut alice = Controller::new(
         Arc::clone(&alice_db),
+        Arc::clone(&alice_escrow_db),
         Arc::clone(&alice_key_manager),
         alice_oobi_root.path(),
     )?;
@@ -425,6 +437,7 @@ fn test_qry_rpy() -> Result<(), Error> {
     // Init bob.
     let mut bob = Controller::new(
         Arc::clone(&bob_db),
+        Arc::clone(&bob_escrow_db),
         Arc::clone(&bob_key_manager),
         bob_oobi_root.path(),
     )?;
@@ -559,10 +572,12 @@ pub fn test_key_state_notice() -> Result<(), Error> {
         let oobi_root = Builder::new().prefix("alice-db-oobi").tempdir().unwrap();
         std::fs::create_dir_all(root.path()).unwrap();
         let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
+        let bob_escrow_db = Arc::new(EscrowDb::new(root.path())?);
 
         let bob_key_manager = Arc::new(Mutex::new(CryptoBox::new()?));
         Controller::new(
             Arc::clone(&db),
+            Arc::clone(&bob_escrow_db),
             Arc::clone(&bob_key_manager),
             oobi_root.path(),
         )?
@@ -678,9 +693,11 @@ fn test_mbx() {
                 .unwrap();
             std::fs::create_dir_all(root.path()).unwrap();
             let db_controller = Arc::new(SledEventDatabase::new(root.path()).unwrap());
+            let escrow_db_controller = Arc::new(EscrowDb::new(root.path()).unwrap());
             let key_manager = Arc::new(Mutex::new(CryptoBox::new().unwrap()));
             Controller::new(
                 Arc::clone(&db_controller),
+                Arc::clone(&escrow_db_controller),
                 key_manager.clone(),
                 oobi_root.path(),
             )
@@ -753,9 +770,11 @@ fn test_invalid_notice() {
                 .unwrap();
             std::fs::create_dir_all(root.path()).unwrap();
             let db_controller = Arc::new(SledEventDatabase::new(root.path()).unwrap());
+            let escrow_db_controller = Arc::new(EscrowDb::new(root.path()).unwrap());
             let key_manager = Arc::new(Mutex::new(CryptoBox::new().unwrap()));
             Controller::new(
                 Arc::clone(&db_controller),
+                Arc::clone(&escrow_db_controller),
                 key_manager.clone(),
                 oobi_root.path(),
             )

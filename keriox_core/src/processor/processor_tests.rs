@@ -1,6 +1,7 @@
 use std::{convert::TryFrom, fs, sync::Arc};
 
 use crate::{
+    database::{escrow::EscrowDb, SledEventDatabase},
     derivation::{basic::Basic, self_signing::SelfSigning},
     error::Error,
     event::sections::threshold::SignatureThreshold,
@@ -15,7 +16,7 @@ use crate::{
         basic_processor::BasicProcessor, escrow::default_escrow_bus, event_storage::EventStorage,
         Processor,
     },
-    signer::Signer, database::{SledEventDatabase, escrow::EscrowDb},
+    signer::Signer,
 };
 
 #[test]
@@ -29,7 +30,7 @@ fn test_process() -> Result<(), Error> {
 
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
     let escrow_db = Arc::new(EscrowDb::new(escrow_root.path()).unwrap());
-    let (not_bus, (ooo_escrow, ps_escrow)) = default_escrow_bus(db.clone(), escrow_db);
+    let (not_bus, (ooo_escrow, ps_escrow, _pw_escrow)) = default_escrow_bus(db.clone(), escrow_db);
     let event_processor = BasicProcessor::new(Arc::clone(&db), Some(not_bus));
     let event_storage = EventStorage::new(Arc::clone(&db));
     // Events and sigs are from keripy `test_multisig_digprefix` test.

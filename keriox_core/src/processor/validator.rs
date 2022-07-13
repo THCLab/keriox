@@ -18,8 +18,9 @@ use crate::{
         signed_event_message::{
             SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
         },
+        Digestible,
     },
-    prefix::{BasicPrefix, SelfSigningPrefix},
+    prefix::{AttachedSignaturePrefix, BasicPrefix, SelfSigningPrefix},
     state::{EventSemantics, IdentifierState},
 };
 #[cfg(feature = "query")]
@@ -48,15 +49,28 @@ impl EventValidator {
         &self,
         signed_event: &SignedEventMessage,
     ) -> Result<Option<IdentifierState>, Error> {
-        self.validate_event_with_receipts(signed_event, [])
+        let sn = signed_event.event_message.event.get_sn();
+        let prefix = &signed_event.event_message.event.get_prefix();
+        let digest = &signed_event.event_message.event.get_digest();
+
+        let (couplets, indexed) = match self.event_storage.get_nt_receipts(prefix, sn, digest)? {
+            Some(rcts) => (
+                rcts.couplets.unwrap_or_default(),
+                rcts.indexed_sigs.unwrap_or_default(),
+            ),
+            None => (vec![], vec![]),
+        };
+        self.validate_event_with_receipts(signed_event, couplets, indexed)
     }
 
-    pub fn validate_event_with_receipts<I>(
+    pub fn validate_event_with_receipts<R, I>(
         &self,
         signed_event: &SignedEventMessage,
         receipt_couplets: I,
+        indexed_receipts: R,
     ) -> Result<Option<IdentifierState>, Error>
     where
+        R: IntoIterator<Item = AttachedSignaturePrefix>,
         I: IntoIterator<Item = (BasicPrefix, SelfSigningPrefix)>,
     {
         // If delegated event, check its delegator seal.
@@ -77,8 +91,12 @@ impl EventValidator {
                         if !result {
                             Err(Error::SignatureVerificationError)
                         } else {
+
                             // check if there are enough receipts and escrow
-                            if new_state.witness_config.enough_receipts(receipt_couplets)? {
+                            if new_state
+                                .witness_config
+                                .enough_receipts(receipt_couplets, indexed_receipts)?
+                            {
                                 Ok(Some(new_state))
                             } else {
                                 Err(Error::NotEnoughReceiptsError)
