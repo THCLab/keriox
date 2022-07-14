@@ -15,8 +15,6 @@ use keri::{
 
 pub struct WitnessProcessor {
     processor: EventProcessor,
-    // partially_signed_escrow: Arc<PartiallySignedEscrow>,
-    // out_of_order_escrow: Arc<OutOfOrderEscrow>,
 }
 
 impl Processor for WitnessProcessor {

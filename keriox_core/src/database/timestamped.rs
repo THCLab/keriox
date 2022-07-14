@@ -69,37 +69,19 @@ impl<M: PartialEq> PartialEq for Timestamped<M> {
 
 impl PartialOrd for Timestamped<SignedEventMessage> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(
-            match self.signed_event_message.event_message.event.get_sn()
-                == other.signed_event_message.event_message.event.get_sn()
-            {
-                true => Ordering::Equal,
-                false => {
-                    match self.signed_event_message.event_message.event.get_sn()
-                        > other.signed_event_message.event_message.event.get_sn()
-                    {
-                        true => Ordering::Greater,
-                        false => Ordering::Less,
-                    }
-                }
-            },
+        PartialOrd::partial_cmp(
+            &self.signed_event_message.event_message.event.get_sn(),
+            &other.signed_event_message.event_message.event.get_sn(),
         )
     }
 }
 
 impl Ord for Timestamped<SignedEventMessage> {
     fn cmp(&self, other: &Self) -> Ordering {
-        match self.signed_event_message.event_message.event.get_sn()
-            == other.signed_event_message.event_message.event.get_sn()
-        {
-            true => Ordering::Equal,
-            false => match self.signed_event_message.event_message.event.get_sn()
-                > other.signed_event_message.event_message.event.get_sn()
-            {
-                true => Ordering::Greater,
-                false => Ordering::Less,
-            },
-        }
+        Ord::cmp(
+            &self.signed_event_message.event_message.event.get_sn(),
+            &other.signed_event_message.event_message.event.get_sn(),
+        )
     }
 }
 

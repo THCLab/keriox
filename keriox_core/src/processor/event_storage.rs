@@ -339,13 +339,6 @@ impl EventStorage {
         id: &IdentifierPrefix,
         event_digest: &SelfAddressingPrefix,
     ) -> Result<Vec<BasicPrefix>, Error> {
-        // let state = match self.get_state(id)? {
-        //     Some(state) if state.sn < sn => {
-        //         self.compute_escrowed_state_at_event(sn, id, event_digest)?
-        //     }
-        //     None => self.compute_escrowed_state_at_event(sn, id, event_digest)?,
-        //     Some(state) => state,
-        // };
         let state = self
             .compute_state_at_event(sn, id, event_digest)?
             .ok_or(Error::MissingEvent)?;
