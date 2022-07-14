@@ -1,6 +1,3 @@
-use std::cmp::Ordering;
-
-use chrono::{DateTime, Local};
 use serde::{ser::SerializeStruct, Deserialize, Serialize};
 
 use super::{key_event_message::KeyEvent, serializer::to_string, EventMessage};
@@ -149,83 +146,6 @@ impl PartialEq for SignedEventMessage {
         self.event_message == other.event_message && self.signatures == other.signatures
     }
 }
-
-#[derive(Serialize, Deserialize)]
-pub struct TimestampedSignedEventMessage {
-    pub timestamp: DateTime<Local>,
-    pub signed_event_message: SignedEventMessage,
-}
-
-impl TimestampedSignedEventMessage {
-    pub fn new(event: SignedEventMessage) -> Self {
-        Self {
-            timestamp: Local::now(),
-            signed_event_message: event,
-        }
-    }
-}
-
-impl From<TimestampedSignedEventMessage> for SignedEventMessage {
-    fn from(event: TimestampedSignedEventMessage) -> SignedEventMessage {
-        event.signed_event_message
-    }
-}
-
-impl From<SignedEventMessage> for TimestampedSignedEventMessage {
-    fn from(event: SignedEventMessage) -> TimestampedSignedEventMessage {
-        TimestampedSignedEventMessage::new(event)
-    }
-}
-
-impl From<&SignedEventMessage> for TimestampedSignedEventMessage {
-    fn from(event: &SignedEventMessage) -> TimestampedSignedEventMessage {
-        TimestampedSignedEventMessage::new(event.clone())
-    }
-}
-
-impl PartialEq for TimestampedSignedEventMessage {
-    fn eq(&self, other: &Self) -> bool {
-        self.signed_event_message == other.signed_event_message
-    }
-}
-
-impl PartialOrd for TimestampedSignedEventMessage {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(
-            match self.signed_event_message.event_message.event.get_sn()
-                == other.signed_event_message.event_message.event.get_sn()
-            {
-                true => Ordering::Equal,
-                false => {
-                    match self.signed_event_message.event_message.event.get_sn()
-                        > other.signed_event_message.event_message.event.get_sn()
-                    {
-                        true => Ordering::Greater,
-                        false => Ordering::Less,
-                    }
-                }
-            },
-        )
-    }
-}
-
-impl Ord for TimestampedSignedEventMessage {
-    fn cmp(&self, other: &Self) -> Ordering {
-        match self.signed_event_message.event_message.event.get_sn()
-            == other.signed_event_message.event_message.event.get_sn()
-        {
-            true => Ordering::Equal,
-            false => match self.signed_event_message.event_message.event.get_sn()
-                > other.signed_event_message.event_message.event.get_sn()
-            {
-                true => Ordering::Greater,
-                false => Ordering::Less,
-            },
-        }
-    }
-}
-
-impl Eq for TimestampedSignedEventMessage {}
 
 impl SignedEventMessage {
     pub fn new(

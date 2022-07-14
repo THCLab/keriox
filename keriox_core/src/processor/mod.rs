@@ -1,13 +1,14 @@
 use std::sync::Arc;
 
-// #[cfg(feature = "async")]
-// pub mod async_processing;
 pub mod basic_processor;
 pub mod escrow;
+#[cfg(test)]
+mod escrow_tests;
 pub mod event_storage;
 pub mod notification;
 #[cfg(test)]
-mod tests;
+mod processor_tests;
+
 pub mod validator;
 
 use self::{
@@ -15,11 +16,11 @@ use self::{
     validator::EventValidator,
 };
 use crate::{
-    database::sled::SledEventDatabase,
+    database::{timestamped::TimestampedSignedEventMessage, SledEventDatabase},
     error::Error,
     event::{receipt::Receipt, SerializationFormats},
     event_message::signed_event_message::{
-        Notice, SignedEventMessage, SignedNontransferableReceipt, TimestampedSignedEventMessage,
+        Notice, SignedEventMessage, SignedNontransferableReceipt,
     },
     prefix::IdentifierPrefix,
     query::reply_event::{ReplyRoute, SignedReply},
@@ -27,15 +28,16 @@ use crate::{
 };
 
 pub trait Processor {
-    fn new(db_path: Arc<SledEventDatabase>) -> Self;
-
     fn process_notice(&self, notice: &Notice) -> Result<(), Error>;
 
     #[cfg(feature = "query")]
     fn process_op_reply(&self, reply: &SignedReply) -> Result<(), Error>;
 
-    fn register_observer(&mut self, observer: Arc<dyn Notifier + Send + Sync>)
-        -> Result<(), Error>;
+    fn register_observer(
+        &mut self,
+        observer: Arc<dyn Notifier + Send + Sync>,
+        notifications: &[JustNotification],
+    ) -> Result<(), Error>;
 
     fn process(
         &self,
@@ -72,15 +74,9 @@ impl EventProcessor {
     pub fn register_observer(
         &mut self,
         observer: Arc<dyn Notifier + Send + Sync>,
+        notifications: Vec<JustNotification>,
     ) -> Result<(), Error> {
-        self.publisher.register_observer(
-            observer,
-            vec![
-                JustNotification::KeyEventAdded,
-                #[cfg(feature = "query")]
-                JustNotification::KsnOutOfOrder,
-            ],
-        );
+        self.publisher.register_observer(observer, notifications);
         Ok(())
     }
 

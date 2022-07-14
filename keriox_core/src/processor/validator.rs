@@ -5,7 +5,7 @@ use chrono::{DateTime, FixedOffset};
 
 use super::event_storage::EventStorage;
 use crate::{
-    database::sled::SledEventDatabase,
+    database::SledEventDatabase,
     error::Error,
     event::{
         event_data::EventData,
@@ -18,6 +18,7 @@ use crate::{
         signed_event_message::{
             SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
         },
+        Digestible,
     },
     prefix::{BasicPrefix, SelfSigningPrefix},
     state::{EventSemantics, IdentifierState},
@@ -39,7 +40,7 @@ impl EventValidator {
         }
     }
 
-    /// Process Event
+    /// Validate Event
     ///
     /// Validates a Key Event against the latest state
     /// of the Identifier and applies it to update the state
@@ -67,20 +68,22 @@ impl EventValidator {
                             Err(Error::SignatureVerificationError)
                         } else {
                             // check if there are enough receipts and escrow
-                            let receipts = self
-                                .event_storage
-                                .get_nt_receipts_for_sn(&new_state.prefix, new_state.sn);
-                            let couplets = match receipts {
-                                Some(rct_list) => rct_list
-                                    .iter()
-                                    .map(|rct| -> Result<_, _> { self.get_receipt_couplets(rct) })
-                                    .collect::<Result<Vec<_>, _>>()?
-                                    .into_iter()
-                                    .flatten()
-                                    .collect(),
-                                None => vec![],
-                            };
-                            if new_state.witness_config.enough_receipts(&couplets)? {
+                            let sn = signed_event.event_message.event.get_sn();
+                            let prefix = &signed_event.event_message.event.get_prefix();
+                            let digest = &signed_event.event_message.event.get_digest();
+
+                            let (couplets, indexed) =
+                                match self.event_storage.get_nt_receipts(prefix, sn, digest)? {
+                                    Some(rcts) => (
+                                        rcts.couplets.unwrap_or_default(),
+                                        rcts.indexed_sigs.unwrap_or_default(),
+                                    ),
+                                    None => (vec![], vec![]),
+                                };
+                            if new_state
+                                .witness_config
+                                .enough_receipts(couplets, indexed)?
+                            {
                                 Ok(Some(new_state))
                             } else {
                                 Err(Error::NotEnoughReceiptsError)
@@ -132,9 +135,12 @@ impl EventValidator {
         let sn = rct.body.event.sn;
         let receipted_event_digest = rct.body.event.receipted_event_digest.clone();
 
-        let witnesses =
-            self.event_storage
-                .get_witnesses_at_event(sn, &id, &receipted_event_digest)?;
+        let witnesses = self
+            .event_storage
+            .compute_state_at_event(sn, &id, &receipted_event_digest)?
+            .ok_or(Error::MissingEvent)?
+            .witness_config
+            .witnesses;
 
         let (couplets, attached_signatures) = (
             rct.couplets.clone().unwrap_or_default(),
@@ -178,17 +184,16 @@ impl EventValidator {
             .event_storage
             .get_event_at_sn(&rct.body.event.prefix, rct.body.event.sn)
         {
-            let serialized_event = event.signed_event_message.serialize()?;
+            let serialized_event = event.signed_event_message.event_message.serialize()?;
             let signer_couplets = self.get_receipt_couplets(rct)?;
-            let (_, errors): (Vec<_>, Vec<Result<bool, Error>>) = signer_couplets
+            signer_couplets
                 .into_iter()
-                .map(|(witness, signature)| witness.verify(&serialized_event, &signature))
-                .partition(Result::is_ok);
-            if errors.is_empty() {
-                Ok(())
-            } else {
-                Err(Error::SignatureVerificationError)
-            }
+                .map(|(witness, signature)| {
+                    (witness.verify(&serialized_event, &signature)?)
+                        .then(|| ())
+                        .ok_or(Error::SignatureVerificationError)
+                })
+                .collect::<Result<_, Error>>()
         } else {
             // There's no receipted event id database so we can't verify signatures
             Err(Error::MissingEvent)
@@ -426,7 +431,7 @@ fn test_validate_seal() -> Result<(), Error> {
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     fs::create_dir_all(root.path()).unwrap();
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-    let event_processor = BasicProcessor::new(Arc::clone(&db));
+    let event_processor = BasicProcessor::new(Arc::clone(&db), None);
 
     // Events and sigs are from keripy `test_delegation` test.
     // (keripy/tests/core/test_delegating.py:#test_delegation)

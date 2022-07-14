@@ -4,7 +4,7 @@ version = "0.8.0"
 authors = [
     "Decentralized Identity Foundation",
     "Charles Cunningham <charles@jolocom.io>",
-    "Ivan Temchenko <ivan@jolocom.io",
+    "Ivan Temchenko <ivan@jolocom.io>",
 	"Edyta Pawlak <edyta.pawlak@opensoftware.pl>"
 ]
 edition = "2018"
@@ -17,7 +17,6 @@ license = "EUPL-1.2"
 crate-type = ["cdylib", "rlib"]
  
 [features]
-# lmdb = ["rkv", "bincode"] # deprecated since 0.7
 sled-db = ["sled", "fixed"]
 async = ["async-std", "pin-project", "futures-core", "bitpat"]
 default = ["sled-db"]

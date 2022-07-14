@@ -2,10 +2,10 @@ use std::sync::Arc;
 
 use keri::{
     actor::{parse_event_stream, prelude::*},
-    database::sled::SledEventDatabase,
+    database::{escrow::EscrowDb, SledEventDatabase},
     error::Error,
     event_message::signed_event_message::Op,
-    processor::event_storage::EventStorage,
+    processor::{escrow::default_escrow_bus, event_storage::EventStorage},
 };
 
 #[test]
@@ -16,8 +16,14 @@ pub fn test_ksn_query() -> Result<(), Error> {
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     let db = Arc::new(SledEventDatabase::new(root.path())?);
 
+    let escrow_root = Builder::new().prefix("test-db").tempdir().unwrap();
+    let escrow_db = Arc::new(EscrowDb::new(escrow_root.path())?);
+
+    let (notification_bus, (_ooo_escrow, _ps_esrow, _pw_escrow)) =
+        default_escrow_bus(db.clone(), escrow_db);
+
     let (processor, storage) = (
-        BasicProcessor::new(db.clone()),
+        BasicProcessor::new(db.clone(), Some(notification_bus)),
         EventStorage::new(db.clone()),
     );
     // Process inception event and its receipts. To accept inception event it must be fully witnessed.
@@ -70,7 +76,7 @@ fn processs_oobi() -> Result<(), Error> {
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
 
     let (processor, storage, oobi_manager) = (
-        BasicProcessor::new(db.clone()),
+        BasicProcessor::new(db.clone(), None),
         EventStorage::new(db.clone()),
         OobiManager::new(oobi_root.path()),
     );

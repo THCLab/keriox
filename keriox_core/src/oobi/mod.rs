@@ -6,7 +6,7 @@ use url::Url;
 
 use self::error::OobiError;
 use crate::{
-    database::sled::DbError,
+    database::DbError,
     event_message::signed_event_message::{Message, Op},
     event_parsing::message::signed_event_stream,
     prefix::IdentifierPrefix,
@@ -174,7 +174,7 @@ pub mod error {
         Keri(#[from] crate::error::Error),
 
         #[error("DB error")]
-        Db(#[from] crate::database::sled::DbError),
+        Db(#[from] crate::database::DbError),
 
         #[error("message parse error")]
         Parse,

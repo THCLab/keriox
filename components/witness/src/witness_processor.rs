@@ -1,7 +1,7 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use keri::{
-    database::sled::SledEventDatabase,
+    database::{escrow::EscrowDb, SledEventDatabase},
     error::Error,
     event_message::signed_event_message::{Notice, SignedEventMessage},
     processor::{
@@ -13,48 +13,62 @@ use keri::{
     query::reply_event::SignedReply,
 };
 
-pub struct WitnessProcessor(EventProcessor);
+pub struct WitnessProcessor {
+    processor: EventProcessor,
+}
 
 impl Processor for WitnessProcessor {
-    fn new(db: Arc<SledEventDatabase>) -> Self {
-        Self::new(db)
-    }
-
     fn register_observer(
         &mut self,
         observer: Arc<dyn Notifier + Send + Sync>,
+        notifications: &[JustNotification],
     ) -> Result<(), Error> {
-        self.0.register_observer(observer)
+        self.processor
+            .register_observer(observer, notifications.to_vec())
     }
 
     fn process_notice(&self, notice: &Notice) -> Result<(), Error> {
-        self.0
+        self.processor
             .process_notice(notice, WitnessProcessor::witness_processing_strategy)?;
         Ok(())
     }
 
     fn process_op_reply(&self, reply: &SignedReply) -> Result<(), Error> {
-        self.0.process_op_reply(reply)?;
+        self.processor.process_op_reply(reply)?;
         Ok(())
     }
 }
 
 impl WitnessProcessor {
-    pub fn new(db: Arc<SledEventDatabase>) -> Self {
+    pub fn new(db: Arc<SledEventDatabase>, escrow_db: Arc<EscrowDb>) -> Self {
         let mut bus = NotificationBus::new();
+        let partially_signed_escrow = Arc::new(PartiallySignedEscrow::new(
+            db.clone(),
+            escrow_db.clone(),
+            Duration::from_secs(10),
+        ));
         bus.register_observer(
-            Arc::new(PartiallySignedEscrow::new(db.clone())),
+            partially_signed_escrow.clone(),
             vec![JustNotification::PartiallySigned],
         );
+        let out_of_order_escrow = Arc::new(OutOfOrderEscrow::new(
+            db.clone(),
+            escrow_db.clone(),
+            Duration::from_secs(10),
+        ));
         bus.register_observer(
-            Arc::new(OutOfOrderEscrow::new(db.clone())),
+            out_of_order_escrow.clone(),
             vec![
                 JustNotification::OutOfOrder,
                 JustNotification::KeyEventAdded,
             ],
         );
         let processor = EventProcessor::new(db, bus);
-        Self(processor)
+        Self {
+            processor,
+            // out_of_order_escrow,
+            // partially_signed_escrow,
+        }
     }
 
     /// Witness processing strategy

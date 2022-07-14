@@ -3,7 +3,7 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 pub enum ControllerError {
     #[error("Database error: {0}")]
-    DatabaseError(#[from] crate::database::sled::DbError),
+    DatabaseError(#[from] crate::database::DbError),
 
     #[error("Communication error: {0}")]
     CommunicationError(String),

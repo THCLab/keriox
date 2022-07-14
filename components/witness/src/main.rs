@@ -49,18 +49,12 @@ async fn main() -> Result<()> {
         .extract()
         .map_err(|_e| anyhow!("Improper `config.json` structure. Should contain fields: `db_path`, `http_host`, `http_port`. Set config file path with -c option."))?;
 
-    let mut oobi_path = db_path.clone();
-    oobi_path.push("oobi");
-    let mut event_path = db_path.clone();
-    event_path.push("events");
-
     let http_address = format!("http://{}:{}", http_host, http_port);
 
     let witness_listener = WitnessListener::setup(
         url::Url::parse(&http_address).unwrap(),
         public_address,
-        event_path.as_path(),
-        oobi_path.as_path(),
+        db_path.as_path(),
         seed,
     )
     .unwrap();

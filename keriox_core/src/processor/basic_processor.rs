@@ -1,13 +1,12 @@
 use std::sync::Arc;
 
 use super::{
-    escrow::default_escrow_bus,
-    notification::{Notification, NotificationBus, Notifier},
+    notification::{JustNotification, Notification, NotificationBus, Notifier},
     validator::EventValidator,
     EventProcessor, Processor,
 };
 #[cfg(feature = "query")]
-use crate::{database::sled::SledEventDatabase, error::Error};
+use crate::{database::SledEventDatabase, error::Error};
 use crate::{
     event_message::signed_event_message::{Notice, SignedEventMessage},
     query::reply_event::SignedReply,
@@ -16,15 +15,12 @@ use crate::{
 pub struct BasicProcessor(EventProcessor);
 
 impl Processor for BasicProcessor {
-    fn new(db: Arc<SledEventDatabase>) -> Self {
-        Self::new(db)
-    }
-
     fn register_observer(
         &mut self,
         observer: Arc<dyn Notifier + Send + Sync>,
+        notification: &[JustNotification],
     ) -> Result<(), Error> {
-        self.0.register_observer(observer)
+        self.0.register_observer(observer, notification.to_vec())
     }
 
     fn process_notice(&self, notice: &Notice) -> Result<(), Error> {
@@ -40,8 +36,12 @@ impl Processor for BasicProcessor {
 }
 
 impl BasicProcessor {
-    pub fn new(db: Arc<SledEventDatabase>) -> Self {
-        let processor = EventProcessor::new(db.clone(), default_escrow_bus(db));
+    pub fn new(db: Arc<SledEventDatabase>, notification_bus: Option<NotificationBus>) -> Self {
+        // TODO should we set some default publisher?
+        let processor = EventProcessor::new(
+            db.clone(),
+            notification_bus.unwrap_or(NotificationBus::new()),
+        );
         Self(processor)
     }
 

@@ -59,8 +59,14 @@ pub enum Error {
     #[error("Event not yet in database")]
     MissingEvent,
 
+    #[error("Event has no signatures")]
+    MissingSignatures,
+
     #[error("Signature verification failed")]
     SignatureVerificationError,
+
+    #[error("Receipt signature verification failed")]
+    ReceiptVerificationError,
 
     #[error("Deserialize error: {0}")]
     DeserializeError(String),
@@ -113,5 +119,5 @@ pub enum Error {
     QueryError(#[from] crate::query::QueryError),
 
     #[error(transparent)]
-    DbError(#[from] crate::database::sled::DbError),
+    DbError(#[from] crate::database::DbError),
 }

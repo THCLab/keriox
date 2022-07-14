@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crate::{
     error::Error,
     event::{
@@ -35,36 +37,37 @@ pub struct WitnessConfig {
 }
 
 impl WitnessConfig {
-    pub fn enough_receipts(
+    pub fn enough_receipts<I, R>(
         &self,
-        receipts_couplets: &[(BasicPrefix, SelfSigningPrefix)],
-    ) -> Result<bool, Error> {
+        receipts_couplets: I,
+        indexed_receipts: R,
+    ) -> Result<bool, Error>
+    where
+        I: IntoIterator<Item = (BasicPrefix, SelfSigningPrefix)>,
+        R: IntoIterator<Item = AttachedSignaturePrefix>,
+    {
         match self.tally.clone() {
             SignatureThreshold::Simple(t) => {
-                let proper_receipts = receipts_couplets
-                    .iter()
+                let mut unique = HashSet::new();
+                // save indexed signer's identifiers
+                indexed_receipts.into_iter().for_each(|w| {
+                    unique.insert(self.witnesses.get(w.index as usize).unwrap().clone());
+                });
+                receipts_couplets
+                    .into_iter()
                     .filter(|(witness, _sig)| self.witnesses.contains(witness))
-                    .count();
-                Ok(proper_receipts >= t as usize)
+                    .for_each(|(witness_id, _witness_sig)| {
+                        unique.insert(witness_id);
+                    });
+                Ok(unique.len() >= t as usize)
             }
             SignatureThreshold::Weighted(t) => {
-                let (attached_signatures, _rest): (Vec<Option<AttachedSignaturePrefix>>, _) =
-                    receipts_couplets
-                        .iter()
-                        .map(|(id, signature)| {
-                            let index = self.witnesses.iter().position(|wit| wit == id);
-                            index.map(|i| AttachedSignaturePrefix {
-                                index: i as u16,
-                                signature: signature.clone(),
-                            })
-                        })
-                        .partition(Option::is_some);
-                let signatures_indexes = attached_signatures
+                let indexes = receipts_couplets
                     .into_iter()
-                    .map(Option::unwrap)
-                    .map(|att| att.index as usize)
+                    .filter_map(|(id, _signature)| self.witnesses.iter().position(|wit| wit == &id))
+                    .chain(indexed_receipts.into_iter().map(|att| att.index as usize))
                     .collect::<Vec<_>>();
-                t.enough_signatures(&signatures_indexes)
+                t.enough_signatures(&indexes)
             }
         }
     }

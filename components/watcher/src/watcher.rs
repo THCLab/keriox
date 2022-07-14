@@ -1,4 +1,7 @@
-use std::{path::Path, sync::Arc};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use derive_more::{Display, Error, From};
 use keri::{
@@ -28,7 +31,6 @@ impl WatcherData {
     pub fn setup(
         public_address: url::Url,
         event_db_path: &Path,
-        oobi_db_path: &Path,
         priv_key: Option<String>,
     ) -> Result<Self, Error> {
         let signer = Arc::new(
@@ -36,9 +38,13 @@ impl WatcherData {
                 .map(|key| Signer::new_with_seed(&key.parse()?))
                 .unwrap_or(Ok(Signer::new()))?,
         );
+        let mut oobi_path = PathBuf::new();
+        oobi_path.push(event_db_path);
+        oobi_path.push("oobi");
+
         let prefix = Basic::Ed25519.derive(signer.public_key());
         let db = Arc::new(SledEventDatabase::new(event_db_path)?);
-        let processor = BasicProcessor::new(db.clone());
+        let processor = BasicProcessor::new(db.clone(), None);
         let storage = EventStorage::new(db.clone());
         // construct witness loc scheme oobi
         let loc_scheme = LocationScheme::new(
@@ -56,7 +62,7 @@ impl WatcherData {
             prefix.clone(),
             SelfSigning::Ed25519Sha512.derive(signer.sign(reply.serialize()?)?),
         );
-        let oobi_manager = OobiManager::new(oobi_db_path);
+        let oobi_manager = OobiManager::new(&oobi_path);
         oobi_manager.save_oobi(&signed_reply)?;
         Ok(Self {
             prefix,
@@ -273,7 +279,7 @@ pub enum WatcherError {
 
     #[display(fmt = "DB error")]
     #[from]
-    DbError(keri::database::sled::DbError),
+    DbError(keri::database::DbError),
 
     #[display(fmt = "OOBI error")]
     #[from]

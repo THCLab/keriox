@@ -1,11 +1,10 @@
 #![allow(dead_code)]
-use std::marker::PhantomData;
+use std::{convert::TryInto, marker::PhantomData};
 
 use arrayref::array_ref;
 use serde::{de::DeserializeOwned, Serialize};
 
 use super::DbError;
-use crate::error::Error;
 
 /// Imitates collection table per key
 ///
@@ -121,8 +120,17 @@ where
         Some(
             self.tree
                 .into_iter()
-                .flatten()
-                .flat_map(|(_key, values)| serde_cbor::from_slice::<Vec<T>>(&values).unwrap()),
+                .values()
+                .flat_map(|values| serde_cbor::from_slice::<Vec<T>>(&values.unwrap()).unwrap()),
+        )
+    }
+
+    pub fn get_keys(&self) -> Option<impl DoubleEndedIterator<Item = u64>> {
+        Some(
+            self.tree
+                .into_iter()
+                .keys()
+                .map(|keys| u64::from_be_bytes(keys.unwrap().to_vec().try_into().unwrap())),
         )
     }
 }
@@ -153,7 +161,7 @@ where
 {
     /// get entire Vec<T> in one go
     ///
-    pub fn get(&self, id: u64) -> Result<Option<T>, Error> {
+    pub fn get(&self, id: u64) -> Result<Option<T>, DbError> {
         match self.tree.get(key_bytes(id))? {
             Some(value) => Ok(Some(serde_cbor::from_slice(&value)?)),
             None => Ok(None),
@@ -162,7 +170,7 @@ where
 
     /// check if sprovided `u64` key is present in the db
     ///
-    pub fn contains_key(&self, id: u64) -> Result<bool, Error> {
+    pub fn contains_key(&self, id: u64) -> Result<bool, DbError> {
         Ok(self.tree.contains_key(key_bytes(id))?)
     }
 
@@ -181,7 +189,7 @@ where
     /// insert `T` with given `key`
     /// Warning! This will rewrite existing value with the same `key`
     ///
-    pub fn insert(&self, key: u64, value: &T) -> Result<(), Error> {
+    pub fn insert(&self, key: u64, value: &T) -> Result<(), DbError> {
         self.tree
             .insert(key_bytes(key), serde_cbor::to_vec(value)?)?;
         Ok(())
@@ -209,7 +217,7 @@ where
     /// somewhat expensive! gets optional `u64` key for given `&T`
     /// if present in the db
     ///
-    pub fn get_key_by_value(&self, value: &T) -> Result<Option<u64>, Error>
+    pub fn get_key_by_value(&self, value: &T) -> Result<Option<u64>, DbError>
     where
         T: Serialize,
     {

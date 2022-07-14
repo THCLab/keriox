@@ -1,4 +1,7 @@
-use std::{path::Path, sync::Arc};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use actix_web::{dev::Server, web, App, HttpServer};
 use anyhow::Result;
@@ -15,16 +18,19 @@ impl WitnessListener {
         address: url::Url,
         public_address: Option<String>,
         event_db_path: &Path,
-        oobi_db_path: &Path,
         priv_key: Option<String>,
     ) -> Result<Self, Error> {
+        let mut oobi_path = PathBuf::new();
+        oobi_path.push(event_db_path);
+        oobi_path.push("oobi");
+
         let pub_address = if let Some(pub_address) = public_address {
             url::Url::parse(&format!("http://{}", pub_address)).unwrap()
         } else {
             address.clone()
         };
 
-        Witness::setup(pub_address, event_db_path, oobi_db_path, priv_key).map(|wd| Self {
+        Witness::setup(pub_address, event_db_path, oobi_path.as_path(), priv_key).map(|wd| Self {
             witness_data: Arc::new(wd),
         })
     }
@@ -164,7 +170,7 @@ pub mod http_handlers {
         KeriError(keri::error::Error),
 
         #[display(fmt = "DB error")]
-        DbError(keri::database::sled::DbError),
+        DbError(keri::database::DbError),
     }
 
     impl ResponseError for ApiError {

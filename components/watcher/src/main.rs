@@ -47,16 +47,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let http_address = format!("http://{}:{}", http_host, http_port);
 
-    let mut oobi_path = db_path.clone();
-    oobi_path.push("oobi");
-    let mut event_path = db_path.clone();
-    event_path.push("events");
-
     let watcher_listener = WatcherListener::setup(
         url::Url::parse(&http_address).unwrap(),
         public_address,
-        oobi_path.as_path(),
-        event_path.as_path(),
+        &db_path,
         seed,
     )
     .unwrap();

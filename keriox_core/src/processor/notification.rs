@@ -68,7 +68,7 @@ pub enum Notification {
     KsnOutOfOrder(SignedReply),
 }
 
-#[derive(PartialEq, Hash, Eq)]
+#[derive(PartialEq, Hash, Eq, Clone)]
 pub enum JustNotification {
     KeyEventAdded,
     OutOfOrder,
