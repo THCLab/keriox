@@ -4,20 +4,23 @@ use std::{
 };
 
 use derive_more::{Display, Error, From};
+use futures::{StreamExt, TryStreamExt};
 use keri::{
-    actor::{parse_notice_stream, parse_op_stream, prelude::*},
+    actor::{parse_event_stream, parse_notice_stream, parse_op_stream, prelude::*},
     derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
     error::Error,
     event_message::signed_event_message::{Notice, Op},
-    oobi::{error::OobiError, EndRole, LocationScheme, OobiManager, Scheme},
-    prefix::{BasicPrefix, IdentifierPrefix},
+    oobi::{error::OobiError, EndRole, LocationScheme, OobiManager, Role, Scheme},
+    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix},
     query::{
+        query_event::{QueryRoute, SignedQuery},
         reply_event::{ReplyEvent, ReplyRoute, SignedReply},
         ReplyType,
     },
     signer::Signer,
     state::IdentifierState,
 };
+use rand::prelude::SliceRandom;
 
 pub struct WatcherData {
     pub prefix: BasicPrefix,
@@ -127,30 +130,64 @@ impl WatcherData {
         process_notice(notice, &self.processor)
     }
 
-    fn process_op(&self, op: Op) -> Result<Vec<Message>, Error> {
-        let mut responses = Vec::new();
+    async fn process_op(&self, op: Op) -> Result<Option<Vec<Message>>, WatcherError> {
         match op {
             Op::Query(qry) => {
-                let response = process_signed_query(qry, &self.event_storage).unwrap();
-                match response {
-                    ReplyType::Ksn(ksn) => {
-                        let rpy = ReplyEvent::new_reply(
-                            ReplyRoute::Ksn(IdentifierPrefix::Basic(self.prefix.clone()), ksn),
-                            SelfAddressing::Blake3_256,
-                            SerializationFormats::JSON,
-                        )?;
+                let cid = qry.query.get_prefix();
+                if !self.check_role(&cid)? {
+                    return Err(WatcherError::MissingRole {
+                        id: cid.clone(),
+                        role: Role::Watcher,
+                    });
+                }
 
-                        let signature =
-                            SelfSigning::Ed25519Sha512.derive(self.signer.sign(&rpy.serialize()?)?);
-                        let reply = Message::Op(Op::Reply(SignedReply::new_nontrans(
-                            rpy,
-                            self.prefix.clone(),
-                            signature,
-                        )));
-                        responses.push(reply);
-                    }
-                    ReplyType::Kel(msgs) | ReplyType::Mbx(msgs) => responses.extend(msgs),
+                if let QueryRoute::Ksn { .. } | QueryRoute::Log { .. } =
+                    qry.query.event.content.data.route
+                {
+                    // Create a new signed message based on the received one
+                    let sigs = vec![AttachedSignaturePrefix::new(
+                        SelfSigning::Ed25519Sha512,
+                        self.signer.sign(qry.query.serialize()?)?,
+                        0,
+                    )];
+                    let qry = SignedQuery::new(
+                        qry.query,
+                        IdentifierPrefix::Basic(self.prefix.clone()),
+                        sigs,
+                    );
+
+                    // Get witnesses and choose one randomly
+                    let id = qry.query.get_prefix();
+                    let wit_id = self
+                        .get_state_for_prefix(&id)?
+                        .and_then(|state| {
+                            state
+                                .witness_config
+                                .witnesses
+                                .choose(&mut rand::thread_rng())
+                                .cloned()
+                        })
+                        .ok_or_else(|| WatcherError::NoIdentState { prefix: id })?;
+
+                    // Send query to witness
+                    let qry_str = Message::Op(Op::Query(qry)).to_cesr()?;
+                    let resp = self
+                        .send_to(
+                            IdentifierPrefix::Basic(wit_id),
+                            keri::oobi::Scheme::Http,
+                            qry_str,
+                        )
+                        .await?
+                        .unwrap();
+
+                    return Ok(Some(parse_event_stream(resp.as_bytes())?));
                 };
+
+                let response = process_signed_query(qry, &self.event_storage)?;
+                match response {
+                    ReplyType::Mbx(msgs) => Ok(Some(msgs)),
+                    _ => unreachable!(),
+                }
             }
             Op::Reply(reply) => {
                 process_reply(
@@ -159,9 +196,27 @@ impl WatcherData {
                     &self.processor,
                     &self.event_storage,
                 )?;
+                Ok(None)
             }
         }
-        Ok(responses)
+    }
+
+    /// Query roles in oobi manager to check if controller with given ID is allowed to communicate with us.
+    fn check_role(&self, cid: &IdentifierPrefix) -> Result<bool, WatcherError> {
+        Ok(self
+            .oobi_manager
+            .get_end_role(cid, Role::Watcher)?
+            .iter()
+            .filter_map(|reply| {
+                if let ReplyRoute::EndRoleAdd(role) = reply.reply.get_route() {
+                    Some(role)
+                } else {
+                    None
+                }
+            })
+            .any(|role| {
+                role.cid == *cid && role.eid == IdentifierPrefix::Basic(self.prefix.clone())
+            }))
     }
 
     pub fn parse_and_process_notices(&self, input_stream: &[u8]) -> Result<(), Error> {
@@ -171,56 +226,18 @@ impl WatcherData {
             .collect()
     }
 
-    pub fn parse_and_process_ops(&self, input_stream: &[u8]) -> Result<Vec<Message>, Error> {
-        parse_op_stream(input_stream)?
-            .into_iter()
-            .flat_map(|op| match self.process_op(op) {
-                Ok(msgs) => msgs.into_iter().map(Ok).collect(),
-                Err(e) => vec![Err(e)],
-            })
-            .collect()
-    }
-}
-
-pub struct Watcher(pub WatcherData);
-
-impl Watcher {
-    pub async fn resolve_end_role(&self, er: EndRole) -> Result<(), WatcherError> {
-        // find endpoint data of endpoint provider identifier
-        let loc_scheme = self
-            .0
-            .get_loc_scheme_for_id(&er.eid.clone())?
-            .get(0)
-            .ok_or(WatcherError::NoLocation { id: er.eid.clone() })?
-            .reply
-            .event
-            .content
-            .data
-            .clone();
-
-        if let ReplyRoute::LocScheme(lc) = loc_scheme {
-            let url = format!("{}oobi/{}/{}/{}", lc.url, er.cid, "witness", er.eid);
-            let oobis = reqwest::get(url).await.unwrap().text().await?;
-
-            self.0.parse_and_process_ops(oobis.as_bytes())?;
-            Ok(())
-        } else {
-            Err(OobiError::InvalidMessageType)?
-        }
-    }
-
-    pub async fn resolve_loc_scheme(&self, lc: &LocationScheme) -> Result<(), WatcherError> {
-        let url = format!("{}oobi/{}", lc.url, lc.eid);
-        let oobis = reqwest::get(url).await?.text().await?;
-
-        self.0.parse_and_process_ops(oobis.as_bytes())?;
-
-        Ok(())
+    pub async fn parse_and_process_ops(
+        &self,
+        input_stream: &[u8],
+    ) -> Result<Vec<Message>, WatcherError> {
+        futures::stream::iter(parse_op_stream(input_stream)?)
+            .then(|op| async { self.process_op(op).await.map(|r| r.unwrap_or_default()) })
+            .try_concat()
+            .await
     }
 
     fn get_loc_schemas(&self, id: &IdentifierPrefix) -> Result<Vec<LocationScheme>, WatcherError> {
-        self.0
-            .get_loc_scheme_for_id(id)?
+        self.get_loc_scheme_for_id(id)?
             .iter()
             .map(|lc| {
                 if let ReplyRoute::LocScheme(loc_scheme) = lc.reply.get_route() {
@@ -267,6 +284,43 @@ impl Watcher {
     }
 }
 
+pub struct Watcher(pub WatcherData);
+
+impl Watcher {
+    pub async fn resolve_end_role(&self, er: EndRole) -> Result<(), WatcherError> {
+        // find endpoint data of endpoint provider identifier
+        let loc_scheme = self
+            .0
+            .get_loc_scheme_for_id(&er.eid.clone())?
+            .get(0)
+            .ok_or(WatcherError::NoLocation { id: er.eid.clone() })?
+            .reply
+            .event
+            .content
+            .data
+            .clone();
+
+        if let ReplyRoute::LocScheme(lc) = loc_scheme {
+            let url = format!("{}oobi/{}/{}/{}", lc.url, er.cid, "witness", er.eid);
+            let oobis = reqwest::get(url).await.unwrap().text().await?;
+
+            self.0.parse_and_process_ops(oobis.as_bytes()).await?;
+            Ok(())
+        } else {
+            Err(OobiError::InvalidMessageType)?
+        }
+    }
+
+    pub async fn resolve_loc_scheme(&self, lc: &LocationScheme) -> Result<(), WatcherError> {
+        let url = format!("{}oobi/{}", lc.url, lc.eid);
+        let oobis = reqwest::get(url).await?.text().await?;
+
+        self.0.parse_and_process_ops(oobis.as_bytes()).await?;
+
+        Ok(())
+    }
+}
+
 #[derive(Debug, Display, Error, From)]
 pub enum WatcherError {
     #[display(fmt = "HTTP request failed")]
@@ -296,4 +350,10 @@ pub enum WatcherError {
 
     #[display(fmt = "wrong reply route")]
     WrongReplyRoute,
+
+    #[display(fmt = "role {role:?} missing for {id:?}")]
+    MissingRole { role: Role, id: IdentifierPrefix },
+
+    #[display(fmt = "no identifier state for prefix {prefix:?}")]
+    NoIdentState { prefix: IdentifierPrefix },
 }
