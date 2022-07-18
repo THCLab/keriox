@@ -50,6 +50,7 @@ pub trait Processor {
             Message::Op(op) => match op {
                 Op::Query(_query) => panic!("processor can't handle query op"),
                 Op::Reply(reply) => self.process_op_reply(reply),
+                Op::Exchange(_) => todo!(),
             },
         }
     }

@@ -1,6 +1,6 @@
 use serde::{ser::SerializeStruct, Deserialize, Serialize};
 
-use super::{key_event_message::KeyEvent, serializer::to_string, EventMessage};
+use super::{key_event_message::KeyEvent, serializer::to_string, EventMessage, exchange::SignedExchange};
 #[cfg(feature = "query")]
 use crate::query::{query_event::SignedQuery, reply_event::SignedReply};
 use crate::{
@@ -31,6 +31,7 @@ pub enum Notice {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Op {
+    Exchange(SignedExchange),
     #[cfg(feature = "query")]
     Reply(SignedReply),
     #[cfg(any(feature = "query", feature = "oobi"))]
@@ -63,6 +64,7 @@ impl From<Op> for SignedEventData {
             Op::Reply(ksn) => SignedEventData::from(ksn),
             #[cfg(feature = "query")]
             Op::Query(qry) => SignedEventData::from(qry),
+            Op::Exchange(exn) => SignedEventData::from(exn),
         }
     }
 }
@@ -97,6 +99,7 @@ impl Op {
             Op::Reply(reply) => reply.reply.get_prefix(),
             #[cfg(feature = "query")]
             Op::Query(qry) => qry.query.get_prefix(),
+            Op::Exchange(exn) => todo!(),
         }
     }
 }

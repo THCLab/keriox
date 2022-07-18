@@ -1,10 +1,16 @@
 use serde::{Serialize, Deserialize};
 
-use crate::{prefix::IdentifierPrefix, error::Error};
+use crate::{prefix::IdentifierPrefix, error::Error, event_parsing::Attachment};
 
 use super::{EventMessage, SaidEvent, key_event_message::KeyEvent, Typeable, EventTypeTag};
 
 pub type ExchangeMessage = EventMessage<SaidEvent<Exchange>>;
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SignedExchange {
+    pub exchange_message: ExchangeMessage,
+    pub attachment: Attachment,
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(tag = "r")]
