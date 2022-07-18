@@ -5,6 +5,7 @@ pub mod serialization_info;
 pub mod serializer;
 pub mod signature;
 pub mod signed_event_message;
+pub mod exchange;
 
 use std::cmp::Ordering;
 
@@ -32,6 +33,7 @@ pub enum EventTypeTag {
     Dip,
     Drt,
     Rct,
+    Exn,
     #[cfg(feature = "query")]
     Rpy,
     #[cfg(feature = "query")]
