@@ -130,10 +130,10 @@ impl WatcherData {
         process_notice(notice, &self.processor)
     }
 
-    async fn process_op(&self, op: Op) -> Result<Option<Vec<Message>>, WatcherError> {
+    pub async fn process_op(&self, op: Op) -> Result<Option<Vec<Message>>, WatcherError> {
         match op {
             Op::Query(qry) => {
-                let cid = qry.query.get_prefix();
+                let cid = qry.signer.clone();
                 if !self.check_role(&cid)? {
                     return Err(WatcherError::MissingRole {
                         id: cid.clone(),
