@@ -22,16 +22,19 @@ use crate::{
         signed_event_message::{
             Message, Notice, Op, SignedEventMessage, SignedNontransferableReceipt,
             SignedTransferableReceipt,
-        }, exchange::{ExchangeMessage, SignedExchange, Exchange},
+        }, exchange::{ExchangeMessage, SignedExchange, Exchange}, signature::Signature,
     },
     event_parsing::payload_size::PayloadType,
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix},
 };
 
+use self::path::MaterialPath;
+
 pub mod attachment;
 pub mod message;
 pub mod payload_size;
 pub mod prefix;
+pub mod path;
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 pub enum Attachment {
@@ -44,6 +47,7 @@ pub enum Attachment {
     FirstSeenReply(Vec<(u64, DateTime<FixedOffset>)>),
     // Group codes
     SealSignaturesGroups(Vec<(EventSeal, Vec<AttachedSignaturePrefix>)>),
+    PathedMaterialQuadruplet(MaterialPath, Signature),
     // List of signatures made using keys from last establishment event od identifier of prefix
     LastEstSignaturesGroups(Vec<(IdentifierPrefix, Vec<AttachedSignaturePrefix>)>),
     // Frame codes
@@ -129,12 +133,32 @@ impl Attachment {
 
                 (PayloadType::ME, couplets.len(), packed_couplets)
             }
+            Attachment::PathedMaterialQuadruplet(path, signatures) => {
+                let attachment = match signatures {
+                    Signature::Transferable(seal, sigs) => Attachment::SealSignaturesGroups(vec![(seal.clone(), sigs.clone())]),
+                    Signature::NonTransferable(signer_id, sig) => Attachment::ReceiptCouplets(vec![(signer_id.clone(), sig.clone())]),
+                }.to_cesr();
+                let packed = [Self::pack_path(path), attachment].join("");
+                // TODO set attachments count
+                (PayloadType::ML, 1, packed)
+            },
         };
         [
             payload_type.adjust_with_num(att_len as u16),
             serialized_attachment,
         ]
         .join("")
+    }
+
+    fn pack_path(path: &MaterialPath) -> String {
+        let ts = path.path.clone().len();
+        // how many chars are missing for base64 encoding
+        let ws = (4 - ts) % 4;
+        // post conv lead size in bytes
+        let ls = (3- ts) % 3;
+        let base = ["A".repeat(ws), path.path.clone()].join("");
+        base[ls..base.len()-1].into()
+
     }
 
     fn pack_sn(sn: u64) -> String {

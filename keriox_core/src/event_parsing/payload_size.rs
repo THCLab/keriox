@@ -74,6 +74,9 @@ pub enum PayloadType {
     /// Count of composed group: IdentifierPrefix + Controller Indexed Signatures
     #[serde(rename = "-H")]
     MH,
+    /// Composed Grouped Pathed Material Quadlet (4 char each)
+    #[serde(rename = "-L")]
+    ML,
     #[serde(rename = "-U")]
     MU,
     #[serde(rename = "-V")]
@@ -248,6 +251,7 @@ impl TryFrom<&str> for PayloadType {
             "-F" => Ok(Self::MF),
             "-G" => Ok(Self::MG),
             "-H" => Ok(Self::MH),
+            "-L" => Ok(Self::ML),
             "-U" => Ok(Self::MU),
             "-V" => Ok(Self::MV),
             "-W" => Ok(Self::MW),
@@ -298,6 +302,7 @@ impl Display for PayloadType {
             Self::MF => f.write_str("-F"),
             Self::MG => f.write_str("-G"),
             Self::MH => f.write_str("-H"),
+            Self::ML => f.write_str("-L"),
             Self::MU => f.write_str("-U"),
             Self::MV => f.write_str("-V"),
             Self::MW => f.write_str("-W"),

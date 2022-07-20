@@ -6,14 +6,14 @@ use nom::{
     combinator::map,
     error::ErrorKind,
     multi::{count, many0},
-    Needed,
+    Needed, branch::alt,
 };
 
 use crate::{
     derivation::attached_signature_code::b64_to_num,
     event::sections::seal::{EventSeal, SourceSeal},
     event_parsing::payload_size::PayloadType,
-    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix}, event_message::signature::Signature,
 };
 
 use super::{
@@ -21,7 +21,7 @@ use super::{
         attached_signature, attached_sn, basic_prefix, prefix, self_addressing_prefix,
         self_signing_prefix,
     },
-    Attachment,
+    Attachment, path::MaterialPath,
 };
 
 /// returns attached source seals
@@ -133,6 +133,21 @@ pub fn timestamp(s: &[u8]) -> nom::IResult<&[u8], DateTime<FixedOffset>> {
     }
 }
 
+pub fn material_path(s: &[u8]) -> nom::IResult<&[u8], MaterialPath> {
+    todo!()
+}
+
+pub fn signaturess(s: &[u8]) -> nom::IResult<&[u8], Signature> {
+    match seal_signatures(s) {
+        // TODO allow more than one
+        Ok((rest, sigs)) => Ok((rest, Signature::Transferable(sigs[0].clone().0, sigs[0].clone().1))),
+        Err(_) => {
+            let (rest, sigs) = couplets(s)?;
+            Ok((rest, Signature::NonTransferable(sigs[0].clone().0, sigs[0].clone().1)))
+        },
+    }
+}
+
 pub fn attachment(s: &[u8]) -> nom::IResult<&[u8], Attachment> {
     let (rest, payload_type) = take(2u8)(s)?;
     let payload_type: PayloadType = PayloadType::try_from(
@@ -189,6 +204,17 @@ pub fn attachment(s: &[u8]) -> nom::IResult<&[u8], Attachment> {
         PayloadType::ME => {
             let (rest, sc) = first_seen_sn(rest)?;
             Ok((rest, Attachment::FirstSeenReply(sc)))
+        }
+        PayloadType::ML => {
+            let (rest, sc) = b64_count(rest)?;
+            match nom::bytes::complete::take(sc * 4)(rest) {
+                Ok((rest, total)) => {
+                    let (extra, mp) = material_path(total)?;
+                    let (extra, sigs) = signaturess(extra)?;
+                    Ok((rest, Attachment::PathedMaterialQuadruplet(mp, sigs)))
+                },
+                Err(e) => {Err(e)}
+            }
         }
         _ => todo!(),
     }
@@ -287,4 +313,10 @@ fn test_attachement() {
     let (rest, att) = attachment(cesr_attachment.as_bytes()).unwrap();
     assert!(matches!(att, Attachment::Frame(_)));
     assert!(rest.is_empty());
+}
+
+#[test]
+fn test_pathed_material() {
+    let attached_str = "-LAZ5AABAA-a-AABAAFjjD99-xy7J0LGmCkSE_zYceED5uPF4q7l8J23nNQ64U-oWWulHI5dh3cFDWT4eICuEQCALdh8BO5ps-qx0qBA";
+    let (_rest, attached_material) = attachment(attached_str.as_bytes()).unwrap();
 }
