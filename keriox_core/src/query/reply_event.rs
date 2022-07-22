@@ -187,8 +187,11 @@ pub fn bada_logic(new_rpy: &SignedReply, old_rpy: &SignedReply) -> Result<(), Qu
             //     greater than old
 
             // check sns
-            let new_sn = seal.sn;
+            let new_sn = seal
+                .ok_or(QueryError::Error("Missing signer seal".into()))?
+                .sn;
             let old_sn: u64 = if let Signature::Transferable(ref seal, _) = old_rpy.signature {
+                let seal = seal.clone().unwrap();
                 seal.sn
             } else {
                 return Err(QueryError::Error(
@@ -231,7 +234,7 @@ impl SignedReply {
         signer_seal: EventSeal,
         signatures: Vec<AttachedSignaturePrefix>,
     ) -> Self {
-        let signature = Signature::Transferable(signer_seal, signatures);
+        let signature = Signature::Transferable(Some(signer_seal), signatures);
         Self {
             reply: envelope,
             signature,

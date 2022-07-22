@@ -62,6 +62,9 @@ pub enum Error {
     #[error("Event has no signatures")]
     MissingSignatures,
 
+    #[error("No signer")]
+    MissingSigner,
+
     #[error("Signature verification failed")]
     SignatureVerificationError,
 

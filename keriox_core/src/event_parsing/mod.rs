@@ -18,11 +18,13 @@ use crate::{
         EventMessage,
     },
     event_message::{
+        exchange::{ExchangeMessage, SignedExchange},
         key_event_message::KeyEvent,
+        signature::Signature,
         signed_event_message::{
             Message, Notice, Op, SignedEventMessage, SignedNontransferableReceipt,
             SignedTransferableReceipt,
-        }, exchange::{ExchangeMessage, SignedExchange, Exchange}, signature::Signature,
+        },
     },
     event_parsing::payload_size::PayloadType,
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix},
@@ -32,9 +34,9 @@ use self::path::MaterialPath;
 
 pub mod attachment;
 pub mod message;
+pub mod path;
 pub mod payload_size;
 pub mod prefix;
-pub mod path;
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 pub enum Attachment {
@@ -134,31 +136,27 @@ impl Attachment {
                 (PayloadType::ME, couplets.len(), packed_couplets)
             }
             Attachment::PathedMaterialQuadruplet(path, signatures) => {
-                let attachment = match signatures {
-                    Signature::Transferable(seal, sigs) => Attachment::SealSignaturesGroups(vec![(seal.clone(), sigs.clone())]),
-                    Signature::NonTransferable(signer_id, sig) => Attachment::ReceiptCouplets(vec![(signer_id.clone(), sig.clone())]),
-                }.to_cesr();
-                let packed = [Self::pack_path(path), attachment].join("");
+                let attachment =
+                    match signatures {
+                        Signature::Transferable(seal, sigs) => Attachment::SealSignaturesGroups(
+                            vec![(seal.clone().unwrap(), sigs.clone())],
+                        )
+                        .to_cesr(),
+                        Signature::NonTransferable(signer_id, sig) => {
+                            Attachment::ReceiptCouplets(vec![(signer_id.clone(), sig.clone())])
+                                .to_cesr()
+                        }
+                    };
+                let packed = [path.to_cesr(), attachment].join("");
                 // TODO set attachments count
                 (PayloadType::ML, 1, packed)
-            },
+            }
         };
         [
             payload_type.adjust_with_num(att_len as u16),
             serialized_attachment,
         ]
         .join("")
-    }
-
-    fn pack_path(path: &MaterialPath) -> String {
-        let ts = path.path.clone().len();
-        // how many chars are missing for base64 encoding
-        let ws = (4 - ts) % 4;
-        // post conv lead size in bytes
-        let ls = (3- ts) % 3;
-        let base = ["A".repeat(ws), path.path.clone()].join("");
-        base[ls..base.len()-1].into()
-
     }
 
     fn pack_sn(sn: u64) -> String {
@@ -277,10 +275,9 @@ impl From<SignedTransferableReceipt> for SignedEventData {
 #[cfg(feature = "query")]
 impl From<SignedReply> for SignedEventData {
     fn from(ev: SignedReply) -> Self {
-        use crate::event_message::signature::Signature;
         let attachments = vec![match ev.signature.clone() {
             Signature::Transferable(seal, sig) => {
-                Attachment::SealSignaturesGroups(vec![(seal, sig)])
+                Attachment::SealSignaturesGroups(vec![(seal.unwrap(), sig)])
             }
             Signature::NonTransferable(pref, sig) => Attachment::ReceiptCouplets(vec![(pref, sig)]),
         }];
@@ -309,7 +306,10 @@ impl From<SignedQuery> for SignedEventData {
 
 impl From<SignedExchange> for SignedEventData {
     fn from(ev: SignedExchange) -> Self {
-        SignedEventData { deserialized_event: EventType::Exn(ev.exchange_message), attachments: vec![ev.attachment] }
+        SignedEventData {
+            deserialized_event: EventType::Exn(ev.exchange_message),
+            attachments: vec![ev.attachment],
+        }
     }
 }
 
@@ -539,7 +539,7 @@ fn signed_receipt(
 
 pub fn signed_exchange(exn: ExchangeMessage, att: Vec<Attachment>) -> Result<Op, Error> {
     match att {
-        _ => todo!()
+        _ => todo!(),
     }
 }
 
@@ -637,16 +637,13 @@ fn test_deserialize_signed_receipt() {
 #[test]
 fn test_deserialize_signed_exchange() {
     use crate::event_parsing::message::signed_message;
-    
+
     let exn_event = r#"{"v":"KERI10JSON0002c9_","t":"exn","d":"Ecei_1u8OhK2M6Y4ZQ8WS3CdSTQ_ZKFH4x71aUpRLvdY","r":"/fwd","q":{"pre":"EozYHef4je02EkMOA1IKM65WkIdSjfrL7XWDk_JzJL9o","topic":"multisig"},"a":{"v":"KERI10JSON000215_","t":"icp","d":"EOWwyMU3XA7RtWdelFt-6waurOTH_aW_Z9VTaU-CshGk","i":"EOWwyMU3XA7RtWdelFt-6waurOTH_aW_Z9VTaU-CshGk","s":"0","kt":"2","k":["DQKeRX-2dXdSWS-EiwYyiQdeIwesvubEqnUYC5vsEyjo","D-U6Sc6VqQC3rDuD2wLF3oR8C4xQyWOTMp4zbJyEnRlE"],"nt":"2","n":["ENVtv0_G68psQhfWB-ZyVH1lndLli2LSmfSxxszNufoI","E6UpCouA9mZA03hMFJLrhA0SvwR4HVNqf2wrZM-ydTSI"],"bt":"3","b":["BGKVzj4ve0VSd8z_AmvhLg4lqcC_9WYX90k03q-R_Ydo","BuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw","Bgoq68HCmYNUDgOz4Skvlu306o_NY-NrYuKAVhk3Zh9c"],"c":[],"a":[]}}-HABE-4-PsMBN0YEKyTl3zL0zulWcBehdaaG6Go5cMc0BzQ8-AABAAf1tIxH_r3zmczFHk9ppWlgaf1FZ7WzM5RZMtglygawaTcMlcSQ2xTUXUbTFVmIsSdElTgC0c-BQjUVa4xnquDQ-LAZ5AABAA-a-AABAB3lE27iIy0CsWETSL4DXwmIhyiNobc005l60FIOiGDGzZBurpGYjoTvGK51eeDB-6btwatAzN44EC6yxsKW-ZDg"#;
     let exn_event = r#"{"v":"KERI10JSON0002c9_","t":"exn","d":"Eru6l4p3-r6KJkT1Ac8r5XWuQMsD91-c80hC7lASOoZI","r":"/fwd","q":{"pre":"E-4-PsMBN0YEKyTl3zL0zulWcBehdaaG6Go5cMc0BzQ8","topic":"multisig"},"a":{"v":"KERI10JSON000215_","t":"icp","d":"EOWwyMU3XA7RtWdelFt-6waurOTH_aW_Z9VTaU-CshGk","i":"EOWwyMU3XA7RtWdelFt-6waurOTH_aW_Z9VTaU-CshGk","s":"0","kt":"2","k":["DQKeRX-2dXdSWS-EiwYyiQdeIwesvubEqnUYC5vsEyjo","D-U6Sc6VqQC3rDuD2wLF3oR8C4xQyWOTMp4zbJyEnRlE"],"nt":"2","n":["ENVtv0_G68psQhfWB-ZyVH1lndLli2LSmfSxxszNufoI","E6UpCouA9mZA03hMFJLrhA0SvwR4HVNqf2wrZM-ydTSI"],"bt":"3","b":["BGKVzj4ve0VSd8z_AmvhLg4lqcC_9WYX90k03q-R_Ydo","BuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw","Bgoq68HCmYNUDgOz4Skvlu306o_NY-NrYuKAVhk3Zh9c"],"c":[],"a":[]}}-HABEozYHef4je02EkMOA1IKM65WkIdSjfrL7XWDk_JzJL9o-AABAArQYXZsfglDLnZrGGYUyhNzriWJTSuKjqRrcrDik3zch94IQ9tjQwz0K0iikVCENApxSSo9tBQT7pz9d9G1O0DQ-LAZ5AABAA-a-AABAAFjjD99-xy7J0LGmCkSE_zYceED5uPF4q7l8J23nNQ64U-oWWulHI5dh3cFDWT4eICuEQCALdh8BO5ps-qx0qBA"#;
-//                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   -AABAASxWnVdpVjgBa03gx8GSGdFHQFKFp-1ICXST6lTzRVo7rW-gKzTj4iJzFxaFZ0fZlwvYp9LsVAaPwRvvCz4xTDQ                                               
-//                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           -AABAAFjjD99-xy7J0LGmCkSE_zYceED5uPF4q7l8J23nNQ64U-oWWulHI5dh3cFDWT4eICuEQCALdh8BO5ps-qx0qBA')                                                  
+    //                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   -AABAASxWnVdpVjgBa03gx8GSGdFHQFKFp-1ICXST6lTzRVo7rW-gKzTj4iJzFxaFZ0fZlwvYp9LsVAaPwRvvCz4xTDQ
+    //                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           -AABAAFjjD99-xy7J0LGmCkSE_zYceED5uPF4q7l8J23nNQ64U-oWWulHI5dh3cFDWT4eICuEQCALdh8BO5ps-qx0qBA')
     let parsed_trans_receipt = signed_message(exn_event.as_bytes()).unwrap().1;
     let msg = Message::try_from(parsed_trans_receipt);
-    assert!(matches!(
-        msg,
-        Ok(Message::Op(Op::Exchange(_)))
-    ));
+    assert!(matches!(msg, Ok(Message::Op(Op::Exchange(_)))));
     assert!(msg.is_ok());
 }

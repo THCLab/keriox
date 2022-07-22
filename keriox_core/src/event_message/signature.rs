@@ -7,15 +7,15 @@ use crate::{
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum Signature {
-    Transferable(EventSeal, Vec<AttachedSignaturePrefix>),
+    Transferable(Option<EventSeal>, Vec<AttachedSignaturePrefix>),
     NonTransferable(BasicPrefix, SelfSigningPrefix),
 }
 
 impl Signature {
-    pub fn get_signer(&self) -> IdentifierPrefix {
+    pub fn get_signer(&self) -> Option<IdentifierPrefix> {
         match self {
-            Signature::Transferable(seal, _) => seal.prefix.clone(),
-            Signature::NonTransferable(id, _) => IdentifierPrefix::Basic(id.clone()),
+            Signature::Transferable(seal, _) => seal.as_ref().map(|s| s.prefix.clone()),
+            Signature::NonTransferable(id, _) => Some(IdentifierPrefix::Basic(id.clone())),
         }
     }
 }

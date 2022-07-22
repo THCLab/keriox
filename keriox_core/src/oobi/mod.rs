@@ -7,6 +7,7 @@ use url::Url;
 use self::error::OobiError;
 use crate::{
     database::DbError,
+    error::Error,
     event_message::signed_event_message::{Message, Op},
     event_parsing::message::signed_event_stream,
     prefix::IdentifierPrefix,
@@ -90,7 +91,7 @@ impl OobiManager {
         match rpy.reply.get_route() {
             // check if signature was made by oobi creator
             ReplyRoute::LocScheme(lc) => {
-                if rpy.signature.get_signer() != lc.get_eid() {
+                if rpy.signature.get_signer().ok_or(Error::MissingSigner)? != lc.get_eid() {
                     return Err(OobiError::SignerMismatch);
                 };
 
@@ -100,7 +101,7 @@ impl OobiManager {
                 Ok(())
             }
             ReplyRoute::EndRoleAdd(er) | ReplyRoute::EndRoleCut(er) => {
-                if rpy.signature.get_signer() != er.cid {
+                if rpy.signature.get_signer().ok_or(Error::MissingSigner)? != er.cid {
                     return Err(OobiError::SignerMismatch);
                 };
                 if let Some(old_rpy) = self

@@ -1,6 +1,8 @@
 use serde::{ser::SerializeStruct, Deserialize, Serialize};
 
-use super::{key_event_message::KeyEvent, serializer::to_string, EventMessage, exchange::SignedExchange};
+use super::{
+    exchange::SignedExchange, key_event_message::KeyEvent, serializer::to_string, EventMessage,
+};
 #[cfg(feature = "query")]
 use crate::query::{query_event::SignedQuery, reply_event::SignedReply};
 use crate::{
