@@ -38,7 +38,6 @@ impl WatcherListener {
                 .app_data(state.clone())
                 .service(http_handlers::get_eid_oobi)
                 .service(http_handlers::get_cid_oobi)
-                .service(http_handlers::get_kel)
                 .service(http_handlers::resolve_oobi)
                 .service(http_handlers::process_notice)
                 .service(http_handlers::process_op)
@@ -75,13 +74,10 @@ pub mod http_handlers {
     use derive_more::{Display, Error, From};
     use itertools::Itertools;
     use keri::{
-        derivation::{self_addressing::SelfAddressing, self_signing::SelfSigning},
         error::Error,
-        event_message::signed_event_message::{Message, Op},
         event_parsing::SignedEventData,
         oobi::{error::OobiError, EndRole, LocationScheme, Role},
-        prefix::{AttachedSignaturePrefix, IdentifierPrefix, Prefix},
-        query::query_event::{QueryArgs, QueryEvent, QueryRoute, SignedQuery},
+        prefix::{IdentifierPrefix, Prefix},
     };
     use reqwest::StatusCode;
     use serde::Deserialize;
@@ -115,76 +111,16 @@ pub mod http_handlers {
         );
         let resp = data
             .0
-            .parse_and_process_ops(&body)?
+            .parse_and_process_ops(&body)
+            .await?
             .iter()
             .map(|msg| msg.to_cesr())
             .flatten_ok()
             .try_collect()?;
 
-        // TODO: check if query cid in oobi_manager - end_role watcher
-
         Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())
             .body(String::from_utf8(resp).unwrap()))
-    }
-
-    // TODO: merge with above method
-    #[get("/query/{id}")]
-    async fn get_kel(
-        eid: web::Path<IdentifierPrefix>,
-        data: web::Data<Watcher>,
-    ) -> Result<impl Responder, ApiError> {
-        // generate query message here
-        let id = eid.clone();
-        let qr = QueryArgs {
-            s: None,
-            i: id.clone(),
-            src: None,
-        };
-        let qry_message = QueryEvent::new_query(
-            QueryRoute::Log {
-                args: qr,
-                reply_route: String::from(""),
-            },
-            keri::event::SerializationFormats::JSON,
-            &SelfAddressing::Blake3_256,
-        )?;
-        let signature = data.0.signer.sign(qry_message.serialize()?)?;
-        let signatures = vec![AttachedSignaturePrefix::new(
-            SelfSigning::Ed25519Sha512,
-            signature,
-            0,
-        )];
-        let signed_qry = SignedQuery::new(
-            qry_message,
-            keri::prefix::IdentifierPrefix::Basic(data.0.prefix.clone()),
-            signatures,
-        );
-
-        // Get witnesses, and TODO choose one randomly.
-        let witnesses = data
-            .0
-            .get_state_for_prefix(&id)?
-            .ok_or_else(|| ApiError::NoStateForPrefix { prefix: id })?
-            .witness_config
-            .witnesses;
-        let witness_id = IdentifierPrefix::Basic(witnesses[0].clone());
-
-        // get witness address and send there query
-        let qry_str = Message::Op(Op::Query(signed_qry)).to_cesr()?;
-        println!(
-            "\nSending query to {}: \n{}",
-            witness_id.to_str(),
-            String::from_utf8_lossy(&qry_str)
-        );
-        let resp = data
-            .send_to(witness_id.clone(), keri::oobi::Scheme::Http, qry_str)
-            .await?
-            .ok_or_else(|| ApiError::NoResponse { witness_id })?;
-
-        Ok(HttpResponse::Ok()
-            .content_type(ContentType::plaintext())
-            .body(resp))
     }
 
     #[post("/resolve")]
@@ -283,12 +219,6 @@ pub mod http_handlers {
         #[display(fmt = "watcher error")]
         #[from]
         WatcherError(WatcherError),
-
-        #[display(fmt = "no state for prefix {}", prefix)]
-        NoStateForPrefix { prefix: IdentifierPrefix },
-
-        #[display(fmt = "no response from witness {}", witness_id)]
-        NoResponse { witness_id: IdentifierPrefix },
     }
 
     impl ResponseError for ApiError {
@@ -319,10 +249,6 @@ pub mod http_handlers {
 
                     _ => StatusCode::INTERNAL_SERVER_ERROR,
                 },
-
-                ApiError::NoStateForPrefix { .. } => StatusCode::BAD_GATEWAY,
-
-                ApiError::NoResponse { .. } => StatusCode::BAD_GATEWAY,
             }
         }
     }
