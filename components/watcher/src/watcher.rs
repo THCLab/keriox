@@ -18,7 +18,7 @@ use keri::{
         ReplyType,
     },
     signer::Signer,
-    state::IdentifierState,
+    state::IdentifierState, database::DbError,
 };
 use rand::prelude::SliceRandom;
 
@@ -223,7 +223,7 @@ impl WatcherData {
     }
 
     /// Query roles in oobi manager to check if controller with given ID is allowed to communicate with us.
-    fn check_role(&self, cid: &IdentifierPrefix) -> Result<bool, WatcherError> {
+    fn check_role(&self, cid: &IdentifierPrefix) -> Result<bool, DbError> {
         Ok(self
             .oobi_manager
             .get_end_role(cid, Role::Watcher)?
