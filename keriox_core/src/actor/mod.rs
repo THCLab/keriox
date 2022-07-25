@@ -21,6 +21,8 @@ use crate::{
     },
 };
 
+pub mod simple_controller;
+
 pub fn parse_event_stream(stream: &[u8]) -> Result<Vec<Message>, Error> {
     let (_rest, events) =
         signed_event_stream(stream).map_err(|e| Error::DeserializeError(e.to_string()))?;
