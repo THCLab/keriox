@@ -11,9 +11,7 @@ use crate::{
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum Signature {
-    /// Created by transferable identifier
     Transferable(SignerData, Vec<AttachedSignaturePrefix>),
-    /// Created by nontransferable identifier
     NonTransferable(BasicPrefix, SelfSigningPrefix),
 }
 
@@ -21,7 +19,6 @@ pub enum Signature {
 pub enum SignerData {
     EventSeal(EventSeal),
     LastEstablishment(IdentifierPrefix),
-    // Signer id should be taken from event
     JustSignatures,
 }
 

@@ -292,13 +292,13 @@ impl From<SignedQuery> for SignedEventData {
 
 impl From<SignedExchange> for SignedEventData {
     fn from(ev: SignedExchange) -> Self {
-        let mut attachments = signature::signatures_into_attachments(&ev.signature);
+        let mut signature_attachment = signature::signatures_into_attachments(&ev.signature);
         let data_attachment =
             Attachment::PathedMaterialQuadruplet(ev.data_signature.0, ev.data_signature.1);
-        attachments.push(data_attachment);
+        signature_attachment.push(data_attachment);
         SignedEventData {
             deserialized_event: EventType::Exn(ev.exchange_message),
-            attachments,
+            attachments: signature_attachment,
         }
     }
 }
@@ -528,27 +528,28 @@ fn signed_receipt(
 }
 
 pub fn signed_exchange(exn: ExchangeMessage, attachments: Vec<Attachment>) -> Result<Op, Error> {
+    // TODO shouldn't depend on order
     let mut atts = attachments.into_iter();
-    let att1 = atts
+    let att1: Vec<Signature> = atts
         .next()
-        .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?;
+        .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?
+        .try_into()?;
     let att2 = atts
         .next()
         .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?;
 
-    let (path, data_sigs, signatures): (_, _, Vec<Signature>) = match (att1, att2) {
-        (Attachment::PathedMaterialQuadruplet(path, sigs), anything)
-        | (anything, Attachment::PathedMaterialQuadruplet(path, sigs)) => {
-            (path, sigs, anything.try_into()?)
-        }
-        _ => return Err(Error::SemanticError("Wrong attachment".into())),
+    let signed_exchange = match (att1.clone(), att2.clone()) {
+        (
+            sigs,
+            Attachment::PathedMaterialQuadruplet(material_path, sig),
+        ) => SignedExchange {
+            exchange_message: exn,
+            signature: att1,
+            data_signature: (material_path, sig),
+        },
+        _ => todo!(),
     };
-
-    Ok(Op::Exchange(SignedExchange {
-        exchange_message: exn,
-        signature: signatures,
-        data_signature: (path, data_sigs),
-    }))
+    Ok(Op::Exchange(signed_exchange))
 }
 
 #[test]
