@@ -242,6 +242,7 @@ impl Witness {
                     &self.event_storage,
                 )?;
             }
+            Op::Exchange(_) => todo!(),
         }
 
         Ok(responses)

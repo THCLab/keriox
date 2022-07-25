@@ -14,7 +14,7 @@ use crate::{
     },
     event_message::{
         key_event_message::KeyEvent,
-        signature::Signature,
+        signature::{Signature, SignerData},
         signed_event_message::{
             SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
         },
@@ -203,8 +203,15 @@ impl EventValidator {
 
     pub fn verify(&self, data: &[u8], sig: &Signature) -> Result<(), Error> {
         match sig {
-            Signature::Transferable(seal, sigs) => {
-                let seal = seal.as_ref().ok_or(Error::MissingSigner)?;
+            Signature::Transferable(signer_data, sigs) => {
+                let seal = match signer_data {
+                    SignerData::EventSeal(seal) => Ok(seal.clone()),
+                    SignerData::LastEstablishment(id) => self
+                        .event_storage
+                        .get_last_establishment_event_seal(id)?
+                        .ok_or(Error::MissingSigner),
+                    SignerData::JustSignatures => Err(Error::MissingSigner),
+                }?;
                 let kp = self.event_storage.get_keys_at_event(
                     &seal.prefix,
                     seal.sn,

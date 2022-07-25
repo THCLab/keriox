@@ -223,21 +223,9 @@ pub fn attachment(s: &[u8]) -> nom::IResult<&[u8], Attachment> {
                 Ok((rest, total)) => {
                     let (extra, mp) = material_path(total)?;
                     let (_extra, attachment) = attachment(extra)?;
-                    let sigs = match attachment {
-                        // TODO allow more than one signature
-                        Attachment::AttachedSignatures(sigs) => Signature::Transferable(None, sigs),
-                        Attachment::ReceiptCouplets(sigs) => sigs
-                            .into_iter()
-                            .map(|(bp, sp)| Signature::NonTransferable(bp, sp))
-                            .next()
-                            .unwrap(),
-                        Attachment::SealSignaturesGroups(sigs) => sigs
-                            .into_iter()
-                            .map(|(es, sigs)| Signature::Transferable(Some(es), sigs))
-                            .next()
-                            .unwrap(),
-                        _ => todo!(),
-                    };
+                    // TODO allow more than one signature
+                    let sigs = Signature::try_from(attachment).unwrap();
+
                     Ok((rest, Attachment::PathedMaterialQuadruplet(mp, sigs)))
                 }
                 Err(e) => Err(e),

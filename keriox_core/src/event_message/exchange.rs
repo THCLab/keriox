@@ -1,15 +1,20 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{error::Error, event_parsing::Attachment, prefix::IdentifierPrefix};
+use crate::{error::Error, event_parsing::path::MaterialPath, prefix::IdentifierPrefix};
 
-use super::{key_event_message::KeyEvent, EventMessage, EventTypeTag, SaidEvent, Typeable};
+use super::{
+    key_event_message::KeyEvent, signature::Signature, EventMessage, EventTypeTag, SaidEvent,
+    Typeable,
+};
 
 pub type ExchangeMessage = EventMessage<SaidEvent<Exchange>>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SignedExchange {
     pub exchange_message: ExchangeMessage,
-    pub attachment: Attachment,
+    pub signature: Signature,
+    // signature of event anchored in exn message in `a` field
+    pub data_signature: (MaterialPath, Signature),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]

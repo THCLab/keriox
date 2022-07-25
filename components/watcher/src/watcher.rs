@@ -179,6 +179,7 @@ impl WatcherData {
                 self.process_reply(reply)?;
                 Ok(None)
             }
+            Op::Exchange(_) => todo!(),
         }
     }
 

@@ -41,7 +41,7 @@ impl MaterialPath {
         let ls = (3 - ts) % 3;
         let base = ["A".repeat(ws), self.base.clone()].join("");
         let decoded_base = base64::decode_config(&base, URL_SAFE).unwrap();
-        let code = match ls {
+        let code = match self.lead_bytes {
             0 => PayloadType::A4,
             1 => PayloadType::A5,
             2 => PayloadType::A6,

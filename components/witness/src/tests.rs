@@ -436,7 +436,7 @@ pub fn test_key_state_notice() -> Result<(), Error> {
     alice_processor.process_op_reply(&signed_rpy)?;
     let ksn_db = alice_storage.get_last_ksn_reply(
         &signed_rpy.reply.get_prefix(),
-        &signed_rpy.signature.get_signer(),
+        &signed_rpy.signature.get_signer().unwrap(),
     );
     assert!(matches!(ksn_db, None));
     alice_processor.process_notice(&Notice::Event(bob_icp))?;
@@ -455,7 +455,7 @@ pub fn test_key_state_notice() -> Result<(), Error> {
     alice_processor.process_op_reply(&new_reply)?;
     let ksn_db = alice_storage.get_last_ksn_reply(
         &signed_rpy.reply.get_prefix(),
-        &signed_rpy.signature.get_signer(),
+        &signed_rpy.signature.get_signer().unwrap(),
     );
     assert!(matches!(ksn_db, Some(_)));
 
@@ -472,7 +472,7 @@ pub fn test_key_state_notice() -> Result<(), Error> {
     // Reply was out of order so saved reply shouldn't be updated
     let ksn_db = alice_storage.get_last_ksn_reply(
         &signed_rpy.reply.get_prefix(),
-        &signed_rpy.signature.get_signer(),
+        &signed_rpy.signature.get_signer().unwrap(),
     );
     assert!(matches!(ksn_db, Some(_)));
     let ksn_from_db_digest = ksn_db.unwrap().reply.get_digest();
@@ -487,7 +487,7 @@ pub fn test_key_state_notice() -> Result<(), Error> {
     // Reply should be updated
     let ksn_db = alice_storage.get_last_ksn_reply(
         &signed_rpy.reply.get_prefix(),
-        &signed_rpy.signature.get_signer(),
+        &signed_rpy.signature.get_signer().unwrap(),
     );
     assert!(matches!(ksn_db, Some(_)));
     let ksn_from_db_digest = ksn_db.unwrap().reply.get_digest();
