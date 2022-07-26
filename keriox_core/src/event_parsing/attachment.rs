@@ -223,8 +223,7 @@ pub fn attachment(s: &[u8]) -> nom::IResult<&[u8], Attachment> {
                 Ok((rest, total)) => {
                     let (extra, mp) = material_path(total)?;
                     let (_extra, attachment) = attachment(extra)?;
-                    // TODO allow more than one signature
-                    let sigs = Signature::try_from(attachment).unwrap();
+                    let sigs = Vec::<Signature>::try_from(attachment).unwrap();
 
                     Ok((rest, Attachment::PathedMaterialQuadruplet(mp, sigs)))
                 }

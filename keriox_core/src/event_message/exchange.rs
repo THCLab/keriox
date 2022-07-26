@@ -12,9 +12,9 @@ pub type ExchangeMessage = EventMessage<SaidEvent<Exchange>>;
 #[derive(Debug, Clone, PartialEq)]
 pub struct SignedExchange {
     pub exchange_message: ExchangeMessage,
-    pub signature: Signature,
+    pub signature: Vec<Signature>,
     // signature of event anchored in exn message in `a` field
-    pub data_signature: (MaterialPath, Signature),
+    pub data_signature: (MaterialPath, Vec<Signature>),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]

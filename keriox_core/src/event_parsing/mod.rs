@@ -20,7 +20,7 @@ use crate::{
     event_message::{
         exchange::{ExchangeMessage, SignedExchange},
         key_event_message::KeyEvent,
-        signature::Signature,
+        signature::{self, Signature},
         signed_event_message::{
             Message, Notice, Op, SignedEventMessage, SignedNontransferableReceipt,
             SignedTransferableReceipt,
@@ -49,7 +49,7 @@ pub enum Attachment {
     FirstSeenReply(Vec<(u64, DateTime<FixedOffset>)>),
     // Group codes
     SealSignaturesGroups(Vec<(EventSeal, Vec<AttachedSignaturePrefix>)>),
-    PathedMaterialQuadruplet(MaterialPath, Signature),
+    PathedMaterialQuadruplet(MaterialPath, Vec<Signature>),
     // List of signatures made using keys from last establishment event od identifier of prefix
     LastEstSignaturesGroups(Vec<(IdentifierPrefix, Vec<AttachedSignaturePrefix>)>),
     // Frame codes
@@ -136,10 +136,13 @@ impl Attachment {
                 (PayloadType::ME, couplets.len(), packed_couplets)
             }
             Attachment::PathedMaterialQuadruplet(path, signatures) => {
-                let attachment: Attachment = signatures.into();
-                let packed = [path.to_cesr(), attachment.to_cesr()].join("");
+                let attachments = signature::signatures_into_attachments(&signatures)
+                    .iter()
+                    .map(|s| s.to_cesr())
+                    .fold(String::new(), |a, b| a + &b)
+                    + &path.to_cesr();
                 // TODO set attachments count
-                (PayloadType::ML, 1, packed)
+                (PayloadType::ML, 1, attachments)
             }
         };
         [
@@ -290,12 +293,13 @@ impl From<SignedQuery> for SignedEventData {
 
 impl From<SignedExchange> for SignedEventData {
     fn from(ev: SignedExchange) -> Self {
-        let signature_attachment = (&ev.signature).into();
+        let mut attachments = signature::signatures_into_attachments(&ev.signature);
         let data_attachment =
             Attachment::PathedMaterialQuadruplet(ev.data_signature.0, ev.data_signature.1);
+        attachments.push(data_attachment);
         SignedEventData {
             deserialized_event: EventType::Exn(ev.exchange_message),
-            attachments: vec![signature_attachment, data_attachment],
+            attachments,
         }
     }
 }
@@ -527,7 +531,7 @@ fn signed_receipt(
 pub fn signed_exchange(exn: ExchangeMessage, attachments: Vec<Attachment>) -> Result<Op, Error> {
     // TODO shouldn't depend on order
     let mut atts = attachments.into_iter();
-    let att1: Signature = atts
+    let att1: Vec<Signature> = atts
         .next()
         .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?
         .try_into()?;
@@ -535,11 +539,8 @@ pub fn signed_exchange(exn: ExchangeMessage, attachments: Vec<Attachment>) -> Re
         .next()
         .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?;
 
-    let signed_exchange = match (att1.clone(), att2.clone()) {
-        (
-            Signature::Transferable(_, _),
-            Attachment::PathedMaterialQuadruplet(material_path, sig),
-        ) => SignedExchange {
+    let signed_exchange = match att2.clone() {
+        Attachment::PathedMaterialQuadruplet(material_path, sig) => SignedExchange {
             exchange_message: exn,
             signature: att1,
             data_signature: (material_path, sig),
