@@ -11,7 +11,9 @@ use crate::{
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum Signature {
+    /// Created by transferable identifier
     Transferable(SignerData, Vec<AttachedSignaturePrefix>),
+    /// Created by nontransferable identifier
     NonTransferable(BasicPrefix, SelfSigningPrefix),
 }
 

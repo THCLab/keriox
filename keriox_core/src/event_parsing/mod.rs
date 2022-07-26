@@ -292,13 +292,13 @@ impl From<SignedQuery> for SignedEventData {
 
 impl From<SignedExchange> for SignedEventData {
     fn from(ev: SignedExchange) -> Self {
-        let mut signature_attachment = signature::signatures_into_attachments(&ev.signature);
+        let mut attachments = signature::signatures_into_attachments(&ev.signature);
         let data_attachment =
             Attachment::PathedMaterialQuadruplet(ev.data_signature.0, ev.data_signature.1);
-        signature_attachment.push(data_attachment);
+        attachments.push(data_attachment);
         SignedEventData {
             deserialized_event: EventType::Exn(ev.exchange_message),
-            attachments: signature_attachment,
+            attachments,
         }
     }
 }
