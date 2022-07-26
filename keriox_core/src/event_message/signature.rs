@@ -21,6 +21,7 @@ pub enum Signature {
 pub enum SignerData {
     EventSeal(EventSeal),
     LastEstablishment(IdentifierPrefix),
+    // Signer id should be taken from event
     JustSignatures,
 }
 

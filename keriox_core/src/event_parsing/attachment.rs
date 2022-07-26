@@ -340,7 +340,7 @@ fn test_pathed_material() {
 }
 
 #[test]
-fn test_pathed_materialg() {
+fn test_path() {
     let attached_str = "6AABAAA-";
     let (_rest, attached_material) = material_path(attached_str.as_bytes()).unwrap();
     assert_eq!(
