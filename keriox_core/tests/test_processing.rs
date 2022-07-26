@@ -9,7 +9,7 @@ use keri::{
 };
 
 #[test]
-pub fn test_ksn_query() -> Result<(), Error> {
+pub fn test_ksn_query() -> Result<(), Box<dyn std::error::Error>> {
     use keri::event_message::signed_event_message::Message;
     use tempfile::Builder;
 

@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use keri::{
-    actor::simple_controller::SimpleController,
+    actor::{simple_controller::SimpleController, SignedQueryError},
     database::{escrow::EscrowDb, SledEventDatabase},
     derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
     error::Error,
@@ -14,7 +14,7 @@ use keri::{
     signer::{CryptoBox, KeyManager, Signer},
 };
 
-use crate::witness::Witness;
+use crate::witness::{Witness, WitnessError};
 
 #[test]
 fn test_not_fully_witnessed() -> Result<(), Error> {
@@ -210,7 +210,7 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
 }
 
 #[test]
-fn test_qry_rpy() -> Result<(), Error> {
+fn test_qry_rpy() -> Result<(), WitnessError> {
     use keri::{
         derivation::{self_addressing::SelfAddressing, self_signing::SelfSigning},
         event::SerializationFormats,
@@ -648,8 +648,12 @@ fn test_invalid_notice() {
         let result = witness.parse_and_process_ops(&mbx_msg);
 
         // should return no receipts because they had no signatures
-        // TODO: better error variant
-        assert!(matches!(result, Err(Error::SemanticError(_))));
+        assert!(matches!(
+            result,
+            Err(WitnessError::ProcessingQueryFailed(
+                SignedQueryError::InvalidSignature
+            ))
+        ));
     }
 }
 
@@ -664,6 +668,7 @@ fn create_mbx_msg(witness: &Witness, controller: &SimpleController<CryptoBox>) -
                     credential: 0,
                     receipt: 0,
                     replay: 0,
+                    reply: 0,
                     multisig: 0,
                     delegate: 0,
                 },

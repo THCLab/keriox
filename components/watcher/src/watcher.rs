@@ -6,7 +6,11 @@ use std::{
 use derive_more::{Display, Error, From};
 use futures::{StreamExt, TryStreamExt};
 use keri::{
-    actor::{parse_event_stream, parse_notice_stream, parse_op_stream, prelude::*},
+    actor::{
+        parse_event_stream, parse_notice_stream, parse_op_stream, prelude::*, QueryError,
+        SignedQueryError,
+    },
+    database::DbError,
     derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
     error::Error,
     event_message::signed_event_message::{Notice, Op},
@@ -18,7 +22,7 @@ use keri::{
         ReplyType,
     },
     signer::Signer,
-    state::IdentifierState, database::DbError,
+    state::IdentifierState,
 };
 use rand::prelude::SliceRandom;
 
@@ -141,7 +145,25 @@ impl WatcherData {
                     });
                 }
 
-                let response = process_signed_query(qry, &self.event_storage).unwrap();
+                let result = process_signed_query(qry.clone(), &self.event_storage);
+                let response = match result {
+                    Err(SignedQueryError::QueryError(QueryError::UnknownId { .. })) => {
+                        // forward query to witness
+                        let response = self.forward_query(&qry).await?;
+
+                        // add witness' response to our mailbox
+                        for msg in response {
+                            if let Message::Notice(Notice::NontransferableRct(rct)) = msg {
+                                // TODO: add new mailbox type (reply) (KeyEvent)
+                                self.event_storage.add_mailbox_receipt(rct)?;
+                            }
+                        }
+
+                        return Ok(None);
+                    }
+                    result => result?,
+                };
+
                 match response {
                     ReplyType::Ksn(ksn) => {
                         let rpy = ReplyEvent::new_reply(
@@ -174,52 +196,61 @@ impl WatcherData {
         }
     }
 
-    // TODO: use this
-    /// Check if query must be forwarded to witness instead and forward it.
-    /// Returns witness' response or none if no forwarding is needed.
-    async fn forward_query(&self, qry: &SignedQuery) -> Result<Option<Vec<Message>>, WatcherError> {
-        if let QueryRoute::Ksn { .. } | QueryRoute::Log { .. } = qry.query.event.content.data.route
-        {
-            // Create a new signed message based on the received one
-            let sigs = vec![AttachedSignaturePrefix::new(
-                SelfSigning::Ed25519Sha512,
-                self.signer.sign(qry.query.serialize()?)?,
-                0,
-            )];
-            let qry = SignedQuery::new(
-                qry.query.clone(),
-                IdentifierPrefix::Basic(self.prefix.clone()),
-                sigs,
-            );
+    /// Forward query to random registered witness and return its response.
+    async fn forward_query(&self, qry: &SignedQuery) -> Result<Vec<Message>, WatcherError> {
+        // Create a new signed message based on the received one
+        let sigs = vec![AttachedSignaturePrefix::new(
+            SelfSigning::Ed25519Sha512,
+            self.signer.sign(qry.query.serialize()?)?,
+            0,
+        )];
+        let qry = SignedQuery::new(
+            qry.query.clone(),
+            IdentifierPrefix::Basic(self.prefix.clone()),
+            sigs,
+        );
 
-            // Get witnesses and choose one randomly
-            let id = qry.query.get_prefix();
-            let wit_id = self
-                .get_state_for_prefix(&id)?
-                .and_then(|state| {
-                    state
-                        .witness_config
-                        .witnesses
-                        .choose(&mut rand::thread_rng())
-                        .cloned()
-                })
-                .ok_or_else(|| WatcherError::NoIdentState { prefix: id })?;
+        // Get witnesses and choose one randomly
+        let id = qry.query.get_prefix();
+        let wit_id = self
+            .get_state_for_prefix(&id)?
+            .and_then(|state| {
+                state
+                    .witness_config
+                    .witnesses
+                    .choose(&mut rand::thread_rng())
+                    .cloned()
+            })
+            .ok_or_else(|| WatcherError::NoIdentState { prefix: id })?;
 
-            // Send query to witness
-            let qry_str = Message::Op(Op::Query(qry)).to_cesr()?;
-            let resp = self
-                .send_to(
-                    IdentifierPrefix::Basic(wit_id),
-                    keri::oobi::Scheme::Http,
-                    qry_str,
-                )
-                .await?
-                .unwrap();
+        // Send query to witness
+        let qry_str = Message::Op(Op::Query(qry)).to_cesr()?;
+        let resp = self
+            .send_to(
+                IdentifierPrefix::Basic(wit_id),
+                keri::oobi::Scheme::Http,
+                qry_str,
+            )
+            .await?
+            .unwrap();
 
-            return Ok(Some(parse_event_stream(resp.as_bytes())?));
-        };
+        let events = parse_event_stream(resp.as_bytes())?;
+        for event in events.iter().cloned() {
+            self.process_message(event).await?;
+        }
 
-        Ok(None)
+        Ok(events)
+    }
+
+    async fn process_message(&self, event: Message) -> Result<(), WatcherError> {
+        Ok(match event {
+            Message::Notice(n) => {
+                self.process_notice(n)?;
+            }
+            Message::Op(op) => {
+                self.process_op(op).await?;
+            }
+        })
     }
 
     /// Query roles in oobi manager to check if controller with given ID is allowed to communicate with us.
@@ -359,6 +390,10 @@ pub enum WatcherError {
     #[display(fmt = "OOBI error")]
     #[from]
     OobiError(keri::oobi::error::OobiError),
+
+    #[display(fmt = "processing query failed")]
+    #[from]
+    QueryError(keri::actor::SignedQueryError),
 
     #[display(fmt = "location not found for {id:?}")]
     NoLocation { id: IdentifierPrefix },

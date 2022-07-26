@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+use super::Timestamped;
 use crate::{
     derivation::self_addressing::SelfAddressing,
     error::Error,
@@ -7,8 +8,6 @@ use crate::{
     event_message::{EventTypeTag, SaidEvent, Typeable},
     prefix::{AttachedSignaturePrefix, IdentifierPrefix},
 };
-
-use super::Timestamped;
 
 // TODO: make enum with different query args
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -61,6 +60,8 @@ pub struct QueryTopics {
     pub receipt: u64,
     #[serde(rename = "/replay")]
     pub replay: u64,
+    #[serde(rename = "/reply")]
+    pub reply: u64,
     #[serde(rename = "/multisig")]
     pub multisig: u64,
     #[serde(rename = "/credential")]
@@ -164,6 +165,7 @@ fn test_query_mbx_deserialize() {
                     topics: QueryTopics {
                         receipt: 0,
                         replay: 0,
+                        reply: 0,
                         multisig: 0,
                         credential: 0,
                         delegate: 0
