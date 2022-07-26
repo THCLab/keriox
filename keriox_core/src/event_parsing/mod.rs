@@ -136,13 +136,11 @@ impl Attachment {
                 (PayloadType::ME, couplets.len(), packed_couplets)
             }
             Attachment::PathedMaterialQuadruplet(path, signatures) => {
-                let attachments = signature::signatures_into_attachments(&signatures)
+                let attachments = path.to_cesr() + &signature::signatures_into_attachments(&signatures)
                     .iter()
                     .map(|s| s.to_cesr())
-                    .fold(String::new(), |a, b| a + &b)
-                    + &path.to_cesr();
-                // TODO set attachments count
-                (PayloadType::ML, 1, attachments)
+                    .fold(String::new(), |a, b| a + &b);
+                (PayloadType::ML, attachments.len()/4, attachments)
             }
         };
         [
@@ -650,6 +648,7 @@ fn test_deserialize_signed_exchange() -> Result<(), Error> {
     let parsed_trans_receipt = signed_message(exn_event.as_bytes()).unwrap().1;
     let msg = Message::try_from(parsed_trans_receipt)?;
     assert!(matches!(msg, Message::Op(Op::Exchange(_))));
+    assert_eq!(String::from_utf8(msg.to_cesr()?).unwrap(), exn_event);
 
     Ok(())
 }
