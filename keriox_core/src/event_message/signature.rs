@@ -116,12 +116,10 @@ impl TryFrom<Attachment> for Vec<Signature> {
                 .into_iter()
                 .map(|(id, sigs)| Signature::Transferable(SignerData::LastEstablishment(id), sigs))
                 .collect()),
-            Attachment::SealSignaturesGroups(sigs) => {
-                Ok(sigs
-                    .into_iter()
-                    .map(|(seal, sig)| Signature::Transferable(SignerData::EventSeal(seal), sig))
-                    .collect())
-            }
+            Attachment::SealSignaturesGroups(sigs) => Ok(sigs
+                .into_iter()
+                .map(|(seal, sig)| Signature::Transferable(SignerData::EventSeal(seal), sig))
+                .collect()),
             _ => Err(Error::SemanticError("Improper attachment type".into())),
         }
     }

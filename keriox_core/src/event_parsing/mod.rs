@@ -136,11 +136,12 @@ impl Attachment {
                 (PayloadType::ME, couplets.len(), packed_couplets)
             }
             Attachment::PathedMaterialQuadruplet(path, signatures) => {
-                let attachments = path.to_cesr() + &signature::signatures_into_attachments(&signatures)
-                    .iter()
-                    .map(|s| s.to_cesr())
-                    .fold(String::new(), |a, b| a + &b);
-                (PayloadType::ML, attachments.len()/4, attachments)
+                let attachments = path.to_cesr()
+                    + &signature::signatures_into_attachments(&signatures)
+                        .iter()
+                        .map(|s| s.to_cesr())
+                        .fold(String::new(), |a, b| a + &b);
+                (PayloadType::ML, attachments.len() / 4, attachments)
             }
         };
         [
@@ -527,25 +528,27 @@ fn signed_receipt(
 }
 
 pub fn signed_exchange(exn: ExchangeMessage, attachments: Vec<Attachment>) -> Result<Op, Error> {
-    // TODO shouldn't depend on order
     let mut atts = attachments.into_iter();
-    let att1: Vec<Signature> = atts
+    let att1 = atts
         .next()
-        .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?
-        .try_into()?;
+        .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?;
     let att2 = atts
         .next()
         .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?;
 
-    let signed_exchange = match att2.clone() {
-        Attachment::PathedMaterialQuadruplet(material_path, sig) => SignedExchange {
-            exchange_message: exn,
-            signature: att1,
-            data_signature: (material_path, sig),
-        },
-        _ => todo!(),
+    let (path, data_sigs, signatures): (_, _, Vec<Signature>) = match (att1, att2) {
+        (Attachment::PathedMaterialQuadruplet(path, sigs), anything)
+        | (anything, Attachment::PathedMaterialQuadruplet(path, sigs)) => {
+            (path, sigs, anything.try_into()?)
+        }
+        _ => return Err(Error::SemanticError("Wrong attachment".into())),
     };
-    Ok(Op::Exchange(signed_exchange))
+
+    Ok(Op::Exchange(SignedExchange {
+        exchange_message: exn,
+        signature: signatures,
+        data_signature: (path, data_sigs),
+    }))
 }
 
 #[test]

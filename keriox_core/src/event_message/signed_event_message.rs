@@ -101,7 +101,8 @@ impl Op {
             Op::Reply(reply) => reply.reply.get_prefix(),
             #[cfg(feature = "query")]
             Op::Query(qry) => qry.query.get_prefix(),
-            Op::Exchange(exn) => todo!(),
+            // returns exchange message receipient id
+            Op::Exchange(exn) => exn.exchange_message.event.content.get_prefix(),
         }
     }
 }

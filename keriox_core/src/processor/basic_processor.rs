@@ -37,7 +37,6 @@ impl Processor for BasicProcessor {
 
 impl BasicProcessor {
     pub fn new(db: Arc<SledEventDatabase>, notification_bus: Option<NotificationBus>) -> Self {
-        // TODO should we set some default publisher?
         let processor = EventProcessor::new(
             db.clone(),
             notification_bus.unwrap_or(NotificationBus::new()),

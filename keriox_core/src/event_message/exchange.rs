@@ -29,6 +29,17 @@ pub enum Exchange {
     },
 }
 
+impl Exchange {
+    pub fn get_prefix(&self) -> IdentifierPrefix {
+        match self {
+            Exchange::Fwd {
+                args,
+                to_forward: _,
+            } => args.recipient_id.clone(),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct FwdArgs {
     #[serde(rename = "pre")]

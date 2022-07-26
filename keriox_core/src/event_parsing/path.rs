@@ -37,8 +37,6 @@ impl MaterialPath {
         let ws = (4 - ts) % 4;
 
         // post conv lead size in bytes
-        // decide what starting code should be used
-        let ls = (3 - ts) % 3;
         let base = ["A".repeat(ws), self.base.clone()].join("");
         let decoded_base = base64::decode_config(&base, URL_SAFE).unwrap();
         let code = match self.lead_bytes {
