@@ -269,5 +269,5 @@ impl Witness {
 pub enum WitnessError {
     KeriError(keri::error::Error),
     DbError(keri::database::DbError),
-    ProcessingQueryFailed(keri::actor::SignedQueryError),
+    QueryFailed(keri::actor::SignedQueryError),
 }

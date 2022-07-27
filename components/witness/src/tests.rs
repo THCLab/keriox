@@ -630,6 +630,7 @@ fn test_invalid_notice() {
             BasicPrefix::new(Basic::Ed25519, PublicKey::new(vec![0; 32])),
         );
         let result = witness.process_notice(Notice::Event(invalid_event));
+        // TODO: use better error variant
         assert!(matches!(result, Err(Error::SemanticError(_))));
 
         // remove signatures
@@ -647,12 +648,12 @@ fn test_invalid_notice() {
         let mbx_msg = Message::Op(mbx_msg).to_cesr().unwrap();
         let result = witness.parse_and_process_ops(&mbx_msg);
 
-        // should return no receipts because they had no signatures
+        // should not be able to query because the inception events didn't go through
         assert!(matches!(
             result,
-            Err(WitnessError::ProcessingQueryFailed(
-                SignedQueryError::InvalidSignature
-            ))
+            Err(WitnessError::QueryFailed(
+                SignedQueryError::UnknownSigner { ref id }
+            )) if id == controller.prefix()
         ));
     }
 }
@@ -685,11 +686,7 @@ fn create_mbx_msg(witness: &Witness, controller: &SimpleController<CryptoBox>) -
         .unwrap()
         .sign(&qry_msg.serialize().unwrap())
         .unwrap();
-    let signatures = vec![AttachedSignaturePrefix::new(
-        SelfSigning::Ed25519Sha512,
-        signature,
-        0,
-    )];
+    let signatures = vec![AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, signature, 0)];
     let mbx_msg = Op::Query(SignedQuery::new(
         qry_msg,
         controller.prefix().clone().clone(),

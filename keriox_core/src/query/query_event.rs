@@ -154,7 +154,7 @@ fn test_query_deserialize() {
 
 #[test]
 fn test_query_mbx_deserialize() {
-    let input_query = r#"{"v":"KERI10JSON000183_","t":"qry","d":"E8iit8ptMCToTUuHOxChftPNjFYYTMmwQzKQTmad6pA4","dt":"2022-03-21T11:13:25.001836+00:00","r":"mbx","rr":"","q":{"pre":"E6OK2wFYp6x0Jx48xX0GCTwAzJUTWtYEvJSykVhtAnaM","topics":{"/receipt":0,"/replay":0,"/multisig":0,"/credential":0,"/delegate":0},"i":"E6OK2wFYp6x0Jx48xX0GCTwAzJUTWtYEvJSykVhtAnaM","src":"BGKVzj4ve0VSd8z_AmvhLg4lqcC_9WYX90k03q-R_Ydo"}}"#;
+    let input_query = r#"{"v":"KERI10JSON000183_","t":"qry","d":"E8iit8ptMCToTUuHOxChftPNjFYYTMmwQzKQTmad6pA4","dt":"2022-03-21T11:13:25.001836+00:00","r":"mbx","rr":"","q":{"pre":"E6OK2wFYp6x0Jx48xX0GCTwAzJUTWtYEvJSykVhtAnaM","topics":{"/receipt":0,"/replay":0,"/reply":0,"/multisig":0,"/credential":0,"/delegate":0},"i":"E6OK2wFYp6x0Jx48xX0GCTwAzJUTWtYEvJSykVhtAnaM","src":"BGKVzj4ve0VSd8z_AmvhLg4lqcC_9WYX90k03q-R_Ydo"}}"#;
     let qr: QueryEvent = serde_json::from_str(input_query).unwrap();
 
     assert!(matches!(

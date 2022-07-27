@@ -192,7 +192,7 @@ pub mod http_handlers {
                     _ => StatusCode::INTERNAL_SERVER_ERROR,
                 },
                 ApiError::WitnessError(err) => match err {
-                    WitnessError::ProcessingQueryFailed(err) => match err {
+                    WitnessError::QueryFailed(err) => match err {
                         SignedQueryError::UnknownSigner { .. } => StatusCode::UNAUTHORIZED,
                         SignedQueryError::QueryError(err) => match err {
                             QueryError::UnknownId { .. } => StatusCode::NOT_FOUND,
