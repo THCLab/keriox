@@ -185,15 +185,20 @@ impl WatcherData {
                 }
             }
             Op::Reply(reply) => {
-                process_reply(
-                    reply,
-                    &self.oobi_manager,
-                    &self.processor,
-                    &self.event_storage,
-                )?;
+                self.process_reply(reply)?;
                 Ok(None)
             }
         }
+    }
+
+    fn process_reply(&self, reply: SignedReply) -> Result<(), Error> {
+        process_reply(
+            reply,
+            &self.oobi_manager,
+            &self.processor,
+            &self.event_storage,
+        )?;
+        Ok(())
     }
 
     /// Forward query to random registered witness and return its response.
@@ -234,23 +239,18 @@ impl WatcherData {
             .await?
             .unwrap();
 
-        let events = parse_event_stream(resp.as_bytes())?;
-        for event in events.iter().cloned() {
-            self.process_message(event).await?;
+        let msgs = parse_event_stream(resp.as_bytes())?;
+        for msg in msgs.iter().cloned() {
+            match msg {
+                Message::Notice(notice) => self.process_notice(notice)?,
+                Message::Op(op) => match op {
+                    Op::Reply(reply) => self.process_reply(reply)?,
+                    _ => {}
+                },
+            }
         }
 
-        Ok(events)
-    }
-
-    async fn process_message(&self, event: Message) -> Result<(), WatcherError> {
-        Ok(match event {
-            Message::Notice(n) => {
-                self.process_notice(n)?;
-            }
-            Message::Op(op) => {
-                self.process_op(op).await?;
-            }
-        })
+        Ok(msgs)
     }
 
     /// Query roles in oobi manager to check if controller with given ID is allowed to communicate with us.
