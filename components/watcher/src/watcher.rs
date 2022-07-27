@@ -17,7 +17,7 @@ use keri::{
     oobi::{error::OobiError, EndRole, LocationScheme, OobiManager, Role, Scheme},
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix},
     query::{
-        query_event::{QueryRoute, SignedQuery},
+        query_event::SignedQuery,
         reply_event::{ReplyEvent, ReplyRoute, SignedReply},
         ReplyType,
     },
@@ -149,16 +149,7 @@ impl WatcherData {
                 let response = match result {
                     Err(SignedQueryError::QueryError(QueryError::UnknownId { .. })) => {
                         // forward query to witness
-                        let response = self.forward_query(&qry).await?;
-
-                        // add witness' response to our mailbox
-                        for msg in response {
-                            if let Message::Notice(Notice::NontransferableRct(rct)) = msg {
-                                // TODO: add new mailbox type (reply) (KeyEvent)
-                                self.event_storage.add_mailbox_receipt(rct)?;
-                            }
-                        }
-
+                        self.forward_query(&qry).await?;
                         return Ok(None);
                     }
                     result => result?,
@@ -201,8 +192,8 @@ impl WatcherData {
         Ok(())
     }
 
-    /// Forward query to random registered witness and return its response.
-    async fn forward_query(&self, qry: &SignedQuery) -> Result<Vec<Message>, WatcherError> {
+    /// Forward query to random registered witness and save its response to mailbox.
+    async fn forward_query(&self, qry: &SignedQuery) -> Result<(), WatcherError> {
         // Create a new signed message based on the received one
         let sigs = vec![AttachedSignaturePrefix::new(
             SelfSigning::Ed25519Sha512,
@@ -240,17 +231,28 @@ impl WatcherData {
             .unwrap();
 
         let msgs = parse_event_stream(resp.as_bytes())?;
+
+        // Process response
         for msg in msgs.iter().cloned() {
             match msg {
-                Message::Notice(notice) => self.process_notice(notice)?,
+                Message::Notice(notice) => {
+                    self.process_notice(notice.clone())?;
+                    if let Notice::Event(event) = notice {
+                        self.event_storage.add_mailbox_reply(event)?;
+                    }
+                }
                 Message::Op(op) => match op {
-                    Op::Reply(reply) => self.process_reply(reply)?,
-                    _ => {}
+                    Op::Reply(reply) => {
+                        self.process_reply(reply)?;
+                    }
+                    _ => {
+                        // Ignore invalid messages
+                    }
                 },
             }
         }
 
-        Ok(msgs)
+        Ok(())
     }
 
     /// Query roles in oobi manager to check if controller with given ID is allowed to communicate with us.
