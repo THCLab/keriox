@@ -33,6 +33,10 @@ impl Processor for BasicProcessor {
         self.0.process_op_reply(reply)?;
         Ok(())
     }
+
+    fn process_op_exchange(&self, reply: &crate::event_message::exchange::SignedExchange) -> Result<(), Error> {
+        todo!()
+    }
 }
 
 impl BasicProcessor {

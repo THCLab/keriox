@@ -37,6 +37,10 @@ impl Processor for WitnessProcessor {
         self.processor.process_op_reply(reply)?;
         Ok(())
     }
+
+    fn process_op_exchange(&self, reply: &keri::event_message::exchange::SignedExchange) -> Result<(), Error> {
+        todo!()
+    }
 }
 
 impl WitnessProcessor {

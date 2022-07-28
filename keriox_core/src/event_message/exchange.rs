@@ -43,8 +43,8 @@ impl Exchange {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct FwdArgs {
     #[serde(rename = "pre")]
-    recipient_id: IdentifierPrefix,
-    topic: ForwardTopic,
+    pub recipient_id: IdentifierPrefix,
+    pub topic: ForwardTopic,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
