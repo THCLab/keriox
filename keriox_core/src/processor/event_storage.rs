@@ -15,7 +15,7 @@ use crate::{
 #[cfg(feature = "query")]
 use crate::{
     event::SerializationFormats,
-    event_message::signed_event_message::Notice,
+    event_message::signed_event_message::{Notice, SignedEventMessage},
     query::{
         key_state_notice::KeyStateNotice, query_event::QueryArgsMbx, reply_event::SignedReply,
     },
@@ -119,6 +119,14 @@ impl EventStorage {
     }
 
     #[cfg(feature = "query")]
+    pub fn add_mailbox_reply(&self, reply: SignedEventMessage) -> Result<(), Error> {
+        let id = reply.event_message.event.get_prefix();
+        self.db.add_mailbox_reply(reply, &id)?;
+
+        Ok(())
+    }
+
+    #[cfg(feature = "query")]
     pub fn get_mailbox_messages(&self, args: QueryArgsMbx) -> Result<Vec<Notice>, Error> {
         let id = args.pre.clone();
 
@@ -132,6 +140,16 @@ impl EventStorage {
                 .flatten()
                 .filter(|rec| rec.body.event.sn >= args.topics.receipt)
                 .map(|rec| Notice::NontransferableRct(rec)),
+        );
+
+        // query replies
+        messages.extend(
+            self.db
+                .get_mailbox_replies(&id)
+                .into_iter()
+                .flatten()
+                .filter(|rpy| rpy.event_message.event.get_sn() >= args.topics.reply)
+                .map(|rpy| Notice::Event(rpy)),
         );
 
         // TODO: query and return the rest of topics

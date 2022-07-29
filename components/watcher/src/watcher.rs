@@ -6,19 +6,23 @@ use std::{
 use derive_more::{Display, Error, From};
 use futures::{StreamExt, TryStreamExt};
 use keri::{
-    actor::{parse_event_stream, parse_notice_stream, parse_op_stream, prelude::*},
+    actor::{
+        parse_event_stream, parse_notice_stream, parse_op_stream, prelude::*, QueryError,
+        SignedQueryError,
+    },
+    database::DbError,
     derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
     error::Error,
     event_message::signed_event_message::{Notice, Op},
     oobi::{error::OobiError, EndRole, LocationScheme, OobiManager, Role, Scheme},
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix},
     query::{
-        query_event::{QueryRoute, SignedQuery},
+        query_event::SignedQuery,
         reply_event::{ReplyEvent, ReplyRoute, SignedReply},
         ReplyType,
     },
     signer::Signer,
-    state::IdentifierState, database::DbError,
+    state::IdentifierState,
 };
 use rand::prelude::SliceRandom;
 
@@ -141,7 +145,16 @@ impl WatcherData {
                     });
                 }
 
-                let response = process_signed_query(qry, &self.event_storage).unwrap();
+                let result = process_signed_query(qry.clone(), &self.event_storage);
+                let response = match result {
+                    Err(SignedQueryError::QueryError(QueryError::UnknownId { .. })) => {
+                        // forward query to witness
+                        self.forward_query(&qry).await?;
+                        return Ok(None);
+                    }
+                    result => result?,
+                };
+
                 match response {
                     ReplyType::Ksn(ksn) => {
                         let rpy = ReplyEvent::new_reply(
@@ -163,63 +176,83 @@ impl WatcherData {
                 }
             }
             Op::Reply(reply) => {
-                process_reply(
-                    reply,
-                    &self.oobi_manager,
-                    &self.processor,
-                    &self.event_storage,
-                )?;
+                self.process_reply(reply)?;
                 Ok(None)
             }
         }
     }
 
-    // TODO: use this
-    /// Check if query must be forwarded to witness instead and forward it.
-    /// Returns witness' response or none if no forwarding is needed.
-    async fn forward_query(&self, qry: &SignedQuery) -> Result<Option<Vec<Message>>, WatcherError> {
-        if let QueryRoute::Ksn { .. } | QueryRoute::Log { .. } = qry.query.event.content.data.route
-        {
-            // Create a new signed message based on the received one
-            let sigs = vec![AttachedSignaturePrefix::new(
-                SelfSigning::Ed25519Sha512,
-                self.signer.sign(qry.query.serialize()?)?,
-                0,
-            )];
-            let qry = SignedQuery::new(
-                qry.query.clone(),
-                IdentifierPrefix::Basic(self.prefix.clone()),
-                sigs,
-            );
+    fn process_reply(&self, reply: SignedReply) -> Result<(), Error> {
+        process_reply(
+            reply,
+            &self.oobi_manager,
+            &self.processor,
+            &self.event_storage,
+        )?;
+        Ok(())
+    }
 
-            // Get witnesses and choose one randomly
-            let id = qry.query.get_prefix();
-            let wit_id = self
-                .get_state_for_prefix(&id)?
-                .and_then(|state| {
-                    state
-                        .witness_config
-                        .witnesses
-                        .choose(&mut rand::thread_rng())
-                        .cloned()
-                })
-                .ok_or_else(|| WatcherError::NoIdentState { prefix: id })?;
+    /// Forward query to random registered witness and save its response to mailbox.
+    async fn forward_query(&self, qry: &SignedQuery) -> Result<(), WatcherError> {
+        // Create a new signed message based on the received one
+        let sigs = vec![AttachedSignaturePrefix::new(
+            SelfSigning::Ed25519Sha512,
+            self.signer.sign(qry.query.serialize()?)?,
+            0,
+        )];
+        let qry = SignedQuery::new(
+            qry.query.clone(),
+            IdentifierPrefix::Basic(self.prefix.clone()),
+            sigs,
+        );
 
-            // Send query to witness
-            let qry_str = Message::Op(Op::Query(qry)).to_cesr()?;
-            let resp = self
-                .send_to(
-                    IdentifierPrefix::Basic(wit_id),
-                    keri::oobi::Scheme::Http,
-                    qry_str,
-                )
-                .await?
-                .unwrap();
+        // Get witnesses and choose one randomly
+        let id = qry.query.get_prefix();
+        let wit_id = self
+            .get_state_for_prefix(&id)?
+            .and_then(|state| {
+                state
+                    .witness_config
+                    .witnesses
+                    .choose(&mut rand::thread_rng())
+                    .cloned()
+            })
+            .ok_or_else(|| WatcherError::NoIdentState { prefix: id })?;
 
-            return Ok(Some(parse_event_stream(resp.as_bytes())?));
-        };
+        // Send query to witness
+        let qry_str = Message::Op(Op::Query(qry)).to_cesr()?;
+        let resp = self
+            .send_to(
+                IdentifierPrefix::Basic(wit_id),
+                keri::oobi::Scheme::Http,
+                qry_str,
+            )
+            .await?
+            .unwrap();
 
-        Ok(None)
+        let msgs = parse_event_stream(resp.as_bytes())?;
+
+        // Process response
+        for msg in msgs.iter().cloned() {
+            match msg {
+                Message::Notice(notice) => {
+                    self.process_notice(notice.clone())?;
+                    if let Notice::Event(event) = notice {
+                        self.event_storage.add_mailbox_reply(event)?;
+                    }
+                }
+                Message::Op(op) => match op {
+                    Op::Reply(reply) => {
+                        self.process_reply(reply)?;
+                    }
+                    _ => {
+                        // Ignore invalid messages
+                    }
+                },
+            }
+        }
+
+        Ok(())
     }
 
     /// Query roles in oobi manager to check if controller with given ID is allowed to communicate with us.
@@ -359,6 +392,10 @@ pub enum WatcherError {
     #[display(fmt = "OOBI error")]
     #[from]
     OobiError(keri::oobi::error::OobiError),
+
+    #[display(fmt = "processing query failed")]
+    #[from]
+    QueryError(keri::actor::SignedQueryError),
 
     #[display(fmt = "location not found for {id:?}")]
     NoLocation { id: IdentifierPrefix },

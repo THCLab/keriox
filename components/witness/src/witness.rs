@@ -1,4 +1,7 @@
-use std::{path::Path, path::PathBuf, sync::Arc};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use keri::{
     actor::{
@@ -95,8 +98,7 @@ pub struct Witness {
 
 impl Witness {
     pub fn new(signer: Arc<Signer>, event_path: &Path, oobi_path: &Path) -> Result<Self, Error> {
-        use keri::database::escrow::EscrowDb;
-        use keri::processor::notification::JustNotification;
+        use keri::{database::escrow::EscrowDb, processor::notification::JustNotification};
         let mut events_path = PathBuf::new();
         events_path.push(&event_path);
         let mut escrow_path = events_path.clone();
@@ -206,7 +208,7 @@ impl Witness {
         self.processor.process_notice(&notice)
     }
 
-    pub fn process_op(&self, op: Op) -> Result<Vec<Message>, Error> {
+    pub fn process_op(&self, op: Op) -> Result<Vec<Message>, WitnessError> {
         let mut responses = Vec::new();
 
         match op {
@@ -252,7 +254,7 @@ impl Witness {
             .collect()
     }
 
-    pub fn parse_and_process_ops(&self, input_stream: &[u8]) -> Result<Vec<Message>, Error> {
+    pub fn parse_and_process_ops(&self, input_stream: &[u8]) -> Result<Vec<Message>, WitnessError> {
         parse_op_stream(input_stream)?
             .into_iter()
             .flat_map(|op| match self.process_op(op) {
@@ -261,4 +263,11 @@ impl Witness {
             })
             .collect()
     }
+}
+
+#[derive(Debug, derive_more::Display, derive_more::Error, derive_more::From)]
+pub enum WitnessError {
+    KeriError(keri::error::Error),
+    DbError(keri::database::DbError),
+    QueryFailed(keri::actor::SignedQueryError),
 }

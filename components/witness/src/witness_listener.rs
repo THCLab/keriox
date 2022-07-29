@@ -68,13 +68,14 @@ pub mod http_handlers {
     use derive_more::{Display, Error, From};
     use itertools::Itertools;
     use keri::{
+        actor::{QueryError, SignedQueryError},
         error::Error,
         event_parsing::SignedEventData,
         oobi::Role,
         prefix::{IdentifierPrefix, Prefix},
     };
 
-    use crate::witness::Witness;
+    use crate::witness::{Witness, WitnessError};
 
     #[get("/oobi/{id}")]
     pub async fn get_eid_oobi(
@@ -169,6 +170,9 @@ pub mod http_handlers {
         #[display(fmt = "keri error")]
         KeriError(keri::error::Error),
 
+        #[display(fmt = "witness error")]
+        WitnessError(WitnessError),
+
         #[display(fmt = "DB error")]
         DbError(keri::database::DbError),
     }
@@ -185,6 +189,17 @@ pub mod http_handlers {
                     | Error::FaultySignatureVerification
                     | Error::SignatureVerificationError => StatusCode::FORBIDDEN,
 
+                    _ => StatusCode::INTERNAL_SERVER_ERROR,
+                },
+                ApiError::WitnessError(err) => match err {
+                    WitnessError::QueryFailed(err) => match err {
+                        SignedQueryError::UnknownSigner { .. } => StatusCode::UNAUTHORIZED,
+                        SignedQueryError::QueryError(err) => match err {
+                            QueryError::UnknownId { .. } => StatusCode::NOT_FOUND,
+                            _ => StatusCode::INTERNAL_SERVER_ERROR,
+                        },
+                        _ => StatusCode::INTERNAL_SERVER_ERROR,
+                    },
                     _ => StatusCode::INTERNAL_SERVER_ERROR,
                 },
                 ApiError::DbError(_) => StatusCode::INTERNAL_SERVER_ERROR,

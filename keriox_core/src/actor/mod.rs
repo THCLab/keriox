@@ -9,6 +9,7 @@ use crate::{
         signed_event_message::{Message, Notice, Op},
     },
     event_parsing::message::{signed_event_stream, signed_notice_stream},
+    prefix::IdentifierPrefix,
 };
 #[cfg(feature = "query")]
 use crate::{
@@ -98,32 +99,54 @@ pub fn process_signed_oobi(
     Ok(())
 }
 #[cfg(feature = "query")]
-pub fn process_signed_query(qr: SignedQuery, storage: &EventStorage) -> Result<ReplyType, Error> {
+pub fn process_signed_query(
+    qr: SignedQuery,
+    storage: &EventStorage,
+) -> Result<ReplyType, SignedQueryError> {
     let signatures = qr.signatures;
     // check signatures
+    let signer_id = qr.signer.clone();
     let kc = storage
-        .get_state(&qr.signer)?
-        .ok_or_else(|| Error::SemanticError("No signer identifier in db".into()))?
+        .get_state(&signer_id)?
+        .ok_or_else(|| SignedQueryError::UnknownSigner { id: signer_id })?
         .current;
 
     if kc.verify(&qr.query.serialize()?, &signatures)? {
         // TODO check timestamps
         // unpack and check what's inside
-        process_query(qr.query.get_query_data(), storage)
+        Ok(process_query(qr.query.get_query_data(), storage)?)
     } else {
-        Err(Error::SignatureVerificationError)
+        Err(SignedQueryError::InvalidSignature)
     }
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum SignedQueryError {
+    #[error(transparent)]
+    KeriError(#[from] crate::error::Error),
+
+    #[error(transparent)]
+    DbError(#[from] crate::database::DbError),
+
+    #[error(transparent)]
+    QueryError(#[from] QueryError),
+
+    #[error("unknown signer with id {id:?}")]
+    UnknownSigner { id: IdentifierPrefix },
+
+    #[error("signature verification failed")]
+    InvalidSignature,
+}
+
 #[cfg(feature = "query")]
-fn process_query(qr: Query, storage: &EventStorage) -> Result<ReplyType, Error> {
+fn process_query(qr: Query, storage: &EventStorage) -> Result<ReplyType, QueryError> {
     use crate::query::query_event::QueryRoute;
 
     match qr.route {
         QueryRoute::Log { args, .. } => Ok(ReplyType::Kel(
             storage
                 .get_kel_messages_with_receipts(&args.i)?
-                .ok_or_else(|| Error::SemanticError("No identifier in db".into()))?
+                .ok_or_else(|| QueryError::UnknownId { id: args.i.clone() })?
                 .into_iter()
                 .map(Message::Notice)
                 .collect(),
@@ -133,7 +156,7 @@ fn process_query(qr: Query, storage: &EventStorage) -> Result<ReplyType, Error> 
             // return reply message with ksn inside
             let state = storage
                 .get_state(&i)?
-                .ok_or_else(|| Error::SemanticError("No id in database".into()))?;
+                .ok_or_else(|| QueryError::UnknownId { id: i })?;
             let ksn = KeyStateNotice::new_ksn(state, SerializationFormats::JSON);
             Ok(ReplyType::Ksn(ksn))
         }
@@ -146,6 +169,18 @@ fn process_query(qr: Query, storage: &EventStorage) -> Result<ReplyType, Error> 
             Ok(ReplyType::Mbx(mail))
         }
     }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum QueryError {
+    #[error(transparent)]
+    KeriError(#[from] crate::error::Error),
+
+    #[error(transparent)]
+    DbError(#[from] crate::database::DbError),
+
+    #[error("unknown identifier {id:?}")]
+    UnknownId { id: IdentifierPrefix },
 }
 
 pub mod prelude {

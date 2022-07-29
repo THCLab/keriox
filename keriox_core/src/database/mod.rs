@@ -44,6 +44,9 @@ pub struct SledEventDatabase {
 
     #[cfg(feature = "query")]
     mailbox_receipts: SledEventTreeVec<SignedNontransferableReceipt>,
+
+    #[cfg(feature = "query")]
+    mailbox_replies: SledEventTreeVec<SignedEventMessage>,
 }
 
 // TODO: remove all the `.ok()`s
@@ -71,7 +74,9 @@ impl SledEventDatabase {
             #[cfg(feature = "query")]
             accepted_rpy: SledEventTreeVec::new(db.open_tree(b"knas")?),
             #[cfg(feature = "query")]
-            mailbox_receipts: SledEventTreeVec::new(db.open_tree(b"mbxr")?),
+            mailbox_receipts: SledEventTreeVec::new(db.open_tree(b"mbxrct")?),
+            #[cfg(feature = "query")]
+            mailbox_replies: SledEventTreeVec::new(db.open_tree(b"mbxrpy")?),
 
             #[cfg(feature = "query")]
             escrowed_replys: SledEventTreeVec::new(db.open_tree(b"knes")?),
@@ -284,6 +289,29 @@ impl SledEventDatabase {
         id: &IdentifierPrefix,
     ) -> Option<impl DoubleEndedIterator<Item = SignedNontransferableReceipt>> {
         self.mailbox_receipts
+            .iter_values(self.identifiers.designated_key(id).ok()?)
+    }
+
+    #[cfg(feature = "query")]
+    pub fn add_mailbox_reply(
+        &self,
+        reply: SignedEventMessage,
+        id: &IdentifierPrefix,
+    ) -> Result<(), DbError> {
+        if !self.mailbox_replies.contains_value(&reply) {
+            self.mailbox_replies
+                .push(self.identifiers.designated_key(id)?, reply)
+        } else {
+            Ok(())
+        }
+    }
+
+    #[cfg(feature = "query")]
+    pub fn get_mailbox_replies(
+        &self,
+        id: &IdentifierPrefix,
+    ) -> Option<impl DoubleEndedIterator<Item = SignedEventMessage>> {
+        self.mailbox_replies
             .iter_values(self.identifiers.designated_key(id).ok()?)
     }
 }
