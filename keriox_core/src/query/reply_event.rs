@@ -9,8 +9,9 @@ use crate::{
     error::Error,
     event::{sections::seal::EventSeal, EventMessage, SerializationFormats},
     event_message::{
-        dummy_event::DummyEventMessage, signature::Signature, Digestible, EventTypeTag, SaidEvent,
-        Typeable,
+        dummy_event::DummyEventMessage,
+        signature::{Signature, SignerData},
+        Digestible, EventTypeTag, SaidEvent, Typeable,
     },
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix},
     query::QueryError,
@@ -176,7 +177,7 @@ pub fn bada_logic(new_rpy: &SignedReply, old_rpy: &SignedReply) -> Result<(), Qu
         }
     }
     match new_rpy.signature.clone() {
-        Signature::Transferable(seal, _sigs) => {
+        Signature::Transferable(SignerData::EventSeal(seal), _sigs) => {
             // A) If sn (sequence number) of last (if forked) Est evt that provides
             //  keys for signature(s) of new is greater than sn of last Est evt
             //  that provides keys for signature(s) of old.
@@ -188,20 +189,27 @@ pub fn bada_logic(new_rpy: &SignedReply, old_rpy: &SignedReply) -> Result<(), Qu
 
             // check sns
             let new_sn = seal.sn;
-            let old_sn: u64 = if let Signature::Transferable(ref seal, _) = old_rpy.signature {
-                seal.sn
-            } else {
-                return Err(QueryError::Error(
-                    "Improper signature type. Should be transferable.".into(),
-                )
-                .into());
-            };
+            let old_sn: u64 =
+                if let Signature::Transferable(SignerData::EventSeal(ref old_seal), _) =
+                    old_rpy.signature
+                {
+                    let seal = old_seal.clone();
+                    seal.sn
+                } else {
+                    return Err(QueryError::Error(
+                        "Improper signature type. Should be transferable.".into(),
+                    )
+                    .into());
+                };
 
             match old_sn.cmp(&new_sn) {
                 Ordering::Less => Ok(()),
                 Ordering::Equal => check_dts(&new_rpy.reply, &old_rpy.reply),
                 Ordering::Greater => Err(QueryError::StaleRpy.into()),
             }
+        }
+        Signature::Transferable(_, _sigs) => {
+            todo!()
         }
         Signature::NonTransferable(_bp, _sig) => {
             //  If date-time-stamp of new is greater than old
@@ -231,7 +239,7 @@ impl SignedReply {
         signer_seal: EventSeal,
         signatures: Vec<AttachedSignaturePrefix>,
     ) -> Self {
-        let signature = Signature::Transferable(signer_seal, signatures);
+        let signature = Signature::Transferable(SignerData::EventSeal(signer_seal), signatures);
         Self {
             reply: envelope,
             signature,

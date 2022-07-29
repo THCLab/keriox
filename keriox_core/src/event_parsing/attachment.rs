@@ -12,11 +12,13 @@ use nom::{
 use crate::{
     derivation::attached_signature_code::b64_to_num,
     event::sections::seal::{EventSeal, SourceSeal},
+    event_message::signature::Signature,
     event_parsing::payload_size::PayloadType,
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
 };
 
 use super::{
+    path::MaterialPath,
     prefix::{
         attached_signature, attached_sn, basic_prefix, prefix, self_addressing_prefix,
         self_signing_prefix,
@@ -133,6 +135,31 @@ pub fn timestamp(s: &[u8]) -> nom::IResult<&[u8], DateTime<FixedOffset>> {
     }
 }
 
+pub fn material_path(s: &[u8]) -> nom::IResult<&[u8], MaterialPath> {
+    let (more, type_c) = take(2u8)(s)?;
+
+    let payload_type = match type_c {
+        b"4A" => PayloadType::A4,
+        b"5A" => PayloadType::A5,
+        b"6A" => PayloadType::A6,
+        _ => {
+            todo!()
+        }
+    };
+    // parse amount of quadruplets
+    let (more, soft_part) = b64_count(more)?;
+    let full_size = soft_part * 4;
+    // parse full path
+    let (more, base) = take(full_size)(more)?;
+
+    let path = MaterialPath::new(
+        payload_type,
+        String::from_utf8(base.to_vec()).unwrap_or_default(),
+    );
+
+    Ok((more, path))
+}
+
 pub fn attachment(s: &[u8]) -> nom::IResult<&[u8], Attachment> {
     let (rest, payload_type) = take(2u8)(s)?;
     let payload_type: PayloadType = PayloadType::try_from(
@@ -189,6 +216,19 @@ pub fn attachment(s: &[u8]) -> nom::IResult<&[u8], Attachment> {
         PayloadType::ME => {
             let (rest, sc) = first_seen_sn(rest)?;
             Ok((rest, Attachment::FirstSeenReply(sc)))
+        }
+        PayloadType::ML => {
+            let (rest, sc) = b64_count(rest)?;
+            match nom::bytes::complete::take(sc * 4)(rest) {
+                Ok((rest, total)) => {
+                    let (extra, mp) = material_path(total)?;
+                    let (_extra, attachment) = attachment(extra)?;
+                    let sigs = Vec::<Signature>::try_from(attachment).unwrap();
+
+                    Ok((rest, Attachment::PathedMaterialQuadruplet(mp, sigs)))
+                }
+                Err(e) => Err(e),
+            }
         }
         _ => todo!(),
     }
@@ -287,4 +327,24 @@ fn test_attachement() {
     let (rest, att) = attachment(cesr_attachment.as_bytes()).unwrap();
     assert!(matches!(att, Attachment::Frame(_)));
     assert!(rest.is_empty());
+}
+
+#[test]
+fn test_pathed_material() {
+    let attached_str = "-LAZ5AABAA-a-AABAAFjjD99-xy7J0LGmCkSE_zYceED5uPF4q7l8J23nNQ64U-oWWulHI5dh3cFDWT4eICuEQCALdh8BO5ps-qx0qBA";
+    let (_rest, attached_material) = attachment(attached_str.as_bytes()).unwrap();
+    assert!(matches!(
+        attached_material,
+        Attachment::PathedMaterialQuadruplet(_, _)
+    ));
+}
+
+#[test]
+fn test_path() {
+    let attached_str = "6AABAAA-";
+    let (_rest, attached_material) = material_path(attached_str.as_bytes()).unwrap();
+    assert_eq!(
+        attached_material,
+        MaterialPath::new(PayloadType::A6, "-".into())
+    );
 }

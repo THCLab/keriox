@@ -1,5 +1,6 @@
 pub mod dummy_event;
 pub mod event_msg_builder;
+pub mod exchange;
 pub mod key_event_message;
 pub mod serialization_info;
 pub mod serializer;
@@ -32,6 +33,7 @@ pub enum EventTypeTag {
     Dip,
     Drt,
     Rct,
+    Exn,
     #[cfg(feature = "query")]
     Rpy,
     #[cfg(feature = "query")]

@@ -50,6 +50,12 @@ pub enum PayloadType {
     IAAF,
     #[serde(rename = "1AAG")]
     IAAG,
+    #[serde(rename = "4A")]
+    A4,
+    #[serde(rename = "5A")]
+    A5,
+    #[serde(rename = "6A")]
+    A6,
     /// Count of attached qualified Base64 indexed controller signatures
     #[serde(rename = "-A")]
     MA,
@@ -74,6 +80,9 @@ pub enum PayloadType {
     /// Count of composed group: IdentifierPrefix + Controller Indexed Signatures
     #[serde(rename = "-H")]
     MH,
+    /// Composed Grouped Pathed Material Quadlet (4 char each)
+    #[serde(rename = "-L")]
+    ML,
     #[serde(rename = "-U")]
     MU,
     #[serde(rename = "-V")]
@@ -180,6 +189,7 @@ impl PayloadType {
             | Self::ME
             | Self::MF
             | Self::MG
+            | Self::ML
             | Self::MH
             | Self::MU
             | Self::MV
@@ -187,6 +197,7 @@ impl PayloadType {
             | Self::MX
             | Self::MY
             | Self::MZ => 2,
+            Self::A4 | Self::A5 | Self::A6 => 2,
             _ => todo!(),
         }
     }
@@ -240,6 +251,9 @@ impl TryFrom<&str> for PayloadType {
             "1AAE" => Ok(Self::IAAE),
             "1AAF" => Ok(Self::IAAF),
             "1AAG" => Ok(Self::IAAG),
+            "4A" => Ok(Self::A4),
+            "5A" => Ok(Self::A5),
+            "6A" => Ok(Self::A6),
             "-A" => Ok(Self::MA),
             "-B" => Ok(Self::MB),
             "-C" => Ok(Self::MC),
@@ -248,6 +262,7 @@ impl TryFrom<&str> for PayloadType {
             "-F" => Ok(Self::MF),
             "-G" => Ok(Self::MG),
             "-H" => Ok(Self::MH),
+            "-L" => Ok(Self::ML),
             "-U" => Ok(Self::MU),
             "-V" => Ok(Self::MV),
             "-W" => Ok(Self::MW),
@@ -290,6 +305,9 @@ impl Display for PayloadType {
             Self::IAAE => f.write_str("1AAE"),
             Self::IAAF => f.write_str("1AAF"),
             Self::IAAG => f.write_str("1AAG"),
+            Self::A4 => f.write_str("4A"),
+            Self::A5 => f.write_str("5A"),
+            Self::A6 => f.write_str("6A"),
             Self::MA => f.write_str("-A"),
             Self::MB => f.write_str("-B"),
             Self::MC => f.write_str("-C"),
@@ -298,6 +316,7 @@ impl Display for PayloadType {
             Self::MF => f.write_str("-F"),
             Self::MG => f.write_str("-G"),
             Self::MH => f.write_str("-H"),
+            Self::ML => f.write_str("-L"),
             Self::MU => f.write_str("-U"),
             Self::MV => f.write_str("-V"),
             Self::MW => f.write_str("-W"),

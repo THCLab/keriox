@@ -14,7 +14,7 @@ use crate::{
     },
     event_message::{
         key_event_message::KeyEvent,
-        signature::Signature,
+        signature::{Signature, SignerData},
         signed_event_message::{
             SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
         },
@@ -203,7 +203,15 @@ impl EventValidator {
 
     pub fn verify(&self, data: &[u8], sig: &Signature) -> Result<(), Error> {
         match sig {
-            Signature::Transferable(seal, sigs) => {
+            Signature::Transferable(signer_data, sigs) => {
+                let seal = match signer_data {
+                    SignerData::EventSeal(seal) => Ok(seal.clone()),
+                    SignerData::LastEstablishment(id) => self
+                        .event_storage
+                        .get_last_establishment_event_seal(id)?
+                        .ok_or(Error::MissingSigner),
+                    SignerData::JustSignatures => Err(Error::MissingSigner),
+                }?;
                 let kp = self.event_storage.get_keys_at_event(
                     &seal.prefix,
                     seal.sn,
@@ -325,7 +333,7 @@ impl EventValidator {
         let route = rpy.reply.get_route();
         // check if signature was made by ksn creator
         if let ReplyRoute::Ksn(signer_id, ksn) = route {
-            if &rpy.signature.get_signer() != &signer_id {
+            if &rpy.signature.get_signer().ok_or(Error::MissingSigner)? != &signer_id {
                 return Err(QueryError::Error("Wrong reply message signer".into()).into());
             };
             self.verify(&rpy.reply.serialize()?, &rpy.signature)?;
@@ -333,10 +341,10 @@ impl EventValidator {
             let reply_prefix = ksn.state.prefix.clone();
 
             // check if there's previous reply to compare
-            if let Some(old_rpy) = self
-                .event_storage
-                .get_last_ksn_reply(&reply_prefix, &rpy.signature.get_signer())
-            {
+            if let Some(old_rpy) = self.event_storage.get_last_ksn_reply(
+                &reply_prefix,
+                &rpy.signature.get_signer().ok_or(Error::MissingSigner)?,
+            ) {
                 bada_logic(rpy, &old_rpy)?;
             };
 

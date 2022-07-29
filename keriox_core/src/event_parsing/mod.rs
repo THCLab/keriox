@@ -1,4 +1,4 @@
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 
 use base64::URL_SAFE_NO_PAD;
 use chrono::{DateTime, FixedOffset, SecondsFormat};
@@ -18,7 +18,9 @@ use crate::{
         EventMessage,
     },
     event_message::{
+        exchange::{ExchangeMessage, SignedExchange},
         key_event_message::KeyEvent,
+        signature::{self, Signature},
         signed_event_message::{
             Message, Notice, Op, SignedEventMessage, SignedNontransferableReceipt,
             SignedTransferableReceipt,
@@ -28,8 +30,11 @@ use crate::{
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix},
 };
 
+use self::path::MaterialPath;
+
 pub mod attachment;
 pub mod message;
+pub mod path;
 pub mod payload_size;
 pub mod prefix;
 
@@ -44,6 +49,7 @@ pub enum Attachment {
     FirstSeenReply(Vec<(u64, DateTime<FixedOffset>)>),
     // Group codes
     SealSignaturesGroups(Vec<(EventSeal, Vec<AttachedSignaturePrefix>)>),
+    PathedMaterialQuadruplet(MaterialPath, Vec<Signature>),
     // List of signatures made using keys from last establishment event od identifier of prefix
     LastEstSignaturesGroups(Vec<(IdentifierPrefix, Vec<AttachedSignaturePrefix>)>),
     // Frame codes
@@ -129,6 +135,14 @@ impl Attachment {
 
                 (PayloadType::ME, couplets.len(), packed_couplets)
             }
+            Attachment::PathedMaterialQuadruplet(path, signatures) => {
+                let attachments = path.to_cesr()
+                    + &signature::signatures_into_attachments(&signatures)
+                        .iter()
+                        .map(|s| s.to_cesr())
+                        .fold(String::new(), |a, b| a + &b);
+                (PayloadType::ML, attachments.len() / 4, attachments)
+            }
         };
         [
             payload_type.adjust_with_num(att_len as u16),
@@ -166,6 +180,7 @@ pub struct SignedEventData {
 pub enum EventType {
     KeyEvent(EventMessage<KeyEvent>),
     Receipt(EventMessage<Receipt>),
+    Exn(ExchangeMessage),
     #[cfg(feature = "query")]
     Qry(QueryEvent),
     #[cfg(any(feature = "query", feature = "oobi"))]
@@ -181,6 +196,7 @@ impl EventType {
             EventType::Qry(qry) => qry.serialize(),
             #[cfg(feature = "query")]
             EventType::Rpy(rpy) => rpy.serialize(),
+            EventType::Exn(exn) => exn.serialize(),
         }
     }
 }
@@ -251,14 +267,7 @@ impl From<SignedTransferableReceipt> for SignedEventData {
 #[cfg(feature = "query")]
 impl From<SignedReply> for SignedEventData {
     fn from(ev: SignedReply) -> Self {
-        use crate::event_message::signature::Signature;
-        let attachments = vec![match ev.signature.clone() {
-            Signature::Transferable(seal, sig) => {
-                Attachment::SealSignaturesGroups(vec![(seal, sig)])
-            }
-            Signature::NonTransferable(pref, sig) => Attachment::ReceiptCouplets(vec![(pref, sig)]),
-        }];
-
+        let attachments = vec![(&ev.signature).into()];
         SignedEventData {
             deserialized_event: EventType::Rpy(ev.reply),
             attachments,
@@ -281,6 +290,19 @@ impl From<SignedQuery> for SignedEventData {
     }
 }
 
+impl From<SignedExchange> for SignedEventData {
+    fn from(ev: SignedExchange) -> Self {
+        let mut attachments = signature::signatures_into_attachments(&ev.signature);
+        let data_attachment =
+            Attachment::PathedMaterialQuadruplet(ev.data_signature.0, ev.data_signature.1);
+        attachments.push(data_attachment);
+        SignedEventData {
+            deserialized_event: EventType::Exn(ev.exchange_message),
+            attachments,
+        }
+    }
+}
+
 impl TryFrom<SignedEventData> for Message {
     type Error = Error;
 
@@ -292,6 +314,7 @@ impl TryFrom<SignedEventData> for Message {
             EventType::Qry(qry) => Message::Op(signed_query(qry, value.attachments)?),
             #[cfg(any(feature = "query", feature = "oobi"))]
             EventType::Rpy(rpy) => Message::Op(signed_reply(rpy, value.attachments)?),
+            EventType::Exn(exn) => Message::Op(signed_exchange(exn, value.attachments)?),
         };
         Ok(msg)
     }
@@ -504,6 +527,30 @@ fn signed_receipt(
     }
 }
 
+pub fn signed_exchange(exn: ExchangeMessage, attachments: Vec<Attachment>) -> Result<Op, Error> {
+    let mut atts = attachments.into_iter();
+    let att1 = atts
+        .next()
+        .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?;
+    let att2 = atts
+        .next()
+        .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?;
+
+    let (path, data_sigs, signatures): (_, _, Vec<Signature>) = match (att1, att2) {
+        (Attachment::PathedMaterialQuadruplet(path, sigs), anything)
+        | (anything, Attachment::PathedMaterialQuadruplet(path, sigs)) => {
+            (path, sigs, anything.try_into()?)
+        }
+        _ => return Err(Error::SemanticError("Wrong attachment".into())),
+    };
+
+    Ok(Op::Exchange(SignedExchange {
+        exchange_message: exn,
+        signature: signatures,
+        data_signature: (path, data_sigs),
+    }))
+}
+
 #[test]
 fn test_stream1() {
     use crate::event_parsing;
@@ -593,4 +640,18 @@ fn test_deserialize_signed_receipt() {
     } else {
         assert!(false)
     };
+}
+
+#[test]
+fn test_deserialize_signed_exchange() -> Result<(), Error> {
+    use crate::event_parsing::message::signed_message;
+
+    let exn_event = r#"{"v":"KERI10JSON0002c9_","t":"exn","d":"Eru6l4p3-r6KJkT1Ac8r5XWuQMsD91-c80hC7lASOoZI","r":"/fwd","q":{"pre":"E-4-PsMBN0YEKyTl3zL0zulWcBehdaaG6Go5cMc0BzQ8","topic":"multisig"},"a":{"v":"KERI10JSON000215_","t":"icp","d":"EOWwyMU3XA7RtWdelFt-6waurOTH_aW_Z9VTaU-CshGk","i":"EOWwyMU3XA7RtWdelFt-6waurOTH_aW_Z9VTaU-CshGk","s":"0","kt":"2","k":["DQKeRX-2dXdSWS-EiwYyiQdeIwesvubEqnUYC5vsEyjo","D-U6Sc6VqQC3rDuD2wLF3oR8C4xQyWOTMp4zbJyEnRlE"],"nt":"2","n":["ENVtv0_G68psQhfWB-ZyVH1lndLli2LSmfSxxszNufoI","E6UpCouA9mZA03hMFJLrhA0SvwR4HVNqf2wrZM-ydTSI"],"bt":"3","b":["BGKVzj4ve0VSd8z_AmvhLg4lqcC_9WYX90k03q-R_Ydo","BuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw","Bgoq68HCmYNUDgOz4Skvlu306o_NY-NrYuKAVhk3Zh9c"],"c":[],"a":[]}}-HABEozYHef4je02EkMOA1IKM65WkIdSjfrL7XWDk_JzJL9o-AABAArQYXZsfglDLnZrGGYUyhNzriWJTSuKjqRrcrDik3zch94IQ9tjQwz0K0iikVCENApxSSo9tBQT7pz9d9G1O0DQ-LAZ5AABAA-a-AABAAFjjD99-xy7J0LGmCkSE_zYceED5uPF4q7l8J23nNQ64U-oWWulHI5dh3cFDWT4eICuEQCALdh8BO5ps-qx0qBA"#;
+
+    let parsed_trans_receipt = signed_message(exn_event.as_bytes()).unwrap().1;
+    let msg = Message::try_from(parsed_trans_receipt)?;
+    assert!(matches!(msg, Message::Op(Op::Exchange(_))));
+    assert_eq!(String::from_utf8(msg.to_cesr()?).unwrap(), exn_event);
+
+    Ok(())
 }

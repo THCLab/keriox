@@ -141,6 +141,7 @@ impl Controller {
                     // TODO: Should controller respond to queries?
                     None
                 }
+                Op::Exchange(_) => todo!(),
             },
             Message::Notice(notice) => {
                 self.processor.process_notice(&notice)?;
@@ -419,6 +420,7 @@ impl Controller {
                 ReplyRoute::EndRoleCut(_) => todo!(),
                 _ => Err(ControllerError::WrongEventTypeError),
             },
+            EventType::Exn(_) => todo!(),
         }
     }
 
