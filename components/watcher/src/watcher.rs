@@ -6,10 +6,7 @@ use std::{
 use derive_more::{Display, Error, From};
 use futures::{StreamExt, TryStreamExt};
 use keri::{
-    actor::{
-        parse_event_stream, parse_notice_stream, parse_op_stream, prelude::*, QueryError,
-        SignedQueryError,
-    },
+    actor::{parse_event_stream, parse_notice_stream, parse_op_stream, prelude::*},
     database::DbError,
     derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
     error::Error,
@@ -17,7 +14,7 @@ use keri::{
     oobi::{error::OobiError, EndRole, LocationScheme, OobiManager, Role, Scheme},
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix},
     query::{
-        query_event::SignedQuery,
+        query_event::{QueryArgs, QueryEvent, QueryRoute, SignedQuery},
         reply_event::{ReplyEvent, ReplyRoute, SignedReply},
         ReplyType,
     },
@@ -145,15 +142,36 @@ impl WatcherData {
                     });
                 }
 
-                let result = process_signed_query(qry.clone(), &self.event_storage);
-                let response = match result {
-                    Err(SignedQueryError::QueryError(QueryError::UnknownId { .. })) => {
-                        // forward query to witness
-                        self.forward_query(&qry).await?;
-                        return Ok(None);
-                    }
-                    result => result?,
-                };
+                // Update latest state for prefix
+                let wit_id = self.query_state(qry.query.get_prefix()).await?;
+
+                // Get latest state for prefix
+                let last_sn = self
+                    .event_storage
+                    .get_last_ksn_reply(&qry.query.get_prefix(), &IdentifierPrefix::Basic(wit_id))
+                    .and_then(|ksn| {
+                        if let ReplyRoute::Ksn(_, ksn) = ksn.reply.get_route() {
+                            Some(ksn)
+                        } else {
+                            None
+                        }
+                    })
+                    .map(|ksn| ksn.state.sn);
+
+                // Compute current state from our database
+                let current_sn = self
+                    .event_storage
+                    .get_ksn_for_prefix(&qry.query.get_prefix(), SerializationFormats::JSON)?
+                    .state
+                    .sn;
+
+                if current_sn < last_sn.unwrap_or(0) {
+                    // forward query to witness
+                    self.forward_query(&qry).await?;
+                    return Ok(None);
+                }
+
+                let response = process_signed_query(qry.clone(), &self.event_storage)?;
 
                 match response {
                     ReplyType::Ksn(ksn) => {
@@ -194,7 +212,8 @@ impl WatcherData {
     }
 
     /// Forward query to random registered witness and save its response to mailbox.
-    async fn forward_query(&self, qry: &SignedQuery) -> Result<(), WatcherError> {
+    /// Returns ID of witness that responded.
+    async fn forward_query(&self, qry: &SignedQuery) -> Result<BasicPrefix, WatcherError> {
         // Create a new signed message based on the received one
         let sigs = vec![AttachedSignaturePrefix::new(
             SelfSigning::Ed25519Sha512,
@@ -207,24 +226,13 @@ impl WatcherData {
             sigs,
         );
 
-        // Get witnesses and choose one randomly
-        let id = qry.query.get_prefix();
-        let wit_id = self
-            .get_state_for_prefix(&id)?
-            .and_then(|state| {
-                state
-                    .witness_config
-                    .witnesses
-                    .choose(&mut rand::thread_rng())
-                    .cloned()
-            })
-            .ok_or_else(|| WatcherError::NoIdentState { prefix: id })?;
+        let wit_id = self.get_witness_for_prefix(qry.query.get_prefix())?;
 
         // Send query to witness
         let qry_str = Message::Op(Op::Query(qry)).to_cesr()?;
         let resp = self
             .send_to(
-                IdentifierPrefix::Basic(wit_id),
+                IdentifierPrefix::Basic(wit_id.clone()),
                 keri::oobi::Scheme::Http,
                 qry_str,
             )
@@ -253,7 +261,76 @@ impl WatcherData {
             }
         }
 
-        Ok(())
+        Ok(wit_id)
+    }
+
+    /// Query witness about KSN for given prefix and save its response to db.
+    /// Returns ID of witness that responded.
+    async fn query_state(&self, prefix: IdentifierPrefix) -> Result<BasicPrefix, WatcherError> {
+        let query_args = QueryArgs {
+            s: None,
+            i: prefix.clone(),
+            src: None,
+        };
+
+        let qry = QueryEvent::new_query(
+            QueryRoute::Ksn {
+                args: query_args,
+                reply_route: String::from(""),
+            },
+            SerializationFormats::JSON,
+            &SelfAddressing::Blake3_256,
+        )?;
+
+        // sign message by watcher
+        let signature = AttachedSignaturePrefix::new(
+            SelfSigning::Ed25519Sha512,
+            (self.signer).sign(&serde_json::to_vec(&qry).unwrap())?,
+            0,
+        );
+
+        let query = Op::Query(SignedQuery::new(
+            qry,
+            IdentifierPrefix::Basic(self.prefix.clone()),
+            vec![signature],
+        ));
+
+        let wit_id = self.get_witness_for_prefix(prefix)?;
+
+        // TODO: should use query endpoint?
+        let response = self
+            .send_to(
+                IdentifierPrefix::Basic(wit_id.clone()),
+                Scheme::Http,
+                Message::Op(query).to_cesr()?,
+            )
+            .await?
+            .unwrap();
+
+        let msgs = parse_event_stream(response.as_bytes())?;
+
+        for msg in msgs.into_iter() {
+            if let Message::Op(Op::Reply(reply)) = msg {
+                self.process_reply(reply)?;
+            }
+        }
+
+        Ok(wit_id)
+    }
+
+    /// Get witnesses for prefix and choose one randomly
+    fn get_witness_for_prefix(&self, id: IdentifierPrefix) -> Result<BasicPrefix, WatcherError> {
+        let wit_id = self
+            .get_state_for_prefix(&id)?
+            .and_then(|state| {
+                state
+                    .witness_config
+                    .witnesses
+                    .choose(&mut rand::thread_rng())
+                    .cloned()
+            })
+            .ok_or_else(|| WatcherError::NoIdentState { prefix: id })?;
+        Ok(wit_id)
     }
 
     /// Query roles in oobi manager to check if controller with given ID is allowed to communicate with us.
