@@ -8,7 +8,7 @@ use futures::{StreamExt, TryStreamExt};
 use keri::{
     actor::{
         parse_event_stream, parse_notice_stream, parse_op_stream, prelude::*, QueryError,
-        SignedQueryError,
+        SignedQueryError, simple_controller::PossibleResponse,
     },
     database::DbError,
     derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
@@ -134,7 +134,7 @@ impl WatcherData {
         process_notice(notice, &self.processor)
     }
 
-    pub async fn process_op(&self, op: Op) -> Result<Option<Vec<Message>>, WatcherError> {
+    pub async fn process_op(&self, op: Op) -> Result<Option<PossibleResponse>, WatcherError> {
         match op {
             Op::Query(qry) => {
                 let cid = qry.signer.clone();
@@ -165,14 +165,11 @@ impl WatcherData {
 
                         let signature =
                             SelfSigning::Ed25519Sha512.derive(self.signer.sign(&rpy.serialize()?)?);
-                        let reply = Message::Op(Op::Reply(SignedReply::new_nontrans(
-                            rpy,
-                            self.prefix.clone(),
-                            signature,
-                        )));
-                        Ok(Some(vec![reply]))
+                        let reply = SignedReply::new_nontrans(rpy, self.prefix.clone(), signature);
+                        Ok(Some(PossibleResponse::Ksn(reply)))
                     }
-                    ReplyType::Kel(msgs) | ReplyType::Mbx(msgs) => Ok(Some(msgs)),
+                    ReplyType::Kel(msgs) => Ok(Some(PossibleResponse::Kel(msgs))),
+                    ReplyType::Mbx(mbx) => Ok(Some(PossibleResponse::Mbx(mbx))),
                 }
             }
             Op::Reply(reply) => {
@@ -284,9 +281,9 @@ impl WatcherData {
     pub async fn parse_and_process_ops(
         &self,
         input_stream: &[u8],
-    ) -> Result<Vec<Message>, WatcherError> {
+    ) -> Result<Vec<PossibleResponse>, WatcherError> {
         futures::stream::iter(parse_op_stream(input_stream)?)
-            .then(|op| async { self.process_op(op).await.map(|r| r.unwrap_or_default()) })
+            .then(|op| async { self.process_op(op).await.map(|r| vec![r.unwrap()]) })
             .try_concat()
             .await
     }

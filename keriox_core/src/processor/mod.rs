@@ -19,10 +19,10 @@ use crate::{
     database::{timestamped::TimestampedSignedEventMessage, SledEventDatabase},
     error::Error,
     event::{receipt::Receipt, SerializationFormats},
+    event_message::exchange::SignedExchange,
     event_message::signed_event_message::{
         Notice, SignedEventMessage, SignedNontransferableReceipt,
     },
-    event_message::exchange::SignedExchange,
     prefix::IdentifierPrefix,
     query::reply_event::{ReplyRoute, SignedReply},
     state::IdentifierState,
@@ -33,9 +33,6 @@ pub trait Processor {
 
     #[cfg(feature = "query")]
     fn process_op_reply(&self, reply: &SignedReply) -> Result<(), Error>;
-
-    #[cfg(feature = "query")]
-    fn process_op_exchange(&self, reply: &SignedExchange) -> Result<(), Error>;
 
     fn register_observer(
         &mut self,
@@ -110,23 +107,29 @@ impl EventProcessor {
 
         // TODO what if more than one sig?
         let sig = exn.signature[0].clone();
-        self.validator.verify(&exn.exchange_message.serialize()?, &sig)?;
+        self.validator
+            .verify(&exn.exchange_message.serialize()?, &sig)?;
         // TODO use material path to extract data from exn
         let (path, signatures) = exn.data_signature.clone();
         let (receipient, topic, event) = match &exn.exchange_message.event.content {
-            Exchange::Fwd { args, to_forward } => (args.recipient_id.clone(), args.topic.clone(), to_forward),
+            Exchange::Fwd { args, to_forward } => {
+                (args.recipient_id.clone(), args.topic.clone(), to_forward)
+            }
         };
         // TODO check if receipient is known
         let to_mailbox = match sig {
-            crate::event_message::signature::Signature::Transferable(SignerData::JustSignatures, sigs) => {
-                event.sign(sigs, None, None)
-            },
+            crate::event_message::signature::Signature::Transferable(
+                SignerData::JustSignatures,
+                sigs,
+            ) => event.sign(sigs, None, None),
             crate::event_message::signature::Signature::NonTransferable(bp, sig) => todo!(),
             _ => todo!(),
         };
 
         match topic {
-            crate::event_message::exchange::ForwardTopic::Multisig => self.db.add_mailbox_multisig(to_mailbox, &receipient)?,
+            crate::event_message::exchange::ForwardTopic::Multisig => {
+                self.db.add_mailbox_multisig(to_mailbox, &receipient)?
+            }
         }
 
         Ok(())

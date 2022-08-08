@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{error::Error, event_parsing::path::MaterialPath, prefix::IdentifierPrefix};
+use crate::{
+    derivation::self_addressing::SelfAddressing, error::Error, event::SerializationFormats,
+    event_parsing::path::MaterialPath, prefix::IdentifierPrefix,
+};
 
 use super::{
     key_event_message::KeyEvent, signature::Signature, EventMessage, EventTypeTag, SaidEvent,
@@ -27,6 +30,16 @@ pub enum Exchange {
         #[serde(rename = "a")]
         to_forward: EventMessage<KeyEvent>,
     },
+}
+
+impl Exchange {
+    pub fn to_message(
+        self,
+        format: SerializationFormats,
+        derivation: &SelfAddressing,
+    ) -> Result<EventMessage<SaidEvent<Exchange>>, Error> {
+        SaidEvent::<Exchange>::to_message(self, format, derivation)
+    }
 }
 
 impl Exchange {

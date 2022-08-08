@@ -1,4 +1,5 @@
 use std::{
+    fmt,
     path::Path,
     sync::{Arc, Mutex},
 };
@@ -9,22 +10,84 @@ use crate::{
     database::{escrow::EscrowDb, SledEventDatabase},
     derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
     error::Error,
-    event::SerializationFormats,
-    event_message::signed_event_message::{Notice, Op, SignedEventMessage},
-    event_parsing::{message::key_event_message, EventType},
+    event::{sections::threshold::SignatureThreshold, SerializationFormats},
+    event_message::{
+        exchange::{Exchange, ForwardTopic, FwdArgs, SignedExchange},
+        signature::{Signature, SignerData},
+        signed_event_message::{Notice, Op, SignedEventMessage},
+    },
+    event_parsing::{message::key_event_message, path::MaterialPath, EventType},
     oobi::{OobiManager, Role},
-    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix},
+    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix},
     processor::{
         basic_processor::BasicProcessor, escrow::default_escrow_bus, event_storage::EventStorage,
         Processor,
     },
     query::{
-        query_event::{QueryArgs, QueryEvent, QueryRoute, SignedQuery},
+        query_event::{
+            MailboxResponse, QueryArgs, QueryArgsMbx, QueryEvent, QueryRoute, QueryTopics,
+            SignedQuery,
+        },
         reply_event::SignedReply,
     },
     signer::KeyManager,
     state::IdentifierState,
 };
+
+#[derive(PartialEq, Debug, Clone)]
+pub enum PossibleResponse {
+    Kel(Vec<Message>),
+    Mbx(MailboxResponse),
+    Ksn(SignedReply),
+    Succes,
+}
+
+impl fmt::Display for PossibleResponse {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use serde::Serialize;
+        let str = match self {
+            PossibleResponse::Kel(kel) => kel
+                .iter()
+                .map(|k| String::from_utf8((k.to_cesr().unwrap())).unwrap())
+                .collect::<Vec<_>>()
+                .join(""),
+            PossibleResponse::Mbx(mbx) => {
+                let receipts_stream = mbx
+                    .receipt
+                    .clone()
+                    .into_iter()
+                    .map(|rct| {
+                        Message::Notice(Notice::NontransferableRct(rct))
+                            .to_cesr()
+                            .unwrap()
+                    })
+                    .flatten();
+                let multisig_stream = mbx
+                    .multisig
+                    .clone()
+                    .into_iter()
+                    .map(|rct| Message::Notice(Notice::Event(rct)).to_cesr().unwrap())
+                    .flatten();
+                #[derive(Serialize)]
+                struct GroupedResponse {
+                    receipt: String,
+                    multisig: String,
+                }
+                serde_json::to_string(&GroupedResponse {
+                    receipt: String::from_utf8(receipts_stream.collect()).unwrap(),
+                    multisig: String::from_utf8(multisig_stream.collect()).unwrap(),
+                })
+                .unwrap()
+            }
+            PossibleResponse::Ksn(ksn) => {
+                String::from_utf8(Message::Op(Op::Reply(ksn.clone())).to_cesr().unwrap()).unwrap()
+            }
+            PossibleResponse::Succes => todo!(),
+        };
+        f.write_str(&str)?;
+        Ok(())
+    }
+}
 
 /// Helper struct for events generation, signing and processing.
 /// Used in tests.
@@ -228,5 +291,160 @@ impl<K: KeyManager> SimpleController<K> {
 
     pub fn get_state(&self) -> Result<Option<IdentifierState>, Error> {
         self.storage.get_state(&self.prefix)
+    }
+
+    pub fn get_state_for_id(
+        &self,
+        id: &IdentifierPrefix,
+    ) -> Result<Option<IdentifierState>, Error> {
+        self.storage.get_state(id)
+    }
+
+    pub fn group_incept(
+        &mut self,
+        identifiers: Vec<IdentifierPrefix>,
+        signature_threshold: &SignatureThreshold,
+        initial_witness: Option<Vec<BasicPrefix>>,
+        witness_threshold: Option<u64>,
+    ) -> Result<(SignedEventMessage, Vec<SignedExchange>), Error> {
+        let signed = {
+            let km = self.key_manager.lock().map_err(|_| Error::MutexPoisoned)?;
+            let next_key_hash = SelfAddressing::Blake3_256.derive(
+                Basic::Ed25519
+                    .derive(km.next_public_key())
+                    .to_str()
+                    .as_bytes(),
+            );
+            let (pks, npks) = identifiers.iter().fold(
+                (
+                    vec![Basic::Ed25519.derive(km.public_key())],
+                    vec![next_key_hash],
+                ),
+                |mut acc, id| {
+                    let state = self.storage.get_state(id).unwrap().unwrap();
+                    acc.0.append(&mut state.clone().current.public_keys);
+                    acc.1
+                        .append(&mut state.clone().current.next_keys_data.next_key_hashes);
+                    acc
+                },
+            );
+            let icp = event_generator::incept_with_next_hashes(
+                pks,
+                signature_threshold,
+                npks,
+                initial_witness.unwrap_or_default(),
+                witness_threshold.unwrap_or(0),
+            )
+            .unwrap();
+            let signature = km.sign(icp.as_bytes())?;
+            let (_, key_event) = key_event_message(icp.as_bytes()).unwrap();
+            if let EventType::KeyEvent(icp) = key_event {
+                icp.sign(
+                    vec![AttachedSignaturePrefix::new(
+                        SelfSigning::Ed25519Sha512,
+                        signature,
+                        0,
+                    )],
+                    None,
+                    None,
+                )
+            } else {
+                unreachable!()
+            }
+        };
+
+        self.processor
+            .process_notice(&Notice::Event(signed.clone()))?;
+
+        // self.prefix = signed.event_message.event.get_prefix();
+        // No need to generate receipt
+        let exchanges = identifiers
+            .iter()
+            .map(|id| self.create_exchange_message(id, &signed).unwrap())
+            .collect();
+
+        Ok((signed, exchanges))
+    }
+
+    pub fn create_exchange_message(
+        &self,
+        receipient: &IdentifierPrefix,
+        data: &SignedEventMessage,
+    ) -> Result<SignedExchange, Error> {
+        let exn_message = Exchange::Fwd {
+            args: FwdArgs {
+                recipient_id: receipient.clone(),
+                topic: ForwardTopic::Multisig,
+            },
+            to_forward: data.event_message.clone(),
+        }
+        .to_message(SerializationFormats::JSON, &SelfAddressing::Blake3_256)?;
+
+        let icp_sig = Signature::Transferable(SignerData::JustSignatures, data.signatures.clone());
+        let mat = MaterialPath::to_path("-a".into());
+        let ssp = {
+            SelfSigning::Ed25519Sha512.derive(
+                self.key_manager
+                    .lock()
+                    .unwrap()
+                    .sign(&exn_message.serialize()?)?,
+            )
+        };
+
+        let exn_sig = AttachedSignaturePrefix {
+            index: 0,
+            signature: ssp,
+        };
+        let sigg = Signature::Transferable(
+            SignerData::LastEstablishment(self.prefix.clone()),
+            vec![exn_sig],
+        );
+
+        Ok(SignedExchange {
+            exchange_message: exn_message,
+            signature: vec![sigg],
+            data_signature: (mat, vec![icp_sig]),
+        })
+    }
+
+    pub fn create_mbx_msg(&self, witness: &BasicPrefix) -> Op {
+        let qry_msg = QueryEvent::new_query(
+            QueryRoute::Mbx {
+                args: QueryArgsMbx {
+                    i: IdentifierPrefix::Basic(witness.clone()),
+                    pre: self.prefix.clone(),
+                    src: IdentifierPrefix::Basic(witness.clone()),
+                    topics: QueryTopics {
+                        credential: 0,
+                        receipt: 0,
+                        replay: 0,
+                        multisig: 0,
+                        delegate: 0,
+                        reply: 0,
+                    },
+                },
+                reply_route: "".to_string(),
+            },
+            SerializationFormats::JSON,
+            &SelfAddressing::Blake3_256,
+        )
+        .unwrap();
+        let signature = self
+            .key_manager
+            .lock()
+            .unwrap()
+            .sign(&qry_msg.serialize().unwrap())
+            .unwrap();
+        let signatures = vec![AttachedSignaturePrefix::new(
+            SelfSigning::Ed25519Sha512,
+            signature,
+            0,
+        )];
+        let mbx_msg = Op::Query(SignedQuery::new(
+            qry_msg,
+            self.prefix.clone().clone(),
+            signatures,
+        ));
+        mbx_msg
     }
 }

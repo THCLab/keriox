@@ -5,10 +5,15 @@ use crate::oobi::OobiManager;
 use crate::{
     error::Error,
     event_message::{
+        exchange::{Exchange, ExchangeMessage, SignedExchange},
         serialization_info::SerializationFormats,
-        signed_event_message::{Message, Notice, Op},
+        signature::Signature,
+        signed_event_message::{Message, Notice, Op, SignedEventMessage},
     },
-    event_parsing::message::{signed_event_stream, signed_notice_stream},
+    event_parsing::{
+        message::{signed_event_stream, signed_notice_stream},
+        path::MaterialPath,
+    },
     prefix::IdentifierPrefix,
 };
 #[cfg(feature = "query")]
@@ -98,6 +103,57 @@ pub fn process_signed_oobi(
 
     Ok(())
 }
+
+pub fn process_signed_exn(exn: SignedExchange, storage: &EventStorage) -> Result<(), Error> {
+    let signatures = exn.signature.get(0).unwrap();
+    // check signatures
+    let kc = storage
+        .get_state(&signatures.get_signer().unwrap())?
+        .ok_or_else(|| Error::SemanticError("No signer identifier in db".into()))?
+        .current;
+
+    match signatures {
+        crate::event_message::signature::Signature::Transferable(sigd, sigs) => {
+            if kc.verify(&exn.exchange_message.clone().serialize()?, &sigs)? {
+                // unpack and check what's inside
+                process_exn(exn.exchange_message, exn.data_signature, storage)
+            } else {
+                Err(Error::SignatureVerificationError)
+            }
+        }
+        crate::event_message::signature::Signature::NonTransferable(_, _) => todo!(),
+    }?;
+    Ok(())
+}
+
+fn process_exn(
+    exn: ExchangeMessage,
+    attachemnt: (MaterialPath, Vec<Signature>),
+    storage: &EventStorage,
+) -> Result<(), Error> {
+    let (receipient, to_forward) = match exn.event.content {
+        Exchange::Fwd { args, to_forward } => (args.recipient_id, to_forward),
+    };
+    let sigs = attachemnt
+        .1
+        .into_iter()
+        .map(|s| match s {
+            Signature::Transferable(_sd, sigs) => sigs,
+            Signature::NonTransferable(_, _) => todo!(),
+        })
+        .flatten()
+        .collect();
+    let signed_to_forward = SignedEventMessage {
+        event_message: to_forward,
+        signatures: sigs,
+        witness_receipts: None,
+        delegator_seal: None,
+    };
+
+    storage.add_mailbox_exchange(&receipient, signed_to_forward)?;
+    Ok(())
+}
+
 #[cfg(feature = "query")]
 pub fn process_signed_query(
     qr: SignedQuery,
@@ -161,11 +217,7 @@ fn process_query(qr: Query, storage: &EventStorage) -> Result<ReplyType, QueryEr
             Ok(ReplyType::Ksn(ksn))
         }
         QueryRoute::Mbx { args, .. } => {
-            let mail = storage
-                .get_mailbox_messages(args)?
-                .into_iter()
-                .map(Message::Notice)
-                .collect();
+            let mail = storage.get_mailbox_messages(args)?;
             Ok(ReplyType::Mbx(mail))
         }
     }

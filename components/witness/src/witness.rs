@@ -5,7 +5,8 @@ use std::{
 
 use keri::{
     actor::{
-        parse_notice_stream, parse_op_stream, prelude::*, process_reply, process_signed_query,
+        parse_notice_stream, parse_op_stream, prelude::*, process_reply, process_signed_exn,
+        process_signed_query, simple_controller::PossibleResponse,
     },
     derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
     error::Error,
@@ -13,12 +14,13 @@ use keri::{
     event_message::{
         event_msg_builder::ReceiptBuilder,
         key_event_message::KeyEvent,
-        signed_event_message::{Message, Notice, Op, SignedNontransferableReceipt},
+        signed_event_message::{Notice, Op, SignedNontransferableReceipt},
     },
     oobi::{LocationScheme, OobiManager},
     prefix::{BasicPrefix, IdentifierPrefix},
     processor::notification::{Notification, NotificationBus, Notifier},
     query::{
+        query_event::{MailboxResponse, QueryArgsMbx, QueryTopics},
         reply_event::{ReplyEvent, ReplyRoute, SignedReply},
         ReplyType,
     },
@@ -46,6 +48,20 @@ impl Notifier for WitnessReceiptGenerator {
                 bus.notify(&Notification::ReceiptAccepted)?;
                 self.storage.add_mailbox_receipt(non_trans_receipt)?;
                 Ok(())
+            }
+            Notification::PartiallyWitnessed(prt) => {
+                self.storage
+                    .db
+                    .add_kel_finalized_event(prt.clone(), &prt.event_message.event.get_prefix())?;
+                bus.notify(&Notification::KeyEventAdded(prt.clone()))?;
+                let non_trans_receipt =
+                    self.respond_to_key_event(&prt.event_message, self.signer.clone())?;
+                let prefix = &non_trans_receipt.body.event.prefix.clone();
+                self.storage
+                    .db
+                    .add_receipt_nt(non_trans_receipt.clone(), prefix)?;
+                bus.notify(&Notification::ReceiptAccepted)?;
+                self.storage.add_mailbox_receipt(non_trans_receipt)
             }
             _ => Ok(()),
         }
@@ -115,7 +131,10 @@ impl Witness {
         let receipt_generator = Arc::new(WitnessReceiptGenerator::new(signer.clone(), db.clone()));
         witness_processor.register_observer(
             receipt_generator.clone(),
-            &[JustNotification::KeyEventAdded],
+            &[
+                JustNotification::KeyEventAdded,
+                JustNotification::PartiallyWitnessed,
+            ],
         )?;
         Ok(Self {
             prefix,
@@ -207,14 +226,11 @@ impl Witness {
     pub fn process_notice(&self, notice: Notice) -> Result<(), Error> {
         self.processor.process_notice(&notice)
     }
-
-    pub fn process_op(&self, op: Op) -> Result<Vec<Message>, WitnessError> {
-        let mut responses = Vec::new();
-
+    pub fn process_op(&self, op: Op) -> Result<PossibleResponse, WitnessError> {
         match op {
             Op::Query(qry) => {
                 let response = process_signed_query(qry, &self.event_storage)?;
-                match response {
+                Ok(match response {
                     ReplyType::Ksn(ksn) => {
                         let rpy = ReplyEvent::new_reply(
                             ReplyRoute::Ksn(IdentifierPrefix::Basic(self.prefix.clone()), ksn),
@@ -224,15 +240,12 @@ impl Witness {
 
                         let signature =
                             SelfSigning::Ed25519Sha512.derive(self.signer.sign(&rpy.serialize()?)?);
-                        let reply = Message::Op(Op::Reply(SignedReply::new_nontrans(
-                            rpy,
-                            self.prefix.clone(),
-                            signature,
-                        )));
-                        responses.push(reply);
+                        let reply = SignedReply::new_nontrans(rpy, self.prefix.clone(), signature);
+                        PossibleResponse::Ksn(reply)
                     }
-                    ReplyType::Kel(msgs) | ReplyType::Mbx(msgs) => responses.extend(msgs),
-                };
+                    ReplyType::Kel(msgs) => PossibleResponse::Kel(msgs),
+                    ReplyType::Mbx(mailbox_response) => PossibleResponse::Mbx(mailbox_response), //responses.extend(msgs),
+                })
             }
             Op::Reply(rpy) => {
                 process_reply(
@@ -241,11 +254,13 @@ impl Witness {
                     &self.processor,
                     &self.event_storage,
                 )?;
+                Ok(PossibleResponse::Succes)
             }
-            Op::Exchange(_) => todo!(),
+            Op::Exchange(exn) => {
+                process_signed_exn(exn, &self.event_storage)?;
+                Ok(PossibleResponse::Succes)
+            }
         }
-
-        Ok(responses)
     }
 
     pub fn parse_and_process_notices(&self, input_stream: &[u8]) -> Result<(), Error> {
@@ -255,14 +270,30 @@ impl Witness {
             .collect()
     }
 
-    pub fn parse_and_process_ops(&self, input_stream: &[u8]) -> Result<Vec<Message>, WitnessError> {
+    pub fn parse_and_process_ops(
+        &self,
+        input_stream: &[u8],
+    ) -> Result<Vec<PossibleResponse>, WitnessError> {
         parse_op_stream(input_stream)?
             .into_iter()
-            .flat_map(|op| match self.process_op(op) {
-                Ok(msgs) => msgs.into_iter().map(Ok).collect(),
-                Err(e) => vec![Err(e)],
-            })
+            .map(|op| self.process_op(op))
             .collect()
+    }
+
+    pub fn get_mailbox_messages(&self, id: &IdentifierPrefix) -> Result<MailboxResponse, Error> {
+        self.event_storage.get_mailbox_messages(QueryArgsMbx {
+            i: IdentifierPrefix::Basic(self.prefix.clone()),
+            pre: id.clone(),
+            src: IdentifierPrefix::Basic(self.prefix.clone()),
+            topics: QueryTopics {
+                credential: 0,
+                receipt: 0,
+                replay: 0,
+                multisig: 0,
+                delegate: 0,
+                reply: 0,
+            },
+        })
     }
 }
 

@@ -157,12 +157,12 @@ pub mod http_handlers {
         let resp = data
             .parse_and_process_ops(post_data.as_bytes())?
             .iter()
-            .map(|msg| msg.to_cesr())
-            .flatten_ok()
-            .try_collect()?;
+            .map(|msg| msg.to_string())
+            .collect::<Vec<_>>()
+            .join("");
         Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())
-            .body(String::from_utf8(resp).unwrap()))
+            .body(resp))
     }
 
     #[derive(Debug, Display, Error, From)]

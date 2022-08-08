@@ -325,8 +325,8 @@ impl SledEventDatabase {
         event: SignedEventMessage,
         target_id: &IdentifierPrefix,
     ) -> Result<(), DbError> {
-            self.mailbox_multisig
-                .push(self.identifiers.designated_key(target_id)?, event.into())
+        self.mailbox_multisig
+            .push(self.identifiers.designated_key(target_id)?, event.into())
     }
 
     #[cfg(feature = "query")]
