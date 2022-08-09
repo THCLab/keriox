@@ -113,7 +113,7 @@ pub fn process_signed_exn(exn: SignedExchange, storage: &EventStorage) -> Result
         .current;
 
     match signatures {
-        crate::event_message::signature::Signature::Transferable(sigd, sigs) => {
+        Signature::Transferable(_sigd, sigs) => {
             if kc.verify(&exn.exchange_message.clone().serialize()?, &sigs)? {
                 // unpack and check what's inside
                 process_exn(exn.exchange_message, exn.data_signature, storage)
@@ -121,7 +121,7 @@ pub fn process_signed_exn(exn: SignedExchange, storage: &EventStorage) -> Result
                 Err(Error::SignatureVerificationError)
             }
         }
-        crate::event_message::signature::Signature::NonTransferable(_, _) => todo!(),
+        Signature::NonTransferable(_, _) => todo!(),
     }?;
     Ok(())
 }

@@ -47,7 +47,7 @@ pub struct SledEventDatabase {
 
     #[cfg(feature = "query")]
     mailbox_replies: SledEventTreeVec<SignedEventMessage>,
-     
+
     #[cfg(feature = "query")]
     mailbox_multisig: SledEventTreeVec<TimestampedSignedEventMessage>,
 }
@@ -319,7 +319,7 @@ impl SledEventDatabase {
         self.mailbox_replies
             .iter_values(self.identifiers.designated_key(id).ok()?)
     }
-    
+
     pub fn add_mailbox_multisig(
         &self,
         event: SignedEventMessage,

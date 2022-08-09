@@ -7,8 +7,8 @@ use derive_more::{Display, Error, From};
 use futures::{StreamExt, TryStreamExt};
 use keri::{
     actor::{
-        parse_event_stream, parse_notice_stream, parse_op_stream, prelude::*, QueryError,
-        SignedQueryError, simple_controller::PossibleResponse,
+        parse_event_stream, parse_notice_stream, parse_op_stream, prelude::*,
+        simple_controller::PossibleResponse, QueryError, SignedQueryError,
     },
     database::DbError,
     derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},

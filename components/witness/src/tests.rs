@@ -1,17 +1,20 @@
 use std::sync::{Arc, Mutex};
 
 use keri::{
-    actor::{simple_controller::{PossibleResponse, SimpleController}, SignedQueryError},
+    actor::{
+        simple_controller::{PossibleResponse, SimpleController},
+        SignedQueryError,
+    },
     database::{escrow::EscrowDb, SledEventDatabase},
-    derivation::{basic::Basic, self_signing::SelfSigning},
+    derivation::basic::Basic,
     error::Error,
     event::sections::threshold::SignatureThreshold,
     event_message::signed_event_message::{Message, Notice, Op},
     keys::PublicKey,
-    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix},
+    prefix::{BasicPrefix, IdentifierPrefix},
     processor::{basic_processor::BasicProcessor, event_storage::EventStorage, Processor},
     query::query_event::MailboxResponse,
-    signer::{CryptoBox, KeyManager, Signer},
+    signer::{CryptoBox, Signer},
 };
 use tempfile::Builder;
 
@@ -558,7 +561,7 @@ fn test_mbx() {
 
     // query witness
     for controller in controllers {
-        let mbx_msg = controller.create_mbx_msg(&witness.prefix);
+        let mbx_msg = controller.query_mailbox(&witness.prefix);
         let mbx_msg = Message::Op(mbx_msg).to_cesr().unwrap();
         let receipts = witness.parse_and_process_ops(&mbx_msg).unwrap();
 
@@ -643,7 +646,7 @@ fn test_invalid_notice() {
 
     // query witness
     for controller in controllers {
-        let mbx_msg = controller.create_mbx_msg(&witness.prefix);
+        let mbx_msg = controller.query_mailbox(&witness.prefix);
         let mbx_msg = Message::Op(mbx_msg).to_cesr().unwrap();
         let result = witness.parse_and_process_ops(&mbx_msg);
 
@@ -665,23 +668,22 @@ pub fn test_multisig() -> Result<(), WitnessError> {
         let witness_root = Builder::new().prefix("test-db").tempdir().unwrap();
         let witness_root_oobi = Builder::new().prefix("test-db").tempdir().unwrap();
         let path = witness_root.path();
-        std::fs::create_dir_all(path).unwrap();
         Witness::new(signer_arc.clone(), path, witness_root_oobi.path())?
     };
 
-    let bob_key_manager = Arc::new(Mutex::new(CryptoBox::new()?));
-    // Init bob.
+    // Init first controller.
     let mut cont1 = {
         // Create test db and event processor.
+        let cont1_key_manager = Arc::new(Mutex::new(CryptoBox::new()?));
         let root = Builder::new().prefix("test-db").tempdir().unwrap();
-        let oobi_root = Builder::new().prefix("alice-db-oobi").tempdir().unwrap();
+        let oobi_root = Builder::new().prefix("cont1-db-oobi").tempdir().unwrap();
         let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-        let bob_escrow_db = Arc::new(EscrowDb::new(root.path())?);
+        let cont1_escrow_db = Arc::new(EscrowDb::new(root.path())?);
 
         SimpleController::new(
             Arc::clone(&db),
-            Arc::clone(&bob_escrow_db),
-            Arc::clone(&bob_key_manager),
+            Arc::clone(&cont1_escrow_db),
+            Arc::clone(&cont1_key_manager),
             oobi_root.path(),
         )?
     };
@@ -695,20 +697,19 @@ pub fn test_multisig() -> Result<(), WitnessError> {
         .collect::<Vec<_>>();
     cont1.process(&receipts1)?;
 
-    // Init alice.
-    let alice_key_manager = Arc::new(Mutex::new(CryptoBox::new()?));
+    // Init second controller.
     let mut cont2 = {
         // Create test db and event processor.
+        let cont2_key_manager = Arc::new(Mutex::new(CryptoBox::new()?));
         let root = Builder::new().prefix("test-db").tempdir().unwrap();
-        let oobi_root = Builder::new().prefix("alice-db-oobi").tempdir().unwrap();
-        std::fs::create_dir_all(root.path()).unwrap();
+        let oobi_root = Builder::new().prefix("cont2-db-oobi").tempdir().unwrap();
         let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-        let bob_escrow_db = Arc::new(EscrowDb::new(root.path())?);
+        let cont2_escrow_db = Arc::new(EscrowDb::new(root.path())?);
 
         SimpleController::new(
             Arc::clone(&db),
-            Arc::clone(&bob_escrow_db),
-            Arc::clone(&alice_key_manager),
+            Arc::clone(&cont2_escrow_db),
+            Arc::clone(&cont2_key_manager),
             oobi_root.path(),
         )?
     };
@@ -737,41 +738,23 @@ pub fn test_multisig() -> Result<(), WitnessError> {
     witness.process_notice(Notice::Event(group_icp.clone()))?;
 
     let group_id = group_icp.event_message.event.get_prefix();
-    let se = exchange_messages[0].clone();
+    assert_eq!(exchange_messages.len(), 1);
 
-    witness.process_op(Op::Exchange(se))?;
+    witness.process_op(Op::Exchange(exchange_messages[0].clone()))?;
 
     // Controller2 asks witness about his mailbox.
-    let mbx_msg = cont2.create_mbx_msg(&witness.prefix);
+    let mbx_msg = cont2.query_mailbox(&witness.prefix);
     let response = witness.process_op(mbx_msg).unwrap();
     if let PossibleResponse::Mbx(MailboxResponse { receipt, multisig }) = response {
         assert_eq!(receipt.len(), 1);
         assert_eq!(multisig.len(), 1);
 
         let group_icp_to_sign = multisig[0].clone();
-        // Process partially signed group icp
-        cont2.process(&[Message::Notice(Notice::Event(group_icp_to_sign.clone()))])?;
 
-        // sign and process inception event
-        let second_signature = AttachedSignaturePrefix {
-            index: 1,
-            signature: SelfSigning::Ed25519Sha512.derive(
-                alice_key_manager
-                    .lock()
-                    .unwrap()
-                    .sign(&group_icp_to_sign.event_message.serialize()?)?,
-            ),
-        };
-        let signed_icp =
-            group_icp_to_sign
-                .clone()
-                .event_message
-                .sign(vec![second_signature], None, None);
-        cont2.process(&[Message::Notice(Notice::Event(signed_icp.clone()))])?;
+        let signed_icp = cont2.process_multisig(group_icp_to_sign)?.unwrap();
+        let exn_from_cont2 = cont2.create_exchange_message(&cont1.prefix(), &signed_icp)?;
         // Send it to witness
         witness.process_notice(Notice::Event(signed_icp.clone()))?;
-
-        let exn_from_cont2 = cont2.create_exchange_message(&cont1.prefix(), &signed_icp)?;
         witness.process_op(Op::Exchange(exn_from_cont2))?;
     };
     // Controller2 didin't accept group icp yet because of lack of witness receipt.
@@ -784,14 +767,36 @@ pub fn test_multisig() -> Result<(), WitnessError> {
     let state = witness.event_storage.get_state(&group_id)?.unwrap();
     assert_eq!(state.sn, 0);
 
-    let group_receipt = witness
-        .get_mailbox_messages(&group_id)?
-        .receipt
+    let group_query_message = cont1.query_groups_mailbox(&witness.prefix)[0].clone();
+
+    let res = witness.process_op(Op::Query(group_query_message))?;
+    let receipts = match res {
+        PossibleResponse::Mbx(mbx) => mbx.receipt,
+        _ => unreachable!(),
+    };
+
+    let group_receipt = receipts
         .into_iter()
         .map(|r| Message::Notice(Notice::NontransferableRct(r)))
         .collect::<Vec<_>>();
     cont2.process(&group_receipt)?;
     let state = cont2.get_state_for_id(&group_id)?;
+    assert_eq!(state.unwrap().sn, 0);
+
+    // Controller1 asks witness about his mailbox.
+    let mbx_msg = cont1.query_mailbox(&witness.prefix);
+    let response = witness.process_op(mbx_msg).unwrap();
+    if let PossibleResponse::Mbx(MailboxResponse { receipt, multisig }) = response {
+        assert_eq!(receipt.len(), 1);
+        assert_eq!(multisig.len(), 1);
+
+        let group_icp = multisig[0].clone();
+        // Process partially signed group icp
+        cont1.process_multisig(group_icp)?;
+    };
+    // Process witness receipt of group event
+    cont1.process(&group_receipt)?;
+    let state = cont1.get_state_for_id(&group_id)?;
     assert_eq!(state.unwrap().sn, 0);
 
     Ok(())

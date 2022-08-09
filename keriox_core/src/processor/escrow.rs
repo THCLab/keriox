@@ -255,8 +255,10 @@ impl PartiallySignedEscrow {
                     self.remove_partially_signed(&new_event.event_message)?;
                     bus.notify(&Notification::PartiallyWitnessed(new_event))?;
                 }
+                Err(Error::SignatureVerificationError) => {
+                    // ignore
+                }
                 Err(_e) => {
-                    // TODO what if signatures are wrong?
                     //keep in escrow and save new partially signed event
                     self.escrowed_partially_signed
                         .add(&id, signed_event.clone())?;

@@ -10,7 +10,7 @@ use crate::{
     database::{escrow::EscrowDb, SledEventDatabase},
     derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
     error::Error,
-    event::{sections::threshold::SignatureThreshold, SerializationFormats},
+    event::{event_data::EventData, sections::threshold::SignatureThreshold, SerializationFormats},
     event_message::{
         exchange::{Exchange, ForwardTopic, FwdArgs, SignedExchange},
         signature::{Signature, SignerData},
@@ -48,7 +48,7 @@ impl fmt::Display for PossibleResponse {
         let str = match self {
             PossibleResponse::Kel(kel) => kel
                 .iter()
-                .map(|k| String::from_utf8((k.to_cesr().unwrap())).unwrap())
+                .map(|k| String::from_utf8(k.to_cesr().unwrap()).unwrap())
                 .collect::<Vec<_>>()
                 .join(""),
             PossibleResponse::Mbx(mbx) => {
@@ -97,6 +97,7 @@ pub struct SimpleController<K: KeyManager + 'static> {
     processor: BasicProcessor,
     oobi_manager: OobiManager,
     pub storage: EventStorage,
+    pub groups: Vec<IdentifierPrefix>,
 }
 
 impl<K: KeyManager> SimpleController<K> {
@@ -116,6 +117,7 @@ impl<K: KeyManager> SimpleController<K> {
             oobi_manager: OobiManager::new(oobi_db_path),
             processor,
             storage: EventStorage::new(db),
+            groups: vec![],
         })
     }
 
@@ -163,7 +165,7 @@ impl<K: KeyManager> SimpleController<K> {
         Ok(signed)
     }
 
-    pub fn query(&self, prefix: &IdentifierPrefix) -> Result<Op, Error> {
+    pub fn query_ksn(&self, prefix: &IdentifierPrefix) -> Result<Op, Error> {
         let query_args = QueryArgs {
             s: None,
             i: prefix.clone(),
@@ -289,6 +291,67 @@ impl<K: KeyManager> SimpleController<K> {
         Ok(())
     }
 
+    pub fn process_multisig(
+        &mut self,
+        event: SignedEventMessage,
+    ) -> Result<Option<SignedEventMessage>, Error> {
+        self.process(&[Message::Notice(Notice::Event(event.clone()))])?;
+        let group_prefix = event.event_message.event.get_prefix();
+
+        // check if you sign this event already
+        if self.groups.contains(&group_prefix) {
+            // signature was already provided
+            Ok(None)
+        } else {
+            // Process partially signed group icp
+            let own_pk = &self.get_state()?.unwrap().current.public_keys[0];
+            let index = match &event.event_message.event.content.event_data {
+                EventData::Icp(icp) => icp
+                    .key_config
+                    .public_keys
+                    .iter()
+                    .position(|pk| pk == own_pk),
+                EventData::Rot(rot) => rot
+                    .key_config
+                    .public_keys
+                    .iter()
+                    .position(|pk| pk == own_pk),
+                EventData::Dip(dip) => dip
+                    .inception_data
+                    .key_config
+                    .public_keys
+                    .iter()
+                    .position(|pk| pk == own_pk),
+                EventData::Drt(drt) => drt
+                    .key_config
+                    .public_keys
+                    .iter()
+                    .position(|pk| pk == own_pk),
+                EventData::Ixn(_) => None,
+            }
+            .ok_or(Error::SemanticError("Not group participant".into()))?;
+
+            // TODO compute index
+            // sign and process inception event
+            let second_signature = AttachedSignaturePrefix {
+                index: index as u16,
+                signature: SelfSigning::Ed25519Sha512.derive(
+                    self.key_manager
+                        .lock()
+                        .unwrap()
+                        .sign(&event.event_message.serialize()?)?,
+                ),
+            };
+            let signed_icp = event
+                .clone()
+                .event_message
+                .sign(vec![second_signature], None, None);
+            self.groups.push(group_prefix);
+            self.process(&[Message::Notice(Notice::Event(signed_icp.clone()))])?;
+            Ok(Some(signed_icp.clone()))
+        }
+    }
+
     pub fn get_state(&self) -> Result<Option<IdentifierState>, Error> {
         self.storage.get_state(&self.prefix)
     }
@@ -356,8 +419,8 @@ impl<K: KeyManager> SimpleController<K> {
         self.processor
             .process_notice(&Notice::Event(signed.clone()))?;
 
-        // self.prefix = signed.event_message.event.get_prefix();
-        // No need to generate receipt
+        self.groups.push(signed.event_message.event.get_prefix());
+
         let exchanges = identifiers
             .iter()
             .map(|id| self.create_exchange_message(id, &signed).unwrap())
@@ -407,7 +470,7 @@ impl<K: KeyManager> SimpleController<K> {
         })
     }
 
-    pub fn create_mbx_msg(&self, witness: &BasicPrefix) -> Op {
+    pub fn query_mailbox(&self, witness: &BasicPrefix) -> Op {
         let qry_msg = QueryEvent::new_query(
             QueryRoute::Mbx {
                 args: QueryArgsMbx {
@@ -446,5 +509,46 @@ impl<K: KeyManager> SimpleController<K> {
             signatures,
         ));
         mbx_msg
+    }
+
+    pub fn query_groups_mailbox(&self, witness: &BasicPrefix) -> Vec<SignedQuery> {
+        self.groups
+            .iter()
+            .map(|id| {
+                let qry_msg = QueryEvent::new_query(
+                    QueryRoute::Mbx {
+                        args: QueryArgsMbx {
+                            i: IdentifierPrefix::Basic(witness.clone()),
+                            pre: id.clone(),
+                            src: IdentifierPrefix::Basic(witness.clone()),
+                            topics: QueryTopics {
+                                credential: 0,
+                                receipt: 0,
+                                replay: 0,
+                                multisig: 0,
+                                delegate: 0,
+                                reply: 0,
+                            },
+                        },
+                        reply_route: "".to_string(),
+                    },
+                    SerializationFormats::JSON,
+                    &SelfAddressing::Blake3_256,
+                )
+                .unwrap();
+                let signature = self
+                    .key_manager
+                    .lock()
+                    .unwrap()
+                    .sign(&qry_msg.serialize().unwrap())
+                    .unwrap();
+                let signatures = vec![AttachedSignaturePrefix::new(
+                    SelfSigning::Ed25519Sha512,
+                    signature,
+                    0,
+                )];
+                SignedQuery::new(qry_msg, self.prefix.clone(), signatures)
+            })
+            .collect()
     }
 }

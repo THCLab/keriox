@@ -528,28 +528,27 @@ fn signed_receipt(
 }
 
 pub fn signed_exchange(exn: ExchangeMessage, attachments: Vec<Attachment>) -> Result<Op, Error> {
-    // TODO shouldn't depend on order
     let mut atts = attachments.into_iter();
-    let att1: Vec<Signature> = atts
+    let att1 = atts
         .next()
-        .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?
-        .try_into()?;
+        .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?;
     let att2 = atts
         .next()
         .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?;
 
-    let signed_exchange = match (att1.clone(), att2.clone()) {
-        (
-            sigs,
-            Attachment::PathedMaterialQuadruplet(material_path, sig),
-        ) => SignedExchange {
-            exchange_message: exn,
-            signature: att1,
-            data_signature: (material_path, sig),
-        },
-        _ => todo!(),
+    let (path, data_sigs, signatures): (_, _, Vec<Signature>) = match (att1, att2) {
+        (Attachment::PathedMaterialQuadruplet(path, sigs), anything)
+        | (anything, Attachment::PathedMaterialQuadruplet(path, sigs)) => {
+            (path, sigs, anything.try_into()?)
+        }
+        _ => return Err(Error::SemanticError("Wrong attachment".into())),
     };
-    Ok(Op::Exchange(signed_exchange))
+
+    Ok(Op::Exchange(SignedExchange {
+        exchange_message: exn,
+        signature: signatures,
+        data_signature: (path, data_sigs),
+    }))
 }
 
 #[test]
