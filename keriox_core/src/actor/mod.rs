@@ -105,34 +105,27 @@ pub fn process_signed_oobi(
 }
 
 pub fn process_signed_exn(exn: SignedExchange, storage: &EventStorage) -> Result<(), Error> {
-    let signatures = exn.signature.get(0).unwrap();
-    // check signatures
-    let kc = storage
-        .get_state(&signatures.get_signer().unwrap())?
-        .ok_or_else(|| Error::SemanticError("No signer identifier in db".into()))?
-        .current;
-
-    match signatures {
-        Signature::Transferable(_sigd, sigs) => {
-            if kc.verify(&exn.exchange_message.clone().serialize()?, &sigs)? {
-                // unpack and check what's inside
-                process_exn(exn.exchange_message, exn.data_signature, storage)
-            } else {
-                Err(Error::SignatureVerificationError)
-            }
-        }
-        Signature::NonTransferable(_, _) => todo!(),
-    }?;
-    Ok(())
+    let exn_message = &exn.exchange_message;
+    let verification_result =
+        exn.signature
+            .iter()
+            .try_fold(true, |acc, signature| -> Result<bool, Error> {
+                Ok(acc && signature.verify(&exn_message.serialize()?, storage)?)
+            });
+    if verification_result? {
+        process_exn(exn_message, exn.data_signature, storage)
+    } else {
+        Err(Error::SignatureVerificationError)
+    }
 }
 
 fn process_exn(
-    exn: ExchangeMessage,
+    exn: &ExchangeMessage,
     attachemnt: (MaterialPath, Vec<Signature>),
     storage: &EventStorage,
 ) -> Result<(), Error> {
-    let (receipient, to_forward) = match exn.event.content {
-        Exchange::Fwd { args, to_forward } => (args.recipient_id, to_forward),
+    let (receipient, to_forward) = match &exn.event.content {
+        Exchange::Fwd { args, to_forward } => (&args.recipient_id, to_forward),
     };
     let sigs = attachemnt
         .1
@@ -144,13 +137,13 @@ fn process_exn(
         .flatten()
         .collect();
     let signed_to_forward = SignedEventMessage {
-        event_message: to_forward,
+        event_message: to_forward.clone(),
         signatures: sigs,
         witness_receipts: None,
         delegator_seal: None,
     };
 
-    storage.add_mailbox_exchange(&receipient, signed_to_forward)?;
+    storage.add_mailbox_exchange(receipient, signed_to_forward)?;
     Ok(())
 }
 

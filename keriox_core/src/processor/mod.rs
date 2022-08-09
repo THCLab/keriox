@@ -19,7 +19,6 @@ use crate::{
     database::{timestamped::TimestampedSignedEventMessage, SledEventDatabase},
     error::Error,
     event::{receipt::Receipt, SerializationFormats},
-    event_message::exchange::SignedExchange,
     event_message::signed_event_message::{
         Notice, SignedEventMessage, SignedNontransferableReceipt,
     },
