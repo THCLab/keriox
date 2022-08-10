@@ -13,6 +13,7 @@ use keri::{
     event_message::signed_event_message::{Notice, Op},
     oobi::{error::OobiError, EndRole, LocationScheme, OobiManager, Role, Scheme},
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix},
+    processor::{escrow::ReplyEscrow, notification::JustNotification},
     query::{
         query_event::{QueryArgs, QueryEvent, QueryRoute, SignedQuery},
         reply_event::{ReplyEvent, ReplyRoute, SignedReply},
@@ -48,7 +49,14 @@ impl WatcherData {
 
         let prefix = Basic::Ed25519.derive(signer.public_key());
         let db = Arc::new(SledEventDatabase::new(event_db_path)?);
-        let processor = BasicProcessor::new(db.clone(), None);
+        let mut processor = BasicProcessor::new(db.clone(), None);
+        processor.register_observer(
+            Arc::new(ReplyEscrow::new(db.clone())),
+            &[
+                JustNotification::KeyEventAdded,
+                JustNotification::KsnOutOfOrder,
+            ],
+        )?;
         let storage = EventStorage::new(db.clone());
         // construct witness loc scheme oobi
         let loc_scheme = LocationScheme::new(
@@ -145,18 +153,40 @@ impl WatcherData {
                 // Update latest state for prefix
                 let wit_id = self.query_state(qry.query.get_prefix()).await?;
 
-                // Get latest state for prefix
+                // Get latest state sn for prefix
                 let last_sn = self
                     .event_storage
-                    .get_last_ksn_reply(&qry.query.get_prefix(), &IdentifierPrefix::Basic(wit_id))
-                    .and_then(|ksn| {
-                        if let ReplyRoute::Ksn(_, ksn) = ksn.reply.get_route() {
-                            Some(ksn)
-                        } else {
-                            None
-                        }
+                    .db
+                    // get latest escrowed reply
+                    .get_escrowed_replys(&qry.query.get_prefix())
+                    .and_then(|replies| {
+                        replies
+                            .map(|reply| {
+                                if let ReplyRoute::Ksn(_, ksn) = reply.reply.get_route() {
+                                    ksn
+                                } else {
+                                    panic!("escrowed replies should only contain ksn replies");
+                                }
+                            })
+                            .map(|ksn| ksn.state.sn)
+                            .max()
                     })
-                    .map(|ksn| ksn.state.sn);
+                    // get latest accepted reply
+                    .or_else(|| {
+                        self.event_storage
+                            .get_last_ksn_reply(
+                                &qry.query.get_prefix(),
+                                &IdentifierPrefix::Basic(wit_id),
+                            )
+                            .map(|reply| {
+                                if let ReplyRoute::Ksn(_, ksn) = reply.reply.get_route() {
+                                    ksn
+                                } else {
+                                    panic!("last ksn reply should be ksn")
+                                }
+                            })
+                            .map(|ksn| ksn.state.sn)
+                    });
 
                 // Compute current state from our database
                 let current_sn = self
@@ -165,7 +195,7 @@ impl WatcherData {
                     .state
                     .sn;
 
-                if current_sn < last_sn.unwrap_or(0) {
+                if current_sn < last_sn.unwrap_or(u64::MAX) {
                     // forward query to witness
                     self.forward_query(&qry).await?;
                     return Ok(None);
