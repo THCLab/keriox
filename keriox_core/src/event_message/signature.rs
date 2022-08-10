@@ -6,7 +6,8 @@ use crate::{
     error::Error,
     event::sections::seal::EventSeal,
     event_parsing::Attachment,
-    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix}, processor::event_storage::EventStorage,
+    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+    processor::event_storage::EventStorage,
 };
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -51,15 +52,11 @@ impl Signature {
                             .get_signer()
                             .ok_or(Error::SemanticError("Uknown signer".into()))?,
                     )?
-                    .ok_or_else(|| {
-                        Error::SemanticError("No signer identifier in db".into())
-                    })?
+                    .ok_or_else(|| Error::SemanticError("No signer identifier in db".into()))?
                     .current;
                 kc.verify(data, &sigs)
             }
-            Signature::NonTransferable(id, sig) => {
-                id.verify(data, &sig)
-            }
+            Signature::NonTransferable(id, sig) => id.verify(data, &sig),
         }
     }
 }

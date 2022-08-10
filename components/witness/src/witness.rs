@@ -226,7 +226,8 @@ impl Witness {
     pub fn process_notice(&self, notice: Notice) -> Result<(), Error> {
         self.processor.process_notice(&notice)
     }
-    pub fn process_op(&self, op: Op) -> Result<PossibleResponse, WitnessError> {
+
+    pub fn process_op(&self, op: Op) -> Result<Option<PossibleResponse>, WitnessError> {
         match op {
             Op::Query(qry) => {
                 let response = process_signed_query(qry, &self.event_storage)?;
@@ -241,10 +242,12 @@ impl Witness {
                         let signature =
                             SelfSigning::Ed25519Sha512.derive(self.signer.sign(&rpy.serialize()?)?);
                         let reply = SignedReply::new_nontrans(rpy, self.prefix.clone(), signature);
-                        PossibleResponse::Ksn(reply)
+                        Some(PossibleResponse::Ksn(reply))
                     }
-                    ReplyType::Kel(msgs) => PossibleResponse::Kel(msgs),
-                    ReplyType::Mbx(mailbox_response) => PossibleResponse::Mbx(mailbox_response), //responses.extend(msgs),
+                    ReplyType::Kel(msgs) => Some(PossibleResponse::Kel(msgs)),
+                    ReplyType::Mbx(mailbox_response) => {
+                        Some(PossibleResponse::Mbx(mailbox_response))
+                    }
                 })
             }
             Op::Reply(rpy) => {
@@ -254,11 +257,11 @@ impl Witness {
                     &self.processor,
                     &self.event_storage,
                 )?;
-                Ok(PossibleResponse::Succes)
+                Ok(None)
             }
             Op::Exchange(exn) => {
                 process_signed_exn(exn, &self.event_storage)?;
-                Ok(PossibleResponse::Succes)
+                Ok(None)
             }
         }
     }
@@ -277,6 +280,11 @@ impl Witness {
         parse_op_stream(input_stream)?
             .into_iter()
             .map(|op| self.process_op(op))
+            .filter_map(|op| match op {
+                Ok(Some(res)) => Some(Ok(res)),
+                Ok(None) => None,
+                Err(e) => Some(Err(e)),
+            })
             .collect()
     }
 

@@ -4,6 +4,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use serde::Serialize;
+
 use super::{prelude::Message, process_message};
 use crate::{
     controller::event_generator,
@@ -39,52 +41,52 @@ pub enum PossibleResponse {
     Kel(Vec<Message>),
     Mbx(MailboxResponse),
     Ksn(SignedReply),
-    Succes,
 }
 
-impl fmt::Display for PossibleResponse {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use serde::Serialize;
-        let str = match self {
+impl PossibleResponse {
+    fn display(&self) -> Result<Vec<u8>, Error> {
+        Ok(match self {
             PossibleResponse::Kel(kel) => kel
                 .iter()
-                .map(|k| String::from_utf8(k.to_cesr().unwrap()).unwrap())
-                .collect::<Vec<_>>()
-                .join(""),
+                .map(|message| -> Result<_, Error> { message.to_cesr() })
+                .collect::<Result<Vec<Vec<u8>>, Error>>()?
+                .concat(),
             PossibleResponse::Mbx(mbx) => {
                 let receipts_stream = mbx
                     .receipt
                     .clone()
                     .into_iter()
-                    .map(|rct| {
-                        Message::Notice(Notice::NontransferableRct(rct))
-                            .to_cesr()
-                            .unwrap()
-                    })
-                    .flatten();
+                    .map(|rct| Message::Notice(Notice::NontransferableRct(rct)).to_cesr())
+                    .collect::<Result<Vec<Vec<u8>>, Error>>()?
+                    .concat();
                 let multisig_stream = mbx
                     .multisig
                     .clone()
                     .into_iter()
-                    .map(|rct| Message::Notice(Notice::Event(rct)).to_cesr().unwrap())
-                    .flatten();
+                    .map(|rct| Message::Notice(Notice::Event(rct)).to_cesr())
+                    .collect::<Result<Vec<Vec<u8>>, Error>>()?
+                    .concat();
                 #[derive(Serialize)]
                 struct GroupedResponse {
                     receipt: String,
                     multisig: String,
                 }
-                serde_json::to_string(&GroupedResponse {
-                    receipt: String::from_utf8(receipts_stream.collect()).unwrap(),
-                    multisig: String::from_utf8(multisig_stream.collect()).unwrap(),
-                })
-                .unwrap()
+                serde_json::to_vec(&GroupedResponse {
+                    receipt: String::from_utf8(receipts_stream)
+                        .map_err(|e| Error::SerializationError(e.to_string()))?,
+                    multisig: String::from_utf8(multisig_stream)
+                        .map_err(|e| Error::SerializationError(e.to_string()))?,
+                })?
             }
-            PossibleResponse::Ksn(ksn) => {
-                String::from_utf8(Message::Op(Op::Reply(ksn.clone())).to_cesr().unwrap()).unwrap()
-            }
-            PossibleResponse::Succes => todo!(),
-        };
-        f.write_str(&str)?;
+            PossibleResponse::Ksn(ksn) => Message::Op(Op::Reply(ksn.clone())).to_cesr()?,
+        })
+    }
+}
+
+impl fmt::Display for PossibleResponse {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let str = self.display().map_err(|_e| fmt::Error)?;
+        f.write_str(&String::from_utf8(str).map_err(|_e| fmt::Error)?)?;
         Ok(())
     }
 }

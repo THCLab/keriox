@@ -176,7 +176,7 @@ impl WatcherData {
                 self.process_reply(reply)?;
                 Ok(None)
             }
-            Op::Exchange(_) => todo!(),
+            Op::Exchange(_exn) => Ok(None),
         }
     }
 
@@ -283,7 +283,11 @@ impl WatcherData {
         input_stream: &[u8],
     ) -> Result<Vec<PossibleResponse>, WatcherError> {
         futures::stream::iter(parse_op_stream(input_stream)?)
-            .then(|op| async { self.process_op(op).await.map(|r| vec![r.unwrap()]) })
+            .then(|op| async {
+                self.process_op(op)
+                    .await
+                    .map(|r| r.map(|res| vec![res]).unwrap_or_default())
+            })
             .try_concat()
             .await
     }

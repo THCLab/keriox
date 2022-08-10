@@ -323,7 +323,7 @@ fn test_qry_rpy() -> Result<(), WitnessError> {
     let response = witness.process_op(query)?;
 
     // assert_eq!(response.len(), 1);
-    if let PossibleResponse::Kel(response) = response {
+    if let Some(PossibleResponse::Kel(response)) = response {
         match &response[0] {
             Message::Op(Op::Reply(rpy)) => {
                 if let ReplyRoute::Ksn(_id, ksn) = rpy.reply.get_route() {
@@ -371,7 +371,7 @@ fn test_qry_rpy() -> Result<(), WitnessError> {
         .flatten()
         .map(Message::Notice)
         .collect::<Vec<_>>();
-    assert_eq!(response, PossibleResponse::Kel(alice_kel));
+    assert_eq!(response, Some(PossibleResponse::Kel(alice_kel)));
 
     Ok(())
 }
@@ -745,7 +745,7 @@ pub fn test_multisig() -> Result<(), WitnessError> {
     // Controller2 asks witness about his mailbox.
     let mbx_msg = cont2.query_mailbox(&witness.prefix);
     let response = witness.process_op(mbx_msg).unwrap();
-    if let PossibleResponse::Mbx(MailboxResponse { receipt, multisig }) = response {
+    if let Some(PossibleResponse::Mbx(MailboxResponse { receipt, multisig })) = response {
         assert_eq!(receipt.len(), 1);
         assert_eq!(multisig.len(), 1);
 
@@ -771,7 +771,7 @@ pub fn test_multisig() -> Result<(), WitnessError> {
 
     let res = witness.process_op(Op::Query(group_query_message))?;
     let receipts = match res {
-        PossibleResponse::Mbx(mbx) => mbx.receipt,
+        Some(PossibleResponse::Mbx(mbx)) => mbx.receipt,
         _ => unreachable!(),
     };
 
@@ -786,7 +786,7 @@ pub fn test_multisig() -> Result<(), WitnessError> {
     // Controller1 asks witness about his mailbox.
     let mbx_msg = cont1.query_mailbox(&witness.prefix);
     let response = witness.process_op(mbx_msg).unwrap();
-    if let PossibleResponse::Mbx(MailboxResponse { receipt, multisig }) = response {
+    if let Some(PossibleResponse::Mbx(MailboxResponse { receipt, multisig })) = response {
         assert_eq!(receipt.len(), 1);
         assert_eq!(multisig.len(), 1);
 
