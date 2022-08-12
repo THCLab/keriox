@@ -4,6 +4,8 @@ pub(crate) mod timestamped;
 
 use std::path::{Path, PathBuf};
 
+use sled::Db;
+
 use self::tables::{SledEventTree, SledEventTreeVec};
 #[cfg(feature = "query")]
 use crate::query::reply_event::SignedReply;
@@ -20,6 +22,73 @@ use crate::{
 };
 
 use self::timestamped::TimestampedSignedEventMessage;
+
+#[cfg(feature = "query")]
+pub struct MailboxData {
+    mailbox_receipts: SledEventTreeVec<SignedNontransferableReceipt>,
+    mailbox_replies: SledEventTreeVec<SignedEventMessage>,
+    mailbox_multisig: SledEventTreeVec<TimestampedSignedEventMessage>,
+}
+
+impl MailboxData {
+    pub fn new(db: &Db) -> Result<Self, DbError> {
+        Ok(Self {
+            mailbox_receipts: SledEventTreeVec::new(db.open_tree(b"mbxrct")?),
+            mailbox_replies: SledEventTreeVec::new(db.open_tree(b"mbxrpy")?),
+            mailbox_multisig: SledEventTreeVec::new(db.open_tree(b"mbxm")?),
+        })
+    }
+
+    #[cfg(feature = "query")]
+    pub fn add_mailbox_receipt(
+        &self,
+        key: u64,
+        receipt: SignedNontransferableReceipt,
+    ) -> Result<(), DbError> {
+        if !self.mailbox_receipts.contains_value(&receipt) {
+            self.mailbox_receipts.push(key, receipt)
+        } else {
+            Ok(())
+        }
+    }
+
+    #[cfg(feature = "query")]
+    pub fn get_mailbox_receipts(
+        &self,
+        key: u64,
+    ) -> Option<impl DoubleEndedIterator<Item = SignedNontransferableReceipt>> {
+        self.mailbox_receipts.iter_values(key)
+    }
+
+    #[cfg(feature = "query")]
+    pub fn add_mailbox_reply(&self, key: u64, reply: SignedEventMessage) -> Result<(), DbError> {
+        if !self.mailbox_replies.contains_value(&reply) {
+            self.mailbox_replies.push(key, reply)
+        } else {
+            Ok(())
+        }
+    }
+
+    #[cfg(feature = "query")]
+    pub fn get_mailbox_replies(
+        &self,
+        key: u64,
+    ) -> Option<impl DoubleEndedIterator<Item = SignedEventMessage>> {
+        self.mailbox_replies.iter_values(key)
+    }
+
+    pub fn add_mailbox_multisig(&self, key: u64, event: SignedEventMessage) -> Result<(), DbError> {
+        self.mailbox_multisig.push(key, event.into())
+    }
+
+    #[cfg(feature = "query")]
+    pub fn get_mailbox_multisig(
+        &self,
+        key: u64,
+    ) -> Option<impl DoubleEndedIterator<Item = TimestampedSignedEventMessage>> {
+        self.mailbox_multisig.iter_values(key)
+    }
+}
 
 pub struct SledEventDatabase {
     // "iids" tree
@@ -43,13 +112,7 @@ pub struct SledEventDatabase {
     escrowed_replys: SledEventTreeVec<SignedReply>,
 
     #[cfg(feature = "query")]
-    mailbox_receipts: SledEventTreeVec<SignedNontransferableReceipt>,
-
-    #[cfg(feature = "query")]
-    mailbox_replies: SledEventTreeVec<SignedEventMessage>,
-
-    #[cfg(feature = "query")]
-    mailbox_multisig: SledEventTreeVec<TimestampedSignedEventMessage>,
+    mailbox: MailboxData,
 }
 
 // TODO: remove all the `.ok()`s
@@ -66,6 +129,7 @@ impl SledEventDatabase {
         escrow_path.push("escrow");
 
         let db = sled::open(events_path.as_path())?;
+        let mailbox = MailboxData::new(&db)?;
 
         Ok(Self {
             identifiers: SledEventTree::new(db.open_tree(b"iids")?),
@@ -76,12 +140,7 @@ impl SledEventDatabase {
             duplicitous_events: SledEventTreeVec::new(db.open_tree(b"dels")?),
             #[cfg(feature = "query")]
             accepted_rpy: SledEventTreeVec::new(db.open_tree(b"knas")?),
-            #[cfg(feature = "query")]
-            mailbox_receipts: SledEventTreeVec::new(db.open_tree(b"mbxrct")?),
-            #[cfg(feature = "query")]
-            mailbox_replies: SledEventTreeVec::new(db.open_tree(b"mbxrpy")?),
-            #[cfg(feature = "query")]
-            mailbox_multisig: SledEventTreeVec::new(db.open_tree(b"mbxm")?),
+            mailbox,
 
             #[cfg(feature = "query")]
             escrowed_replys: SledEventTreeVec::new(db.open_tree(b"knes")?),
@@ -280,12 +339,8 @@ impl SledEventDatabase {
         receipt: SignedNontransferableReceipt,
         id: &IdentifierPrefix,
     ) -> Result<(), DbError> {
-        if !self.mailbox_receipts.contains_value(&receipt) {
-            self.mailbox_receipts
-                .push(self.identifiers.designated_key(id)?, receipt)
-        } else {
-            Ok(())
-        }
+        self.mailbox
+            .add_mailbox_receipt(self.identifiers.designated_key(id)?, receipt)
     }
 
     #[cfg(feature = "query")]
@@ -293,8 +348,8 @@ impl SledEventDatabase {
         &self,
         id: &IdentifierPrefix,
     ) -> Option<impl DoubleEndedIterator<Item = SignedNontransferableReceipt>> {
-        self.mailbox_receipts
-            .iter_values(self.identifiers.designated_key(id).ok()?)
+        self.mailbox
+            .get_mailbox_receipts(self.identifiers.designated_key(id).ok()?)
     }
 
     #[cfg(feature = "query")]
@@ -303,12 +358,8 @@ impl SledEventDatabase {
         reply: SignedEventMessage,
         id: &IdentifierPrefix,
     ) -> Result<(), DbError> {
-        if !self.mailbox_replies.contains_value(&reply) {
-            self.mailbox_replies
-                .push(self.identifiers.designated_key(id)?, reply)
-        } else {
-            Ok(())
-        }
+        self.mailbox
+            .add_mailbox_reply(self.identifiers.designated_key(id)?, reply)
     }
 
     #[cfg(feature = "query")]
@@ -316,8 +367,8 @@ impl SledEventDatabase {
         &self,
         id: &IdentifierPrefix,
     ) -> Option<impl DoubleEndedIterator<Item = SignedEventMessage>> {
-        self.mailbox_replies
-            .iter_values(self.identifiers.designated_key(id).ok()?)
+        self.mailbox
+            .get_mailbox_replies(self.identifiers.designated_key(id).ok()?)
     }
 
     pub fn add_mailbox_multisig(
@@ -325,8 +376,8 @@ impl SledEventDatabase {
         event: SignedEventMessage,
         target_id: &IdentifierPrefix,
     ) -> Result<(), DbError> {
-        self.mailbox_multisig
-            .push(self.identifiers.designated_key(target_id)?, event.into())
+        self.mailbox
+            .add_mailbox_multisig(self.identifiers.designated_key(target_id)?, event)
     }
 
     #[cfg(feature = "query")]
@@ -334,8 +385,8 @@ impl SledEventDatabase {
         &self,
         id: &IdentifierPrefix,
     ) -> Option<impl DoubleEndedIterator<Item = TimestampedSignedEventMessage>> {
-        self.mailbox_multisig
-            .iter_values(self.identifiers.designated_key(id).ok()?)
+        self.mailbox
+            .get_mailbox_multisig(self.identifiers.designated_key(id).ok()?)
     }
 }
 
