@@ -5,10 +5,15 @@ use crate::oobi::OobiManager;
 use crate::{
     error::Error,
     event_message::{
+        exchange::{Exchange, ExchangeMessage, SignedExchange},
         serialization_info::SerializationFormats,
-        signed_event_message::{Message, Notice, Op},
+        signature::Signature,
+        signed_event_message::{Message, Notice, Op, SignedEventMessage},
     },
-    event_parsing::message::{signed_event_stream, signed_notice_stream},
+    event_parsing::{
+        message::{signed_event_stream, signed_notice_stream},
+        path::MaterialPath,
+    },
     prefix::IdentifierPrefix,
 };
 #[cfg(feature = "query")]
@@ -98,6 +103,50 @@ pub fn process_signed_oobi(
 
     Ok(())
 }
+
+pub fn process_signed_exn(exn: SignedExchange, storage: &EventStorage) -> Result<(), Error> {
+    let exn_message = &exn.exchange_message;
+    let verification_result =
+        exn.signature
+            .iter()
+            .try_fold(true, |acc, signature| -> Result<bool, Error> {
+                Ok(acc && signature.verify(&exn_message.serialize()?, storage)?)
+            });
+    if verification_result? {
+        process_exn(exn_message, exn.data_signature, storage)
+    } else {
+        Err(Error::SignatureVerificationError)
+    }
+}
+
+fn process_exn(
+    exn: &ExchangeMessage,
+    attachemnt: (MaterialPath, Vec<Signature>),
+    storage: &EventStorage,
+) -> Result<(), Error> {
+    let (receipient, to_forward) = match &exn.event.content {
+        Exchange::Fwd { args, to_forward } => (&args.recipient_id, to_forward),
+    };
+    let sigs = attachemnt
+        .1
+        .into_iter()
+        .map(|s| match s {
+            Signature::Transferable(_sd, sigs) => sigs,
+            Signature::NonTransferable(_, _) => todo!(),
+        })
+        .flatten()
+        .collect();
+    let signed_to_forward = SignedEventMessage {
+        event_message: to_forward.clone(),
+        signatures: sigs,
+        witness_receipts: None,
+        delegator_seal: None,
+    };
+
+    storage.add_mailbox_exchange(receipient, signed_to_forward)?;
+    Ok(())
+}
+
 #[cfg(feature = "query")]
 pub fn process_signed_query(
     qr: SignedQuery,
@@ -161,11 +210,7 @@ fn process_query(qr: Query, storage: &EventStorage) -> Result<ReplyType, QueryEr
             Ok(ReplyType::Ksn(ksn))
         }
         QueryRoute::Mbx { args, .. } => {
-            let mail = storage
-                .get_mailbox_messages(args)?
-                .into_iter()
-                .map(Message::Notice)
-                .collect();
+            let mail = storage.get_mailbox_messages(args)?;
             Ok(ReplyType::Mbx(mail))
         }
     }

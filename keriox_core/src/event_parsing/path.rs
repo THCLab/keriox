@@ -13,16 +13,26 @@ pub struct MaterialPath {
 
 impl MaterialPath {
     pub fn new(pt: PayloadType, path: String) -> Self {
-        // fill input string with A
-        let b64path = match path.len() % 4 {
-            0 => path,
-            n => ["A".repeat(4 - n), path].join(""),
-        };
-        let leading_bytes = match pt {
+        let lead_bytes = match pt {
             PayloadType::A4 => 0,
             PayloadType::A5 => 1,
             PayloadType::A6 => 2,
             _ => todo!(),
+        };
+        MaterialPath {
+            lead_bytes,
+            base: path,
+        }
+    }
+
+    pub fn to_path(path: String) -> Self {
+        let len_modulo = path.len() % 4;
+        let leading_bytes = (3 - (len_modulo % 3)) % 3;
+
+        // fill input string with A
+        let b64path = match len_modulo {
+            0 => path,
+            n => ["A".repeat(4 - n), path].join(""),
         };
 
         Self {
@@ -32,13 +42,8 @@ impl MaterialPath {
     }
 
     pub fn to_cesr(&self) -> String {
-        let ts = self.base.clone().len() % 4;
-        // how many chars are missing for base64 encoding
-        let ws = (4 - ts) % 4;
+        let decoded_base = base64::decode_config(&self.base, URL_SAFE).unwrap();
 
-        // post conv lead size in bytes
-        let base = ["A".repeat(ws), self.base.clone()].join("");
-        let decoded_base = base64::decode_config(&base, URL_SAFE).unwrap();
         let code = match self.lead_bytes {
             0 => PayloadType::A4,
             1 => PayloadType::A5,
@@ -48,7 +53,7 @@ impl MaterialPath {
             }
         };
         let size = decoded_base.len() / 3;
-        [code.adjust_with_num(size as u16), base].join("")
+        [code.adjust_with_num(size as u16), self.base.clone()].join("")
     }
 
     pub fn to_raw(&self) -> Result<Vec<u8>, Error> {
@@ -60,21 +65,23 @@ impl MaterialPath {
 
 #[test]
 pub fn test_path_to_cesr() -> Result<(), Error> {
+    assert_eq!(MaterialPath::to_path("-".into()).to_cesr(), "6AABAAA-");
+    assert_eq!(MaterialPath::to_path("-A".into()).to_cesr(), "5AABAA-A");
+    assert_eq!(MaterialPath::to_path("-A-".into()).to_cesr(), "4AABA-A-");
+    assert_eq!(MaterialPath::to_path("-A-B".into()).to_cesr(), "4AAB-A-B");
     assert_eq!(
-        MaterialPath::new(PayloadType::A6, "-".into()).to_cesr(),
-        "6AABAAA-"
+        MaterialPath::to_path("-a-b-c".into()).to_cesr(),
+        "5AACAA-a-b-c"
     );
+
     assert_eq!(
-        MaterialPath::new(PayloadType::A5, "-A".into()).to_cesr(),
-        "5AABAA-A"
+        MaterialPath::to_path("-field0".into()).to_cesr(),
+        "4AACA-field0"
     );
+
     assert_eq!(
-        MaterialPath::new(PayloadType::A4, "-A-".into()).to_cesr(),
-        "4AABA-A-"
-    );
-    assert_eq!(
-        MaterialPath::new(PayloadType::A4, "-A-B".into()).to_cesr(),
-        "4AAB-A-B"
+        MaterialPath::to_path("-field0-field1-field3".into()).to_cesr(),
+        "6AAGAAA-field0-field1-field3"
     );
 
     Ok(())

@@ -83,7 +83,7 @@ pub fn test_authentication() -> Result<(), Error> {
     watcher.parse_and_process_notices(&asker_icp).unwrap();
     watcher.parse_and_process_notices(&about_icp).unwrap();
 
-    let query = asker_controller.query(about_controller.prefix())?;
+    let query = asker_controller.query_ksn(about_controller.prefix())?;
 
     // Send query message to watcher before sending end role oobi
     let err = futures::executor::block_on(watcher.process_op(query.clone()));

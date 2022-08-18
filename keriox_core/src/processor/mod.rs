@@ -110,7 +110,6 @@ impl EventProcessor {
                 // check if receipts are attached
                 if let Some(witness_receipts) = &signed_event.witness_receipts {
                     // Create and process witness receipts
-                    // TODO What timestamp should be set?
                     let id = signed_event.event_message.event.get_prefix();
                     let receipt = Receipt {
                         receipted_event_digest: signed_event.event_message.get_digest(),

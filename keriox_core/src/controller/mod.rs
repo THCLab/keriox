@@ -188,7 +188,7 @@ impl Controller {
         schema: Scheme,
         topic: Topic,
     ) -> Result<String, ControllerError> {
-        let addresses = self.get_loc_schemas(&id)?;
+        let addresses = self.get_loc_schemas(id)?;
         match addresses
             .iter()
             // TODO It uses first found address that match schema
@@ -309,12 +309,7 @@ impl Controller {
                 }
             })
             .collect::<Result<Vec<_>, _>>()?;
-        Ok(event_generator::incept(
-            public_keys,
-            next_pub_keys,
-            witnesses,
-            witness_threshold,
-        )?)
+        event_generator::incept(public_keys, next_pub_keys, witnesses, witness_threshold)
     }
 
     pub fn finalize_inception(
@@ -323,7 +318,7 @@ impl Controller {
         sig: Vec<SelfSigningPrefix>,
     ) -> Result<IdentifierPrefix, ControllerError> {
         let (_, parsed_event) =
-            key_event_message(&event).map_err(|_e| ControllerError::EventParseError)?;
+            key_event_message(event).map_err(|_e| ControllerError::EventParseError)?;
         match parsed_event {
             EventType::KeyEvent(ke) => {
                 if let EventData::Icp(_) = &ke.event.get_event_data() {
@@ -367,14 +362,14 @@ impl Controller {
             .get_state(&id)?
             .ok_or(ControllerError::UnknownIdentifierError)?;
 
-        Ok(event_generator::rotate(
+        event_generator::rotate(
             state,
             current_keys,
             new_next_keys,
             witnesses_to_add,
             witness_to_remove,
             witness_threshold,
-        )?)
+        )
     }
 
     pub fn anchor(
@@ -398,7 +393,7 @@ impl Controller {
             .storage
             .get_state(&id)?
             .ok_or(ControllerError::UnknownIdentifierError)?;
-        Ok(event_generator::anchor_with_seal(state, payload)?)
+        event_generator::anchor_with_seal(state, payload)
     }
 
     /// Check signatures, updates database and send events to watcher or witnesses.
@@ -500,7 +495,7 @@ impl Controller {
         )));
         let mut kel = self
             .storage
-            .get_kel(&signer_prefix)?
+            .get_kel(signer_prefix)?
             .ok_or(ControllerError::UnknownIdentifierError)?;
         kel.extend(signed_rpy.to_cesr()?);
 
