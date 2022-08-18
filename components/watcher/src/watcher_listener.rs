@@ -4,7 +4,7 @@ use actix_web::{dev::Server, web, App, HttpServer};
 use futures::future::join_all;
 use keri::{error::Error, oobi::LocationScheme, prefix::BasicPrefix};
 
-use crate::watcher::{Watcher, WatcherData};
+use crate::watcher::{Watcher, WatcherData, WatcherError};
 
 pub struct WatcherListener {
     watcher_data: Watcher,
@@ -49,15 +49,13 @@ impl WatcherListener {
     }
 
     pub async fn resolve_initial_oobis(
-        &self,
+        &mut self,
         initial_oobis: &[LocationScheme],
-    ) -> Result<(), Error> {
-        join_all(
-            initial_oobis
-                .iter()
-                .map(|lc| self.watcher_data.resolve_loc_scheme(lc)),
-        )
-        .await;
+    ) -> Result<(), WatcherError> {
+        for lc in initial_oobis.iter() {
+            self.watcher_data.resolve_loc_scheme(lc).await?;
+        }
+
         Ok(())
     }
 
