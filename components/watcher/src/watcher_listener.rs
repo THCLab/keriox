@@ -1,7 +1,6 @@
 use std::path::Path;
 
 use actix_web::{dev::Server, web, App, HttpServer};
-use futures::future::join_all;
 use keri::{error::Error, oobi::LocationScheme, prefix::BasicPrefix};
 
 use crate::watcher::{Watcher, WatcherData, WatcherError};
@@ -49,7 +48,7 @@ impl WatcherListener {
     }
 
     pub async fn resolve_initial_oobis(
-        &mut self,
+        &self,
         initial_oobis: &[LocationScheme],
     ) -> Result<(), WatcherError> {
         for lc in initial_oobis.iter() {

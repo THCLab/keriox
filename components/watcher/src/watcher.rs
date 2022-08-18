@@ -1,7 +1,7 @@
 use std::{
     collections::VecDeque,
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{Arc, Mutex},
 };
 
 use derive_more::{Display, Error, From};
@@ -32,7 +32,7 @@ pub struct WatcherData {
     event_storage: EventStorage,
     pub oobi_manager: OobiManager,
     pub signer: Arc<Signer>,
-    pub outbox_queue: VecDeque<SignedQuery>,
+    pub outbox_queue: Arc<Mutex<VecDeque<SignedQuery>>>,
 }
 
 impl WatcherData {
@@ -86,7 +86,7 @@ impl WatcherData {
             event_storage: storage,
             signer: signer,
             oobi_manager,
-            outbox_queue: VecDeque::new(),
+            outbox_queue: Arc::new(Mutex::new(VecDeque::new())),
         })
     }
 
@@ -144,7 +144,7 @@ impl WatcherData {
         process_notice(notice, &self.processor)
     }
 
-    pub async fn process_op(&mut self, op: Op) -> Result<Option<Vec<Message>>, WatcherError> {
+    pub async fn process_op(&self, op: Op) -> Result<Option<Vec<Message>>, WatcherError> {
         match op {
             Op::Query(qry) => {
                 let cid = qry.signer.clone();
@@ -213,7 +213,7 @@ impl WatcherData {
         Ok(())
     }
 
-    fn enqueue_query(&mut self, qry: &SignedQuery) -> Result<(), WatcherError> {
+    fn enqueue_query(&self, qry: &SignedQuery) -> Result<(), WatcherError> {
         // Create a new signed message based on the received one
         let sigs = vec![AttachedSignaturePrefix::new(
             SelfSigning::Ed25519Sha512,
@@ -227,15 +227,13 @@ impl WatcherData {
         );
 
         // Save to outgoing queue
-        self.outbox_queue.push_back(qry);
+        self.outbox_queue.lock().unwrap().push_back(qry);
 
         Ok(())
     }
 
-    async fn process_outbox_queue(&mut self) -> Result<(), WatcherError> {
-        let mut queue = std::mem::take(&mut self.outbox_queue);
-
-        for qry in queue.drain(..) {
+    async fn process_outbox_queue(&self) -> Result<(), WatcherError> {
+        while let Some(qry) = self.outbox_queue.lock().unwrap().pop_front() {
             let wit_id = self.get_witness_for_prefix(qry.query.get_prefix())?;
 
             // Send query to witness
@@ -373,7 +371,7 @@ impl WatcherData {
     }
 
     pub async fn parse_and_process_ops(
-        &mut self,
+        &self,
         input_stream: &[u8],
     ) -> Result<Vec<Message>, WatcherError> {
         let mut results = Vec::new();
@@ -423,7 +421,7 @@ impl WatcherData {
 pub struct Watcher(pub WatcherData);
 
 impl Watcher {
-    pub async fn resolve_end_role(&mut self, er: EndRole) -> Result<(), WatcherError> {
+    pub async fn resolve_end_role(&self, er: EndRole) -> Result<(), WatcherError> {
         // find endpoint data of endpoint provider identifier
         let loc_scheme = self
             .0
@@ -447,7 +445,7 @@ impl Watcher {
         }
     }
 
-    pub async fn resolve_loc_scheme(&mut self, lc: &LocationScheme) -> Result<(), WatcherError> {
+    pub async fn resolve_loc_scheme(&self, lc: &LocationScheme) -> Result<(), WatcherError> {
         let url = format!("{}oobi/{}", lc.url, lc.eid);
         let oobis = reqwest::get(url).await?.text().await?;
 
