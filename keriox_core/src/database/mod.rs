@@ -28,6 +28,7 @@ pub struct MailboxData {
     mailbox_receipts: SledEventTreeVec<SignedNontransferableReceipt>,
     mailbox_replies: SledEventTreeVec<SignedEventMessage>,
     mailbox_multisig: SledEventTreeVec<TimestampedSignedEventMessage>,
+    mailbox_delegate: SledEventTreeVec<TimestampedSignedEventMessage>,
 }
 
 impl MailboxData {
@@ -36,10 +37,10 @@ impl MailboxData {
             mailbox_receipts: SledEventTreeVec::new(db.open_tree(b"mbxrct")?),
             mailbox_replies: SledEventTreeVec::new(db.open_tree(b"mbxrpy")?),
             mailbox_multisig: SledEventTreeVec::new(db.open_tree(b"mbxm")?),
+            mailbox_delegate: SledEventTreeVec::new(db.open_tree(b"mbxd")?),
         })
     }
 
-    #[cfg(feature = "query")]
     pub fn add_mailbox_receipt(
         &self,
         key: u64,
@@ -52,7 +53,6 @@ impl MailboxData {
         }
     }
 
-    #[cfg(feature = "query")]
     pub fn get_mailbox_receipts(
         &self,
         key: u64,
@@ -60,7 +60,6 @@ impl MailboxData {
         self.mailbox_receipts.iter_values(key)
     }
 
-    #[cfg(feature = "query")]
     pub fn add_mailbox_reply(&self, key: u64, reply: SignedEventMessage) -> Result<(), DbError> {
         if !self.mailbox_replies.contains_value(&reply) {
             self.mailbox_replies.push(key, reply)
@@ -69,7 +68,6 @@ impl MailboxData {
         }
     }
 
-    #[cfg(feature = "query")]
     pub fn get_mailbox_replies(
         &self,
         key: u64,
@@ -81,12 +79,26 @@ impl MailboxData {
         self.mailbox_multisig.push(key, event.into())
     }
 
-    #[cfg(feature = "query")]
     pub fn get_mailbox_multisig(
         &self,
         key: u64,
     ) -> Option<impl DoubleEndedIterator<Item = TimestampedSignedEventMessage>> {
         self.mailbox_multisig.iter_values(key)
+    }
+
+    pub fn add_mailbox_delegate(
+        &self,
+        key: u64,
+        delegated: SignedEventMessage,
+    ) -> Result<(), DbError> {
+        self.mailbox_delegate.push(key, delegated.into())
+    }
+
+    pub fn get_mailbox_delegate(
+        &self,
+        key: u64,
+    ) -> Option<impl DoubleEndedIterator<Item = TimestampedSignedEventMessage>> {
+        self.mailbox_delegate.iter_values(key)
     }
 }
 
@@ -387,6 +399,23 @@ impl SledEventDatabase {
     ) -> Option<impl DoubleEndedIterator<Item = TimestampedSignedEventMessage>> {
         self.mailbox
             .get_mailbox_multisig(self.identifiers.designated_key(id).ok()?)
+    }
+
+    pub fn add_mailbox_delegate(
+        &self,
+        event: SignedEventMessage,
+        target_id: &IdentifierPrefix,
+    ) -> Result<(), DbError> {
+        self.mailbox
+            .add_mailbox_delegate(self.identifiers.designated_key(target_id)?, event)
+    }
+
+    pub fn get_mailbox_delegate(
+        &self,
+        id: &IdentifierPrefix,
+    ) -> Option<impl DoubleEndedIterator<Item = TimestampedSignedEventMessage>> {
+        self.mailbox
+            .get_mailbox_delegate(self.identifiers.designated_key(id).ok()?)
     }
 }
 

@@ -5,7 +5,7 @@ use crate::oobi::OobiManager;
 use crate::{
     error::Error,
     event_message::{
-        exchange::{Exchange, ExchangeMessage, SignedExchange},
+        exchange::{Exchange, ExchangeMessage, SignedExchange, ForwardTopic},
         serialization_info::SerializationFormats,
         signature::Signature,
         signed_event_message::{Message, Notice, Op, SignedEventMessage},
@@ -124,8 +124,8 @@ fn process_exn(
     attachemnt: (MaterialPath, Vec<Signature>),
     storage: &EventStorage,
 ) -> Result<(), Error> {
-    let (receipient, to_forward) = match &exn.event.content {
-        Exchange::Fwd { args, to_forward } => (&args.recipient_id, to_forward),
+    let (receipient, to_forward, topic) = match &exn.event.content {
+        Exchange::Fwd { args, to_forward } => (&args.recipient_id, to_forward, &args.topic),
     };
     let sigs = attachemnt
         .1
@@ -143,7 +143,14 @@ fn process_exn(
         delegator_seal: None,
     };
 
-    storage.add_mailbox_exchange(receipient, signed_to_forward)?;
+    match topic {
+        ForwardTopic::Multisig => {
+            storage.add_mailbox_multisig(receipient, signed_to_forward)?;
+        },
+        ForwardTopic::Delegate => {
+            storage.add_mailbox_delegate(receipient, signed_to_forward)?;
+        },
+    };
     Ok(())
 }
 

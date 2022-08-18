@@ -11,7 +11,7 @@ use keri::{
     derivation::basic::Basic,
     error::Error,
     event::sections::threshold::SignatureThreshold,
-    event_message::signed_event_message::{Message, Notice, Op},
+    event_message::{signed_event_message::{Message, Notice, Op}, exchange::ForwardTopic},
     keys::PublicKey,
     prefix::{BasicPrefix, IdentifierPrefix},
     processor::{basic_processor::BasicProcessor, event_storage::EventStorage, Processor},
@@ -747,14 +747,14 @@ pub fn test_multisig() -> Result<(), WitnessError> {
     // Controller2 asks witness about his mailbox.
     let mbx_msg = cont2.query_mailbox(&witness.prefix);
     let response = witness.process_op(mbx_msg).unwrap();
-    if let Some(PossibleResponse::Mbx(MailboxResponse { receipt, multisig })) = response {
+    if let Some(PossibleResponse::Mbx(MailboxResponse { receipt, multisig, delegate: _ })) = response {
         assert_eq!(receipt.len(), 1);
         assert_eq!(multisig.len(), 1);
 
         let group_icp_to_sign = multisig[0].clone();
 
         let signed_icp = cont2.process_multisig(group_icp_to_sign)?.unwrap();
-        let exn_from_cont2 = cont2.create_exchange_message(&cont1.prefix(), &signed_icp)?;
+        let exn_from_cont2 = cont2.create_forward_message(&cont1.prefix(), &signed_icp, ForwardTopic::Multisig)?;
         // Send it to witness
         witness.process_notice(Notice::Event(signed_icp.clone()))?;
         witness.process_op(Op::Exchange(exn_from_cont2))?;
@@ -788,7 +788,7 @@ pub fn test_multisig() -> Result<(), WitnessError> {
     // Controller1 asks witness about his mailbox.
     let mbx_msg = cont1.query_mailbox(&witness.prefix);
     let response = witness.process_op(mbx_msg).unwrap();
-    if let Some(PossibleResponse::Mbx(MailboxResponse { receipt, multisig })) = response {
+    if let Some(PossibleResponse::Mbx(MailboxResponse { receipt, multisig, delegate: _ })) = response {
         assert_eq!(receipt.len(), 1);
         assert_eq!(multisig.len(), 1);
 
@@ -803,3 +803,4 @@ pub fn test_multisig() -> Result<(), WitnessError> {
 
     Ok(())
 }
+

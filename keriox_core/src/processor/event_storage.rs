@@ -114,7 +114,7 @@ impl EventStorage {
         }
     }
 
-    pub fn add_mailbox_exchange(
+    pub fn add_mailbox_multisig(
         &self,
         receipient: &IdentifierPrefix,
         to_forward: SignedEventMessage,
@@ -123,6 +123,17 @@ impl EventStorage {
 
         Ok(())
     }
+
+    pub fn add_mailbox_delegate(
+        &self,
+        receipient: &IdentifierPrefix,
+        to_forward: SignedEventMessage,
+    ) -> Result<(), Error> {
+        self.db.add_mailbox_delegate(to_forward, receipient)?;
+
+        Ok(())
+    }
+
 
     #[cfg(feature = "query")]
     pub fn add_mailbox_receipt(&self, receipt: SignedNontransferableReceipt) -> Result<(), Error> {
@@ -158,6 +169,11 @@ impl EventStorage {
             None => vec![],
         };
 
+        let delegate = match self.db.get_mailbox_delegate(&id) {
+            Some(msgs) => msgs.map(|e| e.signed_event_message).collect(),
+            None => vec![],
+        };
+
         let mut messages = vec![];
         // query replies
         messages.extend(
@@ -170,7 +186,7 @@ impl EventStorage {
         );
 
         // TODO: query and return the rest of topics
-        Ok(MailboxResponse { receipt, multisig })
+        Ok(MailboxResponse { receipt, multisig, delegate })
     }
 
     /// Get last establishment event seal for Prefix

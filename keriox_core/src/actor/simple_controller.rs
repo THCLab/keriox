@@ -425,21 +425,22 @@ impl<K: KeyManager> SimpleController<K> {
 
         let exchanges = identifiers
             .iter()
-            .map(|id| self.create_exchange_message(id, &signed).unwrap())
+            .map(|id| self.create_forward_message(id, &signed, ForwardTopic::Multisig).unwrap())
             .collect();
 
         Ok((signed, exchanges))
     }
 
-    pub fn create_exchange_message(
+    pub fn create_forward_message(
         &self,
         receipient: &IdentifierPrefix,
         data: &SignedEventMessage,
+        topic: ForwardTopic
     ) -> Result<SignedExchange, Error> {
         let exn_message = Exchange::Fwd {
             args: FwdArgs {
                 recipient_id: receipient.clone(),
-                topic: ForwardTopic::Multisig,
+                topic,
             },
             to_forward: data.event_message.clone(),
         }
