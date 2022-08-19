@@ -6,6 +6,9 @@ use crate::{
 
 pub mod default;
 
+/// Transport trait allows customizing behavior of actors when it comes to making net requests.
+/// Actors take a `dyn Transport` argument in `new` (dependency injection pattern).
+/// This also allows providing a fake transport for tests.
 #[async_trait::async_trait]
 pub trait Transport {
     /// Send a message to other actor and returns its response

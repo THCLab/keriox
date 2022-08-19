@@ -6,6 +6,8 @@ use crate::{
     prefix::IdentifierPrefix,
 };
 
+/// Default behavior for communication with other actors.
+/// Serializes a keri message, does a net request, and deserializes the response.
 pub struct DefaultTransport;
 
 #[async_trait::async_trait]
