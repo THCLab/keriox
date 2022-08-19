@@ -1,8 +1,8 @@
-use crate::event_message::signed_event_message::Message;
-use crate::event_message::signed_event_message::Op;
-use crate::oobi::LocationScheme;
-use crate::oobi::Role;
-use crate::prefix::IdentifierPrefix;
+use crate::{
+    event_message::signed_event_message::{Message, Op},
+    oobi::{LocationScheme, Role},
+    prefix::IdentifierPrefix,
+};
 
 pub mod default;
 

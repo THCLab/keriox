@@ -1,14 +1,10 @@
-use crate::actor::parse_event_stream;
-use crate::actor::parse_op_stream;
-use crate::event_message::signed_event_message::Message;
-use crate::event_message::signed_event_message::Op;
-use crate::oobi::LocationScheme;
-use crate::oobi::Role;
-use crate::oobi::Scheme;
-use crate::prefix::IdentifierPrefix;
-
-use super::Transport;
-use super::TransportError;
+use super::{Transport, TransportError};
+use crate::{
+    actor::{parse_event_stream, parse_op_stream},
+    event_message::signed_event_message::{Message, Op},
+    oobi::{LocationScheme, Role, Scheme},
+    prefix::IdentifierPrefix,
+};
 
 pub struct DefaultTransport;
 
