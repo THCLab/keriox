@@ -8,6 +8,7 @@ use keri::{
     error::Error,
     prefix::IdentifierPrefix,
 };
+use keri_transport::default::DefaultTransport;
 use tempfile::Builder;
 
 use crate::watcher::{WatcherData, WatcherError};
@@ -77,7 +78,8 @@ pub fn test_authentication() -> Result<(), Error> {
 
     let url = url::Url::parse("http://some/dummy/url").unwrap();
     let root = Builder::new().prefix("cont-test-db").tempdir().unwrap();
-    let watcher = WatcherData::setup(url, root.path(), None)?;
+    // TODO: use fake transport
+    let watcher = WatcherData::setup(url, root.path(), None, Box::new(DefaultTransport))?;
 
     // Watcher should know bouth controllers
     watcher.parse_and_process_notices(&asker_icp).unwrap();

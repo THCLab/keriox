@@ -2,6 +2,7 @@ use std::path::Path;
 
 use actix_web::{dev::Server, web, App, HttpServer};
 use keri::{error::Error, oobi::LocationScheme, prefix::BasicPrefix};
+use keri_transport::default::DefaultTransport;
 
 use crate::watcher::{Watcher, WatcherData, WatcherError};
 
@@ -22,7 +23,13 @@ impl WatcherListener {
             address.clone()
         };
 
-        WatcherData::setup(pub_address, event_db_path, priv_key).map(|watcher_data| Self {
+        WatcherData::setup(
+            pub_address,
+            event_db_path,
+            priv_key,
+            Box::new(DefaultTransport),
+        )
+        .map(|watcher_data| Self {
             watcher_data: Watcher(watcher_data),
         })
     }
