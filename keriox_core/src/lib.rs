@@ -16,5 +16,3 @@ pub mod processor;
 pub mod query;
 pub mod signer;
 pub mod state;
-#[cfg(all(feature = "query", feature = "oobi"))]
-pub mod transport;

@@ -1,5 +1,5 @@
 use super::{Transport, TransportError};
-use crate::{
+use keri::{
     actor::{parse_event_stream, parse_op_stream},
     event_message::signed_event_message::{Message, Op},
     oobi::{LocationScheme, Role, Scheme},

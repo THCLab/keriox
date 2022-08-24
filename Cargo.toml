@@ -3,6 +3,7 @@
 members = [
     "keriox_core",
     "support/gossip",
+    "support/transport",
     "components/witness",
     "components/watcher",
 ]

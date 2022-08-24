@@ -1,9 +1,8 @@
 use std::path::Path;
 
 use actix_web::{dev::Server, web, App, HttpServer};
-use keri::{
-    error::Error, oobi::LocationScheme, prefix::BasicPrefix, transport::default::DefaultTransport,
-};
+use keri::{error::Error, oobi::LocationScheme, prefix::BasicPrefix};
+use keri_transport::default::DefaultTransport;
 
 use crate::watcher::{Watcher, WatcherData, WatcherError};
 
