@@ -12,7 +12,11 @@ use crate::{
     database::{escrow::EscrowDb, SledEventDatabase},
     derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
     error::Error,
-    event::{event_data::EventData, sections::threshold::SignatureThreshold, SerializationFormats},
+    event::{
+        event_data::EventData,
+        sections::{seal::Seal, threshold::SignatureThreshold},
+        SerializationFormats,
+    },
     event_message::{
         exchange::{Exchange, ForwardTopic, FwdArgs, SignedExchange},
         signature::{Signature, SignerData},
@@ -22,7 +26,9 @@ use crate::{
     oobi::{OobiManager, Role},
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix},
     processor::{
-        basic_processor::BasicProcessor, escrow::default_escrow_bus, event_storage::EventStorage,
+        basic_processor::BasicProcessor,
+        escrow::{default_escrow_bus, OutOfOrderEscrow, PartiallyWitnessedEscrow},
+        event_storage::EventStorage,
         Processor,
     },
     query::{
@@ -100,6 +106,8 @@ pub struct SimpleController<K: KeyManager + 'static> {
     oobi_manager: OobiManager,
     pub storage: EventStorage,
     pub groups: Vec<IdentifierPrefix>,
+    pub not_fully_witnessed_escrow: Arc<PartiallyWitnessedEscrow>,
+    pub ooo_escrow: Arc<OutOfOrderEscrow>,
 }
 
 impl<K: KeyManager> SimpleController<K> {
@@ -110,7 +118,7 @@ impl<K: KeyManager> SimpleController<K> {
         key_manager: Arc<Mutex<K>>,
         oobi_db_path: &Path,
     ) -> Result<SimpleController<K>, Error> {
-        let (not_bus, _) = default_escrow_bus(db.clone(), escrow_db);
+        let (not_bus, (ooo, _, partially_witnesses)) = default_escrow_bus(db.clone(), escrow_db);
         let processor = BasicProcessor::new(db.clone(), Some(not_bus));
 
         Ok(SimpleController {
@@ -120,6 +128,8 @@ impl<K: KeyManager> SimpleController<K> {
             processor,
             storage: EventStorage::new(db),
             groups: vec![],
+            not_fully_witnessed_escrow: partially_witnesses,
+            ooo_escrow: ooo,
         })
     }
 
@@ -277,6 +287,32 @@ impl<K: KeyManager> SimpleController<K> {
         .unwrap())
     }
 
+    pub fn anchor(&self, seal: &[Seal]) -> Result<SignedEventMessage, Error> {
+        let state = self
+            .storage
+            .get_state(self.prefix())?
+            .ok_or(Error::SemanticError("missing state".into()))?;
+        let ixn = event_generator::anchor_with_seal(state, seal)
+            .map_err(|e| Error::SemanticError(e.to_string()))?;
+        let km = self.key_manager.lock().map_err(|_| Error::MutexPoisoned)?;
+        let signature = km.sign(&ixn.serialize()?)?;
+
+        let signed = ixn.sign(
+            vec![AttachedSignaturePrefix::new(
+                SelfSigning::Ed25519Sha512,
+                signature,
+                0,
+            )],
+            None,
+            None,
+        );
+
+        self.processor
+            .process_notice(&Notice::Event(signed.clone()))?;
+
+        Ok(signed)
+    }
+
     pub fn process(&self, msg: &[Message]) -> Result<(), Error> {
         let (_process_ok, _process_failed): (Vec<_>, Vec<_>) = msg
             .iter()
@@ -333,7 +369,6 @@ impl<K: KeyManager> SimpleController<K> {
             }
             .ok_or(Error::SemanticError("Not group participant".into()))?;
 
-            // TODO compute index
             // sign and process inception event
             let second_signature = AttachedSignaturePrefix {
                 index: index as u16,
@@ -365,12 +400,14 @@ impl<K: KeyManager> SimpleController<K> {
         self.storage.get_state(id)
     }
 
+    /// Generates group inception signed by controller and exchange messages to group participants from `identifiers` argument.
     pub fn group_incept(
         &mut self,
         identifiers: Vec<IdentifierPrefix>,
         signature_threshold: &SignatureThreshold,
         initial_witness: Option<Vec<BasicPrefix>>,
         witness_threshold: Option<u64>,
+        delegator: Option<IdentifierPrefix>,
     ) -> Result<(SignedEventMessage, Vec<SignedExchange>), Error> {
         let signed = {
             let km = self.key_manager.lock().map_err(|_| Error::MutexPoisoned)?;
@@ -393,14 +430,17 @@ impl<K: KeyManager> SimpleController<K> {
                     acc
                 },
             );
+
             let icp = event_generator::incept_with_next_hashes(
                 pks,
                 signature_threshold,
                 npks,
                 initial_witness.unwrap_or_default(),
                 witness_threshold.unwrap_or(0),
+                delegator.as_ref(),
             )
             .unwrap();
+
             let signature = km.sign(icp.as_bytes())?;
             let (_, key_event) = key_event_message(icp.as_bytes()).unwrap();
             if let EventType::KeyEvent(icp) = key_event {
@@ -425,7 +465,10 @@ impl<K: KeyManager> SimpleController<K> {
 
         let exchanges = identifiers
             .iter()
-            .map(|id| self.create_forward_message(id, &signed, ForwardTopic::Multisig).unwrap())
+            .map(|id| {
+                self.create_forward_message(id, &signed, ForwardTopic::Multisig)
+                    .unwrap()
+            })
             .collect();
 
         Ok((signed, exchanges))
@@ -435,7 +478,7 @@ impl<K: KeyManager> SimpleController<K> {
         &self,
         receipient: &IdentifierPrefix,
         data: &SignedEventMessage,
-        topic: ForwardTopic
+        topic: ForwardTopic,
     ) -> Result<SignedExchange, Error> {
         let exn_message = Exchange::Fwd {
             args: FwdArgs {

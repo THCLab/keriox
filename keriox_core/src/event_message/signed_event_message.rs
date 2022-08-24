@@ -130,6 +130,10 @@ impl Serialize for SignedEventMessage {
             em.serialize_field("", &self.event_message)?;
             let att_sigs = Attachment::AttachedSignatures(self.signatures.clone());
             em.serialize_field("-", &att_sigs.to_cesr())?;
+            if let Some(ref receipts) = self.witness_receipts {
+                let att_receipts = Attachment::AttachedWitnessSignatures(receipts.clone());
+                em.serialize_field("", &att_receipts.to_cesr())?;
+            }
             if let Some(ref seal) = self.delegator_seal {
                 let att_seal = Attachment::SealSourceCouplets(vec![seal.clone()]);
                 em.serialize_field("", &att_seal.to_cesr())?;

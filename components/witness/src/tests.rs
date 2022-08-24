@@ -10,10 +10,16 @@ use keri::{
     database::{escrow::EscrowDb, SledEventDatabase},
     derivation::basic::Basic,
     error::Error,
-    event::sections::threshold::SignatureThreshold,
-    event_message::{signed_event_message::{Message, Notice, Op}, exchange::ForwardTopic},
+    event::sections::{
+        seal::{EventSeal, Seal, SourceSeal},
+        threshold::SignatureThreshold,
+    },
+    event_message::{
+        exchange::ForwardTopic,
+        signed_event_message::{Message, Notice, Op, SignedEventMessage},
+    },
     keys::PublicKey,
-    prefix::{BasicPrefix, IdentifierPrefix},
+    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix},
     processor::{basic_processor::BasicProcessor, event_storage::EventStorage, Processor},
     query::query_event::MailboxResponse,
     signer::{CryptoBox, Signer},
@@ -736,6 +742,7 @@ pub fn test_multisig() -> Result<(), WitnessError> {
         &SignatureThreshold::Simple(2),
         Some(vec![witness.prefix.clone()]),
         Some(1),
+        None,
     )?;
     witness.process_notice(Notice::Event(group_icp.clone()))?;
 
@@ -747,14 +754,20 @@ pub fn test_multisig() -> Result<(), WitnessError> {
     // Controller2 asks witness about his mailbox.
     let mbx_msg = cont2.query_mailbox(&witness.prefix);
     let response = witness.process_op(mbx_msg).unwrap();
-    if let Some(PossibleResponse::Mbx(MailboxResponse { receipt, multisig, delegate: _ })) = response {
+    if let Some(PossibleResponse::Mbx(MailboxResponse {
+        receipt,
+        multisig,
+        delegate: _,
+    })) = response
+    {
         assert_eq!(receipt.len(), 1);
         assert_eq!(multisig.len(), 1);
 
         let group_icp_to_sign = multisig[0].clone();
 
         let signed_icp = cont2.process_multisig(group_icp_to_sign)?.unwrap();
-        let exn_from_cont2 = cont2.create_forward_message(&cont1.prefix(), &signed_icp, ForwardTopic::Multisig)?;
+        let exn_from_cont2 =
+            cont2.create_forward_message(&cont1.prefix(), &signed_icp, ForwardTopic::Multisig)?;
         // Send it to witness
         witness.process_notice(Notice::Event(signed_icp.clone()))?;
         witness.process_op(Op::Exchange(exn_from_cont2))?;
@@ -788,7 +801,12 @@ pub fn test_multisig() -> Result<(), WitnessError> {
     // Controller1 asks witness about his mailbox.
     let mbx_msg = cont1.query_mailbox(&witness.prefix);
     let response = witness.process_op(mbx_msg).unwrap();
-    if let Some(PossibleResponse::Mbx(MailboxResponse { receipt, multisig, delegate: _ })) = response {
+    if let Some(PossibleResponse::Mbx(MailboxResponse {
+        receipt,
+        multisig,
+        delegate: _,
+    })) = response
+    {
         assert_eq!(receipt.len(), 1);
         assert_eq!(multisig.len(), 1);
 
@@ -804,3 +822,282 @@ pub fn test_multisig() -> Result<(), WitnessError> {
     Ok(())
 }
 
+// Helper function taht create controller with inception event receipted by witness
+fn setup_controller(witness: &Witness) -> Result<SimpleController<CryptoBox>, Error> {
+    let mut cont1 = {
+        // Create test db and event processor.
+        let cont1_key_manager = Arc::new(Mutex::new(CryptoBox::new()?));
+        let root = Builder::new().prefix("test-db").tempdir().unwrap();
+        let oobi_root = Builder::new().prefix("cont1-db-oobi").tempdir().unwrap();
+        let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
+        let cont1_escrow_db = Arc::new(EscrowDb::new(root.path())?);
+
+        SimpleController::new(
+            Arc::clone(&db),
+            Arc::clone(&cont1_escrow_db),
+            Arc::clone(&cont1_key_manager),
+            oobi_root.path(),
+        )?
+    };
+    let icp_1 = cont1.incept(Some(vec![witness.prefix.clone()]), Some(1))?;
+    witness.process_notice(Notice::Event(icp_1.clone()))?;
+    let receipts1 = witness
+        .get_mailbox_messages(cont1.prefix())?
+        .receipt
+        .into_iter()
+        .map(|r| Message::Notice(Notice::NontransferableRct(r)))
+        .collect::<Vec<_>>();
+    cont1.process(&receipts1)?;
+    Ok(cont1)
+}
+
+#[test]
+pub fn test_delegated_multisig() -> Result<(), WitnessError> {
+    let signer = Signer::new();
+    let signer_arc = Arc::new(signer);
+    let witness = {
+        let witness_root = Builder::new().prefix("test-db").tempdir().unwrap();
+        let witness_root_oobi = Builder::new().prefix("test-db").tempdir().unwrap();
+        let path = witness_root.path();
+        Witness::new(signer_arc.clone(), path, witness_root_oobi.path())?
+    };
+
+    // Init first controller.
+    let mut cont1 = setup_controller(&witness)?;
+    // Init second controller.
+    let mut cont2 = setup_controller(&witness)?;
+
+    let delegator = setup_controller(&witness)?;
+
+    // Process inceptions of other group participants
+    let cont1_kel = cont1
+        .storage
+        .get_kel_messages_with_receipts(cont1.prefix())?
+        .unwrap()
+        .into_iter()
+        .map(|not| Message::Notice(not))
+        .collect::<Vec<_>>();
+    let cont2_kel = cont2
+        .storage
+        .get_kel_messages_with_receipts(cont2.prefix())?
+        .unwrap()
+        .into_iter()
+        .map(|not| Message::Notice(not))
+        .collect::<Vec<_>>();
+    let delegator_kel = delegator
+        .storage
+        .get_kel_messages_with_receipts(delegator.prefix())?
+        .unwrap()
+        .into_iter()
+        .map(|not| Message::Notice(not))
+        .collect::<Vec<_>>();
+
+    cont2.process(&cont1_kel)?;
+    cont1.process(&cont2_kel)?;
+    cont1.process(&delegator_kel)?;
+    cont2.process(&delegator_kel)?;
+
+    // Make delegated inception event for group
+    let (group_dip, exchange_messages) = cont1.group_incept(
+        vec![cont2.prefix().clone()],
+        &SignatureThreshold::Simple(2),
+        Some(vec![witness.prefix.clone()]),
+        Some(1),
+        Some(delegator.prefix().clone()),
+    )?;
+
+    let group_id = group_dip.event_message.event.get_prefix();
+    let dip_digest = group_dip.event_message.get_digest();
+    assert_eq!(exchange_messages.len(), 1);
+
+    // Send exchange message from controller 1 to controller 2
+    witness.process_op(Op::Exchange(exchange_messages[0].clone()))?;
+
+    // Controller2 asks witness about his mailbox.
+    let mbx_msg = cont2.query_mailbox(&witness.prefix);
+    let response = witness.process_op(mbx_msg).unwrap();
+    if let Some(PossibleResponse::Mbx(MailboxResponse {
+        receipt,
+        multisig,
+        delegate: _,
+    })) = response
+    {
+        assert_eq!(receipt.len(), 1);
+        assert_eq!(multisig.len(), 1);
+
+        let group_icp_to_sign = multisig[0].clone();
+        let signed_dip = cont2.process_multisig(group_icp_to_sign)?.unwrap();
+        // Construct exn message (will be stored in group identidfier mailbox)
+        let exn_from_cont2 =
+            cont2.create_forward_message(&group_id, &signed_dip, ForwardTopic::Multisig)?;
+        // Send it to witness
+        witness.process_op(Op::Exchange(exn_from_cont2))?;
+    };
+
+    // Controller1 asks witness about his mailbox to have fully signed dip.
+    let mbx_msg = cont1.query_groups_mailbox(&witness.prefix);
+    let response = witness.process_op(Op::Query(mbx_msg[0].clone())).unwrap();
+    if let Some(PossibleResponse::Mbx(MailboxResponse {
+        receipt: _,
+        multisig,
+        delegate: _,
+    })) = response
+    {
+        assert_eq!(multisig.len(), 1);
+
+        let group_icp = multisig[0].clone();
+        cont1.process_multisig(group_icp)?;
+    };
+
+    // Controller2 didin't accept group dip yet because of lack of witness receipt and delegating event.
+    let state = cont2.get_state_for_id(&group_id)?;
+    assert_eq!(state, None);
+    // Also Controller1 didin't accept it.
+    let state = cont1.get_state_for_id(&group_id)?;
+    assert_eq!(state, None);
+
+    // Request delegating confirmation
+    // TODO: how to get dip with all signatures? get signed dip from cont escrow
+    let dip = cont2
+        .not_fully_witnessed_escrow
+        .get_event_by_sn_and_digest(0, &group_id, &dip_digest)
+        .unwrap();
+    let delegation_request =
+        cont1.create_forward_message(delegator.prefix(), &dip, ForwardTopic::Delegate)?;
+
+    witness.process_op(Op::Exchange(delegation_request.clone()))?;
+
+    // Delegator gets mailbox
+    let mbx_msg = delegator.query_mailbox(&witness.prefix);
+    let response = witness.process_op(mbx_msg).unwrap();
+    if let Some(PossibleResponse::Mbx(MailboxResponse {
+        receipt,
+        multisig: _,
+        delegate,
+    })) = response
+    {
+        assert_eq!(receipt.len(), 1);
+        assert_eq!(delegate.len(), 1);
+
+        let group_icp_to_confirm = delegate[0].clone();
+        delegator.process(&[Message::Notice(Notice::Event(group_icp_to_confirm))])?;
+
+        // make delegating event
+        let seal = Seal::Event(EventSeal {
+            prefix: group_id.clone(),
+            sn: 0,
+            event_digest: dip_digest,
+        });
+
+        let ixn = delegator.anchor(&vec![seal])?;
+        // Send it to witness
+        witness.process_notice(Notice::Event(ixn.clone()))?;
+
+        let state = witness
+            .event_storage
+            .get_state(delegator.prefix())?
+            .unwrap();
+        assert_eq!(state.sn, 1);
+    };
+
+    // Delegator gets mailbox again for receipts
+    let mbx_msg = delegator.query_mailbox(&witness.prefix);
+    let response = witness.process_op(mbx_msg).unwrap();
+    if let Some(PossibleResponse::Mbx(MailboxResponse {
+        receipt,
+        multisig: _,
+        delegate: _,
+    })) = response
+    {
+        assert_eq!(receipt.len(), 2);
+
+        let ixn_receipt = receipt[1].clone();
+        delegator.process(&[Message::Notice(Notice::NontransferableRct(
+            ixn_receipt.clone(),
+        ))])?;
+
+        // TODO return event with attached receipts
+        let ixn = delegator
+            .storage
+            .get_event_at_sn(delegator.prefix(), 1)?
+            .unwrap()
+            .signed_event_message;
+        let attached_witness_sig = AttachedSignaturePrefix {
+            index: 0,
+            signature: ixn_receipt.couplets.unwrap()[0].1.clone(),
+        };
+        let ixn_with_receipt = SignedEventMessage {
+            witness_receipts: Some(vec![attached_witness_sig]),
+            ..ixn
+        };
+
+        // Forward delegating event to group id
+        let exn_from_delegator = delegator.create_forward_message(
+            &group_id,
+            &ixn_with_receipt,
+            ForwardTopic::Delegate,
+        )?;
+
+        // Send it to witness
+        witness.process_op(Op::Exchange(exn_from_delegator))?;
+    };
+
+    // Child ask about group mailbox
+    for controller in vec![&cont1, &cont2] {
+        let mbx_query = controller.query_groups_mailbox(&witness.prefix);
+
+        let response = witness.process_op(Op::Query(mbx_query[0].clone())).unwrap();
+        if let Some(PossibleResponse::Mbx(MailboxResponse {
+            receipt: _,
+            multisig: _,
+            delegate,
+        })) = response
+        {
+            assert_eq!(delegate.len(), 1);
+            controller.process(&[Message::Notice(Notice::Event(delegate[0].clone()))])?;
+        };
+    }
+
+    let state = witness
+        .event_storage
+        .get_state(&delegator.prefix())?
+        .unwrap();
+    assert_eq!(state.sn, 1);
+
+    // append delegator seal to dip
+    let dip_with_seal = SignedEventMessage {
+        delegator_seal: Some(SourceSeal {
+            sn: 1,
+            digest: state.last_event_digest,
+        }),
+        ..dip
+    };
+
+    // publish delegated event to witness
+    witness.process_notice(Notice::Event(dip_with_seal.clone()))?;
+
+    // Child ask about mailbox
+    for controller in vec![&cont1, &cont2] {
+        let mbx_query = controller.query_groups_mailbox(&witness.prefix);
+        let response = witness.process_op(Op::Query(mbx_query[0].clone())).unwrap();
+        if let Some(PossibleResponse::Mbx(MailboxResponse {
+            receipt,
+            multisig: _,
+            delegate: _,
+        })) = response
+        {
+            assert_eq!(receipt.len(), 1);
+            controller.process(&[Message::Notice(Notice::NontransferableRct(
+                receipt[0].clone(),
+            ))])?;
+        };
+
+        let state = witness.event_storage.get_state(&group_id)?.unwrap();
+        assert_eq!(state.sn, 0);
+
+        let state = controller.get_state_for_id(&group_id)?;
+        assert_eq!(state.unwrap().sn, 0);
+    }
+
+    Ok(())
+}

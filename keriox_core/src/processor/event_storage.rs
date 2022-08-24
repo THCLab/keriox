@@ -134,7 +134,6 @@ impl EventStorage {
         Ok(())
     }
 
-
     #[cfg(feature = "query")]
     pub fn add_mailbox_receipt(&self, receipt: SignedNontransferableReceipt) -> Result<(), Error> {
         let id = receipt.body.event.prefix.clone();
@@ -186,7 +185,11 @@ impl EventStorage {
         );
 
         // TODO: query and return the rest of topics
-        Ok(MailboxResponse { receipt, multisig, delegate })
+        Ok(MailboxResponse {
+            receipt,
+            multisig,
+            delegate,
+        })
     }
 
     /// Get last establishment event seal for Prefix

@@ -53,7 +53,6 @@ impl EventValidator {
         if let Some(seal) = self.get_delegator_seal(signed_event)? {
             self.validate_seal(seal, &signed_event.event_message)?;
         };
-
         self.apply_to_state(&signed_event.event_message)
             .and_then(|new_state| {
                 // match on verification result
@@ -290,7 +289,7 @@ impl EventValidator {
                     .delegator_seal
                     .as_ref()
                     .map(|seal| (seal.sn, seal.digest.clone()))
-                    .ok_or_else(|| Error::SemanticError("Missing source seal".into()))?;
+                    .ok_or_else(|| Error::MissingDelegatorSealError)?;
                 Some(EventSeal {
                     prefix: dip.delegator,
                     sn,
@@ -310,7 +309,7 @@ impl EventValidator {
                     .delegator_seal
                     .as_ref()
                     .map(|seal| (seal.sn, seal.digest.clone()))
-                    .ok_or_else(|| Error::SemanticError("Missing source seal".into()))?;
+                    .ok_or_else(|| Error::MissingDelegatorSealError)?;
                 Some(EventSeal {
                     prefix: delegator,
                     sn,

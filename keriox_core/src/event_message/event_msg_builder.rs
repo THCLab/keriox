@@ -230,7 +230,10 @@ impl EventMsgBuilder {
             EventTypeTag::Dip => {
                 let icp_data = InceptionEvent {
                     key_config,
-                    witness_config: InceptionWitnessConfig::default(),
+                    witness_config: InceptionWitnessConfig {
+                        tally: self.witness_threshold,
+                        initial_witnesses: self.witnesses,
+                    },
                     inception_configuration: vec![],
                     data: vec![],
                 };

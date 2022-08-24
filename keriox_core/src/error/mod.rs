@@ -47,6 +47,9 @@ pub enum Error {
     #[error("Error while applying event: out of order event")]
     EventOutOfOrderError,
 
+    #[error("Error while applying event: missing delegator source seal")]
+    MissingDelegatorSealError,
+
     #[error("Error while applying event: duplicate event")]
     EventDuplicateError,
 

@@ -86,7 +86,7 @@ impl WitnessProcessor {
                 db.add_kel_finalized_event(signed_event.clone(), id)?;
                 publisher.notify(&Notification::KeyEventAdded(signed_event))
             }
-            Err(Error::EventOutOfOrderError) => {
+            Err(Error::EventOutOfOrderError) | Err(Error::MissingDelegatorSealError) => {
                 publisher.notify(&Notification::OutOfOrder(signed_event))
             }
             Err(Error::NotEnoughReceiptsError) => {

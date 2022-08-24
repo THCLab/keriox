@@ -5,7 +5,7 @@ use crate::oobi::OobiManager;
 use crate::{
     error::Error,
     event_message::{
-        exchange::{Exchange, ExchangeMessage, SignedExchange, ForwardTopic},
+        exchange::{Exchange, ExchangeMessage, ForwardTopic, SignedExchange},
         serialization_info::SerializationFormats,
         signature::Signature,
         signed_event_message::{Message, Notice, Op, SignedEventMessage},
@@ -146,10 +146,10 @@ fn process_exn(
     match topic {
         ForwardTopic::Multisig => {
             storage.add_mailbox_multisig(receipient, signed_to_forward)?;
-        },
+        }
         ForwardTopic::Delegate => {
             storage.add_mailbox_delegate(receipient, signed_to_forward)?;
-        },
+        }
     };
     Ok(())
 }

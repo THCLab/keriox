@@ -99,6 +99,21 @@ impl OutOfOrderEscrow {
             escrowed_out_of_order: escrow,
         }
     }
+
+    pub fn get_event_by_sn_and_digest(
+        &self,
+        sn: u64,
+        id: &IdentifierPrefix,
+        event_digest: &SelfAddressingPrefix,
+    ) -> Option<SignedEventMessage> {
+        self.escrowed_out_of_order.get(id).and_then(|mut events| {
+            events.find(|event| {
+                event.event_message.event.content.sn == sn
+                    && &event.event_message.event.content.prefix == id
+                    && &event.event_message.get_digest() == event_digest
+            })
+        })
+    }
 }
 impl Notifier for OutOfOrderEscrow {
     fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error> {
@@ -110,23 +125,7 @@ impl Notifier for OutOfOrderEscrow {
             Notification::OutOfOrder(signed_event) => {
                 // ignore events with no signatures
                 if !signed_event.signatures.is_empty() {
-                    let id = match signed_event.event_message.event.get_event_data() {
-                        crate::event::event_data::EventData::Dip(dip) => dip.delegator,
-                        crate::event::event_data::EventData::Drt(_) => {
-                            let id = signed_event.event_message.event.get_prefix();
-                            if let Some(state) =
-                                EventStorage::new(self.db.clone()).get_state(&id)?
-                            {
-                                match state.delegator {
-                                    Some(id) => id,
-                                    None => id,
-                                }
-                            } else {
-                                id
-                            }
-                        }
-                        _ => signed_event.event_message.event.get_prefix(),
-                    };
+                    let id = signed_event.event_message.event.get_prefix();
                     self.escrowed_out_of_order.add(&id, signed_event.clone())?;
                 }
             }
@@ -231,7 +230,7 @@ impl PartiallySignedEscrow {
             .get(&id)
             .map(|events| events.filter(|event| event.event_message == signed_event.event_message))
         {
-            let new_sigs = esc
+            let new_sigs: Vec<_> = esc
                 .flat_map(|ev| ev.signatures)
                 .chain(signed_event.signatures.clone().into_iter())
                 .collect();
@@ -254,6 +253,11 @@ impl PartiallySignedEscrow {
                     // remove from escrow
                     self.remove_partially_signed(&new_event.event_message)?;
                     bus.notify(&Notification::PartiallyWitnessed(new_event))?;
+                }
+                Err(Error::MissingDelegatorSealError) => {
+                    // remove from escrow
+                    self.remove_partially_signed(&new_event.event_message)?;
+                    bus.notify(&Notification::OutOfOrder(new_event))?;
                 }
                 Err(Error::SignatureVerificationError) => {
                     // ignore
@@ -292,7 +296,7 @@ impl PartiallyWitnessedEscrow {
 
     /// Return escrowed partially witness events of given identifier, sn and
     /// digest.
-    fn get_event_by_sn_and_digest(
+    pub fn get_event_by_sn_and_digest(
         &self,
         sn: u64,
         id: &IdentifierPrefix,
