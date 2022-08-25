@@ -329,6 +329,8 @@ impl<K: KeyManager> SimpleController<K> {
         Ok(())
     }
 
+    /// Checks multisig event and sign it if it wasn't sign by controller
+    /// earlier.
     pub fn process_multisig(
         &mut self,
         event: SignedEventMessage,
@@ -400,10 +402,11 @@ impl<K: KeyManager> SimpleController<K> {
         self.storage.get_state(id)
     }
 
-    /// Generates group inception signed by controller and exchange messages to group participants from `identifiers` argument.
+    /// Generates group inception event signed by controller and exchange
+    /// messages to group participants from `participants` argument.
     pub fn group_incept(
         &mut self,
-        identifiers: Vec<IdentifierPrefix>,
+        participants: Vec<IdentifierPrefix>,
         signature_threshold: &SignatureThreshold,
         initial_witness: Option<Vec<BasicPrefix>>,
         witness_threshold: Option<u64>,
@@ -417,7 +420,7 @@ impl<K: KeyManager> SimpleController<K> {
                     .to_str()
                     .as_bytes(),
             );
-            let (pks, npks) = identifiers.iter().fold(
+            let (pks, npks) = participants.iter().fold(
                 (
                     vec![Basic::Ed25519.derive(km.public_key())],
                     vec![next_key_hash],
@@ -463,7 +466,7 @@ impl<K: KeyManager> SimpleController<K> {
 
         self.groups.push(signed.event_message.event.get_prefix());
 
-        let exchanges = identifiers
+        let exchanges = participants
             .iter()
             .map(|id| {
                 self.create_forward_message(id, &signed, ForwardTopic::Multisig)

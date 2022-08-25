@@ -917,12 +917,11 @@ pub fn test_delegated_multisig() -> Result<(), WitnessError> {
     let mbx_msg = cont2.query_mailbox(&witness.prefix);
     let response = witness.process_op(mbx_msg).unwrap();
     if let Some(PossibleResponse::Mbx(MailboxResponse {
-        receipt,
+        receipt: _,
         multisig,
         delegate: _,
     })) = response
     {
-        assert_eq!(receipt.len(), 1);
         assert_eq!(multisig.len(), 1);
 
         let group_icp_to_sign = multisig[0].clone();
@@ -934,7 +933,7 @@ pub fn test_delegated_multisig() -> Result<(), WitnessError> {
         witness.process_op(Op::Exchange(exn_from_cont2))?;
     };
 
-    // Controller1 asks witness about his mailbox to have fully signed dip.
+    // Controller1 asks witness about group mailbox to have fully signed dip.
     let mbx_msg = cont1.query_groups_mailbox(&witness.prefix);
     let response = witness.process_op(Op::Query(mbx_msg[0].clone())).unwrap();
     if let Some(PossibleResponse::Mbx(MailboxResponse {

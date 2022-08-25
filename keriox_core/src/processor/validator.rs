@@ -273,7 +273,7 @@ impl EventValidator {
                 ));
             };
         } else {
-            return Err(Error::EventOutOfOrderError);
+            return Err(Error::MissingDelegatorSealError);
         }
         Ok(())
     }
