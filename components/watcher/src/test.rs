@@ -15,6 +15,8 @@ use crate::watcher::{WatcherData, WatcherError};
 
 #[test]
 pub fn test_authentication() -> Result<(), Error> {
+    // TODO: init witness
+
     // Controller who will ask
     let mut asker_controller = {
         // Create test db and event processor.
@@ -41,7 +43,7 @@ pub fn test_authentication() -> Result<(), Error> {
     };
 
     let asker_icp = asker_controller
-        .incept(None, None)
+        .incept(None, None) // TODO: add initial witness here
         .unwrap()
         .serialize()
         .unwrap();
@@ -71,7 +73,7 @@ pub fn test_authentication() -> Result<(), Error> {
     };
 
     let about_icp = about_controller
-        .incept(None, None)
+        .incept(None, None) // TODO: add initial witness here
         .unwrap()
         .serialize()
         .unwrap();
@@ -81,7 +83,7 @@ pub fn test_authentication() -> Result<(), Error> {
     // TODO: use fake transport
     let watcher = WatcherData::setup(url, root.path(), None, Box::new(DefaultTransport))?;
 
-    // Watcher should know bouth controllers
+    // Watcher should know both controllers
     watcher.parse_and_process_notices(&asker_icp).unwrap();
     watcher.parse_and_process_notices(&about_icp).unwrap();
 
@@ -99,7 +101,14 @@ pub fn test_authentication() -> Result<(), Error> {
 
     // Send query again
     let result = futures::executor::block_on(watcher.process_op(query));
-    assert!(result.is_ok());
+    // Expect error because controller's witness config is empty and latest ksn can't be checked.
+    assert!(matches!(
+        result, Err(WatcherError::NoIdentState { ref prefix })
+        if prefix == about_controller.prefix()
+    ));
+
+    // TODO: send witness' loc scheme oobi to watcher so it can forward queries to it
+    // TODO: send query again and check if witness received it
 
     Ok(())
 }
