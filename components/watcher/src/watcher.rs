@@ -212,6 +212,7 @@ impl WatcherData {
         Ok(())
     }
 
+    /// Forward query to random registered witness and save its response to mailbox.
     async fn forward_query(&self, qry: &SignedQuery) -> Result<(), WatcherError> {
         // Create a new signed message based on the received one
         let sigs = vec![AttachedSignaturePrefix::new(
