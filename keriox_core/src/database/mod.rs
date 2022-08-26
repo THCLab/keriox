@@ -47,6 +47,9 @@ pub struct SledEventDatabase {
 
     #[cfg(feature = "query")]
     mailbox_replies: SledEventTreeVec<SignedEventMessage>,
+
+    #[cfg(feature = "query")]
+    mailbox_multisig: SledEventTreeVec<TimestampedSignedEventMessage>,
 }
 
 // TODO: remove all the `.ok()`s
@@ -77,6 +80,8 @@ impl SledEventDatabase {
             mailbox_receipts: SledEventTreeVec::new(db.open_tree(b"mbxrct")?),
             #[cfg(feature = "query")]
             mailbox_replies: SledEventTreeVec::new(db.open_tree(b"mbxrpy")?),
+            #[cfg(feature = "query")]
+            mailbox_multisig: SledEventTreeVec::new(db.open_tree(b"mbxm")?),
 
             #[cfg(feature = "query")]
             escrowed_replys: SledEventTreeVec::new(db.open_tree(b"knes")?),
@@ -312,6 +317,24 @@ impl SledEventDatabase {
         id: &IdentifierPrefix,
     ) -> Option<impl DoubleEndedIterator<Item = SignedEventMessage>> {
         self.mailbox_replies
+            .iter_values(self.identifiers.designated_key(id).ok()?)
+    }
+
+    pub fn add_mailbox_multisig(
+        &self,
+        event: SignedEventMessage,
+        target_id: &IdentifierPrefix,
+    ) -> Result<(), DbError> {
+        self.mailbox_multisig
+            .push(self.identifiers.designated_key(target_id)?, event.into())
+    }
+
+    #[cfg(feature = "query")]
+    pub fn get_mailbox_multisig(
+        &self,
+        id: &IdentifierPrefix,
+    ) -> Option<impl DoubleEndedIterator<Item = TimestampedSignedEventMessage>> {
+        self.mailbox_multisig
             .iter_values(self.identifiers.designated_key(id).ok()?)
     }
 }

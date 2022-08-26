@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use super::compute_state;
+use crate::query::query_event::MailboxResponse;
 use crate::{
     database::{timestamped::TimestampedSignedEventMessage, SledEventDatabase},
     error::Error,
@@ -8,14 +9,17 @@ use crate::{
         event_data::EventData,
         sections::{seal::EventSeal, KeyConfig},
     },
-    event_message::{signed_event_message::SignedNontransferableReceipt, Digestible},
+    event_message::{
+        signed_event_message::{SignedEventMessage, SignedNontransferableReceipt},
+        Digestible,
+    },
     prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix},
     state::{EventSemantics, IdentifierState},
 };
 #[cfg(feature = "query")]
 use crate::{
     event::SerializationFormats,
-    event_message::signed_event_message::{Notice, SignedEventMessage},
+    event_message::signed_event_message::Notice,
     query::{
         key_state_notice::KeyStateNotice, query_event::QueryArgsMbx, reply_event::SignedReply,
     },
@@ -110,6 +114,16 @@ impl EventStorage {
         }
     }
 
+    pub fn add_mailbox_exchange(
+        &self,
+        receipient: &IdentifierPrefix,
+        to_forward: SignedEventMessage,
+    ) -> Result<(), Error> {
+        self.db.add_mailbox_multisig(to_forward, receipient)?;
+
+        Ok(())
+    }
+
     #[cfg(feature = "query")]
     pub fn add_mailbox_receipt(&self, receipt: SignedNontransferableReceipt) -> Result<(), Error> {
         let id = receipt.body.event.prefix.clone();
@@ -127,21 +141,24 @@ impl EventStorage {
     }
 
     #[cfg(feature = "query")]
-    pub fn get_mailbox_messages(&self, args: QueryArgsMbx) -> Result<Vec<Notice>, Error> {
+    pub fn get_mailbox_messages(&self, args: QueryArgsMbx) -> Result<MailboxResponse, Error> {
         let id = args.pre.clone();
 
-        let mut messages = Vec::new();
-
         // query receipts
-        messages.extend(
-            self.db
-                .get_mailbox_receipts(&id)
-                .into_iter()
-                .flatten()
-                .filter(|rec| rec.body.event.sn >= args.topics.receipt)
-                .map(|rec| Notice::NontransferableRct(rec)),
-        );
+        let receipt = self
+            .db
+            .get_mailbox_receipts(&id)
+            .into_iter()
+            .flatten()
+            .filter(|rec| rec.body.event.sn >= args.topics.receipt)
+            .collect();
 
+        let multisig = match self.db.get_mailbox_multisig(&id) {
+            Some(msgs) => msgs.map(|e| e.signed_event_message).collect(),
+            None => vec![],
+        };
+
+        let mut messages = vec![];
         // query replies
         messages.extend(
             self.db
@@ -153,7 +170,7 @@ impl EventStorage {
         );
 
         // TODO: query and return the rest of topics
-        Ok(messages)
+        Ok(MailboxResponse { receipt, multisig })
     }
 
     /// Get last establishment event seal for Prefix

@@ -250,6 +250,14 @@ impl PartiallySignedEscrow {
                     self.remove_partially_signed(&new_event.event_message)?;
                     bus.notify(&Notification::KeyEventAdded(new_event))?;
                 }
+                Err(Error::NotEnoughReceiptsError) => {
+                    // remove from escrow
+                    self.remove_partially_signed(&new_event.event_message)?;
+                    bus.notify(&Notification::PartiallyWitnessed(new_event))?;
+                }
+                Err(Error::SignatureVerificationError) => {
+                    // ignore
+                }
                 Err(_e) => {
                     //keep in escrow and save new partially signed event
                     self.escrowed_partially_signed

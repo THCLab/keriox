@@ -343,8 +343,5 @@ fn test_pathed_material() {
 fn test_path() {
     let attached_str = "6AABAAA-";
     let (_rest, attached_material) = material_path(attached_str.as_bytes()).unwrap();
-    assert_eq!(
-        attached_material,
-        MaterialPath::new(PayloadType::A6, "-".into())
-    );
+    assert_eq!(attached_material, MaterialPath::to_path("-".into()));
 }

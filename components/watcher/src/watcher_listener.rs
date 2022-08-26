@@ -118,13 +118,12 @@ pub mod http_handlers {
             .parse_and_process_ops(&body)
             .await?
             .iter()
-            .map(|msg| msg.to_cesr())
-            .flatten_ok()
-            .try_collect()?;
+            .map(|msg| msg.to_string())
+            .join("");
 
         Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())
-            .body(String::from_utf8(resp).unwrap()))
+            .body(resp))
     }
 
     #[post("/resolve")]

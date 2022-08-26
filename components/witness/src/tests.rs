@@ -1,18 +1,22 @@
 use std::sync::{Arc, Mutex};
 
 use keri::{
-    actor::{simple_controller::SimpleController, SignedQueryError},
+    actor::{
+        simple_controller::{PossibleResponse, SimpleController},
+        SignedQueryError,
+    },
     database::{escrow::EscrowDb, SledEventDatabase},
-    derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
+    derivation::basic::Basic,
     error::Error,
-    event::SerializationFormats,
+    event::sections::threshold::SignatureThreshold,
     event_message::signed_event_message::{Message, Notice, Op},
     keys::PublicKey,
-    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix},
+    prefix::{BasicPrefix, IdentifierPrefix},
     processor::{basic_processor::BasicProcessor, event_storage::EventStorage, Processor},
-    query::query_event::{QueryArgsMbx, QueryEvent, QueryRoute, QueryTopics, SignedQuery},
-    signer::{CryptoBox, KeyManager, Signer},
+    query::query_event::MailboxResponse,
+    signer::{CryptoBox, Signer},
 };
+use tempfile::Builder;
 
 use crate::witness::{Witness, WitnessError};
 
@@ -319,13 +323,15 @@ fn test_qry_rpy() -> Result<(), WitnessError> {
     let response = witness.process_op(query)?;
 
     // assert_eq!(response.len(), 1);
-    match &response[0] {
-        Message::Op(Op::Reply(rpy)) => {
-            if let ReplyRoute::Ksn(_id, ksn) = rpy.reply.get_route() {
-                assert_eq!(&ksn.state, &alice.get_state().unwrap().unwrap())
+    if let Some(PossibleResponse::Kel(response)) = response {
+        match &response[0] {
+            Message::Op(Op::Reply(rpy)) => {
+                if let ReplyRoute::Ksn(_id, ksn) = rpy.reply.get_route() {
+                    assert_eq!(&ksn.state, &alice.get_state().unwrap().unwrap())
+                }
             }
+            _ => unreachable!(),
         }
-        _ => unreachable!(),
     }
 
     // Bob asks about alices kel
@@ -365,7 +371,7 @@ fn test_qry_rpy() -> Result<(), WitnessError> {
         .flatten()
         .map(Message::Notice)
         .collect::<Vec<_>>();
-    assert_eq!(response, alice_kel);
+    assert_eq!(response, Some(PossibleResponse::Kel(alice_kel)));
 
     Ok(())
 }
@@ -555,21 +561,17 @@ fn test_mbx() {
 
     // query witness
     for controller in controllers {
-        let mbx_msg = create_mbx_msg(&witness, &controller);
+        let mbx_msg = controller.query_mailbox(&witness.prefix);
         let mbx_msg = Message::Op(mbx_msg).to_cesr().unwrap();
         let receipts = witness.parse_and_process_ops(&mbx_msg).unwrap();
 
-        assert_eq!(receipts.len(), 1);
-        let receipt = receipts[0].clone();
+        if let PossibleResponse::Mbx(mbx) = &receipts[0] {
+            assert_eq!(receipts.len(), 1);
+            let receipt = mbx.receipt[0].clone();
 
-        let receipt = if let Message::Notice(Notice::NontransferableRct(receipt)) = receipt {
-            receipt
-        } else {
-            panic!("didn't receive a receipt")
-        };
-
-        assert_eq!(receipt.body.event.sn, 0);
-        assert_eq!(receipt.body.event.prefix, controller.prefix().clone());
+            assert_eq!(receipt.body.event.sn, 0);
+            assert_eq!(receipt.body.event.prefix, controller.prefix().clone());
+        }
     }
 }
 
@@ -644,7 +646,7 @@ fn test_invalid_notice() {
 
     // query witness
     for controller in controllers {
-        let mbx_msg = create_mbx_msg(&witness, &controller);
+        let mbx_msg = controller.query_mailbox(&witness.prefix);
         let mbx_msg = Message::Op(mbx_msg).to_cesr().unwrap();
         let result = witness.parse_and_process_ops(&mbx_msg);
 
@@ -658,39 +660,144 @@ fn test_invalid_notice() {
     }
 }
 
-fn create_mbx_msg(witness: &Witness, controller: &SimpleController<CryptoBox>) -> Op {
-    let qry_msg = QueryEvent::new_query(
-        QueryRoute::Mbx {
-            args: QueryArgsMbx {
-                i: IdentifierPrefix::Basic(witness.prefix.clone()),
-                pre: controller.prefix().clone(),
-                src: IdentifierPrefix::Basic(witness.prefix.clone()),
-                topics: QueryTopics {
-                    credential: 0,
-                    receipt: 0,
-                    replay: 0,
-                    reply: 0,
-                    multisig: 0,
-                    delegate: 0,
-                },
-            },
-            reply_route: "".to_string(),
-        },
-        SerializationFormats::JSON,
-        &SelfAddressing::Blake3_256,
-    )
-    .unwrap();
-    let signature = controller
-        .key_manager
-        .lock()
-        .unwrap()
-        .sign(&qry_msg.serialize().unwrap())
-        .unwrap();
-    let signatures = vec![AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, signature, 0)];
-    let mbx_msg = Op::Query(SignedQuery::new(
-        qry_msg,
-        controller.prefix().clone().clone(),
-        signatures,
-    ));
-    mbx_msg
+#[test]
+pub fn test_multisig() -> Result<(), WitnessError> {
+    let signer = Signer::new();
+    let signer_arc = Arc::new(signer);
+    let witness = {
+        let witness_root = Builder::new().prefix("test-db").tempdir().unwrap();
+        let witness_root_oobi = Builder::new().prefix("test-db").tempdir().unwrap();
+        let path = witness_root.path();
+        Witness::new(signer_arc.clone(), path, witness_root_oobi.path())?
+    };
+
+    // Init first controller.
+    let mut cont1 = {
+        // Create test db and event processor.
+        let cont1_key_manager = Arc::new(Mutex::new(CryptoBox::new()?));
+        let root = Builder::new().prefix("test-db").tempdir().unwrap();
+        let oobi_root = Builder::new().prefix("cont1-db-oobi").tempdir().unwrap();
+        let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
+        let cont1_escrow_db = Arc::new(EscrowDb::new(root.path())?);
+
+        SimpleController::new(
+            Arc::clone(&db),
+            Arc::clone(&cont1_escrow_db),
+            Arc::clone(&cont1_key_manager),
+            oobi_root.path(),
+        )?
+    };
+    let icp_1 = cont1.incept(Some(vec![witness.prefix.clone()]), Some(1))?;
+    witness.process_notice(Notice::Event(icp_1.clone()))?;
+    let receipts1 = witness
+        .get_mailbox_messages(cont1.prefix())?
+        .receipt
+        .into_iter()
+        .map(|r| Message::Notice(Notice::NontransferableRct(r)))
+        .collect::<Vec<_>>();
+    cont1.process(&receipts1)?;
+
+    // Init second controller.
+    let mut cont2 = {
+        // Create test db and event processor.
+        let cont2_key_manager = Arc::new(Mutex::new(CryptoBox::new()?));
+        let root = Builder::new().prefix("test-db").tempdir().unwrap();
+        let oobi_root = Builder::new().prefix("cont2-db-oobi").tempdir().unwrap();
+        let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
+        let cont2_escrow_db = Arc::new(EscrowDb::new(root.path())?);
+
+        SimpleController::new(
+            Arc::clone(&db),
+            Arc::clone(&cont2_escrow_db),
+            Arc::clone(&cont2_key_manager),
+            oobi_root.path(),
+        )?
+    };
+    let icp_2 = cont2.incept(Some(vec![witness.prefix.clone()]), Some(1))?;
+    witness.process_notice(Notice::Event(icp_2.clone()))?;
+    let receipts2 = witness
+        .get_mailbox_messages(cont2.prefix())?
+        .receipt
+        .into_iter()
+        .map(|r| Message::Notice(Notice::NontransferableRct(r)))
+        .collect::<Vec<_>>();
+    cont2.process(&receipts2)?;
+
+    // Process inceptions of other group participants
+    cont2.process(&[Message::Notice(Notice::Event(icp_1))])?;
+    cont2.process(&receipts1)?;
+    cont1.process(&[Message::Notice(Notice::Event(icp_2))])?;
+    cont1.process(&receipts2)?;
+
+    let (group_icp, exchange_messages) = cont1.group_incept(
+        vec![cont2.prefix().clone()],
+        &SignatureThreshold::Simple(2),
+        Some(vec![witness.prefix.clone()]),
+        Some(1),
+    )?;
+    witness.process_notice(Notice::Event(group_icp.clone()))?;
+
+    let group_id = group_icp.event_message.event.get_prefix();
+    assert_eq!(exchange_messages.len(), 1);
+
+    witness.process_op(Op::Exchange(exchange_messages[0].clone()))?;
+
+    // Controller2 asks witness about his mailbox.
+    let mbx_msg = cont2.query_mailbox(&witness.prefix);
+    let response = witness.process_op(mbx_msg).unwrap();
+    if let Some(PossibleResponse::Mbx(MailboxResponse { receipt, multisig })) = response {
+        assert_eq!(receipt.len(), 1);
+        assert_eq!(multisig.len(), 1);
+
+        let group_icp_to_sign = multisig[0].clone();
+
+        let signed_icp = cont2.process_multisig(group_icp_to_sign)?.unwrap();
+        let exn_from_cont2 = cont2.create_exchange_message(&cont1.prefix(), &signed_icp)?;
+        // Send it to witness
+        witness.process_notice(Notice::Event(signed_icp.clone()))?;
+        witness.process_op(Op::Exchange(exn_from_cont2))?;
+    };
+    // Controller2 didin't accept group icp yet because of lack of witness receipt.
+    let state = cont2.get_state_for_id(&group_id)?;
+    assert_eq!(state, None);
+    // Also Controller1 didin't get his exn and receipts.
+    let state = cont1.get_state_for_id(&group_id)?;
+    assert_eq!(state, None);
+
+    let state = witness.event_storage.get_state(&group_id)?.unwrap();
+    assert_eq!(state.sn, 0);
+
+    let group_query_message = cont1.query_groups_mailbox(&witness.prefix)[0].clone();
+
+    let res = witness.process_op(Op::Query(group_query_message))?;
+    let receipts = match res {
+        Some(PossibleResponse::Mbx(mbx)) => mbx.receipt,
+        _ => unreachable!(),
+    };
+
+    let group_receipt = receipts
+        .into_iter()
+        .map(|r| Message::Notice(Notice::NontransferableRct(r)))
+        .collect::<Vec<_>>();
+    cont2.process(&group_receipt)?;
+    let state = cont2.get_state_for_id(&group_id)?;
+    assert_eq!(state.unwrap().sn, 0);
+
+    // Controller1 asks witness about his mailbox.
+    let mbx_msg = cont1.query_mailbox(&witness.prefix);
+    let response = witness.process_op(mbx_msg).unwrap();
+    if let Some(PossibleResponse::Mbx(MailboxResponse { receipt, multisig })) = response {
+        assert_eq!(receipt.len(), 1);
+        assert_eq!(multisig.len(), 1);
+
+        let group_icp = multisig[0].clone();
+        // Process partially signed group icp
+        cont1.process_multisig(group_icp)?;
+    };
+    // Process witness receipt of group event
+    cont1.process(&group_receipt)?;
+    let state = cont1.get_state_for_id(&group_id)?;
+    assert_eq!(state.unwrap().sn, 0);
+
+    Ok(())
 }

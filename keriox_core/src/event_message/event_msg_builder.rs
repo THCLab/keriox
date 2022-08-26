@@ -7,7 +7,9 @@ use crate::{
             delegated::DelegatedInceptionEvent, interaction::InteractionEvent,
             rotation::RotationEvent,
         },
-        sections::{threshold::SignatureThreshold, RotationWitnessConfig},
+        sections::{
+            key_config::NextKeysData, threshold::SignatureThreshold, RotationWitnessConfig,
+        },
         SerializationFormats,
     },
     event::{
@@ -34,6 +36,7 @@ pub struct EventMsgBuilder {
     next_key_threshold: SignatureThreshold,
     keys: Vec<BasicPrefix>,
     next_keys: Vec<BasicPrefix>,
+    next_keys_hashes: Option<Vec<SelfAddressingPrefix>>,
     prev_event: SelfAddressingPrefix,
     data: Vec<Seal>,
     delegator: IdentifierPrefix,
@@ -70,6 +73,7 @@ impl EventMsgBuilder {
             witness_to_remove: vec![],
             format: SerializationFormats::JSON,
             derivation: SelfAddressing::Blake3_256,
+            next_keys_hashes: None,
         }
     }
 
@@ -86,6 +90,13 @@ impl EventMsgBuilder {
 
     pub fn with_next_keys(self, next_keys: Vec<BasicPrefix>) -> Self {
         EventMsgBuilder { next_keys, ..self }
+    }
+
+    pub fn with_next_keys_hashes(self, next_keys: Vec<SelfAddressingPrefix>) -> Self {
+        EventMsgBuilder {
+            next_keys_hashes: Some(next_keys),
+            ..self
+        }
     }
 
     pub fn with_sn(self, sn: u64) -> Self {
@@ -153,8 +164,14 @@ impl EventMsgBuilder {
     }
 
     pub fn build(self) -> Result<EventMessage<KeyEvent>, Error> {
-        let next_key_hash =
-            nxt_commitment(self.next_key_threshold, &self.next_keys, &self.derivation);
+        let next_key_hash = if let Some(hashes) = self.next_keys_hashes {
+            NextKeysData {
+                threshold: self.next_key_threshold,
+                next_key_hashes: hashes,
+            }
+        } else {
+            nxt_commitment(self.next_key_threshold, &self.next_keys, &self.derivation)
+        };
         let key_config = KeyConfig::new(self.keys, next_key_hash, Some(self.key_threshold));
         let prefix = if self.prefix == IdentifierPrefix::default() {
             let icp_data = InceptionEvent::new(key_config.clone(), None, None)

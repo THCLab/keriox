@@ -5,7 +5,10 @@ use crate::{
     derivation::self_addressing::SelfAddressing,
     error::Error,
     event::{EventMessage, SerializationFormats},
-    event_message::{EventTypeTag, SaidEvent, Typeable},
+    event_message::{
+        signed_event_message::{SignedEventMessage, SignedNontransferableReceipt},
+        EventTypeTag, SaidEvent, Typeable,
+    },
     prefix::{AttachedSignaturePrefix, IdentifierPrefix},
 };
 
@@ -68,6 +71,12 @@ pub struct QueryTopics {
     pub credential: u64,
     #[serde(rename = "/delegate")]
     pub delegate: u64,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct MailboxResponse {
+    pub receipt: Vec<SignedNontransferableReceipt>,
+    pub multisig: Vec<SignedEventMessage>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]

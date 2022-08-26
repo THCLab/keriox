@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{error::Error, event_parsing::path::MaterialPath, prefix::IdentifierPrefix};
+use crate::{
+    derivation::self_addressing::SelfAddressing, error::Error, event::SerializationFormats,
+    event_parsing::path::MaterialPath, prefix::IdentifierPrefix,
+};
 
 use super::{
     key_event_message::KeyEvent, signature::Signature, EventMessage, EventTypeTag, SaidEvent,
@@ -30,6 +33,16 @@ pub enum Exchange {
 }
 
 impl Exchange {
+    pub fn to_message(
+        self,
+        format: SerializationFormats,
+        derivation: &SelfAddressing,
+    ) -> Result<EventMessage<SaidEvent<Exchange>>, Error> {
+        SaidEvent::<Exchange>::to_message(self, format, derivation)
+    }
+}
+
+impl Exchange {
     pub fn get_prefix(&self) -> IdentifierPrefix {
         match self {
             Exchange::Fwd {
@@ -43,8 +56,8 @@ impl Exchange {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct FwdArgs {
     #[serde(rename = "pre")]
-    recipient_id: IdentifierPrefix,
-    topic: ForwardTopic,
+    pub recipient_id: IdentifierPrefix,
+    pub topic: ForwardTopic,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]

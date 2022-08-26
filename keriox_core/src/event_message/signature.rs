@@ -7,6 +7,7 @@ use crate::{
     event::sections::seal::EventSeal,
     event_parsing::Attachment,
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+    processor::event_storage::EventStorage,
 };
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -21,7 +22,6 @@ pub enum Signature {
 pub enum SignerData {
     EventSeal(EventSeal),
     LastEstablishment(IdentifierPrefix),
-    // Signer id should be taken from event
     JustSignatures,
 }
 
@@ -40,6 +40,23 @@ impl Signature {
         match self {
             Signature::Transferable(signer_data, _) => signer_data.get_signer(),
             Signature::NonTransferable(id, _) => Some(IdentifierPrefix::Basic(id.clone())),
+        }
+    }
+
+    pub fn verify(&self, data: &[u8], storage: &EventStorage) -> Result<bool, Error> {
+        match self {
+            Signature::Transferable(_sigd, sigs) => {
+                let kc = storage
+                    .get_state(
+                        &self
+                            .get_signer()
+                            .ok_or(Error::SemanticError("Uknown signer".into()))?,
+                    )?
+                    .ok_or_else(|| Error::SemanticError("No signer identifier in db".into()))?
+                    .current;
+                kc.verify(data, &sigs)
+            }
+            Signature::NonTransferable(id, sig) => id.verify(data, &sig),
         }
     }
 }

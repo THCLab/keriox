@@ -7,7 +7,7 @@ use crate::{
 use chrono::{DateTime, FixedOffset, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize, Serializer};
 
-use self::key_state_notice::KeyStateNotice;
+use self::{key_state_notice::KeyStateNotice, query_event::MailboxResponse};
 
 use thiserror::Error;
 
@@ -54,11 +54,11 @@ impl<D: Serialize + Typeable> Typeable for Timestamped<D> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum ReplyType {
     Ksn(KeyStateNotice),
     Kel(Vec<Message>),
-    Mbx(Vec<Message>),
+    Mbx(MailboxResponse),
 }
 
 #[derive(Error, Debug)]

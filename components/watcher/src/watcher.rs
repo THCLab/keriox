@@ -6,7 +6,9 @@ use std::{
 use derive_more::{Display, Error, From};
 use itertools::Itertools;
 use keri::{
-    actor::{parse_notice_stream, parse_op_stream, prelude::*},
+    actor::{
+        parse_notice_stream, parse_op_stream, prelude::*, simple_controller::PossibleResponse,
+    },
     database::DbError,
     derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
     error::Error,
@@ -144,7 +146,7 @@ impl WatcherData {
         process_notice(notice, &self.processor)
     }
 
-    pub async fn process_op(&self, op: Op) -> Result<Option<Vec<Message>>, WatcherError> {
+    pub async fn process_op(&self, op: Op) -> Result<Option<PossibleResponse>, WatcherError> {
         match op {
             Op::Query(qry) => {
                 let cid = qry.signer.clone();
@@ -156,7 +158,7 @@ impl WatcherData {
                 }
 
                 // Update latest state for prefix
-                let wit_id = self.query_state(qry.query.get_prefix()).await?;
+                self.query_state(qry.query.get_prefix()).await?;
 
                 let escrowed_replies = self
                     .event_storage
@@ -185,21 +187,18 @@ impl WatcherData {
 
                         let signature =
                             SelfSigning::Ed25519Sha512.derive(self.signer.sign(&rpy.serialize()?)?);
-                        let reply = Message::Op(Op::Reply(SignedReply::new_nontrans(
-                            rpy,
-                            self.prefix.clone(),
-                            signature,
-                        )));
-                        Ok(Some(vec![reply]))
+                        let reply = SignedReply::new_nontrans(rpy, self.prefix.clone(), signature);
+                        Ok(Some(PossibleResponse::Ksn(reply)))
                     }
-                    ReplyType::Kel(msgs) | ReplyType::Mbx(msgs) => Ok(Some(msgs)),
+                    ReplyType::Kel(msgs) => Ok(Some(PossibleResponse::Kel(msgs))),
+                    ReplyType::Mbx(mbx) => Ok(Some(PossibleResponse::Mbx(mbx))),
                 }
             }
             Op::Reply(reply) => {
                 self.process_reply(reply)?;
                 Ok(None)
             }
-            Op::Exchange(_) => todo!(),
+            Op::Exchange(_exn) => Ok(None),
         }
     }
 
@@ -355,20 +354,24 @@ impl WatcherData {
     pub async fn parse_and_process_ops(
         &self,
         input_stream: &[u8],
-    ) -> Result<Vec<Message>, WatcherError> {
-        let mut results = Vec::new();
+    ) -> Result<Vec<PossibleResponse>, WatcherError> {
+        let mut responses = Vec::new();
         for op in parse_op_stream(input_stream)? {
-            let mut result = self.process_op(op).await?.unwrap_or_default();
-            results.append(&mut result);
+            let result = self.process_op(op).await?;
+            if let Some(response) = result {
+                responses.push(response);
+            }
         }
-        Ok(results)
+        Ok(responses)
     }
 
-    pub async fn process_ops(&self, ops: Vec<Op>) -> Result<Vec<Message>, WatcherError> {
+    pub async fn process_ops(&self, ops: Vec<Op>) -> Result<Vec<PossibleResponse>, WatcherError> {
         let mut results = Vec::new();
         for op in ops {
-            let mut result = self.process_op(op).await?.unwrap_or_default();
-            results.append(&mut result);
+            let result = self.process_op(op).await?;
+            if let Some(response) = result {
+                results.push(response);
+            }
         }
         Ok(results)
     }
@@ -400,7 +403,6 @@ impl WatcherData {
             None => return Err(WatcherError::NoLocation { id: wit_id }),
         };
 
-        let url = loc.url.join("process").unwrap();
         let response = self.transport.send_message(loc, msg).await?;
 
         println!("\ngot response: {:?}", response);
