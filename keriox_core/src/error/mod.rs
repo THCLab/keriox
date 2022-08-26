@@ -50,6 +50,9 @@ pub enum Error {
     #[error("Error while applying event: missing delegator source seal")]
     MissingDelegatorSealError,
 
+    #[error("Error while applying event: missing delegating event")]
+    MissingDelegatingEventError,
+
     #[error("Error while applying event: duplicate event")]
     EventDuplicateError,
 

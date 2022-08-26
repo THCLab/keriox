@@ -69,8 +69,8 @@ impl BasicProcessor {
                 db.add_duplicious_event(signed_event.clone(), id)?;
                 publisher.notify(&Notification::DupliciousEvent(signed_event))
             }
-            Err(Error::MissingDelegatorSealError) => {
-                publisher.notify(&Notification::OutOfOrder(signed_event))
+            Err(Error::MissingDelegatingEventError) => {
+                publisher.notify(&Notification::MissingDelegatingEvent(signed_event))
             }
             Err(e) => Err(e),
         }

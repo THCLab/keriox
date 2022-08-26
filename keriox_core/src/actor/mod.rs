@@ -7,7 +7,7 @@ use crate::{
     event_message::{
         exchange::{Exchange, ExchangeMessage, ForwardTopic, SignedExchange},
         serialization_info::SerializationFormats,
-        signature::Signature,
+        signature::{Nontransferable, Signature},
         signed_event_message::{Message, Notice, Op, SignedEventMessage},
     },
     event_parsing::{
@@ -127,19 +127,28 @@ fn process_exn(
     let (receipient, to_forward, topic) = match &exn.event.content {
         Exchange::Fwd { args, to_forward } => (&args.recipient_id, to_forward, &args.topic),
     };
-    let sigs = attachemnt
-        .1
-        .into_iter()
-        .map(|s| match s {
-            Signature::Transferable(_sd, sigs) => sigs,
-            Signature::NonTransferable(_, _) => todo!(),
-        })
-        .flatten()
-        .collect();
+    let (sigs, witness_receipts) = attachemnt.1.into_iter().fold(
+        (vec![], vec![]),
+        |(mut signatures, mut witness_receipts), s| {
+            match s {
+                Signature::Transferable(_sd, mut sigs) => signatures.append(&mut sigs),
+                Signature::NonTransferable(Nontransferable::Couplet(_, _)) => todo!(),
+                Signature::NonTransferable(Nontransferable::Indexed(mut witness_sigs)) => {
+                    witness_receipts.append(&mut witness_sigs)
+                }
+            }
+            (signatures, witness_receipts)
+        },
+    );
+
     let signed_to_forward = SignedEventMessage {
         event_message: to_forward.clone(),
         signatures: sigs,
-        witness_receipts: None,
+        witness_receipts: if witness_receipts.is_empty() {
+            None
+        } else {
+            Some(witness_receipts)
+        },
         delegator_seal: None,
     };
 

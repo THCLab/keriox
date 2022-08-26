@@ -19,7 +19,7 @@ use crate::{
     },
     event_message::{
         exchange::{Exchange, ForwardTopic, FwdArgs, SignedExchange},
-        signature::{Signature, SignerData},
+        signature::{Nontransferable, Signature, SignerData},
         signed_event_message::{Notice, Op, SignedEventMessage},
     },
     event_parsing::{message::key_event_message, path::MaterialPath, EventType},
@@ -27,7 +27,9 @@ use crate::{
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix},
     processor::{
         basic_processor::BasicProcessor,
-        escrow::{default_escrow_bus, OutOfOrderEscrow, PartiallyWitnessedEscrow},
+        escrow::{
+            default_escrow_bus, DelegationEscrow, OutOfOrderEscrow, PartiallyWitnessedEscrow,
+        },
         event_storage::EventStorage,
         Processor,
     },
@@ -108,6 +110,7 @@ pub struct SimpleController<K: KeyManager + 'static> {
     pub groups: Vec<IdentifierPrefix>,
     pub not_fully_witnessed_escrow: Arc<PartiallyWitnessedEscrow>,
     pub ooo_escrow: Arc<OutOfOrderEscrow>,
+    pub delegation_escrow: Arc<DelegationEscrow>,
 }
 
 impl<K: KeyManager> SimpleController<K> {
@@ -118,7 +121,8 @@ impl<K: KeyManager> SimpleController<K> {
         key_manager: Arc<Mutex<K>>,
         oobi_db_path: &Path,
     ) -> Result<SimpleController<K>, Error> {
-        let (not_bus, (ooo, _, partially_witnesses)) = default_escrow_bus(db.clone(), escrow_db);
+        let (not_bus, (ooo, _, partially_witnesses, del_escrow)) =
+            default_escrow_bus(db.clone(), escrow_db);
         let processor = BasicProcessor::new(db.clone(), Some(not_bus));
 
         Ok(SimpleController {
@@ -130,6 +134,7 @@ impl<K: KeyManager> SimpleController<K> {
             groups: vec![],
             not_fully_witnessed_escrow: partially_witnesses,
             ooo_escrow: ooo,
+            delegation_escrow: del_escrow,
         })
     }
 
@@ -492,7 +497,17 @@ impl<K: KeyManager> SimpleController<K> {
         }
         .to_message(SerializationFormats::JSON, &SelfAddressing::Blake3_256)?;
 
-        let icp_sig = Signature::Transferable(SignerData::JustSignatures, data.signatures.clone());
+        let mut sigs = vec![Signature::Transferable(
+            SignerData::JustSignatures,
+            data.signatures.clone(),
+        )];
+        if let Some(witness_sigs) = data
+            .witness_receipts
+            .as_ref()
+            .map(|sigs| Signature::NonTransferable(Nontransferable::Indexed(sigs.clone())))
+        {
+            sigs.push(witness_sigs)
+        };
         let mat = MaterialPath::to_path("-a".into());
         let ssp = {
             SelfSigning::Ed25519Sha512.derive(
@@ -515,7 +530,7 @@ impl<K: KeyManager> SimpleController<K> {
         Ok(SignedExchange {
             exchange_message: exn_message,
             signature: vec![sigg],
-            data_signature: (mat, vec![icp_sig]),
+            data_signature: (mat, sigs),
         })
     }
 

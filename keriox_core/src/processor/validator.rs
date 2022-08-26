@@ -14,7 +14,7 @@ use crate::{
     },
     event_message::{
         key_event_message::KeyEvent,
-        signature::{Signature, SignerData},
+        signature::{Nontransferable, Signature, SignerData},
         signed_event_message::{
             SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
         },
@@ -49,47 +49,43 @@ impl EventValidator {
         &self,
         signed_event: &SignedEventMessage,
     ) -> Result<Option<IdentifierState>, Error> {
+        let new_state = self.apply_to_state(&signed_event.event_message)?;
+        // match on verification result
+        let ver_result = new_state.current.verify(
+            &signed_event.event_message.serialize()?,
+            &signed_event.signatures,
+        )?;
         // If delegated event, check its delegator seal.
         if let Some(seal) = self.get_delegator_seal(signed_event)? {
             self.validate_seal(seal, &signed_event.event_message)?;
         };
-        self.apply_to_state(&signed_event.event_message)
-            .and_then(|new_state| {
-                // match on verification result
-                new_state
-                    .current
-                    .verify(
-                        &signed_event.event_message.serialize()?,
-                        &signed_event.signatures,
-                    )
-                    .and_then(|result| {
-                        if !result {
-                            Err(Error::SignatureVerificationError)
-                        } else {
-                            // check if there are enough receipts and escrow
-                            let sn = signed_event.event_message.event.get_sn();
-                            let prefix = &signed_event.event_message.event.get_prefix();
-                            let digest = &signed_event.event_message.event.get_digest();
 
-                            let (couplets, indexed) =
-                                match self.event_storage.get_nt_receipts(prefix, sn, digest)? {
-                                    Some(rcts) => (
-                                        rcts.couplets.unwrap_or_default(),
-                                        rcts.indexed_sigs.unwrap_or_default(),
-                                    ),
-                                    None => (vec![], vec![]),
-                                };
-                            if new_state
-                                .witness_config
-                                .enough_receipts(couplets, indexed)?
-                            {
-                                Ok(Some(new_state))
-                            } else {
-                                Err(Error::NotEnoughReceiptsError)
-                            }
-                        }
-                    })
-            })
+        if !ver_result {
+            Err(Error::SignatureVerificationError)
+        } else {
+            // check if there are enough receipts and escrow
+            let sn = signed_event.event_message.event.get_sn();
+            let prefix = &signed_event.event_message.event.get_prefix();
+            let digest = &signed_event.event_message.event.get_digest();
+
+            let (couplets, indexed) =
+                match self.event_storage.get_nt_receipts(prefix, sn, digest)? {
+                    Some(rcts) => (
+                        rcts.couplets.unwrap_or_default(),
+                        rcts.indexed_sigs.unwrap_or_default(),
+                    ),
+                    None => (vec![], vec![]),
+                };
+            if new_state
+                .witness_config
+                .enough_receipts(couplets, indexed)?
+            {
+                Ok(Some(new_state))
+            } else {
+                Err(Error::NotEnoughReceiptsError)
+            }
+        }
+        // })
     }
 
     /// Process Validator Receipt
@@ -220,10 +216,13 @@ impl EventValidator {
                     .then(|| ())
                     .ok_or(Error::SignatureVerificationError)
             }
-            Signature::NonTransferable(bp, sign) => bp
+            Signature::NonTransferable(Nontransferable::Couplet(bp, sign)) => bp
                 .verify(data, sign)?
                 .then(|| ())
                 .ok_or(Error::SignatureVerificationError),
+            Signature::NonTransferable(Nontransferable::Indexed(_sigs)) => {
+                Err(Error::MissingSigner)
+            }
         }
     }
 
@@ -273,7 +272,7 @@ impl EventValidator {
                 ));
             };
         } else {
-            return Err(Error::MissingDelegatorSealError);
+            return Err(Error::MissingDelegatingEventError);
         }
         Ok(())
     }
@@ -467,7 +466,7 @@ fn test_validate_seal() -> Result<(), Error> {
         // Try to validate seal before processing delegating event
         assert!(matches!(
             validator.validate_seal(seal.clone(), &dip.event_message),
-            Err(Error::EventOutOfOrderError)
+            Err(Error::MissingDelegatingEventError)
         ));
 
         // Process delegating event.

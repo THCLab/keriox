@@ -11,7 +11,7 @@ use keri::{
     derivation::basic::Basic,
     error::Error,
     event::sections::{
-        seal::{EventSeal, Seal, SourceSeal},
+        seal::{EventSeal, Seal},
         threshold::SignatureThreshold,
     },
     event_message::{
@@ -827,7 +827,7 @@ fn setup_controller(witness: &Witness) -> Result<SimpleController<CryptoBox>, Er
     let mut cont1 = {
         // Create test db and event processor.
         let cont1_key_manager = Arc::new(Mutex::new(CryptoBox::new()?));
-        let root = Builder::new().prefix("test-db").tempdir().unwrap();
+        let root = Builder::new().prefix("db-root").tempdir().unwrap();
         let oobi_root = Builder::new().prefix("cont1-db-oobi").tempdir().unwrap();
         let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
         let cont1_escrow_db = Arc::new(EscrowDb::new(root.path())?);
@@ -958,9 +958,10 @@ pub fn test_delegated_multisig() -> Result<(), WitnessError> {
     // Request delegating confirmation
     // TODO: how to get dip with all signatures? get signed dip from cont escrow
     let dip = cont2
-        .not_fully_witnessed_escrow
-        .get_event_by_sn_and_digest(0, &group_id, &dip_digest)
+        .delegation_escrow
+        .get_event_by_sn_and_digest(0, &delegator.prefix(), &dip_digest)
         .unwrap();
+
     let delegation_request =
         cont1.create_forward_message(delegator.prefix(), &dip, ForwardTopic::Delegate)?;
 
@@ -985,7 +986,7 @@ pub fn test_delegated_multisig() -> Result<(), WitnessError> {
         let seal = Seal::Event(EventSeal {
             prefix: group_id.clone(),
             sn: 0,
-            event_digest: dip_digest,
+            event_digest: dip_digest.clone(),
         });
 
         let ixn = delegator.anchor(&vec![seal])?;
@@ -1056,6 +1057,20 @@ pub fn test_delegated_multisig() -> Result<(), WitnessError> {
             controller.process(&[Message::Notice(Notice::Event(delegate[0].clone()))])?;
         };
     }
+    let state = cont1.get_state_for_id(&delegator.prefix())?;
+    assert_eq!(state.unwrap().sn, 1);
+
+    // del escrow should be empty because delegating event was provided
+    let delegation_escrowed =
+        cont1
+            .delegation_escrow
+            .get_event_by_sn_and_digest(0, &group_id, &dip_digest);
+    assert!(delegation_escrowed.is_none());
+
+    let dip_with_delegator_seal = cont1
+        .not_fully_witnessed_escrow
+        .get_event_by_sn_and_digest(0, &group_id, &dip_digest)
+        .unwrap();
 
     let state = witness
         .event_storage
@@ -1063,17 +1078,10 @@ pub fn test_delegated_multisig() -> Result<(), WitnessError> {
         .unwrap();
     assert_eq!(state.sn, 1);
 
-    // append delegator seal to dip
-    let dip_with_seal = SignedEventMessage {
-        delegator_seal: Some(SourceSeal {
-            sn: 1,
-            digest: state.last_event_digest,
-        }),
-        ..dip
-    };
-
     // publish delegated event to witness
-    witness.process_notice(Notice::Event(dip_with_seal.clone()))?;
+    witness.process_notice(Notice::Event(dip_with_delegator_seal.clone()))?;
+    let state = witness.event_storage.get_state(&group_id)?.unwrap();
+    assert_eq!(state.sn, 0);
 
     // Child ask about mailbox
     for controller in vec![&cont1, &cont2] {
@@ -1090,9 +1098,6 @@ pub fn test_delegated_multisig() -> Result<(), WitnessError> {
                 receipt[0].clone(),
             ))])?;
         };
-
-        let state = witness.event_storage.get_state(&group_id)?.unwrap();
-        assert_eq!(state.sn, 0);
 
         let state = controller.get_state_for_id(&group_id)?;
         assert_eq!(state.unwrap().sn, 0);

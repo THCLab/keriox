@@ -48,22 +48,22 @@ pub fn incept_with_next_hashes(
     witness_threshold: u64,
     delegator_id: Option<&IdentifierPrefix>,
 ) -> Result<String, ControllerError> {
-    let event_builder = EventMsgBuilder::new(EventTypeTag::Icp)
+    let event_builder = match delegator_id {
+        Some(delegator) => EventMsgBuilder::new(EventTypeTag::Dip).with_delegator(delegator),
+        None => EventMsgBuilder::new(EventTypeTag::Icp),
+    };
+    let serialized_event = event_builder
         .with_keys(public_keys)
         .with_threshold(signature_threshold)
         .with_next_keys_hashes(next_pub_keys)
         .with_witness_list(witnesses.as_slice())
-        .with_witness_threshold(&SignatureThreshold::Simple(witness_threshold));
-    let serialized_icp = match delegator_id {
-        Some(delegator) => event_builder.with_delegator(delegator),
-        None => event_builder,
-    }
-    .build()
-    .map_err(|e| ControllerError::EventGenerationError(e.to_string()))?
-    .serialize()
-    .map_err(|e| ControllerError::EventGenerationError(e.to_string()))?;
+        .with_witness_threshold(&SignatureThreshold::Simple(witness_threshold))
+        .build()
+        .map_err(|e| ControllerError::EventGenerationError(e.to_string()))?
+        .serialize()
+        .map_err(|e| ControllerError::EventGenerationError(e.to_string()))?;
 
-    let icp = String::from_utf8(serialized_icp)
+    let icp = String::from_utf8(serialized_event)
         .map_err(|e| ControllerError::EventGenerationError(e.to_string()))?;
     Ok(icp)
 }

@@ -64,11 +64,12 @@ pub enum Notification {
     ReceiptOutOfOrder(SignedNontransferableReceipt),
     TransReceiptOutOfOrder(SignedTransferableReceipt),
     DupliciousEvent(SignedEventMessage),
+    MissingDelegatingEvent(SignedEventMessage),
     #[cfg(feature = "query")]
     KsnOutOfOrder(SignedReply),
 }
 
-#[derive(PartialEq, Hash, Eq, Clone)]
+#[derive(PartialEq, Hash, Eq, Clone, Debug)]
 pub enum JustNotification {
     KeyEventAdded,
     OutOfOrder,
@@ -79,6 +80,7 @@ pub enum JustNotification {
     ReceiptOutOfOrder,
     TransReceiptOutOfOrder,
     DupliciousEvent,
+    MissingDelegatingEvent,
     #[cfg(feature = "query")]
     KsnOutOfOrder,
     #[cfg(feature = "query")]
@@ -107,6 +109,7 @@ impl From<&Notification> for JustNotification {
             Notification::DupliciousEvent(_) => JustNotification::DupliciousEvent,
             #[cfg(feature = "query")]
             Notification::KsnOutOfOrder(_) => JustNotification::KsnOutOfOrder,
+            Notification::MissingDelegatingEvent(_) => JustNotification::MissingDelegatingEvent,
         }
     }
 }

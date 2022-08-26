@@ -13,7 +13,11 @@ use crate::{
         SledEventDatabase,
     },
     error::Error,
-    event::EventMessage,
+    event::{
+        event_data::EventData,
+        sections::seal::{EventSeal, Seal, SourceSeal},
+        EventMessage,
+    },
     event_message::{
         key_event_message::KeyEvent,
         signed_event_message::{
@@ -33,6 +37,7 @@ pub fn default_escrow_bus(
         Arc<OutOfOrderEscrow>,
         Arc<PartiallySignedEscrow>,
         Arc<PartiallyWitnessedEscrow>,
+        Arc<DelegationEscrow>,
     ),
 ) {
     let mut bus = NotificationBus::new();
@@ -83,7 +88,20 @@ pub fn default_escrow_bus(
         ],
     );
 
-    (bus, (ooo_escrow, ps_escrow, pw_escrow))
+    let delegation_escrow = Arc::new(DelegationEscrow::new(
+        event_db.clone(),
+        escrow_db.clone(),
+        Duration::from_secs(10),
+    ));
+    bus.register_observer(
+        delegation_escrow.clone(),
+        vec![
+            JustNotification::MissingDelegatingEvent,
+            JustNotification::KeyEventAdded,
+        ],
+    );
+
+    (bus, (ooo_escrow, ps_escrow, pw_escrow, delegation_escrow))
 }
 
 pub struct OutOfOrderEscrow {
@@ -254,10 +272,10 @@ impl PartiallySignedEscrow {
                     self.remove_partially_signed(&new_event.event_message)?;
                     bus.notify(&Notification::PartiallyWitnessed(new_event))?;
                 }
-                Err(Error::MissingDelegatorSealError) => {
+                Err(Error::MissingDelegatingEventError) | Err(Error::MissingDelegatorSealError) => {
                     // remove from escrow
                     self.remove_partially_signed(&new_event.event_message)?;
-                    bus.notify(&Notification::OutOfOrder(new_event))?;
+                    bus.notify(&Notification::MissingDelegatingEvent(new_event))?;
                 }
                 Err(Error::SignatureVerificationError) => {
                     // ignore
@@ -683,6 +701,150 @@ impl ReplyEscrow {
                 };
             }
         };
+        Ok(())
+    }
+}
+
+/// Stores delegated events until delegating event is provided
+pub struct DelegationEscrow {
+    db: Arc<SledEventDatabase>,
+    pub delegation_escrow: Escrow<SignedEventMessage>,
+}
+
+impl DelegationEscrow {
+    pub fn new(db: Arc<SledEventDatabase>, escrow_db: Arc<EscrowDb>, duration: Duration) -> Self {
+        let escrow = Escrow::new(b"dees", duration, escrow_db);
+        Self {
+            db,
+            delegation_escrow: escrow,
+        }
+    }
+
+    pub fn get_event_by_sn_and_digest(
+        &self,
+        sn: u64,
+        delegator_id: &IdentifierPrefix,
+        event_digest: &SelfAddressingPrefix,
+    ) -> Option<SignedEventMessage> {
+        self.delegation_escrow
+            .get(delegator_id)
+            .and_then(|mut events| {
+                events.find(|event| {
+                    event.event_message.event.content.sn == sn
+                        && &event.event_message.get_digest() == event_digest
+                })
+            })
+    }
+}
+
+impl Notifier for DelegationEscrow {
+    fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error> {
+        match notification {
+            Notification::KeyEventAdded(ev_message) => {
+                // delegator's prefix
+                let id = ev_message.event_message.event.get_prefix();
+                // get anchored data
+                let anchored_data: Vec<Seal> =
+                    match &ev_message.event_message.event.content.event_data {
+                        EventData::Icp(icp) => icp.data.clone(),
+                        EventData::Rot(rot) => rot.data.clone(),
+                        EventData::Ixn(ixn) => ixn.data.clone(),
+                        EventData::Dip(dip) => dip.inception_data.data.clone(),
+                        EventData::Drt(drt) => drt.data.clone(),
+                    };
+
+                let seals: Vec<EventSeal> = anchored_data
+                    .into_iter()
+                    .filter_map(|seal| match seal {
+                        Seal::Event(es) => Some(es),
+                        _ => None,
+                    })
+                    .collect();
+                if !seals.is_empty() {
+                    let potential_delegator_seal = SourceSeal {
+                        sn: ev_message.event_message.event.get_sn(),
+                        digest: ev_message.event_message.event.get_digest(),
+                    };
+                    self.process_delegation_events(bus, &id, seals, potential_delegator_seal)?;
+                }
+            }
+            Notification::MissingDelegatingEvent(signed_event) => {
+                // ignore events with no signatures
+                if !signed_event.signatures.is_empty() {
+                    let delegators_id = match &signed_event.event_message.event.content.event_data {
+                        EventData::Dip(dip) => dip.delegator.clone(),
+                        EventData::Drt(_drt) => {
+                            let storage = EventStorage::new(self.db.clone());
+                            storage
+                                .get_state(&signed_event.event_message.event.get_prefix())?
+                                .ok_or(Error::MissingDelegatingEventError)?
+                                .delegator
+                                .ok_or(Error::MissingDelegatingEventError)?
+                        }
+                        _ => {
+                            // not delegated event
+                            todo!()
+                        }
+                    };
+                    self.delegation_escrow
+                        .add(&delegators_id, signed_event.clone())?;
+                }
+            }
+            _ => return Err(Error::SemanticError("Wrong notification".into())),
+        }
+
+        Ok(())
+    }
+}
+
+impl DelegationEscrow {
+    pub fn process_delegation_events(
+        &self,
+        bus: &NotificationBus,
+        id: &IdentifierPrefix,
+        anchored_seals: Vec<EventSeal>,
+        potential_delegator_seal: SourceSeal,
+    ) -> Result<(), Error> {
+        if let Some(esc) = self.delegation_escrow.get(id) {
+            for event in esc {
+                let seal = anchored_seals.iter().find(|seal| {
+                    seal.event_digest == event.event_message.get_digest()
+                        && seal.sn == event.event_message.event.get_sn()
+                        && seal.prefix == event.event_message.event.get_prefix()
+                });
+                let delegated_event = match seal {
+                    Some(_s) => SignedEventMessage {
+                        delegator_seal: Some(potential_delegator_seal.clone()),
+                        ..event.clone()
+                    },
+                    None => event.clone(),
+                };
+                let validator = EventValidator::new(self.db.clone());
+                match validator.validate_event(&delegated_event) {
+                    Ok(_) => {
+                        // add to kel
+                        self.db
+                            .add_kel_finalized_event(delegated_event.clone(), id)?;
+                        // remove from escrow
+                        self.delegation_escrow.remove(id, &event)?;
+                        bus.notify(&Notification::KeyEventAdded(event))?;
+                        // stop processing the escrow if kel was updated. It needs to start again.
+                        break;
+                    }
+                    Err(Error::SignatureVerificationError) => {
+                        // remove from escrow
+                        self.delegation_escrow.remove(id, &event)?;
+                    }
+                    Err(Error::NotEnoughReceiptsError) => {
+                        // remove from escrow
+                        self.delegation_escrow.remove(id, &event)?;
+                        bus.notify(&Notification::PartiallyWitnessed(delegated_event))?;
+                    }
+                    Err(_e) => (), // keep in escrow,
+                }
+            }
+        };
+
         Ok(())
     }
 }
