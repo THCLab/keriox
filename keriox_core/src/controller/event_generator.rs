@@ -3,7 +3,7 @@ use crate::{
     event::{
         sections::{
             seal::{DigestSeal, Seal},
-            threshold::SignatureThreshold,
+            threshold::{SignatureThreshold, WeightedThreshold},
         },
         EventMessage, SerializationFormats,
     },
@@ -53,6 +53,27 @@ pub fn incept_with_next_hashes(
     witness_threshold: u64,
     delegator_id: Option<&IdentifierPrefix>,
 ) -> Result<String, ControllerError> {
+    // Check if threshold is possible to achive
+    match signature_threshold {
+        SignatureThreshold::Simple(t) => {
+            if t > &(public_keys.len() as u64) {
+                return Err(ControllerError::EventGenerationError(
+                    "Improper threshold".into(),
+                ));
+            }
+        }
+        SignatureThreshold::Weighted(w) => {
+            let length = match w {
+                WeightedThreshold::Single(s) => s.length(),
+                WeightedThreshold::Multi(m) => m.length(),
+            };
+            if length > public_keys.len() {
+                return Err(ControllerError::EventGenerationError(
+                    "Improper threshold".into(),
+                ));
+            }
+        }
+    };
     let event_builder = match delegator_id {
         Some(delegator) => EventMsgBuilder::new(EventTypeTag::Dip).with_delegator(delegator),
         None => EventMsgBuilder::new(EventTypeTag::Icp),

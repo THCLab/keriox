@@ -7,7 +7,6 @@ use keri::{
         simple_controller::{PossibleResponse, SimpleController},
         SignedQueryError,
     },
-    controller::event_generator,
     database::{escrow::EscrowDb, SledEventDatabase},
     derivation::basic::Basic,
     error::Error,
@@ -16,7 +15,7 @@ use keri::{
         threshold::SignatureThreshold,
     },
     event_message::{
-        exchange::{ExchangeMessage, ForwardTopic},
+        exchange::ForwardTopic,
         signed_event_message::{Message, Notice, Op, SignedEventMessage},
         Digestible,
     },
@@ -1205,13 +1204,13 @@ pub fn test_delegating_multisig() -> Result<(), WitnessError> {
     // Request delegating confirmation
     // TODO: how to get dip with all signatures? get signed dip from cont escrow
     // TODO: choose the leader
-    let fullt_signed_delegator_icp = delegator_1
+    let full_signed_delegator_icp = delegator_1
         .not_fully_witnessed_escrow
         .get_event_by_sn_and_digest(0, &delegator_group_id, &group_icp_digest)
         .unwrap();
 
     // send fully signed icp to witness
-    witness.process_notice(Notice::Event(fullt_signed_delegator_icp))?;
+    witness.process_notice(Notice::Event(full_signed_delegator_icp))?;
 
     // Delegators ask about group mailbox to get receipt
     for delegator in vec![&delegator_1, &delegator_2] {
@@ -1254,7 +1253,7 @@ pub fn test_delegating_multisig() -> Result<(), WitnessError> {
 
     let (dip, _) = child.group_incept(
         vec![],
-        &SignatureThreshold::Simple(2),
+        &SignatureThreshold::Simple(1),
         Some(vec![witness.prefix.clone()]),
         Some(1),
         Some(delegator_group_id.clone()),
@@ -1265,6 +1264,7 @@ pub fn test_delegating_multisig() -> Result<(), WitnessError> {
         child.create_forward_message(&delegator_group_id, &dip, ForwardTopic::Delegate)?;
 
     let delegated_child_id = dip.event_message.event.get_prefix();
+    let dip_digest = dip.event_message.get_digest();
 
     witness.process_op(Op::Exchange(delegation_request))?;
 
@@ -1415,6 +1415,25 @@ pub fn test_delegating_multisig() -> Result<(), WitnessError> {
     assert_eq!(state.unwrap().sn, 1);
 
     // It is still not fully witnessed
+    let confirmed_delegate_dip = child
+        .not_fully_witnessed_escrow
+        .get_event_by_sn_and_digest(0, &delegated_child_id, &dip_digest)
+        .unwrap();
+
+    // Child sends it to witness
+    witness.process_notice(Notice::Event(confirmed_delegate_dip.clone()))?;
+    let mbx_query = child.query_groups_mailbox(&witness.prefix);
+
+    let response = witness.process_op(Op::Query(mbx_query[0].clone())).unwrap();
+    if let Some(PossibleResponse::Mbx(MailboxResponse {
+        receipt,
+        multisig: _,
+        delegate: _,
+    })) = response
+    {
+        let msg = Message::Notice(Notice::NontransferableRct(receipt[0].clone()));
+        child.process(&[msg])?;
+    };
 
     // Delegated child kel was accepted
     let state = child.get_state_for_id(&delegated_child_id)?;

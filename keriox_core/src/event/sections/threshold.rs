@@ -138,6 +138,10 @@ impl ThresholdClause {
         Self(clause)
     }
 
+    pub fn length(&self) -> usize {
+        self.0.len()
+    }
+
     pub fn enough_signatures(
         &self,
         start_index: usize,
@@ -176,6 +180,10 @@ impl MultiClauses {
             .map(ThresholdClause::new_from_tuples)
             .collect();
         MultiClauses(wt)
+    }
+
+    pub fn length(&self) -> usize {
+        self.0.iter().map(|l| l.length()).sum()
     }
 
     pub fn enough_signatures(&self, sigs_indexes: &[usize]) -> Result<bool, Error> {
