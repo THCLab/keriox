@@ -224,7 +224,17 @@ impl Witness {
     }
 
     pub fn process_notice(&self, notice: Notice) -> Result<(), Error> {
-        self.processor.process_notice(&notice)
+        match self.processor.process_notice(&notice) {
+            Err(Error::MissingDelegatorSealError(id)) => {
+                if let Notice::Event(delegated_event) = notice {
+                    self.event_storage
+                        .add_mailbox_delegate(&id, delegated_event)
+                } else {
+                    Ok(())
+                }
+            }
+            whatever => whatever,
+        }
     }
 
     pub fn process_op(&self, op: Op) -> Result<Option<PossibleResponse>, WitnessError> {

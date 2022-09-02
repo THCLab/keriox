@@ -148,6 +148,7 @@ impl<K: KeyManager> SimpleController<K> {
         &mut self,
         initial_witness: Option<Vec<BasicPrefix>>,
         witness_threshold: Option<u64>,
+        delegator: Option<&IdentifierPrefix>,
     ) -> Result<SignedEventMessage, Error> {
         let km = self.key_manager.lock().map_err(|_| Error::MutexPoisoned)?;
         let icp = event_generator::incept(
@@ -155,6 +156,7 @@ impl<K: KeyManager> SimpleController<K> {
             vec![Basic::Ed25519.derive(km.next_public_key())],
             initial_witness.unwrap_or_default(),
             witness_threshold.unwrap_or(0),
+            delegator,
         )
         .unwrap();
         let signature = km.sign(icp.as_bytes())?;
@@ -318,6 +320,40 @@ impl<K: KeyManager> SimpleController<K> {
         Ok(signed)
     }
 
+    pub fn anchor_group(
+        &self,
+        group_id: &IdentifierPrefix,
+        seals: &[Seal],
+    ) -> Result<SignedEventMessage, Error> {
+        if self.groups.contains(group_id) {
+            let state = self
+                .storage
+                .get_state(group_id)?
+                .ok_or(Error::SemanticError("missing state".into()))?;
+            let ixn = event_generator::anchor_with_seal(state, seals)
+                .map_err(|e| Error::SemanticError(e.to_string()))?;
+            let km = self.key_manager.lock().map_err(|_| Error::MutexPoisoned)?;
+            let signature = km.sign(&ixn.serialize()?)?;
+
+            let signed = ixn.sign(
+                vec![AttachedSignaturePrefix::new(
+                    SelfSigning::Ed25519Sha512,
+                    signature,
+                    0,
+                )],
+                None,
+                None,
+            );
+
+            self.processor
+                .process_notice(&Notice::Event(signed.clone()))?;
+
+            Ok(signed)
+        } else {
+            Err(Error::SemanticError("Not group particiant".into()))
+        }
+    }
+
     pub fn process(&self, msg: &[Message]) -> Result<(), Error> {
         let (_process_ok, _process_failed): (Vec<_>, Vec<_>) = msg
             .iter()
@@ -343,57 +379,64 @@ impl<K: KeyManager> SimpleController<K> {
         self.process(&[Message::Notice(Notice::Event(event.clone()))])?;
         let group_prefix = event.event_message.event.get_prefix();
 
-        // check if you sign this event already
-        if self.groups.contains(&group_prefix) {
-            // signature was already provided
-            Ok(None)
-        } else {
-            // Process partially signed group icp
-            let own_pk = &self.get_state()?.unwrap().current.public_keys[0];
-            let index = match &event.event_message.event.content.event_data {
-                EventData::Icp(icp) => icp
-                    .key_config
-                    .public_keys
-                    .iter()
-                    .position(|pk| pk == own_pk),
-                EventData::Rot(rot) => rot
-                    .key_config
-                    .public_keys
-                    .iter()
-                    .position(|pk| pk == own_pk),
-                EventData::Dip(dip) => dip
-                    .inception_data
-                    .key_config
-                    .public_keys
-                    .iter()
-                    .position(|pk| pk == own_pk),
-                EventData::Drt(drt) => drt
-                    .key_config
-                    .public_keys
-                    .iter()
-                    .position(|pk| pk == own_pk),
-                EventData::Ixn(_) => None,
-            }
-            .ok_or(Error::SemanticError("Not group participant".into()))?;
-
-            // sign and process inception event
-            let second_signature = AttachedSignaturePrefix {
-                index: index as u16,
-                signature: SelfSigning::Ed25519Sha512.derive(
-                    self.key_manager
-                        .lock()
-                        .unwrap()
-                        .sign(&event.event_message.serialize()?)?,
-                ),
-            };
-            let signed_icp = event
-                .clone()
-                .event_message
-                .sign(vec![second_signature], None, None);
-            self.groups.push(group_prefix);
-            self.process(&[Message::Notice(Notice::Event(signed_icp.clone()))])?;
-            Ok(Some(signed_icp.clone()))
+        // Process partially signed group icp
+        // TODO what if group participant is a group and has more than one
+        // public key?
+        let own_pk = &self
+            .get_state()?
+            .ok_or(Error::SemanticError("Unknown state".into()))?
+            .current
+            .public_keys[0];
+        let index = match &event.event_message.event.content.event_data {
+            EventData::Icp(icp) => icp
+                .key_config
+                .public_keys
+                .iter()
+                .position(|pk| pk == own_pk),
+            EventData::Rot(rot) => rot
+                .key_config
+                .public_keys
+                .iter()
+                .position(|pk| pk == own_pk),
+            EventData::Dip(dip) => dip
+                .inception_data
+                .key_config
+                .public_keys
+                .iter()
+                .position(|pk| pk == own_pk),
+            EventData::Drt(drt) => drt
+                .key_config
+                .public_keys
+                .iter()
+                .position(|pk| pk == own_pk),
+            EventData::Ixn(_ixn) => self
+                .storage
+                .get_state(&event.event_message.event.get_prefix())?
+                .ok_or(Error::SemanticError("Unknown state".into()))?
+                .current
+                .public_keys
+                .iter()
+                .position(|pk| pk == own_pk),
         }
+        .ok_or(Error::SemanticError("Not group participant".into()))?;
+
+        // sign and process inception event
+        let second_signature = AttachedSignaturePrefix {
+            index: index as u16,
+            signature: SelfSigning::Ed25519Sha512.derive(
+                self.key_manager
+                    .lock()
+                    .unwrap()
+                    .sign(&event.event_message.serialize()?)?,
+            ),
+        };
+        let signed_icp = event
+            .clone()
+            .event_message
+            .sign(vec![second_signature], None, None);
+        self.groups.push(group_prefix);
+        self.process(&[Message::Notice(Notice::Event(signed_icp.clone()))])?;
+        Ok(Some(signed_icp.clone()))
     }
 
     pub fn get_state(&self) -> Result<Option<IdentifierState>, Error> {

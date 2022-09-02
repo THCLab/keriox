@@ -41,7 +41,7 @@ pub fn test_authentication() -> Result<(), Error> {
     };
 
     let asker_icp = asker_controller
-        .incept(None, None)
+        .incept(None, None, None)
         .unwrap()
         .serialize()
         .unwrap();
@@ -71,7 +71,7 @@ pub fn test_authentication() -> Result<(), Error> {
     };
 
     let about_icp = about_controller
-        .incept(None, None)
+        .incept(None, None, None)
         .unwrap()
         .serialize()
         .unwrap();

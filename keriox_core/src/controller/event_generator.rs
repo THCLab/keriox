@@ -24,8 +24,13 @@ pub fn incept(
     next_pub_keys: Vec<BasicPrefix>,
     witnesses: Vec<BasicPrefix>,
     witness_threshold: u64,
+    delegator_id: Option<&IdentifierPrefix>,
 ) -> Result<String, ControllerError> {
-    let serialized_icp = EventMsgBuilder::new(EventTypeTag::Icp)
+    let event_builder = match delegator_id {
+        Some(delegator) => EventMsgBuilder::new(EventTypeTag::Dip).with_delegator(delegator),
+        None => EventMsgBuilder::new(EventTypeTag::Icp),
+    };
+    let serialized_icp = event_builder
         .with_keys(public_keys)
         .with_next_keys(next_pub_keys)
         .with_witness_list(witnesses.as_slice())

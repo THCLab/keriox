@@ -309,7 +309,13 @@ impl Controller {
                 }
             })
             .collect::<Result<Vec<_>, _>>()?;
-        event_generator::incept(public_keys, next_pub_keys, witnesses, witness_threshold)
+        event_generator::incept(
+            public_keys,
+            next_pub_keys,
+            witnesses,
+            witness_threshold,
+            None,
+        )
     }
 
     pub fn finalize_inception(

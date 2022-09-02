@@ -272,7 +272,8 @@ impl PartiallySignedEscrow {
                     self.remove_partially_signed(&new_event.event_message)?;
                     bus.notify(&Notification::PartiallyWitnessed(new_event))?;
                 }
-                Err(Error::MissingDelegatingEventError) | Err(Error::MissingDelegatorSealError) => {
+                Err(Error::MissingDelegatingEventError)
+                | Err(Error::MissingDelegatorSealError(_)) => {
                     // remove from escrow
                     self.remove_partially_signed(&new_event.event_message)?;
                     bus.notify(&Notification::MissingDelegatingEvent(new_event))?;
@@ -528,9 +529,9 @@ impl Notifier for PartiallyWitnessedEscrow {
                     None => self.escrow_receipt(ooo.clone(), bus),
                     Some(receipted_event) => {
                         // verify receipt signature
-                        let res = self
-                            .validate_partialy_witnessed(&receipted_event, Some(ooo.to_owned()));
-                        match res {
+                        match self
+                            .validate_partialy_witnessed(&receipted_event, Some(ooo.to_owned()))
+                        {
                             Ok(_) => {
                                 // accept event and remove receipts
                                 self.db

@@ -5,7 +5,7 @@ use keri::{
     error::Error,
     event_message::signed_event_message::{Notice, SignedEventMessage},
     processor::{
-        escrow::{OutOfOrderEscrow, PartiallySignedEscrow},
+        escrow::{DelegationEscrow, OutOfOrderEscrow, PartiallySignedEscrow},
         notification::{JustNotification, Notification, NotificationBus, Notifier},
         validator::EventValidator,
         EventProcessor, Processor,
@@ -63,12 +63,20 @@ impl WitnessProcessor {
                 JustNotification::KeyEventAdded,
             ],
         );
+        let deleating_escrow = Arc::new(DelegationEscrow::new(
+            db.clone(),
+            escrow_db.clone(),
+            Duration::from_secs(10),
+        ));
+        bus.register_observer(
+            deleating_escrow.clone(),
+            vec![
+                JustNotification::MissingDelegatingEvent,
+                JustNotification::KeyEventAdded,
+            ],
+        );
         let processor = EventProcessor::new(db, bus);
-        Self {
-            processor,
-            // out_of_order_escrow,
-            // partially_signed_escrow,
-        }
+        Self { processor }
     }
 
     /// Witness processing strategy

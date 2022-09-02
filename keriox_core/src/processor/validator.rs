@@ -288,7 +288,7 @@ impl EventValidator {
                     .delegator_seal
                     .as_ref()
                     .map(|seal| (seal.sn, seal.digest.clone()))
-                    .ok_or_else(|| Error::MissingDelegatorSealError)?;
+                    .ok_or_else(|| Error::MissingDelegatorSealError(dip.delegator.clone()))?;
                 Some(EventSeal {
                     prefix: dip.delegator,
                     sn,
@@ -308,7 +308,7 @@ impl EventValidator {
                     .delegator_seal
                     .as_ref()
                     .map(|seal| (seal.sn, seal.digest.clone()))
-                    .ok_or_else(|| Error::MissingDelegatorSealError)?;
+                    .ok_or_else(|| Error::MissingDelegatorSealError(delegator.clone()))?;
                 Some(EventSeal {
                     prefix: delegator,
                     sn,
