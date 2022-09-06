@@ -14,13 +14,17 @@ use crate::{
     error::Error,
     event::{
         event_data::EventData,
-        sections::{seal::Seal, threshold::SignatureThreshold},
+        sections::{
+            seal::{EventSeal, Seal},
+            threshold::SignatureThreshold,
+        },
         SerializationFormats,
     },
     event_message::{
         exchange::{Exchange, ForwardTopic, FwdArgs, SignedExchange},
+        key_event_message::KeyEvent,
         signature::{Nontransferable, Signature, SignerData},
-        signed_event_message::{Notice, Op, SignedEventMessage},
+        signed_event_message::{Notice, Op, SignedEventMessage, SignedNontransferableReceipt},
     },
     event_parsing::{message::key_event_message, path::MaterialPath, EventType},
     oobi::{OobiManager, Role},
@@ -335,15 +339,12 @@ impl<K: KeyManager> SimpleController<K> {
             let km = self.key_manager.lock().map_err(|_| Error::MutexPoisoned)?;
             let signature = km.sign(&ixn.serialize()?)?;
 
-            let signed = ixn.sign(
-                vec![AttachedSignaturePrefix::new(
-                    SelfSigning::Ed25519Sha512,
-                    signature,
-                    0,
-                )],
-                None,
-                None,
+            let attached_signature = AttachedSignaturePrefix::new(
+                SelfSigning::Ed25519Sha512,
+                signature,
+                self.get_index(&ixn.event)? as u16,
             );
+            let signed = ixn.sign(vec![attached_signature], None, None);
 
             self.processor
                 .process_notice(&Notice::Event(signed.clone()))?;
@@ -370,16 +371,9 @@ impl<K: KeyManager> SimpleController<K> {
         Ok(())
     }
 
-    /// Checks multisig event and sign it if it wasn't sign by controller
-    /// earlier.
-    pub fn process_multisig(
-        &mut self,
-        event: SignedEventMessage,
-    ) -> Result<Option<SignedEventMessage>, Error> {
-        self.process(&[Message::Notice(Notice::Event(event.clone()))])?;
-        let group_prefix = event.event_message.event.get_prefix();
-
-        // Process partially signed group icp
+    /// Returns position of identifier's public key in group's current keys
+    /// list.
+    fn get_index(&self, group_event: &KeyEvent) -> Result<usize, Error> {
         // TODO what if group participant is a group and has more than one
         // public key?
         let own_pk = &self
@@ -387,7 +381,7 @@ impl<K: KeyManager> SimpleController<K> {
             .ok_or(Error::SemanticError("Unknown state".into()))?
             .current
             .public_keys[0];
-        let index = match &event.event_message.event.content.event_data {
+        match &group_event.content.event_data {
             EventData::Icp(icp) => icp
                 .key_config
                 .public_keys
@@ -411,14 +405,27 @@ impl<K: KeyManager> SimpleController<K> {
                 .position(|pk| pk == own_pk),
             EventData::Ixn(_ixn) => self
                 .storage
-                .get_state(&event.event_message.event.get_prefix())?
+                .get_state(&group_event.get_prefix())?
                 .ok_or(Error::SemanticError("Unknown state".into()))?
                 .current
                 .public_keys
                 .iter()
                 .position(|pk| pk == own_pk),
         }
-        .ok_or(Error::SemanticError("Not group participant".into()))?;
+        .ok_or(Error::SemanticError("Not group participant".into()))
+    }
+
+    /// Checks multisig event and sign it if it wasn't sign by controller
+    /// earlier.
+    pub fn process_multisig(
+        &mut self,
+        event: SignedEventMessage,
+    ) -> Result<Option<SignedEventMessage>, Error> {
+        self.process(&[Message::Notice(Notice::Event(event.clone()))])?;
+        let group_prefix = event.event_message.event.get_prefix();
+
+        // Process partially signed group icp
+        let index = self.get_index(&event.event_message.event)?;
 
         // sign and process inception event
         let second_signature = AttachedSignaturePrefix {
@@ -653,5 +660,92 @@ impl<K: KeyManager> SimpleController<K> {
                 SignedQuery::new(qry_msg, self.prefix.clone(), signatures)
             })
             .collect()
+    }
+
+    /// Returns exn message that contains signed multisig event and will be
+    /// forward to group identifier's mailbox.
+    pub fn process_own_multisig(
+        &mut self,
+        event: SignedEventMessage,
+    ) -> Result<SignedExchange, Error> {
+        let signed_icp = self.process_multisig(event)?.unwrap();
+        let receipient = signed_icp.event_message.event.get_prefix();
+        // Construct exn message (will be stored in group identidfier mailbox)
+        self.create_forward_message(&receipient, &signed_icp, ForwardTopic::Multisig)
+    }
+
+    /// If leader and event is fully signed, return event to forward to witness.
+    pub fn process_group_multisig(
+        &self,
+        event: SignedEventMessage,
+    ) -> Result<Option<SignedEventMessage>, Error> {
+        self.process(&[Message::Notice(Notice::Event(event.clone()))])?;
+
+        let id = event.event_message.event.get_prefix();
+        let fully_signed_event = self.not_fully_witnessed_escrow.get_event_by_sn_and_digest(
+            event.event_message.event.get_sn(),
+            &id,
+            &event.event_message.get_digest(),
+        );
+
+        let own_index = self.get_index(&event.event_message.event)?;
+        // Elect the leader
+        // Leader is identifier with minimal index among all participants who
+        // sign event. He will send message to witness.
+        Ok(fully_signed_event.and_then(|ev| {
+            ev.signatures
+                .iter()
+                .map(|at| at.index)
+                .min()
+                .and_then(|index| {
+                    if index as usize == own_index {
+                        Some(ev)
+                    } else {
+                        None
+                    }
+                })
+        }))
+    }
+
+    /// Create delegating event, pack it in exn message (delegate topic).
+    pub fn process_own_delegate(
+        &mut self,
+        event_to_confirm: SignedEventMessage,
+    ) -> Result<SignedExchange, Error> {
+        self.process(&[Message::Notice(Notice::Event(event_to_confirm.clone()))])?;
+        let id = event_to_confirm.event_message.event.get_prefix();
+
+        let seal = Seal::Event(EventSeal {
+            prefix: id.clone(),
+            sn: event_to_confirm.event_message.event.get_sn(),
+            event_digest: event_to_confirm.event_message.get_digest(),
+        });
+
+        let ixn = self.anchor(&vec![seal])?;
+        self.create_forward_message(&id, &ixn, ForwardTopic::Delegate)
+    }
+
+    /// Create delegating event, pack it in exn message to group identifier (multisig topic).
+    pub fn process_group_delegate(
+        &self,
+        event_to_confirm: SignedEventMessage,
+        group_id: &IdentifierPrefix,
+    ) -> Result<SignedExchange, Error> {
+        self.process(&[Message::Notice(Notice::Event(event_to_confirm.clone()))])?;
+        let id = event_to_confirm.event_message.event.get_prefix();
+
+        let seal = Seal::Event(EventSeal {
+            prefix: id.clone(),
+            sn: event_to_confirm.event_message.event.get_sn(),
+            event_digest: event_to_confirm.event_message.get_digest(),
+        });
+
+        let ixn = self.anchor_group(group_id, &vec![seal])?;
+        self.create_forward_message(&group_id, &ixn, ForwardTopic::Multisig)
+    }
+
+    pub fn process_receipt(&self, receipt: SignedNontransferableReceipt) -> Result<(), Error> {
+        self.process(&[Message::Notice(Notice::NontransferableRct(receipt))])?;
+        Ok(())
     }
 }
