@@ -7,12 +7,7 @@ use figment::{
 use keri::{oobi::LocationScheme, prefix::Prefix};
 use serde::Deserialize;
 use structopt::StructOpt;
-
-use crate::watcher_listener::WatcherListener;
-
-mod test;
-mod watcher;
-mod watcher_listener;
+use watcher::WatcherListener;
 
 #[derive(Deserialize)]
 pub struct WatcherConfig {

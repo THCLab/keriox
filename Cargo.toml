@@ -6,4 +6,5 @@ members = [
     "support/transport",
     "components/witness",
     "components/watcher",
+    "tests",
 ]

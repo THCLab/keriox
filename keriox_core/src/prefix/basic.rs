@@ -1,12 +1,14 @@
+use core::str::FromStr;
+
+use base64::decode_config;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
 use super::{verify, Prefix, SelfSigningPrefix};
 use crate::{
     derivation::{basic::Basic, DerivationCode},
     error::Error,
     keys::PublicKey,
 };
-use base64::decode_config;
-use core::str::FromStr;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 #[derive(Debug, Clone, Eq, Hash)]
 pub struct BasicPrefix {
@@ -24,6 +26,10 @@ impl BasicPrefix {
 
     pub fn verify(&self, data: &[u8], signature: &SelfSigningPrefix) -> Result<bool, Error> {
         verify(data, self, signature)
+    }
+
+    pub fn is_transferable(&self) -> bool {
+        self.derivation.is_transferable()
     }
 }
 
@@ -106,9 +112,10 @@ fn serialize_deserialize() {
 
 #[test]
 fn to_from_string() {
-    use crate::keys::PrivateKey;
     use ed25519_dalek::Keypair;
     use rand::rngs::OsRng;
+
+    use crate::keys::PrivateKey;
 
     let kp = Keypair::generate(&mut OsRng);
 

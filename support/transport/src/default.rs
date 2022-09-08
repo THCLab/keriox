@@ -1,10 +1,11 @@
-use super::{Transport, TransportError};
 use keri::{
     actor::{parse_event_stream, parse_op_stream},
     event_message::signed_event_message::{Message, Op},
     oobi::{LocationScheme, Role, Scheme},
     prefix::IdentifierPrefix,
 };
+
+use super::{Transport, TransportError};
 
 /// Default behavior for communication with other actors.
 /// Serializes a keri message, does a net request, and deserializes the response.

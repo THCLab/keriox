@@ -52,7 +52,7 @@ impl WatcherData {
         oobi_path.push(event_db_path);
         oobi_path.push("oobi");
 
-        let prefix = Basic::Ed25519.derive(signer.public_key());
+        let prefix = Basic::Ed25519NT.derive(signer.public_key()); // watcher uses non transferable key
         let db = Arc::new(SledEventDatabase::new(event_db_path)?);
         let mut processor = BasicProcessor::new(db.clone(), None);
         processor.register_observer(

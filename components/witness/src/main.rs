@@ -8,14 +8,7 @@ use figment::{
 use keri::prefix::Prefix;
 use serde::Deserialize;
 use structopt::StructOpt;
-
-#[cfg(test)]
-mod tests;
-
-mod witness;
-mod witness_listener;
-mod witness_processor;
-use crate::witness_listener::WitnessListener;
+use witness::WitnessListener;
 
 #[derive(Deserialize)]
 pub struct WitnessConfig {
