@@ -3,7 +3,10 @@ use std::{path::PathBuf, sync::Arc};
 pub mod error;
 pub mod event_generator;
 pub mod identifier_controller;
+#[cfg(test)]
+mod test;
 pub mod utils;
+pub mod action_request;
 
 use self::{
     error::ControllerError,
@@ -11,7 +14,7 @@ use self::{
 };
 use crate::{
     actor,
-    database::SledEventDatabase,
+    database::{escrow::EscrowDb, SledEventDatabase},
     event::{event_data::EventData, sections::seal::Seal, EventMessage},
     event_message::{
         key_event_message::KeyEvent,
@@ -19,7 +22,7 @@ use crate::{
         Digestible,
     },
     event_parsing::{
-        message::{event_message, key_event_message},
+        message::key_event_message,
         EventType, SignedEventData,
     },
     oobi::{LocationScheme, OobiManager, Role, Scheme},
@@ -27,7 +30,12 @@ use crate::{
         AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix,
         SelfSigningPrefix,
     },
-    processor::{basic_processor::BasicProcessor, event_storage::EventStorage, Processor},
+    processor::{
+        basic_processor::BasicProcessor,
+        escrow::{default_escrow_bus, PartiallyWitnessedEscrow},
+        event_storage::EventStorage,
+        Processor,
+    },
     query::reply_event::{ReplyEvent, ReplyRoute, SignedReply},
 };
 
@@ -35,6 +43,7 @@ pub struct Controller {
     processor: BasicProcessor,
     pub storage: EventStorage,
     oobi_manager: OobiManager,
+    partially_witnessed_escrow: Arc<PartiallyWitnessedEscrow>,
 }
 impl Controller {
     pub fn new(configs: Option<OptionalConfig>) -> Result<Self, ControllerError> {
@@ -50,13 +59,19 @@ impl Controller {
         events_db.push("events");
         let mut oobis_db = db_dir_path.clone();
         oobis_db.push("oobis");
+        let mut escrow_db = db_dir_path.clone();
+        escrow_db.push("escrow");
 
         let db = Arc::new(SledEventDatabase::new(events_db.as_path())?);
+        let escrow_db = Arc::new(EscrowDb::new(escrow_db.as_path())?);
+        let (notification_bus, (_, _partially_signed_escrow, partially_witnessed_escrow, _)) =
+            default_escrow_bus(db.clone(), escrow_db);
 
         let controller = Self {
-            processor: BasicProcessor::new(db.clone(), None),
+            processor: BasicProcessor::new(db.clone(), Some(notification_bus)),
             storage: EventStorage::new(db),
             oobi_manager: OobiManager::new(&oobis_db),
+            partially_witnessed_escrow,
         };
 
         if let Some(initial_oobis) = initial_oobis {
@@ -318,17 +333,20 @@ impl Controller {
         )
     }
 
+    /// Verify event signature, add it to kel, and publish it to witnesses.
+    /// Returns new established identifier prefix. Ment to be used for
+    /// identifiers with one keypair.
     pub fn finalize_inception(
         &self,
         event: &[u8],
-        sig: Vec<SelfSigningPrefix>,
+        sig: &SelfSigningPrefix,
     ) -> Result<IdentifierPrefix, ControllerError> {
         let (_, parsed_event) =
             key_event_message(event).map_err(|_e| ControllerError::EventParseError)?;
         match parsed_event {
             EventType::KeyEvent(ke) => {
                 if let EventData::Icp(_) = &ke.event.get_event_data() {
-                    self.finalize_key_event(&ke, sig)?;
+                    self.finalize_key_event(&ke, sig, 0)?;
                     Ok(ke.event.get_prefix())
                 } else {
                     Err(ControllerError::InceptionError(
@@ -342,6 +360,7 @@ impl Controller {
         }
     }
 
+    /// Generate and return rotation event for given identifier data
     pub fn rotate(
         &self,
         id: IdentifierPrefix,
@@ -378,6 +397,7 @@ impl Controller {
         )
     }
 
+    /// Generate and return interaction event for given identifier data
     pub fn anchor(
         &self,
         id: IdentifierPrefix,
@@ -390,6 +410,7 @@ impl Controller {
         event_generator::anchor(state, payload)
     }
 
+    /// Generate and return interaction event for given identifier data
     pub fn anchor_with_seal(
         &self,
         id: IdentifierPrefix,
@@ -400,29 +421,6 @@ impl Controller {
             .get_state(&id)?
             .ok_or(ControllerError::UnknownIdentifierError)?;
         event_generator::anchor_with_seal(state, payload)
-    }
-
-    /// Check signatures, updates database and send events to watcher or witnesses.
-    pub fn finalize_event(
-        &self,
-        id: &IdentifierPrefix,
-        event: &[u8],
-        sig: Vec<SelfSigningPrefix>,
-    ) -> Result<(), ControllerError> {
-        let parsed_event = event_message(event)
-            .map_err(|_e| ControllerError::EventParseError)?
-            .1;
-        match parsed_event {
-            EventType::KeyEvent(ke) => Ok(self.finalize_key_event(&ke, sig)?),
-            EventType::Receipt(_) => todo!(),
-            EventType::Qry(_) => todo!(),
-            EventType::Rpy(rpy) => match rpy.get_route() {
-                ReplyRoute::EndRoleAdd(_) => Ok(self.finalize_add_role(id, rpy, sig)?),
-                ReplyRoute::EndRoleCut(_) => todo!(),
-                _ => Err(ControllerError::WrongEventTypeError),
-            },
-            EventType::Exn(_) => todo!(),
-        }
     }
 
     fn get_current_witness_list(
@@ -440,35 +438,48 @@ impl Controller {
     fn finalize_key_event(
         &self,
         event: &EventMessage<KeyEvent>,
-        sig: Vec<SelfSigningPrefix>,
+        sig: &SelfSigningPrefix,
+        own_index: usize,
     ) -> Result<(), ControllerError> {
-        let sigs = sig
-            .into_iter()
-            .enumerate()
-            .map(|(i, sig)| AttachedSignaturePrefix {
-                index: i as u16,
-                signature: sig,
-            })
-            .collect();
-
-        let signed_message = event.sign(sigs, None, None);
-        self.process(&Message::Notice(Notice::Event(signed_message.clone())))?;
-
-        let wits = match event.event.get_event_data() {
-            EventData::Icp(icp) => icp.witness_config.initial_witnesses,
-            EventData::Rot(rot) => {
-                let wits = self.get_current_witness_list(&event.event.content.prefix)?;
-                wits.into_iter()
-                    .filter(|w| !rot.witness_config.prune.contains(w))
-                    .chain(rot.witness_config.graft.clone().into_iter())
-                    .collect::<Vec<_>>()
-            }
-            EventData::Ixn(_) => self.get_current_witness_list(&event.event.content.prefix)?,
-            EventData::Dip(_) => todo!(),
-            EventData::Drt(_) => todo!(),
+        let signature = AttachedSignaturePrefix {
+            index: own_index as u16,
+            signature: sig.clone(),
         };
 
-        self.publish(&wits, &signed_message)
+        let signed_message = event.sign(vec![signature], None, None);
+        self.process(&Message::Notice(Notice::Event(signed_message.clone())))?;
+
+        let id = event.event.get_prefix();
+        let fully_signed_event = self.partially_witnessed_escrow.get_event_by_sn_and_digest(
+            event.event.get_sn(),
+            &id,
+            &event.get_digest(),
+        );
+
+        // Elect the leader
+        // Leader is identifier with minimal index among all participants who
+        // sign event. He will send message to witness.
+        let to_publish = fully_signed_event.and_then(|ev| {
+            ev.signatures
+                .iter()
+                .map(|at| at.index)
+                .min()
+                .and_then(|index| {
+                    if index as usize == own_index {
+                        Some(ev)
+                    } else {
+                        // Not a leader
+                        None
+                    }
+                })
+        });
+
+        if let Some(to_pub) = to_publish {
+            let witnesses =
+                self.get_current_witness_list(&to_pub.event_message.event.get_prefix())?;
+            self.publish(&witnesses, &to_pub)?;
+        };
+        Ok(())
     }
 
     fn finalize_add_role(

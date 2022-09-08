@@ -497,10 +497,11 @@ impl<K: KeyManager> SimpleController<K> {
                 witness_threshold.unwrap_or(0),
                 delegator.as_ref(),
             )
-            .unwrap();
+            .unwrap()
+            .serialize()?;
 
-            let signature = km.sign(icp.as_bytes())?;
-            let (_, key_event) = key_event_message(icp.as_bytes()).unwrap();
+            let signature = km.sign(&icp)?;
+            let (_, key_event) = key_event_message(&icp).unwrap();
             if let EventType::KeyEvent(icp) = key_event {
                 icp.sign(
                     vec![AttachedSignaturePrefix::new(

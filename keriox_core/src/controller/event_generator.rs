@@ -8,7 +8,10 @@ use crate::{
         EventMessage, SerializationFormats,
     },
     event_message::{
-        event_msg_builder::EventMsgBuilder, key_event_message::KeyEvent, EventTypeTag,
+        event_msg_builder::EventMsgBuilder,
+        exchange::{Exchange, ExchangeMessage, ForwardTopic, FwdArgs},
+        key_event_message::KeyEvent,
+        EventTypeTag,
     },
     oobi::{EndRole, Role},
     prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix},
@@ -52,7 +55,7 @@ pub fn incept_with_next_hashes(
     witnesses: Vec<BasicPrefix>,
     witness_threshold: u64,
     delegator_id: Option<&IdentifierPrefix>,
-) -> Result<String, ControllerError> {
+) -> Result<EventMessage<KeyEvent>, ControllerError> {
     // Check if threshold is possible to achive
     match signature_threshold {
         SignatureThreshold::Simple(t) => {
@@ -78,20 +81,14 @@ pub fn incept_with_next_hashes(
         Some(delegator) => EventMsgBuilder::new(EventTypeTag::Dip).with_delegator(delegator),
         None => EventMsgBuilder::new(EventTypeTag::Icp),
     };
-    let serialized_event = event_builder
+   event_builder
         .with_keys(public_keys)
         .with_threshold(signature_threshold)
         .with_next_keys_hashes(next_pub_keys)
         .with_witness_list(witnesses.as_slice())
         .with_witness_threshold(&SignatureThreshold::Simple(witness_threshold))
         .build()
-        .map_err(|e| ControllerError::EventGenerationError(e.to_string()))?
-        .serialize()
-        .map_err(|e| ControllerError::EventGenerationError(e.to_string()))?;
-
-    let icp = String::from_utf8(serialized_event)
-        .map_err(|e| ControllerError::EventGenerationError(e.to_string()))?;
-    Ok(icp)
+        .map_err(|e| ControllerError::EventGenerationError(e.to_string()))
 }
 
 pub fn rotate(
@@ -197,5 +194,21 @@ pub fn generate_end_role(
         SelfAddressing::Blake3_256,
         SerializationFormats::JSON,
     )
+    .map_err(|e| ControllerError::EventGenerationError(e.to_string()))
+}
+
+pub fn exchange(
+    receipient: &IdentifierPrefix,
+    data: &EventMessage<KeyEvent>,
+    topic: ForwardTopic,
+) -> Result<ExchangeMessage, ControllerError> {
+    Exchange::Fwd {
+        args: FwdArgs {
+            recipient_id: receipient.clone(),
+            topic,
+        },
+        to_forward: data.clone(),
+    }
+    .to_message(SerializationFormats::JSON, &SelfAddressing::Blake3_256)
     .map_err(|e| ControllerError::EventGenerationError(e.to_string()))
 }

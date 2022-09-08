@@ -35,6 +35,9 @@ pub enum ControllerError {
     #[error("Unknown identifier")]
     UnknownIdentifierError,
 
+    #[error("Not group participant")]
+    NotGroupParticipantError,
+
     #[error("Error while event processing: ")]
     EventProcessingError(#[from] crate::error::Error),
 }
