@@ -802,11 +802,11 @@ impl DelegationEscrow {
     pub fn process_delegation_events(
         &self,
         bus: &NotificationBus,
-        id: &IdentifierPrefix,
+        delegator_id: &IdentifierPrefix,
         anchored_seals: Vec<EventSeal>,
         potential_delegator_seal: SourceSeal,
     ) -> Result<(), Error> {
-        if let Some(esc) = self.delegation_escrow.get(id) {
+        if let Some(esc) = self.delegation_escrow.get(delegator_id) {
             for event in esc {
                 let seal = anchored_seals.iter().find(|seal| {
                     seal.event_digest == event.event_message.get_digest()
@@ -824,21 +824,22 @@ impl DelegationEscrow {
                 match validator.validate_event(&delegated_event) {
                     Ok(_) => {
                         // add to kel
+                        let child_id = event.event_message.event.get_prefix();
                         self.db
-                            .add_kel_finalized_event(delegated_event.clone(), id)?;
+                            .add_kel_finalized_event(delegated_event.clone(), &child_id)?;
                         // remove from escrow
-                        self.delegation_escrow.remove(id, &event)?;
+                        self.delegation_escrow.remove(delegator_id, &event)?;
                         bus.notify(&Notification::KeyEventAdded(event))?;
                         // stop processing the escrow if kel was updated. It needs to start again.
                         break;
                     }
                     Err(Error::SignatureVerificationError) => {
                         // remove from escrow
-                        self.delegation_escrow.remove(id, &event)?;
+                        self.delegation_escrow.remove(delegator_id, &event)?;
                     }
                     Err(Error::NotEnoughReceiptsError) => {
                         // remove from escrow
-                        self.delegation_escrow.remove(id, &event)?;
+                        self.delegation_escrow.remove(delegator_id, &event)?;
                         bus.notify(&Notification::PartiallyWitnessed(delegated_event))?;
                     }
                     Err(_e) => (), // keep in escrow,

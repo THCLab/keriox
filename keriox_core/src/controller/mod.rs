@@ -1,12 +1,12 @@
 use std::{path::PathBuf, sync::Arc};
 
+pub mod action_request;
 pub mod error;
 pub mod event_generator;
 pub mod identifier_controller;
 #[cfg(test)]
 mod test;
 pub mod utils;
-pub mod action_request;
 
 use self::{
     error::ControllerError,
@@ -21,10 +21,7 @@ use crate::{
         signed_event_message::{Message, Notice, Op, SignedEventMessage},
         Digestible,
     },
-    event_parsing::{
-        message::key_event_message,
-        EventType, SignedEventData,
-    },
+    event_parsing::{message::key_event_message, EventType, SignedEventData},
     oobi::{LocationScheme, OobiManager, Role, Scheme},
     prefix::{
         AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix,

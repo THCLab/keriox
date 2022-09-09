@@ -133,13 +133,15 @@ impl IdentifierController {
             },
             EventType::Qry(_) => todo!(),
             EventType::Receipt(_) => todo!(),
-            EventType::Exn(_) => todo!() 
+            EventType::Exn(_) => todo!(),
         }
     }
 
     /// Init group identifier
     ///
     /// Returns serialized group icp and list of exchange messages to sign.
+    /// If `delegator` parameter is provided, it will generate delegated
+    /// inception and append delegation request to exchange messages.
     pub fn incept_group(
         &self,
         participants: Vec<IdentifierPrefix>,
@@ -176,7 +178,8 @@ impl IdentifierController {
         let serialized_icp = String::from_utf8(icp.serialize()?)
             .map_err(|e| ControllerError::EventGenerationError(e.to_string()))?;
 
-        let exchanges: Vec<_> = participants
+        
+        let mut exchanges = participants
             .iter()
             .map(|id| {
                 let exn = event_generator::exchange(id, &icp, ForwardTopic::Multisig)
@@ -185,7 +188,19 @@ impl IdentifierController {
                     .unwrap();
                 String::from_utf8(exn).unwrap()
             })
-            .collect();
+            .collect::<Vec<_>>();
+        let delegation_request = delegator.map(|del| {
+            String::from_utf8(
+                event_generator::exchange(&del, &icp, ForwardTopic::Delegate)
+                    .unwrap()
+                    .serialize()
+                    .unwrap(),
+            )
+            .unwrap()
+        });
+        if let Some(delegation_request) = delegation_request {
+            exchanges.push(delegation_request)
+        };
 
         Ok((serialized_icp, exchanges))
     }
@@ -206,8 +221,11 @@ impl IdentifierController {
 
             self.source.finalize_key_event(&icp, &sig, own_index)?;
             self.groups.push(icp.event.get_prefix());
-       
-            let signature = AttachedSignaturePrefix {index: own_index as u16, signature: sig};
+
+            let signature = AttachedSignaturePrefix {
+                index: own_index as u16,
+                signature: sig,
+            };
 
             // Join exn messages with their signatures and send it to witness.
             let material_path = MaterialPath::to_path("-a".into());
@@ -230,8 +248,7 @@ impl IdentifierController {
                         signature,
                         data_signature: (material_path.clone(), attached_sig.clone()),
                     }));
-                    self
-                        .source
+                    self.source
                         .get_current_witness_list(&self.id)?
                         // TODO for now get first witness
                         .get(0)
@@ -243,13 +260,13 @@ impl IdentifierController {
                                 Topic::Process(signer_exn.to_cesr().unwrap()),
                             )
                         });
-                        Ok(())
+                    Ok(())
                 } else {
                     Err(ControllerError::WrongEventTypeError)
                 }
             })?;
             Ok(group_prefix)
-         } else {
+        } else {
             Err(ControllerError::WrongEventTypeError)
         }
     }

@@ -81,7 +81,7 @@ pub fn incept_with_next_hashes(
         Some(delegator) => EventMsgBuilder::new(EventTypeTag::Dip).with_delegator(delegator),
         None => EventMsgBuilder::new(EventTypeTag::Icp),
     };
-   event_builder
+    event_builder
         .with_keys(public_keys)
         .with_threshold(signature_threshold)
         .with_next_keys_hashes(next_pub_keys)
