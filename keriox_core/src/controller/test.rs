@@ -5,7 +5,9 @@ use tempfile::Builder;
 use crate::{
     controller::utils::OptionalConfig,
     derivation::{basic::Basic, self_signing::SelfSigning},
-    signer::{CryptoBox, KeyManager}, event_parsing::{message::key_event_message, EventType}, event::sections::seal::{EventSeal, Seal},
+    event::sections::seal::{EventSeal, Seal},
+    event_parsing::{message::key_event_message, EventType},
+    signer::{CryptoBox, KeyManager},
 };
 
 use super::{error::ControllerError, identifier_controller::IdentifierController, Controller};
@@ -112,8 +114,9 @@ pub fn test_delegated_incept() -> Result<(), ControllerError> {
 
     let (delegated_inception, exn_messages) =
         identifier1.incept_group(vec![], 1, None, None, Some(delegator.id.clone()))?;
-        
-    let signature_icp = SelfSigning::Ed25519Sha512.derive(km1.sign(delegated_inception.as_bytes())?);
+
+    let signature_icp =
+        SelfSigning::Ed25519Sha512.derive(km1.sign(delegated_inception.as_bytes())?);
     let signature_exn = SelfSigning::Ed25519Sha512.derive(km1.sign(exn_messages[0].as_bytes())?);
 
     // Group initiator needs to use `finalize_group_incept` instead of just
@@ -124,7 +127,7 @@ pub fn test_delegated_incept() -> Result<(), ControllerError> {
         signature_icp,
         vec![(exn_messages[0].as_bytes(), signature_exn)],
     )?;
-    
+
     let kel = controller
         .storage
         .get_kel_messages_with_receipts(&delegate_id)?;
@@ -140,9 +143,15 @@ pub fn test_delegated_incept() -> Result<(), ControllerError> {
         let id = dip.event.get_prefix();
         let event_digest = dip.get_digest();
         let sn = 0;
-        Seal::Event(EventSeal { prefix: id, sn, event_digest })
-    } else { unreachable!()};
-    
+        Seal::Event(EventSeal {
+            prefix: id,
+            sn,
+            event_digest,
+        })
+    } else {
+        unreachable!()
+    };
+
     let ixn = delegator.anchor_with_seal(&[delegated_seal])?;
     let signature_ixn = SelfSigning::Ed25519Sha512.derive(km2.sign(&ixn.serialize()?)?);
     delegator.finalize_event(&ixn.serialize()?, signature_ixn)?;
@@ -150,7 +159,7 @@ pub fn test_delegated_incept() -> Result<(), ControllerError> {
     let kel = controller
         .storage
         .get_kel_messages_with_receipts(&delegate_id)?;
-    
+
     assert!(kel.is_some());
 
     Ok(())

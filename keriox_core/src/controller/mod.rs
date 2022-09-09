@@ -1,9 +1,9 @@
 use std::{path::PathBuf, sync::Arc};
 
-pub mod action_request;
 pub mod error;
 pub mod event_generator;
 pub mod identifier_controller;
+pub mod mailbox_updating;
 #[cfg(test)]
 mod test;
 pub mod utils;
@@ -410,12 +410,12 @@ impl Controller {
     /// Generate and return interaction event for given identifier data
     pub fn anchor_with_seal(
         &self,
-        id: IdentifierPrefix,
+        id: &IdentifierPrefix,
         payload: &[Seal],
     ) -> Result<EventMessage<KeyEvent>, ControllerError> {
         let state = self
             .storage
-            .get_state(&id)?
+            .get_state(id)?
             .ok_or(ControllerError::UnknownIdentifierError)?;
         event_generator::anchor_with_seal(state, payload)
     }
