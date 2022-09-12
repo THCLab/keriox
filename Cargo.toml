@@ -7,4 +7,6 @@ members = [
     "support/transport",
     "components/witness",
     "components/watcher",
+    "components/controller",
+    "tests",
 ]

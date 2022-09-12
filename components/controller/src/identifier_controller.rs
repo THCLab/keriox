@@ -1,8 +1,7 @@
 use std::sync::Arc;
 
-use crate::{
-    actor::prelude::Message,
-    controller::utils::Topic,
+use keri::{
+    actor::{event_generator, prelude::Message},
     derivation::self_addressing::SelfAddressing,
     event::{
         event_data::EventData,
@@ -36,10 +35,9 @@ use crate::{
     },
 };
 
-use crate::controller::{error::ControllerError, event_generator, Controller};
+use crate::{error::ControllerError, utils::Topic, Controller};
 
 use super::mailbox_updating::ActionRequired;
-
 
 pub struct IdentifierController {
     pub id: IdentifierPrefix,
@@ -271,7 +269,7 @@ impl IdentifierController {
                         .map(|wit| {
                             self.source.send_to(
                                 &IdentifierPrefix::Basic(wit.clone()),
-                                crate::oobi::Scheme::Http,
+                                keri::oobi::Scheme::Http,
                                 // TODO what endpoint should be used?
                                 Topic::Process(signer_exn.to_cesr().unwrap()),
                             )
@@ -445,6 +443,7 @@ impl IdentifierController {
                 let response =
                     self.source
                         .send_to(&receipient, Scheme::Http, Topic::Query(qry_str))?;
+                // TODO what if other reponse than mailbox?
                 let res: MailboxResponse = serde_json::from_str(&response).unwrap();
                 res.receipt
                     .iter()

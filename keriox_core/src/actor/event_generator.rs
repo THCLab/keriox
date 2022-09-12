@@ -1,5 +1,6 @@
 use crate::{
     derivation::self_addressing::SelfAddressing,
+    error::Error,
     event::{
         sections::{
             seal::{DigestSeal, Seal},
@@ -19,8 +20,6 @@ use crate::{
     state::IdentifierState,
 };
 
-use crate::controller::error::ControllerError;
-
 // todo add setting signing threshold
 pub fn incept(
     public_keys: Vec<BasicPrefix>,
@@ -28,7 +27,7 @@ pub fn incept(
     witnesses: Vec<BasicPrefix>,
     witness_threshold: u64,
     delegator_id: Option<&IdentifierPrefix>,
-) -> Result<String, ControllerError> {
+) -> Result<String, Error> {
     let event_builder = match delegator_id {
         Some(delegator) => EventMsgBuilder::new(EventTypeTag::Dip).with_delegator(delegator),
         None => EventMsgBuilder::new(EventTypeTag::Icp),
@@ -39,12 +38,12 @@ pub fn incept(
         .with_witness_list(witnesses.as_slice())
         .with_witness_threshold(&SignatureThreshold::Simple(witness_threshold))
         .build()
-        .map_err(|e| ControllerError::EventGenerationError(e.to_string()))?
+        .map_err(|e| Error::EventGenerationError(e.to_string()))?
         .serialize()
-        .map_err(|e| ControllerError::EventGenerationError(e.to_string()))?;
+        .map_err(|e| Error::EventGenerationError(e.to_string()))?;
 
     let icp = String::from_utf8(serialized_icp)
-        .map_err(|e| ControllerError::EventGenerationError(e.to_string()))?;
+        .map_err(|e| Error::EventGenerationError(e.to_string()))?;
     Ok(icp)
 }
 
@@ -55,14 +54,12 @@ pub fn incept_with_next_hashes(
     witnesses: Vec<BasicPrefix>,
     witness_threshold: u64,
     delegator_id: Option<&IdentifierPrefix>,
-) -> Result<EventMessage<KeyEvent>, ControllerError> {
+) -> Result<EventMessage<KeyEvent>, Error> {
     // Check if threshold is possible to achive
     match signature_threshold {
         SignatureThreshold::Simple(t) => {
             if t > &(public_keys.len() as u64) {
-                return Err(ControllerError::EventGenerationError(
-                    "Improper threshold".into(),
-                ));
+                return Err(Error::EventGenerationError("Improper threshold".into()));
             }
         }
         SignatureThreshold::Weighted(w) => {
@@ -71,9 +68,7 @@ pub fn incept_with_next_hashes(
                 WeightedThreshold::Multi(m) => m.length(),
             };
             if length > public_keys.len() {
-                return Err(ControllerError::EventGenerationError(
-                    "Improper threshold".into(),
-                ));
+                return Err(Error::EventGenerationError("Improper threshold".into()));
             }
         }
     };
@@ -88,7 +83,7 @@ pub fn incept_with_next_hashes(
         .with_witness_list(witnesses.as_slice())
         .with_witness_threshold(&SignatureThreshold::Simple(witness_threshold))
         .build()
-        .map_err(|e| ControllerError::EventGenerationError(e.to_string()))
+        .map_err(|e| Error::EventGenerationError(e.to_string()))
 }
 
 pub fn rotate(
@@ -98,7 +93,7 @@ pub fn rotate(
     witness_to_add: Vec<BasicPrefix>,
     witness_to_remove: Vec<BasicPrefix>,
     witness_threshold: u64,
-) -> Result<String, ControllerError> {
+) -> Result<String, Error> {
     let rot = make_rotation(
         state,
         current_keys,
@@ -108,8 +103,8 @@ pub fn rotate(
         witness_threshold,
     )?
     .serialize()
-    .map_err(|e| ControllerError::EventGenerationError(e.to_string()))?;
-    String::from_utf8(rot).map_err(|e| ControllerError::EventGenerationError(e.to_string()))
+    .map_err(|e| Error::EventGenerationError(e.to_string()))?;
+    String::from_utf8(rot).map_err(|e| Error::EventGenerationError(e.to_string()))
 }
 
 fn make_rotation(
@@ -119,7 +114,7 @@ fn make_rotation(
     witness_to_add: Vec<BasicPrefix>,
     witness_to_remove: Vec<BasicPrefix>,
     witness_threshold: u64,
-) -> Result<EventMessage<KeyEvent>, ControllerError> {
+) -> Result<EventMessage<KeyEvent>, Error> {
     EventMsgBuilder::new(EventTypeTag::Rot)
         .with_prefix(&state.prefix)
         .with_sn(state.sn + 1)
@@ -130,13 +125,10 @@ fn make_rotation(
         .with_witness_to_remove(&witness_to_remove)
         .with_witness_threshold(&SignatureThreshold::Simple(witness_threshold))
         .build()
-        .map_err(|e| ControllerError::EventGenerationError(e.to_string()))
+        .map_err(|e| Error::EventGenerationError(e.to_string()))
 }
 
-pub fn anchor(
-    state: IdentifierState,
-    payload: &[SelfAddressingPrefix],
-) -> Result<String, ControllerError> {
+pub fn anchor(state: IdentifierState, payload: &[SelfAddressingPrefix]) -> Result<String, Error> {
     let seal_list = payload
         .iter()
         .map(|seal| {
@@ -151,23 +143,23 @@ pub fn anchor(
         .with_previous_event(&state.last_event_digest)
         .with_seal(seal_list)
         .build()
-        .map_err(|e| ControllerError::EventGenerationError(e.to_string()))?
+        .map_err(|e| Error::EventGenerationError(e.to_string()))?
         .serialize()
-        .map_err(|e| ControllerError::EventGenerationError(e.to_string()))?;
-    String::from_utf8(ixn).map_err(|e| ControllerError::EventGenerationError(e.to_string()))
+        .map_err(|e| Error::EventGenerationError(e.to_string()))?;
+    String::from_utf8(ixn).map_err(|e| Error::EventGenerationError(e.to_string()))
 }
 
 pub fn anchor_with_seal(
     state: IdentifierState,
     seal_list: &[Seal],
-) -> Result<EventMessage<KeyEvent>, ControllerError> {
+) -> Result<EventMessage<KeyEvent>, Error> {
     let ev = EventMsgBuilder::new(EventTypeTag::Ixn)
         .with_prefix(&state.prefix)
         .with_sn(state.sn + 1)
         .with_previous_event(&state.last_event_digest)
         .with_seal(seal_list.to_owned())
         .build()
-        .map_err(|e| ControllerError::EventGenerationError(e.to_string()))?;
+        .map_err(|e| Error::EventGenerationError(e.to_string()))?;
     Ok(ev)
 }
 
@@ -177,7 +169,7 @@ pub fn generate_end_role(
     watcher_id: &IdentifierPrefix,
     role: Role,
     enabled: bool,
-) -> Result<ReplyEvent, ControllerError> {
+) -> Result<ReplyEvent, Error> {
     let end_role = EndRole {
         cid: controller_id.clone(),
         role,
@@ -194,14 +186,14 @@ pub fn generate_end_role(
         SelfAddressing::Blake3_256,
         SerializationFormats::JSON,
     )
-    .map_err(|e| ControllerError::EventGenerationError(e.to_string()))
+    .map_err(|e| Error::EventGenerationError(e.to_string()))
 }
 
 pub fn exchange(
     receipient: &IdentifierPrefix,
     data: &EventMessage<KeyEvent>,
     topic: ForwardTopic,
-) -> Result<ExchangeMessage, ControllerError> {
+) -> Result<ExchangeMessage, Error> {
     Exchange::Fwd {
         args: FwdArgs {
             recipient_id: receipient.clone(),
@@ -210,5 +202,5 @@ pub fn exchange(
         to_forward: data.clone(),
     }
     .to_message(SerializationFormats::JSON, &SelfAddressing::Blake3_256)
-    .map_err(|e| ControllerError::EventGenerationError(e.to_string()))
+    .map_err(|e| Error::EventGenerationError(e.to_string()))
 }

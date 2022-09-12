@@ -1,7 +1,6 @@
 use std::{path::PathBuf, sync::Arc};
 
 pub mod error;
-pub mod event_generator;
 pub mod identifier_controller;
 pub mod mailbox_updating;
 #[cfg(test)]
@@ -12,8 +11,8 @@ use self::{
     error::ControllerError,
     utils::{OptionalConfig, Topic},
 };
-use crate::{
-    actor,
+use keri::{
+    actor::{self, event_generator},
     database::{escrow::EscrowDb, SledEventDatabase},
     event::{event_data::EventData, sections::seal::Seal, EventMessage},
     event_message::{
@@ -35,12 +34,15 @@ use crate::{
     },
     query::reply_event::{ReplyEvent, ReplyRoute, SignedReply},
 };
+// use keri_transport::Transport;
 
 pub struct Controller {
     processor: BasicProcessor,
     pub storage: EventStorage,
     oobi_manager: OobiManager,
     partially_witnessed_escrow: Arc<PartiallyWitnessedEscrow>,
+    // TODO use Tranpsport in send_to
+    // transport: Box<dyn Transport + Send + Sync>,
 }
 impl Controller {
     pub fn new(configs: Option<OptionalConfig>) -> Result<Self, ControllerError> {
@@ -69,6 +71,7 @@ impl Controller {
             storage: EventStorage::new(db),
             oobi_manager: OobiManager::new(&oobis_db),
             partially_witnessed_escrow,
+            // transport,
         };
 
         if let Some(initial_oobis) = initial_oobis {
@@ -328,6 +331,7 @@ impl Controller {
             witness_threshold,
             None,
         )
+        .map_err(|e| ControllerError::EventGenerationError(e.to_string()))
     }
 
     /// Verify event signature, add it to kel, and publish it to witnesses.
@@ -392,6 +396,7 @@ impl Controller {
             witness_to_remove,
             witness_threshold,
         )
+        .map_err(|e| ControllerError::EventGenerationError(e.to_string()))
     }
 
     /// Generate and return interaction event for given identifier data
@@ -405,6 +410,7 @@ impl Controller {
             .get_state(&id)?
             .ok_or(ControllerError::UnknownIdentifierError)?;
         event_generator::anchor(state, payload)
+            .map_err(|e| ControllerError::EventGenerationError(e.to_string()))
     }
 
     /// Generate and return interaction event for given identifier data
@@ -418,6 +424,7 @@ impl Controller {
             .get_state(id)?
             .ok_or(ControllerError::UnknownIdentifierError)?;
         event_generator::anchor_with_seal(state, payload)
+            .map_err(|e| ControllerError::EventGenerationError(e.to_string()))
     }
 
     fn get_current_witness_list(

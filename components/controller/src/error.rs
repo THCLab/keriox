@@ -3,7 +3,7 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 pub enum ControllerError {
     #[error("Database error: {0}")]
-    DatabaseError(#[from] crate::database::DbError),
+    DatabaseError(#[from] keri::database::DbError),
 
     #[error("Communication error: {0}")]
     CommunicationError(String),
@@ -39,5 +39,5 @@ pub enum ControllerError {
     NotGroupParticipantError,
 
     #[error("Error while event processing: ")]
-    EventProcessingError(#[from] crate::error::Error),
+    EventProcessingError(#[from] keri::error::Error),
 }

@@ -6,9 +6,8 @@ use std::{
 
 use serde::Serialize;
 
-use super::{prelude::Message, process_message};
+use super::{event_generator, prelude::Message, process_message};
 use crate::{
-    controller::event_generator,
     database::{escrow::EscrowDb, SledEventDatabase},
     derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
     error::Error,
@@ -303,8 +302,8 @@ impl<K: KeyManager> SimpleController<K> {
             .storage
             .get_state(self.prefix())?
             .ok_or(Error::SemanticError("missing state".into()))?;
-        let ixn = event_generator::anchor_with_seal(state, seal)
-            .map_err(|e| Error::SemanticError(e.to_string()))?;
+        let ixn = event_generator::anchor_with_seal(state, seal)?;
+        // .map_err(|e| Error::SemanticError(e.to_string()))?;
         let km = self.key_manager.lock().map_err(|_| Error::MutexPoisoned)?;
         let signature = km.sign(&ixn.serialize()?)?;
 

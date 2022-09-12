@@ -1,14 +1,16 @@
 use std::sync::Arc;
 
+// use keri_transport::default::DefaultTransport;
 use tempfile::Builder;
 
-use crate::{
-    controller::utils::OptionalConfig,
+use keri::{
     derivation::{basic::Basic, self_signing::SelfSigning},
     event::sections::seal::{EventSeal, Seal},
     event_parsing::{message::key_event_message, EventType},
     signer::{CryptoBox, KeyManager},
 };
+
+use crate::utils::OptionalConfig;
 
 use super::{error::ControllerError, identifier_controller::IdentifierController, Controller};
 
@@ -16,6 +18,8 @@ use super::{error::ControllerError, identifier_controller::IdentifierController,
 pub fn test_group_incept() -> Result<(), ControllerError> {
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     let initial_config = OptionalConfig::init().with_db_path(root.into_path());
+    // let transport = Box::new(DefaultTransport);
+    // let controller = Arc::new(Controller::new(Some(initial_config), transport)?);
     let controller = Arc::new(Controller::new(Some(initial_config))?);
     let km1 = CryptoBox::new()?;
     let km2 = CryptoBox::new()?;
@@ -84,6 +88,8 @@ pub fn test_group_incept() -> Result<(), ControllerError> {
 pub fn test_delegated_incept() -> Result<(), ControllerError> {
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     let initial_config = OptionalConfig::init().with_db_path(root.into_path());
+    // let transport = Box::new(DefaultTransport);
+    // let controller = Arc::new(Controller::new(Some(initial_config), transport)?);
     let controller = Arc::new(Controller::new(Some(initial_config))?);
     let km1 = CryptoBox::new()?;
     let km2 = CryptoBox::new()?;

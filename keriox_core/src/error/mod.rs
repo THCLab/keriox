@@ -131,4 +131,7 @@ pub enum Error {
 
     #[error(transparent)]
     DbError(#[from] crate::database::DbError),
+
+    #[error("Event generation error: {0}")]
+    EventGenerationError(String),
 }

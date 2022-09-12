@@ -1,5 +1,5 @@
-use crate::{
-    actor::prelude::Message,
+use keri::{
+    actor::{event_generator, prelude::Message},
     event::sections::seal::{EventSeal, Seal},
     event_message::{
         exchange::ForwardTopic,
@@ -9,12 +9,9 @@ use crate::{
     query::query_event::MailboxResponse,
 };
 
-use super::{
-    error::ControllerError, event_generator,
-    identifier_controller::IdentifierController,
-};
+use super::{error::ControllerError, identifier_controller::IdentifierController};
 
-use crate::{
+use keri::{
     event::EventMessage,
     event_message::{exchange::ExchangeMessage, key_event_message::KeyEvent},
 };
