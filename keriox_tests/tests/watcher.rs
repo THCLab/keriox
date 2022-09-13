@@ -135,8 +135,8 @@ pub fn watcher_forward_ksn() -> Result<(), Error> {
                     move |loc, msg| {
                         assert_eq!(&loc.url, &witness_url);
                         match msg {
-                            Message::Notice(Notice::Event(e)) => {
-                                witness.process_notice(Notice::Event(e)).unwrap();
+                            Message::Notice(notice) => {
+                                witness.process_notice(notice).unwrap();
                                 Ok(vec![])
                             }
                             Message::Op(op) => {
