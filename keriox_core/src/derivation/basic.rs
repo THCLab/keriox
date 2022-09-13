@@ -1,7 +1,9 @@
+use core::str::FromStr;
+
+use serde::{Deserialize, Serialize};
+
 use super::DerivationCode;
 use crate::{error::Error, keys::PublicKey, prefix::BasicPrefix};
-use core::str::FromStr;
-use serde::{Deserialize, Serialize};
 
 /// Basic Derivations
 ///
@@ -21,6 +23,16 @@ pub enum Basic {
 impl Basic {
     pub fn derive(&self, public_key: PublicKey) -> BasicPrefix {
         BasicPrefix::new(*self, public_key)
+    }
+
+    /// Non transferable means that the public key is always the current public key.
+    /// Transferable means that the public key might have changed and
+    /// you need to request KEL to obtain the newest one.
+    pub fn is_transferable(&self) -> bool {
+        match self {
+            Basic::ECDSAsecp256k1NT | Basic::Ed25519NT | Basic::Ed448NT => false,
+            _ => true,
+        }
     }
 }
 

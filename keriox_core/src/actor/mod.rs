@@ -155,18 +155,31 @@ pub fn process_signed_query(
     let signatures = qr.signatures;
     // check signatures
     let signer_id = qr.signer.clone();
-    let kc = storage
-        .get_state(&signer_id)?
-        .ok_or_else(|| SignedQueryError::UnknownSigner { id: signer_id })?
-        .current;
-
-    if kc.verify(&qr.query.serialize()?, &signatures)? {
-        // TODO check timestamps
-        // unpack and check what's inside
-        Ok(process_query(qr.query.get_query_data(), storage)?)
-    } else {
-        Err(SignedQueryError::InvalidSignature)
+    match signer_id {
+        IdentifierPrefix::Basic(id) if !id.is_transferable() => {
+            // TODO: Define separate signature variant for non transferable identifiers.
+            let sig = &signatures
+                .get(0)
+                .ok_or(SignedQueryError::InvalidSignature)?
+                .signature;
+            if !id.verify(&qr.query.serialize()?, sig)? {
+                return Err(SignedQueryError::InvalidSignature);
+            }
+        }
+        _ => {
+            let key_config = storage
+                .get_state(&signer_id)?
+                .ok_or_else(|| SignedQueryError::UnknownSigner { id: signer_id })?
+                .current;
+            if !key_config.verify(&qr.query.serialize()?, &signatures)? {
+                return Err(SignedQueryError::InvalidSignature);
+            }
+        }
     }
+
+    // TODO check timestamps
+    // unpack and check what's inside
+    Ok(process_query(qr.query.get_query_data(), storage)?)
 }
 
 #[derive(Debug, thiserror::Error)]

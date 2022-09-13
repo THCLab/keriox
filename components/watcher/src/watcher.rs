@@ -4,11 +4,10 @@ use std::{
 };
 
 use derive_more::{Display, Error, From};
-use futures::{StreamExt, TryStreamExt};
+use itertools::Itertools;
 use keri::{
     actor::{
-        parse_event_stream, parse_notice_stream, parse_op_stream, prelude::*,
-        simple_controller::PossibleResponse, QueryError, SignedQueryError,
+        parse_notice_stream, parse_op_stream, prelude::*, simple_controller::PossibleResponse,
     },
     database::DbError,
     derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
@@ -16,14 +15,16 @@ use keri::{
     event_message::signed_event_message::{Notice, Op},
     oobi::{error::OobiError, EndRole, LocationScheme, OobiManager, Role, Scheme},
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix},
+    processor::{escrow::ReplyEscrow, notification::JustNotification},
     query::{
-        query_event::SignedQuery,
+        query_event::{QueryArgs, QueryEvent, QueryRoute, SignedQuery},
         reply_event::{ReplyEvent, ReplyRoute, SignedReply},
         ReplyType,
     },
     signer::Signer,
     state::IdentifierState,
 };
+use keri_transport::Transport;
 use rand::prelude::SliceRandom;
 
 pub struct WatcherData {
@@ -32,6 +33,7 @@ pub struct WatcherData {
     event_storage: EventStorage,
     pub oobi_manager: OobiManager,
     pub signer: Arc<Signer>,
+    transport: Box<dyn Transport + Send + Sync>,
 }
 
 impl WatcherData {
@@ -39,6 +41,7 @@ impl WatcherData {
         public_address: url::Url,
         event_db_path: &Path,
         priv_key: Option<String>,
+        transport: Box<dyn Transport + Send + Sync>,
     ) -> Result<Self, Error> {
         let signer = Arc::new(
             priv_key
@@ -49,9 +52,16 @@ impl WatcherData {
         oobi_path.push(event_db_path);
         oobi_path.push("oobi");
 
-        let prefix = Basic::Ed25519.derive(signer.public_key());
+        let prefix = Basic::Ed25519NT.derive(signer.public_key()); // watcher uses non transferable key
         let db = Arc::new(SledEventDatabase::new(event_db_path)?);
-        let processor = BasicProcessor::new(db.clone(), None);
+        let mut processor = BasicProcessor::new(db.clone(), None);
+        processor.register_observer(
+            Arc::new(ReplyEscrow::new(db.clone())),
+            &[
+                JustNotification::KeyEventAdded,
+                JustNotification::KsnOutOfOrder,
+            ],
+        )?;
         let storage = EventStorage::new(db.clone());
         // construct witness loc scheme oobi
         let loc_scheme = LocationScheme::new(
@@ -71,12 +81,14 @@ impl WatcherData {
         );
         let oobi_manager = OobiManager::new(&oobi_path);
         oobi_manager.save_oobi(&signed_reply)?;
+
         Ok(Self {
             prefix,
             processor,
             event_storage: storage,
             signer: signer,
             oobi_manager,
+            transport,
         })
     }
 
@@ -145,15 +157,25 @@ impl WatcherData {
                     });
                 }
 
-                let result = process_signed_query(qry.clone(), &self.event_storage);
-                let response = match result {
-                    Err(SignedQueryError::QueryError(QueryError::UnknownId { .. })) => {
-                        // forward query to witness
-                        self.forward_query(&qry).await?;
-                        return Ok(None);
-                    }
-                    result => result?,
-                };
+                // Update latest state for prefix
+                self.query_state(qry.query.get_prefix()).await?;
+
+                let escrowed_replies = self
+                    .event_storage
+                    .db
+                    .get_escrowed_replys(&qry.query.get_prefix())
+                    .into_iter()
+                    .flatten()
+                    .collect_vec();
+
+                if escrowed_replies.len() > 0 {
+                    // If there is an escrowed reply it means we don't have the most recent data.
+                    // In this case forward the query to witness.
+                    self.forward_query(&qry).await?;
+                    return Ok(None);
+                }
+
+                let response = process_signed_query(qry.clone(), &self.event_storage)?;
 
                 match response {
                     ReplyType::Ksn(ksn) => {
@@ -204,31 +226,18 @@ impl WatcherData {
             sigs,
         );
 
-        // Get witnesses and choose one randomly
-        let id = qry.query.get_prefix();
-        let wit_id = self
-            .get_state_for_prefix(&id)?
-            .and_then(|state| {
-                state
-                    .witness_config
-                    .witnesses
-                    .choose(&mut rand::thread_rng())
-                    .cloned()
-            })
-            .ok_or_else(|| WatcherError::NoIdentState { prefix: id })?;
+        let wit_id = self.get_witness_for_prefix(qry.query.get_prefix())?;
 
         // Send query to witness
-        let qry_str = Message::Op(Op::Query(qry)).to_cesr()?;
-        let resp = self
-            .send_to(
-                IdentifierPrefix::Basic(wit_id),
-                keri::oobi::Scheme::Http,
-                qry_str,
-            )
-            .await?
-            .unwrap();
+        let qry = Message::Op(Op::Query(qry));
 
-        let msgs = parse_event_stream(resp.as_bytes())?;
+        let msgs = self
+            .send_to(
+                IdentifierPrefix::Basic(wit_id.clone()),
+                keri::oobi::Scheme::Http,
+                qry,
+            )
+            .await?;
 
         // Process response
         for msg in msgs.iter().cloned() {
@@ -251,6 +260,71 @@ impl WatcherData {
         }
 
         Ok(())
+    }
+
+    /// Query witness about KSN for given prefix and save its response to db.
+    /// Returns ID of witness that responded.
+    async fn query_state(&self, prefix: IdentifierPrefix) -> Result<BasicPrefix, WatcherError> {
+        let query_args = QueryArgs {
+            s: None,
+            i: prefix.clone(),
+            src: None,
+        };
+
+        let qry = QueryEvent::new_query(
+            QueryRoute::Ksn {
+                args: query_args,
+                reply_route: String::from(""),
+            },
+            SerializationFormats::JSON,
+            &SelfAddressing::Blake3_256,
+        )?;
+
+        // sign message by watcher
+        let signature = AttachedSignaturePrefix::new(
+            SelfSigning::Ed25519Sha512,
+            (self.signer).sign(&serde_json::to_vec(&qry).unwrap())?,
+            0,
+        );
+
+        let query = Op::Query(SignedQuery::new(
+            qry,
+            IdentifierPrefix::Basic(self.prefix.clone()),
+            vec![signature],
+        ));
+
+        let wit_id = self.get_witness_for_prefix(prefix)?;
+
+        let msgs = self
+            .send_to(
+                IdentifierPrefix::Basic(wit_id.clone()),
+                Scheme::Http,
+                Message::Op(query),
+            )
+            .await?;
+
+        for msg in msgs.into_iter() {
+            if let Message::Op(Op::Reply(reply)) = msg {
+                self.process_reply(reply)?;
+            }
+        }
+
+        Ok(wit_id)
+    }
+
+    /// Get witnesses for prefix and choose one randomly
+    fn get_witness_for_prefix(&self, id: IdentifierPrefix) -> Result<BasicPrefix, WatcherError> {
+        let wit_id = self
+            .get_state_for_prefix(&id)?
+            .and_then(|state| {
+                state
+                    .witness_config
+                    .witnesses
+                    .choose(&mut rand::thread_rng())
+                    .cloned()
+            })
+            .ok_or_else(|| WatcherError::NoIdentState { prefix: id })?;
+        Ok(wit_id)
     }
 
     /// Query roles in oobi manager to check if controller with given ID is allowed to communicate with us.
@@ -282,14 +356,25 @@ impl WatcherData {
         &self,
         input_stream: &[u8],
     ) -> Result<Vec<PossibleResponse>, WatcherError> {
-        futures::stream::iter(parse_op_stream(input_stream)?)
-            .then(|op| async {
-                self.process_op(op)
-                    .await
-                    .map(|r| r.map(|res| vec![res]).unwrap_or_default())
-            })
-            .try_concat()
-            .await
+        let mut responses = Vec::new();
+        for op in parse_op_stream(input_stream)? {
+            let result = self.process_op(op).await?;
+            if let Some(response) = result {
+                responses.push(response);
+            }
+        }
+        Ok(responses)
+    }
+
+    pub async fn process_ops(&self, ops: Vec<Op>) -> Result<Vec<PossibleResponse>, WatcherError> {
+        let mut results = Vec::new();
+        for op in ops {
+            let result = self.process_op(op).await?;
+            if let Some(response) = result {
+                results.push(response);
+            }
+        }
+        Ok(results)
     }
 
     fn get_loc_schemas(&self, id: &IdentifierPrefix) -> Result<Vec<LocationScheme>, WatcherError> {
@@ -309,34 +394,20 @@ impl WatcherData {
         &self,
         wit_id: IdentifierPrefix,
         scheme: Scheme,
-        msg: Vec<u8>,
-    ) -> Result<Option<String>, WatcherError> {
-        let addresses = self.get_loc_schemas(&wit_id)?;
-        match addresses
-            .iter()
-            .find(|loc| loc.scheme == scheme)
-            .map(|lc| &lc.url)
-        {
-            Some(address) => match scheme {
-                Scheme::Http => {
-                    let client = reqwest::Client::new();
-                    let response = client
-                        .post(format!("{}process", address))
-                        .body(msg)
-                        .send()
-                        .await?
-                        .text()
-                        .await?;
+        msg: Message,
+    ) -> Result<Vec<Message>, WatcherError> {
+        let locs = self.get_loc_schemas(&wit_id)?;
+        let loc = locs.into_iter().find(|loc| loc.scheme == scheme);
 
-                    println!("\ngot response: {}", response);
-                    Ok(Some(response))
-                }
-                Scheme::Tcp => {
-                    todo!()
-                }
-            },
-            _ => Err(WatcherError::UnsupportedScheme { id: wit_id, scheme })?,
-        }
+        let loc = match loc {
+            Some(loc) => loc,
+            None => return Err(WatcherError::NoLocation { id: wit_id }),
+        };
+
+        let response = self.transport.send_message(loc, msg).await?;
+
+        println!("\ngot response: {:?}", response);
+        Ok(response)
     }
 }
 
@@ -356,32 +427,31 @@ impl Watcher {
             .data
             .clone();
 
-        if let ReplyRoute::LocScheme(lc) = loc_scheme {
-            let url = format!("{}oobi/{}/{}/{}", lc.url, er.cid, "witness", er.eid);
-            let oobis = reqwest::get(url).await.unwrap().text().await?;
-
-            self.0.parse_and_process_ops(oobis.as_bytes()).await?;
+        if let ReplyRoute::LocScheme(loc) = loc_scheme {
+            let oobis = self
+                .0
+                .transport
+                .request_end_role(loc, er.cid, Role::Witness, er.eid)
+                .await?;
+            self.0.process_ops(oobis).await?;
             Ok(())
         } else {
             Err(OobiError::InvalidMessageType)?
         }
     }
 
-    pub async fn resolve_loc_scheme(&self, lc: &LocationScheme) -> Result<(), WatcherError> {
-        let url = format!("{}oobi/{}", lc.url, lc.eid);
-        let oobis = reqwest::get(url).await?.text().await?;
-
-        self.0.parse_and_process_ops(oobis.as_bytes()).await?;
-
+    pub async fn resolve_loc_scheme(&self, loc: &LocationScheme) -> Result<(), WatcherError> {
+        let oobis = self.0.transport.request_loc_scheme(loc.clone()).await?;
+        self.0.process_ops(oobis).await?;
         Ok(())
     }
 }
 
 #[derive(Debug, Display, Error, From)]
 pub enum WatcherError {
-    #[display(fmt = "HTTP request failed")]
+    #[display(fmt = "network request failed")]
     #[from]
-    RequestFailed(reqwest::Error),
+    TransportError(keri_transport::TransportError),
 
     #[display(fmt = "keri error")]
     #[from]
@@ -401,12 +471,6 @@ pub enum WatcherError {
 
     #[display(fmt = "location not found for {id:?}")]
     NoLocation { id: IdentifierPrefix },
-
-    #[display(fmt = "unsupported scheme {scheme:?} for {id:?}")]
-    UnsupportedScheme {
-        id: IdentifierPrefix,
-        scheme: Scheme,
-    },
 
     #[display(fmt = "wrong reply route")]
     WrongReplyRoute,

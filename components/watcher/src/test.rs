@@ -8,6 +8,7 @@ use keri::{
     error::Error,
     prefix::IdentifierPrefix,
 };
+use keri_transport::default::DefaultTransport;
 use tempfile::Builder;
 
 use crate::watcher::{WatcherData, WatcherError};
@@ -77,9 +78,9 @@ pub fn test_authentication() -> Result<(), Error> {
 
     let url = url::Url::parse("http://some/dummy/url").unwrap();
     let root = Builder::new().prefix("cont-test-db").tempdir().unwrap();
-    let watcher = WatcherData::setup(url, root.path(), None)?;
+    let watcher = WatcherData::setup(url, root.path(), None, Box::new(DefaultTransport))?;
 
-    // Watcher should know bouth controllers
+    // Watcher should know both controllers
     watcher.parse_and_process_notices(&asker_icp).unwrap();
     watcher.parse_and_process_notices(&about_icp).unwrap();
 
@@ -97,7 +98,11 @@ pub fn test_authentication() -> Result<(), Error> {
 
     // Send query again
     let result = futures::executor::block_on(watcher.process_op(query));
-    assert!(result.is_ok());
+    // Expect error because controller's witness config is empty and latest ksn can't be checked.
+    assert!(matches!(
+        result, Err(WatcherError::NoIdentState { ref prefix })
+        if prefix == about_controller.prefix()
+    ));
 
     Ok(())
 }

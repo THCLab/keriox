@@ -1,10 +1,10 @@
 use std::path::Path;
 
 use actix_web::{dev::Server, web, App, HttpServer};
-use futures::future::join_all;
 use keri::{error::Error, oobi::LocationScheme, prefix::BasicPrefix};
+use keri_transport::default::DefaultTransport;
 
-use crate::watcher::{Watcher, WatcherData};
+use crate::watcher::{Watcher, WatcherData, WatcherError};
 
 pub struct WatcherListener {
     watcher_data: Watcher,
@@ -23,7 +23,13 @@ impl WatcherListener {
             address.clone()
         };
 
-        WatcherData::setup(pub_address, event_db_path, priv_key).map(|watcher_data| Self {
+        WatcherData::setup(
+            pub_address,
+            event_db_path,
+            priv_key,
+            Box::new(DefaultTransport),
+        )
+        .map(|watcher_data| Self {
             watcher_data: Watcher(watcher_data),
         })
     }
@@ -51,13 +57,11 @@ impl WatcherListener {
     pub async fn resolve_initial_oobis(
         &self,
         initial_oobis: &[LocationScheme],
-    ) -> Result<(), Error> {
-        join_all(
-            initial_oobis
-                .iter()
-                .map(|lc| self.watcher_data.resolve_loc_scheme(lc)),
-        )
-        .await;
+    ) -> Result<(), WatcherError> {
+        for lc in initial_oobis.iter() {
+            self.watcher_data.resolve_loc_scheme(lc).await?;
+        }
+
         Ok(())
     }
 
