@@ -824,7 +824,7 @@ pub fn test_multisig() -> Result<(), WitnessError> {
     Ok(())
 }
 
-// Helper function taht create controller with inception event receipted by witness
+// Helper function that creates controller, makes and publish its inception event.
 fn setup_controller(witness: &Witness) -> Result<SimpleController<CryptoBox>, Error> {
     let mut cont1 = {
         // Create test db and event processor.
