@@ -7,7 +7,7 @@ use keri::{
     actor::prelude::Message,
     derivation::{basic::Basic, self_signing::SelfSigning},
     oobi::LocationScheme,
-    prefix::{BasicPrefix, IdentifierPrefix, Prefix},
+    prefix::{BasicPrefix, IdentifierPrefix},
     signer::{CryptoBox, KeyManager},
 };
 
@@ -92,10 +92,10 @@ pub fn test_delegated_incept() -> Result<(), ControllerError> {
     let root2 = Builder::new().prefix("test-db2").tempdir().unwrap();
     let initial_config = OptionalConfig::init().with_db_path(root.into_path());
     let initial_config2 = OptionalConfig::init().with_db_path(root2.into_path());
-    // let transport = Box::new(DefaultTransport);
-    // let controller = Arc::new(Controller::new(Some(initial_config), transport)?);
 
-    // DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA is listening on http://127.0.0.1:3232
+    // Tests assumses that witness DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA is listening on http://127.0.0.1:3232
+    // It can be run from components/witness using command:
+    // cargo run -- -c ./src/witness.json
     let witness_id: IdentifierPrefix = "DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA"
         .parse()
         .unwrap();
@@ -123,6 +123,7 @@ pub fn test_delegated_incept() -> Result<(), ControllerError> {
             controller.finalize_inception(icp_event.as_bytes(), &signature)?;
         IdentifierController::new(incepted_identifier, controller.clone())
     };
+    // Quering mailbox to get receipts
     let query = identifier1.query_own_mailbox(&[witness_id_basic.clone()])?;
 
     for qry in query {
@@ -141,10 +142,8 @@ pub fn test_delegated_incept() -> Result<(), ControllerError> {
             controller2.finalize_inception(icp_event.as_bytes(), &signature)?;
         IdentifierController::new(incepted_identifier, controller2.clone())
     };
-    dbg!(identifier1.id.to_str());
-    dbg!(delegator.id.to_str());
 
-    // Quering mailbox
+    // Quering mailbox to get receipts
     let query = delegator.query_own_mailbox(&[witness_id_basic.clone()])?;
 
     for qry in query {
@@ -152,6 +151,7 @@ pub fn test_delegated_incept() -> Result<(), ControllerError> {
         delegator.finalize_mailbox_query(vec![(qry, signature)])?;
     }
 
+    // Generate delegated inception
     let (delegated_inception, exn_messages) = identifier1.incept_group(
         vec![],
         1,
@@ -176,7 +176,7 @@ pub fn test_delegated_incept() -> Result<(), ControllerError> {
     let kel = controller
         .storage
         .get_kel_messages_with_receipts(&delegate_id)?;
-    // Event is not yet accepted.
+    // Event is not yet accepted. Missing delegating event.
     assert!(kel.is_none());
 
     // Delegator asks about his mailbox to get delegated event.
@@ -185,10 +185,9 @@ pub fn test_delegated_incept() -> Result<(), ControllerError> {
     for qry in query {
         let signature = SelfSigning::Ed25519Sha512.derive(km2.sign(&qry.serialize()?)?);
         let ar = delegator.finalize_mailbox_query(vec![(qry, signature)])?;
-        println!("ar: {:?}", &ar);
         assert_eq!(ar.len(), 1);
         match &ar[0] {
-            ActionRequired::MultisigRequest(_, _) => todo!(),
+            ActionRequired::MultisigRequest(_, _) => unreachable!(),
             ActionRequired::DelegationRequest(delegating_event, exn) => {
                 let signature_ixn =
                     SelfSigning::Ed25519Sha512.derive(km2.sign(&delegating_event.serialize()?)?);
@@ -204,37 +203,51 @@ pub fn test_delegated_incept() -> Result<(), ControllerError> {
 
                 for qry in query {
                     let signature = SelfSigning::Ed25519Sha512.derive(km2.sign(&qry.serialize()?)?);
-                    delegator.finalize_mailbox_query(vec![(qry, signature)])?;
+                    let action_required =
+                        delegator.finalize_mailbox_query(vec![(qry, signature)])?;
+                    assert!(action_required.is_empty());
                 }
 
                 // ixn was accepted
-                let kel = controller2.storage.get_kel_messages(&delegator.id)?;
-
-                assert_eq!(kel.unwrap().len(), 2);
+                let delegators_state = controller2.storage.get_state(&delegator.id)?;
+                assert_eq!(delegators_state.unwrap().sn, 1);
             }
         };
     }
 
+    // Process delegator's icp by identifier who'll request delegation.
+    // TODO how child should get delegators kel?
     let delegators_kel = controller2
         .storage
         .get_kel_messages_with_receipts(&delegator.id)?
         .unwrap();
-    controller.process(&Message::Notice(delegators_kel[0].clone()))?;
-    controller.process(&Message::Notice(delegators_kel[1].clone()))?;
+    controller.process(&Message::Notice(delegators_kel[0].clone()))?; // icp
+    controller.process(&Message::Notice(delegators_kel[1].clone()))?; // receipt
 
-    let query = identifier1.query_group_mailbox(&[witness_id_basic.clone()])?; // query_group_mailbox(&[witness_id_basic.clone()])?;
+    let query = identifier1.query_group_mailbox(&[witness_id_basic.clone()])?;
 
     for qry in query {
         let signature = SelfSigning::Ed25519Sha512.derive(km1.sign(&qry.serialize()?)?);
         let ar = identifier1.finalize_mailbox_query(vec![(qry, signature)])?;
-        println!("\nar: {:?}", ar);
+        assert!(ar.is_empty());
     }
     // Process receipt, because it isn't attached exn from delegator
-    // TODO
-    controller.process(&Message::Notice(delegators_kel[3].clone()))?;
+    // TODO Allow attaching it in `PathedMaterial` into exn
+    identifier1
+        .source
+        .process(&Message::Notice(delegators_kel[3].clone()))?;
 
     let state = identifier1.source.storage.get_state(&delegator.id)?;
     assert_eq!(state.unwrap().sn, 1);
+
+    // Get mailbox for receipts.
+    let query = identifier1.query_group_mailbox(&[witness_id_basic.clone()])?;
+
+    for qry in query {
+        let signature = SelfSigning::Ed25519Sha512.derive(km1.sign(&qry.serialize()?)?);
+        let ar = identifier1.finalize_mailbox_query(vec![(qry, signature)])?;
+        println!("ar: {:?}", ar);
+    }
 
     Ok(())
 }

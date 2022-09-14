@@ -23,7 +23,7 @@ use keri::{
     event_parsing::{message::key_event_message, EventType, SignedEventData},
     oobi::{LocationScheme, OobiManager, Role, Scheme},
     prefix::{
-        AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfAddressingPrefix,
+        AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix,
         SelfSigningPrefix,
     },
     processor::{
@@ -203,8 +203,6 @@ impl Controller {
         schema: Scheme,
         topic: Topic,
     ) -> Result<String, ControllerError> {
-        println!("\nSending to: {}", id.to_str());
-
         let addresses = self.get_loc_schemas(id)?;
         match addresses
             .iter()
@@ -216,19 +214,13 @@ impl Controller {
                 Scheme::Http => {
                     let client = reqwest::blocking::Client::new();
                     let response = match topic {
-                        Topic::Oobi(oobi_json) => {
-                            println!(
-                                "Sending oobi: {}",
-                                String::from_utf8(oobi_json.to_vec()).unwrap()
-                            );
-                            client
-                                .post(format!("{}resolve", address))
-                                .body(oobi_json)
-                                .send()
-                                .map_err(|e| ControllerError::CommunicationError(e.to_string()))?
-                                .text()
-                                .map_err(|e| ControllerError::CommunicationError(e.to_string()))?
-                        }
+                        Topic::Oobi(oobi_json) => client
+                            .post(format!("{}resolve", address))
+                            .body(oobi_json)
+                            .send()
+                            .map_err(|e| ControllerError::CommunicationError(e.to_string()))?
+                            .text()
+                            .map_err(|e| ControllerError::CommunicationError(e.to_string()))?,
                         Topic::Query(query) => {
                             println!("Sending query: {}", query);
                             client
@@ -511,8 +503,8 @@ impl Controller {
         let identifier = event_message.event.get_prefix();
         Ok(match event_message.event.get_event_data() {
             EventData::Icp(icp) => icp.witness_config.initial_witnesses,
-            EventData::Rot(rot) => todo!(),
-            EventData::Ixn(ixn) => {
+            EventData::Rot(_rot) => todo!(),
+            EventData::Ixn(_ixn) => {
                 self.storage
                     .get_state(&identifier)?
                     .ok_or(ControllerError::UnknownIdentifierError)?

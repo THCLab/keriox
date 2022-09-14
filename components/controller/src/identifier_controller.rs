@@ -6,7 +6,7 @@ use keri::{
         prelude::Message,
         simple_controller::{parse_response, PossibleResponse},
     },
-    derivation::{self_addressing::SelfAddressing, self_signing::SelfSigning},
+    derivation::self_addressing::SelfAddressing,
     event::{
         event_data::EventData,
         sections::{
@@ -18,8 +18,8 @@ use keri::{
     event_message::{
         exchange::{Exchange, ExchangeMessage, ForwardTopic, FwdArgs, SignedExchange},
         key_event_message::KeyEvent,
-        signature::{Nontransferable, Signature, SignerData},
-        signed_event_message::{Op, SignedEventMessage},
+        signature::{Signature, SignerData},
+        signed_event_message::Op,
     },
     event_parsing::{
         message::{event_message, exchange_message, key_event_message},
@@ -28,38 +28,18 @@ use keri::{
     },
     oobi::{LocationScheme, Role, Scheme},
     prefix::{
-        AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfAddressingPrefix,
+        AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix,
         SelfSigningPrefix,
     },
     query::{
-        query_event::{
-            MailboxResponse, QueryArgsMbx, QueryEvent, QueryRoute, QueryTopics, SignedQuery,
-        },
+        query_event::{QueryArgsMbx, QueryEvent, QueryRoute, QueryTopics, SignedQuery},
         reply_event::ReplyRoute,
     },
 };
 
-use crate::{error::ControllerError, utils::Topic, Controller};
+use crate::{error::ControllerError, mailbox_updating::MailboxReminder, utils::Topic, Controller};
 
 use super::mailbox_updating::ActionRequired;
-
-#[derive(Default)]
-pub struct MailboxReminder {
-    pub receipt: usize,
-    pub multisig: usize,
-    pub delegate: usize,
-}
-impl MailboxReminder {
-    pub fn update_receipt(&mut self) {
-        self.receipt = self.receipt + 1;
-    }
-    pub fn update_multisig(&mut self) {
-        self.receipt = self.multisig + 1;
-    }
-    pub fn update_delegate(&mut self) {
-        self.receipt = self.delegate + 1;
-    }
-}
 
 pub struct IdentifierController {
     pub id: IdentifierPrefix,
@@ -119,9 +99,11 @@ impl IdentifierController {
         self.source.anchor(self.id.clone(), payload)
     }
 
+    /// Generates delegating event (ixn) and exchange event that contains
+    /// delegated event which will be send to delegate after ixn finalization.
     pub fn delegate(
         &self,
-        delegated_event: EventMessage<KeyEvent>,
+        delegated_event: &EventMessage<KeyEvent>,
     ) -> Result<(EventMessage<KeyEvent>, ExchangeMessage), ControllerError> {
         let delegate = delegated_event.event.get_prefix();
         let delegated_seal = {
@@ -133,16 +115,16 @@ impl IdentifierController {
                 event_digest,
             })
         };
-        let ixn = self.source.anchor_with_seal(&self.id, &[delegated_seal])?;
+        let delegating_event = self.source.anchor_with_seal(&self.id, &[delegated_seal])?;
         let exn_message = Exchange::Fwd {
             args: FwdArgs {
                 recipient_id: delegate.clone(),
                 topic: ForwardTopic::Delegate,
             },
-            to_forward: delegated_event.clone(),
+            to_forward: delegating_event.clone(),
         }
         .to_message(SerializationFormats::JSON, &SelfAddressing::Blake3_256)?;
-        Ok((ixn, exn_message))
+        Ok((delegating_event, exn_message))
     }
 
     pub fn anchor_with_seal(
@@ -160,6 +142,7 @@ impl IdentifierController {
         self.source.anchor_with_seal(group_id, seal_list)
     }
 
+    /// Generates reply event with `end_role_add` route.
     pub fn add_watcher(&self, watcher_id: IdentifierPrefix) -> Result<String, ControllerError> {
         String::from_utf8(
             event_generator::generate_end_role(&self.id, &watcher_id, Role::Watcher, true)?
@@ -168,6 +151,7 @@ impl IdentifierController {
         .map_err(|_e| ControllerError::EventFormatError)
     }
 
+    /// Generates reply event with `end_role_cut` route.
     pub fn remove_watcher(&self, watcher_id: IdentifierPrefix) -> Result<String, ControllerError> {
         String::from_utf8(
             event_generator::generate_end_role(&self.id, &watcher_id, Role::Watcher, false)?
@@ -207,6 +191,8 @@ impl IdentifierController {
     /// Init group identifier
     ///
     /// Returns serialized group icp and list of exchange messages to sign.
+    /// Exchanges are ment to be send to witness and forwarded to group
+    /// participants.
     /// If `delegator` parameter is provided, it will generate delegated
     /// inception and append delegation request to exchange messages.
     pub fn incept_group(
@@ -271,8 +257,10 @@ impl IdentifierController {
         Ok((serialized_icp, exchanges))
     }
 
-    /// Join event with signature, save it in db, sends signed exn messages to
-    /// witness.
+    /// Finalize group identifier
+    ///
+    /// Join event with signature, verify them and sends signed exn messages to
+    /// witness to be forwarded to group participants.
     pub fn finalize_group_incept(
         &mut self,
         group_event: &[u8],
@@ -387,12 +375,11 @@ impl IdentifierController {
         .ok_or(ControllerError::NotGroupParticipantError)
     }
 
+    /// Generates query message of route `mbx` to query own identifier mailbox.
     pub fn query_own_mailbox(
         &self,
         witnesses: &[BasicPrefix],
     ) -> Result<Vec<QueryEvent>, ControllerError> {
-        // query own mailbox
-        // let own_queries =
         Ok(witnesses
             .into_iter()
             .map(|wit| {
@@ -419,17 +406,16 @@ impl IdentifierController {
                     SerializationFormats::JSON,
                     &SelfAddressing::Blake3_256,
                 )
-                // .unwrap()
             })
             .collect::<Result<_, _>>()
             .unwrap())
     }
 
+    /// Generates query messages of route `mbx` to query groups mailbox.
     pub fn query_group_mailbox(
         &self,
         witnesses: &[BasicPrefix],
     ) -> Result<Vec<QueryEvent>, ControllerError> {
-        // query group mailbox
         let groups_queries = self
             .groups
             .iter()
@@ -465,6 +451,9 @@ impl IdentifierController {
         Ok(groups_queries.collect())
     }
 
+    /// Joins query events with their signatures, sends it to witness and
+    /// process its response. If user action is needed to finalize process,
+    /// returns proper notification.
     pub fn finalize_mailbox_query(
         &mut self,
         queries: Vec<(QueryEvent, SelfSigningPrefix)>,
@@ -511,7 +500,7 @@ impl IdentifierController {
                     } else {
                         // process group mailbox
                         let group_req =
-                            self.process_group_mailbox(&res, &self.last_asked_groups_index)?;
+                            self.process_groups_mailbox(&res, &self.last_asked_groups_index)?;
                         self.last_asked_groups_index = MailboxReminder {
                             receipt: res.receipt.len(),
                             multisig: res.multisig.len(),

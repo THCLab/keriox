@@ -42,7 +42,7 @@ impl Notifier for WitnessReceiptGenerator {
             Notification::KeyEventAdded(event) => {
                 let non_trans_receipt =
                     self.respond_to_key_event(&event.event_message, self.signer.clone())?;
-                let prefix = &non_trans_receipt.body.event.prefix.clone();
+                let prefix = &event.event_message.event.get_prefix(); //&non_trans_receipt.body.event.prefix.clone();
                 self.storage
                     .db
                     .add_receipt_nt(non_trans_receipt.clone(), prefix)?;
@@ -314,8 +314,8 @@ impl Witness {
 
     pub fn get_mailbox_messages(&self, id: &IdentifierPrefix) -> Result<MailboxResponse, Error> {
         self.event_storage.get_mailbox_messages(QueryArgsMbx {
-            i: IdentifierPrefix::Basic(self.prefix.clone()),
-            pre: id.clone(),
+            pre: IdentifierPrefix::Basic(self.prefix.clone()),
+            i: id.clone(),
             src: IdentifierPrefix::Basic(self.prefix.clone()),
             topics: QueryTopics {
                 credential: 0,

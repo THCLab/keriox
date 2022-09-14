@@ -643,7 +643,7 @@ impl<K: KeyManager> SimpleController<K> {
         let qry_msg = QueryEvent::new_query(
             QueryRoute::Mbx {
                 args: QueryArgsMbx {
-                    i: IdentifierPrefix::Basic(witness.clone()),
+                    i: self.prefix.clone(),
                     pre: self.prefix.clone(),
                     src: IdentifierPrefix::Basic(witness.clone()),
                     topics: QueryTopics {
@@ -683,8 +683,8 @@ impl<K: KeyManager> SimpleController<K> {
                 let qry_msg = QueryEvent::new_query(
                     QueryRoute::Mbx {
                         args: QueryArgsMbx {
-                            i: IdentifierPrefix::Basic(witness.clone()),
-                            pre: id.clone(),
+                            i: id.clone(),
+                            pre: self.prefix.clone(),
                             src: IdentifierPrefix::Basic(witness.clone()),
                             topics: QueryTopics {
                                 credential: 0,

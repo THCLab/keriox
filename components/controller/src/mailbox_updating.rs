@@ -12,8 +12,6 @@ use keri::{
     query::query_event::MailboxResponse,
 };
 
-use crate::identifier_controller::MailboxReminder;
-
 use super::{error::ControllerError, identifier_controller::IdentifierController};
 
 use keri::{
@@ -21,9 +19,21 @@ use keri::{
     event_message::{exchange::ExchangeMessage, key_event_message::KeyEvent},
 };
 
+#[derive(Default)]
+/// Struct for tracking what was the last indexes of processed mailbox messages.
+/// Events in mailbox aren't removed after getting them, so it prevents
+/// processing the same event multiple times.
+pub struct MailboxReminder {
+    pub receipt: usize,
+    pub multisig: usize,
+    pub delegate: usize,
+}
+
 #[derive(Debug)]
 pub enum ActionRequired {
     MultisigRequest(EventMessage<KeyEvent>, ExchangeMessage),
+    // Contains delegating event and exchange message that will be send to
+    // delegate after delegating event confirmation.
     DelegationRequest(EventMessage<KeyEvent>, ExchangeMessage),
 }
 
@@ -66,26 +76,45 @@ impl IdentifierController {
             .collect::<Result<Vec<_>, ControllerError>>()
     }
 
-    pub fn process_group_mailbox(
+    pub fn process_groups_mailbox(
         &self,
         mb: &MailboxResponse,
         from_index: &MailboxReminder,
     ) -> Result<Vec<ActionRequired>, ControllerError> {
+        Ok(self
+            .groups
+            .iter()
+            .map(|group_id| self.process_group_mailbox(mb, group_id, from_index))
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .flatten()
+            .collect())
+    }
+
+    fn process_group_mailbox(
+        &self,
+        mb: &MailboxResponse,
+        group_id: &IdentifierPrefix,
+        from_index: &MailboxReminder,
+    ) -> Result<Vec<ActionRequired>, ControllerError> {
+        mb.receipt
+            .iter()
+            .skip(from_index.receipt)
+            .map(|rct| self.process_receipt(rct))
+            .collect::<Result<_, _>>()?;
         mb.multisig
             .iter()
             .skip(from_index.multisig)
             .try_for_each(|event| self.process_group_multisig(event))?;
-
-        Ok(mb
-            .delegate
+        mb.delegate
             .iter()
             .skip(from_index.delegate)
-            .map(|del_event| self.process_own_delegate(del_event))
+            .map(|del_event| self.process_group_delegate(del_event, group_id))
             .filter_map(|del| match del {
-                Ok(del) => del,
-                Err(_) => None,
+                Ok(del) => del.map(|o| Ok(o)),
+                Err(e) => Some(Err(e)),
             })
-            .collect::<Vec<_>>())
+            .collect::<Result<Vec<_>, _>>()
     }
 
     /// Returns exn message that contains signed multisig event and will be
@@ -103,11 +132,15 @@ impl IdentifierController {
         Ok(ActionRequired::MultisigRequest(event, exn))
     }
 
-    /// If leader and event is fully signed, return event to forward to witness.
+    /// If leader and event is fully signed publish event to witness.
     fn process_group_multisig(&self, event: &SignedEventMessage) -> Result<(), ControllerError> {
         self.source
             .process(&Message::Notice(Notice::Event(event.clone())))?;
 
+        self.publish(event)
+    }
+
+    fn publish(&self, event: &SignedEventMessage) -> Result<(), ControllerError> {
         let id = event.event_message.event.get_prefix();
         let fully_signed_event = self
             .source
@@ -145,7 +178,8 @@ impl IdentifierController {
         }
     }
 
-    /// Create delegating event, pack it in exn message (delegate topic).
+    /// Process event from delegate mailbox. If signing is required to finish
+    /// the process it resturns proper notification.
     fn process_own_delegate(
         &self,
         event_to_confirm: &SignedEventMessage,
@@ -161,6 +195,46 @@ impl IdentifierController {
             EventData::Dip(_) | EventData::Drt(_) => {
                 self.source
                     .process(&Message::Notice(Notice::Event(event_to_confirm.clone())))?;
+                let (delegating_event, exn) = self.delegate(&event_to_confirm.event_message)?;
+                Ok(Some(ActionRequired::DelegationRequest(
+                    delegating_event,
+                    exn,
+                )))
+            }
+        }
+    }
+
+    /// Process event from group delegate mailbox. Creates group delegating
+    /// event and send it to group multisig mailbox for other group
+    /// participants. If signing is required to finish the process it resturns
+    /// proper notification.
+    fn process_group_delegate(
+        &self,
+        event_to_confirm: &SignedEventMessage,
+        group_id: &IdentifierPrefix,
+    ) -> Result<Option<ActionRequired>, ControllerError> {
+        match event_to_confirm.event_message.event.get_event_data() {
+            // delegating event
+            EventData::Ixn(ixn) => {
+                //| EventData::Rot(_) | EventData::Ixn(_) => {
+                self.source
+                    .process(&Message::Notice(Notice::Event(event_to_confirm.clone())))?;
+                if let Seal::Event(seal) = ixn.data[0].clone() {
+                    let fully_signed_event = self
+                        .source
+                        .partially_witnessed_escrow
+                        .get_event_by_sn_and_digest(seal.sn, &seal.prefix, &seal.event_digest);
+                    if let Some(fully_signed) = fully_signed_event {
+                        let witnesses = self.source.get_current_witness_list(&self.id)?;
+                        self.source.publish(&witnesses, &fully_signed)?;
+                    };
+                };
+                Ok(None)
+            }
+            // delegated event
+            EventData::Dip(_) | EventData::Drt(_) => {
+                self.source
+                    .process(&Message::Notice(Notice::Event(event_to_confirm.clone())))?;
                 let id = event_to_confirm.event_message.event.get_prefix();
 
                 let seal = Seal::Event(EventSeal {
@@ -169,31 +243,11 @@ impl IdentifierController {
                     event_digest: event_to_confirm.event_message.get_digest(),
                 });
 
-                let ixn = self.anchor_with_seal(&vec![seal])?;
-                let exn = event_generator::exchange(&id, &ixn, ForwardTopic::Delegate)?;
+                let ixn = self.anchor_group(group_id, &vec![seal])?;
+                let exn = event_generator::exchange(&group_id, &ixn, ForwardTopic::Multisig)?;
                 Ok(Some(ActionRequired::DelegationRequest(ixn, exn)))
             }
+            _ => todo!(),
         }
-    }
-
-    /// Create delegating event, pack it in exn message to group identifier (multisig topic).
-    fn process_group_delegate(
-        &self,
-        event_to_confirm: &SignedEventMessage,
-        group_id: &IdentifierPrefix,
-    ) -> Result<ActionRequired, ControllerError> {
-        self.source
-            .process(&Message::Notice(Notice::Event(event_to_confirm.clone())))?;
-        let id = event_to_confirm.event_message.event.get_prefix();
-
-        let seal = Seal::Event(EventSeal {
-            prefix: id.clone(),
-            sn: event_to_confirm.event_message.event.get_sn(),
-            event_digest: event_to_confirm.event_message.get_digest(),
-        });
-
-        let ixn = self.anchor_group(group_id, &vec![seal])?;
-        let exn = event_generator::exchange(&group_id, &ixn, ForwardTopic::Multisig)?;
-        Ok(ActionRequired::DelegationRequest(ixn, exn))
     }
 }

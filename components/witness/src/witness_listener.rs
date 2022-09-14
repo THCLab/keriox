@@ -3,11 +3,7 @@ use std::{
     sync::Arc,
 };
 
-use actix_web::{
-    dev::Server,
-    web::{self, Data},
-    App, HttpServer,
-};
+use actix_web::{dev::Server, web::Data, App, HttpServer};
 use anyhow::Result;
 use keri::{self, error::Error, prefix::BasicPrefix};
 
@@ -43,7 +39,7 @@ impl WitnessListener {
         let host = address.host().unwrap().to_string();
         let port = address.port().unwrap();
 
-        let state = web::Data::new(self.witness_data.clone());
+        let state = Data::new(self.witness_data.clone());
         HttpServer::new(move || {
             App::new()
                 .app_data(state.clone())
