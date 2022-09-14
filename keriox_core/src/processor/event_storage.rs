@@ -152,7 +152,7 @@ impl EventStorage {
 
     #[cfg(feature = "query")]
     pub fn get_mailbox_messages(&self, args: QueryArgsMbx) -> Result<MailboxResponse, Error> {
-        let id = args.pre.clone();
+        let id = args.i.clone();
 
         // query receipts
         let receipt = self

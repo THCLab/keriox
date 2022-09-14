@@ -4,10 +4,11 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use super::{event_generator, prelude::Message, process_message};
 use crate::{
+    actor::parse_event_stream,
     database::{escrow::EscrowDb, SledEventDatabase},
     derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
     error::Error,
@@ -77,21 +78,75 @@ impl PossibleResponse {
                     .map(|rct| Message::Notice(Notice::Event(rct)).to_cesr())
                     .collect::<Result<Vec<Vec<u8>>, Error>>()?
                     .concat();
+                let delegate_stream = mbx
+                    .delegate
+                    .clone()
+                    .into_iter()
+                    .map(|rct| Message::Notice(Notice::Event(rct)).to_cesr())
+                    .collect::<Result<Vec<Vec<u8>>, Error>>()?
+                    .concat();
                 #[derive(Serialize)]
                 struct GroupedResponse {
                     receipt: String,
                     multisig: String,
+                    delegate: String,
                 }
                 serde_json::to_vec(&GroupedResponse {
                     receipt: String::from_utf8(receipts_stream)
                         .map_err(|e| Error::SerializationError(e.to_string()))?,
                     multisig: String::from_utf8(multisig_stream)
                         .map_err(|e| Error::SerializationError(e.to_string()))?,
+                    delegate: String::from_utf8(delegate_stream)
+                        .map_err(|e| Error::SerializationError(e.to_string()))?,
                 })?
             }
             PossibleResponse::Ksn(ksn) => Message::Op(Op::Reply(ksn.clone())).to_cesr()?,
         })
     }
+}
+pub fn parse_response(response: &str) -> Result<PossibleResponse, Error> {
+    #[derive(Deserialize)]
+    struct GroupedResponse {
+        receipt: String,
+        multisig: String,
+        delegate: String,
+    }
+    let res: GroupedResponse = serde_json::from_str(&response)?;
+    let receipts = parse_event_stream(res.receipt.as_bytes())?
+        .into_iter()
+        .map(|rct| {
+            if let Message::Notice(Notice::NontransferableRct(rct)) = rct {
+                rct
+            } else {
+                unreachable!()
+            }
+        })
+        .collect::<Vec<_>>();
+    let multisig = parse_event_stream(res.multisig.as_bytes())?
+        .into_iter()
+        .map(|msg| {
+            if let Message::Notice(Notice::Event(event)) = msg {
+                event
+            } else {
+                unreachable!()
+            }
+        })
+        .collect::<Vec<_>>();
+    let delegate = parse_event_stream(res.delegate.as_bytes())?
+        .into_iter()
+        .map(|msg| {
+            if let Message::Notice(Notice::Event(event)) = msg {
+                event
+            } else {
+                unreachable!()
+            }
+        })
+        .collect::<Vec<_>>();
+    Ok(PossibleResponse::Mbx(MailboxResponse {
+        receipt: receipts,
+        multisig: multisig,
+        delegate,
+    }))
 }
 
 impl fmt::Display for PossibleResponse {

@@ -1,8 +1,12 @@
 use std::sync::Arc;
 
 use keri::{
-    actor::{event_generator, prelude::Message},
-    derivation::self_addressing::SelfAddressing,
+    actor::{
+        event_generator,
+        prelude::Message,
+        simple_controller::{parse_response, PossibleResponse},
+    },
+    derivation::{self_addressing::SelfAddressing, self_signing::SelfSigning},
     event::{
         event_data::EventData,
         sections::{
@@ -12,10 +16,10 @@ use keri::{
         EventMessage, SerializationFormats,
     },
     event_message::{
-        exchange::{ForwardTopic, SignedExchange},
+        exchange::{Exchange, ExchangeMessage, ForwardTopic, FwdArgs, SignedExchange},
         key_event_message::KeyEvent,
-        signature::{Signature, SignerData},
-        signed_event_message::Op,
+        signature::{Nontransferable, Signature, SignerData},
+        signed_event_message::{Op, SignedEventMessage},
     },
     event_parsing::{
         message::{event_message, exchange_message, key_event_message},
@@ -24,7 +28,7 @@ use keri::{
     },
     oobi::{LocationScheme, Role, Scheme},
     prefix::{
-        AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix,
+        AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfAddressingPrefix,
         SelfSigningPrefix,
     },
     query::{
@@ -39,10 +43,30 @@ use crate::{error::ControllerError, utils::Topic, Controller};
 
 use super::mailbox_updating::ActionRequired;
 
+#[derive(Default)]
+pub struct MailboxReminder {
+    pub receipt: usize,
+    pub multisig: usize,
+    pub delegate: usize,
+}
+impl MailboxReminder {
+    pub fn update_receipt(&mut self) {
+        self.receipt = self.receipt + 1;
+    }
+    pub fn update_multisig(&mut self) {
+        self.receipt = self.multisig + 1;
+    }
+    pub fn update_delegate(&mut self) {
+        self.receipt = self.delegate + 1;
+    }
+}
+
 pub struct IdentifierController {
     pub id: IdentifierPrefix,
     pub groups: Vec<IdentifierPrefix>,
     pub source: Arc<Controller>,
+    last_asked_index: MailboxReminder,
+    last_asked_groups_index: MailboxReminder,
 }
 
 impl IdentifierController {
@@ -51,6 +75,8 @@ impl IdentifierController {
             id,
             source: kel,
             groups: vec![],
+            last_asked_index: MailboxReminder::default(),
+            last_asked_groups_index: MailboxReminder::default(),
         }
     }
 
@@ -91,6 +117,32 @@ impl IdentifierController {
 
     pub fn anchor(&self, payload: &[SelfAddressingPrefix]) -> Result<String, ControllerError> {
         self.source.anchor(self.id.clone(), payload)
+    }
+
+    pub fn delegate(
+        &self,
+        delegated_event: EventMessage<KeyEvent>,
+    ) -> Result<(EventMessage<KeyEvent>, ExchangeMessage), ControllerError> {
+        let delegate = delegated_event.event.get_prefix();
+        let delegated_seal = {
+            let event_digest = delegated_event.get_digest();
+            let sn = delegated_event.event.get_sn();
+            Seal::Event(EventSeal {
+                prefix: delegate.clone(),
+                sn,
+                event_digest,
+            })
+        };
+        let ixn = self.source.anchor_with_seal(&self.id, &[delegated_seal])?;
+        let exn_message = Exchange::Fwd {
+            args: FwdArgs {
+                recipient_id: delegate.clone(),
+                topic: ForwardTopic::Delegate,
+            },
+            to_forward: delegated_event.clone(),
+        }
+        .to_message(SerializationFormats::JSON, &SelfAddressing::Blake3_256)?;
+        Ok((ixn, exn_message))
     }
 
     pub fn anchor_with_seal(
@@ -137,7 +189,7 @@ impl IdentifierController {
         match parsed_event {
             EventType::KeyEvent(ke) => {
                 let index = self.get_index(&ke.event)?;
-                Ok(self.source.finalize_key_event(&ke, &sig, index)?)
+                self.source.finalize_key_event(&ke, &sig, index)
             }
             EventType::Rpy(rpy) => match rpy.get_route() {
                 ReplyRoute::EndRoleAdd(_) => {
@@ -244,7 +296,7 @@ impl IdentifierController {
             // Join exn messages with their signatures and send it to witness.
             let material_path = MaterialPath::to_path("-a".into());
             let attached_sig = vec![Signature::Transferable(
-                SignerData::LastEstablishment(self.id.clone()),
+                SignerData::JustSignatures,
                 vec![signature],
             )];
             exchanges.into_iter().try_for_each(|(exn, signature)| {
@@ -253,6 +305,7 @@ impl IdentifierController {
                     let signature = vec![Signature::Transferable(
                         SignerData::LastEstablishment(self.id.clone()),
                         vec![AttachedSignaturePrefix {
+                            // TODO
                             index: 0,
                             signature,
                         }],
@@ -263,7 +316,7 @@ impl IdentifierController {
                         data_signature: (material_path.clone(), attached_sig.clone()),
                     }));
                     self.source
-                        .get_current_witness_list(&self.id)?
+                        .get_witnesses_at_event(&icp)?
                         // TODO for now get first witness
                         .get(0)
                         .map(|wit| {
@@ -271,7 +324,9 @@ impl IdentifierController {
                                 &IdentifierPrefix::Basic(wit.clone()),
                                 keri::oobi::Scheme::Http,
                                 // TODO what endpoint should be used?
-                                Topic::Process(signer_exn.to_cesr().unwrap()),
+                                Topic::Query(
+                                    String::from_utf8(signer_exn.to_cesr().unwrap()).unwrap(),
+                                ),
                             )
                         });
                     Ok(())
@@ -332,50 +387,53 @@ impl IdentifierController {
         .ok_or(ControllerError::NotGroupParticipantError)
     }
 
-    pub fn query_own_mailbox(&self) -> Result<Vec<String>, ControllerError> {
+    pub fn query_own_mailbox(
+        &self,
+        witnesses: &[BasicPrefix],
+    ) -> Result<Vec<QueryEvent>, ControllerError> {
         // query own mailbox
-        let witnesses = self.source.get_current_witness_list(&self.id)?;
-        let own_queries = witnesses.into_iter().map(|wit| {
-            QueryEvent::new_query(
-                QueryRoute::Mbx {
-                    args: QueryArgsMbx {
-                        // about who
-                        i: self.id.clone(),
-                        // who is asking
-                        pre: self.id.clone(),
-                        // who will get the query
-                        src: IdentifierPrefix::Basic(wit),
-                        topics: QueryTopics {
-                            credential: 0,
-                            receipt: 0,
-                            replay: 0,
-                            multisig: 0,
-                            delegate: 0,
-                            reply: 0,
+        // let own_queries =
+        Ok(witnesses
+            .into_iter()
+            .map(|wit| {
+                QueryEvent::new_query(
+                    QueryRoute::Mbx {
+                        args: QueryArgsMbx {
+                            // about who
+                            i: self.id.clone(),
+                            // who is asking
+                            pre: self.id.clone(),
+                            // who will get the query
+                            src: IdentifierPrefix::Basic(wit.clone()),
+                            topics: QueryTopics {
+                                credential: 0,
+                                receipt: 0,
+                                replay: 0,
+                                multisig: 0,
+                                delegate: 0,
+                                reply: 0,
+                            },
                         },
+                        reply_route: "".to_string(),
                     },
-                    reply_route: "".to_string(),
-                },
-                SerializationFormats::JSON,
-                &SelfAddressing::Blake3_256,
-            )
-            .unwrap()
-        });
-
-        own_queries
-            .map(|qry| -> Result<_, _> {
-                String::from_utf8(qry.serialize()?).map_err(|_| ControllerError::EventParseError)
+                    SerializationFormats::JSON,
+                    &SelfAddressing::Blake3_256,
+                )
+                // .unwrap()
             })
-            .collect()
+            .collect::<Result<_, _>>()
+            .unwrap())
     }
 
-    pub fn query_group_mailbox(&self) -> Result<Vec<String>, ControllerError> {
+    pub fn query_group_mailbox(
+        &self,
+        witnesses: &[BasicPrefix],
+    ) -> Result<Vec<QueryEvent>, ControllerError> {
         // query group mailbox
         let groups_queries = self
             .groups
             .iter()
             .map(|group_id| {
-                let witnesses = self.source.get_current_witness_list(&self.id).unwrap();
                 witnesses.clone().into_iter().map(move |wit| {
                     QueryEvent::new_query(
                         QueryRoute::Mbx {
@@ -404,16 +462,11 @@ impl IdentifierController {
                 })
             })
             .flatten();
-
-        groups_queries
-            .map(|qry| -> Result<_, _> {
-                String::from_utf8(qry.serialize()?).map_err(|_| ControllerError::EventParseError)
-            })
-            .collect()
+        Ok(groups_queries.collect())
     }
 
     pub fn finalize_mailbox_query(
-        &self,
+        &mut self,
         queries: Vec<(QueryEvent, SelfSigningPrefix)>,
     ) -> Result<Vec<ActionRequired>, ControllerError> {
         Ok(queries
@@ -423,37 +476,53 @@ impl IdentifierController {
                     index: 0,
                     signature: sig,
                 }];
-                let receipient = match &qry.event.content.data.route {
+                let (receipient, from_who, about_who) = match &qry.event.content.data.route {
                     QueryRoute::Log {
                         reply_route: _,
                         args,
-                    } => args.src.clone().unwrap(),
+                    } => (args.src.clone().unwrap(), None, None),
                     QueryRoute::Ksn {
                         reply_route: _,
                         args,
-                    } => args.src.clone().unwrap(),
+                    } => (args.src.clone().unwrap(), None, None),
                     QueryRoute::Mbx {
                         reply_route: _,
                         args,
-                    } => args.src.clone(),
+                    } => (args.src.clone(), Some(&args.i), Some(&args.pre)),
                 };
-                let query = Op::Query(SignedQuery::new(qry, self.id.clone(), signatures));
+                let query = Op::Query(SignedQuery::new(qry.clone(), self.id.clone(), signatures));
                 let qry_str = String::from_utf8(Message::Op(query.clone()).to_cesr().unwrap())
                     .map_err(|_e| ControllerError::EventParseError)?;
                 let response =
                     self.source
                         .send_to(&receipient, Scheme::Http, Topic::Query(qry_str))?;
                 // TODO what if other reponse than mailbox?
-                let res: MailboxResponse = serde_json::from_str(&response).unwrap();
-                res.receipt
-                    .iter()
-                    .try_for_each(|receipt| self.process_receipt(receipt))?;
-                // process own mailbox
-                let mut own_req = self.process_own_mailbox(&res)?;
-                // process group mailbox
-                let mut group_req = self.process_group_mailbox(&res)?;
-                own_req.append(&mut group_req);
-                Ok(own_req)
+                let res = parse_response(&response).unwrap();
+                if let PossibleResponse::Mbx(res) = res {
+                    let req = if from_who == about_who {
+                        // process own mailbox
+                        let req = self.process_own_mailbox(&res, &self.last_asked_index)?;
+                        self.last_asked_index = MailboxReminder {
+                            receipt: res.receipt.len(),
+                            multisig: res.multisig.len(),
+                            delegate: res.delegate.len(),
+                        };
+                        req
+                    } else {
+                        // process group mailbox
+                        let group_req =
+                            self.process_group_mailbox(&res, &self.last_asked_groups_index)?;
+                        self.last_asked_groups_index = MailboxReminder {
+                            receipt: res.receipt.len(),
+                            multisig: res.multisig.len(),
+                            delegate: res.delegate.len(),
+                        };
+                        group_req
+                    };
+                    Ok(req)
+                } else {
+                    todo!()
+                }
             })
             .collect::<Result<Vec<Vec<ActionRequired>>, _>>()?
             .into_iter()

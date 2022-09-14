@@ -4,13 +4,14 @@ use std::sync::Arc;
 use tempfile::Builder;
 
 use keri::{
+    actor::prelude::Message,
     derivation::{basic::Basic, self_signing::SelfSigning},
-    event::sections::seal::{EventSeal, Seal},
-    event_parsing::{message::key_event_message, EventType},
+    oobi::LocationScheme,
+    prefix::{BasicPrefix, IdentifierPrefix, Prefix},
     signer::{CryptoBox, KeyManager},
 };
 
-use crate::utils::OptionalConfig;
+use crate::{mailbox_updating::ActionRequired, utils::OptionalConfig};
 
 use super::{error::ControllerError, identifier_controller::IdentifierController, Controller};
 
@@ -86,11 +87,28 @@ pub fn test_group_incept() -> Result<(), ControllerError> {
 
 #[test]
 pub fn test_delegated_incept() -> Result<(), ControllerError> {
+    use url::Url;
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
+    let root2 = Builder::new().prefix("test-db2").tempdir().unwrap();
     let initial_config = OptionalConfig::init().with_db_path(root.into_path());
+    let initial_config2 = OptionalConfig::init().with_db_path(root2.into_path());
     // let transport = Box::new(DefaultTransport);
     // let controller = Arc::new(Controller::new(Some(initial_config), transport)?);
+
+    // DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA is listening on http://127.0.0.1:3232
+    let witness_id: IdentifierPrefix = "DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA"
+        .parse()
+        .unwrap();
+    let witness_id_basic: BasicPrefix = "DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA"
+        .parse()
+        .unwrap();
+    let wit_location = LocationScheme {
+        eid: witness_id,
+        scheme: keri::oobi::Scheme::Http,
+        url: Url::parse("http://127.0.0.1:3232").unwrap(),
+    };
     let controller = Arc::new(Controller::new(Some(initial_config))?);
+    let controller2 = Arc::new(Controller::new(Some(initial_config2))?);
     let km1 = CryptoBox::new()?;
     let km2 = CryptoBox::new()?;
 
@@ -98,35 +116,56 @@ pub fn test_delegated_incept() -> Result<(), ControllerError> {
         let pk = Basic::Ed25519.derive(km1.public_key());
         let npk = Basic::Ed25519.derive(km1.next_public_key());
 
-        let icp_event = controller.incept(vec![pk], vec![npk], vec![], 0)?;
+        let icp_event = controller.incept(vec![pk], vec![npk], vec![wit_location.clone()], 1)?;
         let signature = SelfSigning::Ed25519Sha512.derive(km1.sign(icp_event.as_bytes())?);
 
         let incepted_identifier =
             controller.finalize_inception(icp_event.as_bytes(), &signature)?;
         IdentifierController::new(incepted_identifier, controller.clone())
     };
+    let query = identifier1.query_own_mailbox(&[witness_id_basic.clone()])?;
 
-    let delegator = {
+    for qry in query {
+        let signature = SelfSigning::Ed25519Sha512.derive(km1.sign(&qry.serialize()?)?);
+        identifier1.finalize_mailbox_query(vec![(qry, signature)])?;
+    }
+
+    let mut delegator = {
         let pk = Basic::Ed25519.derive(km2.public_key());
         let npk = Basic::Ed25519.derive(km2.next_public_key());
 
-        let icp_event = controller.incept(vec![pk], vec![npk], vec![], 0)?;
+        let icp_event = controller2.incept(vec![pk], vec![npk], vec![wit_location], 1)?;
         let signature = SelfSigning::Ed25519Sha512.derive(km2.sign(icp_event.as_bytes())?);
 
         let incepted_identifier =
-            controller.finalize_inception(icp_event.as_bytes(), &signature)?;
-        IdentifierController::new(incepted_identifier, controller.clone())
+            controller2.finalize_inception(icp_event.as_bytes(), &signature)?;
+        IdentifierController::new(incepted_identifier, controller2.clone())
     };
+    dbg!(identifier1.id.to_str());
+    dbg!(delegator.id.to_str());
 
-    let (delegated_inception, exn_messages) =
-        identifier1.incept_group(vec![], 1, None, None, Some(delegator.id.clone()))?;
+    // Quering mailbox
+    let query = delegator.query_own_mailbox(&[witness_id_basic.clone()])?;
+
+    for qry in query {
+        let signature = SelfSigning::Ed25519Sha512.derive(km2.sign(&qry.serialize()?)?);
+        delegator.finalize_mailbox_query(vec![(qry, signature)])?;
+    }
+
+    let (delegated_inception, exn_messages) = identifier1.incept_group(
+        vec![],
+        1,
+        Some(vec![witness_id_basic.clone()]),
+        Some(1),
+        Some(delegator.id.clone()),
+    )?;
 
     let signature_icp =
         SelfSigning::Ed25519Sha512.derive(km1.sign(delegated_inception.as_bytes())?);
     let signature_exn = SelfSigning::Ed25519Sha512.derive(km1.sign(exn_messages[0].as_bytes())?);
 
     // Group initiator needs to use `finalize_group_incept` instead of just
-    // `finalize_event`, to send multisig request to other group participants.
+    // `finalize_event`, to send multisig request to other group participants or delegator.
     // Identifier who get this request from mailbox, can use just `finalize_event`
     let delegate_id = identifier1.finalize_group_incept(
         delegated_inception.as_bytes(),
@@ -140,33 +179,62 @@ pub fn test_delegated_incept() -> Result<(), ControllerError> {
     // Event is not yet accepted.
     assert!(kel.is_none());
 
-    // TODO: There should be witness who forward group icp from identifier1 to
-    // delegator. It will be stored in delegators mailbox. Assume, that
-    // delegator found dip signed by identifier1 in his mailbox.
-    // It works, because we use common controller for both identifiers.
-    let (_, deserialized_icp) = key_event_message(delegated_inception.as_bytes()).unwrap();
-    let delegated_seal = if let EventType::KeyEvent(dip) = deserialized_icp {
-        let id = dip.event.get_prefix();
-        let event_digest = dip.get_digest();
-        let sn = 0;
-        Seal::Event(EventSeal {
-            prefix: id,
-            sn,
-            event_digest,
-        })
-    } else {
-        unreachable!()
-    };
+    // Delegator asks about his mailbox to get delegated event.
+    let query = delegator.query_own_mailbox(&[witness_id_basic.clone()])?;
 
-    let ixn = delegator.anchor_with_seal(&[delegated_seal])?;
-    let signature_ixn = SelfSigning::Ed25519Sha512.derive(km2.sign(&ixn.serialize()?)?);
-    delegator.finalize_event(&ixn.serialize()?, signature_ixn)?;
+    for qry in query {
+        let signature = SelfSigning::Ed25519Sha512.derive(km2.sign(&qry.serialize()?)?);
+        let ar = delegator.finalize_mailbox_query(vec![(qry, signature)])?;
+        println!("ar: {:?}", &ar);
+        assert_eq!(ar.len(), 1);
+        match &ar[0] {
+            ActionRequired::MultisigRequest(_, _) => todo!(),
+            ActionRequired::DelegationRequest(delegating_event, exn) => {
+                let signature_ixn =
+                    SelfSigning::Ed25519Sha512.derive(km2.sign(&delegating_event.serialize()?)?);
+                let signature_exn = SelfSigning::Ed25519Sha512.derive(km2.sign(&exn.serialize()?)?);
+                delegator.finalize_group_incept(
+                    &delegating_event.serialize()?,
+                    signature_ixn,
+                    vec![(&exn.serialize()?, signature_exn)],
+                )?;
 
-    let kel = controller
+                // Query for receipts
+                let query = delegator.query_own_mailbox(&[witness_id_basic.clone()])?;
+
+                for qry in query {
+                    let signature = SelfSigning::Ed25519Sha512.derive(km2.sign(&qry.serialize()?)?);
+                    delegator.finalize_mailbox_query(vec![(qry, signature)])?;
+                }
+
+                // ixn was accepted
+                let kel = controller2.storage.get_kel_messages(&delegator.id)?;
+
+                assert_eq!(kel.unwrap().len(), 2);
+            }
+        };
+    }
+
+    let delegators_kel = controller2
         .storage
-        .get_kel_messages_with_receipts(&delegate_id)?;
+        .get_kel_messages_with_receipts(&delegator.id)?
+        .unwrap();
+    controller.process(&Message::Notice(delegators_kel[0].clone()))?;
+    controller.process(&Message::Notice(delegators_kel[1].clone()))?;
 
-    assert!(kel.is_some());
+    let query = identifier1.query_group_mailbox(&[witness_id_basic.clone()])?; // query_group_mailbox(&[witness_id_basic.clone()])?;
+
+    for qry in query {
+        let signature = SelfSigning::Ed25519Sha512.derive(km1.sign(&qry.serialize()?)?);
+        let ar = identifier1.finalize_mailbox_query(vec![(qry, signature)])?;
+        println!("\nar: {:?}", ar);
+    }
+    // Process receipt, because it isn't attached exn from delegator
+    // TODO
+    controller.process(&Message::Notice(delegators_kel[3].clone()))?;
+
+    let state = identifier1.source.storage.get_state(&delegator.id)?;
+    assert_eq!(state.unwrap().sn, 1);
 
     Ok(())
 }

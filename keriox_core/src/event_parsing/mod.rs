@@ -340,8 +340,12 @@ impl TryFrom<SignedEventData> for Op {
     type Error = Error;
 
     fn try_from(value: SignedEventData) -> Result<Self, Self::Error> {
-        match Message::try_from(value)? {
-            Message::Op(op) => Ok(op),
+        match value.deserialized_event {
+            #[cfg(feature = "query")]
+            EventType::Qry(qry) => signed_query(qry, value.attachments),
+            #[cfg(any(feature = "query", feature = "oobi"))]
+            EventType::Rpy(rpy) => signed_reply(rpy, value.attachments),
+            EventType::Exn(exn) => signed_exchange(exn, value.attachments),
             _ => Err(Error::SemanticError(
                 "Cannot convert SignedEventData to Op".to_string(),
             )),
@@ -449,27 +453,33 @@ fn signed_key_event(
                 attachments
                     .pop()
                     .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?,
-                attachments
-                    .pop()
-                    .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?,
+                attachments.pop(),
             );
 
             let (seals, sigs) = match (att1, att2) {
-                (Attachment::SealSourceCouplets(seals), Attachment::AttachedSignatures(sigs)) => {
-                    Ok((seals, sigs))
-                }
-                (Attachment::AttachedSignatures(sigs), Attachment::SealSourceCouplets(seals)) => {
-                    Ok((seals, sigs))
-                }
+                (
+                    Attachment::SealSourceCouplets(seals),
+                    Some(Attachment::AttachedSignatures(sigs)),
+                ) => Ok((Some(seals), sigs)),
+                (
+                    Attachment::AttachedSignatures(sigs),
+                    Some(Attachment::SealSourceCouplets(seals)),
+                ) => Ok((Some(seals), sigs)),
+                (Attachment::AttachedSignatures(sigs), None) => Ok((None, sigs)),
                 _ => {
                     // Improper attachment type
                     Err(Error::SemanticError("Improper attachment type".into()))
                 }
             }?;
-            let delegator_seal = match seals.len() {
-                0 => Err(Error::SemanticError("Missing delegator seal".into())),
-                1 => Ok(seals.first().cloned()),
-                _ => Err(Error::SemanticError("Too many seals".into())),
+
+            let delegator_seal = if let Some(seal) = seals {
+                match seal.len() {
+                    0 => Err(Error::SemanticError("Missing delegator seal".into())),
+                    1 => Ok(seal.first().cloned()),
+                    _ => Err(Error::SemanticError("Too many seals".into())),
+                }
+            } else {
+                Ok(None)
             };
 
             Ok(Notice::Event(SignedEventMessage::new(

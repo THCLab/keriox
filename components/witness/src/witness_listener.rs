@@ -3,7 +3,11 @@ use std::{
     sync::Arc,
 };
 
-use actix_web::{dev::Server, web, App, HttpServer};
+use actix_web::{
+    dev::Server,
+    web::{self, Data},
+    App, HttpServer,
+};
 use anyhow::Result;
 use keri::{self, error::Error, prefix::BasicPrefix};
 
@@ -61,6 +65,8 @@ impl WitnessListener {
 }
 
 pub mod http_handlers {
+    use std::sync::Arc;
+
     use actix_web::{
         get,
         http::{header::ContentType, StatusCode},
@@ -81,7 +87,7 @@ pub mod http_handlers {
     #[get("/oobi/{id}")]
     pub async fn get_eid_oobi(
         eid: web::Path<IdentifierPrefix>,
-        data: web::Data<Witness>,
+        data: web::Data<Arc<Witness>>,
     ) -> Result<impl Responder, ApiError> {
         let loc_scheme = data.get_loc_scheme_for_id(&eid)?.unwrap_or(vec![]);
         let oobis: Vec<u8> = loc_scheme
@@ -106,7 +112,7 @@ pub mod http_handlers {
     #[get("/oobi/{cid}/{role}/{eid}")]
     pub async fn get_cid_oobi(
         path: web::Path<(IdentifierPrefix, Role, IdentifierPrefix)>,
-        data: web::Data<Witness>,
+        data: web::Data<Arc<Witness>>,
     ) -> Result<impl Responder, ApiError> {
         let (cid, role, eid) = path.into_inner();
 
@@ -140,7 +146,7 @@ pub mod http_handlers {
     #[post("/process")]
     pub async fn process_notice(
         post_data: String,
-        data: web::Data<Witness>,
+        data: web::Data<Arc<Witness>>,
     ) -> Result<impl Responder, ApiError> {
         println!("\nGot notice to process: \n{}", post_data);
         data.parse_and_process_notices(post_data.as_bytes())?;
@@ -152,7 +158,7 @@ pub mod http_handlers {
     #[post("/query")]
     pub async fn process_query(
         post_data: String,
-        data: web::Data<Witness>,
+        data: web::Data<Arc<Witness>>,
     ) -> Result<impl Responder, ApiError> {
         println!("\nGot query to process: \n{}", post_data);
         let resp = data

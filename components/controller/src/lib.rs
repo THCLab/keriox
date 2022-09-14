@@ -23,7 +23,7 @@ use keri::{
     event_parsing::{message::key_event_message, EventType, SignedEventData},
     oobi::{LocationScheme, OobiManager, Role, Scheme},
     prefix::{
-        AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix,
+        AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfAddressingPrefix,
         SelfSigningPrefix,
     },
     processor::{
@@ -203,6 +203,8 @@ impl Controller {
         schema: Scheme,
         topic: Topic,
     ) -> Result<String, ControllerError> {
+        println!("\nSending to: {}", id.to_str());
+
         let addresses = self.get_loc_schemas(id)?;
         match addresses
             .iter()
@@ -214,26 +216,42 @@ impl Controller {
                 Scheme::Http => {
                     let client = reqwest::blocking::Client::new();
                     let response = match topic {
-                        Topic::Oobi(oobi_json) => client
-                            .post(format!("{}resolve", address))
-                            .body(oobi_json)
-                            .send()
-                            .map_err(|e| ControllerError::CommunicationError(e.to_string()))?
-                            .text()
-                            .map_err(|e| ControllerError::CommunicationError(e.to_string()))?,
-                        Topic::Query(id) => client
-                            .get(format!("{}query/{}", address, id))
-                            .send()
-                            .map_err(|e| ControllerError::CommunicationError(e.to_string()))?
-                            .text()
-                            .map_err(|e| ControllerError::CommunicationError(e.to_string()))?,
-                        Topic::Process(to_process) => client
-                            .post(format!("{}process", address))
-                            .body(to_process)
-                            .send()
-                            .map_err(|e| ControllerError::CommunicationError(e.to_string()))?
-                            .text()
-                            .map_err(|e| ControllerError::CommunicationError(e.to_string()))?,
+                        Topic::Oobi(oobi_json) => {
+                            println!(
+                                "Sending oobi: {}",
+                                String::from_utf8(oobi_json.to_vec()).unwrap()
+                            );
+                            client
+                                .post(format!("{}resolve", address))
+                                .body(oobi_json)
+                                .send()
+                                .map_err(|e| ControllerError::CommunicationError(e.to_string()))?
+                                .text()
+                                .map_err(|e| ControllerError::CommunicationError(e.to_string()))?
+                        }
+                        Topic::Query(query) => {
+                            println!("Sending query: {}", query);
+                            client
+                                .post(format!("{}query", address))
+                                .body(query)
+                                .send()
+                                .map_err(|e| ControllerError::CommunicationError(e.to_string()))?
+                                .text()
+                                .map_err(|e| ControllerError::CommunicationError(e.to_string()))?
+                        }
+                        Topic::Process(to_process) => {
+                            println!(
+                                "Sending to process: {}",
+                                String::from_utf8(to_process.to_vec()).unwrap()
+                            );
+                            client
+                                .post(format!("{}process", address))
+                                .body(to_process)
+                                .send()
+                                .map_err(|e| ControllerError::CommunicationError(e.to_string()))?
+                                .text()
+                                .map_err(|e| ControllerError::CommunicationError(e.to_string()))?
+                        }
                     };
 
                     Ok(response)
@@ -273,6 +291,7 @@ impl Controller {
             .collect::<Result<Vec<_>, _>>()?
             .join("");
         // process collected receipts
+        // send query message for receipt mailbox
         self.process_stream(collected_receipts.as_bytes())?;
 
         // Get processed receipts from database to send all of them to witnesses. It
@@ -479,11 +498,30 @@ impl Controller {
         });
 
         if let Some(to_pub) = to_publish {
-            let witnesses =
-                self.get_current_witness_list(&to_pub.event_message.event.get_prefix())?;
+            let witnesses = self.get_witnesses_at_event(&to_pub.event_message)?;
             self.publish(&witnesses, &to_pub)?;
         };
         Ok(())
+    }
+
+    pub fn get_witnesses_at_event(
+        &self,
+        event_message: &EventMessage<KeyEvent>,
+    ) -> Result<Vec<BasicPrefix>, ControllerError> {
+        let identifier = event_message.event.get_prefix();
+        Ok(match event_message.event.get_event_data() {
+            EventData::Icp(icp) => icp.witness_config.initial_witnesses,
+            EventData::Rot(rot) => todo!(),
+            EventData::Ixn(ixn) => {
+                self.storage
+                    .get_state(&identifier)?
+                    .ok_or(ControllerError::UnknownIdentifierError)?
+                    .witness_config
+                    .witnesses
+            }
+            EventData::Dip(dip) => dip.inception_data.witness_config.initial_witnesses,
+            EventData::Drt(_) => todo!(),
+        })
     }
 
     fn finalize_add_role(

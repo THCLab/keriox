@@ -1,6 +1,9 @@
 use keri::{
     actor::{event_generator, prelude::Message},
-    event::sections::seal::{EventSeal, Seal},
+    event::{
+        event_data::EventData,
+        sections::seal::{EventSeal, Seal},
+    },
     event_message::{
         exchange::ForwardTopic,
         signed_event_message::{Notice, SignedEventMessage, SignedNontransferableReceipt},
@@ -9,6 +12,8 @@ use keri::{
     query::query_event::MailboxResponse,
 };
 
+use crate::identifier_controller::MailboxReminder;
+
 use super::{error::ControllerError, identifier_controller::IdentifierController};
 
 use keri::{
@@ -16,6 +21,7 @@ use keri::{
     event_message::{exchange::ExchangeMessage, key_event_message::KeyEvent},
 };
 
+#[derive(Debug)]
 pub enum ActionRequired {
     MultisigRequest(EventMessage<KeyEvent>, ExchangeMessage),
     DelegationRequest(EventMessage<KeyEvent>, ExchangeMessage),
@@ -36,14 +42,26 @@ impl IdentifierController {
     pub fn process_own_mailbox(
         &self,
         mb: &MailboxResponse,
+        from_index: &MailboxReminder,
     ) -> Result<Vec<ActionRequired>, ControllerError> {
+        mb.receipt
+            .iter()
+            .skip(from_index.receipt)
+            .map(|rct| self.process_receipt(rct))
+            .collect::<Result<_, _>>()?;
         mb.multisig
             .iter()
+            .skip(from_index.multisig)
             .map(|event| self.process_own_multisig(event))
             .chain(
                 mb.delegate
                     .iter()
-                    .map(|del_event| self.process_own_delegate(del_event)),
+                    .skip(from_index.delegate)
+                    .map(|del_event| self.process_own_delegate(del_event))
+                    .filter_map(|del| match del {
+                        Ok(del) => del.map(|o| Ok(o)),
+                        Err(e) => Some(Err(e)),
+                    }),
             )
             .collect::<Result<Vec<_>, ControllerError>>()
     }
@@ -51,15 +69,23 @@ impl IdentifierController {
     pub fn process_group_mailbox(
         &self,
         mb: &MailboxResponse,
+        from_index: &MailboxReminder,
     ) -> Result<Vec<ActionRequired>, ControllerError> {
         mb.multisig
             .iter()
+            .skip(from_index.multisig)
             .try_for_each(|event| self.process_group_multisig(event))?;
 
-        mb.multisig
+        Ok(mb
+            .delegate
             .iter()
+            .skip(from_index.delegate)
             .map(|del_event| self.process_own_delegate(del_event))
-            .collect::<Result<Vec<_>, ControllerError>>()
+            .filter_map(|del| match del {
+                Ok(del) => del,
+                Err(_) => None,
+            })
+            .collect::<Vec<_>>())
     }
 
     /// Returns exn message that contains signed multisig event and will be
@@ -123,20 +149,31 @@ impl IdentifierController {
     fn process_own_delegate(
         &self,
         event_to_confirm: &SignedEventMessage,
-    ) -> Result<ActionRequired, ControllerError> {
-        self.source
-            .process(&Message::Notice(Notice::Event(event_to_confirm.clone())))?;
-        let id = event_to_confirm.event_message.event.get_prefix();
+    ) -> Result<Option<ActionRequired>, ControllerError> {
+        match event_to_confirm.event_message.event.get_event_data() {
+            // delegating event
+            EventData::Icp(_) | EventData::Rot(_) | EventData::Ixn(_) => {
+                self.source
+                    .process(&Message::Notice(Notice::Event(event_to_confirm.clone())))?;
+                Ok(None)
+            }
+            // delegated event
+            EventData::Dip(_) | EventData::Drt(_) => {
+                self.source
+                    .process(&Message::Notice(Notice::Event(event_to_confirm.clone())))?;
+                let id = event_to_confirm.event_message.event.get_prefix();
 
-        let seal = Seal::Event(EventSeal {
-            prefix: id.clone(),
-            sn: event_to_confirm.event_message.event.get_sn(),
-            event_digest: event_to_confirm.event_message.get_digest(),
-        });
+                let seal = Seal::Event(EventSeal {
+                    prefix: id.clone(),
+                    sn: event_to_confirm.event_message.event.get_sn(),
+                    event_digest: event_to_confirm.event_message.get_digest(),
+                });
 
-        let ixn = self.anchor_with_seal(&vec![seal])?;
-        let exn = event_generator::exchange(&id, &ixn, ForwardTopic::Delegate)?;
-        Ok(ActionRequired::DelegationRequest(ixn, exn))
+                let ixn = self.anchor_with_seal(&vec![seal])?;
+                let exn = event_generator::exchange(&id, &ixn, ForwardTopic::Delegate)?;
+                Ok(Some(ActionRequired::DelegationRequest(ixn, exn)))
+            }
+        }
     }
 
     /// Create delegating event, pack it in exn message to group identifier (multisig topic).
