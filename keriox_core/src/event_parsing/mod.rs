@@ -4,6 +4,7 @@ use base64::URL_SAFE_NO_PAD;
 use chrono::{DateTime, FixedOffset, SecondsFormat};
 use serde::Deserialize;
 
+use self::path::MaterialPath;
 #[cfg(feature = "query")]
 use crate::query::{
     query_event::{QueryEvent, SignedQuery},
@@ -29,8 +30,6 @@ use crate::{
     event_parsing::payload_size::PayloadType,
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix},
 };
-
-use self::path::MaterialPath;
 
 pub mod attachment;
 pub mod message;
@@ -324,9 +323,8 @@ impl TryFrom<SignedEventData> for Notice {
     type Error = Error;
 
     fn try_from(value: SignedEventData) -> Result<Self, Self::Error> {
-        match value.deserialized_event {
-            EventType::KeyEvent(ev) => signed_key_event(ev, value.attachments),
-            EventType::Receipt(rct) => signed_receipt(rct, value.attachments),
+        match Message::try_from(value)? {
+            Message::Notice(notice) => Ok(notice),
             _ => Err(Error::SemanticError(
                 "Cannot convert SignedEventData to Notice".to_string(),
             )),
@@ -338,13 +336,36 @@ impl TryFrom<SignedEventData> for Op {
     type Error = Error;
 
     fn try_from(value: SignedEventData) -> Result<Self, Self::Error> {
-        match value.deserialized_event {
-            #[cfg(feature = "query")]
-            EventType::Qry(qry) => signed_query(qry, value.attachments),
-            #[cfg(any(feature = "query", feature = "oobi"))]
-            EventType::Rpy(rpy) => signed_reply(rpy, value.attachments),
+        match Message::try_from(value)? {
+            Message::Op(op) => Ok(op),
             _ => Err(Error::SemanticError(
                 "Cannot convert SignedEventData to Op".to_string(),
+            )),
+        }
+    }
+}
+
+impl TryFrom<SignedEventData> for SignedQuery {
+    type Error = Error;
+
+    fn try_from(value: SignedEventData) -> Result<Self, Self::Error> {
+        match Op::try_from(value)? {
+            Op::Query(qry) => Ok(qry),
+            _ => Err(Error::SemanticError(
+                "Cannot convert SignedEventData to SignedQuery".to_string(),
+            )),
+        }
+    }
+}
+
+impl TryFrom<SignedEventData> for SignedReply {
+    type Error = Error;
+
+    fn try_from(value: SignedEventData) -> Result<Self, Self::Error> {
+        match Op::try_from(value)? {
+            Op::Reply(rpy) => Ok(rpy),
+            _ => Err(Error::SemanticError(
+                "Cannot convert SignedEventData to SignedReply".to_string(),
             )),
         }
     }

@@ -47,7 +47,6 @@ impl WatcherListener {
                 .service(http_handlers::resolve_oobi)
                 .service(http_handlers::process_notice)
                 .service(http_handlers::process_op)
-            // .service(resolve)
         })
         .bind((host, port))
         .unwrap()
@@ -110,12 +109,12 @@ pub mod http_handlers {
         data: web::Data<Watcher>,
     ) -> Result<impl Responder, ApiError> {
         println!(
-            "\nGot events to process: \n{}",
+            "\nGot queries to process: \n{}",
             String::from_utf8_lossy(&body)
         );
         let resp = data
             .0
-            .parse_and_process_ops(&body)
+            .parse_and_process_queries(&body)
             .await?
             .iter()
             .map(|msg| msg.to_string())
@@ -124,6 +123,23 @@ pub mod http_handlers {
         Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())
             .body(resp))
+    }
+
+    #[post("/discover")]
+    async fn process_reply(
+        body: web::Bytes,
+        data: web::Data<Watcher>,
+    ) -> Result<impl Responder, ApiError> {
+        println!(
+            "\nGot replies to process: \n{}",
+            String::from_utf8_lossy(&body)
+        );
+
+        data.0.parse_and_process_replies(&body)?;
+
+        Ok(HttpResponse::Ok()
+            .content_type(ContentType::plaintext())
+            .body(()))
     }
 
     #[post("/resolve")]

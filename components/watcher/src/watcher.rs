@@ -7,7 +7,8 @@ use derive_more::{Display, Error, From};
 use itertools::Itertools;
 use keri::{
     actor::{
-        parse_notice_stream, parse_op_stream, prelude::*, simple_controller::PossibleResponse,
+        parse_notice_stream, parse_query_stream, parse_reply_stream, prelude::*,
+        simple_controller::PossibleResponse,
     },
     database::DbError,
     derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
@@ -148,61 +149,66 @@ impl WatcherData {
 
     pub async fn process_op(&self, op: Op) -> Result<Option<PossibleResponse>, WatcherError> {
         match op {
-            Op::Query(qry) => {
-                let cid = qry.signer.clone();
-                if !self.check_role(&cid)? {
-                    return Err(WatcherError::MissingRole {
-                        id: cid.clone(),
-                        role: Role::Watcher,
-                    });
-                }
-
-                // Update latest state for prefix
-                self.query_state(qry.query.get_prefix()).await?;
-
-                let escrowed_replies = self
-                    .event_storage
-                    .db
-                    .get_escrowed_replys(&qry.query.get_prefix())
-                    .into_iter()
-                    .flatten()
-                    .collect_vec();
-
-                if escrowed_replies.len() > 0 {
-                    // If there is an escrowed reply it means we don't have the most recent data.
-                    // In this case forward the query to witness.
-                    self.forward_query(&qry).await?;
-                    return Ok(None);
-                }
-
-                let response = process_signed_query(qry.clone(), &self.event_storage)?;
-
-                match response {
-                    ReplyType::Ksn(ksn) => {
-                        let rpy = ReplyEvent::new_reply(
-                            ReplyRoute::Ksn(IdentifierPrefix::Basic(self.prefix.clone()), ksn),
-                            SelfAddressing::Blake3_256,
-                            SerializationFormats::JSON,
-                        )?;
-
-                        let signature =
-                            SelfSigning::Ed25519Sha512.derive(self.signer.sign(&rpy.serialize()?)?);
-                        let reply = SignedReply::new_nontrans(rpy, self.prefix.clone(), signature);
-                        Ok(Some(PossibleResponse::Ksn(reply)))
-                    }
-                    ReplyType::Kel(msgs) => Ok(Some(PossibleResponse::Kel(msgs))),
-                    ReplyType::Mbx(mbx) => Ok(Some(PossibleResponse::Mbx(mbx))),
-                }
-            }
-            Op::Reply(reply) => {
-                self.process_reply(reply)?;
+            Op::Query(qry) => Ok(self.process_query(qry).await?),
+            Op::Reply(rpy) => {
+                self.process_reply(rpy)?;
                 Ok(None)
             }
             Op::Exchange(_exn) => Ok(None),
         }
     }
 
-    fn process_reply(&self, reply: SignedReply) -> Result<(), Error> {
+    async fn process_query(
+        &self,
+        qry: SignedQuery,
+    ) -> Result<Option<PossibleResponse>, WatcherError> {
+        let cid = qry.signer.clone();
+        if !self.check_role(&cid)? {
+            return Err(WatcherError::MissingRole {
+                id: cid.clone(),
+                role: Role::Watcher,
+            });
+        }
+
+        // Update latest state for prefix
+        self.query_state(qry.query.get_prefix()).await?;
+
+        let escrowed_replies = self
+            .event_storage
+            .db
+            .get_escrowed_replys(&qry.query.get_prefix())
+            .into_iter()
+            .flatten()
+            .collect_vec();
+
+        if escrowed_replies.len() > 0 {
+            // If there is an escrowed reply it means we don't have the most recent data.
+            // In this case forward the query to witness.
+            self.forward_query(&qry).await?;
+            return Ok(None);
+        }
+
+        let response = process_signed_query(qry.clone(), &self.event_storage)?;
+
+        match response {
+            ReplyType::Ksn(ksn) => {
+                let rpy = ReplyEvent::new_reply(
+                    ReplyRoute::Ksn(IdentifierPrefix::Basic(self.prefix.clone()), ksn),
+                    SelfAddressing::Blake3_256,
+                    SerializationFormats::JSON,
+                )?;
+
+                let signature =
+                    SelfSigning::Ed25519Sha512.derive(self.signer.sign(&rpy.serialize()?)?);
+                let reply = SignedReply::new_nontrans(rpy, self.prefix.clone(), signature);
+                Ok(Some(PossibleResponse::Ksn(reply)))
+            }
+            ReplyType::Kel(msgs) => Ok(Some(PossibleResponse::Kel(msgs))),
+            ReplyType::Mbx(mbx) => Ok(Some(PossibleResponse::Mbx(mbx))),
+        }
+    }
+
+    pub fn process_reply(&self, reply: SignedReply) -> Result<(), Error> {
         process_reply(
             reply,
             &self.oobi_manager,
@@ -352,18 +358,25 @@ impl WatcherData {
             .collect()
     }
 
-    pub async fn parse_and_process_ops(
+    pub async fn parse_and_process_queries(
         &self,
         input_stream: &[u8],
     ) -> Result<Vec<PossibleResponse>, WatcherError> {
         let mut responses = Vec::new();
-        for op in parse_op_stream(input_stream)? {
-            let result = self.process_op(op).await?;
+        for query in parse_query_stream(input_stream)? {
+            let result = self.process_query(query).await?;
             if let Some(response) = result {
                 responses.push(response);
             }
         }
         Ok(responses)
+    }
+
+    pub fn parse_and_process_replies(&self, input_stream: &[u8]) -> Result<(), WatcherError> {
+        for reply in parse_reply_stream(input_stream)? {
+            self.process_reply(reply)?;
+        }
+        Ok(())
     }
 
     pub async fn process_ops(&self, ops: Vec<Op>) -> Result<Vec<PossibleResponse>, WatcherError> {

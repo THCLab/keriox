@@ -10,7 +10,7 @@ use keri::{
     error::Error,
     event_message::signed_event_message::{Message, Notice, Op},
     oobi::{LocationScheme, Role},
-    prefix::{IdentifierPrefix, Prefix},
+    prefix::IdentifierPrefix,
     query::reply_event::SignedReply,
 };
 use keri_transport::{Transport, TransportError};
@@ -150,7 +150,6 @@ pub fn watcher_forward_ksn() -> Result<(), Error> {
                                     Ok(vec![])
                                 }
                             }
-                            _ => panic!("Unexpected message"),
                         }
                     }
                 }),
@@ -202,8 +201,7 @@ pub fn watcher_forward_ksn() -> Result<(), Error> {
                 .unwrap(),
         ),
     );
-    // TODO: wrap in Message:Op and send to reply/ endpoint
-    watcher.oobi_manager.process_oobi(&witness_oobi).unwrap();
+    watcher.process_reply(witness_oobi).unwrap();
 
     // Send query again
     let result = futures::executor::block_on(watcher.process_op(query));
