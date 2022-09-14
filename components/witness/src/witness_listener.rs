@@ -46,8 +46,8 @@ impl WitnessListener {
                 .service(http_handlers::get_eid_oobi)
                 .service(http_handlers::get_cid_oobi)
                 .service(http_handlers::process_notice)
-                .service(http_handlers::process_op)
-            // .service(resolve)
+                .service(http_handlers::process_query)
+                .service(http_handlers::process_reply)
         })
         .bind((host, port))
         .unwrap()
@@ -149,13 +149,13 @@ pub mod http_handlers {
     }
 
     #[post("/query")]
-    pub async fn process_op(
+    pub async fn process_query(
         post_data: String,
         data: web::Data<Witness>,
     ) -> Result<impl Responder, ApiError> {
-        println!("\nGot op to process: \n{}", post_data);
+        println!("\nGot query to process: \n{}", post_data);
         let resp = data
-            .parse_and_process_ops(post_data.as_bytes())?
+            .parse_and_process_queries(post_data.as_bytes())?
             .iter()
             .map(|msg| msg.to_string())
             .collect::<Vec<_>>()
@@ -163,6 +163,19 @@ pub mod http_handlers {
         Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())
             .body(resp))
+    }
+
+    #[post("/discover")]
+    pub async fn process_reply(
+        post_data: String,
+        data: web::Data<Witness>,
+    ) -> Result<impl Responder, ApiError> {
+        println!("\nGot reply to process: \n{}", post_data);
+        data.parse_and_process_replies(post_data.as_bytes())?;
+
+        Ok(HttpResponse::Ok()
+            .content_type(ContentType::plaintext())
+            .body(()))
     }
 
     #[derive(Debug, Display, Error, From)]
