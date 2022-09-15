@@ -48,6 +48,7 @@ impl WitnessListener {
                 .service(http_handlers::process_notice)
                 .service(http_handlers::process_query)
                 .service(http_handlers::process_reply)
+                .service(http_handlers::process_exchange)
         })
         .bind((host, port))
         .unwrap()
@@ -172,6 +173,19 @@ pub mod http_handlers {
     ) -> Result<impl Responder, ApiError> {
         println!("\nGot reply to process: \n{}", post_data);
         data.parse_and_process_replies(post_data.as_bytes())?;
+
+        Ok(HttpResponse::Ok()
+            .content_type(ContentType::plaintext())
+            .body(()))
+    }
+
+    #[post("/forward")]
+    pub async fn process_exchange(
+        post_data: String,
+        data: web::Data<Witness>,
+    ) -> Result<impl Responder, ApiError> {
+        println!("\nGot exchange to process: \n{}", post_data);
+        data.parse_and_process_exchanges(post_data.as_bytes())?;
 
         Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())

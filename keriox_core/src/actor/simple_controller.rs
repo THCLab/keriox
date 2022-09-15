@@ -472,7 +472,7 @@ impl<K: KeyManager> SimpleController<K> {
         })
     }
 
-    pub fn query_mailbox(&self, witness: &BasicPrefix) -> Op {
+    pub fn query_mailbox(&self, witness: &BasicPrefix) -> SignedQuery {
         let qry_msg = QueryEvent::new_query(
             QueryRoute::Mbx {
                 args: QueryArgsMbx {
@@ -505,11 +505,7 @@ impl<K: KeyManager> SimpleController<K> {
             signature,
             0,
         )];
-        let mbx_msg = Op::Query(SignedQuery::new(
-            qry_msg,
-            self.prefix.clone().clone(),
-            signatures,
-        ));
+        let mbx_msg = SignedQuery::new(qry_msg, self.prefix.clone().clone(), signatures);
         mbx_msg
     }
 

@@ -5,8 +5,8 @@ use std::{
 
 use keri::{
     actor::{
-        parse_notice_stream, parse_op_stream, parse_query_stream, parse_reply_stream, prelude::*,
-        process_reply, process_signed_exn, process_signed_query,
+        parse_exchange_stream, parse_notice_stream, parse_query_stream, parse_reply_stream,
+        prelude::*, process_reply, process_signed_exn, process_signed_query,
         simple_controller::PossibleResponse,
     },
     derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
@@ -15,7 +15,7 @@ use keri::{
     event_message::{
         event_msg_builder::ReceiptBuilder,
         key_event_message::KeyEvent,
-        signed_event_message::{Notice, Op, SignedNontransferableReceipt},
+        signed_event_message::{Notice, SignedNontransferableReceipt},
     },
     oobi::{LocationScheme, OobiManager},
     prefix::{BasicPrefix, IdentifierPrefix},
@@ -228,24 +228,15 @@ impl Witness {
         self.processor.process_notice(&notice)
     }
 
-    pub fn process_op(&self, op: Op) -> Result<Option<PossibleResponse>, WitnessError> {
-        match op {
-            Op::Query(qry) => {
-                let resp = self.process_query(qry)?;
-                Ok(resp)
-            }
-            Op::Reply(rpy) => {
-                self.process_reply(rpy)?;
-                Ok(None)
-            }
-            Op::Exchange(exn) => {
-                process_signed_exn(exn, &self.event_storage)?;
-                Ok(None)
-            }
-        }
+    pub fn process_exchange(
+        &self,
+        exn: keri::event_message::exchange::SignedExchange,
+    ) -> Result<(), WitnessError> {
+        process_signed_exn(exn, &self.event_storage)?;
+        Ok(())
     }
 
-    fn process_reply(&self, rpy: SignedReply) -> Result<(), WitnessError> {
+    pub fn process_reply(&self, rpy: SignedReply) -> Result<(), WitnessError> {
         process_reply(
             rpy,
             &self.oobi_manager,
@@ -255,7 +246,7 @@ impl Witness {
         Ok(())
     }
 
-    fn process_query(
+    pub fn process_query(
         &self,
         qry: keri::query::query_event::SignedQuery,
     ) -> Result<Option<PossibleResponse>, WitnessError> {
@@ -286,17 +277,6 @@ impl Witness {
             .collect()
     }
 
-    pub fn parse_and_process_ops(
-        &self,
-        input_stream: &[u8],
-    ) -> Result<Vec<PossibleResponse>, WitnessError> {
-        parse_op_stream(input_stream)?
-            .into_iter()
-            .map(|op| self.process_op(op))
-            .filter_map(Result::transpose)
-            .collect()
-    }
-
     pub fn parse_and_process_queries(
         &self,
         input_stream: &[u8],
@@ -311,6 +291,13 @@ impl Witness {
     pub fn parse_and_process_replies(&self, input_stream: &[u8]) -> Result<(), WitnessError> {
         for reply in parse_reply_stream(input_stream)? {
             self.process_reply(reply)?;
+        }
+        Ok(())
+    }
+
+    pub fn parse_and_process_exchanges(&self, input_stream: &[u8]) -> Result<(), WitnessError> {
+        for exchange in parse_exchange_stream(input_stream)? {
+            self.process_exchange(exchange)?;
         }
         Ok(())
     }

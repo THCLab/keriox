@@ -140,15 +140,25 @@ pub fn watcher_forward_ksn() -> Result<(), Error> {
                                 Ok(vec![])
                             }
                             Message::Op(op) => {
-                                let resp = witness.process_op(op).unwrap();
-                                if let Some(resp) = resp {
+                                let resp = match op {
+                                    Op::Query(qry) => witness.process_query(qry).unwrap(),
+                                    Op::Reply(reply) => {
+                                        witness.process_reply(reply).unwrap();
+                                        None
+                                    }
+                                    Op::Exchange(exn) => {
+                                        witness.process_exchange(exn).unwrap();
+                                        None
+                                    }
+                                };
+                                let msgs = if let Some(resp) = resp {
                                     let s = resp.to_string();
-                                    let msgs = parse_event_stream(s.as_bytes())
-                                        .map_err(|_| TransportError::InvalidResponse)?;
-                                    Ok(msgs)
+                                    parse_event_stream(s.as_bytes())
+                                        .map_err(|_| TransportError::InvalidResponse)?
                                 } else {
-                                    Ok(vec![])
-                                }
+                                    vec![]
+                                };
+                                Ok(msgs)
                             }
                         }
                     }

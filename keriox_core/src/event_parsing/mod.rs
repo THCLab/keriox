@@ -371,6 +371,19 @@ impl TryFrom<SignedEventData> for SignedReply {
     }
 }
 
+impl TryFrom<SignedEventData> for SignedExchange {
+    type Error = Error;
+
+    fn try_from(value: SignedEventData) -> Result<Self, Self::Error> {
+        match Op::try_from(value)? {
+            Op::Exchange(exn) => Ok(exn),
+            _ => Err(Error::SemanticError(
+                "Cannot convert SignedEventData to SignedExchange".to_string(),
+            )),
+        }
+    }
+}
+
 #[cfg(any(feature = "query", feature = "oobi"))]
 fn signed_reply(rpy: ReplyEvent, mut attachments: Vec<Attachment>) -> Result<Op, Error> {
     match attachments

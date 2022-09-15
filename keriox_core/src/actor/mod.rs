@@ -68,6 +68,15 @@ pub fn parse_reply_stream(stream: &[u8]) -> Result<Vec<SignedReply>, Error> {
     replies.into_iter().map(SignedReply::try_from).collect()
 }
 
+#[cfg(any(feature = "query", feature = "oobi"))]
+pub fn parse_exchange_stream(stream: &[u8]) -> Result<Vec<SignedExchange>, Error> {
+    use crate::event_parsing::message::signed_op_stream;
+
+    let (_rest, exchanges) =
+        signed_op_stream(stream).map_err(|e| Error::DeserializeError(e.to_string()))?;
+    exchanges.into_iter().map(SignedExchange::try_from).collect()
+}
+
 pub fn process_message<P: Processor>(
     msg: Message,
     oobi_manager: &OobiManager,
