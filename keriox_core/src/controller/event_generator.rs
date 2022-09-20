@@ -3,7 +3,7 @@ use crate::{
     event::{
         sections::{
             seal::{DigestSeal, Seal},
-            threshold::SignatureThreshold,
+            threshold::{SignatureThreshold, WeightedThreshold},
         },
         EventMessage, SerializationFormats,
     },
@@ -24,8 +24,13 @@ pub fn incept(
     next_pub_keys: Vec<BasicPrefix>,
     witnesses: Vec<BasicPrefix>,
     witness_threshold: u64,
+    delegator_id: Option<&IdentifierPrefix>,
 ) -> Result<String, ControllerError> {
-    let serialized_icp = EventMsgBuilder::new(EventTypeTag::Icp)
+    let event_builder = match delegator_id {
+        Some(delegator) => EventMsgBuilder::new(EventTypeTag::Dip).with_delegator(delegator),
+        None => EventMsgBuilder::new(EventTypeTag::Icp),
+    };
+    let serialized_icp = event_builder
         .with_keys(public_keys)
         .with_next_keys(next_pub_keys)
         .with_witness_list(witnesses.as_slice())
@@ -46,8 +51,34 @@ pub fn incept_with_next_hashes(
     next_pub_keys: Vec<SelfAddressingPrefix>,
     witnesses: Vec<BasicPrefix>,
     witness_threshold: u64,
+    delegator_id: Option<&IdentifierPrefix>,
 ) -> Result<String, ControllerError> {
-    let serialized_icp = EventMsgBuilder::new(EventTypeTag::Icp)
+    // Check if threshold is possible to achive
+    match signature_threshold {
+        SignatureThreshold::Simple(t) => {
+            if t > &(public_keys.len() as u64) {
+                return Err(ControllerError::EventGenerationError(
+                    "Improper threshold".into(),
+                ));
+            }
+        }
+        SignatureThreshold::Weighted(w) => {
+            let length = match w {
+                WeightedThreshold::Single(s) => s.length(),
+                WeightedThreshold::Multi(m) => m.length(),
+            };
+            if length > public_keys.len() {
+                return Err(ControllerError::EventGenerationError(
+                    "Improper threshold".into(),
+                ));
+            }
+        }
+    };
+    let event_builder = match delegator_id {
+        Some(delegator) => EventMsgBuilder::new(EventTypeTag::Dip).with_delegator(delegator),
+        None => EventMsgBuilder::new(EventTypeTag::Icp),
+    };
+    let serialized_event = event_builder
         .with_keys(public_keys)
         .with_threshold(signature_threshold)
         .with_next_keys_hashes(next_pub_keys)
@@ -58,7 +89,7 @@ pub fn incept_with_next_hashes(
         .serialize()
         .map_err(|e| ControllerError::EventGenerationError(e.to_string()))?;
 
-    let icp = String::from_utf8(serialized_icp)
+    let icp = String::from_utf8(serialized_event)
         .map_err(|e| ControllerError::EventGenerationError(e.to_string()))?;
     Ok(icp)
 }

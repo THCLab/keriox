@@ -88,7 +88,7 @@ pub fn watcher_forward_ksn() -> Result<(), Error> {
         .unwrap()
     };
 
-    let asker_icp = asker_controller.incept(None, None).unwrap();
+    let asker_icp = asker_controller.incept(None, None, None).unwrap();
 
     // Controller about which we will ask
     let mut about_controller = {
@@ -115,7 +115,7 @@ pub fn watcher_forward_ksn() -> Result<(), Error> {
     };
 
     let about_icp = about_controller
-        .incept(Some(vec![witness.prefix.clone()]), Some(0))
+        .incept(Some(vec![witness.prefix.clone()]), Some(0), None)
         .unwrap();
 
     witness

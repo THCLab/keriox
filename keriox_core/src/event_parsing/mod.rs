@@ -214,13 +214,17 @@ impl SignedEventData {
 
 impl From<&SignedEventMessage> for SignedEventData {
     fn from(ev: &SignedEventMessage) -> Self {
-        let attachments = match ev.delegator_seal.clone() {
+        let mut attachments: Vec<_> = match ev.delegator_seal.clone() {
             Some(delegator_seal) => [
                 Attachment::SealSourceCouplets(vec![delegator_seal]),
                 Attachment::AttachedSignatures(ev.signatures.clone()),
             ]
             .into(),
             None => [Attachment::AttachedSignatures(ev.signatures.clone())].into(),
+        };
+
+        if let Some(witness_rcts) = &ev.witness_receipts {
+            attachments.push(Attachment::AttachedWitnessSignatures(witness_rcts.clone()));
         };
 
         SignedEventData {

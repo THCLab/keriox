@@ -7,6 +7,8 @@ use serde_cbor;
 use serde_json;
 use thiserror::Error;
 
+use crate::prefix::IdentifierPrefix;
+
 pub mod serializer_error;
 
 #[derive(Error, Debug)]
@@ -46,6 +48,12 @@ pub enum Error {
 
     #[error("Error while applying event: out of order event")]
     EventOutOfOrderError,
+
+    #[error("Error while applying event: missing delegator source seal: {0}")]
+    MissingDelegatorSealError(IdentifierPrefix),
+
+    #[error("Error while applying event: missing delegating event")]
+    MissingDelegatingEventError,
 
     #[error("Error while applying event: duplicate event")]
     EventDuplicateError,

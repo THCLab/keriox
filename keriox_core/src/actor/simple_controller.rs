@@ -12,17 +12,25 @@ use crate::{
     database::{escrow::EscrowDb, SledEventDatabase},
     derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
     error::Error,
-    event::{event_data::EventData, sections::threshold::SignatureThreshold, SerializationFormats},
+    event::{
+        event_data::EventData,
+        sections::{seal::Seal, threshold::SignatureThreshold},
+        SerializationFormats,
+    },
     event_message::{
         exchange::{Exchange, ForwardTopic, FwdArgs, SignedExchange},
-        signature::{Signature, SignerData},
+        signature::{Nontransferable, Signature, SignerData},
         signed_event_message::{Notice, Op, SignedEventMessage},
     },
     event_parsing::{message::key_event_message, path::MaterialPath, EventType},
     oobi::{OobiManager, Role},
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix},
     processor::{
-        basic_processor::BasicProcessor, escrow::default_escrow_bus, event_storage::EventStorage,
+        basic_processor::BasicProcessor,
+        escrow::{
+            default_escrow_bus, DelegationEscrow, OutOfOrderEscrow, PartiallyWitnessedEscrow,
+        },
+        event_storage::EventStorage,
         Processor,
     },
     query::{
@@ -100,6 +108,9 @@ pub struct SimpleController<K: KeyManager + 'static> {
     oobi_manager: OobiManager,
     pub storage: EventStorage,
     pub groups: Vec<IdentifierPrefix>,
+    pub not_fully_witnessed_escrow: Arc<PartiallyWitnessedEscrow>,
+    pub ooo_escrow: Arc<OutOfOrderEscrow>,
+    pub delegation_escrow: Arc<DelegationEscrow>,
 }
 
 impl<K: KeyManager> SimpleController<K> {
@@ -110,7 +121,8 @@ impl<K: KeyManager> SimpleController<K> {
         key_manager: Arc<Mutex<K>>,
         oobi_db_path: &Path,
     ) -> Result<SimpleController<K>, Error> {
-        let (not_bus, _) = default_escrow_bus(db.clone(), escrow_db);
+        let (not_bus, (ooo, _, partially_witnesses, del_escrow)) =
+            default_escrow_bus(db.clone(), escrow_db);
         let processor = BasicProcessor::new(db.clone(), Some(not_bus));
 
         Ok(SimpleController {
@@ -120,6 +132,9 @@ impl<K: KeyManager> SimpleController<K> {
             processor,
             storage: EventStorage::new(db),
             groups: vec![],
+            not_fully_witnessed_escrow: partially_witnesses,
+            ooo_escrow: ooo,
+            delegation_escrow: del_escrow,
         })
     }
 
@@ -133,6 +148,7 @@ impl<K: KeyManager> SimpleController<K> {
         &mut self,
         initial_witness: Option<Vec<BasicPrefix>>,
         witness_threshold: Option<u64>,
+        delegator: Option<&IdentifierPrefix>,
     ) -> Result<SignedEventMessage, Error> {
         let km = self.key_manager.lock().map_err(|_| Error::MutexPoisoned)?;
         let icp = event_generator::incept(
@@ -140,6 +156,7 @@ impl<K: KeyManager> SimpleController<K> {
             vec![Basic::Ed25519.derive(km.next_public_key())],
             initial_witness.unwrap_or_default(),
             witness_threshold.unwrap_or(0),
+            delegator,
         )
         .unwrap();
         let signature = km.sign(icp.as_bytes())?;
@@ -277,6 +294,66 @@ impl<K: KeyManager> SimpleController<K> {
         .unwrap())
     }
 
+    pub fn anchor(&self, seal: &[Seal]) -> Result<SignedEventMessage, Error> {
+        let state = self
+            .storage
+            .get_state(self.prefix())?
+            .ok_or(Error::SemanticError("missing state".into()))?;
+        let ixn = event_generator::anchor_with_seal(state, seal)
+            .map_err(|e| Error::SemanticError(e.to_string()))?;
+        let km = self.key_manager.lock().map_err(|_| Error::MutexPoisoned)?;
+        let signature = km.sign(&ixn.serialize()?)?;
+
+        let signed = ixn.sign(
+            vec![AttachedSignaturePrefix::new(
+                SelfSigning::Ed25519Sha512,
+                signature,
+                0,
+            )],
+            None,
+            None,
+        );
+
+        self.processor
+            .process_notice(&Notice::Event(signed.clone()))?;
+
+        Ok(signed)
+    }
+
+    pub fn anchor_group(
+        &self,
+        group_id: &IdentifierPrefix,
+        seals: &[Seal],
+    ) -> Result<SignedEventMessage, Error> {
+        if self.groups.contains(group_id) {
+            let state = self
+                .storage
+                .get_state(group_id)?
+                .ok_or(Error::SemanticError("missing state".into()))?;
+            let ixn = event_generator::anchor_with_seal(state, seals)
+                .map_err(|e| Error::SemanticError(e.to_string()))?;
+            let km = self.key_manager.lock().map_err(|_| Error::MutexPoisoned)?;
+            let signature = km.sign(&ixn.serialize()?)?;
+
+            let signed = ixn.sign(
+                vec![AttachedSignaturePrefix::new(
+                    SelfSigning::Ed25519Sha512,
+                    signature,
+                    0,
+                )],
+                None,
+                None,
+            );
+
+            self.processor
+                .process_notice(&Notice::Event(signed.clone()))?;
+
+            Ok(signed)
+        } else {
+            Err(Error::SemanticError("Not group particiant".into()))
+        }
+    }
+
     pub fn process(&self, msg: &[Message]) -> Result<(), Error> {
         let (_process_ok, _process_failed): (Vec<_>, Vec<_>) = msg
             .iter()
@@ -293,6 +370,8 @@ impl<K: KeyManager> SimpleController<K> {
         Ok(())
     }
 
+    /// Checks multisig event and sign it if it wasn't sign by controller
+    /// earlier.
     pub fn process_multisig(
         &mut self,
         event: SignedEventMessage,
@@ -300,58 +379,64 @@ impl<K: KeyManager> SimpleController<K> {
         self.process(&[Message::Notice(Notice::Event(event.clone()))])?;
         let group_prefix = event.event_message.event.get_prefix();
 
-        // check if you sign this event already
-        if self.groups.contains(&group_prefix) {
-            // signature was already provided
-            Ok(None)
-        } else {
-            // Process partially signed group icp
-            let own_pk = &self.get_state()?.unwrap().current.public_keys[0];
-            let index = match &event.event_message.event.content.event_data {
-                EventData::Icp(icp) => icp
-                    .key_config
-                    .public_keys
-                    .iter()
-                    .position(|pk| pk == own_pk),
-                EventData::Rot(rot) => rot
-                    .key_config
-                    .public_keys
-                    .iter()
-                    .position(|pk| pk == own_pk),
-                EventData::Dip(dip) => dip
-                    .inception_data
-                    .key_config
-                    .public_keys
-                    .iter()
-                    .position(|pk| pk == own_pk),
-                EventData::Drt(drt) => drt
-                    .key_config
-                    .public_keys
-                    .iter()
-                    .position(|pk| pk == own_pk),
-                EventData::Ixn(_) => None,
-            }
-            .ok_or(Error::SemanticError("Not group participant".into()))?;
-
-            // TODO compute index
-            // sign and process inception event
-            let second_signature = AttachedSignaturePrefix {
-                index: index as u16,
-                signature: SelfSigning::Ed25519Sha512.derive(
-                    self.key_manager
-                        .lock()
-                        .unwrap()
-                        .sign(&event.event_message.serialize()?)?,
-                ),
-            };
-            let signed_icp = event
-                .clone()
-                .event_message
-                .sign(vec![second_signature], None, None);
-            self.groups.push(group_prefix);
-            self.process(&[Message::Notice(Notice::Event(signed_icp.clone()))])?;
-            Ok(Some(signed_icp.clone()))
+        // Process partially signed group icp
+        // TODO what if group participant is a group and has more than one
+        // public key?
+        let own_pk = &self
+            .get_state()?
+            .ok_or(Error::SemanticError("Unknown state".into()))?
+            .current
+            .public_keys[0];
+        let index = match &event.event_message.event.content.event_data {
+            EventData::Icp(icp) => icp
+                .key_config
+                .public_keys
+                .iter()
+                .position(|pk| pk == own_pk),
+            EventData::Rot(rot) => rot
+                .key_config
+                .public_keys
+                .iter()
+                .position(|pk| pk == own_pk),
+            EventData::Dip(dip) => dip
+                .inception_data
+                .key_config
+                .public_keys
+                .iter()
+                .position(|pk| pk == own_pk),
+            EventData::Drt(drt) => drt
+                .key_config
+                .public_keys
+                .iter()
+                .position(|pk| pk == own_pk),
+            EventData::Ixn(_ixn) => self
+                .storage
+                .get_state(&event.event_message.event.get_prefix())?
+                .ok_or(Error::SemanticError("Unknown state".into()))?
+                .current
+                .public_keys
+                .iter()
+                .position(|pk| pk == own_pk),
         }
+        .ok_or(Error::SemanticError("Not group participant".into()))?;
+
+        // sign and process inception event
+        let second_signature = AttachedSignaturePrefix {
+            index: index as u16,
+            signature: SelfSigning::Ed25519Sha512.derive(
+                self.key_manager
+                    .lock()
+                    .unwrap()
+                    .sign(&event.event_message.serialize()?)?,
+            ),
+        };
+        let signed_icp = event
+            .clone()
+            .event_message
+            .sign(vec![second_signature], None, None);
+        self.groups.push(group_prefix);
+        self.process(&[Message::Notice(Notice::Event(signed_icp.clone()))])?;
+        Ok(Some(signed_icp.clone()))
     }
 
     pub fn get_state(&self) -> Result<Option<IdentifierState>, Error> {
@@ -365,12 +450,15 @@ impl<K: KeyManager> SimpleController<K> {
         self.storage.get_state(id)
     }
 
+    /// Generates group inception event signed by controller and exchange
+    /// messages to group participants from `participants` argument.
     pub fn group_incept(
         &mut self,
-        identifiers: Vec<IdentifierPrefix>,
+        participants: Vec<IdentifierPrefix>,
         signature_threshold: &SignatureThreshold,
         initial_witness: Option<Vec<BasicPrefix>>,
         witness_threshold: Option<u64>,
+        delegator: Option<IdentifierPrefix>,
     ) -> Result<(SignedEventMessage, Vec<SignedExchange>), Error> {
         let signed = {
             let km = self.key_manager.lock().map_err(|_| Error::MutexPoisoned)?;
@@ -380,7 +468,7 @@ impl<K: KeyManager> SimpleController<K> {
                     .to_str()
                     .as_bytes(),
             );
-            let (pks, npks) = identifiers.iter().fold(
+            let (pks, npks) = participants.iter().fold(
                 (
                     vec![Basic::Ed25519.derive(km.public_key())],
                     vec![next_key_hash],
@@ -393,14 +481,17 @@ impl<K: KeyManager> SimpleController<K> {
                     acc
                 },
             );
+
             let icp = event_generator::incept_with_next_hashes(
                 pks,
                 signature_threshold,
                 npks,
                 initial_witness.unwrap_or_default(),
                 witness_threshold.unwrap_or(0),
+                delegator.as_ref(),
             )
             .unwrap();
+
             let signature = km.sign(icp.as_bytes())?;
             let (_, key_event) = key_event_message(icp.as_bytes()).unwrap();
             if let EventType::KeyEvent(icp) = key_event {
@@ -423,29 +514,43 @@ impl<K: KeyManager> SimpleController<K> {
 
         self.groups.push(signed.event_message.event.get_prefix());
 
-        let exchanges = identifiers
+        let exchanges = participants
             .iter()
-            .map(|id| self.create_exchange_message(id, &signed).unwrap())
+            .map(|id| {
+                self.create_forward_message(id, &signed, ForwardTopic::Multisig)
+                    .unwrap()
+            })
             .collect();
 
         Ok((signed, exchanges))
     }
 
-    pub fn create_exchange_message(
+    pub fn create_forward_message(
         &self,
         receipient: &IdentifierPrefix,
         data: &SignedEventMessage,
+        topic: ForwardTopic,
     ) -> Result<SignedExchange, Error> {
         let exn_message = Exchange::Fwd {
             args: FwdArgs {
                 recipient_id: receipient.clone(),
-                topic: ForwardTopic::Multisig,
+                topic,
             },
             to_forward: data.event_message.clone(),
         }
         .to_message(SerializationFormats::JSON, &SelfAddressing::Blake3_256)?;
 
-        let icp_sig = Signature::Transferable(SignerData::JustSignatures, data.signatures.clone());
+        let mut sigs = vec![Signature::Transferable(
+            SignerData::JustSignatures,
+            data.signatures.clone(),
+        )];
+        if let Some(witness_sigs) = data
+            .witness_receipts
+            .as_ref()
+            .map(|sigs| Signature::NonTransferable(Nontransferable::Indexed(sigs.clone())))
+        {
+            sigs.push(witness_sigs)
+        };
         let mat = MaterialPath::to_path("-a".into());
         let ssp = {
             SelfSigning::Ed25519Sha512.derive(
@@ -468,7 +573,7 @@ impl<K: KeyManager> SimpleController<K> {
         Ok(SignedExchange {
             exchange_message: exn_message,
             signature: vec![sigg],
-            data_signature: (mat, vec![icp_sig]),
+            data_signature: (mat, sigs),
         })
     }
 

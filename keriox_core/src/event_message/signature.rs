@@ -15,7 +15,13 @@ pub enum Signature {
     /// Created by transferable identifier
     Transferable(SignerData, Vec<AttachedSignaturePrefix>),
     /// Created by nontransferable identifier
-    NonTransferable(BasicPrefix, SelfSigningPrefix),
+    NonTransferable(Nontransferable),
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub enum Nontransferable {
+    Indexed(Vec<AttachedSignaturePrefix>),
+    Couplet(BasicPrefix, SelfSigningPrefix),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -39,7 +45,10 @@ impl Signature {
     pub fn get_signer(&self) -> Option<IdentifierPrefix> {
         match self {
             Signature::Transferable(signer_data, _) => signer_data.get_signer(),
-            Signature::NonTransferable(id, _) => Some(IdentifierPrefix::Basic(id.clone())),
+            Signature::NonTransferable(Nontransferable::Couplet(id, _)) => {
+                Some(IdentifierPrefix::Basic(id.clone()))
+            }
+            Signature::NonTransferable(Nontransferable::Indexed(_)) => None,
         }
     }
 
@@ -56,7 +65,10 @@ impl Signature {
                     .current;
                 kc.verify(data, &sigs)
             }
-            Signature::NonTransferable(id, sig) => id.verify(data, &sig),
+            Signature::NonTransferable(Nontransferable::Couplet(id, sig)) => id.verify(data, &sig),
+            Signature::NonTransferable(Nontransferable::Indexed(_sigs)) => {
+                Err(Error::SemanticError("Uknown signer".into()))
+            }
         }
     }
 }
@@ -73,8 +85,11 @@ impl From<&Signature> for Attachment {
                 }
                 SignerData::JustSignatures => Attachment::AttachedSignatures(sig.clone()),
             },
-            Signature::NonTransferable(bp, sig) => {
+            Signature::NonTransferable(Nontransferable::Couplet(bp, sig)) => {
                 Attachment::ReceiptCouplets(vec![(bp.clone(), sig.clone())])
+            }
+            Signature::NonTransferable(Nontransferable::Indexed(sigs)) => {
+                Attachment::AttachedWitnessSignatures(sigs.clone())
             }
         }
     }
@@ -82,24 +97,31 @@ impl From<&Signature> for Attachment {
 
 pub fn signatures_into_attachments(sigs: &[Signature]) -> Vec<Attachment> {
     // Group same type of signature in one attachment
-    let (trans_seal, trans_last, nontrans, indexed) = sigs.into_iter().cloned().fold(
-        (vec![], vec![], vec![], vec![]),
-        |(mut trans_seal, mut trans_last, mut nontrans, mut indexed), sig| {
-            match sig {
-                Signature::Transferable(SignerData::EventSeal(seal), sig) => {
-                    trans_seal.push((seal, sig))
-                }
-                Signature::Transferable(SignerData::LastEstablishment(id), sig) => {
-                    trans_last.push((id, sig))
-                }
-                Signature::Transferable(SignerData::JustSignatures, mut sig) => {
-                    indexed.append(&mut sig)
-                }
-                Signature::NonTransferable(bp, sp) => nontrans.push((bp, sp)),
-            };
-            (trans_seal, trans_last, nontrans, indexed)
-        },
-    );
+    let (trans_seal, trans_last, nontrans, indexed, witness_indexed) =
+        sigs.into_iter().cloned().fold(
+            (vec![], vec![], vec![], vec![], vec![]),
+            |(mut trans_seal, mut trans_last, mut nontrans, mut indexed, mut witness_indexed),
+             sig| {
+                match sig {
+                    Signature::Transferable(SignerData::EventSeal(seal), sig) => {
+                        trans_seal.push((seal, sig))
+                    }
+                    Signature::Transferable(SignerData::LastEstablishment(id), sig) => {
+                        trans_last.push((id, sig))
+                    }
+                    Signature::Transferable(SignerData::JustSignatures, mut sig) => {
+                        indexed.append(&mut sig)
+                    }
+                    Signature::NonTransferable(Nontransferable::Couplet(bp, sp)) => {
+                        nontrans.push((bp, sp))
+                    }
+                    Signature::NonTransferable(Nontransferable::Indexed(mut sigs)) => {
+                        witness_indexed.append(&mut sigs)
+                    }
+                };
+                (trans_seal, trans_last, nontrans, indexed, witness_indexed)
+            },
+        );
 
     let mut attachments = vec![];
     if !trans_seal.is_empty() {
@@ -113,6 +135,9 @@ pub fn signatures_into_attachments(sigs: &[Signature]) -> Vec<Attachment> {
     };
     if !indexed.is_empty() {
         attachments.push(Attachment::AttachedSignatures(indexed));
+    };
+    if !witness_indexed.is_empty() {
+        attachments.push(Attachment::AttachedWitnessSignatures(witness_indexed));
     };
     attachments
 }
@@ -128,7 +153,7 @@ impl TryFrom<Attachment> for Vec<Signature> {
             )]),
             Attachment::ReceiptCouplets(sigs) => Ok(sigs
                 .into_iter()
-                .map(|(bp, sp)| Signature::NonTransferable(bp, sp))
+                .map(|(bp, sp)| Signature::NonTransferable(Nontransferable::Couplet(bp, sp)))
                 .collect()),
             Attachment::LastEstSignaturesGroups(sigs) => Ok(sigs
                 .into_iter()
@@ -138,6 +163,9 @@ impl TryFrom<Attachment> for Vec<Signature> {
                 .into_iter()
                 .map(|(seal, sig)| Signature::Transferable(SignerData::EventSeal(seal), sig))
                 .collect()),
+            Attachment::AttachedWitnessSignatures(sigs) => Ok(vec![Signature::NonTransferable(
+                Nontransferable::Indexed(sigs),
+            )]),
             _ => Err(Error::SemanticError("Improper attachment type".into())),
         }
     }

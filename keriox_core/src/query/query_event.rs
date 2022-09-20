@@ -77,6 +77,7 @@ pub struct QueryTopics {
 pub struct MailboxResponse {
     pub receipt: Vec<SignedNontransferableReceipt>,
     pub multisig: Vec<SignedEventMessage>,
+    pub delegate: Vec<SignedEventMessage>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
