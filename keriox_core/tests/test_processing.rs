@@ -19,7 +19,7 @@ pub fn test_ksn_query() -> Result<(), Box<dyn std::error::Error>> {
     let escrow_root = Builder::new().prefix("test-db").tempdir().unwrap();
     let escrow_db = Arc::new(EscrowDb::new(escrow_root.path())?);
 
-    let (notification_bus, (_ooo_escrow, _ps_esrow, _pw_escrow)) =
+    let (notification_bus, (_ooo_escrow, _ps_esrow, _pw_escrow, _)) =
         default_escrow_bus(db.clone(), escrow_db);
 
     let (processor, storage) = (

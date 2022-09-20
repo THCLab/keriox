@@ -30,7 +30,8 @@ fn test_process() -> Result<(), Error> {
 
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
     let escrow_db = Arc::new(EscrowDb::new(escrow_root.path()).unwrap());
-    let (not_bus, (ooo_escrow, ps_escrow, _pw_escrow)) = default_escrow_bus(db.clone(), escrow_db);
+    let (not_bus, (ooo_escrow, ps_escrow, _pw_escrow, _)) =
+        default_escrow_bus(db.clone(), escrow_db);
     let event_processor = BasicProcessor::new(Arc::clone(&db), Some(not_bus));
     let event_storage = EventStorage::new(Arc::clone(&db));
     // Events and sigs are from keripy `test_multisig_digprefix` test.

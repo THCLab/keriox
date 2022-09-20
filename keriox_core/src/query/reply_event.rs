@@ -10,7 +10,7 @@ use crate::{
     event::{sections::seal::EventSeal, EventMessage, SerializationFormats},
     event_message::{
         dummy_event::DummyEventMessage,
-        signature::{Signature, SignerData},
+        signature::{Nontransferable, Signature, SignerData},
         Digestible, EventTypeTag, SaidEvent, Typeable,
     },
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix},
@@ -211,7 +211,7 @@ pub fn bada_logic(new_rpy: &SignedReply, old_rpy: &SignedReply) -> Result<(), Qu
         Signature::Transferable(_, _sigs) => {
             todo!()
         }
-        Signature::NonTransferable(_bp, _sig) => {
+        Signature::NonTransferable(_) => {
             //  If date-time-stamp of new is greater than old
             check_dts(&new_rpy.reply, &old_rpy.reply)
         }
@@ -230,7 +230,7 @@ impl SignedReply {
         signer: BasicPrefix,
         signature: SelfSigningPrefix,
     ) -> Self {
-        let signature = Signature::NonTransferable(signer, signature);
+        let signature = Signature::NonTransferable(Nontransferable::Couplet(signer, signature));
         Self { reply, signature }
     }
 

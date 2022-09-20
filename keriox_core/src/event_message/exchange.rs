@@ -64,6 +64,7 @@ pub struct FwdArgs {
 #[serde(rename_all = "lowercase")]
 pub enum ForwardTopic {
     Multisig,
+    Delegate,
 }
 
 impl Typeable for Exchange {
@@ -81,5 +82,11 @@ fn test_exn_serialization() -> Result<(), Error> {
 
     assert_eq!(exn_event, ser_deser);
 
+    let exchange = r#"{"v":"KERI10JSON0002fd_","t":"exn","d":"E4eI8YwFFm3FgrFetNtk9n5uunKaacICRdmuIe9cX_VE","r":"/fwd","q":{"pre":"E8AKUcbZyik8EdkOwXgnyAxO5mSIPJWGZ_o7zMhnNnjo","topic":"delegate"},"a":{"v":"KERI10JSON000249_","t":"dip","d":"EcUCJqbf43LPLDlo2ulpsPQCxhuYwaiiHoTuU9cET89s","i":"EcUCJqbf43LPLDlo2ulpsPQCxhuYwaiiHoTuU9cET89s","s":"0","kt":"2","k":["DQKeRX-2dXdSWS-EiwYyiQdeIwesvubEqnUYC5vsEyjo","D-U6Sc6VqQC3rDuD2wLF3oR8C4xQyWOTMp4zbJyEnRlE"],"nt":"2","n":["ENVtv0_G68psQhfWB-ZyVH1lndLli2LSmfSxxszNufoI","E6UpCouA9mZA03hMFJLrhA0SvwR4HVNqf2wrZM-ydTSI"],"bt":"3","b":["BGKVzj4ve0VSd8z_AmvhLg4lqcC_9WYX90k03q-R_Ydo","BuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw","Bgoq68HCmYNUDgOz4Skvlu306o_NY-NrYuKAVhk3Zh9c"],"c":[],"a":[],"di":"E8AKUcbZyik8EdkOwXgnyAxO5mSIPJWGZ_o7zMhnNnjo"}}"#;
+
+    let parsed: ExchangeMessage = serde_json::from_str(exchange).unwrap();
+    let ser_deser = serde_json::to_string(&parsed).unwrap();
+
+    assert_eq!(exchange, ser_deser);
     Ok(())
 }
