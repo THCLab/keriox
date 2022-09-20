@@ -125,7 +125,7 @@ pub mod http_handlers {
             .body(resp))
     }
 
-    #[post("/discover")]
+    #[post("/register")]
     async fn process_reply(
         body: web::Bytes,
         data: web::Data<Watcher>,

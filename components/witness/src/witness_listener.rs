@@ -166,7 +166,7 @@ pub mod http_handlers {
             .body(resp))
     }
 
-    #[post("/discover")]
+    #[post("/register")]
     pub async fn process_reply(
         post_data: String,
         data: web::Data<Witness>,
