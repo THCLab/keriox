@@ -19,15 +19,25 @@ impl Transport for DefaultTransport {
         msg: Message,
     ) -> Result<Vec<Message>, TransportError> {
         let url = match loc.scheme {
-            Scheme::Http => match msg {
+            Scheme::Http => match &msg {
                 Message::Notice(_) => {
                     // {url}/process
                     loc.url.join("process").unwrap()
                 }
-                Message::Op(_) => {
-                    // {url}/query
-                    loc.url.join("query").unwrap()
-                }
+                Message::Op(op) => match op {
+                    Op::Query(_) => {
+                        // {url}/query
+                        loc.url.join("query").unwrap()
+                    }
+                    Op::Reply(_) => {
+                        // {url}/register
+                        loc.url.join("register").unwrap()
+                    }
+                    Op::Exchange(_) => {
+                        // {url}/forward
+                        loc.url.join("forward").unwrap()
+                    }
+                },
             },
             Scheme::Tcp => todo!(),
         };

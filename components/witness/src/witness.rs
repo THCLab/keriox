@@ -5,8 +5,9 @@ use std::{
 
 use keri::{
     actor::{
-        parse_notice_stream, parse_op_stream, prelude::*, process_reply, process_signed_exn,
-        process_signed_query, simple_controller::PossibleResponse,
+        parse_exchange_stream, parse_notice_stream, parse_query_stream, parse_reply_stream,
+        prelude::*, process_reply, process_signed_exn, process_signed_query,
+        simple_controller::PossibleResponse,
     },
     derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
     error::Error,
@@ -14,7 +15,7 @@ use keri::{
     event_message::{
         event_msg_builder::ReceiptBuilder,
         key_event_message::KeyEvent,
-        signed_event_message::{Notice, Op, SignedNontransferableReceipt},
+        signed_event_message::{Notice, SignedNontransferableReceipt},
     },
     oobi::{LocationScheme, OobiManager},
     prefix::{BasicPrefix, IdentifierPrefix},
@@ -237,42 +238,45 @@ impl Witness {
         }
     }
 
-    pub fn process_op(&self, op: Op) -> Result<Option<PossibleResponse>, WitnessError> {
-        match op {
-            Op::Query(qry) => {
-                let response = process_signed_query(qry, &self.event_storage)?;
-                Ok(match response {
-                    ReplyType::Ksn(ksn) => {
-                        let rpy = ReplyEvent::new_reply(
-                            ReplyRoute::Ksn(IdentifierPrefix::Basic(self.prefix.clone()), ksn),
-                            SelfAddressing::Blake3_256,
-                            SerializationFormats::JSON,
-                        )?;
+    pub fn process_exchange(
+        &self,
+        exn: keri::event_message::exchange::SignedExchange,
+    ) -> Result<(), WitnessError> {
+        process_signed_exn(exn, &self.event_storage)?;
+        Ok(())
+    }
 
-                        let signature =
-                            SelfSigning::Ed25519Sha512.derive(self.signer.sign(&rpy.serialize()?)?);
-                        let reply = SignedReply::new_nontrans(rpy, self.prefix.clone(), signature);
-                        Some(PossibleResponse::Ksn(reply))
-                    }
-                    ReplyType::Kel(msgs) => Some(PossibleResponse::Kel(msgs)),
-                    ReplyType::Mbx(mailbox_response) => {
-                        Some(PossibleResponse::Mbx(mailbox_response))
-                    }
-                })
-            }
-            Op::Reply(rpy) => {
-                process_reply(
-                    rpy,
-                    &self.oobi_manager,
-                    &self.processor,
-                    &self.event_storage,
+    pub fn process_reply(&self, rpy: SignedReply) -> Result<(), WitnessError> {
+        process_reply(
+            rpy,
+            &self.oobi_manager,
+            &self.processor,
+            &self.event_storage,
+        )?;
+        Ok(())
+    }
+
+    pub fn process_query(
+        &self,
+        qry: keri::query::query_event::SignedQuery,
+    ) -> Result<Option<PossibleResponse>, WitnessError> {
+        let response = process_signed_query(qry, &self.event_storage)?;
+
+        match response {
+            ReplyType::Ksn(ksn) => {
+                let rpy = ReplyEvent::new_reply(
+                    ReplyRoute::Ksn(IdentifierPrefix::Basic(self.prefix.clone()), ksn),
+                    SelfAddressing::Blake3_256,
+                    SerializationFormats::JSON,
                 )?;
-                Ok(None)
+
+                let signature =
+                    SelfSigning::Ed25519Sha512.derive(self.signer.sign(&rpy.serialize()?)?);
+                let reply = SignedReply::new_nontrans(rpy, self.prefix.clone(), signature);
+                Ok(Some(PossibleResponse::Ksn(reply)))
             }
-            Op::Exchange(exn) => {
-                process_signed_exn(exn, &self.event_storage)?;
-                Ok(None)
-            }
+            ReplyType::Kel(msgs) => Ok(Some(PossibleResponse::Kel(msgs))),
+            ReplyType::Mbx(mailbox_response) => Ok(Some(PossibleResponse::Mbx(mailbox_response))),
         }
     }
 
@@ -283,19 +287,29 @@ impl Witness {
             .collect()
     }
 
-    pub fn parse_and_process_ops(
+    pub fn parse_and_process_queries(
         &self,
         input_stream: &[u8],
     ) -> Result<Vec<PossibleResponse>, WitnessError> {
-        parse_op_stream(input_stream)?
+        parse_query_stream(input_stream)?
             .into_iter()
-            .map(|op| self.process_op(op))
-            .filter_map(|op| match op {
-                Ok(Some(res)) => Some(Ok(res)),
-                Ok(None) => None,
-                Err(e) => Some(Err(e)),
-            })
+            .map(|qry| self.process_query(qry))
+            .filter_map(Result::transpose)
             .collect()
+    }
+
+    pub fn parse_and_process_replies(&self, input_stream: &[u8]) -> Result<(), WitnessError> {
+        for reply in parse_reply_stream(input_stream)? {
+            self.process_reply(reply)?;
+        }
+        Ok(())
+    }
+
+    pub fn parse_and_process_exchanges(&self, input_stream: &[u8]) -> Result<(), WitnessError> {
+        for exchange in parse_exchange_stream(input_stream)? {
+            self.process_exchange(exchange)?;
+        }
+        Ok(())
     }
 
     pub fn get_mailbox_messages(&self, id: &IdentifierPrefix) -> Result<MailboxResponse, Error> {

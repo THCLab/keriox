@@ -140,15 +140,25 @@ pub fn watcher_forward_ksn() -> Result<(), Error> {
                                 Ok(vec![])
                             }
                             Message::Op(op) => {
-                                let resp = witness.process_op(op).unwrap();
-                                if let Some(resp) = resp {
+                                let resp = match op {
+                                    Op::Query(qry) => witness.process_query(qry).unwrap(),
+                                    Op::Reply(reply) => {
+                                        witness.process_reply(reply).unwrap();
+                                        None
+                                    }
+                                    Op::Exchange(exn) => {
+                                        witness.process_exchange(exn).unwrap();
+                                        None
+                                    }
+                                };
+                                let msgs = if let Some(resp) = resp {
                                     let s = resp.to_string();
-                                    let msgs = parse_event_stream(s.as_bytes())
-                                        .map_err(|_| TransportError::InvalidResponse)?;
-                                    Ok(msgs)
+                                    parse_event_stream(s.as_bytes())
+                                        .map_err(|_| TransportError::InvalidResponse)?
                                 } else {
-                                    Ok(vec![])
-                                }
+                                    vec![]
+                                };
+                                Ok(msgs)
                             }
                         }
                     }
@@ -201,8 +211,7 @@ pub fn watcher_forward_ksn() -> Result<(), Error> {
                 .unwrap(),
         ),
     );
-    // TODO: wrap in Message:Op and send to reply/ endpoint
-    watcher.oobi_manager.process_oobi(&witness_oobi).unwrap();
+    watcher.process_reply(witness_oobi).unwrap();
 
     // Send query again
     let result = futures::executor::block_on(watcher.process_op(query));

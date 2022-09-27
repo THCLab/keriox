@@ -328,9 +328,9 @@ fn test_qry_rpy() -> Result<(), WitnessError> {
         0,
     );
     // Qry message signed by Bob
-    let query = Op::Query(SignedQuery::new(qry, bob_pref.to_owned(), vec![signature]));
+    let query = SignedQuery::new(qry, bob_pref.to_owned(), vec![signature]);
 
-    let response = witness.process_op(query)?;
+    let response = witness.process_query(query)?;
 
     // assert_eq!(response.len(), 1);
     if let Some(PossibleResponse::Kel(response)) = response {
@@ -370,9 +370,9 @@ fn test_qry_rpy() -> Result<(), WitnessError> {
         0,
     );
     // Qry message signed by Bob
-    let query = Op::Query(SignedQuery::new(qry, bob_pref.to_owned(), vec![signature]));
+    let query = SignedQuery::new(qry, bob_pref.to_owned(), vec![signature]);
 
-    let response = witness.process_op(query)?;
+    let response = witness.process_query(query)?;
 
     let alice_kel = alice
         .storage
@@ -572,8 +572,8 @@ fn test_mbx() {
     // query witness
     for controller in controllers {
         let mbx_msg = controller.query_mailbox(&witness.prefix);
-        let mbx_msg = Message::Op(mbx_msg).to_cesr().unwrap();
-        let receipts = witness.parse_and_process_ops(&mbx_msg).unwrap();
+        let mbx_msg = Message::Op(Op::Query(mbx_msg)).to_cesr().unwrap();
+        let receipts = witness.parse_and_process_queries(&mbx_msg).unwrap();
 
         if let PossibleResponse::Mbx(mbx) = &receipts[0] {
             assert_eq!(receipts.len(), 1);
@@ -657,8 +657,8 @@ fn test_invalid_notice() {
     // query witness
     for controller in controllers {
         let mbx_msg = controller.query_mailbox(&witness.prefix);
-        let mbx_msg = Message::Op(mbx_msg).to_cesr().unwrap();
-        let result = witness.parse_and_process_ops(&mbx_msg);
+        let mbx_msg = Message::Op(Op::Query(mbx_msg)).to_cesr().unwrap();
+        let result = witness.parse_and_process_queries(&mbx_msg);
 
         // should not be able to query because the inception events didn't go through
         assert!(matches!(
@@ -751,11 +751,11 @@ pub fn test_multisig() -> Result<(), WitnessError> {
     let group_id = group_icp.event_message.event.get_prefix();
     assert_eq!(exchange_messages.len(), 1);
 
-    witness.process_op(Op::Exchange(exchange_messages[0].clone()))?;
+    witness.process_exchange(exchange_messages[0].clone())?;
 
     // Controller2 asks witness about his mailbox.
     let mbx_msg = cont2.query_mailbox(&witness.prefix);
-    let response = witness.process_op(mbx_msg).unwrap();
+    let response = witness.process_query(mbx_msg).unwrap();
     if let Some(PossibleResponse::Mbx(MailboxResponse {
         receipt,
         multisig,
@@ -772,7 +772,7 @@ pub fn test_multisig() -> Result<(), WitnessError> {
             cont2.create_forward_message(&cont1.prefix(), &signed_icp, ForwardTopic::Multisig)?;
         // Send it to witness
         witness.process_notice(Notice::Event(signed_icp.clone()))?;
-        witness.process_op(Op::Exchange(exn_from_cont2))?;
+        witness.process_exchange(exn_from_cont2)?;
     };
     // Controller2 didin't accept group icp yet because of lack of witness receipt.
     let state = cont2.get_state_for_id(&group_id)?;
@@ -786,7 +786,7 @@ pub fn test_multisig() -> Result<(), WitnessError> {
 
     let group_query_message = cont1.query_groups_mailbox(&witness.prefix)[0].clone();
 
-    let res = witness.process_op(Op::Query(group_query_message))?;
+    let res = witness.process_query(group_query_message)?;
     let receipts = match res {
         Some(PossibleResponse::Mbx(mbx)) => mbx.receipt,
         _ => unreachable!(),
@@ -802,7 +802,7 @@ pub fn test_multisig() -> Result<(), WitnessError> {
 
     // Controller1 asks witness about his mailbox.
     let mbx_msg = cont1.query_mailbox(&witness.prefix);
-    let response = witness.process_op(mbx_msg).unwrap();
+    let response = witness.process_query(mbx_msg).unwrap();
     if let Some(PossibleResponse::Mbx(MailboxResponse {
         receipt,
         multisig,
@@ -913,11 +913,11 @@ pub fn test_delegated_multisig() -> Result<(), WitnessError> {
     assert_eq!(exchange_messages.len(), 1);
 
     // Send exchange message from controller 1 to controller 2
-    witness.process_op(Op::Exchange(exchange_messages[0].clone()))?;
+    witness.process_exchange(exchange_messages[0].clone())?;
 
     // Controller2 asks witness about his mailbox.
     let mbx_msg = cont2.query_mailbox(&witness.prefix);
-    let response = witness.process_op(mbx_msg).unwrap();
+    let response = witness.process_query(mbx_msg).unwrap();
     if let Some(PossibleResponse::Mbx(MailboxResponse {
         receipt: _,
         multisig,
@@ -932,12 +932,12 @@ pub fn test_delegated_multisig() -> Result<(), WitnessError> {
         let exn_from_cont2 =
             cont2.create_forward_message(&group_id, &signed_dip, ForwardTopic::Multisig)?;
         // Send it to witness
-        witness.process_op(Op::Exchange(exn_from_cont2))?;
+        witness.process_exchange(exn_from_cont2)?;
     };
 
     // Controller1 asks witness about group mailbox to have fully signed dip.
     let mbx_msg = cont1.query_groups_mailbox(&witness.prefix);
-    let response = witness.process_op(Op::Query(mbx_msg[0].clone())).unwrap();
+    let response = witness.process_query(mbx_msg[0].clone()).unwrap();
     if let Some(PossibleResponse::Mbx(MailboxResponse {
         receipt: _,
         multisig,
@@ -967,11 +967,11 @@ pub fn test_delegated_multisig() -> Result<(), WitnessError> {
     let delegation_request =
         cont1.create_forward_message(delegator.prefix(), &dip, ForwardTopic::Delegate)?;
 
-    witness.process_op(Op::Exchange(delegation_request.clone()))?;
+    witness.process_exchange(delegation_request.clone())?;
 
     // Delegator gets mailbox
     let mbx_msg = delegator.query_mailbox(&witness.prefix);
-    let response = witness.process_op(mbx_msg).unwrap();
+    let response = witness.process_query(mbx_msg).unwrap();
     if let Some(PossibleResponse::Mbx(MailboxResponse {
         receipt,
         multisig: _,
@@ -1004,7 +1004,7 @@ pub fn test_delegated_multisig() -> Result<(), WitnessError> {
 
     // Delegator gets mailbox again for receipts
     let mbx_msg = delegator.query_mailbox(&witness.prefix);
-    let response = witness.process_op(mbx_msg).unwrap();
+    let response = witness.process_query(mbx_msg).unwrap();
     if let Some(PossibleResponse::Mbx(MailboxResponse {
         receipt,
         multisig: _,
@@ -1041,14 +1041,14 @@ pub fn test_delegated_multisig() -> Result<(), WitnessError> {
         )?;
 
         // Send it to witness
-        witness.process_op(Op::Exchange(exn_from_delegator))?;
+        witness.process_exchange(exn_from_delegator)?;
     };
 
     // Child ask about group mailbox
     for controller in vec![&cont1, &cont2] {
         let mbx_query = controller.query_groups_mailbox(&witness.prefix);
 
-        let response = witness.process_op(Op::Query(mbx_query[0].clone())).unwrap();
+        let response = witness.process_query(mbx_query[0].clone()).unwrap();
         if let Some(PossibleResponse::Mbx(MailboxResponse {
             receipt: _,
             multisig: _,
@@ -1088,7 +1088,7 @@ pub fn test_delegated_multisig() -> Result<(), WitnessError> {
     // Child ask about mailbox
     for controller in vec![&cont1, &cont2] {
         let mbx_query = controller.query_groups_mailbox(&witness.prefix);
-        let response = witness.process_op(Op::Query(mbx_query[0].clone())).unwrap();
+        let response = witness.process_query(mbx_query[0].clone()).unwrap();
         if let Some(PossibleResponse::Mbx(MailboxResponse {
             receipt,
             multisig: _,
@@ -1154,11 +1154,11 @@ pub fn test_delegating_multisig() -> Result<(), WitnessError> {
     assert_eq!(exchange_messages.len(), 1);
 
     // Send exchange message from delegator 1 to delegator 2
-    witness.process_op(Op::Exchange(exchange_messages[0].clone()))?;
+    witness.process_exchange(exchange_messages[0].clone())?;
 
     // Delegator2 asks witness about his mailbox.
     let mbx_msg = delegator_2.query_mailbox(&witness.prefix);
-    let response = witness.process_op(mbx_msg).unwrap();
+    let response = witness.process_query(mbx_msg).unwrap();
     if let Some(PossibleResponse::Mbx(MailboxResponse {
         receipt: _,
         multisig,
@@ -1176,12 +1176,12 @@ pub fn test_delegating_multisig() -> Result<(), WitnessError> {
             ForwardTopic::Multisig,
         )?;
         // Send it to witness
-        witness.process_op(Op::Exchange(exn_from_delegator2))?;
+        witness.process_exchange(exn_from_delegator2)?;
     };
 
     // Delegator1 asks witness about group mailbox to have fully signed dip.
     let mbx_msg = delegator_1.query_groups_mailbox(&witness.prefix);
-    let response = witness.process_op(Op::Query(mbx_msg[0].clone())).unwrap();
+    let response = witness.process_query(mbx_msg[0].clone()).unwrap();
     if let Some(PossibleResponse::Mbx(MailboxResponse {
         receipt: _,
         multisig,
@@ -1216,7 +1216,7 @@ pub fn test_delegating_multisig() -> Result<(), WitnessError> {
     for delegator in vec![&delegator_1, &delegator_2] {
         let mbx_query = delegator.query_groups_mailbox(&witness.prefix);
 
-        let response = witness.process_op(Op::Query(mbx_query[0].clone())).unwrap();
+        let response = witness.process_query(mbx_query[0].clone()).unwrap();
         if let Some(PossibleResponse::Mbx(MailboxResponse {
             receipt,
             multisig: _,
@@ -1266,11 +1266,11 @@ pub fn test_delegating_multisig() -> Result<(), WitnessError> {
     let delegated_child_id = dip.event_message.event.get_prefix();
     let dip_digest = dip.event_message.get_digest();
 
-    witness.process_op(Op::Exchange(delegation_request))?;
+    witness.process_exchange(delegation_request)?;
 
     // Delegators ask group mailbox for delegating request
     let mbx_msg = delegator_1.query_groups_mailbox(&witness.prefix);
-    let response = witness.process_op(Op::Query(mbx_msg[0].clone())).unwrap();
+    let response = witness.process_query(mbx_msg[0].clone()).unwrap();
     let ixn = if let Some(PossibleResponse::Mbx(MailboxResponse {
         receipt: _,
         multisig: _,
@@ -1297,7 +1297,7 @@ pub fn test_delegating_multisig() -> Result<(), WitnessError> {
             ForwardTopic::Multisig,
         )?;
 
-        witness.process_op(Op::Exchange(exn))?;
+        witness.process_exchange(exn)?;
 
         let state = witness
             .event_storage
@@ -1311,7 +1311,7 @@ pub fn test_delegating_multisig() -> Result<(), WitnessError> {
 
     // Delegator2 gets gorup mailbox
     let mbx_msg = delegator_2.query_groups_mailbox(&witness.prefix);
-    let response = witness.process_op(Op::Query(mbx_msg[0].clone())).unwrap();
+    let response = witness.process_query(mbx_msg[0].clone()).unwrap();
     if let Some(PossibleResponse::Mbx(MailboxResponse {
         receipt: _,
         multisig,
@@ -1329,7 +1329,7 @@ pub fn test_delegating_multisig() -> Result<(), WitnessError> {
                 &sed,
                 ForwardTopic::Multisig,
             )?;
-            witness.process_op(Op::Exchange(exn))?;
+            witness.process_exchange(exn)?;
         };
     };
     // get fully signed event from not fully witnessed escrow
@@ -1348,7 +1348,7 @@ pub fn test_delegating_multisig() -> Result<(), WitnessError> {
     for delegator in vec![&delegator_1, &delegator_2] {
         let mbx_query = delegator.query_groups_mailbox(&witness.prefix);
 
-        let response = witness.process_op(Op::Query(mbx_query[0].clone())).unwrap();
+        let response = witness.process_query(mbx_query[0].clone()).unwrap();
         if let Some(PossibleResponse::Mbx(MailboxResponse {
             receipt,
             multisig: _,
@@ -1392,14 +1392,14 @@ pub fn test_delegating_multisig() -> Result<(), WitnessError> {
         &ixn_to_forward,
         ForwardTopic::Delegate,
     )?;
-    witness.process_op(Op::Exchange(exn_to_child))?;
+    witness.process_exchange(exn_to_child)?;
 
     // child get its mailbox
     // TODO for now delegated id is delegated group that consist one
     // participant.
     let mbx_query = child.query_groups_mailbox(&witness.prefix);
 
-    let response = witness.process_op(Op::Query(mbx_query[0].clone())).unwrap();
+    let response = witness.process_query(mbx_query[0].clone()).unwrap();
     if let Some(PossibleResponse::Mbx(MailboxResponse {
         receipt: _,
         multisig: _,
@@ -1424,7 +1424,7 @@ pub fn test_delegating_multisig() -> Result<(), WitnessError> {
     witness.process_notice(Notice::Event(confirmed_delegate_dip.clone()))?;
     let mbx_query = child.query_groups_mailbox(&witness.prefix);
 
-    let response = witness.process_op(Op::Query(mbx_query[0].clone())).unwrap();
+    let response = witness.process_query(mbx_query[0].clone()).unwrap();
     if let Some(PossibleResponse::Mbx(MailboxResponse {
         receipt,
         multisig: _,
