@@ -19,7 +19,7 @@ use keri::{
         signed_event_message::{Message, Notice, Op, SignedEventMessage},
     },
     keys::PublicKey,
-    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix},
+    prefix::{BasicPrefix, IdentifierPrefix},
     processor::{basic_processor::BasicProcessor, event_storage::EventStorage, Processor},
     query::query_event::MailboxResponse,
     signer::{CryptoBox, Signer},
@@ -102,8 +102,8 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
     let receipts = [&first_witness, &second_witness]
         .iter()
         .flat_map(|w| {
-            w.process_notice(Notice::Event(inception_event.clone()))
-                .unwrap();
+            let not = Notice::Event(inception_event.clone());
+            w.process_notice(not).unwrap();
             w.event_storage
                 .db
                 .get_mailbox_receipts(controller.prefix())
@@ -1023,12 +1023,10 @@ pub fn test_delegated_multisig() -> Result<(), WitnessError> {
             .get_event_at_sn(delegator.prefix(), 1)?
             .unwrap()
             .signed_event_message;
-        let attached_witness_sig = AttachedSignaturePrefix {
-            index: 0,
-            signature: ixn_receipt.couplets.unwrap()[0].1.clone(),
-        };
+        let attached_witness_sig = ixn_receipt.signatures;
+
         let ixn_with_receipt = SignedEventMessage {
-            witness_receipts: Some(vec![attached_witness_sig]),
+            witness_receipts: Some(attached_witness_sig),
             ..ixn
         };
 
@@ -1351,14 +1349,10 @@ pub fn test_delegating_multisig() -> Result<(), WitnessError> {
 
     // leader should collect signatures and receipts of ixn event
     let ixn_to_forward = if let Notice::NontransferableRct(rct) = fully_witnessed_ixn[3].clone() {
-        let couplets = rct.couplets.unwrap();
+        let couplets = rct.signatures;
         // there is only one witness so index will be 0
-        let indexed_sigs = AttachedSignaturePrefix {
-            index: 0,
-            signature: couplets[0].1.clone(),
-        };
         SignedEventMessage {
-            witness_receipts: Some(vec![indexed_sigs]),
+            witness_receipts: Some(couplets),
             ..fully_signed_ixn.clone()
         }
     } else {

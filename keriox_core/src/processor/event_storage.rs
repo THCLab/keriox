@@ -320,17 +320,10 @@ impl EventStorage {
             Some(events) => Ok(events
                 .filter(|rcp| rcp.body.event.sn == sn && &rcp.body.get_digest() == digest)
                 .reduce(|acc, rct| {
-                    let new_signatures = match (acc.couplets, rct.couplets) {
-                        (None, None) => None,
-                        (None, Some(new_couplets)) => Some(new_couplets),
-                        (Some(couplets), None) => Some(couplets),
-                        (Some(mut couplets), Some(mut new_coups)) => {
-                            couplets.append(&mut new_coups);
-                            Some(couplets)
-                        }
-                    };
+                    let mut new_signatures = acc.signatures;
+                    new_signatures.append(&mut rct.signatures.clone());
                     SignedNontransferableReceipt {
-                        couplets: new_signatures,
+                        signatures: new_signatures,
                         ..acc
                     }
                 })),

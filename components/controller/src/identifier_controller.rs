@@ -20,6 +20,7 @@ use keri::{
         key_event_message::KeyEvent,
         signature::{Signature, SignerData},
         signed_event_message::Op,
+        Digestible,
     },
     event_parsing::{
         message::{event_message, exchange_message, key_event_message},
@@ -257,6 +258,80 @@ impl IdentifierController {
         Ok((serialized_icp, exchanges))
     }
 
+    pub fn finalize_exchange(
+        &self,
+        exchange: &[u8],
+        exn_signature: SelfSigningPrefix,
+        data_signature: SelfSigningPrefix,
+    ) -> Result<(), ControllerError> {
+        // Join exn messages with their signatures and send it to witness.
+        let material_path = MaterialPath::to_path("-a".into());
+        // let attached_sig = sigs;
+        let (_, parsed_exn) = exchange_message(exchange).unwrap();
+        if let EventType::Exn(exn) = parsed_exn {
+            let Exchange::Fwd { args, to_forward } = exn.event.content.clone();
+
+            let sigs: Vec<_> = if let Some(receipts) = self.source.storage.get_nt_receipts(
+                &to_forward.event.get_prefix(),
+                to_forward.event.get_sn(),
+                &to_forward.event.get_digest(),
+            )? {
+                receipts
+                    .signatures
+                    .iter()
+                    .map(|c| Signature::NonTransferable(c.clone()))
+                    .chain([Signature::Transferable(
+                        SignerData::JustSignatures,
+                        vec![AttachedSignaturePrefix {
+                            // TODO
+                            index: 0,
+                            signature: data_signature,
+                        }]
+                        .into(),
+                    )])
+                    .collect::<Vec<_>>()
+            } else {
+                vec![Signature::Transferable(
+                    SignerData::JustSignatures,
+                    vec![AttachedSignaturePrefix {
+                        // TODO
+                        index: 0,
+                        signature: data_signature,
+                    }],
+                )]
+            };
+
+            let signature = vec![Signature::Transferable(
+                SignerData::LastEstablishment(self.id.clone()),
+                vec![AttachedSignaturePrefix {
+                    // TODO
+                    index: 0,
+                    signature: exn_signature,
+                }],
+            )];
+            let signer_exn = Message::Op(Op::Exchange(SignedExchange {
+                exchange_message: exn,
+                signature,
+                data_signature: (material_path.clone(), sigs.clone()),
+            }));
+            self.source
+                .get_witnesses_at_event(&to_forward)?
+                // TODO for now get first witness
+                .get(0)
+                .map(|wit| {
+                    self.source.send_to(
+                        &IdentifierPrefix::Basic(wit.clone()),
+                        keri::oobi::Scheme::Http,
+                        // TODO what endpoint should be used?
+                        Topic::Query(String::from_utf8(signer_exn.to_cesr().unwrap()).unwrap()),
+                    )
+                });
+            Ok(())
+        } else {
+            Ok(())
+        }
+    }
+
     /// Finalize group identifier
     ///
     /// Join event with signature, verify them and sends signed exn messages to
@@ -281,12 +356,30 @@ impl IdentifierController {
                 signature: sig,
             };
 
+            let sigs: Vec<_> = if let Some(receipts) = self.source.storage.get_nt_receipts(
+                &icp.event.get_prefix(),
+                icp.event.get_sn(),
+                &icp.event.get_digest(),
+            )? {
+                let couplets = receipts.signatures;
+                couplets
+                    .into_iter()
+                    .map(|c| Signature::NonTransferable(c))
+                    .chain([Signature::Transferable(
+                        SignerData::JustSignatures,
+                        vec![signature],
+                    )])
+                    .collect::<Vec<_>>()
+            } else {
+                vec![Signature::Transferable(
+                    SignerData::JustSignatures,
+                    vec![signature],
+                )]
+            };
+
             // Join exn messages with their signatures and send it to witness.
             let material_path = MaterialPath::to_path("-a".into());
-            let attached_sig = vec![Signature::Transferable(
-                SignerData::JustSignatures,
-                vec![signature],
-            )];
+            let attached_sig = sigs;
             exchanges.into_iter().try_for_each(|(exn, signature)| {
                 let (_, parsed_exn) = exchange_message(exn).unwrap();
                 if let EventType::Exn(exn) = parsed_exn {
@@ -485,6 +578,7 @@ impl IdentifierController {
                 let response =
                     self.source
                         .send_to(&receipient, Scheme::Http, Topic::Query(qry_str))?;
+                println!("\nresponse: {}", response);
                 // TODO what if other reponse than mailbox?
                 let res = parse_response(&response).unwrap();
                 if let PossibleResponse::Mbx(res) = res {

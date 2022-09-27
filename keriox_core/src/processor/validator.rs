@@ -68,14 +68,20 @@ impl EventValidator {
             let prefix = &signed_event.event_message.event.get_prefix();
             let digest = &signed_event.event_message.event.get_digest();
 
-            let (couplets, indexed) =
-                match self.event_storage.get_nt_receipts(prefix, sn, digest)? {
-                    Some(rcts) => (
-                        rcts.couplets.unwrap_or_default(),
-                        rcts.indexed_sigs.unwrap_or_default(),
-                    ),
-                    None => (vec![], vec![]),
-                };
+            let (mut couplets, mut indexed) = (vec![], vec![]);
+            match self.event_storage.get_nt_receipts(prefix, sn, digest)? {
+                Some(rcts) => {
+                    rcts.signatures.iter().for_each(|s| match s {
+                        Nontransferable::Couplet(c) => {
+                            couplets.append(&mut c.clone());
+                        }
+                        Nontransferable::Indexed(signatures) => {
+                            indexed.append(&mut signatures.clone())
+                        }
+                    });
+                }
+                None => (),
+            };
             if new_state
                 .witness_config
                 .enough_receipts(couplets, indexed)?
@@ -85,7 +91,6 @@ impl EventValidator {
                 Err(Error::NotEnoughReceiptsError)
             }
         }
-        // })
     }
 
     /// Process Validator Receipt
@@ -137,31 +142,28 @@ impl EventValidator {
             .witness_config
             .witnesses;
 
-        let (couplets, attached_signatures) = (
-            rct.couplets.clone().unwrap_or_default(),
-            rct.indexed_sigs.clone(),
-        );
-
-        Ok(match attached_signatures {
-            Some(signatures) => {
-                let attached: Result<Vec<_>, Error> = signatures
-                    .into_iter()
-                    .map(|att| -> Result<_, _> {
-                        Ok((
-                            witnesses
-                                .get(att.index as usize)
-                                .ok_or_else(|| {
-                                    Error::SemanticError("No matching witness prefix".into())
-                                })?
-                                .clone(),
-                            att.signature,
-                        ))
-                    })
-                    .collect();
-                couplets.into_iter().chain(attached?.into_iter()).collect()
+        let (mut couplets, mut indexed) = (vec![], vec![]);
+        rct.signatures.iter().for_each(|s| match s {
+            Nontransferable::Couplet(c) => {
+                couplets.append(&mut c.clone());
             }
-            None => couplets,
-        })
+            Nontransferable::Indexed(signatures) => indexed.append(&mut signatures.clone()),
+        });
+
+        let i = indexed
+            .into_iter()
+            .map(|sig| -> Result<_, _> {
+                Ok((
+                    witnesses
+                        .get(sig.index as usize)
+                        .ok_or_else(|| Error::SemanticError("No matching witness prefix".into()))?
+                        .clone(),
+                    sig.signature,
+                ))
+            })
+            .collect::<Result<Vec<_>, Error>>()
+            .unwrap();
+        Ok(couplets.into_iter().chain(i.into_iter()).collect())
     }
 
     /// Process Witness Receipt
@@ -216,8 +218,9 @@ impl EventValidator {
                     .then(|| ())
                     .ok_or(Error::SignatureVerificationError)
             }
-            Signature::NonTransferable(Nontransferable::Couplet(bp, sign)) => bp
-                .verify(data, sign)?
+            Signature::NonTransferable(Nontransferable::Couplet(couplets)) => couplets
+                .iter()
+                .all(|(bp, sign)| bp.verify(data, sign).unwrap())
                 .then(|| ())
                 .ok_or(Error::SignatureVerificationError),
             Signature::NonTransferable(Nontransferable::Indexed(_sigs)) => {

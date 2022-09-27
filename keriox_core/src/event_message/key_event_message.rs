@@ -7,6 +7,7 @@ use crate::{
 
 use super::{
     dummy_event::{dummy_prefix, DummyEventMessage, DummyInceptionEvent},
+    signature::Nontransferable,
     signed_event_message::SignedEventMessage,
     Digestible, EventMessage, SaidEvent, Typeable,
 };
@@ -46,7 +47,7 @@ impl EventMessage<KeyEvent> {
     pub fn sign(
         &self,
         sigs: Vec<AttachedSignaturePrefix>,
-        witness_sigs: Option<Vec<AttachedSignaturePrefix>>,
+        witness_sigs: Option<Vec<Nontransferable>>,
         delegator_seal: Option<SourceSeal>,
     ) -> SignedEventMessage {
         SignedEventMessage::new(self, sigs, witness_sigs, delegator_seal)

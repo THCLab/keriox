@@ -230,7 +230,8 @@ impl SignedReply {
         signer: BasicPrefix,
         signature: SelfSigningPrefix,
     ) -> Self {
-        let signature = Signature::NonTransferable(Nontransferable::Couplet(signer, signature));
+        let signature =
+            Signature::NonTransferable(Nontransferable::Couplet(vec![(signer, signature)]));
         Self { reply, signature }
     }
 

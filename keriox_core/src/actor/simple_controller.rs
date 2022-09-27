@@ -23,7 +23,7 @@ use crate::{
     event_message::{
         exchange::{Exchange, ForwardTopic, FwdArgs, SignedExchange},
         key_event_message::KeyEvent,
-        signature::{Nontransferable, Signature, SignerData},
+        signature::{Signature, SignerData},
         signed_event_message::{Notice, Op, SignedEventMessage, SignedNontransferableReceipt},
     },
     event_parsing::{message::key_event_message, path::MaterialPath, EventType},
@@ -105,7 +105,7 @@ impl PossibleResponse {
     }
 }
 pub fn parse_response(response: &str) -> Result<PossibleResponse, Error> {
-    #[derive(Deserialize)]
+    #[derive(Deserialize, Debug)]
     struct GroupedResponse {
         receipt: String,
         multisig: String,
@@ -602,16 +602,18 @@ impl<K: KeyManager> SimpleController<K> {
         }
         .to_message(SerializationFormats::JSON, &SelfAddressing::Blake3_256)?;
 
-        let mut sigs = vec![Signature::Transferable(
+        let sigs = vec![Signature::Transferable(
             SignerData::JustSignatures,
             data.signatures.clone(),
         )];
-        if let Some(witness_sigs) = data
+        let sigs = if let Some(witness_sigs) = data
             .witness_receipts
             .as_ref()
-            .map(|sigs| Signature::NonTransferable(Nontransferable::Indexed(sigs.clone())))
+            .map(|sigs| sigs.iter().map(|t| Signature::NonTransferable(t.clone())))
         {
-            sigs.push(witness_sigs)
+            witness_sigs.chain(sigs.into_iter()).collect::<Vec<_>>()
+        } else {
+            sigs
         };
         let mat = MaterialPath::to_path("-a".into());
         let ssp = {

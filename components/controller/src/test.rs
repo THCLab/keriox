@@ -7,7 +7,7 @@ use keri::{
     actor::prelude::Message,
     derivation::{basic::Basic, self_signing::SelfSigning},
     oobi::LocationScheme,
-    prefix::{BasicPrefix, IdentifierPrefix},
+    prefix::{BasicPrefix, IdentifierPrefix, Prefix},
     signer::{CryptoBox, KeyManager},
 };
 
@@ -19,8 +19,7 @@ use super::{error::ControllerError, identifier_controller::IdentifierController,
 pub fn test_group_incept() -> Result<(), ControllerError> {
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     let initial_config = OptionalConfig::init().with_db_path(root.into_path());
-    // let transport = Box::new(DefaultTransport);
-    // let controller = Arc::new(Controller::new(Some(initial_config), transport)?);
+    
     let controller = Arc::new(Controller::new(Some(initial_config))?);
     let km1 = CryptoBox::new()?;
     let km2 = CryptoBox::new()?;
@@ -169,9 +168,19 @@ pub fn test_delegated_incept() -> Result<(), ControllerError> {
     // Identifier who get this request from mailbox, can use just `finalize_event`
     let delegate_id = identifier1.finalize_group_incept(
         delegated_inception.as_bytes(),
-        signature_icp,
-        vec![(exn_messages[0].as_bytes(), signature_exn)],
+        signature_icp.clone(),
+        vec![(exn_messages[0].as_bytes(), signature_exn.clone())],
     )?;
+
+    // Quering mailbox to get receipts
+    let query = delegator.query_own_mailbox(&[witness_id_basic.clone()])?;
+
+    for qry in query {
+        let signature = SelfSigning::Ed25519Sha512.derive(km2.sign(&qry.serialize()?)?);
+        delegator.finalize_mailbox_query(vec![(qry, signature)])?;
+    }
+
+    identifier1.finalize_exchange(exn_messages[0].as_bytes(), signature_exn, signature_icp)?;
 
     let kel = controller
         .storage
@@ -194,8 +203,8 @@ pub fn test_delegated_incept() -> Result<(), ControllerError> {
                 let signature_exn = SelfSigning::Ed25519Sha512.derive(km2.sign(&exn.serialize()?)?);
                 delegator.finalize_group_incept(
                     &delegating_event.serialize()?,
-                    signature_ixn,
-                    vec![(&exn.serialize()?, signature_exn)],
+                    signature_ixn.clone(),
+                    vec![],
                 )?;
 
                 // Query for receipts
@@ -207,6 +216,8 @@ pub fn test_delegated_incept() -> Result<(), ControllerError> {
                         delegator.finalize_mailbox_query(vec![(qry, signature)])?;
                     assert!(action_required.is_empty());
                 }
+
+                delegator.finalize_exchange(&exn.serialize()?, signature_exn, signature_ixn)?;
 
                 // ixn was accepted
                 let delegators_state = controller2.storage.get_state(&delegator.id)?;
@@ -231,11 +242,6 @@ pub fn test_delegated_incept() -> Result<(), ControllerError> {
         let ar = identifier1.finalize_mailbox_query(vec![(qry, signature)])?;
         assert!(ar.is_empty());
     }
-    // Process receipt, because it isn't attached exn from delegator
-    // TODO Allow attaching it in `PathedMaterial` into exn
-    identifier1
-        .source
-        .process(&Message::Notice(delegators_kel[3].clone()))?;
 
     let state = identifier1.source.storage.get_state(&delegator.id)?;
     assert_eq!(state.unwrap().sn, 1);
@@ -246,7 +252,6 @@ pub fn test_delegated_incept() -> Result<(), ControllerError> {
     for qry in query {
         let signature = SelfSigning::Ed25519Sha512.derive(km1.sign(&qry.serialize()?)?);
         let ar = identifier1.finalize_mailbox_query(vec![(qry, signature)])?;
-        println!("ar: {:?}", ar);
     }
 
     Ok(())
