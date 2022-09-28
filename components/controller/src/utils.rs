@@ -7,6 +7,7 @@ use keri::oobi::LocationScheme;
 pub(crate) enum Topic {
     Oobi(Vec<u8>),
     Query(String),
+    Forward(Vec<u8>),
     Process(Vec<u8>),
 }
 

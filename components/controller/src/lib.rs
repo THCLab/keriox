@@ -222,7 +222,7 @@ impl Controller {
                             .text()
                             .map_err(|e| ControllerError::CommunicationError(e.to_string()))?,
                         Topic::Query(query) => {
-                            println!("Sending query: {}", query);
+                            println!("\nSending query: {}", query);
                             client
                                 .post(format!("{}query", address))
                                 .body(query)
@@ -233,7 +233,7 @@ impl Controller {
                         }
                         Topic::Process(to_process) => {
                             println!(
-                                "Sending to process: {}",
+                                "\nSending to process: {}",
                                 String::from_utf8(to_process.to_vec()).unwrap()
                             );
                             client
@@ -244,6 +244,19 @@ impl Controller {
                                 .text()
                                 .map_err(|e| ControllerError::CommunicationError(e.to_string()))?
                         }
+                        Topic::Forward(to_forward) => {
+                            println!(
+                                "\nSending to forward: {}",
+                                String::from_utf8(to_forward.to_vec()).unwrap()
+                            );
+                            client
+                                .post(format!("{}forward", address))
+                                .body(to_forward)
+                                .send()
+                                .map_err(|e| ControllerError::CommunicationError(e.to_string()))?
+                                .text()
+                                .map_err(|e| ControllerError::CommunicationError(e.to_string()))?
+                        },
                     };
 
                     Ok(response)

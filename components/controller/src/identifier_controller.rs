@@ -322,8 +322,7 @@ impl IdentifierController {
                     self.source.send_to(
                         &IdentifierPrefix::Basic(wit.clone()),
                         keri::oobi::Scheme::Http,
-                        // TODO what endpoint should be used?
-                        Topic::Query(String::from_utf8(signer_exn.to_cesr().unwrap()).unwrap()),
+                        Topic::Forward(signer_exn.to_cesr().unwrap()),
                     )
                 });
             Ok(())
@@ -404,9 +403,8 @@ impl IdentifierController {
                             self.source.send_to(
                                 &IdentifierPrefix::Basic(wit.clone()),
                                 keri::oobi::Scheme::Http,
-                                // TODO what endpoint should be used?
-                                Topic::Query(
-                                    String::from_utf8(signer_exn.to_cesr().unwrap()).unwrap(),
+                                Topic::Forward(
+                                    signer_exn.to_cesr().unwrap(),
                                 ),
                             )
                         });

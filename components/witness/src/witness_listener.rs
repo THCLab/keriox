@@ -171,7 +171,7 @@ pub mod http_handlers {
     #[post("/register")]
     pub async fn process_reply(
         post_data: String,
-        data: web::Data<Witness>,
+        data: web::Data<Arc<Witness>>,
     ) -> Result<impl Responder, ApiError> {
         println!("\nGot reply to process: \n{}", post_data);
         data.parse_and_process_replies(post_data.as_bytes())?;
@@ -184,7 +184,7 @@ pub mod http_handlers {
     #[post("/forward")]
     pub async fn process_exchange(
         post_data: String,
-        data: web::Data<Witness>,
+        data: web::Data<Arc<Witness>>,
     ) -> Result<impl Responder, ApiError> {
         println!("\nGot exchange to process: \n{}", post_data);
         data.parse_and_process_exchanges(post_data.as_bytes())?;
