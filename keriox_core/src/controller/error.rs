@@ -1,5 +1,7 @@
 use thiserror::Error;
 
+use crate::{oobi::Scheme, prefix::IdentifierPrefix};
+
 #[derive(Error, Debug)]
 pub enum ControllerError {
     #[error("Database error: {0}")]
@@ -7,6 +9,9 @@ pub enum ControllerError {
 
     #[error("Communication error: {0}")]
     CommunicationError(String),
+
+    #[error("Transport error: {0}")]
+    TransportError(#[from] crate::transport::TransportError),
 
     #[error("Inception event error: {0}")]
     InceptionError(String),
@@ -37,4 +42,10 @@ pub enum ControllerError {
 
     #[error("Error while event processing: ")]
     EventProcessingError(#[from] crate::error::Error),
+
+    #[error("No location for id {id:?} with scheme {scheme:?}")]
+    NoLocation {
+        id: IdentifierPrefix,
+        scheme: Scheme,
+    },
 }

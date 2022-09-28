@@ -24,8 +24,8 @@ use keri::{
     },
     signer::Signer,
     state::IdentifierState,
+    transport::Transport,
 };
-use keri_transport::Transport;
 use rand::prelude::SliceRandom;
 
 pub struct WatcherData {
@@ -464,7 +464,7 @@ impl Watcher {
 pub enum WatcherError {
     #[display(fmt = "network request failed")]
     #[from]
-    TransportError(keri_transport::TransportError),
+    TransportError(keri::transport::TransportError),
 
     #[display(fmt = "keri error")]
     #[from]

@@ -1,10 +1,12 @@
-use keri::{
+pub mod default;
+
+pub use default::DefaultTransport;
+
+use crate::{
     event_message::signed_event_message::{Message, Op},
     oobi::{LocationScheme, Role},
     prefix::IdentifierPrefix,
 };
-
-pub mod default;
 
 /// Transport trait allows customizing behavior of actors when it comes to making net requests.
 /// Actors take a `dyn Transport` argument in `new` (dependency injection pattern).

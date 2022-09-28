@@ -12,8 +12,8 @@ use keri::{
     oobi::{LocationScheme, Role},
     prefix::IdentifierPrefix,
     query::reply_event::SignedReply,
+    transport::{Transport, TransportError},
 };
-use keri_transport::{Transport, TransportError};
 use tempfile::Builder;
 use watcher::{WatcherData, WatcherError};
 use witness::Witness;

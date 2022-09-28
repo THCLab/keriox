@@ -28,13 +28,18 @@ use crate::{
         SelfSigningPrefix,
     },
     processor::{basic_processor::BasicProcessor, event_storage::EventStorage, Processor},
-    query::reply_event::{ReplyEvent, ReplyRoute, SignedReply},
+    query::{
+        query_event::{MailboxResponse, QueryArgsMbx, QueryTopics},
+        reply_event::{ReplyEvent, ReplyRoute, SignedReply},
+    },
+    transport::{DefaultTransport, Transport},
 };
 
 pub struct Controller {
     processor: BasicProcessor,
     pub storage: EventStorage,
     oobi_manager: OobiManager,
+    transport: DefaultTransport,
 }
 impl Controller {
     pub fn new(configs: Option<OptionalConfig>) -> Result<Self, ControllerError> {
@@ -57,6 +62,7 @@ impl Controller {
             processor: BasicProcessor::new(db.clone(), None),
             storage: EventStorage::new(db),
             oobi_manager: OobiManager::new(&oobis_db),
+            transport: DefaultTransport,
         };
 
         if let Some(initial_oobis) = initial_oobis {
@@ -233,6 +239,45 @@ impl Controller {
             ))),
         }
     }
+
+    async fn send_message_to(
+        &self,
+        id: &IdentifierPrefix,
+        scheme: Scheme,
+        msg: Message,
+    ) -> Result<Vec<Message>, ControllerError> {
+        let loc = self
+            .get_loc_schemas(id)?
+            .into_iter()
+            .find(|lc| lc.scheme == scheme)
+            .ok_or(ControllerError::NoLocation {
+                id: id.clone(),
+                scheme,
+            })?;
+
+        Ok(self.transport.send_message(loc, msg).await?)
+    }
+
+    pub fn get_mailbox(
+        &self,
+        id: IdentifierPrefix,
+    ) -> Result<MailboxResponse, crate::error::Error> {
+        self.storage.get_mailbox_messages(QueryArgsMbx {
+            i: id.clone(),
+            pre: id.clone(),
+            src: id,
+            topics: QueryTopics {
+                receipt: 0,
+                replay: 0,
+                reply: 0,
+                multisig: 0,
+                credential: 0,
+                delegate: 0,
+            },
+        })
+    }
+
+    pub fn fetch_mailbox() {}
 
     /// Publish key event to witnesses
     ///

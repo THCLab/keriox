@@ -7,8 +7,8 @@ use keri::{
     database::{escrow::EscrowDb, SledEventDatabase},
     error::Error,
     prefix::IdentifierPrefix,
+    transport::DefaultTransport,
 };
-use keri_transport::default::DefaultTransport;
 use tempfile::Builder;
 
 use crate::watcher::{WatcherData, WatcherError};
