@@ -19,7 +19,7 @@ use super::{error::ControllerError, identifier_controller::IdentifierController,
 pub fn test_group_incept() -> Result<(), ControllerError> {
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     let initial_config = OptionalConfig::init().with_db_path(root.into_path());
-    
+
     let controller = Arc::new(Controller::new(Some(initial_config))?);
     let km1 = CryptoBox::new()?;
     let km2 = CryptoBox::new()?;
@@ -246,13 +246,22 @@ pub fn test_delegated_incept() -> Result<(), ControllerError> {
     let state = identifier1.source.storage.get_state(&delegator.id)?;
     assert_eq!(state.unwrap().sn, 1);
 
+    // Child kel is not yet accepted
+    let state = identifier1.source.storage.get_state(&delegate_id)?;
+    assert_eq!(state, None);
+
     // Get mailbox for receipts.
     let query = identifier1.query_group_mailbox(&[witness_id_basic.clone()])?;
 
     for qry in query {
         let signature = SelfSigning::Ed25519Sha512.derive(km1.sign(&qry.serialize()?)?);
         let ar = identifier1.finalize_mailbox_query(vec![(qry, signature)])?;
+        assert!(ar.is_empty());
     }
+
+    // Child kel is accepted
+    let state = identifier1.source.storage.get_state(&delegate_id)?;
+    assert_eq!(state.unwrap().sn, 0);
 
     Ok(())
 }

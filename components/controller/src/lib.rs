@@ -256,7 +256,7 @@ impl Controller {
                                 .map_err(|e| ControllerError::CommunicationError(e.to_string()))?
                                 .text()
                                 .map_err(|e| ControllerError::CommunicationError(e.to_string()))?
-                        },
+                        }
                     };
 
                     Ok(response)

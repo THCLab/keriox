@@ -75,7 +75,10 @@ pub fn parse_exchange_stream(stream: &[u8]) -> Result<Vec<SignedExchange>, Error
 
     let (_rest, exchanges) =
         signed_op_stream(stream).map_err(|e| Error::DeserializeError(e.to_string()))?;
-    exchanges.into_iter().map(SignedExchange::try_from).collect()
+    exchanges
+        .into_iter()
+        .map(SignedExchange::try_from)
+        .collect()
 }
 
 pub fn process_message<P: Processor>(

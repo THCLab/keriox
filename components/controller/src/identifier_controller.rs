@@ -403,9 +403,7 @@ impl IdentifierController {
                             self.source.send_to(
                                 &IdentifierPrefix::Basic(wit.clone()),
                                 keri::oobi::Scheme::Http,
-                                Topic::Forward(
-                                    signer_exn.to_cesr().unwrap(),
-                                ),
+                                Topic::Forward(signer_exn.to_cesr().unwrap()),
                             )
                         });
                     Ok(())

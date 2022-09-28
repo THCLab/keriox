@@ -238,13 +238,10 @@ pub struct SignedNontransferableReceipt {
 }
 
 impl SignedNontransferableReceipt {
-    pub fn new(
-        message: &EventMessage<Receipt>,
-        signatures: Vec<Nontransferable>,
-    ) -> Self {
+    pub fn new(message: &EventMessage<Receipt>, signatures: Vec<Nontransferable>) -> Self {
         Self {
             body: message.clone(),
-            signatures, 
+            signatures,
         }
     }
 }

@@ -15,7 +15,8 @@ use keri::{
     event_message::{
         event_msg_builder::ReceiptBuilder,
         key_event_message::KeyEvent,
-        signed_event_message::{Notice, SignedNontransferableReceipt}, signature::Nontransferable,
+        signature::Nontransferable,
+        signed_event_message::{Notice, SignedNontransferableReceipt},
     },
     oobi::{LocationScheme, OobiManager},
     prefix::{BasicPrefix, IdentifierPrefix},
@@ -95,10 +96,7 @@ impl WitnessReceiptGenerator {
         let signature = SelfSigning::Ed25519Sha512.derive(signature);
         let nontrans = Nontransferable::Couplet(vec![(self.prefix.clone(), signature)]);
 
-        let signed_rcp = SignedNontransferableReceipt::new(
-            &rcp,
-            vec![nontrans],
-        );
+        let signed_rcp = SignedNontransferableReceipt::new(&rcp, vec![nontrans]);
 
         Ok(signed_rcp)
     }

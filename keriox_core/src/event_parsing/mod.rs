@@ -535,7 +535,11 @@ fn signed_key_event(
             Ok(Notice::Event(SignedEventMessage::new(
                 &event_message,
                 controller_sigs,
-                if witness_sigs.is_empty() {None} else {Some(witness_sigs)},
+                if witness_sigs.is_empty() {
+                    None
+                } else {
+                    Some(witness_sigs)
+                },
                 // TODO parse delegator seal attachment
                 None,
             )))
@@ -701,10 +705,10 @@ fn test_deserialize_signed_receipt() {
         match &rct.signatures[0] {
             Nontransferable::Indexed(indexed) => {
                 assert_eq!(3, indexed.len());
-            },
+            }
             Nontransferable::Couplet(_) => {
                 unreachable!()
-            },
+            }
         };
     } else {
         assert!(false)
