@@ -516,7 +516,7 @@ impl IdentifierController {
                 index: 0,
                 signature: sig,
             }];
-            let (receipient, from_who, about_who) = match &qry.event.content.data.route {
+            let (receipient, about_who, from_who) = match &qry.event.content.data.route {
                 QueryRoute::Log {
                     reply_route: _,
                     args,
