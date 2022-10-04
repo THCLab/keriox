@@ -40,7 +40,7 @@ use super::mailbox_updating::ActionRequired;
 
 pub struct IdentifierController {
     pub id: IdentifierPrefix,
-    pub groups: Vec<IdentifierPrefix>,
+    // pub groups: Vec<IdentifierPrefix>,
     pub source: Arc<Controller>,
     last_asked_index: MailboxReminder,
     last_asked_groups_index: MailboxReminder,
@@ -51,7 +51,6 @@ impl IdentifierController {
         Self {
             id,
             source: kel,
-            groups: vec![],
             last_asked_index: MailboxReminder::default(),
             last_asked_groups_index: MailboxReminder::default(),
         }
@@ -353,7 +352,6 @@ impl IdentifierController {
         self.source
             .finalize_key_event(&icp, &sig, own_index)
             .await?;
-        self.groups.push(icp.event.get_prefix());
 
         let signature = AttachedSignaturePrefix {
             index: own_index as u16,
@@ -467,8 +465,9 @@ impl IdentifierController {
     }
 
     /// Generates query message of route `mbx` to query own identifier mailbox.
-    pub fn query_own_mailbox(
+    pub fn query_mailbox(
         &self,
+        identifier: &IdentifierPrefix,
         witnesses: &[BasicPrefix],
     ) -> Result<Vec<QueryEvent>, ControllerError> {
         Ok(witnesses
@@ -478,7 +477,7 @@ impl IdentifierController {
                     QueryRoute::Mbx {
                         args: QueryArgsMbx {
                             // about who
-                            i: self.id.clone(),
+                            i: identifier.clone(),
                             // who is asking
                             pre: self.id.clone(),
                             // who will get the query
@@ -502,45 +501,6 @@ impl IdentifierController {
             .unwrap())
     }
 
-    /// Generates query messages of route `mbx` to query groups mailbox.
-    pub fn query_group_mailbox(
-        &self,
-        witnesses: &[BasicPrefix],
-    ) -> Result<Vec<QueryEvent>, ControllerError> {
-        let groups_queries = self
-            .groups
-            .iter()
-            .map(|group_id| {
-                witnesses.clone().into_iter().map(move |wit| {
-                    QueryEvent::new_query(
-                        QueryRoute::Mbx {
-                            args: QueryArgsMbx {
-                                // about who
-                                i: group_id.clone(),
-                                // who is asking
-                                pre: self.id.clone(),
-                                // who will get the query
-                                src: IdentifierPrefix::Basic(wit.clone()),
-                                topics: QueryTopics {
-                                    credential: 0,
-                                    receipt: 0,
-                                    replay: 0,
-                                    multisig: 0,
-                                    delegate: 0,
-                                    reply: 0,
-                                },
-                            },
-                            reply_route: "".to_string(),
-                        },
-                        SerializationFormats::JSON,
-                        &SelfAddressing::Blake3_256,
-                    )
-                    .unwrap()
-                })
-            })
-            .flatten();
-        Ok(groups_queries.collect())
-    }
 
     /// Joins query events with their signatures, sends it to witness and
     /// process its response. If user action is needed to finalize process,
@@ -594,7 +554,7 @@ impl IdentifierController {
             } else {
                 // process group mailbox
                 let group_req = self
-                    .process_groups_mailbox(&res, &self.last_asked_groups_index)
+                    .process_group_mailbox(&res, about_who.unwrap(), &self.last_asked_groups_index)
                     .await?;
                 self.last_asked_groups_index = MailboxReminder {
                     receipt: res.receipt.len(),
