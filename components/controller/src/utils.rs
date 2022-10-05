@@ -1,14 +1,12 @@
 use std::path::PathBuf;
 
-use keri::oobi::LocationScheme;
+use keri::{event_message::signed_event_message::Message, oobi::LocationScheme};
 
 /// Helper enum for types that can be send with `send_to` function
 #[derive(Debug)]
 pub(crate) enum Topic {
     Oobi(Vec<u8>),
-    Query(String),
-    Forward(Vec<u8>),
-    Process(Vec<u8>),
+    Message(Message),
 }
 
 pub struct OptionalConfig {

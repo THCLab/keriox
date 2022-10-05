@@ -3,14 +3,9 @@ use std::{path::PathBuf, sync::Arc};
 pub mod error;
 pub mod identifier_controller;
 pub mod mailbox_updating;
-#[cfg(test)]
 mod test;
 pub mod utils;
 
-use self::{
-    error::ControllerError,
-    utils::{OptionalConfig, Topic},
-};
 use keri::{
     actor::{self, event_generator},
     database::{escrow::EscrowDb, SledEventDatabase},
@@ -34,18 +29,30 @@ use keri::{
     },
     query::reply_event::{ReplyEvent, ReplyRoute, SignedReply},
 };
-// use keri_transport::Transport;
+use keri_transport::{default::DefaultTransport, Transport};
+
+use self::{
+    error::ControllerError,
+    utils::{OptionalConfig, Topic},
+};
 
 pub struct Controller {
     processor: BasicProcessor,
     pub storage: EventStorage,
     oobi_manager: OobiManager,
     partially_witnessed_escrow: Arc<PartiallyWitnessedEscrow>,
-    // TODO use Tranpsport in send_to
-    // transport: Box<dyn Transport + Send + Sync>,
+    transport: Box<dyn Transport + Send + Sync>,
 }
+
 impl Controller {
     pub fn new(configs: Option<OptionalConfig>) -> Result<Self, ControllerError> {
+        Self::with_transport(configs, Box::new(DefaultTransport))
+    }
+
+    pub fn with_transport(
+        configs: Option<OptionalConfig>,
+        transport: Box<dyn Transport + Send + Sync>,
+    ) -> Result<Self, ControllerError> {
         let (db_dir_path, initial_oobis) = match configs {
             Some(OptionalConfig {
                 db_path,
@@ -71,7 +78,7 @@ impl Controller {
             storage: EventStorage::new(db),
             oobi_manager: OobiManager::new(&oobis_db),
             partially_witnessed_escrow,
-            // transport,
+            transport,
         };
 
         if let Some(initial_oobis) = initial_oobis {
@@ -91,11 +98,11 @@ impl Controller {
     /// Make http request to get identifier's endpoints information.
     pub fn resolve_loc_schema(&self, lc: &LocationScheme) -> Result<(), ControllerError> {
         let url = format!("{}oobi/{}", lc.url, lc.eid);
-        let oobis = reqwest::blocking::get(url)
-            .map_err(|e| ControllerError::CommunicationError(e.to_string()))?
-            .text()
-            .map_err(|e| ControllerError::CommunicationError(e.to_string()))?;
-        self.process_stream(oobis.as_bytes())
+        let oobis = self.transport.request_loc_scheme(lc).await?;
+        for oobi in oobis {
+            self.process(oobi)?;
+        }
+        Ok(())
     }
 
     fn get_watchers(
@@ -124,11 +131,7 @@ impl Controller {
         end_role_json: &str,
     ) -> Result<(), ControllerError> {
         for watcher in self.get_watchers(id)?.iter() {
-            self.send_to(
-                &watcher,
-                Scheme::Http,
-                Topic::Oobi(end_role_json.as_bytes().to_vec()),
-            )?;
+            self.send_oobi_to(&watcher, Scheme::Http, end_role_json.as_bytes().to_vec())?;
         }
 
         Ok(())
@@ -140,8 +143,8 @@ impl Controller {
         let watchers = self.get_watchers(id)?;
         // TODO choose random watcher id?
         // TODO we assume that we get the answer immediately which is not always true
-        let to_parse = self.send_to(&watchers[0], Scheme::Http, Topic::Query(query_id.into()))?;
-        self.process_stream(to_parse.as_bytes())
+        let resp = todo!("query");
+        self.process_stream(resp)
     }
 
     // Returns messages if they can be returned immediately, i.e. for query message
@@ -197,79 +200,56 @@ impl Controller {
             .collect())
     }
 
-    fn send_to(
+    async fn send_message_to(
         &self,
         id: &IdentifierPrefix,
-        schema: Scheme,
-        topic: Topic,
-    ) -> Result<String, ControllerError> {
-        let addresses = self.get_loc_schemas(id)?;
-        match addresses
+        scheme: Scheme,
+        msg: Message,
+    ) -> Result<Vec<Message>, ControllerError> {
+        let loc = self
+            .get_loc_schemas(id)?
             .iter()
-            // TODO It uses first found address that match schema
-            .find(|loc| loc.scheme == schema)
-            .map(|lc| &lc.url)
-        {
-            Some(address) => match schema {
-                Scheme::Http => {
-                    let client = reqwest::blocking::Client::new();
-                    let response = match topic {
-                        Topic::Oobi(oobi_json) => client
-                            .post(format!("{}resolve", address))
-                            .body(oobi_json)
-                            .send()
-                            .map_err(|e| ControllerError::CommunicationError(e.to_string()))?
-                            .text()
-                            .map_err(|e| ControllerError::CommunicationError(e.to_string()))?,
-                        Topic::Query(query) => {
-                            println!("\nSending query: {}", query);
-                            client
-                                .post(format!("{}query", address))
-                                .body(query)
-                                .send()
-                                .map_err(|e| ControllerError::CommunicationError(e.to_string()))?
-                                .text()
-                                .map_err(|e| ControllerError::CommunicationError(e.to_string()))?
-                        }
-                        Topic::Process(to_process) => {
-                            println!(
-                                "\nSending to process: {}",
-                                String::from_utf8(to_process.to_vec()).unwrap()
-                            );
-                            client
-                                .post(format!("{}process", address))
-                                .body(to_process)
-                                .send()
-                                .map_err(|e| ControllerError::CommunicationError(e.to_string()))?
-                                .text()
-                                .map_err(|e| ControllerError::CommunicationError(e.to_string()))?
-                        }
-                        Topic::Forward(to_forward) => {
-                            println!(
-                                "\nSending to forward: {}",
-                                String::from_utf8(to_forward.to_vec()).unwrap()
-                            );
-                            client
-                                .post(format!("{}forward", address))
-                                .body(to_forward)
-                                .send()
-                                .map_err(|e| ControllerError::CommunicationError(e.to_string()))?
-                                .text()
-                                .map_err(|e| ControllerError::CommunicationError(e.to_string()))?
-                        }
-                    };
+            .find(|loc| loc.scheme == scheme);
+        let loc = match loc {
+            Some(loc) => loc,
+            None => {
+                return Err(ControllerError::NoLocationScheme {
+                    id: id.clone(),
+                    scheme,
+                });
+            }
+        };
+        Ok(self.transport.send_message(loc, msg).await?)
+    }
 
-                    Ok(response)
-                }
-                Scheme::Tcp => {
-                    todo!()
-                }
-            },
-            _ => Err(ControllerError::CommunicationError(format!(
-                "No address for scheme {:?}",
-                schema
-            ))),
-        }
+    fn send_oobi_to(
+        &self,
+        id: &IdentifierPrefix,
+        scheme: Scheme,
+        oobi: Vec<u8>,
+    ) -> Result<(), ControllerError> {
+        let loc = self
+            .get_loc_schemas(id)?
+            .iter()
+            .find(|loc| loc.scheme == scheme);
+        let loc = match loc {
+            Some(loc) => loc,
+            None => {
+                return Err(ControllerError::NoLocationScheme {
+                    id: id.clone(),
+                    scheme,
+                });
+            }
+        };
+        let client = reqwest::blocking::Client::new();
+        client
+            .post(format!("{}resolve", loc.url))
+            .body(oobi)
+            .send()
+            .map_err(|e| ControllerError::CommunicationError(e.to_string()))?
+            .text()
+            .map_err(|e| ControllerError::CommunicationError(e.to_string()))?;
+        Ok(())
     }
 
     /// Publish key event to witnesses
@@ -282,22 +262,14 @@ impl Controller {
         witness_prefixes: &[BasicPrefix],
         message: &SignedEventMessage,
     ) -> Result<(), ControllerError> {
-        let msg = SignedEventData::from(message).to_cesr()?;
-        let collected_receipts = witness_prefixes
-            .iter()
-            .map(|prefix| {
-                self.send_to(
-                    &IdentifierPrefix::Basic(prefix.clone()),
-                    Scheme::Http,
-                    Topic::Process(msg.clone()),
-                )
-            })
-            .into_iter()
-            .collect::<Result<Vec<_>, _>>()?
-            .join("");
-        // process collected receipts
-        // send query message for receipt mailbox
-        self.process_stream(collected_receipts.as_bytes())?;
+        for id in witness_prefixes {
+            let receipts = self.send_message_to(id, Scheme::Http, message).await?;
+            // process collected receipts
+            // send query message for receipt mailbox
+            for receipt in receipts {
+                self.process(&receipt)?;
+            }
+        }
 
         // Get processed receipts from database to send all of them to witnesses. It
         // will return one receipt with all witness signatures as one attachment,
@@ -563,6 +535,7 @@ impl Controller {
             .ok_or(ControllerError::UnknownIdentifierError)?;
         kel.extend(signed_rpy.to_cesr()?);
 
+        self.send_message_to(&dest_prefix, Scheme::Http, kel);
         self.send_to(&dest_prefix, Scheme::Http, Topic::Process(kel))?;
         self.process(&signed_rpy)?;
         Ok(())

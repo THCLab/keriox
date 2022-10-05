@@ -1,7 +1,6 @@
-use std::sync::Arc;
+#![cfg(test)]
 
-// use keri_transport::default::DefaultTransport;
-use tempfile::Builder;
+use std::sync::Arc;
 
 use keri::{
     actor::prelude::Message,
@@ -10,10 +9,11 @@ use keri::{
     prefix::{BasicPrefix, IdentifierPrefix, Prefix},
     signer::{CryptoBox, KeyManager},
 };
-
-use crate::{mailbox_updating::ActionRequired, utils::OptionalConfig};
+// use keri_transport::default::DefaultTransport;
+use tempfile::Builder;
 
 use super::{error::ControllerError, identifier_controller::IdentifierController, Controller};
+use crate::{mailbox_updating::ActionRequired, utils::OptionalConfig};
 
 #[test]
 pub fn test_group_incept() -> Result<(), ControllerError> {
