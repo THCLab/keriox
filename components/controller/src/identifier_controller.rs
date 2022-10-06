@@ -25,7 +25,7 @@ use keri::{
     },
     oobi::{LocationScheme, Role, Scheme},
     prefix::{
-        AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix,
+        AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfAddressingPrefix,
         SelfSigningPrefix,
     },
     query::{
@@ -420,46 +420,83 @@ impl IdentifierController {
     /// Helper function for getting the position of identifier's public key in
     /// group's current keys list.
     pub(crate) fn get_index(&self, group_event: &KeyEvent) -> Result<usize, ControllerError> {
-        // TODO what if group participant is a group and has more than one
-        // public key?
-        let own_pk = &self
-            .source
-            .storage
-            .get_state(&self.id)?
-            .ok_or(ControllerError::UnknownIdentifierError)?
-            .current
-            .public_keys[0];
         match &group_event.content.event_data {
-            EventData::Icp(icp) => icp
-                .key_config
-                .public_keys
-                .iter()
-                .position(|pk| pk == own_pk),
-            EventData::Rot(rot) => rot
-                .key_config
-                .public_keys
-                .iter()
-                .position(|pk| pk == own_pk),
-            EventData::Dip(dip) => dip
-                .inception_data
-                .key_config
-                .public_keys
-                .iter()
-                .position(|pk| pk == own_pk),
-            EventData::Drt(drt) => drt
-                .key_config
-                .public_keys
-                .iter()
-                .position(|pk| pk == own_pk),
-            EventData::Ixn(_ixn) => self
-                .source
-                .storage
-                .get_state(&group_event.get_prefix())?
-                .ok_or(ControllerError::UnknownIdentifierError)?
-                .current
-                .public_keys
-                .iter()
-                .position(|pk| pk == own_pk),
+            EventData::Icp(icp) => {
+                // TODO what if group participant is a group and has more than one
+                // public key?
+                let own_pk = &self
+                    .source
+                    .storage
+                    .get_state(&self.id)?
+                    .ok_or(ControllerError::UnknownIdentifierError)?
+                    .current
+                    .public_keys[0];
+                icp.key_config
+                    .public_keys
+                    .iter()
+                    .position(|pk| pk == own_pk)
+            }
+            EventData::Rot(rot) => {
+                let own_npk = &self
+                    .source
+                    .storage
+                    .get_state(&self.id)?
+                    .ok_or(ControllerError::UnknownIdentifierError)?
+                    .current
+                    .next_keys_data
+                    .next_key_hashes[0];
+                rot.key_config
+                    .public_keys
+                    .iter()
+                    .position(|pk| own_npk.verify_binding(pk.to_str().as_bytes()))
+            }
+            EventData::Dip(dip) => {
+                // TODO what if group participant is a group and has more than one
+                // public key?
+                let own_pk = &self
+                    .source
+                    .storage
+                    .get_state(&self.id)?
+                    .ok_or(ControllerError::UnknownIdentifierError)?
+                    .current
+                    .public_keys[0];
+                dip.inception_data
+                    .key_config
+                    .public_keys
+                    .iter()
+                    .position(|pk| pk == own_pk)
+            }
+            EventData::Drt(drt) => {
+                let own_npk = &self
+                    .source
+                    .storage
+                    .get_state(&self.id)?
+                    .ok_or(ControllerError::UnknownIdentifierError)?
+                    .current
+                    .next_keys_data
+                    .next_key_hashes[0];
+                drt.key_config
+                    .public_keys
+                    .iter()
+                    .position(|pk| own_npk.verify_binding(pk.to_str().as_bytes()))
+            }
+            EventData::Ixn(_ixn) => {
+                let own_pk = &self
+                    .source
+                    .storage
+                    .get_state(&self.id)?
+                    .ok_or(ControllerError::UnknownIdentifierError)?
+                    .current
+                    .public_keys[0];
+                self.source
+                    .storage
+                    .get_state(&group_event.get_prefix())?
+                    .ok_or(ControllerError::UnknownIdentifierError)?
+                    .current
+                    .public_keys
+                    .iter()
+                    .position(|pk| pk == own_pk)
+            }
         }
         .ok_or(ControllerError::NotGroupParticipantError)
     }
@@ -500,7 +537,6 @@ impl IdentifierController {
             .collect::<Result<_, _>>()
             .unwrap())
     }
-
 
     /// Joins query events with their signatures, sends it to witness and
     /// process its response. If user action is needed to finalize process,
