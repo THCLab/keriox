@@ -105,4 +105,17 @@ impl Transport for DefaultTransport {
         let ops = parse_op_stream(&resp).map_err(|_| TransportError::InvalidResponse)?;
         Ok(ops)
     }
+
+    // async fn resolve_loc_scheme(&self, loc: LocationScheme) -> Result<(), TransportError> {
+    //     // {url}/resolve
+    //     let url = loc.url.join("resolve").unwrap();
+    //     let body = todo!("loc_scheme to bytes");
+    //     reqwest::Client::new()
+    //         .post(url)
+    //         .body(body)
+    //         .send()
+    //         .await
+    //         .map_err(|_| TransportError::NetworkError)?;
+    //     Ok(())
+    // }
 }

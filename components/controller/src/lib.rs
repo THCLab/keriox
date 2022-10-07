@@ -15,7 +15,7 @@ use keri::{
         signed_event_message::{Message, Notice, Op, SignedEventMessage},
         Digestible,
     },
-    event_parsing::{message::key_event_message, EventType, SignedEventData},
+    event_parsing::{message::key_event_message, EventType},
     oobi::{LocationScheme, OobiManager, Role, Scheme},
     prefix::{
         AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix,
@@ -88,19 +88,19 @@ impl Controller {
         Ok(controller)
     }
 
-    fn setup_witnesses(&self, oobis: &[LocationScheme]) -> Result<(), ControllerError> {
-        oobis
-            .iter()
-            .try_for_each(|lc| self.resolve_loc_schema(lc))?;
+    async fn setup_witnesses(&self, oobis: &[LocationScheme]) -> Result<(), ControllerError> {
+        for lc in oobis {
+            self.resolve_loc_schema(lc).await?;
+        }
         Ok(())
     }
 
     /// Make http request to get identifier's endpoints information.
-    pub fn resolve_loc_schema(&self, lc: &LocationScheme) -> Result<(), ControllerError> {
+    pub async fn resolve_loc_schema(&self, lc: &LocationScheme) -> Result<(), ControllerError> {
         let url = format!("{}oobi/{}", lc.url, lc.eid);
-        let oobis = self.transport.request_loc_scheme(lc).await?;
+        let oobis = self.transport.request_loc_scheme(lc.clone()).await?;
         for oobi in oobis {
-            self.process(oobi)?;
+            self.process(&Message::Op(oobi))?;
         }
         Ok(())
     }
@@ -208,7 +208,7 @@ impl Controller {
     ) -> Result<Vec<Message>, ControllerError> {
         let loc = self
             .get_loc_schemas(id)?
-            .iter()
+            .into_iter()
             .find(|loc| loc.scheme == scheme);
         let loc = match loc {
             Some(loc) => loc,
@@ -257,13 +257,19 @@ impl Controller {
     ///  1. send it to all witnesses
     ///  2. collect witness receipts and process them
     ///  3. get processed receipts from db and send it to all witnesses
-    fn publish(
+    async fn publish(
         &self,
         witness_prefixes: &[BasicPrefix],
         message: &SignedEventMessage,
     ) -> Result<(), ControllerError> {
         for id in witness_prefixes {
-            let receipts = self.send_message_to(id, Scheme::Http, message).await?;
+            let receipts = self
+                .send_message_to(
+                    &IdentifierPrefix::Basic(id.clone()),
+                    Scheme::Http,
+                    Message::Notice(Notice::Event(message.clone())),
+                )
+                .await?;
             // process collected receipts
             // send query message for receipt mailbox
             for receipt in receipts {
@@ -282,19 +288,16 @@ impl Controller {
         let rcts_from_db = self.storage.get_nt_receipts(&prefix, sn, &digest)?;
 
         match rcts_from_db {
-            Some(receipts) => {
-                let serialized_receipts = SignedEventData::from(receipts).to_cesr()?;
+            Some(receipt) => {
                 // send receipts to all witnesses
-                witness_prefixes
-                    .iter()
-                    .try_for_each(|prefix| -> Result<_, ControllerError> {
-                        self.send_to(
-                            &IdentifierPrefix::Basic(prefix.clone()),
-                            Scheme::Http,
-                            Topic::Process(serialized_receipts.clone()),
-                        )?;
-                        Ok(())
-                    })?;
+                for prefix in witness_prefixes {
+                    self.send_message_to(
+                        &IdentifierPrefix::Basic(prefix.clone()),
+                        Scheme::Http,
+                        Message::Notice(Notice::NontransferableRct(receipt.clone())),
+                    )
+                    .await?;
+                }
             }
             None => (),
         };
@@ -501,7 +504,7 @@ impl Controller {
         })
     }
 
-    fn finalize_add_role(
+    async fn finalize_add_role(
         &self,
         signer_prefix: &IdentifierPrefix,
         event: ReplyEvent,
@@ -529,14 +532,24 @@ impl Controller {
                 .ok_or(ControllerError::UnknownIdentifierError)?,
             sigs,
         )));
-        let mut kel = self
+        let kel = self
             .storage
-            .get_kel(signer_prefix)?
+            .db
+            .get_kel_finalized_events(signer_prefix)
             .ok_or(ControllerError::UnknownIdentifierError)?;
-        kel.extend(signed_rpy.to_cesr()?);
 
-        self.send_message_to(&dest_prefix, Scheme::Http, kel);
-        self.send_to(&dest_prefix, Scheme::Http, Topic::Process(kel))?;
+        // TODO: send in one request
+        for ev in kel {
+            self.send_message_to(
+                &dest_prefix,
+                Scheme::Http,
+                Message::Notice(Notice::Event(ev.signed_event_message)),
+            )
+            .await?;
+        }
+        self.send_message_to(&dest_prefix, Scheme::Http, signed_rpy.clone())
+            .await?;
+
         self.process(&signed_rpy)?;
         Ok(())
     }

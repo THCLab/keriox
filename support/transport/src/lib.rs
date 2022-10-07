@@ -1,6 +1,6 @@
 use keri::{
     event_message::signed_event_message::{Message, Op},
-    oobi::{LocationScheme, Role},
+    oobi::{EndRole, LocationScheme, Role},
     prefix::IdentifierPrefix,
 };
 
@@ -33,6 +33,14 @@ pub trait Transport {
         role: Role,
         eid: IdentifierPrefix,
     ) -> Result<Vec<Op>, TransportError>;
+
+    // /// Orders other actor to [`request_loc_scheme`](Transport::request_loc_scheme) and save result to its DB.
+    // /// Should use `resolve` endpoint.
+    // async fn resolve_loc_scheme(&self, loc: LocationScheme) -> Result<(), TransportError>;
+
+    // /// Orders other actor to [`request_end_role`](Transport::request_end_role) and save result to its DB.
+    // /// Should use `resolve` endpoint.
+    // async fn resolve_end_role(&self, role: EndRole) -> Result<(), TransportError>;
 }
 
 #[derive(Debug, thiserror::Error)]
