@@ -610,6 +610,13 @@ fn test_partially_sign_escrow() -> Result<(), Error> {
     let ixn2 = br#"{"v":"KERI10JSON0000cb_","t":"ixn","d":"ErcMMcfO4fdplItWB_42GwyY21u0pJkQEVDvMmrLVgFc","i":"EOsgPPbBijCbpu3R9N-TMdURgcoFqrjUf3rQiIaJ5L7M","s":"1","p":"EOsgPPbBijCbpu3R9N-TMdURgcoFqrjUf3rQiIaJ5L7M","a":[]}-AABAAye1jlp6iz6h5raVAavZEEahPQ7mUVHxegfjgZCjaWA-UcSQi5ic59-PKQ0tlEHlNHaeKIPts0lvONpW71dgOAg"#;
     let ixn_second_sig = parse_messagee(ixn2);
 
+    let ixn_event = if let Message::Notice(Notice::Event(ev)) = ixn_first_sig.clone() {
+        Some(ev.event_message)
+    } else {
+        None
+    }
+    .unwrap();
+
     processor.process(&ixn_first_sig)?;
 
     // check if event was accepted into kel
@@ -631,7 +638,7 @@ fn test_partially_sign_escrow() -> Result<(), Error> {
     // Now event is fully signed, check if escrow is empty
     assert_eq!(
         ps_escrow
-            .get_partially_signed_for_event(icp_event)
+            .get_partially_signed_for_event(ixn_event)
             .unwrap()
             .count(),
         0

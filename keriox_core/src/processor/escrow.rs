@@ -251,12 +251,12 @@ impl PartiallySignedEscrow {
         {
             let mut signatures = esc.flat_map(|ev| ev.signatures).collect::<Vec<_>>();
             let signatures_from_event = signed_event.signatures.clone();
-            let mut without_duplicates = signatures_from_event
+            let without_duplicates = signatures_from_event
                 .into_iter()
                 .filter(|sig| !signatures.contains(sig))
                 .collect::<Vec<_>>();
 
-            signatures.append(&mut without_duplicates);
+                signatures.append(&mut without_duplicates.clone());
 
             let new_event = SignedEventMessage {
                 signatures: signatures,

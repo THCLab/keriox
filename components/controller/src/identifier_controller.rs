@@ -337,7 +337,7 @@ impl IdentifierController {
         &mut self,
         group_event: &[u8],
         sig: SelfSigningPrefix,
-        exchanges: Vec<(&[u8], SelfSigningPrefix)>,
+        exchanges: Vec<(Vec<u8>, SelfSigningPrefix)>,
     ) -> Result<IdentifierPrefix, ControllerError> {
         // Join icp event with signature
         let (_, key_event) = key_event_message(&group_event).unwrap();
@@ -383,7 +383,7 @@ impl IdentifierController {
         let material_path = MaterialPath::to_path("-a".into());
         let attached_sig = sigs;
         for (exn, signature) in exchanges {
-            let (_, parsed_exn) = exchange_message(exn).unwrap();
+            let (_, parsed_exn) = exchange_message(&exn).unwrap();
             let exn = if let EventType::Exn(exn) = parsed_exn {
                 exn
             } else {

@@ -58,13 +58,11 @@ async fn test_group_incept() -> Result<(), ControllerError> {
     // Group initiator needs to use `finalize_group_incept` instead of just
     // `finalize_event`, to send multisig request to other group participants.
     // Identifier who get this request from mailbox, can use just `finalize_event`
-    let group_id = identifier1
-        .finalize_group_incept(
-            group_inception.as_bytes(),
-            signature_icp,
-            vec![(exn_messages[0].as_bytes(), signature_exn)],
-        )
-        .await?;
+    let group_id = identifier1.finalize_group_incept(
+        group_inception.as_bytes(),
+        signature_icp,
+        vec![(exn_messages[0].as_bytes().to_vec(), signature_exn)],
+    ).await?;
 
     let kel = controller
         .storage
@@ -190,7 +188,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
         .finalize_group_incept(
             delegated_inception.as_bytes(),
             signature_icp.clone(),
-            vec![(exn_messages[0].as_bytes(), signature_exn.clone())],
+            vec![(exn_messages[0].as_bytes().to_vec(), signature_exn.clone())],
         )
         .await?;
 
