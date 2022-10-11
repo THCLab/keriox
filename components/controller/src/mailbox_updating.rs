@@ -1,3 +1,4 @@
+use futures::{StreamExt, TryStreamExt};
 use keri::{
     actor::{event_generator, prelude::Message},
     event::{
@@ -76,22 +77,18 @@ impl IdentifierController {
             .collect::<Result<Vec<_>, ControllerError>>()
     }
 
-    pub fn process_groups_mailbox(
+    pub async fn process_groups_mailbox(
         &self,
         mb: &MailboxResponse,
         from_index: &MailboxReminder,
     ) -> Result<Vec<ActionRequired>, ControllerError> {
-        Ok(self
-            .groups
-            .iter()
-            .map(|group_id| self.process_group_mailbox(mb, group_id, from_index))
-            .collect::<Result<Vec<_>, _>>()?
-            .into_iter()
-            .flatten()
-            .collect())
+        Ok(futures::stream::iter(&self.groups)
+            .then(|group_id| self.process_group_mailbox(mb, group_id, from_index))
+            .try_concat()
+            .await?)
     }
 
-    fn process_group_mailbox(
+    async fn process_group_mailbox(
         &self,
         mb: &MailboxResponse,
         group_id: &IdentifierPrefix,
@@ -102,19 +99,15 @@ impl IdentifierController {
             .skip(from_index.receipt)
             .map(|rct| self.process_receipt(rct))
             .collect::<Result<_, _>>()?;
-        mb.multisig
-            .iter()
-            .skip(from_index.multisig)
-            .try_for_each(|event| self.process_group_multisig(event))?;
-        mb.delegate
-            .iter()
+        for event in mb.multisig.iter().skip(from_index.multisig) {
+            self.process_group_multisig(event).await?;
+        }
+        futures::stream::iter(&mb.delegate)
             .skip(from_index.delegate)
-            .map(|del_event| self.process_group_delegate(del_event, group_id))
-            .filter_map(|del| match del {
-                Ok(del) => del.map(|o| Ok(o)),
-                Err(e) => Some(Err(e)),
-            })
-            .collect::<Result<Vec<_>, _>>()
+            .then(|del_event| self.process_group_delegate(del_event, group_id))
+            .try_filter_map(|del| async move { Ok(del) })
+            .try_collect::<Vec<_>>()
+            .await
     }
 
     /// Returns exn message that contains signed multisig event and will be
@@ -133,14 +126,17 @@ impl IdentifierController {
     }
 
     /// If leader and event is fully signed publish event to witness.
-    fn process_group_multisig(&self, event: &SignedEventMessage) -> Result<(), ControllerError> {
+    async fn process_group_multisig(
+        &self,
+        event: &SignedEventMessage,
+    ) -> Result<(), ControllerError> {
         self.source
             .process(&Message::Notice(Notice::Event(event.clone())))?;
 
-        self.publish(event)
+        self.publish(event).await
     }
 
-    fn publish(&self, event: &SignedEventMessage) -> Result<(), ControllerError> {
+    async fn publish(&self, event: &SignedEventMessage) -> Result<(), ControllerError> {
         let id = event.event_message.event.get_prefix();
         let fully_signed_event = self
             .source
@@ -172,7 +168,7 @@ impl IdentifierController {
         match to_publish {
             Some(to_publish) => {
                 let witnesses = self.source.get_current_witness_list(&id)?;
-                self.source.publish(&witnesses, &to_publish)
+                self.source.publish(&witnesses, &to_publish).await
             }
             None => Ok(()),
         }
@@ -208,7 +204,7 @@ impl IdentifierController {
     /// event and send it to group multisig mailbox for other group
     /// participants. If signing is required to finish the process it resturns
     /// proper notification.
-    fn process_group_delegate(
+    async fn process_group_delegate(
         &self,
         event_to_confirm: &SignedEventMessage,
         group_id: &IdentifierPrefix,
@@ -226,7 +222,7 @@ impl IdentifierController {
                         .get_event_by_sn_and_digest(seal.sn, &seal.prefix, &seal.event_digest);
                     if let Some(fully_signed) = fully_signed_event {
                         let witnesses = self.source.get_current_witness_list(&self.id)?;
-                        self.source.publish(&witnesses, &fully_signed)?;
+                        self.source.publish(&witnesses, &fully_signed).await?;
                     };
                 };
                 Ok(None)

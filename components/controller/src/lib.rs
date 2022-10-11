@@ -82,7 +82,7 @@ impl Controller {
         };
 
         if let Some(initial_oobis) = initial_oobis {
-            controller.setup_witnesses(&initial_oobis)?;
+             async_std::task::block_on(controller.setup_witnesses(&initial_oobis))?;
         }
 
         Ok(controller)
@@ -305,14 +305,14 @@ impl Controller {
         Ok(())
     }
 
-    pub fn incept(
+    pub async fn incept(
         &self,
         public_keys: Vec<BasicPrefix>,
         next_pub_keys: Vec<BasicPrefix>,
         witnesses: Vec<LocationScheme>,
         witness_threshold: u64,
     ) -> Result<String, ControllerError> {
-        self.setup_witnesses(&witnesses)?;
+        self.setup_witnesses(&witnesses).await?;
         let witnesses = witnesses
             .iter()
             .map(|wit| {
@@ -336,7 +336,7 @@ impl Controller {
     /// Verify event signature, add it to kel, and publish it to witnesses.
     /// Returns new established identifier prefix. Ment to be used for
     /// identifiers with one keypair.
-    pub fn finalize_inception(
+    pub async fn finalize_inception(
         &self,
         event: &[u8],
         sig: &SelfSigningPrefix,
@@ -346,7 +346,7 @@ impl Controller {
         match parsed_event {
             EventType::KeyEvent(ke) => {
                 if let EventData::Icp(_) = &ke.event.get_event_data() {
-                    self.finalize_key_event(&ke, sig, 0)?;
+                    self.finalize_key_event(&ke, sig, 0).await?;
                     Ok(ke.event.get_prefix())
                 } else {
                     Err(ControllerError::InceptionError(
@@ -361,7 +361,7 @@ impl Controller {
     }
 
     /// Generate and return rotation event for given identifier data
-    pub fn rotate(
+    pub async fn rotate(
         &self,
         id: IdentifierPrefix,
         current_keys: Vec<BasicPrefix>,
@@ -370,7 +370,7 @@ impl Controller {
         witness_to_remove: Vec<BasicPrefix>,
         witness_threshold: u64,
     ) -> Result<String, ControllerError> {
-        self.setup_witnesses(&witness_to_add)?;
+        self.setup_witnesses(&witness_to_add).await?;
         let witnesses_to_add = witness_to_add
             .iter()
             .map(|wit| {
@@ -438,7 +438,7 @@ impl Controller {
             .witnesses)
     }
 
-    fn finalize_key_event(
+    async fn finalize_key_event(
         &self,
         event: &EventMessage<KeyEvent>,
         sig: &SelfSigningPrefix,
@@ -479,7 +479,7 @@ impl Controller {
 
         if let Some(to_pub) = to_publish {
             let witnesses = self.get_witnesses_at_event(&to_pub.event_message)?;
-            self.publish(&witnesses, &to_pub)?;
+            self.publish(&witnesses, &to_pub).await?;
         };
         Ok(())
     }
