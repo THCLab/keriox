@@ -1,7 +1,9 @@
 use keri::{
+    actor::simple_controller::PossibleResponse,
     event_message::signed_event_message::{Message, Op},
-    oobi::{EndRole, LocationScheme, Role},
+    oobi::{LocationScheme, Role},
     prefix::IdentifierPrefix,
+    query::query_event::SignedQuery,
 };
 
 pub mod default;
@@ -11,12 +13,17 @@ pub mod default;
 /// This also allows providing a fake transport for tests.
 #[async_trait::async_trait]
 pub trait Transport {
-    /// Send a message to other actor and returns its response
-    async fn send_message(
+    /// Send a message to other actor.
+    /// This is used for sending notices, replies, and exchanges.
+    /// To send query, prefer [`Transport::send_query`] method.
+    async fn send_message(&self, loc: LocationScheme, msg: Message) -> Result<(), TransportError>;
+
+    /// Send a query to other actor and return its response.
+    async fn send_query(
         &self,
         loc: LocationScheme,
-        msg: Message,
-    ) -> Result<Vec<Message>, TransportError>;
+        qry: SignedQuery,
+    ) -> Result<PossibleResponse, TransportError>;
 
     /// Request location scheme for id from other actor.
     /// Should use `get_eid_oobi` endpoint.

@@ -7,7 +7,7 @@ mod test;
 pub mod utils;
 
 use keri::{
-    actor::{self, event_generator},
+    actor::{self, event_generator, simple_controller::PossibleResponse},
     database::{escrow::EscrowDb, SledEventDatabase},
     event::{event_data::EventData, sections::seal::Seal, EventMessage},
     event_message::{
@@ -27,14 +27,14 @@ use keri::{
         event_storage::EventStorage,
         Processor,
     },
-    query::reply_event::{ReplyEvent, ReplyRoute, SignedReply},
+    query::{
+        query_event::SignedQuery,
+        reply_event::{ReplyEvent, ReplyRoute, SignedReply},
+    },
 };
 use keri_transport::{default::DefaultTransport, Transport};
 
-use self::{
-    error::ControllerError,
-    utils::{OptionalConfig, Topic},
-};
+use self::{error::ControllerError, utils::OptionalConfig};
 
 pub struct Controller {
     processor: BasicProcessor,
@@ -82,7 +82,7 @@ impl Controller {
         };
 
         if let Some(initial_oobis) = initial_oobis {
-             async_std::task::block_on(controller.setup_witnesses(&initial_oobis))?;
+            async_std::task::block_on(controller.setup_witnesses(&initial_oobis))?;
         }
 
         Ok(controller)
@@ -97,7 +97,6 @@ impl Controller {
 
     /// Make http request to get identifier's endpoints information.
     pub async fn resolve_loc_schema(&self, lc: &LocationScheme) -> Result<(), ControllerError> {
-        let url = format!("{}oobi/{}", lc.url, lc.eid);
         let oobis = self.transport.request_loc_scheme(lc.clone()).await?;
         for oobi in oobis {
             self.process(&Message::Op(oobi))?;
@@ -139,12 +138,12 @@ impl Controller {
 
     /// Query watcher (TODO randomly chosen, for now asks first found watcher)
     /// about id kel and updates local kel.
-    pub fn query(&self, id: &IdentifierPrefix, query_id: &str) -> Result<(), ControllerError> {
-        let watchers = self.get_watchers(id)?;
+    pub fn query(&self, id: &IdentifierPrefix, _query_id: &str) -> Result<(), ControllerError> {
+        let _watchers = self.get_watchers(id)?;
         // TODO choose random watcher id?
         // TODO we assume that we get the answer immediately which is not always true
-        let resp = todo!("query");
-        self.process_stream(resp)
+        let _resp = todo!("query");
+        // self.process_stream(_resp)
     }
 
     // Returns messages if they can be returned immediately, i.e. for query message
@@ -205,7 +204,7 @@ impl Controller {
         id: &IdentifierPrefix,
         scheme: Scheme,
         msg: Message,
-    ) -> Result<Vec<Message>, ControllerError> {
+    ) -> Result<(), ControllerError> {
         let loc = self
             .get_loc_schemas(id)?
             .into_iter()
@@ -219,7 +218,30 @@ impl Controller {
                 });
             }
         };
-        Ok(self.transport.send_message(loc, msg).await?)
+        self.transport.send_message(loc, msg).await?;
+        Ok(())
+    }
+
+    async fn send_query_to(
+        &self,
+        id: &IdentifierPrefix,
+        scheme: Scheme,
+        query: SignedQuery,
+    ) -> Result<PossibleResponse, ControllerError> {
+        let loc = self
+            .get_loc_schemas(id)?
+            .into_iter()
+            .find(|loc| loc.scheme == scheme);
+        let loc = match loc {
+            Some(loc) => loc,
+            None => {
+                return Err(ControllerError::NoLocationScheme {
+                    id: id.clone(),
+                    scheme,
+                });
+            }
+        };
+        Ok(self.transport.send_query(loc, query).await?)
     }
 
     fn send_oobi_to(
@@ -230,7 +252,7 @@ impl Controller {
     ) -> Result<(), ControllerError> {
         let loc = self
             .get_loc_schemas(id)?
-            .iter()
+            .into_iter()
             .find(|loc| loc.scheme == scheme);
         let loc = match loc {
             Some(loc) => loc,
@@ -272,9 +294,11 @@ impl Controller {
                 .await?;
             // process collected receipts
             // send query message for receipt mailbox
-            for receipt in receipts {
-                self.process(&receipt)?;
-            }
+
+            // TODO: ?????????
+            // for receipt in receipts {
+            //     self.process(&receipt)?;
+            // }
         }
 
         // Get processed receipts from database to send all of them to witnesses. It

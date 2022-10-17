@@ -1,11 +1,7 @@
 use std::sync::Arc;
 
 use keri::{
-    actor::{
-        event_generator,
-        prelude::Message,
-        simple_controller::{parse_response, PossibleResponse},
-    },
+    actor::{event_generator, prelude::Message, simple_controller::PossibleResponse},
     derivation::self_addressing::SelfAddressing,
     event::{
         event_data::EventData,
@@ -38,7 +34,7 @@ use keri::{
     },
 };
 
-use crate::{error::ControllerError, mailbox_updating::MailboxReminder, utils::Topic, Controller};
+use crate::{error::ControllerError, mailbox_updating::MailboxReminder, Controller};
 
 use super::mailbox_updating::ActionRequired;
 
@@ -78,7 +74,7 @@ impl IdentifierController {
             .ok_or(ControllerError::UnknownIdentifierError)
     }
 
-    pub fn rotate(
+    pub async fn rotate(
         &self,
         current_keys: Vec<BasicPrefix>,
         new_next_keys: Vec<BasicPrefix>,
@@ -86,14 +82,16 @@ impl IdentifierController {
         witness_to_remove: Vec<BasicPrefix>,
         witness_threshold: u64,
     ) -> Result<String, ControllerError> {
-        self.source.rotate(
-            self.id.clone(),
-            current_keys,
-            new_next_keys,
-            witness_to_add,
-            witness_to_remove,
-            witness_threshold,
-        )
+        self.source
+            .rotate(
+                self.id.clone(),
+                current_keys,
+                new_next_keys,
+                witness_to_add,
+                witness_to_remove,
+                witness_threshold,
+            )
+            .await
     }
 
     pub fn anchor(&self, payload: &[SelfAddressingPrefix]) -> Result<String, ControllerError> {
@@ -163,7 +161,7 @@ impl IdentifierController {
 
     /// Check signatures, updates database and send events to watcher or
     /// witnesses.
-    pub fn finalize_event(
+    pub async fn finalize_event(
         &self,
         event: &[u8],
         sig: SelfSigningPrefix,
@@ -174,12 +172,13 @@ impl IdentifierController {
         match parsed_event {
             EventType::KeyEvent(ke) => {
                 let index = self.get_index(&ke.event)?;
-                self.source.finalize_key_event(&ke, &sig, index)
+                self.source.finalize_key_event(&ke, &sig, index).await
             }
             EventType::Rpy(rpy) => match rpy.get_route() {
-                ReplyRoute::EndRoleAdd(_) => {
-                    Ok(self.source.finalize_add_role(&self.id, rpy, vec![sig])?)
-                }
+                ReplyRoute::EndRoleAdd(_) => Ok(self
+                    .source
+                    .finalize_add_role(&self.id, rpy, vec![sig])
+                    .await?),
                 ReplyRoute::EndRoleCut(_) => todo!(),
                 _ => Err(ControllerError::WrongEventTypeError),
             },
@@ -258,7 +257,7 @@ impl IdentifierController {
         Ok((serialized_icp, exchanges))
     }
 
-    pub fn finalize_exchange(
+    pub async fn finalize_exchange(
         &self,
         exchange: &[u8],
         exn_signature: SelfSigningPrefix,
@@ -269,7 +268,7 @@ impl IdentifierController {
         // let attached_sig = sigs;
         let (_, parsed_exn) = exchange_message(exchange).unwrap();
         if let EventType::Exn(exn) = parsed_exn {
-            let Exchange::Fwd { args, to_forward } = exn.event.content.clone();
+            let Exchange::Fwd { to_forward, .. } = exn.event.content.clone();
 
             let sigs: Vec<_> = if let Some(receipts) = self.source.storage.get_nt_receipts(
                 &to_forward.event.get_prefix(),
@@ -314,17 +313,17 @@ impl IdentifierController {
                 signature,
                 data_signature: (material_path.clone(), sigs.clone()),
             }));
-            self.source
-                .get_witnesses_at_event(&to_forward)?
-                // TODO for now get first witness
-                .get(0)
-                .map(|wit| {
-                    self.source.send_to(
+            let wits = self.source.get_witnesses_at_event(&to_forward)?;
+            // TODO for now get first witness
+            if let Some(wit) = wits.get(0) {
+                self.source
+                    .send_message_to(
                         &IdentifierPrefix::Basic(wit.clone()),
                         keri::oobi::Scheme::Http,
-                        Topic::Forward(signer_exn.to_cesr().unwrap()),
+                        signer_exn,
                     )
-                });
+                    .await?;
+            }
             Ok(())
         } else {
             Ok(())
@@ -335,7 +334,7 @@ impl IdentifierController {
     ///
     /// Join event with signature, verify them and sends signed exn messages to
     /// witness to be forwarded to group participants.
-    pub fn finalize_group_incept(
+    pub async fn finalize_group_incept(
         &mut self,
         group_event: &[u8],
         sig: SelfSigningPrefix,
@@ -343,78 +342,81 @@ impl IdentifierController {
     ) -> Result<IdentifierPrefix, ControllerError> {
         // Join icp event with signature
         let (_, key_event) = key_event_message(&group_event).unwrap();
-        if let EventType::KeyEvent(icp) = key_event {
-            let own_index = self.get_index(&icp.event)?;
-            let group_prefix = icp.event.get_prefix();
+        let icp = if let EventType::KeyEvent(icp) = key_event {
+            icp
+        } else {
+            return Err(ControllerError::WrongEventTypeError);
+        };
+        let own_index = self.get_index(&icp.event)?;
+        let group_prefix = icp.event.get_prefix();
 
-            self.source.finalize_key_event(&icp, &sig, own_index)?;
-            self.groups.push(icp.event.get_prefix());
+        self.source
+            .finalize_key_event(&icp, &sig, own_index)
+            .await?;
+        self.groups.push(icp.event.get_prefix());
 
-            let signature = AttachedSignaturePrefix {
-                index: own_index as u16,
-                signature: sig,
-            };
+        let signature = AttachedSignaturePrefix {
+            index: own_index as u16,
+            signature: sig,
+        };
 
-            let sigs: Vec<_> = if let Some(receipts) = self.source.storage.get_nt_receipts(
-                &icp.event.get_prefix(),
-                icp.event.get_sn(),
-                &icp.event.get_digest(),
-            )? {
-                let couplets = receipts.signatures;
-                couplets
-                    .into_iter()
-                    .map(|c| Signature::NonTransferable(c))
-                    .chain([Signature::Transferable(
-                        SignerData::JustSignatures,
-                        vec![signature],
-                    )])
-                    .collect::<Vec<_>>()
-            } else {
-                vec![Signature::Transferable(
+        let sigs: Vec<_> = if let Some(receipts) = self.source.storage.get_nt_receipts(
+            &icp.event.get_prefix(),
+            icp.event.get_sn(),
+            &icp.event.get_digest(),
+        )? {
+            let couplets = receipts.signatures;
+            couplets
+                .into_iter()
+                .map(|c| Signature::NonTransferable(c))
+                .chain([Signature::Transferable(
                     SignerData::JustSignatures,
                     vec![signature],
-                )]
-            };
-
-            // Join exn messages with their signatures and send it to witness.
-            let material_path = MaterialPath::to_path("-a".into());
-            let attached_sig = sigs;
-            exchanges.into_iter().try_for_each(|(exn, signature)| {
-                let (_, parsed_exn) = exchange_message(exn).unwrap();
-                if let EventType::Exn(exn) = parsed_exn {
-                    let signature = vec![Signature::Transferable(
-                        SignerData::LastEstablishment(self.id.clone()),
-                        vec![AttachedSignaturePrefix {
-                            // TODO
-                            index: 0,
-                            signature,
-                        }],
-                    )];
-                    let signer_exn = Message::Op(Op::Exchange(SignedExchange {
-                        exchange_message: exn,
-                        signature,
-                        data_signature: (material_path.clone(), attached_sig.clone()),
-                    }));
-                    self.source
-                        .get_witnesses_at_event(&icp)?
-                        // TODO for now get first witness
-                        .get(0)
-                        .map(|wit| {
-                            self.source.send_to(
-                                &IdentifierPrefix::Basic(wit.clone()),
-                                keri::oobi::Scheme::Http,
-                                Topic::Forward(signer_exn.to_cesr().unwrap()),
-                            )
-                        });
-                    Ok(())
-                } else {
-                    Err(ControllerError::WrongEventTypeError)
-                }
-            })?;
-            Ok(group_prefix)
+                )])
+                .collect::<Vec<_>>()
         } else {
-            Err(ControllerError::WrongEventTypeError)
+            vec![Signature::Transferable(
+                SignerData::JustSignatures,
+                vec![signature],
+            )]
+        };
+
+        // Join exn messages with their signatures and send it to witness.
+        let material_path = MaterialPath::to_path("-a".into());
+        let attached_sig = sigs;
+        for (exn, signature) in exchanges {
+            let (_, parsed_exn) = exchange_message(exn).unwrap();
+            let exn = if let EventType::Exn(exn) = parsed_exn {
+                exn
+            } else {
+                return Err(ControllerError::WrongEventTypeError);
+            };
+            let signature = vec![Signature::Transferable(
+                SignerData::LastEstablishment(self.id.clone()),
+                vec![AttachedSignaturePrefix {
+                    // TODO
+                    index: 0,
+                    signature,
+                }],
+            )];
+            let signer_exn = Message::Op(Op::Exchange(SignedExchange {
+                exchange_message: exn,
+                signature,
+                data_signature: (material_path.clone(), attached_sig.clone()),
+            }));
+            let wits = self.source.get_witnesses_at_event(&icp)?;
+            // TODO for now get first witness
+            if let Some(wit) = wits.get(0) {
+                self.source
+                    .send_message_to(
+                        &IdentifierPrefix::Basic(wit.clone()),
+                        keri::oobi::Scheme::Http,
+                        signer_exn,
+                    )
+                    .await?;
+            }
         }
+        Ok(group_prefix)
     }
 
     /// Helper function for getting the position of identifier's public key in
@@ -543,69 +545,66 @@ impl IdentifierController {
     /// Joins query events with their signatures, sends it to witness and
     /// process its response. If user action is needed to finalize process,
     /// returns proper notification.
-    pub fn finalize_mailbox_query(
+    pub async fn finalize_mailbox_query(
         &mut self,
         queries: Vec<(QueryEvent, SelfSigningPrefix)>,
     ) -> Result<Vec<ActionRequired>, ControllerError> {
-        Ok(queries
-            .into_iter()
-            .map(|(qry, sig)| -> Result<_, ControllerError> {
-                let signatures = vec![AttachedSignaturePrefix {
-                    index: 0,
-                    signature: sig,
-                }];
-                let (receipient, from_who, about_who) = match &qry.event.content.data.route {
-                    QueryRoute::Log {
-                        reply_route: _,
-                        args,
-                    } => (args.src.clone().unwrap(), None, None),
-                    QueryRoute::Ksn {
-                        reply_route: _,
-                        args,
-                    } => (args.src.clone().unwrap(), None, None),
-                    QueryRoute::Mbx {
-                        reply_route: _,
-                        args,
-                    } => (args.src.clone(), Some(&args.i), Some(&args.pre)),
+        let self_id = self.id.clone();
+        let mut actions = Vec::new();
+        for (qry, sig) in queries {
+            let signatures = vec![AttachedSignaturePrefix {
+                index: 0,
+                signature: sig,
+            }];
+            let (receipient, from_who, about_who) = match &qry.event.content.data.route {
+                QueryRoute::Log {
+                    reply_route: _,
+                    args,
+                } => (args.src.clone().unwrap(), None, None),
+                QueryRoute::Ksn {
+                    reply_route: _,
+                    args,
+                } => (args.src.clone().unwrap(), None, None),
+                QueryRoute::Mbx {
+                    reply_route: _,
+                    args,
+                } => (args.src.clone(), Some(&args.i), Some(&args.pre)),
+            };
+            let query = SignedQuery::new(qry.clone(), self_id.clone(), signatures);
+            let res = self
+                .source
+                .send_query_to(&receipient, Scheme::Http, query)
+                .await?;
+            println!("\nresponse: {:?}", res);
+            // TODO what if other reponse than mailbox?
+            let res = if let PossibleResponse::Mbx(res) = res {
+                res
+            } else {
+                todo!()
+            };
+            let req = if from_who == about_who {
+                // process own mailbox
+                let req = self.process_own_mailbox(&res, &self.last_asked_index)?;
+                self.last_asked_index = MailboxReminder {
+                    receipt: res.receipt.len(),
+                    multisig: res.multisig.len(),
+                    delegate: res.delegate.len(),
                 };
-                let query = Op::Query(SignedQuery::new(qry.clone(), self.id.clone(), signatures));
-                let qry_str = String::from_utf8(Message::Op(query.clone()).to_cesr().unwrap())
-                    .map_err(|_e| ControllerError::EventParseError)?;
-                let response =
-                    self.source
-                        .send_to(&receipient, Scheme::Http, Topic::Query(qry_str))?;
-                println!("\nresponse: {}", response);
-                // TODO what if other reponse than mailbox?
-                let res = parse_response(&response).unwrap();
-                if let PossibleResponse::Mbx(res) = res {
-                    let req = if from_who == about_who {
-                        // process own mailbox
-                        let req = self.process_own_mailbox(&res, &self.last_asked_index)?;
-                        self.last_asked_index = MailboxReminder {
-                            receipt: res.receipt.len(),
-                            multisig: res.multisig.len(),
-                            delegate: res.delegate.len(),
-                        };
-                        req
-                    } else {
-                        // process group mailbox
-                        let group_req =
-                            self.process_groups_mailbox(&res, &self.last_asked_groups_index)?;
-                        self.last_asked_groups_index = MailboxReminder {
-                            receipt: res.receipt.len(),
-                            multisig: res.multisig.len(),
-                            delegate: res.delegate.len(),
-                        };
-                        group_req
-                    };
-                    Ok(req)
-                } else {
-                    todo!()
-                }
-            })
-            .collect::<Result<Vec<Vec<ActionRequired>>, _>>()?
-            .into_iter()
-            .flatten()
-            .collect())
+                req
+            } else {
+                // process group mailbox
+                let group_req = self
+                    .process_groups_mailbox(&res, &self.last_asked_groups_index)
+                    .await?;
+                self.last_asked_groups_index = MailboxReminder {
+                    receipt: res.receipt.len(),
+                    multisig: res.multisig.len(),
+                    delegate: res.delegate.len(),
+                };
+                group_req
+            };
+            actions.extend(req)
+        }
+        Ok(actions)
     }
 }
