@@ -23,13 +23,16 @@ pub trait Prefix: FromStr<Err = Error> {
     fn derivative(&self) -> Vec<u8>;
     fn derivation_code(&self) -> String;
     fn to_str(&self) -> String {
-        // empty data cannot be prefixed!
         match self.derivative().len() {
+            // empty data cannot be prefixed!
             0 => "".to_string(),
             _ => {
                 let dc = self.derivation_code();
-
-                [dc, from_bytes_to_text(&self.derivative())].join("")
+                let lead_bytes = if dc.len() % 4 != 0 { dc.len() } else { 0 };
+                // replace lead bytes with code
+                let derivative_text =
+                    from_bytes_to_text(&self.derivative())[lead_bytes..].to_string();
+                [dc, derivative_text].join("")
             }
         }
     }

@@ -97,7 +97,9 @@ pub fn basic_prefix(s: &[u8]) -> nom::IResult<&[u8], BasicPrefix> {
 
     let (extra, b) = take(code.derivative_b64_len())(rest)?;
 
-    let decoded = from_text_to_bytes(&b).map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?;
+    let decoded: Vec<_> = from_text_to_bytes(&b)
+        .map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?[code.code_len()..]
+        .to_vec();
     let pk = PublicKey::new(decoded);
     Ok((extra, code.derive(pk)))
 }
@@ -117,7 +119,10 @@ pub fn self_addressing_prefix(s: &[u8]) -> nom::IResult<&[u8], SelfAddressingPre
         .map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?;
 
     let (extra, b) = take(code.derivative_b64_len())(rest)?;
-    let decoded = from_text_to_bytes(&b).map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?;
+
+    let decoded = from_text_to_bytes(&b).map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?
+        [code.code_len()..]
+        .to_vec();
 
     let prefix = SelfAddressingPrefix {
         derivation: code,
@@ -165,8 +170,8 @@ pub fn attached_sn(s: &[u8]) -> nom::IResult<&[u8], u64> {
 
             let sn = {
                 let b64decode = from_text_to_bytes(parsed_sn)
-                    .map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?;
-                // TODO
+                    .map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?[2..]
+                    .to_vec();
                 let mut sn_array: [u8; 8] = [0; 8];
                 sn_array.copy_from_slice(&b64decode[8..]);
                 u64::from_be_bytes(sn_array)

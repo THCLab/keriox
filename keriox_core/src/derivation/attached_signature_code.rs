@@ -87,17 +87,17 @@ pub fn b64_to_num(b64: &[u8]) -> Result<u16, Error> {
 }
 
 pub fn num_to_b64(num: u16) -> String {
-    from_bytes_to_text(&num.to_be_bytes().to_vec())
+    from_bytes_to_text(&num.to_be_bytes().to_vec())[3..].to_string()
 }
 
 #[test]
 fn num_to_b64_test() {
-    assert_eq!("AAAA", num_to_b64(0));
-    assert_eq!("AAAB", num_to_b64(1));
-    assert_eq!("AAAC", num_to_b64(2));
-    assert_eq!("AAAD", num_to_b64(3));
-    assert_eq!("AAAb", num_to_b64(27));
-    assert_eq!("AABQ", num_to_b64(80));
+    assert_eq!("AA", num_to_b64(0));
+    assert_eq!("AB", num_to_b64(1));
+    assert_eq!("AC", num_to_b64(2));
+    assert_eq!("AD", num_to_b64(3));
+    assert_eq!("Ab", num_to_b64(27));
+    assert_eq!("BQ", num_to_b64(80));
 
     // assert_eq!("A", num_to_b64(0));
     // assert_eq!("B", num_to_b64(1));
