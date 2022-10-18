@@ -1,7 +1,7 @@
 use super::Prefix;
 use crate::derivation::{self_addressing::SelfAddressing, DerivationCode};
 use crate::error::Error;
-use base64::decode_config;
+use crate::event_parsing::parsing::from_text_to_bytes;
 use core::{fmt, str::FromStr};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -30,12 +30,10 @@ impl FromStr for SelfAddressingPrefix {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let code = SelfAddressing::from_str(s)?;
         let c_len = code.code_len();
-        let p_len = code.prefix_b64_len();
         if s.len() == code.prefix_b64_len() {
-            Ok(Self::new(
-                code,
-                decode_config(&s[c_len..p_len], base64::URL_SAFE)?,
-            ))
+            let decoded = from_text_to_bytes(&s[c_len..].as_bytes())?;
+
+            Ok(Self::new(code, decoded))
         } else {
             Err(Error::SemanticError(format!(
                 "Incorrect Prefix Length: {}",

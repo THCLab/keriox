@@ -33,6 +33,7 @@ use crate::{
 
 pub mod attachment;
 pub mod message;
+pub mod parsing;
 pub mod path;
 pub mod payload_size;
 pub mod prefix;

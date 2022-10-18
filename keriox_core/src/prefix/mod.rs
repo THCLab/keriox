@@ -1,8 +1,8 @@
 use crate::{
     derivation::{basic::Basic, self_signing::SelfSigning},
     error::Error,
+    event_parsing::parsing::from_bytes_to_text,
 };
-use base64::encode_config;
 use core::str::FromStr;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt::Display;
@@ -28,15 +28,8 @@ pub trait Prefix: FromStr<Err = Error> {
             0 => "".to_string(),
             _ => {
                 let dc = self.derivation_code();
-                let derivative = self.derivative();
-                let lead_size = 3 - (derivative.len() % 3);
-                let full_derivative: Vec<_> = std::iter::repeat(0)
-                    .take(lead_size)
-                    .chain(derivative.into_iter())
-                    .collect();
 
-                let ec = encode_config(full_derivative, base64::URL_SAFE);
-                [&dc, &ec[lead_size..]].join("").to_string()
+                [dc, from_bytes_to_text(&self.derivative())].join("")
             }
         }
     }
