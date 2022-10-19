@@ -278,56 +278,62 @@ fn test_sigs() {
 
 #[test]
 fn test_attachement() {
-    let attached_str = "-GAC0AAAAAAAAAAAAAAAAAAAAAAQE3fUycq1G-P1K1pL2OhvY6ZU-9otSa3hXiCcrxuhjyII0AAAAAAAAAAAAAAAAAAAAAAQE3fUycq1G-P1K1pL2OhvY6ZU-9otSa3hXiCcrxuhjyII";
+    let attached_str = "-GAC0AAAAAAAAAAAAAAAAAAAAAABEJtQndkvwnMpVGE5oVVbLWSCm-jLviGw1AOOkzBvNwsS0AAAAAAAAAAAAAAAAAAAAAABEJtQndkvwnMpVGE5oVVbLWSCm-jLviGw1AOOkzBvNwsS";
     let (_rest, attached_sn_dig) = attachment(attached_str.as_bytes()).unwrap();
     assert_eq!(
         attached_sn_dig,
         Attachment::SealSourceCouplets(vec![
             SourceSeal {
                 sn: 1,
-                digest: "E3fUycq1G-P1K1pL2OhvY6ZU-9otSa3hXiCcrxuhjyII"
+                digest: "EJtQndkvwnMpVGE5oVVbLWSCm-jLviGw1AOOkzBvNwsS"
                     .parse()
                     .unwrap()
             },
             SourceSeal {
                 sn: 1,
-                digest: "E3fUycq1G-P1K1pL2OhvY6ZU-9otSa3hXiCcrxuhjyII"
+                digest: "EJtQndkvwnMpVGE5oVVbLWSCm-jLviGw1AOOkzBvNwsS"
                     .parse()
                     .unwrap()
             }
         ])
     );
 
-    let attached_str = "-FABED9EB3sA5u2vCPOEmX3d7bEyHiSh7Xi8fjew2KMl3FQM0AAAAAAAAAAAAAAAAAAAAAAAEeGqW24EnxUgO_wfuFo6GR_vii-RNv5iGo8ibUrhe6Z0-AABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+    let attached_str = "-FABEKC8085pwSwzLwUGzh-HrEoFDwZnCJq27bVp5atdMT9o0AAAAAAAAAAAAAAAAAAAAAAAEKC8085pwSwzLwUGzh-HrEoFDwZnCJq27bVp5atdMT9o-AABAABB5IVZOhEfcH4TBQgOCyMgyQrJujtBBjT8K_zTPk0-FLMtTZuBgXV7jnLw6fDe6FWtzshh2HGCL_H_j4i1b9kF";
     let (_rest, seal) = attachment(attached_str.as_bytes()).unwrap();
     assert_eq!(
         seal,
         Attachment::SealSignaturesGroups(vec![
             (
                 EventSeal {
-                    prefix: "ED9EB3sA5u2vCPOEmX3d7bEyHiSh7Xi8fjew2KMl3FQM"
+                    prefix: "EKC8085pwSwzLwUGzh-HrEoFDwZnCJq27bVp5atdMT9o"
                         .parse()
                         .unwrap(),
                     sn: 0,
-                    event_digest: "EeGqW24EnxUgO_wfuFo6GR_vii-RNv5iGo8ibUrhe6Z0"
+                    event_digest: "EKC8085pwSwzLwUGzh-HrEoFDwZnCJq27bVp5atdMT9o"
                         .parse()
                         .unwrap()
                 },
-                vec!["AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".parse().unwrap()]
+                vec!["AABB5IVZOhEfcH4TBQgOCyMgyQrJujtBBjT8K_zTPk0-FLMtTZuBgXV7jnLw6fDe6FWtzshh2HGCL_H_j4i1b9kF".parse().unwrap()]
         )
         ])
     );
 
-    let attached_str = "-CABBed2Tpxc8KeCEWoq3_RKKRjU_3P-chSser9J4eAtAK6I0B8npsG58rX1ex73gaGe-jvRnw58RQGsDLzoSXaGn-kHRRNu6Kb44zXDtMnx-_8CjnHqskvDbz6pbEbed3JTOnCQ";
+    let attached_str = "-CABBMrwi0a-Zblpqe5Hg7w7iz9JCKnMgWKu_W9w4aNUL64y0BB6cL0DtDVDW26lgjbQu0_D_Pd_6ovBZj6fU-Qjmm7epVs51jEOOwXKbmG4yUvCSN-DQSYSc7HXZRp8CfAw9DQL";
     let (_rest, seal) = attachment(attached_str.as_bytes()).unwrap();
     assert_eq!(seal, Attachment::ReceiptCouplets(
         vec![
-            ("Bed2Tpxc8KeCEWoq3_RKKRjU_3P-chSser9J4eAtAK6I".parse().unwrap(), "0B8npsG58rX1ex73gaGe-jvRnw58RQGsDLzoSXaGn-kHRRNu6Kb44zXDtMnx-_8CjnHqskvDbz6pbEbed3JTOnCQ".parse().unwrap())
+            ("BMrwi0a-Zblpqe5Hg7w7iz9JCKnMgWKu_W9w4aNUL64y".parse().unwrap(), "0BB6cL0DtDVDW26lgjbQu0_D_Pd_6ovBZj6fU-Qjmm7epVs51jEOOwXKbmG4yUvCSN-DQSYSc7HXZRp8CfAw9DQL".parse().unwrap())
             ]
         )
     );
 
-    let cesr_attachment = "-VAj-HABE4YPqsEOaPNaZxVIbY-Gx2bJgP-c7AH_K7pEE-YfcI9E-AABAAMX88afPpEfF_HF-E-1uZKyv8b_TdILi2x8vC3Yi7Q7yzHn2fR6Bkl2yn-ZxPqmsTfV3f-H_VQwMgk7jYEukVCA";
+    let cesr_attachment = "-AABAAB6P97kZ3al3V3z3VstRtHRPeOrotuqZZUgBl2yHzgpGyOjAXYGinVqWLAMhdmQ089FTSAzqSTBmJzI8RvIezsJ";
+    let (_rest, att) = attachment(cesr_attachment.as_bytes()).unwrap();
+    assert_eq!(att, Attachment::AttachedSignatures(
+        vec!["AAB6P97kZ3al3V3z3VstRtHRPeOrotuqZZUgBl2yHzgpGyOjAXYGinVqWLAMhdmQ089FTSAzqSTBmJzI8RvIezsJ".parse().unwrap()]
+    ));
+
+    let cesr_attachment = "-VAj-HABEIaGMMWJFPmtXznY1IIiKDIrg-vIyge6mBl2QV8dDjI3-AABAAB6P97kZ3al3V3z3VstRtHRPeOrotuqZZUgBl2yHzgpGyOjAXYGinVqWLAMhdmQ089FTSAzqSTBmJzI8RvIezsJ";
     let (rest, att) = attachment(cesr_attachment.as_bytes()).unwrap();
     assert!(matches!(att, Attachment::Frame(_)));
     assert!(rest.is_empty());

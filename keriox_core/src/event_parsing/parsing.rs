@@ -16,7 +16,7 @@ pub fn from_bytes_to_text(bytes: &[u8]) -> String {
         .chain(bytes.to_vec().into_iter())
         .collect();
 
-    encode_config(full_derivative, base64::URL_SAFE).to_string()
+    encode_config(full_derivative, base64::URL_SAFE)
 }
 
 #[test]

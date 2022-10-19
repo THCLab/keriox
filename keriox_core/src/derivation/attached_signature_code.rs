@@ -87,24 +87,26 @@ pub fn b64_to_num(b64: &[u8]) -> Result<u16, Error> {
 }
 
 pub fn num_to_b64(num: u16) -> String {
-    from_bytes_to_text(&num.to_be_bytes().to_vec())[3..].to_string()
+    let b64 = from_bytes_to_text(&num.to_be_bytes().to_vec());
+    // remove leading A's
+    if num < 64 {
+        b64[3..].to_string()
+    } else if num < 4096 {
+        b64[2..].to_string()
+    } else {
+        todo!()
+    }
 }
 
 #[test]
 fn num_to_b64_test() {
-    assert_eq!("AA", num_to_b64(0));
-    assert_eq!("AB", num_to_b64(1));
-    assert_eq!("AC", num_to_b64(2));
-    assert_eq!("AD", num_to_b64(3));
-    assert_eq!("Ab", num_to_b64(27));
+    assert_eq!("A", num_to_b64(0));
+    assert_eq!("B", num_to_b64(1));
+    assert_eq!("C", num_to_b64(2));
+    assert_eq!("D", num_to_b64(3));
+    assert_eq!("b", num_to_b64(27));
     assert_eq!("BQ", num_to_b64(80));
-
-    // assert_eq!("A", num_to_b64(0));
-    // assert_eq!("B", num_to_b64(1));
-    // assert_eq!("C", num_to_b64(2));
-    // assert_eq!("D", num_to_b64(3));
-    // assert_eq!("b", num_to_b64(27));
-    // assert_eq!("BQ", num_to_b64(80));
+    assert_eq!("__", num_to_b64(4095));
 }
 
 #[test]

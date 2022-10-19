@@ -30,12 +30,12 @@ pub fn attached_signature(s: &[u8]) -> nom::IResult<&[u8], AttachedSignaturePref
 
             let (rest, sig_s) = take(86u8)(maybe_sig)?;
 
-            let sig = base64::decode_config(sig_s, base64::URL_SAFE)
-                .map_err(|_| nom::Err::Error((index_c, ErrorKind::IsNot)))?;
+            let sig = &from_text_to_bytes(sig_s)
+                .map_err(|_| nom::Err::Error((index_c, ErrorKind::IsNot)))?[2..];
 
             Ok((
                 rest,
-                AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, sig, index),
+                AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, sig.to_vec(), index),
             ))
         }
         b => {
@@ -46,12 +46,16 @@ pub fn attached_signature(s: &[u8]) -> nom::IResult<&[u8], AttachedSignaturePref
 
             let (rest, sig_s) = take(86u8)(maybe_sig)?;
 
-            let sig = base64::decode_config(sig_s, base64::URL_SAFE)
-                .map_err(|_| nom::Err::Error((index_c, ErrorKind::IsNot)))?;
+            let sig = &from_text_to_bytes(sig_s)
+                .map_err(|_| nom::Err::Error((index_c, ErrorKind::IsNot)))?[2..];
 
             Ok((
                 rest,
-                AttachedSignaturePrefix::new(SelfSigning::ECDSAsecp256k1Sha256, sig, index),
+                AttachedSignaturePrefix::new(
+                    SelfSigning::ECDSAsecp256k1Sha256,
+                    sig.to_vec(),
+                    index,
+                ),
             ))
         }
         z => {
