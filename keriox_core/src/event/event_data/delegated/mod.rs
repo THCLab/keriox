@@ -66,10 +66,10 @@ fn test_delegated_inception_data_derivation() -> Result<(), Error> {
     use crate::prefix::{BasicPrefix, Prefix};
 
     // data taken from keripy/tests/core/test_delegation.py
-    let keys: Vec<BasicPrefix> = vec!["DuK1x8ydpucu3480Jpd1XBfjnCwb3dZ3x5b1CJmuUphA"
+    let keys: Vec<BasicPrefix> = vec!["DLitcfMnabnLt-PNCaXdVwX45wsG93Wd8eW9QiZrlKYQ"
         .parse()
         .unwrap()];
-    let next_keys: Vec<BasicPrefix> = vec!["DTf6QZWoet154o9wvzeMuNhLQRr8JaAUeiC6wjB_4_08"
+    let next_keys: Vec<BasicPrefix> = vec!["DE3-kGVqHrdeeKPcL83jLjYS0Ea_CWgFHogusIwf-P9P"
         .parse()
         .unwrap()];
 
@@ -81,16 +81,16 @@ fn test_delegated_inception_data_derivation() -> Result<(), Error> {
     let key_config = KeyConfig::new(keys, next_key_hash, Some(SignatureThreshold::Simple(1)));
     let dip_data = DelegatedInceptionEvent {
         inception_data: InceptionEvent::new(key_config.clone(), None, None),
-        delegator: "E7YbTIkWWyNwOxZQTTnrs6qn8jFbu2A8zftQ33JYQFQ0".parse()?,
+        delegator: "EA_SbBUZYwqLVlAAn14d6QUBQCSReJlZ755JqTgmRhXH".parse()?,
     }
     .incept_self_addressing(SelfAddressing::Blake3_256, SerializationFormats::JSON)?;
 
     assert_eq!(
-        "ESVGDRnpHMCAESkvj2bxKGAmMloX6K6vxfcmBLTOCM0A",
+        "EHng2fV42DdKb5TLMIs6bbjFkPNmIdQ5mSFn6BTnySJj",
         dip_data.event.get_prefix().to_str()
     );
     assert_eq!(
-        "ESVGDRnpHMCAESkvj2bxKGAmMloX6K6vxfcmBLTOCM0A",
+        "EHng2fV42DdKb5TLMIs6bbjFkPNmIdQ5mSFn6BTnySJj",
         dip_data.event.get_digest().to_str()
     );
     assert_eq!("KERI10JSON00015f_", dip_data.serialization_info.to_str());

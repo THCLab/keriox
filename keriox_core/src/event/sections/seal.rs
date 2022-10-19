@@ -74,19 +74,19 @@ impl SourceSeal {
 #[test]
 fn test_seal_deserialization() {
     // Event seal
-    let seal_str = r#"{"i":"Ek7M173EvQZ6kLjyorCwZK4XWwyNcSi6u7lz5-M6MyFE","s":"1","d":"EeBPcw30IVCylYANEGOg3V8f4nBYMspEpqNaq2Y8_knw"}"#;
+    let seal_str = r#"{"i":"EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen","s":"1","d":"EN8l6yJC2PxribTN0xfri6bLz34Qvj-x3cNwcV3DvT2m"}"#;
     let seal: Seal = serde_json::from_str(seal_str).unwrap();
     assert!(matches!(seal, Seal::Event(_)));
     assert_eq!(serde_json::to_string(&seal).unwrap(), seal_str);
 
     // Location seal
-    let seal_str = r#"{"i":"EXmV-FiCyD7U76DoXSQoHlG30hFLD2cuYWEQPp0mEu1U","s":"1","t":"ixn","p":"Ey-05xXgtfYvKyMGa-dladxUQyXv4JaPg-gaKuXLfceQ"}"#;
+    let seal_str = r#"{"i":"EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen","s":"1","t":"ixn","p":"EN8l6yJC2PxribTN0xfri6bLz34Qvj-x3cNwcV3DvT2m"}"#;
     let seal: Seal = serde_json::from_str(seal_str).unwrap();
     assert!(matches!(seal, Seal::Location(_)));
     assert_eq!(serde_json::to_string(&seal).unwrap(), seal_str);
 
     // Digest seal
-    let seal_str = r#"{"d":"Ey-05xXgtfYvKyMGa-dladxUQyXv4JaPg-gaKuXLfceQ"}"#;
+    let seal_str = r#"{"d":"EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen"}"#;
     let seal: Seal = serde_json::from_str(seal_str).unwrap();
     assert!(matches!(seal, Seal::Digest(_)));
     assert_eq!(serde_json::to_string(&seal).unwrap(), seal_str);
