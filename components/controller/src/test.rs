@@ -92,7 +92,6 @@ async fn test_group_incept() -> Result<(), ControllerError> {
 #[async_std::test]
 #[ignore]
 async fn test_delegated_incept() -> Result<(), ControllerError> {
-    println!("Test start");
     use url::Url;
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     let root2 = Builder::new().prefix("test-db2").tempdir().unwrap();
