@@ -20,6 +20,7 @@ use crate::{
     },
     event_message::{
         key_event_message::KeyEvent,
+        signature::Nontransferable,
         signed_event_message::{
             SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
         },
@@ -351,7 +352,7 @@ impl PartiallyWitnessedEscrow {
         receipt: SignedNontransferableReceipt,
         bus: &NotificationBus,
     ) -> Result<(), Error> {
-        if receipt.couplets.is_none() && receipt.indexed_sigs.is_none() {
+        if receipt.signatures.is_empty() {
             // ignore events with no signatures
             Ok(())
         } else {
@@ -385,28 +386,26 @@ impl PartiallyWitnessedEscrow {
         rct: &SignedNontransferableReceipt,
         witnesses: &[BasicPrefix],
     ) -> Result<Vec<(BasicPrefix, SelfSigningPrefix)>, Error> {
-        let couplets = rct.couplets.clone().unwrap_or_default();
+        let (mut indexed, mut couplets) = (vec![], vec![]);
+        rct.signatures.iter().for_each(|signature| match signature {
+            Nontransferable::Indexed(indexed_sigs) => indexed.append(&mut indexed_sigs.clone()),
+            Nontransferable::Couplet(couplets_sigs) => couplets.append(&mut couplets_sigs.clone()),
+        });
 
-        Ok(match &rct.indexed_sigs {
-            Some(signatures) => {
-                let attached: Result<Vec<_>, Error> = signatures
-                    .into_iter()
-                    .map(|att| -> Result<_, _> {
-                        Ok((
-                            witnesses
-                                .get(att.index as usize)
-                                .ok_or_else(|| {
-                                    Error::SemanticError("No matching witness prefix".into())
-                                })?
-                                .clone(),
-                            att.signature.to_owned(),
-                        ))
-                    })
-                    .collect();
-                couplets.into_iter().chain(attached?.into_iter()).collect()
-            }
-            None => couplets,
-        })
+        let indexes: Result<Vec<(BasicPrefix, SelfSigningPrefix)>, Error> = indexed
+            .iter()
+            .map(|inx| -> Result<_, _> {
+                Ok((
+                    witnesses
+                        .get(inx.index as usize)
+                        .ok_or_else(|| Error::SemanticError("No matching witness prefix".into()))?
+                        .clone(),
+                    inx.signature.to_owned(),
+                ))
+            })
+            .collect();
+
+        Ok(couplets.into_iter().chain(indexes?.into_iter()).collect())
     }
 
     /// Verify escrowed receipts and remove those with wrong
@@ -499,12 +498,16 @@ impl PartiallyWitnessedEscrow {
             .fold(
                 (vec![], vec![]),
                 |(mut all_couplets, mut all_indexed), snr| {
-                    if let Some(couplets) = snr.couplets {
-                        all_couplets.extend(couplets);
-                    };
-                    if let Some(indexed) = snr.indexed_sigs {
-                        all_indexed.extend(indexed);
-                    };
+                    snr.signatures.into_iter().for_each(|signature| {
+                        match signature {
+                            Nontransferable::Indexed(indexed_sigs) => {
+                                all_indexed.append(&mut indexed_sigs.clone())
+                            }
+                            Nontransferable::Couplet(couplets_sigs) => {
+                                all_couplets.append(&mut couplets_sigs.clone())
+                            }
+                        };
+                    });
                     (all_couplets, all_indexed)
                 },
             );
@@ -802,11 +805,11 @@ impl DelegationEscrow {
     pub fn process_delegation_events(
         &self,
         bus: &NotificationBus,
-        id: &IdentifierPrefix,
+        delegator_id: &IdentifierPrefix,
         anchored_seals: Vec<EventSeal>,
         potential_delegator_seal: SourceSeal,
     ) -> Result<(), Error> {
-        if let Some(esc) = self.delegation_escrow.get(id) {
+        if let Some(esc) = self.delegation_escrow.get(delegator_id) {
             for event in esc {
                 let seal = anchored_seals.iter().find(|seal| {
                     seal.event_digest == event.event_message.get_digest()
@@ -824,21 +827,22 @@ impl DelegationEscrow {
                 match validator.validate_event(&delegated_event) {
                     Ok(_) => {
                         // add to kel
+                        let child_id = event.event_message.event.get_prefix();
                         self.db
-                            .add_kel_finalized_event(delegated_event.clone(), id)?;
+                            .add_kel_finalized_event(delegated_event.clone(), &child_id)?;
                         // remove from escrow
-                        self.delegation_escrow.remove(id, &event)?;
+                        self.delegation_escrow.remove(delegator_id, &event)?;
                         bus.notify(&Notification::KeyEventAdded(event))?;
                         // stop processing the escrow if kel was updated. It needs to start again.
                         break;
                     }
                     Err(Error::SignatureVerificationError) => {
                         // remove from escrow
-                        self.delegation_escrow.remove(id, &event)?;
+                        self.delegation_escrow.remove(delegator_id, &event)?;
                     }
                     Err(Error::NotEnoughReceiptsError) => {
                         // remove from escrow
-                        self.delegation_escrow.remove(id, &event)?;
+                        self.delegation_escrow.remove(delegator_id, &event)?;
                         bus.notify(&Notification::PartiallyWitnessed(delegated_event))?;
                     }
                     Err(_e) => (), // keep in escrow,

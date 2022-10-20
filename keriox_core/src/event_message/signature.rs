@@ -21,7 +21,7 @@ pub enum Signature {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum Nontransferable {
     Indexed(Vec<AttachedSignaturePrefix>),
-    Couplet(BasicPrefix, SelfSigningPrefix),
+    Couplet(Vec<(BasicPrefix, SelfSigningPrefix)>),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -45,8 +45,9 @@ impl Signature {
     pub fn get_signer(&self) -> Option<IdentifierPrefix> {
         match self {
             Signature::Transferable(signer_data, _) => signer_data.get_signer(),
-            Signature::NonTransferable(Nontransferable::Couplet(id, _)) => {
-                Some(IdentifierPrefix::Basic(id.clone()))
+            Signature::NonTransferable(Nontransferable::Couplet(couplets)) => {
+                // TODO
+                Some(IdentifierPrefix::Basic(couplets[0].0.clone()))
             }
             Signature::NonTransferable(Nontransferable::Indexed(_)) => None,
         }
@@ -65,7 +66,9 @@ impl Signature {
                     .current;
                 kc.verify(data, &sigs)
             }
-            Signature::NonTransferable(Nontransferable::Couplet(id, sig)) => id.verify(data, &sig),
+            Signature::NonTransferable(Nontransferable::Couplet(couplets)) => Ok(couplets
+                .iter()
+                .all(|(id, sig)| id.verify(data, &sig).unwrap())),
             Signature::NonTransferable(Nontransferable::Indexed(_sigs)) => {
                 Err(Error::SemanticError("Uknown signer".into()))
             }
@@ -85,8 +88,8 @@ impl From<&Signature> for Attachment {
                 }
                 SignerData::JustSignatures => Attachment::AttachedSignatures(sig.clone()),
             },
-            Signature::NonTransferable(Nontransferable::Couplet(bp, sig)) => {
-                Attachment::ReceiptCouplets(vec![(bp.clone(), sig.clone())])
+            Signature::NonTransferable(Nontransferable::Couplet(couplets)) => {
+                Attachment::ReceiptCouplets(couplets.clone())
             }
             Signature::NonTransferable(Nontransferable::Indexed(sigs)) => {
                 Attachment::AttachedWitnessSignatures(sigs.clone())
@@ -112,8 +115,8 @@ pub fn signatures_into_attachments(sigs: &[Signature]) -> Vec<Attachment> {
                     Signature::Transferable(SignerData::JustSignatures, mut sig) => {
                         indexed.append(&mut sig)
                     }
-                    Signature::NonTransferable(Nontransferable::Couplet(bp, sp)) => {
-                        nontrans.push((bp, sp))
+                    Signature::NonTransferable(Nontransferable::Couplet(couplets)) => {
+                        nontrans.append(&mut couplets.clone())
                     }
                     Signature::NonTransferable(Nontransferable::Indexed(mut sigs)) => {
                         witness_indexed.append(&mut sigs)
@@ -151,10 +154,9 @@ impl TryFrom<Attachment> for Vec<Signature> {
                 SignerData::JustSignatures,
                 sigs,
             )]),
-            Attachment::ReceiptCouplets(sigs) => Ok(sigs
-                .into_iter()
-                .map(|(bp, sp)| Signature::NonTransferable(Nontransferable::Couplet(bp, sp)))
-                .collect()),
+            Attachment::ReceiptCouplets(sigs) => Ok(vec![Signature::NonTransferable(
+                Nontransferable::Couplet(sigs),
+            )]),
             Attachment::LastEstSignaturesGroups(sigs) => Ok(sigs
                 .into_iter()
                 .map(|(id, sigs)| Signature::Transferable(SignerData::LastEstablishment(id), sigs))

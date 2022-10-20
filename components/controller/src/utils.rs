@@ -1,11 +1,13 @@
 use std::path::PathBuf;
 
-use crate::oobi::LocationScheme;
+use keri::oobi::LocationScheme;
 
 /// Helper enum for types that can be send with `send_to` function
+#[derive(Debug)]
 pub(crate) enum Topic {
     Oobi(Vec<u8>),
     Query(String),
+    Forward(Vec<u8>),
     Process(Vec<u8>),
 }
 

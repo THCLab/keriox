@@ -1,6 +1,6 @@
 pub mod actor;
-#[cfg(feature = "controller")]
-pub mod controller;
+// #[cfg(feature = "controller")]
+// pub mod controller;
 pub mod database;
 pub mod derivation;
 pub mod error;

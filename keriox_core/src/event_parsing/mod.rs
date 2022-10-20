@@ -21,7 +21,7 @@ use crate::{
     event_message::{
         exchange::{ExchangeMessage, SignedExchange},
         key_event_message::KeyEvent,
-        signature::{self, Signature},
+        signature::{self, Nontransferable, Signature},
         signed_event_message::{
             Message, Notice, Op, SignedEventMessage, SignedNontransferableReceipt,
             SignedTransferableReceipt,
@@ -224,7 +224,14 @@ impl From<&SignedEventMessage> for SignedEventData {
         };
 
         if let Some(witness_rcts) = &ev.witness_receipts {
-            attachments.push(Attachment::AttachedWitnessSignatures(witness_rcts.clone()));
+            witness_rcts.iter().for_each(|rcts| match rcts {
+                Nontransferable::Indexed(indexed) => {
+                    attachments.push(Attachment::AttachedWitnessSignatures(indexed.clone()))
+                }
+                Nontransferable::Couplet(couplets) => {
+                    attachments.push(Attachment::ReceiptCouplets(couplets.clone()))
+                }
+            });
         };
 
         SignedEventData {
@@ -236,16 +243,16 @@ impl From<&SignedEventMessage> for SignedEventData {
 
 impl From<SignedNontransferableReceipt> for SignedEventData {
     fn from(rcp: SignedNontransferableReceipt) -> SignedEventData {
-        let attachments: Vec<_> = match (rcp.couplets, rcp.indexed_sigs) {
-            (None, None) => vec![],
-            (None, Some(indexed_sigs)) => [Attachment::AttachedSignatures(indexed_sigs)].into(),
-            (Some(couplets), None) => [Attachment::ReceiptCouplets(couplets)].into(),
-            (Some(couplets), Some(indexed_sigs)) => [
-                Attachment::ReceiptCouplets(couplets),
-                Attachment::AttachedSignatures(indexed_sigs),
-            ]
-            .into(),
-        };
+        let attachments = rcp
+            .signatures
+            .iter()
+            .map(|sig| match sig {
+                Nontransferable::Indexed(indexed) => {
+                    Attachment::AttachedWitnessSignatures(indexed.clone())
+                }
+                Nontransferable::Couplet(couplets) => Attachment::ReceiptCouplets(couplets.clone()),
+            })
+            .collect();
         SignedEventData {
             deserialized_event: EventType::Receipt(rcp.body),
             attachments,
@@ -340,8 +347,12 @@ impl TryFrom<SignedEventData> for Op {
     type Error = Error;
 
     fn try_from(value: SignedEventData) -> Result<Self, Self::Error> {
-        match Message::try_from(value)? {
-            Message::Op(op) => Ok(op),
+        match value.deserialized_event {
+            #[cfg(feature = "query")]
+            EventType::Qry(qry) => signed_query(qry, value.attachments),
+            #[cfg(any(feature = "query", feature = "oobi"))]
+            EventType::Rpy(rpy) => signed_reply(rpy, value.attachments),
+            EventType::Exn(exn) => signed_exchange(exn, value.attachments),
             _ => Err(Error::SemanticError(
                 "Cannot convert SignedEventData to Op".to_string(),
             )),
@@ -449,27 +460,33 @@ fn signed_key_event(
                 attachments
                     .pop()
                     .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?,
-                attachments
-                    .pop()
-                    .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?,
+                attachments.pop(),
             );
 
             let (seals, sigs) = match (att1, att2) {
-                (Attachment::SealSourceCouplets(seals), Attachment::AttachedSignatures(sigs)) => {
-                    Ok((seals, sigs))
-                }
-                (Attachment::AttachedSignatures(sigs), Attachment::SealSourceCouplets(seals)) => {
-                    Ok((seals, sigs))
-                }
+                (
+                    Attachment::SealSourceCouplets(seals),
+                    Some(Attachment::AttachedSignatures(sigs)),
+                ) => Ok((Some(seals), sigs)),
+                (
+                    Attachment::AttachedSignatures(sigs),
+                    Some(Attachment::SealSourceCouplets(seals)),
+                ) => Ok((Some(seals), sigs)),
+                (Attachment::AttachedSignatures(sigs), None) => Ok((None, sigs)),
                 _ => {
                     // Improper attachment type
                     Err(Error::SemanticError("Improper attachment type".into()))
                 }
             }?;
-            let delegator_seal = match seals.len() {
-                0 => Err(Error::SemanticError("Missing delegator seal".into())),
-                1 => Ok(seals.first().cloned()),
-                _ => Err(Error::SemanticError("Too many seals".into())),
+
+            let delegator_seal = if let Some(seal) = seals {
+                match seal.len() {
+                    0 => Err(Error::SemanticError("Missing delegator seal".into())),
+                    1 => Ok(seal.first().cloned()),
+                    _ => Err(Error::SemanticError("Too many seals".into())),
+                }
+            } else {
+                Ok(None)
             };
 
             Ok(Notice::Event(SignedEventMessage::new(
@@ -502,18 +519,27 @@ fn signed_key_event(
                 .ok_or_else(|| {
                     Error::SemanticError("Missing controller signatures attachment".into())
                 })?;
-            let witness_sigs = signatures.into_iter().find_map(|att| {
-                if let Attachment::AttachedWitnessSignatures(sigs) = att {
-                    Some(sigs)
-                } else {
-                    None
-                }
-            });
+            let witness_sigs: Vec<_> = signatures
+                .into_iter()
+                .filter_map(|att| match att {
+                    Attachment::AttachedWitnessSignatures(indexed) => {
+                        Some(Nontransferable::Indexed(indexed))
+                    }
+                    Attachment::ReceiptCouplets(couplets) => {
+                        Some(Nontransferable::Couplet(couplets))
+                    }
+                    _ => None,
+                })
+                .collect();
 
             Ok(Notice::Event(SignedEventMessage::new(
                 &event_message,
                 controller_sigs,
-                witness_sigs,
+                if witness_sigs.is_empty() {
+                    None
+                } else {
+                    Some(witness_sigs)
+                },
                 // TODO parse delegator seal attachment
                 None,
             )))
@@ -525,16 +551,26 @@ fn signed_receipt(
     event_message: EventMessage<Receipt>,
     mut attachments: Vec<Attachment>,
 ) -> Result<Notice, Error> {
+    let nontransferable = attachments
+        .iter()
+        .filter_map(|att| match att {
+            Attachment::AttachedWitnessSignatures(sigs) => {
+                Some(Nontransferable::Indexed(sigs.clone()))
+            }
+            Attachment::ReceiptCouplets(couplts) => Some(Nontransferable::Couplet(couplts.clone())),
+            _ => None,
+        })
+        .collect();
     let att = attachments
         .pop()
         .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?;
+
     match att {
         // Should be nontransferable receipt
-        Attachment::ReceiptCouplets(couplets) => {
+        Attachment::ReceiptCouplets(_) | Attachment::AttachedWitnessSignatures(_) => {
             Ok(Notice::NontransferableRct(SignedNontransferableReceipt {
                 body: event_message,
-                couplets: Some(couplets),
-                indexed_sigs: None,
+                signatures: nontransferable,
             }))
         }
         Attachment::SealSignaturesGroups(data) => {
@@ -549,13 +585,6 @@ fn signed_receipt(
                 seal,
                 sigs,
             )))
-        }
-        Attachment::AttachedWitnessSignatures(sigs) => {
-            Ok(Notice::NontransferableRct(SignedNontransferableReceipt {
-                body: event_message,
-                couplets: None,
-                indexed_sigs: Some(sigs),
-            }))
         }
         Attachment::Frame(atts) => signed_receipt(event_message, atts),
         _ => {
@@ -609,7 +638,7 @@ fn test_stream1() {
             let serialized_again = signed_event.serialize();
             assert!(serialized_again.is_ok());
             let stringified = String::from_utf8(serialized_again.unwrap()).unwrap();
-            assert_eq!(stream, stringified.as_bytes())
+            assert_eq!(stream, stringified.as_bytes());
         }
         _ => assert!(false),
     }
@@ -632,7 +661,6 @@ fn test_stream2() {
                 signed_event.event_message.serialize().unwrap().len(),
                 signed_event.event_message.serialization_info.size
             );
-
             let serialized_again = signed_event.serialize();
             assert!(serialized_again.is_ok());
             let stringified = String::from_utf8(serialized_again.unwrap()).unwrap();
@@ -674,7 +702,14 @@ fn test_deserialize_signed_receipt() {
     let msg = Message::try_from(parsed_witness_receipt.1);
     assert!(msg.is_ok());
     if let Ok(Message::Notice(Notice::NontransferableRct(rct))) = msg {
-        assert_eq!(3, rct.indexed_sigs.unwrap().len());
+        match &rct.signatures[0] {
+            Nontransferable::Indexed(indexed) => {
+                assert_eq!(3, indexed.len());
+            }
+            Nontransferable::Couplet(_) => {
+                unreachable!()
+            }
+        };
     } else {
         assert!(false)
     };

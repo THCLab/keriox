@@ -1,7 +1,8 @@
 use serde::{ser::SerializeStruct, Deserialize, Serialize};
 
 use super::{
-    exchange::SignedExchange, key_event_message::KeyEvent, serializer::to_string, EventMessage,
+    exchange::SignedExchange, key_event_message::KeyEvent, serializer::to_string,
+    signature::Nontransferable, EventMessage,
 };
 #[cfg(feature = "query")]
 use crate::query::{query_event::SignedQuery, reply_event::SignedReply};
@@ -12,7 +13,7 @@ use crate::{
         sections::seal::{EventSeal, SourceSeal},
     },
     event_parsing::{Attachment, SignedEventData},
-    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+    prefix::{AttachedSignaturePrefix, IdentifierPrefix},
     state::{EventSemantics, IdentifierState},
 };
 
@@ -114,7 +115,7 @@ pub struct SignedEventMessage {
     #[serde(skip_serializing)]
     pub signatures: Vec<AttachedSignaturePrefix>,
     #[serde(skip_serializing)]
-    pub witness_receipts: Option<Vec<AttachedSignaturePrefix>>,
+    pub witness_receipts: Option<Vec<Nontransferable>>,
     #[serde(skip_serializing)]
     pub delegator_seal: Option<SourceSeal>,
 }
@@ -131,8 +132,19 @@ impl Serialize for SignedEventMessage {
             let att_sigs = Attachment::AttachedSignatures(self.signatures.clone());
             em.serialize_field("-", &att_sigs.to_cesr())?;
             if let Some(ref receipts) = self.witness_receipts {
-                let att_receipts = Attachment::AttachedWitnessSignatures(receipts.clone());
-                em.serialize_field("", &att_receipts.to_cesr())?;
+                let att_receipts = receipts
+                    .iter()
+                    .map(|rct| match rct {
+                        Nontransferable::Indexed(indexed) => {
+                            Attachment::AttachedWitnessSignatures(indexed.clone()).to_cesr()
+                        }
+                        Nontransferable::Couplet(couplets) => {
+                            Attachment::ReceiptCouplets(couplets.clone()).to_cesr()
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join("");
+                em.serialize_field("", &att_receipts)?;
             }
             if let Some(ref seal) = self.delegator_seal {
                 let att_seal = Attachment::SealSourceCouplets(vec![seal.clone()]);
@@ -162,7 +174,7 @@ impl SignedEventMessage {
     pub fn new(
         message: &EventMessage<KeyEvent>,
         sigs: Vec<AttachedSignaturePrefix>,
-        witness_receipts: Option<Vec<AttachedSignaturePrefix>>,
+        witness_receipts: Option<Vec<Nontransferable>>,
         delegator_seal: Option<SourceSeal>,
     ) -> Self {
         Self {
@@ -220,20 +232,16 @@ impl SignedTransferableReceipt {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SignedNontransferableReceipt {
     pub body: EventMessage<Receipt>,
-    pub couplets: Option<Vec<(BasicPrefix, SelfSigningPrefix)>>,
-    pub indexed_sigs: Option<Vec<AttachedSignaturePrefix>>,
+    // pub couplets: Option<Vec<(BasicPrefix, SelfSigningPrefix)>>,
+    // pub indexed_sigs: Option<Vec<AttachedSignaturePrefix>>,
+    pub signatures: Vec<Nontransferable>,
 }
 
 impl SignedNontransferableReceipt {
-    pub fn new(
-        message: &EventMessage<Receipt>,
-        couplets: Option<Vec<(BasicPrefix, SelfSigningPrefix)>>,
-        indexed_sigs: Option<Vec<AttachedSignaturePrefix>>,
-    ) -> Self {
+    pub fn new(message: &EventMessage<Receipt>, signatures: Vec<Nontransferable>) -> Self {
         Self {
             body: message.clone(),
-            couplets,
-            indexed_sigs,
+            signatures,
         }
     }
 }

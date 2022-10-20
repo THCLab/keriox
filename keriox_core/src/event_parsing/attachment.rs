@@ -222,8 +222,12 @@ pub fn attachment(s: &[u8]) -> nom::IResult<&[u8], Attachment> {
             match nom::bytes::complete::take(sc * 4)(rest) {
                 Ok((rest, total)) => {
                     let (extra, mp) = material_path(total)?;
-                    let (_extra, attachment) = attachment(extra)?;
-                    let sigs = Vec::<Signature>::try_from(attachment).unwrap();
+                    let (_extra, attachment) = many0(attachment)(extra)?;
+                    let sigs = attachment
+                        .into_iter()
+                        .map(|att| Vec::<Signature>::try_from(att).unwrap())
+                        .flatten()
+                        .collect();
 
                     Ok((rest, Attachment::PathedMaterialQuadruplet(mp, sigs)))
                 }

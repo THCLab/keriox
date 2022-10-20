@@ -47,11 +47,11 @@ pub enum QueryRoute {
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct QueryArgsMbx {
-    /// Identifier to be queried
+    /// Controller's currently used indentifier
     pub pre: IdentifierPrefix,
     /// Types of mail to query and their minimum serial number
     pub topics: QueryTopics,
-    /// Controller's currently used indentifier
+    /// Identifier to be queried
     pub i: IdentifierPrefix,
     /// To which witness given query message reply will be sent
     pub src: IdentifierPrefix,

@@ -118,8 +118,7 @@ impl EventProcessor {
                     };
                     let signed_receipt = SignedNontransferableReceipt::new(
                         &receipt.to_message(SerializationFormats::JSON).unwrap(),
-                        None,
-                        Some(witness_receipts.clone()),
+                        witness_receipts.clone(),
                     );
                     self.process_notice(
                         &Notice::NontransferableRct(signed_receipt),

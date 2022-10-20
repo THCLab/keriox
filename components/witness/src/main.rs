@@ -30,6 +30,9 @@ struct Opts {
 
 #[actix_web::main]
 async fn main() -> Result<()> {
+    std::env::set_var("RUST_LOG", "debug");
+    std::env::set_var("RUST_BACKTRACE", "1");
+    env_logger::init();
     let Opts { config_file } = Opts::from_args();
 
     let WitnessConfig {

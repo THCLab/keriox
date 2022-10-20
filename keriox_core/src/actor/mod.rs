@@ -7,7 +7,7 @@ use crate::{
     event_message::{
         exchange::{Exchange, ExchangeMessage, ForwardTopic, SignedExchange},
         serialization_info::SerializationFormats,
-        signature::{Nontransferable, Signature},
+        signature::Signature,
         signed_event_message::{Message, Notice, Op, SignedEventMessage},
     },
     event_parsing::{
@@ -27,6 +27,7 @@ use crate::{
     },
 };
 
+pub mod event_generator;
 pub mod simple_controller;
 
 pub fn parse_event_stream(stream: &[u8]) -> Result<Vec<Message>, Error> {
@@ -74,7 +75,10 @@ pub fn parse_exchange_stream(stream: &[u8]) -> Result<Vec<SignedExchange>, Error
 
     let (_rest, exchanges) =
         signed_op_stream(stream).map_err(|e| Error::DeserializeError(e.to_string()))?;
-    exchanges.into_iter().map(SignedExchange::try_from).collect()
+    exchanges
+        .into_iter()
+        .map(SignedExchange::try_from)
+        .collect()
 }
 
 pub fn process_message<P: Processor>(
@@ -159,10 +163,7 @@ fn process_exn(
         |(mut signatures, mut witness_receipts), s| {
             match s {
                 Signature::Transferable(_sd, mut sigs) => signatures.append(&mut sigs),
-                Signature::NonTransferable(Nontransferable::Couplet(_, _)) => todo!(),
-                Signature::NonTransferable(Nontransferable::Indexed(mut witness_sigs)) => {
-                    witness_receipts.append(&mut witness_sigs)
-                }
+                Signature::NonTransferable(receipts) => witness_receipts.push(receipts),
             }
             (signatures, witness_receipts)
         },
