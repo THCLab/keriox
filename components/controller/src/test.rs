@@ -84,6 +84,7 @@ pub fn test_group_incept() -> Result<(), ControllerError> {
     Ok(())
 }
 
+#[ignore]
 #[test]
 pub fn test_delegated_incept() -> Result<(), ControllerError> {
     use url::Url;
