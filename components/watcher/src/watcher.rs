@@ -170,22 +170,27 @@ impl WatcherData {
             });
         }
 
-        // Update latest state for prefix
-        self.query_state(qry.query.get_prefix()).await?;
+        match &qry.query.event.content.data.route {
+            QueryRoute::Ksn { .. } | QueryRoute::Log { .. } => {
+                // Update latest state for prefix
+                self.query_state(qry.query.get_prefix()).await?;
 
-        let escrowed_replies = self
-            .event_storage
-            .db
-            .get_escrowed_replys(&qry.query.get_prefix())
-            .into_iter()
-            .flatten()
-            .collect_vec();
+                let escrowed_replies = self
+                    .event_storage
+                    .db
+                    .get_escrowed_replys(&qry.query.get_prefix())
+                    .into_iter()
+                    .flatten()
+                    .collect_vec();
 
-        if escrowed_replies.len() > 0 {
-            // If there is an escrowed reply it means we don't have the most recent data.
-            // In this case forward the query to witness.
-            self.forward_query(&qry).await?;
-            return Ok(None);
+                if escrowed_replies.len() > 0 {
+                    // If there is an escrowed reply it means we don't have the most recent data.
+                    // In this case forward the query to witness.
+                    self.forward_query(&qry).await?;
+                    return Ok(None);
+                }
+            }
+            QueryRoute::Mbx { .. } => {}
         }
 
         let response = process_signed_query(qry.clone(), &self.event_storage)?;
@@ -235,33 +240,30 @@ impl WatcherData {
         let wit_id = self.get_witness_for_prefix(qry.query.get_prefix())?;
 
         // Send query to witness
-        let qry = Message::Op(Op::Query(qry));
-
-        let msgs = self
-            .send_to(
+        let resp = self
+            .send_query_to(
                 IdentifierPrefix::Basic(wit_id.clone()),
                 keri::oobi::Scheme::Http,
                 qry,
             )
             .await?;
 
-        // Process response
-        for msg in msgs.iter().cloned() {
-            match msg {
-                Message::Notice(notice) => {
-                    self.process_notice(notice.clone())?;
-                    if let Notice::Event(event) = notice {
-                        self.event_storage.add_mailbox_reply(event)?;
+        match resp {
+            PossibleResponse::Ksn(rpy) => {
+                self.process_reply(rpy)?;
+            }
+            PossibleResponse::Kel(msgs) => {
+                for msg in msgs {
+                    if let Message::Notice(notice) = msg {
+                        self.process_notice(notice.clone())?;
+                        if let Notice::Event(evt) = notice {
+                            self.event_storage.add_mailbox_reply(evt)?;
+                        }
                     }
                 }
-                Message::Op(op) => match op {
-                    Op::Reply(reply) => {
-                        self.process_reply(reply)?;
-                    }
-                    _ => {
-                        // Ignore invalid messages
-                    }
-                },
+            }
+            PossibleResponse::Mbx(_mbx) => {
+                panic!("Unexpected response type MBX");
             }
         }
 
@@ -293,27 +295,24 @@ impl WatcherData {
             0,
         );
 
-        let query = Op::Query(SignedQuery::new(
+        let query = SignedQuery::new(
             qry,
             IdentifierPrefix::Basic(self.prefix.clone()),
             vec![signature],
-        ));
+        );
 
         let wit_id = self.get_witness_for_prefix(prefix)?;
 
-        let msgs = self
-            .send_to(
-                IdentifierPrefix::Basic(wit_id.clone()),
-                Scheme::Http,
-                Message::Op(query),
-            )
+        let resp = self
+            .send_query_to(IdentifierPrefix::Basic(wit_id.clone()), Scheme::Http, query)
             .await?;
 
-        for msg in msgs.into_iter() {
-            if let Message::Op(Op::Reply(reply)) = msg {
-                self.process_reply(reply)?;
-            }
-        }
+        let resp = match resp {
+            PossibleResponse::Ksn(ksn) => ksn,
+            _ => panic!("Invalid response"),
+        };
+
+        self.process_reply(resp)?;
 
         Ok(wit_id)
     }
@@ -403,12 +402,12 @@ impl WatcherData {
             .collect()
     }
 
-    pub async fn send_to(
+    pub async fn send_query_to(
         &self,
         wit_id: IdentifierPrefix,
         scheme: Scheme,
-        msg: Message,
-    ) -> Result<Vec<Message>, WatcherError> {
+        query: SignedQuery,
+    ) -> Result<PossibleResponse, WatcherError> {
         let locs = self.get_loc_schemas(&wit_id)?;
         let loc = locs.into_iter().find(|loc| loc.scheme == scheme);
 
@@ -417,7 +416,7 @@ impl WatcherData {
             None => return Err(WatcherError::NoLocation { id: wit_id }),
         };
 
-        let response = self.transport.send_message(loc, msg).await?;
+        let response = self.transport.send_query(loc, query).await?;
 
         println!("\ngot response: {:?}", response);
         Ok(response)

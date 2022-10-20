@@ -90,6 +90,7 @@ async fn test_group_incept() -> Result<(), ControllerError> {
 }
 
 #[async_std::test]
+#[ignore]
 async fn test_delegated_incept() -> Result<(), ControllerError> {
     println!("Test start");
     use url::Url;
@@ -101,6 +102,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     // Tests assumses that witness DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA is listening on http://127.0.0.1:3232
     // It can be run from components/witness using command:
     // cargo run -- -c ./src/witness.json
+    // TODO: use fake transport
     let witness_id: IdentifierPrefix = "DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA"
         .parse()
         .unwrap();

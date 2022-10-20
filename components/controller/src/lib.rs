@@ -285,17 +285,15 @@ impl Controller {
         message: &SignedEventMessage,
     ) -> Result<(), ControllerError> {
         for id in witness_prefixes {
-            let receipts = self
-                .send_message_to(
-                    &IdentifierPrefix::Basic(id.clone()),
-                    Scheme::Http,
-                    Message::Notice(Notice::Event(message.clone())),
-                )
-                .await?;
+            self.send_message_to(
+                &IdentifierPrefix::Basic(id.clone()),
+                Scheme::Http,
+                Message::Notice(Notice::Event(message.clone())),
+            )
+            .await?;
             // process collected receipts
             // send query message for receipt mailbox
-
-            // TODO: ?????????
+            // TODO: get receipts from mailbox
             // for receipt in receipts {
             //     self.process(&receipt)?;
             // }
