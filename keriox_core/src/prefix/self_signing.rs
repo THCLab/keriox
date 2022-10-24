@@ -31,7 +31,7 @@ impl FromStr for SelfSigningPrefix {
         if s.len() == code.prefix_b64_len() {
             Ok(Self::new(
                 code,
-                from_text_to_bytes(&s[code.code_len()..].as_bytes())?,
+                from_text_to_bytes(&s[code.code_len()..].as_bytes())?[code.code_len()..].to_vec(),
             ))
         } else {
             Err(Error::SemanticError(format!(

@@ -20,11 +20,7 @@ impl ThresholdFraction {
 
 impl fmt::Display for ThresholdFraction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if self.fraction == One::one() {
-            write!(f, "1/1")
-        } else {
-            write!(f, "{}", self.fraction)
-        }
+        write!(f, "{}", self.fraction)
     }
 }
 
@@ -239,7 +235,7 @@ pub fn test_weighted_treshold_serialization() -> Result<(), Error> {
     // assert_eq!(serde_json::to_string(&wt).unwrap(), multi_threshold);
     assert_eq!(
         serde_json::to_string(&wt).unwrap(),
-        r#"[["1/1"],["1/2","1/2","1/2"]]"#.to_string()
+        r#"[["1"],["1/2","1/2","1/2"]]"#.to_string()
     );
 
     let single_threshold = r#"["1/2","1/2","1/2"]"#.to_string();

@@ -152,7 +152,9 @@ pub fn self_signing_prefix(s: &[u8]) -> nom::IResult<&[u8], SelfSigningPrefix> {
 
     let (extra, b) = take(code.derivative_b64_len())(rest)?;
 
-    let decoded = from_text_to_bytes(&b).map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?;
+    let decoded = from_text_to_bytes(&b).map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?
+        [code.code_len()..]
+        .to_vec();
 
     Ok((
         extra,
