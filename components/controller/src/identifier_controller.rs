@@ -40,7 +40,6 @@ use super::mailbox_updating::ActionRequired;
 
 pub struct IdentifierController {
     pub id: IdentifierPrefix,
-    // pub groups: Vec<IdentifierPrefix>,
     pub source: Arc<Controller>,
     last_asked_index: MailboxReminder,
     last_asked_groups_index: MailboxReminder,
