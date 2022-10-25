@@ -2,15 +2,6 @@ use std::path::PathBuf;
 
 use keri::oobi::LocationScheme;
 
-/// Helper enum for types that can be send with `send_to` function
-#[derive(Debug)]
-pub(crate) enum Topic {
-    Oobi(Vec<u8>),
-    Query(String),
-    Forward(Vec<u8>),
-    Process(Vec<u8>),
-}
-
 pub struct OptionalConfig {
     pub db_path: Option<PathBuf>,
     pub initial_oobis: Option<Vec<LocationScheme>>,

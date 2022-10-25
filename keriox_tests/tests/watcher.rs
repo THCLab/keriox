@@ -11,7 +11,7 @@ use keri::{
     event_message::signed_event_message::{Message, Notice, Op},
     oobi::{LocationScheme, Role},
     prefix::IdentifierPrefix,
-    query::reply_event::SignedReply,
+    query::{query_event::SignedQuery, reply_event::SignedReply},
 };
 use keri_transport::{Transport, TransportError};
 use tempfile::Builder;
@@ -19,18 +19,26 @@ use watcher::{WatcherData, WatcherError};
 use witness::Witness;
 
 struct FakeTransport {
-    send_message:
-        Box<dyn Fn(LocationScheme, Message) -> Result<Vec<Message>, TransportError> + Send + Sync>,
+    send_message: Box<
+        dyn Fn(LocationScheme, Message) -> Result<Option<PossibleResponse>, TransportError>
+            + Send
+            + Sync,
+    >,
 }
 
 #[async_trait::async_trait]
 impl Transport for FakeTransport {
-    async fn send_message(
+    async fn send_message(&self, loc: LocationScheme, msg: Message) -> Result<(), TransportError> {
+        (self.send_message)(loc, msg)?;
+        Ok(())
+    }
+
+    async fn send_query(
         &self,
         loc: LocationScheme,
-        msg: Message,
-    ) -> Result<Vec<Message>, TransportError> {
-        (self.send_message)(loc, msg)
+        qry: SignedQuery,
+    ) -> Result<PossibleResponse, TransportError> {
+        (self.send_message)(loc, Message::Op(Op::Query(qry))).map(|r| r.unwrap())
     }
 
     async fn request_loc_scheme(&self, _loc: LocationScheme) -> Result<Vec<Op>, TransportError> {
@@ -137,29 +145,19 @@ pub fn watcher_forward_ksn() -> Result<(), Error> {
                         match msg {
                             Message::Notice(notice) => {
                                 witness.process_notice(notice).unwrap();
-                                Ok(vec![])
+                                Ok(None)
                             }
-                            Message::Op(op) => {
-                                let resp = match op {
-                                    Op::Query(qry) => witness.process_query(qry).unwrap(),
-                                    Op::Reply(reply) => {
-                                        witness.process_reply(reply).unwrap();
-                                        None
-                                    }
-                                    Op::Exchange(exn) => {
-                                        witness.process_exchange(exn).unwrap();
-                                        None
-                                    }
-                                };
-                                let msgs = if let Some(resp) = resp {
-                                    let s = resp.to_string();
-                                    parse_event_stream(s.as_bytes())
-                                        .map_err(|_| TransportError::InvalidResponse)?
-                                } else {
-                                    vec![]
-                                };
-                                Ok(msgs)
-                            }
+                            Message::Op(op) => match op {
+                                Op::Query(qry) => Ok(witness.process_query(qry).unwrap()),
+                                Op::Reply(reply) => {
+                                    witness.process_reply(reply).unwrap();
+                                    Ok(None)
+                                }
+                                Op::Exchange(exn) => {
+                                    witness.process_exchange(exn).unwrap();
+                                    Ok(None)
+                                }
+                            },
                         }
                     }
                 }),

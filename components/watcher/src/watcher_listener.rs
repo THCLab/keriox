@@ -46,7 +46,8 @@ impl WatcherListener {
                 .service(http_handlers::get_cid_oobi)
                 .service(http_handlers::resolve_oobi)
                 .service(http_handlers::process_notice)
-                .service(http_handlers::process_op)
+                .service(http_handlers::process_query)
+                .service(http_handlers::process_reply)
         })
         .bind((host, port))
         .unwrap()
@@ -104,7 +105,7 @@ pub mod http_handlers {
     }
 
     #[post("/query")]
-    async fn process_op(
+    async fn process_query(
         body: web::Bytes,
         data: web::Data<Watcher>,
     ) -> Result<impl Responder, ApiError> {

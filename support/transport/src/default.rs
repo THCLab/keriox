@@ -1,8 +1,12 @@
 use keri::{
-    actor::{parse_event_stream, parse_op_stream},
+    actor::{
+        parse_op_stream,
+        simple_controller::{parse_response, PossibleResponse},
+    },
     event_message::signed_event_message::{Message, Op},
     oobi::{LocationScheme, Role, Scheme},
     prefix::IdentifierPrefix,
+    query::query_event::SignedQuery,
 };
 
 use super::{Transport, TransportError};
@@ -13,11 +17,7 @@ pub struct DefaultTransport;
 
 #[async_trait::async_trait]
 impl Transport for DefaultTransport {
-    async fn send_message(
-        &self,
-        loc: LocationScheme,
-        msg: Message,
-    ) -> Result<Vec<Message>, TransportError> {
+    async fn send_message(&self, loc: LocationScheme, msg: Message) -> Result<(), TransportError> {
         let url = match loc.scheme {
             Scheme::Http => match &msg {
                 Message::Notice(_) => {
@@ -26,8 +26,7 @@ impl Transport for DefaultTransport {
                 }
                 Message::Op(op) => match op {
                     Op::Query(_) => {
-                        // {url}/query
-                        loc.url.join("query").unwrap()
+                        panic!("can't send query in send_message");
                     }
                     Op::Reply(_) => {
                         // {url}/register
@@ -41,19 +40,38 @@ impl Transport for DefaultTransport {
             },
             Scheme::Tcp => todo!(),
         };
-        let body = msg.to_cesr().unwrap();
-        let client = reqwest::Client::new();
-        let resp = client
+        reqwest::Client::new()
             .post(url)
-            .body(body)
+            .body(msg.to_cesr().unwrap())
+            .send()
+            .await
+            .map_err(|_| TransportError::NetworkError)?;
+        Ok(())
+    }
+
+    async fn send_query(
+        &self,
+        loc: LocationScheme,
+        qry: SignedQuery,
+    ) -> Result<PossibleResponse, TransportError> {
+        let url = match loc.scheme {
+            Scheme::Http => {
+                // {url}/query
+                loc.url.join("query").unwrap()
+            }
+            Scheme::Tcp => todo!(),
+        };
+        let resp = reqwest::Client::new()
+            .post(url)
+            .body(Message::Op(Op::Query(qry)).to_cesr().unwrap())
             .send()
             .await
             .map_err(|_| TransportError::NetworkError)?
-            .bytes()
+            .text()
             .await
             .map_err(|_| TransportError::NetworkError)?;
-        let msgs = parse_event_stream(&resp).map_err(|_| TransportError::InvalidResponse)?;
-        Ok(msgs)
+        let resp = parse_response(&resp).map_err(|_| TransportError::InvalidResponse)?;
+        Ok(resp)
     }
 
     async fn request_loc_scheme(&self, loc: LocationScheme) -> Result<Vec<Op>, TransportError> {
@@ -105,4 +123,17 @@ impl Transport for DefaultTransport {
         let ops = parse_op_stream(&resp).map_err(|_| TransportError::InvalidResponse)?;
         Ok(ops)
     }
+
+    // async fn resolve_loc_scheme(&self, loc: LocationScheme) -> Result<(), TransportError> {
+    //     // {url}/resolve
+    //     let url = loc.url.join("resolve").unwrap();
+    //     let body = todo!("loc_scheme to bytes");
+    //     reqwest::Client::new()
+    //         .post(url)
+    //         .body(body)
+    //         .send()
+    //         .await
+    //         .map_err(|_| TransportError::NetworkError)?;
+    //     Ok(())
+    // }
 }

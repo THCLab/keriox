@@ -1,7 +1,9 @@
 use keri::{
+    actor::simple_controller::PossibleResponse,
     event_message::signed_event_message::{Message, Op},
     oobi::{LocationScheme, Role},
     prefix::IdentifierPrefix,
+    query::query_event::SignedQuery,
 };
 
 pub mod default;
@@ -11,12 +13,17 @@ pub mod default;
 /// This also allows providing a fake transport for tests.
 #[async_trait::async_trait]
 pub trait Transport {
-    /// Send a message to other actor and returns its response
-    async fn send_message(
+    /// Send a message to other actor.
+    /// This is used for sending notices, replies, and exchanges.
+    /// To send query, prefer [`Transport::send_query`] method.
+    async fn send_message(&self, loc: LocationScheme, msg: Message) -> Result<(), TransportError>;
+
+    /// Send a query to other actor and return its response.
+    async fn send_query(
         &self,
         loc: LocationScheme,
-        msg: Message,
-    ) -> Result<Vec<Message>, TransportError>;
+        qry: SignedQuery,
+    ) -> Result<PossibleResponse, TransportError>;
 
     /// Request location scheme for id from other actor.
     /// Should use `get_eid_oobi` endpoint.
@@ -33,6 +40,14 @@ pub trait Transport {
         role: Role,
         eid: IdentifierPrefix,
     ) -> Result<Vec<Op>, TransportError>;
+
+    // /// Orders other actor to [`request_loc_scheme`](Transport::request_loc_scheme) and save result to its DB.
+    // /// Should use `resolve` endpoint.
+    // async fn resolve_loc_scheme(&self, loc: LocationScheme) -> Result<(), TransportError>;
+
+    // /// Orders other actor to [`request_end_role`](Transport::request_end_role) and save result to its DB.
+    // /// Should use `resolve` endpoint.
+    // async fn resolve_end_role(&self, role: EndRole) -> Result<(), TransportError>;
 }
 
 #[derive(Debug, thiserror::Error)]

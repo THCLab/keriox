@@ -1,9 +1,13 @@
+use keri::{oobi::Scheme, prefix::IdentifierPrefix};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum ControllerError {
     #[error("Database error: {0}")]
     DatabaseError(#[from] keri::database::DbError),
+
+    #[error("Transport error: {0}")]
+    TransportError(#[from] keri_transport::TransportError),
 
     #[error("Communication error: {0}")]
     CommunicationError(String),
@@ -40,4 +44,10 @@ pub enum ControllerError {
 
     #[error("Error while event processing: ")]
     EventProcessingError(#[from] keri::error::Error),
+
+    #[error("No location for {id} with {scheme:?}")]
+    NoLocationScheme {
+        id: IdentifierPrefix,
+        scheme: Scheme,
+    },
 }
