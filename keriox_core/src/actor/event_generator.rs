@@ -16,7 +16,10 @@ use crate::{
     },
     oobi::{EndRole, Role},
     prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix},
-    query::reply_event::{ReplyEvent, ReplyRoute},
+    query::{
+        reply_event::{ReplyEvent, ReplyRoute},
+        Timestamped,
+    },
     state::IdentifierState,
 };
 
@@ -205,13 +208,13 @@ pub fn exchange(
     data: &EventMessage<KeyEvent>,
     topic: ForwardTopic,
 ) -> Result<ExchangeMessage, Error> {
-    Exchange::Fwd {
+    Timestamped::new(Exchange::Fwd {
         args: FwdArgs {
             recipient_id: receipient.clone(),
             topic,
         },
         to_forward: data.clone(),
-    }
+    })
     .to_message(SerializationFormats::JSON, &SelfAddressing::Blake3_256)
     .map_err(|e| Error::EventGenerationError(e.to_string()))
 }

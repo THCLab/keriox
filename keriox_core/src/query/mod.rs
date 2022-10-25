@@ -39,7 +39,7 @@ impl<D: Serialize + Typeable + Clone> Timestamped<D> {
         Timestamped { timestamp, data }
     }
 
-    fn to_message(
+    pub fn to_message(
         self,
         format: SerializationFormats,
         derivation: &SelfAddressing,

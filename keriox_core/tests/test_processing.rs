@@ -27,21 +27,15 @@ pub fn test_ksn_query() -> Result<(), Box<dyn std::error::Error>> {
         EventStorage::new(db.clone()),
     );
     // Process inception event and its receipts. To accept inception event it must be fully witnessed.
-    let rcps = r#"{"v":"KERI10JSON000091_","t":"rct","d":"E6OK2wFYp6x0Jx48xX0GCTwAzJUTWtYEvJSykVhtAnaM","i":"E6OK2wFYp6x0Jx48xX0GCTwAzJUTWtYEvJSykVhtAnaM","s":"0"}-BADAAI_M_762PE-i9uhbB_Ynxsx4mfvCA73OHM96U8SQtsgV0co4kGuSw0tMtiQWBYwA9bvDZ7g-ZfhFLtXJPorbtDwABDsQTBpHVpNI-orK8606K5oUSr5sv5LYvyuEHW3dymwVIDRYWUVxMITMp_st7Ee4PjD9nIQCzAeXHDcZ6c14jBQACPySjFKPkqeu5eiB0YfcYLQpvo0vnu6WEQ4XJnzNWWrV9JuOQ2AfWVeIc0D7fuK4ofXMRhTxAXm-btkqTrm0tBA"#;
-
-    let icp_str = r#"{"v":"KERI10JSON0001b7_","t":"icp","d":"E6OK2wFYp6x0Jx48xX0GCTwAzJUTWtYEvJSykVhtAnaM","i":"E6OK2wFYp6x0Jx48xX0GCTwAzJUTWtYEvJSykVhtAnaM","s":"0","kt":"1","k":["DWow4n8Wxqf_UTvzoSnWOrxELM3ptd-mbtZC146khE4w"],"nt":"1","n":["EcjtYj92jg7qK_T1-5bWUlnBU6bdVWP-yMxBHjr_Quo8"],"bt":"3","b":["BGKVzj4ve0VSd8z_AmvhLg4lqcC_9WYX90k03q-R_Ydo","BuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw","Bgoq68HCmYNUDgOz4Skvlu306o_NY-NrYuKAVhk3Zh9c"],"c":[],"a":[]}-AABAA0Dn5vYNWAz8uN1N9cCR-HfBQhDIhb-Crt_1unJY7KTAfz0iwa9FPWHFLTgvTkd0yUSw3AZuNc5Xbr-VMzQDhBw"#;
-    let to_process: Vec<_> = [icp_str, rcps]
-        .iter()
-        .map(|event| parse_event_stream(event.as_bytes()).unwrap())
-        .flatten()
-        .collect();
+    let events_raw = r#"{"v":"KERI10JSON000159_","t":"icp","d":"ENRc2DeK48BKJ3ST8mypvngVwEAxw9rZr_GPNP25TmQ_","i":"ENRc2DeK48BKJ3ST8mypvngVwEAxw9rZr_GPNP25TmQ_","s":"0","kt":"1","k":["DDhKvndcqZlJNx-mtC_5eTy7UiuxOPVgAV3HsmofP2Ll"],"nt":"1","n":["EOOlrw-1jQHp8IfE1mfOb_ikXpHksVSyZ0RCnu5X0Rfg"],"bt":"0","b":["DNjeO6mfXSbrFFdk5UjDmioaho6ON0Sp6JMfhKz2jJF-"],"c":[],"a":[]}-AABAAD34oIVuxmLLKldRCzhfxR9hNg2SOMbOKZn1hp6D1OBmA6Hut6gSID21vFk50ost8_-VNbjHIQnHZ8WulUJ_yQL{"v":"KERI10JSON000091_","t":"rct","d":"ENRc2DeK48BKJ3ST8mypvngVwEAxw9rZr_GPNP25TmQ_","i":"ENRc2DeK48BKJ3ST8mypvngVwEAxw9rZr_GPNP25TmQ_","s":"0"}-CABDNjeO6mfXSbrFFdk5UjDmioaho6ON0Sp6JMfhKz2jJF-0BCTI8wy4v_Iyiyh4cSuG02R-K4GZHMXQVyC3yckpPpev0yWUiuera6q7ErDIQDLvjnMG5UuE2Ycw8-sxzeybicP"#;
+    let to_process = parse_event_stream(events_raw.as_bytes())?;
     for msg in to_process {
         if let Message::Notice(msg) = msg {
             processor.process_notice(&msg).unwrap();
         }
     }
 
-    let qry_str = r#"{"v":"KERI10JSON000104_","t":"qry","d":"ErXRrwRbUFylKDiuOp8a1wO2XPAY4KiMX4TzYWZ1iAGE","dt":"2022-03-21T11:42:58.123955+00:00","r":"ksn","rr":"","q":{"s":0,"i":"E6OK2wFYp6x0Jx48xX0GCTwAzJUTWtYEvJSykVhtAnaM","src":"BGKVzj4ve0VSd8z_AmvhLg4lqcC_9WYX90k03q-R_Ydo"}}-VAj-HABE6OK2wFYp6x0Jx48xX0GCTwAzJUTWtYEvJSykVhtAnaM-AABAAk-Hyv8gpUZNpPYDGJc5F5vrLNWlGM26523Sgb6tKN1CtP4QxUjEApJCRxfm9TN8oW2nQ40QVM_IuZlrly1eLBA"#;
+    let qry_str = r#"{"v":"KERI10JSON0000c9_","t":"qry","d":"ENp5aP1sEyT0tYa-Jz6sTlrhW82vp96_j5UKevVB7VEX","dt":"2022-10-25T11:40:27.023790+00:00","r":"ksn","rr":"","q":{"i":"ENRc2DeK48BKJ3ST8mypvngVwEAxw9rZr_GPNP25TmQ_"}}-HABENRc2DeK48BKJ3ST8mypvngVwEAxw9rZr_GPNP25TmQ_-AABAABdEDGCtpvQl_zNlDMCnj9JwKHDKySapQRyzcAuo53DP7NPX5fl-GJYrfqXf3PPTF9tbxWWOUKaWurW5M1EVyIJ"#;
 
     let parsed = parse_event_stream(qry_str.as_bytes()).unwrap();
     if let Message::Op(Op::Query(signed_query)) = parsed.get(0).unwrap().clone() {
@@ -50,7 +44,7 @@ pub fn test_ksn_query() -> Result<(), Box<dyn std::error::Error>> {
         if let ReplyType::Ksn(ksn) = r {
             assert_eq!(
                 ksn.state.prefix,
-                "E6OK2wFYp6x0Jx48xX0GCTwAzJUTWtYEvJSykVhtAnaM"
+                "ENRc2DeK48BKJ3ST8mypvngVwEAxw9rZr_GPNP25TmQ_"
                     .parse()
                     .unwrap()
             );
@@ -69,8 +63,7 @@ fn processs_oobi() -> Result<(), Error> {
     use keri::oobi::OobiManager;
     use tempfile::Builder;
 
-    let oobi_rpy = r#"{"v":"KERI10JSON000116_","t":"rpy","d":"EZuWRhrNl9gNIck0BcLiPegTJTw3Ng_Hq3WTF8BOQ-sk","dt":"2022-04-12T08:27:47.009114+00:00","r":"/end/role/add","a":{"cid":"Bgoq68HCmYNUDgOz4Skvlu306o_NY-NrYuKAVhk3Zh9c","role":"controller","eid":"Bgoq68HCmYNUDgOz4Skvlu306o_NY-NrYuKAVhk3Zh9c"}}-VAi-CABBgoq68HCmYNUDgOz4Skvlu306o_NY-NrYuKAVhk3Zh9c0Bke1uKEan_LNlP3e5huCO7zHEi50L18FB1-DdskAEyuehw9gMjNMhex73C9Yr0WlkP1B1-JjNIKDVm816zCgmCw"#;
-
+    let oobi_rpy = r#"{"v":"KERI10JSON000113_","t":"rpy","d":"EFlkeg-NociMRXHSGBSqARxV5y7zuT5z-ZpLZAkcoMkk","dt":"2021-01-01T00:00:00.000000+00:00","r":"/end/role/add","a":{"cid":"BLK_YxcmK_sAsSW1CbNLJl_FA0gw0FKDuPr_xUwKcj7y","role":"watcher","eid":"BF6YSJGAtVNmq3b7dpBi04Q0YdqvTfsk9PFkkZaR8LRr"}}-VAi-CABBLK_YxcmK_sAsSW1CbNLJl_FA0gw0FKDuPr_xUwKcj7y0BDa3HMDHpdGb9rQ1wsYmQdGMoeFrO2OguTUBXU6kvJjqb2ucmAka59hU9SC-z3YbRGuJchnBIA2N5Q9ja843OkG"#;
     let oobi_root = Builder::new().prefix("oobi-db").tempdir().unwrap();
     let root = Builder::new().prefix("oobi-db").tempdir().unwrap();
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
