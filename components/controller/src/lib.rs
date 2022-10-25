@@ -136,16 +136,6 @@ impl Controller {
         Ok(())
     }
 
-    /// Query watcher (TODO randomly chosen, for now asks first found watcher)
-    /// about id kel and updates local kel.
-    pub fn query(&self, id: &IdentifierPrefix, _query_id: &str) -> Result<(), ControllerError> {
-        let _watchers = self.get_watchers(id)?;
-        // TODO choose random watcher id?
-        // TODO we assume that we get the answer immediately which is not always true
-        let _resp = todo!("query");
-        // self.process_stream(_resp)
-    }
-
     // Returns messages if they can be returned immediately, i.e. for query message
     pub fn process(&self, msg: &Message) -> Result<Option<Vec<Message>>, ControllerError> {
         let response = match msg.clone() {
