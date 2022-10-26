@@ -8,3 +8,4 @@ async-trait = "0.1.57"
 keri = { path = "../../keriox_core", features = ["controller", "oobi", "query"] }
 reqwest = "0.11.11"
 thiserror = "1.0.32"
+url = "2.2.2"

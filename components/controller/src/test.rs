@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use keri::{
     actor::prelude::Message,
@@ -9,7 +9,10 @@ use keri::{
     prefix::{BasicPrefix, IdentifierPrefix},
     signer::{CryptoBox, KeyManager},
 };
+use keri_transport::test::TestTransport;
 use tempfile::Builder;
+use url::Host;
+use witness::Witness;
 
 use super::{error::ControllerError, identifier_controller::IdentifierController, Controller};
 use crate::{mailbox_updating::ActionRequired, utils::OptionalConfig};
@@ -90,7 +93,6 @@ async fn test_group_incept() -> Result<(), ControllerError> {
 }
 
 #[async_std::test]
-#[ignore]
 async fn test_delegated_incept() -> Result<(), ControllerError> {
     use url::Url;
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
@@ -101,7 +103,30 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     // Tests assumses that witness DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA is listening on http://127.0.0.1:3232
     // It can be run from components/witness using command:
     // cargo run -- -c ./src/witness.json
-    // TODO: use fake transport
+
+    let witness = {
+        let seed = todo!();
+        let witness_root = Builder::new().prefix("test-wit1-db").tempdir().unwrap();
+        let oobi_root = Builder::new()
+            .prefix("test-wit1-db_oobi")
+            .tempdir()
+            .unwrap();
+        Witness::setup(
+            url::Url::parse("http://witness1/").unwrap(),
+            witness_root.path(),
+            &oobi_root.path(),
+            Some(seed.into()),
+        )?
+    };
+
+    let transport = TestTransport {
+        actors: {
+            let mut actors = HashMap::new();
+            actors.insert((Host::Domain("some"), 1234), Box::new(witness));
+            actors
+        },
+    };
+
     let witness_id: IdentifierPrefix = "DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA"
         .parse()
         .unwrap();

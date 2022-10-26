@@ -60,6 +60,73 @@ impl WitnessListener {
     }
 }
 
+mod test {
+    use keri::{
+        actor::simple_controller::PossibleResponse,
+        event_message::signed_event_message::{Message, Op},
+        oobi::Role,
+        prefix::IdentifierPrefix,
+        query::query_event::SignedQuery,
+    };
+    use keri_transport::test::ActorError;
+
+    #[async_trait::async_trait]
+    impl keri_transport::test::TestActor for super::WitnessListener {
+        async fn send_message(&self, msg: Message) -> Result<(), ActorError> {
+            let req = actix_web::test::TestRequest::default()
+                .app_data(self.witness_data.clone())
+                .method(actix_web::http::Method::POST)
+                .set_payload(msg.to_cesr().map_err(|_| ActorError)?)
+                .to_http_request();
+
+            match msg {
+                Message::Notice(_) => {
+                    todo!();
+                }
+                Message::Op(op) => match op {
+                    Op::Query(_) => {
+                        todo!();
+                    }
+                    Op::Reply(_) => {
+                        todo!();
+                    }
+                    Op::Exchange(_) => {
+                        todo!();
+                    }
+                },
+            }
+
+            Ok(())
+        }
+        async fn send_query(&self, query: SignedQuery) -> Result<PossibleResponse, ActorError> {
+            let req = actix_web::test::TestRequest::default()
+                .app_data(self.witness_data.clone())
+                .method(actix_web::http::Method::POST)
+                .set_payload(
+                    Message::Op(Op::Query(query))
+                        .to_cesr()
+                        .map_err(|_| ActorError)?,
+                )
+                .to_http_request();
+
+            let resp = todo!();
+
+            Ok(resp)
+        }
+        async fn request_loc_scheme(&self, eid: IdentifierPrefix) -> Result<Vec<Op>, ActorError> {
+            todo!()
+        }
+        async fn request_end_role(
+            &self,
+            cid: IdentifierPrefix,
+            role: Role,
+            eid: IdentifierPrefix,
+        ) -> Result<Vec<Op>, ActorError> {
+            todo!()
+        }
+    }
+}
+
 pub mod http_handlers {
     use std::sync::Arc;
 
