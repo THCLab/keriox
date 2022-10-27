@@ -81,7 +81,7 @@ impl KeyConfig {
         } else if
         // check if there are not too many
         sigs.len() > self.public_keys.len() {
-            Err(Error::ToManySignatures)
+            Err(Error::TooManySignatures)
 
         // ensure there's enough sigs
         } else if self.threshold.enough_signatures(
