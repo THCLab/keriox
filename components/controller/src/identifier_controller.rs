@@ -201,20 +201,24 @@ impl IdentifierController {
         witness_threshold: Option<u64>,
         delegator: Option<IdentifierPrefix>,
     ) -> Result<(String, Vec<String>), ControllerError> {
-        let key_config = self.source.storage.get_state(&self.id)?.unwrap().current;
-        let (pks, npks) = participants.iter().fold(
-            (
-                key_config.public_keys,
-                key_config.next_keys_data.next_key_hashes,
-            ),
-            |mut acc, id| {
-                let state = self.source.storage.get_state(id).unwrap().unwrap();
-                acc.0.append(&mut state.clone().current.public_keys);
-                acc.1
-                    .append(&mut state.clone().current.next_keys_data.next_key_hashes);
-                acc
-            },
-        );
+        let key_config = self
+            .source
+            .storage
+            .get_state(&self.id)?
+            .ok_or(ControllerError::UnknownIdentifierError)?
+            .current;
+
+        let mut pks = key_config.public_keys;
+        let mut npks = key_config.next_keys_data.next_key_hashes;
+        for participant in &participants {
+            let state = self
+                .source
+                .storage
+                .get_state(&participant)?
+                .ok_or(ControllerError::UnknownIdentifierError)?;
+            pks.append(&mut state.clone().current.public_keys);
+            npks.append(&mut state.clone().current.next_keys_data.next_key_hashes);
+        }
 
         let icp = event_generator::incept_with_next_hashes(
             pks,
@@ -223,34 +227,27 @@ impl IdentifierController {
             initial_witness.unwrap_or_default(),
             witness_threshold.unwrap_or(0),
             delegator.as_ref(),
-        )
-        .unwrap();
+        )?;
 
         let serialized_icp = String::from_utf8(icp.serialize()?)
             .map_err(|e| ControllerError::EventGenerationError(e.to_string()))?;
 
         let mut exchanges = participants
             .iter()
-            .map(|id| {
-                let exn = event_generator::exchange(id, &icp, ForwardTopic::Multisig)
-                    .unwrap()
-                    .serialize()
-                    .unwrap();
-                String::from_utf8(exn).unwrap()
+            .map(|id| -> Result<_, _> {
+                let exn =
+                    event_generator::exchange(id, &icp, ForwardTopic::Multisig)?.serialize()?;
+                String::from_utf8(exn).map_err(|_e| ControllerError::EventFormatError)
             })
-            .collect::<Vec<_>>();
-        let delegation_request = delegator.map(|del| {
-            String::from_utf8(
-                event_generator::exchange(&del, &icp, ForwardTopic::Delegate)
-                    .unwrap()
-                    .serialize()
-                    .unwrap(),
+            .collect::<Result<Vec<String>, ControllerError>>()?;
+
+        if let Some(delegator) = delegator {
+            let delegation_request = String::from_utf8(
+                event_generator::exchange(&delegator, &icp, ForwardTopic::Delegate)?.serialize()?,
             )
-            .unwrap()
-        });
-        if let Some(delegation_request) = delegation_request {
-            exchanges.push(delegation_request)
-        };
+            .map_err(|_e| ControllerError::EventFormatError)?;
+            exchanges.push(delegation_request);
+        }
 
         Ok((serialized_icp, exchanges))
     }
@@ -264,7 +261,8 @@ impl IdentifierController {
         // Join exn messages with their signatures and send it to witness.
         let material_path = MaterialPath::to_path("-a".into());
         // let attached_sig = sigs;
-        let (_, parsed_exn) = exchange_message(exchange).unwrap();
+        let (_, parsed_exn) =
+            exchange_message(exchange).map_err(|_e| ControllerError::EventFormatError)?;
         if let EventType::Exn(exn) = parsed_exn {
             let Exchange::Fwd { to_forward, .. } = exn.event.content.clone();
 
@@ -339,7 +337,8 @@ impl IdentifierController {
         exchanges: Vec<(Vec<u8>, SelfSigningPrefix)>,
     ) -> Result<IdentifierPrefix, ControllerError> {
         // Join icp event with signature
-        let (_, key_event) = key_event_message(&group_event).unwrap();
+        let (_, key_event) =
+            key_event_message(&group_event).map_err(|_e| ControllerError::EventFormatError)?;
         let icp = if let EventType::KeyEvent(icp) = key_event {
             icp
         } else {
@@ -382,7 +381,8 @@ impl IdentifierController {
         let material_path = MaterialPath::to_path("-a".into());
         let attached_sig = sigs;
         for (exn, signature) in exchanges {
-            let (_, parsed_exn) = exchange_message(&exn).unwrap();
+            let (_, parsed_exn) =
+                exchange_message(&exn).map_err(|_e| ControllerError::EventFormatError)?;
             let exn = if let EventType::Exn(exn) = parsed_exn {
                 exn
             } else {
@@ -533,8 +533,7 @@ impl IdentifierController {
                     &SelfAddressing::Blake3_256,
                 )
             })
-            .collect::<Result<_, _>>()
-            .unwrap())
+            .collect::<Result<_, _>>()?)
     }
 
     /// Joins query events with their signatures, sends it to witness and
@@ -555,11 +554,23 @@ impl IdentifierController {
                 QueryRoute::Log {
                     reply_route: _,
                     args,
-                } => (args.src.clone().unwrap(), None, None),
+                } => (
+                    args.src.clone().ok_or(ControllerError::QueryArgumentError(
+                        "Missing query receipient identifier".into(),
+                    ))?,
+                    None,
+                    None,
+                ),
                 QueryRoute::Ksn {
                     reply_route: _,
                     args,
-                } => (args.src.clone().unwrap(), None, None),
+                } => (
+                    args.src.clone().ok_or(ControllerError::QueryArgumentError(
+                        "Missing query receipient identifier".into(),
+                    ))?,
+                    None,
+                    None,
+                ),
                 QueryRoute::Mbx {
                     reply_route: _,
                     args,
@@ -589,7 +600,13 @@ impl IdentifierController {
             } else {
                 // process group mailbox
                 let group_req = self
-                    .process_group_mailbox(&res, about_who.unwrap(), &self.last_asked_groups_index)
+                    .process_group_mailbox(
+                        &res,
+                        about_who.ok_or(ControllerError::QueryArgumentError(
+                            "Missing query receipient identifier".into(),
+                        ))?,
+                        &self.last_asked_groups_index,
+                    )
                     .await?;
                 self.last_asked_groups_index = MailboxReminder {
                     receipt: res.receipt.len(),
