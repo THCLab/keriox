@@ -1,12 +1,13 @@
 use crate::{
     derivation::{basic::Basic, self_signing::SelfSigning},
-    error::Error,
     event_parsing::parsing::from_bytes_to_text,
 };
+use self::error::Error;
 use core::str::FromStr;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt::Display;
 
+pub mod error;
 pub mod attached_signature;
 pub mod basic;
 pub mod seed;
@@ -123,15 +124,15 @@ pub fn verify(
             SelfSigning::Ed25519Sha512 => Ok(key
                 .public_key
                 .verify_ed(data.as_ref(), &signature.signature)),
-            _ => Err(Error::SemanticError("wrong sig type".to_string())),
+            _ => Err(Error::WrongSignatureTypeError.into()),
         },
         Basic::ECDSAsecp256k1 | Basic::ECDSAsecp256k1NT => match signature.derivation {
             SelfSigning::ECDSAsecp256k1Sha256 => Ok(key
                 .public_key
                 .verify_ecdsa(data.as_ref(), &signature.signature)),
-            _ => Err(Error::SemanticError("wrong sig type".to_string())),
+            _ => Err(Error::WrongSignatureTypeError.into()),
         },
-        _ => Err(Error::SemanticError("inelligable key type".to_string())),
+        _ => Err(Error::WrongKeyTypeError.into()),
     }
 }
 
@@ -146,7 +147,7 @@ pub fn derive(seed: &SeedPrefix, transferable: bool) -> Result<BasicPrefix, Erro
             SeedPrefix::RandomSeed256Ed25519(_) if !transferable => Basic::Ed25519NT,
             SeedPrefix::RandomSeed256ECDSAsecp256k1(_) if transferable => Basic::ECDSAsecp256k1,
             SeedPrefix::RandomSeed256ECDSAsecp256k1(_) if !transferable => Basic::ECDSAsecp256k1NT,
-            _ => return Err(Error::ImproperPrefixType),
+            _ => return Err(Error::WrongSeedTypeError),
         },
         pk,
     ))
@@ -228,7 +229,7 @@ mod tests {
 
         let key_prefix = Basic::Ed25519NT.derive(pub_key);
 
-        let sig = priv_key.sign_ed(&data_string.as_bytes())?;
+        let sig = priv_key.sign_ed(&data_string.as_bytes()).unwrap();
         let sig_prefix = SelfSigningPrefix {
             derivation: SelfSigning::Ed25519Sha512,
             signature: sig,

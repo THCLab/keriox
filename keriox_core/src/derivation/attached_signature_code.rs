@@ -1,8 +1,8 @@
 use super::{self_signing::SelfSigning, DerivationCode};
 use crate::{
-    error::Error,
     event_parsing::parsing::{from_bytes_to_text, from_text_to_bytes},
 };
+use super::error::Error;
 use core::str::FromStr;
 
 /// Attached Signature Derivation Codes

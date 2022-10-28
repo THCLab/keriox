@@ -1,7 +1,7 @@
 use super::Prefix;
+use super::error::Error;
 use crate::{
     derivation::{self_signing::SelfSigning, DerivationCode},
-    error::Error,
     event_parsing::parsing::from_text_to_bytes,
 };
 use core::str::FromStr;
@@ -34,10 +34,7 @@ impl FromStr for SelfSigningPrefix {
                 from_text_to_bytes(&s[code.code_len()..].as_bytes())?[code.code_len()..].to_vec(),
             ))
         } else {
-            Err(Error::SemanticError(format!(
-                "Incorrect Prefix Length: {}",
-                s
-            )))
+            Err(Error::IncorrectLengthError(s.into()))
         }
     }
 }

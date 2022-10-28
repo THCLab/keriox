@@ -2,6 +2,7 @@ use std::convert::{TryFrom, TryInto};
 
 use chrono::{DateTime, FixedOffset, SecondsFormat};
 use serde::Deserialize;
+pub mod error;
 
 use self::{parsing::from_bytes_to_text, path::MaterialPath};
 #[cfg(feature = "query")]

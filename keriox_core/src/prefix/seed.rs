@@ -1,6 +1,6 @@
 use super::Prefix;
+use super::error::Error;
 use crate::{
-    error::Error,
     event_parsing::parsing::from_text_to_bytes,
     keys::{PrivateKey, PublicKey},
 };
@@ -33,7 +33,7 @@ impl SeedPrefix {
                     PrivateKey::new(sk.to_bytes().to_vec()),
                 ))
             }
-            _ => Err(Error::ImproperPrefixType),
+            _ => Err(Error::WrongSeedTypeError),
         }
     }
 }

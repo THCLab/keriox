@@ -2,8 +2,8 @@ use core::str::FromStr;
 
 use serde::{Deserialize, Serialize};
 
-use super::DerivationCode;
-use crate::{error::Error, keys::PublicKey, prefix::BasicPrefix};
+use super::{DerivationCode, error::Error};
+use crate::{keys::PublicKey, prefix::BasicPrefix};
 
 /// Basic Derivations
 ///

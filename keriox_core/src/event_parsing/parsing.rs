@@ -1,6 +1,6 @@
 use base64::{encode_config, URL_SAFE};
 
-use crate::error::Error;
+use super::error::Error;
 
 pub fn from_text_to_bytes(text: &[u8]) -> Result<Vec<u8>, Error> {
     let lead_size = (4 - (text.len() % 4)) % 4;

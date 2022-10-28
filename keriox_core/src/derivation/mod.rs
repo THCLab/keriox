@@ -2,6 +2,7 @@ pub mod attached_signature_code;
 pub mod basic;
 pub mod self_addressing;
 pub mod self_signing;
+pub mod error;
 
 pub trait DerivationCode {
     fn code_len(&self) -> usize;

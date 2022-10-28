@@ -124,6 +124,9 @@ pub enum Error {
 
     #[error("Event generation error: {0}")]
     EventGenerationError(String),
+
+    #[error(transparent)]
+    PrefixModuleError(#[from] crate::prefix::error::Error)
 }
 
 impl From<ParseIntError> for Error {

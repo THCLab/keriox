@@ -1,6 +1,7 @@
 use super::DerivationCode;
-use crate::{error::Error, prefix::SelfSigningPrefix};
+use crate::prefix::SelfSigningPrefix;
 use core::str::FromStr;
+use super::error::Error;
 
 /// Self Signing Derivations
 ///

@@ -5,10 +5,10 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use super::{verify, Prefix, SelfSigningPrefix};
 use crate::{
     derivation::{basic::Basic, DerivationCode},
-    error::Error,
     event_parsing::parsing::from_text_to_bytes,
     keys::PublicKey,
 };
+use super::error::Error;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct BasicPrefix {
@@ -44,10 +44,7 @@ impl FromStr for BasicPrefix {
                 from_text_to_bytes(s[code.code_len()..].as_bytes())?[code.code_len()..].to_vec();
             Ok(Self::new(code, PublicKey::new(k_vec)))
         } else {
-            Err(Error::SemanticError(format!(
-                "Incorrect Prefix Length: {}",
-                s
-            )))
+            Err(Error::IncorrectLengthError(s.into()))
         }
     }
 }

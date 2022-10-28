@@ -1,9 +1,9 @@
 use super::Prefix;
 use crate::derivation::{self_addressing::SelfAddressing, DerivationCode};
-use crate::error::Error;
 use crate::event_parsing::parsing::from_text_to_bytes;
 use core::{fmt, str::FromStr};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use super::error::Error;
 
 #[derive(Debug, PartialEq, Clone, Hash, Eq)]
 pub struct SelfAddressingPrefix {
@@ -35,10 +35,7 @@ impl FromStr for SelfAddressingPrefix {
 
             Ok(Self::new(code, decoded))
         } else {
-            Err(Error::SemanticError(format!(
-                "Incorrect Prefix Length: {}",
-                s
-            )))
+            Err(Error::IncorrectLengthError(s.into()))
         }
     }
 }

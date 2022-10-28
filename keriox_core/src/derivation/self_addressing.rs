@@ -1,5 +1,5 @@
-use super::DerivationCode;
-use crate::{error::Error, prefix::SelfAddressingPrefix};
+use super::{DerivationCode, error::Error};
+use crate::{prefix::SelfAddressingPrefix};
 use blake2::{Blake2b, Digest, VarBlake2b, VarBlake2s};
 use blake3;
 use core::str::FromStr;
