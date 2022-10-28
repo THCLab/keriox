@@ -25,7 +25,7 @@ use keri::{
     },
     oobi::{LocationScheme, Role, Scheme},
     prefix::{
-        AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix,
+        AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfAddressingPrefix,
         SelfSigningPrefix,
     },
     query::{
@@ -40,7 +40,6 @@ use super::mailbox_updating::ActionRequired;
 
 pub struct IdentifierController {
     pub id: IdentifierPrefix,
-    pub groups: Vec<IdentifierPrefix>,
     pub source: Arc<Controller>,
     last_asked_index: MailboxReminder,
     last_asked_groups_index: MailboxReminder,
@@ -51,7 +50,6 @@ impl IdentifierController {
         Self {
             id,
             source: kel,
-            groups: vec![],
             last_asked_index: MailboxReminder::default(),
             last_asked_groups_index: MailboxReminder::default(),
         }
@@ -338,7 +336,7 @@ impl IdentifierController {
         &mut self,
         group_event: &[u8],
         sig: SelfSigningPrefix,
-        exchanges: Vec<(&[u8], SelfSigningPrefix)>,
+        exchanges: Vec<(Vec<u8>, SelfSigningPrefix)>,
     ) -> Result<IdentifierPrefix, ControllerError> {
         // Join icp event with signature
         let (_, key_event) = key_event_message(&group_event).unwrap();
@@ -353,7 +351,6 @@ impl IdentifierController {
         self.source
             .finalize_key_event(&icp, &sig, own_index)
             .await?;
-        self.groups.push(icp.event.get_prefix());
 
         let signature = AttachedSignaturePrefix {
             index: own_index as u16,
@@ -385,7 +382,7 @@ impl IdentifierController {
         let material_path = MaterialPath::to_path("-a".into());
         let attached_sig = sigs;
         for (exn, signature) in exchanges {
-            let (_, parsed_exn) = exchange_message(exn).unwrap();
+            let (_, parsed_exn) = exchange_message(&exn).unwrap();
             let exn = if let EventType::Exn(exn) = parsed_exn {
                 exn
             } else {
@@ -422,53 +419,91 @@ impl IdentifierController {
     /// Helper function for getting the position of identifier's public key in
     /// group's current keys list.
     pub(crate) fn get_index(&self, group_event: &KeyEvent) -> Result<usize, ControllerError> {
-        // TODO what if group participant is a group and has more than one
-        // public key?
-        let own_pk = &self
-            .source
-            .storage
-            .get_state(&self.id)?
-            .ok_or(ControllerError::UnknownIdentifierError)?
-            .current
-            .public_keys[0];
         match &group_event.content.event_data {
-            EventData::Icp(icp) => icp
-                .key_config
-                .public_keys
-                .iter()
-                .position(|pk| pk == own_pk),
-            EventData::Rot(rot) => rot
-                .key_config
-                .public_keys
-                .iter()
-                .position(|pk| pk == own_pk),
-            EventData::Dip(dip) => dip
-                .inception_data
-                .key_config
-                .public_keys
-                .iter()
-                .position(|pk| pk == own_pk),
-            EventData::Drt(drt) => drt
-                .key_config
-                .public_keys
-                .iter()
-                .position(|pk| pk == own_pk),
-            EventData::Ixn(_ixn) => self
-                .source
-                .storage
-                .get_state(&group_event.get_prefix())?
-                .ok_or(ControllerError::UnknownIdentifierError)?
-                .current
-                .public_keys
-                .iter()
-                .position(|pk| pk == own_pk),
+            EventData::Icp(icp) => {
+                // TODO what if group participant is a group and has more than one
+                // public key?
+                let own_pk = &self
+                    .source
+                    .storage
+                    .get_state(&self.id)?
+                    .ok_or(ControllerError::UnknownIdentifierError)?
+                    .current
+                    .public_keys[0];
+                icp.key_config
+                    .public_keys
+                    .iter()
+                    .position(|pk| pk == own_pk)
+            }
+            EventData::Rot(rot) => {
+                let own_npk = &self
+                    .source
+                    .storage
+                    .get_state(&self.id)?
+                    .ok_or(ControllerError::UnknownIdentifierError)?
+                    .current
+                    .next_keys_data
+                    .next_key_hashes[0];
+                rot.key_config
+                    .public_keys
+                    .iter()
+                    .position(|pk| own_npk.verify_binding(pk.to_str().as_bytes()))
+            }
+            EventData::Dip(dip) => {
+                // TODO what if group participant is a group and has more than one
+                // public key?
+                let own_pk = &self
+                    .source
+                    .storage
+                    .get_state(&self.id)?
+                    .ok_or(ControllerError::UnknownIdentifierError)?
+                    .current
+                    .public_keys[0];
+                dip.inception_data
+                    .key_config
+                    .public_keys
+                    .iter()
+                    .position(|pk| pk == own_pk)
+            }
+            EventData::Drt(drt) => {
+                let own_npk = &self
+                    .source
+                    .storage
+                    .get_state(&self.id)?
+                    .ok_or(ControllerError::UnknownIdentifierError)?
+                    .current
+                    .next_keys_data
+                    .next_key_hashes[0];
+                drt.key_config
+                    .public_keys
+                    .iter()
+                    .position(|pk| own_npk.verify_binding(pk.to_str().as_bytes()))
+            }
+            EventData::Ixn(_ixn) => {
+                let own_pk = &self
+                    .source
+                    .storage
+                    .get_state(&self.id)?
+                    .ok_or(ControllerError::UnknownIdentifierError)?
+                    .current
+                    .public_keys[0];
+                self.source
+                    .storage
+                    .get_state(&group_event.get_prefix())?
+                    .ok_or(ControllerError::UnknownIdentifierError)?
+                    .current
+                    .public_keys
+                    .iter()
+                    .position(|pk| pk == own_pk)
+            }
         }
         .ok_or(ControllerError::NotGroupParticipantError)
     }
 
     /// Generates query message of route `mbx` to query own identifier mailbox.
-    pub fn query_own_mailbox(
+    pub fn query_mailbox(
         &self,
+        identifier: &IdentifierPrefix,
         witnesses: &[BasicPrefix],
     ) -> Result<Vec<QueryEvent>, ControllerError> {
         Ok(witnesses
@@ -478,7 +513,7 @@ impl IdentifierController {
                     QueryRoute::Mbx {
                         args: QueryArgsMbx {
                             // about who
-                            i: self.id.clone(),
+                            i: identifier.clone(),
                             // who is asking
                             pre: self.id.clone(),
                             // who will get the query
@@ -502,46 +537,6 @@ impl IdentifierController {
             .unwrap())
     }
 
-    /// Generates query messages of route `mbx` to query groups mailbox.
-    pub fn query_group_mailbox(
-        &self,
-        witnesses: &[BasicPrefix],
-    ) -> Result<Vec<QueryEvent>, ControllerError> {
-        let groups_queries = self
-            .groups
-            .iter()
-            .map(|group_id| {
-                witnesses.clone().into_iter().map(move |wit| {
-                    QueryEvent::new_query(
-                        QueryRoute::Mbx {
-                            args: QueryArgsMbx {
-                                // about who
-                                i: group_id.clone(),
-                                // who is asking
-                                pre: self.id.clone(),
-                                // who will get the query
-                                src: IdentifierPrefix::Basic(wit.clone()),
-                                topics: QueryTopics {
-                                    credential: 0,
-                                    receipt: 0,
-                                    replay: 0,
-                                    multisig: 0,
-                                    delegate: 0,
-                                    reply: 0,
-                                },
-                            },
-                            reply_route: "".to_string(),
-                        },
-                        SerializationFormats::JSON,
-                        &SelfAddressing::Blake3_256,
-                    )
-                    .unwrap()
-                })
-            })
-            .flatten();
-        Ok(groups_queries.collect())
-    }
-
     /// Joins query events with their signatures, sends it to witness and
     /// process its response. If user action is needed to finalize process,
     /// returns proper notification.
@@ -556,7 +551,7 @@ impl IdentifierController {
                 index: 0,
                 signature: sig,
             }];
-            let (receipient, from_who, about_who) = match &qry.event.content.data.route {
+            let (receipient, about_who, from_who) = match &qry.event.content.data.route {
                 QueryRoute::Log {
                     reply_route: _,
                     args,
@@ -594,7 +589,7 @@ impl IdentifierController {
             } else {
                 // process group mailbox
                 let group_req = self
-                    .process_groups_mailbox(&res, &self.last_asked_groups_index)
+                    .process_group_mailbox(&res, about_who.unwrap(), &self.last_asked_groups_index)
                     .await?;
                 self.last_asked_groups_index = MailboxReminder {
                     receipt: res.receipt.len(),

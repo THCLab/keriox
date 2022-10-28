@@ -58,13 +58,11 @@ async fn test_group_incept() -> Result<(), ControllerError> {
     // Group initiator needs to use `finalize_group_incept` instead of just
     // `finalize_event`, to send multisig request to other group participants.
     // Identifier who get this request from mailbox, can use just `finalize_event`
-    let group_id = identifier1
-        .finalize_group_incept(
-            group_inception.as_bytes(),
-            signature_icp,
-            vec![(exn_messages[0].as_bytes(), signature_exn)],
-        )
-        .await?;
+    let group_id = identifier1.finalize_group_incept(
+        group_inception.as_bytes(),
+        signature_icp,
+        vec![(exn_messages[0].as_bytes().to_vec(), signature_exn)],
+    ).await?;
 
     let kel = controller
         .storage
@@ -136,8 +134,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
         IdentifierController::new(incepted_identifier, controller.clone())
     };
     // Quering mailbox to get receipts
-    println!("Querying own mailbox to get receipts");
-    let query = identifier1.query_own_mailbox(&[witness_id_basic.clone()])?;
+    let query = identifier1.query_mailbox(&identifier1.id, &[witness_id_basic.clone()])?;
 
     for qry in query {
         let signature = SelfSigning::Ed25519Sha512.derive(km1.sign(&qry.serialize()?)?);
@@ -162,7 +159,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     };
 
     // Quering mailbox to get receipts
-    let query = delegator.query_own_mailbox(&[witness_id_basic.clone()])?;
+    let query = delegator.query_mailbox(&delegator.id, &[witness_id_basic.clone()])?;
 
     for qry in query {
         let signature = SelfSigning::Ed25519Sha512.derive(km2.sign(&qry.serialize()?)?);
@@ -191,12 +188,12 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
         .finalize_group_incept(
             delegated_inception.as_bytes(),
             signature_icp.clone(),
-            vec![(exn_messages[0].as_bytes(), signature_exn.clone())],
+            vec![(exn_messages[0].as_bytes().to_vec(), signature_exn.clone())],
         )
         .await?;
 
     // Quering mailbox to get receipts
-    let query = delegator.query_own_mailbox(&[witness_id_basic.clone()])?;
+    let query = delegator.query_mailbox(&delegator.id, &[witness_id_basic.clone()])?;
 
     for qry in query {
         let signature = SelfSigning::Ed25519Sha512.derive(km2.sign(&qry.serialize()?)?);
@@ -218,7 +215,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     assert!(kel.is_none());
 
     // Delegator asks about his mailbox to get delegated event.
-    let query = delegator.query_own_mailbox(&[witness_id_basic.clone()])?;
+    let query = delegator.query_mailbox(&delegator.id, &[witness_id_basic.clone()])?;
 
     for qry in query {
         let signature = SelfSigning::Ed25519Sha512.derive(km2.sign(&qry.serialize()?)?);
@@ -241,7 +238,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
                     .await?;
 
                 // Query for receipts
-                let query = delegator.query_own_mailbox(&[witness_id_basic.clone()])?;
+                let query = delegator.query_mailbox(&delegator.id, &[witness_id_basic.clone()])?;
 
                 for qry in query {
                     let signature = SelfSigning::Ed25519Sha512.derive(km2.sign(&qry.serialize()?)?);
@@ -271,7 +268,8 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     controller.process(&Message::Notice(delegators_kel[0].clone()))?; // icp
     controller.process(&Message::Notice(delegators_kel[1].clone()))?; // receipt
 
-    let query = identifier1.query_group_mailbox(&[witness_id_basic.clone()])?;
+    // Ask about delegated identifier mailbox
+    let query = identifier1.query_mailbox(&delegate_id, &[witness_id_basic.clone()])?;
 
     for qry in query {
         let signature = SelfSigning::Ed25519Sha512.derive(km1.sign(&qry.serialize()?)?);
@@ -289,7 +287,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     assert_eq!(state, None);
 
     // Get mailbox for receipts.
-    let query = identifier1.query_group_mailbox(&[witness_id_basic.clone()])?;
+    let query = identifier1.query_mailbox(&delegate_id, &[witness_id_basic.clone()])?;
 
     for qry in query {
         let signature = SelfSigning::Ed25519Sha512.derive(km1.sign(&qry.serialize()?)?);
