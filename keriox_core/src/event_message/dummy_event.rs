@@ -1,19 +1,16 @@
 use crate::{
-    derivation::{self_addressing::SelfAddressing, DerivationCode},
+    derivation::self_addressing::SelfAddressing,
     error::Error,
     event::{
         event_data::{DelegatedInceptionEvent, EventData, InceptionEvent},
         SerializationFormats,
     },
+    event_parsing::codes::self_addressing::dummy_prefix,
 };
 
 use super::{serialization_info::SerializationInfo, EventTypeTag, Typeable};
 use serde::Serialize;
 use serde_hex::{Compact, SerHex};
-
-pub fn dummy_prefix(derivation: &SelfAddressing) -> String {
-    "#".repeat(derivation.code_len() + derivation.derivative_b64_len())
-}
 
 /// Dummy Inception Event
 ///
@@ -37,7 +34,7 @@ pub(crate) struct DummyInceptionEvent {
 impl DummyInceptionEvent {
     pub fn dummy_inception_data(
         icp: InceptionEvent,
-        derivation: &SelfAddressing,
+        derivation: SelfAddressing,
         format: SerializationFormats,
     ) -> Result<Self, Error> {
         DummyInceptionEvent::derive_data(EventData::Icp(icp), derivation, format)
@@ -45,7 +42,7 @@ impl DummyInceptionEvent {
 
     pub fn dummy_delegated_inception_data(
         dip: DelegatedInceptionEvent,
-        derivation: &SelfAddressing,
+        derivation: SelfAddressing,
         format: SerializationFormats,
     ) -> Result<Self, Error> {
         DummyInceptionEvent::derive_data(EventData::Dip(dip), derivation, format)
@@ -53,17 +50,18 @@ impl DummyInceptionEvent {
 
     fn derive_data(
         data: EventData,
-        derivation: &SelfAddressing,
+        derivation: SelfAddressing,
         format: SerializationFormats,
     ) -> Result<Self, Error> {
+        let derivation = derivation.into();
         Ok(Self {
             serialization_info: SerializationInfo::new(
                 format,
                 Self {
                     serialization_info: SerializationInfo::new(format, 0),
                     event_type: data.get_type(),
-                    prefix: dummy_prefix(derivation),
-                    digest: dummy_prefix(derivation),
+                    prefix: dummy_prefix(&derivation),
+                    digest: dummy_prefix(&derivation),
                     sn: 0,
                     data: data.clone(),
                 }
@@ -71,8 +69,8 @@ impl DummyInceptionEvent {
                 .len(),
             ),
             event_type: data.get_type(),
-            digest: dummy_prefix(derivation),
-            prefix: dummy_prefix(derivation),
+            digest: dummy_prefix(&derivation),
+            prefix: dummy_prefix(&derivation),
             sn: 0,
             data,
         })
@@ -99,8 +97,9 @@ impl<T: Serialize + Typeable + Clone> DummyEventMessage<T> {
     pub fn dummy_event(
         event: T,
         format: SerializationFormats,
-        derivation: &SelfAddressing,
+        derivation: SelfAddressing,
     ) -> Result<Self, Error> {
+        let cesr_derivation = derivation.clone().into();
         Ok(Self {
             serialization_info: SerializationInfo::new(
                 format,
@@ -108,20 +107,20 @@ impl<T: Serialize + Typeable + Clone> DummyEventMessage<T> {
             ),
             event_type: event.get_type(),
             data: event,
-            digest: dummy_prefix(derivation),
+            digest: dummy_prefix(&cesr_derivation),
         })
     }
 
     fn get_size(
         event: &T,
         format: SerializationFormats,
-        derivation: &SelfAddressing,
+        derivation: SelfAddressing,
     ) -> Result<usize, Error> {
         Ok(Self {
             serialization_info: SerializationInfo::new(format, 0),
             event_type: event.get_type(),
             data: event.clone(),
-            digest: dummy_prefix(derivation),
+            digest: dummy_prefix(&derivation.into()),
         }
         .serialize()?
         .len())

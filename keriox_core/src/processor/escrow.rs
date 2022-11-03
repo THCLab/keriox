@@ -294,7 +294,7 @@ impl PartiallySignedEscrow {
                     };
                     self.escrowed_partially_signed.add(&id, to_add)?;
                 }
-                Err(e) => {
+                Err(_e) => {
                     // keep in escrow
                 }
             }

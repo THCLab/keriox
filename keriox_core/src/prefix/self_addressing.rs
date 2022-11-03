@@ -1,7 +1,10 @@
 use super::error::Error;
 use super::Prefix;
-use crate::derivation::{self_addressing::SelfAddressing, DerivationCode};
-use crate::event_parsing::parsing::from_text_to_bytes;
+use crate::derivation::self_addressing::SelfAddressing;
+use crate::event_parsing::codes::DerivationCode;
+use crate::event_parsing::{
+    codes::self_addressing::SelfAddressing as CesrSelfAddressing, parsing::from_text_to_bytes,
+};
 use core::{fmt, str::FromStr};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -28,12 +31,12 @@ impl FromStr for SelfAddressingPrefix {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let code = SelfAddressing::from_str(s)?;
+        let code = CesrSelfAddressing::from_str(s)?;
         let c_len = code.code_len();
         if s.len() == code.prefix_b64_len() {
             let decoded = from_text_to_bytes(&s[c_len..].as_bytes())?[c_len..].to_vec();
 
-            Ok(Self::new(code, decoded))
+            Ok(Self::new(code.into(), decoded))
         } else {
             Err(Error::IncorrectLengthError(s.into()))
         }
@@ -45,7 +48,8 @@ impl Prefix for SelfAddressingPrefix {
         self.digest.to_owned()
     }
     fn derivation_code(&self) -> String {
-        self.derivation.to_str()
+        let cesr_der: CesrSelfAddressing = self.derivation.clone().into();
+        cesr_der.to_str()
     }
 }
 

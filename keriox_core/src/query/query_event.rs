@@ -95,7 +95,7 @@ impl QueryEvent {
     pub fn new_query(
         route: QueryRoute,
         serialization_format: SerializationFormats,
-        derivation: &SelfAddressing,
+        derivation: SelfAddressing,
     ) -> Result<Self, Error> {
         let message = Query { route };
 

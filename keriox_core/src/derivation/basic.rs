@@ -1,8 +1,6 @@
-use core::str::FromStr;
-
 use serde::{Deserialize, Serialize};
 
-use super::{error::Error, DerivationCode};
+use crate::event_parsing::codes::basic::Basic as CesrBasic;
 use crate::{keys::PublicKey, prefix::BasicPrefix};
 
 /// Basic Derivations
@@ -20,6 +18,36 @@ pub enum Basic {
     X448,
 }
 
+impl Into<CesrBasic> for Basic {
+    fn into(self) -> CesrBasic {
+        match self {
+            Basic::ECDSAsecp256k1NT => CesrBasic::ECDSAsecp256k1NT,
+            Basic::ECDSAsecp256k1 => CesrBasic::ECDSAsecp256k1,
+            Basic::Ed25519NT => CesrBasic::Ed25519NT,
+            Basic::Ed25519 => CesrBasic::Ed25519,
+            Basic::Ed448NT => CesrBasic::Ed448NT,
+            Basic::Ed448 => CesrBasic::Ed448,
+            Basic::X25519 => CesrBasic::X25519,
+            Basic::X448 => CesrBasic::X448,
+        }
+    }
+}
+
+impl From<CesrBasic> for Basic {
+    fn from(cb: CesrBasic) -> Self {
+        match cb {
+            CesrBasic::ECDSAsecp256k1NT => Basic::ECDSAsecp256k1NT,
+            CesrBasic::ECDSAsecp256k1 => Basic::ECDSAsecp256k1,
+            CesrBasic::Ed25519NT => Basic::Ed25519NT,
+            CesrBasic::Ed25519 => Basic::Ed25519,
+            CesrBasic::Ed448NT => Basic::Ed448NT,
+            CesrBasic::Ed448 => Basic::Ed448,
+            CesrBasic::X25519 => Basic::X25519,
+            CesrBasic::X448 => Basic::X448,
+        }
+    }
+}
+
 impl Basic {
     pub fn derive(&self, public_key: PublicKey) -> BasicPrefix {
         BasicPrefix::new(*self, public_key)
@@ -32,62 +60,6 @@ impl Basic {
         match self {
             Basic::ECDSAsecp256k1NT | Basic::Ed25519NT | Basic::Ed448NT => false,
             _ => true,
-        }
-    }
-}
-
-impl DerivationCode for Basic {
-    fn to_str(&self) -> String {
-        match self {
-            Self::Ed25519NT => "B",
-            Self::X25519 => "C",
-            Self::Ed25519 => "D",
-            Self::X448 => "L",
-            Self::ECDSAsecp256k1NT => "1AAA",
-            Self::ECDSAsecp256k1 => "1AAB",
-            Self::Ed448NT => "1AAC",
-            Self::Ed448 => "1AAD",
-        }
-        .into()
-    }
-
-    fn code_len(&self) -> usize {
-        match self {
-            Self::Ed25519NT | Self::Ed25519 | Self::X25519 | Self::X448 => 1,
-            Self::ECDSAsecp256k1NT | Self::ECDSAsecp256k1 | Self::Ed448NT | Self::Ed448 => 4,
-        }
-    }
-
-    fn derivative_b64_len(&self) -> usize {
-        match self {
-            Self::Ed25519NT | Self::Ed25519 | Self::X25519 => 43,
-            Self::X448 => 75,
-            Self::ECDSAsecp256k1NT | Self::ECDSAsecp256k1 => 47,
-            Self::Ed448NT | Self::Ed448 => 76,
-        }
-    }
-}
-
-impl FromStr for Basic {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s
-            .get(..1)
-            .ok_or_else(|| Error::DeserializeError("Empty prefix".into()))?
-        {
-            "B" => Ok(Self::Ed25519NT),
-            "C" => Ok(Self::X25519),
-            "D" => Ok(Self::Ed25519),
-            "L" => Ok(Self::X448),
-            "1" => match &s[1..4] {
-                "AAA" => Ok(Self::ECDSAsecp256k1NT),
-                "AAB" => Ok(Self::ECDSAsecp256k1),
-                "AAC" => Ok(Self::Ed448NT),
-                "AAD" => Ok(Self::Ed448),
-                _ => Err(Error::DeserializeError("Unknown signature code".into())),
-            },
-            _ => Err(Error::DeserializeError("Unknown prefix code".into())),
         }
     }
 }

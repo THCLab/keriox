@@ -10,10 +10,9 @@ use nom::{
 };
 
 use crate::{
-    derivation::attached_signature_code::b64_to_num,
     event::sections::seal::{EventSeal, SourceSeal},
     event_message::signature::Signature,
-    event_parsing::payload_size::PayloadType,
+    event_parsing::{parsing::b64_to_num, payload_size::PayloadType},
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
 };
 

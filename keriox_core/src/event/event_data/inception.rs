@@ -58,7 +58,7 @@ impl InceptionEvent {
         format: SerializationFormats,
     ) -> Result<EventMessage<KeyEvent>, Error> {
         let dummy_event =
-            DummyInceptionEvent::dummy_inception_data(self.clone(), &derivation, format)?;
+            DummyInceptionEvent::dummy_inception_data(self.clone(), derivation.clone(), format)?;
         let digest = derivation.derive(&dummy_event.serialize()?);
         let event = Event::new(
             IdentifierPrefix::SelfAddressing(digest.clone()),

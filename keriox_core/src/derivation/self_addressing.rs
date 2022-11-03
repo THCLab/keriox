@@ -1,8 +1,7 @@
-use super::{error::Error, DerivationCode};
+use crate::event_parsing::codes::self_addressing::SelfAddressing as CesrSelfAddressing;
 use crate::prefix::SelfAddressingPrefix;
 use blake2::{Blake2b, Digest, VarBlake2b, VarBlake2s};
 use blake3;
-use core::str::FromStr;
 use sha2::{Sha256, Sha512};
 use sha3::{Sha3_256, Sha3_512};
 
@@ -28,6 +27,38 @@ pub enum SelfAddressing {
     SHA2_512,
 }
 
+impl Into<CesrSelfAddressing> for SelfAddressing {
+    fn into(self) -> CesrSelfAddressing {
+        match self {
+            SelfAddressing::Blake3_256 => CesrSelfAddressing::Blake3_256,
+            SelfAddressing::Blake2B256(a) => CesrSelfAddressing::Blake2B256(a),
+            SelfAddressing::Blake2S256(a) => CesrSelfAddressing::Blake2S256(a),
+            SelfAddressing::SHA3_256 => CesrSelfAddressing::SHA3_256,
+            SelfAddressing::SHA2_256 => CesrSelfAddressing::SHA2_256,
+            SelfAddressing::Blake3_512 => CesrSelfAddressing::Blake3_512,
+            SelfAddressing::SHA3_512 => CesrSelfAddressing::SHA3_512,
+            SelfAddressing::Blake2B512 => CesrSelfAddressing::Blake2B512,
+            SelfAddressing::SHA2_512 => CesrSelfAddressing::SHA2_512,
+        }
+    }
+}
+
+impl From<CesrSelfAddressing> for SelfAddressing {
+    fn from(csa: CesrSelfAddressing) -> Self {
+        match csa {
+            CesrSelfAddressing::Blake3_256 => SelfAddressing::Blake3_256,
+            CesrSelfAddressing::Blake2B256(a) => SelfAddressing::Blake2B256(a),
+            CesrSelfAddressing::Blake2S256(a) => SelfAddressing::Blake2S256(a),
+            CesrSelfAddressing::SHA3_256 => SelfAddressing::SHA3_256,
+            CesrSelfAddressing::SHA2_256 => SelfAddressing::SHA2_256,
+            CesrSelfAddressing::Blake3_512 => SelfAddressing::Blake3_512,
+            CesrSelfAddressing::SHA3_512 => SelfAddressing::SHA3_512,
+            CesrSelfAddressing::Blake2B512 => SelfAddressing::Blake2B512,
+            CesrSelfAddressing::SHA2_512 => SelfAddressing::SHA2_512,
+        }
+    }
+}
+
 impl SelfAddressing {
     pub fn digest(&self, data: &[u8]) -> Vec<u8> {
         match self {
@@ -45,72 +76,6 @@ impl SelfAddressing {
 
     pub fn derive(&self, data: &[u8]) -> SelfAddressingPrefix {
         SelfAddressingPrefix::new(self.to_owned(), self.digest(data))
-    }
-}
-
-impl DerivationCode for SelfAddressing {
-    fn to_str(&self) -> String {
-        match self {
-            Self::Blake3_256 => "E",
-            Self::Blake2B256(_) => "F",
-            Self::Blake2S256(_) => "G",
-            Self::SHA3_256 => "H",
-            Self::SHA2_256 => "I",
-            Self::Blake3_512 => "0D",
-            Self::SHA3_512 => "0E",
-            Self::Blake2B512 => "0F",
-            Self::SHA2_512 => "0G",
-        }
-        .into()
-    }
-
-    fn code_len(&self) -> usize {
-        match self {
-            Self::Blake3_256
-            | Self::Blake2B256(_)
-            | Self::Blake2S256(_)
-            | Self::SHA3_256
-            | Self::SHA2_256 => 1,
-            Self::Blake3_512 | Self::SHA3_512 | Self::Blake2B512 | Self::SHA2_512 => 2,
-        }
-    }
-
-    fn derivative_b64_len(&self) -> usize {
-        match self {
-            Self::Blake3_256
-            | Self::Blake2B256(_)
-            | Self::Blake2S256(_)
-            | Self::SHA3_256
-            | Self::SHA2_256 => 43,
-            Self::Blake3_512 | Self::SHA3_512 | Self::Blake2B512 | Self::SHA2_512 => 86,
-        }
-    }
-}
-
-impl FromStr for SelfAddressing {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s
-            .get(..1)
-            .ok_or_else(|| Error::DeserializeError("Empty prefix".into()))?
-        {
-            "E" => Ok(Self::Blake3_256),
-            "F" => Ok(Self::Blake2B256(vec![])),
-            "G" => Ok(Self::Blake2S256(vec![])),
-            "H" => Ok(Self::SHA3_256),
-            "I" => Ok(Self::SHA2_256),
-            "0" => match &s[1..2] {
-                "D" => Ok(Self::Blake3_512),
-                "E" => Ok(Self::SHA3_512),
-                "F" => Ok(Self::Blake2B512),
-                "G" => Ok(Self::SHA2_512),
-                _ => Err(Error::DeserializeError("Unknown hash code".into())),
-            },
-            _ => Err(Error::DeserializeError(
-                "Unknown hash algorithm code".into(),
-            )),
-        }
     }
 }
 

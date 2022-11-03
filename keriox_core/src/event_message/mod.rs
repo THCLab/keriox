@@ -55,9 +55,10 @@ impl<D: Serialize + Clone + Typeable> SaidEvent<D> {
     pub(crate) fn to_message(
         event: D,
         format: SerializationFormats,
-        derivation: &SelfAddressing,
+        derivation: SelfAddressing,
     ) -> Result<EventMessage<SaidEvent<D>>, Error> {
-        let dummy_event = DummyEventMessage::dummy_event(event.clone(), format, derivation)?;
+        let dummy_event =
+            DummyEventMessage::dummy_event(event.clone(), format, derivation.clone())?;
         let digest = derivation.derive(&dummy_event.serialize()?);
 
         Ok(EventMessage {
@@ -268,7 +269,7 @@ mod tests {
             }),
         );
 
-        let icp_m = icp.to_message(SerializationFormats::JSON, &SelfAddressing::Blake3_256)?;
+        let icp_m = icp.to_message(SerializationFormats::JSON, SelfAddressing::Blake3_256)?;
 
         // serialised message
         let ser: Vec<_> = icp_m.serialize()?;

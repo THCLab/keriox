@@ -286,7 +286,7 @@ impl WatcherData {
                 reply_route: String::from(""),
             },
             SerializationFormats::JSON,
-            &SelfAddressing::Blake3_256,
+            SelfAddressing::Blake3_256,
         )?;
 
         // sign message by watcher

@@ -120,7 +120,7 @@ impl ReplyEvent {
         serialization: SerializationFormats,
     ) -> Result<ReplyEvent, Error> {
         let env = Timestamped::new(route);
-        env.to_message(serialization, &self_addressing)
+        env.to_message(serialization, self_addressing)
     }
 }
 
@@ -151,7 +151,7 @@ impl ReplyEvent {
         let dummy = DummyEventMessage::dummy_event(
             self.event.clone(),
             self.serialization_info.kind,
-            &self.event.get_digest().derivation,
+            self.event.get_digest().derivation,
         )?
         .serialize()?;
         self.event

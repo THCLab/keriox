@@ -272,7 +272,7 @@ impl<K: KeyManager> SimpleController<K> {
                 reply_route: String::from(""),
             },
             SerializationFormats::JSON,
-            &SelfAddressing::Blake3_256,
+            SelfAddressing::Blake3_256,
         )?;
 
         // sign message by bob
@@ -624,7 +624,7 @@ impl<K: KeyManager> SimpleController<K> {
             },
             to_forward: data.event_message.clone(),
         }
-        .to_message(SerializationFormats::JSON, &SelfAddressing::Blake3_256)?;
+        .to_message(SerializationFormats::JSON, SelfAddressing::Blake3_256)?;
 
         let sigs = vec![Signature::Transferable(
             SignerData::JustSignatures,
@@ -684,7 +684,7 @@ impl<K: KeyManager> SimpleController<K> {
                 reply_route: "".to_string(),
             },
             SerializationFormats::JSON,
-            &SelfAddressing::Blake3_256,
+            SelfAddressing::Blake3_256,
         )
         .unwrap();
         let signature = self
@@ -724,7 +724,7 @@ impl<K: KeyManager> SimpleController<K> {
                         reply_route: "".to_string(),
                     },
                     SerializationFormats::JSON,
-                    &SelfAddressing::Blake3_256,
+                    SelfAddressing::Blake3_256,
                 )
                 .unwrap();
                 let signature = self

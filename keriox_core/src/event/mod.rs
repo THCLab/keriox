@@ -36,7 +36,7 @@ impl Event {
     pub fn to_message(
         self,
         format: SerializationFormats,
-        derivation: &SelfAddressing,
+        derivation: SelfAddressing,
     ) -> Result<EventMessage<KeyEvent>, Error> {
         match (&self.prefix, self.event_data.clone()) {
             (IdentifierPrefix::SelfAddressing(_), EventData::Icp(icp)) => {

@@ -195,7 +195,7 @@ impl EventMsgBuilder {
 
                 match prefix {
                     IdentifierPrefix::Basic(_) => Event::new(prefix, 0, EventData::Icp(icp_event))
-                        .to_message(self.format, &self.derivation)?,
+                        .to_message(self.format, self.derivation)?,
                     IdentifierPrefix::SelfAddressing(_) => {
                         icp_event.incept_self_addressing(self.derivation, self.format)?
                     }
@@ -217,7 +217,7 @@ impl EventMsgBuilder {
                     data: self.data,
                 }),
             )
-            .to_message(self.format, &self.derivation)?,
+            .to_message(self.format, self.derivation)?,
             EventTypeTag::Ixn => Event::new(
                 prefix,
                 self.sn,
@@ -226,7 +226,7 @@ impl EventMsgBuilder {
                     data: self.data,
                 }),
             )
-            .to_message(self.format, &self.derivation)?,
+            .to_message(self.format, self.derivation)?,
             EventTypeTag::Dip => {
                 let icp_data = InceptionEvent {
                     key_config,
@@ -251,7 +251,7 @@ impl EventMsgBuilder {
                     data: self.data,
                 };
                 Event::new(prefix, self.sn, EventData::Drt(rotation_data))
-                    .to_message(self.format, &self.derivation)?
+                    .to_message(self.format, self.derivation)?
             }
             _ => return Err(Error::SemanticError("Not key event".into())),
         })

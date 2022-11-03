@@ -1,8 +1,11 @@
 use super::error::Error;
 use super::Prefix;
 use crate::{
-    derivation::{self_signing::SelfSigning, DerivationCode},
-    event_parsing::parsing::from_text_to_bytes,
+    derivation::self_signing::SelfSigning,
+    event_parsing::{
+        codes::{self_signing::SelfSigning as CesrSelfSigning, DerivationCode},
+        parsing::from_text_to_bytes,
+    },
 };
 use core::str::FromStr;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -26,11 +29,11 @@ impl FromStr for SelfSigningPrefix {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let code = SelfSigning::from_str(s)?;
+        let code = CesrSelfSigning::from_str(s)?;
 
         if s.len() == code.prefix_b64_len() {
             Ok(Self::new(
-                code,
+                code.into(),
                 from_text_to_bytes(&s[code.code_len()..].as_bytes())?[code.code_len()..].to_vec(),
             ))
         } else {
@@ -44,7 +47,8 @@ impl Prefix for SelfSigningPrefix {
         self.signature.to_owned()
     }
     fn derivation_code(&self) -> String {
-        self.derivation.to_str()
+        let cesr_self_signing: CesrSelfSigning = self.derivation.into();
+        cesr_self_signing.to_str()
     }
 }
 

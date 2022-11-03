@@ -1,10 +1,12 @@
 #![allow(non_upper_case_globals)]
 use crate::{
-    derivation::{
-        attached_signature_code::b64_to_num, basic::Basic, self_addressing::SelfAddressing,
-        self_signing::SelfSigning, DerivationCode,
+    event_parsing::codes::{
+        basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning,
     },
-    event_parsing::parsing::from_text_to_bytes,
+    event_parsing::{
+        codes::DerivationCode,
+        parsing::{b64_to_num, from_text_to_bytes},
+    },
     keys::PublicKey,
     prefix::{
         AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix,
@@ -35,7 +37,11 @@ pub fn attached_signature(s: &[u8]) -> nom::IResult<&[u8], AttachedSignaturePref
 
             Ok((
                 rest,
-                AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, sig.to_vec(), index),
+                AttachedSignaturePrefix::new(
+                    SelfSigning::Ed25519Sha512.into(),
+                    sig.to_vec(),
+                    index,
+                ),
             ))
         }
         b => {
@@ -52,7 +58,7 @@ pub fn attached_signature(s: &[u8]) -> nom::IResult<&[u8], AttachedSignaturePref
             Ok((
                 rest,
                 AttachedSignaturePrefix::new(
-                    SelfSigning::ECDSAsecp256k1Sha256,
+                    SelfSigning::ECDSAsecp256k1Sha256.into(),
                     sig.to_vec(),
                     index,
                 ),
@@ -74,7 +80,7 @@ pub fn attached_signature(s: &[u8]) -> nom::IResult<&[u8], AttachedSignaturePref
 
                     Ok((
                         rest,
-                        AttachedSignaturePrefix::new(SelfSigning::Ed448, sig, index),
+                        AttachedSignaturePrefix::new(SelfSigning::Ed448.into(), sig, index),
                     ))
                 }
                 _ => Err(nom::Err::Error((type_c_2, ErrorKind::IsNot))),
@@ -105,7 +111,7 @@ pub fn basic_prefix(s: &[u8]) -> nom::IResult<&[u8], BasicPrefix> {
         .map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?[code.code_len()..]
         .to_vec();
     let pk = PublicKey::new(decoded);
-    Ok((extra, code.derive(pk)))
+    Ok((extra, BasicPrefix::new(code.into(), pk)))
 }
 
 pub fn self_addressing_prefix(s: &[u8]) -> nom::IResult<&[u8], SelfAddressingPrefix> {
@@ -129,7 +135,7 @@ pub fn self_addressing_prefix(s: &[u8]) -> nom::IResult<&[u8], SelfAddressingPre
         .to_vec();
 
     let prefix = SelfAddressingPrefix {
-        derivation: code,
+        derivation: code.into(),
         digest: decoded,
     };
     Ok((extra, prefix))
@@ -159,7 +165,7 @@ pub fn self_signing_prefix(s: &[u8]) -> nom::IResult<&[u8], SelfSigningPrefix> {
     Ok((
         extra,
         SelfSigningPrefix {
-            derivation: code,
+            derivation: code.into(),
             signature: decoded,
         },
     ))
@@ -205,12 +211,12 @@ pub fn prefix(s: &[u8]) -> nom::IResult<&[u8], IdentifierPrefix> {
 fn test() {
     assert_eq!(
         attached_signature("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".as_bytes()),
-        Ok(("".as_bytes(), AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, vec![0u8; 64], 0)))
+        Ok(("".as_bytes(), AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512.into(), vec![0u8; 64], 0)))
     );
 
     assert_eq!(
         attached_signature("BCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".as_bytes()),
-        Ok(("AA".as_bytes(), AttachedSignaturePrefix::new(SelfSigning::ECDSAsecp256k1Sha256, vec![0u8; 64], 2)))
+        Ok(("AA".as_bytes(), AttachedSignaturePrefix::new(SelfSigning::ECDSAsecp256k1Sha256.into(), vec![0u8; 64], 2)))
     );
 }
 
@@ -223,7 +229,7 @@ fn test_basic_prefix() {
     let kp = Keypair::generate(&mut OsRng);
 
     let bp = BasicPrefix {
-        derivation: Basic::Ed25519,
+        derivation: Basic::Ed25519.into(),
         public_key: PublicKey::new(kp.public.to_bytes().to_vec()),
     };
     let bp_str = [&bp.to_str(), "more"].join("");

@@ -36,7 +36,7 @@ impl Exchange {
     pub fn to_message(
         self,
         format: SerializationFormats,
-        derivation: &SelfAddressing,
+        derivation: SelfAddressing,
     ) -> Result<ExchangeMessage, Error> {
         SaidEvent::<Timestamped<Exchange>>::to_message(Timestamped::new(self), format, derivation)
     }

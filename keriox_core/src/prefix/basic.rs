@@ -4,9 +4,10 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use super::error::Error;
 use super::{verify, Prefix, SelfSigningPrefix};
+use crate::event_parsing::codes::DerivationCode;
 use crate::{
-    derivation::{basic::Basic, DerivationCode},
-    event_parsing::parsing::from_text_to_bytes,
+    derivation::basic::Basic,
+    event_parsing::{codes::basic::Basic as CesrBasic, parsing::from_text_to_bytes},
     keys::PublicKey,
 };
 
@@ -37,12 +38,12 @@ impl FromStr for BasicPrefix {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let code = Basic::from_str(s)?;
+        let code = CesrBasic::from_str(s)?;
 
         if s.len() == code.prefix_b64_len() {
             let k_vec =
-                from_text_to_bytes(s[code.code_len()..].as_bytes())?[code.code_len()..].to_vec();
-            Ok(Self::new(code, PublicKey::new(k_vec)))
+                from_text_to_bytes(&s[code.code_len()..].as_bytes())?[code.code_len()..].to_vec();
+            Ok(Self::new(code.into(), PublicKey::new(k_vec)))
         } else {
             Err(Error::IncorrectLengthError(s.into()))
         }
@@ -54,7 +55,8 @@ impl Prefix for BasicPrefix {
         self.public_key.key()
     }
     fn derivation_code(&self) -> String {
-        self.derivation.to_str()
+        let cesr_basic: CesrBasic = self.derivation.into();
+        cesr_basic.to_str()
     }
 }
 

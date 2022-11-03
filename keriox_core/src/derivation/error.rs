@@ -1,6 +1,7 @@
+use serde::{Serialize, Deserialize};
 use thiserror::Error;
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Serialize, Deserialize)]
 pub enum Error {
     #[error("Deserialize error: {0}")]
     DeserializeError(String),

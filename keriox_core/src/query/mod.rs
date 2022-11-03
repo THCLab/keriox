@@ -42,7 +42,7 @@ impl<D: Serialize + Typeable + Clone> Timestamped<D> {
     pub fn to_message(
         self,
         format: SerializationFormats,
-        derivation: &SelfAddressing,
+        derivation: SelfAddressing,
     ) -> Result<EventMessage<SaidEvent<Timestamped<D>>>, Error> {
         SaidEvent::<Self>::to_message(self, format, derivation)
     }

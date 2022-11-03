@@ -120,7 +120,7 @@ impl IdentifierController {
             },
             to_forward: delegating_event.clone(),
         }
-        .to_message(SerializationFormats::JSON, &SelfAddressing::Blake3_256)?;
+        .to_message(SerializationFormats::JSON, SelfAddressing::Blake3_256)?;
         Ok((delegating_event, exn_message))
     }
 
@@ -533,7 +533,7 @@ impl IdentifierController {
                         reply_route: "".to_string(),
                     },
                     SerializationFormats::JSON,
-                    &SelfAddressing::Blake3_256,
+                    SelfAddressing::Blake3_256,
                 )
             })
             .collect::<Result<_, _>>()?)

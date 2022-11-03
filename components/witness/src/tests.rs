@@ -314,7 +314,7 @@ fn test_qry_rpy() -> Result<(), WitnessError> {
             reply_route: String::from(""),
         },
         SerializationFormats::JSON,
-        &SelfAddressing::Blake3_256,
+        SelfAddressing::Blake3_256,
     )?;
 
     // sign message by bob
@@ -356,7 +356,7 @@ fn test_qry_rpy() -> Result<(), WitnessError> {
             reply_route: String::from(""),
         },
         SerializationFormats::JSON,
-        &SelfAddressing::Blake3_256,
+        SelfAddressing::Blake3_256,
     )?;
 
     // sign message by bob

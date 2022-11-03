@@ -1,12 +1,13 @@
 use crate::{
     error::Error,
     event::{event_data::EventData, sections::seal::SourceSeal, Event},
+    event_parsing::codes::self_addressing::dummy_prefix,
     prefix::{AttachedSignaturePrefix, IdentifierPrefix, SelfAddressingPrefix},
     state::{EventSemantics, IdentifierState},
 };
 
 use super::{
-    dummy_event::{dummy_prefix, DummyEventMessage, DummyInceptionEvent},
+    dummy_event::{DummyEventMessage, DummyInceptionEvent},
     signature::Nontransferable,
     signed_event_message::SignedEventMessage,
     Digestible, EventMessage, SaidEvent, Typeable,
@@ -37,7 +38,7 @@ impl From<EventMessage<KeyEvent>> for DummyEventMessage<Event> {
         DummyEventMessage {
             serialization_info: em.serialization_info,
             event_type: em.event.get_type(),
-            digest: dummy_prefix(&em.event.get_digest().derivation),
+            digest: dummy_prefix(&em.event.get_digest().derivation.into()),
             data: em.event.content,
         }
     }
@@ -66,13 +67,13 @@ impl EventMessage<KeyEvent> {
         Ok(match self.event.get_event_data() {
             EventData::Icp(icp) => DummyInceptionEvent::dummy_inception_data(
                 icp,
-                &self.event.get_digest().derivation,
+                self.event.get_digest().derivation,
                 self.serialization_info.kind,
             )?
             .serialize()?,
             EventData::Dip(dip) => DummyInceptionEvent::dummy_delegated_inception_data(
                 dip,
-                &self.event.get_digest().derivation,
+                self.event.get_digest().derivation,
                 self.serialization_info.kind,
             )?
             .serialize()?,

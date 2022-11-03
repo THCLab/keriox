@@ -215,6 +215,6 @@ pub fn exchange(
         },
         to_forward: data.clone(),
     })
-    .to_message(SerializationFormats::JSON, &SelfAddressing::Blake3_256)
+    .to_message(SerializationFormats::JSON, SelfAddressing::Blake3_256)
     .map_err(|e| Error::EventGenerationError(e.to_string()))
 }

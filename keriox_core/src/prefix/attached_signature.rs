@@ -1,11 +1,8 @@
 use super::error::Error;
 use super::{Prefix, SelfSigningPrefix};
-use crate::{
-    derivation::{
-        attached_signature_code::AttachedSignatureCode, self_signing::SelfSigning, DerivationCode,
-    },
-    event_parsing::parsing::from_text_to_bytes,
-};
+use crate::event_parsing::codes::attached_signature_code::AttachedSignatureCode;
+use crate::event_parsing::codes::DerivationCode;
+use crate::{derivation::self_signing::SelfSigning, event_parsing::parsing::from_text_to_bytes};
 use core::str::FromStr;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -37,7 +34,7 @@ impl FromStr for AttachedSignaturePrefix {
                 0
             };
             let s_vec = from_text_to_bytes(&s[code.code_len()..].as_bytes())?[lead..].to_vec();
-            Ok(Self::new(code.code, s_vec, code.index))
+            Ok(Self::new(code.code.into(), s_vec, code.index))
         } else {
             Err(Error::IncorrectLengthError(s.into()))
         }
@@ -49,7 +46,7 @@ impl Prefix for AttachedSignaturePrefix {
         self.signature.signature.to_vec()
     }
     fn derivation_code(&self) -> String {
-        AttachedSignatureCode::new(self.signature.derivation, self.index).to_str()
+        AttachedSignatureCode::new(self.signature.derivation.into(), self.index).to_str()
     }
 }
 

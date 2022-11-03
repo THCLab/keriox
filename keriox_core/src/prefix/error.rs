@@ -1,8 +1,8 @@
-use base64::DecodeError;
 use ed25519_dalek;
+use serde::{Serialize, Deserialize};
 use thiserror::Error;
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Serialize, Deserialize)]
 pub enum Error {
     #[error(transparent)]
     DeriviationCodeError(#[from] crate::derivation::error::Error),
@@ -25,6 +25,12 @@ pub enum Error {
     #[error(transparent)]
     ParseError(#[from] crate::event_parsing::error::Error),
 
-    #[error(transparent)]
-    Ed25519DalekSignatureError(#[from] ed25519_dalek::SignatureError),
+    #[error("ED25519Dalek signature error")]
+    Ed25519DalekSignatureError,
+}
+
+impl From<ed25519_dalek::SignatureError> for Error {
+    fn from(_: ed25519_dalek::SignatureError) -> Self {
+        Error::Ed25519DalekSignatureError
+    }
 }
