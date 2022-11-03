@@ -1,5 +1,6 @@
 use self::error::Error;
-use crate::{event_parsing::parsing::from_bytes_to_text, sai::SelfAddressingPrefix};
+use crate::event_parsing::parsing::from_bytes_to_text;
+use crate::sai::SelfAddressingPrefix;
 use core::str::FromStr;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt::Display;

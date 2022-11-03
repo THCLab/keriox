@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use crate::event_parsing::error::Error;
+use super::super::error::Error;
 
 use super::DerivationCode;
 
