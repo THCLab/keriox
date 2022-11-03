@@ -224,7 +224,7 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
 #[test]
 fn test_qry_rpy() -> Result<(), WitnessError> {
     use keri::{
-        derivation::self_addressing::SelfAddressing,
+        derivation::SelfAddressing,
         event::SerializationFormats,
         prefix::AttachedSignaturePrefix,
         query::{

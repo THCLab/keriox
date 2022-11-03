@@ -2,10 +2,10 @@ use serde::{Deserialize, Serialize};
 
 use super::threshold::SignatureThreshold;
 use crate::{
-    derivation::self_addressing::SelfAddressing,
+    derivation::SelfAddressing,
     error::Error,
     prefix::{
-        AttachedSignaturePrefix, BasicPrefix, Prefix, SelfAddressingPrefix, SelfSigningPrefix,
+        AttachedSignaturePrefix, BasicPrefix, Prefix, SelfAddressingPrefix,
     },
 };
 
@@ -187,8 +187,8 @@ fn test_threshold() -> Result<(), Error> {
     use rand::rngs::OsRng;
 
     use crate::{
-        event_parsing::codes::self_signing::SelfSigning,
         keys::{PrivateKey, PublicKey},
+        prefix::SelfSigningPrefix
     };
 
     let (pub_keys, priv_keys): (Vec<BasicPrefix>, Vec<PrivateKey>) = [0, 1, 2]

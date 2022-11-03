@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use keri::{
     actor::{event_generator, prelude::Message, simple_controller::PossibleResponse},
-    derivation::self_addressing::SelfAddressing,
+    derivation::SelfAddressing,
     event::{
         event_data::EventData,
         sections::{

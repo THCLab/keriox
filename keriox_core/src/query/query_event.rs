@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use super::Timestamped;
 use crate::{
-    derivation::self_addressing::SelfAddressing,
+    derivation::SelfAddressing,
     error::Error,
     event::{EventMessage, SerializationFormats},
     event_message::{

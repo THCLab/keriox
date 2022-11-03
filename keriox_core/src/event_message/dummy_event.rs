@@ -1,5 +1,5 @@
 use crate::{
-    derivation::self_addressing::SelfAddressing,
+    derivation::SelfAddressing,
     error::Error,
     event::{
         event_data::{DelegatedInceptionEvent, EventData, InceptionEvent},

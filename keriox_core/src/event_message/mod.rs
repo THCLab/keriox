@@ -10,7 +10,7 @@ pub mod signed_event_message;
 use std::cmp::Ordering;
 
 use crate::{
-    derivation::self_addressing::SelfAddressing, error::Error, prefix::SelfAddressingPrefix,
+    derivation::SelfAddressing, error::Error, prefix::SelfAddressingPrefix,
 };
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize, Serializer};
@@ -214,7 +214,7 @@ mod tests {
     use self::test_utils::test_mock_event_sequence;
     use super::*;
     use crate::{
-        derivation::self_addressing::SelfAddressing,
+        derivation::SelfAddressing,
         event::{
             event_data::{inception::InceptionEvent, EventData},
             sections::{key_config::nxt_commitment, KeyConfig},

@@ -11,7 +11,7 @@ use keri::{
         simple_controller::PossibleResponse,
     },
     database::DbError,
-    derivation::self_addressing::SelfAddressing,
+    derivation::SelfAddressing,
     error::Error,
     event_message::signed_event_message::{Notice, Op},
     oobi::{error::OobiError, EndRole, LocationScheme, OobiManager, Role, Scheme},

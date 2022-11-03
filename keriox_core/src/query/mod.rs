@@ -1,5 +1,5 @@
 use crate::{
-    derivation::self_addressing::SelfAddressing,
+    derivation::SelfAddressing,
     error::Error,
     event::{EventMessage, SerializationFormats},
     event_message::{signed_event_message::Message, EventTypeTag, SaidEvent, Typeable},

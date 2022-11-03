@@ -1,6 +1,6 @@
 use super::error::Error;
 use super::Prefix;
-use crate::derivation::self_addressing::SelfAddressing;
+use crate::derivation::SelfAddressing;
 use crate::event_parsing::codes::DerivationCode;
 use crate::event_parsing::{
     codes::self_addressing::SelfAddressing as CesrSelfAddressing, parsing::from_text_to_bytes,

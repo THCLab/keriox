@@ -9,7 +9,7 @@ use keri::{
         prelude::*, process_reply, process_signed_exn, process_signed_query,
         simple_controller::PossibleResponse,
     },
-    derivation::self_addressing::SelfAddressing,
+    derivation::SelfAddressing,
     error::Error,
     event::EventMessage,
     event_message::{

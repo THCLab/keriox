@@ -1,6 +1,6 @@
 use super::event_msg_builder::EventMsgBuilder;
 use crate::{
-    derivation::self_addressing::SelfAddressing,
+    derivation::SelfAddressing,
     error::Error,
     event::sections::{key_config::nxt_commitment, threshold::SignatureThreshold},
     event_message::EventTypeTag,

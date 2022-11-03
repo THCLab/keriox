@@ -3,7 +3,7 @@ use super::{
     EventData,
 };
 use crate::{
-    derivation::self_addressing::SelfAddressing,
+    derivation::SelfAddressing,
     error::Error,
     event::{sections::seal::Seal, Event},
     event_message::{
