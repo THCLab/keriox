@@ -26,7 +26,8 @@ use crate::{
         },
         Digestible,
     },
-    prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix, SelfSigningPrefix},
+    prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+    sai::SelfAddressingPrefix,
 };
 
 pub fn default_escrow_bus(

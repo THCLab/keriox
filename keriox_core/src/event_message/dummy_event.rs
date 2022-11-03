@@ -5,7 +5,7 @@ use crate::{
         SerializationFormats,
     },
     event_parsing::codes::self_addressing::dummy_prefix,
-    sai::SelfAddressing,
+    sai::derivation::SelfAddressing,
 };
 
 use super::{serialization_info::SerializationInfo, EventTypeTag, Typeable};

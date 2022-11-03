@@ -14,12 +14,12 @@ use crate::{
         EventTypeTag,
     },
     oobi::{EndRole, Role},
-    prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix},
+    prefix::{BasicPrefix, IdentifierPrefix},
     query::{
         reply_event::{ReplyEvent, ReplyRoute},
         Timestamped,
     },
-    sai::SelfAddressing,
+    sai::{derivation::SelfAddressing, SelfAddressingPrefix},
     state::IdentifierState,
 };
 

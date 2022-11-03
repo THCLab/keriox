@@ -2,7 +2,8 @@ use crate::{
     error::Error,
     event::{event_data::EventData, sections::seal::SourceSeal, Event},
     event_parsing::codes::self_addressing::dummy_prefix,
-    prefix::{AttachedSignaturePrefix, IdentifierPrefix, SelfAddressingPrefix},
+    prefix::{AttachedSignaturePrefix, IdentifierPrefix},
+    sai::SelfAddressingPrefix,
     state::{EventSemantics, IdentifierState},
 };
 

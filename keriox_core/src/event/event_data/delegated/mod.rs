@@ -7,7 +7,7 @@ use crate::{
     error::Error,
     event::{Event, EventMessage, SerializationFormats},
     prefix::IdentifierPrefix,
-    sai::SelfAddressing,
+    sai::derivation::SelfAddressing,
     state::{EventSemantics, IdentifierState},
 };
 use serde::{Deserialize, Serialize};

@@ -72,14 +72,14 @@ impl FromStr for BasicPrefix {
 impl Prefix for BasicPrefix {
     fn derivative(&self) -> Vec<u8> {
         match self {
-            BasicPrefix::ECDSAsecp256k1NT(pk) => pk.key(),
-            BasicPrefix::ECDSAsecp256k1(pk) => pk.key(),
-            BasicPrefix::Ed25519NT(pk) => pk.key(),
-            BasicPrefix::Ed25519(pk) => pk.key(),
-            BasicPrefix::Ed448NT(pk) => pk.key(),
-            BasicPrefix::Ed448(pk) => pk.key(),
-            BasicPrefix::X25519(pk) => pk.key(),
-            BasicPrefix::X448(pk) => pk.key(),
+            BasicPrefix::ECDSAsecp256k1NT(pk)
+            | BasicPrefix::ECDSAsecp256k1(pk)
+            | BasicPrefix::Ed25519NT(pk)
+            | BasicPrefix::Ed25519(pk)
+            | BasicPrefix::Ed448NT(pk)
+            | BasicPrefix::Ed448(pk)
+            | BasicPrefix::X25519(pk)
+            | BasicPrefix::X448(pk) => pk.key(),
         }
     }
     fn derivation_code(&self) -> String {

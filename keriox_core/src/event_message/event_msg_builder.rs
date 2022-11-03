@@ -20,8 +20,8 @@ use crate::{
         Event, EventMessage,
     },
     keys::PublicKey,
-    prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix},
-    sai::SelfAddressing,
+    prefix::{BasicPrefix, IdentifierPrefix},
+    sai::{derivation::SelfAddressing, SelfAddressingPrefix},
 };
 use ed25519_dalek::Keypair;
 use rand::rngs::OsRng;

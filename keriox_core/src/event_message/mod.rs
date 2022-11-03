@@ -9,7 +9,7 @@ pub mod signed_event_message;
 
 use std::cmp::Ordering;
 
-use crate::{error::Error, prefix::SelfAddressingPrefix, sai::SelfAddressing};
+use crate::{error::Error, sai::derivation::SelfAddressing, sai::SelfAddressingPrefix};
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize, Serializer};
 use serialization_info::*;
@@ -220,7 +220,7 @@ mod tests {
         },
         keys::{PrivateKey, PublicKey},
         prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
-        sai::SelfAddressing,
+        sai::derivation::SelfAddressing,
         state::IdentifierState,
     };
     use ed25519_dalek::Keypair;

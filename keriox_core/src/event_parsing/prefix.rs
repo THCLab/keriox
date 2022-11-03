@@ -8,10 +8,8 @@ use crate::{
         parsing::{b64_to_num, from_text_to_bytes},
     },
     keys::PublicKey,
-    prefix::{
-        AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix,
-        SelfSigningPrefix,
-    },
+    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+    sai::SelfAddressingPrefix,
 };
 use nom::{bytes::complete::take, error::ErrorKind};
 
@@ -226,7 +224,6 @@ fn test_basic_prefix() {
 #[test]
 fn test_self_adressing() {
     use crate::prefix::Prefix;
-
     let sap: SelfAddressingPrefix = "ELC5L3iBVD77d_MYbYGGCUQgqQBju1o4x1Ud-z2sL-ux"
         .parse()
         .unwrap();

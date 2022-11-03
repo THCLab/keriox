@@ -43,7 +43,7 @@ use crate::{
         },
         reply_event::SignedReply,
     },
-    sai::SelfAddressing,
+    sai::derivation::SelfAddressing,
     signer::KeyManager,
     state::IdentifierState,
 };

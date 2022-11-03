@@ -10,7 +10,7 @@ use crate::{
         serialization_info::SerializationFormats, EventMessage, SaidEvent,
     },
     prefix::IdentifierPrefix,
-    sai::SelfAddressing,
+    sai::derivation::SelfAddressing,
     state::{EventSemantics, IdentifierState, LastEstablishmentData},
 };
 use serde::{Deserialize, Serialize};
@@ -96,7 +96,9 @@ fn test_inception_data_derivation() -> Result<(), Error> {
         key_config::KeyConfig, key_config::NextKeysData, threshold::SignatureThreshold,
     };
     use crate::event_message::Digestible;
-    use crate::prefix::{BasicPrefix, Prefix, SelfAddressingPrefix};
+    use crate::prefix::{BasicPrefix, Prefix};
+    use crate::sai::SelfAddressingPrefix;
+
     let keys: Vec<BasicPrefix> = vec![
         "DErocgXD2RGSyvn3MObcx59jeOsEQhv2TqHirVkzrp0Q"
             .parse()

@@ -2,7 +2,7 @@ use crate::{
     error::Error,
     event::{EventMessage, SerializationFormats},
     event_message::{signed_event_message::Message, EventTypeTag, SaidEvent, Typeable},
-    sai::SelfAddressing,
+    sai::derivation::SelfAddressing,
 };
 use chrono::{DateTime, FixedOffset, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize, Serializer};

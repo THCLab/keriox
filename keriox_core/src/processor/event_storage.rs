@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use super::compute_state;
 use crate::query::query_event::MailboxResponse;
+use crate::sai::SelfAddressingPrefix;
 use crate::{
     database::{timestamped::TimestampedSignedEventMessage, SledEventDatabase},
     error::Error,
@@ -13,7 +14,7 @@ use crate::{
         signed_event_message::{SignedEventMessage, SignedNontransferableReceipt},
         Digestible,
     },
-    prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix},
+    prefix::{BasicPrefix, IdentifierPrefix},
     state::{EventSemantics, IdentifierState},
 };
 #[cfg(feature = "query")]

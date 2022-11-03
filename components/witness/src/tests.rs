@@ -230,7 +230,7 @@ fn test_qry_rpy() -> Result<(), WitnessError> {
             query_event::{QueryArgs, QueryEvent, QueryRoute, SignedQuery},
             reply_event::ReplyRoute,
         },
-        sai::SelfAddressing,
+        sai::derivation::SelfAddressing,
         signer::{KeyManager, Signer},
     };
     use tempfile::Builder;

@@ -14,7 +14,7 @@ use crate::{
     },
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix},
     query::QueryError,
-    sai::SelfAddressing,
+    sai::derivation::SelfAddressing,
 };
 
 #[derive(Clone, PartialEq, Debug)]

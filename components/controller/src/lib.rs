@@ -17,10 +17,7 @@ use keri::{
     },
     event_parsing::{message::key_event_message, EventType},
     oobi::{LocationScheme, OobiManager, Role, Scheme},
-    prefix::{
-        AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix,
-        SelfSigningPrefix,
-    },
+    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     processor::{
         basic_processor::BasicProcessor,
         escrow::{default_escrow_bus, PartiallyWitnessedEscrow},
@@ -31,6 +28,7 @@ use keri::{
         query_event::SignedQuery,
         reply_event::{ReplyEvent, ReplyRoute, SignedReply},
     },
+    sai::SelfAddressingPrefix,
 };
 use keri_transport::{default::DefaultTransport, Transport};
 use witness::WitnessError;

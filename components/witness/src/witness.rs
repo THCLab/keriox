@@ -25,7 +25,7 @@ use keri::{
         reply_event::{ReplyEvent, ReplyRoute, SignedReply},
         ReplyType,
     },
-    sai::SelfAddressing,
+    sai::derivation::SelfAddressing,
     signer::Signer,
 };
 use serde::{Deserialize, Serialize};

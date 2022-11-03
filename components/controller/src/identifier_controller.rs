@@ -23,15 +23,12 @@ use keri::{
         EventType,
     },
     oobi::{LocationScheme, Role, Scheme},
-    prefix::{
-        AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfAddressingPrefix,
-        SelfSigningPrefix,
-    },
+    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix},
     query::{
         query_event::{QueryArgsMbx, QueryEvent, QueryRoute, QueryTopics, SignedQuery},
         reply_event::ReplyRoute,
     },
-    sai::SelfAddressing,
+    sai::{derivation::SelfAddressing, SelfAddressingPrefix},
 };
 
 use crate::{error::ControllerError, mailbox_updating::MailboxReminder, Controller};

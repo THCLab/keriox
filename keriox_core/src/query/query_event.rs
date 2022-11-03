@@ -9,7 +9,7 @@ use crate::{
         EventTypeTag, SaidEvent, Typeable,
     },
     prefix::{AttachedSignaturePrefix, IdentifierPrefix},
-    sai::SelfAddressing,
+    sai::derivation::SelfAddressing,
 };
 
 // TODO: make enum with different query args

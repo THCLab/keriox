@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     error::Error, event::SerializationFormats, event_parsing::path::MaterialPath,
-    prefix::IdentifierPrefix, query::Timestamped, sai::SelfAddressing,
+    prefix::IdentifierPrefix, query::Timestamped, sai::derivation::SelfAddressing,
 };
 
 use super::{

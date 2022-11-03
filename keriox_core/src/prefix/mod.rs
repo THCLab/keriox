@@ -1,5 +1,5 @@
 use self::error::Error;
-use crate::event_parsing::parsing::from_bytes_to_text;
+use crate::{event_parsing::parsing::from_bytes_to_text, sai::SelfAddressingPrefix};
 use core::str::FromStr;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt::Display;
@@ -8,13 +8,11 @@ pub mod attached_signature;
 pub mod basic;
 pub mod error;
 pub mod seed;
-pub mod self_addressing;
 pub mod self_signing;
 
 pub use attached_signature::AttachedSignaturePrefix;
 pub use basic::BasicPrefix;
 pub use seed::SeedPrefix;
-pub use self_addressing::SelfAddressingPrefix;
 pub use self_signing::SelfSigningPrefix;
 
 pub trait Prefix: FromStr<Err = Error> {
@@ -156,7 +154,7 @@ mod tests {
     use super::*;
     use crate::{
         keys::{PrivateKey, PublicKey},
-        sai::SelfAddressing,
+        sai::derivation::SelfAddressing,
     };
     use ed25519_dalek::Keypair;
     use rand::rngs::OsRng;
@@ -398,7 +396,7 @@ mod tests {
 
 #[test]
 pub fn test_identifier_encoding() {
-    use crate::{keys::PublicKey, sai::SelfAddressing};
+    use crate::{keys::PublicKey, sai::derivation::SelfAddressing};
     use sodiumoxide::hex;
     let pub_key = "694e894769e6c3267e8b477c2590284cd647dd42ef6007d254fce1cd2e9be423";
     let key = hex::decode(pub_key).unwrap();

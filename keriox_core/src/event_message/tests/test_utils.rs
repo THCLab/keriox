@@ -4,11 +4,8 @@ use crate::{
     event::sections::{key_config::nxt_commitment, threshold::SignatureThreshold},
     event_message::EventTypeTag,
     keys::{PrivateKey, PublicKey},
-    prefix::{
-        AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix,
-        SelfSigningPrefix,
-    },
-    sai::SelfAddressing,
+    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+    sai::{derivation::SelfAddressing, SelfAddressingPrefix},
     state::IdentifierState,
 };
 use ed25519_dalek::Keypair;
