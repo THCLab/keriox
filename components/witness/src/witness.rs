@@ -9,7 +9,7 @@ use keri::{
         prelude::*, process_reply, process_signed_exn, process_signed_query,
         simple_controller::PossibleResponse,
     },
-    derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
+    derivation::{self_addressing::SelfAddressing, self_signing::SelfSigning},
     error::Error,
     event::EventMessage,
     event_message::{
@@ -74,7 +74,7 @@ impl Notifier for WitnessReceiptGenerator {
 impl WitnessReceiptGenerator {
     pub fn new(signer: Arc<Signer>, db: Arc<SledEventDatabase>) -> Self {
         let storage = EventStorage::new(db);
-        let prefix = Basic::Ed25519NT.derive(signer.public_key());
+        let prefix = BasicPrefix::Ed25519NT(signer.public_key());
         Self {
             prefix,
             signer,
@@ -122,7 +122,7 @@ impl Witness {
         events_path.push("events");
         escrow_path.push("escrow");
 
-        let prefix = Basic::Ed25519NT.derive(signer.public_key());
+        let prefix = BasicPrefix::Ed25519NT(signer.public_key());
         let db = Arc::new(SledEventDatabase::new(events_path.as_path())?);
         let escrow_db = Arc::new(EscrowDb::new(escrow_path.as_path())?);
         let mut witness_processor = WitnessProcessor::new(db.clone(), escrow_db);
@@ -156,7 +156,7 @@ impl Witness {
                 .map(|key| Signer::new_with_seed(&key.parse()?))
                 .unwrap_or(Ok(Signer::new()))?,
         );
-        let prefix = Basic::Ed25519NT.derive(signer.public_key());
+        let prefix = BasicPrefix::Ed25519NT(signer.public_key());
         let witness = Witness::new(signer.clone(), event_db_path, oobi_db_path)?;
         // construct witness loc scheme oobi
         let loc_scheme = LocationScheme::new(

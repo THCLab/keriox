@@ -10,7 +10,7 @@ use super::{event_generator, prelude::Message, process_message};
 use crate::{
     actor::parse_event_stream,
     database::{escrow::EscrowDb, SledEventDatabase},
-    derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
+    derivation::{self_addressing::SelfAddressing, self_signing::SelfSigning},
     error::Error,
     event::{
         event_data::EventData,
@@ -227,8 +227,8 @@ impl<K: KeyManager> SimpleController<K> {
     ) -> Result<SignedEventMessage, Error> {
         let km = self.key_manager.lock().map_err(|_| Error::MutexPoisoned)?;
         let icp = event_generator::incept(
-            vec![Basic::Ed25519.derive(km.public_key())],
-            vec![Basic::Ed25519.derive(km.next_public_key())],
+            vec![BasicPrefix::Ed25519(km.public_key())],
+            vec![BasicPrefix::Ed25519(km.next_public_key())],
             initial_witness.unwrap_or_default(),
             witness_threshold.unwrap_or(0),
             delegator,
@@ -360,8 +360,8 @@ impl<K: KeyManager> SimpleController<K> {
 
         Ok(event_generator::rotate(
             state,
-            vec![Basic::Ed25519.derive(km.public_key())],
-            vec![Basic::Ed25519.derive(km.next_public_key())],
+            vec![BasicPrefix::Ed25519(km.public_key())],
+            vec![BasicPrefix::Ed25519(km.next_public_key())],
             witness_to_add.unwrap_or_default().to_vec(),
             witness_to_remove.unwrap_or_default().into(),
             witness_threshold.unwrap_or(0),
@@ -548,14 +548,13 @@ impl<K: KeyManager> SimpleController<K> {
         let signed = {
             let km = self.key_manager.lock().map_err(|_| Error::MutexPoisoned)?;
             let next_key_hash = SelfAddressing::Blake3_256.derive(
-                Basic::Ed25519
-                    .derive(km.next_public_key())
+                BasicPrefix::Ed25519(km.next_public_key())
                     .to_str()
                     .as_bytes(),
             );
             let (pks, npks) = participants.iter().fold(
                 (
-                    vec![Basic::Ed25519.derive(km.public_key())],
+                    vec![BasicPrefix::Ed25519(km.public_key())],
                     vec![next_key_hash],
                 ),
                 |mut acc, id| {

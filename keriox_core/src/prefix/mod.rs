@@ -1,8 +1,5 @@
 use self::error::Error;
-use crate::{
-    derivation::{basic::Basic, self_signing::SelfSigning},
-    event_parsing::parsing::from_bytes_to_text,
-};
+use crate::{derivation::self_signing::SelfSigning, event_parsing::parsing::from_bytes_to_text};
 use core::str::FromStr;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt::Display;
@@ -119,19 +116,19 @@ pub fn verify(
     key: &BasicPrefix,
     signature: &SelfSigningPrefix,
 ) -> Result<bool, Error> {
-    match key.derivation {
-        Basic::Ed25519 | Basic::Ed25519NT => match signature.derivation {
-            SelfSigning::Ed25519Sha512 => Ok(key
-                .public_key
-                .verify_ed(data.as_ref(), &signature.signature)),
+    match key {
+        BasicPrefix::Ed25519(pk) | BasicPrefix::Ed25519NT(pk) => match signature.derivation {
+            SelfSigning::Ed25519Sha512 => Ok(pk.verify_ed(data.as_ref(), &signature.signature)),
             _ => Err(Error::WrongSignatureTypeError.into()),
         },
-        Basic::ECDSAsecp256k1 | Basic::ECDSAsecp256k1NT => match signature.derivation {
-            SelfSigning::ECDSAsecp256k1Sha256 => Ok(key
-                .public_key
-                .verify_ecdsa(data.as_ref(), &signature.signature)),
-            _ => Err(Error::WrongSignatureTypeError.into()),
-        },
+        BasicPrefix::ECDSAsecp256k1(key) | BasicPrefix::ECDSAsecp256k1NT(key) => {
+            match signature.derivation {
+                SelfSigning::ECDSAsecp256k1Sha256 => {
+                    Ok(key.verify_ecdsa(data.as_ref(), &signature.signature))
+                }
+                _ => Err(Error::WrongSignatureTypeError.into()),
+            }
+        }
         _ => Err(Error::WrongKeyTypeError.into()),
     }
 }
@@ -141,16 +138,17 @@ pub fn verify(
 /// Derives the Basic Prefix corrosponding to the given Seed Prefix
 pub fn derive(seed: &SeedPrefix, transferable: bool) -> Result<BasicPrefix, Error> {
     let (pk, _) = seed.derive_key_pair()?;
-    Ok(BasicPrefix::new(
-        match seed {
-            SeedPrefix::RandomSeed256Ed25519(_) if transferable => Basic::Ed25519,
-            SeedPrefix::RandomSeed256Ed25519(_) if !transferable => Basic::Ed25519NT,
-            SeedPrefix::RandomSeed256ECDSAsecp256k1(_) if transferable => Basic::ECDSAsecp256k1,
-            SeedPrefix::RandomSeed256ECDSAsecp256k1(_) if !transferable => Basic::ECDSAsecp256k1NT,
-            _ => return Err(Error::WrongSeedTypeError),
-        },
-        pk,
-    ))
+    Ok(match seed {
+        SeedPrefix::RandomSeed256Ed25519(_) if transferable => BasicPrefix::Ed25519(pk),
+        SeedPrefix::RandomSeed256Ed25519(_) if !transferable => BasicPrefix::Ed25519NT(pk),
+        SeedPrefix::RandomSeed256ECDSAsecp256k1(_) if transferable => {
+            BasicPrefix::ECDSAsecp256k1(pk)
+        }
+        SeedPrefix::RandomSeed256ECDSAsecp256k1(_) if !transferable => {
+            BasicPrefix::ECDSAsecp256k1NT(pk)
+        }
+        _ => return Err(Error::WrongSeedTypeError),
+    })
 }
 
 #[cfg(test)]
@@ -205,7 +203,7 @@ mod tests {
 
     #[test]
     fn simple_serialize() -> Result<(), Error> {
-        let pref = Basic::Ed25519NT.derive(PublicKey::new(
+        let pref = BasicPrefix::Ed25519NT(PublicKey::new(
             ed25519_dalek::PublicKey::from_bytes(&[0; 32])?
                 .to_bytes()
                 .to_vec(),
@@ -227,7 +225,7 @@ mod tests {
         let pub_key = PublicKey::new(kp.public.to_bytes().to_vec());
         let priv_key = PrivateKey::new(kp.secret.to_bytes().to_vec());
 
-        let key_prefix = Basic::Ed25519NT.derive(pub_key);
+        let key_prefix = BasicPrefix::Ed25519NT(pub_key);
 
         let sig = priv_key.sign_ed(&data_string.as_bytes()).unwrap();
         let sig_prefix = SelfSigningPrefix {
@@ -298,59 +296,50 @@ mod tests {
 
         // Test BasicPrefix serialization.
         assert_eq!(
-            BasicPrefix::new(
-                Basic::Ed25519NT,
-                PublicKey::new(
-                    ed25519_dalek::PublicKey::from_bytes(&[0; 32])?
-                        .to_bytes()
-                        .to_vec()
-                )
-            )
+            BasicPrefix::Ed25519NT(PublicKey::new(
+                ed25519_dalek::PublicKey::from_bytes(&[0; 32])?
+                    .to_bytes()
+                    .to_vec()
+            ))
             .to_str(),
             ["B".to_string(), "A".repeat(43)].join("")
         );
         assert_eq!(
-            BasicPrefix::new(
-                Basic::X25519,
-                PublicKey::new(
-                    ed25519_dalek::PublicKey::from_bytes(&[0; 32])?
-                        .to_bytes()
-                        .to_vec()
-                )
-            )
+            BasicPrefix::X25519(PublicKey::new(
+                ed25519_dalek::PublicKey::from_bytes(&[0; 32])?
+                    .to_bytes()
+                    .to_vec()
+            ))
             .to_str(),
             ["C".to_string(), "A".repeat(43)].join("")
         );
         assert_eq!(
-            BasicPrefix::new(
-                Basic::Ed25519,
-                PublicKey::new(
-                    ed25519_dalek::PublicKey::from_bytes(&[0; 32])?
-                        .to_bytes()
-                        .to_vec()
-                )
-            )
+            BasicPrefix::Ed25519(PublicKey::new(
+                ed25519_dalek::PublicKey::from_bytes(&[0; 32])?
+                    .to_bytes()
+                    .to_vec()
+            ))
             .to_str(),
             ["D".to_string(), "A".repeat(43)].join("")
         );
         assert_eq!(
-            BasicPrefix::new(Basic::X448, PublicKey::new([0; 56].to_vec())).to_str(),
+            BasicPrefix::X448(PublicKey::new([0; 56].to_vec())).to_str(),
             ["L".to_string(), "A".repeat(75)].join("")
         );
         assert_eq!(
-            BasicPrefix::new(Basic::ECDSAsecp256k1NT, PublicKey::new([0; 33].to_vec())).to_str(),
+            BasicPrefix::ECDSAsecp256k1NT(PublicKey::new([0; 33].to_vec())).to_str(),
             ["1AAA".to_string(), "A".repeat(44)].join("")
         );
         assert_eq!(
-            BasicPrefix::new(Basic::ECDSAsecp256k1, PublicKey::new([0; 33].to_vec())).to_str(),
+            BasicPrefix::ECDSAsecp256k1(PublicKey::new([0; 33].to_vec())).to_str(),
             ["1AAB".to_string(), "A".repeat(44)].join("")
         );
         assert_eq!(
-            BasicPrefix::new(Basic::Ed448NT, PublicKey::new([0; 57].to_vec())).to_str(),
+            BasicPrefix::Ed448NT(PublicKey::new([0; 57].to_vec())).to_str(),
             ["1AAC".to_string(), "A".repeat(76)].join("")
         );
         assert_eq!(
-            BasicPrefix::new(Basic::Ed448, PublicKey::new([0; 57].to_vec())).to_str(),
+            BasicPrefix::Ed448(PublicKey::new([0; 57].to_vec())).to_str(),
             ["1AAD".to_string(), "A".repeat(76)].join("")
         );
 
@@ -416,7 +405,7 @@ pub fn test_identifier_encoding() {
     use sodiumoxide::hex;
     let pub_key = "694e894769e6c3267e8b477c2590284cd647dd42ef6007d254fce1cd2e9be423";
     let key = hex::decode(pub_key).unwrap();
-    let bp = Basic::Ed25519NT.derive(PublicKey::new(key));
+    let bp = BasicPrefix::Ed25519NT(PublicKey::new(key));
     let expected_identifier = "BGlOiUdp5sMmfotHfCWQKEzWR91C72AH0lT84c0um-Qj";
     assert_eq!(bp.to_str(), expected_identifier);
 

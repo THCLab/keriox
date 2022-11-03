@@ -8,7 +8,6 @@ use keri::{
         SignedQueryError,
     },
     database::{escrow::EscrowDb, SledEventDatabase},
-    derivation::basic::Basic,
     error::Error,
     event::sections::{
         seal::{EventSeal, Seal},
@@ -637,9 +636,8 @@ fn test_invalid_notice() {
 
         // change identifier
         let mut invalid_event = incept_event.clone();
-        invalid_event.event_message.event.content.prefix = IdentifierPrefix::Basic(
-            BasicPrefix::new(Basic::Ed25519, PublicKey::new(vec![0; 32])),
-        );
+        invalid_event.event_message.event.content.prefix =
+            IdentifierPrefix::Basic(BasicPrefix::Ed25519(PublicKey::new(vec![0; 32])));
         let result = witness.process_notice(Notice::Event(invalid_event));
         // TODO: use better error variant
         assert!(matches!(result, Err(Error::SemanticError(_))));

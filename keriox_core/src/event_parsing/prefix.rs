@@ -228,10 +228,7 @@ fn test_basic_prefix() {
 
     let kp = Keypair::generate(&mut OsRng);
 
-    let bp = BasicPrefix {
-        derivation: Basic::Ed25519.into(),
-        public_key: PublicKey::new(kp.public.to_bytes().to_vec()),
-    };
+    let bp = BasicPrefix::Ed25519(PublicKey::new(kp.public.to_bytes().to_vec()));
     let bp_str = [&bp.to_str(), "more"].join("");
     let parsed = basic_prefix(bp_str.as_bytes()).unwrap();
     assert_eq!(parsed, ("more".as_bytes(), bp))

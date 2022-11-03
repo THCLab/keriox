@@ -1,6 +1,6 @@
 use super::event_msg_builder::EventMsgBuilder;
 use crate::{
-    derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
+    derivation::{self_addressing::SelfAddressing, self_signing::SelfSigning},
     error::Error,
     event::sections::{key_config::nxt_commitment, threshold::SignatureThreshold},
     event_message::EventTypeTag,
@@ -64,8 +64,8 @@ fn test_update_identifier_state(
         next_sk = sk;
     };
 
-    let current_key_pref = Basic::Ed25519.derive(cur_pk.clone());
-    let next_key_prefix = Basic::Ed25519.derive(next_pk.clone());
+    let current_key_pref = BasicPrefix::Ed25519(cur_pk.clone());
+    let next_key_prefix = BasicPrefix::Ed25519(next_pk.clone());
     let next_keys_data = nxt_commitment(
         SignatureThreshold::Simple(1),
         &[next_key_prefix.clone()],

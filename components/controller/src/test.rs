@@ -4,9 +4,9 @@ use std::{collections::HashMap, sync::Arc};
 
 use keri::{
     actor::prelude::Message,
-    derivation::{basic::Basic, self_signing::SelfSigning},
+    derivation::self_signing::SelfSigning,
     oobi::LocationScheme,
-    prefix::IdentifierPrefix,
+    prefix::{IdentifierPrefix, BasicPrefix},
     signer::{CryptoBox, KeyManager},
 };
 use keri_transport::test::{TestActorMap, TestTransport};
@@ -27,8 +27,8 @@ async fn test_group_incept() -> Result<(), ControllerError> {
     let km2 = CryptoBox::new()?;
 
     let mut identifier1 = {
-        let pk = Basic::Ed25519.derive(km1.public_key());
-        let npk = Basic::Ed25519.derive(km1.next_public_key());
+        let pk = BasicPrefix::Ed25519(km1.public_key());
+        let npk = BasicPrefix::Ed25519(km1.next_public_key());
 
         let icp_event = controller.incept(vec![pk], vec![npk], vec![], 0).await?;
         let signature = SelfSigning::Ed25519Sha512.derive(km1.sign(icp_event.as_bytes())?);
@@ -40,8 +40,8 @@ async fn test_group_incept() -> Result<(), ControllerError> {
     };
 
     let identifier2 = {
-        let pk = Basic::Ed25519.derive(km2.public_key());
-        let npk = Basic::Ed25519.derive(km2.next_public_key());
+        let pk = BasicPrefix::Ed25519(km2.public_key());
+        let npk = BasicPrefix::Ed25519(km2.next_public_key());
 
         let icp_event = controller.incept(vec![pk], vec![npk], vec![], 0).await?;
         let signature = SelfSigning::Ed25519Sha512.derive(km2.sign(icp_event.as_bytes())?);
@@ -142,8 +142,8 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     let km2 = CryptoBox::new()?;
 
     let mut identifier1 = {
-        let pk = Basic::Ed25519.derive(km1.public_key());
-        let npk = Basic::Ed25519.derive(km1.next_public_key());
+        let pk = BasicPrefix::Ed25519(km1.public_key());
+        let npk = BasicPrefix::Ed25519(km1.next_public_key());
 
         let icp_event = controller
             .incept(vec![pk], vec![npk], vec![wit_location.clone()], 1)
@@ -166,8 +166,8 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     }
 
     let mut delegator = {
-        let pk = Basic::Ed25519.derive(km2.public_key());
-        let npk = Basic::Ed25519.derive(km2.next_public_key());
+        let pk = BasicPrefix::Ed25519(km2.public_key());
+        let npk = BasicPrefix::Ed25519(km2.next_public_key());
 
         let icp_event = controller2
             .incept(vec![pk], vec![npk], vec![wit_location], 1)

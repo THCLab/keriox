@@ -11,7 +11,7 @@ use keri::{
         simple_controller::PossibleResponse,
     },
     database::DbError,
-    derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
+    derivation::{self_addressing::SelfAddressing, self_signing::SelfSigning},
     error::Error,
     event_message::signed_event_message::{Notice, Op},
     oobi::{error::OobiError, EndRole, LocationScheme, OobiManager, Role, Scheme},
@@ -54,7 +54,7 @@ impl WatcherData {
         oobi_path.push(event_db_path);
         oobi_path.push("oobi");
 
-        let prefix = Basic::Ed25519NT.derive(signer.public_key()); // watcher uses non transferable key
+        let prefix = BasicPrefix::Ed25519NT(signer.public_key()); // watcher uses non transferable key
         let db = Arc::new(SledEventDatabase::new(event_db_path)?);
         let mut processor = BasicProcessor::new(db.clone(), None);
         processor.register_observer(

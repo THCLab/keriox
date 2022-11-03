@@ -185,7 +185,7 @@ fn test_threshold() -> Result<(), Error> {
     use rand::rngs::OsRng;
 
     use crate::{
-        derivation::{basic::Basic, self_signing::SelfSigning},
+        derivation::self_signing::SelfSigning,
         keys::{PrivateKey, PublicKey},
     };
 
@@ -194,7 +194,7 @@ fn test_threshold() -> Result<(), Error> {
         .map(|_| {
             let kp = Keypair::generate(&mut OsRng);
             (
-                Basic::Ed25519.derive(PublicKey::new(kp.public.to_bytes().to_vec())),
+                BasicPrefix::Ed25519(PublicKey::new(kp.public.to_bytes().to_vec())),
                 PrivateKey::new(kp.secret.to_bytes().to_vec()),
             )
         })
@@ -207,7 +207,7 @@ fn test_threshold() -> Result<(), Error> {
             .iter()
             .map(|_| {
                 let kp = Keypair::generate(&mut OsRng);
-                Basic::Ed25519.derive(PublicKey::new(kp.public.to_bytes().to_vec()))
+                BasicPrefix::Ed25519(PublicKey::new(kp.public.to_bytes().to_vec()))
             })
             .collect();
         nxt_commitment(next_threshold, &next_keys, &SelfAddressing::Blake3_256)

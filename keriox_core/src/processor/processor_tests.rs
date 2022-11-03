@@ -2,7 +2,7 @@ use std::{convert::TryFrom, fs, sync::Arc};
 
 use crate::{
     database::{escrow::EscrowDb, SledEventDatabase},
-    derivation::{basic::Basic, self_signing::SelfSigning},
+    derivation::self_signing::SelfSigning,
     error::Error,
     event::sections::threshold::SignatureThreshold,
     event_message::{
@@ -11,7 +11,7 @@ use crate::{
         Digestible, EventTypeTag,
     },
     event_parsing::message::{signed_event_stream, signed_message},
-    prefix::{AttachedSignaturePrefix, IdentifierPrefix, Prefix, SeedPrefix},
+    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SeedPrefix},
     processor::{
         basic_processor::BasicProcessor, escrow::default_escrow_bus, event_storage::EventStorage,
         Processor,
@@ -359,10 +359,10 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
     // setup keypairs
     let signers = setup_signers();
 
-    let keys = vec![Basic::Ed25519.derive(signers[0].public_key())];
+    let keys = vec![BasicPrefix::Ed25519(signers[0].public_key())];
     let next_pks = signers[1..6]
         .iter()
-        .map(|signer| Basic::Ed25519.derive(signer.public_key()))
+        .map(|signer| BasicPrefix::Ed25519(signer.public_key()))
         .collect::<Vec<_>>();
     // build inception event
     let icp = EventMsgBuilder::new(EventTypeTag::Icp)
@@ -403,11 +403,11 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
     let current_signers = [&signers[2], &signers[4], &signers[5]];
     let current_public_keys = current_signers
         .iter()
-        .map(|sig| Basic::Ed25519.derive(sig.public_key()))
+        .map(|sig| BasicPrefix::Ed25519(sig.public_key()))
         .collect::<Vec<_>>();
     let next_public_keys = signers[6..11]
         .iter()
-        .map(|sig| Basic::Ed25519.derive(sig.public_key()))
+        .map(|sig| BasicPrefix::Ed25519(sig.public_key()))
         .collect::<Vec<_>>();
     // Generate partial rotation event
     let rotation = EventMsgBuilder::new(EventTypeTag::Rot)
@@ -439,11 +439,11 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
     let current_signers = [&signers[6], &signers[7], &signers[8]];
     let next_public_keys = signers[11..16]
         .iter()
-        .map(|sig| Basic::Ed25519.derive(sig.public_key()))
+        .map(|sig| BasicPrefix::Ed25519(sig.public_key()))
         .collect::<Vec<_>>();
     let current_public_keys = current_signers
         .iter()
-        .map(|sig| Basic::Ed25519.derive(sig.public_key()))
+        .map(|sig| BasicPrefix::Ed25519(sig.public_key()))
         .collect::<Vec<_>>();
 
     //  Partial rotation that will fail because it does not have enough sigs for
@@ -498,10 +498,10 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
     // setup keypairs
     let signers = setup_signers();
 
-    let keys = vec![Basic::Ed25519.derive(signers[0].public_key())];
+    let keys = vec![BasicPrefix::Ed25519(signers[0].public_key())];
     let next_pks = signers[1..6]
         .iter()
-        .map(|signer| Basic::Ed25519.derive(signer.public_key()))
+        .map(|signer| BasicPrefix::Ed25519(signer.public_key()))
         .collect::<Vec<_>>();
     // build inception event
     let icp = EventMsgBuilder::new(EventTypeTag::Icp)
@@ -547,11 +547,11 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
     let current_signers = [&signers[3], &signers[4], &signers[5]];
     let current_public_keys = current_signers
         .iter()
-        .map(|sig| Basic::Ed25519.derive(sig.public_key()))
+        .map(|sig| BasicPrefix::Ed25519(sig.public_key()))
         .collect::<Vec<_>>();
     let next_public_keys = signers[11..16]
         .iter()
-        .map(|sig| Basic::Ed25519.derive(sig.public_key()))
+        .map(|sig| BasicPrefix::Ed25519(sig.public_key()))
         .collect::<Vec<_>>();
 
     // Generate partial rotation event
@@ -600,7 +600,7 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
     let next_public_keys = vec![];
     let current_public_keys = current_signers
         .iter()
-        .map(|sig| Basic::Ed25519.derive(sig.public_key()))
+        .map(|sig| BasicPrefix::Ed25519(sig.public_key()))
         .collect::<Vec<_>>();
 
     //  Partial rotation that will fail because it does not have enough sigs for

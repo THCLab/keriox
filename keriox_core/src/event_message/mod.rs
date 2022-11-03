@@ -214,7 +214,7 @@ mod tests {
     use self::test_utils::test_mock_event_sequence;
     use super::*;
     use crate::{
-        derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
+        derivation::{self_addressing::SelfAddressing, self_signing::SelfSigning},
         event::{
             event_data::{inception::InceptionEvent, EventData},
             sections::{key_config::nxt_commitment, KeyConfig},
@@ -222,7 +222,7 @@ mod tests {
             Event,
         },
         keys::{PrivateKey, PublicKey},
-        prefix::{AttachedSignaturePrefix, IdentifierPrefix},
+        prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix},
         state::IdentifierState,
     };
     use ed25519_dalek::Keypair;
@@ -243,10 +243,10 @@ mod tests {
         );
 
         // initial signing key prefix
-        let pref0 = Basic::Ed25519.derive(pub_key0);
+        let pref0 = BasicPrefix::Ed25519(pub_key0);
 
         // initial control key hash prefix
-        let pref1 = Basic::Ed25519.derive(pub_key1);
+        let pref1 = BasicPrefix::Ed25519(pub_key1);
         let nxt = nxt_commitment(
             SignatureThreshold::Simple(1),
             &vec![pref1],
@@ -327,12 +327,12 @@ mod tests {
         );
 
         // initial key set
-        let sig_pref_0 = Basic::Ed25519.derive(pub_key0);
-        let enc_pref_0 = Basic::X25519.derive(enc_key_0);
+        let sig_pref_0 = BasicPrefix::Ed25519(pub_key0);
+        let enc_pref_0 = BasicPrefix::X25519(enc_key_0);
 
         // next key set
-        let sig_pref_1 = Basic::Ed25519.derive(pub_key1);
-        let enc_pref_1 = Basic::X25519.derive(enc_key_1);
+        let sig_pref_1 = BasicPrefix::Ed25519(pub_key1);
+        let enc_pref_1 = BasicPrefix::X25519(enc_key_1);
 
         // next key set pre-commitment
         let nexter_pref = nxt_commitment(
