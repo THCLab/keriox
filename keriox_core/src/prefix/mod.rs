@@ -1,15 +1,15 @@
+use self::error::Error;
 use crate::{
     derivation::{basic::Basic, self_signing::SelfSigning},
     event_parsing::parsing::from_bytes_to_text,
 };
-use self::error::Error;
 use core::str::FromStr;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt::Display;
 
-pub mod error;
 pub mod attached_signature;
 pub mod basic;
+pub mod error;
 pub mod seed;
 pub mod self_addressing;
 pub mod self_signing;

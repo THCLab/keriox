@@ -2,13 +2,13 @@ use core::str::FromStr;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
+use super::error::Error;
 use super::{verify, Prefix, SelfSigningPrefix};
 use crate::{
     derivation::{basic::Basic, DerivationCode},
     event_parsing::parsing::from_text_to_bytes,
     keys::PublicKey,
 };
-use super::error::Error;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct BasicPrefix {

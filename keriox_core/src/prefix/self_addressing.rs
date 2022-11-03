@@ -1,9 +1,9 @@
+use super::error::Error;
 use super::Prefix;
 use crate::derivation::{self_addressing::SelfAddressing, DerivationCode};
 use crate::event_parsing::parsing::from_text_to_bytes;
 use core::{fmt, str::FromStr};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use super::error::Error;
 
 #[derive(Debug, PartialEq, Clone, Hash, Eq)]
 pub struct SelfAddressingPrefix {

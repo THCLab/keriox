@@ -2,7 +2,7 @@ use core::str::FromStr;
 
 use serde::{Deserialize, Serialize};
 
-use super::{DerivationCode, error::Error};
+use super::{error::Error, DerivationCode};
 use crate::{keys::PublicKey, prefix::BasicPrefix};
 
 /// Basic Derivations

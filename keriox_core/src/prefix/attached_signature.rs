@@ -1,3 +1,4 @@
+use super::error::Error;
 use super::{Prefix, SelfSigningPrefix};
 use crate::{
     derivation::{
@@ -5,7 +6,6 @@ use crate::{
     },
     event_parsing::parsing::from_text_to_bytes,
 };
-use super::error::Error;
 use core::str::FromStr;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 

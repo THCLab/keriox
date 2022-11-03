@@ -100,7 +100,9 @@ impl KeyConfig {
                             .ok_or_else(|| {
                                 Error::SemanticError("Key index not present in set".into())
                             })
-                            .and_then(|key: &BasicPrefix| Ok(key.verify(message, &sig.signature)?))?)
+                            .and_then(|key: &BasicPrefix| {
+                                Ok(key.verify(message, &sig.signature)?)
+                            })?)
                 })?)
         } else {
             Err(Error::NotEnoughSigsError)

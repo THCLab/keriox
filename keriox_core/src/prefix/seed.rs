@@ -1,5 +1,5 @@
-use super::Prefix;
 use super::error::Error;
+use super::Prefix;
 use crate::{
     event_parsing::parsing::from_text_to_bytes,
     keys::{PrivateKey, PublicKey},

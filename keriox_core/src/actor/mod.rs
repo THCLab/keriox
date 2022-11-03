@@ -213,7 +213,7 @@ pub fn process_signed_query(
                 Err(e) => {
                     let keri_error: crate::error::Error = e.into();
                     return Err(keri_error.into());
-                } ,
+                }
             };
             if !ver_result {
                 return Err(SignedQueryError::InvalidSignature);
