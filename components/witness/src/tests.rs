@@ -18,7 +18,7 @@ use keri::{
         signed_event_message::{Message, Notice, Op, SignedEventMessage},
     },
     keys::PublicKey,
-    prefix::{BasicPrefix, IdentifierPrefix},
+    prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     processor::{basic_processor::BasicProcessor, event_storage::EventStorage, Processor},
     query::query_event::MailboxResponse,
     signer::{CryptoBox, Signer},
@@ -224,7 +224,7 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
 #[test]
 fn test_qry_rpy() -> Result<(), WitnessError> {
     use keri::{
-        derivation::{self_addressing::SelfAddressing, self_signing::SelfSigning},
+        derivation::self_addressing::SelfAddressing,
         event::SerializationFormats,
         prefix::AttachedSignaturePrefix,
         query::{
@@ -318,11 +318,12 @@ fn test_qry_rpy() -> Result<(), WitnessError> {
 
     // sign message by bob
     let signature = AttachedSignaturePrefix::new(
-        SelfSigning::Ed25519Sha512,
-        Arc::clone(&bob_key_manager)
-            .lock()
-            .unwrap()
-            .sign(&serde_json::to_vec(&qry).unwrap())?,
+        SelfSigningPrefix::Ed25519Sha512(
+            Arc::clone(&bob_key_manager)
+                .lock()
+                .unwrap()
+                .sign(&serde_json::to_vec(&qry).unwrap())?,
+        ),
         0,
     );
     // Qry message signed by Bob
@@ -360,11 +361,12 @@ fn test_qry_rpy() -> Result<(), WitnessError> {
 
     // sign message by bob
     let signature = AttachedSignaturePrefix::new(
-        SelfSigning::Ed25519Sha512,
-        Arc::clone(&bob_key_manager)
-            .lock()
-            .unwrap()
-            .sign(&serde_json::to_vec(&qry).unwrap())?,
+        SelfSigningPrefix::Ed25519Sha512(
+            Arc::clone(&bob_key_manager)
+                .lock()
+                .unwrap()
+                .sign(&serde_json::to_vec(&qry).unwrap())?,
+        ),
         0,
     );
     // Qry message signed by Bob

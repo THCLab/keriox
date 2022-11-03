@@ -37,11 +37,7 @@ pub fn attached_signature(s: &[u8]) -> nom::IResult<&[u8], AttachedSignaturePref
 
             Ok((
                 rest,
-                AttachedSignaturePrefix::new(
-                    SelfSigning::Ed25519Sha512.into(),
-                    sig.to_vec(),
-                    index,
-                ),
+                AttachedSignaturePrefix::new(SelfSigningPrefix::Ed25519Sha512(sig.to_vec()), index),
             ))
         }
         b => {
@@ -58,8 +54,7 @@ pub fn attached_signature(s: &[u8]) -> nom::IResult<&[u8], AttachedSignaturePref
             Ok((
                 rest,
                 AttachedSignaturePrefix::new(
-                    SelfSigning::ECDSAsecp256k1Sha256.into(),
-                    sig.to_vec(),
+                    SelfSigningPrefix::ECDSAsecp256k1Sha256(sig.to_vec()),
                     index,
                 ),
             ))
@@ -80,7 +75,7 @@ pub fn attached_signature(s: &[u8]) -> nom::IResult<&[u8], AttachedSignaturePref
 
                     Ok((
                         rest,
-                        AttachedSignaturePrefix::new(SelfSigning::Ed448.into(), sig, index),
+                        AttachedSignaturePrefix::new(SelfSigningPrefix::Ed448(sig), index),
                     ))
                 }
                 _ => Err(nom::Err::Error((type_c_2, ErrorKind::IsNot))),
@@ -162,13 +157,7 @@ pub fn self_signing_prefix(s: &[u8]) -> nom::IResult<&[u8], SelfSigningPrefix> {
         [code.code_len()..]
         .to_vec();
 
-    Ok((
-        extra,
-        SelfSigningPrefix {
-            derivation: code.into(),
-            signature: decoded,
-        },
-    ))
+    Ok((extra, SelfSigningPrefix::new(code, decoded)))
 }
 
 pub fn attached_sn(s: &[u8]) -> nom::IResult<&[u8], u64> {
@@ -211,12 +200,12 @@ pub fn prefix(s: &[u8]) -> nom::IResult<&[u8], IdentifierPrefix> {
 fn test() {
     assert_eq!(
         attached_signature("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".as_bytes()),
-        Ok(("".as_bytes(), AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512.into(), vec![0u8; 64], 0)))
+        Ok(("".as_bytes(), AttachedSignaturePrefix::new(SelfSigningPrefix::Ed25519Sha512(vec![0u8; 64]), 0)))
     );
 
     assert_eq!(
         attached_signature("BCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".as_bytes()),
-        Ok(("AA".as_bytes(), AttachedSignaturePrefix::new(SelfSigning::ECDSAsecp256k1Sha256.into(), vec![0u8; 64], 2)))
+        Ok(("AA".as_bytes(), AttachedSignaturePrefix::new(SelfSigningPrefix::ECDSAsecp256k1Sha256(vec![0u8; 64]), 2)))
     );
 }
 

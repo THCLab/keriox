@@ -10,7 +10,7 @@ use super::{event_generator, prelude::Message, process_message};
 use crate::{
     actor::parse_event_stream,
     database::{escrow::EscrowDb, SledEventDatabase},
-    derivation::{self_addressing::SelfAddressing, self_signing::SelfSigning},
+    derivation::self_addressing::SelfAddressing,
     error::Error,
     event::{
         event_data::EventData,
@@ -26,9 +26,11 @@ use crate::{
         signature::{Signature, SignerData},
         signed_event_message::{Notice, Op, SignedEventMessage, SignedNontransferableReceipt},
     },
-    event_parsing::{message::key_event_message, path::MaterialPath, EventType},
+    event_parsing::{
+        codes::self_signing::SelfSigning, message::key_event_message, path::MaterialPath, EventType,
+    },
     oobi::{OobiManager, Role},
-    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix},
+    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix},
     processor::{
         basic_processor::BasicProcessor,
         escrow::{
@@ -239,8 +241,7 @@ impl<K: KeyManager> SimpleController<K> {
         let signed = if let EventType::KeyEvent(icp) = key_event {
             icp.sign(
                 vec![AttachedSignaturePrefix::new(
-                    SelfSigning::Ed25519Sha512,
-                    signature,
+                    SelfSigningPrefix::Ed25519Sha512(signature),
                     0,
                 )],
                 None,
@@ -277,11 +278,12 @@ impl<K: KeyManager> SimpleController<K> {
 
         // sign message by bob
         let signature = AttachedSignaturePrefix::new(
-            SelfSigning::Ed25519Sha512,
-            Arc::clone(&self.key_manager)
-                .lock()
-                .unwrap()
-                .sign(&serde_json::to_vec(&qry).unwrap())?,
+            SelfSigningPrefix::Ed25519Sha512(
+                Arc::clone(&self.key_manager)
+                    .lock()
+                    .unwrap()
+                    .sign(&serde_json::to_vec(&qry).unwrap())?,
+            ),
             0,
         );
         // Qry message signed by Bob
@@ -298,7 +300,7 @@ impl<K: KeyManager> SimpleController<K> {
                 .unwrap();
         let sed: Vec<u8> = end_role.serialize()?;
         let sig = self.key_manager.clone().lock().unwrap().sign(&sed)?;
-        let att_sig = AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, sig, 0);
+        let att_sig = AttachedSignaturePrefix::new(SelfSigningPrefix::Ed25519Sha512(sig), 0);
 
         let oobi_rpy = SignedReply::new_trans(
             end_role,
@@ -328,8 +330,7 @@ impl<K: KeyManager> SimpleController<K> {
         let signed = if let EventType::KeyEvent(rot) = key_event {
             rot.sign(
                 vec![AttachedSignaturePrefix::new(
-                    SelfSigning::Ed25519Sha512,
-                    signature,
+                    SelfSigningPrefix::Ed25519Sha512(signature),
                     0,
                 )],
                 None,
@@ -381,8 +382,7 @@ impl<K: KeyManager> SimpleController<K> {
 
         let signed = ixn.sign(
             vec![AttachedSignaturePrefix::new(
-                SelfSigning::Ed25519Sha512,
-                signature,
+                SelfSigningPrefix::Ed25519Sha512(signature),
                 0,
             )],
             None,
@@ -411,8 +411,7 @@ impl<K: KeyManager> SimpleController<K> {
             let signature = km.sign(&ixn.serialize()?)?;
 
             let attached_signature = AttachedSignaturePrefix::new(
-                SelfSigning::Ed25519Sha512,
-                signature,
+                SelfSigningPrefix::Ed25519Sha512(signature),
                 self.get_index(&ixn.event)? as u16,
             );
             let signed = ixn.sign(vec![attached_signature], None, None);
@@ -508,7 +507,7 @@ impl<K: KeyManager> SimpleController<K> {
         // sign and process inception event
         let second_signature = AttachedSignaturePrefix {
             index: index as u16,
-            signature: SelfSigning::Ed25519Sha512.derive(
+            signature: SelfSigningPrefix::Ed25519Sha512(
                 self.key_manager
                     .lock()
                     .unwrap()
@@ -582,8 +581,7 @@ impl<K: KeyManager> SimpleController<K> {
             if let EventType::KeyEvent(icp) = key_event {
                 icp.sign(
                     vec![AttachedSignaturePrefix::new(
-                        SelfSigning::Ed25519Sha512,
-                        signature,
+                        SelfSigningPrefix::Ed25519Sha512(signature),
                         0,
                     )],
                     None,
@@ -640,7 +638,7 @@ impl<K: KeyManager> SimpleController<K> {
         };
         let mat = MaterialPath::to_path("-a".into());
         let ssp = {
-            SelfSigning::Ed25519Sha512.derive(
+            SelfSigningPrefix::Ed25519Sha512(
                 self.key_manager
                     .lock()
                     .unwrap()
@@ -693,8 +691,7 @@ impl<K: KeyManager> SimpleController<K> {
             .sign(&qry_msg.serialize().unwrap())
             .unwrap();
         let signatures = vec![AttachedSignaturePrefix::new(
-            SelfSigning::Ed25519Sha512,
-            signature,
+            SelfSigningPrefix::Ed25519Sha512(signature),
             0,
         )];
         let mbx_msg = SignedQuery::new(qry_msg, self.prefix.clone().clone(), signatures);
@@ -733,8 +730,7 @@ impl<K: KeyManager> SimpleController<K> {
                     .sign(&qry_msg.serialize().unwrap())
                     .unwrap();
                 let signatures = vec![AttachedSignaturePrefix::new(
-                    SelfSigning::Ed25519Sha512,
-                    signature,
+                    SelfSigningPrefix::Ed25519Sha512(signature),
                     0,
                 )];
                 SignedQuery::new(qry_msg, self.prefix.clone(), signatures)

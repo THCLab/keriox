@@ -4,9 +4,8 @@ use std::{collections::HashMap, sync::Arc};
 
 use keri::{
     actor::prelude::Message,
-    derivation::self_signing::SelfSigning,
     oobi::LocationScheme,
-    prefix::{IdentifierPrefix, BasicPrefix},
+    prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     signer::{CryptoBox, KeyManager},
 };
 use keri_transport::test::{TestActorMap, TestTransport};
@@ -31,7 +30,7 @@ async fn test_group_incept() -> Result<(), ControllerError> {
         let npk = BasicPrefix::Ed25519(km1.next_public_key());
 
         let icp_event = controller.incept(vec![pk], vec![npk], vec![], 0).await?;
-        let signature = SelfSigning::Ed25519Sha512.derive(km1.sign(icp_event.as_bytes())?);
+        let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(icp_event.as_bytes())?);
 
         let incepted_identifier = controller
             .finalize_inception(icp_event.as_bytes(), &signature)
@@ -44,7 +43,7 @@ async fn test_group_incept() -> Result<(), ControllerError> {
         let npk = BasicPrefix::Ed25519(km2.next_public_key());
 
         let icp_event = controller.incept(vec![pk], vec![npk], vec![], 0).await?;
-        let signature = SelfSigning::Ed25519Sha512.derive(km2.sign(icp_event.as_bytes())?);
+        let signature = SelfSigningPrefix::Ed25519Sha512(km2.sign(icp_event.as_bytes())?);
 
         let incepted_identifier = controller
             .finalize_inception(icp_event.as_bytes(), &signature)
@@ -55,8 +54,8 @@ async fn test_group_incept() -> Result<(), ControllerError> {
     let (group_inception, exn_messages) =
         identifier1.incept_group(vec![identifier2.id.clone()], 2, None, None, None)?;
 
-    let signature_icp = SelfSigning::Ed25519Sha512.derive(km1.sign(group_inception.as_bytes())?);
-    let signature_exn = SelfSigning::Ed25519Sha512.derive(km1.sign(exn_messages[0].as_bytes())?);
+    let signature_icp = SelfSigningPrefix::Ed25519Sha512(km1.sign(group_inception.as_bytes())?);
+    let signature_exn = SelfSigningPrefix::Ed25519Sha512(km1.sign(exn_messages[0].as_bytes())?);
 
     // Group initiator needs to use `finalize_group_incept` instead of just
     // `finalize_event`, to send multisig request to other group participants.
@@ -79,7 +78,7 @@ async fn test_group_incept() -> Result<(), ControllerError> {
     // identifier2.  It will be stored in identifier2 mailbox. Assume, that
     // identifier2 found icp signed by identifier1 in his mailbox.
     // It works, because we use common controller for both identifiers.
-    let signature_icp = SelfSigning::Ed25519Sha512.derive(km2.sign(group_inception.as_bytes())?);
+    let signature_icp = SelfSigningPrefix::Ed25519Sha512(km2.sign(group_inception.as_bytes())?);
     identifier2
         .finalize_event(group_inception.as_bytes(), signature_icp)
         .await?;
@@ -148,7 +147,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
         let icp_event = controller
             .incept(vec![pk], vec![npk], vec![wit_location.clone()], 1)
             .await?;
-        let signature = SelfSigning::Ed25519Sha512.derive(km1.sign(icp_event.as_bytes())?);
+        let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(icp_event.as_bytes())?);
 
         let incepted_identifier = controller
             .finalize_inception(icp_event.as_bytes(), &signature)
@@ -159,7 +158,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     let query = identifier1.query_mailbox(&identifier1.id, &[witness_id_basic.clone()])?;
 
     for qry in query {
-        let signature = SelfSigning::Ed25519Sha512.derive(km1.sign(&qry.serialize()?)?);
+        let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(&qry.serialize()?)?);
         identifier1
             .finalize_mailbox_query(vec![(qry, signature)])
             .await?;
@@ -172,7 +171,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
         let icp_event = controller2
             .incept(vec![pk], vec![npk], vec![wit_location], 1)
             .await?;
-        let signature = SelfSigning::Ed25519Sha512.derive(km2.sign(icp_event.as_bytes())?);
+        let signature = SelfSigningPrefix::Ed25519Sha512(km2.sign(icp_event.as_bytes())?);
 
         let incepted_identifier = controller2
             .finalize_inception(icp_event.as_bytes(), &signature)
@@ -184,7 +183,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     let query = delegator.query_mailbox(&delegator.id, &[witness_id_basic.clone()])?;
 
     for qry in query {
-        let signature = SelfSigning::Ed25519Sha512.derive(km2.sign(&qry.serialize()?)?);
+        let signature = SelfSigningPrefix::Ed25519Sha512(km2.sign(&qry.serialize()?)?);
         delegator
             .finalize_mailbox_query(vec![(qry, signature)])
             .await?;
@@ -199,9 +198,8 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
         Some(delegator.id.clone()),
     )?;
 
-    let signature_icp =
-        SelfSigning::Ed25519Sha512.derive(km1.sign(delegated_inception.as_bytes())?);
-    let signature_exn = SelfSigning::Ed25519Sha512.derive(km1.sign(exn_messages[0].as_bytes())?);
+    let signature_icp = SelfSigningPrefix::Ed25519Sha512(km1.sign(delegated_inception.as_bytes())?);
+    let signature_exn = SelfSigningPrefix::Ed25519Sha512(km1.sign(exn_messages[0].as_bytes())?);
 
     // Group initiator needs to use `finalize_group_incept` instead of just
     // `finalize_event`, to send multisig request to other group participants or delegator.
@@ -218,7 +216,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     let query = delegator.query_mailbox(&delegator.id, &[witness_id_basic.clone()])?;
 
     for qry in query {
-        let signature = SelfSigning::Ed25519Sha512.derive(km2.sign(&qry.serialize()?)?);
+        let signature = SelfSigningPrefix::Ed25519Sha512(km2.sign(&qry.serialize()?)?);
         delegator
             .finalize_mailbox_query(vec![(qry, signature)])
             .await?;
@@ -240,7 +238,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     let query = delegator.query_mailbox(&delegator.id, &[witness_id_basic.clone()])?;
 
     for qry in query {
-        let signature = SelfSigning::Ed25519Sha512.derive(km2.sign(&qry.serialize()?)?);
+        let signature = SelfSigningPrefix::Ed25519Sha512(km2.sign(&qry.serialize()?)?);
         let ar = delegator
             .finalize_mailbox_query(vec![(qry, signature)])
             .await?;
@@ -249,8 +247,8 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
             ActionRequired::MultisigRequest(_, _) => unreachable!(),
             ActionRequired::DelegationRequest(delegating_event, exn) => {
                 let signature_ixn =
-                    SelfSigning::Ed25519Sha512.derive(km2.sign(&delegating_event.serialize()?)?);
-                let signature_exn = SelfSigning::Ed25519Sha512.derive(km2.sign(&exn.serialize()?)?);
+                    SelfSigningPrefix::Ed25519Sha512(km2.sign(&delegating_event.serialize()?)?);
+                let signature_exn = SelfSigningPrefix::Ed25519Sha512(km2.sign(&exn.serialize()?)?);
                 delegator
                     .finalize_group_incept(
                         &delegating_event.serialize()?,
@@ -263,7 +261,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
                 let query = delegator.query_mailbox(&delegator.id, &[witness_id_basic.clone()])?;
 
                 for qry in query {
-                    let signature = SelfSigning::Ed25519Sha512.derive(km2.sign(&qry.serialize()?)?);
+                    let signature = SelfSigningPrefix::Ed25519Sha512(km2.sign(&qry.serialize()?)?);
                     let action_required = delegator
                         .finalize_mailbox_query(vec![(qry, signature)])
                         .await?;
@@ -294,7 +292,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     let query = identifier1.query_mailbox(&delegate_id, &[witness_id_basic.clone()])?;
 
     for qry in query {
-        let signature = SelfSigning::Ed25519Sha512.derive(km1.sign(&qry.serialize()?)?);
+        let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(&qry.serialize()?)?);
         let ar = identifier1
             .finalize_mailbox_query(vec![(qry, signature)])
             .await?;
@@ -312,7 +310,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     let query = identifier1.query_mailbox(&delegate_id, &[witness_id_basic.clone()])?;
 
     for qry in query {
-        let signature = SelfSigning::Ed25519Sha512.derive(km1.sign(&qry.serialize()?)?);
+        let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(&qry.serialize()?)?);
         let ar = identifier1
             .finalize_mailbox_query(vec![(qry, signature)])
             .await?;

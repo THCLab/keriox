@@ -62,7 +62,7 @@ impl FromStr for BasicPrefix {
         if s.len() == code.prefix_b64_len() {
             let k_vec =
                 from_text_to_bytes(&s[code.code_len()..].as_bytes())?[code.code_len()..].to_vec();
-            Ok(Self::new(code.into(), PublicKey::new(k_vec)))
+            Ok(Self::new(code, PublicKey::new(k_vec)))
         } else {
             Err(Error::IncorrectLengthError(s.into()))
         }
@@ -149,10 +149,7 @@ fn to_from_string() {
     let signer = PrivateKey::new(kp.secret.to_bytes().to_vec());
 
     let message = b"hello there";
-    let sig = SelfSigningPrefix::new(
-        crate::derivation::self_signing::SelfSigning::Ed25519Sha512,
-        signer.sign_ed(message).unwrap(),
-    );
+    let sig = SelfSigningPrefix::Ed25519Sha512(signer.sign_ed(message).unwrap());
 
     let bp = BasicPrefix::Ed25519(PublicKey::new(kp.public.to_bytes().to_vec()));
 

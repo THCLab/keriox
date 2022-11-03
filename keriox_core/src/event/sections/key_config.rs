@@ -4,7 +4,9 @@ use super::threshold::SignatureThreshold;
 use crate::{
     derivation::self_addressing::SelfAddressing,
     error::Error,
-    prefix::{AttachedSignaturePrefix, BasicPrefix, Prefix, SelfAddressingPrefix},
+    prefix::{
+        AttachedSignaturePrefix, BasicPrefix, Prefix, SelfAddressingPrefix, SelfSigningPrefix,
+    },
 };
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
@@ -185,7 +187,7 @@ fn test_threshold() -> Result<(), Error> {
     use rand::rngs::OsRng;
 
     use crate::{
-        derivation::self_signing::SelfSigning,
+        event_parsing::codes::self_signing::SelfSigning,
         keys::{PrivateKey, PublicKey},
     };
 
@@ -220,8 +222,7 @@ fn test_threshold() -> Result<(), Error> {
     for i in 0..priv_keys.len() {
         let sig = priv_keys[i].sign_ed(msg_to_sign)?;
         signatures.push(AttachedSignaturePrefix::new(
-            SelfSigning::Ed25519Sha512,
-            sig,
+            SelfSigningPrefix::Ed25519Sha512(sig),
             i as u16,
         ));
     }

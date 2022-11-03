@@ -1,11 +1,14 @@
 use super::event_msg_builder::EventMsgBuilder;
 use crate::{
-    derivation::{self_addressing::SelfAddressing, self_signing::SelfSigning},
+    derivation::self_addressing::SelfAddressing,
     error::Error,
     event::sections::{key_config::nxt_commitment, threshold::SignatureThreshold},
     event_message::EventTypeTag,
     keys::{PrivateKey, PublicKey},
-    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix},
+    prefix::{
+        AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix,
+        SelfSigningPrefix,
+    },
     state::IdentifierState,
 };
 use ed25519_dalek::Keypair;
@@ -89,7 +92,7 @@ fn test_update_identifier_state(
         // Sign.
         let signer = cur_sk.clone();
         let sig = signer.sign_ed(&sed)?;
-        AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, sig, 0)
+        AttachedSignaturePrefix::new(SelfSigningPrefix::Ed25519Sha512(sig), 0)
     };
 
     // Attach sign to event message.

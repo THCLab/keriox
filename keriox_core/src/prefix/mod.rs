@@ -1,5 +1,5 @@
 use self::error::Error;
-use crate::{derivation::self_signing::SelfSigning, event_parsing::parsing::from_bytes_to_text};
+use crate::event_parsing::parsing::from_bytes_to_text;
 use core::str::FromStr;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt::Display;
@@ -117,18 +117,18 @@ pub fn verify(
     signature: &SelfSigningPrefix,
 ) -> Result<bool, Error> {
     match key {
-        BasicPrefix::Ed25519(pk) | BasicPrefix::Ed25519NT(pk) => match signature.derivation {
-            SelfSigning::Ed25519Sha512 => Ok(pk.verify_ed(data.as_ref(), &signature.signature)),
+        BasicPrefix::Ed25519(pk) | BasicPrefix::Ed25519NT(pk) => match signature {
+            SelfSigningPrefix::Ed25519Sha512(signature) => {
+                Ok(pk.verify_ed(data.as_ref(), &signature))
+            }
             _ => Err(Error::WrongSignatureTypeError.into()),
         },
-        BasicPrefix::ECDSAsecp256k1(key) | BasicPrefix::ECDSAsecp256k1NT(key) => {
-            match signature.derivation {
-                SelfSigning::ECDSAsecp256k1Sha256 => {
-                    Ok(key.verify_ecdsa(data.as_ref(), &signature.signature))
-                }
-                _ => Err(Error::WrongSignatureTypeError.into()),
+        BasicPrefix::ECDSAsecp256k1(key) | BasicPrefix::ECDSAsecp256k1NT(key) => match signature {
+            SelfSigningPrefix::ECDSAsecp256k1Sha256(signature) => {
+                Ok(key.verify_ecdsa(data.as_ref(), &signature))
             }
-        }
+            _ => Err(Error::WrongSignatureTypeError.into()),
+        },
         _ => Err(Error::WrongKeyTypeError.into()),
     }
 }
@@ -228,10 +228,7 @@ mod tests {
         let key_prefix = BasicPrefix::Ed25519NT(pub_key);
 
         let sig = priv_key.sign_ed(&data_string.as_bytes()).unwrap();
-        let sig_prefix = SelfSigningPrefix {
-            derivation: SelfSigning::Ed25519Sha512,
-            signature: sig,
-        };
+        let sig_prefix = SelfSigningPrefix::Ed25519Sha512(sig);
 
         let check = key_prefix.verify(&data_string.as_bytes(), &sig_prefix);
         assert!(check.is_ok());
@@ -383,15 +380,15 @@ mod tests {
 
         // Test SelfSigningPrefix serialization.
         assert_eq!(
-            SelfSigningPrefix::new(SelfSigning::ECDSAsecp256k1Sha256, vec![0; 64]).to_str(),
+            SelfSigningPrefix::ECDSAsecp256k1Sha256(vec![0; 64]).to_str(),
             ["0C".to_string(), "A".repeat(86)].join("")
         );
         assert_eq!(
-            SelfSigningPrefix::new(SelfSigning::Ed25519Sha512, vec![0; 64]).to_str(),
+            SelfSigningPrefix::Ed25519Sha512(vec![0; 64]).to_str(),
             ["0B".to_string(), "A".repeat(86)].join("")
         );
         assert_eq!(
-            SelfSigningPrefix::new(SelfSigning::Ed448, vec![0; 114]).to_str(),
+            SelfSigningPrefix::Ed448(vec![0; 114]).to_str(),
             ["1AAE".to_string(), "A".repeat(152)].join("")
         );
 
@@ -425,7 +422,7 @@ pub fn test_identifier_encoding() {
         "mdI8OSQkMJ9r-xigjEByEjIua7LHH3AOJ22PQKqljMhuhcgh9nGRcKnsz5KvKd7K_H9-1298F4Id1DxvIoEmCQ==";
     let self_signing_raw = base64::decode_config(self_signing_b64, base64::URL_SAFE).unwrap();
 
-    let ssp = SelfSigning::Ed25519Sha512.derive(self_signing_raw);
+    let ssp = SelfSigningPrefix::Ed25519Sha512(self_signing_raw);
     println!("ssp: {}", ssp.to_str());
     assert_eq!(
         ssp.to_str(),

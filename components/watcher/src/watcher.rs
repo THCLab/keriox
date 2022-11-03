@@ -11,11 +11,11 @@ use keri::{
         simple_controller::PossibleResponse,
     },
     database::DbError,
-    derivation::{self_addressing::SelfAddressing, self_signing::SelfSigning},
+    derivation::self_addressing::SelfAddressing,
     error::Error,
     event_message::signed_event_message::{Notice, Op},
     oobi::{error::OobiError, EndRole, LocationScheme, OobiManager, Role, Scheme},
-    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix},
+    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     processor::{escrow::ReplyEscrow, notification::JustNotification},
     query::{
         query_event::{QueryArgs, QueryEvent, QueryRoute, SignedQuery},
@@ -79,7 +79,7 @@ impl WatcherData {
         let signed_reply = SignedReply::new_nontrans(
             reply.clone(),
             prefix.clone(),
-            SelfSigning::Ed25519Sha512.derive(signer.sign(reply.serialize()?)?),
+            SelfSigningPrefix::Ed25519Sha512(signer.sign(reply.serialize()?)?),
         );
         let oobi_manager = OobiManager::new(&oobi_path);
         oobi_manager.save_oobi(&signed_reply)?;
@@ -107,7 +107,7 @@ impl WatcherData {
                     Ok(SignedReply::new_nontrans(
                         oobi_to_sing.clone(),
                         self.prefix.clone(),
-                        SelfSigning::Ed25519Sha512.derive(signature),
+                        SelfSigningPrefix::Ed25519Sha512(signature),
                     ))
                 })
                 .collect::<Result<_, Error>>()?,
@@ -129,7 +129,7 @@ impl WatcherData {
             SerializationFormats::JSON,
         )?;
 
-        let signature = SelfSigning::Ed25519Sha512.derive(signer.sign(&rpy.serialize()?)?);
+        let signature = SelfSigningPrefix::Ed25519Sha512(signer.sign(&rpy.serialize()?)?);
         Ok(SignedReply::new_nontrans(
             rpy,
             self.prefix.clone(),
@@ -205,7 +205,7 @@ impl WatcherData {
                 )?;
 
                 let signature =
-                    SelfSigning::Ed25519Sha512.derive(self.signer.sign(&rpy.serialize()?)?);
+                    SelfSigningPrefix::Ed25519Sha512(self.signer.sign(&rpy.serialize()?)?);
                 let reply = SignedReply::new_nontrans(rpy, self.prefix.clone(), signature);
                 Ok(Some(PossibleResponse::Ksn(reply)))
             }
@@ -228,8 +228,7 @@ impl WatcherData {
     async fn forward_query(&self, qry: &SignedQuery) -> Result<(), WatcherError> {
         // Create a new signed message based on the received one
         let sigs = vec![AttachedSignaturePrefix::new(
-            SelfSigning::Ed25519Sha512,
-            self.signer.sign(qry.query.serialize()?)?,
+            SelfSigningPrefix::Ed25519Sha512(self.signer.sign(qry.query.serialize()?)?),
             0,
         )];
         let qry = SignedQuery::new(
@@ -291,8 +290,9 @@ impl WatcherData {
 
         // sign message by watcher
         let signature = AttachedSignaturePrefix::new(
-            SelfSigning::Ed25519Sha512,
-            (self.signer).sign(&serde_json::to_vec(&qry).unwrap())?,
+            SelfSigningPrefix::Ed25519Sha512(
+                (self.signer).sign(&serde_json::to_vec(&qry).unwrap())?,
+            ),
             0,
         );
 

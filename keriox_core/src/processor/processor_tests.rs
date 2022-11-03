@@ -2,7 +2,6 @@ use std::{convert::TryFrom, fs, sync::Arc};
 
 use crate::{
     database::{escrow::EscrowDb, SledEventDatabase},
-    derivation::self_signing::SelfSigning,
     error::Error,
     event::sections::threshold::SignatureThreshold,
     event_message::{
@@ -11,7 +10,10 @@ use crate::{
         Digestible, EventTypeTag,
     },
     event_parsing::message::{signed_event_stream, signed_message},
-    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SeedPrefix},
+    prefix::{
+        AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SeedPrefix,
+        SelfSigningPrefix,
+    },
     processor::{
         basic_processor::BasicProcessor, escrow::default_escrow_bus, event_storage::EventStorage,
         Processor,
@@ -388,8 +390,7 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
     let signature = signers[0].sign(icp.serialize().unwrap())?;
     let signed_icp = icp.sign(
         vec![AttachedSignaturePrefix::new(
-            SelfSigning::Ed25519Sha512,
-            signature,
+            SelfSigningPrefix::Ed25519Sha512(signature),
             0,
         )],
         None,
@@ -426,7 +427,7 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
         .enumerate()
         .map(|(index, sig)| {
             let signature = sig.sign(rotation.serialize().unwrap()).unwrap();
-            AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, signature, index as u16)
+            AttachedSignaturePrefix::new(SelfSigningPrefix::Ed25519Sha512(signature), index as u16)
         })
         .collect::<Vec<_>>();
 
@@ -464,7 +465,7 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
         .enumerate()
         .map(|(index, sig)| {
             let signature = sig.sign(rotation.serialize().unwrap()).unwrap();
-            AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, signature, index as u16)
+            AttachedSignaturePrefix::new(SelfSigningPrefix::Ed25519Sha512(signature), index as u16)
         })
         .collect::<Vec<_>>();
 
@@ -532,8 +533,7 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
     let signature = signers[0].sign(icp.serialize().unwrap())?;
     let signed_icp = icp.sign(
         vec![AttachedSignaturePrefix::new(
-            SelfSigning::Ed25519Sha512,
-            signature,
+            SelfSigningPrefix::Ed25519Sha512(signature),
             0,
         )],
         None,
@@ -581,7 +581,7 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
         .enumerate()
         .map(|(index, sig)| {
             let signature = sig.sign(rotation.serialize().unwrap()).unwrap();
-            AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, signature, index as u16)
+            AttachedSignaturePrefix::new(SelfSigningPrefix::Ed25519Sha512(signature), index as u16)
         })
         .collect::<Vec<_>>();
 
@@ -620,7 +620,7 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
         .enumerate()
         .map(|(index, sig)| {
             let signature = sig.sign(rotation.serialize().unwrap()).unwrap();
-            AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, signature, index as u16)
+            AttachedSignaturePrefix::new(SelfSigningPrefix::Ed25519Sha512(signature), index as u16)
         })
         .collect::<Vec<_>>();
 
