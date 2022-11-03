@@ -4,10 +4,10 @@ use crate::event_message::dummy_event::DummyInceptionEvent;
 use crate::event_message::key_event_message::KeyEvent;
 use crate::event_message::SaidEvent;
 use crate::{
-    derivation::SelfAddressing,
     error::Error,
     event::{Event, EventMessage, SerializationFormats},
     prefix::IdentifierPrefix,
+    sai::SelfAddressing,
     state::{EventSemantics, IdentifierState},
 };
 use serde::{Deserialize, Serialize};

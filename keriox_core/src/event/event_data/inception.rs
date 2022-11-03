@@ -3,7 +3,6 @@ use super::{
     EventData,
 };
 use crate::{
-    derivation::SelfAddressing,
     error::Error,
     event::{sections::seal::Seal, Event},
     event_message::{
@@ -11,6 +10,7 @@ use crate::{
         serialization_info::SerializationFormats, EventMessage, SaidEvent,
     },
     prefix::IdentifierPrefix,
+    sai::SelfAddressing,
     state::{EventSemantics, IdentifierState, LastEstablishmentData},
 };
 use serde::{Deserialize, Serialize};

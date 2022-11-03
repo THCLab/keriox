@@ -1,5 +1,4 @@
 use crate::{
-    derivation::SelfAddressing,
     error::Error,
     event::sections::key_config::nxt_commitment,
     event::{
@@ -22,6 +21,7 @@ use crate::{
     },
     keys::PublicKey,
     prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix},
+    sai::SelfAddressing,
 };
 use ed25519_dalek::Keypair;
 use rand::rngs::OsRng;

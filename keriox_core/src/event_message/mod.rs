@@ -9,9 +9,7 @@ pub mod signed_event_message;
 
 use std::cmp::Ordering;
 
-use crate::{
-    derivation::SelfAddressing, error::Error, prefix::SelfAddressingPrefix,
-};
+use crate::{error::Error, prefix::SelfAddressingPrefix, sai::SelfAddressing};
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize, Serializer};
 use serialization_info::*;
@@ -214,7 +212,6 @@ mod tests {
     use self::test_utils::test_mock_event_sequence;
     use super::*;
     use crate::{
-        derivation::SelfAddressing,
         event::{
             event_data::{inception::InceptionEvent, EventData},
             sections::{key_config::nxt_commitment, KeyConfig},
@@ -223,6 +220,7 @@ mod tests {
         },
         keys::{PrivateKey, PublicKey},
         prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+        sai::SelfAddressing,
         state::IdentifierState,
     };
     use ed25519_dalek::Keypair;

@@ -155,8 +155,8 @@ pub fn derive(seed: &SeedPrefix, transferable: bool) -> Result<BasicPrefix, Erro
 mod tests {
     use super::*;
     use crate::{
-        derivation::SelfAddressing,
         keys::{PrivateKey, PublicKey},
+        sai::SelfAddressing,
     };
     use ed25519_dalek::Keypair;
     use rand::rngs::OsRng;
@@ -398,7 +398,7 @@ mod tests {
 
 #[test]
 pub fn test_identifier_encoding() {
-    use crate::{derivation::SelfAddressing, keys::PublicKey};
+    use crate::{keys::PublicKey, sai::SelfAddressing};
     use sodiumoxide::hex;
     let pub_key = "694e894769e6c3267e8b477c2590284cd647dd42ef6007d254fce1cd2e9be423";
     let key = hex::decode(pub_key).unwrap();

@@ -1,6 +1,5 @@
 use super::event_msg_builder::EventMsgBuilder;
 use crate::{
-    derivation::SelfAddressing,
     error::Error,
     event::sections::{key_config::nxt_commitment, threshold::SignatureThreshold},
     event_message::EventTypeTag,
@@ -9,6 +8,7 @@ use crate::{
         AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix,
         SelfSigningPrefix,
     },
+    sai::SelfAddressing,
     state::IdentifierState,
 };
 use ed25519_dalek::Keypair;

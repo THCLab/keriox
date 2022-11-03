@@ -2,7 +2,6 @@ use serde::{Deserialize, Serialize};
 
 use super::Timestamped;
 use crate::{
-    derivation::SelfAddressing,
     error::Error,
     event::{EventMessage, SerializationFormats},
     event_message::{
@@ -10,6 +9,7 @@ use crate::{
         EventTypeTag, SaidEvent, Typeable,
     },
     prefix::{AttachedSignaturePrefix, IdentifierPrefix},
+    sai::SelfAddressing,
 };
 
 // TODO: make enum with different query args

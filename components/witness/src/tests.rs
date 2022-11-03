@@ -224,13 +224,13 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
 #[test]
 fn test_qry_rpy() -> Result<(), WitnessError> {
     use keri::{
-        derivation::SelfAddressing,
         event::SerializationFormats,
         prefix::AttachedSignaturePrefix,
         query::{
             query_event::{QueryArgs, QueryEvent, QueryRoute, SignedQuery},
             reply_event::ReplyRoute,
         },
+        sai::SelfAddressing,
         signer::{KeyManager, Signer},
     };
     use tempfile::Builder;

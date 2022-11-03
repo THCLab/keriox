@@ -1,8 +1,8 @@
 use crate::prefix::SelfAddressingPrefix;
 
-pub mod error;
 pub mod cesr_adapter;
 mod digest;
+pub mod error;
 
 /// Self Addressing Derivations
 ///

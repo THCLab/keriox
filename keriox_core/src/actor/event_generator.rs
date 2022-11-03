@@ -1,5 +1,4 @@
 use crate::{
-    derivation::SelfAddressing,
     error::Error,
     event::{
         sections::{
@@ -20,6 +19,7 @@ use crate::{
         reply_event::{ReplyEvent, ReplyRoute},
         Timestamped,
     },
+    sai::SelfAddressing,
     state::IdentifierState,
 };
 

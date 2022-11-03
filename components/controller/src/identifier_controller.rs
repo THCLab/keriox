@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use keri::{
     actor::{event_generator, prelude::Message, simple_controller::PossibleResponse},
-    derivation::SelfAddressing,
     event::{
         event_data::EventData,
         sections::{
@@ -32,6 +31,7 @@ use keri::{
         query_event::{QueryArgsMbx, QueryEvent, QueryRoute, QueryTopics, SignedQuery},
         reply_event::ReplyRoute,
     },
+    sai::SelfAddressing,
 };
 
 use crate::{error::ControllerError, mailbox_updating::MailboxReminder, Controller};

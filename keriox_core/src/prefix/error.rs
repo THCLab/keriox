@@ -5,7 +5,7 @@ use thiserror::Error;
 #[derive(Error, Debug, Serialize, Deserialize)]
 pub enum Error {
     #[error(transparent)]
-    DeriviationCodeError(#[from] crate::derivation::error::Error),
+    DeriviationCodeError(#[from] crate::sai::error::Error),
 
     #[error("Incorrect data length: {0}")]
     IncorrectLengthError(String),

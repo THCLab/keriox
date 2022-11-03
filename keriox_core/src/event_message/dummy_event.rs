@@ -1,11 +1,11 @@
 use crate::{
-    derivation::SelfAddressing,
     error::Error,
     event::{
         event_data::{DelegatedInceptionEvent, EventData, InceptionEvent},
         SerializationFormats,
     },
     event_parsing::codes::self_addressing::dummy_prefix,
+    sai::SelfAddressing,
 };
 
 use super::{serialization_info::SerializationInfo, EventTypeTag, Typeable};

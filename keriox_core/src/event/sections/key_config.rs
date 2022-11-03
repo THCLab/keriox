@@ -2,11 +2,9 @@ use serde::{Deserialize, Serialize};
 
 use super::threshold::SignatureThreshold;
 use crate::{
-    derivation::SelfAddressing,
     error::Error,
-    prefix::{
-        AttachedSignaturePrefix, BasicPrefix, Prefix, SelfAddressingPrefix,
-    },
+    prefix::{AttachedSignaturePrefix, BasicPrefix, Prefix, SelfAddressingPrefix},
+    sai::SelfAddressing,
 };
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
@@ -188,7 +186,7 @@ fn test_threshold() -> Result<(), Error> {
 
     use crate::{
         keys::{PrivateKey, PublicKey},
-        prefix::SelfSigningPrefix
+        prefix::SelfSigningPrefix,
     };
 
     let (pub_keys, priv_keys): (Vec<BasicPrefix>, Vec<PrivateKey>) = [0, 1, 2]

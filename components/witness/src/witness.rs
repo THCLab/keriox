@@ -9,7 +9,6 @@ use keri::{
         prelude::*, process_reply, process_signed_exn, process_signed_query,
         simple_controller::PossibleResponse,
     },
-    derivation::SelfAddressing,
     error::Error,
     event::EventMessage,
     event_message::{
@@ -26,6 +25,7 @@ use keri::{
         reply_event::{ReplyEvent, ReplyRoute, SignedReply},
         ReplyType,
     },
+    sai::SelfAddressing,
     signer::Signer,
 };
 use serde::{Deserialize, Serialize};

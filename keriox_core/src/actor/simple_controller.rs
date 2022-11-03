@@ -10,7 +10,6 @@ use super::{event_generator, prelude::Message, process_message};
 use crate::{
     actor::parse_event_stream,
     database::{escrow::EscrowDb, SledEventDatabase},
-    derivation::SelfAddressing,
     error::Error,
     event::{
         event_data::EventData,
@@ -26,9 +25,7 @@ use crate::{
         signature::{Signature, SignerData},
         signed_event_message::{Notice, Op, SignedEventMessage, SignedNontransferableReceipt},
     },
-    event_parsing::{
-        message::key_event_message, path::MaterialPath, EventType,
-    },
+    event_parsing::{message::key_event_message, path::MaterialPath, EventType},
     oobi::{OobiManager, Role},
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix},
     processor::{
@@ -46,6 +43,7 @@ use crate::{
         },
         reply_event::SignedReply,
     },
+    sai::SelfAddressing,
     signer::KeyManager,
     state::IdentifierState,
 };

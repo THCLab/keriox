@@ -33,4 +33,3 @@ impl From<CesrSelfAddressing> for SelfAddressing {
         }
     }
 }
-

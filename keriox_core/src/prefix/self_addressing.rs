@@ -1,10 +1,10 @@
 use super::error::Error;
 use super::Prefix;
-use crate::derivation::SelfAddressing;
 use crate::event_parsing::codes::DerivationCode;
 use crate::event_parsing::{
     codes::self_addressing::SelfAddressing as CesrSelfAddressing, parsing::from_text_to_bytes,
 };
+use crate::sai::SelfAddressing;
 use core::{fmt, str::FromStr};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 

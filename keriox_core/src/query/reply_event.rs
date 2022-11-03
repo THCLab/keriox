@@ -5,7 +5,6 @@ use super::{key_state_notice::KeyStateNotice, Timestamped};
 #[cfg(feature = "oobi")]
 use crate::oobi::{EndRole, LocationScheme};
 use crate::{
-    derivation::SelfAddressing,
     error::Error,
     event::{sections::seal::EventSeal, EventMessage, SerializationFormats},
     event_message::{
@@ -15,6 +14,7 @@ use crate::{
     },
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix},
     query::QueryError,
+    sai::SelfAddressing,
 };
 
 #[derive(Clone, PartialEq, Debug)]
