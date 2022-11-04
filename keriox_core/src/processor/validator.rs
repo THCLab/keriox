@@ -334,7 +334,7 @@ impl EventValidator {
         let route = rpy.reply.get_route();
         // check if signature was made by ksn creator
         if let ReplyRoute::Ksn(signer_id, ksn) = route {
-            if &rpy.signature.get_signer().ok_or(Error::MissingSigner)? != &signer_id {
+            if rpy.signature.get_signer().ok_or(Error::MissingSigner)? != signer_id {
                 return Err(QueryError::Error("Wrong reply message signer".into()).into());
             };
             self.verify(&rpy.reply.serialize()?, &rpy.signature)?;

@@ -50,4 +50,7 @@ pub enum ControllerError {
         id: IdentifierPrefix,
         scheme: Scheme,
     },
+
+    #[error("Query error: {0}")]
+    QueryArgumentError(String),
 }
