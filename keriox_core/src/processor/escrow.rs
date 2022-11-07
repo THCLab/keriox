@@ -249,13 +249,17 @@ impl PartiallySignedEscrow {
             .get(&id)
             .map(|events| events.filter(|event| event.event_message == signed_event.event_message))
         {
-            let new_sigs: Vec<_> = esc
-                .flat_map(|ev| ev.signatures)
-                .chain(signed_event.signatures.clone().into_iter())
-                .collect();
+            let mut signatures = esc.flat_map(|ev| ev.signatures).collect::<Vec<_>>();
+            let signatures_from_event = signed_event.signatures.clone();
+            let without_duplicates = signatures_from_event
+                .into_iter()
+                .filter(|sig| !signatures.contains(sig))
+                .collect::<Vec<_>>();
+
+                signatures.append(&mut without_duplicates.clone());
 
             let new_event = SignedEventMessage {
-                signatures: new_sigs,
+                signatures: signatures,
                 ..signed_event.to_owned()
             };
 
@@ -282,10 +286,16 @@ impl PartiallySignedEscrow {
                 Err(Error::SignatureVerificationError) => {
                     // ignore
                 }
-                Err(_e) => {
+                Err(Error::NotEnoughSigsError) => {
                     //keep in escrow and save new partially signed event
-                    self.escrowed_partially_signed
-                        .add(&id, signed_event.clone())?;
+                    let to_add = SignedEventMessage {
+                        signatures: without_duplicates,
+                        ..signed_event.to_owned()
+                    };
+                    self.escrowed_partially_signed.add(&id, to_add)?;
+                }
+                Err(e) => {
+                    // keep in escrow
                 }
             }
         } else {

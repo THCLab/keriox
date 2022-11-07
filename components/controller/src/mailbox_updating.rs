@@ -79,16 +79,17 @@ impl IdentifierController {
 
     pub async fn process_groups_mailbox(
         &self,
+        groups: Vec<IdentifierPrefix>,
         mb: &MailboxResponse,
         from_index: &MailboxReminder,
     ) -> Result<Vec<ActionRequired>, ControllerError> {
-        Ok(futures::stream::iter(&self.groups)
+        Ok(futures::stream::iter(&groups)
             .then(|group_id| self.process_group_mailbox(mb, group_id, from_index))
             .try_concat()
             .await?)
     }
 
-    async fn process_group_mailbox(
+    pub async fn process_group_mailbox(
         &self,
         mb: &MailboxResponse,
         group_id: &IdentifierPrefix,
@@ -167,7 +168,9 @@ impl IdentifierController {
 
         match to_publish {
             Some(to_publish) => {
-                let witnesses = self.source.get_current_witness_list(&id)?;
+                let witnesses = self
+                    .source
+                    .get_witnesses_at_event(&to_publish.event_message)?;
                 self.source.publish(&witnesses, &to_publish).await
             }
             None => Ok(()),

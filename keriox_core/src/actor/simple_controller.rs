@@ -441,11 +441,18 @@ impl<K: KeyManager> SimpleController<K> {
                 .public_keys
                 .iter()
                 .position(|pk| pk == own_pk),
-            EventData::Rot(rot) => rot
-                .key_config
-                .public_keys
-                .iter()
-                .position(|pk| pk == own_pk),
+            EventData::Rot(rot) => {
+                let own_npk = &self
+                    .get_state()?
+                    .ok_or(Error::SemanticError("Unknown state".into()))?
+                    .current
+                    .next_keys_data
+                    .next_key_hashes[0];
+                rot.key_config
+                    .public_keys
+                    .iter()
+                    .position(|pk| own_npk.verify_binding(pk.to_str().as_bytes()))
+            }
             EventData::Dip(dip) => dip
                 .inception_data
                 .key_config

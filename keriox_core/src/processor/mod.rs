@@ -84,7 +84,7 @@ impl EventProcessor {
     #[cfg(feature = "query")]
     pub fn process_op_reply(&self, rpy: &SignedReply) -> Result<(), Error> {
         match rpy.reply.get_route() {
-            ReplyRoute::Ksn(_, _) => match self.validator.process_signed_ksn_reply(&rpy) {
+            ReplyRoute::Ksn(_, _) => match self.validator.process_signed_ksn_reply(rpy) {
                 Ok(_) => {
                     self.db
                         .update_accepted_reply(rpy.clone(), &rpy.reply.get_prefix())?;
@@ -130,7 +130,7 @@ impl EventProcessor {
             }
             Notice::NontransferableRct(rct) => {
                 let id = &rct.body.event.prefix;
-                match self.validator.validate_witness_receipt(&rct) {
+                match self.validator.validate_witness_receipt(rct) {
                     Ok(_) => {
                         self.db.add_receipt_nt(rct.to_owned(), id)?;
                         self.publisher.notify(&Notification::ReceiptAccepted)
@@ -141,7 +141,7 @@ impl EventProcessor {
                     Err(e) => Err(e),
                 }
             }
-            Notice::TransferableRct(vrc) => match self.validator.validate_validator_receipt(&vrc) {
+            Notice::TransferableRct(vrc) => match self.validator.validate_validator_receipt(vrc) {
                 Ok(_) => {
                     self.db.add_receipt_t(vrc.clone(), &vrc.body.event.prefix)?;
                     self.publisher.notify(&Notification::ReceiptAccepted)

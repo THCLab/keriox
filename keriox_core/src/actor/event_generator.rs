@@ -59,7 +59,9 @@ pub fn incept_with_next_hashes(
     match signature_threshold {
         SignatureThreshold::Simple(t) => {
             if t > &(public_keys.len() as u64) {
-                return Err(Error::EventGenerationError("Improper threshold".into()));
+                return Err(Error::EventGenerationError(
+                    "Improper signature threshold".into(),
+                ));
             }
         }
         SignatureThreshold::Weighted(w) => {
@@ -68,10 +70,19 @@ pub fn incept_with_next_hashes(
                 WeightedThreshold::Multi(m) => m.length(),
             };
             if length > public_keys.len() {
-                return Err(Error::EventGenerationError("Improper threshold".into()));
+                return Err(Error::EventGenerationError(
+                    "Improper signature threshold".into(),
+                ));
             }
         }
     };
+
+    if witness_threshold > witnesses.len() as u64 || witness_threshold < 0 {
+        return Err(Error::EventGenerationError(
+            "Improper witness threshold".into(),
+        ));
+    };
+
     let event_builder = match delegator_id {
         Some(delegator) => EventMsgBuilder::new(EventTypeTag::Dip).with_delegator(delegator),
         None => EventMsgBuilder::new(EventTypeTag::Icp),
