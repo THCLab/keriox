@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use keri::{
     actor::simple_controller::PossibleResponse,
@@ -12,23 +12,35 @@ use super::{Transport, TransportError};
 
 #[async_trait::async_trait]
 pub trait TestActor {
-    async fn send_message(&self, msg: Message) -> Result<(), ActorError>;
-    async fn send_query(&self, query: SignedQuery) -> Result<PossibleResponse, ActorError>;
-    async fn request_loc_scheme(&self, eid: IdentifierPrefix) -> Result<Vec<Op>, ActorError>;
+    async fn send_message(&self, msg: Message) -> Result<(), TestActorError>;
+    async fn send_query(&self, query: SignedQuery) -> Result<PossibleResponse, TestActorError>;
+    async fn request_loc_scheme(&self, eid: IdentifierPrefix) -> Result<Vec<Op>, TestActorError>;
     async fn request_end_role(
         &self,
         cid: IdentifierPrefix,
         role: Role,
         eid: IdentifierPrefix,
-    ) -> Result<Vec<Op>, ActorError>;
+    ) -> Result<Vec<Op>, TestActorError>;
 }
 
-pub struct ActorError;
+pub struct TestActorError;
 
+pub type TestActorMap = HashMap<(url::Host, u16), Box<dyn TestActor + Send + Sync>>;
+
+#[derive(Clone)]
 pub struct TestTransport {
-    actors: HashMap<(url::Host, u16), Box<dyn TestActor + Send + Sync>>,
+    actors: Arc<TestActorMap>,
 }
 
+impl TestTransport {
+    pub fn new(actors: TestActorMap) -> Self {
+        Self {
+            actors: Arc::new(actors),
+        }
+    }
+}
+
+/// Used in tests to connect directly to actors without going through the network.
 #[async_trait::async_trait]
 impl Transport for TestTransport {
     async fn send_message(&self, loc: LocationScheme, msg: Message) -> Result<(), TransportError> {

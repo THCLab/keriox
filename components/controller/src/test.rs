@@ -6,13 +6,13 @@ use keri::{
     actor::prelude::Message,
     derivation::{basic::Basic, self_signing::SelfSigning},
     oobi::LocationScheme,
-    prefix::{BasicPrefix, IdentifierPrefix},
+    prefix::IdentifierPrefix,
     signer::{CryptoBox, KeyManager},
 };
-use keri_transport::test::TestTransport;
+use keri_transport::test::{TestActorMap, TestTransport};
 use tempfile::Builder;
 use url::Host;
-use witness::Witness;
+use witness::WitnessListener;
 
 use super::{error::ControllerError, identifier_controller::IdentifierController, Controller};
 use crate::{mailbox_updating::ActionRequired, utils::OptionalConfig};
@@ -100,47 +100,44 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     let initial_config = OptionalConfig::init().with_db_path(root.into_path());
     let initial_config2 = OptionalConfig::init().with_db_path(root2.into_path());
 
-    // Tests assumses that witness DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA is listening on http://127.0.0.1:3232
-    // It can be run from components/witness using command:
-    // cargo run -- -c ./src/witness.json
-
     let witness = {
-        let seed = todo!();
+        let seed = "ArwXoACJgOleVZ2PY7kXn7rA0II0mHYDhc6WrBH8fDAc";
         let witness_root = Builder::new().prefix("test-wit1-db").tempdir().unwrap();
-        let oobi_root = Builder::new()
-            .prefix("test-wit1-db_oobi")
-            .tempdir()
-            .unwrap();
-        Witness::setup(
-            url::Url::parse("http://witness1/").unwrap(),
+        WitnessListener::setup(
+            url::Url::parse("http://witness1:3232/").unwrap(), // not used
+            None,
             witness_root.path(),
-            &oobi_root.path(),
-            Some(seed.into()),
+            Some(seed.to_string()),
         )?
     };
 
-    let transport = TestTransport {
-        actors: {
-            let mut actors = HashMap::new();
-            actors.insert((Host::Domain("some"), 1234), Box::new(witness));
-            actors
-        },
-    };
-
-    let witness_id: IdentifierPrefix = "DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA"
-        .parse()
-        .unwrap();
-    let witness_id_basic: BasicPrefix = "DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA"
-        .parse()
-        .unwrap();
+    let witness_id_basic = witness.get_prefix();
+    let witness_id = IdentifierPrefix::Basic(witness_id_basic.clone());
+    assert_eq!(
+        witness_id.to_string(),
+        "DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA"
+    );
     let wit_location = LocationScheme {
         eid: witness_id,
         scheme: keri::oobi::Scheme::Http,
-        url: Url::parse("http://127.0.0.1:3232").unwrap(),
+        url: Url::parse("http://witness1:3232").unwrap(),
     };
-    println!("Init controllers");
-    let controller = Arc::new(Controller::new(Some(initial_config))?);
-    let controller2 = Arc::new(Controller::new(Some(initial_config2))?);
+
+    let mut actors: TestActorMap = HashMap::new();
+    actors.insert(
+        (Host::Domain("witness1".to_string()), 3232),
+        Box::new(witness),
+    );
+    let transport = TestTransport::new(actors);
+
+    let controller = Arc::new(Controller::with_transport(
+        Some(initial_config),
+        Box::new(transport.clone()),
+    )?);
+    let controller2 = Arc::new(Controller::with_transport(
+        Some(initial_config2),
+        Box::new(transport),
+    )?);
     let km1 = CryptoBox::new()?;
     let km2 = CryptoBox::new()?;
 
@@ -148,20 +145,17 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
         let pk = Basic::Ed25519.derive(km1.public_key());
         let npk = Basic::Ed25519.derive(km1.next_public_key());
 
-        println!("Start incept");
         let icp_event = controller
             .incept(vec![pk], vec![npk], vec![wit_location.clone()], 1)
             .await?;
         let signature = SelfSigning::Ed25519Sha512.derive(km1.sign(icp_event.as_bytes())?);
 
-        println!("Finalize inception");
         let incepted_identifier = controller
             .finalize_inception(icp_event.as_bytes(), &signature)
             .await?;
         IdentifierController::new(incepted_identifier, controller.clone())
     };
     // Quering mailbox to get receipts
-    println!("Querying own mailbox to get receipts");
     let query = identifier1.query_own_mailbox(&[witness_id_basic.clone()])?;
 
     for qry in query {
