@@ -116,3 +116,9 @@ fn test_from_bytes_to_text() {
         "MP__".to_string()
     );
 }
+
+#[test]
+fn test_adjust_with_num() {
+    assert_eq!(adjust_with_num(2, 4), "AAAC");
+    assert_eq!(adjust_with_num(27, 6), "AAAAAb");
+}

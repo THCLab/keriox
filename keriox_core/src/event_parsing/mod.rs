@@ -5,7 +5,7 @@ use serde::Deserialize;
 pub mod codes;
 pub mod error;
 
-use self::{codes::group::GroupCode, path::MaterialPath, parsing::from_bytes_to_text};
+use self::{codes::group::GroupCode, parsing::from_bytes_to_text, path::MaterialPath};
 #[cfg(feature = "query")]
 use crate::query::{
     query_event::{QueryEvent, SignedQuery},

@@ -1,4 +1,4 @@
-use crate::{error::Error, event_parsing::parsing::num_to_b64};
+use crate::error::Error;
 use serde::{Deserialize, Serialize};
 use std::{convert::TryFrom, fmt::Display};
 
@@ -201,22 +201,6 @@ impl PayloadType {
             _ => todo!(),
         }
     }
-
-    pub fn adjust_with_num(&self, sn: u16) -> String {
-        let expected_length = self.index_length();
-        if expected_length > 0 {
-            let i = num_to_b64(sn);
-            if i.len() < expected_length {
-                // refill string to have proper size
-                let missing_part = "A".repeat(expected_length - i.len());
-                [self.to_string(), missing_part, i].join("")
-            } else {
-                [self.to_string(), i].join("")
-            }
-        } else {
-            self.to_string()
-        }
-    }
 }
 
 impl TryFrom<&str> for PayloadType {
@@ -325,10 +309,4 @@ impl Display for PayloadType {
             Self::MZ => f.write_str("-Z"),
         }
     }
-}
-
-#[test]
-fn test_adjust_with_num() {
-    assert_eq!(PayloadType::MA.adjust_with_num(2), "-AAC");
-    assert_eq!(PayloadType::MA.adjust_with_num(27), "-AAb");
 }

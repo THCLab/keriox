@@ -1,7 +1,7 @@
 use base64::URL_SAFE;
 use serde::Deserialize;
 
-use super::payload_size::PayloadType;
+use super::{parsing::adjust_with_num, payload_size::PayloadType};
 use crate::error::Error;
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
@@ -53,7 +53,12 @@ impl MaterialPath {
             }
         };
         let size = decoded_base.len() / 3;
-        [code.adjust_with_num(size as u16), self.base.clone()].join("")
+        [
+            code.to_string(),
+            adjust_with_num(size as u16, code.index_length()),
+            self.base.clone(),
+        ]
+        .join("")
     }
 
     pub fn to_raw(&self) -> Result<Vec<u8>, Error> {
