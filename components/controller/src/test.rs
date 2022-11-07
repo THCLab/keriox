@@ -115,7 +115,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     let witness_id = IdentifierPrefix::Basic(witness_id_basic.clone());
     assert_eq!(
         witness_id.to_string(),
-        "DErocgXD2RGSyvn3MObcx59jeOsEQhv2TqHirVkzrp0Q"
+        "BErocgXD2RGSyvn3MObcx59jeOsEQhv2TqHirVkzrp0Q"
     );
     let wit_location = LocationScheme {
         eid: witness_id,
