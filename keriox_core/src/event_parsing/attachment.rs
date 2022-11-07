@@ -13,10 +13,11 @@ use crate::{
     event::sections::seal::{EventSeal, SourceSeal},
     event_message::signature::Signature,
     event_parsing::{parsing::b64_to_num, payload_size::PayloadType},
-    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+    prefix::AttachedSignaturePrefix,
 };
 
 use super::{
+    codes::group::GroupCode,
     path::MaterialPath,
     prefix::{
         attached_signature, attached_sn, basic_prefix, prefix, self_addressing_prefix,
@@ -24,23 +25,6 @@ use super::{
     },
     Attachment,
 };
-
-/// returns attached source seals
-fn source_seal(s: &[u8]) -> nom::IResult<&[u8], Vec<SourceSeal>> {
-    let (rest, sc) = b64_count(s)?;
-
-    let (rest, attachment) = count(
-        nom::sequence::tuple((attached_sn, self_addressing_prefix)),
-        sc as usize,
-    )(rest)?;
-    Ok((
-        rest,
-        attachment
-            .into_iter()
-            .map(|(sn, digest)| SourceSeal::new(sn, digest))
-            .collect(),
-    ))
-}
 
 fn event_seal(s: &[u8]) -> nom::IResult<&[u8], EventSeal> {
     let (rest, identifier) = prefix(s)?;
@@ -64,50 +48,11 @@ pub(crate) fn b64_count(s: &[u8]) -> nom::IResult<&[u8], u16> {
     Ok((rest, t?))
 }
 
-fn signatures(s: &[u8]) -> nom::IResult<&[u8], Vec<AttachedSignaturePrefix>> {
-    let (rest, sc) = b64_count(s)?;
-    count(attached_signature, sc as usize)(rest)
-}
-
-fn couplets(s: &[u8]) -> nom::IResult<&[u8], Vec<(BasicPrefix, SelfSigningPrefix)>> {
-    let (rest, sc) = b64_count(s)?;
-
-    count(
-        nom::sequence::tuple((basic_prefix, self_signing_prefix)),
-        sc as usize,
-    )(rest)
-}
-
 fn indexed_signatures(input: &[u8]) -> nom::IResult<&[u8], Vec<AttachedSignaturePrefix>> {
     attachment(input).map(|(rest, att)| match att {
         Attachment::AttachedSignatures(sigs) => Ok((rest, sigs)),
         _ => Err(nom::Err::Error((rest, ErrorKind::IsNot))),
     })?
-}
-
-fn identifier_signatures(
-    s: &[u8],
-) -> nom::IResult<&[u8], Vec<(IdentifierPrefix, Vec<AttachedSignaturePrefix>)>> {
-    let (rest, sc) = b64_count(s)?;
-    count(
-        nom::sequence::tuple((prefix, indexed_signatures)),
-        sc as usize,
-    )(rest)
-}
-
-fn seal_signatures(
-    s: &[u8],
-) -> nom::IResult<&[u8], Vec<(EventSeal, Vec<AttachedSignaturePrefix>)>> {
-    let (rest, sc) = b64_count(s)?;
-    count(
-        nom::sequence::tuple((event_seal, indexed_signatures)),
-        sc as usize,
-    )(rest)
-}
-
-fn first_seen_sn(s: &[u8]) -> nom::IResult<&[u8], Vec<(u64, DateTime<FixedOffset>)>> {
-    let (rest, sc) = b64_count(s)?;
-    count(nom::sequence::tuple((attached_sn, timestamp)), sc as usize)(rest)
 }
 
 pub fn timestamp(s: &[u8]) -> nom::IResult<&[u8], DateTime<FixedOffset>> {
@@ -160,80 +105,95 @@ pub fn material_path(s: &[u8]) -> nom::IResult<&[u8], MaterialPath> {
 }
 
 pub fn attachment(s: &[u8]) -> nom::IResult<&[u8], Attachment> {
-    let (rest, payload_type) = take(2u8)(s)?;
-    let payload_type: PayloadType = PayloadType::try_from(
-        std::str::from_utf8(payload_type).map_err(|_e| nom::Err::Failure((s, ErrorKind::IsNot)))?,
-    )
+    let (rest, payload_type) = take(4u8)(s)?;
+    let group_code: GroupCode = std::str::from_utf8(payload_type)
+        .map_err(|_e| nom::Err::Failure((s, ErrorKind::IsNot)))?
+        .parse()
+        .map_err(|_e| nom::Err::Error((s, ErrorKind::IsNot)))?;
     // Can't parse payload type
-    .map_err(|_e| nom::Err::Error((s, ErrorKind::IsNot)))?;
-    match payload_type {
-        PayloadType::MG => {
-            let (rest, source_seals) = source_seal(rest)?;
+    match group_code {
+        GroupCode::IndexedControllerSignatures(n) => {
+            let (rest, signatures) = count(attached_signature, n as usize)(rest)?;
+            Ok((rest, Attachment::AttachedSignatures(signatures)))
+        }
+        GroupCode::IndexedWitnessSignatures(n) => {
+            let (rest, signatures) = count(attached_signature, n as usize)(rest)?;
+            Ok((rest, Attachment::AttachedWitnessSignatures(signatures)))
+        }
+        GroupCode::NontransferableReceiptCouples(n) => {
+            let (rest, receipts) = count(
+                nom::sequence::tuple((basic_prefix, self_signing_prefix)),
+                n as usize,
+            )(rest)?;
+            Ok((rest, Attachment::ReceiptCouplets(receipts)))
+        }
+        GroupCode::TransferableReceiptQuadruples(n) => {
+            let (rest, quadruple) = count(
+                nom::sequence::tuple((attached_sn, self_addressing_prefix)),
+                n as usize,
+            )(rest)?;
+            let source_seals = quadruple
+                .into_iter()
+                .map(|(sn, digest)| SourceSeal::new(sn, digest))
+                .collect();
             Ok((rest, Attachment::SealSourceCouplets(source_seals)))
         }
-        PayloadType::MF => {
-            let (rest, event_seals) = seal_signatures(rest)?;
-            Ok((rest, Attachment::SealSignaturesGroups(event_seals)))
+        GroupCode::FirstSeenReplyCouples(n) => {
+            let (rest, first_seen_replys) =
+                count(nom::sequence::tuple((attached_sn, timestamp)), n as usize)(rest)?;
+            Ok((rest, Attachment::FirstSeenReply(first_seen_replys)))
         }
-        PayloadType::MA => {
-            let (rest, sigs) = signatures(rest)?;
-            Ok((rest, Attachment::AttachedSignatures(sigs)))
+        GroupCode::TransferableIndexedSigGroups(n) => {
+            let (rest, signatures) = count(
+                nom::sequence::tuple((event_seal, indexed_signatures)),
+                n as usize,
+            )(rest)?;
+            Ok((rest, Attachment::SealSignaturesGroups(signatures)))
         }
-        PayloadType::MB => {
-            let (rest, sigs) = signatures(rest)?;
-            Ok((rest, Attachment::AttachedWitnessSignatures(sigs)))
+        GroupCode::LastEstSignaturesGroups(n) => {
+            let (rest, last_established_signature) = count(
+                nom::sequence::tuple((prefix, indexed_signatures)),
+                n as usize,
+            )(rest)?;
+            Ok((
+                rest,
+                Attachment::LastEstSignaturesGroups(last_established_signature),
+            ))
         }
-        PayloadType::MC => {
-            let (rest, couplets) = couplets(rest)?;
-            Ok((rest, Attachment::ReceiptCouplets(couplets)))
-        }
-        PayloadType::MH => {
-            let (rest, identifier_sigs) = identifier_signatures(rest)?;
-            Ok((rest, Attachment::LastEstSignaturesGroups(identifier_sigs)))
-        }
-        PayloadType::MV => {
-            let (rest, sc) = b64_count(rest)?;
+        GroupCode::Frame(n) => {
             // sc * 4 is all attachments length
-            match nom::bytes::complete::take(sc * 4)(rest) {
+            match nom::bytes::complete::take(n * 4)(rest) {
                 Ok((rest, total)) => {
                     let (extra, atts) = many0(attachment)(total)?;
                     if !extra.is_empty() {
                         // something is wrong, should not happend
                         Err(nom::Err::Incomplete(Needed::Size(
-                            (sc * 4) as usize - rest.len(),
+                            (n * 4) as usize - rest.len(),
                         )))
                     } else {
                         Ok((rest, Attachment::Frame(atts)))
                     }
                 }
                 Err(nom::Err::Error((rest, _))) => Err(nom::Err::Incomplete(Needed::Size(
-                    (sc * 4) as usize - rest.len(),
+                    (n * 4) as usize - rest.len(),
                 ))),
                 Err(e) => Err(e),
             }
         }
-        PayloadType::ME => {
-            let (rest, sc) = first_seen_sn(rest)?;
-            Ok((rest, Attachment::FirstSeenReply(sc)))
-        }
-        PayloadType::ML => {
-            let (rest, sc) = b64_count(rest)?;
-            match nom::bytes::complete::take(sc * 4)(rest) {
-                Ok((rest, total)) => {
-                    let (extra, mp) = material_path(total)?;
-                    let (_extra, attachment) = many0(attachment)(extra)?;
-                    let sigs = attachment
-                        .into_iter()
-                        .map(|att| Vec::<Signature>::try_from(att).unwrap())
-                        .flatten()
-                        .collect();
+        GroupCode::PathedMaterialQuadruplet(n) => match nom::bytes::complete::take(n * 4)(rest) {
+            Ok((rest, total)) => {
+                let (extra, mp) = material_path(total)?;
+                let (_extra, attachment) = many0(attachment)(extra)?;
+                let sigs = attachment
+                    .into_iter()
+                    .map(|att| Vec::<Signature>::try_from(att).unwrap())
+                    .flatten()
+                    .collect();
 
-                    Ok((rest, Attachment::PathedMaterialQuadruplet(mp, sigs)))
-                }
-                Err(e) => Err(e),
+                Ok((rest, Attachment::PathedMaterialQuadruplet(mp, sigs)))
             }
-        }
-        _ => todo!(),
+            Err(e) => Err(e),
+        },
     }
 }
 
@@ -249,7 +209,7 @@ fn test_b64_count() {
 
 #[test]
 fn test_sigs() {
-    use crate::prefix::AttachedSignaturePrefix;
+    use crate::prefix::{AttachedSignaturePrefix, SelfSigningPrefix};
 
     assert_eq!(
         attachment("-AABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".as_bytes()),

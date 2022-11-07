@@ -15,6 +15,8 @@ pub enum GroupCode {
     TransferableIndexedSigGroups(u16),
     LastEstSignaturesGroups(u16),
     Frame(u16),
+    // it's from cesr-proof
+    PathedMaterialQuadruplet(u16),
 }
 
 impl GroupCode {
@@ -30,7 +32,7 @@ impl GroupCode {
         self.code_len() + self.index_len()
     }
 
-    fn to_str(&self) -> String {
+    pub fn to_str(&self) -> String {
         let (code, count) = match self {
             GroupCode::IndexedControllerSignatures(count) => ("-A", count),
             GroupCode::IndexedWitnessSignatures(count) => ("-B", count),
@@ -40,6 +42,7 @@ impl GroupCode {
             GroupCode::TransferableReceiptQuadruples(count) => ("-G", count),
             GroupCode::LastEstSignaturesGroups(count) => ("-H", count),
             GroupCode::Frame(len) => ("-V", len),
+            GroupCode::PathedMaterialQuadruplet(len) => ("-L", len),
         };
         [code, &adjust_with_num(count.to_owned(), self.index_len())].join("")
     }
@@ -63,6 +66,7 @@ impl FromStr for GroupCode {
             "-H" => Ok(Self::LastEstSignaturesGroups(count)),
             // todo why not in cesr docs?
             "-G" => Ok(Self::TransferableReceiptQuadruples(count)),
+            "-L" => Ok(Self::PathedMaterialQuadruplet(count)),
             "-U" => todo!(),
             "-V" => Ok(Self::Frame(count)),
             "-W" => todo!(),

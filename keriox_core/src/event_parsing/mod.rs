@@ -5,7 +5,7 @@ use serde::Deserialize;
 pub mod codes;
 pub mod error;
 
-use self::{parsing::from_bytes_to_text, path::MaterialPath};
+use self::{codes::group::GroupCode, path::MaterialPath, parsing::from_bytes_to_text};
 #[cfg(feature = "query")]
 use crate::query::{
     query_event::{QueryEvent, SignedQuery},
@@ -59,13 +59,16 @@ pub enum Attachment {
 
 impl Attachment {
     pub fn to_cesr(&self) -> String {
-        let (payload_type, att_len, serialized_attachment) = match self {
+        let (code, serialized_attachment) = match self {
             Attachment::SealSourceCouplets(sources) => {
                 let serialzied_sources = sources.iter().fold("".into(), |acc, s| {
                     [acc, Self::pack_sn(s.sn), s.digest.to_str()].join("")
                 });
 
-                (PayloadType::MG, sources.len(), serialzied_sources)
+                (
+                    GroupCode::TransferableReceiptQuadruples(sources.len() as u16),
+                    serialzied_sources,
+                )
             }
             Attachment::SealSignaturesGroups(seals_signatures) => {
                 let serialized_seals =
@@ -81,26 +84,38 @@ impl Attachment {
                             ]
                             .join("")
                         });
-                (PayloadType::MF, seals_signatures.len(), serialized_seals)
+                (
+                    GroupCode::TransferableIndexedSigGroups(seals_signatures.len() as u16),
+                    serialized_seals,
+                )
             }
             Attachment::AttachedSignatures(sigs) => {
                 let serialized_sigs = sigs
                     .iter()
                     .fold("".into(), |acc, sig| [acc, sig.to_str()].join(""));
-                (PayloadType::MA, sigs.len(), serialized_sigs)
+                (
+                    GroupCode::IndexedControllerSignatures(sigs.len() as u16),
+                    serialized_sigs,
+                )
             }
             Attachment::AttachedWitnessSignatures(sigs) => {
                 let serialized_sigs = sigs
                     .iter()
                     .fold("".into(), |acc, sig| [acc, sig.to_str()].join(""));
-                (PayloadType::MB, sigs.len(), serialized_sigs)
+                (
+                    GroupCode::IndexedWitnessSignatures(sigs.len() as u16),
+                    serialized_sigs,
+                )
             }
             Attachment::ReceiptCouplets(couplets) => {
                 let packed_couplets = couplets.iter().fold("".into(), |acc, (bp, sp)| {
                     [acc, bp.to_str(), sp.to_str()].join("")
                 });
 
-                (PayloadType::MC, couplets.len(), packed_couplets)
+                (
+                    GroupCode::NontransferableReceiptCouples(couplets.len() as u16),
+                    packed_couplets,
+                )
             }
             Attachment::LastEstSignaturesGroups(signers) => {
                 let packed_signers = signers.iter().fold("".to_string(), |acc, (signer, sigs)| {
@@ -111,15 +126,17 @@ impl Attachment {
                     ]
                     .concat()
                 });
-                (PayloadType::MH, signers.len(), packed_signers)
+                (
+                    GroupCode::LastEstSignaturesGroups(signers.len() as u16),
+                    packed_signers,
+                )
             }
             Attachment::Frame(att) => {
                 let packed_attachments = att
                     .iter()
                     .fold("".to_string(), |acc, att| [acc, att.to_cesr()].concat());
                 (
-                    PayloadType::MV,
-                    packed_attachments.len(),
+                    GroupCode::Frame(packed_attachments.len() as u16),
                     packed_attachments,
                 )
             }
@@ -134,7 +151,10 @@ impl Attachment {
                         .join("")
                     });
 
-                (PayloadType::ME, couplets.len(), packed_couplets)
+                (
+                    GroupCode::FirstSeenReplyCouples(couplets.len() as u16),
+                    packed_couplets,
+                )
             }
             Attachment::PathedMaterialQuadruplet(path, signatures) => {
                 let attachments = path.to_cesr()
@@ -142,14 +162,13 @@ impl Attachment {
                         .iter()
                         .map(|s| s.to_cesr())
                         .fold(String::new(), |a, b| a + &b);
-                (PayloadType::ML, attachments.len() / 4, attachments)
+                (
+                    GroupCode::PathedMaterialQuadruplet((attachments.len() / 4) as u16),
+                    attachments,
+                )
             }
         };
-        [
-            payload_type.adjust_with_num(att_len as u16),
-            serialized_attachment,
-        ]
-        .join("")
+        [code.to_str(), serialized_attachment].join("")
     }
 
     fn pack_sn(sn: u64) -> String {
