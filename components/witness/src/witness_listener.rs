@@ -43,12 +43,30 @@ impl WitnessListener {
         HttpServer::new(move || {
             App::new()
                 .app_data(state.clone())
-                .service(http_handlers::get_eid_oobi)
-                .service(http_handlers::get_cid_oobi)
-                .service(http_handlers::process_notice)
-                .service(http_handlers::process_query)
-                .service(http_handlers::process_reply)
-                .service(http_handlers::process_exchange)
+                .route(
+                    "/oobi/{id}",
+                    actix_web::web::get().to(http_handlers::get_eid_oobi),
+                )
+                .route(
+                    "/oobi/{cid}/{role}/{eid}",
+                    actix_web::web::get().to(http_handlers::get_cid_oobi),
+                )
+                .route(
+                    "/process",
+                    actix_web::web::post().to(http_handlers::process_notice),
+                )
+                .route(
+                    "/query",
+                    actix_web::web::post().to(http_handlers::process_query),
+                )
+                .route(
+                    "/register",
+                    actix_web::web::post().to(http_handlers::process_reply),
+                )
+                .route(
+                    "/forward",
+                    actix_web::web::post().to(http_handlers::process_exchange),
+                )
         })
         .bind((host, port))
         .unwrap()
@@ -60,13 +78,99 @@ impl WitnessListener {
     }
 }
 
+mod test {
+    use actix_web::body::MessageBody;
+    use keri::{
+        actor::{
+            parse_op_stream,
+            simple_controller::{parse_response, PossibleResponse},
+        },
+        event_message::signed_event_message::{Message, Op},
+        oobi::Role,
+        prefix::IdentifierPrefix,
+        query::query_event::SignedQuery,
+    };
+    use keri_transport::test::TestActorError;
+
+    #[async_trait::async_trait]
+    impl keri_transport::test::TestActor for super::WitnessListener {
+        async fn send_message(&self, msg: Message) -> Result<(), TestActorError> {
+            let payload = String::from_utf8(msg.to_cesr().unwrap()).unwrap();
+            let data = actix_web::web::Data::new(self.witness_data.clone());
+            match msg {
+                Message::Notice(_) => {
+                    super::http_handlers::process_notice(payload, data)
+                        .await
+                        .map_err(|_| TestActorError)?;
+                }
+                Message::Op(op) => match op {
+                    Op::Query(_) => {
+                        super::http_handlers::process_query(payload, data)
+                            .await
+                            .map_err(|_| TestActorError)?;
+                    }
+                    Op::Reply(_) => {
+                        super::http_handlers::process_reply(payload, data)
+                            .await
+                            .map_err(|_| TestActorError)?;
+                    }
+                    Op::Exchange(_) => {
+                        super::http_handlers::process_exchange(payload, data)
+                            .await
+                            .map_err(|_| TestActorError)?;
+                    }
+                },
+            }
+
+            Ok(())
+        }
+        async fn send_query(&self, query: SignedQuery) -> Result<PossibleResponse, TestActorError> {
+            let payload =
+                String::from_utf8(Message::Op(Op::Query(query)).to_cesr().unwrap()).unwrap();
+            let data = actix_web::web::Data::new(self.witness_data.clone());
+            let resp = super::http_handlers::process_query(payload, data)
+                .await
+                .map_err(|_| TestActorError)?;
+            let resp = resp.into_body().try_into_bytes().unwrap();
+            let resp = String::from_utf8(resp.into()).unwrap();
+            let resp = parse_response(&resp).unwrap();
+            Ok(resp)
+        }
+        async fn request_loc_scheme(
+            &self,
+            eid: IdentifierPrefix,
+        ) -> Result<Vec<Op>, TestActorError> {
+            let data = actix_web::web::Data::new(self.witness_data.clone());
+            let resp = super::http_handlers::get_eid_oobi(eid.into(), data)
+                .await
+                .map_err(|_| TestActorError)?;
+            let resp = resp.into_body().try_into_bytes().unwrap();
+            let resp = parse_op_stream(resp.as_ref()).unwrap();
+            Ok(resp)
+        }
+        async fn request_end_role(
+            &self,
+            cid: IdentifierPrefix,
+            role: Role,
+            eid: IdentifierPrefix,
+        ) -> Result<Vec<Op>, TestActorError> {
+            let data = actix_web::web::Data::new(self.witness_data.clone());
+            let resp = super::http_handlers::get_cid_oobi((cid, role, eid).into(), data)
+                .await
+                .map_err(|_| TestActorError)?;
+            let resp = resp.into_body().try_into_bytes().unwrap();
+            let resp = parse_op_stream(resp.as_ref()).unwrap();
+            Ok(resp)
+        }
+    }
+}
+
 pub mod http_handlers {
     use std::sync::Arc;
 
     use actix_web::{
-        get,
         http::{header::ContentType, StatusCode},
-        post, web, HttpResponse, Responder, ResponseError,
+        web, HttpResponse, ResponseError,
     };
     use derive_more::{Display, Error, From};
     use itertools::Itertools;
@@ -80,11 +184,10 @@ pub mod http_handlers {
 
     use crate::witness::{Witness, WitnessError};
 
-    #[get("/oobi/{id}")]
     pub async fn get_eid_oobi(
         eid: web::Path<IdentifierPrefix>,
         data: web::Data<Arc<Witness>>,
-    ) -> Result<impl Responder, ApiError> {
+    ) -> Result<HttpResponse, ApiError> {
         let loc_scheme = data.get_loc_scheme_for_id(&eid)?.unwrap_or(vec![]);
         let oobis: Vec<u8> = loc_scheme
             .into_iter()
@@ -105,11 +208,10 @@ pub mod http_handlers {
             .body(String::from_utf8(oobis).unwrap()))
     }
 
-    #[get("/oobi/{cid}/{role}/{eid}")]
     pub async fn get_cid_oobi(
         path: web::Path<(IdentifierPrefix, Role, IdentifierPrefix)>,
         data: web::Data<Arc<Witness>>,
-    ) -> Result<impl Responder, ApiError> {
+    ) -> Result<HttpResponse, ApiError> {
         let (cid, role, eid) = path.into_inner();
 
         let end_role = data.oobi_manager.get_end_role(&cid, role)?;
@@ -139,11 +241,10 @@ pub mod http_handlers {
             .body(String::from_utf8(res).unwrap()))
     }
 
-    #[post("/process")]
     pub async fn process_notice(
         post_data: String,
         data: web::Data<Arc<Witness>>,
-    ) -> Result<impl Responder, ApiError> {
+    ) -> Result<HttpResponse, ApiError> {
         println!("\nGot notice to process: \n{}", post_data);
         data.parse_and_process_notices(post_data.as_bytes())?;
         Ok(HttpResponse::Ok()
@@ -151,11 +252,10 @@ pub mod http_handlers {
             .body(()))
     }
 
-    #[post("/query")]
     pub async fn process_query(
         post_data: String,
         data: web::Data<Arc<Witness>>,
-    ) -> Result<impl Responder, ApiError> {
+    ) -> Result<HttpResponse, ApiError> {
         println!("\nGot query to process: \n{}", post_data);
         let resp = data
             .parse_and_process_queries(post_data.as_bytes())?
@@ -168,11 +268,10 @@ pub mod http_handlers {
             .body(resp))
     }
 
-    #[post("/register")]
     pub async fn process_reply(
         post_data: String,
         data: web::Data<Arc<Witness>>,
-    ) -> Result<impl Responder, ApiError> {
+    ) -> Result<HttpResponse, ApiError> {
         println!("\nGot reply to process: \n{}", post_data);
         data.parse_and_process_replies(post_data.as_bytes())?;
 
@@ -181,11 +280,10 @@ pub mod http_handlers {
             .body(()))
     }
 
-    #[post("/forward")]
     pub async fn process_exchange(
         post_data: String,
         data: web::Data<Arc<Witness>>,
-    ) -> Result<impl Responder, ApiError> {
+    ) -> Result<HttpResponse, ApiError> {
         println!("\nGot exchange to process: \n{}", post_data);
         data.parse_and_process_exchanges(post_data.as_bytes())?;
 

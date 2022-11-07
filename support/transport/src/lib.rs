@@ -7,6 +7,7 @@ use keri::{
 };
 
 pub mod default;
+pub mod test;
 
 /// Transport trait allows customizing behavior of actors when it comes to making net requests.
 /// Actors take a `dyn Transport` argument in `new` (dependency injection pattern).

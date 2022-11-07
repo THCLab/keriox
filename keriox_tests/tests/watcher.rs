@@ -1,10 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use keri::{
-    actor::{
-        parse_event_stream,
-        simple_controller::{PossibleResponse, SimpleController},
-    },
+    actor::simple_controller::{PossibleResponse, SimpleController},
     database::{escrow::EscrowDb, SledEventDatabase},
     derivation::self_signing::SelfSigning,
     error::Error,
