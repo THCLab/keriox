@@ -7,7 +7,7 @@ use crate::{
         codes::{self_addressing::SelfAddressing as CesrSelfAddressing, DerivationCode},
         parsing::from_text_to_bytes,
     },
-    prefix::{Prefix, error::Error as PrefixError},
+    prefix::{error::Error as PrefixError, Prefix},
 };
 
 impl Into<CesrSelfAddressing> for SelfAddressing {

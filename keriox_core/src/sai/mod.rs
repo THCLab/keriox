@@ -1,6 +1,6 @@
 pub mod cesr_adapter;
-mod digest;
 pub mod derivation;
+mod digest;
 
 use self::derivation::SelfAddressing;
 
