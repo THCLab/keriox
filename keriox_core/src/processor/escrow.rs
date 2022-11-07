@@ -256,7 +256,7 @@ impl PartiallySignedEscrow {
                 .filter(|sig| !signatures.contains(sig))
                 .collect::<Vec<_>>();
 
-                signatures.append(&mut without_duplicates.clone());
+            signatures.append(&mut without_duplicates.clone());
 
             let new_event = SignedEventMessage {
                 signatures: signatures,

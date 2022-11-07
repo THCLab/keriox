@@ -1,10 +1,9 @@
 use std::convert::{TryFrom, TryInto};
 
-use base64::URL_SAFE_NO_PAD;
 use chrono::{DateTime, FixedOffset, SecondsFormat};
 use serde::Deserialize;
 
-use self::path::MaterialPath;
+use self::{parsing::from_bytes_to_text, path::MaterialPath};
 #[cfg(feature = "query")]
 use crate::query::{
     query_event::{QueryEvent, SignedQuery},
@@ -154,6 +153,7 @@ impl Attachment {
     fn pack_sn(sn: u64) -> String {
         let payload_type = PayloadType::OA;
         let sn_raw: Vec<u8> = sn.to_be_bytes().into();
+
         // Calculate how many zeros are missing to achieve expected base64 string
         // length. Master code size is expected padding size.
         let missing_zeros =
@@ -164,7 +164,7 @@ impl Attachment {
             .collect();
         [
             payload_type.to_string(),
-            base64::encode_config(sn_vec, URL_SAFE_NO_PAD),
+            from_bytes_to_text(&sn_vec)[2..].to_string(),
         ]
         .join("")
     }
