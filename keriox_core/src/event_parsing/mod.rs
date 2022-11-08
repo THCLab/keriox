@@ -4,6 +4,7 @@ use chrono::{DateTime, FixedOffset, SecondsFormat};
 use serde::Deserialize;
 pub mod codes;
 pub mod error;
+pub mod parsers;
 
 use self::{
     codes::{group::GroupCode, serial_number::pack_sn, DerivationCode},
