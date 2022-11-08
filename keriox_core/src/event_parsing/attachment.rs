@@ -12,12 +12,12 @@ use nom::{
 use crate::{
     event::sections::seal::{EventSeal, SourceSeal},
     event_message::signature::Signature,
-    event_parsing::{parsing::b64_to_num, payload_size::PayloadType},
+    event_parsing::parsing::b64_to_num,
     prefix::AttachedSignaturePrefix,
 };
 
 use super::{
-    codes::group::GroupCode,
+    codes::{group::GroupCode, material_path_codes::MaterialPathCode},
     path::MaterialPath,
     prefix::{
         attached_signature, attached_sn, basic_prefix, prefix, self_addressing_prefix,
@@ -80,19 +80,11 @@ pub fn timestamp(s: &[u8]) -> nom::IResult<&[u8], DateTime<FixedOffset>> {
 }
 
 pub fn material_path(s: &[u8]) -> nom::IResult<&[u8], MaterialPath> {
-    let (more, type_c) = take(2u8)(s)?;
+    let (more, type_c) = take(4u8)(s)?;
 
-    let payload_type = match type_c {
-        b"4A" => PayloadType::A4,
-        b"5A" => PayloadType::A5,
-        b"6A" => PayloadType::A6,
-        _ => {
-            todo!()
-        }
-    };
+    let payload_type: MaterialPathCode = std::str::from_utf8(type_c).unwrap().parse().unwrap();
     // parse amount of quadruplets
-    let (more, soft_part) = b64_count(more)?;
-    let full_size = soft_part * 4;
+    let full_size = payload_type.size() * 4;
     // parse full path
     let (more, base) = take(full_size)(more)?;
 

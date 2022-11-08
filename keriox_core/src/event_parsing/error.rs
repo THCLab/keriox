@@ -2,7 +2,7 @@ use base64::DecodeError;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-#[derive(Error, Debug, Serialize, Deserialize)]
+#[derive(Error, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Error {
     #[error("Base64 Decoding error")]
     Base64DecodingError,

@@ -5,7 +5,10 @@ use serde::Deserialize;
 pub mod codes;
 pub mod error;
 
-use self::{codes::group::GroupCode, parsing::from_bytes_to_text, path::MaterialPath};
+use self::{
+    codes::{group::GroupCode, serial_number::pack_sn},
+    path::MaterialPath,
+};
 #[cfg(feature = "query")]
 use crate::query::{
     query_event::{QueryEvent, SignedQuery},
@@ -28,7 +31,6 @@ use crate::{
             SignedTransferableReceipt,
         },
     },
-    event_parsing::payload_size::PayloadType,
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix},
 };
 
@@ -36,7 +38,6 @@ pub mod attachment;
 pub mod message;
 pub mod parsing;
 pub mod path;
-pub mod payload_size;
 pub mod prefix;
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
@@ -62,7 +63,7 @@ impl Attachment {
         let (code, serialized_attachment) = match self {
             Attachment::SealSourceCouplets(sources) => {
                 let serialzied_sources = sources.iter().fold("".into(), |acc, s| {
-                    [acc, Self::pack_sn(s.sn), s.digest.to_str()].join("")
+                    [acc, pack_sn(s.sn), s.digest.to_str()].join("")
                 });
 
                 (
@@ -78,7 +79,7 @@ impl Attachment {
                             [
                                 acc,
                                 seal.prefix.to_str(),
-                                Self::pack_sn(seal.sn),
+                                pack_sn(seal.sn),
                                 seal.event_digest.to_str(),
                                 Attachment::AttachedSignatures(sigs.to_vec()).to_cesr(),
                             ]
@@ -169,25 +170,6 @@ impl Attachment {
             }
         };
         [code.to_str(), serialized_attachment].join("")
-    }
-
-    fn pack_sn(sn: u64) -> String {
-        let payload_type = PayloadType::OA;
-        let sn_raw: Vec<u8> = sn.to_be_bytes().into();
-
-        // Calculate how many zeros are missing to achieve expected base64 string
-        // length. Master code size is expected padding size.
-        let missing_zeros =
-            payload_type.size() / 4 * 3 - payload_type.master_code_size(false) - sn_raw.len();
-        let sn_vec: Vec<u8> = std::iter::repeat(0)
-            .take(missing_zeros)
-            .chain(sn_raw)
-            .collect();
-        [
-            payload_type.to_string(),
-            from_bytes_to_text(&sn_vec)[2..].to_string(),
-        ]
-        .join("")
     }
 }
 

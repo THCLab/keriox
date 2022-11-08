@@ -1,7 +1,7 @@
 use base64::URL_SAFE;
 use serde::Deserialize;
 
-use super::{parsing::adjust_with_num, payload_size::PayloadType};
+use super::codes::material_path_codes::MaterialPathCode;
 use crate::error::Error;
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
@@ -12,13 +12,8 @@ pub struct MaterialPath {
 }
 
 impl MaterialPath {
-    pub fn new(pt: PayloadType, path: String) -> Self {
-        let lead_bytes = match pt {
-            PayloadType::A4 => 0,
-            PayloadType::A5 => 1,
-            PayloadType::A6 => 2,
-            _ => todo!(),
-        };
+    pub fn new(pt: MaterialPathCode, path: String) -> Self {
+        let lead_bytes = pt.lead_bytes_len();
         MaterialPath {
             lead_bytes,
             base: path,
@@ -44,21 +39,9 @@ impl MaterialPath {
     pub fn to_cesr(&self) -> String {
         let decoded_base = base64::decode_config(&self.base, URL_SAFE).unwrap();
 
-        let code = match self.lead_bytes {
-            0 => PayloadType::A4,
-            1 => PayloadType::A5,
-            2 => PayloadType::A6,
-            _ => {
-                todo!()
-            }
-        };
         let size = decoded_base.len() / 3;
-        [
-            code.to_string(),
-            adjust_with_num(size as u16, code.index_length()),
-            self.base.clone(),
-        ]
-        .join("")
+        let code = MaterialPathCode::new(self.lead_bytes, size as u16).unwrap();
+        [code.to_str(), self.base.clone()].join("")
     }
 
     pub fn to_raw(&self) -> Result<Vec<u8>, Error> {

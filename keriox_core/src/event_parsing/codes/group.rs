@@ -66,6 +66,7 @@ impl FromStr for GroupCode {
             "-H" => Ok(Self::LastEstSignaturesGroups(count)),
             // todo why not in cesr docs?
             "-G" => Ok(Self::TransferableReceiptQuadruples(count)),
+            // todo why not in cesr-proof docs?
             "-L" => Ok(Self::PathedMaterialQuadruplet(count)),
             "-U" => todo!(),
             "-V" => Ok(Self::Frame(count)),
