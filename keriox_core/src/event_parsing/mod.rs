@@ -6,7 +6,7 @@ pub mod codes;
 pub mod error;
 
 use self::{
-    codes::{group::GroupCode, serial_number::pack_sn},
+    codes::{group::GroupCode, serial_number::pack_sn, DerivationCode},
     path::MaterialPath,
 };
 #[cfg(feature = "query")]

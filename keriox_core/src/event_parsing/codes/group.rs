@@ -5,6 +5,8 @@ use crate::event_parsing::{
     parsing::{adjust_with_num, b64_to_num},
 };
 
+use super::DerivationCode;
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum GroupCode {
     IndexedControllerSignatures(u16),
@@ -19,20 +21,20 @@ pub enum GroupCode {
     PathedMaterialQuadruplet(u16),
 }
 
-impl GroupCode {
-    pub fn code_len(&self) -> usize {
+impl DerivationCode for GroupCode {
+    fn value_size(&self) -> usize {
+        0
+    }
+
+    fn soft_size(&self) -> usize {
         2
     }
 
-    pub fn index_len(&self) -> usize {
+    fn hard_size(&self) -> usize {
         2
     }
 
-    pub fn full_len(&self) -> usize {
-        self.code_len() + self.index_len()
-    }
-
-    pub fn to_str(&self) -> String {
+    fn to_str(&self) -> String {
         let (code, count) = match self {
             GroupCode::IndexedControllerSignatures(count) => ("-A", count),
             GroupCode::IndexedWitnessSignatures(count) => ("-B", count),
@@ -44,7 +46,7 @@ impl GroupCode {
             GroupCode::Frame(len) => ("-V", len),
             GroupCode::PathedMaterialQuadruplet(len) => ("-L", len),
         };
-        [code, &adjust_with_num(count.to_owned(), self.index_len())].join("")
+        [code, &adjust_with_num(count.to_owned(), self.soft_size())].join("")
     }
 }
 

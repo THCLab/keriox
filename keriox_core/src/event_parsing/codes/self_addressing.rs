@@ -18,6 +18,32 @@ pub enum SelfAddressing {
 }
 
 impl DerivationCode for SelfAddressing {
+    fn value_size(&self) -> usize {
+        match self {
+            Self::Blake3_256
+            | Self::Blake2B256(_)
+            | Self::Blake2S256(_)
+            | Self::SHA3_256
+            | Self::SHA2_256 => 43,
+            Self::Blake3_512 | Self::SHA3_512 | Self::Blake2B512 | Self::SHA2_512 => 86,
+        }
+    }
+
+    fn soft_size(&self) -> usize {
+        0
+    }
+
+    fn hard_size(&self) -> usize {
+        match self {
+            Self::Blake3_256
+            | Self::Blake2B256(_)
+            | Self::Blake2S256(_)
+            | Self::SHA3_256
+            | Self::SHA2_256 => 1,
+            Self::Blake3_512 | Self::SHA3_512 | Self::Blake2B512 | Self::SHA2_512 => 2,
+        }
+    }
+
     fn to_str(&self) -> String {
         match self {
             Self::Blake3_256 => "E",
@@ -31,28 +57,6 @@ impl DerivationCode for SelfAddressing {
             Self::SHA2_512 => "0G",
         }
         .into()
-    }
-
-    fn code_len(&self) -> usize {
-        match self {
-            Self::Blake3_256
-            | Self::Blake2B256(_)
-            | Self::Blake2S256(_)
-            | Self::SHA3_256
-            | Self::SHA2_256 => 1,
-            Self::Blake3_512 | Self::SHA3_512 | Self::Blake2B512 | Self::SHA2_512 => 2,
-        }
-    }
-
-    fn derivative_b64_len(&self) -> usize {
-        match self {
-            Self::Blake3_256
-            | Self::Blake2B256(_)
-            | Self::Blake2S256(_)
-            | Self::SHA3_256
-            | Self::SHA2_256 => 43,
-            Self::Blake3_512 | Self::SHA3_512 | Self::Blake2B512 | Self::SHA2_512 => 86,
-        }
     }
 }
 
@@ -79,5 +83,5 @@ impl FromStr for SelfAddressing {
 }
 
 pub fn dummy_prefix(derivation: &SelfAddressing) -> String {
-    "#".repeat(derivation.code_len() + derivation.derivative_b64_len())
+    "#".repeat(derivation.code_size() + derivation.value_size())
 }

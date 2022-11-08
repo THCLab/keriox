@@ -98,10 +98,10 @@ pub fn basic_prefix(s: &[u8]) -> nom::IResult<&[u8], BasicPrefix> {
         .parse()
         .map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?;
 
-    let (extra, b) = take(code.derivative_b64_len())(rest)?;
+    let (extra, b) = take(code.value_size())(rest)?;
 
     let decoded: Vec<_> = from_text_to_bytes(&b)
-        .map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?[code.code_len()..]
+        .map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?[code.code_size()..]
         .to_vec();
     let pk = PublicKey::new(decoded);
     Ok((extra, BasicPrefix::new(code.into(), pk)))
@@ -121,10 +121,10 @@ pub fn self_addressing_prefix(s: &[u8]) -> nom::IResult<&[u8], SelfAddressingPre
         .parse()
         .map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?;
 
-    let (extra, b) = take(code.derivative_b64_len())(rest)?;
+    let (extra, b) = take(code.value_size())(rest)?;
 
     let decoded = from_text_to_bytes(&b).map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?
-        [code.code_len()..]
+        [code.code_size()..]
         .to_vec();
 
     let prefix = SelfAddressingPrefix {
@@ -149,10 +149,10 @@ pub fn self_signing_prefix(s: &[u8]) -> nom::IResult<&[u8], SelfSigningPrefix> {
         .parse()
         .map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?;
 
-    let (extra, b) = take(code.derivative_b64_len())(rest)?;
+    let (extra, b) = take(code.value_size())(rest)?;
 
     let decoded = from_text_to_bytes(&b).map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?
-        [code.code_len()..]
+        [code.code_size()..]
         .to_vec();
 
     Ok((extra, SelfSigningPrefix::new(code, decoded)))

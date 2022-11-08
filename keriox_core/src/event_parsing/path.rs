@@ -1,7 +1,7 @@
 use base64::URL_SAFE;
 use serde::Deserialize;
 
-use super::codes::material_path_codes::MaterialPathCode;
+use super::codes::{material_path_codes::MaterialPathCode, DerivationCode};
 use crate::error::Error;
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]

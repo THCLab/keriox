@@ -17,6 +17,26 @@ pub enum Basic {
 }
 
 impl DerivationCode for Basic {
+    fn value_size(&self) -> usize {
+        match self {
+            Self::Ed25519NT | Self::Ed25519 | Self::X25519 => 43,
+            Self::X448 => 75,
+            Self::ECDSAsecp256k1NT | Self::ECDSAsecp256k1 => 44,
+            Self::Ed448NT | Self::Ed448 => 76,
+        }
+    }
+
+    fn soft_size(&self) -> usize {
+        0
+    }
+
+    fn hard_size(&self) -> usize {
+        match self {
+            Self::Ed25519NT | Self::X25519 | Self::Ed25519 | Self::X448 => 1,
+            Self::ECDSAsecp256k1NT | Self::ECDSAsecp256k1 | Self::Ed448NT | Self::Ed448 => 4,
+        }
+    }
+
     fn to_str(&self) -> String {
         match self {
             Self::Ed25519NT => "B",
@@ -29,22 +49,6 @@ impl DerivationCode for Basic {
             Self::Ed448 => "1AAD",
         }
         .into()
-    }
-
-    fn code_len(&self) -> usize {
-        match self {
-            Self::Ed25519NT | Self::Ed25519 | Self::X25519 | Self::X448 => 1,
-            Self::ECDSAsecp256k1NT | Self::ECDSAsecp256k1 | Self::Ed448NT | Self::Ed448 => 4,
-        }
-    }
-
-    fn derivative_b64_len(&self) -> usize {
-        match self {
-            Self::Ed25519NT | Self::Ed25519 | Self::X25519 => 43,
-            Self::X448 => 75,
-            Self::ECDSAsecp256k1NT | Self::ECDSAsecp256k1 => 47,
-            Self::Ed448NT | Self::Ed448 => 76,
-        }
     }
 }
 

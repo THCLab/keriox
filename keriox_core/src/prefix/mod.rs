@@ -256,7 +256,7 @@ mod tests {
         // All codes that are mapped to `BasicPrefix`.
         let basic_codes = vec!["B", "C", "D", "L", "1AAA", "1AAB", "1AAC", "1AAD"].into_iter();
         // Allowed string lengths for respective basic codes.
-        let allowed_lengths = vec![43, 43, 43, 75, 47, 47, 76, 76].into_iter();
+        let allowed_lengths = vec![43, 43, 43, 75, 44, 44, 76, 76].into_iter();
         let is_basic = |identifier| matches!(&identifier, IdentifierPrefix::Basic(_));
         all_codes(basic_codes.zip(allowed_lengths).collect(), is_basic)?;
 

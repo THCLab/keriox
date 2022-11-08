@@ -3,7 +3,6 @@ use std::convert::TryFrom;
 use chrono::{DateTime, FixedOffset};
 use nom::{
     bytes::complete::take,
-    combinator::map,
     error::ErrorKind,
     multi::{count, many0},
     Needed,
@@ -12,7 +11,6 @@ use nom::{
 use crate::{
     event::sections::seal::{EventSeal, SourceSeal},
     event_message::signature::Signature,
-    event_parsing::parsing::b64_to_num,
     prefix::AttachedSignaturePrefix,
 };
 
@@ -38,14 +36,6 @@ fn event_seal(s: &[u8]) -> nom::IResult<&[u8], EventSeal> {
     };
 
     Ok((rest, seal))
-}
-
-pub(crate) fn b64_count(s: &[u8]) -> nom::IResult<&[u8], u16> {
-    let (rest, t) = map(nom::bytes::complete::take(2u8), |b64_count| {
-        b64_to_num(b64_count).map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))
-    })(s)?;
-
-    Ok((rest, t?))
 }
 
 fn indexed_signatures(input: &[u8]) -> nom::IResult<&[u8], Vec<AttachedSignaturePrefix>> {
@@ -187,16 +177,6 @@ pub fn attachment(s: &[u8]) -> nom::IResult<&[u8], Attachment> {
             Err(e) => Err(e),
         },
     }
-}
-
-#[test]
-fn test_b64_count() {
-    assert_eq!(b64_count("AA".as_bytes()), Ok(("".as_bytes(), 0u16)));
-    assert_eq!(b64_count("BA".as_bytes()), Ok(("".as_bytes(), 64u16)));
-    assert_eq!(
-        b64_count("ABextra data and stuff".as_bytes(),),
-        Ok(("extra data and stuff".as_bytes(), 1u16))
-    );
 }
 
 #[test]

@@ -57,8 +57,8 @@ impl FromStr for SelfAddressingPrefix {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let code = CesrSelfAddressing::from_str(s)?;
-        let c_len = code.code_len();
-        if s.len() == code.prefix_b64_len() {
+        let c_len = code.code_size();
+        if s.len() == code.full_size() {
             let decoded = from_text_to_bytes(&s[c_len..].as_bytes())?[c_len..].to_vec();
 
             Ok(Self::new(code.into(), decoded))

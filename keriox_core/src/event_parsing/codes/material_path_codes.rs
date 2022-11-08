@@ -5,11 +5,37 @@ use crate::event_parsing::{
     parsing::{adjust_with_num, b64_to_num},
 };
 
+use super::DerivationCode;
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum MaterialPathCode {
     ZeroLeadBytes(u16),
     OneLeadBytes(u16),
     TwoLeadBytes(u16),
+}
+
+impl DerivationCode for MaterialPathCode {
+    fn soft_size(&self) -> usize {
+        2
+    }
+
+    fn hard_size(&self) -> usize {
+        2
+    }
+
+    fn value_size(&self) -> usize {
+        0
+    }
+
+    fn to_str(&self) -> String {
+        let (code, data_len) = match self {
+            MaterialPathCode::ZeroLeadBytes(data_lenght) => ("4A", data_lenght),
+            MaterialPathCode::OneLeadBytes(data_length) => ("5A", data_length),
+            MaterialPathCode::TwoLeadBytes(data_length) => ("6A", data_length),
+        };
+        let data = adjust_with_num(data_len.to_owned(), self.soft_size());
+        [code, &data].join("")
+    }
 }
 
 impl MaterialPathCode {
@@ -39,20 +65,6 @@ impl MaterialPathCode {
                 "Wrong lead bytes length".into(),
             )),
         }
-    }
-
-    pub fn index_len(&self) -> usize {
-        2
-    }
-
-    pub fn to_str(&self) -> String {
-        let (code, data_len) = match self {
-            MaterialPathCode::ZeroLeadBytes(data_lenght) => ("4A", data_lenght),
-            MaterialPathCode::OneLeadBytes(data_length) => ("5A", data_length),
-            MaterialPathCode::TwoLeadBytes(data_length) => ("6A", data_length),
-        };
-        let data = adjust_with_num(data_len.to_owned(), self.index_len());
-        [code, &data].join("")
     }
 }
 

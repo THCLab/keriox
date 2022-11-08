@@ -41,10 +41,10 @@ impl FromStr for SelfSigningPrefix {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let code = SelfSigning::from_str(s)?;
 
-        if s.len() == code.prefix_b64_len() {
+        if s.len() == code.full_size() {
             Ok(Self::new(
                 code.into(),
-                from_text_to_bytes(&s[code.code_len()..].as_bytes())?[code.code_len()..].to_vec(),
+                from_text_to_bytes(&s[code.code_size()..].as_bytes())?[code.code_size()..].to_vec(),
             ))
         } else {
             Err(Error::IncorrectLengthError(s.into()))

@@ -7,11 +7,15 @@ use super::DerivationCode;
 pub struct SerialNumberCode;
 
 impl DerivationCode for SerialNumberCode {
-    fn code_len(&self) -> usize {
+    fn hard_size(&self) -> usize {
         2
     }
 
-    fn derivative_b64_len(&self) -> usize {
+    fn soft_size(&self) -> usize {
+        0
+    }
+
+    fn value_size(&self) -> usize {
         22
     }
 
@@ -39,8 +43,7 @@ pub fn pack_sn(sn: u64) -> String {
 
     // Calculate how many zeros are missing to achieve expected base64 string
     // length. Master code size is expected padding size.
-    let missing_zeros =
-        payload_type.prefix_b64_len() / 4 * 3 - payload_type.code_len() - sn_raw.len();
+    let missing_zeros = payload_type.full_size() / 4 * 3 - payload_type.code_size() - sn_raw.len();
     let sn_vec: Vec<u8> = std::iter::repeat(0)
         .take(missing_zeros)
         .chain(sn_raw)

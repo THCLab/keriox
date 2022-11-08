@@ -25,13 +25,13 @@ impl FromStr for AttachedSignaturePrefix {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let code = AttachedSignatureCode::from_str(s)?;
 
-        if (s.len()) == code.prefix_b64_len() {
-            let lead = if code.code_len() % 4 != 0 {
-                code.code_len()
+        if (s.len()) == code.full_size() {
+            let lead = if code.code_size() % 4 != 0 {
+                code.code_size()
             } else {
                 0
             };
-            let s_vec = from_text_to_bytes(&s[code.code_len()..].as_bytes())?[lead..].to_vec();
+            let s_vec = from_text_to_bytes(&s[code.code_size()..].as_bytes())?[lead..].to_vec();
             let ssp = SelfSigningPrefix::new(code.code, s_vec);
             Ok(Self::new(ssp, code.index))
         } else {

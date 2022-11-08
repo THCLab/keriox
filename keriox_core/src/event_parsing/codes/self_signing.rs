@@ -12,6 +12,24 @@ pub enum SelfSigning {
 }
 
 impl DerivationCode for SelfSigning {
+    fn value_size(&self) -> usize {
+        match self {
+            Self::Ed25519Sha512 | Self::ECDSAsecp256k1Sha256 => 86,
+            Self::Ed448 => 152,
+        }
+    }
+
+    fn soft_size(&self) -> usize {
+        0
+    }
+
+    fn hard_size(&self) -> usize {
+        match self {
+            Self::Ed25519Sha512 | Self::ECDSAsecp256k1Sha256 => 2,
+            Self::Ed448 => 4,
+        }
+    }
+
     fn to_str(&self) -> String {
         match self {
             Self::Ed25519Sha512 => "0B",
@@ -19,20 +37,6 @@ impl DerivationCode for SelfSigning {
             Self::Ed448 => "1AAE",
         }
         .into()
-    }
-
-    fn code_len(&self) -> usize {
-        match self {
-            Self::Ed25519Sha512 | Self::ECDSAsecp256k1Sha256 => 2,
-            Self::Ed448 => 4,
-        }
-    }
-
-    fn derivative_b64_len(&self) -> usize {
-        match self {
-            Self::Ed25519Sha512 | Self::ECDSAsecp256k1Sha256 => 86,
-            Self::Ed448 => 152,
-        }
     }
 }
 
