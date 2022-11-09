@@ -74,7 +74,7 @@ impl FromStr for AttachedSignatureCode {
     }
 }
 
-// returns the u16 from the lowest 2 bytes of the b64 string
+/// Parses the number from radix 64 using digits from url-safe base64 (`A` = 0, `_` = 63)
 pub fn b64_to_num(b64: &[u8]) -> Result<u16, Error> {
     let slice = from_text_to_bytes(b64)?;
     let len = slice.len();
@@ -86,6 +86,7 @@ pub fn b64_to_num(b64: &[u8]) -> Result<u16, Error> {
     }))
 }
 
+/// Formats the number in radix 64 using digits from url-safe base64 (`A` = 0, `_` = 63)
 pub fn num_to_b64(num: u16) -> String {
     let b64 = from_bytes_to_text(&num.to_be_bytes().to_vec());
     // remove leading A's
