@@ -4,13 +4,13 @@ use crate::{
         attached_signature_code::b64_to_num, basic::Basic, self_addressing::SelfAddressing,
         self_signing::SelfSigning, DerivationCode,
     },
+    event_parsing::parsing::from_text_to_bytes,
     keys::PublicKey,
     prefix::{
         AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix,
         SelfSigningPrefix,
     },
 };
-use base64::URL_SAFE;
 use nom::{bytes::complete::take, error::ErrorKind};
 
 // TODO this could be a lot nicer, but is currently written to be careful and "easy" to follow
@@ -30,12 +30,12 @@ pub fn attached_signature(s: &[u8]) -> nom::IResult<&[u8], AttachedSignaturePref
 
             let (rest, sig_s) = take(86u8)(maybe_sig)?;
 
-            let sig = base64::decode_config(sig_s, base64::URL_SAFE)
-                .map_err(|_| nom::Err::Error((index_c, ErrorKind::IsNot)))?;
+            let sig = &from_text_to_bytes(sig_s)
+                .map_err(|_| nom::Err::Error((index_c, ErrorKind::IsNot)))?[2..];
 
             Ok((
                 rest,
-                AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, sig, index),
+                AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, sig.to_vec(), index),
             ))
         }
         b => {
@@ -46,12 +46,16 @@ pub fn attached_signature(s: &[u8]) -> nom::IResult<&[u8], AttachedSignaturePref
 
             let (rest, sig_s) = take(86u8)(maybe_sig)?;
 
-            let sig = base64::decode_config(sig_s, base64::URL_SAFE)
-                .map_err(|_| nom::Err::Error((index_c, ErrorKind::IsNot)))?;
+            let sig = &from_text_to_bytes(sig_s)
+                .map_err(|_| nom::Err::Error((index_c, ErrorKind::IsNot)))?[2..];
 
             Ok((
                 rest,
-                AttachedSignaturePrefix::new(SelfSigning::ECDSAsecp256k1Sha256, sig, index),
+                AttachedSignaturePrefix::new(
+                    SelfSigning::ECDSAsecp256k1Sha256,
+                    sig.to_vec(),
+                    index,
+                ),
             ))
         }
         z => {
@@ -96,9 +100,11 @@ pub fn basic_prefix(s: &[u8]) -> nom::IResult<&[u8], BasicPrefix> {
         .map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?;
 
     let (extra, b) = take(code.derivative_b64_len())(rest)?;
-    let pk = PublicKey::new(
-        base64::decode_config(b, URL_SAFE).map_err(|_| nom::Err::Error((s, ErrorKind::IsNot)))?,
-    );
+
+    let decoded: Vec<_> = from_text_to_bytes(&b)
+        .map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?[code.code_len()..]
+        .to_vec();
+    let pk = PublicKey::new(decoded);
     Ok((extra, code.derive(pk)))
 }
 
@@ -118,11 +124,15 @@ pub fn self_addressing_prefix(s: &[u8]) -> nom::IResult<&[u8], SelfAddressingPre
 
     let (extra, b) = take(code.derivative_b64_len())(rest)?;
 
-    let pref: SelfAddressingPrefix = std::str::from_utf8(&[code_str, b].concat())
-        .map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?
-        .parse()
-        .map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?;
-    Ok((extra, pref))
+    let decoded = from_text_to_bytes(&b).map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?
+        [code.code_len()..]
+        .to_vec();
+
+    let prefix = SelfAddressingPrefix {
+        derivation: code,
+        digest: decoded,
+    };
+    Ok((extra, prefix))
 }
 
 pub fn self_signing_prefix(s: &[u8]) -> nom::IResult<&[u8], SelfSigningPrefix> {
@@ -142,9 +152,17 @@ pub fn self_signing_prefix(s: &[u8]) -> nom::IResult<&[u8], SelfSigningPrefix> {
 
     let (extra, b) = take(code.derivative_b64_len())(rest)?;
 
-    let sig =
-        base64::decode_config(b, URL_SAFE).map_err(|_| nom::Err::Error((s, ErrorKind::IsNot)))?;
-    Ok((extra, code.derive(sig)))
+    let decoded = from_text_to_bytes(&b).map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?
+        [code.code_len()..]
+        .to_vec();
+
+    Ok((
+        extra,
+        SelfSigningPrefix {
+            derivation: code,
+            signature: decoded,
+        },
+    ))
 }
 
 pub fn attached_sn(s: &[u8]) -> nom::IResult<&[u8], u64> {
@@ -157,8 +175,9 @@ pub fn attached_sn(s: &[u8]) -> nom::IResult<&[u8], u64> {
             let (rest, parsed_sn) = take(22u8)(more)?;
 
             let sn = {
-                let b64decode = base64::decode_config(parsed_sn, URL_SAFE)
-                    .map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?;
+                let b64decode = from_text_to_bytes(parsed_sn)
+                    .map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?[2..]
+                    .to_vec();
                 let mut sn_array: [u8; 8] = [0; 8];
                 sn_array.copy_from_slice(&b64decode[8..]);
                 u64::from_be_bytes(sn_array)
@@ -216,7 +235,7 @@ fn test_basic_prefix() {
 fn test_self_adressing() {
     use crate::prefix::Prefix;
 
-    let sap: SelfAddressingPrefix = "EJJR2nmwyYAfSVPzhzS6b5CMZAoTNZH3ULvaU6Z-i0d8"
+    let sap: SelfAddressingPrefix = "ELC5L3iBVD77d_MYbYGGCUQgqQBju1o4x1Ud-z2sL-ux"
         .parse()
         .unwrap();
     let str_to_parse = [&sap.to_str(), "more"].join("");
@@ -244,6 +263,6 @@ fn test_self_signing() {
 
 #[test]
 fn test_sn_parse() {
-    let sn = attached_sn("0AAAAAAAAAAAAAAAAAAAAAAw".as_bytes()).unwrap();
+    let sn = attached_sn("0AAAAAAAAAAAAAAAAAAAAAAD".as_bytes()).unwrap();
     assert_eq!(sn, ("".as_bytes(), 3));
 }

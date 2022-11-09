@@ -264,7 +264,10 @@ impl IdentifierController {
         let (_, parsed_exn) =
             exchange_message(exchange).map_err(|_e| ControllerError::EventFormatError)?;
         if let EventType::Exn(exn) = parsed_exn {
-            let Exchange::Fwd { to_forward, .. } = exn.event.content.clone();
+            let Exchange::Fwd {
+                args: _,
+                to_forward,
+            } = exn.event.content.data.clone();
 
             let sigs: Vec<_> = if let Some(receipts) = self.source.storage.get_nt_receipts(
                 &to_forward.event.get_prefix(),

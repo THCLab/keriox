@@ -1,9 +1,9 @@
 use super::Prefix;
 use crate::{
     error::Error,
+    event_parsing::parsing::from_text_to_bytes,
     keys::{PrivateKey, PublicKey},
 };
-use base64::decode_config;
 use core::str::FromStr;
 use ed25519_dalek::SecretKey;
 use k256::ecdsa::{SigningKey, VerifyingKey};
@@ -43,23 +43,19 @@ impl FromStr for SeedPrefix {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match &s[..1] {
-            "A" => Ok(Self::RandomSeed256Ed25519(decode_config(
-                &s[1..],
-                base64::URL_SAFE,
-            )?)),
-            "J" => Ok(Self::RandomSeed256ECDSAsecp256k1(decode_config(
-                &s[1..],
-                base64::URL_SAFE,
-            )?)),
-            "K" => Ok(Self::RandomSeed448(decode_config(
-                &s[1..],
-                base64::URL_SAFE,
-            )?)),
+            "A" => Ok(Self::RandomSeed256Ed25519(
+                from_text_to_bytes(&s[1..].as_bytes())?[1..].to_vec(),
+            )),
+            "J" => Ok(Self::RandomSeed256ECDSAsecp256k1(
+                from_text_to_bytes(&s[1..].as_bytes())?[1..].to_vec(),
+            )),
+            "K" => Ok(Self::RandomSeed448(
+                from_text_to_bytes(&s[1..].as_bytes())?[1..].to_vec(),
+            )),
             "0" => match &s[1..2] {
-                "A" => Ok(Self::RandomSeed128(decode_config(
-                    &s[2..],
-                    base64::URL_SAFE,
-                )?)),
+                "A" => Ok(Self::RandomSeed128(
+                    from_text_to_bytes(&s[2..].as_bytes())?[2..].to_vec(),
+                )),
                 _ => Err(Error::DeserializeError(format!(
                     "Unknown seed prefix cod: {}",
                     s
@@ -94,18 +90,19 @@ impl Prefix for SeedPrefix {
 
 #[test]
 fn test_derive_keypair() -> Result<(), Error> {
+    use crate::derivation::basic::Basic;
     use base64::URL_SAFE;
 
     // taken from KERIPY: tests/core/test_eventing.py#1512
     let seeds = vec![
-        "ArwXoACJgOleVZ2PY7kXn7rA0II0mHYDhc6WrBH8fDAc",
-        "A6zz7M08-HQSFq92sJ8KJOT2cZ47x7pXFQLPB0pckB3Q",
-        "AcwFTk-wgk3ZT2buPRIbK-zxgPx-TKbaegQvPEivN90Y",
-        "Alntkt3u6dDgiQxTATr01dy8M72uuaZEf9eTdM-70Gk8",
-        "A1-QxDkso9-MR1A8rZz_Naw6fgaAtayda8hrbkRVVu1E",
-        "AKuYMe09COczwf2nIoD5AE119n7GLFOVFlNLxZcKuswc",
-        "AxFfJTcSuEE11FINfXMqWttkZGnUZ8KaREhrnyAXTsjw",
-        "ALq-w1UKkdrppwZzGTtz4PWYEeWm0-sDHzOv5sq96xJY",
+        "AK8F6AAiYDpXlWdj2O5F5-6wNCCNJh2A4XOlqwR_HwwH",
+        "AOs8-zNPPh0EhavdrCfCiTk9nGeO8e6VxUCzwdKXJAd0",
+        "AHMBU5PsIJN2U9m7j0SGyvs8YD8fkym2noELzxIrzfdG",
+        "AJZ7ZLd7unQ4IkMUwE69NXcvDO9rrmmRH_Xk3TPu9BpP",
+        "ANfkMQ5LKPfjEdQPK2c_zWsOn4GgLWsnWvIa25EVVbtR",
+        "ACrmDHtPQjnM8H9pyKA-QBNdfZ-xixTlRZTS8WXCrrMH",
+        "AMRXyU3ErhBNdRSDX1zKlrbZGRp1GfCmkRIa58gF07I8",
+        "AC6vsNVCpHa6acGcxk7c-D1mBHlptPrAx8zr-bKvesSW",
     ];
 
     let expected_pubkeys = vec![
@@ -118,11 +115,26 @@ fn test_derive_keypair() -> Result<(), Error> {
         "VjWcaNX2gCkHOjk6rkmqPBCxkRCqwIJ-3OjdYmMwxf4=",
         "T1nEDepd6CSAMCE7NY_jlLdG6_mKUlKS_mW-2HJY1hg=",
     ];
+    let expected_basic_prefix = vec![
+        "DErocgXD2RGSyvn3MObcx59jeOsEQhv2TqHirVkzrp0Q",
+        "DFXLiTjiRdSBPLL6hLa0rskIxk3dh4XwJLfctkJFLRSS",
+        "DE9YgIQVgpLwocTVrG8tidKScsQSMWwLWywNC48fhq4f",
+        "DCjxOXniUc5EUzDqERlXdptfKPHy6jNo_ZGsS4Vd8fAE",
+        "DNZHARO4dCJlluv0qezEMRmErIWWc-lzOzolBOQ15tHV",
+        "DOCQ4KN1jUlKbfjRteDYt9fxgpq1NK9_MqO5IA7shpED",
+        "DFY1nGjV9oApBzo5Oq5JqjwQsZEQqsCCftzo3WJjMMX-",
+        "DE9ZxA3qXegkgDAhOzWP45S3Ruv5ilJSkv5lvthyWNYY",
+    ];
 
-    for (seed_str, expected_pk) in seeds.iter().zip(expected_pubkeys.iter()) {
+    for (seed_str, (expected_pk, expected_bp)) in seeds
+        .iter()
+        .zip(expected_pubkeys.iter().zip(expected_basic_prefix.iter()))
+    {
         let seed: SeedPrefix = seed_str.parse()?;
         let (pub_key, _priv_key) = seed.derive_key_pair()?;
         let b64_pubkey = base64::encode_config(pub_key.key(), URL_SAFE);
+        let bp = Basic::Ed25519.derive(pub_key);
+        assert_eq!(&bp.to_str(), expected_bp);
         assert_eq!(&b64_pubkey, expected_pk);
     }
 

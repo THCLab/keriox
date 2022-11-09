@@ -4,8 +4,8 @@ use crate::{
         attached_signature_code::AttachedSignatureCode, self_signing::SelfSigning, DerivationCode,
     },
     error::Error,
+    event_parsing::parsing::from_text_to_bytes,
 };
-use base64::decode_config;
 use core::str::FromStr;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -31,11 +31,13 @@ impl FromStr for AttachedSignaturePrefix {
         let code = AttachedSignatureCode::from_str(s)?;
 
         if (s.len()) == code.prefix_b64_len() {
-            Ok(Self::new(
-                code.code,
-                decode_config(&s[code.code_len()..code.prefix_b64_len()], base64::URL_SAFE)?,
-                code.index,
-            ))
+            let lead = if code.code_len() % 4 != 0 {
+                code.code_len()
+            } else {
+                0
+            };
+            let s_vec = from_text_to_bytes(&s[code.code_len()..].as_bytes())?[lead..].to_vec();
+            Ok(Self::new(code.code, s_vec, code.index))
         } else {
             Err(Error::SemanticError(format!(
                 "Incorrect Prefix Length: {}",

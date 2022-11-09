@@ -61,11 +61,13 @@ async fn test_group_incept() -> Result<(), ControllerError> {
     // Group initiator needs to use `finalize_group_incept` instead of just
     // `finalize_event`, to send multisig request to other group participants.
     // Identifier who get this request from mailbox, can use just `finalize_event`
-    let group_id = identifier1.finalize_group_incept(
-        group_inception.as_bytes(),
-        signature_icp,
-        vec![(exn_messages[0].as_bytes().to_vec(), signature_exn)],
-    ).await?;
+    let group_id = identifier1
+        .finalize_group_incept(
+            group_inception.as_bytes(),
+            signature_icp,
+            vec![(exn_messages[0].as_bytes().to_vec(), signature_exn)],
+        )
+        .await?;
 
     let kel = controller
         .storage
@@ -99,7 +101,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     let initial_config2 = OptionalConfig::init().with_db_path(root2.into_path());
 
     let witness = {
-        let seed = "ArwXoACJgOleVZ2PY7kXn7rA0II0mHYDhc6WrBH8fDAc";
+        let seed = "AK8F6AAiYDpXlWdj2O5F5-6wNCCNJh2A4XOlqwR_HwwH";
         let witness_root = Builder::new().prefix("test-wit1-db").tempdir().unwrap();
         WitnessListener::setup(
             url::Url::parse("http://witness1:3232/").unwrap(), // not used
@@ -113,7 +115,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     let witness_id = IdentifierPrefix::Basic(witness_id_basic.clone());
     assert_eq!(
         witness_id.to_string(),
-        "DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA"
+        "BErocgXD2RGSyvn3MObcx59jeOsEQhv2TqHirVkzrp0Q"
     );
     let wit_location = LocationScheme {
         eid: witness_id,

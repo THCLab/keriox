@@ -16,7 +16,10 @@ use crate::{
     },
     oobi::{EndRole, Role},
     prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix},
-    query::reply_event::{ReplyEvent, ReplyRoute},
+    query::{
+        reply_event::{ReplyEvent, ReplyRoute},
+        Timestamped,
+    },
     state::IdentifierState,
 };
 
@@ -77,7 +80,7 @@ pub fn incept_with_next_hashes(
         }
     };
 
-    if witness_threshold > witnesses.len() as u64 || witness_threshold < 0 {
+    if witness_threshold > witnesses.len() as u64 {
         return Err(Error::EventGenerationError(
             "Improper witness threshold".into(),
         ));
@@ -205,13 +208,13 @@ pub fn exchange(
     data: &EventMessage<KeyEvent>,
     topic: ForwardTopic,
 ) -> Result<ExchangeMessage, Error> {
-    Exchange::Fwd {
+    Timestamped::new(Exchange::Fwd {
         args: FwdArgs {
             recipient_id: receipient.clone(),
             topic,
         },
         to_forward: data.clone(),
-    }
+    })
     .to_message(SerializationFormats::JSON, &SelfAddressing::Blake3_256)
     .map_err(|e| Error::EventGenerationError(e.to_string()))
 }

@@ -97,26 +97,25 @@ fn test_inception_data_derivation() -> Result<(), Error> {
     };
     use crate::event_message::Digestible;
     use crate::prefix::{BasicPrefix, Prefix, SelfAddressingPrefix};
-
     let keys: Vec<BasicPrefix> = vec![
-        "DRd2QdFHY2ymPlzOwW8o5r5mcbMwwUbkwtoGV7X1on2M"
+        "DErocgXD2RGSyvn3MObcx59jeOsEQhv2TqHirVkzrp0Q"
             .parse()
             .unwrap(),
-        "DvhIXMDz2Wz9q4iohJ_hRtJAbE09z3LxnZSs8Nm6kSww"
+        "DFXLiTjiRdSBPLL6hLa0rskIxk3dh4XwJLfctkJFLRSS"
             .parse()
             .unwrap(),
-        "DRHHGMFBQPicaJqKgGWqDyqmRGMksYx7rs491WwcVqtA"
+        "DE9YgIQVgpLwocTVrG8tidKScsQSMWwLWywNC48fhq4f"
             .parse()
             .unwrap(),
     ];
     let next_keys_hashes: Vec<SelfAddressingPrefix> = vec![
-        "ExKDRQLyYUS3O1xme1pbKenP73WqpbKTMopvUSQFRRSw"
+        "EDJk5EEpC4-tQ7YDwBiKbpaZahh1QCyQOnZRF7p2i8k8"
             .parse()
             .unwrap(),
-        "E2e7tLvlVlER4kkV3bw36SN8Gz3fJ-3QR2xadxKyed10"
+        "EAXfDjKvUFRj-IEB_o4y-Y_qeJAjYfZtOMD9e7vHNFss"
             .parse()
             .unwrap(),
-        "Ekhos3Fx8IfwKdfQrfZ_FicfrYiXmvZodQcHV3KNOSlU"
+        "EN8l6yJC2PxribTN0xfri6bLz34Qvj-x3cNwcV3DvT2m"
             .parse()
             .unwrap(),
     ];
@@ -130,11 +129,11 @@ fn test_inception_data_derivation() -> Result<(), Error> {
         .incept_self_addressing(SelfAddressing::Blake3_256, SerializationFormats::JSON)?;
 
     assert_eq!(
-        "EfFRznBFTCjE6L4Muo0mJ3rPpf-31ytLhe7ZW5FGLpaY",
+        "EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen",
         icp_data.event.get_prefix().to_str()
     );
     assert_eq!(
-        "EfFRznBFTCjE6L4Muo0mJ3rPpf-31ytLhe7ZW5FGLpaY",
+        "EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen",
         icp_data.event.get_digest().to_str()
     );
 

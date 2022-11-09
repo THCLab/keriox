@@ -2,8 +2,8 @@ use super::Prefix;
 use crate::{
     derivation::{self_signing::SelfSigning, DerivationCode},
     error::Error,
+    event_parsing::parsing::from_text_to_bytes,
 };
-use base64::decode_config;
 use core::str::FromStr;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -31,7 +31,7 @@ impl FromStr for SelfSigningPrefix {
         if s.len() == code.prefix_b64_len() {
             Ok(Self::new(
                 code,
-                decode_config(&s[code.code_len()..code.prefix_b64_len()], base64::URL_SAFE)?,
+                from_text_to_bytes(&s[code.code_len()..].as_bytes())?[code.code_len()..].to_vec(),
             ))
         } else {
             Err(Error::SemanticError(format!(
