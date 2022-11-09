@@ -119,4 +119,6 @@ fn b64_to_num_test() {
     assert_eq!(b64_to_num("b".as_bytes()).unwrap(), 27);
     assert_eq!(b64_to_num("BQ".as_bytes()).unwrap(), 80);
     assert_eq!(b64_to_num("__".as_bytes()).unwrap(), 4095);
+    assert_eq!(b64_to_num("_".as_bytes()).unwrap(), 63);
+    assert_eq!(b64_to_num("-".as_bytes()).unwrap(), 62);
 }

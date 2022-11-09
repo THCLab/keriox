@@ -80,7 +80,7 @@ pub fn incept_with_next_hashes(
         }
     };
 
-    if witness_threshold > witnesses.len() as u64 || witness_threshold < 0 {
+    if witness_threshold > witnesses.len() as u64 {
         return Err(Error::EventGenerationError(
             "Improper witness threshold".into(),
         ));

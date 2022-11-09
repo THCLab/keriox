@@ -202,18 +202,19 @@ impl<K: KeyManager> SimpleController<K> {
         &self.prefix
     }
 
-    pub fn get_kel(&self) -> String {
-        String::from_utf8(
-            self.storage
-                .get_kel_messages(self.prefix())
-                .unwrap()
-                .unwrap()
-                .iter()
-                .map(|s| Message::Notice(s.clone()).to_cesr().unwrap())
-                .flatten()
-                .collect(),
-        )
-        .unwrap()
+    pub fn get_kel(&self) -> Option<String> {
+        match self.storage.get_kel_messages(self.prefix()) {
+            Ok(Some(kel)) => Some(
+                String::from_utf8(
+                    kel.iter()
+                        .map(|s| Message::Notice(s.clone()).to_cesr().unwrap())
+                        .flatten()
+                        .collect(),
+                )
+                .unwrap(),
+            ),
+            _ => None,
+        }
     }
 
     pub fn incept(
