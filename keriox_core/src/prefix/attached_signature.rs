@@ -1,9 +1,10 @@
 use super::error::Error;
-use super::{Prefix, SelfSigningPrefix};
+use super::{SelfSigningPrefix};
 use crate::event_parsing::codes::attached_signature_code::AttachedSignatureCode;
 use crate::event_parsing::codes::self_signing::SelfSigning;
-use crate::event_parsing::codes::DerivationCode;
+use crate::event_parsing::codes::{DerivationCode, PrimitiveCode};
 use crate::event_parsing::parsing::from_text_to_bytes;
+use crate::event_parsing::primitives::CesrPrimitive;
 use core::str::FromStr;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -40,13 +41,13 @@ impl FromStr for AttachedSignaturePrefix {
     }
 }
 
-impl Prefix for AttachedSignaturePrefix {
+impl CesrPrimitive for AttachedSignaturePrefix {
     fn derivative(&self) -> Vec<u8> {
         self.signature.derivative()
     }
-    fn derivation_code(&self) -> String {
+    fn derivation_code(&self) -> PrimitiveCode {
         let code: SelfSigning = self.signature.get_code();
-        AttachedSignatureCode::new(code, self.index).to_str()
+        PrimitiveCode::IndexedSignature(AttachedSignatureCode::new(code, self.index))
     }
 }
 

@@ -2,9 +2,10 @@ pub mod cesr_adapter;
 pub mod derivation;
 mod digest;
 
+use crate::event_parsing::primitives::CesrPrimitive;
+
 use self::derivation::SelfAddressing;
 
-use crate::prefix::Prefix;
 use core::{fmt, str::FromStr};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 

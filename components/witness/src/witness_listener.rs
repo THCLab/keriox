@@ -177,7 +177,7 @@ pub mod http_handlers {
         actor::{QueryError, SignedQueryError},
         event_parsing::SignedEventData,
         oobi::Role,
-        prefix::{IdentifierPrefix, Prefix},
+        prefix::{IdentifierPrefix, CesrPrimitive},
     };
 
     use crate::witness::{Witness, WitnessError};

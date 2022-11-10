@@ -1,5 +1,6 @@
 use self::error::Error;
-use crate::event_parsing::parsing::from_bytes_to_text;
+use crate::event_parsing::codes::PrimitiveCode;
+use crate::event_parsing::{primitives::CesrPrimitive};
 use crate::sai::SelfAddressingPrefix;
 use core::str::FromStr;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -15,25 +16,6 @@ pub use attached_signature::AttachedSignaturePrefix;
 pub use basic::BasicPrefix;
 pub use seed::SeedPrefix;
 pub use self_signing::SelfSigningPrefix;
-
-pub trait Prefix: FromStr<Err = Error> {
-    fn derivative(&self) -> Vec<u8>;
-    fn derivation_code(&self) -> String;
-    fn to_str(&self) -> String {
-        match self.derivative().len() {
-            // empty data cannot be prefixed!
-            0 => "".to_string(),
-            _ => {
-                let dc = self.derivation_code();
-                let lead_bytes = if dc.len() % 4 != 0 { dc.len() } else { 0 };
-                // replace lead bytes with code
-                let derivative_text =
-                    from_bytes_to_text(&self.derivative())[lead_bytes..].to_string();
-                [dc, derivative_text].join("")
-            }
-        }
-    }
-}
 
 #[derive(Debug, PartialEq, Clone, Eq, Hash)]
 pub enum IdentifierPrefix {
@@ -61,7 +43,7 @@ impl FromStr for IdentifierPrefix {
     }
 }
 
-impl Prefix for IdentifierPrefix {
+impl CesrPrimitive for IdentifierPrefix {
     fn derivative(&self) -> Vec<u8> {
         match self {
             Self::Basic(bp) => bp.derivative(),
@@ -69,7 +51,7 @@ impl Prefix for IdentifierPrefix {
             Self::SelfSigning(ssp) => ssp.derivative(),
         }
     }
-    fn derivation_code(&self) -> String {
+    fn derivation_code(&self) -> PrimitiveCode {
         match self {
             Self::Basic(bp) => bp.derivation_code(),
             Self::SelfAddressing(sap) => sap.derivation_code(),
@@ -164,7 +146,7 @@ mod tests {
     fn simple_deserialize() -> Result<(), Error> {
         let pref: IdentifierPrefix = "BAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".parse()?;
 
-        assert_eq!(pref.derivation_code(), "B");
+        assert_eq!(pref.derivation_code().to_str(), "B");
 
         assert_eq!(pref.derivative().len(), 32);
 
@@ -248,7 +230,7 @@ mod tests {
                 let pref: IdentifierPrefix =
                     [code.to_string(), "A".repeat(length)].join("").parse()?;
                 assert!(pred(pref.clone()));
-                assert_eq!(pref.derivation_code(), code);
+                assert_eq!(pref.derivation_code().to_str(), code);
             }
             Ok(())
         }

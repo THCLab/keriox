@@ -1,7 +1,7 @@
 use super::error::Error;
-use super::Prefix;
+use super::CesrPrimitive;
 use crate::{
-    event_parsing::parsing::from_text_to_bytes,
+    event_parsing::{parsing::from_text_to_bytes, codes::PrimitiveCode},
     keys::{PrivateKey, PublicKey},
 };
 use core::str::FromStr;
@@ -69,7 +69,7 @@ impl FromStr for SeedPrefix {
     }
 }
 
-impl Prefix for SeedPrefix {
+impl CesrPrimitive for SeedPrefix {
     fn derivative(&self) -> Vec<u8> {
         match self {
             Self::RandomSeed256Ed25519(seed) => seed.to_owned(),
@@ -78,13 +78,14 @@ impl Prefix for SeedPrefix {
             Self::RandomSeed128(seed) => seed.to_owned(),
         }
     }
-    fn derivation_code(&self) -> String {
-        match self {
-            Self::RandomSeed256Ed25519(_) => "A".to_string(),
-            Self::RandomSeed256ECDSAsecp256k1(_) => "J".to_string(),
-            Self::RandomSeed448(_) => "K".to_string(),
-            Self::RandomSeed128(_) => "0A".to_string(),
-        }
+    fn derivation_code(&self) -> PrimitiveCode {
+        todo!()
+        // match self {
+        //     Self::RandomSeed256Ed25519(_) => "A".to_string(),
+        //     Self::RandomSeed256ECDSAsecp256k1(_) => "J".to_string(),
+        //     Self::RandomSeed448(_) => "K".to_string(),
+        //     Self::RandomSeed128(_) => "0A".to_string(),
+        // }
     }
 }
 

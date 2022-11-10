@@ -1,7 +1,13 @@
-use chrono::{FixedOffset, DateTime};
-use nom::{bytes::complete::take, multi::{count, many0}, sequence::tuple};
+use nom::{
+    bytes::complete::take,
+    multi::{count, many0},
+    sequence::tuple,
+};
 
-use self::{basic::Basic, self_signing::SelfSigning, group::GroupCode, attached_signature_code::AttachedSignatureCode, self_addressing::SelfAddressing};
+use self::{
+    attached_signature_code::AttachedSignatureCode, basic::Basic, group::GroupCode,
+    self_addressing::SelfAddressing, self_signing::SelfSigning, serial_number::{pack_sn, SerialNumberCode},
+};
 
 pub mod attached_signature_code;
 pub mod basic;
@@ -11,7 +17,15 @@ pub mod self_addressing;
 pub mod self_signing;
 pub mod serial_number;
 
-use super::{message::event_message, parsers::{group_code, indexed_signature, nontransferable_identifier, signature, serial_number_parser, transferable_quadruple, timestamp, identifier_signature_pair}, EventType, parsing::from_text_to_bytes};
+use super::{
+    message::event_message,
+    parsers::{
+        group_code, identifier_signature_pair, indexed_signature, nontransferable_identifier,
+        serial_number_parser, signature, timestamp, transferable_quadruple,
+    },
+    parsing::{from_text_to_bytes},
+    EventType, primitives::{IndexedSignature, NontransferableIdentifier, TransferableQuadruple, Timestamp, CesrPrimitive, Signature, IdentifierSignaturesCouple},
+};
 
 pub trait DerivationCode {
     /// hard (fixed) part of code size in chars
@@ -37,25 +51,111 @@ pub fn parse_value<A: DerivationCode>(code: A, stream: &[u8]) -> nom::IResult<&[
     Ok((rest, (code, decoded)))
 }
 
-pub enum Codes {
-    Primitives(IdentifierCode),
-    GroupCode(GroupCode),
-}
-
-pub enum IdentifierCode {
+pub enum PrimitiveCode {
+    // todo
+    Seed(),
     Basic(Basic),
     SelfAddressing(SelfAddressing),
+    SelfSigning(SelfSigning),
+    SerialNumber(SerialNumberCode),
+    IndexedSignature(AttachedSignatureCode),
+    Timestamp
 }
 
-pub type Identifier = (IdentifierCode, Vec<u8>);
-pub type NontransferableIdentifier = (Basic, Vec<u8>);
-pub type Digest = (SelfAddressing, Vec<u8>);
-pub type Signature = (SelfSigning, Vec<u8>);
-pub type IndexedSignature = (AttachedSignatureCode, Vec<u8>);
-pub type Timestamp = DateTime<FixedOffset>;
-pub type TransferableQuadruple = (Identifier, u64, Digest, Vec<IndexedSignature>);
-pub type IdentifierSignaturesCouple = (Identifier, Vec<IndexedSignature>);
+impl PrimitiveCode {
+    pub fn to_str(&self) -> String {
+        match self {
+            PrimitiveCode::Basic(code) => code.to_str(),
+            PrimitiveCode::SelfAddressing(code) => code.to_str(),
+            PrimitiveCode::SelfSigning(code) => code.to_str(),
+            PrimitiveCode::SerialNumber(code) => code.to_str(),
+            PrimitiveCode::IndexedSignature(code) => code.to_str(),
+            PrimitiveCode::Timestamp => todo!(),
+            PrimitiveCode::Seed() => todo!(),
+        }
+    }
+}
 
+impl Group {
+    pub fn to_cesr_str(&self) -> String {
+        [self.code(), self.data_to_str()].join("")
+    }
+    fn data_to_str(&self) -> String {
+        match self {
+            Group::IndexedControllerSignatures(sigs) | Group::IndexedWitnessSignatures(sigs) => {
+                sigs.iter().fold("".into(), |acc, s| {
+                    [acc, s.to_str()].join("")
+                })
+            }
+            Group::NontransferableReceiptCouples(couples) => 
+                couples.iter().fold("".into(), |acc, (identifeir, signature)| {
+                    [acc, identifeir.to_str(), signature.to_str()].join("")
+                }),
+            Group::TransferableReceiptQuadruples(quadruple) => {
+                quadruple.into_iter().fold("".into(), |acc, (identifeir, sn, digest, signatures)| {
+                    let signatures = signatures.iter().fold("".into(), |acc, s| {
+                        [acc, s.to_str()].join("")
+                    });
+                    [acc, identifeir.to_str(), "0A".to_string(), pack_sn(*sn), digest.to_str(), signatures].join("")
+                })
+            },
+            Group::FirstSeenReplyCouples(couples) => {
+                couples.iter().fold("".into(), |acc, (sn, dt)| {
+                    [acc, "0A".to_string(), pack_sn(*sn), "todo".to_string()].join("")
+                })
+            },
+            Group::TransferableIndexedSigGroups(groups) => {
+                groups.iter().fold("".into(), |acc, (identifier, sn, digest, signatures)| {
+                    let signatures = signatures.iter().fold("".into(), |acc, s| {
+                        [acc, s.to_str()].join("")
+                    });
+                    [acc, identifier.to_str(), "0A".to_string(), pack_sn(*sn), signatures].join("")
+                })
+            },
+            Group::LastEstSignaturesGroups(couples) => {
+                couples.iter().fold("".into(), |acc, (identifier, signatures)| {
+                    let signatures = signatures.iter().fold("".into(), |acc, s| {
+                        [acc, s.to_str()].join("")
+                    });
+                    [acc, identifier.to_str(), signatures].join("")
+                })
+            },
+            Group::Frame(_) => todo!(),
+            Group::PathedMaterialQuadruplet(_) => todo!(),
+        }
+    }
+
+    fn code(&self) -> String {
+        match self {
+            Group::IndexedControllerSignatures(sigs) => {
+                GroupCode::IndexedControllerSignatures(sigs.len() as u16)
+            }
+            Group::IndexedWitnessSignatures(sigs) => {
+                GroupCode::IndexedWitnessSignatures(sigs.len() as u16)
+            }
+            Group::NontransferableReceiptCouples(couples) => {
+                GroupCode::NontransferableReceiptCouples(couples.len() as u16)
+            }
+            Group::TransferableReceiptQuadruples(quadruple) => {
+                GroupCode::TransferableReceiptQuadruples(quadruple.len() as u16)
+            }
+            Group::FirstSeenReplyCouples(couple) => {
+                GroupCode::FirstSeenReplyCouples(couple.len() as u16)
+            }
+            Group::TransferableIndexedSigGroups(group) => {
+                GroupCode::TransferableIndexedSigGroups(group.len() as u16)
+            }
+            Group::LastEstSignaturesGroups(group) => {
+                GroupCode::LastEstSignaturesGroups(group.len() as u16)
+            }
+            Group::Frame(_) => todo!(),
+            Group::PathedMaterialQuadruplet(_) => todo!(),
+        }
+        .to_str()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum Group {
     IndexedControllerSignatures(Vec<IndexedSignature>),
     IndexedWitnessSignatures(Vec<IndexedSignature>),
@@ -74,7 +174,7 @@ pub enum Group {
 
 pub struct ParsedData {
     payload: EventType,
-    attachments: Vec<Group>
+    attachments: Vec<Group>,
 }
 
 pub fn parse_payload(stream: &[u8]) -> nom::IResult<&[u8], EventType> {
@@ -87,42 +187,46 @@ pub fn parse_group(stream: &[u8]) -> nom::IResult<&[u8], Group> {
         GroupCode::IndexedControllerSignatures(n) => {
             let (rest, signatures) = count(indexed_signature, n as usize)(rest)?;
             (rest, Group::IndexedControllerSignatures(signatures))
-        },
+        }
         GroupCode::IndexedWitnessSignatures(n) => {
             let (rest, signatures) = count(indexed_signature, n as usize)(rest)?;
             (rest, Group::IndexedWitnessSignatures(signatures))
-        },
+        }
         GroupCode::NontransferableReceiptCouples(n) => {
-            let (rest, couple) = count(tuple((nontransferable_identifier, signature)), n as usize)(rest)?;
+            let (rest, couple) =
+                count(tuple((nontransferable_identifier, signature)), n as usize)(rest)?;
             (rest, Group::NontransferableReceiptCouples(couple))
-        },
+        }
         GroupCode::TransferableReceiptQuadruples(n) => {
-            let (rest, quadruple) = count(
-                transferable_quadruple, n as usize)(rest).unwrap();
+            let (rest, quadruple) = count(transferable_quadruple, n as usize)(rest).unwrap();
             (rest, Group::TransferableReceiptQuadruples(quadruple))
-        },
+        }
         GroupCode::FirstSeenReplyCouples(n) => {
             let (rest, couple) = count(tuple((serial_number_parser, timestamp)), n as usize)(rest)?;
             (rest, Group::FirstSeenReplyCouples(couple))
-        },
+        }
         GroupCode::TransferableIndexedSigGroups(n) => {
-            let (rest, quadruple) = count(
-                transferable_quadruple, n as usize)(rest).unwrap();
+            let (rest, quadruple) = count(transferable_quadruple, n as usize)(rest).unwrap();
             (rest, Group::TransferableIndexedSigGroups(quadruple))
-        },
+        }
         GroupCode::LastEstSignaturesGroups(n) => {
             let (rest, couple) = count(identifier_signature_pair, n as usize)(rest)?;
             (rest, Group::LastEstSignaturesGroups(couple))
-        },
+        }
         GroupCode::Frame(_) => todo!(),
         GroupCode::PathedMaterialQuadruplet(_) => todo!(),
     })
 }
 
-pub fn parse(stream: &[u8]) -> nom::IResult<&[u8], ParsedData> { 
+pub fn parse(stream: &[u8]) -> nom::IResult<&[u8], ParsedData> {
     let (rest, payload) = event_message(stream)?;
     let (rest, attachments) = many0(parse_group)(rest)?;
 
-
-    Ok((rest, ParsedData {payload, attachments}))
+    Ok((
+        rest,
+        ParsedData {
+            payload,
+            attachments,
+        },
+    ))
 }

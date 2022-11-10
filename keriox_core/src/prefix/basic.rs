@@ -3,8 +3,9 @@ use core::str::FromStr;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use super::error::Error;
-use super::{verify, Prefix, SelfSigningPrefix};
-use crate::event_parsing::codes::DerivationCode;
+use super::{verify, SelfSigningPrefix};
+use crate::event_parsing::codes::{DerivationCode, PrimitiveCode};
+use crate::event_parsing::primitives::CesrPrimitive;
 use crate::{
     event_parsing::{codes::basic::Basic as CesrBasic, parsing::from_text_to_bytes},
     keys::PublicKey,
@@ -69,7 +70,7 @@ impl FromStr for BasicPrefix {
     }
 }
 
-impl Prefix for BasicPrefix {
+impl CesrPrimitive for BasicPrefix {
     fn derivative(&self) -> Vec<u8> {
         match self {
             BasicPrefix::ECDSAsecp256k1NT(pk)
@@ -82,8 +83,8 @@ impl Prefix for BasicPrefix {
             | BasicPrefix::X448(pk) => pk.key(),
         }
     }
-    fn derivation_code(&self) -> String {
-        match self {
+    fn derivation_code(&self) -> PrimitiveCode {
+        PrimitiveCode::Basic( match self {
             BasicPrefix::ECDSAsecp256k1NT(_) => CesrBasic::ECDSAsecp256k1NT,
             BasicPrefix::ECDSAsecp256k1(_) => CesrBasic::ECDSAsecp256k1,
             BasicPrefix::Ed25519NT(_) => CesrBasic::Ed25519NT,
@@ -92,8 +93,7 @@ impl Prefix for BasicPrefix {
             BasicPrefix::Ed448(_) => CesrBasic::Ed448,
             BasicPrefix::X25519(_) => CesrBasic::X25519,
             BasicPrefix::X448(_) => CesrBasic::X448,
-        }
-        .to_str()
+        })
     }
 }
 

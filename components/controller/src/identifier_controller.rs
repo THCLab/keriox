@@ -23,7 +23,7 @@ use keri::{
         EventType,
     },
     oobi::{LocationScheme, Role, Scheme},
-    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix},
+    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, CesrPrimitive, SelfSigningPrefix},
     query::{
         query_event::{QueryArgsMbx, QueryEvent, QueryRoute, QueryTopics, SignedQuery},
         reply_event::ReplyRoute,

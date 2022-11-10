@@ -25,9 +25,9 @@ use crate::{
         signature::{Signature, SignerData},
         signed_event_message::{Notice, Op, SignedEventMessage, SignedNontransferableReceipt},
     },
-    event_parsing::{message::key_event_message, path::MaterialPath, EventType},
+    event_parsing::{message::key_event_message, path::MaterialPath, EventType, primitives::CesrPrimitive},
     oobi::{OobiManager, Role},
-    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix},
+    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     processor::{
         basic_processor::BasicProcessor,
         escrow::{

@@ -9,9 +9,9 @@ use crate::{
         signed_event_message::{Message, Notice},
         Digestible, EventTypeTag,
     },
-    event_parsing::message::{signed_event_stream, signed_message},
+    event_parsing::{message::{signed_event_stream, signed_message}, primitives::CesrPrimitive},
     prefix::{
-        AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SeedPrefix,
+        AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SeedPrefix,
         SelfSigningPrefix,
     },
     processor::{

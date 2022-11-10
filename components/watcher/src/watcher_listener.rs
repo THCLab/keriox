@@ -81,7 +81,7 @@ pub mod http_handlers {
         error::Error,
         event_parsing::SignedEventData,
         oobi::{error::OobiError, EndRole, LocationScheme, Role},
-        prefix::{IdentifierPrefix, Prefix},
+        prefix::{IdentifierPrefix, CesrPrimitive},
     };
     use reqwest::StatusCode;
     use serde::Deserialize;

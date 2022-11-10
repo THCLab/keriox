@@ -5,7 +5,7 @@ use figment::{
     providers::{Format, Json},
     Figment,
 };
-use keri::prefix::Prefix;
+use keri::prefix::CesrPrimitive;
 use serde::Deserialize;
 use structopt::StructOpt;
 use witness::WitnessListener;

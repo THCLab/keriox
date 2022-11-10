@@ -12,7 +12,7 @@ use crate::{
         signature::{Nontransferable, Signature, SignerData},
         Digestible, EventTypeTag, SaidEvent, Typeable,
     },
-    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix},
+    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     query::QueryError,
     sai::derivation::SelfAddressing,
 };

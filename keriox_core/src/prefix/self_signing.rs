@@ -1,7 +1,7 @@
 use super::error::Error;
-use super::Prefix;
+use super::CesrPrimitive;
 use crate::event_parsing::{
-    codes::{self_signing::SelfSigning, DerivationCode},
+    codes::{self_signing::SelfSigning, DerivationCode, PrimitiveCode},
     parsing::from_text_to_bytes,
 };
 use core::str::FromStr;
@@ -52,7 +52,7 @@ impl FromStr for SelfSigningPrefix {
     }
 }
 
-impl Prefix for SelfSigningPrefix {
+impl CesrPrimitive for SelfSigningPrefix {
     fn derivative(&self) -> Vec<u8> {
         match self {
             SelfSigningPrefix::Ed25519Sha512(signature)
@@ -60,8 +60,8 @@ impl Prefix for SelfSigningPrefix {
             | SelfSigningPrefix::Ed448(signature) => signature.clone(),
         }
     }
-    fn derivation_code(&self) -> String {
-        self.get_code().to_str()
+    fn derivation_code(&self) -> PrimitiveCode {
+        PrimitiveCode::SelfSigning(self.get_code())
     }
 }
 

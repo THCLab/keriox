@@ -5,10 +5,11 @@ use serde::Deserialize;
 pub mod codes;
 pub mod error;
 pub mod parsers;
+pub mod primitives;
 
 use self::{
-    codes::{group::GroupCode, serial_number::pack_sn, DerivationCode},
-    path::MaterialPath,
+    codes::{group::GroupCode, serial_number::pack_sn, DerivationCode, Group},
+    path::MaterialPath, primitives::CesrPrimitive,
 };
 #[cfg(feature = "query")]
 use crate::query::{
@@ -32,7 +33,7 @@ use crate::{
             SignedTransferableReceipt,
         },
     },
-    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix},
+    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
 };
 
 pub mod attachment;
@@ -177,7 +178,7 @@ impl Attachment {
 #[derive(Clone, Debug, PartialEq)]
 pub struct SignedEventData {
     pub deserialized_event: EventType,
-    pub attachments: Vec<Attachment>,
+    pub attachments: Vec<Group>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -210,7 +211,7 @@ impl SignedEventData {
         let attachments = self
             .attachments
             .iter()
-            .fold(String::default(), |acc, att| [acc, att.to_cesr()].concat())
+            .fold(String::default(), |acc, att| [acc, att.to_cesr_str()].concat())
             .as_bytes()
             .to_vec();
         Ok([self.deserialized_event.serialize()?, attachments].concat())
@@ -220,7 +221,8 @@ impl SignedEventData {
 impl From<&SignedEventMessage> for SignedEventData {
     fn from(ev: &SignedEventMessage) -> Self {
         let mut attachments: Vec<_> = match ev.delegator_seal.clone() {
-            Some(delegator_seal) => [
+            Some(EventSeal {prefix, sn, event_digest}) => [
+                let quadruple = (prefix, sn, event_digest, ev.signatures);
                 Attachment::SealSourceCouplets(vec![delegator_seal]),
                 Attachment::AttachedSignatures(ev.signatures.clone()),
             ]
