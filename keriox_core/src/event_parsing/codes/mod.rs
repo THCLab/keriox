@@ -24,7 +24,7 @@ use super::{
         serial_number_parser, signature, timestamp, transferable_quadruple,
     },
     parsing::{from_text_to_bytes},
-    EventType, primitives::{IndexedSignature, NontransferableIdentifier, TransferableQuadruple, Timestamp, CesrPrimitive, Signature, IdentifierSignaturesCouple},
+    EventType, primitives::{IndexedSignature, NontransferableIdentifier, TransferableQuadruple, Timestamp, CesrPrimitive, Signature, IdentifierSignaturesCouple, Digest},
 };
 
 pub trait DerivationCode {
@@ -91,12 +91,12 @@ impl Group {
                 couples.iter().fold("".into(), |acc, (identifeir, signature)| {
                     [acc, identifeir.to_str(), signature.to_str()].join("")
                 }),
-            Group::TransferableReceiptQuadruples(quadruple) => {
-                quadruple.into_iter().fold("".into(), |acc, (identifeir, sn, digest, signatures)| {
-                    let signatures = signatures.iter().fold("".into(), |acc, s| {
-                        [acc, s.to_str()].join("")
-                    });
-                    [acc, identifeir.to_str(), "0A".to_string(), pack_sn(*sn), digest.to_str(), signatures].join("")
+            Group::SnDigestCouple(quadruple) => {
+                quadruple.into_iter().fold("".into(), |acc, (sn, digest)| {
+                    // let signatures = signatures.iter().fold("".into(), |acc, s| {
+                    //     [acc, s.to_str()].join("")
+                    // });
+                    [acc, "0A".to_string(), pack_sn(*sn), digest.to_str()].join("")
                 })
             },
             Group::FirstSeenReplyCouples(couples) => {
@@ -136,8 +136,8 @@ impl Group {
             Group::NontransferableReceiptCouples(couples) => {
                 GroupCode::NontransferableReceiptCouples(couples.len() as u16)
             }
-            Group::TransferableReceiptQuadruples(quadruple) => {
-                GroupCode::TransferableReceiptQuadruples(quadruple.len() as u16)
+            Group::SnDigestCouple(couple) => {
+                GroupCode::SnDigestCouple(couple.len() as u16)
             }
             Group::FirstSeenReplyCouples(couple) => {
                 GroupCode::FirstSeenReplyCouples(couple.len() as u16)
@@ -160,7 +160,7 @@ pub enum Group {
     IndexedControllerSignatures(Vec<IndexedSignature>),
     IndexedWitnessSignatures(Vec<IndexedSignature>),
     NontransferableReceiptCouples(Vec<(NontransferableIdentifier, Signature)>),
-    TransferableReceiptQuadruples(Vec<TransferableQuadruple>),
+    SnDigestCouple(Vec<(u64, Digest)>),
     // todo add timestamp
     FirstSeenReplyCouples(Vec<(u64, Timestamp)>),
     TransferableIndexedSigGroups(Vec<TransferableQuadruple>),
@@ -197,9 +197,9 @@ pub fn parse_group(stream: &[u8]) -> nom::IResult<&[u8], Group> {
                 count(tuple((nontransferable_identifier, signature)), n as usize)(rest)?;
             (rest, Group::NontransferableReceiptCouples(couple))
         }
-        GroupCode::TransferableReceiptQuadruples(n) => {
+        GroupCode::SnDigestCouple(n) => {
             let (rest, quadruple) = count(transferable_quadruple, n as usize)(rest).unwrap();
-            (rest, Group::TransferableReceiptQuadruples(quadruple))
+            (rest, Group::SnDigestCouple(quadruple))
         }
         GroupCode::FirstSeenReplyCouples(n) => {
             let (rest, couple) = count(tuple((serial_number_parser, timestamp)), n as usize)(rest)?;

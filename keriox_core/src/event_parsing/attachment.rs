@@ -109,7 +109,7 @@ pub fn attachment(s: &[u8]) -> nom::IResult<&[u8], Attachment> {
             )(rest)?;
             Ok((rest, Attachment::ReceiptCouplets(receipts)))
         }
-        GroupCode::TransferableReceiptQuadruples(n) => {
+        GroupCode::SnDigestCouple(n) => {
             let (rest, quadruple) = count(
                 nom::sequence::tuple((attached_sn, self_addressing_prefix)),
                 n as usize,

@@ -8,7 +8,7 @@ pub mod parsers;
 pub mod primitives;
 
 use self::{
-    codes::{group::GroupCode, serial_number::pack_sn, DerivationCode, Group},
+    codes::{group::GroupCode, serial_number::pack_sn, DerivationCode, Group, PrimitiveCode},
     path::MaterialPath, primitives::CesrPrimitive,
 };
 #[cfg(feature = "query")]
@@ -69,7 +69,7 @@ impl Attachment {
                 });
 
                 (
-                    GroupCode::TransferableReceiptQuadruples(sources.len() as u16),
+                    GroupCode::SnDigestCouple(sources.len() as u16),
                     serialzied_sources,
                 )
             }
@@ -221,12 +221,14 @@ impl SignedEventData {
 impl From<&SignedEventMessage> for SignedEventData {
     fn from(ev: &SignedEventMessage) -> Self {
         let mut attachments: Vec<_> = match ev.delegator_seal.clone() {
-            Some(EventSeal {prefix, sn, event_digest}) => [
-                let quadruple = (prefix, sn, event_digest, ev.signatures);
-                Attachment::SealSourceCouplets(vec![delegator_seal]),
-                Attachment::AttachedSignatures(ev.signatures.clone()),
-            ]
-            .into(),
+            Some(SourceSeal {sn, digest}) => 
+                {
+                    let PrimitiveCode::SelfAddressing(code) = digest.derivation_code() else {todo!()};
+                    let e = vec![(sn, (code, digest.derivative()))];
+                        [Group::SnDigestCouple(e),
+                        Group::IndexedControllerSignatures(ev.signatures)].to_vec()
+                    
+                },
             None => [Attachment::AttachedSignatures(ev.signatures.clone())].into(),
         };
 
