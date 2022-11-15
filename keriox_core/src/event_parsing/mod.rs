@@ -371,17 +371,16 @@ impl TryFrom<SignedEventData> for Op {
     type Error = Error;
 
     fn try_from(value: SignedEventData) -> Result<Self, Self::Error> {
-        todo!()
-        // match value.deserialized_event {
-        //     #[cfg(feature = "query")]
-        //     EventType::Qry(qry) => signed_query(qry, value.attachments),
-        //     #[cfg(any(feature = "query", feature = "oobi"))]
-        //     EventType::Rpy(rpy) => signed_reply(rpy, value.attachments),
-        //     EventType::Exn(exn) => signed_exchange(exn, value.attachments),
-        //     _ => Err(Error::SemanticError(
-        //         "Cannot convert SignedEventData to Op".to_string(),
-        //     )),
-        // }
+        match value.deserialized_event {
+            #[cfg(feature = "query")]
+            EventType::Qry(qry) => signed_query(qry, value.attachments),
+            #[cfg(any(feature = "query", feature = "oobi"))]
+            EventType::Rpy(rpy) => signed_reply(rpy, value.attachments),
+            EventType::Exn(exn) => signed_exchange(exn, value.attachments),
+            _ => Err(Error::SemanticError(
+                "Cannot convert SignedEventData to Op".to_string(),
+            )),
+        }
     }
 }
 
@@ -453,10 +452,7 @@ fn signed_reply(rpy: ReplyEvent, mut attachments: Vec<Group>) -> Result<Op, Erro
             let sigs = sigs.into_iter().map(|sig| sig.into()).collect();
             Ok(Op::Reply(SignedReply::new_trans(rpy, seal, sigs)))
         }
-        Group::Frame(atts) => {
-            todo!()
-            // signed_reply(rpy, atts)
-        }
+        Group::Frame(atts) => signed_reply(rpy, atts),
         _ => {
             // Improper payload type
             Err(Error::SemanticError("Improper payload type".into()))
@@ -479,10 +475,7 @@ fn signed_query(qry: QueryEvent, mut attachments: Vec<Group>) -> Result<Op, Erro
                 signatures: converted_signatures,
             }))
         }
-        Group::Frame(atts) => {
-            todo!()
-            // signed_query(qry, atts)
-        }
+        Group::Frame(atts) => signed_query(qry, atts),
         _ => {
             // Improper payload type
             Err(Error::SemanticError(
@@ -545,8 +538,7 @@ fn signed_key_event(
                 .cloned()
                 .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?
             {
-                todo!()
-                // atts
+                atts
             } else {
                 attachments
             };
@@ -646,10 +638,7 @@ fn signed_receipt(
                 converted_signatures,
             )))
         }
-        Group::Frame(atts) => {
-            todo!()
-            // signed_receipt(event_message, atts)
-        }
+        Group::Frame(atts) => signed_receipt(event_message, atts),
         _ => {
             // Improper payload type
             Err(Error::SemanticError("Improper payload type".into()))

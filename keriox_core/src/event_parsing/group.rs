@@ -12,48 +12,49 @@ pub enum Group {
     IndexedWitnessSignatures(Vec<IndexedSignature>),
     NontransferableReceiptCouples(Vec<(PublicKey, Signature)>),
     SourceSealCouples(Vec<(u64, Digest)>),
-    // todo add timestamp
     FirstSeenReplyCouples(Vec<(u64, Timestamp)>),
     TransferableIndexedSigGroups(Vec<TransferableQuadruple>),
     LastEstSignaturesGroups(Vec<IdentifierSignaturesCouple>),
-
-    // todo
-    Frame(u16),
+    Frame(Vec<Group>),
     // it's from cesr-proof
     PathedMaterialQuadruplet(u16),
 }
 
 impl Group {
     pub fn to_cesr_str(&self) -> String {
-        [self.code(), self.data_to_str()].join("")
-    }
-    fn data_to_str(&self) -> String {
-        match self {
-            Group::IndexedControllerSignatures(sigs) | Group::IndexedWitnessSignatures(sigs) => {
+        let (code, value) = match self {
+            Group::IndexedControllerSignatures(sigs) => (
+                GroupCode::IndexedControllerSignatures(sigs.len() as u16),
                 sigs.iter()
-                    .fold("".into(), |acc, s| [acc, s.to_str()].join(""))
-            }
-            Group::NontransferableReceiptCouples(couples) => {
+                    .fold("".into(), |acc, s| [acc, s.to_str()].join("")),
+            ),
+            Group::IndexedWitnessSignatures(sigs) => (
+                GroupCode::IndexedWitnessSignatures(sigs.len() as u16),
+                sigs.iter()
+                    .fold("".into(), |acc, s| [acc, s.to_str()].join("")),
+            ),
+            Group::NontransferableReceiptCouples(couples) => (
+                GroupCode::NontransferableReceiptCouples(couples.len() as u16),
                 couples
                     .iter()
                     .fold("".into(), |acc, (identifeir, signature)| {
                         [acc, identifeir.to_str(), signature.to_str()].join("")
-                    })
-            }
-            Group::SourceSealCouples(quadruple) => {
+                    }),
+            ),
+            Group::SourceSealCouples(quadruple) => (
+                GroupCode::SealSourceCouples(quadruple.len() as u16),
                 quadruple.into_iter().fold("".into(), |acc, (sn, digest)| {
-                    // let signatures = signatures.iter().fold("".into(), |acc, s| {
-                    //     [acc, s.to_str()].join("")
-                    // });
                     [acc, "0A".to_string(), pack_sn(*sn), digest.to_str()].join("")
-                })
-            }
-            Group::FirstSeenReplyCouples(couples) => {
+                }),
+            ),
+            Group::FirstSeenReplyCouples(couples) => (
+                GroupCode::FirstSeenReplyCouples(couples.len() as u16),
                 couples.iter().fold("".into(), |acc, (sn, dt)| {
                     [acc, "0A".to_string(), pack_sn(*sn), pack_datetime(dt)].join("")
-                })
-            }
-            Group::TransferableIndexedSigGroups(groups) => {
+                }),
+            ),
+            Group::TransferableIndexedSigGroups(groups) => (
+                GroupCode::TransferableIndexedSigGroups(groups.len() as u16),
                 groups
                     .iter()
                     .fold("".into(), |acc, (identifier, sn, digest, signatures)| {
@@ -69,9 +70,10 @@ impl Group {
                             signatures,
                         ]
                         .join("")
-                    })
-            }
-            Group::LastEstSignaturesGroups(couples) => {
+                    }),
+            ),
+            Group::LastEstSignaturesGroups(couples) => (
+                GroupCode::LastEstSignaturesGroups(couples.len() as u16),
                 couples
                     .iter()
                     .fold("".into(), |acc, (identifier, signatures)| {
@@ -79,37 +81,17 @@ impl Group {
                             .iter()
                             .fold("".into(), |acc, s| [acc, s.to_str()].join(""));
                         [acc, identifier.to_str(), signatures].join("")
-                    })
+                    }),
+            ),
+            Group::Frame(att) => {
+                let data = att
+                    .iter()
+                    .fold("".to_string(), |acc, att| [acc, att.to_cesr_str()].concat());
+                let code = GroupCode::Frame(data.len() as u16);
+                (code, data)
             }
-            Group::Frame(_) => todo!(),
             Group::PathedMaterialQuadruplet(_) => todo!(),
-        }
-    }
-
-    fn code(&self) -> String {
-        match self {
-            Group::IndexedControllerSignatures(sigs) => {
-                GroupCode::IndexedControllerSignatures(sigs.len() as u16)
-            }
-            Group::IndexedWitnessSignatures(sigs) => {
-                GroupCode::IndexedWitnessSignatures(sigs.len() as u16)
-            }
-            Group::NontransferableReceiptCouples(couples) => {
-                GroupCode::NontransferableReceiptCouples(couples.len() as u16)
-            }
-            Group::SourceSealCouples(couple) => GroupCode::SealSourceCouples(couple.len() as u16),
-            Group::FirstSeenReplyCouples(couple) => {
-                GroupCode::FirstSeenReplyCouples(couple.len() as u16)
-            }
-            Group::TransferableIndexedSigGroups(group) => {
-                GroupCode::TransferableIndexedSigGroups(group.len() as u16)
-            }
-            Group::LastEstSignaturesGroups(group) => {
-                GroupCode::LastEstSignaturesGroups(group.len() as u16)
-            }
-            Group::Frame(_) => todo!(),
-            Group::PathedMaterialQuadruplet(_) => todo!(),
-        }
-        .to_str()
+        };
+        [code.to_str(), value].concat()
     }
 }
