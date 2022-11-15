@@ -77,10 +77,13 @@ impl Group {
                 couples
                     .iter()
                     .fold("".into(), |acc, (identifier, signatures)| {
-                        let signatures = signatures
-                            .iter()
-                            .fold("".into(), |acc, s| [acc, s.to_str()].join(""));
-                        [acc, identifier.to_str(), signatures].join("")
+                        let sigs = Group::IndexedControllerSignatures(
+                            signatures
+                                .into_iter()
+                                .map(|sig| sig.clone().into())
+                                .collect(),
+                        );
+                        [acc, identifier.to_str(), sigs.to_cesr_str()].join("")
                     }),
             ),
             Group::Frame(att) => {
@@ -95,9 +98,10 @@ impl Group {
                     .into_iter()
                     .map(|s| s.to_cesr_str())
                     .fold(String::new(), |a, b| a + &b);
+                let attached_text = path.to_cesr() + &attachments;
                 (
-                    GroupCode::PathedMaterialQuadruple((attachments.len() / 4) as u16),
-                    path.to_cesr() + &attachments,
+                    GroupCode::PathedMaterialQuadruple((attached_text.len() / 4) as u16),
+                    attached_text,
                 )
             }
         };

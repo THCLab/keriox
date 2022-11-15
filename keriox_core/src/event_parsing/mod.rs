@@ -1,4 +1,4 @@
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 
 use chrono::{DateTime, FixedOffset, SecondsFormat};
 use serde::Deserialize;
@@ -167,9 +167,9 @@ impl Attachment {
             }
             Attachment::PathedMaterialQuadruplet(path, signatures) => {
                 let attachments = path.to_cesr()
-                    + &signature::signatures_into_attachments(&signatures)
+                    + &signature::signatures_into_groups(&signatures)
                         .iter()
-                        .map(|s| s.to_cesr())
+                        .map(|s| s.to_cesr_str())
                         .fold(String::new(), |a, b| a + &b);
                 (
                     GroupCode::PathedMaterialQuadruple((attachments.len() / 4) as u16),
@@ -324,16 +324,16 @@ impl From<SignedQuery> for SignedEventData {
 
 impl From<SignedExchange> for SignedEventData {
     fn from(ev: SignedExchange) -> Self {
-        todo!()
-        // let signatures = ev.signature.into();
-        // let mut attachments = signature::signatures_into_attachments(&ev.signature);
-        // let data_attachment =
-        //     Group::PathedMaterialQuadruplet(ev.data_signature.0, ev.data_signature.1);
-        // attachments.push(data_attachment);
-        // SignedEventData {
-        //     deserialized_event: EventType::Exn(ev.exchange_message),
-        //     attachments,
-        // }
+        let mut attachments = signature::signatures_into_groups(&ev.signature);
+
+        let data_signatures = signature::signatures_into_groups(&ev.data_signature.1);
+
+        let data_attachment = Group::PathedMaterialQuadruplet(ev.data_signature.0, data_signatures);
+        attachments.push(data_attachment);
+        SignedEventData {
+            deserialized_event: EventType::Exn(ev.exchange_message),
+            attachments,
+        }
     }
 }
 
@@ -647,28 +647,35 @@ fn signed_receipt(
 }
 
 pub fn signed_exchange(exn: ExchangeMessage, attachments: Vec<Group>) -> Result<Op, Error> {
-    todo!()
-    // let mut atts = attachments.into_iter();
-    // let att1 = atts
-    //     .next()
-    //     .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?;
-    // let att2 = atts
-    //     .next()
-    //     .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?;
+    let mut atts = attachments.into_iter();
+    let att1 = atts
+        .next()
+        .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?;
+    let att2 = atts
+        .next()
+        .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?;
 
-    // let (path, data_sigs, signatures): (_, _, Vec<Signature>) = match (att1, att2) {
-    //     (Attachment::PathedMaterialQuadruplet(path, sigs), anything)
-    //     | (anything, Attachment::PathedMaterialQuadruplet(path, sigs)) => {
-    //         (path, sigs, anything.try_into()?)
-    //     }
-    //     _ => return Err(Error::SemanticError("Wrong attachment".into())),
-    // };
+    let (path, data_sigs, signatures): (_, _, Vec<Signature>) = match (att1, att2) {
+        (Group::PathedMaterialQuadruplet(path, sigs), anything)
+        | (anything, Group::PathedMaterialQuadruplet(path, sigs)) => {
+            (path, sigs, anything.try_into()?)
+        }
+        _ => return Err(Error::SemanticError("Wrong attachment".into())),
+    };
 
-    // Ok(Op::Exchange(SignedExchange {
-    //     exchange_message: exn,
-    //     signature: signatures,
-    //     data_signature: (path, data_sigs),
-    // }))
+    let data_signatures: Result<Vec<Signature>, Error> =
+        data_sigs.into_iter().fold(Ok(vec![]), |acc, group| {
+            let mut signatures: Vec<Signature> = group.try_into()?;
+            let mut sigs = acc?;
+            sigs.append(&mut signatures);
+            Ok(sigs)
+        });
+
+    Ok(Op::Exchange(SignedExchange {
+        exchange_message: exn,
+        signature: signatures,
+        data_signature: (path, data_signatures?),
+    }))
 }
 
 #[test]
