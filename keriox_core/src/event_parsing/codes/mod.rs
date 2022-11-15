@@ -4,7 +4,7 @@ use nom::multi::many0;
 
 use self::{
     attached_signature_code::AttachedSignatureCode, basic::Basic, self_addressing::SelfAddressing,
-    self_signing::SelfSigning, serial_number::SerialNumberCode,
+    self_signing::SelfSigning, serial_number::SerialNumberCode, timestamp::TimestampCode,
 };
 
 pub mod attached_signature_code;
@@ -14,6 +14,7 @@ pub mod material_path_codes;
 pub mod self_addressing;
 pub mod self_signing;
 pub mod serial_number;
+pub mod timestamp;
 
 use super::{
     error::Error, group::Group, message::event_message, parsers::group::parse_group, EventType,
@@ -46,7 +47,7 @@ pub enum PrimitiveCode {
     SelfSigning(SelfSigning),
     SerialNumber(SerialNumberCode),
     IndexedSignature(AttachedSignatureCode),
-    Timestamp,
+    Timestamp(TimestampCode),
 }
 
 impl PrimitiveCode {
@@ -57,7 +58,7 @@ impl PrimitiveCode {
             PrimitiveCode::SelfSigning(code) => code.to_str(),
             PrimitiveCode::SerialNumber(code) => code.to_str(),
             PrimitiveCode::IndexedSignature(code) => code.to_str(),
-            PrimitiveCode::Timestamp => todo!(),
+            PrimitiveCode::Timestamp(code) => code.to_str(),
             PrimitiveCode::Seed() => todo!(),
         }
     }
@@ -95,7 +96,7 @@ impl DerivationCode for PrimitiveCode {
             PrimitiveCode::SelfSigning(ss) => ss.hard_size(),
             PrimitiveCode::SerialNumber(sn) => sn.hard_size(),
             PrimitiveCode::IndexedSignature(i) => i.hard_size(),
-            PrimitiveCode::Timestamp => todo!(),
+            PrimitiveCode::Timestamp(code) => code.hard_size(),
         }
     }
 
@@ -107,7 +108,7 @@ impl DerivationCode for PrimitiveCode {
             PrimitiveCode::SelfSigning(ss) => ss.soft_size(),
             PrimitiveCode::SerialNumber(sn) => sn.soft_size(),
             PrimitiveCode::IndexedSignature(i) => i.soft_size(),
-            PrimitiveCode::Timestamp => todo!(),
+            PrimitiveCode::Timestamp(code) => code.soft_size(),
         }
     }
 
@@ -119,7 +120,7 @@ impl DerivationCode for PrimitiveCode {
             PrimitiveCode::SelfSigning(ss) => ss.value_size(),
             PrimitiveCode::SerialNumber(sn) => sn.value_size(),
             PrimitiveCode::IndexedSignature(i) => i.value_size(),
-            PrimitiveCode::Timestamp => todo!(),
+            PrimitiveCode::Timestamp(code) => code.value_size(),
         }
     }
 
@@ -131,7 +132,7 @@ impl DerivationCode for PrimitiveCode {
             PrimitiveCode::SelfSigning(ss) => ss.to_str(),
             PrimitiveCode::SerialNumber(sn) => sn.to_str(),
             PrimitiveCode::IndexedSignature(i) => i.to_str(),
-            PrimitiveCode::Timestamp => todo!(),
+            PrimitiveCode::Timestamp(code) => code.to_str(),
         }
     }
 }

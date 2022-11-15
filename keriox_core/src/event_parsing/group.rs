@@ -1,5 +1,5 @@
 use super::{
-    codes::{group::GroupCode, serial_number::pack_sn, DerivationCode},
+    codes::{group::GroupCode, serial_number::pack_sn, timestamp::pack_datetime, DerivationCode},
     primitives::{
         CesrPrimitive, Digest, IdentifierSignaturesCouple, IndexedSignature, PublicKey, Signature,
         Timestamp, TransferableQuadruple,
@@ -50,7 +50,7 @@ impl Group {
             }
             Group::FirstSeenReplyCouples(couples) => {
                 couples.iter().fold("".into(), |acc, (sn, dt)| {
-                    [acc, "0A".to_string(), pack_sn(*sn), todo!()].join("")
+                    [acc, "0A".to_string(), pack_sn(*sn), pack_datetime(dt)].join("")
                 })
             }
             Group::TransferableIndexedSigGroups(groups) => {

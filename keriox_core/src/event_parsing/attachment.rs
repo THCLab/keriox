@@ -1,6 +1,5 @@
 use std::convert::TryFrom;
 
-use chrono::{DateTime, FixedOffset};
 use nom::{
     bytes::complete::take,
     error::ErrorKind,
@@ -16,6 +15,7 @@ use crate::{
 
 use super::{
     codes::{group::GroupCode, material_path_codes::MaterialPathCode},
+    parsers::primitives::timestamp_parser,
     path::MaterialPath,
     prefix::{
         attached_signature, attached_sn, basic_prefix, prefix, self_addressing_prefix,
@@ -43,30 +43,6 @@ fn indexed_signatures(input: &[u8]) -> nom::IResult<&[u8], Vec<AttachedSignature
         Attachment::AttachedSignatures(sigs) => Ok((rest, sigs)),
         _ => Err(nom::Err::Error((rest, ErrorKind::IsNot))),
     })?
-}
-
-pub fn timestamp(s: &[u8]) -> nom::IResult<&[u8], DateTime<FixedOffset>> {
-    let (more, type_c) = take(4u8)(s)?;
-
-    match type_c {
-        b"1AAG" => {
-            let (rest, parsed_timestamp) = take(32u8)(more)?;
-
-            let timestamp = {
-                let dt_str = String::from_utf8(parsed_timestamp.to_vec())
-                    .map_err(|_e| nom::Err::Error((s, ErrorKind::IsNot)))?
-                    .replace('c', ":")
-                    .replace('d', ".")
-                    .replace('p', "+");
-                dt_str
-                    .parse::<DateTime<FixedOffset>>()
-                    .map_err(|_e| nom::Err::Error((s, ErrorKind::IsNot)))?
-            };
-
-            Ok((rest, timestamp))
-        }
-        _ => Err(nom::Err::Error((type_c, ErrorKind::IsNot))),
-    }
 }
 
 pub fn material_path(s: &[u8]) -> nom::IResult<&[u8], MaterialPath> {
@@ -121,8 +97,10 @@ pub fn attachment(s: &[u8]) -> nom::IResult<&[u8], Attachment> {
             Ok((rest, Attachment::SealSourceCouplets(source_seals)))
         }
         GroupCode::FirstSeenReplyCouples(n) => {
-            let (rest, first_seen_replys) =
-                count(nom::sequence::tuple((attached_sn, timestamp)), n as usize)(rest)?;
+            let (rest, first_seen_replys) = count(
+                nom::sequence::tuple((attached_sn, timestamp_parser)),
+                n as usize,
+            )(rest)?;
             Ok((rest, Attachment::FirstSeenReply(first_seen_replys)))
         }
         GroupCode::TransferableIndexedSigGroups(n) => {

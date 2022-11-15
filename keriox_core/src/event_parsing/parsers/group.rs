@@ -2,7 +2,7 @@ use nom::{bytes::complete::take, error::ErrorKind, multi::count, sequence::tuple
 
 use super::primitives::{
     digest, identifier_signature_pair, indexed_signature, nontransferable_identifier,
-    serial_number_parser, signature, timestamp, transferable_quadruple,
+    serial_number_parser, signature, timestamp_parser, transferable_quadruple,
 };
 use crate::event_parsing::{codes::group::GroupCode, group::Group};
 
@@ -37,7 +37,8 @@ pub fn parse_group(stream: &[u8]) -> nom::IResult<&[u8], Group> {
             (rest, Group::SourceSealCouples(couple))
         }
         GroupCode::FirstSeenReplyCouples(n) => {
-            let (rest, couple) = count(tuple((serial_number_parser, timestamp)), n as usize)(rest)?;
+            let (rest, couple) =
+                count(tuple((serial_number_parser, timestamp_parser)), n as usize)(rest)?;
             (rest, Group::FirstSeenReplyCouples(couple))
         }
         GroupCode::TransferableIndexedSigGroups(n) => {
@@ -51,4 +52,18 @@ pub fn parse_group(stream: &[u8]) -> nom::IResult<&[u8], Group> {
         GroupCode::Frame(_) => todo!(),
         GroupCode::PathedMaterialQuadruplet(_) => todo!(),
     })
+}
+
+#[test]
+pub fn test_parse_group() {
+    use crate::event_parsing::primitives::Timestamp;
+    let group_str = "-EAB0AAAAAAAAAAAAAAAAAAAAAAA1AAG2022-10-25T12c04c30d175309p00c00";
+    let (_rest, group) = parse_group(group_str.as_bytes()).unwrap();
+    let expected = (
+        0,
+        "2022-10-25T12:04:30.175309+00:00"
+            .parse::<Timestamp>()
+            .unwrap(),
+    );
+    assert_eq!(group, Group::FirstSeenReplyCouples(vec![expected]));
 }

@@ -7,6 +7,7 @@ use crate::event_parsing::codes::attached_signature_code::AttachedSignatureCode;
 use crate::event_parsing::codes::basic::Basic;
 use crate::event_parsing::codes::self_addressing::SelfAddressing;
 use crate::event_parsing::codes::self_signing::SelfSigning;
+use crate::event_parsing::codes::timestamp::TimestampCode;
 use crate::event_parsing::codes::{
     group::GroupCode, serial_number::SerialNumberCode, DerivationCode,
 };
@@ -73,29 +74,27 @@ pub fn serial_number_parser(s: &[u8]) -> nom::IResult<&[u8], u64> {
     Ok((rest, sn))
 }
 
-// TODO add and use codes for Timestamp
-pub fn timestamp(s: &[u8]) -> nom::IResult<&[u8], DateTime<FixedOffset>> {
+pub fn timestamp_parser(s: &[u8]) -> nom::IResult<&[u8], DateTime<FixedOffset>> {
     let (more, type_c) = take(4u8)(s)?;
+    let code: TimestampCode = String::from_utf8(type_c.to_vec())
+        .map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?
+        .parse()
+        .map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?;
 
-    match type_c {
-        b"1AAG" => {
-            let (rest, parsed_timestamp) = take(32u8)(more)?;
+    let (rest, parsed_timestamp) = take(code.value_size() as usize)(more)?;
 
-            let timestamp = {
-                let dt_str = String::from_utf8(parsed_timestamp.to_vec())
-                    .map_err(|_e| nom::Err::Error((s, ErrorKind::IsNot)))?
-                    .replace('c', ":")
-                    .replace('d', ".")
-                    .replace('p', "+");
-                dt_str
-                    .parse::<DateTime<FixedOffset>>()
-                    .map_err(|_e| nom::Err::Error((s, ErrorKind::IsNot)))?
-            };
+    let timestamp = {
+        let dt_str = String::from_utf8(parsed_timestamp.to_vec())
+            .map_err(|_e| nom::Err::Error((s, ErrorKind::IsNot)))?
+            .replace('c', ":")
+            .replace('d', ".")
+            .replace('p', "+");
+        dt_str
+            .parse::<DateTime<FixedOffset>>()
+            .map_err(|_e| nom::Err::Error((s, ErrorKind::IsNot)))?
+    };
 
-            Ok((rest, timestamp))
-        }
-        _ => Err(nom::Err::Error((type_c, ErrorKind::IsNot))),
-    }
+    Ok((rest, timestamp))
 }
 
 pub fn transferable_quadruple(s: &[u8]) -> nom::IResult<&[u8], TransferableQuadruple> {
@@ -189,4 +188,14 @@ fn test_signature() {
 fn test_sn_parse() {
     let sn = serial_number_parser("0AAAAAAAAAAAAAAAAAAAAAAD".as_bytes()).unwrap();
     assert_eq!(sn, ("".as_bytes(), 3));
+}
+
+#[test]
+pub fn test_timestamp_parse() {
+    let timestamp_str = "1AAG2020-08-22T17c50c09d988921p00c00";
+    let (_rest, parsed_datetime) = timestamp_parser(timestamp_str.as_bytes()).unwrap();
+    assert_eq!(
+        "2020-08-22 17:50:09.988921 +00:00",
+        parsed_datetime.to_string()
+    );
 }
