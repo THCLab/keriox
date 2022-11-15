@@ -9,7 +9,8 @@ pub mod parsers;
 pub mod primitives;
 
 use self::{
-    codes::{group::GroupCode, serial_number::pack_sn, DerivationCode, Group},
+    codes::{group::GroupCode, serial_number::pack_sn, DerivationCode},
+    group::Group,
     path::MaterialPath,
     primitives::{CesrPrimitive, IndexedSignature},
 };
@@ -39,6 +40,7 @@ use crate::{
 };
 
 pub mod attachment;
+pub mod group;
 pub mod message;
 pub mod parsing;
 pub mod path;

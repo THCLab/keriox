@@ -6,7 +6,8 @@ use crate::{
 };
 
 use super::{
-    codes::{attached_signature_code::AttachedSignatureCode, Group},
+    codes::attached_signature_code::AttachedSignatureCode,
+    group::Group,
     primitives::{
         CesrPrimitive, Digest, Identifier, IdentifierCode, IndexedSignature, PublicKey, Signature,
     },

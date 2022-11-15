@@ -4,7 +4,7 @@ use super::primitives::{
     digest, identifier_signature_pair, indexed_signature, nontransferable_identifier,
     serial_number_parser, signature, timestamp, transferable_quadruple,
 };
-use crate::event_parsing::codes::{group::GroupCode, Group};
+use crate::event_parsing::{codes::group::GroupCode, group::Group};
 
 pub fn group_code(s: &[u8]) -> nom::IResult<&[u8], GroupCode> {
     let (rest, payload_type) = take(4u8)(s)?;

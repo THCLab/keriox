@@ -3,8 +3,9 @@ use std::str::FromStr;
 use crate::event_parsing::parsers::{group::parse_group, parse_primitive};
 
 use super::{
-    codes::{group::GroupCode, Group, PrimitiveCode},
+    codes::{group::GroupCode, PrimitiveCode},
     error::Error,
+    group::Group,
 };
 
 #[derive(PartialEq, Debug)]
@@ -38,8 +39,9 @@ mod tests {
     use crate::event_parsing::{
         codes::{
             attached_signature_code::AttachedSignatureCode, basic::Basic, group::GroupCode,
-            self_addressing::SelfAddressing, self_signing::SelfSigning, Group,
+            self_addressing::SelfAddressing, self_signing::SelfSigning,
         },
+        group::Group,
         primitives::IdentifierCode,
         value::{parse_value, Value},
     };
