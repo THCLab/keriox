@@ -5,12 +5,14 @@ use nom::{bytes::complete::take, error::ErrorKind, multi::count, sequence::tuple
 
 use crate::event_parsing::codes::attached_signature_code::AttachedSignatureCode;
 use crate::event_parsing::codes::basic::Basic;
+use crate::event_parsing::codes::material_path_codes::MaterialPathCode;
 use crate::event_parsing::codes::self_addressing::SelfAddressing;
 use crate::event_parsing::codes::self_signing::SelfSigning;
 use crate::event_parsing::codes::timestamp::TimestampCode;
 use crate::event_parsing::codes::{
     group::GroupCode, serial_number::SerialNumberCode, DerivationCode,
 };
+use crate::event_parsing::path::MaterialPath;
 
 use super::group::group_code;
 use super::parse_primitive;
@@ -95,6 +97,23 @@ pub fn timestamp_parser(s: &[u8]) -> nom::IResult<&[u8], DateTime<FixedOffset>> 
     };
 
     Ok((rest, timestamp))
+}
+
+pub fn material_path(s: &[u8]) -> nom::IResult<&[u8], MaterialPath> {
+    let (more, type_c) = take(4u8)(s)?;
+
+    let payload_type: MaterialPathCode = std::str::from_utf8(type_c).unwrap().parse().unwrap();
+    // parse amount of quadruplets
+    let full_size = payload_type.size() * 4;
+    // parse full path
+    let (more, base) = take(full_size)(more)?;
+
+    let path = MaterialPath::new(
+        payload_type,
+        String::from_utf8(base.to_vec()).unwrap_or_default(),
+    );
+
+    Ok((more, path))
 }
 
 pub fn transferable_quadruple(s: &[u8]) -> nom::IResult<&[u8], TransferableQuadruple> {
@@ -198,4 +217,11 @@ pub fn test_timestamp_parse() {
         "2020-08-22 17:50:09.988921 +00:00",
         parsed_datetime.to_string()
     );
+}
+
+#[test]
+fn test_path_parse() {
+    let attached_str = "6AABAAA-";
+    let (_rest, attached_material) = material_path(attached_str.as_bytes()).unwrap();
+    assert_eq!(attached_material, MaterialPath::to_path("-".into()));
 }

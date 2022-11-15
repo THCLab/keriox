@@ -172,7 +172,7 @@ impl Attachment {
                         .map(|s| s.to_cesr())
                         .fold(String::new(), |a, b| a + &b);
                 (
-                    GroupCode::PathedMaterialQuadruplet((attachments.len() / 4) as u16),
+                    GroupCode::PathedMaterialQuadruple((attachments.len() / 4) as u16),
                     attachments,
                 )
             }

@@ -1,5 +1,6 @@
 use super::{
     codes::{group::GroupCode, serial_number::pack_sn, timestamp::pack_datetime, DerivationCode},
+    path::MaterialPath,
     primitives::{
         CesrPrimitive, Digest, IdentifierSignaturesCouple, IndexedSignature, PublicKey, Signature,
         Timestamp, TransferableQuadruple,
@@ -17,7 +18,7 @@ pub enum Group {
     LastEstSignaturesGroups(Vec<IdentifierSignaturesCouple>),
     Frame(Vec<Group>),
     // it's from cesr-proof
-    PathedMaterialQuadruplet(u16),
+    PathedMaterialQuadruplet(MaterialPath, Vec<Group>),
 }
 
 impl Group {
@@ -44,13 +45,13 @@ impl Group {
             Group::SourceSealCouples(quadruple) => (
                 GroupCode::SealSourceCouples(quadruple.len() as u16),
                 quadruple.into_iter().fold("".into(), |acc, (sn, digest)| {
-                    [acc, "0A".to_string(), pack_sn(*sn), digest.to_str()].join("")
+                    [acc, pack_sn(*sn), digest.to_str()].join("")
                 }),
             ),
             Group::FirstSeenReplyCouples(couples) => (
                 GroupCode::FirstSeenReplyCouples(couples.len() as u16),
                 couples.iter().fold("".into(), |acc, (sn, dt)| {
-                    [acc, "0A".to_string(), pack_sn(*sn), pack_datetime(dt)].join("")
+                    [acc, pack_sn(*sn), pack_datetime(dt)].join("")
                 }),
             ),
             Group::TransferableIndexedSigGroups(groups) => (
@@ -64,7 +65,6 @@ impl Group {
                         [
                             acc,
                             identifier.to_str(),
-                            "0A".to_string(),
                             pack_sn(*sn),
                             digest.to_str(),
                             signatures,
@@ -90,7 +90,16 @@ impl Group {
                 let code = GroupCode::Frame(data.len() as u16);
                 (code, data)
             }
-            Group::PathedMaterialQuadruplet(_) => todo!(),
+            Group::PathedMaterialQuadruplet(path, attachments) => {
+                let attachments = attachments
+                    .into_iter()
+                    .map(|s| s.to_cesr_str())
+                    .fold(String::new(), |a, b| a + &b);
+                (
+                    GroupCode::PathedMaterialQuadruple((attachments.len() / 4) as u16),
+                    path.to_cesr() + &attachments,
+                )
+            }
         };
         [code.to_str(), value].concat()
     }

@@ -140,7 +140,7 @@ pub fn attachment(s: &[u8]) -> nom::IResult<&[u8], Attachment> {
                 Err(e) => Err(e),
             }
         }
-        GroupCode::PathedMaterialQuadruplet(n) => match nom::bytes::complete::take(n * 4)(rest) {
+        GroupCode::PathedMaterialQuadruple(n) => match nom::bytes::complete::take(n * 4)(rest) {
             Ok((rest, total)) => {
                 let (extra, mp) = material_path(total)?;
                 let (_extra, attachment) = many0(attachment)(extra)?;
