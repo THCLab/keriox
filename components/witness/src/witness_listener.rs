@@ -175,9 +175,10 @@ pub mod http_handlers {
     use itertools::Itertools;
     use keri::{
         actor::{QueryError, SignedQueryError},
-        event_parsing::SignedEventData,
+        error::Error,
+        event_parsing::{primitives::CesrPrimitive, SignedEventData},
         oobi::Role,
-        prefix::{IdentifierPrefix, CesrPrimitive},
+        prefix::IdentifierPrefix,
     };
 
     use crate::witness::{Witness, WitnessError};

@@ -1,5 +1,5 @@
 use super::error::Error;
-use super::{SelfSigningPrefix};
+use super::SelfSigningPrefix;
 use crate::event_parsing::codes::attached_signature_code::AttachedSignatureCode;
 use crate::event_parsing::codes::self_signing::SelfSigning;
 use crate::event_parsing::codes::{DerivationCode, PrimitiveCode};

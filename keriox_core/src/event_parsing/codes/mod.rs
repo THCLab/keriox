@@ -1,12 +1,14 @@
-use nom::{
-    bytes::complete::take,
-    multi::{count, many0},
-    sequence::tuple,
-};
+use std::str::FromStr;
+
+use nom::multi::many0;
 
 use self::{
-    attached_signature_code::AttachedSignatureCode, basic::Basic, group::GroupCode,
-    self_addressing::SelfAddressing, self_signing::SelfSigning, serial_number::{pack_sn, SerialNumberCode},
+    attached_signature_code::AttachedSignatureCode,
+    basic::Basic,
+    group::GroupCode,
+    self_addressing::SelfAddressing,
+    self_signing::SelfSigning,
+    serial_number::{pack_sn, SerialNumberCode},
 };
 
 pub mod attached_signature_code;
@@ -18,13 +20,14 @@ pub mod self_signing;
 pub mod serial_number;
 
 use super::{
+    error::Error,
     message::event_message,
-    parsers::{
-        group_code, identifier_signature_pair, indexed_signature, nontransferable_identifier,
-        serial_number_parser, signature, timestamp, transferable_quadruple,
+    parsers::group::parse_group,
+    primitives::{
+        CesrPrimitive, Digest, IdentifierSignaturesCouple, IndexedSignature, PublicKey, Signature,
+        Timestamp, TransferableQuadruple,
     },
-    parsing::{from_text_to_bytes},
-    EventType, primitives::{IndexedSignature, NontransferableIdentifier, TransferableQuadruple, Timestamp, CesrPrimitive, Signature, IdentifierSignaturesCouple, Digest},
+    EventType,
 };
 
 pub trait DerivationCode {
@@ -45,12 +48,7 @@ pub trait DerivationCode {
     fn to_str(&self) -> String;
 }
 
-pub fn parse_value<A: DerivationCode>(code: A, stream: &[u8]) -> nom::IResult<&[u8], (A, Vec<u8>)> {
-    let (rest, data) = take(code.value_size() as usize)(stream)?;
-    let decoded = from_text_to_bytes(data).unwrap()[code.code_size()..].to_vec();
-    Ok((rest, (code, decoded)))
-}
-
+#[derive(PartialEq, Debug)]
 pub enum PrimitiveCode {
     // todo
     Seed(),
@@ -59,7 +57,7 @@ pub enum PrimitiveCode {
     SelfSigning(SelfSigning),
     SerialNumber(SerialNumberCode),
     IndexedSignature(AttachedSignatureCode),
-    Timestamp
+    Timestamp,
 }
 
 impl PrimitiveCode {
@@ -76,6 +74,79 @@ impl PrimitiveCode {
     }
 }
 
+impl FromStr for PrimitiveCode {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match AttachedSignatureCode::from_str(s) {
+            Ok(sig) => Ok(PrimitiveCode::IndexedSignature(sig)),
+            Err(_) => match Basic::from_str(s) {
+                Ok(bp) => Ok(PrimitiveCode::Basic(bp)),
+                Err(_) => match SelfAddressing::from_str(s) {
+                    Ok(sa) => Ok(PrimitiveCode::SelfAddressing(sa)),
+                    Err(_) => match SelfSigning::from_str(s) {
+                        Ok(ss) => Ok(PrimitiveCode::SelfSigning(ss)),
+                        Err(_) => match SerialNumberCode::from_str(s) {
+                            Ok(sn) => Ok(PrimitiveCode::SerialNumber(sn)),
+                            Err(_) => todo!(),
+                        },
+                    },
+                },
+            },
+        }
+    }
+}
+
+impl DerivationCode for PrimitiveCode {
+    fn hard_size(&self) -> usize {
+        match self {
+            PrimitiveCode::Seed() => todo!(),
+            PrimitiveCode::Basic(b) => b.hard_size(),
+            PrimitiveCode::SelfAddressing(sa) => sa.hard_size(),
+            PrimitiveCode::SelfSigning(ss) => ss.hard_size(),
+            PrimitiveCode::SerialNumber(sn) => sn.hard_size(),
+            PrimitiveCode::IndexedSignature(i) => i.hard_size(),
+            PrimitiveCode::Timestamp => todo!(),
+        }
+    }
+
+    fn soft_size(&self) -> usize {
+        match self {
+            PrimitiveCode::Seed() => todo!(),
+            PrimitiveCode::Basic(b) => b.soft_size(),
+            PrimitiveCode::SelfAddressing(sa) => sa.soft_size(),
+            PrimitiveCode::SelfSigning(ss) => ss.soft_size(),
+            PrimitiveCode::SerialNumber(sn) => sn.soft_size(),
+            PrimitiveCode::IndexedSignature(i) => i.soft_size(),
+            PrimitiveCode::Timestamp => todo!(),
+        }
+    }
+
+    fn value_size(&self) -> usize {
+        match self {
+            PrimitiveCode::Seed() => todo!(),
+            PrimitiveCode::Basic(b) => b.value_size(),
+            PrimitiveCode::SelfAddressing(sa) => sa.value_size(),
+            PrimitiveCode::SelfSigning(ss) => ss.value_size(),
+            PrimitiveCode::SerialNumber(sn) => sn.value_size(),
+            PrimitiveCode::IndexedSignature(i) => i.value_size(),
+            PrimitiveCode::Timestamp => todo!(),
+        }
+    }
+
+    fn to_str(&self) -> String {
+        match self {
+            PrimitiveCode::Seed() => todo!(),
+            PrimitiveCode::Basic(b) => b.to_str(),
+            PrimitiveCode::SelfAddressing(sa) => sa.to_str(),
+            PrimitiveCode::SelfSigning(ss) => ss.to_str(),
+            PrimitiveCode::SerialNumber(sn) => sn.to_str(),
+            PrimitiveCode::IndexedSignature(i) => i.to_str(),
+            PrimitiveCode::Timestamp => todo!(),
+        }
+    }
+}
+
 impl Group {
     pub fn to_cesr_str(&self) -> String {
         [self.code(), self.data_to_str()].join("")
@@ -83,43 +154,57 @@ impl Group {
     fn data_to_str(&self) -> String {
         match self {
             Group::IndexedControllerSignatures(sigs) | Group::IndexedWitnessSignatures(sigs) => {
-                sigs.iter().fold("".into(), |acc, s| {
-                    [acc, s.to_str()].join("")
-                })
+                sigs.iter()
+                    .fold("".into(), |acc, s| [acc, s.to_str()].join(""))
             }
-            Group::NontransferableReceiptCouples(couples) => 
-                couples.iter().fold("".into(), |acc, (identifeir, signature)| {
-                    [acc, identifeir.to_str(), signature.to_str()].join("")
-                }),
-            Group::SnDigestCouple(quadruple) => {
+            Group::NontransferableReceiptCouples(couples) => {
+                couples
+                    .iter()
+                    .fold("".into(), |acc, (identifeir, signature)| {
+                        [acc, identifeir.to_str(), signature.to_str()].join("")
+                    })
+            }
+            Group::SourceSealCouples(quadruple) => {
                 quadruple.into_iter().fold("".into(), |acc, (sn, digest)| {
                     // let signatures = signatures.iter().fold("".into(), |acc, s| {
                     //     [acc, s.to_str()].join("")
                     // });
                     [acc, "0A".to_string(), pack_sn(*sn), digest.to_str()].join("")
                 })
-            },
+            }
             Group::FirstSeenReplyCouples(couples) => {
                 couples.iter().fold("".into(), |acc, (sn, dt)| {
-                    [acc, "0A".to_string(), pack_sn(*sn), "todo".to_string()].join("")
+                    [acc, "0A".to_string(), pack_sn(*sn), todo!()].join("")
                 })
-            },
+            }
             Group::TransferableIndexedSigGroups(groups) => {
-                groups.iter().fold("".into(), |acc, (identifier, sn, digest, signatures)| {
-                    let signatures = signatures.iter().fold("".into(), |acc, s| {
-                        [acc, s.to_str()].join("")
-                    });
-                    [acc, identifier.to_str(), "0A".to_string(), pack_sn(*sn), signatures].join("")
-                })
-            },
+                groups
+                    .iter()
+                    .fold("".into(), |acc, (identifier, sn, digest, signatures)| {
+                        let signatures = signatures
+                            .iter()
+                            .fold("".into(), |acc, s| [acc, s.to_str()].join(""));
+                        [
+                            acc,
+                            identifier.to_str(),
+                            "0A".to_string(),
+                            pack_sn(*sn),
+                            digest.to_str(),
+                            signatures,
+                        ]
+                        .join("")
+                    })
+            }
             Group::LastEstSignaturesGroups(couples) => {
-                couples.iter().fold("".into(), |acc, (identifier, signatures)| {
-                    let signatures = signatures.iter().fold("".into(), |acc, s| {
-                        [acc, s.to_str()].join("")
-                    });
-                    [acc, identifier.to_str(), signatures].join("")
-                })
-            },
+                couples
+                    .iter()
+                    .fold("".into(), |acc, (identifier, signatures)| {
+                        let signatures = signatures
+                            .iter()
+                            .fold("".into(), |acc, s| [acc, s.to_str()].join(""));
+                        [acc, identifier.to_str(), signatures].join("")
+                    })
+            }
             Group::Frame(_) => todo!(),
             Group::PathedMaterialQuadruplet(_) => todo!(),
         }
@@ -136,9 +221,7 @@ impl Group {
             Group::NontransferableReceiptCouples(couples) => {
                 GroupCode::NontransferableReceiptCouples(couples.len() as u16)
             }
-            Group::SnDigestCouple(couple) => {
-                GroupCode::SnDigestCouple(couple.len() as u16)
-            }
+            Group::SourceSealCouples(couple) => GroupCode::SealSourceCouples(couple.len() as u16),
             Group::FirstSeenReplyCouples(couple) => {
                 GroupCode::FirstSeenReplyCouples(couple.len() as u16)
             }
@@ -159,8 +242,8 @@ impl Group {
 pub enum Group {
     IndexedControllerSignatures(Vec<IndexedSignature>),
     IndexedWitnessSignatures(Vec<IndexedSignature>),
-    NontransferableReceiptCouples(Vec<(NontransferableIdentifier, Signature)>),
-    SnDigestCouple(Vec<(u64, Digest)>),
+    NontransferableReceiptCouples(Vec<(PublicKey, Signature)>),
+    SourceSealCouples(Vec<(u64, Digest)>),
     // todo add timestamp
     FirstSeenReplyCouples(Vec<(u64, Timestamp)>),
     TransferableIndexedSigGroups(Vec<TransferableQuadruple>),
@@ -181,45 +264,8 @@ pub fn parse_payload(stream: &[u8]) -> nom::IResult<&[u8], EventType> {
     event_message(stream)
 }
 
-pub fn parse_group(stream: &[u8]) -> nom::IResult<&[u8], Group> {
-    let (rest, group_code) = group_code(stream)?;
-    Ok(match group_code {
-        GroupCode::IndexedControllerSignatures(n) => {
-            let (rest, signatures) = count(indexed_signature, n as usize)(rest)?;
-            (rest, Group::IndexedControllerSignatures(signatures))
-        }
-        GroupCode::IndexedWitnessSignatures(n) => {
-            let (rest, signatures) = count(indexed_signature, n as usize)(rest)?;
-            (rest, Group::IndexedWitnessSignatures(signatures))
-        }
-        GroupCode::NontransferableReceiptCouples(n) => {
-            let (rest, couple) =
-                count(tuple((nontransferable_identifier, signature)), n as usize)(rest)?;
-            (rest, Group::NontransferableReceiptCouples(couple))
-        }
-        GroupCode::SnDigestCouple(n) => {
-            let (rest, quadruple) = count(transferable_quadruple, n as usize)(rest).unwrap();
-            (rest, Group::SnDigestCouple(quadruple))
-        }
-        GroupCode::FirstSeenReplyCouples(n) => {
-            let (rest, couple) = count(tuple((serial_number_parser, timestamp)), n as usize)(rest)?;
-            (rest, Group::FirstSeenReplyCouples(couple))
-        }
-        GroupCode::TransferableIndexedSigGroups(n) => {
-            let (rest, quadruple) = count(transferable_quadruple, n as usize)(rest).unwrap();
-            (rest, Group::TransferableIndexedSigGroups(quadruple))
-        }
-        GroupCode::LastEstSignaturesGroups(n) => {
-            let (rest, couple) = count(identifier_signature_pair, n as usize)(rest)?;
-            (rest, Group::LastEstSignaturesGroups(couple))
-        }
-        GroupCode::Frame(_) => todo!(),
-        GroupCode::PathedMaterialQuadruplet(_) => todo!(),
-    })
-}
-
 pub fn parse(stream: &[u8]) -> nom::IResult<&[u8], ParsedData> {
-    let (rest, payload) = event_message(stream)?;
+    let (rest, payload) = parse_payload(stream)?;
     let (rest, attachments) = many0(parse_group)(rest)?;
 
     Ok((

@@ -3,8 +3,9 @@ use serde::{Deserialize, Serialize};
 use super::threshold::SignatureThreshold;
 use crate::{
     error::Error,
+    event_parsing::primitives::CesrPrimitive,
     prefix::{AttachedSignaturePrefix, BasicPrefix},
-    sai::{derivation::SelfAddressing, SelfAddressingPrefix}, event_parsing::primitives::CesrPrimitive,
+    sai::{derivation::SelfAddressing, SelfAddressingPrefix},
 };
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]

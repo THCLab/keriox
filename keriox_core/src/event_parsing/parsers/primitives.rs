@@ -1,87 +1,45 @@
+use std::str::FromStr;
+
 use chrono::{DateTime, FixedOffset};
 use nom::{bytes::complete::take, error::ErrorKind, multi::count, sequence::tuple};
 
-use super::codes::{
-    basic::Basic, parse_value, self_addressing::SelfAddressing, self_signing::SelfSigning,
-    serial_number::SerialNumberCode,
+use crate::event_parsing::codes::attached_signature_code::AttachedSignatureCode;
+use crate::event_parsing::codes::basic::Basic;
+use crate::event_parsing::codes::self_addressing::SelfAddressing;
+use crate::event_parsing::codes::self_signing::SelfSigning;
+use crate::event_parsing::codes::{
+    group::GroupCode, serial_number::SerialNumberCode, DerivationCode,
 };
 
-use super::codes::{
-    attached_signature_code::AttachedSignatureCode, group::GroupCode
+use super::group::group_code;
+use super::parse_primitive;
+use crate::event_parsing::parsing::from_text_to_bytes;
+use crate::event_parsing::primitives::{
+    Digest, Identifier, IdentifierCode, IdentifierSignaturesCouple, IndexedSignature, PublicKey,
+    Signature, TransferableQuadruple,
 };
-use super::primitives::{IndexedSignature, Signature, NontransferableIdentifier, Digest, Identifier, IdentifierCode, TransferableQuadruple, IdentifierSignaturesCouple};
 
-pub fn group_code(s: &[u8]) -> nom::IResult<&[u8], GroupCode> {
-    let (rest, payload_type) = take(4u8)(s)?;
-    let group_code: GroupCode = std::str::from_utf8(payload_type)
-        .map_err(|_e| nom::Err::Failure((s, ErrorKind::IsNot)))?
-        .parse()
-        .map_err(|_e| nom::Err::Error((s, ErrorKind::IsNot)))?;
-    Ok((rest, group_code))
-}
+// Parsers for specific primitive. Ment to be used to parse group elements of
+// expected type.
 
 pub fn indexed_signature(s: &[u8]) -> nom::IResult<&[u8], IndexedSignature> {
-    let (_more, type_c) = take(1u8)(s)?;
-
-    const A: &[u8] = "A".as_bytes();
-    const B: &[u8] = "B".as_bytes();
-    const Z: &[u8] = "0".as_bytes();
-
-    let code_len = match type_c {
-        A | B => 2usize,
-        Z => 4usize,
-        _ => todo!(),
-    };
-    let (rest, code_bytes) = take(code_len)(s)?;
-    let code: AttachedSignatureCode = std::str::from_utf8(code_bytes).unwrap().parse().unwrap();
-    parse_value(code, rest)
+    let code = AttachedSignatureCode::from_str(std::str::from_utf8(s).unwrap()).unwrap();
+    parse_primitive(code, s)
 }
 
 pub fn signature(s: &[u8]) -> nom::IResult<&[u8], Signature> {
-    const EXT: &[u8] = "1".as_bytes();
-
-    let (_, type_c) = take(1u8)(s)?;
-
-    let (rest, code_str) = take(match type_c {
-        EXT => 4u8,
-        _ => 2u8,
-    })(s)?;
-
-    let code: SelfSigning = std::str::from_utf8(code_str).unwrap().parse().unwrap();
-    parse_value(code, rest)
+    let code = SelfSigning::from_str(std::str::from_utf8(s).unwrap()).unwrap();
+    parse_primitive(code, s)
 }
 
-pub fn nontransferable_identifier(s: &[u8]) -> nom::IResult<&[u8], NontransferableIdentifier> {
-    const EXT: &[u8] = "1".as_bytes();
-
-    let (_, type_c) = take(1u8)(s)?;
-
-    let (rest, code_str) = take(match type_c {
-        EXT => 4u8,
-        _ => 1u8,
-    })(s)?;
-
-    let code: Basic = String::from_utf8(code_str.to_vec())
-        .map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?
-        .parse()
-        .map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?;
-    parse_value(code, rest)
+pub fn nontransferable_identifier(s: &[u8]) -> nom::IResult<&[u8], PublicKey> {
+    let code = Basic::from_str(std::str::from_utf8(s).unwrap()).unwrap();
+    parse_primitive(code, s)
 }
 
 pub fn digest(s: &[u8]) -> nom::IResult<&[u8], Digest> {
-    const EXT: &[u8] = "0".as_bytes();
-    let (_, type_c) = take(1u8)(s)?;
-
-    let (rest, code_str) = take(match type_c {
-        EXT => 2u8,
-        _ => 1u8,
-    })(s)?;
-
-    let code: SelfAddressing = String::from_utf8(code_str.to_vec())
-        .map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?
-        .parse()
-        .map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?;
-    parse_value(code, rest)
+    let code = SelfAddressing::from_str(std::str::from_utf8(s).unwrap()).unwrap();
+    parse_primitive(code, s)
 }
 
 pub fn identifier(s: &[u8]) -> nom::IResult<&[u8], Identifier> {
@@ -103,11 +61,12 @@ pub fn serial_number_parser(s: &[u8]) -> nom::IResult<&[u8], u64> {
         .parse()
         .map_err(|_| nom::Err::Failure((s, ErrorKind::IsNot)))?;
 
-    let (rest, value) = parse_value(code, rest)?;
+    let (rest, data) = take(code.value_size() as usize)(rest)?;
+    let decoded = from_text_to_bytes(data).unwrap()[code.code_size()..].to_vec();
 
     let sn = {
         let mut sn_array: [u8; 8] = [0; 8];
-        sn_array.copy_from_slice(&value.1[8..]);
+        sn_array.copy_from_slice(&decoded[8..]);
         u64::from_be_bytes(sn_array)
     };
 
@@ -160,6 +119,9 @@ pub fn identifier_signature_pair(s: &[u8]) -> nom::IResult<&[u8], IdentifierSign
 
 #[test]
 fn test_indexed_signature() {
+    use crate::event_parsing::codes::{
+        attached_signature_code::AttachedSignatureCode, self_signing::SelfSigning,
+    };
     assert_eq!(
         indexed_signature("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".as_bytes()),
         Ok(("".as_bytes(), (AttachedSignatureCode { index: 0, code: SelfSigning::Ed25519Sha512 }, vec![0u8; 64])))
@@ -173,6 +135,7 @@ fn test_indexed_signature() {
 
 #[test]
 fn test_basic_identifier() {
+    use crate::event_parsing::codes::basic::Basic;
     let pk_raw = vec![
         249, 247, 209, 34, 220, 90, 114, 42, 247, 149, 69, 221, 219, 244, 123, 60, 41, 37, 217,
         217, 199, 132, 199, 134, 143, 65, 11, 79, 135, 11, 85, 16,
@@ -185,6 +148,7 @@ fn test_basic_identifier() {
 
 #[test]
 fn test_digest() {
+    use crate::event_parsing::codes::self_addressing::SelfAddressing;
     let digest_raw = vec![
         176, 185, 47, 120, 129, 84, 62, 251, 119, 243, 24, 109, 129, 134, 9, 68, 32, 169, 0, 99,
         187, 90, 56, 199, 85, 29, 251, 61, 172, 47, 235, 177,
@@ -199,6 +163,8 @@ fn test_digest() {
 
 #[test]
 fn test_signature() {
+    use crate::event_parsing::codes::self_signing::SelfSigning;
+
     let signature_string =
         "0Bq1UBr1QD5TokdcnO_FmnoYsd8rB4_-oaQtk0dfFSSXPcxAu7pSaQIVfkhzckCVmTIgrdxyXS21uZgs7NxoyZAQ";
     let string_to_parse = [&signature_string, "more"].join("");

@@ -1,6 +1,12 @@
-use chrono::{FixedOffset, DateTime};
+use chrono::{DateTime, FixedOffset};
 
-use super::{codes::{basic::Basic, self_addressing::SelfAddressing, attached_signature_code::AttachedSignatureCode, self_signing::SelfSigning, PrimitiveCode}, parsing::from_bytes_to_text};
+use super::{
+    codes::{
+        attached_signature_code::AttachedSignatureCode, basic::Basic,
+        self_addressing::SelfAddressing, self_signing::SelfSigning, PrimitiveCode,
+    },
+    parsing::from_bytes_to_text,
+};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum IdentifierCode {
@@ -9,7 +15,7 @@ pub enum IdentifierCode {
 }
 
 pub type Identifier = (IdentifierCode, Vec<u8>);
-pub type NontransferableIdentifier = (Basic, Vec<u8>);
+pub type PublicKey = (Basic, Vec<u8>);
 pub type Digest = (SelfAddressing, Vec<u8>);
 pub type Signature = (SelfSigning, Vec<u8>);
 pub type IndexedSignature = (AttachedSignatureCode, Vec<u8>);
@@ -42,7 +48,7 @@ impl CesrPrimitive for Digest {
     }
 
     fn derivation_code(&self) -> PrimitiveCode {
-        PrimitiveCode::SelfAddressing(self.0)
+        PrimitiveCode::SelfAddressing(self.0.clone())
     }
 }
 
@@ -66,17 +72,7 @@ impl CesrPrimitive for IndexedSignature {
     }
 }
 
-impl CesrPrimitive for (PrimitiveCode, Vec<u8>) {
-    fn derivative(&self) -> Vec<u8> {
-        self.1.clone()
-    }
-
-    fn derivation_code(&self) -> PrimitiveCode {
-        self.0
-    }
-}
-
-impl CesrPrimitive for NontransferableIdentifier {
+impl CesrPrimitive for PublicKey {
     fn derivative(&self) -> Vec<u8> {
         self.1.clone()
     }

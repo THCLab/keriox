@@ -4,7 +4,7 @@ use figment::{
     providers::{Format, Json},
     Figment,
 };
-use keri::{oobi::LocationScheme, prefix::CesrPrimitive};
+use keri::{event_parsing::primitives::CesrPrimitive, oobi::LocationScheme};
 use serde::Deserialize;
 use structopt::StructOpt;
 use watcher::WatcherListener;

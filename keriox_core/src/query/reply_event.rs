@@ -12,9 +12,10 @@ use crate::{
         signature::{Nontransferable, Signature, SignerData},
         Digestible, EventTypeTag, SaidEvent, Typeable,
     },
+    event_parsing::primitives::CesrPrimitive,
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     query::QueryError,
-    sai::derivation::SelfAddressing, event_parsing::primitives::CesrPrimitive,
+    sai::derivation::SelfAddressing,
 };
 
 #[derive(Clone, PartialEq, Debug)]

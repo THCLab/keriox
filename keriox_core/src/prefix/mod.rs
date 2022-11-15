@@ -1,6 +1,6 @@
 use self::error::Error;
 use crate::event_parsing::codes::PrimitiveCode;
-use crate::event_parsing::{primitives::CesrPrimitive};
+use crate::event_parsing::primitives::CesrPrimitive;
 use crate::sai::SelfAddressingPrefix;
 use core::str::FromStr;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};

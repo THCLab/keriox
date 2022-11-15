@@ -1,7 +1,7 @@
 use super::error::Error;
 use super::CesrPrimitive;
 use crate::{
-    event_parsing::{parsing::from_text_to_bytes, codes::PrimitiveCode},
+    event_parsing::{codes::PrimitiveCode, parsing::from_text_to_bytes},
     keys::{PrivateKey, PublicKey},
 };
 use core::str::FromStr;

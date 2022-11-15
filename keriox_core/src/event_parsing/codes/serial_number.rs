@@ -4,6 +4,7 @@ use crate::event_parsing::{error::Error, parsing::from_bytes_to_text};
 
 use super::DerivationCode;
 
+#[derive(PartialEq, Debug)]
 pub struct SerialNumberCode;
 
 impl DerivationCode for SerialNumberCode {

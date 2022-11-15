@@ -12,7 +12,8 @@ pub enum GroupCode {
     IndexedControllerSignatures(u16),
     IndexedWitnessSignatures(u16),
     NontransferableReceiptCouples(u16),
-    SnDigestCouple(u16),
+    // Composed Base64 couple, snu+dig of given delegators or issuers event
+    SealSourceCouples(u16),
     FirstSeenReplyCouples(u16),
     TransferableIndexedSigGroups(u16),
     LastEstSignaturesGroups(u16),
@@ -41,7 +42,7 @@ impl DerivationCode for GroupCode {
             GroupCode::NontransferableReceiptCouples(count) => ("-C", count),
             GroupCode::FirstSeenReplyCouples(count) => ("-E", count),
             GroupCode::TransferableIndexedSigGroups(count) => ("-F", count),
-            GroupCode::SnDigestCouple(count) => ("-G", count),
+            GroupCode::SealSourceCouples(count) => ("-G", count),
             GroupCode::LastEstSignaturesGroups(count) => ("-H", count),
             GroupCode::Frame(len) => ("-V", len),
             GroupCode::PathedMaterialQuadruplet(len) => ("-L", len),
@@ -67,7 +68,7 @@ impl FromStr for GroupCode {
             // todo why not in cesr docs?
             "-H" => Ok(Self::LastEstSignaturesGroups(count)),
             // todo why not in cesr docs?
-            "-G" => Ok(Self::SnDigestCouple(count)),
+            "-G" => Ok(Self::SealSourceCouples(count)),
             // todo why not in cesr-proof docs?
             "-L" => Ok(Self::PathedMaterialQuadruplet(count)),
             "-U" => todo!(),
@@ -94,7 +95,7 @@ pub fn test_group_codes_to_str() -> Result<(), Error> {
         GroupCode::TransferableIndexedSigGroups(4095).to_str(),
         "-F__"
     );
-    assert_eq!(GroupCode::SnDigestCouple(0).to_str(), "-GAA");
+    assert_eq!(GroupCode::SealSourceCouples(0).to_str(), "-GAA");
     assert_eq!(GroupCode::Frame(1000).to_str(), "-VPo");
     Ok(())
 }
@@ -112,7 +113,7 @@ pub fn test_group_codes_from_str() -> Result<(), Error> {
         GroupCode::TransferableIndexedSigGroups(4095),
         "-F__".parse()?
     );
-    assert_eq!(GroupCode::SnDigestCouple(0), "-GAA".parse()?);
+    assert_eq!(GroupCode::SealSourceCouples(0), "-GAA".parse()?);
     assert_eq!(GroupCode::Frame(1000), "-VPo".parse()?);
     Ok(())
 }

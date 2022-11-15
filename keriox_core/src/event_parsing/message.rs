@@ -11,12 +11,13 @@ use crate::event_message::exchange::Exchange;
 use crate::event_message::serialization_info::SerializationInfo;
 #[cfg(feature = "query")]
 use crate::event_message::{SaidEvent, Typeable};
+use crate::event_parsing::parsers::group::parse_group;
 #[cfg(feature = "query")]
 use crate::query::Timestamped;
 use crate::{
     event::{receipt::Receipt, EventMessage},
     event_message::{key_event_message::KeyEvent, Digestible},
-    event_parsing::{attachment::attachment, EventType, SignedEventData},
+    event_parsing::{EventType, SignedEventData},
 };
 
 fn json_message<'a, D: Deserialize<'a> + Digestible>(
@@ -106,7 +107,7 @@ pub fn notice_message(s: &[u8]) -> nom::IResult<&[u8], EventType> {
 
 pub fn signed_message(s: &[u8]) -> nom::IResult<&[u8], SignedEventData> {
     map(
-        pair(event_message, many0(attachment)),
+        pair(event_message, many0(parse_group)),
         |(event, attachments)| SignedEventData {
             deserialized_event: event,
             attachments,
@@ -116,7 +117,7 @@ pub fn signed_message(s: &[u8]) -> nom::IResult<&[u8], SignedEventData> {
 
 pub fn signed_notice(s: &[u8]) -> nom::IResult<&[u8], SignedEventData> {
     map(
-        pair(notice_message, many0(attachment)),
+        pair(notice_message, many0(parse_group)),
         |(event, attachments)| SignedEventData {
             deserialized_event: event,
             attachments,
@@ -127,7 +128,7 @@ pub fn signed_notice(s: &[u8]) -> nom::IResult<&[u8], SignedEventData> {
 #[cfg(any(feature = "query", feature = "oobi"))]
 pub fn signed_op(s: &[u8]) -> nom::IResult<&[u8], SignedEventData> {
     map(
-        pair(op_message, many0(attachment)),
+        pair(op_message, many0(parse_group)),
         |(event, attachments)| SignedEventData {
             deserialized_event: event,
             attachments,

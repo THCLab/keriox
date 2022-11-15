@@ -79,9 +79,9 @@ pub mod http_handlers {
     use itertools::Itertools;
     use keri::{
         error::Error,
-        event_parsing::SignedEventData,
+        event_parsing::{primitives::CesrPrimitive, SignedEventData},
         oobi::{error::OobiError, EndRole, LocationScheme, Role},
-        prefix::{IdentifierPrefix, CesrPrimitive},
+        prefix::IdentifierPrefix,
     };
     use reqwest::StatusCode;
     use serde::Deserialize;

@@ -9,10 +9,12 @@ use crate::{
         signed_event_message::{Message, Notice},
         Digestible, EventTypeTag,
     },
-    event_parsing::{message::{signed_event_stream, signed_message}, primitives::CesrPrimitive},
+    event_parsing::{
+        message::{signed_event_stream, signed_message},
+        primitives::CesrPrimitive,
+    },
     prefix::{
-        AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SeedPrefix,
-        SelfSigningPrefix,
+        AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SeedPrefix, SelfSigningPrefix,
     },
     processor::{
         basic_processor::BasicProcessor, escrow::default_escrow_bus, event_storage::EventStorage,

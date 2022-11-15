@@ -20,10 +20,11 @@ use keri::{
     event_parsing::{
         message::{event_message, exchange_message, key_event_message},
         path::MaterialPath,
+        primitives::CesrPrimitive,
         EventType,
     },
     oobi::{LocationScheme, Role, Scheme},
-    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, CesrPrimitive, SelfSigningPrefix},
+    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     query::{
         query_event::{QueryArgsMbx, QueryEvent, QueryRoute, QueryTopics, SignedQuery},
         reply_event::ReplyRoute,

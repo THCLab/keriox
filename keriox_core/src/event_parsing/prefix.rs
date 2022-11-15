@@ -209,9 +209,9 @@ fn test() {
 
 #[test]
 fn test_basic_prefix() {
+    use crate::event_parsing::primitives::CesrPrimitive;
     use ed25519_dalek::Keypair;
     use rand::rngs::OsRng;
-    use crate::event_parsing::primitives::CesrPrimitive;
 
     let kp = Keypair::generate(&mut OsRng);
 
@@ -236,7 +236,6 @@ fn test_self_adressing() {
 
 #[test]
 fn test_self_signing() {
-
     use crate::event_parsing::primitives::CesrPrimitive;
     let sig_prefix: SelfSigningPrefix =
         "0Bq1UBr1QD5TokdcnO_FmnoYsd8rB4_-oaQtk0dfFSSXPcxAu7pSaQIVfkhzckCVmTIgrdxyXS21uZgs7NxoyZAQ"

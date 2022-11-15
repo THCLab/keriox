@@ -4,10 +4,13 @@ use super::{SelfAddressing, SelfAddressingPrefix};
 
 use crate::{
     event_parsing::{
-        codes::{self_addressing::SelfAddressing as CesrSelfAddressing, DerivationCode, PrimitiveCode},
-        parsing::from_text_to_bytes, primitives::CesrPrimitive,
+        codes::{
+            self_addressing::SelfAddressing as CesrSelfAddressing, DerivationCode, PrimitiveCode,
+        },
+        parsing::from_text_to_bytes,
+        primitives::CesrPrimitive,
     },
-    prefix::{error::Error as PrefixError}
+    prefix::error::Error as PrefixError,
 };
 
 impl Into<CesrSelfAddressing> for SelfAddressing {
@@ -44,7 +47,7 @@ impl From<CesrSelfAddressing> for SelfAddressing {
 
 impl CesrPrimitive for SelfAddressingPrefix {
     fn derivative(&self) -> Vec<u8> {
-        self.digest.to_owned()
+        self.digest.clone()
     }
     fn derivation_code(&self) -> PrimitiveCode {
         let cesr_der: CesrSelfAddressing = self.derivation.clone().into();

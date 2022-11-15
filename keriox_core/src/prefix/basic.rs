@@ -52,6 +52,19 @@ impl BasicPrefix {
             _ => true,
         }
     }
+
+    pub fn get_code(&self) -> CesrBasic {
+        match self {
+            BasicPrefix::ECDSAsecp256k1NT(_) => CesrBasic::ECDSAsecp256k1NT,
+            BasicPrefix::ECDSAsecp256k1(_) => CesrBasic::ECDSAsecp256k1,
+            BasicPrefix::Ed25519NT(_) => CesrBasic::Ed25519NT,
+            BasicPrefix::Ed25519(_) => CesrBasic::Ed25519,
+            BasicPrefix::Ed448NT(_) => CesrBasic::Ed448NT,
+            BasicPrefix::Ed448(_) => CesrBasic::Ed448,
+            BasicPrefix::X25519(_) => CesrBasic::X25519,
+            BasicPrefix::X448(_) => CesrBasic::X448,
+        }
+    }
 }
 
 impl FromStr for BasicPrefix {
@@ -84,16 +97,7 @@ impl CesrPrimitive for BasicPrefix {
         }
     }
     fn derivation_code(&self) -> PrimitiveCode {
-        PrimitiveCode::Basic( match self {
-            BasicPrefix::ECDSAsecp256k1NT(_) => CesrBasic::ECDSAsecp256k1NT,
-            BasicPrefix::ECDSAsecp256k1(_) => CesrBasic::ECDSAsecp256k1,
-            BasicPrefix::Ed25519NT(_) => CesrBasic::Ed25519NT,
-            BasicPrefix::Ed25519(_) => CesrBasic::Ed25519,
-            BasicPrefix::Ed448NT(_) => CesrBasic::Ed448NT,
-            BasicPrefix::Ed448(_) => CesrBasic::Ed448,
-            BasicPrefix::X25519(_) => CesrBasic::X25519,
-            BasicPrefix::X448(_) => CesrBasic::X448,
-        })
+        PrimitiveCode::Basic(self.get_code())
     }
 }
 
