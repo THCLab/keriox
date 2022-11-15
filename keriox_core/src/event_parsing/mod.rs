@@ -1,19 +1,11 @@
 use std::convert::{TryFrom, TryInto};
 
-use chrono::{DateTime, FixedOffset, SecondsFormat};
-use serde::Deserialize;
 pub mod cesr_adapter;
 pub mod codes;
 pub mod error;
 pub mod parsers;
 pub mod primitives;
 
-use self::{
-    codes::{group::GroupCode, serial_number::pack_sn, DerivationCode},
-    group::Group,
-    path::MaterialPath,
-    primitives::{CesrPrimitive, IndexedSignature},
-};
 #[cfg(feature = "query")]
 use crate::query::{
     query_event::{QueryEvent, SignedQuery},
@@ -36,150 +28,16 @@ use crate::{
             SignedTransferableReceipt,
         },
     },
-    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
 };
 
-pub mod attachment;
+use self::{group::Group, primitives::IndexedSignature};
+
 pub mod group;
 pub mod message;
 pub mod parsing;
 pub mod path;
-pub mod prefix;
 
 pub mod value;
-
-#[derive(Debug, Clone, Deserialize, PartialEq)]
-pub enum Attachment {
-    // Count codes
-    SealSourceCouplets(Vec<SourceSeal>),
-    AttachedSignatures(Vec<AttachedSignaturePrefix>),
-    AttachedWitnessSignatures(Vec<AttachedSignaturePrefix>),
-    ReceiptCouplets(Vec<(BasicPrefix, SelfSigningPrefix)>),
-    // Count of attached qualified Base64 first seen replay couples fn+dt
-    FirstSeenReply(Vec<(u64, DateTime<FixedOffset>)>),
-    // Group codes
-    SealSignaturesGroups(Vec<(EventSeal, Vec<AttachedSignaturePrefix>)>),
-    PathedMaterialQuadruplet(MaterialPath, Vec<Signature>),
-    // List of signatures made using keys from last establishment event od identifier of prefix
-    LastEstSignaturesGroups(Vec<(IdentifierPrefix, Vec<AttachedSignaturePrefix>)>),
-    // Frame codes
-    Frame(Vec<Attachment>),
-}
-
-impl Attachment {
-    pub fn to_cesr(&self) -> String {
-        let (code, serialized_attachment) = match self {
-            Attachment::SealSourceCouplets(sources) => {
-                let serialzied_sources = sources.iter().fold("".into(), |acc, s| {
-                    [acc, pack_sn(s.sn), s.digest.to_str()].join("")
-                });
-
-                (
-                    GroupCode::SealSourceCouples(sources.len() as u16),
-                    serialzied_sources,
-                )
-            }
-            Attachment::SealSignaturesGroups(seals_signatures) => {
-                let serialized_seals =
-                    seals_signatures
-                        .iter()
-                        .fold("".into(), |acc, (seal, sigs)| {
-                            [
-                                acc,
-                                seal.prefix.to_str(),
-                                pack_sn(seal.sn),
-                                seal.event_digest.to_str(),
-                                Attachment::AttachedSignatures(sigs.to_vec()).to_cesr(),
-                            ]
-                            .join("")
-                        });
-                (
-                    GroupCode::TransferableIndexedSigGroups(seals_signatures.len() as u16),
-                    serialized_seals,
-                )
-            }
-            Attachment::AttachedSignatures(sigs) => {
-                let serialized_sigs = sigs
-                    .iter()
-                    .fold("".into(), |acc, sig| [acc, sig.to_str()].join(""));
-                (
-                    GroupCode::IndexedControllerSignatures(sigs.len() as u16),
-                    serialized_sigs,
-                )
-            }
-            Attachment::AttachedWitnessSignatures(sigs) => {
-                let serialized_sigs = sigs
-                    .iter()
-                    .fold("".into(), |acc, sig| [acc, sig.to_str()].join(""));
-                (
-                    GroupCode::IndexedWitnessSignatures(sigs.len() as u16),
-                    serialized_sigs,
-                )
-            }
-            Attachment::ReceiptCouplets(couplets) => {
-                let packed_couplets = couplets.iter().fold("".into(), |acc, (bp, sp)| {
-                    [acc, bp.to_str(), sp.to_str()].join("")
-                });
-
-                (
-                    GroupCode::NontransferableReceiptCouples(couplets.len() as u16),
-                    packed_couplets,
-                )
-            }
-            Attachment::LastEstSignaturesGroups(signers) => {
-                let packed_signers = signers.iter().fold("".to_string(), |acc, (signer, sigs)| {
-                    [
-                        acc,
-                        signer.to_str(),
-                        Attachment::AttachedSignatures(sigs.clone()).to_cesr(),
-                    ]
-                    .concat()
-                });
-                (
-                    GroupCode::LastEstSignaturesGroups(signers.len() as u16),
-                    packed_signers,
-                )
-            }
-            Attachment::Frame(att) => {
-                let packed_attachments = att
-                    .iter()
-                    .fold("".to_string(), |acc, att| [acc, att.to_cesr()].concat());
-                (
-                    GroupCode::Frame(packed_attachments.len() as u16),
-                    packed_attachments,
-                )
-            }
-            Attachment::FirstSeenReply(couplets) => {
-                let packed_couplets =
-                    couplets.iter().fold("".into(), |acc, (first_seen_sn, dt)| {
-                        [
-                            acc,
-                            first_seen_sn.to_string(),
-                            dt.to_rfc3339_opts(SecondsFormat::Micros, false),
-                        ]
-                        .join("")
-                    });
-
-                (
-                    GroupCode::FirstSeenReplyCouples(couplets.len() as u16),
-                    packed_couplets,
-                )
-            }
-            Attachment::PathedMaterialQuadruplet(path, signatures) => {
-                let attachments = path.to_cesr()
-                    + &signature::signatures_into_groups(&signatures)
-                        .iter()
-                        .map(|s| s.to_cesr_str())
-                        .fold(String::new(), |a, b| a + &b);
-                (
-                    GroupCode::PathedMaterialQuadruple((attachments.len() / 4) as u16),
-                    attachments,
-                )
-            }
-        };
-        [code.to_str(), serialized_attachment].join("")
-    }
-}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct SignedEventData {

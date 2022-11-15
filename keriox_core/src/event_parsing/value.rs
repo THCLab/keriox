@@ -1,11 +1,10 @@
 use std::str::FromStr;
 
-use crate::event_parsing::parsers::{group::parse_group, parse_primitive};
-
 use super::{
     codes::{group::GroupCode, PrimitiveCode},
     error::Error,
     group::Group,
+    parsers::{group::parse_group, parse_primitive},
 };
 
 #[derive(PartialEq, Debug)]

@@ -12,7 +12,7 @@ use crate::{
         receipt::Receipt,
         sections::seal::{EventSeal, SourceSeal},
     },
-    event_parsing::{Attachment, SignedEventData},
+    event_parsing::{group::Group, SignedEventData},
     prefix::{AttachedSignaturePrefix, IdentifierPrefix},
     state::{EventSemantics, IdentifierState},
 };
@@ -129,17 +129,30 @@ impl Serialize for SignedEventMessage {
         if serializer.is_human_readable() {
             let mut em = serializer.serialize_struct("EventMessage", 4)?;
             em.serialize_field("", &self.event_message)?;
-            let att_sigs = Attachment::AttachedSignatures(self.signatures.clone());
-            em.serialize_field("-", &att_sigs.to_cesr())?;
+            let att_sigs = Group::IndexedControllerSignatures(
+                self.signatures
+                    .iter()
+                    .map(|sig| sig.clone().into())
+                    .collect(),
+            );
+            em.serialize_field("-", &att_sigs.to_cesr_str())?;
             if let Some(ref receipts) = self.witness_receipts {
                 let att_receipts = receipts
                     .iter()
                     .map(|rct| match rct {
                         Nontransferable::Indexed(indexed) => {
-                            Attachment::AttachedWitnessSignatures(indexed.clone()).to_cesr()
+                            let signatures = indexed
+                                .into_iter()
+                                .map(|sig| (sig.clone()).into())
+                                .collect();
+                            Group::IndexedWitnessSignatures(signatures).to_cesr_str()
                         }
                         Nontransferable::Couplet(couplets) => {
-                            Attachment::ReceiptCouplets(couplets.clone()).to_cesr()
+                            let couples = couplets
+                                .into_iter()
+                                .map(|(bp, sp)| ((bp.clone()).into(), (sp.clone()).into()))
+                                .collect();
+                            Group::NontransferableReceiptCouples(couples).to_cesr_str()
                         }
                     })
                     .collect::<Vec<_>>()
@@ -147,8 +160,9 @@ impl Serialize for SignedEventMessage {
                 em.serialize_field("", &att_receipts)?;
             }
             if let Some(ref seal) = self.delegator_seal {
-                let att_seal = Attachment::SealSourceCouplets(vec![seal.clone()]);
-                em.serialize_field("", &att_seal.to_cesr())?;
+                let att_seal =
+                    Group::SourceSealCouples(vec![(seal.sn.into(), (&seal.digest).into())]);
+                em.serialize_field("", &att_seal.to_cesr_str())?;
             }
 
             em.end()

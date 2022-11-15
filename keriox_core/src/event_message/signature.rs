@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     error::Error,
     event::sections::seal::EventSeal,
-    event_parsing::{group::Group, Attachment},
+    event_parsing::group::Group,
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     processor::event_storage::EventStorage,
 };
@@ -71,28 +71,6 @@ impl Signature {
                 .all(|(id, sig)| id.verify(data, &sig).unwrap())),
             Signature::NonTransferable(Nontransferable::Indexed(_sigs)) => {
                 Err(Error::SemanticError("Uknown signer".into()))
-            }
-        }
-    }
-}
-
-impl From<&Signature> for Attachment {
-    fn from(signature: &Signature) -> Self {
-        match signature {
-            Signature::Transferable(signer_data, sig) => match signer_data {
-                SignerData::EventSeal(seal) => {
-                    Attachment::SealSignaturesGroups(vec![(seal.clone(), sig.clone())])
-                }
-                SignerData::LastEstablishment(id) => {
-                    Attachment::LastEstSignaturesGroups(vec![(id.clone(), sig.clone())])
-                }
-                SignerData::JustSignatures => Attachment::AttachedSignatures(sig.clone()),
-            },
-            Signature::NonTransferable(Nontransferable::Couplet(couplets)) => {
-                Attachment::ReceiptCouplets(couplets.clone())
-            }
-            Signature::NonTransferable(Nontransferable::Indexed(sigs)) => {
-                Attachment::AttachedWitnessSignatures(sigs.clone())
             }
         }
     }

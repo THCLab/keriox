@@ -11,7 +11,7 @@ use super::primitives::{
     nontransferable_identifier, serial_number_parser, signature, timestamp_parser,
     transferable_quadruple,
 };
-use crate::event_parsing::{codes::group::GroupCode, group::Group, path::MaterialPath};
+use crate::event_parsing::{codes::group::GroupCode, group::Group};
 
 pub fn group_code(s: &[u8]) -> nom::IResult<&[u8], GroupCode> {
     let (rest, payload_type) = take(4u8)(s)?;
@@ -107,6 +107,8 @@ pub fn test_parse_group() {
 
 #[test]
 fn test_pathed_material() {
+    use crate::event_parsing::path::MaterialPath;
+
     let attached_str = "-LAZ5AABAA-a-AABAAFjjD99-xy7J0LGmCkSE_zYceED5uPF4q7l8J23nNQ64U-oWWulHI5dh3cFDWT4eICuEQCALdh8BO5ps-qx0qBA";
     let (_rest, attached_material) = parse_group(attached_str.as_bytes()).unwrap();
     let expected_path = MaterialPath::to_path("-a".into());
