@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     error::Error,
     event::sections::seal::EventSeal,
-    event_parsing::group::Group,
+    event_parsing::{group::Group, primitives::IndexedSignature},
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     processor::event_storage::EventStorage,
 };
@@ -177,6 +177,54 @@ impl TryFrom<Group> for Vec<Signature> {
                 ))])
             }
             _ => Err(Error::SemanticError("Improper attachment type".into())),
+        }
+    }
+}
+
+impl Into<Group> for Nontransferable {
+    fn into(self) -> Group {
+        match self {
+            Nontransferable::Indexed(indexed) => {
+                let signatures = indexed.into_iter().map(|sig| sig.into()).collect();
+                Group::IndexedWitnessSignatures(signatures)
+            }
+            Nontransferable::Couplet(couples) => {
+                let couples = couples
+                    .into_iter()
+                    .map(|(bp, sp)| (bp.into(), sp.into()))
+                    .collect();
+                Group::NontransferableReceiptCouples(couples)
+            }
+        }
+    }
+}
+
+impl Into<Group> for crate::event_message::signature::Signature {
+    fn into(self) -> Group {
+        match self {
+            crate::event_message::signature::Signature::Transferable(seal, signature) => {
+                let signatures: Vec<IndexedSignature> =
+                    signature.into_iter().map(|sig| sig.into()).collect();
+                match seal {
+                    crate::event_message::signature::SignerData::EventSeal(EventSeal {
+                        prefix,
+                        sn,
+                        event_digest,
+                    }) => Group::TransferableIndexedSigGroups(vec![(
+                        prefix.into(),
+                        sn,
+                        (&event_digest).into(),
+                        signatures,
+                    )]),
+                    crate::event_message::signature::SignerData::LastEstablishment(id) => {
+                        Group::LastEstSignaturesGroups(vec![(id.into(), signatures)])
+                    }
+                    crate::event_message::signature::SignerData::JustSignatures => {
+                        Group::IndexedControllerSignatures(signatures)
+                    }
+                }
+            }
+            crate::event_message::signature::Signature::NonTransferable(nt) => nt.into(),
         }
     }
 }

@@ -127,6 +127,9 @@ pub enum Error {
 
     #[error(transparent)]
     PrefixModuleError(#[from] crate::prefix::error::Error),
+
+    #[error("Cesr error")]
+    CesrError,
 }
 
 impl From<ParseIntError> for Error {

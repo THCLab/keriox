@@ -15,6 +15,9 @@ pub enum Error {
 
     #[error("Incorrect data length: {0}")]
     IncorrectLengthError(String),
+
+    #[error("Payload serialization error")]
+    PayloadSerializationError,
 }
 
 impl From<base64::DecodeError> for Error {

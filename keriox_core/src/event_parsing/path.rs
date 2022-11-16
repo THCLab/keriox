@@ -7,7 +7,7 @@ use super::error::Error;
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 pub struct MaterialPath {
     lead_bytes: usize,
-    // base64 reprezentation of path string
+    // base64 representation of path string
     base: String,
 }
 

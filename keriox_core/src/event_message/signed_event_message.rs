@@ -74,7 +74,9 @@ impl From<Op> for ParsedEvent {
 
 impl Message {
     pub fn to_cesr(&self) -> Result<Vec<u8>, Error> {
-        ParsedData::from(self.clone()).to_cesr()
+        ParsedData::from(self.clone())
+            .to_cesr()
+            .map_err(|_e| Error::CesrError)
     }
 
     pub fn get_prefix(&self) -> IdentifierPrefix {

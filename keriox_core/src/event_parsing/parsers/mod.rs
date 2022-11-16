@@ -3,22 +3,10 @@ use serde::Deserialize;
 
 use self::group::parse_group;
 
-use super::{codes::DerivationCode, parsing::from_text_to_bytes, ParsedData, Payload};
+use super::{ParsedData, Payload};
 
 pub mod group;
 pub mod primitives;
-
-pub fn parse_primitive<C: DerivationCode>(
-    code: C,
-    stream: &[u8],
-) -> nom::IResult<&[u8], (C, Vec<u8>)> {
-    // TODO use parser for primitive code
-    let (rest, _parsed_code) = take(code.code_size() as usize)(stream)?;
-    let (rest, data) = take(code.value_size() as usize)(rest)?;
-    // TODO don't remove bytes if code is 4 lenth
-    let decoded = from_text_to_bytes(data).unwrap()[code.code_size() % 4..].to_vec();
-    Ok((rest, (code, decoded)))
-}
 
 pub fn parse_payload<'a, P: Payload + Deserialize<'a>>(stream: &'a [u8]) -> nom::IResult<&[u8], P> {
     let (rest, event) = take(P::get_len(stream).unwrap())(stream)?;

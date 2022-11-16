@@ -10,8 +10,8 @@ use crate::{
         sections::seal::{EventSeal, SourceSeal},
     },
     event_parsing::{
-        group::Group, message::version, parsers::parse, primitives::IndexedSignature, ParsedData,
-        Payload,
+        error::Error as CesrError, group::Group, message::version, parsers::parse,
+        primitives::IndexedSignature, ParsedData, Payload,
     },
     query::{
         query_event::{QueryEvent, SignedQuery},
@@ -33,11 +33,12 @@ use super::{
 pub type ParsedEvent = ParsedData<EventType>;
 
 impl Payload for EventType {
-    fn to_vec(&self) -> Result<Vec<u8>, Error> {
+    fn to_vec(&self) -> Result<Vec<u8>, CesrError> {
         self.serialize()
+            .map_err(|e| CesrError::PayloadSerializationError)
     }
 
-    fn get_len(stream: &[u8]) -> Result<usize, Error> {
+    fn get_len(stream: &[u8]) -> Result<usize, CesrError> {
         // TODO works only for json. How to find version string?
         let version_str = &stream[5..24];
         let (_, version) = version(version_str).unwrap();

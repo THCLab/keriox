@@ -6,8 +6,8 @@ use serde::Deserialize;
 #[cfg(feature = "query")]
 use serde::Serialize;
 
-use crate::event_message::{cesr_adapter::EventType, exchange::Exchange};
 use crate::event_message::serialization_info::SerializationInfo;
+use crate::event_message::{cesr_adapter::EventType, exchange::Exchange};
 #[cfg(feature = "query")]
 use crate::event_message::{SaidEvent, Typeable};
 use crate::event_parsing::parsers::group::parse_group;
@@ -176,7 +176,6 @@ pub(crate) fn version<'a>(data: &'a [u8]) -> nom::IResult<&[u8], SerializationIn
     alt((json_version, cbor_version, mgpk_version))(data).map(|d| (d.0, d.1))
 }
 
-#[cfg(feature = "async")]
 #[test]
 fn test_version_parse() {
     let json = br#""KERI10JSON00014b_""#;

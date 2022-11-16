@@ -8,6 +8,7 @@ use std::fmt::Display;
 
 pub mod attached_signature;
 pub mod basic;
+pub mod cesr_adapter;
 pub mod error;
 pub mod seed;
 pub mod self_signing;

@@ -1,10 +1,9 @@
-pub mod cesr_adapter;
 pub mod codes;
 pub mod error;
 pub mod parsers;
 pub mod primitives;
 
-use crate::error::Error;
+use self::error::Error;
 
 use self::group::Group;
 
@@ -15,15 +14,14 @@ pub mod path;
 
 pub mod value;
 
+pub trait Payload {
+    fn to_vec(&self) -> Result<Vec<u8>, Error>;
+    fn get_len(stream: &[u8]) -> Result<usize, Error>;
+}
 #[derive(Clone, Debug, PartialEq)]
 pub struct ParsedData<P: Payload> {
     pub payload: P,
     pub attachments: Vec<Group>,
-}
-
-pub trait Payload {
-    fn to_vec(&self) -> Result<Vec<u8>, Error>;
-    fn get_len(stream: &[u8]) -> Result<usize, Error>;
 }
 
 impl<P: Payload> ParsedData<P> {

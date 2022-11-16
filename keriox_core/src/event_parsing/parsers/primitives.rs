@@ -13,12 +13,23 @@ use crate::event_parsing::codes::{
 use crate::event_parsing::path::MaterialPath;
 
 use super::group::group_code;
-use super::parse_primitive;
 use crate::event_parsing::parsing::from_text_to_bytes;
 use crate::event_parsing::primitives::{
     Digest, Identifier, IdentifierCode, IdentifierSignaturesCouple, IndexedSignature, PublicKey,
     Signature, TransferableQuadruple,
 };
+
+pub fn parse_primitive<C: DerivationCode>(
+    code: C,
+    stream: &[u8],
+) -> nom::IResult<&[u8], (C, Vec<u8>)> {
+    // TODO use parser for primitive code
+    let (rest, _parsed_code) = take(code.code_size() as usize)(stream)?;
+    let (rest, data) = take(code.value_size() as usize)(rest)?;
+    // TODO don't remove bytes if code is 4 lenth
+    let decoded = from_text_to_bytes(data).unwrap()[code.code_size() % 4..].to_vec();
+    Ok((rest, (code, decoded)))
+}
 
 // Parsers for specific primitive. Ment to be used to parse group elements of
 // expected type.
