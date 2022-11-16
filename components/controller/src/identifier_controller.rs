@@ -11,6 +11,7 @@ use keri::{
         EventMessage, SerializationFormats,
     },
     event_message::{
+        cesr_adapter::EventType,
         exchange::{Exchange, ExchangeMessage, ForwardTopic, FwdArgs, SignedExchange},
         key_event_message::KeyEvent,
         signature::{Signature, SignerData},
@@ -21,7 +22,6 @@ use keri::{
         message::{event_message, exchange_message, key_event_message},
         path::MaterialPath,
         primitives::CesrPrimitive,
-        EventType,
     },
     oobi::{LocationScheme, Role, Scheme},
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},

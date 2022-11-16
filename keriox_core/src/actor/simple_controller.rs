@@ -20,14 +20,13 @@ use crate::{
         SerializationFormats,
     },
     event_message::{
+        cesr_adapter::EventType,
         exchange::{Exchange, ForwardTopic, FwdArgs, SignedExchange},
         key_event_message::KeyEvent,
         signature::{Signature, SignerData},
         signed_event_message::{Notice, Op, SignedEventMessage, SignedNontransferableReceipt},
     },
-    event_parsing::{
-        message::key_event_message, path::MaterialPath, primitives::CesrPrimitive, EventType,
-    },
+    event_parsing::{parsers::parse, path::MaterialPath, primitives::CesrPrimitive},
     oobi::{OobiManager, Role},
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     processor::{
@@ -237,7 +236,7 @@ impl<K: KeyManager> SimpleController<K> {
         )
         .unwrap();
         let signature = km.sign(icp.as_bytes())?;
-        let (_, key_event) = key_event_message(icp.as_bytes()).unwrap();
+        let key_event = parse(icp.as_bytes()).unwrap().1.payload;
         let signed = if let EventType::KeyEvent(icp) = key_event {
             icp.sign(
                 vec![AttachedSignaturePrefix::new(
@@ -325,7 +324,7 @@ impl<K: KeyManager> SimpleController<K> {
         let km = self.key_manager.lock().map_err(|_| Error::MutexPoisoned)?;
         let signature = km.sign(rot.as_bytes())?;
 
-        let (_, key_event) = key_event_message(rot.as_bytes()).unwrap();
+        let key_event = parse(rot.as_bytes()).unwrap().1.payload;
 
         let signed = if let EventType::KeyEvent(rot) = key_event {
             rot.sign(
@@ -577,7 +576,7 @@ impl<K: KeyManager> SimpleController<K> {
             .serialize()?;
 
             let signature = km.sign(&icp)?;
-            let (_, key_event) = key_event_message(&icp).unwrap();
+            let key_event = parse(&icp).unwrap().1.payload;
             if let EventType::KeyEvent(icp) = key_event {
                 icp.sign(
                     vec![AttachedSignaturePrefix::new(

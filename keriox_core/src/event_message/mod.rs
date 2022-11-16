@@ -1,3 +1,4 @@
+pub mod cesr_adapter;
 pub mod dummy_event;
 pub mod event_msg_builder;
 pub mod exchange;

@@ -1,8 +1,8 @@
 use serde::{ser::SerializeStruct, Deserialize, Serialize};
 
 use super::{
-    exchange::SignedExchange, key_event_message::KeyEvent, serializer::to_string,
-    signature::Nontransferable, EventMessage,
+    cesr_adapter::ParsedEvent, exchange::SignedExchange, key_event_message::KeyEvent,
+    serializer::to_string, signature::Nontransferable, EventMessage,
 };
 #[cfg(feature = "query")]
 use crate::query::{query_event::SignedQuery, reply_event::SignedReply};
@@ -41,7 +41,7 @@ pub enum Op {
     Query(SignedQuery),
 }
 
-impl From<Message> for ParsedData {
+impl From<Message> for ParsedEvent {
     fn from(message: Message) -> Self {
         match message {
             Message::Notice(notice) => ParsedData::from(notice),
@@ -50,7 +50,7 @@ impl From<Message> for ParsedData {
     }
 }
 
-impl From<Notice> for ParsedData {
+impl From<Notice> for ParsedEvent {
     fn from(notice: Notice) -> Self {
         match notice {
             Notice::Event(event) => ParsedData::from(&event),
@@ -60,7 +60,7 @@ impl From<Notice> for ParsedData {
     }
 }
 
-impl From<Op> for ParsedData {
+impl From<Op> for ParsedEvent {
     fn from(op: Op) -> Self {
         match op {
             #[cfg(feature = "query")]

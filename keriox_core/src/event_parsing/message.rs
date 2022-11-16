@@ -6,8 +6,7 @@ use serde::Deserialize;
 #[cfg(feature = "query")]
 use serde::Serialize;
 
-use crate::event_message::exchange::Exchange;
-#[cfg(feature = "async")]
+use crate::event_message::{cesr_adapter::EventType, exchange::Exchange};
 use crate::event_message::serialization_info::SerializationInfo;
 #[cfg(feature = "query")]
 use crate::event_message::{SaidEvent, Typeable};
@@ -17,7 +16,7 @@ use crate::query::Timestamped;
 use crate::{
     event::{receipt::Receipt, EventMessage},
     event_message::{key_event_message::KeyEvent, Digestible},
-    event_parsing::{EventType, ParsedData},
+    event_parsing::ParsedData,
 };
 
 fn json_message<'a, D: Deserialize<'a> + Digestible>(
@@ -105,7 +104,7 @@ pub fn notice_message(s: &[u8]) -> nom::IResult<&[u8], EventType> {
     alt((key_event_message, receipt_message))(s)
 }
 
-pub fn signed_message(s: &[u8]) -> nom::IResult<&[u8], ParsedData> {
+pub fn signed_message(s: &[u8]) -> nom::IResult<&[u8], ParsedData<EventType>> {
     map(
         pair(event_message, many0(parse_group)),
         |(event, attachments)| ParsedData {
@@ -115,7 +114,7 @@ pub fn signed_message(s: &[u8]) -> nom::IResult<&[u8], ParsedData> {
     )(s)
 }
 
-pub fn signed_notice(s: &[u8]) -> nom::IResult<&[u8], ParsedData> {
+pub fn signed_notice(s: &[u8]) -> nom::IResult<&[u8], ParsedData<EventType>> {
     map(
         pair(notice_message, many0(parse_group)),
         |(event, attachments)| ParsedData {
@@ -126,7 +125,7 @@ pub fn signed_notice(s: &[u8]) -> nom::IResult<&[u8], ParsedData> {
 }
 
 #[cfg(any(feature = "query", feature = "oobi"))]
-pub fn signed_op(s: &[u8]) -> nom::IResult<&[u8], ParsedData> {
+pub fn signed_op(s: &[u8]) -> nom::IResult<&[u8], ParsedData<EventType>> {
     map(
         pair(op_message, many0(parse_group)),
         |(event, attachments)| ParsedData {
@@ -136,21 +135,20 @@ pub fn signed_op(s: &[u8]) -> nom::IResult<&[u8], ParsedData> {
     )(s)
 }
 
-pub fn signed_event_stream(s: &[u8]) -> nom::IResult<&[u8], Vec<ParsedData>> {
+pub fn signed_event_stream(s: &[u8]) -> nom::IResult<&[u8], Vec<ParsedData<EventType>>> {
     many0(signed_message)(s)
 }
 
-pub fn signed_notice_stream(s: &[u8]) -> nom::IResult<&[u8], Vec<ParsedData>> {
+pub fn signed_notice_stream(s: &[u8]) -> nom::IResult<&[u8], Vec<ParsedData<EventType>>> {
     many0(signed_notice)(s)
 }
 
 #[cfg(any(feature = "query", feature = "oobi"))]
-pub fn signed_op_stream(s: &[u8]) -> nom::IResult<&[u8], Vec<ParsedData>> {
+pub fn signed_op_stream(s: &[u8]) -> nom::IResult<&[u8], Vec<ParsedData<EventType>>> {
     many0(signed_op)(s)
 }
 
 // TESTED: OK
-#[cfg(feature = "async")]
 fn json_version(data: &[u8]) -> nom::IResult<&[u8], SerializationInfo> {
     match serde_json::from_slice(data) {
         Ok(vi) => Ok((data, vi)),
@@ -159,7 +157,6 @@ fn json_version(data: &[u8]) -> nom::IResult<&[u8], SerializationInfo> {
 }
 
 // TODO: Requires testing
-#[cfg(feature = "async")]
 fn cbor_version(data: &[u8]) -> nom::IResult<&[u8], SerializationInfo> {
     match serde_cbor::from_slice(data) {
         Ok(vi) => Ok((data, vi)),
@@ -168,7 +165,6 @@ fn cbor_version(data: &[u8]) -> nom::IResult<&[u8], SerializationInfo> {
 }
 
 // TODO: Requires testing
-#[cfg(feature = "async")]
 fn mgpk_version(data: &[u8]) -> nom::IResult<&[u8], SerializationInfo> {
     match serde_mgpk::from_slice(data) {
         Ok(vi) => Ok((data, vi)),
@@ -176,7 +172,6 @@ fn mgpk_version(data: &[u8]) -> nom::IResult<&[u8], SerializationInfo> {
     }
 }
 
-#[cfg(feature = "async")]
 pub(crate) fn version<'a>(data: &'a [u8]) -> nom::IResult<&[u8], SerializationInfo> {
     alt((json_version, cbor_version, mgpk_version))(data).map(|d| (d.0, d.1))
 }

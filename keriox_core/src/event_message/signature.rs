@@ -92,7 +92,7 @@ pub fn signatures_into_groups(sigs: &[Signature]) -> Vec<Group> {
                     )),
                     Signature::Transferable(SignerData::LastEstablishment(id), sig) => trans_last
                         .push((id.into(), sig.into_iter().map(|sig| sig.into()).collect())),
-                    Signature::Transferable(SignerData::JustSignatures, mut sig) => {
+                    Signature::Transferable(SignerData::JustSignatures, sig) => {
                         indexed.append(&mut sig.into_iter().map(|sig| sig.into()).collect())
                     }
                     Signature::NonTransferable(Nontransferable::Couplet(couplets)) => nontrans
@@ -102,10 +102,8 @@ pub fn signatures_into_groups(sigs: &[Signature]) -> Vec<Group> {
                                 .map(|(bp, sp)| (bp.into(), sp.into()))
                                 .collect(),
                         ),
-                    Signature::NonTransferable(Nontransferable::Indexed(mut sigs)) => {
-                        witness_indexed
-                            .append(&mut sigs.into_iter().map(|sig| sig.into()).collect())
-                    }
+                    Signature::NonTransferable(Nontransferable::Indexed(sigs)) => witness_indexed
+                        .append(&mut sigs.into_iter().map(|sig| sig.into()).collect()),
                 };
                 (trans_seal, trans_last, nontrans, indexed, witness_indexed)
             },

@@ -11,11 +11,12 @@ use keri::{
     database::{escrow::EscrowDb, SledEventDatabase},
     event::{event_data::EventData, sections::seal::Seal, EventMessage},
     event_message::{
+        cesr_adapter::EventType,
         key_event_message::KeyEvent,
         signed_event_message::{Message, Notice, Op, SignedEventMessage},
         Digestible,
     },
-    event_parsing::{message::key_event_message, EventType},
+    event_parsing::message::key_event_message,
     oobi::{LocationScheme, OobiManager, Role, Scheme},
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     processor::{

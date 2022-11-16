@@ -176,7 +176,8 @@ pub mod http_handlers {
     use keri::{
         actor::{QueryError, SignedQueryError},
         error::Error,
-        event_parsing::{primitives::CesrPrimitive, ParsedData},
+        event_message::cesr_adapter::ParsedEvent,
+        event_parsing::primitives::CesrPrimitive,
         oobi::Role,
         prefix::IdentifierPrefix,
     };
@@ -194,7 +195,7 @@ pub mod http_handlers {
         let oobis: Vec<u8> = loc_scheme
             .into_iter()
             .map(|sr| {
-                let sed: ParsedData = sr.into();
+                let sed: ParsedEvent = sr.into();
                 sed.to_cesr()
             })
             .flatten_ok()
@@ -236,7 +237,7 @@ pub mod http_handlers {
             .into_iter()
             .chain(loc_scheme.into_iter())
             .map(|sr| {
-                let sed: ParsedData = sr.into();
+                let sed: ParsedEvent = sr.into();
                 sed.to_cesr()
             })
             .flatten_ok()

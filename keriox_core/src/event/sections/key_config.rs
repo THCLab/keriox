@@ -272,13 +272,13 @@ fn test_verify() -> Result<(), Error> {
     use crate::{
         event::event_data::EventData,
         event_message::signed_event_message::{Message, Notice},
-        event_parsing::message::signed_message,
+        event_parsing::parsers::parse,
     };
 
     // test data taken from keripy
     // (keripy/tests/core/test_weighted_threshold.py::test_weighted)
     let ev = br#"{"v":"KERI10JSON000207_","t":"icp","d":"EIL2dvwm6lYAsyKKtzxIEFm51gSfwe3IIZSx8kI8ve7_","i":"EIL2dvwm6lYAsyKKtzxIEFm51gSfwe3IIZSx8kI8ve7_","s":"0","kt":["1/2","1/2","1/2"],"k":["DCuDiSPCTq-qBBFDHkhf1_kmysrH8KSsFvoaOSgEbx-X","DNUWS4GJHtBpn2Zvgh_ALFuB6E1OJvtphYLvJG8KfI0F","DAVcM7pvoz37lF1HBxFnaZQeGHKC9wVhlytEzKBfzXhV"],"nt":["1/2","1/2","1/2"],"n":["EFQZkN8MMEtZzaS-Tq1EEbH886vsf5SzwicSn_ywbzTy","ENOQnUj8GNr1ICJ1P4qmC3-aHTrpZqKVpZhvHCBVWE1p","EDFH1MfEJWlI9PpMbgBi_RGP7L4UivrLfozFucuEaWVH"],"bt":"0","b":[],"c":[],"a":[]}-AADAAC3xWTpnv14_khneBqDlrK7JHPUoHNJhWMIXzXbK80RVyEYV7iMsWaAXfepkRsyELBLd25atAtE3iLeDn1I-gUMABDr8iCcrun_otXsarVXpe6jgK2VG20RpgsVvFunUxHsrZRKm6gNjMAoKZkqzDVuY5tKD0XkTmonstex5Wj9dToBACAwNb8Lj-vxJYMi_vIH-ETGG0dVfqIk4ihrQvV1iL1_07eWfu4BwRYCPCZDo0F0Xbkz0DP4xXVfChR-lFd2npUG"#;
-    let parsed = signed_message(ev).unwrap().1;
+    let parsed = parse(ev).unwrap().1;
     let signed_msg = Message::try_from(parsed).unwrap();
     match signed_msg {
         Message::Notice(Notice::Event(ref e)) => {
@@ -292,7 +292,7 @@ fn test_verify() -> Result<(), Error> {
     };
 
     let ev  = br#"{"v":"KERI10JSON0002a6_","t":"rot","d":"EJ4TG5D0URQ0InD_EIDXDoI9v1y3vIk-0LMJMjeZXryh","i":"EIL2dvwm6lYAsyKKtzxIEFm51gSfwe3IIZSx8kI8ve7_","s":"3","p":"ELKSLVpbV9eH3xk2xBqH3fSgOmWTbUoBuE2JsLl0lu2L","kt":["1/2","1/2","1/2"],"k":["DO1ligy1cGMWDCwIw3HiBLOusTzGOAH88fkUMNsdJkMy","DJoOgGofKsiig4kMjV04ju9UCcIs42XxjOtQQPrNAORe","DEt34Sqbzwgy-VpnzePz5JiTDLEgnUU8RtuDkLn_xJh0"],"nt":[["1/2","1/2","1/2"],["1","1"]],"n":["ENzeDznmpi75oO8APbVzyW75xnmgLDJRo0rCHf4gsDPc","ELnNWeDypTMeaIZzbT8GoJJnbmm8ksJ8ic8b2-9KFZQK","ED2lFBwMbkNQy2vxFWLbbEg2V6OLChhLfTxmvuNGWz91","EHy3gn2wZog-q8V3r6RzduTN48nLEHgSYHaoNaWHrxrl","EHuCmMw5ksFOQxvDSXL9h-_94RMKERjqLj_KFSusuHQg"],"bt":"0","br":[],"ba":[],"a":[]}-AADAACxUM40kMP7aGrPIlwO1d6XAvk6jX22u2EwcB_IgsQSaxJlLbXEz4v2j9cUHQKkY7ek47TfFYir-rG5kyLWJa0MABCQ6AlObGVXjIslKCFZkZiBNvQSDLgUU_2sR4RQxghGCExNWG9jwsSAOFBGX5QcEb6Hqu4ZrdbnyV9GxRkR-jkDACC4Ydi6Jlqw9ROIqNvyHoXNoYcIZzI8iD8_YB1-U9J1xb55jG4z-1Ddyx8mLW6_O53boaFobaitvO13z3u5OswF"#;
-    let parsed = signed_message(ev).unwrap().1;
+    let parsed = parse(ev).unwrap().1;
     let signed_msg = Message::try_from(parsed).unwrap();
     match signed_msg {
         Message::Notice(Notice::Event(ref e)) => {
