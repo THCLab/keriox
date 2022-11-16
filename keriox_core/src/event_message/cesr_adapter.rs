@@ -35,7 +35,7 @@ pub type ParsedEvent = ParsedData<EventType>;
 impl Payload for EventType {
     fn to_vec(&self) -> Result<Vec<u8>, CesrError> {
         self.serialize()
-            .map_err(|e| CesrError::PayloadSerializationError)
+            .map_err(|_e| CesrError::PayloadSerializationError)
     }
 
     fn get_len(stream: &[u8]) -> Result<usize, CesrError> {

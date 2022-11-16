@@ -196,7 +196,7 @@ pub mod http_handlers {
             .into_iter()
             .map(|sr| {
                 let sed: ParsedEvent = sr.into();
-                sed.to_cesr()
+                sed.to_cesr().map_err(|_| Error::CesrError)
             })
             .flatten_ok()
             .try_collect()
@@ -238,7 +238,7 @@ pub mod http_handlers {
             .chain(loc_scheme.into_iter())
             .map(|sr| {
                 let sed: ParsedEvent = sr.into();
-                sed.to_cesr()
+                sed.to_cesr().map_err(|_| Error::CesrError)
             })
             .flatten_ok()
             .collect::<Result<Vec<_>, _>>()
