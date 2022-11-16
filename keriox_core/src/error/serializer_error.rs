@@ -1,7 +1,7 @@
 use std;
 use std::fmt::{self, Display};
 
-use serde::{de, ser};
+use serde::{de, ser, Serialize, Deserialize};
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -9,7 +9,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 // information in its error type, for example the line and column at which the
 // error occurred, the byte offset into the input, or the current key being
 // processed.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Error {
     // One or more variants that can be created by data structures through the
     // `ser::Error` and `de::Error` traits. For example the Serialize impl for

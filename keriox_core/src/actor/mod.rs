@@ -1,5 +1,7 @@
 use std::convert::TryFrom;
 
+use serde::{Serialize, Deserialize};
+
 #[cfg(feature = "oobi")]
 use crate::oobi::OobiManager;
 use crate::{
@@ -226,7 +228,7 @@ pub fn process_signed_query(
     Ok(process_query(qr.query.get_query_data(), storage)?)
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, Serialize, Deserialize)]
 pub enum SignedQueryError {
     #[error(transparent)]
     KeriError(#[from] crate::error::Error),
@@ -273,7 +275,7 @@ fn process_query(qr: Query, storage: &EventStorage) -> Result<ReplyType, QueryEr
     }
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, Serialize, Deserialize)]
 pub enum QueryError {
     #[error(transparent)]
     KeriError(#[from] crate::error::Error),

@@ -253,7 +253,7 @@ pub mod http_handlers {
                     | Error::DeserializeError(_)
                     | Error::IncorrectDigest => StatusCode::BAD_REQUEST,
 
-                    Error::Ed25519DalekSignatureError(_)
+                    Error::Ed25519DalekSignatureError
                     | Error::FaultySignatureVerification
                     | Error::SignatureVerificationError => StatusCode::FORBIDDEN,
 

@@ -28,6 +28,7 @@ use keri::{
     },
     signer::Signer,
 };
+use serde::{Deserialize, Serialize};
 
 use crate::witness_processor::WitnessProcessor;
 
@@ -327,7 +328,9 @@ impl Witness {
     }
 }
 
-#[derive(Debug, derive_more::Display, derive_more::Error, derive_more::From)]
+#[derive(
+    Debug, derive_more::Display, derive_more::Error, derive_more::From, Serialize, Deserialize,
+)]
 pub enum WitnessError {
     KeriError(keri::error::Error),
     DbError(keri::database::DbError),
