@@ -1,7 +1,10 @@
 use super::error::Error;
 use super::CesrPrimitive;
 use crate::{
-    event_parsing::{codes::PrimitiveCode, parsing::from_text_to_bytes},
+    event_parsing::{
+        codes::{seed::SeedCode, DerivationCode, PrimitiveCode},
+        parsing::from_text_to_bytes,
+    },
     keys::{PrivateKey, PublicKey},
 };
 use core::str::FromStr;
@@ -17,6 +20,15 @@ pub enum SeedPrefix {
 }
 
 impl SeedPrefix {
+    pub fn new(code: SeedCode, value: Vec<u8>) -> Self {
+        match code {
+            SeedCode::RandomSeed128 => Self::RandomSeed128(value),
+            SeedCode::RandomSeed256Ed25519 => Self::RandomSeed256Ed25519(value),
+            SeedCode::RandomSeed256ECDSAsecp256k1 => Self::RandomSeed256ECDSAsecp256k1(value),
+            SeedCode::RandomSeed448 => Self::RandomSeed448(value),
+        }
+    }
+
     pub fn derive_key_pair(&self) -> Result<(PublicKey, PrivateKey), Error> {
         match self {
             Self::RandomSeed256Ed25519(seed) => {
@@ -42,29 +54,14 @@ impl FromStr for SeedPrefix {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match &s[..1] {
-            "A" => Ok(Self::RandomSeed256Ed25519(
-                from_text_to_bytes(&s[1..].as_bytes())?[1..].to_vec(),
-            )),
-            "J" => Ok(Self::RandomSeed256ECDSAsecp256k1(
-                from_text_to_bytes(&s[1..].as_bytes())?[1..].to_vec(),
-            )),
-            "K" => Ok(Self::RandomSeed448(
-                from_text_to_bytes(&s[1..].as_bytes())?[1..].to_vec(),
-            )),
-            "0" => match &s[1..2] {
-                "A" => Ok(Self::RandomSeed128(
-                    from_text_to_bytes(&s[2..].as_bytes())?[2..].to_vec(),
-                )),
-                _ => Err(Error::DeserializeError(format!(
-                    "Unknown seed prefix cod: {}",
-                    s
-                ))),
-            },
-            _ => Err(Error::DeserializeError(format!(
-                "Unknown seed prefix cod: {}",
-                s
-            ))),
+        let code = SeedCode::from_str(s)?;
+
+        if s.len() == code.full_size() {
+            let k_vec =
+                from_text_to_bytes(&s[code.code_size()..].as_bytes())?[code.code_size()..].to_vec();
+            Ok(Self::new(code, k_vec))
+        } else {
+            Err(Error::IncorrectLengthError(s.into()))
         }
     }
 }
@@ -79,13 +76,16 @@ impl CesrPrimitive for SeedPrefix {
         }
     }
     fn derivation_code(&self) -> PrimitiveCode {
-        todo!()
-        // match self {
-        //     Self::RandomSeed256Ed25519(_) => "A".to_string(),
-        //     Self::RandomSeed256ECDSAsecp256k1(_) => "J".to_string(),
-        //     Self::RandomSeed448(_) => "K".to_string(),
-        //     Self::RandomSeed128(_) => "0A".to_string(),
-        // }
+        match self {
+            Self::RandomSeed256Ed25519(_) => {
+                PrimitiveCode::Seed(SeedCode::RandomSeed256ECDSAsecp256k1)
+            }
+            Self::RandomSeed256ECDSAsecp256k1(_) => {
+                PrimitiveCode::Seed(SeedCode::RandomSeed256ECDSAsecp256k1)
+            }
+            Self::RandomSeed448(_) => PrimitiveCode::Seed(SeedCode::RandomSeed448),
+            Self::RandomSeed128(_) => PrimitiveCode::Seed(SeedCode::RandomSeed448),
+        }
     }
 }
 

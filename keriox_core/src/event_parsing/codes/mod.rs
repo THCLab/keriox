@@ -3,14 +3,16 @@ use std::str::FromStr;
 use nom::multi::many0;
 
 use self::{
-    attached_signature_code::AttachedSignatureCode, basic::Basic, self_addressing::SelfAddressing,
-    self_signing::SelfSigning, serial_number::SerialNumberCode, timestamp::TimestampCode,
+    attached_signature_code::AttachedSignatureCode, basic::Basic, seed::SeedCode,
+    self_addressing::SelfAddressing, self_signing::SelfSigning, serial_number::SerialNumberCode,
+    timestamp::TimestampCode,
 };
 
 pub mod attached_signature_code;
 pub mod basic;
 pub mod group;
 pub mod material_path_codes;
+pub mod seed;
 pub mod self_addressing;
 pub mod self_signing;
 pub mod serial_number;
@@ -40,8 +42,7 @@ pub trait DerivationCode {
 
 #[derive(PartialEq, Debug)]
 pub enum PrimitiveCode {
-    // todo
-    Seed(),
+    Seed(SeedCode),
     Basic(Basic),
     SelfAddressing(SelfAddressing),
     SelfSigning(SelfSigning),
@@ -59,7 +60,7 @@ impl PrimitiveCode {
             PrimitiveCode::SerialNumber(code) => code.to_str(),
             PrimitiveCode::IndexedSignature(code) => code.to_str(),
             PrimitiveCode::Timestamp(code) => code.to_str(),
-            PrimitiveCode::Seed() => todo!(),
+            PrimitiveCode::Seed(code) => code.to_str(),
         }
     }
 }
@@ -90,7 +91,7 @@ impl FromStr for PrimitiveCode {
 impl DerivationCode for PrimitiveCode {
     fn hard_size(&self) -> usize {
         match self {
-            PrimitiveCode::Seed() => todo!(),
+            PrimitiveCode::Seed(s) => s.hard_size(),
             PrimitiveCode::Basic(b) => b.hard_size(),
             PrimitiveCode::SelfAddressing(sa) => sa.hard_size(),
             PrimitiveCode::SelfSigning(ss) => ss.hard_size(),
@@ -102,7 +103,7 @@ impl DerivationCode for PrimitiveCode {
 
     fn soft_size(&self) -> usize {
         match self {
-            PrimitiveCode::Seed() => todo!(),
+            PrimitiveCode::Seed(s) => s.soft_size(),
             PrimitiveCode::Basic(b) => b.soft_size(),
             PrimitiveCode::SelfAddressing(sa) => sa.soft_size(),
             PrimitiveCode::SelfSigning(ss) => ss.soft_size(),
@@ -114,7 +115,7 @@ impl DerivationCode for PrimitiveCode {
 
     fn value_size(&self) -> usize {
         match self {
-            PrimitiveCode::Seed() => todo!(),
+            PrimitiveCode::Seed(s) => s.value_size(),
             PrimitiveCode::Basic(b) => b.value_size(),
             PrimitiveCode::SelfAddressing(sa) => sa.value_size(),
             PrimitiveCode::SelfSigning(ss) => ss.value_size(),
@@ -126,7 +127,7 @@ impl DerivationCode for PrimitiveCode {
 
     fn to_str(&self) -> String {
         match self {
-            PrimitiveCode::Seed() => todo!(),
+            PrimitiveCode::Seed(s) => s.to_str(),
             PrimitiveCode::Basic(b) => b.to_str(),
             PrimitiveCode::SelfAddressing(sa) => sa.to_str(),
             PrimitiveCode::SelfSigning(ss) => ss.to_str(),
