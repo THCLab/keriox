@@ -17,7 +17,7 @@ use crate::query::Timestamped;
 use crate::{
     event::{receipt::Receipt, EventMessage},
     event_message::{key_event_message::KeyEvent, Digestible},
-    event_parsing::{EventType, SignedEventData},
+    event_parsing::{EventType, ParsedData},
 };
 
 fn json_message<'a, D: Deserialize<'a> + Digestible>(
@@ -105,47 +105,47 @@ pub fn notice_message(s: &[u8]) -> nom::IResult<&[u8], EventType> {
     alt((key_event_message, receipt_message))(s)
 }
 
-pub fn signed_message(s: &[u8]) -> nom::IResult<&[u8], SignedEventData> {
+pub fn signed_message(s: &[u8]) -> nom::IResult<&[u8], ParsedData> {
     map(
         pair(event_message, many0(parse_group)),
-        |(event, attachments)| SignedEventData {
-            deserialized_event: event,
+        |(event, attachments)| ParsedData {
+            payload: event,
             attachments,
         },
     )(s)
 }
 
-pub fn signed_notice(s: &[u8]) -> nom::IResult<&[u8], SignedEventData> {
+pub fn signed_notice(s: &[u8]) -> nom::IResult<&[u8], ParsedData> {
     map(
         pair(notice_message, many0(parse_group)),
-        |(event, attachments)| SignedEventData {
-            deserialized_event: event,
+        |(event, attachments)| ParsedData {
+            payload: event,
             attachments,
         },
     )(s)
 }
 
 #[cfg(any(feature = "query", feature = "oobi"))]
-pub fn signed_op(s: &[u8]) -> nom::IResult<&[u8], SignedEventData> {
+pub fn signed_op(s: &[u8]) -> nom::IResult<&[u8], ParsedData> {
     map(
         pair(op_message, many0(parse_group)),
-        |(event, attachments)| SignedEventData {
-            deserialized_event: event,
+        |(event, attachments)| ParsedData {
+            payload: event,
             attachments,
         },
     )(s)
 }
 
-pub fn signed_event_stream(s: &[u8]) -> nom::IResult<&[u8], Vec<SignedEventData>> {
+pub fn signed_event_stream(s: &[u8]) -> nom::IResult<&[u8], Vec<ParsedData>> {
     many0(signed_message)(s)
 }
 
-pub fn signed_notice_stream(s: &[u8]) -> nom::IResult<&[u8], Vec<SignedEventData>> {
+pub fn signed_notice_stream(s: &[u8]) -> nom::IResult<&[u8], Vec<ParsedData>> {
     many0(signed_notice)(s)
 }
 
 #[cfg(any(feature = "query", feature = "oobi"))]
-pub fn signed_op_stream(s: &[u8]) -> nom::IResult<&[u8], Vec<SignedEventData>> {
+pub fn signed_op_stream(s: &[u8]) -> nom::IResult<&[u8], Vec<ParsedData>> {
     many0(signed_op)(s)
 }
 
@@ -266,7 +266,7 @@ fn test_exn() {
     let exn_event = r#"{"v":"KERI10JSON0002f1_","t":"exn","d":"EBLqTGJXK8ViUGXMOO8_LXbetpjJX8CY_SbA134RIZmf","dt":"2022-10-25T09:53:04.119676+00:00","r":"/fwd","q":{"pre":"EKYLUMmNPZeEs77Zvclf0bSN5IN-mLfLpx2ySb-HDlk4","topic":"multisig"},"a":{"v":"KERI10JSON000215_","t":"icp","d":"EC61gZ9lCKmHAS7U5ehUfEbGId5rcY0D7MirFZHDQcE2","i":"EC61gZ9lCKmHAS7U5ehUfEbGId5rcY0D7MirFZHDQcE2","s":"0","kt":"2","k":["DOZlWGPfDHLMf62zSFzE8thHmnQUOgA3_Y-KpOyF9ScG","DHGb2qY9WwZ1sBnC9Ip0F-M8QjTM27ftI-3jTGF9mc6K"],"nt":"2","n":["EBvD5VIVvf6NpP9GRmTqu_Cd1KN0RKrKNfPJ-uhIxurj","EHlpcaxffvtcpoUUMTc6tpqAVtb2qnOYVk_3HRsZ34PH"],"bt":"3","b":["BBilc4-L3tFUnfM_wJr4S4OJanAv_VmF_dJNN6vkf2Ha","BLskRTInXnMxWaGqcpSyMgo0nYbalW99cGZESrz3zapM","BIKKuvBwpmDVA4Ds-EpL5bt9OqPzWPja2LigFYZN2YfX"],"c":[],"a":[]}}-HABEJccSRTfXYF6wrUVuenAIHzwcx3hJugeiJsEKmndi5q1-AABAAArUSuSpts5zDQ7CgPcy305IxhAG8lOjf-r_d5yYQXp18OD9No_gd2McOOjGWMfjyLVjDK529pQcbvNv9Uwc6gH-LAZ5AABAA-a-AABAABYHc_lpuYF3SPNWvyPjzek7yquw69Csc6pLv5vrXHkFAFDcwNNTVxq7ZpxpqOO0CAIS-9Qj1zMor-cwvMHAmkE')"#;
 
     let (_extra, event) = signed_message(exn_event.as_bytes()).unwrap();
-    assert!(matches!(event.deserialized_event, EventType::Exn(_)));
+    assert!(matches!(event.payload, EventType::Exn(_)));
 }
 
 #[cfg(feature = "query")]

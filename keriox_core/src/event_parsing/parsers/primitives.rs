@@ -3,15 +3,13 @@ use std::str::FromStr;
 use chrono::{DateTime, FixedOffset};
 use nom::{bytes::complete::take, error::ErrorKind, multi::count, sequence::tuple};
 
-use crate::event_parsing::codes::attached_signature_code::AttachedSignatureCode;
-use crate::event_parsing::codes::basic::Basic;
-use crate::event_parsing::codes::material_path_codes::MaterialPathCode;
-use crate::event_parsing::codes::self_addressing::SelfAddressing;
-use crate::event_parsing::codes::self_signing::SelfSigning;
-use crate::event_parsing::codes::timestamp::TimestampCode;
 use crate::event_parsing::codes::{
-    group::GroupCode, serial_number::SerialNumberCode, DerivationCode,
+    attached_signature_code::AttachedSignatureCode, basic::Basic, group::GroupCode,
+    material_path_codes::MaterialPathCode, self_addressing::SelfAddressing,
+    self_signing::SelfSigning, serial_number::SerialNumberCode, timestamp::TimestampCode,
+    DerivationCode,
 };
+
 use crate::event_parsing::path::MaterialPath;
 
 use super::group::group_code;

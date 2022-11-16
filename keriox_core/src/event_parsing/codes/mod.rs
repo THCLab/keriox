@@ -1,7 +1,5 @@
 use std::str::FromStr;
 
-use nom::multi::many0;
-
 use self::{
     attached_signature_code::AttachedSignatureCode, basic::Basic, seed::SeedCode,
     self_addressing::SelfAddressing, self_signing::SelfSigning, serial_number::SerialNumberCode,
@@ -18,9 +16,7 @@ pub mod self_signing;
 pub mod serial_number;
 pub mod timestamp;
 
-use super::{
-    error::Error, group::Group, message::event_message, parsers::group::parse_group, EventType,
-};
+use super::error::Error;
 
 pub trait DerivationCode {
     /// hard (fixed) part of code size in chars
@@ -136,26 +132,4 @@ impl DerivationCode for PrimitiveCode {
             PrimitiveCode::Timestamp(code) => code.to_str(),
         }
     }
-}
-
-pub struct ParsedData {
-    payload: EventType,
-    attachments: Vec<Group>,
-}
-
-pub fn parse_payload(stream: &[u8]) -> nom::IResult<&[u8], EventType> {
-    event_message(stream)
-}
-
-pub fn parse(stream: &[u8]) -> nom::IResult<&[u8], ParsedData> {
-    let (rest, payload) = parse_payload(stream)?;
-    let (rest, attachments) = many0(parse_group)(rest)?;
-
-    Ok((
-        rest,
-        ParsedData {
-            payload,
-            attachments,
-        },
-    ))
 }

@@ -12,7 +12,7 @@ use crate::{
         receipt::Receipt,
         sections::seal::{EventSeal, SourceSeal},
     },
-    event_parsing::{group::Group, SignedEventData},
+    event_parsing::{group::Group, ParsedData},
     prefix::{AttachedSignaturePrefix, IdentifierPrefix},
     state::{EventSemantics, IdentifierState},
 };
@@ -41,40 +41,40 @@ pub enum Op {
     Query(SignedQuery),
 }
 
-impl From<Message> for SignedEventData {
+impl From<Message> for ParsedData {
     fn from(message: Message) -> Self {
         match message {
-            Message::Notice(notice) => SignedEventData::from(notice),
-            Message::Op(op) => SignedEventData::from(op),
+            Message::Notice(notice) => ParsedData::from(notice),
+            Message::Op(op) => ParsedData::from(op),
         }
     }
 }
 
-impl From<Notice> for SignedEventData {
+impl From<Notice> for ParsedData {
     fn from(notice: Notice) -> Self {
         match notice {
-            Notice::Event(event) => SignedEventData::from(&event),
-            Notice::NontransferableRct(rct) => SignedEventData::from(rct),
-            Notice::TransferableRct(rct) => SignedEventData::from(rct),
+            Notice::Event(event) => ParsedData::from(&event),
+            Notice::NontransferableRct(rct) => ParsedData::from(rct),
+            Notice::TransferableRct(rct) => ParsedData::from(rct),
         }
     }
 }
 
-impl From<Op> for SignedEventData {
+impl From<Op> for ParsedData {
     fn from(op: Op) -> Self {
         match op {
             #[cfg(feature = "query")]
-            Op::Reply(ksn) => SignedEventData::from(ksn),
+            Op::Reply(ksn) => ParsedData::from(ksn),
             #[cfg(feature = "query")]
-            Op::Query(qry) => SignedEventData::from(qry),
-            Op::Exchange(exn) => SignedEventData::from(exn),
+            Op::Query(qry) => ParsedData::from(qry),
+            Op::Exchange(exn) => ParsedData::from(exn),
         }
     }
 }
 
 impl Message {
     pub fn to_cesr(&self) -> Result<Vec<u8>, Error> {
-        SignedEventData::from(self.clone()).to_cesr()
+        ParsedData::from(self.clone()).to_cesr()
     }
 
     pub fn get_prefix(&self) -> IdentifierPrefix {

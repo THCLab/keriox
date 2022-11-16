@@ -79,7 +79,7 @@ pub mod http_handlers {
     use itertools::Itertools;
     use keri::{
         error::Error,
-        event_parsing::{primitives::CesrPrimitive, SignedEventData},
+        event_parsing::{primitives::CesrPrimitive, ParsedData},
         oobi::{error::OobiError, EndRole, LocationScheme, Role},
         prefix::IdentifierPrefix,
     };
@@ -181,7 +181,7 @@ pub mod http_handlers {
         let oobis: Vec<u8> = loc_scheme
             .into_iter()
             .map(|sr| {
-                let sed: SignedEventData = sr.into();
+                let sed: ParsedData = sr.into();
                 sed.to_cesr().unwrap()
             })
             .flatten()
@@ -205,7 +205,7 @@ pub mod http_handlers {
             .into_iter()
             .chain(loc_scheme.into_iter())
             .map(|sr| {
-                let sed: SignedEventData = sr.into();
+                let sed: ParsedData = sr.into();
                 sed.to_cesr().unwrap()
             })
             .flatten()

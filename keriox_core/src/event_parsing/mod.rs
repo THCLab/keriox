@@ -40,8 +40,8 @@ pub mod path;
 pub mod value;
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct SignedEventData {
-    pub deserialized_event: EventType,
+pub struct ParsedData {
+    pub payload: EventType,
     pub attachments: Vec<Group>,
 }
 
@@ -70,7 +70,7 @@ impl EventType {
     }
 }
 
-impl SignedEventData {
+impl ParsedData {
     pub fn to_cesr(&self) -> Result<Vec<u8>, Error> {
         let attachments = self
             .attachments
@@ -80,11 +80,11 @@ impl SignedEventData {
             })
             .as_bytes()
             .to_vec();
-        Ok([self.deserialized_event.serialize()?, attachments].concat())
+        Ok([self.payload.serialize()?, attachments].concat())
     }
 }
 
-impl From<&SignedEventMessage> for SignedEventData {
+impl From<&SignedEventMessage> for ParsedData {
     fn from(ev: &SignedEventMessage) -> Self {
         let mut attachments = if let Some(SourceSeal { sn, digest }) = ev.delegator_seal.clone() {
             vec![Group::SourceSealCouples(vec![(sn, (&digest).into())])]
@@ -117,25 +117,25 @@ impl From<&SignedEventMessage> for SignedEventData {
             });
         };
 
-        SignedEventData {
-            deserialized_event: EventType::KeyEvent(ev.event_message.clone()),
+        ParsedData {
+            payload: EventType::KeyEvent(ev.event_message.clone()),
             attachments,
         }
     }
 }
 
-impl From<SignedNontransferableReceipt> for SignedEventData {
-    fn from(rcp: SignedNontransferableReceipt) -> SignedEventData {
+impl From<SignedNontransferableReceipt> for ParsedData {
+    fn from(rcp: SignedNontransferableReceipt) -> ParsedData {
         let attachments = rcp.signatures.into_iter().map(|sig| sig.into()).collect();
-        SignedEventData {
-            deserialized_event: EventType::Receipt(rcp.body),
+        ParsedData {
+            payload: EventType::Receipt(rcp.body),
             attachments,
         }
     }
 }
 
-impl From<SignedTransferableReceipt> for SignedEventData {
-    fn from(rcp: SignedTransferableReceipt) -> SignedEventData {
+impl From<SignedTransferableReceipt> for ParsedData {
+    fn from(rcp: SignedTransferableReceipt) -> ParsedData {
         let seal = rcp.validator_seal;
         let signatures = rcp.signatures.into_iter().map(|sig| sig.into()).collect();
         let quadruple = (
@@ -146,26 +146,26 @@ impl From<SignedTransferableReceipt> for SignedEventData {
         );
         let group = Group::TransferableIndexedSigGroups(vec![quadruple]);
 
-        SignedEventData {
-            deserialized_event: EventType::Receipt(rcp.body),
+        ParsedData {
+            payload: EventType::Receipt(rcp.body),
             attachments: vec![group],
         }
     }
 }
 
 #[cfg(feature = "query")]
-impl From<SignedReply> for SignedEventData {
+impl From<SignedReply> for ParsedData {
     fn from(ev: SignedReply) -> Self {
         let attachments = vec![ev.signature.into()];
-        SignedEventData {
-            deserialized_event: EventType::Rpy(ev.reply),
+        ParsedData {
+            payload: EventType::Rpy(ev.reply),
             attachments,
         }
     }
 }
 
 #[cfg(feature = "query")]
-impl From<SignedQuery> for SignedEventData {
+impl From<SignedQuery> for ParsedData {
     fn from(ev: SignedQuery) -> Self {
         let signatures = ev.signatures.into_iter().map(|sig| sig.into()).collect();
         let attachments = vec![Group::LastEstSignaturesGroups(vec![(
@@ -173,14 +173,14 @@ impl From<SignedQuery> for SignedEventData {
             signatures,
         )])];
 
-        SignedEventData {
-            deserialized_event: EventType::Qry(ev.query),
+        ParsedData {
+            payload: EventType::Qry(ev.query),
             attachments,
         }
     }
 }
 
-impl From<SignedExchange> for SignedEventData {
+impl From<SignedExchange> for ParsedData {
     fn from(ev: SignedExchange) -> Self {
         let mut attachments = signature::signatures_into_groups(&ev.signature);
 
@@ -188,18 +188,18 @@ impl From<SignedExchange> for SignedEventData {
 
         let data_attachment = Group::PathedMaterialQuadruplet(ev.data_signature.0, data_signatures);
         attachments.push(data_attachment);
-        SignedEventData {
-            deserialized_event: EventType::Exn(ev.exchange_message),
+        ParsedData {
+            payload: EventType::Exn(ev.exchange_message),
             attachments,
         }
     }
 }
 
-impl TryFrom<SignedEventData> for Message {
+impl TryFrom<ParsedData> for Message {
     type Error = Error;
 
-    fn try_from(value: SignedEventData) -> Result<Self, Self::Error> {
-        let msg = match value.deserialized_event {
+    fn try_from(value: ParsedData) -> Result<Self, Self::Error> {
+        let msg = match value.payload {
             EventType::KeyEvent(ev) => Message::Notice(signed_key_event(ev, value.attachments)?),
             EventType::Receipt(rct) => Message::Notice(signed_receipt(rct, value.attachments)?),
             #[cfg(feature = "query")]
@@ -212,10 +212,10 @@ impl TryFrom<SignedEventData> for Message {
     }
 }
 
-impl TryFrom<SignedEventData> for Notice {
+impl TryFrom<ParsedData> for Notice {
     type Error = Error;
 
-    fn try_from(value: SignedEventData) -> Result<Self, Self::Error> {
+    fn try_from(value: ParsedData) -> Result<Self, Self::Error> {
         match Message::try_from(value)? {
             Message::Notice(notice) => Ok(notice),
             _ => Err(Error::SemanticError(
@@ -225,11 +225,11 @@ impl TryFrom<SignedEventData> for Notice {
     }
 }
 
-impl TryFrom<SignedEventData> for Op {
+impl TryFrom<ParsedData> for Op {
     type Error = Error;
 
-    fn try_from(value: SignedEventData) -> Result<Self, Self::Error> {
-        match value.deserialized_event {
+    fn try_from(value: ParsedData) -> Result<Self, Self::Error> {
+        match value.payload {
             #[cfg(feature = "query")]
             EventType::Qry(qry) => signed_query(qry, value.attachments),
             #[cfg(any(feature = "query", feature = "oobi"))]
@@ -242,10 +242,10 @@ impl TryFrom<SignedEventData> for Op {
     }
 }
 
-impl TryFrom<SignedEventData> for SignedQuery {
+impl TryFrom<ParsedData> for SignedQuery {
     type Error = Error;
 
-    fn try_from(value: SignedEventData) -> Result<Self, Self::Error> {
+    fn try_from(value: ParsedData) -> Result<Self, Self::Error> {
         match Op::try_from(value)? {
             Op::Query(qry) => Ok(qry),
             _ => Err(Error::SemanticError(
@@ -255,10 +255,10 @@ impl TryFrom<SignedEventData> for SignedQuery {
     }
 }
 
-impl TryFrom<SignedEventData> for SignedReply {
+impl TryFrom<ParsedData> for SignedReply {
     type Error = Error;
 
-    fn try_from(value: SignedEventData) -> Result<Self, Self::Error> {
+    fn try_from(value: ParsedData) -> Result<Self, Self::Error> {
         match Op::try_from(value)? {
             Op::Reply(rpy) => Ok(rpy),
             _ => Err(Error::SemanticError(
@@ -268,10 +268,10 @@ impl TryFrom<SignedEventData> for SignedReply {
     }
 }
 
-impl TryFrom<SignedEventData> for SignedExchange {
+impl TryFrom<ParsedData> for SignedExchange {
     type Error = Error;
 
-    fn try_from(value: SignedEventData) -> Result<Self, Self::Error> {
+    fn try_from(value: ParsedData) -> Result<Self, Self::Error> {
         match Op::try_from(value)? {
             Op::Exchange(exn) => Ok(exn),
             _ => Err(Error::SemanticError(
