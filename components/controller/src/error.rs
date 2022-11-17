@@ -1,5 +1,6 @@
 use keri::{oobi::Scheme, prefix::IdentifierPrefix};
 use thiserror::Error;
+use witness::WitnessError;
 
 #[derive(Error, Debug)]
 pub enum ControllerError {
@@ -7,7 +8,7 @@ pub enum ControllerError {
     DatabaseError(#[from] keri::database::DbError),
 
     #[error("Transport error: {0}")]
-    TransportError(#[from] keri_transport::TransportError),
+    TransportError(#[from] keri_transport::TransportError<WitnessError>),
 
     #[error("Communication error: {0}")]
     CommunicationError(String),

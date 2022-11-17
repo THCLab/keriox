@@ -13,9 +13,9 @@ pub enum SerializationFormats {
 impl SerializationFormats {
     pub fn encode<T: Serialize>(&self, message: &T) -> Result<Vec<u8>, Error> {
         match self {
-            Self::JSON => serde_json::to_vec(message).map_err(|e| e.into()),
-            Self::CBOR => serde_cbor::to_vec(message).map_err(|e| e.into()),
-            Self::MGPK => serde_mgpk::to_vec(message).map_err(|e| e.into()),
+            Self::JSON => serde_json::to_vec(message).map_err(|_| Error::JsonDeserError),
+            Self::CBOR => serde_cbor::to_vec(message).map_err(|_| Error::CborDeserError),
+            Self::MGPK => serde_mgpk::to_vec(message).map_err(|_| Error::MsgPackDeserError),
         }
     }
 

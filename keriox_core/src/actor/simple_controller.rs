@@ -98,7 +98,8 @@ impl PossibleResponse {
                         .map_err(|e| Error::SerializationError(e.to_string()))?,
                     delegate: String::from_utf8(delegate_stream)
                         .map_err(|e| Error::SerializationError(e.to_string()))?,
-                })?
+                })
+                .map_err(|_| Error::JsonDeserError)?
             }
             PossibleResponse::Ksn(ksn) => Message::Op(Op::Reply(ksn.clone())).to_cesr()?,
         })
@@ -111,7 +112,8 @@ pub fn parse_response(response: &str) -> Result<PossibleResponse, Error> {
         multisig: String,
         delegate: String,
     }
-    let res: GroupedResponse = serde_json::from_str(&response)?;
+    let res: GroupedResponse =
+        serde_json::from_str(&response).map_err(|_| Error::JsonDeserError)?;
     let receipts = parse_event_stream(res.receipt.as_bytes())?
         .into_iter()
         .map(|rct| {

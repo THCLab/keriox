@@ -4,6 +4,7 @@ pub(crate) mod timestamped;
 
 use std::path::{Path, PathBuf};
 
+use serde::{Deserialize, Serialize};
 use sled::Db;
 
 use self::tables::{SledEventTree, SledEventTreeVec};
@@ -419,10 +420,23 @@ impl SledEventDatabase {
     }
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, Serialize, Deserialize)]
 pub enum DbError {
-    #[error("sled error: {0}")]
-    Sled(#[from] sled::Error),
-    #[error("serde error: {0}")]
-    Serde(#[from] serde_cbor::Error),
+    // TODO: more variants
+    #[error("sled error")]
+    Sled,
+    #[error("serde error")]
+    Serde,
+}
+
+impl From<sled::Error> for DbError {
+    fn from(_: sled::Error) -> Self {
+        DbError::Sled
+    }
+}
+
+impl From<serde_cbor::Error> for DbError {
+    fn from(_: serde_cbor::Error) -> Self {
+        DbError::Serde
+    }
 }

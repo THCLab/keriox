@@ -33,6 +33,7 @@ use keri::{
     },
 };
 use keri_transport::{default::DefaultTransport, Transport};
+use witness::WitnessError;
 
 use self::{error::ControllerError, utils::OptionalConfig};
 
@@ -41,23 +42,26 @@ pub struct Controller {
     pub storage: EventStorage,
     oobi_manager: OobiManager,
     partially_witnessed_escrow: Arc<PartiallyWitnessedEscrow>,
-    transport: Box<dyn Transport + Send + Sync>,
+    transport: Box<dyn Transport<WitnessError> + Send + Sync>,
 }
 
 impl Controller {
     pub fn new(configs: Option<OptionalConfig>) -> Result<Self, ControllerError> {
-        Self::with_transport(configs, Box::new(DefaultTransport))
+        Self::with_transport(configs, Box::new(DefaultTransport::new()))
     }
 
     pub fn with_transport(
         configs: Option<OptionalConfig>,
-        transport: Box<dyn Transport + Send + Sync>,
+        transport: Box<dyn Transport<WitnessError> + Send + Sync>,
     ) -> Result<Self, ControllerError> {
         let (db_dir_path, initial_oobis) = match configs {
             Some(OptionalConfig {
                 db_path,
                 initial_oobis,
-            }) => (db_path.unwrap_or(PathBuf::from("./db")), initial_oobis),
+            }) => (
+                db_path.unwrap_or_else(|| PathBuf::from("./db")),
+                initial_oobis,
+            ),
             None => (PathBuf::from("./db"), None),
         };
 
@@ -65,7 +69,7 @@ impl Controller {
         events_db.push("events");
         let mut oobis_db = db_dir_path.clone();
         oobis_db.push("oobis");
-        let mut escrow_db = db_dir_path.clone();
+        let mut escrow_db = db_dir_path;
         escrow_db.push("escrow");
 
         let db = Arc::new(SledEventDatabase::new(events_db.as_path())?);
@@ -130,7 +134,7 @@ impl Controller {
         end_role_json: &str,
     ) -> Result<(), ControllerError> {
         for watcher in self.get_watchers(id)?.iter() {
-            self.send_oobi_to(&watcher, Scheme::Http, end_role_json.as_bytes().to_vec())?;
+            self.send_oobi_to(watcher, Scheme::Http, end_role_json.as_bytes().to_vec())?;
         }
 
         Ok(())
@@ -176,7 +180,7 @@ impl Controller {
         Ok(self
             .oobi_manager
             .get_loc_scheme(id)?
-            .ok_or_else(|| ControllerError::UnknownIdentifierError)?
+            .ok_or(ControllerError::UnknownIdentifierError)?
             .iter()
             .filter_map(|lc| {
                 if let ReplyRoute::LocScheme(loc_scheme) = lc.get_route() {
@@ -299,19 +303,16 @@ impl Controller {
         );
         let rcts_from_db = self.storage.get_nt_receipts(&prefix, sn, &digest)?;
 
-        match rcts_from_db {
-            Some(receipt) => {
-                // send receipts to all witnesses
-                for prefix in witness_prefixes {
-                    self.send_message_to(
-                        &IdentifierPrefix::Basic(prefix.clone()),
-                        Scheme::Http,
-                        Message::Notice(Notice::NontransferableRct(receipt.clone())),
-                    )
-                    .await?;
-                }
+        if let Some(receipt) = rcts_from_db {
+            // send receipts to all witnesses
+            for prefix in witness_prefixes {
+                self.send_message_to(
+                    &IdentifierPrefix::Basic(prefix.clone()),
+                    Scheme::Http,
+                    Message::Notice(Notice::NontransferableRct(receipt.clone())),
+                )
+                .await?;
             }
-            None => (),
         };
 
         Ok(())

@@ -27,7 +27,7 @@ impl WatcherListener {
             pub_address,
             event_db_path,
             priv_key,
-            Box::new(DefaultTransport),
+            Box::new(DefaultTransport::new()),
         )
         .map(|watcher_data| Self {
             watcher_data: Watcher(watcher_data),
@@ -253,7 +253,7 @@ pub mod http_handlers {
                     | Error::DeserializeError(_)
                     | Error::IncorrectDigest => StatusCode::BAD_REQUEST,
 
-                    Error::Ed25519DalekSignatureError(_)
+                    Error::Ed25519DalekSignatureError
                     | Error::FaultySignatureVerification
                     | Error::SignatureVerificationError => StatusCode::FORBIDDEN,
 

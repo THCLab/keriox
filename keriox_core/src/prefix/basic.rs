@@ -10,7 +10,7 @@ use crate::{
     keys::PublicKey,
 };
 
-#[derive(Debug, Clone, Eq, Hash)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct BasicPrefix {
     pub derivation: Basic,
     pub public_key: PublicKey,
@@ -33,12 +33,6 @@ impl BasicPrefix {
     }
 }
 
-impl PartialEq for BasicPrefix {
-    fn eq(&self, other: &Self) -> bool {
-        self.derivation == other.derivation && self.public_key == other.public_key
-    }
-}
-
 impl FromStr for BasicPrefix {
     type Err = Error;
 
@@ -47,7 +41,7 @@ impl FromStr for BasicPrefix {
 
         if s.len() == code.prefix_b64_len() {
             let k_vec =
-                from_text_to_bytes(&s[code.code_len()..].as_bytes())?[code.code_len()..].to_vec();
+                from_text_to_bytes(s[code.code_len()..].as_bytes())?[code.code_len()..].to_vec();
             Ok(Self::new(code, PublicKey::new(k_vec)))
         } else {
             Err(Error::SemanticError(format!(

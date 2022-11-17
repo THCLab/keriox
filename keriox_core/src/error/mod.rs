@@ -2,43 +2,30 @@ use core::num::ParseIntError;
 
 use base64::DecodeError;
 use ed25519_dalek;
-use rmp_serde as serde_mgpk;
-use serde_cbor;
-use serde_json;
+use serde::{Serialize, Deserialize};
 use thiserror::Error;
 
 use crate::prefix::IdentifierPrefix;
 
 pub mod serializer_error;
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Serialize, Deserialize)]
 pub enum Error {
     #[error("Error during Serialization: {0}")]
     SerializationError(String),
 
+    // TODO: add line/col
     #[error("JSON Serialization error")]
-    JSONSerializationError {
-        #[from]
-        source: serde_json::Error,
-    },
+    JsonDeserError,
 
     #[error("CBOR Serialization error")]
-    CBORSerializationError {
-        #[from]
-        source: serde_cbor::Error,
-    },
+    CborDeserError,
 
     #[error("MessagePack Serialization error")]
-    MsgPackSerializationError {
-        #[from]
-        source: serde_mgpk::encode::Error,
-    },
+    MsgPackDeserError ,
 
-    #[error("Error parsing numerical value: {source}")]
-    IntegerParseValue {
-        #[from]
-        source: ParseIntError,
-    },
+    #[error("Error parsing numerical value")]
+    ParseIntError ,
 
     #[error("Error while applying event: {0}")]
     SemanticError(String),
@@ -95,10 +82,7 @@ pub enum Error {
     IdentifierPresentError,
 
     #[error("Base64 Decoding error")]
-    Base64DecodingError {
-        #[from]
-        source: DecodeError,
-    },
+    Base64DecodingError,
 
     #[error("Improper Prefix Type")]
     ImproperPrefixType,
@@ -116,13 +100,13 @@ pub enum Error {
     #[error("Failed to obtain mutable ref to Ark of KeyManager")]
     MutArcKeyVaultError,
 
-    #[error(transparent)]
-    Ed25519DalekSignatureError(#[from] ed25519_dalek::SignatureError),
+    #[error("ED25519Dalek signature error")]
+    Ed25519DalekSignatureError,
 
-    #[error(transparent)]
-    SledError(#[from] sled::Error),
+    #[error("Sled error")]
+    SledError,
 
-    #[error(transparent)]
+    #[error("Keri serializer error: {0}")]
     SerdeSerError(#[from] serializer_error::Error),
 
     #[error("mutex is poisoned")]
@@ -140,4 +124,28 @@ pub enum Error {
 
     #[error("Event generation error: {0}")]
     EventGenerationError(String),
+}
+
+impl From<ParseIntError> for Error {
+    fn from(_: ParseIntError) -> Self {
+        Error::ParseIntError
+    }
+}
+
+impl From<base64::DecodeError> for Error {
+    fn from(_: DecodeError) -> Self {
+        Error::Base64DecodingError
+    }
+}
+
+impl From<ed25519_dalek::SignatureError> for Error {
+    fn from(_: ed25519_dalek::SignatureError) -> Self {
+        Error::Ed25519DalekSignatureError
+    }
+}
+
+impl From<sled::Error> for Error {
+    fn from(_: sled::Error) -> Self {
+        Error::SledError
+    }
 }

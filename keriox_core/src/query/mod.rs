@@ -61,7 +61,7 @@ pub enum ReplyType {
     Mbx(MailboxResponse),
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Serialize, Deserialize)]
 pub enum QueryError {
     #[error("Got stale key state notice")]
     StaleKsn,

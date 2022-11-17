@@ -172,7 +172,6 @@ pub mod http_handlers {
         http::{header::ContentType, StatusCode},
         web, HttpResponse, ResponseError,
     };
-    use derive_more::{Display, Error, From};
     use itertools::Itertools;
     use keri::{
         actor::{QueryError, SignedQueryError},
@@ -187,8 +186,11 @@ pub mod http_handlers {
     pub async fn get_eid_oobi(
         eid: web::Path<IdentifierPrefix>,
         data: web::Data<Arc<Witness>>,
-    ) -> Result<HttpResponse, ApiError> {
-        let loc_scheme = data.get_loc_scheme_for_id(&eid)?.unwrap_or(vec![]);
+    ) -> Result<HttpResponse, WitnessError> {
+        let loc_scheme = data
+            .get_loc_scheme_for_id(&eid)
+            .map_err(|err| WitnessError::KeriError(err))?
+            .unwrap_or(vec![]);
         let oobis: Vec<u8> = loc_scheme
             .into_iter()
             .map(|sr| {
@@ -196,7 +198,8 @@ pub mod http_handlers {
                 sed.to_cesr()
             })
             .flatten_ok()
-            .try_collect()?;
+            .try_collect()
+            .map_err(|err| WitnessError::KeriError(err))?;
 
         println!(
             "\nSending {} oobi: \n {}",
@@ -211,14 +214,24 @@ pub mod http_handlers {
     pub async fn get_cid_oobi(
         path: web::Path<(IdentifierPrefix, Role, IdentifierPrefix)>,
         data: web::Data<Arc<Witness>>,
-    ) -> Result<HttpResponse, ApiError> {
+    ) -> Result<HttpResponse, WitnessError> {
         let (cid, role, eid) = path.into_inner();
 
-        let end_role = data.oobi_manager.get_end_role(&cid, role)?;
-        let loc_scheme = data.get_loc_scheme_for_id(&eid)?.unwrap_or(vec![]);
+        let end_role = data
+            .oobi_manager
+            .get_end_role(&cid, role)
+            .map_err(|err| WitnessError::DbError(err))?;
+        let loc_scheme = data
+            .get_loc_scheme_for_id(&eid)
+            .map_err(|err| WitnessError::KeriError(err))?
+            .unwrap_or(vec![]);
         // (for now) Append controller kel to be able to verify end role signature.
         // TODO use ksn instead
-        let cont_kel = data.event_storage.get_kel(&cid)?.unwrap_or_default();
+        let cont_kel = data
+            .event_storage
+            .get_kel(&cid)
+            .map_err(|err| WitnessError::KeriError(err))?
+            .unwrap_or_default();
         let oobis = end_role
             .into_iter()
             .chain(loc_scheme.into_iter())
@@ -227,7 +240,8 @@ pub mod http_handlers {
                 sed.to_cesr()
             })
             .flatten_ok()
-            .collect::<Result<Vec<_>, _>>()?;
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|err| WitnessError::KeriError(err))?;
         let res: Vec<u8> = cont_kel.into_iter().chain(oobis).collect();
         println!(
             "\nSending {} obi from its witness {}:\n{}",
@@ -244,9 +258,10 @@ pub mod http_handlers {
     pub async fn process_notice(
         post_data: String,
         data: web::Data<Arc<Witness>>,
-    ) -> Result<HttpResponse, ApiError> {
+    ) -> Result<HttpResponse, WitnessError> {
         println!("\nGot notice to process: \n{}", post_data);
-        data.parse_and_process_notices(post_data.as_bytes())?;
+        data.parse_and_process_notices(post_data.as_bytes())
+            .map_err(|err| WitnessError::KeriError(err))?;
         Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())
             .body(()))
@@ -255,7 +270,7 @@ pub mod http_handlers {
     pub async fn process_query(
         post_data: String,
         data: web::Data<Arc<Witness>>,
-    ) -> Result<HttpResponse, ApiError> {
+    ) -> Result<HttpResponse, WitnessError> {
         println!("\nGot query to process: \n{}", post_data);
         let resp = data
             .parse_and_process_queries(post_data.as_bytes())?
@@ -271,7 +286,7 @@ pub mod http_handlers {
     pub async fn process_reply(
         post_data: String,
         data: web::Data<Arc<Witness>>,
-    ) -> Result<HttpResponse, ApiError> {
+    ) -> Result<HttpResponse, WitnessError> {
         println!("\nGot reply to process: \n{}", post_data);
         data.parse_and_process_replies(post_data.as_bytes())?;
 
@@ -283,7 +298,7 @@ pub mod http_handlers {
     pub async fn process_exchange(
         post_data: String,
         data: web::Data<Arc<Witness>>,
-    ) -> Result<HttpResponse, ApiError> {
+    ) -> Result<HttpResponse, WitnessError> {
         println!("\nGot exchange to process: \n{}", post_data);
         data.parse_and_process_exchanges(post_data.as_bytes())?;
 
@@ -292,45 +307,35 @@ pub mod http_handlers {
             .body(()))
     }
 
-    #[derive(Debug, Display, Error, From)]
-    pub enum ApiError {
-        #[display(fmt = "keri error")]
-        KeriError(keri::error::Error),
-
-        #[display(fmt = "witness error")]
-        WitnessError(WitnessError),
-
-        #[display(fmt = "DB error")]
-        DbError(keri::database::DbError),
-    }
-
-    impl ResponseError for ApiError {
+    impl ResponseError for WitnessError {
         fn status_code(&self) -> StatusCode {
             match self {
-                ApiError::KeriError(err) => match err {
-                    Error::Base64DecodingError { .. }
-                    | Error::DeserializeError(_)
-                    | Error::IncorrectDigest => StatusCode::BAD_REQUEST,
+                WitnessError::DbError(_) => StatusCode::INTERNAL_SERVER_ERROR,
 
-                    Error::Ed25519DalekSignatureError(_)
-                    | Error::FaultySignatureVerification
-                    | Error::SignatureVerificationError => StatusCode::FORBIDDEN,
+                WitnessError::QueryFailed(err) => match err {
+                    SignedQueryError::KeriError(_) | SignedQueryError::DbError(_) => {
+                        StatusCode::INTERNAL_SERVER_ERROR
+                    }
 
-                    _ => StatusCode::INTERNAL_SERVER_ERROR,
-                },
-                ApiError::WitnessError(err) => match err {
-                    WitnessError::QueryFailed(err) => match err {
-                        SignedQueryError::UnknownSigner { .. } => StatusCode::UNAUTHORIZED,
-                        SignedQueryError::QueryError(err) => match err {
-                            QueryError::UnknownId { .. } => StatusCode::NOT_FOUND,
-                            _ => StatusCode::INTERNAL_SERVER_ERROR,
-                        },
-                        _ => StatusCode::INTERNAL_SERVER_ERROR,
+                    SignedQueryError::UnknownSigner { .. } | SignedQueryError::InvalidSignature => {
+                        StatusCode::UNAUTHORIZED
+                    }
+
+                    SignedQueryError::QueryError(err) => match err {
+                        QueryError::KeriError(_) | QueryError::DbError(_) => {
+                            StatusCode::INTERNAL_SERVER_ERROR
+                        }
+
+                        QueryError::UnknownId { .. } => StatusCode::NOT_FOUND,
                     },
-                    _ => StatusCode::INTERNAL_SERVER_ERROR,
                 },
-                ApiError::DbError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+
+                WitnessError::KeriError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             }
+        }
+
+        fn error_response(&self) -> HttpResponse {
+            HttpResponse::build(self.status_code()).json(self)
         }
     }
 }

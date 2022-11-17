@@ -230,7 +230,8 @@ fn test_enough_sigs() -> Result<(), Error> {
 #[test]
 pub fn test_weighted_treshold_serialization() -> Result<(), Error> {
     let multi_threshold = r#"[["1"],["1/2","1/2","1/2"]]"#.to_string();
-    let wt: WeightedThreshold = serde_json::from_str(&multi_threshold)?;
+    let wt: WeightedThreshold =
+        serde_json::from_str(&multi_threshold).map_err(|_| Error::JsonDeserError)?;
     assert!(matches!(wt, WeightedThreshold::Multi(_)));
     // assert_eq!(serde_json::to_string(&wt).unwrap(), multi_threshold);
     assert_eq!(
@@ -239,7 +240,8 @@ pub fn test_weighted_treshold_serialization() -> Result<(), Error> {
     );
 
     let single_threshold = r#"["1/2","1/2","1/2"]"#.to_string();
-    let wt: WeightedThreshold = serde_json::from_str(&single_threshold)?;
+    let wt: WeightedThreshold =
+        serde_json::from_str(&single_threshold).map_err(|_| Error::JsonDeserError)?;
     assert!(matches!(wt, WeightedThreshold::Single(_)));
     assert_eq!(serde_json::to_string(&wt).unwrap(), single_threshold);
     Ok(())
