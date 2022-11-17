@@ -1,5 +1,5 @@
-use super::{self_signing::SelfSigning, DerivationCode};
 use crate::event_parsing::{
+    codes::{self_signing::SelfSigning, DerivationCode},
     error::Error,
     parsing::{adjust_with_num, b64_to_num},
 };

@@ -16,7 +16,7 @@ use keri::{
         signed_event_message::{Message, Notice, Op, SignedEventMessage},
         Digestible,
     },
-    event_parsing::message::key_event_message,
+    event_parsing::parsers::parse_payload,
     oobi::{LocationScheme, OobiManager, Role, Scheme},
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     processor::{
@@ -354,7 +354,7 @@ impl Controller {
         sig: &SelfSigningPrefix,
     ) -> Result<IdentifierPrefix, ControllerError> {
         let (_, parsed_event) =
-            key_event_message(event).map_err(|_e| ControllerError::EventParseError)?;
+            parse_payload::<EventType>(event).map_err(|_e| ControllerError::EventParseError)?;
         match parsed_event {
             EventType::KeyEvent(ke) => {
                 if let EventData::Icp(_) = &ke.event.get_event_data() {

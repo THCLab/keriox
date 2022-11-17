@@ -1,11 +1,10 @@
 use std::str::FromStr;
 
 use crate::event_parsing::{
+    codes::DerivationCode,
     error::Error,
     parsing::{adjust_with_num, b64_to_num},
 };
-
-use super::DerivationCode;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum GroupCode {

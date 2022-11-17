@@ -6,16 +6,16 @@ use nom::{
     Needed,
 };
 
-use super::primitives::{
-    identifier_signature_pair, material_path, parse_primitive, serial_number_parser,
-    timestamp_parser, transferable_quadruple,
-};
 use crate::event_parsing::{
     codes::{
         attached_signature_code::AttachedSignatureCode, basic::Basic, group::GroupCode,
         self_addressing::SelfAddressing, self_signing::SelfSigning,
     },
     group::Group,
+    parsers::primitives::{
+        identifier_signature_pair, material_path, parse_primitive, serial_number_parser,
+        timestamp_parser, transferable_quadruple,
+    },
 };
 
 pub fn group_code(s: &[u8]) -> nom::IResult<&[u8], GroupCode> {

@@ -1,8 +1,6 @@
 use std::str::FromStr;
 
-use crate::event_parsing::{error::Error, parsing::from_bytes_to_text};
-
-use super::DerivationCode;
+use crate::event_parsing::{codes::DerivationCode, error::Error, parsing::from_bytes_to_text};
 
 #[derive(PartialEq, Debug)]
 pub struct SerialNumberCode;

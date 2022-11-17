@@ -13,7 +13,7 @@ use crate::{
         cesr_adapter::EventType,
         signed_event_message::{Message, Notice, SignedEventMessage},
     },
-    event_parsing::parsers::{parse, parse_many},
+    event_parsing::parsers::{parse, parse_many, parse_payload},
     prefix::IdentifierPrefix,
     processor::{
         basic_processor::BasicProcessor,
@@ -439,7 +439,6 @@ fn test_out_of_order() -> Result<(), Error> {
 
 #[test]
 fn test_escrow_missing_signatures() -> Result<(), Error> {
-    use crate::event_parsing::message::event_message;
     let kel = br#"{"v":"KERI10JSON000159_","t":"icp","d":"EMTMYJQ3Eaq8YjG94c_GGvihe5cW8vFFXX2PezAwrn2A","i":"EMTMYJQ3Eaq8YjG94c_GGvihe5cW8vFFXX2PezAwrn2A","s":"0","kt":"1","k":["DJPJ89wKDXMW9Mrg18nZdqp37gCEXuCrTojzVXhHwGT6"],"nt":"1","n":["ENey4-IfkllvEDtKtlFXlr0bhAFFfHQp-n6n2MYEick0"],"bt":"0","b":["DHEOrU8GRgLhjFxz-72koNrxJ5Gyj57B_ZGmYjqbOf4W"],"c":[],"a":[]}-AABAACuardPTXF2hZVuFkhbD6-r84g6p3RoZl_nJRVH6kEOmqxZpw1fj37b7s8LJ649TecIu4Pxb-A2Lu05AptmlBkO{"v":"KERI10JSON000160_","t":"rot","d":"EIBUvQrJbIHvkzQt1hZs1-chTR7FELwknEhQKTS-ku_e","i":"EMTMYJQ3Eaq8YjG94c_GGvihe5cW8vFFXX2PezAwrn2A","s":"1","p":"EMTMYJQ3Eaq8YjG94c_GGvihe5cW8vFFXX2PezAwrn2A","kt":"1","k":["DGuK-ColPgPuH_FCZopzjQAoMN2aNzk3rioNewx1_2El"],"nt":"1","n":["EB78ym8c7Z86gmZWZawXYCk5uMy8H6fC5iPdd3d7VPvk"],"bt":"0","br":[],"ba":[],"a":[]}-AABAAAyw89UHMWvXFyDxJva0uCslgPadFzdNnhFzVjaCvvmV0l6vtXKln1wiy382QbOb69u9DuPgIQUdXLIW9xMJAMI"#;
     let event_without_signature_str = br#"{"v":"KERI10JSON0000cb_","t":"ixn","d":"ENSAcKy3MKyQoYJtXVaNiWHHcFSKwnnN0X_x9-i70q0N","i":"EMTMYJQ3Eaq8YjG94c_GGvihe5cW8vFFXX2PezAwrn2A","s":"2","p":"EIBUvQrJbIHvkzQt1hZs1-chTR7FELwknEhQKTS-ku_e","a":[]}-AABAAC-Oy9w2O16tEzQfIW1TjExYyRbQyBeuc6Etrkdc-QIN_wS3iyw_LYqLI6Zmp34UBkdNv0ZLEjTTcX8dyuJVq0M"#;
     let mut kell = parse_many::<EventType>(kel)
@@ -450,7 +449,10 @@ fn test_escrow_missing_signatures() -> Result<(), Error> {
     let ev1 = kell.next().unwrap();
     let ev2 = kell.next().unwrap();
     let (event_without_signatures, _event) =
-        match event_message(event_without_signature_str).unwrap().1 {
+        match parse_payload::<EventType>(event_without_signature_str)
+            .unwrap()
+            .1
+        {
             EventType::KeyEvent(event) => (
                 Message::Notice(Notice::Event(SignedEventMessage {
                     event_message: event.clone(),

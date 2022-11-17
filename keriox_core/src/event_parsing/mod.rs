@@ -8,10 +8,8 @@ use self::error::Error;
 use self::group::Group;
 
 pub mod group;
-pub mod message;
 pub mod parsing;
 pub mod path;
-
 pub mod value;
 
 pub trait Payload {
