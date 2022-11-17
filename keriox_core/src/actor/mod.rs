@@ -7,15 +7,13 @@ use crate::oobi::OobiManager;
 use crate::{
     error::Error,
     event_message::{
+        cesr_adapter::EventType,
         exchange::{Exchange, ExchangeMessage, ForwardTopic, SignedExchange},
         serialization_info::SerializationFormats,
         signature::Signature,
         signed_event_message::{Message, Notice, Op, SignedEventMessage},
     },
-    event_parsing::{
-        message::{signed_event_stream, signed_notice_stream},
-        path::MaterialPath,
-    },
+    event_parsing::{message::signed_notice_stream, parsers::parse_many, path::MaterialPath},
     prefix::IdentifierPrefix,
 };
 #[cfg(feature = "query")]
@@ -34,7 +32,7 @@ pub mod simple_controller;
 
 pub fn parse_event_stream(stream: &[u8]) -> Result<Vec<Message>, Error> {
     let (_rest, events) =
-        signed_event_stream(stream).map_err(|e| Error::DeserializeError(e.to_string()))?;
+        parse_many::<EventType>(stream).map_err(|e| Error::DeserializeError(e.to_string()))?;
     events.into_iter().map(Message::try_from).collect()
 }
 

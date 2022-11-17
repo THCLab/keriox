@@ -104,16 +104,6 @@ pub fn notice_message(s: &[u8]) -> nom::IResult<&[u8], EventType> {
     alt((key_event_message, receipt_message))(s)
 }
 
-pub fn signed_message(s: &[u8]) -> nom::IResult<&[u8], ParsedData<EventType>> {
-    map(
-        pair(event_message, many0(parse_group)),
-        |(event, attachments)| ParsedData {
-            payload: event,
-            attachments,
-        },
-    )(s)
-}
-
 pub fn signed_notice(s: &[u8]) -> nom::IResult<&[u8], ParsedData<EventType>> {
     map(
         pair(notice_message, many0(parse_group)),
@@ -133,10 +123,6 @@ pub fn signed_op(s: &[u8]) -> nom::IResult<&[u8], ParsedData<EventType>> {
             attachments,
         },
     )(s)
-}
-
-pub fn signed_event_stream(s: &[u8]) -> nom::IResult<&[u8], Vec<ParsedData<EventType>>> {
-    many0(signed_message)(s)
 }
 
 pub fn signed_notice_stream(s: &[u8]) -> nom::IResult<&[u8], Vec<ParsedData<EventType>>> {
