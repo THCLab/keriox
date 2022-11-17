@@ -28,8 +28,7 @@ pub fn parse_value(stream: &[u8]) -> nom::IResult<&[u8], Value> {
             Ok((rest, Value::Group(code, group)))
         }
         _ => {
-            let code = PrimitiveCode::from_str(std::str::from_utf8(stream).unwrap()).unwrap();
-            let (rest, value) = parse_primitive(code, stream)?;
+            let (rest, value) = parse_primitive::<PrimitiveCode>(stream)?;
             Ok((rest, Value::Primitive(value.0, value.1)))
         }
     }

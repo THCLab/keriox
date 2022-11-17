@@ -7,11 +7,11 @@ use nom::{
 };
 
 use super::primitives::{
-    digest, identifier_signature_pair, indexed_signature, material_path,
-    nontransferable_identifier, serial_number_parser, signature, timestamp_parser,
-    transferable_quadruple,
+    identifier_signature_pair, material_path,
+    serial_number_parser, timestamp_parser,
+    transferable_quadruple, parse_primitive,
 };
-use crate::event_parsing::{codes::group::GroupCode, group::Group};
+use crate::{event_parsing::{codes::{group::GroupCode, attached_signature_code::AttachedSignatureCode, self_signing::SelfSigning, basic::Basic, self_addressing::SelfAddressing}, group::Group}};
 
 pub fn group_code(s: &[u8]) -> nom::IResult<&[u8], GroupCode> {
     let (rest, payload_type) = take(4u8)(s)?;
@@ -26,21 +26,21 @@ pub fn parse_group(stream: &[u8]) -> nom::IResult<&[u8], Group> {
     let (rest, group_code) = group_code(stream)?;
     Ok(match group_code {
         GroupCode::IndexedControllerSignatures(n) => {
-            let (rest, signatures) = count(indexed_signature, n as usize)(rest)?;
+            let (rest, signatures) = count(parse_primitive::<AttachedSignatureCode>, n as usize)(rest)?;
             (rest, Group::IndexedControllerSignatures(signatures))
         }
         GroupCode::IndexedWitnessSignatures(n) => {
-            let (rest, signatures) = count(indexed_signature, n as usize)(rest)?;
+            let (rest, signatures) = count(parse_primitive::<AttachedSignatureCode>, n as usize)(rest)?;
             (rest, Group::IndexedWitnessSignatures(signatures))
         }
         GroupCode::NontransferableReceiptCouples(n) => {
             let (rest, couple) =
-                count(tuple((nontransferable_identifier, signature)), n as usize)(rest)?;
+                count(tuple((parse_primitive::<Basic>, parse_primitive::<SelfSigning>)), n as usize)(rest)?;
             (rest, Group::NontransferableReceiptCouples(couple))
         }
         GroupCode::SealSourceCouples(n) => {
             let (rest, couple) =
-                count(tuple((serial_number_parser, digest)), n as usize)(rest).unwrap();
+                count(tuple((serial_number_parser, parse_primitive::<SelfAddressing>)), n as usize)(rest).unwrap();
             (rest, Group::SourceSealCouples(couple))
         }
         GroupCode::FirstSeenReplyCouples(n) => {

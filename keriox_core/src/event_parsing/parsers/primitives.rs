@@ -6,23 +6,22 @@ use nom::{bytes::complete::take, error::ErrorKind, multi::count, sequence::tuple
 use crate::event_parsing::codes::{
     attached_signature_code::AttachedSignatureCode, basic::Basic, group::GroupCode,
     material_path_codes::MaterialPathCode, self_addressing::SelfAddressing,
-    self_signing::SelfSigning, serial_number::SerialNumberCode, timestamp::TimestampCode,
+    serial_number::SerialNumberCode, timestamp::TimestampCode,
     DerivationCode,
 };
 
+use crate::event_parsing::error::Error;
 use crate::event_parsing::path::MaterialPath;
 
 use super::group::group_code;
 use crate::event_parsing::parsing::from_text_to_bytes;
-use crate::event_parsing::primitives::{
-    Digest, Identifier, IdentifierCode, IdentifierSignaturesCouple, IndexedSignature, PublicKey,
-    Signature, TransferableQuadruple,
+use crate::event_parsing::primitives::{Identifier, IdentifierCode, IdentifierSignaturesCouple, TransferableQuadruple,
 };
 
-pub fn parse_primitive<C: DerivationCode>(
-    code: C,
+pub fn parse_primitive<C: DerivationCode + FromStr<Err = Error>>(
     stream: &[u8],
 ) -> nom::IResult<&[u8], (C, Vec<u8>)> {
+    let code = C::from_str(std::str::from_utf8(stream).unwrap()).unwrap();
     // TODO use parser for primitive code
     let (rest, _parsed_code) = take(code.code_size() as usize)(stream)?;
     let (rest, data) = take(code.value_size() as usize)(rest)?;
@@ -33,31 +32,10 @@ pub fn parse_primitive<C: DerivationCode>(
 
 // Parsers for specific primitive. Ment to be used to parse group elements of
 // expected type.
-
-pub fn indexed_signature(s: &[u8]) -> nom::IResult<&[u8], IndexedSignature> {
-    let code = AttachedSignatureCode::from_str(std::str::from_utf8(s).unwrap()).unwrap();
-    parse_primitive(code, s)
-}
-
-pub fn signature(s: &[u8]) -> nom::IResult<&[u8], Signature> {
-    let code = SelfSigning::from_str(std::str::from_utf8(s).unwrap()).unwrap();
-    parse_primitive(code, s)
-}
-
-pub fn nontransferable_identifier(s: &[u8]) -> nom::IResult<&[u8], PublicKey> {
-    let code = Basic::from_str(std::str::from_utf8(s).unwrap()).unwrap();
-    parse_primitive(code, s)
-}
-
-pub fn digest(s: &[u8]) -> nom::IResult<&[u8], Digest> {
-    let code = SelfAddressing::from_str(std::str::from_utf8(s).unwrap()).unwrap();
-    parse_primitive(code, s)
-}
-
 pub fn identifier(s: &[u8]) -> nom::IResult<&[u8], Identifier> {
-    let (rest, identifier) = match digest(s) {
+    let (rest, identifier) = match parse_primitive::<SelfAddressing>(s) {
         Ok(sap) => Ok((sap.0, (IdentifierCode::SelfAddressing(sap.1 .0), sap.1 .1))),
-        Err(_) => match nontransferable_identifier(s) {
+        Err(_) => match parse_primitive::<Basic>(s) {
             Ok(bp) => Ok((bp.0, (IdentifierCode::Basic(bp.1 .0), bp.1 .1))),
             Err(e) => Err(e),
         },
@@ -127,11 +105,11 @@ pub fn material_path(s: &[u8]) -> nom::IResult<&[u8], MaterialPath> {
 
 pub fn transferable_quadruple(s: &[u8]) -> nom::IResult<&[u8], TransferableQuadruple> {
     let (rest, (identifier, serial_number, digest)) =
-        tuple((identifier, serial_number_parser, digest))(s)?;
+        tuple((identifier, serial_number_parser, parse_primitive::<SelfAddressing>))(s)?;
     let (rest, GroupCode::IndexedControllerSignatures(signatures_cout)) = group_code(rest)? else {
 		todo!()
 	};
-    let (rest, signatures) = count(indexed_signature, signatures_cout as usize)(rest)?;
+    let (rest, signatures) = count(parse_primitive::<AttachedSignatureCode>, signatures_cout as usize)(rest)?;
     Ok((rest, (identifier, serial_number, digest, signatures)))
 }
 
@@ -140,7 +118,7 @@ pub fn identifier_signature_pair(s: &[u8]) -> nom::IResult<&[u8], IdentifierSign
     let (rest, GroupCode::IndexedControllerSignatures(signatures_cout)) = group_code(rest)? else {
 		todo!()
 	};
-    let (rest, signatures) = count(indexed_signature, signatures_cout as usize)(rest)?;
+    let (rest, signatures) = count(parse_primitive::<AttachedSignatureCode>, signatures_cout as usize)(rest)?;
     Ok((rest, (identifier, signatures)))
 }
 
@@ -150,12 +128,12 @@ fn test_indexed_signature() {
         attached_signature_code::AttachedSignatureCode, self_signing::SelfSigning,
     };
     assert_eq!(
-        indexed_signature("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".as_bytes()),
+        parse_primitive::<AttachedSignatureCode>("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".as_bytes()),
         Ok(("".as_bytes(), (AttachedSignatureCode { index: 0, code: SelfSigning::Ed25519Sha512 }, vec![0u8; 64])))
     );
 
     assert_eq!(
-        indexed_signature("BCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".as_bytes()),
+        parse_primitive::<AttachedSignatureCode>("BCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".as_bytes()),
         Ok(("AA".as_bytes(), (AttachedSignatureCode { index: 2, code: SelfSigning::ECDSAsecp256k1Sha256 }, vec![0u8; 64])))
     );
 }
@@ -169,7 +147,7 @@ fn test_basic_identifier() {
     ];
     let str_to_parse = "DPn30SLcWnIq95VF3dv0ezwpJdnZx4THho9BC0-HC1UQmore";
 
-    let parsed = nontransferable_identifier(str_to_parse.as_bytes()).unwrap();
+    let parsed = parse_primitive::<Basic>(str_to_parse.as_bytes()).unwrap();
     assert_eq!(parsed, ("more".as_bytes(), (Basic::Ed25519, pk_raw)))
 }
 
@@ -183,7 +161,7 @@ fn test_digest() {
     let sai_str = "ELC5L3iBVD77d_MYbYGGCUQgqQBju1o4x1Ud-z2sL-ux";
     let str_to_parse = [&sai_str, "more"].join("");
     assert_eq!(
-        digest(str_to_parse.as_bytes()),
+        parse_primitive::<SelfAddressing>(str_to_parse.as_bytes()),
         Ok(("more".as_bytes(), (SelfAddressing::Blake3_256, digest_raw)))
     );
 }
@@ -204,7 +182,7 @@ fn test_signature() {
     ];
 
     assert_eq!(
-        signature(string_to_parse.as_bytes()),
+        parse_primitive::<SelfSigning>(string_to_parse.as_bytes()),
         Ok((
             "more".as_bytes(),
             (SelfSigning::Ed25519Sha512, signature_raw)
