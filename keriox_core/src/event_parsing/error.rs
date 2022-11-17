@@ -13,6 +13,9 @@ pub enum Error {
     #[error("Empty code")]
     EmptyCodeError,
 
+    #[error("Empty stream")]
+    EmptyStreamError,
+
     #[error("Incorrect data length: {0}")]
     IncorrectLengthError(String),
 

@@ -1,7 +1,7 @@
 use std;
 use std::fmt::{self, Display};
 
-use serde::{de, ser, Serialize, Deserialize};
+use serde::{de, ser, Deserialize, Serialize};
 
 pub type Result<T> = std::result::Result<T, Error>;
 

@@ -40,7 +40,7 @@ impl Payload for EventType {
 
     fn get_len(stream: &[u8]) -> Result<usize, CesrError> {
         // TODO works only for json. How to find version string?
-        let version_str = &stream[5..24];
+        let version_str = &stream.get(5..24).ok_or(CesrError::EmptyStreamError)?;
         let (_, version) = version(version_str).unwrap();
         Ok(version.size)
     }

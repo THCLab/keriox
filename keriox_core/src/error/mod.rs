@@ -2,7 +2,7 @@ use core::num::ParseIntError;
 
 use base64::DecodeError;
 use ed25519_dalek;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::prefix::IdentifierPrefix;
@@ -22,10 +22,10 @@ pub enum Error {
     CborDeserError,
 
     #[error("MessagePack Serialization error")]
-    MsgPackDeserError ,
+    MsgPackDeserError,
 
     #[error("Error parsing numerical value")]
-    ParseIntError ,
+    ParseIntError,
 
     #[error("Error while applying event: {0}")]
     SemanticError(String),

@@ -1,6 +1,6 @@
 use std::convert::TryFrom;
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "oobi")]
 use crate::oobi::OobiManager;

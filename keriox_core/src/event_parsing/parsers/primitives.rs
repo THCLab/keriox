@@ -6,8 +6,7 @@ use nom::{bytes::complete::take, error::ErrorKind, multi::count, sequence::tuple
 use crate::event_parsing::codes::{
     attached_signature_code::AttachedSignatureCode, basic::Basic, group::GroupCode,
     material_path_codes::MaterialPathCode, self_addressing::SelfAddressing,
-    serial_number::SerialNumberCode, timestamp::TimestampCode,
-    DerivationCode,
+    serial_number::SerialNumberCode, timestamp::TimestampCode, DerivationCode,
 };
 
 use crate::event_parsing::error::Error;
@@ -15,7 +14,8 @@ use crate::event_parsing::path::MaterialPath;
 
 use super::group::group_code;
 use crate::event_parsing::parsing::from_text_to_bytes;
-use crate::event_parsing::primitives::{Identifier, IdentifierCode, IdentifierSignaturesCouple, TransferableQuadruple,
+use crate::event_parsing::primitives::{
+    Identifier, IdentifierCode, IdentifierSignaturesCouple, TransferableQuadruple,
 };
 
 pub fn parse_primitive<C: DerivationCode + FromStr<Err = Error>>(
@@ -104,12 +104,18 @@ pub fn material_path(s: &[u8]) -> nom::IResult<&[u8], MaterialPath> {
 }
 
 pub fn transferable_quadruple(s: &[u8]) -> nom::IResult<&[u8], TransferableQuadruple> {
-    let (rest, (identifier, serial_number, digest)) =
-        tuple((identifier, serial_number_parser, parse_primitive::<SelfAddressing>))(s)?;
+    let (rest, (identifier, serial_number, digest)) = tuple((
+        identifier,
+        serial_number_parser,
+        parse_primitive::<SelfAddressing>,
+    ))(s)?;
     let (rest, GroupCode::IndexedControllerSignatures(signatures_cout)) = group_code(rest)? else {
 		todo!()
 	};
-    let (rest, signatures) = count(parse_primitive::<AttachedSignatureCode>, signatures_cout as usize)(rest)?;
+    let (rest, signatures) = count(
+        parse_primitive::<AttachedSignatureCode>,
+        signatures_cout as usize,
+    )(rest)?;
     Ok((rest, (identifier, serial_number, digest, signatures)))
 }
 
@@ -118,7 +124,10 @@ pub fn identifier_signature_pair(s: &[u8]) -> nom::IResult<&[u8], IdentifierSign
     let (rest, GroupCode::IndexedControllerSignatures(signatures_cout)) = group_code(rest)? else {
 		todo!()
 	};
-    let (rest, signatures) = count(parse_primitive::<AttachedSignatureCode>, signatures_cout as usize)(rest)?;
+    let (rest, signatures) = count(
+        parse_primitive::<AttachedSignatureCode>,
+        signatures_cout as usize,
+    )(rest)?;
     Ok((rest, (identifier, signatures)))
 }
 
