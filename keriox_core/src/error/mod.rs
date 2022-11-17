@@ -2,10 +2,7 @@ use core::num::ParseIntError;
 
 use base64::DecodeError;
 use ed25519_dalek;
-use rmp_serde as serde_mgpk;
 use serde::{Serialize, Deserialize};
-use serde_cbor;
-use serde_json;
 use thiserror::Error;
 
 use crate::prefix::IdentifierPrefix;

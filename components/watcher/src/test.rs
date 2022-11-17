@@ -78,7 +78,7 @@ pub fn test_authentication() -> Result<(), Error> {
 
     let url = url::Url::parse("http://some/dummy/url").unwrap();
     let root = Builder::new().prefix("cont-test-db").tempdir().unwrap();
-    let watcher = WatcherData::setup(url, root.path(), None, Box::new(DefaultTransport))?;
+    let watcher = WatcherData::setup(url, root.path(), None, Box::new(DefaultTransport::new()))?;
 
     // Watcher should know both controllers
     watcher.parse_and_process_notices(&asker_icp).unwrap();

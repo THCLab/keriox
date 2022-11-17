@@ -13,19 +13,26 @@ use keri::{
 use keri_transport::{Transport, TransportError};
 use tempfile::Builder;
 use watcher::{WatcherData, WatcherError};
-use witness::Witness;
+use witness::{Witness, WitnessError};
 
 struct FakeTransport {
     send_message: Box<
-        dyn Fn(LocationScheme, Message) -> Result<Option<PossibleResponse>, TransportError>
+        dyn Fn(
+                LocationScheme,
+                Message,
+            ) -> Result<Option<PossibleResponse>, TransportError<WitnessError>>
             + Send
             + Sync,
     >,
 }
 
 #[async_trait::async_trait]
-impl Transport for FakeTransport {
-    async fn send_message(&self, loc: LocationScheme, msg: Message) -> Result<(), TransportError> {
+impl Transport<WitnessError> for FakeTransport {
+    async fn send_message(
+        &self,
+        loc: LocationScheme,
+        msg: Message,
+    ) -> Result<(), TransportError<WitnessError>> {
         (self.send_message)(loc, msg)?;
         Ok(())
     }
@@ -34,11 +41,14 @@ impl Transport for FakeTransport {
         &self,
         loc: LocationScheme,
         qry: SignedQuery,
-    ) -> Result<PossibleResponse, TransportError> {
+    ) -> Result<PossibleResponse, TransportError<WitnessError>> {
         (self.send_message)(loc, Message::Op(Op::Query(qry))).map(|r| r.unwrap())
     }
 
-    async fn request_loc_scheme(&self, _loc: LocationScheme) -> Result<Vec<Op>, TransportError> {
+    async fn request_loc_scheme(
+        &self,
+        _loc: LocationScheme,
+    ) -> Result<Vec<Op>, TransportError<WitnessError>> {
         todo!()
     }
 
@@ -48,7 +58,7 @@ impl Transport for FakeTransport {
         _cid: IdentifierPrefix,
         _role: Role,
         _eid: IdentifierPrefix,
-    ) -> Result<Vec<Op>, TransportError> {
+    ) -> Result<Vec<Op>, TransportError<WitnessError>> {
         todo!()
     }
 }

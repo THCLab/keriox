@@ -335,7 +335,7 @@ pub mod http_handlers {
         }
 
         fn error_response(&self) -> HttpResponse {
-            HttpResponse::build(self.status_code()).body("asd")
+            HttpResponse::build(self.status_code()).json(self)
         }
     }
 }

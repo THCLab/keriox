@@ -27,6 +27,7 @@ use keri::{
 };
 use keri_transport::Transport;
 use rand::prelude::SliceRandom;
+use witness::WitnessError;
 
 pub struct WatcherData {
     pub prefix: BasicPrefix,
@@ -34,7 +35,7 @@ pub struct WatcherData {
     event_storage: EventStorage,
     pub oobi_manager: OobiManager,
     pub signer: Arc<Signer>,
-    transport: Box<dyn Transport + Send + Sync>,
+    transport: Box<dyn Transport<WitnessError> + Send + Sync>,
 }
 
 impl WatcherData {
@@ -42,7 +43,7 @@ impl WatcherData {
         public_address: url::Url,
         event_db_path: &Path,
         priv_key: Option<String>,
-        transport: Box<dyn Transport + Send + Sync>,
+        transport: Box<dyn Transport<WitnessError> + Send + Sync>,
     ) -> Result<Self, Error> {
         let signer = Arc::new(
             priv_key
@@ -463,7 +464,7 @@ impl Watcher {
 pub enum WatcherError {
     #[display(fmt = "network request failed")]
     #[from]
-    TransportError(keri_transport::TransportError),
+    TransportError(keri_transport::TransportError<WitnessError>),
 
     #[display(fmt = "keri error")]
     #[from]

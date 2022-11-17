@@ -7,6 +7,7 @@ use keri::{
     prefix::IdentifierPrefix,
     query::query_event::SignedQuery,
 };
+use serde::Deserialize;
 
 use super::{Transport, TransportError};
 
@@ -27,23 +28,40 @@ pub struct TestActorError;
 
 pub type TestActorMap = HashMap<(url::Host, u16), Box<dyn TestActor + Send + Sync>>;
 
-#[derive(Clone)]
-pub struct TestTransport {
+/// Used in tests to connect directly to actors without going through the network.
+pub struct TestTransport<E> {
     actors: Arc<TestActorMap>,
+    _phantom: std::marker::PhantomData<E>,
 }
 
-impl TestTransport {
+impl<E> TestTransport<E> {
     pub fn new(actors: TestActorMap) -> Self {
         Self {
             actors: Arc::new(actors),
+            _phantom: std::marker::PhantomData,
         }
     }
 }
 
-/// Used in tests to connect directly to actors without going through the network.
+impl<E> Clone for TestTransport<E> {
+    fn clone(&self) -> Self {
+        Self {
+            actors: Arc::clone(&self.actors),
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}
+
 #[async_trait::async_trait]
-impl Transport for TestTransport {
-    async fn send_message(&self, loc: LocationScheme, msg: Message) -> Result<(), TransportError> {
+impl<E> Transport<E> for TestTransport<E>
+where
+    E: for<'a> Deserialize<'a> + Send + Sync + std::error::Error + 'static,
+{
+    async fn send_message(
+        &self,
+        loc: LocationScheme,
+        msg: Message,
+    ) -> Result<(), TransportError<E>> {
         let (host, port) = match loc.url.origin() {
             url::Origin::Tuple(_scheme, host, port) => (host, port),
             _ => return Err(TransportError::NetworkError),
@@ -63,7 +81,7 @@ impl Transport for TestTransport {
         &self,
         loc: LocationScheme,
         qry: SignedQuery,
-    ) -> Result<PossibleResponse, TransportError> {
+    ) -> Result<PossibleResponse, TransportError<E>> {
         let (host, port) = match loc.url.origin() {
             url::Origin::Tuple(_scheme, host, port) => (host, port),
             _ => return Err(TransportError::NetworkError),
@@ -80,7 +98,7 @@ impl Transport for TestTransport {
         Ok(resp)
     }
 
-    async fn request_loc_scheme(&self, loc: LocationScheme) -> Result<Vec<Op>, TransportError> {
+    async fn request_loc_scheme(&self, loc: LocationScheme) -> Result<Vec<Op>, TransportError<E>> {
         let (host, port) = match loc.url.origin() {
             url::Origin::Tuple(_scheme, host, port) => (host, port),
             _ => return Err(TransportError::NetworkError),
@@ -103,7 +121,7 @@ impl Transport for TestTransport {
         cid: IdentifierPrefix,
         role: Role,
         eid: IdentifierPrefix,
-    ) -> Result<Vec<Op>, TransportError> {
+    ) -> Result<Vec<Op>, TransportError<E>> {
         let (host, port) = match loc.url.origin() {
             url::Origin::Tuple(_scheme, host, port) => (host, port),
             _ => return Err(TransportError::NetworkError),

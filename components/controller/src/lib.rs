@@ -33,6 +33,7 @@ use keri::{
     },
 };
 use keri_transport::{default::DefaultTransport, Transport};
+use witness::WitnessError;
 
 use self::{error::ControllerError, utils::OptionalConfig};
 
@@ -41,17 +42,17 @@ pub struct Controller {
     pub storage: EventStorage,
     oobi_manager: OobiManager,
     partially_witnessed_escrow: Arc<PartiallyWitnessedEscrow>,
-    transport: Box<dyn Transport + Send + Sync>,
+    transport: Box<dyn Transport<WitnessError> + Send + Sync>,
 }
 
 impl Controller {
     pub fn new(configs: Option<OptionalConfig>) -> Result<Self, ControllerError> {
-        Self::with_transport(configs, Box::new(DefaultTransport))
+        Self::with_transport(configs, Box::new(DefaultTransport::new()))
     }
 
     pub fn with_transport(
         configs: Option<OptionalConfig>,
-        transport: Box<dyn Transport + Send + Sync>,
+        transport: Box<dyn Transport<WitnessError> + Send + Sync>,
     ) -> Result<Self, ControllerError> {
         let (db_dir_path, initial_oobis) = match configs {
             Some(OptionalConfig {

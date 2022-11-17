@@ -27,7 +27,7 @@ impl WatcherListener {
             pub_address,
             event_db_path,
             priv_key,
-            Box::new(DefaultTransport),
+            Box::new(DefaultTransport::new()),
         )
         .map(|watcher_data| Self {
             watcher_data: Watcher(watcher_data),

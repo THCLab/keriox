@@ -8,16 +8,40 @@ use keri::{
     prefix::IdentifierPrefix,
     query::query_event::SignedQuery,
 };
+use serde::Deserialize;
 
 use super::{Transport, TransportError};
 
 /// Default behavior for communication with other actors.
 /// Serializes a keri message, does a net request, and deserializes the response.
-pub struct DefaultTransport;
+pub struct DefaultTransport<E> {
+    _phantom: std::marker::PhantomData<E>,
+}
+
+impl<E> DefaultTransport<E> {
+    pub fn new() -> Self {
+        Self {
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<E> Default for DefaultTransport<E> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 #[async_trait::async_trait]
-impl Transport for DefaultTransport {
-    async fn send_message(&self, loc: LocationScheme, msg: Message) -> Result<(), TransportError> {
+impl<E> Transport<E> for DefaultTransport<E>
+where
+    E: for<'a> Deserialize<'a> + Send + Sync + std::error::Error + 'static,
+{
+    async fn send_message(
+        &self,
+        loc: LocationScheme,
+        msg: Message,
+    ) -> Result<(), TransportError<E>> {
         let url = match loc.scheme {
             Scheme::Http => match &msg {
                 Message::Notice(_) => {
@@ -40,12 +64,20 @@ impl Transport for DefaultTransport {
             },
             Scheme::Tcp => todo!(),
         };
-        reqwest::Client::new()
+        let resp = reqwest::Client::new()
             .post(url)
             .body(msg.to_cesr().unwrap())
             .send()
             .await
             .map_err(|_| TransportError::NetworkError)?;
+        if !resp.status().is_success() {
+            let body = resp
+                .text()
+                .await
+                .map_err(|_| TransportError::NetworkError)?;
+            let err = serde_json::from_str(&body).map_err(|_| TransportError::NetworkError)?;
+            return Err(TransportError::RemoteError(err));
+        }
         Ok(())
     }
 
@@ -53,7 +85,7 @@ impl Transport for DefaultTransport {
         &self,
         loc: LocationScheme,
         qry: SignedQuery,
-    ) -> Result<PossibleResponse, TransportError> {
+    ) -> Result<PossibleResponse, TransportError<E>> {
         let url = match loc.scheme {
             Scheme::Http => {
                 // {url}/query
@@ -66,15 +98,22 @@ impl Transport for DefaultTransport {
             .body(Message::Op(Op::Query(qry)).to_cesr().unwrap())
             .send()
             .await
-            .map_err(|_| TransportError::NetworkError)?
+            .map_err(|_| TransportError::NetworkError)?;
+        let status = resp.status();
+        let body = resp
             .text()
             .await
             .map_err(|_| TransportError::NetworkError)?;
-        let resp = parse_response(&resp).map_err(|_| TransportError::InvalidResponse)?;
-        Ok(resp)
+        if status.is_success() {
+            let resp = parse_response(&body).map_err(|_| TransportError::InvalidResponse)?;
+            Ok(resp)
+        } else {
+            let err = serde_json::from_str(&body).map_err(|_| TransportError::InvalidResponse)?;
+            Err(TransportError::RemoteError(err))
+        }
     }
 
-    async fn request_loc_scheme(&self, loc: LocationScheme) -> Result<Vec<Op>, TransportError> {
+    async fn request_loc_scheme(&self, loc: LocationScheme) -> Result<Vec<Op>, TransportError<E>> {
         // {url}/oobi/{eid}
         let url = loc
             .url
@@ -84,12 +123,22 @@ impl Transport for DefaultTransport {
             .unwrap();
         let resp = reqwest::get(url)
             .await
-            .map_err(|_| TransportError::NetworkError)?
-            .bytes()
-            .await
             .map_err(|_| TransportError::NetworkError)?;
-        let ops = parse_op_stream(&resp).map_err(|_| TransportError::InvalidResponse)?;
-        Ok(ops)
+        if resp.status().is_success() {
+            let body = resp
+                .bytes()
+                .await
+                .map_err(|_| TransportError::NetworkError)?;
+            let ops = parse_op_stream(&body).map_err(|_| TransportError::InvalidResponse)?;
+            Ok(ops)
+        } else {
+            let body = resp
+                .text()
+                .await
+                .map_err(|_| TransportError::NetworkError)?;
+            let err = serde_json::from_str(&body).map_err(|_| TransportError::InvalidResponse)?;
+            Err(TransportError::RemoteError(err))
+        }
     }
 
     async fn request_end_role(
@@ -98,7 +147,7 @@ impl Transport for DefaultTransport {
         cid: IdentifierPrefix,
         role: Role,
         eid: IdentifierPrefix,
-    ) -> Result<Vec<Op>, TransportError> {
+    ) -> Result<Vec<Op>, TransportError<E>> {
         // {url}/oobi/{cid}/{role}/{eid}
         let url = loc
             .url
@@ -116,24 +165,21 @@ impl Transport for DefaultTransport {
             .unwrap();
         let resp = reqwest::get(url)
             .await
-            .map_err(|_| TransportError::NetworkError)?
-            .bytes()
-            .await
             .map_err(|_| TransportError::NetworkError)?;
-        let ops = parse_op_stream(&resp).map_err(|_| TransportError::InvalidResponse)?;
-        Ok(ops)
+        if resp.status().is_success() {
+            let body = resp
+                .bytes()
+                .await
+                .map_err(|_| TransportError::NetworkError)?;
+            let ops = parse_op_stream(&body).map_err(|_| TransportError::InvalidResponse)?;
+            Ok(ops)
+        } else {
+            let body = resp
+                .text()
+                .await
+                .map_err(|_| TransportError::NetworkError)?;
+            let err = serde_json::from_str(&body).map_err(|_| TransportError::InvalidResponse)?;
+            Err(TransportError::RemoteError(err))
+        }
     }
-
-    // async fn resolve_loc_scheme(&self, loc: LocationScheme) -> Result<(), TransportError> {
-    //     // {url}/resolve
-    //     let url = loc.url.join("resolve").unwrap();
-    //     let body = todo!("loc_scheme to bytes");
-    //     reqwest::Client::new()
-    //         .post(url)
-    //         .body(body)
-    //         .send()
-    //         .await
-    //         .map_err(|_| TransportError::NetworkError)?;
-    //     Ok(())
-    // }
 }
