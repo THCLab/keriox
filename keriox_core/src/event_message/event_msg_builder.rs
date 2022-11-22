@@ -1,5 +1,4 @@
 use crate::{
-    derivation::{basic::Basic, self_addressing::SelfAddressing},
     error::Error,
     event::sections::key_config::nxt_commitment,
     event::{
@@ -21,7 +20,8 @@ use crate::{
         Event, EventMessage,
     },
     keys::PublicKey,
-    prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix},
+    prefix::{BasicPrefix, IdentifierPrefix},
+    sai::{derivation::SelfAddressing, SelfAddressingPrefix},
 };
 use ed25519_dalek::Keypair;
 use rand::rngs::OsRng;
@@ -55,12 +55,12 @@ impl EventMsgBuilder {
         let nkp = Keypair::generate(&mut rng);
         let pk = PublicKey::new(kp.public.to_bytes().to_vec());
         let npk = PublicKey::new(nkp.public.to_bytes().to_vec());
-        let basic_pref = Basic::Ed25519.derive(pk);
+        let basic_pref = BasicPrefix::Ed25519(pk);
         EventMsgBuilder {
             event_type,
             prefix: IdentifierPrefix::default(),
             keys: vec![basic_pref],
-            next_keys: vec![Basic::Ed25519.derive(npk)],
+            next_keys: vec![BasicPrefix::Ed25519(npk)],
             key_threshold: SignatureThreshold::default(),
             next_key_threshold: SignatureThreshold::default(),
             sn: 1,
@@ -195,7 +195,7 @@ impl EventMsgBuilder {
 
                 match prefix {
                     IdentifierPrefix::Basic(_) => Event::new(prefix, 0, EventData::Icp(icp_event))
-                        .to_message(self.format, &self.derivation)?,
+                        .to_message(self.format, self.derivation)?,
                     IdentifierPrefix::SelfAddressing(_) => {
                         icp_event.incept_self_addressing(self.derivation, self.format)?
                     }
@@ -217,7 +217,7 @@ impl EventMsgBuilder {
                     data: self.data,
                 }),
             )
-            .to_message(self.format, &self.derivation)?,
+            .to_message(self.format, self.derivation)?,
             EventTypeTag::Ixn => Event::new(
                 prefix,
                 self.sn,
@@ -226,7 +226,7 @@ impl EventMsgBuilder {
                     data: self.data,
                 }),
             )
-            .to_message(self.format, &self.derivation)?,
+            .to_message(self.format, self.derivation)?,
             EventTypeTag::Dip => {
                 let icp_data = InceptionEvent {
                     key_config,
@@ -251,7 +251,7 @@ impl EventMsgBuilder {
                     data: self.data,
                 };
                 Event::new(prefix, self.sn, EventData::Drt(rotation_data))
-                    .to_message(self.format, &self.derivation)?
+                    .to_message(self.format, self.derivation)?
             }
             _ => return Err(Error::SemanticError("Not key event".into())),
         })

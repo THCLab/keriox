@@ -175,7 +175,6 @@ pub mod http_handlers {
     use itertools::Itertools;
     use keri::{
         actor::{QueryError, SignedQueryError},
-        error::Error,
         event_parsing::SignedEventData,
         oobi::Role,
         prefix::{IdentifierPrefix, Prefix},

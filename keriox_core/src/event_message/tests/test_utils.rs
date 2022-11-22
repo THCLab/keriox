@@ -1,11 +1,11 @@
 use super::event_msg_builder::EventMsgBuilder;
 use crate::{
-    derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
     error::Error,
     event::sections::{key_config::nxt_commitment, threshold::SignatureThreshold},
     event_message::EventTypeTag,
     keys::{PrivateKey, PublicKey},
-    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfAddressingPrefix},
+    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+    sai::{derivation::SelfAddressing, SelfAddressingPrefix},
     state::IdentifierState,
 };
 use ed25519_dalek::Keypair;
@@ -64,8 +64,8 @@ fn test_update_identifier_state(
         next_sk = sk;
     };
 
-    let current_key_pref = Basic::Ed25519.derive(cur_pk.clone());
-    let next_key_prefix = Basic::Ed25519.derive(next_pk.clone());
+    let current_key_pref = BasicPrefix::Ed25519(cur_pk.clone());
+    let next_key_prefix = BasicPrefix::Ed25519(next_pk.clone());
     let next_keys_data = nxt_commitment(
         SignatureThreshold::Simple(1),
         &[next_key_prefix.clone()],
@@ -89,7 +89,7 @@ fn test_update_identifier_state(
         // Sign.
         let signer = cur_sk.clone();
         let sig = signer.sign_ed(&sed)?;
-        AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, sig, 0)
+        AttachedSignaturePrefix::new(SelfSigningPrefix::Ed25519Sha512(sig), 0)
     };
 
     // Attach sign to event message.

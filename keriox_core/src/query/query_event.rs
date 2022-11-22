@@ -2,7 +2,6 @@ use serde::{Deserialize, Serialize};
 
 use super::Timestamped;
 use crate::{
-    derivation::self_addressing::SelfAddressing,
     error::Error,
     event::{EventMessage, SerializationFormats},
     event_message::{
@@ -10,6 +9,7 @@ use crate::{
         EventTypeTag, SaidEvent, Typeable,
     },
     prefix::{AttachedSignaturePrefix, IdentifierPrefix},
+    sai::derivation::SelfAddressing,
 };
 
 // TODO: make enum with different query args
@@ -95,7 +95,7 @@ impl QueryEvent {
     pub fn new_query(
         route: QueryRoute,
         serialization_format: SerializationFormats,
-        derivation: &SelfAddressing,
+        derivation: SelfAddressing,
     ) -> Result<Self, Error> {
         let message = Query { route };
 

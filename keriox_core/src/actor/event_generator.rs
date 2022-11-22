@@ -1,5 +1,4 @@
 use crate::{
-    derivation::self_addressing::SelfAddressing,
     error::Error,
     event::{
         sections::{
@@ -15,11 +14,12 @@ use crate::{
         EventTypeTag,
     },
     oobi::{EndRole, Role},
-    prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix},
+    prefix::{BasicPrefix, IdentifierPrefix},
     query::{
         reply_event::{ReplyEvent, ReplyRoute},
         Timestamped,
     },
+    sai::{derivation::SelfAddressing, SelfAddressingPrefix},
     state::IdentifierState,
 };
 
@@ -215,6 +215,6 @@ pub fn exchange(
         },
         to_forward: data.clone(),
     })
-    .to_message(SerializationFormats::JSON, &SelfAddressing::Blake3_256)
+    .to_message(SerializationFormats::JSON, SelfAddressing::Blake3_256)
     .map_err(|e| Error::EventGenerationError(e.to_string()))
 }

@@ -1,4 +1,4 @@
-use crate::{derivation::attached_signature_code::num_to_b64, error::Error};
+use crate::{error::Error, event_parsing::parsing::num_to_b64};
 use serde::{Deserialize, Serialize};
 use std::{convert::TryFrom, fmt::Display};
 

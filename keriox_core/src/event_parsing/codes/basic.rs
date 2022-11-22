@@ -1,14 +1,10 @@
-use core::str::FromStr;
+use std::str::FromStr;
 
-use serde::{Deserialize, Serialize};
+use super::super::error::Error;
 
 use super::DerivationCode;
-use crate::{error::Error, keys::PublicKey, prefix::BasicPrefix};
 
-/// Basic Derivations
-///
-/// Basic prefix derivation is just a public key (2.3.1)
-#[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize, Hash, Eq)]
+#[derive(Debug, PartialEq, Clone, Copy, Hash, Eq)]
 pub enum Basic {
     ECDSAsecp256k1NT,
     ECDSAsecp256k1,
@@ -18,22 +14,6 @@ pub enum Basic {
     Ed448,
     X25519,
     X448,
-}
-
-impl Basic {
-    pub fn derive(&self, public_key: PublicKey) -> BasicPrefix {
-        BasicPrefix::new(*self, public_key)
-    }
-
-    /// Non transferable means that the public key is always the current public key.
-    /// Transferable means that the public key might have changed and
-    /// you need to request KEL to obtain the newest one.
-    pub fn is_transferable(&self) -> bool {
-        match self {
-            Basic::ECDSAsecp256k1NT | Basic::Ed25519NT | Basic::Ed448NT => false,
-            _ => true,
-        }
-    }
 }
 
 impl DerivationCode for Basic {
@@ -72,10 +52,7 @@ impl FromStr for Basic {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s
-            .get(..1)
-            .ok_or_else(|| Error::DeserializeError("Empty prefix".into()))?
-        {
+        match s.get(..1).ok_or_else(|| Error::EmptyCodeError)? {
             "B" => Ok(Self::Ed25519NT),
             "C" => Ok(Self::X25519),
             "D" => Ok(Self::Ed25519),
@@ -85,9 +62,9 @@ impl FromStr for Basic {
                 "AAB" => Ok(Self::ECDSAsecp256k1),
                 "AAC" => Ok(Self::Ed448NT),
                 "AAD" => Ok(Self::Ed448),
-                _ => Err(Error::DeserializeError("Unknown signature code".into())),
+                _ => Err(Error::UnknownCodeError),
             },
-            _ => Err(Error::DeserializeError("Unknown prefix code".into())),
+            _ => Err(Error::UnknownCodeError),
         }
     }
 }

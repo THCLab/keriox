@@ -3,11 +3,10 @@ use std::sync::{Arc, Mutex};
 use keri::{
     actor::simple_controller::{PossibleResponse, SimpleController},
     database::{escrow::EscrowDb, SledEventDatabase},
-    derivation::self_signing::SelfSigning,
     error::Error,
     event_message::signed_event_message::{Message, Notice, Op},
     oobi::{LocationScheme, Role},
-    prefix::IdentifierPrefix,
+    prefix::{IdentifierPrefix, SelfSigningPrefix},
     query::{query_event::SignedQuery, reply_event::SignedReply},
 };
 use keri_transport::{Transport, TransportError};
@@ -209,7 +208,7 @@ pub fn watcher_forward_ksn() -> Result<(), Error> {
     let witness_oobi = SignedReply::new_nontrans(
         witness_oobis[0].clone(),
         witness.prefix.clone(),
-        SelfSigning::Ed25519Sha512.derive(
+        SelfSigningPrefix::Ed25519Sha512(
             witness
                 .signer
                 .sign(witness_oobis[0].serialize().unwrap())

@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    derivation::self_addressing::SelfAddressing, error::Error, event::SerializationFormats,
-    event_parsing::path::MaterialPath, prefix::IdentifierPrefix, query::Timestamped,
+    error::Error, event::SerializationFormats, event_parsing::path::MaterialPath,
+    prefix::IdentifierPrefix, query::Timestamped, sai::derivation::SelfAddressing,
 };
 
 use super::{
@@ -36,7 +36,7 @@ impl Exchange {
     pub fn to_message(
         self,
         format: SerializationFormats,
-        derivation: &SelfAddressing,
+        derivation: SelfAddressing,
     ) -> Result<ExchangeMessage, Error> {
         SaidEvent::<Timestamped<Exchange>>::to_message(Timestamped::new(self), format, derivation)
     }

@@ -4,7 +4,7 @@ use crate::event_message::Digestible;
 use crate::event_message::EventTypeTag;
 use crate::event_message::Typeable;
 use crate::prefix::IdentifierPrefix;
-use crate::prefix::SelfAddressingPrefix;
+use crate::sai::SelfAddressingPrefix;
 use serde::{Deserialize, Serialize};
 use serde_hex::{Compact, SerHex};
 

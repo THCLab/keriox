@@ -1,8 +1,8 @@
 use crate::{
-    derivation::self_addressing::SelfAddressing,
     error::Error,
     event::{EventMessage, SerializationFormats},
     event_message::{signed_event_message::Message, EventTypeTag, SaidEvent, Typeable},
+    sai::derivation::SelfAddressing,
 };
 use chrono::{DateTime, FixedOffset, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize, Serializer};
@@ -42,7 +42,7 @@ impl<D: Serialize + Typeable + Clone> Timestamped<D> {
     pub fn to_message(
         self,
         format: SerializationFormats,
-        derivation: &SelfAddressing,
+        derivation: SelfAddressing,
     ) -> Result<EventMessage<SaidEvent<Timestamped<D>>>, Error> {
         SaidEvent::<Self>::to_message(self, format, derivation)
     }

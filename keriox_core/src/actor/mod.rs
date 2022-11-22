@@ -208,7 +208,14 @@ pub fn process_signed_query(
                 .get(0)
                 .ok_or(SignedQueryError::InvalidSignature)?
                 .signature;
-            if !id.verify(&qr.query.serialize()?, sig)? {
+            let ver_result = match id.verify(&qr.query.serialize()?, sig) {
+                Ok(result) => result,
+                Err(e) => {
+                    let keri_error: crate::error::Error = e.into();
+                    return Err(keri_error.into());
+                }
+            };
+            if !ver_result {
                 return Err(SignedQueryError::InvalidSignature);
             }
         }

@@ -26,7 +26,8 @@ use crate::{
         },
         Digestible,
     },
-    prefix::{BasicPrefix, IdentifierPrefix, SelfAddressingPrefix, SelfSigningPrefix},
+    prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+    sai::SelfAddressingPrefix,
 };
 
 pub fn default_escrow_bus(
@@ -294,7 +295,7 @@ impl PartiallySignedEscrow {
                     };
                     self.escrowed_partially_signed.add(&id, to_add)?;
                 }
-                Err(e) => {
+                Err(_e) => {
                     // keep in escrow
                 }
             }

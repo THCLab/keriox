@@ -11,7 +11,7 @@ use crate::{
     error::Error,
     event_message::signed_event_message::{Message, Notice, SignedEventMessage},
     event_parsing::message::{signed_event_stream, signed_message},
-    prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+    prefix::IdentifierPrefix,
     processor::{
         basic_processor::BasicProcessor,
         escrow::{

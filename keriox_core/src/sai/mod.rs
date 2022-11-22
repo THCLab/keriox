@@ -1,7 +1,10 @@
-use super::Prefix;
-use crate::derivation::{self_addressing::SelfAddressing, DerivationCode};
-use crate::error::Error;
-use crate::event_parsing::parsing::from_text_to_bytes;
+pub mod cesr_adapter;
+mod digest;
+pub mod derivation;
+
+use self::derivation::SelfAddressing;
+
+use crate::prefix::Prefix;
 use core::{fmt, str::FromStr};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -21,34 +24,6 @@ impl SelfAddressingPrefix {
 
     pub fn verify_binding(&self, sed: &[u8]) -> bool {
         self.derivation.digest(sed) == self.digest
-    }
-}
-
-impl FromStr for SelfAddressingPrefix {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let code = SelfAddressing::from_str(s)?;
-        let c_len = code.code_len();
-        if s.len() == code.prefix_b64_len() {
-            let decoded = from_text_to_bytes(&s[c_len..].as_bytes())?[c_len..].to_vec();
-
-            Ok(Self::new(code, decoded))
-        } else {
-            Err(Error::SemanticError(format!(
-                "Incorrect Prefix Length: {}",
-                s
-            )))
-        }
-    }
-}
-
-impl Prefix for SelfAddressingPrefix {
-    fn derivative(&self) -> Vec<u8> {
-        self.digest.to_owned()
-    }
-    fn derivation_code(&self) -> String {
-        self.derivation.to_str()
     }
 }
 

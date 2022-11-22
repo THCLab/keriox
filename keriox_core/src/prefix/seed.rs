@@ -1,6 +1,6 @@
+use super::error::Error;
 use super::Prefix;
 use crate::{
-    error::Error,
     event_parsing::parsing::from_text_to_bytes,
     keys::{PrivateKey, PublicKey},
 };
@@ -33,7 +33,7 @@ impl SeedPrefix {
                     PrivateKey::new(sk.to_bytes().to_vec()),
                 ))
             }
-            _ => Err(Error::ImproperPrefixType),
+            _ => Err(Error::WrongSeedTypeError),
         }
     }
 }
@@ -90,7 +90,7 @@ impl Prefix for SeedPrefix {
 
 #[test]
 fn test_derive_keypair() -> Result<(), Error> {
-    use crate::derivation::basic::Basic;
+    use crate::prefix::basic::BasicPrefix;
     use base64::URL_SAFE;
 
     // taken from KERIPY: tests/core/test_eventing.py#1512
@@ -133,7 +133,7 @@ fn test_derive_keypair() -> Result<(), Error> {
         let seed: SeedPrefix = seed_str.parse()?;
         let (pub_key, _priv_key) = seed.derive_key_pair()?;
         let b64_pubkey = base64::encode_config(pub_key.key(), URL_SAFE);
-        let bp = Basic::Ed25519.derive(pub_key);
+        let bp = BasicPrefix::Ed25519(pub_key);
         assert_eq!(&bp.to_str(), expected_bp);
         assert_eq!(&b64_pubkey, expected_pk);
     }

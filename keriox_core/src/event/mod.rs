@@ -2,7 +2,7 @@ use crate::event_message::key_event_message::KeyEvent;
 pub use crate::event_message::{serialization_info::SerializationFormats, EventMessage};
 use crate::event_message::{EventTypeTag, SaidEvent, Typeable};
 use crate::state::IdentifierState;
-use crate::{derivation::self_addressing::SelfAddressing, prefix::IdentifierPrefix};
+use crate::{prefix::IdentifierPrefix, sai::derivation::SelfAddressing};
 use serde::{Deserialize, Serialize};
 pub mod event_data;
 pub mod receipt;
@@ -36,7 +36,7 @@ impl Event {
     pub fn to_message(
         self,
         format: SerializationFormats,
-        derivation: &SelfAddressing,
+        derivation: SelfAddressing,
     ) -> Result<EventMessage<KeyEvent>, Error> {
         match (&self.prefix, self.event_data.clone()) {
             (IdentifierPrefix::SelfAddressing(_), EventData::Icp(icp)) => {

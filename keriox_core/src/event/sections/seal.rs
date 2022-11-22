@@ -1,4 +1,4 @@
-use crate::prefix::{IdentifierPrefix, SelfAddressingPrefix};
+use crate::{prefix::IdentifierPrefix, sai::SelfAddressingPrefix};
 use serde::{Deserialize, Serialize};
 use serde_hex::{Compact, SerHex};
 

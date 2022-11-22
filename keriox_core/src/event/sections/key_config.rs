@@ -2,9 +2,9 @@ use serde::{Deserialize, Serialize};
 
 use super::threshold::SignatureThreshold;
 use crate::{
-    derivation::self_addressing::SelfAddressing,
     error::Error,
-    prefix::{AttachedSignaturePrefix, BasicPrefix, Prefix, SelfAddressingPrefix},
+    prefix::{AttachedSignaturePrefix, BasicPrefix, Prefix},
+    sai::{derivation::SelfAddressing, SelfAddressingPrefix},
 };
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
@@ -100,7 +100,9 @@ impl KeyConfig {
                             .ok_or_else(|| {
                                 Error::SemanticError("Key index not present in set".into())
                             })
-                            .and_then(|key: &BasicPrefix| key.verify(message, &sig.signature))?)
+                            .and_then(|key: &BasicPrefix| {
+                                Ok(key.verify(message, &sig.signature)?)
+                            })?)
                 })?)
         } else {
             Err(Error::NotEnoughSigsError)
@@ -183,8 +185,8 @@ fn test_threshold() -> Result<(), Error> {
     use rand::rngs::OsRng;
 
     use crate::{
-        derivation::{basic::Basic, self_signing::SelfSigning},
         keys::{PrivateKey, PublicKey},
+        prefix::SelfSigningPrefix,
     };
 
     let (pub_keys, priv_keys): (Vec<BasicPrefix>, Vec<PrivateKey>) = [0, 1, 2]
@@ -192,7 +194,7 @@ fn test_threshold() -> Result<(), Error> {
         .map(|_| {
             let kp = Keypair::generate(&mut OsRng);
             (
-                Basic::Ed25519.derive(PublicKey::new(kp.public.to_bytes().to_vec())),
+                BasicPrefix::Ed25519(PublicKey::new(kp.public.to_bytes().to_vec())),
                 PrivateKey::new(kp.secret.to_bytes().to_vec()),
             )
         })
@@ -205,7 +207,7 @@ fn test_threshold() -> Result<(), Error> {
             .iter()
             .map(|_| {
                 let kp = Keypair::generate(&mut OsRng);
-                Basic::Ed25519.derive(PublicKey::new(kp.public.to_bytes().to_vec()))
+                BasicPrefix::Ed25519(PublicKey::new(kp.public.to_bytes().to_vec()))
             })
             .collect();
         nxt_commitment(next_threshold, &next_keys, &SelfAddressing::Blake3_256)
@@ -218,8 +220,7 @@ fn test_threshold() -> Result<(), Error> {
     for i in 0..priv_keys.len() {
         let sig = priv_keys[i].sign_ed(msg_to_sign)?;
         signatures.push(AttachedSignaturePrefix::new(
-            SelfSigning::Ed25519Sha512,
-            sig,
+            SelfSigningPrefix::Ed25519Sha512(sig),
             i as u16,
         ));
     }

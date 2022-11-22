@@ -3,7 +3,6 @@ use super::{
     EventData,
 };
 use crate::{
-    derivation::self_addressing::SelfAddressing,
     error::Error,
     event::{sections::seal::Seal, Event},
     event_message::{
@@ -11,6 +10,7 @@ use crate::{
         serialization_info::SerializationFormats, EventMessage, SaidEvent,
     },
     prefix::IdentifierPrefix,
+    sai::derivation::SelfAddressing,
     state::{EventSemantics, IdentifierState, LastEstablishmentData},
 };
 use serde::{Deserialize, Serialize};
@@ -58,7 +58,7 @@ impl InceptionEvent {
         format: SerializationFormats,
     ) -> Result<EventMessage<KeyEvent>, Error> {
         let dummy_event =
-            DummyInceptionEvent::dummy_inception_data(self.clone(), &derivation, format)?;
+            DummyInceptionEvent::dummy_inception_data(self.clone(), derivation.clone(), format)?;
         let digest = derivation.derive(&dummy_event.serialize()?);
         let event = Event::new(
             IdentifierPrefix::SelfAddressing(digest.clone()),
@@ -96,7 +96,9 @@ fn test_inception_data_derivation() -> Result<(), Error> {
         key_config::KeyConfig, key_config::NextKeysData, threshold::SignatureThreshold,
     };
     use crate::event_message::Digestible;
-    use crate::prefix::{BasicPrefix, Prefix, SelfAddressingPrefix};
+    use crate::prefix::{BasicPrefix, Prefix};
+    use crate::sai::SelfAddressingPrefix;
+
     let keys: Vec<BasicPrefix> = vec![
         "DErocgXD2RGSyvn3MObcx59jeOsEQhv2TqHirVkzrp0Q"
             .parse()

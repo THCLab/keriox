@@ -10,10 +10,9 @@ use nom::{
 };
 
 use crate::{
-    derivation::attached_signature_code::b64_to_num,
     event::sections::seal::{EventSeal, SourceSeal},
     event_message::signature::Signature,
-    event_parsing::payload_size::PayloadType,
+    event_parsing::{parsing::b64_to_num, payload_size::PayloadType},
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
 };
 
@@ -250,11 +249,11 @@ fn test_b64_count() {
 
 #[test]
 fn test_sigs() {
-    use crate::{derivation::self_signing::SelfSigning, prefix::AttachedSignaturePrefix};
+    use crate::prefix::AttachedSignaturePrefix;
 
     assert_eq!(
         attachment("-AABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".as_bytes()),
-        Ok(("".as_bytes(), Attachment::AttachedSignatures(vec![AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, vec![0u8; 64], 0)])))
+        Ok(("".as_bytes(), Attachment::AttachedSignatures(vec![AttachedSignaturePrefix::new(SelfSigningPrefix::Ed25519Sha512(vec![0u8; 64]), 0)])))
     );
 
     assert!(attachment("-AABAA0Q7bqPvenjWXo_YIikMBKOg-pghLKwBi1Plm0PEqdv67L1_c6dq9bll7OFnoLp0a74Nw1cBGdjIPcu-yAllHAw".as_bytes()).is_ok());
@@ -262,16 +261,16 @@ fn test_sigs() {
     assert_eq!(
         attachment("-AACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0AACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAextra data".as_bytes()),
         Ok(("extra data".as_bytes(), Attachment::AttachedSignatures(vec![
-            AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, vec![0u8; 64], 0),
-            AttachedSignaturePrefix::new(SelfSigning::Ed448, vec![0u8; 114], 2)
+            AttachedSignaturePrefix::new(SelfSigningPrefix::Ed25519Sha512( vec![0u8; 64]), 0),
+            AttachedSignaturePrefix::new(SelfSigningPrefix::Ed448(vec![0u8; 114]), 2)
         ])))
     );
 
     assert_eq!(
         attachment("-AACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0AACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".as_bytes()),
         Ok(("".as_bytes(), Attachment::AttachedSignatures(vec![
-            AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, vec![0u8; 64], 0),
-            AttachedSignaturePrefix::new(SelfSigning::Ed448, vec![0u8; 114], 2)
+            AttachedSignaturePrefix::new(SelfSigningPrefix::Ed25519Sha512(vec![0u8; 64]), 0),
+            AttachedSignaturePrefix::new(SelfSigningPrefix::Ed448(vec![0u8; 114]), 2)
         ])))
     )
 }

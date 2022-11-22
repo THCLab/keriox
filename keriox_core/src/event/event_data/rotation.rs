@@ -1,7 +1,8 @@
 use super::super::sections::{seal::*, KeyConfig, RotationWitnessConfig};
 use crate::{
     error::Error,
-    prefix::{BasicPrefix, SelfAddressingPrefix},
+    prefix::BasicPrefix,
+    sai::SelfAddressingPrefix,
     state::{EventSemantics, IdentifierState, LastEstablishmentData, WitnessConfig},
 };
 use serde::{Deserialize, Serialize};

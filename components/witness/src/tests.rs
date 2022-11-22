@@ -8,7 +8,6 @@ use keri::{
         SignedQueryError,
     },
     database::{escrow::EscrowDb, SledEventDatabase},
-    derivation::basic::Basic,
     error::Error,
     event::sections::{
         seal::{EventSeal, Seal},
@@ -19,7 +18,7 @@ use keri::{
         signed_event_message::{Message, Notice, Op, SignedEventMessage},
     },
     keys::PublicKey,
-    prefix::{BasicPrefix, IdentifierPrefix},
+    prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     processor::{basic_processor::BasicProcessor, event_storage::EventStorage, Processor},
     query::query_event::MailboxResponse,
     signer::{CryptoBox, Signer},
@@ -225,13 +224,13 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
 #[test]
 fn test_qry_rpy() -> Result<(), WitnessError> {
     use keri::{
-        derivation::{self_addressing::SelfAddressing, self_signing::SelfSigning},
         event::SerializationFormats,
         prefix::AttachedSignaturePrefix,
         query::{
             query_event::{QueryArgs, QueryEvent, QueryRoute, SignedQuery},
             reply_event::ReplyRoute,
         },
+        sai::derivation::SelfAddressing,
         signer::{KeyManager, Signer},
     };
     use tempfile::Builder;
@@ -314,16 +313,17 @@ fn test_qry_rpy() -> Result<(), WitnessError> {
             reply_route: String::from(""),
         },
         SerializationFormats::JSON,
-        &SelfAddressing::Blake3_256,
+        SelfAddressing::Blake3_256,
     )?;
 
     // sign message by bob
     let signature = AttachedSignaturePrefix::new(
-        SelfSigning::Ed25519Sha512,
-        Arc::clone(&bob_key_manager)
-            .lock()
-            .unwrap()
-            .sign(&serde_json::to_vec(&qry).unwrap())?,
+        SelfSigningPrefix::Ed25519Sha512(
+            Arc::clone(&bob_key_manager)
+                .lock()
+                .unwrap()
+                .sign(&serde_json::to_vec(&qry).unwrap())?,
+        ),
         0,
     );
     // Qry message signed by Bob
@@ -356,16 +356,17 @@ fn test_qry_rpy() -> Result<(), WitnessError> {
             reply_route: String::from(""),
         },
         SerializationFormats::JSON,
-        &SelfAddressing::Blake3_256,
+        SelfAddressing::Blake3_256,
     )?;
 
     // sign message by bob
     let signature = AttachedSignaturePrefix::new(
-        SelfSigning::Ed25519Sha512,
-        Arc::clone(&bob_key_manager)
-            .lock()
-            .unwrap()
-            .sign(&serde_json::to_vec(&qry).unwrap())?,
+        SelfSigningPrefix::Ed25519Sha512(
+            Arc::clone(&bob_key_manager)
+                .lock()
+                .unwrap()
+                .sign(&serde_json::to_vec(&qry).unwrap())?,
+        ),
         0,
     );
     // Qry message signed by Bob
@@ -637,9 +638,8 @@ fn test_invalid_notice() {
 
         // change identifier
         let mut invalid_event = incept_event.clone();
-        invalid_event.event_message.event.content.prefix = IdentifierPrefix::Basic(
-            BasicPrefix::new(Basic::Ed25519, PublicKey::new(vec![0; 32])),
-        );
+        invalid_event.event_message.event.content.prefix =
+            IdentifierPrefix::Basic(BasicPrefix::Ed25519(PublicKey::new(vec![0; 32])));
         let result = witness.process_notice(Notice::Event(invalid_event));
         // TODO: use better error variant
         assert!(matches!(result, Err(Error::SemanticError(_))));

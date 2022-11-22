@@ -10,7 +10,6 @@ use super::{event_generator, prelude::Message, process_message};
 use crate::{
     actor::parse_event_stream,
     database::{escrow::EscrowDb, SledEventDatabase},
-    derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
     error::Error,
     event::{
         event_data::EventData,
@@ -28,7 +27,7 @@ use crate::{
     },
     event_parsing::{message::key_event_message, path::MaterialPath, EventType},
     oobi::{OobiManager, Role},
-    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix},
+    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix},
     processor::{
         basic_processor::BasicProcessor,
         escrow::{
@@ -44,6 +43,7 @@ use crate::{
         },
         reply_event::SignedReply,
     },
+    sai::derivation::SelfAddressing,
     signer::KeyManager,
     state::IdentifierState,
 };
@@ -227,8 +227,8 @@ impl<K: KeyManager> SimpleController<K> {
     ) -> Result<SignedEventMessage, Error> {
         let km = self.key_manager.lock().map_err(|_| Error::MutexPoisoned)?;
         let icp = event_generator::incept(
-            vec![Basic::Ed25519.derive(km.public_key())],
-            vec![Basic::Ed25519.derive(km.next_public_key())],
+            vec![BasicPrefix::Ed25519(km.public_key())],
+            vec![BasicPrefix::Ed25519(km.next_public_key())],
             initial_witness.unwrap_or_default(),
             witness_threshold.unwrap_or(0),
             delegator,
@@ -239,8 +239,7 @@ impl<K: KeyManager> SimpleController<K> {
         let signed = if let EventType::KeyEvent(icp) = key_event {
             icp.sign(
                 vec![AttachedSignaturePrefix::new(
-                    SelfSigning::Ed25519Sha512,
-                    signature,
+                    SelfSigningPrefix::Ed25519Sha512(signature),
                     0,
                 )],
                 None,
@@ -272,16 +271,17 @@ impl<K: KeyManager> SimpleController<K> {
                 reply_route: String::from(""),
             },
             SerializationFormats::JSON,
-            &SelfAddressing::Blake3_256,
+            SelfAddressing::Blake3_256,
         )?;
 
         // sign message by bob
         let signature = AttachedSignaturePrefix::new(
-            SelfSigning::Ed25519Sha512,
-            Arc::clone(&self.key_manager)
-                .lock()
-                .unwrap()
-                .sign(&serde_json::to_vec(&qry).unwrap())?,
+            SelfSigningPrefix::Ed25519Sha512(
+                Arc::clone(&self.key_manager)
+                    .lock()
+                    .unwrap()
+                    .sign(&serde_json::to_vec(&qry).unwrap())?,
+            ),
             0,
         );
         // Qry message signed by Bob
@@ -298,7 +298,7 @@ impl<K: KeyManager> SimpleController<K> {
                 .unwrap();
         let sed: Vec<u8> = end_role.serialize()?;
         let sig = self.key_manager.clone().lock().unwrap().sign(&sed)?;
-        let att_sig = AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, sig, 0);
+        let att_sig = AttachedSignaturePrefix::new(SelfSigningPrefix::Ed25519Sha512(sig), 0);
 
         let oobi_rpy = SignedReply::new_trans(
             end_role,
@@ -328,8 +328,7 @@ impl<K: KeyManager> SimpleController<K> {
         let signed = if let EventType::KeyEvent(rot) = key_event {
             rot.sign(
                 vec![AttachedSignaturePrefix::new(
-                    SelfSigning::Ed25519Sha512,
-                    signature,
+                    SelfSigningPrefix::Ed25519Sha512(signature),
                     0,
                 )],
                 None,
@@ -360,8 +359,8 @@ impl<K: KeyManager> SimpleController<K> {
 
         Ok(event_generator::rotate(
             state,
-            vec![Basic::Ed25519.derive(km.public_key())],
-            vec![Basic::Ed25519.derive(km.next_public_key())],
+            vec![BasicPrefix::Ed25519(km.public_key())],
+            vec![BasicPrefix::Ed25519(km.next_public_key())],
             witness_to_add.unwrap_or_default().to_vec(),
             witness_to_remove.unwrap_or_default().into(),
             witness_threshold.unwrap_or(0),
@@ -381,8 +380,7 @@ impl<K: KeyManager> SimpleController<K> {
 
         let signed = ixn.sign(
             vec![AttachedSignaturePrefix::new(
-                SelfSigning::Ed25519Sha512,
-                signature,
+                SelfSigningPrefix::Ed25519Sha512(signature),
                 0,
             )],
             None,
@@ -411,8 +409,7 @@ impl<K: KeyManager> SimpleController<K> {
             let signature = km.sign(&ixn.serialize()?)?;
 
             let attached_signature = AttachedSignaturePrefix::new(
-                SelfSigning::Ed25519Sha512,
-                signature,
+                SelfSigningPrefix::Ed25519Sha512(signature),
                 self.get_index(&ixn.event)? as u16,
             );
             let signed = ixn.sign(vec![attached_signature], None, None);
@@ -508,7 +505,7 @@ impl<K: KeyManager> SimpleController<K> {
         // sign and process inception event
         let second_signature = AttachedSignaturePrefix {
             index: index as u16,
-            signature: SelfSigning::Ed25519Sha512.derive(
+            signature: SelfSigningPrefix::Ed25519Sha512(
                 self.key_manager
                     .lock()
                     .unwrap()
@@ -548,14 +545,13 @@ impl<K: KeyManager> SimpleController<K> {
         let signed = {
             let km = self.key_manager.lock().map_err(|_| Error::MutexPoisoned)?;
             let next_key_hash = SelfAddressing::Blake3_256.derive(
-                Basic::Ed25519
-                    .derive(km.next_public_key())
+                BasicPrefix::Ed25519(km.next_public_key())
                     .to_str()
                     .as_bytes(),
             );
             let (pks, npks) = participants.iter().fold(
                 (
-                    vec![Basic::Ed25519.derive(km.public_key())],
+                    vec![BasicPrefix::Ed25519(km.public_key())],
                     vec![next_key_hash],
                 ),
                 |mut acc, id| {
@@ -583,8 +579,7 @@ impl<K: KeyManager> SimpleController<K> {
             if let EventType::KeyEvent(icp) = key_event {
                 icp.sign(
                     vec![AttachedSignaturePrefix::new(
-                        SelfSigning::Ed25519Sha512,
-                        signature,
+                        SelfSigningPrefix::Ed25519Sha512(signature),
                         0,
                     )],
                     None,
@@ -624,7 +619,7 @@ impl<K: KeyManager> SimpleController<K> {
             },
             to_forward: data.event_message.clone(),
         }
-        .to_message(SerializationFormats::JSON, &SelfAddressing::Blake3_256)?;
+        .to_message(SerializationFormats::JSON, SelfAddressing::Blake3_256)?;
 
         let sigs = vec![Signature::Transferable(
             SignerData::JustSignatures,
@@ -641,7 +636,7 @@ impl<K: KeyManager> SimpleController<K> {
         };
         let mat = MaterialPath::to_path("-a".into());
         let ssp = {
-            SelfSigning::Ed25519Sha512.derive(
+            SelfSigningPrefix::Ed25519Sha512(
                 self.key_manager
                     .lock()
                     .unwrap()
@@ -684,7 +679,7 @@ impl<K: KeyManager> SimpleController<K> {
                 reply_route: "".to_string(),
             },
             SerializationFormats::JSON,
-            &SelfAddressing::Blake3_256,
+            SelfAddressing::Blake3_256,
         )
         .unwrap();
         let signature = self
@@ -694,8 +689,7 @@ impl<K: KeyManager> SimpleController<K> {
             .sign(&qry_msg.serialize().unwrap())
             .unwrap();
         let signatures = vec![AttachedSignaturePrefix::new(
-            SelfSigning::Ed25519Sha512,
-            signature,
+            SelfSigningPrefix::Ed25519Sha512(signature),
             0,
         )];
         let mbx_msg = SignedQuery::new(qry_msg, self.prefix.clone().clone(), signatures);
@@ -724,7 +718,7 @@ impl<K: KeyManager> SimpleController<K> {
                         reply_route: "".to_string(),
                     },
                     SerializationFormats::JSON,
-                    &SelfAddressing::Blake3_256,
+                    SelfAddressing::Blake3_256,
                 )
                 .unwrap();
                 let signature = self
@@ -734,8 +728,7 @@ impl<K: KeyManager> SimpleController<K> {
                     .sign(&qry_msg.serialize().unwrap())
                     .unwrap();
                 let signatures = vec![AttachedSignaturePrefix::new(
-                    SelfSigning::Ed25519Sha512,
-                    signature,
+                    SelfSigningPrefix::Ed25519Sha512(signature),
                     0,
                 )];
                 SignedQuery::new(qry_msg, self.prefix.clone(), signatures)

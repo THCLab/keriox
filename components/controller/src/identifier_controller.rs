@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use keri::{
     actor::{event_generator, prelude::Message, simple_controller::PossibleResponse},
-    derivation::self_addressing::SelfAddressing,
     event::{
         event_data::EventData,
         sections::{
@@ -24,14 +23,12 @@ use keri::{
         EventType,
     },
     oobi::{LocationScheme, Role, Scheme},
-    prefix::{
-        AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfAddressingPrefix,
-        SelfSigningPrefix,
-    },
+    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix},
     query::{
         query_event::{QueryArgsMbx, QueryEvent, QueryRoute, QueryTopics, SignedQuery},
         reply_event::ReplyRoute,
     },
+    sai::{derivation::SelfAddressing, SelfAddressingPrefix},
 };
 
 use crate::{error::ControllerError, mailbox_updating::MailboxReminder, Controller};
@@ -120,7 +117,7 @@ impl IdentifierController {
             },
             to_forward: delegating_event.clone(),
         }
-        .to_message(SerializationFormats::JSON, &SelfAddressing::Blake3_256)?;
+        .to_message(SerializationFormats::JSON, SelfAddressing::Blake3_256)?;
         Ok((delegating_event, exn_message))
     }
 
@@ -533,7 +530,7 @@ impl IdentifierController {
                         reply_route: "".to_string(),
                     },
                     SerializationFormats::JSON,
-                    &SelfAddressing::Blake3_256,
+                    SelfAddressing::Blake3_256,
                 )
             })
             .collect::<Result<_, _>>()?)

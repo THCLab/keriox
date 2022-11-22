@@ -9,9 +9,7 @@ pub mod signed_event_message;
 
 use std::cmp::Ordering;
 
-use crate::{
-    derivation::self_addressing::SelfAddressing, error::Error, prefix::SelfAddressingPrefix,
-};
+use crate::{error::Error, sai::derivation::SelfAddressing, sai::SelfAddressingPrefix};
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize, Serializer};
 use serialization_info::*;
@@ -55,9 +53,10 @@ impl<D: Serialize + Clone + Typeable> SaidEvent<D> {
     pub(crate) fn to_message(
         event: D,
         format: SerializationFormats,
-        derivation: &SelfAddressing,
+        derivation: SelfAddressing,
     ) -> Result<EventMessage<SaidEvent<D>>, Error> {
-        let dummy_event = DummyEventMessage::dummy_event(event.clone(), format, derivation)?;
+        let dummy_event =
+            DummyEventMessage::dummy_event(event.clone(), format, derivation.clone())?;
         let digest = derivation.derive(&dummy_event.serialize()?);
 
         Ok(EventMessage {
@@ -213,7 +212,6 @@ mod tests {
     use self::test_utils::test_mock_event_sequence;
     use super::*;
     use crate::{
-        derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
         event::{
             event_data::{inception::InceptionEvent, EventData},
             sections::{key_config::nxt_commitment, KeyConfig},
@@ -221,7 +219,8 @@ mod tests {
             Event,
         },
         keys::{PrivateKey, PublicKey},
-        prefix::{AttachedSignaturePrefix, IdentifierPrefix},
+        prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+        sai::derivation::SelfAddressing,
         state::IdentifierState,
     };
     use ed25519_dalek::Keypair;
@@ -242,10 +241,10 @@ mod tests {
         );
 
         // initial signing key prefix
-        let pref0 = Basic::Ed25519.derive(pub_key0);
+        let pref0 = BasicPrefix::Ed25519(pub_key0);
 
         // initial control key hash prefix
-        let pref1 = Basic::Ed25519.derive(pub_key1);
+        let pref1 = BasicPrefix::Ed25519(pub_key1);
         let nxt = nxt_commitment(
             SignatureThreshold::Simple(1),
             &vec![pref1],
@@ -268,14 +267,14 @@ mod tests {
             }),
         );
 
-        let icp_m = icp.to_message(SerializationFormats::JSON, &SelfAddressing::Blake3_256)?;
+        let icp_m = icp.to_message(SerializationFormats::JSON, SelfAddressing::Blake3_256)?;
 
         // serialised message
         let ser: Vec<_> = icp_m.serialize()?;
 
         // sign
         let sig = priv_key0.sign_ed(&ser)?;
-        let attached_sig = AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, sig, 0);
+        let attached_sig = AttachedSignaturePrefix::new(SelfSigningPrefix::Ed25519Sha512(sig), 0);
 
         assert!(pref0.verify(&ser, &attached_sig.signature)?);
 
@@ -326,12 +325,12 @@ mod tests {
         );
 
         // initial key set
-        let sig_pref_0 = Basic::Ed25519.derive(pub_key0);
-        let enc_pref_0 = Basic::X25519.derive(enc_key_0);
+        let sig_pref_0 = BasicPrefix::Ed25519(pub_key0);
+        let enc_pref_0 = BasicPrefix::X25519(enc_key_0);
 
         // next key set
-        let sig_pref_1 = Basic::Ed25519.derive(pub_key1);
-        let enc_pref_1 = Basic::X25519.derive(enc_key_1);
+        let sig_pref_1 = BasicPrefix::Ed25519(pub_key1);
+        let enc_pref_1 = BasicPrefix::X25519(enc_key_1);
 
         // next key set pre-commitment
         let nexter_pref = nxt_commitment(
@@ -357,7 +356,7 @@ mod tests {
         // sign
         let sk = priv_key0;
         let sig = sk.sign_ed(&serialized)?;
-        let attached_sig = AttachedSignaturePrefix::new(SelfSigning::Ed25519Sha512, sig, 0);
+        let attached_sig = AttachedSignaturePrefix::new(SelfSigningPrefix::Ed25519Sha512(sig), 0);
 
         assert!(sig_pref_0.verify(&serialized, &attached_sig.signature)?);
 

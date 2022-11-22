@@ -1,6 +1,6 @@
 use super::super::sections::seal::*;
 use crate::error::Error;
-use crate::prefix::SelfAddressingPrefix;
+use crate::sai::SelfAddressingPrefix;
 use crate::state::{EventSemantics, IdentifierState};
 use serde::{Deserialize, Serialize};
 

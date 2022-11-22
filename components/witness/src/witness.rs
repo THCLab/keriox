@@ -9,7 +9,6 @@ use keri::{
         prelude::*, process_reply, process_signed_exn, process_signed_query,
         simple_controller::PossibleResponse,
     },
-    derivation::{basic::Basic, self_addressing::SelfAddressing, self_signing::SelfSigning},
     error::Error,
     event::EventMessage,
     event_message::{
@@ -19,13 +18,14 @@ use keri::{
         signed_event_message::{Notice, SignedNontransferableReceipt},
     },
     oobi::{LocationScheme, OobiManager},
-    prefix::{BasicPrefix, IdentifierPrefix},
+    prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     processor::notification::{Notification, NotificationBus, Notifier},
     query::{
         query_event::{MailboxResponse, QueryArgsMbx, QueryTopics},
         reply_event::{ReplyEvent, ReplyRoute, SignedReply},
         ReplyType,
     },
+    sai::derivation::SelfAddressing,
     signer::Signer,
 };
 use serde::{Deserialize, Serialize};
@@ -74,7 +74,7 @@ impl Notifier for WitnessReceiptGenerator {
 impl WitnessReceiptGenerator {
     pub fn new(signer: Arc<Signer>, db: Arc<SledEventDatabase>) -> Self {
         let storage = EventStorage::new(db);
-        let prefix = Basic::Ed25519NT.derive(signer.public_key());
+        let prefix = BasicPrefix::Ed25519NT(signer.public_key());
         Self {
             prefix,
             signer,
@@ -94,7 +94,7 @@ impl WitnessReceiptGenerator {
             .with_receipted_event(event_message.clone())
             .build()?;
 
-        let signature = SelfSigning::Ed25519Sha512.derive(signature);
+        let signature = SelfSigningPrefix::Ed25519Sha512(signature);
         let nontrans = Nontransferable::Couplet(vec![(self.prefix.clone(), signature)]);
 
         let signed_rcp = SignedNontransferableReceipt::new(&rcp, vec![nontrans]);
@@ -122,7 +122,7 @@ impl Witness {
         events_path.push("events");
         escrow_path.push("escrow");
 
-        let prefix = Basic::Ed25519NT.derive(signer.public_key());
+        let prefix = BasicPrefix::Ed25519NT(signer.public_key());
         let db = Arc::new(SledEventDatabase::new(events_path.as_path())?);
         let escrow_db = Arc::new(EscrowDb::new(escrow_path.as_path())?);
         let mut witness_processor = WitnessProcessor::new(db.clone(), escrow_db);
@@ -156,7 +156,7 @@ impl Witness {
                 .map(|key| Signer::new_with_seed(&key.parse()?))
                 .unwrap_or(Ok(Signer::new()))?,
         );
-        let prefix = Basic::Ed25519NT.derive(signer.public_key());
+        let prefix = BasicPrefix::Ed25519NT(signer.public_key());
         let witness = Witness::new(signer.clone(), event_db_path, oobi_db_path)?;
         // construct witness loc scheme oobi
         let loc_scheme = LocationScheme::new(
@@ -172,7 +172,7 @@ impl Witness {
         let signed_reply = SignedReply::new_nontrans(
             reply.clone(),
             prefix.clone(),
-            SelfSigning::Ed25519Sha512.derive(signer.sign(reply.serialize()?)?),
+            SelfSigningPrefix::Ed25519Sha512(signer.sign(reply.serialize()?)?),
         );
         witness.oobi_manager.save_oobi(&signed_reply)?;
         Ok(witness)
@@ -192,7 +192,7 @@ impl Witness {
                         SignedReply::new_nontrans(
                             oobi_to_sing.clone(),
                             self.prefix.clone(),
-                            SelfSigning::Ed25519Sha512.derive(signature),
+                            SelfSigningPrefix::Ed25519Sha512(signature),
                         )
                     })
                     .collect(),
@@ -215,7 +215,7 @@ impl Witness {
             SerializationFormats::JSON,
         )?;
 
-        let signature = SelfSigning::Ed25519Sha512.derive(signer.sign(&rpy.serialize()?)?);
+        let signature = SelfSigningPrefix::Ed25519Sha512(signer.sign(&rpy.serialize()?)?);
         Ok(SignedReply::new_nontrans(
             rpy,
             self.prefix.clone(),
@@ -270,7 +270,7 @@ impl Witness {
                 )?;
 
                 let signature =
-                    SelfSigning::Ed25519Sha512.derive(self.signer.sign(&rpy.serialize()?)?);
+                    SelfSigningPrefix::Ed25519Sha512(self.signer.sign(&rpy.serialize()?)?);
                 let reply = SignedReply::new_nontrans(rpy, self.prefix.clone(), signature);
                 Ok(Some(PossibleResponse::Ksn(reply)))
             }
