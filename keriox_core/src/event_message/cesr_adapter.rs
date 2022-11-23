@@ -21,7 +21,6 @@ use crate::{
 use super::{
     exchange::{ExchangeMessage, SignedExchange},
     key_event_message::KeyEvent,
-    serialization_info::version,
     signature::{self, Nontransferable, Signature},
     signed_event_message::{
         Message, Notice, Op, SignedEventMessage, SignedNontransferableReceipt,
@@ -36,13 +35,6 @@ impl Payload for EventType {
     fn to_vec(&self) -> Result<Vec<u8>, CesrError> {
         self.serialize()
             .map_err(|_e| CesrError::PayloadSerializationError)
-    }
-
-    fn get_len(stream: &[u8]) -> Result<usize, CesrError> {
-        // TODO works only for json. How to find version string?
-        let version_str = &stream.get(5..24).ok_or(CesrError::EmptyStreamError)?;
-        let (_, version) = version(version_str).unwrap();
-        Ok(version.size)
     }
 }
 

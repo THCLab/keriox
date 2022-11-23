@@ -23,7 +23,7 @@ pub trait DerivationCode {
     fn hard_size(&self) -> usize;
     /// soft (variable) part of code size in chars
     fn soft_size(&self) -> usize;
-    /// value size in charsi
+    /// value size in chars
     fn value_size(&self) -> usize;
 
     fn code_size(&self) -> usize {

@@ -1,7 +1,7 @@
 use nom::{branch::alt, multi::many0};
 use serde::Deserialize;
 
-use crate::event_parsing::{parsers::group::parse_group, ParsedData, Payload};
+use crate::event_parsing::{parsers::group::parse_group, ParsedData};
 
 use message::{cbor_message, json_message, mgpk_message};
 
@@ -9,25 +9,12 @@ pub mod group;
 pub mod message;
 pub mod primitives;
 
-/// Version of parsing that assumes that provided type know the length of data
-/// that should be parsed (thanks to Payload trait)
-// pub fn parse_payload<'a, P: Payload + Deserialize<'a>>(stream: &'a [u8]) -> nom::IResult<&[u8], P> {
-//     let length_to_parse =
-//         P::get_len(stream).map_err(|_e| nom::Err::Error((stream, ErrorKind::Eof)))?;
-//     let (rest, event) = take(length_to_parse)(stream)?;
-//     let parsed_event: P = serde_json::from_slice(event).unwrap();
-//     Ok((rest, parsed_event))
-// }
-
-/// Version of parsing that tries to parse each possible serialization until it
-/// succeeds
+/// Tries to parse each possible serialization until it succeeds
 pub fn parse_payload<'a, D: Deserialize<'a>>(stream: &'a [u8]) -> nom::IResult<&[u8], D> {
     alt((json_message::<D>, cbor_message::<D>, mgpk_message::<D>))(stream)
 }
 
-pub fn parse<'a, P: Payload + Deserialize<'a>>(
-    stream: &'a [u8],
-) -> nom::IResult<&[u8], ParsedData<P>> {
+pub fn parse<'a, P: Deserialize<'a>>(stream: &'a [u8]) -> nom::IResult<&[u8], ParsedData<P>> {
     let (rest, payload) = parse_payload(stream)?;
     let (rest, attachments) = many0(parse_group)(rest)?;
 
@@ -40,7 +27,7 @@ pub fn parse<'a, P: Payload + Deserialize<'a>>(
     ))
 }
 
-pub fn parse_many<'a, P: Payload + Deserialize<'a>>(
+pub fn parse_many<'a, P: Deserialize<'a>>(
     stream: &'a [u8],
 ) -> nom::IResult<&[u8], Vec<ParsedData<P>>> {
     many0(parse::<P>)(stream)

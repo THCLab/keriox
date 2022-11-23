@@ -14,10 +14,9 @@ pub mod value;
 
 pub trait Payload {
     fn to_vec(&self) -> Result<Vec<u8>, Error>;
-    fn get_len(stream: &[u8]) -> Result<usize, Error>;
 }
 #[derive(Clone, Debug, PartialEq)]
-pub struct ParsedData<P: Payload> {
+pub struct ParsedData<P> {
     pub payload: P,
     pub attachments: Vec<Group>,
 }
