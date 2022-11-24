@@ -255,7 +255,6 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
         let qry = query[0].clone();
         let sig = SelfSigningPrefix::Ed25519Sha512(km2.sign(b"not actual message")?);
         let resp = identifier1.finalize_mailbox_query(vec![(qry, sig)]).await;
-        dbg!(&resp);
         assert!(matches!(
             resp,
             Err(ControllerError::TransportError(
