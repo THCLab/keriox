@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, error::Error, sync::Arc};
 
 use keri::{
     actor::simple_controller::PossibleResponse,
@@ -12,30 +12,28 @@ use serde::Deserialize;
 use super::{Transport, TransportError};
 
 #[async_trait::async_trait]
-pub trait TestActor {
-    async fn send_message(&self, msg: Message) -> Result<(), TestActorError>;
-    async fn send_query(&self, query: SignedQuery) -> Result<PossibleResponse, TestActorError>;
-    async fn request_loc_scheme(&self, eid: IdentifierPrefix) -> Result<Vec<Op>, TestActorError>;
+pub trait TestActor<E: Error> {
+    async fn send_message(&self, msg: Message) -> Result<(), E>;
+    async fn send_query(&self, query: SignedQuery) -> Result<PossibleResponse, E>;
+    async fn request_loc_scheme(&self, eid: IdentifierPrefix) -> Result<Vec<Op>, E>;
     async fn request_end_role(
         &self,
         cid: IdentifierPrefix,
         role: Role,
         eid: IdentifierPrefix,
-    ) -> Result<Vec<Op>, TestActorError>;
+    ) -> Result<Vec<Op>, E>;
 }
 
-pub struct TestActorError;
-
-pub type TestActorMap = HashMap<(url::Host, u16), Box<dyn TestActor + Send + Sync>>;
+pub type TestActorMap<E> = HashMap<(url::Host, u16), Box<dyn TestActor<E> + Send + Sync>>;
 
 /// Used in tests to connect directly to actors without going through the network.
 pub struct TestTransport<E> {
-    actors: Arc<TestActorMap>,
+    actors: Arc<TestActorMap<E>>,
     _phantom: std::marker::PhantomData<E>,
 }
 
 impl<E> TestTransport<E> {
-    pub fn new(actors: TestActorMap) -> Self {
+    pub fn new(actors: TestActorMap<E>) -> Self {
         Self {
             actors: Arc::new(actors),
             _phantom: std::marker::PhantomData,
@@ -72,7 +70,7 @@ where
             .ok_or(TransportError::NetworkError)?
             .send_message(msg)
             .await
-            .map_err(|_| TransportError::InvalidResponse)?;
+            .map_err(|err| TransportError::RemoteError(err))?;
 
         Ok(())
     }
@@ -93,7 +91,7 @@ where
             .ok_or(TransportError::NetworkError)?
             .send_query(qry)
             .await
-            .map_err(|_| TransportError::NetworkError)?;
+            .map_err(|err| TransportError::RemoteError(err))?;
 
         Ok(resp)
     }
