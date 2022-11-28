@@ -1,81 +1,39 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
 use keri::{
-    actor::simple_controller::{PossibleResponse, SimpleController},
+    actor::{
+        simple_controller::{PossibleResponse, SimpleController},
+        SignedQueryError,
+    },
     database::{escrow::EscrowDb, SledEventDatabase},
     error::Error,
-    event_message::signed_event_message::{Message, Notice, Op},
-    oobi::{LocationScheme, Role},
+    event_message::signed_event_message::{Notice, Op},
     prefix::{IdentifierPrefix, SelfSigningPrefix},
     query::{query_event::SignedQuery, reply_event::SignedReply},
 };
-use keri_transport::{Transport, TransportError};
+use keri_transport::test::{TestActorMap, TestTransport};
 use tempfile::Builder;
+use url::Host;
 use watcher::{WatcherData, WatcherError};
-use witness::{Witness, WitnessError};
-
-struct FakeTransport {
-    send_message: Box<
-        dyn Fn(
-                LocationScheme,
-                Message,
-            ) -> Result<Option<PossibleResponse>, TransportError<WitnessError>>
-            + Send
-            + Sync,
-    >,
-}
-
-#[async_trait::async_trait]
-impl Transport<WitnessError> for FakeTransport {
-    async fn send_message(
-        &self,
-        loc: LocationScheme,
-        msg: Message,
-    ) -> Result<(), TransportError<WitnessError>> {
-        (self.send_message)(loc, msg)?;
-        Ok(())
-    }
-
-    async fn send_query(
-        &self,
-        loc: LocationScheme,
-        qry: SignedQuery,
-    ) -> Result<PossibleResponse, TransportError<WitnessError>> {
-        (self.send_message)(loc, Message::Op(Op::Query(qry))).map(|r| r.unwrap())
-    }
-
-    async fn request_loc_scheme(
-        &self,
-        _loc: LocationScheme,
-    ) -> Result<Vec<Op>, TransportError<WitnessError>> {
-        todo!()
-    }
-
-    async fn request_end_role(
-        &self,
-        _loc: LocationScheme,
-        _cid: IdentifierPrefix,
-        _role: Role,
-        _eid: IdentifierPrefix,
-    ) -> Result<Vec<Op>, TransportError<WitnessError>> {
-        todo!()
-    }
-}
+use witness::{WitnessError, WitnessListener};
 
 #[test]
 pub fn watcher_forward_ksn() -> Result<(), Error> {
-    let witness_url = url::Url::parse("http://some/witness/url").unwrap();
+    let witness_url = url::Url::parse("http://witness1").unwrap();
 
-    let witness = Arc::new({
+    let witness_listener = {
         let root_witness = Builder::new().prefix("test-wit").tempdir().unwrap();
-        let oobi_root = Builder::new().prefix("test-wit-oobi").tempdir().unwrap();
-        Witness::setup(
-            witness_url.clone(),
+
+        WitnessListener::setup(
+            witness_url,
+            None,
             root_witness.path(),
-            &oobi_root.path(),
             Some("ArwXoACJgOleVZ2PY7kXn7rA0II0mHYDhc6WrBH8fDAc".into()),
         )?
-    });
+    };
 
     // Controller who will ask
     let mut asker_controller = {
@@ -96,7 +54,7 @@ pub fn watcher_forward_ksn() -> Result<(), Error> {
         SimpleController::new(
             Arc::clone(&db_controller),
             escrow_db,
-            key_manager.clone(),
+            key_manager,
             oobi_root.path(),
         )
         .unwrap()
@@ -122,54 +80,33 @@ pub fn watcher_forward_ksn() -> Result<(), Error> {
         SimpleController::new(
             Arc::clone(&db_controller),
             escrow_db,
-            key_manager.clone(),
+            key_manager,
             oobi_root.path(),
         )
         .unwrap()
     };
 
     let about_icp = about_controller
-        .incept(Some(vec![witness.prefix.clone()]), Some(0), None)
+        .incept(Some(vec![witness_listener.get_prefix()]), Some(0), None)
         .unwrap();
 
-    witness
+    witness_listener
+        .witness_data
         .process_notice(Notice::Event(about_icp.clone()))
         .unwrap();
 
+    let witness = Arc::clone(&witness_listener.witness_data);
+
+    let mut actors: TestActorMap<WitnessError> = HashMap::new();
+    actors.insert(
+        (Host::Domain("witness1".to_string()), 80),
+        Box::new(witness_listener),
+    );
+    let transport = TestTransport::new(actors);
+
     let url = url::Url::parse("http://some/dummy/url").unwrap();
     let root = Builder::new().prefix("cont-test-db").tempdir().unwrap();
-    let watcher = WatcherData::setup(
-        url,
-        root.path(),
-        None,
-        Box::new({
-            FakeTransport {
-                send_message: Box::new({
-                    let witness = Arc::clone(&witness);
-                    move |loc, msg| {
-                        assert_eq!(&loc.url, &witness_url);
-                        match msg {
-                            Message::Notice(notice) => {
-                                witness.process_notice(notice).unwrap();
-                                Ok(None)
-                            }
-                            Message::Op(op) => match op {
-                                Op::Query(qry) => Ok(witness.process_query(qry).unwrap()),
-                                Op::Reply(reply) => {
-                                    witness.process_reply(reply).unwrap();
-                                    Ok(None)
-                                }
-                                Op::Exchange(exn) => {
-                                    witness.process_exchange(exn).unwrap();
-                                    Ok(None)
-                                }
-                            },
-                        }
-                    }
-                }),
-            }
-        }),
-    )?;
+    let watcher = WatcherData::setup(url, root.path(), None, Box::new(transport))?;
 
     // Watcher should know both controllers
     watcher
@@ -216,6 +153,25 @@ pub fn watcher_forward_ksn() -> Result<(), Error> {
         ),
     );
     watcher.process_reply(witness_oobi).unwrap();
+
+    let mut wrong_query = query.clone();
+    if let Op::Query(SignedQuery { signatures, .. }) = &mut wrong_query {
+        if let SelfSigningPrefix::Ed25519Sha512(ref mut bytes) = &mut signatures[0].signature {
+            bytes[15] += 1;
+        } else {
+            panic!("Unexpected signature type");
+        }
+    }
+
+    // Send wrong query
+    let result = futures::executor::block_on(watcher.process_op(wrong_query));
+
+    assert!(matches!(
+        result,
+        Err(WatcherError::QueryError(
+            SignedQueryError::InvalidSignature { .. }
+        ))
+    ));
 
     // Send query again
     let result = futures::executor::block_on(watcher.process_op(query));

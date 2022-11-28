@@ -3,15 +3,18 @@
 use std::{collections::HashMap, sync::Arc};
 
 use keri::{
-    actor::prelude::Message,
+    actor::{prelude::Message, SignedQueryError},
     oobi::LocationScheme,
     prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     signer::{CryptoBox, KeyManager},
 };
-use keri_transport::test::{TestActorMap, TestTransport};
+use keri_transport::{
+    test::{TestActorMap, TestTransport},
+    TransportError,
+};
 use tempfile::Builder;
 use url::Host;
-use witness::WitnessListener;
+use witness::{WitnessError, WitnessListener};
 
 use super::{error::ControllerError, identifier_controller::IdentifierController, Controller};
 use crate::{mailbox_updating::ActionRequired, utils::OptionalConfig};
@@ -122,7 +125,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
         url: Url::parse("http://witness1:3232").unwrap(),
     };
 
-    let mut actors: TestActorMap = HashMap::new();
+    let mut actors: TestActorMap<WitnessError> = HashMap::new();
     actors.insert(
         (Host::Domain("witness1".to_string()), 3232),
         Box::new(witness),
@@ -156,6 +159,21 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     };
     // Quering mailbox to get receipts
     let query = identifier1.query_mailbox(&identifier1.id, &[witness_id_basic.clone()])?;
+
+    // Query with wrong signature
+    {
+        let qry = query[0].clone();
+        let sig = SelfSigningPrefix::Ed25519Sha512(km2.sign(&qry.serialize()?)?);
+        let resp = identifier1.finalize_mailbox_query(vec![(qry, sig)]).await;
+        assert!(matches!(
+            resp,
+            Err(ControllerError::TransportError(
+                TransportError::RemoteError(WitnessError::QueryFailed(
+                    SignedQueryError::InvalidSignature
+                ))
+            ))
+        ));
+    }
 
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(&qry.serialize()?)?);
@@ -201,6 +219,23 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     let signature_icp = SelfSigningPrefix::Ed25519Sha512(km1.sign(delegated_inception.as_bytes())?);
     let signature_exn = SelfSigningPrefix::Ed25519Sha512(km1.sign(exn_messages[0].as_bytes())?);
 
+    // Send with wrong signature
+    let resp = identifier1
+        .finalize_group_incept(
+            delegated_inception.as_bytes(),
+            signature_exn.clone(),
+            vec![(exn_messages[0].as_bytes().to_vec(), signature_icp.clone())],
+        )
+        .await;
+    assert!(matches!(
+        resp,
+        Err(ControllerError::TransportError(
+            TransportError::RemoteError(WitnessError::KeriError(
+                keri::error::Error::SignatureVerificationError
+            ))
+        ))
+    ));
+
     // Group initiator needs to use `finalize_group_incept` instead of just
     // `finalize_event`, to send multisig request to other group participants or delegator.
     // Identifier who get this request from mailbox, can use just `finalize_event`
@@ -214,6 +249,21 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
 
     // Quering mailbox to get receipts
     let query = delegator.query_mailbox(&delegator.id, &[witness_id_basic.clone()])?;
+
+    // Query with wrong signature
+    {
+        let qry = query[0].clone();
+        let sig = SelfSigningPrefix::Ed25519Sha512(km2.sign(b"not actual message")?);
+        let resp = identifier1.finalize_mailbox_query(vec![(qry, sig)]).await;
+        assert!(matches!(
+            resp,
+            Err(ControllerError::TransportError(
+                TransportError::RemoteError(WitnessError::QueryFailed(
+                    SignedQueryError::InvalidSignature
+                ))
+            ))
+        ));
+    }
 
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(km2.sign(&qry.serialize()?)?);
