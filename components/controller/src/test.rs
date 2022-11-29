@@ -373,3 +373,81 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
 
     Ok(())
 }
+
+
+#[async_std::test]
+async fn test_2_wit() -> Result<(), ControllerError> {
+    use url::Url;
+    let root = Builder::new().prefix("test-db").tempdir().unwrap();
+    let root2 = Builder::new().prefix("test-db2").tempdir().unwrap();
+    let initial_config = OptionalConfig::init().with_db_path(root.into_path());
+    let initial_config2 = OptionalConfig::init().with_db_path(root2.into_path());
+
+    let witness1 = {
+        let seed = "AK8F6AAiYDpXlWdj2O5F5-6wNCCNJh2A4XOlqwR_HwwH";
+        let witness_root = Builder::new().prefix("test-wit1-db").tempdir().unwrap();
+        WitnessListener::setup(
+            url::Url::parse("http://witness1/").unwrap(), // not used
+            None,
+            witness_root.path(),
+            Some(seed.to_string()),
+        )?
+    };
+    let witness2 = {
+        let seed = "AJZ7ZLd7unQ4IkMUwE69NXcvDO9rrmmRH_Xk3TPu9BpP";
+        let witness_root = Builder::new().prefix("test-wit2-db").tempdir().unwrap();
+        WitnessListener::setup(
+            url::Url::parse("http://witness2/").unwrap(), // not used
+            None,
+            witness_root.path(),
+            Some(seed.to_string()),
+        )?
+    };
+
+    let wit1_location = LocationScheme {
+        eid: IdentifierPrefix::Basic( witness1.get_prefix() ),
+        scheme: keri::oobi::Scheme::Http,
+        url: Url::parse("http://witness1/").unwrap(),
+    };
+    let wit2_location = LocationScheme {
+        eid: IdentifierPrefix::Basic( witness2.get_prefix() ),
+        scheme: keri::oobi::Scheme::Http,
+        url: Url::parse("http://witness2/").unwrap(),
+    };
+
+    let mut actors: TestActorMap<WitnessError> = HashMap::new();
+    actors.insert(
+        (Host::Domain("witness1".to_string()), 80),
+        Box::new(witness1),
+    );
+    actors.insert(
+        (Host::Domain("witness2".to_string()), 80),
+        Box::new(witness2),
+    );
+    let transport = TestTransport::new(actors);
+
+    let controller = Arc::new(Controller::with_transport(
+        Some(initial_config),
+        Box::new(transport.clone()),
+    )?);
+    
+    let km1 = CryptoBox::new()?;
+
+    let mut ident_ctl = {
+        let pk = BasicPrefix::Ed25519(km1.public_key());
+        let npk = BasicPrefix::Ed25519(km1.next_public_key());
+
+        let icp_event = controller
+            .incept(vec![pk], vec![npk], vec![wit1_location.clone(), wit2_location.clone()], 2)
+            .await?;
+        let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(icp_event.as_bytes())?);
+
+        let incepted_identifier = controller
+            .finalize_inception(icp_event.as_bytes(), &signature)
+            .await?;
+        IdentifierController::new(incepted_identifier, controller.clone())
+    };
+
+
+    Ok(())
+}
