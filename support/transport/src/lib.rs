@@ -23,7 +23,11 @@ where
     /// Send a message to other actor.
     /// This is used for sending notices, replies, and exchanges.
     /// To send query, prefer [`Transport::send_query`] method.
-    async fn send_message(&self, loc: LocationScheme, msg: Message) -> Result<(), TransportError<E>>;
+    async fn send_message(
+        &self,
+        loc: LocationScheme,
+        msg: Message,
+    ) -> Result<(), TransportError<E>>;
 
     /// Send a query to other actor and return its response.
     async fn send_query(

@@ -3,8 +3,9 @@ use core::str::FromStr;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use super::error::Error;
-use super::{verify, Prefix, SelfSigningPrefix};
-use crate::event_parsing::codes::DerivationCode;
+use super::{verify, SelfSigningPrefix};
+use crate::event_parsing::codes::{DerivationCode, PrimitiveCode};
+use crate::event_parsing::primitives::CesrPrimitive;
 use crate::{
     event_parsing::{codes::basic::Basic as CesrBasic, parsing::from_text_to_bytes},
     keys::PublicKey,
@@ -51,6 +52,19 @@ impl BasicPrefix {
             _ => true,
         }
     }
+
+    pub fn get_code(&self) -> CesrBasic {
+        match self {
+            BasicPrefix::ECDSAsecp256k1NT(_) => CesrBasic::ECDSAsecp256k1NT,
+            BasicPrefix::ECDSAsecp256k1(_) => CesrBasic::ECDSAsecp256k1,
+            BasicPrefix::Ed25519NT(_) => CesrBasic::Ed25519NT,
+            BasicPrefix::Ed25519(_) => CesrBasic::Ed25519,
+            BasicPrefix::Ed448NT(_) => CesrBasic::Ed448NT,
+            BasicPrefix::Ed448(_) => CesrBasic::Ed448,
+            BasicPrefix::X25519(_) => CesrBasic::X25519,
+            BasicPrefix::X448(_) => CesrBasic::X448,
+        }
+    }
 }
 
 impl FromStr for BasicPrefix {
@@ -59,9 +73,9 @@ impl FromStr for BasicPrefix {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let code = CesrBasic::from_str(s)?;
 
-        if s.len() == code.prefix_b64_len() {
+        if s.len() == code.full_size() {
             let k_vec =
-                from_text_to_bytes(&s[code.code_len()..].as_bytes())?[code.code_len()..].to_vec();
+                from_text_to_bytes(&s[code.code_size()..].as_bytes())?[code.code_size()..].to_vec();
             Ok(Self::new(code, PublicKey::new(k_vec)))
         } else {
             Err(Error::IncorrectLengthError(s.into()))
@@ -69,7 +83,7 @@ impl FromStr for BasicPrefix {
     }
 }
 
-impl Prefix for BasicPrefix {
+impl CesrPrimitive for BasicPrefix {
     fn derivative(&self) -> Vec<u8> {
         match self {
             BasicPrefix::ECDSAsecp256k1NT(pk)
@@ -82,18 +96,8 @@ impl Prefix for BasicPrefix {
             | BasicPrefix::X448(pk) => pk.key(),
         }
     }
-    fn derivation_code(&self) -> String {
-        match self {
-            BasicPrefix::ECDSAsecp256k1NT(_) => CesrBasic::ECDSAsecp256k1NT,
-            BasicPrefix::ECDSAsecp256k1(_) => CesrBasic::ECDSAsecp256k1,
-            BasicPrefix::Ed25519NT(_) => CesrBasic::Ed25519NT,
-            BasicPrefix::Ed25519(_) => CesrBasic::Ed25519,
-            BasicPrefix::Ed448NT(_) => CesrBasic::Ed448NT,
-            BasicPrefix::Ed448(_) => CesrBasic::Ed448,
-            BasicPrefix::X25519(_) => CesrBasic::X25519,
-            BasicPrefix::X448(_) => CesrBasic::X448,
-        }
-        .to_str()
+    fn derivation_code(&self) -> PrimitiveCode {
+        PrimitiveCode::Basic(self.get_code())
     }
 }
 

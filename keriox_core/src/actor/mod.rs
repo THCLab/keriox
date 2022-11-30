@@ -1,21 +1,19 @@
 use std::convert::TryFrom;
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "oobi")]
 use crate::oobi::OobiManager;
 use crate::{
     error::Error,
     event_message::{
+        cesr_adapter::EventType,
         exchange::{Exchange, ExchangeMessage, ForwardTopic, SignedExchange},
         serialization_info::SerializationFormats,
         signature::Signature,
         signed_event_message::{Message, Notice, Op, SignedEventMessage},
     },
-    event_parsing::{
-        message::{signed_event_stream, signed_notice_stream},
-        path::MaterialPath,
-    },
+    event_parsing::{parsers::parse_many, path::MaterialPath},
     prefix::IdentifierPrefix,
 };
 #[cfg(feature = "query")]
@@ -34,49 +32,41 @@ pub mod simple_controller;
 
 pub fn parse_event_stream(stream: &[u8]) -> Result<Vec<Message>, Error> {
     let (_rest, events) =
-        signed_event_stream(stream).map_err(|e| Error::DeserializeError(e.to_string()))?;
+        parse_many::<EventType>(stream).map_err(|e| Error::DeserializeError(e.to_string()))?;
     events.into_iter().map(Message::try_from).collect()
 }
 
 pub fn parse_notice_stream(stream: &[u8]) -> Result<Vec<Notice>, Error> {
     let (_rest, notices) =
-        signed_notice_stream(stream).map_err(|e| Error::DeserializeError(e.to_string()))?;
+        parse_many::<EventType>(stream).map_err(|e| Error::DeserializeError(e.to_string()))?;
     notices.into_iter().map(Notice::try_from).collect()
 }
 
 #[cfg(any(feature = "query", feature = "oobi"))]
 pub fn parse_op_stream(stream: &[u8]) -> Result<Vec<Op>, Error> {
-    use crate::event_parsing::message::signed_op_stream;
-
     let (_rest, ops) =
-        signed_op_stream(stream).map_err(|e| Error::DeserializeError(e.to_string()))?;
+        parse_many::<EventType>(stream).map_err(|e| Error::DeserializeError(e.to_string()))?;
     ops.into_iter().map(Op::try_from).collect()
 }
 
 #[cfg(any(feature = "query", feature = "oobi"))]
 pub fn parse_query_stream(stream: &[u8]) -> Result<Vec<SignedQuery>, Error> {
-    use crate::event_parsing::message::signed_op_stream;
-
     let (_rest, queries) =
-        signed_op_stream(stream).map_err(|e| Error::DeserializeError(e.to_string()))?;
+        parse_many::<EventType>(stream).map_err(|e| Error::DeserializeError(e.to_string()))?;
     queries.into_iter().map(SignedQuery::try_from).collect()
 }
 
 #[cfg(any(feature = "query", feature = "oobi"))]
 pub fn parse_reply_stream(stream: &[u8]) -> Result<Vec<SignedReply>, Error> {
-    use crate::event_parsing::message::signed_op_stream;
-
     let (_rest, replies) =
-        signed_op_stream(stream).map_err(|e| Error::DeserializeError(e.to_string()))?;
+        parse_many::<EventType>(stream).map_err(|e| Error::DeserializeError(e.to_string()))?;
     replies.into_iter().map(SignedReply::try_from).collect()
 }
 
 #[cfg(any(feature = "query", feature = "oobi"))]
 pub fn parse_exchange_stream(stream: &[u8]) -> Result<Vec<SignedExchange>, Error> {
-    use crate::event_parsing::message::signed_op_stream;
-
     let (_rest, exchanges) =
-        signed_op_stream(stream).map_err(|e| Error::DeserializeError(e.to_string()))?;
+        parse_many::<EventType>(stream).map_err(|e| Error::DeserializeError(e.to_string()))?;
     exchanges
         .into_iter()
         .map(SignedExchange::try_from)

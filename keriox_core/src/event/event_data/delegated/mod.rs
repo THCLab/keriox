@@ -66,7 +66,8 @@ fn test_delegated_inception_data_derivation() -> Result<(), Error> {
         threshold::SignatureThreshold,
     };
     use crate::event_message::Digestible;
-    use crate::prefix::{BasicPrefix, Prefix};
+    use crate::event_parsing::primitives::CesrPrimitive;
+    use crate::prefix::BasicPrefix;
 
     // data taken from keripy/tests/core/test_delegation.py
     let keys: Vec<BasicPrefix> = vec!["DLitcfMnabnLt-PNCaXdVwX45wsG93Wd8eW9QiZrlKYQ"

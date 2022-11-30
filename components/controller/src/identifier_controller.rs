@@ -11,19 +11,16 @@ use keri::{
         EventMessage, SerializationFormats,
     },
     event_message::{
+        cesr_adapter::EventType,
         exchange::{Exchange, ExchangeMessage, ForwardTopic, FwdArgs, SignedExchange},
         key_event_message::KeyEvent,
         signature::{Signature, SignerData},
         signed_event_message::Op,
         Digestible,
     },
-    event_parsing::{
-        message::{event_message, exchange_message, key_event_message},
-        path::MaterialPath,
-        EventType,
-    },
+    event_parsing::{parsers::parse_payload, path::MaterialPath, primitives::CesrPrimitive},
     oobi::{LocationScheme, Role, Scheme},
-    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, Prefix, SelfSigningPrefix},
+    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     query::{
         query_event::{QueryArgsMbx, QueryEvent, QueryRoute, QueryTopics, SignedQuery},
         reply_event::ReplyRoute,
@@ -161,7 +158,7 @@ impl IdentifierController {
         event: &[u8],
         sig: SelfSigningPrefix,
     ) -> Result<(), ControllerError> {
-        let parsed_event = event_message(event)
+        let parsed_event = parse_payload::<EventType>(event)
             .map_err(|_e| ControllerError::EventParseError)?
             .1;
         match parsed_event {
@@ -259,7 +256,7 @@ impl IdentifierController {
         let material_path = MaterialPath::to_path("-a".into());
         // let attached_sig = sigs;
         let (_, parsed_exn) =
-            exchange_message(exchange).map_err(|_e| ControllerError::EventFormatError)?;
+            parse_payload::<EventType>(exchange).map_err(|_e| ControllerError::EventFormatError)?;
         if let EventType::Exn(exn) = parsed_exn {
             let Exchange::Fwd {
                 args: _,
@@ -337,8 +334,8 @@ impl IdentifierController {
         exchanges: Vec<(Vec<u8>, SelfSigningPrefix)>,
     ) -> Result<IdentifierPrefix, ControllerError> {
         // Join icp event with signature
-        let (_, key_event) =
-            key_event_message(&group_event).map_err(|_e| ControllerError::EventFormatError)?;
+        let (_, key_event) = parse_payload::<EventType>(&group_event)
+            .map_err(|_e| ControllerError::EventFormatError)?;
         let icp = if let EventType::KeyEvent(icp) = key_event {
             icp
         } else {
@@ -382,7 +379,7 @@ impl IdentifierController {
         let attached_sig = sigs;
         for (exn, signature) in exchanges {
             let (_, parsed_exn) =
-                exchange_message(&exn).map_err(|_e| ControllerError::EventFormatError)?;
+                parse_payload::<EventType>(&exn).map_err(|_e| ControllerError::EventFormatError)?;
             let exn = if let EventType::Exn(exn) = parsed_exn {
                 exn
             } else {

@@ -8,8 +8,11 @@ use self::error::OobiError;
 use crate::{
     database::DbError,
     error::Error,
-    event_message::signed_event_message::{Message, Op},
-    event_parsing::message::signed_event_stream,
+    event_message::{
+        cesr_adapter::EventType,
+        signed_event_message::{Message, Op},
+    },
+    event_parsing::parsers::parse_many,
     prefix::IdentifierPrefix,
     query::reply_event::{bada_logic, ReplyEvent, ReplyRoute, SignedReply},
 };
@@ -118,7 +121,7 @@ impl OobiManager {
     }
 
     fn parse_and_save(&self, stream: &str) -> Result<(), OobiError> {
-        signed_event_stream(stream.as_bytes())
+        parse_many::<EventType>(stream.as_bytes())
             .map_err(|_| OobiError::Parse)?
             .1
             .into_iter()
@@ -196,8 +199,8 @@ mod tests {
 
     use super::{error::OobiError, EndRole, LocationScheme};
     use crate::{
-        error::Error, event_parsing::message::signed_event_stream, oobi::OobiManager,
-        prefix::IdentifierPrefix, query::reply_event::ReplyRoute,
+        error::Error, event_message::cesr_adapter::EventType, event_parsing::parsers::parse_many,
+        oobi::OobiManager, prefix::IdentifierPrefix, query::reply_event::ReplyRoute,
     };
     #[test]
     fn test_oobi_deserialize() -> Result<(), Error> {
@@ -229,7 +232,7 @@ mod tests {
         let oobi_manager = setup_oobi_manager();
 
         let body = r#"{"v":"KERI10JSON0000fa_","t":"rpy","d":"EJq4dQQdqg8aK7VyGnfSibxPyW8Zk2zO1qbVRD6flOvE","dt":"2022-02-28T17:23:20.336207+00:00","r":"/loc/scheme","a":{"eid":"BuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw","scheme":"http","url":"http://127.0.0.1:5643/"}}-VAi-CABBuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw0BAPJ5p_IpUFdmq8uupehsL8DzxWDeaU_SjeiwfmRZ6i9pqddraItmCOAysdXdTEQZ1hEM60iDEWvK16g68TrcAw{"v":"KERI10JSON0000f8_","t":"rpy","d":"ExSR01j5noF2LnGcGFUbLnq-U8JuYBr9WWEMt8d2fb1Y","dt":"2022-02-28T17:23:20.337272+00:00","r":"/loc/scheme","a":{"eid":"BuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw","scheme":"tcp","url":"tcp://127.0.0.1:5633/"}}-VAi-CABBuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw0BZtIhK6Nh6Zk1zPmkJYiFVz0RimQRiubshmSmqAzxzhT4KpGMAH7sbNlFP-0-lKjTawTReKv4L7N3TR7jxXaEBg"#; //{"v":"KERI10JSON000116_","t":"rpy","d":"EcZ1I4nKy6gIkWxjq1LmIivoPGv32lvlSuMVsWnOPwSc","dt":"2022-02-28T17:23:20.338355+00:00","r":"/end/role/add","a":{"cid":"BuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw","role":"controller","eid":"BuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw"}}-VAi-CABBuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw0B9ccIiMxdwurRjGvUUUdXsxhseo58onhE4bJddKuyPaSpBHXdRKKuiFE0SmLAogMQGJ0iN6f1V_2E_MVfMc3sAA"#;
-        let stream = signed_event_stream(body.as_bytes());
+        let stream = parse_many::<EventType>(body.as_bytes());
         assert_eq!(stream.unwrap().1.len(), 2);
 
         oobi_manager.parse_and_save(body)?;

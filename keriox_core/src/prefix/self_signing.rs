@@ -1,7 +1,7 @@
 use super::error::Error;
-use super::Prefix;
+use super::CesrPrimitive;
 use crate::event_parsing::{
-    codes::{self_signing::SelfSigning, DerivationCode},
+    codes::{self_signing::SelfSigning, DerivationCode, PrimitiveCode},
     parsing::from_text_to_bytes,
 };
 use core::str::FromStr;
@@ -41,10 +41,10 @@ impl FromStr for SelfSigningPrefix {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let code = SelfSigning::from_str(s)?;
 
-        if s.len() == code.prefix_b64_len() {
+        if s.len() == code.full_size() {
             Ok(Self::new(
                 code.into(),
-                from_text_to_bytes(&s[code.code_len()..].as_bytes())?[code.code_len()..].to_vec(),
+                from_text_to_bytes(&s[code.code_size()..].as_bytes())?[code.code_size()..].to_vec(),
             ))
         } else {
             Err(Error::IncorrectLengthError(s.into()))
@@ -52,7 +52,7 @@ impl FromStr for SelfSigningPrefix {
     }
 }
 
-impl Prefix for SelfSigningPrefix {
+impl CesrPrimitive for SelfSigningPrefix {
     fn derivative(&self) -> Vec<u8> {
         match self {
             SelfSigningPrefix::Ed25519Sha512(signature)
@@ -60,8 +60,8 @@ impl Prefix for SelfSigningPrefix {
             | SelfSigningPrefix::Ed448(signature) => signature.clone(),
         }
     }
-    fn derivation_code(&self) -> String {
-        self.get_code().to_str()
+    fn derivation_code(&self) -> PrimitiveCode {
+        PrimitiveCode::SelfSigning(self.get_code())
     }
 }
 

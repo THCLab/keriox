@@ -174,9 +174,11 @@ pub mod http_handlers {
     use itertools::Itertools;
     use keri::{
         actor::{QueryError, SignedQueryError},
-        event_parsing::SignedEventData,
+        error::Error,
+        event_message::cesr_adapter::ParsedEvent,
+        event_parsing::primitives::CesrPrimitive,
         oobi::Role,
-        prefix::{IdentifierPrefix, Prefix},
+        prefix::IdentifierPrefix,
     };
 
     use crate::witness::{Witness, WitnessError};
@@ -192,8 +194,8 @@ pub mod http_handlers {
         let oobis: Vec<u8> = loc_scheme
             .into_iter()
             .map(|sr| {
-                let sed: SignedEventData = sr.into();
-                sed.to_cesr()
+                let sed: ParsedEvent = sr.into();
+                sed.to_cesr().map_err(|_| Error::CesrError)
             })
             .flatten_ok()
             .try_collect()
@@ -234,8 +236,8 @@ pub mod http_handlers {
             .into_iter()
             .chain(loc_scheme.into_iter())
             .map(|sr| {
-                let sed: SignedEventData = sr.into();
-                sed.to_cesr()
+                let sed: ParsedEvent = sr.into();
+                sed.to_cesr().map_err(|_| Error::CesrError)
             })
             .flatten_ok()
             .collect::<Result<Vec<_>, _>>()

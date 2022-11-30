@@ -44,6 +44,21 @@ pub fn num_to_b64(num: u16) -> String {
     }
 }
 
+pub fn adjust_with_num(sn: u16, expected_length: usize) -> String {
+    if expected_length > 0 {
+        let i = num_to_b64(sn);
+        if i.len() < expected_length {
+            // refill string to have proper size
+            let missing_part = "A".repeat(expected_length - i.len());
+            [missing_part, i].join("")
+        } else {
+            [i].join("")
+        }
+    } else {
+        "".to_string()
+    }
+}
+
 #[test]
 fn num_to_b64_test() {
     assert_eq!("A", num_to_b64(0));
@@ -100,4 +115,10 @@ fn test_from_bytes_to_text() {
         from_bytes_to_text(&hex::decode("30ffff").unwrap()),
         "MP__".to_string()
     );
+}
+
+#[test]
+fn test_adjust_with_num() {
+    assert_eq!(adjust_with_num(2, 4), "AAAC");
+    assert_eq!(adjust_with_num(27, 6), "AAAAAb");
 }

@@ -1,9 +1,10 @@
 use super::error::Error;
-use super::{Prefix, SelfSigningPrefix};
+use super::SelfSigningPrefix;
 use crate::event_parsing::codes::attached_signature_code::AttachedSignatureCode;
 use crate::event_parsing::codes::self_signing::SelfSigning;
-use crate::event_parsing::codes::DerivationCode;
+use crate::event_parsing::codes::{DerivationCode, PrimitiveCode};
 use crate::event_parsing::parsing::from_text_to_bytes;
+use crate::event_parsing::primitives::CesrPrimitive;
 use core::str::FromStr;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -25,13 +26,13 @@ impl FromStr for AttachedSignaturePrefix {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let code = AttachedSignatureCode::from_str(s)?;
 
-        if (s.len()) == code.prefix_b64_len() {
-            let lead = if code.code_len() % 4 != 0 {
-                code.code_len()
+        if (s.len()) == code.full_size() {
+            let lead = if code.code_size() % 4 != 0 {
+                code.code_size()
             } else {
                 0
             };
-            let s_vec = from_text_to_bytes(&s[code.code_len()..].as_bytes())?[lead..].to_vec();
+            let s_vec = from_text_to_bytes(&s[code.code_size()..].as_bytes())?[lead..].to_vec();
             let ssp = SelfSigningPrefix::new(code.code, s_vec);
             Ok(Self::new(ssp, code.index))
         } else {
@@ -40,13 +41,13 @@ impl FromStr for AttachedSignaturePrefix {
     }
 }
 
-impl Prefix for AttachedSignaturePrefix {
+impl CesrPrimitive for AttachedSignaturePrefix {
     fn derivative(&self) -> Vec<u8> {
         self.signature.derivative()
     }
-    fn derivation_code(&self) -> String {
+    fn derivation_code(&self) -> PrimitiveCode {
         let code: SelfSigning = self.signature.get_code();
-        AttachedSignatureCode::new(code, self.index).to_str()
+        PrimitiveCode::IndexedSignature(AttachedSignatureCode::new(code, self.index))
     }
 }
 

@@ -96,7 +96,8 @@ fn test_inception_data_derivation() -> Result<(), Error> {
         key_config::KeyConfig, key_config::NextKeysData, threshold::SignatureThreshold,
     };
     use crate::event_message::Digestible;
-    use crate::prefix::{BasicPrefix, Prefix};
+    use crate::event_parsing::primitives::CesrPrimitive;
+    use crate::prefix::BasicPrefix;
     use crate::sai::SelfAddressingPrefix;
 
     let keys: Vec<BasicPrefix> = vec![

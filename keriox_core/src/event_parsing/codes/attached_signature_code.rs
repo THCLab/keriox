@@ -1,7 +1,7 @@
-use super::{self_signing::SelfSigning, DerivationCode};
 use crate::event_parsing::{
+    codes::{self_signing::SelfSigning, DerivationCode},
     error::Error,
-    parsing::{b64_to_num, num_to_b64},
+    parsing::{adjust_with_num, b64_to_num},
 };
 use core::str::FromStr;
 
@@ -21,31 +21,37 @@ impl AttachedSignatureCode {
 }
 
 impl DerivationCode for AttachedSignatureCode {
-    // TODO, this will only work with indicies up to 63
+    fn soft_size(&self) -> usize {
+        match self.code {
+            SelfSigning::Ed25519Sha512 | SelfSigning::ECDSAsecp256k1Sha256 => 1,
+            SelfSigning::Ed448 => 2,
+        }
+    }
+
+    fn hard_size(&self) -> usize {
+        match self.code {
+            SelfSigning::Ed25519Sha512 | SelfSigning::ECDSAsecp256k1Sha256 => 1,
+            SelfSigning::Ed448 => 2,
+        }
+    }
+
+    fn value_size(&self) -> usize {
+        match self.code {
+            SelfSigning::Ed25519Sha512 | SelfSigning::ECDSAsecp256k1Sha256 => 86,
+            SelfSigning::Ed448 => 152,
+        }
+    }
+
     fn to_str(&self) -> String {
         [
             match self.code {
                 SelfSigning::Ed25519Sha512 => "A",
                 SelfSigning::ECDSAsecp256k1Sha256 => "B",
-                SelfSigning::Ed448 => "0AA",
+                SelfSigning::Ed448 => "0A",
             },
-            &num_to_b64(self.index),
+            &adjust_with_num(self.index, self.soft_size()),
         ]
         .join("")
-    }
-
-    fn code_len(&self) -> usize {
-        match self.code {
-            SelfSigning::Ed25519Sha512 | SelfSigning::ECDSAsecp256k1Sha256 => 2,
-            SelfSigning::Ed448 => 4,
-        }
-    }
-
-    fn derivative_b64_len(&self) -> usize {
-        match self.code {
-            SelfSigning::Ed25519Sha512 | SelfSigning::ECDSAsecp256k1Sha256 => 86,
-            SelfSigning::Ed448 => 152,
-        }
     }
 }
 
@@ -62,10 +68,10 @@ impl FromStr for AttachedSignatureCode {
                 SelfSigning::ECDSAsecp256k1Sha256,
                 b64_to_num(&s.as_bytes()[1..2])?,
             )),
-            "0" => match &s[1..3] {
-                "AA" => Ok(Self::new(
+            "0" => match &s[1..2] {
+                "A" => Ok(Self::new(
                     SelfSigning::Ed448,
-                    b64_to_num(&s.as_bytes()[3..4])?,
+                    b64_to_num(&s.as_bytes()[2..4])?,
                 )),
                 _ => Err(Error::UnknownCodeError),
             },

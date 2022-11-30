@@ -4,10 +4,13 @@ use super::{SelfAddressing, SelfAddressingPrefix};
 
 use crate::{
     event_parsing::{
-        codes::{self_addressing::SelfAddressing as CesrSelfAddressing, DerivationCode},
+        codes::{
+            self_addressing::SelfAddressing as CesrSelfAddressing, DerivationCode, PrimitiveCode,
+        },
         parsing::from_text_to_bytes,
+        primitives::CesrPrimitive,
     },
-    prefix::{Prefix, error::Error as PrefixError},
+    prefix::error::Error as PrefixError,
 };
 
 impl Into<CesrSelfAddressing> for SelfAddressing {
@@ -42,13 +45,13 @@ impl From<CesrSelfAddressing> for SelfAddressing {
     }
 }
 
-impl Prefix for SelfAddressingPrefix {
+impl CesrPrimitive for SelfAddressingPrefix {
     fn derivative(&self) -> Vec<u8> {
-        self.digest.to_owned()
+        self.digest.clone()
     }
-    fn derivation_code(&self) -> String {
+    fn derivation_code(&self) -> PrimitiveCode {
         let cesr_der: CesrSelfAddressing = self.derivation.clone().into();
-        cesr_der.to_str()
+        PrimitiveCode::SelfAddressing(cesr_der)
     }
 }
 
@@ -57,8 +60,8 @@ impl FromStr for SelfAddressingPrefix {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let code = CesrSelfAddressing::from_str(s)?;
-        let c_len = code.code_len();
-        if s.len() == code.prefix_b64_len() {
+        let c_len = code.code_size();
+        if s.len() == code.full_size() {
             let decoded = from_text_to_bytes(&s[c_len..].as_bytes())?[c_len..].to_vec();
 
             Ok(Self::new(code.into(), decoded))

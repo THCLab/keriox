@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     error::Error,
     event::sections::seal::EventSeal,
-    event_parsing::Attachment,
+    event_parsing::{group::Group, primitives::IndexedSignature},
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     processor::event_storage::EventStorage,
 };
@@ -76,29 +76,7 @@ impl Signature {
     }
 }
 
-impl From<&Signature> for Attachment {
-    fn from(signature: &Signature) -> Self {
-        match signature {
-            Signature::Transferable(signer_data, sig) => match signer_data {
-                SignerData::EventSeal(seal) => {
-                    Attachment::SealSignaturesGroups(vec![(seal.clone(), sig.clone())])
-                }
-                SignerData::LastEstablishment(id) => {
-                    Attachment::LastEstSignaturesGroups(vec![(id.clone(), sig.clone())])
-                }
-                SignerData::JustSignatures => Attachment::AttachedSignatures(sig.clone()),
-            },
-            Signature::NonTransferable(Nontransferable::Couplet(couplets)) => {
-                Attachment::ReceiptCouplets(couplets.clone())
-            }
-            Signature::NonTransferable(Nontransferable::Indexed(sigs)) => {
-                Attachment::AttachedWitnessSignatures(sigs.clone())
-            }
-        }
-    }
-}
-
-pub fn signatures_into_attachments(sigs: &[Signature]) -> Vec<Attachment> {
+pub fn signatures_into_groups(sigs: &[Signature]) -> Vec<Group> {
     // Group same type of signature in one attachment
     let (trans_seal, trans_last, nontrans, indexed, witness_indexed) =
         sigs.into_iter().cloned().fold(
@@ -106,21 +84,26 @@ pub fn signatures_into_attachments(sigs: &[Signature]) -> Vec<Attachment> {
             |(mut trans_seal, mut trans_last, mut nontrans, mut indexed, mut witness_indexed),
              sig| {
                 match sig {
-                    Signature::Transferable(SignerData::EventSeal(seal), sig) => {
-                        trans_seal.push((seal, sig))
+                    Signature::Transferable(SignerData::EventSeal(seal), sig) => trans_seal.push((
+                        seal.prefix.into(),
+                        seal.sn,
+                        (&seal.event_digest).into(),
+                        sig.into_iter().map(|sig| sig.into()).collect(),
+                    )),
+                    Signature::Transferable(SignerData::LastEstablishment(id), sig) => trans_last
+                        .push((id.into(), sig.into_iter().map(|sig| sig.into()).collect())),
+                    Signature::Transferable(SignerData::JustSignatures, sig) => {
+                        indexed.append(&mut sig.into_iter().map(|sig| sig.into()).collect())
                     }
-                    Signature::Transferable(SignerData::LastEstablishment(id), sig) => {
-                        trans_last.push((id, sig))
-                    }
-                    Signature::Transferable(SignerData::JustSignatures, mut sig) => {
-                        indexed.append(&mut sig)
-                    }
-                    Signature::NonTransferable(Nontransferable::Couplet(couplets)) => {
-                        nontrans.append(&mut couplets.clone())
-                    }
-                    Signature::NonTransferable(Nontransferable::Indexed(mut sigs)) => {
-                        witness_indexed.append(&mut sigs)
-                    }
+                    Signature::NonTransferable(Nontransferable::Couplet(couplets)) => nontrans
+                        .append(
+                            &mut couplets
+                                .into_iter()
+                                .map(|(bp, sp)| (bp.into(), sp.into()))
+                                .collect(),
+                        ),
+                    Signature::NonTransferable(Nontransferable::Indexed(sigs)) => witness_indexed
+                        .append(&mut sigs.into_iter().map(|sig| sig.into()).collect()),
                 };
                 (trans_seal, trans_last, nontrans, indexed, witness_indexed)
             },
@@ -128,47 +111,120 @@ pub fn signatures_into_attachments(sigs: &[Signature]) -> Vec<Attachment> {
 
     let mut attachments = vec![];
     if !trans_seal.is_empty() {
-        attachments.push(Attachment::SealSignaturesGroups(trans_seal));
+        attachments.push(Group::TransferableIndexedSigGroups(trans_seal));
     }
     if !trans_last.is_empty() {
-        attachments.push(Attachment::LastEstSignaturesGroups(trans_last));
+        attachments.push(Group::LastEstSignaturesGroups(trans_last));
     }
     if !nontrans.is_empty() {
-        attachments.push(Attachment::ReceiptCouplets(nontrans));
+        attachments.push(Group::NontransferableReceiptCouples(nontrans));
     };
     if !indexed.is_empty() {
-        attachments.push(Attachment::AttachedSignatures(indexed));
+        attachments.push(Group::IndexedControllerSignatures(indexed));
     };
     if !witness_indexed.is_empty() {
-        attachments.push(Attachment::AttachedWitnessSignatures(witness_indexed));
+        attachments.push(Group::IndexedWitnessSignatures(witness_indexed));
     };
     attachments
 }
 
-impl TryFrom<Attachment> for Vec<Signature> {
+impl TryFrom<Group> for Vec<Signature> {
     type Error = Error;
 
-    fn try_from(value: Attachment) -> Result<Self, Self::Error> {
+    fn try_from(value: Group) -> Result<Self, Self::Error> {
         match value {
-            Attachment::AttachedSignatures(sigs) => Ok(vec![Signature::Transferable(
-                SignerData::JustSignatures,
-                sigs,
-            )]),
-            Attachment::ReceiptCouplets(sigs) => Ok(vec![Signature::NonTransferable(
-                Nontransferable::Couplet(sigs),
-            )]),
-            Attachment::LastEstSignaturesGroups(sigs) => Ok(sigs
+            Group::IndexedControllerSignatures(sigs) => {
+                let signatures = sigs.into_iter().map(|sig| sig.into()).collect();
+                Ok(vec![Signature::Transferable(
+                    SignerData::JustSignatures,
+                    signatures,
+                )])
+            }
+            Group::NontransferableReceiptCouples(sigs) => {
+                let signatures = sigs
+                    .into_iter()
+                    .map(|(bp, sp)| (bp.into(), sp.into()))
+                    .collect();
+                Ok(vec![Signature::NonTransferable(Nontransferable::Couplet(
+                    signatures,
+                ))])
+            }
+            Group::LastEstSignaturesGroups(sigs) => Ok(sigs
                 .into_iter()
-                .map(|(id, sigs)| Signature::Transferable(SignerData::LastEstablishment(id), sigs))
+                .map(|(id, sigs)| {
+                    let signatures = sigs.into_iter().map(|sig| sig.into()).collect();
+                    Signature::Transferable(SignerData::LastEstablishment(id.into()), signatures)
+                })
                 .collect()),
-            Attachment::SealSignaturesGroups(sigs) => Ok(sigs
+            Group::TransferableIndexedSigGroups(sigs) => Ok(sigs
                 .into_iter()
-                .map(|(seal, sig)| Signature::Transferable(SignerData::EventSeal(seal), sig))
+                .map(|(id, sn, digest, sigs)| {
+                    let signatures = sigs.into_iter().map(|sig| sig.into()).collect();
+                    Signature::Transferable(
+                        SignerData::EventSeal(EventSeal {
+                            prefix: id.into(),
+                            sn,
+                            event_digest: digest.into(),
+                        }),
+                        signatures,
+                    )
+                })
                 .collect()),
-            Attachment::AttachedWitnessSignatures(sigs) => Ok(vec![Signature::NonTransferable(
-                Nontransferable::Indexed(sigs),
-            )]),
+            Group::IndexedWitnessSignatures(sigs) => {
+                let signatures = sigs.into_iter().map(|sig| sig.into()).collect();
+                Ok(vec![Signature::NonTransferable(Nontransferable::Indexed(
+                    signatures,
+                ))])
+            }
             _ => Err(Error::SemanticError("Improper attachment type".into())),
+        }
+    }
+}
+
+impl Into<Group> for Nontransferable {
+    fn into(self) -> Group {
+        match self {
+            Nontransferable::Indexed(indexed) => {
+                let signatures = indexed.into_iter().map(|sig| sig.into()).collect();
+                Group::IndexedWitnessSignatures(signatures)
+            }
+            Nontransferable::Couplet(couples) => {
+                let couples = couples
+                    .into_iter()
+                    .map(|(bp, sp)| (bp.into(), sp.into()))
+                    .collect();
+                Group::NontransferableReceiptCouples(couples)
+            }
+        }
+    }
+}
+
+impl Into<Group> for crate::event_message::signature::Signature {
+    fn into(self) -> Group {
+        match self {
+            crate::event_message::signature::Signature::Transferable(seal, signature) => {
+                let signatures: Vec<IndexedSignature> =
+                    signature.into_iter().map(|sig| sig.into()).collect();
+                match seal {
+                    crate::event_message::signature::SignerData::EventSeal(EventSeal {
+                        prefix,
+                        sn,
+                        event_digest,
+                    }) => Group::TransferableIndexedSigGroups(vec![(
+                        prefix.into(),
+                        sn,
+                        (&event_digest).into(),
+                        signatures,
+                    )]),
+                    crate::event_message::signature::SignerData::LastEstablishment(id) => {
+                        Group::LastEstSignaturesGroups(vec![(id.into(), signatures)])
+                    }
+                    crate::event_message::signature::SignerData::JustSignatures => {
+                        Group::IndexedControllerSignatures(signatures)
+                    }
+                }
+            }
+            crate::event_message::signature::Signature::NonTransferable(nt) => nt.into(),
         }
     }
 }
