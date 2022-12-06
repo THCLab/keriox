@@ -12,6 +12,12 @@ EUPL 1.2
 
 We have distilled the most crucial license specifics to make your adoption seamless: [see here for details](https://github.com/THCLab/licensing).
 
+## Status
+
+KERIOX implementation is in progress and ongoing. We support all the KERI protocol's significant features and provide the second most advanced implementation right after the [keripy](https://github.com/weboftrust/keripy) reference implementation.
+
+We furthermore support bindings to NodeJS and Dart. See our [keri-bindings](https://github.com/THCLab/keri-bindings) repository.
+
 ## Organization
 
 This repository provides implementation of KERI. It contains:
