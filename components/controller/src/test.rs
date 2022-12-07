@@ -164,7 +164,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     {
         let qry = query[0].clone();
         let sig = SelfSigningPrefix::Ed25519Sha512(km2.sign(&qry.serialize()?)?);
-        let resp = identifier1.finalize_mailbox_query(vec![(qry, sig)]).await;
+        let resp = identifier1.finalize_query(vec![(qry, sig)]).await;
         assert!(matches!(
             resp,
             Err(ControllerError::TransportError(
@@ -177,9 +177,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
 
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(&qry.serialize()?)?);
-        identifier1
-            .finalize_mailbox_query(vec![(qry, signature)])
-            .await?;
+        identifier1.finalize_query(vec![(qry, signature)]).await?;
     }
 
     let mut delegator = {
@@ -202,9 +200,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
 
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(km2.sign(&qry.serialize()?)?);
-        delegator
-            .finalize_mailbox_query(vec![(qry, signature)])
-            .await?;
+        delegator.finalize_query(vec![(qry, signature)]).await?;
     }
 
     // Generate delegated inception
@@ -254,7 +250,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     {
         let qry = query[0].clone();
         let sig = SelfSigningPrefix::Ed25519Sha512(km2.sign(b"not actual message")?);
-        let resp = identifier1.finalize_mailbox_query(vec![(qry, sig)]).await;
+        let resp = identifier1.finalize_query(vec![(qry, sig)]).await;
         assert!(matches!(
             resp,
             Err(ControllerError::TransportError(
@@ -267,9 +263,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
 
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(km2.sign(&qry.serialize()?)?);
-        delegator
-            .finalize_mailbox_query(vec![(qry, signature)])
-            .await?;
+        delegator.finalize_query(vec![(qry, signature)]).await?;
     }
 
     identifier1
@@ -289,9 +283,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
 
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(km2.sign(&qry.serialize()?)?);
-        let ar = delegator
-            .finalize_mailbox_query(vec![(qry, signature)])
-            .await?;
+        let ar = delegator.finalize_query(vec![(qry, signature)]).await?;
         assert_eq!(ar.len(), 1);
         match &ar[0] {
             ActionRequired::MultisigRequest(_, _) => unreachable!(),
@@ -312,9 +304,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
 
                 for qry in query {
                     let signature = SelfSigningPrefix::Ed25519Sha512(km2.sign(&qry.serialize()?)?);
-                    let action_required = delegator
-                        .finalize_mailbox_query(vec![(qry, signature)])
-                        .await?;
+                    let action_required = delegator.finalize_query(vec![(qry, signature)]).await?;
                     assert!(action_required.is_empty());
                 }
 
@@ -343,9 +333,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
 
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(&qry.serialize()?)?);
-        let ar = identifier1
-            .finalize_mailbox_query(vec![(qry, signature)])
-            .await?;
+        let ar = identifier1.finalize_query(vec![(qry, signature)]).await?;
         assert!(ar.is_empty());
     }
 
@@ -361,9 +349,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
 
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(&qry.serialize()?)?);
-        let ar = identifier1
-            .finalize_mailbox_query(vec![(qry, signature)])
-            .await?;
+        let ar = identifier1.finalize_query(vec![(qry, signature)]).await?;
         assert!(ar.is_empty());
     }
 

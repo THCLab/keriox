@@ -22,7 +22,9 @@ use keri::{
     oobi::{LocationScheme, Role, Scheme},
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     query::{
-        query_event::{QueryArgsMbx, QueryEvent, QueryRoute, QueryTopics, SignedQuery},
+        query_event::{
+            MailboxResponse, QueryArgsMbx, QueryEvent, QueryRoute, QueryTopics, SignedQuery,
+        },
         reply_event::ReplyRoute,
     },
     sai::{derivation::SelfAddressing, SelfAddressingPrefix},
@@ -533,10 +535,40 @@ impl IdentifierController {
             .collect::<Result<_, _>>()?)
     }
 
+    async fn mailbox_reponse(
+        &mut self,
+        from_who: &IdentifierPrefix,
+        about_who: &IdentifierPrefix,
+        res: &MailboxResponse,
+    ) -> Result<Vec<ActionRequired>, ControllerError> {
+        let req = if from_who == about_who {
+            // process own mailbox
+            let req = self.process_own_mailbox(res, &self.last_asked_index)?;
+            self.last_asked_index = MailboxReminder {
+                receipt: res.receipt.len(),
+                multisig: res.multisig.len(),
+                delegate: res.delegate.len(),
+            };
+            req
+        } else {
+            // process group mailbox
+            let group_req = self
+                .process_group_mailbox(&res, &about_who, &self.last_asked_groups_index)
+                .await?;
+            self.last_asked_groups_index = MailboxReminder {
+                receipt: res.receipt.len(),
+                multisig: res.multisig.len(),
+                delegate: res.delegate.len(),
+            };
+            group_req
+        };
+        Ok(req)
+    }
+
     /// Joins query events with their signatures, sends it to witness and
     /// process its response. If user action is needed to finalize process,
     /// returns proper notification.
-    pub async fn finalize_mailbox_query(
+    pub async fn finalize_query(
         &mut self,
         queries: Vec<(QueryEvent, SelfSigningPrefix)>,
     ) -> Result<Vec<ActionRequired>, ControllerError> {
@@ -580,39 +612,23 @@ impl IdentifierController {
                 .await?;
             println!("\nresponse: {:?}", res);
             // TODO what if other reponse than mailbox?
-            let res = if let PossibleResponse::Mbx(res) = res {
-                res
-            } else {
-                todo!()
+            match res {
+                PossibleResponse::Kel(kel) => {
+                    for event in kel {
+                        self.source.process(&event)?;
+                    }
+                }
+                PossibleResponse::Mbx(mbx) => {
+                    let about_who = about_who.ok_or(ControllerError::QueryArgumentError(
+                        "Missing query subject identifier".into(),
+                    ))?;
+                    let from_who = from_who.ok_or(ControllerError::QueryArgumentError(
+                        "Missing query sender identifier".into(),
+                    ))?;
+                    actions.append(&mut self.mailbox_reponse(about_who, from_who, &mbx).await?);
+                }
+                PossibleResponse::Ksn(_) => todo!(),
             };
-            let req = if from_who == about_who {
-                // process own mailbox
-                let req = self.process_own_mailbox(&res, &self.last_asked_index)?;
-                self.last_asked_index = MailboxReminder {
-                    receipt: res.receipt.len(),
-                    multisig: res.multisig.len(),
-                    delegate: res.delegate.len(),
-                };
-                req
-            } else {
-                // process group mailbox
-                let group_req = self
-                    .process_group_mailbox(
-                        &res,
-                        about_who.ok_or(ControllerError::QueryArgumentError(
-                            "Missing query receipient identifier".into(),
-                        ))?,
-                        &self.last_asked_groups_index,
-                    )
-                    .await?;
-                self.last_asked_groups_index = MailboxReminder {
-                    receipt: res.receipt.len(),
-                    multisig: res.multisig.len(),
-                    delegate: res.delegate.len(),
-                };
-                group_req
-            };
-            actions.extend(req)
         }
         Ok(actions)
     }
