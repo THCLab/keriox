@@ -2,11 +2,15 @@
 
 use std::sync::{Arc, Mutex};
 
+use controller::{identifier_controller::IdentifierController, utils::OptionalConfig, Controller};
 use keri::{
     actor::simple_controller::SimpleController,
     database::{escrow::EscrowDb, SledEventDatabase},
     error::Error,
-    prefix::IdentifierPrefix,
+    event_parsing::codes::self_signing::SelfSigning,
+    oobi::LocationScheme,
+    prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+    signer::{CryptoBox, KeyManager},
 };
 use keri_transport::default::DefaultTransport;
 use tempfile::Builder;
@@ -103,6 +107,89 @@ pub fn test_authentication() -> Result<(), Error> {
         result, Err(WatcherError::NoIdentState { ref prefix })
         if prefix == about_controller.prefix()
     ));
+
+    Ok(())
+}
+
+#[test]
+fn test_add_watcher() -> Result<(), Error> {
+    let root = Builder::new().prefix("test-db").tempdir().unwrap();
+    let initial_config = OptionalConfig::init().with_db_path(root.into_path());
+
+    let controller = Arc::new(Controller::new(Some(initial_config)).unwrap());
+    let km1 = CryptoBox::new()?;
+    let km2 = CryptoBox::new()?;
+
+    let mut identifier1 = {
+        let pk = BasicPrefix::Ed25519(km1.public_key());
+        let npk = BasicPrefix::Ed25519(km1.next_public_key());
+
+        let icp_event =
+            futures::executor::block_on(controller.incept(vec![pk], vec![npk], vec![], 0)).unwrap();
+        let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(icp_event.as_bytes())?);
+
+        let incepted_identifier = futures::executor::block_on(
+            controller.finalize_inception(icp_event.as_bytes(), &signature),
+        )
+        .unwrap();
+        IdentifierController::new(incepted_identifier, controller.clone())
+    };
+
+    let identifier2 = {
+        let pk = BasicPrefix::Ed25519(km2.public_key());
+        let npk = BasicPrefix::Ed25519(km2.next_public_key());
+
+        let icp_event =
+            futures::executor::block_on(controller.incept(vec![pk], vec![npk], vec![], 0)).unwrap();
+        let signature = SelfSigningPrefix::Ed25519Sha512(km2.sign(icp_event.as_bytes())?);
+
+        let incepted_identifier = futures::executor::block_on(
+            controller.finalize_inception(icp_event.as_bytes(), &signature),
+        )
+        .unwrap();
+        IdentifierController::new(incepted_identifier, controller.clone())
+    };
+
+    let url = url::Url::parse("http://127.0.0.1:3236").unwrap();
+    let root = Builder::new().prefix("cont-test-db").tempdir().unwrap();
+    let watcher = WatcherData::setup(
+        url.clone(),
+        root.path(),
+        None,
+        Box::new(DefaultTransport::new()),
+    )?;
+    let watcher_id = watcher.prefix;
+    // let watcher_id: BasicPrefix = "BF2t2NPc1bwptY1hYV0YCib1JjQ11k9jtuaZemecPF5b".parse().unwrap();
+
+    // Watcher should know both controllers
+    // watcher.parse_and_process_notices(&asker_icp).unwrap();
+    // watcher.parse_and_process_notices(&about_icp).unwrap();
+
+    let watcher_oobi = LocationScheme {
+        eid: IdentifierPrefix::Basic(watcher_id.clone()),
+        scheme: keri::oobi::Scheme::Http,
+        url,
+    };
+    futures::executor::block_on(identifier1.source.resolve_loc_schema(&watcher_oobi)).unwrap();
+
+    let add_watcher = identifier1
+        .add_watcher(IdentifierPrefix::Basic(watcher_id.clone()))
+        .unwrap();
+    let query_sig = SelfSigningPrefix::new(
+        SelfSigning::Ed25519Sha512,
+        km1.sign(add_watcher.as_bytes()).unwrap(),
+    );
+    futures::executor::block_on(identifier1.finalize_event(add_watcher.as_bytes(), query_sig))
+        .unwrap();
+
+    let query = identifier1
+        .query_watcher(&identifier2.id, IdentifierPrefix::Basic(watcher_id))
+        .unwrap();
+    let query_sig = SelfSigningPrefix::new(
+        SelfSigning::Ed25519Sha512,
+        km1.sign(&query.serialize()?).unwrap(),
+    );
+    futures::executor::block_on(identifier1.finalize_query(vec![(query, query_sig)])).unwrap();
 
     Ok(())
 }

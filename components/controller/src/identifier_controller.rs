@@ -172,12 +172,10 @@ impl IdentifierController {
                 self.source.finalize_key_event(&ke, &sig, index)
             }
             EventType::Rpy(rpy) => match rpy.get_route() {
-                ReplyRoute::EndRoleAdd(_) => {
-                    Ok(self
-                        .source
-                        .finalize_add_role(&self.id, rpy, vec![sig])
-                        .await?)
-                }
+                ReplyRoute::EndRoleAdd(_) => Ok(self
+                    .source
+                    .finalize_add_role(&self.id, rpy, vec![sig])
+                    .await?),
                 ReplyRoute::EndRoleCut(_) => todo!(),
                 _ => Err(ControllerError::WrongEventTypeError),
             },
