@@ -23,7 +23,8 @@ use keri::{
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     query::{
         query_event::{
-            MailboxResponse, QueryArgsMbx, QueryEvent, QueryRoute, QueryTopics, SignedQuery,
+            MailboxResponse, QueryArgs, QueryArgsMbx, QueryEvent, QueryRoute, QueryTopics,
+            SignedQuery,
         },
         reply_event::ReplyRoute,
     },
@@ -171,10 +172,12 @@ impl IdentifierController {
                 self.source.finalize_key_event(&ke, &sig, index)
             }
             EventType::Rpy(rpy) => match rpy.get_route() {
-                ReplyRoute::EndRoleAdd(_) => Ok(self
-                    .source
-                    .finalize_add_role(&self.id, rpy, vec![sig])
-                    .await?),
+                ReplyRoute::EndRoleAdd(_) => {
+                    Ok(self
+                        .source
+                        .finalize_add_role(&self.id, rpy, vec![sig])
+                        .await?)
+                }
                 ReplyRoute::EndRoleCut(_) => todo!(),
                 _ => Err(ControllerError::WrongEventTypeError),
             },
@@ -560,6 +563,38 @@ impl IdentifierController {
                 )
             })
             .collect::<Result<_, _>>()?)
+    }
+
+    pub fn query_watcher(
+        &self,
+        identifier: &IdentifierPrefix,
+        watcher: IdentifierPrefix,
+    ) -> Result<QueryEvent, ControllerError> {
+        Ok(QueryEvent::new_query(
+            QueryRoute::Log {
+                args: QueryArgs {
+                    // about who
+                    i: identifier.clone(),
+                    // who will get the query
+                    src: Some(watcher),
+                    s: None,
+                },
+                reply_route: "".to_string(),
+            },
+            SerializationFormats::JSON,
+            SelfAddressing::Blake3_256,
+        )?)
+    }
+
+    pub fn query_own_watchers(
+        &self,
+        about_who: &IdentifierPrefix,
+    ) -> Result<Vec<QueryEvent>, ControllerError> {
+        self.source
+            .get_watchers(&self.id)?
+            .into_iter()
+            .map(|watcher| self.query_watcher(about_who, watcher))
+            .collect()
     }
 
     async fn mailbox_reponse(
