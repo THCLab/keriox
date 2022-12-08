@@ -38,7 +38,7 @@ impl WatcherListener {
         let host = address.host().unwrap().to_string();
         let port = address.port().unwrap();
 
-        let state = web::Data::new(self.watcher_data);
+        let state = web::Data::new(self.watcher_data.0);
         HttpServer::new(move || {
             App::new()
                 .app_data(state.clone())
