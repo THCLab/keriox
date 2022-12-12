@@ -2,17 +2,23 @@ pub mod cesr_adapter;
 pub mod derivation;
 mod digest;
 
-use crate::event_parsing::primitives::CesrPrimitive;
-
-use self::derivation::SelfAddressing;
-
 use core::{fmt, str::FromStr};
+
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-#[derive(Debug, PartialEq, Clone, Hash, Eq)]
+use self::derivation::SelfAddressing;
+use crate::event_parsing::primitives::CesrPrimitive;
+
+#[derive(PartialEq, Clone, Hash, Eq)]
 pub struct SelfAddressingPrefix {
     pub derivation: SelfAddressing,
     pub digest: Vec<u8>,
+}
+
+impl fmt::Debug for SelfAddressingPrefix {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self.to_str())
+    }
 }
 
 impl SelfAddressingPrefix {

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 use keri::{
     actor::{event_generator, prelude::Message, simple_controller::PossibleResponse},
@@ -14,7 +14,7 @@ use keri::{
         cesr_adapter::EventType,
         exchange::{Exchange, ExchangeMessage, ForwardTopic, FwdArgs, SignedExchange},
         key_event_message::KeyEvent,
-        signature::{Signature, SignerData},
+        signature::{Nontransferable, Signature, SignerData},
         signed_event_message::{Notice, Op},
         Digestible,
     },
@@ -37,7 +37,7 @@ pub struct IdentifierController {
     pub source: Arc<Controller>,
     last_asked_index: MailboxReminder,
     last_asked_groups_index: MailboxReminder,
-    last_broadcasted_index: Option<u16>,
+    broadcasted_rcts: HashSet<(SelfAddressingPrefix, BasicPrefix)>,
 }
 
 impl IdentifierController {
@@ -47,7 +47,7 @@ impl IdentifierController {
             source: kel,
             last_asked_index: MailboxReminder::default(),
             last_asked_groups_index: MailboxReminder::default(),
-            last_broadcasted_index: None,
+            broadcasted_rcts: HashSet::new(),
         }
     }
 
@@ -417,7 +417,7 @@ impl IdentifierController {
         Ok(group_prefix)
     }
 
-    pub async fn notify_witnesses(&self, own_index: u16) -> Result<usize, ControllerError> {
+    pub async fn notify_witnesses(&self) -> Result<usize, ControllerError> {
         let mut n = 0;
         let evs = self
             .source
@@ -428,7 +428,7 @@ impl IdentifierController {
             // Leader is identifier with minimal index among all participants who
             // sign event. He will send message to witness.
             let min_idx = ev.signatures.iter().map(|at| at.index).min();
-            if min_idx == Some(own_index) {
+            if min_idx == Some(0) {
                 let witnesses = self.source.get_witnesses_at_event(&ev.event_message)?;
                 self.source.publish(&witnesses, &ev).await?;
                 n += 1;
@@ -612,11 +612,12 @@ impl IdentifierController {
             let req = if from_who == about_who {
                 // process own mailbox
                 let req = self.process_own_mailbox(&res, &self.last_asked_index)?;
-                self.last_asked_index = MailboxReminder {
-                    receipt: res.receipt.len(),
-                    multisig: res.multisig.len(),
-                    delegate: res.delegate.len(),
-                };
+                // TODO: update last seen index
+                // self.last_asked_index = MailboxReminder {
+                //     receipt: res.receipt.len(),
+                //     multisig: res.multisig.len(),
+                //     delegate: res.delegate.len(),
+                // };
                 req
             } else {
                 // process group mailbox
@@ -643,22 +644,23 @@ impl IdentifierController {
 
     /// Retrieve receipts for given `id` from the database and sends them to witnesses with IDs `wits`.
     pub async fn broadcast_receipts(
-        &self,
-        id: &IdentifierPrefix,
+        &mut self,
         wits: &[IdentifierPrefix],
     ) -> Result<usize, ControllerError> {
         let receipts = self
             .source
             .storage
             .db
-            .get_receipts_nt(id)
+            .get_receipts_nt(&self.id)
             .into_iter()
             .flatten()
             .collect::<Vec<_>>();
         let n = receipts.len();
 
+        // TODO: don't send the same receipt twice.
         for rct in receipts {
             for wit in wits {
+                // TODO: don't send receipt to witness who created it.
                 self.source
                     .send_message_to(
                         wit,
@@ -666,6 +668,29 @@ impl IdentifierController {
                         Message::Notice(Notice::NontransferableRct(rct.clone())),
                     )
                     .await?;
+            }
+
+            // Remember event digest and witness ID to avoid sending the same receipt twice.
+            let digest = rct.body.event.receipted_event_digest;
+            for sig in rct.signatures {
+                match sig {
+                    Nontransferable::Indexed(sigs) => {
+                        for sig in sigs {
+                            let wits = self.source.storage.get_witnesses_at_event(
+                                rct.body.event.sn,
+                                &self.id,
+                                &digest,
+                            )?;
+                            self.broadcasted_rcts
+                                .insert((digest.clone(), wits[sig.index as usize].clone()));
+                        }
+                    }
+                    Nontransferable::Couplet(sigs) => {
+                        for (wit_id, _sig) in sigs {
+                            self.broadcasted_rcts.insert((digest.clone(), wit_id));
+                        }
+                    }
+                }
             }
         }
 
