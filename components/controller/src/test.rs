@@ -35,9 +35,8 @@ async fn test_group_incept() -> Result<(), ControllerError> {
         let icp_event = controller.incept(vec![pk], vec![npk], vec![], 0).await?;
         let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(icp_event.as_bytes())?);
 
-        let incepted_identifier = controller
-            .finalize_inception(icp_event.as_bytes(), &signature)
-            .await?;
+        let incepted_identifier =
+            controller.finalize_inception(icp_event.as_bytes(), &signature)?;
         IdentifierController::new(incepted_identifier, controller.clone())
     };
 
@@ -48,9 +47,8 @@ async fn test_group_incept() -> Result<(), ControllerError> {
         let icp_event = controller.incept(vec![pk], vec![npk], vec![], 0).await?;
         let signature = SelfSigningPrefix::Ed25519Sha512(km2.sign(icp_event.as_bytes())?);
 
-        let incepted_identifier = controller
-            .finalize_inception(icp_event.as_bytes(), &signature)
-            .await?;
+        let incepted_identifier =
+            controller.finalize_inception(icp_event.as_bytes(), &signature)?;
         IdentifierController::new(incepted_identifier, controller.clone())
     };
 
@@ -152,9 +150,8 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
             .await?;
         let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(icp_event.as_bytes())?);
 
-        let incepted_identifier = controller
-            .finalize_inception(icp_event.as_bytes(), &signature)
-            .await?;
+        let incepted_identifier =
+            controller.finalize_inception(icp_event.as_bytes(), &signature)?;
         IdentifierController::new(incepted_identifier, controller.clone())
     };
     // Quering mailbox to get receipts
@@ -191,9 +188,8 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
             .await?;
         let signature = SelfSigningPrefix::Ed25519Sha512(km2.sign(icp_event.as_bytes())?);
 
-        let incepted_identifier = controller2
-            .finalize_inception(icp_event.as_bytes(), &signature)
-            .await?;
+        let incepted_identifier =
+            controller2.finalize_inception(icp_event.as_bytes(), &signature)?;
         IdentifierController::new(incepted_identifier, controller2.clone())
     };
 
@@ -374,14 +370,11 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     Ok(())
 }
 
-
 #[async_std::test]
 async fn test_2_wit() -> Result<(), ControllerError> {
     use url::Url;
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
-    let root2 = Builder::new().prefix("test-db2").tempdir().unwrap();
     let initial_config = OptionalConfig::init().with_db_path(root.into_path());
-    let initial_config2 = OptionalConfig::init().with_db_path(root2.into_path());
 
     let witness1 = {
         let seed = "AK8F6AAiYDpXlWdj2O5F5-6wNCCNJh2A4XOlqwR_HwwH";
@@ -404,13 +397,15 @@ async fn test_2_wit() -> Result<(), ControllerError> {
         )?
     };
 
+    let wit1_id = witness1.get_prefix();
     let wit1_location = LocationScheme {
-        eid: IdentifierPrefix::Basic( witness1.get_prefix() ),
+        eid: IdentifierPrefix::Basic(wit1_id.clone()),
         scheme: keri::oobi::Scheme::Http,
         url: Url::parse("http://witness1/").unwrap(),
     };
+    let wit2_id = witness2.get_prefix();
     let wit2_location = LocationScheme {
-        eid: IdentifierPrefix::Basic( witness2.get_prefix() ),
+        eid: IdentifierPrefix::Basic(wit2_id.clone()),
         scheme: keri::oobi::Scheme::Http,
         url: Url::parse("http://witness2/").unwrap(),
     };
@@ -430,7 +425,7 @@ async fn test_2_wit() -> Result<(), ControllerError> {
         Some(initial_config),
         Box::new(transport.clone()),
     )?);
-    
+
     let km1 = CryptoBox::new()?;
 
     let mut ident_ctl = {
@@ -438,16 +433,44 @@ async fn test_2_wit() -> Result<(), ControllerError> {
         let npk = BasicPrefix::Ed25519(km1.next_public_key());
 
         let icp_event = controller
-            .incept(vec![pk], vec![npk], vec![wit1_location.clone(), wit2_location.clone()], 2)
+            .incept(
+                vec![pk],
+                vec![npk],
+                vec![wit1_location.clone(), wit2_location.clone()],
+                2,
+            )
             .await?;
         let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(icp_event.as_bytes())?);
 
-        let incepted_identifier = controller
-            .finalize_inception(icp_event.as_bytes(), &signature)
-            .await?;
+        let incepted_identifier =
+            controller.finalize_inception(icp_event.as_bytes(), &signature)?;
         IdentifierController::new(incepted_identifier, controller.clone())
     };
 
+    let n = ident_ctl.notify_witnesses(0).await?;
+    assert_eq!(n, 1);
+
+    // Quering mailbox to get receipts
+    let query = ident_ctl.query_mailbox(&ident_ctl.id, &[wit1_id.clone(), wit2_id.clone()])?;
+
+    for qry in query {
+        let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(&qry.serialize()?)?);
+        ident_ctl
+            .finalize_mailbox_query(vec![(qry, signature)])
+            .await?;
+    }
+
+    let n = ident_ctl
+        .broadcast_receipts(
+            &ident_ctl.id,
+            &[
+                IdentifierPrefix::Basic(wit1_id.clone()),
+                IdentifierPrefix::Basic(wit2_id.clone()),
+            ],
+        )
+        .await?;
+
+    println!("Broadcast receipts: {}", n);
 
     Ok(())
 }

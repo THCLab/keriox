@@ -15,7 +15,7 @@ use keri::{
         exchange::{Exchange, ExchangeMessage, ForwardTopic, FwdArgs, SignedExchange},
         key_event_message::KeyEvent,
         signature::{Signature, SignerData},
-        signed_event_message::Op,
+        signed_event_message::{Notice, Op},
         Digestible,
     },
     event_parsing::{parsers::parse_payload, path::MaterialPath, primitives::CesrPrimitive},
@@ -37,6 +37,7 @@ pub struct IdentifierController {
     pub source: Arc<Controller>,
     last_asked_index: MailboxReminder,
     last_asked_groups_index: MailboxReminder,
+    last_broadcasted_index: Option<u16>,
 }
 
 impl IdentifierController {
@@ -46,6 +47,7 @@ impl IdentifierController {
             source: kel,
             last_asked_index: MailboxReminder::default(),
             last_asked_groups_index: MailboxReminder::default(),
+            last_broadcasted_index: None,
         }
     }
 
@@ -153,6 +155,8 @@ impl IdentifierController {
 
     /// Check signatures, updates database and send events to watcher or
     /// witnesses.
+    ///
+    /// Must call [`IdentifierController::notify_witnesses`] after calling this function if event is a key event.
     pub async fn finalize_event(
         &self,
         event: &[u8],
@@ -164,7 +168,7 @@ impl IdentifierController {
         match parsed_event {
             EventType::KeyEvent(ke) => {
                 let index = self.get_index(&ke.event)?;
-                self.source.finalize_key_event(&ke, &sig, index).await
+                self.source.finalize_key_event(&ke, &sig, index)
             }
             EventType::Rpy(rpy) => match rpy.get_route() {
                 ReplyRoute::EndRoleAdd(_) => Ok(self
@@ -327,6 +331,8 @@ impl IdentifierController {
     ///
     /// Join event with signature, verify them and sends signed exn messages to
     /// witness to be forwarded to group participants.
+    ///
+    /// Must call [`IdentifierController::notify_witnesses`] after calling this function.
     pub async fn finalize_group_incept(
         &mut self,
         group_event: &[u8],
@@ -344,9 +350,7 @@ impl IdentifierController {
         let own_index = self.get_index(&icp.event)?;
         let group_prefix = icp.event.get_prefix();
 
-        self.source
-            .finalize_key_event(&icp, &sig, own_index)
-            .await?;
+        self.source.finalize_key_event(&icp, &sig, own_index)?;
 
         let signature = AttachedSignaturePrefix {
             index: own_index as u16,
@@ -411,6 +415,26 @@ impl IdentifierController {
             }
         }
         Ok(group_prefix)
+    }
+
+    pub async fn notify_witnesses(&self, own_index: u16) -> Result<usize, ControllerError> {
+        let mut n = 0;
+        let evs = self
+            .source
+            .partially_witnessed_escrow
+            .get_partially_witnessed_events();
+        for ev in evs {
+            // Elect the leader
+            // Leader is identifier with minimal index among all participants who
+            // sign event. He will send message to witness.
+            let min_idx = ev.signatures.iter().map(|at| at.index).min();
+            if min_idx == Some(own_index) {
+                let witnesses = self.source.get_witnesses_at_event(&ev.event_message)?;
+                self.source.publish(&witnesses, &ev).await?;
+                n += 1;
+            }
+        }
+        Ok(n)
     }
 
     /// Helper function for getting the position of identifier's public key in
@@ -615,5 +639,36 @@ impl IdentifierController {
             actions.extend(req)
         }
         Ok(actions)
+    }
+
+    /// Retrieve receipts for given `id` from the database and sends them to witnesses with IDs `wits`.
+    pub async fn broadcast_receipts(
+        &self,
+        id: &IdentifierPrefix,
+        wits: &[IdentifierPrefix],
+    ) -> Result<usize, ControllerError> {
+        let receipts = self
+            .source
+            .storage
+            .db
+            .get_receipts_nt(id)
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+        let n = receipts.len();
+
+        for rct in receipts {
+            for wit in wits {
+                self.source
+                    .send_message_to(
+                        wit,
+                        Scheme::Http,
+                        Message::Notice(Notice::NontransferableRct(rct.clone())),
+                    )
+                    .await?;
+            }
+        }
+
+        Ok(n)
     }
 }
