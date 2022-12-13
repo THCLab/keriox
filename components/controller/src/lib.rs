@@ -520,8 +520,7 @@ impl Controller {
         )));
         let kel = self
             .storage
-            .db
-            .get_kel_finalized_events(signer_prefix)
+            .get_kel_messages_with_receipts(signer_prefix)?
             .ok_or(ControllerError::UnknownIdentifierError)?;
 
         // TODO: send in one request
@@ -529,7 +528,7 @@ impl Controller {
             self.send_message_to(
                 &dest_prefix,
                 Scheme::Http,
-                Message::Notice(Notice::Event(ev.signed_event_message)),
+                Message::Notice(ev),
             )
             .await?;
         }
