@@ -59,7 +59,7 @@ impl Group {
                 groups
                     .iter()
                     .fold("".into(), |acc, (identifier, sn, digest, signatures)| {
-                        let signatures = signatures
+                        let signatures_str = signatures
                             .iter()
                             .fold("".into(), |acc, s| [acc, s.to_str()].join(""));
                         [
@@ -67,7 +67,8 @@ impl Group {
                             identifier.to_str(),
                             pack_sn(*sn),
                             digest.to_str(),
-                            signatures,
+                            GroupCode::IndexedControllerSignatures(signatures.len() as u16).to_str(),
+                            signatures_str,
                         ]
                         .join("")
                     }),
