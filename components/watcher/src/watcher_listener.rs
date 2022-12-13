@@ -38,7 +38,7 @@ impl WatcherListener {
         let host = address.host().unwrap().to_string();
         let port = address.port().unwrap();
 
-        let state = web::Data::new(self.watcher_data.0);
+        let state = web::Data::new(self.watcher_data);
         HttpServer::new(move || {
             App::new()
                 .app_data(state.clone())
@@ -87,7 +87,7 @@ pub mod http_handlers {
     use reqwest::StatusCode;
     use serde::Deserialize;
 
-    use crate::watcher::{Watcher, WatcherData, WatcherError};
+    use crate::watcher::{Watcher, WatcherError};
 
     #[post("/process")]
     async fn process_notice(
@@ -176,9 +176,9 @@ pub mod http_handlers {
     #[get("/oobi/{id}")]
     async fn get_eid_oobi(
         eid: web::Path<IdentifierPrefix>,
-        data: web::Data<WatcherData>,
+        data: web::Data<Watcher>,
     ) -> Result<impl Responder, ApiError> {
-        let loc_scheme = data.get_loc_scheme_for_id(&eid)?;
+        let loc_scheme = data.0.get_loc_scheme_for_id(&eid)?;
         let oobis: Vec<u8> = loc_scheme
             .into_iter()
             .map(|sr| {
@@ -187,7 +187,11 @@ pub mod http_handlers {
             })
             .flatten()
             .collect();
-
+        println!(
+            "\nSending {} oobi: {}",
+            &eid.to_str(),
+            String::from_utf8(oobis.clone()).unwrap_or_default()
+        );
         Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())
             .body(String::from_utf8(oobis).unwrap()))
@@ -196,12 +200,12 @@ pub mod http_handlers {
     #[get("/oobi/{cid}/{role}/{eid}")]
     async fn get_cid_oobi(
         path: web::Path<(IdentifierPrefix, Role, IdentifierPrefix)>,
-        data: web::Data<WatcherData>,
+        data: web::Data<Watcher>,
     ) -> Result<impl Responder, ApiError> {
         let (cid, role, eid) = path.into_inner();
 
-        let end_role = data.oobi_manager.get_end_role(&cid, role)?;
-        let loc_scheme = data.get_loc_scheme_for_id(&eid)?;
+        let end_role = data.0.oobi_manager.get_end_role(&cid, role)?;
+        let loc_scheme = data.0.get_loc_scheme_for_id(&eid)?;
         let oobis: Vec<u8> = end_role
             .into_iter()
             .chain(loc_scheme.into_iter())
