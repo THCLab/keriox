@@ -173,7 +173,7 @@ pub mod http_handlers {
     };
     use itertools::Itertools;
     use keri::{
-        actor::{QueryError, SignedQueryError},
+        actor::{QueryError, SignedQueryError, prelude::Message},
         error::Error,
         event_message::cesr_adapter::ParsedEvent,
         event_parsing::primitives::CesrPrimitive,
@@ -227,11 +227,15 @@ pub mod http_handlers {
             .unwrap_or_default();
         // (for now) Append controller kel to be able to verify end role signature.
         // TODO use ksn instead
-        let cont_kel = data
+        let cont_kel: Vec<_> = data
             .event_storage
-            .get_kel(&cid)
+            .get_kel_messages_with_receipts(&cid)
             .map_err(WitnessError::KeriError)?
-            .unwrap_or_default();
+            .unwrap_or_default()
+            .into_iter()
+            .map(|not| Message::Notice(not).to_cesr().unwrap())
+            .flatten()
+            .collect();
         let oobis = end_role
             .into_iter()
             .chain(loc_scheme.into_iter())
