@@ -643,15 +643,26 @@ impl IdentifierController {
                 .source
                 .send_query_to(&receipient, Scheme::Http, query)
                 .await?;
-            println!("\nresponse: {:?}", res);
-            // TODO what if other reponse than mailbox?
+
             match res {
                 PossibleResponse::Kel(kel) => {
+                    println!(
+                        "\nGot kel from {}: {}",
+                        &receipient.to_str(),
+                        std::str::from_utf8(
+                            &kel.iter()
+                                .map(|m| m.to_cesr().unwrap())
+                                .flatten()
+                                .collect::<Vec<_>>()
+                        )
+                        .unwrap()
+                    );
                     for event in kel {
                         self.source.process(&event)?;
                     }
                 }
                 PossibleResponse::Mbx(mbx) => {
+                    println!("Mailbox updated");
                     let about_who = about_who.ok_or(ControllerError::QueryArgumentError(
                         "Missing query subject identifier".into(),
                     ))?;

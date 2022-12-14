@@ -10,12 +10,12 @@ use keri::{
         parse_notice_stream, parse_query_stream, parse_reply_stream, prelude::*,
         simple_controller::PossibleResponse,
     },
-    database::{DbError, escrow::EscrowDb},
+    database::{escrow::EscrowDb, DbError},
     error::Error,
-    event_message::signed_event_message::{Notice, Op},
+    event_message::signed_event_message::{Message, Notice, Op},
     oobi::{error::OobiError, EndRole, LocationScheme, OobiManager, Role, Scheme},
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
-    processor::{escrow::default_escrow_bus},
+    processor::escrow::default_escrow_bus,
     query::{
         query_event::{QueryArgs, QueryEvent, QueryRoute, SignedQuery},
         reply_event::{ReplyEvent, ReplyRoute, SignedReply},
@@ -60,8 +60,7 @@ impl WatcherData {
 
         let db = Arc::new(SledEventDatabase::new(event_db_path)?);
         let escrow_db = Arc::new(EscrowDb::new(escrow_path.as_path())?);
-        let (notification_bus, _) =
-            default_escrow_bus(db.clone(), escrow_db);
+        let (notification_bus, _) = default_escrow_bus(db.clone(), escrow_db);
 
         let prefix = BasicPrefix::Ed25519NT(signer.public_key()); // watcher uses non transferable key
         let processor = BasicProcessor::new(db.clone(), Some(notification_bus));
@@ -420,7 +419,6 @@ impl WatcherData {
 
         let response = self.transport.send_query(loc, query).await?;
 
-        println!("\ngot response: {:?}", response);
         Ok(response)
     }
 }
@@ -449,10 +447,14 @@ impl Watcher {
                 .await?;
             for m in oobis {
                 match m {
-                    Message::Op(op) => {self.0.process_op(op).await?;},
-                    Message::Notice(not) => {self.0.process_notice(not)?;},
+                    Message::Op(op) => {
+                        self.0.process_op(op).await?;
+                    }
+                    Message::Notice(not) => {
+                        self.0.process_notice(not)?;
+                    }
                 }
-            };
+            }
             Ok(())
         } else {
             Err(OobiError::InvalidMessageType)?

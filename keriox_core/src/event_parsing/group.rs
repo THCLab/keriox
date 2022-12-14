@@ -67,7 +67,8 @@ impl Group {
                             identifier.to_str(),
                             pack_sn(*sn),
                             digest.to_str(),
-                            GroupCode::IndexedControllerSignatures(signatures.len() as u16).to_str(),
+                            GroupCode::IndexedControllerSignatures(signatures.len() as u16)
+                                .to_str(),
                             signatures_str,
                         ]
                         .join("")

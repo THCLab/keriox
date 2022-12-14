@@ -173,7 +173,7 @@ pub mod http_handlers {
     };
     use itertools::Itertools;
     use keri::{
-        actor::{QueryError, SignedQueryError, prelude::Message},
+        actor::{prelude::Message, QueryError, SignedQueryError},
         error::Error,
         event_message::cesr_adapter::ParsedEvent,
         event_parsing::primitives::CesrPrimitive,
