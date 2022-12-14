@@ -445,9 +445,14 @@ impl Watcher {
             let oobis = self
                 .0
                 .transport
-                .request_end_role(loc, er.cid, Role::Witness, er.eid)
+                .request_end_role(loc, er.cid, er.role, er.eid)
                 .await?;
-            self.0.process_ops(oobis).await?;
+            for m in oobis {
+                match m {
+                    Message::Op(op) => {self.0.process_op(op).await?;},
+                    Message::Notice(not) => {self.0.process_notice(not)?;},
+                }
+            };
             Ok(())
         } else {
             Err(OobiError::InvalidMessageType)?

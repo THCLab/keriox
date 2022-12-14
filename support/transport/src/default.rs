@@ -1,7 +1,7 @@
 use keri::{
     actor::{
         parse_op_stream,
-        simple_controller::{parse_response, PossibleResponse},
+        simple_controller::{parse_response, PossibleResponse}, parse_event_stream,
     },
     event_message::signed_event_message::{Message, Op},
     oobi::{LocationScheme, Role, Scheme},
@@ -147,18 +147,18 @@ where
         cid: IdentifierPrefix,
         role: Role,
         eid: IdentifierPrefix,
-    ) -> Result<Vec<Op>, TransportError<E>> {
+    ) -> Result<Vec<Message>, TransportError<E>> {
         // {url}/oobi/{cid}/{role}/{eid}
         let url = loc
             .url
             .join("oobi/")
             .unwrap()
-            .join(&cid.to_string())
+            .join(&format!("{}/", &cid.to_string()))
             .unwrap()
             .join(match role {
-                Role::Witness => "witness",
-                Role::Watcher => "watcher",
-                Role::Controller => "controller",
+                Role::Witness => "witness/",
+                Role::Watcher => "watcher/",
+                Role::Controller => "controller/",
             })
             .unwrap()
             .join(&eid.to_string())
@@ -171,7 +171,7 @@ where
                 .bytes()
                 .await
                 .map_err(|_| TransportError::NetworkError)?;
-            let ops = parse_op_stream(&body).map_err(|_| TransportError::InvalidResponse)?;
+            let ops = parse_event_stream(&body).map_err(|_| TransportError::InvalidResponse)?;
             Ok(ops)
         } else {
             let body = resp

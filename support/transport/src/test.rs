@@ -21,7 +21,7 @@ pub trait TestActor<E: Error> {
         cid: IdentifierPrefix,
         role: Role,
         eid: IdentifierPrefix,
-    ) -> Result<Vec<Op>, E>;
+    ) -> Result<Vec<Message>, E>;
 }
 
 pub type TestActorMap<E> = HashMap<(url::Host, u16), Arc<dyn TestActor<E> + Send + Sync>>;
@@ -119,7 +119,7 @@ where
         cid: IdentifierPrefix,
         role: Role,
         eid: IdentifierPrefix,
-    ) -> Result<Vec<Op>, TransportError<E>> {
+    ) -> Result<Vec<Message>, TransportError<E>> {
         let (host, port) = match loc.url.origin() {
             url::Origin::Tuple(_scheme, host, port) => (host, port),
             _ => return Err(TransportError::NetworkError),

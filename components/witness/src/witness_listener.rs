@@ -154,11 +154,11 @@ mod test {
             cid: IdentifierPrefix,
             role: Role,
             eid: IdentifierPrefix,
-        ) -> Result<Vec<Op>, WitnessError> {
+        ) -> Result<Vec<Message>, WitnessError> {
             let data = actix_web::web::Data::new(self.witness_data.clone());
             let resp = super::http_handlers::get_cid_oobi((cid, role, eid).into(), data).await?;
             let resp = resp.into_body().try_into_bytes().unwrap();
-            let resp = parse_op_stream(resp.as_ref()).unwrap();
+            let resp = parse_event_stream(resp.as_ref()).unwrap();
             Ok(resp)
         }
     }
