@@ -1,7 +1,7 @@
 use keri::{
     actor::{
-        parse_op_stream,
-        simple_controller::{parse_response, PossibleResponse}, parse_event_stream,
+        parse_event_stream, parse_op_stream,
+        simple_controller::{parse_response, PossibleResponse},
     },
     event_message::signed_event_message::{Message, Op},
     oobi::{LocationScheme, Role, Scheme},
