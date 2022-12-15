@@ -1,20 +1,27 @@
-use super::error::Error;
-use super::CesrPrimitive;
+use core::{fmt, str::FromStr};
+
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+use super::{error::Error, CesrPrimitive};
 use crate::event_parsing::{
     codes::{self_signing::SelfSigning, DerivationCode, PrimitiveCode},
     parsing::from_text_to_bytes,
 };
-use core::str::FromStr;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 /// Self Signing Derivations
 ///
 /// A self signing prefix derivation outputs a signature as its derivative (2.3.5)
-#[derive(Debug, PartialEq, Clone, Hash, Eq)]
+#[derive(PartialEq, Clone, Hash, Eq)]
 pub enum SelfSigningPrefix {
     Ed25519Sha512(Vec<u8>),
     ECDSAsecp256k1Sha256(Vec<u8>),
     Ed448(Vec<u8>),
+}
+
+impl fmt::Debug for SelfSigningPrefix {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self.to_str())
+    }
 }
 
 impl SelfSigningPrefix {

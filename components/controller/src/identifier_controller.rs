@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 use keri::{
     actor::{event_generator, prelude::Message, simple_controller::PossibleResponse},
@@ -14,8 +14,8 @@ use keri::{
         cesr_adapter::EventType,
         exchange::{Exchange, ExchangeMessage, ForwardTopic, FwdArgs, SignedExchange},
         key_event_message::KeyEvent,
-        signature::{Signature, SignerData},
-        signed_event_message::Op,
+        signature::{Nontransferable, Signature, SignerData},
+        signed_event_message::{Notice, Op},
         Digestible,
     },
     event_parsing::{parsers::parse_payload, path::MaterialPath, primitives::CesrPrimitive},
@@ -37,6 +37,7 @@ pub struct IdentifierController {
     pub source: Arc<Controller>,
     last_asked_index: MailboxReminder,
     last_asked_groups_index: MailboxReminder,
+    broadcasted_rcts: HashSet<(SelfAddressingPrefix, BasicPrefix)>,
 }
 
 impl IdentifierController {
@@ -46,6 +47,7 @@ impl IdentifierController {
             source: kel,
             last_asked_index: MailboxReminder::default(),
             last_asked_groups_index: MailboxReminder::default(),
+            broadcasted_rcts: HashSet::new(),
         }
     }
 
@@ -151,8 +153,8 @@ impl IdentifierController {
         .map_err(|_e| ControllerError::EventFormatError)
     }
 
-    /// Check signatures, updates database and send events to watcher or
-    /// witnesses.
+    /// Checks signatures and updates database.
+    /// Must call [`IdentifierController::notify_witnesses`] after calling this function if event is a key event.
     pub async fn finalize_event(
         &self,
         event: &[u8],
@@ -164,7 +166,7 @@ impl IdentifierController {
         match parsed_event {
             EventType::KeyEvent(ke) => {
                 let index = self.get_index(&ke.event)?;
-                self.source.finalize_key_event(&ke, &sig, index).await
+                self.source.finalize_key_event(&ke, &sig, index)
             }
             EventType::Rpy(rpy) => match rpy.get_route() {
                 ReplyRoute::EndRoleAdd(_) => Ok(self
@@ -323,10 +325,10 @@ impl IdentifierController {
         }
     }
 
-    /// Finalize group identifier
-    ///
-    /// Join event with signature, verify them and sends signed exn messages to
-    /// witness to be forwarded to group participants.
+    /// Finalizes group identifier.
+    /// Joins event with signature and verifies them.
+    /// Must call [`IdentifierController::notify_witnesses`] after calling this function
+    /// to send signed exn messages to witness to be forwarded to group participants.
     pub async fn finalize_group_incept(
         &mut self,
         group_event: &[u8],
@@ -344,9 +346,7 @@ impl IdentifierController {
         let own_index = self.get_index(&icp.event)?;
         let group_prefix = icp.event.get_prefix();
 
-        self.source
-            .finalize_key_event(&icp, &sig, own_index)
-            .await?;
+        self.source.finalize_key_event(&icp, &sig, own_index)?;
 
         let signature = AttachedSignaturePrefix {
             index: own_index as u16,
@@ -411,6 +411,33 @@ impl IdentifierController {
             }
         }
         Ok(group_prefix)
+    }
+
+    pub async fn notify_witnesses(&self) -> Result<usize, ControllerError> {
+        let mut n = 0;
+        let evs = self
+            .source
+            .partially_witnessed_escrow
+            .get_partially_witnessed_events();
+
+        for ev in evs {
+            // Elect the leader
+            // Leader is identifier with minimal index among all participants who
+            // sign event. He will send message to witness.
+            let id_idx = self.get_index(&ev.event_message.event).unwrap_or_default();
+            let min_sig_idx =
+                ev.signatures
+                    .iter()
+                    .map(|at| at.index)
+                    .min()
+                    .expect("event should have at least one signature") as usize;
+            if min_sig_idx == id_idx {
+                let witnesses = self.source.get_witnesses_at_event(&ev.event_message)?;
+                self.source.publish(&witnesses, &ev).await?;
+                n += 1;
+            }
+        }
+        Ok(n)
     }
 
     /// Helper function for getting the position of identifier's public key in
@@ -588,11 +615,12 @@ impl IdentifierController {
             let req = if from_who == about_who {
                 // process own mailbox
                 let req = self.process_own_mailbox(&res, &self.last_asked_index)?;
-                self.last_asked_index = MailboxReminder {
-                    receipt: res.receipt.len(),
-                    multisig: res.multisig.len(),
-                    delegate: res.delegate.len(),
-                };
+                // TODO: update last seen index
+                // self.last_asked_index = MailboxReminder {
+                //     receipt: res.receipt.len(),
+                //     multisig: res.multisig.len(),
+                //     delegate: res.delegate.len(),
+                // };
                 req
             } else {
                 // process group mailbox
@@ -615,5 +643,60 @@ impl IdentifierController {
             actions.extend(req)
         }
         Ok(actions)
+    }
+
+    /// Retrieve receipts for given `id` from the database and sends them to witnesses with IDs `wits`.
+    pub async fn broadcast_receipts(
+        &mut self,
+        wits: &[IdentifierPrefix],
+    ) -> Result<usize, ControllerError> {
+        let receipts = self
+            .source
+            .storage
+            .db
+            .get_receipts_nt(&self.id)
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+        let n = receipts.len();
+
+        // TODO: don't send the same receipt twice.
+        for rct in receipts {
+            for wit in wits {
+                // TODO: don't send receipt to witness who created it.
+                self.source
+                    .send_message_to(
+                        wit,
+                        Scheme::Http,
+                        Message::Notice(Notice::NontransferableRct(rct.clone())),
+                    )
+                    .await?;
+            }
+
+            // Remember event digest and witness ID to avoid sending the same receipt twice.
+            let digest = rct.body.event.receipted_event_digest;
+            for sig in rct.signatures {
+                match sig {
+                    Nontransferable::Indexed(sigs) => {
+                        for sig in sigs {
+                            let wits = self.source.storage.get_witnesses_at_event(
+                                rct.body.event.sn,
+                                &self.id,
+                                &digest,
+                            )?;
+                            self.broadcasted_rcts
+                                .insert((digest.clone(), wits[sig.index as usize].clone()));
+                        }
+                    }
+                    Nontransferable::Couplet(sigs) => {
+                        for (wit_id, _sig) in sigs {
+                            self.broadcasted_rcts.insert((digest.clone(), wit_id));
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(n)
     }
 }

@@ -1,17 +1,18 @@
-use core::str::FromStr;
+use core::{fmt, str::FromStr};
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use super::error::Error;
-use super::{verify, SelfSigningPrefix};
-use crate::event_parsing::codes::{DerivationCode, PrimitiveCode};
-use crate::event_parsing::primitives::CesrPrimitive;
+use super::{error::Error, verify, SelfSigningPrefix};
 use crate::{
-    event_parsing::{codes::basic::Basic as CesrBasic, parsing::from_text_to_bytes},
+    event_parsing::{
+        codes::{basic::Basic as CesrBasic, DerivationCode, PrimitiveCode},
+        parsing::from_text_to_bytes,
+        primitives::CesrPrimitive,
+    },
     keys::PublicKey,
 };
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Clone, Eq, PartialEq, Hash)]
 pub enum BasicPrefix {
     ECDSAsecp256k1NT(PublicKey),
     ECDSAsecp256k1(PublicKey),
@@ -21,6 +22,12 @@ pub enum BasicPrefix {
     Ed448(PublicKey),
     X25519(PublicKey),
     X448(PublicKey),
+}
+
+impl fmt::Debug for BasicPrefix {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self.to_str())
+    }
 }
 
 impl BasicPrefix {
