@@ -345,10 +345,9 @@ impl Controller {
         .map_err(|e| ControllerError::EventGenerationError(e.to_string()))
     }
 
-    /// Verify event signature, add it to kel, and publish it to witnesses.
-    /// Returns new established identifier prefix. Ment to be used for
-    /// identifiers with one keypair.
-    /// 
+    /// Verifies event signature and adds it to kel.
+    /// Returns new established identifier prefix.
+    /// Meant to be used for identifiers with one key pair.
     /// Must call [`IdentifierController::notify_witnesses`] after calling this function.
     pub fn finalize_inception(
         &self,
@@ -452,7 +451,8 @@ impl Controller {
             .witnesses)
     }
 
-    /// Must call [`IdentifierController::notify_witnesses`] after calling this function.
+    /// Adds signature to event and processes itt.
+    /// Should call [`IdentifierController::notify_witnesses`] after calling this function.
     fn finalize_key_event(
         &self,
         event: &EventMessage<KeyEvent>,

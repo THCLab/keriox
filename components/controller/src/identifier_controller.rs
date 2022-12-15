@@ -153,9 +153,7 @@ impl IdentifierController {
         .map_err(|_e| ControllerError::EventFormatError)
     }
 
-    /// Check signatures, updates database and send events to watcher or
-    /// witnesses.
-    ///
+    /// Checks signatures abd updates database.
     /// Must call [`IdentifierController::notify_witnesses`] after calling this function if event is a key event.
     pub async fn finalize_event(
         &self,
@@ -327,12 +325,10 @@ impl IdentifierController {
         }
     }
 
-    /// Finalize group identifier
-    ///
-    /// Join event with signature, verify them and sends signed exn messages to
-    /// witness to be forwarded to group participants.
-    ///
-    /// Must call [`IdentifierController::notify_witnesses`] after calling this function.
+    /// Finalizes group identifier.
+    /// Joins event with signature and verifies them.
+    /// Must call [`IdentifierController::notify_witnesses`] after calling this function
+    /// to send signed exn messages to witness to be forwarded to group participants.
     pub async fn finalize_group_incept(
         &mut self,
         group_event: &[u8],
