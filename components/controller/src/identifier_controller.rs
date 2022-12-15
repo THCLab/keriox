@@ -153,7 +153,7 @@ impl IdentifierController {
         .map_err(|_e| ControllerError::EventFormatError)
     }
 
-    /// Checks signatures abd updates database.
+    /// Checks signatures and updates database.
     /// Must call [`IdentifierController::notify_witnesses`] after calling this function if event is a key event.
     pub async fn finalize_event(
         &self,

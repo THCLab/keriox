@@ -451,7 +451,7 @@ impl Controller {
             .witnesses)
     }
 
-    /// Adds signature to event and processes itt.
+    /// Adds signature to event and processes it.
     /// Should call [`IdentifierController::notify_witnesses`] after calling this function.
     fn finalize_key_event(
         &self,
