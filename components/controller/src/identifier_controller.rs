@@ -423,12 +423,19 @@ impl IdentifierController {
             .source
             .partially_witnessed_escrow
             .get_partially_witnessed_events();
+
         for ev in evs {
             // Elect the leader
             // Leader is identifier with minimal index among all participants who
             // sign event. He will send message to witness.
-            let min_idx = ev.signatures.iter().map(|at| at.index).min();
-            if min_idx == Some(0) {
+            let id_idx = self.get_index(&ev.event_message.event).unwrap_or_default();
+            let min_sig_idx =
+                ev.signatures
+                    .iter()
+                    .map(|at| at.index)
+                    .min()
+                    .expect("event should have at least one signature") as usize;
+            if min_sig_idx == id_idx {
                 let witnesses = self.source.get_witnesses_at_event(&ev.event_message)?;
                 self.source.publish(&witnesses, &ev).await?;
                 n += 1;

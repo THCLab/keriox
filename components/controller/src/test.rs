@@ -446,7 +446,7 @@ async fn test_2_wit() -> Result<(), ControllerError> {
         IdentifierController::new(incepted_identifier, controller.clone())
     };
 
-    let n = ident_ctl.notify_witnesses().await?;
+    let n = ident_ctl.notify_witnesses().await.unwrap();
     assert_eq!(n, 1);
 
     // Quering mailbox to get receipts
@@ -459,7 +459,7 @@ async fn test_2_wit() -> Result<(), ControllerError> {
             .await?;
     }
 
-    let n = ident_ctl.notify_witnesses().await?;
+    let n = ident_ctl.notify_witnesses().await.unwrap();
     assert_eq!(n, 0);
 
     let n = ident_ctl
