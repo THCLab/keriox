@@ -282,6 +282,7 @@ pub mod http_handlers {
             .map(|msg| msg.to_string())
             .collect::<Vec<_>>()
             .join("");
+        println!("\nWitness responds with: {}", resp);
         Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())
             .body(resp))
