@@ -9,8 +9,9 @@ use keri::{
         exchange::ForwardTopic,
         signed_event_message::{Notice, SignedEventMessage, SignedNontransferableReceipt},
     },
+    event_parsing::primitives::CesrPrimitive,
     prefix::IdentifierPrefix,
-    query::query_event::MailboxResponse, event_parsing::primitives::CesrPrimitive,
+    query::query_event::MailboxResponse,
 };
 
 use super::{error::ControllerError, identifier_controller::IdentifierController};
@@ -101,20 +102,44 @@ impl IdentifierController {
             .iter()
             .skip(from_index.receipt)
             .map(|rct| {
-                println!("\t{}", String::from_utf8(Message::Notice(Notice::NontransferableRct(rct.clone())).to_cesr().unwrap()).unwrap());
+                println!(
+                    "\t{}",
+                    String::from_utf8(
+                        Message::Notice(Notice::NontransferableRct(rct.clone()))
+                            .to_cesr()
+                            .unwrap()
+                    )
+                    .unwrap()
+                );
                 self.process_receipt(&rct)
             })
             .collect::<Result<_, _>>()?;
         println!("\tmultisig: ");
         for event in mb.multisig.iter().skip(from_index.multisig) {
-            println!("\t{}", String::from_utf8(Message::Notice(Notice::Event(event.clone())).to_cesr().unwrap()).unwrap());
+            println!(
+                "\t{}",
+                String::from_utf8(
+                    Message::Notice(Notice::Event(event.clone()))
+                        .to_cesr()
+                        .unwrap()
+                )
+                .unwrap()
+            );
             self.process_group_multisig(&event).await?;
         }
-        println!("\tmultisig: ");
+        println!("\tdelegate: ");
         futures::stream::iter(&mb.delegate)
             .skip(from_index.delegate)
             .then(|del_event| {
-                println!("\t{}", String::from_utf8(Message::Notice(Notice::Event(del_event.clone())).to_cesr().unwrap()).unwrap());
+                println!(
+                    "\t{}",
+                    String::from_utf8(
+                        Message::Notice(Notice::Event(del_event.clone()))
+                            .to_cesr()
+                            .unwrap()
+                    )
+                    .unwrap()
+                );
                 self.process_group_delegate(del_event, group_id)
             })
             .try_filter_map(|del| async move { Ok(del) })

@@ -279,8 +279,7 @@ impl IdentifierController {
                     .map(|c| Signature::NonTransferable(c.clone()))
                     .chain([Signature::Transferable(
                         SignerData::JustSignatures,
-                        vec![data_signature]
-                        .into(),
+                        vec![data_signature].into(),
                     )])
                     .collect::<Vec<_>>()
             } else {
@@ -349,7 +348,8 @@ impl IdentifierController {
         };
 
         for (exn, signature) in exchanges {
-            self.finalize_exchange(&exn, signature, att_signature.clone()).await?;
+            self.finalize_exchange(&exn, signature, att_signature.clone())
+                .await?;
         }
         Ok(group_prefix)
     }

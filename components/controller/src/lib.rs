@@ -127,13 +127,14 @@ impl Controller {
 
     /// Sends identifier's endpoint information to identifiers's watchers.
     // TODO use stream instead of json
-    pub fn send_oobi_to_watcher(
+    pub async fn send_oobi_to_watcher(
         &self,
         id: &IdentifierPrefix,
         end_role_json: &str,
     ) -> Result<(), ControllerError> {
         for watcher in self.get_watchers(id)?.iter() {
-            self.send_oobi_to(watcher, Scheme::Http, end_role_json.as_bytes().to_vec())?;
+            self.send_oobi_to(watcher, Scheme::Http, end_role_json.as_bytes().to_vec())
+                .await?;
         }
 
         Ok(())
@@ -237,7 +238,7 @@ impl Controller {
         Ok(self.transport.send_query(loc, query).await?)
     }
 
-    fn send_oobi_to(
+    async fn send_oobi_to(
         &self,
         id: &IdentifierPrefix,
         scheme: Scheme,
@@ -256,13 +257,15 @@ impl Controller {
                 });
             }
         };
-        let client = reqwest::blocking::Client::new();
+        let client = reqwest::Client::new();
         client
             .post(format!("{}resolve", loc.url))
             .body(oobi)
             .send()
+            .await
             .map_err(|e| ControllerError::CommunicationError(e.to_string()))?
             .text()
+            .await
             .map_err(|e| ControllerError::CommunicationError(e.to_string()))?;
         Ok(())
     }
@@ -525,12 +528,8 @@ impl Controller {
 
         // TODO: send in one request
         for ev in kel {
-            self.send_message_to(
-                &dest_prefix,
-                Scheme::Http,
-                Message::Notice(ev),
-            )
-            .await?;
+            self.send_message_to(&dest_prefix, Scheme::Http, Message::Notice(ev))
+                .await?;
         }
         self.send_message_to(&dest_prefix, Scheme::Http, signed_rpy.clone())
             .await?;
