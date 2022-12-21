@@ -20,7 +20,7 @@ use keri::{
     event_message::{exchange::ExchangeMessage, key_event_message::KeyEvent},
 };
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 /// Struct for tracking what was the last indexes of processed mailbox messages.
 /// Events in mailbox aren't removed after getting them, so it prevents
 /// processing the same event multiple times.
@@ -108,7 +108,7 @@ impl IdentifierController {
         println!("\tmultisig: ");
         for event in mb.multisig.iter().skip(from_index.multisig) {
             println!("\t{}", String::from_utf8(Message::Notice(Notice::Event(event.clone())).to_cesr().unwrap()).unwrap());
-            self.process_group_multisig(event).await?;
+            self.process_group_multisig(&event).await?;
         }
         println!("\tmultisig: ");
         futures::stream::iter(&mb.delegate)

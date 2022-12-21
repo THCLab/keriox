@@ -255,7 +255,7 @@ impl IdentifierController {
         &self,
         exchange: &[u8],
         exn_signature: SelfSigningPrefix,
-        data_signature: SelfSigningPrefix,
+        data_signature: AttachedSignaturePrefix,
     ) -> Result<(), ControllerError> {
         // Join exn messages with their signatures and send it to witness.
         let material_path = MaterialPath::to_path("-a".into());
@@ -279,22 +279,14 @@ impl IdentifierController {
                     .map(|c| Signature::NonTransferable(c.clone()))
                     .chain([Signature::Transferable(
                         SignerData::JustSignatures,
-                        vec![AttachedSignaturePrefix {
-                            // TODO
-                            index: 0,
-                            signature: data_signature,
-                        }]
+                        vec![data_signature]
                         .into(),
                     )])
                     .collect::<Vec<_>>()
             } else {
                 vec![Signature::Transferable(
                     SignerData::JustSignatures,
-                    vec![AttachedSignaturePrefix {
-                        // TODO
-                        index: 0,
-                        signature: data_signature,
-                    }],
+                    vec![data_signature],
                 )]
             };
 
@@ -351,67 +343,13 @@ impl IdentifierController {
 
         self.source.finalize_key_event(&icp, &sig, own_index)?;
 
-        let signature = AttachedSignaturePrefix {
+        let att_signature = AttachedSignaturePrefix {
             index: own_index as u16,
             signature: sig,
         };
 
-        let sigs: Vec<_> = if let Some(receipts) = self.source.storage.get_nt_receipts(
-            &icp.event.get_prefix(),
-            icp.event.get_sn(),
-            &icp.event.get_digest(),
-        )? {
-            let couplets = receipts.signatures;
-            couplets
-                .into_iter()
-                .map(|c| Signature::NonTransferable(c))
-                .chain([Signature::Transferable(
-                    SignerData::JustSignatures,
-                    vec![signature],
-                )])
-                .collect::<Vec<_>>()
-        } else {
-            vec![Signature::Transferable(
-                SignerData::JustSignatures,
-                vec![signature],
-            )]
-        };
-
-        // Join exn messages with their signatures and send it to witness.
-        let material_path = MaterialPath::to_path("-a".into());
-        let attached_sig = sigs;
         for (exn, signature) in exchanges {
-            let (_, parsed_exn) =
-                parse_payload::<EventType>(&exn).map_err(|_e| ControllerError::EventFormatError)?;
-            let exn = if let EventType::Exn(exn) = parsed_exn {
-                exn
-            } else {
-                return Err(ControllerError::WrongEventTypeError);
-            };
-            let signature = vec![Signature::Transferable(
-                SignerData::LastEstablishment(self.id.clone()),
-                vec![AttachedSignaturePrefix {
-                    // TODO
-                    index: 0,
-                    signature,
-                }],
-            )];
-            let signer_exn = Message::Op(Op::Exchange(SignedExchange {
-                exchange_message: exn,
-                signature,
-                data_signature: (material_path.clone(), attached_sig.clone()),
-            }));
-            let wits = self.source.get_witnesses_at_event(&icp)?;
-            // TODO for now get first witness
-            if let Some(wit) = wits.get(0) {
-                self.source
-                    .send_message_to(
-                        &IdentifierPrefix::Basic(wit.clone()),
-                        keri::oobi::Scheme::Http,
-                        signer_exn,
-                    )
-                    .await?;
-            }
+            self.finalize_exchange(&exn, signature, att_signature.clone()).await?;
         }
         Ok(group_prefix)
     }
@@ -696,7 +634,7 @@ impl IdentifierController {
                     let from_who = from_who.ok_or(ControllerError::QueryArgumentError(
                         "Missing query sender identifier".into(),
                     ))?;
-                    actions.append(&mut self.mailbox_reponse(about_who, from_who, &mbx).await?);
+                    actions.append(&mut self.mailbox_reponse(from_who, about_who, &mbx).await?);
                 }
                 PossibleResponse::Ksn(_) => todo!(),
             };
