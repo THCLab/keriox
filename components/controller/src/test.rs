@@ -7,7 +7,7 @@ use keri::{
     event::event_data::EventData,
     event_message::signed_event_message::Notice,
     oobi::LocationScheme,
-    prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+    prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix, AttachedSignaturePrefix},
     signer::{CryptoBox, KeyManager},
 };
 use keri_transport::{
@@ -266,9 +266,10 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
         let signature = SelfSigningPrefix::Ed25519Sha512(km2.sign(&qry.serialize()?)?);
         delegator.finalize_query(vec![(qry, signature)]).await?;
     }
+    let data_signature = AttachedSignaturePrefix::new(signature_icp, 0);
 
     identifier1
-        .finalize_exchange(exn_messages[0].as_bytes(), signature_exn, signature_icp)
+        .finalize_exchange(exn_messages[0].as_bytes(), signature_exn, data_signature)
         .await?;
 
     println!("before get_kel_messages_with_receipts");
@@ -308,9 +309,10 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
                     let action_required = delegator.finalize_query(vec![(qry, signature)]).await?;
                     assert!(action_required.is_empty());
                 }
+                let data_signature = AttachedSignaturePrefix::new(signature_ixn, 0);
 
                 delegator
-                    .finalize_exchange(&exn.serialize()?, signature_exn, signature_ixn)
+                    .finalize_exchange(&exn.serialize()?, signature_exn, data_signature)
                     .await?;
 
                 // ixn was accepted

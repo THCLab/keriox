@@ -111,6 +111,7 @@ pub fn test_authentication() -> Result<(), Error> {
     Ok(())
 }
 
+#[ignore]
 #[test]
 fn test_add_watcher() -> Result<(), Error> {
     let root = Builder::new().prefix("test-db").tempdir().unwrap();

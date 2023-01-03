@@ -30,7 +30,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         scheme: Scheme::Http,
         url: "http://127.0.0.1:3232".parse()?,
     };
-    let witness_oobi_json = serde_json::to_string(&witness_oobi).unwrap();
+    let _witness_oobi_json = serde_json::to_string(&witness_oobi).unwrap();
     let witness_basic_prefix: BasicPrefix =
         "BJq7UABlttINuWJh1Xl2lkqZG4NTdUdqnbFJDa6ZyxCC".parse()?;
 
