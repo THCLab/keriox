@@ -352,7 +352,7 @@ impl Controller {
     /// Returns new established identifier prefix.
     /// Meant to be used for identifiers with one key pair.
     /// Must call [`IdentifierController::notify_witnesses`] after calling this function.
-    pub fn finalize_inception(
+    pub async fn finalize_inception(
         &self,
         event: &[u8],
         sig: &SelfSigningPrefix,

@@ -38,7 +38,7 @@ async fn test_group_incept() -> Result<(), ControllerError> {
         let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(icp_event.as_bytes())?);
 
         let incepted_identifier =
-            controller.finalize_inception(icp_event.as_bytes(), &signature)?;
+            controller.finalize_inception(icp_event.as_bytes(), &signature).await?;
         IdentifierController::new(incepted_identifier, controller.clone())
     };
     identifier1.notify_witnesses().await?;
@@ -51,7 +51,7 @@ async fn test_group_incept() -> Result<(), ControllerError> {
         let signature = SelfSigningPrefix::Ed25519Sha512(km2.sign(icp_event.as_bytes())?);
 
         let incepted_identifier =
-            controller.finalize_inception(icp_event.as_bytes(), &signature)?;
+            controller.finalize_inception(icp_event.as_bytes(), &signature).await?;
         IdentifierController::new(incepted_identifier, controller.clone())
     };
     identifier2.notify_witnesses().await?;
@@ -153,7 +153,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
         let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(icp_event.as_bytes())?);
 
         let incepted_identifier =
-            controller.finalize_inception(icp_event.as_bytes(), &signature)?;
+            controller.finalize_inception(icp_event.as_bytes(), &signature).await?;
         IdentifierController::new(incepted_identifier, controller.clone())
     };
     identifier1.notify_witnesses().await?;
@@ -191,7 +191,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
         let signature = SelfSigningPrefix::Ed25519Sha512(km2.sign(icp_event.as_bytes())?);
 
         let incepted_identifier =
-            controller2.finalize_inception(icp_event.as_bytes(), &signature)?;
+            controller2.finalize_inception(icp_event.as_bytes(), &signature).await?;
         IdentifierController::new(incepted_identifier, controller2.clone())
     };
     delegator.notify_witnesses().await?;
@@ -430,7 +430,7 @@ async fn test_2_wit() -> Result<(), ControllerError> {
         let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(icp_event.as_bytes())?);
 
         let incepted_identifier =
-            controller.finalize_inception(icp_event.as_bytes(), &signature)?;
+            controller.finalize_inception(icp_event.as_bytes(), &signature).await?;
         IdentifierController::new(incepted_identifier, controller.clone())
     };
 

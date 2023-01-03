@@ -542,11 +542,12 @@ impl IdentifierController {
         let req = if from_who == about_who {
             // process own mailbox
             let req = self.process_own_mailbox(res, &self.last_asked_index)?;
-            self.last_asked_index = MailboxReminder {
-                receipt: res.receipt.len(),
-                multisig: res.multisig.len(),
-                delegate: res.delegate.len(),
-            };
+            // TODO: update last seen index
+            // self.last_asked_index = MailboxReminder {
+            //     receipt: res.receipt.len(),
+            //     multisig: res.multisig.len(),
+            //     delegate: res.delegate.len(),
+            // };
             req
         } else {
             // process group mailbox
