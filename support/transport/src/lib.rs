@@ -10,6 +10,7 @@ use keri::{
 use serde::Deserialize;
 
 pub mod default;
+pub mod http;
 pub mod test;
 
 /// Transport trait allows customizing behavior of actors when it comes to making net requests.

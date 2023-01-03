@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 async-trait = "0.1.57"
+bytes = "1.1.0"
 keri = { path = "../../keriox_core", features = ["controller", "oobi", "query"] }
 reqwest = "0.11.11"
 serde = "1.0"
