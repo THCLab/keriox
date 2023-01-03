@@ -170,9 +170,10 @@ impl OobiManager {
 }
 
 pub mod error {
+    use serde::{Deserialize, Serialize};
     use thiserror::Error;
 
-    #[derive(Error, Debug)]
+    #[derive(Error, Debug, Serialize, Deserialize)]
     pub enum OobiError {
         #[error("Keri error")]
         Keri(#[from] crate::error::Error),

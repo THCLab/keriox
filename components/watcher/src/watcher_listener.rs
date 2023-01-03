@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{path::Path, sync::Arc};
 
 use actix_web::{dev::Server, web, App, HttpServer};
 use keri::{error::Error, oobi::LocationScheme, prefix::BasicPrefix};
@@ -7,7 +7,7 @@ use keri_transport::default::DefaultTransport;
 use crate::watcher::{Watcher, WatcherData, WatcherError};
 
 pub struct WatcherListener {
-    watcher_data: Watcher,
+    watcher_data: Arc<Watcher>,
 }
 
 impl WatcherListener {
@@ -30,7 +30,7 @@ impl WatcherListener {
             Box::new(DefaultTransport::new()),
         )
         .map(|watcher_data| Self {
-            watcher_data: Watcher(watcher_data),
+            watcher_data: Arc::new(Watcher(watcher_data)),
         })
     }
 
@@ -42,12 +42,30 @@ impl WatcherListener {
         HttpServer::new(move || {
             App::new()
                 .app_data(state.clone())
-                .service(http_handlers::get_eid_oobi)
-                .service(http_handlers::get_cid_oobi)
-                .service(http_handlers::resolve_oobi)
-                .service(http_handlers::process_notice)
-                .service(http_handlers::process_query)
-                .service(http_handlers::process_reply)
+                .route(
+                    "/oobi/{id}",
+                    actix_web::web::get().to(http_handlers::get_eid_oobi),
+                )
+                .route(
+                    "/oobi/{cid}/{role}/{eid}",
+                    actix_web::web::get().to(http_handlers::get_cid_oobi),
+                )
+                .route(
+                    "/process",
+                    actix_web::web::post().to(http_handlers::process_notice),
+                )
+                .route(
+                    "/query",
+                    actix_web::web::post().to(http_handlers::process_query),
+                )
+                .route(
+                    "/register",
+                    actix_web::web::post().to(http_handlers::process_reply),
+                )
+                .route(
+                    "/resolve",
+                    actix_web::web::post().to(http_handlers::resolve_oobi),
+                )
         })
         .bind((host, port))
         .unwrap()
@@ -72,10 +90,10 @@ impl WatcherListener {
 
 pub mod http_handlers {
 
-    use actix_web::{
-        get, http::header::ContentType, post, web, HttpResponse, Responder, ResponseError,
-    };
-    use derive_more::{Display, Error, From};
+    use std::sync::Arc;
+
+    use actix_web::{http::header::ContentType, web, HttpResponse, ResponseError};
+
     use itertools::Itertools;
     use keri::{
         error::Error,
@@ -89,11 +107,10 @@ pub mod http_handlers {
 
     use crate::watcher::{Watcher, WatcherError};
 
-    #[post("/process")]
-    async fn process_notice(
+    pub async fn process_notice(
         body: web::Bytes,
-        data: web::Data<Watcher>,
-    ) -> Result<impl Responder, ApiError> {
+        data: web::Data<Arc<Watcher>>,
+    ) -> Result<HttpResponse, WatcherError> {
         println!(
             "\nGot events to process: \n{}",
             String::from_utf8_lossy(&body)
@@ -105,11 +122,10 @@ pub mod http_handlers {
             .body(()))
     }
 
-    #[post("/query")]
-    async fn process_query(
+    pub async fn process_query(
         body: web::Bytes,
-        data: web::Data<Watcher>,
-    ) -> Result<impl Responder, ApiError> {
+        data: web::Data<Arc<Watcher>>,
+    ) -> Result<HttpResponse, WatcherError> {
         println!(
             "\nGot queries to process: \n{}",
             String::from_utf8_lossy(&body)
@@ -127,11 +143,10 @@ pub mod http_handlers {
             .body(resp))
     }
 
-    #[post("/register")]
-    async fn process_reply(
+    pub async fn process_reply(
         body: web::Bytes,
-        data: web::Data<Watcher>,
-    ) -> Result<impl Responder, ApiError> {
+        data: web::Data<Arc<Watcher>>,
+    ) -> Result<HttpResponse, WatcherError> {
         println!(
             "\nGot replies to process: \n{}",
             String::from_utf8_lossy(&body)
@@ -144,11 +159,10 @@ pub mod http_handlers {
             .body(()))
     }
 
-    #[post("/resolve")]
-    async fn resolve_oobi(
+    pub async fn resolve_oobi(
         body: web::Bytes,
-        data: web::Data<Watcher>,
-    ) -> Result<impl Responder, ApiError> {
+        data: web::Data<Arc<Watcher>>,
+    ) -> Result<HttpResponse, WatcherError> {
         println!(
             "\nGot oobi to resolve: \n{}",
             String::from_utf8_lossy(&body)
@@ -161,7 +175,9 @@ pub mod http_handlers {
             LocationScheme(LocationScheme),
         }
 
-        match serde_json::from_slice(&body)? {
+        match serde_json::from_slice(&body)
+            .map_err(|err| WatcherError::KeriError(Error::JsonDeserError))?
+        {
             RequestData::EndRole(end_role) => {
                 data.resolve_end_role(end_role).await?;
             }
@@ -170,14 +186,13 @@ pub mod http_handlers {
             }
         }
 
-        Ok(HttpResponse::Ok())
+        Ok(HttpResponse::Ok().finish())
     }
 
-    #[get("/oobi/{id}")]
-    async fn get_eid_oobi(
+    pub async fn get_eid_oobi(
         eid: web::Path<IdentifierPrefix>,
-        data: web::Data<Watcher>,
-    ) -> Result<impl Responder, ApiError> {
+        data: web::Data<Arc<Watcher>>,
+    ) -> Result<HttpResponse, WatcherError> {
         let loc_scheme = data.0.get_loc_scheme_for_id(&eid)?;
         let oobis: Vec<u8> = loc_scheme
             .into_iter()
@@ -197,11 +212,10 @@ pub mod http_handlers {
             .body(String::from_utf8(oobis).unwrap()))
     }
 
-    #[get("/oobi/{cid}/{role}/{eid}")]
-    async fn get_cid_oobi(
+    pub async fn get_cid_oobi(
         path: web::Path<(IdentifierPrefix, Role, IdentifierPrefix)>,
-        data: web::Data<Watcher>,
-    ) -> Result<impl Responder, ApiError> {
+        data: web::Data<Arc<Watcher>>,
+    ) -> Result<HttpResponse, WatcherError> {
         let (cid, role, eid) = path.into_inner();
 
         let end_role = data.0.oobi_manager.get_end_role(&cid, role)?;
@@ -227,33 +241,12 @@ pub mod http_handlers {
             .body(String::from_utf8(oobis).unwrap()))
     }
 
-    #[derive(Debug, Display, Error, From)]
-    pub enum ApiError {
-        #[display(fmt = "DB error")]
-        #[from]
-        DbError(keri::database::DbError),
-
-        #[display(fmt = "deserialize error")]
-        #[from]
-        DeserializeError(serde_json::Error),
-
-        #[display(fmt = "keri error")]
-        #[from]
-        KeriError(Error),
-
-        #[display(fmt = "watcher error")]
-        #[from]
-        WatcherError(WatcherError),
-    }
-
-    impl ResponseError for ApiError {
+    impl ResponseError for WatcherError {
         fn status_code(&self) -> StatusCode {
             match self {
-                ApiError::DbError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+                WatcherError::DbError(_) => StatusCode::INTERNAL_SERVER_ERROR,
 
-                ApiError::DeserializeError(_) => StatusCode::BAD_REQUEST,
-
-                ApiError::KeriError(err) => match err {
+                WatcherError::KeriError(err) => match err {
                     Error::Base64DecodingError { .. }
                     | Error::DeserializeError(_)
                     | Error::IncorrectDigest => StatusCode::BAD_REQUEST,
@@ -265,16 +258,104 @@ pub mod http_handlers {
                     _ => StatusCode::INTERNAL_SERVER_ERROR,
                 },
 
-                ApiError::WatcherError(err) => match err {
-                    WatcherError::OobiError(err) => match err {
-                        OobiError::SignerMismatch => StatusCode::FORBIDDEN,
-
-                        _ => StatusCode::INTERNAL_SERVER_ERROR,
-                    },
+                WatcherError::OobiError(err) => match err {
+                    OobiError::SignerMismatch => StatusCode::FORBIDDEN,
 
                     _ => StatusCode::INTERNAL_SERVER_ERROR,
                 },
+
+                _ => StatusCode::INTERNAL_SERVER_ERROR,
             }
+        }
+
+        fn error_response(&self) -> HttpResponse {
+            HttpResponse::build(self.status_code()).json(self)
+        }
+    }
+}
+
+mod test {
+    use actix_web::{body::MessageBody, web::Bytes};
+    use keri::{
+        actor::{
+            parse_event_stream, parse_op_stream,
+            simple_controller::{parse_response, PossibleResponse},
+        },
+        event_message::signed_event_message::{Message, Op},
+        oobi::Role,
+        prefix::IdentifierPrefix,
+        query::query_event::{QueryRoute, SignedQuery},
+    };
+
+    use crate::WatcherError;
+
+    #[async_trait::async_trait]
+    impl keri_transport::test::TestActor<WatcherError> for super::WatcherListener {
+        async fn send_message(&self, msg: Message) -> Result<(), WatcherError> {
+            let payload = String::from_utf8(msg.to_cesr().unwrap()).unwrap();
+            let data = actix_web::web::Data::new(self.watcher_data.clone());
+            match msg {
+                Message::Notice(_) => {
+                    super::http_handlers::process_notice(Bytes::from(payload), data).await?;
+                }
+                Message::Op(op) => match op {
+                    Op::Query(_) => {
+                        super::http_handlers::process_query(Bytes::from(payload), data).await?;
+                    }
+                    Op::Reply(_) => {
+                        super::http_handlers::process_reply(Bytes::from(payload), data).await?;
+                    }
+                    Op::Exchange(_) => {
+                        panic!("watcher doesn't support exchange")
+                    }
+                },
+            }
+
+            Ok(())
+        }
+        async fn send_query(&self, query: SignedQuery) -> Result<PossibleResponse, WatcherError> {
+            let payload =
+                String::from_utf8(Message::Op(Op::Query(query.clone())).to_cesr().unwrap())
+                    .unwrap();
+            let data = actix_web::web::Data::new(self.watcher_data.clone());
+            let resp = super::http_handlers::process_query(Bytes::from(payload), data).await?;
+            let resp = resp.into_body().try_into_bytes().unwrap();
+            match query.query.event.content.data.route {
+                QueryRoute::Ksn { .. } => {
+                    let resp = parse_op_stream(&resp).unwrap();
+                    let resp = resp.into_iter().next().unwrap();
+                    let Op::Reply(reply) = resp else { panic!("wrong response type") };
+                    Ok(PossibleResponse::Ksn(reply))
+                }
+                QueryRoute::Log { .. } => {
+                    let log = parse_event_stream(&resp).unwrap();
+                    Ok(PossibleResponse::Kel(log))
+                }
+                QueryRoute::Mbx { .. } => {
+                    let resp = String::from_utf8(resp.to_vec()).unwrap();
+                    let resp = parse_response(&resp).unwrap();
+                    Ok(resp)
+                }
+            }
+        }
+        async fn request_loc_scheme(&self, eid: IdentifierPrefix) -> Result<Vec<Op>, WatcherError> {
+            let data = actix_web::web::Data::new(self.watcher_data.clone());
+            let resp = super::http_handlers::get_eid_oobi(eid.into(), data).await?;
+            let resp = resp.into_body().try_into_bytes().unwrap();
+            let resp = parse_op_stream(resp.as_ref()).unwrap();
+            Ok(resp)
+        }
+        async fn request_end_role(
+            &self,
+            cid: IdentifierPrefix,
+            role: Role,
+            eid: IdentifierPrefix,
+        ) -> Result<Vec<Message>, WatcherError> {
+            let data = actix_web::web::Data::new(self.watcher_data.clone());
+            let resp = super::http_handlers::get_cid_oobi((cid, role, eid).into(), data).await?;
+            let resp = resp.into_body().try_into_bytes().unwrap();
+            let resp = parse_event_stream(resp.as_ref()).unwrap();
+            Ok(resp)
         }
     }
 }

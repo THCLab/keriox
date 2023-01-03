@@ -27,6 +27,7 @@ use keri::{
 };
 use keri_transport::Transport;
 use rand::prelude::SliceRandom;
+use serde::{Serialize, Deserialize};
 use witness::WitnessError;
 
 pub struct WatcherData {
@@ -468,7 +469,7 @@ impl Watcher {
     }
 }
 
-#[derive(Debug, Display, Error, From)]
+#[derive(Debug, Display, Error, From, Serialize, Deserialize)]
 pub enum WatcherError {
     #[display(fmt = "network request failed")]
     #[from]

@@ -61,7 +61,7 @@ where
     // async fn resolve_end_role(&self, role: EndRole) -> Result<(), TransportError>;
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, serde::Serialize, serde::Deserialize)]
 pub enum TransportError<E> {
     #[error("network error")]
     NetworkError,
