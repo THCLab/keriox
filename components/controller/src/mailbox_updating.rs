@@ -4,18 +4,18 @@ use keri::{
     actor::{event_generator, prelude::Message},
     event::{
         event_data::EventData,
-        sections::seal::{EventSeal, Seal},
+        sections::seal::{EventSeal, Seal}, EventMessage,
     },
     event_message::signed_event_message::{
         Notice, SignedEventMessage, SignedNontransferableReceipt,
     },
+    event_message::key_event_message::KeyEvent,
     mailbox::{
         exchange::{ExchangeMessage, ForwardTopic},
         MailboxResponse,
     },
-    prefix::IdentifierPrefix,
+    prefix::{IdentifierPrefix},
 };
-use keri::{event::EventMessage, event_message::key_event_message::KeyEvent};
 
 #[derive(Default, Debug)]
 /// Struct for tracking what was the last indexes of processed mailbox messages.

@@ -192,8 +192,7 @@ pub mod http_handlers {
     use keri::{
         actor::{error::ActorError, prelude::Message},
         error::Error,
-        event_message::cesr_adapter::ParsedEvent,
-        event_parsing::primitives::CesrPrimitive,
+        event_message::signed_event_message::Op,
         oobi::Role,
         prefix::IdentifierPrefix,
     };
@@ -211,18 +210,18 @@ pub mod http_handlers {
         let oobis: Vec<u8> = loc_scheme
             .into_iter()
             .map(|sr| {
-                let sed: ParsedEvent = sr.into();
+                let sed = Message::Op(Op::Reply(sr));
                 sed.to_cesr().map_err(|_| Error::CesrError)
             })
             .flatten_ok()
             .try_collect()
             .map_err(ActorError::KeriError)?;
 
-        println!(
-            "\nSending {} oobi: \n {}",
-            &eid.to_str(),
-            String::from_utf8(oobis.clone()).unwrap_or_default()
-        );
+        // println!(
+        //     "\nSending {} oobi: \n {}",
+        //     &eid.to_str(),
+        //     String::from_utf8(oobis.clone()).unwrap_or_default()
+        // );
         Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())
             .body(String::from_utf8(oobis).unwrap()))
@@ -257,19 +256,19 @@ pub mod http_handlers {
             .into_iter()
             .chain(loc_scheme.into_iter())
             .map(|sr| {
-                let sed: ParsedEvent = sr.into();
+                let sed = Message::Op(Op::Reply(sr));
                 sed.to_cesr().map_err(|_| Error::CesrError)
             })
             .flatten_ok()
             .collect::<Result<Vec<_>, _>>()
             .map_err(ActorError::KeriError)?;
         let res: Vec<u8> = cont_kel.into_iter().chain(oobis).collect();
-        println!(
-            "\nSending {} obi from its witness {}:\n{}",
-            cid.to_str(),
-            eid.to_str(),
-            String::from_utf8_lossy(&res)
-        );
+        // println!(
+        //     "\nSending {} obi from its witness {}:\n{}",
+        //     cid.to_str(),
+        //     eid.to_str(),
+        //     String::from_utf8_lossy(&res)
+        // );
 
         Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())

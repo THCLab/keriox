@@ -5,11 +5,7 @@ use figment::{
     providers::{Format, Json},
     Figment,
 };
-use keri::{
-    event_parsing::primitives::CesrPrimitive,
-    oobi::{LocationScheme, Scheme},
-    prefix::IdentifierPrefix,
-};
+use keri::{prefix::{CesrPrimitive, IdentifierPrefix}, oobi::{LocationScheme, Scheme}};
 use serde::Deserialize;
 use structopt::StructOpt;
 use witness::WitnessListener;

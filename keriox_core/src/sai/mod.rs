@@ -4,10 +4,10 @@ mod digest;
 
 use core::{fmt, str::FromStr};
 
+use cesrox::primitives::CesrPrimitive;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use self::derivation::SelfAddressing;
-use crate::event_parsing::primitives::CesrPrimitive;
 
 #[derive(PartialEq, Clone, Hash, Eq)]
 pub struct SelfAddressingPrefix {

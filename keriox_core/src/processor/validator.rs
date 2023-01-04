@@ -423,17 +423,16 @@ impl EventValidator {
 
 #[test]
 fn test_validate_seal() -> Result<(), Error> {
+    use cesrox::parse;
     use std::{convert::TryFrom, fs, sync::Arc};
 
     use tempfile::Builder;
 
     use crate::{
         event_message::{
-            cesr_adapter::EventType,
             signed_event_message::{Message, Notice},
             Digestible,
         },
-        event_parsing::parsers::parse,
         processor::{basic_processor::BasicProcessor, Processor},
     };
 
@@ -448,14 +447,14 @@ fn test_validate_seal() -> Result<(), Error> {
 
     // Process icp.
     let delegator_icp_raw = br#"{"v":"KERI10JSON00012b_","t":"icp","d":"EA_SbBUZYwqLVlAAn14d6QUBQCSReJlZ755JqTgmRhXH","i":"EA_SbBUZYwqLVlAAn14d6QUBQCSReJlZ755JqTgmRhXH","s":"0","kt":"1","k":["DKiNnDmdOkcBjcAqL2FFhMZnSlPfNyGrJlCjJmX5b1nU"],"nt":"1","n":["EMP7Lg6BtehOYZt2RwOqXLNfMUiUllejAp8G_5EiANXR"],"bt":"0","b":[],"c":[],"a":[]}-AABAAArkDBeflIAo4kBsKnc754XHJvdLnf04iq-noTFEJkbv2MeIGZtx6lIfJPmRSEmFMUkFW4otRrMeBGQ0-nlhHEE"#;
-    let parsed = parse::<EventType>(delegator_icp_raw).unwrap().1;
+    let parsed = parse(delegator_icp_raw).unwrap().1;
     let deserialized_icp = Message::try_from(parsed).unwrap();
     event_processor.process(&deserialized_icp)?;
     let delegator_id = "EA_SbBUZYwqLVlAAn14d6QUBQCSReJlZ755JqTgmRhXH".parse()?;
 
     // Delegated inception event.
     let dip_raw = br#"{"v":"KERI10JSON00015f_","t":"dip","d":"EHng2fV42DdKb5TLMIs6bbjFkPNmIdQ5mSFn6BTnySJj","i":"EHng2fV42DdKb5TLMIs6bbjFkPNmIdQ5mSFn6BTnySJj","s":"0","kt":"1","k":["DLitcfMnabnLt-PNCaXdVwX45wsG93Wd8eW9QiZrlKYQ"],"nt":"1","n":["EDjXvWdaNJx7pAIr72Va6JhHxc7Pf4ScYJG496ky8lK8"],"bt":"0","b":[],"c":[],"a":[],"di":"EA_SbBUZYwqLVlAAn14d6QUBQCSReJlZ755JqTgmRhXH"}-AABAABv6Q3s-1Tif-ksrx7ul9OKyOL_ZPHHp6lB9He4n6kswjm9VvHXzWB3O7RS2OQNWhx8bd3ycg9bWRPRrcKADoYC-GAB0AAAAAAAAAAAAAAAAAAAAAABEJtQndkvwnMpVGE5oVVbLWSCm-jLviGw1AOOkzBvNwsS"#;
-    let parsed = parse::<EventType>(dip_raw).unwrap().1;
+    let parsed = parse(dip_raw).unwrap().1;
     let msg = Message::try_from(parsed).unwrap();
     if let Message::Notice(Notice::Event(dip)) = msg {
         let delegated_event_digest = dip.event_message.event.get_digest();
@@ -475,7 +474,7 @@ fn test_validate_seal() -> Result<(), Error> {
 
         // Process delegating event.
         let delegating_event_raw = br#"{"v":"KERI10JSON00013a_","t":"ixn","d":"EJtQndkvwnMpVGE5oVVbLWSCm-jLviGw1AOOkzBvNwsS","i":"EA_SbBUZYwqLVlAAn14d6QUBQCSReJlZ755JqTgmRhXH","s":"1","p":"EA_SbBUZYwqLVlAAn14d6QUBQCSReJlZ755JqTgmRhXH","a":[{"i":"EHng2fV42DdKb5TLMIs6bbjFkPNmIdQ5mSFn6BTnySJj","s":"0","d":"EHng2fV42DdKb5TLMIs6bbjFkPNmIdQ5mSFn6BTnySJj"}]}-AABAADFmoctrQkBbm47vuk7ejMbQ1y5vKD0Nfo8cqzbETZAlEPdbgVRSFta1-Bpv0y1RiDrCxa_0IOp906gYqDPXIwG"#;
-        let parsed = parse::<EventType>(delegating_event_raw).unwrap().1;
+        let parsed = parse(delegating_event_raw).unwrap().1;
         let deserialized_ixn = Message::try_from(parsed).unwrap();
         event_processor.process(&deserialized_ixn)?;
 

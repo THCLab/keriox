@@ -1,10 +1,16 @@
 use super::error::Error;
 use super::SelfSigningPrefix;
-use crate::event_parsing::codes::attached_signature_code::AttachedSignatureCode;
-use crate::event_parsing::codes::self_signing::SelfSigning;
-use crate::event_parsing::codes::{DerivationCode, PrimitiveCode};
-use crate::event_parsing::parsing::from_text_to_bytes;
-use crate::event_parsing::primitives::CesrPrimitive;
+use cesrox::{
+    conversion::from_text_to_bytes,
+    derivation_code::DerivationCode,
+    primitives::{
+        codes::{
+            attached_signature_code::AttachedSignatureCode, self_signing::SelfSigning,
+            PrimitiveCode,
+        },
+        CesrPrimitive,
+    },
+};
 use core::str::FromStr;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 

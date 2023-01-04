@@ -4,11 +4,11 @@ use crate::{
         event_data::{DelegatedInceptionEvent, EventData, InceptionEvent},
         SerializationFormats,
     },
-    event_parsing::codes::self_addressing::dummy_prefix,
     sai::derivation::SelfAddressing,
 };
 
 use super::{serialization_info::SerializationInfo, EventTypeTag, Typeable};
+use cesrox::primitives::codes::self_addressing::dummy_prefix;
 use serde::Serialize;
 use serde_hex::{Compact, SerHex};
 

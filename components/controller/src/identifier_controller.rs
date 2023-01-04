@@ -1,7 +1,7 @@
 use std::{collections::HashSet, sync::Arc};
 
 use keri::{
-    actor::{event_generator, prelude::Message, simple_controller::PossibleResponse},
+    actor::{event_generator, prelude::Message, simple_controller::PossibleResponse, MaterialPath},
     event::{
         event_data::EventData,
         sections::{
@@ -11,24 +11,21 @@ use keri::{
         EventMessage, SerializationFormats,
     },
     event_message::{
-        cesr_adapter::EventType,
+        cesr_adapter::{parse_event_type, EventType},
         key_event_message::KeyEvent,
         signature::{Nontransferable, Signature, SignerData},
         signed_event_message::{Notice, Op},
         Digestible,
     },
-    event_parsing::{parsers::parse_payload, path::MaterialPath, primitives::CesrPrimitive},
-    mailbox::{
-        exchange::{Exchange, ExchangeMessage, ForwardTopic, FwdArgs, SignedExchange},
-        MailboxResponse,
-    },
     oobi::{LocationScheme, Role, Scheme},
-    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+    prefix::{
+        AttachedSignaturePrefix, BasicPrefix, CesrPrimitive, IdentifierPrefix, SelfSigningPrefix,
+    },
     query::{
         query_event::{QueryArgs, QueryArgsMbx, QueryEvent, QueryRoute, QueryTopics, SignedQuery},
         reply_event::ReplyRoute,
     },
-    sai::{derivation::SelfAddressing, SelfAddressingPrefix},
+    sai::{derivation::SelfAddressing, SelfAddressingPrefix}, mailbox::{MailboxResponse, exchange::{ForwardTopic, Exchange, SignedExchange, ExchangeMessage, FwdArgs}},
 };
 
 use super::mailbox_updating::ActionRequired;
@@ -162,9 +159,8 @@ impl IdentifierController {
         event: &[u8],
         sig: SelfSigningPrefix,
     ) -> Result<(), ControllerError> {
-        let parsed_event = parse_payload::<EventType>(event)
-            .map_err(|_e| ControllerError::EventParseError)?
-            .1;
+        let parsed_event =
+            parse_event_type(&event).map_err(|_e| ControllerError::EventFormatError)?;
         match parsed_event {
             EventType::KeyEvent(ke) => {
                 let index = self.get_index(&ke.event)?;
@@ -259,8 +255,8 @@ impl IdentifierController {
         // Join exn messages with their signatures and send it to witness.
         let material_path = MaterialPath::to_path("-a".into());
         // let attached_sig = sigs;
-        let (_, parsed_exn) =
-            parse_payload::<EventType>(exchange).map_err(|_e| ControllerError::EventFormatError)?;
+        let parsed_exn =
+            parse_event_type(exchange).map_err(|_e| ControllerError::EventFormatError)?;
         if let EventType::Exn(exn) = parsed_exn {
             let Exchange::Fwd {
                 args: _,
@@ -329,8 +325,8 @@ impl IdentifierController {
         exchanges: Vec<(Vec<u8>, SelfSigningPrefix)>,
     ) -> Result<IdentifierPrefix, ControllerError> {
         // Join icp event with signature
-        let (_, key_event) = parse_payload::<EventType>(&group_event)
-            .map_err(|_e| ControllerError::EventFormatError)?;
+        let key_event =
+            parse_event_type(&group_event).map_err(|_e| ControllerError::EventFormatError)?;
         let icp = if let EventType::KeyEvent(icp) = key_event {
             icp
         } else {

@@ -6,8 +6,9 @@ use keri::{
     actor::{error::ActorError, simple_controller::SimpleController},
     database::{escrow::EscrowDb, SledEventDatabase},
     error::Error,
-    prefix::IdentifierPrefix,
-    transport::default::DefaultTransport,
+    oobi::LocationScheme,
+    prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+    signer::{CryptoBox, KeyManager},
 };
 use tempfile::Builder;
 use url::Url;

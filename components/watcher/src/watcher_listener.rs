@@ -121,11 +121,10 @@ pub mod http_handlers {
     use actix_web::{http::header::ContentType, web, HttpResponse, ResponseError};
     use itertools::Itertools;
     use keri::{
-        actor::error::ActorError,
+        actor::{prelude::Message, error::ActorError},
         error::Error,
-        event_message::cesr_adapter::ParsedEvent,
-        event_parsing::primitives::CesrPrimitive,
-        oobi::{EndRole, LocationScheme, Role},
+        event_message::signed_event_message::Op,
+        oobi::{error::OobiError, EndRole, LocationScheme, Role},
         prefix::IdentifierPrefix,
     };
     use reqwest::StatusCode;
@@ -225,15 +224,15 @@ pub mod http_handlers {
         let oobis: Vec<u8> = loc_scheme
             .into_iter()
             .flat_map(|sr| {
-                let sed: ParsedEvent = sr.into();
+                let sed = Message::Op(Op::Reply(sr));
                 sed.to_cesr().unwrap()
             })
             .collect();
-        println!(
-            "\nSending {} oobi: {}",
-            &eid.to_str(),
-            String::from_utf8(oobis.clone()).unwrap_or_default()
-        );
+        // println!(
+        //     "\nSending {} oobi: {}",
+        //     &eid.to_str(),
+        //     String::from_utf8(oobis.clone()).unwrap_or_default()
+        // );
         Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())
             .body(String::from_utf8(oobis).unwrap()))
@@ -255,16 +254,16 @@ pub mod http_handlers {
             .into_iter()
             .chain(loc_scheme.into_iter())
             .flat_map(|sr| {
-                let sed: ParsedEvent = sr.into();
+                let sed = Message::Op(Op::Reply(sr));
                 sed.to_cesr().unwrap()
             })
             .collect();
-        println!(
-            "\nSending {} obi from its watcher {}:\n{}",
-            cid.to_str(),
-            eid.to_str(),
-            String::from_utf8_lossy(&oobis)
-        );
+        // println!(
+        //     "\nSending {} obi from its watcher {}:\n{}",
+        //     cid.to_str(),
+        //     eid.to_str(),
+        //     String::from_utf8_lossy(&oobis)
+        // );
 
         Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())

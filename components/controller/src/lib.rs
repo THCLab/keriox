@@ -11,13 +11,12 @@ use keri::{
     database::{escrow::EscrowDb, SledEventDatabase},
     event::{event_data::EventData, sections::seal::Seal, EventMessage},
     event_message::{
-        cesr_adapter::EventType,
+        cesr_adapter::{parse_event_type, EventType},
         key_event_message::KeyEvent,
         signed_event_message::{Message, Notice, Op, SignedEventMessage},
         Digestible,
     },
-    event_parsing::parsers::parse_payload,
-    oobi::{LocationScheme, Oobi, OobiManager, Role, Scheme},
+    oobi::{LocationScheme, OobiManager, Role, Scheme, Oobi},
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     processor::{
         basic_processor::BasicProcessor,
@@ -344,8 +343,8 @@ impl Controller {
         event: &[u8],
         sig: &SelfSigningPrefix,
     ) -> Result<IdentifierPrefix, ControllerError> {
-        let (_, parsed_event) =
-            parse_payload::<EventType>(event).map_err(|_e| ControllerError::EventParseError)?;
+        let parsed_event =
+            parse_event_type(event).map_err(|_e| ControllerError::EventParseError)?;
         match parsed_event {
             EventType::KeyEvent(ke) => {
                 if let EventData::Icp(_) = &ke.event.get_event_data() {

@@ -1,11 +1,9 @@
-use std::convert::TryFrom;
-
+use cesrox::{group::Group, primitives::IndexedSignature};
 use serde::{Deserialize, Serialize};
 
 use crate::{
     error::Error,
     event::sections::seal::EventSeal,
-    event_parsing::{group::Group, primitives::IndexedSignature},
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     processor::event_storage::EventStorage,
 };
@@ -111,13 +109,13 @@ pub fn signatures_into_groups(sigs: &[Signature]) -> Vec<Group> {
 
     let mut attachments = vec![];
     if !trans_seal.is_empty() {
-        attachments.push(Group::TransferableIndexedSigGroups(trans_seal));
+        attachments.push(Group::TransIndexedSigGroups(trans_seal));
     }
     if !trans_last.is_empty() {
         attachments.push(Group::LastEstSignaturesGroups(trans_last));
     }
     if !nontrans.is_empty() {
-        attachments.push(Group::NontransferableReceiptCouples(nontrans));
+        attachments.push(Group::NontransReceiptCouples(nontrans));
     };
     if !indexed.is_empty() {
         attachments.push(Group::IndexedControllerSignatures(indexed));
@@ -128,58 +126,58 @@ pub fn signatures_into_groups(sigs: &[Signature]) -> Vec<Group> {
     attachments
 }
 
-impl TryFrom<Group> for Vec<Signature> {
-    type Error = Error;
+// impl TryFrom<Group> for Vec<Signature> {
+//     type Error = Error;
 
-    fn try_from(value: Group) -> Result<Self, Self::Error> {
-        match value {
-            Group::IndexedControllerSignatures(sigs) => {
-                let signatures = sigs.into_iter().map(|sig| sig.into()).collect();
-                Ok(vec![Signature::Transferable(
-                    SignerData::JustSignatures,
-                    signatures,
-                )])
-            }
-            Group::NontransferableReceiptCouples(sigs) => {
-                let signatures = sigs
-                    .into_iter()
-                    .map(|(bp, sp)| (bp.into(), sp.into()))
-                    .collect();
-                Ok(vec![Signature::NonTransferable(Nontransferable::Couplet(
-                    signatures,
-                ))])
-            }
-            Group::LastEstSignaturesGroups(sigs) => Ok(sigs
-                .into_iter()
-                .map(|(id, sigs)| {
-                    let signatures = sigs.into_iter().map(|sig| sig.into()).collect();
-                    Signature::Transferable(SignerData::LastEstablishment(id.into()), signatures)
-                })
-                .collect()),
-            Group::TransferableIndexedSigGroups(sigs) => Ok(sigs
-                .into_iter()
-                .map(|(id, sn, digest, sigs)| {
-                    let signatures = sigs.into_iter().map(|sig| sig.into()).collect();
-                    Signature::Transferable(
-                        SignerData::EventSeal(EventSeal {
-                            prefix: id.into(),
-                            sn,
-                            event_digest: digest.into(),
-                        }),
-                        signatures,
-                    )
-                })
-                .collect()),
-            Group::IndexedWitnessSignatures(sigs) => {
-                let signatures = sigs.into_iter().map(|sig| sig.into()).collect();
-                Ok(vec![Signature::NonTransferable(Nontransferable::Indexed(
-                    signatures,
-                ))])
-            }
-            _ => Err(Error::SemanticError("Improper attachment type".into())),
-        }
-    }
-}
+//     fn try_from(value: Group) -> Result<Self, Self::Error> {
+//         match value {
+//             Group::IndexedControllerSignatures(sigs) => {
+//                 let signatures = sigs.into_iter().map(|sig| sig.into()).collect();
+//                 Ok(vec![Signature::Transferable(
+//                     SignerData::JustSignatures,
+//                     signatures,
+//                 )])
+//             }
+//             Group::NontransferableReceiptCouples(sigs) => {
+//                 let signatures = sigs
+//                     .into_iter()
+//                     .map(|(bp, sp)| (bp.into(), sp.into()))
+//                     .collect();
+//                 Ok(vec![Signature::NonTransferable(Nontransferable::Couplet(
+//                     signatures,
+//                 ))])
+//             }
+//             Group::LastEstSignaturesGroups(sigs) => Ok(sigs
+//                 .into_iter()
+//                 .map(|(id, sigs)| {
+//                     let signatures = sigs.into_iter().map(|sig| sig.into()).collect();
+//                     Signature::Transferable(SignerData::LastEstablishment(id.into()), signatures)
+//                 })
+//                 .collect()),
+//             Group::TransferableIndexedSigGroups(sigs) => Ok(sigs
+//                 .into_iter()
+//                 .map(|(id, sn, digest, sigs)| {
+//                     let signatures = sigs.into_iter().map(|sig| sig.into()).collect();
+//                     Signature::Transferable(
+//                         SignerData::EventSeal(EventSeal {
+//                             prefix: id.into(),
+//                             sn,
+//                             event_digest: digest.into(),
+//                         }),
+//                         signatures,
+//                     )
+//                 })
+//                 .collect()),
+//             Group::IndexedWitnessSignatures(sigs) => {
+//                 let signatures = sigs.into_iter().map(|sig| sig.into()).collect();
+//                 Ok(vec![Signature::NonTransferable(Nontransferable::Indexed(
+//                     signatures,
+//                 ))])
+//             }
+//             _ => Err(Error::SemanticError("Improper attachment type".into())),
+//         }
+//     }
+// }
 
 impl Into<Group> for Nontransferable {
     fn into(self) -> Group {
@@ -193,7 +191,7 @@ impl Into<Group> for Nontransferable {
                     .into_iter()
                     .map(|(bp, sp)| (bp.into(), sp.into()))
                     .collect();
-                Group::NontransferableReceiptCouples(couples)
+                Group::NontransReceiptCouples(couples)
             }
         }
     }
@@ -210,7 +208,7 @@ impl Into<Group> for crate::event_message::signature::Signature {
                         prefix,
                         sn,
                         event_digest,
-                    }) => Group::TransferableIndexedSigGroups(vec![(
+                    }) => Group::TransIndexedSigGroups(vec![(
                         prefix.into(),
                         sn,
                         (&event_digest).into(),

@@ -1,11 +1,10 @@
 use super::error::Error;
 use super::CesrPrimitive;
-use crate::{
-    event_parsing::{
-        codes::{seed::SeedCode, DerivationCode, PrimitiveCode},
-        parsing::from_text_to_bytes,
-    },
-    keys::{PrivateKey, PublicKey},
+use crate::keys::{PrivateKey, PublicKey};
+use cesrox::{
+    conversion::from_text_to_bytes,
+    derivation_code::DerivationCode,
+    primitives::codes::{seed::SeedCode, PrimitiveCode},
 };
 use core::str::FromStr;
 use ed25519_dalek::SecretKey;

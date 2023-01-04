@@ -1,3 +1,4 @@
+use cesrox::primitives::CesrPrimitive;
 use chrono::{DateTime, FixedOffset};
 use serde::{de, ser::SerializeStruct, Deserialize, Deserializer, Serialize, Serializer};
 
@@ -13,7 +14,6 @@ use crate::{
         timestamped::Timestamped,
         Digestible, EventTypeTag, SaidEvent, Typeable,
     },
-    event_parsing::primitives::CesrPrimitive,
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     query::QueryError,
     sai::derivation::SelfAddressing,
@@ -259,7 +259,7 @@ impl SignedReply {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::{event_message::cesr_adapter::EventType, event_parsing::parsers::parse};
+    use cesrox::parse;
 
     #[test]
     pub fn reply_parse() {
@@ -269,7 +269,7 @@ pub mod tests {
 
         let rpy = r#"{"v":"KERI10JSON00029d_","t":"rpy","d":"EYFMuK9IQmHvq9KaJ1r67_MMCq5GnQEgLyN9YPamR3r0","dt":"2021-01-01T00:00:00.000000+00:00","r":"/ksn/E7YbTIkWWyNwOxZQTTnrs6qn8jFbu2A8zftQ33JYQFQ0","a":{"v":"KERI10JSON0001e2_","i":"E7YbTIkWWyNwOxZQTTnrs6qn8jFbu2A8zftQ33JYQFQ0","s":"3","p":"EF7f4gNFCbJz6ZHLacIi_bbIq7kaWAFOzX7ncU_vs5Qg","d":"EOPSPvHHVmU9IIdHa5ksisoVrOnmHRps_tx3OsZSQQ30","f":"3","dt":"2021-01-01T00:00:00.000000+00:00","et":"rot","kt":"1","k":["DrcAz_gmDTuWIHn_mOQDeSK_aJIRiw5IMzPD7igzEDb0"],"nt":"1","n":["EK7ZUmFebD2st48Yvtzc9LajV3Yg2mkeeDzVRL-7uKrU"],"bt":"0","b":[],"c":[],"ee":{"s":"3","d":"EOPSPvHHVmU9IIdHa5ksisoVrOnmHRps_tx3OsZSQQ30","br":[],"ba":[]},"di":""}}-VA0-FABE7YbTIkWWyNwOxZQTTnrs6qn8jFbu2A8zftQ33JYQFQ00AAAAAAAAAAAAAAAAAAAAAAwEOPSPvHHVmU9IIdHa5ksisoVrOnmHRps_tx3OsZSQQ30-AABAAYsqumzPM0bIo04gJ4Ln0zAOsGVnjHZrFjjjS49hGx_nQKbXuD1D4J_jNoEa4TPtPDnQ8d0YcJ4TIRJb-XouJBg"#;
 
-        let parsed = parse::<EventType>(rpy.as_bytes()).unwrap().1;
+        let parsed = parse(rpy.as_bytes()).unwrap().1;
         let deserialized_rpy = Message::try_from(parsed).unwrap();
 
         assert!(matches!(deserialized_rpy, Message::Op(Op::Reply(_))));
@@ -280,14 +280,15 @@ pub mod tests {
     pub fn oobi_reply_parse() {
         use std::convert::TryFrom;
 
+        use cesrox::parse_many;
+
         use crate::{
             event_message::signed_event_message::{Message, Op},
-            event_parsing::parsers::parse_many,
             query::reply_event::ReplyRoute,
         };
 
         let endrole = br#"{"v":"KERI10JSON000116_","t":"rpy","d":"EcZ1I4nKy6gIkWxjq1LmIivoPGv32lvlSuMVsWnOPwSc","dt":"2022-02-28T17:23:20.338355+00:00","r":"/end/role/add","a":{"cid":"BuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw","role":"controller","eid":"BuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw"}}-VAi-CABBuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw0B9ccIiMxdwurRjGvUUUdXsxhseo58onhE4bJddKuyPaSpBHXdRKKuiFE0SmLAogMQGJ0iN6f1V_2E_MVfMc3sAA"#;
-        let parsed = parse::<EventType>(endrole).unwrap().1;
+        let parsed = parse(endrole).unwrap().1;
         let deserialized_rpy = Message::try_from(parsed).unwrap();
 
         if let Message::Op(Op::Reply(reply)) = deserialized_rpy {
@@ -297,7 +298,7 @@ pub mod tests {
         };
 
         let endrole = br#"{"v":"KERI10JSON000113_","t":"rpy","d":"EwZH6wJVwwqb2tmhYKYa-GyiO75k4MqkuMKyG2XWpP7Y","dt":"2021-01-01T00:00:01.000000+00:00","r":"/end/role/cut","a":{"cid":"Bsr9jFyYr-wCxJbUJs0smX8UDSDDQUoO4-v_FTApyPvI","role":"watcher","eid":"BXphIkYC1U2ardvt2kGLThDRh2q9N-yT08WSRlpHwtGs"}}-VAi-CABBsr9jFyYr-wCxJbUJs0smX8UDSDDQUoO4-v_FTApyPvI0BUrzk2jcq5YtdMuW4s4U6FuGrfHNZZAn4pzfzzsEcfIsgfMbhJ1ozpWlYPYdR3wbryWUkxfWqtbNwDWlBdTblAQ"#;
-        let parsed = parse::<EventType>(endrole).unwrap().1;
+        let parsed = parse(endrole).unwrap().1;
         let deserialized_rpy = Message::try_from(parsed).unwrap();
 
         if let Message::Op(Op::Reply(reply)) = deserialized_rpy {
@@ -307,7 +308,7 @@ pub mod tests {
         };
 
         let body = br#"{"v":"KERI10JSON0000fa_","t":"rpy","d":"EJq4dQQdqg8aK7VyGnfSibxPyW8Zk2zO1qbVRD6flOvE","dt":"2022-02-28T17:23:20.336207+00:00","r":"/loc/scheme","a":{"eid":"BuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw","scheme":"http","url":"http://127.0.0.1:5643/"}}-VAi-CABBuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw0BAPJ5p_IpUFdmq8uupehsL8DzxWDeaU_SjeiwfmRZ6i9pqddraItmCOAysdXdTEQZ1hEM60iDEWvK16g68TrcAw{"v":"KERI10JSON0000f8_","t":"rpy","d":"ExSR01j5noF2LnGcGFUbLnq-U8JuYBr9WWEMt8d2fb1Y","dt":"2022-02-28T17:23:20.337272+00:00","r":"/loc/scheme","a":{"eid":"BuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw","scheme":"tcp","url":"tcp://127.0.0.1:5633/"}}-VAi-CABBuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw0BZtIhK6Nh6Zk1zPmkJYiFVz0RimQRiubshmSmqAzxzhT4KpGMAH7sbNlFP-0-lKjTawTReKv4L7N3TR7jxXaEBg{"v":"KERI10JSON000116_","t":"rpy","d":"EcZ1I4nKy6gIkWxjq1LmIivoPGv32lvlSuMVsWnOPwSc","dt":"2022-02-28T17:23:20.338355+00:00","r":"/end/role/add","a":{"cid":"BuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw","role":"controller","eid":"BuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw"}}-VAi-CABBuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw0B9ccIiMxdwurRjGvUUUdXsxhseo58onhE4bJddKuyPaSpBHXdRKKuiFE0SmLAogMQGJ0iN6f1V_2E_MVfMc3sAA"#;
-        let stream = parse_many::<EventType>(body).unwrap();
+        let stream = parse_many(body).unwrap();
 
         assert_eq!(stream.1.len(), 3);
     }

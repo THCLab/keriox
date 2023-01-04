@@ -1,9 +1,11 @@
 use std::{
+    convert::TryInto,
     fmt,
     path::Path,
     sync::{Arc, Mutex},
 };
 
+use cesrox::{cesr_proof::MaterialPath, parse, primitives::CesrPrimitive};
 use serde::{Deserialize, Serialize};
 
 use super::{event_generator, prelude::Message, process_message};
@@ -30,7 +32,6 @@ use crate::{
         signature::{Signature, SignerData},
         signed_event_message::{Notice, Op, SignedEventMessage, SignedNontransferableReceipt},
     },
-    event_parsing::{parsers::parse, path::MaterialPath, primitives::CesrPrimitive},
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     processor::{
         basic_processor::BasicProcessor,
@@ -261,7 +262,7 @@ impl<K: KeyManager> SimpleController<K> {
         .unwrap();
         let signature = km.sign(icp.as_bytes())?;
         let key_event = parse(icp.as_bytes()).unwrap().1.payload;
-        let signed = if let EventType::KeyEvent(icp) = key_event {
+        let signed = if let EventType::KeyEvent(icp) = key_event.try_into()? {
             icp.sign(
                 vec![AttachedSignaturePrefix::new(
                     SelfSigningPrefix::Ed25519Sha512(signature),
@@ -350,7 +351,7 @@ impl<K: KeyManager> SimpleController<K> {
 
         let key_event = parse(rot.as_bytes()).unwrap().1.payload;
 
-        let signed = if let EventType::KeyEvent(rot) = key_event {
+        let signed = if let EventType::KeyEvent(rot) = key_event.try_into()? {
             rot.sign(
                 vec![AttachedSignaturePrefix::new(
                     SelfSigningPrefix::Ed25519Sha512(signature),
@@ -601,7 +602,7 @@ impl<K: KeyManager> SimpleController<K> {
 
             let signature = km.sign(&icp)?;
             let key_event = parse(&icp).unwrap().1.payload;
-            if let EventType::KeyEvent(icp) = key_event {
+            if let EventType::KeyEvent(icp) = key_event.try_into()? {
                 icp.sign(
                     vec![AttachedSignaturePrefix::new(
                         SelfSigningPrefix::Ed25519Sha512(signature),

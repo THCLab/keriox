@@ -1,14 +1,12 @@
+use cesrox::primitives::{
+    codes::attached_signature_code::AttachedSignatureCode, CesrPrimitive, Digest, Identifier,
+    IdentifierCode, IndexedSignature, PublicKey, Signature,
+};
+
 use crate::{
     event::sections::seal::{EventSeal, SourceSeal},
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     sai::SelfAddressingPrefix,
-};
-
-use crate::event_parsing::{
-    codes::attached_signature_code::AttachedSignatureCode,
-    primitives::{
-        CesrPrimitive, Digest, Identifier, IdentifierCode, IndexedSignature, PublicKey, Signature,
-    },
 };
 
 impl From<IndexedSignature> for AttachedSignaturePrefix {

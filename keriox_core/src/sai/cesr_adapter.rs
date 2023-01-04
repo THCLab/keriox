@@ -2,15 +2,14 @@ use std::str::FromStr;
 
 use super::{SelfAddressing, SelfAddressingPrefix};
 
-use crate::{
-    event_parsing::{
-        codes::{
-            self_addressing::SelfAddressing as CesrSelfAddressing, DerivationCode, PrimitiveCode,
-        },
-        parsing::from_text_to_bytes,
-        primitives::CesrPrimitive,
+use crate::prefix::error::Error as PrefixError;
+use cesrox::{
+    conversion::from_text_to_bytes,
+    derivation_code::DerivationCode,
+    primitives::{
+        codes::{self_addressing::SelfAddressing as CesrSelfAddressing, PrimitiveCode},
+        CesrPrimitive,
     },
-    prefix::error::Error as PrefixError,
 };
 
 impl Into<CesrSelfAddressing> for SelfAddressing {

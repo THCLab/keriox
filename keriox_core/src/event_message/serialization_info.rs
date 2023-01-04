@@ -1,6 +1,6 @@
 use crate::error::Error;
 use core::str::FromStr;
-use nom::{branch::alt, error::ErrorKind};
+// use nom::{branch::alt, error::ErrorKind};
 use rmp_serde as serde_mgpk;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -118,40 +118,40 @@ impl Default for SerializationInfo {
     }
 }
 
-// TESTED: OK
-fn json_version(data: &[u8]) -> nom::IResult<&[u8], SerializationInfo> {
-    match serde_json::from_slice(data) {
-        Ok(vi) => Ok((data, vi)),
-        _ => Err(nom::Err::Error((data, ErrorKind::IsNot))),
-    }
-}
+// // TESTED: OK
+// fn json_version(data: &[u8]) -> nom::IResult<&[u8], SerializationInfo> {
+//     match serde_json::from_slice(data) {
+//         Ok(vi) => Ok((data, vi)),
+//         _ => Err(nom::Err::Error((data, ErrorKind::IsNot))),
+//     }
+// }
 
-// TODO: Requires testing
-fn cbor_version(data: &[u8]) -> nom::IResult<&[u8], SerializationInfo> {
-    match serde_cbor::from_slice(data) {
-        Ok(vi) => Ok((data, vi)),
-        _ => Err(nom::Err::Error((data, ErrorKind::IsNot))),
-    }
-}
+// // TODO: Requires testing
+// fn cbor_version(data: &[u8]) -> nom::IResult<&[u8], SerializationInfo> {
+//     match serde_cbor::from_slice(data) {
+//         Ok(vi) => Ok((data, vi)),
+//         _ => Err(nom::Err::Error((data, ErrorKind::IsNot))),
+//     }
+// }
 
-// TODO: Requires testing
-fn mgpk_version(data: &[u8]) -> nom::IResult<&[u8], SerializationInfo> {
-    match serde_mgpk::from_slice(data) {
-        Ok(vi) => Ok((data, vi)),
-        _ => Err(nom::Err::Error((data, ErrorKind::IsNot))),
-    }
-}
+// // TODO: Requires testing
+// fn mgpk_version(data: &[u8]) -> nom::IResult<&[u8], SerializationInfo> {
+//     match serde_mgpk::from_slice(data) {
+//         Ok(vi) => Ok((data, vi)),
+//         _ => Err(nom::Err::Error((data, ErrorKind::IsNot))),
+//     }
+// }
 
-pub(crate) fn version<'a>(data: &'a [u8]) -> nom::IResult<&[u8], SerializationInfo> {
-    alt((json_version, cbor_version, mgpk_version))(data).map(|d| (d.0, d.1))
-}
+// pub(crate) fn version<'a>(data: &'a [u8]) -> nom::IResult<&[u8], SerializationInfo> {
+//     alt((json_version, cbor_version, mgpk_version))(data).map(|d| (d.0, d.1))
+// }
 
-#[test]
-fn test_version_parse() {
-    let json = br#""KERI10JSON00014b_""#;
-    let json_result = version(json);
-    assert!(json_result.is_ok());
-}
+// #[test]
+// fn test_version_parse() {
+//     let json = br#""KERI10JSON00014b_""#;
+//     let json_result = version(json);
+//     assert!(json_result.is_ok());
+// }
 
 #[test]
 fn basic_serialize() -> Result<(), Error> {

@@ -5,9 +5,6 @@ use crate::{
 };
 use rand::rngs::OsRng;
 
-#[cfg(feature = "wallet")]
-pub mod wallet;
-
 pub trait KeyManager {
     fn sign(&self, msg: &[u8]) -> Result<Vec<u8>, Error>;
     fn public_key(&self) -> PublicKey;

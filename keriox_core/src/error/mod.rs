@@ -93,10 +93,6 @@ pub enum Error {
     #[error("Invalid identifier state")]
     InvalidIdentifierStat,
 
-    #[cfg(feature = "async")]
-    #[error("Zero send error")]
-    ZeroSendError,
-
     #[error("Failed to obtain mutable ref to Ark of KeyManager")]
     MutArcKeyVaultError,
 
