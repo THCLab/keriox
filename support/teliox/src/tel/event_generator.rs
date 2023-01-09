@@ -1,7 +1,7 @@
 use keri::{
-    sai::{derivation::SelfAddressing, SelfAddressingPrefix},
     event::{sections::seal::EventSeal, SerializationFormats},
-    prefix::{IdentifierPrefix},
+    prefix::IdentifierPrefix,
+    sai::{derivation::SelfAddressing, SelfAddressingPrefix},
 };
 
 use crate::{

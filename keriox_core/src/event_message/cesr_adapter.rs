@@ -12,14 +12,13 @@ use crate::{
     event_parsing::{
         error::Error as CesrError, group::Group, primitives::IndexedSignature, ParsedData, Payload,
     },
-    
 };
 
 #[cfg(feature = "query")]
 use crate::query::{
-        query_event::{QueryEvent, SignedQuery},
-        reply_event::{ReplyEvent, SignedReply},
-    };
+    query_event::{QueryEvent, SignedQuery},
+    reply_event::{ReplyEvent, SignedReply},
+};
 
 #[cfg(feature = "mailbox")]
 use crate::mailbox::exchange::{ExchangeMessage, SignedExchange};

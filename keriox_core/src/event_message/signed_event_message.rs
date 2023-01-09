@@ -1,8 +1,8 @@
 use serde::{ser::SerializeStruct, Deserialize, Serialize};
 
 use super::{
-    cesr_adapter::ParsedEvent, key_event_message::KeyEvent,
-    serializer::to_string, signature::Nontransferable, EventMessage,
+    cesr_adapter::ParsedEvent, key_event_message::KeyEvent, serializer::to_string,
+    signature::Nontransferable, EventMessage,
 };
 #[cfg(feature = "query")]
 use crate::query::{query_event::SignedQuery, reply_event::SignedReply};
@@ -14,7 +14,8 @@ use crate::{
     },
     event_parsing::{group::Group, ParsedData},
     prefix::{AttachedSignaturePrefix, IdentifierPrefix},
-    state::{EventSemantics, IdentifierState}}; 
+    state::{EventSemantics, IdentifierState},
+};
 
 #[cfg(feature = "mailbox")]
 use crate::mailbox::exchange::SignedExchange;

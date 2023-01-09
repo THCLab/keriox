@@ -15,6 +15,8 @@ use self::{
     notification::{JustNotification, Notification, NotificationBus, Notifier},
     validator::EventValidator,
 };
+#[cfg(feature = "query")]
+use crate::query::reply_event::{ReplyRoute, SignedReply};
 use crate::{
     database::{timestamped::TimestampedSignedEventMessage, SledEventDatabase},
     error::Error,
@@ -25,8 +27,6 @@ use crate::{
     prefix::IdentifierPrefix,
     state::IdentifierState,
 };
-#[cfg(feature = "query")]
-use crate::query::reply_event::{ReplyRoute, SignedReply};
 
 pub trait Processor {
     fn process_notice(&self, notice: &Notice) -> Result<(), Error>;

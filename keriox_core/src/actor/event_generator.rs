@@ -1,3 +1,12 @@
+#[cfg(feature = "mailbox")]
+use crate::mailbox::exchange::{Exchange, ExchangeMessage, ForwardTopic, FwdArgs};
+#[cfg(feature = "oobi")]
+use crate::oobi::{EndRole, Role};
+#[cfg(feature = "query")]
+use crate::query::{
+    reply_event::{ReplyEvent, ReplyRoute},
+    Timestamped,
+};
 use crate::{
     error::Error,
     event::{
@@ -8,20 +17,12 @@ use crate::{
         EventMessage, SerializationFormats,
     },
     event_message::{
-        event_msg_builder::EventMsgBuilder,
-        key_event_message::KeyEvent,
-        EventTypeTag,
+        event_msg_builder::EventMsgBuilder, key_event_message::KeyEvent, EventTypeTag,
     },
     prefix::{BasicPrefix, IdentifierPrefix},
     sai::{derivation::SelfAddressing, SelfAddressingPrefix},
     state::IdentifierState,
 };
-#[cfg(feature = "query")]
-use crate::query::{reply_event::{ReplyEvent, ReplyRoute}, Timestamped,};
-#[cfg(feature = "oobi")]
-use crate::oobi::{EndRole, Role};
-#[cfg(feature = "mailbox")]
-use crate::mailbox::exchange::{Exchange, ExchangeMessage, ForwardTopic, FwdArgs};
 
 // todo add setting signing threshold
 pub fn incept(

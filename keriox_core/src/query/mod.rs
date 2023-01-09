@@ -1,16 +1,16 @@
+#[cfg(feature = "mailbox")]
+use crate::mailbox::MailboxResponse;
 use crate::{
     error::Error,
     event::{EventMessage, SerializationFormats},
     event_message::{signed_event_message::Message, EventTypeTag, SaidEvent, Typeable},
-    sai::derivation::SelfAddressing
+    sai::derivation::SelfAddressing,
 };
-#[cfg(feature = "mailbox")]
-use crate::mailbox::MailboxResponse;
 
 use chrono::{DateTime, FixedOffset, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize, Serializer};
 
-use self::{key_state_notice::KeyStateNotice};
+use self::key_state_notice::KeyStateNotice;
 
 use thiserror::Error;
 

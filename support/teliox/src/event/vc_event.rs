@@ -3,7 +3,7 @@ use chrono::{DateTime, FixedOffset, Local, SecondsFormat};
 use keri::{
     event::{sections::seal::EventSeal, SerializationFormats},
     event_message::serialization_info::SerializationInfo,
-    prefix::{IdentifierPrefix},
+    prefix::IdentifierPrefix,
     sai::SelfAddressingPrefix,
 };
 use serde::{de, Deserialize, Serialize, Serializer};

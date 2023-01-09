@@ -7,6 +7,11 @@ use std::{
 use serde::{Deserialize, Serialize};
 
 use super::{event_generator, prelude::Message, process_message};
+#[cfg(feature = "mailbox")]
+use crate::mailbox::{
+    exchange::{Exchange, ForwardTopic, FwdArgs, SignedExchange},
+    MailboxResponse,
+};
 use crate::{
     actor::parse_event_stream,
     database::{escrow::EscrowDb, SledEventDatabase},
@@ -35,27 +40,21 @@ use crate::{
         event_storage::EventStorage,
         Processor,
     },
-    
     sai::derivation::SelfAddressing,
     signer::KeyManager,
     state::IdentifierState,
 };
-#[cfg(feature = "mailbox")]
-use crate::mailbox::{MailboxResponse ,exchange::{Exchange, ForwardTopic, SignedExchange, FwdArgs}};
 
 #[cfg(feature = "oobi")]
 use crate::oobi::{OobiManager, Role};
 
 #[cfg(feature = "query")]
-use crate::query::{
-        query_event::{
-            QueryArgs, QueryArgsMbx, QueryEvent, QueryRoute, QueryTopics,
-            SignedQuery,
-        },
-        reply_event::SignedReply,
-    };
-#[cfg(feature = "query")]
 use super::parse_reply_stream;
+#[cfg(feature = "query")]
+use crate::query::{
+    query_event::{QueryArgs, QueryArgsMbx, QueryEvent, QueryRoute, QueryTopics, SignedQuery},
+    reply_event::SignedReply,
+};
 
 #[cfg(feature = "query")]
 #[derive(PartialEq, Debug, Clone)]

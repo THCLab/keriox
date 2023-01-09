@@ -2,8 +2,17 @@ use std::convert::TryFrom;
 
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "mailbox")]
+use crate::mailbox::exchange::{Exchange, ExchangeMessage, ForwardTopic, SignedExchange};
 #[cfg(feature = "oobi")]
 use crate::oobi::OobiManager;
+#[cfg(feature = "query")]
+use crate::query::{
+    key_state_notice::KeyStateNotice,
+    query_event::{Query, SignedQuery},
+    reply_event::{ReplyRoute, SignedReply},
+    ReplyType,
+};
 use crate::{
     error::Error,
     event_message::{
@@ -16,17 +25,6 @@ use crate::{
     prefix::IdentifierPrefix,
     processor::{event_storage::EventStorage, validator::EventValidator, Processor},
 };
-#[cfg(feature = "query")]
-use crate::{
-    query::{
-        key_state_notice::KeyStateNotice,
-        query_event::{Query, SignedQuery},
-        reply_event::{ReplyRoute, SignedReply},
-        ReplyType,
-    },
-};
-#[cfg(feature = "mailbox")]
-use crate::mailbox::exchange::{Exchange, ExchangeMessage, ForwardTopic, SignedExchange};
 
 pub mod event_generator;
 #[cfg(any(feature = "mailbox", feature = "query", feature = "oobi"))]
@@ -78,23 +76,20 @@ pub fn parse_exchange_stream(stream: &[u8]) -> Result<Vec<SignedExchange>, Error
 
 pub fn process_message<P: Processor>(
     msg: Message,
-    #[cfg(feature = "oobi")]
-    oobi_manager: &OobiManager,
+    #[cfg(feature = "oobi")] oobi_manager: &OobiManager,
     processor: &P,
     event_storage: &EventStorage,
 ) -> Result<(), Error> {
     match msg {
         Message::Notice(notice) => process_notice(notice, processor)?,
-        Message::Op(op) => {
-            match op {
-                #[cfg(feature = "oobi")]
-                Op::Reply(reply) => process_reply(reply, oobi_manager, processor, event_storage)?,
-                #[cfg(feature = "mailbox")]
-                Op::Exchange(_) => todo!(),
-                #[cfg(feature = "query")]
-                Op::Query(_) => todo!(),
-            }
-        }
+        Message::Op(op) => match op {
+            #[cfg(feature = "oobi")]
+            Op::Reply(reply) => process_reply(reply, oobi_manager, processor, event_storage)?,
+            #[cfg(feature = "mailbox")]
+            Op::Exchange(_) => todo!(),
+            #[cfg(feature = "query")]
+            Op::Query(_) => todo!(),
+        },
     };
     Ok(())
 }
@@ -297,19 +292,17 @@ pub enum QueryError {
 }
 
 pub mod prelude {
+    #[cfg(feature = "oobi")]
+    pub use crate::actor::process_signed_oobi;
+    #[cfg(feature = "query")]
+    pub use crate::actor::{process_reply, process_signed_query};
+    #[cfg(feature = "query")]
+    pub use crate::query::ReplyType;
     pub use crate::{
-        actor::{
-            process_message, process_notice,
-        },
+        actor::{process_message, process_notice},
         database::SledEventDatabase,
         event::SerializationFormats,
         event_message::signed_event_message::Message,
         processor::{basic_processor::BasicProcessor, event_storage::EventStorage, Processor},
     };
-    #[cfg(feature = "oobi")]
-    pub use crate::actor::process_signed_oobi;
-    #[cfg(feature = "query")]
-    pub use crate::query::ReplyType;
-    #[cfg(feature = "query")]
-    pub use crate::actor::{process_signed_query, process_reply};
 }

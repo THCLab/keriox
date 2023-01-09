@@ -403,7 +403,7 @@ impl SledEventDatabase {
         self.mailbox
             .get_mailbox_multisig(self.identifiers.designated_key(id).ok()?)
     }
-    
+
     #[cfg(feature = "mailbox")]
     pub fn add_mailbox_delegate(
         &self,

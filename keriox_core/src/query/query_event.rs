@@ -73,8 +73,6 @@ pub struct QueryTopics {
     pub delegate: u64,
 }
 
-
-
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct QueryArgs {
     #[serde(skip_serializing_if = "Option::is_none")]

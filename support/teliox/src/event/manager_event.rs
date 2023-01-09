@@ -4,10 +4,10 @@ use serde_hex::{Compact, SerHex};
 use keri::{
     event::SerializationFormats,
     event_message::serialization_info::SerializationInfo,
-    prefix::{IdentifierPrefix},
-    sai::{SelfAddressingPrefix, derivation::SelfAddressing}, event_parsing::codes::self_addressing::dummy_prefix, 
+    event_parsing::codes::self_addressing::dummy_prefix,
+    prefix::IdentifierPrefix,
+    sai::{derivation::SelfAddressing, SelfAddressingPrefix},
 };
-
 
 use crate::{error::Error, state::ManagerTelState};
 
@@ -294,8 +294,12 @@ fn test_serialization() -> Result<(), keri::prefix::error::Error> {
 fn test_apply_to() -> Result<(), Error> {
     use keri::sai::derivation::SelfAddressing;
     // Construct inception event
-    let pref: IdentifierPrefix = "EVohdnN33-vdNOTPYxeTQIWVzRKtzZzBoiBSGYSSnD0s".parse().unwrap();
-    let issuer_pref: IdentifierPrefix = "DntNTPnDFBnmlO6J44LXCrzZTAmpe-82b7BmQGtL4QhM".parse().unwrap();
+    let pref: IdentifierPrefix = "EVohdnN33-vdNOTPYxeTQIWVzRKtzZzBoiBSGYSSnD0s"
+        .parse()
+        .unwrap();
+    let issuer_pref: IdentifierPrefix = "DntNTPnDFBnmlO6J44LXCrzZTAmpe-82b7BmQGtL4QhM"
+        .parse()
+        .unwrap();
     let event_type = ManagerEventType::Vcp(Inc {
         issuer_id: issuer_pref.clone(),
         config: vec![],
@@ -313,7 +317,9 @@ fn test_apply_to() -> Result<(), Error> {
     let prev_event = SelfAddressing::Blake3_256.derive(&vcp.serialize()?);
     let event_type = ManagerEventType::Vrt(Rot {
         prev_event,
-        backers_to_add: vec!["EXvR3p8V95W8J7Ui4-mEzZ79S-A1esAnJo1Kmzq80Jkc".parse().unwrap()],
+        backers_to_add: vec!["EXvR3p8V95W8J7Ui4-mEzZ79S-A1esAnJo1Kmzq80Jkc"
+            .parse()
+            .unwrap()],
         backers_to_remove: vec![],
     });
     let vrt = ManagerTelEvent::new(&pref, 1, event_type.clone(), SerializationFormats::JSON)?;
@@ -340,10 +346,16 @@ fn test_apply_to() -> Result<(), Error> {
     let prev_event = SelfAddressing::Blake3_256.derive(&vrt.serialize()?);
     let event_type = ManagerEventType::Vrt(Rot {
         prev_event,
-        backers_to_remove: vec!["EXvR3p8V95W8J7Ui4-mEzZ79S-A1esAnJo1Kmzq80Jkc".parse().unwrap()],
+        backers_to_remove: vec!["EXvR3p8V95W8J7Ui4-mEzZ79S-A1esAnJo1Kmzq80Jkc"
+            .parse()
+            .unwrap()],
         backers_to_add: vec![
-            "DSEpNJeSJjxo6oAxkNE8eCOJg2HRPstqkeHWBAvN9XNU".parse().unwrap(),
-            "Dvxo-P4W_Z0xXTfoA3_4DMPn7oi0mLCElOWJDpC0nQXw".parse().unwrap(),
+            "DSEpNJeSJjxo6oAxkNE8eCOJg2HRPstqkeHWBAvN9XNU"
+                .parse()
+                .unwrap(),
+            "Dvxo-P4W_Z0xXTfoA3_4DMPn7oi0mLCElOWJDpC0nQXw"
+                .parse()
+                .unwrap(),
         ],
     });
     let vrt = ManagerTelEvent::new(&pref, 2, event_type.clone(), SerializationFormats::JSON)?;
@@ -357,8 +369,12 @@ fn test_apply_to() -> Result<(), Error> {
 fn test_no_backers() -> Result<(), Error> {
     use keri::sai::derivation::SelfAddressing;
     // Construct inception event
-    let pref: IdentifierPrefix = "EVohdnN33-vdNOTPYxeTQIWVzRKtzZzBoiBSGYSSnD0s".parse().unwrap();
-    let issuer_pref: IdentifierPrefix = "DntNTPnDFBnmlO6J44LXCrzZTAmpe-82b7BmQGtL4QhM".parse().unwrap();
+    let pref: IdentifierPrefix = "EVohdnN33-vdNOTPYxeTQIWVzRKtzZzBoiBSGYSSnD0s"
+        .parse()
+        .unwrap();
+    let issuer_pref: IdentifierPrefix = "DntNTPnDFBnmlO6J44LXCrzZTAmpe-82b7BmQGtL4QhM"
+        .parse()
+        .unwrap();
     let event_type = ManagerEventType::Vcp(Inc {
         issuer_id: issuer_pref.clone(),
         config: vec![Config::NoBackers],
@@ -376,7 +392,9 @@ fn test_no_backers() -> Result<(), Error> {
     let prev_event = SelfAddressing::Blake3_256.derive(&vcp.serialize()?);
     let event_type = ManagerEventType::Vrt(Rot {
         prev_event,
-        backers_to_add: vec!["EXvR3p8V95W8J7Ui4-mEzZ79S-A1esAnJo1Kmzq80Jkc".parse().unwrap()],
+        backers_to_add: vec!["EXvR3p8V95W8J7Ui4-mEzZ79S-A1esAnJo1Kmzq80Jkc"
+            .parse()
+            .unwrap()],
         backers_to_remove: vec![],
     });
     let vrt = ManagerTelEvent::new(&pref, 1, event_type.clone(), SerializationFormats::JSON)?;

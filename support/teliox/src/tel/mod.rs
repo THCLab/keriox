@@ -8,8 +8,8 @@ use crate::{
     state::{vc_state::TelState, ManagerTelState, State},
 };
 use keri::{
+    prefix::IdentifierPrefix,
     sai::{derivation::SelfAddressing, SelfAddressingPrefix},
-    prefix::{IdentifierPrefix},
 };
 
 pub mod event_generator;
@@ -111,13 +111,17 @@ mod tests {
         let tel_root = Builder::new().prefix("tel-test-db").tempdir().unwrap();
         fs::create_dir_all(tel_root.path()).unwrap();
         let tel_db = crate::database::EventDatabase::new(tel_root.path()).unwrap();
-        let issuer_prefix = "DpE03it33djytuVvXhSbZdEw0lx7Xa-olrlUUSH2Ykvc".parse().unwrap();
+        let issuer_prefix = "DpE03it33djytuVvXhSbZdEw0lx7Xa-olrlUUSH2Ykvc"
+            .parse()
+            .unwrap();
 
         // Create tel
         let mut tel = Tel::new(&tel_db);
         let dummy_source_seal = EventSourceSeal {
             sn: 1,
-            digest: "EJJR2nmwyYAfSVPzhzS6b5CMZAoTNZH3ULvaU6Z-i0d8".parse().unwrap(),
+            digest: "EJJR2nmwyYAfSVPzhzS6b5CMZAoTNZH3ULvaU6Z-i0d8"
+                .parse()
+                .unwrap(),
         };
 
         let vcp = tel.make_inception_event(issuer_prefix, vec![], 0, vec![])?;
@@ -125,7 +129,9 @@ mod tests {
         let processing_output = tel.process(verifiable_vcp.clone());
         assert!(processing_output.is_ok());
 
-        let backers_to_add = vec!["EJJR2nmwyYAfSVPzhzS6b5CMZAoTNZH3ULvaU6Z-i0d8".parse().unwrap()];
+        let backers_to_add = vec!["EJJR2nmwyYAfSVPzhzS6b5CMZAoTNZH3ULvaU6Z-i0d8"
+            .parse()
+            .unwrap()];
         let rcp = tel.make_rotation_event(&backers_to_add, &vec![])?;
         let verifiable_rcp = VerifiableEvent::new(rcp.clone(), dummy_source_seal.into());
         let processing_output = tel.process(verifiable_rcp.clone());

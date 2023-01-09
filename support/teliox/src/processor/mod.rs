@@ -1,4 +1,4 @@
-use keri::{prefix::{IdentifierPrefix}, sai::SelfAddressingPrefix};
+use keri::{prefix::IdentifierPrefix, sai::SelfAddressingPrefix};
 
 use crate::{
     database::EventDatabase,
@@ -111,7 +111,7 @@ impl<'d> EventProcessor<'d> {
 
 #[cfg(test)]
 mod tests {
-    use keri::{sai::derivation::SelfAddressing, prefix::IdentifierPrefix};
+    use keri::{prefix::IdentifierPrefix, sai::derivation::SelfAddressing};
 
     use crate::{
         error::Error, event::verifiable_event::VerifiableEvent, processor::EventProcessor,
@@ -131,11 +131,14 @@ mod tests {
         // Setup test data.
         let message = "some message";
         let message_id = SelfAddressing::Blake3_256.derive(message.as_bytes());
-        let issuer_prefix: IdentifierPrefix =
-            "EaKJ0FoLxO1TYmyuprguKO7kJ7Hbn0m0Wuk5aMtSrMtY".parse().unwrap();
+        let issuer_prefix: IdentifierPrefix = "EaKJ0FoLxO1TYmyuprguKO7kJ7Hbn0m0Wuk5aMtSrMtY"
+            .parse()
+            .unwrap();
         let dummy_source_seal = EventSourceSeal {
             sn: 1,
-            digest: "EJJR2nmwyYAfSVPzhzS6b5CMZAoTNZH3ULvaU6Z-i0d8".parse().unwrap(),
+            digest: "EJJR2nmwyYAfSVPzhzS6b5CMZAoTNZH3ULvaU6Z-i0d8"
+                .parse()
+                .unwrap(),
         };
 
         let vcp =
@@ -193,8 +196,9 @@ mod tests {
         assert_eq!(o.len(), 2);
         assert_eq!(o, vec![verifiable_iss, verifiable_rev]);
 
-        let backers: Vec<IdentifierPrefix> =
-            vec!["BwFbQvUaS4EirvZVPUav7R_KDHB8AKmSfXNpWnZU_YEU".parse().unwrap()];
+        let backers: Vec<IdentifierPrefix> = vec!["BwFbQvUaS4EirvZVPUav7R_KDHB8AKmSfXNpWnZU_YEU"
+            .parse()
+            .unwrap()];
 
         let vrt = event_generator::make_rotation_event(&st, &backers, &vec![], None, None)?;
 

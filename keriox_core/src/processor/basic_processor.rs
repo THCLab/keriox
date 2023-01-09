@@ -5,10 +5,12 @@ use super::{
     validator::EventValidator,
     EventProcessor, Processor,
 };
-use crate::{database::SledEventDatabase, error::Error, event_message::signed_event_message::{Notice, SignedEventMessage}};
 #[cfg(feature = "query")]
+use crate::query::reply_event::SignedReply;
 use crate::{
-    query::reply_event::SignedReply,
+    database::SledEventDatabase,
+    error::Error,
+    event_message::signed_event_message::{Notice, SignedEventMessage},
 };
 
 pub struct BasicProcessor(EventProcessor);
