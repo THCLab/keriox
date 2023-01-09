@@ -8,17 +8,16 @@ use crate::{
     error::Error,
     event_message::{
         cesr_adapter::EventType,
-        exchange::{Exchange, ExchangeMessage, ForwardTopic, SignedExchange},
         serialization_info::SerializationFormats,
         signature::Signature,
         signed_event_message::{Message, Notice, Op, SignedEventMessage},
     },
     event_parsing::{parsers::parse_many, path::MaterialPath},
     prefix::IdentifierPrefix,
+    processor::{event_storage::EventStorage, validator::EventValidator, Processor},
 };
 #[cfg(feature = "query")]
 use crate::{
-    processor::{event_storage::EventStorage, validator::EventValidator, Processor},
     query::{
         key_state_notice::KeyStateNotice,
         query_event::{Query, SignedQuery},
@@ -26,8 +25,11 @@ use crate::{
         ReplyType,
     },
 };
+#[cfg(feature = "mailbox")]
+use crate::mailbox::exchange::{Exchange, ExchangeMessage, ForwardTopic, SignedExchange};
 
 pub mod event_generator;
+#[cfg(any(feature = "mailbox", feature = "query", feature = "oobi"))]
 pub mod simple_controller;
 pub mod error;
 
@@ -76,6 +78,7 @@ pub fn parse_exchange_stream(stream: &[u8]) -> Result<Vec<SignedExchange>, Error
 
 pub fn process_message<P: Processor>(
     msg: Message,
+    #[cfg(feature = "oobi")]
     oobi_manager: &OobiManager,
     processor: &P,
     event_storage: &EventStorage,
@@ -83,8 +86,13 @@ pub fn process_message<P: Processor>(
     match msg {
         Message::Notice(notice) => process_notice(notice, processor)?,
         Message::Op(op) => {
-            if let Op::Reply(reply) = op {
-                process_reply(reply, oobi_manager, processor, event_storage)?;
+            match op {
+                #[cfg(feature = "oobi")]
+                Op::Reply(reply) => process_reply(reply, oobi_manager, processor, event_storage)?,
+                #[cfg(feature = "mailbox")]
+                Op::Exchange(_) => todo!(),
+                #[cfg(feature = "query")]
+                Op::Query(_) => todo!(),
             }
         }
     };
@@ -95,6 +103,7 @@ pub fn process_notice<P: Processor>(msg: Notice, processor: &P) -> Result<(), Er
     processor.process_notice(&msg)
 }
 
+#[cfg(any(feature = "query", feature = "oobi"))]
 pub fn process_reply<P: Processor>(
     sr: SignedReply,
     oobi_manager: &OobiManager,
@@ -128,6 +137,7 @@ pub fn process_signed_oobi(
     Ok(())
 }
 
+#[cfg(feature = "mailbox")]
 pub fn process_signed_exn(exn: SignedExchange, storage: &EventStorage) -> Result<(), Error> {
     let exn_message = &exn.exchange_message;
     let verification_result =
@@ -143,6 +153,7 @@ pub fn process_signed_exn(exn: SignedExchange, storage: &EventStorage) -> Result
     }
 }
 
+#[cfg(feature = "mailbox")]
 fn process_exn(
     exn: &ExchangeMessage,
     attachemnt: (MaterialPath, Vec<Signature>),
@@ -288,13 +299,17 @@ pub enum QueryError {
 pub mod prelude {
     pub use crate::{
         actor::{
-            process_message, process_notice, process_reply, process_signed_oobi,
-            process_signed_query,
+            process_message, process_notice,
         },
         database::SledEventDatabase,
         event::SerializationFormats,
         event_message::signed_event_message::Message,
         processor::{basic_processor::BasicProcessor, event_storage::EventStorage, Processor},
-        query::ReplyType,
     };
+    #[cfg(feature = "oobi")]
+    pub use crate::actor::process_signed_oobi;
+    #[cfg(feature = "query")]
+    pub use crate::query::ReplyType;
+    #[cfg(feature = "query")]
+    pub use crate::actor::{process_signed_query, process_reply};
 }

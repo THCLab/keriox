@@ -1,6 +1,5 @@
+
 pub mod actor;
-// #[cfg(feature = "controller")]
-// pub mod controller;
 pub mod database;
 pub mod error;
 pub mod event;
@@ -13,6 +12,8 @@ pub mod prefix;
 pub mod processor;
 #[cfg(feature = "query")]
 pub mod query;
+#[cfg(feature = "mailbox")]
+pub mod mailbox;
 pub mod sai;
 pub mod signer;
 pub mod state;

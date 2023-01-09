@@ -9,19 +9,19 @@ use crate::{
     },
     event_message::{
         event_msg_builder::EventMsgBuilder,
-        exchange::{Exchange, ExchangeMessage, ForwardTopic, FwdArgs},
         key_event_message::KeyEvent,
         EventTypeTag,
     },
-    oobi::{EndRole, Role},
     prefix::{BasicPrefix, IdentifierPrefix},
-    query::{
-        reply_event::{ReplyEvent, ReplyRoute},
-        Timestamped,
-    },
     sai::{derivation::SelfAddressing, SelfAddressingPrefix},
     state::IdentifierState,
 };
+#[cfg(feature = "query")]
+use crate::query::{reply_event::{ReplyEvent, ReplyRoute}, Timestamped,};
+#[cfg(feature = "oobi")]
+use crate::oobi::{EndRole, Role};
+#[cfg(feature = "mailbox")]
+use crate::mailbox::exchange::{Exchange, ExchangeMessage, ForwardTopic, FwdArgs};
 
 // todo add setting signing threshold
 pub fn incept(
@@ -177,6 +177,7 @@ pub fn anchor_with_seal(
     Ok(ev)
 }
 
+#[cfg(feature = "oobi")]
 /// Generate reply event used to add role to given identifier.
 pub fn generate_end_role(
     controller_id: &IdentifierPrefix,
@@ -202,7 +203,7 @@ pub fn generate_end_role(
     )
     .map_err(|e| Error::EventGenerationError(e.to_string()))
 }
-
+#[cfg(feature = "mailbox")]
 pub fn exchange(
     receipient: &IdentifierPrefix,
     data: &EventMessage<KeyEvent>,

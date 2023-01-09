@@ -5,7 +5,7 @@ use crate::{
     prefix::IdentifierPrefix, query::Timestamped, sai::derivation::SelfAddressing,
 };
 
-use super::{
+use crate::event_message::{
     key_event_message::KeyEvent, signature::Signature, EventMessage, EventTypeTag, SaidEvent,
     Typeable,
 };

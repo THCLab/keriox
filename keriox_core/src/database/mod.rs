@@ -24,7 +24,7 @@ use crate::{
 
 use self::timestamped::TimestampedSignedEventMessage;
 
-#[cfg(feature = "query")]
+#[cfg(feature = "mailbox")]
 pub struct MailboxData {
     mailbox_receipts: SledEventTreeVec<SignedNontransferableReceipt>,
     mailbox_replies: SledEventTreeVec<SignedEventMessage>,
@@ -32,6 +32,7 @@ pub struct MailboxData {
     mailbox_delegate: SledEventTreeVec<TimestampedSignedEventMessage>,
 }
 
+#[cfg(feature = "mailbox")]
 impl MailboxData {
     pub fn new(db: &Db) -> Result<Self, DbError> {
         Ok(Self {
@@ -124,7 +125,7 @@ pub struct SledEventDatabase {
     #[cfg(feature = "query")]
     escrowed_replys: SledEventTreeVec<SignedReply>,
 
-    #[cfg(feature = "query")]
+    #[cfg(feature = "mailbox")]
     mailbox: MailboxData,
 }
 
@@ -142,7 +143,6 @@ impl SledEventDatabase {
         escrow_path.push("escrow");
 
         let db = sled::open(events_path.as_path())?;
-        let mailbox = MailboxData::new(&db)?;
 
         Ok(Self {
             identifiers: SledEventTree::new(db.open_tree(b"iids")?),
@@ -153,7 +153,8 @@ impl SledEventDatabase {
             duplicitous_events: SledEventTreeVec::new(db.open_tree(b"dels")?),
             #[cfg(feature = "query")]
             accepted_rpy: SledEventTreeVec::new(db.open_tree(b"knas")?),
-            mailbox,
+            #[cfg(feature = "mailbox")]
+            mailbox: MailboxData::new(&db)?,
 
             #[cfg(feature = "query")]
             escrowed_replys: SledEventTreeVec::new(db.open_tree(b"knes")?),
@@ -384,6 +385,7 @@ impl SledEventDatabase {
             .get_mailbox_replies(self.identifiers.designated_key(id).ok()?)
     }
 
+    #[cfg(feature = "mailbox")]
     pub fn add_mailbox_multisig(
         &self,
         event: SignedEventMessage,
@@ -401,7 +403,8 @@ impl SledEventDatabase {
         self.mailbox
             .get_mailbox_multisig(self.identifiers.designated_key(id).ok()?)
     }
-
+    
+    #[cfg(feature = "mailbox")]
     pub fn add_mailbox_delegate(
         &self,
         event: SignedEventMessage,
@@ -411,6 +414,7 @@ impl SledEventDatabase {
             .add_mailbox_delegate(self.identifiers.designated_key(target_id)?, event)
     }
 
+    #[cfg(feature = "mailbox")]
     pub fn get_mailbox_delegate(
         &self,
         id: &IdentifierPrefix,

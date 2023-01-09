@@ -23,9 +23,10 @@ use crate::{
         Notice, SignedEventMessage, SignedNontransferableReceipt,
     },
     prefix::IdentifierPrefix,
-    query::reply_event::{ReplyRoute, SignedReply},
     state::IdentifierState,
 };
+#[cfg(feature = "query")]
+use crate::query::reply_event::{ReplyRoute, SignedReply};
 
 pub trait Processor {
     fn process_notice(&self, notice: &Notice) -> Result<(), Error>;
@@ -48,9 +49,11 @@ pub trait Processor {
         match msg {
             Message::Notice(notice) => self.process_notice(notice),
             Message::Op(op) => match op {
+                #[cfg(feature = "query")]
                 Op::Query(_query) => panic!("processor can't handle query op"),
+                #[cfg(feature = "oobi")]
                 Op::Reply(reply) => self.process_op_reply(reply),
-                Op::Exchange(_) => todo!(),
+                _ => todo!(),
             },
         }
     }

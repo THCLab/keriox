@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use super::compute_state;
-use crate::query::query_event::MailboxResponse;
 use crate::sai::SelfAddressingPrefix;
 use crate::{
     database::{timestamped::TimestampedSignedEventMessage, SledEventDatabase},
@@ -11,6 +10,7 @@ use crate::{
         sections::{seal::EventSeal, KeyConfig},
     },
     event_message::{
+        signed_event_message::Notice,
         signed_event_message::{SignedEventMessage, SignedNontransferableReceipt},
         Digestible,
     },
@@ -20,11 +20,13 @@ use crate::{
 #[cfg(feature = "query")]
 use crate::{
     event::SerializationFormats,
-    event_message::signed_event_message::Notice,
     query::{
         key_state_notice::KeyStateNotice, query_event::QueryArgsMbx, reply_event::SignedReply,
     },
 };
+
+#[cfg(feature = "mailbox")]
+use crate::mailbox::MailboxResponse;
 
 pub struct EventStorage {
     pub db: Arc<SledEventDatabase>,
@@ -115,6 +117,7 @@ impl EventStorage {
         }
     }
 
+    #[cfg(feature = "mailbox")]
     pub fn add_mailbox_multisig(
         &self,
         receipient: &IdentifierPrefix,
@@ -125,6 +128,7 @@ impl EventStorage {
         Ok(())
     }
 
+    #[cfg(feature = "mailbox")]
     pub fn add_mailbox_delegate(
         &self,
         receipient: &IdentifierPrefix,
@@ -135,7 +139,7 @@ impl EventStorage {
         Ok(())
     }
 
-    #[cfg(feature = "query")]
+    #[cfg(feature = "mailbox")]
     pub fn add_mailbox_receipt(&self, receipt: SignedNontransferableReceipt) -> Result<(), Error> {
         let id = receipt.body.event.prefix.clone();
         self.db.add_mailbox_receipt(receipt, &id)?;
@@ -143,7 +147,7 @@ impl EventStorage {
         Ok(())
     }
 
-    #[cfg(feature = "query")]
+    #[cfg(feature = "mailbox")]
     pub fn add_mailbox_reply(&self, reply: SignedEventMessage) -> Result<(), Error> {
         let id = reply.event_message.event.get_prefix();
         self.db.add_mailbox_reply(reply, &id)?;
@@ -151,8 +155,9 @@ impl EventStorage {
         Ok(())
     }
 
-    #[cfg(feature = "query")]
+    #[cfg(feature = "mailbox")]
     pub fn get_mailbox_messages(&self, args: QueryArgsMbx) -> Result<MailboxResponse, Error> {
+
         let id = args.i.clone();
 
         // query receipts

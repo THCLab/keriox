@@ -2,12 +2,15 @@ use crate::{
     error::Error,
     event::{EventMessage, SerializationFormats},
     event_message::{signed_event_message::Message, EventTypeTag, SaidEvent, Typeable},
-    sai::derivation::SelfAddressing,
+    sai::derivation::SelfAddressing
 };
+#[cfg(feature = "mailbox")]
+use crate::mailbox::MailboxResponse;
+
 use chrono::{DateTime, FixedOffset, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize, Serializer};
 
-use self::{key_state_notice::KeyStateNotice, query_event::MailboxResponse};
+use self::{key_state_notice::KeyStateNotice};
 
 use thiserror::Error;
 
@@ -58,6 +61,7 @@ impl<D: Serialize + Typeable> Typeable for Timestamped<D> {
 pub enum ReplyType {
     Ksn(KeyStateNotice),
     Kel(Vec<Message>),
+    #[cfg(feature = "mailbox")]
     Mbx(MailboxResponse),
 }
 
