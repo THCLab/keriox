@@ -12,20 +12,20 @@ use keri::{
     },
     event_message::{
         cesr_adapter::EventType,
-        exchange::{Exchange, ExchangeMessage, ForwardTopic, FwdArgs, SignedExchange},
         key_event_message::KeyEvent,
         signature::{Nontransferable, Signature, SignerData},
         signed_event_message::{Notice, Op},
         Digestible,
     },
     event_parsing::{parsers::parse_payload, path::MaterialPath, primitives::CesrPrimitive},
+    mailbox::{
+        exchange::{Exchange, ExchangeMessage, ForwardTopic, FwdArgs, SignedExchange},
+        MailboxResponse,
+    },
     oobi::{LocationScheme, Role, Scheme},
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     query::{
-        query_event::{
-            MailboxResponse, QueryArgs, QueryArgsMbx, QueryEvent, QueryRoute, QueryTopics,
-            SignedQuery,
-        },
+        query_event::{QueryArgs, QueryArgsMbx, QueryEvent, QueryRoute, QueryTopics, SignedQuery},
         reply_event::ReplyRoute,
     },
     sai::{derivation::SelfAddressing, SelfAddressingPrefix},
@@ -551,7 +551,7 @@ impl IdentifierController {
         } else {
             // process group mailbox
             let group_req = self
-                .process_group_mailbox(&res, &about_who, &self.last_asked_groups_index)
+                .process_group_mailbox(res, &about_who, &self.last_asked_groups_index)
                 .await?;
             self.last_asked_groups_index = MailboxReminder {
                 receipt: res.receipt.len(),

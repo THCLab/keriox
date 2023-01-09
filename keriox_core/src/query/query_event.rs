@@ -5,7 +5,6 @@ use crate::{
     error::Error,
     event::{EventMessage, SerializationFormats},
     event_message::{
-        signed_event_message::{SignedEventMessage, SignedNontransferableReceipt},
         EventTypeTag, SaidEvent, Typeable,
     },
     prefix::{AttachedSignaturePrefix, IdentifierPrefix},

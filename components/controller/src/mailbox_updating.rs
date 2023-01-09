@@ -5,19 +5,17 @@ use keri::{
         event_data::EventData,
         sections::seal::{EventSeal, Seal},
     },
-    event_message::{
-        exchange::ForwardTopic,
-        signed_event_message::{Notice, SignedEventMessage, SignedNontransferableReceipt},
+    event_message::signed_event_message::{
+        Notice, SignedEventMessage, SignedNontransferableReceipt,
     },
     event_parsing::primitives::CesrPrimitive,
+    mailbox::{
+        exchange::{ExchangeMessage, ForwardTopic},
+        MailboxResponse,
+    },
     prefix::IdentifierPrefix,
-    query::query_event::MailboxResponse,
 };
-use keri::{
-    event::EventMessage,
-    event_message::{exchange::ExchangeMessage, key_event_message::KeyEvent},
-};
-
+use keri::{event::EventMessage, event_message::key_event_message::KeyEvent};
 use super::{error::ControllerError, identifier_controller::IdentifierController};
 
 #[derive(Default, Debug)]

@@ -13,14 +13,11 @@ use keri::{
         seal::{EventSeal, Seal},
         threshold::SignatureThreshold,
     },
-    event_message::{
-        exchange::ForwardTopic,
-        signed_event_message::{Message, Notice, Op, SignedEventMessage},
-    },
+    event_message::signed_event_message::{Message, Notice, Op, SignedEventMessage},
     keys::PublicKey,
+    mailbox::{exchange::ForwardTopic, MailboxResponse},
     prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     processor::{basic_processor::BasicProcessor, event_storage::EventStorage, Processor},
-    query::query_event::MailboxResponse,
     signer::{CryptoBox, Signer},
 };
 use tempfile::Builder;
