@@ -4,6 +4,7 @@ members = [
     "keriox_core",
     "keriox_tests",
     "support/gossip",
+    "support/teliox",
     "components/witness",
     "components/watcher",
     "components/controller",
