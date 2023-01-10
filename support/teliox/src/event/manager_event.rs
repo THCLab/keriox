@@ -1,21 +1,21 @@
-use serde::{Deserialize, Serialize};
+use serde::{de, Deserialize, Deserializer, Serialize};
 use serde_hex::{Compact, SerHex};
 
 use keri::{
     event::SerializationFormats,
-    event_message::serialization_info::SerializationInfo,
+    event_message::{serialization_info::SerializationInfo, EventMessage, SaidEvent, Typeable},
     event_parsing::codes::self_addressing::dummy_prefix,
     prefix::IdentifierPrefix,
     sai::{derivation::SelfAddressing, SelfAddressingPrefix},
 };
+use serde_json::Value;
 
-use crate::{error::Error, state::ManagerTelState};
+use crate::error::Error;
+
+pub type ManagerTelEventMessage = EventMessage<SaidEvent<ManagerTelEvent>>;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ManagerTelEvent {
-    #[serde(rename = "v")]
-    pub serialization_info: SerializationInfo,
-
     // The Registry specific identifier will be self-certifying, self-addressing using its inception data for its derivation.
     // This requires a commitment to the anchor in the controlling KEL and necessitates the event location seal be included in
     // the event. The derived identifier is then set in the i field of the events in the management TEL.
@@ -29,98 +29,72 @@ pub struct ManagerTelEvent {
     pub event_type: ManagerEventType,
 }
 
-impl ManagerTelEvent {
-    pub fn new(
-        prefix: &IdentifierPrefix,
-        sn: u64,
-        event_type: ManagerEventType,
-        format: SerializationFormats,
-    ) -> Result<Self, Error> {
-        let size = Self {
-            serialization_info: SerializationInfo::new(format, 0),
-            prefix: prefix.clone(),
-            sn,
-            event_type: event_type.clone(),
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "lowercase")]
+pub enum ManagementTelType {
+    Vcp,
+    Vrt,
+}
+
+impl Typeable for ManagerTelEvent {
+    type TypeTag = ManagementTelType;
+    fn get_type(&self) -> ManagementTelType {
+        match self.event_type {
+            ManagerEventType::Vcp(_) => ManagementTelType::Vcp,
+            ManagerEventType::Vrt(_) => ManagementTelType::Vrt,
         }
-        .serialize()?
-        .len();
-        let serialization_info = SerializationInfo::new(format, size);
-        Ok(Self {
-            serialization_info,
+    }
+}
+
+impl<'de> Deserialize<'de> for ManagerEventType {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        // Helper struct for adding tag to properly deserialize 't' field
+        #[derive(Deserialize, Debug)]
+        struct EventType {
+            t: ManagementTelType,
+        }
+
+        let v = Value::deserialize(deserializer)?;
+        let m = EventType::deserialize(&v).map_err(de::Error::custom)?;
+        match m.t {
+            ManagementTelType::Vcp => Ok(ManagerEventType::Vcp(
+                Inc::deserialize(&v).map_err(de::Error::custom)?,
+            )),
+            ManagementTelType::Vrt => Ok(ManagerEventType::Vrt(
+                Rot::deserialize(&v).map_err(de::Error::custom)?,
+            )),
+        }
+    }
+}
+
+impl ManagerTelEvent {
+    pub fn new(prefix: &IdentifierPrefix, sn: u64, event_type: ManagerEventType) -> Self {
+        Self {
             prefix: prefix.to_owned(),
             sn,
             event_type,
-        })
-    }
-
-    pub fn serialize(&self) -> Result<Vec<u8>, Error> {
-        self.serialization_info
-            .kind
-            .encode(self)
-            .map_err(|e| Error::KeriError(e))
-    }
-
-    pub fn apply_to(&self, state: &ManagerTelState) -> Result<ManagerTelState, Error> {
-        match self.event_type {
-            ManagerEventType::Vcp(ref vcp) => {
-                if state != &ManagerTelState::default() {
-                    Err(Error::Generic("Improper manager state".into()))
-                } else {
-                    let backers = if vcp.config.contains(&Config::NoBackers) {
-                        None
-                    } else {
-                        Some(vcp.backers.clone())
-                    };
-                    Ok(ManagerTelState {
-                        prefix: self.prefix.to_owned(),
-                        sn: 0,
-                        last: self.serialize()?,
-                        issuer: vcp.issuer_id.clone(),
-                        backers,
-                    })
-                }
-            }
-            ManagerEventType::Vrt(ref vrt) => {
-                if state.sn + 1 == self.sn {
-                    if vrt.prev_event.verify_binding(&state.last) {
-                        match state.backers {
-                            Some(ref backers) => {
-                                let mut new_backers: Vec<IdentifierPrefix> = backers
-                                    .iter()
-                                    .filter(|backer| !backers.contains(backer))
-                                    .map(|x| x.to_owned())
-                                    .collect();
-                                vrt.backers_to_add
-                                    .iter()
-                                    .for_each(|ba| new_backers.push(ba.to_owned()));
-                                Ok(ManagerTelState {
-                                    prefix: self.prefix.to_owned(),
-                                    sn: self.sn,
-                                    last: self.serialize()?,
-                                    backers: Some(new_backers),
-                                    issuer: state.issuer.clone(),
-                                })
-                            }
-                            None => Err(Error::Generic(
-                                "Trying to update backers of backerless state".into(),
-                            )),
-                        }
-                    } else {
-                        Err(Error::Generic("Previous event doesn't match".to_string()))
-                    }
-                } else {
-                    Err(Error::Generic("Improper event sn".into()))
-                }
-            }
         }
+    }
+
+    pub fn to_message(
+        self,
+        format: SerializationFormats,
+        derivation: SelfAddressing,
+    ) -> Result<ManagerTelEventMessage, Error> {
+        Ok(SaidEvent::<ManagerTelEvent>::to_message(
+            self, format, derivation,
+        )?)
     }
 }
 
 // #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 // pub struct ManagerIdentifier {}
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-#[serde(tag = "t", rename_all = "lowercase")]
+#[derive(Serialize, Debug, Clone, PartialEq)]
+#[serde(untagged, rename_all = "lowercase")]
 pub enum ManagerEventType {
     Vcp(Inc),
     Vrt(Rot),
@@ -219,14 +193,13 @@ impl Inc {
         derivation: &keri::sai::derivation::SelfAddressing,
         format: SerializationFormats,
     ) -> Result<ManagerTelEvent, Error> {
-        ManagerTelEvent::new(
+        Ok(ManagerTelEvent::new(
             &IdentifierPrefix::SelfAddressing(derivation.derive(
                 &DummyEvent::derive_inception_data(self.clone(), &derivation, format)?,
             )),
             0,
             ManagerEventType::Vcp(self),
-            format,
-        )
+        ))
     }
 }
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -239,168 +212,203 @@ pub struct Rot {
     pub backers_to_remove: Vec<IdentifierPrefix>,
 }
 
-#[test]
-fn test_serialization() -> Result<(), keri::prefix::error::Error> {
-    // Manager inception
-    let vcp_raw = r#"{"v":"KERI10JSON0000ad_","i":"EjD_sFljMHXJCC3rEFL93MwHNGguKdC11mcMuQnZitcs","ii":"DntNTPnDFBnmlO6J44LXCrzZTAmpe-82b7BmQGtL4QhM","s":"0","t":"vcp","c":["NB"],"bt":"0","b":[]}"#;
-    let vcp: ManagerTelEvent = serde_json::from_str(vcp_raw).unwrap();
-    assert_eq!(
-        vcp.prefix,
-        "EjD_sFljMHXJCC3rEFL93MwHNGguKdC11mcMuQnZitcs".parse()?
-    );
-    assert_eq!(vcp.sn, 0);
-    let expected_event_type = ManagerEventType::Vcp(Inc {
-        issuer_id: "DntNTPnDFBnmlO6J44LXCrzZTAmpe-82b7BmQGtL4QhM".parse()?,
-        config: vec![Config::NoBackers],
-        backer_threshold: 0,
-        backers: vec![],
-    });
-    assert_eq!(vcp.event_type, expected_event_type);
+#[cfg(test)]
+mod tests {
+    use keri::{
+        event::SerializationFormats, event_message::Digestible, prefix::IdentifierPrefix,
+        sai::derivation::SelfAddressing,
+    };
 
-    let vcp_raw = r#"{"v":"KERI10JSON0000d7_","i":"EVohdnN33-vdNOTPYxeTQIWVzRKtzZzBoiBSGYSSnD0s","ii":"DntNTPnDFBnmlO6J44LXCrzZTAmpe-82b7BmQGtL4QhM","s":"0","t":"vcp","c":[],"bt":"1","b":["EXvR3p8V95W8J7Ui4-mEzZ79S-A1esAnJo1Kmzq80Jkc"]}"#;
-    let vcp: ManagerTelEvent = serde_json::from_str(vcp_raw).unwrap();
-    assert_eq!(
-        vcp.prefix,
-        "EVohdnN33-vdNOTPYxeTQIWVzRKtzZzBoiBSGYSSnD0s".parse()?
-    );
-    assert_eq!(vcp.sn, 0);
-    let expected_event_type = ManagerEventType::Vcp(Inc {
-        issuer_id: "DntNTPnDFBnmlO6J44LXCrzZTAmpe-82b7BmQGtL4QhM".parse()?,
-        config: vec![],
-        backer_threshold: 1,
-        backers: vec!["EXvR3p8V95W8J7Ui4-mEzZ79S-A1esAnJo1Kmzq80Jkc".parse()?],
-    });
-    assert_eq!(vcp.event_type, expected_event_type);
+    use crate::{
+        error::Error,
+        event::manager_event::{
+            Config, Inc, ManagerEventType, ManagerTelEvent, ManagerTelEventMessage, Rot,
+        },
+        state::ManagerTelState,
+    };
 
-    // Manager rotation
-    let vrt_raw = r#"{"v":"KERI10JSON0000aa_","i":"EE3Xv6CWwEMpW-99rhPD9IHFCR2LN5ienLVI8yG5faBw","p":"EY2L3ycqK9645aEeQKP941xojSiuiHsw4Y6yTW-PmsBg","s":"3","t":"vrt","bt":"1","br":[],"ba":[]}"#;
-    let vrt: ManagerTelEvent = serde_json::from_str(vrt_raw).unwrap();
-    assert_eq!(
-        vrt.prefix,
-        "EE3Xv6CWwEMpW-99rhPD9IHFCR2LN5ienLVI8yG5faBw".parse()?
-    );
-    assert_eq!(vrt.sn, 3);
-    let expected_event_type = ManagerEventType::Vrt(Rot {
-        prev_event: "EY2L3ycqK9645aEeQKP941xojSiuiHsw4Y6yTW-PmsBg".parse()?,
-        backers_to_add: vec![],
-        backers_to_remove: vec![],
-    });
-    assert_eq!(vrt.event_type, expected_event_type);
+    #[test]
+    fn test_serialization() -> Result<(), keri::prefix::error::Error> {
+        // Manager inception
+        // let vcp_raw = r#"{"v":"KERI10JSON000113_","t":"vcp","d":"EBoBPh3N5nr1tItAUCkXNx3vShB_Be6iiQPXBsg2LvxA","i":"EBoBPh3N5nr1tItAUCkXNx3vShB_Be6iiQPXBsg2LvxA","ii":"DAtNTPnDFBnmlO6J44LXCrzZTAmpe-82b7BmQGtL4QhM","s":"0","c":["NB"],"bt":"0","b":[],"n":"A9XfpxIl1LcIkMhUSCCC8fgvkuX8gG9xK3SM-S8a8Y_U"}"#;
+        let vcp_raw = r#"{"v":"KERI10JSON0000dc_","t":"vcp","d":"EIniznx8Vyltc0i-T7QwngvZkt_2xsT1PdsyRjq_1gAw","i":"EFohdnN33-vdNOTPYxeTQIWVzRKtzZzBoiBSGYSSnD0s","s":"0","ii":"DHtNTPnDFBnmlO6J44LXCrzZTAmpe-82b7BmQGtL4QhM","c":[],"bt":"1","b":[]}"#;
+        let vcp: ManagerTelEventMessage = serde_json::from_str(vcp_raw).unwrap();
+        assert_eq!(
+            vcp.event.content.prefix,
+            "EFohdnN33-vdNOTPYxeTQIWVzRKtzZzBoiBSGYSSnD0s".parse()?
+        );
+        assert_eq!(vcp.event.content.sn, 0);
+        let expected_event_type = ManagerEventType::Vcp(Inc {
+            issuer_id: "DHtNTPnDFBnmlO6J44LXCrzZTAmpe-82b7BmQGtL4QhM".parse()?,
+            config: vec![],
+            backer_threshold: 1,
+            backers: vec![],
+        });
+        assert_eq!(vcp.event.content.event_type, expected_event_type);
+        assert_eq!(
+            String::from_utf8(vcp.serialize().unwrap()).unwrap(),
+            vcp_raw
+        );
 
-    Ok(())
-}
+        // let vcp_raw = r#"{"v":"KERI10JSON0000d7_","i":"EVohdnN33-vdNOTPYxeTQIWVzRKtzZzBoiBSGYSSnD0s","ii":"DntNTPnDFBnmlO6J44LXCrzZTAmpe-82b7BmQGtL4QhM","s":"0","t":"vcp","c":[],"bt":"1","b":["EXvR3p8V95W8J7Ui4-mEzZ79S-A1esAnJo1Kmzq80Jkc"]}"#;
+        let vcp_raw = r#"{"v":"KERI10JSON0000e0_","t":"vcp","d":"EBK9Otzl6zxt55LF095coJH7EBqlPIdrDC0f8bjeZYC9","i":"EFohdnN33-vdNOTPYxeTQIWVzRKtzZzBoiBSGYSSnD0s","s":"0","ii":"DHtNTPnDFBnmlO6J44LXCrzZTAmpe-82b7BmQGtL4QhM","c":["NB"],"bt":"1","b":["EXvR3p8V95W8J7Ui4-mEzZ79S-A1esAnJo1Kmzq80Jkc"]}"#;
+        let vcp: ManagerTelEvent = serde_json::from_str(vcp_raw).unwrap();
+        assert_eq!(
+            vcp.prefix,
+            "EFohdnN33-vdNOTPYxeTQIWVzRKtzZzBoiBSGYSSnD0s".parse()?
+        );
+        assert_eq!(vcp.sn, 0);
+        let expected_event_type = ManagerEventType::Vcp(Inc {
+            issuer_id: "DHtNTPnDFBnmlO6J44LXCrzZTAmpe-82b7BmQGtL4QhM".parse()?,
+            config: vec![Config::NoBackers],
+            backer_threshold: 1,
+            backers: vec!["EXvR3p8V95W8J7Ui4-mEzZ79S-A1esAnJo1Kmzq80Jkc".parse()?],
+        });
+        assert_eq!(vcp.event_type, expected_event_type);
 
-#[test]
-fn test_apply_to() -> Result<(), Error> {
-    use keri::sai::derivation::SelfAddressing;
-    // Construct inception event
-    let pref: IdentifierPrefix = "EVohdnN33-vdNOTPYxeTQIWVzRKtzZzBoiBSGYSSnD0s"
-        .parse()
-        .unwrap();
-    let issuer_pref: IdentifierPrefix = "DntNTPnDFBnmlO6J44LXCrzZTAmpe-82b7BmQGtL4QhM"
-        .parse()
-        .unwrap();
-    let event_type = ManagerEventType::Vcp(Inc {
-        issuer_id: issuer_pref.clone(),
-        config: vec![],
-        backer_threshold: 1,
-        backers: vec![],
-    });
-    let vcp = ManagerTelEvent::new(&pref, 0, event_type, SerializationFormats::JSON)?;
-
-    let state = ManagerTelState::default();
-    let state = vcp.apply_to(&state)?;
-    assert_eq!(state.issuer, issuer_pref);
-    assert_eq!(state.backers.clone().unwrap(), vec![]);
-
-    // Construct rotation event
-    let prev_event = SelfAddressing::Blake3_256.derive(&vcp.serialize()?);
-    let event_type = ManagerEventType::Vrt(Rot {
-        prev_event,
-        backers_to_add: vec!["EXvR3p8V95W8J7Ui4-mEzZ79S-A1esAnJo1Kmzq80Jkc"
-            .parse()
-            .unwrap()],
-        backers_to_remove: vec![],
-    });
-    let vrt = ManagerTelEvent::new(&pref, 1, event_type.clone(), SerializationFormats::JSON)?;
-    let state = vrt.apply_to(&state)?;
-    assert_eq!(state.backers.clone().unwrap().len(), 1);
-
-    // Try applying event with improper sn.
-    let out_of_order_vrt = ManagerTelEvent::new(&pref, 10, event_type, SerializationFormats::JSON)?;
-    let err_state = out_of_order_vrt.apply_to(&state);
-    assert!(err_state.is_err());
-
-    // Try applying event with improper previous event
-    let prev_event = SelfAddressing::Blake3_256.derive(&vcp.serialize()?);
-    let event_type = ManagerEventType::Vrt(Rot {
-        prev_event,
-        backers_to_remove: vec![],
-        backers_to_add: vec![],
-    });
-    let bad_previous = ManagerTelEvent::new(&pref, 2, event_type, SerializationFormats::JSON)?;
-    let err_state = bad_previous.apply_to(&state);
-    assert!(err_state.is_err());
-
-    // Construct next rotation event
-    let prev_event = SelfAddressing::Blake3_256.derive(&vrt.serialize()?);
-    let event_type = ManagerEventType::Vrt(Rot {
-        prev_event,
-        backers_to_remove: vec!["EXvR3p8V95W8J7Ui4-mEzZ79S-A1esAnJo1Kmzq80Jkc"
-            .parse()
-            .unwrap()],
-        backers_to_add: vec![
-            "DSEpNJeSJjxo6oAxkNE8eCOJg2HRPstqkeHWBAvN9XNU"
+        // Manager rotation
+        // let vrt_raw = r#"{"v":"KERI10JSON0000aa_","i":"EE3Xv6CWwEMpW-99rhPD9IHFCR2LN5ienLVI8yG5faBw","p":"EY2L3ycqK9645aEeQKP941xojSiuiHsw4Y6yTW-PmsBg","s":"3","t":"vrt","bt":"1","br":[],"ba":[]}"#;
+        let vrt_raw = r#"{"v":"KERI10JSON000102_","t":"vrt","d":"EBt83eunp22Zingg0UXHKXddBLeYQSBovkbr5mtQnwmB","i":"EFohdnN33-vdNOTPYxeTQIWVzRKtzZzBoiBSGYSSnD0s","s":"1","p":"EIniznx8Vyltc0i-T7QwngvZkt_2xsT1PdsyRjq_1gAw","ba":["EHvR3p8V95W8J7Ui4-mEzZ79S-A1esAnJo1Kmzq80Jkc"],"br":[]}"#;
+        let vrt: ManagerTelEvent = serde_json::from_str(vrt_raw).unwrap();
+        assert_eq!(
+            vrt.prefix,
+            "EFohdnN33-vdNOTPYxeTQIWVzRKtzZzBoiBSGYSSnD0s".parse()?
+        );
+        assert_eq!(vrt.sn, 1);
+        let expected_event_type = ManagerEventType::Vrt(Rot {
+            prev_event: "EIniznx8Vyltc0i-T7QwngvZkt_2xsT1PdsyRjq_1gAw".parse()?,
+            backers_to_add: vec!["EHvR3p8V95W8J7Ui4-mEzZ79S-A1esAnJo1Kmzq80Jkc"
                 .parse()
-                .unwrap(),
-            "Dvxo-P4W_Z0xXTfoA3_4DMPn7oi0mLCElOWJDpC0nQXw"
-                .parse()
-                .unwrap(),
-        ],
-    });
-    let vrt = ManagerTelEvent::new(&pref, 2, event_type.clone(), SerializationFormats::JSON)?;
-    let state = vrt.apply_to(&state)?;
-    assert_eq!(state.backers.clone().unwrap().len(), 2);
+                .unwrap()],
+            backers_to_remove: vec![],
+        });
+        assert_eq!(vrt.event_type, expected_event_type);
 
-    Ok(())
-}
+        Ok(())
+    }
 
-#[test]
-fn test_no_backers() -> Result<(), Error> {
-    use keri::sai::derivation::SelfAddressing;
-    // Construct inception event
-    let pref: IdentifierPrefix = "EVohdnN33-vdNOTPYxeTQIWVzRKtzZzBoiBSGYSSnD0s"
-        .parse()
-        .unwrap();
-    let issuer_pref: IdentifierPrefix = "DntNTPnDFBnmlO6J44LXCrzZTAmpe-82b7BmQGtL4QhM"
-        .parse()
-        .unwrap();
-    let event_type = ManagerEventType::Vcp(Inc {
-        issuer_id: issuer_pref.clone(),
-        config: vec![Config::NoBackers],
-        backer_threshold: 1,
-        backers: vec![],
-    });
-    let vcp = ManagerTelEvent::new(&pref, 0, event_type, SerializationFormats::JSON)?;
-
-    let state = ManagerTelState::default();
-    let state = vcp.apply_to(&state)?;
-    assert_eq!(state.issuer, issuer_pref);
-    assert_eq!(state.backers, None);
-
-    // Construct rotation event
-    let prev_event = SelfAddressing::Blake3_256.derive(&vcp.serialize()?);
-    let event_type = ManagerEventType::Vrt(Rot {
-        prev_event,
-        backers_to_add: vec!["EXvR3p8V95W8J7Ui4-mEzZ79S-A1esAnJo1Kmzq80Jkc"
+    #[test]
+    fn test_apply_to() -> Result<(), Error> {
+        // Construct inception event
+        let pref: IdentifierPrefix = "EVohdnN33-vdNOTPYxeTQIWVzRKtzZzBoiBSGYSSnD0s"
             .parse()
-            .unwrap()],
-        backers_to_remove: vec![],
-    });
-    let vrt = ManagerTelEvent::new(&pref, 1, event_type.clone(), SerializationFormats::JSON)?;
-    // Try to update backers of backerless state.
-    let state = vrt.apply_to(&state);
-    assert!(state.is_err());
+            .unwrap();
+        let issuer_pref: IdentifierPrefix = "DntNTPnDFBnmlO6J44LXCrzZTAmpe-82b7BmQGtL4QhM"
+            .parse()
+            .unwrap();
+        let event_type = ManagerEventType::Vcp(Inc {
+            issuer_id: issuer_pref.clone(),
+            config: vec![],
+            backer_threshold: 1,
+            backers: vec![],
+        });
+        let vcp = ManagerTelEvent::new(&pref, 0, event_type)
+            .to_message(SerializationFormats::JSON, SelfAddressing::Blake3_256)?;
+        println!("\nvcp: {}", String::from_utf8(vcp.serialize()?).unwrap());
 
-    Ok(())
+        let state = ManagerTelState::default();
+        let state = state.apply(&vcp)?;
+        assert_eq!(state.issuer, issuer_pref);
+        assert_eq!(state.backers.clone().unwrap(), vec![]);
+
+        // Construct rotation event
+        let prev_event = vcp.event.get_digest();
+        let event_type = ManagerEventType::Vrt(Rot {
+            prev_event,
+            backers_to_add: vec!["EXvR3p8V95W8J7Ui4-mEzZ79S-A1esAnJo1Kmzq80Jkc"
+                .parse()
+                .unwrap()],
+            backers_to_remove: vec![],
+        });
+        let vrt = ManagerTelEvent::new(&pref, 1, event_type.clone())
+            .to_message(SerializationFormats::JSON, SelfAddressing::Blake3_256)?;
+        println!("\nvrt: {}", String::from_utf8(vrt.serialize()?).unwrap());
+        let state = state.apply(&vrt)?;
+        assert_eq!(state.backers.clone().unwrap().len(), 1);
+        assert_eq!(state.sn, 1);
+
+        // Try applying event with improper sn.
+        let out_of_order_vrt = ManagerTelEvent::new(&pref, 10, event_type)
+            .to_message(SerializationFormats::JSON, SelfAddressing::Blake3_256)?;
+        let err_state = state.apply(&out_of_order_vrt);
+        assert!(err_state.is_err());
+
+        // Try applying event with improper previous event
+        let prev_event = SelfAddressing::Blake3_256.derive("anything".as_bytes());
+        let event_type = ManagerEventType::Vrt(Rot {
+            prev_event,
+            backers_to_remove: vec![],
+            backers_to_add: vec![],
+        });
+        let bad_previous = ManagerTelEvent::new(&pref, 2, event_type)
+            .to_message(SerializationFormats::JSON, SelfAddressing::Blake3_256)?;
+        let err_state = state.apply(&bad_previous);
+        assert!(err_state.is_err());
+
+        // Construct next rotation event
+        let prev_event = state.last.clone();
+        let event_type = ManagerEventType::Vrt(Rot {
+            prev_event,
+            backers_to_remove: vec!["EXvR3p8V95W8J7Ui4-mEzZ79S-A1esAnJo1Kmzq80Jkc"
+                .parse()
+                .unwrap()],
+            backers_to_add: vec![
+                "DSEpNJeSJjxo6oAxkNE8eCOJg2HRPstqkeHWBAvN9XNU"
+                    .parse()
+                    .unwrap(),
+                "Dvxo-P4W_Z0xXTfoA3_4DMPn7oi0mLCElOWJDpC0nQXw"
+                    .parse()
+                    .unwrap(),
+            ],
+        });
+        let vrt = ManagerTelEvent::new(&pref, 2, event_type.clone())
+            .to_message(SerializationFormats::JSON, SelfAddressing::Blake3_256)?;
+        let state = state.apply(&vrt)?;
+        assert_eq!(state.backers.clone().unwrap().len(), 2);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_no_backers() -> Result<(), Error> {
+        use keri::sai::derivation::SelfAddressing;
+        // Construct inception event
+        let pref: IdentifierPrefix = "EVohdnN33-vdNOTPYxeTQIWVzRKtzZzBoiBSGYSSnD0s"
+            .parse()
+            .unwrap();
+        let issuer_pref: IdentifierPrefix = "DntNTPnDFBnmlO6J44LXCrzZTAmpe-82b7BmQGtL4QhM"
+            .parse()
+            .unwrap();
+        let event_type = ManagerEventType::Vcp(Inc {
+            issuer_id: issuer_pref.clone(),
+            config: vec![Config::NoBackers],
+            backer_threshold: 1,
+            backers: vec![],
+        });
+        let vcp = ManagerTelEvent::new(&pref, 0, event_type)
+            .to_message(SerializationFormats::JSON, SelfAddressing::Blake3_256)?;
+        println!("\nvcp: {}", String::from_utf8(vcp.serialize()?).unwrap());
+
+        let state = ManagerTelState::default();
+        let state = state.apply(&vcp)?;
+        assert_eq!(state.issuer, issuer_pref);
+        assert_eq!(state.backers, None);
+
+        // Construct rotation event
+        let prev_event = SelfAddressing::Blake3_256.derive(&vcp.serialize()?);
+        let event_type = ManagerEventType::Vrt(Rot {
+            prev_event,
+            backers_to_add: vec!["EXvR3p8V95W8J7Ui4-mEzZ79S-A1esAnJo1Kmzq80Jkc"
+                .parse()
+                .unwrap()],
+            backers_to_remove: vec![],
+        });
+        let vrt = ManagerTelEvent::new(&pref, 1, event_type.clone())
+            .to_message(SerializationFormats::JSON, SelfAddressing::Blake3_256)?;
+        // Try to update backers of backerless state.
+        let state = state.apply(&vrt);
+        assert!(state.is_err());
+
+        Ok(())
+    }
 }

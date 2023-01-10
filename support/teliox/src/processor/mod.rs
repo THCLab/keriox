@@ -53,15 +53,16 @@ impl<'d> EventProcessor<'d> {
     // Process verifiable event. It doesn't check if source seal is correct. Just add event to tel.
     pub fn process(&self, event: VerifiableEvent) -> Result<State, Error> {
         match &event.event.clone() {
-            Event::Management(ref man) => self
-                .get_management_tel_state(&man.prefix)?
-                .apply(man)
-                .map(|state| {
+            Event::Management(ref man) => {
+                let state = self.get_management_tel_state(&man.event.content.prefix)?;
+
+                state.apply(man).map(|state| {
                     self.db
-                        .add_new_management_event(event, &man.prefix)
+                        .add_new_management_event(event, &man.event.content.prefix)
                         .unwrap();
                     State::Management(state)
-                }),
+                })
+            }
             Event::Vc(ref vc_ev) => self
                 .get_vc_state(&vc_ev.event.content.data.prefix)?
                 .apply(vc_ev)
@@ -104,7 +105,7 @@ impl<'d> EventProcessor<'d> {
         match self.db.get_management_events(id) {
             Some(mut events) => Ok(events.find(|event| {
                 if let Event::Management(man) = &event.event {
-                    man.sn == sn
+                    man.event.content.sn == sn
                 } else {
                     false
                 }

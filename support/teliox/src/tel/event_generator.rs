@@ -30,12 +30,19 @@ pub fn make_inception_event(
     };
 
     Ok(Event::Management(
-        event_type.incept_self_addressing(
-            &derivation.unwrap_or(&SelfAddressing::Blake3_256),
-            serialization_format
-                .unwrap_or(&SerializationFormats::JSON)
-                .to_owned(),
-        )?,
+        event_type
+            .incept_self_addressing(
+                &derivation.unwrap_or(&SelfAddressing::Blake3_256),
+                serialization_format
+                    .unwrap_or(&SerializationFormats::JSON)
+                    .to_owned(),
+            )?
+            .to_message(
+                serialization_format
+                    .unwrap_or(&SerializationFormats::JSON)
+                    .clone(),
+                derivation.unwrap_or(&SelfAddressing::Blake3_256).clone(),
+            )?,
     ))
 }
 
@@ -47,20 +54,19 @@ pub fn make_rotation_event(
     serialization_format: Option<&SerializationFormats>,
 ) -> Result<Event, Error> {
     let rot_data = Rot {
-        prev_event: derivation
-            .unwrap_or(&SelfAddressing::Blake3_256)
-            .derive(&state.last),
+        prev_event: state.last.clone(),
         backers_to_add: ba.to_vec(),
         backers_to_remove: br.to_vec(),
     };
-    Ok(Event::Management(ManagerTelEvent::new(
-        &state.prefix,
-        state.sn + 1,
-        ManagerEventType::Vrt(rot_data),
-        serialization_format
-            .unwrap_or(&SerializationFormats::JSON)
-            .to_owned(),
-    )?))
+    Ok(Event::Management(
+        ManagerTelEvent::new(&state.prefix, state.sn + 1, ManagerEventType::Vrt(rot_data))
+            .to_message(
+                serialization_format
+                    .unwrap_or(&SerializationFormats::JSON)
+                    .to_owned(),
+                derivation.unwrap_or(&SelfAddressing::Blake3_256).clone(),
+            )?,
+    ))
 }
 
 pub fn make_issuance_event(
@@ -72,9 +78,7 @@ pub fn make_issuance_event(
     let registry_anchor = EventSeal {
         prefix: state.prefix.clone(),
         sn: state.sn,
-        event_digest: derivation
-            .unwrap_or(&SelfAddressing::Blake3_256)
-            .derive(&state.last),
+        event_digest: state.last.clone(),
     };
     let iss = VCEventType::Bis(Issuance::new(state.issuer.clone(), registry_anchor));
     let vc_prefix = IdentifierPrefix::SelfAddressing(vc_hash);
@@ -98,9 +102,7 @@ pub fn make_revoke_event(
     let registry_anchor = EventSeal {
         prefix: state.prefix.to_owned(),
         sn: state.sn,
-        event_digest: derivation
-            .unwrap_or(&SelfAddressing::Blake3_256)
-            .derive(&state.last),
+        event_digest: state.last.clone(),
     };
     let rev = VCEventType::Brv(Revocation {
         prev_event_hash: last_vc_event_hash,
