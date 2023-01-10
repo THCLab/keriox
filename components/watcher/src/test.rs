@@ -24,7 +24,7 @@ use tempfile::Builder;
 use url::{Host, Url};
 use witness::WitnessListener;
 
-use crate::watcher::WatcherData;
+use crate::{watcher::WatcherData, WatcherListener};
 
 #[async_std::test]
 async fn test_authentication() -> Result<(), Error> {
@@ -132,13 +132,25 @@ async fn test_add_watcher() -> Result<(), Error> {
         )?
     };
 
-    let root = Builder::new().prefix("test-db").tempdir().unwrap();
-    let initial_config = OptionalConfig::init().with_db_path(root.into_path());
+    let watcher_url = Url::parse("http://127.0.0.1:3236").unwrap();
+    let watcher_listener = {
+        let root = Builder::new().prefix("cont-test-db").tempdir().unwrap();
+        WatcherListener::setup(watcher_url.clone(), None, root.path(), None)?
+    };
+    let watcher = watcher_listener.watcher_data.clone();
+    let watcher_id = watcher.0.prefix.clone();
+    // let watcher_id: BasicPrefix = "BF2t2NPc1bwptY1hYV0YCib1JjQ11k9jtuaZemecPF5b".parse().unwrap();
 
     let mut actors: TestActorMap = HashMap::new();
     actors.insert((Host::Ipv4(Ipv4Addr::LOCALHOST), 3232), Arc::new(wit));
+    actors.insert(
+        (Host::Ipv4(Ipv4Addr::LOCALHOST), 3236),
+        Arc::new(watcher_listener),
+    );
     let transport = TestTransport::new(actors);
 
+    let root = Builder::new().prefix("test-db").tempdir().unwrap();
+    let initial_config = OptionalConfig::init().with_db_path(root.into_path());
     let controller =
         Arc::new(Controller::with_transport(Some(initial_config), Box::new(transport)).unwrap());
     let km1 = CryptoBox::new()?;
@@ -178,17 +190,6 @@ async fn test_add_watcher() -> Result<(), Error> {
         IdentifierController::new(incepted_identifier, controller.clone())
     };
 
-    let url = Url::parse("http://127.0.0.1:3236").unwrap();
-    let root = Builder::new().prefix("cont-test-db").tempdir().unwrap();
-    let watcher = WatcherData::setup(
-        url.clone(),
-        root.path(),
-        None,
-        Box::new(DefaultTransport::new()),
-    )?;
-    let watcher_id = watcher.prefix;
-    // let watcher_id: BasicPrefix = "BF2t2NPc1bwptY1hYV0YCib1JjQ11k9jtuaZemecPF5b".parse().unwrap();
-
     // Watcher should know both controllers
     // watcher.parse_and_process_notices(&asker_icp).unwrap();
     // watcher.parse_and_process_notices(&about_icp).unwrap();
@@ -196,7 +197,7 @@ async fn test_add_watcher() -> Result<(), Error> {
     let watcher_oobi = LocationScheme {
         eid: IdentifierPrefix::Basic(watcher_id.clone()),
         scheme: keri::oobi::Scheme::Http,
-        url,
+        url: watcher_url,
     };
     identifier1
         .source

@@ -10,7 +10,7 @@ use crate::watcher::{Watcher, WatcherData};
 use self::http_handlers::ApiError;
 
 pub struct WatcherListener {
-    watcher_data: Arc<Watcher>,
+    pub watcher_data: Arc<Watcher>,
 }
 
 impl WatcherListener {
