@@ -5,7 +5,6 @@ use crate::oobi::{EndRole, Role};
 #[cfg(feature = "query")]
 use crate::query::{
     reply_event::{ReplyEvent, ReplyRoute},
-    Timestamped,
 };
 use crate::{
     error::Error,
@@ -210,6 +209,8 @@ pub fn exchange(
     data: &EventMessage<KeyEvent>,
     topic: ForwardTopic,
 ) -> Result<ExchangeMessage, Error> {
+    use crate::event_message::timestamped::Timestamped;
+
     Timestamped::new(Exchange::Fwd {
         args: FwdArgs {
             recipient_id: receipient.clone(),

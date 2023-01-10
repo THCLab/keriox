@@ -11,7 +11,7 @@ use super::{
     dummy_event::{DummyEventMessage, DummyInceptionEvent},
     signature::Nontransferable,
     signed_event_message::SignedEventMessage,
-    Digestible, EventMessage, SaidEvent, Typeable,
+    Digestible, EventMessage, SaidEvent, Typeable, EventTypeTag,
 };
 
 pub type KeyEvent = SaidEvent<Event>;
@@ -34,7 +34,7 @@ impl EventSemantics for KeyEvent {
     }
 }
 
-impl From<EventMessage<KeyEvent>> for DummyEventMessage<Event> {
+impl From<EventMessage<KeyEvent>> for DummyEventMessage<EventTypeTag, Event> {
     fn from(em: EventMessage<KeyEvent>) -> Self {
         DummyEventMessage {
             serialization_info: em.serialization_info,
@@ -79,7 +79,7 @@ impl EventMessage<KeyEvent> {
             )?
             .serialize()?,
             _ => {
-                let dummy_event: DummyEventMessage<_> = self.clone().into();
+                let dummy_event: DummyEventMessage<_, _> = self.clone().into();
                 dummy_event.serialize()?
             }
         })

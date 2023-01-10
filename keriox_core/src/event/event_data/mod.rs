@@ -88,6 +88,7 @@ impl From<EventData> for EventTypeTag {
 }
 
 impl Typeable for EventData {
+    type TypeTag = EventTypeTag;
     fn get_type(&self) -> EventTypeTag {
         self.into()
     }

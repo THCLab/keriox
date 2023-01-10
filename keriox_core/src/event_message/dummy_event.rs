@@ -82,20 +82,20 @@ impl DummyInceptionEvent {
 }
 
 #[derive(Serialize, Debug, Clone)]
-pub(crate) struct DummyEventMessage<T: Serialize> {
+pub(crate) struct DummyEventMessage<T: Serialize, D: Serialize> {
     #[serde(rename = "v")]
     pub serialization_info: SerializationInfo,
     #[serde(rename = "t")]
-    pub event_type: EventTypeTag,
+    pub event_type: T,
     #[serde(rename = "d")]
     pub digest: String,
     #[serde(flatten)]
-    pub data: T,
+    pub data: D,
 }
 
-impl<T: Serialize + Typeable + Clone> DummyEventMessage<T> {
+impl<T: Serialize, D: Serialize + Typeable<TypeTag = T> + Clone> DummyEventMessage<T, D> {
     pub fn dummy_event(
-        event: T,
+        event: D,
         format: SerializationFormats,
         derivation: SelfAddressing,
     ) -> Result<Self, Error> {
@@ -112,7 +112,7 @@ impl<T: Serialize + Typeable + Clone> DummyEventMessage<T> {
     }
 
     fn get_size(
-        event: &T,
+        event: &D,
         format: SerializationFormats,
         derivation: SelfAddressing,
     ) -> Result<usize, Error> {

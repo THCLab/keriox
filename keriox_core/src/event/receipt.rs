@@ -46,6 +46,7 @@ impl Receipt {
 }
 
 impl Typeable for Receipt {
+    type TypeTag = EventTypeTag;
     fn get_type(&self) -> EventTypeTag {
         EventTypeTag::Rct
     }

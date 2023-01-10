@@ -1,7 +1,7 @@
 use chrono::{DateTime, FixedOffset};
 use serde::{de, ser::SerializeStruct, Deserialize, Deserializer, Serialize, Serializer};
 
-use super::{key_state_notice::KeyStateNotice, Timestamped};
+use super::{key_state_notice::KeyStateNotice};
 #[cfg(feature = "oobi")]
 use crate::oobi::{EndRole, LocationScheme};
 use crate::{
@@ -10,7 +10,7 @@ use crate::{
     event_message::{
         dummy_event::DummyEventMessage,
         signature::{Nontransferable, Signature, SignerData},
-        Digestible, EventTypeTag, SaidEvent, Typeable,
+        Digestible, EventTypeTag, SaidEvent, Typeable, timestamped::Timestamped,
     },
     event_parsing::primitives::CesrPrimitive,
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
@@ -27,6 +27,20 @@ pub enum ReplyRoute {
     EndRoleAdd(EndRole),
     #[cfg(feature = "oobi")]
     EndRoleCut(EndRole),
+}
+
+impl ReplyRoute {
+     pub fn get_prefix(&self) -> IdentifierPrefix {
+        match &self {
+            ReplyRoute::Ksn(_, ksn) => ksn.state.prefix.clone(),
+            #[cfg(feature = "oobi")]
+            ReplyRoute::LocScheme(loc) => loc.get_eid(),
+            #[cfg(feature = "oobi")]
+            ReplyRoute::EndRoleAdd(endrole) | ReplyRoute::EndRoleCut(endrole) => {
+                endrole.cid.clone()
+            }
+        }
+    }
 }
 
 impl Serialize for ReplyRoute {
@@ -109,6 +123,7 @@ impl<'de> Deserialize<'de> for ReplyRoute {
 pub type ReplyEvent = EventMessage<SaidEvent<Timestamped<ReplyRoute>>>;
 
 impl Typeable for ReplyRoute {
+    type TypeTag = EventTypeTag;
     fn get_type(&self) -> EventTypeTag {
         EventTypeTag::Rpy
     }
@@ -123,6 +138,8 @@ impl ReplyEvent {
         let env = Timestamped::new(route);
         env.to_message(serialization, self_addressing)
     }
+
+    
 }
 
 impl ReplyEvent {
@@ -135,15 +152,7 @@ impl ReplyEvent {
     }
 
     pub fn get_prefix(&self) -> IdentifierPrefix {
-        match &self.event.content.data {
-            ReplyRoute::Ksn(_, ksn) => ksn.state.prefix.clone(),
-            #[cfg(feature = "oobi")]
-            ReplyRoute::LocScheme(loc) => loc.get_eid(),
-            #[cfg(feature = "oobi")]
-            ReplyRoute::EndRoleAdd(endrole) | ReplyRoute::EndRoleCut(endrole) => {
-                endrole.cid.clone()
-            }
-        }
+        self.event.content.data.get_prefix()
     }
 }
 

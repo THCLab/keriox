@@ -1,11 +1,10 @@
 use serde::{Deserialize, Serialize};
 
-use super::Timestamped;
 use crate::{
     error::Error,
     event::{EventMessage, SerializationFormats},
     event_message::{
-        EventTypeTag, SaidEvent, Typeable,
+        EventTypeTag, SaidEvent, Typeable, timestamped::Timestamped,
     },
     prefix::{AttachedSignaturePrefix, IdentifierPrefix},
     sai::derivation::SelfAddressing,
@@ -42,6 +41,15 @@ pub enum QueryRoute {
         #[serde(rename = "q")]
         args: QueryArgsMbx,
     },
+}
+
+impl QueryRoute {
+     pub fn get_prefix(&self) -> IdentifierPrefix {
+        match self {
+            QueryRoute::Log { ref args, .. } | QueryRoute::Ksn { ref args, .. } => args.i.clone(),
+            QueryRoute::Mbx { ref args, .. } => args.i.clone(),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -100,14 +108,12 @@ impl QueryEvent {
     }
 
     pub fn get_prefix(&self) -> IdentifierPrefix {
-        match self.event.content.data.route {
-            QueryRoute::Log { ref args, .. } | QueryRoute::Ksn { ref args, .. } => args.i.clone(),
-            QueryRoute::Mbx { ref args, .. } => args.i.clone(),
-        }
+        self.event.content.data.route.get_prefix()
     }
 }
 
 impl Typeable for Query {
+    type TypeTag = EventTypeTag;
     fn get_type(&self) -> EventTypeTag {
         EventTypeTag::Qry
     }
