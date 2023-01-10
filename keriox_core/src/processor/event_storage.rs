@@ -11,7 +11,7 @@ use crate::{
     },
     event_message::{
         signed_event_message::Notice,
-        signed_event_message::{SignedEventMessage, SignedNontransferableReceipt},
+        signed_event_message::{SignedNontransferableReceipt},
         Digestible,
     },
     prefix::{BasicPrefix, IdentifierPrefix},
@@ -26,7 +26,8 @@ use crate::{
 };
 
 #[cfg(feature = "mailbox")]
-use crate::mailbox::MailboxResponse;
+use crate::{mailbox::MailboxResponse,
+event_message::signed_event_message::SignedEventMessage};
 
 pub struct EventStorage {
     pub db: Arc<SledEventDatabase>,

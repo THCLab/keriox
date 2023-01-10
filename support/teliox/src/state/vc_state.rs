@@ -5,7 +5,7 @@ use crate::{
 use keri::{event_message::Digestible, sai::SelfAddressingPrefix};
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum TelState {
     NotIsuued,
     Issued(SelfAddressingPrefix),

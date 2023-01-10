@@ -4,13 +4,13 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::Error;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct EventSourceSeal {
     pub sn: u64,
     pub digest: SelfAddressingPrefix,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AttachedSourceSeal {
     pub seal: EventSourceSeal,
 }
@@ -41,5 +41,5 @@ impl AttachedSourceSeal {
 fn num_to_base_64(sn: u64) -> Result<String, Error> {
     let mut tmp = vec![0, 0, 0, 0, 0, 0, 0, 0];
     tmp.extend(u64::to_be_bytes(sn).to_vec());
-    Ok((&base64::encode_config(tmp, URL_SAFE)[..22]).to_string())
+    Ok((base64::encode_config(tmp, URL_SAFE)[..22]).to_string())
 }

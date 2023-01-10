@@ -1,7 +1,7 @@
 #[cfg(feature = "mailbox")]
 use crate::mailbox::exchange::{Exchange, ExchangeMessage, ForwardTopic, FwdArgs};
 #[cfg(feature = "oobi")]
-use crate::oobi::{EndRole, Role};
+use crate::{oobi::{EndRole, Role}, event::SerializationFormats};
 #[cfg(feature = "query")]
 use crate::query::reply_event::{ReplyEvent, ReplyRoute};
 use crate::{
@@ -11,7 +11,7 @@ use crate::{
             seal::{DigestSeal, Seal},
             threshold::{SignatureThreshold, WeightedThreshold},
         },
-        EventMessage, SerializationFormats,
+        EventMessage
     },
     event_message::{
         event_msg_builder::EventMsgBuilder, key_event_message::KeyEvent, EventTypeTag,

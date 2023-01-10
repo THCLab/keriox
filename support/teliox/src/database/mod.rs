@@ -35,7 +35,7 @@ impl EventDatabase {
     ) -> Result<(), Error> {
         Ok(self
             .tel_events
-            .push(self.identifiers.designated_key(id), event.into())?)
+            .push(self.identifiers.designated_key(id), event)?)
     }
 
     pub fn get_events(
@@ -53,7 +53,7 @@ impl EventDatabase {
     ) -> Result<(), Error> {
         Ok(self
             .management_events
-            .push(self.identifiers.designated_key(id), event.into())?)
+            .push(self.identifiers.designated_key(id), event)?)
     }
 
     pub fn get_management_events(

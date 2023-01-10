@@ -50,7 +50,7 @@ where
     let s: &str = de::Deserialize::deserialize(deserializer)?;
     // serde_json::from_str(s).map_err(de::Error::custom)
     let dt: DateTime<FixedOffset> =
-        DateTime::from(chrono::DateTime::parse_from_rfc3339(s).unwrap());
+        chrono::DateTime::parse_from_rfc3339(s).unwrap();
     Ok(dt)
 }
 
@@ -185,14 +185,14 @@ impl Issuance {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SimpleIssuance {
     // registry identifier from management TEL
     #[serde(rename = "ri")]
     registry_id: IdentifierPrefix,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SimpleRevocation {
     #[serde(rename = "ri")]
     pub registry_id: IdentifierPrefix,

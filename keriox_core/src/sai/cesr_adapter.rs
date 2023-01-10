@@ -62,7 +62,7 @@ impl FromStr for SelfAddressingPrefix {
         let code = CesrSelfAddressing::from_str(s)?;
         let c_len = code.code_size();
         if s.len() == code.full_size() {
-            let decoded = from_text_to_bytes(&s[c_len..].as_bytes())?[c_len..].to_vec();
+            let decoded = from_text_to_bytes(s[c_len..].as_bytes())?[c_len..].to_vec();
 
             Ok(Self::new(code.into(), decoded))
         } else {

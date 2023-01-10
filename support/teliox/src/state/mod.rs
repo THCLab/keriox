@@ -15,7 +15,7 @@ pub enum State {
     Tel(TelState),
 }
 
-#[derive(Default, PartialEq, Debug)]
+#[derive(Default, PartialEq, Eq, Debug)]
 pub struct ManagerTelState {
     pub prefix: IdentifierPrefix,
     pub sn: u64,

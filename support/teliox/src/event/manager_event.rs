@@ -14,7 +14,7 @@ use crate::error::Error;
 
 pub type ManagerTelEventMessage = EventMessage<SaidEvent<ManagerTelEvent>>;
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ManagerTelEvent {
     // The Registry specific identifier will be self-certifying, self-addressing using its inception data for its derivation.
     // This requires a commitment to the anchor in the controlling KEL and necessitates the event location seal be included in
@@ -93,20 +93,20 @@ impl ManagerTelEvent {
 // #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 // pub struct ManagerIdentifier {}
 
-#[derive(Serialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Debug, Clone, PartialEq, Eq)]
 #[serde(untagged, rename_all = "lowercase")]
 pub enum ManagerEventType {
     Vcp(Inc),
     Vrt(Rot),
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum Config {
     #[serde(rename = "NB")]
     NoBackers,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct Inc {
     #[serde(rename = "ii")]
     pub issuer_id: IdentifierPrefix,
@@ -154,7 +154,7 @@ impl DummyEvent {
     ) -> Result<Vec<u8>, Error> {
         use keri::event_parsing::codes::self_addressing::SelfAddressing as CesrCode;
         let derivation_code: CesrCode = derivation.clone().into();
-        Ok(Self {
+        Self {
             serialization_info: SerializationInfo::new(
                 format,
                 Self {
@@ -168,16 +168,16 @@ impl DummyEvent {
             ),
             prefix: dummy_prefix(&derivation_code),
             sn: 0,
-            data: data,
+            data,
         }
-        .serialize()?)
+        .serialize()
     }
 
     fn serialize(&self) -> Result<Vec<u8>, Error> {
         self.serialization_info
             .kind
             .encode(&self)
-            .map_err(|e| Error::KeriError(e))
+            .map_err( Error::KeriError)
     }
 
     // fn dummy_prefix(derivation: &SelfAddressing) -> String {
@@ -195,14 +195,14 @@ impl Inc {
     ) -> Result<ManagerTelEvent, Error> {
         Ok(ManagerTelEvent::new(
             &IdentifierPrefix::SelfAddressing(derivation.derive(
-                &DummyEvent::derive_inception_data(self.clone(), &derivation, format)?,
+                &DummyEvent::derive_inception_data(self.clone(), derivation, format)?,
             )),
             0,
             ManagerEventType::Vcp(self),
         ))
     }
 }
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct Rot {
     #[serde(rename = "p")]
     pub prev_event: SelfAddressingPrefix,

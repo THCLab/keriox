@@ -5,6 +5,7 @@ pub(crate) mod timestamped;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "mailbox")]
 use sled::Db;
 
 use self::tables::{SledEventTree, SledEventTreeVec};

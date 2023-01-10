@@ -1,4 +1,4 @@
-use std::convert::{TryFrom, TryInto};
+use std::convert::{TryFrom};
 
 use serde::Deserialize;
 
@@ -498,6 +498,7 @@ fn signed_receipt(
 
 #[cfg(feature = "mailbox")]
 pub fn signed_exchange(exn: ExchangeMessage, attachments: Vec<Group>) -> Result<Op, Error> {
+    use std::convert::TryInto;
     let mut atts = attachments.into_iter();
     let att1 = atts
         .next()
