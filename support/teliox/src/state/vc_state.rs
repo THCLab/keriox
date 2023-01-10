@@ -1,24 +1,25 @@
 use crate::{
     error::Error,
-    event::vc_event::{VCEvent, VCEventType},
+    event::vc_event::{VCEventType, VCEventMessage},
 };
+use keri::{sai::SelfAddressingPrefix, event_message::Digestible};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum TelState {
     NotIsuued,
-    // Issued state has last event as argument
-    Issued(Vec<u8>),
+    Issued(SelfAddressingPrefix),
     Revoked,
 }
 
 impl TelState {
-    pub fn apply(&self, event: &VCEvent) -> Result<Self, Error> {
-        match event.event_type.clone() {
+    pub fn apply(&self, event: &VCEventMessage) -> Result<Self, Error> {
+        let event_content = event.event.content.data.clone();
+        match event_content.event_type {
             VCEventType::Bis(_iss) => match self {
                 TelState::NotIsuued => {
-                    if event.sn == 0 {
-                        Ok(TelState::Issued(event.serialize()?))
+                    if event_content.sn == 0 {
+                        Ok(TelState::Issued(event.event.get_digest()))
                     } else {
                         Err(Error::Generic("Wrong sn".into()))
                     }
@@ -27,7 +28,7 @@ impl TelState {
             },
             VCEventType::Brv(rev) => match self {
                 TelState::Issued(last) => {
-                    if rev.prev_event_hash.verify_binding(last) && event.sn == 1 {
+                    if rev.prev_event_hash.eq(last) && event_content.sn == 1 {
                         Ok(TelState::Revoked)
                     } else {
                         Err(Error::Generic("Previous event doesn't match".to_string()))
@@ -36,12 +37,12 @@ impl TelState {
                 _ => Err(Error::Generic("Wrong state".into())),
             },
             VCEventType::Iss(_iss) => match self {
-                TelState::NotIsuued => Ok(TelState::Issued(event.serialize()?)),
+                TelState::NotIsuued => Ok(TelState::Issued(event.event.get_digest())),
                 _ => Err(Error::Generic("Wrong state".into())),
             },
             VCEventType::Rev(rev) => match self {
                 TelState::Issued(last) => {
-                    if rev.prev_event_hash.verify_binding(last) {
+                    if &rev.prev_event_hash == last {
                         Ok(TelState::Revoked)
                     } else {
                         Err(Error::Generic("Previous event doesn't match".to_string()))
@@ -61,29 +62,28 @@ impl Default for TelState {
 
 #[test]
 fn test_apply() -> Result<(), Error> {
-    use crate::event::vc_event::TimestampedVCEvent;
-    let bis_raw = r#"{"v":"KERI10JSON000126_","i":"DntNTPnDFBnmlO6J44LXCrzZTAmpe-82b7BmQGtL4QhM","s":"0","t":"bis","ra":{"i":"EE3Xv6CWwEMpW-99rhPD9IHFCR2LN5ienLVI8yG5faBw","s":"3","d":"Ezpq06UecHwzy-K9FpNoRxCJp2wIGM9u2Edk-PLMZ1H4"},"dt":"2021-01-01T00:00:00+00:00"}"#;
-    let bis_ev: TimestampedVCEvent = serde_json::from_str(&bis_raw).unwrap();
+    let bis_raw = r#"{"v":"KERI10JSON000162_","t":"bis","d":"EFXbFFjdUNRgg_blTx76RAdcIoRoLtPl5tA3yAw5vS9W","i":"EC8Oej-3HAUpBY_kxzBK3B-0RV9j4dXw1H0NRKxJg7g-","s":"0","ii":"EKKJ0FoLxO1TYmyuprguKO7kJ7Hbn0m0Wuk5aMtSrMtY","ra":{"i":"EIZlA3TANi3p8vEu4VQMjPnY0sPFAag1ekIwyyR6lAsq","s":"0","d":"EFSL6HebpbWsxKxfdS4t6NbKTdO4hAUIAxvhmWVf3Z8o"},"dt":"2023-01-10T10:36:50.842679+00:00"}"#;
+    let bis_ev: VCEventMessage = serde_json::from_str(&bis_raw).unwrap();
     assert_eq!(serde_json::to_string(&bis_ev).unwrap(), bis_raw);
 
-    let brv_raw = r#"{"v":"KERI10JSON000125_","i":"DntNTPnDFBnmlO6J44LXCrzZTAmpe-82b7BmQGtL4QhM","s":"1","t":"brv","p":"EAw68wa_F60wtPJ8MPsz7UOv9wRMI6Yi5aeJjKL2ijHs","ra":{"i":"EE3Xv6CWwEMpW-99rhPD9IHFCR2LN5ienLVI8yG5faBw","s":"3","d":"Ezpq06UecHwzy-K9FpNoRxCJp2wIGM9u2Edk-PLMZ1H4"},"dt":"2021-01-01T00:00:00+00:00"}"#;
-    let brv_ev: TimestampedVCEvent = serde_json::from_str(&brv_raw).unwrap();
+    let brv_raw = r#"{"v":"KERI10JSON000161_","t":"brv","d":"ENJrZygsUPsqzxjrmgXIjweuQX5I2lXbgcGFn7iEyDyG","i":"EC8Oej-3HAUpBY_kxzBK3B-0RV9j4dXw1H0NRKxJg7g-","s":"1","p":"EFXbFFjdUNRgg_blTx76RAdcIoRoLtPl5tA3yAw5vS9W","ra":{"i":"EIZlA3TANi3p8vEu4VQMjPnY0sPFAag1ekIwyyR6lAsq","s":"0","d":"EFSL6HebpbWsxKxfdS4t6NbKTdO4hAUIAxvhmWVf3Z8o"},"dt":"2023-01-10T10:36:50.843652+00:00"}"#;
+    let brv_ev: VCEventMessage = serde_json::from_str(&brv_raw).unwrap();
     assert_eq!(serde_json::to_string(&brv_ev).unwrap(), brv_raw);
 
     let state = TelState::default();
-    let state = state.apply(&bis_ev.event)?;
+    let state = state.apply(&bis_ev)?;
     assert!(matches!(state, TelState::Issued(_)));
 
     if let TelState::Issued(last) = state.clone() {
-        match brv_ev.event.event_type {
-            VCEventType::Brv(ref brv) => assert!(brv.prev_event_hash.verify_binding(&last)),
+        match brv_ev.event.content.data.event_type {
+            VCEventType::Brv(ref brv) => assert!(brv.prev_event_hash == last),
             _ => (),
         };
     }
-    let state = state.apply(&brv_ev.event)?;
+    let state = state.apply(&brv_ev)?;
     assert_eq!(state, TelState::Revoked);
 
-    let state = state.apply(&brv_ev.event);
+    let state = state.apply(&brv_ev);
     assert!(state.is_err());
 
     Ok(())

@@ -76,21 +76,19 @@ pub fn make_issuance_event(
             .unwrap_or(&SelfAddressing::Blake3_256)
             .derive(&state.last),
     };
-    let iss = VCEventType::Bis(Issuance::new(registry_anchor));
+    let iss = VCEventType::Bis(Issuance::new(state.issuer.clone(), registry_anchor));
     let vc_prefix = IdentifierPrefix::SelfAddressing(vc_hash);
     Ok(Event::Vc(VCEvent::new(
         vc_prefix.clone(),
         0,
         iss,
-        serialization_format
-            .unwrap_or(&SerializationFormats::JSON)
-            .to_owned(),
-    )?))
+        )
+        .to_message(serialization_format.unwrap_or(&SerializationFormats::JSON).clone(), derivation.unwrap_or(&SelfAddressing::Blake3_256).clone())?))
 }
 
 pub fn make_revoke_event(
     vc_hash: &SelfAddressingPrefix,
-    last_vc_event: &[u8],
+    last_vc_event_hash: SelfAddressingPrefix,
     state: &ManagerTelState,
     derivation: Option<&SelfAddressing>,
     serialization_format: Option<&SerializationFormats>,
@@ -103,18 +101,15 @@ pub fn make_revoke_event(
             .derive(&state.last),
     };
     let rev = VCEventType::Brv(Revocation {
-        prev_event_hash: derivation
-            .unwrap_or(&SelfAddressing::Blake3_256)
-            .derive(last_vc_event),
+        prev_event_hash: last_vc_event_hash,
         registry_anchor: Some(registry_anchor),
     });
     let vc_prefix = IdentifierPrefix::SelfAddressing(vc_hash.to_owned());
+
     Ok(Event::Vc(VCEvent::new(
-        vc_prefix,
-        1,
+        vc_prefix.clone(),
+        state.sn + 1,
         rev,
-        serialization_format
-            .unwrap_or(&SerializationFormats::JSON)
-            .to_owned(),
-    )?))
+        )
+        .to_message(serialization_format.unwrap_or(&SerializationFormats::JSON).clone(), derivation.unwrap_or(&SelfAddressing::Blake3_256).clone())?))
 }

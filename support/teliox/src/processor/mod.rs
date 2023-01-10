@@ -62,8 +62,8 @@ impl<'d> EventProcessor<'d> {
                         .unwrap();
                     State::Management(state)
                 }),
-            Event::Vc(ref vc_ev) => self.get_vc_state(&vc_ev.prefix)?.apply(vc_ev).map(|state| {
-                self.db.add_new_event(event, &vc_ev.prefix).unwrap();
+            Event::Vc(ref vc_ev) => self.get_vc_state(&vc_ev.event.content.data.prefix)?.apply(vc_ev).map(|state| {
+                self.db.add_new_event(event, &vc_ev.event.content.data.prefix).unwrap();
                 State::Tel(state)
             }),
         }
@@ -166,25 +166,27 @@ mod tests {
 
         let verifiable_iss =
             VerifiableEvent::new(iss_event.clone(), dummy_source_seal.clone().into());
+        println!("\nbis: {}", String::from_utf8(verifiable_iss.clone().serialize().unwrap()).unwrap());
         processor.process(verifiable_iss.clone())?;
 
         // Chcek if iss event is in db.
         let o = processor.get_events(&message_id)?;
-        assert_eq!(o, vec![verifiable_iss.clone()]);
+        assert_eq!(o[0].serialize().unwrap(), verifiable_iss.serialize().unwrap());
 
         let state =
             processor.get_vc_state(&IdentifierPrefix::SelfAddressing(message_id.clone()))?;
         assert!(matches!(state, TelState::Issued(_)));
         let last = match state {
-            TelState::Issued(last) => last,
-            _ => vec![],
+            TelState::Issued(last) => Some(last),
+            _ => None,
         };
 
         // Create revocation event.
-        let rev_event = event_generator::make_revoke_event(&message_id, &last, &st, None, None)?;
+        let rev_event = event_generator::make_revoke_event(&message_id, last.unwrap(), &st, None, None)?;
 
         let verifiable_rev =
             VerifiableEvent::new(rev_event.clone(), dummy_source_seal.clone().into());
+        println!("\nbrv: {}", String::from_utf8(verifiable_rev.clone().serialize().unwrap()).unwrap());
 
         // Check if vc was revoked.
         processor.process(verifiable_rev.clone())?;
@@ -194,7 +196,10 @@ mod tests {
         // Chcek if rev event is in db.
         let o = processor.get_events(&message_id)?;
         assert_eq!(o.len(), 2);
-        assert_eq!(o, vec![verifiable_iss, verifiable_rev]);
+        assert_eq!(
+            o.iter().map(|e| e.serialize().unwrap()).collect::<Vec<_>>(), 
+            vec![verifiable_iss, verifiable_rev].iter().map(|e| e.serialize().unwrap()).collect::<Vec<_>>()
+        );
 
         let backers: Vec<IdentifierPrefix> = vec!["BwFbQvUaS4EirvZVPUav7R_KDHB8AKmSfXNpWnZU_YEU"
             .parse()

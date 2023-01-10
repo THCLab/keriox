@@ -67,7 +67,7 @@ impl<'d> Tel<'d> {
             TelState::Issued(last) => last,
             _ => return Err(Error::Generic("Inproper vc state".into())),
         };
-        event_generator::make_revoke_event(vc, &last, &self.get_management_tel_state()?, None, None)
+        event_generator::make_revoke_event(vc, last, &self.get_management_tel_state()?, None, None)
     }
 
     // Process verifiable event. It doesn't check if source seal is correct. Just add event to tel.
