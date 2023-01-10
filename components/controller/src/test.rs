@@ -3,18 +3,18 @@
 use std::{collections::HashMap, sync::Arc};
 
 use keri::{
-    actor::{prelude::Message, SignedQueryError},
+    actor::{error::ActorError, prelude::Message, SignedQueryError},
     oobi::LocationScheme,
     prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     signer::{CryptoBox, KeyManager},
-};
-use keri_transport::{
-    test::{TestActorMap, TestTransport},
-    TransportError,
+    transport::{
+        test::{TestActorMap, TestTransport},
+        TransportError,
+    },
 };
 use tempfile::Builder;
 use url::Host;
-use witness::{WitnessError, WitnessListener};
+use witness::WitnessListener;
 
 use super::{error::ControllerError, identifier_controller::IdentifierController, Controller};
 use crate::{mailbox_updating::ActionRequired, utils::OptionalConfig};
@@ -125,7 +125,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
         url: Url::parse("http://witness1:3232").unwrap(),
     };
 
-    let mut actors: TestActorMap<WitnessError> = HashMap::new();
+    let mut actors: TestActorMap = HashMap::new();
     actors.insert(
         (Host::Domain("witness1".to_string()), 3232),
         Box::new(witness),
@@ -168,7 +168,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
         assert!(matches!(
             resp,
             Err(ControllerError::TransportError(
-                TransportError::RemoteError(WitnessError::QueryFailed(
+                TransportError::RemoteError(ActorError::QueryError(
                     SignedQueryError::InvalidSignature
                 ))
             ))
@@ -226,7 +226,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     assert!(matches!(
         resp,
         Err(ControllerError::TransportError(
-            TransportError::RemoteError(WitnessError::KeriError(
+            TransportError::RemoteError(ActorError::KeriError(
                 keri::error::Error::SignatureVerificationError
             ))
         ))
@@ -254,7 +254,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
         assert!(matches!(
             resp,
             Err(ControllerError::TransportError(
-                TransportError::RemoteError(WitnessError::QueryFailed(
+                TransportError::RemoteError(ActorError::QueryError(
                     SignedQueryError::InvalidSignature
                 ))
             ))

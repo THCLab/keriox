@@ -2,23 +2,29 @@
 
 use std::{
     collections::HashMap,
+    net::Ipv4Addr,
     sync::{Arc, Mutex},
 };
 
 use controller::{identifier_controller::IdentifierController, utils::OptionalConfig, Controller};
 use keri::{
-    actor::simple_controller::SimpleController,
+    actor::{error::ActorError, simple_controller::SimpleController},
     database::{escrow::EscrowDb, SledEventDatabase},
     error::Error,
     event_parsing::codes::self_signing::SelfSigning,
     oobi::LocationScheme,
     prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     signer::{CryptoBox, KeyManager},
+    transport::{
+        default::DefaultTransport,
+        test::{TestActorMap, TestTransport},
+    },
 };
-use keri_transport::{default::DefaultTransport, test::TestTransport};
 use tempfile::Builder;
+use url::{Host, Url};
+use witness::{Witness, WitnessListener};
 
-use crate::watcher::{WatcherData, WatcherError};
+use crate::watcher::WatcherData;
 
 #[async_std::test]
 async fn test_authentication() -> Result<(), Error> {
@@ -83,7 +89,7 @@ async fn test_authentication() -> Result<(), Error> {
         .serialize()
         .unwrap();
 
-    let url = url::Url::parse("http://some/dummy/url").unwrap();
+    let url = Url::parse("http://some/dummy/url").unwrap();
     let root = Builder::new().prefix("cont-test-db").tempdir().unwrap();
     let watcher = WatcherData::setup(url, root.path(), None, Box::new(DefaultTransport::new()))?;
 
@@ -96,7 +102,7 @@ async fn test_authentication() -> Result<(), Error> {
     // Send query message to watcher before sending end role oobi
     let err = watcher.process_op(query.clone()).await;
 
-    assert!(matches!(err, Err(WatcherError::MissingRole { .. })));
+    assert!(matches!(err, Err(ActorError::MissingRole { .. })));
 
     // Create and send end role oobi to watcher
     let end_role =
@@ -107,7 +113,7 @@ async fn test_authentication() -> Result<(), Error> {
     let result = watcher.process_op(query).await;
     // Expect error because controller's witness config is empty and latest ksn can't be checked.
     assert!(matches!(
-        result, Err(WatcherError::NoIdentState { ref prefix })
+        result, Err(ActorError::NoIdentState { ref prefix })
         if prefix == about_controller.prefix()
     ));
 
@@ -116,11 +122,23 @@ async fn test_authentication() -> Result<(), Error> {
 
 #[async_std::test]
 async fn test_add_watcher() -> Result<(), Error> {
+    let wit = {
+        let wit_root = Builder::new().prefix("wit-db").tempdir().unwrap();
+        WitnessListener::setup(
+            Url::parse("http://127.0.0.1:3232").unwrap(),
+            None,
+            wit_root.path(),
+            Some("ArwXoACJgOleVZ2PY7kXn7rA0II0mHYDhc6WrBH8fDAc".to_string()),
+        )?
+    };
+
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     let initial_config = OptionalConfig::init().with_db_path(root.into_path());
 
-    let actors = HashMap::new();
+    let mut actors: TestActorMap = HashMap::new();
+    actors.insert((Host::Ipv4(Ipv4Addr::LOCALHOST), 3232), Box::new(wit));
     let transport = TestTransport::new(actors);
+    
     let controller =
         Arc::new(Controller::with_transport(Some(initial_config), Box::new(transport)).unwrap());
     let km1 = CryptoBox::new()?;
@@ -160,7 +178,7 @@ async fn test_add_watcher() -> Result<(), Error> {
         IdentifierController::new(incepted_identifier, controller.clone())
     };
 
-    let url = url::Url::parse("http://127.0.0.1:3236").unwrap();
+    let url = Url::parse("http://127.0.0.1:3236").unwrap();
     let root = Builder::new().prefix("cont-test-db").tempdir().unwrap();
     let watcher = WatcherData::setup(
         url.clone(),

@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 use keri::{
     actor::{
         simple_controller::{PossibleResponse, SimpleController},
-        SignedQueryError,
+        SignedQueryError, error::ActorError,
     },
     database::{escrow::EscrowDb, SledEventDatabase},
     error::Error,
@@ -25,7 +25,7 @@ use keri::{
 };
 use tempfile::Builder;
 
-use crate::witness::{Witness, WitnessError};
+use crate::witness::Witness;
 
 #[test]
 fn test_not_fully_witnessed() -> Result<(), Error> {
@@ -222,7 +222,7 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
 }
 
 #[test]
-fn test_qry_rpy() -> Result<(), WitnessError> {
+fn test_qry_rpy() -> Result<(), ActorError> {
     use keri::{
         event::SerializationFormats,
         prefix::AttachedSignaturePrefix,
@@ -662,7 +662,7 @@ fn test_invalid_notice() {
         // should not be able to query because the inception events didn't go through
         assert!(matches!(
             result,
-            Err(WitnessError::QueryFailed(
+            Err(ActorError::QueryError(
                 SignedQueryError::UnknownSigner { ref id }
             )) if id == controller.prefix()
         ));
@@ -670,7 +670,7 @@ fn test_invalid_notice() {
 }
 
 #[test]
-pub fn test_multisig() -> Result<(), WitnessError> {
+pub fn test_multisig() -> Result<(), ActorError> {
     let signer = Signer::new();
     let signer_arc = Arc::new(signer);
     let witness = {
@@ -853,7 +853,7 @@ fn setup_controller(witness: &Witness) -> Result<SimpleController<CryptoBox>, Er
 }
 
 #[test]
-pub fn test_delegated_multisig() -> Result<(), WitnessError> {
+pub fn test_delegated_multisig() -> Result<(), ActorError> {
     let signer = Signer::new();
     let signer_arc = Arc::new(signer);
     let witness = {
@@ -1106,7 +1106,7 @@ pub fn test_delegated_multisig() -> Result<(), WitnessError> {
 }
 
 #[test]
-pub fn test_delegating_multisig() -> Result<(), WitnessError> {
+pub fn test_delegating_multisig() -> Result<(), ActorError> {
     let signer = Signer::new();
     let signer_arc = Arc::new(signer);
     let witness = {

@@ -1,13 +1,13 @@
 use bytes::Bytes;
-use keri::{
+use serde::Deserialize;
+
+use super::TransportError;
+use crate::{
     actor::simple_controller::{parse_response, PossibleResponse},
     event_message::signed_event_message::{Message, Op},
     oobi::{LocationScheme, Scheme},
     query::query_event::SignedQuery,
 };
-use serde::Deserialize;
-
-use crate::TransportError;
 
 mod default;
 
@@ -65,8 +65,8 @@ pub trait HttpTransport {
         match resp.code {
             200..=299 => Ok(()),
             _ => {
-                let err =
-                    serde_json::from_slice(&resp.body).map_err(|_| TransportError::InvalidResponse)?;
+                let err = serde_json::from_slice(&resp.body)
+                    .map_err(|_| TransportError::InvalidResponse)?;
                 Err(TransportError::RemoteError(err))
             }
         }

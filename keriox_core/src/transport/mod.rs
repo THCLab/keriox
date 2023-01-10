@@ -1,13 +1,14 @@
 use std::error::Error;
 
-use keri::{
-    actor::simple_controller::PossibleResponse,
+use serde::Deserialize;
+
+use crate::{
+    actor::{error::ActorError, simple_controller::PossibleResponse},
     event_message::signed_event_message::{Message, Op},
     oobi::{LocationScheme, Role},
     prefix::IdentifierPrefix,
     query::query_event::SignedQuery,
 };
-use serde::Deserialize;
 
 pub mod default;
 pub mod http;
@@ -17,7 +18,7 @@ pub mod test;
 /// Actors take a `dyn Transport` argument in `new` (dependency injection pattern).
 /// This also allows providing a fake transport for tests.
 #[async_trait::async_trait]
-pub trait Transport<E>
+pub trait Transport<E = ActorError>
 where
     E: for<'a> Deserialize<'a> + Error + Send + Sync + 'static,
 {
@@ -63,7 +64,7 @@ where
 }
 
 #[derive(Debug, thiserror::Error, serde::Serialize, serde::Deserialize)]
-pub enum TransportError<E> {
+pub enum TransportError<E = ActorError> {
     #[error("network error")]
     NetworkError,
     #[error("invalid response")]

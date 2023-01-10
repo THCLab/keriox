@@ -8,7 +8,6 @@ publish = false
 async-trait = "0.1.57"
 futures = "0.3.24"
 keri = { path = "../keriox_core", features = ["oobi", "controller"] }
-keri-transport = { path = "../support/transport" }
 tempfile = "3.3.0"
 url = "2.2.2"
 watcher = { path = "../components/watcher" }

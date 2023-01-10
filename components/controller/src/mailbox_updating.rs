@@ -12,13 +12,12 @@ use keri::{
     prefix::IdentifierPrefix,
     query::query_event::MailboxResponse,
 };
-
-use super::{error::ControllerError, identifier_controller::IdentifierController};
-
 use keri::{
     event::EventMessage,
     event_message::{exchange::ExchangeMessage, key_event_message::KeyEvent},
 };
+
+use super::{error::ControllerError, identifier_controller::IdentifierController};
 
 #[derive(Default)]
 /// Struct for tracking what was the last indexes of processed mailbox messages.
