@@ -1,8 +1,8 @@
 use crate::{
     error::Error,
-    event::vc_event::{VCEventType, VCEventMessage},
+    event::vc_event::{VCEventMessage, VCEventType},
 };
-use keri::{sai::SelfAddressingPrefix, event_message::Digestible};
+use keri::{event_message::Digestible, sai::SelfAddressingPrefix};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]

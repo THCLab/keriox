@@ -1,8 +1,6 @@
+use crate::event_message::signed_event_message::Message;
 #[cfg(feature = "mailbox")]
 use crate::mailbox::MailboxResponse;
-use crate::{
-    event_message::signed_event_message::Message,
-};
 
 use serde::{Deserialize, Serialize};
 
@@ -13,7 +11,6 @@ use thiserror::Error;
 pub mod key_state_notice;
 pub mod query_event;
 pub mod reply_event;
-
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ReplyType {

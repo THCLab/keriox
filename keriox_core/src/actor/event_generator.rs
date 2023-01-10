@@ -3,9 +3,7 @@ use crate::mailbox::exchange::{Exchange, ExchangeMessage, ForwardTopic, FwdArgs}
 #[cfg(feature = "oobi")]
 use crate::oobi::{EndRole, Role};
 #[cfg(feature = "query")]
-use crate::query::{
-    reply_event::{ReplyEvent, ReplyRoute},
-};
+use crate::query::reply_event::{ReplyEvent, ReplyRoute};
 use crate::{
     error::Error,
     event::{

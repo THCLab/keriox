@@ -3,9 +3,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     error::Error,
     event::{EventMessage, SerializationFormats},
-    event_message::{
-        EventTypeTag, SaidEvent, Typeable, timestamped::Timestamped,
-    },
+    event_message::{timestamped::Timestamped, EventTypeTag, SaidEvent, Typeable},
     prefix::{AttachedSignaturePrefix, IdentifierPrefix},
     sai::derivation::SelfAddressing,
 };
@@ -44,7 +42,7 @@ pub enum QueryRoute {
 }
 
 impl QueryRoute {
-     pub fn get_prefix(&self) -> IdentifierPrefix {
+    pub fn get_prefix(&self) -> IdentifierPrefix {
         match self {
             QueryRoute::Log { ref args, .. } | QueryRoute::Ksn { ref args, .. } => args.i.clone(),
             QueryRoute::Mbx { ref args, .. } => args.i.clone(),

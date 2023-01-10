@@ -1,7 +1,7 @@
 use chrono::{DateTime, FixedOffset};
 use serde::{de, ser::SerializeStruct, Deserialize, Deserializer, Serialize, Serializer};
 
-use super::{key_state_notice::KeyStateNotice};
+use super::key_state_notice::KeyStateNotice;
 #[cfg(feature = "oobi")]
 use crate::oobi::{EndRole, LocationScheme};
 use crate::{
@@ -10,7 +10,8 @@ use crate::{
     event_message::{
         dummy_event::DummyEventMessage,
         signature::{Nontransferable, Signature, SignerData},
-        Digestible, EventTypeTag, SaidEvent, Typeable, timestamped::Timestamped,
+        timestamped::Timestamped,
+        Digestible, EventTypeTag, SaidEvent, Typeable,
     },
     event_parsing::primitives::CesrPrimitive,
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
@@ -30,7 +31,7 @@ pub enum ReplyRoute {
 }
 
 impl ReplyRoute {
-     pub fn get_prefix(&self) -> IdentifierPrefix {
+    pub fn get_prefix(&self) -> IdentifierPrefix {
         match &self {
             ReplyRoute::Ksn(_, ksn) => ksn.state.prefix.clone(),
             #[cfg(feature = "oobi")]
@@ -138,8 +139,6 @@ impl ReplyEvent {
         let env = Timestamped::new(route);
         env.to_message(serialization, self_addressing)
     }
-
-    
 }
 
 impl ReplyEvent {

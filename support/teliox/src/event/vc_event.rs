@@ -2,11 +2,11 @@ use crate::error::Error;
 use chrono::{DateTime, FixedOffset, SecondsFormat, Utc};
 use keri::{
     event::{sections::seal::EventSeal, SerializationFormats},
-    event_message::{EventMessage, Typeable, SaidEvent},
+    event_message::{EventMessage, SaidEvent, Typeable},
     prefix::IdentifierPrefix,
-    sai::{SelfAddressingPrefix, derivation::SelfAddressing},
+    sai::{derivation::SelfAddressing, SelfAddressingPrefix},
 };
-use serde::{de, Deserialize, Serialize, Serializer, Deserializer};
+use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use serde_hex::{Compact, SerHex};
 use serde_json::Value;
 
@@ -24,7 +24,7 @@ pub struct TimestampedVCEvent {
 }
 
 impl Typeable for TimestampedVCEvent {
-    type TypeTag= TelEventType;
+    type TypeTag = TelEventType;
 
     fn get_type(&self) -> Self::TypeTag {
         match self.data.event_type {
@@ -49,7 +49,8 @@ where
 {
     let s: &str = de::Deserialize::deserialize(deserializer)?;
     // serde_json::from_str(s).map_err(de::Error::custom)
-    let dt: DateTime<FixedOffset> = DateTime::from(chrono::DateTime::parse_from_rfc3339(s).unwrap());
+    let dt: DateTime<FixedOffset> =
+        DateTime::from(chrono::DateTime::parse_from_rfc3339(s).unwrap());
     Ok(dt)
 }
 
@@ -105,11 +106,23 @@ pub struct VCEvent {
 
 impl VCEvent {
     pub fn new(prefix: IdentifierPrefix, sn: u64, event_type: VCEventType) -> Self {
-        Self { prefix, sn, event_type }
+        Self {
+            prefix,
+            sn,
+            event_type,
+        }
     }
-    pub fn to_message(self, format: SerializationFormats, derivation: SelfAddressing) -> Result<VCEventMessage, Error> {
+    pub fn to_message(
+        self,
+        format: SerializationFormats,
+        derivation: SelfAddressing,
+    ) -> Result<VCEventMessage, Error> {
         let timestamped = TimestampedVCEvent::new(self);
-        Ok(SaidEvent::<TimestampedVCEvent>::to_message(timestamped, format, derivation)?)
+        Ok(SaidEvent::<TimestampedVCEvent>::to_message(
+            timestamped,
+            format,
+            derivation,
+        )?)
     }
 }
 
@@ -133,7 +146,7 @@ impl<'de> Deserialize<'de> for VCEventType {
         // Helper struct for adding tag to properly deserialize 't' field
         #[derive(Deserialize, Debug)]
         struct EventType {
-                t: TelEventType,
+            t: TelEventType,
         }
 
         let v = Value::deserialize(deserializer)?;
@@ -155,7 +168,6 @@ impl<'de> Deserialize<'de> for VCEventType {
     }
 }
 
-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Issuance {
     #[serde(rename = "ii")]
@@ -166,7 +178,10 @@ pub struct Issuance {
 
 impl Issuance {
     pub fn new(issuer_id: IdentifierPrefix, registry_anchor: EventSeal) -> Self {
-        Self { issuer_id, registry_anchor }
+        Self {
+            issuer_id,
+            registry_anchor,
+        }
     }
 }
 
@@ -204,7 +219,7 @@ fn test_tel_event_serialization() -> Result<(), Error> {
     let rev_ev: VCEventMessage = serde_json::from_str(&rev_raw).unwrap();
     assert_eq!(serde_json::to_string(&rev_ev).unwrap(), rev_raw);
 
-    let bis_raw = r#"{"v":"KERI10JSON000162_","t":"bis","d":"EF60WQClTmmJqbuHFHBAwmKiCT8RdE4rs6sIVC3s2_AH","i":"EC8Oej-3HAUpBY_kxzBK3B-0RV9j4dXw1H0NRKxJg7g-","s":"0","ii":"EKKJ0FoLxO1TYmyuprguKO7kJ7Hbn0m0Wuk5aMtSrMtY","ra":{"i":"EIZlA3TANi3p8vEu4VQMjPnY0sPFAag1ekIwyyR6lAsq","s":"0","d":"EFSL6HebpbWsxKxfdS4t6NbKTdO4hAUIAxvhmWVf3Z8o"},"dt":"2023-01-10T10:33:57.273969+00:00"}"#;//-GAB0AAAAAAAAAAAAAAAAAAAAAAQEJJR2nmwyYAfSVPzhzS6b5CMZAoTNZH3ULvaU6Z-i0d8"#;
+    let bis_raw = r#"{"v":"KERI10JSON000162_","t":"bis","d":"EF60WQClTmmJqbuHFHBAwmKiCT8RdE4rs6sIVC3s2_AH","i":"EC8Oej-3HAUpBY_kxzBK3B-0RV9j4dXw1H0NRKxJg7g-","s":"0","ii":"EKKJ0FoLxO1TYmyuprguKO7kJ7Hbn0m0Wuk5aMtSrMtY","ra":{"i":"EIZlA3TANi3p8vEu4VQMjPnY0sPFAag1ekIwyyR6lAsq","s":"0","d":"EFSL6HebpbWsxKxfdS4t6NbKTdO4hAUIAxvhmWVf3Z8o"},"dt":"2023-01-10T10:33:57.273969+00:00"}"#; //-GAB0AAAAAAAAAAAAAAAAAAAAAAQEJJR2nmwyYAfSVPzhzS6b5CMZAoTNZH3ULvaU6Z-i0d8"#;
     let bis_ev: VCEventMessage = serde_json::from_str(&bis_raw).unwrap();
     assert_eq!(serde_json::to_string(&bis_ev).unwrap(), bis_raw);
 

@@ -1,6 +1,6 @@
 use crate::error::Error;
 
-use self::{manager_event::ManagerTelEvent, vc_event::{VCEventMessage}};
+use self::{manager_event::ManagerTelEvent, vc_event::VCEventMessage};
 use keri::prefix::IdentifierPrefix;
 use serde::{Deserialize, Serialize};
 

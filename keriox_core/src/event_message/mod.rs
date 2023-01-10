@@ -82,8 +82,6 @@ impl<T, D: Typeable<TypeTag = T>> Typeable for SaidEvent<D> {
     fn get_type(&self) -> T {
         self.content.get_type()
     }
-
-
 }
 
 #[derive(Default, Deserialize, Debug, Clone, PartialEq)]
@@ -104,7 +102,9 @@ impl<D: Digestible> EventMessage<D> {
     }
 }
 
-impl<T: Serialize, D: Digestible + Typeable<TypeTag = T> + Serialize + Clone> Serialize for EventMessage<D> {
+impl<T: Serialize, D: Digestible + Typeable<TypeTag = T> + Serialize + Clone> Serialize
+    for EventMessage<D>
+{
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -122,7 +122,9 @@ impl<T: Serialize, D: Digestible + Typeable<TypeTag = T> + Serialize + Clone> Se
             #[serde(flatten)]
             event: D,
         }
-        impl<T: Serialize, D: Digestible + Typeable<TypeTag = T> + Clone> From<&EventMessage<D>> for TypedEventMessage<T, D> {
+        impl<T: Serialize, D: Digestible + Typeable<TypeTag = T> + Clone> From<&EventMessage<D>>
+            for TypedEventMessage<T, D>
+        {
             fn from(em: &EventMessage<D>) -> Self {
                 TypedEventMessage {
                     v: em.serialization_info,
@@ -196,7 +198,7 @@ impl From<EventMessage<KeyEvent>> for TimestampedEventMessage {
     }
 }
 
-impl<T:Serialize, D: Clone + Serialize + Digestible + Typeable<TypeTag = T>> EventMessage<D> {
+impl<T: Serialize, D: Clone + Serialize + Digestible + Typeable<TypeTag = T>> EventMessage<D> {
     pub fn serialization(&self) -> SerializationFormats {
         self.serialization_info.kind
     }

@@ -11,7 +11,7 @@ use super::{
     dummy_event::{DummyEventMessage, DummyInceptionEvent},
     signature::Nontransferable,
     signed_event_message::SignedEventMessage,
-    Digestible, EventMessage, SaidEvent, Typeable, EventTypeTag,
+    Digestible, EventMessage, EventTypeTag, SaidEvent, Typeable,
 };
 
 pub type KeyEvent = SaidEvent<Event>;

@@ -112,7 +112,7 @@ impl Op {
             #[cfg(feature = "mailbox")]
             // returns exchange message receipient id
             Op::Exchange(exn) => exn.exchange_message.event.content.data.get_prefix(),
-            _ => todo!()
+            _ => todo!(),
         }
     }
 }
