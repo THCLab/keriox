@@ -357,6 +357,13 @@ impl PartiallyWitnessedEscrow {
         })
     }
 
+    pub fn get_partially_witnessed_events(&self) -> Vec<SignedEventMessage> {
+        match self.escrowed_partially_witnessed.get_all() {
+            Some(events) => events.collect(),
+            None => vec![],
+        }
+    }
+
     /// Saves nontransferable receipt in escrow.
     fn escrow_receipt(
         &self,

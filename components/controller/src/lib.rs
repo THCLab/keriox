@@ -126,13 +126,14 @@ impl Controller {
 
     /// Sends identifier's endpoint information to identifiers's watchers.
     // TODO use stream instead of json
-    pub fn send_oobi_to_watcher(
+    pub async fn send_oobi_to_watcher(
         &self,
         id: &IdentifierPrefix,
         end_role_json: &str,
     ) -> Result<(), ControllerError> {
         for watcher in self.get_watchers(id)?.iter() {
-            self.send_oobi_to(watcher, Scheme::Http, end_role_json.as_bytes().to_vec())?;
+            self.send_oobi_to(watcher, Scheme::Http, end_role_json.as_bytes().to_vec())
+                .await?;
         }
 
         Ok(())
@@ -236,7 +237,7 @@ impl Controller {
         Ok(self.transport.send_query(loc, query).await?)
     }
 
-    fn send_oobi_to(
+    async fn send_oobi_to(
         &self,
         id: &IdentifierPrefix,
         scheme: Scheme,
@@ -255,13 +256,15 @@ impl Controller {
                 });
             }
         };
-        let client = reqwest::blocking::Client::new();
+        let client = reqwest::Client::new();
         client
             .post(format!("{}resolve", loc.url))
             .body(oobi)
             .send()
+            .await
             .map_err(|e| ControllerError::CommunicationError(e.to_string()))?
             .text()
+            .await
             .map_err(|e| ControllerError::CommunicationError(e.to_string()))?;
         Ok(())
     }
@@ -344,9 +347,10 @@ impl Controller {
         .map_err(|e| ControllerError::EventGenerationError(e.to_string()))
     }
 
-    /// Verify event signature, add it to kel, and publish it to witnesses.
-    /// Returns new established identifier prefix. Ment to be used for
-    /// identifiers with one keypair.
+    /// Verifies event signature and adds it to kel.
+    /// Returns new established identifier prefix.
+    /// Meant to be used for identifiers with one key pair.
+    /// Must call [`IdentifierController::notify_witnesses`] after calling this function.
     pub async fn finalize_inception(
         &self,
         event: &[u8],
@@ -357,7 +361,7 @@ impl Controller {
         match parsed_event {
             EventType::KeyEvent(ke) => {
                 if let EventData::Icp(_) = &ke.event.get_event_data() {
-                    self.finalize_key_event(&ke, sig, 0).await?;
+                    self.finalize_key_event(&ke, sig, 0)?;
                     Ok(ke.event.get_prefix())
                 } else {
                     Err(ControllerError::InceptionError(
@@ -449,7 +453,9 @@ impl Controller {
             .witnesses)
     }
 
-    async fn finalize_key_event(
+    /// Adds signature to event and processes it.
+    /// Should call [`IdentifierController::notify_witnesses`] after calling this function.
+    fn finalize_key_event(
         &self,
         event: &EventMessage<KeyEvent>,
         sig: &SelfSigningPrefix,
@@ -461,37 +467,8 @@ impl Controller {
         };
 
         let signed_message = event.sign(vec![signature], None, None);
-        self.process(&Message::Notice(Notice::Event(signed_message.clone())))?;
+        self.process(&Message::Notice(Notice::Event(signed_message)))?;
 
-        let id = event.event.get_prefix();
-        let fully_signed_event = self.partially_witnessed_escrow.get_event_by_sn_and_digest(
-            event.event.get_sn(),
-            &id,
-            &event.get_digest(),
-        );
-
-        // Elect the leader
-        // Leader is identifier with minimal index among all participants who
-        // sign event. He will send message to witness.
-        let to_publish = fully_signed_event.and_then(|ev| {
-            ev.signatures
-                .iter()
-                .map(|at| at.index)
-                .min()
-                .and_then(|index| {
-                    if index as usize == own_index {
-                        Some(ev)
-                    } else {
-                        // Not a leader
-                        None
-                    }
-                })
-        });
-
-        if let Some(to_pub) = to_publish {
-            let witnesses = self.get_witnesses_at_event(&to_pub.event_message)?;
-            self.publish(&witnesses, &to_pub).await?;
-        };
         Ok(())
     }
 

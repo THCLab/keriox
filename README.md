@@ -6,6 +6,18 @@ KERIOX is an open source Rust implementation of the [ Key Event Receipt Infrastr
 
 KERI provides the same security and verifiability properties for transactions as a blockchain or distributed ledger can, without the overhead of requiring an absolute global ordering of transactions. Because of this, there is no need for a cannonical chain and thus there is no "KERI Chain" or "KERI Network". KERI Identifiers can be generated independantly in a self-sovereign and privacy-preserving manner and are secured via a self-certifying post-quantum resistant key management scheme based on blinded pre-rotation, auditable and flexible key events and a distributed conflict resolution algorithm called KAACE.
 
+## License
+
+EUPL 1.2 
+
+We have distilled the most crucial license specifics to make your adoption seamless: [see here for details](https://github.com/THCLab/licensing).
+
+## Status
+
+KERIOX implementation is in progress and ongoing. We support all the KERI protocol's significant features and provide the second most advanced implementation right after the [keripy](https://github.com/weboftrust/keripy) reference implementation.
+
+We furthermore support bindings to NodeJS and Dart. See our [keri-bindings](https://github.com/THCLab/keri-bindings) repository.
+
 ## Organization
 
 This repository provides implementation of KERI. It contains:

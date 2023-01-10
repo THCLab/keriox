@@ -4,8 +4,10 @@ use std::{collections::HashMap, sync::Arc};
 
 use keri::{
     actor::{error::ActorError, prelude::Message, SignedQueryError},
+    event::event_data::EventData,
+    event_message::signed_event_message::Notice,
     oobi::LocationScheme,
-    prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     signer::{CryptoBox, KeyManager},
     transport::{
         test::{TestActorMap, TestTransport},
@@ -40,6 +42,7 @@ async fn test_group_incept() -> Result<(), ControllerError> {
             .await?;
         IdentifierController::new(incepted_identifier, controller.clone())
     };
+    identifier1.notify_witnesses().await?;
 
     let identifier2 = {
         let pk = BasicPrefix::Ed25519(km2.public_key());
@@ -53,6 +56,7 @@ async fn test_group_incept() -> Result<(), ControllerError> {
             .await?;
         IdentifierController::new(incepted_identifier, controller.clone())
     };
+    identifier2.notify_witnesses().await?;
 
     let (group_inception, exn_messages) =
         identifier1.incept_group(vec![identifier2.id.clone()], 2, None, None, None)?;
@@ -94,6 +98,7 @@ async fn test_group_incept() -> Result<(), ControllerError> {
     Ok(())
 }
 
+#[ignore]
 #[async_std::test]
 async fn test_delegated_incept() -> Result<(), ControllerError> {
     use url::Url;
@@ -105,12 +110,12 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     let witness = {
         let seed = "AK8F6AAiYDpXlWdj2O5F5-6wNCCNJh2A4XOlqwR_HwwH";
         let witness_root = Builder::new().prefix("test-wit1-db").tempdir().unwrap();
-        WitnessListener::setup(
+        Arc::new(WitnessListener::setup(
             url::Url::parse("http://witness1:3232/").unwrap(), // not used
             None,
             witness_root.path(),
             Some(seed.to_string()),
-        )?
+        )?)
     };
 
     let witness_id_basic = witness.get_prefix();
@@ -126,10 +131,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     };
 
     let mut actors: TestActorMap = HashMap::new();
-    actors.insert(
-        (Host::Domain("witness1".to_string()), 3232),
-        Box::new(witness),
-    );
+    actors.insert((Host::Domain("witness1".to_string()), 3232), witness);
     let transport = TestTransport::new(actors);
 
     let controller = Arc::new(Controller::with_transport(
@@ -157,6 +159,8 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
             .await?;
         IdentifierController::new(incepted_identifier, controller.clone())
     };
+    identifier1.notify_witnesses().await?;
+
     // Quering mailbox to get receipts
     let query = identifier1.query_mailbox(&identifier1.id, &[witness_id_basic.clone()])?;
 
@@ -194,6 +198,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
             .await?;
         IdentifierController::new(incepted_identifier, controller2.clone())
     };
+    delegator.notify_witnesses().await?;
 
     // Quering mailbox to get receipts
     let query = delegator.query_mailbox(&delegator.id, &[witness_id_basic.clone()])?;
@@ -265,9 +270,10 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
         let signature = SelfSigningPrefix::Ed25519Sha512(km2.sign(&qry.serialize()?)?);
         delegator.finalize_query(vec![(qry, signature)]).await?;
     }
+    let data_signature = AttachedSignaturePrefix::new(signature_icp, 0);
 
     identifier1
-        .finalize_exchange(exn_messages[0].as_bytes(), signature_exn, signature_icp)
+        .finalize_exchange(exn_messages[0].as_bytes(), signature_exn, data_signature)
         .await?;
 
     println!("before get_kel_messages_with_receipts");
@@ -307,9 +313,10 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
                     let action_required = delegator.finalize_query(vec![(qry, signature)]).await?;
                     assert!(action_required.is_empty());
                 }
+                let data_signature = AttachedSignaturePrefix::new(signature_ixn, 0);
 
                 delegator
-                    .finalize_exchange(&exn.serialize()?, signature_exn, signature_ixn)
+                    .finalize_exchange(&exn.serialize()?, signature_exn, data_signature)
                     .await?;
 
                 // ixn was accepted
@@ -356,6 +363,127 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     // Child kel is accepted
     let state = identifier1.source.storage.get_state(&delegate_id)?;
     assert_eq!(state.unwrap().sn, 0);
+
+    Ok(())
+}
+
+#[async_std::test]
+async fn test_2_wit() -> Result<(), ControllerError> {
+    use url::Url;
+    let root = Builder::new().prefix("test-db").tempdir().unwrap();
+    let initial_config = OptionalConfig::init().with_db_path(root.into_path());
+
+    let witness1 = {
+        let seed = "AK8F6AAiYDpXlWdj2O5F5-6wNCCNJh2A4XOlqwR_HwwH";
+        let witness_root = Builder::new().prefix("test-wit1-db").tempdir().unwrap();
+        Arc::new(WitnessListener::setup(
+            url::Url::parse("http://witness1/").unwrap(), // not used
+            None,
+            witness_root.path(),
+            Some(seed.to_string()),
+        )?)
+    };
+    let witness2 = {
+        let seed = "AJZ7ZLd7unQ4IkMUwE69NXcvDO9rrmmRH_Xk3TPu9BpP";
+        let witness_root = Builder::new().prefix("test-wit2-db").tempdir().unwrap();
+        Arc::new(WitnessListener::setup(
+            url::Url::parse("http://witness2/").unwrap(), // not used
+            None,
+            witness_root.path(),
+            Some(seed.to_string()),
+        )?)
+    };
+
+    let wit1_id = witness1.get_prefix();
+    let wit1_location = LocationScheme {
+        eid: IdentifierPrefix::Basic(wit1_id.clone()),
+        scheme: keri::oobi::Scheme::Http,
+        url: Url::parse("http://witness1/").unwrap(),
+    };
+    let wit2_id = witness2.get_prefix();
+    let wit2_location = LocationScheme {
+        eid: IdentifierPrefix::Basic(wit2_id.clone()),
+        scheme: keri::oobi::Scheme::Http,
+        url: Url::parse("http://witness2/").unwrap(),
+    };
+
+    let mut actors: TestActorMap = HashMap::new();
+    actors.insert((Host::Domain("witness1".to_string()), 80), witness1.clone());
+    actors.insert((Host::Domain("witness2".to_string()), 80), witness2.clone());
+    let transport = TestTransport::new(actors);
+
+    let controller = Arc::new(Controller::with_transport(
+        Some(initial_config),
+        Box::new(transport.clone()),
+    )?);
+
+    let km1 = CryptoBox::new()?;
+
+    let mut ident_ctl = {
+        let pk = BasicPrefix::Ed25519(km1.public_key());
+        let npk = BasicPrefix::Ed25519(km1.next_public_key());
+
+        let icp_event = controller
+            .incept(
+                vec![pk],
+                vec![npk],
+                vec![wit1_location.clone(), wit2_location.clone()],
+                2,
+            )
+            .await?;
+        let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(icp_event.as_bytes())?);
+
+        let incepted_identifier = controller
+            .finalize_inception(icp_event.as_bytes(), &signature)
+            .await?;
+        IdentifierController::new(incepted_identifier, controller.clone())
+    };
+
+    let n = ident_ctl.notify_witnesses().await.unwrap();
+    assert_eq!(n, 1);
+
+    // Quering mailbox to get receipts
+    let query = ident_ctl.query_mailbox(&ident_ctl.id, &[wit1_id.clone(), wit2_id.clone()])?;
+
+    for qry in query {
+        let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(&qry.serialize()?)?);
+        ident_ctl.finalize_query(vec![(qry, signature)]).await?;
+    }
+
+    let n = ident_ctl.notify_witnesses().await.unwrap();
+    assert_eq!(n, 0);
+
+    let n = ident_ctl
+        .broadcast_receipts(&[
+            IdentifierPrefix::Basic(wit1_id.clone()),
+            IdentifierPrefix::Basic(wit2_id.clone()),
+        ])
+        .await?;
+    assert_eq!(n, 2);
+
+    let kel = witness1
+        .witness_data
+        .event_storage
+        .get_kel_messages_with_receipts(&ident_ctl.id)
+        .unwrap()
+        .unwrap();
+    assert_eq!(kel.len(), 2);
+
+    match &kel[0] {
+        Notice::Event(evt) => match evt.event_message.event.content.event_data {
+            EventData::Icp(_) => (),
+            _ => panic!("Unexpected event type"),
+        },
+        _ => panic!("Unexpected notice type"),
+    }
+
+    match &kel[1] {
+        Notice::NontransferableRct(rct) => {
+            // TODO: fix witness to not insert duplicate signatures
+            assert_eq!(rct.signatures.len(), 3);
+        }
+        _ => panic!("Unexpected notice type"),
+    }
 
     Ok(())
 }

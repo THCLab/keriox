@@ -15,3 +15,4 @@ serde_json = "1.0"
 url = "2.3.1"
 tempfile = { version = "3.1" }
 witness = { path = "../witness" }
+actix-web = { version = "4" }

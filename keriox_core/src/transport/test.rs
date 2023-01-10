@@ -25,7 +25,7 @@ pub trait TestActor<E: Error = ActorError> {
 }
 
 pub type TestActorMap<E = ActorError> =
-    HashMap<(url::Host, u16), Box<dyn TestActor<E> + Send + Sync>>;
+    HashMap<(url::Host, u16), Arc<dyn TestActor<E> + Send + Sync>>;
 
 /// Used in tests to connect directly to actors without going through the network.
 pub struct TestTransport<E> {

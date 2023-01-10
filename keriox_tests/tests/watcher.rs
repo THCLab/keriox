@@ -28,12 +28,12 @@ pub fn watcher_forward_ksn() -> Result<(), Error> {
     let witness_listener = {
         let root_witness = Builder::new().prefix("test-wit").tempdir().unwrap();
 
-        WitnessListener::setup(
+        Arc::new(WitnessListener::setup(
             witness_url,
             None,
             root_witness.path(),
             Some("ArwXoACJgOleVZ2PY7kXn7rA0II0mHYDhc6WrBH8fDAc".into()),
-        )?
+        )?)
     };
 
     // Controller who will ask
@@ -99,10 +99,7 @@ pub fn watcher_forward_ksn() -> Result<(), Error> {
     let witness = Arc::clone(&witness_listener.witness_data);
 
     let mut actors: TestActorMap = HashMap::new();
-    actors.insert(
-        (Host::Domain("witness1".to_string()), 80),
-        Box::new(witness_listener),
-    );
+    actors.insert((Host::Domain("witness1".to_string()), 80), witness_listener);
     let transport = TestTransport::new(actors);
 
     let url = url::Url::parse("http://some/dummy/url").unwrap();

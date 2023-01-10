@@ -22,7 +22,7 @@ use keri::{
 };
 use tempfile::Builder;
 use url::{Host, Url};
-use witness::{Witness, WitnessListener};
+use witness::WitnessListener;
 
 use crate::watcher::WatcherData;
 
@@ -136,9 +136,9 @@ async fn test_add_watcher() -> Result<(), Error> {
     let initial_config = OptionalConfig::init().with_db_path(root.into_path());
 
     let mut actors: TestActorMap = HashMap::new();
-    actors.insert((Host::Ipv4(Ipv4Addr::LOCALHOST), 3232), Box::new(wit));
+    actors.insert((Host::Ipv4(Ipv4Addr::LOCALHOST), 3232), Arc::new(wit));
     let transport = TestTransport::new(actors);
-    
+
     let controller =
         Arc::new(Controller::with_transport(Some(initial_config), Box::new(transport)).unwrap());
     let km1 = CryptoBox::new()?;
