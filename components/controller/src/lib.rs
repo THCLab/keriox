@@ -30,9 +30,8 @@ use keri::{
         reply_event::{ReplyEvent, ReplyRoute, SignedReply},
     },
     sai::SelfAddressingPrefix,
+    transport::{default::DefaultTransport, Transport},
 };
-use keri_transport::{default::DefaultTransport, Transport};
-use witness::WitnessError;
 
 use self::{error::ControllerError, utils::OptionalConfig};
 
@@ -41,7 +40,7 @@ pub struct Controller {
     pub storage: EventStorage,
     oobi_manager: OobiManager,
     partially_witnessed_escrow: Arc<PartiallyWitnessedEscrow>,
-    transport: Box<dyn Transport<WitnessError> + Send + Sync>,
+    transport: Box<dyn Transport + Send + Sync>,
 }
 
 impl Controller {
@@ -51,7 +50,7 @@ impl Controller {
 
     pub fn with_transport(
         configs: Option<OptionalConfig>,
-        transport: Box<dyn Transport<WitnessError> + Send + Sync>,
+        transport: Box<dyn Transport + Send + Sync>,
     ) -> Result<Self, ControllerError> {
         let (db_dir_path, initial_oobis) = match configs {
             Some(OptionalConfig {

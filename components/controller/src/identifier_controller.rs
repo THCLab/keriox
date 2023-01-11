@@ -31,9 +31,8 @@ use keri::{
     sai::{derivation::SelfAddressing, SelfAddressingPrefix},
 };
 
-use crate::{error::ControllerError, mailbox_updating::MailboxReminder, Controller};
-
 use super::mailbox_updating::ActionRequired;
+use crate::{error::ControllerError, mailbox_updating::MailboxReminder, Controller};
 
 pub struct IdentifierController {
     pub id: IdentifierPrefix,

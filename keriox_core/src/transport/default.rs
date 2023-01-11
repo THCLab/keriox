@@ -1,4 +1,7 @@
-use keri::{
+use serde::Deserialize;
+
+use super::{Transport, TransportError};
+use crate::{
     actor::{
         parse_event_stream, parse_op_stream,
         simple_controller::{parse_response, PossibleResponse},
@@ -8,9 +11,6 @@ use keri::{
     prefix::IdentifierPrefix,
     query::query_event::SignedQuery,
 };
-use serde::Deserialize;
-
-use super::{Transport, TransportError};
 
 /// Default behavior for communication with other actors.
 /// Serializes a keri message, does a net request, and deserializes the response.

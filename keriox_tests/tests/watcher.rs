@@ -5,6 +5,7 @@ use std::{
 
 use keri::{
     actor::{
+        error::ActorError,
         simple_controller::{PossibleResponse, SimpleController},
         SignedQueryError,
     },
@@ -13,12 +14,12 @@ use keri::{
     event_message::signed_event_message::{Notice, Op},
     prefix::{IdentifierPrefix, SelfSigningPrefix},
     query::{query_event::SignedQuery, reply_event::SignedReply},
+    transport::test::{TestActorMap, TestTransport},
 };
-use keri_transport::test::{TestActorMap, TestTransport};
 use tempfile::Builder;
 use url::Host;
-use watcher::{WatcherData, WatcherError};
-use witness::{WitnessError, WitnessListener};
+use watcher::WatcherData;
+use witness::WitnessListener;
 
 #[test]
 pub fn watcher_forward_ksn() -> Result<(), Error> {
@@ -97,7 +98,7 @@ pub fn watcher_forward_ksn() -> Result<(), Error> {
 
     let witness = Arc::clone(&witness_listener.witness_data);
 
-    let mut actors: TestActorMap<WitnessError> = HashMap::new();
+    let mut actors: TestActorMap = HashMap::new();
     actors.insert((Host::Domain("witness1".to_string()), 80), witness_listener);
     let transport = TestTransport::new(actors);
 
@@ -118,7 +119,7 @@ pub fn watcher_forward_ksn() -> Result<(), Error> {
     // Send query message to watcher before sending end role oobi
     let err = futures::executor::block_on(watcher.process_op(query.clone()));
 
-    assert!(matches!(err, Err(WatcherError::MissingRole { .. })));
+    assert!(matches!(err, Err(ActorError::MissingRole { .. })));
 
     // Create and send end role oobi to watcher
     let end_role =
@@ -129,7 +130,7 @@ pub fn watcher_forward_ksn() -> Result<(), Error> {
     let result = futures::executor::block_on(watcher.process_op(query.clone()));
     // Expect error because no loc scheme for witness.
     assert!(matches!(
-        result, Err(WatcherError::NoLocation { ref id })
+        result, Err(ActorError::NoLocation { ref id })
         if id == &IdentifierPrefix::Basic(witness.prefix.clone())
     ));
 
@@ -165,7 +166,7 @@ pub fn watcher_forward_ksn() -> Result<(), Error> {
 
     assert!(matches!(
         result,
-        Err(WatcherError::QueryError(
+        Err(ActorError::QueryError(
             SignedQueryError::InvalidSignature { .. }
         ))
     ));
