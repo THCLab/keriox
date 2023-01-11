@@ -9,10 +9,12 @@ edition = "2021"
 async-std = { version = "1.12.0", features = ["attributes"] }
 futures = "0.3.24"
 keri = { path = "../../keriox_core", features = ["oobi", "controller"] }
-keri-transport = { path = "../../support/transport" }
 reqwest = { version = "0.11", features = ["json", "rustls-tls", "blocking"], default-features = false }
 thiserror = "1.0"
 serde_json = "1.0"
 url = "2.3.1"
 tempfile = { version = "3.1" }
+actix-web = { version = "4" }
+
+[dev-dependencies]
 witness = { path = "../witness" }

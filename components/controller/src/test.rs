@@ -3,20 +3,20 @@
 use std::{collections::HashMap, sync::Arc};
 
 use keri::{
-    actor::{prelude::Message, SignedQueryError},
+    actor::{error::ActorError, prelude::Message, SignedQueryError},
     event::event_data::EventData,
     event_message::signed_event_message::Notice,
     oobi::LocationScheme,
-    prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     signer::{CryptoBox, KeyManager},
-};
-use keri_transport::{
-    test::{TestActorMap, TestTransport},
-    TransportError,
+    transport::{
+        test::{TestActorMap, TestTransport},
+        TransportError,
+    },
 };
 use tempfile::Builder;
 use url::Host;
-use witness::{WitnessError, WitnessListener};
+use witness::WitnessListener;
 
 use super::{error::ControllerError, identifier_controller::IdentifierController, Controller};
 use crate::{mailbox_updating::ActionRequired, utils::OptionalConfig};
@@ -37,8 +37,9 @@ async fn test_group_incept() -> Result<(), ControllerError> {
         let icp_event = controller.incept(vec![pk], vec![npk], vec![], 0).await?;
         let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(icp_event.as_bytes())?);
 
-        let incepted_identifier =
-            controller.finalize_inception(icp_event.as_bytes(), &signature)?;
+        let incepted_identifier = controller
+            .finalize_inception(icp_event.as_bytes(), &signature)
+            .await?;
         IdentifierController::new(incepted_identifier, controller.clone())
     };
     identifier1.notify_witnesses().await?;
@@ -50,8 +51,9 @@ async fn test_group_incept() -> Result<(), ControllerError> {
         let icp_event = controller.incept(vec![pk], vec![npk], vec![], 0).await?;
         let signature = SelfSigningPrefix::Ed25519Sha512(km2.sign(icp_event.as_bytes())?);
 
-        let incepted_identifier =
-            controller.finalize_inception(icp_event.as_bytes(), &signature)?;
+        let incepted_identifier = controller
+            .finalize_inception(icp_event.as_bytes(), &signature)
+            .await?;
         IdentifierController::new(incepted_identifier, controller.clone())
     };
     identifier2.notify_witnesses().await?;
@@ -128,7 +130,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
         url: Url::parse("http://witness1:3232").unwrap(),
     };
 
-    let mut actors: TestActorMap<WitnessError> = HashMap::new();
+    let mut actors: TestActorMap = HashMap::new();
     actors.insert((Host::Domain("witness1".to_string()), 3232), witness);
     let transport = TestTransport::new(actors);
 
@@ -152,8 +154,9 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
             .await?;
         let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(icp_event.as_bytes())?);
 
-        let incepted_identifier =
-            controller.finalize_inception(icp_event.as_bytes(), &signature)?;
+        let incepted_identifier = controller
+            .finalize_inception(icp_event.as_bytes(), &signature)
+            .await?;
         IdentifierController::new(incepted_identifier, controller.clone())
     };
     identifier1.notify_witnesses().await?;
@@ -165,11 +168,11 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     {
         let qry = query[0].clone();
         let sig = SelfSigningPrefix::Ed25519Sha512(km2.sign(&qry.serialize()?)?);
-        let resp = identifier1.finalize_mailbox_query(vec![(qry, sig)]).await;
+        let resp = identifier1.finalize_query(vec![(qry, sig)]).await;
         assert!(matches!(
             resp,
             Err(ControllerError::TransportError(
-                TransportError::RemoteError(WitnessError::QueryFailed(
+                TransportError::RemoteError(ActorError::QueryError(
                     SignedQueryError::InvalidSignature
                 ))
             ))
@@ -178,9 +181,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
 
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(&qry.serialize()?)?);
-        identifier1
-            .finalize_mailbox_query(vec![(qry, signature)])
-            .await?;
+        identifier1.finalize_query(vec![(qry, signature)]).await?;
     }
 
     let mut delegator = {
@@ -192,8 +193,9 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
             .await?;
         let signature = SelfSigningPrefix::Ed25519Sha512(km2.sign(icp_event.as_bytes())?);
 
-        let incepted_identifier =
-            controller2.finalize_inception(icp_event.as_bytes(), &signature)?;
+        let incepted_identifier = controller2
+            .finalize_inception(icp_event.as_bytes(), &signature)
+            .await?;
         IdentifierController::new(incepted_identifier, controller2.clone())
     };
     delegator.notify_witnesses().await?;
@@ -203,9 +205,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
 
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(km2.sign(&qry.serialize()?)?);
-        delegator
-            .finalize_mailbox_query(vec![(qry, signature)])
-            .await?;
+        delegator.finalize_query(vec![(qry, signature)]).await?;
     }
 
     // Generate delegated inception
@@ -231,7 +231,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     assert!(matches!(
         resp,
         Err(ControllerError::TransportError(
-            TransportError::RemoteError(WitnessError::KeriError(
+            TransportError::RemoteError(ActorError::KeriError(
                 keri::error::Error::SignatureVerificationError
             ))
         ))
@@ -255,11 +255,11 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     {
         let qry = query[0].clone();
         let sig = SelfSigningPrefix::Ed25519Sha512(km2.sign(b"not actual message")?);
-        let resp = identifier1.finalize_mailbox_query(vec![(qry, sig)]).await;
+        let resp = identifier1.finalize_query(vec![(qry, sig)]).await;
         assert!(matches!(
             resp,
             Err(ControllerError::TransportError(
-                TransportError::RemoteError(WitnessError::QueryFailed(
+                TransportError::RemoteError(ActorError::QueryError(
                     SignedQueryError::InvalidSignature
                 ))
             ))
@@ -268,13 +268,12 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
 
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(km2.sign(&qry.serialize()?)?);
-        delegator
-            .finalize_mailbox_query(vec![(qry, signature)])
-            .await?;
+        delegator.finalize_query(vec![(qry, signature)]).await?;
     }
+    let data_signature = AttachedSignaturePrefix::new(signature_icp, 0);
 
     identifier1
-        .finalize_exchange(exn_messages[0].as_bytes(), signature_exn, signature_icp)
+        .finalize_exchange(exn_messages[0].as_bytes(), signature_exn, data_signature)
         .await?;
 
     println!("before get_kel_messages_with_receipts");
@@ -290,9 +289,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
 
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(km2.sign(&qry.serialize()?)?);
-        let ar = delegator
-            .finalize_mailbox_query(vec![(qry, signature)])
-            .await?;
+        let ar = delegator.finalize_query(vec![(qry, signature)]).await?;
         assert_eq!(ar.len(), 1);
         match &ar[0] {
             ActionRequired::MultisigRequest(_, _) => unreachable!(),
@@ -313,14 +310,13 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
 
                 for qry in query {
                     let signature = SelfSigningPrefix::Ed25519Sha512(km2.sign(&qry.serialize()?)?);
-                    let action_required = delegator
-                        .finalize_mailbox_query(vec![(qry, signature)])
-                        .await?;
+                    let action_required = delegator.finalize_query(vec![(qry, signature)]).await?;
                     assert!(action_required.is_empty());
                 }
+                let data_signature = AttachedSignaturePrefix::new(signature_ixn, 0);
 
                 delegator
-                    .finalize_exchange(&exn.serialize()?, signature_exn, signature_ixn)
+                    .finalize_exchange(&exn.serialize()?, signature_exn, data_signature)
                     .await?;
 
                 // ixn was accepted
@@ -344,9 +340,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
 
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(&qry.serialize()?)?);
-        let ar = identifier1
-            .finalize_mailbox_query(vec![(qry, signature)])
-            .await?;
+        let ar = identifier1.finalize_query(vec![(qry, signature)]).await?;
         assert!(ar.is_empty());
     }
 
@@ -362,9 +356,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
 
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(&qry.serialize()?)?);
-        let ar = identifier1
-            .finalize_mailbox_query(vec![(qry, signature)])
-            .await?;
+        let ar = identifier1.finalize_query(vec![(qry, signature)]).await?;
         assert!(ar.is_empty());
     }
 
@@ -415,7 +407,7 @@ async fn test_2_wit() -> Result<(), ControllerError> {
         url: Url::parse("http://witness2/").unwrap(),
     };
 
-    let mut actors: TestActorMap<WitnessError> = HashMap::new();
+    let mut actors: TestActorMap = HashMap::new();
     actors.insert((Host::Domain("witness1".to_string()), 80), witness1.clone());
     actors.insert((Host::Domain("witness2".to_string()), 80), witness2.clone());
     let transport = TestTransport::new(actors);
@@ -441,8 +433,9 @@ async fn test_2_wit() -> Result<(), ControllerError> {
             .await?;
         let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(icp_event.as_bytes())?);
 
-        let incepted_identifier =
-            controller.finalize_inception(icp_event.as_bytes(), &signature)?;
+        let incepted_identifier = controller
+            .finalize_inception(icp_event.as_bytes(), &signature)
+            .await?;
         IdentifierController::new(incepted_identifier, controller.clone())
     };
 
@@ -454,9 +447,7 @@ async fn test_2_wit() -> Result<(), ControllerError> {
 
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(&qry.serialize()?)?);
-        ident_ctl
-            .finalize_mailbox_query(vec![(qry, signature)])
-            .await?;
+        ident_ctl.finalize_query(vec![(qry, signature)]).await?;
     }
 
     let n = ident_ctl.notify_witnesses().await.unwrap();

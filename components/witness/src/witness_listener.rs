@@ -82,6 +82,7 @@ mod test {
     use actix_web::body::MessageBody;
     use keri::{
         actor::{
+            error::ActorError,
             parse_event_stream, parse_op_stream,
             simple_controller::{parse_response, PossibleResponse},
         },
@@ -91,38 +92,46 @@ mod test {
         query::query_event::{QueryRoute, SignedQuery},
     };
 
-    use crate::WitnessError;
-
     #[async_trait::async_trait]
-    impl keri_transport::test::TestActor<WitnessError> for super::WitnessListener {
-        async fn send_message(&self, msg: Message) -> Result<(), WitnessError> {
+    impl keri::transport::test::TestActor for super::WitnessListener {
+        async fn send_message(&self, msg: Message) -> Result<(), ActorError> {
             let payload = String::from_utf8(msg.to_cesr().unwrap()).unwrap();
             let data = actix_web::web::Data::new(self.witness_data.clone());
             match msg {
                 Message::Notice(_) => {
-                    super::http_handlers::process_notice(payload, data).await?;
+                    super::http_handlers::process_notice(payload, data)
+                        .await
+                        .map_err(|err| err.0)?;
                 }
                 Message::Op(op) => match op {
                     Op::Query(_) => {
-                        super::http_handlers::process_query(payload, data).await?;
+                        super::http_handlers::process_query(payload, data)
+                            .await
+                            .map_err(|err| err.0)?;
                     }
                     Op::Reply(_) => {
-                        super::http_handlers::process_reply(payload, data).await?;
+                        super::http_handlers::process_reply(payload, data)
+                            .await
+                            .map_err(|err| err.0)?;
                     }
                     Op::Exchange(_) => {
-                        super::http_handlers::process_exchange(payload, data).await?;
+                        super::http_handlers::process_exchange(payload, data)
+                            .await
+                            .map_err(|err| err.0)?;
                     }
                 },
             }
 
             Ok(())
         }
-        async fn send_query(&self, query: SignedQuery) -> Result<PossibleResponse, WitnessError> {
+        async fn send_query(&self, query: SignedQuery) -> Result<PossibleResponse, ActorError> {
             let payload =
                 String::from_utf8(Message::Op(Op::Query(query.clone())).to_cesr().unwrap())
                     .unwrap();
             let data = actix_web::web::Data::new(self.witness_data.clone());
-            let resp = super::http_handlers::process_query(payload, data).await?;
+            let resp = super::http_handlers::process_query(payload, data)
+                .await
+                .map_err(|err| err.0)?;
             let resp = resp.into_body().try_into_bytes().unwrap();
             match query.query.event.content.data.route {
                 QueryRoute::Ksn { .. } => {
@@ -142,9 +151,11 @@ mod test {
                 }
             }
         }
-        async fn request_loc_scheme(&self, eid: IdentifierPrefix) -> Result<Vec<Op>, WitnessError> {
+        async fn request_loc_scheme(&self, eid: IdentifierPrefix) -> Result<Vec<Op>, ActorError> {
             let data = actix_web::web::Data::new(self.witness_data.clone());
-            let resp = super::http_handlers::get_eid_oobi(eid.into(), data).await?;
+            let resp = super::http_handlers::get_eid_oobi(eid.into(), data)
+                .await
+                .map_err(|err| err.0)?;
             let resp = resp.into_body().try_into_bytes().unwrap();
             let resp = parse_op_stream(resp.as_ref()).unwrap();
             Ok(resp)
@@ -154,11 +165,13 @@ mod test {
             cid: IdentifierPrefix,
             role: Role,
             eid: IdentifierPrefix,
-        ) -> Result<Vec<Op>, WitnessError> {
+        ) -> Result<Vec<Message>, ActorError> {
             let data = actix_web::web::Data::new(self.witness_data.clone());
-            let resp = super::http_handlers::get_cid_oobi((cid, role, eid).into(), data).await?;
+            let resp = super::http_handlers::get_cid_oobi((cid, role, eid).into(), data)
+                .await
+                .map_err(|err| err.0)?;
             let resp = resp.into_body().try_into_bytes().unwrap();
-            let resp = parse_op_stream(resp.as_ref()).unwrap();
+            let resp = parse_event_stream(resp.as_ref()).unwrap();
             Ok(resp)
         }
     }
@@ -173,7 +186,7 @@ pub mod http_handlers {
     };
     use itertools::Itertools;
     use keri::{
-        actor::{QueryError, SignedQueryError},
+        actor::{error::ActorError, prelude::Message},
         error::Error,
         event_message::cesr_adapter::ParsedEvent,
         event_parsing::primitives::CesrPrimitive,
@@ -181,15 +194,15 @@ pub mod http_handlers {
         prefix::IdentifierPrefix,
     };
 
-    use crate::witness::{Witness, WitnessError};
+    use crate::witness::Witness;
 
     pub async fn get_eid_oobi(
         eid: web::Path<IdentifierPrefix>,
         data: web::Data<Arc<Witness>>,
-    ) -> Result<HttpResponse, WitnessError> {
+    ) -> Result<HttpResponse, ApiError> {
         let loc_scheme = data
             .get_loc_scheme_for_id(&eid)
-            .map_err(WitnessError::KeriError)?
+            .map_err(ActorError::KeriError)?
             .unwrap_or_default();
         let oobis: Vec<u8> = loc_scheme
             .into_iter()
@@ -199,7 +212,7 @@ pub mod http_handlers {
             })
             .flatten_ok()
             .try_collect()
-            .map_err(WitnessError::KeriError)?;
+            .map_err(ActorError::KeriError)?;
 
         println!(
             "\nSending {} oobi: \n {}",
@@ -214,24 +227,28 @@ pub mod http_handlers {
     pub async fn get_cid_oobi(
         path: web::Path<(IdentifierPrefix, Role, IdentifierPrefix)>,
         data: web::Data<Arc<Witness>>,
-    ) -> Result<HttpResponse, WitnessError> {
+    ) -> Result<HttpResponse, ApiError> {
         let (cid, role, eid) = path.into_inner();
 
         let end_role = data
             .oobi_manager
             .get_end_role(&cid, role)
-            .map_err(WitnessError::DbError)?;
+            .map_err(ActorError::DbError)?;
         let loc_scheme = data
             .get_loc_scheme_for_id(&eid)
-            .map_err(WitnessError::KeriError)?
+            .map_err(ActorError::KeriError)?
             .unwrap_or_default();
         // (for now) Append controller kel to be able to verify end role signature.
         // TODO use ksn instead
-        let cont_kel = data
+        let cont_kel: Vec<_> = data
             .event_storage
-            .get_kel(&cid)
-            .map_err(WitnessError::KeriError)?
-            .unwrap_or_default();
+            .get_kel_messages_with_receipts(&cid)
+            .map_err(ActorError::KeriError)?
+            .unwrap_or_default()
+            .into_iter()
+            .map(|not| Message::Notice(not).to_cesr().unwrap())
+            .flatten()
+            .collect();
         let oobis = end_role
             .into_iter()
             .chain(loc_scheme.into_iter())
@@ -241,7 +258,7 @@ pub mod http_handlers {
             })
             .flatten_ok()
             .collect::<Result<Vec<_>, _>>()
-            .map_err(WitnessError::KeriError)?;
+            .map_err(ActorError::KeriError)?;
         let res: Vec<u8> = cont_kel.into_iter().chain(oobis).collect();
         println!(
             "\nSending {} obi from its witness {}:\n{}",
@@ -258,10 +275,10 @@ pub mod http_handlers {
     pub async fn process_notice(
         post_data: String,
         data: web::Data<Arc<Witness>>,
-    ) -> Result<HttpResponse, WitnessError> {
+    ) -> Result<HttpResponse, ApiError> {
         println!("\nGot notice to process: \n{}", post_data);
         data.parse_and_process_notices(post_data.as_bytes())
-            .map_err(WitnessError::KeriError)?;
+            .map_err(ActorError::KeriError)?;
         Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())
             .body(()))
@@ -270,7 +287,7 @@ pub mod http_handlers {
     pub async fn process_query(
         post_data: String,
         data: web::Data<Arc<Witness>>,
-    ) -> Result<HttpResponse, WitnessError> {
+    ) -> Result<HttpResponse, ApiError> {
         println!("\nGot query to process: \n{}", post_data);
         let resp = data
             .parse_and_process_queries(post_data.as_bytes())?
@@ -278,6 +295,7 @@ pub mod http_handlers {
             .map(|msg| msg.to_string())
             .collect::<Vec<_>>()
             .join("");
+        println!("\nWitness responds with: {}", resp);
         Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())
             .body(resp))
@@ -286,7 +304,7 @@ pub mod http_handlers {
     pub async fn process_reply(
         post_data: String,
         data: web::Data<Arc<Witness>>,
-    ) -> Result<HttpResponse, WitnessError> {
+    ) -> Result<HttpResponse, ApiError> {
         println!("\nGot reply to process: \n{}", post_data);
         data.parse_and_process_replies(post_data.as_bytes())?;
 
@@ -298,7 +316,7 @@ pub mod http_handlers {
     pub async fn process_exchange(
         post_data: String,
         data: web::Data<Arc<Witness>>,
-    ) -> Result<HttpResponse, WitnessError> {
+    ) -> Result<HttpResponse, ApiError> {
         println!("\nGot exchange to process: \n{}", post_data);
         data.parse_and_process_exchanges(post_data.as_bytes())?;
 
@@ -307,35 +325,16 @@ pub mod http_handlers {
             .body(()))
     }
 
-    impl ResponseError for WitnessError {
+    #[derive(Debug, derive_more::Display, derive_more::From, derive_more::Error)]
+    pub struct ApiError(pub ActorError);
+
+    impl ResponseError for ApiError {
         fn status_code(&self) -> StatusCode {
-            match self {
-                WitnessError::DbError(_) => StatusCode::INTERNAL_SERVER_ERROR,
-
-                WitnessError::QueryFailed(err) => match err {
-                    SignedQueryError::KeriError(_) | SignedQueryError::DbError(_) => {
-                        StatusCode::INTERNAL_SERVER_ERROR
-                    }
-
-                    SignedQueryError::UnknownSigner { .. } | SignedQueryError::InvalidSignature => {
-                        StatusCode::UNAUTHORIZED
-                    }
-
-                    SignedQueryError::QueryError(err) => match err {
-                        QueryError::KeriError(_) | QueryError::DbError(_) => {
-                            StatusCode::INTERNAL_SERVER_ERROR
-                        }
-
-                        QueryError::UnknownId { .. } => StatusCode::NOT_FOUND,
-                    },
-                },
-
-                WitnessError::KeriError(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            }
+            self.0.http_status_code()
         }
 
         fn error_response(&self) -> HttpResponse {
-            HttpResponse::build(self.status_code()).json(self)
+            HttpResponse::build(self.status_code()).json(&self.0)
         }
     }
 }

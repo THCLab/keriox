@@ -1,6 +1,9 @@
-use keri::{
+use serde::Deserialize;
+
+use super::{Transport, TransportError};
+use crate::{
     actor::{
-        parse_op_stream,
+        parse_event_stream, parse_op_stream,
         simple_controller::{parse_response, PossibleResponse},
     },
     event_message::signed_event_message::{Message, Op},
@@ -8,9 +11,6 @@ use keri::{
     prefix::IdentifierPrefix,
     query::query_event::SignedQuery,
 };
-use serde::Deserialize;
-
-use super::{Transport, TransportError};
 
 /// Default behavior for communication with other actors.
 /// Serializes a keri message, does a net request, and deserializes the response.
@@ -147,18 +147,18 @@ where
         cid: IdentifierPrefix,
         role: Role,
         eid: IdentifierPrefix,
-    ) -> Result<Vec<Op>, TransportError<E>> {
+    ) -> Result<Vec<Message>, TransportError<E>> {
         // {url}/oobi/{cid}/{role}/{eid}
         let url = loc
             .url
             .join("oobi/")
             .unwrap()
-            .join(&cid.to_string())
+            .join(&format!("{}/", &cid.to_string()))
             .unwrap()
             .join(match role {
-                Role::Witness => "witness",
-                Role::Watcher => "watcher",
-                Role::Controller => "controller",
+                Role::Witness => "witness/",
+                Role::Watcher => "watcher/",
+                Role::Controller => "controller/",
             })
             .unwrap()
             .join(&eid.to_string())
@@ -171,7 +171,7 @@ where
                 .bytes()
                 .await
                 .map_err(|_| TransportError::NetworkError)?;
-            let ops = parse_op_stream(&body).map_err(|_| TransportError::InvalidResponse)?;
+            let ops = parse_event_stream(&body).map_err(|_| TransportError::InvalidResponse)?;
             Ok(ops)
         } else {
             let body = resp

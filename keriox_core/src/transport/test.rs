@@ -1,18 +1,18 @@
 use std::{collections::HashMap, error::Error, sync::Arc};
 
-use keri::{
-    actor::simple_controller::PossibleResponse,
+use serde::Deserialize;
+
+use super::{Transport, TransportError};
+use crate::{
+    actor::{error::ActorError, simple_controller::PossibleResponse},
     event_message::signed_event_message::{Message, Op},
     oobi::{LocationScheme, Role},
     prefix::IdentifierPrefix,
     query::query_event::SignedQuery,
 };
-use serde::Deserialize;
-
-use super::{Transport, TransportError};
 
 #[async_trait::async_trait]
-pub trait TestActor<E: Error> {
+pub trait TestActor<E: Error = ActorError> {
     async fn send_message(&self, msg: Message) -> Result<(), E>;
     async fn send_query(&self, query: SignedQuery) -> Result<PossibleResponse, E>;
     async fn request_loc_scheme(&self, eid: IdentifierPrefix) -> Result<Vec<Op>, E>;
@@ -21,10 +21,11 @@ pub trait TestActor<E: Error> {
         cid: IdentifierPrefix,
         role: Role,
         eid: IdentifierPrefix,
-    ) -> Result<Vec<Op>, E>;
+    ) -> Result<Vec<Message>, E>;
 }
 
-pub type TestActorMap<E> = HashMap<(url::Host, u16), Arc<dyn TestActor<E> + Send + Sync>>;
+pub type TestActorMap<E = ActorError> =
+    HashMap<(url::Host, u16), Arc<dyn TestActor<E> + Send + Sync>>;
 
 /// Used in tests to connect directly to actors without going through the network.
 pub struct TestTransport<E> {
@@ -119,7 +120,7 @@ where
         cid: IdentifierPrefix,
         role: Role,
         eid: IdentifierPrefix,
-    ) -> Result<Vec<Op>, TransportError<E>> {
+    ) -> Result<Vec<Message>, TransportError<E>> {
         let (host, port) = match loc.url.origin() {
             url::Origin::Tuple(_scheme, host, port) => (host, port),
             _ => return Err(TransportError::NetworkError),

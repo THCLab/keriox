@@ -22,15 +22,17 @@ use keri::{
     oobi::{LocationScheme, Role, Scheme},
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     query::{
-        query_event::{QueryArgsMbx, QueryEvent, QueryRoute, QueryTopics, SignedQuery},
+        query_event::{
+            MailboxResponse, QueryArgs, QueryArgsMbx, QueryEvent, QueryRoute, QueryTopics,
+            SignedQuery,
+        },
         reply_event::ReplyRoute,
     },
     sai::{derivation::SelfAddressing, SelfAddressingPrefix},
 };
 
-use crate::{error::ControllerError, mailbox_updating::MailboxReminder, Controller};
-
 use super::mailbox_updating::ActionRequired;
+use crate::{error::ControllerError, mailbox_updating::MailboxReminder, Controller};
 
 pub struct IdentifierController {
     pub id: IdentifierPrefix,
@@ -252,7 +254,7 @@ impl IdentifierController {
         &self,
         exchange: &[u8],
         exn_signature: SelfSigningPrefix,
-        data_signature: SelfSigningPrefix,
+        data_signature: AttachedSignaturePrefix,
     ) -> Result<(), ControllerError> {
         // Join exn messages with their signatures and send it to witness.
         let material_path = MaterialPath::to_path("-a".into());
@@ -276,22 +278,13 @@ impl IdentifierController {
                     .map(|c| Signature::NonTransferable(c.clone()))
                     .chain([Signature::Transferable(
                         SignerData::JustSignatures,
-                        vec![AttachedSignaturePrefix {
-                            // TODO
-                            index: 0,
-                            signature: data_signature,
-                        }]
-                        .into(),
+                        vec![data_signature].into(),
                     )])
                     .collect::<Vec<_>>()
             } else {
                 vec![Signature::Transferable(
                     SignerData::JustSignatures,
-                    vec![AttachedSignaturePrefix {
-                        // TODO
-                        index: 0,
-                        signature: data_signature,
-                    }],
+                    vec![data_signature],
                 )]
             };
 
@@ -348,67 +341,14 @@ impl IdentifierController {
 
         self.source.finalize_key_event(&icp, &sig, own_index)?;
 
-        let signature = AttachedSignaturePrefix {
+        let att_signature = AttachedSignaturePrefix {
             index: own_index as u16,
             signature: sig,
         };
 
-        let sigs: Vec<_> = if let Some(receipts) = self.source.storage.get_nt_receipts(
-            &icp.event.get_prefix(),
-            icp.event.get_sn(),
-            &icp.event.get_digest(),
-        )? {
-            let couplets = receipts.signatures;
-            couplets
-                .into_iter()
-                .map(|c| Signature::NonTransferable(c))
-                .chain([Signature::Transferable(
-                    SignerData::JustSignatures,
-                    vec![signature],
-                )])
-                .collect::<Vec<_>>()
-        } else {
-            vec![Signature::Transferable(
-                SignerData::JustSignatures,
-                vec![signature],
-            )]
-        };
-
-        // Join exn messages with their signatures and send it to witness.
-        let material_path = MaterialPath::to_path("-a".into());
-        let attached_sig = sigs;
         for (exn, signature) in exchanges {
-            let (_, parsed_exn) =
-                parse_payload::<EventType>(&exn).map_err(|_e| ControllerError::EventFormatError)?;
-            let exn = if let EventType::Exn(exn) = parsed_exn {
-                exn
-            } else {
-                return Err(ControllerError::WrongEventTypeError);
-            };
-            let signature = vec![Signature::Transferable(
-                SignerData::LastEstablishment(self.id.clone()),
-                vec![AttachedSignaturePrefix {
-                    // TODO
-                    index: 0,
-                    signature,
-                }],
-            )];
-            let signer_exn = Message::Op(Op::Exchange(SignedExchange {
-                exchange_message: exn,
-                signature,
-                data_signature: (material_path.clone(), attached_sig.clone()),
-            }));
-            let wits = self.source.get_witnesses_at_event(&icp)?;
-            // TODO for now get first witness
-            if let Some(wit) = wits.get(0) {
-                self.source
-                    .send_message_to(
-                        &IdentifierPrefix::Basic(wit.clone()),
-                        keri::oobi::Scheme::Http,
-                        signer_exn,
-                    )
-                    .await?;
-            }
+            self.finalize_exchange(&exn, signature, att_signature.clone())
+                .await?;
         }
         Ok(group_prefix)
     }
@@ -560,10 +500,73 @@ impl IdentifierController {
             .collect::<Result<_, _>>()?)
     }
 
+    pub fn query_watcher(
+        &self,
+        identifier: &IdentifierPrefix,
+        watcher: IdentifierPrefix,
+    ) -> Result<QueryEvent, ControllerError> {
+        Ok(QueryEvent::new_query(
+            QueryRoute::Log {
+                args: QueryArgs {
+                    // about who
+                    i: identifier.clone(),
+                    // who will get the query
+                    src: Some(watcher),
+                    s: None,
+                },
+                reply_route: "".to_string(),
+            },
+            SerializationFormats::JSON,
+            SelfAddressing::Blake3_256,
+        )?)
+    }
+
+    pub fn query_own_watchers(
+        &self,
+        about_who: &IdentifierPrefix,
+    ) -> Result<Vec<QueryEvent>, ControllerError> {
+        self.source
+            .get_watchers(&self.id)?
+            .into_iter()
+            .map(|watcher| self.query_watcher(about_who, watcher))
+            .collect()
+    }
+
+    async fn mailbox_reponse(
+        &mut self,
+        from_who: &IdentifierPrefix,
+        about_who: &IdentifierPrefix,
+        res: &MailboxResponse,
+    ) -> Result<Vec<ActionRequired>, ControllerError> {
+        let req = if from_who == about_who {
+            // process own mailbox
+            let req = self.process_own_mailbox(res, &self.last_asked_index)?;
+            // TODO: update last seen index
+            // self.last_asked_index = MailboxReminder {
+            //     receipt: res.receipt.len(),
+            //     multisig: res.multisig.len(),
+            //     delegate: res.delegate.len(),
+            // };
+            req
+        } else {
+            // process group mailbox
+            let group_req = self
+                .process_group_mailbox(&res, &about_who, &self.last_asked_groups_index)
+                .await?;
+            self.last_asked_groups_index = MailboxReminder {
+                receipt: res.receipt.len(),
+                multisig: res.multisig.len(),
+                delegate: res.delegate.len(),
+            };
+            group_req
+        };
+        Ok(req)
+    }
+
     /// Joins query events with their signatures, sends it to witness and
     /// process its response. If user action is needed to finalize process,
     /// returns proper notification.
-    pub async fn finalize_mailbox_query(
+    pub async fn finalize_query(
         &mut self,
         queries: Vec<(QueryEvent, SelfSigningPrefix)>,
     ) -> Result<Vec<ActionRequired>, ControllerError> {
@@ -605,42 +608,36 @@ impl IdentifierController {
                 .source
                 .send_query_to(&receipient, Scheme::Http, query)
                 .await?;
-            println!("\nresponse: {:?}", res);
-            // TODO what if other reponse than mailbox?
-            let res = if let PossibleResponse::Mbx(res) = res {
-                res
-            } else {
-                todo!()
+
+            match res {
+                PossibleResponse::Kel(kel) => {
+                    println!(
+                        "\nGot kel from {}: {}",
+                        &receipient.to_str(),
+                        std::str::from_utf8(
+                            &kel.iter()
+                                .map(|m| m.to_cesr().unwrap())
+                                .flatten()
+                                .collect::<Vec<_>>()
+                        )
+                        .unwrap()
+                    );
+                    for event in kel {
+                        self.source.process(&event)?;
+                    }
+                }
+                PossibleResponse::Mbx(mbx) => {
+                    println!("Mailbox updated");
+                    let about_who = about_who.ok_or(ControllerError::QueryArgumentError(
+                        "Missing query subject identifier".into(),
+                    ))?;
+                    let from_who = from_who.ok_or(ControllerError::QueryArgumentError(
+                        "Missing query sender identifier".into(),
+                    ))?;
+                    actions.append(&mut self.mailbox_reponse(from_who, about_who, &mbx).await?);
+                }
+                PossibleResponse::Ksn(_) => todo!(),
             };
-            let req = if from_who == about_who {
-                // process own mailbox
-                let req = self.process_own_mailbox(&res, &self.last_asked_index)?;
-                // TODO: update last seen index
-                // self.last_asked_index = MailboxReminder {
-                //     receipt: res.receipt.len(),
-                //     multisig: res.multisig.len(),
-                //     delegate: res.delegate.len(),
-                // };
-                req
-            } else {
-                // process group mailbox
-                let group_req = self
-                    .process_group_mailbox(
-                        &res,
-                        about_who.ok_or(ControllerError::QueryArgumentError(
-                            "Missing query receipient identifier".into(),
-                        ))?,
-                        &self.last_asked_groups_index,
-                    )
-                    .await?;
-                self.last_asked_groups_index = MailboxReminder {
-                    receipt: res.receipt.len(),
-                    multisig: res.multisig.len(),
-                    delegate: res.delegate.len(),
-                };
-                group_req
-            };
-            actions.extend(req)
         }
         Ok(actions)
     }

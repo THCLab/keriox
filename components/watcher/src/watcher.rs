@@ -3,19 +3,18 @@ use std::{
     sync::Arc,
 };
 
-use derive_more::{Display, Error, From};
 use itertools::Itertools;
 use keri::{
     actor::{
-        parse_notice_stream, parse_query_stream, parse_reply_stream, prelude::*,
+        error::ActorError, parse_notice_stream, parse_query_stream, parse_reply_stream, prelude::*,
         simple_controller::PossibleResponse,
     },
-    database::DbError,
+    database::{escrow::EscrowDb, DbError},
     error::Error,
-    event_message::signed_event_message::{Notice, Op},
+    event_message::signed_event_message::{Message, Notice, Op},
     oobi::{error::OobiError, EndRole, LocationScheme, OobiManager, Role, Scheme},
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
-    processor::{escrow::ReplyEscrow, notification::JustNotification},
+    processor::escrow::default_escrow_bus,
     query::{
         query_event::{QueryArgs, QueryEvent, QueryRoute, SignedQuery},
         reply_event::{ReplyEvent, ReplyRoute, SignedReply},
@@ -24,10 +23,9 @@ use keri::{
     sai::derivation::SelfAddressing,
     signer::Signer,
     state::IdentifierState,
+    transport::Transport,
 };
-use keri_transport::Transport;
 use rand::prelude::SliceRandom;
-use witness::WitnessError;
 
 pub struct WatcherData {
     pub prefix: BasicPrefix,
@@ -35,7 +33,7 @@ pub struct WatcherData {
     event_storage: EventStorage,
     pub oobi_manager: OobiManager,
     pub signer: Arc<Signer>,
-    transport: Box<dyn Transport<WitnessError> + Send + Sync>,
+    transport: Box<dyn Transport + Send + Sync>,
 }
 
 impl WatcherData {
@@ -43,7 +41,7 @@ impl WatcherData {
         public_address: url::Url,
         event_db_path: &Path,
         priv_key: Option<String>,
-        transport: Box<dyn Transport<WitnessError> + Send + Sync>,
+        transport: Box<dyn Transport + Send + Sync>,
     ) -> Result<Self, Error> {
         let signer = Arc::new(
             priv_key
@@ -54,16 +52,16 @@ impl WatcherData {
         oobi_path.push(event_db_path);
         oobi_path.push("oobi");
 
-        let prefix = BasicPrefix::Ed25519NT(signer.public_key()); // watcher uses non transferable key
+        let mut escrow_path = PathBuf::new();
+        escrow_path.push(event_db_path);
+        escrow_path.push("escrow");
+
         let db = Arc::new(SledEventDatabase::new(event_db_path)?);
-        let mut processor = BasicProcessor::new(db.clone(), None);
-        processor.register_observer(
-            Arc::new(ReplyEscrow::new(db.clone())),
-            &[
-                JustNotification::KeyEventAdded,
-                JustNotification::KsnOutOfOrder,
-            ],
-        )?;
+        let escrow_db = Arc::new(EscrowDb::new(escrow_path.as_path())?);
+        let (notification_bus, _) = default_escrow_bus(db.clone(), escrow_db);
+
+        let prefix = BasicPrefix::Ed25519NT(signer.public_key()); // watcher uses non transferable key
+        let processor = BasicProcessor::new(db.clone(), Some(notification_bus));
         let storage = EventStorage::new(db.clone());
         // construct witness loc scheme oobi
         let loc_scheme = LocationScheme::new(
@@ -88,7 +86,7 @@ impl WatcherData {
             prefix,
             processor,
             event_storage: storage,
-            signer: signer,
+            signer,
             oobi_manager,
             transport,
         })
@@ -98,7 +96,7 @@ impl WatcherData {
     pub fn get_loc_scheme_for_id(
         &self,
         eid: &IdentifierPrefix,
-    ) -> Result<Vec<SignedReply>, WatcherError> {
+    ) -> Result<Vec<SignedReply>, ActorError> {
         Ok(match self.oobi_manager.get_loc_scheme(eid)? {
             Some(oobis_to_sign) => oobis_to_sign
                 .iter()
@@ -111,7 +109,7 @@ impl WatcherData {
                     ))
                 })
                 .collect::<Result<_, Error>>()?,
-            None => return Err(WatcherError::NoLocation { id: eid.clone() }),
+            None => return Err(ActorError::NoLocation { id: eid.clone() }),
         })
     }
 
@@ -148,7 +146,7 @@ impl WatcherData {
         process_notice(notice, &self.processor)
     }
 
-    pub async fn process_op(&self, op: Op) -> Result<Option<PossibleResponse>, WatcherError> {
+    pub async fn process_op(&self, op: Op) -> Result<Option<PossibleResponse>, ActorError> {
         match op {
             Op::Query(qry) => Ok(self.process_query(qry).await?),
             Op::Reply(rpy) => {
@@ -162,10 +160,10 @@ impl WatcherData {
     async fn process_query(
         &self,
         qry: SignedQuery,
-    ) -> Result<Option<PossibleResponse>, WatcherError> {
+    ) -> Result<Option<PossibleResponse>, ActorError> {
         let cid = qry.signer.clone();
         if !self.check_role(&cid)? {
-            return Err(WatcherError::MissingRole {
+            return Err(ActorError::MissingRole {
                 id: cid.clone(),
                 role: Role::Watcher,
             });
@@ -225,7 +223,7 @@ impl WatcherData {
     }
 
     /// Forward query to random registered witness and save its response to mailbox.
-    async fn forward_query(&self, qry: &SignedQuery) -> Result<(), WatcherError> {
+    async fn forward_query(&self, qry: &SignedQuery) -> Result<(), ActorError> {
         // Create a new signed message based on the received one
         let sigs = vec![AttachedSignaturePrefix::new(
             SelfSigningPrefix::Ed25519Sha512(self.signer.sign(qry.query.serialize()?)?),
@@ -272,7 +270,7 @@ impl WatcherData {
 
     /// Query witness about KSN for given prefix and save its response to db.
     /// Returns ID of witness that responded.
-    async fn query_state(&self, prefix: IdentifierPrefix) -> Result<BasicPrefix, WatcherError> {
+    async fn query_state(&self, prefix: IdentifierPrefix) -> Result<BasicPrefix, ActorError> {
         let query_args = QueryArgs {
             s: None,
             i: prefix.clone(),
@@ -319,7 +317,7 @@ impl WatcherData {
     }
 
     /// Get witnesses for prefix and choose one randomly
-    fn get_witness_for_prefix(&self, id: IdentifierPrefix) -> Result<BasicPrefix, WatcherError> {
+    fn get_witness_for_prefix(&self, id: IdentifierPrefix) -> Result<BasicPrefix, ActorError> {
         let wit_id = self
             .get_state_for_prefix(&id)?
             .and_then(|state| {
@@ -329,7 +327,7 @@ impl WatcherData {
                     .choose(&mut rand::thread_rng())
                     .cloned()
             })
-            .ok_or_else(|| WatcherError::NoIdentState { prefix: id })?;
+            .ok_or_else(|| ActorError::NoIdentState { prefix: id })?;
         Ok(wit_id)
     }
 
@@ -361,7 +359,7 @@ impl WatcherData {
     pub async fn parse_and_process_queries(
         &self,
         input_stream: &[u8],
-    ) -> Result<Vec<PossibleResponse>, WatcherError> {
+    ) -> Result<Vec<PossibleResponse>, ActorError> {
         let mut responses = Vec::new();
         for query in parse_query_stream(input_stream)? {
             let result = self.process_query(query).await?;
@@ -372,14 +370,14 @@ impl WatcherData {
         Ok(responses)
     }
 
-    pub fn parse_and_process_replies(&self, input_stream: &[u8]) -> Result<(), WatcherError> {
+    pub fn parse_and_process_replies(&self, input_stream: &[u8]) -> Result<(), ActorError> {
         for reply in parse_reply_stream(input_stream)? {
             self.process_reply(reply)?;
         }
         Ok(())
     }
 
-    pub async fn process_ops(&self, ops: Vec<Op>) -> Result<Vec<PossibleResponse>, WatcherError> {
+    pub async fn process_ops(&self, ops: Vec<Op>) -> Result<Vec<PossibleResponse>, ActorError> {
         let mut results = Vec::new();
         for op in ops {
             let result = self.process_op(op).await?;
@@ -390,14 +388,14 @@ impl WatcherData {
         Ok(results)
     }
 
-    fn get_loc_schemas(&self, id: &IdentifierPrefix) -> Result<Vec<LocationScheme>, WatcherError> {
+    fn get_loc_schemas(&self, id: &IdentifierPrefix) -> Result<Vec<LocationScheme>, ActorError> {
         self.get_loc_scheme_for_id(id)?
             .iter()
             .map(|lc| {
                 if let ReplyRoute::LocScheme(loc_scheme) = lc.reply.get_route() {
                     Ok(loc_scheme)
                 } else {
-                    Err(WatcherError::WrongReplyRoute)
+                    Err(ActorError::WrongReplyRoute)
                 }
             })
             .collect()
@@ -408,18 +406,17 @@ impl WatcherData {
         wit_id: IdentifierPrefix,
         scheme: Scheme,
         query: SignedQuery,
-    ) -> Result<PossibleResponse, WatcherError> {
+    ) -> Result<PossibleResponse, ActorError> {
         let locs = self.get_loc_schemas(&wit_id)?;
         let loc = locs.into_iter().find(|loc| loc.scheme == scheme);
 
         let loc = match loc {
             Some(loc) => loc,
-            None => return Err(WatcherError::NoLocation { id: wit_id }),
+            None => return Err(ActorError::NoLocation { id: wit_id }),
         };
 
         let response = self.transport.send_query(loc, query).await?;
 
-        println!("\ngot response: {:?}", response);
         Ok(response)
     }
 }
@@ -427,13 +424,13 @@ impl WatcherData {
 pub struct Watcher(pub WatcherData);
 
 impl Watcher {
-    pub async fn resolve_end_role(&self, er: EndRole) -> Result<(), WatcherError> {
+    pub async fn resolve_end_role(&self, er: EndRole) -> Result<(), ActorError> {
         // find endpoint data of endpoint provider identifier
         let loc_scheme = self
             .0
             .get_loc_scheme_for_id(&er.eid.clone())?
             .get(0)
-            .ok_or(WatcherError::NoLocation { id: er.eid.clone() })?
+            .ok_or(ActorError::NoLocation { id: er.eid.clone() })?
             .reply
             .event
             .content
@@ -444,53 +441,27 @@ impl Watcher {
             let oobis = self
                 .0
                 .transport
-                .request_end_role(loc, er.cid, Role::Witness, er.eid)
+                .request_end_role(loc, er.cid, er.role, er.eid)
                 .await?;
-            self.0.process_ops(oobis).await?;
+            for m in oobis {
+                match m {
+                    Message::Op(op) => {
+                        self.0.process_op(op).await?;
+                    }
+                    Message::Notice(not) => {
+                        self.0.process_notice(not)?;
+                    }
+                }
+            }
             Ok(())
         } else {
             Err(OobiError::InvalidMessageType)?
         }
     }
 
-    pub async fn resolve_loc_scheme(&self, loc: &LocationScheme) -> Result<(), WatcherError> {
+    pub async fn resolve_loc_scheme(&self, loc: &LocationScheme) -> Result<(), ActorError> {
         let oobis = self.0.transport.request_loc_scheme(loc.clone()).await?;
         self.0.process_ops(oobis).await?;
         Ok(())
     }
-}
-
-#[derive(Debug, Display, Error, From)]
-pub enum WatcherError {
-    #[display(fmt = "network request failed")]
-    #[from]
-    TransportError(keri_transport::TransportError<WitnessError>),
-
-    #[display(fmt = "keri error")]
-    #[from]
-    KeriError(keri::error::Error),
-
-    #[display(fmt = "DB error")]
-    #[from]
-    DbError(keri::database::DbError),
-
-    #[display(fmt = "OOBI error")]
-    #[from]
-    OobiError(keri::oobi::error::OobiError),
-
-    #[display(fmt = "processing query failed")]
-    #[from]
-    QueryError(keri::actor::SignedQueryError),
-
-    #[display(fmt = "location not found for {id:?}")]
-    NoLocation { id: IdentifierPrefix },
-
-    #[display(fmt = "wrong reply route")]
-    WrongReplyRoute,
-
-    #[display(fmt = "role {role:?} missing for {id:?}")]
-    MissingRole { role: Role, id: IdentifierPrefix },
-
-    #[display(fmt = "no identifier state for prefix {prefix:?}")]
-    NoIdentState { prefix: IdentifierPrefix },
 }

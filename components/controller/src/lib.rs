@@ -30,9 +30,8 @@ use keri::{
         reply_event::{ReplyEvent, ReplyRoute, SignedReply},
     },
     sai::SelfAddressingPrefix,
+    transport::{default::DefaultTransport, Transport},
 };
-use keri_transport::{default::DefaultTransport, Transport};
-use witness::WitnessError;
 
 use self::{error::ControllerError, utils::OptionalConfig};
 
@@ -41,7 +40,7 @@ pub struct Controller {
     pub storage: EventStorage,
     oobi_manager: OobiManager,
     partially_witnessed_escrow: Arc<PartiallyWitnessedEscrow>,
-    transport: Box<dyn Transport<WitnessError> + Send + Sync>,
+    transport: Box<dyn Transport + Send + Sync>,
 }
 
 impl Controller {
@@ -51,7 +50,7 @@ impl Controller {
 
     pub fn with_transport(
         configs: Option<OptionalConfig>,
-        transport: Box<dyn Transport<WitnessError> + Send + Sync>,
+        transport: Box<dyn Transport + Send + Sync>,
     ) -> Result<Self, ControllerError> {
         let (db_dir_path, initial_oobis) = match configs {
             Some(OptionalConfig {
@@ -127,13 +126,14 @@ impl Controller {
 
     /// Sends identifier's endpoint information to identifiers's watchers.
     // TODO use stream instead of json
-    pub fn send_oobi_to_watcher(
+    pub async fn send_oobi_to_watcher(
         &self,
         id: &IdentifierPrefix,
         end_role_json: &str,
     ) -> Result<(), ControllerError> {
         for watcher in self.get_watchers(id)?.iter() {
-            self.send_oobi_to(watcher, Scheme::Http, end_role_json.as_bytes().to_vec())?;
+            self.send_oobi_to(watcher, Scheme::Http, end_role_json.as_bytes().to_vec())
+                .await?;
         }
 
         Ok(())
@@ -237,7 +237,7 @@ impl Controller {
         Ok(self.transport.send_query(loc, query).await?)
     }
 
-    fn send_oobi_to(
+    async fn send_oobi_to(
         &self,
         id: &IdentifierPrefix,
         scheme: Scheme,
@@ -256,13 +256,15 @@ impl Controller {
                 });
             }
         };
-        let client = reqwest::blocking::Client::new();
+        let client = reqwest::Client::new();
         client
             .post(format!("{}resolve", loc.url))
             .body(oobi)
             .send()
+            .await
             .map_err(|e| ControllerError::CommunicationError(e.to_string()))?
             .text()
+            .await
             .map_err(|e| ControllerError::CommunicationError(e.to_string()))?;
         Ok(())
     }
@@ -349,7 +351,7 @@ impl Controller {
     /// Returns new established identifier prefix.
     /// Meant to be used for identifiers with one key pair.
     /// Must call [`IdentifierController::notify_witnesses`] after calling this function.
-    pub fn finalize_inception(
+    pub async fn finalize_inception(
         &self,
         event: &[u8],
         sig: &SelfSigningPrefix,
@@ -520,18 +522,13 @@ impl Controller {
         )));
         let kel = self
             .storage
-            .db
-            .get_kel_finalized_events(signer_prefix)
+            .get_kel_messages_with_receipts(signer_prefix)?
             .ok_or(ControllerError::UnknownIdentifierError)?;
 
         // TODO: send in one request
         for ev in kel {
-            self.send_message_to(
-                &dest_prefix,
-                Scheme::Http,
-                Message::Notice(Notice::Event(ev.signed_event_message)),
-            )
-            .await?;
+            self.send_message_to(&dest_prefix, Scheme::Http, Message::Notice(ev))
+                .await?;
         }
         self.send_message_to(&dest_prefix, Scheme::Http, signed_rpy.clone())
             .await?;

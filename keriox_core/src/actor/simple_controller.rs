@@ -6,7 +6,7 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 
-use super::{event_generator, prelude::Message, process_message};
+use super::{event_generator, parse_reply_stream, prelude::Message, process_message};
 use crate::{
     actor::parse_event_stream,
     database::{escrow::EscrowDb, SledEventDatabase},
@@ -106,7 +106,21 @@ impl PossibleResponse {
         })
     }
 }
+
 pub fn parse_response(response: &str) -> Result<PossibleResponse, Error> {
+    Ok(match parse_mailbox_response(response) {
+        Err(_) => match parse_reply_stream(response.as_bytes()) {
+            Ok(rep) => PossibleResponse::Ksn(rep[0].clone()),
+            Err(_e) => {
+                let events = parse_event_stream(response.as_bytes())?;
+                PossibleResponse::Kel(events)
+            }
+        },
+        Ok(res) => res,
+    })
+}
+
+pub fn parse_mailbox_response(response: &str) -> Result<PossibleResponse, Error> {
     #[derive(Deserialize, Debug)]
     struct GroupedResponse {
         receipt: String,
