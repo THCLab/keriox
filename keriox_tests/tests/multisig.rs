@@ -7,7 +7,7 @@ use controller::{
     utils::OptionalConfig, Controller,
 };
 use keri::{
-    event_parsing::{codes::self_signing::SelfSigning},
+    event_parsing::codes::self_signing::SelfSigning,
     oobi::{EndRole, LocationScheme, Role},
     prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     signer::{CryptoBox, KeyManager},

@@ -405,7 +405,6 @@ pub fn test_identifier_encoding() {
     let self_signing_raw = base64::decode_config(self_signing_b64, base64::URL_SAFE).unwrap();
 
     let ssp = SelfSigningPrefix::Ed25519Sha512(self_signing_raw);
-    println!("ssp: {}", ssp.to_str());
     assert_eq!(
         ssp.to_str(),
         "0BCZ0jw5JCQwn2v7GKCMQHISMi5rsscfcA4nbY9AqqWMyG6FyCH2cZFwqezPkq8p3sr8f37Xb3wXgh3UPG8igSYJ"

@@ -9,7 +9,6 @@ use keri::{
     event_message::signed_event_message::{
         Notice, SignedEventMessage, SignedNontransferableReceipt,
     },
-    event_parsing::primitives::CesrPrimitive,
     mailbox::{
         exchange::{ExchangeMessage, ForwardTopic},
         MailboxResponse,
@@ -93,52 +92,17 @@ impl IdentifierController {
         group_id: &IdentifierPrefix,
         from_index: &MailboxReminder,
     ) -> Result<Vec<ActionRequired>, ControllerError> {
-        println!("In group {} mailbox:\n", group_id.to_str());
-        println!("\treceipts: ");
         mb.receipt
             .iter()
             .skip(from_index.receipt)
-            .map(|rct| {
-                println!(
-                    "\t{}",
-                    String::from_utf8(
-                        Message::Notice(Notice::NontransferableRct(rct.clone()))
-                            .to_cesr()
-                            .unwrap()
-                    )
-                    .unwrap()
-                );
-                self.process_receipt(&rct)
-            })
+            .map(|rct| self.process_receipt(&rct))
             .collect::<Result<_, _>>()?;
-        println!("\tmultisig: ");
         for event in mb.multisig.iter().skip(from_index.multisig) {
-            println!(
-                "\t{}",
-                String::from_utf8(
-                    Message::Notice(Notice::Event(event.clone()))
-                        .to_cesr()
-                        .unwrap()
-                )
-                .unwrap()
-            );
             self.process_group_multisig(&event).await?;
         }
-        println!("\tdelegate: ");
         futures::stream::iter(&mb.delegate)
             .skip(from_index.delegate)
-            .then(|del_event| {
-                println!(
-                    "\t{}",
-                    String::from_utf8(
-                        Message::Notice(Notice::Event(del_event.clone()))
-                            .to_cesr()
-                            .unwrap()
-                    )
-                    .unwrap()
-                );
-                self.process_group_delegate(del_event, group_id)
-            })
+            .then(|del_event| self.process_group_delegate(del_event, group_id))
             .try_filter_map(|del| async move { Ok(del) })
             .try_collect::<Vec<_>>()
             .await

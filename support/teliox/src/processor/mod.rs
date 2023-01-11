@@ -172,10 +172,6 @@ mod tests {
 
         let verifiable_iss =
             VerifiableEvent::new(iss_event.clone(), dummy_source_seal.clone().into());
-        println!(
-            "\nbis: {}",
-            String::from_utf8(verifiable_iss.clone().serialize().unwrap()).unwrap()
-        );
         processor.process(verifiable_iss.clone())?;
 
         // Chcek if iss event is in db.
@@ -199,10 +195,6 @@ mod tests {
 
         let verifiable_rev =
             VerifiableEvent::new(rev_event.clone(), dummy_source_seal.clone().into());
-        println!(
-            "\nbrv: {}",
-            String::from_utf8(verifiable_rev.clone().serialize().unwrap()).unwrap()
-        );
 
         // Check if vc was revoked.
         processor.process(verifiable_rev.clone())?;

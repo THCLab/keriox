@@ -4,7 +4,11 @@ use figment::{
     providers::{Format, Json},
     Figment,
 };
-use keri::{event_parsing::primitives::CesrPrimitive, oobi::LocationScheme};
+use keri::{
+    event_parsing::primitives::CesrPrimitive,
+    oobi::{LocationScheme, Scheme},
+    prefix::IdentifierPrefix,
+};
 use serde::Deserialize;
 use structopt::StructOpt;
 use watcher::WatcherListener;
@@ -42,25 +46,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     } = Figment::new().join(Json::file(config_file)).extract()?;
 
     let http_address = format!("http://{}:{}", http_host, http_port);
+    let watcher_url = url::Url::parse(&http_address).unwrap();
 
-    let watcher_listener = WatcherListener::setup(
-        url::Url::parse(&http_address).unwrap(),
-        public_address,
-        &db_path,
-        seed,
-    )
-    .unwrap();
+    let watcher_listener =
+        WatcherListener::setup(watcher_url.clone(), public_address, &db_path, seed).unwrap();
 
     // Resolve oobi to know how to find witness
     watcher_listener
         .resolve_initial_oobis(&initial_oobis)
         .await
         .unwrap();
+    let watcher_id = watcher_listener.get_prefix();
+    let watcher_loc_scheme = LocationScheme {
+        eid: IdentifierPrefix::Basic(watcher_id.clone()),
+        scheme: Scheme::Http,
+        url: watcher_url,
+    };
 
     println!(
         "Watcher {} is listening on {}",
-        watcher_listener.get_prefix().to_str(),
+        watcher_id.to_str(),
         http_address,
+    );
+    println!(
+        "Watcher's oobi: {}",
+        serde_json::to_string(&watcher_loc_scheme).unwrap()
     );
 
     watcher_listener
