@@ -24,4 +24,3 @@ tempfile = { version = "3.1" }
 [dev-dependencies]
 controller = {path = "../controller"}
 futures = { version = "0.3.13" }
-witness = { path = "../witness" }
