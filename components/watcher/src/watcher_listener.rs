@@ -2,7 +2,10 @@ use std::{path::Path, sync::Arc};
 
 use actix_web::{dev::Server, web, App, HttpServer};
 use keri::{
-    error::Error, oobi::LocationScheme, prefix::BasicPrefix, transport::default::DefaultTransport,
+    error::Error,
+    oobi::LocationScheme,
+    prefix::BasicPrefix,
+    transport::{default::DefaultTransport, Transport},
 };
 
 use crate::watcher::{Watcher, WatcherData};
@@ -30,10 +33,30 @@ impl WatcherListener {
             pub_address,
             event_db_path,
             priv_key,
-            Box::new(DefaultTransport::new()),
+            Box::new(DefaultTransport::default()),
         )
         .map(|watcher_data| Self {
             watcher_data: Arc::new(Watcher(watcher_data)),
+        })
+    }
+
+    pub fn with_transport(
+        address: url::Url,
+        public_address: Option<String>,
+        event_db_path: &Path,
+        priv_key: Option<String>,
+        transport: Box<dyn Transport + Send + Sync>,
+    ) -> Result<Self, Error> {
+        let pub_address = if let Some(pub_address) = public_address {
+            url::Url::parse(&format!("http://{}", pub_address)).unwrap()
+        } else {
+            address
+        };
+
+        WatcherData::setup(pub_address, event_db_path, priv_key, transport).map(|watcher_data| {
+            Self {
+                watcher_data: Arc::new(Watcher(watcher_data)),
+            }
         })
     }
 

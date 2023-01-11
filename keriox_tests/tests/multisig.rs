@@ -1,7 +1,6 @@
-use std::{sync::Arc, time::Duration};
+use std::{collections::HashMap, net::Ipv4Addr, sync::Arc};
 
 use anyhow::Result;
-use async_std::task;
 use controller::{
     identifier_controller::IdentifierController, mailbox_updating::ActionRequired,
     utils::OptionalConfig, Controller,
@@ -11,10 +10,10 @@ use keri::{
     oobi::{EndRole, LocationScheme, Role},
     prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     signer::{CryptoBox, KeyManager},
-    transport::default::DefaultTransport,
+    transport::test::{TestActorMap, TestTransport},
 };
 use tempfile::Builder;
-use url::Url;
+use url::{Host, Url};
 use watcher::WatcherListener;
 use witness::WitnessListener;
 
@@ -22,12 +21,12 @@ use witness::WitnessListener;
 async fn test_multisig() -> Result<()> {
     let wit = {
         let wit_root = Builder::new().prefix("wit-db").tempdir().unwrap();
-        WitnessListener::setup(
+        Arc::new(WitnessListener::setup(
             Url::parse("http://127.0.0.1:3232").unwrap(),
             None,
             wit_root.path(),
             Some("ArwXoACJgOleVZ2PY7kXn7rA0II0mHYDhc6WrBH8fDAc".to_string()),
-        )?
+        )?)
     };
     let witness_id = wit.get_prefix();
     let witness_oobi = LocationScheme {
@@ -35,15 +34,15 @@ async fn test_multisig() -> Result<()> {
         scheme: keri::oobi::Scheme::Http,
         url: Url::parse("http://127.0.0.1:3232").unwrap(),
     };
-    task::spawn(async move {
-        wit.listen_http(Url::parse("http://127.0.0.1:3232").unwrap())
-            .await
-    });
+
+    let mut actors: TestActorMap = HashMap::new();
+    actors.insert((Host::Ipv4(Ipv4Addr::LOCALHOST), 3232), wit.clone());
+    let transport = Box::new(TestTransport::new(actors));
 
     let watcher_url = Url::parse("http://127.0.0.1:3236").unwrap();
     let watcher_listener = {
         let root = Builder::new().prefix("cont-test-db").tempdir().unwrap();
-        WatcherListener::setup(watcher_url.clone(), None, root.path(), None)?
+        WatcherListener::with_transport(watcher_url.clone(), None, root.path(), None, transport)?
     };
     let watcher = watcher_listener.watcher_data.clone();
     let watcher_id = watcher.0.prefix.clone();
@@ -52,17 +51,20 @@ async fn test_multisig() -> Result<()> {
         scheme: keri::oobi::Scheme::Http,
         url: watcher_url.clone(),
     };
-    task::spawn(async move { watcher_listener.listen_http(watcher_url).await });
 
-    task::sleep(Duration::from_secs(1)).await;
+    let mut actors: TestActorMap = HashMap::new();
+    actors.insert((Host::Ipv4(Ipv4Addr::LOCALHOST), 3232), wit);
+    actors.insert(
+        (Host::Ipv4(Ipv4Addr::LOCALHOST), 3236),
+        Arc::new(watcher_listener),
+    );
+    let transport = Box::new(TestTransport::new(actors));
 
     // Setup first identifier.
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     let initial_config = OptionalConfig::init().with_db_path(root.into_path());
-    let controller1 = Arc::new(
-        Controller::with_transport(Some(initial_config), Box::new(DefaultTransport::default()))
-            .unwrap(),
-    );
+    let controller1 =
+        Arc::new(Controller::with_transport(Some(initial_config), transport.clone()).unwrap());
 
     let km1 = CryptoBox::new()?;
     let mut identifier1 = {
@@ -95,10 +97,8 @@ async fn test_multisig() -> Result<()> {
     // Setup second identifier.
     let root2 = Builder::new().prefix("test-db").tempdir().unwrap();
     let initial_config = OptionalConfig::init().with_db_path(root2.into_path());
-    let controller2 = Arc::new(
-        Controller::with_transport(Some(initial_config), Box::new(DefaultTransport::default()))
-            .unwrap(),
-    );
+    let controller2 =
+        Arc::new(Controller::with_transport(Some(initial_config), transport).unwrap());
     let km2 = CryptoBox::new()?;
 
     let mut identifier2 = {
