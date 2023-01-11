@@ -21,9 +21,8 @@ sled-db = ["sled", "fixed"]
 async = ["async-std", "pin-project", "futures-core", "bitpat"]
 default = ["sled-db"]
 query = []
-oobi = ["query", "url", "strum_macros", "strum"]
+oobi = ["query", "url", "strum_macros", "strum", "reqwest"]
 mailbox = ["query"]
-controller = ["oobi", "reqwest"]
 
 [dependencies]
 bytes = "1.3.0"

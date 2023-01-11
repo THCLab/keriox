@@ -16,4 +16,5 @@ pub mod query;
 pub mod sai;
 pub mod signer;
 pub mod state;
+#[cfg(feature = "query")]
 pub mod transport;

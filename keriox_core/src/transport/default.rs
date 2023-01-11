@@ -49,13 +49,16 @@ where
                     loc.url.join("process").unwrap()
                 }
                 Message::Op(op) => match op {
+                    #[cfg(feature = "query")]
                     Op::Query(_) => {
                         panic!("can't send query in send_message");
                     }
+                    #[cfg(feature = "query")]
                     Op::Reply(_) => {
                         // {url}/register
                         loc.url.join("register").unwrap()
                     }
+                    #[cfg(feature = "mailbox")]
                     Op::Exchange(_) => {
                         // {url}/forward
                         loc.url.join("forward").unwrap()
@@ -81,6 +84,7 @@ where
         Ok(())
     }
 
+    #[cfg(feature = "query")]
     async fn send_query(
         &self,
         loc: LocationScheme,

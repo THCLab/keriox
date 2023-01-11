@@ -1,16 +1,16 @@
 use http::StatusCode;
 
+#[cfg(feature = "oobi")]
+use crate::oobi::{error::OobiError, Role};
+#[cfg(feature = "query")]
+use crate::transport::TransportError;
 use crate::{
-    actor::SignedQueryError,
-    database::DbError,
-    error::Error as KeriError,
-    oobi::{error::OobiError, Role},
-    prefix::IdentifierPrefix,
-    transport::TransportError,
+    actor::SignedQueryError, database::DbError, error::Error as KeriError, prefix::IdentifierPrefix,
 };
 
 #[derive(Debug, thiserror::Error, serde::Serialize, serde::Deserialize)]
 pub enum ActorError {
+    #[cfg(feature = "query")]
     #[error("network request failed")]
     TransportError(Box<TransportError>),
 
@@ -20,6 +20,7 @@ pub enum ActorError {
     #[error("DB error")]
     DbError(#[from] DbError),
 
+    #[cfg(feature = "oobi")]
     #[error("OOBI error")]
     OobiError(#[from] OobiError),
 
@@ -32,6 +33,7 @@ pub enum ActorError {
     #[error("wrong reply route")]
     WrongReplyRoute,
 
+    #[cfg(feature = "oobi")]
     #[error("role {role:?} missing for {id:?}")]
     MissingRole { role: Role, id: IdentifierPrefix }, // TODO: should be Oobi error
 
@@ -39,6 +41,7 @@ pub enum ActorError {
     NoIdentState { prefix: IdentifierPrefix },
 }
 
+#[cfg(feature = "query")]
 impl From<TransportError> for ActorError {
     fn from(err: TransportError) -> Self {
         ActorError::TransportError(Box::new(err))
@@ -62,6 +65,7 @@ impl ActorError {
                 _ => StatusCode::INTERNAL_SERVER_ERROR,
             },
 
+            #[cfg(feature = "oobi")]
             ActorError::OobiError(OobiError::SignerMismatch) => StatusCode::UNAUTHORIZED,
 
             _ => StatusCode::INTERNAL_SERVER_ERROR,

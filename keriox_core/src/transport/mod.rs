@@ -31,6 +31,7 @@ where
         msg: Message,
     ) -> Result<(), TransportError<E>>;
 
+    #[cfg(feature = "query")]
     /// Send a query to other actor and return its response.
     async fn send_query(
         &self,
