@@ -174,6 +174,10 @@ mod test {
             let resp = parse_event_stream(resp.as_ref()).unwrap();
             Ok(resp)
         }
+
+        async fn resolve_oobi(&self, msg: keri::oobi::Oobi) -> Result<(), ActorError> {
+            todo!()
+        }
     }
 }
 

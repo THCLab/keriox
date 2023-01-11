@@ -7,7 +7,7 @@ use crate::{
         simple_controller::{parse_response, PossibleResponse},
     },
     event_message::signed_event_message::{Message, Op},
-    oobi::{LocationScheme, Role, Scheme},
+    oobi::{LocationScheme, Oobi, Role, Scheme},
     prefix::IdentifierPrefix,
     query::query_event::SignedQuery,
 };
@@ -185,5 +185,9 @@ where
             let err = serde_json::from_str(&body).map_err(|_| TransportError::InvalidResponse)?;
             Err(TransportError::RemoteError(err))
         }
+    }
+
+    async fn resolve_oobi(&self, loc: LocationScheme, oobi: Oobi) -> Result<(), TransportError<E>> {
+        todo!()
     }
 }

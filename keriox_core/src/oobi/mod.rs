@@ -22,6 +22,13 @@ pub mod storage;
 use self::storage::OobiStorage;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(untagged)]
+pub enum Oobi {
+    Location(LocationScheme),
+    EndRole(EndRole),
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct LocationScheme {
     pub eid: IdentifierPrefix,
     pub scheme: Scheme,

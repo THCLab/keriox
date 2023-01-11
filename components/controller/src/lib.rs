@@ -17,7 +17,7 @@ use keri::{
         Digestible,
     },
     event_parsing::parsers::parse_payload,
-    oobi::{LocationScheme, OobiManager, Role, Scheme},
+    oobi::{LocationScheme, Oobi, OobiManager, Role, Scheme},
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     processor::{
         basic_processor::BasicProcessor,
@@ -129,10 +129,11 @@ impl Controller {
     pub async fn send_oobi_to_watcher(
         &self,
         id: &IdentifierPrefix,
-        end_role_json: &str,
+        oobi_json: &str,
     ) -> Result<(), ControllerError> {
+        let oobi: Oobi = serde_json::from_str(oobi_json).unwrap();
         for watcher in self.get_watchers(id)?.iter() {
-            self.send_oobi_to(watcher, Scheme::Http, end_role_json.as_bytes().to_vec())
+            self.send_oobi_to(watcher, Scheme::Http, oobi.clone())
                 .await?;
         }
 
@@ -241,31 +242,18 @@ impl Controller {
         &self,
         id: &IdentifierPrefix,
         scheme: Scheme,
-        oobi: Vec<u8>,
+        oobi: Oobi,
     ) -> Result<(), ControllerError> {
         let loc = self
             .get_loc_schemas(id)?
             .into_iter()
-            .find(|loc| loc.scheme == scheme);
-        let loc = match loc {
-            Some(loc) => loc,
-            None => {
-                return Err(ControllerError::NoLocationScheme {
-                    id: id.clone(),
-                    scheme,
-                });
-            }
-        };
-        let client = reqwest::Client::new();
-        client
-            .post(format!("{}resolve", loc.url))
-            .body(oobi)
-            .send()
-            .await
-            .map_err(|e| ControllerError::CommunicationError(e.to_string()))?
-            .text()
-            .await
-            .map_err(|e| ControllerError::CommunicationError(e.to_string()))?;
+            .find(|loc| loc.scheme == scheme)
+            .ok_or(ControllerError::NoLocationScheme {
+                id: id.clone(),
+                scheme,
+            })?;
+
+        self.transport.resolve_oobi(loc, oobi).await?;
         Ok(())
     }
 

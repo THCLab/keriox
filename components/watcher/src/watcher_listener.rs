@@ -294,7 +294,7 @@ mod test {
             simple_controller::{parse_response, PossibleResponse},
         },
         event_message::signed_event_message::{Message, Op},
-        oobi::Role,
+        oobi::{Oobi, Role},
         prefix::IdentifierPrefix,
         query::query_event::{QueryRoute, SignedQuery},
     };
@@ -378,6 +378,18 @@ mod test {
             let resp = resp.into_body().try_into_bytes().unwrap();
             let resp = parse_event_stream(resp.as_ref()).unwrap();
             Ok(resp)
+        }
+        async fn resolve_oobi(&self, msg: Oobi) -> Result<(), ActorError> {
+            let data = actix_web::web::Data::new(self.watcher_data.clone());
+            let resp = super::http_handlers::resolve_oobi(
+                Bytes::from(serde_json::to_string(&msg).unwrap()),
+                data,
+            )
+            .await
+            .map_err(|err| err.0)?;
+            let resp = resp.into_body().try_into_bytes().unwrap();
+            parse_event_stream(resp.as_ref()).unwrap();
+            Ok(())
         }
     }
 }

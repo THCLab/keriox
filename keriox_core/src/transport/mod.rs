@@ -5,7 +5,7 @@ use serde::Deserialize;
 use crate::{
     actor::{error::ActorError, simple_controller::PossibleResponse},
     event_message::signed_event_message::{Message, Op},
-    oobi::{LocationScheme, Role},
+    oobi::{LocationScheme, Oobi, Role},
     prefix::IdentifierPrefix,
     query::query_event::SignedQuery,
 };
@@ -55,13 +55,9 @@ where
         eid: IdentifierPrefix,
     ) -> Result<Vec<Message>, TransportError<E>>;
 
-    // /// Orders other actor to [`request_loc_scheme`](Transport::request_loc_scheme) and save result to its DB.
-    // /// Should use `resolve` endpoint.
-    // async fn resolve_loc_scheme(&self, loc: LocationScheme) -> Result<(), TransportError>;
-
-    // /// Orders other actor to [`request_end_role`](Transport::request_end_role) and save result to its DB.
-    // /// Should use `resolve` endpoint.
-    // async fn resolve_end_role(&self, role: EndRole) -> Result<(), TransportError>;
+    /// Orders other actor to [`request_loc_scheme`](Transport::request_loc_scheme) or [`request_end_role`](Transport::request_end_role) and save result to its DB.
+    /// Should use `resolve` endpoint.
+    async fn resolve_oobi(&self, loc: LocationScheme, oobi: Oobi) -> Result<(), TransportError<E>>;
 }
 
 #[derive(Debug, thiserror::Error, serde::Serialize, serde::Deserialize)]
