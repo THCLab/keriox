@@ -1,3 +1,4 @@
+use super::{error::ControllerError, identifier_controller::IdentifierController};
 use futures::{StreamExt, TryStreamExt};
 use keri::{
     actor::{event_generator, prelude::Message},
@@ -16,7 +17,6 @@ use keri::{
     prefix::IdentifierPrefix,
 };
 use keri::{event::EventMessage, event_message::key_event_message::KeyEvent};
-use super::{error::ControllerError, identifier_controller::IdentifierController};
 
 #[derive(Default, Debug)]
 /// Struct for tracking what was the last indexes of processed mailbox messages.

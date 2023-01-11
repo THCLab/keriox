@@ -49,8 +49,7 @@ where
 {
     let s: &str = de::Deserialize::deserialize(deserializer)?;
     // serde_json::from_str(s).map_err(de::Error::custom)
-    let dt: DateTime<FixedOffset> =
-        chrono::DateTime::parse_from_rfc3339(s).unwrap();
+    let dt: DateTime<FixedOffset> = chrono::DateTime::parse_from_rfc3339(s).unwrap();
     Ok(dt)
 }
 

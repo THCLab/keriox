@@ -1,7 +1,5 @@
 #[cfg(feature = "mailbox")]
 use crate::mailbox::exchange::{Exchange, ExchangeMessage, ForwardTopic, FwdArgs};
-#[cfg(feature = "oobi")]
-use crate::{oobi::{EndRole, Role}, event::SerializationFormats};
 #[cfg(feature = "query")]
 use crate::query::reply_event::{ReplyEvent, ReplyRoute};
 use crate::{
@@ -11,7 +9,7 @@ use crate::{
             seal::{DigestSeal, Seal},
             threshold::{SignatureThreshold, WeightedThreshold},
         },
-        EventMessage
+        EventMessage,
     },
     event_message::{
         event_msg_builder::EventMsgBuilder, key_event_message::KeyEvent, EventTypeTag,
@@ -19,6 +17,11 @@ use crate::{
     prefix::{BasicPrefix, IdentifierPrefix},
     sai::{derivation::SelfAddressing, SelfAddressingPrefix},
     state::IdentifierState,
+};
+#[cfg(feature = "oobi")]
+use crate::{
+    event::SerializationFormats,
+    oobi::{EndRole, Role},
 };
 
 // todo add setting signing threshold

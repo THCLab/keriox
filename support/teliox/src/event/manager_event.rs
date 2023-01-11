@@ -177,7 +177,7 @@ impl DummyEvent {
         self.serialization_info
             .kind
             .encode(&self)
-            .map_err( Error::KeriError)
+            .map_err(Error::KeriError)
     }
 
     // fn dummy_prefix(derivation: &SelfAddressing) -> String {

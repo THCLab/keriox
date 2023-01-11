@@ -5,9 +5,9 @@ use std::{
 
 use keri::{
     actor::{
-        parse_exchange_stream, parse_notice_stream, parse_query_stream, parse_reply_stream,
-        prelude::*, process_reply, process_signed_exn, process_signed_query,
-        simple_controller::PossibleResponse, error::ActorError,
+        error::ActorError, parse_exchange_stream, parse_notice_stream, parse_query_stream,
+        parse_reply_stream, prelude::*, process_reply, process_signed_exn, process_signed_query,
+        simple_controller::PossibleResponse,
     },
     error::Error,
     event::EventMessage,

@@ -4,8 +4,9 @@ use std::sync::{Arc, Mutex};
 
 use keri::{
     actor::{
+        error::ActorError,
         simple_controller::{PossibleResponse, SimpleController},
-        SignedQueryError, error::ActorError,
+        SignedQueryError,
     },
     database::{escrow::EscrowDb, SledEventDatabase},
     error::Error,

@@ -26,10 +26,10 @@ use crate::{
     processor::{event_storage::EventStorage, validator::EventValidator, Processor},
 };
 
+pub mod error;
 pub mod event_generator;
 #[cfg(any(feature = "mailbox", feature = "query", feature = "oobi"))]
 pub mod simple_controller;
-pub mod error;
 
 pub fn parse_event_stream(stream: &[u8]) -> Result<Vec<Message>, Error> {
     let (_rest, events) =
