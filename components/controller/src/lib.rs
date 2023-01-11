@@ -106,7 +106,7 @@ impl Controller {
         Ok(())
     }
 
-    fn get_watchers(
+    pub fn get_watchers(
         &self,
         id: &IdentifierPrefix,
     ) -> Result<Vec<IdentifierPrefix>, ControllerError> {
