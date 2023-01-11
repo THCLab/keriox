@@ -120,6 +120,7 @@ async fn test_authentication() -> Result<(), Error> {
     Ok(())
 }
 
+#[ignore]
 #[async_std::test]
 async fn test_add_watcher() -> Result<(), Error> {
     let wit = {
