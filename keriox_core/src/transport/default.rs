@@ -188,6 +188,22 @@ where
     }
 
     async fn resolve_oobi(&self, loc: LocationScheme, oobi: Oobi) -> Result<(), TransportError<E>> {
-        todo!()
+        let client = reqwest::Client::new();
+        let resp = client
+            .post(format!("{}resolve", loc.url))
+            .body(serde_json::to_string(&oobi).unwrap())
+            .send()
+            .await
+            .map_err(|_| TransportError::NetworkError)?;
+
+        if !resp.status().is_success() {
+            let body = resp
+                .text()
+                .await
+                .map_err(|_| TransportError::NetworkError)?;
+            let err = serde_json::from_str(&body).map_err(|_| TransportError::NetworkError)?;
+            return Err(TransportError::RemoteError(err));
+        }
+        Ok(())
     }
 }
