@@ -90,13 +90,12 @@ impl ManagerTelEvent {
     }
 }
 
-// #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-// pub struct ManagerIdentifier {}
-
 #[derive(Serialize, Debug, Clone, PartialEq, Eq)]
 #[serde(untagged, rename_all = "lowercase")]
 pub enum ManagerEventType {
+    /// Registry Inception Event
     Vcp(Inc),
+    /// Registry Rotation Event
     Vrt(Rot),
 }
 

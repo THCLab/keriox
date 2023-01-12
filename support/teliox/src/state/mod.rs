@@ -24,12 +24,6 @@ pub struct ManagerTelState {
     pub backers: Option<Vec<IdentifierPrefix>>,
 }
 
-// impl ManagerState {
-//     pub fn apply_to(&self, state: &ManagerTelState) -> Result<ManagerTelState, Error> {
-
-//     }
-// }
-
 impl ManagerTelState {
     pub fn apply(&self, event: &ManagerTelEventMessage) -> Result<Self, Error>
     where

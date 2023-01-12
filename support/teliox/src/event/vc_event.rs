@@ -93,7 +93,7 @@ impl Typeable for VCEvent {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct VCEvent {
     #[serde(rename = "i")]
-    // VC specific identifier will be a digest hash of the serialized contents of the VC
+    ///  Verifiable Credential(VC) specific identifier will be a digest hash of the serialized contents of the VC
     pub prefix: IdentifierPrefix,
 
     #[serde(rename = "s", with = "SerHex::<Compact>")]
@@ -124,9 +124,6 @@ impl VCEvent {
         )?)
     }
 }
-
-// #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-// pub struct Identifier {}
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(untagged, rename_all = "lowercase")]

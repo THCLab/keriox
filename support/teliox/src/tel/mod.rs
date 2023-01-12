@@ -14,6 +14,7 @@ use keri::{
 
 pub mod event_generator;
 
+/// Transaction Event Log
 pub struct Tel<'d> {
     pub processor: EventProcessor<'d>,
     tel_prefix: IdentifierPrefix,
