@@ -28,7 +28,7 @@ use crate::mailbox::exchange::{ExchangeMessage, SignedExchange};
 
 use super::{
     key_event_message::KeyEvent,
-    signature::{self, Nontransferable, Signature},
+    signature::{self, Nontransferable},
     signed_event_message::{
         Message, Notice, Op, SignedEventMessage, SignedNontransferableReceipt,
         SignedTransferableReceipt,

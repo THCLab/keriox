@@ -178,12 +178,6 @@ impl DummyEvent {
             .encode(&self)
             .map_err(Error::KeriError)
     }
-
-    // fn dummy_prefix(derivation: &SelfAddressing) -> String {
-    //     std::iter::repeat("#")
-    //         .take(derivation.code_len() + derivation.derivative_b64_len())
-    //         .collect::<String>()
-    // }
 }
 
 impl Inc {
