@@ -528,6 +528,10 @@ fn signed_receipt(
 
 #[cfg(feature = "mailbox")]
 pub fn signed_exchange(exn: ExchangeMessage, attachments: Vec<Group>) -> Result<Op, Error> {
+    use crate::event_message::signature::get_signatures;
+
+    use super::signature::Signature;
+
     let mut atts = attachments.into_iter();
     let att1 = atts
         .next()
@@ -535,28 +539,26 @@ pub fn signed_exchange(exn: ExchangeMessage, attachments: Vec<Group>) -> Result<
     let att2 = atts
         .next()
         .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?;
-    todo!()
-    // let (path, data_sigs, signatures): (_, _, Vec<Signature>) = match (att1, att2) {
-    //     (Group::PathedMaterialQuadruplet(path, sigs), anything)
-    //     | (anything, Group::PathedMaterialQuadruplet(path, sigs)) => {
-    //         todo!();
-    //         // (path, sigs, anything.try_into()?)
-    //     }
-    //     _ => return Err(Error::SemanticError("Wrong attachment".into())),
-    // };
-    // let data_signatures: Result<Vec<Signature>, Error> = todo!();
-    //     data_sigs.into_iter().fold(Ok(vec![]), |acc, group| {
-    //         let mut signatures: Vec<Signature> = group.try_into()?;
-    //         let mut sigs = acc?;
-    //         sigs.append(&mut signatures);
-    //         Ok(sigs)
-    //     });
+    let (path, data_sigs, signatures): (_, _, Vec<Signature>) = match (att1, att2) {
+        (Group::PathedMaterialQuadruplet(path, sigs), anything)
+        | (anything, Group::PathedMaterialQuadruplet(path, sigs)) => {
+            (path, sigs, get_signatures(anything)?)
+        }
+        _ => return Err(Error::SemanticError("Wrong attachment".into())),
+    };
+    let data_signatures: Result<Vec<Signature>, Error> = 
+        data_sigs.into_iter().fold(Ok(vec![]), |acc, group| {
+            let mut signatures: Vec<Signature> = get_signatures(group)?;
+            let mut sigs = acc?;
+            sigs.append(&mut signatures);
+            Ok(sigs)
+        });
 
-    // Ok(Op::Exchange(SignedExchange {
-    //     exchange_message: exn,
-    //     signature: signatures,
-    //     data_signature: (path, data_signatures?),
-    // }))
+    Ok(Op::Exchange(SignedExchange {
+        exchange_message: exn,
+        signature: signatures,
+        data_signature: (path, data_signatures?),
+    }))
 }
 
 #[cfg(test)]
