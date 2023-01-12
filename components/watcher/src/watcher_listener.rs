@@ -121,10 +121,10 @@ pub mod http_handlers {
     use actix_web::{http::header::ContentType, web, HttpResponse, ResponseError};
     use itertools::Itertools;
     use keri::{
-        actor::{prelude::Message, error::ActorError},
+        actor::{error::ActorError, prelude::Message},
         error::Error,
         event_message::signed_event_message::Op,
-        oobi::{error::OobiError, EndRole, LocationScheme, Role},
+        oobi::{EndRole, LocationScheme, Role},
         prefix::IdentifierPrefix,
     };
     use reqwest::StatusCode;

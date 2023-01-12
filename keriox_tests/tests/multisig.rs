@@ -6,7 +6,7 @@ use controller::{
     utils::OptionalConfig, Controller,
 };
 use keri::{
-    oobi::{LocationScheme, Scheme},
+    oobi::{EndRole, LocationScheme, Role, Scheme},
     prefix::{BasicPrefix, CesrPrimitive, IdentifierPrefix, SelfSigningPrefix},
     signer::{CryptoBox, KeyManager},
     transport::test::{TestActorMap, TestTransport},

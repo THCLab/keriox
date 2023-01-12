@@ -16,7 +16,7 @@ use keri::{
         signed_event_message::{Message, Notice, Op, SignedEventMessage},
         Digestible,
     },
-    oobi::{LocationScheme, OobiManager, Role, Scheme, Oobi},
+    oobi::{LocationScheme, Oobi, OobiManager, Role, Scheme},
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     processor::{
         basic_processor::BasicProcessor,

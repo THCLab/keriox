@@ -111,7 +111,9 @@ impl From<&SignedEventMessage> for ParsedData {
     }
 }
 
-impl<T: Serialize,D: Digestible + Typeable<TypeTag = T> + Serialize + Clone> From<EventMessage<D>> for Payload {
+impl<T: Serialize, D: Digestible + Typeable<TypeTag = T> + Serialize + Clone> From<EventMessage<D>>
+    for Payload
+{
     fn from(pd: EventMessage<D>) -> Self {
         match pd.serialization_info.kind {
             super::serialization_info::SerializationFormats::JSON => {

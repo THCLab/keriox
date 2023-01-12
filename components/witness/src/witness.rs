@@ -116,7 +116,7 @@ impl Witness {
     pub fn new(signer: Arc<Signer>, event_path: &Path, oobi_path: &Path) -> Result<Self, Error> {
         use keri::{database::escrow::EscrowDb, processor::notification::JustNotification};
         let mut events_path = PathBuf::new();
-        events_path.push(&event_path);
+        events_path.push(event_path);
         let mut escrow_path = events_path.clone();
 
         events_path.push("events");
@@ -128,7 +128,7 @@ impl Witness {
         let mut witness_processor = WitnessProcessor::new(db.clone(), escrow_db);
         let event_storage = EventStorage::new(db.clone());
 
-        let receipt_generator = Arc::new(WitnessReceiptGenerator::new(signer.clone(), db.clone()));
+        let receipt_generator = Arc::new(WitnessReceiptGenerator::new(signer.clone(), db));
         witness_processor.register_observer(
             receipt_generator.clone(),
             &[
@@ -154,7 +154,7 @@ impl Witness {
         let signer = Arc::new(
             priv_key
                 .map(|key| Signer::new_with_seed(&key.parse()?))
-                .unwrap_or(Ok(Signer::new()))?,
+                .unwrap_or_else(|| Ok(Signer::new()))?,
         );
         let prefix = BasicPrefix::Ed25519NT(signer.public_key());
         let witness = Witness::new(signer.clone(), event_db_path, oobi_db_path)?;
@@ -171,7 +171,7 @@ impl Witness {
         )?;
         let signed_reply = SignedReply::new_nontrans(
             reply.clone(),
-            prefix.clone(),
+            prefix,
             SelfSigningPrefix::Ed25519Sha512(signer.sign(reply.serialize()?)?),
         );
         witness.oobi_manager.save_oobi(&signed_reply)?;
@@ -282,8 +282,7 @@ impl Witness {
     pub fn parse_and_process_notices(&self, input_stream: &[u8]) -> Result<(), Error> {
         parse_notice_stream(input_stream)?
             .into_iter()
-            .map(|notice| self.process_notice(notice))
-            .collect()
+            .try_for_each(|notice| self.process_notice(notice))
     }
 
     pub fn parse_and_process_queries(

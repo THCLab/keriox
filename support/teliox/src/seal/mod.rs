@@ -1,5 +1,5 @@
 use base64::URL_SAFE;
-use keri::{event_parsing::primitives::CesrPrimitive, sai::SelfAddressingPrefix, prefix::CesrPrimitive};
+use keri::{prefix::CesrPrimitive, sai::SelfAddressingPrefix};
 use serde::{Deserialize, Serialize};
 
 use crate::error::Error;

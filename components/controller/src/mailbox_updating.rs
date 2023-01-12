@@ -4,17 +4,18 @@ use keri::{
     actor::{event_generator, prelude::Message},
     event::{
         event_data::EventData,
-        sections::seal::{EventSeal, Seal}, EventMessage,
+        sections::seal::{EventSeal, Seal},
+        EventMessage,
     },
+    event_message::key_event_message::KeyEvent,
     event_message::signed_event_message::{
         Notice, SignedEventMessage, SignedNontransferableReceipt,
     },
-    event_message::key_event_message::KeyEvent,
     mailbox::{
         exchange::{ExchangeMessage, ForwardTopic},
         MailboxResponse,
     },
-    prefix::{IdentifierPrefix},
+    prefix::IdentifierPrefix,
 };
 
 #[derive(Default, Debug)]
@@ -55,8 +56,7 @@ impl IdentifierController {
         mb.receipt
             .iter()
             .skip(from_index.receipt)
-            .map(|rct| self.process_receipt(rct))
-            .collect::<Result<_, _>>()?;
+            .try_for_each(|rct| self.process_receipt(rct))?;
         mb.multisig
             .iter()
             .skip(from_index.multisig)
@@ -67,7 +67,7 @@ impl IdentifierController {
                     .skip(from_index.delegate)
                     .map(|del_event| self.process_own_delegate(del_event))
                     .filter_map(|del| match del {
-                        Ok(del) => del.map(|o| Ok(o)),
+                        Ok(del) => del.map(Ok),
                         Err(e) => Some(Err(e)),
                     }),
             )
@@ -80,10 +80,10 @@ impl IdentifierController {
         mb: &MailboxResponse,
         from_index: &MailboxReminder,
     ) -> Result<Vec<ActionRequired>, ControllerError> {
-        Ok(futures::stream::iter(&groups)
+        futures::stream::iter(&groups)
             .then(|group_id| self.process_group_mailbox(mb, group_id, from_index))
             .try_concat()
-            .await?)
+            .await
     }
 
     pub async fn process_group_mailbox(
@@ -95,10 +95,9 @@ impl IdentifierController {
         mb.receipt
             .iter()
             .skip(from_index.receipt)
-            .map(|rct| self.process_receipt(&rct))
-            .collect::<Result<_, _>>()?;
+            .try_for_each(|rct| self.process_receipt(rct))?;
         for event in mb.multisig.iter().skip(from_index.multisig) {
-            self.process_group_multisig(&event).await?;
+            self.process_group_multisig(event).await?;
         }
         futures::stream::iter(&mb.delegate)
             .skip(from_index.delegate)
@@ -234,13 +233,13 @@ impl IdentifierController {
                 let id = event_to_confirm.event_message.event.get_prefix();
 
                 let seal = Seal::Event(EventSeal {
-                    prefix: id.clone(),
+                    prefix: id,
                     sn: event_to_confirm.event_message.event.get_sn(),
                     event_digest: event_to_confirm.event_message.get_digest(),
                 });
 
-                let ixn = self.anchor_group(group_id, &vec![seal])?;
-                let exn = event_generator::exchange(&group_id, &ixn, ForwardTopic::Multisig)?;
+                let ixn = self.anchor_group(group_id, &[seal])?;
+                let exn = event_generator::exchange(group_id, &ixn, ForwardTopic::Multisig)?;
                 Ok(Some(ActionRequired::DelegationRequest(ixn, exn)))
             }
             _ => todo!(),

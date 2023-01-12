@@ -1,10 +1,10 @@
+use cesrox::primitives::codes::self_addressing::dummy_prefix;
 use serde::{de, Deserialize, Deserializer, Serialize};
 use serde_hex::{Compact, SerHex};
 
 use keri::{
     event::SerializationFormats,
     event_message::{serialization_info::SerializationInfo, EventMessage, SaidEvent, Typeable},
-    event_parsing::codes::self_addressing::dummy_prefix,
     prefix::IdentifierPrefix,
     sai::{derivation::SelfAddressing, SelfAddressingPrefix},
 };
@@ -151,7 +151,7 @@ impl DummyEvent {
         derivation: &SelfAddressing,
         format: SerializationFormats,
     ) -> Result<Vec<u8>, Error> {
-        use keri::event_parsing::codes::self_addressing::SelfAddressing as CesrCode;
+        use cesrox::primitives::codes::self_addressing::SelfAddressing as CesrCode;
         let derivation_code: CesrCode = derivation.clone().into();
         Self {
             serialization_info: SerializationInfo::new(

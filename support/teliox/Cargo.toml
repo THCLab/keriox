@@ -21,6 +21,7 @@ arrayref = "0.3.6"
 sled = { version = "0.34.6"}
 serde_cbor = "0.11.1"
 sled-tables = "0.2.0"
+cesrox = { version = "0.1.2"}
 
 [dev-dependencies]
 tempfile = "3.1"

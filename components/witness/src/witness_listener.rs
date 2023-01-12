@@ -175,7 +175,7 @@ mod test {
             Ok(resp)
         }
 
-        async fn resolve_oobi(&self, msg: keri::oobi::Oobi) -> Result<(), ActorError> {
+        async fn resolve_oobi(&self, _msg: keri::oobi::Oobi) -> Result<(), ActorError> {
             todo!()
         }
     }
@@ -243,15 +243,6 @@ pub mod http_handlers {
             .unwrap_or_default();
         // (for now) Append controller kel to be able to verify end role signature.
         // TODO use ksn instead
-        let cont_kel: Vec<_> = data
-            .event_storage
-            .get_kel_messages_with_receipts(&cid)
-            .map_err(ActorError::KeriError)?
-            .unwrap_or_default()
-            .into_iter()
-            .map(|not| Message::Notice(not).to_cesr().unwrap())
-            .flatten()
-            .collect();
         let oobis = end_role
             .into_iter()
             .chain(loc_scheme.into_iter())
@@ -262,7 +253,16 @@ pub mod http_handlers {
             .flatten_ok()
             .collect::<Result<Vec<_>, _>>()
             .map_err(ActorError::KeriError)?;
-        let res: Vec<u8> = cont_kel.into_iter().chain(oobis).collect();
+        let res: Vec<_> = data
+            .event_storage
+            .get_kel_messages_with_receipts(&cid)
+            .map_err(ActorError::KeriError)?
+            .unwrap_or_default()
+            .into_iter()
+            .flat_map(|not| Message::Notice(not).to_cesr().unwrap())
+            .chain(oobis)
+            .collect();
+
         // println!(
         //     "\nSending {} obi from its witness {}:\n{}",
         //     cid.to_str(),

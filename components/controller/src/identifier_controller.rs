@@ -17,6 +17,10 @@ use keri::{
         signed_event_message::{Notice, Op},
         Digestible,
     },
+    mailbox::{
+        exchange::{Exchange, ExchangeMessage, ForwardTopic, FwdArgs, SignedExchange},
+        MailboxResponse,
+    },
     oobi::{LocationScheme, Role, Scheme},
     prefix::{
         AttachedSignaturePrefix, BasicPrefix, CesrPrimitive, IdentifierPrefix, SelfSigningPrefix,
@@ -25,7 +29,7 @@ use keri::{
         query_event::{QueryArgs, QueryArgsMbx, QueryEvent, QueryRoute, QueryTopics, SignedQuery},
         reply_event::ReplyRoute,
     },
-    sai::{derivation::SelfAddressing, SelfAddressingPrefix}, mailbox::{MailboxResponse, exchange::{ForwardTopic, Exchange, SignedExchange, ExchangeMessage, FwdArgs}},
+    sai::{derivation::SelfAddressing, SelfAddressingPrefix},
 };
 
 use super::mailbox_updating::ActionRequired;
@@ -110,7 +114,7 @@ impl IdentifierController {
         let delegating_event = self.source.anchor_with_seal(&self.id, &[delegated_seal])?;
         let exn_message = Exchange::Fwd {
             args: FwdArgs {
-                recipient_id: delegate.clone(),
+                recipient_id: delegate,
                 topic: ForwardTopic::Delegate,
             },
             to_forward: delegating_event.clone(),
@@ -160,7 +164,7 @@ impl IdentifierController {
         sig: SelfSigningPrefix,
     ) -> Result<(), ControllerError> {
         let parsed_event =
-            parse_event_type(&event).map_err(|_e| ControllerError::EventFormatError)?;
+            parse_event_type(event).map_err(|_e| ControllerError::EventFormatError)?;
         match parsed_event {
             EventType::KeyEvent(ke) => {
                 let index = self.get_index(&ke.event)?;
@@ -208,7 +212,7 @@ impl IdentifierController {
             let state = self
                 .source
                 .storage
-                .get_state(&participant)?
+                .get_state(participant)?
                 .ok_or(ControllerError::UnknownIdentifierError)?;
             pks.append(&mut state.clone().current.public_keys);
             npks.append(&mut state.clone().current.next_keys_data.next_key_hashes);
@@ -274,7 +278,7 @@ impl IdentifierController {
                     .map(|c| Signature::NonTransferable(c.clone()))
                     .chain([Signature::Transferable(
                         SignerData::JustSignatures,
-                        vec![data_signature].into(),
+                        vec![data_signature],
                     )])
                     .collect::<Vec<_>>()
             } else {
@@ -326,7 +330,7 @@ impl IdentifierController {
     ) -> Result<IdentifierPrefix, ControllerError> {
         // Join icp event with signature
         let key_event =
-            parse_event_type(&group_event).map_err(|_e| ControllerError::EventFormatError)?;
+            parse_event_type(group_event).map_err(|_e| ControllerError::EventFormatError)?;
         let icp = if let EventType::KeyEvent(icp) = key_event {
             icp
         } else {
@@ -467,7 +471,7 @@ impl IdentifierController {
         witnesses: &[BasicPrefix],
     ) -> Result<Vec<QueryEvent>, ControllerError> {
         Ok(witnesses
-            .into_iter()
+            .iter()
             .map(|wit| {
                 QueryEvent::new_query(
                     QueryRoute::Mbx {
@@ -547,7 +551,7 @@ impl IdentifierController {
         } else {
             // process group mailbox
             let group_req = self
-                .process_group_mailbox(res, &about_who, &self.last_asked_groups_index)
+                .process_group_mailbox(res, about_who, &self.last_asked_groups_index)
                 .await?;
             self.last_asked_groups_index = MailboxReminder {
                 receipt: res.receipt.len(),
@@ -578,9 +582,11 @@ impl IdentifierController {
                     reply_route: _,
                     args,
                 } => (
-                    args.src.clone().ok_or(ControllerError::QueryArgumentError(
-                        "Missing query receipient identifier".into(),
-                    ))?,
+                    args.src.clone().ok_or_else(|| {
+                        ControllerError::QueryArgumentError(
+                            "Missing query receipient identifier".into(),
+                        )
+                    })?,
                     None,
                     None,
                 ),
@@ -588,9 +594,11 @@ impl IdentifierController {
                     reply_route: _,
                     args,
                 } => (
-                    args.src.clone().ok_or(ControllerError::QueryArgumentError(
-                        "Missing query receipient identifier".into(),
-                    ))?,
+                    args.src.clone().ok_or_else(|| {
+                        ControllerError::QueryArgumentError(
+                            "Missing query receipient identifier".into(),
+                        )
+                    })?,
                     None,
                     None,
                 ),
@@ -612,8 +620,7 @@ impl IdentifierController {
                         &receipient.to_str(),
                         std::str::from_utf8(
                             &kel.iter()
-                                .map(|m| m.to_cesr().unwrap())
-                                .flatten()
+                                .flat_map(|m| m.to_cesr().unwrap())
                                 .collect::<Vec<_>>()
                         )
                         .unwrap()
@@ -624,12 +631,16 @@ impl IdentifierController {
                 }
                 PossibleResponse::Mbx(mbx) => {
                     println!("Mailbox updated");
-                    let about_who = about_who.ok_or(ControllerError::QueryArgumentError(
-                        "Missing query subject identifier".into(),
-                    ))?;
-                    let from_who = from_who.ok_or(ControllerError::QueryArgumentError(
-                        "Missing query sender identifier".into(),
-                    ))?;
+                    let about_who = about_who.ok_or_else(|| {
+                        ControllerError::QueryArgumentError(
+                            "Missing query subject identifier".into(),
+                        )
+                    })?;
+                    let from_who = from_who.ok_or_else(|| {
+                        ControllerError::QueryArgumentError(
+                            "Missing query sender identifier".into(),
+                        )
+                    })?;
                     actions.append(&mut self.mailbox_reponse(from_who, about_who, &mbx).await?);
                 }
                 PossibleResponse::Ksn(_) => todo!(),
