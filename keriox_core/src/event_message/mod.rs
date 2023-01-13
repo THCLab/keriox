@@ -1,12 +1,12 @@
 pub mod cesr_adapter;
 pub mod dummy_event;
 pub mod event_msg_builder;
-pub mod exchange;
 pub mod key_event_message;
 pub mod serialization_info;
 pub mod serializer;
 pub mod signature;
 pub mod signed_event_message;
+pub mod timestamped;
 
 use std::cmp::Ordering;
 
@@ -18,7 +18,8 @@ use serialization_info::*;
 use self::{dummy_event::DummyEventMessage, key_event_message::KeyEvent};
 
 pub trait Typeable {
-    fn get_type(&self) -> EventTypeTag;
+    type TypeTag;
+    fn get_type(&self) -> Self::TypeTag;
 }
 pub trait Digestible {
     fn get_digest(&self) -> SelfAddressingPrefix;
@@ -47,11 +48,11 @@ pub struct SaidEvent<D> {
     pub content: D,
 }
 
-impl<D: Serialize + Clone + Typeable> SaidEvent<D> {
+impl<T: Serialize, D: Serialize + Clone + Typeable<TypeTag = T>> SaidEvent<D> {
     pub fn new(digest: SelfAddressingPrefix, content: D) -> Self {
         Self { digest, content }
     }
-    pub(crate) fn to_message(
+    pub fn to_message(
         event: D,
         format: SerializationFormats,
         derivation: SelfAddressing,
@@ -76,8 +77,9 @@ impl<D> Digestible for SaidEvent<D> {
     }
 }
 
-impl<D: Typeable> Typeable for SaidEvent<D> {
-    fn get_type(&self) -> EventTypeTag {
+impl<T, D: Typeable<TypeTag = T>> Typeable for SaidEvent<D> {
+    type TypeTag = T;
+    fn get_type(&self) -> T {
         self.content.get_type()
     }
 }
@@ -100,17 +102,19 @@ impl<D: Digestible> EventMessage<D> {
     }
 }
 
-impl<D: Digestible + Typeable + Serialize + Clone> Serialize for EventMessage<D> {
+impl<T: Serialize, D: Digestible + Typeable<TypeTag = T> + Serialize + Clone> Serialize
+    for EventMessage<D>
+{
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
         // Helper struct for adding `t` field to EventMessage serialization
         #[derive(Serialize)]
-        struct TypedEventMessage<D> {
+        struct TypedEventMessage<T, D> {
             v: SerializationInfo,
             #[serde(rename = "t")]
-            event_type: EventTypeTag,
+            event_type: T,
 
             #[serde(rename = "d")]
             digest: SelfAddressingPrefix,
@@ -118,7 +122,9 @@ impl<D: Digestible + Typeable + Serialize + Clone> Serialize for EventMessage<D>
             #[serde(flatten)]
             event: D,
         }
-        impl<D: Digestible + Typeable + Clone> From<&EventMessage<D>> for TypedEventMessage<D> {
+        impl<T: Serialize, D: Digestible + Typeable<TypeTag = T> + Clone> From<&EventMessage<D>>
+            for TypedEventMessage<T, D>
+        {
             fn from(em: &EventMessage<D>) -> Self {
                 TypedEventMessage {
                     v: em.serialization_info,
@@ -129,7 +135,7 @@ impl<D: Digestible + Typeable + Serialize + Clone> Serialize for EventMessage<D>
             }
         }
 
-        let tem: TypedEventMessage<_> = self.into();
+        let tem: TypedEventMessage<_, _> = self.into();
         tem.serialize(serializer)
     }
 }
@@ -192,7 +198,7 @@ impl From<EventMessage<KeyEvent>> for TimestampedEventMessage {
     }
 }
 
-impl<T: Clone + Serialize + Digestible + Typeable> EventMessage<T> {
+impl<T: Serialize, D: Clone + Serialize + Digestible + Typeable<TypeTag = T>> EventMessage<D> {
     pub fn serialization(&self) -> SerializationFormats {
         self.serialization_info.kind
     }

@@ -1,3 +1,7 @@
+#[cfg(feature = "mailbox")]
+use crate::mailbox::exchange::{Exchange, ExchangeMessage, ForwardTopic, FwdArgs};
+#[cfg(feature = "query")]
+use crate::query::reply_event::{ReplyEvent, ReplyRoute};
 use crate::{
     error::Error,
     event::{
@@ -5,22 +9,19 @@ use crate::{
             seal::{DigestSeal, Seal},
             threshold::{SignatureThreshold, WeightedThreshold},
         },
-        EventMessage, SerializationFormats,
+        EventMessage,
     },
     event_message::{
-        event_msg_builder::EventMsgBuilder,
-        exchange::{Exchange, ExchangeMessage, ForwardTopic, FwdArgs},
-        key_event_message::KeyEvent,
-        EventTypeTag,
+        event_msg_builder::EventMsgBuilder, key_event_message::KeyEvent, EventTypeTag,
     },
-    oobi::{EndRole, Role},
     prefix::{BasicPrefix, IdentifierPrefix},
-    query::{
-        reply_event::{ReplyEvent, ReplyRoute},
-        Timestamped,
-    },
     sai::{derivation::SelfAddressing, SelfAddressingPrefix},
     state::IdentifierState,
+};
+#[cfg(feature = "oobi")]
+use crate::{
+    event::SerializationFormats,
+    oobi::{EndRole, Role},
 };
 
 // todo add setting signing threshold
@@ -177,6 +178,7 @@ pub fn anchor_with_seal(
     Ok(ev)
 }
 
+#[cfg(feature = "oobi")]
 /// Generate reply event used to add role to given identifier.
 pub fn generate_end_role(
     controller_id: &IdentifierPrefix,
@@ -202,12 +204,14 @@ pub fn generate_end_role(
     )
     .map_err(|e| Error::EventGenerationError(e.to_string()))
 }
-
+#[cfg(feature = "mailbox")]
 pub fn exchange(
     receipient: &IdentifierPrefix,
     data: &EventMessage<KeyEvent>,
     topic: ForwardTopic,
 ) -> Result<ExchangeMessage, Error> {
+    use crate::event_message::timestamped::Timestamped;
+
     Timestamped::new(Exchange::Fwd {
         args: FwdArgs {
             recipient_id: receipient.clone(),

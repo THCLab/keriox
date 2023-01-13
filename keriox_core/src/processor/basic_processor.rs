@@ -6,10 +6,11 @@ use super::{
     EventProcessor, Processor,
 };
 #[cfg(feature = "query")]
-use crate::{database::SledEventDatabase, error::Error};
+use crate::query::reply_event::SignedReply;
 use crate::{
+    database::SledEventDatabase,
+    error::Error,
     event_message::signed_event_message::{Notice, SignedEventMessage},
-    query::reply_event::SignedReply,
 };
 
 pub struct BasicProcessor(EventProcessor);
@@ -29,6 +30,7 @@ impl Processor for BasicProcessor {
         Ok(())
     }
 
+    #[cfg(feature = "query")]
     fn process_op_reply(&self, reply: &SignedReply) -> Result<(), Error> {
         self.0.process_op_reply(reply)?;
         Ok(())

@@ -22,6 +22,7 @@ async = ["async-std", "pin-project", "futures-core", "bitpat"]
 default = ["sled-db"]
 query = []
 oobi = ["query", "url", "strum_macros", "strum"]
+mailbox = ["query"]
 controller = ["oobi", "reqwest"]
 
 [dependencies]

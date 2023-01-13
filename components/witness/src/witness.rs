@@ -5,9 +5,9 @@ use std::{
 
 use keri::{
     actor::{
-        parse_exchange_stream, parse_notice_stream, parse_query_stream, parse_reply_stream,
-        prelude::*, process_reply, process_signed_exn, process_signed_query,
-        simple_controller::PossibleResponse, error::ActorError,
+        error::ActorError, parse_exchange_stream, parse_notice_stream, parse_query_stream,
+        parse_reply_stream, prelude::*, process_reply, process_signed_exn, process_signed_query,
+        simple_controller::PossibleResponse,
     },
     error::Error,
     event::EventMessage,
@@ -17,11 +17,12 @@ use keri::{
         signature::Nontransferable,
         signed_event_message::{Notice, SignedNontransferableReceipt},
     },
+    mailbox::MailboxResponse,
     oobi::{LocationScheme, OobiManager},
     prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     processor::notification::{Notification, NotificationBus, Notifier},
     query::{
-        query_event::{MailboxResponse, QueryArgsMbx, QueryTopics},
+        query_event::{QueryArgsMbx, QueryTopics},
         reply_event::{ReplyEvent, ReplyRoute, SignedReply},
         ReplyType,
     },
@@ -238,7 +239,7 @@ impl Witness {
 
     pub fn process_exchange(
         &self,
-        exn: keri::event_message::exchange::SignedExchange,
+        exn: keri::mailbox::exchange::SignedExchange,
     ) -> Result<(), ActorError> {
         process_signed_exn(exn, &self.event_storage)?;
         Ok(())

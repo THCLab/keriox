@@ -1,4 +1,4 @@
-use std::convert::{TryFrom, TryInto};
+use std::convert::TryFrom;
 
 use serde::Deserialize;
 
@@ -12,14 +12,18 @@ use crate::{
     event_parsing::{
         error::Error as CesrError, group::Group, primitives::IndexedSignature, ParsedData, Payload,
     },
-    query::{
-        query_event::{QueryEvent, SignedQuery},
-        reply_event::{ReplyEvent, SignedReply},
-    },
 };
 
+#[cfg(feature = "query")]
+use crate::query::{
+    query_event::{QueryEvent, SignedQuery},
+    reply_event::{ReplyEvent, SignedReply},
+};
+
+#[cfg(feature = "mailbox")]
+use crate::mailbox::exchange::{ExchangeMessage, SignedExchange};
+
 use super::{
-    exchange::{ExchangeMessage, SignedExchange},
     key_event_message::KeyEvent,
     signature::{self, Nontransferable, Signature},
     signed_event_message::{
@@ -43,6 +47,7 @@ impl Payload for EventType {
 pub enum EventType {
     KeyEvent(EventMessage<KeyEvent>),
     Receipt(EventMessage<Receipt>),
+    #[cfg(feature = "mailbox")]
     Exn(ExchangeMessage),
     #[cfg(feature = "query")]
     Qry(QueryEvent),
@@ -59,6 +64,7 @@ impl EventType {
             EventType::Qry(qry) => qry.serialize(),
             #[cfg(feature = "query")]
             EventType::Rpy(rpy) => rpy.serialize(),
+            #[cfg(feature = "mailbox")]
             EventType::Exn(exn) => exn.serialize(),
         }
     }
@@ -160,6 +166,7 @@ impl From<SignedQuery> for ParsedData<EventType> {
     }
 }
 
+#[cfg(feature = "mailbox")]
 impl From<SignedExchange> for ParsedData<EventType> {
     fn from(ev: SignedExchange) -> Self {
         let mut attachments = signature::signatures_into_groups(&ev.signature);
@@ -186,6 +193,7 @@ impl TryFrom<ParsedData<EventType>> for Message {
             EventType::Qry(qry) => Message::Op(signed_query(qry, value.attachments)?),
             #[cfg(any(feature = "query", feature = "oobi"))]
             EventType::Rpy(rpy) => Message::Op(signed_reply(rpy, value.attachments)?),
+            #[cfg(feature = "mailbox")]
             EventType::Exn(exn) => Message::Op(signed_exchange(exn, value.attachments)?),
         };
         Ok(msg)
@@ -214,6 +222,7 @@ impl TryFrom<ParsedData<EventType>> for Op {
             EventType::Qry(qry) => signed_query(qry, value.attachments),
             #[cfg(any(feature = "query", feature = "oobi"))]
             EventType::Rpy(rpy) => signed_reply(rpy, value.attachments),
+            #[cfg(feature = "mailbox")]
             EventType::Exn(exn) => signed_exchange(exn, value.attachments),
             _ => Err(Error::SemanticError(
                 "Cannot convert SignedEventData to Op".to_string(),
@@ -222,6 +231,7 @@ impl TryFrom<ParsedData<EventType>> for Op {
     }
 }
 
+#[cfg(feature = "query")]
 impl TryFrom<ParsedData<EventType>> for SignedQuery {
     type Error = Error;
 
@@ -235,6 +245,7 @@ impl TryFrom<ParsedData<EventType>> for SignedQuery {
     }
 }
 
+#[cfg(feature = "query")]
 impl TryFrom<ParsedData<EventType>> for SignedReply {
     type Error = Error;
 
@@ -248,6 +259,7 @@ impl TryFrom<ParsedData<EventType>> for SignedReply {
     }
 }
 
+#[cfg(feature = "mailbox")]
 impl TryFrom<ParsedData<EventType>> for SignedExchange {
     type Error = Error;
 
@@ -484,7 +496,9 @@ fn signed_receipt(
     }
 }
 
+#[cfg(feature = "mailbox")]
 pub fn signed_exchange(exn: ExchangeMessage, attachments: Vec<Group>) -> Result<Op, Error> {
+    use std::convert::TryInto;
     let mut atts = attachments.into_iter();
     let att1 = atts
         .next()

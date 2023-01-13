@@ -15,6 +15,8 @@ use self::{
     notification::{JustNotification, Notification, NotificationBus, Notifier},
     validator::EventValidator,
 };
+#[cfg(feature = "query")]
+use crate::query::reply_event::{ReplyRoute, SignedReply};
 use crate::{
     database::{timestamped::TimestampedSignedEventMessage, SledEventDatabase},
     error::Error,
@@ -23,7 +25,6 @@ use crate::{
         Notice, SignedEventMessage, SignedNontransferableReceipt,
     },
     prefix::IdentifierPrefix,
-    query::reply_event::{ReplyRoute, SignedReply},
     state::IdentifierState,
 };
 
@@ -48,9 +49,11 @@ pub trait Processor {
         match msg {
             Message::Notice(notice) => self.process_notice(notice),
             Message::Op(op) => match op {
+                #[cfg(feature = "query")]
                 Op::Query(_query) => panic!("processor can't handle query op"),
+                #[cfg(feature = "oobi")]
                 Op::Reply(reply) => self.process_op_reply(reply),
-                Op::Exchange(_) => todo!(),
+                _ => todo!(),
             },
         }
     }

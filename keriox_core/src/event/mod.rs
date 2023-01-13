@@ -51,6 +51,7 @@ impl Event {
 }
 
 impl Typeable for Event {
+    type TypeTag = EventTypeTag;
     fn get_type(&self) -> EventTypeTag {
         self.event_data.get_type()
     }

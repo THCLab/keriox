@@ -6,7 +6,12 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 
-use super::{event_generator, parse_reply_stream, prelude::Message, process_message};
+use super::{event_generator, prelude::Message, process_message};
+#[cfg(feature = "mailbox")]
+use crate::mailbox::{
+    exchange::{Exchange, ForwardTopic, FwdArgs, SignedExchange},
+    MailboxResponse,
+};
 use crate::{
     actor::parse_event_stream,
     database::{escrow::EscrowDb, SledEventDatabase},
@@ -21,13 +26,11 @@ use crate::{
     },
     event_message::{
         cesr_adapter::EventType,
-        exchange::{Exchange, ForwardTopic, FwdArgs, SignedExchange},
         key_event_message::KeyEvent,
         signature::{Signature, SignerData},
         signed_event_message::{Notice, Op, SignedEventMessage, SignedNontransferableReceipt},
     },
     event_parsing::{parsers::parse, path::MaterialPath, primitives::CesrPrimitive},
-    oobi::{OobiManager, Role},
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     processor::{
         basic_processor::BasicProcessor,
@@ -37,18 +40,23 @@ use crate::{
         event_storage::EventStorage,
         Processor,
     },
-    query::{
-        query_event::{
-            MailboxResponse, QueryArgs, QueryArgsMbx, QueryEvent, QueryRoute, QueryTopics,
-            SignedQuery,
-        },
-        reply_event::SignedReply,
-    },
     sai::derivation::SelfAddressing,
     signer::KeyManager,
     state::IdentifierState,
 };
 
+#[cfg(feature = "oobi")]
+use crate::oobi::{OobiManager, Role};
+
+#[cfg(feature = "query")]
+use super::parse_reply_stream;
+#[cfg(feature = "query")]
+use crate::query::{
+    query_event::{QueryArgs, QueryArgsMbx, QueryEvent, QueryRoute, QueryTopics, SignedQuery},
+    reply_event::SignedReply,
+};
+
+#[cfg(feature = "query")]
 #[derive(PartialEq, Debug, Clone)]
 pub enum PossibleResponse {
     Kel(Vec<Message>),
@@ -107,6 +115,7 @@ impl PossibleResponse {
     }
 }
 
+#[cfg(feature = "query")]
 pub fn parse_response(response: &str) -> Result<PossibleResponse, Error> {
     Ok(match parse_mailbox_response(response) {
         Err(_) => match parse_reply_stream(response.as_bytes()) {
@@ -120,6 +129,7 @@ pub fn parse_response(response: &str) -> Result<PossibleResponse, Error> {
     })
 }
 
+#[cfg(feature = "mailbox")]
 pub fn parse_mailbox_response(response: &str) -> Result<PossibleResponse, Error> {
     #[derive(Deserialize, Debug)]
     struct GroupedResponse {
@@ -621,6 +631,7 @@ impl<K: KeyManager> SimpleController<K> {
         Ok((signed, exchanges))
     }
 
+    #[cfg(feature = "mailbox")]
     pub fn create_forward_message(
         &self,
         receipient: &IdentifierPrefix,
@@ -675,6 +686,7 @@ impl<K: KeyManager> SimpleController<K> {
         })
     }
 
+    #[cfg(feature = "mailbox")]
     pub fn query_mailbox(&self, witness: &BasicPrefix) -> SignedQuery {
         let qry_msg = QueryEvent::new_query(
             QueryRoute::Mbx {
@@ -711,6 +723,7 @@ impl<K: KeyManager> SimpleController<K> {
         mbx_msg
     }
 
+    #[cfg(feature = "mailbox")]
     pub fn query_groups_mailbox(&self, witness: &BasicPrefix) -> Vec<SignedQuery> {
         self.groups
             .iter()

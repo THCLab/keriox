@@ -1,13 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-use super::Timestamped;
 use crate::{
     error::Error,
     event::{EventMessage, SerializationFormats},
-    event_message::{
-        signed_event_message::{SignedEventMessage, SignedNontransferableReceipt},
-        EventTypeTag, SaidEvent, Typeable,
-    },
+    event_message::{timestamped::Timestamped, EventTypeTag, SaidEvent, Typeable},
     prefix::{AttachedSignaturePrefix, IdentifierPrefix},
     sai::derivation::SelfAddressing,
 };
@@ -45,6 +41,15 @@ pub enum QueryRoute {
     },
 }
 
+impl QueryRoute {
+    pub fn get_prefix(&self) -> IdentifierPrefix {
+        match self {
+            QueryRoute::Log { ref args, .. } | QueryRoute::Ksn { ref args, .. } => args.i.clone(),
+            QueryRoute::Mbx { ref args, .. } => args.i.clone(),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct QueryArgsMbx {
     /// Controller's currently used indentifier
@@ -71,13 +76,6 @@ pub struct QueryTopics {
     pub credential: u64,
     #[serde(rename = "/delegate")]
     pub delegate: u64,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct MailboxResponse {
-    pub receipt: Vec<SignedNontransferableReceipt>,
-    pub multisig: Vec<SignedEventMessage>,
-    pub delegate: Vec<SignedEventMessage>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -108,14 +106,12 @@ impl QueryEvent {
     }
 
     pub fn get_prefix(&self) -> IdentifierPrefix {
-        match self.event.content.data.route {
-            QueryRoute::Log { ref args, .. } | QueryRoute::Ksn { ref args, .. } => args.i.clone(),
-            QueryRoute::Mbx { ref args, .. } => args.i.clone(),
-        }
+        self.event.content.data.route.get_prefix()
     }
 }
 
 impl Typeable for Query {
+    type TypeTag = EventTypeTag;
     fn get_type(&self) -> EventTypeTag {
         EventTypeTag::Qry
     }

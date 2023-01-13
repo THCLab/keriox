@@ -1,11 +1,12 @@
 use serde::{Deserialize, Serialize};
 
+use crate::event_message::timestamped::Timestamped;
 use crate::{
     error::Error, event::SerializationFormats, event_parsing::path::MaterialPath,
-    prefix::IdentifierPrefix, query::Timestamped, sai::derivation::SelfAddressing,
+    prefix::IdentifierPrefix, sai::derivation::SelfAddressing,
 };
 
-use super::{
+use crate::event_message::{
     key_event_message::KeyEvent, signature::Signature, EventMessage, EventTypeTag, SaidEvent,
     Typeable,
 };
@@ -68,6 +69,7 @@ pub enum ForwardTopic {
 }
 
 impl Typeable for Exchange {
+    type TypeTag = EventTypeTag;
     fn get_type(&self) -> EventTypeTag {
         EventTypeTag::Exn
     }

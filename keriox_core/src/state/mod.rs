@@ -13,7 +13,7 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use serde_hex::{Compact, SerHex};
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
 pub struct LastEstablishmentData {
     #[serde(rename = "s", with = "SerHex::<Compact>")]
     pub(crate) sn: u64,

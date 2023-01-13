@@ -1,8 +1,8 @@
 use serde::{ser::SerializeStruct, Deserialize, Serialize};
 
 use super::{
-    cesr_adapter::ParsedEvent, exchange::SignedExchange, key_event_message::KeyEvent,
-    serializer::to_string, signature::Nontransferable, EventMessage,
+    cesr_adapter::ParsedEvent, key_event_message::KeyEvent, serializer::to_string,
+    signature::Nontransferable, EventMessage,
 };
 #[cfg(feature = "query")]
 use crate::query::{query_event::SignedQuery, reply_event::SignedReply};
@@ -16,6 +16,9 @@ use crate::{
     prefix::{AttachedSignaturePrefix, IdentifierPrefix},
     state::{EventSemantics, IdentifierState},
 };
+
+#[cfg(feature = "mailbox")]
+use crate::mailbox::exchange::SignedExchange;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Message {
@@ -34,10 +37,11 @@ pub enum Notice {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Op {
+    #[cfg(feature = "mailbox")]
     Exchange(SignedExchange),
-    #[cfg(feature = "query")]
-    Reply(SignedReply),
     #[cfg(any(feature = "query", feature = "oobi"))]
+    Reply(SignedReply),
+    #[cfg(feature = "query")]
     Query(SignedQuery),
 }
 
@@ -67,6 +71,7 @@ impl From<Op> for ParsedEvent {
             Op::Reply(ksn) => ParsedData::from(ksn),
             #[cfg(feature = "query")]
             Op::Query(qry) => ParsedData::from(qry),
+            #[cfg(feature = "mailbox")]
             Op::Exchange(exn) => ParsedData::from(exn),
         }
     }
@@ -104,8 +109,10 @@ impl Op {
             Op::Reply(reply) => reply.reply.get_prefix(),
             #[cfg(feature = "query")]
             Op::Query(qry) => qry.query.get_prefix(),
+            #[cfg(feature = "mailbox")]
             // returns exchange message receipient id
             Op::Exchange(exn) => exn.exchange_message.event.content.data.get_prefix(),
+            _ => todo!(),
         }
     }
 }
