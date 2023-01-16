@@ -98,7 +98,6 @@ async fn test_group_incept() -> Result<(), ControllerError> {
     Ok(())
 }
 
-#[ignore]
 #[async_std::test]
 async fn test_delegated_incept() -> Result<(), ControllerError> {
     use url::Url;
@@ -304,6 +303,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
                         vec![],
                     )
                     .await?;
+                delegator.notify_witnesses().await?;
 
                 // Query for receipts
                 let query = delegator.query_mailbox(&delegator.id, &[witness_id_basic.clone()])?;
@@ -324,6 +324,14 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
                 assert_eq!(delegators_state.unwrap().sn, 1);
             }
         };
+    }
+
+    // Repeat query and expect 0 required actions.
+    let query = delegator.query_mailbox(&delegator.id, &[witness_id_basic.clone()])?;
+    for qry in query {
+        let signature = SelfSigningPrefix::Ed25519Sha512(km2.sign(&qry.serialize()?)?);
+        let ar = delegator.finalize_query(vec![(qry, signature)]).await?;
+        assert!(ar.is_empty());
     }
 
     // Process delegator's icp by identifier who'll request delegation.
@@ -447,7 +455,8 @@ async fn test_2_wit() -> Result<(), ControllerError> {
 
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(&qry.serialize()?)?);
-        ident_ctl.finalize_query(vec![(qry, signature)]).await?;
+        let act = ident_ctl.finalize_query(vec![(qry, signature)]).await?;
+        assert_eq!(act.len(), 0);
     }
 
     let n = ident_ctl.notify_witnesses().await.unwrap();

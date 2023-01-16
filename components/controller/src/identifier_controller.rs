@@ -1,4 +1,7 @@
-use std::{collections::HashSet, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use keri::{
     actor::{event_generator, prelude::Message, simple_controller::PossibleResponse, MaterialPath},
@@ -38,8 +41,8 @@ use crate::{error::ControllerError, mailbox_updating::MailboxReminder, Controlle
 pub struct IdentifierController {
     pub id: IdentifierPrefix,
     pub source: Arc<Controller>,
-    last_asked_index: MailboxReminder,
-    last_asked_groups_index: MailboxReminder,
+    last_asked_index: HashMap<IdentifierPrefix, MailboxReminder>,
+    last_asked_groups_index: HashMap<IdentifierPrefix, MailboxReminder>,
     broadcasted_rcts: HashSet<(SelfAddressingPrefix, BasicPrefix)>,
 }
 
@@ -48,8 +51,8 @@ impl IdentifierController {
         Self {
             id,
             source: kel,
-            last_asked_index: MailboxReminder::default(),
-            last_asked_groups_index: MailboxReminder::default(),
+            last_asked_index: HashMap::new(),
+            last_asked_groups_index: HashMap::new(),
             broadcasted_rcts: HashSet::new(),
         }
     }
@@ -532,32 +535,45 @@ impl IdentifierController {
             .collect()
     }
 
-    async fn mailbox_reponse(
+    async fn mailbox_response(
         &mut self,
+        recipient: &IdentifierPrefix,
         from_who: &IdentifierPrefix,
         about_who: &IdentifierPrefix,
         res: &MailboxResponse,
     ) -> Result<Vec<ActionRequired>, ControllerError> {
         let req = if from_who == about_who {
             // process own mailbox
-            let req = self.process_own_mailbox(res, &self.last_asked_index)?;
-            // TODO: update last seen index
-            // self.last_asked_index = MailboxReminder {
-            //     receipt: res.receipt.len(),
-            //     multisig: res.multisig.len(),
-            //     delegate: res.delegate.len(),
-            // };
+            let reminder = self
+                .last_asked_index
+                .get(recipient)
+                .cloned()
+                .unwrap_or_default();
+            let req = self.process_own_mailbox(res, &reminder)?;
+
+            let mut reminder = self.last_asked_index.entry(recipient.clone()).or_default();
+            reminder.delegate = res.delegate.len();
+            reminder.multisig = res.multisig.len();
+            reminder.receipt = res.receipt.len();
             req
         } else {
             // process group mailbox
+            let reminder = self
+                .last_asked_groups_index
+                .get(recipient)
+                .cloned()
+                .unwrap_or_default();
             let group_req = self
-                .process_group_mailbox(res, about_who, &self.last_asked_groups_index)
+                .process_group_mailbox(res, about_who, &reminder)
                 .await?;
-            self.last_asked_groups_index = MailboxReminder {
-                receipt: res.receipt.len(),
-                multisig: res.multisig.len(),
-                delegate: res.delegate.len(),
-            };
+
+            let reminder = self
+                .last_asked_groups_index
+                .entry(recipient.clone())
+                .or_default();
+            reminder.delegate = res.delegate.len();
+            reminder.multisig = res.multisig.len();
+            reminder.receipt = res.receipt.len();
             group_req
         };
         Ok(req)
@@ -577,7 +593,7 @@ impl IdentifierController {
                 index: 0,
                 signature: sig,
             }];
-            let (receipient, about_who, from_who) = match &qry.event.content.data.route {
+            let (recipient, about_who, from_who) = match &qry.event.content.data.route {
                 QueryRoute::Log {
                     reply_route: _,
                     args,
@@ -610,14 +626,14 @@ impl IdentifierController {
             let query = SignedQuery::new(qry.clone(), self_id.clone(), signatures);
             let res = self
                 .source
-                .send_query_to(&receipient, Scheme::Http, query)
+                .send_query_to(&recipient, Scheme::Http, query)
                 .await?;
 
             match res {
                 PossibleResponse::Kel(kel) => {
                     println!(
                         "\nGot kel from {}: {}",
-                        &receipient.to_str(),
+                        &recipient.to_str(),
                         std::str::from_utf8(
                             &kel.iter()
                                 .flat_map(|m| m.to_cesr().unwrap())
@@ -631,17 +647,14 @@ impl IdentifierController {
                 }
                 PossibleResponse::Mbx(mbx) => {
                     println!("Mailbox updated");
-                    let about_who = about_who.ok_or_else(|| {
-                        ControllerError::QueryArgumentError(
-                            "Missing query subject identifier".into(),
-                        )
-                    })?;
-                    let from_who = from_who.ok_or_else(|| {
-                        ControllerError::QueryArgumentError(
-                            "Missing query sender identifier".into(),
-                        )
-                    })?;
-                    actions.append(&mut self.mailbox_reponse(from_who, about_who, &mbx).await?);
+                    // only process if we actually asked about mailbox
+                    if let (Some(from_who), Some(about_who)) = (from_who, about_who) {
+                        actions.append(
+                            &mut self
+                                .mailbox_response(&recipient, from_who, about_who, &mbx)
+                                .await?,
+                        );
+                    }
                 }
                 PossibleResponse::Ksn(_) => todo!(),
             };

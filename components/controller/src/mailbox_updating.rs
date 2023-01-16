@@ -18,7 +18,7 @@ use keri::{
     prefix::IdentifierPrefix,
 };
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 /// Struct for tracking what was the last indexes of processed mailbox messages.
 /// Events in mailbox aren't removed after getting them, so it prevents
 /// processing the same event multiple times.
