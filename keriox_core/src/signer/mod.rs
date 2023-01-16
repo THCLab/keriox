@@ -48,7 +48,6 @@ impl KeyManager for CryptoBox {
         Ok(())
     }
 }
-//#[cfg(feature = "demo")]
 impl CryptoBox {
     pub fn new() -> Result<Self, Error> {
         let signer = Signer::new();

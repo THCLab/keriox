@@ -7,7 +7,7 @@ use crate::{
         simple_controller::{parse_response, PossibleResponse},
     },
     event_message::signed_event_message::{Message, Op},
-    oobi::{LocationScheme, Role, Scheme},
+    oobi::{LocationScheme, Oobi, Role, Scheme},
     prefix::IdentifierPrefix,
     query::query_event::SignedQuery,
 };
@@ -49,13 +49,16 @@ where
                     loc.url.join("process").unwrap()
                 }
                 Message::Op(op) => match op {
+                    #[cfg(feature = "query")]
                     Op::Query(_) => {
                         panic!("can't send query in send_message");
                     }
+                    #[cfg(feature = "query")]
                     Op::Reply(_) => {
                         // {url}/register
                         loc.url.join("register").unwrap()
                     }
+                    #[cfg(feature = "mailbox")]
                     Op::Exchange(_) => {
                         // {url}/forward
                         loc.url.join("forward").unwrap()
@@ -81,6 +84,7 @@ where
         Ok(())
     }
 
+    #[cfg(feature = "query")]
     async fn send_query(
         &self,
         loc: LocationScheme,
@@ -181,5 +185,25 @@ where
             let err = serde_json::from_str(&body).map_err(|_| TransportError::InvalidResponse)?;
             Err(TransportError::RemoteError(err))
         }
+    }
+
+    async fn resolve_oobi(&self, loc: LocationScheme, oobi: Oobi) -> Result<(), TransportError<E>> {
+        let client = reqwest::Client::new();
+        let resp = client
+            .post(format!("{}resolve", loc.url))
+            .body(serde_json::to_string(&oobi).unwrap())
+            .send()
+            .await
+            .map_err(|_| TransportError::NetworkError)?;
+
+        if !resp.status().is_success() {
+            let body = resp
+                .text()
+                .await
+                .map_err(|_| TransportError::NetworkError)?;
+            let err = serde_json::from_str(&body).map_err(|_| TransportError::NetworkError)?;
+            return Err(TransportError::RemoteError(err));
+        }
+        Ok(())
     }
 }

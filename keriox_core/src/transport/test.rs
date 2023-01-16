@@ -6,7 +6,7 @@ use super::{Transport, TransportError};
 use crate::{
     actor::{error::ActorError, simple_controller::PossibleResponse},
     event_message::signed_event_message::{Message, Op},
-    oobi::{LocationScheme, Role},
+    oobi::{LocationScheme, Oobi, Role},
     prefix::IdentifierPrefix,
     query::query_event::SignedQuery,
 };
@@ -22,6 +22,7 @@ pub trait TestActor<E: Error = ActorError> {
         role: Role,
         eid: IdentifierPrefix,
     ) -> Result<Vec<Message>, E>;
+    async fn resolve_oobi(&self, msg: Oobi) -> Result<(), E>;
 }
 
 pub type TestActorMap<E = ActorError> =
@@ -135,5 +136,20 @@ where
             .map_err(|_| TransportError::NetworkError)?;
 
         Ok(ops)
+    }
+
+    async fn resolve_oobi(&self, loc: LocationScheme, oobi: Oobi) -> Result<(), TransportError<E>> {
+        let (host, port) = match loc.url.origin() {
+            url::Origin::Tuple(_scheme, host, port) => (host, port),
+            _ => return Err(TransportError::NetworkError),
+        };
+
+        self.actors
+            .get(&(host, port))
+            .ok_or(TransportError::NetworkError)?
+            .resolve_oobi(oobi)
+            .await
+            .map_err(|err| TransportError::RemoteError(err))?;
+        Ok(())
     }
 }

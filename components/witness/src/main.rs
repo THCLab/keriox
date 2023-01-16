@@ -5,7 +5,11 @@ use figment::{
     providers::{Format, Json},
     Figment,
 };
-use keri::event_parsing::primitives::CesrPrimitive;
+use keri::{
+    event_parsing::primitives::CesrPrimitive,
+    oobi::{LocationScheme, Scheme},
+    prefix::IdentifierPrefix,
+};
 use serde::Deserialize;
 use structopt::StructOpt;
 use witness::WitnessListener;
@@ -46,19 +50,27 @@ async fn main() -> Result<()> {
         .map_err(|_e| anyhow!("Improper `config.json` structure. Should contain fields: `db_path`, `http_host`, `http_port`. Set config file path with -c option."))?;
 
     let http_address = format!("http://{}:{}", http_host, http_port);
+    let witness_url = url::Url::parse(&http_address).unwrap();
 
-    let witness_listener = WitnessListener::setup(
-        url::Url::parse(&http_address).unwrap(),
-        public_address,
-        db_path.as_path(),
-        seed,
-    )
-    .unwrap();
+    let witness_listener =
+        WitnessListener::setup(witness_url.clone(), public_address, db_path.as_path(), seed)
+            .unwrap();
+
+    let witness_id = IdentifierPrefix::Basic(witness_listener.get_prefix());
+    let witness_loc_scheme = LocationScheme {
+        eid: witness_id.clone(),
+        scheme: Scheme::Http,
+        url: witness_url,
+    };
 
     println!(
         "\nWitness {} is listening on {}",
         witness_listener.get_prefix().to_str(),
         http_address,
+    );
+    println!(
+        "Witness's oobi: {}",
+        serde_json::to_string(&witness_loc_scheme).unwrap()
     );
 
     let http_handle = witness_listener.listen_http(url::Url::parse(&http_address).unwrap());

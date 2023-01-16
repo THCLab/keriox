@@ -2,7 +2,10 @@ use std::{path::Path, sync::Arc};
 
 use actix_web::{dev::Server, web, App, HttpServer};
 use keri::{
-    error::Error, oobi::LocationScheme, prefix::BasicPrefix, transport::default::DefaultTransport,
+    error::Error,
+    oobi::LocationScheme,
+    prefix::BasicPrefix,
+    transport::{default::DefaultTransport, Transport},
 };
 
 use crate::watcher::{Watcher, WatcherData};
@@ -30,10 +33,30 @@ impl WatcherListener {
             pub_address,
             event_db_path,
             priv_key,
-            Box::new(DefaultTransport::new()),
+            Box::new(DefaultTransport::default()),
         )
         .map(|watcher_data| Self {
             watcher_data: Arc::new(Watcher(watcher_data)),
+        })
+    }
+
+    pub fn with_transport(
+        address: url::Url,
+        public_address: Option<String>,
+        event_db_path: &Path,
+        priv_key: Option<String>,
+        transport: Box<dyn Transport + Send + Sync>,
+    ) -> Result<Self, Error> {
+        let pub_address = if let Some(pub_address) = public_address {
+            url::Url::parse(&format!("http://{}", pub_address)).unwrap()
+        } else {
+            address
+        };
+
+        WatcherData::setup(pub_address, event_db_path, priv_key, transport).map(|watcher_data| {
+            Self {
+                watcher_data: Arc::new(Watcher(watcher_data)),
+            }
         })
     }
 
@@ -271,7 +294,7 @@ mod test {
             simple_controller::{parse_response, PossibleResponse},
         },
         event_message::signed_event_message::{Message, Op},
-        oobi::Role,
+        oobi::{Oobi, Role},
         prefix::IdentifierPrefix,
         query::query_event::{QueryRoute, SignedQuery},
     };
@@ -355,6 +378,18 @@ mod test {
             let resp = resp.into_body().try_into_bytes().unwrap();
             let resp = parse_event_stream(resp.as_ref()).unwrap();
             Ok(resp)
+        }
+        async fn resolve_oobi(&self, msg: Oobi) -> Result<(), ActorError> {
+            let data = actix_web::web::Data::new(self.watcher_data.clone());
+            let resp = super::http_handlers::resolve_oobi(
+                Bytes::from(serde_json::to_string(&msg).unwrap()),
+                data,
+            )
+            .await
+            .map_err(|err| err.0)?;
+            let resp = resp.into_body().try_into_bytes().unwrap();
+            parse_event_stream(resp.as_ref()).unwrap();
+            Ok(())
         }
     }
 }
