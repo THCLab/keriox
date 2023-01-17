@@ -89,7 +89,7 @@ impl WitnessReceiptGenerator {
     ) -> Result<SignedNontransferableReceipt, Error> {
         // Create witness receipt and add it to db
         let ser = event_message.serialize()?;
-        let signature = signer.sign(&ser)?;
+        let signature = signer.sign(ser)?;
         let rcp = ReceiptBuilder::default()
             .with_receipted_event(event_message.clone())
             .build()?;
@@ -182,23 +182,19 @@ impl Witness {
         &self,
         eid: &IdentifierPrefix,
     ) -> Result<Option<Vec<SignedReply>>, Error> {
-        Ok(match self.oobi_manager.get_loc_scheme(eid)? {
-            Some(oobis_to_sign) => Some(
-                oobis_to_sign
-                    .iter()
-                    .map(|oobi_to_sing| {
-                        let signature =
-                            self.signer.sign(oobi_to_sing.serialize().unwrap()).unwrap();
-                        SignedReply::new_nontrans(
-                            oobi_to_sing.clone(),
-                            self.prefix.clone(),
-                            SelfSigningPrefix::Ed25519Sha512(signature),
-                        )
-                    })
-                    .collect(),
-            ),
-            None => None,
-        })
+        Ok(self.oobi_manager.get_loc_scheme(eid)?.map(|oobis_to_sign| {
+            oobis_to_sign
+                .iter()
+                .map(|oobi_to_sing| {
+                    let signature = self.signer.sign(oobi_to_sing.serialize().unwrap()).unwrap();
+                    SignedReply::new_nontrans(
+                        oobi_to_sing.clone(),
+                        self.prefix.clone(),
+                        SelfSigningPrefix::Ed25519Sha512(signature),
+                    )
+                })
+                .collect()
+        }))
     }
 
     pub fn get_signed_ksn_for_prefix(
@@ -215,7 +211,7 @@ impl Witness {
             SerializationFormats::JSON,
         )?;
 
-        let signature = SelfSigningPrefix::Ed25519Sha512(signer.sign(&rpy.serialize()?)?);
+        let signature = SelfSigningPrefix::Ed25519Sha512(signer.sign(rpy.serialize()?)?);
         Ok(SignedReply::new_nontrans(
             rpy,
             self.prefix.clone(),
@@ -270,7 +266,7 @@ impl Witness {
                 )?;
 
                 let signature =
-                    SelfSigningPrefix::Ed25519Sha512(self.signer.sign(&rpy.serialize()?)?);
+                    SelfSigningPrefix::Ed25519Sha512(self.signer.sign(rpy.serialize()?)?);
                 let reply = SignedReply::new_nontrans(rpy, self.prefix.clone(), signature);
                 Ok(Some(PossibleResponse::Ksn(reply)))
             }

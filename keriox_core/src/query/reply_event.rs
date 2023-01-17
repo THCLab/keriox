@@ -207,14 +207,13 @@ pub fn bada_logic(new_rpy: &SignedReply, old_rpy: &SignedReply) -> Result<(), Qu
                 } else {
                     return Err(QueryError::Error(
                         "Improper signature type. Should be transferable.".into(),
-                    )
-                    .into());
+                    ));
                 };
 
             match old_sn.cmp(&new_sn) {
                 Ordering::Less => Ok(()),
                 Ordering::Equal => check_dts(&new_rpy.reply, &old_rpy.reply),
-                Ordering::Greater => Err(QueryError::StaleRpy.into()),
+                Ordering::Greater => Err(QueryError::StaleRpy),
             }
         }
         Signature::Transferable(_, _sigs) => {

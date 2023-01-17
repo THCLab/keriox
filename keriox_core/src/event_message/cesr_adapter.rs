@@ -207,8 +207,8 @@ impl TryFrom<Payload> for EventType {
     fn try_from(value: Payload) -> Result<Self, Self::Error> {
         let event: Result<EventType, _> = match value {
             Payload::JSON(event) => serde_json::from_slice(&event),
-            Payload::CBOR(event) => todo!(),
-            Payload::MGPK(event) => todo!(),
+            Payload::CBOR(_event) => todo!(),
+            Payload::MGPK(_event) => todo!(),
         };
         event.map_err(|e| Error::DeserializeError(e.to_string()))
     }
@@ -546,7 +546,7 @@ pub fn signed_exchange(exn: ExchangeMessage, attachments: Vec<Group>) -> Result<
         }
         _ => return Err(Error::SemanticError("Wrong attachment".into())),
     };
-    let data_signatures: Result<Vec<Signature>, Error> = 
+    let data_signatures: Result<Vec<Signature>, Error> =
         data_sigs.into_iter().fold(Ok(vec![]), |acc, group| {
             let mut signatures: Vec<Signature> = get_signatures(group)?;
             let mut sigs = acc?;
