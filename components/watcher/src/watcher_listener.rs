@@ -228,11 +228,7 @@ pub mod http_handlers {
                 sed.to_cesr().unwrap()
             })
             .collect();
-        // println!(
-        //     "\nSending {} oobi: {}",
-        //     &eid.to_str(),
-        //     String::from_utf8(oobis.clone()).unwrap_or_default()
-        // );
+
         Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())
             .body(String::from_utf8(oobis).unwrap()))
@@ -258,12 +254,6 @@ pub mod http_handlers {
                 sed.to_cesr().unwrap()
             })
             .collect();
-        // println!(
-        //     "\nSending {} obi from its watcher {}:\n{}",
-        //     cid.to_str(),
-        //     eid.to_str(),
-        //     String::from_utf8_lossy(&oobis)
-        // );
 
         Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())

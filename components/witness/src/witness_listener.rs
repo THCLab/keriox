@@ -217,11 +217,6 @@ pub mod http_handlers {
             .try_collect()
             .map_err(ActorError::KeriError)?;
 
-        // println!(
-        //     "\nSending {} oobi: \n {}",
-        //     &eid.to_str(),
-        //     String::from_utf8(oobis.clone()).unwrap_or_default()
-        // );
         Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())
             .body(String::from_utf8(oobis).unwrap()))
@@ -262,13 +257,6 @@ pub mod http_handlers {
             .flat_map(|not| Message::Notice(not).to_cesr().unwrap())
             .chain(oobis)
             .collect();
-
-        // println!(
-        //     "\nSending {} obi from its witness {}:\n{}",
-        //     cid.to_str(),
-        //     eid.to_str(),
-        //     String::from_utf8_lossy(&res)
-        // );
 
         Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())
