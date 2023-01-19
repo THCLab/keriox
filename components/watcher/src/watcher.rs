@@ -46,7 +46,7 @@ impl WatcherData {
         let signer = Arc::new(
             priv_key
                 .map(|key| Signer::new_with_seed(&key.parse()?))
-                .unwrap_or(Ok(Signer::new()))?,
+                .unwrap_or_else(|| Ok(Signer::new()))?,
         );
         let mut oobi_path = PathBuf::new();
         oobi_path.push(event_db_path);
@@ -62,7 +62,7 @@ impl WatcherData {
 
         let prefix = BasicPrefix::Ed25519NT(signer.public_key()); // watcher uses non transferable key
         let processor = BasicProcessor::new(db.clone(), Some(notification_bus));
-        let storage = EventStorage::new(db.clone());
+        let storage = EventStorage::new(db);
         // construct witness loc scheme oobi
         let loc_scheme = LocationScheme::new(
             IdentifierPrefix::Basic(prefix.clone()),
@@ -182,7 +182,7 @@ impl WatcherData {
                     .flatten()
                     .collect_vec();
 
-                if escrowed_replies.len() > 0 {
+                if !escrowed_replies.is_empty() {
                     // If there is an escrowed reply it means we don't have the most recent data.
                     // In this case forward the query to witness.
                     self.forward_query(&qry).await?;
@@ -327,7 +327,7 @@ impl WatcherData {
                     .choose(&mut rand::thread_rng())
                     .cloned()
             })
-            .ok_or_else(|| ActorError::NoIdentState { prefix: id })?;
+            .ok_or(ActorError::NoIdentState { prefix: id })?;
         Ok(wit_id)
     }
 
@@ -352,8 +352,7 @@ impl WatcherData {
     pub fn parse_and_process_notices(&self, input_stream: &[u8]) -> Result<(), Error> {
         parse_notice_stream(input_stream)?
             .into_iter()
-            .map(|notice| self.process_notice(notice))
-            .collect()
+            .try_for_each(|notice| self.process_notice(notice))
     }
 
     pub async fn parse_and_process_queries(

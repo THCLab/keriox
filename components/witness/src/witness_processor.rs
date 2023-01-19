@@ -48,7 +48,7 @@ impl WitnessProcessor {
             Duration::from_secs(10),
         ));
         bus.register_observer(
-            partially_signed_escrow.clone(),
+            partially_signed_escrow,
             vec![JustNotification::PartiallySigned],
         );
         let out_of_order_escrow = Arc::new(OutOfOrderEscrow::new(
@@ -57,7 +57,7 @@ impl WitnessProcessor {
             Duration::from_secs(10),
         ));
         bus.register_observer(
-            out_of_order_escrow.clone(),
+            out_of_order_escrow,
             vec![
                 JustNotification::OutOfOrder,
                 JustNotification::KeyEventAdded,
@@ -65,11 +65,11 @@ impl WitnessProcessor {
         );
         let deleating_escrow = Arc::new(DelegationEscrow::new(
             db.clone(),
-            escrow_db.clone(),
+            escrow_db,
             Duration::from_secs(10),
         ));
         bus.register_observer(
-            deleating_escrow.clone(),
+            deleating_escrow,
             vec![
                 JustNotification::MissingDelegatingEvent,
                 JustNotification::KeyEventAdded,

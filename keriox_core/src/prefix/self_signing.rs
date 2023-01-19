@@ -1,12 +1,13 @@
 use core::{fmt, str::FromStr};
 
+use cesrox::{
+    conversion::from_text_to_bytes,
+    derivation_code::DerivationCode,
+    primitives::codes::{self_signing::SelfSigning, PrimitiveCode},
+};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use super::{error::Error, CesrPrimitive};
-use crate::event_parsing::{
-    codes::{self_signing::SelfSigning, DerivationCode, PrimitiveCode},
-    parsing::from_text_to_bytes,
-};
 
 /// Self Signing Derivations
 ///

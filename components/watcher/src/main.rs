@@ -5,9 +5,8 @@ use figment::{
     Figment,
 };
 use keri::{
-    event_parsing::primitives::CesrPrimitive,
     oobi::{LocationScheme, Scheme},
-    prefix::IdentifierPrefix,
+    prefix::{CesrPrimitive, IdentifierPrefix},
 };
 use serde::Deserialize;
 use structopt::StructOpt;

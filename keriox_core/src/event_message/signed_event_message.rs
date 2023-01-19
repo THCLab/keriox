@@ -1,8 +1,8 @@
+use cesrox::{group::Group, ParsedData};
 use serde::{ser::SerializeStruct, Deserialize, Serialize};
 
 use super::{
-    cesr_adapter::ParsedEvent, key_event_message::KeyEvent, serializer::to_string,
-    signature::Nontransferable, EventMessage,
+    key_event_message::KeyEvent, serializer::to_string, signature::Nontransferable, EventMessage,
 };
 #[cfg(feature = "query")]
 use crate::query::{query_event::SignedQuery, reply_event::SignedReply};
@@ -12,7 +12,6 @@ use crate::{
         receipt::Receipt,
         sections::seal::{EventSeal, SourceSeal},
     },
-    event_parsing::{group::Group, ParsedData},
     prefix::{AttachedSignaturePrefix, IdentifierPrefix},
     state::{EventSemantics, IdentifierState},
 };
@@ -45,7 +44,7 @@ pub enum Op {
     Query(SignedQuery),
 }
 
-impl From<Message> for ParsedEvent {
+impl From<Message> for ParsedData {
     fn from(message: Message) -> Self {
         match message {
             Message::Notice(notice) => ParsedData::from(notice),
@@ -54,7 +53,7 @@ impl From<Message> for ParsedEvent {
     }
 }
 
-impl From<Notice> for ParsedEvent {
+impl From<Notice> for ParsedData {
     fn from(notice: Notice) -> Self {
         match notice {
             Notice::Event(event) => ParsedData::from(&event),
@@ -64,7 +63,7 @@ impl From<Notice> for ParsedEvent {
     }
 }
 
-impl From<Op> for ParsedEvent {
+impl From<Op> for ParsedData {
     fn from(op: Op) -> Self {
         match op {
             #[cfg(feature = "query")]
@@ -161,7 +160,7 @@ impl Serialize for SignedEventMessage {
                                 .into_iter()
                                 .map(|(bp, sp)| ((bp.clone()).into(), (sp.clone()).into()))
                                 .collect();
-                            Group::NontransferableReceiptCouples(couples).to_cesr_str()
+                            Group::NontransReceiptCouples(couples).to_cesr_str()
                         }
                     })
                     .collect::<Vec<_>>()
@@ -273,15 +272,15 @@ impl SignedNontransferableReceipt {
 pub mod tests {
     use std::convert::TryFrom;
 
+    use cesrox::{parse, ParsedData};
+
     use crate::{
         actor::prelude::Message,
         error::Error,
         event_message::{
-            cesr_adapter::ParsedEvent,
             signature::Nontransferable,
             signed_event_message::{Notice, Op},
         },
-        event_parsing::parsers::parse,
     };
 
     #[test]
@@ -357,7 +356,7 @@ pub mod tests {
 
         // takien from keripy/tests/core/test_witness.py::test_indexed_witness_reply
         let witness_receipts = br#"{"v":"KERI10JSON000091_","t":"rct","d":"EHz9RXAr9JiJn-3wkBvsUo1Qq3hvMQPaITxzcfJND8NM","i":"EHz9RXAr9JiJn-3wkBvsUo1Qq3hvMQPaITxzcfJND8NM","s":"0"}-BADAAdgQkf11JTyF2WVA1Vji1ZhXD8di4AJsfro-sN_jURM1SUioeOleik7w8lkDldKtg0-Nr1X32V9Q8tk8RvBGxDgABZmkRun-qNliRA8WR2fIUnVeB8eFLF7aLFtn2hb31iW7wYSYafR0kT3fV_r1wNNdjm9dkBw-_2xsxThTGfO5UAwACRGJiRPFe4ClvpqZL3LHcEAeT396WVrYV10EaTdt0trINT8rPbz96deSFT32z3myNPVwLlNcq4FzIaQCooM2HDQ"#;
-        let parsed_witness_receipt: ParsedEvent = parse(witness_receipts).unwrap().1;
+        let parsed_witness_receipt: ParsedData = parse(witness_receipts).unwrap().1;
 
         let msg = Message::try_from(parsed_witness_receipt);
         assert!(msg.is_ok());

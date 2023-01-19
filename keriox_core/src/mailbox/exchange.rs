@@ -1,9 +1,10 @@
+use cesrox::cesr_proof::MaterialPath;
 use serde::{Deserialize, Serialize};
 
 use crate::event_message::timestamped::Timestamped;
 use crate::{
-    error::Error, event::SerializationFormats, event_parsing::path::MaterialPath,
-    prefix::IdentifierPrefix, sai::derivation::SelfAddressing,
+    error::Error, event::SerializationFormats, prefix::IdentifierPrefix,
+    sai::derivation::SelfAddressing,
 };
 
 use crate::event_message::{

@@ -3,13 +3,14 @@ use core::{fmt, str::FromStr};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use super::{error::Error, verify, SelfSigningPrefix};
-use crate::{
-    event_parsing::{
-        codes::{basic::Basic as CesrBasic, DerivationCode, PrimitiveCode},
-        parsing::from_text_to_bytes,
-        primitives::CesrPrimitive,
+use crate::keys::PublicKey;
+use cesrox::{
+    conversion::from_text_to_bytes,
+    derivation_code::DerivationCode,
+    primitives::{
+        codes::{basic::Basic as CesrBasic, PrimitiveCode},
+        CesrPrimitive,
     },
-    keys::PublicKey,
 };
 
 #[derive(Clone, Eq, PartialEq, Hash)]
@@ -33,11 +34,11 @@ impl fmt::Debug for BasicPrefix {
 impl BasicPrefix {
     pub fn new(code: CesrBasic, public_key: PublicKey) -> Self {
         match code {
-            CesrBasic::ECDSAsecp256k1NT => Self::ECDSAsecp256k1NT(public_key),
+            CesrBasic::ECDSAsecp256k1Nontrans => Self::ECDSAsecp256k1NT(public_key),
             CesrBasic::ECDSAsecp256k1 => Self::ECDSAsecp256k1(public_key),
-            CesrBasic::Ed25519NT => Self::Ed25519NT(public_key),
+            CesrBasic::Ed25519Nontrans => Self::Ed25519NT(public_key),
             CesrBasic::Ed25519 => Self::Ed25519(public_key),
-            CesrBasic::Ed448NT => Self::Ed448NT(public_key),
+            CesrBasic::Ed448Nontrans => Self::Ed448NT(public_key),
             CesrBasic::Ed448 => Self::Ed448(public_key),
             CesrBasic::X25519 => Self::X25519(public_key),
             CesrBasic::X448 => Self::X448(public_key),
@@ -62,11 +63,11 @@ impl BasicPrefix {
 
     pub fn get_code(&self) -> CesrBasic {
         match self {
-            BasicPrefix::ECDSAsecp256k1NT(_) => CesrBasic::ECDSAsecp256k1NT,
+            BasicPrefix::ECDSAsecp256k1NT(_) => CesrBasic::ECDSAsecp256k1Nontrans,
             BasicPrefix::ECDSAsecp256k1(_) => CesrBasic::ECDSAsecp256k1,
-            BasicPrefix::Ed25519NT(_) => CesrBasic::Ed25519NT,
+            BasicPrefix::Ed25519NT(_) => CesrBasic::Ed25519Nontrans,
             BasicPrefix::Ed25519(_) => CesrBasic::Ed25519,
-            BasicPrefix::Ed448NT(_) => CesrBasic::Ed448NT,
+            BasicPrefix::Ed448NT(_) => CesrBasic::Ed448Nontrans,
             BasicPrefix::Ed448(_) => CesrBasic::Ed448,
             BasicPrefix::X25519(_) => CesrBasic::X25519,
             BasicPrefix::X448(_) => CesrBasic::X448,

@@ -6,7 +6,6 @@ use controller::{
     utils::OptionalConfig, Controller,
 };
 use keri::{
-    event_parsing::codes::self_signing::SelfSigning,
     oobi::{EndRole, LocationScheme, Role},
     prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     signer::{CryptoBox, KeyManager},
@@ -135,10 +134,8 @@ async fn test_multisig() -> Result<()> {
         .add_watcher(IdentifierPrefix::Basic(watcher_id.clone()))
         .unwrap();
 
-    let add_watcher_sig = SelfSigningPrefix::new(
-        SelfSigning::Ed25519Sha512,
-        km1.sign(add_watcher.as_bytes()).unwrap(),
-    );
+    println!("add_watcher: {}", add_watcher);
+    let add_watcher_sig = SelfSigningPrefix::Ed25519Sha512(km1.sign(add_watcher.as_bytes())?);
 
     identifier1
         .finalize_event(add_watcher.as_bytes(), add_watcher_sig)

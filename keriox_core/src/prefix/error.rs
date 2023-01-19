@@ -20,7 +20,7 @@ pub enum Error {
     DeserializeError(String),
 
     #[error(transparent)]
-    ParseError(#[from] crate::event_parsing::error::Error),
+    ParseError(#[from] cesrox::error::Error),
 
     #[error("ED25519Dalek signature error")]
     Ed25519DalekSignatureError,

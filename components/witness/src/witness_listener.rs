@@ -175,7 +175,7 @@ mod test {
             Ok(resp)
         }
 
-        async fn resolve_oobi(&self, msg: keri::oobi::Oobi) -> Result<(), ActorError> {
+        async fn resolve_oobi(&self, _msg: keri::oobi::Oobi) -> Result<(), ActorError> {
             todo!()
         }
     }
@@ -192,8 +192,7 @@ pub mod http_handlers {
     use keri::{
         actor::{error::ActorError, prelude::Message},
         error::Error,
-        event_message::cesr_adapter::ParsedEvent,
-        event_parsing::primitives::CesrPrimitive,
+        event_message::signed_event_message::Op,
         oobi::Role,
         prefix::IdentifierPrefix,
     };
@@ -211,18 +210,13 @@ pub mod http_handlers {
         let oobis: Vec<u8> = loc_scheme
             .into_iter()
             .map(|sr| {
-                let sed: ParsedEvent = sr.into();
+                let sed = Message::Op(Op::Reply(sr));
                 sed.to_cesr().map_err(|_| Error::CesrError)
             })
             .flatten_ok()
             .try_collect()
             .map_err(ActorError::KeriError)?;
 
-        println!(
-            "\nSending {} oobi: \n {}",
-            &eid.to_str(),
-            String::from_utf8(oobis.clone()).unwrap_or_default()
-        );
         Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())
             .body(String::from_utf8(oobis).unwrap()))
@@ -244,32 +238,25 @@ pub mod http_handlers {
             .unwrap_or_default();
         // (for now) Append controller kel to be able to verify end role signature.
         // TODO use ksn instead
-        let cont_kel: Vec<_> = data
-            .event_storage
-            .get_kel_messages_with_receipts(&cid)
-            .map_err(ActorError::KeriError)?
-            .unwrap_or_default()
-            .into_iter()
-            .map(|not| Message::Notice(not).to_cesr().unwrap())
-            .flatten()
-            .collect();
         let oobis = end_role
             .into_iter()
             .chain(loc_scheme.into_iter())
             .map(|sr| {
-                let sed: ParsedEvent = sr.into();
+                let sed = Message::Op(Op::Reply(sr));
                 sed.to_cesr().map_err(|_| Error::CesrError)
             })
             .flatten_ok()
             .collect::<Result<Vec<_>, _>>()
             .map_err(ActorError::KeriError)?;
-        let res: Vec<u8> = cont_kel.into_iter().chain(oobis).collect();
-        println!(
-            "\nSending {} obi from its witness {}:\n{}",
-            cid.to_str(),
-            eid.to_str(),
-            String::from_utf8_lossy(&res)
-        );
+        let res: Vec<_> = data
+            .event_storage
+            .get_kel_messages_with_receipts(&cid)
+            .map_err(ActorError::KeriError)?
+            .unwrap_or_default()
+            .into_iter()
+            .flat_map(|not| Message::Notice(not).to_cesr().unwrap())
+            .chain(oobis)
+            .collect();
 
         Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())
