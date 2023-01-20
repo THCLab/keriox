@@ -51,37 +51,30 @@ impl IdentifierController {
     pub fn process_own_mailbox(
         &self,
         mb: &MailboxResponse,
-        from_index: &MailboxReminder,
     ) -> Result<Vec<ActionRequired>, ControllerError> {
-        mb.receipt
-            .iter()
-            .skip(from_index.receipt)
-            .try_for_each(|rct| self.process_receipt(rct))?;
-        mb.multisig
-            .iter()
-            .skip(from_index.multisig)
-            .map(|event| self.process_own_multisig(event))
-            .chain(
-                mb.delegate
-                    .iter()
-                    .skip(from_index.delegate)
-                    .map(|del_event| self.process_own_delegate(del_event))
-                    .filter_map(|del| match del {
-                        Ok(del) => del.map(Ok),
-                        Err(e) => Some(Err(e)),
-                    }),
-            )
-            .collect::<Result<Vec<_>, ControllerError>>()
+        for rct in &mb.receipt {
+            self.process_receipt(rct)?;
+        }
+
+        Iterator::chain(
+            mb.multisig
+                .iter()
+                .map(|event| self.process_own_multisig(event)),
+            mb.delegate
+                .iter()
+                .map(|del_event| self.process_own_delegate(del_event))
+                .filter_map(Result::transpose),
+        )
+        .collect()
     }
 
     pub async fn process_groups_mailbox(
         &self,
         groups: Vec<IdentifierPrefix>,
         mb: &MailboxResponse,
-        from_index: &MailboxReminder,
     ) -> Result<Vec<ActionRequired>, ControllerError> {
         futures::stream::iter(&groups)
-            .then(|group_id| self.process_group_mailbox(mb, group_id, from_index))
+            .then(|group_id| self.process_group_mailbox(mb, group_id))
             .try_concat()
             .await
     }
@@ -90,17 +83,16 @@ impl IdentifierController {
         &self,
         mb: &MailboxResponse,
         group_id: &IdentifierPrefix,
-        from_index: &MailboxReminder,
     ) -> Result<Vec<ActionRequired>, ControllerError> {
-        mb.receipt
-            .iter()
-            .skip(from_index.receipt)
-            .try_for_each(|rct| self.process_receipt(rct))?;
-        for event in mb.multisig.iter().skip(from_index.multisig) {
-            self.process_group_multisig(event).await?;
+        for rct in &mb.receipt {
+            self.process_receipt(rct)?;
         }
+
+        for event in mb.multisig.iter() {
+            self.process_group_multisig(&event).await?;
+        }
+
         futures::stream::iter(&mb.delegate)
-            .skip(from_index.delegate)
             .then(|del_event| self.process_group_delegate(del_event, group_id))
             .try_filter_map(|del| async move { Ok(del) })
             .try_collect::<Vec<_>>()

@@ -3,6 +3,7 @@ use std::{
     sync::Arc,
 };
 
+use az::SaturatingAs;
 use keri::{
     actor::{event_generator, prelude::Message, simple_controller::PossibleResponse, MaterialPath},
     event::{
@@ -476,6 +477,21 @@ impl IdentifierController {
         Ok(witnesses
             .iter()
             .map(|wit| {
+                let recipient = IdentifierPrefix::Basic(wit.clone());
+
+                let reminders = if identifier == &self.id {
+                    // request own mailbox
+                    &self.last_asked_index
+                } else {
+                    // request group mailbox
+                    &self.last_asked_groups_index
+                };
+
+                let reminder = reminders
+                    .get(&recipient)
+                    .cloned()
+                    .unwrap_or_default();
+
                 QueryEvent::new_query(
                     QueryRoute::Mbx {
                         args: QueryArgsMbx {
@@ -484,13 +500,13 @@ impl IdentifierController {
                             // who is asking
                             pre: self.id.clone(),
                             // who will get the query
-                            src: IdentifierPrefix::Basic(wit.clone()),
+                            src: recipient,
                             topics: QueryTopics {
                                 credential: 0,
-                                receipt: 0,
+                                receipt: reminder.receipt.saturating_as(),
                                 replay: 0,
-                                multisig: 0,
-                                delegate: 0,
+                                multisig: reminder.multisig.saturating_as(),
+                                delegate: reminder.delegate.saturating_as(),
                                 reply: 0,
                             },
                         },
@@ -544,36 +560,22 @@ impl IdentifierController {
     ) -> Result<Vec<ActionRequired>, ControllerError> {
         let req = if from_who == about_who {
             // process own mailbox
-            let reminder = self
-                .last_asked_index
-                .get(recipient)
-                .cloned()
-                .unwrap_or_default();
-            let req = self.process_own_mailbox(res, &reminder)?;
-
+            let req = self.process_own_mailbox(res)?;
             let mut reminder = self.last_asked_index.entry(recipient.clone()).or_default();
-            reminder.delegate = res.delegate.len();
-            reminder.multisig = res.multisig.len();
-            reminder.receipt = res.receipt.len();
+            reminder.delegate += res.delegate.len();
+            reminder.multisig += res.multisig.len();
+            reminder.receipt += res.receipt.len();
             req
         } else {
             // process group mailbox
-            let reminder = self
-                .last_asked_groups_index
-                .get(recipient)
-                .cloned()
-                .unwrap_or_default();
-            let group_req = self
-                .process_group_mailbox(res, about_who, &reminder)
-                .await?;
-
+            let group_req = self.process_group_mailbox(res, about_who).await?;
             let reminder = self
                 .last_asked_groups_index
                 .entry(recipient.clone())
                 .or_default();
-            reminder.delegate = res.delegate.len();
-            reminder.multisig = res.multisig.len();
-            reminder.receipt = res.receipt.len();
+            reminder.delegate += res.delegate.len();
+            reminder.multisig += res.multisig.len();
+            reminder.receipt += res.receipt.len();
             group_req
         };
         Ok(req)

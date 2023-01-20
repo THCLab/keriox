@@ -24,6 +24,7 @@ oobi = ["query", "url", "strum_macros", "strum", "reqwest"]
 mailbox = ["query"]
 
 [dependencies]
+az = "1.2.1"
 bytes = "1.3.0"
 http = "0.2.8"
 cesrox = { version = "0.1.3", features = ["cesr-proof"]}

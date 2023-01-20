@@ -204,7 +204,8 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
 
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(km2.sign(&qry.serialize()?)?);
-        delegator.finalize_query(vec![(qry, signature)]).await?;
+        let ar = delegator.finalize_query(vec![(qry, signature)]).await?;
+        assert!(ar.is_empty());
     }
 
     // Generate delegated inception
@@ -265,9 +266,11 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
         ));
     }
 
+    // Query with correct signature
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(km2.sign(&qry.serialize()?)?);
-        delegator.finalize_query(vec![(qry, signature)]).await?;
+        let ar = delegator.finalize_query(vec![(qry, signature)]).await?;
+        assert_eq!(ar.len(), 1);
     }
     let data_signature = AttachedSignaturePrefix::new(signature_icp, 0);
 
