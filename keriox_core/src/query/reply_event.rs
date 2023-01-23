@@ -9,10 +9,10 @@ use crate::{
     error::Error,
     event::{sections::seal::EventSeal, EventMessage, SerializationFormats},
     event_message::{
-        dummy_event::DummyEventMessage,
+        dummy_event::DummyEvent,
         signature::{Nontransferable, Signature, SignerData},
         timestamped::Timestamped,
-        Digestible, EventTypeTag, SaidEvent, Typeable,
+        Digestible, EventTypeTag, SaidEvent, Typeable, msg::KeriEvent,
     },
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     query::QueryError,
@@ -155,12 +155,11 @@ impl ReplyEvent {
     }
 }
 
-impl ReplyEvent {
-    pub fn check_digest(&self) -> Result<(), Error> {
-        let dummy = DummyEventMessage::dummy_event(
-            self.event.clone(),
-            self.serialization_info.kind,
-            self.event.get_digest().derivation,
+    pub fn check_digest<T: Serialize, D: Serialize + Clone + Typeable<TypeTag = T>>(event: &KeriEvent<SaidEvent<D>>) -> Result<(), Error> {
+        let dummy: Vec<u8> = DummyEvent::dummy_event(
+            event.data.content.clone(),
+            event.serialization_info.kind,
+            event.data.get_digest().derivation,
         )?
         .serialize()?;
         self.event
@@ -169,7 +168,6 @@ impl ReplyEvent {
             .then(|| ())
             .ok_or(Error::IncorrectDigest)
     }
-}
 
 #[cfg(feature = "query")]
 pub fn bada_logic(new_rpy: &SignedReply, old_rpy: &SignedReply) -> Result<(), QueryError> {

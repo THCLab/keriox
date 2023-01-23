@@ -2,15 +2,15 @@ use crate::{
     error::Error,
     event::{
         event_data::{DelegatedInceptionEvent, EventData, InceptionEvent},
-        SerializationFormats,
     },
     sai::derivation::SelfAddressing,
 };
 
-use super::{serialization_info::SerializationInfo, EventTypeTag, Typeable};
+use super::{EventTypeTag, Typeable};
 use cesrox::primitives::codes::self_addressing::dummy_prefix;
 use serde::Serialize;
 use serde_hex::{Compact, SerHex};
+use version::serialization_info::{SerializationInfo, SerializationFormats};
 
 /// Dummy Inception Event
 ///
@@ -56,9 +56,10 @@ impl DummyInceptionEvent {
         let derivation = derivation.into();
         Ok(Self {
             serialization_info: SerializationInfo::new(
+                ['K', 'E', 'R', 'I'],
                 format,
                 Self {
-                    serialization_info: SerializationInfo::new(format, 0),
+                    serialization_info: SerializationInfo::new(['K','E','R','I'], format, 0),
                     event_type: data.get_type(),
                     prefix: dummy_prefix(&derivation),
                     digest: dummy_prefix(&derivation),
@@ -77,12 +78,12 @@ impl DummyInceptionEvent {
     }
 
     pub fn serialize(&self) -> Result<Vec<u8>, Error> {
-        self.serialization_info.kind.encode(&self)
+        Ok(self.serialization_info.kind.encode(&self).unwrap())
     }
 }
 
 #[derive(Serialize, Debug, Clone)]
-pub(crate) struct DummyEventMessage<T: Serialize, D: Serialize> {
+pub(crate) struct DummyEvent<T: Serialize, D: Serialize> {
     #[serde(rename = "v")]
     pub serialization_info: SerializationInfo,
     #[serde(rename = "t")]
@@ -93,40 +94,19 @@ pub(crate) struct DummyEventMessage<T: Serialize, D: Serialize> {
     pub data: D,
 }
 
-impl<T: Serialize, D: Serialize + Typeable<TypeTag = T> + Clone> DummyEventMessage<T, D> {
-    pub fn dummy_event(
-        event: D,
-        format: SerializationFormats,
-        derivation: SelfAddressing,
-    ) -> Result<Self, Error> {
-        let cesr_derivation = derivation.clone().into();
-        Ok(Self {
-            serialization_info: SerializationInfo::new(
-                format,
-                Self::get_size(&event, format, derivation)?,
-            ),
-            event_type: event.get_type(),
-            data: event,
-            digest: dummy_prefix(&cesr_derivation),
-        })
-    }
-
-    fn get_size(
-        event: &D,
-        format: SerializationFormats,
-        derivation: SelfAddressing,
-    ) -> Result<usize, Error> {
-        Ok(Self {
-            serialization_info: SerializationInfo::new(format, 0),
-            event_type: event.get_type(),
-            data: event.clone(),
-            digest: dummy_prefix(&derivation.into()),
-        }
-        .serialize()?
-        .len())
-    }
-
+impl<T: Serialize, D: Serialize> DummyEvent<T, D> {
     pub fn serialize(&self) -> Result<Vec<u8>, Error> {
-        self.serialization_info.kind.encode(&self)
+        Ok(self.serialization_info.kind.encode(&self).unwrap())
+    }
+}
+
+impl<T: Serialize, D: Serialize + Typeable<TypeTag =  T>> DummyEvent<T, D> {
+    pub fn dummy_event(derivation: SelfAddressing, format: SerializationFormats, event: D) -> Result<Self, Error> {
+        let mut version = SerializationInfo::new_empty(['K', 'E', 'R', 'I'], format);
+        let dummy_prefix = dummy_prefix(&derivation.into());
+        let mut dummy_event = DummyEvent { serialization_info: version, event_type: event.get_type(), digest: dummy_prefix, data: event };
+        let event_len = dummy_event.serialize()?.len();
+        version.size = event_len;
+        Ok(dummy_event)
     }
 }

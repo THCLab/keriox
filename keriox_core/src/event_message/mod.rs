@@ -7,6 +7,7 @@ pub mod serializer;
 pub mod signature;
 pub mod signed_event_message;
 pub mod timestamped;
+pub mod msg;
 
 use std::cmp::Ordering;
 
@@ -15,7 +16,7 @@ use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize, Serializer};
 use serialization_info::*;
 
-use self::{dummy_event::DummyEventMessage, key_event_message::KeyEvent};
+use self::{dummy_event::DummyEvent, key_event_message::KeyEvent};
 
 pub trait Typeable {
     type TypeTag;
@@ -58,7 +59,7 @@ impl<T: Serialize, D: Serialize + Clone + Typeable<TypeTag = T>> SaidEvent<D> {
         derivation: SelfAddressing,
     ) -> Result<EventMessage<SaidEvent<D>>, Error> {
         let dummy_event =
-            DummyEventMessage::dummy_event(event.clone(), format, derivation.clone())?;
+            DummyEvent::dummy_event(event.clone(), format, derivation.clone())?;
         let digest = derivation.derive(&dummy_event.serialize()?);
 
         Ok(EventMessage {

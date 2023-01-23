@@ -9,7 +9,7 @@ use crate::{
 };
 
 use super::{
-    dummy_event::{DummyEventMessage, DummyInceptionEvent},
+    dummy_event::{DummyEvent, DummyInceptionEvent},
     signature::Nontransferable,
     signed_event_message::SignedEventMessage,
     Digestible, EventMessage, EventTypeTag, SaidEvent, Typeable,
@@ -35,13 +35,12 @@ impl EventSemantics for KeyEvent {
     }
 }
 
-impl From<EventMessage<KeyEvent>> for DummyEventMessage<EventTypeTag, Event> {
-    fn from(em: EventMessage<KeyEvent>) -> Self {
-        DummyEventMessage {
-            serialization_info: em.serialization_info,
-            event_type: em.event.get_type(),
-            digest: dummy_prefix(&em.event.get_digest().derivation.into()),
-            data: em.event.content,
+impl From<KeyEvent> for DummyEvent<EventTypeTag, Event> {
+    fn from(em: KeyEvent) -> Self {
+        DummyEvent {
+            event_type: em.get_type(),
+            digest: dummy_prefix(&em.get_digest().derivation.into()),
+            data: em.content,
         }
     }
 }
@@ -80,8 +79,9 @@ impl EventMessage<KeyEvent> {
             )?
             .serialize()?,
             _ => {
-                let dummy_event: DummyEventMessage<_, _> = self.clone().into();
-                dummy_event.serialize()?
+                let dummy_event: DummyEvent<_, _> = event.data.clone().into();
+                let msg = Message { serialization_info: event.serialization_info, data: dummy_event };
+                msg.serialize()?
             }
         })
     }

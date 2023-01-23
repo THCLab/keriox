@@ -26,7 +26,8 @@ mailbox = ["query"]
 [dependencies]
 bytes = "1.3.0"
 http = "0.2.8"
-cesrox = { version = "0.1.3", features = ["cesr-proof"] }
+cesrox = { version = "0.1.3", features = ["cesr-proof"]}
+version = { path = "../../cesrox/version"}
 ed25519-dalek = "1.0.1"
 k256 = { version = "0.9", features = ["ecdsa", "sha256", "zeroize"] }
 blake2 = "0.9.1"

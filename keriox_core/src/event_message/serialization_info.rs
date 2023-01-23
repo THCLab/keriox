@@ -69,6 +69,21 @@ impl SerializationInfo {
             self.size
         )
     }
+
+    pub fn new_empty(kind: SerializationFormats) -> Self {
+        Self {
+            // protocol_code: protocol,
+            major_version: 1,
+            minor_version: 0,
+            size: 0,
+            kind,
+        }
+    }
+
+    pub fn serialize(&self) -> Result<Vec<u8>, Error> {
+        self.kind.encode(self)
+    }
+
 }
 
 impl FromStr for SerializationInfo {
