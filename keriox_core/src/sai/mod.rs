@@ -1,6 +1,7 @@
 pub mod cesr_adapter;
 pub mod derivation;
 mod digest;
+pub mod sad;
 
 use core::{fmt, str::FromStr};
 
