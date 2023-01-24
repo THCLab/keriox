@@ -4,7 +4,7 @@ use super::{
 };
 use crate::{
     error::Error,
-    event::{sections::seal::Seal, Event},
+    event::{sections::seal::Seal, KeyEvent},
     event_message::{
         dummy_event::DummyInceptionEvent, key_event_message::KeyEvent, EventMessage, SaidEvent,
     },
@@ -60,7 +60,7 @@ impl InceptionEvent {
         let dummy_event =
             DummyInceptionEvent::dummy_inception_data(self.clone(), derivation.clone(), format)?;
         let digest = derivation.derive(&dummy_event.serialize()?);
-        let event = Event::new(
+        let event = KeyEvent::new(
             IdentifierPrefix::SelfAddressing(digest.clone()),
             0,
             EventData::Icp(self),

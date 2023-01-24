@@ -80,7 +80,7 @@ fn test_update_identifier_state(
         .with_keys(vec![current_key_pref.clone()])
         .with_next_keys(vec![next_key_prefix])
         .build()?;
-    let prefix = event_msg.event.get_prefix();
+    let prefix = event_msg.data.get_prefix();
 
     // Serialize event message before signing.
     let sed = event_msg.serialize()?;

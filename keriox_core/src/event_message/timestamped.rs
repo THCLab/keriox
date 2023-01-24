@@ -4,7 +4,7 @@ use version::serialization_info::SerializationFormats;
 
 use crate::{error::Error, sai::derivation::SelfAddressing};
 
-use super::{EventMessage, SaidEvent, Typeable};
+use super::{SaidEvent, Typeable, msg::KeriEvent};
 
 pub type TimeStamp = DateTime<FixedOffset>;
 
@@ -34,7 +34,7 @@ impl<T: Serialize, D: Serialize + Typeable<TypeTag = T> + Clone> Timestamped<D> 
         self,
         format: SerializationFormats,
         derivation: SelfAddressing,
-    ) -> Result<EventMessage<SaidEvent<Timestamped<D>>>, Error> {
+    ) -> Result<KeriEvent<Timestamped<D>>, Error> {
         SaidEvent::<Self>::to_message(self, format, derivation)
     }
 }

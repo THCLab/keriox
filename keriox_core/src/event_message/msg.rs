@@ -35,7 +35,6 @@ impl<T: Serialize, D: Serialize + Typeable<TypeTag = T> + Clone> KeriEvent<D> {
             &self.digest.derivation,
         )?
         .serialize()?;
-        println!("\ndummy: {}", String::from_utf8(dummy.clone()).unwrap());
         self
             .digest
             .verify_binding(&dummy)

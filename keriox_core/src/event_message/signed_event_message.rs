@@ -2,7 +2,7 @@ use cesrox::{group::Group, ParsedData};
 use serde::{ser::SerializeStruct, Deserialize, Serialize};
 
 use super::{
-    key_event_message::KeyEvent, serializer::to_string, signature::Nontransferable, EventMessage,
+    serializer::to_string, signature::Nontransferable, msg::KeriEvent,
 };
 #[cfg(feature = "query")]
 use crate::query::{query_event::SignedQuery, reply_event::SignedReply};
@@ -10,7 +10,7 @@ use crate::{
     error::Error,
     event::{
         receipt::Receipt,
-        sections::seal::{EventSeal, SourceSeal},
+        sections::seal::{EventSeal, SourceSeal}, KeyEvent,
     },
     prefix::{AttachedSignaturePrefix, IdentifierPrefix},
     state::{EventSemantics, IdentifierState},
@@ -94,9 +94,9 @@ impl Message {
 impl Notice {
     pub fn get_prefix(&self) -> IdentifierPrefix {
         match self {
-            Notice::Event(ev) => ev.event_message.event.get_prefix(),
-            Notice::NontransferableRct(rct) => rct.body.event.prefix.clone(),
-            Notice::TransferableRct(rct) => rct.body.event.prefix.clone(),
+            Notice::Event(ev) => ev.event_message.data.get_prefix(),
+            Notice::NontransferableRct(rct) => rct.body.data.prefix.clone(),
+            Notice::TransferableRct(rct) => rct.body.data.prefix.clone(),
         }
     }
 }
@@ -119,7 +119,7 @@ impl Op {
 // KERI serializer should be used to serialize this
 #[derive(Debug, Clone, Deserialize)]
 pub struct SignedEventMessage {
-    pub event_message: EventMessage<KeyEvent>,
+    pub event_message: KeriEvent<KeyEvent>,
     #[serde(skip_serializing)]
     pub signatures: Vec<AttachedSignaturePrefix>,
     #[serde(skip_serializing)]
@@ -194,7 +194,7 @@ impl PartialEq for SignedEventMessage {
 
 impl SignedEventMessage {
     pub fn new(
-        message: &EventMessage<KeyEvent>,
+        message: &KeriEvent<KeyEvent>,
         sigs: Vec<AttachedSignaturePrefix>,
         witness_receipts: Option<Vec<Nontransferable>>,
         delegator_seal: Option<SourceSeal>,
@@ -226,14 +226,14 @@ impl EventSemantics for SignedEventMessage {
 /// Mostly intended for use by Validators
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SignedTransferableReceipt {
-    pub body: EventMessage<Receipt>,
+    pub body: KeriEvent<Receipt>,
     pub validator_seal: EventSeal,
     pub signatures: Vec<AttachedSignaturePrefix>,
 }
 
 impl SignedTransferableReceipt {
     pub fn new(
-        message: EventMessage<Receipt>,
+        message: KeriEvent<Receipt>,
         event_seal: EventSeal,
         sigs: Vec<AttachedSignaturePrefix>,
     ) -> Self {
@@ -253,14 +253,14 @@ impl SignedTransferableReceipt {
 /// signatures
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SignedNontransferableReceipt {
-    pub body: EventMessage<Receipt>,
+    pub body: KeriEvent<Receipt>,
     // pub couplets: Option<Vec<(BasicPrefix, SelfSigningPrefix)>>,
     // pub indexed_sigs: Option<Vec<AttachedSignaturePrefix>>,
     pub signatures: Vec<Nontransferable>,
 }
 
 impl SignedNontransferableReceipt {
-    pub fn new(message: &EventMessage<Receipt>, signatures: Vec<Nontransferable>) -> Self {
+    pub fn new(message: &KeriEvent<Receipt>, signatures: Vec<Nontransferable>) -> Self {
         Self {
             body: message.clone(),
             signatures,

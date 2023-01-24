@@ -13,7 +13,7 @@ use crate::{
         dummy_event::DummyEvent,
         signature::{Nontransferable, Signature, SignerData},
         timestamped::Timestamped,
-        Digestible, EventTypeTag, SaidEvent, Typeable, msg::KeriEvent, EventMessage,
+        Digestible, EventTypeTag, SaidEvent, Typeable, msg::KeriEvent,
     },
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     query::QueryError,

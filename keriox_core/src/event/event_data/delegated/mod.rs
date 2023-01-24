@@ -5,7 +5,7 @@ use crate::event_message::key_event_message::KeyEvent;
 use crate::event_message::SaidEvent;
 use crate::{
     error::Error,
-    event::{Event, EventMessage, SerializationFormats},
+    event::{KeyEvent, EventMessage, SerializationFormats},
     prefix::IdentifierPrefix,
     sai::derivation::SelfAddressing,
     state::{EventSemantics, IdentifierState},
@@ -38,7 +38,7 @@ impl DelegatedInceptionEvent {
             format,
         )?;
         let digest = derivation.derive(&dummy_event.serialize()?);
-        let event = Event::new(
+        let event = KeyEvent::new(
             IdentifierPrefix::SelfAddressing(digest.clone()),
             0,
             EventData::Dip(self),

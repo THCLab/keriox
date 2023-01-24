@@ -9,15 +9,14 @@ use crate::{
     error::Error,
     event::{
         event_data::EventData,
-        sections::seal::{EventSeal, Seal},
+        sections::seal::{EventSeal, Seal}, KeyEvent,
     },
     event_message::{
-        key_event_message::KeyEvent,
         signature::{Nontransferable, Signature, SignerData},
         signed_event_message::{
             SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
         },
-        Digestible, EventMessage,
+        msg::KeriEvent,
     },
     prefix::{BasicPrefix, SelfSigningPrefix},
     state::{EventSemantics, IdentifierState},
@@ -63,9 +62,9 @@ impl EventValidator {
             Err(Error::SignatureVerificationError)
         } else {
             // check if there are enough receipts and escrow
-            let sn = signed_event.event_message.event.get_sn();
-            let prefix = &signed_event.event_message.event.get_prefix();
-            let digest = &signed_event.event_message.event.get_digest();
+            let sn = signed_event.event_message.data.get_sn();
+            let prefix = &signed_event.event_message.data.get_prefix();
+            let digest = &signed_event.event_message.get_digest();
 
             let (mut couplets, mut indexed) = (vec![], vec![]);
             match self.event_storage.get_nt_receipts(prefix, sn, digest)? {
@@ -103,7 +102,7 @@ impl EventValidator {
     ) -> Result<Option<IdentifierState>, Error> {
         if let Ok(Some(event)) = self
             .event_storage
-            .get_event_at_sn(&vrc.body.event.prefix, vrc.body.event.sn)
+            .get_event_at_sn(&vrc.body.data.prefix, vrc.body.data.sn)
         {
             let kp = self.event_storage.get_keys_at_event(
                 &vrc.validator_seal.prefix,
@@ -123,16 +122,16 @@ impl EventValidator {
         } else {
             Err(Error::MissingEvent)
         }?;
-        self.event_storage.get_state(&vrc.body.event.prefix)
+        self.event_storage.get_state(&vrc.body.data.prefix)
     }
 
     pub fn get_receipt_couplets(
         &self,
         rct: &SignedNontransferableReceipt,
     ) -> Result<Vec<(BasicPrefix, SelfSigningPrefix)>, Error> {
-        let id = rct.body.event.prefix.clone();
-        let sn = rct.body.event.sn;
-        let receipted_event_digest = rct.body.event.receipted_event_digest.clone();
+        let id = rct.body.data.prefix.clone();
+        let sn = rct.body.data.sn;
+        let receipted_event_digest = rct.body.data.receipted_event_digest.clone();
 
         let witnesses = self
             .event_storage
@@ -175,10 +174,10 @@ impl EventValidator {
         rct: &SignedNontransferableReceipt,
     ) -> Result<Option<IdentifierState>, Error> {
         // get event which is being receipted
-        let id = &rct.body.event.prefix.to_owned();
+        let id = &rct.body.data.prefix.to_owned();
         if let Ok(Some(event)) = self
             .event_storage
-            .get_event_at_sn(&rct.body.event.prefix, rct.body.event.sn)
+            .get_event_at_sn(&rct.body.data.prefix, rct.body.data.sn)
         {
             let serialized_event = event.signed_event_message.event_message.serialize()?;
             let signer_couplets = self.get_receipt_couplets(rct)?;
@@ -228,10 +227,10 @@ impl EventValidator {
         }
     }
 
-    fn apply_to_state(&self, event: &EventMessage<KeyEvent>) -> Result<IdentifierState, Error> {
+    fn apply_to_state(&self, event: &KeriEvent<KeyEvent>) -> Result<IdentifierState, Error> {
         // get state for id (TODO cache?)
         self.event_storage
-            .get_state(&event.event.get_prefix())
+            .get_state(&event.data.get_prefix())
             // get empty state if there is no state yet
             .map(|opt| opt.map_or_else(IdentifierState::default, |s| s))
             // process the event update
@@ -245,7 +244,7 @@ impl EventValidator {
     fn validate_seal(
         &self,
         seal: EventSeal,
-        delegated_event: &EventMessage<KeyEvent>,
+        delegated_event: &KeriEvent<KeyEvent>,
     ) -> Result<(), Error> {
         // Check if event of seal's prefix and sn is in db.
         if let Ok(Some(event)) = self.event_storage.get_event_at_sn(&seal.prefix, seal.sn) {
@@ -253,7 +252,7 @@ impl EventValidator {
             let data = match event
                 .signed_event_message
                 .event_message
-                .event
+                .data
                 .get_event_data()
             {
                 EventData::Rot(rot) => rot.data,
@@ -265,7 +264,7 @@ impl EventValidator {
             // Check if event seal list contains delegating event seal.
             if !data.iter().any(|s| match s {
                 Seal::Event(es) => delegated_event
-                    .check_digest(&es.event_digest)
+                    .compare_digest(&es.event_digest)
                     .unwrap_or(false),
                 _ => false,
             }) {
@@ -284,7 +283,7 @@ impl EventValidator {
         signed_event: &SignedEventMessage,
     ) -> Result<Option<EventSeal>, Error> {
         // If delegated event, check its delegator seal.
-        Ok(match signed_event.event_message.event.get_event_data() {
+        Ok(match signed_event.event_message.data.get_event_data() {
             EventData::Dip(dip) => {
                 let (sn, dig) = signed_event
                     .delegator_seal
@@ -300,7 +299,7 @@ impl EventValidator {
             EventData::Drt(_drt) => {
                 let delegator = self
                     .event_storage
-                    .get_state(&signed_event.event_message.event.get_prefix())?
+                    .get_state(&signed_event.event_message.data.get_prefix())?
                     .ok_or_else(|| {
                         Error::SemanticError("Missing state of delegated identifier".into())
                     })?
@@ -394,7 +393,7 @@ impl EventValidator {
             .signed_event_message
             .event_message;
         event_from_db
-            .check_digest(&ksn.state.last_event_digest)?
+            .compare_digest(&ksn.state.last_event_digest)?
             .then(|| ())
             .ok_or::<Error>(Error::IncorrectDigest)?;
 
@@ -456,7 +455,7 @@ fn test_validate_seal() -> Result<(), Error> {
     let parsed = parse(dip_raw).unwrap().1;
     let msg = Message::try_from(parsed).unwrap();
     if let Message::Notice(Notice::Event(dip)) = msg {
-        let delegated_event_digest = dip.event_message.event.get_digest();
+        let delegated_event_digest = dip.event_message.get_digest();
         // Construct delegating seal.
         let seal = EventSeal {
             prefix: delegator_id,

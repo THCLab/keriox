@@ -2,6 +2,7 @@ use cesrox::cesr_proof::MaterialPath;
 use serde::{Deserialize, Serialize};
 use version::serialization_info::SerializationFormats;
 
+use crate::event::KeyEvent;
 use crate::event_message::msg::KeriEvent;
 use crate::event_message::timestamped::Timestamped;
 use crate::{
@@ -10,7 +11,7 @@ use crate::{
 };
 
 use crate::event_message::{
-    key_event_message::KeyEvent, signature::Signature, EventMessage, EventTypeTag, SaidEvent,
+    signature::Signature, EventTypeTag, SaidEvent,
     Typeable,
 };
 
@@ -32,7 +33,7 @@ pub enum Exchange {
         #[serde(rename = "q")]
         args: FwdArgs,
         #[serde(rename = "a")]
-        to_forward: EventMessage<KeyEvent>,
+        to_forward: KeriEvent<KeyEvent>,
     },
 }
 

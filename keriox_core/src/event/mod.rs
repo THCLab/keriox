@@ -1,5 +1,5 @@
-use crate::event_message::key_event_message::KeyEvent;
-use crate::event_message::{EventTypeTag, SaidEvent, Typeable, EventMessage};
+use crate::event_message::msg::KeriEvent;
+use crate::event_message::{EventTypeTag, SaidEvent, Typeable};
 use crate::state::IdentifierState;
 use crate::{prefix::IdentifierPrefix, sai::derivation::SelfAddressing};
 use serde::{Deserialize, Serialize};
@@ -13,7 +13,7 @@ use crate::state::EventSemantics;
 use serde_hex::{Compact, SerHex};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct Event {
+pub struct KeyEvent {
     #[serde(rename = "i")]
     pub prefix: IdentifierPrefix,
 
@@ -24,9 +24,9 @@ pub struct Event {
     pub event_data: EventData,
 }
 
-impl Event {
+impl KeyEvent {
     pub fn new(prefix: IdentifierPrefix, sn: u64, event_data: EventData) -> Self {
-        Event {
+        KeyEvent {
             prefix,
             sn,
             event_data,
@@ -37,7 +37,7 @@ impl Event {
         self,
         format: SerializationFormats,
         derivation: SelfAddressing,
-    ) -> Result<EventMessage<KeyEvent>, Error> {
+    ) -> Result<KeriEvent<KeyEvent>, Error> {
         match (&self.prefix, self.event_data.clone()) {
             (IdentifierPrefix::SelfAddressing(_), EventData::Icp(icp)) => {
                 icp.incept_self_addressing(derivation.clone(), format)
@@ -45,19 +45,19 @@ impl Event {
             (IdentifierPrefix::SelfAddressing(_), EventData::Dip(dip)) => {
                 dip.incept_self_addressing(derivation.clone(), format)
             }
-            _ => SaidEvent::<Event>::to_message(self, format, derivation),
+            _ => KeriEvent::new(format, derivation, self)
         }
     }
 }
 
-impl Typeable for Event {
+impl Typeable for KeyEvent {
     type TypeTag = EventTypeTag;
     fn get_type(&self) -> EventTypeTag {
         self.event_data.get_type()
     }
 }
 
-impl EventSemantics for Event {
+impl EventSemantics for KeyEvent {
     fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
         match self.event_data {
             EventData::Icp(_) | EventData::Dip(_) => {
@@ -126,7 +126,7 @@ mod tests {
   \"a\": []
 }";
 
-        let event: Event = serde_json::from_str(event_str)?;
+        let event: KeyEvent = serde_json::from_str(event_str)?;
 
         print!("\n{}\n", serde_json::to_string(&event)?);
 

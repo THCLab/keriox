@@ -86,9 +86,9 @@ impl EventStorage {
                     .map(|event| {
                         let rcts_from_db = self
                             .get_nt_receipts(
-                                &event.signed_event_message.event_message.event.get_prefix(),
-                                event.signed_event_message.event_message.event.get_sn(),
-                                &event.signed_event_message.event_message.event.get_digest(),
+                                &event.signed_event_message.event_message.data.get_prefix(),
+                                event.signed_event_message.event_message.data.get_sn(),
+                                &event.signed_event_message.event_message.get_digest(),
                             )
                             .unwrap()
                             .map(Notice::NontransferableRct);
@@ -111,7 +111,7 @@ impl EventStorage {
         sn: u64,
     ) -> Result<Option<TimestampedSignedEventMessage>, Error> {
         if let Some(mut events) = self.db.get_kel_finalized_events(id) {
-            Ok(events.find(|event| event.signed_event_message.event_message.event.get_sn() == sn))
+            Ok(events.find(|event| event.signed_event_message.event_message.data.get_sn() == sn))
         } else {
             Ok(None)
         }
@@ -141,7 +141,7 @@ impl EventStorage {
 
     #[cfg(feature = "mailbox")]
     pub fn add_mailbox_receipt(&self, receipt: SignedNontransferableReceipt) -> Result<(), Error> {
-        let id = receipt.body.event.prefix.clone();
+        let id = receipt.body.data.prefix.clone();
         self.db.add_mailbox_receipt(receipt, &id)?;
 
         Ok(())
@@ -149,7 +149,7 @@ impl EventStorage {
 
     #[cfg(feature = "mailbox")]
     pub fn add_mailbox_reply(&self, reply: SignedEventMessage) -> Result<(), Error> {
-        let id = reply.event_message.event.get_prefix();
+        let id = reply.event_message.data.get_prefix();
         self.db.add_mailbox_reply(reply, &id)?;
 
         Ok(())
@@ -163,8 +163,10 @@ impl EventStorage {
         let receipt = self
             .db
             .get_mailbox_receipts(&id)
-            .map(|it| it.skip(args.topics.receipt).collect())
-            .unwrap_or_default();
+            .into_iter()
+            .flatten()
+            .filter(|rec| rec.body.data.sn >= args.topics.receipt)
+            .collect();
 
         let multisig = self
             .db
@@ -176,15 +178,21 @@ impl EventStorage {
             })
             .unwrap_or_default();
 
-        let delegate = self
-            .db
-            .get_mailbox_delegate(&id)
-            .map(|it| {
-                it.skip(args.topics.delegate)
-                    .map(|ev| ev.signed_event_message)
-                    .collect()
-            })
-            .unwrap_or_default();
+        let delegate = match self.db.get_mailbox_delegate(&id) {
+            Some(msgs) => msgs.map(|e| e.signed_event_message).collect(),
+            None => vec![],
+        };
+
+        let mut messages = vec![];
+        // query replies
+        messages.extend(
+            self.db
+                .get_mailbox_replies(&id)
+                .into_iter()
+                .flatten()
+                .filter(|rpy| rpy.event_message.data.get_sn() >= args.topics.reply)
+                .map(|rpy| Notice::Event(rpy)),
+        );
 
         // TODO: query and return the rest of topics
         Ok(MailboxResponse {
@@ -206,12 +214,12 @@ impl EventStorage {
         let mut last_est = None;
         if let Some(events) = self.db.get_kel_finalized_events(id) {
             for event in events {
-                state = state.apply(&event.signed_event_message.event_message.event)?;
+                state = state.apply(&event.signed_event_message.event_message.data)?;
                 // TODO: is this event.event.event stuff too ugly? =)
                 last_est = match event
                     .signed_event_message
                     .event_message
-                    .event
+                    .data
                     .get_event_data()
                 {
                     EventData::Icp(_) => Some(event.signed_event_message),
@@ -223,8 +231,8 @@ impl EventStorage {
             return Ok(None);
         }
         let seal = last_est.map(|event| EventSeal {
-            prefix: event.event_message.event.get_prefix(),
-            sn: event.event_message.event.get_sn(),
+            prefix: event.event_message.data.get_prefix(),
+            sn: event.event_message.data.get_sn(),
             event_digest: event.event_message.get_digest(),
         });
         Ok(seal)
@@ -246,7 +254,7 @@ impl EventStorage {
             sorted_events.sort();
             for event in sorted_events
                 .iter()
-                .filter(|e| e.signed_event_message.event_message.event.get_sn() <= sn)
+                .filter(|e| e.signed_event_message.event_message.data.get_sn() <= sn)
             {
                 state = state.apply(&event.signed_event_message.event_message)?;
             }
@@ -272,14 +280,14 @@ impl EventStorage {
             if event
                 .signed_event_message
                 .event_message
-                .check_digest(event_digest)?
+                .compare_digest(event_digest)?
             {
                 // return the config or error if it's not an establishment event
                 Ok(Some(
                     match event
                         .signed_event_message
                         .event_message
-                        .event
+                        .data
                         .get_event_data()
                     {
                         EventData::Icp(icp) => icp.key_config,
@@ -305,7 +313,7 @@ impl EventStorage {
     ) -> Result<bool, Error> {
         Ok(if let Some(receipts) = self.db.get_receipts_t(id) {
             receipts
-                .filter(|r| r.body.event.sn.eq(&sn))
+                .filter(|r| r.body.data.sn.eq(&sn))
                 .any(|receipt| receipt.validator_seal.prefix.eq(validator_pref))
         } else {
             false
@@ -320,7 +328,7 @@ impl EventStorage {
     ) -> Result<Option<SignedNontransferableReceipt>, Error> {
         match self.db.get_receipts_nt(prefix) {
             Some(events) => Ok(events
-                .filter(|rcp| rcp.body.event.sn == sn && &rcp.body.get_digest() == digest)
+                .filter(|rcp| rcp.body.data.sn == sn && &rcp.body.get_digest() == digest)
                 .reduce(|acc, rct| {
                     let mut new_signatures = acc.signatures;
                     new_signatures.append(&mut rct.signatures.clone());

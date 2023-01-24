@@ -3,7 +3,7 @@ use version::serialization_info::SerializationInfo;
 
 use crate::{
     error::Error,
-    event::{event_data::EventData, sections::seal::SourceSeal, Event},
+    event::{event_data::EventData, sections::seal::SourceSeal, KeyEvent},
     prefix::{AttachedSignaturePrefix, IdentifierPrefix},
     sai::SelfAddressingPrefix,
     state::{EventSemantics, IdentifierState},
@@ -13,41 +13,33 @@ use super::{
     dummy_event::{DummyEvent, DummyInceptionEvent},
     signature::Nontransferable,
     signed_event_message::SignedEventMessage,
-    Digestible, EventMessage, EventTypeTag, SaidEvent, Typeable,
+    Digestible, EventTypeTag, SaidEvent, Typeable, msg::KeriEvent,
 };
-
-pub type KeyEvent = SaidEvent<Event>;
 
 impl KeyEvent {
     pub fn get_sn(&self) -> u64 {
-        self.content.sn
+        self.sn
     }
     pub fn get_prefix(&self) -> IdentifierPrefix {
-        self.content.prefix.clone()
+        self.prefix.clone()
     }
     pub fn get_event_data(&self) -> EventData {
-        self.content.event_data.clone()
+        self.event_data.clone()
     }
 }
 
-impl EventSemantics for KeyEvent {
-    fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
-        self.content.apply_to(state)
-    }
-}
-
-impl From<KeyEvent> for DummyEvent<EventTypeTag, Event> {
-    fn from(em: KeyEvent) -> Self {
+impl From<KeriEvent<KeyEvent>> for DummyEvent<EventTypeTag, KeyEvent> {
+    fn from(em: KeriEvent<KeyEvent>) -> Self {
         DummyEvent {
             serialization_info: SerializationInfo::default(),
-            event_type: em.get_type(),
+            event_type: em.data.get_type(),
             digest: dummy_prefix(&em.get_digest().derivation.into()),
-            data: em.content,
+            data: em.data,
         }
     }
 }
 
-impl EventMessage<KeyEvent> {
+impl KeriEvent<KeyEvent> {
     pub fn sign(
         &self,
         sigs: Vec<AttachedSignaturePrefix>,
@@ -57,8 +49,8 @@ impl EventMessage<KeyEvent> {
         SignedEventMessage::new(self, sigs, witness_sigs, delegator_seal)
     }
 
-    pub fn check_digest(&self, sai: &SelfAddressingPrefix) -> Result<bool, Error> {
-        let self_dig = self.event.get_digest();
+    pub fn compare_digest(&self, sai: &SelfAddressingPrefix) -> Result<bool, Error> {
+        let self_dig = self.get_digest();
         if self_dig.derivation == sai.derivation {
             Ok(&self_dig == sai)
         } else {
@@ -67,39 +59,39 @@ impl EventMessage<KeyEvent> {
     }
 
     fn to_derivation_data(&self) -> Result<Vec<u8>, Error> {
-        Ok(match self.event.get_event_data() {
+        Ok(match self.data.get_event_data() {
             EventData::Icp(icp) => DummyInceptionEvent::dummy_inception_data(
                 icp,
-                self.event.get_digest().derivation,
+                self.get_digest().derivation,
                 self.serialization_info.kind,
             )?
             .serialize()?,
             EventData::Dip(dip) => DummyInceptionEvent::dummy_delegated_inception_data(
                 dip,
-                self.event.get_digest().derivation,
+                self.get_digest().derivation,
                 self.serialization_info.kind,
             )?
             .serialize()?,
             _ => {
-                let dummy_event: DummyEvent<_, _> = self.event.clone().into();
+                let dummy_event: DummyEvent<_, _> = self.clone().into();
                 dummy_event.serialize()?
             }
         })
     }
 }
 
-impl EventSemantics for EventMessage<KeyEvent> {
+impl EventSemantics for KeriEvent<KeyEvent> {
     fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
-        let check_event_digest = |ev: &EventMessage<KeyEvent>| -> Result<(), Error> {
-            ev.check_digest(&self.get_digest())?
+        let check_event_digest = |ev: &KeriEvent<KeyEvent>| -> Result<(), Error> {
+            ev.compare_digest(&self.get_digest())?
                 .then(|| ())
                 .ok_or(Error::IncorrectDigest)
         };
         // Update state.last with serialized current event message.
-        match self.event.get_event_data() {
+        match self.data.get_event_data() {
             EventData::Icp(_) | EventData::Dip(_) => {
                 if verify_identifier_binding(self)? {
-                    self.event.apply_to(IdentifierState {
+                    self.data.apply_to(IdentifierState {
                         last_event_digest: self.get_digest(),
                         ..state
                     })
@@ -120,7 +112,7 @@ impl EventSemantics for EventMessage<KeyEvent> {
                     // previous event hash binding and update state last, apply it
                     // to the state. It will return EventOutOfOrderError or
                     // EventDuplicateError in that cases.
-                    self.event.apply_to(state.clone()).and_then(|next_state| {
+                    self.data.apply_to(state.clone()).and_then(|next_state| {
                         if rot.previous_event_hash.eq(&state.last_event_digest) {
                             Ok(IdentifierState {
                                 last_event_digest: self.get_digest(),
@@ -134,7 +126,7 @@ impl EventSemantics for EventMessage<KeyEvent> {
                     })
                 }
             }
-            EventData::Drt(ref drt) => self.event.apply_to(state.clone()).and_then(|next_state| {
+            EventData::Drt(ref drt) => self.data.apply_to(state.clone()).and_then(|next_state| {
                 check_event_digest(self)?;
                 if state.delegator.is_none() {
                     Err(Error::SemanticError(
@@ -153,7 +145,7 @@ impl EventSemantics for EventMessage<KeyEvent> {
             }),
             EventData::Ixn(ref inter) => {
                 check_event_digest(self)?;
-                self.event.apply_to(state.clone()).and_then(|next_state| {
+                self.data.apply_to(state.clone()).and_then(|next_state| {
                     if inter.previous_event_hash.eq(&state.last_event_digest) {
                         Ok(IdentifierState {
                             last_event_digest: self.get_digest(),
@@ -170,24 +162,23 @@ impl EventSemantics for EventMessage<KeyEvent> {
     }
 }
 
-pub fn verify_identifier_binding(icp_event: &EventMessage<KeyEvent>) -> Result<bool, Error> {
-    let event_data = &icp_event.event.get_event_data();
+pub fn verify_identifier_binding(icp_event: &KeriEvent<KeyEvent>) -> Result<bool, Error> {
+    let event_data = &icp_event.data.get_event_data();
     match event_data {
-        EventData::Icp(icp) => match &icp_event.event.get_prefix() {
+        EventData::Icp(icp) => match &icp_event.data.get_prefix() {
             IdentifierPrefix::Basic(bp) => Ok(icp.key_config.public_keys.len() == 1
-                && bp
-                    == icp
+                && bp.eq(icp
                         .key_config
                         .public_keys
                         .first()
-                        .ok_or_else(|| Error::SemanticError("Missing public key".into()))?),
+                        .ok_or_else(|| Error::SemanticError("Missing public key".into()))?)),
             IdentifierPrefix::SelfAddressing(sap) => {
-                Ok(icp_event.check_digest(sap)? && icp_event.get_digest().eq(sap))
+                Ok(icp_event.compare_digest(sap)? && icp_event.get_digest().eq(sap))
             }
             IdentifierPrefix::SelfSigning(_ssp) => todo!(),
         },
-        EventData::Dip(_dip) => match &icp_event.event.get_prefix() {
-            IdentifierPrefix::SelfAddressing(sap) => icp_event.check_digest(sap),
+        EventData::Dip(_dip) => match &icp_event.data.get_prefix() {
+            IdentifierPrefix::SelfAddressing(sap) => icp_event.compare_digest(sap),
             _ => todo!(),
         },
         _ => Err(Error::SemanticError("Not an ICP or DIP event".into())),

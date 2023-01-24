@@ -3,7 +3,7 @@ use version::serialization_info::SerializationFormats;
 
 use crate::{
     error::Error,
-    event_message::{timestamped::Timestamped, EventTypeTag, SaidEvent, Typeable, EventMessage},
+    event_message::{timestamped::Timestamped, EventTypeTag, SaidEvent, Typeable, msg::KeriEvent},
     prefix::{AttachedSignaturePrefix, IdentifierPrefix},
     sai::derivation::SelfAddressing,
 };
@@ -87,7 +87,7 @@ pub struct QueryArgs {
     pub src: Option<IdentifierPrefix>,
 }
 
-pub type QueryEvent = EventMessage<SaidEvent<Timestamped<Query>>>;
+pub type QueryEvent = KeriEvent<Timestamped<Query>>;
 
 impl QueryEvent {
     pub fn new_query(
@@ -102,11 +102,11 @@ impl QueryEvent {
     }
 
     pub fn get_query_data(&self) -> Query {
-        self.event.content.data.clone()
+        self.data.data.clone()
     }
 
     pub fn get_prefix(&self) -> IdentifierPrefix {
-        self.event.content.data.route.get_prefix()
+        self.data.data.route.get_prefix()
     }
 }
 
@@ -145,7 +145,7 @@ fn test_query_deserialize() {
     let qr: QueryEvent = serde_json::from_str(input_query).unwrap();
 
     assert!(matches!(
-        qr.event.content.data,
+        qr.data.data,
         Query {
             route: QueryRoute::Log { .. },
             ..
@@ -164,7 +164,7 @@ fn test_query_mbx_deserialize() {
     let qr: QueryEvent = serde_json::from_str(input_query).unwrap();
 
     assert!(matches!(
-        qr.event.content.data,
+        qr.data.data,
         Query {
             route: QueryRoute::Mbx {
                 args: QueryArgsMbx {

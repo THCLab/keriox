@@ -46,7 +46,7 @@ fn test_process() -> Result<(), Error> {
     let deserialized_icp = Message::try_from(parsed).unwrap();
 
     let id = match &deserialized_icp {
-        Message::Notice(Notice::Event(e)) => e.event_message.event.get_prefix(),
+        Message::Notice(Notice::Event(e)) => e.event_message.data.get_prefix(),
         _ => Err(Error::SemanticError("bad deser".into()))?,
     };
 
@@ -93,8 +93,8 @@ fn test_process() -> Result<(), Error> {
     let ixn_from_db = event_storage.get_event_at_sn(&id, 2).unwrap().unwrap();
     match deserialized_ixn {
         Message::Notice(Notice::Event(evt)) => assert_eq!(
-            ixn_from_db.signed_event_message.event_message.event,
-            evt.event_message.event
+            ixn_from_db.signed_event_message.event_message.data,
+            evt.event_message.data
         ),
         _ => assert!(false),
     }
@@ -378,8 +378,8 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
         .unwrap();
     // {"v":"KERI10JSON0001e7_","t":"icp","d":"EKkedrfoZz54Xsb_lGGdKTkYqNMf6TMrX1x57M1j0yi3","i":"EKkedrfoZz54Xsb_lGGdKTkYqNMf6TMrX1x57M1j0yi3","s":"0","kt":"1","k":["DErocgXD2RGSyvn3MObcx59jeOsEQhv2TqHirVkzrp0Q"],"nt":"2","n":["EIQsSW4KMrLzY1HQI9H_XxY6MyzhaFFXhG6fdBb5Wxta","EHuvLs1hmwxo4ImDoCpaAermYVQhiPsPDNaZsz4bcgko","EDJk5EEpC4-tQ7YDwBiKbpaZahh1QCyQOnZRF7p2i8k8","EAXfDjKvUFRj-IEB_o4y-Y_qeJAjYfZtOMD9e7vHNFss","EN8l6yJC2PxribTN0xfri6bLz34Qvj-x3cNwcV3DvT2m"],"bt":"0","b":[],"c":[],"a":[]}
 
-    let id_prefix = icp.event.get_prefix();
-    let icp_digest = icp.event.get_digest();
+    let id_prefix = icp.data.get_prefix();
+    let icp_digest = icp.get_digest();
     assert_eq!(
         id_prefix,
         IdentifierPrefix::SelfAddressing(icp_digest.clone())
@@ -422,7 +422,7 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
         .with_next_threshold(&SignatureThreshold::Simple(4))
         .build()?;
 
-    let rot_digest = rotation.event.get_digest();
+    let rot_digest = rotation.get_digest();
 
     let signatures = current_signers
         .iter()
@@ -522,8 +522,8 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
         .build()
         .unwrap();
 
-    let id_prefix = icp.event.get_prefix();
-    let icp_digest = icp.event.get_digest();
+    let id_prefix = icp.data.get_prefix();
+    let icp_digest = icp.get_digest();
     assert_eq!(
         id_prefix,
         IdentifierPrefix::SelfAddressing(icp_digest.clone())
@@ -577,7 +577,7 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
         ]))
         .build()?;
 
-    let rot_digest = rotation.event.get_digest();
+    let rot_digest = rotation.get_digest();
 
     let signatures = current_signers
         .iter()

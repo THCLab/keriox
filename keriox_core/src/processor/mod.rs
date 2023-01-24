@@ -115,11 +115,11 @@ impl EventProcessor {
                 // check if receipts are attached
                 if let Some(witness_receipts) = &signed_event.witness_receipts {
                     // Create and process witness receipts
-                    let id = signed_event.event_message.event.get_prefix();
+                    let id = signed_event.event_message.data.get_prefix();
                     let receipt = Receipt {
                         receipted_event_digest: signed_event.event_message.get_digest(),
                         prefix: id,
-                        sn: signed_event.event_message.event.get_sn(),
+                        sn: signed_event.event_message.data.get_sn(),
                     };
                     let signed_receipt = SignedNontransferableReceipt::new(
                         &receipt.to_message(SerializationFormats::JSON).unwrap(),
@@ -134,7 +134,7 @@ impl EventProcessor {
                 }
             }
             Notice::NontransferableRct(rct) => {
-                let id = &rct.body.event.prefix;
+                let id = &rct.body.data.prefix;
                 match self.validator.validate_witness_receipt(rct) {
                     Ok(_) => {
                         self.db.add_receipt_nt(rct.to_owned(), id)?;
@@ -148,7 +148,7 @@ impl EventProcessor {
             }
             Notice::TransferableRct(vrc) => match self.validator.validate_validator_receipt(vrc) {
                 Ok(_) => {
-                    self.db.add_receipt_t(vrc.clone(), &vrc.body.event.prefix)?;
+                    self.db.add_receipt_t(vrc.clone(), &vrc.body.data.prefix)?;
                     self.publisher.notify(&Notification::ReceiptAccepted)
                 }
                 Err(Error::MissingEvent) | Err(Error::EventOutOfOrderError) => self

@@ -34,7 +34,7 @@ use super::{
         Message, Notice, Op, SignedEventMessage, SignedNontransferableReceipt,
         SignedTransferableReceipt,
     },
-    Digestible, EventMessage, Typeable, msg::KeriEvent,
+    Digestible, Typeable, msg::KeriEvent,
 };
 
 pub fn parse_event_type(input: &[u8]) -> Result<EventType, Error> {
@@ -47,8 +47,8 @@ pub fn parse_event_type(input: &[u8]) -> Result<EventType, Error> {
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 #[serde(untagged)]
 pub enum EventType {
-    KeyEvent(EventMessage<KeyEvent>),
-    Receipt(EventMessage<Receipt>),
+    KeyEvent(KeriEvent<KeyEvent>),
+    Receipt(KeriEvent<Receipt>),
     #[cfg(feature = "mailbox")]
     Exn(ExchangeMessage),
     #[cfg(feature = "query")]
@@ -112,25 +112,7 @@ impl From<&SignedEventMessage> for ParsedData {
     }
 }
 
-impl<T: Serialize, D: Digestible + Typeable<TypeTag = T> + Serialize + Clone> From<EventMessage<D>>
-    for Payload
-{
-    fn from(pd: EventMessage<D>) -> Self {
-        match pd.serialization_info.kind {
-            SerializationFormats::JSON => {
-                Payload::JSON(pd.serialize().unwrap())
-            }
-            SerializationFormats::MGPK => {
-                Payload::MGPK(pd.serialize().unwrap())
-            }
-            SerializationFormats::CBOR => {
-                Payload::CBOR(pd.serialize().unwrap())
-            }
-        }
-    }
-}
-
-impl<T: Serialize, D: Typeable<TypeTag = T> + Serialize + Clone> From<KeriEvent<D>>
+impl<T: Serialize, D:  Typeable<TypeTag = T> + Serialize + Clone> From<KeriEvent<D>>
     for Payload
 {
     fn from(pd: KeriEvent<D>) -> Self {
@@ -387,10 +369,10 @@ fn signed_query(qry: QueryEvent, mut attachments: Vec<Group>) -> Result<Op, Erro
 }
 
 fn signed_key_event(
-    event_message: EventMessage<KeyEvent>,
+    event_message: KeriEvent<KeyEvent>,
     mut attachments: Vec<Group>,
 ) -> Result<Notice, Error> {
-    match event_message.event.get_event_data() {
+    match event_message.data.get_event_data() {
         EventData::Dip(_) | EventData::Drt(_) => {
             let (att1, att2) = (
                 attachments
@@ -488,7 +470,7 @@ fn signed_key_event(
 }
 
 fn signed_receipt(
-    event_message: EventMessage<Receipt>,
+    event_message: KeriEvent<Receipt>,
     mut attachments: Vec<Group>,
 ) -> Result<Notice, Error> {
     let nontransferable = attachments
