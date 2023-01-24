@@ -1,9 +1,9 @@
 use crate::event_message::key_event_message::KeyEvent;
-pub use crate::event_message::{serialization_info::SerializationFormats, EventMessage};
-use crate::event_message::{EventTypeTag, SaidEvent, Typeable};
+use crate::event_message::{EventTypeTag, SaidEvent, Typeable, EventMessage};
 use crate::state::IdentifierState;
 use crate::{prefix::IdentifierPrefix, sai::derivation::SelfAddressing};
 use serde::{Deserialize, Serialize};
+use version::serialization_info::SerializationFormats;
 pub mod event_data;
 pub mod receipt;
 pub mod sections;

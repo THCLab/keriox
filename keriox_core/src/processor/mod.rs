@@ -11,6 +11,8 @@ mod processor_tests;
 
 pub mod validator;
 
+use version::serialization_info::SerializationFormats;
+
 use self::{
     notification::{JustNotification, Notification, NotificationBus, Notifier},
     validator::EventValidator,
@@ -20,7 +22,7 @@ use crate::query::reply_event::{ReplyRoute, SignedReply};
 use crate::{
     database::{timestamped::TimestampedSignedEventMessage, SledEventDatabase},
     error::Error,
-    event::{receipt::Receipt, SerializationFormats},
+    event::{receipt::Receipt},
     event_message::signed_event_message::{
         Notice, SignedEventMessage, SignedNontransferableReceipt,
     },

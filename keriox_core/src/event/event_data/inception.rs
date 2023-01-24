@@ -6,14 +6,14 @@ use crate::{
     error::Error,
     event::{sections::seal::Seal, Event},
     event_message::{
-        dummy_event::DummyInceptionEvent, key_event_message::KeyEvent,
-        serialization_info::SerializationFormats, EventMessage, SaidEvent,
+        dummy_event::DummyInceptionEvent, key_event_message::KeyEvent, EventMessage, SaidEvent,
     },
     prefix::IdentifierPrefix,
     sai::derivation::SelfAddressing,
     state::{EventSemantics, IdentifierState, LastEstablishmentData},
 };
 use serde::{Deserialize, Serialize};
+use version::serialization_info::SerializationFormats;
 
 /// Inception Event
 ///

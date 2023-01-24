@@ -1,4 +1,5 @@
 use cesrox::primitives::codes::self_addressing::dummy_prefix;
+use version::serialization_info::SerializationInfo;
 
 use crate::{
     error::Error,
@@ -38,6 +39,7 @@ impl EventSemantics for KeyEvent {
 impl From<KeyEvent> for DummyEvent<EventTypeTag, Event> {
     fn from(em: KeyEvent) -> Self {
         DummyEvent {
+            serialization_info: SerializationInfo::default(),
             event_type: em.get_type(),
             digest: dummy_prefix(&em.get_digest().derivation.into()),
             data: em.content,
@@ -79,9 +81,8 @@ impl EventMessage<KeyEvent> {
             )?
             .serialize()?,
             _ => {
-                let dummy_event: DummyEvent<_, _> = event.data.clone().into();
-                let msg = Message { serialization_info: event.serialization_info, data: dummy_event };
-                msg.serialize()?
+                let dummy_event: DummyEvent<_, _> = self.event.clone().into();
+                dummy_event.serialize()?
             }
         })
     }

@@ -1,9 +1,10 @@
 use chrono::{DateTime, FixedOffset, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize, Serializer};
+use version::serialization_info::SerializationFormats;
 
 use crate::{error::Error, sai::derivation::SelfAddressing};
 
-use super::{serialization_info::SerializationFormats, EventMessage, SaidEvent, Typeable};
+use super::{EventMessage, SaidEvent, Typeable};
 
 pub type TimeStamp = DateTime<FixedOffset>;
 

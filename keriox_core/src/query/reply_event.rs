@@ -1,18 +1,19 @@
 use cesrox::primitives::CesrPrimitive;
 use chrono::{DateTime, FixedOffset};
 use serde::{de, ser::SerializeStruct, Deserialize, Deserializer, Serialize, Serializer};
+use version::serialization_info::SerializationFormats;
 
 use super::key_state_notice::KeyStateNotice;
 #[cfg(feature = "oobi")]
 use crate::oobi::{EndRole, LocationScheme};
 use crate::{
     error::Error,
-    event::{sections::seal::EventSeal, EventMessage, SerializationFormats},
+    event::{sections::seal::EventSeal},
     event_message::{
         dummy_event::DummyEvent,
         signature::{Nontransferable, Signature, SignerData},
         timestamped::Timestamped,
-        Digestible, EventTypeTag, SaidEvent, Typeable, msg::KeriEvent,
+        Digestible, EventTypeTag, SaidEvent, Typeable, msg::KeriEvent, EventMessage,
     },
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     query::QueryError,
@@ -121,7 +122,7 @@ impl<'de> Deserialize<'de> for ReplyRoute {
     }
 }
 
-pub type ReplyEvent = EventMessage<SaidEvent<Timestamped<ReplyRoute>>>;
+pub type ReplyEvent = KeriEvent<Timestamped<ReplyRoute>>;
 
 impl Typeable for ReplyRoute {
     type TypeTag = EventTypeTag;
@@ -137,37 +138,24 @@ impl ReplyEvent {
         serialization: SerializationFormats,
     ) -> Result<ReplyEvent, Error> {
         let env = Timestamped::new(route);
-        env.to_message(serialization, self_addressing)
+        KeriEvent::new(serialization, self_addressing, env)
     }
 }
 
 impl ReplyEvent {
     pub fn get_timestamp(&self) -> DateTime<FixedOffset> {
-        self.event.content.timestamp
+        self.data.timestamp
     }
 
     pub fn get_route(&self) -> ReplyRoute {
-        self.event.content.data.clone()
+        self.data.data.clone()
     }
 
     pub fn get_prefix(&self) -> IdentifierPrefix {
-        self.event.content.data.get_prefix()
+        self.data.data.get_prefix()
     }
 }
 
-    pub fn check_digest<T: Serialize, D: Serialize + Clone + Typeable<TypeTag = T>>(event: &KeriEvent<SaidEvent<D>>) -> Result<(), Error> {
-        let dummy: Vec<u8> = DummyEvent::dummy_event(
-            event.data.content.clone(),
-            event.serialization_info.kind,
-            event.data.get_digest().derivation,
-        )?
-        .serialize()?;
-        self.event
-            .get_digest()
-            .verify_binding(&dummy)
-            .then(|| ())
-            .ok_or(Error::IncorrectDigest)
-    }
 
 #[cfg(feature = "query")]
 pub fn bada_logic(new_rpy: &SignedReply, old_rpy: &SignedReply) -> Result<(), QueryError> {

@@ -12,13 +12,12 @@ use self::tables::{SledEventTree, SledEventTreeVec};
 #[cfg(feature = "query")]
 use crate::query::reply_event::SignedReply;
 use crate::{
-    event::EventMessage,
     event_message::{
         key_event_message::KeyEvent,
         signed_event_message::{
             SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
         },
-        TimestampedEventMessage,
+        TimestampedEventMessage, EventMessage,
     },
     prefix::IdentifierPrefix,
 };

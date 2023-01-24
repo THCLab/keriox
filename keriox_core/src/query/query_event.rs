@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
+use version::serialization_info::SerializationFormats;
 
 use crate::{
     error::Error,
-    event::{EventMessage, SerializationFormats},
-    event_message::{timestamped::Timestamped, EventTypeTag, SaidEvent, Typeable},
+    event_message::{timestamped::Timestamped, EventTypeTag, SaidEvent, Typeable, EventMessage},
     prefix::{AttachedSignaturePrefix, IdentifierPrefix},
     sai::derivation::SelfAddressing,
 };

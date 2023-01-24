@@ -2,7 +2,7 @@ pub mod cesr_adapter;
 pub mod dummy_event;
 pub mod event_msg_builder;
 pub mod key_event_message;
-pub mod serialization_info;
+// pub mod serialization_info;
 pub mod serializer;
 pub mod signature;
 pub mod signed_event_message;
@@ -14,7 +14,7 @@ use std::cmp::Ordering;
 use crate::{error::Error, sai::derivation::SelfAddressing, sai::SelfAddressingPrefix};
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize, Serializer};
-use serialization_info::*;
+use version::serialization_info::{SerializationFormats, SerializationInfo};
 
 use self::{dummy_event::DummyEvent, key_event_message::KeyEvent};
 
@@ -59,7 +59,7 @@ impl<T: Serialize, D: Serialize + Clone + Typeable<TypeTag = T>> SaidEvent<D> {
         derivation: SelfAddressing,
     ) -> Result<EventMessage<SaidEvent<D>>, Error> {
         let dummy_event =
-            DummyEvent::dummy_event(event.clone(), format, derivation.clone())?;
+            DummyEvent::dummy_event(event.clone(), format, &derivation.clone().into())?;
         let digest = derivation.derive(&dummy_event.serialize()?);
 
         Ok(EventMessage {
@@ -209,7 +209,7 @@ impl<T: Serialize, D: Clone + Serialize + Digestible + Typeable<TypeTag = T>> Ev
     /// returns the serialized event message
     /// NOTE: this method, for deserialized events, will be UNABLE to preserve ordering
     pub fn serialize(&self) -> Result<Vec<u8>, Error> {
-        self.serialization().encode(self)
+        Ok(self.serialization().encode(self)?)
     }
 }
 

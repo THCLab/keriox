@@ -16,7 +16,6 @@ use crate::{
     event::{
         event_data::EventData,
         sections::seal::{EventSeal, Seal, SourceSeal},
-        EventMessage,
     },
     event_message::{
         key_event_message::KeyEvent,
@@ -24,7 +23,7 @@ use crate::{
         signed_event_message::{
             SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
         },
-        Digestible,
+        Digestible, EventMessage,
     },
     prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     sai::SelfAddressingPrefix,

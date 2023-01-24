@@ -9,7 +9,6 @@ use crate::{
         sections::{
             key_config::NextKeysData, threshold::SignatureThreshold, RotationWitnessConfig,
         },
-        SerializationFormats,
     },
     event::{
         event_data::{inception::InceptionEvent, EventData},
@@ -17,7 +16,7 @@ use crate::{
         sections::seal::Seal,
         sections::InceptionWitnessConfig,
         sections::KeyConfig,
-        Event, EventMessage,
+        Event,
     },
     keys::PublicKey,
     prefix::{BasicPrefix, IdentifierPrefix},
@@ -25,8 +24,9 @@ use crate::{
 };
 use ed25519_dalek::Keypair;
 use rand::rngs::OsRng;
+use version::serialization_info::SerializationFormats;
 
-use super::{EventTypeTag, KeyEvent};
+use super::{EventTypeTag, KeyEvent, EventMessage};
 
 pub struct EventMsgBuilder {
     event_type: EventTypeTag,

@@ -126,6 +126,9 @@ pub enum Error {
 
     #[error("Cesr error")]
     CesrError,
+
+    #[error("Version error")]
+    VersionError,
 }
 
 impl From<ParseIntError> for Error {
@@ -133,6 +136,13 @@ impl From<ParseIntError> for Error {
         Error::ParseIntError
     }
 }
+
+impl From<version::error::Error> for Error {
+    fn from(_: version::error::Error) -> Self {
+        Error::VersionError
+    }
+}
+
 
 impl From<base64::DecodeError> for Error {
     fn from(_: DecodeError) -> Self {

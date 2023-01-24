@@ -101,12 +101,14 @@ impl<T: Serialize, D: Serialize> DummyEvent<T, D> {
 }
 
 impl<T: Serialize, D: Serialize + Typeable<TypeTag =  T>> DummyEvent<T, D> {
-    pub fn dummy_event(derivation: SelfAddressing, format: SerializationFormats, event: D) -> Result<Self, Error> {
+    pub fn dummy_event(event: D, format: SerializationFormats, derivation: &SelfAddressing,) -> Result<Self, Error> {
         let mut version = SerializationInfo::new_empty(['K', 'E', 'R', 'I'], format);
-        let dummy_prefix = dummy_prefix(&derivation.into());
+        let cesr_derivation = derivation.clone().into();
+        let mut dummy_prefix = dummy_prefix(&cesr_derivation);
         let mut dummy_event = DummyEvent { serialization_info: version, event_type: event.get_type(), digest: dummy_prefix, data: event };
         let event_len = dummy_event.serialize()?.len();
         version.size = event_len;
+        dummy_event.serialization_info = version;
         Ok(dummy_event)
     }
 }

@@ -17,8 +17,9 @@ use crate::{
     state::{EventSemantics, IdentifierState},
 };
 #[cfg(feature = "query")]
+use version::serialization_info::SerializationFormats;
+#[cfg(feature = "query")]
 use crate::{
-    event::SerializationFormats,
     query::{
         key_state_notice::KeyStateNotice, query_event::QueryArgsMbx, reply_event::SignedReply,
     },
@@ -414,6 +415,7 @@ impl EventStorage {
         prefix: &IdentifierPrefix,
         format: SerializationFormats,
     ) -> Result<KeyStateNotice, Error> {
+
         let state = self
             .get_state(prefix)?
             .ok_or_else(|| Error::SemanticError("No state in db".into()))?;

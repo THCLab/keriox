@@ -9,10 +9,9 @@ use crate::{
             seal::{DigestSeal, Seal},
             threshold::{SignatureThreshold, WeightedThreshold},
         },
-        EventMessage,
     },
     event_message::{
-        event_msg_builder::EventMsgBuilder, key_event_message::KeyEvent, EventTypeTag,
+        event_msg_builder::EventMsgBuilder, key_event_message::KeyEvent, EventTypeTag, EventMessage,
     },
     prefix::{BasicPrefix, IdentifierPrefix},
     sai::{derivation::SelfAddressing, SelfAddressingPrefix},
@@ -20,7 +19,6 @@ use crate::{
 };
 #[cfg(feature = "oobi")]
 use crate::{
-    event::SerializationFormats,
     oobi::{EndRole, Role},
 };
 
@@ -186,6 +184,8 @@ pub fn generate_end_role(
     role: Role,
     enabled: bool,
 ) -> Result<ReplyEvent, Error> {
+    use version::serialization_info::SerializationFormats;
+
     let end_role = EndRole {
         cid: controller_id.clone(),
         role,
@@ -210,15 +210,17 @@ pub fn exchange(
     data: &EventMessage<KeyEvent>,
     topic: ForwardTopic,
 ) -> Result<ExchangeMessage, Error> {
-    use crate::event_message::timestamped::Timestamped;
+    use version::serialization_info::SerializationFormats;
 
-    Timestamped::new(Exchange::Fwd {
+    use crate::event_message::{timestamped::Timestamped, msg::KeriEvent};
+
+    let event = Timestamped::new(Exchange::Fwd {
         args: FwdArgs {
             recipient_id: receipient.clone(),
             topic,
         },
         to_forward: data.clone(),
-    })
-    .to_message(SerializationFormats::JSON, SelfAddressing::Blake3_256)
-    .map_err(|e| Error::EventGenerationError(e.to_string()))
+    });
+    
+    KeriEvent::new(SerializationFormats::JSON, SelfAddressing::Blake3_256, event).map_err(|e| Error::EventGenerationError(e.to_string()))
 }

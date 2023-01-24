@@ -7,6 +7,7 @@ use cesrox::{
     ParsedData,
 };
 use serde::{Deserialize, Serialize};
+use version::serialization_info::SerializationFormats;
 
 use crate::{
     error::Error,
@@ -33,7 +34,7 @@ use super::{
         Message, Notice, Op, SignedEventMessage, SignedNontransferableReceipt,
         SignedTransferableReceipt,
     },
-    Digestible, EventMessage, Typeable,
+    Digestible, EventMessage, Typeable, msg::KeriEvent,
 };
 
 pub fn parse_event_type(input: &[u8]) -> Result<EventType, Error> {
@@ -116,13 +117,31 @@ impl<T: Serialize, D: Digestible + Typeable<TypeTag = T> + Serialize + Clone> Fr
 {
     fn from(pd: EventMessage<D>) -> Self {
         match pd.serialization_info.kind {
-            super::serialization_info::SerializationFormats::JSON => {
+            SerializationFormats::JSON => {
                 Payload::JSON(pd.serialize().unwrap())
             }
-            super::serialization_info::SerializationFormats::MGPK => {
+            SerializationFormats::MGPK => {
                 Payload::MGPK(pd.serialize().unwrap())
             }
-            super::serialization_info::SerializationFormats::CBOR => {
+            SerializationFormats::CBOR => {
+                Payload::CBOR(pd.serialize().unwrap())
+            }
+        }
+    }
+}
+
+impl<T: Serialize, D: Typeable<TypeTag = T> + Serialize + Clone> From<KeriEvent<D>>
+    for Payload
+{
+    fn from(pd: KeriEvent<D>) -> Self {
+        match pd.serialization_info.kind {
+            SerializationFormats::JSON => {
+                Payload::JSON(pd.serialize().unwrap())
+            }
+            SerializationFormats::MGPK => {
+                Payload::MGPK(pd.serialize().unwrap())
+            }
+            SerializationFormats::CBOR => {
                 Payload::CBOR(pd.serialize().unwrap())
             }
         }

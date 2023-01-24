@@ -13,10 +13,10 @@ use crate::query::{
     reply_event::{ReplyRoute, SignedReply},
     ReplyType,
 };
+use version::serialization_info::SerializationFormats;
 use crate::{
     error::Error,
     event_message::{
-        serialization_info::SerializationFormats,
         signature::Signature,
         signed_event_message::{Message, Notice, Op, SignedEventMessage},
     },
@@ -152,7 +152,7 @@ fn process_exn(
     attachemnt: (MaterialPath, Vec<Signature>),
     storage: &EventStorage,
 ) -> Result<(), Error> {
-    let (receipient, to_forward, topic) = match &exn.event.content.data {
+    let (receipient, to_forward, topic) = match &exn.data.data {
         Exchange::Fwd { args, to_forward } => (&args.recipient_id, to_forward, &args.topic),
     };
     let (sigs, witness_receipts) = attachemnt.1.into_iter().fold(
@@ -299,8 +299,8 @@ pub mod prelude {
     pub use crate::{
         actor::{process_message, process_notice},
         database::SledEventDatabase,
-        event::SerializationFormats,
         event_message::signed_event_message::Message,
         processor::{basic_processor::BasicProcessor, event_storage::EventStorage, Processor},
     };
+    pub use version::serialization_info::SerializationFormats;
 }

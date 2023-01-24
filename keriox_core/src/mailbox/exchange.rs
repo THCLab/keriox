@@ -1,9 +1,11 @@
 use cesrox::cesr_proof::MaterialPath;
 use serde::{Deserialize, Serialize};
+use version::serialization_info::SerializationFormats;
 
+use crate::event_message::msg::KeriEvent;
 use crate::event_message::timestamped::Timestamped;
 use crate::{
-    error::Error, event::SerializationFormats, prefix::IdentifierPrefix,
+    error::Error, prefix::IdentifierPrefix,
     sai::derivation::SelfAddressing,
 };
 
@@ -12,7 +14,7 @@ use crate::event_message::{
     Typeable,
 };
 
-pub type ExchangeMessage = EventMessage<SaidEvent<Timestamped<Exchange>>>;
+pub type ExchangeMessage = KeriEvent<Timestamped<Exchange>>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SignedExchange {
@@ -40,7 +42,7 @@ impl Exchange {
         format: SerializationFormats,
         derivation: SelfAddressing,
     ) -> Result<ExchangeMessage, Error> {
-        SaidEvent::<Timestamped<Exchange>>::to_message(Timestamped::new(self), format, derivation)
+        KeriEvent::new(format, derivation, Timestamped::new(self))
     }
 }
 

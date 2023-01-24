@@ -1,5 +1,4 @@
 use crate::error::Error;
-use crate::event_message::serialization_info::SerializationInfo;
 use crate::event_message::Digestible;
 use crate::event_message::EventTypeTag;
 use crate::event_message::Typeable;
@@ -7,9 +6,10 @@ use crate::prefix::IdentifierPrefix;
 use crate::sai::SelfAddressingPrefix;
 use serde::{Deserialize, Serialize};
 use serde_hex::{Compact, SerHex};
+use version::serialization_info::SerializationFormats;
+use version::serialization_info::SerializationInfo;
 
 use super::EventMessage;
-use super::SerializationFormats;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Receipt {
@@ -32,14 +32,14 @@ pub struct Receipt {
 impl Receipt {
     pub fn to_message(self, format: SerializationFormats) -> Result<EventMessage<Receipt>, Error> {
         let len = EventMessage {
-            serialization_info: SerializationInfo::new(format, 0),
+            serialization_info: SerializationInfo::new(['K','E','R','I'], format, 0),
             event: self.clone(),
         }
         .serialize()?
         .len();
 
         Ok(EventMessage {
-            serialization_info: SerializationInfo::new(format, len),
+            serialization_info: SerializationInfo::new(['K','E','R','I'], format, len),
             event: self,
         })
     }

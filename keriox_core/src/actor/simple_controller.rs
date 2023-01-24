@@ -7,6 +7,7 @@ use std::{
 
 use cesrox::{cesr_proof::MaterialPath, parse, primitives::CesrPrimitive};
 use serde::{Deserialize, Serialize};
+use version::serialization_info::SerializationFormats;
 
 use super::{event_generator, prelude::Message, process_message};
 #[cfg(feature = "mailbox")]
@@ -24,7 +25,6 @@ use crate::{
             seal::{EventSeal, Seal},
             threshold::SignatureThreshold,
         },
-        SerializationFormats,
     },
     event_message::{
         cesr_adapter::EventType,
