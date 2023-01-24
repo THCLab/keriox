@@ -156,22 +156,20 @@ impl EventStorage {
 
     #[cfg(feature = "mailbox")]
     pub fn get_mailbox_messages(&self, args: QueryArgsMbx) -> Result<MailboxResponse, Error> {
-        use az::SaturatingAs;
-
         let id = args.i.clone();
 
         // query receipts
         let receipt = self
             .db
             .get_mailbox_receipts(&id)
-            .map(|it| it.skip(args.topics.receipt.saturating_as()).collect())
+            .map(|it| it.skip(args.topics.receipt).collect())
             .unwrap_or_default();
 
         let multisig = self
             .db
             .get_mailbox_multisig(&id)
             .map(|it| {
-                it.skip(args.topics.multisig.saturating_as())
+                it.skip(args.topics.multisig)
                     .map(|ev| ev.signed_event_message)
                     .collect()
             })
@@ -181,7 +179,7 @@ impl EventStorage {
             .db
             .get_mailbox_delegate(&id)
             .map(|it| {
-                it.skip(args.topics.delegate.saturating_as())
+                it.skip(args.topics.delegate)
                     .map(|ev| ev.signed_event_message)
                     .collect()
             })

@@ -487,10 +487,7 @@ impl IdentifierController {
                     &self.last_asked_groups_index
                 };
 
-                let reminder = reminders
-                    .get(&recipient)
-                    .cloned()
-                    .unwrap_or_default();
+                let reminder = reminders.get(&recipient).cloned().unwrap_or_default();
 
                 QueryEvent::new_query(
                     QueryRoute::Mbx {
@@ -503,10 +500,10 @@ impl IdentifierController {
                             src: recipient,
                             topics: QueryTopics {
                                 credential: 0,
-                                receipt: reminder.receipt.saturating_as(),
+                                receipt: reminder.receipt,
                                 replay: 0,
-                                multisig: reminder.multisig.saturating_as(),
-                                delegate: reminder.delegate.saturating_as(),
+                                multisig: reminder.multisig,
+                                delegate: reminder.delegate,
                                 reply: 0,
                             },
                         },

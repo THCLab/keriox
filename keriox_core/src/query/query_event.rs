@@ -65,17 +65,17 @@ pub struct QueryArgsMbx {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct QueryTopics {
     #[serde(rename = "/receipt")]
-    pub receipt: u64,
+    pub receipt: usize,
     #[serde(rename = "/replay")]
-    pub replay: u64,
+    pub replay: usize,
     #[serde(rename = "/reply")]
-    pub reply: u64,
+    pub reply: usize,
     #[serde(rename = "/multisig")]
-    pub multisig: u64,
+    pub multisig: usize,
     #[serde(rename = "/credential")]
-    pub credential: u64,
+    pub credential: usize,
     #[serde(rename = "/delegate")]
-    pub delegate: u64,
+    pub delegate: usize,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
