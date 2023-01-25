@@ -8,7 +8,7 @@ use crate::event_message::msg::KeriEvent;
 use crate::event_message::timestamped::Timestamped;
 use crate::{error::Error, prefix::IdentifierPrefix, sai::derivation::SelfAddressing};
 
-use crate::event_message::{signature::Signature, EventTypeTag, SaidEvent, Typeable};
+use crate::event_message::{signature::Signature, EventTypeTag, Typeable};
 
 pub type ExchangeMessage = KeriEvent<Timestamped<Exchange>>;
 

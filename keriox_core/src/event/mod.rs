@@ -1,5 +1,5 @@
 use crate::event_message::msg::KeriEvent;
-use crate::event_message::{EventTypeTag, SaidEvent, Typeable};
+use crate::event_message::{EventTypeTag, Typeable};
 use crate::state::IdentifierState;
 use crate::{prefix::IdentifierPrefix, sai::derivation::SelfAddressing};
 use serde::{Deserialize, Serialize};

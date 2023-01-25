@@ -99,7 +99,7 @@ impl QueryEvent {
         let message = Query { route };
 
         let env = Timestamped::new(message);
-        env.to_message(serialization_format, derivation)
+        KeriEvent::new(serialization_format, derivation, env)
     }
 
     pub fn get_query_data(&self) -> Query {

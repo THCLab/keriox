@@ -10,11 +10,10 @@ use crate::{
     error::Error,
     event::sections::seal::EventSeal,
     event_message::{
-        dummy_event::DummyEvent,
         msg::KeriEvent,
         signature::{Nontransferable, Signature, SignerData},
         timestamped::Timestamped,
-        Digestible, EventTypeTag, SaidEvent, Typeable,
+        EventTypeTag, Typeable,
     },
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     query::QueryError,
