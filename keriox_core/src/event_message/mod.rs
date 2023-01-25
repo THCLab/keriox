@@ -10,14 +10,11 @@ pub mod timestamped;
 
 use std::cmp::Ordering;
 
-use crate::{
-    error::Error, event::KeyEvent, sai::derivation::SelfAddressing, sai::SelfAddressingPrefix,
-};
+use crate::event::KeyEvent;
 use chrono::{DateTime, Local};
-use serde::{Deserialize, Serialize, Serializer};
-use version::serialization_info::SerializationFormats;
+use serde::{Deserialize, Serialize};
 
-use self::{dummy_event::DummyEvent, msg::KeriEvent};
+use self::msg::KeriEvent;
 
 pub trait Typeable {
     type TypeTag;
@@ -100,20 +97,6 @@ impl From<KeriEvent<KeyEvent>> for TimestampedEventMessage {
     }
 }
 
-// impl<T: Serialize, D: Clone + Serialize + Digestible + Typeable<TypeTag = T>> KeriEvent<D> {
-//     pub fn serialization(&self) -> SerializationFormats {
-//         self.serialization_info.kind
-//     }
-
-//     /// Serialize
-//     ///
-//     /// returns the serialized event message
-//     /// NOTE: this method, for deserialized events, will be UNABLE to preserve ordering
-//     pub fn serialize(&self) -> Result<Vec<u8>, Error> {
-//         Ok(self.serialization().encode(self)?)
-//     }
-// }
-
 #[cfg(test)]
 mod tests {
     mod test_utils;
@@ -121,6 +104,7 @@ mod tests {
     use self::test_utils::test_mock_event_sequence;
     use super::*;
     use crate::{
+        error::Error,
         event::{
             event_data::{inception::InceptionEvent, EventData},
             sections::{key_config::nxt_commitment, KeyConfig},
@@ -129,12 +113,12 @@ mod tests {
         },
         keys::{PrivateKey, PublicKey},
         prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
-        sai::{derivation::SelfAddressing, sad::SAD},
+        sai::derivation::SelfAddressing,
         state::IdentifierState,
     };
     use ed25519_dalek::Keypair;
     use rand::rngs::OsRng;
-    use version::Versional;
+    use version::{serialization_info::SerializationFormats, Versional};
 
     #[test]
     fn basic_create() -> Result<(), Error> {

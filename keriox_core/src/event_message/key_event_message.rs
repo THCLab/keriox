@@ -1,5 +1,5 @@
 use cesrox::primitives::codes::self_addressing::dummy_prefix;
-use version::serialization_info::SerializationInfo;
+use version::{serialization_info::SerializationInfo, Versional};
 
 use crate::{
     error::Error,

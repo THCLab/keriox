@@ -1,6 +1,6 @@
 use crate::error::Error;
 
-use super::{derivation::SelfAddressing, SelfAddressingPrefix};
+use super::SelfAddressingPrefix;
 
 /// Self Addressing Data
 pub trait SAD {

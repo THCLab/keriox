@@ -8,7 +8,10 @@ use super::{EventTypeTag, Typeable};
 use cesrox::primitives::codes::self_addressing::dummy_prefix;
 use serde::Serialize;
 use serde_hex::{Compact, SerHex};
-use version::serialization_info::{SerializationFormats, SerializationInfo};
+use version::{
+    serialization_info::{SerializationFormats, SerializationInfo},
+    Versional,
+};
 
 /// Dummy Inception Event
 ///
@@ -80,8 +83,12 @@ impl DummyInceptionEvent {
     }
 }
 
+/// Dummy Event
+///
+/// Contains logic for replacing digest field with placeholder during event
+/// digest computation process.
 #[derive(Serialize, Debug, Clone)]
-pub(crate) struct DummyEvent<T: Serialize, D: Serialize> {
+pub(crate) struct DummyEvent<T: Serialize, D: Serialize + Typeable<TypeTag = T>> {
     #[serde(rename = "v")]
     pub serialization_info: SerializationInfo,
     #[serde(rename = "t")]
@@ -92,9 +99,9 @@ pub(crate) struct DummyEvent<T: Serialize, D: Serialize> {
     pub data: D,
 }
 
-impl<T: Serialize, D: Serialize> DummyEvent<T, D> {
-    pub fn serialize(&self) -> Result<Vec<u8>, Error> {
-        Ok(self.serialization_info.kind.encode(&self).unwrap())
+impl<T: Serialize, D: Serialize + Typeable<TypeTag = T>> Versional for DummyEvent<T, D> {
+    fn get_version_str(&self) -> SerializationInfo {
+        self.serialization_info
     }
 }
 
@@ -106,14 +113,14 @@ impl<T: Serialize, D: Serialize + Typeable<TypeTag = T>> DummyEvent<T, D> {
     ) -> Result<Self, Error> {
         let mut version = SerializationInfo::new_empty(['K', 'E', 'R', 'I'], format);
         let cesr_derivation = derivation.clone().into();
-        let mut dummy_prefix = dummy_prefix(&cesr_derivation);
+        let dummy_prefix = dummy_prefix(&cesr_derivation);
         let mut dummy_event = DummyEvent {
             serialization_info: version,
             event_type: event.get_type(),
             digest: dummy_prefix,
             data: event,
         };
-        let event_len = dummy_event.serialize()?.len();
+        let event_len = Versional::serialize(&dummy_event)?.len();
         version.size = event_len;
         dummy_event.serialization_info = version;
         Ok(dummy_event)

@@ -13,8 +13,16 @@ use super::{dummy_event::DummyEvent, Typeable};
 
 #[derive(Deserialize, Debug, Clone, PartialEq)]
 pub struct KeriEvent<D> {
+    /// Serialization Information
+    ///
+    /// Encodes the version, size and serialization format of the event
     #[serde(rename = "v")]
     pub serialization_info: SerializationInfo,
+    /// Digest of the event
+    ///
+    /// While computing the digest, this field is replaced with sequence of `#`,
+    /// its length depends on derivation type. Then it is replaced by computed
+    /// SAI.
     #[serde(rename = "d")]
     pub digest: SelfAddressingPrefix,
     #[serde(flatten)]
@@ -27,12 +35,12 @@ impl<T: Serialize, D: Serialize + Typeable<TypeTag = T> + Clone> SAD for KeriEve
     }
 
     fn dummy_event(&self) -> Result<Vec<u8>, Error> {
-        DummyEvent::dummy_event(
+        Versional::serialize(&DummyEvent::dummy_event(
             self.data.clone(),
             self.serialization_info.kind,
             &self.digest.derivation,
-        )?
-        .serialize()
+        )?)
+        .map_err(|_e| Error::VersionError)
     }
 }
 
@@ -50,7 +58,7 @@ impl<T: Serialize, D: Serialize + Typeable<TypeTag = T> + Clone> KeriEvent<D> {
     ) -> Result<Self, Error> {
         let dummy_event = DummyEvent::dummy_event(event.clone(), format, &derivation)?;
 
-        let sai = derivation.derive(&dummy_event.serialize()?);
+        let sai = derivation.derive(&Versional::serialize(&dummy_event)?);
         Ok(Self {
             serialization_info: dummy_event.serialization_info,
             digest: sai,

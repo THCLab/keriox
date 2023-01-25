@@ -211,7 +211,7 @@ pub fn exchange(
 ) -> Result<ExchangeMessage, Error> {
     use version::serialization_info::SerializationFormats;
 
-    use crate::event_message::{msg::KeriEvent, timestamped::Timestamped};
+    use crate::event_message::timestamped::Timestamped;
 
     let event = Timestamped::new(Exchange::Fwd {
         args: FwdArgs {

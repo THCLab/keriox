@@ -209,7 +209,7 @@ pub fn process_signed_query(
                 .ok_or(SignedQueryError::InvalidSignature)?
                 .signature;
             let ver_result = match id.verify(
-                &Versional::serialize(&qr.query).map_err(|e| Error::VersionError)?,
+                &Versional::serialize(&qr.query).map_err(|_e| Error::VersionError)?,
                 sig,
             ) {
                 Ok(result) => result,
@@ -228,7 +228,7 @@ pub fn process_signed_query(
                 .ok_or_else(|| SignedQueryError::UnknownSigner { id: signer_id })?
                 .current;
             if !key_config.verify(
-                &Versional::serialize(&qr.query).map_err(|e| Error::VersionError)?,
+                &Versional::serialize(&qr.query).map_err(|_e| Error::VersionError)?,
                 &signatures,
             )? {
                 return Err(SignedQueryError::InvalidSignature);
