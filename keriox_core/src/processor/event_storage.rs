@@ -16,7 +16,6 @@ use crate::{
     },
     event_message::{
         signed_event_message::Notice, signed_event_message::SignedNontransferableReceipt,
-        Digestible,
     },
     prefix::{BasicPrefix, IdentifierPrefix},
     state::{EventSemantics, IdentifierState},
@@ -327,7 +326,7 @@ impl EventStorage {
     ) -> Result<Option<SignedNontransferableReceipt>, Error> {
         match self.db.get_receipts_nt(prefix) {
             Some(events) => Ok(events
-                .filter(|rcp| rcp.body.sn == sn && &rcp.body.get_digest() == digest)
+                .filter(|rcp| rcp.body.sn == sn && &rcp.body.receipted_event_digest == digest)
                 .reduce(|acc, rct| {
                     let mut new_signatures = acc.signatures;
                     new_signatures.append(&mut rct.signatures.clone());

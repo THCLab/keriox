@@ -94,7 +94,6 @@ fn test_inception_data_derivation() -> Result<(), Error> {
     use crate::event::sections::{
         key_config::KeyConfig, key_config::NextKeysData, threshold::SignatureThreshold,
     };
-    use crate::event_message::Digestible;
     use crate::prefix::BasicPrefix;
     use crate::sai::SelfAddressingPrefix;
     use cesrox::primitives::CesrPrimitive;

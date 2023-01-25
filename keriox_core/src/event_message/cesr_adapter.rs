@@ -35,7 +35,7 @@ use super::{
         Message, Notice, Op, SignedEventMessage, SignedNontransferableReceipt,
         SignedTransferableReceipt,
     },
-    Digestible, Typeable,
+    Typeable,
 };
 
 pub fn parse_event_type(input: &[u8]) -> Result<EventType, Error> {

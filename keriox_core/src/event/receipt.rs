@@ -1,6 +1,3 @@
-use crate::error::Error;
-use crate::event_message::msg::KeriEvent;
-use crate::event_message::Digestible;
 use crate::event_message::EventTypeTag;
 use crate::event_message::Typeable;
 use crate::prefix::IdentifierPrefix;
@@ -8,7 +5,6 @@ use crate::sai::SelfAddressingPrefix;
 use cesrox::payload::Payload;
 use serde::{Deserialize, Serialize};
 use serde_hex::{Compact, SerHex};
-use version::serialization_info;
 use version::serialization_info::SerializationFormats;
 use version::serialization_info::SerializationInfo;
 use version::Versional;
@@ -74,11 +70,5 @@ impl Typeable for Receipt {
     type TypeTag = EventTypeTag;
     fn get_type(&self) -> EventTypeTag {
         EventTypeTag::Rct
-    }
-}
-
-impl Digestible for Receipt {
-    fn get_digest(&self) -> SelfAddressingPrefix {
-        self.receipted_event_digest.clone()
     }
 }

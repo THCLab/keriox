@@ -23,9 +23,9 @@ pub trait Typeable {
     type TypeTag;
     fn get_type(&self) -> Self::TypeTag;
 }
-pub trait Digestible {
-    fn get_digest(&self) -> SelfAddressingPrefix;
-}
+// pub trait Digestible {
+//     fn get_digest(&self) -> SelfAddressingPrefix;
+// }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum EventTypeTag {

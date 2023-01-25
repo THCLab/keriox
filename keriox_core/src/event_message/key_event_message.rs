@@ -14,7 +14,7 @@ use super::{
     msg::KeriEvent,
     signature::Nontransferable,
     signed_event_message::SignedEventMessage,
-    Digestible, EventTypeTag, Typeable,
+    EventTypeTag, Typeable,
 };
 
 impl KeyEvent {

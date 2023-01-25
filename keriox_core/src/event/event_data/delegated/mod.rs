@@ -66,7 +66,6 @@ fn test_delegated_inception_data_derivation() -> Result<(), Error> {
         key_config::{nxt_commitment, KeyConfig},
         threshold::SignatureThreshold,
     };
-    use crate::event_message::Digestible;
     use crate::prefix::BasicPrefix;
     use cesrox::primitives::CesrPrimitive;
 

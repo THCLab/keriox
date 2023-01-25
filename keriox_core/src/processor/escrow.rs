@@ -26,7 +26,6 @@ use crate::{
         signed_event_message::{
             SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
         },
-        Digestible,
     },
     prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     sai::{sad::SAD, SelfAddressingPrefix},
@@ -375,7 +374,7 @@ impl PartiallyWitnessedEscrow {
         digest: &SelfAddressingPrefix,
     ) -> Option<Vec<SignedNontransferableReceipt>> {
         self.escrowed_nontranferable_receipts.get(&id).map(|r| {
-            r.filter(|rct| rct.body.sn == sn && &rct.body.get_digest() == digest)
+            r.filter(|rct| rct.body.sn == sn && &rct.body.receipted_event_digest == digest)
                 // TODO avoid collect
                 .collect()
         })
@@ -570,7 +569,7 @@ impl Notifier for PartiallyWitnessedEscrow {
                 let sn = ooo.body.sn;
                 let id = ooo.body.prefix.clone();
                 // look for receipted event in partially witnessed. If there's no event yet, escrow receipt.
-                match self.get_event_by_sn_and_digest(sn, &id, &ooo.body.get_digest()) {
+                match self.get_event_by_sn_and_digest(sn, &id, &ooo.body.receipted_event_digest) {
                     None => self.escrow_receipt(ooo.clone(), bus),
                     Some(receipted_event) => {
                         // verify receipt signature

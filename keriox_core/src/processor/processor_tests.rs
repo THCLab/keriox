@@ -10,7 +10,7 @@ use crate::{
     event_message::{
         event_msg_builder::EventMsgBuilder,
         signed_event_message::{Message, Notice},
-        Digestible, EventTypeTag,
+        EventTypeTag,
     },
     prefix::{
         AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SeedPrefix, SelfSigningPrefix,

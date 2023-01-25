@@ -11,7 +11,6 @@ use keri::{
             seal::{EventSeal, Seal},
             threshold::SignatureThreshold,
         },
-        EventMessage, SerializationFormats,
     },
     event_message::{
         cesr_adapter::{parse_event_type, EventType},

@@ -430,10 +430,7 @@ fn test_validate_seal() -> Result<(), Error> {
     use tempfile::Builder;
 
     use crate::{
-        event_message::{
-            signed_event_message::{Message, Notice},
-            Digestible,
-        },
+        event_message::signed_event_message::{Message, Notice},
         processor::{basic_processor::BasicProcessor, Processor},
     };
 
