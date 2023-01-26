@@ -1,14 +1,15 @@
 use crate::error::Error;
 use chrono::{DateTime, FixedOffset, SecondsFormat, Utc};
 use keri::{
-    event::{sections::seal::EventSeal, SerializationFormats},
-    event_message::{EventMessage, SaidEvent, Typeable},
+    event::sections::seal::EventSeal,
+    event_message::{msg::KeriEvent, Typeable},
     prefix::IdentifierPrefix,
     sai::{derivation::SelfAddressing, SelfAddressingPrefix},
 };
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use serde_hex::{Compact, SerHex};
 use serde_json::Value;
+use version::serialization_info::SerializationFormats;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct TimestampedVCEvent {
@@ -77,7 +78,7 @@ pub enum TelEventType {
     Brv,
 }
 
-pub type VCEventMessage = EventMessage<SaidEvent<TimestampedVCEvent>>;
+pub type VCEventMessage = KeriEvent<TimestampedVCEvent>;
 impl Typeable for VCEvent {
     type TypeTag = TelEventType;
     fn get_type(&self) -> TelEventType {
@@ -117,11 +118,7 @@ impl VCEvent {
         derivation: SelfAddressing,
     ) -> Result<VCEventMessage, Error> {
         let timestamped = TimestampedVCEvent::new(self);
-        Ok(SaidEvent::<TimestampedVCEvent>::to_message(
-            timestamped,
-            format,
-            derivation,
-        )?)
+        Ok(KeriEvent::new(format, derivation, timestamped)?)
     }
 }
 

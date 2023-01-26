@@ -1,4 +1,4 @@
-use keri::{oobi::Scheme, prefix::IdentifierPrefix};
+use keri::{actor::prelude::VersionError, oobi::Scheme, prefix::IdentifierPrefix};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -44,6 +44,9 @@ pub enum ControllerError {
 
     #[error("Error while event processing: ")]
     EventProcessingError(#[from] keri::error::Error),
+
+    #[error("Keri version error: ")]
+    VersionError(#[from] VersionError),
 
     #[error("No location for {id} with {scheme:?}")]
     NoLocationScheme {

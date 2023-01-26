@@ -4,20 +4,25 @@ use std::{
 };
 
 use keri::{
-    actor::{event_generator, prelude::Message, simple_controller::PossibleResponse, MaterialPath},
+    actor::{
+        event_generator,
+        prelude::{Message, SerializationFormats, Versional},
+        simple_controller::PossibleResponse,
+        MaterialPath,
+    },
     event::{
         event_data::EventData,
         sections::{
             seal::{EventSeal, Seal},
             threshold::SignatureThreshold,
         },
+        KeyEvent,
     },
     event_message::{
         cesr_adapter::{parse_event_type, EventType},
-        key_event_message::KeyEvent,
+        msg::KeriEvent,
         signature::{Nontransferable, Signature, SignerData},
-        signed_event_message::{Notice, Op, SignedNontransferableReceipt},
-        Digestible,
+        signed_event_message::{Notice, Op},
     },
     mailbox::{
         exchange::{Exchange, ExchangeMessage, ForwardTopic, FwdArgs, SignedExchange},
@@ -31,7 +36,7 @@ use keri::{
         query_event::{QueryArgs, QueryArgsMbx, QueryEvent, QueryRoute, QueryTopics, SignedQuery},
         reply_event::ReplyRoute,
     },
-    sai::{derivation::SelfAddressing, SelfAddressingPrefix},
+    sai::{derivation::SelfAddressing, sad::SAD, SelfAddressingPrefix},
 };
 
 use super::mailbox_updating::ActionRequired;
@@ -106,12 +111,12 @@ impl IdentifierController {
     /// delegated event which will be send to delegate after ixn finalization.
     pub fn delegate(
         &self,
-        delegated_event: &EventMessage<KeyEvent>,
-    ) -> Result<(EventMessage<KeyEvent>, ExchangeMessage), ControllerError> {
-        let delegate = delegated_event.event.get_prefix();
+        delegated_event: &KeriEvent<KeyEvent>,
+    ) -> Result<(KeriEvent<KeyEvent>, ExchangeMessage), ControllerError> {
+        let delegate = delegated_event.data.get_prefix();
         let delegated_seal = {
             let event_digest = delegated_event.get_digest();
-            let sn = delegated_event.event.get_sn();
+            let sn = delegated_event.data.get_sn();
             Seal::Event(EventSeal {
                 prefix: delegate.clone(),
                 sn,
@@ -133,7 +138,7 @@ impl IdentifierController {
     pub fn anchor_with_seal(
         &self,
         seal_list: &[Seal],
-    ) -> Result<EventMessage<KeyEvent>, ControllerError> {
+    ) -> Result<KeriEvent<KeyEvent>, ControllerError> {
         self.source.anchor_with_seal(&self.id, seal_list)
     }
 
@@ -141,7 +146,7 @@ impl IdentifierController {
         &self,
         group_id: &IdentifierPrefix,
         seal_list: &[Seal],
-    ) -> Result<EventMessage<KeyEvent>, ControllerError> {
+    ) -> Result<KeriEvent<KeyEvent>, ControllerError> {
         self.source.anchor_with_seal(group_id, seal_list)
     }
 
@@ -174,7 +179,7 @@ impl IdentifierController {
             parse_event_type(event).map_err(|_e| ControllerError::EventFormatError)?;
         match parsed_event {
             EventType::KeyEvent(ke) => {
-                let index = self.get_index(&ke.event)?;
+                let index = self.get_index(&ke.data)?;
                 self.source.finalize_key_event(&ke, &sig, index)
             }
             EventType::Rpy(rpy) => match rpy.get_route() {
@@ -272,12 +277,12 @@ impl IdentifierController {
             let Exchange::Fwd {
                 args: _,
                 to_forward,
-            } = exn.event.content.data.clone();
+            } = exn.data.data.clone();
 
             let sigs: Vec<_> = if let Some(receipts) = self.source.storage.get_nt_receipts(
-                &to_forward.event.get_prefix(),
-                to_forward.event.get_sn(),
-                &to_forward.event.get_digest(),
+                &to_forward.data.get_prefix(),
+                to_forward.data.get_sn(),
+                &to_forward.get_digest(),
             )? {
                 receipts
                     .signatures
@@ -343,8 +348,8 @@ impl IdentifierController {
         } else {
             return Err(ControllerError::WrongEventTypeError);
         };
-        let own_index = self.get_index(&icp.event)?;
-        let group_prefix = icp.event.get_prefix();
+        let own_index = self.get_index(&icp.data)?;
+        let group_prefix = icp.data.get_prefix();
 
         self.source.finalize_key_event(&icp, &sig, own_index)?;
 
@@ -371,7 +376,7 @@ impl IdentifierController {
             // Elect the leader
             // Leader is identifier with minimal index among all participants who
             // sign event. He will send message to witness.
-            let id_idx = self.get_index(&ev.event_message.event).unwrap_or_default();
+            let id_idx = self.get_index(&ev.event_message.data).unwrap_or_default();
             let min_sig_idx =
                 ev.signatures
                     .iter()
@@ -390,7 +395,7 @@ impl IdentifierController {
     /// Helper function for getting the position of identifier's public key in
     /// group's current keys list.
     pub(crate) fn get_index(&self, group_event: &KeyEvent) -> Result<usize, ControllerError> {
-        match &group_event.content.event_data {
+        match &group_event.event_data {
             EventData::Icp(icp) => {
                 // TODO what if group participant is a group and has more than one
                 // public key?
@@ -595,7 +600,7 @@ impl IdentifierController {
                 index: 0,
                 signature: sig,
             }];
-            let (recipient, about_who, from_who) = match &qry.event.content.data.route {
+            let (receipient, about_who, from_who) = match &qry.data.data.route {
                 QueryRoute::Log {
                     reply_route: _,
                     args,
@@ -712,13 +717,26 @@ impl IdentifierController {
                     )
                     .await?;
 
-                // Remember event digest and witness ID to avoid sending the same receipt twice.
-                for rct_wit_id in &rct_wit_ids {
-                    self.broadcasted_rcts.insert((
-                        rct_digest.clone(),
-                        rct_wit_id.clone(),
-                        dest_wit_id.clone(),
-                    ));
+            // Remember event digest and witness ID to avoid sending the same receipt twice.
+            let digest = rct.body.receipted_event_digest;
+            for sig in rct.signatures {
+                match sig {
+                    Nontransferable::Indexed(sigs) => {
+                        for sig in sigs {
+                            let wits = self.source.storage.get_witnesses_at_event(
+                                rct.body.sn,
+                                &self.id,
+                                &digest,
+                            )?;
+                            self.broadcasted_rcts
+                                .insert((digest.clone(), wits[sig.index as usize].clone()));
+                        }
+                    }
+                    Nontransferable::Couplet(sigs) => {
+                        for (wit_id, _sig) in sigs {
+                            self.broadcasted_rcts.insert((digest.clone(), wit_id));
+                        }
+                    }
                 }
 
                 n += 1;
@@ -755,4 +773,4 @@ impl IdentifierController {
         }
         Ok(wit_ids)
     }
-}
+    }}

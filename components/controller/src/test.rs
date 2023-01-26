@@ -3,7 +3,11 @@
 use std::{collections::HashMap, sync::Arc};
 
 use keri::{
-    actor::{error::ActorError, prelude::Message, SignedQueryError},
+    actor::{
+        error::ActorError,
+        prelude::{Message, Versional},
+        SignedQueryError,
+    },
     event::event_data::EventData,
     event_message::signed_event_message::Notice,
     oobi::LocationScheme,
@@ -472,6 +476,13 @@ async fn test_2_wit() -> Result<(), ControllerError> {
 
     assert_eq!(ident_ctl.broadcast_receipts(&wit_ids).await?, 2);
     assert_eq!(ident_ctl.broadcast_receipts(&wit_ids).await?, 0);
+    match &kel[0] {
+        Notice::Event(evt) => match evt.event_message.data.event_data {
+            EventData::Icp(_) => (),
+            _ => panic!("Unexpected event type"),
+        },
+        _ => panic!("Unexpected notice type"),
+    }
 
     assert!(matches!(
         witness1.witness_data.event_storage.get_kel_messages_with_receipts(&ident_ctl.id)?.unwrap().as_slice(),

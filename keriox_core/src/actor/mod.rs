@@ -313,5 +313,7 @@ pub mod prelude {
         event_message::signed_event_message::Message,
         processor::{basic_processor::BasicProcessor, event_storage::EventStorage, Processor},
     };
-    pub use version::serialization_info::SerializationFormats;
+    pub use version::{
+        error::Error as VersionError, serialization_info::SerializationFormats, Versional,
+    };
 }

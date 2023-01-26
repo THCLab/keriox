@@ -1,3 +1,4 @@
+use super::error::ActorError;
 use version::Versional;
 
 #[cfg(feature = "mailbox")]

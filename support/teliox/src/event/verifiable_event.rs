@@ -1,6 +1,7 @@
 use crate::error::Error;
 use crate::seal::AttachedSourceSeal;
 use serde::{Deserialize, Serialize};
+use version::Versional;
 
 use super::Event;
 
@@ -18,9 +19,11 @@ impl VerifiableEvent {
     pub fn serialize(&self) -> Result<Vec<u8>, Error> {
         Ok(match &self.event {
             Event::Management(man) => {
-                [man.serialize()?, self.seal.serialize()?].join("-".as_bytes())
+                [Versional::serialize(man)?, self.seal.serialize()?].join("-".as_bytes())
             }
-            Event::Vc(vc) => [vc.serialize()?, self.seal.serialize()?].join("-".as_bytes()),
+            Event::Vc(vc) => {
+                [Versional::serialize(vc)?, self.seal.serialize()?].join("-".as_bytes())
+            }
         })
     }
 

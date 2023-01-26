@@ -6,6 +6,7 @@ use std::{
 use keri::{
     actor::{
         error::ActorError,
+        prelude::Versional,
         simple_controller::{PossibleResponse, SimpleController},
         SignedQueryError,
     },

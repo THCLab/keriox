@@ -6,6 +6,7 @@ use controller::{
     ControllerConfig,
 };
 use keri::{
+    actor::prelude::Versional,
     oobi::{EndRole, LocationScheme, Role},
     prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     signer::{CryptoBox, KeyManager},

@@ -3,16 +3,19 @@ use serde::{de, Deserialize, Deserializer, Serialize};
 use serde_hex::{Compact, SerHex};
 
 use keri::{
-    event::SerializationFormats,
-    event_message::{serialization_info::SerializationInfo, EventMessage, SaidEvent, Typeable},
+    event_message::{msg::KeriEvent, Typeable},
     prefix::IdentifierPrefix,
     sai::{derivation::SelfAddressing, SelfAddressingPrefix},
 };
 use serde_json::Value;
+use version::{
+    serialization_info::{SerializationFormats, SerializationInfo},
+    Versional,
+};
 
 use crate::error::Error;
 
-pub type ManagerTelEventMessage = EventMessage<SaidEvent<ManagerTelEvent>>;
+pub type ManagerTelEventMessage = KeriEvent<ManagerTelEvent>;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ManagerTelEvent {
@@ -84,9 +87,7 @@ impl ManagerTelEvent {
         format: SerializationFormats,
         derivation: SelfAddressing,
     ) -> Result<ManagerTelEventMessage, Error> {
-        Ok(SaidEvent::<ManagerTelEvent>::to_message(
-            self, format, derivation,
-        )?)
+        Ok(KeriEvent::new(format, derivation, self)?)
     }
 }
 
@@ -153,30 +154,28 @@ impl DummyEvent {
     ) -> Result<Vec<u8>, Error> {
         use cesrox::primitives::codes::self_addressing::SelfAddressing as CesrCode;
         let derivation_code: CesrCode = derivation.clone().into();
-        Self {
+        Ok(Versional::serialize(&Self {
             serialization_info: SerializationInfo::new(
+                ['K', 'E', 'R', 'I'],
                 format,
-                Self {
-                    serialization_info: SerializationInfo::new(format, 0),
+                Versional::serialize(&Self {
+                    serialization_info: SerializationInfo::default(),
                     prefix: dummy_prefix(&derivation_code),
                     sn: 0,
                     data: data.clone(),
-                }
-                .serialize()?
+                })?
                 .len(),
             ),
             prefix: dummy_prefix(&derivation_code),
             sn: 0,
             data,
-        }
-        .serialize()
+        })?)
     }
+}
 
-    fn serialize(&self) -> Result<Vec<u8>, Error> {
+impl Versional for DummyEvent {
+    fn get_version_str(&self) -> SerializationInfo {
         self.serialization_info
-            .kind
-            .encode(&self)
-            .map_err(Error::KeriError)
     }
 }
 
@@ -208,9 +207,10 @@ pub struct Rot {
 #[cfg(test)]
 mod tests {
     use keri::{
-        event::SerializationFormats, event_message::Digestible, prefix::IdentifierPrefix,
-        sai::derivation::SelfAddressing,
+        prefix::IdentifierPrefix,
+        sai::{derivation::SelfAddressing, sad::SAD},
     };
+    use version::{serialization_info::SerializationFormats, Versional};
 
     use crate::{
         error::Error,
@@ -227,17 +227,17 @@ mod tests {
         let vcp_raw = r#"{"v":"KERI10JSON0000dc_","t":"vcp","d":"EIniznx8Vyltc0i-T7QwngvZkt_2xsT1PdsyRjq_1gAw","i":"EFohdnN33-vdNOTPYxeTQIWVzRKtzZzBoiBSGYSSnD0s","s":"0","ii":"DHtNTPnDFBnmlO6J44LXCrzZTAmpe-82b7BmQGtL4QhM","c":[],"bt":"1","b":[]}"#;
         let vcp: ManagerTelEventMessage = serde_json::from_str(vcp_raw).unwrap();
         assert_eq!(
-            vcp.event.content.prefix,
+            vcp.data.prefix,
             "EFohdnN33-vdNOTPYxeTQIWVzRKtzZzBoiBSGYSSnD0s".parse()?
         );
-        assert_eq!(vcp.event.content.sn, 0);
+        assert_eq!(vcp.data.sn, 0);
         let expected_event_type = ManagerEventType::Vcp(Inc {
             issuer_id: "DHtNTPnDFBnmlO6J44LXCrzZTAmpe-82b7BmQGtL4QhM".parse()?,
             config: vec![],
             backer_threshold: 1,
             backers: vec![],
         });
-        assert_eq!(vcp.event.content.event_type, expected_event_type);
+        assert_eq!(vcp.data.event_type, expected_event_type);
         assert_eq!(
             String::from_utf8(vcp.serialize().unwrap()).unwrap(),
             vcp_raw
@@ -305,7 +305,7 @@ mod tests {
         assert_eq!(state.backers.clone().unwrap(), vec![]);
 
         // Construct rotation event
-        let prev_event = vcp.event.get_digest();
+        let prev_event = vcp.get_digest();
         let event_type = ManagerEventType::Vrt(Rot {
             prev_event,
             backers_to_add: vec!["EXvR3p8V95W8J7Ui4-mEzZ79S-A1esAnJo1Kmzq80Jkc"

@@ -1,4 +1,5 @@
 use crate::error::Error;
+use version::Versional;
 
 use self::{manager_event::ManagerTelEventMessage, vc_event::VCEventMessage};
 use keri::prefix::IdentifierPrefix;
@@ -17,22 +18,22 @@ pub enum Event {
 impl Event {
     pub fn get_prefix(&self) -> IdentifierPrefix {
         match self {
-            Event::Management(man) => man.event.content.prefix.clone(),
-            Event::Vc(ev) => ev.event.content.data.prefix.clone(),
+            Event::Management(man) => man.data.prefix.clone(),
+            Event::Vc(ev) => ev.data.data.prefix.clone(),
         }
     }
 
     pub fn get_sn(&self) -> u64 {
         match self {
-            Event::Management(man) => man.event.content.sn,
-            Event::Vc(ev) => ev.event.content.data.sn,
+            Event::Management(man) => man.data.sn,
+            Event::Vc(ev) => ev.data.data.sn,
         }
     }
 
     pub fn serialize(&self) -> Result<Vec<u8>, Error> {
         match self {
-            Event::Management(man) => Ok(man.serialize()?),
-            Event::Vc(ev) => Ok(ev.serialize()?),
+            Event::Management(man) => Ok(Versional::serialize(man)?),
+            Event::Vc(ev) => Ok(Versional::serialize(ev)?),
         }
     }
 }

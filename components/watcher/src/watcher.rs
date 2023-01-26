@@ -194,7 +194,7 @@ impl WatcherData {
             });
         }
 
-        match &qry.query.event.content.data.route {
+        match &qry.query.data.data.route {
             QueryRoute::Ksn { .. } | QueryRoute::Log { .. } => {
                 // Update latest state for prefix
                 self.query_state(qry.query.get_prefix()).await?;
@@ -456,8 +456,7 @@ impl Watcher {
             .get(0)
             .ok_or(ActorError::NoLocation { id: er.eid.clone() })?
             .reply
-            .event
-            .content
+            .data
             .data
             .clone();
 

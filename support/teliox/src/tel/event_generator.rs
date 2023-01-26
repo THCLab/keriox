@@ -1,8 +1,9 @@
 use keri::{
-    event::{sections::seal::EventSeal, SerializationFormats},
+    event::sections::seal::EventSeal,
     prefix::IdentifierPrefix,
     sai::{derivation::SelfAddressing, SelfAddressingPrefix},
 };
+use version::serialization_info::SerializationFormats;
 
 use crate::{
     error::Error,

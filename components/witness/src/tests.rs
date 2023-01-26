@@ -604,8 +604,8 @@ fn test_mbx() {
             assert_eq!(receipts.len(), 1);
             let receipt = mbx.receipt[0].clone();
 
-            assert_eq!(receipt.body.event.sn, 0);
-            assert_eq!(receipt.body.event.prefix, controller.prefix().clone());
+            assert_eq!(receipt.body.sn, 0);
+            assert_eq!(receipt.body.prefix, controller.prefix().clone());
         }
     }
 }
@@ -670,7 +670,7 @@ fn test_invalid_notice() {
 
         // change identifier
         let mut invalid_event = incept_event.clone();
-        invalid_event.event_message.event.content.prefix =
+        invalid_event.event_message.data.prefix =
             IdentifierPrefix::Basic(BasicPrefix::Ed25519(PublicKey::new(vec![0; 32])));
         let result = witness.process_notice(Notice::Event(invalid_event));
         // TODO: use better error variant
@@ -786,7 +786,7 @@ pub fn test_multisig() -> Result<(), ActorError> {
     )?;
     witness.process_notice(Notice::Event(group_icp.clone()))?;
 
-    let group_id = group_icp.event_message.event.get_prefix();
+    let group_id = group_icp.event_message.data.get_prefix();
     assert_eq!(exchange_messages.len(), 1);
 
     witness.process_exchange(exchange_messages[0].clone())?;
@@ -952,7 +952,7 @@ pub fn test_delegated_multisig() -> Result<(), ActorError> {
         Some(delegator.prefix().clone()),
     )?;
 
-    let group_id = group_dip.event_message.event.get_prefix();
+    let group_id = group_dip.event_message.data.get_prefix();
     let dip_digest = group_dip.event_message.get_digest();
     assert_eq!(exchange_messages.len(), 1);
 
@@ -1196,7 +1196,7 @@ pub fn test_delegating_multisig() -> Result<(), ActorError> {
         None,
     )?;
 
-    let delegator_group_id = group_icp.event_message.event.get_prefix();
+    let delegator_group_id = group_icp.event_message.data.get_prefix();
     assert_eq!(exchange_messages.len(), 1);
 
     // Send exchange message from delegator 1 to delegator 2
