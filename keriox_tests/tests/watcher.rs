@@ -6,7 +6,6 @@ use std::{
 use keri::{
     actor::{
         error::ActorError,
-        prelude::Versional,
         simple_controller::{PossibleResponse, SimpleController},
         SignedQueryError,
     },
@@ -117,10 +116,10 @@ pub fn watcher_forward_ksn() -> Result<(), Error> {
 
     // Watcher should know both controllers
     watcher
-        .parse_and_process_notices(&asker_icp.serialize().unwrap())
+        .parse_and_process_notices(&asker_icp.encode().unwrap())
         .unwrap();
     watcher
-        .parse_and_process_notices(&about_icp.serialize().unwrap())
+        .parse_and_process_notices(&about_icp.encode().unwrap())
         .unwrap();
 
     let query = asker_controller.query_ksn(about_controller.prefix())?;
@@ -155,7 +154,7 @@ pub fn watcher_forward_ksn() -> Result<(), Error> {
         SelfSigningPrefix::Ed25519Sha512(
             witness
                 .signer
-                .sign(witness_oobis[0].serialize().unwrap())
+                .sign(witness_oobis[0].encode().unwrap())
                 .unwrap(),
         ),
     );

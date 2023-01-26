@@ -206,7 +206,7 @@ impl SignedEventMessage {
         }
     }
 
-    pub fn serialize(&self) -> Result<Vec<u8>, Error> {
+    pub fn encode(&self) -> Result<Vec<u8>, Error> {
         Ok(to_string(&self)?.as_bytes().to_vec())
     }
 }
@@ -272,7 +272,6 @@ pub mod tests {
     use std::convert::TryFrom;
 
     use cesrox::{parse, ParsedData};
-    use version::Versional;
 
     use crate::{
         actor::prelude::Message,
@@ -295,11 +294,11 @@ pub mod tests {
         match msg {
             Message::Notice(Notice::Event(signed_event)) => {
                 assert_eq!(
-                    signed_event.event_message.serialize().unwrap().len(),
+                    signed_event.event_message.encode().unwrap().len(),
                     signed_event.event_message.serialization_info.size
                 );
 
-                let serialized_again = signed_event.serialize();
+                let serialized_again = signed_event.encode();
                 assert!(serialized_again.is_ok());
                 let stringified = String::from_utf8(serialized_again.unwrap()).unwrap();
                 assert_eq!(stream, stringified.as_bytes());
@@ -320,10 +319,10 @@ pub mod tests {
         match msg.unwrap() {
             Message::Notice(Notice::Event(signed_event)) => {
                 assert_eq!(
-                    signed_event.event_message.serialize().unwrap().len(),
+                    signed_event.event_message.encode().unwrap().len(),
                     signed_event.event_message.serialization_info.size
                 );
-                let serialized_again = signed_event.serialize();
+                let serialized_again = signed_event.encode();
                 assert!(serialized_again.is_ok());
                 let stringified = String::from_utf8(serialized_again.unwrap()).unwrap();
                 assert_eq!(stream, stringified.as_bytes())

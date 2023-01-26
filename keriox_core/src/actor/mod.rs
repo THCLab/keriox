@@ -24,7 +24,7 @@ use crate::{
 };
 pub use cesrox::cesr_proof::MaterialPath;
 use cesrox::parse_many;
-use version::{serialization_info::SerializationFormats, Versional};
+use version::{serialization_info::SerializationFormats};
 
 pub mod error;
 pub mod event_generator;
@@ -122,7 +122,7 @@ pub fn process_signed_oobi(
     let validator = EventValidator::new(event_storage.db.clone());
     // check signature
     validator.verify(
-        &Versional::serialize(&signed_oobi.reply)?,
+        &signed_oobi.reply.encode()?,
         &signed_oobi.signature,
     )?;
     // check digest
@@ -142,7 +142,7 @@ pub fn process_signed_exn(exn: SignedExchange, storage: &EventStorage) -> Result
         exn.signature
             .iter()
             .try_fold(true, |acc, signature| -> Result<bool, Error> {
-                Ok(acc && signature.verify(&Versional::serialize(exn_message)?, storage)?)
+                Ok(acc && signature.verify(&exn_message.encode()?, storage)?)
             });
     if verification_result? {
         process_exn(exn_message, exn.data_signature, storage)
@@ -209,7 +209,7 @@ pub fn process_signed_query(
                 .ok_or(SignedQueryError::InvalidSignature)?
                 .signature;
             let ver_result = match id.verify(
-                &Versional::serialize(&qr.query).map_err(|_e| Error::VersionError)?,
+                &qr.query.encode().map_err(|_e| Error::VersionError)?,
                 sig,
             ) {
                 Ok(result) => result,
@@ -228,7 +228,7 @@ pub fn process_signed_query(
                 .ok_or_else(|| SignedQueryError::UnknownSigner { id: signer_id })?
                 .current;
             if !key_config.verify(
-                &Versional::serialize(&qr.query).map_err(|_e| Error::VersionError)?,
+                &qr.query.encode()?,
                 &signatures,
             )? {
                 return Err(SignedQueryError::InvalidSignature);
@@ -314,6 +314,6 @@ pub mod prelude {
         processor::{basic_processor::BasicProcessor, event_storage::EventStorage, Processor},
     };
     pub use version::{
-        error::Error as VersionError, serialization_info::SerializationFormats, Versional,
+        error::Error as VersionError, serialization_info::SerializationFormats,
     };
 }

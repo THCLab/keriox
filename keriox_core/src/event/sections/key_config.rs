@@ -148,7 +148,6 @@ pub fn nxt_commitment(
 #[cfg(test)]
 mod test {
     use cesrox::parse;
-    use version::Versional;
 
     use crate::{
         error::Error,
@@ -299,7 +298,7 @@ mod test {
             Message::Notice(Notice::Event(ref e)) => {
                 if let EventData::Icp(icp) = e.to_owned().event_message.data.get_event_data() {
                     let kc = icp.key_config;
-                    let msg = e.event_message.serialize()?;
+                    let msg = e.event_message.encode()?;
                     assert!(kc.verify(&msg, &e.signatures)?);
                 }
             }
@@ -313,7 +312,7 @@ mod test {
             Message::Notice(Notice::Event(ref e)) => {
                 if let EventData::Icp(icp) = e.to_owned().event_message.data.get_event_data() {
                     let kc = icp.key_config;
-                    let msg = e.event_message.serialize()?;
+                    let msg = e.event_message.encode()?;
                     assert!(kc.verify(&msg, &e.signatures)?);
                 }
             }

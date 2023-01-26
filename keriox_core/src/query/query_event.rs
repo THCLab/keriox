@@ -7,7 +7,6 @@ use crate::{
     prefix::{AttachedSignaturePrefix, IdentifierPrefix},
     sai::derivation::SelfAddressing,
 };
-use version::Versional;
 
 // TODO: make enum with different query args
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -155,7 +154,7 @@ fn test_query_deserialize() {
 
     assert_eq!(
         input_query,
-        &String::from_utf8_lossy(&Versional::serialize(&qr).unwrap())
+        &String::from_utf8_lossy(&qr.encode().unwrap())
     );
 }
 
@@ -186,6 +185,6 @@ fn test_query_mbx_deserialize() {
 
     assert_eq!(
         input_query,
-        &String::from_utf8_lossy(&Versional::serialize(&qr).unwrap())
+        &String::from_utf8_lossy(&qr.encode().unwrap())
     );
 }

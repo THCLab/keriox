@@ -1,6 +1,3 @@
-use super::error::ActorError;
-use version::Versional;
-
 #[cfg(feature = "mailbox")]
 use crate::mailbox::exchange::{Exchange, ExchangeMessage, ForwardTopic, FwdArgs};
 #[cfg(feature = "oobi")]
@@ -41,7 +38,7 @@ pub fn incept(
         .with_witness_threshold(&SignatureThreshold::Simple(witness_threshold))
         .build()
         .map_err(|e| Error::EventGenerationError(e.to_string()))?
-        .serialize()
+        .encode()
         .map_err(|e| Error::EventGenerationError(e.to_string()))?;
 
     let icp = String::from_utf8(serialized_icp)
@@ -115,7 +112,7 @@ pub fn rotate(
         witness_to_remove,
         witness_threshold,
     )?
-    .serialize()
+    .encode()
     .map_err(|e| Error::EventGenerationError(e.to_string()))?;
     String::from_utf8(rot).map_err(|e| Error::EventGenerationError(e.to_string()))
 }
@@ -157,7 +154,7 @@ pub fn anchor(state: IdentifierState, payload: &[SelfAddressingPrefix]) -> Resul
         .with_seal(seal_list)
         .build()
         .map_err(|e| Error::EventGenerationError(e.to_string()))?
-        .serialize()
+        .encode()
         .map_err(|e| Error::EventGenerationError(e.to_string()))?;
     String::from_utf8(ixn).map_err(|e| Error::EventGenerationError(e.to_string()))
 }

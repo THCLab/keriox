@@ -1,3 +1,4 @@
+use crate::error::Error;
 use crate::event_message::EventTypeTag;
 use crate::event_message::Typeable;
 use crate::prefix::IdentifierPrefix;
@@ -7,7 +8,6 @@ use serde::{Deserialize, Serialize};
 use serde_hex::{Compact, SerHex};
 use version::serialization_info::SerializationFormats;
 use version::serialization_info::SerializationInfo;
-use version::Versional;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Receipt {
@@ -43,26 +43,24 @@ impl Receipt {
             prefix,
             sn,
         };
-        let len = Versional::serialize(&receipt).unwrap().len();
+        let len = receipt.encode().unwrap().len();
         serialization_info.size = len;
         receipt.serialization_info = serialization_info;
         receipt
+    }
+
+    pub fn encode(&self) -> Result<Vec<u8>, Error> {
+        Ok(self.serialization_info.serialize(&self).unwrap())
     }
 }
 
 impl From<Receipt> for Payload {
     fn from(pd: Receipt) -> Self {
         match pd.serialization_info.kind {
-            SerializationFormats::JSON => Payload::JSON(Versional::serialize(&pd).unwrap()),
-            SerializationFormats::MGPK => Payload::MGPK(Versional::serialize(&pd).unwrap()),
-            SerializationFormats::CBOR => Payload::CBOR(Versional::serialize(&pd).unwrap()),
+            SerializationFormats::JSON => Payload::JSON(pd.encode().unwrap()),
+            SerializationFormats::MGPK => Payload::MGPK(pd.encode().unwrap()),
+            SerializationFormats::CBOR => Payload::CBOR(pd.encode().unwrap()),
         }
-    }
-}
-
-impl Versional for Receipt {
-    fn get_version_str(&self) -> SerializationInfo {
-        self.serialization_info
     }
 }
 

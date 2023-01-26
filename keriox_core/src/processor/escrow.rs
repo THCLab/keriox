@@ -1,7 +1,5 @@
 use std::{sync::Arc, time::Duration};
 
-use version::Versional;
-
 use super::{
     event_storage::EventStorage,
     notification::{JustNotification, Notification, NotificationBus, Notifier},
@@ -458,7 +456,7 @@ impl PartiallyWitnessedEscrow {
         witnesses: &[BasicPrefix],
     ) -> Result<(), Error> {
         // verify receipts signatuers
-        let serialized_event = receipted_event.event_message.serialize()?;
+        let serialized_event = receipted_event.event_message.encode()?;
         self.get_receipt_couplets(rct, witnesses)?
             .into_iter()
             .map(|(witness, signature)| {
@@ -502,7 +500,7 @@ impl PartiallyWitnessedEscrow {
             couplets
                 .iter()
                 .map(|(bp, sp)| {
-                    bp.verify(&receipted_event.event_message.serialize()?, sp)?
+                    bp.verify(&receipted_event.event_message.encode()?, sp)?
                         .then(|| ())
                         .ok_or(Error::ReceiptVerificationError)
                 })
@@ -512,7 +510,7 @@ impl PartiallyWitnessedEscrow {
         new_state
             .current
             .verify(
-                &receipted_event.event_message.serialize()?,
+                &receipted_event.event_message.encode()?,
                 &receipted_event.signatures,
             )?
             .then(|| ())

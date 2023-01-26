@@ -7,7 +7,7 @@ use std::{
 
 use cesrox::{cesr_proof::MaterialPath, parse, primitives::CesrPrimitive};
 use serde::{Deserialize, Serialize};
-use version::{serialization_info::SerializationFormats, Versional};
+use version::{serialization_info::SerializationFormats};
 
 use super::{event_generator, prelude::Message, process_message};
 #[cfg(feature = "mailbox")]
@@ -324,7 +324,7 @@ impl<K: KeyManager> SimpleController<K> {
         let end_role =
             event_generator::generate_end_role(&self.prefix(), watcher_id, Role::Watcher, true)
                 .unwrap();
-        let sed: Vec<u8> = Versional::serialize(&end_role)?;
+        let sed: Vec<u8> = end_role.encode()?;
         let sig = self.key_manager.clone().lock().unwrap().sign(&sed)?;
         let att_sig = AttachedSignaturePrefix::new(SelfSigningPrefix::Ed25519Sha512(sig), 0);
 
@@ -404,7 +404,7 @@ impl<K: KeyManager> SimpleController<K> {
         let ixn = event_generator::anchor_with_seal(state, seal)?;
         // .map_err(|e| Error::SemanticError(e.to_string()))?;
         let km = self.key_manager.lock().map_err(|_| Error::MutexPoisoned)?;
-        let signature = km.sign(&Versional::serialize(&ixn)?)?;
+        let signature = km.sign(&ixn.encode()?)?;
 
         let signed = ixn.sign(
             vec![AttachedSignaturePrefix::new(
@@ -434,7 +434,7 @@ impl<K: KeyManager> SimpleController<K> {
             let ixn = event_generator::anchor_with_seal(state, seals)
                 .map_err(|e| Error::SemanticError(e.to_string()))?;
             let km = self.key_manager.lock().map_err(|_| Error::MutexPoisoned)?;
-            let signature = km.sign(&Versional::serialize(&ixn)?)?;
+            let signature = km.sign(&ixn.encode()?)?;
 
             let attached_signature = AttachedSignaturePrefix::new(
                 SelfSigningPrefix::Ed25519Sha512(signature),
@@ -537,7 +537,7 @@ impl<K: KeyManager> SimpleController<K> {
                 self.key_manager
                     .lock()
                     .unwrap()
-                    .sign(&Versional::serialize(&event.event_message)?)?,
+                    .sign(&event.event_message.encode()?)?,
             ),
         };
         let signed_icp = event
@@ -591,7 +591,7 @@ impl<K: KeyManager> SimpleController<K> {
                 },
             );
 
-            let icp = Versional::serialize(
+            let icp = 
                 &event_generator::incept_with_next_hashes(
                     pks,
                     signature_threshold,
@@ -600,8 +600,7 @@ impl<K: KeyManager> SimpleController<K> {
                     witness_threshold.unwrap_or(0),
                     delegator.as_ref(),
                 )
-                .unwrap(),
-            )?;
+                .unwrap().encode()?;
 
             let signature = km.sign(&icp)?;
             let key_event = parse(&icp).unwrap().1.payload;
@@ -670,7 +669,7 @@ impl<K: KeyManager> SimpleController<K> {
                 self.key_manager
                     .lock()
                     .unwrap()
-                    .sign(&Versional::serialize(&exn_message)?)?,
+                    .sign(&exn_message.encode()?)?,
             )
         };
 
@@ -717,7 +716,7 @@ impl<K: KeyManager> SimpleController<K> {
             .key_manager
             .lock()
             .unwrap()
-            .sign(&Versional::serialize(&qry_msg).unwrap())
+            .sign(&qry_msg.encode().unwrap())
             .unwrap();
         let signatures = vec![AttachedSignaturePrefix::new(
             SelfSigningPrefix::Ed25519Sha512(signature),
@@ -757,7 +756,7 @@ impl<K: KeyManager> SimpleController<K> {
                     .key_manager
                     .lock()
                     .unwrap()
-                    .sign(&Versional::serialize(&qry_msg).unwrap())
+                    .sign(&qry_msg.encode().unwrap())
                     .unwrap();
                 let signatures = vec![AttachedSignaturePrefix::new(
                     SelfSigningPrefix::Ed25519Sha512(signature),

@@ -10,7 +10,6 @@ use crate::{
 };
 use ed25519_dalek::Keypair;
 use rand::rngs::OsRng;
-use version::Versional;
 
 /// Collects data for testing `IdentifierState` update. `prev_event_hash`, `sn`,
 /// `current_keypair` and `new_keypair` are used to generate mock event message
@@ -84,7 +83,7 @@ fn test_update_identifier_state(
     let prefix = event_msg.data.get_prefix();
 
     // Serialize event message before signing.
-    let sed = event_msg.serialize()?;
+    let sed = event_msg.encode()?;
 
     let attached_sig = {
         // Sign.

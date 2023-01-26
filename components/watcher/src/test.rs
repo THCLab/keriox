@@ -45,7 +45,7 @@ async fn test_authentication() -> Result<(), Error> {
     let asker_icp = asker_controller
         .incept(None, None, None)
         .unwrap()
-        .serialize()
+        .encode()
         .unwrap();
 
     // Controller about witch we will ask
@@ -76,7 +76,7 @@ async fn test_authentication() -> Result<(), Error> {
     let about_icp = about_controller
         .incept(None, None, None)
         .unwrap()
-        .serialize()
+        .encode()
         .unwrap();
 
     let url = Url::parse("http://some/dummy/url").unwrap();

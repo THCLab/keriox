@@ -1,5 +1,5 @@
 use cesrox::primitives::codes::self_addressing::dummy_prefix;
-use version::{serialization_info::SerializationInfo, Versional};
+use version::{serialization_info::SerializationInfo};
 
 use crate::{
     error::Error,
@@ -66,16 +66,16 @@ impl KeriEvent<KeyEvent> {
                 self.get_digest().derivation,
                 self.serialization_info.kind,
             )?
-            .serialize()?,
+            .encode()?,
             EventData::Dip(dip) => DummyInceptionEvent::dummy_delegated_inception_data(
                 dip,
                 self.get_digest().derivation,
                 self.serialization_info.kind,
             )?
-            .serialize()?,
+            .encode()?,
             _ => {
                 let dummy_event: DummyEvent<_, _> = self.clone().into();
-                dummy_event.serialize()?
+                dummy_event.encode()?
             }
         })
     }

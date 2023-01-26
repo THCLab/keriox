@@ -10,7 +10,6 @@ use serde::Serialize;
 use serde_hex::{Compact, SerHex};
 use version::{
     serialization_info::{SerializationFormats, SerializationInfo},
-    Versional,
 };
 
 /// Dummy Inception Event
@@ -67,7 +66,7 @@ impl DummyInceptionEvent {
                     sn: 0,
                     data: data.clone(),
                 }
-                .serialize()?
+                .encode()?
                 .len(),
             ),
             event_type: data.get_type(),
@@ -78,8 +77,8 @@ impl DummyInceptionEvent {
         })
     }
 
-    pub fn serialize(&self) -> Result<Vec<u8>, Error> {
-        Ok(self.serialization_info.kind.encode(&self).unwrap())
+    pub fn encode(&self) -> Result<Vec<u8>, Error> {
+        Ok(self.serialization_info.serialize(&self).unwrap())
     }
 }
 
@@ -99,13 +98,10 @@ pub(crate) struct DummyEvent<T: Serialize, D: Serialize + Typeable<TypeTag = T>>
     pub data: D,
 }
 
-impl<T: Serialize, D: Serialize + Typeable<TypeTag = T>> Versional for DummyEvent<T, D> {
-    fn get_version_str(&self) -> SerializationInfo {
-        self.serialization_info
-    }
-}
-
 impl<T: Serialize, D: Serialize + Typeable<TypeTag = T>> DummyEvent<T, D> {
+    pub fn encode(&self) -> Result<Vec<u8>, Error> {
+        Ok(self.serialization_info.serialize(&self).unwrap())
+    }
     pub fn dummy_event(
         event: D,
         format: SerializationFormats,
@@ -120,7 +116,7 @@ impl<T: Serialize, D: Serialize + Typeable<TypeTag = T>> DummyEvent<T, D> {
             digest: dummy_prefix,
             data: event,
         };
-        let event_len = Versional::serialize(&dummy_event)?.len();
+        let event_len = dummy_event.encode()?.len();
         version.size = event_len;
         dummy_event.serialization_info = version;
         Ok(dummy_event)

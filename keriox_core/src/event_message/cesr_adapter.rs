@@ -7,7 +7,7 @@ use cesrox::{
     ParsedData,
 };
 use serde::{Deserialize, Serialize};
-use version::{serialization_info::SerializationFormats, Versional};
+use version::{serialization_info::SerializationFormats};
 
 use crate::{
     error::Error,
@@ -61,14 +61,14 @@ pub enum EventType {
 impl EventType {
     pub fn serialize(&self) -> Result<Vec<u8>, Error> {
         Ok(match self {
-            EventType::KeyEvent(event) => Versional::serialize(event),
-            EventType::Receipt(rcp) => Versional::serialize(rcp),
+            EventType::KeyEvent(event) => event.encode(),
+            EventType::Receipt(rcp) => rcp.encode(),
             #[cfg(feature = "query")]
-            EventType::Qry(qry) => Versional::serialize(qry),
+            EventType::Qry(qry) => qry.encode(),
             #[cfg(feature = "query")]
-            EventType::Rpy(rpy) => Versional::serialize(rpy),
+            EventType::Rpy(rpy) => rpy.encode(),
             #[cfg(feature = "mailbox")]
-            EventType::Exn(exn) => Versional::serialize(exn),
+            EventType::Exn(exn) => exn.encode(),
         }?)
     }
 }
@@ -116,9 +116,9 @@ impl From<&SignedEventMessage> for ParsedData {
 impl<T: Serialize, D: Typeable<TypeTag = T> + Serialize + Clone> From<KeriEvent<D>> for Payload {
     fn from(pd: KeriEvent<D>) -> Self {
         match pd.serialization_info.kind {
-            SerializationFormats::JSON => Payload::JSON(Versional::serialize(&pd).unwrap()),
-            SerializationFormats::MGPK => Payload::MGPK(Versional::serialize(&pd).unwrap()),
-            SerializationFormats::CBOR => Payload::CBOR(Versional::serialize(&pd).unwrap()),
+            SerializationFormats::JSON => Payload::JSON(pd.encode().unwrap()),
+            SerializationFormats::MGPK => Payload::MGPK(pd.encode().unwrap()),
+            SerializationFormats::CBOR => Payload::CBOR(pd.encode().unwrap()),
         }
     }
 }

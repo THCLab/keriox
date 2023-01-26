@@ -50,7 +50,7 @@ impl EventStorage {
         match self.db.get_kel_finalized_events(id) {
             Some(events) => Ok(Some(
                 events
-                    .map(|event| event.signed_event_message.serialize().unwrap_or_default())
+                    .map(|event| event.signed_event_message.encode().unwrap_or_default())
                     .fold(vec![], |mut accum, serialized_event| {
                         accum.extend(serialized_event);
                         accum

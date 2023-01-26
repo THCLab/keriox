@@ -1,5 +1,4 @@
 use crate::error::Error;
-use version::Versional;
 
 use self::{manager_event::ManagerTelEventMessage, vc_event::VCEventMessage};
 use keri::prefix::IdentifierPrefix;
@@ -32,8 +31,8 @@ impl Event {
 
     pub fn serialize(&self) -> Result<Vec<u8>, Error> {
         match self {
-            Event::Management(man) => Ok(Versional::serialize(man)?),
-            Event::Vc(ev) => Ok(Versional::serialize(ev)?),
+            Event::Management(man) => Ok(man.encode()?),
+            Event::Vc(ev) => Ok(ev.encode()?),
         }
     }
 }

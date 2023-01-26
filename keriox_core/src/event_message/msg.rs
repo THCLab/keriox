@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize, Serializer};
 use version::{
     serialization_info::{SerializationFormats, SerializationInfo},
-    Versional,
 };
 
 use crate::{
@@ -35,18 +34,11 @@ impl<T: Serialize, D: Serialize + Typeable<TypeTag = T> + Clone> SAD for KeriEve
     }
 
     fn dummy_event(&self) -> Result<Vec<u8>, Error> {
-        Versional::serialize(&DummyEvent::dummy_event(
+        DummyEvent::dummy_event(
             self.data.clone(),
             self.serialization_info.kind,
             &self.digest.derivation,
-        )?)
-        .map_err(|_e| Error::VersionError)
-    }
-}
-
-impl<T: Serialize, D: Serialize + Typeable<TypeTag = T> + Clone> Versional for KeriEvent<D> {
-    fn get_version_str(&self) -> SerializationInfo {
-        self.serialization_info
+        )?.encode()
     }
 }
 
@@ -58,12 +50,16 @@ impl<T: Serialize, D: Serialize + Typeable<TypeTag = T> + Clone> KeriEvent<D> {
     ) -> Result<Self, Error> {
         let dummy_event = DummyEvent::dummy_event(event.clone(), format, &derivation)?;
 
-        let sai = derivation.derive(&Versional::serialize(&dummy_event)?);
+        let sai = derivation.derive(&dummy_event.encode()?);
         Ok(Self {
             serialization_info: dummy_event.serialization_info,
             digest: sai,
             data: event,
         })
+    }
+    
+    pub fn encode(&self) -> Result<Vec<u8>, Error> {
+        Ok(self.serialization_info.serialize(&self).unwrap())
     }
 }
 

@@ -116,7 +116,7 @@ mod tests {
     };
     use ed25519_dalek::Keypair;
     use rand::rngs::OsRng;
-    use version::{serialization_info::SerializationFormats, Versional};
+    use version::{serialization_info::SerializationFormats};
 
     #[test]
     fn basic_create() -> Result<(), Error> {
@@ -162,7 +162,7 @@ mod tests {
         let icp_m = icp.to_message(SerializationFormats::JSON, SelfAddressing::Blake3_256)?;
 
         // serialised message
-        let ser: Vec<_> = Versional::serialize(&icp_m)?;
+        let ser: Vec<_> = icp_m.encode()?;
 
         // sign
         let sig = priv_key0.sign_ed(&ser)?;
@@ -243,7 +243,7 @@ mod tests {
         .incept_self_addressing(SelfAddressing::Blake3_256, SerializationFormats::JSON)?;
 
         // serialised
-        let serialized: Vec<_> = Versional::serialize(&icp)?;
+        let serialized: Vec<_> = icp.encode()?;
 
         // sign
         let sk = priv_key0;

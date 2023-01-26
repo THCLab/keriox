@@ -37,7 +37,7 @@ impl DelegatedInceptionEvent {
             derivation.clone(),
             format,
         )?;
-        let digest = derivation.derive(&dummy_event.serialize()?);
+        let digest = derivation.derive(&dummy_event.encode()?);
         let event = KeyEvent::new(
             IdentifierPrefix::SelfAddressing(digest.clone()),
             0,

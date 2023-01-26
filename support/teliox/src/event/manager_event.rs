@@ -10,7 +10,6 @@ use keri::{
 use serde_json::Value;
 use version::{
     serialization_info::{SerializationFormats, SerializationInfo},
-    Versional,
 };
 
 use crate::error::Error;
@@ -154,28 +153,27 @@ impl DummyEvent {
     ) -> Result<Vec<u8>, Error> {
         use cesrox::primitives::codes::self_addressing::SelfAddressing as CesrCode;
         let derivation_code: CesrCode = derivation.clone().into();
-        Ok(Versional::serialize(&Self {
+        Self {
             serialization_info: SerializationInfo::new(
                 ['K', 'E', 'R', 'I'],
                 format,
-                Versional::serialize(&Self {
+                Self {
                     serialization_info: SerializationInfo::default(),
                     prefix: dummy_prefix(&derivation_code),
                     sn: 0,
                     data: data.clone(),
-                })?
+                }
+                .encode()?
                 .len(),
             ),
             prefix: dummy_prefix(&derivation_code),
             sn: 0,
             data,
-        })?)
+        }.encode()
     }
-}
 
-impl Versional for DummyEvent {
-    fn get_version_str(&self) -> SerializationInfo {
-        self.serialization_info
+    pub fn encode(&self) -> Result<Vec<u8>, Error> {
+        Ok(self.serialization_info.serialize(&self)?)
     }
 }
 
@@ -210,7 +208,7 @@ mod tests {
         prefix::IdentifierPrefix,
         sai::{derivation::SelfAddressing, sad::SAD},
     };
-    use version::{serialization_info::SerializationFormats, Versional};
+    use version::{serialization_info::SerializationFormats};
 
     use crate::{
         error::Error,
@@ -239,7 +237,7 @@ mod tests {
         });
         assert_eq!(vcp.data.event_type, expected_event_type);
         assert_eq!(
-            String::from_utf8(vcp.serialize().unwrap()).unwrap(),
+            String::from_utf8(vcp.encode().unwrap()).unwrap(),
             vcp_raw
         );
 
@@ -297,7 +295,7 @@ mod tests {
         });
         let vcp = ManagerTelEvent::new(&pref, 0, event_type)
             .to_message(SerializationFormats::JSON, SelfAddressing::Blake3_256)?;
-        println!("\nvcp: {}", String::from_utf8(vcp.serialize()?).unwrap());
+        println!("\nvcp: {}", String::from_utf8(vcp.encode()?).unwrap());
 
         let state = ManagerTelState::default();
         let state = state.apply(&vcp)?;
@@ -315,7 +313,7 @@ mod tests {
         });
         let vrt = ManagerTelEvent::new(&pref, 1, event_type.clone())
             .to_message(SerializationFormats::JSON, SelfAddressing::Blake3_256)?;
-        println!("\nvrt: {}", String::from_utf8(vrt.serialize()?).unwrap());
+        println!("\nvrt: {}", String::from_utf8(vrt.encode()?).unwrap());
         let state = state.apply(&vrt)?;
         assert_eq!(state.backers.clone().unwrap().len(), 1);
         assert_eq!(state.sn, 1);
@@ -380,7 +378,7 @@ mod tests {
         });
         let vcp = ManagerTelEvent::new(&pref, 0, event_type)
             .to_message(SerializationFormats::JSON, SelfAddressing::Blake3_256)?;
-        println!("\nvcp: {}", String::from_utf8(vcp.serialize()?).unwrap());
+        println!("\nvcp: {}", String::from_utf8(vcp.encode()?).unwrap());
 
         let state = ManagerTelState::default();
         let state = state.apply(&vcp)?;
@@ -388,7 +386,7 @@ mod tests {
         assert_eq!(state.backers, None);
 
         // Construct rotation event
-        let prev_event = SelfAddressing::Blake3_256.derive(&vcp.serialize()?);
+        let prev_event = SelfAddressing::Blake3_256.derive(&vcp.encode()?);
         let event_type = ManagerEventType::Vrt(Rot {
             prev_event,
             backers_to_add: vec!["EXvR3p8V95W8J7Ui4-mEzZ79S-A1esAnJo1Kmzq80Jkc"

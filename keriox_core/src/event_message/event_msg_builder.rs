@@ -24,7 +24,7 @@ use crate::{
 };
 use ed25519_dalek::Keypair;
 use rand::rngs::OsRng;
-use version::{serialization_info::SerializationFormats, Versional};
+use version::{serialization_info::SerializationFormats};
 
 use super::{msg::KeriEvent, EventTypeTag};
 
@@ -335,5 +335,5 @@ fn test_multisig_prefix_derivation() {
         .with_next_threshold(&SignatureThreshold::Simple(2));
     let msg = msg_builder.build().unwrap();
 
-    assert_eq!(expected_event.to_vec(), msg.serialize().unwrap());
+    assert_eq!(expected_event.to_vec(), msg.encode().unwrap());
 }

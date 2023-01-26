@@ -1,7 +1,6 @@
 use std::{convert::TryFrom, fs, sync::Arc};
 
 use cesrox::{parse, parse_many, primitives::CesrPrimitive};
-use version::Versional;
 
 use crate::{
     database::{escrow::EscrowDb, SledEventDatabase},
@@ -60,7 +59,7 @@ fn test_process() -> Result<(), Error> {
     let re_serialized = icp_from_db
         .unwrap()
         .signed_event_message
-        .serialize()
+        .encode()
         .unwrap();
     assert_eq!(icp_raw.to_vec(), re_serialized);
 
@@ -72,7 +71,7 @@ fn test_process() -> Result<(), Error> {
     event_processor.process(&deserialized_rot.clone())?;
     let rot_from_db = event_storage.get_event_at_sn(&id, 1).unwrap().unwrap();
     assert_eq!(
-        rot_from_db.signed_event_message.serialize().unwrap(),
+        rot_from_db.signed_event_message.encode().unwrap(),
         rot_raw
     );
 
@@ -205,7 +204,7 @@ fn test_process_delegated() -> Result<(), Error> {
     // Helper function for serializing message (without attachments)
     let raw_parsed = |ev: Message| -> Result<Vec<_>, Error> {
         if let Message::Notice(Notice::Event(ev)) = ev {
-            Ok(ev.event_message.serialize()?)
+            Ok(ev.event_message.encode()?)
         } else {
             Ok(vec![])
         }
@@ -217,7 +216,7 @@ fn test_process_delegated() -> Result<(), Error> {
         .unwrap()
         .unwrap();
     assert_eq!(
-        ixn_from_db.signed_event_message.event_message.serialize()?,
+        ixn_from_db.signed_event_message.event_message.encode()?,
         raw_parsed(deserialized_ixn)?
     );
 
@@ -228,7 +227,7 @@ fn test_process_delegated() -> Result<(), Error> {
     let dip_from_db = event_storage.get_event_at_sn(&child_prefix, 0)?.unwrap();
 
     assert_eq!(
-        dip_from_db.signed_event_message.event_message.serialize()?,
+        dip_from_db.signed_event_message.event_message.encode()?,
         raw_parsed(deserialized_dip.clone())?
     );
 
@@ -244,7 +243,7 @@ fn test_process_delegated() -> Result<(), Error> {
         .get_event_at_sn(&delegator_prefix, 2)?
         .unwrap();
     assert_eq!(
-        ixn_from_db.signed_event_message.event_message.serialize()?,
+        ixn_from_db.signed_event_message.event_message.encode()?,
         raw_parsed(deserialized_ixn_drt)?
     );
 
@@ -259,7 +258,7 @@ fn test_process_delegated() -> Result<(), Error> {
     // Check if processed drt event is in db.
     let drt_from_db = event_storage.get_event_at_sn(&child_prefix, 1)?.unwrap();
     assert_eq!(
-        drt_from_db.signed_event_message.event_message.serialize()?,
+        drt_from_db.signed_event_message.event_message.encode()?,
         raw_parsed(deserialized_drt)?
     );
 
@@ -391,7 +390,7 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
         "EKkedrfoZz54Xsb_lGGdKTkYqNMf6TMrX1x57M1j0yi3"
     );
     // sign inception event
-    let signature = signers[0].sign(icp.serialize().unwrap())?;
+    let signature = signers[0].sign(icp.encode().unwrap())?;
     let signed_icp = icp.sign(
         vec![AttachedSignaturePrefix::new(
             SelfSigningPrefix::Ed25519Sha512(signature),
@@ -430,7 +429,7 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
         .iter()
         .enumerate()
         .map(|(index, sig)| {
-            let signature = sig.sign(rotation.serialize().unwrap()).unwrap();
+            let signature = sig.sign(rotation.encode().unwrap()).unwrap();
             AttachedSignaturePrefix::new(SelfSigningPrefix::Ed25519Sha512(signature), index as u16)
         })
         .collect::<Vec<_>>();
@@ -468,7 +467,7 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
         .iter()
         .enumerate()
         .map(|(index, sig)| {
-            let signature = sig.sign(rotation.serialize().unwrap()).unwrap();
+            let signature = sig.sign(rotation.encode().unwrap()).unwrap();
             AttachedSignaturePrefix::new(SelfSigningPrefix::Ed25519Sha512(signature), index as u16)
         })
         .collect::<Vec<_>>();
@@ -535,7 +534,7 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
         "EM2y0cPBcua33FMaji79hQ2NVq7mzIIEX8Zlw0Ch5OQQ"
     );
     // sign inception event
-    let signature = signers[0].sign(icp.serialize().unwrap())?;
+    let signature = signers[0].sign(icp.encode().unwrap())?;
     let signed_icp = icp.sign(
         vec![AttachedSignaturePrefix::new(
             SelfSigningPrefix::Ed25519Sha512(signature),
@@ -585,7 +584,7 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
         .iter()
         .enumerate()
         .map(|(index, sig)| {
-            let signature = sig.sign(rotation.serialize().unwrap()).unwrap();
+            let signature = sig.sign(rotation.encode().unwrap()).unwrap();
             AttachedSignaturePrefix::new(SelfSigningPrefix::Ed25519Sha512(signature), index as u16)
         })
         .collect::<Vec<_>>();
@@ -624,7 +623,7 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
         .iter()
         .enumerate()
         .map(|(index, sig)| {
-            let signature = sig.sign(rotation.serialize().unwrap()).unwrap();
+            let signature = sig.sign(rotation.encode().unwrap()).unwrap();
             AttachedSignaturePrefix::new(SelfSigningPrefix::Ed25519Sha512(signature), index as u16)
         })
         .collect::<Vec<_>>();

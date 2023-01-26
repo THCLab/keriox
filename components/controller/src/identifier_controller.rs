@@ -6,7 +6,7 @@ use std::{
 use keri::{
     actor::{
         event_generator,
-        prelude::{Message, SerializationFormats, Versional},
+        prelude::{Message, SerializationFormats},
         simple_controller::PossibleResponse,
         MaterialPath,
     },
@@ -154,7 +154,7 @@ impl IdentifierController {
     pub fn add_watcher(&self, watcher_id: IdentifierPrefix) -> Result<String, ControllerError> {
         String::from_utf8(
             event_generator::generate_end_role(&self.id, &watcher_id, Role::Watcher, true)?
-                .serialize()?,
+                .encode()?,
         )
         .map_err(|_e| ControllerError::EventFormatError)
     }
@@ -163,7 +163,7 @@ impl IdentifierController {
     pub fn remove_watcher(&self, watcher_id: IdentifierPrefix) -> Result<String, ControllerError> {
         String::from_utf8(
             event_generator::generate_end_role(&self.id, &watcher_id, Role::Watcher, false)?
-                .serialize()?,
+                .encode()?,
         )
         .map_err(|_e| ControllerError::EventFormatError)
     }
@@ -239,21 +239,21 @@ impl IdentifierController {
             delegator.as_ref(),
         )?;
 
-        let serialized_icp = String::from_utf8(icp.serialize()?)
+        let serialized_icp = String::from_utf8(icp.encode()?)
             .map_err(|e| ControllerError::EventGenerationError(e.to_string()))?;
 
         let mut exchanges = participants
             .iter()
             .map(|id| -> Result<_, _> {
                 let exn =
-                    event_generator::exchange(id, &icp, ForwardTopic::Multisig)?.serialize()?;
+                    event_generator::exchange(id, &icp, ForwardTopic::Multisig)?.encode()?;
                 String::from_utf8(exn).map_err(|_e| ControllerError::EventFormatError)
             })
             .collect::<Result<Vec<String>, ControllerError>>()?;
 
         if let Some(delegator) = delegator {
             let delegation_request = String::from_utf8(
-                event_generator::exchange(&delegator, &icp, ForwardTopic::Delegate)?.serialize()?,
+                event_generator::exchange(&delegator, &icp, ForwardTopic::Delegate)?.encode()?,
             )
             .map_err(|_e| ControllerError::EventFormatError)?;
             exchanges.push(delegation_request);

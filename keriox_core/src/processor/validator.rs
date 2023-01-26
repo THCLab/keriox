@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 #[cfg(feature = "query")]
 use chrono::{DateTime, FixedOffset};
-use version::Versional;
 
 use super::event_storage::EventStorage;
 use crate::{
@@ -53,7 +52,7 @@ impl EventValidator {
         let new_state = self.apply_to_state(&signed_event.event_message)?;
         // match on verification result
         let ver_result = new_state.current.verify(
-            &signed_event.event_message.serialize()?,
+            &signed_event.event_message.encode()?,
             &signed_event.signatures,
         )?;
         // If delegated event, check its delegator seal.
@@ -114,7 +113,7 @@ impl EventValidator {
             )?;
             if kp.is_some()
                 && kp.unwrap().verify(
-                    &event.signed_event_message.event_message.serialize()?,
+                    &event.signed_event_message.event_message.encode()?,
                     &vrc.signatures,
                 )?
             {
@@ -182,7 +181,7 @@ impl EventValidator {
             .event_storage
             .get_event_at_sn(&rct.body.prefix, rct.body.sn)
         {
-            let serialized_event = event.signed_event_message.event_message.serialize()?;
+            let serialized_event = event.signed_event_message.event_message.encode()?;
             let signer_couplets = self.get_receipt_couplets(rct)?;
             signer_couplets
                 .into_iter()
@@ -338,7 +337,7 @@ impl EventValidator {
             if rpy.signature.get_signer().ok_or(Error::MissingSigner)? != signer_id {
                 return Err(QueryError::Error("Wrong reply message signer".into()).into());
             };
-            self.verify(&rpy.reply.serialize()?, &rpy.signature)?;
+            self.verify(&rpy.reply.encode()?, &rpy.signature)?;
             rpy.reply.check_digest()?;
             let reply_prefix = ksn.state.prefix.clone();
 
