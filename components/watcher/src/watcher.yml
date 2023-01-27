@@ -1,0 +1,5 @@
+db_path: "db/"
+public_url: "http://localhost:3236/"
+seed: "Alntkt3u6dDgiQxTATr01dy8M72uuaZEf9eTdM-70Gk8"
+http_port: 3236
+initial_oobis: []

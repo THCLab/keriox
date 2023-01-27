@@ -30,7 +30,6 @@ pub fn watcher_forward_ksn() -> Result<(), Error> {
 
         Arc::new(WitnessListener::setup(
             witness_url,
-            None,
             root_witness.path(),
             Some("ArwXoACJgOleVZ2PY7kXn7rA0II0mHYDhc6WrBH8fDAc".into()),
         )?)

@@ -22,7 +22,6 @@ async fn test_multisig() -> Result<()> {
         let wit_root = Builder::new().prefix("wit-db").tempdir().unwrap();
         Arc::new(WitnessListener::setup(
             Url::parse("http://127.0.0.1:3232").unwrap(),
-            None,
             wit_root.path(),
             Some("ArwXoACJgOleVZ2PY7kXn7rA0II0mHYDhc6WrBH8fDAc".to_string()),
         )?)

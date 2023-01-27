@@ -1,71 +1,68 @@
-use std::path::PathBuf;
+use std::{net::Ipv4Addr, path::PathBuf};
 
+use clap::Parser;
 use figment::{
-    providers::{Format, Json},
+    providers::{Env, Format, Serialized, Yaml},
     Figment,
 };
 use keri::{
     oobi::{LocationScheme, Scheme},
     prefix::{CesrPrimitive, IdentifierPrefix},
 };
-use serde::Deserialize;
-use structopt::StructOpt;
+use serde::{Deserialize, Serialize};
+use url::Url;
 use watcher::WatcherListener;
 
 #[derive(Deserialize)]
-pub struct WatcherConfig {
+pub struct Config {
     db_path: PathBuf,
-    public_address: Option<String>,
-    /// Witness listen host.
-    http_host: String,
-    /// Witness listen port.
+    /// Public URL used to advertise itself to other actors using OOBI.
+    public_url: Url,
+    /// HTTP listen port.
     http_port: u16,
     /// Witness private key
     seed: Option<String>,
     initial_oobis: Vec<LocationScheme>,
 }
 
-#[derive(Debug, StructOpt)]
-struct Opts {
-    #[structopt(short = "c", long, default_value = "./watcher.json")]
+#[derive(Debug, Parser, Serialize)]
+struct Args {
+    #[arg(short = 'c', long, default_value = "./watcher.yml")]
     config_file: String,
+    #[arg(short = 'd', long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    db_path: Option<PathBuf>,
 }
 
 #[actix_web::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let Opts { config_file } = Opts::from_args();
+    let args = Args::parse();
 
-    let WatcherConfig {
-        db_path,
-        public_address,
-        http_host,
-        http_port,
-        seed,
-        initial_oobis,
-    } = Figment::new().join(Json::file(config_file)).extract()?;
-
-    let http_address = format!("http://{}:{}", http_host, http_port);
-    let watcher_url = url::Url::parse(&http_address).unwrap();
+    let cfg = Figment::new()
+        .merge(Yaml::file(args.config_file.clone()))
+        .merge(Env::prefixed("WATCHER_"))
+        .merge(Serialized::defaults(args))
+        .extract::<Config>()?;
 
     let watcher_listener =
-        WatcherListener::setup(watcher_url.clone(), public_address, &db_path, seed).unwrap();
+        WatcherListener::setup(cfg.public_url.clone(), &cfg.db_path, cfg.seed).unwrap();
 
     // Resolve oobi to know how to find witness
     watcher_listener
-        .resolve_initial_oobis(&initial_oobis)
+        .resolve_initial_oobis(&cfg.initial_oobis)
         .await
         .unwrap();
     let watcher_id = watcher_listener.get_prefix();
     let watcher_loc_scheme = LocationScheme {
         eid: IdentifierPrefix::Basic(watcher_id.clone()),
         scheme: Scheme::Http,
-        url: watcher_url,
+        url: cfg.public_url.clone(),
     };
 
     println!(
-        "Watcher {} is listening on {}",
+        "Watcher {} is listening on port {}",
         watcher_id.to_str(),
-        http_address,
+        cfg.http_port,
     );
     println!(
         "Watcher's oobi: {}",
@@ -73,7 +70,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     watcher_listener
-        .listen_http(url::Url::parse(&http_address).unwrap())
+        .listen_http((Ipv4Addr::UNSPECIFIED, cfg.http_port))
         .await?;
 
     Ok(())

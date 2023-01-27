@@ -1,4 +1,4 @@
-use std::{path::Path, sync::Arc};
+use std::{net::ToSocketAddrs, path::Path, sync::Arc};
 
 use actix_web::{dev::Server, web, App, HttpServer};
 use keri::{
@@ -18,19 +18,12 @@ pub struct WatcherListener {
 
 impl WatcherListener {
     pub fn setup(
-        address: url::Url,
-        public_address: Option<String>,
+        pub_addr: url::Url,
         event_db_path: &Path,
         priv_key: Option<String>,
     ) -> Result<Self, Error> {
-        let pub_address = if let Some(pub_address) = public_address {
-            url::Url::parse(&format!("http://{}", pub_address)).unwrap()
-        } else {
-            address
-        };
-
         WatcherData::setup(
-            pub_address,
+            pub_addr,
             event_db_path,
             priv_key,
             Box::new(DefaultTransport::default()),
@@ -60,10 +53,7 @@ impl WatcherListener {
         })
     }
 
-    pub fn listen_http(self, address: url::Url) -> Server {
-        let host = address.host().unwrap().to_string();
-        let port = address.port().unwrap();
-
+    pub fn listen_http(self, addr: impl ToSocketAddrs) -> Server {
         let state = web::Data::new(self.watcher_data);
         HttpServer::new(move || {
             App::new()
@@ -93,7 +83,7 @@ impl WatcherListener {
                     actix_web::web::post().to(http_handlers::resolve_oobi),
                 )
         })
-        .bind((host, port))
+        .bind(addr)
         .unwrap()
         .run()
     }

@@ -110,8 +110,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
         let seed = "AK8F6AAiYDpXlWdj2O5F5-6wNCCNJh2A4XOlqwR_HwwH";
         let witness_root = Builder::new().prefix("test-wit1-db").tempdir().unwrap();
         Arc::new(WitnessListener::setup(
-            url::Url::parse("http://witness1:3232/").unwrap(), // not used
-            None,
+            url::Url::parse("http://witness1:3232/").unwrap(),
             witness_root.path(),
             Some(seed.to_string()),
         )?)
@@ -388,8 +387,7 @@ async fn test_2_wit() -> Result<(), ControllerError> {
         let seed = "AK8F6AAiYDpXlWdj2O5F5-6wNCCNJh2A4XOlqwR_HwwH";
         let witness_root = Builder::new().prefix("test-wit1-db").tempdir().unwrap();
         Arc::new(WitnessListener::setup(
-            url::Url::parse("http://witness1/").unwrap(), // not used
-            None,
+            url::Url::parse("http://witness1/").unwrap(),
             witness_root.path(),
             Some(seed.to_string()),
         )?)
@@ -398,8 +396,7 @@ async fn test_2_wit() -> Result<(), ControllerError> {
         let seed = "AJZ7ZLd7unQ4IkMUwE69NXcvDO9rrmmRH_Xk3TPu9BpP";
         let witness_root = Builder::new().prefix("test-wit2-db").tempdir().unwrap();
         Arc::new(WitnessListener::setup(
-            url::Url::parse("http://witness2/").unwrap(), // not used
-            None,
+            url::Url::parse("http://witness2/").unwrap(),
             witness_root.path(),
             Some(seed.to_string()),
         )?)
