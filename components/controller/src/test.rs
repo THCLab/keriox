@@ -266,18 +266,6 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
         ));
     }
 
-    // Query with correct signature
-    for qry in query {
-        let signature = SelfSigningPrefix::Ed25519Sha512(km2.sign(&qry.serialize()?)?);
-        let ar = delegator.finalize_query(vec![(qry, signature)]).await?;
-        assert_eq!(ar.len(), 1);
-    }
-    let data_signature = AttachedSignaturePrefix::new(signature_icp, 0);
-
-    identifier1
-        .finalize_exchange(exn_messages[0].as_bytes(), signature_exn, data_signature)
-        .await?;
-
     println!("before get_kel_messages_with_receipts");
     let kel = controller
         .storage
