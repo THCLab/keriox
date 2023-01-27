@@ -2,7 +2,7 @@ use crate::{
     error::Error,
     event::vc_event::{VCEventMessage, VCEventType},
 };
-use keri::sai::{sad::SAD, SelfAddressingPrefix};
+use sai::{sad::SAD, SelfAddressingPrefix};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]

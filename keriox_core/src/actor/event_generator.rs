@@ -1,3 +1,5 @@
+use sai::SelfAddressingPrefix;
+
 #[cfg(feature = "mailbox")]
 use crate::mailbox::exchange::{Exchange, ExchangeMessage, ForwardTopic, FwdArgs};
 #[cfg(feature = "oobi")]
@@ -15,7 +17,6 @@ use crate::{
     },
     event_message::{event_msg_builder::EventMsgBuilder, msg::KeriEvent, EventTypeTag},
     prefix::{BasicPrefix, IdentifierPrefix},
-    sai::{derivation::SelfAddressing, SelfAddressingPrefix},
     state::IdentifierState,
 };
 
@@ -181,6 +182,7 @@ pub fn generate_end_role(
     role: Role,
     enabled: bool,
 ) -> Result<ReplyEvent, Error> {
+    use sai::derivation::SelfAddressing;
     use version::serialization_info::SerializationFormats;
 
     let end_role = EndRole {
@@ -207,6 +209,7 @@ pub fn exchange(
     data: &KeriEvent<KeyEvent>,
     topic: ForwardTopic,
 ) -> Result<ExchangeMessage, Error> {
+    use sai::derivation::SelfAddressing;
     use version::serialization_info::SerializationFormats;
 
     use crate::event_message::timestamped::Timestamped;

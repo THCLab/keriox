@@ -1,7 +1,7 @@
 use super::super::sections::seal::*;
 use crate::error::Error;
-use crate::sai::SelfAddressingPrefix;
 use crate::state::{EventSemantics, IdentifierState};
+use sai::SelfAddressingPrefix;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]

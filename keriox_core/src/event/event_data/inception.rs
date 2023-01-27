@@ -7,9 +7,9 @@ use crate::{
     event::{sections::seal::Seal, KeyEvent},
     event_message::{dummy_event::DummyInceptionEvent, msg::KeriEvent},
     prefix::IdentifierPrefix,
-    sai::{derivation::SelfAddressing, sad::SAD},
     state::{EventSemantics, IdentifierState, LastEstablishmentData},
 };
+use sai::{derivation::SelfAddressing};
 use serde::{Deserialize, Serialize};
 use version::serialization_info::SerializationFormats;
 
@@ -91,11 +91,11 @@ impl EventSemantics for InceptionEvent {
 
 #[test]
 fn test_inception_data_derivation() -> Result<(), Error> {
+    use sai::{derivation::SelfAddressing, sad::SAD, SelfAddressingPrefix};
     use crate::event::sections::{
         key_config::KeyConfig, key_config::NextKeysData, threshold::SignatureThreshold,
     };
     use crate::prefix::BasicPrefix;
-    use crate::sai::SelfAddressingPrefix;
     use cesrox::primitives::CesrPrimitive;
 
     let keys: Vec<BasicPrefix> = vec![

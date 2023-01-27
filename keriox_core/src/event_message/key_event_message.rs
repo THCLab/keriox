@@ -1,11 +1,11 @@
 use cesrox::primitives::codes::self_addressing::dummy_prefix;
-use version::{serialization_info::SerializationInfo};
+use sai::{sad::SAD, SelfAddressingPrefix};
+use version::serialization_info::SerializationInfo;
 
 use crate::{
     error::Error,
     event::{event_data::EventData, sections::seal::SourceSeal, KeyEvent},
     prefix::{AttachedSignaturePrefix, IdentifierPrefix},
-    sai::{sad::SAD, SelfAddressingPrefix},
     state::{EventSemantics, IdentifierState},
 };
 

@@ -6,8 +6,9 @@ use std::{
 };
 
 use cesrox::{cesr_proof::MaterialPath, parse, primitives::CesrPrimitive};
+use sai::{derivation::SelfAddressing, sad::SAD};
 use serde::{Deserialize, Serialize};
-use version::{serialization_info::SerializationFormats};
+use version::serialization_info::SerializationFormats;
 
 use super::{event_generator, prelude::Message, process_message};
 #[cfg(feature = "mailbox")]
@@ -42,7 +43,6 @@ use crate::{
         event_storage::EventStorage,
         Processor,
     },
-    sai::{derivation::SelfAddressing, sad::SAD},
     signer::KeyManager,
     state::IdentifierState,
 };
@@ -591,16 +591,16 @@ impl<K: KeyManager> SimpleController<K> {
                 },
             );
 
-            let icp = 
-                &event_generator::incept_with_next_hashes(
-                    pks,
-                    signature_threshold,
-                    npks,
-                    initial_witness.unwrap_or_default(),
-                    witness_threshold.unwrap_or(0),
-                    delegator.as_ref(),
-                )
-                .unwrap().encode()?;
+            let icp = &event_generator::incept_with_next_hashes(
+                pks,
+                signature_threshold,
+                npks,
+                initial_witness.unwrap_or_default(),
+                witness_threshold.unwrap_or(0),
+                delegator.as_ref(),
+            )
+            .unwrap()
+            .encode()?;
 
             let signature = km.sign(&icp)?;
             let key_event = parse(&icp).unwrap().1.payload;

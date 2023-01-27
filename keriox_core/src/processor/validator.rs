@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 #[cfg(feature = "query")]
 use chrono::{DateTime, FixedOffset};
+use sai::sad::SAD;
 
 use super::event_storage::EventStorage;
 use crate::{
@@ -20,7 +21,6 @@ use crate::{
         },
     },
     prefix::{BasicPrefix, SelfSigningPrefix},
-    sai::sad::SAD,
     state::{EventSemantics, IdentifierState},
 };
 #[cfg(feature = "query")]
@@ -329,6 +329,7 @@ impl EventValidator {
         &self,
         rpy: &SignedReply,
     ) -> Result<Option<IdentifierState>, Error> {
+
         use crate::query::reply_event::{bada_logic, ReplyRoute};
 
         let route = rpy.reply.get_route();

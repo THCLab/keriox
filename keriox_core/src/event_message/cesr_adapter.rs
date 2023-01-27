@@ -7,7 +7,7 @@ use cesrox::{
     ParsedData,
 };
 use serde::{Deserialize, Serialize};
-use version::{serialization_info::SerializationFormats};
+use version::serialization_info::SerializationFormats;
 
 use crate::{
     error::Error,

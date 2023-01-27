@@ -1,4 +1,5 @@
-use keri::{prefix::IdentifierPrefix, sai::SelfAddressingPrefix};
+use keri::prefix::IdentifierPrefix;
+use sai::SelfAddressingPrefix;
 
 use crate::{
     database::EventDatabase,
@@ -117,7 +118,8 @@ impl<'d> EventProcessor<'d> {
 
 #[cfg(test)]
 mod tests {
-    use keri::{prefix::IdentifierPrefix, sai::derivation::SelfAddressing};
+    use keri::prefix::IdentifierPrefix;
+    use sai::derivation::SelfAddressing;
 
     use crate::{
         error::Error, event::verifiable_event::VerifiableEvent, processor::EventProcessor,

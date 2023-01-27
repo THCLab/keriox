@@ -1,7 +1,8 @@
 use crate::event_message::msg::KeriEvent;
 use crate::event_message::{EventTypeTag, Typeable};
+use crate::prefix::IdentifierPrefix;
 use crate::state::IdentifierState;
-use crate::{prefix::IdentifierPrefix, sai::derivation::SelfAddressing};
+use sai::derivation::SelfAddressing;
 use serde::{Deserialize, Serialize};
 use version::serialization_info::SerializationFormats;
 pub mod event_data;

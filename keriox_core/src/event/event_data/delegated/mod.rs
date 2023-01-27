@@ -2,14 +2,13 @@ use super::EventData;
 use super::InceptionEvent;
 use crate::event_message::dummy_event::DummyInceptionEvent;
 use crate::event_message::msg::KeriEvent;
-use crate::sai::sad::SAD;
 use crate::{
     error::Error,
     event::{KeyEvent, SerializationFormats},
     prefix::IdentifierPrefix,
-    sai::derivation::SelfAddressing,
     state::{EventSemantics, IdentifierState},
 };
+use sai::derivation::SelfAddressing;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -68,6 +67,7 @@ fn test_delegated_inception_data_derivation() -> Result<(), Error> {
     };
     use crate::prefix::BasicPrefix;
     use cesrox::primitives::CesrPrimitive;
+    use sai::sad::SAD;
 
     // data taken from keripy/tests/core/test_delegation.py
     let keys: Vec<BasicPrefix> = vec!["DLitcfMnabnLt-PNCaXdVwX45wsG93Wd8eW9QiZrlKYQ"

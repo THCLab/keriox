@@ -7,10 +7,8 @@ use crate::{
     processor::EventProcessor,
     state::{vc_state::TelState, ManagerTelState, State},
 };
-use keri::{
-    prefix::IdentifierPrefix,
-    sai::{derivation::SelfAddressing, SelfAddressingPrefix},
-};
+use keri::prefix::IdentifierPrefix;
+use sai::{derivation::SelfAddressing, SelfAddressingPrefix};
 
 pub mod event_generator;
 

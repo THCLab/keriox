@@ -17,7 +17,6 @@ use keri::{
         reply_event::{ReplyEvent, ReplyRoute, SignedReply},
         ReplyType,
     },
-    sai::derivation::SelfAddressing,
     signer::Signer,
     state::IdentifierState,
     transport::{default::DefaultTransport, Transport},
@@ -227,8 +226,7 @@ impl WatcherData {
                     SerializationFormats::JSON,
                 )?;
 
-                let signature =
-                    SelfSigningPrefix::Ed25519Sha512(self.signer.sign(&rpy.encode()?)?);
+                let signature = SelfSigningPrefix::Ed25519Sha512(self.signer.sign(&rpy.encode()?)?);
                 let reply = SignedReply::new_nontrans(rpy, self.prefix.clone(), signature);
                 Ok(Some(PossibleResponse::Ksn(reply)))
             }

@@ -2,9 +2,9 @@ use super::super::sections::{seal::*, KeyConfig, RotationWitnessConfig};
 use crate::{
     error::Error,
     prefix::BasicPrefix,
-    sai::SelfAddressingPrefix,
     state::{EventSemantics, IdentifierState, LastEstablishmentData, WitnessConfig},
 };
+use sai::SelfAddressingPrefix;
 use serde::{Deserialize, Serialize};
 
 /// Rotation Event

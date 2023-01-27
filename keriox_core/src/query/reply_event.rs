@@ -1,5 +1,6 @@
 use cesrox::primitives::CesrPrimitive;
 use chrono::{DateTime, FixedOffset};
+use sai::derivation::SelfAddressing;
 use serde::{de, ser::SerializeStruct, Deserialize, Deserializer, Serialize, Serializer};
 use version::serialization_info::SerializationFormats;
 
@@ -17,7 +18,6 @@ use crate::{
     },
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     query::QueryError,
-    sai::derivation::SelfAddressing,
 };
 
 #[derive(Clone, PartialEq, Debug)]

@@ -6,7 +6,7 @@ use std::{
 use keri::{
     actor::{
         event_generator,
-        prelude::{Message, SerializationFormats},
+        prelude::{Message, SelfAddressing, SelfAddressingPrefix, SerializationFormats, SAD},
         simple_controller::PossibleResponse,
         MaterialPath,
     },
@@ -36,7 +36,6 @@ use keri::{
         query_event::{QueryArgs, QueryArgsMbx, QueryEvent, QueryRoute, QueryTopics, SignedQuery},
         reply_event::ReplyRoute,
     },
-    sai::{derivation::SelfAddressing, sad::SAD, SelfAddressingPrefix},
 };
 
 use super::mailbox_updating::ActionRequired;
@@ -245,8 +244,7 @@ impl IdentifierController {
         let mut exchanges = participants
             .iter()
             .map(|id| -> Result<_, _> {
-                let exn =
-                    event_generator::exchange(id, &icp, ForwardTopic::Multisig)?.encode()?;
+                let exn = event_generator::exchange(id, &icp, ForwardTopic::Multisig)?.encode()?;
                 String::from_utf8(exn).map_err(|_e| ControllerError::EventFormatError)
             })
             .collect::<Result<Vec<String>, ControllerError>>()?;

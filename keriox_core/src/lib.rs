@@ -12,7 +12,6 @@ pub mod prefix;
 pub mod processor;
 #[cfg(feature = "query")]
 pub mod query;
-pub mod sai;
 pub mod signer;
 pub mod state;
 #[cfg(feature = "query")]

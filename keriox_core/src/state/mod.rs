@@ -8,8 +8,8 @@ use crate::{
     },
     event_message::EventTypeTag,
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
-    sai::SelfAddressingPrefix,
 };
+use sai::SelfAddressingPrefix;
 use serde::{Deserialize, Serialize};
 use serde_hex::{Compact, SerHex};
 

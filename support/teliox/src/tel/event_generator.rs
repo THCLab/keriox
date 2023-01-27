@@ -1,8 +1,5 @@
-use keri::{
-    event::sections::seal::EventSeal,
-    prefix::IdentifierPrefix,
-    sai::{derivation::SelfAddressing, SelfAddressingPrefix},
-};
+use keri::{event::sections::seal::EventSeal, prefix::IdentifierPrefix};
+use sai::{derivation::SelfAddressing, SelfAddressingPrefix};
 use version::serialization_info::SerializationFormats;
 
 use crate::{

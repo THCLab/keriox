@@ -20,11 +20,11 @@ use crate::{
     },
     keys::PublicKey,
     prefix::{BasicPrefix, IdentifierPrefix},
-    sai::{derivation::SelfAddressing, sad::SAD, SelfAddressingPrefix},
 };
 use ed25519_dalek::Keypair;
 use rand::rngs::OsRng;
-use version::{serialization_info::SerializationFormats};
+use sai::{derivation::SelfAddressing, sad::SAD, SelfAddressingPrefix};
+use version::serialization_info::SerializationFormats;
 
 use super::{msg::KeriEvent, EventTypeTag};
 

@@ -3,11 +3,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use keri::{
-    actor::{
-        error::ActorError,
-        prelude::{Message},
-        SignedQueryError,
-    },
+    actor::{error::ActorError, prelude::Message, SignedQueryError},
     event::event_data::EventData,
     event_message::signed_event_message::Notice,
     oobi::LocationScheme,

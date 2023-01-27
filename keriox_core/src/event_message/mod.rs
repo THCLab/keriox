@@ -111,12 +111,12 @@ mod tests {
         },
         keys::{PrivateKey, PublicKey},
         prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
-        sai::derivation::SelfAddressing,
         state::IdentifierState,
     };
     use ed25519_dalek::Keypair;
     use rand::rngs::OsRng;
-    use version::{serialization_info::SerializationFormats};
+    use sai::derivation::SelfAddressing;
+    use version::serialization_info::SerializationFormats;
 
     #[test]
     fn basic_create() -> Result<(), Error> {

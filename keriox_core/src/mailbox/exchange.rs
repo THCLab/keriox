@@ -1,11 +1,12 @@
 use cesrox::cesr_proof::MaterialPath;
+use sai::derivation::SelfAddressing;
 use serde::{Deserialize, Serialize};
 use version::serialization_info::SerializationFormats;
 
 use crate::event::KeyEvent;
 use crate::event_message::msg::KeriEvent;
 use crate::event_message::timestamped::Timestamped;
-use crate::{error::Error, prefix::IdentifierPrefix, sai::derivation::SelfAddressing};
+use crate::{error::Error, prefix::IdentifierPrefix};
 
 use crate::event_message::{signature::Signature, EventTypeTag, Typeable};
 

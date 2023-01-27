@@ -24,7 +24,7 @@ use crate::{
 };
 pub use cesrox::cesr_proof::MaterialPath;
 use cesrox::parse_many;
-use version::{serialization_info::SerializationFormats};
+use version::serialization_info::SerializationFormats;
 
 pub mod error;
 pub mod event_generator;
@@ -117,14 +117,11 @@ pub fn process_signed_oobi(
     oobi_manager: &OobiManager,
     event_storage: &EventStorage,
 ) -> Result<(), Error> {
-    use crate::sai::sad::SAD;
+    use sai::sad::SAD;
 
     let validator = EventValidator::new(event_storage.db.clone());
     // check signature
-    validator.verify(
-        &signed_oobi.reply.encode()?,
-        &signed_oobi.signature,
-    )?;
+    validator.verify(&signed_oobi.reply.encode()?, &signed_oobi.signature)?;
     // check digest
     signed_oobi.reply.check_digest()?;
     // save
@@ -208,16 +205,14 @@ pub fn process_signed_query(
                 .get(0)
                 .ok_or(SignedQueryError::InvalidSignature)?
                 .signature;
-            let ver_result = match id.verify(
-                &qr.query.encode().map_err(|_e| Error::VersionError)?,
-                sig,
-            ) {
-                Ok(result) => result,
-                Err(e) => {
-                    let keri_error: crate::error::Error = e.into();
-                    return Err(keri_error.into());
-                }
-            };
+            let ver_result =
+                match id.verify(&qr.query.encode().map_err(|_e| Error::VersionError)?, sig) {
+                    Ok(result) => result,
+                    Err(e) => {
+                        let keri_error: crate::error::Error = e.into();
+                        return Err(keri_error.into());
+                    }
+                };
             if !ver_result {
                 return Err(SignedQueryError::InvalidSignature);
             }
@@ -227,10 +222,7 @@ pub fn process_signed_query(
                 .get_state(&signer_id)?
                 .ok_or_else(|| SignedQueryError::UnknownSigner { id: signer_id })?
                 .current;
-            if !key_config.verify(
-                &qr.query.encode()?,
-                &signatures,
-            )? {
+            if !key_config.verify(&qr.query.encode()?, &signatures)? {
                 return Err(SignedQueryError::InvalidSignature);
             }
         }
@@ -313,7 +305,6 @@ pub mod prelude {
         event_message::signed_event_message::Message,
         processor::{basic_processor::BasicProcessor, event_storage::EventStorage, Processor},
     };
-    pub use version::{
-        error::Error as VersionError, serialization_info::SerializationFormats,
-    };
+    pub use sai::{derivation::SelfAddressing, sad::SAD, SelfAddressingPrefix};
+    pub use version::{error::Error as VersionError, serialization_info::SerializationFormats};
 }

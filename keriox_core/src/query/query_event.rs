@@ -1,3 +1,4 @@
+use sai::derivation::SelfAddressing;
 use serde::{Deserialize, Serialize};
 use version::serialization_info::SerializationFormats;
 
@@ -5,7 +6,6 @@ use crate::{
     error::Error,
     event_message::{msg::KeriEvent, timestamped::Timestamped, EventTypeTag, Typeable},
     prefix::{AttachedSignaturePrefix, IdentifierPrefix},
-    sai::derivation::SelfAddressing,
 };
 
 // TODO: make enum with different query args
@@ -152,10 +152,7 @@ fn test_query_deserialize() {
         }
     ));
 
-    assert_eq!(
-        input_query,
-        &String::from_utf8_lossy(&qr.encode().unwrap())
-    );
+    assert_eq!(input_query, &String::from_utf8_lossy(&qr.encode().unwrap()));
 }
 
 #[test]
@@ -183,8 +180,5 @@ fn test_query_mbx_deserialize() {
         }
     ));
 
-    assert_eq!(
-        input_query,
-        &String::from_utf8_lossy(&qr.encode().unwrap())
-    );
+    assert_eq!(input_query, &String::from_utf8_lossy(&qr.encode().unwrap()));
 }

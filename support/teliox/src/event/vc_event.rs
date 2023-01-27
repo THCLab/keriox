@@ -4,8 +4,8 @@ use keri::{
     event::sections::seal::EventSeal,
     event_message::{msg::KeriEvent, Typeable},
     prefix::IdentifierPrefix,
-    sai::{derivation::SelfAddressing, SelfAddressingPrefix},
 };
+use sai::{derivation::SelfAddressing, SelfAddressingPrefix};
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use serde_hex::{Compact, SerHex};
 use serde_json::Value;

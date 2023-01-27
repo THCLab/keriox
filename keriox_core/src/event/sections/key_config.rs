@@ -1,11 +1,11 @@
 use cesrox::primitives::CesrPrimitive;
+use sai::{derivation::SelfAddressing, SelfAddressingPrefix};
 use serde::{Deserialize, Serialize};
 
 use super::threshold::SignatureThreshold;
 use crate::{
     error::Error,
     prefix::{AttachedSignaturePrefix, BasicPrefix},
-    sai::{derivation::SelfAddressing, SelfAddressingPrefix},
 };
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
@@ -148,6 +148,7 @@ pub fn nxt_commitment(
 #[cfg(test)]
 mod test {
     use cesrox::parse;
+    use sai::{derivation::SelfAddressing, SelfAddressingPrefix};
 
     use crate::{
         error::Error,
@@ -157,7 +158,6 @@ mod test {
             KeyConfig,
         },
         prefix::{AttachedSignaturePrefix, BasicPrefix},
-        sai::{derivation::SelfAddressing, SelfAddressingPrefix},
     };
 
     #[test]

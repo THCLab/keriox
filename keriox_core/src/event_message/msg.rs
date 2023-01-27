@@ -1,12 +1,8 @@
+use sai::{derivation::SelfAddressing, sad::SAD, SelfAddressingPrefix};
 use serde::{Deserialize, Serialize, Serializer};
-use version::{
-    serialization_info::{SerializationFormats, SerializationInfo},
-};
+use version::serialization_info::{SerializationFormats, SerializationInfo};
 
-use crate::{
-    error::Error,
-    sai::{derivation::SelfAddressing, sad::SAD, SelfAddressingPrefix},
-};
+use crate::error::Error;
 
 use super::{dummy_event::DummyEvent, Typeable};
 
@@ -33,12 +29,15 @@ impl<T: Serialize, D: Serialize + Typeable<TypeTag = T> + Clone> SAD for KeriEve
         self.digest.clone()
     }
 
-    fn dummy_event(&self) -> Result<Vec<u8>, Error> {
+    fn dummy_event(&self) -> std::result::Result<Vec<u8>, sai::error::Error> {
         DummyEvent::dummy_event(
             self.data.clone(),
             self.serialization_info.kind,
             &self.digest.derivation,
-        )?.encode()
+        )
+        .map_err(|_e| sai::error::Error::DummyEventError)?
+        .encode()
+        .map_err(|_e| sai::error::Error::DummyEventError)
     }
 }
 
@@ -57,7 +56,7 @@ impl<T: Serialize, D: Serialize + Typeable<TypeTag = T> + Clone> KeriEvent<D> {
             data: event,
         })
     }
-    
+
     pub fn encode(&self) -> Result<Vec<u8>, Error> {
         Ok(self.serialization_info.serialize(&self).unwrap())
     }

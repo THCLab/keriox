@@ -1,5 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
+use sai::{sad::SAD, SelfAddressingPrefix};
+
 use super::{
     event_storage::EventStorage,
     notification::{JustNotification, Notification, NotificationBus, Notifier},
@@ -26,7 +28,6 @@ use crate::{
         },
     },
     prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
-    sai::{sad::SAD, SelfAddressingPrefix},
 };
 
 #[derive(Debug, Clone)]

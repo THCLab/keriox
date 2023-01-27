@@ -1,7 +1,10 @@
 use super::{error::ControllerError, identifier_controller::IdentifierController};
 use futures::{StreamExt, TryStreamExt};
 use keri::{
-    actor::{event_generator, prelude::Message},
+    actor::{
+        event_generator,
+        prelude::{Message, SAD},
+    },
     event::{
         event_data::EventData,
         sections::seal::{EventSeal, Seal},
@@ -16,7 +19,6 @@ use keri::{
         MailboxResponse,
     },
     prefix::IdentifierPrefix,
-    sai::sad::SAD,
 };
 
 #[derive(Default, Debug, Clone)]

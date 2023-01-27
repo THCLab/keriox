@@ -6,7 +6,11 @@ pub mod mailbox_updating;
 mod test;
 
 use keri::{
-    actor::{self, event_generator, simple_controller::PossibleResponse},
+    actor::{
+        self, event_generator,
+        prelude::{SelfAddressingPrefix, SAD},
+        simple_controller::PossibleResponse,
+    },
     database::{escrow::EscrowDb, SledEventDatabase},
     event::{event_data::EventData, sections::seal::Seal, KeyEvent},
     event_message::{
@@ -26,7 +30,6 @@ use keri::{
         query_event::SignedQuery,
         reply_event::{ReplyEvent, ReplyRoute, SignedReply},
     },
-    sai::{sad::SAD, SelfAddressingPrefix},
     transport::{default::DefaultTransport, Transport},
 };
 

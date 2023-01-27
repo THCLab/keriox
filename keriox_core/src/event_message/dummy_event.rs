@@ -1,16 +1,14 @@
 use crate::{
     error::Error,
     event::event_data::{DelegatedInceptionEvent, EventData, InceptionEvent},
-    sai::derivation::SelfAddressing,
 };
 
 use super::{EventTypeTag, Typeable};
 use cesrox::primitives::codes::self_addressing::dummy_prefix;
+use sai::derivation::SelfAddressing;
 use serde::Serialize;
 use serde_hex::{Compact, SerHex};
-use version::{
-    serialization_info::{SerializationFormats, SerializationInfo},
-};
+use version::serialization_info::{SerializationFormats, SerializationInfo};
 
 /// Dummy Inception Event
 ///

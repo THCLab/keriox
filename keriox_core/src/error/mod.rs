@@ -129,6 +129,9 @@ pub enum Error {
 
     #[error("Version error")]
     VersionError,
+
+    #[error("SAI error")]
+    SAIError,
 }
 
 impl From<ParseIntError> for Error {
@@ -140,6 +143,12 @@ impl From<ParseIntError> for Error {
 impl From<version::error::Error> for Error {
     fn from(_: version::error::Error) -> Self {
         Error::VersionError
+    }
+}
+
+impl From<sai::error::Error> for Error {
+    fn from(_: sai::error::Error) -> Self {
+        Error::SAIError
     }
 }
 

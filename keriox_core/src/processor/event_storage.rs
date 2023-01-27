@@ -5,8 +5,6 @@ use super::compute_state;
 use crate::query::{
     key_state_notice::KeyStateNotice, query_event::QueryArgsMbx, reply_event::SignedReply,
 };
-use crate::sai::sad::SAD;
-use crate::sai::SelfAddressingPrefix;
 use crate::{
     database::{timestamped::TimestampedSignedEventMessage, SledEventDatabase},
     error::Error,
@@ -20,6 +18,7 @@ use crate::{
     prefix::{BasicPrefix, IdentifierPrefix},
     state::{EventSemantics, IdentifierState},
 };
+use sai::{sad::SAD, SelfAddressingPrefix};
 #[cfg(feature = "query")]
 use version::serialization_info::SerializationFormats;
 

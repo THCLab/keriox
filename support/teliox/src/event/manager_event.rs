@@ -1,16 +1,14 @@
 use cesrox::primitives::codes::self_addressing::dummy_prefix;
+use sai::{derivation::SelfAddressing, SelfAddressingPrefix};
 use serde::{de, Deserialize, Deserializer, Serialize};
 use serde_hex::{Compact, SerHex};
 
 use keri::{
     event_message::{msg::KeriEvent, Typeable},
     prefix::IdentifierPrefix,
-    sai::{derivation::SelfAddressing, SelfAddressingPrefix},
 };
 use serde_json::Value;
-use version::{
-    serialization_info::{SerializationFormats, SerializationInfo},
-};
+use version::serialization_info::{SerializationFormats, SerializationInfo};
 
 use crate::error::Error;
 
@@ -169,7 +167,8 @@ impl DummyEvent {
             prefix: dummy_prefix(&derivation_code),
             sn: 0,
             data,
-        }.encode()
+        }
+        .encode()
     }
 
     pub fn encode(&self) -> Result<Vec<u8>, Error> {
@@ -180,7 +179,7 @@ impl DummyEvent {
 impl Inc {
     pub fn incept_self_addressing(
         self,
-        derivation: &keri::sai::derivation::SelfAddressing,
+        derivation: &sai::derivation::SelfAddressing,
         format: SerializationFormats,
     ) -> Result<ManagerTelEvent, Error> {
         Ok(ManagerTelEvent::new(
@@ -204,11 +203,9 @@ pub struct Rot {
 
 #[cfg(test)]
 mod tests {
-    use keri::{
-        prefix::IdentifierPrefix,
-        sai::{derivation::SelfAddressing, sad::SAD},
-    };
-    use version::{serialization_info::SerializationFormats};
+    use keri::prefix::IdentifierPrefix;
+    use sai::{derivation::SelfAddressing, sad::SAD};
+    use version::serialization_info::SerializationFormats;
 
     use crate::{
         error::Error,
@@ -236,10 +233,7 @@ mod tests {
             backers: vec![],
         });
         assert_eq!(vcp.data.event_type, expected_event_type);
-        assert_eq!(
-            String::from_utf8(vcp.encode().unwrap()).unwrap(),
-            vcp_raw
-        );
+        assert_eq!(String::from_utf8(vcp.encode().unwrap()).unwrap(), vcp_raw);
 
         // let vcp_raw = r#"{"v":"KERI10JSON0000d7_","i":"EVohdnN33-vdNOTPYxeTQIWVzRKtzZzBoiBSGYSSnD0s","ii":"DntNTPnDFBnmlO6J44LXCrzZTAmpe-82b7BmQGtL4QhM","s":"0","t":"vcp","c":[],"bt":"1","b":["EXvR3p8V95W8J7Ui4-mEzZ79S-A1esAnJo1Kmzq80Jkc"]}"#;
         let vcp_raw = r#"{"v":"KERI10JSON0000e0_","t":"vcp","d":"EBK9Otzl6zxt55LF095coJH7EBqlPIdrDC0f8bjeZYC9","i":"EFohdnN33-vdNOTPYxeTQIWVzRKtzZzBoiBSGYSSnD0s","s":"0","ii":"DHtNTPnDFBnmlO6J44LXCrzZTAmpe-82b7BmQGtL4QhM","c":["NB"],"bt":"1","b":["EXvR3p8V95W8J7Ui4-mEzZ79S-A1esAnJo1Kmzq80Jkc"]}"#;
@@ -267,7 +261,9 @@ mod tests {
         );
         assert_eq!(vrt.sn, 1);
         let expected_event_type = ManagerEventType::Vrt(Rot {
-            prev_event: "EIniznx8Vyltc0i-T7QwngvZkt_2xsT1PdsyRjq_1gAw".parse()?,
+            prev_event: "EIniznx8Vyltc0i-T7QwngvZkt_2xsT1PdsyRjq_1gAw"
+                .parse()
+                .unwrap(),
             backers_to_add: vec!["EHvR3p8V95W8J7Ui4-mEzZ79S-A1esAnJo1Kmzq80Jkc"
                 .parse()
                 .unwrap()],
@@ -362,7 +358,6 @@ mod tests {
 
     #[test]
     fn test_no_backers() -> Result<(), Error> {
-        use keri::sai::derivation::SelfAddressing;
         // Construct inception event
         let pref: IdentifierPrefix = "EVohdnN33-vdNOTPYxeTQIWVzRKtzZzBoiBSGYSSnD0s"
             .parse()

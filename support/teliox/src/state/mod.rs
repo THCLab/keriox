@@ -1,9 +1,7 @@
 pub mod vc_state;
 
-use keri::{
-    prefix::IdentifierPrefix,
-    sai::{sad::SAD, SelfAddressingPrefix},
-};
+use keri::prefix::IdentifierPrefix;
+use sai::{sad::SAD, SelfAddressingPrefix};
 
 use crate::{
     error::Error,
