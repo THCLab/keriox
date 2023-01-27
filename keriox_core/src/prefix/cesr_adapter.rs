@@ -2,7 +2,7 @@ use cesrox::primitives::{
     codes::attached_signature_code::AttachedSignatureCode, CesrPrimitive, Digest, Identifier,
     IdentifierCode, IndexedSignature, PublicKey, Signature,
 };
-use sai::{SelfAddressingPrefix};
+use sai::SelfAddressingPrefix;
 
 use crate::{
     event::sections::seal::{EventSeal, SourceSeal},

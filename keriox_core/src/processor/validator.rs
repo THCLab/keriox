@@ -329,7 +329,6 @@ impl EventValidator {
         &self,
         rpy: &SignedReply,
     ) -> Result<Option<IdentifierState>, Error> {
-
         use crate::query::reply_event::{bada_logic, ReplyRoute};
 
         let route = rpy.reply.get_route();

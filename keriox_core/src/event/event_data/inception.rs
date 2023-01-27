@@ -9,7 +9,7 @@ use crate::{
     prefix::IdentifierPrefix,
     state::{EventSemantics, IdentifierState, LastEstablishmentData},
 };
-use sai::{derivation::SelfAddressing};
+use sai::derivation::SelfAddressing;
 use serde::{Deserialize, Serialize};
 use version::serialization_info::SerializationFormats;
 
@@ -91,12 +91,12 @@ impl EventSemantics for InceptionEvent {
 
 #[test]
 fn test_inception_data_derivation() -> Result<(), Error> {
-    use sai::{derivation::SelfAddressing, sad::SAD, SelfAddressingPrefix};
     use crate::event::sections::{
         key_config::KeyConfig, key_config::NextKeysData, threshold::SignatureThreshold,
     };
     use crate::prefix::BasicPrefix;
     use cesrox::primitives::CesrPrimitive;
+    use sai::{derivation::SelfAddressing, sad::SAD, SelfAddressingPrefix};
 
     let keys: Vec<BasicPrefix> = vec![
         "DErocgXD2RGSyvn3MObcx59jeOsEQhv2TqHirVkzrp0Q"
