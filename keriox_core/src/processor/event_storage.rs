@@ -162,31 +162,28 @@ impl EventStorage {
         let receipt = self
             .db
             .get_mailbox_receipts(&id)
-            .into_iter()
-            .flatten()
-            .filter(|rec| rec.body.event.sn >= args.topics.receipt)
-            .collect();
+            .map(|it| it.skip(args.topics.receipt).collect())
+            .unwrap_or_default();
 
-        let multisig = match self.db.get_mailbox_multisig(&id) {
-            Some(msgs) => msgs.map(|e| e.signed_event_message).collect(),
-            None => vec![],
-        };
+        let multisig = self
+            .db
+            .get_mailbox_multisig(&id)
+            .map(|it| {
+                it.skip(args.topics.multisig)
+                    .map(|ev| ev.signed_event_message)
+                    .collect()
+            })
+            .unwrap_or_default();
 
-        let delegate = match self.db.get_mailbox_delegate(&id) {
-            Some(msgs) => msgs.map(|e| e.signed_event_message).collect(),
-            None => vec![],
-        };
-
-        let mut messages = vec![];
-        // query replies
-        messages.extend(
-            self.db
-                .get_mailbox_replies(&id)
-                .into_iter()
-                .flatten()
-                .filter(|rpy| rpy.event_message.event.get_sn() >= args.topics.reply)
-                .map(|rpy| Notice::Event(rpy)),
-        );
+        let delegate = self
+            .db
+            .get_mailbox_delegate(&id)
+            .map(|it| {
+                it.skip(args.topics.delegate)
+                    .map(|ev| ev.signed_event_message)
+                    .collect()
+            })
+            .unwrap_or_default();
 
         // TODO: query and return the rest of topics
         Ok(MailboxResponse {
