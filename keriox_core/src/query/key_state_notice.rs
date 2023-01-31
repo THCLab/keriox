@@ -61,7 +61,7 @@ impl KeyStateNotice {
         let dt: DateTime<FixedOffset> = DateTime::from(Utc::now());
 
         KeyStateNotice {
-            serialization_info: SerializationInfo::new(['K', 'E', 'R', 'I'], serialization, 0),
+            serialization_info: SerializationInfo::new("KERI".to_string(), serialization, 0),
             timestamp: dt,
             state,
             first_seen_sn: 0,

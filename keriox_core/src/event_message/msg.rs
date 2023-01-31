@@ -87,7 +87,7 @@ impl<T: Serialize, D: Typeable<TypeTag = T> + Serialize + Clone> Serialize for K
         {
             fn from(em: &KeriEvent<D>) -> Self {
                 TypedEventMessage {
-                    v: em.serialization_info,
+                    v: em.serialization_info.clone(),
                     event_type: em.data.get_type(),
                     digest: em.get_digest(),
                     event: em.data.clone(),

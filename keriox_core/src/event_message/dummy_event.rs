@@ -54,10 +54,10 @@ impl DummyInceptionEvent {
         let derivation = derivation.into();
         Ok(Self {
             serialization_info: SerializationInfo::new(
-                ['K', 'E', 'R', 'I'],
+                "KERI".to_string(),
                 format,
                 Self {
-                    serialization_info: SerializationInfo::new(['K', 'E', 'R', 'I'], format, 0),
+                    serialization_info: SerializationInfo::new("KERI".to_string(), format, 0),
                     event_type: data.get_type(),
                     prefix: dummy_prefix(&derivation),
                     digest: dummy_prefix(&derivation),
@@ -105,18 +105,16 @@ impl<T: Serialize, D: Serialize + Typeable<TypeTag = T>> DummyEvent<T, D> {
         format: SerializationFormats,
         derivation: &SelfAddressing,
     ) -> Result<Self, Error> {
-        let mut version = SerializationInfo::new_empty(['K', 'E', 'R', 'I'], format);
         let cesr_derivation = derivation.clone().into();
         let dummy_prefix = dummy_prefix(&cesr_derivation);
         let mut dummy_event = DummyEvent {
-            serialization_info: version,
+            serialization_info: SerializationInfo::new_empty("KERI".to_string(), format),
             event_type: event.get_type(),
             digest: dummy_prefix,
             data: event,
         };
         let event_len = dummy_event.encode()?.len();
-        version.size = event_len;
-        dummy_event.serialization_info = version;
+        dummy_event.serialization_info.size = event_len;
         Ok(dummy_event)
     }
 }

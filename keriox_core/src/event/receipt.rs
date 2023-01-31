@@ -36,16 +36,14 @@ impl Receipt {
         prefix: IdentifierPrefix,
         sn: u64,
     ) -> Self {
-        let mut serialization_info = SerializationInfo::new_empty(['K', 'E', 'R', 'I'], format);
         let mut receipt = Self {
-            serialization_info,
+            serialization_info: SerializationInfo::new_empty("KERI".to_string(), format),
             receipted_event_digest,
             prefix,
             sn,
         };
         let len = receipt.encode().unwrap().len();
-        serialization_info.size = len;
-        receipt.serialization_info = serialization_info;
+        receipt.serialization_info.size = len;
         receipt
     }
 

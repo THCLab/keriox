@@ -153,7 +153,7 @@ impl DummyEvent {
         let derivation_code: CesrCode = derivation.clone().into();
         Self {
             serialization_info: SerializationInfo::new(
-                ['K', 'E', 'R', 'I'],
+                "KERI".to_string(),
                 format,
                 Self {
                     serialization_info: SerializationInfo::default(),
