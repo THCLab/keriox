@@ -4,10 +4,8 @@ use std::{collections::HashMap, sync::Arc};
 
 use keri::{
     actor::{error::ActorError, prelude::Message, SignedQueryError},
-    event::{event_data::EventData},
-    event_message::{
-        signed_event_message::{Notice},
-    },
+    event::event_data::EventData,
+    event_message::signed_event_message::Notice,
     oobi::LocationScheme,
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     signer::{CryptoBox, KeyManager},
@@ -447,10 +445,9 @@ async fn test_2_wit() -> Result<(), ControllerError> {
         IdentifierController::new(incepted_identifier, controller.clone())
     };
 
-    let n = ident_ctl.notify_witnesses().await?;
-    assert_eq!(n, 1);
+    assert_eq!(ident_ctl.notify_witnesses().await?, 1);
 
-    // Quering mailbox to get receipts
+    // Querying mailbox to get receipts
     for qry in ident_ctl.query_mailbox(&ident_ctl.id, &[wit1_id.clone(), wit2_id.clone()])? {
         let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(&qry.serialize()?)?);
         let act = ident_ctl.finalize_query(vec![(qry, signature)]).await?;
@@ -471,11 +468,8 @@ async fn test_2_wit() -> Result<(), ControllerError> {
     // Force broadcast again to see if witness will accept duplicate signatures
     ident_ctl.broadcasted_rcts.clear();
 
-    let n = ident_ctl.broadcast_receipts(&wit_ids).await?;
-    assert_eq!(n, 2);
-
-    let n = ident_ctl.broadcast_receipts(&wit_ids).await?;
-    assert_eq!(n, 0);
+    assert_eq!(ident_ctl.broadcast_receipts(&wit_ids).await?, 2);
+    assert_eq!(ident_ctl.broadcast_receipts(&wit_ids).await?, 0);
 
     assert!(matches!(
         witness1.witness_data.event_storage.get_kel_messages_with_receipts(&ident_ctl.id)?.unwrap().as_slice(),
