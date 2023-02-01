@@ -689,6 +689,7 @@ impl IdentifierController {
 
             for wit in wits {
                 // Don't send receipt to witness who created it.
+                // TODO: this only works if the target witness ID is a BasicPrefix.
                 if let IdentifierPrefix::Basic(wit_id) = wit {
                     if wit_ids.contains(wit_id) {
                         continue;
