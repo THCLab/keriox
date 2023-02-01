@@ -660,10 +660,11 @@ impl IdentifierController {
         Ok(actions)
     }
 
-    /// Retrieve receipts for given `id` from the database and sends them to witnesses with IDs `wits`.
+    /// Send new receipts obtained via [`Self::finalize_query`] to specified witnesses.
+    /// Returns number of new receipts sent per witness.
     pub async fn broadcast_receipts(
         &mut self,
-        wits: &[IdentifierPrefix],
+        dest_wit_ids: &[IdentifierPrefix],
     ) -> Result<usize, ControllerError> {
         let receipts = self
             .source
@@ -677,21 +678,21 @@ impl IdentifierController {
 
         for rct in receipts {
             let rct_digest = rct.body.event.receipted_event_digest.clone();
-            let wit_ids = self.get_wit_ids_of_rct(&rct)?;
+            let rct_wit_ids = self.get_wit_ids_of_rct(&rct)?;
 
             // Don't send the same receipt twice.
-            if wit_ids.iter().all(|wit_id| {
+            if rct_wit_ids.iter().all(|rct_wit_id| {
                 self.broadcasted_rcts
-                    .contains(&(rct_digest.clone(), wit_id.clone()))
+                    .contains(&(rct_digest.clone(), rct_wit_id.clone()))
             }) {
                 continue;
             }
 
-            for wit in wits {
+            for dest_wit_id in dest_wit_ids {
                 // Don't send receipt to witness who created it.
                 // TODO: this only works if the target witness ID is a BasicPrefix.
-                if let IdentifierPrefix::Basic(wit_id) = wit {
-                    if wit_ids.contains(wit_id) {
+                if let IdentifierPrefix::Basic(dest_wit_id) = dest_wit_id {
+                    if rct_wit_ids.contains(dest_wit_id) {
                         continue;
                     }
                 }
@@ -699,7 +700,7 @@ impl IdentifierController {
                 // TODO: what if only some witnesses are online?
                 self.source
                     .send_message_to(
-                        wit,
+                        dest_wit_id,
                         Scheme::Http,
                         Message::Notice(Notice::NontransferableRct(rct.clone())),
                     )
@@ -709,10 +710,9 @@ impl IdentifierController {
             }
 
             // Remember event digest and witness ID to avoid sending the same receipt twice.
-            let wit_ids = self.get_wit_ids_of_rct(&rct)?;
-            for wit_id in wit_ids {
+            for rct_wit_id in rct_wit_ids {
                 self.broadcasted_rcts
-                    .insert((rct.body.event.receipted_event_digest.clone(), wit_id));
+                    .insert((rct_digest.clone(), rct_wit_id));
             }
         }
 
