@@ -2,28 +2,33 @@ use std::convert::TryFrom;
 
 use serde::{Deserialize, Serialize};
 
-#[cfg(feature = "mailbox")]
-use crate::mailbox::exchange::{Exchange, ExchangeMessage, ForwardTopic, SignedExchange};
 #[cfg(feature = "oobi")]
 use crate::oobi::OobiManager;
-#[cfg(feature = "query")]
-use crate::query::{
-    key_state_notice::KeyStateNotice,
-    query_event::{Query, SignedQuery},
-    reply_event::{ReplyRoute, SignedReply},
-    ReplyType,
-};
 use crate::{
     error::Error,
-    event_message::{
-        signature::Signature,
-        signed_event_message::{Message, Notice, Op, SignedEventMessage},
-    },
+    event_message::signed_event_message::{Message, Notice},
     prefix::IdentifierPrefix,
-    processor::{event_storage::EventStorage, validator::EventValidator, Processor},
+    processor::Processor,
+};
+#[cfg(feature = "query")]
+use crate::{
+    event_message::signed_event_message::Op,
+    processor::event_storage::EventStorage,
+    query::{
+        key_state_notice::KeyStateNotice,
+        query_event::{Query, SignedQuery},
+        reply_event::{ReplyRoute, SignedReply},
+        ReplyType,
+    },
+};
+#[cfg(feature = "mailbox")]
+use crate::{
+    event_message::{signature::Signature, signed_event_message::SignedEventMessage},
+    mailbox::exchange::{Exchange, ExchangeMessage, ForwardTopic, SignedExchange},
 };
 pub use cesrox::cesr_proof::MaterialPath;
 use cesrox::parse_many;
+#[cfg(feature = "query")]
 use version::serialization_info::SerializationFormats;
 
 pub mod error;
@@ -76,7 +81,7 @@ pub fn process_message<P: Processor>(
     msg: Message,
     #[cfg(feature = "oobi")] oobi_manager: &OobiManager,
     processor: &P,
-    event_storage: &EventStorage,
+    #[cfg(feature = "oobi")] event_storage: &EventStorage,
 ) -> Result<(), Error> {
     match msg {
         Message::Notice(notice) => process_notice(notice, processor)?,
@@ -117,6 +122,7 @@ pub fn process_signed_oobi(
     oobi_manager: &OobiManager,
     event_storage: &EventStorage,
 ) -> Result<(), Error> {
+    use crate::processor::validator::EventValidator;
     use sai::sad::SAD;
 
     let validator = EventValidator::new(event_storage.db.clone());

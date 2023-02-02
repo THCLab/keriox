@@ -26,11 +26,14 @@ use crate::query::{
 };
 
 #[cfg(feature = "mailbox")]
-use crate::mailbox::exchange::{ExchangeMessage, SignedExchange};
+use crate::{
+    event_message::signature,
+    mailbox::exchange::{ExchangeMessage, SignedExchange},
+};
 
 use super::{
     msg::KeriEvent,
-    signature::{self, Nontransferable},
+    signature::Nontransferable,
     signed_event_message::{
         Message, Notice, Op, SignedEventMessage, SignedNontransferableReceipt,
         SignedTransferableReceipt,
@@ -243,7 +246,8 @@ impl TryFrom<ParsedData> for Op {
     type Error = Error;
 
     fn try_from(value: ParsedData) -> Result<Self, Self::Error> {
-        match value.payload.try_into()? {
+        let et: EventType = value.payload.try_into()?;
+        match et {
             #[cfg(feature = "query")]
             EventType::Qry(qry) => signed_query(qry, value.attachments),
             #[cfg(any(feature = "query", feature = "oobi"))]

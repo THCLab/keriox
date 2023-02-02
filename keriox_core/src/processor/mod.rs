@@ -47,8 +47,9 @@ pub trait Processor {
         &self,
         msg: &crate::event_message::signed_event_message::Message,
     ) -> Result<(), Error> {
-        use crate::event_message::signed_event_message::{Message, Op};
-
+        use crate::event_message::signed_event_message::Message;
+        #[cfg(feature = "query")]
+        use crate::event_message::signed_event_message::Op;
         match msg {
             Message::Notice(notice) => self.process_notice(notice),
             Message::Op(op) => match op {
