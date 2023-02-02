@@ -104,7 +104,7 @@ impl Into<Identifier> for IdentifierPrefix {
                 (IdentifierCode::Basic(bp.get_code()), self.derivative())
             }
             IdentifierPrefix::SelfAddressing(sa) => (
-                IdentifierCode::SelfAddressing(sa.derivation.clone().into()),
+                IdentifierCode::SelfAddressing((&sa.derivation).into()),
                 self.derivative(),
             ),
             IdentifierPrefix::SelfSigning(_ss) => todo!(),

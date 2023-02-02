@@ -150,7 +150,7 @@ impl DummyEvent {
         format: SerializationFormats,
     ) -> Result<Vec<u8>, Error> {
         use cesrox::primitives::codes::self_addressing::SelfAddressing as CesrCode;
-        let derivation_code: CesrCode = derivation.clone().into();
+        let derivation_code: CesrCode = derivation.into();
         Self {
             serialization_info: SerializationInfo::new(
                 "KERI".to_string(),

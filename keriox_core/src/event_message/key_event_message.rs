@@ -34,7 +34,7 @@ impl From<KeriEvent<KeyEvent>> for DummyEvent<EventTypeTag, KeyEvent> {
         DummyEvent {
             serialization_info: SerializationInfo::default(),
             event_type: em.data.get_type(),
-            digest: dummy_prefix(&em.get_digest().derivation.into()),
+            digest: dummy_prefix(&(&em.get_digest().derivation).into()),
             data: em.data,
         }
     }
@@ -63,13 +63,13 @@ impl KeriEvent<KeyEvent> {
         Ok(match self.data.get_event_data() {
             EventData::Icp(icp) => DummyInceptionEvent::dummy_inception_data(
                 icp,
-                self.get_digest().derivation,
+                &self.get_digest().derivation,
                 self.serialization_info.kind,
             )?
             .encode()?,
             EventData::Dip(dip) => DummyInceptionEvent::dummy_delegated_inception_data(
                 dip,
-                self.get_digest().derivation,
+                &self.get_digest().derivation,
                 self.serialization_info.kind,
             )?
             .encode()?,

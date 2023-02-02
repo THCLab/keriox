@@ -32,7 +32,7 @@ pub(crate) struct DummyInceptionEvent {
 impl DummyInceptionEvent {
     pub fn dummy_inception_data(
         icp: InceptionEvent,
-        derivation: SelfAddressing,
+        derivation: &SelfAddressing,
         format: SerializationFormats,
     ) -> Result<Self, Error> {
         DummyInceptionEvent::derive_data(EventData::Icp(icp), derivation, format)
@@ -40,7 +40,7 @@ impl DummyInceptionEvent {
 
     pub fn dummy_delegated_inception_data(
         dip: DelegatedInceptionEvent,
-        derivation: SelfAddressing,
+        derivation: &SelfAddressing,
         format: SerializationFormats,
     ) -> Result<Self, Error> {
         DummyInceptionEvent::derive_data(EventData::Dip(dip), derivation, format)
@@ -48,7 +48,7 @@ impl DummyInceptionEvent {
 
     fn derive_data(
         data: EventData,
-        derivation: SelfAddressing,
+        derivation: &SelfAddressing,
         format: SerializationFormats,
     ) -> Result<Self, Error> {
         let derivation = derivation.into();
@@ -105,7 +105,7 @@ impl<T: Serialize, D: Serialize + Typeable<TypeTag = T>> DummyEvent<T, D> {
         format: SerializationFormats,
         derivation: &SelfAddressing,
     ) -> Result<Self, Error> {
-        let cesr_derivation = derivation.clone().into();
+        let cesr_derivation = derivation.into();
         let dummy_prefix = dummy_prefix(&cesr_derivation);
         let mut dummy_event = DummyEvent {
             serialization_info: SerializationInfo::new_empty("KERI".to_string(), format),

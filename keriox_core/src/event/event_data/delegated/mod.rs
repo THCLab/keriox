@@ -31,11 +31,8 @@ impl DelegatedInceptionEvent {
         derivation: SelfAddressing,
         format: SerializationFormats,
     ) -> Result<KeriEvent<KeyEvent>, Error> {
-        let dummy_event = DummyInceptionEvent::dummy_delegated_inception_data(
-            self.clone(),
-            derivation.clone(),
-            format,
-        )?;
+        let dummy_event =
+            DummyInceptionEvent::dummy_delegated_inception_data(self.clone(), &derivation, format)?;
         let digest = derivation.derive(&dummy_event.encode()?);
         let event = KeyEvent::new(
             IdentifierPrefix::SelfAddressing(digest.clone()),
