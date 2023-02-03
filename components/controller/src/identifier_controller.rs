@@ -43,7 +43,12 @@ pub struct IdentifierController {
     pub source: Arc<Controller>,
     pub(crate) last_asked_index: HashMap<IdentifierPrefix, MailboxReminder>,
     pub(crate) last_asked_groups_index: HashMap<IdentifierPrefix, MailboxReminder>,
-    pub(crate) broadcasted_rcts: HashSet<(SelfAddressingPrefix, BasicPrefix)>,
+    /// Set of already broadcasted receipts.
+    /// Each element contains:
+    /// - event digest which uniqually identifies event.
+    /// - ID of witness who signed the event which uniquely identifies a receipt.
+    /// - ID of witness to which we sent this receipt.
+    pub(crate) broadcasted_rcts: HashSet<(SelfAddressingPrefix, BasicPrefix, IdentifierPrefix)>,
 }
 
 impl IdentifierController {
@@ -661,7 +666,7 @@ impl IdentifierController {
     }
 
     /// Send new receipts obtained via [`Self::finalize_query`] to specified witnesses.
-    /// Returns number of new receipts sent per witness.
+    /// Returns number of new receipts sent per witness or first error.
     pub async fn broadcast_receipts(
         &mut self,
         dest_wit_ids: &[IdentifierPrefix],
@@ -680,14 +685,6 @@ impl IdentifierController {
             let rct_digest = rct.body.event.receipted_event_digest.clone();
             let rct_wit_ids = self.get_wit_ids_of_rct(&rct)?;
 
-            // Don't send the same receipt twice.
-            if rct_wit_ids.iter().all(|rct_wit_id| {
-                self.broadcasted_rcts
-                    .contains(&(rct_digest.clone(), rct_wit_id.clone()))
-            }) {
-                continue;
-            }
-
             for dest_wit_id in dest_wit_ids {
                 // Don't send receipt to witness who created it.
                 // TODO: this only works if the target witness ID is a BasicPrefix.
@@ -697,7 +694,17 @@ impl IdentifierController {
                     }
                 }
 
-                // TODO: what if only some witnesses are online?
+                // Don't send the same receipt twice.
+                if rct_wit_ids.iter().all(|rct_wit_id| {
+                    self.broadcasted_rcts.contains(&(
+                        rct_digest.clone(),
+                        rct_wit_id.clone(),
+                        dest_wit_id.clone(),
+                    ))
+                }) {
+                    continue;
+                }
+
                 self.source
                     .send_message_to(
                         dest_wit_id,
@@ -706,13 +713,16 @@ impl IdentifierController {
                     )
                     .await?;
 
-                n += 1;
-            }
+                // Remember event digest and witness ID to avoid sending the same receipt twice.
+                for rct_wit_id in &rct_wit_ids {
+                    self.broadcasted_rcts.insert((
+                        rct_digest.clone(),
+                        rct_wit_id.clone(),
+                        dest_wit_id.clone(),
+                    ));
+                }
 
-            // Remember event digest and witness ID to avoid sending the same receipt twice.
-            for rct_wit_id in rct_wit_ids {
-                self.broadcasted_rcts
-                    .insert((rct_digest.clone(), rct_wit_id));
+                n += 1;
             }
         }
 
