@@ -17,7 +17,7 @@ use keri::{
         cesr_adapter::{parse_event_type, EventType},
         key_event_message::KeyEvent,
         signature::{Nontransferable, Signature, SignerData},
-        signed_event_message::{Notice, Op},
+        signed_event_message::{Notice, Op, SignedNontransferableReceipt},
         Digestible,
     },
     mailbox::{
@@ -41,9 +41,14 @@ use crate::{error::ControllerError, mailbox_updating::MailboxReminder, Controlle
 pub struct IdentifierController {
     pub id: IdentifierPrefix,
     pub source: Arc<Controller>,
-    last_asked_index: HashMap<IdentifierPrefix, MailboxReminder>,
-    last_asked_groups_index: HashMap<IdentifierPrefix, MailboxReminder>,
-    broadcasted_rcts: HashSet<(SelfAddressingPrefix, BasicPrefix)>,
+    pub(crate) last_asked_index: HashMap<IdentifierPrefix, MailboxReminder>,
+    pub(crate) last_asked_groups_index: HashMap<IdentifierPrefix, MailboxReminder>,
+    /// Set of already broadcasted receipts.
+    /// Each element contains:
+    /// - event digest which uniqually identifies event.
+    /// - ID of witness who signed the event which uniquely identifies a receipt.
+    /// - ID of witness to which we sent this receipt.
+    pub(crate) broadcasted_rcts: HashSet<(SelfAddressingPrefix, BasicPrefix, IdentifierPrefix)>,
 }
 
 impl IdentifierController {
@@ -660,10 +665,11 @@ impl IdentifierController {
         Ok(actions)
     }
 
-    /// Retrieve receipts for given `id` from the database and sends them to witnesses with IDs `wits`.
+    /// Send new receipts obtained via [`Self::finalize_query`] to specified witnesses.
+    /// Returns number of new receipts sent per witness or first error.
     pub async fn broadcast_receipts(
         &mut self,
-        wits: &[IdentifierPrefix],
+        dest_wit_ids: &[IdentifierPrefix],
     ) -> Result<usize, ControllerError> {
         let receipts = self
             .source
@@ -673,45 +679,81 @@ impl IdentifierController {
             .into_iter()
             .flatten()
             .collect::<Vec<_>>();
-        let n = receipts.len();
+        let mut n = 0;
 
-        // TODO: don't send the same receipt twice.
         for rct in receipts {
-            for wit in wits {
-                // TODO: don't send receipt to witness who created it.
+            let rct_digest = rct.body.event.receipted_event_digest.clone();
+            let rct_wit_ids = self.get_wit_ids_of_rct(&rct)?;
+
+            for dest_wit_id in dest_wit_ids {
+                // Don't send receipt to witness who created it.
+                // TODO: this only works if the target witness ID is a BasicPrefix.
+                if let IdentifierPrefix::Basic(dest_wit_id) = dest_wit_id {
+                    if rct_wit_ids.contains(dest_wit_id) {
+                        continue;
+                    }
+                }
+
+                // Don't send the same receipt twice.
+                if rct_wit_ids.iter().all(|rct_wit_id| {
+                    self.broadcasted_rcts.contains(&(
+                        rct_digest.clone(),
+                        rct_wit_id.clone(),
+                        dest_wit_id.clone(),
+                    ))
+                }) {
+                    continue;
+                }
+
                 self.source
                     .send_message_to(
-                        wit,
+                        dest_wit_id,
                         Scheme::Http,
                         Message::Notice(Notice::NontransferableRct(rct.clone())),
                     )
                     .await?;
-            }
 
-            // Remember event digest and witness ID to avoid sending the same receipt twice.
-            let digest = rct.body.event.receipted_event_digest;
-            for sig in rct.signatures {
-                match sig {
-                    Nontransferable::Indexed(sigs) => {
-                        for sig in sigs {
-                            let wits = self.source.storage.get_witnesses_at_event(
-                                rct.body.event.sn,
-                                &self.id,
-                                &digest,
-                            )?;
-                            self.broadcasted_rcts
-                                .insert((digest.clone(), wits[sig.index as usize].clone()));
-                        }
-                    }
-                    Nontransferable::Couplet(sigs) => {
-                        for (wit_id, _sig) in sigs {
-                            self.broadcasted_rcts.insert((digest.clone(), wit_id));
-                        }
-                    }
+                // Remember event digest and witness ID to avoid sending the same receipt twice.
+                for rct_wit_id in &rct_wit_ids {
+                    self.broadcasted_rcts.insert((
+                        rct_digest.clone(),
+                        rct_wit_id.clone(),
+                        dest_wit_id.clone(),
+                    ));
                 }
+
+                n += 1;
             }
         }
 
         Ok(n)
+    }
+
+    /// Get IDs of witnesses who signed given receipt.
+    fn get_wit_ids_of_rct(
+        &self,
+        rct: &SignedNontransferableReceipt,
+    ) -> Result<Vec<BasicPrefix>, ControllerError> {
+        let mut wit_ids = Vec::new();
+        for sig in &rct.signatures {
+            match sig {
+                Nontransferable::Indexed(sigs) => {
+                    for sig in sigs {
+                        let wits = self.source.storage.get_witnesses_at_event(
+                            rct.body.event.sn,
+                            &self.id,
+                            &rct.body.event.receipted_event_digest,
+                        )?;
+                        wit_ids.push(wits[sig.index as usize].clone());
+                    }
+                }
+                Nontransferable::Couplet(sigs) => {
+                    for (wit_id, _sig) in sigs {
+                        wit_ids.push(wit_id.clone());
+                    }
+                }
+            }
+        }
+        Ok(wit_ids)
     }
 }

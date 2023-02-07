@@ -406,10 +406,17 @@ async fn test_2_wit() -> Result<(), ControllerError> {
         url: Url::parse("http://witness2/").unwrap(),
     };
 
-    let mut actors: TestActorMap = HashMap::new();
-    actors.insert((Host::Domain("witness1".to_string()), 80), witness1.clone());
-    actors.insert((Host::Domain("witness2".to_string()), 80), witness2.clone());
-    let transport = TestTransport::new(actors);
+    let wit_ids = [
+        IdentifierPrefix::Basic(wit1_id.clone()),
+        IdentifierPrefix::Basic(wit2_id.clone()),
+    ];
+
+    let transport = {
+        let mut actors: TestActorMap = HashMap::new();
+        actors.insert((Host::Domain("witness1".to_string()), 80), witness1.clone());
+        actors.insert((Host::Domain("witness2".to_string()), 80), witness2.clone());
+        TestTransport::new(actors)
+    };
 
     let controller = Arc::new(Controller::with_transport(
         Some(initial_config),
@@ -438,52 +445,38 @@ async fn test_2_wit() -> Result<(), ControllerError> {
         IdentifierController::new(incepted_identifier, controller.clone())
     };
 
-    let n = ident_ctl.notify_witnesses().await.unwrap();
-    assert_eq!(n, 1);
+    assert_eq!(ident_ctl.notify_witnesses().await?, 1);
 
-    // Quering mailbox to get receipts
-    let query = ident_ctl.query_mailbox(&ident_ctl.id, &[wit1_id.clone(), wit2_id.clone()])?;
-
-    for qry in query {
+    // Querying mailbox to get receipts
+    for qry in ident_ctl.query_mailbox(&ident_ctl.id, &[wit1_id.clone(), wit2_id.clone()])? {
         let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(&qry.serialize()?)?);
         let act = ident_ctl.finalize_query(vec![(qry, signature)]).await?;
         assert_eq!(act.len(), 0);
     }
 
-    let n = ident_ctl.notify_witnesses().await.unwrap();
-    assert_eq!(n, 0);
+    assert_eq!(ident_ctl.notify_witnesses().await?, 0);
+    assert_eq!(ident_ctl.broadcast_receipts(&wit_ids).await?, 2);
+    assert_eq!(ident_ctl.broadcast_receipts(&wit_ids).await?, 0);
 
-    let n = ident_ctl
-        .broadcast_receipts(&[
-            IdentifierPrefix::Basic(wit1_id.clone()),
-            IdentifierPrefix::Basic(wit2_id.clone()),
-        ])
-        .await?;
-    assert_eq!(n, 2);
+    assert!(matches!(
+        witness1.witness_data.event_storage.get_kel_messages_with_receipts(&ident_ctl.id)?.unwrap().as_slice(),
+        [Notice::Event(evt), Notice::NontransferableRct(rct)]
+            if matches!(evt.event_message.event.content.event_data, EventData::Icp(_))
+            && matches!(rct.signatures.len(), 2)
+    ));
 
-    let kel = witness1
-        .witness_data
-        .event_storage
-        .get_kel_messages_with_receipts(&ident_ctl.id)
-        .unwrap()
-        .unwrap();
-    assert_eq!(kel.len(), 2);
+    // Force broadcast again to see if witness will accept duplicate signatures
+    ident_ctl.broadcasted_rcts.clear();
 
-    match &kel[0] {
-        Notice::Event(evt) => match evt.event_message.event.content.event_data {
-            EventData::Icp(_) => (),
-            _ => panic!("Unexpected event type"),
-        },
-        _ => panic!("Unexpected notice type"),
-    }
+    assert_eq!(ident_ctl.broadcast_receipts(&wit_ids).await?, 2);
+    assert_eq!(ident_ctl.broadcast_receipts(&wit_ids).await?, 0);
 
-    match &kel[1] {
-        Notice::NontransferableRct(rct) => {
-            // TODO: fix witness to not insert duplicate signatures
-            assert_eq!(rct.signatures.len(), 3);
-        }
-        _ => panic!("Unexpected notice type"),
-    }
+    assert!(matches!(
+        witness1.witness_data.event_storage.get_kel_messages_with_receipts(&ident_ctl.id)?.unwrap().as_slice(),
+        [Notice::Event(evt), Notice::NontransferableRct(rct)]
+            if matches!(evt.event_message.event.content.event_data, EventData::Icp(_))
+            && matches!(rct.signatures.len(), 3) // TODO: fix witness to not insert duplicate signatures
+    ));
 
     Ok(())
 }

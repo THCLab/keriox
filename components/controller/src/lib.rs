@@ -337,7 +337,7 @@ impl Controller {
     /// Verifies event signature and adds it to kel.
     /// Returns new established identifier prefix.
     /// Meant to be used for identifiers with one key pair.
-    /// Must call [`IdentifierController::notify_witnesses`] after calling this function.
+    /// Must call `IdentifierController::notify_witnesses` after calling this function.
     pub async fn finalize_inception(
         &self,
         event: &[u8],
@@ -441,7 +441,7 @@ impl Controller {
     }
 
     /// Adds signature to event and processes it.
-    /// Should call [`IdentifierController::notify_witnesses`] after calling this function.
+    /// Should call `IdentifierController::notify_witnesses` after calling this function.
     fn finalize_key_event(
         &self,
         event: &EventMessage<KeyEvent>,
