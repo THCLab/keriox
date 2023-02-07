@@ -49,7 +49,32 @@ impl EventValidator {
         &self,
         signed_event: &SignedEventMessage,
     ) -> Result<Option<IdentifierState>, Error> {
-        let new_state = self.apply_to_state(&signed_event.event_message)?;
+        let new_state = if let Some(state) = self
+            .event_storage
+            .get_state(&signed_event.event_message.data.get_prefix())?
+        {
+            // Get indexes of keys in previous next key list.
+            // Now it uses the same indexes as those in current list.
+            let indexes_in_last_prev = signed_event
+                .signatures
+                .iter()
+                .map(|sig| sig.index as usize)
+                .collect::<Vec<_>>();
+            // Check previous next threshold
+            state
+                .current
+                .next_keys_data
+                .threshold
+                .enough_signatures(&indexes_in_last_prev)?
+                .then_some(())
+                .ok_or(Error::NotEnoughSigsError)?;
+
+            signed_event.event_message.apply_to(state)?
+        } else {
+            signed_event
+                .event_message
+                .apply_to(IdentifierState::default())?
+        };
         // match on verification result
         let ver_result = new_state.current.verify(
             &signed_event.event_message.encode()?,
@@ -227,16 +252,6 @@ impl EventValidator {
                 Err(Error::MissingSigner)
             }
         }
-    }
-
-    fn apply_to_state(&self, event: &KeriEvent<KeyEvent>) -> Result<IdentifierState, Error> {
-        // get state for id (TODO cache?)
-        self.event_storage
-            .get_state(&event.data.get_prefix())
-            // get empty state if there is no state yet
-            .map(|opt| opt.map_or_else(IdentifierState::default, |s| s))
-            // process the event update
-            .and_then(|state| event.apply_to(state))
     }
 
     /// Validate delegating event seal.

@@ -31,7 +31,10 @@ impl NextKeysData {
             indexes.push(sigs_indexes);
         }
         // check previous next threshold
-        self.threshold.enough_signatures(&indexes)
+        self.threshold
+            .enough_signatures(&indexes)?
+            .then_some(true)
+            .ok_or(Error::NotEnoughSigsError)
     }
 }
 

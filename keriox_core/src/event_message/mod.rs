@@ -100,7 +100,7 @@ mod tests {
     mod test_utils;
 
     use self::test_utils::test_mock_event_sequence;
-    use super::*;
+    use super::{event_msg_builder::EventMsgBuilder, *};
     use crate::{
         error::Error,
         event::{
@@ -111,11 +111,13 @@ mod tests {
         },
         keys::{PrivateKey, PublicKey},
         prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
-        state::IdentifierState,
+        signer::setup_signers,
+        state::{EventSemantics, IdentifierState},
     };
+    use cesrox::primitives::CesrPrimitive;
     use ed25519_dalek::Keypair;
     use rand::rngs::OsRng;
-    use sai::derivation::SelfAddressing;
+    use sai::{derivation::SelfAddressing, sad::SAD};
     use version::serialization_info::SerializationFormats;
 
     #[test]
@@ -327,6 +329,112 @@ mod tests {
             EventTypeTag::Drt,
         ];
         assert!(test_mock_event_sequence(delegated_sequence).is_ok());
+
+        Ok(())
+    }
+
+    #[test]
+    pub fn test_partial_rotation() -> Result<(), Error> {
+        // setup keypairs
+        let signers = setup_signers();
+
+        let keys = vec![BasicPrefix::Ed25519(signers[0].public_key())];
+        let next_pks = signers[1..6]
+            .iter()
+            .map(|signer| BasicPrefix::Ed25519(signer.public_key()))
+            .collect::<Vec<_>>();
+        // build inception event
+        let icp = EventMsgBuilder::new(EventTypeTag::Icp)
+            .with_keys(keys)
+            .with_threshold(&SignatureThreshold::Simple(1))
+            .with_next_keys(next_pks)
+            .with_next_threshold(&SignatureThreshold::single_weighted(vec![
+                (1, 2),
+                (1, 2),
+                (1, 3),
+                (1, 3),
+                (1, 3),
+            ]))
+            .build()
+            .unwrap();
+
+        let id_prefix = icp.data.get_prefix();
+        let icp_digest = icp.get_digest();
+        assert_eq!(
+            id_prefix,
+            IdentifierPrefix::SelfAddressing(icp_digest.clone())
+        );
+        assert_eq!(
+            id_prefix.to_str(),
+            "EM2y0cPBcua33FMaji79hQ2NVq7mzIIEX8Zlw0Ch5OQQ"
+        );
+
+        let state = IdentifierState::default();
+        let state = icp.apply_to(state)?;
+
+        // create partial rotation event. Subset of keys set in inception event as
+        // next keys
+        let current_signers = [&signers[3], &signers[4], &signers[5]];
+        let current_public_keys = current_signers
+            .iter()
+            .map(|sig| BasicPrefix::Ed25519(sig.public_key()))
+            .collect::<Vec<_>>();
+        let next_public_keys = signers[11..16]
+            .iter()
+            .map(|sig| BasicPrefix::Ed25519(sig.public_key()))
+            .collect::<Vec<_>>();
+
+        // Generate partial rotation event
+        let rotation = EventMsgBuilder::new(EventTypeTag::Rot)
+            .with_prefix(&id_prefix)
+            .with_previous_event(&icp_digest)
+            .with_keys(current_public_keys.clone())
+            .with_threshold(&SignatureThreshold::single_weighted(vec![
+                (1, 2),
+                (1, 2),
+                (1, 3),
+            ]))
+            .with_next_keys(next_public_keys)
+            .with_next_threshold(&SignatureThreshold::single_weighted(vec![
+                (1, 2),
+                (1, 2),
+                (1, 3),
+                (1, 3),
+                (1, 3),
+            ]))
+            .build()?;
+
+        let rot_digest = rotation.get_digest();
+        let state = rotation.apply_to(state)?;
+
+        assert_eq!(state.sn, 1);
+        assert_eq!(&state.current.public_keys, &current_public_keys);
+        assert_eq!(
+            serde_json::to_string(&state.current.threshold).unwrap(),
+            "[\"1/2\",\"1/2\",\"1/3\"]"
+        );
+
+        let current_signers = [&signers[13], &signers[14]];
+        let next_public_keys = vec![];
+        let current_public_keys = current_signers
+            .iter()
+            .map(|sig| BasicPrefix::Ed25519(sig.public_key()))
+            .collect::<Vec<_>>();
+
+        //  Partial rotation that will fail because it does not have enough
+        //  public keys to satisfy prior threshold (`nt`).
+        let rotation = EventMsgBuilder::new(EventTypeTag::Rot)
+            .with_prefix(&id_prefix)
+            .with_keys(current_public_keys)
+            .with_threshold(&SignatureThreshold::Simple(2))
+            .with_next_keys(next_public_keys)
+            .with_next_threshold(&SignatureThreshold::Simple(0))
+            .with_sn(2)
+            .with_previous_event(&rot_digest)
+            .build()?;
+
+        let res = rotation.apply_to(state);
+        assert!(matches!(res, Err(Error::NotEnoughSigsError)));
 
         Ok(())
     }

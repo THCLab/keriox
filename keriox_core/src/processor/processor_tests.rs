@@ -12,16 +12,14 @@ use crate::{
         signed_event_message::{Message, Notice},
         EventTypeTag,
     },
-    prefix::{
-        AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SeedPrefix, SelfSigningPrefix,
-    },
+    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     processor::{
         basic_processor::BasicProcessor,
         escrow::{default_escrow_bus, EscrowConfig},
         event_storage::EventStorage,
         Processor,
     },
-    signer::Signer,
+    signer::setup_signers,
 };
 
 #[test]
@@ -306,40 +304,6 @@ fn test_compute_state_at_sn() -> Result<(), Error> {
     Ok(())
 }
 
-/// Helper function to generate keypairs that can be used for signing in tests.
-fn setup_signers() -> Vec<Signer> {
-    vec![
-        "AK8F6AAiYDpXlWdj2O5F5-6wNCCNJh2A4XOlqwR_HwwH",
-        "AOs8-zNPPh0EhavdrCfCiTk9nGeO8e6VxUCzwdKXJAd0",
-        "AHMBU5PsIJN2U9m7j0SGyvs8YD8fkym2noELzxIrzfdG",
-        "AJZ7ZLd7unQ4IkMUwE69NXcvDO9rrmmRH_Xk3TPu9BpP",
-        "ANfkMQ5LKPfjEdQPK2c_zWsOn4GgLWsnWvIa25EVVbtR",
-        "ACrmDHtPQjnM8H9pyKA-QBNdfZ-xixTlRZTS8WXCrrMH",
-        "AMRXyU3ErhBNdRSDX1zKlrbZGRp1GfCmkRIa58gF07I8",
-        "AC6vsNVCpHa6acGcxk7c-D1mBHlptPrAx8zr-bKvesSW",
-        "AAD8sznuHWMw7cl6eZJQLm8PGBKvCjQzDH1Ui9ygH0Uo",
-        "ANqQNn_9UjfayUJNdQobmixrH9qJF1cltKDwDMVkiLg8",
-        "A1t7ix1GuZIP48r6ljsoo8jPsB9dEnnWNfhy2XNl1r-c",
-        "AhzCysVY12fWXfkH1QkAOCY6oYbVwXOaUjf7YPtIfC8U",
-        "A4HrsYq9XfxYK76ffoceNzj9n8tBkXrWNBIXUNdoe5ME",
-        "AhpAiPtDqDcEeU_eXlJ8Bk3kJE0g0jdezyXZdBKfXslU",
-        "AzN9fKZAZEIn9jMN2fZ2B35MNMQJPAZrNrJQRMi_S_8g",
-        "AkNrzLqnqRx9WCpJAwTAOE5oNaDlOgOYiuM9bL4HM9R0",
-        "ALjR-EE3jUF2yXW7Tq7WJSh3OFc6-BNxXJ9jGdfwA6Bs",
-        "AvpsEhige2ssBrMxskK2xXpeKfed4cvcZCIdRh7fhgiI",
-    ]
-    .iter()
-    .map(|key| {
-        let (_pk, sk) = key
-            .parse::<SeedPrefix>()
-            .unwrap()
-            .derive_key_pair()
-            .unwrap();
-        Signer::new_with_key(&sk.key()).unwrap()
-    })
-    .collect::<Vec<_>>()
-}
-
 #[test]
 pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
     use tempfile::Builder;
@@ -351,7 +315,7 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
     let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
     let escrow_db = Arc::new(EscrowDb::new(escrow_root.path()).unwrap());
 
-    let (not_bus, _ooo_escrow) = default_escrow_bus(db.clone(), escrow_db, EscrowConfig::default());
+    let (not_bus, (_, ps_escrow, _, _)) = default_escrow_bus(db.clone(), escrow_db, EscrowConfig::default());
 
     let processor = BasicProcessor::new(db.clone(), Some(not_bus));
     // setup keypairs
@@ -466,8 +430,16 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
         .collect::<Vec<_>>();
 
     let signed_rotation = rotation.sign(signatures, None, None);
-    let result = processor.process_notice(&Notice::Event(signed_rotation));
-    assert!(result.is_err());
+    processor.process_notice(&Notice::Event(signed_rotation.clone()))?;
+    // rotation should be stored in partially signed events escrow.
+    assert_eq!(
+        ps_escrow
+            .escrowed_partially_signed
+            .get_all()
+            .and_then(|mut x| x.next()),
+        Some(signed_rotation)
+    );
+
     let state = EventStorage::new(db.clone()).get_state(&id_prefix)?;
     assert_eq!(state.unwrap().sn, 1);
 
@@ -593,7 +565,7 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
         "[\"1/2\",\"1/2\",\"1/3\"]"
     );
 
-    let current_signers = [&signers[13], &signers[14]];
+    let current_signers = [&signers[13], &signers[14], &signers[15]];
     let next_public_keys = vec![];
     let current_public_keys = current_signers
         .iter()
@@ -612,18 +584,22 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
         .with_previous_event(&rot_digest)
         .build()?;
 
-    let signatures = current_signers
+    // Not enough signatures to satisfy previous threshold.
+    let signatures = current_signers[1..3]
         .iter()
         .enumerate()
         .map(|(index, sig)| {
             let signature = sig.sign(rotation.encode().unwrap()).unwrap();
-            AttachedSignaturePrefix::new(SelfSigningPrefix::Ed25519Sha512(signature), index as u16)
+            AttachedSignaturePrefix::new(
+                SelfSigningPrefix::Ed25519Sha512(signature),
+                (index + 1) as u16,
+            )
         })
         .collect::<Vec<_>>();
 
+    println!("len: {}", signatures.len());
     let signed_rotation = rotation.sign(signatures, None, None);
-    let result = processor.process_notice(&Notice::Event(signed_rotation));
-    assert!(result.is_err());
+    processor.process_notice(&Notice::Event(signed_rotation))?;
 
     // State shouldn't be updated.
     let state = storage.get_state(&id_prefix)?.unwrap();

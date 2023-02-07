@@ -114,3 +114,37 @@ fn generate_key_pair() -> Result<(PublicKey, PrivateKey), Error> {
     let sk = PrivateKey::new(sk.to_bytes().to_vec());
     Ok((vk, sk))
 }
+
+/// Helper function to generate keypairs that can be used for signing in tests.
+pub(crate) fn setup_signers() -> Vec<Signer> {
+    vec![
+        "AK8F6AAiYDpXlWdj2O5F5-6wNCCNJh2A4XOlqwR_HwwH",
+        "AOs8-zNPPh0EhavdrCfCiTk9nGeO8e6VxUCzwdKXJAd0",
+        "AHMBU5PsIJN2U9m7j0SGyvs8YD8fkym2noELzxIrzfdG",
+        "AJZ7ZLd7unQ4IkMUwE69NXcvDO9rrmmRH_Xk3TPu9BpP",
+        "ANfkMQ5LKPfjEdQPK2c_zWsOn4GgLWsnWvIa25EVVbtR",
+        "ACrmDHtPQjnM8H9pyKA-QBNdfZ-xixTlRZTS8WXCrrMH",
+        "AMRXyU3ErhBNdRSDX1zKlrbZGRp1GfCmkRIa58gF07I8",
+        "AC6vsNVCpHa6acGcxk7c-D1mBHlptPrAx8zr-bKvesSW",
+        "AAD8sznuHWMw7cl6eZJQLm8PGBKvCjQzDH1Ui9ygH0Uo",
+        "ANqQNn_9UjfayUJNdQobmixrH9qJF1cltKDwDMVkiLg8",
+        "A1t7ix1GuZIP48r6ljsoo8jPsB9dEnnWNfhy2XNl1r-c",
+        "AhzCysVY12fWXfkH1QkAOCY6oYbVwXOaUjf7YPtIfC8U",
+        "A4HrsYq9XfxYK76ffoceNzj9n8tBkXrWNBIXUNdoe5ME",
+        "AhpAiPtDqDcEeU_eXlJ8Bk3kJE0g0jdezyXZdBKfXslU",
+        "AzN9fKZAZEIn9jMN2fZ2B35MNMQJPAZrNrJQRMi_S_8g",
+        "AkNrzLqnqRx9WCpJAwTAOE5oNaDlOgOYiuM9bL4HM9R0",
+        "ALjR-EE3jUF2yXW7Tq7WJSh3OFc6-BNxXJ9jGdfwA6Bs",
+        "AvpsEhige2ssBrMxskK2xXpeKfed4cvcZCIdRh7fhgiI",
+    ]
+    .iter()
+    .map(|key| {
+        let (_pk, sk) = key
+            .parse::<SeedPrefix>()
+            .unwrap()
+            .derive_key_pair()
+            .unwrap();
+        Signer::new_with_key(&sk.key()).unwrap()
+    })
+    .collect::<Vec<_>>()
+}
