@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use super::threshold::SignatureThreshold;
 use crate::{
     error::Error,
-    prefix::{AttachedSignaturePrefix, BasicPrefix},
+    prefix::{IndexedSignature, BasicPrefix},
 };
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
@@ -70,7 +70,7 @@ impl KeyConfig {
     ///
     /// Verifies the given sigs against the given message using the KeyConfigs
     /// Public Keys, according to the indexes in the sigs.
-    pub fn verify(&self, message: &[u8], sigs: &[AttachedSignaturePrefix]) -> Result<bool, Error> {
+    pub fn verify(&self, message: &[u8], sigs: &[IndexedSignature]) -> Result<bool, Error> {
         // there are no duplicates
         if !(sigs
             .iter()
@@ -160,7 +160,7 @@ mod test {
             threshold::SignatureThreshold,
             KeyConfig,
         },
-        prefix::{AttachedSignaturePrefix, BasicPrefix},
+        prefix::{IndexedSignature, BasicPrefix},
     };
 
     #[test]
@@ -238,7 +238,7 @@ mod test {
         let mut signatures = vec![];
         for i in 0..priv_keys.len() {
             let sig = priv_keys[i].sign_ed(msg_to_sign)?;
-            signatures.push(AttachedSignaturePrefix::new_both_same(
+            signatures.push(IndexedSignature::new_both_same(
                 SelfSigningPrefix::Ed25519Sha512(sig),
                 i as u16,
             ));

@@ -111,7 +111,7 @@ mod tests {
         },
         keys::{PrivateKey, PublicKey},
         prefix::{
-            AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix,
+            IndexedSignature, BasicPrefix, IdentifierPrefix,
             SelfSigningPrefix,
         },
         signer::setup_signers,
@@ -172,7 +172,7 @@ mod tests {
         // sign
         let sig = priv_key0.sign_ed(&ser)?;
         let attached_sig =
-            AttachedSignaturePrefix::new_both_same(SelfSigningPrefix::Ed25519Sha512(sig), 0);
+            IndexedSignature::new_both_same(SelfSigningPrefix::Ed25519Sha512(sig), 0);
 
         assert!(pref0.verify(&ser, &attached_sig.signature)?);
 
@@ -255,7 +255,7 @@ mod tests {
         let sk = priv_key0;
         let sig = sk.sign_ed(&serialized)?;
         let attached_sig =
-            AttachedSignaturePrefix::new_both_same(SelfSigningPrefix::Ed25519Sha512(sig), 0);
+            IndexedSignature::new_both_same(SelfSigningPrefix::Ed25519Sha512(sig), 0);
 
         assert!(sig_pref_0.verify(&serialized, &attached_sig.signature)?);
 

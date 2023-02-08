@@ -12,7 +12,7 @@ use crate::{
         signed_event_message::{Message, Notice},
         EventTypeTag,
     },
-    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+    prefix::{IndexedSignature, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     processor::{
         basic_processor::BasicProcessor,
         escrow::{default_escrow_bus, EscrowConfig},
@@ -349,7 +349,7 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
     // sign inception event
     let signature = signers[0].sign(icp.encode().unwrap())?;
     let signed_icp = icp.sign(
-        vec![AttachedSignaturePrefix::new_both_same(
+        vec![IndexedSignature::new_both_same(
             SelfSigningPrefix::Ed25519Sha512(signature),
             0,
         )],
@@ -387,7 +387,7 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
         .enumerate()
         .map(|(index, sig)| {
             let signature = sig.sign(rotation.encode().unwrap()).unwrap();
-            AttachedSignaturePrefix::new_both_same(
+            IndexedSignature::new_both_same(
                 SelfSigningPrefix::Ed25519Sha512(signature),
                 index as u16,
             )
@@ -428,7 +428,7 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
         .enumerate()
         .map(|(index, sig)| {
             let signature = sig.sign(rotation.encode().unwrap()).unwrap();
-            AttachedSignaturePrefix::new_both_same(
+            IndexedSignature::new_both_same(
                 SelfSigningPrefix::Ed25519Sha512(signature),
                 index as u16,
             )
@@ -507,7 +507,7 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
     // sign inception event
     let signature = signers[0].sign(icp.encode().unwrap())?;
     let signed_icp = icp.sign(
-        vec![AttachedSignaturePrefix::new_both_same(
+        vec![IndexedSignature::new_both_same(
             SelfSigningPrefix::Ed25519Sha512(signature),
             0,
         )],
@@ -556,7 +556,7 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
         .enumerate()
         .map(|(index, sig)| {
             let signature = sig.sign(rotation.encode().unwrap()).unwrap();
-            AttachedSignaturePrefix::new_both_same(
+            IndexedSignature::new_both_same(
                 SelfSigningPrefix::Ed25519Sha512(signature),
                 index as u16,
             )
@@ -599,7 +599,7 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
         .enumerate()
         .map(|(index, sig)| {
             let signature = sig.sign(rotation.encode().unwrap()).unwrap();
-            AttachedSignaturePrefix::new_both_same(
+            IndexedSignature::new_both_same(
                 SelfSigningPrefix::Ed25519Sha512(signature),
                 (index + 1) as u16,
             )

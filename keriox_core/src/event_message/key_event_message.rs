@@ -5,7 +5,7 @@ use version::serialization_info::SerializationInfo;
 use crate::{
     error::Error,
     event::{event_data::EventData, sections::seal::SourceSeal, KeyEvent},
-    prefix::{AttachedSignaturePrefix, IdentifierPrefix},
+    prefix::{IndexedSignature, IdentifierPrefix},
     state::{EventSemantics, IdentifierState},
 };
 
@@ -43,7 +43,7 @@ impl From<KeriEvent<KeyEvent>> for DummyEvent<EventTypeTag, KeyEvent> {
 impl KeriEvent<KeyEvent> {
     pub fn sign(
         &self,
-        sigs: Vec<AttachedSignaturePrefix>,
+        sigs: Vec<IndexedSignature>,
         witness_sigs: Option<Vec<Nontransferable>>,
         delegator_seal: Option<SourceSeal>,
     ) -> SignedEventMessage {

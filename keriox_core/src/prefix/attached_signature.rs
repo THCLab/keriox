@@ -39,12 +39,12 @@ impl Index {
     }
 }
 #[derive(Debug, PartialEq, Clone)]
-pub struct AttachedSignaturePrefix {
+pub struct IndexedSignature {
     pub index: Index,
     pub signature: SelfSigningPrefix,
 }
 
-impl AttachedSignaturePrefix {
+impl IndexedSignature {
     pub fn new_both_same(signature: SelfSigningPrefix, index: u16) -> Self {
         Self {
             signature,
@@ -53,7 +53,7 @@ impl AttachedSignaturePrefix {
     }
 }
 
-impl FromStr for AttachedSignaturePrefix {
+impl FromStr for IndexedSignature {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -74,7 +74,7 @@ impl FromStr for AttachedSignaturePrefix {
     }
 }
 
-impl CesrPrimitive for AttachedSignaturePrefix {
+impl CesrPrimitive for IndexedSignature {
     fn derivative(&self) -> Vec<u8> {
         self.signature.derivative()
     }
@@ -85,7 +85,7 @@ impl CesrPrimitive for AttachedSignaturePrefix {
 }
 
 /// Serde compatible Serialize
-impl Serialize for AttachedSignaturePrefix {
+impl Serialize for IndexedSignature {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -95,14 +95,14 @@ impl Serialize for AttachedSignaturePrefix {
 }
 
 /// Serde compatible Deserialize
-impl<'de> Deserialize<'de> for AttachedSignaturePrefix {
-    fn deserialize<D>(deserializer: D) -> Result<AttachedSignaturePrefix, D::Error>
+impl<'de> Deserialize<'de> for IndexedSignature {
+    fn deserialize<D>(deserializer: D) -> Result<IndexedSignature, D::Error>
     where
         D: Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
 
-        AttachedSignaturePrefix::from_str(&s).map_err(serde::de::Error::custom)
+        IndexedSignature::from_str(&s).map_err(serde::de::Error::custom)
     }
 }
 
@@ -116,9 +116,9 @@ mod tests {
         let attached_secp_2 = "BCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
         let attached_448_3 = "0AADAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 
-        let pref_ed_1 = AttachedSignaturePrefix::from_str(attached_ed_1)?;
-        let pref_secp_2 = AttachedSignaturePrefix::from_str(attached_secp_2)?;
-        let pref_448_3 = AttachedSignaturePrefix::from_str(attached_448_3)?;
+        let pref_ed_1 = IndexedSignature::from_str(attached_ed_1)?;
+        let pref_secp_2 = IndexedSignature::from_str(attached_secp_2)?;
+        let pref_448_3 = IndexedSignature::from_str(attached_448_3)?;
 
         assert_eq!(1, pref_ed_1.index.current());
         assert_eq!(2, pref_secp_2.index.current());
@@ -135,16 +135,16 @@ mod tests {
 
     #[test]
     fn serialize() -> Result<(), Error> {
-        let pref_ed_2 = AttachedSignaturePrefix::new_both_same(
+        let pref_ed_2 = IndexedSignature::new_both_same(
             SelfSigningPrefix::Ed25519Sha512(vec![0u8; 64]),
             2,
         );
-        let pref_secp_6 = AttachedSignaturePrefix::new_both_same(
+        let pref_secp_6 = IndexedSignature::new_both_same(
             SelfSigningPrefix::ECDSAsecp256k1Sha256(vec![0u8; 64]),
             6,
         );
         let pref_448_4 =
-            AttachedSignaturePrefix::new_both_same(SelfSigningPrefix::Ed448(vec![0u8; 114]), 4);
+            IndexedSignature::new_both_same(SelfSigningPrefix::Ed448(vec![0u8; 114]), 4);
 
         assert_eq!(88, pref_ed_2.to_str().len());
         assert_eq!(88, pref_secp_6.to_str().len());

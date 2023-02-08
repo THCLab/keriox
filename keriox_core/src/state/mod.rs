@@ -7,7 +7,7 @@ use crate::{
         sections::{threshold::SignatureThreshold, KeyConfig},
     },
     event_message::EventTypeTag,
-    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+    prefix::{IndexedSignature, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
 };
 use sai::SelfAddressingPrefix;
 use serde::{Deserialize, Serialize};
@@ -42,7 +42,7 @@ impl WitnessConfig {
     ) -> Result<bool, Error>
     where
         I: IntoIterator<Item = (BasicPrefix, SelfSigningPrefix)>,
-        R: IntoIterator<Item = AttachedSignaturePrefix>,
+        R: IntoIterator<Item = IndexedSignature>,
     {
         match self.tally.clone() {
             SignatureThreshold::Simple(t) => {

@@ -30,7 +30,7 @@ use keri::{
     },
     oobi::{LocationScheme, Role, Scheme},
     prefix::{
-        AttachedSignaturePrefix, BasicPrefix, CesrPrimitive, IdentifierPrefix, SelfSigningPrefix,
+        IndexedSignature, BasicPrefix, CesrPrimitive, IdentifierPrefix, SelfSigningPrefix,
     },
     query::{
         query_event::{QueryArgs, QueryArgsMbx, QueryEvent, QueryRoute, QueryTopics, SignedQuery},
@@ -264,7 +264,7 @@ impl IdentifierController {
         &self,
         exchange: &[u8],
         exn_signature: SelfSigningPrefix,
-        data_signature: AttachedSignaturePrefix,
+        data_signature: IndexedSignature,
     ) -> Result<(), ControllerError> {
         // Join exn messages with their signatures and send it to witness.
         let material_path = MaterialPath::to_path("-a".into());
@@ -300,7 +300,7 @@ impl IdentifierController {
 
             let signature = vec![Signature::Transferable(
                 SignerData::LastEstablishment(self.id.clone()),
-                vec![AttachedSignaturePrefix::new_both_same(
+                vec![IndexedSignature::new_both_same(
                     exn_signature,
                     // TODO
                     0,
@@ -351,7 +351,7 @@ impl IdentifierController {
 
         self.source.finalize_key_event(&icp, &sig, own_index)?;
 
-        let att_signature = AttachedSignaturePrefix::new_both_same(sig, own_index as u16);
+        let att_signature = IndexedSignature::new_both_same(sig, own_index as u16);
 
         for (exn, signature) in exchanges {
             self.finalize_exchange(&exn, signature, att_signature.clone())
@@ -591,7 +591,7 @@ impl IdentifierController {
         let self_id = self.id.clone();
         let mut actions = Vec::new();
         for (qry, sig) in queries {
-            let signatures = vec![AttachedSignaturePrefix::new_both_same(sig, 0)];
+            let signatures = vec![IndexedSignature::new_both_same(sig, 0)];
             let (recipient, about_who, from_who) = match &qry.data.data.route {
                 QueryRoute::Log {
                     reply_route: _,

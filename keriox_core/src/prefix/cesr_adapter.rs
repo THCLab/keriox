@@ -1,17 +1,17 @@
 use cesrox::primitives::{
     codes::attached_signature_code::AttachedSignatureCode, CesrPrimitive, Digest, Identifier,
-    IdentifierCode, IndexedSignature, PublicKey, Signature,
+    IdentifierCode, IndexedSignature as CesrIndexedSignature, PublicKey, Signature,
 };
 use sai::SelfAddressingPrefix;
 
 use crate::{
     event::sections::seal::{EventSeal, SourceSeal},
-    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+    prefix::{IndexedSignature, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
 };
 
-impl From<IndexedSignature> for AttachedSignaturePrefix {
-    fn from((code, value): IndexedSignature) -> Self {
-        AttachedSignaturePrefix::new_both_same(SelfSigningPrefix::new(code.code, value), code.index)
+impl From<CesrIndexedSignature> for IndexedSignature {
+    fn from((code, value): CesrIndexedSignature) -> Self {
+        IndexedSignature::new_both_same(SelfSigningPrefix::new(code.code, value), code.index)
     }
 }
 
@@ -82,8 +82,8 @@ impl Into<PublicKey> for BasicPrefix {
     }
 }
 
-impl Into<IndexedSignature> for AttachedSignaturePrefix {
-    fn into(self) -> IndexedSignature {
+impl Into<CesrIndexedSignature> for IndexedSignature {
+    fn into(self) -> CesrIndexedSignature {
         (
             AttachedSignatureCode::new(self.signature.get_code(), self.index.current()),
             self.derivative(),

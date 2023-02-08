@@ -5,7 +5,7 @@ use version::serialization_info::SerializationFormats;
 use crate::{
     error::Error,
     event_message::{msg::KeriEvent, timestamped::Timestamped, EventTypeTag, Typeable},
-    prefix::{AttachedSignaturePrefix, IdentifierPrefix},
+    prefix::{IndexedSignature, IdentifierPrefix},
 };
 
 // TODO: make enum with different query args
@@ -121,14 +121,14 @@ impl Typeable for Query {
 pub struct SignedQuery {
     pub query: QueryEvent,
     pub signer: IdentifierPrefix,
-    pub signatures: Vec<AttachedSignaturePrefix>,
+    pub signatures: Vec<IndexedSignature>,
 }
 
 impl SignedQuery {
     pub fn new(
         envelope: QueryEvent,
         signer: IdentifierPrefix,
-        signatures: Vec<AttachedSignaturePrefix>,
+        signatures: Vec<IndexedSignature>,
     ) -> Self {
         Self {
             query: envelope,

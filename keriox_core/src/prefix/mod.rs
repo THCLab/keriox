@@ -13,7 +13,7 @@ pub mod error;
 pub mod seed;
 pub mod self_signing;
 
-pub use attached_signature::AttachedSignaturePrefix;
+pub use attached_signature::IndexedSignature;
 pub use basic::BasicPrefix;
 pub use seed::SeedPrefix;
 pub use self_signing::SelfSigningPrefix;

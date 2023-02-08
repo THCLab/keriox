@@ -10,7 +10,7 @@ use keri::{
     error::Error,
     event_message::signed_event_message::{Message, Notice, Op},
     oobi::{error::OobiError, EndRole, LocationScheme, OobiManager, Role, Scheme},
-    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+    prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix, IndexedSignature},
     processor::escrow::{default_escrow_bus, EscrowConfig},
     query::{
         query_event::{QueryArgs, QueryEvent, QueryRoute, SignedQuery},
@@ -248,7 +248,7 @@ impl WatcherData {
     /// Forward query to random registered witness and save its response to mailbox.
     async fn forward_query(&self, qry: &SignedQuery) -> Result<(), ActorError> {
         // Create a new signed message based on the received one
-        let sigs = vec![AttachedSignaturePrefix::new_both_same(
+        let sigs = vec![IndexedSignature::new_both_same(
             SelfSigningPrefix::Ed25519Sha512(self.signer.sign(qry.query.encode()?)?),
             0,
         )];
@@ -310,7 +310,7 @@ impl WatcherData {
         )?;
 
         // sign message by watcher
-        let signature = AttachedSignaturePrefix::new_both_same(
+        let signature = IndexedSignature::new_both_same(
             SelfSigningPrefix::Ed25519Sha512(
                 (self.signer).sign(serde_json::to_vec(&qry).unwrap())?,
             ),
