@@ -116,6 +116,7 @@ fn generate_key_pair() -> Result<(PublicKey, PrivateKey), Error> {
 }
 
 /// Helper function to generate keypairs that can be used for signing in tests.
+#[cfg(test)]
 pub(crate) fn setup_signers() -> Vec<Signer> {
     vec![
         "AK8F6AAiYDpXlWdj2O5F5-6wNCCNJh2A4XOlqwR_HwwH",

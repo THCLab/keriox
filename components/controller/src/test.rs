@@ -306,7 +306,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
                     let action_required = delegator.finalize_query(vec![(qry, signature)]).await?;
                     assert!(action_required.is_empty());
                 }
-                let data_signature = AttachedSignaturePrefix::new(signature_ixn, 0);
+                let data_signature = AttachedSignaturePrefix::new_both_same(signature_ixn, 0);
 
                 delegator
                     .finalize_exchange(&exn.encode()?, signature_exn, data_signature)

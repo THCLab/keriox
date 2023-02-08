@@ -437,7 +437,7 @@ impl PartiallyWitnessedEscrow {
             .map(|inx| -> Result<_, _> {
                 Ok((
                     witnesses
-                        .get(inx.index as usize)
+                        .get(inx.index.current() as usize)
                         .ok_or_else(|| Error::SemanticError("No matching witness prefix".into()))?
                         .clone(),
                     inx.signature.to_owned(),

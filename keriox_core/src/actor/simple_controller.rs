@@ -266,7 +266,7 @@ impl<K: KeyManager> SimpleController<K> {
         let key_event = parse(icp.as_bytes()).unwrap().1.payload;
         let signed = if let EventType::KeyEvent(icp) = key_event.try_into()? {
             icp.sign(
-                vec![AttachedSignaturePrefix::new(
+                vec![AttachedSignaturePrefix::new_both_same(
                     SelfSigningPrefix::Ed25519Sha512(signature),
                     0,
                 )],
@@ -303,7 +303,7 @@ impl<K: KeyManager> SimpleController<K> {
         )?;
 
         // sign message by bob
-        let signature = AttachedSignaturePrefix::new(
+        let signature = AttachedSignaturePrefix::new_both_same(
             SelfSigningPrefix::Ed25519Sha512(
                 Arc::clone(&self.key_manager)
                     .lock()
@@ -326,7 +326,8 @@ impl<K: KeyManager> SimpleController<K> {
                 .unwrap();
         let sed: Vec<u8> = end_role.encode()?;
         let sig = self.key_manager.clone().lock().unwrap().sign(&sed)?;
-        let att_sig = AttachedSignaturePrefix::new(SelfSigningPrefix::Ed25519Sha512(sig), 0);
+        let att_sig =
+            AttachedSignaturePrefix::new_both_same(SelfSigningPrefix::Ed25519Sha512(sig), 0);
 
         let oobi_rpy = SignedReply::new_trans(
             end_role,
@@ -355,7 +356,7 @@ impl<K: KeyManager> SimpleController<K> {
 
         let signed = if let EventType::KeyEvent(rot) = key_event.try_into()? {
             rot.sign(
-                vec![AttachedSignaturePrefix::new(
+                vec![AttachedSignaturePrefix::new_both_same(
                     SelfSigningPrefix::Ed25519Sha512(signature),
                     0,
                 )],
@@ -407,7 +408,7 @@ impl<K: KeyManager> SimpleController<K> {
         let signature = km.sign(&ixn.encode()?)?;
 
         let signed = ixn.sign(
-            vec![AttachedSignaturePrefix::new(
+            vec![AttachedSignaturePrefix::new_both_same(
                 SelfSigningPrefix::Ed25519Sha512(signature),
                 0,
             )],
@@ -436,7 +437,7 @@ impl<K: KeyManager> SimpleController<K> {
             let km = self.key_manager.lock().map_err(|_| Error::MutexPoisoned)?;
             let signature = km.sign(&ixn.encode()?)?;
 
-            let attached_signature = AttachedSignaturePrefix::new(
+            let attached_signature = AttachedSignaturePrefix::new_both_same(
                 SelfSigningPrefix::Ed25519Sha512(signature),
                 self.get_index(&ixn.data)? as u16,
             );
@@ -531,15 +532,15 @@ impl<K: KeyManager> SimpleController<K> {
         let index = self.get_index(&event.event_message.data)?;
 
         // sign and process inception event
-        let second_signature = AttachedSignaturePrefix {
-            index: index as u16,
-            signature: SelfSigningPrefix::Ed25519Sha512(
+        let second_signature = AttachedSignaturePrefix::new_both_same(
+            SelfSigningPrefix::Ed25519Sha512(
                 self.key_manager
                     .lock()
                     .unwrap()
                     .sign(&event.event_message.encode()?)?,
             ),
-        };
+            index as u16,
+        );
         let signed_icp = event
             .clone()
             .event_message
@@ -606,7 +607,7 @@ impl<K: KeyManager> SimpleController<K> {
             let key_event = parse(&icp).unwrap().1.payload;
             if let EventType::KeyEvent(icp) = key_event.try_into()? {
                 icp.sign(
-                    vec![AttachedSignaturePrefix::new(
+                    vec![AttachedSignaturePrefix::new_both_same(
                         SelfSigningPrefix::Ed25519Sha512(signature),
                         0,
                     )],
@@ -673,10 +674,7 @@ impl<K: KeyManager> SimpleController<K> {
             )
         };
 
-        let exn_sig = AttachedSignaturePrefix {
-            index: 0,
-            signature: ssp,
-        };
+        let exn_sig = AttachedSignaturePrefix::new_both_same(ssp, 0);
         let sigg = Signature::Transferable(
             SignerData::LastEstablishment(self.prefix.clone()),
             vec![exn_sig],
@@ -718,7 +716,7 @@ impl<K: KeyManager> SimpleController<K> {
             .unwrap()
             .sign(&qry_msg.encode().unwrap())
             .unwrap();
-        let signatures = vec![AttachedSignaturePrefix::new(
+        let signatures = vec![AttachedSignaturePrefix::new_both_same(
             SelfSigningPrefix::Ed25519Sha512(signature),
             0,
         )];
@@ -758,7 +756,7 @@ impl<K: KeyManager> SimpleController<K> {
                     .unwrap()
                     .sign(&qry_msg.encode().unwrap())
                     .unwrap();
-                let signatures = vec![AttachedSignaturePrefix::new(
+                let signatures = vec![AttachedSignaturePrefix::new_both_same(
                     SelfSigningPrefix::Ed25519Sha512(signature),
                     0,
                 )];
@@ -800,7 +798,7 @@ impl<K: KeyManager> SimpleController<K> {
         Ok(fully_signed_event.and_then(|ev| {
             ev.signatures
                 .iter()
-                .map(|at| at.index)
+                .map(|at| at.index.current())
                 .min()
                 .and_then(|index| {
                     if index as usize == own_index {

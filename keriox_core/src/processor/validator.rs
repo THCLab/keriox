@@ -58,7 +58,7 @@ impl EventValidator {
             let indexes_in_last_prev = signed_event
                 .signatures
                 .iter()
-                .map(|sig| sig.index as usize)
+                .map(|sig| sig.index.current() as usize)
                 .collect::<Vec<_>>();
             // Check previous next threshold
             state
@@ -180,7 +180,7 @@ impl EventValidator {
             .map(|sig| -> Result<_, _> {
                 Ok((
                     witnesses
-                        .get(sig.index as usize)
+                        .get(sig.index.current() as usize)
                         .ok_or_else(|| Error::SemanticError("No matching witness prefix".into()))?
                         .clone(),
                     sig.signature,

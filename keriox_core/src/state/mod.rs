@@ -49,7 +49,12 @@ impl WitnessConfig {
                 let mut unique = HashSet::new();
                 // save indexed signer's identifiers
                 indexed_receipts.into_iter().for_each(|w| {
-                    unique.insert(self.witnesses.get(w.index as usize).unwrap().clone());
+                    unique.insert(
+                        self.witnesses
+                            .get(w.index.current() as usize)
+                            .unwrap()
+                            .clone(),
+                    );
                 });
                 receipts_couplets
                     .into_iter()
@@ -63,7 +68,11 @@ impl WitnessConfig {
                 let indexes = receipts_couplets
                     .into_iter()
                     .filter_map(|(id, _signature)| self.witnesses.iter().position(|wit| wit == &id))
-                    .chain(indexed_receipts.into_iter().map(|att| att.index as usize))
+                    .chain(
+                        indexed_receipts
+                            .into_iter()
+                            .map(|att| att.index.current() as usize),
+                    )
                     .collect::<Vec<_>>();
                 t.enough_signatures(&indexes)
             }

@@ -300,11 +300,11 @@ impl IdentifierController {
 
             let signature = vec![Signature::Transferable(
                 SignerData::LastEstablishment(self.id.clone()),
-                vec![AttachedSignaturePrefix {
+                vec![AttachedSignaturePrefix::new_both_same(
+                    exn_signature,
                     // TODO
-                    index: 0,
-                    signature: exn_signature,
-                }],
+                    0,
+                )],
             )];
             let signer_exn = Message::Op(Op::Exchange(SignedExchange {
                 exchange_message: exn,
@@ -351,10 +351,7 @@ impl IdentifierController {
 
         self.source.finalize_key_event(&icp, &sig, own_index)?;
 
-        let att_signature = AttachedSignaturePrefix {
-            index: own_index as u16,
-            signature: sig,
-        };
+        let att_signature = AttachedSignaturePrefix::new_both_same(sig, own_index as u16);
 
         for (exn, signature) in exchanges {
             self.finalize_exchange(&exn, signature, att_signature.clone())
@@ -378,7 +375,7 @@ impl IdentifierController {
             let min_sig_idx =
                 ev.signatures
                     .iter()
-                    .map(|at| at.index)
+                    .map(|at| at.index.current())
                     .min()
                     .expect("event should have at least one signature") as usize;
             if min_sig_idx == id_idx {
@@ -594,10 +591,7 @@ impl IdentifierController {
         let self_id = self.id.clone();
         let mut actions = Vec::new();
         for (qry, sig) in queries {
-            let signatures = vec![AttachedSignaturePrefix {
-                index: 0,
-                signature: sig,
-            }];
+            let signatures = vec![AttachedSignaturePrefix::new_both_same(sig, 0)];
             let (recipient, about_who, from_who) = match &qry.data.data.route {
                 QueryRoute::Log {
                     reply_route: _,
@@ -667,7 +661,7 @@ impl IdentifierController {
         Ok(actions)
     }
 
-    /// Send new receipts obtained via [`Self::finalize_query`] to specified witnesses.
+     /// Send new receipts obtained via [`Self::finalize_query`] to specified witnesses.
     /// Returns number of new receipts sent per witness or first error.
     pub async fn broadcast_receipts(
         &mut self,
@@ -746,7 +740,7 @@ impl IdentifierController {
                             &self.id,
                             &rct.body.receipted_event_digest,
                         )?;
-                        wit_ids.push(wits[sig.index as usize].clone());
+                        wit_ids.push(wits[sig.index.current() as usize].clone());
                     }
                 }
                 Nontransferable::Couplet(sigs) => {

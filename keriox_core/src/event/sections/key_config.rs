@@ -75,7 +75,7 @@ impl KeyConfig {
         if !(sigs
             .iter()
             .fold(vec![0u64; self.public_keys.len()], |mut acc, sig| {
-                acc[sig.index as usize] += 1;
+                acc[sig.index.current() as usize] += 1;
                 acc
             })
             .iter()
@@ -91,7 +91,7 @@ impl KeyConfig {
         } else if self.threshold.enough_signatures(
             &sigs
                 .iter()
-                .map(|sig| sig.index as usize)
+                .map(|sig| sig.index.current() as usize)
                 .collect::<Vec<_>>(),
         )? {
             Ok(sigs
@@ -100,7 +100,7 @@ impl KeyConfig {
                     Ok(acc?
                         && self
                             .public_keys
-                            .get(sig.index as usize)
+                            .get(sig.index.current() as usize)
                             .ok_or_else(|| {
                                 Error::SemanticError("Key index not present in set".into())
                             })
@@ -238,7 +238,7 @@ mod test {
         let mut signatures = vec![];
         for i in 0..priv_keys.len() {
             let sig = priv_keys[i].sign_ed(msg_to_sign)?;
-            signatures.push(AttachedSignaturePrefix::new(
+            signatures.push(AttachedSignaturePrefix::new_both_same(
                 SelfSigningPrefix::Ed25519Sha512(sig),
                 i as u16,
             ));

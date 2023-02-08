@@ -330,7 +330,7 @@ fn test_qry_rpy() -> Result<(), ActorError> {
     )?;
 
     // sign message by bob
-    let signature = AttachedSignaturePrefix::new(
+    let signature = AttachedSignaturePrefix::new_both_same(
         SelfSigningPrefix::Ed25519Sha512(
             Arc::clone(&bob_key_manager)
                 .lock()
@@ -373,7 +373,7 @@ fn test_qry_rpy() -> Result<(), ActorError> {
     )?;
 
     // sign message by bob
-    let signature = AttachedSignaturePrefix::new(
+    let signature = AttachedSignaturePrefix::new_both_same(
         SelfSigningPrefix::Ed25519Sha512(
             Arc::clone(&bob_key_manager)
                 .lock()

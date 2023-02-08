@@ -11,10 +11,7 @@ use crate::{
 
 impl From<IndexedSignature> for AttachedSignaturePrefix {
     fn from((code, value): IndexedSignature) -> Self {
-        AttachedSignaturePrefix {
-            index: code.index,
-            signature: SelfSigningPrefix::new(code.code, value),
-        }
+        AttachedSignaturePrefix::new_both_same(SelfSigningPrefix::new(code.code, value), code.index)
     }
 }
 
@@ -88,10 +85,7 @@ impl Into<PublicKey> for BasicPrefix {
 impl Into<IndexedSignature> for AttachedSignaturePrefix {
     fn into(self) -> IndexedSignature {
         (
-            AttachedSignatureCode {
-                index: self.index,
-                code: self.signature.get_code(),
-            },
+            AttachedSignatureCode::new(self.signature.get_code(), self.index.current()),
             self.derivative(),
         )
     }

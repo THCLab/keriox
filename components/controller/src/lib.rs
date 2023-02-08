@@ -472,10 +472,7 @@ impl Controller {
         sig: &SelfSigningPrefix,
         own_index: usize,
     ) -> Result<(), ControllerError> {
-        let signature = AttachedSignaturePrefix {
-            index: own_index as u16,
-            signature: sig.clone(),
-        };
+        let signature = AttachedSignaturePrefix::new_both_same(sig.clone(), own_index as u16);
 
         let signed_message = event.sign(vec![signature], None, None);
         self.process(&Message::Notice(Notice::Event(signed_message)))?;
@@ -512,10 +509,7 @@ impl Controller {
         let sigs = sig
             .into_iter()
             .enumerate()
-            .map(|(i, sig)| AttachedSignaturePrefix {
-                index: i as u16,
-                signature: sig,
-            })
+            .map(|(i, sig)| AttachedSignaturePrefix::new_both_same(sig, i as u16))
             .collect();
 
         let dest_prefix = match &event.data.data {

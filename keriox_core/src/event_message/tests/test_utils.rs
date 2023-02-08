@@ -89,7 +89,7 @@ fn test_update_identifier_state(
         // Sign.
         let signer = cur_sk.clone();
         let sig = signer.sign_ed(&sed)?;
-        AttachedSignaturePrefix::new(SelfSigningPrefix::Ed25519Sha512(sig), 0)
+        AttachedSignaturePrefix::new_both_same(SelfSigningPrefix::Ed25519Sha512(sig), 0)
     };
 
     // Attach sign to event message.
