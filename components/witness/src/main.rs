@@ -11,6 +11,7 @@ use keri::{
     prefix::{CesrPrimitive, IdentifierPrefix},
 };
 use serde::{Deserialize, Serialize};
+use serde_with::{serde_as, DurationSeconds};
 use url::Url;
 use witness::{WitnessEscrowConfig, WitnessListener};
 
@@ -32,19 +33,19 @@ pub struct Config {
     escrow_timeout: WitnessEscrowConfig,
 }
 
+#[serde_as]
 #[derive(Deserialize)]
-#[serde_with::serde_as]
 struct PartialEscrowConfig {
-    #[serde_as(as = "Option<serde_as::DurationSeconds>")]
+    #[serde_as(as = "Option<DurationSeconds>")]
     default_timeout: Option<Duration>,
 
-    #[serde_as(as = "Option<serde_as::DurationSeconds>")]
+    #[serde_as(as = "Option<DurationSeconds>")]
     partially_signed_timeout: Option<Duration>,
 
-    #[serde_as(as = "Option<serde_as::DurationSeconds>")]
+    #[serde_as(as = "Option<DurationSeconds>")]
     out_of_order_timeout: Option<Duration>,
 
-    #[serde_as(as = "Option<serde_as::DurationSeconds>")]
+    #[serde_as(as = "Option<DurationSeconds>")]
     delegation_timeout: Option<Duration>,
 }
 

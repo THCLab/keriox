@@ -12,7 +12,7 @@ use keri::{
     transport::default::DefaultTransport,
 };
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
+use serde_with::{serde_as, DurationSeconds};
 use url::Url;
 use watcher::{WatcherConfig, WatcherListener};
 
@@ -35,25 +35,25 @@ pub struct Config {
     escrow_config: EscrowConfig,
 }
 
+#[serde_as]
 #[derive(Deserialize)]
-#[serde_with::serde_as]
 struct PartialEscrowConfig {
-    #[serde_as(as = "Option<serde_as::DurationSeconds>")]
+    #[serde_as(as = "Option<DurationSeconds>")]
     default_timeout: Option<Duration>,
 
-    #[serde_as(as = "Option<serde_as::DurationSeconds>")]
+    #[serde_as(as = "Option<DurationSeconds>")]
     out_of_order_timeout: Option<Duration>,
 
-    #[serde_as(as = "Option<serde_as::DurationSeconds>")]
+    #[serde_as(as = "Option<DurationSeconds>")]
     partially_signed_timeout: Option<Duration>,
 
-    #[serde_as(as = "Option<serde_as::DurationSeconds>")]
+    #[serde_as(as = "Option<DurationSeconds>")]
     partially_witnessed_timeout: Option<Duration>,
 
-    #[serde_as(as = "Option<serde_as::DurationSeconds>")]
+    #[serde_as(as = "Option<DurationSeconds>")]
     trans_receipt_timeout: Option<Duration>,
 
-    #[serde_as(as = "Option<serde_as::DurationSeconds>")]
+    #[serde_as(as = "Option<DurationSeconds>")]
     delegation_timeout: Option<Duration>,
 }
 
