@@ -1,7 +1,6 @@
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
-    time::Duration,
 };
 
 use keri::{
@@ -14,13 +13,14 @@ use keri::{
     error::Error,
     event_message::signed_event_message::{Notice, Op},
     prefix::{IdentifierPrefix, SelfSigningPrefix},
+    processor::escrow::EscrowConfig,
     query::{query_event::SignedQuery, reply_event::SignedReply},
     transport::test::{TestActorMap, TestTransport},
 };
 use tempfile::Builder;
 use url::Host;
 use watcher::{WatcherConfig, WatcherData};
-use witness::WitnessListener;
+use witness::{WitnessEscrowConfig, WitnessListener};
 
 #[test]
 pub fn watcher_forward_ksn() -> Result<(), Error> {
@@ -33,7 +33,7 @@ pub fn watcher_forward_ksn() -> Result<(), Error> {
             witness_url,
             root_witness.path(),
             Some("ArwXoACJgOleVZ2PY7kXn7rA0II0mHYDhc6WrBH8fDAc".into()),
-            Duration::from_secs(60),
+            WitnessEscrowConfig::default(),
         )?)
     };
 
@@ -58,7 +58,7 @@ pub fn watcher_forward_ksn() -> Result<(), Error> {
             escrow_db,
             key_manager,
             oobi_root.path(),
-            Duration::from_secs(60),
+            EscrowConfig::default(),
         )
         .unwrap()
     };
@@ -85,7 +85,7 @@ pub fn watcher_forward_ksn() -> Result<(), Error> {
             escrow_db,
             key_manager,
             oobi_root.path(),
-            Duration::from_secs(60),
+            EscrowConfig::default(),
         )
         .unwrap()
     };

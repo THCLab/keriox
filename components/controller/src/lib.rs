@@ -1,4 +1,4 @@
-use std::{path::PathBuf, sync::Arc, time::Duration};
+use std::{path::PathBuf, sync::Arc};
 
 pub mod error;
 pub mod identifier_controller;
@@ -19,7 +19,7 @@ use keri::{
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     processor::{
         basic_processor::BasicProcessor,
-        escrow::{default_escrow_bus, PartiallyWitnessedEscrow},
+        escrow::{default_escrow_bus, EscrowConfig, PartiallyWitnessedEscrow},
         event_storage::EventStorage,
         Processor,
     },
@@ -44,7 +44,7 @@ pub struct Controller {
 pub struct ControllerConfig {
     pub db_path: PathBuf,
     pub initial_oobis: Vec<LocationScheme>,
-    pub escrow_timeout: Duration,
+    pub escrow_config: EscrowConfig,
     pub transport: Box<dyn Transport + Send + Sync>,
 }
 
@@ -53,7 +53,7 @@ impl Default for ControllerConfig {
         Self {
             db_path: PathBuf::from("db"),
             initial_oobis: vec![],
-            escrow_timeout: Duration::from_secs(60),
+            escrow_config: EscrowConfig::default(),
             transport: Box::new(DefaultTransport::new()),
         }
     }
@@ -64,7 +64,7 @@ impl Controller {
         let ControllerConfig {
             db_path,
             initial_oobis,
-            escrow_timeout,
+            escrow_config,
             transport,
         } = config;
 
@@ -94,7 +94,7 @@ impl Controller {
                 partially_witnessed_escrow,
                 _delegation_escrow,
             ),
-        ) = default_escrow_bus(db.clone(), escrow_db, escrow_timeout);
+        ) = default_escrow_bus(db.clone(), escrow_db, escrow_config);
 
         let controller = Self {
             processor: BasicProcessor::new(db.clone(), Some(notification_bus)),

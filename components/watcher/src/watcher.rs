@@ -1,4 +1,4 @@
-use std::{path::PathBuf, sync::Arc, time::Duration};
+use std::{path::PathBuf, sync::Arc};
 
 use itertools::Itertools;
 use keri::{
@@ -11,7 +11,7 @@ use keri::{
     event_message::signed_event_message::{Message, Notice, Op},
     oobi::{error::OobiError, EndRole, LocationScheme, OobiManager, Role, Scheme},
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
-    processor::escrow::default_escrow_bus,
+    processor::escrow::{default_escrow_bus, EscrowConfig},
     query::{
         query_event::{QueryArgs, QueryEvent, QueryRoute, SignedQuery},
         reply_event::{ReplyEvent, ReplyRoute, SignedReply},
@@ -38,7 +38,7 @@ pub struct WatcherConfig {
     pub db_path: PathBuf,
     pub priv_key: Option<String>,
     pub transport: Box<dyn Transport + Send + Sync>,
-    pub escrow_timeout: Duration,
+    pub escrow_config: EscrowConfig,
 }
 
 impl Default for WatcherConfig {
@@ -48,7 +48,7 @@ impl Default for WatcherConfig {
             db_path: PathBuf::from("db"),
             priv_key: None,
             transport: Box::new(DefaultTransport::new()),
-            escrow_timeout: Duration::from_secs(60),
+            escrow_config: EscrowConfig::default(),
         }
     }
 }
@@ -60,7 +60,7 @@ impl WatcherData {
             db_path,
             priv_key,
             transport,
-            escrow_timeout,
+            escrow_config,
         } = config;
 
         let signer = Arc::new(
@@ -83,7 +83,7 @@ impl WatcherData {
             OobiManager::new(&path)
         };
 
-        let (notification_bus, _) = default_escrow_bus(db.clone(), escrow_db, escrow_timeout);
+        let (notification_bus, _) = default_escrow_bus(db.clone(), escrow_db, escrow_config);
 
         let prefix = BasicPrefix::Ed25519NT(signer.public_key()); // watcher uses non transferable key
         let processor = BasicProcessor::new(db.clone(), Some(notification_bus));

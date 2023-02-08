@@ -1,11 +1,14 @@
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use keri::{
     actor::{parse_event_stream, prelude::*},
     database::{escrow::EscrowDb, SledEventDatabase},
     error::Error,
     event_message::signed_event_message::Op,
-    processor::{escrow::default_escrow_bus, event_storage::EventStorage},
+    processor::{
+        escrow::{default_escrow_bus, EscrowConfig},
+        event_storage::EventStorage,
+    },
 };
 
 #[test]
@@ -20,7 +23,7 @@ pub fn test_ksn_query() -> Result<(), Box<dyn std::error::Error>> {
     let escrow_db = Arc::new(EscrowDb::new(escrow_root.path())?);
 
     let (notification_bus, (_ooo_escrow, _ps_esrow, _pw_escrow, _)) =
-        default_escrow_bus(db.clone(), escrow_db, Duration::from_secs(60));
+        default_escrow_bus(db.clone(), escrow_db, EscrowConfig::default());
 
     let (processor, storage) = (
         BasicProcessor::new(db.clone(), Some(notification_bus)),

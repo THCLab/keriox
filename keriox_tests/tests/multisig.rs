@@ -1,4 +1,4 @@
-use std::{collections::HashMap, net::Ipv4Addr, sync::Arc, time::Duration};
+use std::{collections::HashMap, net::Ipv4Addr, sync::Arc};
 
 use anyhow::Result;
 use controller::{
@@ -14,7 +14,7 @@ use keri::{
 use tempfile::Builder;
 use url::{Host, Url};
 use watcher::{WatcherConfig, WatcherListener};
-use witness::WitnessListener;
+use witness::{WitnessEscrowConfig, WitnessListener};
 
 #[async_std::test]
 async fn test_multisig() -> Result<()> {
@@ -24,7 +24,7 @@ async fn test_multisig() -> Result<()> {
             Url::parse("http://127.0.0.1:3232").unwrap(),
             wit_root.path(),
             Some("ArwXoACJgOleVZ2PY7kXn7rA0II0mHYDhc6WrBH8fDAc".to_string()),
-            Duration::from_secs(10),
+            WitnessEscrowConfig::default(),
         )?)
     };
     let witness_id = wit.get_prefix();

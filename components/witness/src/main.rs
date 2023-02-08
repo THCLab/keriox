@@ -12,9 +12,8 @@ use keri::{
 };
 use serde::{Deserialize, Serialize};
 use url::Url;
-use witness::WitnessListener;
+use witness::{WitnessEscrowConfig, WitnessListener};
 
-#[serde_with::serde_as]
 #[derive(Deserialize)]
 pub struct Config {
     db_path: PathBuf,
@@ -28,9 +27,46 @@ pub struct Config {
     /// Witness keypair seed
     seed: Option<String>,
 
-    /// Time after which an escrowed event is considered stale (in seconds).
-    #[serde_as(as = "serde_with::DurationSeconds")]
-    escrow_timeout: Duration,
+    /// Time after which an escrowed event is considered stale.
+    #[serde(default, deserialize_with = "deserialize_escrow_config")]
+    escrow_timeout: WitnessEscrowConfig,
+}
+
+#[derive(Deserialize)]
+#[serde_with::serde_as]
+struct PartialEscrowConfig {
+    #[serde_as(as = "Option<serde_as::DurationSeconds>")]
+    default_timeout: Option<Duration>,
+
+    #[serde_as(as = "Option<serde_as::DurationSeconds>")]
+    partially_signed_timeout: Option<Duration>,
+
+    #[serde_as(as = "Option<serde_as::DurationSeconds>")]
+    out_of_order_timeout: Option<Duration>,
+
+    #[serde_as(as = "Option<serde_as::DurationSeconds>")]
+    delegation_timeout: Option<Duration>,
+}
+
+fn deserialize_escrow_config<'de, D>(deserializer: D) -> Result<WitnessEscrowConfig, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let config = PartialEscrowConfig::deserialize(deserializer)?;
+    Ok(WitnessEscrowConfig {
+        partially_signed_timeout: config
+            .partially_signed_timeout
+            .or(config.default_timeout)
+            .unwrap_or(WitnessEscrowConfig::default().partially_signed_timeout),
+        out_of_order_timeout: config
+            .out_of_order_timeout
+            .or(config.default_timeout)
+            .unwrap_or(WitnessEscrowConfig::default().out_of_order_timeout),
+        delegation_timeout: config
+            .delegation_timeout
+            .or(config.default_timeout)
+            .unwrap_or(WitnessEscrowConfig::default().delegation_timeout),
+    })
 }
 
 #[derive(Debug, Parser, Serialize)]

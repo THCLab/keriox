@@ -1,15 +1,13 @@
 #![cfg(test)]
 
-use std::{
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::sync::{Arc, Mutex};
 
 use keri::{
     actor::{error::ActorError, simple_controller::SimpleController},
     database::{escrow::EscrowDb, SledEventDatabase},
     error::Error,
     prefix::IdentifierPrefix,
+    processor::escrow::EscrowConfig,
 };
 use tempfile::Builder;
 use url::Url;
@@ -39,7 +37,7 @@ async fn test_authentication() -> Result<(), Error> {
             escrow_db,
             key_manager,
             oobi_root.path(),
-            Duration::from_secs(60),
+            EscrowConfig::default(),
         )
         .unwrap()
     };
@@ -70,7 +68,7 @@ async fn test_authentication() -> Result<(), Error> {
             escrow_db,
             key_manager,
             oobi_root.path(),
-            Duration::from_secs(60),
+            EscrowConfig::default(),
         )
         .unwrap()
     };

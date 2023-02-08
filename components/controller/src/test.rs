@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc};
 
 use keri::{
     actor::{error::ActorError, prelude::Message, SignedQueryError},
@@ -16,7 +16,7 @@ use keri::{
 };
 use tempfile::Builder;
 use url::Host;
-use witness::WitnessListener;
+use witness::{WitnessEscrowConfig, WitnessListener};
 
 use super::{error::ControllerError, identifier_controller::IdentifierController, Controller};
 use crate::{mailbox_updating::ActionRequired, ControllerConfig};
@@ -113,7 +113,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
             url::Url::parse("http://witness1:3232/").unwrap(),
             witness_root.path(),
             Some(seed.to_string()),
-            Duration::from_secs(10),
+            WitnessEscrowConfig::default(),
         )?)
     };
 
@@ -392,7 +392,7 @@ async fn test_2_wit() -> Result<(), ControllerError> {
             url::Url::parse("http://witness1/").unwrap(),
             witness_root.path(),
             Some(seed.to_string()),
-            Duration::from_secs(10),
+            WitnessEscrowConfig::default(),
         )?)
     };
     let witness2 = {
@@ -402,7 +402,7 @@ async fn test_2_wit() -> Result<(), ControllerError> {
             url::Url::parse("http://witness2/").unwrap(),
             witness_root.path(),
             Some(seed.to_string()),
-            Duration::from_secs(10),
+            WitnessEscrowConfig::default(),
         )?)
     };
 

@@ -2,14 +2,13 @@ use std::{
     net::ToSocketAddrs,
     path::{Path, PathBuf},
     sync::Arc,
-    time::Duration,
 };
 
 use actix_web::{dev::Server, web::Data, App, HttpServer};
 use anyhow::Result;
 use keri::{self, error::Error, prefix::BasicPrefix};
 
-use crate::witness::Witness;
+use crate::{witness::Witness, witness_processor::WitnessEscrowConfig};
 
 pub struct WitnessListener {
     pub witness_data: Arc<Witness>,
@@ -20,7 +19,7 @@ impl WitnessListener {
         pub_addr: url::Url,
         event_db_path: &Path,
         priv_key: Option<String>,
-        escrow_timeout: Duration,
+        escrow_config: WitnessEscrowConfig,
     ) -> Result<Self, Error> {
         let mut oobi_path = PathBuf::new();
         oobi_path.push(event_db_path);
@@ -31,7 +30,7 @@ impl WitnessListener {
                 event_db_path,
                 oobi_path.as_path(),
                 priv_key,
-                escrow_timeout,
+                escrow_config,
             )?),
         })
     }

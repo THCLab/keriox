@@ -8,13 +8,14 @@ use figment::{
 use keri::{
     oobi::{LocationScheme, Scheme},
     prefix::{CesrPrimitive, IdentifierPrefix},
+    processor::escrow::EscrowConfig,
     transport::default::DefaultTransport,
 };
 use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use url::Url;
 use watcher::{WatcherConfig, WatcherListener};
 
-#[serde_with::serde_as]
 #[derive(Deserialize)]
 pub struct Config {
     db_path: PathBuf,
@@ -30,9 +31,59 @@ pub struct Config {
 
     initial_oobis: Vec<LocationScheme>,
 
-    /// Time after which an escrowed event is considered stale (in seconds).
-    #[serde_as(as = "serde_with::DurationSeconds")]
-    escrow_timeout: Duration,
+    #[serde(default, deserialize_with = "deserialize_escrow_config")]
+    escrow_config: EscrowConfig,
+}
+
+#[derive(Deserialize)]
+#[serde_with::serde_as]
+struct PartialEscrowConfig {
+    #[serde_as(as = "Option<serde_as::DurationSeconds>")]
+    default_timeout: Option<Duration>,
+
+    #[serde_as(as = "Option<serde_as::DurationSeconds>")]
+    out_of_order_timeout: Option<Duration>,
+
+    #[serde_as(as = "Option<serde_as::DurationSeconds>")]
+    partially_signed_timeout: Option<Duration>,
+
+    #[serde_as(as = "Option<serde_as::DurationSeconds>")]
+    partially_witnessed_timeout: Option<Duration>,
+
+    #[serde_as(as = "Option<serde_as::DurationSeconds>")]
+    trans_receipt_timeout: Option<Duration>,
+
+    #[serde_as(as = "Option<serde_as::DurationSeconds>")]
+    delegation_timeout: Option<Duration>,
+}
+
+fn deserialize_escrow_config<'de, D>(deserializer: D) -> Result<EscrowConfig, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let config = PartialEscrowConfig::deserialize(deserializer)?;
+    Ok(EscrowConfig {
+        out_of_order_timeout: config
+            .out_of_order_timeout
+            .or(config.default_timeout)
+            .unwrap_or(EscrowConfig::default().out_of_order_timeout),
+        partially_signed_timeout: config
+            .partially_signed_timeout
+            .or(config.default_timeout)
+            .unwrap_or(EscrowConfig::default().partially_signed_timeout),
+        partially_witnessed_timeout: config
+            .partially_witnessed_timeout
+            .or(config.default_timeout)
+            .unwrap_or(EscrowConfig::default().partially_witnessed_timeout),
+        trans_receipt_timeout: config
+            .trans_receipt_timeout
+            .or(config.default_timeout)
+            .unwrap_or(EscrowConfig::default().trans_receipt_timeout),
+        delegation_timeout: config
+            .delegation_timeout
+            .or(config.default_timeout)
+            .unwrap_or(EscrowConfig::default().delegation_timeout),
+    })
 }
 
 #[derive(Debug, Parser, Serialize)]
@@ -60,7 +111,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         db_path: cfg.db_path.clone(),
         priv_key: cfg.seed,
         transport: Box::new(DefaultTransport::new()),
-        escrow_timeout: cfg.escrow_timeout,
+        escrow_config: cfg.escrow_config,
     })
     .unwrap();
 

@@ -21,12 +21,15 @@ use keri::{
     keys::PublicKey,
     mailbox::{exchange::ForwardTopic, MailboxResponse},
     prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
-    processor::{basic_processor::BasicProcessor, event_storage::EventStorage, Processor},
+    processor::{
+        basic_processor::BasicProcessor, escrow::EscrowConfig, event_storage::EventStorage,
+        Processor,
+    },
     signer::{CryptoBox, Signer},
 };
 use tempfile::Builder;
 
-use crate::witness::Witness;
+use crate::{witness::Witness, witness_processor::WitnessEscrowConfig};
 
 #[test]
 fn test_not_fully_witnessed() -> Result<(), Error> {
@@ -57,7 +60,7 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
             escrow_db,
             key_manager,
             oobi_root.path(),
-            Duration::from_secs(60),
+            EscrowConfig::default(),
         )?
     };
 
@@ -72,7 +75,7 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
             root_witness.path(),
             oobi_root.path(),
             Some(seed1.into()),
-            Duration::from_secs(60),
+            WitnessEscrowConfig::default(),
         )?
     };
 
@@ -85,7 +88,7 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
             root_witness.path(),
             oobi_root.path(),
             Some(seed2.into()),
-            Duration::from_secs(60),
+            WitnessEscrowConfig::default(),
         )?
     };
 
@@ -257,7 +260,7 @@ fn test_qry_rpy() -> Result<(), ActorError> {
         signer_arc,
         witness_root.path(),
         witness_oobi_root.path(),
-        Duration::from_secs(60),
+        WitnessEscrowConfig::default(),
     )?;
 
     let alice_key_manager = Arc::new(Mutex::new({
@@ -271,7 +274,7 @@ fn test_qry_rpy() -> Result<(), ActorError> {
         Arc::clone(&alice_escrow_db),
         Arc::clone(&alice_key_manager),
         alice_oobi_root.path(),
-        Duration::from_secs(60),
+        EscrowConfig::default(),
     )?;
 
     let bob_key_manager = Arc::new(Mutex::new({
@@ -285,7 +288,7 @@ fn test_qry_rpy() -> Result<(), ActorError> {
         Arc::clone(&bob_escrow_db),
         Arc::clone(&bob_key_manager),
         bob_oobi_root.path(),
-        Duration::from_secs(60),
+        EscrowConfig::default(),
     )?;
 
     let bob_icp = bob.incept(None, None, None).unwrap();
@@ -416,7 +419,7 @@ pub fn test_key_state_notice() -> Result<(), Error> {
             signer_arc.clone(),
             path,
             witness_root_oobi.path(),
-            Duration::from_secs(60),
+            WitnessEscrowConfig::default(),
         )?
     };
 
@@ -435,7 +438,7 @@ pub fn test_key_state_notice() -> Result<(), Error> {
             Arc::clone(&bob_escrow_db),
             Arc::clone(&bob_key_manager),
             oobi_root.path(),
-            Duration::from_secs(60),
+            EscrowConfig::default(),
         )?
     };
 
@@ -556,7 +559,7 @@ fn test_mbx() {
                 Arc::clone(&escrow_db_controller),
                 key_manager,
                 oobi_root.path(),
-                Duration::from_secs(60),
+                EscrowConfig::default(),
             )
             .unwrap()
         })
@@ -576,7 +579,7 @@ fn test_mbx() {
             signer,
             root.path(),
             oobi_root.path(),
-            Duration::from_secs(60),
+            WitnessEscrowConfig::default(),
         )
         .unwrap()
     };
@@ -636,7 +639,7 @@ fn test_invalid_notice() {
                 Arc::clone(&escrow_db_controller),
                 key_manager,
                 oobi_root.path(),
-                Duration::from_secs(60),
+                EscrowConfig::default(),
             )
             .unwrap()
         })
@@ -656,7 +659,7 @@ fn test_invalid_notice() {
             signer,
             root.path(),
             oobi_root.path(),
-            Duration::from_secs(60),
+            WitnessEscrowConfig::default(),
         )
         .unwrap()
     };
@@ -712,7 +715,7 @@ pub fn test_multisig() -> Result<(), ActorError> {
             signer_arc,
             path,
             witness_root_oobi.path(),
-            Duration::from_secs(60),
+            WitnessEscrowConfig::default(),
         )?
     };
 
@@ -730,7 +733,7 @@ pub fn test_multisig() -> Result<(), ActorError> {
             Arc::clone(&cont1_escrow_db),
             Arc::clone(&cont1_key_manager),
             oobi_root.path(),
-            Duration::from_secs(60),
+            EscrowConfig::default(),
         )?
     };
     let icp_1 = cont1.incept(Some(vec![witness.prefix.clone()]), Some(1), None)?;
@@ -757,7 +760,7 @@ pub fn test_multisig() -> Result<(), ActorError> {
             Arc::clone(&cont2_escrow_db),
             Arc::clone(&cont2_key_manager),
             oobi_root.path(),
-            Duration::from_secs(60),
+            EscrowConfig::default(),
         )?
     };
     let icp_2 = cont2.incept(Some(vec![witness.prefix.clone()]), Some(1), None)?;
@@ -876,7 +879,7 @@ fn setup_controller(witness: &Witness) -> Result<SimpleController<CryptoBox>, Er
             Arc::clone(&cont1_escrow_db),
             Arc::clone(&cont1_key_manager),
             oobi_root.path(),
-            Duration::from_secs(60),
+            EscrowConfig::default(),
         )?
     };
     let icp_1 = cont1.incept(Some(vec![witness.prefix.clone()]), Some(1), None)?;
@@ -903,7 +906,7 @@ pub fn test_delegated_multisig() -> Result<(), ActorError> {
             signer_arc,
             path,
             witness_root_oobi.path(),
-            Duration::from_secs(60),
+            WitnessEscrowConfig::default(),
         )?
     };
 
@@ -1161,7 +1164,7 @@ pub fn test_delegating_multisig() -> Result<(), ActorError> {
             signer_arc,
             path,
             witness_root_oobi.path(),
-            Duration::from_secs(60),
+            WitnessEscrowConfig::default(),
         )?
     };
 
