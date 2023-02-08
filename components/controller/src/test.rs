@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use keri::{
     actor::{error::ActorError, prelude::Message, SignedQueryError},
@@ -19,14 +19,16 @@ use url::Host;
 use witness::WitnessListener;
 
 use super::{error::ControllerError, identifier_controller::IdentifierController, Controller};
-use crate::{mailbox_updating::ActionRequired, utils::OptionalConfig};
+use crate::{mailbox_updating::ActionRequired, ControllerConfig};
 
 #[async_std::test]
 async fn test_group_incept() -> Result<(), ControllerError> {
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
-    let initial_config = OptionalConfig::init().with_db_path(root.into_path());
 
-    let controller = Arc::new(Controller::new(Some(initial_config))?);
+    let controller = Arc::new(Controller::new(ControllerConfig {
+        db_path: root.path().to_owned(),
+        ..Default::default()
+    })?);
     let km1 = CryptoBox::new()?;
     let km2 = CryptoBox::new()?;
 
@@ -103,8 +105,6 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     use url::Url;
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     let root2 = Builder::new().prefix("test-db2").tempdir().unwrap();
-    let initial_config = OptionalConfig::init().with_db_path(root.into_path());
-    let initial_config2 = OptionalConfig::init().with_db_path(root2.into_path());
 
     let witness = {
         let seed = "AK8F6AAiYDpXlWdj2O5F5-6wNCCNJh2A4XOlqwR_HwwH";
@@ -113,6 +113,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
             url::Url::parse("http://witness1:3232/").unwrap(),
             witness_root.path(),
             Some(seed.to_string()),
+            Duration::from_secs(10),
         )?)
     };
 
@@ -132,14 +133,16 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     actors.insert((Host::Domain("witness1".to_string()), 3232), witness);
     let transport = TestTransport::new(actors);
 
-    let controller = Arc::new(Controller::with_transport(
-        Some(initial_config),
-        Box::new(transport.clone()),
-    )?);
-    let controller2 = Arc::new(Controller::with_transport(
-        Some(initial_config2),
-        Box::new(transport),
-    )?);
+    let controller = Arc::new(Controller::new(ControllerConfig {
+        db_path: root.path().to_owned(),
+        transport: Box::new(transport.clone()),
+        ..Default::default()
+    })?);
+    let controller2 = Arc::new(Controller::new(ControllerConfig {
+        db_path: root2.path().to_owned(),
+        transport: Box::new(transport.clone()),
+        ..Default::default()
+    })?);
     let km1 = CryptoBox::new()?;
     let km2 = CryptoBox::new()?;
 
@@ -381,7 +384,6 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
 async fn test_2_wit() -> Result<(), ControllerError> {
     use url::Url;
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
-    let initial_config = OptionalConfig::init().with_db_path(root.into_path());
 
     let witness1 = {
         let seed = "AK8F6AAiYDpXlWdj2O5F5-6wNCCNJh2A4XOlqwR_HwwH";
@@ -390,6 +392,7 @@ async fn test_2_wit() -> Result<(), ControllerError> {
             url::Url::parse("http://witness1/").unwrap(),
             witness_root.path(),
             Some(seed.to_string()),
+            Duration::from_secs(10),
         )?)
     };
     let witness2 = {
@@ -399,6 +402,7 @@ async fn test_2_wit() -> Result<(), ControllerError> {
             url::Url::parse("http://witness2/").unwrap(),
             witness_root.path(),
             Some(seed.to_string()),
+            Duration::from_secs(10),
         )?)
     };
 
@@ -420,10 +424,11 @@ async fn test_2_wit() -> Result<(), ControllerError> {
     actors.insert((Host::Domain("witness2".to_string()), 80), witness2.clone());
     let transport = TestTransport::new(actors);
 
-    let controller = Arc::new(Controller::with_transport(
-        Some(initial_config),
-        Box::new(transport.clone()),
-    )?);
+    let controller = Arc::new(Controller::new(ControllerConfig {
+        db_path: root.path().to_owned(),
+        transport: Box::new(transport.clone()),
+        ..Default::default()
+    })?);
 
     let km1 = CryptoBox::new()?;
 

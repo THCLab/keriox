@@ -132,12 +132,9 @@ pub struct SledEventDatabase {
 
 // TODO: remove all the `.ok()`s
 impl SledEventDatabase {
-    pub fn new<'a, P>(path: P) -> Result<Self, DbError>
-    where
-        P: Into<&'a Path>,
-    {
+    pub fn new(path: impl AsRef<Path>) -> Result<Self, DbError> {
         let mut events_path = PathBuf::new();
-        events_path.push(&path.into());
+        events_path.push(path);
         let mut escrow_path = events_path.clone();
 
         events_path.push("events");

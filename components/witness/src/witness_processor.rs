@@ -40,12 +40,16 @@ impl Processor for WitnessProcessor {
 }
 
 impl WitnessProcessor {
-    pub fn new(db: Arc<SledEventDatabase>, escrow_db: Arc<EscrowDb>) -> Self {
+    pub fn new(
+        db: Arc<SledEventDatabase>,
+        escrow_db: Arc<EscrowDb>,
+        escrow_timeout: Duration,
+    ) -> Self {
         let mut bus = NotificationBus::new();
         let partially_signed_escrow = Arc::new(PartiallySignedEscrow::new(
             db.clone(),
             escrow_db.clone(),
-            Duration::from_secs(10),
+            escrow_timeout,
         ));
         bus.register_observer(
             partially_signed_escrow,
@@ -54,7 +58,7 @@ impl WitnessProcessor {
         let out_of_order_escrow = Arc::new(OutOfOrderEscrow::new(
             db.clone(),
             escrow_db.clone(),
-            Duration::from_secs(10),
+            escrow_timeout,
         ));
         bus.register_observer(
             out_of_order_escrow,
@@ -63,11 +67,8 @@ impl WitnessProcessor {
                 JustNotification::KeyEventAdded,
             ],
         );
-        let deleating_escrow = Arc::new(DelegationEscrow::new(
-            db.clone(),
-            escrow_db,
-            Duration::from_secs(10),
-        ));
+        let deleating_escrow =
+            Arc::new(DelegationEscrow::new(db.clone(), escrow_db, escrow_timeout));
         bus.register_observer(
             deleating_escrow,
             vec![

@@ -3,6 +3,7 @@ use std::{
     fmt,
     path::Path,
     sync::{Arc, Mutex},
+    time::Duration,
 };
 
 use cesrox::{cesr_proof::MaterialPath, parse, primitives::CesrPrimitive};
@@ -206,9 +207,10 @@ impl<K: KeyManager> SimpleController<K> {
         escrow_db: Arc<EscrowDb>,
         key_manager: Arc<Mutex<K>>,
         oobi_db_path: &Path,
+        escrow_timeout: Duration,
     ) -> Result<SimpleController<K>, Error> {
         let (not_bus, (ooo, _, partially_witnesses, del_escrow)) =
-            default_escrow_bus(db.clone(), escrow_db);
+            default_escrow_bus(db.clone(), escrow_db, escrow_timeout);
         let processor = BasicProcessor::new(db.clone(), Some(not_bus));
 
         Ok(SimpleController {

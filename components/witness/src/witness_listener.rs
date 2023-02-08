@@ -2,6 +2,7 @@ use std::{
     net::ToSocketAddrs,
     path::{Path, PathBuf},
     sync::Arc,
+    time::Duration,
 };
 
 use actix_web::{dev::Server, web::Data, App, HttpServer};
@@ -19,13 +20,19 @@ impl WitnessListener {
         pub_addr: url::Url,
         event_db_path: &Path,
         priv_key: Option<String>,
+        escrow_timeout: Duration,
     ) -> Result<Self, Error> {
         let mut oobi_path = PathBuf::new();
         oobi_path.push(event_db_path);
         oobi_path.push("oobi");
-
-        Witness::setup(pub_addr, event_db_path, oobi_path.as_path(), priv_key).map(|wd| Self {
-            witness_data: Arc::new(wd),
+        Ok(Self {
+            witness_data: Arc::new(Witness::setup(
+                pub_addr,
+                event_db_path,
+                oobi_path.as_path(),
+                priv_key,
+                escrow_timeout,
+            )?),
         })
     }
 

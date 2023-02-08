@@ -1,4 +1,4 @@
-use std::{net::Ipv4Addr, path::PathBuf};
+use std::{net::Ipv4Addr, path::PathBuf, time::Duration};
 
 use clap::Parser;
 use figment::{
@@ -8,27 +8,38 @@ use figment::{
 use keri::{
     oobi::{LocationScheme, Scheme},
     prefix::{CesrPrimitive, IdentifierPrefix},
+    transport::default::DefaultTransport,
 };
 use serde::{Deserialize, Serialize};
 use url::Url;
-use watcher::WatcherListener;
+use watcher::{WatcherConfig, WatcherListener};
 
+#[serde_with::serde_as]
 #[derive(Deserialize)]
 pub struct Config {
     db_path: PathBuf,
+
     /// Public URL used to advertise itself to other actors using OOBI.
     public_url: Url,
+
     /// HTTP listen port.
     http_port: u16,
+
     /// Witness private key
     seed: Option<String>,
+
     initial_oobis: Vec<LocationScheme>,
+
+    /// Time after which an escrowed event is considered stale (in seconds).
+    #[serde_as(as = "serde_with::DurationSeconds")]
+    escrow_timeout: Duration,
 }
 
 #[derive(Debug, Parser, Serialize)]
 struct Args {
     #[arg(short = 'c', long, default_value = "./watcher.yml")]
     config_file: String,
+
     #[arg(short = 'd', long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     db_path: Option<PathBuf>,
@@ -44,8 +55,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .merge(Serialized::defaults(args))
         .extract::<Config>()?;
 
-    let watcher_listener =
-        WatcherListener::setup(cfg.public_url.clone(), &cfg.db_path, cfg.seed).unwrap();
+    let watcher_listener = WatcherListener::new(WatcherConfig {
+        public_address: cfg.public_url.clone(),
+        db_path: cfg.db_path.clone(),
+        priv_key: cfg.seed,
+        transport: Box::new(DefaultTransport::new()),
+        escrow_timeout: cfg.escrow_timeout,
+    })
+    .unwrap();
 
     // Resolve oobi to know how to find witness
     watcher_listener

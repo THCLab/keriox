@@ -12,6 +12,7 @@ itertools = { version = "0.10.3" }
 derive_more = { version = "0.99.17" }
 keri = { path = "../../keriox_core", features = ["oobi", "mailbox"] }
 serde = { version = "1.0", features = ["derive"] }
+serde_with = "2.2.0"
 actix-web = { version = "4" }
 figment = { version = "0.10.6", features = ["yaml"] }
 url = { version = "2.2.2", features = ["serde"] }

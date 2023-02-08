@@ -1,6 +1,7 @@
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
+    time::Duration,
 };
 
 use keri::{
@@ -18,7 +19,7 @@ use keri::{
 };
 use tempfile::Builder;
 use url::Host;
-use watcher::WatcherData;
+use watcher::{WatcherConfig, WatcherData};
 use witness::WitnessListener;
 
 #[test]
@@ -32,6 +33,7 @@ pub fn watcher_forward_ksn() -> Result<(), Error> {
             witness_url,
             root_witness.path(),
             Some("ArwXoACJgOleVZ2PY7kXn7rA0II0mHYDhc6WrBH8fDAc".into()),
+            Duration::from_secs(60),
         )?)
     };
 
@@ -56,6 +58,7 @@ pub fn watcher_forward_ksn() -> Result<(), Error> {
             escrow_db,
             key_manager,
             oobi_root.path(),
+            Duration::from_secs(60),
         )
         .unwrap()
     };
@@ -82,6 +85,7 @@ pub fn watcher_forward_ksn() -> Result<(), Error> {
             escrow_db,
             key_manager,
             oobi_root.path(),
+            Duration::from_secs(60),
         )
         .unwrap()
     };
@@ -103,7 +107,12 @@ pub fn watcher_forward_ksn() -> Result<(), Error> {
 
     let url = url::Url::parse("http://some/dummy/url").unwrap();
     let root = Builder::new().prefix("cont-test-db").tempdir().unwrap();
-    let watcher = WatcherData::setup(url, root.path(), None, Box::new(transport))?;
+    let watcher = WatcherData::new(WatcherConfig {
+        public_address: url,
+        db_path: root.path().to_owned(),
+        transport: Box::new(transport),
+        ..Default::default()
+    })?;
 
     // Watcher should know both controllers
     watcher

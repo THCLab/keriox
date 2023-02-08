@@ -1,6 +1,9 @@
 #![cfg(test)]
 
-use std::sync::{Arc, Mutex};
+use std::{
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
 use keri::{
     actor::{
@@ -52,8 +55,9 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
         SimpleController::new(
             Arc::clone(&db_controller),
             escrow_db,
-            key_manager.clone(),
+            key_manager,
             oobi_root.path(),
+            Duration::from_secs(60),
         )?
     };
 
@@ -66,8 +70,9 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
         Witness::setup(
             url::Url::parse("http://some/url").unwrap(),
             root_witness.path(),
-            &oobi_root.path(),
+            oobi_root.path(),
             Some(seed1.into()),
+            Duration::from_secs(60),
         )?
     };
 
@@ -78,8 +83,9 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
         Witness::setup(
             url::Url::parse("http://some/url").unwrap(),
             root_witness.path(),
-            &oobi_root.path(),
+            oobi_root.path(),
             Some(seed2.into()),
+            Duration::from_secs(60),
         )?
     };
 
@@ -247,7 +253,12 @@ fn test_qry_rpy() -> Result<(), ActorError> {
     let witness_oobi_root = Builder::new().prefix("test-db").tempdir().unwrap();
     let signer = Signer::new();
     let signer_arc = Arc::new(signer);
-    let witness = Witness::new(signer_arc, witness_root.path(), witness_oobi_root.path())?;
+    let witness = Witness::new(
+        signer_arc,
+        witness_root.path(),
+        witness_oobi_root.path(),
+        Duration::from_secs(60),
+    )?;
 
     let alice_key_manager = Arc::new(Mutex::new({
         use keri::signer::CryptoBox;
@@ -260,6 +271,7 @@ fn test_qry_rpy() -> Result<(), ActorError> {
         Arc::clone(&alice_escrow_db),
         Arc::clone(&alice_key_manager),
         alice_oobi_root.path(),
+        Duration::from_secs(60),
     )?;
 
     let bob_key_manager = Arc::new(Mutex::new({
@@ -273,6 +285,7 @@ fn test_qry_rpy() -> Result<(), ActorError> {
         Arc::clone(&bob_escrow_db),
         Arc::clone(&bob_key_manager),
         bob_oobi_root.path(),
+        Duration::from_secs(60),
     )?;
 
     let bob_icp = bob.incept(None, None, None).unwrap();
@@ -399,7 +412,12 @@ pub fn test_key_state_notice() -> Result<(), Error> {
         let witness_root_oobi = Builder::new().prefix("test-db").tempdir().unwrap();
         let path = witness_root.path();
         std::fs::create_dir_all(path).unwrap();
-        Witness::new(signer_arc.clone(), path, witness_root_oobi.path())?
+        Witness::new(
+            signer_arc.clone(),
+            path,
+            witness_root_oobi.path(),
+            Duration::from_secs(60),
+        )?
     };
 
     // Init bob.
@@ -417,6 +435,7 @@ pub fn test_key_state_notice() -> Result<(), Error> {
             Arc::clone(&bob_escrow_db),
             Arc::clone(&bob_key_manager),
             oobi_root.path(),
+            Duration::from_secs(60),
         )?
     };
 
@@ -535,8 +554,9 @@ fn test_mbx() {
             SimpleController::new(
                 Arc::clone(&db_controller),
                 Arc::clone(&escrow_db_controller),
-                key_manager.clone(),
+                key_manager,
                 oobi_root.path(),
+                Duration::from_secs(60),
             )
             .unwrap()
         })
@@ -548,11 +568,17 @@ fn test_mbx() {
             .tempdir()
             .unwrap();
         let oobi_root = tempfile::Builder::new()
-            .prefix(&format!("test-oobi"))
+            .prefix(&"test-oobi".to_string())
             .tempdir()
             .unwrap();
         std::fs::create_dir_all(root.path()).unwrap();
-        Witness::new(signer, root.path(), oobi_root.path()).unwrap()
+        Witness::new(
+            signer,
+            root.path(),
+            oobi_root.path(),
+            Duration::from_secs(60),
+        )
+        .unwrap()
     };
 
     // create inception events
@@ -608,8 +634,9 @@ fn test_invalid_notice() {
             SimpleController::new(
                 Arc::clone(&db_controller),
                 Arc::clone(&escrow_db_controller),
-                key_manager.clone(),
+                key_manager,
                 oobi_root.path(),
+                Duration::from_secs(60),
             )
             .unwrap()
         })
@@ -621,11 +648,17 @@ fn test_invalid_notice() {
             .tempdir()
             .unwrap();
         let oobi_root = tempfile::Builder::new()
-            .prefix(&format!("test-oobi"))
+            .prefix(&"test-oobi".to_string())
             .tempdir()
             .unwrap();
         std::fs::create_dir_all(root.path()).unwrap();
-        Witness::new(signer, root.path(), oobi_root.path()).unwrap()
+        Witness::new(
+            signer,
+            root.path(),
+            oobi_root.path(),
+            Duration::from_secs(60),
+        )
+        .unwrap()
     };
 
     // create invalid inception events
@@ -675,7 +708,12 @@ pub fn test_multisig() -> Result<(), ActorError> {
         let witness_root = Builder::new().prefix("test-db").tempdir().unwrap();
         let witness_root_oobi = Builder::new().prefix("test-db").tempdir().unwrap();
         let path = witness_root.path();
-        Witness::new(signer_arc.clone(), path, witness_root_oobi.path())?
+        Witness::new(
+            signer_arc,
+            path,
+            witness_root_oobi.path(),
+            Duration::from_secs(60),
+        )?
     };
 
     // Init first controller.
@@ -692,6 +730,7 @@ pub fn test_multisig() -> Result<(), ActorError> {
             Arc::clone(&cont1_escrow_db),
             Arc::clone(&cont1_key_manager),
             oobi_root.path(),
+            Duration::from_secs(60),
         )?
     };
     let icp_1 = cont1.incept(Some(vec![witness.prefix.clone()]), Some(1), None)?;
@@ -718,6 +757,7 @@ pub fn test_multisig() -> Result<(), ActorError> {
             Arc::clone(&cont2_escrow_db),
             Arc::clone(&cont2_key_manager),
             oobi_root.path(),
+            Duration::from_secs(60),
         )?
     };
     let icp_2 = cont2.incept(Some(vec![witness.prefix.clone()]), Some(1), None)?;
@@ -836,6 +876,7 @@ fn setup_controller(witness: &Witness) -> Result<SimpleController<CryptoBox>, Er
             Arc::clone(&cont1_escrow_db),
             Arc::clone(&cont1_key_manager),
             oobi_root.path(),
+            Duration::from_secs(60),
         )?
     };
     let icp_1 = cont1.incept(Some(vec![witness.prefix.clone()]), Some(1), None)?;
@@ -858,7 +899,12 @@ pub fn test_delegated_multisig() -> Result<(), ActorError> {
         let witness_root = Builder::new().prefix("test-db").tempdir().unwrap();
         let witness_root_oobi = Builder::new().prefix("test-db").tempdir().unwrap();
         let path = witness_root.path();
-        Witness::new(signer_arc.clone(), path, witness_root_oobi.path())?
+        Witness::new(
+            signer_arc,
+            path,
+            witness_root_oobi.path(),
+            Duration::from_secs(60),
+        )?
     };
 
     // Init first controller.
@@ -1111,7 +1157,12 @@ pub fn test_delegating_multisig() -> Result<(), ActorError> {
         let witness_root = Builder::new().prefix("test-db").tempdir().unwrap();
         let witness_root_oobi = Builder::new().prefix("test-db").tempdir().unwrap();
         let path = witness_root.path();
-        Witness::new(signer_arc.clone(), path, witness_root_oobi.path())?
+        Witness::new(
+            signer_arc,
+            path,
+            witness_root_oobi.path(),
+            Duration::from_secs(60),
+        )?
     };
 
     let mut delegator_1 = setup_controller(&witness)?;

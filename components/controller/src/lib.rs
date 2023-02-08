@@ -1,10 +1,9 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{path::PathBuf, sync::Arc, time::Duration};
 
 pub mod error;
 pub mod identifier_controller;
 pub mod mailbox_updating;
 mod test;
-pub mod utils;
 
 use keri::{
     actor::{self, event_generator, simple_controller::PossibleResponse},
@@ -32,7 +31,7 @@ use keri::{
     transport::{default::DefaultTransport, Transport},
 };
 
-use self::{error::ControllerError, utils::OptionalConfig};
+use self::error::ControllerError;
 
 pub struct Controller {
     processor: BasicProcessor,
@@ -42,47 +41,70 @@ pub struct Controller {
     transport: Box<dyn Transport + Send + Sync>,
 }
 
-impl Controller {
-    pub fn new(configs: Option<OptionalConfig>) -> Result<Self, ControllerError> {
-        Self::with_transport(configs, Box::new(DefaultTransport::new()))
-    }
+pub struct ControllerConfig {
+    pub db_path: PathBuf,
+    pub initial_oobis: Vec<LocationScheme>,
+    pub escrow_timeout: Duration,
+    pub transport: Box<dyn Transport + Send + Sync>,
+}
 
-    pub fn with_transport(
-        configs: Option<OptionalConfig>,
-        transport: Box<dyn Transport + Send + Sync>,
-    ) -> Result<Self, ControllerError> {
-        let (db_dir_path, initial_oobis) = match configs {
-            Some(OptionalConfig {
-                db_path,
-                initial_oobis,
-            }) => (
-                db_path.unwrap_or_else(|| PathBuf::from("./db")),
-                initial_oobis,
-            ),
-            None => (PathBuf::from("./db"), None),
+impl Default for ControllerConfig {
+    fn default() -> Self {
+        Self {
+            db_path: PathBuf::from("db"),
+            initial_oobis: vec![],
+            escrow_timeout: Duration::from_secs(60),
+            transport: Box::new(DefaultTransport::new()),
+        }
+    }
+}
+
+impl Controller {
+    pub fn new(config: ControllerConfig) -> Result<Self, ControllerError> {
+        let ControllerConfig {
+            db_path,
+            initial_oobis,
+            escrow_timeout,
+            transport,
+        } = config;
+
+        let db = {
+            let mut path = db_path.clone();
+            path.push("events");
+            Arc::new(SledEventDatabase::new(&path)?)
         };
 
-        let mut events_db = db_dir_path.clone();
-        events_db.push("events");
-        let mut oobis_db = db_dir_path.clone();
-        oobis_db.push("oobis");
-        let mut escrow_db = db_dir_path;
-        escrow_db.push("escrow");
+        let escrow_db = {
+            let mut path = db_path.clone();
+            path.push("escrow");
+            Arc::new(EscrowDb::new(&path)?)
+        };
 
-        let db = Arc::new(SledEventDatabase::new(events_db.as_path())?);
-        let escrow_db = Arc::new(EscrowDb::new(escrow_db.as_path())?);
-        let (notification_bus, (_, _partially_signed_escrow, partially_witnessed_escrow, _)) =
-            default_escrow_bus(db.clone(), escrow_db);
+        let oobi_manager = {
+            let mut path = db_path;
+            path.push("oobis");
+            OobiManager::new(&path)
+        };
+
+        let (
+            notification_bus,
+            (
+                _out_of_order_escrow,
+                _partially_signed_escrow,
+                partially_witnessed_escrow,
+                _delegation_escrow,
+            ),
+        ) = default_escrow_bus(db.clone(), escrow_db, escrow_timeout);
 
         let controller = Self {
             processor: BasicProcessor::new(db.clone(), Some(notification_bus)),
             storage: EventStorage::new(db),
-            oobi_manager: OobiManager::new(&oobis_db),
+            oobi_manager,
             partially_witnessed_escrow,
             transport,
         };
 
-        if let Some(initial_oobis) = initial_oobis {
+        if !initial_oobis.is_empty() {
             async_std::task::block_on(controller.setup_witnesses(&initial_oobis))?;
         }
 

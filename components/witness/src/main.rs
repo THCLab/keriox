@@ -1,4 +1,4 @@
-use std::{net::Ipv4Addr, path::PathBuf};
+use std::{net::Ipv4Addr, path::PathBuf, time::Duration};
 
 use anyhow::Result;
 use clap::Parser;
@@ -14,15 +14,23 @@ use serde::{Deserialize, Serialize};
 use url::Url;
 use witness::WitnessListener;
 
+#[serde_with::serde_as]
 #[derive(Deserialize)]
 pub struct Config {
     db_path: PathBuf,
+
     /// Public URL used to advertise itself to other actors using OOBI.
     public_url: Url,
+
     /// HTTP Listen port
     http_port: u16,
+
     /// Witness keypair seed
     seed: Option<String>,
+
+    /// Time after which an escrowed event is considered stale (in seconds).
+    #[serde_as(as = "serde_with::DurationSeconds")]
+    escrow_timeout: Duration,
 }
 
 #[derive(Debug, Parser, Serialize)]
@@ -30,6 +38,7 @@ pub struct Config {
 struct Args {
     #[arg(short = 'c', long, default_value = "./witness.yml")]
     config_file: String,
+
     #[arg(short = 'd', long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     db_path: Option<PathBuf>,
@@ -47,8 +56,13 @@ async fn main() -> Result<()> {
         .merge(Serialized::defaults(args))
         .extract::<Config>()?;
 
-    let witness_listener =
-        WitnessListener::setup(cfg.public_url.clone(), cfg.db_path.as_path(), cfg.seed).unwrap();
+    let witness_listener = WitnessListener::setup(
+        cfg.public_url.clone(),
+        cfg.db_path.as_path(),
+        cfg.seed,
+        cfg.escrow_timeout,
+    )
+    .unwrap();
 
     let witness_id = IdentifierPrefix::Basic(witness_listener.get_prefix());
     let witness_loc_scheme = LocationScheme {
