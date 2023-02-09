@@ -18,6 +18,8 @@ pub struct NextKeysData {
 }
 
 impl NextKeysData {
+    /// Checks if next KeyConfig contains enough public keys to fulfill current
+    /// next threshold.
     pub fn verify_next(&self, next: &KeyConfig) -> Result<bool, Error> {
         let mut indexes = vec![];
         for key in &next.public_keys {
@@ -35,6 +37,45 @@ impl NextKeysData {
             .enough_signatures(&indexes)?
             .then_some(true)
             .ok_or(Error::NotEnoughSigsError)
+    }
+
+    /// Checks if public keys corresponding to signatures match keys committed in
+    /// NextKeysData and if it's enough of them
+    pub fn check_threshold(
+        &self,
+        public_keys: &[BasicPrefix],
+        signatures: &[IndexedSignature],
+    ) -> Result<(), Error> {
+        // Get indexes of keys in previous next key list.
+        let indexes_in_last_prev = signatures
+            .iter()
+            .filter_map(|sig| {
+                if let Some(prev_next) = sig.index.previous_next() {
+                    match (
+                        self.next_key_hashes.get(prev_next as usize),
+                        public_keys.get(sig.index.current() as usize),
+                    ) {
+                        (Some(prev_next_digest), Some(current)) => prev_next_digest
+                            .verify_binding(current.to_str().as_bytes())
+                            .then_some(prev_next as usize),
+                        _ => {
+                            // TODO no keys or next key digest of that index
+                            todo!()
+                        }
+                    }
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        // Check previous next threshold
+        self.threshold
+            .enough_signatures(&indexes_in_last_prev)?
+            .then_some(())
+            .ok_or(Error::NotEnoughSigsError)?;
+
+        Ok(())
     }
 }
 

@@ -51,56 +51,26 @@ impl EventValidator {
         &self,
         signed_event: &SignedEventMessage,
     ) -> Result<Option<IdentifierState>, Error> {
-        let new_state = if let Some(state) = self
+        // Compute new state
+        let new_state = match self
             .event_storage
             .get_state(&signed_event.event_message.data.get_prefix())?
         {
-            let new_state = signed_event.event_message.apply_to(state.clone())?;
-
-            let type_tag: EventTypeTag = signed_event.event_message.data.event_data.clone().into();
-            if type_tag == EventTypeTag::Rot {
-                // Get indexes of keys in previous next key list.
-                let indexes_in_last_prev = signed_event
-                    .signatures
-                    .iter()
-                    .filter_map(|sig| match sig.index.previous_next() {
-                        Some(prev_next) => {
-                            let prev_nxt = state
-                                .current
-                                .next_keys_data
-                                .next_key_hashes
-                                .get(prev_next as usize);
-                            let current = new_state
-                                .current
-                                .public_keys
-                                .get(sig.index.current() as usize);
-                            if prev_nxt
-                                .unwrap()
-                                .verify_binding(current.unwrap().to_str().as_bytes())
-                            {
-                                sig.index.previous_next().map(|i| i as usize)
-                            } else {
-                                None
-                            }
-                        }
-                        None => None,
-                    })
-                    .collect::<Vec<_>>();
-
-                // Check previous next threshold
-                state
-                    .current
-                    .next_keys_data
-                    .threshold
-                    .enough_signatures(&indexes_in_last_prev)?
-                    .then_some(())
-                    .ok_or(Error::NotEnoughSigsError)?;
+            Some(state) => {
+                let new_state = signed_event.event_message.apply_to(state.clone())?;
+                // In case of rotation event, check if previous next threshold is satisfied
+                if let EventData::Rot(rot) = signed_event.event_message.data.get_event_data() {
+                    let new_public_keys = rot.key_config.public_keys;
+                    state
+                        .current
+                        .next_keys_data
+                        .check_threshold(&new_public_keys, &signed_event.signatures)?;
+                }
+                new_state
             }
-            new_state
-        } else {
-            signed_event
+            None => signed_event
                 .event_message
-                .apply_to(IdentifierState::default())?
+                .apply_to(IdentifierState::default())?,
         };
         // match on verification result
         let ver_result = new_state.current.verify(
@@ -120,12 +90,12 @@ impl EventValidator {
             let prefix = &signed_event.event_message.data.get_prefix();
             let digest = &signed_event.event_message.get_digest();
 
-            let (mut couplets, mut indexed) = (vec![], vec![]);
+            let (mut couples, mut indexed) = (vec![], vec![]);
             match self.event_storage.get_nt_receipts(prefix, sn, digest)? {
                 Some(rcts) => {
                     rcts.signatures.iter().for_each(|s| match s {
                         Nontransferable::Couplet(c) => {
-                            couplets.append(&mut c.clone());
+                            couples.append(&mut c.clone());
                         }
                         Nontransferable::Indexed(signatures) => {
                             indexed.append(&mut signatures.clone())
@@ -134,10 +104,7 @@ impl EventValidator {
                 }
                 None => (),
             };
-            if new_state
-                .witness_config
-                .enough_receipts(couplets, indexed)?
-            {
+            if new_state.witness_config.enough_receipts(couples, indexed)? {
                 Ok(Some(new_state))
             } else {
                 Err(Error::NotEnoughReceiptsError)
