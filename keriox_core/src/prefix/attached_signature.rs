@@ -33,7 +33,7 @@ impl Index {
     pub fn previous_next(&self) -> Option<u16> {
         match self {
             Index::CurrentOnly(_) => None,
-            Index::BothSame(_) => None,
+            Index::BothSame(prev_next) => Some(*prev_next),
             Index::BothDifferent(_, prev_next) => Some(*prev_next),
         }
     }
@@ -50,6 +50,17 @@ impl IndexedSignature {
             signature,
             index: Index::BothSame(index),
         }
+    }
+
+    pub fn new_both_diffrent(signature: SelfSigningPrefix, curr_index: u16, prev_next_index: u16) -> Self {
+        Self {
+            signature,
+            index: Index::BothDifferent(curr_index, prev_next_index),
+        }
+    }
+
+    pub fn new_current_only(signature: SelfSigningPrefix, curr_index: u16) -> Self {
+        Self { index: Index::CurrentOnly(curr_index), signature }
     }
 }
 

@@ -385,11 +385,15 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
     let signatures = current_signers
         .iter()
         .enumerate()
-        .map(|(index, sig)| {
+        // zip with corresponding possition in previos next keys
+        // without it previos threshold won't be satisied
+        .zip([2-1, 4-1, 5-1])
+        .map(|((index, sig), prev_next_index)| {
             let signature = sig.sign(rotation.encode().unwrap()).unwrap();
-            IndexedSignature::new_both_same(
+            IndexedSignature::new_both_diffrent(
                 SelfSigningPrefix::Ed25519Sha512(signature),
                 index as u16,
+                prev_next_index as u16,
             )
         })
         .collect::<Vec<_>>();
@@ -400,7 +404,7 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
     let state = EventStorage::new(db.clone()).get_state(&id_prefix)?;
     assert_eq!(state.unwrap().sn, 1);
 
-    let current_signers = [&signers[6], &signers[7], &signers[8]];
+    let current_signers = [&signers[6], &signers[7], &signers[8], &signers[9]];
     let next_public_keys = signers[11..16]
         .iter()
         .map(|sig| BasicPrefix::Ed25519(sig.public_key()))
@@ -435,7 +439,7 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
         })
         .collect::<Vec<_>>();
 
-    let signed_rotation = rotation.sign(signatures, None, None);
+    let signed_rotation = rotation.sign(signatures[..3].to_vec(), None, None);
     processor.process_notice(&Notice::Event(signed_rotation.clone()))?;
     // rotation should be stored in partially signed events escrow.
     assert_eq!(
@@ -448,6 +452,21 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
 
     let state = EventStorage::new(db.clone()).get_state(&id_prefix)?;
     assert_eq!(state.unwrap().sn, 1);
+
+    // Provide the fourth signature - enough to satisfy prev threshold
+    let signed_rotation = rotation.sign(signatures[3..4].to_vec(), None, None);
+    processor.process_notice(&Notice::Event(signed_rotation.clone()))?;
+    // rotation should be removed from partially signed events escrow.
+    assert_eq!(
+        ps_escrow
+            .escrowed_partially_signed
+            .get_all()
+            .and_then(|mut x| x.next()),
+        None
+    );
+
+    let state = EventStorage::new(db.clone()).get_state(&id_prefix)?;
+    assert_eq!(state.unwrap().sn, 2);
 
     Ok(())
 }
@@ -554,11 +573,13 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
     let signatures = current_signers
         .iter()
         .enumerate()
-        .map(|(index, sig)| {
+        .zip([2, 3,4])
+        .map(|((index, sig), prev_next)| {
             let signature = sig.sign(rotation.encode().unwrap()).unwrap();
-            IndexedSignature::new_both_same(
+            IndexedSignature::new_both_diffrent(
                 SelfSigningPrefix::Ed25519Sha512(signature),
                 index as u16,
+                prev_next as u16,
             )
         })
         .collect::<Vec<_>>();
@@ -597,11 +618,13 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
     let signatures = current_signers[1..3]
         .iter()
         .enumerate()
-        .map(|(index, sig)| {
+        .zip([3,4])
+        .map(|((index, sig), prev_next)| {
             let signature = sig.sign(rotation.encode().unwrap()).unwrap();
-            IndexedSignature::new_both_same(
+            IndexedSignature::new_both_diffrent(
                 SelfSigningPrefix::Ed25519Sha512(signature),
                 (index + 1) as u16,
+                prev_next
             )
         })
         .collect::<Vec<_>>();

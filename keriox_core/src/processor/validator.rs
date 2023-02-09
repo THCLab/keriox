@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use cesrox::primitives::CesrPrimitive;
 #[cfg(feature = "query")]
 use chrono::{DateTime, FixedOffset};
 use sai::sad::SAD;
@@ -18,7 +19,7 @@ use crate::{
         signature::{Nontransferable, Signature, SignerData},
         signed_event_message::{
             SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
-        },
+        }, EventTypeTag,
     },
     prefix::{BasicPrefix, SelfSigningPrefix},
     state::{EventSemantics, IdentifierState},
@@ -53,13 +54,33 @@ impl EventValidator {
             .event_storage
             .get_state(&signed_event.event_message.data.get_prefix())?
         {
+            let new_state = signed_event.event_message.apply_to(state.clone())?;
+
+            let type_tag: EventTypeTag = signed_event.event_message.data.event_data.clone().into();
+            if type_tag == EventTypeTag::Rot {
+
             // Get indexes of keys in previous next key list.
-            // Now it uses the same indexes as those in current list.
             let indexes_in_last_prev = signed_event
                 .signatures
                 .iter()
-                .map(|sig| sig.index.current() as usize)
+                .filter_map(|sig| {
+                    match sig.index.previous_next() {
+                        Some(prev_next) => {
+                            let prev_nxt = state.current.next_keys_data.next_key_hashes.get(prev_next as usize);
+                            let current = new_state.current.public_keys.get(sig.index.current() as usize);
+                            if prev_nxt.unwrap().verify_binding(current.unwrap().to_str().as_bytes()) {
+                                sig.index.previous_next().map(|i| i as usize)
+                            } else {
+                                None
+                            }
+                        },
+                        None => None,
+                    }
+
+                    
+                })
                 .collect::<Vec<_>>();
+ 
             // Check previous next threshold
             state
                 .current
@@ -68,8 +89,8 @@ impl EventValidator {
                 .enough_signatures(&indexes_in_last_prev)?
                 .then_some(())
                 .ok_or(Error::NotEnoughSigsError)?;
-
-            signed_event.event_message.apply_to(state)?
+            }
+            new_state
         } else {
             signed_event
                 .event_message
