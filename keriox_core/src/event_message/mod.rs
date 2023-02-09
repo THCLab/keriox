@@ -110,10 +110,7 @@ mod tests {
             KeyEvent,
         },
         keys::{PrivateKey, PublicKey},
-        prefix::{
-            IndexedSignature, BasicPrefix, IdentifierPrefix,
-            SelfSigningPrefix,
-        },
+        prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
         signer::setup_signers,
         state::{EventSemantics, IdentifierState},
     };

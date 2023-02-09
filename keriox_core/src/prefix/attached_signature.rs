@@ -52,7 +52,11 @@ impl IndexedSignature {
         }
     }
 
-    pub fn new_both_diffrent(signature: SelfSigningPrefix, curr_index: u16, prev_next_index: u16) -> Self {
+    pub fn new_both_diffrent(
+        signature: SelfSigningPrefix,
+        curr_index: u16,
+        prev_next_index: u16,
+    ) -> Self {
         Self {
             signature,
             index: Index::BothDifferent(curr_index, prev_next_index),
@@ -60,7 +64,10 @@ impl IndexedSignature {
     }
 
     pub fn new_current_only(signature: SelfSigningPrefix, curr_index: u16) -> Self {
-        Self { index: Index::CurrentOnly(curr_index), signature }
+        Self {
+            index: Index::CurrentOnly(curr_index),
+            signature,
+        }
     }
 }
 
@@ -146,10 +153,8 @@ mod tests {
 
     #[test]
     fn serialize() -> Result<(), Error> {
-        let pref_ed_2 = IndexedSignature::new_both_same(
-            SelfSigningPrefix::Ed25519Sha512(vec![0u8; 64]),
-            2,
-        );
+        let pref_ed_2 =
+            IndexedSignature::new_both_same(SelfSigningPrefix::Ed25519Sha512(vec![0u8; 64]), 2);
         let pref_secp_6 = IndexedSignature::new_both_same(
             SelfSigningPrefix::ECDSAsecp256k1Sha256(vec![0u8; 64]),
             6,

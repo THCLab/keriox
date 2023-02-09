@@ -33,7 +33,7 @@ use crate::{
         signature::{Signature, SignerData},
         signed_event_message::{Notice, Op, SignedEventMessage, SignedNontransferableReceipt},
     },
-    prefix::{IndexedSignature, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+    prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
     processor::{
         basic_processor::BasicProcessor,
         escrow::{
@@ -326,8 +326,7 @@ impl<K: KeyManager> SimpleController<K> {
                 .unwrap();
         let sed: Vec<u8> = end_role.encode()?;
         let sig = self.key_manager.clone().lock().unwrap().sign(&sed)?;
-        let att_sig =
-            IndexedSignature::new_both_same(SelfSigningPrefix::Ed25519Sha512(sig), 0);
+        let att_sig = IndexedSignature::new_both_same(SelfSigningPrefix::Ed25519Sha512(sig), 0);
 
         let oobi_rpy = SignedReply::new_trans(
             end_role,

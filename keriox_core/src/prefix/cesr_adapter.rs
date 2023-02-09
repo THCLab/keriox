@@ -6,7 +6,7 @@ use sai::SelfAddressingPrefix;
 
 use crate::{
     event::sections::seal::{EventSeal, SourceSeal},
-    prefix::{IndexedSignature, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+    prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
 };
 
 impl From<CesrIndexedSignature> for IndexedSignature {

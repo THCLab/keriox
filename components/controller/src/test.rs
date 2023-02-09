@@ -7,7 +7,7 @@ use keri::{
     event::event_data::EventData,
     event_message::signed_event_message::Notice,
     oobi::LocationScheme,
-    prefix::{IndexedSignature, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+    prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
     signer::{CryptoBox, KeyManager},
     transport::{
         test::{TestActorMap, TestTransport},

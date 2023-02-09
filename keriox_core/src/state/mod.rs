@@ -7,7 +7,7 @@ use crate::{
         sections::{threshold::SignatureThreshold, KeyConfig},
     },
     event_message::EventTypeTag,
-    prefix::{IndexedSignature, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+    prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
 };
 use sai::SelfAddressingPrefix;
 use serde::{Deserialize, Serialize};

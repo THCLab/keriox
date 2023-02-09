@@ -5,7 +5,7 @@ use version::serialization_info::SerializationFormats;
 use crate::{
     error::Error,
     event_message::{msg::KeriEvent, timestamped::Timestamped, EventTypeTag, Typeable},
-    prefix::{IndexedSignature, IdentifierPrefix},
+    prefix::{IdentifierPrefix, IndexedSignature},
 };
 
 // TODO: make enum with different query args

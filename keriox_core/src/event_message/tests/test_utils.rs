@@ -4,7 +4,7 @@ use crate::{
     event::sections::{key_config::nxt_commitment, threshold::SignatureThreshold},
     event_message::EventTypeTag,
     keys::{PrivateKey, PublicKey},
-    prefix::{IndexedSignature, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+    prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
     state::IdentifierState,
 };
 use ed25519_dalek::Keypair;

@@ -19,7 +19,7 @@ use keri::{
         signed_event_message::{Message, Notice, Op, SignedEventMessage},
     },
     oobi::{LocationScheme, Oobi, OobiManager, Role, Scheme},
-    prefix::{IndexedSignature, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+    prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
     processor::{
         basic_processor::BasicProcessor,
         escrow::{default_escrow_bus, EscrowConfig, PartiallyWitnessedEscrow},

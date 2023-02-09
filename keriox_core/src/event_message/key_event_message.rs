@@ -5,7 +5,7 @@ use version::serialization_info::SerializationInfo;
 use crate::{
     error::Error,
     event::{event_data::EventData, sections::seal::SourceSeal, KeyEvent},
-    prefix::{IndexedSignature, IdentifierPrefix},
+    prefix::{IdentifierPrefix, IndexedSignature},
     state::{EventSemantics, IdentifierState},
 };
 

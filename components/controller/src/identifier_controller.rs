@@ -29,9 +29,7 @@ use keri::{
         MailboxResponse,
     },
     oobi::{LocationScheme, Role, Scheme},
-    prefix::{
-        IndexedSignature, BasicPrefix, CesrPrimitive, IdentifierPrefix, SelfSigningPrefix,
-    },
+    prefix::{BasicPrefix, CesrPrimitive, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
     query::{
         query_event::{QueryArgs, QueryArgsMbx, QueryEvent, QueryRoute, QueryTopics, SignedQuery},
         reply_event::ReplyRoute,

@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     error::Error,
     event::sections::seal::EventSeal,
-    prefix::{IndexedSignature, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+    prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
     processor::event_storage::EventStorage,
 };
 

@@ -12,7 +12,7 @@ use crate::{
         signed_event_message::{Message, Notice},
         EventTypeTag,
     },
-    prefix::{IndexedSignature, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+    prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
     processor::{
         basic_processor::BasicProcessor,
         escrow::{default_escrow_bus, EscrowConfig},
@@ -387,7 +387,7 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
         .enumerate()
         // zip with corresponding possition in previos next keys
         // without it previos threshold won't be satisied
-        .zip([2-1, 4-1, 5-1])
+        .zip([2 - 1, 4 - 1, 5 - 1])
         .map(|((index, sig), prev_next_index)| {
             let signature = sig.sign(rotation.encode().unwrap()).unwrap();
             IndexedSignature::new_both_diffrent(
@@ -573,7 +573,7 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
     let signatures = current_signers
         .iter()
         .enumerate()
-        .zip([2, 3,4])
+        .zip([2, 3, 4])
         .map(|((index, sig), prev_next)| {
             let signature = sig.sign(rotation.encode().unwrap()).unwrap();
             IndexedSignature::new_both_diffrent(
@@ -618,13 +618,13 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
     let signatures = current_signers[1..3]
         .iter()
         .enumerate()
-        .zip([3,4])
+        .zip([3, 4])
         .map(|((index, sig), prev_next)| {
             let signature = sig.sign(rotation.encode().unwrap()).unwrap();
             IndexedSignature::new_both_diffrent(
                 SelfSigningPrefix::Ed25519Sha512(signature),
                 (index + 1) as u16,
-                prev_next
+                prev_next,
             )
         })
         .collect::<Vec<_>>();

@@ -16,7 +16,7 @@ use crate::{
         timestamped::Timestamped,
         EventTypeTag, Typeable,
     },
-    prefix::{IndexedSignature, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+    prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
     query::QueryError,
 };
 

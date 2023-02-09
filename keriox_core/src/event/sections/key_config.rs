@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use super::threshold::SignatureThreshold;
 use crate::{
     error::Error,
-    prefix::{IndexedSignature, BasicPrefix},
+    prefix::{BasicPrefix, IndexedSignature},
 };
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
@@ -160,7 +160,7 @@ mod test {
             threshold::SignatureThreshold,
             KeyConfig,
         },
-        prefix::{IndexedSignature, BasicPrefix},
+        prefix::{BasicPrefix, IndexedSignature},
     };
 
     #[test]

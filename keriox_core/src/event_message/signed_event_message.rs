@@ -11,7 +11,7 @@ use crate::{
         sections::seal::{EventSeal, SourceSeal},
         KeyEvent,
     },
-    prefix::{IndexedSignature, IdentifierPrefix},
+    prefix::{IdentifierPrefix, IndexedSignature},
     state::{EventSemantics, IdentifierState},
 };
 
@@ -231,11 +231,7 @@ pub struct SignedTransferableReceipt {
 }
 
 impl SignedTransferableReceipt {
-    pub fn new(
-        message: Receipt,
-        event_seal: EventSeal,
-        sigs: Vec<IndexedSignature>,
-    ) -> Self {
+    pub fn new(message: Receipt, event_seal: EventSeal, sigs: Vec<IndexedSignature>) -> Self {
         Self {
             body: message,
             validator_seal: event_seal,
