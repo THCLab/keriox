@@ -341,6 +341,7 @@ mod tests {
         let signers = setup_signers();
 
         let keys = vec![BasicPrefix::Ed25519(signers[0].public_key())];
+
         let next_pks = signers[1..6]
             .iter()
             .map(|signer| BasicPrefix::Ed25519(signer.public_key()))

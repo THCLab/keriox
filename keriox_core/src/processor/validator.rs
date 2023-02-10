@@ -61,10 +61,10 @@ impl EventValidator {
                 // In case of rotation event, check if previous next threshold is satisfied
                 if let EventData::Rot(rot) = signed_event.event_message.data.get_event_data() {
                     let new_public_keys = rot.key_config.public_keys;
-                    state
-                        .current
-                        .next_keys_data
-                        .check_threshold(&new_public_keys, &signed_event.signatures)?;
+                    state.current.next_keys_data.check_threshold(
+                        &new_public_keys,
+                        signed_event.signatures.iter().map(|sig| &sig.index),
+                    )?;
                 }
                 new_state
             }
