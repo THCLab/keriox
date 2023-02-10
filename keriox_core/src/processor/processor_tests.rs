@@ -639,3 +639,185 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
 
     Ok(())
 }
+
+#[test]
+pub fn test_reserve_rotation() -> Result<(), Error> {
+    use tempfile::Builder;
+    let (processor, storage) = {
+        let db_root = Builder::new().prefix("test-db").tempdir().unwrap();
+        let path = db_root.path();
+        std::fs::create_dir_all(path).unwrap();
+        let db = Arc::new(SledEventDatabase::new(path).unwrap());
+
+        let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
+        let escrow_db = Arc::new(EscrowDb::new(escrow_root.path()).unwrap());
+
+        let (not_bus, _ooo_escrow) = default_escrow_bus(db.clone(), escrow_db);
+        (
+            BasicProcessor::new(db.clone(), Some(not_bus)),
+            EventStorage::new(db.clone()),
+        )
+    };
+    // setup keypairs
+    let signers = setup_signers();
+
+    let current_pks = signers[0..5]
+        .iter()
+        .map(|signer| BasicPrefix::Ed25519(signer.public_key()))
+        .collect::<Vec<_>>();
+    let next_pks = signers[5..9]
+        .iter()
+        .map(|signer| BasicPrefix::Ed25519(signer.public_key()))
+        .collect::<Vec<_>>();
+    // build inception event
+    let icp = EventMsgBuilder::new(EventTypeTag::Icp)
+        .with_keys(current_pks)
+        .with_threshold(&SignatureThreshold::single_weighted(vec![
+            (1, 2),
+            (1, 2),
+            (1, 2),
+            (1, 4),
+            (1, 4),
+        ]))
+        .with_next_keys(next_pks)
+        .with_next_threshold(&SignatureThreshold::single_weighted(vec![
+            (1, 2),
+            (1, 2),
+            (1, 2),
+            (1, 4),
+            (1, 4),
+        ]))
+        .build()
+        .unwrap();
+
+    let id_prefix = icp.data.get_prefix();
+    let icp_digest = icp.get_digest();
+    assert_eq!(
+        id_prefix,
+        IdentifierPrefix::SelfAddressing(icp_digest.clone())
+    );
+
+    // sign inception event
+    let signatures = signers[..2].iter().enumerate().map(|(i, s)| { 
+        let signature = SelfSigningPrefix::Ed25519Sha512(s.sign(icp.encode().unwrap()).unwrap());
+        IndexedSignature::new_both_same(
+            signature,
+            i as u16,
+        )
+    } ).collect();
+    let signed_icp = icp.sign(
+        signatures,
+        None,
+        None,
+    );
+
+    processor.process_notice(&Notice::Event(signed_icp))?;
+
+    // create partial rotation event. Subset of keys set in inception event as
+    // next keys
+    let current_signers = &signers[5..8];
+    let current_public_keys = current_signers
+        .iter()
+        .map(|sig| BasicPrefix::Ed25519(sig.public_key()))
+        .collect::<Vec<_>>();
+    let next_public_keys = signers[10..13]
+        .iter()
+        .chain(signers[8..10].iter())
+        .map(|sig| BasicPrefix::Ed25519(sig.public_key()))
+        .collect::<Vec<_>>();
+
+    // Generate partial rotation event
+    let rotation = EventMsgBuilder::new(EventTypeTag::Rot)
+        .with_prefix(&id_prefix)
+        .with_previous_event(&icp_digest)
+        .with_keys(current_public_keys.clone())
+        .with_threshold(&SignatureThreshold::single_weighted(vec![
+            (1, 2),
+            (1, 2),
+            (1, 2),
+        ]))
+        .with_next_keys(next_public_keys)
+        .with_next_threshold(&SignatureThreshold::single_weighted(vec![
+            (1, 2),
+            (1, 2),
+            (1, 2),
+            (1, 4),
+            (1, 4),
+        ]))
+        .build()?;
+
+    let rot_digest = rotation.get_digest();
+
+    let signatures = current_signers
+        .iter()
+        .enumerate()
+        .map(|(index, sig)| {
+            let signature = sig.sign(rotation.encode().unwrap()).unwrap();
+            IndexedSignature::new_both_same(
+                SelfSigningPrefix::Ed25519Sha512(signature),
+                index as u16,
+            )
+        })
+        .collect::<Vec<_>>();
+
+    let signed_rotation = rotation.sign(signatures, None, None);
+
+    processor.process_notice(&Notice::Event(signed_rotation))?;
+    let state = storage.get_state(&id_prefix)?.unwrap();
+    assert_eq!(state.sn, 1);
+
+     // create partial rotation event. Subset of keys set in inception event as
+    // next keys
+    let current_signers: Vec<_> = signers[10..11].iter().chain(signers[8..10].iter()).collect();
+    let current_public_keys = &current_signers
+        .iter()
+        .map(|sig| BasicPrefix::Ed25519(sig.public_key()))
+        .collect::<Vec<_>>();
+    let next_public_keys = signers[13..18]
+        .iter()
+        .map(|sig| BasicPrefix::Ed25519(sig.public_key()))
+        .collect::<Vec<_>>();
+
+    // Generate partial rotation event
+    let rotation = EventMsgBuilder::new(EventTypeTag::Rot)
+        .with_prefix(&id_prefix)
+        .with_previous_event(&rot_digest)
+        .with_keys(current_public_keys.clone())
+        .with_threshold(&SignatureThreshold::single_weighted(vec![
+            (1, 2),
+            (1, 2),
+            (1, 2),
+        ]))
+        .with_next_keys(next_public_keys)
+        .with_next_threshold(&SignatureThreshold::single_weighted(vec![
+            (1, 2),
+            (1, 2),
+            (1, 2),
+            (1, 4),
+            (1, 4),
+        ]))
+        .with_sn(2)
+        .build()?;
+
+    let signatures = current_signers
+        .iter()
+        .enumerate()
+        .zip([0, 3, 4])
+        .map(|((index, sig), prev_idx)| {
+            let signature = sig.sign(rotation.encode().unwrap()).unwrap();
+            IndexedSignature::new_both_diffrent(
+                SelfSigningPrefix::Ed25519Sha512(signature),
+                index as u16,
+                prev_idx as u16
+            )
+        })
+        .collect::<Vec<_>>();
+
+    let signed_rotation = rotation.sign(signatures, None, None);
+
+    processor.process_notice(&Notice::Event(signed_rotation))?;
+    let state = storage.get_state(&id_prefix)?.unwrap();
+    assert_eq!(state.sn, 2);
+
+    Ok(())
+}
