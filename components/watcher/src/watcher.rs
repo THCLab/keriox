@@ -1,7 +1,4 @@
-use std::{
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::{path::PathBuf, sync::Arc};
 
 use itertools::Itertools;
 use keri::{
@@ -14,7 +11,7 @@ use keri::{
     event_message::signed_event_message::{Message, Notice, Op},
     oobi::{error::OobiError, EndRole, LocationScheme, OobiManager, Role, Scheme},
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
-    processor::escrow::default_escrow_bus,
+    processor::escrow::{default_escrow_bus, EscrowConfig},
     query::{
         query_event::{QueryArgs, QueryEvent, QueryRoute, SignedQuery},
         reply_event::{ReplyEvent, ReplyRoute, SignedReply},
@@ -23,7 +20,7 @@ use keri::{
     sai::derivation::SelfAddressing,
     signer::Signer,
     state::IdentifierState,
-    transport::Transport,
+    transport::{default::DefaultTransport, Transport},
 };
 use rand::prelude::SliceRandom;
 
@@ -36,33 +33,62 @@ pub struct WatcherData {
     transport: Box<dyn Transport + Send + Sync>,
 }
 
+pub struct WatcherConfig {
+    pub public_address: url::Url,
+    pub db_path: PathBuf,
+    pub priv_key: Option<String>,
+    pub transport: Box<dyn Transport + Send + Sync>,
+    pub escrow_config: EscrowConfig,
+}
+
+impl Default for WatcherConfig {
+    fn default() -> Self {
+        Self {
+            public_address: url::Url::parse("http://localhost:3236").unwrap(),
+            db_path: PathBuf::from("db"),
+            priv_key: None,
+            transport: Box::new(DefaultTransport::new()),
+            escrow_config: EscrowConfig::default(),
+        }
+    }
+}
+
 impl WatcherData {
-    pub fn setup(
-        public_address: url::Url,
-        event_db_path: &Path,
-        priv_key: Option<String>,
-        transport: Box<dyn Transport + Send + Sync>,
-    ) -> Result<Self, Error> {
+    pub fn new(config: WatcherConfig) -> Result<Self, Error> {
+        let WatcherConfig {
+            public_address,
+            db_path,
+            priv_key,
+            transport,
+            escrow_config,
+        } = config;
+
         let signer = Arc::new(
             priv_key
                 .map(|key| Signer::new_with_seed(&key.parse()?))
                 .unwrap_or_else(|| Ok(Signer::new()))?,
         );
-        let mut oobi_path = PathBuf::new();
-        oobi_path.push(event_db_path);
-        oobi_path.push("oobi");
 
-        let mut escrow_path = PathBuf::new();
-        escrow_path.push(event_db_path);
-        escrow_path.push("escrow");
+        let db = Arc::new(SledEventDatabase::new(db_path.clone())?);
 
-        let db = Arc::new(SledEventDatabase::new(event_db_path)?);
-        let escrow_db = Arc::new(EscrowDb::new(escrow_path.as_path())?);
-        let (notification_bus, _) = default_escrow_bus(db.clone(), escrow_db);
+        let escrow_db = {
+            let mut path = db_path.clone();
+            path.push("escrow");
+            Arc::new(EscrowDb::new(path)?)
+        };
+
+        let oobi_manager = {
+            let mut path = db_path;
+            path.push("oobi");
+            OobiManager::new(&path)
+        };
+
+        let (notification_bus, _) = default_escrow_bus(db.clone(), escrow_db, escrow_config);
 
         let prefix = BasicPrefix::Ed25519NT(signer.public_key()); // watcher uses non transferable key
         let processor = BasicProcessor::new(db.clone(), Some(notification_bus));
         let storage = EventStorage::new(db);
+
         // construct witness loc scheme oobi
         let loc_scheme = LocationScheme::new(
             IdentifierPrefix::Basic(prefix.clone()),
@@ -79,7 +105,6 @@ impl WatcherData {
             prefix.clone(),
             SelfSigningPrefix::Ed25519Sha512(signer.sign(reply.serialize()?)?),
         );
-        let oobi_manager = OobiManager::new(&oobi_path);
         oobi_manager.save_oobi(&signed_reply)?;
 
         Ok(Self {
@@ -127,7 +152,7 @@ impl WatcherData {
             SerializationFormats::JSON,
         )?;
 
-        let signature = SelfSigningPrefix::Ed25519Sha512(signer.sign(&rpy.serialize()?)?);
+        let signature = SelfSigningPrefix::Ed25519Sha512(signer.sign(rpy.serialize()?)?);
         Ok(SignedReply::new_nontrans(
             rpy,
             self.prefix.clone(),
@@ -203,7 +228,7 @@ impl WatcherData {
                 )?;
 
                 let signature =
-                    SelfSigningPrefix::Ed25519Sha512(self.signer.sign(&rpy.serialize()?)?);
+                    SelfSigningPrefix::Ed25519Sha512(self.signer.sign(rpy.serialize()?)?);
                 let reply = SignedReply::new_nontrans(rpy, self.prefix.clone(), signature);
                 Ok(Some(PossibleResponse::Ksn(reply)))
             }
@@ -289,7 +314,7 @@ impl WatcherData {
         // sign message by watcher
         let signature = AttachedSignaturePrefix::new(
             SelfSigningPrefix::Ed25519Sha512(
-                (self.signer).sign(&serde_json::to_vec(&qry).unwrap())?,
+                (self.signer).sign(serde_json::to_vec(&qry).unwrap())?,
             ),
             0,
         );

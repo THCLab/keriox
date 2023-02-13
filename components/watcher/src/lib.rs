@@ -1,5 +1,5 @@
 pub use crate::{
-    watcher::{Watcher, WatcherData},
+    watcher::{Watcher, WatcherConfig, WatcherData},
     watcher_listener::WatcherListener,
 };
 

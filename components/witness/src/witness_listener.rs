@@ -1,4 +1,5 @@
 use std::{
+    net::ToSocketAddrs,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -7,7 +8,7 @@ use actix_web::{dev::Server, web::Data, App, HttpServer};
 use anyhow::Result;
 use keri::{self, error::Error, prefix::BasicPrefix};
 
-use crate::witness::Witness;
+use crate::{witness::Witness, witness_processor::WitnessEscrowConfig};
 
 pub struct WitnessListener {
     pub witness_data: Arc<Witness>,
@@ -15,30 +16,26 @@ pub struct WitnessListener {
 
 impl WitnessListener {
     pub fn setup(
-        address: url::Url,
-        public_address: Option<String>,
+        pub_addr: url::Url,
         event_db_path: &Path,
         priv_key: Option<String>,
+        escrow_config: WitnessEscrowConfig,
     ) -> Result<Self, Error> {
         let mut oobi_path = PathBuf::new();
         oobi_path.push(event_db_path);
         oobi_path.push("oobi");
-
-        let pub_address = if let Some(pub_address) = public_address {
-            url::Url::parse(&format!("http://{}", pub_address)).unwrap()
-        } else {
-            address
-        };
-
-        Witness::setup(pub_address, event_db_path, oobi_path.as_path(), priv_key).map(|wd| Self {
-            witness_data: Arc::new(wd),
+        Ok(Self {
+            witness_data: Arc::new(Witness::setup(
+                pub_addr,
+                event_db_path,
+                oobi_path.as_path(),
+                priv_key,
+                escrow_config,
+            )?),
         })
     }
 
-    pub fn listen_http(&self, address: url::Url) -> Server {
-        let host = address.host().unwrap().to_string();
-        let port = address.port().unwrap();
-
+    pub fn listen_http(&self, addr: impl ToSocketAddrs) -> Server {
         let state = Data::new(self.witness_data.clone());
         HttpServer::new(move || {
             App::new()
@@ -68,7 +65,7 @@ impl WitnessListener {
                     actix_web::web::post().to(http_handlers::process_exchange),
                 )
         })
-        .bind((host, port))
+        .bind(addr)
         .unwrap()
         .run()
     }

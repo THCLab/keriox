@@ -1,71 +1,152 @@
-use std::path::PathBuf;
+use std::{net::Ipv4Addr, path::PathBuf, time::Duration};
 
+use anyhow::Context;
+use clap::Parser;
 use figment::{
-    providers::{Format, Json},
+    providers::{Env, Format, Serialized, Yaml},
     Figment,
 };
 use keri::{
     oobi::{LocationScheme, Scheme},
     prefix::{CesrPrimitive, IdentifierPrefix},
+    processor::escrow::EscrowConfig,
+    transport::default::DefaultTransport,
 };
-use serde::Deserialize;
-use structopt::StructOpt;
-use watcher::WatcherListener;
+use serde::{Deserialize, Serialize};
+use serde_with::{serde_as, DurationSeconds};
+use url::Url;
+use watcher::{WatcherConfig, WatcherListener};
 
 #[derive(Deserialize)]
-pub struct WatcherConfig {
+pub struct Config {
     db_path: PathBuf,
-    public_address: Option<String>,
-    /// Witness listen host.
-    http_host: String,
-    /// Witness listen port.
+
+    /// Public URL used to advertise itself to other actors using OOBI.
+    public_url: Url,
+
+    /// HTTP listen port.
     http_port: u16,
+
     /// Witness private key
     seed: Option<String>,
+
     initial_oobis: Vec<LocationScheme>,
+
+    #[serde(default, deserialize_with = "deserialize_escrow_config")]
+    escrow_config: EscrowConfig,
 }
 
-#[derive(Debug, StructOpt)]
-struct Opts {
-    #[structopt(short = "c", long, default_value = "./watcher.json")]
-    config_file: String,
+#[serde_as]
+#[derive(Deserialize)]
+struct PartialEscrowConfig {
+    #[serde_as(as = "Option<DurationSeconds>")]
+    default_timeout: Option<Duration>,
+
+    #[serde_as(as = "Option<DurationSeconds>")]
+    out_of_order_timeout: Option<Duration>,
+
+    #[serde_as(as = "Option<DurationSeconds>")]
+    partially_signed_timeout: Option<Duration>,
+
+    #[serde_as(as = "Option<DurationSeconds>")]
+    partially_witnessed_timeout: Option<Duration>,
+
+    #[serde_as(as = "Option<DurationSeconds>")]
+    trans_receipt_timeout: Option<Duration>,
+
+    #[serde_as(as = "Option<DurationSeconds>")]
+    delegation_timeout: Option<Duration>,
 }
+
+fn deserialize_escrow_config<'de, D>(deserializer: D) -> Result<EscrowConfig, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let config = PartialEscrowConfig::deserialize(deserializer)?;
+    Ok(EscrowConfig {
+        out_of_order_timeout: config
+            .out_of_order_timeout
+            .or(config.default_timeout)
+            .unwrap_or(EscrowConfig::default().out_of_order_timeout),
+        partially_signed_timeout: config
+            .partially_signed_timeout
+            .or(config.default_timeout)
+            .unwrap_or(EscrowConfig::default().partially_signed_timeout),
+        partially_witnessed_timeout: config
+            .partially_witnessed_timeout
+            .or(config.default_timeout)
+            .unwrap_or(EscrowConfig::default().partially_witnessed_timeout),
+        trans_receipt_timeout: config
+            .trans_receipt_timeout
+            .or(config.default_timeout)
+            .unwrap_or(EscrowConfig::default().trans_receipt_timeout),
+        delegation_timeout: config
+            .delegation_timeout
+            .or(config.default_timeout)
+            .unwrap_or(EscrowConfig::default().delegation_timeout),
+    })
+}
+
+#[derive(Debug, Parser, Serialize)]
+struct Args {
+    #[arg(short = 'c', long, default_value = "./watcher.yml")]
+    config_file: String,
+
+    #[arg(short = 'd', long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    db_path: Option<PathBuf>,
+
+    #[arg(short = 'u', long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    public_url: Option<Url>,
+
+    #[arg(short = 'p', long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    http_port: Option<u16>,
+
+    #[arg(short = 's', long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    seed: Option<String>,
+}
+
+const ENV_PREFIX: &str = "WATCHER_";
 
 #[actix_web::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let Opts { config_file } = Opts::from_args();
+async fn main() -> anyhow::Result<()> {
+    let args = Args::parse();
+    println!("Using config file: {:?}", args.config_file);
+    println!("Using environment prefix: {:?}", ENV_PREFIX);
 
-    let WatcherConfig {
-        db_path,
-        public_address,
-        http_host,
-        http_port,
-        seed,
-        initial_oobis,
-    } = Figment::new().join(Json::file(config_file)).extract()?;
+    let cfg = Figment::new()
+        .merge(Yaml::file(args.config_file.clone()))
+        .merge(Env::prefixed(ENV_PREFIX))
+        .merge(Serialized::defaults(args))
+        .extract::<Config>()
+        .context("Failed to load config")?;
 
-    let http_address = format!("http://{}:{}", http_host, http_port);
-    let watcher_url = url::Url::parse(&http_address).unwrap();
-
-    let watcher_listener =
-        WatcherListener::setup(watcher_url.clone(), public_address, &db_path, seed).unwrap();
+    let watcher_listener = WatcherListener::new(WatcherConfig {
+        public_address: cfg.public_url.clone(),
+        db_path: cfg.db_path.clone(),
+        priv_key: cfg.seed,
+        transport: Box::new(DefaultTransport::new()),
+        escrow_config: cfg.escrow_config,
+    })?;
 
     // Resolve oobi to know how to find witness
     watcher_listener
-        .resolve_initial_oobis(&initial_oobis)
-        .await
-        .unwrap();
+        .resolve_initial_oobis(&cfg.initial_oobis)
+        .await?;
     let watcher_id = watcher_listener.get_prefix();
     let watcher_loc_scheme = LocationScheme {
         eid: IdentifierPrefix::Basic(watcher_id.clone()),
         scheme: Scheme::Http,
-        url: watcher_url,
+        url: cfg.public_url.clone(),
     };
 
     println!(
-        "Watcher {} is listening on {}",
+        "Watcher {} is listening on port {}",
         watcher_id.to_str(),
-        http_address,
+        cfg.http_port,
     );
     println!(
         "Watcher's oobi: {}",
@@ -73,7 +154,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     watcher_listener
-        .listen_http(url::Url::parse(&http_address).unwrap())
+        .listen_http((Ipv4Addr::UNSPECIFIED, cfg.http_port))
         .await?;
 
     Ok(())

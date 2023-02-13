@@ -30,7 +30,7 @@ use keri::{
     signer::Signer,
 };
 
-use crate::witness_processor::WitnessProcessor;
+use crate::witness_processor::{WitnessEscrowConfig, WitnessProcessor};
 
 pub struct WitnessReceiptGenerator {
     pub prefix: BasicPrefix,
@@ -113,7 +113,12 @@ pub struct Witness {
 }
 
 impl Witness {
-    pub fn new(signer: Arc<Signer>, event_path: &Path, oobi_path: &Path) -> Result<Self, Error> {
+    pub fn new(
+        signer: Arc<Signer>,
+        event_path: &Path,
+        oobi_path: &Path,
+        escrow_config: WitnessEscrowConfig,
+    ) -> Result<Self, Error> {
         use keri::{database::escrow::EscrowDb, processor::notification::JustNotification};
         let mut events_path = PathBuf::new();
         events_path.push(event_path);
@@ -125,7 +130,7 @@ impl Witness {
         let prefix = BasicPrefix::Ed25519NT(signer.public_key());
         let db = Arc::new(SledEventDatabase::new(events_path.as_path())?);
         let escrow_db = Arc::new(EscrowDb::new(escrow_path.as_path())?);
-        let mut witness_processor = WitnessProcessor::new(db.clone(), escrow_db);
+        let mut witness_processor = WitnessProcessor::new(db.clone(), escrow_db, escrow_config);
         let event_storage = EventStorage::new(db.clone());
 
         let receipt_generator = Arc::new(WitnessReceiptGenerator::new(signer.clone(), db));
@@ -145,11 +150,13 @@ impl Witness {
             oobi_manager: OobiManager::new(oobi_path),
         })
     }
+
     pub fn setup(
         public_address: url::Url,
         event_db_path: &Path,
         oobi_db_path: &Path,
         priv_key: Option<String>,
+        escrow_config: WitnessEscrowConfig,
     ) -> Result<Self, Error> {
         let signer = Arc::new(
             priv_key
@@ -157,7 +164,7 @@ impl Witness {
                 .unwrap_or_else(|| Ok(Signer::new()))?,
         );
         let prefix = BasicPrefix::Ed25519NT(signer.public_key());
-        let witness = Witness::new(signer.clone(), event_db_path, oobi_db_path)?;
+        let witness = Witness::new(signer.clone(), event_db_path, oobi_db_path, escrow_config)?;
         // construct witness loc scheme oobi
         let loc_scheme = LocationScheme::new(
             IdentifierPrefix::Basic(prefix.clone()),

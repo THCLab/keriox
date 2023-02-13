@@ -30,9 +30,31 @@ use crate::{
     sai::SelfAddressingPrefix,
 };
 
+#[derive(Debug, Clone)]
+pub struct EscrowConfig {
+    pub out_of_order_timeout: Duration,
+    pub partially_signed_timeout: Duration,
+    pub partially_witnessed_timeout: Duration,
+    pub trans_receipt_timeout: Duration,
+    pub delegation_timeout: Duration,
+}
+
+impl Default for EscrowConfig {
+    fn default() -> Self {
+        Self {
+            out_of_order_timeout: Duration::from_secs(60),
+            partially_signed_timeout: Duration::from_secs(60),
+            partially_witnessed_timeout: Duration::from_secs(60),
+            trans_receipt_timeout: Duration::from_secs(60),
+            delegation_timeout: Duration::from_secs(60),
+        }
+    }
+}
+
 pub fn default_escrow_bus(
     event_db: Arc<SledEventDatabase>,
     escrow_db: Arc<EscrowDb>,
+    escrow_config: EscrowConfig,
 ) -> (
     NotificationBus,
     (
@@ -48,7 +70,7 @@ pub fn default_escrow_bus(
     let ooo_escrow = Arc::new(OutOfOrderEscrow::new(
         event_db.clone(),
         escrow_db.clone(),
-        Duration::from_secs(10),
+        escrow_config.out_of_order_timeout,
     ));
     bus.register_observer(
         ooo_escrow.clone(),
@@ -61,14 +83,14 @@ pub fn default_escrow_bus(
     let ps_escrow = Arc::new(PartiallySignedEscrow::new(
         event_db.clone(),
         escrow_db.clone(),
-        Duration::from_secs(10),
+        escrow_config.partially_signed_timeout,
     ));
     bus.register_observer(ps_escrow.clone(), vec![JustNotification::PartiallySigned]);
 
     let pw_escrow = Arc::new(PartiallyWitnessedEscrow::new(
         event_db.clone(),
         escrow_db.clone(),
-        Duration::from_secs(10),
+        escrow_config.partially_witnessed_timeout,
     ));
     bus.register_observer(
         pw_escrow.clone(),
@@ -82,7 +104,7 @@ pub fn default_escrow_bus(
         Arc::new(TransReceiptsEscrow::new(
             event_db.clone(),
             escrow_db.clone(),
-            Duration::from_secs(10),
+            escrow_config.trans_receipt_timeout,
         )),
         vec![
             JustNotification::KeyEventAdded,
@@ -91,9 +113,9 @@ pub fn default_escrow_bus(
     );
 
     let delegation_escrow = Arc::new(DelegationEscrow::new(
-        event_db.clone(),
-        escrow_db.clone(),
-        Duration::from_secs(10),
+        event_db,
+        escrow_db,
+        escrow_config.delegation_timeout,
     ));
     bus.register_observer(
         delegation_escrow.clone(),
@@ -260,7 +282,7 @@ impl PartiallySignedEscrow {
             signatures.append(&mut without_duplicates.clone());
 
             let new_event = SignedEventMessage {
-                signatures: signatures,
+                signatures,
                 ..signed_event.to_owned()
             };
 

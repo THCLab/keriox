@@ -1,0 +1,6 @@
+db_path: "db/"
+http_port: 3232
+public_url: "http://localhost:3232/"
+seed: "ArwXoACJgOleVZ2PY7kXn7rA0II0mHYDhc6WrBH8fDAc"
+escrow_config:
+  default_timeout: 60

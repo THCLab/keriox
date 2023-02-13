@@ -36,7 +36,8 @@ use crate::{
     processor::{
         basic_processor::BasicProcessor,
         escrow::{
-            default_escrow_bus, DelegationEscrow, OutOfOrderEscrow, PartiallyWitnessedEscrow,
+            default_escrow_bus, DelegationEscrow, EscrowConfig, OutOfOrderEscrow,
+            PartiallyWitnessedEscrow,
         },
         event_storage::EventStorage,
         Processor,
@@ -206,9 +207,10 @@ impl<K: KeyManager> SimpleController<K> {
         escrow_db: Arc<EscrowDb>,
         key_manager: Arc<Mutex<K>>,
         oobi_db_path: &Path,
+        escrow_config: EscrowConfig,
     ) -> Result<SimpleController<K>, Error> {
         let (not_bus, (ooo, _, partially_witnesses, del_escrow)) =
-            default_escrow_bus(db.clone(), escrow_db);
+            default_escrow_bus(db.clone(), escrow_db, escrow_config);
         let processor = BasicProcessor::new(db.clone(), Some(not_bus));
 
         Ok(SimpleController {

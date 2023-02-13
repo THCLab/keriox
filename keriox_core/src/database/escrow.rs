@@ -83,11 +83,8 @@ pub struct EscrowDb {
 }
 
 impl EscrowDb {
-    pub fn new<'a, P>(path: P) -> Result<Self, DbError>
-    where
-        P: Into<&'a Path>,
-    {
-        let db = sled::open(path.into())?;
+    pub fn new(path: impl AsRef<Path>) -> Result<Self, DbError> {
+        let db = sled::open(path)?;
         Ok(Self {
             identifiers: SledEventTree::new(db.open_tree(b"iids")?),
             db,

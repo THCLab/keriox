@@ -1,14 +1,9 @@
-use std::{path::Path, sync::Arc};
+use std::{net::ToSocketAddrs, sync::Arc};
 
 use actix_web::{dev::Server, web, App, HttpServer};
-use keri::{
-    error::Error,
-    oobi::LocationScheme,
-    prefix::BasicPrefix,
-    transport::{default::DefaultTransport, Transport},
-};
+use keri::{error::Error, oobi::LocationScheme, prefix::BasicPrefix};
 
-use crate::watcher::{Watcher, WatcherData};
+use crate::watcher::{Watcher, WatcherConfig, WatcherData};
 
 use self::http_handlers::ApiError;
 
@@ -17,53 +12,13 @@ pub struct WatcherListener {
 }
 
 impl WatcherListener {
-    pub fn setup(
-        address: url::Url,
-        public_address: Option<String>,
-        event_db_path: &Path,
-        priv_key: Option<String>,
-    ) -> Result<Self, Error> {
-        let pub_address = if let Some(pub_address) = public_address {
-            url::Url::parse(&format!("http://{}", pub_address)).unwrap()
-        } else {
-            address
-        };
-
-        WatcherData::setup(
-            pub_address,
-            event_db_path,
-            priv_key,
-            Box::new(DefaultTransport::default()),
-        )
-        .map(|watcher_data| Self {
-            watcher_data: Arc::new(Watcher(watcher_data)),
+    pub fn new(config: WatcherConfig) -> Result<Self, Error> {
+        Ok(Self {
+            watcher_data: Arc::new(Watcher(WatcherData::new(config)?)),
         })
     }
 
-    pub fn with_transport(
-        address: url::Url,
-        public_address: Option<String>,
-        event_db_path: &Path,
-        priv_key: Option<String>,
-        transport: Box<dyn Transport + Send + Sync>,
-    ) -> Result<Self, Error> {
-        let pub_address = if let Some(pub_address) = public_address {
-            url::Url::parse(&format!("http://{}", pub_address)).unwrap()
-        } else {
-            address
-        };
-
-        WatcherData::setup(pub_address, event_db_path, priv_key, transport).map(|watcher_data| {
-            Self {
-                watcher_data: Arc::new(Watcher(watcher_data)),
-            }
-        })
-    }
-
-    pub fn listen_http(self, address: url::Url) -> Server {
-        let host = address.host().unwrap().to_string();
-        let port = address.port().unwrap();
-
+    pub fn listen_http(self, addr: impl ToSocketAddrs) -> Server {
         let state = web::Data::new(self.watcher_data);
         HttpServer::new(move || {
             App::new()
@@ -93,7 +48,7 @@ impl WatcherListener {
                     actix_web::web::post().to(http_handlers::resolve_oobi),
                 )
         })
-        .bind((host, port))
+        .bind(addr)
         .unwrap()
         .run()
     }

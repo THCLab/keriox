@@ -5,7 +5,7 @@ use keri::{
     error::Error,
     event_message::signed_event_message::{Notice, SignedEventMessage},
     processor::{
-        escrow::{DelegationEscrow, OutOfOrderEscrow, PartiallySignedEscrow},
+        escrow::{DelegationEscrow, EscrowConfig, OutOfOrderEscrow, PartiallySignedEscrow},
         notification::{JustNotification, Notification, NotificationBus, Notifier},
         validator::EventValidator,
         EventProcessor, Processor,
@@ -39,13 +39,35 @@ impl Processor for WitnessProcessor {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct WitnessEscrowConfig {
+    pub partially_signed_timeout: Duration,
+    pub out_of_order_timeout: Duration,
+    pub delegation_timeout: Duration,
+}
+
+impl Default for WitnessEscrowConfig {
+    fn default() -> Self {
+        let default = EscrowConfig::default();
+        Self {
+            partially_signed_timeout: default.partially_signed_timeout,
+            out_of_order_timeout: default.out_of_order_timeout,
+            delegation_timeout: default.delegation_timeout,
+        }
+    }
+}
+
 impl WitnessProcessor {
-    pub fn new(db: Arc<SledEventDatabase>, escrow_db: Arc<EscrowDb>) -> Self {
+    pub fn new(
+        db: Arc<SledEventDatabase>,
+        escrow_db: Arc<EscrowDb>,
+        escrow_config: WitnessEscrowConfig,
+    ) -> Self {
         let mut bus = NotificationBus::new();
         let partially_signed_escrow = Arc::new(PartiallySignedEscrow::new(
             db.clone(),
             escrow_db.clone(),
-            Duration::from_secs(10),
+            escrow_config.partially_signed_timeout,
         ));
         bus.register_observer(
             partially_signed_escrow,
@@ -54,7 +76,7 @@ impl WitnessProcessor {
         let out_of_order_escrow = Arc::new(OutOfOrderEscrow::new(
             db.clone(),
             escrow_db.clone(),
-            Duration::from_secs(10),
+            escrow_config.out_of_order_timeout,
         ));
         bus.register_observer(
             out_of_order_escrow,
@@ -66,7 +88,7 @@ impl WitnessProcessor {
         let deleating_escrow = Arc::new(DelegationEscrow::new(
             db.clone(),
             escrow_db,
-            Duration::from_secs(10),
+            escrow_config.delegation_timeout,
         ));
         bus.register_observer(
             deleating_escrow,

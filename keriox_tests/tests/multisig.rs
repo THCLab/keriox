@@ -2,8 +2,8 @@ use std::{collections::HashMap, net::Ipv4Addr, sync::Arc};
 
 use anyhow::Result;
 use controller::{
-    identifier_controller::IdentifierController, mailbox_updating::ActionRequired,
-    utils::OptionalConfig, Controller,
+    identifier_controller::IdentifierController, mailbox_updating::ActionRequired, Controller,
+    ControllerConfig,
 };
 use keri::{
     oobi::{EndRole, LocationScheme, Role},
@@ -13,8 +13,8 @@ use keri::{
 };
 use tempfile::Builder;
 use url::{Host, Url};
-use watcher::WatcherListener;
-use witness::WitnessListener;
+use watcher::{WatcherConfig, WatcherListener};
+use witness::{WitnessEscrowConfig, WitnessListener};
 
 #[async_std::test]
 async fn test_multisig() -> Result<()> {
@@ -22,9 +22,9 @@ async fn test_multisig() -> Result<()> {
         let wit_root = Builder::new().prefix("wit-db").tempdir().unwrap();
         Arc::new(WitnessListener::setup(
             Url::parse("http://127.0.0.1:3232").unwrap(),
-            None,
             wit_root.path(),
             Some("ArwXoACJgOleVZ2PY7kXn7rA0II0mHYDhc6WrBH8fDAc".to_string()),
+            WitnessEscrowConfig::default(),
         )?)
     };
     let witness_id = wit.get_prefix();
@@ -41,7 +41,12 @@ async fn test_multisig() -> Result<()> {
     let watcher_url = Url::parse("http://127.0.0.1:3236").unwrap();
     let watcher_listener = {
         let root = Builder::new().prefix("cont-test-db").tempdir().unwrap();
-        WatcherListener::with_transport(watcher_url.clone(), None, root.path(), None, transport)?
+        WatcherListener::new(WatcherConfig {
+            public_address: watcher_url.clone(),
+            db_path: root.path().to_owned(),
+            transport,
+            ..Default::default()
+        })?
     };
     let watcher = watcher_listener.watcher_data.clone();
     let watcher_id = watcher.0.prefix.clone();
@@ -61,9 +66,14 @@ async fn test_multisig() -> Result<()> {
 
     // Setup first identifier.
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
-    let initial_config = OptionalConfig::init().with_db_path(root.into_path());
-    let controller1 =
-        Arc::new(Controller::with_transport(Some(initial_config), transport.clone()).unwrap());
+    let controller1 = Arc::new(
+        Controller::new(ControllerConfig {
+            db_path: root.path().to_owned(),
+            transport: transport.clone(),
+            ..Default::default()
+        })
+        .unwrap(),
+    );
 
     let km1 = CryptoBox::new()?;
     let mut identifier1 = {
@@ -95,9 +105,14 @@ async fn test_multisig() -> Result<()> {
 
     // Setup second identifier.
     let root2 = Builder::new().prefix("test-db").tempdir().unwrap();
-    let initial_config = OptionalConfig::init().with_db_path(root2.into_path());
-    let controller2 =
-        Arc::new(Controller::with_transport(Some(initial_config), transport).unwrap());
+    let controller2 = Arc::new(
+        Controller::new(ControllerConfig {
+            db_path: root2.path().to_owned(),
+            transport,
+            ..Default::default()
+        })
+        .unwrap(),
+    );
     let km2 = CryptoBox::new()?;
 
     let mut identifier2 = {

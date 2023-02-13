@@ -13,13 +13,14 @@ use keri::{
     error::Error,
     event_message::signed_event_message::{Notice, Op},
     prefix::{IdentifierPrefix, SelfSigningPrefix},
+    processor::escrow::EscrowConfig,
     query::{query_event::SignedQuery, reply_event::SignedReply},
     transport::test::{TestActorMap, TestTransport},
 };
 use tempfile::Builder;
 use url::Host;
-use watcher::WatcherData;
-use witness::WitnessListener;
+use watcher::{WatcherConfig, WatcherData};
+use witness::{WitnessEscrowConfig, WitnessListener};
 
 #[test]
 pub fn watcher_forward_ksn() -> Result<(), Error> {
@@ -30,9 +31,9 @@ pub fn watcher_forward_ksn() -> Result<(), Error> {
 
         Arc::new(WitnessListener::setup(
             witness_url,
-            None,
             root_witness.path(),
             Some("ArwXoACJgOleVZ2PY7kXn7rA0II0mHYDhc6WrBH8fDAc".into()),
+            WitnessEscrowConfig::default(),
         )?)
     };
 
@@ -57,6 +58,7 @@ pub fn watcher_forward_ksn() -> Result<(), Error> {
             escrow_db,
             key_manager,
             oobi_root.path(),
+            EscrowConfig::default(),
         )
         .unwrap()
     };
@@ -83,6 +85,7 @@ pub fn watcher_forward_ksn() -> Result<(), Error> {
             escrow_db,
             key_manager,
             oobi_root.path(),
+            EscrowConfig::default(),
         )
         .unwrap()
     };
@@ -104,7 +107,12 @@ pub fn watcher_forward_ksn() -> Result<(), Error> {
 
     let url = url::Url::parse("http://some/dummy/url").unwrap();
     let root = Builder::new().prefix("cont-test-db").tempdir().unwrap();
-    let watcher = WatcherData::setup(url, root.path(), None, Box::new(transport))?;
+    let watcher = WatcherData::new(WatcherConfig {
+        public_address: url,
+        db_path: root.path().to_owned(),
+        transport: Box::new(transport),
+        ..Default::default()
+    })?;
 
     // Watcher should know both controllers
     watcher

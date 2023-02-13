@@ -15,7 +15,9 @@ use crate::{
         AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SeedPrefix, SelfSigningPrefix,
     },
     processor::{
-        basic_processor::BasicProcessor, escrow::default_escrow_bus, event_storage::EventStorage,
+        basic_processor::BasicProcessor,
+        escrow::{default_escrow_bus, EscrowConfig},
+        event_storage::EventStorage,
         Processor,
     },
     signer::Signer,
@@ -33,7 +35,7 @@ fn test_process() -> Result<(), Error> {
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
     let escrow_db = Arc::new(EscrowDb::new(escrow_root.path()).unwrap());
     let (not_bus, (ooo_escrow, ps_escrow, _pw_escrow, _)) =
-        default_escrow_bus(db.clone(), escrow_db);
+        default_escrow_bus(db.clone(), escrow_db, EscrowConfig::default());
     let event_processor = BasicProcessor::new(Arc::clone(&db), Some(not_bus));
     let event_storage = EventStorage::new(Arc::clone(&db));
     // Events and sigs are from keripy `test_multisig_digprefix` test.
@@ -171,7 +173,7 @@ fn test_process_delegated() -> Result<(), Error> {
     fs::create_dir_all(root.path()).unwrap();
     let escrow_db = Arc::new(EscrowDb::new(escrow_root.path()).unwrap());
 
-    let (not_bus, _ooo_escrow) = default_escrow_bus(db.clone(), escrow_db);
+    let (not_bus, _ooo_escrow) = default_escrow_bus(db.clone(), escrow_db, EscrowConfig::default());
 
     let event_processor = BasicProcessor::new(Arc::clone(&db), Some(not_bus));
     let event_storage = EventStorage::new(Arc::clone(&db));
@@ -277,7 +279,7 @@ fn test_compute_state_at_sn() -> Result<(), Error> {
     fs::create_dir_all(root.path()).unwrap();
     let escrow_db = Arc::new(EscrowDb::new(escrow_root.path()).unwrap());
 
-    let (not_bus, _ooo_escrow) = default_escrow_bus(db.clone(), escrow_db);
+    let (not_bus, _ooo_escrow) = default_escrow_bus(db.clone(), escrow_db, EscrowConfig::default());
 
     let event_processor = BasicProcessor::new(Arc::clone(&db), Some(not_bus));
     let event_storage = EventStorage::new(Arc::clone(&db));
@@ -355,7 +357,7 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
     let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
     let escrow_db = Arc::new(EscrowDb::new(escrow_root.path()).unwrap());
 
-    let (not_bus, _ooo_escrow) = default_escrow_bus(db.clone(), escrow_db);
+    let (not_bus, _ooo_escrow) = default_escrow_bus(db.clone(), escrow_db, EscrowConfig::default());
 
     let processor = BasicProcessor::new(db.clone(), Some(not_bus));
     // setup keypairs
@@ -490,7 +492,8 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
         let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
         let escrow_db = Arc::new(EscrowDb::new(escrow_root.path()).unwrap());
 
-        let (not_bus, _ooo_escrow) = default_escrow_bus(db.clone(), escrow_db);
+        let (not_bus, _ooo_escrow) =
+            default_escrow_bus(db.clone(), escrow_db, EscrowConfig::default());
         (
             BasicProcessor::new(db.clone(), Some(not_bus)),
             EventStorage::new(db.clone()),
