@@ -1,8 +1,6 @@
 use crate::{
     error::Error,
-    event::{
-        event_data::{DelegatedInceptionEvent, EventData, InceptionEvent},
-    },
+    event::event_data::{DelegatedInceptionEvent, EventData, InceptionEvent},
     sai::derivation::SelfAddressing,
 };
 
@@ -10,7 +8,7 @@ use super::{EventTypeTag, Typeable};
 use cesrox::primitives::codes::self_addressing::dummy_prefix;
 use serde::Serialize;
 use serde_hex::{Compact, SerHex};
-use version::serialization_info::{SerializationInfo, SerializationFormats};
+use version::serialization_info::{SerializationFormats, SerializationInfo};
 
 /// Dummy Inception Event
 ///
@@ -59,7 +57,7 @@ impl DummyInceptionEvent {
                 ['K', 'E', 'R', 'I'],
                 format,
                 Self {
-                    serialization_info: SerializationInfo::new(['K','E','R','I'], format, 0),
+                    serialization_info: SerializationInfo::new(['K', 'E', 'R', 'I'], format, 0),
                     event_type: data.get_type(),
                     prefix: dummy_prefix(&derivation),
                     digest: dummy_prefix(&derivation),
@@ -100,12 +98,21 @@ impl<T: Serialize, D: Serialize> DummyEvent<T, D> {
     }
 }
 
-impl<T: Serialize, D: Serialize + Typeable<TypeTag =  T>> DummyEvent<T, D> {
-    pub fn dummy_event(event: D, format: SerializationFormats, derivation: &SelfAddressing,) -> Result<Self, Error> {
+impl<T: Serialize, D: Serialize + Typeable<TypeTag = T>> DummyEvent<T, D> {
+    pub fn dummy_event(
+        event: D,
+        format: SerializationFormats,
+        derivation: &SelfAddressing,
+    ) -> Result<Self, Error> {
         let mut version = SerializationInfo::new_empty(['K', 'E', 'R', 'I'], format);
         let cesr_derivation = derivation.clone().into();
         let mut dummy_prefix = dummy_prefix(&cesr_derivation);
-        let mut dummy_event = DummyEvent { serialization_info: version, event_type: event.get_type(), digest: dummy_prefix, data: event };
+        let mut dummy_event = DummyEvent {
+            serialization_info: version,
+            event_type: event.get_type(),
+            digest: dummy_prefix,
+            data: event,
+        };
         let event_len = dummy_event.serialize()?.len();
         version.size = event_len;
         dummy_event.serialization_info = version;

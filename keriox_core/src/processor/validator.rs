@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 #[cfg(feature = "query")]
 use chrono::{DateTime, FixedOffset};
+use version::Versional;
 
 use super::event_storage::EventStorage;
 use crate::{
@@ -9,16 +10,18 @@ use crate::{
     error::Error,
     event::{
         event_data::EventData,
-        sections::seal::{EventSeal, Seal}, KeyEvent,
+        sections::seal::{EventSeal, Seal},
+        KeyEvent,
     },
     event_message::{
+        msg::KeriEvent,
         signature::{Nontransferable, Signature, SignerData},
         signed_event_message::{
             SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
         },
-        msg::KeriEvent,
     },
     prefix::{BasicPrefix, SelfSigningPrefix},
+    sai::sad::SAD,
     state::{EventSemantics, IdentifierState},
 };
 #[cfg(feature = "query")]
@@ -102,7 +105,7 @@ impl EventValidator {
     ) -> Result<Option<IdentifierState>, Error> {
         if let Ok(Some(event)) = self
             .event_storage
-            .get_event_at_sn(&vrc.body.data.prefix, vrc.body.data.sn)
+            .get_event_at_sn(&vrc.body.prefix, vrc.body.sn)
         {
             let kp = self.event_storage.get_keys_at_event(
                 &vrc.validator_seal.prefix,
@@ -122,16 +125,16 @@ impl EventValidator {
         } else {
             Err(Error::MissingEvent)
         }?;
-        self.event_storage.get_state(&vrc.body.data.prefix)
+        self.event_storage.get_state(&vrc.body.prefix)
     }
 
     pub fn get_receipt_couplets(
         &self,
         rct: &SignedNontransferableReceipt,
     ) -> Result<Vec<(BasicPrefix, SelfSigningPrefix)>, Error> {
-        let id = rct.body.data.prefix.clone();
-        let sn = rct.body.data.sn;
-        let receipted_event_digest = rct.body.data.receipted_event_digest.clone();
+        let id = rct.body.prefix.clone();
+        let sn = rct.body.sn;
+        let receipted_event_digest = rct.body.receipted_event_digest.clone();
 
         let witnesses = self
             .event_storage
@@ -174,10 +177,10 @@ impl EventValidator {
         rct: &SignedNontransferableReceipt,
     ) -> Result<Option<IdentifierState>, Error> {
         // get event which is being receipted
-        let id = &rct.body.data.prefix.to_owned();
+        let id = &rct.body.prefix.to_owned();
         if let Ok(Some(event)) = self
             .event_storage
-            .get_event_at_sn(&rct.body.data.prefix, rct.body.data.sn)
+            .get_event_at_sn(&rct.body.prefix, rct.body.sn)
         {
             let serialized_event = event.signed_event_message.event_message.serialize()?;
             let signer_couplets = self.get_receipt_couplets(rct)?;

@@ -1,5 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
+use version::Versional;
+
 use super::{
     event_storage::EventStorage,
     notification::{JustNotification, Notification, NotificationBus, Notifier},
@@ -15,17 +17,19 @@ use crate::{
     error::Error,
     event::{
         event_data::EventData,
-        sections::seal::{EventSeal, Seal, SourceSeal}, KeyEvent,
+        sections::seal::{EventSeal, Seal, SourceSeal},
+        KeyEvent,
     },
     event_message::{
+        msg::KeriEvent,
         signature::Nontransferable,
         signed_event_message::{
             SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
         },
-        Digestible, msg::KeriEvent,
+        Digestible,
     },
     prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
-    sai::SelfAddressingPrefix,
+    sai::{sad::SAD, SelfAddressingPrefix},
 };
 
 #[derive(Debug, Clone)]
@@ -371,7 +375,7 @@ impl PartiallyWitnessedEscrow {
         digest: &SelfAddressingPrefix,
     ) -> Option<Vec<SignedNontransferableReceipt>> {
         self.escrowed_nontranferable_receipts.get(&id).map(|r| {
-            r.filter(|rct| rct.body.data.sn == sn && &rct.body.data.get_digest() == digest)
+            r.filter(|rct| rct.body.sn == sn && &rct.body.get_digest() == digest)
                 // TODO avoid collect
                 .collect()
         })
@@ -394,7 +398,7 @@ impl PartiallyWitnessedEscrow {
             // ignore events with no signatures
             Ok(())
         } else {
-            let id = &receipt.body.data.prefix;
+            let id = &receipt.body.prefix;
             self.escrowed_nontranferable_receipts
                 .add(&id, receipt.clone())?;
             bus.notify(&Notification::ReceiptEscrowed)
@@ -470,7 +474,7 @@ impl PartiallyWitnessedEscrow {
                 // remove from escrow if any signature is wrong
                 match self
                     .escrowed_nontranferable_receipts
-                    .remove(&rct.body.data.prefix, rct)
+                    .remove(&rct.body.prefix, rct)
                 {
                     Ok(_) => e,
                     Err(e) => e.into(),
@@ -563,8 +567,8 @@ impl Notifier for PartiallyWitnessedEscrow {
             Notification::ReceiptOutOfOrder(ooo) => {
                 // Receipted event wasn't accepted into kel yet, so check escrowed
                 // partailly witnessed events.
-                let sn = ooo.body.data.sn;
-                let id = ooo.body.data.prefix.clone();
+                let sn = ooo.body.sn;
+                let id = ooo.body.prefix.clone();
                 // look for receipted event in partially witnessed. If there's no event yet, escrow receipt.
                 match self.get_event_by_sn_and_digest(sn, &id, &ooo.body.get_digest()) {
                     None => self.escrow_receipt(ooo.clone(), bus),
@@ -786,14 +790,13 @@ impl Notifier for DelegationEscrow {
                 // delegator's prefix
                 let id = ev_message.event_message.data.get_prefix();
                 // get anchored data
-                let anchored_data: Vec<Seal> =
-                    match &ev_message.event_message.data.event_data {
-                        EventData::Icp(icp) => icp.data.clone(),
-                        EventData::Rot(rot) => rot.data.clone(),
-                        EventData::Ixn(ixn) => ixn.data.clone(),
-                        EventData::Dip(dip) => dip.inception_data.data.clone(),
-                        EventData::Drt(drt) => drt.data.clone(),
-                    };
+                let anchored_data: Vec<Seal> = match &ev_message.event_message.data.event_data {
+                    EventData::Icp(icp) => icp.data.clone(),
+                    EventData::Rot(rot) => rot.data.clone(),
+                    EventData::Ixn(ixn) => ixn.data.clone(),
+                    EventData::Dip(dip) => dip.inception_data.data.clone(),
+                    EventData::Drt(drt) => drt.data.clone(),
+                };
 
                 let seals: Vec<EventSeal> = anchored_data
                     .into_iter()

@@ -1,6 +1,11 @@
 use std::sync::Arc;
 
 use super::compute_state;
+#[cfg(feature = "query")]
+use crate::query::{
+    key_state_notice::KeyStateNotice, query_event::QueryArgsMbx, reply_event::SignedReply,
+};
+use crate::sai::sad::SAD;
 use crate::sai::SelfAddressingPrefix;
 use crate::{
     database::{timestamped::TimestampedSignedEventMessage, SledEventDatabase},
@@ -18,12 +23,6 @@ use crate::{
 };
 #[cfg(feature = "query")]
 use version::serialization_info::SerializationFormats;
-#[cfg(feature = "query")]
-use crate::{
-    query::{
-        key_state_notice::KeyStateNotice, query_event::QueryArgsMbx, reply_event::SignedReply,
-    },
-};
 
 #[cfg(feature = "mailbox")]
 use crate::{event_message::signed_event_message::SignedEventMessage, mailbox::MailboxResponse};
@@ -141,7 +140,7 @@ impl EventStorage {
 
     #[cfg(feature = "mailbox")]
     pub fn add_mailbox_receipt(&self, receipt: SignedNontransferableReceipt) -> Result<(), Error> {
-        let id = receipt.body.data.prefix.clone();
+        let id = receipt.body.prefix.clone();
         self.db.add_mailbox_receipt(receipt, &id)?;
 
         Ok(())
@@ -165,7 +164,7 @@ impl EventStorage {
             .get_mailbox_receipts(&id)
             .into_iter()
             .flatten()
-            .filter(|rec| rec.body.data.sn >= args.topics.receipt)
+            .filter(|rec| rec.body.sn >= args.topics.receipt)
             .collect();
 
         let multisig = self
@@ -313,7 +312,7 @@ impl EventStorage {
     ) -> Result<bool, Error> {
         Ok(if let Some(receipts) = self.db.get_receipts_t(id) {
             receipts
-                .filter(|r| r.body.data.sn.eq(&sn))
+                .filter(|r| r.body.sn.eq(&sn))
                 .any(|receipt| receipt.validator_seal.prefix.eq(validator_pref))
         } else {
             false
@@ -328,7 +327,7 @@ impl EventStorage {
     ) -> Result<Option<SignedNontransferableReceipt>, Error> {
         match self.db.get_receipts_nt(prefix) {
             Some(events) => Ok(events
-                .filter(|rcp| rcp.body.data.sn == sn && &rcp.body.get_digest() == digest)
+                .filter(|rcp| rcp.body.sn == sn && &rcp.body.get_digest() == digest)
                 .reduce(|acc, rct| {
                     let mut new_signatures = acc.signatures;
                     new_signatures.append(&mut rct.signatures.clone());
@@ -423,7 +422,6 @@ impl EventStorage {
         prefix: &IdentifierPrefix,
         format: SerializationFormats,
     ) -> Result<KeyStateNotice, Error> {
-
         let state = self
             .get_state(prefix)?
             .ok_or_else(|| Error::SemanticError("No state in db".into()))?;

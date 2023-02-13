@@ -1,16 +1,15 @@
 use cesrox::{group::Group, ParsedData};
 use serde::{ser::SerializeStruct, Deserialize, Serialize};
 
-use super::{
-    serializer::to_string, signature::Nontransferable, msg::KeriEvent,
-};
+use super::{msg::KeriEvent, serializer::to_string, signature::Nontransferable};
 #[cfg(feature = "query")]
 use crate::query::{query_event::SignedQuery, reply_event::SignedReply};
 use crate::{
     error::Error,
     event::{
         receipt::Receipt,
-        sections::seal::{EventSeal, SourceSeal}, KeyEvent,
+        sections::seal::{EventSeal, SourceSeal},
+        KeyEvent,
     },
     prefix::{AttachedSignaturePrefix, IdentifierPrefix},
     state::{EventSemantics, IdentifierState},
@@ -95,8 +94,8 @@ impl Notice {
     pub fn get_prefix(&self) -> IdentifierPrefix {
         match self {
             Notice::Event(ev) => ev.event_message.data.get_prefix(),
-            Notice::NontransferableRct(rct) => rct.body.data.prefix.clone(),
-            Notice::TransferableRct(rct) => rct.body.data.prefix.clone(),
+            Notice::NontransferableRct(rct) => rct.body.prefix.clone(),
+            Notice::TransferableRct(rct) => rct.body.prefix.clone(),
         }
     }
 }
@@ -226,14 +225,14 @@ impl EventSemantics for SignedEventMessage {
 /// Mostly intended for use by Validators
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SignedTransferableReceipt {
-    pub body: KeriEvent<Receipt>,
+    pub body: Receipt,
     pub validator_seal: EventSeal,
     pub signatures: Vec<AttachedSignaturePrefix>,
 }
 
 impl SignedTransferableReceipt {
     pub fn new(
-        message: KeriEvent<Receipt>,
+        message: Receipt,
         event_seal: EventSeal,
         sigs: Vec<AttachedSignaturePrefix>,
     ) -> Self {
@@ -253,14 +252,14 @@ impl SignedTransferableReceipt {
 /// signatures
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SignedNontransferableReceipt {
-    pub body: KeriEvent<Receipt>,
+    pub body: Receipt,
     // pub couplets: Option<Vec<(BasicPrefix, SelfSigningPrefix)>>,
     // pub indexed_sigs: Option<Vec<AttachedSignaturePrefix>>,
     pub signatures: Vec<Nontransferable>,
 }
 
 impl SignedNontransferableReceipt {
-    pub fn new(message: &KeriEvent<Receipt>, signatures: Vec<Nontransferable>) -> Self {
+    pub fn new(message: &Receipt, signatures: Vec<Nontransferable>) -> Self {
         Self {
             body: message.clone(),
             signatures,
@@ -273,6 +272,7 @@ pub mod tests {
     use std::convert::TryFrom;
 
     use cesrox::{parse, ParsedData};
+    use version::Versional;
 
     use crate::{
         actor::prelude::Message,

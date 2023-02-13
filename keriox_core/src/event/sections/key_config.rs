@@ -148,6 +148,7 @@ pub fn nxt_commitment(
 #[cfg(test)]
 mod test {
     use cesrox::parse;
+    use version::Versional;
 
     use crate::{
         error::Error,
@@ -296,7 +297,7 @@ mod test {
         let signed_msg = Message::try_from(parsed).unwrap();
         match signed_msg {
             Message::Notice(Notice::Event(ref e)) => {
-                if let EventData::Icp(icp) = e.to_owned().event_message.event.get_event_data() {
+                if let EventData::Icp(icp) = e.to_owned().event_message.data.get_event_data() {
                     let kc = icp.key_config;
                     let msg = e.event_message.serialize()?;
                     assert!(kc.verify(&msg, &e.signatures)?);
@@ -310,7 +311,7 @@ mod test {
         let signed_msg = Message::try_from(parsed).unwrap();
         match signed_msg {
             Message::Notice(Notice::Event(ref e)) => {
-                if let EventData::Icp(icp) = e.to_owned().event_message.event.get_event_data() {
+                if let EventData::Icp(icp) = e.to_owned().event_message.data.get_event_data() {
                     let kc = icp.key_config;
                     let msg = e.event_message.serialize()?;
                     assert!(kc.verify(&msg, &e.signatures)?);

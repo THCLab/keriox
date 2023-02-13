@@ -13,7 +13,6 @@ use crate::query::{
     reply_event::{ReplyRoute, SignedReply},
     ReplyType,
 };
-use version::serialization_info::SerializationFormats;
 use crate::{
     error::Error,
     event_message::{
@@ -25,6 +24,7 @@ use crate::{
 };
 pub use cesrox::cesr_proof::MaterialPath;
 use cesrox::parse_many;
+use version::{serialization_info::SerializationFormats, Versional};
 
 pub mod error;
 pub mod event_generator;
@@ -117,9 +117,14 @@ pub fn process_signed_oobi(
     oobi_manager: &OobiManager,
     event_storage: &EventStorage,
 ) -> Result<(), Error> {
+    use crate::sai::sad::SAD;
+
     let validator = EventValidator::new(event_storage.db.clone());
     // check signature
-    validator.verify(&signed_oobi.reply.serialize()?, &signed_oobi.signature)?;
+    validator.verify(
+        &Versional::serialize(&signed_oobi.reply)?,
+        &signed_oobi.signature,
+    )?;
     // check digest
     signed_oobi.reply.check_digest()?;
     // save
@@ -137,7 +142,7 @@ pub fn process_signed_exn(exn: SignedExchange, storage: &EventStorage) -> Result
         exn.signature
             .iter()
             .try_fold(true, |acc, signature| -> Result<bool, Error> {
-                Ok(acc && signature.verify(&exn_message.serialize()?, storage)?)
+                Ok(acc && signature.verify(&Versional::serialize(exn_message)?, storage)?)
             });
     if verification_result? {
         process_exn(exn_message, exn.data_signature, storage)
@@ -203,7 +208,10 @@ pub fn process_signed_query(
                 .get(0)
                 .ok_or(SignedQueryError::InvalidSignature)?
                 .signature;
-            let ver_result = match id.verify(&qr.query.serialize()?, sig) {
+            let ver_result = match id.verify(
+                &Versional::serialize(&qr.query).map_err(|e| Error::VersionError)?,
+                sig,
+            ) {
                 Ok(result) => result,
                 Err(e) => {
                     let keri_error: crate::error::Error = e.into();
@@ -219,7 +227,10 @@ pub fn process_signed_query(
                 .get_state(&signer_id)?
                 .ok_or_else(|| SignedQueryError::UnknownSigner { id: signer_id })?
                 .current;
-            if !key_config.verify(&qr.query.serialize()?, &signatures)? {
+            if !key_config.verify(
+                &Versional::serialize(&qr.query).map_err(|e| Error::VersionError)?,
+                &signatures,
+            )? {
                 return Err(SignedQueryError::InvalidSignature);
             }
         }

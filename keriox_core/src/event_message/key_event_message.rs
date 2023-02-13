@@ -5,15 +5,16 @@ use crate::{
     error::Error,
     event::{event_data::EventData, sections::seal::SourceSeal, KeyEvent},
     prefix::{AttachedSignaturePrefix, IdentifierPrefix},
-    sai::SelfAddressingPrefix,
+    sai::{sad::SAD, SelfAddressingPrefix},
     state::{EventSemantics, IdentifierState},
 };
 
 use super::{
     dummy_event::{DummyEvent, DummyInceptionEvent},
+    msg::KeriEvent,
     signature::Nontransferable,
     signed_event_message::SignedEventMessage,
-    Digestible, EventTypeTag, SaidEvent, Typeable, msg::KeriEvent,
+    Digestible, EventTypeTag, SaidEvent, Typeable,
 };
 
 impl KeyEvent {
@@ -168,10 +169,10 @@ pub fn verify_identifier_binding(icp_event: &KeriEvent<KeyEvent>) -> Result<bool
         EventData::Icp(icp) => match &icp_event.data.get_prefix() {
             IdentifierPrefix::Basic(bp) => Ok(icp.key_config.public_keys.len() == 1
                 && bp.eq(icp
-                        .key_config
-                        .public_keys
-                        .first()
-                        .ok_or_else(|| Error::SemanticError("Missing public key".into()))?)),
+                    .key_config
+                    .public_keys
+                    .first()
+                    .ok_or_else(|| Error::SemanticError("Missing public key".into()))?)),
             IdentifierPrefix::SelfAddressing(sap) => {
                 Ok(icp_event.compare_digest(sap)? && icp_event.get_digest().eq(sap))
             }

@@ -2,18 +2,20 @@ pub mod cesr_adapter;
 pub mod dummy_event;
 pub mod event_msg_builder;
 pub mod key_event_message;
+pub mod msg;
 pub mod serializer;
 pub mod signature;
 pub mod signed_event_message;
 pub mod timestamped;
-pub mod msg;
 
 use std::cmp::Ordering;
 
-use crate::{error::Error, sai::derivation::SelfAddressing, sai::SelfAddressingPrefix, event::KeyEvent};
+use crate::{
+    error::Error, event::KeyEvent, sai::derivation::SelfAddressing, sai::SelfAddressingPrefix,
+};
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize, Serializer};
-use version::serialization_info::{SerializationFormats};
+use version::serialization_info::SerializationFormats;
 
 use self::{dummy_event::DummyEvent, msg::KeriEvent};
 
@@ -225,11 +227,12 @@ mod tests {
         },
         keys::{PrivateKey, PublicKey},
         prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
-        sai::derivation::SelfAddressing,
+        sai::{derivation::SelfAddressing, sad::SAD},
         state::IdentifierState,
     };
     use ed25519_dalek::Keypair;
     use rand::rngs::OsRng;
+    use version::Versional;
 
     #[test]
     fn basic_create() -> Result<(), Error> {
@@ -275,7 +278,7 @@ mod tests {
         let icp_m = icp.to_message(SerializationFormats::JSON, SelfAddressing::Blake3_256)?;
 
         // serialised message
-        let ser: Vec<_> = icp_m.serialize()?;
+        let ser: Vec<_> = Versional::serialize(&icp_m)?;
 
         // sign
         let sig = priv_key0.sign_ed(&ser)?;
@@ -356,7 +359,7 @@ mod tests {
         .incept_self_addressing(SelfAddressing::Blake3_256, SerializationFormats::JSON)?;
 
         // serialised
-        let serialized: Vec<_> = icp.serialize()?;
+        let serialized: Vec<_> = Versional::serialize(&icp)?;
 
         // sign
         let sk = priv_key0;
@@ -373,9 +376,9 @@ mod tests {
 
         assert!(s0.current.verify(&serialized, &signed_event.signatures)?);
 
-        assert_eq!(s0.prefix, icp.event.get_prefix());
+        assert_eq!(s0.prefix, icp.data.get_prefix());
         assert_eq!(s0.sn, 0);
-        assert!(icp.check_digest(&s0.last_event_digest)?);
+        assert!(icp.compare_digest(&s0.last_event_digest)?);
         assert_eq!(s0.current.public_keys.len(), 2);
         assert_eq!(s0.current.public_keys[0], sig_pref_0);
         assert_eq!(s0.current.public_keys[1], enc_pref_0);

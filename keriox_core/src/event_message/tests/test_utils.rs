@@ -5,11 +5,12 @@ use crate::{
     event_message::EventTypeTag,
     keys::{PrivateKey, PublicKey},
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
-    sai::{derivation::SelfAddressing, SelfAddressingPrefix},
+    sai::{derivation::SelfAddressing, sad::SAD, SelfAddressingPrefix},
     state::IdentifierState,
 };
 use ed25519_dalek::Keypair;
 use rand::rngs::OsRng;
+use version::Versional;
 
 /// Collects data for testing `IdentifierState` update. `prev_event_hash`, `sn`,
 /// `current_keypair` and `new_keypair` are used to generate mock event message

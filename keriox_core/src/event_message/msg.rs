@@ -1,7 +1,13 @@
-use serde::{Serialize, Deserialize, Serializer};
-use version::{serialization_info::{SerializationInfo, SerializationFormats}, message::Message};
+use serde::{Deserialize, Serialize, Serializer};
+use version::{
+    serialization_info::{SerializationFormats, SerializationInfo},
+    Versional,
+};
 
-use crate::{sai::{SelfAddressingPrefix, derivation::SelfAddressing}, error::Error};
+use crate::{
+    error::Error,
+    sai::{derivation::SelfAddressing, sad::SAD, SelfAddressingPrefix},
+};
 
 use super::{dummy_event::DummyEvent, Typeable};
 
@@ -15,8 +21,29 @@ pub struct KeriEvent<D> {
     pub data: D,
 }
 
+impl<T: Serialize, D: Serialize + Typeable<TypeTag = T> + Clone> SAD for KeriEvent<D> {
+    fn get_digest(&self) -> SelfAddressingPrefix {
+        self.digest.clone()
+    }
+
+    fn dummy_event(&self) -> Result<Vec<u8>, Error> {
+        DummyEvent::dummy_event(
+            self.data.clone(),
+            self.serialization_info.kind,
+            &self.digest.derivation,
+        )?
+        .serialize()
+    }
+}
+
+impl<T: Serialize, D: Serialize + Typeable<TypeTag = T> + Clone> Versional for KeriEvent<D> {
+    fn get_version_str(&self) -> SerializationInfo {
+        self.serialization_info
+    }
+}
+
 impl<T: Serialize, D: Serialize + Typeable<TypeTag = T> + Clone> KeriEvent<D> {
-	pub fn new(
+    pub fn new(
         format: SerializationFormats,
         derivation: SelfAddressing,
         event: D,
@@ -24,36 +51,15 @@ impl<T: Serialize, D: Serialize + Typeable<TypeTag = T> + Clone> KeriEvent<D> {
         let dummy_event = DummyEvent::dummy_event(event.clone(), format, &derivation)?;
 
         let sai = derivation.derive(&dummy_event.serialize()?);
-        Ok(Self { serialization_info: dummy_event.serialization_info, digest: sai, data: event })
-
-    }
-
-    pub fn check_digest(&self) -> Result<(), Error> {
-        let dummy: Vec<u8> = DummyEvent::dummy_event(
-            self.data.clone(),
-            self.serialization_info.kind,
-            &self.digest.derivation,
-        )?
-        .serialize()?;
-        self
-            .digest
-            .verify_binding(&dummy)
-            .then(|| ())
-            .ok_or(Error::IncorrectDigest)
-    }
-
-    pub fn get_digest(&self) -> SelfAddressingPrefix {
-        self.digest.clone()
-    }
-
-    pub fn serialize(&self) -> Result<Vec<u8>, Error> {
-        Ok(self.serialization_info.kind.encode(self)?)
+        Ok(Self {
+            serialization_info: dummy_event.serialization_info,
+            digest: sai,
+            data: event,
+        })
     }
 }
 
-impl<T: Serialize, D: Typeable<TypeTag = T> + Serialize + Clone> Serialize
-    for KeriEvent<D>
-{
+impl<T: Serialize, D: Typeable<TypeTag = T> + Serialize + Clone> Serialize for KeriEvent<D> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,

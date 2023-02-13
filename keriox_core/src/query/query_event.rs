@@ -3,10 +3,11 @@ use version::serialization_info::SerializationFormats;
 
 use crate::{
     error::Error,
-    event_message::{timestamped::Timestamped, EventTypeTag, SaidEvent, Typeable, msg::KeriEvent},
+    event_message::{msg::KeriEvent, timestamped::Timestamped, EventTypeTag, Typeable},
     prefix::{AttachedSignaturePrefix, IdentifierPrefix},
     sai::derivation::SelfAddressing,
 };
+use version::Versional;
 
 // TODO: make enum with different query args
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -154,7 +155,7 @@ fn test_query_deserialize() {
 
     assert_eq!(
         input_query,
-        &String::from_utf8_lossy(&qr.serialize().unwrap())
+        &String::from_utf8_lossy(&Versional::serialize(&qr).unwrap())
     );
 }
 
@@ -185,6 +186,6 @@ fn test_query_mbx_deserialize() {
 
     assert_eq!(
         input_query,
-        &String::from_utf8_lossy(&qr.serialize().unwrap())
+        &String::from_utf8_lossy(&Versional::serialize(&qr).unwrap())
     );
 }

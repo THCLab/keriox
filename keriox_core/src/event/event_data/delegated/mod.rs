@@ -1,11 +1,11 @@
 use super::EventData;
 use super::InceptionEvent;
 use crate::event_message::dummy_event::DummyInceptionEvent;
-use crate::event_message::key_event_message::KeyEvent;
-use crate::event_message::SaidEvent;
+use crate::event_message::msg::KeriEvent;
+use crate::sai::sad::SAD;
 use crate::{
     error::Error,
-    event::{KeyEvent, EventMessage, SerializationFormats},
+    event::{KeyEvent, SerializationFormats},
     prefix::IdentifierPrefix,
     sai::derivation::SelfAddressing,
     state::{EventSemantics, IdentifierState},
@@ -31,7 +31,7 @@ impl DelegatedInceptionEvent {
         self,
         derivation: SelfAddressing,
         format: SerializationFormats,
-    ) -> Result<EventMessage<KeyEvent>, Error> {
+    ) -> Result<KeriEvent<KeyEvent>, Error> {
         let dummy_event = DummyInceptionEvent::dummy_delegated_inception_data(
             self.clone(),
             derivation.clone(),
@@ -43,9 +43,10 @@ impl DelegatedInceptionEvent {
             0,
             EventData::Dip(self),
         );
-        Ok(EventMessage {
+        Ok(KeriEvent {
             serialization_info: dummy_event.serialization_info,
-            event: SaidEvent::new(digest, event),
+            digest,
+            data: event,
         })
     }
 }
@@ -91,11 +92,11 @@ fn test_delegated_inception_data_derivation() -> Result<(), Error> {
 
     assert_eq!(
         "EHng2fV42DdKb5TLMIs6bbjFkPNmIdQ5mSFn6BTnySJj",
-        dip_data.event.get_prefix().to_str()
+        dip_data.data.get_prefix().to_str()
     );
     assert_eq!(
         "EHng2fV42DdKb5TLMIs6bbjFkPNmIdQ5mSFn6BTnySJj",
-        dip_data.event.get_digest().to_str()
+        dip_data.get_digest().to_str()
     );
     assert_eq!("KERI10JSON00015f_", dip_data.serialization_info.to_str());
 

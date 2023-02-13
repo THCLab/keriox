@@ -20,13 +20,13 @@ use crate::{
     },
     keys::PublicKey,
     prefix::{BasicPrefix, IdentifierPrefix},
-    sai::{derivation::SelfAddressing, SelfAddressingPrefix},
+    sai::{derivation::SelfAddressing, sad::SAD, SelfAddressingPrefix},
 };
 use ed25519_dalek::Keypair;
 use rand::rngs::OsRng;
-use version::serialization_info::SerializationFormats;
+use version::{serialization_info::SerializationFormats, Versional};
 
-use super::{EventTypeTag, msg::KeriEvent};
+use super::{msg::KeriEvent, EventTypeTag};
 
 pub struct EventMsgBuilder {
     event_type: EventTypeTag,
@@ -176,7 +176,7 @@ impl EventMsgBuilder {
         let prefix = if self.prefix == IdentifierPrefix::default() {
             let icp_data = InceptionEvent::new(key_config.clone(), None, None)
                 .incept_self_addressing(self.derivation.clone(), self.format)?;
-            icp_data.event.get_prefix()
+            icp_data.data.get_prefix()
         } else {
             self.prefix
         };
@@ -194,8 +194,10 @@ impl EventMsgBuilder {
                 };
 
                 match prefix {
-                    IdentifierPrefix::Basic(_) => KeyEvent::new(prefix, 0, EventData::Icp(icp_event))
-                        .to_message(self.format, self.derivation)?,
+                    IdentifierPrefix::Basic(_) => {
+                        KeyEvent::new(prefix, 0, EventData::Icp(icp_event))
+                            .to_message(self.format, self.derivation)?
+                    }
                     IdentifierPrefix::SelfAddressing(_) => {
                         icp_event.incept_self_addressing(self.derivation, self.format)?
                     }
@@ -285,16 +287,16 @@ impl ReceiptBuilder {
         }
     }
 
-    pub fn build(&self) -> Result<KeriEvent<Receipt>, Error> {
+    pub fn build(&self) -> Result<Receipt, Error> {
         let prefix = self.receipted_event.data.get_prefix();
         let sn = self.receipted_event.data.get_sn();
         let receipted_event_digest = self.receipted_event.get_digest();
-        Receipt {
+        Ok(Receipt::new(
+            self.format,
             receipted_event_digest,
-            sn,
             prefix,
-        }
-        .to_message(self.format)
+            sn,
+        ))
     }
 }
 

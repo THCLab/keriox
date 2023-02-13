@@ -8,12 +8,13 @@ use super::key_state_notice::KeyStateNotice;
 use crate::oobi::{EndRole, LocationScheme};
 use crate::{
     error::Error,
-    event::{sections::seal::EventSeal},
+    event::sections::seal::EventSeal,
     event_message::{
         dummy_event::DummyEvent,
+        msg::KeriEvent,
         signature::{Nontransferable, Signature, SignerData},
         timestamped::Timestamped,
-        Digestible, EventTypeTag, SaidEvent, Typeable, msg::KeriEvent,
+        Digestible, EventTypeTag, SaidEvent, Typeable,
     },
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     query::QueryError,
@@ -155,7 +156,6 @@ impl ReplyEvent {
         self.data.data.get_prefix()
     }
 }
-
 
 #[cfg(feature = "query")]
 pub fn bada_logic(new_rpy: &SignedReply, old_rpy: &SignedReply) -> Result<(), QueryError> {

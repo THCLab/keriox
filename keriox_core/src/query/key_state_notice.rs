@@ -3,9 +3,7 @@ use serde::{ser::SerializeStruct, Deserialize, Serialize, Serializer};
 use serde_hex::{Compact, SerHex};
 use version::serialization_info::{SerializationFormats, SerializationInfo};
 
-use crate::{
-    state::IdentifierState,
-};
+use crate::state::IdentifierState;
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct KeyStateNotice {
@@ -63,7 +61,7 @@ impl KeyStateNotice {
         let dt: DateTime<FixedOffset> = DateTime::from(Utc::now());
 
         KeyStateNotice {
-            serialization_info: SerializationInfo::new(['K','E','R','I'], serialization, 0),
+            serialization_info: SerializationInfo::new(['K', 'E', 'R', 'I'], serialization, 0),
             timestamp: dt,
             state,
             first_seen_sn: 0,

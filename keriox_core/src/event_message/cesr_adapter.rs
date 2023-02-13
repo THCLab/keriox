@@ -7,7 +7,7 @@ use cesrox::{
     ParsedData,
 };
 use serde::{Deserialize, Serialize};
-use version::serialization_info::SerializationFormats;
+use version::{serialization_info::SerializationFormats, Versional};
 
 use crate::{
     error::Error,
@@ -15,6 +15,7 @@ use crate::{
         event_data::EventData,
         receipt::Receipt,
         sections::seal::{EventSeal, SourceSeal},
+        KeyEvent,
     },
 };
 
@@ -28,13 +29,13 @@ use crate::query::{
 use crate::mailbox::exchange::{ExchangeMessage, SignedExchange};
 
 use super::{
-    key_event_message::KeyEvent,
+    msg::KeriEvent,
     signature::{self, Nontransferable},
     signed_event_message::{
         Message, Notice, Op, SignedEventMessage, SignedNontransferableReceipt,
         SignedTransferableReceipt,
     },
-    Digestible, Typeable, msg::KeriEvent,
+    Digestible, Typeable,
 };
 
 pub fn parse_event_type(input: &[u8]) -> Result<EventType, Error> {
@@ -48,7 +49,7 @@ pub fn parse_event_type(input: &[u8]) -> Result<EventType, Error> {
 #[serde(untagged)]
 pub enum EventType {
     KeyEvent(KeriEvent<KeyEvent>),
-    Receipt(KeriEvent<Receipt>),
+    Receipt(Receipt),
     #[cfg(feature = "mailbox")]
     Exn(ExchangeMessage),
     #[cfg(feature = "query")]
@@ -59,16 +60,16 @@ pub enum EventType {
 
 impl EventType {
     pub fn serialize(&self) -> Result<Vec<u8>, Error> {
-        match self {
-            EventType::KeyEvent(event) => event.serialize(),
-            EventType::Receipt(rcp) => rcp.serialize(),
+        Ok(match self {
+            EventType::KeyEvent(event) => Versional::serialize(event),
+            EventType::Receipt(rcp) => Versional::serialize(rcp),
             #[cfg(feature = "query")]
-            EventType::Qry(qry) => qry.serialize(),
+            EventType::Qry(qry) => Versional::serialize(qry),
             #[cfg(feature = "query")]
-            EventType::Rpy(rpy) => rpy.serialize(),
+            EventType::Rpy(rpy) => Versional::serialize(rpy),
             #[cfg(feature = "mailbox")]
-            EventType::Exn(exn) => exn.serialize(),
-        }
+            EventType::Exn(exn) => Versional::serialize(exn),
+        }?)
     }
 }
 
@@ -112,20 +113,12 @@ impl From<&SignedEventMessage> for ParsedData {
     }
 }
 
-impl<T: Serialize, D:  Typeable<TypeTag = T> + Serialize + Clone> From<KeriEvent<D>>
-    for Payload
-{
+impl<T: Serialize, D: Typeable<TypeTag = T> + Serialize + Clone> From<KeriEvent<D>> for Payload {
     fn from(pd: KeriEvent<D>) -> Self {
         match pd.serialization_info.kind {
-            SerializationFormats::JSON => {
-                Payload::JSON(pd.serialize().unwrap())
-            }
-            SerializationFormats::MGPK => {
-                Payload::MGPK(pd.serialize().unwrap())
-            }
-            SerializationFormats::CBOR => {
-                Payload::CBOR(pd.serialize().unwrap())
-            }
+            SerializationFormats::JSON => Payload::JSON(Versional::serialize(&pd).unwrap()),
+            SerializationFormats::MGPK => Payload::MGPK(Versional::serialize(&pd).unwrap()),
+            SerializationFormats::CBOR => Payload::CBOR(Versional::serialize(&pd).unwrap()),
         }
     }
 }
@@ -469,10 +462,7 @@ fn signed_key_event(
     }
 }
 
-fn signed_receipt(
-    event_message: KeriEvent<Receipt>,
-    mut attachments: Vec<Group>,
-) -> Result<Notice, Error> {
+fn signed_receipt(event_message: Receipt, mut attachments: Vec<Group>) -> Result<Notice, Error> {
     let nontransferable = attachments
         .iter()
         .filter_map(|att| match att {

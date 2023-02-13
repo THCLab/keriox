@@ -12,12 +12,13 @@ use self::tables::{SledEventTree, SledEventTreeVec};
 #[cfg(feature = "query")]
 use crate::query::reply_event::SignedReply;
 use crate::{
+    event::KeyEvent,
     event_message::{
-        key_event_message::KeyEvent,
+        msg::KeriEvent,
         signed_event_message::{
             SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
         },
-        TimestampedEventMessage, EventMessage,
+        TimestampedEventMessage,
     },
     prefix::IdentifierPrefix,
 };
@@ -230,7 +231,7 @@ impl SledEventDatabase {
 
     pub fn add_likely_duplicious_event(
         &self,
-        event: EventMessage<KeyEvent>,
+        event: KeriEvent<KeyEvent>,
         id: &IdentifierPrefix,
     ) -> Result<(), DbError> {
         self.likely_duplicious_events

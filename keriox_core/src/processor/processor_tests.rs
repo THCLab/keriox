@@ -1,6 +1,7 @@
 use std::{convert::TryFrom, fs, sync::Arc};
 
 use cesrox::{parse, parse_many, primitives::CesrPrimitive};
+use version::Versional;
 
 use crate::{
     database::{escrow::EscrowDb, SledEventDatabase},
@@ -20,6 +21,7 @@ use crate::{
         event_storage::EventStorage,
         Processor,
     },
+    sai::sad::SAD,
     signer::Signer,
 };
 
@@ -203,7 +205,7 @@ fn test_process_delegated() -> Result<(), Error> {
     // Helper function for serializing message (without attachments)
     let raw_parsed = |ev: Message| -> Result<Vec<_>, Error> {
         if let Message::Notice(Notice::Event(ev)) = ev {
-            ev.event_message.serialize()
+            Ok(ev.event_message.serialize()?)
         } else {
             Ok(vec![])
         }

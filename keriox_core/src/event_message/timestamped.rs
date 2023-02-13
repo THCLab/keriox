@@ -4,7 +4,7 @@ use version::serialization_info::SerializationFormats;
 
 use crate::{error::Error, sai::derivation::SelfAddressing};
 
-use super::{SaidEvent, Typeable, msg::KeriEvent};
+use super::{msg::KeriEvent, SaidEvent, Typeable};
 
 pub type TimeStamp = DateTime<FixedOffset>;
 

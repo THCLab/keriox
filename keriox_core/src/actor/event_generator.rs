@@ -1,5 +1,9 @@
+use version::Versional;
+
 #[cfg(feature = "mailbox")]
 use crate::mailbox::exchange::{Exchange, ExchangeMessage, ForwardTopic, FwdArgs};
+#[cfg(feature = "oobi")]
+use crate::oobi::{EndRole, Role};
 #[cfg(feature = "query")]
 use crate::query::reply_event::{ReplyEvent, ReplyRoute};
 use crate::{
@@ -9,17 +13,12 @@ use crate::{
             seal::{DigestSeal, Seal},
             threshold::{SignatureThreshold, WeightedThreshold},
         },
+        KeyEvent,
     },
-    event_message::{
-        event_msg_builder::EventMsgBuilder, key_event_message::KeyEvent, EventTypeTag, EventMessage,
-    },
+    event_message::{event_msg_builder::EventMsgBuilder, msg::KeriEvent, EventTypeTag},
     prefix::{BasicPrefix, IdentifierPrefix},
     sai::{derivation::SelfAddressing, SelfAddressingPrefix},
     state::IdentifierState,
-};
-#[cfg(feature = "oobi")]
-use crate::{
-    oobi::{EndRole, Role},
 };
 
 // todo add setting signing threshold
@@ -56,7 +55,7 @@ pub fn incept_with_next_hashes(
     witnesses: Vec<BasicPrefix>,
     witness_threshold: u64,
     delegator_id: Option<&IdentifierPrefix>,
-) -> Result<EventMessage<KeyEvent>, Error> {
+) -> Result<KeriEvent<KeyEvent>, Error> {
     // Check if threshold is possible to achive
     match signature_threshold {
         SignatureThreshold::Simple(t) => {
@@ -127,7 +126,7 @@ fn make_rotation(
     witness_to_add: Vec<BasicPrefix>,
     witness_to_remove: Vec<BasicPrefix>,
     witness_threshold: u64,
-) -> Result<EventMessage<KeyEvent>, Error> {
+) -> Result<KeriEvent<KeyEvent>, Error> {
     EventMsgBuilder::new(EventTypeTag::Rot)
         .with_prefix(&state.prefix)
         .with_sn(state.sn + 1)
@@ -165,7 +164,7 @@ pub fn anchor(state: IdentifierState, payload: &[SelfAddressingPrefix]) -> Resul
 pub fn anchor_with_seal(
     state: IdentifierState,
     seal_list: &[Seal],
-) -> Result<EventMessage<KeyEvent>, Error> {
+) -> Result<KeriEvent<KeyEvent>, Error> {
     let ev = EventMsgBuilder::new(EventTypeTag::Ixn)
         .with_prefix(&state.prefix)
         .with_sn(state.sn + 1)
@@ -207,12 +206,12 @@ pub fn generate_end_role(
 #[cfg(feature = "mailbox")]
 pub fn exchange(
     receipient: &IdentifierPrefix,
-    data: &EventMessage<KeyEvent>,
+    data: &KeriEvent<KeyEvent>,
     topic: ForwardTopic,
 ) -> Result<ExchangeMessage, Error> {
     use version::serialization_info::SerializationFormats;
 
-    use crate::event_message::{timestamped::Timestamped, msg::KeriEvent};
+    use crate::event_message::{msg::KeriEvent, timestamped::Timestamped};
 
     let event = Timestamped::new(Exchange::Fwd {
         args: FwdArgs {
@@ -221,6 +220,11 @@ pub fn exchange(
         },
         to_forward: data.clone(),
     });
-    
-    KeriEvent::new(SerializationFormats::JSON, SelfAddressing::Blake3_256, event).map_err(|e| Error::EventGenerationError(e.to_string()))
+
+    KeriEvent::new(
+        SerializationFormats::JSON,
+        SelfAddressing::Blake3_256,
+        event,
+    )
+    .map_err(|e| Error::EventGenerationError(e.to_string()))
 }

@@ -22,11 +22,12 @@ use crate::query::reply_event::{ReplyRoute, SignedReply};
 use crate::{
     database::{timestamped::TimestampedSignedEventMessage, SledEventDatabase},
     error::Error,
-    event::{receipt::Receipt},
+    event::receipt::Receipt,
     event_message::signed_event_message::{
         Notice, SignedEventMessage, SignedNontransferableReceipt,
     },
     prefix::IdentifierPrefix,
+    sai::sad::SAD,
     state::IdentifierState,
 };
 
@@ -116,15 +117,14 @@ impl EventProcessor {
                 if let Some(witness_receipts) = &signed_event.witness_receipts {
                     // Create and process witness receipts
                     let id = signed_event.event_message.data.get_prefix();
-                    let receipt = Receipt {
-                        receipted_event_digest: signed_event.event_message.get_digest(),
-                        prefix: id,
-                        sn: signed_event.event_message.data.get_sn(),
-                    };
-                    let signed_receipt = SignedNontransferableReceipt::new(
-                        &receipt.to_message(SerializationFormats::JSON).unwrap(),
-                        witness_receipts.clone(),
+                    let receipt = Receipt::new(
+                        SerializationFormats::JSON,
+                        signed_event.event_message.get_digest(),
+                        id,
+                        signed_event.event_message.data.get_sn(),
                     );
+                    let signed_receipt =
+                        SignedNontransferableReceipt::new(&receipt, witness_receipts.clone());
                     self.process_notice(
                         &Notice::NontransferableRct(signed_receipt),
                         processing_strategy,
@@ -134,7 +134,7 @@ impl EventProcessor {
                 }
             }
             Notice::NontransferableRct(rct) => {
-                let id = &rct.body.data.prefix;
+                let id = &rct.body.prefix;
                 match self.validator.validate_witness_receipt(rct) {
                     Ok(_) => {
                         self.db.add_receipt_nt(rct.to_owned(), id)?;
@@ -148,7 +148,7 @@ impl EventProcessor {
             }
             Notice::TransferableRct(vrc) => match self.validator.validate_validator_receipt(vrc) {
                 Ok(_) => {
-                    self.db.add_receipt_t(vrc.clone(), &vrc.body.data.prefix)?;
+                    self.db.add_receipt_t(vrc.clone(), &vrc.body.prefix)?;
                     self.publisher.notify(&Notification::ReceiptAccepted)
                 }
                 Err(Error::MissingEvent) | Err(Error::EventOutOfOrderError) => self

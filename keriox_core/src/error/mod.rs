@@ -143,7 +143,6 @@ impl From<version::error::Error> for Error {
     }
 }
 
-
 impl From<base64::DecodeError> for Error {
     fn from(_: DecodeError) -> Self {
         Error::Base64DecodingError

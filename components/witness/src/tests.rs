@@ -8,6 +8,7 @@ use std::{
 use keri::{
     actor::{
         error::ActorError,
+        prelude::SerializationFormats,
         simple_controller::{PossibleResponse, SimpleController},
         SignedQueryError,
     },
@@ -21,10 +22,8 @@ use keri::{
     keys::PublicKey,
     mailbox::{exchange::ForwardTopic, MailboxResponse},
     prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
-    processor::{
-        basic_processor::BasicProcessor, escrow::EscrowConfig, event_storage::EventStorage,
-        Processor,
-    },
+    processor::{basic_processor::BasicProcessor, event_storage::EventStorage, Processor},
+    sai::sad::SAD,
     signer::{CryptoBox, Signer},
 };
 use tempfile::Builder;
@@ -231,7 +230,6 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
 #[test]
 fn test_qry_rpy() -> Result<(), ActorError> {
     use keri::{
-        event::SerializationFormats,
         prefix::AttachedSignaturePrefix,
         query::{
             query_event::{QueryArgs, QueryEvent, QueryRoute, SignedQuery},
@@ -1297,7 +1295,7 @@ pub fn test_delegating_multisig() -> Result<(), ActorError> {
     let delegation_request =
         child.create_forward_message(&delegator_group_id, &dip, ForwardTopic::Delegate)?;
 
-    let delegated_child_id = dip.event_message.event.get_prefix();
+    let delegated_child_id = dip.event_message.data.get_prefix();
     let dip_digest = dip.event_message.get_digest();
 
     // Send delegation request to witness.
