@@ -315,7 +315,8 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
     let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
     let escrow_db = Arc::new(EscrowDb::new(escrow_root.path()).unwrap());
 
-    let (not_bus, (_, ps_escrow, _, _)) = default_escrow_bus(db.clone(), escrow_db, EscrowConfig::default());
+    let (not_bus, (_, ps_escrow, _, _)) =
+        default_escrow_bus(db.clone(), escrow_db, EscrowConfig::default());
 
     let processor = BasicProcessor::new(db.clone(), Some(not_bus));
     // setup keypairs
@@ -652,7 +653,8 @@ pub fn test_reserve_rotation() -> Result<(), Error> {
         let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
         let escrow_db = Arc::new(EscrowDb::new(escrow_root.path()).unwrap());
 
-        let (not_bus, _ooo_escrow) = default_escrow_bus(db.clone(), escrow_db);
+        let (not_bus, _ooo_escrow) =
+            default_escrow_bus(db.clone(), escrow_db, EscrowConfig::default());
         (
             BasicProcessor::new(db.clone(), Some(not_bus)),
             EventStorage::new(db.clone()),
@@ -698,18 +700,16 @@ pub fn test_reserve_rotation() -> Result<(), Error> {
     );
 
     // sign inception event
-    let signatures = signers[..2].iter().enumerate().map(|(i, s)| { 
-        let signature = SelfSigningPrefix::Ed25519Sha512(s.sign(icp.encode().unwrap()).unwrap());
-        IndexedSignature::new_both_same(
-            signature,
-            i as u16,
-        )
-    } ).collect();
-    let signed_icp = icp.sign(
-        signatures,
-        None,
-        None,
-    );
+    let signatures = signers[..2]
+        .iter()
+        .enumerate()
+        .map(|(i, s)| {
+            let signature =
+                SelfSigningPrefix::Ed25519Sha512(s.sign(icp.encode().unwrap()).unwrap());
+            IndexedSignature::new_both_same(signature, i as u16)
+        })
+        .collect();
+    let signed_icp = icp.sign(signatures, None, None);
 
     processor.process_notice(&Notice::Event(signed_icp))?;
 
@@ -766,9 +766,12 @@ pub fn test_reserve_rotation() -> Result<(), Error> {
     let state = storage.get_state(&id_prefix)?.unwrap();
     assert_eq!(state.sn, 1);
 
-     // create partial rotation event. Subset of keys set in inception event as
+    // create partial rotation event. Subset of keys set in inception event as
     // next keys
-    let current_signers: Vec<_> = signers[10..11].iter().chain(signers[8..10].iter()).collect();
+    let current_signers: Vec<_> = signers[10..11]
+        .iter()
+        .chain(signers[8..10].iter())
+        .collect();
     let current_public_keys = &current_signers
         .iter()
         .map(|sig| BasicPrefix::Ed25519(sig.public_key()))
@@ -808,7 +811,7 @@ pub fn test_reserve_rotation() -> Result<(), Error> {
             IndexedSignature::new_both_diffrent(
                 SelfSigningPrefix::Ed25519Sha512(signature),
                 index as u16,
-                prev_idx as u16
+                prev_idx as u16,
             )
         })
         .collect::<Vec<_>>();
@@ -818,6 +821,153 @@ pub fn test_reserve_rotation() -> Result<(), Error> {
     processor.process_notice(&Notice::Event(signed_rotation))?;
     let state = storage.get_state(&id_prefix)?.unwrap();
     assert_eq!(state.sn, 2);
+
+    Ok(())
+}
+
+#[test]
+pub fn test_custorial_rotation() -> Result<(), Error> {
+    use tempfile::Builder;
+    let (processor, storage) = {
+        let db_root = Builder::new().prefix("test-db").tempdir().unwrap();
+        let path = db_root.path();
+        std::fs::create_dir_all(path).unwrap();
+        let db = Arc::new(SledEventDatabase::new(path).unwrap());
+
+        let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
+        let escrow_db = Arc::new(EscrowDb::new(escrow_root.path()).unwrap());
+
+        let (not_bus, _ooo_escrow) =
+            default_escrow_bus(db.clone(), escrow_db, EscrowConfig::default());
+        (
+            BasicProcessor::new(db.clone(), Some(not_bus)),
+            EventStorage::new(db.clone()),
+        )
+    };
+    // setup keypairs
+    let signers = setup_signers();
+    let custodians_signers = &signers[..3];
+    let owner_signers = &signers[3..6];
+
+    let current_pks = custodians_signers
+        .iter()
+        .map(|signer| BasicPrefix::Ed25519(signer.public_key()))
+        .collect::<Vec<_>>();
+    let next_pks = owner_signers
+        .iter()
+        .map(|signer| BasicPrefix::Ed25519(signer.public_key()))
+        .collect::<Vec<_>>();
+    // build inception event
+    let icp = EventMsgBuilder::new(EventTypeTag::Icp)
+        .with_keys(current_pks)
+        .with_threshold(&SignatureThreshold::single_weighted(vec![
+            (1, 2),
+            (1, 2),
+            (1, 2),
+        ]))
+        .with_next_keys(next_pks)
+        .with_next_threshold(&SignatureThreshold::single_weighted(vec![
+            (1, 2),
+            (1, 2),
+            (1, 2),
+        ]))
+        .build()
+        .unwrap();
+
+    let id_prefix = icp.data.get_prefix();
+    let icp_digest = icp.get_digest();
+    assert_eq!(
+        id_prefix,
+        IdentifierPrefix::SelfAddressing(icp_digest.clone())
+    );
+
+    // sign inception event
+    let signatures = custodians_signers
+        .iter()
+        .enumerate()
+        .map(|(i, s)| {
+            let signature =
+                SelfSigningPrefix::Ed25519Sha512(s.sign(icp.encode().unwrap()).unwrap());
+            IndexedSignature::new_both_same(signature, i as u16)
+        })
+        .collect();
+    let signed_icp = icp.sign(signatures, None, None);
+
+    processor.process_notice(&Notice::Event(signed_icp))?;
+    // Inception was accepted
+    assert_eq!(storage.get_state(&id_prefix).unwrap().unwrap().sn, 0);
+
+    // create rotation event.
+    let new_custodian_signers = &signers[6..9];
+    let new_owner_signers = &signers[9..12];
+    let current_signers = owner_signers.iter().chain(new_custodian_signers.iter());
+    let current_public_keys = current_signers
+        .map(|sig| BasicPrefix::Ed25519(sig.public_key()))
+        .collect::<Vec<_>>();
+    let next_public_keys = new_owner_signers
+        .iter()
+        .chain(signers[8..10].iter())
+        .map(|sig| BasicPrefix::Ed25519(sig.public_key()))
+        .collect::<Vec<_>>();
+
+    // Generate partial rotation event
+    let rotation = EventMsgBuilder::new(EventTypeTag::Rot)
+        .with_prefix(&id_prefix)
+        .with_previous_event(&icp_digest)
+        .with_keys(current_public_keys.clone())
+        .with_threshold(&SignatureThreshold::single_weighted(vec![
+            (0, 1),
+            (0, 1),
+            (0, 1),
+            (1, 2),
+            (1, 2),
+            (1, 2),
+        ]))
+        .with_next_keys(next_public_keys)
+        .with_next_threshold(&SignatureThreshold::single_weighted(vec![
+            (1, 2),
+            (1, 2),
+            (1, 2),
+        ]))
+        .build()?;
+
+    let owner_signatures = owner_signers
+        .iter()
+        .enumerate()
+        .map(|(index, sig)| {
+            let signature = sig.sign(rotation.encode().unwrap()).unwrap();
+            IndexedSignature::new_both_same(
+                SelfSigningPrefix::Ed25519Sha512(signature),
+                index as u16,
+            )
+        })
+        .collect::<Vec<_>>();
+
+    let signed_rotation = rotation.sign(owner_signatures, None, None);
+
+    processor.process_notice(&Notice::Event(signed_rotation))?;
+    let state = storage.get_state(&id_prefix)?.unwrap();
+    // Rotation is no accepted because of missing new custodial signatures
+    assert_eq!(state.sn, 0);
+
+    let new_custodian_signatures = new_custodian_signers
+        .iter()
+        .enumerate()
+        .map(|(index, sig)| {
+            let signature = sig.sign(rotation.encode().unwrap()).unwrap();
+            IndexedSignature::new_both_same(
+                SelfSigningPrefix::Ed25519Sha512(signature),
+                3 + index as u16,
+            )
+        })
+        .collect();
+
+    let signed_rotation = rotation.sign(new_custodian_signatures, None, None);
+
+    processor.process_notice(&Notice::Event(signed_rotation))?;
+    let state = storage.get_state(&id_prefix)?.unwrap();
+    // Rotation should be accepted
+    assert_eq!(state.sn, 1);
 
     Ok(())
 }

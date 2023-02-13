@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use cesrox::primitives::CesrPrimitive;
 #[cfg(feature = "query")]
 use chrono::{DateTime, FixedOffset};
 use sai::sad::SAD;
@@ -20,7 +19,6 @@ use crate::{
         signed_event_message::{
             SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
         },
-        EventTypeTag,
     },
     prefix::{BasicPrefix, SelfSigningPrefix},
     state::{EventSemantics, IdentifierState},

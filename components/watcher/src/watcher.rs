@@ -10,7 +10,7 @@ use keri::{
     error::Error,
     event_message::signed_event_message::{Message, Notice, Op},
     oobi::{error::OobiError, EndRole, LocationScheme, OobiManager, Role, Scheme},
-    prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix, IndexedSignature},
+    prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
     processor::escrow::{default_escrow_bus, EscrowConfig},
     query::{
         query_event::{QueryArgs, QueryEvent, QueryRoute, SignedQuery},

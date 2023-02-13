@@ -21,17 +21,19 @@ impl NextKeysData {
     /// Checks if next KeyConfig contains enough public keys to fulfill current
     /// next threshold.
     pub fn verify_next(&self, next: &KeyConfig) -> Result<bool, Error> {
-        let mut indexes = vec![];
-        for key in &next.public_keys {
-            let sigs_indexes = self
-                .next_key_hashes
-                .iter()
-                .position(|dig| dig.verify_binding(key.to_str().as_bytes()))
-                .ok_or_else(|| {
-                    Error::SemanticError("No such public key in next keys hashes".into())
-                })?;
-            indexes.push(sigs_indexes);
-        }
+        // let mut indexes = vec![];
+
+        let indexes: Vec<_> = next
+            .public_keys
+            .iter()
+            .map(|key| {
+                self.next_key_hashes
+                    .iter()
+                    .position(|dig| dig.verify_binding(key.to_str().as_bytes()))
+            })
+            .flatten()
+            .collect();
+
         // check previous next threshold
         self.threshold
             .enough_signatures(&indexes)?

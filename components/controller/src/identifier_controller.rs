@@ -659,7 +659,7 @@ impl IdentifierController {
         Ok(actions)
     }
 
-     /// Send new receipts obtained via [`Self::finalize_query`] to specified witnesses.
+    /// Send new receipts obtained via [`Self::finalize_query`] to specified witnesses.
     /// Returns number of new receipts sent per witness or first error.
     pub async fn broadcast_receipts(
         &mut self,
