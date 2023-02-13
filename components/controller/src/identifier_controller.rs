@@ -22,7 +22,7 @@ use keri::{
         cesr_adapter::{parse_event_type, EventType},
         msg::KeriEvent,
         signature::{Nontransferable, Signature, SignerData},
-        signed_event_message::{Notice, Op},
+        signed_event_message::{Notice, Op, SignedNontransferableReceipt},
     },
     mailbox::{
         exchange::{Exchange, ExchangeMessage, ForwardTopic, FwdArgs, SignedExchange},
@@ -598,7 +598,7 @@ impl IdentifierController {
                 index: 0,
                 signature: sig,
             }];
-            let (receipient, about_who, from_who) = match &qry.data.data.route {
+            let (recipient, about_who, from_who) = match &qry.data.data.route {
                 QueryRoute::Log {
                     reply_route: _,
                     args,
@@ -684,7 +684,7 @@ impl IdentifierController {
         let mut n = 0;
 
         for rct in receipts {
-            let rct_digest = rct.body.event.receipted_event_digest.clone();
+            let rct_digest = rct.body.receipted_event_digest.clone();
             let rct_wit_ids = self.get_wit_ids_of_rct(&rct)?;
 
             for dest_wit_id in dest_wit_ids {
@@ -715,26 +715,13 @@ impl IdentifierController {
                     )
                     .await?;
 
-            // Remember event digest and witness ID to avoid sending the same receipt twice.
-            let digest = rct.body.receipted_event_digest;
-            for sig in rct.signatures {
-                match sig {
-                    Nontransferable::Indexed(sigs) => {
-                        for sig in sigs {
-                            let wits = self.source.storage.get_witnesses_at_event(
-                                rct.body.sn,
-                                &self.id,
-                                &digest,
-                            )?;
-                            self.broadcasted_rcts
-                                .insert((digest.clone(), wits[sig.index as usize].clone()));
-                        }
-                    }
-                    Nontransferable::Couplet(sigs) => {
-                        for (wit_id, _sig) in sigs {
-                            self.broadcasted_rcts.insert((digest.clone(), wit_id));
-                        }
-                    }
+                // Remember event digest and witness ID to avoid sending the same receipt twice.
+                for rct_wit_id in &rct_wit_ids {
+                    self.broadcasted_rcts.insert((
+                        rct_digest.clone(),
+                        rct_wit_id.clone(),
+                        dest_wit_id.clone(),
+                    ));
                 }
 
                 n += 1;
@@ -755,9 +742,9 @@ impl IdentifierController {
                 Nontransferable::Indexed(sigs) => {
                     for sig in sigs {
                         let wits = self.source.storage.get_witnesses_at_event(
-                            rct.body.event.sn,
+                            rct.body.sn,
                             &self.id,
-                            &rct.body.event.receipted_event_digest,
+                            &rct.body.receipted_event_digest,
                         )?;
                         wit_ids.push(wits[sig.index as usize].clone());
                     }
@@ -771,4 +758,4 @@ impl IdentifierController {
         }
         Ok(wit_ids)
     }
-    }}
+}

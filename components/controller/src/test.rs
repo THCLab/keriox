@@ -205,7 +205,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     let query = delegator.query_mailbox(&delegator.id, &[witness_id_basic.clone()])?;
 
     for qry in query {
-        let signature = SelfSigningPrefix::Ed25519Sha512(km2.sign(&qry.serialize()?)?);
+        let signature = SelfSigningPrefix::Ed25519Sha512(km2.sign(&qry.encode()?)?);
         let ar = delegator.finalize_query(vec![(qry, signature)]).await?;
         assert!(ar.is_empty());
     }
@@ -322,7 +322,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     // Repeat query and expect 0 required actions.
     let query = delegator.query_mailbox(&delegator.id, &[witness_id_basic.clone()])?;
     for qry in query {
-        let signature = SelfSigningPrefix::Ed25519Sha512(km2.sign(&qry.serialize()?)?);
+        let signature = SelfSigningPrefix::Ed25519Sha512(km2.sign(&qry.encode()?)?);
         let ar = delegator.finalize_query(vec![(qry, signature)]).await?;
         assert!(ar.is_empty());
     }
@@ -451,7 +451,7 @@ async fn test_2_wit() -> Result<(), ControllerError> {
 
     // Querying mailbox to get receipts
     for qry in ident_ctl.query_mailbox(&ident_ctl.id, &[wit1_id.clone(), wit2_id.clone()])? {
-        let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(&qry.serialize()?)?);
+        let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(&qry.encode()?)?);
         let act = ident_ctl.finalize_query(vec![(qry, signature)]).await?;
         assert_eq!(act.len(), 0);
     }
@@ -463,7 +463,7 @@ async fn test_2_wit() -> Result<(), ControllerError> {
     assert!(matches!(
         witness1.witness_data.event_storage.get_kel_messages_with_receipts(&ident_ctl.id)?.unwrap().as_slice(),
         [Notice::Event(evt), Notice::NontransferableRct(rct)]
-            if matches!(evt.event_message.event.content.event_data, EventData::Icp(_))
+        if matches!(evt.event_message.data.event_data, EventData::Icp(_))
             && matches!(rct.signatures.len(), 2)
     ));
 
@@ -472,18 +472,11 @@ async fn test_2_wit() -> Result<(), ControllerError> {
 
     assert_eq!(ident_ctl.broadcast_receipts(&wit_ids).await?, 2);
     assert_eq!(ident_ctl.broadcast_receipts(&wit_ids).await?, 0);
-    match &kel[0] {
-        Notice::Event(evt) => match evt.event_message.data.event_data {
-            EventData::Icp(_) => (),
-            _ => panic!("Unexpected event type"),
-        },
-        _ => panic!("Unexpected notice type"),
-    }
 
     assert!(matches!(
         witness1.witness_data.event_storage.get_kel_messages_with_receipts(&ident_ctl.id)?.unwrap().as_slice(),
         [Notice::Event(evt), Notice::NontransferableRct(rct)]
-            if matches!(evt.event_message.event.content.event_data, EventData::Icp(_))
+            if matches!(evt.event_message.data.event_data, EventData::Icp(_))
             && matches!(rct.signatures.len(), 3) // TODO: fix witness to not insert duplicate signatures
     ));
 

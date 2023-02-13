@@ -22,7 +22,10 @@ use keri::{
     keys::PublicKey,
     mailbox::{exchange::ForwardTopic, MailboxResponse},
     prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
-    processor::{basic_processor::BasicProcessor, event_storage::EventStorage, Processor},
+    processor::{
+        basic_processor::BasicProcessor, escrow::EscrowConfig, event_storage::EventStorage,
+        Processor,
+    },
     signer::{CryptoBox, Signer},
 };
 use tempfile::Builder;
