@@ -1,5 +1,6 @@
 use std::{net::Ipv4Addr, path::PathBuf, time::Duration};
 
+use anyhow::Context;
 use clap::Parser;
 use figment::{
     providers::{Env, Format, Serialized, Yaml},
@@ -94,17 +95,34 @@ struct Args {
     #[arg(short = 'd', long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     db_path: Option<PathBuf>,
+
+    #[arg(short = 'u', long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    public_url: Option<Url>,
+
+    #[arg(short = 'p', long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    http_port: Option<u16>,
+
+    #[arg(short = 's', long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    seed: Option<String>,
 }
 
+const ENV_PREFIX: &str = "WATCHER_";
+
 #[actix_web::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
+    println!("Using config file: {:?}", args.config_file);
+    println!("Using environment prefix: {:?}", ENV_PREFIX);
 
     let cfg = Figment::new()
         .merge(Yaml::file(args.config_file.clone()))
-        .merge(Env::prefixed("WATCHER_"))
+        .merge(Env::prefixed(ENV_PREFIX))
         .merge(Serialized::defaults(args))
-        .extract::<Config>()?;
+        .extract::<Config>()
+        .context("Failed to load config")?;
 
     let watcher_listener = WatcherListener::new(WatcherConfig {
         public_address: cfg.public_url.clone(),
@@ -112,14 +130,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         priv_key: cfg.seed,
         transport: Box::new(DefaultTransport::new()),
         escrow_config: cfg.escrow_config,
-    })
-    .unwrap();
+    })?;
 
     // Resolve oobi to know how to find witness
     watcher_listener
         .resolve_initial_oobis(&cfg.initial_oobis)
-        .await
-        .unwrap();
+        .await?;
     let watcher_id = watcher_listener.get_prefix();
     let watcher_loc_scheme = LocationScheme {
         eid: IdentifierPrefix::Basic(watcher_id.clone()),
