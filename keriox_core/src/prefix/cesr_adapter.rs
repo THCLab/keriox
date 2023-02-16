@@ -1,5 +1,5 @@
 use cesrox::primitives::{
-    codes::attached_signature_code::AttachedSignatureCode, CesrPrimitive, Digest, Identifier,
+    codes::attached_signature_code::{AttachedSignatureCode, Index as CesrIndex}, CesrPrimitive, Digest, Identifier,
     IdentifierCode, IndexedSignature as CesrIndexedSignature, PublicKey, Signature,
 };
 use sai::SelfAddressingPrefix;
@@ -9,9 +9,28 @@ use crate::{
     prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
 };
 
+use super::attached_signature::Index;
+
 impl From<CesrIndexedSignature> for IndexedSignature {
     fn from((code, value): CesrIndexedSignature) -> Self {
-        IndexedSignature::new_both_same(SelfSigningPrefix::new(code.code, value), code.index)
+        match code.index {
+            CesrIndex::BothSame(i) => IndexedSignature::new_both_same(SelfSigningPrefix::new(code.code, value), i),
+            CesrIndex::Dual(i, pi) => IndexedSignature::new_both_diffrent(SelfSigningPrefix::new(code.code, value), i, pi),
+            CesrIndex::BigDual(i, pi) => IndexedSignature::new_both_diffrent(SelfSigningPrefix::new(code.code, value), i, pi),
+            CesrIndex::CurrentOnly(i) => IndexedSignature::new_current_only(SelfSigningPrefix::new(code.code, value), i),
+            CesrIndex::BigCurrentOnly(i) => IndexedSignature::new_current_only(SelfSigningPrefix::new(code.code, value), i),
+        }
+        
+    }
+}
+
+impl From<CesrIndex> for Index {
+    fn from(value: CesrIndex) -> Self {
+        match value {
+            CesrIndex::BothSame(i) => Index::BothSame(i),
+            CesrIndex::Dual(i, pi) | CesrIndex::BigDual(i, pi) => Index::BothDifferent(i, pi),
+            CesrIndex::CurrentOnly(i) | CesrIndex::BigCurrentOnly(i) => Index::CurrentOnly(i),
+        }
     }
 }
 
@@ -85,9 +104,19 @@ impl Into<PublicKey> for BasicPrefix {
 impl Into<CesrIndexedSignature> for IndexedSignature {
     fn into(self) -> CesrIndexedSignature {
         (
-            AttachedSignatureCode::new(self.signature.get_code(), self.index.current()),
+            AttachedSignatureCode::new(self.signature.get_code(), (&self.index).into()),
             self.derivative(),
         )
+    }
+}
+
+impl Into<CesrIndex> for &Index {
+    fn into(self) -> CesrIndex {
+        match self {
+            Index::CurrentOnly(i) => if *i < 64 { CesrIndex::CurrentOnly(*i)} else {CesrIndex::BigCurrentOnly(*i)},
+            Index::BothSame(i) => CesrIndex::BothSame(*i),
+            Index::BothDifferent(i, pi) => if *i < 64 {CesrIndex::Dual(*i, *pi)} else {CesrIndex::BigDual(*i, *pi)},
+        }
     }
 }
 

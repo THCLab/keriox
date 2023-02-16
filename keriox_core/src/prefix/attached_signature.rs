@@ -79,13 +79,14 @@ impl FromStr for IndexedSignature {
 
         if (s.len()) == code.full_size() {
             let lead = if code.code_size() % 4 != 0 {
-                code.code_size()
+                code.code_size() % 4
             } else {
                 0
             };
             let s_vec = from_text_to_bytes(&s[code.code_size()..].as_bytes())?[lead..].to_vec();
             let ssp = SelfSigningPrefix::new(code.code, s_vec);
-            Ok(Self::new_both_same(ssp, code.index))
+  
+            Ok(Self { index: code.index.into(), signature: ssp })
         } else {
             Err(Error::IncorrectLengthError(s.into()))
         }
@@ -98,7 +99,7 @@ impl CesrPrimitive for IndexedSignature {
     }
     fn derivation_code(&self) -> PrimitiveCode {
         let code: SelfSigning = self.signature.get_code();
-        PrimitiveCode::IndexedSignature(AttachedSignatureCode::new(code, self.index.current()))
+        PrimitiveCode::IndexedSignature(AttachedSignatureCode::new(code, (&self.index).into()))
     }
 }
 
@@ -140,11 +141,12 @@ mod tests {
 
         assert_eq!(1, pref_ed_1.index.current());
         assert_eq!(2, pref_secp_2.index.current());
-        assert_eq!(3, pref_448_3.index.current());
+        assert_eq!(0, pref_448_3.index.current());
+        assert_eq!(Some(3), pref_448_3.index.previous_next());
 
         assert_eq!(SelfSigning::Ed25519Sha512, pref_ed_1.signature.get_code());
         assert_eq!(
-            SelfSigning::ECDSAsecp256k1Sha256,
+            SelfSigning::Ed25519Sha512,
             pref_secp_2.signature.get_code()
         );
         assert_eq!(SelfSigning::Ed448, pref_448_3.signature.get_code());
@@ -155,19 +157,22 @@ mod tests {
     fn serialize() -> Result<(), Error> {
         let pref_ed_2 =
             IndexedSignature::new_both_same(SelfSigningPrefix::Ed25519Sha512(vec![0u8; 64]), 2);
+        let pref_ed_2_3 =
+            IndexedSignature::new_both_diffrent(SelfSigningPrefix::Ed25519Sha512(vec![0u8; 64]), 2, 3);
         let pref_secp_6 = IndexedSignature::new_both_same(
             SelfSigningPrefix::ECDSAsecp256k1Sha256(vec![0u8; 64]),
             6,
         );
         let pref_448_4 =
-            IndexedSignature::new_both_same(SelfSigningPrefix::Ed448(vec![0u8; 114]), 4);
+            IndexedSignature::new_both_diffrent(SelfSigningPrefix::Ed448(vec![0u8; 114]), 0, 4);
 
         assert_eq!(88, pref_ed_2.to_str().len());
         assert_eq!(88, pref_secp_6.to_str().len());
         assert_eq!(156, pref_448_4.to_str().len());
 
         assert_eq!("ACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", pref_ed_2.to_str());
-        assert_eq!("BGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", pref_secp_6.to_str());
+        assert_eq!("2AACADAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", pref_ed_2_3.to_str());
+        assert_eq!("CGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", pref_secp_6.to_str());
         assert_eq!("0AAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", pref_448_4.to_str());
         Ok(())
     }
