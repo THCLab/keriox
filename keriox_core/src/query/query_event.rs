@@ -1,11 +1,11 @@
+use sai::derivation::SelfAddressing;
 use serde::{Deserialize, Serialize};
+use version::serialization_info::SerializationFormats;
 
 use crate::{
     error::Error,
-    event::{EventMessage, SerializationFormats},
-    event_message::{timestamped::Timestamped, EventTypeTag, SaidEvent, Typeable},
+    event_message::{msg::KeriEvent, timestamped::Timestamped, EventTypeTag, Typeable},
     prefix::{AttachedSignaturePrefix, IdentifierPrefix},
-    sai::derivation::SelfAddressing,
 };
 
 // TODO: make enum with different query args
@@ -87,7 +87,7 @@ pub struct QueryArgs {
     pub src: Option<IdentifierPrefix>,
 }
 
-pub type QueryEvent = EventMessage<SaidEvent<Timestamped<Query>>>;
+pub type QueryEvent = KeriEvent<Timestamped<Query>>;
 
 impl QueryEvent {
     pub fn new_query(
@@ -98,15 +98,15 @@ impl QueryEvent {
         let message = Query { route };
 
         let env = Timestamped::new(message);
-        env.to_message(serialization_format, derivation)
+        KeriEvent::new(serialization_format, derivation, env)
     }
 
     pub fn get_query_data(&self) -> Query {
-        self.event.content.data.clone()
+        self.data.data.clone()
     }
 
     pub fn get_prefix(&self) -> IdentifierPrefix {
-        self.event.content.data.route.get_prefix()
+        self.data.data.route.get_prefix()
     }
 }
 
@@ -145,17 +145,14 @@ fn test_query_deserialize() {
     let qr: QueryEvent = serde_json::from_str(input_query).unwrap();
 
     assert!(matches!(
-        qr.event.content.data,
+        qr.data.data,
         Query {
             route: QueryRoute::Log { .. },
             ..
         }
     ));
 
-    assert_eq!(
-        input_query,
-        &String::from_utf8_lossy(&qr.serialize().unwrap())
-    );
+    assert_eq!(input_query, &String::from_utf8_lossy(&qr.encode().unwrap()));
 }
 
 #[test]
@@ -164,7 +161,7 @@ fn test_query_mbx_deserialize() {
     let qr: QueryEvent = serde_json::from_str(input_query).unwrap();
 
     assert!(matches!(
-        qr.event.content.data,
+        qr.data.data,
         Query {
             route: QueryRoute::Mbx {
                 args: QueryArgsMbx {
@@ -183,8 +180,5 @@ fn test_query_mbx_deserialize() {
         }
     ));
 
-    assert_eq!(
-        input_query,
-        &String::from_utf8_lossy(&qr.serialize().unwrap())
-    );
+    assert_eq!(input_query, &String::from_utf8_lossy(&qr.encode().unwrap()));
 }

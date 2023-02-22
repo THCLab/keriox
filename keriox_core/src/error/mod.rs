@@ -126,11 +126,29 @@ pub enum Error {
 
     #[error("Cesr error")]
     CesrError,
+
+    #[error("Version error")]
+    VersionError,
+
+    #[error("SAI error")]
+    SAIError,
 }
 
 impl From<ParseIntError> for Error {
     fn from(_: ParseIntError) -> Self {
         Error::ParseIntError
+    }
+}
+
+impl From<version::error::Error> for Error {
+    fn from(_: version::error::Error) -> Self {
+        Error::VersionError
+    }
+}
+
+impl From<sai::error::Error> for Error {
+    fn from(_: sai::error::Error) -> Self {
+        Error::SAIError
     }
 }
 

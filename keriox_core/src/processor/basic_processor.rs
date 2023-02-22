@@ -51,7 +51,7 @@ impl BasicProcessor {
         publisher: &NotificationBus,
         signed_event: SignedEventMessage,
     ) -> Result<(), Error> {
-        let id = &signed_event.event_message.event.get_prefix();
+        let id = &signed_event.event_message.data.get_prefix();
         let validator = EventValidator::new(db.clone());
         match validator.validate_event(&signed_event) {
             Ok(_) => {

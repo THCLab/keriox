@@ -1,15 +1,14 @@
 use super::EventData;
 use super::InceptionEvent;
 use crate::event_message::dummy_event::DummyInceptionEvent;
-use crate::event_message::key_event_message::KeyEvent;
-use crate::event_message::SaidEvent;
+use crate::event_message::msg::KeriEvent;
 use crate::{
     error::Error,
-    event::{Event, EventMessage, SerializationFormats},
+    event::{KeyEvent, SerializationFormats},
     prefix::IdentifierPrefix,
-    sai::derivation::SelfAddressing,
     state::{EventSemantics, IdentifierState},
 };
+use sai::derivation::SelfAddressing;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -31,21 +30,19 @@ impl DelegatedInceptionEvent {
         self,
         derivation: SelfAddressing,
         format: SerializationFormats,
-    ) -> Result<EventMessage<KeyEvent>, Error> {
-        let dummy_event = DummyInceptionEvent::dummy_delegated_inception_data(
-            self.clone(),
-            derivation.clone(),
-            format,
-        )?;
-        let digest = derivation.derive(&dummy_event.serialize()?);
-        let event = Event::new(
+    ) -> Result<KeriEvent<KeyEvent>, Error> {
+        let dummy_event =
+            DummyInceptionEvent::dummy_delegated_inception_data(self.clone(), &derivation, format)?;
+        let digest = derivation.derive(&dummy_event.encode()?);
+        let event = KeyEvent::new(
             IdentifierPrefix::SelfAddressing(digest.clone()),
             0,
             EventData::Dip(self),
         );
-        Ok(EventMessage {
+        Ok(KeriEvent {
             serialization_info: dummy_event.serialization_info,
-            event: SaidEvent::new(digest, event),
+            digest,
+            data: event,
         })
     }
 }
@@ -65,9 +62,9 @@ fn test_delegated_inception_data_derivation() -> Result<(), Error> {
         key_config::{nxt_commitment, KeyConfig},
         threshold::SignatureThreshold,
     };
-    use crate::event_message::Digestible;
     use crate::prefix::BasicPrefix;
     use cesrox::primitives::CesrPrimitive;
+    use sai::sad::SAD;
 
     // data taken from keripy/tests/core/test_delegation.py
     let keys: Vec<BasicPrefix> = vec!["DLitcfMnabnLt-PNCaXdVwX45wsG93Wd8eW9QiZrlKYQ"
@@ -91,11 +88,11 @@ fn test_delegated_inception_data_derivation() -> Result<(), Error> {
 
     assert_eq!(
         "EHng2fV42DdKb5TLMIs6bbjFkPNmIdQ5mSFn6BTnySJj",
-        dip_data.event.get_prefix().to_str()
+        dip_data.data.get_prefix().to_str()
     );
     assert_eq!(
         "EHng2fV42DdKb5TLMIs6bbjFkPNmIdQ5mSFn6BTnySJj",
-        dip_data.event.get_digest().to_str()
+        dip_data.get_digest().to_str()
     );
     assert_eq!("KERI10JSON00015f_", dip_data.serialization_info.to_str());
 

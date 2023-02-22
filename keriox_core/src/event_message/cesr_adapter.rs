@@ -7,6 +7,7 @@ use cesrox::{
     ParsedData,
 };
 use serde::{Deserialize, Serialize};
+use version::serialization_info::SerializationFormats;
 
 use crate::{
     error::Error,
@@ -14,6 +15,7 @@ use crate::{
         event_data::EventData,
         receipt::Receipt,
         sections::seal::{EventSeal, SourceSeal},
+        KeyEvent,
     },
 };
 
@@ -24,16 +26,19 @@ use crate::query::{
 };
 
 #[cfg(feature = "mailbox")]
-use crate::mailbox::exchange::{ExchangeMessage, SignedExchange};
+use crate::{
+    event_message::signature,
+    mailbox::exchange::{ExchangeMessage, SignedExchange},
+};
 
 use super::{
-    key_event_message::KeyEvent,
-    signature::{self, Nontransferable},
+    msg::KeriEvent,
+    signature::Nontransferable,
     signed_event_message::{
         Message, Notice, Op, SignedEventMessage, SignedNontransferableReceipt,
         SignedTransferableReceipt,
     },
-    Digestible, EventMessage, Typeable,
+    Typeable,
 };
 
 pub fn parse_event_type(input: &[u8]) -> Result<EventType, Error> {
@@ -46,8 +51,8 @@ pub fn parse_event_type(input: &[u8]) -> Result<EventType, Error> {
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 #[serde(untagged)]
 pub enum EventType {
-    KeyEvent(EventMessage<KeyEvent>),
-    Receipt(EventMessage<Receipt>),
+    KeyEvent(KeriEvent<KeyEvent>),
+    Receipt(Receipt),
     #[cfg(feature = "mailbox")]
     Exn(ExchangeMessage),
     #[cfg(feature = "query")]
@@ -58,16 +63,16 @@ pub enum EventType {
 
 impl EventType {
     pub fn serialize(&self) -> Result<Vec<u8>, Error> {
-        match self {
-            EventType::KeyEvent(event) => event.serialize(),
-            EventType::Receipt(rcp) => rcp.serialize(),
+        Ok(match self {
+            EventType::KeyEvent(event) => event.encode(),
+            EventType::Receipt(rcp) => rcp.encode(),
             #[cfg(feature = "query")]
-            EventType::Qry(qry) => qry.serialize(),
+            EventType::Qry(qry) => qry.encode(),
             #[cfg(feature = "query")]
-            EventType::Rpy(rpy) => rpy.serialize(),
+            EventType::Rpy(rpy) => rpy.encode(),
             #[cfg(feature = "mailbox")]
-            EventType::Exn(exn) => exn.serialize(),
-        }
+            EventType::Exn(exn) => exn.encode(),
+        }?)
     }
 }
 
@@ -111,20 +116,12 @@ impl From<&SignedEventMessage> for ParsedData {
     }
 }
 
-impl<T: Serialize, D: Digestible + Typeable<TypeTag = T> + Serialize + Clone> From<EventMessage<D>>
-    for Payload
-{
-    fn from(pd: EventMessage<D>) -> Self {
+impl<T: Serialize, D: Typeable<TypeTag = T> + Serialize + Clone> From<KeriEvent<D>> for Payload {
+    fn from(pd: KeriEvent<D>) -> Self {
         match pd.serialization_info.kind {
-            super::serialization_info::SerializationFormats::JSON => {
-                Payload::JSON(pd.serialize().unwrap())
-            }
-            super::serialization_info::SerializationFormats::MGPK => {
-                Payload::MGPK(pd.serialize().unwrap())
-            }
-            super::serialization_info::SerializationFormats::CBOR => {
-                Payload::CBOR(pd.serialize().unwrap())
-            }
+            SerializationFormats::JSON => Payload::JSON(pd.encode().unwrap()),
+            SerializationFormats::MGPK => Payload::MGPK(pd.encode().unwrap()),
+            SerializationFormats::CBOR => Payload::CBOR(pd.encode().unwrap()),
         }
     }
 }
@@ -249,7 +246,8 @@ impl TryFrom<ParsedData> for Op {
     type Error = Error;
 
     fn try_from(value: ParsedData) -> Result<Self, Self::Error> {
-        match value.payload.try_into()? {
+        let et: EventType = value.payload.try_into()?;
+        match et {
             #[cfg(feature = "query")]
             EventType::Qry(qry) => signed_query(qry, value.attachments),
             #[cfg(any(feature = "query", feature = "oobi"))]
@@ -368,10 +366,10 @@ fn signed_query(qry: QueryEvent, mut attachments: Vec<Group>) -> Result<Op, Erro
 }
 
 fn signed_key_event(
-    event_message: EventMessage<KeyEvent>,
+    event_message: KeriEvent<KeyEvent>,
     mut attachments: Vec<Group>,
 ) -> Result<Notice, Error> {
-    match event_message.event.get_event_data() {
+    match event_message.data.get_event_data() {
         EventData::Dip(_) | EventData::Drt(_) => {
             let (att1, att2) = (
                 attachments
@@ -468,10 +466,7 @@ fn signed_key_event(
     }
 }
 
-fn signed_receipt(
-    event_message: EventMessage<Receipt>,
-    mut attachments: Vec<Group>,
-) -> Result<Notice, Error> {
+fn signed_receipt(event_message: Receipt, mut attachments: Vec<Group>) -> Result<Notice, Error> {
     let nontransferable = attachments
         .iter()
         .filter_map(|att| match att {

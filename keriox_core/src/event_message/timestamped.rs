@@ -1,9 +1,7 @@
 use chrono::{DateTime, FixedOffset, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize, Serializer};
 
-use crate::{error::Error, sai::derivation::SelfAddressing};
-
-use super::{serialization_info::SerializationFormats, EventMessage, SaidEvent, Typeable};
+use super::Typeable;
 
 pub type TimeStamp = DateTime<FixedOffset>;
 
@@ -27,14 +25,6 @@ impl<T: Serialize, D: Serialize + Typeable<TypeTag = T> + Clone> Timestamped<D> 
     pub fn new(data: D) -> Self {
         let timestamp: DateTime<FixedOffset> = Utc::now().into();
         Timestamped { timestamp, data }
-    }
-
-    pub fn to_message(
-        self,
-        format: SerializationFormats,
-        derivation: SelfAddressing,
-    ) -> Result<EventMessage<SaidEvent<Timestamped<D>>>, Error> {
-        SaidEvent::<Self>::to_message(self, format, derivation)
     }
 }
 

@@ -70,8 +70,8 @@ impl<M: PartialEq> PartialEq for Timestamped<M> {
 impl PartialOrd for Timestamped<SignedEventMessage> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         PartialOrd::partial_cmp(
-            &self.signed_event_message.event_message.event.get_sn(),
-            &other.signed_event_message.event_message.event.get_sn(),
+            &self.signed_event_message.event_message.data.get_sn(),
+            &other.signed_event_message.event_message.data.get_sn(),
         )
     }
 }
@@ -79,8 +79,8 @@ impl PartialOrd for Timestamped<SignedEventMessage> {
 impl Ord for Timestamped<SignedEventMessage> {
     fn cmp(&self, other: &Self) -> Ordering {
         Ord::cmp(
-            &self.signed_event_message.event_message.event.get_sn(),
-            &other.signed_event_message.event_message.event.get_sn(),
+            &self.signed_event_message.event_message.data.get_sn(),
+            &other.signed_event_message.event_message.data.get_sn(),
         )
     }
 }

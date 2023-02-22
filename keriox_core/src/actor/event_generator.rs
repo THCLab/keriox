@@ -1,5 +1,9 @@
+use sai::SelfAddressingPrefix;
+
 #[cfg(feature = "mailbox")]
 use crate::mailbox::exchange::{Exchange, ExchangeMessage, ForwardTopic, FwdArgs};
+#[cfg(feature = "oobi")]
+use crate::oobi::{EndRole, Role};
 #[cfg(feature = "query")]
 use crate::query::reply_event::{ReplyEvent, ReplyRoute};
 use crate::{
@@ -9,19 +13,11 @@ use crate::{
             seal::{DigestSeal, Seal},
             threshold::{SignatureThreshold, WeightedThreshold},
         },
-        EventMessage,
+        KeyEvent,
     },
-    event_message::{
-        event_msg_builder::EventMsgBuilder, key_event_message::KeyEvent, EventTypeTag,
-    },
+    event_message::{event_msg_builder::EventMsgBuilder, msg::KeriEvent, EventTypeTag},
     prefix::{BasicPrefix, IdentifierPrefix},
-    sai::{derivation::SelfAddressing, SelfAddressingPrefix},
     state::IdentifierState,
-};
-#[cfg(feature = "oobi")]
-use crate::{
-    event::SerializationFormats,
-    oobi::{EndRole, Role},
 };
 
 // todo add setting signing threshold
@@ -43,7 +39,7 @@ pub fn incept(
         .with_witness_threshold(&SignatureThreshold::Simple(witness_threshold))
         .build()
         .map_err(|e| Error::EventGenerationError(e.to_string()))?
-        .serialize()
+        .encode()
         .map_err(|e| Error::EventGenerationError(e.to_string()))?;
 
     let icp = String::from_utf8(serialized_icp)
@@ -58,7 +54,7 @@ pub fn incept_with_next_hashes(
     witnesses: Vec<BasicPrefix>,
     witness_threshold: u64,
     delegator_id: Option<&IdentifierPrefix>,
-) -> Result<EventMessage<KeyEvent>, Error> {
+) -> Result<KeriEvent<KeyEvent>, Error> {
     // Check if threshold is possible to achive
     match signature_threshold {
         SignatureThreshold::Simple(t) => {
@@ -117,7 +113,7 @@ pub fn rotate(
         witness_to_remove,
         witness_threshold,
     )?
-    .serialize()
+    .encode()
     .map_err(|e| Error::EventGenerationError(e.to_string()))?;
     String::from_utf8(rot).map_err(|e| Error::EventGenerationError(e.to_string()))
 }
@@ -129,7 +125,7 @@ fn make_rotation(
     witness_to_add: Vec<BasicPrefix>,
     witness_to_remove: Vec<BasicPrefix>,
     witness_threshold: u64,
-) -> Result<EventMessage<KeyEvent>, Error> {
+) -> Result<KeriEvent<KeyEvent>, Error> {
     EventMsgBuilder::new(EventTypeTag::Rot)
         .with_prefix(&state.prefix)
         .with_sn(state.sn + 1)
@@ -159,7 +155,7 @@ pub fn anchor(state: IdentifierState, payload: &[SelfAddressingPrefix]) -> Resul
         .with_seal(seal_list)
         .build()
         .map_err(|e| Error::EventGenerationError(e.to_string()))?
-        .serialize()
+        .encode()
         .map_err(|e| Error::EventGenerationError(e.to_string()))?;
     String::from_utf8(ixn).map_err(|e| Error::EventGenerationError(e.to_string()))
 }
@@ -167,7 +163,7 @@ pub fn anchor(state: IdentifierState, payload: &[SelfAddressingPrefix]) -> Resul
 pub fn anchor_with_seal(
     state: IdentifierState,
     seal_list: &[Seal],
-) -> Result<EventMessage<KeyEvent>, Error> {
+) -> Result<KeriEvent<KeyEvent>, Error> {
     let ev = EventMsgBuilder::new(EventTypeTag::Ixn)
         .with_prefix(&state.prefix)
         .with_sn(state.sn + 1)
@@ -186,6 +182,9 @@ pub fn generate_end_role(
     role: Role,
     enabled: bool,
 ) -> Result<ReplyEvent, Error> {
+    use sai::derivation::SelfAddressing;
+    use version::serialization_info::SerializationFormats;
+
     let end_role = EndRole {
         cid: controller_id.clone(),
         role,
@@ -207,18 +206,26 @@ pub fn generate_end_role(
 #[cfg(feature = "mailbox")]
 pub fn exchange(
     receipient: &IdentifierPrefix,
-    data: &EventMessage<KeyEvent>,
+    data: &KeriEvent<KeyEvent>,
     topic: ForwardTopic,
 ) -> Result<ExchangeMessage, Error> {
+    use sai::derivation::SelfAddressing;
+    use version::serialization_info::SerializationFormats;
+
     use crate::event_message::timestamped::Timestamped;
 
-    Timestamped::new(Exchange::Fwd {
+    let event = Timestamped::new(Exchange::Fwd {
         args: FwdArgs {
             recipient_id: receipient.clone(),
             topic,
         },
         to_forward: data.clone(),
-    })
-    .to_message(SerializationFormats::JSON, SelfAddressing::Blake3_256)
+    });
+
+    KeriEvent::new(
+        SerializationFormats::JSON,
+        SelfAddressing::Blake3_256,
+        event,
+    )
     .map_err(|e| Error::EventGenerationError(e.to_string()))
 }

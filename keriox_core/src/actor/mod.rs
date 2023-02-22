@@ -2,29 +2,34 @@ use std::convert::TryFrom;
 
 use serde::{Deserialize, Serialize};
 
-#[cfg(feature = "mailbox")]
-use crate::mailbox::exchange::{Exchange, ExchangeMessage, ForwardTopic, SignedExchange};
 #[cfg(feature = "oobi")]
 use crate::oobi::OobiManager;
-#[cfg(feature = "query")]
-use crate::query::{
-    key_state_notice::KeyStateNotice,
-    query_event::{Query, SignedQuery},
-    reply_event::{ReplyRoute, SignedReply},
-    ReplyType,
-};
 use crate::{
     error::Error,
-    event_message::{
-        serialization_info::SerializationFormats,
-        signature::Signature,
-        signed_event_message::{Message, Notice, Op, SignedEventMessage},
-    },
+    event_message::signed_event_message::{Message, Notice},
     prefix::IdentifierPrefix,
-    processor::{event_storage::EventStorage, validator::EventValidator, Processor},
+    processor::Processor,
+};
+#[cfg(feature = "query")]
+use crate::{
+    event_message::signed_event_message::Op,
+    processor::event_storage::EventStorage,
+    query::{
+        key_state_notice::KeyStateNotice,
+        query_event::{Query, SignedQuery},
+        reply_event::{ReplyRoute, SignedReply},
+        ReplyType,
+    },
+};
+#[cfg(feature = "mailbox")]
+use crate::{
+    event_message::{signature::Signature, signed_event_message::SignedEventMessage},
+    mailbox::exchange::{Exchange, ExchangeMessage, ForwardTopic, SignedExchange},
 };
 pub use cesrox::cesr_proof::MaterialPath;
 use cesrox::parse_many;
+#[cfg(feature = "query")]
+use version::serialization_info::SerializationFormats;
 
 pub mod error;
 pub mod event_generator;
@@ -76,7 +81,7 @@ pub fn process_message<P: Processor>(
     msg: Message,
     #[cfg(feature = "oobi")] oobi_manager: &OobiManager,
     processor: &P,
-    event_storage: &EventStorage,
+    #[cfg(feature = "oobi")] event_storage: &EventStorage,
 ) -> Result<(), Error> {
     match msg {
         Message::Notice(notice) => process_notice(notice, processor)?,
@@ -117,9 +122,12 @@ pub fn process_signed_oobi(
     oobi_manager: &OobiManager,
     event_storage: &EventStorage,
 ) -> Result<(), Error> {
+    use crate::processor::validator::EventValidator;
+    use sai::sad::SAD;
+
     let validator = EventValidator::new(event_storage.db.clone());
     // check signature
-    validator.verify(&signed_oobi.reply.serialize()?, &signed_oobi.signature)?;
+    validator.verify(&signed_oobi.reply.encode()?, &signed_oobi.signature)?;
     // check digest
     signed_oobi.reply.check_digest()?;
     // save
@@ -137,7 +145,7 @@ pub fn process_signed_exn(exn: SignedExchange, storage: &EventStorage) -> Result
         exn.signature
             .iter()
             .try_fold(true, |acc, signature| -> Result<bool, Error> {
-                Ok(acc && signature.verify(&exn_message.serialize()?, storage)?)
+                Ok(acc && signature.verify(&exn_message.encode()?, storage)?)
             });
     if verification_result? {
         process_exn(exn_message, exn.data_signature, storage)
@@ -152,7 +160,7 @@ fn process_exn(
     attachemnt: (MaterialPath, Vec<Signature>),
     storage: &EventStorage,
 ) -> Result<(), Error> {
-    let (receipient, to_forward, topic) = match &exn.event.content.data {
+    let (receipient, to_forward, topic) = match &exn.data.data {
         Exchange::Fwd { args, to_forward } => (&args.recipient_id, to_forward, &args.topic),
     };
     let (sigs, witness_receipts) = attachemnt.1.into_iter().fold(
@@ -203,13 +211,14 @@ pub fn process_signed_query(
                 .get(0)
                 .ok_or(SignedQueryError::InvalidSignature)?
                 .signature;
-            let ver_result = match id.verify(&qr.query.serialize()?, sig) {
-                Ok(result) => result,
-                Err(e) => {
-                    let keri_error: crate::error::Error = e.into();
-                    return Err(keri_error.into());
-                }
-            };
+            let ver_result =
+                match id.verify(&qr.query.encode().map_err(|_e| Error::VersionError)?, sig) {
+                    Ok(result) => result,
+                    Err(e) => {
+                        let keri_error: crate::error::Error = e.into();
+                        return Err(keri_error.into());
+                    }
+                };
             if !ver_result {
                 return Err(SignedQueryError::InvalidSignature);
             }
@@ -219,7 +228,7 @@ pub fn process_signed_query(
                 .get_state(&signer_id)?
                 .ok_or_else(|| SignedQueryError::UnknownSigner { id: signer_id })?
                 .current;
-            if !key_config.verify(&qr.query.serialize()?, &signatures)? {
+            if !key_config.verify(&qr.query.encode()?, &signatures)? {
                 return Err(SignedQueryError::InvalidSignature);
             }
         }
@@ -299,8 +308,9 @@ pub mod prelude {
     pub use crate::{
         actor::{process_message, process_notice},
         database::SledEventDatabase,
-        event::SerializationFormats,
         event_message::signed_event_message::Message,
         processor::{basic_processor::BasicProcessor, event_storage::EventStorage, Processor},
     };
+    pub use sai::{derivation::SelfAddressing, sad::SAD, SelfAddressingPrefix};
+    pub use version::{error::Error as VersionError, serialization_info::SerializationFormats};
 }

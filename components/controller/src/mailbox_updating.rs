@@ -1,15 +1,18 @@
 use super::{error::ControllerError, identifier_controller::IdentifierController};
 use futures::{StreamExt, TryStreamExt};
 use keri::{
-    actor::{event_generator, prelude::Message},
+    actor::{
+        event_generator,
+        prelude::{Message, SAD},
+    },
     event::{
         event_data::EventData,
         sections::seal::{EventSeal, Seal},
-        EventMessage,
+        KeyEvent,
     },
-    event_message::key_event_message::KeyEvent,
-    event_message::signed_event_message::{
-        Notice, SignedEventMessage, SignedNontransferableReceipt,
+    event_message::{
+        msg::KeriEvent,
+        signed_event_message::{Notice, SignedEventMessage, SignedNontransferableReceipt},
     },
     mailbox::{
         exchange::{ExchangeMessage, ForwardTopic},
@@ -30,10 +33,10 @@ pub struct MailboxReminder {
 
 #[derive(Debug)]
 pub enum ActionRequired {
-    MultisigRequest(EventMessage<KeyEvent>, ExchangeMessage),
+    MultisigRequest(KeriEvent<KeyEvent>, ExchangeMessage),
     // Contains delegating event and exchange message that will be send to
     // delegate after delegating event confirmation.
-    DelegationRequest(EventMessage<KeyEvent>, ExchangeMessage),
+    DelegationRequest(KeriEvent<KeyEvent>, ExchangeMessage),
 }
 
 impl IdentifierController {
@@ -108,7 +111,7 @@ impl IdentifierController {
         self.source
             .process(&Message::Notice(Notice::Event(event.clone())))?;
         let event = event.event_message.clone();
-        let receipient = event.event.get_prefix();
+        let receipient = event.data.get_prefix();
         // Construct exn message (will be stored in group identidfier mailbox)
         let exn = event_generator::exchange(&receipient, &event, ForwardTopic::Multisig)?;
         Ok(ActionRequired::MultisigRequest(event, exn))
@@ -126,17 +129,17 @@ impl IdentifierController {
     }
 
     async fn publish(&self, event: &SignedEventMessage) -> Result<(), ControllerError> {
-        let id = event.event_message.event.get_prefix();
+        let id = event.event_message.data.get_prefix();
         let fully_signed_event = self
             .source
             .partially_witnessed_escrow
             .get_event_by_sn_and_digest(
-                event.event_message.event.get_sn(),
+                event.event_message.data.get_sn(),
                 &id,
                 &event.event_message.get_digest(),
             );
 
-        let own_index = self.get_index(&event.event_message.event)?;
+        let own_index = self.get_index(&event.event_message.data)?;
         // Elect the leader
         // Leader is identifier with minimal index among all participants who
         // sign event. He will send message to witness.
@@ -171,7 +174,7 @@ impl IdentifierController {
         &self,
         event_to_confirm: &SignedEventMessage,
     ) -> Result<Option<ActionRequired>, ControllerError> {
-        match event_to_confirm.event_message.event.get_event_data() {
+        match event_to_confirm.event_message.data.get_event_data() {
             // delegating event
             EventData::Icp(_) | EventData::Rot(_) | EventData::Ixn(_) => {
                 self.source
@@ -200,7 +203,7 @@ impl IdentifierController {
         event_to_confirm: &SignedEventMessage,
         group_id: &IdentifierPrefix,
     ) -> Result<Option<ActionRequired>, ControllerError> {
-        match event_to_confirm.event_message.event.get_event_data() {
+        match event_to_confirm.event_message.data.get_event_data() {
             // delegating event
             EventData::Ixn(ixn) => {
                 //| EventData::Rot(_) | EventData::Ixn(_) => {
@@ -222,11 +225,11 @@ impl IdentifierController {
             EventData::Dip(_) | EventData::Drt(_) => {
                 self.source
                     .process(&Message::Notice(Notice::Event(event_to_confirm.clone())))?;
-                let id = event_to_confirm.event_message.event.get_prefix();
+                let id = event_to_confirm.event_message.data.get_prefix();
 
                 let seal = Seal::Event(EventSeal {
                     prefix: id,
-                    sn: event_to_confirm.event_message.event.get_sn(),
+                    sn: event_to_confirm.event_message.data.get_sn(),
                     event_digest: event_to_confirm.event_message.get_digest(),
                 });
 

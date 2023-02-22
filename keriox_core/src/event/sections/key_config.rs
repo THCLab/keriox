@@ -1,11 +1,11 @@
 use cesrox::primitives::CesrPrimitive;
+use sai::{derivation::SelfAddressing, SelfAddressingPrefix};
 use serde::{Deserialize, Serialize};
 
 use super::threshold::SignatureThreshold;
 use crate::{
     error::Error,
     prefix::{AttachedSignaturePrefix, BasicPrefix},
-    sai::{derivation::SelfAddressing, SelfAddressingPrefix},
 };
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
@@ -148,6 +148,7 @@ pub fn nxt_commitment(
 #[cfg(test)]
 mod test {
     use cesrox::parse;
+    use sai::{derivation::SelfAddressing, SelfAddressingPrefix};
 
     use crate::{
         error::Error,
@@ -157,7 +158,6 @@ mod test {
             KeyConfig,
         },
         prefix::{AttachedSignaturePrefix, BasicPrefix},
-        sai::{derivation::SelfAddressing, SelfAddressingPrefix},
     };
 
     #[test]
@@ -296,9 +296,9 @@ mod test {
         let signed_msg = Message::try_from(parsed).unwrap();
         match signed_msg {
             Message::Notice(Notice::Event(ref e)) => {
-                if let EventData::Icp(icp) = e.to_owned().event_message.event.get_event_data() {
+                if let EventData::Icp(icp) = e.to_owned().event_message.data.get_event_data() {
                     let kc = icp.key_config;
-                    let msg = e.event_message.serialize()?;
+                    let msg = e.event_message.encode()?;
                     assert!(kc.verify(&msg, &e.signatures)?);
                 }
             }
@@ -310,9 +310,9 @@ mod test {
         let signed_msg = Message::try_from(parsed).unwrap();
         match signed_msg {
             Message::Notice(Notice::Event(ref e)) => {
-                if let EventData::Icp(icp) = e.to_owned().event_message.event.get_event_data() {
+                if let EventData::Icp(icp) = e.to_owned().event_message.data.get_event_data() {
                     let kc = icp.key_config;
-                    let msg = e.event_message.serialize()?;
+                    let msg = e.event_message.encode()?;
                     assert!(kc.verify(&msg, &e.signatures)?);
                 }
             }

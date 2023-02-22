@@ -1,6 +1,7 @@
 use std::{convert::TryFrom, fs, sync::Arc};
 
 use cesrox::{parse, parse_many, primitives::CesrPrimitive};
+use sai::sad::SAD;
 
 use crate::{
     database::{escrow::EscrowDb, SledEventDatabase},
@@ -9,7 +10,7 @@ use crate::{
     event_message::{
         event_msg_builder::EventMsgBuilder,
         signed_event_message::{Message, Notice},
-        Digestible, EventTypeTag,
+        EventTypeTag,
     },
     prefix::{
         AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SeedPrefix, SelfSigningPrefix,
@@ -46,7 +47,7 @@ fn test_process() -> Result<(), Error> {
     let deserialized_icp = Message::try_from(parsed).unwrap();
 
     let id = match &deserialized_icp {
-        Message::Notice(Notice::Event(e)) => e.event_message.event.get_prefix(),
+        Message::Notice(Notice::Event(e)) => e.event_message.data.get_prefix(),
         _ => Err(Error::SemanticError("bad deser".into()))?,
     };
 
@@ -55,11 +56,7 @@ fn test_process() -> Result<(), Error> {
 
     // Check if processed event is in kel.
     let icp_from_db = event_storage.get_event_at_sn(&id, 0).unwrap();
-    let re_serialized = icp_from_db
-        .unwrap()
-        .signed_event_message
-        .serialize()
-        .unwrap();
+    let re_serialized = icp_from_db.unwrap().signed_event_message.encode().unwrap();
     assert_eq!(icp_raw.to_vec(), re_serialized);
 
     let rot_raw = br#"{"v":"KERI10JSON00021c_","t":"rot","d":"EHjzZj4i_-RpTN2Yh-NocajFROJ_GkBtlByhRykqiXgz","i":"EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen","s":"1","p":"EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen","kt":"2","k":["DCjxOXniUc5EUzDqERlXdptfKPHy6jNo_ZGsS4Vd8fAE","DNZHARO4dCJlluv0qezEMRmErIWWc-lzOzolBOQ15tHV","DOCQ4KN1jUlKbfjRteDYt9fxgpq1NK9_MqO5IA7shpED"],"nt":"2","n":["EN8l6yJC2PxribTN0xfri6bLz34Qvj-x3cNwcV3DvT2m","EATiZAHl0kzKID6faaQP2O7zB3Hj7eH3bE-vgKVAtsyU","EG6e7dJhh78ZqeIZ-eMbe-OB3TwFMPmrSsh9k75XIjLP"],"bt":"0","br":[],"ba":[],"a":[]}-AADAAAqV6xpsAAEB_FJP5UdYO5qiJphz8cqXbTjB9SRy8V0wIim-lgafF4o-b7TW0spZtzx2RXUfZLQQCIKZsw99k8AABBP8nfF3t6bf4z7eNoBgUJR-hdhw7wnlljMZkeY5j2KFRI_s8wqtcOFx1A913xarGJlO6UfrqFWo53e9zcD8egIACB8DKLMZcCGICuk98RCEVuS0GsqVngi1d-7gAX0jid42qUcR3aiYDMp2wJhqJn-iHJVvtB-LK7TRTggBtMDjuwB"#;
@@ -69,10 +66,7 @@ fn test_process() -> Result<(), Error> {
     // Process rotation event.
     event_processor.process(&deserialized_rot.clone())?;
     let rot_from_db = event_storage.get_event_at_sn(&id, 1).unwrap().unwrap();
-    assert_eq!(
-        rot_from_db.signed_event_message.serialize().unwrap(),
-        rot_raw
-    );
+    assert_eq!(rot_from_db.signed_event_message.encode().unwrap(), rot_raw);
 
     // Process the same rotation event one more time.
     event_processor.process(&deserialized_rot)?;
@@ -93,8 +87,8 @@ fn test_process() -> Result<(), Error> {
     let ixn_from_db = event_storage.get_event_at_sn(&id, 2).unwrap().unwrap();
     match deserialized_ixn {
         Message::Notice(Notice::Event(evt)) => assert_eq!(
-            ixn_from_db.signed_event_message.event_message.event,
-            evt.event_message.event
+            ixn_from_db.signed_event_message.event_message.data,
+            evt.event_message.data
         ),
         _ => assert!(false),
     }
@@ -203,7 +197,7 @@ fn test_process_delegated() -> Result<(), Error> {
     // Helper function for serializing message (without attachments)
     let raw_parsed = |ev: Message| -> Result<Vec<_>, Error> {
         if let Message::Notice(Notice::Event(ev)) = ev {
-            ev.event_message.serialize()
+            Ok(ev.event_message.encode()?)
         } else {
             Ok(vec![])
         }
@@ -215,7 +209,7 @@ fn test_process_delegated() -> Result<(), Error> {
         .unwrap()
         .unwrap();
     assert_eq!(
-        ixn_from_db.signed_event_message.event_message.serialize()?,
+        ixn_from_db.signed_event_message.event_message.encode()?,
         raw_parsed(deserialized_ixn)?
     );
 
@@ -226,7 +220,7 @@ fn test_process_delegated() -> Result<(), Error> {
     let dip_from_db = event_storage.get_event_at_sn(&child_prefix, 0)?.unwrap();
 
     assert_eq!(
-        dip_from_db.signed_event_message.event_message.serialize()?,
+        dip_from_db.signed_event_message.event_message.encode()?,
         raw_parsed(deserialized_dip.clone())?
     );
 
@@ -242,7 +236,7 @@ fn test_process_delegated() -> Result<(), Error> {
         .get_event_at_sn(&delegator_prefix, 2)?
         .unwrap();
     assert_eq!(
-        ixn_from_db.signed_event_message.event_message.serialize()?,
+        ixn_from_db.signed_event_message.event_message.encode()?,
         raw_parsed(deserialized_ixn_drt)?
     );
 
@@ -257,7 +251,7 @@ fn test_process_delegated() -> Result<(), Error> {
     // Check if processed drt event is in db.
     let drt_from_db = event_storage.get_event_at_sn(&child_prefix, 1)?.unwrap();
     assert_eq!(
-        drt_from_db.signed_event_message.event_message.serialize()?,
+        drt_from_db.signed_event_message.event_message.encode()?,
         raw_parsed(deserialized_drt)?
     );
 
@@ -378,8 +372,8 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
         .unwrap();
     // {"v":"KERI10JSON0001e7_","t":"icp","d":"EKkedrfoZz54Xsb_lGGdKTkYqNMf6TMrX1x57M1j0yi3","i":"EKkedrfoZz54Xsb_lGGdKTkYqNMf6TMrX1x57M1j0yi3","s":"0","kt":"1","k":["DErocgXD2RGSyvn3MObcx59jeOsEQhv2TqHirVkzrp0Q"],"nt":"2","n":["EIQsSW4KMrLzY1HQI9H_XxY6MyzhaFFXhG6fdBb5Wxta","EHuvLs1hmwxo4ImDoCpaAermYVQhiPsPDNaZsz4bcgko","EDJk5EEpC4-tQ7YDwBiKbpaZahh1QCyQOnZRF7p2i8k8","EAXfDjKvUFRj-IEB_o4y-Y_qeJAjYfZtOMD9e7vHNFss","EN8l6yJC2PxribTN0xfri6bLz34Qvj-x3cNwcV3DvT2m"],"bt":"0","b":[],"c":[],"a":[]}
 
-    let id_prefix = icp.event.get_prefix();
-    let icp_digest = icp.event.get_digest();
+    let id_prefix = icp.data.get_prefix();
+    let icp_digest = icp.get_digest();
     assert_eq!(
         id_prefix,
         IdentifierPrefix::SelfAddressing(icp_digest.clone())
@@ -389,7 +383,7 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
         "EKkedrfoZz54Xsb_lGGdKTkYqNMf6TMrX1x57M1j0yi3"
     );
     // sign inception event
-    let signature = signers[0].sign(icp.serialize().unwrap())?;
+    let signature = signers[0].sign(icp.encode().unwrap())?;
     let signed_icp = icp.sign(
         vec![AttachedSignaturePrefix::new(
             SelfSigningPrefix::Ed25519Sha512(signature),
@@ -422,13 +416,13 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
         .with_next_threshold(&SignatureThreshold::Simple(4))
         .build()?;
 
-    let rot_digest = rotation.event.get_digest();
+    let rot_digest = rotation.get_digest();
 
     let signatures = current_signers
         .iter()
         .enumerate()
         .map(|(index, sig)| {
-            let signature = sig.sign(rotation.serialize().unwrap()).unwrap();
+            let signature = sig.sign(rotation.encode().unwrap()).unwrap();
             AttachedSignaturePrefix::new(SelfSigningPrefix::Ed25519Sha512(signature), index as u16)
         })
         .collect::<Vec<_>>();
@@ -466,7 +460,7 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
         .iter()
         .enumerate()
         .map(|(index, sig)| {
-            let signature = sig.sign(rotation.serialize().unwrap()).unwrap();
+            let signature = sig.sign(rotation.encode().unwrap()).unwrap();
             AttachedSignaturePrefix::new(SelfSigningPrefix::Ed25519Sha512(signature), index as u16)
         })
         .collect::<Vec<_>>();
@@ -522,8 +516,8 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
         .build()
         .unwrap();
 
-    let id_prefix = icp.event.get_prefix();
-    let icp_digest = icp.event.get_digest();
+    let id_prefix = icp.data.get_prefix();
+    let icp_digest = icp.get_digest();
     assert_eq!(
         id_prefix,
         IdentifierPrefix::SelfAddressing(icp_digest.clone())
@@ -533,7 +527,7 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
         "EM2y0cPBcua33FMaji79hQ2NVq7mzIIEX8Zlw0Ch5OQQ"
     );
     // sign inception event
-    let signature = signers[0].sign(icp.serialize().unwrap())?;
+    let signature = signers[0].sign(icp.encode().unwrap())?;
     let signed_icp = icp.sign(
         vec![AttachedSignaturePrefix::new(
             SelfSigningPrefix::Ed25519Sha512(signature),
@@ -577,13 +571,13 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
         ]))
         .build()?;
 
-    let rot_digest = rotation.event.get_digest();
+    let rot_digest = rotation.get_digest();
 
     let signatures = current_signers
         .iter()
         .enumerate()
         .map(|(index, sig)| {
-            let signature = sig.sign(rotation.serialize().unwrap()).unwrap();
+            let signature = sig.sign(rotation.encode().unwrap()).unwrap();
             AttachedSignaturePrefix::new(SelfSigningPrefix::Ed25519Sha512(signature), index as u16)
         })
         .collect::<Vec<_>>();
@@ -622,7 +616,7 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
         .iter()
         .enumerate()
         .map(|(index, sig)| {
-            let signature = sig.sign(rotation.serialize().unwrap()).unwrap();
+            let signature = sig.sign(rotation.encode().unwrap()).unwrap();
             AttachedSignaturePrefix::new(SelfSigningPrefix::Ed25519Sha512(signature), index as u16)
         })
         .collect::<Vec<_>>();

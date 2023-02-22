@@ -17,7 +17,6 @@ use keri::{
         reply_event::{ReplyEvent, ReplyRoute, SignedReply},
         ReplyType,
     },
-    sai::derivation::SelfAddressing,
     signer::Signer,
     state::IdentifierState,
     transport::{default::DefaultTransport, Transport},
@@ -103,7 +102,7 @@ impl WatcherData {
         let signed_reply = SignedReply::new_nontrans(
             reply.clone(),
             prefix.clone(),
-            SelfSigningPrefix::Ed25519Sha512(signer.sign(reply.serialize()?)?),
+            SelfSigningPrefix::Ed25519Sha512(signer.sign(reply.encode()?)?),
         );
         oobi_manager.save_oobi(&signed_reply)?;
 
@@ -126,7 +125,7 @@ impl WatcherData {
             Some(oobis_to_sign) => oobis_to_sign
                 .iter()
                 .map(|oobi_to_sing| {
-                    let signature = self.signer.sign(oobi_to_sing.serialize().unwrap())?;
+                    let signature = self.signer.sign(oobi_to_sing.encode().unwrap())?;
                     Ok(SignedReply::new_nontrans(
                         oobi_to_sing.clone(),
                         self.prefix.clone(),
@@ -152,7 +151,7 @@ impl WatcherData {
             SerializationFormats::JSON,
         )?;
 
-        let signature = SelfSigningPrefix::Ed25519Sha512(signer.sign(rpy.serialize()?)?);
+        let signature = SelfSigningPrefix::Ed25519Sha512(signer.sign(&rpy.encode()?)?);
         Ok(SignedReply::new_nontrans(
             rpy,
             self.prefix.clone(),
@@ -194,7 +193,7 @@ impl WatcherData {
             });
         }
 
-        match &qry.query.event.content.data.route {
+        match &qry.query.data.data.route {
             QueryRoute::Ksn { .. } | QueryRoute::Log { .. } => {
                 // Update latest state for prefix
                 self.query_state(qry.query.get_prefix()).await?;
@@ -227,8 +226,7 @@ impl WatcherData {
                     SerializationFormats::JSON,
                 )?;
 
-                let signature =
-                    SelfSigningPrefix::Ed25519Sha512(self.signer.sign(rpy.serialize()?)?);
+                let signature = SelfSigningPrefix::Ed25519Sha512(self.signer.sign(&rpy.encode()?)?);
                 let reply = SignedReply::new_nontrans(rpy, self.prefix.clone(), signature);
                 Ok(Some(PossibleResponse::Ksn(reply)))
             }
@@ -251,7 +249,7 @@ impl WatcherData {
     async fn forward_query(&self, qry: &SignedQuery) -> Result<(), ActorError> {
         // Create a new signed message based on the received one
         let sigs = vec![AttachedSignaturePrefix::new(
-            SelfSigningPrefix::Ed25519Sha512(self.signer.sign(qry.query.serialize()?)?),
+            SelfSigningPrefix::Ed25519Sha512(self.signer.sign(qry.query.encode()?)?),
             0,
         )];
         let qry = SignedQuery::new(
@@ -456,8 +454,7 @@ impl Watcher {
             .get(0)
             .ok_or(ActorError::NoLocation { id: er.eid.clone() })?
             .reply
-            .event
-            .content
+            .data
             .data
             .clone();
 

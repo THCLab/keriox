@@ -9,7 +9,6 @@ use crate::{
         sections::{
             key_config::NextKeysData, threshold::SignatureThreshold, RotationWitnessConfig,
         },
-        SerializationFormats,
     },
     event::{
         event_data::{inception::InceptionEvent, EventData},
@@ -17,16 +16,17 @@ use crate::{
         sections::seal::Seal,
         sections::InceptionWitnessConfig,
         sections::KeyConfig,
-        Event, EventMessage,
+        KeyEvent,
     },
     keys::PublicKey,
     prefix::{BasicPrefix, IdentifierPrefix},
-    sai::{derivation::SelfAddressing, SelfAddressingPrefix},
 };
 use ed25519_dalek::Keypair;
 use rand::rngs::OsRng;
+use sai::{derivation::SelfAddressing, sad::SAD, SelfAddressingPrefix};
+use version::serialization_info::SerializationFormats;
 
-use super::{EventTypeTag, KeyEvent};
+use super::{msg::KeriEvent, EventTypeTag};
 
 pub struct EventMsgBuilder {
     event_type: EventTypeTag,
@@ -163,7 +163,7 @@ impl EventMsgBuilder {
         }
     }
 
-    pub fn build(self) -> Result<EventMessage<KeyEvent>, Error> {
+    pub fn build(self) -> Result<KeriEvent<KeyEvent>, Error> {
         let next_key_hash = if let Some(hashes) = self.next_keys_hashes {
             NextKeysData {
                 threshold: self.next_key_threshold,
@@ -176,7 +176,7 @@ impl EventMsgBuilder {
         let prefix = if self.prefix == IdentifierPrefix::default() {
             let icp_data = InceptionEvent::new(key_config.clone(), None, None)
                 .incept_self_addressing(self.derivation.clone(), self.format)?;
-            icp_data.event.get_prefix()
+            icp_data.data.get_prefix()
         } else {
             self.prefix
         };
@@ -194,8 +194,10 @@ impl EventMsgBuilder {
                 };
 
                 match prefix {
-                    IdentifierPrefix::Basic(_) => Event::new(prefix, 0, EventData::Icp(icp_event))
-                        .to_message(self.format, self.derivation)?,
+                    IdentifierPrefix::Basic(_) => {
+                        KeyEvent::new(prefix, 0, EventData::Icp(icp_event))
+                            .to_message(self.format, self.derivation)?
+                    }
                     IdentifierPrefix::SelfAddressing(_) => {
                         icp_event.incept_self_addressing(self.derivation, self.format)?
                     }
@@ -203,7 +205,7 @@ impl EventMsgBuilder {
                 }
             }
 
-            EventTypeTag::Rot => Event::new(
+            EventTypeTag::Rot => KeyEvent::new(
                 prefix,
                 self.sn,
                 EventData::Rot(RotationEvent {
@@ -218,7 +220,7 @@ impl EventMsgBuilder {
                 }),
             )
             .to_message(self.format, self.derivation)?,
-            EventTypeTag::Ixn => Event::new(
+            EventTypeTag::Ixn => KeyEvent::new(
                 prefix,
                 self.sn,
                 EventData::Ixn(InteractionEvent {
@@ -250,7 +252,7 @@ impl EventMsgBuilder {
                     witness_config: RotationWitnessConfig::default(),
                     data: self.data,
                 };
-                Event::new(prefix, self.sn, EventData::Drt(rotation_data))
+                KeyEvent::new(prefix, self.sn, EventData::Drt(rotation_data))
                     .to_message(self.format, self.derivation)?
             }
             _ => return Err(Error::SemanticError("Not key event".into())),
@@ -260,7 +262,7 @@ impl EventMsgBuilder {
 
 pub struct ReceiptBuilder {
     format: SerializationFormats,
-    receipted_event: EventMessage<KeyEvent>,
+    receipted_event: KeriEvent<KeyEvent>,
 }
 
 impl Default for ReceiptBuilder {
@@ -278,23 +280,23 @@ impl ReceiptBuilder {
         Self { format, ..self }
     }
 
-    pub fn with_receipted_event(self, receipted_event: EventMessage<KeyEvent>) -> Self {
+    pub fn with_receipted_event(self, receipted_event: KeriEvent<KeyEvent>) -> Self {
         Self {
             receipted_event,
             ..self
         }
     }
 
-    pub fn build(&self) -> Result<EventMessage<Receipt>, Error> {
-        let prefix = self.receipted_event.event.get_prefix();
-        let sn = self.receipted_event.event.get_sn();
+    pub fn build(&self) -> Result<Receipt, Error> {
+        let prefix = self.receipted_event.data.get_prefix();
+        let sn = self.receipted_event.data.get_sn();
         let receipted_event_digest = self.receipted_event.get_digest();
-        Receipt {
+        Ok(Receipt::new(
+            self.format,
             receipted_event_digest,
-            sn,
             prefix,
-        }
-        .to_message(self.format)
+            sn,
+        ))
     }
 }
 
@@ -333,5 +335,5 @@ fn test_multisig_prefix_derivation() {
         .with_next_threshold(&SignatureThreshold::Simple(2));
     let msg = msg_builder.build().unwrap();
 
-    assert_eq!(expected_event.to_vec(), msg.serialize().unwrap());
+    assert_eq!(expected_event.to_vec(), msg.encode().unwrap());
 }

@@ -48,6 +48,12 @@ impl From<TransportError> for ActorError {
     }
 }
 
+impl From<version::error::Error> for ActorError {
+    fn from(err: version::error::Error) -> Self {
+        ActorError::KeriError(err.into())
+    }
+}
+
 impl ActorError {
     pub fn http_status_code(&self) -> StatusCode {
         match self {

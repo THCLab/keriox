@@ -1,6 +1,7 @@
 pub mod vc_state;
 
-use keri::{prefix::IdentifierPrefix, sai::SelfAddressingPrefix};
+use keri::prefix::IdentifierPrefix;
+use sai::{sad::SAD, SelfAddressingPrefix};
 
 use crate::{
     error::Error,
@@ -29,7 +30,7 @@ impl ManagerTelState {
     where
         Self: Sized,
     {
-        let event_content = event.event.content.clone();
+        let event_content = event.data.clone();
         match event_content.event_type {
             ManagerEventType::Vcp(ref vcp) => {
                 if self != &ManagerTelState::default() {

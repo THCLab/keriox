@@ -1,22 +1,23 @@
 use cesrox::primitives::CesrPrimitive;
 use chrono::{DateTime, FixedOffset};
+use sai::derivation::SelfAddressing;
 use serde::{de, ser::SerializeStruct, Deserialize, Deserializer, Serialize, Serializer};
+use version::serialization_info::SerializationFormats;
 
 use super::key_state_notice::KeyStateNotice;
 #[cfg(feature = "oobi")]
 use crate::oobi::{EndRole, LocationScheme};
 use crate::{
     error::Error,
-    event::{sections::seal::EventSeal, EventMessage, SerializationFormats},
+    event::sections::seal::EventSeal,
     event_message::{
-        dummy_event::DummyEventMessage,
+        msg::KeriEvent,
         signature::{Nontransferable, Signature, SignerData},
         timestamped::Timestamped,
-        Digestible, EventTypeTag, SaidEvent, Typeable,
+        EventTypeTag, Typeable,
     },
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     query::QueryError,
-    sai::derivation::SelfAddressing,
 };
 
 #[derive(Clone, PartialEq, Debug)]
@@ -121,7 +122,7 @@ impl<'de> Deserialize<'de> for ReplyRoute {
     }
 }
 
-pub type ReplyEvent = EventMessage<SaidEvent<Timestamped<ReplyRoute>>>;
+pub type ReplyEvent = KeriEvent<Timestamped<ReplyRoute>>;
 
 impl Typeable for ReplyRoute {
     type TypeTag = EventTypeTag;
@@ -137,37 +138,21 @@ impl ReplyEvent {
         serialization: SerializationFormats,
     ) -> Result<ReplyEvent, Error> {
         let env = Timestamped::new(route);
-        env.to_message(serialization, self_addressing)
+        KeriEvent::new(serialization, self_addressing, env)
     }
 }
 
 impl ReplyEvent {
     pub fn get_timestamp(&self) -> DateTime<FixedOffset> {
-        self.event.content.timestamp
+        self.data.timestamp
     }
 
     pub fn get_route(&self) -> ReplyRoute {
-        self.event.content.data.clone()
+        self.data.data.clone()
     }
 
     pub fn get_prefix(&self) -> IdentifierPrefix {
-        self.event.content.data.get_prefix()
-    }
-}
-
-impl ReplyEvent {
-    pub fn check_digest(&self) -> Result<(), Error> {
-        let dummy = DummyEventMessage::dummy_event(
-            self.event.clone(),
-            self.serialization_info.kind,
-            self.event.get_digest().derivation,
-        )?
-        .serialize()?;
-        self.event
-            .get_digest()
-            .verify_binding(&dummy)
-            .then(|| ())
-            .ok_or(Error::IncorrectDigest)
+        self.data.data.get_prefix()
     }
 }
 

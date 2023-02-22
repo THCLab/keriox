@@ -1,8 +1,8 @@
 use self::error::Error;
-use crate::sai::SelfAddressingPrefix;
 use cesrox::primitives::codes::PrimitiveCode;
 pub use cesrox::primitives::CesrPrimitive;
 use core::str::FromStr;
+use sai::SelfAddressingPrefix;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt::Display;
 
@@ -136,12 +136,10 @@ pub fn derive(seed: &SeedPrefix, transferable: bool) -> Result<BasicPrefix, Erro
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        keys::{PrivateKey, PublicKey},
-        sai::derivation::SelfAddressing,
-    };
+    use crate::keys::{PrivateKey, PublicKey};
     use ed25519_dalek::Keypair;
     use rand::rngs::OsRng;
+    use sai::derivation::SelfAddressing;
 
     #[test]
     fn simple_deserialize() -> Result<(), Error> {
@@ -380,7 +378,8 @@ mod tests {
 
 #[test]
 pub fn test_identifier_encoding() {
-    use crate::{keys::PublicKey, sai::derivation::SelfAddressing};
+    use crate::keys::PublicKey;
+    use sai::derivation::SelfAddressing;
     use sodiumoxide::hex;
     let pub_key = "694e894769e6c3267e8b477c2590284cd647dd42ef6007d254fce1cd2e9be423";
     let key = hex::decode(pub_key).unwrap();

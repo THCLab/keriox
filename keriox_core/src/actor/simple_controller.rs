@@ -6,7 +6,9 @@ use std::{
 };
 
 use cesrox::{cesr_proof::MaterialPath, parse, primitives::CesrPrimitive};
+use sai::{derivation::SelfAddressing, sad::SAD};
 use serde::{Deserialize, Serialize};
+use version::serialization_info::SerializationFormats;
 
 use super::{event_generator, prelude::Message, process_message};
 #[cfg(feature = "mailbox")]
@@ -24,11 +26,10 @@ use crate::{
             seal::{EventSeal, Seal},
             threshold::SignatureThreshold,
         },
-        SerializationFormats,
+        KeyEvent,
     },
     event_message::{
         cesr_adapter::EventType,
-        key_event_message::KeyEvent,
         signature::{Signature, SignerData},
         signed_event_message::{Notice, Op, SignedEventMessage, SignedNontransferableReceipt},
     },
@@ -42,7 +43,6 @@ use crate::{
         event_storage::EventStorage,
         Processor,
     },
-    sai::derivation::SelfAddressing,
     signer::KeyManager,
     state::IdentifierState,
 };
@@ -280,7 +280,7 @@ impl<K: KeyManager> SimpleController<K> {
         self.processor
             .process_notice(&Notice::Event(signed.clone()))?;
 
-        self.prefix = signed.event_message.event.get_prefix();
+        self.prefix = signed.event_message.data.get_prefix();
         // No need to generate receipt
 
         Ok(signed)
@@ -324,7 +324,7 @@ impl<K: KeyManager> SimpleController<K> {
         let end_role =
             event_generator::generate_end_role(&self.prefix(), watcher_id, Role::Watcher, true)
                 .unwrap();
-        let sed: Vec<u8> = end_role.serialize()?;
+        let sed: Vec<u8> = end_role.encode()?;
         let sig = self.key_manager.clone().lock().unwrap().sign(&sed)?;
         let att_sig = AttachedSignaturePrefix::new(SelfSigningPrefix::Ed25519Sha512(sig), 0);
 
@@ -404,7 +404,7 @@ impl<K: KeyManager> SimpleController<K> {
         let ixn = event_generator::anchor_with_seal(state, seal)?;
         // .map_err(|e| Error::SemanticError(e.to_string()))?;
         let km = self.key_manager.lock().map_err(|_| Error::MutexPoisoned)?;
-        let signature = km.sign(&ixn.serialize()?)?;
+        let signature = km.sign(&ixn.encode()?)?;
 
         let signed = ixn.sign(
             vec![AttachedSignaturePrefix::new(
@@ -434,11 +434,11 @@ impl<K: KeyManager> SimpleController<K> {
             let ixn = event_generator::anchor_with_seal(state, seals)
                 .map_err(|e| Error::SemanticError(e.to_string()))?;
             let km = self.key_manager.lock().map_err(|_| Error::MutexPoisoned)?;
-            let signature = km.sign(&ixn.serialize()?)?;
+            let signature = km.sign(&ixn.encode()?)?;
 
             let attached_signature = AttachedSignaturePrefix::new(
                 SelfSigningPrefix::Ed25519Sha512(signature),
-                self.get_index(&ixn.event)? as u16,
+                self.get_index(&ixn.data)? as u16,
             );
             let signed = ixn.sign(vec![attached_signature], None, None);
 
@@ -477,7 +477,7 @@ impl<K: KeyManager> SimpleController<K> {
             .ok_or(Error::SemanticError("Unknown state".into()))?
             .current
             .public_keys[0];
-        match &group_event.content.event_data {
+        match &group_event.event_data {
             EventData::Icp(icp) => icp
                 .key_config
                 .public_keys
@@ -525,10 +525,10 @@ impl<K: KeyManager> SimpleController<K> {
         event: SignedEventMessage,
     ) -> Result<Option<SignedEventMessage>, Error> {
         self.process(&[Message::Notice(Notice::Event(event.clone()))])?;
-        let group_prefix = event.event_message.event.get_prefix();
+        let group_prefix = event.event_message.data.get_prefix();
 
         // Process partially signed group icp
-        let index = self.get_index(&event.event_message.event)?;
+        let index = self.get_index(&event.event_message.data)?;
 
         // sign and process inception event
         let second_signature = AttachedSignaturePrefix {
@@ -537,7 +537,7 @@ impl<K: KeyManager> SimpleController<K> {
                 self.key_manager
                     .lock()
                     .unwrap()
-                    .sign(&event.event_message.serialize()?)?,
+                    .sign(&event.event_message.encode()?)?,
             ),
         };
         let signed_icp = event
@@ -591,7 +591,7 @@ impl<K: KeyManager> SimpleController<K> {
                 },
             );
 
-            let icp = event_generator::incept_with_next_hashes(
+            let icp = &event_generator::incept_with_next_hashes(
                 pks,
                 signature_threshold,
                 npks,
@@ -600,7 +600,7 @@ impl<K: KeyManager> SimpleController<K> {
                 delegator.as_ref(),
             )
             .unwrap()
-            .serialize()?;
+            .encode()?;
 
             let signature = km.sign(&icp)?;
             let key_event = parse(&icp).unwrap().1.payload;
@@ -621,7 +621,7 @@ impl<K: KeyManager> SimpleController<K> {
         self.processor
             .process_notice(&Notice::Event(signed.clone()))?;
 
-        self.groups.push(signed.event_message.event.get_prefix());
+        self.groups.push(signed.event_message.data.get_prefix());
 
         let exchanges = participants
             .iter()
@@ -669,7 +669,7 @@ impl<K: KeyManager> SimpleController<K> {
                 self.key_manager
                     .lock()
                     .unwrap()
-                    .sign(&exn_message.serialize()?)?,
+                    .sign(&exn_message.encode()?)?,
             )
         };
 
@@ -716,7 +716,7 @@ impl<K: KeyManager> SimpleController<K> {
             .key_manager
             .lock()
             .unwrap()
-            .sign(&qry_msg.serialize().unwrap())
+            .sign(&qry_msg.encode().unwrap())
             .unwrap();
         let signatures = vec![AttachedSignaturePrefix::new(
             SelfSigningPrefix::Ed25519Sha512(signature),
@@ -756,7 +756,7 @@ impl<K: KeyManager> SimpleController<K> {
                     .key_manager
                     .lock()
                     .unwrap()
-                    .sign(&qry_msg.serialize().unwrap())
+                    .sign(&qry_msg.encode().unwrap())
                     .unwrap();
                 let signatures = vec![AttachedSignaturePrefix::new(
                     SelfSigningPrefix::Ed25519Sha512(signature),
@@ -774,7 +774,7 @@ impl<K: KeyManager> SimpleController<K> {
         event: SignedEventMessage,
     ) -> Result<SignedExchange, Error> {
         let signed_icp = self.process_multisig(event)?.unwrap();
-        let receipient = signed_icp.event_message.event.get_prefix();
+        let receipient = signed_icp.event_message.data.get_prefix();
         // Construct exn message (will be stored in group identidfier mailbox)
         self.create_forward_message(&receipient, &signed_icp, ForwardTopic::Multisig)
     }
@@ -786,14 +786,14 @@ impl<K: KeyManager> SimpleController<K> {
     ) -> Result<Option<SignedEventMessage>, Error> {
         self.process(&[Message::Notice(Notice::Event(event.clone()))])?;
 
-        let id = event.event_message.event.get_prefix();
+        let id = event.event_message.data.get_prefix();
         let fully_signed_event = self.not_fully_witnessed_escrow.get_event_by_sn_and_digest(
-            event.event_message.event.get_sn(),
+            event.event_message.data.get_sn(),
             &id,
             &event.event_message.get_digest(),
         );
 
-        let own_index = self.get_index(&event.event_message.event)?;
+        let own_index = self.get_index(&event.event_message.data)?;
         // Elect the leader
         // Leader is identifier with minimal index among all participants who
         // sign event. He will send message to witness.
@@ -818,11 +818,11 @@ impl<K: KeyManager> SimpleController<K> {
         event_to_confirm: SignedEventMessage,
     ) -> Result<SignedExchange, Error> {
         self.process(&[Message::Notice(Notice::Event(event_to_confirm.clone()))])?;
-        let id = event_to_confirm.event_message.event.get_prefix();
+        let id = event_to_confirm.event_message.data.get_prefix();
 
         let seal = Seal::Event(EventSeal {
             prefix: id.clone(),
-            sn: event_to_confirm.event_message.event.get_sn(),
+            sn: event_to_confirm.event_message.data.get_sn(),
             event_digest: event_to_confirm.event_message.get_digest(),
         });
 
@@ -837,11 +837,11 @@ impl<K: KeyManager> SimpleController<K> {
         group_id: &IdentifierPrefix,
     ) -> Result<SignedExchange, Error> {
         self.process(&[Message::Notice(Notice::Event(event_to_confirm.clone()))])?;
-        let id = event_to_confirm.event_message.event.get_prefix();
+        let id = event_to_confirm.event_message.data.get_prefix();
 
         let seal = Seal::Event(EventSeal {
             prefix: id.clone(),
-            sn: event_to_confirm.event_message.event.get_sn(),
+            sn: event_to_confirm.event_message.data.get_sn(),
             event_digest: event_to_confirm.event_message.get_digest(),
         });
 

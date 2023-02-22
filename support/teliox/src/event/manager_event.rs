@@ -1,18 +1,18 @@
 use cesrox::primitives::codes::self_addressing::dummy_prefix;
+use sai::{derivation::SelfAddressing, SelfAddressingPrefix};
 use serde::{de, Deserialize, Deserializer, Serialize};
 use serde_hex::{Compact, SerHex};
 
 use keri::{
-    event::SerializationFormats,
-    event_message::{serialization_info::SerializationInfo, EventMessage, SaidEvent, Typeable},
+    event_message::{msg::KeriEvent, Typeable},
     prefix::IdentifierPrefix,
-    sai::{derivation::SelfAddressing, SelfAddressingPrefix},
 };
 use serde_json::Value;
+use version::serialization_info::{SerializationFormats, SerializationInfo};
 
 use crate::error::Error;
 
-pub type ManagerTelEventMessage = EventMessage<SaidEvent<ManagerTelEvent>>;
+pub type ManagerTelEventMessage = KeriEvent<ManagerTelEvent>;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ManagerTelEvent {
@@ -84,9 +84,7 @@ impl ManagerTelEvent {
         format: SerializationFormats,
         derivation: SelfAddressing,
     ) -> Result<ManagerTelEventMessage, Error> {
-        Ok(SaidEvent::<ManagerTelEvent>::to_message(
-            self, format, derivation,
-        )?)
+        Ok(KeriEvent::new(format, derivation, self)?)
     }
 }
 
@@ -152,38 +150,36 @@ impl DummyEvent {
         format: SerializationFormats,
     ) -> Result<Vec<u8>, Error> {
         use cesrox::primitives::codes::self_addressing::SelfAddressing as CesrCode;
-        let derivation_code: CesrCode = derivation.clone().into();
+        let derivation_code: CesrCode = derivation.into();
         Self {
             serialization_info: SerializationInfo::new(
+                "KERI".to_string(),
                 format,
                 Self {
-                    serialization_info: SerializationInfo::new(format, 0),
+                    serialization_info: SerializationInfo::default(),
                     prefix: dummy_prefix(&derivation_code),
                     sn: 0,
                     data: data.clone(),
                 }
-                .serialize()?
+                .encode()?
                 .len(),
             ),
             prefix: dummy_prefix(&derivation_code),
             sn: 0,
             data,
         }
-        .serialize()
+        .encode()
     }
 
-    fn serialize(&self) -> Result<Vec<u8>, Error> {
-        self.serialization_info
-            .kind
-            .encode(&self)
-            .map_err(Error::KeriError)
+    pub fn encode(&self) -> Result<Vec<u8>, Error> {
+        Ok(self.serialization_info.serialize(&self)?)
     }
 }
 
 impl Inc {
     pub fn incept_self_addressing(
         self,
-        derivation: &keri::sai::derivation::SelfAddressing,
+        derivation: &sai::derivation::SelfAddressing,
         format: SerializationFormats,
     ) -> Result<ManagerTelEvent, Error> {
         Ok(ManagerTelEvent::new(
@@ -207,10 +203,9 @@ pub struct Rot {
 
 #[cfg(test)]
 mod tests {
-    use keri::{
-        event::SerializationFormats, event_message::Digestible, prefix::IdentifierPrefix,
-        sai::derivation::SelfAddressing,
-    };
+    use keri::prefix::IdentifierPrefix;
+    use sai::{derivation::SelfAddressing, sad::SAD};
+    use version::serialization_info::SerializationFormats;
 
     use crate::{
         error::Error,
@@ -227,21 +222,18 @@ mod tests {
         let vcp_raw = r#"{"v":"KERI10JSON0000dc_","t":"vcp","d":"EIniznx8Vyltc0i-T7QwngvZkt_2xsT1PdsyRjq_1gAw","i":"EFohdnN33-vdNOTPYxeTQIWVzRKtzZzBoiBSGYSSnD0s","s":"0","ii":"DHtNTPnDFBnmlO6J44LXCrzZTAmpe-82b7BmQGtL4QhM","c":[],"bt":"1","b":[]}"#;
         let vcp: ManagerTelEventMessage = serde_json::from_str(vcp_raw).unwrap();
         assert_eq!(
-            vcp.event.content.prefix,
+            vcp.data.prefix,
             "EFohdnN33-vdNOTPYxeTQIWVzRKtzZzBoiBSGYSSnD0s".parse()?
         );
-        assert_eq!(vcp.event.content.sn, 0);
+        assert_eq!(vcp.data.sn, 0);
         let expected_event_type = ManagerEventType::Vcp(Inc {
             issuer_id: "DHtNTPnDFBnmlO6J44LXCrzZTAmpe-82b7BmQGtL4QhM".parse()?,
             config: vec![],
             backer_threshold: 1,
             backers: vec![],
         });
-        assert_eq!(vcp.event.content.event_type, expected_event_type);
-        assert_eq!(
-            String::from_utf8(vcp.serialize().unwrap()).unwrap(),
-            vcp_raw
-        );
+        assert_eq!(vcp.data.event_type, expected_event_type);
+        assert_eq!(String::from_utf8(vcp.encode().unwrap()).unwrap(), vcp_raw);
 
         // let vcp_raw = r#"{"v":"KERI10JSON0000d7_","i":"EVohdnN33-vdNOTPYxeTQIWVzRKtzZzBoiBSGYSSnD0s","ii":"DntNTPnDFBnmlO6J44LXCrzZTAmpe-82b7BmQGtL4QhM","s":"0","t":"vcp","c":[],"bt":"1","b":["EXvR3p8V95W8J7Ui4-mEzZ79S-A1esAnJo1Kmzq80Jkc"]}"#;
         let vcp_raw = r#"{"v":"KERI10JSON0000e0_","t":"vcp","d":"EBK9Otzl6zxt55LF095coJH7EBqlPIdrDC0f8bjeZYC9","i":"EFohdnN33-vdNOTPYxeTQIWVzRKtzZzBoiBSGYSSnD0s","s":"0","ii":"DHtNTPnDFBnmlO6J44LXCrzZTAmpe-82b7BmQGtL4QhM","c":["NB"],"bt":"1","b":["EXvR3p8V95W8J7Ui4-mEzZ79S-A1esAnJo1Kmzq80Jkc"]}"#;
@@ -269,7 +261,9 @@ mod tests {
         );
         assert_eq!(vrt.sn, 1);
         let expected_event_type = ManagerEventType::Vrt(Rot {
-            prev_event: "EIniznx8Vyltc0i-T7QwngvZkt_2xsT1PdsyRjq_1gAw".parse()?,
+            prev_event: "EIniznx8Vyltc0i-T7QwngvZkt_2xsT1PdsyRjq_1gAw"
+                .parse()
+                .unwrap(),
             backers_to_add: vec!["EHvR3p8V95W8J7Ui4-mEzZ79S-A1esAnJo1Kmzq80Jkc"
                 .parse()
                 .unwrap()],
@@ -297,7 +291,7 @@ mod tests {
         });
         let vcp = ManagerTelEvent::new(&pref, 0, event_type)
             .to_message(SerializationFormats::JSON, SelfAddressing::Blake3_256)?;
-        println!("\nvcp: {}", String::from_utf8(vcp.serialize()?).unwrap());
+        println!("\nvcp: {}", String::from_utf8(vcp.encode()?).unwrap());
 
         let state = ManagerTelState::default();
         let state = state.apply(&vcp)?;
@@ -305,7 +299,7 @@ mod tests {
         assert_eq!(state.backers.clone().unwrap(), vec![]);
 
         // Construct rotation event
-        let prev_event = vcp.event.get_digest();
+        let prev_event = vcp.get_digest();
         let event_type = ManagerEventType::Vrt(Rot {
             prev_event,
             backers_to_add: vec!["EXvR3p8V95W8J7Ui4-mEzZ79S-A1esAnJo1Kmzq80Jkc"
@@ -315,7 +309,7 @@ mod tests {
         });
         let vrt = ManagerTelEvent::new(&pref, 1, event_type.clone())
             .to_message(SerializationFormats::JSON, SelfAddressing::Blake3_256)?;
-        println!("\nvrt: {}", String::from_utf8(vrt.serialize()?).unwrap());
+        println!("\nvrt: {}", String::from_utf8(vrt.encode()?).unwrap());
         let state = state.apply(&vrt)?;
         assert_eq!(state.backers.clone().unwrap().len(), 1);
         assert_eq!(state.sn, 1);
@@ -364,7 +358,6 @@ mod tests {
 
     #[test]
     fn test_no_backers() -> Result<(), Error> {
-        use keri::sai::derivation::SelfAddressing;
         // Construct inception event
         let pref: IdentifierPrefix = "EVohdnN33-vdNOTPYxeTQIWVzRKtzZzBoiBSGYSSnD0s"
             .parse()
@@ -380,7 +373,7 @@ mod tests {
         });
         let vcp = ManagerTelEvent::new(&pref, 0, event_type)
             .to_message(SerializationFormats::JSON, SelfAddressing::Blake3_256)?;
-        println!("\nvcp: {}", String::from_utf8(vcp.serialize()?).unwrap());
+        println!("\nvcp: {}", String::from_utf8(vcp.encode()?).unwrap());
 
         let state = ManagerTelState::default();
         let state = state.apply(&vcp)?;
@@ -388,7 +381,7 @@ mod tests {
         assert_eq!(state.backers, None);
 
         // Construct rotation event
-        let prev_event = SelfAddressing::Blake3_256.derive(&vcp.serialize()?);
+        let prev_event = SelfAddressing::Blake3_256.derive(&vcp.encode()?);
         let event_type = ManagerEventType::Vrt(Rot {
             prev_event,
             backers_to_add: vec!["EXvR3p8V95W8J7Ui4-mEzZ79S-A1esAnJo1Kmzq80Jkc"

@@ -18,4 +18,7 @@ pub enum Error {
 
     #[error("{0}")]
     Generic(String),
+
+    #[error(transparent)]
+    VersionError(#[from] version::error::Error),
 }

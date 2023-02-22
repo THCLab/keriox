@@ -4,16 +4,14 @@ use super::{
 };
 use crate::{
     error::Error,
-    event::{sections::seal::Seal, Event},
-    event_message::{
-        dummy_event::DummyInceptionEvent, key_event_message::KeyEvent,
-        serialization_info::SerializationFormats, EventMessage, SaidEvent,
-    },
+    event::{sections::seal::Seal, KeyEvent},
+    event_message::{dummy_event::DummyInceptionEvent, msg::KeriEvent},
     prefix::IdentifierPrefix,
-    sai::derivation::SelfAddressing,
     state::{EventSemantics, IdentifierState, LastEstablishmentData},
 };
+use sai::derivation::SelfAddressing;
 use serde::{Deserialize, Serialize};
+use version::serialization_info::SerializationFormats;
 
 /// Inception Event
 ///
@@ -56,18 +54,19 @@ impl InceptionEvent {
         self,
         derivation: SelfAddressing,
         format: SerializationFormats,
-    ) -> Result<EventMessage<KeyEvent>, Error> {
+    ) -> Result<KeriEvent<KeyEvent>, Error> {
         let dummy_event =
-            DummyInceptionEvent::dummy_inception_data(self.clone(), derivation.clone(), format)?;
-        let digest = derivation.derive(&dummy_event.serialize()?);
-        let event = Event::new(
+            DummyInceptionEvent::dummy_inception_data(self.clone(), &derivation, format)?;
+        let digest = derivation.derive(&dummy_event.encode()?);
+        let event = KeyEvent::new(
             IdentifierPrefix::SelfAddressing(digest.clone()),
             0,
             EventData::Icp(self),
         );
-        Ok(EventMessage {
+        Ok(KeriEvent {
             serialization_info: dummy_event.serialization_info,
-            event: SaidEvent::new(digest, event),
+            digest,
+            data: event,
         })
     }
 }
@@ -95,10 +94,9 @@ fn test_inception_data_derivation() -> Result<(), Error> {
     use crate::event::sections::{
         key_config::KeyConfig, key_config::NextKeysData, threshold::SignatureThreshold,
     };
-    use crate::event_message::Digestible;
     use crate::prefix::BasicPrefix;
-    use crate::sai::SelfAddressingPrefix;
     use cesrox::primitives::CesrPrimitive;
+    use sai::{derivation::SelfAddressing, sad::SAD, SelfAddressingPrefix};
 
     let keys: Vec<BasicPrefix> = vec![
         "DErocgXD2RGSyvn3MObcx59jeOsEQhv2TqHirVkzrp0Q"
@@ -133,11 +131,11 @@ fn test_inception_data_derivation() -> Result<(), Error> {
 
     assert_eq!(
         "EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen",
-        icp_data.event.get_prefix().to_str()
+        icp_data.data.get_prefix().to_str()
     );
     assert_eq!(
         "EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen",
-        icp_data.event.get_digest().to_str()
+        icp_data.get_digest().to_str()
     );
 
     Ok(())

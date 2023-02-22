@@ -1,4 +1,5 @@
-use keri::{prefix::IdentifierPrefix, sai::SelfAddressingPrefix};
+use keri::prefix::IdentifierPrefix;
+use sai::SelfAddressingPrefix;
 
 use crate::{
     database::EventDatabase,
@@ -54,21 +55,21 @@ impl<'d> EventProcessor<'d> {
     pub fn process(&self, event: VerifiableEvent) -> Result<State, Error> {
         match &event.event.clone() {
             Event::Management(ref man) => {
-                let state = self.get_management_tel_state(&man.event.content.prefix)?;
+                let state = self.get_management_tel_state(&man.data.prefix)?;
 
                 state.apply(man).map(|state| {
                     self.db
-                        .add_new_management_event(event, &man.event.content.prefix)
+                        .add_new_management_event(event, &man.data.prefix)
                         .unwrap();
                     State::Management(state)
                 })
             }
             Event::Vc(ref vc_ev) => self
-                .get_vc_state(&vc_ev.event.content.data.prefix)?
+                .get_vc_state(&vc_ev.data.data.prefix)?
                 .apply(vc_ev)
                 .map(|state| {
                     self.db
-                        .add_new_event(event, &vc_ev.event.content.data.prefix)
+                        .add_new_event(event, &vc_ev.data.data.prefix)
                         .unwrap();
                     State::Tel(state)
                 }),
@@ -105,7 +106,7 @@ impl<'d> EventProcessor<'d> {
         match self.db.get_management_events(id) {
             Some(mut events) => Ok(events.find(|event| {
                 if let Event::Management(man) = &event.event {
-                    man.event.content.sn == sn
+                    man.data.sn == sn
                 } else {
                     false
                 }
@@ -117,7 +118,8 @@ impl<'d> EventProcessor<'d> {
 
 #[cfg(test)]
 mod tests {
-    use keri::{prefix::IdentifierPrefix, sai::derivation::SelfAddressing};
+    use keri::prefix::IdentifierPrefix;
+    use sai::derivation::SelfAddressing;
 
     use crate::{
         error::Error, event::verifiable_event::VerifiableEvent, processor::EventProcessor,

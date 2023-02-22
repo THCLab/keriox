@@ -1,9 +1,7 @@
 use cesrox::{group::Group, ParsedData};
 use serde::{ser::SerializeStruct, Deserialize, Serialize};
 
-use super::{
-    key_event_message::KeyEvent, serializer::to_string, signature::Nontransferable, EventMessage,
-};
+use super::{msg::KeriEvent, serializer::to_string, signature::Nontransferable};
 #[cfg(feature = "query")]
 use crate::query::{query_event::SignedQuery, reply_event::SignedReply};
 use crate::{
@@ -11,6 +9,7 @@ use crate::{
     event::{
         receipt::Receipt,
         sections::seal::{EventSeal, SourceSeal},
+        KeyEvent,
     },
     prefix::{AttachedSignaturePrefix, IdentifierPrefix},
     state::{EventSemantics, IdentifierState},
@@ -94,9 +93,9 @@ impl Message {
 impl Notice {
     pub fn get_prefix(&self) -> IdentifierPrefix {
         match self {
-            Notice::Event(ev) => ev.event_message.event.get_prefix(),
-            Notice::NontransferableRct(rct) => rct.body.event.prefix.clone(),
-            Notice::TransferableRct(rct) => rct.body.event.prefix.clone(),
+            Notice::Event(ev) => ev.event_message.data.get_prefix(),
+            Notice::NontransferableRct(rct) => rct.body.prefix.clone(),
+            Notice::TransferableRct(rct) => rct.body.prefix.clone(),
         }
     }
 }
@@ -110,7 +109,7 @@ impl Op {
             Op::Query(qry) => qry.query.get_prefix(),
             #[cfg(feature = "mailbox")]
             // returns exchange message receipient id
-            Op::Exchange(exn) => exn.exchange_message.event.content.data.get_prefix(),
+            Op::Exchange(exn) => exn.exchange_message.data.data.get_prefix(),
             _ => todo!(),
         }
     }
@@ -119,7 +118,7 @@ impl Op {
 // KERI serializer should be used to serialize this
 #[derive(Debug, Clone, Deserialize)]
 pub struct SignedEventMessage {
-    pub event_message: EventMessage<KeyEvent>,
+    pub event_message: KeriEvent<KeyEvent>,
     #[serde(skip_serializing)]
     pub signatures: Vec<AttachedSignaturePrefix>,
     #[serde(skip_serializing)]
@@ -194,7 +193,7 @@ impl PartialEq for SignedEventMessage {
 
 impl SignedEventMessage {
     pub fn new(
-        message: &EventMessage<KeyEvent>,
+        message: &KeriEvent<KeyEvent>,
         sigs: Vec<AttachedSignaturePrefix>,
         witness_receipts: Option<Vec<Nontransferable>>,
         delegator_seal: Option<SourceSeal>,
@@ -207,7 +206,7 @@ impl SignedEventMessage {
         }
     }
 
-    pub fn serialize(&self) -> Result<Vec<u8>, Error> {
+    pub fn encode(&self) -> Result<Vec<u8>, Error> {
         Ok(to_string(&self)?.as_bytes().to_vec())
     }
 }
@@ -226,14 +225,14 @@ impl EventSemantics for SignedEventMessage {
 /// Mostly intended for use by Validators
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SignedTransferableReceipt {
-    pub body: EventMessage<Receipt>,
+    pub body: Receipt,
     pub validator_seal: EventSeal,
     pub signatures: Vec<AttachedSignaturePrefix>,
 }
 
 impl SignedTransferableReceipt {
     pub fn new(
-        message: EventMessage<Receipt>,
+        message: Receipt,
         event_seal: EventSeal,
         sigs: Vec<AttachedSignaturePrefix>,
     ) -> Self {
@@ -253,14 +252,14 @@ impl SignedTransferableReceipt {
 /// signatures
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SignedNontransferableReceipt {
-    pub body: EventMessage<Receipt>,
+    pub body: Receipt,
     // pub couplets: Option<Vec<(BasicPrefix, SelfSigningPrefix)>>,
     // pub indexed_sigs: Option<Vec<AttachedSignaturePrefix>>,
     pub signatures: Vec<Nontransferable>,
 }
 
 impl SignedNontransferableReceipt {
-    pub fn new(message: &EventMessage<Receipt>, signatures: Vec<Nontransferable>) -> Self {
+    pub fn new(message: &Receipt, signatures: Vec<Nontransferable>) -> Self {
         Self {
             body: message.clone(),
             signatures,
@@ -295,11 +294,11 @@ pub mod tests {
         match msg {
             Message::Notice(Notice::Event(signed_event)) => {
                 assert_eq!(
-                    signed_event.event_message.serialize().unwrap().len(),
+                    signed_event.event_message.encode().unwrap().len(),
                     signed_event.event_message.serialization_info.size
                 );
 
-                let serialized_again = signed_event.serialize();
+                let serialized_again = signed_event.encode();
                 assert!(serialized_again.is_ok());
                 let stringified = String::from_utf8(serialized_again.unwrap()).unwrap();
                 assert_eq!(stream, stringified.as_bytes());
@@ -320,10 +319,10 @@ pub mod tests {
         match msg.unwrap() {
             Message::Notice(Notice::Event(signed_event)) => {
                 assert_eq!(
-                    signed_event.event_message.serialize().unwrap().len(),
+                    signed_event.event_message.encode().unwrap().len(),
                     signed_event.event_message.serialization_info.size
                 );
-                let serialized_again = signed_event.serialize();
+                let serialized_again = signed_event.encode();
                 assert!(serialized_again.is_ok());
                 let stringified = String::from_utf8(serialized_again.unwrap()).unwrap();
                 assert_eq!(stream, stringified.as_bytes())

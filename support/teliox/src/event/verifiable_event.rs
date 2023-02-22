@@ -17,10 +17,8 @@ impl VerifiableEvent {
 
     pub fn serialize(&self) -> Result<Vec<u8>, Error> {
         Ok(match &self.event {
-            Event::Management(man) => {
-                [man.serialize()?, self.seal.serialize()?].join("-".as_bytes())
-            }
-            Event::Vc(vc) => [vc.serialize()?, self.seal.serialize()?].join("-".as_bytes()),
+            Event::Management(man) => [man.encode()?, self.seal.serialize()?].join("-".as_bytes()),
+            Event::Vc(vc) => [vc.encode()?, self.seal.serialize()?].join("-".as_bytes()),
         })
     }
 

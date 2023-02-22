@@ -11,6 +11,9 @@ mod processor_tests;
 
 pub mod validator;
 
+use sai::sad::SAD;
+use version::serialization_info::SerializationFormats;
+
 use self::{
     notification::{JustNotification, Notification, NotificationBus, Notifier},
     validator::EventValidator,
@@ -20,7 +23,7 @@ use crate::query::reply_event::{ReplyRoute, SignedReply};
 use crate::{
     database::{timestamped::TimestampedSignedEventMessage, SledEventDatabase},
     error::Error,
-    event::{receipt::Receipt, SerializationFormats},
+    event::receipt::Receipt,
     event_message::signed_event_message::{
         Notice, SignedEventMessage, SignedNontransferableReceipt,
     },
@@ -44,8 +47,9 @@ pub trait Processor {
         &self,
         msg: &crate::event_message::signed_event_message::Message,
     ) -> Result<(), Error> {
-        use crate::event_message::signed_event_message::{Message, Op};
-
+        use crate::event_message::signed_event_message::Message;
+        #[cfg(feature = "query")]
+        use crate::event_message::signed_event_message::Op;
         match msg {
             Message::Notice(notice) => self.process_notice(notice),
             Message::Op(op) => match op {
@@ -113,16 +117,15 @@ impl EventProcessor {
                 // check if receipts are attached
                 if let Some(witness_receipts) = &signed_event.witness_receipts {
                     // Create and process witness receipts
-                    let id = signed_event.event_message.event.get_prefix();
-                    let receipt = Receipt {
-                        receipted_event_digest: signed_event.event_message.get_digest(),
-                        prefix: id,
-                        sn: signed_event.event_message.event.get_sn(),
-                    };
-                    let signed_receipt = SignedNontransferableReceipt::new(
-                        &receipt.to_message(SerializationFormats::JSON).unwrap(),
-                        witness_receipts.clone(),
+                    let id = signed_event.event_message.data.get_prefix();
+                    let receipt = Receipt::new(
+                        SerializationFormats::JSON,
+                        signed_event.event_message.get_digest(),
+                        id,
+                        signed_event.event_message.data.get_sn(),
                     );
+                    let signed_receipt =
+                        SignedNontransferableReceipt::new(&receipt, witness_receipts.clone());
                     self.process_notice(
                         &Notice::NontransferableRct(signed_receipt),
                         processing_strategy,
@@ -132,7 +135,7 @@ impl EventProcessor {
                 }
             }
             Notice::NontransferableRct(rct) => {
-                let id = &rct.body.event.prefix;
+                let id = &rct.body.prefix;
                 match self.validator.validate_witness_receipt(rct) {
                     Ok(_) => {
                         self.db.add_receipt_nt(rct.to_owned(), id)?;
@@ -146,7 +149,7 @@ impl EventProcessor {
             }
             Notice::TransferableRct(vrc) => match self.validator.validate_validator_receipt(vrc) {
                 Ok(_) => {
-                    self.db.add_receipt_t(vrc.clone(), &vrc.body.event.prefix)?;
+                    self.db.add_receipt_t(vrc.clone(), &vrc.body.prefix)?;
                     self.publisher.notify(&Notification::ReceiptAccepted)
                 }
                 Err(Error::MissingEvent) | Err(Error::EventOutOfOrderError) => self

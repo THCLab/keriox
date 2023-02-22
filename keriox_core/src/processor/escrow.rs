@@ -1,5 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
+use sai::{sad::SAD, SelfAddressingPrefix};
+
 use super::{
     event_storage::EventStorage,
     notification::{JustNotification, Notification, NotificationBus, Notifier},
@@ -16,18 +18,16 @@ use crate::{
     event::{
         event_data::EventData,
         sections::seal::{EventSeal, Seal, SourceSeal},
-        EventMessage,
+        KeyEvent,
     },
     event_message::{
-        key_event_message::KeyEvent,
+        msg::KeriEvent,
         signature::Nontransferable,
         signed_event_message::{
             SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
         },
-        Digestible,
     },
     prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
-    sai::SelfAddressingPrefix,
 };
 
 #[derive(Debug, Clone)]
@@ -150,8 +150,8 @@ impl OutOfOrderEscrow {
     ) -> Option<SignedEventMessage> {
         self.escrowed_out_of_order.get(id).and_then(|mut events| {
             events.find(|event| {
-                event.event_message.event.content.sn == sn
-                    && &event.event_message.event.content.prefix == id
+                event.event_message.data.sn == sn
+                    && &event.event_message.data.prefix == id
                     && &event.event_message.get_digest() == event_digest
             })
         })
@@ -161,13 +161,13 @@ impl Notifier for OutOfOrderEscrow {
     fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error> {
         match notification {
             Notification::KeyEventAdded(ev_message) => {
-                let id = ev_message.event_message.event.get_prefix();
+                let id = ev_message.event_message.data.get_prefix();
                 self.process_out_of_order_events(bus, &id)?;
             }
             Notification::OutOfOrder(signed_event) => {
                 // ignore events with no signatures
                 if !signed_event.signatures.is_empty() {
-                    let id = signed_event.event_message.event.get_prefix();
+                    let id = signed_event.event_message.data.get_prefix();
                     self.escrowed_out_of_order.add(&id, signed_event.clone())?;
                 }
             }
@@ -226,16 +226,16 @@ impl PartiallySignedEscrow {
 
     pub fn get_partially_signed_for_event(
         &self,
-        event: EventMessage<KeyEvent>,
+        event: KeriEvent<KeyEvent>,
     ) -> Option<impl DoubleEndedIterator<Item = SignedEventMessage>> {
-        let id = event.event.get_prefix();
+        let id = event.data.get_prefix();
         self.escrowed_partially_signed
             .get(&id)
             .map(|events| events.filter(move |ev| ev.event_message == event))
     }
 
-    fn remove_partially_signed(&self, event: &EventMessage<KeyEvent>) -> Result<(), Error> {
-        let id = event.event.get_prefix();
+    fn remove_partially_signed(&self, event: &KeriEvent<KeyEvent>) -> Result<(), Error> {
+        let id = event.data.get_prefix();
         self.escrowed_partially_signed.get(&id).map(|events| {
             events
                 .filter(|ev| &ev.event_message == event)
@@ -266,7 +266,7 @@ impl PartiallySignedEscrow {
         bus: &NotificationBus,
         signed_event: &SignedEventMessage,
     ) -> Result<(), Error> {
-        let id = signed_event.event_message.event.get_prefix();
+        let id = signed_event.event_message.data.get_prefix();
         if let Some(esc) = self
             .escrowed_partially_signed
             .get(&id)
@@ -359,8 +359,8 @@ impl PartiallyWitnessedEscrow {
             .get(id)
             .and_then(|mut events| {
                 events.find(|event| {
-                    event.event_message.event.content.sn == sn
-                        && &event.event_message.event.content.prefix == id
+                    event.event_message.data.sn == sn
+                        && &event.event_message.data.prefix == id
                         && &event.event_message.get_digest() == event_digest
                 })
             })
@@ -373,7 +373,7 @@ impl PartiallyWitnessedEscrow {
         digest: &SelfAddressingPrefix,
     ) -> Option<Vec<SignedNontransferableReceipt>> {
         self.escrowed_nontranferable_receipts.get(&id).map(|r| {
-            r.filter(|rct| rct.body.event.sn == sn && &rct.body.event.get_digest() == digest)
+            r.filter(|rct| rct.body.sn == sn && &rct.body.receipted_event_digest == digest)
                 // TODO avoid collect
                 .collect()
         })
@@ -396,7 +396,7 @@ impl PartiallyWitnessedEscrow {
             // ignore events with no signatures
             Ok(())
         } else {
-            let id = &receipt.body.event.prefix;
+            let id = &receipt.body.prefix;
             self.escrowed_nontranferable_receipts
                 .add(&id, receipt.clone())?;
             bus.notify(&Notification::ReceiptEscrowed)
@@ -404,11 +404,11 @@ impl PartiallyWitnessedEscrow {
     }
 
     fn accept_receipts_for(&self, event: &SignedEventMessage) -> Result<(), Error> {
-        let id = event.event_message.event.get_prefix();
+        let id = event.event_message.data.get_prefix();
         Ok(self
             .get_escrowed_receipts(
                 &id,
-                event.event_message.event.get_sn(),
+                event.event_message.data.get_sn(),
                 &event.event_message.get_digest(),
             )
             .unwrap_or_default()
@@ -457,7 +457,7 @@ impl PartiallyWitnessedEscrow {
         witnesses: &[BasicPrefix],
     ) -> Result<(), Error> {
         // verify receipts signatuers
-        let serialized_event = receipted_event.event_message.serialize()?;
+        let serialized_event = receipted_event.event_message.encode()?;
         self.get_receipt_couplets(rct, witnesses)?
             .into_iter()
             .map(|(witness, signature)| {
@@ -472,7 +472,7 @@ impl PartiallyWitnessedEscrow {
                 // remove from escrow if any signature is wrong
                 match self
                     .escrowed_nontranferable_receipts
-                    .remove(&rct.body.event.prefix, rct)
+                    .remove(&rct.body.prefix, rct)
                 {
                     Ok(_) => e,
                     Err(e) => e.into(),
@@ -486,8 +486,8 @@ impl PartiallyWitnessedEscrow {
         additional_receipt: Option<SignedNontransferableReceipt>,
     ) -> Result<(), Error> {
         let storage = EventStorage::new(self.db.clone());
-        let id = receipted_event.event_message.event.get_prefix();
-        let sn = receipted_event.event_message.event.get_sn();
+        let id = receipted_event.event_message.data.get_prefix();
+        let sn = receipted_event.event_message.data.get_sn();
         let digest = receipted_event.event_message.get_digest();
         let new_state = storage
             .get_state(&id)?
@@ -501,7 +501,7 @@ impl PartiallyWitnessedEscrow {
             couplets
                 .iter()
                 .map(|(bp, sp)| {
-                    bp.verify(&receipted_event.event_message.serialize()?, sp)?
+                    bp.verify(&receipted_event.event_message.encode()?, sp)?
                         .then(|| ())
                         .ok_or(Error::ReceiptVerificationError)
                 })
@@ -511,7 +511,7 @@ impl PartiallyWitnessedEscrow {
         new_state
             .current
             .verify(
-                &receipted_event.event_message.serialize()?,
+                &receipted_event.event_message.encode()?,
                 &receipted_event.signatures,
             )?
             .then(|| ())
@@ -565,10 +565,10 @@ impl Notifier for PartiallyWitnessedEscrow {
             Notification::ReceiptOutOfOrder(ooo) => {
                 // Receipted event wasn't accepted into kel yet, so check escrowed
                 // partailly witnessed events.
-                let sn = ooo.body.event.sn;
-                let id = ooo.body.event.prefix.clone();
+                let sn = ooo.body.sn;
+                let id = ooo.body.prefix.clone();
                 // look for receipted event in partially witnessed. If there's no event yet, escrow receipt.
-                match self.get_event_by_sn_and_digest(sn, &id, &ooo.body.get_digest()) {
+                match self.get_event_by_sn_and_digest(sn, &id, &ooo.body.receipted_event_digest) {
                     None => self.escrow_receipt(ooo.clone(), bus),
                     Some(receipted_event) => {
                         // verify receipt signature
@@ -607,7 +607,7 @@ impl Notifier for PartiallyWitnessedEscrow {
             Notification::PartiallyWitnessed(signed_event) => {
                 // ignore events with no signatures
                 if !signed_event.signatures.is_empty() {
-                    let id = signed_event.event_message.event.get_prefix();
+                    let id = signed_event.event_message.data.get_prefix();
                     match self.validate_partialy_witnessed(signed_event, None) {
                         Ok(_) => {
                             self.escrowed_partially_witnessed
@@ -645,7 +645,7 @@ impl Notifier for TransReceiptsEscrow {
     fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error> {
         match notification {
             Notification::KeyEventAdded(event) => {
-                self.process_t_receipts_escrow(&event.event_message.event.get_prefix(), bus)?;
+                self.process_t_receipts_escrow(&event.event_message.data.get_prefix(), bus)?;
             }
             Notification::TransReceiptOutOfOrder(receipt) => {
                 // ignore events with no signatures
@@ -774,7 +774,7 @@ impl DelegationEscrow {
             .get(delegator_id)
             .and_then(|mut events| {
                 events.find(|event| {
-                    event.event_message.event.content.sn == sn
+                    event.event_message.data.sn == sn
                         && &event.event_message.get_digest() == event_digest
                 })
             })
@@ -786,16 +786,15 @@ impl Notifier for DelegationEscrow {
         match notification {
             Notification::KeyEventAdded(ev_message) => {
                 // delegator's prefix
-                let id = ev_message.event_message.event.get_prefix();
+                let id = ev_message.event_message.data.get_prefix();
                 // get anchored data
-                let anchored_data: Vec<Seal> =
-                    match &ev_message.event_message.event.content.event_data {
-                        EventData::Icp(icp) => icp.data.clone(),
-                        EventData::Rot(rot) => rot.data.clone(),
-                        EventData::Ixn(ixn) => ixn.data.clone(),
-                        EventData::Dip(dip) => dip.inception_data.data.clone(),
-                        EventData::Drt(drt) => drt.data.clone(),
-                    };
+                let anchored_data: Vec<Seal> = match &ev_message.event_message.data.event_data {
+                    EventData::Icp(icp) => icp.data.clone(),
+                    EventData::Rot(rot) => rot.data.clone(),
+                    EventData::Ixn(ixn) => ixn.data.clone(),
+                    EventData::Dip(dip) => dip.inception_data.data.clone(),
+                    EventData::Drt(drt) => drt.data.clone(),
+                };
 
                 let seals: Vec<EventSeal> = anchored_data
                     .into_iter()
@@ -806,8 +805,8 @@ impl Notifier for DelegationEscrow {
                     .collect();
                 if !seals.is_empty() {
                     let potential_delegator_seal = SourceSeal {
-                        sn: ev_message.event_message.event.get_sn(),
-                        digest: ev_message.event_message.event.get_digest(),
+                        sn: ev_message.event_message.data.get_sn(),
+                        digest: ev_message.event_message.get_digest(),
                     };
                     self.process_delegation_events(bus, &id, seals, potential_delegator_seal)?;
                 }
@@ -815,12 +814,12 @@ impl Notifier for DelegationEscrow {
             Notification::MissingDelegatingEvent(signed_event) => {
                 // ignore events with no signatures
                 if !signed_event.signatures.is_empty() {
-                    let delegators_id = match &signed_event.event_message.event.content.event_data {
+                    let delegators_id = match &signed_event.event_message.data.event_data {
                         EventData::Dip(dip) => dip.delegator.clone(),
                         EventData::Drt(_drt) => {
                             let storage = EventStorage::new(self.db.clone());
                             storage
-                                .get_state(&signed_event.event_message.event.get_prefix())?
+                                .get_state(&signed_event.event_message.data.get_prefix())?
                                 .ok_or(Error::MissingDelegatingEventError)?
                                 .delegator
                                 .ok_or(Error::MissingDelegatingEventError)?
@@ -853,8 +852,8 @@ impl DelegationEscrow {
             for event in esc {
                 let seal = anchored_seals.iter().find(|seal| {
                     seal.event_digest == event.event_message.get_digest()
-                        && seal.sn == event.event_message.event.get_sn()
-                        && seal.prefix == event.event_message.event.get_prefix()
+                        && seal.sn == event.event_message.data.get_sn()
+                        && seal.prefix == event.event_message.data.get_prefix()
                 });
                 let delegated_event = match seal {
                     Some(_s) => SignedEventMessage {
@@ -867,7 +866,7 @@ impl DelegationEscrow {
                 match validator.validate_event(&delegated_event) {
                     Ok(_) => {
                         // add to kel
-                        let child_id = event.event_message.event.get_prefix();
+                        let child_id = event.event_message.data.get_prefix();
                         self.db
                             .add_kel_finalized_event(delegated_event.clone(), &child_id)?;
                         // remove from escrow

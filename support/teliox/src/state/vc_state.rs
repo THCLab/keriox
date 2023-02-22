@@ -2,7 +2,7 @@ use crate::{
     error::Error,
     event::vc_event::{VCEventMessage, VCEventType},
 };
-use keri::{event_message::Digestible, sai::SelfAddressingPrefix};
+use sai::{sad::SAD, SelfAddressingPrefix};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -14,12 +14,12 @@ pub enum TelState {
 
 impl TelState {
     pub fn apply(&self, event: &VCEventMessage) -> Result<Self, Error> {
-        let event_content = event.event.content.data.clone();
+        let event_content = event.data.data.clone();
         match event_content.event_type {
             VCEventType::Bis(_iss) => match self {
                 TelState::NotIsuued => {
                     if event_content.sn == 0 {
-                        Ok(TelState::Issued(event.event.get_digest()))
+                        Ok(TelState::Issued(event.get_digest()))
                     } else {
                         Err(Error::Generic("Wrong sn".into()))
                     }
@@ -37,7 +37,7 @@ impl TelState {
                 _ => Err(Error::Generic("Wrong state".into())),
             },
             VCEventType::Iss(_iss) => match self {
-                TelState::NotIsuued => Ok(TelState::Issued(event.event.get_digest())),
+                TelState::NotIsuued => Ok(TelState::Issued(event.get_digest())),
                 _ => Err(Error::Generic("Wrong state".into())),
             },
             VCEventType::Rev(rev) => match self {
@@ -75,7 +75,7 @@ fn test_apply() -> Result<(), Error> {
     assert!(matches!(state, TelState::Issued(_)));
 
     if let TelState::Issued(last) = state.clone() {
-        match brv_ev.event.content.data.event_type {
+        match brv_ev.data.data.event_type {
             VCEventType::Brv(ref brv) => assert!(brv.prev_event_hash == last),
             _ => (),
         };

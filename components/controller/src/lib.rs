@@ -6,14 +6,17 @@ pub mod mailbox_updating;
 mod test;
 
 use keri::{
-    actor::{self, event_generator, simple_controller::PossibleResponse},
+    actor::{
+        self, event_generator,
+        prelude::{SelfAddressingPrefix, SAD},
+        simple_controller::PossibleResponse,
+    },
     database::{escrow::EscrowDb, SledEventDatabase},
-    event::{event_data::EventData, sections::seal::Seal, EventMessage},
+    event::{event_data::EventData, sections::seal::Seal, KeyEvent},
     event_message::{
         cesr_adapter::{parse_event_type, EventType},
-        key_event_message::KeyEvent,
+        msg::KeriEvent,
         signed_event_message::{Message, Notice, Op, SignedEventMessage},
-        Digestible,
     },
     oobi::{LocationScheme, Oobi, OobiManager, Role, Scheme},
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
@@ -27,7 +30,6 @@ use keri::{
         query_event::SignedQuery,
         reply_event::{ReplyEvent, ReplyRoute, SignedReply},
     },
-    sai::SelfAddressingPrefix,
     transport::{default::DefaultTransport, Transport},
 };
 
@@ -307,9 +309,9 @@ impl Controller {
         // will return one receipt with all witness signatures as one attachment,
         // not three separate receipts as in `collected_receipts`.
         let (prefix, sn, digest) = (
-            message.event_message.event.get_prefix(),
-            message.event_message.event.get_sn(),
-            message.event_message.event.get_digest(),
+            message.event_message.data.get_prefix(),
+            message.event_message.data.get_sn(),
+            message.event_message.get_digest(),
         );
         let rcts_from_db = self.storage.get_nt_receipts(&prefix, sn, &digest)?;
 
@@ -369,9 +371,9 @@ impl Controller {
             parse_event_type(event).map_err(|_e| ControllerError::EventParseError)?;
         match parsed_event {
             EventType::KeyEvent(ke) => {
-                if let EventData::Icp(_) = &ke.event.get_event_data() {
+                if let EventData::Icp(_) = &ke.data.get_event_data() {
                     self.finalize_key_event(&ke, sig, 0)?;
-                    Ok(ke.event.get_prefix())
+                    Ok(ke.data.get_prefix())
                 } else {
                     Err(ControllerError::InceptionError(
                         "Wrong event type, should be inception event".into(),
@@ -441,7 +443,7 @@ impl Controller {
         &self,
         id: &IdentifierPrefix,
         payload: &[Seal],
-    ) -> Result<EventMessage<KeyEvent>, ControllerError> {
+    ) -> Result<KeriEvent<KeyEvent>, ControllerError> {
         let state = self
             .storage
             .get_state(id)?
@@ -466,7 +468,7 @@ impl Controller {
     /// Should call `IdentifierController::notify_witnesses` after calling this function.
     fn finalize_key_event(
         &self,
-        event: &EventMessage<KeyEvent>,
+        event: &KeriEvent<KeyEvent>,
         sig: &SelfSigningPrefix,
         own_index: usize,
     ) -> Result<(), ControllerError> {
@@ -483,10 +485,10 @@ impl Controller {
 
     pub fn get_witnesses_at_event(
         &self,
-        event_message: &EventMessage<KeyEvent>,
+        event_message: &KeriEvent<KeyEvent>,
     ) -> Result<Vec<BasicPrefix>, ControllerError> {
-        let identifier = event_message.event.get_prefix();
-        Ok(match event_message.event.get_event_data() {
+        let identifier = event_message.data.get_prefix();
+        Ok(match event_message.data.get_event_data() {
             EventData::Icp(icp) => icp.witness_config.initial_witnesses,
             EventData::Rot(_rot) => todo!(),
             EventData::Ixn(_ixn) => {
@@ -516,7 +518,7 @@ impl Controller {
             })
             .collect();
 
-        let dest_prefix = match &event.event.content.data {
+        let dest_prefix = match &event.data.data {
             ReplyRoute::Ksn(_, _) => todo!(),
             ReplyRoute::LocScheme(_) => todo!(),
             ReplyRoute::EndRoleAdd(role) => role.eid.clone(),

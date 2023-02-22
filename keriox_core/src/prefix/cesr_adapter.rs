@@ -2,11 +2,11 @@ use cesrox::primitives::{
     codes::attached_signature_code::AttachedSignatureCode, CesrPrimitive, Digest, Identifier,
     IdentifierCode, IndexedSignature, PublicKey, Signature,
 };
+use sai::SelfAddressingPrefix;
 
 use crate::{
     event::sections::seal::{EventSeal, SourceSeal},
     prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
-    sai::SelfAddressingPrefix,
 };
 
 impl From<IndexedSignature> for AttachedSignaturePrefix {
@@ -27,12 +27,6 @@ impl From<PublicKey> for BasicPrefix {
 impl From<Signature> for SelfSigningPrefix {
     fn from((code, value): Signature) -> Self {
         SelfSigningPrefix::new(code, value)
-    }
-}
-
-impl From<Digest> for SelfAddressingPrefix {
-    fn from((code, digest): Digest) -> Self {
-        SelfAddressingPrefix::new(code.into(), digest)
     }
 }
 
@@ -79,12 +73,6 @@ impl From<Identifier> for IdentifierPrefix {
     }
 }
 
-impl Into<Digest> for &SelfAddressingPrefix {
-    fn into(self) -> Digest {
-        (self.derivation.clone().into(), self.derivative())
-    }
-}
-
 impl Into<Signature> for SelfSigningPrefix {
     fn into(self) -> Signature {
         (self.get_code(), self.derivative())
@@ -116,7 +104,7 @@ impl Into<Identifier> for IdentifierPrefix {
                 (IdentifierCode::Basic(bp.get_code()), self.derivative())
             }
             IdentifierPrefix::SelfAddressing(sa) => (
-                IdentifierCode::SelfAddressing(sa.derivation.clone().into()),
+                IdentifierCode::SelfAddressing((&sa.derivation).into()),
                 self.derivative(),
             ),
             IdentifierPrefix::SelfSigning(_ss) => todo!(),
