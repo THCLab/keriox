@@ -21,8 +21,6 @@ impl NextKeysData {
     /// Checks if next KeyConfig contains enough public keys to fulfill current
     /// next threshold.
     pub fn verify_next(&self, next: &KeyConfig) -> Result<bool, Error> {
-        // let mut indexes = vec![];
-
         let indexes: Vec<_> = next
             .public_keys
             .iter()
@@ -60,7 +58,7 @@ impl NextKeysData {
         Ok(())
     }
 
-    /// Checks if hashes of public keys matches public keys of provided indexes.
+    /// Checks if hashes of public keys match public keys of provided indexes.
     /// Returns list of positions in next keys list that matches.
     fn matching_previous_indexes<'a>(
         &self,
@@ -71,7 +69,7 @@ impl NextKeysData {
         Ok(indexes
             .into_iter()
             .filter_map(|index| {
-                if let Some(prev_next) = index.previous_next() {
+                index.previous_next().and_then(|prev_next| {
                     match (
                         self.next_key_hashes.get(prev_next as usize),
                         public_keys.get(index.current() as usize),
@@ -79,14 +77,9 @@ impl NextKeysData {
                         (Some(prev_next_digest), Some(current)) => prev_next_digest
                             .verify_binding(current.to_str().as_bytes())
                             .then_some(prev_next as usize),
-                        _ => {
-                            // TODO no keys or next key digest of that index
-                            None
-                        }
+                        _ => None,
                     }
-                } else {
-                    None
-                }
+                })
             })
             .collect::<Vec<_>>())
     }

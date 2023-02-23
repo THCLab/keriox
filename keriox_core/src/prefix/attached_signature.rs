@@ -85,8 +85,11 @@ impl FromStr for IndexedSignature {
             };
             let s_vec = from_text_to_bytes(&s[code.code_size()..].as_bytes())?[lead..].to_vec();
             let ssp = SelfSigningPrefix::new(code.code, s_vec);
-  
-            Ok(Self { index: code.index.into(), signature: ssp })
+
+            Ok(Self {
+                index: code.index.into(),
+                signature: ssp,
+            })
         } else {
             Err(Error::IncorrectLengthError(s.into()))
         }
@@ -145,10 +148,7 @@ mod tests {
         assert_eq!(Some(3), pref_448_3.index.previous_next());
 
         assert_eq!(SelfSigning::Ed25519Sha512, pref_ed_1.signature.get_code());
-        assert_eq!(
-            SelfSigning::Ed25519Sha512,
-            pref_secp_2.signature.get_code()
-        );
+        assert_eq!(SelfSigning::Ed25519Sha512, pref_secp_2.signature.get_code());
         assert_eq!(SelfSigning::Ed448, pref_448_3.signature.get_code());
         Ok(())
     }
@@ -157,8 +157,11 @@ mod tests {
     fn serialize() -> Result<(), Error> {
         let pref_ed_2 =
             IndexedSignature::new_both_same(SelfSigningPrefix::Ed25519Sha512(vec![0u8; 64]), 2);
-        let pref_ed_2_3 =
-            IndexedSignature::new_both_diffrent(SelfSigningPrefix::Ed25519Sha512(vec![0u8; 64]), 2, 3);
+        let pref_ed_2_3 = IndexedSignature::new_both_diffrent(
+            SelfSigningPrefix::Ed25519Sha512(vec![0u8; 64]),
+            2,
+            3,
+        );
         let pref_secp_6 = IndexedSignature::new_both_same(
             SelfSigningPrefix::ECDSAsecp256k1Sha256(vec![0u8; 64]),
             6,
