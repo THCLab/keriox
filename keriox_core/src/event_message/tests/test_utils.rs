@@ -4,7 +4,7 @@ use crate::{
     event::sections::{key_config::nxt_commitment, threshold::SignatureThreshold},
     event_message::EventTypeTag,
     keys::{PrivateKey, PublicKey},
-    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+    prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
     state::IdentifierState,
 };
 use ed25519_dalek::Keypair;
@@ -89,7 +89,7 @@ fn test_update_identifier_state(
         // Sign.
         let signer = cur_sk.clone();
         let sig = signer.sign_ed(&sed)?;
-        AttachedSignaturePrefix::new(SelfSigningPrefix::Ed25519Sha512(sig), 0)
+        IndexedSignature::new_both_same(SelfSigningPrefix::Ed25519Sha512(sig), 0)
     };
 
     // Attach sign to event message.

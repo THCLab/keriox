@@ -3,7 +3,7 @@ use std::convert::{TryFrom, TryInto};
 use cesrox::{
     group::Group,
     payload::{parse_payload, Payload},
-    primitives::IndexedSignature,
+    primitives::IndexedSignature as CesrIndexedSignature,
     ParsedData,
 };
 use serde::{Deserialize, Serialize};
@@ -95,7 +95,7 @@ impl From<&SignedEventMessage> for ParsedData {
         if let Some(witness_rcts) = &ev.witness_receipts {
             witness_rcts.iter().for_each(|rcts| match rcts {
                 Nontransferable::Indexed(indexed) => {
-                    let witness_sigs: Vec<IndexedSignature> =
+                    let witness_sigs: Vec<CesrIndexedSignature> =
                         indexed.into_iter().map(|sig| sig.clone().into()).collect();
                     attachments.push(Group::IndexedWitnessSignatures(witness_sigs))
                 }

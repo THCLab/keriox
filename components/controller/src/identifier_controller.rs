@@ -29,9 +29,7 @@ use keri::{
         MailboxResponse,
     },
     oobi::{LocationScheme, Role, Scheme},
-    prefix::{
-        AttachedSignaturePrefix, BasicPrefix, CesrPrimitive, IdentifierPrefix, SelfSigningPrefix,
-    },
+    prefix::{BasicPrefix, CesrPrimitive, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
     query::{
         query_event::{QueryArgs, QueryArgsMbx, QueryEvent, QueryRoute, QueryTopics, SignedQuery},
         reply_event::ReplyRoute,
@@ -264,7 +262,7 @@ impl IdentifierController {
         &self,
         exchange: &[u8],
         exn_signature: SelfSigningPrefix,
-        data_signature: AttachedSignaturePrefix,
+        data_signature: IndexedSignature,
     ) -> Result<(), ControllerError> {
         // Join exn messages with their signatures and send it to witness.
         let material_path = MaterialPath::to_path("-a".into());
@@ -300,11 +298,11 @@ impl IdentifierController {
 
             let signature = vec![Signature::Transferable(
                 SignerData::LastEstablishment(self.id.clone()),
-                vec![AttachedSignaturePrefix {
+                vec![IndexedSignature::new_both_same(
+                    exn_signature,
                     // TODO
-                    index: 0,
-                    signature: exn_signature,
-                }],
+                    0,
+                )],
             )];
             let signer_exn = Message::Op(Op::Exchange(SignedExchange {
                 exchange_message: exn,
@@ -351,10 +349,7 @@ impl IdentifierController {
 
         self.source.finalize_key_event(&icp, &sig, own_index)?;
 
-        let att_signature = AttachedSignaturePrefix {
-            index: own_index as u16,
-            signature: sig,
-        };
+        let att_signature = IndexedSignature::new_both_same(sig, own_index as u16);
 
         for (exn, signature) in exchanges {
             self.finalize_exchange(&exn, signature, att_signature.clone())
@@ -378,7 +373,7 @@ impl IdentifierController {
             let min_sig_idx =
                 ev.signatures
                     .iter()
-                    .map(|at| at.index)
+                    .map(|at| at.index.current())
                     .min()
                     .expect("event should have at least one signature") as usize;
             if min_sig_idx == id_idx {
@@ -594,10 +589,7 @@ impl IdentifierController {
         let self_id = self.id.clone();
         let mut actions = Vec::new();
         for (qry, sig) in queries {
-            let signatures = vec![AttachedSignaturePrefix {
-                index: 0,
-                signature: sig,
-            }];
+            let signatures = vec![IndexedSignature::new_both_same(sig, 0)];
             let (recipient, about_who, from_who) = match &qry.data.data.route {
                 QueryRoute::Log {
                     reply_route: _,
@@ -746,7 +738,7 @@ impl IdentifierController {
                             &self.id,
                             &rct.body.receipted_event_digest,
                         )?;
-                        wit_ids.push(wits[sig.index as usize].clone());
+                        wit_ids.push(wits[sig.index.current() as usize].clone());
                     }
                 }
                 Nontransferable::Couplet(sigs) => {

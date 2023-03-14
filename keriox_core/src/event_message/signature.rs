@@ -1,24 +1,24 @@
-use cesrox::{group::Group, primitives::IndexedSignature};
+use cesrox::{group::Group, primitives::IndexedSignature as CesrIndexedSignature};
 use serde::{Deserialize, Serialize};
 
 use crate::{
     error::Error,
     event::sections::seal::EventSeal,
-    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+    prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
     processor::event_storage::EventStorage,
 };
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum Signature {
     /// Created by transferable identifier
-    Transferable(SignerData, Vec<AttachedSignaturePrefix>),
+    Transferable(SignerData, Vec<IndexedSignature>),
     /// Created by nontransferable identifier
     NonTransferable(Nontransferable),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum Nontransferable {
-    Indexed(Vec<AttachedSignaturePrefix>),
+    Indexed(Vec<IndexedSignature>),
     Couplet(Vec<(BasicPrefix, SelfSigningPrefix)>),
 }
 
@@ -197,7 +197,7 @@ impl Into<Group> for crate::event_message::signature::Signature {
     fn into(self) -> Group {
         match self {
             crate::event_message::signature::Signature::Transferable(seal, signature) => {
-                let signatures: Vec<IndexedSignature> =
+                let signatures: Vec<CesrIndexedSignature> =
                     signature.into_iter().map(|sig| sig.into()).collect();
                 match seal {
                     crate::event_message::signature::SignerData::EventSeal(EventSeal {

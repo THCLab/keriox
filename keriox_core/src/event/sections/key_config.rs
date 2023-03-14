@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use super::threshold::SignatureThreshold;
 use crate::{
     error::Error,
-    prefix::{AttachedSignaturePrefix, BasicPrefix},
+    prefix::{attached_signature::Index, BasicPrefix, IndexedSignature},
 };
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
@@ -18,20 +18,70 @@ pub struct NextKeysData {
 }
 
 impl NextKeysData {
+    /// Checks if next KeyConfig contains enough public keys to fulfill current
+    /// next threshold.
     pub fn verify_next(&self, next: &KeyConfig) -> Result<bool, Error> {
-        let mut indexes = vec![];
-        for key in &next.public_keys {
-            let sigs_indexes = self
-                .next_key_hashes
-                .iter()
-                .position(|dig| dig.verify_binding(key.to_str().as_bytes()))
-                .ok_or_else(|| {
-                    Error::SemanticError("No such public key in next keys hashes".into())
-                })?;
-            indexes.push(sigs_indexes);
-        }
+        let indexes: Vec<_> = next
+            .public_keys
+            .iter()
+            .map(|key| {
+                self.next_key_hashes
+                    .iter()
+                    .position(|dig| dig.verify_binding(key.to_str().as_bytes()))
+            })
+            .flatten()
+            .collect();
+
         // check previous next threshold
-        self.threshold.enough_signatures(&indexes)
+        self.threshold
+            .enough_signatures(&indexes)?
+            .then_some(true)
+            .ok_or(Error::NotEnoughSigsError)
+    }
+
+    /// Checks if public keys corresponding to signatures match keys committed in
+    /// NextKeysData and if it's enough of them
+    pub fn check_threshold<'a>(
+        &self,
+        public_keys: &[BasicPrefix],
+        indexes: impl IntoIterator<Item = &'a Index>,
+    ) -> Result<(), Error> {
+        // Get indexes of keys in previous next key list.
+        let indexes_in_last_prev = self.matching_previous_indexes(public_keys, indexes)?;
+
+        // Check previous next threshold
+        self.threshold
+            .enough_signatures(&indexes_in_last_prev)?
+            .then_some(())
+            .ok_or(Error::NotEnoughSigsError)?;
+
+        Ok(())
+    }
+
+    /// Checks if hashes of public keys match public keys of provided indexes.
+    /// Returns list of positions in next keys list that matches.
+    fn matching_previous_indexes<'a>(
+        &self,
+        public_keys: &[BasicPrefix],
+        indexes: impl IntoIterator<Item = &'a Index>,
+    ) -> Result<Vec<usize>, Error> {
+        // Get indexes of keys in previous next key list.
+        Ok(indexes
+            .into_iter()
+            .filter_map(|index| {
+                index.previous_next().and_then(|prev_next| {
+                    match (
+                        self.next_key_hashes.get(prev_next as usize),
+                        public_keys.get(index.current() as usize),
+                    ) {
+                        (Some(prev_next_digest), Some(current)) => prev_next_digest
+                            .verify_binding(current.to_str().as_bytes())
+                            .then_some(prev_next as usize),
+                        _ => None,
+                    }
+                })
+            })
+            .collect::<Vec<_>>())
     }
 }
 
@@ -67,12 +117,12 @@ impl KeyConfig {
     ///
     /// Verifies the given sigs against the given message using the KeyConfigs
     /// Public Keys, according to the indexes in the sigs.
-    pub fn verify(&self, message: &[u8], sigs: &[AttachedSignaturePrefix]) -> Result<bool, Error> {
+    pub fn verify(&self, message: &[u8], sigs: &[IndexedSignature]) -> Result<bool, Error> {
         // there are no duplicates
         if !(sigs
             .iter()
             .fold(vec![0u64; self.public_keys.len()], |mut acc, sig| {
-                acc[sig.index as usize] += 1;
+                acc[sig.index.current() as usize] += 1;
                 acc
             })
             .iter()
@@ -88,7 +138,7 @@ impl KeyConfig {
         } else if self.threshold.enough_signatures(
             &sigs
                 .iter()
-                .map(|sig| sig.index as usize)
+                .map(|sig| sig.index.current() as usize)
                 .collect::<Vec<_>>(),
         )? {
             Ok(sigs
@@ -97,7 +147,7 @@ impl KeyConfig {
                     Ok(acc?
                         && self
                             .public_keys
-                            .get(sig.index as usize)
+                            .get(sig.index.current() as usize)
                             .ok_or_else(|| {
                                 Error::SemanticError("Key index not present in set".into())
                             })
@@ -147,7 +197,7 @@ pub fn nxt_commitment(
 
 #[cfg(test)]
 mod test {
-    use cesrox::parse;
+    use cesrox::{parse, primitives::CesrPrimitive};
     use sai::{derivation::SelfAddressing, SelfAddressingPrefix};
 
     use crate::{
@@ -157,7 +207,7 @@ mod test {
             threshold::SignatureThreshold,
             KeyConfig,
         },
-        prefix::{AttachedSignaturePrefix, BasicPrefix},
+        prefix::{attached_signature::Index, BasicPrefix, IndexedSignature},
     };
 
     #[test]
@@ -235,7 +285,7 @@ mod test {
         let mut signatures = vec![];
         for i in 0..priv_keys.len() {
             let sig = priv_keys[i].sign_ed(msg_to_sign)?;
-            signatures.push(AttachedSignaturePrefix::new(
+            signatures.push(IndexedSignature::new_both_same(
                 SelfSigningPrefix::Ed25519Sha512(sig),
                 i as u16,
             ));
@@ -318,6 +368,116 @@ mod test {
             }
             _ => (),
         };
+
+        Ok(())
+    }
+
+    #[test]
+    pub fn test_finding_matching_previous_indexes() -> Result<(), Error> {
+        use crate::signer::setup_signers;
+
+        let signers = setup_signers();
+
+        let sample_public_keys: Vec<_> = signers
+            .iter()
+            .map(|bp| BasicPrefix::Ed25519(bp.public_key()))
+            .collect();
+        let sample_digests: Vec<_> = sample_public_keys
+            .clone()
+            .into_iter()
+            .map(|pk| SelfAddressing::Blake3_256.derive(pk.to_str().as_bytes()))
+            .collect();
+
+        let threshold = SignatureThreshold::single_weighted(vec![(1, 4), (1, 2), (1, 4), (1, 2)]);
+        let public_keys = sample_public_keys[..5].to_vec();
+        let initial_digests: Vec<_> = sample_digests[..5].to_vec();
+
+        // Corresponding previous next keys in the same order as in current keys.
+        let indexes = vec![Index::BothSame(0), Index::BothSame(1), Index::BothSame(2)];
+
+        let next_keys_data = NextKeysData {
+            threshold: threshold.clone(),
+            next_key_hashes: initial_digests.clone(),
+        };
+        assert_eq!(
+            next_keys_data.matching_previous_indexes(&public_keys, &indexes[..2])?,
+            vec![0, 1]
+        );
+        assert_eq!(
+            next_keys_data.matching_previous_indexes(&public_keys, &indexes)?,
+            vec![0, 1, 2]
+        );
+
+        // Corresponding previous next keys in other order than in current keys.
+        let indexes = vec![
+            Index::BothDifferent(0, 2),
+            Index::BothDifferent(1, 0),
+            Index::BothDifferent(2, 1),
+        ];
+        let digests = vec![
+            initial_digests[1].clone(),
+            initial_digests[2].clone(),
+            initial_digests[0].clone(),
+        ];
+
+        let next_keys_data = NextKeysData {
+            threshold: threshold.clone(),
+            next_key_hashes: digests.to_vec(),
+        };
+        assert_eq!(
+            next_keys_data.matching_previous_indexes(&public_keys, &indexes[..2])?,
+            vec![2, 0]
+        );
+        assert_eq!(
+            next_keys_data.matching_previous_indexes(&public_keys, &indexes)?,
+            vec![2, 0, 1]
+        );
+
+        // Some keys current only
+        let indexes = vec![
+            Index::CurrentOnly(0),
+            Index::BothDifferent(1, 2),
+            Index::BothDifferent(2, 1),
+        ];
+        let digests = vec![
+            initial_digests[0].clone(),
+            initial_digests[2].clone(),
+            initial_digests[1].clone(),
+        ];
+
+        let next_keys_data = NextKeysData {
+            threshold: threshold.clone(),
+            next_key_hashes: digests.to_vec(),
+        };
+        assert_eq!(
+            next_keys_data.matching_previous_indexes(&public_keys, &indexes[..2])?,
+            vec![2]
+        );
+        assert_eq!(
+            next_keys_data.matching_previous_indexes(&public_keys, &indexes)?,
+            vec![2, 1]
+        );
+
+        // Bad digest
+        let indexes = vec![
+            Index::CurrentOnly(0),
+            Index::BothDifferent(1, 2),
+            Index::BothDifferent(2, 1),
+        ];
+        let digests = vec![
+            initial_digests[0].clone(),
+            initial_digests[2].clone(),
+            SelfAddressing::Blake3_256.derive("Bad digest".as_bytes()),
+        ];
+
+        let next_keys_data = NextKeysData {
+            threshold: threshold.clone(),
+            next_key_hashes: digests.to_vec(),
+        };
+        assert_eq!(
+            next_keys_data.matching_previous_indexes(&public_keys, &indexes)?,
+            vec![1]
+        );
 
         Ok(())
     }

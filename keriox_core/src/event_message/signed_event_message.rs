@@ -11,7 +11,7 @@ use crate::{
         sections::seal::{EventSeal, SourceSeal},
         KeyEvent,
     },
-    prefix::{AttachedSignaturePrefix, IdentifierPrefix},
+    prefix::{IdentifierPrefix, IndexedSignature},
     state::{EventSemantics, IdentifierState},
 };
 
@@ -120,7 +120,7 @@ impl Op {
 pub struct SignedEventMessage {
     pub event_message: KeriEvent<KeyEvent>,
     #[serde(skip_serializing)]
-    pub signatures: Vec<AttachedSignaturePrefix>,
+    pub signatures: Vec<IndexedSignature>,
     #[serde(skip_serializing)]
     pub witness_receipts: Option<Vec<Nontransferable>>,
     #[serde(skip_serializing)]
@@ -194,7 +194,7 @@ impl PartialEq for SignedEventMessage {
 impl SignedEventMessage {
     pub fn new(
         message: &KeriEvent<KeyEvent>,
-        sigs: Vec<AttachedSignaturePrefix>,
+        sigs: Vec<IndexedSignature>,
         witness_receipts: Option<Vec<Nontransferable>>,
         delegator_seal: Option<SourceSeal>,
     ) -> Self {
@@ -227,15 +227,11 @@ impl EventSemantics for SignedEventMessage {
 pub struct SignedTransferableReceipt {
     pub body: Receipt,
     pub validator_seal: EventSeal,
-    pub signatures: Vec<AttachedSignaturePrefix>,
+    pub signatures: Vec<IndexedSignature>,
 }
 
 impl SignedTransferableReceipt {
-    pub fn new(
-        message: Receipt,
-        event_seal: EventSeal,
-        sigs: Vec<AttachedSignaturePrefix>,
-    ) -> Self {
+    pub fn new(message: Receipt, event_seal: EventSeal, sigs: Vec<IndexedSignature>) -> Self {
         Self {
             body: message,
             validator_seal: event_seal,

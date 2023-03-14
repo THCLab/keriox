@@ -16,7 +16,7 @@ use crate::{
         timestamped::Timestamped,
         EventTypeTag, Typeable,
     },
-    prefix::{AttachedSignaturePrefix, BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+    prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
     query::QueryError,
 };
 
@@ -231,7 +231,7 @@ impl SignedReply {
     pub fn new_trans(
         envelope: ReplyEvent,
         signer_seal: EventSeal,
-        signatures: Vec<AttachedSignaturePrefix>,
+        signatures: Vec<IndexedSignature>,
     ) -> Self {
         let signature = Signature::Transferable(SignerData::EventSeal(signer_seal), signatures);
         Self {

@@ -146,7 +146,7 @@ impl IdentifierController {
         let to_publish = fully_signed_event.and_then(|ev| {
             ev.signatures
                 .iter()
-                .map(|at| at.index)
+                .map(|at| at.index.current())
                 .min()
                 .and_then(|index| {
                     if index as usize == own_index {
