@@ -89,7 +89,7 @@ impl IdentifierController {
         }
 
         for event in mb.multisig.iter() {
-            self.process_group_multisig(&event).await?;
+            self.process_group_multisig(event).await?;
         }
 
         futures::stream::iter(&mb.delegate)

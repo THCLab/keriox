@@ -203,7 +203,7 @@ impl EventValidator {
                 .into_iter()
                 .map(|(witness, signature)| {
                     (witness.verify(&serialized_event, &signature)?)
-                        .then(|| ())
+                        .then_some(())
                         .ok_or(Error::SignatureVerificationError)
                 })
                 .collect::<Result<_, Error>>()
@@ -231,13 +231,13 @@ impl EventValidator {
                     &seal.event_digest,
                 )?;
                 (kp.is_some() && kp.unwrap().verify(data, sigs)?)
-                    .then(|| ())
+                    .then_some(())
                     .ok_or(Error::SignatureVerificationError)
             }
             Signature::NonTransferable(Nontransferable::Couplet(couplets)) => couplets
                 .iter()
                 .all(|(bp, sign)| bp.verify(data, sign).unwrap())
-                .then(|| ())
+                .then_some(())
                 .ok_or(Error::SignatureVerificationError),
             Signature::NonTransferable(Nontransferable::Indexed(_sigs)) => {
                 Err(Error::MissingSigner)
@@ -402,7 +402,7 @@ impl EventValidator {
             .event_message;
         event_from_db
             .compare_digest(&ksn.state.last_event_digest)?
-            .then(|| ())
+            .then_some(())
             .ok_or::<Error>(Error::IncorrectDigest)?;
 
         match self.check_timestamp_with_last_ksn(ksn.timestamp, &ksn_pre, aid) {

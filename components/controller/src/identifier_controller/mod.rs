@@ -2,6 +2,7 @@ use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
 };
+pub mod signing;
 
 use keri::{
     actor::{
