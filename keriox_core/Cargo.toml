@@ -49,7 +49,6 @@ arrayref = "0.3.6"
 zeroize = "1.3.0"
 fraction = { version = "0.9", features = ["with-serde-support"] }
 sled = { version = "0.34.6", optional = true }
-nom = "5"
 
 # oobis dependecies
 async-trait = "0.1.57"

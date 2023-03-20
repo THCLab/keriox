@@ -124,7 +124,7 @@ impl OobiManager {
         }
     }
 
-    fn parse_and_save(&self, stream: &str) -> Result<(), OobiError> {
+    pub fn parse_and_save(&self, stream: &str) -> Result<(), OobiError> {
         parse_many(stream.as_bytes())
             .map_err(|_| OobiError::Parse)?
             .1
