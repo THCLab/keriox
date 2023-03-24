@@ -492,39 +492,51 @@ impl Controller {
         event: ReplyEvent,
         sig: Vec<SelfSigningPrefix>,
     ) -> Result<(), ControllerError> {
-        let sigs = sig
-            .into_iter()
-            .enumerate()
-            .map(|(i, sig)| IndexedSignature::new_both_same(sig, i as u16))
-            .collect();
+        match signer_prefix {
+            IdentifierPrefix::Basic(bp) => {
+                let signed_rpy = Message::Op(Op::Reply(SignedReply::new_nontrans(
+                    event,
+                    bp.clone(),
+                    sig[0].clone(),
+                )));
+                self.process(&signed_rpy)?;
+            }
+            _ => {
+                let sigs = sig
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, sig)| IndexedSignature::new_both_same(sig, i as u16))
+                    .collect();
 
-        let dest_prefix = match &event.data.data {
-            ReplyRoute::Ksn(_, _) => todo!(),
-            ReplyRoute::LocScheme(_) => todo!(),
-            ReplyRoute::EndRoleAdd(role) => role.eid.clone(),
-            ReplyRoute::EndRoleCut(role) => role.eid.clone(),
+                let dest_prefix = match &event.data.data {
+                    ReplyRoute::Ksn(_, _) => todo!(),
+                    ReplyRoute::LocScheme(_) => todo!(),
+                    ReplyRoute::EndRoleAdd(role) => role.eid.clone(),
+                    ReplyRoute::EndRoleCut(role) => role.eid.clone(),
+                };
+                let signed_rpy = Message::Op(Op::Reply(SignedReply::new_trans(
+                    event,
+                    self.storage
+                        .get_last_establishment_event_seal(signer_prefix)?
+                        .ok_or(ControllerError::UnknownIdentifierError)?,
+                    sigs,
+                )));
+                let kel = self
+                    .storage
+                    .get_kel_messages_with_receipts(signer_prefix)?
+                    .ok_or(ControllerError::UnknownIdentifierError)?;
+
+                // TODO: send in one request
+                for ev in kel {
+                    self.send_message_to(&dest_prefix, Scheme::Http, Message::Notice(ev))
+                        .await?;
+                }
+                self.send_message_to(&dest_prefix, Scheme::Http, signed_rpy.clone())
+                    .await?;
+
+                self.process(&signed_rpy)?;
+            }
         };
-        let signed_rpy = Message::Op(Op::Reply(SignedReply::new_trans(
-            event,
-            self.storage
-                .get_last_establishment_event_seal(signer_prefix)?
-                .ok_or(ControllerError::UnknownIdentifierError)?,
-            sigs,
-        )));
-        let kel = self
-            .storage
-            .get_kel_messages_with_receipts(signer_prefix)?
-            .ok_or(ControllerError::UnknownIdentifierError)?;
-
-        // TODO: send in one request
-        for ev in kel {
-            self.send_message_to(&dest_prefix, Scheme::Http, Message::Notice(ev))
-                .await?;
-        }
-        self.send_message_to(&dest_prefix, Scheme::Http, signed_rpy.clone())
-            .await?;
-
-        self.process(&signed_rpy)?;
         Ok(())
     }
 }

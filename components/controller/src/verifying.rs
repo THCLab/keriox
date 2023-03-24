@@ -36,8 +36,7 @@ impl Controller {
                         Payload::MGPK(_mgpk) => todo!(),
                     };
                     self.verify(payload, &s)
-                })
-            {
+                }) {
                 Ok(_) => true,
                 Err(err) => {
                     err_reasons.push(err);

@@ -598,7 +598,7 @@ impl IdentifierController {
                 } => (
                     args.src.clone().ok_or_else(|| {
                         ControllerError::QueryArgumentError(
-                            "Missing query receipient identifier".into(),
+                            "Missing query recipient identifier".into(),
                         )
                     })?,
                     None,
@@ -610,7 +610,7 @@ impl IdentifierController {
                 } => (
                     args.src.clone().ok_or_else(|| {
                         ControllerError::QueryArgumentError(
-                            "Missing query receipient identifier".into(),
+                            "Missing query recipient identifier".into(),
                         )
                     })?,
                     None,
