@@ -66,6 +66,9 @@ pub enum Error {
     #[error("No signer")]
     MissingSigner,
 
+    #[error("No signer identifier in db {0}")]
+    UnknownSigner(IdentifierPrefix),
+
     #[error("Signature verification failed")]
     SignatureVerificationError,
 

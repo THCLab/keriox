@@ -590,7 +590,6 @@ impl IdentifierController {
         let self_id = self.id.clone();
         let mut actions = Vec::new();
         for (qry, sig) in queries {
-            let signatures = vec![IndexedSignature::new_both_same(sig, 0)];
             let (recipient, about_who, from_who) = match &qry.data.data.route {
                 QueryRoute::Log {
                     reply_route: _,
@@ -621,7 +620,15 @@ impl IdentifierController {
                     args,
                 } => (args.src.clone(), Some(&args.i), Some(&args.pre)),
             };
-            let query = SignedQuery::new(qry.clone(), self_id.clone(), signatures);
+            let query = match &self.id {
+                IdentifierPrefix::Basic(bp) => {
+                    SignedQuery::new_nontrans(qry.clone(), bp.clone(), sig)
+                }
+                _ => {
+                    let signatures = vec![IndexedSignature::new_both_same(sig, 0)];
+                    SignedQuery::new_trans(qry.clone(), self_id.clone(), signatures)
+                }
+            };
             let res = self
                 .source
                 .send_query_to(&recipient, Scheme::Http, query)

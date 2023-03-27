@@ -313,7 +313,7 @@ impl<K: KeyManager> SimpleController<K> {
             0,
         );
         // Qry message signed by Bob
-        Ok(Op::Query(SignedQuery::new(
+        Ok(Op::Query(SignedQuery::new_trans(
             qry,
             self.prefix().clone(),
             vec![signature],
@@ -719,7 +719,7 @@ impl<K: KeyManager> SimpleController<K> {
             SelfSigningPrefix::Ed25519Sha512(signature),
             0,
         )];
-        let mbx_msg = SignedQuery::new(qry_msg, self.prefix.clone().clone(), signatures);
+        let mbx_msg = SignedQuery::new_trans(qry_msg, self.prefix.clone().clone(), signatures);
         mbx_msg
     }
 
@@ -759,7 +759,7 @@ impl<K: KeyManager> SimpleController<K> {
                     SelfSigningPrefix::Ed25519Sha512(signature),
                     0,
                 )];
-                SignedQuery::new(qry_msg, self.prefix.clone(), signatures)
+                SignedQuery::new_trans(qry_msg, self.prefix.clone(), signatures)
             })
             .collect()
     }

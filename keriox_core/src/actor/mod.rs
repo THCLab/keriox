@@ -200,38 +200,16 @@ pub fn process_signed_query(
     qr: SignedQuery,
     storage: &EventStorage,
 ) -> Result<ReplyType, SignedQueryError> {
-    let signatures = qr.signatures;
+    let signature = qr.signature;
     // check signatures
-    let signer_id = qr.signer.clone();
-    match signer_id {
-        IdentifierPrefix::Basic(id) if !id.is_transferable() => {
-            // TODO: Define separate signature variant for non transferable identifiers.
-            let sig = &signatures
-                .get(0)
-                .ok_or(SignedQueryError::InvalidSignature)?
-                .signature;
-            let ver_result =
-                match id.verify(&qr.query.encode().map_err(|_e| Error::VersionError)?, sig) {
-                    Ok(result) => result,
-                    Err(e) => {
-                        let keri_error: crate::error::Error = e.into();
-                        return Err(keri_error.into());
-                    }
-                };
-            if !ver_result {
-                return Err(SignedQueryError::InvalidSignature);
-            }
-        }
-        _ => {
-            let key_config = storage
-                .get_state(&signer_id)?
-                .ok_or_else(|| SignedQueryError::UnknownSigner { id: signer_id })?
-                .current;
-            if !key_config.verify(&qr.query.encode()?, &signatures)? {
-                return Err(SignedQueryError::InvalidSignature);
-            }
-        }
-    }
+    let ver_result = signature.verify(
+        &qr.query.encode().map_err(|_e| Error::VersionError)?,
+        storage,
+    )?;
+
+    if !ver_result {
+        return Err(SignedQueryError::InvalidSignature);
+    };
 
     // TODO check timestamps
     // unpack and check what's inside

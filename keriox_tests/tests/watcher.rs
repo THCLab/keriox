@@ -161,12 +161,17 @@ pub fn watcher_forward_ksn() -> Result<(), Error> {
     watcher.process_reply(witness_oobi).unwrap();
 
     let mut wrong_query = query.clone();
-    if let Op::Query(SignedQuery { signatures, .. }) = &mut wrong_query {
-        if let SelfSigningPrefix::Ed25519Sha512(ref mut bytes) = &mut signatures[0].signature {
-            bytes[15] += 1;
-        } else {
-            panic!("Unexpected signature type");
-        }
+    if let Op::Query(SignedQuery { signature, .. }) = &mut wrong_query {
+        match signature {
+            keri::event_message::signature::Signature::Transferable(_, sig) => {
+                if let SelfSigningPrefix::Ed25519Sha512(ref mut bytes) = &mut sig[0].signature {
+                    bytes[15] += 1;
+                } else {
+                    panic!("Unexpected signature type");
+                }
+            }
+            keri::event_message::signature::Signature::NonTransferable(_) => unreachable!(),
+        };
     }
 
     // Send wrong query

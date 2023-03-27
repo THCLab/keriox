@@ -13,7 +13,7 @@ reqwest = { version = "0.11", features = ["json", "rustls-tls", "blocking"], def
 thiserror = "1.0"
 serde_json = "1.0"
 url = "2.3.1"
-cesrox = { git = "https://github.com/THCLab/cesrox" }
+cesrox = { git = "https://github.com/THCLab/cesrox", tag = "v0.1.4" }
 
 [dev-dependencies]
 witness = { path = "../witness" }

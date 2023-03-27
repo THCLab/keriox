@@ -39,6 +39,9 @@ pub enum ActorError {
 
     #[error("no identifier state for prefix {prefix:?}")]
     NoIdentState { prefix: IdentifierPrefix },
+
+    #[error("Missing signer identifier")]
+    MissingSignerId,
 }
 
 #[cfg(feature = "query")]

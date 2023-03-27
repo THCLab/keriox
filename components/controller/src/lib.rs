@@ -492,15 +492,17 @@ impl Controller {
         event: ReplyEvent,
         sig: Vec<SelfSigningPrefix>,
     ) -> Result<(), ControllerError> {
-        match signer_prefix {
-            IdentifierPrefix::Basic(bp) => {
-                let signed_rpy = Message::Op(Op::Reply(SignedReply::new_nontrans(
-                    event,
-                    bp.clone(),
-                    sig[0].clone(),
-                )));
-                self.process(&signed_rpy)?;
-            }
+        let dest_prefix = match &event.data.data {
+            ReplyRoute::EndRoleAdd(role) => role.eid.clone(),
+            ReplyRoute::EndRoleCut(role) => role.eid.clone(),
+            _ => return Err(ControllerError::EventFormatError),
+        };
+        let signed_reply = match signer_prefix {
+            IdentifierPrefix::Basic(bp) => Message::Op(Op::Reply(SignedReply::new_nontrans(
+                event,
+                bp.clone(),
+                sig[0].clone(),
+            ))),
             _ => {
                 let sigs = sig
                     .into_iter()
@@ -508,12 +510,6 @@ impl Controller {
                     .map(|(i, sig)| IndexedSignature::new_both_same(sig, i as u16))
                     .collect();
 
-                let dest_prefix = match &event.data.data {
-                    ReplyRoute::Ksn(_, _) => todo!(),
-                    ReplyRoute::LocScheme(_) => todo!(),
-                    ReplyRoute::EndRoleAdd(role) => role.eid.clone(),
-                    ReplyRoute::EndRoleCut(role) => role.eid.clone(),
-                };
                 let signed_rpy = Message::Op(Op::Reply(SignedReply::new_trans(
                     event,
                     self.storage
@@ -524,19 +520,22 @@ impl Controller {
                 let kel = self
                     .storage
                     .get_kel_messages_with_receipts(signer_prefix)?
-                    .ok_or(ControllerError::UnknownIdentifierError)?;
+                    .ok_or(ControllerError::UnknownIdentifierError)
+                    .unwrap();
 
                 // TODO: send in one request
                 for ev in kel {
                     self.send_message_to(&dest_prefix, Scheme::Http, Message::Notice(ev))
                         .await?;
                 }
-                self.send_message_to(&dest_prefix, Scheme::Http, signed_rpy.clone())
-                    .await?;
-
-                self.process(&signed_rpy)?;
+                signed_rpy
             }
         };
+
+        self.process(&signed_reply)?;
+
+        self.send_message_to(&dest_prefix, Scheme::Http, signed_reply.clone())
+            .await?;
         Ok(())
     }
 }

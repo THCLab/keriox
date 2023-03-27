@@ -97,9 +97,9 @@ const ENV_PREFIX: &str = "WITNESS_";
 
 #[actix_web::main]
 async fn main() -> Result<()> {
-    std::env::set_var("RUST_LOG", "debug");
-    std::env::set_var("RUST_BACKTRACE", "1");
-    env_logger::init();
+    // std::env::set_var("RUST_LOG", "debug");
+    // std::env::set_var("RUST_BACKTRACE", "1");
+    // env_logger::init();
 
     let args = Args::parse();
 

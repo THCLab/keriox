@@ -58,9 +58,11 @@ impl Signature {
                     .get_state(
                         &self
                             .get_signer()
-                            .ok_or(Error::SemanticError("Uknown signer".into()))?,
+                            .ok_or(Error::MissingSigner)?,
                     )?
-                    .ok_or_else(|| Error::SemanticError("No signer identifier in db".into()))?
+                    .ok_or_else(|| {
+                        Error::UnknownSigner(self.get_signer().unwrap())
+                    })?
                     .current;
                 kc.verify(data, &sigs)
             }
@@ -68,7 +70,7 @@ impl Signature {
                 .iter()
                 .all(|(id, sig)| id.verify(data, &sig).unwrap())),
             Signature::NonTransferable(Nontransferable::Indexed(_sigs)) => {
-                Err(Error::SemanticError("Uknown signer".into()))
+                Err(Error::MissingSigner)
             }
         }
     }

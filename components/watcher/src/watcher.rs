@@ -10,7 +10,7 @@ use keri::{
     error::Error,
     event_message::signed_event_message::{Message, Notice, Op},
     oobi::{error::OobiError, EndRole, LocationScheme, OobiManager, Role, Scheme},
-    prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
+    prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     processor::escrow::{default_escrow_bus, EscrowConfig},
     query::{
         query_event::{QueryArgs, QueryEvent, QueryRoute, SignedQuery},
@@ -185,7 +185,10 @@ impl WatcherData {
         &self,
         qry: SignedQuery,
     ) -> Result<Option<PossibleResponse>, ActorError> {
-        let cid = qry.signer.clone();
+        let cid = qry
+            .signature
+            .get_signer()
+            .ok_or(ActorError::MissingSignerId)?;
         if !self.check_role(&cid)? {
             return Err(ActorError::MissingRole {
                 id: cid.clone(),
@@ -248,15 +251,8 @@ impl WatcherData {
     /// Forward query to random registered witness and save its response to mailbox.
     async fn forward_query(&self, qry: &SignedQuery) -> Result<(), ActorError> {
         // Create a new signed message based on the received one
-        let sigs = vec![IndexedSignature::new_both_same(
-            SelfSigningPrefix::Ed25519Sha512(self.signer.sign(qry.query.encode()?)?),
-            0,
-        )];
-        let qry = SignedQuery::new(
-            qry.query.clone(),
-            IdentifierPrefix::Basic(self.prefix.clone()),
-            sigs,
-        );
+        let sigs = SelfSigningPrefix::Ed25519Sha512(self.signer.sign(qry.query.encode()?)?);
+        let qry = SignedQuery::new_nontrans(qry.query.clone(), self.prefix.clone(), sigs);
 
         let wit_id = self.get_witness_for_prefix(qry.query.get_prefix())?;
 
@@ -310,18 +306,11 @@ impl WatcherData {
         )?;
 
         // sign message by watcher
-        let signature = IndexedSignature::new_both_same(
-            SelfSigningPrefix::Ed25519Sha512(
-                (self.signer).sign(serde_json::to_vec(&qry).unwrap())?,
-            ),
-            0,
+        let signature = SelfSigningPrefix::Ed25519Sha512(
+            (self.signer).sign(serde_json::to_vec(&qry).unwrap())?,
         );
 
-        let query = SignedQuery::new(
-            qry,
-            IdentifierPrefix::Basic(self.prefix.clone()),
-            vec![signature],
-        );
+        let query = SignedQuery::new_nontrans(qry, self.prefix.clone(), signature);
 
         let wit_id = self.get_witness_for_prefix(prefix)?;
 
