@@ -9,6 +9,8 @@ pub mod verifying;
 use keri::prefix::IndexedSignature;
 pub use keri::prefix::{BasicPrefix, CesrPrimitive, IdentifierPrefix, SelfSigningPrefix};
 pub use keri::signer::{CryptoBox, KeyManager};
+pub use keri::keys::PublicKey;
+pub use keri::oobi::{LocationScheme, EndRole, Oobi};
 
 use config::ControllerConfig;
 use keri::{
@@ -23,7 +25,7 @@ use keri::{
         msg::KeriEvent,
         signed_event_message::{Message, Notice, Op, SignedEventMessage},
     },
-    oobi::{LocationScheme, Oobi, OobiManager, Role, Scheme},
+    oobi::{OobiManager, Role, Scheme},
     processor::{
         basic_processor::BasicProcessor,
         escrow::{default_escrow_bus, PartiallyWitnessedEscrow},
