@@ -126,8 +126,6 @@ impl Typeable for Query {
 pub struct SignedQuery {
     pub query: QueryEvent,
     pub signature: Signature,
-    // pub signer: IdentifierPrefix,
-    // pub signatures: Vec<IndexedSignature>,
 }
 
 impl SignedQuery {

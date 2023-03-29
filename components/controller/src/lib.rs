@@ -6,11 +6,11 @@ pub mod identifier_controller;
 pub mod mailbox_updating;
 mod test;
 pub mod verifying;
+pub use keri::keys::PublicKey;
+pub use keri::oobi::{EndRole, LocationScheme, Oobi};
 use keri::prefix::IndexedSignature;
 pub use keri::prefix::{BasicPrefix, CesrPrimitive, IdentifierPrefix, SelfSigningPrefix};
 pub use keri::signer::{CryptoBox, KeyManager};
-pub use keri::keys::PublicKey;
-pub use keri::oobi::{LocationScheme, EndRole, Oobi};
 
 use config::ControllerConfig;
 use keri::{

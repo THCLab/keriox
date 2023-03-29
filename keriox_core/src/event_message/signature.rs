@@ -55,14 +55,8 @@ impl Signature {
         match self {
             Signature::Transferable(_sigd, sigs) => {
                 let kc = storage
-                    .get_state(
-                        &self
-                            .get_signer()
-                            .ok_or(Error::MissingSigner)?,
-                    )?
-                    .ok_or_else(|| {
-                        Error::UnknownSigner(self.get_signer().unwrap())
-                    })?
+                    .get_state(&self.get_signer().ok_or(Error::MissingSigner)?)?
+                    .ok_or_else(|| Error::UnknownSigner(self.get_signer().unwrap()))?
                     .current;
                 kc.verify(data, &sigs)
             }
