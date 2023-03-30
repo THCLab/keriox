@@ -11,9 +11,9 @@ license = "EUPL-1.2"
 
 [dependencies]
 keri = {path = "../../keriox_core"}
-sai = { git = "https://github.com/THCLab/cesrox" }
-cesrox = { git = "https://github.com/THCLab/cesrox" }
-version = { git = "https://github.com/THCLab/cesrox" }
+sai = { git = "https://github.com/THCLab/cesrox", rev = "59f84d9" }
+cesrox = { git = "https://github.com/THCLab/cesrox", rev = "59f84d9" }
+version = { git = "https://github.com/THCLab/cesrox", rev = "59f84d9" }
 base64 = "0.13.0"
 serde = "1.0"
 serde_json = "1.0"
