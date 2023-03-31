@@ -3,7 +3,7 @@ use futures::{StreamExt, TryStreamExt};
 use keri::{
     actor::{
         event_generator,
-        prelude::{Message, SAD},
+        prelude::{Message},
     },
     event::{
         event_data::EventData,

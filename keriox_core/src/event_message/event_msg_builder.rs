@@ -23,7 +23,7 @@ use crate::{
 };
 use ed25519_dalek::Keypair;
 use rand::rngs::OsRng;
-use sai::{derivation::SelfAddressing, sad::SAD, SelfAddressingPrefix};
+use said::{derivation::{HashFunction, HashFunctionCode}, SelfAddressingIdentifier};
 use version::serialization_info::SerializationFormats;
 
 use super::{msg::KeriEvent, EventTypeTag};
@@ -36,8 +36,8 @@ pub struct EventMsgBuilder {
     next_key_threshold: SignatureThreshold,
     keys: Vec<BasicPrefix>,
     next_keys: Vec<BasicPrefix>,
-    next_keys_hashes: Option<Vec<SelfAddressingPrefix>>,
-    prev_event: SelfAddressingPrefix,
+    next_keys_hashes: Option<Vec<SelfAddressingIdentifier>>,
+    prev_event: SelfAddressingIdentifier,
     data: Vec<Seal>,
     delegator: IdentifierPrefix,
     witness_threshold: SignatureThreshold,
@@ -45,7 +45,7 @@ pub struct EventMsgBuilder {
     witness_to_add: Vec<BasicPrefix>,
     witness_to_remove: Vec<BasicPrefix>,
     format: SerializationFormats,
-    derivation: SelfAddressing,
+    derivation: HashFunction,
 }
 
 impl EventMsgBuilder {
@@ -55,6 +55,7 @@ impl EventMsgBuilder {
         let nkp = Keypair::generate(&mut rng);
         let pk = PublicKey::new(kp.public.to_bytes().to_vec());
         let npk = PublicKey::new(nkp.public.to_bytes().to_vec());
+        let hash_function: HashFunction = HashFunctionCode::Blake3_256.into();
         let basic_pref = BasicPrefix::Ed25519(pk);
         EventMsgBuilder {
             event_type,
@@ -64,7 +65,7 @@ impl EventMsgBuilder {
             key_threshold: SignatureThreshold::default(),
             next_key_threshold: SignatureThreshold::default(),
             sn: 1,
-            prev_event: SelfAddressing::Blake3_256.derive(&[0u8; 32]),
+            prev_event: hash_function.derive(&[0u8; 32]),
             data: vec![],
             delegator: IdentifierPrefix::default(),
             witness_threshold: SignatureThreshold::Simple(0),
@@ -72,7 +73,7 @@ impl EventMsgBuilder {
             witness_to_add: vec![],
             witness_to_remove: vec![],
             format: SerializationFormats::JSON,
-            derivation: SelfAddressing::Blake3_256,
+            derivation: hash_function,
             next_keys_hashes: None,
         }
     }
@@ -92,7 +93,7 @@ impl EventMsgBuilder {
         EventMsgBuilder { next_keys, ..self }
     }
 
-    pub fn with_next_keys_hashes(self, next_keys: Vec<SelfAddressingPrefix>) -> Self {
+    pub fn with_next_keys_hashes(self, next_keys: Vec<SelfAddressingIdentifier>) -> Self {
         EventMsgBuilder {
             next_keys_hashes: Some(next_keys),
             ..self
@@ -102,7 +103,7 @@ impl EventMsgBuilder {
     pub fn with_sn(self, sn: u64) -> Self {
         EventMsgBuilder { sn, ..self }
     }
-    pub fn with_previous_event(self, prev_event: &SelfAddressingPrefix) -> Self {
+    pub fn with_previous_event(self, prev_event: &SelfAddressingIdentifier) -> Self {
         EventMsgBuilder {
             prev_event: prev_event.clone(),
             ..self

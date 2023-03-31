@@ -1,7 +1,7 @@
 pub mod vc_state;
 
 use keri::prefix::IdentifierPrefix;
-use sai::{sad::SAD, SelfAddressingPrefix};
+use said::{SelfAddressingIdentifier};
 
 use crate::{
     error::Error,
@@ -20,7 +20,7 @@ pub enum State {
 pub struct ManagerTelState {
     pub prefix: IdentifierPrefix,
     pub sn: u64,
-    pub last: SelfAddressingPrefix,
+    pub last: SelfAddressingIdentifier,
     pub issuer: IdentifierPrefix,
     pub backers: Option<Vec<IdentifierPrefix>>,
 }

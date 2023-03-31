@@ -5,7 +5,7 @@ use keri::{
     event_message::{msg::KeriEvent, Typeable},
     prefix::IdentifierPrefix,
 };
-use sai::{derivation::SelfAddressing, SelfAddressingPrefix};
+use said::{derivation::HashFunctionCode, SelfAddressingIdentifier};
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use serde_hex::{Compact, SerHex};
 use serde_json::Value;
@@ -115,10 +115,10 @@ impl VCEvent {
     pub fn to_message(
         self,
         format: SerializationFormats,
-        derivation: SelfAddressing,
+        derivation: HashFunctionCode,
     ) -> Result<VCEventMessage, Error> {
         let timestamped = TimestampedVCEvent::new(self);
-        Ok(KeriEvent::new(format, derivation, timestamped)?)
+        Ok(KeriEvent::new(format, derivation.into(), timestamped)?)
     }
 }
 
@@ -190,12 +190,12 @@ pub struct SimpleRevocation {
     #[serde(rename = "ri")]
     pub registry_id: IdentifierPrefix,
     #[serde(rename = "p")]
-    pub prev_event_hash: SelfAddressingPrefix,
+    pub prev_event_hash: SelfAddressingIdentifier,
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Revocation {
     #[serde(rename = "p")]
-    pub prev_event_hash: SelfAddressingPrefix,
+    pub prev_event_hash: SelfAddressingIdentifier,
     // registry anchor to management TEL
     #[serde(rename = "ra")]
     pub registry_anchor: Option<EventSeal>,

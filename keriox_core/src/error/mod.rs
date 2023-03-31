@@ -146,8 +146,8 @@ impl From<version::error::Error> for Error {
     }
 }
 
-impl From<sai::error::Error> for Error {
-    fn from(_: sai::error::Error) -> Self {
+impl From<said::error::Error> for Error {
+    fn from(_: said::error::Error) -> Self {
         Error::SAIError
     }
 }

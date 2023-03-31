@@ -1,6 +1,6 @@
 use cesrox::primitives::CesrPrimitive;
 use chrono::{DateTime, FixedOffset};
-use sai::derivation::SelfAddressing;
+use said::derivation::HashFunctionCode;
 use serde::{de, ser::SerializeStruct, Deserialize, Deserializer, Serialize, Serializer};
 use version::serialization_info::SerializationFormats;
 
@@ -134,11 +134,11 @@ impl Typeable for ReplyRoute {
 impl ReplyEvent {
     pub fn new_reply(
         route: ReplyRoute,
-        self_addressing: SelfAddressing,
+        self_addressing: HashFunctionCode,
         serialization: SerializationFormats,
     ) -> Result<ReplyEvent, Error> {
         let env = Timestamped::new(route);
-        KeriEvent::new(serialization, self_addressing, env)
+        KeriEvent::new(serialization, self_addressing.into(), env)
     }
 }
 

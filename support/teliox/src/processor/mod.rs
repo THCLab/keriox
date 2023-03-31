@@ -1,5 +1,5 @@
 use keri::prefix::IdentifierPrefix;
-use sai::SelfAddressingPrefix;
+use said::SelfAddressingIdentifier;
 
 use crate::{
     database::EventDatabase,
@@ -90,7 +90,7 @@ impl<'d> EventProcessor<'d> {
         }
     }
 
-    pub fn get_events(&self, vc_id: &SelfAddressingPrefix) -> Result<Vec<VerifiableEvent>, Error> {
+    pub fn get_events(&self, vc_id: &SelfAddressingIdentifier) -> Result<Vec<VerifiableEvent>, Error> {
         let prefix = IdentifierPrefix::SelfAddressing(vc_id.to_owned());
         match self.db.get_events(&prefix) {
             Some(events) => Ok(events.collect()),
@@ -119,7 +119,8 @@ impl<'d> EventProcessor<'d> {
 #[cfg(test)]
 mod tests {
     use keri::prefix::IdentifierPrefix;
-    use sai::derivation::SelfAddressing;
+    use cesrox::primitives::codes::self_addressing::SelfAddressing;
+    use said::derivation::HashFunction;
 
     use crate::{
         error::Error, event::verifiable_event::VerifiableEvent, processor::EventProcessor,
@@ -138,7 +139,7 @@ mod tests {
 
         // Setup test data.
         let message = "some message";
-        let message_id = SelfAddressing::Blake3_256.derive(message.as_bytes());
+        let message_id = HashFunction::from(SelfAddressing::Blake3_256).derive(message.as_bytes());
         let issuer_prefix: IdentifierPrefix = "EaKJ0FoLxO1TYmyuprguKO7kJ7Hbn0m0Wuk5aMtSrMtY"
             .parse()
             .unwrap();

@@ -1,5 +1,5 @@
 use cesrox::cesr_proof::MaterialPath;
-use sai::derivation::SelfAddressing;
+use said::derivation::HashFunctionCode;
 use serde::{Deserialize, Serialize};
 use version::serialization_info::SerializationFormats;
 
@@ -36,9 +36,9 @@ impl Exchange {
     pub fn to_message(
         self,
         format: SerializationFormats,
-        derivation: SelfAddressing,
+        derivation: HashFunctionCode,
     ) -> Result<ExchangeMessage, Error> {
-        KeriEvent::new(format, derivation, Timestamped::new(self))
+        KeriEvent::new(format, derivation.into(), Timestamped::new(self))
     }
 }
 

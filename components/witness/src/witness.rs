@@ -172,7 +172,7 @@ impl Witness {
         );
         let reply = ReplyEvent::new_reply(
             ReplyRoute::LocScheme(loc_scheme),
-            SelfAddressing::Blake3_256,
+            HashFunctionCode::Blake3_256,
             SerializationFormats::JSON,
         )?;
         let signed_reply = SignedReply::new_nontrans(
@@ -213,7 +213,7 @@ impl Witness {
             .get_ksn_for_prefix(prefix, SerializationFormats::JSON)?;
         let rpy = ReplyEvent::new_reply(
             ReplyRoute::Ksn(IdentifierPrefix::Basic(self.prefix.clone()), ksn),
-            SelfAddressing::Blake3_256,
+            HashFunctionCode::Blake3_256,
             SerializationFormats::JSON,
         )?;
 
@@ -267,7 +267,7 @@ impl Witness {
             ReplyType::Ksn(ksn) => {
                 let rpy = ReplyEvent::new_reply(
                     ReplyRoute::Ksn(IdentifierPrefix::Basic(self.prefix.clone()), ksn),
-                    SelfAddressing::Blake3_256,
+                    HashFunctionCode::Blake3_256,
                     SerializationFormats::JSON,
                 )?;
 

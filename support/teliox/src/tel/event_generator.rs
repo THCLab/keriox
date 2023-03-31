@@ -1,6 +1,7 @@
 use keri::{event::sections::seal::EventSeal, prefix::IdentifierPrefix};
-use sai::{derivation::SelfAddressing, SelfAddressingPrefix};
+use said::{SelfAddressingIdentifier, derivation::HashFunction};
 use version::serialization_info::SerializationFormats;
+use cesrox::primitives::codes::self_addressing::SelfAddressing;
 
 use crate::{
     error::Error,
@@ -30,7 +31,7 @@ pub fn make_inception_event(
     Ok(Event::Management(
         event_type
             .incept_self_addressing(
-                derivation.unwrap_or(&SelfAddressing::Blake3_256),
+                &HashFunction::from(derivation.unwrap_or(&SelfAddressing::Blake3_256).to_owned()),
                 serialization_format
                     .unwrap_or(&SerializationFormats::JSON)
                     .to_owned(),
@@ -67,7 +68,7 @@ pub fn make_rotation_event(
 
 pub fn make_issuance_event(
     state: &ManagerTelState,
-    vc_hash: SelfAddressingPrefix,
+    vc_hash: SelfAddressingIdentifier,
     derivation: Option<&SelfAddressing>,
     serialization_format: Option<&SerializationFormats>,
 ) -> Result<Event, Error> {
@@ -85,8 +86,8 @@ pub fn make_issuance_event(
 }
 
 pub fn make_revoke_event(
-    vc_hash: &SelfAddressingPrefix,
-    last_vc_event_hash: SelfAddressingPrefix,
+    vc_hash: &SelfAddressingIdentifier,
+    last_vc_event_hash: SelfAddressingIdentifier,
     state: &ManagerTelState,
     derivation: Option<&SelfAddressing>,
     serialization_format: Option<&SerializationFormats>,
