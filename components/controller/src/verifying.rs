@@ -1,4 +1,4 @@
-use cesrox::{parse_many, payload::Payload};
+use cesrox::{payload::Payload, ParsedData, parse_many};
 use keri::{
     error::Error,
     event_message::signature::{get_signatures, Signature},
@@ -8,6 +8,28 @@ use keri::{
 use crate::{error::ControllerError, Controller};
 
 impl Controller {
+    /// Parse elements from cesr stream and splits them into oobis to be
+    /// resolved and signed credentials.
+    pub fn parse_cesr_stream(
+        &self,
+        stream: &str,
+    ) -> Result<(Vec<String>, Vec<ParsedData>), ControllerError> {
+        let (_rest, data) =
+            parse_many(stream.as_bytes()).map_err(|_e| ControllerError::CesrFormatError)?;
+        // When attachments are empty, it is expected to be an oobi.
+        let (oobis, to_verify): (Vec<_>, Vec<_>) =
+            data.into_iter().partition(|d| d.attachments.is_empty());
+        let oo = oobis
+            .into_iter()
+            .map(|o| match o.payload {
+                Payload::JSON(json_oobi) => String::from_utf8(json_oobi).unwrap(),
+                Payload::CBOR(_) => todo!(),
+                Payload::MGPK(_) => todo!(),
+            })
+            .collect();
+        Ok((oo, to_verify))
+    }
+
     pub fn verify(&self, data: &[u8], signature: &Signature) -> Result<(), ControllerError> {
         let verifier = EventValidator::new(self.storage.db.clone());
         verifier.verify(data, signature).map_err(|e| match e {
@@ -20,9 +42,8 @@ impl Controller {
         })
     }
 
-    pub fn verify_from_cesr(&self, stream: &str) -> Result<(), ControllerError> {
-        let (_rest, data) =
-            parse_many(stream.as_bytes()).map_err(|_e| ControllerError::CesrFormatError)?;
+    /// Verify signed data that was parsed from cesr stream.
+    pub fn verify_parsed(&self, data: &[ParsedData]) -> Result<(), ControllerError> {
         let mut err_reasons: Vec<ControllerError> = vec![];
         let (_oks, errs): (Vec<_>, Vec<_>) = data.iter().partition(|d| {
             match d
