@@ -137,10 +137,9 @@ pub fn derive(seed: &SeedPrefix, transferable: bool) -> Result<BasicPrefix, Erro
 mod tests {
     use super::*;
     use crate::keys::{PrivateKey, PublicKey};
-    use cesrox::primitives::codes::self_addressing::SelfAddressing;
     use ed25519_dalek::Keypair;
     use rand::rngs::OsRng;
-    use said::derivation::HashFunction;
+    use said::derivation::{HashFunction, HashFunctionCode};
 
     #[test]
     fn simple_deserialize() -> Result<(), Error> {
@@ -323,41 +322,41 @@ mod tests {
 
         // Test SelfAddressingIdentifier serialization.
         assert_eq!(
-            SelfAddressingIdentifier::new(SelfAddressing::Blake3_256.into(), vec![0; 32]).to_str(),
+            SelfAddressingIdentifier::new(HashFunctionCode::Blake3_256.into(), vec![0; 32]).to_str(),
             ["E".to_string(), "A".repeat(43)].join("")
         );
         assert_eq!(
-            SelfAddressingIdentifier::new(SelfAddressing::Blake2B256(vec!()).into(), vec![0; 32])
+            SelfAddressingIdentifier::new(HashFunctionCode::Blake2B256(vec!()).into(), vec![0; 32])
                 .to_str(),
             ["F".to_string(), "A".repeat(43)].join("")
         );
         assert_eq!(
-            SelfAddressingIdentifier::new(SelfAddressing::Blake2S256(vec!()).into(), vec![0; 32])
+            SelfAddressingIdentifier::new(HashFunctionCode::Blake2S256(vec!()).into(), vec![0; 32])
                 .to_str(),
             ["G".to_string(), "A".repeat(43)].join("")
         );
         assert_eq!(
-            SelfAddressingIdentifier::new(SelfAddressing::SHA3_256.into(), vec![0; 32]).to_str(),
+            SelfAddressingIdentifier::new(HashFunctionCode::SHA3_256.into(), vec![0; 32]).to_str(),
             ["H".to_string(), "A".repeat(43)].join("")
         );
         assert_eq!(
-            SelfAddressingIdentifier::new(SelfAddressing::SHA2_256.into(), vec![0; 32]).to_str(),
+            SelfAddressingIdentifier::new(HashFunctionCode::SHA2_256.into(), vec![0; 32]).to_str(),
             ["I".to_string(), "A".repeat(43)].join("")
         );
         assert_eq!(
-            SelfAddressingIdentifier::new(SelfAddressing::Blake3_512.into(), vec![0; 64]).to_str(),
+            SelfAddressingIdentifier::new(HashFunctionCode::Blake3_512.into(), vec![0; 64]).to_str(),
             ["0D".to_string(), "A".repeat(86)].join("")
         );
         assert_eq!(
-            SelfAddressingIdentifier::new(SelfAddressing::SHA3_512.into(), vec![0; 64]).to_str(),
+            SelfAddressingIdentifier::new(HashFunctionCode::SHA3_512.into(), vec![0; 64]).to_str(),
             ["0E".to_string(), "A".repeat(86)].join("")
         );
         assert_eq!(
-            SelfAddressingIdentifier::new(SelfAddressing::Blake2B512.into(), vec![0; 64]).to_str(),
+            SelfAddressingIdentifier::new(HashFunctionCode::Blake2B512.into(), vec![0; 64]).to_str(),
             ["0F".to_string(), "A".repeat(86)].join("")
         );
         assert_eq!(
-            SelfAddressingIdentifier::new(SelfAddressing::SHA2_512.into(), vec![0; 64]).to_str(),
+            SelfAddressingIdentifier::new(HashFunctionCode::SHA2_512.into(), vec![0; 64]).to_str(),
             ["0G".to_string(), "A".repeat(86)].join("")
         );
 
@@ -381,12 +380,11 @@ mod tests {
     #[test]
     pub fn test_identifier_encoding() {
         use crate::keys::PublicKey;
-        use cesrox::primitives::codes::self_addressing::SelfAddressing;
         use sodiumoxide::hex;
         let pub_key = "694e894769e6c3267e8b477c2590284cd647dd42ef6007d254fce1cd2e9be423";
         let key = hex::decode(pub_key).unwrap();
         let bp = BasicPrefix::Ed25519NT(PublicKey::new(key));
-        let hash_function: HashFunction = SelfAddressing::Blake3_256.into();
+        let hash_function: HashFunction = HashFunctionCode::Blake3_256.into();
         let expected_identifier = "BGlOiUdp5sMmfotHfCWQKEzWR91C72AH0lT84c0um-Qj";
         assert_eq!(bp.to_str(), expected_identifier);
 

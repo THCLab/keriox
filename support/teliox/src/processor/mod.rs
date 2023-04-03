@@ -121,9 +121,8 @@ impl<'d> EventProcessor<'d> {
 
 #[cfg(test)]
 mod tests {
-    use cesrox::primitives::codes::self_addressing::SelfAddressing;
     use keri::prefix::IdentifierPrefix;
-    use said::derivation::HashFunction;
+    use said::derivation::{HashFunction, HashFunctionCode};
 
     use crate::{
         error::Error, event::verifiable_event::VerifiableEvent, processor::EventProcessor,
@@ -142,7 +141,7 @@ mod tests {
 
         // Setup test data.
         let message = "some message";
-        let message_id = HashFunction::from(SelfAddressing::Blake3_256).derive(message.as_bytes());
+        let message_id = HashFunction::from(HashFunctionCode::Blake3_256).derive(message.as_bytes());
         let issuer_prefix: IdentifierPrefix = "EaKJ0FoLxO1TYmyuprguKO7kJ7Hbn0m0Wuk5aMtSrMtY"
             .parse()
             .unwrap();

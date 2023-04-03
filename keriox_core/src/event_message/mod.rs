@@ -114,7 +114,8 @@ mod tests {
         signer::setup_signers,
         state::{EventSemantics, IdentifierState},
     };
-    use cesrox::primitives::{codes::self_addressing::SelfAddressing, CesrPrimitive};
+    use cesrox::primitives::{CesrPrimitive};
+    use said::derivation::HashFunctionCode;
     use ed25519_dalek::Keypair;
     use rand::rngs::OsRng;
     use version::serialization_info::SerializationFormats;
@@ -141,7 +142,7 @@ mod tests {
         let nxt = nxt_commitment(
             SignatureThreshold::Simple(1),
             &vec![pref1],
-            &SelfAddressing::Blake3_256.into(),
+            &HashFunctionCode::Blake3_256.into(),
         );
 
         // create a simple inception event
@@ -162,7 +163,7 @@ mod tests {
 
         let icp_m = icp.to_message(
             SerializationFormats::JSON,
-            SelfAddressing::Blake3_256.into(),
+            HashFunctionCode::Blake3_256.into(),
         )?;
 
         // serialised message
@@ -233,7 +234,7 @@ mod tests {
         let nexter_pref = nxt_commitment(
             SignatureThreshold::default(),
             &[sig_pref_1, enc_pref_1],
-            &SelfAddressing::Blake3_256.into(),
+            &HashFunctionCode::Blake3_256.into(),
         );
 
         let icp = InceptionEvent::new(
@@ -246,7 +247,7 @@ mod tests {
             None,
         )
         .incept_self_addressing(
-            SelfAddressing::Blake3_256.into(),
+            HashFunctionCode::Blake3_256.into(),
             SerializationFormats::JSON,
         )?;
 
