@@ -1,4 +1,4 @@
-use cesrox::{payload::Payload, ParsedData, parse_many};
+use cesrox::{parse_many, payload::Payload, ParsedData};
 use keri::{
     error::Error,
     event_message::signature::{get_signatures, Signature},
