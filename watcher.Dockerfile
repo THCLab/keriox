@@ -1,15 +1,17 @@
-FROM rust:1.61 AS builder
+FROM rust:1.65.0 as build
 
-WORKDIR app
 COPY Cargo.toml ./
 COPY ./src src
+COPY ./components components
+COPY ./keriox_core keriox_core
+COPY ./support support
+COPY ./keriox_tests keriox_tests
 RUN cargo fetch
-RUN cargo build --release --bin watcher-binary --all-features
+RUN cargo build --release --package watcher
 
-FROM debian:buster-slim
-WORKDIR app
-COPY --from=builder /app/target/release/watcher-binary /usr/local/bin
-COPY --from=builder /app/src/bin/configs/watcher.json /app/watcher-conf.json
-
-ENTRYPOINT ["/usr/local/bin/watcher-binary"]
-CMD ["-c", "/app/watcher-conf.json"]
+FROM debian:10-slim
+RUN apt update && apt install libssl-dev -y
+WORKDIR /app
+COPY --from=build /target/release/watcher .
+COPY --from=build /components/watcher/watcher.yml .
+ENTRYPOINT ["/app/watcher"]
