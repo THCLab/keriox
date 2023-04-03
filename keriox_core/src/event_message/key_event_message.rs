@@ -1,5 +1,5 @@
 use cesrox::primitives::codes::self_addressing::dummy_prefix;
-use said::{SelfAddressingIdentifier};
+use said::SelfAddressingIdentifier;
 use version::serialization_info::SerializationInfo;
 
 use crate::{

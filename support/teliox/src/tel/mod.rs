@@ -8,7 +8,10 @@ use crate::{
     state::{vc_state::TelState, ManagerTelState, State},
 };
 use keri::prefix::IdentifierPrefix;
-use said::{derivation::{HashFunctionCode, HashFunction}, SelfAddressingIdentifier};
+use said::{
+    derivation::{HashFunction, HashFunctionCode},
+    SelfAddressingIdentifier,
+};
 
 pub mod event_generator;
 
@@ -86,7 +89,10 @@ impl<'d> Tel<'d> {
         self.processor.get_vc_state(&vc_prefix)
     }
 
-    pub fn get_tel(&self, vc_hash: &SelfAddressingIdentifier) -> Result<Vec<VerifiableEvent>, Error> {
+    pub fn get_tel(
+        &self,
+        vc_hash: &SelfAddressingIdentifier,
+    ) -> Result<Vec<VerifiableEvent>, Error> {
         self.processor.get_events(vc_hash)
     }
 

@@ -90,7 +90,10 @@ impl<'d> EventProcessor<'d> {
         }
     }
 
-    pub fn get_events(&self, vc_id: &SelfAddressingIdentifier) -> Result<Vec<VerifiableEvent>, Error> {
+    pub fn get_events(
+        &self,
+        vc_id: &SelfAddressingIdentifier,
+    ) -> Result<Vec<VerifiableEvent>, Error> {
         let prefix = IdentifierPrefix::SelfAddressing(vc_id.to_owned());
         match self.db.get_events(&prefix) {
             Some(events) => Ok(events.collect()),
@@ -118,8 +121,8 @@ impl<'d> EventProcessor<'d> {
 
 #[cfg(test)]
 mod tests {
-    use keri::prefix::IdentifierPrefix;
     use cesrox::primitives::codes::self_addressing::SelfAddressing;
+    use keri::prefix::IdentifierPrefix;
     use said::derivation::HashFunction;
 
     use crate::{

@@ -139,7 +139,10 @@ fn make_rotation(
         .map_err(|e| Error::EventGenerationError(e.to_string()))
 }
 
-pub fn anchor(state: IdentifierState, payload: &[SelfAddressingIdentifier]) -> Result<String, Error> {
+pub fn anchor(
+    state: IdentifierState,
+    payload: &[SelfAddressingIdentifier],
+) -> Result<String, Error> {
     let seal_list = payload
         .iter()
         .map(|seal| {

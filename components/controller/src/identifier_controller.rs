@@ -6,7 +6,7 @@ use std::{
 use keri::{
     actor::{
         event_generator,
-        prelude::{Message, HashFunctionCode, SelfAddressingIdentifier, SerializationFormats},
+        prelude::{HashFunctionCode, Message, SelfAddressingIdentifier, SerializationFormats},
         simple_controller::PossibleResponse,
         MaterialPath,
     },

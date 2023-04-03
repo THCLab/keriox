@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use said::{SelfAddressingIdentifier};
+use said::SelfAddressingIdentifier;
 
 use super::{
     event_storage::EventStorage,

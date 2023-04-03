@@ -1,4 +1,4 @@
-use said::{SelfAddressingIdentifier, derivation::HashFunction};
+use said::{derivation::HashFunction, SelfAddressingIdentifier};
 use serde::{Deserialize, Serialize, Serializer};
 use version::serialization_info::{SerializationFormats, SerializationInfo};
 

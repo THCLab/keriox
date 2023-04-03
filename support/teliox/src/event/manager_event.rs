@@ -1,6 +1,6 @@
 use cesrox::primitives::codes::self_addressing::dummy_prefix;
-use said::{SelfAddressingIdentifier};
 use cesrox::primitives::codes::self_addressing::SelfAddressing;
+use said::SelfAddressingIdentifier;
 use serde::{de, Deserialize, Deserializer, Serialize};
 use serde_hex::{Compact, SerHex};
 
@@ -202,10 +202,10 @@ pub struct Rot {
 
 #[cfg(test)]
 mod tests {
+    use cesrox::primitives::codes::self_addressing::SelfAddressing;
     use keri::prefix::IdentifierPrefix;
     use said::derivation::HashFunction;
     use version::serialization_info::SerializationFormats;
-    use cesrox::primitives::codes::self_addressing::SelfAddressing;
 
     use crate::{
         error::Error,
@@ -321,7 +321,8 @@ mod tests {
         assert!(err_state.is_err());
 
         // Try applying event with improper previous event
-        let prev_event = HashFunction::from(SelfAddressing::Blake3_256).derive("anything".as_bytes());
+        let prev_event =
+            HashFunction::from(SelfAddressing::Blake3_256).derive("anything".as_bytes());
         let event_type = ManagerEventType::Vrt(Rot {
             prev_event,
             backers_to_remove: vec![],

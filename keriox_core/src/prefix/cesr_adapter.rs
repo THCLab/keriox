@@ -92,9 +92,9 @@ impl From<Identifier> for IdentifierPrefix {
                 bp,
                 crate::keys::PublicKey::new(identifier.1),
             )),
-            IdentifierCode::SelfAddressing(sa) => {
-                IdentifierPrefix::SelfAddressing(SelfAddressingIdentifier::new(sa.into(), identifier.1))
-            }
+            IdentifierCode::SelfAddressing(sa) => IdentifierPrefix::SelfAddressing(
+                SelfAddressingIdentifier::new(sa.into(), identifier.1),
+            ),
         }
     }
 }

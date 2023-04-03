@@ -1,7 +1,7 @@
-use keri::{event::sections::seal::EventSeal, prefix::IdentifierPrefix};
-use said::{SelfAddressingIdentifier, derivation::HashFunction};
-use version::serialization_info::SerializationFormats;
 use cesrox::primitives::codes::self_addressing::SelfAddressing;
+use keri::{event::sections::seal::EventSeal, prefix::IdentifierPrefix};
+use said::{derivation::HashFunction, SelfAddressingIdentifier};
+use version::serialization_info::SerializationFormats;
 
 use crate::{
     error::Error,

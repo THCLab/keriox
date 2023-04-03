@@ -7,8 +7,7 @@ mod test;
 
 use keri::{
     actor::{
-        self, event_generator,
-        prelude::{SelfAddressingIdentifier},
+        self, event_generator, prelude::SelfAddressingIdentifier,
         simple_controller::PossibleResponse,
     },
     database::{escrow::EscrowDb, SledEventDatabase},

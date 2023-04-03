@@ -6,7 +6,7 @@ use std::{
 };
 
 use cesrox::{cesr_proof::MaterialPath, parse, primitives::CesrPrimitive};
-use said::{derivation::{HashFunctionCode, HashFunction}};
+use said::derivation::{HashFunction, HashFunctionCode};
 use serde::{Deserialize, Serialize};
 use version::serialization_info::SerializationFormats;
 

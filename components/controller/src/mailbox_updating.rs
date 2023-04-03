@@ -1,10 +1,7 @@
 use super::{error::ControllerError, identifier_controller::IdentifierController};
 use futures::{StreamExt, TryStreamExt};
 use keri::{
-    actor::{
-        event_generator,
-        prelude::{Message},
-    },
+    actor::{event_generator, prelude::Message},
     event::{
         event_data::EventData,
         sections::seal::{EventSeal, Seal},

@@ -114,7 +114,7 @@ mod tests {
         signer::setup_signers,
         state::{EventSemantics, IdentifierState},
     };
-    use cesrox::primitives::{CesrPrimitive, codes::self_addressing::SelfAddressing};
+    use cesrox::primitives::{codes::self_addressing::SelfAddressing, CesrPrimitive};
     use ed25519_dalek::Keypair;
     use rand::rngs::OsRng;
     use version::serialization_info::SerializationFormats;
@@ -160,7 +160,10 @@ mod tests {
             }),
         );
 
-        let icp_m = icp.to_message(SerializationFormats::JSON, SelfAddressing::Blake3_256.into())?;
+        let icp_m = icp.to_message(
+            SerializationFormats::JSON,
+            SelfAddressing::Blake3_256.into(),
+        )?;
 
         // serialised message
         let ser: Vec<_> = icp_m.encode()?;
@@ -242,7 +245,10 @@ mod tests {
             None,
             None,
         )
-        .incept_self_addressing(SelfAddressing::Blake3_256.into(), SerializationFormats::JSON)?;
+        .incept_self_addressing(
+            SelfAddressing::Blake3_256.into(),
+            SerializationFormats::JSON,
+        )?;
 
         // serialised
         let serialized: Vec<_> = icp.encode()?;

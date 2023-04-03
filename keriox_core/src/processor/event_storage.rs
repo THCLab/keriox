@@ -18,7 +18,7 @@ use crate::{
     prefix::{BasicPrefix, IdentifierPrefix},
     state::{EventSemantics, IdentifierState},
 };
-use said::{SelfAddressingIdentifier};
+use said::SelfAddressingIdentifier;
 #[cfg(feature = "query")]
 use version::serialization_info::SerializationFormats;
 

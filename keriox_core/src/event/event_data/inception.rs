@@ -9,7 +9,7 @@ use crate::{
     prefix::IdentifierPrefix,
     state::{EventSemantics, IdentifierState, LastEstablishmentData},
 };
-use said::{derivation::HashFunction, SelfAddressingIdentifier};
+use said::derivation::HashFunction;
 use serde::{Deserialize, Serialize};
 use version::serialization_info::SerializationFormats;
 
@@ -96,7 +96,7 @@ fn test_inception_data_derivation() -> Result<(), Error> {
     };
     use crate::prefix::BasicPrefix;
     use cesrox::primitives::CesrPrimitive;
-    use said::derivation::HashFunctionCode;
+    use said::{derivation::HashFunctionCode, SelfAddressingIdentifier};
 
     let keys: Vec<BasicPrefix> = vec![
         "DErocgXD2RGSyvn3MObcx59jeOsEQhv2TqHirVkzrp0Q"
@@ -126,8 +126,10 @@ fn test_inception_data_derivation() -> Result<(), Error> {
         next_key_hashes: next_keys_hashes,
     };
     let key_config = KeyConfig::new(keys, next_keys_data, Some(SignatureThreshold::Simple(2)));
-    let icp_data = InceptionEvent::new(key_config.clone(), None, None)
-        .incept_self_addressing(HashFunctionCode::Blake3_256.into(), SerializationFormats::JSON)?;
+    let icp_data = InceptionEvent::new(key_config.clone(), None, None).incept_self_addressing(
+        HashFunctionCode::Blake3_256.into(),
+        SerializationFormats::JSON,
+    )?;
 
     assert_eq!(
         "EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen",

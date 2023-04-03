@@ -1,7 +1,7 @@
 pub mod vc_state;
 
 use keri::prefix::IdentifierPrefix;
-use said::{SelfAddressingIdentifier};
+use said::SelfAddressingIdentifier;
 
 use crate::{
     error::Error,

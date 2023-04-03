@@ -1,5 +1,5 @@
 use cesrox::primitives::CesrPrimitive;
-use said::{SelfAddressingIdentifier, derivation::HashFunction};
+use said::{derivation::HashFunction, SelfAddressingIdentifier};
 use serde::{Deserialize, Serialize};
 
 use super::threshold::SignatureThreshold;
@@ -198,7 +198,7 @@ pub fn nxt_commitment(
 #[cfg(test)]
 mod test {
     use cesrox::{parse, primitives::CesrPrimitive};
-    use said::{SelfAddressingIdentifier, derivation::HashFunction, derivation::HashFunctionCode};
+    use said::{derivation::HashFunction, derivation::HashFunctionCode, SelfAddressingIdentifier};
 
     use crate::{
         error::Error,
@@ -276,7 +276,11 @@ mod test {
                     BasicPrefix::Ed25519(PublicKey::new(kp.public.to_bytes().to_vec()))
                 })
                 .collect();
-            nxt_commitment(next_threshold, &next_keys, &HashFunctionCode::Blake3_256.into())
+            nxt_commitment(
+                next_threshold,
+                &next_keys,
+                &HashFunctionCode::Blake3_256.into(),
+            )
         };
         let key_config = KeyConfig::new(pub_keys, next_key_hash, Some(current_threshold));
 

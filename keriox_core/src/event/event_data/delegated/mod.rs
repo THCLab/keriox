@@ -31,8 +31,11 @@ impl DelegatedInceptionEvent {
         derivation: HashFunction,
         format: SerializationFormats,
     ) -> Result<KeriEvent<KeyEvent>, Error> {
-        let dummy_event =
-            DummyInceptionEvent::dummy_delegated_inception_data(self.clone(), &(&derivation).into(), format)?;
+        let dummy_event = DummyInceptionEvent::dummy_delegated_inception_data(
+            self.clone(),
+            &(&derivation).into(),
+            format,
+        )?;
         let digest = derivation.derive(&dummy_event.encode()?);
         let event = KeyEvent::new(
             IdentifierPrefix::SelfAddressing(digest.clone()),
@@ -63,8 +66,8 @@ fn test_delegated_inception_data_derivation() -> Result<(), Error> {
         threshold::SignatureThreshold,
     };
     use crate::prefix::BasicPrefix;
+    use cesrox::primitives::CesrPrimitive;
     use said::derivation::HashFunctionCode;
-    use cesrox::{primitives::CesrPrimitive};
 
     // data taken from keripy/tests/core/test_delegation.py
     let keys: Vec<BasicPrefix> = vec!["DLitcfMnabnLt-PNCaXdVwX45wsG93Wd8eW9QiZrlKYQ"
@@ -84,7 +87,10 @@ fn test_delegated_inception_data_derivation() -> Result<(), Error> {
         inception_data: InceptionEvent::new(key_config.clone(), None, None),
         delegator: "EA_SbBUZYwqLVlAAn14d6QUBQCSReJlZ755JqTgmRhXH".parse()?,
     }
-    .incept_self_addressing(HashFunctionCode::Blake3_256.into(), SerializationFormats::JSON)?;
+    .incept_self_addressing(
+        HashFunctionCode::Blake3_256.into(),
+        SerializationFormats::JSON,
+    )?;
 
     assert_eq!(
         "EHng2fV42DdKb5TLMIs6bbjFkPNmIdQ5mSFn6BTnySJj",

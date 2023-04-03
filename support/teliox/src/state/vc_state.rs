@@ -2,7 +2,7 @@ use crate::{
     error::Error,
     event::vc_event::{VCEventMessage, VCEventType},
 };
-use said::{SelfAddressingIdentifier};
+use said::SelfAddressingIdentifier;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
