@@ -4,7 +4,7 @@ use crate::{
     prefix::BasicPrefix,
     state::{EventSemantics, IdentifierState, LastEstablishmentData, WitnessConfig},
 };
-use sai::SelfAddressingPrefix;
+use said::SelfAddressingIdentifier;
 use serde::{Deserialize, Serialize};
 
 /// Rotation Event
@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct RotationEvent {
     #[serde(rename = "p")]
-    pub previous_event_hash: SelfAddressingPrefix,
+    pub previous_event_hash: SelfAddressingIdentifier,
 
     #[serde(flatten)]
     pub key_config: KeyConfig,

@@ -2,13 +2,13 @@ use crate::{
     error::Error,
     event::vc_event::{VCEventMessage, VCEventType},
 };
-use sai::{sad::SAD, SelfAddressingPrefix};
+use said::SelfAddressingIdentifier;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum TelState {
     NotIsuued,
-    Issued(SelfAddressingPrefix),
+    Issued(SelfAddressingIdentifier),
     Revoked,
 }
 

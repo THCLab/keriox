@@ -9,7 +9,7 @@ use crate::{
 };
 use ed25519_dalek::Keypair;
 use rand::rngs::OsRng;
-use sai::{derivation::SelfAddressing, sad::SAD, SelfAddressingPrefix};
+use said::{derivation::HashFunctionCode, SelfAddressingIdentifier};
 
 /// Collects data for testing `IdentifierState` update. `prev_event_hash`, `sn`,
 /// `current_keypair` and `new_keypair` are used to generate mock event message
@@ -19,7 +19,7 @@ pub struct TestStateData {
     state: IdentifierState,
     prefix: IdentifierPrefix,
     keys_history: Vec<BasicPrefix>,
-    prev_event_hash: SelfAddressingPrefix,
+    prev_event_hash: SelfAddressingIdentifier,
     sn: u64,
     current_keypair: (PublicKey, PrivateKey),
     new_keypair: (PublicKey, PrivateKey),
@@ -36,7 +36,7 @@ fn get_initial_test_data() -> Result<TestStateData, Error> {
         state: IdentifierState::default(),
         prefix: IdentifierPrefix::default(),
         keys_history: vec![],
-        prev_event_hash: SelfAddressingPrefix::default(),
+        prev_event_hash: SelfAddressingIdentifier::default(),
         sn: 0,
         current_keypair: (pk.clone(), sk.clone()),
         new_keypair: (pk, sk),
@@ -69,7 +69,7 @@ fn test_update_identifier_state(
     let next_keys_data = nxt_commitment(
         SignatureThreshold::Simple(1),
         &[next_key_prefix.clone()],
-        &SelfAddressing::Blake3_256,
+        &HashFunctionCode::Blake3_256.into(),
     );
 
     // Build event msg of given type.

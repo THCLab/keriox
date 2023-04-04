@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 use keri::{
     actor::{
         error::ActorError,
-        prelude::{SelfAddressing, SerializationFormats, SAD},
+        prelude::{HashFunctionCode, SerializationFormats},
         simple_controller::{PossibleResponse, SimpleController},
         SignedQueryError,
     },
@@ -323,7 +323,7 @@ fn test_qry_rpy() -> Result<(), ActorError> {
             reply_route: String::from(""),
         },
         SerializationFormats::JSON,
-        SelfAddressing::Blake3_256,
+        HashFunctionCode::Blake3_256,
     )?;
 
     // sign message by bob
@@ -366,7 +366,7 @@ fn test_qry_rpy() -> Result<(), ActorError> {
             reply_route: String::from(""),
         },
         SerializationFormats::JSON,
-        SelfAddressing::Blake3_256,
+        HashFunctionCode::Blake3_256,
     )?;
 
     // sign message by bob

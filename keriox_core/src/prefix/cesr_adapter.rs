@@ -3,7 +3,7 @@ use cesrox::primitives::{
     CesrPrimitive, Digest, Identifier, IdentifierCode, IndexedSignature as CesrIndexedSignature,
     PublicKey, Signature,
 };
-use sai::SelfAddressingPrefix;
+use said::SelfAddressingIdentifier;
 
 use crate::{
     event::sections::seal::{EventSeal, SourceSeal},
@@ -92,9 +92,9 @@ impl From<Identifier> for IdentifierPrefix {
                 bp,
                 crate::keys::PublicKey::new(identifier.1),
             )),
-            IdentifierCode::SelfAddressing(sa) => {
-                IdentifierPrefix::SelfAddressing(SelfAddressingPrefix::new(sa.into(), identifier.1))
-            }
+            IdentifierCode::SelfAddressing(sa) => IdentifierPrefix::SelfAddressing(
+                SelfAddressingIdentifier::new(sa.into(), identifier.1),
+            ),
         }
     }
 }

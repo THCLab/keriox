@@ -9,7 +9,7 @@ use crate::{
     event_message::EventTypeTag,
     prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
 };
-use sai::SelfAddressingPrefix;
+use said::SelfAddressingIdentifier;
 use serde::{Deserialize, Serialize};
 use serde_hex::{Compact, SerHex};
 
@@ -18,7 +18,7 @@ pub struct LastEstablishmentData {
     #[serde(rename = "s", with = "SerHex::<Compact>")]
     pub(crate) sn: u64,
     #[serde(rename = "d")]
-    pub(crate) digest: SelfAddressingPrefix,
+    pub(crate) digest: SelfAddressingIdentifier,
     #[serde(rename = "br")]
     pub(crate) br: Vec<BasicPrefix>,
     #[serde(rename = "ba")]
@@ -91,10 +91,10 @@ pub struct IdentifierState {
     pub sn: u64,
 
     #[serde(rename = "d")]
-    pub last_event_digest: SelfAddressingPrefix,
+    pub last_event_digest: SelfAddressingIdentifier,
 
     #[serde(rename = "p")]
-    pub last_previous: Option<SelfAddressingPrefix>,
+    pub last_previous: Option<SelfAddressingIdentifier>,
 
     #[serde(rename = "et")]
     pub last_event_type: Option<EventTypeTag>,

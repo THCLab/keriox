@@ -1,6 +1,6 @@
 use base64::URL_SAFE;
 use keri::prefix::CesrPrimitive;
-use sai::SelfAddressingPrefix;
+use said::SelfAddressingIdentifier;
 use serde::{Deserialize, Serialize};
 
 use crate::error::Error;
@@ -8,7 +8,7 @@ use crate::error::Error;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct EventSourceSeal {
     pub sn: u64,
-    pub digest: SelfAddressingPrefix,
+    pub digest: SelfAddressingIdentifier,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -23,7 +23,7 @@ impl From<EventSourceSeal> for AttachedSourceSeal {
 }
 
 impl AttachedSourceSeal {
-    pub fn new(sn: u64, dig: SelfAddressingPrefix) -> Self {
+    pub fn new(sn: u64, dig: SelfAddressingIdentifier) -> Self {
         let seal = EventSourceSeal { sn, digest: dig };
         Self { seal }
     }

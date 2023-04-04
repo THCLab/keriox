@@ -11,7 +11,6 @@ mod processor_tests;
 
 pub mod validator;
 
-use sai::sad::SAD;
 use version::serialization_info::SerializationFormats;
 
 use self::{

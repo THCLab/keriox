@@ -1,5 +1,6 @@
 use cesrox::primitives::codes::self_addressing::dummy_prefix;
-use sai::{derivation::SelfAddressing, SelfAddressingPrefix};
+use cesrox::primitives::codes::self_addressing::SelfAddressing;
+use said::SelfAddressingIdentifier;
 use serde::{de, Deserialize, Deserializer, Serialize};
 use serde_hex::{Compact, SerHex};
 
@@ -84,7 +85,7 @@ impl ManagerTelEvent {
         format: SerializationFormats,
         derivation: SelfAddressing,
     ) -> Result<ManagerTelEventMessage, Error> {
-        Ok(KeriEvent::new(format, derivation, self)?)
+        Ok(KeriEvent::new(format, derivation.into(), self)?)
     }
 }
 
@@ -149,22 +150,20 @@ impl DummyEvent {
         derivation: &SelfAddressing,
         format: SerializationFormats,
     ) -> Result<Vec<u8>, Error> {
-        use cesrox::primitives::codes::self_addressing::SelfAddressing as CesrCode;
-        let derivation_code: CesrCode = derivation.into();
         Self {
             serialization_info: SerializationInfo::new(
                 "KERI".to_string(),
                 format,
                 Self {
                     serialization_info: SerializationInfo::default(),
-                    prefix: dummy_prefix(&derivation_code),
+                    prefix: dummy_prefix(&derivation),
                     sn: 0,
                     data: data.clone(),
                 }
                 .encode()?
                 .len(),
             ),
-            prefix: dummy_prefix(&derivation_code),
+            prefix: dummy_prefix(&derivation),
             sn: 0,
             data,
         }
@@ -179,12 +178,12 @@ impl DummyEvent {
 impl Inc {
     pub fn incept_self_addressing(
         self,
-        derivation: &sai::derivation::SelfAddressing,
+        derivation: &said::derivation::HashFunction,
         format: SerializationFormats,
     ) -> Result<ManagerTelEvent, Error> {
         Ok(ManagerTelEvent::new(
             &IdentifierPrefix::SelfAddressing(derivation.derive(
-                &DummyEvent::derive_inception_data(self.clone(), derivation, format)?,
+                &DummyEvent::derive_inception_data(self.clone(), &derivation.into(), format)?,
             )),
             0,
             ManagerEventType::Vcp(self),
@@ -194,7 +193,7 @@ impl Inc {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct Rot {
     #[serde(rename = "p")]
-    pub prev_event: SelfAddressingPrefix,
+    pub prev_event: SelfAddressingIdentifier,
     #[serde(rename = "ba")]
     pub backers_to_add: Vec<IdentifierPrefix>,
     #[serde(rename = "br")]
@@ -204,7 +203,7 @@ pub struct Rot {
 #[cfg(test)]
 mod tests {
     use keri::prefix::IdentifierPrefix;
-    use sai::{derivation::SelfAddressing, sad::SAD};
+    use said::derivation::{HashFunction, HashFunctionCode};
     use version::serialization_info::SerializationFormats;
 
     use crate::{
@@ -290,7 +289,7 @@ mod tests {
             backers: vec![],
         });
         let vcp = ManagerTelEvent::new(&pref, 0, event_type)
-            .to_message(SerializationFormats::JSON, SelfAddressing::Blake3_256)?;
+            .to_message(SerializationFormats::JSON, HashFunctionCode::Blake3_256)?;
         println!("\nvcp: {}", String::from_utf8(vcp.encode()?).unwrap());
 
         let state = ManagerTelState::default();
@@ -308,7 +307,7 @@ mod tests {
             backers_to_remove: vec![],
         });
         let vrt = ManagerTelEvent::new(&pref, 1, event_type.clone())
-            .to_message(SerializationFormats::JSON, SelfAddressing::Blake3_256)?;
+            .to_message(SerializationFormats::JSON, HashFunctionCode::Blake3_256)?;
         println!("\nvrt: {}", String::from_utf8(vrt.encode()?).unwrap());
         let state = state.apply(&vrt)?;
         assert_eq!(state.backers.clone().unwrap().len(), 1);
@@ -316,19 +315,20 @@ mod tests {
 
         // Try applying event with improper sn.
         let out_of_order_vrt = ManagerTelEvent::new(&pref, 10, event_type)
-            .to_message(SerializationFormats::JSON, SelfAddressing::Blake3_256)?;
+            .to_message(SerializationFormats::JSON, HashFunctionCode::Blake3_256)?;
         let err_state = state.apply(&out_of_order_vrt);
         assert!(err_state.is_err());
 
         // Try applying event with improper previous event
-        let prev_event = SelfAddressing::Blake3_256.derive("anything".as_bytes());
+        let prev_event =
+            HashFunction::from(HashFunctionCode::Blake3_256).derive("anything".as_bytes());
         let event_type = ManagerEventType::Vrt(Rot {
             prev_event,
             backers_to_remove: vec![],
             backers_to_add: vec![],
         });
         let bad_previous = ManagerTelEvent::new(&pref, 2, event_type)
-            .to_message(SerializationFormats::JSON, SelfAddressing::Blake3_256)?;
+            .to_message(SerializationFormats::JSON, HashFunctionCode::Blake3_256)?;
         let err_state = state.apply(&bad_previous);
         assert!(err_state.is_err());
 
@@ -349,7 +349,7 @@ mod tests {
             ],
         });
         let vrt = ManagerTelEvent::new(&pref, 2, event_type.clone())
-            .to_message(SerializationFormats::JSON, SelfAddressing::Blake3_256)?;
+            .to_message(SerializationFormats::JSON, HashFunctionCode::Blake3_256)?;
         let state = state.apply(&vrt)?;
         assert_eq!(state.backers.clone().unwrap().len(), 2);
 
@@ -372,7 +372,7 @@ mod tests {
             backers: vec![],
         });
         let vcp = ManagerTelEvent::new(&pref, 0, event_type)
-            .to_message(SerializationFormats::JSON, SelfAddressing::Blake3_256)?;
+            .to_message(SerializationFormats::JSON, HashFunctionCode::Blake3_256)?;
         println!("\nvcp: {}", String::from_utf8(vcp.encode()?).unwrap());
 
         let state = ManagerTelState::default();
@@ -381,7 +381,7 @@ mod tests {
         assert_eq!(state.backers, None);
 
         // Construct rotation event
-        let prev_event = SelfAddressing::Blake3_256.derive(&vcp.encode()?);
+        let prev_event = HashFunction::from(HashFunctionCode::Blake3_256).derive(&vcp.encode()?);
         let event_type = ManagerEventType::Vrt(Rot {
             prev_event,
             backers_to_add: vec!["EXvR3p8V95W8J7Ui4-mEzZ79S-A1esAnJo1Kmzq80Jkc"
@@ -390,7 +390,7 @@ mod tests {
             backers_to_remove: vec![],
         });
         let vrt = ManagerTelEvent::new(&pref, 1, event_type.clone())
-            .to_message(SerializationFormats::JSON, SelfAddressing::Blake3_256)?;
+            .to_message(SerializationFormats::JSON, HashFunctionCode::Blake3_256)?;
         // Try to update backers of backerless state.
         let state = state.apply(&vrt);
         assert!(state.is_err());

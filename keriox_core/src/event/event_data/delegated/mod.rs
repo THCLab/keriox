@@ -8,7 +8,7 @@ use crate::{
     prefix::IdentifierPrefix,
     state::{EventSemantics, IdentifierState},
 };
-use sai::derivation::SelfAddressing;
+use said::derivation::HashFunction;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -28,11 +28,14 @@ impl DelegatedInceptionEvent {
     /// given derivation method
     pub fn incept_self_addressing(
         self,
-        derivation: SelfAddressing,
+        derivation: HashFunction,
         format: SerializationFormats,
     ) -> Result<KeriEvent<KeyEvent>, Error> {
-        let dummy_event =
-            DummyInceptionEvent::dummy_delegated_inception_data(self.clone(), &derivation, format)?;
+        let dummy_event = DummyInceptionEvent::dummy_delegated_inception_data(
+            self.clone(),
+            &(&derivation).into(),
+            format,
+        )?;
         let digest = derivation.derive(&dummy_event.encode()?);
         let event = KeyEvent::new(
             IdentifierPrefix::SelfAddressing(digest.clone()),
@@ -64,7 +67,7 @@ fn test_delegated_inception_data_derivation() -> Result<(), Error> {
     };
     use crate::prefix::BasicPrefix;
     use cesrox::primitives::CesrPrimitive;
-    use sai::sad::SAD;
+    use said::derivation::HashFunctionCode;
 
     // data taken from keripy/tests/core/test_delegation.py
     let keys: Vec<BasicPrefix> = vec!["DLitcfMnabnLt-PNCaXdVwX45wsG93Wd8eW9QiZrlKYQ"
@@ -77,14 +80,17 @@ fn test_delegated_inception_data_derivation() -> Result<(), Error> {
     let next_key_hash = nxt_commitment(
         SignatureThreshold::Simple(1),
         &next_keys,
-        &SelfAddressing::Blake3_256,
+        &HashFunctionCode::Blake3_256.into(),
     );
     let key_config = KeyConfig::new(keys, next_key_hash, Some(SignatureThreshold::Simple(1)));
     let dip_data = DelegatedInceptionEvent {
         inception_data: InceptionEvent::new(key_config.clone(), None, None),
         delegator: "EA_SbBUZYwqLVlAAn14d6QUBQCSReJlZ755JqTgmRhXH".parse()?,
     }
-    .incept_self_addressing(SelfAddressing::Blake3_256, SerializationFormats::JSON)?;
+    .incept_self_addressing(
+        HashFunctionCode::Blake3_256.into(),
+        SerializationFormats::JSON,
+    )?;
 
     assert_eq!(
         "EHng2fV42DdKb5TLMIs6bbjFkPNmIdQ5mSFn6BTnySJj",

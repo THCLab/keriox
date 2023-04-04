@@ -2,7 +2,7 @@ use self::error::Error;
 use cesrox::primitives::codes::PrimitiveCode;
 pub use cesrox::primitives::CesrPrimitive;
 use core::str::FromStr;
-use sai::SelfAddressingPrefix;
+use said::SelfAddressingIdentifier;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt::Display;
 
@@ -21,7 +21,7 @@ pub use self_signing::SelfSigningPrefix;
 #[derive(Debug, PartialEq, Clone, Eq, Hash)]
 pub enum IdentifierPrefix {
     Basic(BasicPrefix),
-    SelfAddressing(SelfAddressingPrefix),
+    SelfAddressing(SelfAddressingIdentifier),
     SelfSigning(SelfSigningPrefix),
 }
 
@@ -36,7 +36,7 @@ impl FromStr for IdentifierPrefix {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match BasicPrefix::from_str(s) {
             Ok(bp) => Ok(Self::Basic(bp)),
-            Err(_) => match SelfAddressingPrefix::from_str(s) {
+            Err(_) => match SelfAddressingIdentifier::from_str(s) {
                 Ok(sa) => Ok(Self::SelfAddressing(sa)),
                 Err(_) => Ok(Self::SelfSigning(SelfSigningPrefix::from_str(s)?)),
             },
@@ -85,7 +85,7 @@ impl<'de> Deserialize<'de> for IdentifierPrefix {
 
 impl Default for IdentifierPrefix {
     fn default() -> Self {
-        IdentifierPrefix::SelfAddressing(SelfAddressingPrefix::default())
+        IdentifierPrefix::SelfAddressing(SelfAddressingIdentifier::default())
     }
 }
 
@@ -139,7 +139,7 @@ mod tests {
     use crate::keys::{PrivateKey, PublicKey};
     use ed25519_dalek::Keypair;
     use rand::rngs::OsRng;
-    use sai::derivation::SelfAddressing;
+    use said::derivation::{HashFunction, HashFunctionCode};
 
     #[test]
     fn simple_deserialize() -> Result<(), Error> {
@@ -241,7 +241,7 @@ mod tests {
         let is_basic = |identifier| matches!(&identifier, IdentifierPrefix::Basic(_));
         all_codes(basic_codes.zip(allowed_lengths).collect(), is_basic)?;
 
-        // All codes that are mapped to `SelfAddressingPrefix`.
+        // All codes that are mapped to `SelfAddressingIdentifier`.
         let self_adressing_codes =
             vec!["E", "F", "G", "H", "I", "0D", "0E", "0F", "0G"].into_iter();
         // Allowed string lengths for respective self addressing codes.
@@ -320,41 +320,43 @@ mod tests {
             ["1AAD".to_string(), "A".repeat(76)].join("")
         );
 
-        // Test SelfAddressingPrefix serialization.
+        // Test SelfAddressingIdentifier serialization.
         assert_eq!(
-            SelfAddressingPrefix::new(SelfAddressing::Blake3_256, vec![0; 32]).to_str(),
+            SelfAddressingIdentifier::new(HashFunctionCode::Blake3_256.into(), vec![0; 32]).to_str(),
             ["E".to_string(), "A".repeat(43)].join("")
         );
         assert_eq!(
-            SelfAddressingPrefix::new(SelfAddressing::Blake2B256(vec!()), vec![0; 32]).to_str(),
+            SelfAddressingIdentifier::new(HashFunctionCode::Blake2B256(vec!()).into(), vec![0; 32])
+                .to_str(),
             ["F".to_string(), "A".repeat(43)].join("")
         );
         assert_eq!(
-            SelfAddressingPrefix::new(SelfAddressing::Blake2S256(vec!()), vec![0; 32]).to_str(),
+            SelfAddressingIdentifier::new(HashFunctionCode::Blake2S256(vec!()).into(), vec![0; 32])
+                .to_str(),
             ["G".to_string(), "A".repeat(43)].join("")
         );
         assert_eq!(
-            SelfAddressingPrefix::new(SelfAddressing::SHA3_256, vec![0; 32]).to_str(),
+            SelfAddressingIdentifier::new(HashFunctionCode::SHA3_256.into(), vec![0; 32]).to_str(),
             ["H".to_string(), "A".repeat(43)].join("")
         );
         assert_eq!(
-            SelfAddressingPrefix::new(SelfAddressing::SHA2_256, vec![0; 32]).to_str(),
+            SelfAddressingIdentifier::new(HashFunctionCode::SHA2_256.into(), vec![0; 32]).to_str(),
             ["I".to_string(), "A".repeat(43)].join("")
         );
         assert_eq!(
-            SelfAddressingPrefix::new(SelfAddressing::Blake3_512, vec![0; 64]).to_str(),
+            SelfAddressingIdentifier::new(HashFunctionCode::Blake3_512.into(), vec![0; 64]).to_str(),
             ["0D".to_string(), "A".repeat(86)].join("")
         );
         assert_eq!(
-            SelfAddressingPrefix::new(SelfAddressing::SHA3_512, vec![0; 64]).to_str(),
+            SelfAddressingIdentifier::new(HashFunctionCode::SHA3_512.into(), vec![0; 64]).to_str(),
             ["0E".to_string(), "A".repeat(86)].join("")
         );
         assert_eq!(
-            SelfAddressingPrefix::new(SelfAddressing::Blake2B512, vec![0; 64]).to_str(),
+            SelfAddressingIdentifier::new(HashFunctionCode::Blake2B512.into(), vec![0; 64]).to_str(),
             ["0F".to_string(), "A".repeat(86)].join("")
         );
         assert_eq!(
-            SelfAddressingPrefix::new(SelfAddressing::SHA2_512, vec![0; 64]).to_str(),
+            SelfAddressingIdentifier::new(HashFunctionCode::SHA2_512.into(), vec![0; 64]).to_str(),
             ["0G".to_string(), "A".repeat(86)].join("")
         );
 
@@ -374,38 +376,38 @@ mod tests {
 
         Ok(())
     }
-}
 
-#[test]
-pub fn test_identifier_encoding() {
-    use crate::keys::PublicKey;
-    use sai::derivation::SelfAddressing;
-    use sodiumoxide::hex;
-    let pub_key = "694e894769e6c3267e8b477c2590284cd647dd42ef6007d254fce1cd2e9be423";
-    let key = hex::decode(pub_key).unwrap();
-    let bp = BasicPrefix::Ed25519NT(PublicKey::new(key));
-    let expected_identifier = "BGlOiUdp5sMmfotHfCWQKEzWR91C72AH0lT84c0um-Qj";
-    assert_eq!(bp.to_str(), expected_identifier);
+    #[test]
+    pub fn test_identifier_encoding() {
+        use crate::keys::PublicKey;
+        use sodiumoxide::hex;
+        let pub_key = "694e894769e6c3267e8b477c2590284cd647dd42ef6007d254fce1cd2e9be423";
+        let key = hex::decode(pub_key).unwrap();
+        let bp = BasicPrefix::Ed25519NT(PublicKey::new(key));
+        let hash_function: HashFunction = HashFunctionCode::Blake3_256.into();
+        let expected_identifier = "BGlOiUdp5sMmfotHfCWQKEzWR91C72AH0lT84c0um-Qj";
+        assert_eq!(bp.to_str(), expected_identifier);
 
-    // Prefixes from keripy/tests/core/test_coring:test_diger
-    let to_digest = "abcdefghijklmnopqrstuvwxyz0123456789";
-    let dig = SelfAddressing::Blake3_256.derive(to_digest.as_bytes());
-    dig.verify_binding(to_digest.as_bytes());
-    assert_eq!(dig.to_str(), "ELC5L3iBVD77d_MYbYGGCUQgqQBju1o4x1Ud-z2sL-ux");
+        // Prefixes from keripy/tests/core/test_coring:test_diger
+        let to_digest = "abcdefghijklmnopqrstuvwxyz0123456789";
+        let dig = hash_function.derive(to_digest.as_bytes());
+        dig.verify_binding(to_digest.as_bytes());
+        assert_eq!(dig.to_str(), "ELC5L3iBVD77d_MYbYGGCUQgqQBju1o4x1Ud-z2sL-ux");
 
-    // Digest from: keripy/tests/core/test_coring:test_nexter
-    let to_digest = "BDjXHlcskwOzNj8rYbV8IQ6ox2TW_KkbA1K3-n0EU0un";
-    let dig = SelfAddressing::Blake3_256.derive(to_digest.as_bytes());
-    assert_eq!(dig.to_str(), "EP9XvFnpQP4vnaTNDNAMU2T7nxDPe1EZLUaiABcLRfS4");
+        // Digest from: keripy/tests/core/test_coring:test_nexter
+        let to_digest = "BDjXHlcskwOzNj8rYbV8IQ6ox2TW_KkbA1K3-n0EU0un";
+        let dig = hash_function.derive(to_digest.as_bytes());
+        assert_eq!(dig.to_str(), "EP9XvFnpQP4vnaTNDNAMU2T7nxDPe1EZLUaiABcLRfS4");
 
-    // Prefixes from keripy/tests/core/test_coring:test_matter
-    let self_signing_b64 =
+        // Prefixes from keripy/tests/core/test_coring:test_matter
+        let self_signing_b64 =
         "mdI8OSQkMJ9r-xigjEByEjIua7LHH3AOJ22PQKqljMhuhcgh9nGRcKnsz5KvKd7K_H9-1298F4Id1DxvIoEmCQ==";
-    let self_signing_raw = base64::decode_config(self_signing_b64, base64::URL_SAFE).unwrap();
+        let self_signing_raw = base64::decode_config(self_signing_b64, base64::URL_SAFE).unwrap();
 
-    let ssp = SelfSigningPrefix::Ed25519Sha512(self_signing_raw);
-    assert_eq!(
+        let ssp = SelfSigningPrefix::Ed25519Sha512(self_signing_raw);
+        assert_eq!(
         ssp.to_str(),
         "0BCZ0jw5JCQwn2v7GKCMQHISMi5rsscfcA4nbY9AqqWMyG6FyCH2cZFwqezPkq8p3sr8f37Xb3wXgh3UPG8igSYJ"
     );
+    }
 }

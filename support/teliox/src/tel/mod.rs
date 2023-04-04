@@ -8,7 +8,10 @@ use crate::{
     state::{vc_state::TelState, ManagerTelState, State},
 };
 use keri::prefix::IdentifierPrefix;
-use sai::{derivation::SelfAddressing, SelfAddressingPrefix};
+use said::{
+    derivation::{HashFunction, HashFunctionCode},
+    SelfAddressingIdentifier,
+};
 
 pub mod event_generator;
 
@@ -53,14 +56,14 @@ impl<'d> Tel<'d> {
 
     pub fn make_issuance_event(
         &self,
-        derivation: SelfAddressing,
+        derivation: HashFunctionCode,
         vc: &str,
     ) -> Result<Event, Error> {
-        let vc_hash = derivation.derive(vc.as_bytes());
+        let vc_hash = HashFunction::from(derivation).derive(vc.as_bytes());
         event_generator::make_issuance_event(&self.get_management_tel_state()?, vc_hash, None, None)
     }
 
-    pub fn make_revoke_event(&self, vc: &SelfAddressingPrefix) -> Result<Event, Error> {
+    pub fn make_revoke_event(&self, vc: &SelfAddressingIdentifier) -> Result<Event, Error> {
         let vc_state = self.get_vc_state(vc)?;
         let last = match vc_state {
             TelState::Issued(last) => last,
@@ -81,12 +84,15 @@ impl<'d> Tel<'d> {
         Ok(state)
     }
 
-    pub fn get_vc_state(&self, vc_hash: &SelfAddressingPrefix) -> Result<TelState, Error> {
+    pub fn get_vc_state(&self, vc_hash: &SelfAddressingIdentifier) -> Result<TelState, Error> {
         let vc_prefix = IdentifierPrefix::SelfAddressing(vc_hash.to_owned());
         self.processor.get_vc_state(&vc_prefix)
     }
 
-    pub fn get_tel(&self, vc_hash: &SelfAddressingPrefix) -> Result<Vec<VerifiableEvent>, Error> {
+    pub fn get_tel(
+        &self,
+        vc_hash: &SelfAddressingIdentifier,
+    ) -> Result<Vec<VerifiableEvent>, Error> {
         self.processor.get_events(vc_hash)
     }
 

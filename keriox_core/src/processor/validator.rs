@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 #[cfg(feature = "query")]
 use chrono::{DateTime, FixedOffset};
-use sai::sad::SAD;
 
 use super::event_storage::EventStorage;
 use crate::{

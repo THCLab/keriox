@@ -6,7 +6,7 @@ use std::{
 };
 
 use cesrox::{cesr_proof::MaterialPath, parse, primitives::CesrPrimitive};
-use sai::{derivation::SelfAddressing, sad::SAD};
+use said::derivation::{HashFunction, HashFunctionCode};
 use serde::{Deserialize, Serialize};
 use version::serialization_info::SerializationFormats;
 
@@ -299,7 +299,7 @@ impl<K: KeyManager> SimpleController<K> {
                 reply_route: String::from(""),
             },
             SerializationFormats::JSON,
-            SelfAddressing::Blake3_256,
+            HashFunctionCode::Blake3_256,
         )?;
 
         // sign message by bob
@@ -572,7 +572,7 @@ impl<K: KeyManager> SimpleController<K> {
     ) -> Result<(SignedEventMessage, Vec<SignedExchange>), Error> {
         let signed = {
             let km = self.key_manager.lock().map_err(|_| Error::MutexPoisoned)?;
-            let next_key_hash = SelfAddressing::Blake3_256.derive(
+            let next_key_hash = HashFunction::from(HashFunctionCode::Blake3_256).derive(
                 BasicPrefix::Ed25519(km.next_public_key())
                     .to_str()
                     .as_bytes(),
@@ -648,7 +648,7 @@ impl<K: KeyManager> SimpleController<K> {
             },
             to_forward: data.event_message.clone(),
         }
-        .to_message(SerializationFormats::JSON, SelfAddressing::Blake3_256)?;
+        .to_message(SerializationFormats::JSON, HashFunctionCode::Blake3_256)?;
 
         let sigs = vec![Signature::Transferable(
             SignerData::JustSignatures,
@@ -706,7 +706,7 @@ impl<K: KeyManager> SimpleController<K> {
                 reply_route: "".to_string(),
             },
             SerializationFormats::JSON,
-            SelfAddressing::Blake3_256,
+            HashFunctionCode::Blake3_256,
         )
         .unwrap();
         let signature = self
@@ -746,7 +746,7 @@ impl<K: KeyManager> SimpleController<K> {
                         reply_route: "".to_string(),
                     },
                     SerializationFormats::JSON,
-                    SelfAddressing::Blake3_256,
+                    HashFunctionCode::Blake3_256,
                 )
                 .unwrap();
                 let signature = self

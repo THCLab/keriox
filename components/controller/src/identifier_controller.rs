@@ -6,7 +6,7 @@ use std::{
 use keri::{
     actor::{
         event_generator,
-        prelude::{Message, SelfAddressing, SelfAddressingPrefix, SerializationFormats, SAD},
+        prelude::{HashFunctionCode, Message, SelfAddressingIdentifier, SerializationFormats},
         simple_controller::PossibleResponse,
         MaterialPath,
     },
@@ -49,7 +49,7 @@ pub struct IdentifierController {
     /// - event digest which uniqually identifies event.
     /// - ID of witness who signed the event which uniquely identifies a receipt.
     /// - ID of witness to which we sent this receipt.
-    pub(crate) broadcasted_rcts: HashSet<(SelfAddressingPrefix, BasicPrefix, IdentifierPrefix)>,
+    pub(crate) broadcasted_rcts: HashSet<(SelfAddressingIdentifier, BasicPrefix, IdentifierPrefix)>,
 }
 
 impl IdentifierController {
@@ -100,7 +100,7 @@ impl IdentifierController {
             .await
     }
 
-    pub fn anchor(&self, payload: &[SelfAddressingPrefix]) -> Result<String, ControllerError> {
+    pub fn anchor(&self, payload: &[SelfAddressingIdentifier]) -> Result<String, ControllerError> {
         self.source.anchor(self.id.clone(), payload)
     }
 
@@ -128,7 +128,7 @@ impl IdentifierController {
             },
             to_forward: delegating_event.clone(),
         }
-        .to_message(SerializationFormats::JSON, SelfAddressing::Blake3_256)?;
+        .to_message(SerializationFormats::JSON, HashFunctionCode::Blake3_256)?;
         Ok((delegating_event, exn_message))
     }
 
@@ -511,7 +511,7 @@ impl IdentifierController {
                         reply_route: "".to_string(),
                     },
                     SerializationFormats::JSON,
-                    SelfAddressing::Blake3_256,
+                    HashFunctionCode::Blake3_256,
                 )
             })
             .collect::<Result<_, _>>()?)
@@ -534,7 +534,7 @@ impl IdentifierController {
                 reply_route: "".to_string(),
             },
             SerializationFormats::JSON,
-            SelfAddressing::Blake3_256,
+            HashFunctionCode::Blake3_256,
         )?)
     }
 

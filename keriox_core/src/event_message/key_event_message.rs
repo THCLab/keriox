@@ -1,5 +1,5 @@
 use cesrox::primitives::codes::self_addressing::dummy_prefix;
-use sai::{sad::SAD, SelfAddressingPrefix};
+use said::SelfAddressingIdentifier;
 use version::serialization_info::SerializationInfo;
 
 use crate::{
@@ -50,7 +50,7 @@ impl KeriEvent<KeyEvent> {
         SignedEventMessage::new(self, sigs, witness_sigs, delegator_seal)
     }
 
-    pub fn compare_digest(&self, sai: &SelfAddressingPrefix) -> Result<bool, Error> {
+    pub fn compare_digest(&self, sai: &SelfAddressingIdentifier) -> Result<bool, Error> {
         let self_dig = self.get_digest();
         if self_dig.derivation == sai.derivation {
             Ok(&self_dig == sai)
@@ -63,13 +63,13 @@ impl KeriEvent<KeyEvent> {
         Ok(match self.data.get_event_data() {
             EventData::Icp(icp) => DummyInceptionEvent::dummy_inception_data(
                 icp,
-                &self.get_digest().derivation,
+                &(&self.get_digest().derivation).into(),
                 self.serialization_info.kind,
             )?
             .encode()?,
             EventData::Dip(dip) => DummyInceptionEvent::dummy_delegated_inception_data(
                 dip,
-                &self.get_digest().derivation,
+                &(&self.get_digest().derivation).into(),
                 self.serialization_info.kind,
             )?
             .encode()?,

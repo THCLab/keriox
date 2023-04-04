@@ -18,7 +18,7 @@ use crate::{
     prefix::{BasicPrefix, IdentifierPrefix},
     state::{EventSemantics, IdentifierState},
 };
-use sai::{sad::SAD, SelfAddressingPrefix};
+use said::SelfAddressingIdentifier;
 #[cfg(feature = "query")]
 use version::serialization_info::SerializationFormats;
 
@@ -262,7 +262,7 @@ impl EventStorage {
         &self,
         id: &IdentifierPrefix,
         sn: u64,
-        event_digest: &SelfAddressingPrefix,
+        event_digest: &SelfAddressingIdentifier,
     ) -> Result<Option<KeyConfig>, Error> {
         if let Ok(Some(event)) = self.get_event_at_sn(id, sn) {
             // if it's the event we're looking for
@@ -313,7 +313,7 @@ impl EventStorage {
         &self,
         prefix: &IdentifierPrefix,
         sn: u64,
-        digest: &SelfAddressingPrefix,
+        digest: &SelfAddressingIdentifier,
     ) -> Result<Option<SignedNontransferableReceipt>, Error> {
         match self.db.get_receipts_nt(prefix) {
             Some(events) => Ok(events
@@ -359,7 +359,7 @@ impl EventStorage {
         &self,
         sn: u64,
         id: &IdentifierPrefix,
-        event_digest: &SelfAddressingPrefix,
+        event_digest: &SelfAddressingIdentifier,
     ) -> Result<Option<IdentifierState>, Error> {
         let new_state = self.compute_state_at_sn(id, sn)?;
         if let Some(ref state) = new_state {
@@ -383,7 +383,7 @@ impl EventStorage {
         &self,
         sn: u64,
         id: &IdentifierPrefix,
-        event_digest: &SelfAddressingPrefix,
+        event_digest: &SelfAddressingIdentifier,
     ) -> Result<Vec<BasicPrefix>, Error> {
         let state = self
             .compute_state_at_event(sn, id, event_digest)?

@@ -7,8 +7,7 @@ mod test;
 
 use keri::{
     actor::{
-        self, event_generator,
-        prelude::{SelfAddressingPrefix, SAD},
+        self, event_generator, prelude::SelfAddressingIdentifier,
         simple_controller::PossibleResponse,
     },
     database::{escrow::EscrowDb, SledEventDatabase},
@@ -428,7 +427,7 @@ impl Controller {
     pub fn anchor(
         &self,
         id: IdentifierPrefix,
-        payload: &[SelfAddressingPrefix],
+        payload: &[SelfAddressingIdentifier],
     ) -> Result<String, ControllerError> {
         let state = self
             .storage

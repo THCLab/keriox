@@ -1,4 +1,4 @@
-use sai::SelfAddressingPrefix;
+use said::SelfAddressingIdentifier;
 
 #[cfg(feature = "mailbox")]
 use crate::mailbox::exchange::{Exchange, ExchangeMessage, ForwardTopic, FwdArgs};
@@ -50,7 +50,7 @@ pub fn incept(
 pub fn incept_with_next_hashes(
     public_keys: Vec<BasicPrefix>,
     signature_threshold: &SignatureThreshold,
-    next_pub_keys: Vec<SelfAddressingPrefix>,
+    next_pub_keys: Vec<SelfAddressingIdentifier>,
     witnesses: Vec<BasicPrefix>,
     witness_threshold: u64,
     delegator_id: Option<&IdentifierPrefix>,
@@ -139,7 +139,10 @@ fn make_rotation(
         .map_err(|e| Error::EventGenerationError(e.to_string()))
 }
 
-pub fn anchor(state: IdentifierState, payload: &[SelfAddressingPrefix]) -> Result<String, Error> {
+pub fn anchor(
+    state: IdentifierState,
+    payload: &[SelfAddressingIdentifier],
+) -> Result<String, Error> {
     let seal_list = payload
         .iter()
         .map(|seal| {
@@ -182,7 +185,7 @@ pub fn generate_end_role(
     role: Role,
     enabled: bool,
 ) -> Result<ReplyEvent, Error> {
-    use sai::derivation::SelfAddressing;
+    use said::derivation::HashFunctionCode;
     use version::serialization_info::SerializationFormats;
 
     let end_role = EndRole {
@@ -198,7 +201,7 @@ pub fn generate_end_role(
     ReplyEvent::new_reply(
         reply_route,
         // TODO set algo and serialization
-        SelfAddressing::Blake3_256,
+        HashFunctionCode::Blake3_256,
         SerializationFormats::JSON,
     )
     .map_err(|e| Error::EventGenerationError(e.to_string()))
@@ -209,7 +212,7 @@ pub fn exchange(
     data: &KeriEvent<KeyEvent>,
     topic: ForwardTopic,
 ) -> Result<ExchangeMessage, Error> {
-    use sai::derivation::SelfAddressing;
+    use said::derivation::HashFunctionCode;
     use version::serialization_info::SerializationFormats;
 
     use crate::event_message::timestamped::Timestamped;
@@ -224,7 +227,7 @@ pub fn exchange(
 
     KeriEvent::new(
         SerializationFormats::JSON,
-        SelfAddressing::Blake3_256,
+        HashFunctionCode::Blake3_256.into(),
         event,
     )
     .map_err(|e| Error::EventGenerationError(e.to_string()))

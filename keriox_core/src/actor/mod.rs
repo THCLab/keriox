@@ -123,7 +123,6 @@ pub fn process_signed_oobi(
     event_storage: &EventStorage,
 ) -> Result<(), Error> {
     use crate::processor::validator::EventValidator;
-    use sai::sad::SAD;
 
     let validator = EventValidator::new(event_storage.db.clone());
     // check signature
@@ -311,6 +310,6 @@ pub mod prelude {
         event_message::signed_event_message::Message,
         processor::{basic_processor::BasicProcessor, event_storage::EventStorage, Processor},
     };
-    pub use sai::{derivation::SelfAddressing, sad::SAD, SelfAddressingPrefix};
+    pub use said::{derivation::HashFunctionCode, SelfAddressingIdentifier};
     pub use version::{error::Error as VersionError, serialization_info::SerializationFormats};
 }

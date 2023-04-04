@@ -1,5 +1,5 @@
 use keri::{event::sections::seal::EventSeal, prefix::IdentifierPrefix};
-use sai::{derivation::SelfAddressing, SelfAddressingPrefix};
+use said::{derivation::HashFunction, derivation::HashFunctionCode, SelfAddressingIdentifier};
 use version::serialization_info::SerializationFormats;
 
 use crate::{
@@ -17,7 +17,7 @@ pub fn make_inception_event(
     config: Vec<Config>,
     backer_threshold: u64,
     backers: Vec<IdentifierPrefix>,
-    derivation: Option<&SelfAddressing>,
+    derivation: Option<&HashFunctionCode>,
     serialization_format: Option<&SerializationFormats>,
 ) -> Result<Event, Error> {
     let event_type = Inc {
@@ -30,14 +30,14 @@ pub fn make_inception_event(
     Ok(Event::Management(
         event_type
             .incept_self_addressing(
-                derivation.unwrap_or(&SelfAddressing::Blake3_256),
+                &HashFunction::from(derivation.unwrap_or(&HashFunctionCode::Blake3_256).to_owned()),
                 serialization_format
                     .unwrap_or(&SerializationFormats::JSON)
                     .to_owned(),
             )?
             .to_message(
                 *serialization_format.unwrap_or(&SerializationFormats::JSON),
-                derivation.unwrap_or(&SelfAddressing::Blake3_256).clone(),
+                derivation.unwrap_or(&HashFunctionCode::Blake3_256).clone(),
             )?,
     ))
 }
@@ -46,7 +46,7 @@ pub fn make_rotation_event(
     state: &ManagerTelState,
     ba: &[IdentifierPrefix],
     br: &[IdentifierPrefix],
-    derivation: Option<&SelfAddressing>,
+    derivation: Option<&HashFunctionCode>,
     serialization_format: Option<&SerializationFormats>,
 ) -> Result<Event, Error> {
     let rot_data = Rot {
@@ -60,15 +60,15 @@ pub fn make_rotation_event(
                 serialization_format
                     .unwrap_or(&SerializationFormats::JSON)
                     .to_owned(),
-                derivation.unwrap_or(&SelfAddressing::Blake3_256).clone(),
+                derivation.unwrap_or(&HashFunctionCode::Blake3_256).clone(),
             )?,
     ))
 }
 
 pub fn make_issuance_event(
     state: &ManagerTelState,
-    vc_hash: SelfAddressingPrefix,
-    derivation: Option<&SelfAddressing>,
+    vc_hash: SelfAddressingIdentifier,
+    derivation: Option<&HashFunctionCode>,
     serialization_format: Option<&SerializationFormats>,
 ) -> Result<Event, Error> {
     let registry_anchor = EventSeal {
@@ -80,15 +80,15 @@ pub fn make_issuance_event(
     let vc_prefix = IdentifierPrefix::SelfAddressing(vc_hash);
     Ok(Event::Vc(VCEvent::new(vc_prefix, 0, iss).to_message(
         *serialization_format.unwrap_or(&SerializationFormats::JSON),
-        derivation.unwrap_or(&SelfAddressing::Blake3_256).clone(),
+        derivation.unwrap_or(&HashFunctionCode::Blake3_256).clone(),
     )?))
 }
 
 pub fn make_revoke_event(
-    vc_hash: &SelfAddressingPrefix,
-    last_vc_event_hash: SelfAddressingPrefix,
+    vc_hash: &SelfAddressingIdentifier,
+    last_vc_event_hash: SelfAddressingIdentifier,
     state: &ManagerTelState,
-    derivation: Option<&SelfAddressing>,
+    derivation: Option<&HashFunctionCode>,
     serialization_format: Option<&SerializationFormats>,
 ) -> Result<Event, Error> {
     let registry_anchor = EventSeal {
@@ -105,7 +105,7 @@ pub fn make_revoke_event(
     Ok(Event::Vc(
         VCEvent::new(vc_prefix, state.sn + 1, rev).to_message(
             *serialization_format.unwrap_or(&SerializationFormats::JSON),
-            derivation.unwrap_or(&SelfAddressing::Blake3_256).clone(),
+            derivation.unwrap_or(&HashFunctionCode::Blake3_256).clone(),
         )?,
     ))
 }

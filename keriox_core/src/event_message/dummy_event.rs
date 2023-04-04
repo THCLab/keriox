@@ -4,8 +4,7 @@ use crate::{
 };
 
 use super::{EventTypeTag, Typeable};
-use cesrox::primitives::codes::self_addressing::dummy_prefix;
-use sai::derivation::SelfAddressing;
+use cesrox::primitives::codes::self_addressing::{dummy_prefix, SelfAddressing};
 use serde::Serialize;
 use serde_hex::{Compact, SerHex};
 use version::serialization_info::{SerializationFormats, SerializationInfo};
@@ -51,7 +50,6 @@ impl DummyInceptionEvent {
         derivation: &SelfAddressing,
         format: SerializationFormats,
     ) -> Result<Self, Error> {
-        let derivation = derivation.into();
         Ok(Self {
             serialization_info: SerializationInfo::new(
                 "KERI".to_string(),
@@ -105,8 +103,7 @@ impl<T: Serialize, D: Serialize + Typeable<TypeTag = T>> DummyEvent<T, D> {
         format: SerializationFormats,
         derivation: &SelfAddressing,
     ) -> Result<Self, Error> {
-        let cesr_derivation = derivation.into();
-        let dummy_prefix = dummy_prefix(&cesr_derivation);
+        let dummy_prefix = dummy_prefix(&derivation);
         let mut dummy_event = DummyEvent {
             serialization_info: SerializationInfo::new_empty("KERI".to_string(), format),
             event_type: event.get_type(),

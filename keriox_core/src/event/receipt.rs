@@ -3,7 +3,7 @@ use crate::event_message::EventTypeTag;
 use crate::event_message::Typeable;
 use crate::prefix::IdentifierPrefix;
 use cesrox::payload::Payload;
-use sai::SelfAddressingPrefix;
+use said::SelfAddressingIdentifier;
 use serde::{Deserialize, Serialize};
 use serde_hex::{Compact, SerHex};
 use version::serialization_info::SerializationFormats;
@@ -18,7 +18,7 @@ pub struct Receipt {
     /// A Qualified Digest of the event which this receipt is made for
     /// (not the receipt message itself).
     #[serde(rename = "d")]
-    pub receipted_event_digest: SelfAddressingPrefix,
+    pub receipted_event_digest: SelfAddressingIdentifier,
 
     /// Receipted Event identifier
     #[serde(rename = "i")]
@@ -32,7 +32,7 @@ pub struct Receipt {
 impl Receipt {
     pub fn new(
         format: SerializationFormats,
-        receipted_event_digest: SelfAddressingPrefix,
+        receipted_event_digest: SelfAddressingIdentifier,
         prefix: IdentifierPrefix,
         sn: u64,
     ) -> Self {

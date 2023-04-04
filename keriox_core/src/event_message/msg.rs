@@ -1,4 +1,4 @@
-use sai::{derivation::SelfAddressing, sad::SAD, SelfAddressingPrefix};
+use said::{derivation::HashFunction, SelfAddressingIdentifier};
 use serde::{Deserialize, Serialize, Serializer};
 use version::serialization_info::{SerializationFormats, SerializationInfo};
 
@@ -19,35 +19,41 @@ pub struct KeriEvent<D> {
     /// its length depends on derivation type. Then it is replaced by computed
     /// SAI.
     #[serde(rename = "d")]
-    pub digest: SelfAddressingPrefix,
+    pub digest: SelfAddressingIdentifier,
     #[serde(flatten)]
     pub data: D,
 }
 
-impl<T: Serialize, D: Serialize + Typeable<TypeTag = T> + Clone> SAD for KeriEvent<D> {
-    fn get_digest(&self) -> SelfAddressingPrefix {
+impl<T: Serialize, D: Serialize + Typeable<TypeTag = T> + Clone> KeriEvent<D> {
+    pub fn get_digest(&self) -> SelfAddressingIdentifier {
         self.digest.clone()
     }
 
-    fn dummy_event(&self) -> std::result::Result<Vec<u8>, sai::error::Error> {
+    pub fn dummy_event(&self) -> std::result::Result<Vec<u8>, Error> {
         DummyEvent::dummy_event(
             self.data.clone(),
             self.serialization_info.kind,
-            &self.digest.derivation,
-        )
-        .map_err(|_e| sai::error::Error::DummyEventError)?
+            &(&self.digest.derivation).into(),
+        )?
         .encode()
-        .map_err(|_e| sai::error::Error::DummyEventError)
+    }
+
+    pub fn check_digest(&self) -> Result<(), Error> {
+        let dummy: Vec<u8> = self.dummy_event()?;
+        self.get_digest()
+            .verify_binding(&dummy)
+            .then_some(())
+            .ok_or(Error::IncorrectDigest)
     }
 }
 
 impl<T: Serialize, D: Serialize + Typeable<TypeTag = T> + Clone> KeriEvent<D> {
     pub fn new(
         format: SerializationFormats,
-        derivation: SelfAddressing,
+        derivation: HashFunction,
         event: D,
     ) -> Result<Self, Error> {
-        let dummy_event = DummyEvent::dummy_event(event.clone(), format, &derivation)?;
+        let dummy_event = DummyEvent::dummy_event(event.clone(), format, &(&derivation).into())?;
 
         let sai = derivation.derive(&dummy_event.encode()?);
         Ok(Self {
@@ -77,7 +83,7 @@ impl<T: Serialize, D: Typeable<TypeTag = T> + Serialize + Clone> Serialize for K
             event_type: T,
 
             #[serde(rename = "d")]
-            digest: SelfAddressingPrefix,
+            digest: SelfAddressingIdentifier,
 
             #[serde(flatten)]
             event: D,

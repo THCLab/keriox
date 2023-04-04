@@ -1,5 +1,5 @@
 use cesrox::primitives::CesrPrimitive;
-use sai::{derivation::SelfAddressing, SelfAddressingPrefix};
+use said::{derivation::HashFunction, SelfAddressingIdentifier};
 use serde::{Deserialize, Serialize};
 
 use super::threshold::SignatureThreshold;
@@ -14,7 +14,7 @@ pub struct NextKeysData {
     pub threshold: SignatureThreshold,
 
     #[serde(rename = "n")]
-    pub next_key_hashes: Vec<SelfAddressingPrefix>,
+    pub next_key_hashes: Vec<SelfAddressingIdentifier>,
 }
 
 impl NextKeysData {
@@ -172,7 +172,7 @@ impl KeyConfig {
     ///
     /// Serializes the KeyConfig for creation or verification of a threshold
     /// key digest commitment
-    pub fn commit(&self, derivation: &SelfAddressing) -> NextKeysData {
+    pub fn commit(&self, derivation: &HashFunction) -> NextKeysData {
         nxt_commitment(self.threshold.clone(), &self.public_keys, derivation)
     }
 }
@@ -183,7 +183,7 @@ impl KeyConfig {
 pub fn nxt_commitment(
     threshold: SignatureThreshold,
     keys: &[BasicPrefix],
-    derivation: &SelfAddressing,
+    derivation: &HashFunction,
 ) -> NextKeysData {
     let next_key_hashes = keys
         .iter()
@@ -198,7 +198,7 @@ pub fn nxt_commitment(
 #[cfg(test)]
 mod test {
     use cesrox::{parse, primitives::CesrPrimitive};
-    use sai::{derivation::SelfAddressing, SelfAddressingPrefix};
+    use said::{derivation::HashFunction, derivation::HashFunctionCode, SelfAddressingIdentifier};
 
     use crate::{
         error::Error,
@@ -224,10 +224,10 @@ mod test {
         .iter()
         .map(|x| x.parse().unwrap())
         .collect();
-        let nxt = nxt_commitment(sith, &next_keys, &SelfAddressing::Blake3_256);
+        let nxt = nxt_commitment(sith, &next_keys, &HashFunctionCode::Blake3_256.into());
 
         let threshold = SignatureThreshold::multi_weighted(vec![vec![(1, 2), (1, 2), (1, 2)]]);
-        let next_key_hashes: Vec<SelfAddressingPrefix> = [
+        let next_key_hashes: Vec<SelfAddressingIdentifier> = [
             "EFQZkN8MMEtZzaS-Tq1EEbH886vsf5SzwicSn_ywbzTy",
             "ENOQnUj8GNr1ICJ1P4qmC3-aHTrpZqKVpZhvHCBVWE1p",
             "EDFH1MfEJWlI9PpMbgBi_RGP7L4UivrLfozFucuEaWVH",
@@ -276,7 +276,11 @@ mod test {
                     BasicPrefix::Ed25519(PublicKey::new(kp.public.to_bytes().to_vec()))
                 })
                 .collect();
-            nxt_commitment(next_threshold, &next_keys, &SelfAddressing::Blake3_256)
+            nxt_commitment(
+                next_threshold,
+                &next_keys,
+                &HashFunctionCode::Blake3_256.into(),
+            )
         };
         let key_config = KeyConfig::new(pub_keys, next_key_hash, Some(current_threshold));
 
@@ -377,6 +381,7 @@ mod test {
         use crate::signer::setup_signers;
 
         let signers = setup_signers();
+        let hash_function: HashFunction = HashFunctionCode::Blake3_256.into();
 
         let sample_public_keys: Vec<_> = signers
             .iter()
@@ -385,7 +390,7 @@ mod test {
         let sample_digests: Vec<_> = sample_public_keys
             .clone()
             .into_iter()
-            .map(|pk| SelfAddressing::Blake3_256.derive(pk.to_str().as_bytes()))
+            .map(|pk| hash_function.derive(pk.to_str().as_bytes()))
             .collect();
 
         let threshold = SignatureThreshold::single_weighted(vec![(1, 4), (1, 2), (1, 4), (1, 2)]);
@@ -467,7 +472,7 @@ mod test {
         let digests = vec![
             initial_digests[0].clone(),
             initial_digests[2].clone(),
-            SelfAddressing::Blake3_256.derive("Bad digest".as_bytes()),
+            hash_function.derive("Bad digest".as_bytes()),
         ];
 
         let next_keys_data = NextKeysData {

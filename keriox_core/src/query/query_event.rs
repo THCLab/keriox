@@ -1,4 +1,4 @@
-use sai::derivation::SelfAddressing;
+use said::derivation::HashFunctionCode;
 use serde::{Deserialize, Serialize};
 use version::serialization_info::SerializationFormats;
 
@@ -93,12 +93,12 @@ impl QueryEvent {
     pub fn new_query(
         route: QueryRoute,
         serialization_format: SerializationFormats,
-        derivation: SelfAddressing,
+        derivation: HashFunctionCode,
     ) -> Result<Self, Error> {
         let message = Query { route };
 
         let env = Timestamped::new(message);
-        KeriEvent::new(serialization_format, derivation, env)
+        KeriEvent::new(serialization_format, derivation.into(), env)
     }
 
     pub fn get_query_data(&self) -> Query {

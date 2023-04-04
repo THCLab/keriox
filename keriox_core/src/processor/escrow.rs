@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use sai::{sad::SAD, SelfAddressingPrefix};
+use said::SelfAddressingIdentifier;
 
 use super::{
     event_storage::EventStorage,
@@ -146,7 +146,7 @@ impl OutOfOrderEscrow {
         &self,
         sn: u64,
         id: &IdentifierPrefix,
-        event_digest: &SelfAddressingPrefix,
+        event_digest: &SelfAddressingIdentifier,
     ) -> Option<SignedEventMessage> {
         self.escrowed_out_of_order.get(id).and_then(|mut events| {
             events.find(|event| {
@@ -353,7 +353,7 @@ impl PartiallyWitnessedEscrow {
         &self,
         sn: u64,
         id: &IdentifierPrefix,
-        event_digest: &SelfAddressingPrefix,
+        event_digest: &SelfAddressingIdentifier,
     ) -> Option<SignedEventMessage> {
         self.escrowed_partially_witnessed
             .get(id)
@@ -370,7 +370,7 @@ impl PartiallyWitnessedEscrow {
         &self,
         id: &IdentifierPrefix,
         sn: u64,
-        digest: &SelfAddressingPrefix,
+        digest: &SelfAddressingIdentifier,
     ) -> Option<Vec<SignedNontransferableReceipt>> {
         self.escrowed_nontranferable_receipts.get(&id).map(|r| {
             r.filter(|rct| rct.body.sn == sn && &rct.body.receipted_event_digest == digest)
@@ -768,7 +768,7 @@ impl DelegationEscrow {
         &self,
         sn: u64,
         delegator_id: &IdentifierPrefix,
-        event_digest: &SelfAddressingPrefix,
+        event_digest: &SelfAddressingIdentifier,
     ) -> Option<SignedEventMessage> {
         self.delegation_escrow
             .get(delegator_id)
