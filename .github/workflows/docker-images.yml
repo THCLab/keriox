@@ -15,7 +15,7 @@ jobs:
           - uses: actions/checkout@v2
 
           - name: Build and Publish Tag Docker image
-            uses: TCPShield/gp-docker-action@1.1.13
+            uses: VaultVulp/gp-docker-action@1.6.0
             with:
                 github-token: ${{ secrets.GITHUB_TOKEN }} # Provide GITHUB_TOKEN to login into the GitHub Packages
                 image-name: watcher
