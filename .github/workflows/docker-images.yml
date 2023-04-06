@@ -1,4 +1,4 @@
-name: Build docker images for all components
+name: Build docker images
 
 on:
   push:
@@ -20,3 +20,4 @@ jobs:
                 github-token: ${{ secrets.GITHUB_TOKEN }} # Provide GITHUB_TOKEN to login into the GitHub Packages
                 image-name: watcher
                 extract-git-tag: true # Provide flag to extract Docker image tag from git reference
+                dockerfile: watcher.Dockerfile
