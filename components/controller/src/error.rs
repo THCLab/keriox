@@ -63,6 +63,6 @@ pub enum ControllerError {
     #[error("Wrong signature")]
     FaultySignature,
 
-    #[error("Verification failed for following elements: {{0:?}}")]
+    #[error("Verification failed for following elements: {0:?}")]
     VerificationError(Vec<(ControllerError, String)>),
 }

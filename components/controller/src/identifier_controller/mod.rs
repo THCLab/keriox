@@ -758,4 +758,14 @@ impl IdentifierController {
         }
         Ok(wit_ids)
     }
+
+    /// Splits input string into oobis to resolve and signed data, sends oobi to
+    /// watchers and verify provided credentials.
+    pub async fn verify_stream(&self, stream: &str) -> Result<(), ControllerError> {
+        let (oobis, parsed) = self.source.parse_cesr_stream(stream)?;
+        for oobi in oobis {
+            self.source.send_oobi_to_watcher(&self.id, &oobi).await?;
+        }
+        self.source.verify_parsed(&parsed)
+    }
 }
