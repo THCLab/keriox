@@ -1,11 +1,13 @@
 use sad_macros::SAD;
-use said::{derivation::HashFunction, derivation::HashFunctionCode, SelfAddressingIdentifier, sad::SAD};
+use said::{
+    derivation::HashFunction, derivation::HashFunctionCode, sad::SAD, SelfAddressingIdentifier,
+};
 use serde::{Deserialize, Serialize, Serializer};
 use version::serialization_info::{SerializationFormats, SerializationInfo};
 
 use crate::error::Error;
 
-use super::{dummy_event::DummyEvent, Typeable};
+use super::{EventTypeTag, Typeable};
 
 #[derive(Deserialize, Debug, Clone, PartialEq, SAD)]
 pub struct KeriEvent<D: Serialize + Clone> {
@@ -14,6 +16,7 @@ pub struct KeriEvent<D: Serialize + Clone> {
     /// Encodes the version, size and serialization format of the event
     #[serde(rename = "v")]
     pub serialization_info: SerializationInfo,
+    
     /// Digest of the event
     ///
     /// While computing the digest, this field is replaced with sequence of `#`,
@@ -31,21 +34,20 @@ impl<T: Serialize, D: Serialize + Typeable<TypeTag = T> + Clone> KeriEvent<D> {
         self.digest.clone().unwrap()
     }
 
-    pub fn dummy_event(&self) -> std::result::Result<Vec<u8>, Error> {
-        DummyEvent::dummy_event(
-            self.data.clone(),
-            self.serialization_info.kind,
-            &(&self.digest.as_ref().unwrap().derivation).into(),
-        )?
-        .encode()
-    }
-
     pub fn check_digest(&self) -> Result<(), Error> {
-        let dummy: Vec<u8> = self.dummy_event()?;
-        self.get_digest()
+        let dummy = self
+            .derivative(
+                &(&self.get_digest().derivation).into(),
+                &self.serialization_info.kind,
+            );
+        println!("dummy: {}", dummy);
+        println!("\nactua: {}", String::from_utf8(self.encode().unwrap()).unwrap());
+        let dummy = dummy.as_bytes()
+            .to_vec();
+        Ok(self.get_digest()
             .verify_binding(&dummy)
-            .then_some(())
-            .ok_or(Error::IncorrectDigest)
+            .then_some(()).unwrap())
+            // .ok_or(Error::IncorrectDigest)
     }
 }
 
@@ -56,8 +58,12 @@ impl<T: Serialize, D: Serialize + Typeable<TypeTag = T> + Clone> KeriEvent<D> {
         event: D,
     ) -> Result<Self, Error> {
         let tmp_serialization_info = SerializationInfo::new_empty("KERI".to_string(), format);
-        
-        let mut tmp_self = Self { serialization_info: tmp_serialization_info, digest: None, data: event };
+
+        let mut tmp_self = Self {
+            serialization_info: tmp_serialization_info,
+            digest: None,
+            data: event,
+        };
         let encoded = tmp_self.derivative(&(&derivation).into(), &format);
         println!("In KeriEvent new: {}", encoded);
 
@@ -65,15 +71,6 @@ impl<T: Serialize, D: Serialize + Typeable<TypeTag = T> + Clone> KeriEvent<D> {
         tmp_self.serialization_info.size = event_len;
         let keri_event = tmp_self.compute_digest((&derivation).into(), format);
         Ok(keri_event)
-
-        // let dummy_event = DummyEvent::dummy_event(event.clone(), format, &(&derivation).into())?;
-
-        // let sai = derivation.derive(&dummy_event.encode()?);
-        // Ok(Self {
-        //     serialization_info: dummy_event.serialization_info,
-        //     digest: sai,
-        //     data: event,
-        // })
     }
 
     pub fn encode(&self) -> Result<Vec<u8>, Error> {

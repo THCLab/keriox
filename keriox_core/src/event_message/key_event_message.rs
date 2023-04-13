@@ -1,5 +1,5 @@
 use cesrox::primitives::codes::self_addressing::dummy_prefix;
-use said::SelfAddressingIdentifier;
+use said::{sad::SAD, SelfAddressingIdentifier};
 use version::serialization_info::SerializationInfo;
 
 use crate::{
@@ -10,11 +10,8 @@ use crate::{
 };
 
 use super::{
-    dummy_event::{DummyEvent, DummyInceptionEvent},
-    msg::KeriEvent,
-    signature::Nontransferable,
-    signed_event_message::SignedEventMessage,
-    EventTypeTag, Typeable,
+    dummy_event::DummyInceptionEvent, msg::KeriEvent, signature::Nontransferable,
+    signed_event_message::SignedEventMessage, EventTypeTag, Typeable,
 };
 
 impl KeyEvent {
@@ -26,17 +23,6 @@ impl KeyEvent {
     }
     pub fn get_event_data(&self) -> EventData {
         self.event_data.clone()
-    }
-}
-
-impl From<KeriEvent<KeyEvent>> for DummyEvent<EventTypeTag, KeyEvent> {
-    fn from(em: KeriEvent<KeyEvent>) -> Self {
-        DummyEvent {
-            serialization_info: SerializationInfo::default(),
-            event_type: em.data.get_type(),
-            digest: dummy_prefix(&(&em.get_digest().derivation).into()),
-            data: em.data,
-        }
     }
 }
 
@@ -73,10 +59,13 @@ impl KeriEvent<KeyEvent> {
                 self.serialization_info.kind,
             )?
             .encode()?,
-            _ => {
-                let dummy_event: DummyEvent<_, _> = self.clone().into();
-                dummy_event.encode()?
-            }
+            _ => self
+                .derivative(
+                    &(&self.get_digest().derivation).into(),
+                    &self.serialization_info.kind,
+                )
+                .as_bytes()
+                .to_vec(),
         })
     }
 }
