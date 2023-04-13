@@ -57,7 +57,8 @@ impl InceptionEvent {
     ) -> Result<KeriEvent<KeyEvent>, Error> {
         let dummy_event =
             DummyInceptionEvent::dummy_inception_data(self.clone(), &(&derivation).into(), format)?;
-        let digest = derivation.derive(&dummy_event.encode()?);
+        println!("in incept_self_addressing: {}", String::from_utf8(dummy_event.encode()?).unwrap());
+        let digest = dummy_event.prefix.unwrap();
         let event = KeyEvent::new(
             IdentifierPrefix::SelfAddressing(digest.clone()),
             0,
@@ -65,7 +66,7 @@ impl InceptionEvent {
         );
         Ok(KeriEvent {
             serialization_info: dummy_event.serialization_info,
-            digest,
+            digest: Some(digest),
             data: event,
         })
     }

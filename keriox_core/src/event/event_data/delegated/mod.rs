@@ -36,7 +36,7 @@ impl DelegatedInceptionEvent {
             &(&derivation).into(),
             format,
         )?;
-        let digest = derivation.derive(&dummy_event.encode()?);
+        let digest = dummy_event.prefix.unwrap();
         let event = KeyEvent::new(
             IdentifierPrefix::SelfAddressing(digest.clone()),
             0,
@@ -44,7 +44,7 @@ impl DelegatedInceptionEvent {
         );
         Ok(KeriEvent {
             serialization_info: dummy_event.serialization_info,
-            digest,
+            digest: Some(digest),
             data: event,
         })
     }
