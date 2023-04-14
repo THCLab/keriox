@@ -32,7 +32,7 @@ use crate::{
 };
 
 use super::{
-    msg::KeriEvent,
+    msg::{KeriEvent, TypedEvent},
     signature::Nontransferable,
     signed_event_message::{
         Message, Notice, Op, SignedEventMessage, SignedNontransferableReceipt,
@@ -116,8 +116,10 @@ impl From<&SignedEventMessage> for ParsedData {
     }
 }
 
-impl<T: Serialize, D: Typeable<TypeTag = T> + Serialize + Clone> From<KeriEvent<D>> for Payload {
-    fn from(pd: KeriEvent<D>) -> Self {
+impl<T: Serialize + Clone, D: Typeable<TypeTag = T> + Serialize + Clone> From<TypedEvent<T, D>>
+    for Payload
+{
+    fn from(pd: TypedEvent<T, D>) -> Self {
         match pd.serialization_info.kind {
             SerializationFormats::JSON => Payload::JSON(pd.encode().unwrap()),
             SerializationFormats::MGPK => Payload::MGPK(pd.encode().unwrap()),

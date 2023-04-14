@@ -114,10 +114,10 @@ mod tests {
         signer::setup_signers,
         state::{EventSemantics, IdentifierState},
     };
-    use cesrox::primitives::{CesrPrimitive};
-    use said::derivation::HashFunctionCode;
+    use cesrox::primitives::CesrPrimitive;
     use ed25519_dalek::Keypair;
     use rand::rngs::OsRng;
+    use said::derivation::HashFunctionCode;
     use version::serialization_info::SerializationFormats;
 
     #[test]

@@ -45,20 +45,30 @@ impl KeriEvent<KeyEvent> {
         }
     }
 
-    fn to_derivation_data(&self) -> Result<Vec<u8>, Error> {
+    pub fn to_derivation_data(&self) -> Result<Vec<u8>, Error> {
         Ok(match self.data.get_event_data() {
             EventData::Icp(icp) => DummyInceptionEvent::dummy_inception_data(
                 icp,
                 &(&self.get_digest().derivation).into(),
                 self.serialization_info.kind,
             )?
-            .encode()?,
+            .derivative(
+                &(&self.get_digest().derivation).into(),
+                &self.serialization_info.kind,
+            )
+            .as_bytes()
+            .to_vec(),
             EventData::Dip(dip) => DummyInceptionEvent::dummy_delegated_inception_data(
                 dip,
                 &(&self.get_digest().derivation).into(),
                 self.serialization_info.kind,
             )?
-            .encode()?,
+            .derivative(
+                &(&self.get_digest().derivation).into(),
+                &self.serialization_info.kind,
+            )
+            .as_bytes()
+            .to_vec(),
             _ => self
                 .derivative(
                     &(&self.get_digest().derivation).into(),

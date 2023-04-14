@@ -30,7 +30,11 @@ pub fn make_inception_event(
     Ok(Event::Management(
         event_type
             .incept_self_addressing(
-                &HashFunction::from(derivation.unwrap_or(&HashFunctionCode::Blake3_256).to_owned()),
+                &HashFunction::from(
+                    derivation
+                        .unwrap_or(&HashFunctionCode::Blake3_256)
+                        .to_owned(),
+                ),
                 serialization_format
                     .unwrap_or(&SerializationFormats::JSON)
                     .to_owned(),

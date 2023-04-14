@@ -141,7 +141,8 @@ mod tests {
 
         // Setup test data.
         let message = "some message";
-        let message_id = HashFunction::from(HashFunctionCode::Blake3_256).derive(message.as_bytes());
+        let message_id =
+            HashFunction::from(HashFunctionCode::Blake3_256).derive(message.as_bytes());
         let issuer_prefix: IdentifierPrefix = "EaKJ0FoLxO1TYmyuprguKO7kJ7Hbn0m0Wuk5aMtSrMtY"
             .parse()
             .unwrap();

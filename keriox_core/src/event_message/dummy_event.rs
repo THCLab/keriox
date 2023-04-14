@@ -70,8 +70,7 @@ impl DummyInceptionEvent {
         let len = tmp_icp.derivative(derivation, &format).len();
         let serialization_info = SerializationInfo::new("KERI".to_string(), format, len);
         tmp_icp.serialization_info = serialization_info;
-        let icp = tmp_icp.compute_digest(derivation.clone(), format);
-        Ok(icp)
+        Ok(tmp_icp)
     }
 
     pub fn encode(&self) -> Result<Vec<u8>, Error> {

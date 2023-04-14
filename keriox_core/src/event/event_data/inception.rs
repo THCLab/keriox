@@ -5,11 +5,11 @@ use super::{
 use crate::{
     error::Error,
     event::{sections::seal::Seal, KeyEvent},
-    event_message::{dummy_event::DummyInceptionEvent, msg::KeriEvent},
+    event_message::{dummy_event::DummyInceptionEvent, msg::KeriEvent, EventTypeTag, Typeable},
     prefix::IdentifierPrefix,
     state::{EventSemantics, IdentifierState, LastEstablishmentData},
 };
-use said::derivation::HashFunction;
+use said::{derivation::HashFunction, sad::SAD};
 use serde::{Deserialize, Serialize};
 use version::serialization_info::SerializationFormats;
 
@@ -57,7 +57,7 @@ impl InceptionEvent {
     ) -> Result<KeriEvent<KeyEvent>, Error> {
         let dummy_event =
             DummyInceptionEvent::dummy_inception_data(self.clone(), &(&derivation).into(), format)?;
-        println!("in incept_self_addressing: {}", String::from_utf8(dummy_event.encode()?).unwrap());
+        let dummy_event = dummy_event.compute_digest((&derivation).into(), format);
         let digest = dummy_event.prefix.unwrap();
         let event = KeyEvent::new(
             IdentifierPrefix::SelfAddressing(digest.clone()),
@@ -66,6 +66,7 @@ impl InceptionEvent {
         );
         Ok(KeriEvent {
             serialization_info: dummy_event.serialization_info,
+            event_type: event.get_type(),
             digest: Some(digest),
             data: event,
         })
@@ -140,6 +141,9 @@ fn test_inception_data_derivation() -> Result<(), Error> {
         "EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen",
         icp_data.get_digest().to_str()
     );
+
+    let digest = icp_data.get_digest();
+    assert!(digest.verify_binding(&icp_data.to_derivation_data().unwrap()));
 
     Ok(())
 }

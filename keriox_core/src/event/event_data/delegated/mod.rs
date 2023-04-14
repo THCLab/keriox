@@ -2,6 +2,7 @@ use super::EventData;
 use super::InceptionEvent;
 use crate::event_message::dummy_event::DummyInceptionEvent;
 use crate::event_message::msg::KeriEvent;
+use crate::event_message::Typeable;
 use crate::{
     error::Error,
     event::{KeyEvent, SerializationFormats},
@@ -9,6 +10,7 @@ use crate::{
     state::{EventSemantics, IdentifierState},
 };
 use said::derivation::HashFunction;
+use said::sad::SAD;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -36,6 +38,7 @@ impl DelegatedInceptionEvent {
             &(&derivation).into(),
             format,
         )?;
+        let dummy_event = dummy_event.compute_digest((&derivation).into(), format);
         let digest = dummy_event.prefix.unwrap();
         let event = KeyEvent::new(
             IdentifierPrefix::SelfAddressing(digest.clone()),
@@ -44,6 +47,7 @@ impl DelegatedInceptionEvent {
         );
         Ok(KeriEvent {
             serialization_info: dummy_event.serialization_info,
+            event_type: event.get_type(),
             digest: Some(digest),
             data: event,
         })
@@ -101,6 +105,8 @@ fn test_delegated_inception_data_derivation() -> Result<(), Error> {
         dip_data.get_digest().to_str()
     );
     assert_eq!("KERI10JSON00015f_", dip_data.serialization_info.to_str());
+    let digest = dip_data.get_digest();
+    assert!(digest.verify_binding(&dip_data.to_derivation_data().unwrap()));
 
     Ok(())
 }
