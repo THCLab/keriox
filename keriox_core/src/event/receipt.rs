@@ -9,10 +9,16 @@ use serde_hex::{Compact, SerHex};
 use version::serialization_info::SerializationFormats;
 use version::serialization_info::SerializationInfo;
 
+/// Receipt event is not a SAD. That's because TypedEvent wrapper is not used here.
+/// It's digest field is digest of receipted event, not digest of receipt itself.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Receipt {
     #[serde(rename = "v")]
     pub serialization_info: SerializationInfo,
+    
+    #[serde(rename = "t")]
+    pub event_type: EventTypeTag,
+
     /// Receipted Event Digest
     ///
     /// A Qualified Digest of the event which this receipt is made for
@@ -41,6 +47,7 @@ impl Receipt {
             receipted_event_digest,
             prefix,
             sn,
+            event_type: EventTypeTag::Rct,
         };
         let len = receipt.encode().unwrap().len();
         receipt.serialization_info.size = len;

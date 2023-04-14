@@ -5,7 +5,7 @@ use super::{
 use crate::{
     error::Error,
     event::{sections::seal::Seal, KeyEvent},
-    event_message::{dummy_event::DummyInceptionEvent, msg::KeriEvent, EventTypeTag, Typeable},
+    event_message::{dummy_event::DummyInceptionEvent, msg::KeriEvent, Typeable},
     prefix::IdentifierPrefix,
     state::{EventSemantics, IdentifierState, LastEstablishmentData},
 };

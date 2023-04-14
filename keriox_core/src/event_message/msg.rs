@@ -52,9 +52,7 @@ impl<T: Serialize + Clone, D: Serialize + Typeable<TypeTag = T> + Clone> TypedEv
             .unwrap())
         // .ok_or(Error::IncorrectDigest)
     }
-}
 
-impl<T: Serialize + Clone, D: Serialize + Typeable<TypeTag = T> + Clone> TypedEvent<T, D> {
     pub fn new(
         format: SerializationFormats,
         derivation: HashFunction,

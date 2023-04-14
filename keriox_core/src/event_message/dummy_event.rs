@@ -2,13 +2,11 @@ use crate::{
     error::Error,
     event::{
         event_data::{DelegatedInceptionEvent, EventData, InceptionEvent},
-        KeyEvent,
     },
-    event_message::msg::KeriEvent,
 };
 
 use super::{EventTypeTag, Typeable};
-use cesrox::primitives::codes::self_addressing::{dummy_prefix, SelfAddressing};
+use cesrox::primitives::codes::self_addressing::SelfAddressing;
 use sad_macros::SAD;
 use said::{derivation::HashFunctionCode, sad::SAD, SelfAddressingIdentifier};
 use serde::Serialize;
@@ -71,9 +69,5 @@ impl DummyInceptionEvent {
         let serialization_info = SerializationInfo::new("KERI".to_string(), format, len);
         tmp_icp.serialization_info = serialization_info;
         Ok(tmp_icp)
-    }
-
-    pub fn encode(&self) -> Result<Vec<u8>, Error> {
-        Ok(self.serialization_info.serialize(&self).unwrap())
     }
 }

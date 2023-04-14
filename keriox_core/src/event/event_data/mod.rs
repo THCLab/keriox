@@ -8,8 +8,7 @@ use crate::{
     event_message::{EventTypeTag, Typeable},
     state::{EventSemantics, IdentifierState},
 };
-use serde::{de, Deserialize, Deserializer, Serialize};
-use serde_json::Value;
+use serde::{Deserialize, Serialize};
 
 pub use self::{
     delegated::DelegatedInceptionEvent, inception::InceptionEvent, interaction::InteractionEvent,
@@ -22,10 +21,10 @@ pub use self::{
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(untagged, rename_all = "lowercase")]
 pub enum EventData {
+    Dip(DelegatedInceptionEvent),
     Icp(InceptionEvent),
     Rot(RotationEvent),
     Ixn(InteractionEvent),
-    Dip(DelegatedInceptionEvent),
     Drt(RotationEvent),
 }
 

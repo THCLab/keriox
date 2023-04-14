@@ -560,11 +560,11 @@ pub fn signed_exchange(exn: ExchangeMessage, attachments: Vec<Group>) -> Result<
 
 #[cfg(test)]
 pub mod test {
-    use std::convert::TryInto;
+    use std::convert::{TryInto};
 
     use cesrox::{parse, parse_many};
 
-    use crate::event_message::cesr_adapter::EventType;
+    use crate::{event_message::{cesr_adapter::EventType, msg::KeriEvent}, event::{KeyEvent, receipt::Receipt}};
 
     #[test]
     fn test_signed_event() {
@@ -579,47 +579,44 @@ pub mod test {
     fn test_key_event_parsing() {
         // Inception event.
         let stream = br#"{"v":"KERI10JSON0000fd_","t":"icp","d":"EMW0zK3bagYPO6gx3w7Ua90f-I7x5kGIaI4Xeq9W8_As","i":"BFs8BBx86uytIM0D2BhsE5rrqVIT8ef8mflpNceHo4XH","s":"0","kt":"1","k":["BFs8BBx86uytIM0D2BhsE5rrqVIT8ef8mflpNceHo4XH"],"nt":"0","n":[],"bt":"0","b":[],"c":[],"a":[]}"#;
-        let event = parse(stream);
-        assert!(event.is_ok());
-        assert_eq!(event.unwrap().1.to_cesr().unwrap(), stream);
+        let event: KeriEvent<KeyEvent> = serde_json::from_slice(stream).unwrap();
+        assert_eq!(event.encode().unwrap(), stream);
 
         // Rotation event.
         let stream = br#"{"v":"KERI10JSON000160_","t":"rot","d":"EFl8nvRCbN2xQJI75nBXp-gaXuHJw8zheVjwMN_rB-pb","i":"DFs8BBx86uytIM0D2BhsE5rrqVIT8ef8mflpNceHo4XH","s":"1","p":"EJQUyxnzIAtmZPoq9f4fExeGN0qfJmaFnUEKTwIiTBPj","kt":"1","k":["DB4GWvru73jWZKpNgMQp8ayDRin0NG0Ymn_RXQP_v-PQ"],"nt":"1","n":["EIsKL3B6Zz5ICGxCQp-SoLXjwOrdlSbLJrEn21c2zVaU"],"bt":"0","br":[],"ba":[],"a":[]}"#;
-        let event = parse(stream);
-        assert!(event.is_ok());
-        assert_eq!(event.unwrap().1.to_cesr().unwrap(), stream);
+        let event: KeriEvent<KeyEvent> = serde_json::from_slice(stream).unwrap();
+        assert_eq!(event.encode().unwrap(), stream);
 
         // Interaction event without seals.
         let stream = br#"{"v":"KERI10JSON0000cb_","t":"ixn","d":"EKKccCumVQdgxvsrSXvuTtjmS28Xqf3zRJ8T6peKgl9J","i":"DFs8BBx86uytIM0D2BhsE5rrqVIT8ef8mflpNceHo4XH","s":"2","p":"ECauhEzA4DJDXVDnNQiGQ0sKXa6sx_GgS8Ebdzm4E-kQ","a":[]}"#;
-        let event = parse(stream);
-        assert!(event.is_ok());
-        assert_eq!(event.unwrap().1.to_cesr().unwrap(), stream);
+        let event: KeriEvent<KeyEvent> = serde_json::from_slice(stream).unwrap();
+        assert_eq!(event.encode().unwrap(), stream);
 
         // Interaction event with seal.
         let stream = br#"{"v":"KERI10JSON00013a_","t":"ixn","d":"EJtQndkvwnMpVGE5oVVbLWSCm-jLviGw1AOOkzBvNwsS","i":"EA_SbBUZYwqLVlAAn14d6QUBQCSReJlZ755JqTgmRhXH","s":"1","p":"EA_SbBUZYwqLVlAAn14d6QUBQCSReJlZ755JqTgmRhXH","a":[{"i":"EHng2fV42DdKb5TLMIs6bbjFkPNmIdQ5mSFn6BTnySJj","s":"0","d":"EHng2fV42DdKb5TLMIs6bbjFkPNmIdQ5mSFn6BTnySJj"}]}"#;
-        let event = parse(stream);
-        assert!(event.is_ok());
-        assert_eq!(event.unwrap().1.to_cesr().unwrap(), stream);
+        let event: KeriEvent<KeyEvent> = serde_json::from_slice(stream).unwrap();
+        assert_eq!(event.encode().unwrap(), stream);
 
         // Delegated inception event.
-        let stream = br#"{"v":"KERI10JSON00015f_","t":"dip","d":"EN3PglLbr4mJblS4dyqbqlpUa735hVmLOhYUbUztxaiH","i":"EN3PglLbr4mJblS4dyqbqlpUa735hVmLOhYUbUztxaiH","s":"0","kt":"1","k":["DB4GWvru73jWZKpNgMQp8ayDRin0NG0Ymn_RXQP_v-PQ"],"nt":"1","n":["EIf-ENw7PrM52w4H-S7NGU2qVIfraXVIlV9hEAaMHg7W"],"bt":"0","b":[],"c":[],"a":[],"di":"EAdHxtdjCQUM-TVO8CgJAKb8ykXsFe4u9epTUQFCL7Yd"}"#;
-        let event = parse(stream);
-        assert_eq!(event.unwrap().1.to_cesr().unwrap(), stream);
+        let stream = br#"{"v":"KERI10JSON00015f_","t":"dip","d":"EHng2fV42DdKb5TLMIs6bbjFkPNmIdQ5mSFn6BTnySJj","i":"EHng2fV42DdKb5TLMIs6bbjFkPNmIdQ5mSFn6BTnySJj","s":"0","kt":"1","k":["DLitcfMnabnLt-PNCaXdVwX45wsG93Wd8eW9QiZrlKYQ"],"nt":"1","n":["EDjXvWdaNJx7pAIr72Va6JhHxc7Pf4ScYJG496ky8lK8"],"bt":"0","b":[],"c":[],"a":[],"di":"EA_SbBUZYwqLVlAAn14d6QUBQCSReJlZ755JqTgmRhXH"}"#;
+        let event: KeriEvent<KeyEvent> = serde_json::from_slice(stream).unwrap();
+        assert_eq!(event.encode().unwrap(), stream);
 
         // Delegated rotation event.
         let stream = br#"{"v":"KERI10JSON000160_","t":"drt","d":"EMBBBkaLV7i6wNgfz3giib2ItrHsr548mtIflW0Hrbuv","i":"EN3PglLbr4mJblS4dyqbqlpUa735hVmLOhYUbUztxaiH","s":"4","p":"EANkcl_QewzrRSKH2p9zUskHI462CuIMS_HQIO132Z30","kt":"1","k":["DPLt4YqQsWZ5DPztI32mSyTJPRESONvE9KbETtCVYIeH"],"nt":"1","n":["EIsKL3B6Zz5ICGxCQp-SoLXjwOrdlSbLJrEn21c2zVaU"],"bt":"0","br":[],"ba":[],"a":[]}"#;
-        let event = parse(stream);
-        assert!(event.is_ok());
-        assert_eq!(event.unwrap().1.to_cesr().unwrap(), stream);
+        let event: KeriEvent<KeyEvent> = serde_json::from_slice(stream).unwrap();
+        assert_eq!(event.encode().unwrap(), stream);
     }
 
     #[test]
     fn test_receipt_parsing() {
         // Receipt event
         let stream = br#"{"v":"KERI10JSON000091_","t":"rct","d":"EKKccCumVQdgxvsrSXvuTtjmS28Xqf3zRJ8T6peKgl9J","i":"DFs8BBx86uytIM0D2BhsE5rrqVIT8ef8mflpNceHo4XH","s":"0"}"#;
-        let event = parse(stream);
-        assert!(event.is_ok());
-        assert_eq!(event.unwrap().1.to_cesr().unwrap(), stream);
+        let event = parse(stream).unwrap().1;
+        assert_eq!(event.to_cesr().unwrap(), stream);
+
+        let event: Receipt = serde_json::from_slice(stream).unwrap();
+        assert_eq!(String::from_utf8(event.encode().unwrap()).unwrap(), String::from_utf8(stream.to_vec()).unwrap());
     }
 
     #[cfg(feature = "query")]

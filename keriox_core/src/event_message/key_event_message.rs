@@ -1,6 +1,4 @@
-use cesrox::primitives::codes::self_addressing::dummy_prefix;
 use said::{sad::SAD, SelfAddressingIdentifier};
-use version::serialization_info::SerializationInfo;
 
 use crate::{
     error::Error,
@@ -11,7 +9,7 @@ use crate::{
 
 use super::{
     dummy_event::DummyInceptionEvent, msg::KeriEvent, signature::Nontransferable,
-    signed_event_message::SignedEventMessage, EventTypeTag, Typeable,
+    signed_event_message::SignedEventMessage,
 };
 
 impl KeyEvent {
