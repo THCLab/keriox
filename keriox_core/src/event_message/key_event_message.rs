@@ -9,7 +9,7 @@ use crate::{
 
 use super::{
     dummy_event::DummyInceptionEvent, msg::KeriEvent, signature::Nontransferable,
-    signed_event_message::SignedEventMessage,
+    signed_event_message::SignedEventMessage, EventTypeTag,
 };
 
 impl KeyEvent {
@@ -86,8 +86,8 @@ impl EventSemantics for KeriEvent<KeyEvent> {
                 .ok_or(Error::IncorrectDigest)
         };
         // Update state.last with serialized current event message.
-        match self.data.get_event_data() {
-            EventData::Icp(_) | EventData::Dip(_) => {
+        match (self.data.get_event_data(), &self.event_type) {
+            (EventData::Icp(_), _) | (EventData::Dip(_), _) => {
                 if verify_identifier_binding(self)? {
                     self.data.apply_to(IdentifierState {
                         last_event_digest: self.get_digest(),
@@ -99,7 +99,7 @@ impl EventSemantics for KeriEvent<KeyEvent> {
                     ))
                 }
             }
-            EventData::Rot(ref rot) => {
+           (EventData::Rot(ref rot), EventTypeTag::Rot) | (EventData::Drt(ref rot), EventTypeTag::Rot) => {
                 check_event_digest(self)?;
                 if state.delegator.is_some() {
                     Err(Error::SemanticError(
@@ -124,7 +124,7 @@ impl EventSemantics for KeriEvent<KeyEvent> {
                     })
                 }
             }
-            EventData::Drt(ref drt) => self.data.apply_to(state.clone()).and_then(|next_state| {
+            (EventData::Rot(ref drt), EventTypeTag::Drt) |  (EventData::Drt(ref drt), EventTypeTag::Drt) => self.data.apply_to(state.clone()).and_then(|next_state| {
                 check_event_digest(self)?;
                 if state.delegator.is_none() {
                     Err(Error::SemanticError(
@@ -141,7 +141,7 @@ impl EventSemantics for KeriEvent<KeyEvent> {
                     ))
                 }
             }),
-            EventData::Ixn(ref inter) => {
+            (EventData::Ixn(ref inter), _) => {
                 check_event_digest(self)?;
                 self.data.apply_to(state.clone()).and_then(|next_state| {
                     if inter.previous_event_hash.eq(&state.last_event_digest) {
@@ -155,7 +155,8 @@ impl EventSemantics for KeriEvent<KeyEvent> {
                         ))
                     }
                 })
-            }
+            },
+            _ => {Err(Error::SemanticError("Wrong type tag".to_string()))}
         }
     }
 }
