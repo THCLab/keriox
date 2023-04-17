@@ -1,17 +1,14 @@
 use cesrox::primitives::codes::self_addressing::dummy_prefix;
 use keri::actor::prelude::SerializationFormats;
 use keri::event_message::msg::TypedEvent;
-use said::{derivation::HashFunction, derivation::HashFunctionCode, SelfAddressingIdentifier};
-use serde::{de, Deserialize, Deserializer, Serialize};
+use said::{derivation::HashFunctionCode, SelfAddressingIdentifier};
+use serde::{Deserialize, Serialize};
 use serde_hex::{Compact, SerHex};
 
 use keri::{event_message::Typeable, prefix::IdentifierPrefix};
-use serde_json::Value;
 use version::serialization_info::SerializationInfo;
 
 use crate::error::Error;
-
-use super::vc_event::TelEventType;
 
 pub type ManagerTelEventMessage = TypedEvent<ManagementTelType, ManagerTelEvent>;
 
@@ -26,7 +23,7 @@ pub struct ManagerTelEvent {
     #[serde(rename = "s", with = "SerHex::<Compact>")]
     pub sn: u64,
 
-    #[serde(flatten, rename = "t")]
+    #[serde(flatten)]
     pub event_type: ManagerEventType,
 }
 
@@ -43,30 +40,6 @@ impl Typeable for ManagerTelEvent {
         match self.event_type {
             ManagerEventType::Vcp(_) => ManagementTelType::Vcp,
             ManagerEventType::Vrt(_) => ManagementTelType::Vrt,
-        }
-    }
-}
-
-impl<'de> Deserialize<'de> for ManagerEventType {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        // Helper struct for adding tag to properly deserialize 't' field
-        #[derive(Deserialize, Debug)]
-        struct EventType {
-            t: ManagementTelType,
-        }
-
-        let v = Value::deserialize(deserializer)?;
-        let m = EventType::deserialize(&v).map_err(de::Error::custom)?;
-        match m.t {
-            ManagementTelType::Vcp => Ok(ManagerEventType::Vcp(
-                Inc::deserialize(&v).map_err(de::Error::custom)?,
-            )),
-            ManagementTelType::Vrt => Ok(ManagerEventType::Vrt(
-                Rot::deserialize(&v).map_err(de::Error::custom)?,
-            )),
         }
     }
 }
@@ -93,7 +66,7 @@ impl ManagerTelEvent {
     }
 }
 
-#[derive(Serialize, Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(untagged, rename_all = "lowercase")]
 pub enum ManagerEventType {
     /// Registry Inception Event
