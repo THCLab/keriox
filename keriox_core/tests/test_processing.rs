@@ -1,5 +1,7 @@
+#[cfg(feature = "query")]
 use std::sync::Arc;
 
+#[cfg(feature = "query")]
 use keri::{
     actor::{parse_event_stream, prelude::*},
     database::{escrow::EscrowDb, SledEventDatabase},
@@ -11,6 +13,7 @@ use keri::{
     },
 };
 
+#[cfg(feature = "query")]
 #[test]
 pub fn test_ksn_query() -> Result<(), Box<dyn std::error::Error>> {
     use keri::event_message::signed_event_message::Message;

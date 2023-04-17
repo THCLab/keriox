@@ -1,8 +1,4 @@
-use said::{
-    derivation::{HashFunction, HashFunctionCode},
-    sad::SAD,
-    SelfAddressingIdentifier,
-};
+use said::{derivation::HashFunctionCode, sad::SAD, SelfAddressingIdentifier};
 
 use crate::{
     error::Error,
