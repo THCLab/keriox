@@ -112,7 +112,7 @@ impl IdentifierController {
     ) -> Result<(KeriEvent<KeyEvent>, ExchangeMessage), ControllerError> {
         let delegate = delegated_event.data.get_prefix();
         let delegated_seal = {
-            let event_digest = delegated_event.get_digest();
+            let event_digest = delegated_event.digest()?;
             let sn = delegated_event.data.get_sn();
             Seal::Event(EventSeal {
                 prefix: delegate.clone(),
@@ -278,7 +278,7 @@ impl IdentifierController {
             let sigs: Vec<_> = if let Some(receipts) = self.source.storage.get_nt_receipts(
                 &to_forward.data.get_prefix(),
                 to_forward.data.get_sn(),
-                &to_forward.get_digest(),
+                &to_forward.digest()?,
             )? {
                 receipts
                     .signatures

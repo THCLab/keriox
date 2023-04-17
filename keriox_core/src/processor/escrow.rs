@@ -152,7 +152,7 @@ impl OutOfOrderEscrow {
             events.find(|event| {
                 event.event_message.data.sn == sn
                     && &event.event_message.data.prefix == id
-                    && &event.event_message.get_digest() == event_digest
+                    && event.event_message.digest().ok().as_ref() == Some(event_digest)
             })
         })
     }
@@ -361,7 +361,7 @@ impl PartiallyWitnessedEscrow {
                 events.find(|event| {
                     event.event_message.data.sn == sn
                         && &event.event_message.data.prefix == id
-                        && &event.event_message.get_digest() == event_digest
+                        && event.event_message.digest().ok().as_ref() == Some(event_digest)
                 })
             })
     }
@@ -409,7 +409,7 @@ impl PartiallyWitnessedEscrow {
             .get_escrowed_receipts(
                 &id,
                 event.event_message.data.get_sn(),
-                &event.event_message.get_digest(),
+                &event.event_message.digest()?,
             )
             .unwrap_or_default()
             .into_iter()
@@ -488,7 +488,7 @@ impl PartiallyWitnessedEscrow {
         let storage = EventStorage::new(self.db.clone());
         let id = receipted_event.event_message.data.get_prefix();
         let sn = receipted_event.event_message.data.get_sn();
-        let digest = receipted_event.event_message.get_digest();
+        let digest = receipted_event.event_message.digest()?;
         let new_state = storage
             .get_state(&id)?
             .unwrap_or_default()
@@ -775,7 +775,7 @@ impl DelegationEscrow {
             .and_then(|mut events| {
                 events.find(|event| {
                     event.event_message.data.sn == sn
-                        && &event.event_message.get_digest() == event_digest
+                        && event.event_message.digest().ok().as_ref() == Some(event_digest)
                 })
             })
     }
@@ -806,7 +806,7 @@ impl Notifier for DelegationEscrow {
                 if !seals.is_empty() {
                     let potential_delegator_seal = SourceSeal {
                         sn: ev_message.event_message.data.get_sn(),
-                        digest: ev_message.event_message.get_digest(),
+                        digest: ev_message.event_message.digest()?,
                     };
                     self.process_delegation_events(bus, &id, seals, potential_delegator_seal)?;
                 }
@@ -850,8 +850,9 @@ impl DelegationEscrow {
     ) -> Result<(), Error> {
         if let Some(esc) = self.delegation_escrow.get(delegator_id) {
             for event in esc {
+                let event_digest = event.event_message.digest()?;
                 let seal = anchored_seals.iter().find(|seal| {
-                    seal.event_digest == event.event_message.get_digest()
+                    seal.event_digest == event_digest
                         && seal.sn == event.event_message.data.get_sn()
                         && seal.prefix == event.event_message.data.get_prefix()
                 });

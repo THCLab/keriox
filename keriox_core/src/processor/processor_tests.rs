@@ -338,7 +338,7 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
     // {"v":"KERI10JSON0001e7_","t":"icp","d":"EKkedrfoZz54Xsb_lGGdKTkYqNMf6TMrX1x57M1j0yi3","i":"EKkedrfoZz54Xsb_lGGdKTkYqNMf6TMrX1x57M1j0yi3","s":"0","kt":"1","k":["DErocgXD2RGSyvn3MObcx59jeOsEQhv2TqHirVkzrp0Q"],"nt":"2","n":["EIQsSW4KMrLzY1HQI9H_XxY6MyzhaFFXhG6fdBb5Wxta","EHuvLs1hmwxo4ImDoCpaAermYVQhiPsPDNaZsz4bcgko","EDJk5EEpC4-tQ7YDwBiKbpaZahh1QCyQOnZRF7p2i8k8","EAXfDjKvUFRj-IEB_o4y-Y_qeJAjYfZtOMD9e7vHNFss","EN8l6yJC2PxribTN0xfri6bLz34Qvj-x3cNwcV3DvT2m"],"bt":"0","b":[],"c":[],"a":[]}
 
     let id_prefix = icp.data.get_prefix();
-    let icp_digest = icp.get_digest();
+    let icp_digest = icp.digest()?;
     assert_eq!(
         id_prefix,
         IdentifierPrefix::SelfAddressing(icp_digest.clone())
@@ -381,7 +381,7 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
         .with_next_threshold(&SignatureThreshold::Simple(4))
         .build()?;
 
-    let rot_digest = rotation.get_digest();
+    let rot_digest = rotation.digest()?;
 
     let signatures = current_signers
         .iter()
@@ -515,7 +515,7 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
         .unwrap();
 
     let id_prefix = icp.data.get_prefix();
-    let icp_digest = icp.get_digest();
+    let icp_digest = icp.digest()?;
     assert_eq!(
         id_prefix,
         IdentifierPrefix::SelfAddressing(icp_digest.clone())
@@ -569,7 +569,7 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
         ]))
         .build()?;
 
-    let rot_digest = rotation.get_digest();
+    let rot_digest = rotation.digest()?;
 
     let signatures = current_signers
         .iter()
@@ -693,7 +693,7 @@ pub fn test_reserve_rotation() -> Result<(), Error> {
         .unwrap();
 
     let id_prefix = icp.data.get_prefix();
-    let icp_digest = icp.get_digest();
+    let icp_digest = icp.digest()?;
     assert_eq!(
         id_prefix,
         IdentifierPrefix::SelfAddressing(icp_digest.clone())
@@ -746,7 +746,7 @@ pub fn test_reserve_rotation() -> Result<(), Error> {
         ]))
         .build()?;
 
-    let rot_digest = rotation.get_digest();
+    let rot_digest = rotation.digest()?;
 
     let signatures = current_signers
         .iter()
@@ -875,7 +875,7 @@ pub fn test_custorial_rotation() -> Result<(), Error> {
         .unwrap();
 
     let id_prefix = icp.data.get_prefix();
-    let icp_digest = icp.get_digest();
+    let icp_digest = icp.digest()?;
     assert_eq!(
         id_prefix,
         IdentifierPrefix::SelfAddressing(icp_digest.clone())

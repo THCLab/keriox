@@ -79,7 +79,7 @@ impl EventType {
 impl From<&SignedEventMessage> for ParsedData {
     fn from(ev: &SignedEventMessage) -> Self {
         let mut attachments = if let Some(SourceSeal { sn, digest }) = ev.delegator_seal.clone() {
-            vec![Group::SourceSealCouples(vec![(sn, (&digest).into())])]
+            vec![Group::SourceSealCouples(vec![(sn, digest.into())])]
         } else {
             vec![]
         };
@@ -145,7 +145,7 @@ impl From<SignedTransferableReceipt> for ParsedData {
         let quadruple = (
             seal.prefix.into(),
             seal.sn,
-            (&seal.event_digest).into(),
+            seal.event_digest.into(),
             signatures,
         );
         let group = Group::TransIndexedSigGroups(vec![quadruple]);

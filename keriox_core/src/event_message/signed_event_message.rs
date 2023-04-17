@@ -166,8 +166,10 @@ impl Serialize for SignedEventMessage {
                 em.serialize_field("", &att_receipts)?;
             }
             if let Some(ref seal) = self.delegator_seal {
-                let att_seal =
-                    Group::SourceSealCouples(vec![(seal.sn.into(), (&seal.digest).into())]);
+                let att_seal = Group::SourceSealCouples(vec![(
+                    (&seal.sn).clone(),
+                    seal.digest.clone().into(),
+                )]);
                 em.serialize_field("", &att_seal.to_cesr_str())?;
             }
 

@@ -368,7 +368,7 @@ mod tests {
             .unwrap();
 
         let id_prefix = icp.data.get_prefix();
-        let icp_digest = icp.get_digest();
+        let icp_digest = icp.digest()?;
         assert_eq!(
             id_prefix,
             IdentifierPrefix::SelfAddressing(icp_digest.clone())
@@ -413,7 +413,7 @@ mod tests {
             ]))
             .build()?;
 
-        let rot_digest = rotation.get_digest();
+        let rot_digest = rotation.digest()?;
         let state = rotation.apply_to(state)?;
 
         assert_eq!(state.sn, 1);

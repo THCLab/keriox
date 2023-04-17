@@ -111,6 +111,9 @@ pub enum Error {
     #[error("Incorrect event digest")]
     IncorrectDigest,
 
+    #[error("No digest of event set")]
+    EventDigestError,
+
     #[cfg(feature = "query")]
     #[error(transparent)]
     QueryError(#[from] crate::query::QueryError),

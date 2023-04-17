@@ -35,16 +35,15 @@ pub struct TypedEvent<T: Serialize + Clone, D: Serialize + Clone + Typeable<Type
 }
 
 impl<T: Serialize + Clone, D: Serialize + Typeable<TypeTag = T> + Clone> TypedEvent<T, D> {
-    pub fn get_digest(&self) -> SelfAddressingIdentifier {
-        self.digest.clone().unwrap()
+    pub fn digest(&self) -> Result<SelfAddressingIdentifier, Error> {
+        self.digest.to_owned().ok_or(Error::EventDigestError)
     }
 
     pub fn check_digest(&self) -> Result<(), Error> {
-        let dummy = self.derivation_data(
-            &(&self.get_digest().derivation).into(),
-            &self.serialization_info.kind,
-        );
-        self.get_digest()
+        let event_digest = self.digest()?;
+        let hash_function_code = event_digest.derivation.to_owned().into();
+        let dummy = self.derivation_data(&hash_function_code, &self.serialization_info.kind);
+        event_digest
             .verify_binding(&dummy)
             .then_some(())
             .ok_or(Error::IncorrectDigest)
@@ -63,11 +62,12 @@ impl<T: Serialize + Clone, D: Serialize + Typeable<TypeTag = T> + Clone> TypedEv
             digest: None,
             data: event,
         };
-        let encoded = tmp_self.derivation_data(&(&derivation).into(), &format);
+        let hash_function = derivation.into();
+        let encoded = tmp_self.derivation_data(&hash_function, &format);
 
         let event_len = encoded.len();
         tmp_self.serialization_info.size = event_len;
-        let keri_event = tmp_self.compute_digest((&derivation).into(), format);
+        let keri_event = tmp_self.compute_digest(hash_function, format);
         Ok(keri_event)
     }
 

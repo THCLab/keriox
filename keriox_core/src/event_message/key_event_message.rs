@@ -1,4 +1,8 @@
-use said::{sad::SAD, SelfAddressingIdentifier};
+use said::{
+    derivation::{HashFunction, HashFunctionCode},
+    sad::SAD,
+    SelfAddressingIdentifier,
+};
 
 use crate::{
     error::Error,
@@ -35,8 +39,8 @@ impl KeriEvent<KeyEvent> {
     }
 
     pub fn compare_digest(&self, sai: &SelfAddressingIdentifier) -> Result<bool, Error> {
-        let self_dig = self.get_digest();
-        if self_dig.derivation == sai.derivation {
+        let self_dig = self.digest()?;
+        if self_dig.derivation.eq(&sai.derivation) {
             Ok(&self_dig == sai)
         } else {
             Ok(sai.verify_binding(&self.to_derivation_data()?))
@@ -44,37 +48,31 @@ impl KeriEvent<KeyEvent> {
     }
 
     pub fn to_derivation_data(&self) -> Result<Vec<u8>, Error> {
+        let event_digest = self.digest()?;
+        let hash_function_code: HashFunctionCode = event_digest.derivation.into();
         Ok(match self.data.get_event_data() {
             EventData::Icp(icp) => DummyInceptionEvent::dummy_inception_data(
                 icp,
-                &(&self.get_digest().derivation).into(),
+                &hash_function_code,
                 self.serialization_info.kind,
             )?
-            .derivation_data(
-                &(&self.get_digest().derivation).into(),
-                &self.serialization_info.kind,
-            ),
+            .derivation_data(&hash_function_code, &self.serialization_info.kind),
             EventData::Dip(dip) => DummyInceptionEvent::dummy_delegated_inception_data(
                 dip,
-                &(&self.get_digest().derivation).into(),
+                &hash_function_code,
                 self.serialization_info.kind,
             )?
-            .derivation_data(
-                &(&self.get_digest().derivation).into(),
-                &self.serialization_info.kind,
-            ),
-            _ => self.derivation_data(
-                &(&self.get_digest().derivation).into(),
-                &self.serialization_info.kind,
-            ),
+            .derivation_data(&hash_function_code, &self.serialization_info.kind),
+            _ => self.derivation_data(&hash_function_code, &self.serialization_info.kind),
         })
     }
 }
 
 impl EventSemantics for KeriEvent<KeyEvent> {
     fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
+        let event_digest = self.digest()?;
         let check_event_digest = |ev: &KeriEvent<KeyEvent>| -> Result<(), Error> {
-            ev.compare_digest(&self.get_digest())?
+            ev.compare_digest(&event_digest)?
                 .then(|| ())
                 .ok_or(Error::IncorrectDigest)
         };
@@ -83,7 +81,7 @@ impl EventSemantics for KeriEvent<KeyEvent> {
             (EventData::Icp(_), _) | (EventData::Dip(_), _) => {
                 if verify_identifier_binding(self)? {
                     self.data.apply_to(IdentifierState {
-                        last_event_digest: self.get_digest(),
+                        last_event_digest: event_digest,
                         ..state
                     })
                 } else {
@@ -107,7 +105,7 @@ impl EventSemantics for KeriEvent<KeyEvent> {
                     self.data.apply_to(state.clone()).and_then(|next_state| {
                         if rot.previous_event_hash.eq(&state.last_event_digest) {
                             Ok(IdentifierState {
-                                last_event_digest: self.get_digest(),
+                                last_event_digest: event_digest,
                                 ..next_state
                             })
                         } else {
@@ -128,7 +126,7 @@ impl EventSemantics for KeriEvent<KeyEvent> {
                         ))
                     } else if drt.previous_event_hash.eq(&state.last_event_digest) {
                         Ok(IdentifierState {
-                            last_event_digest: self.get_digest(),
+                            last_event_digest: event_digest.clone(),
                             ..next_state
                         })
                     } else {
@@ -143,7 +141,7 @@ impl EventSemantics for KeriEvent<KeyEvent> {
                 self.data.apply_to(state.clone()).and_then(|next_state| {
                     if inter.previous_event_hash.eq(&state.last_event_digest) {
                         Ok(IdentifierState {
-                            last_event_digest: self.get_digest(),
+                            last_event_digest: event_digest,
                             ..next_state
                         })
                     } else {
@@ -169,7 +167,7 @@ pub fn verify_identifier_binding(icp_event: &KeriEvent<KeyEvent>) -> Result<bool
                     .first()
                     .ok_or_else(|| Error::SemanticError("Missing public key".into()))?)),
             IdentifierPrefix::SelfAddressing(sap) => {
-                Ok(icp_event.compare_digest(sap)? && icp_event.get_digest().eq(sap))
+                Ok(icp_event.compare_digest(sap)? && icp_event.digest()?.eq(sap))
             }
             IdentifierPrefix::SelfSigning(_ssp) => todo!(),
         },

@@ -85,7 +85,11 @@ impl EventStorage {
                             .get_nt_receipts(
                                 &event.signed_event_message.event_message.data.get_prefix(),
                                 event.signed_event_message.event_message.data.get_sn(),
-                                &event.signed_event_message.event_message.get_digest(),
+                                &event
+                                    .signed_event_message
+                                    .event_message
+                                    .digest()
+                                    .expect("Event with no digest"),
                             )
                             .unwrap()
                             .map(Notice::NontransferableRct);
@@ -219,12 +223,16 @@ impl EventStorage {
         } else {
             return Ok(None);
         }
-        let seal = last_est.map(|event| EventSeal {
-            prefix: event.event_message.data.get_prefix(),
-            sn: event.event_message.data.get_sn(),
-            event_digest: event.event_message.get_digest(),
-        });
-        Ok(seal)
+        if let Some(event) = last_est {
+            let event_digest = event.event_message.digest()?;
+            Ok(Some(EventSeal {
+                prefix: event.event_message.data.get_prefix(),
+                sn: event.event_message.data.get_sn(),
+                event_digest,
+            }))
+        } else {
+            Ok(None)
+        }
     }
 
     /// Compute State for Prefix and sn

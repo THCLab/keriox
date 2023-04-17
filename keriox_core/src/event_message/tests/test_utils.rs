@@ -115,7 +115,7 @@ fn test_update_identifier_state(
     // Check if state is updated correctly.
     assert_eq!(new_state.prefix, prefix.clone());
     assert_eq!(new_state.sn, state_data.sn);
-    assert_eq!(new_state.last_event_digest, event_msg.get_digest());
+    assert_eq!(new_state.last_event_digest, event_msg.digest()?);
     assert_eq!(new_state.current.public_keys.len(), 1);
     assert_eq!(new_state.current.public_keys[0], current_key_pref);
     assert_eq!(new_state.current.threshold, SignatureThreshold::Simple(1));
@@ -133,7 +133,7 @@ fn test_update_identifier_state(
         new_history.push(current_key_pref);
     }
     // Current event will be previous event for the next one, so return its hash.
-    let prev_event_hash = event_msg.get_digest();
+    let prev_event_hash = event_msg.digest()?;
     // Compute sn for next event.
     let next_sn = state_data.sn + 1;
 
