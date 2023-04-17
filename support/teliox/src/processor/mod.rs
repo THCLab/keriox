@@ -170,7 +170,10 @@ mod tests {
         // check if vcp event is in db.
         let man_event_from_db = processor.get_management_event_at_sn(&management_tel_prefix, 0)?;
         assert!(man_event_from_db.is_some());
-        assert_eq!(man_event_from_db.unwrap(), verifiable_vcp);
+        assert_eq!(
+            man_event_from_db.unwrap().serialize().unwrap(),
+            verifiable_vcp.serialize().unwrap()
+        );
 
         // create issue event
         let vc_prefix = IdentifierPrefix::SelfAddressing(message_id.clone());
@@ -234,7 +237,10 @@ mod tests {
         // check if vrt event is in db.
         let man_event_from_db = processor.get_management_event_at_sn(&management_tel_prefix, 1)?;
         assert!(man_event_from_db.is_some());
-        assert_eq!(man_event_from_db.unwrap(), verifiable_vrt);
+        assert_eq!(
+            man_event_from_db.unwrap().serialize().unwrap(),
+            verifiable_vrt.serialize().unwrap()
+        );
 
         Ok(())
     }

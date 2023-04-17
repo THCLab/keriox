@@ -44,7 +44,7 @@ impl ManagerTelState {
                     Ok(ManagerTelState {
                         prefix: event_content.prefix.to_owned(),
                         sn: 0,
-                        last: event.get_digest(),
+                        last: event.digest()?,
                         issuer: vcp.issuer_id.clone(),
                         backers,
                     })
@@ -66,7 +66,7 @@ impl ManagerTelState {
                                 Ok(ManagerTelState {
                                     prefix: self.prefix.to_owned(),
                                     sn: self.sn + 1,
-                                    last: event.get_digest(),
+                                    last: event.digest()?,
                                     backers: Some(new_backers),
                                     issuer: self.issuer.clone(),
                                 })

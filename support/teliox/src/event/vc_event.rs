@@ -2,7 +2,10 @@ use crate::error::Error;
 use chrono::{DateTime, FixedOffset, SecondsFormat, Utc};
 use keri::{
     event::sections::seal::EventSeal,
-    event_message::{msg::KeriEvent, Typeable},
+    event_message::{
+        msg::{KeriEvent, TypedEvent},
+        Typeable,
+    },
     prefix::IdentifierPrefix,
 };
 use said::{derivation::HashFunctionCode, SelfAddressingIdentifier};
@@ -69,7 +72,7 @@ impl From<TimestampedVCEvent> for VCEvent {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "lowercase")]
 pub enum TelEventType {
     Iss,
@@ -78,7 +81,7 @@ pub enum TelEventType {
     Brv,
 }
 
-pub type VCEventMessage = KeriEvent<TimestampedVCEvent>;
+pub type VCEventMessage = TypedEvent<TelEventType, TimestampedVCEvent>;
 impl Typeable for VCEvent {
     type TypeTag = TelEventType;
     fn get_type(&self) -> TelEventType {
@@ -118,7 +121,11 @@ impl VCEvent {
         derivation: HashFunctionCode,
     ) -> Result<VCEventMessage, Error> {
         let timestamped = TimestampedVCEvent::new(self);
-        Ok(KeriEvent::new(format, derivation.into(), timestamped)?)
+        Ok(TypedEvent::<TelEventType, TimestampedVCEvent>::new(
+            format,
+            derivation.into(),
+            timestamped,
+        )?)
     }
 }
 

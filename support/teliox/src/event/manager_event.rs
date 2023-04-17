@@ -1,19 +1,19 @@
 use cesrox::primitives::codes::self_addressing::dummy_prefix;
-use cesrox::primitives::codes::self_addressing::SelfAddressing;
-use said::SelfAddressingIdentifier;
+use keri::actor::prelude::SerializationFormats;
+use keri::event_message::msg::TypedEvent;
+use said::{derivation::HashFunction, derivation::HashFunctionCode, SelfAddressingIdentifier};
 use serde::{de, Deserialize, Deserializer, Serialize};
 use serde_hex::{Compact, SerHex};
 
-use keri::{
-    event_message::{msg::KeriEvent, Typeable},
-    prefix::IdentifierPrefix,
-};
+use keri::{event_message::Typeable, prefix::IdentifierPrefix};
 use serde_json::Value;
-use version::serialization_info::{SerializationFormats, SerializationInfo};
+use version::serialization_info::SerializationInfo;
 
 use crate::error::Error;
 
-pub type ManagerTelEventMessage = KeriEvent<ManagerTelEvent>;
+use super::vc_event::TelEventType;
+
+pub type ManagerTelEventMessage = TypedEvent<ManagementTelType, ManagerTelEvent>;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ManagerTelEvent {
@@ -30,7 +30,7 @@ pub struct ManagerTelEvent {
     pub event_type: ManagerEventType,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "lowercase")]
 pub enum ManagementTelType {
     Vcp,
@@ -83,9 +83,13 @@ impl ManagerTelEvent {
     pub fn to_message(
         self,
         format: SerializationFormats,
-        derivation: SelfAddressing,
+        derivation: HashFunctionCode,
     ) -> Result<ManagerTelEventMessage, Error> {
-        Ok(KeriEvent::new(format, derivation.into(), self)?)
+        Ok(TypedEvent::<ManagementTelType, ManagerTelEvent>::new(
+            format,
+            derivation.into(),
+            self,
+        )?)
     }
 }
 
@@ -139,7 +143,7 @@ pub(crate) struct DummyEvent {
 impl DummyEvent {
     pub fn derive_inception_data(
         vcp: Inc,
-        derivation: &SelfAddressing,
+        derivation: &HashFunctionCode,
         format: SerializationFormats,
     ) -> Result<Vec<u8>, Error> {
         Self::derive_data(ManagerEventType::Vcp(vcp), derivation, format)
@@ -147,7 +151,7 @@ impl DummyEvent {
 
     fn derive_data(
         data: ManagerEventType,
-        derivation: &SelfAddressing,
+        derivation: &HashFunctionCode,
         format: SerializationFormats,
     ) -> Result<Vec<u8>, Error> {
         Self {
@@ -298,7 +302,7 @@ mod tests {
         assert_eq!(state.backers.clone().unwrap(), vec![]);
 
         // Construct rotation event
-        let prev_event = vcp.get_digest();
+        let prev_event = vcp.digest()?;
         let event_type = ManagerEventType::Vrt(Rot {
             prev_event,
             backers_to_add: vec!["EXvR3p8V95W8J7Ui4-mEzZ79S-A1esAnJo1Kmzq80Jkc"
@@ -306,16 +310,20 @@ mod tests {
                 .unwrap()],
             backers_to_remove: vec![],
         });
-        let vrt = ManagerTelEvent::new(&pref, 1, event_type.clone())
-            .to_message(SerializationFormats::JSON, HashFunctionCode::Blake3_256)?;
+        let vrt = ManagerTelEvent::new(&pref, 1, event_type.clone()).to_message(
+            SerializationFormats::JSON,
+            HashFunctionCode::Blake3_256.into(),
+        )?;
         println!("\nvrt: {}", String::from_utf8(vrt.encode()?).unwrap());
         let state = state.apply(&vrt)?;
         assert_eq!(state.backers.clone().unwrap().len(), 1);
         assert_eq!(state.sn, 1);
 
         // Try applying event with improper sn.
-        let out_of_order_vrt = ManagerTelEvent::new(&pref, 10, event_type)
-            .to_message(SerializationFormats::JSON, HashFunctionCode::Blake3_256)?;
+        let out_of_order_vrt = ManagerTelEvent::new(&pref, 10, event_type).to_message(
+            SerializationFormats::JSON,
+            HashFunctionCode::Blake3_256.into(),
+        )?;
         let err_state = state.apply(&out_of_order_vrt);
         assert!(err_state.is_err());
 
