@@ -15,7 +15,7 @@ use version::serialization_info::SerializationInfo;
 pub struct Receipt {
     #[serde(rename = "v")]
     pub serialization_info: SerializationInfo,
-    
+
     #[serde(rename = "t")]
     pub event_type: EventTypeTag,
 

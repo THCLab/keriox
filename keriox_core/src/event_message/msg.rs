@@ -40,17 +40,14 @@ impl<T: Serialize + Clone, D: Serialize + Typeable<TypeTag = T> + Clone> TypedEv
     }
 
     pub fn check_digest(&self) -> Result<(), Error> {
-        let dummy = self.derivative(
+        let dummy = self.derivation_data(
             &(&self.get_digest().derivation).into(),
             &self.serialization_info.kind,
         );
-        let dummy = dummy.as_bytes().to_vec();
-        Ok(self
-            .get_digest()
+        self.get_digest()
             .verify_binding(&dummy)
             .then_some(())
-            .unwrap())
-        // .ok_or(Error::IncorrectDigest)
+            .ok_or(Error::IncorrectDigest)
     }
 
     pub fn new(
@@ -66,8 +63,7 @@ impl<T: Serialize + Clone, D: Serialize + Typeable<TypeTag = T> + Clone> TypedEv
             digest: None,
             data: event,
         };
-        let encoded = tmp_self.derivative(&(&derivation).into(), &format);
-        println!("In KeriEvent new: {}", encoded);
+        let encoded = tmp_self.derivation_data(&(&derivation).into(), &format);
 
         let event_len = encoded.len();
         tmp_self.serialization_info.size = event_len;

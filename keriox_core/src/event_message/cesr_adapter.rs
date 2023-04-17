@@ -560,11 +560,14 @@ pub fn signed_exchange(exn: ExchangeMessage, attachments: Vec<Group>) -> Result<
 
 #[cfg(test)]
 pub mod test {
-    use std::convert::{TryInto};
+    use std::convert::TryInto;
 
     use cesrox::{parse, parse_many};
 
-    use crate::{event_message::{cesr_adapter::EventType, msg::KeriEvent}, event::{KeyEvent, receipt::Receipt}};
+    use crate::{
+        event::{receipt::Receipt, KeyEvent},
+        event_message::{cesr_adapter::EventType, msg::KeriEvent},
+    };
 
     #[test]
     fn test_signed_event() {
@@ -616,7 +619,7 @@ pub mod test {
         assert_eq!(event.to_cesr().unwrap(), stream);
 
         let event: Receipt = serde_json::from_slice(stream).unwrap();
-        assert_eq!(String::from_utf8(event.encode().unwrap()).unwrap(), String::from_utf8(stream.to_vec()).unwrap());
+        assert_eq!(event.encode().unwrap(), stream.to_vec());
     }
 
     #[cfg(feature = "query")]

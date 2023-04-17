@@ -1,8 +1,6 @@
 use crate::{
     error::Error,
-    event::{
-        event_data::{DelegatedInceptionEvent, EventData, InceptionEvent},
-    },
+    event::event_data::{DelegatedInceptionEvent, EventData, InceptionEvent},
 };
 
 use super::{EventTypeTag, Typeable};
@@ -65,7 +63,7 @@ impl DummyInceptionEvent {
             sn: 0,
             data,
         };
-        let len = tmp_icp.derivative(derivation, &format).len();
+        let len = tmp_icp.derivation_data(derivation, &format).len();
         let serialization_info = SerializationInfo::new("KERI".to_string(), format, len);
         tmp_icp.serialization_info = serialization_info;
         Ok(tmp_icp)

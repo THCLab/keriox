@@ -50,30 +50,23 @@ impl KeriEvent<KeyEvent> {
                 &(&self.get_digest().derivation).into(),
                 self.serialization_info.kind,
             )?
-            .derivative(
+            .derivation_data(
                 &(&self.get_digest().derivation).into(),
                 &self.serialization_info.kind,
-            )
-            .as_bytes()
-            .to_vec(),
+            ),
             EventData::Dip(dip) => DummyInceptionEvent::dummy_delegated_inception_data(
                 dip,
                 &(&self.get_digest().derivation).into(),
                 self.serialization_info.kind,
             )?
-            .derivative(
+            .derivation_data(
                 &(&self.get_digest().derivation).into(),
                 &self.serialization_info.kind,
-            )
-            .as_bytes()
-            .to_vec(),
-            _ => self
-                .derivative(
-                    &(&self.get_digest().derivation).into(),
-                    &self.serialization_info.kind,
-                )
-                .as_bytes()
-                .to_vec(),
+            ),
+            _ => self.derivation_data(
+                &(&self.get_digest().derivation).into(),
+                &self.serialization_info.kind,
+            ),
         })
     }
 }
@@ -99,7 +92,8 @@ impl EventSemantics for KeriEvent<KeyEvent> {
                     ))
                 }
             }
-           (EventData::Rot(ref rot), EventTypeTag::Rot) | (EventData::Drt(ref rot), EventTypeTag::Rot) => {
+            (EventData::Rot(ref rot), EventTypeTag::Rot)
+            | (EventData::Drt(ref rot), EventTypeTag::Rot) => {
                 check_event_digest(self)?;
                 if state.delegator.is_some() {
                     Err(Error::SemanticError(
@@ -124,23 +118,26 @@ impl EventSemantics for KeriEvent<KeyEvent> {
                     })
                 }
             }
-            (EventData::Rot(ref drt), EventTypeTag::Drt) |  (EventData::Drt(ref drt), EventTypeTag::Drt) => self.data.apply_to(state.clone()).and_then(|next_state| {
-                check_event_digest(self)?;
-                if state.delegator.is_none() {
-                    Err(Error::SemanticError(
-                        "Applying delegated rotation to non-delegated state.".into(),
-                    ))
-                } else if drt.previous_event_hash.eq(&state.last_event_digest) {
-                    Ok(IdentifierState {
-                        last_event_digest: self.get_digest(),
-                        ..next_state
-                    })
-                } else {
-                    Err(Error::SemanticError(
-                        "Last event does not match previous event".into(),
-                    ))
-                }
-            }),
+            (EventData::Rot(ref drt), EventTypeTag::Drt)
+            | (EventData::Drt(ref drt), EventTypeTag::Drt) => {
+                self.data.apply_to(state.clone()).and_then(|next_state| {
+                    check_event_digest(self)?;
+                    if state.delegator.is_none() {
+                        Err(Error::SemanticError(
+                            "Applying delegated rotation to non-delegated state.".into(),
+                        ))
+                    } else if drt.previous_event_hash.eq(&state.last_event_digest) {
+                        Ok(IdentifierState {
+                            last_event_digest: self.get_digest(),
+                            ..next_state
+                        })
+                    } else {
+                        Err(Error::SemanticError(
+                            "Last event does not match previous event".into(),
+                        ))
+                    }
+                })
+            }
             (EventData::Ixn(ref inter), _) => {
                 check_event_digest(self)?;
                 self.data.apply_to(state.clone()).and_then(|next_state| {
@@ -155,8 +152,8 @@ impl EventSemantics for KeriEvent<KeyEvent> {
                         ))
                     }
                 })
-            },
-            _ => {Err(Error::SemanticError("Wrong type tag".to_string()))}
+            }
+            _ => Err(Error::SemanticError("Wrong type tag".to_string())),
         }
     }
 }
