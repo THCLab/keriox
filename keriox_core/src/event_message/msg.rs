@@ -1,107 +1,77 @@
-use said::{derivation::HashFunction, SelfAddressingIdentifier};
-use serde::{Deserialize, Serialize, Serializer};
+use sad_macros::SAD;
+use said::{
+    derivation::HashFunction, derivation::HashFunctionCode, sad::SAD, SelfAddressingIdentifier,
+};
+use serde::{Deserialize, Serialize};
 use version::serialization_info::{SerializationFormats, SerializationInfo};
 
 use crate::error::Error;
 
-use super::{dummy_event::DummyEvent, Typeable};
+use super::{EventTypeTag, Typeable};
 
-#[derive(Deserialize, Debug, Clone, PartialEq)]
-pub struct KeriEvent<D> {
+pub type KeriEvent<D> = TypedEvent<EventTypeTag, D>;
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, SAD)]
+pub struct TypedEvent<T: Serialize + Clone, D: Serialize + Clone + Typeable<TypeTag = T>> {
     /// Serialization Information
     ///
     /// Encodes the version, size and serialization format of the event
     #[serde(rename = "v")]
     pub serialization_info: SerializationInfo,
+
+    #[serde(rename = "t")]
+    pub event_type: T,
+
     /// Digest of the event
     ///
     /// While computing the digest, this field is replaced with sequence of `#`,
     /// its length depends on derivation type. Then it is replaced by computed
     /// SAI.
+    #[said]
     #[serde(rename = "d")]
-    pub digest: SelfAddressingIdentifier,
+    pub digest: Option<SelfAddressingIdentifier>,
     #[serde(flatten)]
     pub data: D,
 }
 
-impl<T: Serialize, D: Serialize + Typeable<TypeTag = T> + Clone> KeriEvent<D> {
-    pub fn get_digest(&self) -> SelfAddressingIdentifier {
-        self.digest.clone()
-    }
-
-    pub fn dummy_event(&self) -> std::result::Result<Vec<u8>, Error> {
-        DummyEvent::dummy_event(
-            self.data.clone(),
-            self.serialization_info.kind,
-            &(&self.digest.derivation).into(),
-        )?
-        .encode()
+impl<T: Serialize + Clone, D: Serialize + Typeable<TypeTag = T> + Clone> TypedEvent<T, D> {
+    pub fn digest(&self) -> Result<SelfAddressingIdentifier, Error> {
+        self.digest.to_owned().ok_or(Error::EventDigestError)
     }
 
     pub fn check_digest(&self) -> Result<(), Error> {
-        let dummy: Vec<u8> = self.dummy_event()?;
-        self.get_digest()
+        let event_digest = self.digest()?;
+        let hash_function_code = event_digest.derivation.to_owned().into();
+        let dummy = self.derivation_data(&hash_function_code, &self.serialization_info.kind);
+        event_digest
             .verify_binding(&dummy)
             .then_some(())
             .ok_or(Error::IncorrectDigest)
     }
-}
 
-impl<T: Serialize, D: Serialize + Typeable<TypeTag = T> + Clone> KeriEvent<D> {
     pub fn new(
         format: SerializationFormats,
         derivation: HashFunction,
         event: D,
     ) -> Result<Self, Error> {
-        let dummy_event = DummyEvent::dummy_event(event.clone(), format, &(&derivation).into())?;
+        let tmp_serialization_info = SerializationInfo::new_empty("KERI".to_string(), format);
 
-        let sai = derivation.derive(&dummy_event.encode()?);
-        Ok(Self {
-            serialization_info: dummy_event.serialization_info,
-            digest: sai,
+        let mut tmp_self = Self {
+            serialization_info: tmp_serialization_info,
+            event_type: event.get_type(),
+            digest: None,
             data: event,
-        })
+        };
+        let hash_function = derivation.into();
+        let encoded = tmp_self.derivation_data(&hash_function, &format);
+
+        let event_len = encoded.len();
+        tmp_self.serialization_info.size = event_len;
+        let keri_event = tmp_self.compute_digest(hash_function, format);
+        Ok(keri_event)
     }
 
     pub fn encode(&self) -> Result<Vec<u8>, Error> {
         Ok(self.serialization_info.serialize(&self).unwrap())
-    }
-}
-
-impl<T: Serialize, D: Typeable<TypeTag = T> + Serialize + Clone> Serialize for KeriEvent<D> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        // Helper struct for adding `t` field to EventMessage serialization
-        #[derive(Serialize)]
-        struct TypedEventMessage<T, D> {
-            #[serde(rename = "v")]
-            v: SerializationInfo,
-
-            #[serde(rename = "t")]
-            event_type: T,
-
-            #[serde(rename = "d")]
-            digest: SelfAddressingIdentifier,
-
-            #[serde(flatten)]
-            event: D,
-        }
-        impl<T: Serialize, D: Serialize + Typeable<TypeTag = T> + Clone> From<&KeriEvent<D>>
-            for TypedEventMessage<T, D>
-        {
-            fn from(em: &KeriEvent<D>) -> Self {
-                TypedEventMessage {
-                    v: em.serialization_info.clone(),
-                    event_type: em.data.get_type(),
-                    digest: em.get_digest(),
-                    event: em.data.clone(),
-                }
-            }
-        }
-
-        let tem: TypedEventMessage<_, _> = self.into();
-        tem.serialize(serializer)
     }
 }

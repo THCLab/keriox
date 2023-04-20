@@ -787,7 +787,7 @@ impl<K: KeyManager> SimpleController<K> {
         let fully_signed_event = self.not_fully_witnessed_escrow.get_event_by_sn_and_digest(
             event.event_message.data.get_sn(),
             &id,
-            &event.event_message.get_digest(),
+            &event.event_message.digest()?,
         );
 
         let own_index = self.get_index(&event.event_message.data)?;
@@ -820,7 +820,7 @@ impl<K: KeyManager> SimpleController<K> {
         let seal = Seal::Event(EventSeal {
             prefix: id.clone(),
             sn: event_to_confirm.event_message.data.get_sn(),
-            event_digest: event_to_confirm.event_message.get_digest(),
+            event_digest: event_to_confirm.event_message.digest()?,
         });
 
         let ixn = self.anchor(&vec![seal])?;
@@ -839,7 +839,7 @@ impl<K: KeyManager> SimpleController<K> {
         let seal = Seal::Event(EventSeal {
             prefix: id.clone(),
             sn: event_to_confirm.event_message.data.get_sn(),
-            event_digest: event_to_confirm.event_message.get_digest(),
+            event_digest: event_to_confirm.event_message.digest()?,
         });
 
         let ixn = self.anchor_group(group_id, &vec![seal])?;

@@ -1,6 +1,4 @@
-use cesrox::primitives::codes::self_addressing::dummy_prefix;
-use said::SelfAddressingIdentifier;
-use version::serialization_info::SerializationInfo;
+use said::{derivation::HashFunctionCode, sad::SAD, SelfAddressingIdentifier};
 
 use crate::{
     error::Error,
@@ -10,11 +8,8 @@ use crate::{
 };
 
 use super::{
-    dummy_event::{DummyEvent, DummyInceptionEvent},
-    msg::KeriEvent,
-    signature::Nontransferable,
-    signed_event_message::SignedEventMessage,
-    EventTypeTag, Typeable,
+    dummy_event::DummyInceptionEvent, msg::KeriEvent, signature::Nontransferable,
+    signed_event_message::SignedEventMessage, EventTypeTag,
 };
 
 impl KeyEvent {
@@ -29,17 +24,6 @@ impl KeyEvent {
     }
 }
 
-impl From<KeriEvent<KeyEvent>> for DummyEvent<EventTypeTag, KeyEvent> {
-    fn from(em: KeriEvent<KeyEvent>) -> Self {
-        DummyEvent {
-            serialization_info: SerializationInfo::default(),
-            event_type: em.data.get_type(),
-            digest: dummy_prefix(&(&em.get_digest().derivation).into()),
-            data: em.data,
-        }
-    }
-}
-
 impl KeriEvent<KeyEvent> {
     pub fn sign(
         &self,
@@ -51,49 +35,49 @@ impl KeriEvent<KeyEvent> {
     }
 
     pub fn compare_digest(&self, sai: &SelfAddressingIdentifier) -> Result<bool, Error> {
-        let self_dig = self.get_digest();
-        if self_dig.derivation == sai.derivation {
+        let self_dig = self.digest()?;
+        if self_dig.derivation.eq(&sai.derivation) {
             Ok(&self_dig == sai)
         } else {
             Ok(sai.verify_binding(&self.to_derivation_data()?))
         }
     }
 
-    fn to_derivation_data(&self) -> Result<Vec<u8>, Error> {
+    pub fn to_derivation_data(&self) -> Result<Vec<u8>, Error> {
+        let event_digest = self.digest()?;
+        let hash_function_code: HashFunctionCode = event_digest.derivation.into();
         Ok(match self.data.get_event_data() {
             EventData::Icp(icp) => DummyInceptionEvent::dummy_inception_data(
                 icp,
-                &(&self.get_digest().derivation).into(),
+                &hash_function_code,
                 self.serialization_info.kind,
             )?
-            .encode()?,
+            .derivation_data(&hash_function_code, &self.serialization_info.kind),
             EventData::Dip(dip) => DummyInceptionEvent::dummy_delegated_inception_data(
                 dip,
-                &(&self.get_digest().derivation).into(),
+                &hash_function_code,
                 self.serialization_info.kind,
             )?
-            .encode()?,
-            _ => {
-                let dummy_event: DummyEvent<_, _> = self.clone().into();
-                dummy_event.encode()?
-            }
+            .derivation_data(&hash_function_code, &self.serialization_info.kind),
+            _ => self.derivation_data(&hash_function_code, &self.serialization_info.kind),
         })
     }
 }
 
 impl EventSemantics for KeriEvent<KeyEvent> {
     fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
+        let event_digest = self.digest()?;
         let check_event_digest = |ev: &KeriEvent<KeyEvent>| -> Result<(), Error> {
-            ev.compare_digest(&self.get_digest())?
+            ev.compare_digest(&event_digest)?
                 .then(|| ())
                 .ok_or(Error::IncorrectDigest)
         };
         // Update state.last with serialized current event message.
-        match self.data.get_event_data() {
-            EventData::Icp(_) | EventData::Dip(_) => {
+        match (self.data.get_event_data(), &self.event_type) {
+            (EventData::Icp(_), _) | (EventData::Dip(_), _) => {
                 if verify_identifier_binding(self)? {
                     self.data.apply_to(IdentifierState {
-                        last_event_digest: self.get_digest(),
+                        last_event_digest: event_digest,
                         ..state
                     })
                 } else {
@@ -102,7 +86,8 @@ impl EventSemantics for KeriEvent<KeyEvent> {
                     ))
                 }
             }
-            EventData::Rot(ref rot) => {
+            (EventData::Rot(ref rot), EventTypeTag::Rot)
+            | (EventData::Drt(ref rot), EventTypeTag::Rot) => {
                 check_event_digest(self)?;
                 if state.delegator.is_some() {
                     Err(Error::SemanticError(
@@ -116,7 +101,7 @@ impl EventSemantics for KeriEvent<KeyEvent> {
                     self.data.apply_to(state.clone()).and_then(|next_state| {
                         if rot.previous_event_hash.eq(&state.last_event_digest) {
                             Ok(IdentifierState {
-                                last_event_digest: self.get_digest(),
+                                last_event_digest: event_digest,
                                 ..next_state
                             })
                         } else {
@@ -127,29 +112,32 @@ impl EventSemantics for KeriEvent<KeyEvent> {
                     })
                 }
             }
-            EventData::Drt(ref drt) => self.data.apply_to(state.clone()).and_then(|next_state| {
-                check_event_digest(self)?;
-                if state.delegator.is_none() {
-                    Err(Error::SemanticError(
-                        "Applying delegated rotation to non-delegated state.".into(),
-                    ))
-                } else if drt.previous_event_hash.eq(&state.last_event_digest) {
-                    Ok(IdentifierState {
-                        last_event_digest: self.get_digest(),
-                        ..next_state
-                    })
-                } else {
-                    Err(Error::SemanticError(
-                        "Last event does not match previous event".into(),
-                    ))
-                }
-            }),
-            EventData::Ixn(ref inter) => {
+            (EventData::Rot(ref drt), EventTypeTag::Drt)
+            | (EventData::Drt(ref drt), EventTypeTag::Drt) => {
+                self.data.apply_to(state.clone()).and_then(|next_state| {
+                    check_event_digest(self)?;
+                    if state.delegator.is_none() {
+                        Err(Error::SemanticError(
+                            "Applying delegated rotation to non-delegated state.".into(),
+                        ))
+                    } else if drt.previous_event_hash.eq(&state.last_event_digest) {
+                        Ok(IdentifierState {
+                            last_event_digest: event_digest.clone(),
+                            ..next_state
+                        })
+                    } else {
+                        Err(Error::SemanticError(
+                            "Last event does not match previous event".into(),
+                        ))
+                    }
+                })
+            }
+            (EventData::Ixn(ref inter), _) => {
                 check_event_digest(self)?;
                 self.data.apply_to(state.clone()).and_then(|next_state| {
                     if inter.previous_event_hash.eq(&state.last_event_digest) {
                         Ok(IdentifierState {
-                            last_event_digest: self.get_digest(),
+                            last_event_digest: event_digest,
                             ..next_state
                         })
                     } else {
@@ -159,6 +147,7 @@ impl EventSemantics for KeriEvent<KeyEvent> {
                     }
                 })
             }
+            _ => Err(Error::SemanticError("Wrong type tag".to_string())),
         }
     }
 }
@@ -174,7 +163,7 @@ pub fn verify_identifier_binding(icp_event: &KeriEvent<KeyEvent>) -> Result<bool
                     .first()
                     .ok_or_else(|| Error::SemanticError("Missing public key".into()))?)),
             IdentifierPrefix::SelfAddressing(sap) => {
-                Ok(icp_event.compare_digest(sap)? && icp_event.get_digest().eq(sap))
+                Ok(icp_event.compare_digest(sap)? && icp_event.digest()?.eq(sap))
             }
             IdentifierPrefix::SelfSigning(_ssp) => todo!(),
         },

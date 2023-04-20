@@ -491,8 +491,8 @@ pub fn test_key_state_notice() -> Result<(), Error> {
     );
     assert!(matches!(ksn_db, Some(_)));
 
-    let ksn_from_db_digest = ksn_db.unwrap().reply.get_digest();
-    let processed_ksn_digest = new_reply.reply.get_digest();
+    let ksn_from_db_digest = ksn_db.unwrap().reply.digest()?;
+    let processed_ksn_digest = new_reply.reply.digest()?;
     assert_eq!(ksn_from_db_digest, processed_ksn_digest);
 
     let new_bob_rot = bob.rotate(None, None, None)?;
@@ -507,8 +507,8 @@ pub fn test_key_state_notice() -> Result<(), Error> {
         &signed_rpy.signature.get_signer().unwrap(),
     );
     assert!(matches!(ksn_db, Some(_)));
-    let ksn_from_db_digest = ksn_db.unwrap().reply.get_digest();
-    let out_of_order_ksn_digest = trans_rpy.reply.get_digest();
+    let ksn_from_db_digest = ksn_db.unwrap().reply.digest()?;
+    let out_of_order_ksn_digest = trans_rpy.reply.digest()?;
     assert_ne!(ksn_from_db_digest, out_of_order_ksn_digest);
     assert_eq!(ksn_from_db_digest, processed_ksn_digest);
 
@@ -522,7 +522,7 @@ pub fn test_key_state_notice() -> Result<(), Error> {
         &signed_rpy.signature.get_signer().unwrap(),
     );
     assert!(matches!(ksn_db, Some(_)));
-    let ksn_from_db_digest = ksn_db.unwrap().reply.get_digest();
+    let ksn_from_db_digest = ksn_db.unwrap().reply.digest()?;
     assert_eq!(ksn_from_db_digest, out_of_order_ksn_digest);
 
     Ok(())
@@ -951,7 +951,7 @@ pub fn test_delegated_multisig() -> Result<(), ActorError> {
     )?;
 
     let group_id = group_dip.event_message.data.get_prefix();
-    let dip_digest = group_dip.event_message.get_digest();
+    let dip_digest = group_dip.event_message.digest()?;
     assert_eq!(exchange_messages.len(), 1);
 
     // Send exchange message from controller 1 to controller 2
@@ -1294,7 +1294,7 @@ pub fn test_delegating_multisig() -> Result<(), ActorError> {
         child.create_forward_message(&delegator_group_id, &dip, ForwardTopic::Delegate)?;
 
     let delegated_child_id = dip.event_message.data.get_prefix();
-    let dip_digest = dip.event_message.get_digest();
+    let dip_digest = dip.event_message.digest()?;
 
     // Send delegation request to witness.
     witness.process_exchange(delegation_request)?;

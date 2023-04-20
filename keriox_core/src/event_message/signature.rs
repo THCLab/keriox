@@ -85,7 +85,7 @@ pub fn signatures_into_groups(sigs: &[Signature]) -> Vec<Group> {
                     Signature::Transferable(SignerData::EventSeal(seal), sig) => trans_seal.push((
                         seal.prefix.into(),
                         seal.sn,
-                        (&seal.event_digest).into(),
+                        seal.event_digest.into(),
                         sig.into_iter().map(|sig| sig.into()).collect(),
                     )),
                     Signature::Transferable(SignerData::LastEstablishment(id), sig) => trans_last
@@ -207,7 +207,7 @@ impl Into<Group> for crate::event_message::signature::Signature {
                     }) => Group::TransIndexedSigGroups(vec![(
                         prefix.into(),
                         sn,
-                        (&event_digest).into(),
+                        event_digest.into(),
                         signatures,
                     )]),
                     crate::event_message::signature::SignerData::LastEstablishment(id) => {

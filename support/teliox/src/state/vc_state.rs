@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum TelState {
-    NotIsuued,
+    NotIssued,
     Issued(SelfAddressingIdentifier),
     Revoked,
 }
@@ -17,9 +17,9 @@ impl TelState {
         let event_content = event.data.data.clone();
         match event_content.event_type {
             VCEventType::Bis(_iss) => match self {
-                TelState::NotIsuued => {
+                TelState::NotIssued => {
                     if event_content.sn == 0 {
-                        Ok(TelState::Issued(event.get_digest()))
+                        Ok(TelState::Issued(event.digest()?))
                     } else {
                         Err(Error::Generic("Wrong sn".into()))
                     }
@@ -37,7 +37,7 @@ impl TelState {
                 _ => Err(Error::Generic("Wrong state".into())),
             },
             VCEventType::Iss(_iss) => match self {
-                TelState::NotIsuued => Ok(TelState::Issued(event.get_digest())),
+                TelState::NotIssued => Ok(TelState::Issued(event.digest()?)),
                 _ => Err(Error::Generic("Wrong state".into())),
             },
             VCEventType::Rev(rev) => match self {
@@ -56,7 +56,7 @@ impl TelState {
 
 impl Default for TelState {
     fn default() -> Self {
-        TelState::NotIsuued
+        TelState::NotIssued
     }
 }
 

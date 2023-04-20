@@ -310,9 +310,9 @@ impl Controller {
         let (prefix, sn, digest) = (
             message.event_message.data.get_prefix(),
             message.event_message.data.get_sn(),
-            message.event_message.get_digest(),
+            message.event_message.digest(),
         );
-        let rcts_from_db = self.storage.get_nt_receipts(&prefix, sn, &digest)?;
+        let rcts_from_db = self.storage.get_nt_receipts(&prefix, sn, &digest?)?;
 
         if let Some(receipt) = rcts_from_db {
             // send receipts to all witnesses

@@ -294,7 +294,7 @@ impl ReceiptBuilder {
     pub fn build(&self) -> Result<Receipt, Error> {
         let prefix = self.receipted_event.data.get_prefix();
         let sn = self.receipted_event.data.get_sn();
-        let receipted_event_digest = self.receipted_event.get_digest();
+        let receipted_event_digest = self.receipted_event.digest()?;
         Ok(Receipt::new(
             self.format,
             receipted_event_digest,

@@ -176,14 +176,15 @@ fn test_process_delegated() -> Result<(), Error> {
     let parsed = parse(delegator_icp).unwrap().1;
     let msg = Message::try_from(parsed).unwrap();
     event_processor.process(&msg)?;
-    let delegator_prefix = "EA_SbBUZYwqLVlAAn14d6QUBQCSReJlZ755JqTgmRhXH".parse()?;
+    let delegator_prefix: IdentifierPrefix =
+        "EA_SbBUZYwqLVlAAn14d6QUBQCSReJlZ755JqTgmRhXH".parse()?;
 
     // Delegated inception event.
     let dip_raw = br#"{"v":"KERI10JSON00015f_","t":"dip","d":"EHng2fV42DdKb5TLMIs6bbjFkPNmIdQ5mSFn6BTnySJj","i":"EHng2fV42DdKb5TLMIs6bbjFkPNmIdQ5mSFn6BTnySJj","s":"0","kt":"1","k":["DLitcfMnabnLt-PNCaXdVwX45wsG93Wd8eW9QiZrlKYQ"],"nt":"1","n":["EDjXvWdaNJx7pAIr72Va6JhHxc7Pf4ScYJG496ky8lK8"],"bt":"0","b":[],"c":[],"a":[],"di":"EA_SbBUZYwqLVlAAn14d6QUBQCSReJlZ755JqTgmRhXH"}-AABAABv6Q3s-1Tif-ksrx7ul9OKyOL_ZPHHp6lB9He4n6kswjm9VvHXzWB3O7RS2OQNWhx8bd3ycg9bWRPRrcKADoYC-GAB0AAAAAAAAAAAAAAAAAAAAAABEJtQndkvwnMpVGE5oVVbLWSCm-jLviGw1AOOkzBvNwsS"#;
     let parsed = parse(dip_raw).unwrap().1;
     let deserialized_dip = Message::try_from(parsed).unwrap();
 
-    let child_prefix = "EHng2fV42DdKb5TLMIs6bbjFkPNmIdQ5mSFn6BTnySJj".parse()?;
+    let child_prefix: IdentifierPrefix = "EHng2fV42DdKb5TLMIs6bbjFkPNmIdQ5mSFn6BTnySJj".parse()?;
 
     // Delegators's ixn event with delegating event seal.
     let delegator_ixn = br#"{"v":"KERI10JSON00013a_","t":"ixn","d":"EJtQndkvwnMpVGE5oVVbLWSCm-jLviGw1AOOkzBvNwsS","i":"EA_SbBUZYwqLVlAAn14d6QUBQCSReJlZ755JqTgmRhXH","s":"1","p":"EA_SbBUZYwqLVlAAn14d6QUBQCSReJlZ755JqTgmRhXH","a":[{"i":"EHng2fV42DdKb5TLMIs6bbjFkPNmIdQ5mSFn6BTnySJj","s":"0","d":"EHng2fV42DdKb5TLMIs6bbjFkPNmIdQ5mSFn6BTnySJj"}]}-AABAADFmoctrQkBbm47vuk7ejMbQ1y5vKD0Nfo8cqzbETZAlEPdbgVRSFta1-Bpv0y1RiDrCxa_0IOp906gYqDPXIwG"#;
@@ -337,7 +338,7 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
     // {"v":"KERI10JSON0001e7_","t":"icp","d":"EKkedrfoZz54Xsb_lGGdKTkYqNMf6TMrX1x57M1j0yi3","i":"EKkedrfoZz54Xsb_lGGdKTkYqNMf6TMrX1x57M1j0yi3","s":"0","kt":"1","k":["DErocgXD2RGSyvn3MObcx59jeOsEQhv2TqHirVkzrp0Q"],"nt":"2","n":["EIQsSW4KMrLzY1HQI9H_XxY6MyzhaFFXhG6fdBb5Wxta","EHuvLs1hmwxo4ImDoCpaAermYVQhiPsPDNaZsz4bcgko","EDJk5EEpC4-tQ7YDwBiKbpaZahh1QCyQOnZRF7p2i8k8","EAXfDjKvUFRj-IEB_o4y-Y_qeJAjYfZtOMD9e7vHNFss","EN8l6yJC2PxribTN0xfri6bLz34Qvj-x3cNwcV3DvT2m"],"bt":"0","b":[],"c":[],"a":[]}
 
     let id_prefix = icp.data.get_prefix();
-    let icp_digest = icp.get_digest();
+    let icp_digest = icp.digest()?;
     assert_eq!(
         id_prefix,
         IdentifierPrefix::SelfAddressing(icp_digest.clone())
@@ -380,7 +381,7 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
         .with_next_threshold(&SignatureThreshold::Simple(4))
         .build()?;
 
-    let rot_digest = rotation.get_digest();
+    let rot_digest = rotation.digest()?;
 
     let signatures = current_signers
         .iter()
@@ -514,7 +515,7 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
         .unwrap();
 
     let id_prefix = icp.data.get_prefix();
-    let icp_digest = icp.get_digest();
+    let icp_digest = icp.digest()?;
     assert_eq!(
         id_prefix,
         IdentifierPrefix::SelfAddressing(icp_digest.clone())
@@ -568,7 +569,7 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
         ]))
         .build()?;
 
-    let rot_digest = rotation.get_digest();
+    let rot_digest = rotation.digest()?;
 
     let signatures = current_signers
         .iter()
@@ -692,7 +693,7 @@ pub fn test_reserve_rotation() -> Result<(), Error> {
         .unwrap();
 
     let id_prefix = icp.data.get_prefix();
-    let icp_digest = icp.get_digest();
+    let icp_digest = icp.digest()?;
     assert_eq!(
         id_prefix,
         IdentifierPrefix::SelfAddressing(icp_digest.clone())
@@ -745,7 +746,7 @@ pub fn test_reserve_rotation() -> Result<(), Error> {
         ]))
         .build()?;
 
-    let rot_digest = rotation.get_digest();
+    let rot_digest = rotation.digest()?;
 
     let signatures = current_signers
         .iter()
@@ -874,7 +875,7 @@ pub fn test_custorial_rotation() -> Result<(), Error> {
         .unwrap();
 
     let id_prefix = icp.data.get_prefix();
-    let icp_digest = icp.get_digest();
+    let icp_digest = icp.digest()?;
     assert_eq!(
         id_prefix,
         IdentifierPrefix::SelfAddressing(icp_digest.clone())

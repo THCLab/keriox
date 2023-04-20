@@ -133,7 +133,7 @@ impl IdentifierController {
             .get_event_by_sn_and_digest(
                 event.event_message.data.get_sn(),
                 &id,
-                &event.event_message.get_digest(),
+                &event.event_message.digest()?,
             );
 
         let own_index = self.get_index(&event.event_message.data)?;
@@ -227,7 +227,7 @@ impl IdentifierController {
                 let seal = Seal::Event(EventSeal {
                     prefix: id,
                     sn: event_to_confirm.event_message.data.get_sn(),
-                    event_digest: event_to_confirm.event_message.get_digest(),
+                    event_digest: event_to_confirm.event_message.digest()?,
                 });
 
                 let ixn = self.anchor_group(group_id, &[seal])?;

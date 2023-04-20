@@ -119,7 +119,7 @@ impl EventProcessor {
                     let id = signed_event.event_message.data.get_prefix();
                     let receipt = Receipt::new(
                         SerializationFormats::JSON,
-                        signed_event.event_message.get_digest(),
+                        signed_event.event_message.digest()?,
                         id,
                         signed_event.event_message.data.get_sn(),
                     );

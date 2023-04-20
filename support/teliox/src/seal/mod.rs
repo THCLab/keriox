@@ -1,5 +1,5 @@
 use base64::URL_SAFE;
-use keri::prefix::CesrPrimitive;
+use cesrox::primitives::CesrPrimitive;
 use said::SelfAddressingIdentifier;
 use serde::{Deserialize, Serialize};
 

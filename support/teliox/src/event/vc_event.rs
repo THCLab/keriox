@@ -2,13 +2,12 @@ use crate::error::Error;
 use chrono::{DateTime, FixedOffset, SecondsFormat, Utc};
 use keri::{
     event::sections::seal::EventSeal,
-    event_message::{msg::KeriEvent, Typeable},
+    event_message::{msg::TypedEvent, Typeable},
     prefix::IdentifierPrefix,
 };
 use said::{derivation::HashFunctionCode, SelfAddressingIdentifier};
-use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
+use serde::{de, Deserialize, Serialize, Serializer};
 use serde_hex::{Compact, SerHex};
-use serde_json::Value;
 use version::serialization_info::SerializationFormats;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -69,7 +68,7 @@ impl From<TimestampedVCEvent> for VCEvent {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "lowercase")]
 pub enum TelEventType {
     Iss,
@@ -78,7 +77,7 @@ pub enum TelEventType {
     Brv,
 }
 
-pub type VCEventMessage = KeriEvent<TimestampedVCEvent>;
+pub type VCEventMessage = TypedEvent<TelEventType, TimestampedVCEvent>;
 impl Typeable for VCEvent {
     type TypeTag = TelEventType;
     fn get_type(&self) -> TelEventType {
@@ -118,47 +117,21 @@ impl VCEvent {
         derivation: HashFunctionCode,
     ) -> Result<VCEventMessage, Error> {
         let timestamped = TimestampedVCEvent::new(self);
-        Ok(KeriEvent::new(format, derivation.into(), timestamped)?)
+        Ok(TypedEvent::<TelEventType, TimestampedVCEvent>::new(
+            format,
+            derivation.into(),
+            timestamped,
+        )?)
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged, rename_all = "lowercase")]
 pub enum VCEventType {
-    Iss(SimpleIssuance),
     Rev(SimpleRevocation),
+    Iss(SimpleIssuance),
     Bis(Issuance),
     Brv(Revocation),
-}
-
-impl<'de> Deserialize<'de> for VCEventType {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        // Helper struct for adding tag to properly deserialize 't' field
-        #[derive(Deserialize, Debug)]
-        struct EventType {
-            t: TelEventType,
-        }
-
-        let v = Value::deserialize(deserializer)?;
-        let m = EventType::deserialize(&v).map_err(de::Error::custom)?;
-        match m.t {
-            TelEventType::Iss => Ok(VCEventType::Iss(
-                SimpleIssuance::deserialize(&v).map_err(de::Error::custom)?,
-            )),
-            TelEventType::Rev => Ok(VCEventType::Rev(
-                SimpleRevocation::deserialize(&v).map_err(de::Error::custom)?,
-            )),
-            TelEventType::Bis => Ok(VCEventType::Bis(
-                Issuance::deserialize(&v).map_err(de::Error::custom)?,
-            )),
-            TelEventType::Brv => Ok(VCEventType::Brv(
-                Revocation::deserialize(&v).map_err(de::Error::custom)?,
-            )),
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

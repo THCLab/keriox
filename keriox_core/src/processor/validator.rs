@@ -85,7 +85,7 @@ impl EventValidator {
             // check if there are enough receipts and escrow
             let sn = signed_event.event_message.data.get_sn();
             let prefix = &signed_event.event_message.data.get_prefix();
-            let digest = &signed_event.event_message.get_digest();
+            let digest = &signed_event.event_message.digest()?;
 
             let (mut couples, mut indexed) = (vec![], vec![]);
             match self.event_storage.get_nt_receipts(prefix, sn, digest)? {
@@ -460,7 +460,7 @@ fn test_validate_seal() -> Result<(), Error> {
     let parsed = parse(dip_raw).unwrap().1;
     let msg = Message::try_from(parsed).unwrap();
     if let Message::Notice(Notice::Event(dip)) = msg {
-        let delegated_event_digest = dip.event_message.get_digest();
+        let delegated_event_digest = dip.event_message.digest()?;
         // Construct delegating seal.
         let seal = EventSeal {
             prefix: delegator_id,

@@ -5,11 +5,14 @@ use super::{
 use crate::{
     error::Error,
     event::{sections::seal::Seal, KeyEvent},
-    event_message::{dummy_event::DummyInceptionEvent, msg::KeriEvent},
+    event_message::{dummy_event::DummyInceptionEvent, msg::KeriEvent, Typeable},
     prefix::IdentifierPrefix,
     state::{EventSemantics, IdentifierState, LastEstablishmentData},
 };
-use said::derivation::HashFunction;
+use said::{
+    derivation::{HashFunction, HashFunctionCode},
+    sad::SAD,
+};
 use serde::{Deserialize, Serialize};
 use version::serialization_info::SerializationFormats;
 
@@ -55,9 +58,10 @@ impl InceptionEvent {
         derivation: HashFunction,
         format: SerializationFormats,
     ) -> Result<KeriEvent<KeyEvent>, Error> {
-        let dummy_event =
-            DummyInceptionEvent::dummy_inception_data(self.clone(), &(&derivation).into(), format)?;
-        let digest = derivation.derive(&dummy_event.encode()?);
+        let code: HashFunctionCode = derivation.into();
+        let dummy_event = DummyInceptionEvent::dummy_inception_data(self.clone(), &code, format)?;
+        let dummy_event = dummy_event.compute_digest(code, format);
+        let digest = dummy_event.prefix.unwrap();
         let event = KeyEvent::new(
             IdentifierPrefix::SelfAddressing(digest.clone()),
             0,
@@ -65,7 +69,8 @@ impl InceptionEvent {
         );
         Ok(KeriEvent {
             serialization_info: dummy_event.serialization_info,
-            digest,
+            event_type: event.get_type(),
+            digest: Some(digest),
             data: event,
         })
     }
@@ -131,14 +136,17 @@ fn test_inception_data_derivation() -> Result<(), Error> {
         SerializationFormats::JSON,
     )?;
 
+    let icp_digest = icp_data.digest()?;
     assert_eq!(
         "EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen",
         icp_data.data.get_prefix().to_str()
     );
     assert_eq!(
         "EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen",
-        icp_data.get_digest().to_str()
+        icp_digest.to_str()
     );
+
+    assert!(icp_digest.verify_binding(&icp_data.to_derivation_data().unwrap()));
 
     Ok(())
 }

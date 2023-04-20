@@ -8,8 +8,7 @@ use crate::{
     event_message::{EventTypeTag, Typeable},
     state::{EventSemantics, IdentifierState},
 };
-use serde::{de, Deserialize, Deserializer, Serialize};
-use serde_json::Value;
+use serde::{Deserialize, Serialize};
 
 pub use self::{
     delegated::DelegatedInceptionEvent, inception::InceptionEvent, interaction::InteractionEvent,
@@ -19,48 +18,14 @@ pub use self::{
 /// Event Data
 ///
 /// Event Data conveys the semantic content of a KERI event.
-#[derive(Serialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(untagged, rename_all = "lowercase")]
 pub enum EventData {
+    Dip(DelegatedInceptionEvent),
     Icp(InceptionEvent),
     Rot(RotationEvent),
     Ixn(InteractionEvent),
-    Dip(DelegatedInceptionEvent),
     Drt(RotationEvent),
-}
-
-impl<'de> Deserialize<'de> for EventData {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        // Helper struct for adding tag to properly deserialize 't' field
-        #[derive(Deserialize)]
-        struct EventType {
-            t: EventTypeTag,
-        }
-
-        let v = Value::deserialize(deserializer)?;
-        let m = EventType::deserialize(&v).map_err(de::Error::custom)?;
-        match m.t {
-            EventTypeTag::Icp => Ok(EventData::Icp(
-                InceptionEvent::deserialize(&v).map_err(de::Error::custom)?,
-            )),
-            EventTypeTag::Rot => Ok(EventData::Rot(
-                RotationEvent::deserialize(&v).map_err(de::Error::custom)?,
-            )),
-            EventTypeTag::Ixn => Ok(EventData::Ixn(
-                InteractionEvent::deserialize(&v).map_err(de::Error::custom)?,
-            )),
-            EventTypeTag::Dip => Ok(EventData::Dip(
-                DelegatedInceptionEvent::deserialize(&v).map_err(de::Error::custom)?,
-            )),
-            EventTypeTag::Drt => Ok(EventData::Drt(
-                RotationEvent::deserialize(&v).map_err(de::Error::custom)?,
-            )),
-            _ => Err(Error::SemanticError("Not a key event".into())).map_err(de::Error::custom)?,
-        }
-    }
 }
 
 impl EventSemantics for EventData {

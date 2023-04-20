@@ -322,7 +322,8 @@ mod tests {
 
         // Test SelfAddressingIdentifier serialization.
         assert_eq!(
-            SelfAddressingIdentifier::new(HashFunctionCode::Blake3_256.into(), vec![0; 32]).to_str(),
+            SelfAddressingIdentifier::new(HashFunctionCode::Blake3_256.into(), vec![0; 32])
+                .to_str(),
             ["E".to_string(), "A".repeat(43)].join("")
         );
         assert_eq!(
@@ -344,7 +345,8 @@ mod tests {
             ["I".to_string(), "A".repeat(43)].join("")
         );
         assert_eq!(
-            SelfAddressingIdentifier::new(HashFunctionCode::Blake3_512.into(), vec![0; 64]).to_str(),
+            SelfAddressingIdentifier::new(HashFunctionCode::Blake3_512.into(), vec![0; 64])
+                .to_str(),
             ["0D".to_string(), "A".repeat(86)].join("")
         );
         assert_eq!(
@@ -352,7 +354,8 @@ mod tests {
             ["0E".to_string(), "A".repeat(86)].join("")
         );
         assert_eq!(
-            SelfAddressingIdentifier::new(HashFunctionCode::Blake2B512.into(), vec![0; 64]).to_str(),
+            SelfAddressingIdentifier::new(HashFunctionCode::Blake2B512.into(), vec![0; 64])
+                .to_str(),
             ["0F".to_string(), "A".repeat(86)].join("")
         );
         assert_eq!(
