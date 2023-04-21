@@ -2,8 +2,8 @@ use std::{collections::HashMap, net::Ipv4Addr, sync::Arc};
 
 use anyhow::Result;
 use controller::{
-    identifier_controller::IdentifierController, mailbox_updating::ActionRequired, Controller,
-    ControllerConfig,
+    config::ControllerConfig, identifier_controller::IdentifierController,
+    mailbox_updating::ActionRequired, Controller,
 };
 use keri::{
     oobi::{EndRole, LocationScheme, Role},

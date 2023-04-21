@@ -56,4 +56,13 @@ pub enum ControllerError {
 
     #[error("Query error: {0}")]
     QueryArgumentError(String),
+
+    #[error("Cesr error")]
+    CesrFormatError,
+
+    #[error("Wrong signature")]
+    FaultySignature,
+
+    #[error("Verification failed for following elements: {0:?}")]
+    VerificationError(Vec<(ControllerError, String)>),
 }

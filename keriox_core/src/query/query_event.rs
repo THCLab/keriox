@@ -4,8 +4,13 @@ use version::serialization_info::SerializationFormats;
 
 use crate::{
     error::Error,
-    event_message::{msg::KeriEvent, timestamped::Timestamped, EventTypeTag, Typeable},
-    prefix::{IdentifierPrefix, IndexedSignature},
+    event_message::{
+        msg::KeriEvent,
+        signature::{Nontransferable, Signature, SignerData},
+        timestamped::Timestamped,
+        EventTypeTag, Typeable,
+    },
+    prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
 };
 
 // TODO: make enum with different query args
@@ -120,22 +125,53 @@ impl Typeable for Query {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct SignedQuery {
     pub query: QueryEvent,
-    pub signer: IdentifierPrefix,
-    pub signatures: Vec<IndexedSignature>,
+    pub signature: Signature,
 }
 
 impl SignedQuery {
-    pub fn new(
-        envelope: QueryEvent,
-        signer: IdentifierPrefix,
+    pub fn new_nontrans(
+        query: QueryEvent,
+        signer: BasicPrefix,
+        signature: SelfSigningPrefix,
+    ) -> Self {
+        let signature =
+            Signature::NonTransferable(Nontransferable::Couplet(vec![(signer, signature)]));
+        Self { query, signature }
+    }
+
+    pub fn new_trans(
+        query: QueryEvent,
+        signer_id: IdentifierPrefix,
         signatures: Vec<IndexedSignature>,
     ) -> Self {
-        Self {
-            query: envelope,
-            signer,
-            signatures,
-        }
+        let signature =
+            Signature::Transferable(SignerData::LastEstablishment(signer_id), signatures);
+        Self { query, signature }
     }
+}
+
+#[test]
+pub fn signed_query_parse() {
+    use cesrox::parse;
+    use std::convert::TryFrom;
+
+    use crate::event_message::signed_event_message::{Message, Op};
+
+    let input_query = r#"{"v":"KERI10JSON0000c9_","t":"qry","d":"EGN68_seecuzXQO15FFGJLVwZCBCPYW-hy29fjWWPQbp","dt":"2021-01-01T00:00:00.000000+00:00","r":"log","rr":"","q":{"i":"DAvCLRr5luWmp7keDvDuLP0kIqcyBYq79b3Dho1QvrjI"}}-HABEFyzzg2Mp5A3ecChc6AhSLTQssBZAmNvPnGxjJyHxl4F-AABAAB1DuEfnZZ6juMZDYiodcWiIqdjuEE-QzdORp-DbxdDN_GG84x_NA1rSc5lPfPQQkQkxI862_XjyZLHyClVTLoD"#;
+
+    let parsed = parse(input_query.as_bytes()).unwrap().1;
+    let deserialized_qry = Message::try_from(parsed).unwrap();
+
+    match deserialized_qry {
+        Message::Notice(_) => todo!(),
+        Message::Op(Op::Query(sq)) => {
+            assert!(matches!(
+                sq.signature,
+                Signature::Transferable(SignerData::LastEstablishment(_), _)
+            ))
+        }
+        _ => unreachable!(),
+    };
 }
 
 #[test]

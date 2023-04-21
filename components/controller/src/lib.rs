@@ -1,10 +1,18 @@
-use std::{path::PathBuf, sync::Arc};
+use std::sync::Arc;
 
+pub mod config;
 pub mod error;
 pub mod identifier_controller;
 pub mod mailbox_updating;
 mod test;
+pub mod verifying;
+pub use keri::keys::PublicKey;
+pub use keri::oobi::{EndRole, LocationScheme, Oobi};
+use keri::prefix::IndexedSignature;
+pub use keri::prefix::{BasicPrefix, CesrPrimitive, IdentifierPrefix, SelfSigningPrefix};
+pub use keri::signer::{CryptoBox, KeyManager};
 
+use config::ControllerConfig;
 use keri::{
     actor::{
         self, event_generator, prelude::SelfAddressingIdentifier,
@@ -17,11 +25,10 @@ use keri::{
         msg::KeriEvent,
         signed_event_message::{Message, Notice, Op, SignedEventMessage},
     },
-    oobi::{LocationScheme, Oobi, OobiManager, Role, Scheme},
-    prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
+    oobi::{OobiManager, Role, Scheme},
     processor::{
         basic_processor::BasicProcessor,
-        escrow::{default_escrow_bus, EscrowConfig, PartiallyWitnessedEscrow},
+        escrow::{default_escrow_bus, PartiallyWitnessedEscrow},
         event_storage::EventStorage,
         Processor,
     },
@@ -29,7 +36,7 @@ use keri::{
         query_event::SignedQuery,
         reply_event::{ReplyEvent, ReplyRoute, SignedReply},
     },
-    transport::{default::DefaultTransport, Transport},
+    transport::Transport,
 };
 
 use self::error::ControllerError;
@@ -40,24 +47,6 @@ pub struct Controller {
     oobi_manager: OobiManager,
     partially_witnessed_escrow: Arc<PartiallyWitnessedEscrow>,
     transport: Box<dyn Transport + Send + Sync>,
-}
-
-pub struct ControllerConfig {
-    pub db_path: PathBuf,
-    pub initial_oobis: Vec<LocationScheme>,
-    pub escrow_config: EscrowConfig,
-    pub transport: Box<dyn Transport + Send + Sync>,
-}
-
-impl Default for ControllerConfig {
-    fn default() -> Self {
-        Self {
-            db_path: PathBuf::from("db"),
-            initial_oobis: vec![],
-            escrow_config: EscrowConfig::default(),
-            transport: Box::new(DefaultTransport::new()),
-        }
-    }
 }
 
 impl Controller {
@@ -505,39 +494,50 @@ impl Controller {
         event: ReplyEvent,
         sig: Vec<SelfSigningPrefix>,
     ) -> Result<(), ControllerError> {
-        let sigs = sig
-            .into_iter()
-            .enumerate()
-            .map(|(i, sig)| IndexedSignature::new_both_same(sig, i as u16))
-            .collect();
-
         let dest_prefix = match &event.data.data {
-            ReplyRoute::Ksn(_, _) => todo!(),
-            ReplyRoute::LocScheme(_) => todo!(),
             ReplyRoute::EndRoleAdd(role) => role.eid.clone(),
             ReplyRoute::EndRoleCut(role) => role.eid.clone(),
+            _ => return Err(ControllerError::EventFormatError),
         };
-        let signed_rpy = Message::Op(Op::Reply(SignedReply::new_trans(
-            event,
-            self.storage
-                .get_last_establishment_event_seal(signer_prefix)?
-                .ok_or(ControllerError::UnknownIdentifierError)?,
-            sigs,
-        )));
-        let kel = self
-            .storage
-            .get_kel_messages_with_receipts(signer_prefix)?
-            .ok_or(ControllerError::UnknownIdentifierError)?;
+        let signed_reply = match signer_prefix {
+            IdentifierPrefix::Basic(bp) => Message::Op(Op::Reply(SignedReply::new_nontrans(
+                event,
+                bp.clone(),
+                sig[0].clone(),
+            ))),
+            _ => {
+                let sigs = sig
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, sig)| IndexedSignature::new_both_same(sig, i as u16))
+                    .collect();
 
-        // TODO: send in one request
-        for ev in kel {
-            self.send_message_to(&dest_prefix, Scheme::Http, Message::Notice(ev))
-                .await?;
-        }
-        self.send_message_to(&dest_prefix, Scheme::Http, signed_rpy.clone())
+                let signed_rpy = Message::Op(Op::Reply(SignedReply::new_trans(
+                    event,
+                    self.storage
+                        .get_last_establishment_event_seal(signer_prefix)?
+                        .ok_or(ControllerError::UnknownIdentifierError)?,
+                    sigs,
+                )));
+                let kel = self
+                    .storage
+                    .get_kel_messages_with_receipts(signer_prefix)?
+                    .ok_or(ControllerError::UnknownIdentifierError)
+                    .unwrap();
+
+                // TODO: send in one request
+                for ev in kel {
+                    self.send_message_to(&dest_prefix, Scheme::Http, Message::Notice(ev))
+                        .await?;
+                }
+                signed_rpy
+            }
+        };
+
+        self.process(&signed_reply)?;
+
+        self.send_message_to(&dest_prefix, Scheme::Http, signed_reply.clone())
             .await?;
-
-        self.process(&signed_rpy)?;
         Ok(())
     }
 }

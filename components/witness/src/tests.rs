@@ -337,7 +337,7 @@ fn test_qry_rpy() -> Result<(), ActorError> {
         0,
     );
     // Qry message signed by Bob
-    let query = SignedQuery::new(qry, bob_pref.to_owned(), vec![signature]);
+    let query = SignedQuery::new_trans(qry, bob_pref.to_owned(), vec![signature]);
 
     let response = witness.process_query(query)?;
 
@@ -380,7 +380,7 @@ fn test_qry_rpy() -> Result<(), ActorError> {
         0,
     );
     // Qry message signed by Bob
-    let query = SignedQuery::new(qry, bob_pref.to_owned(), vec![signature]);
+    let query = SignedQuery::new_trans(qry, bob_pref.to_owned(), vec![signature]);
 
     let response = witness.process_query(query)?;
 
@@ -692,8 +692,8 @@ fn test_invalid_notice() {
         // should not be able to query because the inception events didn't go through
         assert!(matches!(
             result,
-            Err(ActorError::QueryError(
-                SignedQueryError::UnknownSigner { ref id }
+            Err(ActorError::QueryError(SignedQueryError::KeriError(
+                keri::error::Error::UnknownSigner(ref id))
             )) if id == controller.prefix()
         ));
     }

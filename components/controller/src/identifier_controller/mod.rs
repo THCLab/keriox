@@ -2,6 +2,7 @@ use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
 };
+pub mod signing;
 
 use keri::{
     actor::{
@@ -589,7 +590,6 @@ impl IdentifierController {
         let self_id = self.id.clone();
         let mut actions = Vec::new();
         for (qry, sig) in queries {
-            let signatures = vec![IndexedSignature::new_both_same(sig, 0)];
             let (recipient, about_who, from_who) = match &qry.data.data.route {
                 QueryRoute::Log {
                     reply_route: _,
@@ -597,7 +597,7 @@ impl IdentifierController {
                 } => (
                     args.src.clone().ok_or_else(|| {
                         ControllerError::QueryArgumentError(
-                            "Missing query receipient identifier".into(),
+                            "Missing query recipient identifier".into(),
                         )
                     })?,
                     None,
@@ -609,7 +609,7 @@ impl IdentifierController {
                 } => (
                     args.src.clone().ok_or_else(|| {
                         ControllerError::QueryArgumentError(
-                            "Missing query receipient identifier".into(),
+                            "Missing query recipient identifier".into(),
                         )
                     })?,
                     None,
@@ -620,7 +620,15 @@ impl IdentifierController {
                     args,
                 } => (args.src.clone(), Some(&args.i), Some(&args.pre)),
             };
-            let query = SignedQuery::new(qry.clone(), self_id.clone(), signatures);
+            let query = match &self.id {
+                IdentifierPrefix::Basic(bp) => {
+                    SignedQuery::new_nontrans(qry.clone(), bp.clone(), sig)
+                }
+                _ => {
+                    let signatures = vec![IndexedSignature::new_both_same(sig, 0)];
+                    SignedQuery::new_trans(qry.clone(), self_id.clone(), signatures)
+                }
+            };
             let res = self
                 .source
                 .send_query_to(&recipient, Scheme::Http, query)
@@ -749,5 +757,15 @@ impl IdentifierController {
             }
         }
         Ok(wit_ids)
+    }
+
+    /// Splits input string into oobis to resolve and signed data, sends oobi to
+    /// watchers and verify provided credentials.
+    pub async fn verify_stream(&self, stream: &str) -> Result<(), ControllerError> {
+        let (oobis, parsed) = self.source.parse_cesr_stream(stream)?;
+        for oobi in oobis {
+            self.source.send_oobi_to_watcher(&self.id, &oobi).await?;
+        }
+        self.source.verify_parsed(&parsed)
     }
 }

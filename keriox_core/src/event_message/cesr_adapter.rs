@@ -33,7 +33,7 @@ use crate::{
 
 use super::{
     msg::{KeriEvent, TypedEvent},
-    signature::Nontransferable,
+    signature::{signatures_into_groups, Nontransferable},
     signed_event_message::{
         Message, Notice, Op, SignedEventMessage, SignedNontransferableReceipt,
         SignedTransferableReceipt,
@@ -171,15 +171,11 @@ impl From<SignedReply> for ParsedData {
 #[cfg(feature = "query")]
 impl From<SignedQuery> for ParsedData {
     fn from(ev: SignedQuery) -> Self {
-        let signatures = ev.signatures.into_iter().map(|sig| sig.into()).collect();
-        let attachments = vec![Group::LastEstSignaturesGroups(vec![(
-            ev.signer.into(),
-            signatures,
-        )])];
+        let groups = signatures_into_groups(&[ev.signature]);
 
         ParsedData {
             payload: ev.query.into(),
-            attachments,
+            attachments: groups,
         }
     }
 }
@@ -344,27 +340,17 @@ fn signed_reply(rpy: ReplyEvent, mut attachments: Vec<Group>) -> Result<Op, Erro
 
 #[cfg(feature = "query")]
 fn signed_query(qry: QueryEvent, mut attachments: Vec<Group>) -> Result<Op, Error> {
-    match attachments
+    use super::signature::get_signatures;
+
+    let att = attachments
         .pop()
-        .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?
-    {
-        Group::LastEstSignaturesGroups(groups) => {
-            let (signer, signatures) = groups[0].clone();
-            let converted_signatures = signatures.into_iter().map(|sig| sig.into()).collect();
-            Ok(Op::Query(SignedQuery {
-                query: qry,
-                signer: signer.into(),
-                signatures: converted_signatures,
-            }))
-        }
-        Group::Frame(atts) => signed_query(qry, atts),
-        _ => {
-            // Improper payload type
-            Err(Error::SemanticError(
-                "Improper attachments for query message".into(),
-            ))
-        }
-    }
+        .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?;
+    let sigs = get_signatures(att)?;
+    Ok(Op::Query(SignedQuery {
+        query: qry,
+        // TODO what if more than one?
+        signature: sigs.get(0).ok_or(Error::MissingSignatures)?.clone(),
+    }))
 }
 
 fn signed_key_event(
