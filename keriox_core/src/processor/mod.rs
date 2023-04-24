@@ -51,6 +51,7 @@ pub trait Processor {
         use crate::event_message::signed_event_message::Op;
         match msg {
             Message::Notice(notice) => self.process_notice(notice),
+            #[cfg(any(feature = "query", feature = "oobi"))]
             Message::Op(op) => match op {
                 #[cfg(feature = "query")]
                 Op::Query(_query) => panic!("processor can't handle query op"),

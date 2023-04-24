@@ -21,6 +21,7 @@ use crate::mailbox::exchange::SignedExchange;
 #[derive(Clone, Debug, PartialEq)]
 pub enum Message {
     Notice(Notice),
+    #[cfg(any(feature = "query", feature = "oobi"))]
     Op(Op),
 }
 
@@ -33,11 +34,11 @@ pub enum Notice {
     TransferableRct(SignedTransferableReceipt),
 }
 
+#[cfg(any(feature = "query", feature = "oobi"))]
 #[derive(Clone, Debug, PartialEq)]
 pub enum Op {
     #[cfg(feature = "mailbox")]
     Exchange(SignedExchange),
-    #[cfg(any(feature = "query", feature = "oobi"))]
     Reply(SignedReply),
     #[cfg(feature = "query")]
     Query(SignedQuery),
@@ -47,6 +48,7 @@ impl From<Message> for ParsedData {
     fn from(message: Message) -> Self {
         match message {
             Message::Notice(notice) => ParsedData::from(notice),
+            #[cfg(any(feature = "query", feature = "oobi"))]
             Message::Op(op) => ParsedData::from(op),
         }
     }
@@ -62,6 +64,7 @@ impl From<Notice> for ParsedData {
     }
 }
 
+#[cfg(any(feature = "query", feature = "oobi"))]
 impl From<Op> for ParsedData {
     fn from(op: Op) -> Self {
         match op {
@@ -85,6 +88,7 @@ impl Message {
     pub fn get_prefix(&self) -> IdentifierPrefix {
         match self {
             Message::Notice(notice) => notice.get_prefix(),
+            #[cfg(any(feature = "query", feature = "oobi"))]
             Message::Op(op) => op.get_prefix(),
         }
     }
@@ -100,12 +104,11 @@ impl Notice {
     }
 }
 
+#[cfg(any(feature = "query", feature = "oobi"))]
 impl Op {
     pub fn get_prefix(&self) -> IdentifierPrefix {
         match self {
-            #[cfg(feature = "query")]
             Op::Reply(reply) => reply.reply.get_prefix(),
-            #[cfg(feature = "query")]
             Op::Query(qry) => qry.query.get_prefix(),
             #[cfg(feature = "mailbox")]
             // returns exchange message recipient id

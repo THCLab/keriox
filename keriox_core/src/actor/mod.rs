@@ -85,6 +85,7 @@ pub fn process_message<P: Processor>(
 ) -> Result<(), Error> {
     match msg {
         Message::Notice(notice) => process_notice(notice, processor)?,
+        #[cfg(any(feature = "query", feature = "oobi"))]
         Message::Op(op) => match op {
             #[cfg(feature = "oobi")]
             Op::Reply(reply) => process_reply(reply, oobi_manager, processor, event_storage)?,

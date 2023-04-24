@@ -19,6 +19,9 @@ use crate::{
     },
 };
 
+#[cfg(any(feature = "query", feature = "oobi"))]
+use crate::event_message::signed_event_message::Op;
+
 #[cfg(feature = "query")]
 use crate::query::{
     query_event::{QueryEvent, SignedQuery},
@@ -35,7 +38,7 @@ use super::{
     msg::{KeriEvent, TypedEvent},
     signature::{signatures_into_groups, Nontransferable},
     signed_event_message::{
-        Message, Notice, Op, SignedEventMessage, SignedNontransferableReceipt,
+        Message, Notice, SignedEventMessage, SignedNontransferableReceipt,
         SignedTransferableReceipt,
     },
     Typeable,
@@ -240,6 +243,7 @@ impl TryFrom<ParsedData> for Notice {
     }
 }
 
+#[cfg(any(feature = "query", feature = "oobi"))]
 impl TryFrom<ParsedData> for Op {
     type Error = Error;
 
