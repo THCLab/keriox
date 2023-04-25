@@ -28,8 +28,8 @@ This repository provides implementation of KERI. It contains:
 For ready to use client libraries, we encourage to visit https://github.com/THCLab/keri-bindings that provide bindings to other languages via FFI layer. 
 
 For ready to use infrastructure components, see our prebaked Docker images:
-* [Witness](https://hub.docker.com/r/humancolossus/keriox-witness)
-* [Watcher](https://hub.docker.com/r/humancolossus/keriox-watcher)
+* [Witness](https://ghcr.io/thclab/keriox-witness)
+* [Watcher](https://ghcr.io/thclab/keriox-watcher)
 
 
 ## Example
