@@ -305,7 +305,7 @@ impl TryFrom<ParsedData> for SignedExchange {
     }
 }
 
-#[cfg(any(feature = "query", feature = "oobi"))]
+#[cfg(any(feature = "oobi"))]
 fn signed_reply(rpy: ReplyEvent, mut attachments: Vec<Group>) -> Result<Op, Error> {
     match attachments
         .pop()

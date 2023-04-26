@@ -345,7 +345,7 @@ impl SledEventDatabase {
         self.escrowed_replys.get_all()
     }
 
-    #[cfg(feature = "query")]
+    #[cfg(feature = "mailbox")]
     pub fn add_mailbox_receipt(
         &self,
         receipt: SignedNontransferableReceipt,
@@ -355,7 +355,7 @@ impl SledEventDatabase {
             .add_mailbox_receipt(self.identifiers.designated_key(id)?, receipt)
     }
 
-    #[cfg(feature = "query")]
+    #[cfg(feature = "mailbox")]
     pub fn get_mailbox_receipts(
         &self,
         id: &IdentifierPrefix,
@@ -364,7 +364,7 @@ impl SledEventDatabase {
             .get_mailbox_receipts(self.identifiers.designated_key(id).ok()?)
     }
 
-    #[cfg(feature = "query")]
+    #[cfg(feature = "mailbox")]
     pub fn add_mailbox_reply(
         &self,
         reply: SignedEventMessage,
@@ -374,7 +374,7 @@ impl SledEventDatabase {
             .add_mailbox_reply(self.identifiers.designated_key(id)?, reply)
     }
 
-    #[cfg(feature = "query")]
+    #[cfg(feature = "mailbox")]
     pub fn get_mailbox_replies(
         &self,
         id: &IdentifierPrefix,
@@ -393,7 +393,7 @@ impl SledEventDatabase {
             .add_mailbox_multisig(self.identifiers.designated_key(target_id)?, event)
     }
 
-    #[cfg(feature = "query")]
+    #[cfg(feature = "mailbox")]
     pub fn get_mailbox_multisig(
         &self,
         id: &IdentifierPrefix,

@@ -33,7 +33,7 @@ use version::serialization_info::SerializationFormats;
 
 pub mod error;
 pub mod event_generator;
-#[cfg(any(feature = "mailbox", feature = "query", feature = "oobi"))]
+#[cfg(all(feature = "query", feature = "oobi", feature = "mailbox"))]
 pub mod simple_controller;
 
 pub fn parse_event_stream(stream: &[u8]) -> Result<Vec<Message>, Error> {
@@ -67,7 +67,7 @@ pub fn parse_reply_stream(stream: &[u8]) -> Result<Vec<SignedReply>, Error> {
     replies.into_iter().map(SignedReply::try_from).collect()
 }
 
-#[cfg(any(feature = "query", feature = "oobi"))]
+#[cfg(feature = "mailbox")]
 pub fn parse_exchange_stream(stream: &[u8]) -> Result<Vec<SignedExchange>, Error> {
     let (_rest, exchanges) =
         parse_many(stream).map_err(|e| Error::DeserializeError(e.to_string()))?;
@@ -102,14 +102,16 @@ pub fn process_notice<P: Processor>(msg: Notice, processor: &P) -> Result<(), Er
     processor.process_notice(&msg)
 }
 
-#[cfg(any(feature = "query", feature = "oobi"))]
+#[cfg(feature = "query")]
 pub fn process_reply<P: Processor>(
     sr: SignedReply,
+    #[cfg(feature = "oobi")]
     oobi_manager: &OobiManager,
     processor: &P,
     event_storage: &EventStorage,
 ) -> Result<(), Error> {
     match sr.reply.get_route() {
+        #[cfg(feature = "oobi")]
         ReplyRoute::LocScheme(_) | ReplyRoute::EndRoleAdd(_) | ReplyRoute::EndRoleCut(_) => {
             process_signed_oobi(&sr, oobi_manager, event_storage)
         }
@@ -257,6 +259,7 @@ fn process_query(qr: Query, storage: &EventStorage) -> Result<ReplyType, QueryEr
             let ksn = KeyStateNotice::new_ksn(state, SerializationFormats::JSON);
             Ok(ReplyType::Ksn(ksn))
         }
+        #[cfg(feature = "mailbox")]
         QueryRoute::Mbx { args, .. } => {
             let mail = storage.get_mailbox_messages(args)?;
             Ok(ReplyType::Mbx(mail))

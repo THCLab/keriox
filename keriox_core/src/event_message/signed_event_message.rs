@@ -39,6 +39,7 @@ pub enum Notice {
 pub enum Op {
     #[cfg(feature = "mailbox")]
     Exchange(SignedExchange),
+    #[cfg(feature = "oobi")]
     Reply(SignedReply),
     #[cfg(feature = "query")]
     Query(SignedQuery),
@@ -68,7 +69,7 @@ impl From<Notice> for ParsedData {
 impl From<Op> for ParsedData {
     fn from(op: Op) -> Self {
         match op {
-            #[cfg(feature = "query")]
+            #[cfg(feature = "oobi")]
             Op::Reply(ksn) => ParsedData::from(ksn),
             #[cfg(feature = "query")]
             Op::Query(qry) => ParsedData::from(qry),
@@ -108,6 +109,7 @@ impl Notice {
 impl Op {
     pub fn get_prefix(&self) -> IdentifierPrefix {
         match self {
+            #[cfg(feature = "oobi")]
             Op::Reply(reply) => reply.reply.get_prefix(),
             Op::Query(qry) => qry.query.get_prefix(),
             #[cfg(feature = "mailbox")]
