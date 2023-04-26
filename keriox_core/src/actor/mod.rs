@@ -105,8 +105,7 @@ pub fn process_notice<P: Processor>(msg: Notice, processor: &P) -> Result<(), Er
 #[cfg(feature = "query")]
 pub fn process_reply<P: Processor>(
     sr: SignedReply,
-    #[cfg(feature = "oobi")]
-    oobi_manager: &OobiManager,
+    #[cfg(feature = "oobi")] oobi_manager: &OobiManager,
     processor: &P,
     event_storage: &EventStorage,
 ) -> Result<(), Error> {

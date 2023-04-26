@@ -200,9 +200,7 @@ pub mod http_handlers {
 
     use crate::witness::Witness;
 
-    pub async fn introduce(
-        data: web::Data<Arc<Witness>>,
-    ) -> Result<HttpResponse, ApiError> {
+    pub async fn introduce(data: web::Data<Arc<Witness>>) -> Result<HttpResponse, ApiError> {
         Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())
             .body(serde_json::to_string(&data.oobi()).unwrap()))

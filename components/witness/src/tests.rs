@@ -254,7 +254,7 @@ fn test_qry_rpy() -> Result<(), ActorError> {
     let signer = Signer::new();
     let signer_arc = Arc::new(signer);
     let witness = Witness::new(
-        Url::parse("example").unwrap(),
+        Url::parse("http://example.com").unwrap(),
         signer_arc,
         witness_root.path(),
         witness_oobi_root.path(),
@@ -414,7 +414,7 @@ pub fn test_key_state_notice() -> Result<(), Error> {
         let path = witness_root.path();
         std::fs::create_dir_all(path).unwrap();
         Witness::new(
-            Url::parse("example").unwrap(),
+            Url::parse("http://example.com").unwrap(),
             signer_arc.clone(),
             path,
             witness_root_oobi.path(),
@@ -575,7 +575,7 @@ fn test_mbx() {
             .unwrap();
         std::fs::create_dir_all(root.path()).unwrap();
         Witness::new(
-            Url::parse("example").unwrap(),
+            Url::parse("http://example.com").unwrap(),
             signer,
             root.path(),
             oobi_root.path(),
@@ -656,7 +656,7 @@ fn test_invalid_notice() {
             .unwrap();
         std::fs::create_dir_all(root.path()).unwrap();
         Witness::new(
-            Url::parse("example").unwrap(),
+            Url::parse("http://example.com").unwrap(),
             signer,
             root.path(),
             oobi_root.path(),
@@ -713,7 +713,7 @@ pub fn test_multisig() -> Result<(), ActorError> {
         let witness_root_oobi = Builder::new().prefix("test-db").tempdir().unwrap();
         let path = witness_root.path();
         Witness::new(
-        Url::parse("example").unwrap(),
+            Url::parse("http://example.com").unwrap(),
             signer_arc,
             path,
             witness_root_oobi.path(),
@@ -905,7 +905,7 @@ pub fn test_delegated_multisig() -> Result<(), ActorError> {
         let witness_root_oobi = Builder::new().prefix("test-db").tempdir().unwrap();
         let path = witness_root.path();
         Witness::new(
-            Url::parse("example").unwrap(),
+            Url::parse("http://example.com").unwrap(),
             signer_arc,
             path,
             witness_root_oobi.path(),
@@ -1164,7 +1164,7 @@ pub fn test_delegating_multisig() -> Result<(), ActorError> {
         let witness_root_oobi = Builder::new().prefix("test-db").tempdir().unwrap();
         let path = witness_root.path();
         Witness::new(
-            Url::parse("example").unwrap(),
+            Url::parse("http://example.com").unwrap(),
             signer_arc,
             path,
             witness_root_oobi.path(),

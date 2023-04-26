@@ -173,7 +173,13 @@ impl Witness {
             public_address.scheme().parse().unwrap(),
             public_address.clone(),
         );
-        let witness = Witness::new(public_address, signer.clone(), event_db_path, oobi_db_path, escrow_config)?;
+        let witness = Witness::new(
+            public_address,
+            signer.clone(),
+            event_db_path,
+            oobi_db_path,
+            escrow_config,
+        )?;
         let reply = ReplyEvent::new_reply(
             ReplyRoute::LocScheme(loc_scheme),
             HashFunctionCode::Blake3_256,
