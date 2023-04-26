@@ -28,6 +28,7 @@ use keri::{
     },
     signer::Signer,
 };
+use url::Url;
 
 use crate::witness_processor::{WitnessEscrowConfig, WitnessProcessor};
 
@@ -103,6 +104,7 @@ impl WitnessReceiptGenerator {
 }
 
 pub struct Witness {
+    pub address: Url,
     pub prefix: BasicPrefix,
     pub processor: WitnessProcessor,
     pub event_storage: EventStorage,
@@ -113,6 +115,7 @@ pub struct Witness {
 
 impl Witness {
     pub fn new(
+        address: Url,
         signer: Arc<Signer>,
         event_path: &Path,
         oobi_path: &Path,
@@ -141,6 +144,7 @@ impl Witness {
             ],
         )?;
         Ok(Self {
+            address,
             prefix,
             processor: witness_processor,
             signer,
@@ -163,13 +167,13 @@ impl Witness {
                 .unwrap_or_else(|| Ok(Signer::new()))?,
         );
         let prefix = BasicPrefix::Ed25519NT(signer.public_key());
-        let witness = Witness::new(signer.clone(), event_db_path, oobi_db_path, escrow_config)?;
         // construct witness loc scheme oobi
         let loc_scheme = LocationScheme::new(
             IdentifierPrefix::Basic(prefix.clone()),
             public_address.scheme().parse().unwrap(),
             public_address.clone(),
         );
+        let witness = Witness::new(public_address, signer.clone(), event_db_path, oobi_db_path, escrow_config)?;
         let reply = ReplyEvent::new_reply(
             ReplyRoute::LocScheme(loc_scheme),
             HashFunctionCode::Blake3_256,
@@ -182,6 +186,14 @@ impl Witness {
         );
         witness.oobi_manager.save_oobi(&signed_reply)?;
         Ok(witness)
+    }
+
+    pub fn oobi(&self) -> LocationScheme {
+        LocationScheme::new(
+            IdentifierPrefix::Basic(self.prefix.clone()),
+            self.address.scheme().parse().unwrap(),
+            self.address.clone(),
+        )
     }
 
     pub fn get_loc_scheme_for_id(
