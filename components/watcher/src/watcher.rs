@@ -24,6 +24,7 @@ use keri::{
 use rand::prelude::SliceRandom;
 
 pub struct WatcherData {
+    address: url::Url,
     pub prefix: BasicPrefix,
     pub processor: BasicProcessor,
     event_storage: EventStorage,
@@ -107,6 +108,7 @@ impl WatcherData {
         oobi_manager.save_oobi(&signed_reply)?;
 
         Ok(Self {
+            address: public_address,
             prefix,
             processor,
             event_storage: storage,
@@ -435,6 +437,13 @@ impl WatcherData {
 pub struct Watcher(pub WatcherData);
 
 impl Watcher {
+    pub fn oobi(&self) -> LocationScheme {
+        LocationScheme::new(
+            IdentifierPrefix::Basic(self.0.prefix.clone()),
+            self.0.address.scheme().parse().unwrap(),
+            self.0.address.clone(),
+        )
+    }
     pub async fn resolve_end_role(&self, er: EndRole) -> Result<(), ActorError> {
         // find endpoint data of endpoint provider identifier
         let loc_scheme = self

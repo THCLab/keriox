@@ -2,7 +2,7 @@ use http::StatusCode;
 
 #[cfg(feature = "oobi")]
 use crate::oobi::{error::OobiError, Role};
-#[cfg(feature = "query")]
+#[cfg(feature = "oobi")]
 use crate::transport::TransportError;
 use crate::{
     actor::SignedQueryError, database::DbError, error::Error as KeriError, prefix::IdentifierPrefix,
@@ -10,7 +10,7 @@ use crate::{
 
 #[derive(Debug, thiserror::Error, serde::Serialize, serde::Deserialize)]
 pub enum ActorError {
-    #[cfg(feature = "query")]
+    #[cfg(feature = "oobi")]
     #[error("network request failed")]
     TransportError(Box<TransportError>),
 
@@ -44,7 +44,7 @@ pub enum ActorError {
     MissingSignerId,
 }
 
-#[cfg(feature = "query")]
+#[cfg(feature = "oobi")]
 impl From<TransportError> for ActorError {
     fn from(err: TransportError) -> Self {
         ActorError::TransportError(Box::new(err))

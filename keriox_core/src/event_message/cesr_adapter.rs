@@ -19,6 +19,11 @@ use crate::{
     },
 };
 
+#[cfg(any(feature = "query", feature = "oobi"))]
+use crate::event_message::signed_event_message::Op;
+
+#[cfg(feature = "query")]
+use super::signature::signatures_into_groups;
 #[cfg(feature = "query")]
 use crate::query::{
     query_event::{QueryEvent, SignedQuery},
@@ -33,9 +38,9 @@ use crate::{
 
 use super::{
     msg::{KeriEvent, TypedEvent},
-    signature::{signatures_into_groups, Nontransferable},
+    signature::Nontransferable,
     signed_event_message::{
-        Message, Notice, Op, SignedEventMessage, SignedNontransferableReceipt,
+        Message, Notice, SignedEventMessage, SignedNontransferableReceipt,
         SignedTransferableReceipt,
     },
     Typeable,
@@ -233,6 +238,7 @@ impl TryFrom<ParsedData> for Notice {
     fn try_from(value: ParsedData) -> Result<Self, Self::Error> {
         match Message::try_from(value)? {
             Message::Notice(notice) => Ok(notice),
+            #[cfg(feature = "query")]
             _ => Err(Error::SemanticError(
                 "Cannot convert SignedEventData to Notice".to_string(),
             )),
@@ -240,6 +246,7 @@ impl TryFrom<ParsedData> for Notice {
     }
 }
 
+#[cfg(any(feature = "query", feature = "oobi"))]
 impl TryFrom<ParsedData> for Op {
     type Error = Error;
 
@@ -301,7 +308,7 @@ impl TryFrom<ParsedData> for SignedExchange {
     }
 }
 
-#[cfg(any(feature = "query", feature = "oobi"))]
+#[cfg(any(feature = "oobi"))]
 fn signed_reply(rpy: ReplyEvent, mut attachments: Vec<Group>) -> Result<Op, Error> {
     match attachments
         .pop()

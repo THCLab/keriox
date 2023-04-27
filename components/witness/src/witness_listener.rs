@@ -41,6 +41,10 @@ impl WitnessListener {
             App::new()
                 .app_data(state.clone())
                 .route(
+                    "/introduce",
+                    actix_web::web::get().to(http_handlers::introduce),
+                )
+                .route(
                     "/oobi/{id}",
                     actix_web::web::get().to(http_handlers::get_eid_oobi),
                 )
@@ -195,6 +199,10 @@ pub mod http_handlers {
     };
 
     use crate::witness::Witness;
+
+    pub async fn introduce(data: web::Data<Arc<Witness>>) -> Result<HttpResponse, ApiError> {
+        Ok(HttpResponse::Ok().json(data.oobi()))
+    }
 
     pub async fn get_eid_oobi(
         eid: web::Path<IdentifierPrefix>,

@@ -37,6 +37,7 @@ pub enum QueryRoute {
         #[serde(rename = "q")]
         args: QueryArgs,
     },
+    #[cfg(feature = "mailbox")]
     #[serde(rename = "mbx")]
     Mbx {
         #[serde(rename = "rr")]
@@ -50,6 +51,7 @@ impl QueryRoute {
     pub fn get_prefix(&self) -> IdentifierPrefix {
         match self {
             QueryRoute::Log { ref args, .. } | QueryRoute::Ksn { ref args, .. } => args.i.clone(),
+            #[cfg(feature = "mailbox")]
             QueryRoute::Mbx { ref args, .. } => args.i.clone(),
         }
     }
