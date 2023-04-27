@@ -23,6 +23,8 @@ use crate::{
 use crate::event_message::signed_event_message::Op;
 
 #[cfg(feature = "query")]
+use super::signature::signatures_into_groups;
+#[cfg(feature = "query")]
 use crate::query::{
     query_event::{QueryEvent, SignedQuery},
     reply_event::{ReplyEvent, SignedReply},
@@ -36,7 +38,7 @@ use crate::{
 
 use super::{
     msg::{KeriEvent, TypedEvent},
-    signature::{signatures_into_groups, Nontransferable},
+    signature::Nontransferable,
     signed_event_message::{
         Message, Notice, SignedEventMessage, SignedNontransferableReceipt,
         SignedTransferableReceipt,
@@ -236,6 +238,7 @@ impl TryFrom<ParsedData> for Notice {
     fn try_from(value: ParsedData) -> Result<Self, Self::Error> {
         match Message::try_from(value)? {
             Message::Notice(notice) => Ok(notice),
+            #[cfg(feature = "query")]
             _ => Err(Error::SemanticError(
                 "Cannot convert SignedEventData to Notice".to_string(),
             )),
