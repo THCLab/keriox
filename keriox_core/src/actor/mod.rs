@@ -77,27 +77,6 @@ pub fn parse_exchange_stream(stream: &[u8]) -> Result<Vec<SignedExchange>, Error
         .collect()
 }
 
-pub fn process_message<P: Processor>(
-    msg: Message,
-    #[cfg(feature = "oobi")] oobi_manager: &OobiManager,
-    processor: &P,
-    #[cfg(feature = "oobi")] event_storage: &EventStorage,
-) -> Result<(), Error> {
-    match msg {
-        Message::Notice(notice) => process_notice(notice, processor)?,
-        #[cfg(any(feature = "query", feature = "oobi"))]
-        Message::Op(op) => match op {
-            #[cfg(feature = "oobi")]
-            Op::Reply(reply) => process_reply(reply, oobi_manager, processor, event_storage)?,
-            #[cfg(feature = "mailbox")]
-            Op::Exchange(_) => todo!(),
-            #[cfg(feature = "query")]
-            Op::Query(_) => todo!(),
-        },
-    };
-    Ok(())
-}
-
 pub fn process_notice<P: Processor>(msg: Notice, processor: &P) -> Result<(), Error> {
     processor.process_notice(&msg)
 }
@@ -286,7 +265,7 @@ pub mod prelude {
     #[cfg(feature = "query")]
     pub use crate::query::ReplyType;
     pub use crate::{
-        actor::{process_message, process_notice},
+        actor::process_notice,
         database::SledEventDatabase,
         event_message::signed_event_message::Message,
         processor::{basic_processor::BasicProcessor, event_storage::EventStorage, Processor},

@@ -10,7 +10,10 @@ use said::derivation::{HashFunction, HashFunctionCode};
 use serde::{Deserialize, Serialize};
 use version::serialization_info::SerializationFormats;
 
-use super::{event_generator, prelude::Message, process_message};
+use super::{
+    event_generator, prelude::Message, process_notice, process_signed_exn,
+    process_signed_oobi,
+};
 #[cfg(feature = "mailbox")]
 use crate::mailbox::{
     exchange::{Exchange, ForwardTopic, FwdArgs, SignedExchange},
@@ -454,13 +457,13 @@ impl<K: KeyManager> SimpleController<K> {
     pub fn process(&self, msg: &[Message]) -> Result<(), Error> {
         let (_process_ok, _process_failed): (Vec<_>, Vec<_>) = msg
             .iter()
-            .map(|message| {
-                process_message(
-                    message.clone(),
-                    &self.oobi_manager,
-                    &self.processor,
-                    &self.storage,
-                )
+            .map(|message| match message {
+                Message::Notice(notice) => process_notice(notice.to_owned(), &self.processor),
+                Message::Op(op) => match op {
+                    Op::Exchange(exn) => process_signed_exn(exn.to_owned(), &self.storage),
+                    Op::Reply(rpy) => process_signed_oobi(&rpy, &self.oobi_manager, &self.storage),
+                    Op::Query(_qry) => todo!(),
+                },
             })
             .partition(Result::is_ok);
 
