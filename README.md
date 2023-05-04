@@ -2,9 +2,9 @@
 
 ## Introduction
 
-KERIOX is an open source Rust implementation of the [ Key Event Receipt Infrastructure (KERI) ](https://github.com/decentralized-identity/keri), a system designed to provide a secure identifier-based trust spanning layer for any stack. [The current version of the KERI paper can be found here](https://github.com/SmithSamuelM/Papers/blob/master/whitepapers/KERI_WP_2.x.web.pdf).
+KERIOX is an open source Rust implementation of the [ Key Event Receipt Infrastructure (KERI) ](https://weboftrust.github.io/ietf-keri/draft-ssmith-keri.html), a system designed to provide a secure identifier-based trust spanning layer for any stack. [The current version of the KERI paper can be found here](https://github.com/SmithSamuelM/Papers/blob/master/whitepapers/KERI_WP_2.x.web.pdf).
 
-KERI provides the same security and verifiability properties for transactions as a blockchain or distributed ledger can, without the overhead of requiring an absolute global ordering of transactions. Because of this, there is no need for a cannonical chain and thus there is no "KERI Chain" or "KERI Network". KERI Identifiers can be generated independantly in a self-sovereign and privacy-preserving manner and are secured via a self-certifying post-quantum resistant key management scheme based on blinded pre-rotation, auditable and flexible key events and a distributed conflict resolution algorithm called KAACE.
+KERI provides the same security and verifiability properties for transactions as a blockchain or distributed ledger can, without the overhead of requiring an absolute global ordering of transactions. Because of this, there is no need for a canonical chain and thus there is no "KERI Chain" or "KERI Network". KERI Identifiers can be generated independently in a self-sovereign and privacy-preserving manner and are secured via a self-certifying post-quantum resistant key management scheme based on blinded pre-rotation, auditable and flexible key events and a distributed conflict resolution algorithm called KAACE.
 
 ## License
 
@@ -20,10 +20,10 @@ We furthermore support bindings to NodeJS and Dart. See our [keri-bindings](http
 
 ## Organization
 
-This repository provides implementation of KERI. It contains:
+This repository provides implementation of KERI. Core protocol features are implemented in [`keriox_core`](https://github.com/THCLab/keriox/tree/master/keriox_core) workspace. Repository contains also workspaces for following KERI components:
 * High level interface for [Witness](./components/witness)
 * High level interface for [Watcher](./components/watcher)
-* High level interface for [Controller](./keriox_core/src/controller)
+* High level interface for [Controller](./components/src/controller)
 
 For ready to use client libraries, we encourage to visit https://github.com/THCLab/keri-bindings that provide bindings to other languages via FFI layer. 
 

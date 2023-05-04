@@ -11,8 +11,7 @@ use serde::{Deserialize, Serialize};
 use version::serialization_info::SerializationFormats;
 
 use super::{
-    event_generator, prelude::Message, process_notice, process_signed_exn,
-    process_signed_oobi,
+    event_generator, prelude::Message, process_notice, process_signed_exn, process_signed_oobi,
 };
 #[cfg(feature = "mailbox")]
 use crate::mailbox::{
