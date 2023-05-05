@@ -13,6 +13,7 @@ pub use keri::prefix::{BasicPrefix, CesrPrimitive, IdentifierPrefix, SelfSigning
 pub use keri::signer::{CryptoBox, KeyManager};
 
 use config::ControllerConfig;
+use keri::state::IdentifierState;
 use keri::{
     actor::{
         self, event_generator, prelude::SelfAddressingIdentifier,
@@ -360,6 +361,7 @@ impl Controller {
         match parsed_event {
             EventType::KeyEvent(ke) => {
                 if let EventData::Icp(_) = &ke.data.get_event_data() {
+                    // TODO we assume here that provided signature matches 0th public key.
                     self.finalize_key_event(&ke, sig, 0)?;
                     Ok(ke.data.get_prefix())
                 } else {
@@ -539,5 +541,11 @@ impl Controller {
         self.send_message_to(&dest_prefix, Scheme::Http, signed_reply.clone())
             .await?;
         Ok(())
+    }
+
+    pub fn get_state(&self, id: &IdentifierPrefix) -> Result<IdentifierState, ControllerError> {
+        self.storage
+            .get_state(id)?
+            .ok_or(ControllerError::UnknownIdentifierError)
     }
 }

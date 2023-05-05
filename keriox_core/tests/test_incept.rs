@@ -2,14 +2,15 @@ use std::sync::Arc;
 
 use cesrox::primitives::codes::basic::Basic;
 use keri::{
+    actor,
     database::SledEventDatabase,
     error::Error,
     event_message::{
         event_msg_builder::EventMsgBuilder, signed_event_message::Notice, EventTypeTag,
     },
     prefix::{BasicPrefix, IndexedSignature, SelfSigningPrefix},
-    processor::{basic_processor::BasicProcessor, event_storage::EventStorage, Processor},
-    signer::{CryptoBox, KeyManager}, actor,
+    processor::{basic_processor::BasicProcessor, event_storage::EventStorage},
+    signer::{CryptoBox, KeyManager},
 };
 use tempfile::Builder;
 
@@ -41,7 +42,7 @@ fn test_incept() -> Result<(), Error> {
 
     let signed_inception = inception_event.sign(vec![indexed_signature], None, None);
 
-    actor::process_notice(Notice::Event(signed_inception), &processor)?; 
+    actor::process_notice(Notice::Event(signed_inception), &processor)?;
     let state = storage.get_state(&identifier)?;
     assert!(matches!(state, Some(_)));
     assert_eq!(state.unwrap().sn, 0);
