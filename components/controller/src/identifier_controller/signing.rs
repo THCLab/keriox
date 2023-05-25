@@ -1,4 +1,4 @@
-use cesrox::ParsedData;
+use cesrox::{ParsedData, group::Group};
 use keri::{
     event::sections::seal::EventSeal,
     event_message::signature::{Signature, SignerData},
@@ -28,6 +28,12 @@ impl IdentifierController {
         });
         let indexes_sig = IndexedSignature::new_both_same(signature, key_index);
         Ok(Signature::Transferable(sig_data, vec![indexes_sig]))
+    }
+
+    pub fn to_cesr_signature(&self, sig: SelfSigningPrefix, index: u16) -> Result<String, ControllerError> {
+        let signature: Signature = self.sign(sig, index).map(|s| s.into())?;
+        let group: Group = signature.into();
+        Ok(group.to_cesr_str())
     }
 
     pub fn sign_to_cesr(
