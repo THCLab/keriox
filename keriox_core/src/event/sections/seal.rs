@@ -10,6 +10,7 @@ pub enum Seal {
     Event(EventSeal),
     Digest(DigestSeal),
     Root(RootSeal),
+    Payload(PayloadSeal),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -70,6 +71,14 @@ impl SourceSeal {
     pub fn new(sn: u64, digest: SelfAddressingIdentifier) -> Self {
         Self { sn, digest }
     }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct PayloadSeal {
+    #[serde(rename = "t")]
+    pub payload_type: String,
+    #[serde(rename = "p")]
+    pub payload: String,
 }
 
 #[test]

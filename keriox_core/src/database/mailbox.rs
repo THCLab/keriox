@@ -1,6 +1,8 @@
 use sled::Db;
 
-use crate::event_message::signed_event_message::{SignedNontransferableReceipt, SignedEventMessage};
+use crate::event_message::signed_event_message::{
+    SignedEventMessage, SignedNontransferableReceipt,
+};
 
 use super::{tables::SledEventTreeVec, timestamped::TimestampedSignedEventMessage, DbError};
 
