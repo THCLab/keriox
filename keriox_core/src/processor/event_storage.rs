@@ -9,8 +9,11 @@ use crate::{
     database::{timestamped::TimestampedSignedEventMessage, SledEventDatabase},
     error::Error,
     event::{
-        event_data::EventData,
-        sections::{seal::EventSeal, KeyConfig},
+        event_data::{EventData, InteractionEvent},
+        sections::{
+            seal::{EventSeal, Seal},
+            KeyConfig,
+        },
     },
     event_message::{
         signed_event_message::Notice, signed_event_message::SignedNontransferableReceipt,
@@ -102,6 +105,35 @@ impl EventStorage {
                     .collect();
                 Ok(Some(e))
             }
+            None => Ok(None),
+        }
+    }
+
+    pub fn get_mailbox_location(&self, id: &IdentifierPrefix) -> Result<Option<String>, Error> {
+        match self.db.get_kel_finalized_events(id) {
+            Some(events) => Ok(events
+                .filter_map(|ev| {
+                    let event = ev.signed_event_message.event_message.data;
+                    match &event.event_data {
+                        EventData::Ixn(InteractionEvent {
+                            previous_event_hash: _,
+                            data,
+                        }) => data.iter().find_map(|seal| {
+                            if let Seal::Payload(payload) = seal {
+                                if payload.payload_type.eq("MBX") {
+                                    Some((event.sn, payload.clone()))
+                                } else {
+                                    None
+                                }
+                            } else {
+                                None
+                            }
+                        }),
+                        _ => None,
+                    }
+                })
+                .max_by(|x, y| x.0.cmp(&y.0))
+                .map(|payload| payload.1.payload)),
             None => Ok(None),
         }
     }
