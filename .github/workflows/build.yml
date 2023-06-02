@@ -52,5 +52,5 @@ jobs:
           context: .
           platforms: linux/amd64
           push: true
-          file: witness.Dockerfile
+          file: ${{ inputs.component-name }}.Dockerfile
           tags: ${{ steps.meta.outputs.tags }}
