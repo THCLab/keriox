@@ -19,15 +19,15 @@ impl Controller {
         // When attachments are empty, it is expected to be an oobi.
         let (oobis, to_verify): (Vec<_>, Vec<_>) =
             data.into_iter().partition(|d| d.attachments.is_empty());
-        let oo = oobis
+        let oo: Result<Vec<_>, ControllerError> = oobis
             .into_iter()
             .map(|o| match o.payload {
-                Payload::JSON(json_oobi) => String::from_utf8(json_oobi).unwrap(),
-                Payload::CBOR(_) => todo!(),
-                Payload::MGPK(_) => todo!(),
+                Payload::JSON(json_oobi) => String::from_utf8(json_oobi).map_err(|_e| ControllerError::WrongEventTypeError),
+                Payload::CBOR(_) => Err(ControllerError::OtherError("CBOR format not implemented yet".to_string())),
+                Payload::MGPK(_) => Err(ControllerError::OtherError("MGPK format not implemented yet".to_string())),
             })
             .collect();
-        Ok((oo, to_verify))
+        Ok((oo?, to_verify))
     }
 
     pub fn verify(&self, data: &[u8], signature: &Signature) -> Result<(), ControllerError> {
@@ -38,7 +38,7 @@ impl Controller {
             }
             Error::MissingSigner => ControllerError::UnknownIdentifierError,
             Error::EventOutOfOrderError => ControllerError::MissingEventError,
-            _e => todo!(),
+            e => ControllerError::OtherError(e.to_string()),
         })
     }
 
@@ -59,8 +59,8 @@ impl Controller {
                 .try_for_each(|s| {
                     let payload = match &d.payload {
                         Payload::JSON(json) => json,
-                        Payload::CBOR(_cbor) => todo!(),
-                        Payload::MGPK(_mgpk) => todo!(),
+                        Payload::CBOR(cbor) => cbor,
+                        Payload::MGPK(mgpk) => mgpk, 
                     };
                     self.verify(payload, &s)
                 }) {

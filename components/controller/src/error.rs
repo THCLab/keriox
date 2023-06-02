@@ -65,4 +65,7 @@ pub enum ControllerError {
 
     #[error("Verification failed for following elements: {0:?}")]
     VerificationError(Vec<(ControllerError, String)>),
+
+    #[error("Error: {0}")]
+    OtherError(String),
 }
