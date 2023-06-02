@@ -15,16 +15,11 @@ impl IdentifierController {
         signature: SelfSigningPrefix,
         key_index: u16,
     ) -> Result<Signature, ControllerError> {
-        let state = self
-            .source
-            .storage
-            .get_state(&self.id)?
-            .ok_or(ControllerError::UnknownIdentifierError)?;
-
+        let last_establishment = self.source.storage.get_last_establishment_event_seal(&self.id)?.ok_or(ControllerError::UnknownIdentifierError)?;
         let sig_data = SignerData::EventSeal(EventSeal {
             prefix: self.id.clone(),
-            sn: state.sn,
-            event_digest: state.last_event_digest,
+            sn: last_establishment.sn,
+            event_digest: last_establishment.event_digest,
         });
         let indexes_sig = IndexedSignature::new_both_same(signature, key_index);
         Ok(Signature::Transferable(sig_data, vec![indexes_sig]))
