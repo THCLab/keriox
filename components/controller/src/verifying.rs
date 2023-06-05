@@ -22,9 +22,15 @@ impl Controller {
         let oo: Result<Vec<_>, ControllerError> = oobis
             .into_iter()
             .map(|o| match o.payload {
-                Payload::JSON(json_oobi) => String::from_utf8(json_oobi).map_err(|_e| ControllerError::WrongEventTypeError),
-                Payload::CBOR(_) => Err(ControllerError::OtherError("CBOR format not implemented yet".to_string())),
-                Payload::MGPK(_) => Err(ControllerError::OtherError("MGPK format not implemented yet".to_string())),
+                Payload::JSON(json_oobi) => {
+                    String::from_utf8(json_oobi).map_err(|_e| ControllerError::WrongEventTypeError)
+                }
+                Payload::CBOR(_) => Err(ControllerError::OtherError(
+                    "CBOR format not implemented yet".to_string(),
+                )),
+                Payload::MGPK(_) => Err(ControllerError::OtherError(
+                    "MGPK format not implemented yet".to_string(),
+                )),
             })
             .collect();
         Ok((oo?, to_verify))
@@ -60,7 +66,7 @@ impl Controller {
                     let payload = match &d.payload {
                         Payload::JSON(json) => json,
                         Payload::CBOR(cbor) => cbor,
-                        Payload::MGPK(mgpk) => mgpk, 
+                        Payload::MGPK(mgpk) => mgpk,
                     };
                     self.verify(payload, &s)
                 }) {

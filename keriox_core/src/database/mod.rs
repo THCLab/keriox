@@ -1,14 +1,17 @@
 pub mod escrow;
-pub(crate) mod tables;
-pub(crate) mod timestamped;
 #[cfg(feature = "mailbox")]
 pub mod mailbox;
+pub(crate) mod tables;
+pub(crate) mod timestamped;
 
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use self::{tables::{SledEventTree, SledEventTreeVec}, mailbox::MailboxData};
+use self::{
+    mailbox::MailboxData,
+    tables::{SledEventTree, SledEventTreeVec},
+};
 #[cfg(feature = "query")]
 use crate::query::reply_event::SignedReply;
 use crate::{
@@ -24,7 +27,6 @@ use crate::{
 };
 
 use self::timestamped::TimestampedSignedEventMessage;
-
 
 pub struct SledEventDatabase {
     // "iids" tree
