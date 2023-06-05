@@ -477,7 +477,14 @@ impl Controller {
         let identifier = event_message.data.get_prefix();
         Ok(match event_message.data.get_event_data() {
             EventData::Icp(icp) => icp.witness_config.initial_witnesses,
-            EventData::Rot(_rot) => todo!(),
+            EventData::Rot(_rot) => {
+                let state = self
+                    .storage
+                    .get_state(&identifier)?
+                    .ok_or(ControllerError::UnknownIdentifierError)?
+                    .apply(event_message)?;
+                state.witness_config.witnesses
+            }
             EventData::Ixn(_ixn) => {
                 self.storage
                     .get_state(&identifier)?
@@ -486,7 +493,14 @@ impl Controller {
                     .witnesses
             }
             EventData::Dip(dip) => dip.inception_data.witness_config.initial_witnesses,
-            EventData::Drt(_) => todo!(),
+            EventData::Drt(_drt) => {
+                let state = self
+                    .storage
+                    .get_state(&identifier)?
+                    .ok_or(ControllerError::UnknownIdentifierError)?
+                    .apply(event_message)?;
+                state.witness_config.witnesses
+            }
         })
     }
 
