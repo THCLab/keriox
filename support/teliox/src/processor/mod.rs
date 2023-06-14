@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use keri::prefix::IdentifierPrefix;
 use said::SelfAddressingIdentifier;
 
@@ -8,11 +10,11 @@ use crate::{
     state::{vc_state::TelState, ManagerTelState, State},
 };
 
-pub struct EventProcessor<'d> {
-    db: &'d EventDatabase,
+pub struct EventProcessor {
+    db: Arc<EventDatabase>,
 }
-impl<'d> EventProcessor<'d> {
-    pub fn new(db: &'d EventDatabase) -> Self {
+impl EventProcessor {
+    pub fn new(db: Arc<EventDatabase>) -> Self {
         Self { db }
     }
 
@@ -121,6 +123,8 @@ impl<'d> EventProcessor<'d> {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use keri::prefix::IdentifierPrefix;
     use said::derivation::{HashFunction, HashFunctionCode};
 
@@ -136,8 +140,8 @@ mod tests {
         // Create test db and processor.
         let root = Builder::new().prefix("test-db").tempdir().unwrap();
         fs::create_dir_all(root.path()).unwrap();
-        let db = crate::database::EventDatabase::new(root.path()).unwrap();
-        let processor = EventProcessor::new(&db);
+        let db = Arc::new(crate::database::EventDatabase::new(root.path()).unwrap());
+        let processor = EventProcessor::new(db);
 
         // Setup test data.
         let message = "some message";

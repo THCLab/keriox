@@ -8,10 +8,10 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use self::{
-    mailbox::MailboxData,
-    tables::{SledEventTree, SledEventTreeVec},
-};
+#[cfg(feature = "mailbox")]
+use self::mailbox::MailboxData;
+use self::tables::{SledEventTree, SledEventTreeVec};
+
 #[cfg(feature = "query")]
 use crate::query::reply_event::SignedReply;
 use crate::{

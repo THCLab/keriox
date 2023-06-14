@@ -3,6 +3,7 @@ use std::{
     sync::Arc,
 };
 pub mod signing;
+pub mod tel;
 
 use keri::{
     actor::{
@@ -36,6 +37,7 @@ use keri::{
         reply_event::ReplyRoute,
     },
 };
+use teliox::tel::Tel;
 
 use super::mailbox_updating::ActionRequired;
 use crate::{error::ControllerError, mailbox_updating::MailboxReminder, Controller};
@@ -43,6 +45,7 @@ use crate::{error::ControllerError, mailbox_updating::MailboxReminder, Controlle
 pub struct IdentifierController {
     pub id: IdentifierPrefix,
     pub source: Arc<Controller>,
+    pub tel: Option<Tel>,
     pub(crate) last_asked_index: HashMap<IdentifierPrefix, MailboxReminder>,
     pub(crate) last_asked_groups_index: HashMap<IdentifierPrefix, MailboxReminder>,
     /// Set of already broadcasted receipts.
@@ -58,6 +61,7 @@ impl IdentifierController {
         Self {
             id,
             source: kel,
+            tel: None,
             last_asked_index: HashMap::new(),
             last_asked_groups_index: HashMap::new(),
             broadcasted_rcts: HashSet::new(),

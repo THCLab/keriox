@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::{
     database::EventDatabase,
     error::Error,
@@ -16,13 +18,13 @@ use said::{
 pub mod event_generator;
 
 /// Transaction Event Log
-pub struct Tel<'d> {
-    pub processor: EventProcessor<'d>,
-    tel_prefix: IdentifierPrefix,
+pub struct Tel {
+    pub processor: EventProcessor,
+    pub tel_prefix: IdentifierPrefix,
 }
 
-impl<'d> Tel<'d> {
-    pub fn new(db: &'d EventDatabase) -> Self {
+impl Tel {
+    pub fn new(db: Arc<EventDatabase>) -> Self {
         Self {
             processor: EventProcessor::new(db),
             tel_prefix: IdentifierPrefix::default(),
@@ -102,7 +104,7 @@ impl<'d> Tel<'d> {
 }
 #[cfg(test)]
 mod tests {
-    use std::fs;
+    use std::{fs, sync::Arc};
 
     use crate::{
         error::Error, event::verifiable_event::VerifiableEvent, seal::EventSourceSeal,
@@ -115,13 +117,13 @@ mod tests {
 
         let tel_root = Builder::new().prefix("tel-test-db").tempdir().unwrap();
         fs::create_dir_all(tel_root.path()).unwrap();
-        let tel_db = crate::database::EventDatabase::new(tel_root.path()).unwrap();
+        let tel_db = Arc::new(crate::database::EventDatabase::new(tel_root.path()).unwrap());
         let issuer_prefix = "DpE03it33djytuVvXhSbZdEw0lx7Xa-olrlUUSH2Ykvc"
             .parse()
             .unwrap();
 
         // Create tel
-        let mut tel = Tel::new(&tel_db);
+        let mut tel = Tel::new(tel_db);
         let dummy_source_seal = EventSourceSeal {
             sn: 1,
             digest: "EJJR2nmwyYAfSVPzhzS6b5CMZAoTNZH3ULvaU6Z-i0d8"
