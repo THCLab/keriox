@@ -79,7 +79,7 @@ impl ManagerTelState {
                         Err(Error::Generic("Previous event doesn't match".to_string()))
                     }
                 } else {
-                    Err(Error::Generic("Improper event sn".into()))
+                    Err(Error::OutOfOrderError)
                 }
             }
         }

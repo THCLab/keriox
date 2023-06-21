@@ -21,4 +21,16 @@ pub enum Error {
 
     #[error(transparent)]
     VersionError(#[from] version::error::Error),
+
+    #[error("Error")]
+    MissingSealError,
+
+    #[error("Missing issuer event")]
+    MissingIssuerEventError,
+
+    #[error("Event is out of order")]
+    OutOfOrderError,
+
+    #[error("Digests doesn't match")]
+    DigestsNotMatchError,
 }

@@ -9,7 +9,7 @@ pub mod manager_event;
 pub mod vc_event;
 pub mod verifiable_event;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum Event {
     Management(ManagerTelEventMessage),
     Vc(VCEventMessage),

@@ -23,7 +23,7 @@ impl IdentifierController {
         let tel_db = Arc::new(teliox::database::EventDatabase::new(tel_db_path).unwrap());
 
         // Create tel
-        let mut tel = Tel::new(tel_db);
+        let mut tel = Tel::new(tel_db, self.source.storage);
 
         let vcp = tel
             .make_inception_event(

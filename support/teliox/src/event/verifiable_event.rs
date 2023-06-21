@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use super::Event;
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct VerifiableEvent {
     pub event: Event,
     pub seal: AttachedSourceSeal,

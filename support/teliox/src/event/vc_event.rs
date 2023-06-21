@@ -68,7 +68,7 @@ impl From<TimestampedVCEvent> for VCEvent {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum TelEventType {
     Iss,

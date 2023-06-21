@@ -27,7 +27,7 @@ pub struct ManagerTelEvent {
     pub event_type: ManagerEventType,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum ManagementTelType {
     Vcp,
