@@ -20,10 +20,8 @@ impl IdentifierController {
         &mut self,
         tel_db_path: impl AsRef<Path>,
     ) -> Result<Vec<u8>, ControllerError> {
-        let tel_db = Arc::new(teliox::database::EventDatabase::new(tel_db_path).unwrap());
-
         // Create tel
-        let mut tel = Tel::new(tel_db, self.source.storage);
+        let tel = self.source.tel.clone();
 
         let vcp = tel
             .make_inception_event(
@@ -34,6 +32,7 @@ impl IdentifierController {
             )
             .unwrap();
 
+        let id = vcp.get_prefix();
         let seal = Seal::Event(EventSeal {
             prefix: vcp.get_prefix(),
             sn: vcp.get_sn(),
@@ -50,8 +49,9 @@ impl IdentifierController {
             event: vcp,
             seal: AttachedSourceSeal { seal: source_seal },
         };
-        tel.process(verifiable_event).unwrap();
-        self.tel = Some(tel);
+
+        tel.processor.process(verifiable_event).unwrap();
+        self.registry_id = Some(id);
 
         Ok(encoded)
     }
@@ -60,10 +60,11 @@ impl IdentifierController {
     /// the process, `ixn` need to be signed confirmed with `finalize_event`
     /// function.
     pub fn issue(&self, credential: &str) -> Result<Vec<u8>, ControllerError> {
-        match self.tel.as_ref() {
-            Some(tel) => {
+        match self.registry_id.as_ref() {
+            Some(registry_id) => {
+                let tel = self.source.tel.clone();
                 let iss = tel
-                    .make_issuance_event(HashFunctionCode::Blake3_256, credential)
+                    .make_issuance_event(registry_id, HashFunctionCode::Blake3_256, credential)
                     .unwrap();
 
                 let seal = Seal::Event(EventSeal {
@@ -98,9 +99,10 @@ impl IdentifierController {
         &self,
         credential_sai: &SelfAddressingIdentifier,
     ) -> Result<Vec<u8>, ControllerError> {
-        match &self.tel {
-            Some(tel) => {
-                let rev = tel.make_revoke_event(credential_sai).unwrap();
+        match &self.registry_id {
+            Some(registry_id) => {
+                let tel = self.source.tel.clone();
+                let rev = tel.make_revoke_event(registry_id, credential_sai).unwrap();
 
                 let seal = Seal::Event(EventSeal {
                     prefix: rev.get_prefix(),

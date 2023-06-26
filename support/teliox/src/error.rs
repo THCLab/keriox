@@ -28,9 +28,15 @@ pub enum Error {
     #[error("Missing issuer event")]
     MissingIssuerEventError,
 
+    #[error("Missing issuer event")]
+    MissingRegistryError,
+
     #[error("Event is out of order")]
     OutOfOrderError,
 
     #[error("Digests doesn't match")]
     DigestsNotMatchError,
+
+    #[error("Unknown identifier")]
+    UnknownIdentifierError,
 }

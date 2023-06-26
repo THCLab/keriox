@@ -48,8 +48,11 @@ async fn test_tel() -> Result<(), ControllerError> {
 
     identifier1.finalize_event(&ixn, signature).await.unwrap();
 
-    let tel_ref = identifier1.tel.as_ref().unwrap();
-    let mana = tel_ref.get_management_tel_state().unwrap();
+    let tel_ref = identifier1.source.tel.clone();
+    let mana = tel_ref
+        .get_management_tel_state(identifier1.registry_id.as_ref().unwrap())
+        .unwrap()
+        .unwrap();
     assert_eq!(mana.sn, 0);
 
     // Issue something (sign and create ixn event to kel)
@@ -73,7 +76,10 @@ async fn test_tel() -> Result<(), ControllerError> {
 
     assert_eq!(state.sn, 2);
     let iss = tel_ref.get_vc_state(&vc_hash).unwrap();
-    assert!(matches!(iss, teliox::state::vc_state::TelState::Issued(_)));
+    assert!(matches!(
+        iss,
+        Some(teliox::state::vc_state::TelState::Issued(_))
+    ));
 
     // Revoke issued credential
     let revocation_ixn = identifier1.revoke(&vc_hash).unwrap();
@@ -93,7 +99,10 @@ async fn test_tel() -> Result<(), ControllerError> {
 
     assert_eq!(state.sn, 3);
     let rev = tel_ref.get_vc_state(&vc_hash).unwrap();
-    assert!(matches!(rev, teliox::state::vc_state::TelState::Revoked));
+    assert!(matches!(
+        rev,
+        Some(teliox::state::vc_state::TelState::Revoked)
+    ));
 
     Ok(())
 }

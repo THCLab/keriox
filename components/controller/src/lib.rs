@@ -1,4 +1,6 @@
+use std::path::Path;
 use std::sync::Arc;
+use std::time::Duration;
 
 pub mod config;
 pub mod error;
@@ -10,6 +12,7 @@ pub use keri::keys::PublicKey;
 pub use keri::oobi::{EndRole, LocationScheme, Oobi};
 use keri::prefix::IndexedSignature;
 pub use keri::prefix::{BasicPrefix, CesrPrimitive, IdentifierPrefix, SelfSigningPrefix};
+use keri::processor::notification::JustNotification;
 pub use keri::signer::{CryptoBox, KeyManager};
 
 use config::ControllerConfig;
@@ -39,15 +42,22 @@ use keri::{
     },
     transport::Transport,
 };
+use teliox::database::EventDatabase;
+use teliox::processor::escrow::MissingIssuerEscrow;
+use teliox::processor::storage::TelEventStorage;
+use teliox::tel::Tel;
 
 use self::error::ControllerError;
 
 pub struct Controller {
     processor: BasicProcessor,
-    pub storage: EventStorage,
+    pub storage: Arc<EventStorage>,
     oobi_manager: OobiManager,
     partially_witnessed_escrow: Arc<PartiallyWitnessedEscrow>,
     transport: Box<dyn Transport + Send + Sync>,
+
+    pub tel: Arc<Tel>,
+    pub missing_issuer_escrow: Arc<MissingIssuerEscrow>,
 }
 
 impl Controller {
@@ -78,7 +88,7 @@ impl Controller {
         };
 
         let (
-            notification_bus,
+            mut notification_bus,
             (
                 _out_of_order_escrow,
                 _partially_signed_escrow,
@@ -87,12 +97,29 @@ impl Controller {
             ),
         ) = default_escrow_bus(db.clone(), escrow_db, escrow_config);
 
+        let escrow_db = Arc::new(EscrowDb::new(Path::new("./mie")).unwrap());
+        let tel_db = Arc::new(EventDatabase::new(Path::new("./tel")).unwrap());
+        let tel_storage = Arc::new(TelEventStorage::new(tel_db));
+        let kel_storage = Arc::new(EventStorage::new(db.clone()));
+        let tel = Arc::new(Tel::new(tel_storage.clone(), kel_storage.clone(), None));
+
+        let mie = Arc::new(MissingIssuerEscrow::new(
+            tel_storage,
+            escrow_db,
+            Duration::from_secs(100),
+            kel_storage.clone(),
+            None,
+        ));
+        notification_bus.register_observer(mie.clone(), vec![JustNotification::KeyEventAdded]);
+
         let controller = Self {
             processor: BasicProcessor::new(db.clone(), Some(notification_bus)),
-            storage: EventStorage::new(db),
+            storage: kel_storage,
             oobi_manager,
             partially_witnessed_escrow,
             transport,
+            tel: tel,
+            missing_issuer_escrow: mie,
         };
 
         if !initial_oobis.is_empty() {

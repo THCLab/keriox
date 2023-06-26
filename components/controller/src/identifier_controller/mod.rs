@@ -1,10 +1,13 @@
 use std::{
     collections::{HashMap, HashSet},
+    path::PathBuf,
     sync::Arc,
+    time::Duration,
 };
 pub mod signing;
 pub mod tel;
 
+use async_std::path::Path;
 use keri::{
     actor::{
         event_generator,
@@ -12,6 +15,7 @@ use keri::{
         simple_controller::PossibleResponse,
         MaterialPath,
     },
+    database::escrow::EscrowDb,
     event::{
         event_data::EventData,
         sections::{
@@ -32,12 +36,13 @@ use keri::{
     },
     oobi::{LocationScheme, Role, Scheme},
     prefix::{BasicPrefix, CesrPrimitive, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
+    processor::notification::{JustNotification, Notification},
     query::{
         query_event::{QueryArgs, QueryArgsMbx, QueryEvent, QueryRoute, QueryTopics, SignedQuery},
         reply_event::ReplyRoute,
     },
 };
-use teliox::tel::Tel;
+use teliox::{processor::escrow::MissingIssuerEscrow, tel::Tel};
 
 use super::mailbox_updating::ActionRequired;
 use crate::{error::ControllerError, mailbox_updating::MailboxReminder, Controller};
@@ -45,7 +50,8 @@ use crate::{error::ControllerError, mailbox_updating::MailboxReminder, Controlle
 pub struct IdentifierController {
     pub id: IdentifierPrefix,
     pub source: Arc<Controller>,
-    pub tel: Option<Tel>,
+    pub registry_id: Option<IdentifierPrefix>,
+
     pub(crate) last_asked_index: HashMap<IdentifierPrefix, MailboxReminder>,
     pub(crate) last_asked_groups_index: HashMap<IdentifierPrefix, MailboxReminder>,
     /// Set of already broadcasted receipts.
@@ -59,9 +65,9 @@ pub struct IdentifierController {
 impl IdentifierController {
     pub fn new(id: IdentifierPrefix, kel: Arc<Controller>) -> Self {
         Self {
+            registry_id: None,
             id,
             source: kel,
-            tel: None,
             last_asked_index: HashMap::new(),
             last_asked_groups_index: HashMap::new(),
             broadcasted_rcts: HashSet::new(),

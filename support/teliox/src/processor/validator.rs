@@ -77,7 +77,10 @@ impl TelEventValidator {
             return Err(Error::MissingSealError);
         };
 
-        let state = self.db.compute_management_tel_state(&event.data.prefix)?;
+        let state = self
+            .db
+            .compute_management_tel_state(&event.data.prefix)?
+            .unwrap_or_default();
 
         state.apply(&event)?;
 
@@ -91,6 +94,7 @@ impl TelEventValidator {
     ) -> Result<(), Error> {
         self.db
             .compute_vc_state(&vc_event.data.data.prefix)?
+            .unwrap_or_default()
             .apply(&vc_event)?;
 
         Ok(())

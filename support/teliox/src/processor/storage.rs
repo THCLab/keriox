@@ -21,36 +21,40 @@ impl TelEventStorage {
     pub fn compute_management_tel_state(
         &self,
         id: &IdentifierPrefix,
-    ) -> Result<ManagerTelState, Error> {
-        match self.db.get_management_events(id) {
-            Some(events) => events.into_iter().fold(
-                Ok(ManagerTelState::default()),
-                |state: Result<ManagerTelState, Error>,
-                 ev: VerifiableEvent|
-                 -> Result<ManagerTelState, Error> {
-                    match ev.event {
-                        Event::Management(event) => state?.apply(&event),
-                        Event::Vc(_) => Err(Error::Generic("Improper event type".into())),
-                    }
-                },
-            ),
-            None => Ok(ManagerTelState::default()),
-        }
+    ) -> Result<Option<ManagerTelState>, Error> {
+        self.db
+            .get_management_events(id)
+            .map(|events| {
+                events.fold(
+                    Ok(ManagerTelState::default()),
+                    |state: Result<ManagerTelState, Error>,
+                     ev: VerifiableEvent|
+                     -> Result<ManagerTelState, Error> {
+                        match ev.event {
+                            Event::Management(event) => state?.apply(&event),
+                            Event::Vc(_) => Err(Error::Generic("Improper event type".into())),
+                        }
+                    },
+                )
+            })
+            .transpose()
     }
 
-    pub fn compute_vc_state(&self, vc_id: &IdentifierPrefix) -> Result<TelState, Error> {
-        match self.db.get_events(vc_id) {
-            Some(events) => events.into_iter().fold(
-                Ok(TelState::default()),
-                |state, ev| -> Result<TelState, Error> {
-                    match ev.event {
-                        Event::Vc(event) => state?.apply(&event),
-                        _ => state,
-                    }
-                },
-            ),
-            None => Ok(TelState::default()),
-        }
+    pub fn compute_vc_state(&self, vc_id: &IdentifierPrefix) -> Result<Option<TelState>, Error> {
+        self.db
+            .get_events(vc_id)
+            .map(|events| {
+                events.into_iter().fold(
+                    Ok(TelState::default()),
+                    |state, ev| -> Result<TelState, Error> {
+                        match ev.event {
+                            Event::Vc(event) => state?.apply(&event),
+                            _ => state,
+                        }
+                    },
+                )
+            })
+            .transpose()
     }
 
     pub fn get_management_events(&self, id: &IdentifierPrefix) -> Result<Option<Vec<u8>>, Error> {
