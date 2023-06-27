@@ -22,6 +22,9 @@ pub enum Error {
     #[error(transparent)]
     VersionError(#[from] version::error::Error),
 
+    #[error("Escrow database error")]
+    EscrowDatabaseError,
+
     #[error("Error")]
     MissingSealError,
 
@@ -39,4 +42,7 @@ pub enum Error {
 
     #[error("Unknown identifier")]
     UnknownIdentifierError,
+
+    #[error("Locking error")]
+    RwLockingError,
 }

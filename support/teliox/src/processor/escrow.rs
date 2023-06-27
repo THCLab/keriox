@@ -9,18 +9,22 @@ use keri::{
     },
 };
 
-use crate::{database::EventDatabase, error::Error, event::verifiable_event::VerifiableEvent};
+use crate::{
+    error::Error,
+    event::{verifiable_event::VerifiableEvent, Event},
+};
 
 use super::{
-    notification::TelNotificationBus, storage::TelEventStorage, validator::TelEventValidator,
-    TelEventProcessor,
+    notification::{TelNotification, TelNotificationBus, TelNotifier},
+    storage::TelEventStorage,
+    validator::TelEventValidator,
 };
 
 pub struct MissingIssuerEscrow {
     kel_reference: Arc<EventStorage>,
     tel_reference: Arc<TelEventStorage>,
     publisher: TelNotificationBus,
-    pub escrowed_missing_issuer: Escrow<VerifiableEvent>,
+    escrowed_missing_issuer: Escrow<VerifiableEvent>,
 }
 
 impl MissingIssuerEscrow {
@@ -29,14 +33,15 @@ impl MissingIssuerEscrow {
         escrow_db: Arc<EscrowDb>,
         duration: Duration,
         kel_reference: Arc<EventStorage>,
-        bus: Option<TelNotificationBus>,
+        bus: TelNotificationBus,
     ) -> Self {
         let escrow = Escrow::new(b"mie.", duration, escrow_db);
+
         Self {
             tel_reference: db,
             escrowed_missing_issuer: escrow,
             kel_reference,
-            publisher: bus.unwrap_or_default(),
+            publisher: bus,
         }
     }
 }
@@ -64,7 +69,27 @@ impl Notifier for MissingIssuerEscrow {
     }
 }
 
+impl TelNotifier for MissingIssuerEscrow {
+    fn notify(
+        &self,
+        notification: &super::notification::TelNotification,
+        _bus: &TelNotificationBus,
+    ) -> Result<(), Error> {
+        match notification {
+            TelNotification::MissingIssuer(event) => {
+                let missing_event_digest =
+                    IdentifierPrefix::SelfAddressing(event.seal.seal.digest.clone());
+                self.escrowed_missing_issuer
+                    .add(&missing_event_digest, event.clone())
+                    .map_err(|e| Error::EscrowDatabaseError)
+            }
+            _ => return Err(Error::Generic("Wrong notification".into())),
+        }
+    }
+}
+
 impl MissingIssuerEscrow {
+    /// Reprocess escrowed events that need issuer event of given digest for acceptance.
     pub fn process_missing_issuer_escrow(&self, id: &IdentifierPrefix) -> Result<(), Error> {
         if let Some(esc) = self.escrowed_missing_issuer.get(id) {
             for event in esc {
@@ -73,23 +98,20 @@ impl MissingIssuerEscrow {
                     self.kel_reference.clone(),
                 );
                 let result = match &event.event {
-                    crate::event::Event::Management(man) => {
-                        validator.validate_management(&man, &event.seal)
-                    }
-                    crate::event::Event::Vc(vc) => validator.validate_vc(&vc, &event.seal),
+                    Event::Management(man) => validator.validate_management(&man, &event.seal),
+                    Event::Vc(vc) => validator.validate_vc(&vc, &event.seal),
                 };
                 match result {
                     Ok(_) => {
                         // remove from escrow
-                        self.escrowed_missing_issuer.remove(id, &event).unwrap();
+                        self.escrowed_missing_issuer
+                            .remove(id, &event)
+                            .map_err(|_e| Error::EscrowDatabaseError)?;
                         // accept tel event
-                        self.tel_reference
-                            .db
-                            .add_new_event(event.clone(), id)
-                            .unwrap();
-                        self.publisher.notify(
-                            &super::notification::TelNotification::TelEventAdded(event.event),
-                        )?;
+                        self.tel_reference.add_event(event.clone())?;
+
+                        self.publisher
+                            .notify(&TelNotification::TelEventAdded(event.event))?;
                     }
                     Err(Error::MissingSealError) => {
                         // remove from escrow
@@ -97,16 +119,12 @@ impl MissingIssuerEscrow {
                     }
                     Err(Error::OutOfOrderError) => {
                         self.escrowed_missing_issuer.remove(id, &event).unwrap();
-                        self.publisher
-                            .notify(&super::notification::TelNotification::OutOfOrder(event))?;
-                        ()
+                        self.publisher.notify(&TelNotification::OutOfOrder(event))?;
                     }
                     Err(Error::MissingRegistryError) => {
                         self.escrowed_missing_issuer.remove(id, &event).unwrap();
-                        self.publisher.notify(
-                            &super::notification::TelNotification::MissingRegistry(event),
-                        )?;
-                        ()
+                        self.publisher
+                            .notify(&TelNotification::MissingRegistry(event))?;
                     }
                     Err(_e) => (), // keep in escrow,
                 }

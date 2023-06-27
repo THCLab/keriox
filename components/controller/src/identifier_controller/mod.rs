@@ -207,7 +207,7 @@ impl IdentifierController {
     /// Init group identifier
     ///
     /// Returns serialized group icp and list of exchange messages to sign.
-    /// Exchanges are ment to be send to witness and forwarded to group
+    /// Exchanges are meant to be send to witness and forwarded to group
     /// participants.
     /// If `delegator` parameter is provided, it will generate delegated
     /// inception and append delegation request to exchange messages.

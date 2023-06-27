@@ -110,7 +110,7 @@ mod tests {
         processor::{TelEventProcessor, TelEventStorage},
         seal::EventSourceSeal,
         state::vc_state::TelState,
-        // tel::event_generator,
+        tel::event_generator,
     };
 
     //     #[test]

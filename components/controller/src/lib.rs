@@ -44,6 +44,7 @@ use keri::{
 };
 use teliox::database::EventDatabase;
 use teliox::processor::escrow::MissingIssuerEscrow;
+use teliox::processor::notification::{TelNotification, TelNotificationBus, TelNotificationKind};
 use teliox::processor::storage::TelEventStorage;
 use teliox::tel::Tel;
 
@@ -57,7 +58,7 @@ pub struct Controller {
     transport: Box<dyn Transport + Send + Sync>,
 
     pub tel: Arc<Tel>,
-    pub missing_issuer_escrow: Arc<MissingIssuerEscrow>,
+    // pub missing_issuer_escrow: Arc<MissingIssuerEscrow>,
 }
 
 impl Controller {
@@ -82,7 +83,7 @@ impl Controller {
         };
 
         let oobi_manager = {
-            let mut path = db_path;
+            let mut path = db_path.clone();
             path.push("oobis");
             OobiManager::new(&path)
         };
@@ -97,20 +98,47 @@ impl Controller {
             ),
         ) = default_escrow_bus(db.clone(), escrow_db, escrow_config);
 
-        let escrow_db = Arc::new(EscrowDb::new(Path::new("./mie")).unwrap());
-        let tel_db = Arc::new(EventDatabase::new(Path::new("./tel")).unwrap());
-        let tel_storage = Arc::new(TelEventStorage::new(tel_db));
         let kel_storage = Arc::new(EventStorage::new(db.clone()));
-        let tel = Arc::new(Tel::new(tel_storage.clone(), kel_storage.clone(), None));
 
-        let mie = Arc::new(MissingIssuerEscrow::new(
-            tel_storage,
-            escrow_db,
+        // Initiate tel and it's escrows
+        let tel_events_db = {
+            let mut path = db_path.clone();
+            path.push("tel");
+            path.push("events");
+            Arc::new(EventDatabase::new(&path).unwrap())
+        };
+
+        let tel_escrow_db = {
+            let mut path = db_path.clone();
+            path.push("tel");
+            path.push("escrow");
+            Arc::new(EscrowDb::new(&path)?)
+        };
+        let tel_storage = Arc::new(TelEventStorage::new(tel_events_db));
+        let tel_bus = TelNotificationBus::new();
+
+        let missing_issuer_escrow = Arc::new(MissingIssuerEscrow::new(
+            tel_storage.clone(),
+            tel_escrow_db,
             Duration::from_secs(100),
             kel_storage.clone(),
-            None,
+            tel_bus.clone(),
         ));
-        notification_bus.register_observer(mie.clone(), vec![JustNotification::KeyEventAdded]);
+
+        tel_bus.register_observer(
+            missing_issuer_escrow.clone(),
+            vec![TelNotificationKind::MissingIssuer],
+        );
+        let tel = Arc::new(Tel::new(
+            tel_storage.clone(),
+            kel_storage.clone(),
+            Some(tel_bus),
+        ));
+
+        notification_bus.register_observer(
+            missing_issuer_escrow.clone(),
+            vec![JustNotification::KeyEventAdded],
+        );
 
         let controller = Self {
             processor: BasicProcessor::new(db.clone(), Some(notification_bus)),
@@ -119,7 +147,7 @@ impl Controller {
             partially_witnessed_escrow,
             transport,
             tel: tel,
-            missing_issuer_escrow: mie,
+            // missing_issuer_escrow: mie,
         };
 
         if !initial_oobis.is_empty() {

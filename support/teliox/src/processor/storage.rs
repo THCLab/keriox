@@ -98,4 +98,15 @@ impl TelEventStorage {
             None => Ok(None),
         }
     }
+
+    pub fn add_event(&self, event: VerifiableEvent) -> Result<(), Error> {
+        match &event.event {
+            Event::Management(man) => self
+                .db
+                .add_new_management_event(event.clone(), &event.get_event().get_prefix()),
+            Event::Vc(vc) => self
+                .db
+                .add_new_event(event.clone(), &event.get_event().get_prefix()),
+        }
+    }
 }

@@ -1,36 +1,46 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::{Arc, RwLock},
+};
 
 use crate::{
     error::Error,
     event::{verifiable_event::VerifiableEvent, Event},
 };
-
+#[derive(Clone)]
 pub struct TelNotificationBus {
-    observers: HashMap<TelNotificationKind, Vec<Arc<dyn TelNotifier + Send + Sync>>>,
+    observers: Arc<RwLock<HashMap<TelNotificationKind, Vec<Arc<dyn TelNotifier + Send + Sync>>>>>,
 }
 
 impl TelNotificationBus {
     pub fn new() -> Self {
         Self {
-            observers: HashMap::new(),
+            observers: Arc::new(RwLock::new(HashMap::new())),
         }
     }
     pub fn register_observer(
-        &mut self,
+        &self,
         escrow: Arc<dyn TelNotifier + Send + Sync>,
-        notification: Vec<TelNotificationKind>,
-    ) {
-        notification.into_iter().for_each(|notification| {
+        notifications: Vec<TelNotificationKind>,
+    ) -> Result<(), Error> {
+        for notification in notifications {
             self.observers
+                .write()
+                .map_err(|_e| Error::RwLockingError)?
                 .entry(notification)
                 .or_insert_with(Vec::new)
                 .push(escrow.clone());
-        });
+        }
+        Ok(())
     }
 
     pub fn notify(&self, notification: &TelNotification) -> Result<(), Error> {
-        println!("\nTel notification: {:?}", notification);
-        if let Some(obs) = self.observers.get(&notification.into()) {
+        if let Some(obs) = self
+            .observers
+            .read()
+            .map_err(|_e| Error::RwLockingError)?
+            .get(&notification.into())
+        {
             for esc in obs.iter() {
                 esc.notify(notification, self)?;
             }
