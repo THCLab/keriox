@@ -81,7 +81,7 @@ impl TelNotifier for MissingIssuerEscrow {
                     IdentifierPrefix::SelfAddressing(event.seal.seal.digest.clone());
                 self.escrowed_missing_issuer
                     .add(&missing_event_digest, event.clone())
-                    .map_err(|e| Error::EscrowDatabaseError)
+                    .map_err(|_e| Error::EscrowDatabaseError)
             }
             _ => return Err(Error::Generic("Wrong notification".into())),
         }

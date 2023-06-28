@@ -1,13 +1,23 @@
 use std::sync::Arc;
 
-use keri::processor::{event_storage::EventStorage, validator::EventValidator};
+use keri::{
+    event::{
+        event_data::{EventData, InteractionEvent},
+        sections::seal::Seal,
+    },
+    prefix::IdentifierPrefix,
+    processor::event_storage::EventStorage,
+};
+use said::SelfAddressingIdentifier;
 
 use crate::{
     database::EventDatabase,
     error::Error,
     event::{
-        manager_event::ManagerTelEventMessage, vc_event::VCEventMessage,
-        verifiable_event::VerifiableEvent, Event,
+        manager_event::{ManagerEventType, ManagerTelEventMessage},
+        vc_event::VCEventMessage,
+        verifiable_event::VerifiableEvent,
+        Event,
     },
     seal::AttachedSourceSeal,
 };
@@ -26,56 +36,71 @@ impl TelEventValidator {
             kel_reference,
         }
     }
+
+    /// Checks if kel event pointed by seal has seal to tel event inside.
+    pub fn check_kel_event(
+        &self,
+        seal: &AttachedSourceSeal,
+        issuer_id: &IdentifierPrefix,
+        expected_digest: SelfAddressingIdentifier,
+    ) -> Result<(), Error> {
+        let reference_kel_event = self
+            .kel_reference
+            .get_event_at_sn(&issuer_id, seal.seal.sn)?
+            .ok_or(Error::MissingIssuerEventError)?;
+        // Check if digest of found event matches digest from seal
+        match &reference_kel_event
+            .signed_event_message
+            .event_message
+            .digest
+        {
+            Some(dig) if dig == &seal.seal.digest => Ok(()),
+            _ => Err(Error::DigestsNotMatchError),
+        }?;
+        // Check if found event has tel event anchored
+        let event_type = reference_kel_event
+            .signed_event_message
+            .event_message
+            .data
+            .event_data;
+        if let EventData::Ixn(InteractionEvent {
+            data,
+            previous_event_hash: _,
+        }) = event_type
+        {
+            if data
+                .into_iter()
+                .find(|seal| match seal {
+                    Seal::Event(es) => es.event_digest.eq(&expected_digest),
+                    _ => false,
+                })
+                .is_some()
+            {
+                Ok(())
+            } else {
+                Err(Error::MissingSealError)
+            }
+        } else {
+            Err(Error::Generic("Wrong event type".to_string()))
+        }
+    }
+
     pub fn validate_management(
         &self,
         event: &ManagerTelEventMessage,
         seal: &AttachedSourceSeal,
     ) -> Result<(), Error> {
         let id = match &event.data.event_type {
-            crate::event::manager_event::ManagerEventType::Vcp(vcp) => vcp.issuer_id.clone(),
-            crate::event::manager_event::ManagerEventType::Vrt(vrt) => todo!(),
-        };
-        let digest = seal.seal.digest.clone();
-        let sn = seal.seal.sn.clone();
-
-        let reference_kel_event = self
-            .kel_reference
-            .get_event_at_sn(&id, sn)?
-            .ok_or(Error::MissingIssuerEventError)?;
-        if digest.ne(&reference_kel_event
-            .signed_event_message
-            .event_message
-            .digest
-            .unwrap())
-        {
-            return Err(Error::DigestsNotMatchError);
-        };
-
-        if match reference_kel_event
-            .signed_event_message
-            .event_message
-            .data
-            .event_data
-        {
-            keri::event::event_data::EventData::Dip(_) => todo!(),
-            keri::event::event_data::EventData::Icp(_) => todo!(),
-            keri::event::event_data::EventData::Rot(_) => todo!(),
-            keri::event::event_data::EventData::Ixn(ixn) => {
-                ixn.data.into_iter().find(|seal| match seal {
-                    keri::event::sections::seal::Seal::Location(_) => todo!(),
-                    keri::event::sections::seal::Seal::Event(es) => {
-                        es.event_digest.eq(&event.digest.as_ref().unwrap())
-                    }
-                    keri::event::sections::seal::Seal::Digest(_) => todo!(),
-                    keri::event::sections::seal::Seal::Root(_) => todo!(),
-                })
+            ManagerEventType::Vcp(vcp) => vcp.issuer_id.clone(),
+            ManagerEventType::Vrt(_vrt) => {
+                self.db
+                    .compute_management_tel_state(&event.data.prefix)?
+                    .ok_or(Error::MissingRegistryError)?
+                    .issuer
             }
-            keri::event::event_data::EventData::Drt(_) => todo!(),
-        }
-        .is_none()
-        {
-            return Err(Error::MissingSealError);
         };
+
+        self.check_kel_event(seal, &id, event.digest().unwrap())?;
 
         let state = self
             .db
@@ -92,6 +117,7 @@ impl TelEventValidator {
         vc_event: &VCEventMessage,
         seal: &AttachedSourceSeal,
     ) -> Result<(), Error> {
+        self.check_kel_event(seal, &vc_event.data.data.prefix, vc_event.digest().unwrap())?;
         self.db
             .compute_vc_state(&vc_event.data.data.prefix)?
             .unwrap_or_default()

@@ -6,6 +6,7 @@ use crate::query::{
     key_state_notice::KeyStateNotice, query_event::QueryArgsMbx, reply_event::SignedReply,
 };
 use crate::{
+    actor::prelude::Message,
     database::{timestamped::TimestampedSignedEventMessage, SledEventDatabase},
     error::Error,
     event::{
@@ -42,21 +43,20 @@ impl EventStorage {
         compute_state(self.db.clone(), identifier)
     }
 
-    /// Get KERL for Prefix
+    /// Get KEL for Prefix
     ///
-    /// Returns serialized current validated KEL for a given Prefix
+    /// Returns serialized in CESR current validated KEL for a given Prefix
     pub fn get_kel(&self, id: &IdentifierPrefix) -> Result<Option<Vec<u8>>, Error> {
-        match self.db.get_kel_finalized_events(id) {
-            Some(events) => Ok(Some(
-                events
-                    .map(|event| event.signed_event_message.encode().unwrap_or_default())
-                    .fold(vec![], |mut accum, serialized_event| {
-                        accum.extend(serialized_event);
-                        accum
-                    }),
-            )),
-            None => Ok(None),
-        }
+        let kel = self.get_kel_messages(id)?;
+        Ok(kel.map(|events| {
+            events
+                .into_iter()
+                .map(|event| Message::Notice(event).to_cesr().unwrap_or_default())
+                .fold(vec![], |mut accum, serialized_event| {
+                    accum.extend(serialized_event);
+                    accum
+                })
+        }))
     }
 
     /// Get KERL for Prefix

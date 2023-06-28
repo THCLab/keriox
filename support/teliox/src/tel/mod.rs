@@ -1,20 +1,14 @@
-use std::{path::Path, sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use crate::{
-    database::EventDatabase,
     error::Error,
     event::manager_event::Config,
     event::verifiable_event::VerifiableEvent,
     event::Event,
-    processor::{
-        escrow::MissingIssuerEscrow, notification::TelNotificationBus, storage::TelEventStorage,
-        TelEventProcessor,
-    },
-    state::{vc_state::TelState, ManagerTelState, State},
+    processor::{notification::TelNotificationBus, storage::TelEventStorage, TelEventProcessor},
+    state::{vc_state::TelState, ManagerTelState},
 };
-use keri::{
-    database::escrow::EscrowDb, prefix::IdentifierPrefix, processor::event_storage::EventStorage,
-};
+use keri::{prefix::IdentifierPrefix, processor::event_storage::EventStorage};
 use said::{
     derivation::{HashFunction, HashFunctionCode},
     SelfAddressingIdentifier,

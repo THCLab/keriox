@@ -34,7 +34,6 @@ impl NotificationBus {
     }
 
     pub fn notify(&self, notification: &Notification) -> Result<(), Error> {
-        println!("\nIn kel notification: {:?}", notification);
         if let Some(obs) = self.observers.get(&notification.into()) {
             for esc in obs.iter() {
                 esc.notify(notification, self)?;

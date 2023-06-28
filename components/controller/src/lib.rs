@@ -125,10 +125,12 @@ impl Controller {
             tel_bus.clone(),
         ));
 
-        tel_bus.register_observer(
-            missing_issuer_escrow.clone(),
-            vec![TelNotificationKind::MissingIssuer],
-        );
+        tel_bus
+            .register_observer(
+                missing_issuer_escrow.clone(),
+                vec![TelNotificationKind::MissingIssuer],
+            )
+            .unwrap();
         let tel = Arc::new(Tel::new(
             tel_storage.clone(),
             kel_storage.clone(),
