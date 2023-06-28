@@ -41,14 +41,15 @@ async fn test_tel() -> Result<(), ControllerError> {
     let issuer_prefix = identifier1.id.clone();
 
     // Incept management TEL
-    let tel_root = Builder::new().prefix("tel-test-db").tempdir().unwrap();
-
-    let ixn = identifier1.incept_registry(tel_root.path()).unwrap();
+    let ixn = identifier1.incept_registry().unwrap();
     let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(&ixn).unwrap());
 
     identifier1.finalize_event(&ixn, signature).await.unwrap();
 
     let tel_ref = identifier1.source.tel.clone();
+
+    println!("Id registry: {:?}", identifier1.registry_id);
+
     let mana = tel_ref
         .get_management_tel_state(identifier1.registry_id.as_ref().unwrap())
         .unwrap()
@@ -56,7 +57,7 @@ async fn test_tel() -> Result<(), ControllerError> {
     assert_eq!(mana.sn, 0);
 
     // Issue something (sign and create ixn event to kel)
-    let credential = r#"{"blabla":"bla"}"#;
+    let credential = r#"message"#;
     let vc_hash = HashFunction::from(HashFunctionCode::Blake3_256).derive(credential.as_bytes());
 
     let issuance_ixn = identifier1.issue(credential).unwrap();
@@ -103,6 +104,9 @@ async fn test_tel() -> Result<(), ControllerError> {
         rev,
         Some(teliox::state::vc_state::TelState::Revoked)
     ));
+
+    let kel = controller1.storage.get_kel(&issuer_prefix)?;
+    println!("kel: {}", String::from_utf8(kel.unwrap()).unwrap());
 
     Ok(())
 }

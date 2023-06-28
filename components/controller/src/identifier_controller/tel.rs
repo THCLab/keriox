@@ -16,10 +16,7 @@ impl IdentifierController {
     /// Generate `vcp` event and `ixn` event with  seal to `vcp`. To finalize
     /// the process, `ixn` need to be signed confirmed with `finalize_event`
     /// function.
-    pub fn incept_registry(
-        &mut self,
-        tel_db_path: impl AsRef<Path>,
-    ) -> Result<Vec<u8>, ControllerError> {
+    pub fn incept_registry(&mut self) -> Result<Vec<u8>, ControllerError> {
         // Create tel
         let tel = self.source.tel.clone();
 

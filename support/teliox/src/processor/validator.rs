@@ -99,4 +99,10 @@ impl TelEventValidator {
 
         Ok(())
     }
+    pub fn validate(&self, verifiable_event: VerifiableEvent) -> Result<(), Error> {
+        match &verifiable_event.event {
+            Event::Management(man) => self.validate_management(man, &verifiable_event.seal),
+            Event::Vc(vc) => self.validate_vc(vc, &verifiable_event.seal),
+        }
+    }
 }

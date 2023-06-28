@@ -43,7 +43,7 @@ impl TelEventProcessor {
         observer: Arc<dyn TelNotifier + Send + Sync>,
         notifications: Vec<TelNotificationKind>,
     ) -> Result<(), Error> {
-        self.publisher.register_observer(observer, notifications);
+        self.publisher.register_observer(observer, notifications)?;
         Ok(())
     }
 
@@ -63,12 +63,6 @@ impl TelEventProcessor {
                     Ok(())
                 }
                 Err(e) => match e {
-                    Error::DynError(_) => todo!(),
-                    Error::KeriError(_) => todo!(),
-                    Error::SledError(_) => todo!(),
-                    Error::SledTablesError(_) => todo!(),
-                    Error::Generic(_) => todo!(),
-                    Error::VersionError(_) => todo!(),
                     Error::MissingSealError => todo!(),
                     Error::OutOfOrderError => {
                         self.publisher.notify(&TelNotification::OutOfOrder(event))
@@ -81,6 +75,7 @@ impl TelEventProcessor {
                         .publisher
                         .notify(&TelNotification::MissingRegistry(event)),
                     Error::UnknownIdentifierError => todo!(),
+                    _ => todo!(),
                 },
             },
             Event::Vc(ref vc_ev) => match validator.validate_vc(&vc_ev, &event.seal) {
@@ -105,6 +100,7 @@ mod tests {
     use said::derivation::{HashFunction, HashFunctionCode};
 
     use crate::{
+        database::EventDatabase,
         error::Error,
         event::verifiable_event::VerifiableEvent,
         processor::{TelEventProcessor, TelEventStorage},
@@ -121,9 +117,12 @@ mod tests {
     //         let root = Builder::new().prefix("test-db").tempdir().unwrap();
     //         let root1 = Builder::new().prefix("test-db-1").tempdir().unwrap();
     //         fs::create_dir_all(root.path()).unwrap();
-    //         let db = Arc::new(crate::database::EventDatabase::new(root.path()).unwrap());
+    //         let db = Arc::new(EventDatabase::new(root.path()).unwrap());
     //         let db_escrow = Arc::new(EscrowDb::new(root1.path()).unwrap());
-    //         let processor = TelEventProcessor{database: TelEventDatabase::new(db, db_escrow)};
+    //         // let processor = TelEventProcessor{database: TelEventDatabase::new(db, db_escrow)};
+
+    //         let issuer_kel = r#"{"v":"KERI10JSON00012b_","t":"icp","d":"ENQCCkuoGcP7X2wIaaNtOBugmewpEIVKCnMCxuuHv9Mx","i":"ENQCCkuoGcP7X2wIaaNtOBugmewpEIVKCnMCxuuHv9Mx","s":"0","kt":"1","k":["DE_9BBSdeKq9TxMygpjRgizUtNkTf3Hbc-z5H6csg9bj"],"nt":"1","n":["EEBjivdG_HKByoApnqsLTvnl0BxkBfdTSvzvLucAHalD"],"bt":"0","b":[],"c":[],"a":[]}-AABAAB9Px51I-suu9HFecdNzvd89ZbL9RTLL6MursUXkKRVfbdq_qHXAK5NAi4cIaxWAo_q4I6Gs866uxqGBJ7-ZkoC{"v":"KERI10JSON00013a_","t":"ixn","d":"EGFRe_ommqsDPoDXTyKI1Byd6en6ttshbUElNHfrqnKB","i":"ENQCCkuoGcP7X2wIaaNtOBugmewpEIVKCnMCxuuHv9Mx","s":"1","p":"ENQCCkuoGcP7X2wIaaNtOBugmewpEIVKCnMCxuuHv9Mx","a":[,{"i""EIq-SpOahbwHdmT1JGCryYy4aytMW1hg0tW72xMnbpaQ"},{"s""0"},{"d""EAYFzx6f9juc8IOlwDoeKhQRa2ohuZKvnHzZiAQu2Bq8"}]}-AABAADbC12olcP0DQ-CjRHN5OBrD8G4NIF-dXfZOXb6L3ABaD7SRWVK5ZqJRGSMwxIkU52fAMGoopmX-yY4kVEDhCsJ{"v":"KERI10JSON00013a_","t":"ixn","d":"EDBzF6jdOEmN-tsjnZgm0GSY3sBO4sUQzzeMhIQoPpEP","i":"ENQCCkuoGcP7X2wIaaNtOBugmewpEIVKCnMCxuuHv9Mx","s":"2","p":"EGFRe_ommqsDPoDXTyKI1Byd6en6ttshbUElNHfrqnKB","a":[,{"i""EEvXZtq623byRrE7h34J7sosXnSlXT5oKMuvntyqTgVa"},{"s""0"},{"d""EPD4Y0oAoOlxUPQWCVX8uaagbyW5XSlwqQ0jEpbXkebX"}]}-AABAABkE6y8Q5oSukj7T57M-sDKQJS4EJOsTAVM6hChU6zK-_HFEpqDTw7yfXN0BZSYlo0IDxV3cHw6g3X1bbj6-KAJ{"v":"KERI10JSON00013a_","t":"ixn","d":"EKWPbXD2A-yH8odXodyDKPknSWfb6QK9xHWCc8YNkLZ_","i":"ENQCCkuoGcP7X2wIaaNtOBugmewpEIVKCnMCxuuHv9Mx","s":"3","p":"EDBzF6jdOEmN-tsjnZgm0GSY3sBO4sUQzzeMhIQoPpEP","a":[,{"i""EEvXZtq623byRrE7h34J7sosXnSlXT5oKMuvntyqTgVa"},{"s""1"},{"d""EDoIHS8amh05lEsJHR0cFpiYNlkmnicngty-FyDFHL4p"}]}-AABAAC-vUdtgN3XVa2wp3ECPxJ3D--9rFIjNBQNd_giejDtZWcw9w2eYGOUOH20HyO5mpk-m2j9eGztpaOuWbfUNEEN"#;
+    //         let processor = TelEventProcessor::new(kel_reference, tel_reference, tel_publisher); // TelEventProcessor{database: TelEventDatabase::new(db, db_escrow)};
 
     //         // Setup test data.
     //         let message = "some message";

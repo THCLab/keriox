@@ -85,3 +85,53 @@ impl ManagerTelState {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+
+    use keri::prefix::IdentifierPrefix;
+
+    use crate::{error::Error, event::Event, state::ManagerTelState, tel::event_generator};
+
+    #[test]
+    pub fn test_management_tel() -> Result<(), Error> {
+        // Test if generated event sequence matches
+        let mut state = ManagerTelState::default();
+        let issuer_prefix: IdentifierPrefix = "DpE03it33djytuVvXhSbZdEw0lx7Xa-olrlUUSH2Ykvc"
+            .parse()
+            .unwrap();
+
+        let vcp = event_generator::make_inception_event(
+            issuer_prefix.clone(),
+            vec![],
+            0,
+            vec![],
+            None,
+            None,
+        )?;
+        if let Event::Management(event) = &vcp {
+            state = state.apply(event)?;
+        }
+
+        assert_eq!(state.sn, 0);
+        assert_eq!(state.issuer, issuer_prefix);
+        assert_eq!(state.prefix, vcp.get_prefix());
+        assert_eq!(state.last, vcp.get_digest()?);
+
+        let backers_to_add = vec!["EJJR2nmwyYAfSVPzhzS6b5CMZAoTNZH3ULvaU6Z-i0d8"
+            .parse()
+            .unwrap()];
+
+        let rct =
+            event_generator::make_rotation_event(&state, &backers_to_add, &vec![], None, None)?;
+        if let Event::Management(event) = &rct {
+            state = state.apply(event)?;
+        }
+        assert_eq!(state.issuer, issuer_prefix);
+        assert_eq!(state.sn, 1);
+        assert_eq!(state.prefix, rct.get_prefix());
+        assert_eq!(state.last, rct.get_digest()?);
+
+        Ok(())
+    }
+}

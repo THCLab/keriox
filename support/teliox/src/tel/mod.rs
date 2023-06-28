@@ -29,16 +29,6 @@ pub struct Tel {
 }
 
 impl Tel {
-    // pub fn new_with_default_escrow(db: Arc<EventDatabase>, kel_reference: Arc<EventStorage>) -> Self {
-
-    //     let nb = TelNotificationBus::new();
-    //     let esc  =  Arc::new(EscrowDb::new(&Path::new("./escrow")).unwrap());
-    //     let missing_issuer_escrow = MissingIssuerEscrow::new(db, esc, Duration::from_secs(100), kel_reference, Some(nb));
-    //     nb.register_observer(escrow, notification)
-    //     Tel::new(db, kel_reference, publisher)
-
-    // }
-
     pub fn new(
         tel_reference: Arc<TelEventStorage>,
         kel_reference: Arc<EventStorage>,
@@ -158,65 +148,5 @@ impl Tel {
         self.processor
             .tel_reference
             .compute_management_tel_state(&id)
-    }
-}
-#[cfg(test)]
-mod tests {
-    use std::{fs, sync::Arc};
-
-    use keri::{
-        database::{escrow::EscrowDb, SledEventDatabase},
-        processor::event_storage::EventStorage,
-    };
-
-    use crate::{
-        error::Error, event::verifiable_event::VerifiableEvent,
-        processor::storage::TelEventStorage, seal::EventSourceSeal, state::State, tel::Tel,
-    };
-
-    #[test]
-    pub fn test_management_tel() -> Result<(), Error> {
-        use tempfile::Builder;
-        let root = Builder::new().prefix("test-db1").tempdir().unwrap();
-        std::fs::create_dir_all(root.path()).unwrap();
-        let db_controller = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-        let kel_reference = Arc::new(EventStorage::new(db_controller));
-
-        let tel_root = Builder::new().prefix("tel-test-db").tempdir().unwrap();
-        let tel_root_db = Builder::new().prefix("tel-test-db").tempdir().unwrap();
-        fs::create_dir_all(tel_root.path()).unwrap();
-        let tel_db = Arc::new(crate::database::EventDatabase::new(tel_root.path()).unwrap());
-        let tel_reference = Arc::new(TelEventStorage::new(tel_db));
-        // let tel_db_escrow = Arc::new(EscrowDb::new(tel_root.path()).unwrap());
-        let issuer_prefix = "DpE03it33djytuVvXhSbZdEw0lx7Xa-olrlUUSH2Ykvc"
-            .parse()
-            .unwrap();
-
-        // Create tel
-        let mut tel = Tel::new(tel_reference, kel_reference, None);
-        let dummy_source_seal = EventSourceSeal {
-            sn: 1,
-            digest: "EJJR2nmwyYAfSVPzhzS6b5CMZAoTNZH3ULvaU6Z-i0d8"
-                .parse()
-                .unwrap(),
-        };
-
-        let vcp = tel.make_inception_event(issuer_prefix, vec![], 0, vec![])?;
-        let registry_id = vcp.get_prefix();
-        let verifiable_vcp = VerifiableEvent::new(vcp.clone(), dummy_source_seal.clone().into());
-        let processing_output = tel.process(verifiable_vcp.clone());
-        assert!(processing_output.is_ok());
-
-        let backers_to_add = vec!["EJJR2nmwyYAfSVPzhzS6b5CMZAoTNZH3ULvaU6Z-i0d8"
-            .parse()
-            .unwrap()];
-        let rcp = tel.make_rotation_event(&registry_id, &backers_to_add, &vec![])?;
-        let verifiable_rcp = VerifiableEvent::new(rcp.clone(), dummy_source_seal.into());
-        let processing_output = tel.process(verifiable_rcp.clone());
-        assert!(processing_output.is_ok());
-        let state = tel.get_management_tel_state(&registry_id)?.unwrap();
-        assert_eq!(state.backers, Some(backers_to_add));
-
-        Ok(())
     }
 }
