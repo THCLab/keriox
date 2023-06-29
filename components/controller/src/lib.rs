@@ -43,8 +43,8 @@ use keri::{
     transport::Transport,
 };
 use teliox::database::EventDatabase;
-use teliox::processor::escrow::MissingIssuerEscrow;
-use teliox::processor::notification::{TelNotification, TelNotificationBus, TelNotificationKind};
+use teliox::processor::escrow::missing_issuer::MissingIssuerEscrow;
+use teliox::processor::notification::{TelNotificationBus, TelNotificationKind};
 use teliox::processor::storage::TelEventStorage;
 use teliox::tel::Tel;
 
