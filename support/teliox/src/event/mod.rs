@@ -10,6 +10,7 @@ pub mod vc_event;
 pub mod verifiable_event;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(untagged)]
 pub enum Event {
     Management(ManagerTelEventMessage),
     Vc(VCEventMessage),
@@ -34,6 +35,13 @@ impl Event {
             Event::Management(man) => man.data.sn,
             Event::Vc(ev) => ev.data.data.sn,
         }
+    }
+
+    pub fn get_registry_id(&self) -> Result<IdentifierPrefix, Error> {
+        Ok(match &self {
+            Event::Management(ref man) => man.data.prefix.clone(),
+            Event::Vc(ref vc) => vc.data.data.registry_id()?,
+        })
     }
 
     pub fn serialize(&self) -> Result<Vec<u8>, Error> {

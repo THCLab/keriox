@@ -1,5 +1,3 @@
-use base64::URL_SAFE;
-use cesrox::primitives::CesrPrimitive;
 use said::SelfAddressingIdentifier;
 use serde::{Deserialize, Serialize};
 
@@ -29,18 +27,10 @@ impl AttachedSourceSeal {
     }
 
     pub fn serialize(&self) -> Result<Vec<u8>, Error> {
-        Ok([
-            "GAB".as_bytes().to_vec(),
-            "0A".as_bytes().to_vec(),
-            num_to_base_64(self.seal.sn)?.as_bytes().to_vec(),
-            self.seal.digest.to_str().as_bytes().to_vec(),
-        ]
-        .concat())
+        let attachment = cesrox::group::Group::SourceSealCouples(vec![(
+            self.seal.sn,
+            self.seal.digest.clone().into(),
+        )]);
+        Ok(attachment.to_cesr_str().as_bytes().to_vec())
     }
-}
-
-fn num_to_base_64(sn: u64) -> Result<String, Error> {
-    let mut tmp = vec![0, 0, 0, 0, 0, 0, 0, 0];
-    tmp.extend(u64::to_be_bytes(sn).to_vec());
-    Ok((base64::encode_config(tmp, URL_SAFE)[..22]).to_string())
 }

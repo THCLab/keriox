@@ -132,7 +132,16 @@ impl Tel {
         &self,
         vc_hash: &SelfAddressingIdentifier,
     ) -> Result<Vec<VerifiableEvent>, Error> {
-        self.processor.tel_reference.get_events(vc_hash)
+        let vc_events = self.processor.tel_reference.get_events(vc_hash)?;
+        let registry_id = vc_events[0].event.get_registry_id()?;
+        Ok(self
+            .processor
+            .tel_reference
+            .db
+            .get_management_events(&registry_id)
+            .unwrap()
+            .chain(vc_events.into_iter())
+            .collect::<Vec<_>>())
     }
 
     pub fn get_management_tel_state(

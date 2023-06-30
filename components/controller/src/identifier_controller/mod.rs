@@ -1,13 +1,10 @@
 use std::{
     collections::{HashMap, HashSet},
-    path::PathBuf,
     sync::Arc,
-    time::Duration,
 };
 pub mod signing;
 pub mod tel;
 
-use async_std::path::Path;
 use keri::{
     actor::{
         event_generator,
@@ -15,7 +12,6 @@ use keri::{
         simple_controller::PossibleResponse,
         MaterialPath,
     },
-    database::escrow::EscrowDb,
     event::{
         event_data::EventData,
         sections::{

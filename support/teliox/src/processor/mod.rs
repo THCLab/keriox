@@ -81,14 +81,21 @@ impl TelEventProcessor {
                 Ok(_) => {
                     self.tel_reference
                         .db
-                        .add_new_event(event, &vc_ev.data.data.prefix)
+                        .add_new_event(event.clone(), &vc_ev.data.data.prefix)
                         .unwrap();
-                    Ok(())
+                    self.publisher
+                        .notify(&TelNotification::TelEventAdded(event.event))
                 }
                 Err(Error::MissingIssuerEventError) => self
                     .publisher
                     .notify(&TelNotification::MissingIssuer(event)),
-                Err(_) => todo!(),
+                Err(Error::MissingRegistryError) => self
+                    .publisher
+                    .notify(&TelNotification::MissingRegistry(event)),
+                Err(Error::OutOfOrderError) => {
+                    self.publisher.notify(&TelNotification::OutOfOrder(event))
+                }
+                Err(e) => Err(e),
             },
         }
     }

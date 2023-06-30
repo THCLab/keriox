@@ -1,12 +1,7 @@
-use std::sync::Arc;
-
-use std::path::Path;
-
 use keri::actor::prelude::{HashFunctionCode, SelfAddressingIdentifier};
 use keri::event::sections::seal::{EventSeal, Seal};
 use teliox::event::verifiable_event::VerifiableEvent;
 use teliox::seal::{AttachedSourceSeal, EventSourceSeal};
-use teliox::tel::Tel;
 
 use crate::error::ControllerError;
 

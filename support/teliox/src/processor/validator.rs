@@ -117,7 +117,13 @@ impl TelEventValidator {
         vc_event: &VCEventMessage,
         seal: &AttachedSourceSeal,
     ) -> Result<(), Error> {
-        self.check_kel_event(seal, &vc_event.data.data.prefix, vc_event.digest().unwrap())?;
+        let registry_id = vc_event.data.data.registry_id()?;
+        let issuer_id = self
+            .db
+            .compute_management_tel_state(&registry_id)?
+            .ok_or(Error::MissingRegistryError)?
+            .issuer;
+        self.check_kel_event(seal, &issuer_id, vc_event.digest().unwrap())?;
         self.db
             .compute_vc_state(&vc_event.data.data.prefix)?
             .unwrap_or_default()
@@ -125,10 +131,10 @@ impl TelEventValidator {
 
         Ok(())
     }
-    pub fn validate(&self, verifiable_event: VerifiableEvent) -> Result<(), Error> {
-        match &verifiable_event.event {
-            Event::Management(man) => self.validate_management(man, &verifiable_event.seal),
-            Event::Vc(vc) => self.validate_vc(vc, &verifiable_event.seal),
+    pub fn validate(&self, verifiable_event: &VerifiableEvent) -> Result<(), Error> {
+        match verifiable_event.event {
+            Event::Management(ref man) => self.validate_management(man, &verifiable_event.seal),
+            Event::Vc(ref vc) => self.validate_vc(vc, &verifiable_event.seal),
         }
     }
 }
