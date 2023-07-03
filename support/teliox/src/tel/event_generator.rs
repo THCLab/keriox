@@ -6,7 +6,7 @@ use crate::{
     error::Error,
     event::{
         manager_event::{Config, Inc, ManagerEventType, ManagerTelEvent, Rot},
-        vc_event::{Issuance, Revocation, VCEvent, VCEventType, SimpleIssuance, SimpleRevocation},
+        vc_event::{Issuance, Revocation, SimpleIssuance, SimpleRevocation, VCEvent, VCEventType},
         Event,
     },
     state::ManagerTelState,
@@ -75,14 +75,13 @@ pub fn make_simple_issuance_event(
     derivation: Option<&HashFunctionCode>,
     serialization_format: Option<&SerializationFormats>,
 ) -> Result<Event, Error> {
-    let iss = VCEventType::Iss(SimpleIssuance { registry_id  } );
+    let iss = VCEventType::Iss(SimpleIssuance { registry_id });
     let vc_prefix = IdentifierPrefix::SelfAddressing(vc_hash);
     Ok(Event::Vc(VCEvent::new(vc_prefix, 0, iss).to_message(
         *serialization_format.unwrap_or(&SerializationFormats::JSON),
         derivation.unwrap_or(&HashFunctionCode::Blake3_256).clone(),
     )?))
 }
-
 
 pub fn make_issuance_event(
     state: &ManagerTelState,
@@ -103,7 +102,6 @@ pub fn make_issuance_event(
     )?))
 }
 
-
 pub fn make_simple_revoke_event(
     vc_hash: &SelfAddressingIdentifier,
     last_vc_event_hash: SelfAddressingIdentifier,
@@ -111,7 +109,10 @@ pub fn make_simple_revoke_event(
     derivation: Option<&HashFunctionCode>,
     serialization_format: Option<&SerializationFormats>,
 ) -> Result<Event, Error> {
-    let rev = VCEventType::Rev(SimpleRevocation { registry_id: state.prefix.clone(), prev_event_hash: last_vc_event_hash });
+    let rev = VCEventType::Rev(SimpleRevocation {
+        registry_id: state.prefix.clone(),
+        prev_event_hash: last_vc_event_hash,
+    });
     let vc_prefix = IdentifierPrefix::SelfAddressing(vc_hash.to_owned());
 
     Ok(Event::Vc(

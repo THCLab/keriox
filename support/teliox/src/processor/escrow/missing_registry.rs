@@ -44,21 +44,19 @@ impl TelNotifier for MissingRegistryEscrow {
         notification: &TelNotification,
         bus: &TelNotificationBus,
     ) -> Result<(), Error> {
-        println!("\nMissing Registry notification: {:?}", notification);
         match notification {
-            TelNotification::MissingIssuer(_) => todo!(),
-            TelNotification::OutOfOrder(_signed_event) => todo!(),
             TelNotification::MissingRegistry(signed_event) => {
                 let registry_id = signed_event.event.get_registry_id()?;
                 self.escrowed_missing_registry
                     .add(&registry_id, signed_event.clone())
-                    .unwrap();
+                    .map_err(|_e| Error::EscrowDatabaseError)?;
                 Ok(())
             }
             TelNotification::TelEventAdded(event) => {
                 let reg_id = event.get_registry_id()?;
                 self.process_missing_registry(bus, &reg_id)
             }
+            _ => Err(Error::Generic("Wrong notification".into())),
         }
     }
 }
@@ -92,9 +90,7 @@ impl MissingRegistryEscrow {
                         // remove from escrow
                         self.escrowed_missing_registry.remove(id, &event).unwrap();
                     }
-                    Err(e) => {
-                        println!("{}", e.to_string())
-                    } // keep in escrow,
+                    Err(_e) => {} // keep in escrow,
                 }
             }
         };
@@ -111,27 +107,19 @@ mod tests {
         actor::parse_event_stream,
         database::{escrow::EscrowDb, SledEventDatabase},
         prefix::IdentifierPrefix,
-        processor::{
-            basic_processor::BasicProcessor, event_storage::EventStorage,
-            notification::JustNotification, Processor,
-        },
+        processor::{basic_processor::BasicProcessor, event_storage::EventStorage, Processor},
     };
 
     use crate::{
         database::EventDatabase,
         error::Error,
-        event::{manager_event, verifiable_event::VerifiableEvent},
+        event::verifiable_event::VerifiableEvent,
         processor::{
-            escrow::{
-                missing_issuer::MissingIssuerEscrow, missing_registry::MissingRegistryEscrow,
-                out_of_order::OutOfOrderEscrow,
-            },
-            notification::{TelNotification, TelNotificationBus, TelNotificationKind},
+            escrow::missing_registry::MissingRegistryEscrow,
+            notification::{TelNotificationBus, TelNotificationKind},
             TelEventProcessor, TelEventStorage,
         },
-        seal::EventSourceSeal,
         state::vc_state::TelState,
-        tel::event_generator,
     };
 
     #[test]
@@ -141,7 +129,7 @@ mod tests {
         // Setup issuer key event log. Without ixn events tel event's can't be validated.
         let keri_root = Builder::new().prefix("test-db").tempdir().unwrap();
         let keri_db = Arc::new(SledEventDatabase::new(keri_root.path()).unwrap());
-        let mut keri_processor = BasicProcessor::new(keri_db.clone(), None);
+        let keri_processor = BasicProcessor::new(keri_db.clone(), None);
         let keri_storage = Arc::new(EventStorage::new(keri_db.clone()));
 
         let issuer_kel = r#"{"v":"KERI10JSON00012b_","t":"icp","d":"EPyhGnPEzI1OjbmvNCEsiQfinmwxGcJgyDK_Nx9hnI2l","i":"EPyhGnPEzI1OjbmvNCEsiQfinmwxGcJgyDK_Nx9hnI2l","s":"0","kt":"1","k":["DA11BfhLUT4Jvk-5vpyO3oADg0s09banjPsRTrh71nAq"],"nt":"1","n":["EPMnPDJ3lZ3xIj0YT61461pXa-NLbOsGCTDc5O7cfclL"],"bt":"0","b":[],"c":[],"a":[]}-AABAAAOJey_ELDDtz51QS-dSmh6EBg1S6NJGVweDIuwX6aka4ZjzjooPyz3OtZMMcesPAw2jfoFeg-hUR7iSH4tURkP{"v":"KERI10JSON00013a_","t":"ixn","d":"ENMILl_3-wbKmzOR5IC4rOjwwXE-LFafC34vzduBn2O1","i":"EPyhGnPEzI1OjbmvNCEsiQfinmwxGcJgyDK_Nx9hnI2l","s":"1","p":"EPyhGnPEzI1OjbmvNCEsiQfinmwxGcJgyDK_Nx9hnI2l","a":[{"i":"EPafIvNeW6xYZZhmXBO3hc3GtCHv-8jDgdZsKAFffhLN","s":"0","d":"EJPLd0ZMdbusC-nEQgXfVDcNWPkaZfhPAYH43ZqIrOOA"}]}-AABAABkcHE1DAkNFg7s8oRbtwx3ogkjhawBkKLL8KEZGRDh0lUKO9lx_zhs81NDWp5bfH26yExwRoD0bEdRIoolFt4L{"v":"KERI10JSON00013a_","t":"ixn","d":"EPBB-kmu3NQkuDUijczDscu6SMkOq_XznhufG2DFiveh","i":"EPyhGnPEzI1OjbmvNCEsiQfinmwxGcJgyDK_Nx9hnI2l","s":"2","p":"ENMILl_3-wbKmzOR5IC4rOjwwXE-LFafC34vzduBn2O1","a":[{"i":"EEvXZtq623byRrE7h34J7sosXnSlXT5oKMuvntyqTgVa","s":"0","d":"EH--8AOVXFyZ5HdshHVUjYIgrxqIRczzzbTZiZRzl6v8"}]}-AABAADPWrG2rkAJf0V1LoxMToz0ewXc6SiSTutM0CbMrVWNuoPJwc-2KrltNDRDAzCoJMlX23_l_vkpvOxb0_AnNtoC{"v":"KERI10JSON00013a_","t":"ixn","d":"EKtt7vosEnv-Y0QVRfZq5HFmRZ1e_l5NeJq-zq_wd2ht","i":"EPyhGnPEzI1OjbmvNCEsiQfinmwxGcJgyDK_Nx9hnI2l","s":"3","p":"EPBB-kmu3NQkuDUijczDscu6SMkOq_XznhufG2DFiveh","a":[{"i":"EEvXZtq623byRrE7h34J7sosXnSlXT5oKMuvntyqTgVa","s":"1","d":"EBr1rgUjzKeGKRijXUkc-Sx_LzB1HUxyd3qB6zc8Jaga"}]}-AABAADlK0LDw76SctNkrLZmcvncZ5IumaZi5cL0nPUZud5apxmTgJnSQ5SSTA7D4DJ5q7SG-5IL8uzYS4SMaT-uk8IG"#;

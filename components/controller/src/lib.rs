@@ -57,7 +57,6 @@ pub struct Controller {
     transport: Box<dyn Transport + Send + Sync>,
 
     pub tel: Arc<Tel>,
-    // pub missing_issuer_escrow: Arc<MissingIssuerEscrow>,
 }
 
 impl Controller {
@@ -148,7 +147,6 @@ impl Controller {
             partially_witnessed_escrow,
             transport,
             tel: tel,
-            // missing_issuer_escrow: mie,
         };
 
         if !initial_oobis.is_empty() {
