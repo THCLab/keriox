@@ -42,8 +42,7 @@ use keri::{
     transport::Transport,
 };
 use teliox::database::EventDatabase;
-use teliox::processor::escrow::missing_issuer::MissingIssuerEscrow;
-use teliox::processor::notification::{TelNotificationBus, TelNotificationKind};
+use teliox::processor::escrow::default_escrow_bus as tel_escrow_bus;
 use teliox::processor::storage::TelEventStorage;
 use teliox::tel::Tel;
 
@@ -113,22 +112,8 @@ impl Controller {
             Arc::new(EscrowDb::new(&path)?)
         };
         let tel_storage = Arc::new(TelEventStorage::new(tel_events_db));
-        let tel_bus = TelNotificationBus::new();
-
-        let missing_issuer_escrow = Arc::new(MissingIssuerEscrow::new(
-            tel_storage.clone(),
-            tel_escrow_db,
-            Duration::from_secs(100),
-            kel_storage.clone(),
-            tel_bus.clone(),
-        ));
-
-        tel_bus
-            .register_observer(
-                missing_issuer_escrow.clone(),
-                vec![TelNotificationKind::MissingIssuer],
-            )
-            .unwrap();
+        let (tel_bus, missing_issuer, _out_of_order, _missing_registy) = tel_escrow_bus(tel_storage.clone(), kel_storage.clone(), tel_escrow_db.clone()).unwrap();
+       
         let tel = Arc::new(Tel::new(
             tel_storage.clone(),
             kel_storage.clone(),
@@ -136,7 +121,7 @@ impl Controller {
         ));
 
         notification_bus.register_observer(
-            missing_issuer_escrow.clone(),
+            missing_issuer.clone(),
             vec![JustNotification::KeyEventAdded],
         );
 

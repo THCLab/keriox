@@ -28,6 +28,7 @@ use keri::{
     },
     signer::Signer,
 };
+use teliox::{database::EventDatabase, processor::{storage::TelEventStorage, escrow::default_escrow_bus}, tel::Tel};
 use url::Url;
 
 use crate::witness_processor::{WitnessEscrowConfig, WitnessProcessor};
@@ -107,10 +108,11 @@ pub struct Witness {
     pub address: Url,
     pub prefix: BasicPrefix,
     pub processor: WitnessProcessor,
-    pub event_storage: EventStorage,
+    pub event_storage: Arc<EventStorage>,
     pub oobi_manager: OobiManager,
     pub signer: Arc<Signer>,
     pub receipt_generator: Arc<WitnessReceiptGenerator>,
+    pub tel: Arc<Tel>,
 }
 
 impl Witness {
@@ -125,6 +127,7 @@ impl Witness {
         let mut events_path = PathBuf::new();
         events_path.push(event_path);
         let mut escrow_path = events_path.clone();
+        let mut tel_path = events_path.clone();
 
         events_path.push("events");
         escrow_path.push("escrow");
@@ -133,7 +136,7 @@ impl Witness {
         let db = Arc::new(SledEventDatabase::new(events_path.as_path())?);
         let escrow_db = Arc::new(EscrowDb::new(escrow_path.as_path())?);
         let mut witness_processor = WitnessProcessor::new(db.clone(), escrow_db, escrow_config);
-        let event_storage = EventStorage::new(db.clone());
+        let event_storage = Arc::new(EventStorage::new(db.clone()));
 
         let receipt_generator = Arc::new(WitnessReceiptGenerator::new(signer.clone(), db));
         witness_processor.register_observer(
@@ -143,6 +146,29 @@ impl Witness {
                 JustNotification::PartiallyWitnessed,
             ],
         )?;
+
+        // Initiate tel and it's escrows
+        let tel_events_db = {
+            tel_path.push("tel");
+            tel_path.push("events");
+            Arc::new(EventDatabase::new(&tel_path).unwrap())
+        };
+
+        let tel_escrow_db = {
+            let mut tel_path = events_path.clone();
+            tel_path.push("tel");
+            tel_path.push("escrow");
+            Arc::new(EscrowDb::new(&tel_path)?)
+        };
+        let tel_storage = Arc::new(TelEventStorage::new(tel_events_db));
+        let (tel_bus, missing_issuer, _out_of_order, _missing_registy) = default_escrow_bus(tel_storage.clone(), event_storage.clone(), tel_escrow_db.clone()).unwrap();
+       
+        let tel = Arc::new(Tel::new(
+            tel_storage.clone(),
+            event_storage.clone(),
+            Some(tel_bus),
+        ));
+
         Ok(Self {
             address,
             prefix,
@@ -151,6 +177,7 @@ impl Witness {
             event_storage,
             receipt_generator,
             oobi_manager: OobiManager::new(oobi_path),
+            tel
         })
     }
 
