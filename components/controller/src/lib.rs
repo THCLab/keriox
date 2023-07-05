@@ -112,8 +112,13 @@ impl Controller {
             Arc::new(EscrowDb::new(&path)?)
         };
         let tel_storage = Arc::new(TelEventStorage::new(tel_events_db));
-        let (tel_bus, missing_issuer, _out_of_order, _missing_registy) = tel_escrow_bus(tel_storage.clone(), kel_storage.clone(), tel_escrow_db.clone()).unwrap();
-       
+        let (tel_bus, missing_issuer, _out_of_order, _missing_registy) = tel_escrow_bus(
+            tel_storage.clone(),
+            kel_storage.clone(),
+            tel_escrow_db.clone(),
+        )
+        .unwrap();
+
         let tel = Arc::new(Tel::new(
             tel_storage.clone(),
             kel_storage.clone(),

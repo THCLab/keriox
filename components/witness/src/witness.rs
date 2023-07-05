@@ -28,7 +28,11 @@ use keri::{
     },
     signer::Signer,
 };
-use teliox::{database::EventDatabase, processor::{storage::TelEventStorage, escrow::default_escrow_bus}, tel::Tel};
+use teliox::{
+    database::EventDatabase,
+    processor::{escrow::default_escrow_bus, storage::TelEventStorage},
+    tel::Tel,
+};
 use url::Url;
 
 use crate::witness_processor::{WitnessEscrowConfig, WitnessProcessor};
@@ -161,8 +165,13 @@ impl Witness {
             Arc::new(EscrowDb::new(&tel_path)?)
         };
         let tel_storage = Arc::new(TelEventStorage::new(tel_events_db));
-        let (tel_bus, missing_issuer, _out_of_order, _missing_registy) = default_escrow_bus(tel_storage.clone(), event_storage.clone(), tel_escrow_db.clone()).unwrap();
-       
+        let (tel_bus, _missing_issuer, _out_of_order, _missing_registy) = default_escrow_bus(
+            tel_storage.clone(),
+            event_storage.clone(),
+            tel_escrow_db.clone(),
+        )
+        .unwrap();
+
         let tel = Arc::new(Tel::new(
             tel_storage.clone(),
             event_storage.clone(),
@@ -177,7 +186,7 @@ impl Witness {
             event_storage,
             receipt_generator,
             oobi_manager: OobiManager::new(oobi_path),
-            tel
+            tel,
         })
     }
 
@@ -357,7 +366,7 @@ impl Witness {
     }
 
     pub fn get_mailbox_messages(&self, id: &IdentifierPrefix) -> Result<MailboxResponse, Error> {
-        self.event_storage.get_mailbox_messages(QueryArgsMbx {
+        self.event_storage.get_mailbox_messages(&QueryArgsMbx {
             pre: IdentifierPrefix::Basic(self.prefix.clone()),
             i: id.clone(),
             src: IdentifierPrefix::Basic(self.prefix.clone()),

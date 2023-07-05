@@ -198,7 +198,7 @@ impl WatcherData {
             });
         }
 
-        match &qry.query.data.data.route {
+        match &qry.query.get_route() {
             QueryRoute::Ksn { .. } | QueryRoute::Log { .. } => {
                 // Update latest state for prefix
                 self.query_state(qry.query.get_prefix()).await?;
@@ -256,7 +256,7 @@ impl WatcherData {
         let sigs = SelfSigningPrefix::Ed25519Sha512(self.signer.sign(qry.query.encode()?)?);
         let qry = SignedQuery::new_nontrans(qry.query.clone(), self.prefix.clone(), sigs);
 
-        let wit_id = self.get_witness_for_prefix(qry.query.get_prefix())?;
+        let wit_id = self.get_witness_for_prefix(qry.query.data.data.get_prefix())?;
 
         // Send query to witness
         let resp = self

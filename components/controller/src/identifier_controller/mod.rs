@@ -594,7 +594,7 @@ impl IdentifierController {
         let self_id = self.id.clone();
         let mut actions = Vec::new();
         for (qry, sig) in queries {
-            let (recipient, about_who, from_who) = match &qry.data.data.route {
+            let (recipient, about_who, from_who) = match qry.get_route() {
                 QueryRoute::Log {
                     reply_route: _,
                     args,

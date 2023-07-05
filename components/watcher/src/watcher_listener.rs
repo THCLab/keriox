@@ -290,7 +290,7 @@ mod test {
                 .await
                 .map_err(|err| err.0)?;
             let resp = resp.into_body().try_into_bytes().unwrap();
-            match query.query.data.data.route {
+            match query.query.get_route() {
                 QueryRoute::Ksn { .. } => {
                     let resp = parse_op_stream(&resp).unwrap();
                     let resp = resp.into_iter().next().unwrap();
