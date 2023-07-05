@@ -33,7 +33,9 @@ use keri::{
     oobi::{LocationScheme, Role, Scheme},
     prefix::{BasicPrefix, CesrPrimitive, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
     query::{
-        query_event::{QueryArgs, QueryArgsMbx, QueryEvent, QueryRoute, QueryTopics, SignedQuery},
+        query_event::{
+            QueryArgs, QueryArgsMbx, QueryEvent, QueryRoute, QueryTopics, SignedKelQuery,
+        },
         reply_event::ReplyRoute,
     },
 };
@@ -626,11 +628,11 @@ impl IdentifierController {
             };
             let query = match &self.id {
                 IdentifierPrefix::Basic(bp) => {
-                    SignedQuery::new_nontrans(qry.clone(), bp.clone(), sig)
+                    SignedKelQuery::new_nontrans(qry.clone(), bp.clone(), sig)
                 }
                 _ => {
                     let signatures = vec![IndexedSignature::new_both_same(sig, 0)];
-                    SignedQuery::new_trans(qry.clone(), self_id.clone(), signatures)
+                    SignedKelQuery::new_trans(qry.clone(), self_id.clone(), signatures)
                 }
             };
             let res = self

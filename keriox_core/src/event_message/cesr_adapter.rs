@@ -26,7 +26,7 @@ use crate::event_message::signed_event_message::Op;
 use super::signature::signatures_into_groups;
 #[cfg(feature = "query")]
 use crate::query::{
-    query_event::{QueryEvent, SignedQuery},
+    query_event::{QueryEvent, SignedKelQuery},
     reply_event::{ReplyEvent, SignedReply},
 };
 
@@ -174,8 +174,8 @@ impl From<SignedReply> for ParsedData {
 }
 
 #[cfg(feature = "query")]
-impl From<SignedQuery> for ParsedData {
-    fn from(ev: SignedQuery) -> Self {
+impl From<SignedKelQuery> for ParsedData {
+    fn from(ev: SignedKelQuery) -> Self {
         let groups = signatures_into_groups(&[ev.signature]);
 
         ParsedData {
@@ -267,7 +267,7 @@ impl TryFrom<ParsedData> for Op {
 }
 
 #[cfg(feature = "query")]
-impl TryFrom<ParsedData> for SignedQuery {
+impl TryFrom<ParsedData> for SignedKelQuery {
     type Error = Error;
 
     fn try_from(value: ParsedData) -> Result<Self, Self::Error> {
@@ -353,7 +353,7 @@ fn signed_query(qry: QueryEvent, mut attachments: Vec<Group>) -> Result<Op, Erro
         .pop()
         .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?;
     let sigs = get_signatures(att)?;
-    Ok(Op::Query(SignedQuery {
+    Ok(Op::Query(SignedKelQuery {
         query: qry,
         // TODO what if more than one?
         signature: sigs.get(0).ok_or(Error::MissingSignatures)?.clone(),

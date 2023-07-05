@@ -313,7 +313,7 @@ impl Witness {
 
     pub fn process_query(
         &self,
-        qry: keri::query::query_event::SignedQuery,
+        qry: keri::query::query_event::SignedKelQuery,
     ) -> Result<Option<PossibleResponse>, ActorError> {
         let response = process_signed_query(qry, &self.event_storage)?;
 

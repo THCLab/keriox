@@ -11,6 +11,7 @@ use crate::{
         EventTypeTag, Typeable,
     },
     prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
+    query::mailbox::{QueryArgsMbx, QueryTopics},
 };
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -46,36 +47,9 @@ impl QueryRoute {
             QueryRoute::Log { ref args, .. } | QueryRoute::Ksn { ref args, .. } => args.i.clone(),
             #[cfg(feature = "mailbox")]
             QueryRoute::Mbx { ref args, .. } => args.i.clone(),
+            // QueryRoute::Tels { reply_route, args } => todo!(),
         }
     }
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct QueryArgsMbx {
-    /// Controller's currently used indentifier
-    pub pre: IdentifierPrefix,
-    /// Types of mail to query and their minimum serial number
-    pub topics: QueryTopics,
-    /// Identifier to be queried
-    pub i: IdentifierPrefix,
-    /// To which witness given query message reply will be sent
-    pub src: IdentifierPrefix,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct QueryTopics {
-    #[serde(rename = "/receipt")]
-    pub receipt: usize,
-    #[serde(rename = "/replay")]
-    pub replay: usize,
-    #[serde(rename = "/reply")]
-    pub reply: usize,
-    #[serde(rename = "/multisig")]
-    pub multisig: usize,
-    #[serde(rename = "/credential")]
-    pub credential: usize,
-    #[serde(rename = "/delegate")]
-    pub delegate: usize,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -115,25 +89,22 @@ impl Typeable for QueryRoute {
     }
 }
 
+pub type SignedKelQuery = SignedQuery<QueryEvent>;
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct SignedQuery {
-    pub query: QueryEvent,
+pub struct SignedQuery<D> {
+    pub query: D,
     pub signature: Signature,
 }
 
-impl SignedQuery {
-    pub fn new_nontrans(
-        query: QueryEvent,
-        signer: BasicPrefix,
-        signature: SelfSigningPrefix,
-    ) -> Self {
+impl<D> SignedQuery<D> {
+    pub fn new_nontrans(query: D, signer: BasicPrefix, signature: SelfSigningPrefix) -> Self {
         let signature =
             Signature::NonTransferable(Nontransferable::Couplet(vec![(signer, signature)]));
         Self { query, signature }
     }
 
     pub fn new_trans(
-        query: QueryEvent,
+        query: D,
         signer_id: IdentifierPrefix,
         signatures: Vec<IndexedSignature>,
     ) -> Self {

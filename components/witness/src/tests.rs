@@ -232,7 +232,7 @@ fn test_qry_rpy() -> Result<(), ActorError> {
     use keri::{
         prefix::IndexedSignature,
         query::{
-            query_event::{QueryArgs, QueryEvent, QueryRoute, SignedQuery},
+            query_event::{QueryArgs, QueryEvent, QueryRoute, SignedKelQuery},
             reply_event::ReplyRoute,
         },
         signer::{KeyManager, Signer},
@@ -339,7 +339,7 @@ fn test_qry_rpy() -> Result<(), ActorError> {
         0,
     );
     // Qry message signed by Bob
-    let query = SignedQuery::new_trans(qry, bob_pref.to_owned(), vec![signature]);
+    let query = SignedKelQuery::new_trans(qry, bob_pref.to_owned(), vec![signature]);
 
     let response = witness.process_query(query)?;
 
@@ -382,7 +382,7 @@ fn test_qry_rpy() -> Result<(), ActorError> {
         0,
     );
     // Qry message signed by Bob
-    let query = SignedQuery::new_trans(qry, bob_pref.to_owned(), vec![signature]);
+    let query = SignedKelQuery::new_trans(qry, bob_pref.to_owned(), vec![signature]);
 
     let response = witness.process_query(query)?;
 

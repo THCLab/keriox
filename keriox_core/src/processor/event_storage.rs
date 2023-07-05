@@ -1,10 +1,9 @@
 use std::sync::Arc;
 
 use super::compute_state;
+use crate::query::mailbox::QueryArgsMbx;
 #[cfg(feature = "query")]
-use crate::query::{
-    key_state_notice::KeyStateNotice, query_event::QueryArgsMbx, reply_event::SignedReply,
-};
+use crate::query::{key_state_notice::KeyStateNotice, reply_event::SignedReply};
 use crate::{
     actor::prelude::Message,
     database::{timestamped::TimestampedSignedEventMessage, SledEventDatabase},

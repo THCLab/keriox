@@ -1,14 +1,16 @@
 use std::sync::Arc;
 
 use keri::prefix::IdentifierPrefix;
-use said::SelfAddressingIdentifier;
 
 use crate::{
     database::EventDatabase,
     error::Error,
     event::{verifiable_event::VerifiableEvent, Event},
+    query::TelQueryRoute,
     state::{vc_state::TelState, ManagerTelState},
 };
+
+use super::ReplyType;
 
 pub struct TelEventStorage {
     pub db: Arc<EventDatabase>,
@@ -71,12 +73,8 @@ impl TelEventStorage {
         }
     }
 
-    pub fn get_events(
-        &self,
-        vc_id: &SelfAddressingIdentifier,
-    ) -> Result<Vec<VerifiableEvent>, Error> {
-        let prefix = IdentifierPrefix::SelfAddressing(vc_id.to_owned());
-        match self.db.get_events(&prefix) {
+    pub fn get_events(&self, vc_id: &IdentifierPrefix) -> Result<Vec<VerifiableEvent>, Error> {
+        match self.db.get_events(&vc_id) {
             Some(events) => Ok(events.collect()),
             None => Ok(vec![]),
         }
@@ -107,6 +105,24 @@ impl TelEventStorage {
             Event::Vc(_vc) => self
                 .db
                 .add_new_event(event.clone(), &event.get_event().get_prefix()),
+        }
+    }
+
+    pub fn process_query(&self, qry: &TelQueryRoute) -> Result<ReplyType, Error> {
+        match qry {
+            TelQueryRoute::Tels { reply_route, args } => {
+                let management_tel = self
+                    .get_management_events(args.ri.as_ref().unwrap())?
+                    .unwrap();
+                let vc_tel = self
+                    .get_events(&args.i.as_ref().unwrap())?
+                    .into_iter()
+                    .map(|event| event.serialize().unwrap())
+                    .flatten();
+                Ok(ReplyType::Tel(
+                    management_tel.into_iter().chain(vc_tel).collect(),
+                ))
+            }
         }
     }
 }

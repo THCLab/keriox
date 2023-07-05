@@ -5,6 +5,7 @@ use keri::processor::event_storage::EventStorage;
 use crate::{
     error::Error,
     event::{verifiable_event::VerifiableEvent, Event},
+    query::SignedTelQuery,
 };
 
 use self::{
@@ -99,4 +100,25 @@ impl TelEventProcessor {
             },
         }
     }
+
+    pub fn process_signed_query(
+        &self,
+        qr: SignedTelQuery,
+        storage: &EventStorage,
+    ) -> Result<ReplyType, Error> {
+        let signature = qr.signature;
+        // check signatures
+        let ver_result = signature.verify(&(qr.query.encode()?), storage)?;
+
+        if !ver_result {
+            return Err(Error::Generic("Wrong query event signature".to_string()));
+        };
+
+        // unpack and check what's inside
+        self.tel_reference.process_query(&qr.query.data.data)
+    }
+}
+
+pub enum ReplyType {
+    Tel(Vec<u8>),
 }

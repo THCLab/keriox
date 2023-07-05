@@ -17,7 +17,7 @@ use crate::{
     query::{
         key_state_notice::KeyStateNotice,
         query_event::QueryRoute,
-        query_event::SignedQuery,
+        query_event::SignedKelQuery,
         reply_event::{ReplyRoute, SignedReply},
         ReplyType,
     },
@@ -29,6 +29,7 @@ use crate::{
 };
 pub use cesrox::cesr_proof::MaterialPath;
 use cesrox::parse_many;
+use std::sync::Arc;
 #[cfg(feature = "query")]
 use version::serialization_info::SerializationFormats;
 
@@ -55,10 +56,10 @@ pub fn parse_op_stream(stream: &[u8]) -> Result<Vec<Op>, Error> {
 }
 
 #[cfg(any(feature = "query", feature = "oobi"))]
-pub fn parse_query_stream(stream: &[u8]) -> Result<Vec<SignedQuery>, Error> {
+pub fn parse_query_stream(stream: &[u8]) -> Result<Vec<SignedKelQuery>, Error> {
     let (_rest, queries) =
         parse_many(stream).map_err(|e| Error::DeserializeError(e.to_string()))?;
-    queries.into_iter().map(SignedQuery::try_from).collect()
+    queries.into_iter().map(SignedKelQuery::try_from).collect()
 }
 
 #[cfg(any(feature = "query", feature = "oobi"))]
@@ -179,7 +180,7 @@ fn process_exn(
 
 #[cfg(feature = "query")]
 pub fn process_signed_query(
-    qr: SignedQuery,
+    qr: SignedKelQuery,
     storage: &EventStorage,
 ) -> Result<ReplyType, SignedQueryError> {
     let signature = qr.signature;

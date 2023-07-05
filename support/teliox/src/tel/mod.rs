@@ -132,7 +132,10 @@ impl Tel {
         &self,
         vc_hash: &SelfAddressingIdentifier,
     ) -> Result<Vec<VerifiableEvent>, Error> {
-        let vc_events = self.processor.tel_reference.get_events(vc_hash)?;
+        let vc_events = self
+            .processor
+            .tel_reference
+            .get_events(&IdentifierPrefix::SelfAddressing(vc_hash.clone()))?;
         let registry_id = vc_events[0].event.get_registry_id()?;
         Ok(self
             .processor

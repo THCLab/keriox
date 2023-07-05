@@ -248,7 +248,7 @@ mod test {
         event_message::signed_event_message::{Message, Op},
         oobi::{Oobi, Role},
         prefix::IdentifierPrefix,
-        query::query_event::{QueryRoute, SignedQuery},
+        query::query_event::{QueryRoute, SignedKelQuery},
     };
 
     #[async_trait::async_trait]
@@ -281,7 +281,7 @@ mod test {
 
             Ok(())
         }
-        async fn send_query(&self, query: SignedQuery) -> Result<PossibleResponse, ActorError> {
+        async fn send_query(&self, query: SignedKelQuery) -> Result<PossibleResponse, ActorError> {
             let payload =
                 String::from_utf8(Message::Op(Op::Query(query.clone())).to_cesr().unwrap())
                     .unwrap();

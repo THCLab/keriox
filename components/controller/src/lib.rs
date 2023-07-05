@@ -36,7 +36,7 @@ use keri::{
         Processor,
     },
     query::{
-        query_event::SignedQuery,
+        query_event::SignedKelQuery,
         reply_event::{ReplyEvent, ReplyRoute, SignedReply},
     },
     transport::Transport,
@@ -276,7 +276,7 @@ impl Controller {
         &self,
         id: &IdentifierPrefix,
         scheme: Scheme,
-        query: SignedQuery,
+        query: SignedKelQuery,
     ) -> Result<PossibleResponse, ControllerError> {
         let loc = self
             .get_loc_schemas(id)?

@@ -56,7 +56,7 @@ use crate::oobi::{OobiManager, Role};
 use super::parse_reply_stream;
 #[cfg(feature = "query")]
 use crate::query::{
-    query_event::{QueryArgs, QueryArgsMbx, QueryEvent, QueryRoute, QueryTopics, SignedQuery},
+    query_event::{QueryArgs, QueryEvent, QueryRoute, SignedKelQuery},
     reply_event::SignedReply,
 };
 
@@ -315,7 +315,7 @@ impl<K: KeyManager> SimpleController<K> {
             0,
         );
         // Qry message signed by Bob
-        Ok(Op::Query(SignedQuery::new_trans(
+        Ok(Op::Query(SignedKelQuery::new_trans(
             qry,
             self.prefix().clone(),
             vec![signature],
@@ -689,7 +689,9 @@ impl<K: KeyManager> SimpleController<K> {
     }
 
     #[cfg(feature = "mailbox")]
-    pub fn query_mailbox(&self, witness: &BasicPrefix) -> SignedQuery {
+    pub fn query_mailbox(&self, witness: &BasicPrefix) -> SignedKelQuery {
+        use crate::query::mailbox::{QueryArgsMbx, QueryTopics};
+
         let qry_msg = QueryEvent::new_query(
             QueryRoute::Mbx {
                 args: QueryArgsMbx {
@@ -721,12 +723,14 @@ impl<K: KeyManager> SimpleController<K> {
             SelfSigningPrefix::Ed25519Sha512(signature),
             0,
         )];
-        let mbx_msg = SignedQuery::new_trans(qry_msg, self.prefix.clone().clone(), signatures);
+        let mbx_msg = SignedKelQuery::new_trans(qry_msg, self.prefix.clone().clone(), signatures);
         mbx_msg
     }
 
     #[cfg(feature = "mailbox")]
-    pub fn query_groups_mailbox(&self, witness: &BasicPrefix) -> Vec<SignedQuery> {
+    pub fn query_groups_mailbox(&self, witness: &BasicPrefix) -> Vec<SignedKelQuery> {
+        use crate::query::mailbox::{QueryArgsMbx, QueryTopics};
+
         self.groups
             .iter()
             .map(|id| {
@@ -761,7 +765,7 @@ impl<K: KeyManager> SimpleController<K> {
                     SelfSigningPrefix::Ed25519Sha512(signature),
                     0,
                 )];
-                SignedQuery::new_trans(qry_msg, self.prefix.clone(), signatures)
+                SignedKelQuery::new_trans(qry_msg, self.prefix.clone(), signatures)
             })
             .collect()
     }
