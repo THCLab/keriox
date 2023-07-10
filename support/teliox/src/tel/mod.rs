@@ -108,6 +108,14 @@ impl Tel {
         )
     }
 
+    pub fn parse_and_process_tel_stream(&self, stream: &[u8]) -> Result<(), Error> {
+        let parsed = VerifiableEvent::parse(stream)?;
+        for event in parsed {
+            self.processor.process(event)?;
+        }
+        Ok(())
+    }
+
     // Process verifiable event. It doesn't check if source seal is correct. Just add event to tel.
     pub fn process(&mut self, event: VerifiableEvent) -> Result<(), Error> {
         self.processor.process(event.clone())?;

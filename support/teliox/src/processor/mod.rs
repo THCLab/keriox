@@ -101,14 +101,10 @@ impl TelEventProcessor {
         }
     }
 
-    pub fn process_signed_query(
-        &self,
-        qr: SignedTelQuery,
-        storage: &EventStorage,
-    ) -> Result<ReplyType, Error> {
+    pub fn process_signed_query(&self, qr: SignedTelQuery) -> Result<TelReplyType, Error> {
         let signature = qr.signature;
         // check signatures
-        let ver_result = signature.verify(&(qr.query.encode()?), storage)?;
+        let ver_result = signature.verify(&(qr.query.encode()?), &self.kel_reference)?;
 
         if !ver_result {
             return Err(Error::Generic("Wrong query event signature".to_string()));
@@ -119,6 +115,14 @@ impl TelEventProcessor {
     }
 }
 
-pub enum ReplyType {
+pub enum TelReplyType {
     Tel(Vec<u8>),
+}
+
+impl ToString for TelReplyType {
+    fn to_string(&self) -> String {
+        match self {
+            TelReplyType::Tel(tel) => String::from_utf8(tel.to_vec()).unwrap(),
+        }
+    }
 }

@@ -61,6 +61,10 @@ impl WitnessListener {
                     actix_web::web::post().to(http_handlers::process_query),
                 )
                 .route(
+                    "/query/tel",
+                    actix_web::web::post().to(http_handlers::process_tel_query),
+                )
+                .route(
                     "/register",
                     actix_web::web::post().to(http_handlers::process_reply),
                 )
@@ -287,6 +291,23 @@ pub mod http_handlers {
         println!("\nGot query to process: \n{}", post_data);
         let resp = data
             .parse_and_process_queries(post_data.as_bytes())?
+            .iter()
+            .map(|msg| msg.to_string())
+            .collect::<Vec<_>>()
+            .join("");
+        println!("\nWitness responds with: {}", resp);
+        Ok(HttpResponse::Ok()
+            .content_type(ContentType::plaintext())
+            .body(resp))
+    }
+
+    pub async fn process_tel_query(
+        post_data: String,
+        data: web::Data<Arc<Witness>>,
+    ) -> Result<HttpResponse, ApiError> {
+        println!("\nGot query to process: \n{}", post_data);
+        let resp = data
+            .parse_and_process_tel_queries(post_data.as_bytes())?
             .iter()
             .map(|msg| msg.to_string())
             .collect::<Vec<_>>()

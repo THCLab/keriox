@@ -22,7 +22,7 @@ use keri::{
     prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     processor::notification::{Notification, NotificationBus, Notifier},
     query::{
-        query_event::{QueryArgsMbx, QueryTopics},
+        mailbox::{QueryArgsMbx, QueryTopics},
         reply_event::{ReplyEvent, ReplyRoute, SignedReply},
         ReplyType,
     },
@@ -30,7 +30,8 @@ use keri::{
 };
 use teliox::{
     database::EventDatabase,
-    processor::{escrow::default_escrow_bus, storage::TelEventStorage},
+    event::parse_tel_query_stream,
+    processor::{escrow::default_escrow_bus, storage::TelEventStorage, TelReplyType},
     tel::Tel,
 };
 use url::Url;
@@ -349,6 +350,19 @@ impl Witness {
             .map(|qry| self.process_query(qry))
             .filter_map(Result::transpose)
             .collect()
+    }
+
+    pub fn parse_and_process_tel_queries(
+        &self,
+        input_stream: &[u8],
+    ) -> Result<Vec<TelReplyType>, ActorError> {
+        Ok(parse_tel_query_stream(input_stream)
+            .unwrap()
+            .into_iter()
+            .map(|qry| self.tel.processor.process_signed_query(qry))
+            // .filter_map(Result::ok)
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap())
     }
 
     pub fn parse_and_process_replies(&self, input_stream: &[u8]) -> Result<(), ActorError> {

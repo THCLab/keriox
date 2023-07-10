@@ -19,3 +19,4 @@ cesrox = { git = "https://github.com/THCLab/cesrox", tag = "v0.1.4" }
 [dev-dependencies]
 witness = { path = "../witness" }
 tempfile = { version = "3.1" }
+tokio = { version = "1.29.1", features = ["full"] }

@@ -1,3 +1,4 @@
+use cesrox::{payload::Payload, ParsedData};
 use said::derivation::HashFunctionCode;
 use serde::{Deserialize, Serialize};
 use version::serialization_info::SerializationFormats;
@@ -6,7 +7,7 @@ use crate::{
     error::Error,
     event_message::{
         msg::KeriEvent,
-        signature::{Nontransferable, Signature, SignerData},
+        signature::{Nontransferable, Signature, SignerData, signatures_into_groups},
         timestamped::Timestamped,
         EventTypeTag, Typeable,
     },
@@ -111,6 +112,14 @@ impl<D> SignedQuery<D> {
         let signature =
             Signature::Transferable(SignerData::LastEstablishment(signer_id), signatures);
         Self { query, signature }
+    }
+}
+
+impl<D> SignedQuery<KeriEvent<D>> where D: Clone + Serialize + Typeable<TypeTag = EventTypeTag> {
+    pub fn to_cesr(&self) -> Result<Vec<u8>, Error> {
+        let payload: Payload = self.query.clone().into();
+        let attachments = signatures_into_groups(&[self.signature.clone()]);
+        ParsedData { payload, attachments }.to_cesr().map_err(|e| Error::CesrError)
     }
 }
 

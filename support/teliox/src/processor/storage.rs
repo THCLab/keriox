@@ -10,7 +10,7 @@ use crate::{
     state::{vc_state::TelState, ManagerTelState},
 };
 
-use super::ReplyType;
+use super::TelReplyType;
 
 pub struct TelEventStorage {
     pub db: Arc<EventDatabase>,
@@ -108,7 +108,7 @@ impl TelEventStorage {
         }
     }
 
-    pub fn process_query(&self, qry: &TelQueryRoute) -> Result<ReplyType, Error> {
+    pub fn process_query(&self, qry: &TelQueryRoute) -> Result<TelReplyType, Error> {
         match qry {
             TelQueryRoute::Tels { reply_route, args } => {
                 let management_tel = self
@@ -119,7 +119,7 @@ impl TelEventStorage {
                     .into_iter()
                     .map(|event| event.serialize().unwrap())
                     .flatten();
-                Ok(ReplyType::Tel(
+                Ok(TelReplyType::Tel(
                     management_tel.into_iter().chain(vc_tel).collect(),
                 ))
             }

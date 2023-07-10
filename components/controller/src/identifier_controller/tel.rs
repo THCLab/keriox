@@ -1,6 +1,10 @@
-use keri::actor::prelude::{HashFunctionCode, SelfAddressingIdentifier};
+use keri::actor::prelude::{HashFunctionCode, SelfAddressingIdentifier, SerializationFormats};
 use keri::event::sections::seal::{EventSeal, Seal};
+use keri::event_message::msg::KeriEvent;
+use keri::event_message::timestamped::Timestamped;
+use keri::prefix::IdentifierPrefix;
 use teliox::event::verifiable_event::VerifiableEvent;
+use teliox::query::{TelQueryArgs, TelQueryEvent, TelQueryRoute};
 use teliox::seal::{AttachedSourceSeal, EventSourceSeal};
 
 use crate::error::ControllerError;
@@ -23,7 +27,6 @@ impl IdentifierController {
                 vec![],
             )
             .unwrap();
-
         let id = vcp.get_prefix();
         let seal = Seal::Event(EventSeal {
             prefix: vcp.get_prefix(),
@@ -51,7 +54,7 @@ impl IdentifierController {
     /// Generate `iss` event and `ixn` event with  seal to `iss`. To finalize
     /// the process, `ixn` need to be signed confirmed with `finalize_event`
     /// function.
-    pub fn issue(&self, credential: &str) -> Result<Vec<u8>, ControllerError> {
+    pub fn issue(&self, credential: &str) -> Result<(IdentifierPrefix, Vec<u8>), ControllerError> {
         match self.registry_id.as_ref() {
             Some(registry_id) => {
                 let tel = self.source.tel.clone();
@@ -59,6 +62,7 @@ impl IdentifierController {
                     .make_issuance_event(registry_id, HashFunctionCode::Blake3_256, credential)
                     .unwrap();
 
+                let vc_hash = iss.get_prefix();
                 let seal = Seal::Event(EventSeal {
                     prefix: iss.get_prefix(),
                     sn: iss.get_sn(),
@@ -78,7 +82,7 @@ impl IdentifierController {
                 };
                 tel.processor.process(verifiable_event).unwrap();
 
-                Ok(encoded_ixn)
+                Ok((vc_hash, encoded_ixn))
             }
             None => Err(ControllerError::OtherError("Tel not incepted".into())),
         }
@@ -119,5 +123,25 @@ impl IdentifierController {
             }
             None => Err(ControllerError::OtherError("Tel not incepted".into())),
         }
+    }
+
+    pub fn query_tel(
+        &self,
+        registry_id: IdentifierPrefix,
+        vc_identifier: IdentifierPrefix,
+    ) -> Result<TelQueryEvent, ControllerError> {
+        let route = TelQueryRoute::Tels {
+            reply_route: "".into(),
+            args: TelQueryArgs {
+                i: Some(vc_identifier),
+                ri: Some(registry_id),
+            },
+        };
+        let env = Timestamped::new(route);
+        Ok(KeriEvent::new(
+            SerializationFormats::JSON,
+            HashFunctionCode::Blake3_256.into(),
+            env,
+        )?)
     }
 }
