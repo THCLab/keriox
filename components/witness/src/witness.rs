@@ -365,7 +365,7 @@ impl Witness {
     }
 
     pub fn parse_and_process_tel_events(&self, input_stream: &[u8]) -> Result<(), ActorError> {
-       VerifiableEvent::parse(input_stream) 
+        VerifiableEvent::parse(input_stream)
             .unwrap()
             .into_iter()
             .map(|tel_event| self.tel.processor.process(tel_event))

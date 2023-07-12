@@ -1,6 +1,9 @@
 use std::{path::Path, sync::Arc};
 
-use controller::{LocationScheme, identifier_controller::IdentifierController, CryptoBox, config::ControllerConfig, Controller, BasicPrefix, IdentifierPrefix, SelfSigningPrefix, KeyManager};
+use controller::{
+    config::ControllerConfig, identifier_controller::IdentifierController, BasicPrefix, Controller,
+    CryptoBox, IdentifierPrefix, KeyManager, LocationScheme, SelfSigningPrefix,
+};
 use keri::{actor::error::ActorError, transport::test::TestTransport};
 use transport::TelTestTransport;
 

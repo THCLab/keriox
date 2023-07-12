@@ -8,7 +8,7 @@ use teliox::{
     transport::{GeneralTelTransport, TransportError},
 };
 use watcher::Watcher;
-use witness::{Witness, WitnessListener};
+use witness::Witness;
 
 pub enum TelTestActor {
     Witness(Arc<Witness>),
@@ -30,7 +30,7 @@ impl TelTestActor {
                 .map(|msg| msg.to_string())
                 .collect::<Vec<_>>()
                 .join(""),
-            TelTestActor::Watcher(wat) => todo!(),
+            TelTestActor::Watcher(_wat) => todo!(),
         };
         Ok(response)
     }
@@ -43,8 +43,8 @@ impl TelTestActor {
         match self {
             TelTestActor::Witness(wit) => wit
                 .parse_and_process_tel_events(&input_stream)
-                .map_err(|err| TransportError::NetworkError)?,
-            TelTestActor::Watcher(wat) => todo!(),
+                .map_err(|_err| TransportError::NetworkError)?,
+            TelTestActor::Watcher(_wat) => todo!(),
         };
         Ok(())
     }
