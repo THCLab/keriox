@@ -10,7 +10,6 @@ async-std = { version = "1.12.0", features = ["attributes"] }
 futures = "0.3.24"
 keri = { path = "../../keriox_core", features = ["oobi", "mailbox"] }
 teliox = {path = "../../support/teliox"}
-reqwest = { version = "0.11", features = ["json", "rustls-tls", "blocking"], default-features = false }
 thiserror = "1.0"
 serde_json = "1.0"
 url = "2.3.1"
@@ -19,4 +18,3 @@ cesrox = { git = "https://github.com/THCLab/cesrox", tag = "v0.1.4" }
 [dev-dependencies]
 witness = { path = "../witness" }
 tempfile = { version = "3.1" }
-tokio = { version = "1.29.1", features = ["full"] }

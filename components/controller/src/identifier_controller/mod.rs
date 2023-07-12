@@ -712,46 +712,6 @@ impl IdentifierController {
         Ok(())
     }
 
-    async fn send_tel_query_to(
-        &self,
-        id: &IdentifierPrefix,
-        scheme: Scheme,
-        query: SignedTelQuery,
-    ) -> Result<PossibleResponse, ControllerError> {
-        let loc = self
-            .source
-            .get_loc_schemas(id)?
-            .into_iter()
-            .find(|loc| loc.scheme == scheme);
-        let loc = match loc {
-            Some(loc) => loc,
-            None => {
-                return Err(ControllerError::NoLocationScheme {
-                    id: id.clone(),
-                    scheme,
-                });
-            }
-        };
-        let url = loc.url.join("tel/query").unwrap();
-        let resp = reqwest::Client::new()
-            .post(url)
-            .body(query.to_cesr().unwrap())
-            .send()
-            .await
-            .map_err(|_| TransportError::NetworkError)?;
-        if !resp.status().is_success() {
-            let body = resp
-                .text()
-                .await
-                .map_err(|_| TransportError::NetworkError)?;
-            let err = serde_json::from_str(&body).map_err(|_| TransportError::NetworkError)?;
-            return Err(ControllerError::EventFormatError);
-        // Ok(self.transport.send_query(loc, query).await?)
-        } else {
-            todo!()
-        }
-    }
-
     /// Send new receipts obtained via [`Self::finalize_query`] to specified witnesses.
     /// Returns number of new receipts sent per witness or first error.
     pub async fn broadcast_receipts(
