@@ -5,7 +5,7 @@ use std::{
 
 use crate::{
     error::Error,
-    event::{verifiable_event::VerifiableEvent, Event},
+    event::{verifiable_event::VerifiableEvent},
 };
 #[derive(Clone)]
 pub struct TelNotificationBus {

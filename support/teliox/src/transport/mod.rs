@@ -39,7 +39,7 @@ impl GeneralTelTransport for TelTransport {
         let client = reqwest::Client::new();
         let query = qry
             .serialize()
-            .map_err(|e| TransportError::InvalidResponse)?;
+            .map_err(|_e| TransportError::InvalidResponse)?;
         let resp = client
             .post(url)
             .body(query)

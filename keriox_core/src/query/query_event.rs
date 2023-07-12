@@ -12,7 +12,7 @@ use crate::{
         EventTypeTag, Typeable,
     },
     prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
-    query::mailbox::{QueryArgsMbx, QueryTopics},
+    query::mailbox::{QueryArgsMbx},
 };
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -127,7 +127,7 @@ where
             attachments,
         }
         .to_cesr()
-        .map_err(|e| Error::CesrError)
+        .map_err(|_e| Error::CesrError)
     }
 }
 
@@ -168,6 +168,7 @@ fn test_query_deserialize() {
 
 #[test]
 fn test_query_mbx_deserialize() {
+    use crate::query::mailbox::QueryTopics;
     let input_query = r#"{"v":"KERI10JSON000165_","t":"qry","d":"EKrOiJOMKnTLvJJz0j9hJ5acANkr_DFhVp6HgfjZLOUR","dt":"2022-10-25T09:53:04.454094+00:00","r":"mbx","rr":"","q":{"pre":"EC61gZ9lCKmHAS7U5ehUfEbGId5rcY0D7MirFZHDQcE2","topics":{"/receipt":0,"/replay":0,"/reply":0,"/multisig":0,"/credential":0,"/delegate":0},"i":"EC61gZ9lCKmHAS7U5ehUfEbGId5rcY0D7MirFZHDQcE2","src":"BBilc4-L3tFUnfM_wJr4S4OJanAv_VmF_dJNN6vkf2Ha"}}"#; //-VAj-HABEKYLUMmNPZeEs77Zvclf0bSN5IN-mLfLpx2ySb-HDlk4-AABAAAQY9eL1n96itQTvVTEdKjb-xYFWy-SYylQopNeYpYEW9bJ96h4deDboGOUCzVUCQrZ2kt2UNFL3xSJn4ieWLAC"#;
     let qr: QueryEvent = serde_json::from_str(input_query).unwrap();
 

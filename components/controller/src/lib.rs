@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use std::time::Duration;
 
 pub mod config;
 pub mod error;

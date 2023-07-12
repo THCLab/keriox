@@ -37,7 +37,6 @@ use keri::{
         query_event::{QueryArgs, QueryEvent, QueryRoute, SignedKelQuery},
         reply_event::ReplyRoute,
     },
-    transport::TransportError,
 };
 use teliox::query::{SignedTelQuery, TelQueryEvent};
 

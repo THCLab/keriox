@@ -29,7 +29,6 @@ use crate::{
 };
 pub use cesrox::cesr_proof::MaterialPath;
 use cesrox::parse_many;
-use std::sync::Arc;
 #[cfg(feature = "query")]
 use version::serialization_info::SerializationFormats;
 
