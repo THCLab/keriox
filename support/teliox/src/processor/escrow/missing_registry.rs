@@ -90,6 +90,10 @@ impl MissingRegistryEscrow {
                         // remove from escrow
                         self.escrowed_missing_registry.remove(id, &event).unwrap();
                     }
+                    Err(Error::MissingIssuerEventError) => {
+                        self.escrowed_missing_registry.remove(id, &event).unwrap();
+                        bus.notify(&TelNotification::MissingIssuer(event.clone()))?;
+                    }
                     Err(_e) => {} // keep in escrow,
                 }
             }

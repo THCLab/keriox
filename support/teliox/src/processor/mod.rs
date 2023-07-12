@@ -75,7 +75,11 @@ impl TelEventProcessor {
                         .publisher
                         .notify(&TelNotification::MissingRegistry(event)),
                     Error::UnknownIdentifierError => todo!(),
-                    e => todo!(),
+                    Error::EventAlreadySavedError => {
+                        // Means that vc of given registry is already accepted
+                        Ok(())
+                    }
+                    _e => todo!(),
                 },
             },
             Event::Vc(ref vc_ev) => match validator.validate_vc(&vc_ev, &event.seal) {
@@ -95,6 +99,10 @@ impl TelEventProcessor {
                     .notify(&TelNotification::MissingRegistry(event)),
                 Err(Error::OutOfOrderError) => {
                     self.publisher.notify(&TelNotification::OutOfOrder(event))
+                }
+                Err(Error::EventAlreadySavedError) => {
+                    // Means that vc of given id is already accepted
+                    Ok(())
                 }
                 Err(e) => Err(e),
             },

@@ -7,7 +7,7 @@ use crate::{
     error::Error,
     event_message::{
         msg::KeriEvent,
-        signature::{Nontransferable, Signature, SignerData, signatures_into_groups},
+        signature::{signatures_into_groups, Nontransferable, Signature, SignerData},
         timestamped::Timestamped,
         EventTypeTag, Typeable,
     },
@@ -115,11 +115,19 @@ impl<D> SignedQuery<D> {
     }
 }
 
-impl<D> SignedQuery<KeriEvent<D>> where D: Clone + Serialize + Typeable<TypeTag = EventTypeTag> {
+impl<D> SignedQuery<KeriEvent<D>>
+where
+    D: Clone + Serialize + Typeable<TypeTag = EventTypeTag>,
+{
     pub fn to_cesr(&self) -> Result<Vec<u8>, Error> {
         let payload: Payload = self.query.clone().into();
         let attachments = signatures_into_groups(&[self.signature.clone()]);
-        ParsedData { payload, attachments }.to_cesr().map_err(|e| Error::CesrError)
+        ParsedData {
+            payload,
+            attachments,
+        }
+        .to_cesr()
+        .map_err(|e| Error::CesrError)
     }
 }
 

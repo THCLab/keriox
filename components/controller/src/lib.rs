@@ -45,7 +45,7 @@ use teliox::database::EventDatabase;
 use teliox::processor::escrow::default_escrow_bus as tel_escrow_bus;
 use teliox::processor::storage::TelEventStorage;
 use teliox::tel::Tel;
-use teliox::transport::{GeneralTelTransport};
+use teliox::transport::GeneralTelTransport;
 
 use self::error::ControllerError;
 
@@ -67,7 +67,7 @@ impl Controller {
             initial_oobis,
             escrow_config,
             transport,
-            tel_transport
+            tel_transport,
         } = config;
 
         let db = {

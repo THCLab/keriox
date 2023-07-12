@@ -24,7 +24,7 @@ impl TelState {
                         Err(Error::Generic("Wrong sn".into()))
                     }
                 }
-                _ => Err(Error::Generic("Wrong state".into())),
+                _ => Err(Error::EventAlreadySavedError),
             },
             VCEventType::Brv(rev) => match self {
                 TelState::Issued(last) => {
@@ -39,7 +39,7 @@ impl TelState {
             },
             VCEventType::Iss(_iss) => match self {
                 TelState::NotIssued => Ok(TelState::Issued(event.digest()?)),
-                _ => Err(Error::Generic("Wrong state".into())),
+                _ => Err(Error::EventAlreadySavedError),
             },
             VCEventType::Rev(rev) => match self {
                 TelState::Issued(last) => {

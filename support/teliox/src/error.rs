@@ -43,6 +43,9 @@ pub enum Error {
     #[error("Unknown identifier")]
     UnknownIdentifierError,
 
+    #[error("Event is already accepted in TEL")]
+    EventAlreadySavedError,
+
     #[error("Locking error")]
     RwLockingError,
 }

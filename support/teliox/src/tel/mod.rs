@@ -1,11 +1,18 @@
-use std::{sync::{Arc, RwLock}, collections::HashMap};
+use std::{
+    collections::HashMap,
+    sync::{Arc, RwLock},
+};
 
 use crate::{
     error::Error,
     event::manager_event::Config,
     event::verifiable_event::VerifiableEvent,
     event::Event,
-    processor::{notification::{TelNotificationBus, TelNotifier, TelNotification, TelNotificationKind}, storage::TelEventStorage, TelEventProcessor},
+    processor::{
+        notification::{TelNotification, TelNotificationBus, TelNotificationKind, TelNotifier},
+        storage::TelEventStorage,
+        TelEventProcessor,
+    },
     state::{vc_state::TelState, ManagerTelState},
 };
 use keri::{prefix::IdentifierPrefix, processor::event_storage::EventStorage};
@@ -16,7 +23,7 @@ use said::{
 
 pub mod event_generator;
 
-pub struct  RecentlyAddedEvents(RwLock<Vec<VerifiableEvent>>);
+pub struct RecentlyAddedEvents(RwLock<Vec<VerifiableEvent>>);
 impl RecentlyAddedEvents {
     pub fn new() -> Self {
         Self(RwLock::new(Vec::new()))
@@ -25,17 +32,19 @@ impl RecentlyAddedEvents {
     pub fn get(&self) -> Vec<VerifiableEvent> {
         self.0.write().unwrap().drain(0..).collect()
     }
-    
 }
 impl TelNotifier for RecentlyAddedEvents {
-    fn notify(&self, notification: &TelNotification, _bus: &TelNotificationBus)
-        -> Result<(), Error> {
+    fn notify(
+        &self,
+        notification: &TelNotification,
+        _bus: &TelNotificationBus,
+    ) -> Result<(), Error> {
         match notification {
             TelNotification::TelEventAdded(event) => self.0.write().unwrap().push(event.clone()),
             _ => todo!(),
         };
         Ok(())
-        }
+    }
 }
 
 /// Transaction Event Log
@@ -51,7 +60,12 @@ impl Tel {
         publisher: Option<TelNotificationBus>,
     ) -> Self {
         let added_events = Arc::new(RecentlyAddedEvents::new());
-        publisher.as_ref().map(|r| r.register_observer(added_events.clone(), vec![TelNotificationKind::TelEventAdded]));
+        publisher.as_ref().map(|r| {
+            r.register_observer(
+                added_events.clone(),
+                vec![TelNotificationKind::TelEventAdded],
+            )
+        });
         Self {
             processor: TelEventProcessor::new(kel_reference, tel_reference, publisher),
             recently_added_events: added_events,

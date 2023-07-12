@@ -22,7 +22,7 @@ impl Default for ControllerConfig {
             initial_oobis: vec![],
             escrow_config: EscrowConfig::default(),
             transport: Box::new(DefaultTransport::new()),
-            tel_transport: Box::new(TelTransport)
+            tel_transport: Box::new(TelTransport),
         }
     }
 }

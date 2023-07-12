@@ -355,8 +355,8 @@ pub mod http_handlers {
         let parsed = VerifiableEvent::parse(post_data.as_bytes()).unwrap();
         for ev in parsed {
             data.tel.processor.process(ev).unwrap()
-        };
-       
+        }
+
         Ok(HttpResponse::Ok().body(()))
     }
 

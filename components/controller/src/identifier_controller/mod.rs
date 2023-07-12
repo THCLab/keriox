@@ -36,9 +36,10 @@ use keri::{
         mailbox::{QueryArgsMbx, QueryTopics},
         query_event::{QueryArgs, QueryEvent, QueryRoute, SignedKelQuery},
         reply_event::ReplyRoute,
-    }, transport::TransportError,
+    },
+    transport::TransportError,
 };
-use teliox::query::{TelQueryEvent, SignedTelQuery};
+use teliox::query::{SignedTelQuery, TelQueryEvent};
 
 use super::mailbox_updating::ActionRequired;
 use crate::{error::ControllerError, mailbox_updating::MailboxReminder, Controller};
@@ -679,28 +680,34 @@ impl IdentifierController {
     }
 
     pub async fn finalize_tel_query(
-        &mut self,
-        qry: TelQueryEvent, 
+        &self,
+        qry: TelQueryEvent,
         sig: SelfSigningPrefix,
     ) -> Result<(), ControllerError> {
-       let query = match &self.id {
-                IdentifierPrefix::Basic(bp) => {
-                    SignedTelQuery::new_nontrans(qry.clone(), bp.clone(), sig)
-                }
-                _ => {
-                    let signatures = vec![IndexedSignature::new_both_same(sig, 0)];
-                    SignedTelQuery::new_trans(qry.clone(), self.id.clone(), signatures)
-                }
-            };
-            let witness = self.source.get_current_witness_list(&self.id)?[0].clone();
-            let location = self.source.get_loc_schemas(&IdentifierPrefix::Basic(witness))?[0].clone();
-            let tel_res = self
-                .source
-                .tel_transport.send_query(query, location) 
-                .await
-                .unwrap();
-            println!("Get tel from witness!: {}", tel_res);
-           self.source.tel.parse_and_process_tel_stream(tel_res.as_bytes()).unwrap(); 
+        let query = match &self.id {
+            IdentifierPrefix::Basic(bp) => {
+                SignedTelQuery::new_nontrans(qry.clone(), bp.clone(), sig)
+            }
+            _ => {
+                let signatures = vec![IndexedSignature::new_both_same(sig, 0)];
+                SignedTelQuery::new_trans(qry.clone(), self.id.clone(), signatures)
+            }
+        };
+        let witness = self.source.get_current_witness_list(&self.id)?[0].clone();
+        let location = self
+            .source
+            .get_loc_schemas(&IdentifierPrefix::Basic(witness))?[0]
+            .clone();
+        let tel_res = self
+            .source
+            .tel_transport
+            .send_query(query, location)
+            .await
+            .unwrap();
+        self.source
+            .tel
+            .parse_and_process_tel_stream(tel_res.as_bytes())
+            .unwrap();
 
         Ok(())
     }
@@ -711,7 +718,8 @@ impl IdentifierController {
         scheme: Scheme,
         query: SignedTelQuery,
     ) -> Result<PossibleResponse, ControllerError> {
-        let loc = self.source
+        let loc = self
+            .source
             .get_loc_schemas(id)?
             .into_iter()
             .find(|loc| loc.scheme == scheme);
@@ -739,7 +747,9 @@ impl IdentifierController {
             let err = serde_json::from_str(&body).map_err(|_| TransportError::NetworkError)?;
             return Err(ControllerError::EventFormatError);
         // Ok(self.transport.send_query(loc, query).await?)
-        } else {todo!()}
+        } else {
+            todo!()
+        }
     }
 
     /// Send new receipts obtained via [`Self::finalize_query`] to specified witnesses.

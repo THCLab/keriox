@@ -8,7 +8,7 @@ use keri::{
     oobi::LocationScheme,
     prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     signer::{CryptoBox, KeyManager},
-    transport::test::{TestActorMap, TestTransport}, actor::prelude::HashFunctionCode,
+    transport::test::{TestActorMap, TestTransport},
 };
 use tempfile::Builder;
 use url::Host;

@@ -10,7 +10,7 @@ license = "EUPL-1.2"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-keri = {path = "../../keriox_core", features = ["oobi"]}
+keri = {path = "../../keriox_core", features = ["oobi", "mailbox"]}
 said = { git = "https://github.com/THCLab/cesrox", tag = "v0.1.4" }
 cesrox = { git = "https://github.com/THCLab/cesrox", tag = "v0.1.4" }
 version = { git = "https://github.com/THCLab/cesrox", tag = "v0.1.4" }
