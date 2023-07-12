@@ -105,17 +105,5 @@ async fn test_tel() -> Result<(), ControllerError> {
         Some(teliox::state::vc_state::TelState::Revoked)
     ));
 
-    // let tel = controller1
-    //     .tel
-    //     .get_tel(&vc_hash)
-    //     .unwrap()
-    //     .iter()
-    //     .map(|ev| ev.serialize().unwrap())
-    //     .flatten()
-    //     .collect::<Vec<u8>>();
-    // println!("tel: {}", String::from_utf8(tel).unwrap());
-    // let kel = controller1.storage.get_kel(&issuer_prefix)?;
-    // println!("\nkel: {}", String::from_utf8(kel.unwrap()).unwrap());
-
     Ok(())
 }

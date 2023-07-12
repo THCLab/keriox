@@ -30,7 +30,7 @@ use keri::{
 };
 use teliox::{
     database::EventDatabase,
-    event::{parse_tel_event_stream, parse_tel_query_stream},
+    event::{parse_tel_query_stream, verifiable_event::VerifiableEvent},
     processor::{escrow::default_escrow_bus, storage::TelEventStorage, TelReplyType},
     tel::Tel,
 };
@@ -360,13 +360,12 @@ impl Witness {
             .unwrap()
             .into_iter()
             .map(|qry| self.tel.processor.process_signed_query(qry))
-            // .filter_map(Result::ok)
             .collect::<Result<Vec<_>, _>>()
             .unwrap())
     }
 
     pub fn parse_and_process_tel_events(&self, input_stream: &[u8]) -> Result<(), ActorError> {
-        parse_tel_event_stream(input_stream)
+       VerifiableEvent::parse(input_stream) 
             .unwrap()
             .into_iter()
             .map(|tel_event| self.tel.processor.process(tel_event))
