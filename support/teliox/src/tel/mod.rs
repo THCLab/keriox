@@ -1,11 +1,11 @@
-use std::sync::Arc;
+use std::{sync::{Arc, RwLock}, collections::HashMap};
 
 use crate::{
     error::Error,
     event::manager_event::Config,
     event::verifiable_event::VerifiableEvent,
     event::Event,
-    processor::{notification::TelNotificationBus, storage::TelEventStorage, TelEventProcessor},
+    processor::{notification::{TelNotificationBus, TelNotifier, TelNotification, TelNotificationKind}, storage::TelEventStorage, TelEventProcessor},
     state::{vc_state::TelState, ManagerTelState},
 };
 use keri::{prefix::IdentifierPrefix, processor::event_storage::EventStorage};
@@ -16,10 +16,32 @@ use said::{
 
 pub mod event_generator;
 
+pub struct  RecentlyAddedEvents(RwLock<Vec<VerifiableEvent>>);
+impl RecentlyAddedEvents {
+    pub fn new() -> Self {
+        Self(RwLock::new(Vec::new()))
+    }
+
+    pub fn get(&self) -> Vec<VerifiableEvent> {
+        self.0.write().unwrap().drain(0..).collect()
+    }
+    
+}
+impl TelNotifier for RecentlyAddedEvents {
+    fn notify(&self, notification: &TelNotification, _bus: &TelNotificationBus)
+        -> Result<(), Error> {
+        match notification {
+            TelNotification::TelEventAdded(event) => self.0.write().unwrap().push(event.clone()),
+            _ => todo!(),
+        };
+        Ok(())
+        }
+}
+
 /// Transaction Event Log
 pub struct Tel {
     pub processor: TelEventProcessor,
-    pub tel_prefix: IdentifierPrefix,
+    pub recently_added_events: Arc<RecentlyAddedEvents>,
 }
 
 impl Tel {
@@ -28,9 +50,11 @@ impl Tel {
         kel_reference: Arc<EventStorage>,
         publisher: Option<TelNotificationBus>,
     ) -> Self {
+        let added_events = Arc::new(RecentlyAddedEvents::new());
+        publisher.as_ref().map(|r| r.register_observer(added_events.clone(), vec![TelNotificationKind::TelEventAdded]));
         Self {
             processor: TelEventProcessor::new(kel_reference, tel_reference, publisher),
-            tel_prefix: IdentifierPrefix::default(),
+            recently_added_events: added_events,
         }
     }
 
@@ -112,18 +136,6 @@ impl Tel {
         let parsed = VerifiableEvent::parse(stream)?;
         for event in parsed {
             self.processor.process(event)?;
-        }
-        Ok(())
-    }
-
-    // Process verifiable event. It doesn't check if source seal is correct. Just add event to tel.
-    pub fn process(&mut self, event: VerifiableEvent) -> Result<(), Error> {
-        self.processor.process(event.clone())?;
-        // If tel prefix is not set yet, set it to first processed management event identifier prefix.
-        if self.tel_prefix == IdentifierPrefix::default() {
-            if let Event::Management(man) = event.event {
-                self.tel_prefix = man.data.prefix.to_owned()
-            }
         }
         Ok(())
     }

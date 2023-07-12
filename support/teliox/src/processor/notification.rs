@@ -65,7 +65,7 @@ pub enum TelNotification {
     MissingRegistry(VerifiableEvent),
     MissingIssuer(VerifiableEvent),
     OutOfOrder(VerifiableEvent),
-    TelEventAdded(Event),
+    TelEventAdded(VerifiableEvent),
 }
 
 #[derive(PartialEq, Hash, Eq, Clone, Debug)]

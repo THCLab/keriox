@@ -365,6 +365,19 @@ impl Witness {
             .unwrap())
     }
 
+    pub fn parse_and_process_tel_events(
+        &self,
+        input_stream: &[u8],
+    ) -> Result<Vec<TelReplyType>, ActorError> {
+        Ok(parse_tel_query_stream(input_stream)
+            .unwrap()
+            .into_iter()
+            .map(|qry| self.tel.processor.process_signed_query(qry))
+            // .filter_map(Result::ok)
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap())
+    }
+
     pub fn parse_and_process_replies(&self, input_stream: &[u8]) -> Result<(), ActorError> {
         for reply in parse_reply_stream(input_stream)? {
             self.process_reply(reply)?;

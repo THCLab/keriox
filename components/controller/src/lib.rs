@@ -45,7 +45,7 @@ use teliox::database::EventDatabase;
 use teliox::processor::escrow::default_escrow_bus as tel_escrow_bus;
 use teliox::processor::storage::TelEventStorage;
 use teliox::tel::Tel;
-use teliox::transport::TelTransport;
+use teliox::transport::{GeneralTelTransport};
 
 use self::error::ControllerError;
 
@@ -57,7 +57,7 @@ pub struct Controller {
     transport: Box<dyn Transport + Send + Sync>,
 
     pub tel: Arc<Tel>,
-    tel_transport: TelTransport,
+    tel_transport: Box<dyn GeneralTelTransport>,
 }
 
 impl Controller {
@@ -67,6 +67,7 @@ impl Controller {
             initial_oobis,
             escrow_config,
             transport,
+            tel_transport
         } = config;
 
         let db = {
@@ -139,7 +140,7 @@ impl Controller {
             partially_witnessed_escrow,
             transport,
             tel: tel,
-            tel_transport: TelTransport,
+            tel_transport: tel_transport,
         };
 
         if !initial_oobis.is_empty() {

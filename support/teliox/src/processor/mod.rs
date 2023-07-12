@@ -59,7 +59,7 @@ impl TelEventProcessor {
                         .add_new_management_event(event.clone(), &man.data.prefix)
                         .unwrap();
                     self.publisher
-                        .notify(&TelNotification::TelEventAdded(event.event))?;
+                        .notify(&TelNotification::TelEventAdded(event))?;
                     Ok(())
                 }
                 Err(e) => match e {
@@ -75,7 +75,7 @@ impl TelEventProcessor {
                         .publisher
                         .notify(&TelNotification::MissingRegistry(event)),
                     Error::UnknownIdentifierError => todo!(),
-                    _ => todo!(),
+                    e => todo!(),
                 },
             },
             Event::Vc(ref vc_ev) => match validator.validate_vc(&vc_ev, &event.seal) {
@@ -85,7 +85,7 @@ impl TelEventProcessor {
                         .add_new_event(event.clone(), &vc_ev.data.data.prefix)
                         .unwrap();
                     self.publisher
-                        .notify(&TelNotification::TelEventAdded(event.event))
+                        .notify(&TelNotification::TelEventAdded(event))
                 }
                 Err(Error::MissingIssuerEventError) => self
                     .publisher

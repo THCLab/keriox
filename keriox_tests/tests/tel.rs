@@ -60,7 +60,7 @@ async fn test_tel() -> Result<(), ControllerError> {
     let credential = r#"message"#;
     let vc_hash = HashFunction::from(HashFunctionCode::Blake3_256).derive(credential.as_bytes());
 
-    let issuance_ixn = identifier1.issue(credential).unwrap();
+    let issuance_ixn = identifier1.issue(credential).unwrap().1;
     let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(&issuance_ixn).unwrap());
 
     identifier1

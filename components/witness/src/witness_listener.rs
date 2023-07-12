@@ -65,6 +65,10 @@ impl WitnessListener {
                     actix_web::web::post().to(http_handlers::process_tel_query),
                 )
                 .route(
+                    "/process/tel",
+                    actix_web::web::post().to(http_handlers::process_tel_events),
+                )
+                .route(
                     "/register",
                     actix_web::web::post().to(http_handlers::process_reply),
                 )
@@ -201,6 +205,7 @@ pub mod http_handlers {
         oobi::Role,
         prefix::IdentifierPrefix,
     };
+    use teliox::event::verifiable_event::VerifiableEvent;
 
     use crate::witness::Witness;
 
@@ -340,6 +345,19 @@ pub mod http_handlers {
         Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())
             .body(()))
+    }
+
+    pub async fn process_tel_events(
+        post_data: String,
+        data: web::Data<Arc<Witness>>,
+    ) -> Result<HttpResponse, ApiError> {
+        println!("\nGot tel event to process: \n{}", post_data);
+        let parsed = VerifiableEvent::parse(post_data.as_bytes()).unwrap();
+        for ev in parsed {
+            data.tel.processor.process(ev).unwrap()
+        };
+       
+        Ok(HttpResponse::Ok().body(()))
     }
 
     #[derive(Debug, derive_more::Display, derive_more::From, derive_more::Error)]

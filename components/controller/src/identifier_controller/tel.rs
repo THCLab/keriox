@@ -144,4 +144,16 @@ impl IdentifierController {
             env,
         )?)
     }
+
+    pub async fn notify_backers(&self) -> Result<(), ControllerError> {
+        let to_notify = self.source.tel.recently_added_events.get();
+        let backers = self.source.get_current_witness_list(&self.id)?;
+        for backer in backers {
+            let location = self.source.get_loc_schemas(&IdentifierPrefix::Basic(backer))?[0].clone();
+            for event in &to_notify {
+                self.source.tel_transport.send_tel_event(event.clone(), location.clone()).await.unwrap();
+            }
+        }
+        Ok(())
+    }
 }
