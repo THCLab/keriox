@@ -3,9 +3,7 @@ use crate::{
     query::{SignedTelQuery, TelQueryEvent},
 };
 
-use self::{
-    manager_event::ManagerTelEventMessage, vc_event::VCEventMessage,
-};
+use self::{manager_event::ManagerTelEventMessage, vc_event::VCEventMessage};
 use cesrox::{group::Group, parse_many};
 use keri::{event_message::signature::get_signatures, prefix::IdentifierPrefix};
 use said::SelfAddressingIdentifier;

@@ -12,7 +12,7 @@ use crate::{
         EventTypeTag, Typeable,
     },
     prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
-    query::mailbox::{QueryArgsMbx},
+    query::mailbox::QueryArgsMbx,
 };
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]

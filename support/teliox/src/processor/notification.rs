@@ -3,10 +3,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use crate::{
-    error::Error,
-    event::{verifiable_event::VerifiableEvent},
-};
+use crate::{error::Error, event::verifiable_event::VerifiableEvent};
 #[derive(Clone)]
 pub struct TelNotificationBus {
     observers: Arc<RwLock<HashMap<TelNotificationKind, Vec<Arc<dyn TelNotifier + Send + Sync>>>>>,

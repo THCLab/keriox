@@ -64,7 +64,11 @@ pub struct IdentifierController {
 }
 
 impl IdentifierController {
-    pub fn new(id: IdentifierPrefix, kel: Arc<Controller>, registry_id: Option<IdentifierPrefix>) -> Self {
+    pub fn new(
+        id: IdentifierPrefix,
+        kel: Arc<Controller>,
+        registry_id: Option<IdentifierPrefix>,
+    ) -> Self {
         Self {
             registry_id,
             id,

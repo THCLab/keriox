@@ -57,7 +57,7 @@ pub struct Controller {
     transport: Box<dyn Transport + Send + Sync>,
 
     pub tel: Arc<Tel>,
-    tel_transport: Box<dyn GeneralTelTransport + Send +Sync>,
+    tel_transport: Box<dyn GeneralTelTransport + Send + Sync>,
 }
 
 impl Controller {

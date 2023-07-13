@@ -110,7 +110,10 @@ impl TelEventStorage {
 
     pub fn process_query(&self, qry: &TelQueryRoute) -> Result<TelReplyType, Error> {
         match qry {
-            TelQueryRoute::Tels { reply_route:_, args } => {
+            TelQueryRoute::Tels {
+                reply_route: _,
+                args,
+            } => {
                 let management_tel = self
                     .get_management_events(args.ri.as_ref().unwrap())?
                     .unwrap();
