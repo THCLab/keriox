@@ -93,7 +93,7 @@ async fn test_2_wit() -> Result<(), ControllerError> {
         let incepted_identifier = controller
             .finalize_inception(icp_event.as_bytes(), &signature)
             .await?;
-        IdentifierController::new(incepted_identifier, controller.clone())
+        IdentifierController::new(incepted_identifier, controller.clone(), None)
     };
 
     assert_eq!(ident_ctl.notify_witnesses().await?, 1);

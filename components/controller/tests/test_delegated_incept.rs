@@ -76,7 +76,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
         let incepted_identifier = controller
             .finalize_inception(icp_event.as_bytes(), &signature)
             .await?;
-        IdentifierController::new(incepted_identifier, controller.clone())
+        IdentifierController::new(incepted_identifier, controller.clone(), None)
     };
     identifier1.notify_witnesses().await?;
 
@@ -115,7 +115,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
         let incepted_identifier = controller2
             .finalize_inception(icp_event.as_bytes(), &signature)
             .await?;
-        IdentifierController::new(incepted_identifier, controller2.clone())
+        IdentifierController::new(incepted_identifier, controller2.clone(), None)
     };
     delegator.notify_witnesses().await?;
 

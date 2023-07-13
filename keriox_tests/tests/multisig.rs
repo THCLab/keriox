@@ -90,7 +90,7 @@ async fn test_multisig() -> Result<()> {
             .finalize_inception(icp_event.as_bytes(), &signature)
             .await
             .unwrap();
-        IdentifierController::new(incepted_identifier, controller1.clone())
+        IdentifierController::new(incepted_identifier, controller1.clone(), None)
     };
 
     identifier1.notify_witnesses().await?;
@@ -129,7 +129,7 @@ async fn test_multisig() -> Result<()> {
             .finalize_inception(icp_event.as_bytes(), &signature)
             .await
             .unwrap();
-        IdentifierController::new(incepted_identifier, controller2.clone())
+        IdentifierController::new(incepted_identifier, controller2.clone(), None)
     };
     identifier2.notify_witnesses().await?;
 

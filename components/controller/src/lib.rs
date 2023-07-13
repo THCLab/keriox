@@ -12,6 +12,7 @@ use keri::prefix::IndexedSignature;
 pub use keri::prefix::{BasicPrefix, CesrPrimitive, IdentifierPrefix, SelfSigningPrefix};
 use keri::processor::notification::JustNotification;
 pub use keri::signer::{CryptoBox, KeyManager};
+pub use teliox::event::parse_tel_query_stream;
 
 use config::ControllerConfig;
 use keri::state::IdentifierState;
@@ -56,7 +57,7 @@ pub struct Controller {
     transport: Box<dyn Transport + Send + Sync>,
 
     pub tel: Arc<Tel>,
-    tel_transport: Box<dyn GeneralTelTransport>,
+    tel_transport: Box<dyn GeneralTelTransport + Send +Sync>,
 }
 
 impl Controller {

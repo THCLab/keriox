@@ -75,7 +75,7 @@ async fn test_tel_from_witness() -> Result<(), ControllerError> {
     // Issue message.
     let msg_to_issue = "hello world";
     // Incept registry. It'll generate ixn that need to be signed.
-    let vcp_ixn = issuer.incept_registry()?;
+    let (vcp_id, vcp_ixn) = issuer.incept_registry()?;
 
     let signature = SelfSigningPrefix::Ed25519Sha512(issuer_keypair.sign(&vcp_ixn)?);
     issuer.finalize_event(&vcp_ixn, signature).await?;

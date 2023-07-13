@@ -15,7 +15,7 @@ impl IdentifierController {
     /// Generate `vcp` event and `ixn` event with  seal to `vcp`. To finalize
     /// the process, `ixn` need to be signed confirmed with `finalize_event`
     /// function.
-    pub fn incept_registry(&mut self) -> Result<Vec<u8>, ControllerError> {
+    pub fn incept_registry(&mut self) -> Result<(IdentifierPrefix, Vec<u8>), ControllerError> {
         // Create tel
         let tel = self.source.tel.clone();
 
@@ -46,9 +46,9 @@ impl IdentifierController {
         };
 
         tel.processor.process(verifiable_event).unwrap();
-        self.registry_id = Some(id);
+        self.registry_id = Some(id.clone());
 
-        Ok(encoded)
+        Ok((id, encoded))
     }
 
     /// Generate `iss` event and `ixn` event with  seal to `iss`. To finalize

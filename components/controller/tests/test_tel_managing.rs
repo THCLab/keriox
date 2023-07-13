@@ -34,12 +34,12 @@ async fn test_tel() -> Result<(), ControllerError> {
             .finalize_inception(icp_event.as_bytes(), &signature)
             .await
             .unwrap();
-        IdentifierController::new(incepted_identifier, controller1.clone())
+        IdentifierController::new(incepted_identifier, controller1.clone(), None)
     };
     let issuer_prefix = identifier1.id.clone();
 
     // Incept management TEL
-    let ixn = identifier1.incept_registry().unwrap();
+    let (_registry_id, ixn) = identifier1.incept_registry().unwrap();
     let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(&ixn).unwrap());
 
     identifier1.finalize_event(&ixn, signature).await.unwrap();

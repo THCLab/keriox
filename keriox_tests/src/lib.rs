@@ -50,7 +50,7 @@ pub async fn setup_identifier(
             .finalize_inception(icp_event.as_bytes(), &signature)
             .await
             .unwrap();
-        IdentifierController::new(incepted_identifier, verifier_controller.clone())
+        IdentifierController::new(incepted_identifier, verifier_controller.clone(), None)
     };
 
     assert_eq!(verifier.notify_witnesses().await.unwrap(), 1);

@@ -27,7 +27,7 @@ async fn test_kel_managing() -> Result<(), ControllerError> {
         let incept_identifier = controller
             .finalize_inception(icp_event.as_bytes(), &signature)
             .await?;
-        IdentifierController::new(incept_identifier, controller.clone())
+        IdentifierController::new(incept_identifier, controller.clone(), None)
     };
 
     let id_state = controller.get_state(&identifier1.id)?;

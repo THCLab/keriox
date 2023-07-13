@@ -64,9 +64,9 @@ pub struct IdentifierController {
 }
 
 impl IdentifierController {
-    pub fn new(id: IdentifierPrefix, kel: Arc<Controller>) -> Self {
+    pub fn new(id: IdentifierPrefix, kel: Arc<Controller>, registry_id: Option<IdentifierPrefix>) -> Self {
         Self {
-            registry_id: None,
+            registry_id,
             id,
             source: kel,
             last_asked_index: HashMap::new(),
