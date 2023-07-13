@@ -2,19 +2,27 @@ use crate::error::Error;
 
 use self::{manager_event::ManagerTelEventMessage, vc_event::VCEventMessage};
 use keri::prefix::IdentifierPrefix;
+use said::SelfAddressingIdentifier;
 use serde::{Deserialize, Serialize};
 
 pub mod manager_event;
 pub mod vc_event;
 pub mod verifiable_event;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(untagged)]
 pub enum Event {
     Management(ManagerTelEventMessage),
     Vc(VCEventMessage),
 }
 
 impl Event {
+    pub fn get_digest(&self) -> Result<SelfAddressingIdentifier, Error> {
+        Ok(match self {
+            Event::Management(man) => man.digest(),
+            Event::Vc(ev) => ev.digest(),
+        }?)
+    }
     pub fn get_prefix(&self) -> IdentifierPrefix {
         match self {
             Event::Management(man) => man.data.prefix.clone(),
@@ -27,6 +35,13 @@ impl Event {
             Event::Management(man) => man.data.sn,
             Event::Vc(ev) => ev.data.data.sn,
         }
+    }
+
+    pub fn get_registry_id(&self) -> Result<IdentifierPrefix, Error> {
+        Ok(match &self {
+            Event::Management(ref man) => man.data.prefix.clone(),
+            Event::Vc(ref vc) => vc.data.data.registry_id()?,
+        })
     }
 
     pub fn serialize(&self) -> Result<Vec<u8>, Error> {

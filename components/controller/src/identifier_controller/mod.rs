@@ -3,6 +3,7 @@ use std::{
     sync::Arc,
 };
 pub mod signing;
+pub mod tel;
 
 use keri::{
     actor::{
@@ -43,6 +44,8 @@ use crate::{error::ControllerError, mailbox_updating::MailboxReminder, Controlle
 pub struct IdentifierController {
     pub id: IdentifierPrefix,
     pub source: Arc<Controller>,
+    pub registry_id: Option<IdentifierPrefix>,
+
     pub(crate) last_asked_index: HashMap<IdentifierPrefix, MailboxReminder>,
     pub(crate) last_asked_groups_index: HashMap<IdentifierPrefix, MailboxReminder>,
     /// Set of already broadcasted receipts.
@@ -56,6 +59,7 @@ pub struct IdentifierController {
 impl IdentifierController {
     pub fn new(id: IdentifierPrefix, kel: Arc<Controller>) -> Self {
         Self {
+            registry_id: None,
             id,
             source: kel,
             last_asked_index: HashMap::new(),
@@ -197,7 +201,7 @@ impl IdentifierController {
     /// Init group identifier
     ///
     /// Returns serialized group icp and list of exchange messages to sign.
-    /// Exchanges are ment to be send to witness and forwarded to group
+    /// Exchanges are meant to be send to witness and forwarded to group
     /// participants.
     /// If `delegator` parameter is provided, it will generate delegated
     /// inception and append delegation request to exchange messages.

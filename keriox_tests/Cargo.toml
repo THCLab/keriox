@@ -10,6 +10,8 @@ futures = "0.3.24"
 keri = { path = "../keriox_core", features = ["oobi"] }
 tempfile = "3.3.0"
 url = "2.2.2"
+said = { git = "https://github.com/THCLab/cesrox", tag = "v0.1.4"} 
+teliox = {path = "../support/teliox"}
 watcher = { path = "../components/watcher" }
 witness = { path = "../components/witness" }
 controller = { path = "../components/controller"}

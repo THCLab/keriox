@@ -34,7 +34,8 @@ impl TelState {
                         Err(Error::Generic("Previous event doesn't match".to_string()))
                     }
                 }
-                _ => Err(Error::Generic("Wrong state".into())),
+                TelState::NotIssued => Err(Error::OutOfOrderError),
+                TelState::Revoked => Err(Error::Generic("Already revoked".into())),
             },
             VCEventType::Iss(_iss) => match self {
                 TelState::NotIssued => Ok(TelState::Issued(event.digest()?)),
@@ -48,7 +49,8 @@ impl TelState {
                         Err(Error::Generic("Previous event doesn't match".to_string()))
                     }
                 }
-                _ => Err(Error::Generic("Wrong state".into())),
+                TelState::NotIssued => Err(Error::OutOfOrderError),
+                TelState::Revoked => Err(Error::Generic("Already revoked".into())),
             },
         }
     }

@@ -16,11 +16,8 @@ pub struct EventDatabase {
 }
 
 impl EventDatabase {
-    pub fn new<'a, P>(path: P) -> Result<Self, Error>
-    where
-        P: Into<&'a Path>,
-    {
-        let db = sled::open(path.into())?;
+    pub fn new(path: impl AsRef<Path>) -> Result<Self, Error> {
+        let db = sled::open(path)?;
         Ok(Self {
             identifiers: SledEventTree::new(db.open_tree(b"iids")?),
             tel_events: SledEventTreeVec::new(db.open_tree(b"tels")?),

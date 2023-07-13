@@ -21,4 +21,28 @@ pub enum Error {
 
     #[error(transparent)]
     VersionError(#[from] version::error::Error),
+
+    #[error("Escrow database error")]
+    EscrowDatabaseError,
+
+    #[error("Error")]
+    MissingSealError,
+
+    #[error("Missing issuer event")]
+    MissingIssuerEventError,
+
+    #[error("Missing issuer event")]
+    MissingRegistryError,
+
+    #[error("Event is out of order")]
+    OutOfOrderError,
+
+    #[error("Digests doesn't match")]
+    DigestsNotMatchError,
+
+    #[error("Unknown identifier")]
+    UnknownIdentifierError,
+
+    #[error("Locking error")]
+    RwLockingError,
 }

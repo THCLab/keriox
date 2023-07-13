@@ -68,7 +68,7 @@ impl From<TimestampedVCEvent> for VCEvent {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum TelEventType {
     Iss,
@@ -123,6 +123,20 @@ impl VCEvent {
             timestamped,
         )?)
     }
+
+    pub fn registry_id(&self) -> Result<IdentifierPrefix, Error> {
+        Ok(match &self.event_type {
+            VCEventType::Rev(rev) => rev.registry_id.clone(),
+            VCEventType::Iss(iss) => iss.registry_id.clone(),
+            VCEventType::Bis(iss) => iss.registry_anchor.prefix.clone(),
+            VCEventType::Brv(rev) => rev
+                .registry_anchor
+                .as_ref()
+                .ok_or(Error::Generic("No registry id".into()))?
+                .prefix
+                .clone(),
+        })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -155,7 +169,7 @@ impl Issuance {
 pub struct SimpleIssuance {
     // registry identifier from management TEL
     #[serde(rename = "ri")]
-    registry_id: IdentifierPrefix,
+    pub registry_id: IdentifierPrefix,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
