@@ -19,19 +19,17 @@ impl IdentifierController {
         // Create tel
         let tel = self.source.tel.clone();
 
-        let vcp = tel
-            .make_inception_event(
-                self.id.clone(),
-                vec![teliox::event::manager_event::Config::NoBackers],
-                0,
-                vec![],
-            )
-            .unwrap();
+        let vcp = tel.make_inception_event(
+            self.id.clone(),
+            vec![teliox::event::manager_event::Config::NoBackers],
+            0,
+            vec![],
+        )?;
         let id = vcp.get_prefix();
         let seal = Seal::Event(EventSeal {
             prefix: vcp.get_prefix(),
             sn: vcp.get_sn(),
-            event_digest: vcp.get_digest().unwrap(),
+            event_digest: vcp.get_digest()?,
         });
         let ixn = self.anchor_with_seal(&[seal])?;
         let source_seal = EventSourceSeal {
@@ -45,7 +43,7 @@ impl IdentifierController {
             seal: AttachedSourceSeal { seal: source_seal },
         };
 
-        tel.processor.process(verifiable_event).unwrap();
+        tel.processor.process(verifiable_event)?;
         self.registry_id = Some(id.clone());
 
         Ok((id, encoded))
@@ -58,15 +56,14 @@ impl IdentifierController {
         match self.registry_id.as_ref() {
             Some(registry_id) => {
                 let tel = self.source.tel.clone();
-                let iss = tel
-                    .make_issuance_event(registry_id, HashFunctionCode::Blake3_256, credential)
-                    .unwrap();
+                let iss =
+                    tel.make_issuance_event(registry_id, HashFunctionCode::Blake3_256, credential)?;
 
                 let vc_hash = iss.get_prefix();
                 let seal = Seal::Event(EventSeal {
                     prefix: iss.get_prefix(),
                     sn: iss.get_sn(),
-                    event_digest: iss.get_digest().unwrap(),
+                    event_digest: iss.get_digest()?,
                 });
                 let ixn = self.anchor_with_seal(&[seal])?;
 
@@ -80,7 +77,7 @@ impl IdentifierController {
                     event: iss,
                     seal: AttachedSourceSeal { seal: source_seal },
                 };
-                tel.processor.process(verifiable_event).unwrap();
+                tel.processor.process(verifiable_event)?;
 
                 Ok((vc_hash, encoded_ixn))
             }
@@ -98,12 +95,12 @@ impl IdentifierController {
         match &self.registry_id {
             Some(registry_id) => {
                 let tel = self.source.tel.clone();
-                let rev = tel.make_revoke_event(registry_id, credential_sai).unwrap();
+                let rev = tel.make_revoke_event(registry_id, credential_sai)?;
 
                 let seal = Seal::Event(EventSeal {
                     prefix: rev.get_prefix(),
                     sn: rev.get_sn(),
-                    event_digest: rev.get_digest().unwrap(),
+                    event_digest: rev.get_digest()?,
                 });
                 let ixn = self.anchor_with_seal(&[seal])?;
 
@@ -117,7 +114,7 @@ impl IdentifierController {
                     event: rev,
                     seal: AttachedSourceSeal { seal: source_seal },
                 };
-                tel.processor.process(verifiable_event).unwrap();
+                tel.processor.process(verifiable_event)?;
 
                 Ok(encoded_ixn)
             }
@@ -158,7 +155,7 @@ impl IdentifierController {
                     .tel_transport
                     .send_tel_event(event.clone(), location.clone())
                     .await
-                    .unwrap();
+                    .map_err(|e| ControllerError::OtherError(e.to_string()))?;
             }
         }
         Ok(())

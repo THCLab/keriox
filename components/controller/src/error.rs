@@ -66,6 +66,9 @@ pub enum ControllerError {
     #[error("Verification failed for following elements: {0:?}")]
     VerificationError(Vec<(ControllerError, String)>),
 
+    #[error(transparent)]
+    TelError(#[from] teliox::error::Error),
+
     #[error("Error: {0}")]
     OtherError(String),
 }

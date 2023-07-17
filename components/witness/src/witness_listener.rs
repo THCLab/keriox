@@ -6,9 +6,12 @@ use std::{
 
 use actix_web::{dev::Server, web::Data, App, HttpServer};
 use anyhow::Result;
-use keri::{self, error::Error, prefix::BasicPrefix};
+use keri::{self, prefix::BasicPrefix};
 
-use crate::{witness::Witness, witness_processor::WitnessEscrowConfig};
+use crate::{
+    witness::{Witness, WitnessError},
+    witness_processor::WitnessEscrowConfig,
+};
 
 pub struct WitnessListener {
     pub witness_data: Arc<Witness>,
@@ -20,7 +23,7 @@ impl WitnessListener {
         event_db_path: &Path,
         priv_key: Option<String>,
         escrow_config: WitnessEscrowConfig,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, WitnessError> {
         let mut oobi_path = PathBuf::new();
         oobi_path.push(event_db_path);
         oobi_path.push("oobi");

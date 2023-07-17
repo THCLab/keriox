@@ -1,26 +1,20 @@
 use keri::error::Error as KeriError;
-use sled_tables::error::Error as SledError;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Serialize, Deserialize)]
 pub enum Error {
-    #[error(transparent)]
-    DynError(#[from] Box<dyn std::error::Error>),
-
     #[error(transparent)]
     KeriError(#[from] KeriError),
 
-    #[error(transparent)]
-    SledError(#[from] sled::Error),
-
-    #[error(transparent)]
-    SledTablesError(#[from] SledError),
+    #[error("Sled database error")]
+    SledError,
 
     #[error("{0}")]
     Generic(String),
 
-    #[error(transparent)]
-    VersionError(#[from] version::error::Error),
+    #[error("Tel event encoding error")]
+    EncodingError(String),
 
     #[error("Escrow database error")]
     EscrowDatabaseError,
@@ -48,4 +42,16 @@ pub enum Error {
 
     #[error("Locking error")]
     RwLockingError,
+}
+
+impl From<sled::Error> for Error {
+    fn from(_: sled::Error) -> Self {
+        Error::SledError
+    }
+}
+
+impl From<sled_tables::error::Error> for Error {
+    fn from(_: sled_tables::error::Error) -> Self {
+        Error::SledError
+    }
 }

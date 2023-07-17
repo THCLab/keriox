@@ -651,22 +651,11 @@ impl IdentifierController {
 
             match res {
                 PossibleResponse::Kel(kel) => {
-                    println!(
-                        "\nGot kel from {}: {}",
-                        &recipient.to_str(),
-                        std::str::from_utf8(
-                            &kel.iter()
-                                .flat_map(|m| m.to_cesr().unwrap())
-                                .collect::<Vec<_>>()
-                        )
-                        .unwrap()
-                    );
                     for event in kel {
                         self.source.process(&event)?;
                     }
                 }
                 PossibleResponse::Mbx(mbx) => {
-                    println!("Mailbox updated");
                     // only process if we actually asked about mailbox
                     if let (Some(from_who), Some(about_who)) = (from_who, about_who) {
                         actions.append(
@@ -706,11 +695,10 @@ impl IdentifierController {
             .tel_transport
             .send_query(query, location)
             .await
-            .unwrap();
+            .map_err(|e| ControllerError::OtherError(e.to_string()))?;
         self.source
             .tel
-            .parse_and_process_tel_stream(tel_res.as_bytes())
-            .unwrap();
+            .parse_and_process_tel_stream(tel_res.as_bytes())?;
 
         Ok(())
     }

@@ -29,12 +29,15 @@ pub fn watcher_forward_ksn() -> Result<(), Error> {
     let witness_listener = {
         let root_witness = Builder::new().prefix("test-wit").tempdir().unwrap();
 
-        Arc::new(WitnessListener::setup(
-            witness_url,
-            root_witness.path(),
-            Some("ArwXoACJgOleVZ2PY7kXn7rA0II0mHYDhc6WrBH8fDAc".into()),
-            WitnessEscrowConfig::default(),
-        )?)
+        Arc::new(
+            WitnessListener::setup(
+                witness_url,
+                root_witness.path(),
+                Some("ArwXoACJgOleVZ2PY7kXn7rA0II0mHYDhc6WrBH8fDAc".into()),
+                WitnessEscrowConfig::default(),
+            )
+            .unwrap(),
+        )
     };
 
     // Controller who will ask

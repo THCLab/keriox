@@ -28,12 +28,14 @@ use keri::{
     },
     signer::Signer,
 };
+use serde::{Deserialize, Serialize};
 use teliox::{
     database::EventDatabase,
     event::{parse_tel_query_stream, verifiable_event::VerifiableEvent},
     processor::{escrow::default_escrow_bus, storage::TelEventStorage, TelReplyType},
     tel::Tel,
 };
+use thiserror::Error;
 use url::Url;
 
 use crate::witness_processor::{WitnessEscrowConfig, WitnessProcessor};
@@ -109,6 +111,18 @@ impl WitnessReceiptGenerator {
     }
 }
 
+#[derive(Error, Debug, Serialize, Deserialize)]
+pub enum WitnessError {
+    #[error(transparent)]
+    KeriError(#[from] keri::error::Error),
+
+    #[error(transparent)]
+    TelError(#[from] teliox::error::Error),
+
+    #[error(transparent)]
+    DatabaseError(#[from] keri::database::DbError),
+}
+
 pub struct Witness {
     pub address: Url,
     pub prefix: BasicPrefix,
@@ -127,7 +141,7 @@ impl Witness {
         event_path: &Path,
         oobi_path: &Path,
         escrow_config: WitnessEscrowConfig,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, WitnessError> {
         use keri::{database::escrow::EscrowDb, processor::notification::JustNotification};
         let mut events_path = PathBuf::new();
         events_path.push(event_path);
@@ -197,7 +211,7 @@ impl Witness {
         oobi_db_path: &Path,
         priv_key: Option<String>,
         escrow_config: WitnessEscrowConfig,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, WitnessError> {
         let signer = Arc::new(
             priv_key
                 .map(|key| Signer::new_with_seed(&key.parse()?))

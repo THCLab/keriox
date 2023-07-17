@@ -23,12 +23,15 @@ async fn test_tel_from_witness() -> Result<(), ControllerError> {
     let witness1 = {
         let seed = "AK8F6AAiYDpXlWdj2O5F5-6wNCCNJh2A4XOlqwR_HwwH";
         let witness_root = Builder::new().prefix("test-wit1-db").tempdir().unwrap();
-        Arc::new(WitnessListener::setup(
-            url::Url::parse("http://witness1/").unwrap(),
-            witness_root.path(),
-            Some(seed.to_string()),
-            WitnessEscrowConfig::default(),
-        )?)
+        Arc::new(
+            WitnessListener::setup(
+                url::Url::parse("http://witness1/").unwrap(),
+                witness_root.path(),
+                Some(seed.to_string()),
+                WitnessEscrowConfig::default(),
+            )
+            .unwrap(),
+        )
     };
 
     let wit1_id = witness1.get_prefix();
@@ -75,7 +78,7 @@ async fn test_tel_from_witness() -> Result<(), ControllerError> {
     // Issue message.
     let msg_to_issue = "hello world";
     // Incept registry. It'll generate ixn that need to be signed.
-    let (vcp_id, vcp_ixn) = issuer.incept_registry()?;
+    let (_vcp_id, vcp_ixn) = issuer.incept_registry()?;
 
     let signature = SelfSigningPrefix::Ed25519Sha512(issuer_keypair.sign(&vcp_ixn)?);
     issuer.finalize_event(&vcp_ixn, signature).await?;

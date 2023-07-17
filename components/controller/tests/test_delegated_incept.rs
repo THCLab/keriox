@@ -27,12 +27,15 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     let witness = {
         let seed = "AK8F6AAiYDpXlWdj2O5F5-6wNCCNJh2A4XOlqwR_HwwH";
         let witness_root = Builder::new().prefix("test-wit1-db").tempdir().unwrap();
-        Arc::new(WitnessListener::setup(
-            url::Url::parse("http://witness1:3232/").unwrap(),
-            witness_root.path(),
-            Some(seed.to_string()),
-            WitnessEscrowConfig::default(),
-        )?)
+        Arc::new(
+            WitnessListener::setup(
+                url::Url::parse("http://witness1:3232/").unwrap(),
+                witness_root.path(),
+                Some(seed.to_string()),
+                WitnessEscrowConfig::default(),
+            )
+            .unwrap(),
+        )
     };
 
     let witness_id_basic = witness.get_prefix();

@@ -105,7 +105,7 @@ impl Controller {
             let mut path = db_path.clone();
             path.push("tel");
             path.push("events");
-            Arc::new(EventDatabase::new(&path).unwrap())
+            Arc::new(EventDatabase::new(&path)?)
         };
 
         let tel_escrow_db = {
@@ -119,8 +119,7 @@ impl Controller {
             tel_storage.clone(),
             kel_storage.clone(),
             tel_escrow_db.clone(),
-        )
-        .unwrap();
+        )?;
 
         let tel = Arc::new(Tel::new(
             tel_storage.clone(),
@@ -191,7 +190,9 @@ impl Controller {
         id: &IdentifierPrefix,
         oobi_json: &str,
     ) -> Result<(), ControllerError> {
-        let oobi: Oobi = serde_json::from_str(oobi_json).unwrap();
+        let oobi: Oobi = serde_json::from_str(oobi_json).map_err(|_e| {
+            ControllerError::OtherError(format!("Can't parse oobi: {}", &oobi_json))
+        })?;
         for watcher in self.get_watchers(id)?.iter() {
             self.send_oobi_to(watcher, Scheme::Http, oobi.clone())
                 .await?;
@@ -586,8 +587,7 @@ impl Controller {
                 let kel = self
                     .storage
                     .get_kel_messages_with_receipts(signer_prefix)?
-                    .ok_or(ControllerError::UnknownIdentifierError)
-                    .unwrap();
+                    .ok_or(ControllerError::UnknownIdentifierError)?;
 
                 // TODO: send in one request
                 for ev in kel {
