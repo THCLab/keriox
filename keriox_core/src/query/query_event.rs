@@ -48,7 +48,6 @@ impl QueryRoute {
             QueryRoute::Log { ref args, .. } | QueryRoute::Ksn { ref args, .. } => args.i.clone(),
             #[cfg(feature = "mailbox")]
             QueryRoute::Mbx { ref args, .. } => args.i.clone(),
-            // QueryRoute::Tels { reply_route, args } => todo!(),
         }
     }
 }

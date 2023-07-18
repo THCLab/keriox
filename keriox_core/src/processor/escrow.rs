@@ -815,20 +815,20 @@ impl Notifier for DelegationEscrow {
                 // ignore events with no signatures
                 if !signed_event.signatures.is_empty() {
                     let delegators_id = match &signed_event.event_message.data.event_data {
-                        EventData::Dip(dip) => dip.delegator.clone(),
+                        EventData::Dip(dip) => Ok(dip.delegator.clone()),
                         EventData::Drt(_drt) => {
                             let storage = EventStorage::new(self.db.clone());
                             storage
                                 .get_state(&signed_event.event_message.data.get_prefix())?
                                 .ok_or(Error::MissingDelegatingEventError)?
                                 .delegator
-                                .ok_or(Error::MissingDelegatingEventError)?
+                                .ok_or(Error::MissingDelegatingEventError)
                         }
                         _ => {
                             // not delegated event
-                            todo!()
+                            Err(Error::SemanticError("Not delegated event".to_string()))
                         }
-                    };
+                    }?;
                     self.delegation_escrow
                         .add(&delegators_id, signed_event.clone())?;
                 }

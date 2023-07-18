@@ -57,8 +57,7 @@ pub fn default_escrow_bus(
                 TelNotificationKind::OutOfOrder,
                 TelNotificationKind::TelEventAdded,
             ],
-        )
-        .unwrap();
+        )?;
     tel_bus
         .register_observer(
             missing_registry_escrow.clone(),
@@ -66,14 +65,12 @@ pub fn default_escrow_bus(
                 TelNotificationKind::MissingRegistry,
                 TelNotificationKind::TelEventAdded,
             ],
-        )
-        .unwrap();
+        )?;
     tel_bus
         .register_observer(
             missing_issuer_escrow.clone(),
             vec![TelNotificationKind::MissingIssuer],
-        )
-        .unwrap();
+        )?;
     Ok((
         tel_bus,
         missing_issuer_escrow,

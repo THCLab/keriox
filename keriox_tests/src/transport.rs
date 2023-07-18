@@ -85,7 +85,6 @@ impl GeneralTelTransport for TelTestTransport {
         qry: SignedTelQuery,
         loc: LocationScheme,
     ) -> Result<String, TransportError> {
-        // todo!()
         let (host, port) = match loc.url.origin() {
             url::Origin::Tuple(_scheme, host, port) => (host, port),
             _ => return Err(TransportError::NetworkError),

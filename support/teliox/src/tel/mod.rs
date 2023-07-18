@@ -38,7 +38,7 @@ impl TelNotifier for RecentlyAddedEvents {
     ) -> Result<(), Error> {
         match notification {
             TelNotification::TelEventAdded(event) => self.0.write().unwrap().push(event.clone()),
-            _ => todo!(),
+            _ => return Err(Error::Generic("Wrong event type".to_string())),
         };
         Ok(())
     }

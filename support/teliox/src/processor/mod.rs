@@ -47,7 +47,7 @@ impl TelEventProcessor {
         Ok(())
     }
 
-    // Process verifiable event. It doesn't check if source seal is correct. Just add event to tel.
+    // Checks verifiable event and adds it to database.
     pub fn process(&self, event: VerifiableEvent) -> Result<(), Error> {
         let validator =
             TelEventValidator::new(self.tel_reference.db.clone(), self.kel_reference.clone());
@@ -63,23 +63,20 @@ impl TelEventProcessor {
                     Ok(())
                 }
                 Err(e) => match e {
-                    Error::MissingSealError => todo!(),
                     Error::OutOfOrderError => {
                         self.publisher.notify(&TelNotification::OutOfOrder(event))
                     }
                     Error::MissingIssuerEventError => self
                         .publisher
                         .notify(&TelNotification::MissingIssuer(event)),
-                    Error::DigestsNotMatchError => todo!(),
                     Error::MissingRegistryError => self
                         .publisher
                         .notify(&TelNotification::MissingRegistry(event)),
-                    Error::UnknownIdentifierError => todo!(),
                     Error::EventAlreadySavedError => {
                         // Means that vc of given registry is already accepted
                         Ok(())
                     }
-                    _e => todo!(),
+                    e => Err(e),
                 },
             },
             Event::Vc(ref vc_ev) => match validator.validate_vc(&vc_ev, &event.seal) {
