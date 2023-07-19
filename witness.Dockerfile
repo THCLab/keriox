@@ -10,6 +10,7 @@ members = [\n\
 ]' > Cargo.toml
 COPY ./components components
 COPY ./keriox_core keriox_core
+COPY ./support/teliox support/teliox
 WORKDIR /app/components/witness
 RUN cargo fetch
 RUN cargo build --release --package witness
