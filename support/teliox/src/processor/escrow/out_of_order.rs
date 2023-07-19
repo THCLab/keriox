@@ -53,7 +53,7 @@ impl TelNotifier for OutOfOrderEscrow {
                     .map_err(|_e| Error::EscrowDatabaseError)
             }
             TelNotification::TelEventAdded(event) => {
-                self.process_out_of_order_events(bus, &event.get_prefix())
+                self.process_out_of_order_events(bus, &event.event.get_prefix())
             }
             _ => Err(Error::Generic("Wrong notification".into())),
         }
@@ -81,7 +81,7 @@ impl OutOfOrderEscrow {
                         // accept tel event
                         self.tel_reference.add_event(event.clone())?;
 
-                        bus.notify(&TelNotification::TelEventAdded(event.clone().event))?;
+                        bus.notify(&TelNotification::TelEventAdded(event.clone()))?;
                         // stop processing the escrow if tel was updated. It needs to start again.
                         break;
                     }

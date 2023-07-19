@@ -4,8 +4,6 @@ use controller::{
     config::ControllerConfig, error::ControllerError, identifier_controller::IdentifierController,
     BasicPrefix, Controller, CryptoBox, KeyManager, SelfSigningPrefix,
 };
-use keri::actor::prelude::HashFunctionCode;
-use said::derivation::HashFunction;
 
 #[async_std::test]
 async fn test_tel() -> Result<(), ControllerError> {
@@ -36,12 +34,12 @@ async fn test_tel() -> Result<(), ControllerError> {
             .finalize_inception(icp_event.as_bytes(), &signature)
             .await
             .unwrap();
-        IdentifierController::new(incepted_identifier, controller1.clone())
+        IdentifierController::new(incepted_identifier, controller1.clone(), None)
     };
     let issuer_prefix = identifier1.id.clone();
 
     // Incept management TEL
-    let ixn = identifier1.incept_registry().unwrap();
+    let (_registry_id, ixn) = identifier1.incept_registry().unwrap();
     let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(&ixn).unwrap());
 
     identifier1.finalize_event(&ixn, signature).await.unwrap();
@@ -58,9 +56,12 @@ async fn test_tel() -> Result<(), ControllerError> {
 
     // Issue something (sign and create ixn event to kel)
     let credential = r#"message"#;
-    let vc_hash = HashFunction::from(HashFunctionCode::Blake3_256).derive(credential.as_bytes());
 
-    let issuance_ixn = identifier1.issue(credential).unwrap();
+    let (vc_id, issuance_ixn) = identifier1.issue(credential).unwrap();
+    let vc_hash = match vc_id {
+        controller::IdentifierPrefix::SelfAddressing(sai) => sai.clone(),
+        _ => unreachable!(),
+    };
     let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(&issuance_ixn).unwrap());
 
     identifier1
@@ -73,7 +74,7 @@ async fn test_tel() -> Result<(), ControllerError> {
         .storage
         .get_state(&issuer_prefix)
         .unwrap()
-        .unwrap(); // .get_last_establishment_event_seal(&issuer_prefix).unwrap().unwrap();
+        .unwrap();
 
     assert_eq!(state.sn, 2);
     let iss = tel_ref.get_vc_state(&vc_hash).unwrap();
@@ -104,18 +105,6 @@ async fn test_tel() -> Result<(), ControllerError> {
         rev,
         Some(teliox::state::vc_state::TelState::Revoked)
     ));
-
-    // let tel = controller1
-    //     .tel
-    //     .get_tel(&vc_hash)
-    //     .unwrap()
-    //     .iter()
-    //     .map(|ev| ev.serialize().unwrap())
-    //     .flatten()
-    //     .collect::<Vec<u8>>();
-    // println!("tel: {}", String::from_utf8(tel).unwrap());
-    // let kel = controller1.storage.get_kel(&issuer_prefix)?;
-    // println!("\nkel: {}", String::from_utf8(kel.unwrap()).unwrap());
 
     Ok(())
 }

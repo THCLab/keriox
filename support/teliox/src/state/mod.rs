@@ -34,7 +34,7 @@ impl ManagerTelState {
         match event_content.event_type {
             ManagerEventType::Vcp(ref vcp) => {
                 if self != &ManagerTelState::default() {
-                    Err(Error::Generic("Improper manager state".into()))
+                    Err(Error::EventAlreadySavedError)
                 } else {
                     let backers = if vcp.config.contains(&Config::NoBackers) {
                         None

@@ -8,13 +8,13 @@ use crate::{
     event_message::signed_event_message::{Message, Op},
     oobi::{LocationScheme, Oobi, Role},
     prefix::IdentifierPrefix,
-    query::query_event::SignedQuery,
+    query::query_event::SignedKelQuery,
 };
 
 #[async_trait::async_trait]
 pub trait TestActor<E: Error = ActorError> {
     async fn send_message(&self, msg: Message) -> Result<(), E>;
-    async fn send_query(&self, query: SignedQuery) -> Result<PossibleResponse, E>;
+    async fn send_query(&self, query: SignedKelQuery) -> Result<PossibleResponse, E>;
     async fn request_loc_scheme(&self, eid: IdentifierPrefix) -> Result<Vec<Op>, E>;
     async fn request_end_role(
         &self,
@@ -80,7 +80,7 @@ where
     async fn send_query(
         &self,
         loc: LocationScheme,
-        qry: SignedQuery,
+        qry: SignedKelQuery,
     ) -> Result<PossibleResponse, TransportError<E>> {
         let (host, port) = match loc.url.origin() {
             url::Origin::Tuple(_scheme, host, port) => (host, port),

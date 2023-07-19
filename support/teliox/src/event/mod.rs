@@ -1,7 +1,11 @@
-use crate::error::Error;
+use crate::{
+    error::Error,
+    query::{SignedTelQuery, TelQueryEvent},
+};
 
 use self::{manager_event::ManagerTelEventMessage, vc_event::VCEventMessage};
-use keri::prefix::IdentifierPrefix;
+use cesrox::{group::Group, parse_many};
+use keri::{event_message::signature::get_signatures, prefix::IdentifierPrefix};
 use said::SelfAddressingIdentifier;
 use serde::{Deserialize, Serialize};
 
@@ -50,4 +54,33 @@ impl Event {
             Event::Vc(ev) => Ok(ev.encode()?),
         }
     }
+}
+
+fn signed_tel_query(
+    qry: TelQueryEvent,
+    mut attachments: Vec<Group>,
+) -> Result<SignedTelQuery, Error> {
+    let att = attachments.pop().unwrap();
+    // .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?;
+    let sigs = get_signatures(att)?;
+    Ok(SignedTelQuery {
+        query: qry,
+        // TODO what if more than one?
+        signature: sigs.get(0).unwrap().to_owned(), //.ok_or(Error::MissingSignatures)?.clone(),
+    })
+}
+
+pub fn parse_tel_query_stream(stream: &[u8]) -> Result<Vec<SignedTelQuery>, Error> {
+    let (_rest, queries) = parse_many(stream).unwrap();
+    queries
+        .iter()
+        .map(|qry| {
+            let q: TelQueryEvent = match &qry.payload {
+                cesrox::payload::Payload::JSON(json) => serde_json::from_slice(&json).unwrap(),
+                cesrox::payload::Payload::CBOR(_) => todo!(),
+                cesrox::payload::Payload::MGPK(_) => todo!(),
+            };
+            signed_tel_query(q, qry.attachments.clone())
+        })
+        .collect()
 }

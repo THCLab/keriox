@@ -33,7 +33,7 @@ pub enum EventTypeTag {
     Exn,
     #[cfg(feature = "query")]
     Rpy,
-    #[cfg(feature = "query")]
+    // #[cfg(feature = "query")]
     Qry,
 }
 

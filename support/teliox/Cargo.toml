@@ -10,7 +10,7 @@ license = "EUPL-1.2"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-keri = {path = "../../keriox_core"}
+keri = {path = "../../keriox_core", features = ["oobi", "mailbox"]}
 said = { git = "https://github.com/THCLab/cesrox", tag = "v0.1.4" }
 cesrox = { git = "https://github.com/THCLab/cesrox", tag = "v0.1.4" }
 version = { git = "https://github.com/THCLab/cesrox", tag = "v0.1.4" }
@@ -24,6 +24,8 @@ arrayref = "0.3.6"
 sled = { version = "0.34.6"}
 serde_cbor = "0.11.1"
 sled-tables = "0.2.0"
+reqwest = { version = "0.11"}
+async-trait = "0.1.57"
 
 
 [dev-dependencies]

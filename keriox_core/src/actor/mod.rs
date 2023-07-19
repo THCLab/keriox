@@ -16,7 +16,8 @@ use crate::{
     processor::event_storage::EventStorage,
     query::{
         key_state_notice::KeyStateNotice,
-        query_event::{Query, SignedQuery},
+        query_event::QueryRoute,
+        query_event::SignedKelQuery,
         reply_event::{ReplyRoute, SignedReply},
         ReplyType,
     },
@@ -54,10 +55,10 @@ pub fn parse_op_stream(stream: &[u8]) -> Result<Vec<Op>, Error> {
 }
 
 #[cfg(any(feature = "query", feature = "oobi"))]
-pub fn parse_query_stream(stream: &[u8]) -> Result<Vec<SignedQuery>, Error> {
+pub fn parse_query_stream(stream: &[u8]) -> Result<Vec<SignedKelQuery>, Error> {
     let (_rest, queries) =
         parse_many(stream).map_err(|e| Error::DeserializeError(e.to_string()))?;
-    queries.into_iter().map(SignedQuery::try_from).collect()
+    queries.into_iter().map(SignedKelQuery::try_from).collect()
 }
 
 #[cfg(any(feature = "query", feature = "oobi"))]
@@ -178,7 +179,7 @@ fn process_exn(
 
 #[cfg(feature = "query")]
 pub fn process_signed_query(
-    qr: SignedQuery,
+    qr: SignedKelQuery,
     storage: &EventStorage,
 ) -> Result<ReplyType, SignedQueryError> {
     let signature = qr.signature;
@@ -194,7 +195,7 @@ pub fn process_signed_query(
 
     // TODO check timestamps
     // unpack and check what's inside
-    Ok(process_query(qr.query.get_query_data(), storage)?)
+    Ok(process_query(qr.query.get_route(), storage)?)
 }
 
 #[derive(Debug, thiserror::Error, Serialize, Deserialize)]
@@ -216,10 +217,8 @@ pub enum SignedQueryError {
 }
 
 #[cfg(feature = "query")]
-fn process_query(qr: Query, storage: &EventStorage) -> Result<ReplyType, QueryError> {
-    use crate::query::query_event::QueryRoute;
-
-    match qr.route {
+fn process_query(qr: &QueryRoute, storage: &EventStorage) -> Result<ReplyType, QueryError> {
+    match qr {
         QueryRoute::Log { args, .. } => Ok(ReplyType::Kel(
             storage
                 .get_kel_messages_with_receipts(&args.i)?
@@ -229,11 +228,10 @@ fn process_query(qr: Query, storage: &EventStorage) -> Result<ReplyType, QueryEr
                 .collect(),
         )),
         QueryRoute::Ksn { args, .. } => {
-            let i = args.i;
             // return reply message with ksn inside
             let state = storage
-                .get_state(&i)?
-                .ok_or_else(|| QueryError::UnknownId { id: i })?;
+                .get_state(&args.i)?
+                .ok_or_else(|| QueryError::UnknownId { id: args.i.clone() })?;
             let ksn = KeyStateNotice::new_ksn(state, SerializationFormats::JSON);
             Ok(ReplyType::Ksn(ksn))
         }

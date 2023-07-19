@@ -9,7 +9,7 @@ use crate::{
     event_message::signed_event_message::{Message, Op},
     oobi::{LocationScheme, Oobi, Role, Scheme},
     prefix::IdentifierPrefix,
-    query::query_event::SignedQuery,
+    query::query_event::SignedKelQuery,
 };
 
 /// Default behavior for communication with other actors.
@@ -88,7 +88,7 @@ where
     async fn send_query(
         &self,
         loc: LocationScheme,
-        qry: SignedQuery,
+        qry: SignedKelQuery,
     ) -> Result<PossibleResponse, TransportError<E>> {
         let url = match loc.scheme {
             Scheme::Http => {

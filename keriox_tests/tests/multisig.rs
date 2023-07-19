@@ -20,12 +20,15 @@ use witness::{WitnessEscrowConfig, WitnessListener};
 async fn test_multisig() -> Result<()> {
     let wit = {
         let wit_root = Builder::new().prefix("wit-db").tempdir().unwrap();
-        Arc::new(WitnessListener::setup(
-            Url::parse("http://127.0.0.1:3232").unwrap(),
-            wit_root.path(),
-            Some("ArwXoACJgOleVZ2PY7kXn7rA0II0mHYDhc6WrBH8fDAc".to_string()),
-            WitnessEscrowConfig::default(),
-        )?)
+        Arc::new(
+            WitnessListener::setup(
+                Url::parse("http://127.0.0.1:3232").unwrap(),
+                wit_root.path(),
+                Some("ArwXoACJgOleVZ2PY7kXn7rA0II0mHYDhc6WrBH8fDAc".to_string()),
+                WitnessEscrowConfig::default(),
+            )
+            .unwrap(),
+        )
     };
     let witness_id = wit.get_prefix();
     let witness_oobi = LocationScheme {
@@ -90,7 +93,7 @@ async fn test_multisig() -> Result<()> {
             .finalize_inception(icp_event.as_bytes(), &signature)
             .await
             .unwrap();
-        IdentifierController::new(incepted_identifier, controller1.clone())
+        IdentifierController::new(incepted_identifier, controller1.clone(), None)
     };
 
     identifier1.notify_witnesses().await?;
@@ -129,7 +132,7 @@ async fn test_multisig() -> Result<()> {
             .finalize_inception(icp_event.as_bytes(), &signature)
             .await
             .unwrap();
-        IdentifierController::new(incepted_identifier, controller2.clone())
+        IdentifierController::new(incepted_identifier, controller2.clone(), None)
     };
     identifier2.notify_witnesses().await?;
 

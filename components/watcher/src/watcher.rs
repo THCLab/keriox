@@ -13,7 +13,7 @@ use keri::{
     prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     processor::escrow::{default_escrow_bus, EscrowConfig},
     query::{
-        query_event::{QueryArgs, QueryEvent, QueryRoute, SignedQuery},
+        query_event::{QueryArgs, QueryEvent, QueryRoute, SignedKelQuery},
         reply_event::{ReplyEvent, ReplyRoute, SignedReply},
         ReplyType,
     },
@@ -185,7 +185,7 @@ impl WatcherData {
 
     async fn process_query(
         &self,
-        qry: SignedQuery,
+        qry: SignedKelQuery,
     ) -> Result<Option<PossibleResponse>, ActorError> {
         let cid = qry
             .signature
@@ -198,7 +198,7 @@ impl WatcherData {
             });
         }
 
-        match &qry.query.data.data.route {
+        match &qry.query.get_route() {
             QueryRoute::Ksn { .. } | QueryRoute::Log { .. } => {
                 // Update latest state for prefix
                 self.query_state(qry.query.get_prefix()).await?;
@@ -251,12 +251,12 @@ impl WatcherData {
     }
 
     /// Forward query to random registered witness and save its response to mailbox.
-    async fn forward_query(&self, qry: &SignedQuery) -> Result<(), ActorError> {
+    async fn forward_query(&self, qry: &SignedKelQuery) -> Result<(), ActorError> {
         // Create a new signed message based on the received one
         let sigs = SelfSigningPrefix::Ed25519Sha512(self.signer.sign(qry.query.encode()?)?);
-        let qry = SignedQuery::new_nontrans(qry.query.clone(), self.prefix.clone(), sigs);
+        let qry = SignedKelQuery::new_nontrans(qry.query.clone(), self.prefix.clone(), sigs);
 
-        let wit_id = self.get_witness_for_prefix(qry.query.get_prefix())?;
+        let wit_id = self.get_witness_for_prefix(qry.query.data.data.get_prefix())?;
 
         // Send query to witness
         let resp = self
@@ -312,7 +312,7 @@ impl WatcherData {
             (self.signer).sign(serde_json::to_vec(&qry).unwrap())?,
         );
 
-        let query = SignedQuery::new_nontrans(qry, self.prefix.clone(), signature);
+        let query = SignedKelQuery::new_nontrans(qry, self.prefix.clone(), signature);
 
         let wit_id = self.get_witness_for_prefix(prefix)?;
 
@@ -418,7 +418,7 @@ impl WatcherData {
         &self,
         wit_id: IdentifierPrefix,
         scheme: Scheme,
-        query: SignedQuery,
+        query: SignedKelQuery,
     ) -> Result<PossibleResponse, ActorError> {
         let locs = self.get_loc_schemas(&wit_id)?;
         let loc = locs.into_iter().find(|loc| loc.scheme == scheme);

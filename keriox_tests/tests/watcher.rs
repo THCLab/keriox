@@ -14,7 +14,7 @@ use keri::{
     event_message::signed_event_message::{Notice, Op},
     prefix::{IdentifierPrefix, SelfSigningPrefix},
     processor::escrow::EscrowConfig,
-    query::{query_event::SignedQuery, reply_event::SignedReply},
+    query::{query_event::SignedKelQuery, reply_event::SignedReply},
     transport::test::{TestActorMap, TestTransport},
 };
 use tempfile::Builder;
@@ -29,12 +29,15 @@ pub fn watcher_forward_ksn() -> Result<(), Error> {
     let witness_listener = {
         let root_witness = Builder::new().prefix("test-wit").tempdir().unwrap();
 
-        Arc::new(WitnessListener::setup(
-            witness_url,
-            root_witness.path(),
-            Some("ArwXoACJgOleVZ2PY7kXn7rA0II0mHYDhc6WrBH8fDAc".into()),
-            WitnessEscrowConfig::default(),
-        )?)
+        Arc::new(
+            WitnessListener::setup(
+                witness_url,
+                root_witness.path(),
+                Some("ArwXoACJgOleVZ2PY7kXn7rA0II0mHYDhc6WrBH8fDAc".into()),
+                WitnessEscrowConfig::default(),
+            )
+            .unwrap(),
+        )
     };
 
     // Controller who will ask
@@ -161,7 +164,7 @@ pub fn watcher_forward_ksn() -> Result<(), Error> {
     watcher.process_reply(witness_oobi).unwrap();
 
     let mut wrong_query = query.clone();
-    if let Op::Query(SignedQuery { signature, .. }) = &mut wrong_query {
+    if let Op::Query(SignedKelQuery { signature, .. }) = &mut wrong_query {
         match signature {
             keri::event_message::signature::Signature::Transferable(_, sig) => {
                 if let SelfSigningPrefix::Ed25519Sha512(ref mut bytes) = &mut sig[0].signature {

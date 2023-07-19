@@ -53,7 +53,7 @@ impl TelNotifier for MissingRegistryEscrow {
                 Ok(())
             }
             TelNotification::TelEventAdded(event) => {
-                let reg_id = event.get_registry_id()?;
+                let reg_id = event.event.get_registry_id()?;
                 self.process_missing_registry(bus, &reg_id)
             }
             _ => Err(Error::Generic("Wrong notification".into())),
@@ -82,13 +82,17 @@ impl MissingRegistryEscrow {
                         // accept tel event
                         self.tel_reference.add_event(event.clone())?;
 
-                        bus.notify(&TelNotification::TelEventAdded(event.clone().event))?;
+                        bus.notify(&TelNotification::TelEventAdded(event.clone()))?;
                         // stop processing the escrow if tel was updated. It needs to start again.
                         break;
                     }
                     Err(Error::MissingSealError) => {
                         // remove from escrow
                         self.escrowed_missing_registry.remove(id, &event).unwrap();
+                    }
+                    Err(Error::MissingIssuerEventError) => {
+                        self.escrowed_missing_registry.remove(id, &event).unwrap();
+                        bus.notify(&TelNotification::MissingIssuer(event.clone()))?;
                     }
                     Err(_e) => {} // keep in escrow,
                 }

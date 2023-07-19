@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use std::time::Duration;
 
 pub mod config;
 pub mod error;
@@ -13,6 +12,7 @@ use keri::prefix::IndexedSignature;
 pub use keri::prefix::{BasicPrefix, CesrPrimitive, IdentifierPrefix, SelfSigningPrefix};
 use keri::processor::notification::JustNotification;
 pub use keri::signer::{CryptoBox, KeyManager};
+pub use teliox::event::parse_tel_query_stream;
 
 use config::ControllerConfig;
 use keri::state::IdentifierState;
@@ -36,16 +36,16 @@ use keri::{
         Processor,
     },
     query::{
-        query_event::SignedQuery,
+        query_event::SignedKelQuery,
         reply_event::{ReplyEvent, ReplyRoute, SignedReply},
     },
     transport::Transport,
 };
 use teliox::database::EventDatabase;
-use teliox::processor::escrow::missing_issuer::MissingIssuerEscrow;
-use teliox::processor::notification::{TelNotificationBus, TelNotificationKind};
+use teliox::processor::escrow::default_escrow_bus as tel_escrow_bus;
 use teliox::processor::storage::TelEventStorage;
 use teliox::tel::Tel;
+use teliox::transport::GeneralTelTransport;
 
 use self::error::ControllerError;
 
@@ -57,6 +57,7 @@ pub struct Controller {
     transport: Box<dyn Transport + Send + Sync>,
 
     pub tel: Arc<Tel>,
+    tel_transport: Box<dyn GeneralTelTransport + Send + Sync>,
 }
 
 impl Controller {
@@ -66,6 +67,7 @@ impl Controller {
             initial_oobis,
             escrow_config,
             transport,
+            tel_transport,
         } = config;
 
         let db = {
@@ -103,7 +105,7 @@ impl Controller {
             let mut path = db_path.clone();
             path.push("tel");
             path.push("events");
-            Arc::new(EventDatabase::new(&path).unwrap())
+            Arc::new(EventDatabase::new(&path)?)
         };
 
         let tel_escrow_db = {
@@ -113,22 +115,12 @@ impl Controller {
             Arc::new(EscrowDb::new(&path)?)
         };
         let tel_storage = Arc::new(TelEventStorage::new(tel_events_db));
-        let tel_bus = TelNotificationBus::new();
-
-        let missing_issuer_escrow = Arc::new(MissingIssuerEscrow::new(
+        let (tel_bus, missing_issuer, _out_of_order, _missing_registy) = tel_escrow_bus(
             tel_storage.clone(),
-            tel_escrow_db,
-            Duration::from_secs(100),
             kel_storage.clone(),
-            tel_bus.clone(),
-        ));
+            tel_escrow_db.clone(),
+        )?;
 
-        tel_bus
-            .register_observer(
-                missing_issuer_escrow.clone(),
-                vec![TelNotificationKind::MissingIssuer],
-            )
-            .unwrap();
         let tel = Arc::new(Tel::new(
             tel_storage.clone(),
             kel_storage.clone(),
@@ -136,7 +128,7 @@ impl Controller {
         ));
 
         notification_bus.register_observer(
-            missing_issuer_escrow.clone(),
+            missing_issuer.clone(),
             vec![JustNotification::KeyEventAdded],
         );
 
@@ -147,6 +139,7 @@ impl Controller {
             partially_witnessed_escrow,
             transport,
             tel: tel,
+            tel_transport: tel_transport,
         };
 
         if !initial_oobis.is_empty() {
@@ -197,7 +190,9 @@ impl Controller {
         id: &IdentifierPrefix,
         oobi_json: &str,
     ) -> Result<(), ControllerError> {
-        let oobi: Oobi = serde_json::from_str(oobi_json).unwrap();
+        let oobi: Oobi = serde_json::from_str(oobi_json).map_err(|_e| {
+            ControllerError::OtherError(format!("Can't parse oobi: {}", &oobi_json))
+        })?;
         for watcher in self.get_watchers(id)?.iter() {
             self.send_oobi_to(watcher, Scheme::Http, oobi.clone())
                 .await?;
@@ -286,7 +281,7 @@ impl Controller {
         &self,
         id: &IdentifierPrefix,
         scheme: Scheme,
-        query: SignedQuery,
+        query: SignedKelQuery,
     ) -> Result<PossibleResponse, ControllerError> {
         let loc = self
             .get_loc_schemas(id)?
@@ -592,8 +587,7 @@ impl Controller {
                 let kel = self
                     .storage
                     .get_kel_messages_with_receipts(signer_prefix)?
-                    .ok_or(ControllerError::UnknownIdentifierError)
-                    .unwrap();
+                    .ok_or(ControllerError::UnknownIdentifierError)?;
 
                 // TODO: send in one request
                 for ev in kel {

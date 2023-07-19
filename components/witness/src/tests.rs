@@ -75,7 +75,8 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
             oobi_root.path(),
             Some(seed1.into()),
             WitnessEscrowConfig::default(),
-        )?
+        )
+        .unwrap()
     };
 
     let second_witness = {
@@ -88,7 +89,8 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
             oobi_root.path(),
             Some(seed2.into()),
             WitnessEscrowConfig::default(),
-        )?
+        )
+        .unwrap()
     };
 
     // Get inception event.
@@ -232,7 +234,7 @@ fn test_qry_rpy() -> Result<(), ActorError> {
     use keri::{
         prefix::IndexedSignature,
         query::{
-            query_event::{QueryArgs, QueryEvent, QueryRoute, SignedQuery},
+            query_event::{QueryArgs, QueryEvent, QueryRoute, SignedKelQuery},
             reply_event::ReplyRoute,
         },
         signer::{KeyManager, Signer},
@@ -259,7 +261,8 @@ fn test_qry_rpy() -> Result<(), ActorError> {
         witness_root.path(),
         witness_oobi_root.path(),
         WitnessEscrowConfig::default(),
-    )?;
+    )
+    .unwrap();
 
     let alice_key_manager = Arc::new(Mutex::new({
         use keri::signer::CryptoBox;
@@ -339,7 +342,7 @@ fn test_qry_rpy() -> Result<(), ActorError> {
         0,
     );
     // Qry message signed by Bob
-    let query = SignedQuery::new_trans(qry, bob_pref.to_owned(), vec![signature]);
+    let query = SignedKelQuery::new_trans(qry, bob_pref.to_owned(), vec![signature]);
 
     let response = witness.process_query(query)?;
 
@@ -382,7 +385,7 @@ fn test_qry_rpy() -> Result<(), ActorError> {
         0,
     );
     // Qry message signed by Bob
-    let query = SignedQuery::new_trans(qry, bob_pref.to_owned(), vec![signature]);
+    let query = SignedKelQuery::new_trans(qry, bob_pref.to_owned(), vec![signature]);
 
     let response = witness.process_query(query)?;
 
@@ -419,7 +422,8 @@ pub fn test_key_state_notice() -> Result<(), Error> {
             path,
             witness_root_oobi.path(),
             WitnessEscrowConfig::default(),
-        )?
+        )
+        .unwrap()
     };
 
     // Init bob.
@@ -718,7 +722,8 @@ pub fn test_multisig() -> Result<(), ActorError> {
             path,
             witness_root_oobi.path(),
             WitnessEscrowConfig::default(),
-        )?
+        )
+        .unwrap()
     };
 
     // Init first controller.
@@ -910,7 +915,8 @@ pub fn test_delegated_multisig() -> Result<(), ActorError> {
             path,
             witness_root_oobi.path(),
             WitnessEscrowConfig::default(),
-        )?
+        )
+        .unwrap()
     };
 
     // Init first controller.
@@ -1169,7 +1175,8 @@ pub fn test_delegating_multisig() -> Result<(), ActorError> {
             path,
             witness_root_oobi.path(),
             WitnessEscrowConfig::default(),
-        )?
+        )
+        .unwrap()
     };
 
     let mut delegator_1 = setup_controller(&witness)?;

@@ -6,7 +6,7 @@ use crate::{
     actor::simple_controller::{parse_response, PossibleResponse},
     event_message::signed_event_message::{Message, Op},
     oobi::{LocationScheme, Scheme},
-    query::query_event::SignedQuery,
+    query::query_event::SignedKelQuery,
 };
 
 mod default;
@@ -79,7 +79,7 @@ pub trait HttpTransport {
     async fn send_query<E>(
         &self,
         loc: LocationScheme,
-        qry: SignedQuery,
+        qry: SignedKelQuery,
     ) -> Result<PossibleResponse, TransportError<E>>
     where
         E: for<'de> Deserialize<'de>,

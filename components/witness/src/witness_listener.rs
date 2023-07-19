@@ -6,9 +6,12 @@ use std::{
 
 use actix_web::{dev::Server, web::Data, App, HttpServer};
 use anyhow::Result;
-use keri::{self, error::Error, prefix::BasicPrefix};
+use keri::{self, prefix::BasicPrefix};
 
-use crate::{witness::Witness, witness_processor::WitnessEscrowConfig};
+use crate::{
+    witness::{Witness, WitnessError},
+    witness_processor::WitnessEscrowConfig,
+};
 
 pub struct WitnessListener {
     pub witness_data: Arc<Witness>,
@@ -20,7 +23,7 @@ impl WitnessListener {
         event_db_path: &Path,
         priv_key: Option<String>,
         escrow_config: WitnessEscrowConfig,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, WitnessError> {
         let mut oobi_path = PathBuf::new();
         oobi_path.push(event_db_path);
         oobi_path.push("oobi");
@@ -61,6 +64,14 @@ impl WitnessListener {
                     actix_web::web::post().to(http_handlers::process_query),
                 )
                 .route(
+                    "/query/tel",
+                    actix_web::web::post().to(http_handlers::process_tel_query),
+                )
+                .route(
+                    "/process/tel",
+                    actix_web::web::post().to(http_handlers::process_tel_events),
+                )
+                .route(
                     "/register",
                     actix_web::web::post().to(http_handlers::process_reply),
                 )
@@ -90,7 +101,7 @@ mod test {
         event_message::signed_event_message::{Message, Op},
         oobi::Role,
         prefix::IdentifierPrefix,
-        query::query_event::{QueryRoute, SignedQuery},
+        query::query_event::{QueryRoute, SignedKelQuery},
     };
 
     #[async_trait::async_trait]
@@ -125,7 +136,7 @@ mod test {
 
             Ok(())
         }
-        async fn send_query(&self, query: SignedQuery) -> Result<PossibleResponse, ActorError> {
+        async fn send_query(&self, query: SignedKelQuery) -> Result<PossibleResponse, ActorError> {
             let payload =
                 String::from_utf8(Message::Op(Op::Query(query.clone())).to_cesr().unwrap())
                     .unwrap();
@@ -134,7 +145,7 @@ mod test {
                 .await
                 .map_err(|err| err.0)?;
             let resp = resp.into_body().try_into_bytes().unwrap();
-            match query.query.data.data.route {
+            match query.query.get_route() {
                 QueryRoute::Ksn { .. } => {
                     let resp = parse_op_stream(&resp).unwrap();
                     let resp = resp.into_iter().next().unwrap();
@@ -197,6 +208,7 @@ pub mod http_handlers {
         oobi::Role,
         prefix::IdentifierPrefix,
     };
+    use teliox::event::verifiable_event::VerifiableEvent;
 
     use crate::witness::Witness;
 
@@ -297,6 +309,23 @@ pub mod http_handlers {
             .body(resp))
     }
 
+    pub async fn process_tel_query(
+        post_data: String,
+        data: web::Data<Arc<Witness>>,
+    ) -> Result<HttpResponse, ApiError> {
+        println!("\nGot query to process: \n{}", post_data);
+        let resp = data
+            .parse_and_process_tel_queries(post_data.as_bytes())?
+            .iter()
+            .map(|msg| msg.to_string())
+            .collect::<Vec<_>>()
+            .join("");
+        println!("\nWitness responds with: {}", resp);
+        Ok(HttpResponse::Ok()
+            .content_type(ContentType::plaintext())
+            .body(resp))
+    }
+
     pub async fn process_reply(
         post_data: String,
         data: web::Data<Arc<Witness>>,
@@ -319,6 +348,19 @@ pub mod http_handlers {
         Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())
             .body(()))
+    }
+
+    pub async fn process_tel_events(
+        post_data: String,
+        data: web::Data<Arc<Witness>>,
+    ) -> Result<HttpResponse, ApiError> {
+        println!("\nGot tel event to process: \n{}", post_data);
+        let parsed = VerifiableEvent::parse(post_data.as_bytes()).unwrap();
+        for ev in parsed {
+            data.tel.processor.process(ev).unwrap()
+        }
+
+        Ok(HttpResponse::Ok().body(()))
     }
 
     #[derive(Debug, derive_more::Display, derive_more::From, derive_more::Error)]

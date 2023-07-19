@@ -25,22 +25,28 @@ async fn test_2_wit() -> Result<(), ControllerError> {
     let witness1 = {
         let seed = "AK8F6AAiYDpXlWdj2O5F5-6wNCCNJh2A4XOlqwR_HwwH";
         let witness_root = Builder::new().prefix("test-wit1-db").tempdir().unwrap();
-        Arc::new(WitnessListener::setup(
-            url::Url::parse("http://witness1/").unwrap(),
-            witness_root.path(),
-            Some(seed.to_string()),
-            WitnessEscrowConfig::default(),
-        )?)
+        Arc::new(
+            WitnessListener::setup(
+                url::Url::parse("http://witness1/").unwrap(),
+                witness_root.path(),
+                Some(seed.to_string()),
+                WitnessEscrowConfig::default(),
+            )
+            .unwrap(),
+        )
     };
     let witness2 = {
         let seed = "AJZ7ZLd7unQ4IkMUwE69NXcvDO9rrmmRH_Xk3TPu9BpP";
         let witness_root = Builder::new().prefix("test-wit2-db").tempdir().unwrap();
-        Arc::new(WitnessListener::setup(
-            url::Url::parse("http://witness2/").unwrap(),
-            witness_root.path(),
-            Some(seed.to_string()),
-            WitnessEscrowConfig::default(),
-        )?)
+        Arc::new(
+            WitnessListener::setup(
+                url::Url::parse("http://witness2/").unwrap(),
+                witness_root.path(),
+                Some(seed.to_string()),
+                WitnessEscrowConfig::default(),
+            )
+            .unwrap(),
+        )
     };
 
     let wit1_id = witness1.get_prefix();
@@ -93,7 +99,7 @@ async fn test_2_wit() -> Result<(), ControllerError> {
         let incepted_identifier = controller
             .finalize_inception(icp_event.as_bytes(), &signature)
             .await?;
-        IdentifierController::new(incepted_identifier, controller.clone())
+        IdentifierController::new(incepted_identifier, controller.clone(), None)
     };
 
     assert_eq!(ident_ctl.notify_witnesses().await?, 1);

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use super::compute_state;
 #[cfg(feature = "query")]
 use crate::query::{
-    key_state_notice::KeyStateNotice, query_event::QueryArgsMbx, reply_event::SignedReply,
+    key_state_notice::KeyStateNotice, mailbox::QueryArgsMbx, reply_event::SignedReply,
 };
 use crate::{
     actor::prelude::Message,
@@ -157,7 +157,7 @@ impl EventStorage {
     }
 
     #[cfg(feature = "mailbox")]
-    pub fn get_mailbox_messages(&self, args: QueryArgsMbx) -> Result<MailboxResponse, Error> {
+    pub fn get_mailbox_messages(&self, args: &QueryArgsMbx) -> Result<MailboxResponse, Error> {
         let id = args.i.clone();
 
         // query receipts

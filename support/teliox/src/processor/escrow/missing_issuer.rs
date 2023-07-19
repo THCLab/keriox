@@ -110,7 +110,7 @@ impl MissingIssuerEscrow {
                         self.tel_reference.add_event(event.clone())?;
 
                         self.publisher
-                            .notify(&TelNotification::TelEventAdded(event.event))?;
+                            .notify(&TelNotification::TelEventAdded(event))?;
                     }
                     Err(Error::MissingSealError) => {
                         // remove from escrow

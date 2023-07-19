@@ -1,3 +1,4 @@
+use cesrox::{payload::Payload, ParsedData};
 use said::derivation::HashFunctionCode;
 use serde::{Deserialize, Serialize};
 use version::serialization_info::SerializationFormats;
@@ -6,19 +7,13 @@ use crate::{
     error::Error,
     event_message::{
         msg::KeriEvent,
-        signature::{Nontransferable, Signature, SignerData},
+        signature::{signatures_into_groups, Nontransferable, Signature, SignerData},
         timestamped::Timestamped,
         EventTypeTag, Typeable,
     },
     prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
+    query::mailbox::QueryArgsMbx,
 };
-
-// TODO: make enum with different query args
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct Query {
-    #[serde(flatten)]
-    pub route: QueryRoute,
-}
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(tag = "r")]
@@ -58,34 +53,6 @@ impl QueryRoute {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct QueryArgsMbx {
-    /// Controller's currently used indentifier
-    pub pre: IdentifierPrefix,
-    /// Types of mail to query and their minimum serial number
-    pub topics: QueryTopics,
-    /// Identifier to be queried
-    pub i: IdentifierPrefix,
-    /// To which witness given query message reply will be sent
-    pub src: IdentifierPrefix,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct QueryTopics {
-    #[serde(rename = "/receipt")]
-    pub receipt: usize,
-    #[serde(rename = "/replay")]
-    pub replay: usize,
-    #[serde(rename = "/reply")]
-    pub reply: usize,
-    #[serde(rename = "/multisig")]
-    pub multisig: usize,
-    #[serde(rename = "/credential")]
-    pub credential: usize,
-    #[serde(rename = "/delegate")]
-    pub delegate: usize,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct QueryArgs {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub s: Option<u64>,
@@ -94,7 +61,7 @@ pub struct QueryArgs {
     pub src: Option<IdentifierPrefix>,
 }
 
-pub type QueryEvent = KeriEvent<Timestamped<Query>>;
+pub type QueryEvent = KeriEvent<Timestamped<QueryRoute>>;
 
 impl QueryEvent {
     pub fn new_query(
@@ -102,53 +69,64 @@ impl QueryEvent {
         serialization_format: SerializationFormats,
         derivation: HashFunctionCode,
     ) -> Result<Self, Error> {
-        let message = Query { route };
-
-        let env = Timestamped::new(message);
+        let env = Timestamped::new(route);
         KeriEvent::new(serialization_format, derivation.into(), env)
     }
 
-    pub fn get_query_data(&self) -> Query {
-        self.data.data.clone()
+    pub fn get_prefix(&self) -> IdentifierPrefix {
+        self.data.data.get_prefix()
     }
 
-    pub fn get_prefix(&self) -> IdentifierPrefix {
-        self.data.data.route.get_prefix()
+    pub fn get_route(&self) -> &QueryRoute {
+        &self.data.data
     }
 }
 
-impl Typeable for Query {
+impl Typeable for QueryRoute {
     type TypeTag = EventTypeTag;
     fn get_type(&self) -> EventTypeTag {
         EventTypeTag::Qry
     }
 }
 
+pub type SignedKelQuery = SignedQuery<QueryEvent>;
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct SignedQuery {
-    pub query: QueryEvent,
+pub struct SignedQuery<D> {
+    pub query: D,
     pub signature: Signature,
 }
 
-impl SignedQuery {
-    pub fn new_nontrans(
-        query: QueryEvent,
-        signer: BasicPrefix,
-        signature: SelfSigningPrefix,
-    ) -> Self {
+impl<D> SignedQuery<D> {
+    pub fn new_nontrans(query: D, signer: BasicPrefix, signature: SelfSigningPrefix) -> Self {
         let signature =
             Signature::NonTransferable(Nontransferable::Couplet(vec![(signer, signature)]));
         Self { query, signature }
     }
 
     pub fn new_trans(
-        query: QueryEvent,
+        query: D,
         signer_id: IdentifierPrefix,
         signatures: Vec<IndexedSignature>,
     ) -> Self {
         let signature =
             Signature::Transferable(SignerData::LastEstablishment(signer_id), signatures);
         Self { query, signature }
+    }
+}
+
+impl<D> SignedQuery<KeriEvent<D>>
+where
+    D: Clone + Serialize + Typeable<TypeTag = EventTypeTag>,
+{
+    pub fn to_cesr(&self) -> Result<Vec<u8>, Error> {
+        let payload: Payload = self.query.clone().into();
+        let attachments = signatures_into_groups(&[self.signature.clone()]);
+        ParsedData {
+            payload,
+            attachments,
+        }
+        .to_cesr()
+        .map_err(|_e| Error::CesrError)
     }
 }
 
@@ -182,40 +160,33 @@ fn test_query_deserialize() {
     let input_query = r#"{"v":"KERI10JSON0000c9_","t":"qry","d":"EGN68_seecuzXQO15FFGJLVwZCBCPYW-hy29fjWWPQbp","dt":"2021-01-01T00:00:00.000000+00:00","r":"log","rr":"","q":{"i":"DAvCLRr5luWmp7keDvDuLP0kIqcyBYq79b3Dho1QvrjI"}}"#; //-HABEFyzzg2Mp5A3ecChc6AhSLTQssBZAmNvPnGxjJyHxl4F-AABAAB1DuEfnZZ6juMZDYiodcWiIqdjuEE-QzdORp-DbxdDN_GG84x_NA1rSc5lPfPQQkQkxI862_XjyZLHyClVTLoD"#;
     let qr: QueryEvent = serde_json::from_str(input_query).unwrap();
 
-    assert!(matches!(
-        qr.data.data,
-        Query {
-            route: QueryRoute::Log { .. },
-            ..
-        }
-    ));
+    assert!(matches!(qr.data.data, QueryRoute::Log { .. },));
 
     assert_eq!(input_query, &String::from_utf8_lossy(&qr.encode().unwrap()));
 }
 
 #[test]
 fn test_query_mbx_deserialize() {
+    use crate::query::mailbox::QueryTopics;
     let input_query = r#"{"v":"KERI10JSON000165_","t":"qry","d":"EKrOiJOMKnTLvJJz0j9hJ5acANkr_DFhVp6HgfjZLOUR","dt":"2022-10-25T09:53:04.454094+00:00","r":"mbx","rr":"","q":{"pre":"EC61gZ9lCKmHAS7U5ehUfEbGId5rcY0D7MirFZHDQcE2","topics":{"/receipt":0,"/replay":0,"/reply":0,"/multisig":0,"/credential":0,"/delegate":0},"i":"EC61gZ9lCKmHAS7U5ehUfEbGId5rcY0D7MirFZHDQcE2","src":"BBilc4-L3tFUnfM_wJr4S4OJanAv_VmF_dJNN6vkf2Ha"}}"#; //-VAj-HABEKYLUMmNPZeEs77Zvclf0bSN5IN-mLfLpx2ySb-HDlk4-AABAAAQY9eL1n96itQTvVTEdKjb-xYFWy-SYylQopNeYpYEW9bJ96h4deDboGOUCzVUCQrZ2kt2UNFL3xSJn4ieWLAC"#;
     let qr: QueryEvent = serde_json::from_str(input_query).unwrap();
 
     assert!(matches!(
         qr.data.data,
-        Query {
-            route: QueryRoute::Mbx {
-                args: QueryArgsMbx {
-                    topics: QueryTopics {
-                        receipt: 0,
-                        replay: 0,
-                        reply: 0,
-                        multisig: 0,
-                        credential: 0,
-                        delegate: 0
-                    },
-                    ..
+        QueryRoute::Mbx {
+            args: QueryArgsMbx {
+                topics: QueryTopics {
+                    receipt: 0,
+                    replay: 0,
+                    reply: 0,
+                    multisig: 0,
+                    credential: 0,
+                    delegate: 0
                 },
                 ..
             },
-        }
+            ..
+        },
     ));
 
     assert_eq!(input_query, &String::from_utf8_lossy(&qr.encode().unwrap()));

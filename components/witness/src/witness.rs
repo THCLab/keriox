@@ -22,12 +22,20 @@ use keri::{
     prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     processor::notification::{Notification, NotificationBus, Notifier},
     query::{
-        query_event::{QueryArgsMbx, QueryTopics},
+        mailbox::{QueryArgsMbx, QueryTopics},
         reply_event::{ReplyEvent, ReplyRoute, SignedReply},
         ReplyType,
     },
     signer::Signer,
 };
+use serde::{Deserialize, Serialize};
+use teliox::{
+    database::EventDatabase,
+    event::{parse_tel_query_stream, verifiable_event::VerifiableEvent},
+    processor::{escrow::default_escrow_bus, storage::TelEventStorage, TelReplyType},
+    tel::Tel,
+};
+use thiserror::Error;
 use url::Url;
 
 use crate::witness_processor::{WitnessEscrowConfig, WitnessProcessor};
@@ -103,14 +111,27 @@ impl WitnessReceiptGenerator {
     }
 }
 
+#[derive(Error, Debug, Serialize, Deserialize)]
+pub enum WitnessError {
+    #[error(transparent)]
+    KeriError(#[from] keri::error::Error),
+
+    #[error(transparent)]
+    TelError(#[from] teliox::error::Error),
+
+    #[error(transparent)]
+    DatabaseError(#[from] keri::database::DbError),
+}
+
 pub struct Witness {
     pub address: Url,
     pub prefix: BasicPrefix,
     pub processor: WitnessProcessor,
-    pub event_storage: EventStorage,
+    pub event_storage: Arc<EventStorage>,
     pub oobi_manager: OobiManager,
     pub signer: Arc<Signer>,
     pub receipt_generator: Arc<WitnessReceiptGenerator>,
+    pub tel: Arc<Tel>,
 }
 
 impl Witness {
@@ -120,11 +141,12 @@ impl Witness {
         event_path: &Path,
         oobi_path: &Path,
         escrow_config: WitnessEscrowConfig,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, WitnessError> {
         use keri::{database::escrow::EscrowDb, processor::notification::JustNotification};
         let mut events_path = PathBuf::new();
         events_path.push(event_path);
         let mut escrow_path = events_path.clone();
+        let mut tel_path = events_path.clone();
 
         events_path.push("events");
         escrow_path.push("escrow");
@@ -133,7 +155,7 @@ impl Witness {
         let db = Arc::new(SledEventDatabase::new(events_path.as_path())?);
         let escrow_db = Arc::new(EscrowDb::new(escrow_path.as_path())?);
         let mut witness_processor = WitnessProcessor::new(db.clone(), escrow_db, escrow_config);
-        let event_storage = EventStorage::new(db.clone());
+        let event_storage = Arc::new(EventStorage::new(db.clone()));
 
         let receipt_generator = Arc::new(WitnessReceiptGenerator::new(signer.clone(), db));
         witness_processor.register_observer(
@@ -143,6 +165,34 @@ impl Witness {
                 JustNotification::PartiallyWitnessed,
             ],
         )?;
+
+        // Initiate tel and it's escrows
+        let tel_events_db = {
+            tel_path.push("tel");
+            tel_path.push("events");
+            Arc::new(EventDatabase::new(&tel_path).unwrap())
+        };
+
+        let tel_escrow_db = {
+            let mut tel_path = events_path.clone();
+            tel_path.push("tel");
+            tel_path.push("escrow");
+            Arc::new(EscrowDb::new(&tel_path)?)
+        };
+        let tel_storage = Arc::new(TelEventStorage::new(tel_events_db));
+        let (tel_bus, _missing_issuer, _out_of_order, _missing_registy) = default_escrow_bus(
+            tel_storage.clone(),
+            event_storage.clone(),
+            tel_escrow_db.clone(),
+        )
+        .unwrap();
+
+        let tel = Arc::new(Tel::new(
+            tel_storage.clone(),
+            event_storage.clone(),
+            Some(tel_bus),
+        ));
+
         Ok(Self {
             address,
             prefix,
@@ -151,6 +201,7 @@ impl Witness {
             event_storage,
             receipt_generator,
             oobi_manager: OobiManager::new(oobi_path),
+            tel,
         })
     }
 
@@ -160,7 +211,7 @@ impl Witness {
         oobi_db_path: &Path,
         priv_key: Option<String>,
         escrow_config: WitnessEscrowConfig,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, WitnessError> {
         let signer = Arc::new(
             priv_key
                 .map(|key| Signer::new_with_seed(&key.parse()?))
@@ -277,7 +328,7 @@ impl Witness {
 
     pub fn process_query(
         &self,
-        qry: keri::query::query_event::SignedQuery,
+        qry: keri::query::query_event::SignedKelQuery,
     ) -> Result<Option<PossibleResponse>, ActorError> {
         let response = process_signed_query(qry, &self.event_storage)?;
 
@@ -315,6 +366,28 @@ impl Witness {
             .collect()
     }
 
+    pub fn parse_and_process_tel_queries(
+        &self,
+        input_stream: &[u8],
+    ) -> Result<Vec<TelReplyType>, ActorError> {
+        Ok(parse_tel_query_stream(input_stream)
+            .unwrap()
+            .into_iter()
+            .map(|qry| self.tel.processor.process_signed_query(qry))
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap())
+    }
+
+    pub fn parse_and_process_tel_events(&self, input_stream: &[u8]) -> Result<(), ActorError> {
+        VerifiableEvent::parse(input_stream)
+            .unwrap()
+            .into_iter()
+            .map(|tel_event| self.tel.processor.process(tel_event))
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        Ok(())
+    }
+
     pub fn parse_and_process_replies(&self, input_stream: &[u8]) -> Result<(), ActorError> {
         for reply in parse_reply_stream(input_stream)? {
             self.process_reply(reply)?;
@@ -330,7 +403,7 @@ impl Witness {
     }
 
     pub fn get_mailbox_messages(&self, id: &IdentifierPrefix) -> Result<MailboxResponse, Error> {
-        self.event_storage.get_mailbox_messages(QueryArgsMbx {
+        self.event_storage.get_mailbox_messages(&QueryArgsMbx {
             pre: IdentifierPrefix::Basic(self.prefix.clone()),
             i: id.clone(),
             src: IdentifierPrefix::Basic(self.prefix.clone()),

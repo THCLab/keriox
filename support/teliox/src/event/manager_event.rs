@@ -148,7 +148,9 @@ impl DummyEvent {
     }
 
     pub fn encode(&self) -> Result<Vec<u8>, Error> {
-        Ok(self.serialization_info.serialize(&self)?)
+        self.serialization_info
+            .serialize(&self)
+            .map_err(|e| Error::EncodingError(e.to_string()))
     }
 }
 

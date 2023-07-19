@@ -3,10 +3,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use crate::{
-    error::Error,
-    event::{verifiable_event::VerifiableEvent, Event},
-};
+use crate::{error::Error, event::verifiable_event::VerifiableEvent};
 #[derive(Clone)]
 pub struct TelNotificationBus {
     observers: Arc<RwLock<HashMap<TelNotificationKind, Vec<Arc<dyn TelNotifier + Send + Sync>>>>>,
@@ -65,7 +62,7 @@ pub enum TelNotification {
     MissingRegistry(VerifiableEvent),
     MissingIssuer(VerifiableEvent),
     OutOfOrder(VerifiableEvent),
-    TelEventAdded(Event),
+    TelEventAdded(VerifiableEvent),
 }
 
 #[derive(PartialEq, Hash, Eq, Clone, Debug)]

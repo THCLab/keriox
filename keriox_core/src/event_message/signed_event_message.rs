@@ -3,7 +3,7 @@ use serde::{ser::SerializeStruct, Deserialize, Serialize};
 
 use super::{msg::KeriEvent, serializer::to_string, signature::Nontransferable};
 #[cfg(feature = "query")]
-use crate::query::{query_event::SignedQuery, reply_event::SignedReply};
+use crate::query::{query_event::SignedKelQuery, reply_event::SignedReply};
 use crate::{
     error::Error,
     event::{
@@ -42,7 +42,7 @@ pub enum Op {
     #[cfg(feature = "oobi")]
     Reply(SignedReply),
     #[cfg(feature = "query")]
-    Query(SignedQuery),
+    Query(SignedKelQuery),
 }
 
 impl From<Message> for ParsedData {
