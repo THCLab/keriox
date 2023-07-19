@@ -6,6 +6,7 @@ RUN echo '[workspace] \n\
 members = [\n\
     "keriox_core",\n\
     "components/witness",\n\
+    "support/teliox",\n\
 ]' > Cargo.toml
 COPY ./components components
 COPY ./keriox_core keriox_core
