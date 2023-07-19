@@ -8,9 +8,11 @@ members = [\n\
     "components/watcher",\n\
     "components/controller",\n\
     "components/witness",\n\
+    "support/teliox",\n\
 ]' > Cargo.toml
 COPY keriox_core keriox_core
 COPY components components
+COPY ./support/teliox support/teliox
 WORKDIR /app/components/watcher
 RUN cargo fetch
 RUN cargo build --release --package watcher
