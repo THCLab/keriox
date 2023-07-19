@@ -181,6 +181,16 @@ impl IdentifierController {
         .map_err(|_e| ControllerError::EventFormatError)
     }
 
+    /// Generates reply event with `end_role_add` route.
+    pub fn add_messagebox(&self, message_box_id: IdentifierPrefix) -> Result<String, ControllerError> {
+        String::from_utf8(
+            event_generator::generate_end_role(&self.id, &message_box_id, Role::Messagebox, true)?
+                .encode()?,
+        )
+        .map_err(|_e| ControllerError::EventFormatError)
+    }
+
+
     /// Checks signatures and updates database.
     /// Must call [`IdentifierController::notify_witnesses`] after calling this function if event is a key event.
     pub async fn finalize_event(
