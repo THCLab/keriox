@@ -268,6 +268,7 @@ pub mod tests {
 
         use crate::{
             event_message::signed_event_message::{Message, Op},
+            oobi::{EndRole, Role},
             query::reply_event::ReplyRoute,
         };
 
@@ -295,5 +296,22 @@ pub mod tests {
         let stream = parse_many(body).unwrap();
 
         assert_eq!(stream.1.len(), 3);
+
+        let message_box = r#"{"v":"KERI10JSON000116_","t":"rpy","d":"EGS28iaGy4iDF8w4q7XkXtdnp4lLj97oZ9n-QrZCyt_8","dt":"2023-07-20T12:31:59.458182+00:00","r":"/end/role/add","a":{"cid":"ECQxoxuKOcO7KkbMyKHnbzhi3sWnSJRnGP_-XsL6eamT","role":"messagebox","eid":"BL0RdEFZxEf2wkq7TTYDagcoOxfmWK45enEUQHwLPadJ"}}-FABECQxoxuKOcO7KkbMyKHnbzhi3sWnSJRnGP_-XsL6eamT0AAAAAAAAAAAAAAAAAAAAAAAECQxoxuKOcO7KkbMyKHnbzhi3sWnSJRnGP_-XsL6eamT-AABAABtWkO0ezyg_IC9HeG2rc3wplzAj95lKqVTdnEu46xlELl2M2oHrcpVWC_n1Bg1zgjqAAOeRkBgqdwKha7ZS4IK"#;
+        let parsed = parse(message_box.as_bytes()).unwrap().1;
+        let deserialized_rpy = Message::try_from(parsed).unwrap();
+
+        if let Message::Op(Op::Reply(reply)) = deserialized_rpy {
+            assert!(matches!(
+                reply.reply.get_route(),
+                ReplyRoute::EndRoleAdd(EndRole {
+                    eid: _,
+                    role: Role::Messagebox,
+                    cid: _
+                })
+            ));
+        } else {
+            assert!(false)
+        };
     }
 }

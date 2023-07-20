@@ -4,6 +4,8 @@ pub mod config;
 pub mod error;
 pub mod identifier_controller;
 pub mod mailbox_updating;
+pub mod messagebox;
+
 mod test;
 pub mod verifying;
 pub use keri::keys::PublicKey;

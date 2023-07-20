@@ -163,7 +163,7 @@ where
                 Role::Witness => "witness/",
                 Role::Watcher => "watcher/",
                 Role::Controller => "controller/",
-                Role::Messagebox => "messagebox/"
+                Role::Messagebox => "messagebox/",
             })
             .unwrap()
             .join(&eid.to_string())
