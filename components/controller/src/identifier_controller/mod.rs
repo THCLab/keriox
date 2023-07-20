@@ -38,7 +38,7 @@ use keri::{
         reply_event::ReplyRoute,
     },
 };
-use teliox::query::{SignedTelQuery, TelQueryEvent};
+pub use teliox::query::{SignedTelQuery, TelQueryEvent};
 
 use super::mailbox_updating::ActionRequired;
 use crate::{error::ControllerError, mailbox_updating::MailboxReminder, Controller};
