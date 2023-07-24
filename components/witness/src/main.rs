@@ -100,7 +100,6 @@ async fn main() -> Result<()> {
     let args = Args::parse();
 
     println!("Using config file {:?}", args.config_file);
-    println!("Using environment prefix: {:?}", ENV_PREFIX);
 
     let cfg = Figment::new()
         .merge(Yaml::file(args.config_file.clone()))
