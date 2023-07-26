@@ -176,10 +176,7 @@ async fn test_multisig() -> Result<()> {
 
     identifier1
         .source
-        .send_oobi_to_watcher(
-            &identifier1.id,
-            &Oobi::Location(witness_oobi),
-        )
+        .send_oobi_to_watcher(&identifier1.id, &Oobi::Location(witness_oobi))
         .await?;
     identifier1
         .source

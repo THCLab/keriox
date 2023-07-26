@@ -14,7 +14,9 @@ use keri::prefix::IndexedSignature;
 pub use keri::prefix::{BasicPrefix, CesrPrimitive, IdentifierPrefix, SelfSigningPrefix};
 use keri::processor::notification::JustNotification;
 pub use keri::signer::{CryptoBox, KeyManager};
-pub use teliox::event::parse_tel_query_stream;
+pub use teliox::{
+    event::parse_tel_query_stream, state::vc_state::TelState, state::ManagerTelState,
+};
 
 use config::ControllerConfig;
 use keri::state::IdentifierState;

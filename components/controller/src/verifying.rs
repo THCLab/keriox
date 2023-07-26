@@ -3,7 +3,8 @@ use itertools::Itertools;
 use keri::{
     error::Error,
     event_message::signature::{get_signatures, Signature},
-    processor::validator::EventValidator, oobi::Oobi,
+    oobi::Oobi,
+    processor::validator::EventValidator,
 };
 
 use crate::{error::ControllerError, Controller};
@@ -18,23 +19,23 @@ impl Controller {
         let (_rest, data) =
             parse_many(stream.as_bytes()).map_err(|_e| ControllerError::CesrFormatError)?;
         // Split into oobis and other data
-        let (oobis, to_verify): (Vec<Oobi>, Vec<_>) =
-            data.into_iter().partition_map(|d| {
-                let oobi: Result<Oobi, _> = match &d.payload {
-                    Payload::JSON(json) => serde_json::from_slice(json).map_err(|_e| ControllerError::OtherError("Wrong JSON".to_string())),
-                    Payload::CBOR(_) => Err(ControllerError::OtherError(
-                        "CBOR format not implemented yet".to_string(),
-                    )),
-                    Payload::MGPK(_) => Err(ControllerError::OtherError(
-                        "MGPK format not implemented yet".to_string(),
-                    )),
-                };
-                match oobi {
-                    Ok(oobi) => itertools::Either::Left(oobi),
-                    Err(_) => itertools::Either::Right(d),
-                }
-            });
-       
+        let (oobis, to_verify): (Vec<Oobi>, Vec<_>) = data.into_iter().partition_map(|d| {
+            let oobi: Result<Oobi, _> = match &d.payload {
+                Payload::JSON(json) => serde_json::from_slice(json)
+                    .map_err(|_e| ControllerError::OtherError("Wrong JSON".to_string())),
+                Payload::CBOR(_) => Err(ControllerError::OtherError(
+                    "CBOR format not implemented yet".to_string(),
+                )),
+                Payload::MGPK(_) => Err(ControllerError::OtherError(
+                    "MGPK format not implemented yet".to_string(),
+                )),
+            };
+            match oobi {
+                Ok(oobi) => itertools::Either::Left(oobi),
+                Err(_) => itertools::Either::Right(d),
+            }
+        });
+
         Ok((oobis, to_verify))
     }
 
