@@ -1,8 +1,9 @@
 use cesrox::{parse_many, payload::Payload, ParsedData};
+use itertools::Itertools;
 use keri::{
     error::Error,
     event_message::signature::{get_signatures, Signature},
-    processor::validator::EventValidator,
+    processor::validator::EventValidator, oobi::Oobi,
 };
 
 use crate::{error::ControllerError, Controller};
@@ -13,27 +14,28 @@ impl Controller {
     pub fn parse_cesr_stream(
         &self,
         stream: &str,
-    ) -> Result<(Vec<String>, Vec<ParsedData>), ControllerError> {
+    ) -> Result<(Vec<Oobi>, Vec<ParsedData>), ControllerError> {
         let (_rest, data) =
             parse_many(stream.as_bytes()).map_err(|_e| ControllerError::CesrFormatError)?;
-        // When attachments are empty, it is expected to be an oobi.
-        let (oobis, to_verify): (Vec<_>, Vec<_>) =
-            data.into_iter().partition(|d| d.attachments.is_empty());
-        let oo: Result<Vec<_>, ControllerError> = oobis
-            .into_iter()
-            .map(|o| match o.payload {
-                Payload::JSON(json_oobi) => {
-                    String::from_utf8(json_oobi).map_err(|_e| ControllerError::WrongEventTypeError)
+        // Split into oobis and other data
+        let (oobis, to_verify): (Vec<Oobi>, Vec<_>) =
+            data.into_iter().partition_map(|d| {
+                let oobi: Result<Oobi, _> = match &d.payload {
+                    Payload::JSON(json) => serde_json::from_slice(json).map_err(|_e| ControllerError::OtherError("Wrong JSON".to_string())),
+                    Payload::CBOR(_) => Err(ControllerError::OtherError(
+                        "CBOR format not implemented yet".to_string(),
+                    )),
+                    Payload::MGPK(_) => Err(ControllerError::OtherError(
+                        "MGPK format not implemented yet".to_string(),
+                    )),
+                };
+                match oobi {
+                    Ok(oobi) => itertools::Either::Left(oobi),
+                    Err(_) => itertools::Either::Right(d),
                 }
-                Payload::CBOR(_) => Err(ControllerError::OtherError(
-                    "CBOR format not implemented yet".to_string(),
-                )),
-                Payload::MGPK(_) => Err(ControllerError::OtherError(
-                    "MGPK format not implemented yet".to_string(),
-                )),
-            })
-            .collect();
-        Ok((oo?, to_verify))
+            });
+       
+        Ok((oobis, to_verify))
     }
 
     pub fn verify(&self, data: &[u8], signature: &Signature) -> Result<(), ControllerError> {

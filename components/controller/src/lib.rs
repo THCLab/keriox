@@ -190,11 +190,8 @@ impl Controller {
     pub async fn send_oobi_to_watcher(
         &self,
         id: &IdentifierPrefix,
-        oobi_json: &str,
+        oobi: &Oobi,
     ) -> Result<(), ControllerError> {
-        let oobi: Oobi = serde_json::from_str(oobi_json).map_err(|_e| {
-            ControllerError::OtherError(format!("Can't parse oobi: {}", &oobi_json))
-        })?;
         for watcher in self.get_watchers(id)?.iter() {
             self.send_oobi_to(watcher, Scheme::Http, oobi.clone())
                 .await?;

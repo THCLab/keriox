@@ -126,12 +126,6 @@ async fn test_tel_from_witness() -> Result<(), ControllerError> {
         issuer.registry_id.as_ref().unwrap().clone(),
         vc_hash.clone(),
     )?;
-    let signature =
-        SelfSigningPrefix::Ed25519Sha512(verifier_keypair.sign(&qry.encode().unwrap())?);
-    verifier.finalize_tel_query(qry, signature).await?;
-
-    let vc_state = verifier.source.tel.get_vc_state(&sai).unwrap();
-    assert!(matches!(vc_state, None));
 
     // verifier need to have issuer kel to accept tel events.
     // It can be obtained by query message, but we just simulate this.
@@ -144,8 +138,11 @@ async fn test_tel_from_witness() -> Result<(), ControllerError> {
         .into_iter()
         .map(|ev| Message::Notice(ev.clone()).to_cesr().unwrap())
         .flatten();
-
     verifier.source.process_stream(&kel.collect::<Vec<_>>())?;
+
+    let signature =
+        SelfSigningPrefix::Ed25519Sha512(verifier_keypair.sign(&qry.encode().unwrap())?);
+    verifier.finalize_tel_query(&issuer.id, qry, signature).await?;
 
     let vc_state = verifier.source.tel.get_vc_state(&sai).unwrap();
     assert!(matches!(vc_state, Some(TelState::Issued(_))));
@@ -183,9 +180,6 @@ async fn test_tel_from_witness() -> Result<(), ControllerError> {
         issuer.registry_id.as_ref().unwrap().clone(),
         vc_hash.clone(),
     )?;
-    let signature =
-        SelfSigningPrefix::Ed25519Sha512(verifier_keypair.sign(&qry.encode().unwrap())?);
-    verifier.finalize_tel_query(qry, signature).await?;
 
     // verifier need to update issuer's kel to accept tel events.
     let kel = issuer
@@ -199,6 +193,10 @@ async fn test_tel_from_witness() -> Result<(), ControllerError> {
         .flatten();
 
     verifier.source.process_stream(&kel.collect::<Vec<_>>())?;
+
+    let signature =
+        SelfSigningPrefix::Ed25519Sha512(verifier_keypair.sign(&qry.encode().unwrap())?);
+    verifier.finalize_tel_query(&issuer.id, qry, signature).await?;
 
     let vc_state = verifier.source.tel.get_vc_state(&sai).unwrap();
     assert!(matches!(vc_state, Some(TelState::Revoked)));

@@ -3,7 +3,7 @@ use std::{collections::HashMap, net::Ipv4Addr, sync::Arc};
 use anyhow::Result;
 use controller::{
     config::ControllerConfig, identifier_controller::IdentifierController,
-    mailbox_updating::ActionRequired, Controller,
+    mailbox_updating::ActionRequired, Controller, Oobi,
 };
 use keri::{
     oobi::{EndRole, LocationScheme, Role},
@@ -178,12 +178,12 @@ async fn test_multisig() -> Result<()> {
         .source
         .send_oobi_to_watcher(
             &identifier1.id,
-            &serde_json::to_string(&witness_oobi).unwrap(),
+            &Oobi::Location(witness_oobi),
         )
         .await?;
     identifier1
         .source
-        .send_oobi_to_watcher(&identifier1.id, &serde_json::to_string(&oobi2).unwrap())
+        .send_oobi_to_watcher(&identifier1.id, &Oobi::EndRole(oobi2))
         .await?;
 
     let qry_watcher = identifier1.query_own_watchers(&identifier2.id)?;

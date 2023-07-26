@@ -685,7 +685,7 @@ impl IdentifierController {
 
     pub async fn finalize_tel_query(
         &self,
-        issuer_id: IdentifierPrefix,
+        issuer_id: &IdentifierPrefix,
         qry: TelQueryEvent,
         sig: SelfSigningPrefix,
     ) -> Result<(), ControllerError> {
@@ -698,7 +698,7 @@ impl IdentifierController {
                 SignedTelQuery::new_trans(qry.clone(), self.id.clone(), signatures)
             }
         };
-        let witness = self.source.get_current_witness_list(&issuer_id)?[0].clone();
+        let witness = self.source.get_current_witness_list(issuer_id)?[0].clone();
         let location = self
             .source
             .get_loc_schemas(&IdentifierPrefix::Basic(witness))?[0]
