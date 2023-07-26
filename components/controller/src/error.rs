@@ -42,7 +42,7 @@ pub enum ControllerError {
     #[error("Not group participant")]
     NotGroupParticipantError,
 
-    #[error("Error while event processing: ")]
+    #[error("transparent")]
     EventProcessingError(#[from] keri::error::Error),
 
     #[error("Keri version error: ")]
