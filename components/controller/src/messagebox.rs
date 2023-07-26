@@ -29,7 +29,7 @@ impl Controller {
                     if let Message::Op(Op::Reply(signed_oobi)) = msg {
                         self.oobi_manager.save_oobi(&signed_oobi)?;
                     } else {
-                        todo!()
+                        self.process(&msg)?;
                     }
                 }
             }
