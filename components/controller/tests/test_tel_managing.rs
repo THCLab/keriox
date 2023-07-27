@@ -54,10 +54,10 @@ async fn test_tel() -> Result<(), ControllerError> {
         .unwrap();
     assert_eq!(mana.sn, 0);
 
-    // Issue something (sign and create ixn event to kel)
-    let credential = r#"message"#;
+    // Issue something of this hash (sign and create ixn event to kel)
+    let credential_sai = r#"EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen"#;
 
-    let (vc_id, issuance_ixn) = identifier1.issue(credential).unwrap();
+    let (vc_id, issuance_ixn) = identifier1.issue(credential_sai.parse().unwrap()).unwrap();
     let vc_hash = match vc_id {
         controller::IdentifierPrefix::SelfAddressing(sai) => sai.clone(),
         _ => unreachable!(),

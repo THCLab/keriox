@@ -106,10 +106,8 @@ impl Tel {
     pub fn make_issuance_event(
         &self,
         id: &IdentifierPrefix,
-        derivation: HashFunctionCode,
-        vc: &str,
+        vc_hash: SelfAddressingIdentifier,
     ) -> Result<Event, Error> {
-        let vc_hash = HashFunction::from(derivation).derive(vc.as_bytes());
         event_generator::make_issuance_event(
             &self
                 .get_management_tel_state(id)?

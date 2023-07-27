@@ -8,6 +8,7 @@ use keri_tests::{
     setup_identifier,
     transport::{TelTestActor, TelTestTransport},
 };
+use said::SelfAddressingIdentifier;
 use teliox::state::vc_state::TelState;
 use tempfile::Builder;
 use url::Host;
@@ -75,8 +76,8 @@ async fn test_tel_from_witness() -> Result<(), ControllerError> {
     let state = issuer.source.get_state(&issuer.id)?;
     assert_eq!(state.sn, 0);
 
-    // Issue message.
-    let msg_to_issue = "hello world";
+    // Issue message of given hash
+    let sai: SelfAddressingIdentifier =" EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen".parse().unwrap();
     // Incept registry. It'll generate ixn that need to be signed.
     let (_vcp_id, vcp_ixn) = issuer.incept_registry()?;
 
@@ -95,7 +96,7 @@ async fn test_tel_from_witness() -> Result<(), ControllerError> {
     assert_eq!(state.sn, 1);
 
     // Issue message. It'll generate ixn message, that need to be signed.
-    let (vc_hash, iss_ixn) = issuer.issue(msg_to_issue)?;
+    let (vc_hash, iss_ixn) = issuer.issue(sai)?;
     let sai = match &vc_hash {
         IdentifierPrefix::SelfAddressing(sai) => sai.clone(),
         _ => unreachable!(),
