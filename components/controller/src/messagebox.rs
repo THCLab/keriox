@@ -2,7 +2,7 @@ use keri::{
     event_message::signed_event_message::{Message, Op},
     oobi::{EndRole, LocationScheme, Oobi, Role},
     prefix::IdentifierPrefix,
-    query::reply_event::ReplyRoute,
+    query::reply_event::{ReplyRoute, SignedReply},
 };
 
 use crate::{error::ControllerError, Controller};
@@ -66,5 +66,21 @@ impl Controller {
             })
             .flatten()
             .collect())
+    }
+
+    pub fn get_messagebox_end_role(
+        &self,
+        id: &IdentifierPrefix,
+    ) -> Result<Vec<EndRole>, ControllerError> {
+        let end_roles = self
+            .oobi_manager
+            .get_end_role(id, Role::Messagebox)?
+            .into_iter()
+            .map(|reply| match reply.reply.data.data {
+                ReplyRoute::EndRoleAdd(end_role) => end_role,
+                _ => todo!(),
+            })
+            .collect();
+        Ok(end_roles)
     }
 }
