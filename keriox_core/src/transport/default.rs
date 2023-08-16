@@ -77,8 +77,8 @@ where
             let body = resp
                 .text()
                 .await
-                .map_err(|_| TransportError::NetworkError)?;
-            let err = serde_json::from_str(&body).map_err(|_| TransportError::NetworkError)?;
+                .map_err(|_| TransportError::InvalidResponse)?;
+            let err = serde_json::from_str(&body).map_err(|_| TransportError::InvalidResponse)?;
             return Err(TransportError::RemoteError(err));
         }
         Ok(())

@@ -8,10 +8,10 @@ pub mod messagebox;
 
 mod test;
 pub mod verifying;
-pub use keri::keys::PublicKey;
+pub use keri::keys::{PublicKey, PrivateKey};
 pub use keri::oobi::{EndRole, LocationScheme, Oobi};
 use keri::prefix::IndexedSignature;
-pub use keri::prefix::{BasicPrefix, CesrPrimitive, IdentifierPrefix, SelfSigningPrefix};
+pub use keri::prefix::{BasicPrefix, CesrPrimitive, IdentifierPrefix, SelfSigningPrefix, SeedPrefix};
 use keri::processor::notification::JustNotification;
 pub use keri::signer::{CryptoBox, KeyManager};
 pub use teliox::{
