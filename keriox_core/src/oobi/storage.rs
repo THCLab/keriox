@@ -14,6 +14,7 @@ use crate::{
 };
 
 pub struct OobiStorage {
+    db: sled::Db,
     identifiers: SledEventTree<IdentifierPrefix>,
     // subdatabase for endpoint providers location schemes
     oobis: SledEventTreeVec<SignedReply>,
@@ -28,6 +29,7 @@ impl OobiStorage {
             identifiers: SledEventTree::new(db.open_tree(b"iids")?),
             oobis: SledEventTreeVec::new(db.open_tree(b"oobis")?),
             cids: SledEventTreeVec::new(db.open_tree(b"cids")?),
+            db,
         })
     }
 
@@ -101,6 +103,7 @@ impl OobiStorage {
                 self.cids.push(key, signed_reply.clone())?;
             }
         }
+        self.db.flush()?;
         Ok(())
     }
 }

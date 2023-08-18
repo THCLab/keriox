@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use sled::Db;
 
 use crate::event_message::signed_event_message::{
@@ -7,6 +9,7 @@ use crate::event_message::signed_event_message::{
 use super::{tables::SledEventTreeVec, timestamped::TimestampedSignedEventMessage, DbError};
 
 pub struct MailboxData {
+    db: Arc<sled::Db>,
     mailbox_receipts: SledEventTreeVec<SignedNontransferableReceipt>,
     mailbox_replies: SledEventTreeVec<SignedEventMessage>,
     mailbox_multisig: SledEventTreeVec<TimestampedSignedEventMessage>,
@@ -14,12 +17,13 @@ pub struct MailboxData {
 }
 
 impl MailboxData {
-    pub fn new(db: &Db) -> Result<Self, DbError> {
+    pub fn new(db: Arc<Db>) -> Result<Self, DbError> {
         Ok(Self {
             mailbox_receipts: SledEventTreeVec::new(db.open_tree(b"mbxrct")?),
             mailbox_replies: SledEventTreeVec::new(db.open_tree(b"mbxrpy")?),
             mailbox_multisig: SledEventTreeVec::new(db.open_tree(b"mbxm")?),
             mailbox_delegate: SledEventTreeVec::new(db.open_tree(b"mbxd")?),
+            db,
         })
     }
 
@@ -29,7 +33,9 @@ impl MailboxData {
         receipt: SignedNontransferableReceipt,
     ) -> Result<(), DbError> {
         if !self.mailbox_receipts.contains_value(&receipt) {
-            self.mailbox_receipts.push(key, receipt)
+            self.mailbox_receipts.push(key, receipt)?;
+            self.db.flush()?;
+            Ok(())
         } else {
             Ok(())
         }
@@ -44,7 +50,9 @@ impl MailboxData {
 
     pub fn add_mailbox_reply(&self, key: u64, reply: SignedEventMessage) -> Result<(), DbError> {
         if !self.mailbox_replies.contains_value(&reply) {
-            self.mailbox_replies.push(key, reply)
+            self.mailbox_replies.push(key, reply)?;
+            self.db.flush()?;
+            Ok(())
         } else {
             Ok(())
         }
@@ -58,7 +66,9 @@ impl MailboxData {
     }
 
     pub fn add_mailbox_multisig(&self, key: u64, event: SignedEventMessage) -> Result<(), DbError> {
-        self.mailbox_multisig.push(key, event.into())
+        self.mailbox_multisig.push(key, event.into())?;
+        self.db.flush()?;
+        Ok(())
     }
 
     pub fn get_mailbox_multisig(
@@ -73,7 +83,9 @@ impl MailboxData {
         key: u64,
         delegated: SignedEventMessage,
     ) -> Result<(), DbError> {
-        self.mailbox_delegate.push(key, delegated.into())
+        self.mailbox_delegate.push(key, delegated.into())?;
+        self.db.flush()?;
+        Ok(())
     }
 
     pub fn get_mailbox_delegate(
