@@ -4,7 +4,7 @@ pub mod mailbox;
 pub(crate) mod tables;
 pub(crate) mod timestamped;
 
-use std::path::{Path, PathBuf};
+use std::{path::{Path, PathBuf}, sync::Arc};
 
 use serde::{Deserialize, Serialize};
 
@@ -29,6 +29,7 @@ use crate::{
 use self::timestamped::TimestampedSignedEventMessage;
 
 pub struct SledEventDatabase {
+    db: Arc<sled::Db>,
     // "iids" tree
     // this thing is expensive, but everything else is cheeeeeep
     identifiers: SledEventTree<IdentifierPrefix>,
@@ -63,7 +64,7 @@ impl SledEventDatabase {
         events_path.push("events");
         escrow_path.push("escrow");
 
-        let db = sled::open(events_path.as_path())?;
+        let db = Arc::new(sled::open(events_path.as_path())?);
 
         Ok(Self {
             identifiers: SledEventTree::new(db.open_tree(b"iids")?),
@@ -75,10 +76,11 @@ impl SledEventDatabase {
             #[cfg(feature = "query")]
             accepted_rpy: SledEventTreeVec::new(db.open_tree(b"knas")?),
             #[cfg(feature = "mailbox")]
-            mailbox: MailboxData::new(&db)?,
+            mailbox: MailboxData::new(db.clone())?,
 
             #[cfg(feature = "query")]
             escrowed_replys: SledEventTreeVec::new(db.open_tree(b"knes")?),
+            db,
         })
     }
 
@@ -88,7 +90,9 @@ impl SledEventDatabase {
         id: &IdentifierPrefix,
     ) -> Result<(), DbError> {
         self.key_event_logs
-            .push(self.identifiers.designated_key(id)?, event.into())
+            .push(self.identifiers.designated_key(id)?, event.into())?;
+        self.db.flush()?;
+        Ok(())
     }
 
     pub fn get_kel_finalized_events(
@@ -105,7 +109,9 @@ impl SledEventDatabase {
         event: &SignedEventMessage,
     ) -> Result<(), DbError> {
         self.key_event_logs
-            .remove(self.identifiers.designated_key(id)?, &event.into())
+            .remove(self.identifiers.designated_key(id)?, &event.into())?;
+        self.db.flush()?;
+        Ok(())
     }
 
     pub fn add_receipt_t(
@@ -114,7 +120,9 @@ impl SledEventDatabase {
         id: &IdentifierPrefix,
     ) -> Result<(), DbError> {
         self.receipts_t
-            .push(self.identifiers.designated_key(id)?, receipt)
+            .push(self.identifiers.designated_key(id)?, receipt)?;
+        self.db.flush()?;
+        Ok(())
     }
 
     pub fn get_receipts_t(
@@ -131,7 +139,9 @@ impl SledEventDatabase {
         id: &IdentifierPrefix,
     ) -> Result<(), DbError> {
         self.receipts_nt
-            .push(self.identifiers.designated_key(id)?, receipt)
+            .push(self.identifiers.designated_key(id)?, receipt)?;
+        self.db.flush()?;
+        Ok(())
     }
 
     pub fn get_receipts_nt(
@@ -149,6 +159,7 @@ impl SledEventDatabase {
                     .remove(self.identifiers.designated_key(id)?, &receipt)?;
             }
         }
+        self.db.flush()?;
         Ok(())
     }
 
@@ -158,7 +169,9 @@ impl SledEventDatabase {
         id: &IdentifierPrefix,
     ) -> Result<(), DbError> {
         self.likely_duplicious_events
-            .push(self.identifiers.designated_key(id)?, event.into())
+            .push(self.identifiers.designated_key(id)?, event.into())?;
+        self.db.flush()?;
+        Ok(())
     }
 
     pub fn get_likely_duplicitous_events(
@@ -212,7 +225,9 @@ impl SledEventDatabase {
             None => self
                 .accepted_rpy
                 .push(self.identifiers.designated_key(id)?, rpy),
-        }
+        }?;
+        self.db.flush()?;
+        Ok(())
     }
 
     #[cfg(feature = "query")]
@@ -231,7 +246,9 @@ impl SledEventDatabase {
         rpy: SignedReply,
     ) -> Result<(), DbError> {
         self.accepted_rpy
-            .remove(self.identifiers.designated_key(id)?, &rpy)
+            .remove(self.identifiers.designated_key(id)?, &rpy)?;
+        self.db.flush()?;
+        Ok(())
     }
 
     #[cfg(feature = "query")]
@@ -241,7 +258,9 @@ impl SledEventDatabase {
         id: &IdentifierPrefix,
     ) -> Result<(), DbError> {
         self.escrowed_replys
-            .push(self.identifiers.designated_key(id)?, rpy)
+            .push(self.identifiers.designated_key(id)?, rpy)?;
+        self.db.flush()?;
+        Ok(())
     }
 
     #[cfg(feature = "query")]
@@ -260,7 +279,9 @@ impl SledEventDatabase {
         rpy: &SignedReply,
     ) -> Result<(), DbError> {
         self.escrowed_replys
-            .remove(self.identifiers.designated_key(id)?, rpy)
+            .remove(self.identifiers.designated_key(id)?, rpy)?;
+        self.db.flush()?;
+        Ok(())
     }
 
     #[cfg(feature = "query")]
@@ -275,7 +296,9 @@ impl SledEventDatabase {
         id: &IdentifierPrefix,
     ) -> Result<(), DbError> {
         self.mailbox
-            .add_mailbox_receipt(self.identifiers.designated_key(id)?, receipt)
+            .add_mailbox_receipt(self.identifiers.designated_key(id)?, receipt)?;
+        self.db.flush()?;
+        Ok(())
     }
 
     #[cfg(feature = "mailbox")]
@@ -294,7 +317,9 @@ impl SledEventDatabase {
         id: &IdentifierPrefix,
     ) -> Result<(), DbError> {
         self.mailbox
-            .add_mailbox_reply(self.identifiers.designated_key(id)?, reply)
+            .add_mailbox_reply(self.identifiers.designated_key(id)?, reply)?;
+        self.db.flush()?;
+        Ok(())
     }
 
     #[cfg(feature = "mailbox")]
@@ -313,7 +338,9 @@ impl SledEventDatabase {
         target_id: &IdentifierPrefix,
     ) -> Result<(), DbError> {
         self.mailbox
-            .add_mailbox_multisig(self.identifiers.designated_key(target_id)?, event)
+            .add_mailbox_multisig(self.identifiers.designated_key(target_id)?, event)?;
+        self.db.flush()?;
+        Ok(())
     }
 
     #[cfg(feature = "mailbox")]
@@ -332,7 +359,9 @@ impl SledEventDatabase {
         target_id: &IdentifierPrefix,
     ) -> Result<(), DbError> {
         self.mailbox
-            .add_mailbox_delegate(self.identifiers.designated_key(target_id)?, event)
+            .add_mailbox_delegate(self.identifiers.designated_key(target_id)?, event)?;
+        self.db.flush()?;
+        Ok(())
     }
 
     #[cfg(feature = "mailbox")]

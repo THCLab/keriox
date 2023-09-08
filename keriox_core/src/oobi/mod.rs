@@ -79,6 +79,8 @@ pub enum Role {
     Witness,
     #[strum(serialize = "watcher")]
     Watcher,
+    #[strum(serialize = "messagebox")]
+    Messagebox,
 }
 
 pub struct OobiManager {

@@ -33,7 +33,9 @@ impl<'a, T: Serialize + DeserializeOwned + PartialEq + Clone> Escrow<T> {
     pub fn add(&self, id: &IdentifierPrefix, event: T) -> Result<(), DbError> {
         let event = event.into();
         if !self.tree.contains_value(&event) {
-            self.tree.push(self.escrow_db.get_key(id)?, event)
+            self.tree.push(self.escrow_db.get_key(id)?, event)?;
+            self.escrow_db.db.flush()?;
+            Ok(())
         } else {
             Ok(())
         }
@@ -62,7 +64,9 @@ impl<'a, T: Serialize + DeserializeOwned + PartialEq + Clone> Escrow<T> {
 
     pub fn remove(&self, id: &IdentifierPrefix, event: &T) -> Result<(), DbError> {
         let id_key = self.escrow_db.get_key(id)?;
-        self.tree.remove(id_key, &event.into())
+        self.tree.remove(id_key, &event.into())?;
+        self.escrow_db.db.flush()?;
+        Ok(())
     }
 
     pub fn get_all(&self) -> Option<impl DoubleEndedIterator<Item = T>> {

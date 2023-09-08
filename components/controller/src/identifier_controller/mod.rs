@@ -38,7 +38,7 @@ use keri::{
         reply_event::ReplyRoute,
     },
 };
-use teliox::query::{SignedTelQuery, TelQueryEvent};
+pub use teliox::query::{SignedTelQuery, TelQueryEvent};
 
 use super::mailbox_updating::ActionRequired;
 use crate::{error::ControllerError, mailbox_updating::MailboxReminder, Controller};
@@ -176,6 +176,18 @@ impl IdentifierController {
     pub fn remove_watcher(&self, watcher_id: IdentifierPrefix) -> Result<String, ControllerError> {
         String::from_utf8(
             event_generator::generate_end_role(&self.id, &watcher_id, Role::Watcher, false)?
+                .encode()?,
+        )
+        .map_err(|_e| ControllerError::EventFormatError)
+    }
+
+    /// Generates reply event with `end_role_add` route and messagebox as a role..
+    pub fn add_messagebox(
+        &self,
+        message_box_id: IdentifierPrefix,
+    ) -> Result<String, ControllerError> {
+        String::from_utf8(
+            event_generator::generate_end_role(&self.id, &message_box_id, Role::Messagebox, true)?
                 .encode()?,
         )
         .map_err(|_e| ControllerError::EventFormatError)
@@ -673,6 +685,7 @@ impl IdentifierController {
 
     pub async fn finalize_tel_query(
         &self,
+        issuer_id: &IdentifierPrefix,
         qry: TelQueryEvent,
         sig: SelfSigningPrefix,
     ) -> Result<(), ControllerError> {
@@ -685,7 +698,7 @@ impl IdentifierController {
                 SignedTelQuery::new_trans(qry.clone(), self.id.clone(), signatures)
             }
         };
-        let witness = self.source.get_current_witness_list(&self.id)?[0].clone();
+        let witness = self.source.get_current_witness_list(issuer_id)?[0].clone();
         let location = self
             .source
             .get_loc_schemas(&IdentifierPrefix::Basic(witness))?[0]

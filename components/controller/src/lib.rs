@@ -4,15 +4,19 @@ pub mod config;
 pub mod error;
 pub mod identifier_controller;
 pub mod mailbox_updating;
+pub mod messagebox;
+
 mod test;
 pub mod verifying;
-pub use keri::keys::PublicKey;
+pub use keri::keys::{PublicKey, PrivateKey};
 pub use keri::oobi::{EndRole, LocationScheme, Oobi};
 use keri::prefix::IndexedSignature;
-pub use keri::prefix::{BasicPrefix, CesrPrimitive, IdentifierPrefix, SelfSigningPrefix};
+pub use keri::prefix::{BasicPrefix, CesrPrimitive, IdentifierPrefix, SelfSigningPrefix, SeedPrefix};
 use keri::processor::notification::JustNotification;
 pub use keri::signer::{CryptoBox, KeyManager};
-pub use teliox::event::parse_tel_query_stream;
+pub use teliox::{
+    event::parse_tel_query_stream, state::vc_state::TelState, state::ManagerTelState,
+};
 
 use config::ControllerConfig;
 use keri::state::IdentifierState;
@@ -188,11 +192,8 @@ impl Controller {
     pub async fn send_oobi_to_watcher(
         &self,
         id: &IdentifierPrefix,
-        oobi_json: &str,
+        oobi: &Oobi,
     ) -> Result<(), ControllerError> {
-        let oobi: Oobi = serde_json::from_str(oobi_json).map_err(|_e| {
-            ControllerError::OtherError(format!("Can't parse oobi: {}", &oobi_json))
-        })?;
         for watcher in self.get_watchers(id)?.iter() {
             self.send_oobi_to(watcher, Scheme::Http, oobi.clone())
                 .await?;
