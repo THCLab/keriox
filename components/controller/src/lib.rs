@@ -560,9 +560,9 @@ impl Controller {
         event: ReplyEvent,
         sig: Vec<SelfSigningPrefix>,
     ) -> Result<(), ControllerError> {
-        let dest_prefix = match &event.data.data {
-            ReplyRoute::EndRoleAdd(role) => role.eid.clone(),
-            ReplyRoute::EndRoleCut(role) => role.eid.clone(),
+        let (dest_prefix, role) = match &event.data.data {
+            ReplyRoute::EndRoleAdd(role) => (role.eid.clone(), role.role.clone()),
+            ReplyRoute::EndRoleCut(role) => (role.eid.clone(), role.role.clone()),
             _ => return Err(ControllerError::EventFormatError),
         };
         let signed_reply = match signer_prefix {
@@ -585,15 +585,17 @@ impl Controller {
                         .ok_or(ControllerError::UnknownIdentifierError)?,
                     sigs,
                 )));
-                let kel = self
-                    .storage
-                    .get_kel_messages_with_receipts(signer_prefix)?
-                    .ok_or(ControllerError::UnknownIdentifierError)?;
+                if Role::Messagebox != role {
+                    let kel = self
+                        .storage
+                        .get_kel_messages_with_receipts(signer_prefix)?
+                        .ok_or(ControllerError::UnknownIdentifierError)?;
 
-                // TODO: send in one request
-                for ev in kel {
-                    self.send_message_to(&dest_prefix, Scheme::Http, Message::Notice(ev))
-                        .await?;
+                    // TODO: send in one request
+                    for ev in kel {
+                        self.send_message_to(&dest_prefix, Scheme::Http, Message::Notice(ev))
+                            .await?;
+                    }
                 }
                 signed_rpy
             }
