@@ -52,12 +52,14 @@ impl IdentifierController {
     /// Generate `iss` event and `ixn` event with  seal to `iss`. To finalize
     /// the process, `ixn` need to be signed confirmed with `finalize_event`
     /// function.
-    pub fn issue(&self, credential: &str) -> Result<(IdentifierPrefix, Vec<u8>), ControllerError> {
+    pub fn issue(
+        &self,
+        credential_digest: SelfAddressingIdentifier,
+    ) -> Result<(IdentifierPrefix, Vec<u8>), ControllerError> {
         match self.registry_id.as_ref() {
             Some(registry_id) => {
                 let tel = self.source.tel.clone();
-                let iss =
-                    tel.make_issuance_event(registry_id, HashFunctionCode::Blake3_256, credential)?;
+                let iss = tel.make_issuance_event(registry_id, credential_digest)?;
 
                 let vc_hash = iss.get_prefix();
                 let seal = Seal::Event(EventSeal {

@@ -8,10 +8,12 @@ pub mod messagebox;
 
 mod test;
 pub mod verifying;
-pub use keri::keys::{PublicKey, PrivateKey};
+pub use keri::keys::{PrivateKey, PublicKey};
 pub use keri::oobi::{EndRole, LocationScheme, Oobi};
 use keri::prefix::IndexedSignature;
-pub use keri::prefix::{BasicPrefix, CesrPrimitive, IdentifierPrefix, SelfSigningPrefix, SeedPrefix};
+pub use keri::prefix::{
+    BasicPrefix, CesrPrimitive, IdentifierPrefix, SeedPrefix, SelfSigningPrefix,
+};
 use keri::processor::notification::JustNotification;
 pub use keri::signer::{CryptoBox, KeyManager};
 pub use teliox::{
@@ -56,7 +58,7 @@ use self::error::ControllerError;
 pub struct Controller {
     processor: BasicProcessor,
     pub storage: Arc<EventStorage>,
-    oobi_manager: OobiManager,
+    pub oobi_manager: OobiManager,
     partially_witnessed_escrow: Arc<PartiallyWitnessedEscrow>,
     transport: Box<dyn Transport + Send + Sync>,
 
@@ -560,6 +562,7 @@ impl Controller {
         event: ReplyEvent,
         sig: Vec<SelfSigningPrefix>,
     ) -> Result<(), ControllerError> {
+        println!("In finalize end role: {:?}", event);
         let (dest_prefix, role) = match &event.data.data {
             ReplyRoute::EndRoleAdd(role) => (role.eid.clone(), role.role.clone()),
             ReplyRoute::EndRoleCut(role) => (role.eid.clone(), role.role.clone()),
@@ -596,7 +599,7 @@ impl Controller {
                         self.send_message_to(&dest_prefix, Scheme::Http, Message::Notice(ev))
                             .await?;
                     }
-                }
+                };
                 signed_rpy
             }
         };

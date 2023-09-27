@@ -4,7 +4,10 @@ pub mod mailbox;
 pub(crate) mod tables;
 pub(crate) mod timestamped;
 
-use std::{path::{Path, PathBuf}, sync::Arc};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use serde::{Deserialize, Serialize};
 

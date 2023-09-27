@@ -8,6 +8,7 @@ use keri_tests::{
     setup_identifier,
     transport::{TelTestActor, TelTestTransport},
 };
+use said::derivation::{HashFunction, HashFunctionCode};
 use teliox::state::vc_state::TelState;
 use tempfile::Builder;
 use url::Host;
@@ -77,6 +78,8 @@ async fn test_tel_from_witness() -> Result<(), ControllerError> {
 
     // Issue message.
     let msg_to_issue = "hello world";
+    let credential_said =
+        HashFunction::from(HashFunctionCode::Blake3_256).derive(msg_to_issue.as_bytes());
     // Incept registry. It'll generate ixn that need to be signed.
     let (_vcp_id, vcp_ixn) = issuer.incept_registry()?;
 
@@ -95,7 +98,7 @@ async fn test_tel_from_witness() -> Result<(), ControllerError> {
     assert_eq!(state.sn, 1);
 
     // Issue message. It'll generate ixn message, that need to be signed.
-    let (vc_hash, iss_ixn) = issuer.issue(msg_to_issue)?;
+    let (vc_hash, iss_ixn) = issuer.issue(credential_said)?;
     let sai = match &vc_hash {
         IdentifierPrefix::SelfAddressing(sai) => sai.clone(),
         _ => unreachable!(),

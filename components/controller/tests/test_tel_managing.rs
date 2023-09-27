@@ -1,9 +1,12 @@
 use std::sync::Arc;
 
 use controller::{
-    config::ControllerConfig, error::ControllerError, identifier_controller::IdentifierController,
+    config::ControllerConfig,
+    error::ControllerError,
+    identifier_controller::{tel::SelfAddressingData, IdentifierController},
     BasicPrefix, Controller, CryptoBox, KeyManager, SelfSigningPrefix,
 };
+use said::derivation::{HashFunction, HashFunctionCode};
 
 #[async_std::test]
 async fn test_tel() -> Result<(), ControllerError> {
@@ -55,9 +58,11 @@ async fn test_tel() -> Result<(), ControllerError> {
     assert_eq!(mana.sn, 0);
 
     // Issue something (sign and create ixn event to kel)
-    let credential = r#"message"#;
+    let credential = r#"message"#.to_string();
+    let credential_said =
+        HashFunction::from(HashFunctionCode::Blake3_256).derive(credential.as_bytes());
 
-    let (vc_id, issuance_ixn) = identifier1.issue(credential).unwrap();
+    let (vc_id, issuance_ixn) = identifier1.issue(credential_said).unwrap();
     let vc_hash = match vc_id {
         controller::IdentifierPrefix::SelfAddressing(sai) => sai.clone(),
         _ => unreachable!(),
