@@ -66,6 +66,8 @@ pub enum TransportError<E = ActorError> {
     NetworkError,
     #[error("invalid response")]
     InvalidResponse,
+    #[error("Response is not ready")]
+    ResponseNotReady,
     #[error("remote error: {0}")]
     RemoteError(E),
 }

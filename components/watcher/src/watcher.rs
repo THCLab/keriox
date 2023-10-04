@@ -11,7 +11,10 @@ use keri::{
     event_message::signed_event_message::{Message, Notice, Op},
     oobi::{error::OobiError, EndRole, LocationScheme, OobiManager, Role, Scheme},
     prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
-    processor::escrow::{default_escrow_bus, EscrowConfig},
+    processor::{
+        escrow::{default_escrow_bus, EscrowConfig, ReplyEscrow},
+        notification::JustNotification,
+    },
     query::{
         query_event::{QueryArgs, QueryEvent, QueryRoute, SignedKelQuery},
         reply_event::{ReplyEvent, ReplyRoute, SignedReply},
@@ -83,10 +86,18 @@ impl WatcherData {
             OobiManager::new(&path)
         };
 
-        let (notification_bus, _) = default_escrow_bus(db.clone(), escrow_db, escrow_config);
+        let (mut notification_bus, _) = default_escrow_bus(db.clone(), escrow_db, escrow_config);
+        notification_bus.register_observer(
+            Arc::new(ReplyEscrow::new(db.clone())),
+            vec![
+                JustNotification::KeyEventAdded,
+                JustNotification::KsnOutOfOrder,
+            ],
+        );
 
         let prefix = BasicPrefix::Ed25519NT(signer.public_key()); // watcher uses non transferable key
         let processor = BasicProcessor::new(db.clone(), Some(notification_bus));
+
         let storage = EventStorage::new(db);
 
         // construct witness loc scheme oobi

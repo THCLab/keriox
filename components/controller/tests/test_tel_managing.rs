@@ -1,9 +1,7 @@
 use std::sync::Arc;
 
 use controller::{
-    config::ControllerConfig,
-    error::ControllerError,
-    identifier_controller::IdentifierController,
+    config::ControllerConfig, error::ControllerError, identifier_controller::IdentifierController,
     BasicPrefix, Controller, CryptoBox, KeyManager, SelfSigningPrefix,
 };
 use said::derivation::{HashFunction, HashFunctionCode};

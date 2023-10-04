@@ -562,7 +562,6 @@ impl Controller {
         event: ReplyEvent,
         sig: Vec<SelfSigningPrefix>,
     ) -> Result<(), ControllerError> {
-        println!("In finalize end role: {:?}", event);
         let (dest_prefix, role) = match &event.data.data {
             ReplyRoute::EndRoleAdd(role) => (role.eid.clone(), role.role.clone()),
             ReplyRoute::EndRoleCut(role) => (role.eid.clone(), role.role.clone()),

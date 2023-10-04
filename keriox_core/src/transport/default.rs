@@ -109,7 +109,10 @@ where
             .await
             .map_err(|_| TransportError::NetworkError)?;
         if status.is_success() {
-            let resp = parse_response(&body).map_err(|_| TransportError::InvalidResponse)?;
+            let resp = parse_response(&body).map_err(|e| match e {
+                crate::error::Error::MissingEvent => TransportError::ResponseNotReady,
+                _ => TransportError::InvalidResponse,
+            })?;
             Ok(resp)
         } else {
             let err = serde_json::from_str(&body).map_err(|_| TransportError::InvalidResponse)?;
