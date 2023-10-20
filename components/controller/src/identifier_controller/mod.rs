@@ -1,6 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
-    sync::Arc,
+    sync::{Arc, Mutex},
 };
 pub mod signing;
 pub mod tel;
@@ -53,8 +53,8 @@ pub struct IdentifierController {
     pub source: Arc<Controller>,
     pub registry_id: Option<IdentifierPrefix>,
 
-    pub(crate) last_asked_index: HashMap<IdentifierPrefix, MailboxReminder>,
-    pub(crate) last_asked_groups_index: HashMap<IdentifierPrefix, MailboxReminder>,
+    pub(crate) last_asked_index: Arc<Mutex<HashMap<IdentifierPrefix, MailboxReminder>>>,
+    pub(crate) last_asked_groups_index: Arc<Mutex<HashMap<IdentifierPrefix, MailboxReminder>>>,
     /// Set of already broadcasted receipts.
     /// Each element contains:
     /// - event digest which uniqually identifies event.
@@ -73,10 +73,65 @@ impl IdentifierController {
             registry_id,
             id,
             source: kel,
-            last_asked_index: HashMap::new(),
-            last_asked_groups_index: HashMap::new(),
+            last_asked_index: Arc::new(Mutex::new(HashMap::new())),
+            last_asked_groups_index: Arc::new(Mutex::new(HashMap::new())),
             broadcasted_rcts: HashSet::new(),
         }
+    }
+
+    fn last_asked_index(&self, id: &IdentifierPrefix) -> Result<MailboxReminder, ControllerError> {
+        Ok(self
+            .last_asked_index
+            .lock()
+            .map_err(|_| ControllerError::OtherError("Can't lock mutex".to_string()))?
+            .get(id)
+            .cloned()
+            .unwrap_or_default())
+    }
+
+    fn last_asked_group_index(
+        &self,
+        id: &IdentifierPrefix,
+    ) -> Result<MailboxReminder, ControllerError> {
+        Ok(self
+            .last_asked_groups_index
+            .lock()
+            .map_err(|_| ControllerError::OtherError("Can't lock mutex".to_string()))?
+            .get(id)
+            .cloned()
+            .unwrap_or_default())
+    }
+
+    fn update_last_asked_index(
+        &self,
+        id: IdentifierPrefix,
+        res: &MailboxResponse,
+    ) -> Result<(), ControllerError> {
+        let mut indexes = self
+            .last_asked_index
+            .lock()
+            .map_err(|_| ControllerError::OtherError("Can't lock mutex".to_string()))?;
+        let reminder = indexes.entry(id).or_default();
+        reminder.delegate += res.delegate.len();
+        reminder.multisig += res.multisig.len();
+        reminder.receipt += res.receipt.len();
+        Ok(())
+    }
+
+    fn update_last_asked_group_index(
+        &self,
+        id: IdentifierPrefix,
+        res: &MailboxResponse,
+    ) -> Result<(), ControllerError> {
+        let mut indexes = self
+            .last_asked_groups_index
+            .lock()
+            .map_err(|_| ControllerError::OtherError("Can't lock mutex".to_string()))?;
+        let reminder = indexes.entry(id).or_default();
+        reminder.delegate += res.delegate.len();
+        reminder.multisig += res.multisig.len();
+        reminder.receipt += res.receipt.len();
+        Ok(())
     }
 
     pub fn get_kel(&self) -> Result<String, ControllerError> {
@@ -503,22 +558,20 @@ impl IdentifierController {
         identifier: &IdentifierPrefix,
         witnesses: &[BasicPrefix],
     ) -> Result<Vec<QueryEvent>, ControllerError> {
-        Ok(witnesses
+        witnesses
             .iter()
-            .map(|wit| {
+            .map(|wit| -> Result<_, ControllerError> {
                 let recipient = IdentifierPrefix::Basic(wit.clone());
 
-                let reminders = if identifier == &self.id {
+                let reminder = if identifier == &self.id {
                     // request own mailbox
-                    &self.last_asked_index
+                    self.last_asked_index(&recipient)
                 } else {
                     // request group mailbox
-                    &self.last_asked_groups_index
-                };
+                    self.last_asked_group_index(&recipient)
+                }?;
 
-                let reminder = reminders.get(&recipient).cloned().unwrap_or_default();
-
-                QueryEvent::new_query(
+                Ok(QueryEvent::new_query(
                     QueryRoute::Mbx {
                         args: QueryArgsMbx {
                             // about who
@@ -540,9 +593,9 @@ impl IdentifierController {
                     },
                     SerializationFormats::JSON,
                     HashFunctionCode::Blake3_256,
-                )
+                )?)
             })
-            .collect::<Result<_, _>>()?)
+            .collect()
     }
 
     pub fn query_watcher(
@@ -578,7 +631,7 @@ impl IdentifierController {
     }
 
     async fn mailbox_response(
-        &mut self,
+        &self,
         recipient: &IdentifierPrefix,
         from_who: &IdentifierPrefix,
         about_who: &IdentifierPrefix,
@@ -587,21 +640,12 @@ impl IdentifierController {
         let req = if from_who == about_who {
             // process own mailbox
             let req = self.process_own_mailbox(res)?;
-            let mut reminder = self.last_asked_index.entry(recipient.clone()).or_default();
-            reminder.delegate += res.delegate.len();
-            reminder.multisig += res.multisig.len();
-            reminder.receipt += res.receipt.len();
+            self.update_last_asked_index(recipient.clone(), res)?;
             req
         } else {
             // process group mailbox
             let group_req = self.process_group_mailbox(res, about_who).await?;
-            let reminder = self
-                .last_asked_groups_index
-                .entry(recipient.clone())
-                .or_default();
-            reminder.delegate += res.delegate.len();
-            reminder.multisig += res.multisig.len();
-            reminder.receipt += res.receipt.len();
+            self.update_last_asked_group_index(recipient.clone(), res)?;
             group_req
         };
         Ok(req)
@@ -611,7 +655,7 @@ impl IdentifierController {
     /// process its response. If user action is needed to finalize process,
     /// returns proper notification.
     pub async fn finalize_query(
-        &mut self,
+        &self,
         queries: Vec<(QueryEvent, SelfSigningPrefix)>,
     ) -> Result<Vec<ActionRequired>, ControllerError> {
         let self_id = self.id.clone();
