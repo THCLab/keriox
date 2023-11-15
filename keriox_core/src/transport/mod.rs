@@ -11,7 +11,7 @@ use crate::{
 };
 
 pub mod default;
-pub mod http;
+// pub mod http;
 pub mod test;
 
 /// Transport trait allows customizing behavior of actors when it comes to making net requests.
@@ -62,8 +62,8 @@ where
 
 #[derive(Debug, thiserror::Error, serde::Serialize, serde::Deserialize)]
 pub enum TransportError<E = ActorError> {
-    #[error("network error")]
-    NetworkError,
+    #[error("network error: {0}")]
+    NetworkError(String),
     #[error("invalid response")]
     InvalidResponse,
     #[error("Response is not ready")]

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use controller::{
     config::ControllerConfig, error::ControllerError, identifier_controller::IdentifierController,
-    BasicPrefix, Controller, CryptoBox, KeyManager, SelfSigningPrefix,
+    BasicPrefix, Controller, CryptoBox, KeyManager, SelfSigningPrefix, LocationScheme,
 };
 use tempfile::Builder;
 

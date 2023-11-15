@@ -72,12 +72,12 @@ where
             .body(msg.to_cesr().unwrap())
             .send()
             .await
-            .map_err(|_| TransportError::NetworkError)?;
+            .map_err(|e| TransportError::NetworkError(e.to_string()))?;
         if !resp.status().is_success() {
             let body = resp
                 .text()
                 .await
-                .map_err(|_| TransportError::InvalidResponse)?;
+                .map_err(|e| TransportError::NetworkError(e.to_string()))?;
             let err = serde_json::from_str(&body).map_err(|_| TransportError::InvalidResponse)?;
             return Err(TransportError::RemoteError(err));
         }
@@ -102,12 +102,12 @@ where
             .body(Message::Op(Op::Query(qry)).to_cesr().unwrap())
             .send()
             .await
-            .map_err(|_| TransportError::NetworkError)?;
+            .map_err(|e| TransportError::NetworkError(e.to_string()))?;
         let status = resp.status();
         let body = resp
             .text()
             .await
-            .map_err(|_| TransportError::NetworkError)?;
+            .map_err(|e| TransportError::NetworkError(e.to_string()))?;
         if status.is_success() {
             let resp = parse_response(&body).map_err(|e| match e {
                 crate::error::Error::MissingEvent => TransportError::ResponseNotReady,
@@ -130,19 +130,19 @@ where
             .unwrap();
         let resp = reqwest::get(url)
             .await
-            .map_err(|_| TransportError::NetworkError)?;
+            .map_err(|e| TransportError::NetworkError(e.to_string()))?;
         if resp.status().is_success() {
             let body = resp
                 .bytes()
                 .await
-                .map_err(|_| TransportError::NetworkError)?;
+                .map_err(|e| TransportError::NetworkError(e.to_string()))?;
             let ops = parse_op_stream(&body).map_err(|_| TransportError::InvalidResponse)?;
             Ok(ops)
         } else {
             let body = resp
                 .text()
                 .await
-                .map_err(|_| TransportError::NetworkError)?;
+                .map_err(|e| TransportError::NetworkError(e.to_string()))?;
             let err = serde_json::from_str(&body).map_err(|_| TransportError::InvalidResponse)?;
             Err(TransportError::RemoteError(err))
         }
@@ -173,19 +173,20 @@ where
             .unwrap();
         let resp = reqwest::get(url)
             .await
-            .map_err(|_| TransportError::NetworkError)?;
+            .map_err(|e| TransportError::NetworkError(e.to_string()))?;
         if resp.status().is_success() {
             let body = resp
                 .bytes()
                 .await
-                .map_err(|_| TransportError::NetworkError)?;
+                .map_err(|e| TransportError::NetworkError(e.to_string()))?;
+               
             let ops = parse_event_stream(&body).map_err(|_| TransportError::InvalidResponse)?;
             Ok(ops)
         } else {
             let body = resp
                 .text()
                 .await
-                .map_err(|_| TransportError::NetworkError)?;
+                .map_err(|e| TransportError::NetworkError(e.to_string()))?;
             let err = serde_json::from_str(&body).map_err(|_| TransportError::InvalidResponse)?;
             Err(TransportError::RemoteError(err))
         }
@@ -198,14 +199,15 @@ where
             .body(serde_json::to_string(&oobi).unwrap())
             .send()
             .await
-            .map_err(|_| TransportError::NetworkError)?;
+            .map_err(|e| TransportError::NetworkError(e.to_string()))?;
 
         if !resp.status().is_success() {
             let body = resp
                 .text()
                 .await
-                .map_err(|_| TransportError::NetworkError)?;
-            let err = serde_json::from_str(&body).map_err(|_| TransportError::NetworkError)?;
+                .map_err(|e| TransportError::NetworkError(e.to_string()))?;
+            let err = serde_json::from_str(&body)
+                .map_err(|e| TransportError::NetworkError(e.to_string()))?;
             return Err(TransportError::RemoteError(err));
         }
         Ok(())
