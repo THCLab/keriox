@@ -1,6 +1,6 @@
 use crate::{
     error::Error,
-    keys::{PrivateKey, PublicKey},
+    keys::{KeysError, PrivateKey, PublicKey},
     prefix::SeedPrefix,
 };
 use rand::rngs::OsRng;
@@ -20,7 +20,7 @@ pub struct CryptoBox {
 
 impl KeyManager for CryptoBox {
     fn sign(&self, msg: &[u8]) -> Result<Vec<u8>, Error> {
-        self.signer.sign(msg)
+        Ok(self.signer.sign(msg)?)
     }
 
     fn public_key(&self) -> PublicKey {
@@ -92,7 +92,7 @@ impl Signer {
         })
     }
 
-    pub fn sign(&self, msg: impl AsRef<[u8]>) -> Result<Vec<u8>, Error> {
+    pub fn sign(&self, msg: impl AsRef<[u8]>) -> Result<Vec<u8>, KeysError> {
         self.priv_key.sign_ed(msg.as_ref())
     }
 

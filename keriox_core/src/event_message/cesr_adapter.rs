@@ -9,14 +9,11 @@ use cesrox::{
 use serde::{Deserialize, Serialize};
 use version::serialization_info::SerializationFormats;
 
-use crate::{
-    error::Error,
-    event::{
-        event_data::EventData,
-        receipt::Receipt,
-        sections::seal::{EventSeal, SourceSeal},
-        KeyEvent,
-    },
+use crate::event::{
+    event_data::EventData,
+    receipt::Receipt,
+    sections::seal::{EventSeal, SourceSeal},
+    KeyEvent,
 };
 
 #[cfg(any(feature = "query", feature = "oobi"))]
@@ -46,9 +43,21 @@ use super::{
     Typeable,
 };
 
-pub fn parse_event_type(input: &[u8]) -> Result<EventType, Error> {
+#[derive(Debug, thiserror::Error, Serialize, Deserialize)]
+pub enum ParseError {
+    #[error("Cesr error")]
+    CesrError(String),
+    #[error("Deserialize error: {0}")]
+    DeserializeError(String),
+    #[error("Wrong attachment: {0}")]
+    AttachmentError(String),
+    #[error("Wrong event type: {0}")]
+    WrongEventType(String),
+}
+
+pub fn parse_event_type(input: &[u8]) -> Result<EventType, ParseError> {
     parse_payload(input)
-        .map_err(|_e| Error::CesrError)?
+        .map_err(|e| ParseError::CesrError(e.to_string()))?
         .1
         .try_into()
 }
@@ -67,7 +76,7 @@ pub enum EventType {
 }
 
 impl EventType {
-    pub fn serialize(&self) -> Result<Vec<u8>, Error> {
+    pub fn serialize(&self) -> Result<Vec<u8>, crate::error::Error> {
         Ok(match self {
             EventType::KeyEvent(event) => event.encode(),
             EventType::Receipt(rcp) => rcp.encode(),
@@ -202,7 +211,7 @@ impl From<SignedExchange> for ParsedData {
 }
 
 impl TryFrom<Payload> for EventType {
-    type Error = Error;
+    type Error = ParseError;
 
     fn try_from(value: Payload) -> Result<Self, Self::Error> {
         let event: Result<EventType, _> = match value {
@@ -210,12 +219,12 @@ impl TryFrom<Payload> for EventType {
             Payload::CBOR(_event) => todo!(),
             Payload::MGPK(_event) => todo!(),
         };
-        event.map_err(|e| Error::DeserializeError(e.to_string()))
+        event.map_err(|e| ParseError::DeserializeError(e.to_string()))
     }
 }
 
 impl TryFrom<ParsedData> for Message {
-    type Error = Error;
+    type Error = ParseError;
 
     fn try_from(value: ParsedData) -> Result<Self, Self::Error> {
         let msg = match value.payload.try_into()? {
@@ -233,13 +242,13 @@ impl TryFrom<ParsedData> for Message {
 }
 
 impl TryFrom<ParsedData> for Notice {
-    type Error = Error;
+    type Error = ParseError;
 
     fn try_from(value: ParsedData) -> Result<Self, Self::Error> {
         match Message::try_from(value)? {
             Message::Notice(notice) => Ok(notice),
             #[cfg(feature = "query")]
-            _ => Err(Error::SemanticError(
+            _ => Err(ParseError::WrongEventType(
                 "Cannot convert SignedEventData to Notice".to_string(),
             )),
         }
@@ -248,7 +257,7 @@ impl TryFrom<ParsedData> for Notice {
 
 #[cfg(any(feature = "query", feature = "oobi"))]
 impl TryFrom<ParsedData> for Op {
-    type Error = Error;
+    type Error = ParseError;
 
     fn try_from(value: ParsedData) -> Result<Self, Self::Error> {
         let et: EventType = value.payload.try_into()?;
@@ -259,7 +268,7 @@ impl TryFrom<ParsedData> for Op {
             EventType::Rpy(rpy) => signed_reply(rpy, value.attachments),
             #[cfg(feature = "mailbox")]
             EventType::Exn(exn) => signed_exchange(exn, value.attachments),
-            _ => Err(Error::SemanticError(
+            _ => Err(ParseError::WrongEventType(
                 "Cannot convert SignedEventData to Op".to_string(),
             )),
         }
@@ -268,12 +277,12 @@ impl TryFrom<ParsedData> for Op {
 
 #[cfg(feature = "query")]
 impl TryFrom<ParsedData> for SignedKelQuery {
-    type Error = Error;
+    type Error = ParseError;
 
     fn try_from(value: ParsedData) -> Result<Self, Self::Error> {
         match Op::try_from(value)? {
             Op::Query(qry) => Ok(qry),
-            _ => Err(Error::SemanticError(
+            _ => Err(ParseError::WrongEventType(
                 "Cannot convert SignedEventData to SignedQuery".to_string(),
             )),
         }
@@ -282,12 +291,12 @@ impl TryFrom<ParsedData> for SignedKelQuery {
 
 #[cfg(feature = "query")]
 impl TryFrom<ParsedData> for SignedReply {
-    type Error = Error;
+    type Error = ParseError;
 
     fn try_from(value: ParsedData) -> Result<Self, Self::Error> {
         match Op::try_from(value)? {
             Op::Reply(rpy) => Ok(rpy),
-            _ => Err(Error::SemanticError(
+            _ => Err(ParseError::WrongEventType(
                 "Cannot convert SignedEventData to SignedReply".to_string(),
             )),
         }
@@ -296,12 +305,12 @@ impl TryFrom<ParsedData> for SignedReply {
 
 #[cfg(feature = "mailbox")]
 impl TryFrom<ParsedData> for SignedExchange {
-    type Error = Error;
+    type Error = ParseError;
 
     fn try_from(value: ParsedData) -> Result<Self, Self::Error> {
         match Op::try_from(value)? {
             Op::Exchange(exn) => Ok(exn),
-            _ => Err(Error::SemanticError(
+            _ => Err(ParseError::WrongEventType(
                 "Cannot convert SignedEventData to SignedExchange".to_string(),
             )),
         }
@@ -309,10 +318,10 @@ impl TryFrom<ParsedData> for SignedExchange {
 }
 
 #[cfg(any(feature = "oobi"))]
-fn signed_reply(rpy: ReplyEvent, mut attachments: Vec<Group>) -> Result<Op, Error> {
+fn signed_reply(rpy: ReplyEvent, mut attachments: Vec<Group>) -> Result<Op, ParseError> {
     match attachments
         .pop()
-        .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?
+        .ok_or_else(|| ParseError::AttachmentError("Missing attachment".into()))?
     {
         Group::NontransReceiptCouples(couplets) => {
             let signer = couplets[0].0.clone();
@@ -327,7 +336,7 @@ fn signed_reply(rpy: ReplyEvent, mut attachments: Vec<Group>) -> Result<Op, Erro
             let (prefix, sn, digest, sigs) = data
                 // TODO what if more than one?
                 .last()
-                .ok_or_else(|| Error::SemanticError("More than one seal".into()))?
+                .ok_or_else(|| ParseError::AttachmentError("More than one seal".into()))?
                 .to_owned();
             let seal = EventSeal {
                 prefix: prefix.into(),
@@ -340,36 +349,39 @@ fn signed_reply(rpy: ReplyEvent, mut attachments: Vec<Group>) -> Result<Op, Erro
         Group::Frame(atts) => signed_reply(rpy, atts),
         _ => {
             // Improper payload type
-            Err(Error::SemanticError("Improper payload type".into()))
+            Err(ParseError::AttachmentError("Improper payload type".into()))
         }
     }
 }
 
 #[cfg(feature = "query")]
-fn signed_query(qry: QueryEvent, mut attachments: Vec<Group>) -> Result<Op, Error> {
+fn signed_query(qry: QueryEvent, mut attachments: Vec<Group>) -> Result<Op, ParseError> {
     use super::signature::get_signatures;
 
     let att = attachments
         .pop()
-        .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?;
+        .ok_or_else(|| ParseError::AttachmentError("Missing attachment".into()))?;
     let sigs = get_signatures(att)?;
     Ok(Op::Query(SignedKelQuery {
         query: qry,
         // TODO what if more than one?
-        signature: sigs.get(0).ok_or(Error::MissingSignatures)?.clone(),
+        signature: sigs
+            .get(0)
+            .ok_or(ParseError::AttachmentError("Missing attachment".into()))?
+            .clone(),
     }))
 }
 
 fn signed_key_event(
     event_message: KeriEvent<KeyEvent>,
     mut attachments: Vec<Group>,
-) -> Result<Notice, Error> {
+) -> Result<Notice, ParseError> {
     match event_message.data.get_event_data() {
         EventData::Dip(_) | EventData::Drt(_) => {
             let (att1, att2) = (
                 attachments
                     .pop()
-                    .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?,
+                    .ok_or_else(|| ParseError::AttachmentError("Missing attachment".into()))?,
                 attachments.pop(),
             );
 
@@ -385,15 +397,17 @@ fn signed_key_event(
                 (Group::IndexedControllerSignatures(sigs), None) => Ok((None, sigs)),
                 _ => {
                     // Improper attachment type
-                    Err(Error::SemanticError("Improper attachment type".into()))
+                    Err(ParseError::AttachmentError(
+                        "Improper attachment type".into(),
+                    ))
                 }
             }?;
 
             let delegator_seal = if let Some(seal) = seals {
                 match seal.len() {
-                    0 => Err(Error::SemanticError("Missing delegator seal".into())),
+                    0 => Err(ParseError::AttachmentError("Missing delegator seal".into())),
                     1 => Ok(seal.first().map(|seal| seal.clone().into())),
-                    _ => Err(Error::SemanticError("Too many seals".into())),
+                    _ => Err(ParseError::AttachmentError("Too many seals".into())),
                 }
             } else {
                 Ok(None)
@@ -411,7 +425,7 @@ fn signed_key_event(
             let signatures = if let Group::Frame(atts) = attachments
                 .first()
                 .cloned()
-                .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?
+                .ok_or_else(|| ParseError::AttachmentError("Missing attachment".into()))?
             {
                 atts
             } else {
@@ -428,7 +442,7 @@ fn signed_key_event(
                     }
                 })
                 .ok_or_else(|| {
-                    Error::SemanticError("Missing controller signatures attachment".into())
+                    ParseError::AttachmentError("Missing controller signatures attachment".into())
                 })?;
             let witness_sigs: Vec<_> = signatures
                 .into_iter()
@@ -461,7 +475,10 @@ fn signed_key_event(
     }
 }
 
-fn signed_receipt(event_message: Receipt, mut attachments: Vec<Group>) -> Result<Notice, Error> {
+fn signed_receipt(
+    event_message: Receipt,
+    mut attachments: Vec<Group>,
+) -> Result<Notice, ParseError> {
     let nontransferable = attachments
         .iter()
         .filter_map(|att| match att {
@@ -480,7 +497,7 @@ fn signed_receipt(event_message: Receipt, mut attachments: Vec<Group>) -> Result
         .collect();
     let att = attachments
         .pop()
-        .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?;
+        .ok_or_else(|| ParseError::AttachmentError("Missing attachment".into()))?;
 
     match att {
         // Should be nontransferable receipt
@@ -495,7 +512,7 @@ fn signed_receipt(event_message: Receipt, mut attachments: Vec<Group>) -> Result
             let (prefix, sn, event_digest, sigs) = data
                 // TODO what if more than one?
                 .last()
-                .ok_or_else(|| Error::SemanticError("Empty seals".into()))?;
+                .ok_or_else(|| ParseError::AttachmentError("Empty seals".into()))?;
             let seal = EventSeal {
                 prefix: prefix.clone().into(),
                 sn: *sn,
@@ -511,13 +528,13 @@ fn signed_receipt(event_message: Receipt, mut attachments: Vec<Group>) -> Result
         Group::Frame(atts) => signed_receipt(event_message, atts),
         _ => {
             // Improper payload type
-            Err(Error::SemanticError("Improper payload type".into()))
+            Err(ParseError::AttachmentError("Improper payload type".into()))
         }
     }
 }
 
 #[cfg(feature = "mailbox")]
-pub fn signed_exchange(exn: ExchangeMessage, attachments: Vec<Group>) -> Result<Op, Error> {
+pub fn signed_exchange(exn: ExchangeMessage, attachments: Vec<Group>) -> Result<Op, ParseError> {
     use crate::event_message::signature::get_signatures;
 
     use super::signature::Signature;
@@ -525,18 +542,18 @@ pub fn signed_exchange(exn: ExchangeMessage, attachments: Vec<Group>) -> Result<
     let mut atts = attachments.into_iter();
     let att1 = atts
         .next()
-        .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?;
+        .ok_or_else(|| ParseError::AttachmentError("Missing attachment".into()))?;
     let att2 = atts
         .next()
-        .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?;
+        .ok_or_else(|| ParseError::AttachmentError("Missing attachment".into()))?;
     let (path, data_sigs, signatures): (_, _, Vec<Signature>) = match (att1, att2) {
         (Group::PathedMaterialQuadruplet(path, sigs), anything)
         | (anything, Group::PathedMaterialQuadruplet(path, sigs)) => {
             (path, sigs, get_signatures(anything)?)
         }
-        _ => return Err(Error::SemanticError("Wrong attachment".into())),
+        _ => return Err(ParseError::AttachmentError("Wrong attachment".into())),
     };
-    let data_signatures: Result<Vec<Signature>, Error> =
+    let data_signatures: Result<Vec<Signature>, ParseError> =
         data_sigs.into_iter().fold(Ok(vec![]), |acc, group| {
             let mut signatures: Vec<Signature> = get_signatures(group)?;
             let mut sigs = acc?;

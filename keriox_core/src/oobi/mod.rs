@@ -128,7 +128,7 @@ impl OobiManager {
 
     pub fn parse_and_save(&self, stream: &str) -> Result<(), OobiError> {
         parse_many(stream.as_bytes())
-            .map_err(|_| OobiError::Parse)?
+            .map_err(|_| OobiError::Parse(stream.to_string()))?
             .1
             .into_iter()
             .try_for_each(|sed| -> Result<_, OobiError> {
@@ -187,8 +187,8 @@ pub mod error {
         #[error("DB error")]
         Db(#[from] crate::database::DbError),
 
-        #[error("message parse error")]
-        Parse,
+        #[error("Oobi parse error: {0}")]
+        Parse(String),
 
         #[error("query error")]
         Query(#[from] crate::query::QueryError),

@@ -1,5 +1,7 @@
 use http::StatusCode;
 
+use crate::event_message::cesr_adapter::ParseError;
+use crate::keys::KeysError;
 #[cfg(feature = "oobi")]
 use crate::oobi::{error::OobiError, Role};
 #[cfg(feature = "oobi")]
@@ -27,6 +29,9 @@ pub enum ActorError {
     #[error("processing query failed")]
     QueryError(#[from] SignedQueryError),
 
+    #[error("Keri event parsing error: {0}")]
+    ParseError(#[from] ParseError),
+
     #[error("location not found for {id:?}")]
     NoLocation { id: IdentifierPrefix }, // TODO: should be Oobi error
 
@@ -42,6 +47,9 @@ pub enum ActorError {
 
     #[error("Missing signer identifier")]
     MissingSignerId,
+
+    #[error("Signing error: {0}")]
+    SigningError(#[from] KeysError),
 }
 
 #[cfg(feature = "oobi")]
@@ -63,13 +71,13 @@ impl ActorError {
             ActorError::DbError(_) => StatusCode::INTERNAL_SERVER_ERROR,
 
             ActorError::KeriError(err) => match err {
-                KeriError::Base64DecodingError { .. }
-                | KeriError::DeserializeError(_)
-                | KeriError::IncorrectDigest => StatusCode::BAD_REQUEST,
+                KeriError::DeserializeError(_) | KeriError::IncorrectDigest => {
+                    StatusCode::BAD_REQUEST
+                }
 
-                KeriError::Ed25519DalekSignatureError
-                | KeriError::FaultySignatureVerification
-                | KeriError::SignatureVerificationError => StatusCode::FORBIDDEN,
+                KeriError::FaultySignatureVerification | KeriError::SignatureVerificationError => {
+                    StatusCode::FORBIDDEN
+                }
 
                 _ => StatusCode::INTERNAL_SERVER_ERROR,
             },

@@ -5,6 +5,20 @@ use fraction::{Fraction, One, Zero};
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use serde_hex::{Compact, SerHex};
 
+#[derive(Debug, thiserror::Error, Serialize, Deserialize)]
+pub enum ThresholdError {
+    #[error("Error parsing numerical value")]
+    ParseIntError,
+    #[error("Wrong threshold value. Should be fraction")]
+    FractionExpected,
+}
+
+impl From<core::num::ParseIntError> for ThresholdError {
+    fn from(_: core::num::ParseIntError) -> Self {
+        ThresholdError::ParseIntError
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ThresholdFraction {
     fraction: Fraction,
@@ -25,12 +39,12 @@ impl fmt::Display for ThresholdFraction {
 }
 
 impl FromStr for ThresholdFraction {
-    type Err = Error;
+    type Err = ThresholdError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let f: Vec<_> = s.split('/').collect();
         if f.len() > 2 {
-            Err(Error::SemanticError("Improper threshold fraction".into()))
+            Err(ThresholdError::FractionExpected)
         } else if f.len() == 1 {
             let a = f[0].parse::<u64>()?;
             Ok(ThresholdFraction {
@@ -230,8 +244,7 @@ fn test_enough_sigs() -> Result<(), Error> {
 #[test]
 pub fn test_weighted_treshold_serialization() -> Result<(), Error> {
     let multi_threshold = r#"[["1"],["1/2","1/2","1/2"]]"#.to_string();
-    let wt: WeightedThreshold =
-        serde_json::from_str(&multi_threshold).map_err(|_| Error::JsonDeserError)?;
+    let wt: WeightedThreshold = serde_json::from_str(&multi_threshold).unwrap();
     assert!(matches!(wt, WeightedThreshold::Multi(_)));
     // assert_eq!(serde_json::to_string(&wt).unwrap(), multi_threshold);
     assert_eq!(
@@ -240,8 +253,7 @@ pub fn test_weighted_treshold_serialization() -> Result<(), Error> {
     );
 
     let single_threshold = r#"["1/2","1/2","1/2"]"#.to_string();
-    let wt: WeightedThreshold =
-        serde_json::from_str(&single_threshold).map_err(|_| Error::JsonDeserError)?;
+    let wt: WeightedThreshold = serde_json::from_str(&single_threshold).unwrap();
     assert!(matches!(wt, WeightedThreshold::Single(_)));
     assert_eq!(serde_json::to_string(&wt).unwrap(), single_threshold);
     Ok(())

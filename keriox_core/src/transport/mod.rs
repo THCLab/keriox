@@ -4,14 +4,17 @@ use serde::Deserialize;
 
 use crate::{
     actor::{error::ActorError, simple_controller::PossibleResponse},
-    event_message::signed_event_message::{Message, Op},
+    event_message::{
+        cesr_adapter::ParseError,
+        signed_event_message::{Message, Op},
+    },
     oobi::{LocationScheme, Oobi, Role},
     prefix::IdentifierPrefix,
     query::query_event::SignedKelQuery,
 };
 
 pub mod default;
-pub mod http;
+// pub mod http;
 pub mod test;
 
 /// Transport trait allows customizing behavior of actors when it comes to making net requests.
@@ -62,10 +65,14 @@ where
 
 #[derive(Debug, thiserror::Error, serde::Serialize, serde::Deserialize)]
 pub enum TransportError<E = ActorError> {
-    #[error("network error")]
-    NetworkError,
-    #[error("invalid response")]
-    InvalidResponse,
+    #[error("network error: {0}")]
+    NetworkError(String),
+    #[error("Empty response")]
+    EmptyResponse,
+    #[error("Invalid response: {0}")]
+    InvalidResponse(#[from] ParseError),
+    #[error("Unknown error: {0}")]
+    UnknownError(String),
     #[error("Response is not ready")]
     ResponseNotReady,
     #[error("remote error: {0}")]

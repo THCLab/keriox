@@ -5,6 +5,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use crate::event_message::cesr_adapter::ParseError;
 use cesrox::{cesr_proof::MaterialPath, parse, primitives::CesrPrimitive};
 use said::derivation::{HashFunction, HashFunctionCode};
 use serde::{Deserialize, Serialize};
@@ -68,6 +69,14 @@ pub enum PossibleResponse {
     Ksn(SignedReply),
 }
 
+#[derive(Debug, thiserror::Error, Serialize, Deserialize)]
+pub enum ResponseError {
+    #[error("Empty response")]
+    EmptyResponse,
+    #[error("Can't parse response: {0}")]
+    Unparsable(#[from] ParseError),
+}
+
 impl PossibleResponse {
     fn display(&self) -> Result<Vec<u8>, Error> {
         Ok(match self {
@@ -112,7 +121,7 @@ impl PossibleResponse {
                     delegate: String::from_utf8(delegate_stream)
                         .map_err(|e| Error::SerializationError(e.to_string()))?,
                 })
-                .map_err(|_| Error::JsonDeserError)?
+                .map_err(|e| Error::SerializationError(e.to_string()))?
             }
             PossibleResponse::Ksn(ksn) => Message::Op(Op::Reply(ksn.clone())).to_cesr()?,
         })
@@ -120,10 +129,10 @@ impl PossibleResponse {
 }
 
 #[cfg(feature = "query")]
-pub fn parse_response(response: &str) -> Result<PossibleResponse, Error> {
+pub fn parse_response(response: &str) -> Result<PossibleResponse, ResponseError> {
     Ok(match parse_mailbox_response(response) {
         Err(_) => match parse_reply_stream(response.as_bytes()) {
-            Ok(a) if a.is_empty() => return Err(Error::MissingEvent),
+            Ok(a) if a.is_empty() => return Err(ResponseError::EmptyResponse),
             Ok(rep) => PossibleResponse::Ksn(rep[0].clone()),
             Err(_e) => {
                 let events = parse_event_stream(response.as_bytes())?;
@@ -135,7 +144,7 @@ pub fn parse_response(response: &str) -> Result<PossibleResponse, Error> {
 }
 
 #[cfg(feature = "mailbox")]
-pub fn parse_mailbox_response(response: &str) -> Result<PossibleResponse, Error> {
+pub fn parse_mailbox_response(response: &str) -> Result<PossibleResponse, ParseError> {
     #[derive(Deserialize, Debug)]
     struct GroupedResponse {
         receipt: String,
@@ -143,7 +152,7 @@ pub fn parse_mailbox_response(response: &str) -> Result<PossibleResponse, Error>
         delegate: String,
     }
     let res: GroupedResponse =
-        serde_json::from_str(&response).map_err(|_| Error::JsonDeserError)?;
+        serde_json::from_str(&response).map_err(|e| ParseError::DeserializeError(e.to_string()))?;
     let receipts = parse_event_stream(res.receipt.as_bytes())?
         .into_iter()
         .map(|rct| {

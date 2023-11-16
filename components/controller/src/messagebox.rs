@@ -2,7 +2,7 @@ use keri::{
     event_message::signed_event_message::{Message, Op},
     oobi::{EndRole, LocationScheme, Oobi, Role},
     prefix::IdentifierPrefix,
-    query::reply_event::{ReplyRoute, SignedReply},
+    query::reply_event::ReplyRoute,
 };
 
 use crate::{error::ControllerError, Controller};

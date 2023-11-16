@@ -1,11 +1,7 @@
-use core::num::ParseIntError;
-
-use base64::DecodeError;
-use ed25519_dalek;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::prefix::IdentifierPrefix;
+use crate::{event_message::cesr_adapter::ParseError, prefix::IdentifierPrefix};
 
 pub mod serializer_error;
 
@@ -13,19 +9,6 @@ pub mod serializer_error;
 pub enum Error {
     #[error("Error during Serialization: {0}")]
     SerializationError(String),
-
-    // TODO: add line/col
-    #[error("JSON Serialization error")]
-    JsonDeserError,
-
-    #[error("CBOR Serialization error")]
-    CborDeserError,
-
-    #[error("MessagePack Serialization error")]
-    MsgPackDeserError,
-
-    #[error("Error parsing numerical value")]
-    ParseIntError,
 
     #[error("Error while applying event: {0}")]
     SemanticError(String),
@@ -48,10 +31,10 @@ pub enum Error {
     #[error("Not enough signatures while verifying")]
     NotEnoughSigsError,
 
-    #[error("Signature duplicate while verifing")]
+    #[error("Signature duplicate while verifying")]
     DuplicateSignature,
 
-    #[error("Too many signatures while verifing")]
+    #[error("Too many signatures while verifying")]
     TooManySignatures,
 
     #[error("Not enough receipts")]
@@ -76,7 +59,7 @@ pub enum Error {
     ReceiptVerificationError,
 
     #[error("Deserialize error: {0}")]
-    DeserializeError(String),
+    DeserializeError(#[from] ParseError),
 
     #[error("Identifier is not indexed into the DB")]
     NotIndexedError,
@@ -84,23 +67,8 @@ pub enum Error {
     #[error("Identifier ID is already present in the DB")]
     IdentifierPresentError,
 
-    #[error("Base64 Decoding error")]
-    Base64DecodingError,
-
-    #[error("Improper Prefix Type")]
-    ImproperPrefixType,
-
-    #[error("Storage error")]
-    StorageError,
-
-    #[error("Invalid identifier state")]
-    InvalidIdentifierStat,
-
     #[error("Failed to obtain mutable ref to Ark of KeyManager")]
     MutArcKeyVaultError,
-
-    #[error("ED25519Dalek signature error")]
-    Ed25519DalekSignatureError,
 
     #[error("Sled error")]
     SledError,
@@ -130,7 +98,7 @@ pub enum Error {
     #[error(transparent)]
     PrefixModuleError(#[from] crate::prefix::error::Error),
 
-    #[error("Cesr error")]
+    #[error("CESR error")]
     CesrError,
 
     #[error("Version error")]
@@ -138,12 +106,9 @@ pub enum Error {
 
     #[error("SAI error")]
     SAIError,
-}
 
-impl From<ParseIntError> for Error {
-    fn from(_: ParseIntError) -> Self {
-        Error::ParseIntError
-    }
+    #[error("Signing error")]
+    SigningError,
 }
 
 impl From<version::error::Error> for Error {
@@ -158,20 +123,14 @@ impl From<said::error::Error> for Error {
     }
 }
 
-impl From<base64::DecodeError> for Error {
-    fn from(_: DecodeError) -> Self {
-        Error::Base64DecodingError
-    }
-}
-
-impl From<ed25519_dalek::SignatureError> for Error {
-    fn from(_: ed25519_dalek::SignatureError) -> Self {
-        Error::Ed25519DalekSignatureError
-    }
-}
-
 impl From<sled::Error> for Error {
     fn from(_: sled::Error) -> Self {
         Error::SledError
+    }
+}
+
+impl From<crate::keys::KeysError> for Error {
+    fn from(_: crate::keys::KeysError) -> Self {
+        Error::SigningError
     }
 }

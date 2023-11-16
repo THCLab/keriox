@@ -7,7 +7,6 @@ members = [\n\
     "keriox_core",\n\
     "components/watcher",\n\
     "components/controller",\n\
-    "components/witness",\n\
     "support/teliox",\n\
 ]' > Cargo.toml
 COPY keriox_core keriox_core

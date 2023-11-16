@@ -1,8 +1,20 @@
-use crate::error::Error;
 use ed25519_dalek::{ExpandedSecretKey, SecretKey};
 use k256::ecdsa::{signature::Signer as EcdsaSigner, Signature as EcdsaSignature, SigningKey};
 use k256::ecdsa::{signature::Verifier as EcdsaVerifier, VerifyingKey};
+use serde_derive::{Deserialize, Serialize};
 use zeroize::Zeroize;
+
+#[derive(Debug, thiserror::Error, Serialize, Deserialize)]
+pub enum KeysError {
+    #[error("ED25519Dalek signature error")]
+    Ed25519DalekSignatureError,
+}
+
+impl From<ed25519_dalek::SignatureError> for KeysError {
+    fn from(_: ed25519_dalek::SignatureError) -> Self {
+        KeysError::Ed25519DalekSignatureError
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Hash, Eq, Default)]
 pub struct PublicKey {
@@ -65,13 +77,13 @@ impl PrivateKey {
         Self { key }
     }
 
-    pub fn sign_ecdsa(&self, msg: &[u8]) -> Result<Vec<u8>, Error> {
+    pub fn sign_ecdsa(&self, msg: &[u8]) -> Result<Vec<u8>, KeysError> {
         let sig: EcdsaSignature = EcdsaSigner::sign(&SigningKey::from_bytes(&self.key)?, msg);
         Ok(sig.as_ref().to_vec())
     }
 
-    pub fn sign_ed(&self, msg: &[u8]) -> Result<Vec<u8>, Error> {
-        let sk = SecretKey::from_bytes(&self.key).map_err(|e| Error::from(e))?;
+    pub fn sign_ed(&self, msg: &[u8]) -> Result<Vec<u8>, KeysError> {
+        let sk = SecretKey::from_bytes(&self.key).map_err(|e| KeysError::from(e))?;
         let pk = ed25519_dalek::PublicKey::from(&sk);
         Ok(ExpandedSecretKey::from(&sk)
             .sign(msg, &pk)

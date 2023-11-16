@@ -320,7 +320,10 @@ impl WatcherData {
 
         // sign message by watcher
         let signature = SelfSigningPrefix::Ed25519Sha512(
-            (self.signer).sign(serde_json::to_vec(&qry).unwrap())?,
+            (self.signer).sign(
+                serde_json::to_vec(&qry)
+                    .map_err(|e| keri::error::Error::SerializationError(e.to_string()))?,
+            )?,
         );
 
         let query = SignedKelQuery::new_nontrans(qry, self.prefix.clone(), signature);
