@@ -81,9 +81,8 @@ pub mod http_handlers {
     use itertools::Itertools;
     use keri::{
         actor::{error::ActorError, prelude::Message},
-        error::Error,
         event_message::signed_event_message::Op,
-        oobi::{EndRole, LocationScheme, Role},
+        oobi::{error::OobiError, EndRole, LocationScheme, Role},
         prefix::IdentifierPrefix,
     };
     use reqwest::StatusCode;
@@ -165,9 +164,9 @@ pub mod http_handlers {
             LocationScheme(LocationScheme),
         }
 
-        match serde_json::from_slice(&body)
-            .map_err(|_| ActorError::KeriError(Error::JsonDeserError))?
-        {
+        match serde_json::from_slice(&body).map_err(|_| {
+            ApiError(OobiError::Parse(String::from_utf8_lossy(&body).to_string()).into())
+        })? {
             RequestData::EndRole(end_role) => {
                 data.resolve_end_role(end_role).await?;
             }

@@ -121,7 +121,7 @@ impl PossibleResponse {
                     delegate: String::from_utf8(delegate_stream)
                         .map_err(|e| Error::SerializationError(e.to_string()))?,
                 })
-                .map_err(|_| Error::JsonDeserError)?
+                .map_err(|e| Error::SerializationError(e.to_string()))?
             }
             PossibleResponse::Ksn(ksn) => Message::Op(Op::Reply(ksn.clone())).to_cesr()?,
         })

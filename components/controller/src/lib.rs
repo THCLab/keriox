@@ -8,7 +8,6 @@ pub mod messagebox;
 
 mod test;
 pub mod verifying;
-pub use keri::keys::{PrivateKey, PublicKey};
 pub use keri::oobi::{EndRole, LocationScheme, Oobi};
 use keri::prefix::IndexedSignature;
 pub use keri::prefix::{

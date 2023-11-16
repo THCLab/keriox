@@ -121,6 +121,9 @@ pub enum WitnessError {
 
     #[error(transparent)]
     DatabaseError(#[from] keri::database::DbError),
+
+    #[error("Signing error")]
+    SigningError,
 }
 
 pub struct Witness {
@@ -239,7 +242,11 @@ impl Witness {
         let signed_reply = SignedReply::new_nontrans(
             reply.clone(),
             prefix,
-            SelfSigningPrefix::Ed25519Sha512(signer.sign(reply.encode()?)?),
+            SelfSigningPrefix::Ed25519Sha512(
+                signer
+                    .sign(reply.encode()?)
+                    .map_err(|e| WitnessError::SigningError)?,
+            ),
         );
         witness.oobi_manager.save_oobi(&signed_reply)?;
         Ok(witness)
