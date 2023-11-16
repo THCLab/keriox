@@ -64,7 +64,7 @@ where
     ) -> Result<(), TransportError<E>> {
         let (host, port) = match loc.url.origin() {
             url::Origin::Tuple(_scheme, host, port) => (host, port),
-            _ => return Err(TransportError::NetworkError("".to_string())),
+            _ => return Err(TransportError::NetworkError("Wrong url".to_string())),
         };
 
         self.actors
@@ -84,13 +84,13 @@ where
     ) -> Result<PossibleResponse, TransportError<E>> {
         let (host, port) = match loc.url.origin() {
             url::Origin::Tuple(_scheme, host, port) => (host, port),
-            _ => return Err(TransportError::NetworkError("".to_string())),
+            _ => return Err(TransportError::NetworkError("Wrong url".to_string())),
         };
 
         let resp = self
             .actors
             .get(&(host, port))
-            .ok_or(TransportError::NetworkError("".into()))?
+            .ok_or(TransportError::NetworkError("Unknown actor".into()))?
             .send_query(qry)
             .await
             .map_err(|err| TransportError::RemoteError(err))?;
@@ -101,16 +101,16 @@ where
     async fn request_loc_scheme(&self, loc: LocationScheme) -> Result<Vec<Op>, TransportError<E>> {
         let (host, port) = match loc.url.origin() {
             url::Origin::Tuple(_scheme, host, port) => (host, port),
-            _ => return Err(TransportError::NetworkError("".into())),
+            _ => return Err(TransportError::NetworkError("Wrong url".into())),
         };
 
         let ops = self
             .actors
             .get(&(host, port))
-            .ok_or(TransportError::NetworkError("".into()))?
+            .ok_or(TransportError::NetworkError("Unknown actor".into()))?
             .request_loc_scheme(loc.eid)
             .await
-            .map_err(|_| TransportError::NetworkError("".into()))?;
+            .map_err(|e| TransportError::NetworkError(e.to_string()))?;
 
         Ok(ops)
     }
@@ -124,16 +124,16 @@ where
     ) -> Result<Vec<Message>, TransportError<E>> {
         let (host, port) = match loc.url.origin() {
             url::Origin::Tuple(_scheme, host, port) => (host, port),
-            _ => return Err(TransportError::NetworkError("".into())),
+            _ => return Err(TransportError::NetworkError("Wrong url".into())),
         };
 
         let ops = self
             .actors
             .get(&(host, port))
-            .ok_or(TransportError::NetworkError("".into()))?
+            .ok_or(TransportError::NetworkError("Unknown actor".into()))?
             .request_end_role(cid, role, eid)
             .await
-            .map_err(|_| TransportError::NetworkError("".into()))?;
+            .map_err(|e| TransportError::NetworkError(e.to_string()))?;
 
         Ok(ops)
     }
@@ -141,12 +141,12 @@ where
     async fn resolve_oobi(&self, loc: LocationScheme, oobi: Oobi) -> Result<(), TransportError<E>> {
         let (host, port) = match loc.url.origin() {
             url::Origin::Tuple(_scheme, host, port) => (host, port),
-            _ => return Err(TransportError::NetworkError("".into())),
+            _ => return Err(TransportError::NetworkError("Wrong url".into())),
         };
 
         self.actors
             .get(&(host, port))
-            .ok_or(TransportError::NetworkError("".into()))?
+            .ok_or(TransportError::NetworkError("Unknown actor".into()))?
             .resolve_oobi(oobi)
             .await
             .map_err(|err| TransportError::RemoteError(err))?;
