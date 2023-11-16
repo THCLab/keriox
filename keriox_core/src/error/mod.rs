@@ -1,4 +1,3 @@
-use ed25519_dalek;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -32,10 +31,10 @@ pub enum Error {
     #[error("Not enough signatures while verifying")]
     NotEnoughSigsError,
 
-    #[error("Signature duplicate while verifing")]
+    #[error("Signature duplicate while verifying")]
     DuplicateSignature,
 
-    #[error("Too many signatures while verifing")]
+    #[error("Too many signatures while verifying")]
     TooManySignatures,
 
     #[error("Not enough receipts")]
@@ -99,7 +98,7 @@ pub enum Error {
     #[error(transparent)]
     PrefixModuleError(#[from] crate::prefix::error::Error),
 
-    #[error("Cesr error")]
+    #[error("CESR error")]
     CesrError,
 
     #[error("Version error")]

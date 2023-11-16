@@ -79,7 +79,7 @@ where
                 .await
                 .map_err(|e| TransportError::NetworkError(e.to_string()))?;
             let err =
-                serde_json::from_str(&body).map_err(|e| TransportError::UnknownError(body))?;
+                serde_json::from_str(&body).map_err(|_e| TransportError::UnknownError(body))?;
             return Err(TransportError::RemoteError(err));
         }
         Ok(())
@@ -148,7 +148,7 @@ where
                 .await
                 .map_err(|e| TransportError::NetworkError(e.to_string()))?;
             let err =
-                serde_json::from_str(&body).map_err(|e| TransportError::UnknownError(body))?;
+                serde_json::from_str(&body).map_err(|_e| TransportError::UnknownError(body))?;
             Err(TransportError::RemoteError(err))
         }
     }
@@ -193,7 +193,7 @@ where
                 .await
                 .map_err(|e| TransportError::NetworkError(e.to_string()))?;
             let err =
-                serde_json::from_str(&body).map_err(|e| TransportError::UnknownError(body))?;
+                serde_json::from_str(&body).map_err(|_e| TransportError::UnknownError(body))?;
             Err(TransportError::RemoteError(err))
         }
     }

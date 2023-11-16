@@ -245,7 +245,7 @@ impl Witness {
             SelfSigningPrefix::Ed25519Sha512(
                 signer
                     .sign(reply.encode()?)
-                    .map_err(|e| WitnessError::SigningError)?,
+                    .map_err(|_e| WitnessError::SigningError)?,
             ),
         );
         witness.oobi_manager.save_oobi(&signed_reply)?;

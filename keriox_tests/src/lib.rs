@@ -35,7 +35,7 @@ pub async fn setup_identifier(
 
     let verifier_keypair = CryptoBox::new().unwrap();
 
-    let mut verifier = {
+    let verifier = {
         let pk = BasicPrefix::Ed25519(verifier_keypair.public_key());
         let npk = BasicPrefix::Ed25519(verifier_keypair.next_public_key());
 
