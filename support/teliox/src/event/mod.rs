@@ -5,7 +5,10 @@ use crate::{
 
 use self::{manager_event::ManagerTelEventMessage, vc_event::VCEventMessage};
 use cesrox::{group::Group, parse_many};
-use keri::{event_message::signature::get_signatures, prefix::IdentifierPrefix};
+use keri::{
+    event_message::{cesr_adapter::ParseError, signature::get_signatures},
+    prefix::IdentifierPrefix,
+};
 use said::SelfAddressingIdentifier;
 use serde::{Deserialize, Serialize};
 
@@ -59,18 +62,24 @@ impl Event {
 fn signed_tel_query(
     qry: TelQueryEvent,
     mut attachments: Vec<Group>,
-) -> Result<SignedTelQuery, Error> {
-    let att = attachments.pop().unwrap();
-    // .ok_or_else(|| Error::SemanticError("Missing attachment".into()))?;
+) -> Result<SignedTelQuery, ParseError> {
+    let att = attachments
+        .pop()
+        .ok_or_else(|| ParseError::AttachmentError("Missing attachment".into()))?;
     let sigs = get_signatures(att)?;
     Ok(SignedTelQuery {
         query: qry,
         // TODO what if more than one?
-        signature: sigs.get(0).unwrap().to_owned(), //.ok_or(Error::MissingSignatures)?.clone(),
+        signature: sigs
+            .get(0)
+            .ok_or(ParseError::AttachmentError(
+                "Missing signatures".to_string(),
+            ))?
+            .to_owned(),
     })
 }
 
-pub fn parse_tel_query_stream(stream: &[u8]) -> Result<Vec<SignedTelQuery>, Error> {
+pub fn parse_tel_query_stream(stream: &[u8]) -> Result<Vec<SignedTelQuery>, ParseError> {
     let (_rest, queries) = parse_many(stream).unwrap();
     queries
         .iter()

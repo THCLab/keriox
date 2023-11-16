@@ -1,4 +1,7 @@
-use keri::{actor::prelude::VersionError, oobi::Scheme, prefix::IdentifierPrefix};
+use keri::{
+    actor::prelude::VersionError, event_message::cesr_adapter::ParseError, oobi::Scheme,
+    prefix::IdentifierPrefix,
+};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -24,8 +27,8 @@ pub enum ControllerError {
     #[error("Wrong event format")]
     EventFormatError,
 
-    #[error("Can't parse attachment")]
-    AttachmentParseError,
+    #[error("Keri event parsing error: {0}")]
+    ParseError(#[from] ParseError),
 
     #[error("Improper witness prefix, should be basic prefix")]
     WrongWitnessPrefixError,

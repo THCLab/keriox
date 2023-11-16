@@ -6,7 +6,10 @@ use serde::{Deserialize, Serialize};
 use crate::oobi::OobiManager;
 use crate::{
     error::Error,
-    event_message::signed_event_message::{Message, Notice},
+    event_message::{
+        cesr_adapter::ParseError,
+        signed_event_message::{Message, Notice},
+    },
     prefix::IdentifierPrefix,
     processor::Processor,
 };
@@ -37,41 +40,38 @@ pub mod event_generator;
 #[cfg(all(feature = "query", feature = "oobi", feature = "mailbox"))]
 pub mod simple_controller;
 
-pub fn parse_event_stream(stream: &[u8]) -> Result<Vec<Message>, Error> {
-    let (_rest, events) = parse_many(stream).map_err(|e| Error::DeserializeError(e.to_string()))?;
+pub fn parse_event_stream(stream: &[u8]) -> Result<Vec<Message>, ParseError> {
+    let (_rest, events) = parse_many(stream).map_err(|e| ParseError::CesrError(e.to_string()))?;
     events.into_iter().map(Message::try_from).collect()
 }
 
-pub fn parse_notice_stream(stream: &[u8]) -> Result<Vec<Notice>, Error> {
-    let (_rest, notices) =
-        parse_many(stream).map_err(|e| Error::DeserializeError(e.to_string()))?;
+pub fn parse_notice_stream(stream: &[u8]) -> Result<Vec<Notice>, ParseError> {
+    let (_rest, notices) = parse_many(stream).map_err(|e| ParseError::CesrError(e.to_string()))?;
     notices.into_iter().map(Notice::try_from).collect()
 }
 
 #[cfg(any(feature = "query", feature = "oobi"))]
-pub fn parse_op_stream(stream: &[u8]) -> Result<Vec<Op>, Error> {
-    let (_rest, ops) = parse_many(stream).map_err(|e| Error::DeserializeError(e.to_string()))?;
+pub fn parse_op_stream(stream: &[u8]) -> Result<Vec<Op>, ParseError> {
+    let (_rest, ops) = parse_many(stream).map_err(|e| ParseError::CesrError(e.to_string()))?;
     ops.into_iter().map(Op::try_from).collect()
 }
 
 #[cfg(any(feature = "query", feature = "oobi"))]
-pub fn parse_query_stream(stream: &[u8]) -> Result<Vec<SignedKelQuery>, Error> {
-    let (_rest, queries) =
-        parse_many(stream).map_err(|e| Error::DeserializeError(e.to_string()))?;
+pub fn parse_query_stream(stream: &[u8]) -> Result<Vec<SignedKelQuery>, ParseError> {
+    let (_rest, queries) = parse_many(stream).map_err(|e| ParseError::CesrError(e.to_string()))?;
     queries.into_iter().map(SignedKelQuery::try_from).collect()
 }
 
 #[cfg(any(feature = "query", feature = "oobi"))]
-pub fn parse_reply_stream(stream: &[u8]) -> Result<Vec<SignedReply>, Error> {
-    let (_rest, replies) =
-        parse_many(stream).map_err(|e| Error::DeserializeError(e.to_string()))?;
+pub fn parse_reply_stream(stream: &[u8]) -> Result<Vec<SignedReply>, ParseError> {
+    let (_rest, replies) = parse_many(stream).map_err(|e| ParseError::CesrError(e.to_string()))?;
     replies.into_iter().map(SignedReply::try_from).collect()
 }
 
 #[cfg(feature = "mailbox")]
-pub fn parse_exchange_stream(stream: &[u8]) -> Result<Vec<SignedExchange>, Error> {
+pub fn parse_exchange_stream(stream: &[u8]) -> Result<Vec<SignedExchange>, ParseError> {
     let (_rest, exchanges) =
-        parse_many(stream).map_err(|e| Error::DeserializeError(e.to_string()))?;
+        parse_many(stream).map_err(|e| ParseError::CesrError(e.to_string()))?;
     exchanges
         .into_iter()
         .map(SignedExchange::try_from)

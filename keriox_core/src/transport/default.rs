@@ -78,7 +78,8 @@ where
                 .text()
                 .await
                 .map_err(|e| TransportError::NetworkError(e.to_string()))?;
-            let err = serde_json::from_str(&body).map_err(|_| TransportError::InvalidResponse)?;
+            let err =
+                serde_json::from_str(&body).map_err(|e| TransportError::UnknownError(body))?;
             return Err(TransportError::RemoteError(err));
         }
         Ok(())
@@ -90,6 +91,8 @@ where
         loc: LocationScheme,
         qry: SignedKelQuery,
     ) -> Result<PossibleResponse, TransportError<E>> {
+        use crate::actor::simple_controller::ResponseError;
+
         let url = match loc.scheme {
             Scheme::Http => {
                 // {url}/query
@@ -109,13 +112,14 @@ where
             .await
             .map_err(|e| TransportError::NetworkError(e.to_string()))?;
         if status.is_success() {
-            let resp = parse_response(&body).map_err(|e| match e {
-                crate::error::Error::MissingEvent => TransportError::ResponseNotReady,
-                _ => TransportError::InvalidResponse,
-            })?;
-            Ok(resp)
+            match parse_response(&body) {
+                Ok(resp) => Ok(resp),
+                Err(ResponseError::EmptyResponse) => Err(TransportError::ResponseNotReady),
+                Err(ResponseError::Unparsable(e)) => Err(TransportError::InvalidResponse(e)),
+            }
         } else {
-            let err = serde_json::from_str(&body).map_err(|_| TransportError::InvalidResponse)?;
+            let err =
+                serde_json::from_str(&body).map_err(|_| TransportError::UnknownError(body))?;
             Err(TransportError::RemoteError(err))
         }
     }
@@ -136,14 +140,15 @@ where
                 .bytes()
                 .await
                 .map_err(|e| TransportError::NetworkError(e.to_string()))?;
-            let ops = parse_op_stream(&body).map_err(|_| TransportError::InvalidResponse)?;
+            let ops = parse_op_stream(&body)?;
             Ok(ops)
         } else {
             let body = resp
                 .text()
                 .await
                 .map_err(|e| TransportError::NetworkError(e.to_string()))?;
-            let err = serde_json::from_str(&body).map_err(|_| TransportError::InvalidResponse)?;
+            let err =
+                serde_json::from_str(&body).map_err(|e| TransportError::UnknownError(body))?;
             Err(TransportError::RemoteError(err))
         }
     }
@@ -179,15 +184,16 @@ where
                 .bytes()
                 .await
                 .map_err(|e| TransportError::NetworkError(e.to_string()))?;
-               
-            let ops = parse_event_stream(&body).map_err(|_| TransportError::InvalidResponse)?;
+
+            let ops = parse_event_stream(&body)?;
             Ok(ops)
         } else {
             let body = resp
                 .text()
                 .await
                 .map_err(|e| TransportError::NetworkError(e.to_string()))?;
-            let err = serde_json::from_str(&body).map_err(|_| TransportError::InvalidResponse)?;
+            let err =
+                serde_json::from_str(&body).map_err(|e| TransportError::UnknownError(body))?;
             Err(TransportError::RemoteError(err))
         }
     }

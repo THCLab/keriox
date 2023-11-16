@@ -5,7 +5,7 @@ use ed25519_dalek;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::prefix::IdentifierPrefix;
+use crate::{event_message::cesr_adapter::ParseError, prefix::IdentifierPrefix};
 
 pub mod serializer_error;
 
@@ -76,7 +76,7 @@ pub enum Error {
     ReceiptVerificationError,
 
     #[error("Deserialize error: {0}")]
-    DeserializeError(String),
+    DeserializeError(#[from] ParseError),
 
     #[error("Identifier is not indexed into the DB")]
     NotIndexedError,

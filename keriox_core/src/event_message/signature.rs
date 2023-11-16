@@ -8,6 +8,8 @@ use crate::{
     processor::event_storage::EventStorage,
 };
 
+use super::cesr_adapter::ParseError;
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum Signature {
     /// Created by transferable identifier
@@ -122,7 +124,7 @@ pub fn signatures_into_groups(sigs: &[Signature]) -> Vec<Group> {
     attachments
 }
 
-pub fn get_signatures(group: Group) -> Result<Vec<Signature>, Error> {
+pub fn get_signatures(group: Group) -> Result<Vec<Signature>, ParseError> {
     match group {
         Group::IndexedControllerSignatures(sigs) => {
             let signatures = sigs.into_iter().map(|sig| sig.into()).collect();
@@ -167,7 +169,9 @@ pub fn get_signatures(group: Group) -> Result<Vec<Signature>, Error> {
                 signatures,
             ))])
         }
-        _ => Err(Error::SemanticError("Improper attachment type".into())),
+        _ => Err(ParseError::AttachmentError(
+            "Improper attachment type".into(),
+        )),
     }
 }
 

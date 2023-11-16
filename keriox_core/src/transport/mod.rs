@@ -4,7 +4,10 @@ use serde::Deserialize;
 
 use crate::{
     actor::{error::ActorError, simple_controller::PossibleResponse},
-    event_message::signed_event_message::{Message, Op},
+    event_message::{
+        cesr_adapter::ParseError,
+        signed_event_message::{Message, Op},
+    },
     oobi::{LocationScheme, Oobi, Role},
     prefix::IdentifierPrefix,
     query::query_event::SignedKelQuery,
@@ -64,8 +67,12 @@ where
 pub enum TransportError<E = ActorError> {
     #[error("network error: {0}")]
     NetworkError(String),
-    #[error("invalid response")]
-    InvalidResponse,
+    #[error("Empty response")]
+    EmptyResponse,
+    #[error("Invalid response: {0}")]
+    InvalidResponse(#[from] ParseError),
+    #[error("Unknown error: {0}")]
+    UnknownError(String),
     #[error("Response is not ready")]
     ResponseNotReady,
     #[error("remote error: {0}")]

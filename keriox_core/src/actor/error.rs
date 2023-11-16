@@ -1,5 +1,6 @@
 use http::StatusCode;
 
+use crate::event_message::cesr_adapter::ParseError;
 #[cfg(feature = "oobi")]
 use crate::oobi::{error::OobiError, Role};
 #[cfg(feature = "oobi")]
@@ -26,6 +27,9 @@ pub enum ActorError {
 
     #[error("processing query failed")]
     QueryError(#[from] SignedQueryError),
+
+    #[error("Keri event parsing error: {0}")]
+    ParseError(#[from] ParseError),
 
     #[error("location not found for {id:?}")]
     NoLocation { id: IdentifierPrefix }, // TODO: should be Oobi error

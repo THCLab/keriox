@@ -294,7 +294,9 @@ mod test {
                 QueryRoute::Ksn { .. } => {
                     let resp = parse_op_stream(&resp).unwrap();
                     let resp = resp.into_iter().next().unwrap();
-                    let Op::Reply(reply) = resp else { panic!("wrong response type") };
+                    let Op::Reply(reply) = resp else {
+                        panic!("wrong response type")
+                    };
                     Ok(PossibleResponse::Ksn(reply))
                 }
                 QueryRoute::Log { .. } => {
