@@ -1,4 +1,4 @@
-FROM rust:1.70 as build
+FROM rust:1.74 as build
 
 WORKDIR /app
 RUN echo '[workspace] \n\
@@ -15,7 +15,7 @@ WORKDIR /app/components/witness
 RUN cargo fetch
 RUN cargo build --release --package witness
 
-FROM debian:10-slim
+FROM debian:11-slim
 RUN apt update && apt install libssl-dev -y
 WORKDIR /app
 COPY --from=build /app/target/release/witness .
