@@ -16,7 +16,7 @@ WORKDIR /app/components/watcher
 RUN cargo fetch
 RUN cargo build --release --package watcher
 
-FROM debian:11-slim
+FROM debian:12-slim
 RUN apt update && apt install libssl-dev -y
 WORKDIR /app
 COPY --from=build /app/target/release/watcher .
