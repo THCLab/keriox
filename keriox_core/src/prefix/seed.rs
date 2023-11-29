@@ -76,9 +76,7 @@ impl CesrPrimitive for SeedPrefix {
     }
     fn derivation_code(&self) -> PrimitiveCode {
         match self {
-            Self::RandomSeed256Ed25519(_) => {
-                PrimitiveCode::Seed(SeedCode::RandomSeed256Ed25519)
-            }
+            Self::RandomSeed256Ed25519(_) => PrimitiveCode::Seed(SeedCode::RandomSeed256Ed25519),
             Self::RandomSeed256ECDSAsecp256k1(_) => {
                 PrimitiveCode::Seed(SeedCode::RandomSeed256ECDSAsecp256k1)
             }

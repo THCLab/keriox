@@ -4,9 +4,10 @@ use sled_tables::{
     self,
     tables::{SledEventTree, SledEventTreeVec},
 };
-use std::path::Path;
+use std::{path::Path, sync::Arc};
 
 pub struct EventDatabase {
+    db: Arc<sled::Db>,
     // "iids" tree
     identifiers: SledEventTree<IdentifierPrefix>,
     // "tels" tree
@@ -17,8 +18,9 @@ pub struct EventDatabase {
 
 impl EventDatabase {
     pub fn new(path: impl AsRef<Path>) -> Result<Self, Error> {
-        let db = sled::open(path)?;
+        let db = Arc::new(sled::open(path)?);
         Ok(Self {
+            db: db.clone(),
             identifiers: SledEventTree::new(db.open_tree(b"iids")?),
             tel_events: SledEventTreeVec::new(db.open_tree(b"tels")?),
             management_events: SledEventTreeVec::new(db.open_tree(b"mans")?),
@@ -30,9 +32,10 @@ impl EventDatabase {
         event: VerifiableEvent,
         id: &IdentifierPrefix,
     ) -> Result<(), Error> {
-        Ok(self
-            .tel_events
-            .push(self.identifiers.designated_key(id), event)?)
+        self.tel_events
+            .push(self.identifiers.designated_key(id), event)?;
+        self.db.flush()?;
+        Ok(())
     }
 
     pub fn get_events(
@@ -48,9 +51,10 @@ impl EventDatabase {
         event: VerifiableEvent,
         id: &IdentifierPrefix,
     ) -> Result<(), Error> {
-        Ok(self
-            .management_events
-            .push(self.identifiers.designated_key(id), event)?)
+        self.management_events
+            .push(self.identifiers.designated_key(id), event)?;
+        self.db.flush()?;
+        Ok(())
     }
 
     pub fn get_management_events(
