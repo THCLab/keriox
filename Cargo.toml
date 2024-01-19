@@ -1,5 +1,6 @@
 [workspace]
 
+resolver = "2"
 members = [
     "keriox_core",
     "keriox_tests",

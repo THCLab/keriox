@@ -35,9 +35,9 @@ impl DelegatedInceptionEvent {
         format: SerializationFormats,
     ) -> Result<KeriEvent<KeyEvent>, Error> {
         let code: HashFunctionCode = derivation.into();
-        let dummy_event =
+        let mut dummy_event =
             DummyInceptionEvent::dummy_delegated_inception_data(self.clone(), &code, format)?;
-        let dummy_event = dummy_event.compute_digest(code, format);
+        dummy_event.compute_digest(&code, &format);
         let digest = dummy_event.prefix.unwrap();
         let event = KeyEvent::new(
             IdentifierPrefix::SelfAddressing(digest.clone()),

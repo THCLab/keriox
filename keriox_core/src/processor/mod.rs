@@ -11,7 +11,7 @@ mod processor_tests;
 
 pub mod validator;
 
-use version::serialization_info::SerializationFormats;
+use said::version::format::SerializationFormats;
 
 use self::{
     notification::{JustNotification, Notification, NotificationBus, Notifier},

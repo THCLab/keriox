@@ -19,9 +19,9 @@ use crate::{
     prefix::{BasicPrefix, IdentifierPrefix},
     state::{EventSemantics, IdentifierState},
 };
-use said::SelfAddressingIdentifier;
 #[cfg(feature = "query")]
-use version::serialization_info::SerializationFormats;
+use said::version::format::SerializationFormats;
+use said::SelfAddressingIdentifier;
 
 #[cfg(feature = "mailbox")]
 use crate::{event_message::signed_event_message::SignedEventMessage, mailbox::MailboxResponse};

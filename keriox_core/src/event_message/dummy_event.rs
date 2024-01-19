@@ -5,11 +5,10 @@ use crate::{
 
 use super::{EventTypeTag, Typeable};
 use cesrox::primitives::codes::self_addressing::SelfAddressing;
-use sad_macros::SAD;
+use said::version::{format::SerializationFormats, SerializationInfo};
 use said::{derivation::HashFunctionCode, sad::SAD, SelfAddressingIdentifier};
 use serde::Serialize;
 use serde_hex::{Compact, SerHex};
-use version::serialization_info::{SerializationFormats, SerializationInfo};
 
 /// Dummy Inception Event
 ///
@@ -54,7 +53,7 @@ impl DummyInceptionEvent {
         derivation: &SelfAddressing,
         format: SerializationFormats,
     ) -> Result<Self, Error> {
-        let tmp_serialization_info = SerializationInfo::new_empty("KERI".to_string(), format);
+        let tmp_serialization_info = SerializationInfo::new_empty("KERI".to_string(), 1, 0, format);
         let mut tmp_icp = DummyInceptionEvent {
             serialization_info: tmp_serialization_info,
             event_type: data.get_type(),
@@ -64,7 +63,7 @@ impl DummyInceptionEvent {
             data,
         };
         let len = tmp_icp.derivation_data(derivation, &format).len();
-        let serialization_info = SerializationInfo::new("KERI".to_string(), format, len);
+        let serialization_info = SerializationInfo::new("KERI".to_string(), 1, 0, format, len);
         tmp_icp.serialization_info = serialization_info;
         Ok(tmp_icp)
     }

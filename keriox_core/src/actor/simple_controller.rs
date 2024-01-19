@@ -8,8 +8,8 @@ use std::{
 use crate::event_message::cesr_adapter::ParseError;
 use cesrox::{cesr_proof::MaterialPath, parse, primitives::CesrPrimitive};
 use said::derivation::{HashFunction, HashFunctionCode};
+use said::version::format::SerializationFormats;
 use serde::{Deserialize, Serialize};
-use version::serialization_info::SerializationFormats;
 
 use super::{
     event_generator, prelude::Message, process_notice, process_signed_exn, process_signed_oobi,

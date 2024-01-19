@@ -5,10 +5,10 @@ use keri::{
     event_message::{msg::TypedEvent, Typeable},
     prefix::IdentifierPrefix,
 };
+use said::version::format::SerializationFormats;
 use said::{derivation::HashFunctionCode, SelfAddressingIdentifier};
 use serde::{de, Deserialize, Serialize, Serializer};
 use serde_hex::{Compact, SerHex};
-use version::serialization_info::SerializationFormats;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct TimestampedVCEvent {

@@ -3,11 +3,11 @@ use crate::event_message::EventTypeTag;
 use crate::event_message::Typeable;
 use crate::prefix::IdentifierPrefix;
 use cesrox::payload::Payload;
+use said::version::format::SerializationFormats;
+use said::version::SerializationInfo;
 use said::SelfAddressingIdentifier;
 use serde::{Deserialize, Serialize};
 use serde_hex::{Compact, SerHex};
-use version::serialization_info::SerializationFormats;
-use version::serialization_info::SerializationInfo;
 
 /// Receipt event is not a SAD. That's because TypedEvent wrapper is not used here.
 /// It's digest field is digest of receipted event, not digest of receipt itself.
@@ -43,7 +43,7 @@ impl Receipt {
         sn: u64,
     ) -> Self {
         let mut receipt = Self {
-            serialization_info: SerializationInfo::new_empty("KERI".to_string(), format),
+            serialization_info: SerializationInfo::new_empty("KERI".to_string(), 1, 0, format),
             receipted_event_digest,
             prefix,
             sn,

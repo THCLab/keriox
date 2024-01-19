@@ -3,12 +3,12 @@ use std::{collections::HashMap, sync::Arc};
 use controller::{
     error::ControllerError, IdentifierPrefix, KeyManager, LocationScheme, SelfSigningPrefix,
 };
+use keri::actor::prelude::{HashFunction, HashFunctionCode};
 use keri::{event_message::signed_event_message::Message, transport::test::TestTransport};
 use keri_tests::{
     setup_identifier,
     transport::{TelTestActor, TelTestTransport},
 };
-use said::derivation::{HashFunction, HashFunctionCode};
 use teliox::state::vc_state::TelState;
 use tempfile::Builder;
 use url::Host;

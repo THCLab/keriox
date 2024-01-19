@@ -118,7 +118,7 @@ mod tests {
     use ed25519_dalek::Keypair;
     use rand::rngs::OsRng;
     use said::derivation::HashFunctionCode;
-    use version::serialization_info::SerializationFormats;
+    use said::version::format::SerializationFormats;
 
     #[test]
     fn basic_create() -> Result<(), Error> {

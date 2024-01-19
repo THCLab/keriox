@@ -1,3 +1,4 @@
+use said::version::error::Error as VersionError;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -111,8 +112,8 @@ pub enum Error {
     SigningError,
 }
 
-impl From<version::error::Error> for Error {
-    fn from(_: version::error::Error) -> Self {
+impl From<VersionError> for Error {
+    fn from(_: VersionError) -> Self {
         Error::VersionError
     }
 }

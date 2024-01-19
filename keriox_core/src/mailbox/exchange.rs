@@ -1,7 +1,7 @@
 use cesrox::cesr_proof::MaterialPath;
 use said::derivation::HashFunctionCode;
+use said::version::format::SerializationFormats;
 use serde::{Deserialize, Serialize};
-use version::serialization_info::SerializationFormats;
 
 use crate::event::KeyEvent;
 use crate::event_message::msg::KeriEvent;

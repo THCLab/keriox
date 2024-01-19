@@ -1,8 +1,8 @@
 use cesrox::primitives::CesrPrimitive;
 use chrono::{DateTime, FixedOffset};
 use said::derivation::HashFunctionCode;
+use said::version::format::SerializationFormats;
 use serde::{de, ser::SerializeStruct, Deserialize, Deserializer, Serialize, Serializer};
-use version::serialization_info::SerializationFormats;
 
 use super::key_state_notice::KeyStateNotice;
 #[cfg(feature = "oobi")]

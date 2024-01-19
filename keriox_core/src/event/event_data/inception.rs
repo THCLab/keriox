@@ -9,12 +9,12 @@ use crate::{
     prefix::IdentifierPrefix,
     state::{EventSemantics, IdentifierState, LastEstablishmentData},
 };
+use said::version::format::SerializationFormats;
 use said::{
     derivation::{HashFunction, HashFunctionCode},
     sad::SAD,
 };
 use serde::{Deserialize, Serialize};
-use version::serialization_info::SerializationFormats;
 
 /// Inception Event
 ///
@@ -59,8 +59,9 @@ impl InceptionEvent {
         format: SerializationFormats,
     ) -> Result<KeriEvent<KeyEvent>, Error> {
         let code: HashFunctionCode = derivation.into();
-        let dummy_event = DummyInceptionEvent::dummy_inception_data(self.clone(), &code, format)?;
-        let dummy_event = dummy_event.compute_digest(code, format);
+        let mut dummy_event =
+            DummyInceptionEvent::dummy_inception_data(self.clone(), &code, format)?;
+        dummy_event.compute_digest(&code, &format);
         let digest = dummy_event.prefix.unwrap();
         let event = KeyEvent::new(
             IdentifierPrefix::SelfAddressing(digest.clone()),

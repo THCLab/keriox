@@ -186,7 +186,7 @@ pub fn generate_end_role(
     enabled: bool,
 ) -> Result<ReplyEvent, Error> {
     use said::derivation::HashFunctionCode;
-    use version::serialization_info::SerializationFormats;
+    use said::version::format::SerializationFormats;
 
     let end_role = EndRole {
         cid: controller_id.clone(),
@@ -213,7 +213,7 @@ pub fn exchange(
     topic: ForwardTopic,
 ) -> Result<ExchangeMessage, Error> {
     use said::derivation::HashFunctionCode;
-    use version::serialization_info::SerializationFormats;
+    use said::version::format::SerializationFormats;
 
     use crate::event_message::timestamped::Timestamped;
 

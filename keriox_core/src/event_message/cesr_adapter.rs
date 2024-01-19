@@ -6,8 +6,8 @@ use cesrox::{
     primitives::IndexedSignature as CesrIndexedSignature,
     ParsedData,
 };
+use said::version::format::SerializationFormats;
 use serde::{Deserialize, Serialize};
-use version::serialization_info::SerializationFormats;
 
 use crate::event::{
     event_data::EventData,

@@ -1,7 +1,7 @@
 use cesrox::{payload::Payload, ParsedData};
 use said::derivation::HashFunctionCode;
+use said::version::format::SerializationFormats;
 use serde::{Deserialize, Serialize};
-use version::serialization_info::SerializationFormats;
 
 use crate::{
     error::Error,

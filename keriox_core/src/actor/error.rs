@@ -9,6 +9,7 @@ use crate::transport::TransportError;
 use crate::{
     actor::SignedQueryError, database::DbError, error::Error as KeriError, prefix::IdentifierPrefix,
 };
+use said::version::error::Error as VersionError;
 
 #[derive(Debug, thiserror::Error, serde::Serialize, serde::Deserialize)]
 pub enum ActorError {
@@ -59,8 +60,8 @@ impl From<TransportError> for ActorError {
     }
 }
 
-impl From<version::error::Error> for ActorError {
-    fn from(err: version::error::Error) -> Self {
+impl From<VersionError> for ActorError {
+    fn from(err: VersionError) -> Self {
         ActorError::KeriError(err.into())
     }
 }

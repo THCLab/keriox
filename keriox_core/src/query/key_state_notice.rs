@@ -1,7 +1,7 @@
 use chrono::{DateTime, FixedOffset, SecondsFormat, Utc};
+use said::version::{format::SerializationFormats, SerializationInfo};
 use serde::{ser::SerializeStruct, Deserialize, Serialize, Serializer};
 use serde_hex::{Compact, SerHex};
-use version::serialization_info::{SerializationFormats, SerializationInfo};
 
 use crate::state::IdentifierState;
 
@@ -61,7 +61,7 @@ impl KeyStateNotice {
         let dt: DateTime<FixedOffset> = DateTime::from(Utc::now());
 
         KeyStateNotice {
-            serialization_info: SerializationInfo::new("KERI".to_string(), serialization, 0),
+            serialization_info: SerializationInfo::new("KERI".to_string(), 1, 0, serialization, 0),
             timestamp: dt,
             state,
             first_seen_sn: 0,

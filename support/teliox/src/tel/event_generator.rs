@@ -1,6 +1,6 @@
 use keri::{event::sections::seal::EventSeal, prefix::IdentifierPrefix};
+use said::version::format::SerializationFormats;
 use said::{derivation::HashFunction, derivation::HashFunctionCode, SelfAddressingIdentifier};
-use version::serialization_info::SerializationFormats;
 
 use crate::{
     error::Error,

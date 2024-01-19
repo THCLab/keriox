@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use serde_hex::{Compact, SerHex};
 
 use keri::{event_message::Typeable, prefix::IdentifierPrefix};
-use version::serialization_info::SerializationInfo;
+use said::version::SerializationInfo;
 
 use crate::error::Error;
 
@@ -130,6 +130,8 @@ impl DummyEvent {
         Self {
             serialization_info: SerializationInfo::new(
                 "KERI".to_string(),
+                1,
+                0,
                 format,
                 Self {
                     serialization_info: SerializationInfo::default(),
@@ -183,7 +185,7 @@ pub struct Rot {
 mod tests {
     use keri::prefix::IdentifierPrefix;
     use said::derivation::{HashFunction, HashFunctionCode};
-    use version::serialization_info::SerializationFormats;
+    use said::version::format::SerializationFormats;
 
     use crate::{
         error::Error,

@@ -1,9 +1,8 @@
-use sad_macros::SAD;
+use said::version::{format::SerializationFormats, SerializationInfo};
 use said::{
     derivation::HashFunction, derivation::HashFunctionCode, sad::SAD, SelfAddressingIdentifier,
 };
 use serde::{Deserialize, Serialize};
-use version::serialization_info::{SerializationFormats, SerializationInfo};
 
 use crate::error::Error;
 
@@ -54,7 +53,7 @@ impl<T: Serialize + Clone, D: Serialize + Typeable<TypeTag = T> + Clone> TypedEv
         derivation: HashFunction,
         event: D,
     ) -> Result<Self, Error> {
-        let tmp_serialization_info = SerializationInfo::new_empty("KERI".to_string(), format);
+        let tmp_serialization_info = SerializationInfo::new_empty("KERI".to_string(), 1, 0, format);
 
         let mut tmp_self = Self {
             serialization_info: tmp_serialization_info,
@@ -67,8 +66,8 @@ impl<T: Serialize + Clone, D: Serialize + Typeable<TypeTag = T> + Clone> TypedEv
 
         let event_len = encoded.len();
         tmp_self.serialization_info.size = event_len;
-        let keri_event = tmp_self.compute_digest(hash_function, format);
-        Ok(keri_event)
+        tmp_self.compute_digest(&hash_function, &format);
+        Ok(tmp_self)
     }
 
     pub fn encode(&self) -> Result<Vec<u8>, Error> {

@@ -23,11 +23,11 @@ use crate::{
 };
 use ed25519_dalek::Keypair;
 use rand::rngs::OsRng;
+use said::version::format::SerializationFormats;
 use said::{
     derivation::{HashFunction, HashFunctionCode},
     SelfAddressingIdentifier,
 };
-use version::serialization_info::SerializationFormats;
 
 use super::{msg::KeriEvent, EventTypeTag};
 

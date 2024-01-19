@@ -33,7 +33,7 @@ use crate::{
 pub use cesrox::cesr_proof::MaterialPath;
 use cesrox::parse_many;
 #[cfg(feature = "query")]
-use version::serialization_info::SerializationFormats;
+use said::version::format::SerializationFormats;
 
 pub mod error;
 pub mod event_generator;
@@ -268,6 +268,8 @@ pub mod prelude {
         event_message::signed_event_message::Message,
         processor::{basic_processor::BasicProcessor, event_storage::EventStorage, Processor},
     };
-    pub use said::{derivation::HashFunctionCode, SelfAddressingIdentifier};
-    pub use version::{error::Error as VersionError, serialization_info::SerializationFormats};
+    pub use said::version::{error::Error as VersionError, format::SerializationFormats};
+    pub use said::{
+        derivation::HashFunction, derivation::HashFunctionCode, SelfAddressingIdentifier,
+    };
 }
