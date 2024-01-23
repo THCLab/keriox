@@ -69,7 +69,7 @@ impl EventSemantics for KeriEvent<KeyEvent> {
         let event_digest = self.digest()?;
         let check_event_digest = |ev: &KeriEvent<KeyEvent>| -> Result<(), Error> {
             ev.compare_digest(&event_digest)?
-                .then(|| ())
+                .then_some(())
                 .ok_or(Error::IncorrectDigest)
         };
         // Update state.last with serialized current event message.

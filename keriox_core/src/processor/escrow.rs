@@ -372,7 +372,7 @@ impl PartiallyWitnessedEscrow {
         sn: u64,
         digest: &SelfAddressingIdentifier,
     ) -> Option<Vec<SignedNontransferableReceipt>> {
-        self.escrowed_nontranferable_receipts.get(&id).map(|r| {
+        self.escrowed_nontranferable_receipts.get(id).map(|r| {
             r.filter(|rct| rct.body.sn == sn && &rct.body.receipted_event_digest == digest)
                 // TODO avoid collect
                 .collect()
@@ -398,7 +398,7 @@ impl PartiallyWitnessedEscrow {
         } else {
             let id = &receipt.body.prefix;
             self.escrowed_nontranferable_receipts
-                .add(&id, receipt.clone())?;
+                .add(id, receipt.clone())?;
             bus.notify(&Notification::ReceiptEscrowed)
         }
     }
@@ -445,7 +445,7 @@ impl PartiallyWitnessedEscrow {
             })
             .collect();
 
-        Ok(couplets.into_iter().chain(indexes?.into_iter()).collect())
+        Ok(couplets.into_iter().chain(indexes?).collect())
     }
 
     /// Verify escrowed receipts and remove those with wrong
@@ -460,14 +460,13 @@ impl PartiallyWitnessedEscrow {
         let serialized_event = receipted_event.event_message.encode()?;
         self.get_receipt_couplets(rct, witnesses)?
             .into_iter()
-            .map(|(witness, signature)| {
+            .try_for_each(|(witness, signature)| {
                 if witness.verify(&serialized_event, &signature)? {
                     Ok(())
                 } else {
                     Err(Error::SignatureVerificationError)
                 }
             })
-            .collect::<Result<(), Error>>()
             .map_err(|e| {
                 // remove from escrow if any signature is wrong
                 match self
@@ -498,14 +497,11 @@ impl PartiallyWitnessedEscrow {
         if let Some(ref receipt) = additional_receipt {
             let couplets =
                 self.get_receipt_couplets(receipt, &new_state.witness_config.witnesses)?;
-            couplets
-                .iter()
-                .map(|(bp, sp)| {
-                    bp.verify(&receipted_event.event_message.encode()?, sp)?
-                        .then(|| ())
-                        .ok_or(Error::ReceiptVerificationError)
-                })
-                .collect::<Result<_, _>>()?;
+            couplets.iter().try_for_each(|(bp, sp)| {
+                bp.verify(&receipted_event.event_message.encode()?, sp)?
+                    .then_some(())
+                    .ok_or(Error::ReceiptVerificationError)
+            })?;
         }
         // Verify receipted event signatures
         new_state
@@ -514,7 +510,7 @@ impl PartiallyWitnessedEscrow {
                 &receipted_event.event_message.encode()?,
                 &receipted_event.signatures,
             )?
-            .then(|| ())
+            .then_some(())
             .ok_or(Error::SignatureVerificationError)?;
 
         // Verify signatures of all receipts and remove those with wrong signatures
@@ -524,8 +520,8 @@ impl PartiallyWitnessedEscrow {
             .into_iter()
             .filter(|rct| {
                 let rr = self.validate_receipt(
-                    &rct,
-                    &receipted_event,
+                    rct,
+                    receipted_event,
                     &new_state.witness_config.witnesses,
                 );
                 rr.is_ok()
@@ -555,7 +551,7 @@ impl PartiallyWitnessedEscrow {
         new_state
             .witness_config
             .enough_receipts(couplets, indexed)?
-            .then(|| ())
+            .then_some(())
             .ok_or(Error::NotEnoughReceiptsError)
     }
 }
@@ -671,16 +667,16 @@ impl TransReceiptsEscrow {
                 match validator.validate_validator_receipt(&timestamped_receipt) {
                     Ok(_) => {
                         // add to receipts
-                        self.db.add_receipt_t(timestamped_receipt.clone(), &id)?;
+                        self.db.add_receipt_t(timestamped_receipt.clone(), id)?;
                         // remove from escrow
                         self.escrowed_trans_receipts
-                            .remove(&id, &timestamped_receipt)?;
+                            .remove(id, &timestamped_receipt)?;
                         bus.notify(&Notification::ReceiptAccepted)?;
                     }
                     Err(Error::SignatureVerificationError) => {
                         // remove from escrow
                         self.escrowed_trans_receipts
-                            .remove(&id, &timestamped_receipt)?;
+                            .remove(id, &timestamped_receipt)?;
                     }
                     Err(e) => return Err(e), // keep in escrow,
                 }

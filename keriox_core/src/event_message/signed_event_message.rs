@@ -152,15 +152,13 @@ impl Serialize for SignedEventMessage {
                     .iter()
                     .map(|rct| match rct {
                         Nontransferable::Indexed(indexed) => {
-                            let signatures = indexed
-                                .into_iter()
-                                .map(|sig| (sig.clone()).into())
-                                .collect();
+                            let signatures =
+                                indexed.iter().map(|sig| (sig.clone()).into()).collect();
                             Group::IndexedWitnessSignatures(signatures).to_cesr_str()
                         }
                         Nontransferable::Couplet(couplets) => {
                             let couples = couplets
-                                .into_iter()
+                                .iter()
                                 .map(|(bp, sp)| ((bp.clone()).into(), (sp.clone()).into()))
                                 .collect();
                             Group::NontransReceiptCouples(couples).to_cesr_str()
@@ -171,10 +169,8 @@ impl Serialize for SignedEventMessage {
                 em.serialize_field("", &att_receipts)?;
             }
             if let Some(ref seal) = self.delegator_seal {
-                let att_seal = Group::SourceSealCouples(vec![(
-                    (&seal.sn).clone(),
-                    seal.digest.clone().into(),
-                )]);
+                let att_seal =
+                    Group::SourceSealCouples(vec![(seal.sn, seal.digest.clone().into())]);
                 em.serialize_field("", &att_seal.to_cesr_str())?;
             }
 
@@ -275,7 +271,6 @@ pub mod tests {
 
     use cesrox::{parse, ParsedData};
 
-    #[cfg(feature = "query")]
     use crate::{
         actor::prelude::Message,
         event_message::{signature::Nontransferable, signed_event_message::Notice},

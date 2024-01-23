@@ -101,17 +101,17 @@ pub fn verify(
     match key {
         BasicPrefix::Ed25519(pk) | BasicPrefix::Ed25519NT(pk) => match signature {
             SelfSigningPrefix::Ed25519Sha512(signature) => {
-                Ok(pk.verify_ed(data.as_ref(), &signature))
+                Ok(pk.verify_ed(data.as_ref(), signature))
             }
-            _ => Err(Error::WrongSignatureTypeError.into()),
+            _ => Err(Error::WrongSignatureTypeError),
         },
         BasicPrefix::ECDSAsecp256k1(key) | BasicPrefix::ECDSAsecp256k1NT(key) => match signature {
             SelfSigningPrefix::ECDSAsecp256k1Sha256(signature) => {
-                Ok(key.verify_ecdsa(data.as_ref(), &signature))
+                Ok(key.verify_ecdsa(data.as_ref(), signature))
             }
-            _ => Err(Error::WrongSignatureTypeError.into()),
+            _ => Err(Error::WrongSignatureTypeError),
         },
-        _ => Err(Error::WrongKeyTypeError.into()),
+        _ => Err(Error::WrongKeyTypeError),
     }
 }
 

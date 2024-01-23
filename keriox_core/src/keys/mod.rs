@@ -83,7 +83,7 @@ impl PrivateKey {
     }
 
     pub fn sign_ed(&self, msg: &[u8]) -> Result<Vec<u8>, KeysError> {
-        let sk = SecretKey::from_bytes(&self.key).map_err(|e| KeysError::from(e))?;
+        let sk = SecretKey::from_bytes(&self.key).map_err(KeysError::from)?;
         let pk = ed25519_dalek::PublicKey::from(&sk);
         Ok(ExpandedSecretKey::from(&sk)
             .sign(msg, &pk)

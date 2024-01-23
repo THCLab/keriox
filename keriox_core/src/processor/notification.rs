@@ -28,7 +28,7 @@ impl NotificationBus {
         notification.into_iter().for_each(|notification| {
             self.observers
                 .entry(notification)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(escrow.clone());
         });
     }

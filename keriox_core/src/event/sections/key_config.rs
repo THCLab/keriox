@@ -24,12 +24,11 @@ impl NextKeysData {
         let indexes: Vec<_> = next
             .public_keys
             .iter()
-            .map(|key| {
+            .filter_map(|key| {
                 self.next_key_hashes
                     .iter()
                     .position(|dig| dig.verify_binding(key.to_str().as_bytes()))
             })
-            .flatten()
             .collect();
 
         // check previous next threshold

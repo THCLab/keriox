@@ -18,7 +18,7 @@ pub struct Escrow<T> {
     duration: Duration,
 }
 
-impl<'a, T: Serialize + DeserializeOwned + PartialEq + Clone> Escrow<T> {
+impl<T: Serialize + DeserializeOwned + PartialEq + Clone> Escrow<T> {
     pub fn new<V>(name: V, duration: Duration, escrow_db: Arc<EscrowDb>) -> Self
     where
         V: AsRef<[u8]>,
@@ -42,13 +42,10 @@ impl<'a, T: Serialize + DeserializeOwned + PartialEq + Clone> Escrow<T> {
     }
 
     fn cleanup(&self, id: u64) -> Result<(), DbError> {
-        match self.tree.iter_values(id) {
-            Some(data) => {
-                // Remove stale events
-                let new_data = data.filter(|e| !e.is_stale(self.duration).unwrap());
-                self.tree.put(id, new_data.collect())?;
-            }
-            None => (),
+        if let Some(data) = self.tree.iter_values(id) {
+            // Remove stale events
+            let new_data = data.filter(|e| !e.is_stale(self.duration).unwrap());
+            self.tree.put(id, new_data.collect())?;
         };
         Ok(())
     }

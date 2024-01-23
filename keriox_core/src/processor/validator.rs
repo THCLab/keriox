@@ -88,18 +88,13 @@ impl EventValidator {
             let digest = &signed_event.event_message.digest()?;
 
             let (mut couples, mut indexed) = (vec![], vec![]);
-            match self.event_storage.get_nt_receipts(prefix, sn, digest)? {
-                Some(rcts) => {
-                    rcts.signatures.iter().for_each(|s| match s {
-                        Nontransferable::Couplet(c) => {
-                            couples.append(&mut c.clone());
-                        }
-                        Nontransferable::Indexed(signatures) => {
-                            indexed.append(&mut signatures.clone())
-                        }
-                    });
-                }
-                None => (),
+            if let Some(rcts) = self.event_storage.get_nt_receipts(prefix, sn, digest)? {
+                rcts.signatures.iter().for_each(|s| match s {
+                    Nontransferable::Couplet(c) => {
+                        couples.append(&mut c.clone());
+                    }
+                    Nontransferable::Indexed(signatures) => indexed.append(&mut signatures.clone()),
+                });
             };
             if new_state.witness_config.enough_receipts(couples, indexed)? {
                 Ok(Some(new_state))
@@ -179,7 +174,7 @@ impl EventValidator {
             })
             .collect::<Result<Vec<_>, Error>>()
             .unwrap();
-        Ok(couplets.into_iter().chain(i.into_iter()).collect())
+        Ok(couplets.into_iter().chain(i).collect())
     }
 
     /// Process Witness Receipt
@@ -201,12 +196,11 @@ impl EventValidator {
             let signer_couplets = self.get_receipt_couplets(rct)?;
             signer_couplets
                 .into_iter()
-                .map(|(witness, signature)| {
+                .try_for_each(|(witness, signature)| {
                     (witness.verify(&serialized_event, &signature)?)
                         .then_some(())
                         .ok_or(Error::SignatureVerificationError)
                 })
-                .collect::<Result<_, Error>>()
         } else {
             // There's no receipted event id database so we can't verify signatures
             Err(Error::MissingEvent)

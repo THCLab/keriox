@@ -60,11 +60,11 @@ impl Signature {
                     .get_state(&self.get_signer().ok_or(Error::MissingSigner)?)?
                     .ok_or_else(|| Error::UnknownSigner(self.get_signer().unwrap()))?
                     .current;
-                kc.verify(data, &sigs)
+                kc.verify(data, sigs)
             }
             Signature::NonTransferable(Nontransferable::Couplet(couplets)) => Ok(couplets
                 .iter()
-                .all(|(id, sig)| id.verify(data, &sig).unwrap())),
+                .all(|(id, sig)| id.verify(data, sig).unwrap())),
             Signature::NonTransferable(Nontransferable::Indexed(_sigs)) => {
                 Err(Error::MissingSigner)
             }
@@ -74,36 +74,35 @@ impl Signature {
 
 pub fn signatures_into_groups(sigs: &[Signature]) -> Vec<Group> {
     // Group same type of signature in one attachment
-    let (trans_seal, trans_last, nontrans, indexed, witness_indexed) =
-        sigs.into_iter().cloned().fold(
-            (vec![], vec![], vec![], vec![], vec![]),
-            |(mut trans_seal, mut trans_last, mut nontrans, mut indexed, mut witness_indexed),
-             sig| {
-                match sig {
-                    Signature::Transferable(SignerData::EventSeal(seal), sig) => trans_seal.push((
-                        seal.prefix.into(),
-                        seal.sn,
-                        seal.event_digest.into(),
-                        sig.into_iter().map(|sig| sig.into()).collect(),
-                    )),
-                    Signature::Transferable(SignerData::LastEstablishment(id), sig) => trans_last
-                        .push((id.into(), sig.into_iter().map(|sig| sig.into()).collect())),
-                    Signature::Transferable(SignerData::JustSignatures, sig) => {
-                        indexed.append(&mut sig.into_iter().map(|sig| sig.into()).collect())
-                    }
-                    Signature::NonTransferable(Nontransferable::Couplet(couplets)) => nontrans
-                        .append(
-                            &mut couplets
-                                .into_iter()
-                                .map(|(bp, sp)| (bp.into(), sp.into()))
-                                .collect(),
-                        ),
-                    Signature::NonTransferable(Nontransferable::Indexed(sigs)) => witness_indexed
-                        .append(&mut sigs.into_iter().map(|sig| sig.into()).collect()),
-                };
-                (trans_seal, trans_last, nontrans, indexed, witness_indexed)
-            },
-        );
+    let (trans_seal, trans_last, nontrans, indexed, witness_indexed) = sigs.iter().cloned().fold(
+        (vec![], vec![], vec![], vec![], vec![]),
+        |(mut trans_seal, mut trans_last, mut nontrans, mut indexed, mut witness_indexed), sig| {
+            match sig {
+                Signature::Transferable(SignerData::EventSeal(seal), sig) => trans_seal.push((
+                    seal.prefix.into(),
+                    seal.sn,
+                    seal.event_digest.into(),
+                    sig.into_iter().map(|sig| sig.into()).collect(),
+                )),
+                Signature::Transferable(SignerData::LastEstablishment(id), sig) => {
+                    trans_last.push((id.into(), sig.into_iter().map(|sig| sig.into()).collect()))
+                }
+                Signature::Transferable(SignerData::JustSignatures, sig) => {
+                    indexed.append(&mut sig.into_iter().map(|sig| sig.into()).collect())
+                }
+                Signature::NonTransferable(Nontransferable::Couplet(couplets)) => nontrans.append(
+                    &mut couplets
+                        .into_iter()
+                        .map(|(bp, sp)| (bp.into(), sp.into()))
+                        .collect(),
+                ),
+                Signature::NonTransferable(Nontransferable::Indexed(sigs)) => {
+                    witness_indexed.append(&mut sigs.into_iter().map(|sig| sig.into()).collect())
+                }
+            };
+            (trans_seal, trans_last, nontrans, indexed, witness_indexed)
+        },
+    );
 
     let mut attachments = vec![];
     if !trans_seal.is_empty() {

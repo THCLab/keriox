@@ -80,7 +80,7 @@ impl EventStorage {
         match self.db.get_kel_finalized_events(id) {
             Some(events) => {
                 let e = events
-                    .map(|event| {
+                    .flat_map(|event| {
                         let rcts_from_db = self
                             .get_nt_receipts(
                                 &event.signed_event_message.event_message.data.get_prefix(),
@@ -98,7 +98,6 @@ impl EventStorage {
                             None => vec![Notice::Event(event.into())],
                         }
                     })
-                    .flatten()
                     .collect();
                 Ok(Some(e))
             }

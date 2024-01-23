@@ -77,7 +77,7 @@ pub enum EventType {
 
 impl EventType {
     pub fn serialize(&self) -> Result<Vec<u8>, crate::error::Error> {
-        Ok(match self {
+        match self {
             EventType::KeyEvent(event) => event.encode(),
             EventType::Receipt(rcp) => rcp.encode(),
             #[cfg(feature = "query")]
@@ -86,7 +86,7 @@ impl EventType {
             EventType::Rpy(rpy) => rpy.encode(),
             #[cfg(feature = "mailbox")]
             EventType::Exn(exn) => exn.encode(),
-        }?)
+        }
     }
 }
 
@@ -110,12 +110,12 @@ impl From<&SignedEventMessage> for ParsedData {
             witness_rcts.iter().for_each(|rcts| match rcts {
                 Nontransferable::Indexed(indexed) => {
                     let witness_sigs: Vec<CesrIndexedSignature> =
-                        indexed.into_iter().map(|sig| sig.clone().into()).collect();
+                        indexed.iter().map(|sig| sig.clone().into()).collect();
                     attachments.push(Group::IndexedWitnessSignatures(witness_sigs))
                 }
                 Nontransferable::Couplet(couplets) => {
                     let couples = couplets
-                        .into_iter()
+                        .iter()
                         .map(|(bp, sp)| (bp.clone().into(), sp.clone().into()))
                         .collect();
                     attachments.push(Group::NontransReceiptCouples(couples))
@@ -317,7 +317,7 @@ impl TryFrom<ParsedData> for SignedExchange {
     }
 }
 
-#[cfg(any(feature = "oobi"))]
+#[cfg(feature = "oobi")]
 fn signed_reply(rpy: ReplyEvent, mut attachments: Vec<Group>) -> Result<Op, ParseError> {
     match attachments
         .pop()
@@ -483,7 +483,7 @@ fn signed_receipt(
         .iter()
         .filter_map(|att| match att {
             Group::IndexedWitnessSignatures(sigs) => {
-                let converted_signatures = sigs.into_iter().map(|sig| sig.clone().into()).collect();
+                let converted_signatures = sigs.iter().map(|sig| sig.clone().into()).collect();
                 Some(Nontransferable::Indexed(converted_signatures))
             }
             Group::NontransReceiptCouples(couples) => Some(Nontransferable::Couplet(
@@ -518,7 +518,7 @@ fn signed_receipt(
                 sn: *sn,
                 event_digest: event_digest.clone().into(),
             };
-            let converted_signatures = sigs.into_iter().map(|sig| sig.clone().into()).collect();
+            let converted_signatures = sigs.iter().map(|sig| sig.clone().into()).collect();
             Ok(Notice::TransferableRct(SignedTransferableReceipt::new(
                 event_message,
                 seal,
