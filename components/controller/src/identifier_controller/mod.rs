@@ -5,7 +5,7 @@ use std::{
 pub mod signing;
 pub mod tel;
 
-use keri::{
+use keri_core::{
     actor::{
         event_generator,
         prelude::{HashFunctionCode, Message, SelfAddressingIdentifier, SerializationFormats},
@@ -398,7 +398,7 @@ impl IdentifierController {
                 self.source
                     .send_message_to(
                         &IdentifierPrefix::Basic(wit.clone()),
-                        keri::oobi::Scheme::Http,
+                        keri_core::oobi::Scheme::Http,
                         signer_exn,
                     )
                     .await?;

@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use keri::{database::escrow::EscrowDb, processor::event_storage::EventStorage};
+use keri_core::{database::escrow::EscrowDb, processor::event_storage::EventStorage};
 
 use crate::error::Error;
 

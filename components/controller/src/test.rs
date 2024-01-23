@@ -2,7 +2,7 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use keri::{
+use keri_core::{
     event::event_data::EventData,
     event_message::signed_event_message::Notice,
     oobi::LocationScheme,
@@ -52,13 +52,13 @@ async fn test_2_wit() -> Result<(), ControllerError> {
     let wit1_id = witness1.get_prefix();
     let wit1_location = LocationScheme {
         eid: IdentifierPrefix::Basic(wit1_id.clone()),
-        scheme: keri::oobi::Scheme::Http,
+        scheme: keri_core::oobi::Scheme::Http,
         url: Url::parse("http://witness1/").unwrap(),
     };
     let wit2_id = witness2.get_prefix();
     let wit2_location = LocationScheme {
         eid: IdentifierPrefix::Basic(wit2_id.clone()),
-        scheme: keri::oobi::Scheme::Http,
+        scheme: keri_core::oobi::Scheme::Http,
         url: Url::parse("http://witness2/").unwrap(),
     };
 

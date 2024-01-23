@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use keri::{
+use keri_core::{
     actor::{parse_notice_stream, process_notice},
     database::{escrow::EscrowDb, SledEventDatabase},
     error::Error,

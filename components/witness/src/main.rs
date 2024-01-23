@@ -6,7 +6,7 @@ use figment::{
     providers::{Env, Format, Serialized, Yaml},
     Figment,
 };
-use keri::{
+use keri_core::{
     oobi::{LocationScheme, Scheme},
     prefix::{CesrPrimitive, IdentifierPrefix},
 };

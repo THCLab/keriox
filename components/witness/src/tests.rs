@@ -2,7 +2,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use keri::{
+use keri_core::{
     actor::{
         error::ActorError,
         prelude::{HashFunctionCode, SerializationFormats},
@@ -51,7 +51,7 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
         let oobi_root = Builder::new().prefix("test-db").tempdir().unwrap();
 
         let key_manager = {
-            use keri::signer::CryptoBox;
+            use keri_core::signer::CryptoBox;
             Arc::new(Mutex::new(CryptoBox::new()?))
         };
         SimpleController::new(
@@ -231,7 +231,7 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
 
 #[test]
 fn test_qry_rpy() -> Result<(), ActorError> {
-    use keri::{
+    use keri_core::{
         prefix::IndexedSignature,
         query::{
             query_event::{QueryArgs, QueryEvent, QueryRoute, SignedKelQuery},
@@ -265,7 +265,7 @@ fn test_qry_rpy() -> Result<(), ActorError> {
     .unwrap();
 
     let alice_key_manager = Arc::new(Mutex::new({
-        use keri::signer::CryptoBox;
+        use keri_core::signer::CryptoBox;
         CryptoBox::new()?
     }));
 
@@ -279,7 +279,7 @@ fn test_qry_rpy() -> Result<(), ActorError> {
     )?;
 
     let bob_key_manager = Arc::new(Mutex::new({
-        use keri::signer::CryptoBox;
+        use keri_core::signer::CryptoBox;
         CryptoBox::new()?
     }));
 
@@ -403,7 +403,7 @@ fn test_qry_rpy() -> Result<(), ActorError> {
 
 #[test]
 pub fn test_key_state_notice() -> Result<(), Error> {
-    use keri::{
+    use keri_core::{
         query::QueryError,
         signer::{CryptoBox, Signer},
     };
@@ -539,7 +539,7 @@ pub fn test_key_state_notice() -> Result<(), Error> {
 fn test_mbx() {
     use std::sync::Mutex;
 
-    use keri::signer::CryptoBox;
+    use keri_core::signer::CryptoBox;
 
     let signer = Arc::new(Signer::new());
 
@@ -620,7 +620,7 @@ fn test_mbx() {
 fn test_invalid_notice() {
     use std::sync::Mutex;
 
-    use keri::signer::CryptoBox;
+    use keri_core::signer::CryptoBox;
 
     let signer = Arc::new(Signer::new());
 
@@ -702,7 +702,7 @@ fn test_invalid_notice() {
         assert!(matches!(
             result,
             Err(ActorError::QueryError(SignedQueryError::KeriError(
-                keri::error::Error::UnknownSigner(ref id))
+                keri_core::error::Error::UnknownSigner(ref id))
             )) if id == controller.prefix()
         ));
     }

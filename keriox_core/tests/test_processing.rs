@@ -1,6 +1,6 @@
 use std::{fs, sync::Arc};
 
-use keri::{
+use keri_core::{
     actor::{parse_event_stream, parse_notice_stream, process_notice},
     database::SledEventDatabase,
     error::Error,

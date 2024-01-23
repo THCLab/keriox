@@ -1,7 +1,7 @@
 use std::{net::ToSocketAddrs, sync::Arc};
 
 use actix_web::{dev::Server, web, App, HttpServer};
-use keri::{error::Error, oobi::LocationScheme, prefix::BasicPrefix};
+use keri_core::{error::Error, oobi::LocationScheme, prefix::BasicPrefix};
 
 use crate::watcher::{Watcher, WatcherConfig, WatcherData};
 
@@ -79,7 +79,7 @@ pub mod http_handlers {
 
     use actix_web::{http::header::ContentType, web, HttpResponse, ResponseError};
     use itertools::Itertools;
-    use keri::{
+    use keri_core::{
         actor::{error::ActorError, prelude::Message},
         event_message::signed_event_message::Op,
         oobi::{error::OobiError, EndRole, LocationScheme, Role},
@@ -238,7 +238,7 @@ pub mod http_handlers {
 
 mod test {
     use actix_web::{body::MessageBody, web::Bytes};
-    use keri::{
+    use keri_core::{
         actor::{
             error::ActorError,
             parse_event_stream, parse_op_stream,
@@ -251,7 +251,7 @@ mod test {
     };
 
     #[async_trait::async_trait]
-    impl keri::transport::test::TestActor for super::WatcherListener {
+    impl keri_core::transport::test::TestActor for super::WatcherListener {
         async fn send_message(&self, msg: Message) -> Result<(), ActorError> {
             let payload = String::from_utf8(msg.to_cesr().unwrap()).unwrap();
             let data = actix_web::web::Data::new(self.watcher_data.clone());

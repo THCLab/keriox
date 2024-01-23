@@ -5,7 +5,7 @@ use controller::{
     mailbox_updating::ActionRequired, BasicPrefix, Controller, CryptoBox, IdentifierPrefix,
     KeyManager, LocationScheme, SelfSigningPrefix,
 };
-use keri::{
+use keri_core::{
     actor::{error::ActorError, SignedQueryError},
     event_message::signed_event_message::Message,
     prefix::IndexedSignature,
@@ -46,7 +46,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     );
     let wit_location = LocationScheme {
         eid: witness_id,
-        scheme: keri::oobi::Scheme::Http,
+        scheme: keri_core::oobi::Scheme::Http,
         url: Url::parse("http://witness1:3232").unwrap(),
     };
 
@@ -155,7 +155,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
         resp,
         Err(ControllerError::TransportError(
             TransportError::RemoteError(ActorError::KeriError(
-                keri::error::Error::SignatureVerificationError
+                keri_core::error::Error::SignatureVerificationError
             ))
         ))
     ));

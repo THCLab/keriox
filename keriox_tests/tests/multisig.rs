@@ -5,7 +5,7 @@ use controller::{
     config::ControllerConfig, identifier_controller::IdentifierController,
     mailbox_updating::ActionRequired, Controller, Oobi,
 };
-use keri::{
+use keri_core::{
     oobi::{EndRole, LocationScheme, Role},
     prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     signer::{CryptoBox, KeyManager},
@@ -33,7 +33,7 @@ async fn test_multisig() -> Result<()> {
     let witness_id = wit.get_prefix();
     let witness_oobi = LocationScheme {
         eid: IdentifierPrefix::Basic(witness_id.clone()),
-        scheme: keri::oobi::Scheme::Http,
+        scheme: keri_core::oobi::Scheme::Http,
         url: Url::parse("http://127.0.0.1:3232").unwrap(),
     };
 
@@ -55,7 +55,7 @@ async fn test_multisig() -> Result<()> {
     let watcher_id = watcher.0.prefix.clone();
     let watcher_oobi = LocationScheme {
         eid: IdentifierPrefix::Basic(watcher_id.clone()),
-        scheme: keri::oobi::Scheme::Http,
+        scheme: keri_core::oobi::Scheme::Http,
         url: watcher_url.clone(),
     };
 

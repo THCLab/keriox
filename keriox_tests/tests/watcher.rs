@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use keri::{
+use keri_core::{
     actor::{
         error::ActorError,
         simple_controller::{PossibleResponse, SimpleController},
@@ -53,7 +53,7 @@ pub fn watcher_forward_ksn() -> Result<(), Error> {
         let oobi_root = Builder::new().prefix("oobi-test-db1").tempdir().unwrap();
 
         let key_manager = {
-            use keri::signer::CryptoBox;
+            use keri_core::signer::CryptoBox;
             Arc::new(Mutex::new(CryptoBox::new().unwrap()))
         };
         SimpleController::new(
@@ -80,7 +80,7 @@ pub fn watcher_forward_ksn() -> Result<(), Error> {
         let oobi_root = Builder::new().prefix("oobi-test-db2").tempdir().unwrap();
 
         let key_manager = {
-            use keri::signer::CryptoBox;
+            use keri_core::signer::CryptoBox;
             Arc::new(Mutex::new(CryptoBox::new().unwrap()))
         };
         SimpleController::new(
@@ -166,14 +166,14 @@ pub fn watcher_forward_ksn() -> Result<(), Error> {
     let mut wrong_query = query.clone();
     if let Op::Query(SignedKelQuery { signature, .. }) = &mut wrong_query {
         match signature {
-            keri::event_message::signature::Signature::Transferable(_, sig) => {
+            keri_core::event_message::signature::Signature::Transferable(_, sig) => {
                 if let SelfSigningPrefix::Ed25519Sha512(ref mut bytes) = &mut sig[0].signature {
                     bytes[15] += 1;
                 } else {
                     panic!("Unexpected signature type");
                 }
             }
-            keri::event_message::signature::Signature::NonTransferable(_) => unreachable!(),
+            keri_core::event_message::signature::Signature::NonTransferable(_) => unreachable!(),
         };
     }
 

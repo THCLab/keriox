@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use keri::{
+use keri_core::{
     database::escrow::{Escrow, EscrowDb},
     prefix::IdentifierPrefix,
     processor::{
@@ -49,7 +49,7 @@ impl Notifier for MissingIssuerEscrow {
         &self,
         notification: &Notification,
         _bus: &NotificationBus,
-    ) -> Result<(), keri::error::Error> {
+    ) -> Result<(), keri_core::error::Error> {
         match notification {
             Notification::KeyEventAdded(ev_message) => {
                 let digest = ev_message.event_message.digest()?;
@@ -58,7 +58,7 @@ impl Notifier for MissingIssuerEscrow {
                     .unwrap();
             }
             _ => {
-                return Err(keri::error::Error::SemanticError(
+                return Err(keri_core::error::Error::SemanticError(
                     "Wrong notification".into(),
                 ))
             }
@@ -138,7 +138,7 @@ impl MissingIssuerEscrow {
 mod tests {
     use std::{sync::Arc, time::Duration};
 
-    use keri::{
+    use keri_core::{
         actor::parse_event_stream,
         database::{escrow::EscrowDb, SledEventDatabase},
         prefix::IdentifierPrefix,

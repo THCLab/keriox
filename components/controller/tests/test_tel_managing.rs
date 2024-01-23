@@ -4,7 +4,7 @@ use controller::{
     config::ControllerConfig, error::ControllerError, identifier_controller::IdentifierController,
     BasicPrefix, Controller, CryptoBox, KeyManager, SelfSigningPrefix,
 };
-use keri::actor::prelude::{HashFunction, HashFunctionCode};
+use keri_core::actor::prelude::{HashFunction, HashFunctionCode};
 
 #[async_std::test]
 async fn test_tel() -> Result<(), ControllerError> {

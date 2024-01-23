@@ -1,5 +1,5 @@
 use crate::{error::Error, event::verifiable_event::VerifiableEvent};
-use keri::prefix::IdentifierPrefix;
+use keri_core::prefix::IdentifierPrefix;
 use sled_tables::{
     self,
     tables::{SledEventTree, SledEventTreeVec},

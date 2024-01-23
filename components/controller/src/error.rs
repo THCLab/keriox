@@ -1,4 +1,4 @@
-use keri::{
+use keri_core::{
     actor::prelude::VersionError, event_message::cesr_adapter::ParseError, oobi::Scheme,
     prefix::IdentifierPrefix,
 };
@@ -7,10 +7,10 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 pub enum ControllerError {
     #[error("Database error: {0}")]
-    DatabaseError(#[from] keri::database::DbError),
+    DatabaseError(#[from] keri_core::database::DbError),
 
     #[error("Transport error: {0}")]
-    TransportError(#[from] keri::transport::TransportError),
+    TransportError(#[from] keri_core::transport::TransportError),
 
     #[error("Communication error: {0}")]
     CommunicationError(String),
@@ -46,7 +46,7 @@ pub enum ControllerError {
     NotGroupParticipantError,
 
     #[error("transparent")]
-    EventProcessingError(#[from] keri::error::Error),
+    EventProcessingError(#[from] keri_core::error::Error),
 
     #[error("Keri version error: ")]
     VersionError(#[from] VersionError),

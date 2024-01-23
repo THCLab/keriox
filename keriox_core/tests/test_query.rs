@@ -2,7 +2,7 @@
 mod test_query {
     use std::sync::Arc;
 
-    use keri::{
+    use keri_core::{
         actor::{parse_event_stream, prelude::*},
         database::{escrow::EscrowDb, SledEventDatabase},
         event_message::signed_event_message::Op,

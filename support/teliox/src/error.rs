@@ -1,4 +1,4 @@
-use keri::error::Error as KeriError;
+use keri_core::error::Error as KeriError;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 

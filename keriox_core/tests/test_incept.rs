@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use cesrox::primitives::codes::basic::Basic;
-use keri::{
+use keri_core::{
     actor,
     database::SledEventDatabase,
     error::Error,

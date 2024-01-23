@@ -3,7 +3,7 @@ use std::{
     sync::Arc,
 };
 
-use keri::{
+use keri_core::{
     actor::{
         error::ActorError, parse_exchange_stream, parse_notice_stream, parse_query_stream,
         parse_reply_stream, prelude::*, process_reply, process_signed_exn, process_signed_query,
@@ -114,13 +114,13 @@ impl WitnessReceiptGenerator {
 #[derive(Error, Debug, Serialize, Deserialize)]
 pub enum WitnessError {
     #[error(transparent)]
-    KeriError(#[from] keri::error::Error),
+    KeriError(#[from] keri_core::error::Error),
 
     #[error(transparent)]
     TelError(#[from] teliox::error::Error),
 
     #[error(transparent)]
-    DatabaseError(#[from] keri::database::DbError),
+    DatabaseError(#[from] keri_core::database::DbError),
 
     #[error("Signing error")]
     SigningError,
@@ -145,7 +145,7 @@ impl Witness {
         oobi_path: &Path,
         escrow_config: WitnessEscrowConfig,
     ) -> Result<Self, WitnessError> {
-        use keri::{database::escrow::EscrowDb, processor::notification::JustNotification};
+        use keri_core::{database::escrow::EscrowDb, processor::notification::JustNotification};
         let mut events_path = PathBuf::new();
         events_path.push(event_path);
         let mut escrow_path = events_path.clone();
@@ -317,7 +317,7 @@ impl Witness {
 
     pub fn process_exchange(
         &self,
-        exn: keri::mailbox::exchange::SignedExchange,
+        exn: keri_core::mailbox::exchange::SignedExchange,
     ) -> Result<(), ActorError> {
         process_signed_exn(exn, &self.event_storage)?;
         Ok(())
@@ -335,7 +335,7 @@ impl Witness {
 
     pub fn process_query(
         &self,
-        qry: keri::query::query_event::SignedKelQuery,
+        qry: keri_core::query::query_event::SignedKelQuery,
     ) -> Result<Option<PossibleResponse>, ActorError> {
         let response = process_signed_query(qry, &self.event_storage)?;
 

@@ -3,8 +3,8 @@ use std::{collections::HashMap, sync::Arc};
 use controller::{
     error::ControllerError, IdentifierPrefix, KeyManager, LocationScheme, SelfSigningPrefix,
 };
-use keri::actor::prelude::{HashFunction, HashFunctionCode};
-use keri::{event_message::signed_event_message::Message, transport::test::TestTransport};
+use keri_core::actor::prelude::{HashFunction, HashFunctionCode};
+use keri_core::{event_message::signed_event_message::Message, transport::test::TestTransport};
 use keri_tests::{
     setup_identifier,
     transport::{TelTestActor, TelTestTransport},
@@ -38,12 +38,12 @@ async fn test_tel_from_witness() -> Result<(), ControllerError> {
     let wit1_id = witness1.get_prefix();
     let wit1_location = LocationScheme {
         eid: IdentifierPrefix::Basic(wit1_id.clone()),
-        scheme: keri::oobi::Scheme::Http,
+        scheme: keri_core::oobi::Scheme::Http,
         url: Url::parse("http://witness1/").unwrap(),
     };
 
     let transport = {
-        let mut actors: keri::transport::test::TestActorMap = HashMap::new();
+        let mut actors: keri_core::transport::test::TestActorMap = HashMap::new();
         actors.insert((Host::Domain("witness1".to_string()), 80), witness1.clone());
         TestTransport::new(actors)
     };

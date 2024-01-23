@@ -1,6 +1,6 @@
 pub mod vc_state;
 
-use keri::prefix::IdentifierPrefix;
+use keri_core::prefix::IdentifierPrefix;
 use said::SelfAddressingIdentifier;
 
 use crate::{
@@ -89,7 +89,7 @@ impl ManagerTelState {
 #[cfg(test)]
 mod tests {
 
-    use keri::prefix::IdentifierPrefix;
+    use keri_core::prefix::IdentifierPrefix;
 
     use crate::{error::Error, event::Event, state::ManagerTelState, tel::event_generator};
 

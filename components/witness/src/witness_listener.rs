@@ -6,7 +6,7 @@ use std::{
 
 use actix_web::{dev::Server, web::Data, App, HttpServer};
 use anyhow::Result;
-use keri::{self, prefix::BasicPrefix};
+use keri_core::{self, prefix::BasicPrefix};
 
 use crate::{
     witness::{Witness, WitnessError},
@@ -92,7 +92,7 @@ impl WitnessListener {
 
 mod test {
     use actix_web::body::MessageBody;
-    use keri::{
+    use keri_core::{
         actor::{
             error::ActorError,
             parse_event_stream, parse_op_stream,
@@ -105,7 +105,7 @@ mod test {
     };
 
     #[async_trait::async_trait]
-    impl keri::transport::test::TestActor for super::WitnessListener {
+    impl keri_core::transport::test::TestActor for super::WitnessListener {
         async fn send_message(&self, msg: Message) -> Result<(), ActorError> {
             let payload = String::from_utf8(msg.to_cesr().unwrap()).unwrap();
             let data = actix_web::web::Data::new(self.witness_data.clone());
@@ -189,7 +189,7 @@ mod test {
             Ok(resp)
         }
 
-        async fn resolve_oobi(&self, _msg: keri::oobi::Oobi) -> Result<(), ActorError> {
+        async fn resolve_oobi(&self, _msg: keri_core::oobi::Oobi) -> Result<(), ActorError> {
             todo!()
         }
     }
@@ -203,7 +203,7 @@ pub mod http_handlers {
         web, HttpResponse, ResponseError,
     };
     use itertools::Itertools;
-    use keri::{
+    use keri_core::{
         actor::{error::ActorError, prelude::Message},
         error::Error,
         event_message::signed_event_message::Op,

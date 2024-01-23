@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use keri::{
+use keri_core::{
     database::escrow::{Escrow, EscrowDb},
     prefix::IdentifierPrefix,
     processor::event_storage::EventStorage,
@@ -102,7 +102,7 @@ impl OutOfOrderEscrow {
 mod tests {
     use std::{sync::Arc, time::Duration};
 
-    use keri::{
+    use keri_core::{
         actor::parse_event_stream,
         database::{escrow::EscrowDb, SledEventDatabase},
         prefix::IdentifierPrefix,

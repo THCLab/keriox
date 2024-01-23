@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use keri::{
+use keri_core::{
     event::{
         event_data::{EventData, InteractionEvent},
         sections::seal::Seal,

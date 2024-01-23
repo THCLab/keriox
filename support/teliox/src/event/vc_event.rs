@@ -1,6 +1,6 @@
 use crate::error::Error;
 use chrono::{DateTime, FixedOffset, SecondsFormat, Utc};
-use keri::{
+use keri_core::{
     event::sections::seal::EventSeal,
     event_message::{msg::TypedEvent, Typeable},
     prefix::IdentifierPrefix,

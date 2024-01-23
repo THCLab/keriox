@@ -1,4 +1,4 @@
-use keri::oobi::{LocationScheme, Scheme};
+use keri_core::oobi::{LocationScheme, Scheme};
 
 use crate::{event::verifiable_event::VerifiableEvent, query::SignedTelQuery};
 

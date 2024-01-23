@@ -8,20 +8,20 @@ pub mod messagebox;
 
 mod test;
 pub mod verifying;
-pub use keri::oobi::{EndRole, LocationScheme, Oobi};
-use keri::prefix::IndexedSignature;
-pub use keri::prefix::{
+pub use keri_core::oobi::{EndRole, LocationScheme, Oobi};
+use keri_core::prefix::IndexedSignature;
+pub use keri_core::prefix::{
     BasicPrefix, CesrPrimitive, IdentifierPrefix, SeedPrefix, SelfSigningPrefix,
 };
-use keri::processor::notification::JustNotification;
-pub use keri::signer::{CryptoBox, KeyManager};
+use keri_core::processor::notification::JustNotification;
+pub use keri_core::signer::{CryptoBox, KeyManager};
 pub use teliox::{
     event::parse_tel_query_stream, state::vc_state::TelState, state::ManagerTelState,
 };
 
 use config::ControllerConfig;
-use keri::state::IdentifierState;
-use keri::{
+use keri_core::state::IdentifierState;
+use keri_core::{
     actor::{
         self, event_generator, prelude::SelfAddressingIdentifier,
         simple_controller::PossibleResponse,

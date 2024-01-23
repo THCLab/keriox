@@ -1,5 +1,5 @@
 [package]
-name = "keri"
+name = "keri-core"
 version = "0.8.0"
 authors = [
     "Decentralized Identity Foundation",

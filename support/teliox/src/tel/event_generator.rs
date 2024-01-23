@@ -1,4 +1,4 @@
-use keri::{event::sections::seal::EventSeal, prefix::IdentifierPrefix};
+use keri_core::{event::sections::seal::EventSeal, prefix::IdentifierPrefix};
 use said::version::format::SerializationFormats;
 use said::{derivation::HashFunction, derivation::HashFunctionCode, SelfAddressingIdentifier};
 

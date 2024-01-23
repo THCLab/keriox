@@ -1,4 +1,4 @@
-use keri::{
+use keri_core::{
     event_message::signed_event_message::{Message, Op},
     oobi::{EndRole, LocationScheme, Oobi, Role},
     prefix::IdentifierPrefix,

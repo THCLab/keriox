@@ -1,8 +1,8 @@
-use keri::actor::prelude::{HashFunctionCode, SelfAddressingIdentifier, SerializationFormats};
-use keri::event::sections::seal::{EventSeal, Seal};
-use keri::event_message::msg::KeriEvent;
-use keri::event_message::timestamped::Timestamped;
-use keri::prefix::IdentifierPrefix;
+use keri_core::actor::prelude::{HashFunctionCode, SelfAddressingIdentifier, SerializationFormats};
+use keri_core::event::sections::seal::{EventSeal, Seal};
+use keri_core::event_message::msg::KeriEvent;
+use keri_core::event_message::timestamped::Timestamped;
+use keri_core::prefix::IdentifierPrefix;
 use teliox::event::verifiable_event::VerifiableEvent;
 use teliox::query::{TelQueryArgs, TelQueryEvent, TelQueryRoute};
 use teliox::seal::{AttachedSourceSeal, EventSourceSeal};

@@ -1,6 +1,6 @@
 use super::{error::ControllerError, identifier_controller::IdentifierController};
 use futures::{StreamExt, TryStreamExt};
-use keri::{
+use keri_core::{
     actor::{event_generator, prelude::Message},
     event::{
         event_data::EventData,

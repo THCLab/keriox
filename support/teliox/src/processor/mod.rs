@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use keri::processor::event_storage::EventStorage;
+use keri_core::processor::event_storage::EventStorage;
 
 use crate::{
     error::Error,

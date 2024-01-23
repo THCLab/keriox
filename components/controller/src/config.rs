@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use keri::{
+use keri_core::{
     oobi::LocationScheme,
     processor::escrow::EscrowConfig,
     transport::{default::DefaultTransport, Transport},

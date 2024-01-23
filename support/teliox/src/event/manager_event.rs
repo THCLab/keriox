@@ -1,11 +1,11 @@
 use cesrox::primitives::codes::self_addressing::dummy_prefix;
-use keri::actor::prelude::SerializationFormats;
-use keri::event_message::msg::TypedEvent;
+use keri_core::actor::prelude::SerializationFormats;
+use keri_core::event_message::msg::TypedEvent;
 use said::{derivation::HashFunctionCode, SelfAddressingIdentifier};
 use serde::{Deserialize, Serialize};
 use serde_hex::{Compact, SerHex};
 
-use keri::{event_message::Typeable, prefix::IdentifierPrefix};
+use keri_core::{event_message::Typeable, prefix::IdentifierPrefix};
 use said::version::SerializationInfo;
 
 use crate::error::Error;
@@ -183,7 +183,7 @@ pub struct Rot {
 
 #[cfg(test)]
 mod tests {
-    use keri::prefix::IdentifierPrefix;
+    use keri_core::prefix::IdentifierPrefix;
     use said::derivation::{HashFunction, HashFunctionCode};
     use said::version::format::SerializationFormats;
 
@@ -196,7 +196,7 @@ mod tests {
     };
 
     #[test]
-    fn test_serialization() -> Result<(), keri::prefix::error::Error> {
+    fn test_serialization() -> Result<(), keri_core::prefix::error::Error> {
         // Manager inception
         // let vcp_raw = r#"{"v":"KERI10JSON000113_","t":"vcp","d":"EBoBPh3N5nr1tItAUCkXNx3vShB_Be6iiQPXBsg2LvxA","i":"EBoBPh3N5nr1tItAUCkXNx3vShB_Be6iiQPXBsg2LvxA","ii":"DAtNTPnDFBnmlO6J44LXCrzZTAmpe-82b7BmQGtL4QhM","s":"0","c":["NB"],"bt":"0","b":[],"n":"A9XfpxIl1LcIkMhUSCCC8fgvkuX8gG9xK3SM-S8a8Y_U"}"#;
         let vcp_raw = r#"{"v":"KERI10JSON0000dc_","t":"vcp","d":"EIniznx8Vyltc0i-T7QwngvZkt_2xsT1PdsyRjq_1gAw","i":"EFohdnN33-vdNOTPYxeTQIWVzRKtzZzBoiBSGYSSnD0s","s":"0","ii":"DHtNTPnDFBnmlO6J44LXCrzZTAmpe-82b7BmQGtL4QhM","c":[],"bt":"1","b":[]}"#;

@@ -1,5 +1,5 @@
 use cesrox::{group::Group, ParsedData};
-use keri::{
+use keri_core::{
     event::sections::seal::EventSeal,
     event_message::signature::{Signature, SignerData},
     prefix::{IndexedSignature, SelfSigningPrefix},

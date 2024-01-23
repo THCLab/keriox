@@ -5,7 +5,7 @@ use crate::{
 
 use self::{manager_event::ManagerTelEventMessage, vc_event::VCEventMessage};
 use cesrox::{group::Group, parse_many};
-use keri::{
+use keri_core::{
     event_message::{cesr_adapter::ParseError, signature::get_signatures},
     prefix::IdentifierPrefix,
 };

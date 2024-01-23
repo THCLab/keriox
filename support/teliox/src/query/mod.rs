@@ -1,4 +1,4 @@
-use keri::{
+use keri_core::{
     event_message::{msg::KeriEvent, timestamped::Timestamped, EventTypeTag, Typeable},
     prefix::IdentifierPrefix,
     query::query_event::SignedQuery,

@@ -4,7 +4,7 @@ use controller::{
     config::ControllerConfig, identifier_controller::IdentifierController, BasicPrefix, Controller,
     CryptoBox, IdentifierPrefix, KeyManager, LocationScheme, SelfSigningPrefix,
 };
-use keri::{actor::error::ActorError, transport::test::TestTransport};
+use keri_core::{actor::error::ActorError, transport::test::TestTransport};
 use transport::TelTestTransport;
 
 pub mod transport;

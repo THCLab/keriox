@@ -1,7 +1,7 @@
 use std::{path::PathBuf, sync::Arc};
 
 use itertools::Itertools;
-use keri::{
+use keri_core::{
     actor::{
         error::ActorError, parse_notice_stream, parse_query_stream, parse_reply_stream, prelude::*,
         simple_controller::PossibleResponse,
@@ -273,7 +273,7 @@ impl WatcherData {
         let resp = self
             .send_query_to(
                 IdentifierPrefix::Basic(wit_id.clone()),
-                keri::oobi::Scheme::Http,
+                keri_core::oobi::Scheme::Http,
                 qry,
             )
             .await?;
@@ -322,7 +322,7 @@ impl WatcherData {
         let signature = SelfSigningPrefix::Ed25519Sha512(
             (self.signer).sign(
                 serde_json::to_vec(&qry)
-                    .map_err(|e| keri::error::Error::SerializationError(e.to_string()))?,
+                    .map_err(|e| keri_core::error::Error::SerializationError(e.to_string()))?,
             )?,
         );
 

@@ -2,7 +2,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use keri::{
+use keri_core::{
     actor::{error::ActorError, simple_controller::SimpleController},
     database::{escrow::EscrowDb, SledEventDatabase},
     error::Error,
@@ -29,7 +29,7 @@ async fn test_authentication() -> Result<(), Error> {
         let oobi_root = Builder::new().prefix("oobi-test-db1").tempdir().unwrap();
 
         let key_manager = {
-            use keri::signer::CryptoBox;
+            use keri_core::signer::CryptoBox;
             Arc::new(Mutex::new(CryptoBox::new().unwrap()))
         };
         SimpleController::new(
@@ -60,7 +60,7 @@ async fn test_authentication() -> Result<(), Error> {
         let oobi_root = Builder::new().prefix("oobi-test-db2").tempdir().unwrap();
 
         let key_manager = {
-            use keri::signer::CryptoBox;
+            use keri_core::signer::CryptoBox;
             Arc::new(Mutex::new(CryptoBox::new().unwrap()))
         };
         SimpleController::new(

@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use keri::{
+use keri_core::{
     database::{escrow::EscrowDb, SledEventDatabase},
     error::Error,
     event_message::signed_event_message::{Notice, SignedEventMessage},
