@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use controller::{
+use keri_controller::{
     config::ControllerConfig, error::ControllerError, identifier_controller::IdentifierController,
     BasicPrefix, Controller, CryptoBox, KeyManager, SelfSigningPrefix,
 };

@@ -52,7 +52,6 @@ impl PublicKey {
         match VerifyingKey::from_sec1_bytes(&self.key()) {
             Ok(k) => {
                 use k256::ecdsa::Signature;
-                use std::convert::TryFrom;
                 if let Ok(sig) = Signature::try_from(sig) {
                     match k.verify(msg, &sig) {
                         Ok(()) => true,

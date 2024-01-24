@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use controller::{
+use keri_controller::{
     config::ControllerConfig, error::ControllerError, identifier_controller::IdentifierController,
     mailbox_updating::ActionRequired, BasicPrefix, Controller, CryptoBox, IdentifierPrefix,
     KeyManager, LocationScheme, SelfSigningPrefix,

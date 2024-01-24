@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use controller::{
+use keri_controller::{
     config::ControllerConfig, error::ControllerError, identifier_controller::IdentifierController,
     BasicPrefix, Controller, CryptoBox, KeyManager, SelfSigningPrefix,
 };
@@ -62,7 +62,7 @@ async fn test_tel() -> Result<(), ControllerError> {
 
     let (vc_id, issuance_ixn) = identifier1.issue(credential_said).unwrap();
     let vc_hash = match vc_id {
-        controller::IdentifierPrefix::SelfAddressing(sai) => sai.clone(),
+        keri_controller::IdentifierPrefix::SelfAddressing(sai) => sai.clone(),
         _ => unreachable!(),
     };
     let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(&issuance_ixn).unwrap());

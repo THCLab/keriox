@@ -1,7 +1,7 @@
 use std::{collections::HashMap, net::Ipv4Addr, sync::Arc};
 
 use anyhow::Result;
-use controller::{
+use keri_controller::{
     config::ControllerConfig, identifier_controller::IdentifierController,
     mailbox_updating::ActionRequired, Controller, Oobi,
 };

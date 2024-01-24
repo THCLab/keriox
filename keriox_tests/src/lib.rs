@@ -1,6 +1,6 @@
 use std::{path::Path, sync::Arc};
 
-use controller::{
+use keri_controller::{
     config::ControllerConfig, identifier_controller::IdentifierController, BasicPrefix, Controller,
     CryptoBox, IdentifierPrefix, KeyManager, LocationScheme, SelfSigningPrefix,
 };

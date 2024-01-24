@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use controller::{
+use keri_controller::{
     error::ControllerError, IdentifierPrefix, KeyManager, LocationScheme, SelfSigningPrefix,
 };
 use keri_core::actor::prelude::{HashFunction, HashFunctionCode};
