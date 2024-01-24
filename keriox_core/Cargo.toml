@@ -1,15 +1,11 @@
 [package]
 name = "keri-core"
 version = "0.8.0"
-authors = [
-    "Decentralized Identity Foundation",
-    "Charles Cunningham <charles@jolocom.io>",
-    "Ivan Temchenko <ivan@jolocom.io>",
-    "Edyta Pawlak <edyta.pawlak@opensoftware.pl>",
-]
-edition = "2018"
 description = "Core library for the Key Event Receipt Infrastructure "
-license = "EUPL-1.2"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -20,7 +16,7 @@ crate-type = ["cdylib", "rlib"]
 sled-db = ["sled", "serde_cbor"]
 default = ["sled-db"]
 query = []
-oobi = ["query", "url", "strum_macros", "strum", "reqwest"]
+oobi = ["query", "url", "strum_macros", "strum", "reqwest", "async-trait"]
 mailbox = ["query"]
 
 [dependencies]
@@ -50,7 +46,7 @@ fraction = { version = "0.9", features = ["with-serde-support"] }
 sled = { version = "0.34.6", optional = true }
 
 # oobis dependecies
-async-trait = "0.1.57"
+async-trait = { version = "0.1.57", optional = true }
 reqwest = { version = "0.11", optional = true }
 url = { version = "2.2.2", features = ["serde"], optional = true }
 strum_macros = { version = "0.24", optional = true }

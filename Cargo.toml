@@ -10,3 +10,11 @@ members = [
     "components/watcher",
     "components/controller",
 ]
+
+[workspace.package]
+repository = "https://github.com/THCLab/keriox"
+authors = [
+    "Human Colossus Foundation <contact@humancolossus.org>",
+]
+edition = "2021"
+license = "EUPL-1.2"

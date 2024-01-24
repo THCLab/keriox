@@ -1,11 +1,10 @@
 [package]
 name = "teliox"
 version = "0.1.0"
-authors = [
-	"Edyta Pawlak <edyta.pawlak@opensoftware.pl>"
-]
-edition = "2021"
-license = "EUPL-1.2"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
