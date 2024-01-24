@@ -1,6 +1,6 @@
 [package]
 name = "keri-controller"
-version = "0.1.0"
+version = "0.1.1"
 description = "KERI Identifier Management Library"
 authors.workspace = true
 edition.workspace = true
