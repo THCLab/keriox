@@ -11,8 +11,8 @@ repository.workspace = true
 [dependencies]
 async-std = { version = "1.12.0", features = ["attributes"] }
 futures = "0.3.24"
-keri-core = { path = "../../keriox_core", features = ["oobi", "mailbox"] }
-teliox = {path = "../../support/teliox"}
+keri-core = { path = "../../keriox_core", version = "0.9.0", features = ["oobi", "mailbox"] }
+teliox = {path = "../../support/teliox", version = "0.1.0"}
 thiserror = "1.0"
 serde_json = "1.0"
 url = "2.3.1"
