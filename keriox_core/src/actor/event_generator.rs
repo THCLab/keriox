@@ -101,6 +101,7 @@ pub fn rotate(
     state: IdentifierState,
     current_keys: Vec<BasicPrefix>,
     new_next_keys: Vec<BasicPrefix>,
+    new_next_threshold: u64,
     witness_to_add: Vec<BasicPrefix>,
     witness_to_remove: Vec<BasicPrefix>,
     witness_threshold: u64,
@@ -109,6 +110,7 @@ pub fn rotate(
         state,
         current_keys,
         new_next_keys,
+        new_next_threshold,
         witness_to_add,
         witness_to_remove,
         witness_threshold,
@@ -122,6 +124,7 @@ fn make_rotation(
     state: IdentifierState,
     current_keys: Vec<BasicPrefix>,
     new_next_keys: Vec<BasicPrefix>,
+    new_next_threshold: u64,
     witness_to_add: Vec<BasicPrefix>,
     witness_to_remove: Vec<BasicPrefix>,
     witness_threshold: u64,
@@ -135,6 +138,7 @@ fn make_rotation(
         .with_witness_to_add(&witness_to_add)
         .with_witness_to_remove(&witness_to_remove)
         .with_witness_threshold(&SignatureThreshold::Simple(witness_threshold))
+        .with_next_threshold(&SignatureThreshold::Simple(new_next_threshold))
         .build()
         .map_err(|e| Error::EventGenerationError(e.to_string()))
 }

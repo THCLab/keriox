@@ -401,6 +401,7 @@ impl<K: KeyManager> SimpleController<K> {
             state,
             vec![BasicPrefix::Ed25519(km.public_key())],
             vec![BasicPrefix::Ed25519(km.next_public_key())],
+            1,
             witness_to_add.unwrap_or_default().to_vec(),
             witness_to_remove.unwrap_or_default().into(),
             witness_threshold.unwrap_or(0),

@@ -38,7 +38,7 @@ async fn test_kel_managing() -> Result<(), ControllerError> {
     let pk = BasicPrefix::Ed25519(km.public_key());
     let npk = BasicPrefix::Ed25519(km.next_public_key());
     let rotation_event = identifier1
-        .rotate(vec![pk], vec![npk], vec![], vec![], 0)
+        .rotate(vec![pk], vec![npk], 1, vec![], vec![], 0)
         .await?;
 
     let signature = SelfSigningPrefix::Ed25519Sha512(km.sign(rotation_event.as_bytes())?);
