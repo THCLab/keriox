@@ -9,6 +9,7 @@ use cesrox::{
 use core::str::FromStr;
 use ed25519_dalek::SecretKey;
 use k256::ecdsa::{SigningKey, VerifyingKey};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum SeedPrefix {
@@ -83,6 +84,28 @@ impl CesrPrimitive for SeedPrefix {
             Self::RandomSeed448(_) => PrimitiveCode::Seed(SeedCode::RandomSeed448),
             Self::RandomSeed128(_) => PrimitiveCode::Seed(SeedCode::RandomSeed448),
         }
+    }
+}
+
+/// Serde compatible Serialize
+impl Serialize for SeedPrefix {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&self.to_str())
+    }
+}
+
+/// Serde compatible Deserialize
+impl<'de> Deserialize<'de> for SeedPrefix {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+
+        SeedPrefix::from_str(&s).map_err(serde::de::Error::custom)
     }
 }
 
