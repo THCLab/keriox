@@ -208,7 +208,7 @@ pub mod http_handlers {
         error::Error,
         event_message::signed_event_message::Op,
         oobi::Role,
-        prefix::IdentifierPrefix,
+        prefix::{CesrPrimitive, IdentifierPrefix},
     };
     use teliox::event::verifiable_event::VerifiableEvent;
 
@@ -286,7 +286,7 @@ pub mod http_handlers {
         post_data: String,
         data: web::Data<Arc<Witness>>,
     ) -> Result<HttpResponse, ApiError> {
-        println!("\nGot notice to process: \n{}", post_data);
+        println!("\nWitness {} got notice to process: \n{}", &data.prefix.to_str() , post_data);
         data.parse_and_process_notices(post_data.as_bytes())
             .map_err(ActorError::KeriError)?;
         Ok(HttpResponse::Ok()
@@ -298,7 +298,7 @@ pub mod http_handlers {
         post_data: String,
         data: web::Data<Arc<Witness>>,
     ) -> Result<HttpResponse, ApiError> {
-        println!("\nGot query to process: \n{}", post_data);
+        println!("\nWitness {} got query to process: \n{}", &data.prefix.to_str(), post_data);
         let resp = data
             .parse_and_process_queries(post_data.as_bytes())?
             .iter()

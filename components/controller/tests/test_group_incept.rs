@@ -31,7 +31,7 @@ async fn test_group_incept() -> Result<(), ControllerError> {
     };
     identifier1.notify_witnesses().await?;
 
-    let identifier2 = {
+    let mut identifier2 = {
         let pk = BasicPrefix::Ed25519(km2.public_key());
         let npk = BasicPrefix::Ed25519(km2.next_public_key());
 

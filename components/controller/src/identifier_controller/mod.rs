@@ -24,7 +24,7 @@ use keri_core::{
         cesr_adapter::{parse_event_type, EventType},
         msg::KeriEvent,
         signature::{Nontransferable, Signature, SignerData},
-        signed_event_message::{Notice, Op, SignedNontransferableReceipt},
+        signed_event_message::{Notice, Op, SignedEventMessage, SignedNontransferableReceipt},
     },
     mailbox::{
         exchange::{Exchange, ExchangeMessage, ForwardTopic, FwdArgs, SignedExchange},
@@ -52,6 +52,7 @@ pub struct IdentifierController {
     pub id: IdentifierPrefix,
     pub source: Arc<Controller>,
     pub registry_id: Option<IdentifierPrefix>,
+    pub to_notify: Vec<SignedEventMessage>,
 
     pub(crate) last_asked_index: Arc<Mutex<HashMap<IdentifierPrefix, MailboxReminder>>>,
     pub(crate) last_asked_groups_index: Arc<Mutex<HashMap<IdentifierPrefix, MailboxReminder>>>,
@@ -69,6 +70,13 @@ impl IdentifierController {
         kel: Arc<Controller>,
         registry_id: Option<IdentifierPrefix>,
     ) -> Self {
+        let evs = kel 
+            .partially_witnessed_escrow
+            .get_partially_witnessed_events()
+            .iter()
+            .filter(|ev| ev.event_message.data.prefix == id)
+            .cloned()
+            .collect();
         Self {
             registry_id,
             id,
@@ -76,6 +84,7 @@ impl IdentifierController {
             last_asked_index: Arc::new(Mutex::new(HashMap::new())),
             last_asked_groups_index: Arc::new(Mutex::new(HashMap::new())),
             broadcasted_rcts: HashSet::new(),
+            to_notify: evs,
         }
     }
 
@@ -253,7 +262,7 @@ impl IdentifierController {
     /// Checks signatures and updates database.
     /// Must call [`IdentifierController::notify_witnesses`] after calling this function if event is a key event.
     pub async fn finalize_event(
-        &self,
+        &mut self,
         event: &[u8],
         sig: SelfSigningPrefix,
     ) -> Result<(), ControllerError> {
@@ -261,8 +270,29 @@ impl IdentifierController {
             parse_event_type(event).map_err(|_e| ControllerError::EventFormatError)?;
         match parsed_event {
             EventType::KeyEvent(ke) => {
-                let index = self.get_index(&ke.data)?;
-                self.source.finalize_key_event(&ke, &sig, index)
+                // Provide kel for new witnesses
+                // TODO  should add to notify_witness instead of sending directly?
+                match &ke.data.event_data {
+                    EventData::Rot(rot) | EventData::Drt(rot) => {
+                        let own_kel = self.source.storage.get_kel_messages_with_receipts(&self.id)?.unwrap();
+                        for witness in &rot.witness_config.graft {
+                            let witness_id = IdentifierPrefix::Basic(witness.clone());
+                            for msg in &own_kel {
+                                self.source.send_message_to(&witness_id, Scheme::Http, Message::Notice(msg.clone())).await?;
+                            }
+                        };
+                    },
+                    _ => (),
+                };
+                let index = self.get_index(&ke.data).unwrap();
+                
+                self.source.finalize_key_event(&ke, &sig, index)?;
+                let signature = IndexedSignature::new_both_same(sig.clone(), index as u16);
+
+                let signed_message = ke.sign(vec![signature], None, None);
+                self.to_notify.push(signed_message);
+                
+                Ok(())
             }
             EventType::Rpy(rpy) => match rpy.get_route() {
                 ReplyRoute::EndRoleAdd(_) => Ok(self
@@ -443,14 +473,9 @@ impl IdentifierController {
         Ok(group_prefix)
     }
 
-    pub async fn notify_witnesses(&self) -> Result<usize, ControllerError> {
+    pub async fn notify_witnesses(&mut self) -> Result<usize, ControllerError> {
         let mut n = 0;
-        let evs = self
-            .source
-            .partially_witnessed_escrow
-            .get_partially_witnessed_events();
-
-        for ev in evs {
+        while let Some(ev) = self.to_notify.pop() {
             // Elect the leader
             // Leader is identifier with minimal index among all participants who
             // sign event. He will send message to witness.

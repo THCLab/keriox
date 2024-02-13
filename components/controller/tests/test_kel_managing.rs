@@ -17,7 +17,7 @@ async fn test_kel_managing() -> Result<(), ControllerError> {
     let mut km = CryptoBox::new()?;
 
     // Incept identifier
-    let identifier1 = {
+    let mut identifier1 = {
         let pk = BasicPrefix::Ed25519(km.public_key());
         let npk = BasicPrefix::Ed25519(km.next_public_key());
 

@@ -35,9 +35,9 @@ pub async fn setup_identifier(
 
     let verifier_keypair = CryptoBox::new().unwrap();
 
-    let verifier = {
-        let pk = BasicPrefix::Ed25519(verifier_keypair.public_key());
-        let npk = BasicPrefix::Ed25519(verifier_keypair.next_public_key());
+    let mut verifier = {
+        let pk = BasicPrefix::Ed25519NT(verifier_keypair.public_key());
+        let npk = BasicPrefix::Ed25519NT(verifier_keypair.next_public_key());
 
         let icp_event = verifier_controller
             .incept(vec![pk], vec![npk], witness_locations, 1)
