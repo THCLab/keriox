@@ -256,7 +256,7 @@ impl Controller {
             .collect())
     }
 
-    async fn send_message_to(
+    pub async fn send_message_to(
         &self,
         id: &IdentifierPrefix,
         scheme: Scheme,
