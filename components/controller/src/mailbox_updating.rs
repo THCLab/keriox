@@ -158,7 +158,9 @@ impl IdentifierController {
             Some(to_publish) => {
                 let witnesses = self
                     .source
-                    .get_witnesses_at_event(&to_publish.event_message)?;
+                    .get_state_at_event(&to_publish.event_message)?
+                    .witness_config
+                    .witnesses;
                 self.source.publish(&witnesses, &to_publish).await
             }
             None => Ok(()),
