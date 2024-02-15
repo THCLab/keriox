@@ -36,7 +36,7 @@ use keri_core::{
         mailbox::{QueryArgsMbx, QueryTopics},
         query_event::{QueryArgs, QueryEvent, QueryRoute, SignedKelQuery},
         reply_event::ReplyRoute,
-    },
+    }, state::IdentifierState,
 };
 pub use teliox::query::{SignedTelQuery, TelQueryEvent};
 
@@ -53,6 +53,7 @@ pub struct IdentifierController {
     pub source: Arc<Controller>,
     pub registry_id: Option<IdentifierPrefix>,
     pub to_notify: Vec<SignedEventMessage>,
+    pub state: IdentifierState,
 
     pub(crate) last_asked_index: Arc<Mutex<HashMap<IdentifierPrefix, MailboxReminder>>>,
     pub(crate) last_asked_groups_index: Arc<Mutex<HashMap<IdentifierPrefix, MailboxReminder>>>,
@@ -77,10 +78,12 @@ impl IdentifierController {
             .filter(|ev| ev.event_message.data.prefix == id)
             .cloned()
             .collect();
+        let state = kel.get_state(&id).unwrap_or_default();
         Self {
             registry_id,
             id,
             source: kel,
+            state,
             last_asked_index: Arc::new(Mutex::new(HashMap::new())),
             last_asked_groups_index: Arc::new(Mutex::new(HashMap::new())),
             broadcasted_rcts: HashSet::new(),
@@ -285,6 +288,8 @@ impl IdentifierController {
                     _ => (),
                 };
                 let index = self.get_index(&ke.data).unwrap();
+                let st = self.state.clone().apply(&ke)?;
+                self.state = st;
                 
                 self.source.finalize_key_event(&ke, &sig, index)?;
                 let signature = IndexedSignature::new_both_same(sig.clone(), index as u16);
@@ -424,7 +429,7 @@ impl IdentifierController {
                 signature,
                 data_signature: (material_path.clone(), sigs.clone()),
             }));
-            let wits = self.source.get_witnesses_at_event(&to_forward)?;
+            let wits = self.source.get_state_at_event(&to_forward)?.witness_config.witnesses;
             // TODO for now get first witness
             if let Some(wit) = wits.get(0) {
                 self.source
@@ -487,8 +492,10 @@ impl IdentifierController {
                     .min()
                     .expect("event should have at least one signature") as usize;
             if min_sig_idx == id_idx {
-                let witnesses = self.source.get_witnesses_at_event(&ev.event_message)?;
-                self.source.publish(&witnesses, &ev).await?;
+                let state = self.source.get_state_at_event(&ev.event_message)?;
+                let witnesses = &state.witness_config.witnesses;
+                self.source.publish(witnesses, &ev).await?;
+                self.state = state;
                 n += 1;
             }
         }

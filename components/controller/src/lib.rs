@@ -518,41 +518,42 @@ impl Controller {
         let signature = IndexedSignature::new_both_same(sig.clone(), own_index as u16);
 
         let signed_message = event.sign(vec![signature], None, None);
+        // self.processor.process_own_event(signed_message)?;
         self.process(&Message::Notice(Notice::Event(signed_message)))?;
 
         Ok(())
     }
 
-    pub fn get_witnesses_at_event(
+    pub fn get_state_at_event(
         &self,
         event_message: &KeriEvent<KeyEvent>,
-    ) -> Result<Vec<BasicPrefix>, ControllerError> {
+    ) -> Result<IdentifierState, ControllerError> {
         let identifier = event_message.data.get_prefix();
         Ok(match event_message.data.get_event_data() {
-            EventData::Icp(icp) => icp.witness_config.initial_witnesses,
+            EventData::Icp(icp) => {
+                IdentifierState::default().apply(event_message)?
+            },
             EventData::Rot(_rot) => {
                 let state = self
                     .storage
                     .get_state(&identifier)?
                     .ok_or(ControllerError::UnknownIdentifierError)?
                     .apply(event_message)?;
-                state.witness_config.witnesses
+                state
             }
             EventData::Ixn(_ixn) => {
                 self.storage
                     .get_state(&identifier)?
                     .ok_or(ControllerError::UnknownIdentifierError)?
-                    .witness_config
-                    .witnesses
             }
-            EventData::Dip(dip) => dip.inception_data.witness_config.initial_witnesses,
+            EventData::Dip(dip) => IdentifierState::default().apply(event_message)?,
             EventData::Drt(_drt) => {
                 let state = self
                     .storage
                     .get_state(&identifier)?
                     .ok_or(ControllerError::UnknownIdentifierError)?
                     .apply(event_message)?;
-                state.witness_config.witnesses
+                state
             }
         })
     }
