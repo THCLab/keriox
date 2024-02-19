@@ -20,7 +20,7 @@ impl Controller {
                 // TODO what if more than one
                 let loc = self
                     .get_loc_schemas(&eid)?
-                    .get(0)
+                    .first()
                     .ok_or(ControllerError::UnknownIdentifierError)?
                     .clone();
                 let msgs = self.transport.request_end_role(loc, cid, role, eid).await?;

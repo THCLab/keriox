@@ -46,7 +46,7 @@ impl TelEventValidator {
     ) -> Result<(), Error> {
         let reference_kel_event = self
             .kel_reference
-            .get_event_at_sn(&issuer_id, seal.seal.sn)?
+            .get_event_at_sn(issuer_id, seal.seal.sn)?
             .ok_or(Error::MissingIssuerEventError)?;
         // Check if digest of found event matches digest from seal
         match &reference_kel_event
@@ -68,14 +68,10 @@ impl TelEventValidator {
             previous_event_hash: _,
         }) = event_type
         {
-            if data
-                .into_iter()
-                .find(|seal| match seal {
-                    Seal::Event(es) => es.event_digest.eq(&expected_digest),
-                    _ => false,
-                })
-                .is_some()
-            {
+            if data.into_iter().any(|seal| match seal {
+                Seal::Event(es) => es.event_digest.eq(&expected_digest),
+                _ => false,
+            }) {
                 Ok(())
             } else {
                 Err(Error::MissingSealError)
@@ -107,7 +103,7 @@ impl TelEventValidator {
             .compute_management_tel_state(&event.data.prefix)?
             .unwrap_or_default();
 
-        state.apply(&event)?;
+        state.apply(event)?;
 
         Ok(())
     }
@@ -127,7 +123,7 @@ impl TelEventValidator {
         self.db
             .compute_vc_state(&vc_event.data.data.prefix)?
             .unwrap_or_default()
-            .apply(&vc_event)?;
+            .apply(vc_event)?;
 
         Ok(())
     }

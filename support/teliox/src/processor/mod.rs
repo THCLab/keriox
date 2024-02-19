@@ -52,7 +52,7 @@ impl TelEventProcessor {
         let validator =
             TelEventValidator::new(self.tel_reference.db.clone(), self.kel_reference.clone());
         match &event.event.clone() {
-            Event::Management(ref man) => match validator.validate_management(&man, &event.seal) {
+            Event::Management(ref man) => match validator.validate_management(man, &event.seal) {
                 Ok(_) => {
                     self.tel_reference
                         .db
@@ -79,7 +79,7 @@ impl TelEventProcessor {
                     e => Err(e),
                 },
             },
-            Event::Vc(ref vc_ev) => match validator.validate_vc(&vc_ev, &event.seal) {
+            Event::Vc(ref vc_ev) => match validator.validate_vc(vc_ev, &event.seal) {
                 Ok(_) => {
                     self.tel_reference
                         .db

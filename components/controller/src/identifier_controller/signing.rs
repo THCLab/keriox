@@ -34,7 +34,7 @@ impl IdentifierController {
         sig: SelfSigningPrefix,
         index: u16,
     ) -> Result<String, ControllerError> {
-        let signature: Signature = self.sign(sig, index).map(|s| s.into())?;
+        let signature: Signature = self.sign(sig, index)?;
         let group: Group = signature.into();
         Ok(group.to_cesr_str())
     }

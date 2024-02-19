@@ -169,7 +169,7 @@ impl Tel {
             .db
             .get_management_events(&registry_id)
             .unwrap()
-            .chain(vc_events.into_iter())
+            .chain(vc_events)
             .collect::<Vec<_>>())
     }
 
@@ -179,6 +179,6 @@ impl Tel {
     ) -> Result<Option<ManagerTelState>, Error> {
         self.processor
             .tel_reference
-            .compute_management_tel_state(&id)
+            .compute_management_tel_state(id)
     }
 }

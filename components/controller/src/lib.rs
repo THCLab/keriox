@@ -143,7 +143,7 @@ impl Controller {
             oobi_manager,
             partially_witnessed_escrow,
             transport,
-            tel: tel,
+            tel,
             tel_transport: tel_transport,
         };
 
@@ -530,31 +530,22 @@ impl Controller {
     ) -> Result<IdentifierState, ControllerError> {
         let identifier = event_message.data.get_prefix();
         Ok(match event_message.data.get_event_data() {
-            EventData::Icp(icp) => {
-                IdentifierState::default().apply(event_message)?
-            },
-            EventData::Rot(_rot) => {
-                let state = self
-                    .storage
-                    .get_state(&identifier)?
-                    .ok_or(ControllerError::UnknownIdentifierError)?
-                    .apply(event_message)?;
-                state
-            }
-            EventData::Ixn(_ixn) => {
-                self.storage
-                    .get_state(&identifier)?
-                    .ok_or(ControllerError::UnknownIdentifierError)?
-            }
-            EventData::Dip(dip) => IdentifierState::default().apply(event_message)?,
-            EventData::Drt(_drt) => {
-                let state = self
-                    .storage
-                    .get_state(&identifier)?
-                    .ok_or(ControllerError::UnknownIdentifierError)?
-                    .apply(event_message)?;
-                state
-            }
+            EventData::Icp(_icp) => IdentifierState::default().apply(event_message)?,
+            EventData::Rot(_rot) => self
+                .storage
+                .get_state(&identifier)?
+                .ok_or(ControllerError::UnknownIdentifierError)?
+                .apply(event_message)?,
+            EventData::Ixn(_ixn) => self
+                .storage
+                .get_state(&identifier)?
+                .ok_or(ControllerError::UnknownIdentifierError)?,
+            EventData::Dip(_dip) => IdentifierState::default().apply(event_message)?,
+            EventData::Drt(_drt) => self
+                .storage
+                .get_state(&identifier)?
+                .ok_or(ControllerError::UnknownIdentifierError)?
+                .apply(event_message)?,
         })
     }
 

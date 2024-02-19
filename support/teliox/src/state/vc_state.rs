@@ -5,8 +5,9 @@ use crate::{
 use said::SelfAddressingIdentifier;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
 pub enum TelState {
+    #[default]
     NotIssued,
     Issued(SelfAddressingIdentifier),
     Revoked,
@@ -53,12 +54,6 @@ impl TelState {
                 TelState::Revoked => Err(Error::Generic("Already revoked".into())),
             },
         }
-    }
-}
-
-impl Default for TelState {
-    fn default() -> Self {
-        TelState::NotIssued
     }
 }
 

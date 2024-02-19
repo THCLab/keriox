@@ -74,7 +74,7 @@ impl TelEventStorage {
     }
 
     pub fn get_events(&self, vc_id: &IdentifierPrefix) -> Result<Vec<VerifiableEvent>, Error> {
-        match self.db.get_events(&vc_id) {
+        match self.db.get_events(vc_id) {
             Some(events) => Ok(events.collect()),
             None => Ok(vec![]),
         }
@@ -118,10 +118,9 @@ impl TelEventStorage {
                     .get_management_events(args.ri.as_ref().unwrap())?
                     .unwrap();
                 let vc_tel = self
-                    .get_events(&args.i.as_ref().unwrap())?
+                    .get_events(args.i.as_ref().unwrap())?
                     .into_iter()
-                    .map(|event| event.serialize().unwrap())
-                    .flatten();
+                    .flat_map(|event| event.serialize().unwrap());
                 Ok(TelReplyType::Tel(
                     management_tel.into_iter().chain(vc_tel).collect(),
                 ))
