@@ -1,12 +1,14 @@
 use std::{collections::HashMap, sync::Arc};
 
-use keri_controller::{error::ControllerError, BasicPrefix, IdentifierPrefix, KeyManager, LocationScheme, SelfSigningPrefix};
+use keri_controller::{
+    error::ControllerError, BasicPrefix, IdentifierPrefix, KeyManager, LocationScheme,
+    SelfSigningPrefix,
+};
 use keri_core::transport::test::TestTransport;
 use keri_tests::{setup_identifier, transport::TelTestTransport};
 use tempfile::Builder;
 use url::Host;
 use witness::{WitnessEscrowConfig, WitnessListener};
-
 
 #[async_std::test]
 async fn test_witness_rotation() -> Result<(), ControllerError> {
@@ -35,7 +37,7 @@ async fn test_witness_rotation() -> Result<(), ControllerError> {
         url: Url::parse("http://witness1/").unwrap(),
     };
 
-	 // Setup second witness
+    // Setup second witness
     let witness2 = {
         // let seed = "AK8F6AAiYDpXlWdj2O5F5-6wNCCNJh2A4XOlqwR_HwwH";
         let witness_root = Builder::new().prefix("test-wit2-db").tempdir().unwrap();
@@ -64,7 +66,7 @@ async fn test_witness_rotation() -> Result<(), ControllerError> {
         TestTransport::new(actors)
     };
 
-	// Setup identifier with `witness1` as witness
+    // Setup identifier with `witness1` as witness
     let (mut controller, mut controller_keypair) = setup_identifier(
         root0.path(),
         vec![wit1_location.clone()],
@@ -76,21 +78,40 @@ async fn test_witness_rotation() -> Result<(), ControllerError> {
     let state = controller.source.get_state(&controller.id)?;
     assert_eq!(state.sn, 0);
 
-	// Rotate witness to `witness2`
-	controller_keypair.rotate()?;
-	let new_curr = BasicPrefix::Ed25519NT(controller_keypair.public_key());
-	let new_next = BasicPrefix::Ed25519NT(controller_keypair.next_public_key());
-	let rotation_event = controller.rotate(vec![new_curr], vec![new_next], 1, vec![wit2_location], vec![wit1_id], 1).await?;
- 
-	let signature = SelfSigningPrefix::Ed25519Sha512(controller_keypair.sign(rotation_event.as_bytes())?);
-	controller.finalize_event(rotation_event.as_bytes(), signature).await?;
+    // Rotate witness to `witness2`
+    controller_keypair.rotate()?;
+    let new_curr = BasicPrefix::Ed25519NT(controller_keypair.public_key());
+    let new_next = BasicPrefix::Ed25519NT(controller_keypair.next_public_key());
+    let rotation_event = controller
+        .rotate(
+            vec![new_curr],
+            vec![new_next],
+            1,
+            vec![wit2_location],
+            vec![wit1_id],
+            1,
+        )
+        .await?;
+
+    let signature =
+        SelfSigningPrefix::Ed25519Sha512(controller_keypair.sign(rotation_event.as_bytes())?);
+    controller
+        .finalize_event(rotation_event.as_bytes(), signature)
+        .await?;
 
     controller.notify_witnesses().await.unwrap();
-    let witnesses =  &controller.state.witness_config.witnesses;
-    dbg!(&witnesses);
+    let cached_witnesses = &controller.state.witness_config.witnesses;
+    // dbg!(&cached_witnesses);
+    let state = controller.source.get_state(&controller.id)?;
+    // Missing witness receipts, so rotation is not accepted yet.
+    assert_eq!(state.sn, 0);
+    assert_ne!(&state.witness_config.witnesses, cached_witnesses);
 
     // Querying mailbox to get receipts
-    for qry in controller.query_mailbox(&controller.id, &witnesses).unwrap() {
+    for qry in controller
+        .query_mailbox(&controller.id, &cached_witnesses)
+        .unwrap()
+    {
         let signature = SelfSigningPrefix::Ed25519Sha512(
             controller_keypair.sign(&qry.encode().unwrap()).unwrap(),
         );
@@ -103,6 +124,7 @@ async fn test_witness_rotation() -> Result<(), ControllerError> {
 
     let state = controller.source.get_state(&controller.id)?;
     assert_eq!(state.sn, 1);
+    assert_eq!(&state.witness_config.witnesses, cached_witnesses);
 
     Ok(())
 }

@@ -36,7 +36,8 @@ use keri_core::{
         mailbox::{QueryArgsMbx, QueryTopics},
         query_event::{QueryArgs, QueryEvent, QueryRoute, SignedKelQuery},
         reply_event::ReplyRoute,
-    }, state::IdentifierState,
+    },
+    state::IdentifierState,
 };
 pub use teliox::query::{SignedTelQuery, TelQueryEvent};
 
@@ -71,7 +72,7 @@ impl IdentifierController {
         kel: Arc<Controller>,
         registry_id: Option<IdentifierPrefix>,
     ) -> Self {
-        let evs = kel 
+        let evs = kel
             .partially_witnessed_escrow
             .get_partially_witnessed_events()
             .iter()
@@ -277,26 +278,36 @@ impl IdentifierController {
                 // TODO  should add to notify_witness instead of sending directly?
                 match &ke.data.event_data {
                     EventData::Rot(rot) | EventData::Drt(rot) => {
-                        let own_kel = self.source.storage.get_kel_messages_with_receipts(&self.id)?.unwrap();
+                        let own_kel = self
+                            .source
+                            .storage
+                            .get_kel_messages_with_receipts(&self.id)?
+                            .unwrap();
                         for witness in &rot.witness_config.graft {
                             let witness_id = IdentifierPrefix::Basic(witness.clone());
                             for msg in &own_kel {
-                                self.source.send_message_to(&witness_id, Scheme::Http, Message::Notice(msg.clone())).await?;
+                                self.source
+                                    .send_message_to(
+                                        &witness_id,
+                                        Scheme::Http,
+                                        Message::Notice(msg.clone()),
+                                    )
+                                    .await?;
                             }
-                        };
-                    },
+                        }
+                    }
                     _ => (),
                 };
                 let index = self.get_index(&ke.data).unwrap();
                 let st = self.state.clone().apply(&ke)?;
                 self.state = st;
-                
+
                 self.source.finalize_key_event(&ke, &sig, index)?;
                 let signature = IndexedSignature::new_both_same(sig.clone(), index as u16);
 
                 let signed_message = ke.sign(vec![signature], None, None);
                 self.to_notify.push(signed_message);
-                
+
                 Ok(())
             }
             EventType::Rpy(rpy) => match rpy.get_route() {
@@ -429,9 +440,13 @@ impl IdentifierController {
                 signature,
                 data_signature: (material_path.clone(), sigs.clone()),
             }));
-            let wits = self.source.get_state_at_event(&to_forward)?.witness_config.witnesses;
+            let wits = self
+                .source
+                .get_state_at_event(&to_forward)?
+                .witness_config
+                .witnesses;
             // TODO for now get first witness
-            if let Some(wit) = wits.get(0) {
+            if let Some(wit) = wits.first() {
                 self.source
                     .send_message_to(
                         &IdentifierPrefix::Basic(wit.clone()),
