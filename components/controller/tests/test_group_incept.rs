@@ -74,7 +74,7 @@ async fn test_group_incept() -> Result<(), ControllerError> {
     // It works, because we use common controller for both identifiers.
     let signature_icp = SelfSigningPrefix::Ed25519Sha512(km2.sign(group_inception.as_bytes())?);
     identifier2
-        .finalize_event(group_inception.as_bytes(), signature_icp)
+        .finalize_group_incept(group_inception.as_bytes(), signature_icp, vec![])
         .await?;
 
     let kel = controller

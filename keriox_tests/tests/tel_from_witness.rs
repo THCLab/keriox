@@ -85,7 +85,11 @@ async fn test_tel_from_witness() -> Result<(), ControllerError> {
 
     let signature = SelfSigningPrefix::Ed25519Sha512(issuer_keypair.sign(&vcp_ixn)?);
     issuer.finalize_event(&vcp_ixn, signature).await?;
+    assert_eq!(issuer.state.sn, 1);
+    let state = issuer.source.get_state(&issuer.id)?;
+    assert_eq!(state.sn, 0);
     issuer.notify_witnesses().await?;
+    assert_eq!(issuer.state.sn, 1);
 
     // Querying mailbox to get receipts
     for qry in issuer.query_mailbox(&issuer.id, &[wit1_id.clone()])? {

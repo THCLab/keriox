@@ -4,7 +4,12 @@ use keri_controller::{
     config::ControllerConfig, identifier_controller::IdentifierController, BasicPrefix, Controller,
     CryptoBox, IdentifierPrefix, KeyManager, LocationScheme, SelfSigningPrefix,
 };
-use keri_core::{actor::error::ActorError, transport::test::TestTransport};
+use keri_core::{
+    actor::error::ActorError,
+    event_message::cesr_adapter::{parse_event_type, EventType},
+    state::IdentifierState,
+    transport::test::TestTransport,
+};
 use transport::TelTestTransport;
 
 pub mod transport;
@@ -50,7 +55,17 @@ pub async fn setup_identifier(
             .finalize_inception(icp_event.as_bytes(), &signature)
             .await
             .unwrap();
-        IdentifierController::new(incepted_identifier, verifier_controller.clone(), None)
+        let mut verifier =
+            IdentifierController::new(incepted_identifier, verifier_controller.clone(), None);
+        let parsed_icp = parse_event_type(&icp_event.as_bytes()).unwrap();
+        match parsed_icp {
+            EventType::KeyEvent(ke) => {
+                verifier.state = IdentifierState::default().apply(&ke).unwrap()
+            }
+            _ => unreachable!(),
+        };
+
+        verifier
     };
 
     assert_eq!(verifier.notify_witnesses().await.unwrap(), 1);
