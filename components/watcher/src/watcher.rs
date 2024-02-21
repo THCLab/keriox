@@ -16,7 +16,7 @@ use keri_core::{
         notification::JustNotification,
     },
     query::{
-        query_event::{QueryArgs, QueryEvent, QueryRoute, SignedKelQuery},
+        query_event::{LogQueryArgs, QueryEvent, QueryRoute, SignedKelQuery},
         reply_event::{ReplyEvent, ReplyRoute, SignedReply},
         ReplyType,
     },
@@ -303,10 +303,8 @@ impl WatcherData {
     /// Query witness about KSN for given prefix and save its response to db.
     /// Returns ID of witness that responded.
     async fn query_state(&self, prefix: IdentifierPrefix) -> Result<BasicPrefix, ActorError> {
-        let query_args = QueryArgs {
-            s: None,
+        let query_args = LogQueryArgs {
             i: prefix.clone(),
-            src: None,
         };
 
         let qry = QueryEvent::new_query(

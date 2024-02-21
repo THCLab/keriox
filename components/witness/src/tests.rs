@@ -234,7 +234,7 @@ fn test_qry_rpy() -> Result<(), ActorError> {
     use keri_core::{
         prefix::IndexedSignature,
         query::{
-            query_event::{QueryArgs, QueryEvent, QueryRoute, SignedKelQuery},
+            query_event::{LogQueryArgs, QueryEvent, QueryRoute, SignedKelQuery},
             reply_event::ReplyRoute,
         },
         signer::{KeyManager, Signer},
@@ -316,10 +316,8 @@ fn test_qry_rpy() -> Result<(), ActorError> {
 
     // Bob asks about alices key state
     // construct qry message to ask of alice key state message
-    let query_args = QueryArgs {
-        s: None,
+    let query_args = LogQueryArgs {
         i: alice.prefix().clone(),
-        src: None,
     };
 
     let qry = QueryEvent::new_query(
@@ -360,10 +358,8 @@ fn test_qry_rpy() -> Result<(), ActorError> {
 
     // Bob asks about alices kel
     // construct qry message to ask of alice kel
-    let query_args = QueryArgs {
-        s: None,
+    let query_args = LogQueryArgs {
         i: alice.prefix().clone(),
-        src: None,
     };
     let qry = QueryEvent::new_query(
         QueryRoute::Log {

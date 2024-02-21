@@ -23,14 +23,21 @@ pub enum QueryRoute {
         #[serde(rename = "rr")]
         reply_route: String,
         #[serde(rename = "q")]
-        args: QueryArgs,
+        args: LogQueryArgs,
+    },
+    #[serde(rename = "logs")]
+    Logs {
+        #[serde(rename = "rr")]
+        reply_route: String,
+        #[serde(rename = "q")]
+        args: LogsQueryArgs,
     },
     #[serde(rename = "ksn")]
     Ksn {
         #[serde(rename = "rr")]
         reply_route: String,
         #[serde(rename = "q")]
-        args: QueryArgs,
+        args: LogQueryArgs,
     },
     #[cfg(feature = "mailbox")]
     #[serde(rename = "mbx")]
@@ -46,6 +53,7 @@ impl QueryRoute {
     pub fn get_prefix(&self) -> IdentifierPrefix {
         match self {
             QueryRoute::Log { ref args, .. } | QueryRoute::Ksn { ref args, .. } => args.i.clone(),
+            QueryRoute::Logs { ref args, .. } => args.i.clone(),
             #[cfg(feature = "mailbox")]
             QueryRoute::Mbx { ref args, .. } => args.i.clone(),
         }
@@ -53,12 +61,15 @@ impl QueryRoute {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct QueryArgs {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub s: Option<u64>,
+pub struct LogQueryArgs {
     pub i: IdentifierPrefix,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub src: Option<IdentifierPrefix>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct LogsQueryArgs {
+    pub s: u64,
+    pub i: IdentifierPrefix,
+    pub src: IdentifierPrefix,
 }
 
 pub type QueryEvent = KeriEvent<Timestamped<QueryRoute>>;
@@ -163,6 +174,11 @@ fn test_query_deserialize() {
     assert!(matches!(qr.data.data, QueryRoute::Log { .. },));
 
     assert_eq!(input_query, &String::from_utf8_lossy(&qr.encode().unwrap()));
+
+    let input_query = r#"{"v":"KERI10JSON000105_","t":"qry","d":"EHtaQHsKzezkQUEYjMjEv6nIf4AhhR9Zy6AvcfyGCXkI","dt":"2021-01-01T00:00:00.000000+00:00","r":"logs","rr":"","q":{"s":0,"i":"EIaGMMWJFPmtXznY1IIiKDIrg-vIyge6mBl2QV8dDjI3","src":"BGKVzj4ve0VSd8z_AmvhLg4lqcC_9WYX90k03q-R_Ydo"}}"#;
+    let qr: QueryEvent = serde_json::from_str(input_query).unwrap();
+    assert!(matches!(qr.data.data, QueryRoute::Logs { .. },));
+
 }
 
 #[test]

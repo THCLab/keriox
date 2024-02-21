@@ -57,7 +57,7 @@ use crate::oobi::{OobiManager, Role};
 use super::parse_reply_stream;
 #[cfg(feature = "query")]
 use crate::query::{
-    query_event::{QueryArgs, QueryEvent, QueryRoute, SignedKelQuery},
+    query_event::{LogQueryArgs, QueryEvent, QueryRoute, SignedKelQuery},
     reply_event::SignedReply,
 };
 
@@ -299,10 +299,8 @@ impl<K: KeyManager> SimpleController<K> {
     }
 
     pub fn query_ksn(&self, prefix: &IdentifierPrefix) -> Result<Op, Error> {
-        let query_args = QueryArgs {
-            s: None,
+        let query_args = LogQueryArgs {
             i: prefix.clone(),
-            src: None,
         };
 
         let qry = QueryEvent::new_query(

@@ -34,7 +34,7 @@ use keri_core::{
     prefix::{BasicPrefix, CesrPrimitive, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
     query::{
         mailbox::{QueryArgsMbx, QueryTopics},
-        query_event::{QueryArgs, QueryEvent, QueryRoute, SignedKelQuery},
+        query_event::{LogQueryArgs, QueryEvent, QueryRoute, SignedKelQuery},
         reply_event::ReplyRoute,
     },
     state::IdentifierState,
@@ -659,7 +659,7 @@ impl IdentifierController {
     ) -> Result<QueryEvent, ControllerError> {
         Ok(QueryEvent::new_query(
             QueryRoute::Log {
-                args: QueryArgs {
+                args: LogQueryArgs {
                     // about who
                     i: identifier.clone(),
                     // who will get the query

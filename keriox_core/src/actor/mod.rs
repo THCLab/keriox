@@ -239,7 +239,8 @@ fn process_query(qr: &QueryRoute, storage: &EventStorage) -> Result<ReplyType, Q
         QueryRoute::Mbx { args, .. } => {
             let mail = storage.get_mailbox_messages(args)?;
             Ok(ReplyType::Mbx(mail))
-        }
+        },
+        QueryRoute::Logs { reply_route, args } => todo!(),
     }
 }
 
