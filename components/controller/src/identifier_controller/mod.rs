@@ -298,12 +298,13 @@ impl IdentifierController {
                     }
                     _ => (),
                 };
-                let index = self.get_index(&ke.data).unwrap();
-                let st = self.state.clone().apply(&ke)?;
-                self.state = st;
 
-                self.source.finalize_key_event(&ke, &sig, index)?;
+                let index = self.get_index(&ke.data).unwrap();
+                self.source.finalize_key_event(&ke, &sig, index).unwrap();
                 let signature = IndexedSignature::new_both_same(sig.clone(), index as u16);
+
+                let st = self.state.clone().apply(&ke).unwrap();
+                self.state = st;
 
                 let signed_message = ke.sign(vec![signature], None, None);
                 self.to_notify.push(signed_message);
@@ -474,15 +475,20 @@ impl IdentifierController {
         // Join icp event with signature
         let key_event =
             parse_event_type(group_event).map_err(|_e| ControllerError::EventFormatError)?;
-        let icp = if let EventType::KeyEvent(icp) = key_event {
+        let ke = if let EventType::KeyEvent(icp) = key_event {
             icp
         } else {
             return Err(ControllerError::WrongEventTypeError);
         };
-        let own_index = self.get_index(&icp.data)?;
-        let group_prefix = icp.data.get_prefix();
+        let own_index = self.get_index(&ke.data)?;
+        let group_prefix = ke.data.get_prefix();
 
-        self.source.finalize_key_event(&icp, &sig, own_index)?;
+        self.source.finalize_key_event(&ke, &sig, own_index)?;
+
+        let signature = IndexedSignature::new_both_same(sig.clone(), own_index as u16);
+
+        let signed_message = ke.sign(vec![signature], None, None);
+        self.to_notify.push(signed_message);
 
         let att_signature = IndexedSignature::new_both_same(sig, own_index as u16);
 
@@ -510,7 +516,6 @@ impl IdentifierController {
                 let state = self.source.get_state_at_event(&ev.event_message)?;
                 let witnesses = &state.witness_config.witnesses;
                 self.source.publish(witnesses, &ev).await?;
-                self.state = state;
                 n += 1;
             }
         }
