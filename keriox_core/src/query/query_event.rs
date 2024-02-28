@@ -18,13 +18,6 @@ use crate::{
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(tag = "r")]
 pub enum QueryRoute {
-    #[serde(rename = "log")]
-    Log {
-        #[serde(rename = "rr")]
-        reply_route: String,
-        #[serde(rename = "q")]
-        args: LogQueryArgs,
-    },
     #[serde(rename = "logs")]
     Logs {
         #[serde(rename = "rr")]
@@ -52,7 +45,7 @@ pub enum QueryRoute {
 impl QueryRoute {
     pub fn get_prefix(&self) -> IdentifierPrefix {
         match self {
-            QueryRoute::Log { ref args, .. } => args.i.clone(),
+            // QueryRoute::Log { ref args, .. } => args.i.clone(),
             QueryRoute::Ksn { ref args, .. } => args.i.clone(),
             QueryRoute::Logs { ref args, .. } => args.i.clone(),
             #[cfg(feature = "mailbox")]
@@ -151,9 +144,9 @@ pub fn signed_query_parse() {
 
     use crate::event_message::signed_event_message::{Message, Op};
 
-    let input_query = r#"{"v":"KERI10JSON0000c9_","t":"qry","d":"EGN68_seecuzXQO15FFGJLVwZCBCPYW-hy29fjWWPQbp","dt":"2021-01-01T00:00:00.000000+00:00","r":"log","rr":"","q":{"i":"DAvCLRr5luWmp7keDvDuLP0kIqcyBYq79b3Dho1QvrjI"}}-HABEFyzzg2Mp5A3ecChc6AhSLTQssBZAmNvPnGxjJyHxl4F-AABAAB1DuEfnZZ6juMZDYiodcWiIqdjuEE-QzdORp-DbxdDN_GG84x_NA1rSc5lPfPQQkQkxI862_XjyZLHyClVTLoD"#;
+    let input_query = br#"{"v":"KERI10JSON0000c9_","t":"qry","d":"EGN68_seecuzXQO15FFGJLVwZCBCPYW-hy29fjWWPQbp","dt":"2021-01-01T00:00:00.000000+00:00","r":"log","rr":"","q":{"i":"DAvCLRr5luWmp7keDvDuLP0kIqcyBYq79b3Dho1QvrjI"}}-HABEFyzzg2Mp5A3ecChc6AhSLTQssBZAmNvPnGxjJyHxl4F-AABAAB1DuEfnZZ6juMZDYiodcWiIqdjuEE-QzdORp-DbxdDN_GG84x_NA1rSc5lPfPQQkQkxI862_XjyZLHyClVTLoD"#;
 
-    let parsed = parse(input_query.as_bytes()).unwrap().1;
+    let parsed = parse(input_query).unwrap().1;
     let deserialized_qry = Message::try_from(parsed).unwrap();
 
     match deserialized_qry {
@@ -170,14 +163,6 @@ pub fn signed_query_parse() {
 
 #[test]
 fn test_query_deserialize() {
-    // taken from keripy keripy/tests/core/test_eventing.py::test_messegize
-    let input_query = r#"{"v":"KERI10JSON0000c9_","t":"qry","d":"EGN68_seecuzXQO15FFGJLVwZCBCPYW-hy29fjWWPQbp","dt":"2021-01-01T00:00:00.000000+00:00","r":"log","rr":"","q":{"i":"DAvCLRr5luWmp7keDvDuLP0kIqcyBYq79b3Dho1QvrjI"}}"#; //-HABEFyzzg2Mp5A3ecChc6AhSLTQssBZAmNvPnGxjJyHxl4F-AABAAB1DuEfnZZ6juMZDYiodcWiIqdjuEE-QzdORp-DbxdDN_GG84x_NA1rSc5lPfPQQkQkxI862_XjyZLHyClVTLoD"#;
-    let qr: QueryEvent = serde_json::from_str(input_query).unwrap();
-
-    assert!(matches!(qr.data.data, QueryRoute::Log { .. },));
-
-    assert_eq!(input_query, &String::from_utf8_lossy(&qr.encode().unwrap()));
-
     let input_query = r#"{"v":"KERI10JSON000105_","t":"qry","d":"EHtaQHsKzezkQUEYjMjEv6nIf4AhhR9Zy6AvcfyGCXkI","dt":"2021-01-01T00:00:00.000000+00:00","r":"logs","rr":"","q":{"s":0,"i":"EIaGMMWJFPmtXznY1IIiKDIrg-vIyge6mBl2QV8dDjI3","src":"BGKVzj4ve0VSd8z_AmvhLg4lqcC_9WYX90k03q-R_Ydo"}}"#;
     let qr: QueryEvent = serde_json::from_str(input_query).unwrap();
     assert!(matches!(qr.data.data, QueryRoute::Logs { .. },));

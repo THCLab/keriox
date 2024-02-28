@@ -707,20 +707,6 @@ impl IdentifierController {
         let mut actions = Vec::new();
         for (qry, sig) in queries {
             let (recipient, about_who, from_who) = match qry.get_route() {
-                QueryRoute::Log {
-                    reply_route: _,
-                    args,
-                } => 
-                    todo!(),
-                // (
-                //     args.src.clone().ok_or_else(|| {
-                //         ControllerError::QueryArgumentError(
-                //             "Missing query recipient identifier".into(),
-                //         )
-                //     })?,
-                //     None,
-                //     None,
-                // ),
                 QueryRoute::Logs {
                     reply_route: _,
                     args,

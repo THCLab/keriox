@@ -217,16 +217,8 @@ pub enum SignedQueryError {
 }
 
 #[cfg(feature = "query")]
-fn process_query(qr: &QueryRoute, storage: &EventStorage) -> Result<ReplyType, QueryError> {
+pub fn process_query(qr: &QueryRoute, storage: &EventStorage) -> Result<ReplyType, QueryError> {
     match qr {
-        QueryRoute::Log { args, .. } => Ok(ReplyType::Kel(
-            storage
-                .get_kel_messages_with_receipts(&args.i, None)?
-                .ok_or_else(|| QueryError::UnknownId { id: args.i.clone() })?
-                .into_iter()
-                .map(Message::Notice)
-                .collect(),
-        )),
         QueryRoute::Ksn { args, .. } => {
             // return reply message with ksn inside
             let state = storage

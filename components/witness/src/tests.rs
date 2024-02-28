@@ -351,11 +351,13 @@ fn test_qry_rpy() -> Result<(), ActorError> {
 
     // Bob asks about alices kel
     // construct qry message to ask of alice kel
-    let query_args = LogQueryArgs {
+    let query_args = LogsQueryArgs {
         i: alice.prefix().clone(),
+        s: None,
+        src: None,
     };
     let qry = QueryEvent::new_query(
-        QueryRoute::Log {
+        QueryRoute::Logs {
             args: query_args,
             reply_route: String::from(""),
         },

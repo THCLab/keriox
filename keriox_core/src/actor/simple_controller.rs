@@ -301,8 +301,8 @@ impl<K: KeyManager> SimpleController<K> {
     pub fn query_ksn(&self, prefix: &IdentifierPrefix) -> Result<Op, Error> {
         let query_args = LogsQueryArgs {
             i: prefix.clone(),
-            s: todo!(),
-            src: todo!(),
+            s: None,
+            src: None,
         };
 
         let qry = QueryEvent::new_query(

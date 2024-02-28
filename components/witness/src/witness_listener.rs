@@ -154,7 +154,7 @@ mod test {
                     };
                     Ok(PossibleResponse::Ksn(reply))
                 }
-                QueryRoute::Log { .. } | QueryRoute::Logs { .. } => {
+                QueryRoute::Logs { .. } => {
                     let log = parse_event_stream(&resp).unwrap();
                     Ok(PossibleResponse::Kel(log))
                 }

@@ -4,7 +4,7 @@ use itertools::Itertools;
 use keri_core::{
     actor::{
         error::ActorError, parse_notice_stream, parse_query_stream, parse_reply_stream, prelude::*,
-        simple_controller::PossibleResponse,
+        simple_controller::PossibleResponse, SignedQueryError,
     },
     database::{escrow::EscrowDb, DbError},
     error::Error,
@@ -16,7 +16,7 @@ use keri_core::{
         notification::JustNotification,
     },
     query::{
-        query_event::{self, LogQueryArgs, LogsQueryArgs, QueryEvent, QueryRoute, SignedKelQuery, SignedQuery},
+        query_event::{LogsQueryArgs, QueryEvent, QueryRoute, SignedKelQuery, SignedQuery},
         reply_event::{ReplyEvent, ReplyRoute, SignedReply},
         ReplyType,
     },
@@ -209,53 +209,49 @@ impl WatcherData {
             });
         }
 
+        // Check signature
+         let signature = qry.signature;
+        let ver_result = signature.verify(
+            &qry.query.encode().map_err(|_e| Error::VersionError)?,
+            &self.event_storage,
+        )?;
+
+        if !ver_result {
+            return Err(SignedQueryError::InvalidSignature.into());
+        };
+
+        // Check if we need to update state from witnesses
         match &qry.query.get_route() {
-            QueryRoute::Logs { reply_route, args } => {
+            QueryRoute::Logs { reply_route: _, args } => {
                 let local_state = self.get_state_for_prefix(&args.i)?;
                 match (local_state, args.s) {
-                    (None, None) => todo!(),
-                    (None, Some(_)) => todo!(),
-                    (Some(_state), None) => {
-                        // query watcher and return info, that it's not ready
-                        self.update_local_kel(&qry.query.get_prefix()).await?;
-                    },
-                    (Some(state), Some(sn)) => {
-                        if state.sn >= sn {
-                            // return kel from local db
-                            let kel = self.event_storage.get_kel_messages_with_receipts(&qry.query.get_prefix(), Some(sn))?;
-
-                        } else {
-                            // query watcher and return info, that it's not ready
+                    (Some(state), Some(sn)) if sn <= state.sn => {
+                        // return kel from local db
+                        // let kel = self.event_storage.get_kel_messages_with_receipts(&qry.query.get_prefix(), Some(sn))?;
+                    },         
+                    _ => {
+                         // query watcher and return info, that it's not ready
                             self.update_local_kel(&qry.query.get_prefix()).await?;
-
-                        }
                     },
                 };
 
             },
-            QueryRoute::Ksn { .. } | QueryRoute::Log { .. } => {
-                // Update latest state for prefix
-                self.query_state(&qry.query.get_prefix()).await?;
-
-                let escrowed_replies = self
-                    .event_storage
-                    .db
-                    .get_escrowed_replys(&qry.query.get_prefix())
-                    .into_iter()
-                    .flatten()
-                    .collect_vec();
-
-                if !escrowed_replies.is_empty() {
-                    // If there is an escrowed reply it means we don't have the most recent data.
-                    // In this case forward the query to witness.
-                    self.forward_query(&qry.query).await?;
-                    return Ok(None);
-                }
+            QueryRoute::Ksn { reply_route: _, args  } => {
+                let local_state = self.get_state_for_prefix(&args.i)?;
+                match (local_state, args.s) {
+                    (Some(state), Some(sn)) if sn <= state.sn => {
+                        // return local ksn
+                    }
+                    _ => {
+                        // query watcher and return info, that it's not ready
+                        self.update_local_kel(&qry.query.get_prefix()).await?;
+                    },
+                };
             }
             QueryRoute::Mbx { .. } => {}
         }
 
-        let response = process_signed_query(qry.clone(), &self.event_storage)?;
+        let response = keri_core::actor::process_query(qry.query.get_route(), &self.event_storage).unwrap();
 
         match response {
             ReplyType::Ksn(ksn) => {
@@ -289,10 +285,7 @@ impl WatcherData {
         if !escrowed_replies.is_empty() {
             // If there is an escrowed reply it means we don't have the most recent data.
             // In this case forward the query to witness.
-            let route = QueryRoute::Log { reply_route: "".to_string(), args: LogQueryArgs { i: id.clone() } };
-            let qry = QueryEvent::new_query(route, SerializationFormats::JSON, HashFunctionCode::Blake3_256)?;
-            self.forward_query(&qry).await?;
-            // return Ok(None);
+            self.forward_query(id).await?;
         };
         Ok(())
     }
@@ -308,55 +301,20 @@ impl WatcherData {
     }
 
     /// Forward query to random registered witness and save its response to mailbox.
-    async fn forward_query(&self, qry: &QueryEvent) -> Result<(), ActorError> {
-        // Create a new signed message based on the received one
+    async fn forward_query(&self, id: &IdentifierPrefix) -> Result<(), ActorError> {
+        let random_witness = IdentifierPrefix::Basic(self.get_witness_for_prefix(id.clone())?);
+        let route = QueryRoute::Logs { reply_route: "".to_string(), args: LogsQueryArgs { i: id.clone(), s: None, src: Some(random_witness.clone()) } };
+      
+        let qry = QueryEvent::new_query(route, SerializationFormats::JSON, HashFunctionCode::Blake3_256)?;
+        // Create a new signed message 
         let sigs = SelfSigningPrefix::Ed25519Sha512(self.signer.sign(qry.encode()?)?);
-        let qry = SignedKelQuery::new_nontrans(qry.clone(), self.prefix.clone(), sigs);
-
-        self.query_kel_from_witness(qry).await?;
-
-        // let wit_id = self.get_witness_for_prefix(qry.query.data.data.get_prefix())?;
-
-        // // Send query to witness
-        // let resp = self
-        //     .send_query_to(
-        //         IdentifierPrefix::Basic(wit_id.clone()),
-        //         keri_core::oobi::Scheme::Http,
-        //         qry,
-        //     )
-        //     .await?;
-
-        // match resp {
-        //     PossibleResponse::Ksn(rpy) => {
-        //         self.process_reply(rpy)?;
-        //     }
-        //     PossibleResponse::Kel(msgs) => {
-        //         for msg in msgs {
-        //             if let Message::Notice(notice) = msg {
-        //                 self.process_notice(notice.clone())?;
-        //                 if let Notice::Event(evt) = notice {
-        //                     self.event_storage.add_mailbox_reply(evt)?;
-        //                 }
-        //             }
-        //         }
-        //     }
-        //     PossibleResponse::Mbx(_mbx) => {
-        //         panic!("Unexpected response type MBX");
-        //     }
-        // }
-
-        Ok(())
-    }
-
-    async fn query_kel_from_witness(&self, sq: SignedKelQuery) -> Result<(), ActorError> {
-         let wit_id = self.get_witness_for_prefix(sq.query.data.data.get_prefix())?;
-
-        // Send query to witness
+        let signed_qry = SignedKelQuery::new_nontrans(qry.clone(), self.prefix.clone(), sigs);
+        
         let resp = self
             .send_query_to(
-                IdentifierPrefix::Basic(wit_id.clone()),
+                random_witness.clone(),
                 keri_core::oobi::Scheme::Http,
-                sq,
+                signed_qry,
             )
             .await?;
 
