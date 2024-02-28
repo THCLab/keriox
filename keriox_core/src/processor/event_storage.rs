@@ -7,15 +7,13 @@ use crate::query::{
 };
 use crate::{
     actor::prelude::Message,
-    database::{timestamped::TimestampedSignedEventMessage, SledEventDatabase},
+    database::{timestamped::{Timestamped, TimestampedSignedEventMessage}, SledEventDatabase},
     error::Error,
     event::{
         event_data::EventData,
         sections::{seal::EventSeal, KeyConfig},
     },
-    event_message::{
-        signed_event_message::Notice, signed_event_message::SignedNontransferableReceipt,
-    },
+    event_message::signed_event_message::{Notice, SignedNontransferableReceipt},
     prefix::{BasicPrefix, IdentifierPrefix},
     state::{EventSemantics, IdentifierState},
 };
@@ -76,33 +74,44 @@ impl EventStorage {
     pub fn get_kel_messages_with_receipts(
         &self,
         id: &IdentifierPrefix,
+        sn: Option<u64>
     ) -> Result<Option<Vec<Notice>>, Error> {
-        match self.db.get_kel_finalized_events(id) {
-            Some(events) => {
-                let e = events
-                    .flat_map(|event| {
-                        let rcts_from_db = self
-                            .get_nt_receipts(
-                                &event.signed_event_message.event_message.data.get_prefix(),
-                                event.signed_event_message.event_message.data.get_sn(),
-                                &event
-                                    .signed_event_message
-                                    .event_message
-                                    .digest()
-                                    .expect("Event with no digest"),
-                            )
-                            .unwrap()
-                            .map(Notice::NontransferableRct);
-                        match rcts_from_db {
-                            Some(rct) => vec![Notice::Event(event.into()), rct],
-                            None => vec![Notice::Event(event.into())],
-                        }
-                    })
-                    .collect();
-                Ok(Some(e))
+        let events = self.db.get_kel_finalized_events(id);
+       Ok(match (events, sn) {
+            (None, _) => None, 
+            (Some(events), None) => self.collect_with_receipts(events),
+            (Some(events), Some(sn)) => {
+                let evs = events
+                    .filter(|ev| ev.signed_event_message.event_message.data.get_sn() <= sn );
+                self.collect_with_receipts(evs)
             }
-            None => Ok(None),
-        }
+        })
+
+    }
+
+    fn collect_with_receipts<'a, I>(&self, events: I ) -> Option<Vec<Notice>> 
+    where I: IntoIterator<Item = Timestamped<SignedEventMessage>> {
+        let evs = events
+            .into_iter()
+            .flat_map(|event| {
+                let rcts_from_db = self
+                    .get_nt_receipts(
+                        &event.signed_event_message.event_message.data.get_prefix(),
+                        event.signed_event_message.event_message.data.get_sn(),
+                        &event
+                            .signed_event_message
+                            .event_message
+                            .digest()
+                            .expect("Event with no digest"),
+                    )
+                    .unwrap()
+                    .map(Notice::NontransferableRct);
+                match rcts_from_db {
+                    Some(rct) => vec![Notice::Event(event.signed_event_message), rct],
+                    None => vec![Notice::Event(event.into())],
+                }
+            });
+            Some(evs.collect())
     }
 
     pub fn get_event_at_sn(

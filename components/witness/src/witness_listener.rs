@@ -154,7 +154,7 @@ mod test {
                     };
                     Ok(PossibleResponse::Ksn(reply))
                 }
-                QueryRoute::Log { .. } => {
+                QueryRoute::Log { .. } | QueryRoute::Logs { .. } => {
                     let log = parse_event_stream(&resp).unwrap();
                     Ok(PossibleResponse::Kel(log))
                 }
@@ -269,7 +269,7 @@ pub mod http_handlers {
             .map_err(ActorError::KeriError)?;
         let res: Vec<_> = data
             .event_storage
-            .get_kel_messages_with_receipts(&cid)
+            .get_kel_messages_with_receipts(&cid, None)
             .map_err(ActorError::KeriError)?
             .unwrap_or_default()
             .into_iter()

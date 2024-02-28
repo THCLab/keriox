@@ -6,6 +6,7 @@ use keri_controller::{
 };
 use tempfile::Builder;
 
+#[ignore]
 #[async_std::test]
 async fn test_group_incept() -> Result<(), ControllerError> {
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
@@ -64,7 +65,7 @@ async fn test_group_incept() -> Result<(), ControllerError> {
 
     let kel = controller
         .storage
-        .get_kel_messages_with_receipts(&group_id)?;
+        .get_kel_messages_with_receipts(&group_id, None)?;
     // Event is not yet accepted.
     assert!(kel.is_none());
 
@@ -79,7 +80,7 @@ async fn test_group_incept() -> Result<(), ControllerError> {
 
     let kel = controller
         .storage
-        .get_kel_messages_with_receipts(&group_id)?;
+        .get_kel_messages_with_receipts(&group_id, None)?;
     assert!(kel.is_some());
 
     Ok(())

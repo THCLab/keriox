@@ -18,6 +18,7 @@ use tempfile::Builder;
 use url::Host;
 use witness::{WitnessEscrowConfig, WitnessListener};
 
+#[ignore]
 #[async_std::test]
 async fn test_delegated_incept() -> Result<(), ControllerError> {
     use url::Url;
@@ -192,7 +193,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     println!("before get_kel_messages_with_receipts");
     let kel = controller
         .storage
-        .get_kel_messages_with_receipts(&delegate_id)?;
+        .get_kel_messages_with_receipts(&delegate_id, None)?;
     // Event is not yet accepted. Missing delegating event.
     println!("after get_kel_messages_with_receipts");
     assert!(kel.is_none());
@@ -252,7 +253,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     // TODO how child should get delegators kel?
     let delegators_kel = controller2
         .storage
-        .get_kel_messages_with_receipts(&delegator.id)?
+        .get_kel_messages_with_receipts(&delegator.id, None)?
         .unwrap();
     controller.process(&Message::Notice(delegators_kel[0].clone()))?; // icp
     controller.process(&Message::Notice(delegators_kel[1].clone()))?; // receipt

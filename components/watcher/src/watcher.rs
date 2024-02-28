@@ -16,7 +16,7 @@ use keri_core::{
         notification::JustNotification,
     },
     query::{
-        query_event::{LogQueryArgs, QueryEvent, QueryRoute, SignedKelQuery},
+        query_event::{self, LogQueryArgs, LogsQueryArgs, QueryEvent, QueryRoute, SignedKelQuery, SignedQuery},
         reply_event::{ReplyEvent, ReplyRoute, SignedReply},
         ReplyType,
     },
@@ -210,9 +210,32 @@ impl WatcherData {
         }
 
         match &qry.query.get_route() {
+            QueryRoute::Logs { reply_route, args } => {
+                let local_state = self.get_state_for_prefix(&args.i)?;
+                match (local_state, args.s) {
+                    (None, None) => todo!(),
+                    (None, Some(_)) => todo!(),
+                    (Some(_state), None) => {
+                        // query watcher and return info, that it's not ready
+                        self.update_local_kel(&qry.query.get_prefix()).await?;
+                    },
+                    (Some(state), Some(sn)) => {
+                        if state.sn >= sn {
+                            // return kel from local db
+                            let kel = self.event_storage.get_kel_messages_with_receipts(&qry.query.get_prefix(), Some(sn))?;
+
+                        } else {
+                            // query watcher and return info, that it's not ready
+                            self.update_local_kel(&qry.query.get_prefix()).await?;
+
+                        }
+                    },
+                };
+
+            },
             QueryRoute::Ksn { .. } | QueryRoute::Log { .. } => {
                 // Update latest state for prefix
-                self.query_state(qry.query.get_prefix()).await?;
+                self.query_state(&qry.query.get_prefix()).await?;
 
                 let escrowed_replies = self
                     .event_storage
@@ -225,7 +248,7 @@ impl WatcherData {
                 if !escrowed_replies.is_empty() {
                     // If there is an escrowed reply it means we don't have the most recent data.
                     // In this case forward the query to witness.
-                    self.forward_query(&qry).await?;
+                    self.forward_query(&qry.query).await?;
                     return Ok(None);
                 }
             }
@@ -251,6 +274,29 @@ impl WatcherData {
         }
     }
 
+    async fn update_local_kel(&self, id: &IdentifierPrefix) -> Result<(), ActorError> {
+        // Update latest state for prefix
+        self.query_state(id).await?;
+
+        let escrowed_replies = self
+            .event_storage
+            .db
+            .get_escrowed_replys(&id)
+            .into_iter()
+            .flatten()
+            .collect_vec();
+
+        if !escrowed_replies.is_empty() {
+            // If there is an escrowed reply it means we don't have the most recent data.
+            // In this case forward the query to witness.
+            let route = QueryRoute::Log { reply_route: "".to_string(), args: LogQueryArgs { i: id.clone() } };
+            let qry = QueryEvent::new_query(route, SerializationFormats::JSON, HashFunctionCode::Blake3_256)?;
+            self.forward_query(&qry).await?;
+            // return Ok(None);
+        };
+        Ok(())
+    }
+
     pub fn process_reply(&self, reply: SignedReply) -> Result<(), Error> {
         process_reply(
             reply,
@@ -262,19 +308,55 @@ impl WatcherData {
     }
 
     /// Forward query to random registered witness and save its response to mailbox.
-    async fn forward_query(&self, qry: &SignedKelQuery) -> Result<(), ActorError> {
+    async fn forward_query(&self, qry: &QueryEvent) -> Result<(), ActorError> {
         // Create a new signed message based on the received one
-        let sigs = SelfSigningPrefix::Ed25519Sha512(self.signer.sign(qry.query.encode()?)?);
-        let qry = SignedKelQuery::new_nontrans(qry.query.clone(), self.prefix.clone(), sigs);
+        let sigs = SelfSigningPrefix::Ed25519Sha512(self.signer.sign(qry.encode()?)?);
+        let qry = SignedKelQuery::new_nontrans(qry.clone(), self.prefix.clone(), sigs);
 
-        let wit_id = self.get_witness_for_prefix(qry.query.data.data.get_prefix())?;
+        self.query_kel_from_witness(qry).await?;
+
+        // let wit_id = self.get_witness_for_prefix(qry.query.data.data.get_prefix())?;
+
+        // // Send query to witness
+        // let resp = self
+        //     .send_query_to(
+        //         IdentifierPrefix::Basic(wit_id.clone()),
+        //         keri_core::oobi::Scheme::Http,
+        //         qry,
+        //     )
+        //     .await?;
+
+        // match resp {
+        //     PossibleResponse::Ksn(rpy) => {
+        //         self.process_reply(rpy)?;
+        //     }
+        //     PossibleResponse::Kel(msgs) => {
+        //         for msg in msgs {
+        //             if let Message::Notice(notice) = msg {
+        //                 self.process_notice(notice.clone())?;
+        //                 if let Notice::Event(evt) = notice {
+        //                     self.event_storage.add_mailbox_reply(evt)?;
+        //                 }
+        //             }
+        //         }
+        //     }
+        //     PossibleResponse::Mbx(_mbx) => {
+        //         panic!("Unexpected response type MBX");
+        //     }
+        // }
+
+        Ok(())
+    }
+
+    async fn query_kel_from_witness(&self, sq: SignedKelQuery) -> Result<(), ActorError> {
+         let wit_id = self.get_witness_for_prefix(sq.query.data.data.get_prefix())?;
 
         // Send query to witness
         let resp = self
             .send_query_to(
                 IdentifierPrefix::Basic(wit_id.clone()),
                 keri_core::oobi::Scheme::Http,
-                qry,
+                sq,
             )
             .await?;
 
@@ -302,9 +384,11 @@ impl WatcherData {
 
     /// Query witness about KSN for given prefix and save its response to db.
     /// Returns ID of witness that responded.
-    async fn query_state(&self, prefix: IdentifierPrefix) -> Result<BasicPrefix, ActorError> {
-        let query_args = LogQueryArgs {
+    async fn query_state(&self, prefix: &IdentifierPrefix) -> Result<BasicPrefix, ActorError> {
+        let query_args = LogsQueryArgs {
             i: prefix.clone(),
+            s: None,
+            src: None,
         };
 
         let qry = QueryEvent::new_query(
@@ -326,7 +410,7 @@ impl WatcherData {
 
         let query = SignedKelQuery::new_nontrans(qry, self.prefix.clone(), signature);
 
-        let wit_id = self.get_witness_for_prefix(prefix)?;
+        let wit_id = self.get_witness_for_prefix(prefix.clone())?;
 
         let resp = self
             .send_query_to(IdentifierPrefix::Basic(wit_id.clone()), Scheme::Http, query)

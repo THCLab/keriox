@@ -583,7 +583,7 @@ impl Controller {
                 if Role::Messagebox != role {
                     let kel = self
                         .storage
-                        .get_kel_messages_with_receipts(signer_prefix)?
+                        .get_kel_messages_with_receipts(signer_prefix, None)?
                         .ok_or(ControllerError::UnknownIdentifierError)?;
 
                     // TODO: send in one request

@@ -214,7 +214,7 @@ async fn test_multisig() -> Result<()> {
 
     let kel = controller1
         .storage
-        .get_kel_messages_with_receipts(&group_id)?;
+        .get_kel_messages_with_receipts(&group_id, None)?;
     // Event is not yet accepted.
     assert!(kel.is_none());
 

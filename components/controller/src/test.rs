@@ -116,7 +116,7 @@ async fn test_2_wit() -> Result<(), ControllerError> {
     assert_eq!(ident_ctl.broadcast_receipts(&wit_ids).await?, 0);
 
     assert!(matches!(
-        witness1.witness_data.event_storage.get_kel_messages_with_receipts(&ident_ctl.id)?.unwrap().as_slice(),
+        witness1.witness_data.event_storage.get_kel_messages_with_receipts(&ident_ctl.id, None)?.unwrap().as_slice(),
         [Notice::Event(evt), Notice::NontransferableRct(rct)]
         if matches!(evt.event_message.data.event_data, EventData::Icp(_))
             && matches!(rct.signatures.len(), 2)
@@ -129,7 +129,7 @@ async fn test_2_wit() -> Result<(), ControllerError> {
     assert_eq!(ident_ctl.broadcast_receipts(&wit_ids).await?, 0);
 
     assert!(matches!(
-        witness1.witness_data.event_storage.get_kel_messages_with_receipts(&ident_ctl.id)?.unwrap().as_slice(),
+        witness1.witness_data.event_storage.get_kel_messages_with_receipts(&ident_ctl.id, None)?.unwrap().as_slice(),
         [Notice::Event(evt), Notice::NontransferableRct(rct)]
             if matches!(evt.event_message.data.event_data, EventData::Icp(_))
             && matches!(rct.signatures.len(), 3) // TODO: fix witness to not insert duplicate signatures

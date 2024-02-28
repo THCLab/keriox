@@ -34,7 +34,7 @@ use keri_core::{
     prefix::{BasicPrefix, CesrPrimitive, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
     query::{
         mailbox::{QueryArgsMbx, QueryTopics},
-        query_event::{LogQueryArgs, QueryEvent, QueryRoute, SignedKelQuery},
+        query_event::{LogQueryArgs, LogsQueryArgs, QueryEvent, QueryRoute, SignedKelQuery},
         reply_event::ReplyRoute,
     },
     state::IdentifierState,
@@ -281,7 +281,7 @@ impl IdentifierController {
                         let own_kel = self
                             .source
                             .storage
-                            .get_kel_messages_with_receipts(&self.id)?
+                            .get_kel_messages_with_receipts(&self.id, None)?
                             .unwrap();
                         for witness in &rot.witness_config.graft {
                             let witness_id = IdentifierPrefix::Basic(witness.clone());
@@ -658,16 +658,7 @@ impl IdentifierController {
         watcher: IdentifierPrefix,
     ) -> Result<QueryEvent, ControllerError> {
         Ok(QueryEvent::new_query(
-            QueryRoute::Log {
-                args: LogQueryArgs {
-                    // about who
-                    i: identifier.clone(),
-                    // who will get the query
-                    src: Some(watcher),
-                    s: None,
-                },
-                reply_route: "".to_string(),
-            },
+            QueryRoute::Logs { reply_route: "".to_string(), args: LogsQueryArgs { s: None, i: identifier.clone(), src: Some(watcher) } },
             SerializationFormats::JSON,
             HashFunctionCode::Blake3_256,
         )?)
@@ -719,31 +710,42 @@ impl IdentifierController {
                 QueryRoute::Log {
                     reply_route: _,
                     args,
+                } => 
+                    todo!(),
+                // (
+                //     args.src.clone().ok_or_else(|| {
+                //         ControllerError::QueryArgumentError(
+                //             "Missing query recipient identifier".into(),
+                //         )
+                //     })?,
+                //     None,
+                //     None,
+                // ),
+                QueryRoute::Logs {
+                    reply_route: _,
+                    args,
                 } => (
-                    args.src.clone().ok_or_else(|| {
-                        ControllerError::QueryArgumentError(
-                            "Missing query recipient identifier".into(),
-                        )
-                    })?,
-                    None,
-                    None,
+                    args.src.clone(),
+                    Some(&args.i),
+                    Some(&self.id),
                 ),
                 QueryRoute::Ksn {
                     reply_route: _,
                     args,
                 } => (
-                    args.src.clone().ok_or_else(|| {
-                        ControllerError::QueryArgumentError(
-                            "Missing query recipient identifier".into(),
-                        )
-                    })?,
+                    args.src.clone(),
+                    // .ok_or_else(|| {
+                    //     ControllerError::QueryArgumentError(
+                    //         "Missing query recipient identifier".into(),
+                    //     )
+                    // })?,
                     None,
                     None,
                 ),
                 QueryRoute::Mbx {
                     reply_route: _,
                     args,
-                } => (args.src.clone(), Some(&args.i), Some(&args.pre)),
+                } => (Some(args.src.clone()), Some(&args.i), Some(&args.pre)),
             };
             let query = match &self.id {
                 IdentifierPrefix::Basic(bp) => {
@@ -756,7 +758,7 @@ impl IdentifierController {
             };
             let res = self
                 .source
-                .send_query_to(&recipient, Scheme::Http, query)
+                .send_query_to(recipient.as_ref().unwrap(), Scheme::Http, query)
                 .await?;
 
             match res {
@@ -767,10 +769,10 @@ impl IdentifierController {
                 }
                 PossibleResponse::Mbx(mbx) => {
                     // only process if we actually asked about mailbox
-                    if let (Some(from_who), Some(about_who)) = (from_who, about_who) {
+                    if let (Some(from_who), Some(about_who)) = (from_who.as_ref(), about_who.as_ref()) {
                         actions.append(
                             &mut self
-                                .mailbox_response(&recipient, from_who, about_who, &mbx)
+                                .mailbox_response(&recipient.unwrap(), from_who, about_who, &mbx)
                                 .await?,
                         );
                     }

@@ -139,7 +139,7 @@ async fn test_tel_from_witness() -> Result<(), ControllerError> {
     let kel = issuer
         .source
         .storage
-        .get_kel_messages_with_receipts(&issuer.id)
+        .get_kel_messages_with_receipts(&issuer.id, None)
         .unwrap()
         .unwrap()
         .into_iter()
@@ -194,7 +194,7 @@ async fn test_tel_from_witness() -> Result<(), ControllerError> {
     let kel = issuer
         .source
         .storage
-        .get_kel_messages_with_receipts(&issuer.id)
+        .get_kel_messages_with_receipts(&issuer.id, None)
         .unwrap()
         .unwrap()
         .into_iter()

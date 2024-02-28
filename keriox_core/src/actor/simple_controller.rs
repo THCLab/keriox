@@ -5,7 +5,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::event_message::cesr_adapter::ParseError;
+use crate::{event_message::cesr_adapter::ParseError, query::query_event::LogsQueryArgs};
 use cesrox::{cesr_proof::MaterialPath, parse, primitives::CesrPrimitive};
 use said::derivation::{HashFunction, HashFunctionCode};
 use said::version::format::SerializationFormats;
@@ -299,8 +299,10 @@ impl<K: KeyManager> SimpleController<K> {
     }
 
     pub fn query_ksn(&self, prefix: &IdentifierPrefix) -> Result<Op, Error> {
-        let query_args = LogQueryArgs {
+        let query_args = LogsQueryArgs {
             i: prefix.clone(),
+            s: todo!(),
+            src: todo!(),
         };
 
         let qry = QueryEvent::new_query(

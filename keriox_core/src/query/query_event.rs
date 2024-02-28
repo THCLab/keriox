@@ -37,7 +37,7 @@ pub enum QueryRoute {
         #[serde(rename = "rr")]
         reply_route: String,
         #[serde(rename = "q")]
-        args: LogQueryArgs,
+        args: LogsQueryArgs,
     },
     #[cfg(feature = "mailbox")]
     #[serde(rename = "mbx")]
@@ -52,7 +52,8 @@ pub enum QueryRoute {
 impl QueryRoute {
     pub fn get_prefix(&self) -> IdentifierPrefix {
         match self {
-            QueryRoute::Log { ref args, .. } | QueryRoute::Ksn { ref args, .. } => args.i.clone(),
+            QueryRoute::Log { ref args, .. } => args.i.clone(),
+            QueryRoute::Ksn { ref args, .. } => args.i.clone(),
             QueryRoute::Logs { ref args, .. } => args.i.clone(),
             #[cfg(feature = "mailbox")]
             QueryRoute::Mbx { ref args, .. } => args.i.clone(),
@@ -67,9 +68,11 @@ pub struct LogQueryArgs {
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct LogsQueryArgs {
-    pub s: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub s: Option<u64>,
     pub i: IdentifierPrefix,
-    pub src: IdentifierPrefix,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub src: Option<IdentifierPrefix>,
 }
 
 pub type QueryEvent = KeriEvent<Timestamped<QueryRoute>>;
