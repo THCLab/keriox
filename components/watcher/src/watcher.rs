@@ -16,7 +16,7 @@ use keri_core::{
         notification::JustNotification,
     },
     query::{
-        query_event::{LogsQueryArgs, QueryEvent, QueryRoute, SignedKelQuery, SignedQuery},
+        query_event::{LogsQueryArgs, QueryEvent, QueryRoute, SignedKelQuery},
         reply_event::{ReplyEvent, ReplyRoute, SignedReply},
         ReplyType,
     },

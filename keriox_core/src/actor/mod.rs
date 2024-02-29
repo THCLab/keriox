@@ -232,7 +232,7 @@ pub fn process_query(qr: &QueryRoute, storage: &EventStorage) -> Result<ReplyTyp
             let mail = storage.get_mailbox_messages(args)?;
             Ok(ReplyType::Mbx(mail))
         },
-        QueryRoute::Logs { reply_route, args } => {
+        QueryRoute::Logs { reply_route: _, args } => {
             let sn_kel = storage
                 .get_kel_messages_with_receipts(&args.i, args.s)?
                 .ok_or_else(|| QueryError::UnknownId { id: args.i.clone() })?

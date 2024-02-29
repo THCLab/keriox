@@ -6,7 +6,6 @@ use keri_controller::{
 };
 use tempfile::Builder;
 
-#[ignore]
 #[async_std::test]
 async fn test_group_incept() -> Result<(), ControllerError> {
     let root = Builder::new().prefix("test-db").tempdir().unwrap();

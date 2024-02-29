@@ -225,7 +225,7 @@ fn test_qry_rpy() -> Result<(), ActorError> {
     use keri_core::{
         prefix::IndexedSignature,
         query::{
-            query_event::{LogQueryArgs, QueryEvent, QueryRoute, SignedKelQuery},
+            query_event::{QueryEvent, QueryRoute, SignedKelQuery},
             reply_event::ReplyRoute,
         },
         signer::{KeyManager, Signer},
@@ -699,7 +699,6 @@ fn test_invalid_notice() {
     }
 }
 
-#[ignore]
 #[test]
 pub fn test_multisig() -> Result<(), ActorError> {
     let signer = Signer::new();

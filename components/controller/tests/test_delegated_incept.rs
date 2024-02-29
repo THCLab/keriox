@@ -18,7 +18,6 @@ use tempfile::Builder;
 use url::Host;
 use witness::{WitnessEscrowConfig, WitnessListener};
 
-#[ignore]
 #[async_std::test]
 async fn test_delegated_incept() -> Result<(), ControllerError> {
     use url::Url;

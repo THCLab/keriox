@@ -53,12 +53,6 @@ impl QueryRoute {
         }
     }
 }
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct LogQueryArgs {
-    pub i: IdentifierPrefix,
-}
-
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct LogsQueryArgs {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -144,7 +138,7 @@ pub fn signed_query_parse() {
 
     use crate::event_message::signed_event_message::{Message, Op};
 
-    let input_query = br#"{"v":"KERI10JSON0000c9_","t":"qry","d":"EGN68_seecuzXQO15FFGJLVwZCBCPYW-hy29fjWWPQbp","dt":"2021-01-01T00:00:00.000000+00:00","r":"log","rr":"","q":{"i":"DAvCLRr5luWmp7keDvDuLP0kIqcyBYq79b3Dho1QvrjI"}}-HABEFyzzg2Mp5A3ecChc6AhSLTQssBZAmNvPnGxjJyHxl4F-AABAAB1DuEfnZZ6juMZDYiodcWiIqdjuEE-QzdORp-DbxdDN_GG84x_NA1rSc5lPfPQQkQkxI862_XjyZLHyClVTLoD"#;
+    let input_query = br#"{"v":"KERI10JSON0000ff_","t":"qry","d":"EKZbZZs0KweJm_VbpHBqM6Uvn0tCOoQRQ4okoyoKKXVH","dt":"2024-02-29T13:37:25.671274+00:00","r":"logs","rr":"","q":{"i":"EAz8-amlMgzWkUAcGLzPR5SZ57K0fLaG6eV3DK9SHadw","src":"BLogequWU0j7imRMuDrPChX9BCWuhZJVWawP9zuibmlk"}}-HABEMnw5Z0A0S_ab2l3LJ5qwgf0MgfFFCrWHIl4iZNvmFUO-AABAACGk8GcwX1BXQ2KKIncFH1h3tpSDd4rfU4zUC0gEIIwDv2IPnL7WlvyIxcKcO7yv17FbfX1DpWAiHfCEWZlrWMP"#;
 
     let parsed = parse(input_query).unwrap().1;
     let deserialized_qry = Message::try_from(parsed).unwrap();

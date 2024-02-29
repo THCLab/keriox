@@ -34,7 +34,7 @@ use keri_core::{
     prefix::{BasicPrefix, CesrPrimitive, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
     query::{
         mailbox::{QueryArgsMbx, QueryTopics},
-        query_event::{LogQueryArgs, LogsQueryArgs, QueryEvent, QueryRoute, SignedKelQuery},
+        query_event::{LogsQueryArgs, QueryEvent, QueryRoute, SignedKelQuery},
         reply_event::ReplyRoute,
     },
     state::IdentifierState,

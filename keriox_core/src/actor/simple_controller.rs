@@ -57,7 +57,7 @@ use crate::oobi::{OobiManager, Role};
 use super::parse_reply_stream;
 #[cfg(feature = "query")]
 use crate::query::{
-    query_event::{LogQueryArgs, QueryEvent, QueryRoute, SignedKelQuery},
+    query_event::{QueryEvent, QueryRoute, SignedKelQuery},
     reply_event::SignedReply,
 };
 
