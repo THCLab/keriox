@@ -878,7 +878,9 @@ impl IdentifierController {
             .map(|sig| {
                 (
                     sig,
-                    (state.iter().position(|bp| bp.verify(data, sig).ok().is_some())),
+                    (state
+                        .iter()
+                        .position(|bp| bp.verify(data, sig).ok().is_some())),
                 )
             })
             .map(|(sig, index)| {
