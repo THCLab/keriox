@@ -210,7 +210,7 @@ impl WatcherData {
         }
 
         // Check signature
-         let signature = qry.signature;
+        let signature = qry.signature;
         let ver_result = signature.verify(
             &qry.query.encode().map_err(|_e| Error::VersionError)?,
             &self.event_storage,
@@ -222,21 +222,26 @@ impl WatcherData {
 
         // Check if we need to update state from witnesses
         match &qry.query.get_route() {
-            QueryRoute::Logs { reply_route: _, args } => {
+            QueryRoute::Logs {
+                reply_route: _,
+                args,
+            } => {
                 let local_state = self.get_state_for_prefix(&args.i)?;
                 match (local_state, args.s) {
                     (Some(state), Some(sn)) if sn <= state.sn => {
                         // return kel from local db
                         // let kel = self.event_storage.get_kel_messages_with_receipts(&qry.query.get_prefix(), Some(sn))?;
-                    },         
+                    }
                     _ => {
-                         // query watcher and return info, that it's not ready
-                            self.update_local_kel(&qry.query.get_prefix()).await?;
-                    },
+                        // query watcher and return info, that it's not ready
+                        self.update_local_kel(&qry.query.get_prefix()).await?;
+                    }
                 };
-
-            },
-            QueryRoute::Ksn { reply_route: _, args  } => {
+            }
+            QueryRoute::Ksn {
+                reply_route: _,
+                args,
+            } => {
                 let local_state = self.get_state_for_prefix(&args.i)?;
                 match (local_state, args.s) {
                     (Some(state), Some(sn)) if sn <= state.sn => {
@@ -245,13 +250,14 @@ impl WatcherData {
                     _ => {
                         // query watcher and return info, that it's not ready
                         self.update_local_kel(&qry.query.get_prefix()).await?;
-                    },
+                    }
                 };
             }
             QueryRoute::Mbx { .. } => {}
         }
 
-        let response = keri_core::actor::process_query(qry.query.get_route(), &self.event_storage).unwrap();
+        let response =
+            keri_core::actor::process_query(qry.query.get_route(), &self.event_storage).unwrap();
 
         match response {
             ReplyType::Ksn(ksn) => {
@@ -303,13 +309,24 @@ impl WatcherData {
     /// Forward query to random registered witness and save its response to mailbox.
     async fn forward_query(&self, id: &IdentifierPrefix) -> Result<(), ActorError> {
         let random_witness = IdentifierPrefix::Basic(self.get_witness_for_prefix(id.clone())?);
-        let route = QueryRoute::Logs { reply_route: "".to_string(), args: LogsQueryArgs { i: id.clone(), s: None, src: Some(random_witness.clone()) } };
-      
-        let qry = QueryEvent::new_query(route, SerializationFormats::JSON, HashFunctionCode::Blake3_256)?;
-        // Create a new signed message 
+        let route = QueryRoute::Logs {
+            reply_route: "".to_string(),
+            args: LogsQueryArgs {
+                i: id.clone(),
+                s: None,
+                src: Some(random_witness.clone()),
+            },
+        };
+
+        let qry = QueryEvent::new_query(
+            route,
+            SerializationFormats::JSON,
+            HashFunctionCode::Blake3_256,
+        )?;
+        // Create a new signed message
         let sigs = SelfSigningPrefix::Ed25519Sha512(self.signer.sign(qry.encode()?)?);
         let signed_qry = SignedKelQuery::new_nontrans(qry.clone(), self.prefix.clone(), sigs);
-        
+
         let resp = self
             .send_query_to(
                 random_witness.clone(),

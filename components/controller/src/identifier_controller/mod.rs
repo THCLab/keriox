@@ -72,14 +72,29 @@ impl IdentifierController {
         kel: Arc<Controller>,
         registry_id: Option<IdentifierPrefix>,
     ) -> Self {
-        let evs = kel
+        let events_to_notice: Vec<_> = kel
             .partially_witnessed_escrow
             .get_partially_witnessed_events()
             .iter()
             .filter(|ev| ev.event_message.data.prefix == id)
             .cloned()
             .collect();
-        let state = kel.get_state(&id).unwrap_or_default();
+        // Save state that is not fully witnessed
+        let state = if let Ok(state) = kel.get_state(&id) {
+            state
+        } else {
+            let not_accepted_incept = events_to_notice.iter().find_map(|ev| {
+                if let EventData::Icp(_icp) = &ev.event_message.data.event_data {
+                    Some(ev.event_message.clone())
+                } else {
+                    None
+                }
+            });
+            IdentifierState::default()
+                .apply(&not_accepted_incept.unwrap())
+                .unwrap()
+        };
+
         Self {
             registry_id,
             id,
@@ -88,7 +103,7 @@ impl IdentifierController {
             last_asked_index: Arc::new(Mutex::new(HashMap::new())),
             last_asked_groups_index: Arc::new(Mutex::new(HashMap::new())),
             broadcasted_rcts: HashSet::new(),
-            to_notify: evs,
+            to_notify: events_to_notice,
         }
     }
 
@@ -303,7 +318,7 @@ impl IdentifierController {
                 self.source.finalize_key_event(&ke, &sig, index).unwrap();
                 let signature = IndexedSignature::new_both_same(sig.clone(), index as u16);
 
-                let st = self.state.clone().apply(&ke).unwrap();
+                let st = self.state.clone().apply(&ke)?;
                 self.state = st;
 
                 let signed_message = ke.sign(vec![signature], None, None);
@@ -658,7 +673,14 @@ impl IdentifierController {
         watcher: IdentifierPrefix,
     ) -> Result<QueryEvent, ControllerError> {
         Ok(QueryEvent::new_query(
-            QueryRoute::Logs { reply_route: "".to_string(), args: LogsQueryArgs { s: None, i: identifier.clone(), src: Some(watcher) } },
+            QueryRoute::Logs {
+                reply_route: "".to_string(),
+                args: LogsQueryArgs {
+                    s: None,
+                    i: identifier.clone(),
+                    src: Some(watcher),
+                },
+            },
             SerializationFormats::JSON,
             HashFunctionCode::Blake3_256,
         )?)
@@ -710,11 +732,7 @@ impl IdentifierController {
                 QueryRoute::Logs {
                     reply_route: _,
                     args,
-                } => (
-                    args.src.clone(),
-                    Some(&args.i),
-                    Some(&self.id),
-                ),
+                } => (args.src.clone(), Some(&args.i), Some(&self.id)),
                 QueryRoute::Ksn {
                     reply_route: _,
                     args,
@@ -755,7 +773,9 @@ impl IdentifierController {
                 }
                 PossibleResponse::Mbx(mbx) => {
                     // only process if we actually asked about mailbox
-                    if let (Some(from_who), Some(about_who)) = (from_who.as_ref(), about_who.as_ref()) {
+                    if let (Some(from_who), Some(about_who)) =
+                        (from_who.as_ref(), about_who.as_ref())
+                    {
                         actions.append(
                             &mut self
                                 .mailbox_response(&recipient.unwrap(), from_who, about_who, &mbx)
