@@ -1,5 +1,10 @@
 # KERIOX
 
+## Usage
+
+- Running infrastructure, see the following [example](https://github.com/THCLab/dkms-demo/tree/main/infrastructure).
+- Running Controller (infrastructure client) see [test](https://github.com/THCLab/keriox/blob/master/keriox_tests/tests/indirect_mode_signing.rs).
+
 ## Introduction
 
 KERIOX is an open source Rust implementation of the [ Key Event Receipt Infrastructure (KERI) ](https://weboftrust.github.io/ietf-keri/draft-ssmith-keri.html), a system designed to provide a secure identifier-based trust spanning layer for any stack. [The current version of the KERI paper can be found here](https://github.com/SmithSamuelM/Papers/blob/master/whitepapers/KERI_WP_2.x.web.pdf).
@@ -30,8 +35,3 @@ For ready to use client libraries, we encourage to visit https://github.com/THCL
 For ready to use infrastructure components, see our prebaked Docker images:
 * [Witness](https://ghcr.io/thclab/keriox-witness)
 * [Watcher](https://ghcr.io/thclab/keriox-watcher)
-
-
-## Example
-
-See this [repo](https://github.com/THCLab/dkms-demo) that demonstrates the DKMS components usage along with sample apps.
