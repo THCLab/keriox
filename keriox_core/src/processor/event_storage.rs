@@ -20,9 +20,10 @@ use crate::{
 #[cfg(feature = "query")]
 use said::version::format::SerializationFormats;
 use said::SelfAddressingIdentifier;
+use crate::event_message::signed_event_message::SignedEventMessage;
 
 #[cfg(feature = "mailbox")]
-use crate::{event_message::signed_event_message::SignedEventMessage, mailbox::MailboxResponse};
+use crate::mailbox::MailboxResponse;
 
 pub struct EventStorage {
     pub db: Arc<SledEventDatabase>,
@@ -93,7 +94,7 @@ impl EventStorage {
     where I: IntoIterator<Item = Timestamped<SignedEventMessage>> {
         let evs = events
             .into_iter()
-            .flat_map(|event| {
+            .flat_map(|event: Timestamped<SignedEventMessage>| {
                 let rcts_from_db = self
                     .get_nt_receipts(
                         &event.signed_event_message.event_message.data.get_prefix(),
