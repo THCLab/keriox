@@ -1,14 +1,23 @@
-FROM rust:1.74 as build
+FROM rust:1.76 as build
 
 WORKDIR /app
 RUN echo '[workspace] \n\
+\n\
+resolver = "2"\n\
 \n\
 members = [\n\
     "keriox_core",\n\
     "components/watcher",\n\
     "components/controller",\n\
     "support/teliox",\n\
-]' > Cargo.toml
+]\n\
+[workspace.package]\n\
+repository = "https://github.com/THCLab/keriox"\n\
+authors = [\n\
+    "Human Colossus Foundation <contact@humancolossus.org>",\n\
+]\n\
+edition = "2021"\n\
+license = "EUPL-1.2"' > Cargo.toml
 COPY keriox_core keriox_core
 COPY components components
 COPY ./support/teliox support/teliox
