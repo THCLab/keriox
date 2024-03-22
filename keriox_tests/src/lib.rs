@@ -4,10 +4,7 @@ use keri_controller::{
     config::ControllerConfig, identifier_controller::IdentifierController, BasicPrefix, Controller,
     CryptoBox, IdentifierPrefix, KeyManager, LocationScheme, SelfSigningPrefix,
 };
-use keri_core::{
-    actor::error::ActorError,
-    transport::test::TestTransport,
-};
+use keri_core::{actor::error::ActorError, transport::test::TestTransport};
 use transport::TelTestTransport;
 
 pub mod transport;
@@ -54,7 +51,6 @@ pub async fn setup_identifier(
             .await
             .unwrap();
         IdentifierController::new(identifier, verifier_controller.clone(), None)
-
     };
 
     assert_eq!(verifier.notify_witnesses().await.unwrap(), 1);

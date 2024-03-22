@@ -4,7 +4,7 @@ use itertools::Itertools;
 use keri_core::{
     actor::{
         error::ActorError, parse_notice_stream, parse_query_stream, parse_reply_stream, prelude::*,
-        simple_controller::PossibleResponse, SignedQueryError,
+        simple_controller::PossibleResponse, QueryError, SignedQueryError,
     },
     database::{escrow::EscrowDb, DbError},
     error::Error,
@@ -234,7 +234,7 @@ impl WatcherData {
                     }
                     _ => {
                         // query watcher and return info, that it's not ready
-                        self.update_local_kel(&qry.query.get_prefix()).await?;
+                        let _ = self.update_local_kel(&qry.query.get_prefix()).await;
                     }
                 };
             }
@@ -245,11 +245,10 @@ impl WatcherData {
                 let local_state = self.get_state_for_prefix(&args.i)?;
                 match (local_state, args.s) {
                     (Some(state), Some(sn)) if sn <= state.sn => {
-                        // return local ksn
                     }
                     _ => {
                         // query watcher and return info, that it's not ready
-                        self.update_local_kel(&qry.query.get_prefix()).await?;
+                        let _ = self.update_local_kel(&qry.query.get_prefix()).await;
                     }
                 };
             }
@@ -257,7 +256,15 @@ impl WatcherData {
         }
 
         let response =
-            keri_core::actor::process_query(qry.query.get_route(), &self.event_storage).unwrap();
+            match keri_core::actor::process_query(qry.query.get_route(), &self.event_storage) {
+                Ok(reply) => reply,
+                Err(QueryError::UnknownId { id }) => {
+                    return Err(ActorError::NoIdentState { prefix: id })
+                }
+                Err(e) => {
+                   return  Err(ActorError::GeneralError(e.to_string())); 
+                }
+            };
 
         match response {
             ReplyType::Ksn(ksn) => {
@@ -278,7 +285,7 @@ impl WatcherData {
 
     async fn update_local_kel(&self, id: &IdentifierPrefix) -> Result<(), ActorError> {
         // Update latest state for prefix
-        self.query_state(id).await?;
+        let _ = self.query_state(id).await;
 
         let escrowed_replies = self
             .event_storage

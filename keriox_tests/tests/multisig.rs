@@ -183,7 +183,8 @@ async fn test_multisig() -> Result<()> {
         .send_oobi_to_watcher(&identifier1.id, &Oobi::EndRole(oobi2))
         .await?;
 
-    let qry_watcher = identifier1.query_own_watchers(&identifier2.id)?;
+    let qry_watcher =
+        identifier1.query_own_watchers(&identifier2.get_last_establishment_event_seal()?)?;
     for qry in qry_watcher {
         let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(&qry.encode()?)?);
         identifier1.finalize_query(vec![(qry, signature)]).await?;

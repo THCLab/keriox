@@ -51,6 +51,9 @@ pub enum ActorError {
 
     #[error("Signing error: {0}")]
     SigningError(#[from] KeysError),
+    
+    #[error("Error: {0}")]
+    GeneralError(String)
 }
 
 #[cfg(feature = "oobi")]

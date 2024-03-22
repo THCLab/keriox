@@ -669,15 +669,15 @@ impl IdentifierController {
 
     pub fn query_watcher(
         &self,
-        identifier: &IdentifierPrefix,
+        seal: &EventSeal,
         watcher: IdentifierPrefix,
     ) -> Result<QueryEvent, ControllerError> {
         Ok(QueryEvent::new_query(
             QueryRoute::Logs {
                 reply_route: "".to_string(),
                 args: LogsQueryArgs {
-                    s: None,
-                    i: identifier.clone(),
+                    s: Some(seal.sn),
+                    i: seal.prefix.clone(),
                     src: Some(watcher),
                 },
             },
@@ -688,7 +688,7 @@ impl IdentifierController {
 
     pub fn query_own_watchers(
         &self,
-        about_who: &IdentifierPrefix,
+        about_who: &EventSeal,
     ) -> Result<Vec<QueryEvent>, ControllerError> {
         self.source
             .get_watchers(&self.id)?
