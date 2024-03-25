@@ -244,14 +244,6 @@ async fn indirect_mode_signing() -> Result<(), ControllerError> {
             .await;
     }
 
-    // Now get expected KEL
-    let kel = verifying_identifier
-        .source
-        .storage
-        .get_kel(&signing_identifier.id)
-        .unwrap();
-    println!("{:?}", String::from_utf8(kel.unwrap()).unwrap());
-
     // Verify signed message.
     assert!(verifying_controller
         .verify(first_message, &first_signature)
@@ -264,7 +256,7 @@ async fn indirect_mode_signing() -> Result<(), ControllerError> {
 
     // Rotation needs two witness receipts to be accepted
     let rotation_event = signing_identifier
-        .rotate(vec![pk], vec![npk], 1, vec![], vec![], 1)
+        .rotate(vec![pk], vec![npk], 1, vec![], vec![], 2)
         .await?;
 
     let signature = SelfSigningPrefix::Ed25519Sha512(key_manager.sign(rotation_event.as_bytes())?);

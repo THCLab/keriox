@@ -1,13 +1,17 @@
 use std::sync::Arc;
 
 use super::compute_state;
+use crate::event_message::signed_event_message::SignedEventMessage;
 #[cfg(feature = "query")]
 use crate::query::{
     key_state_notice::KeyStateNotice, mailbox::QueryArgsMbx, reply_event::SignedReply,
 };
 use crate::{
     actor::prelude::Message,
-    database::{timestamped::{Timestamped, TimestampedSignedEventMessage}, SledEventDatabase},
+    database::{
+        timestamped::{Timestamped, TimestampedSignedEventMessage},
+        SledEventDatabase,
+    },
     error::Error,
     event::{
         event_data::EventData,
@@ -20,7 +24,6 @@ use crate::{
 #[cfg(feature = "query")]
 use said::version::format::SerializationFormats;
 use said::SelfAddressingIdentifier;
-use crate::event_message::signed_event_message::SignedEventMessage;
 
 #[cfg(feature = "mailbox")]
 use crate::mailbox::MailboxResponse;
@@ -75,23 +78,24 @@ impl EventStorage {
     pub fn get_kel_messages_with_receipts(
         &self,
         id: &IdentifierPrefix,
-        sn: Option<u64>
+        sn: Option<u64>,
     ) -> Result<Option<Vec<Notice>>, Error> {
         let events = self.db.get_kel_finalized_events(id);
-       Ok(match (events, sn) {
-            (None, _) => None, 
+        Ok(match (events, sn) {
+            (None, _) => None,
             (Some(events), None) => self.collect_with_receipts(events),
             (Some(events), Some(sn)) => {
-                let evs = events
-                    .filter(|ev| ev.signed_event_message.event_message.data.get_sn() <= sn );
+                let evs =
+                    events.filter(|ev| ev.signed_event_message.event_message.data.get_sn() <= sn);
                 self.collect_with_receipts(evs)
             }
         })
-
     }
 
-    fn collect_with_receipts<'a, I>(&self, events: I ) -> Option<Vec<Notice>> 
-    where I: IntoIterator<Item = Timestamped<SignedEventMessage>> {
+    fn collect_with_receipts<'a, I>(&self, events: I) -> Option<Vec<Notice>>
+    where
+        I: IntoIterator<Item = Timestamped<SignedEventMessage>>,
+    {
         let evs = events
             .into_iter()
             .flat_map(|event: Timestamped<SignedEventMessage>| {
@@ -112,7 +116,7 @@ impl EventStorage {
                     None => vec![Notice::Event(event.into())],
                 }
             });
-            Some(evs.collect())
+        Some(evs.collect())
     }
 
     pub fn get_event_at_sn(

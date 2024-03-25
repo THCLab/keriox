@@ -8,13 +8,23 @@ use keri_core::{
         prelude::{HashFunctionCode, SerializationFormats},
         simple_controller::{PossibleResponse, SimpleController},
         SignedQueryError,
-    }, database::{escrow::EscrowDb, SledEventDatabase}, error::Error, event::sections::{
+    },
+    database::{escrow::EscrowDb, SledEventDatabase},
+    error::Error,
+    event::sections::{
         seal::{EventSeal, Seal},
         threshold::SignatureThreshold,
-    }, event_message::signed_event_message::{Message, Notice, Op, SignedEventMessage}, keys::PublicKey, mailbox::{exchange::ForwardTopic, MailboxResponse}, prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix}, processor::{
+    },
+    event_message::signed_event_message::{Message, Notice, Op, SignedEventMessage},
+    keys::PublicKey,
+    mailbox::{exchange::ForwardTopic, MailboxResponse},
+    prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+    processor::{
         basic_processor::BasicProcessor, escrow::EscrowConfig, event_storage::EventStorage,
         Processor,
-    }, query::query_event::LogsQueryArgs, signer::{CryptoBox, Signer}
+    },
+    query::query_event::LogsQueryArgs,
+    signer::{CryptoBox, Signer},
 };
 use tempfile::Builder;
 use url::Url;

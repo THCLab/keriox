@@ -160,7 +160,6 @@ fn test_query_deserialize() {
     let input_query = r#"{"v":"KERI10JSON000105_","t":"qry","d":"EHtaQHsKzezkQUEYjMjEv6nIf4AhhR9Zy6AvcfyGCXkI","dt":"2021-01-01T00:00:00.000000+00:00","r":"logs","rr":"","q":{"s":0,"i":"EIaGMMWJFPmtXznY1IIiKDIrg-vIyge6mBl2QV8dDjI3","src":"BGKVzj4ve0VSd8z_AmvhLg4lqcC_9WYX90k03q-R_Ydo"}}"#;
     let qr: QueryEvent = serde_json::from_str(input_query).unwrap();
     assert!(matches!(qr.data.data, QueryRoute::Logs { .. },));
-
 }
 
 #[test]
