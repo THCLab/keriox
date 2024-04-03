@@ -1,9 +1,12 @@
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use keri_core::actor::parse_event_stream;
-use keri_core::oobi::{LocationScheme, Oobi};
+use keri_core::event_message::signed_event_message::SignedNontransferableReceipt;
+use keri_core::oobi::LocationScheme;
 use keri_core::prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix};
 
+use keri_core::processor::escrow::EscrowConfig;
 use keri_core::processor::notification::JustNotification;
 
 
@@ -11,14 +14,13 @@ use keri_core::state::IdentifierState;
 use keri_core::{
     actor::{
         self, event_generator, prelude::SelfAddressingIdentifier,
-        simple_controller::PossibleResponse,
     },
     database::{escrow::EscrowDb, SledEventDatabase},
     event::{event_data::EventData, sections::seal::Seal, KeyEvent},
     event_message::{
         cesr_adapter::{parse_event_type, EventType},
         msg::KeriEvent,
-        signed_event_message::{Message, Notice, Op, SignedEventMessage},
+        signed_event_message::{Message, Notice, Op},
     },
     oobi::{OobiManager, Role, Scheme},
     processor::{
@@ -27,11 +29,7 @@ use keri_core::{
         event_storage::EventStorage,
         Processor,
     },
-    query::{
-        query_event::SignedKelQuery,
-        reply_event::{ReplyEvent, ReplyRoute, SignedReply},
-    },
-    transport::Transport,
+    query::reply_event::{ReplyEvent, ReplyRoute, SignedReply},
 };
 use teliox::database::EventDatabase;
 use teliox::processor::escrow::default_escrow_bus as tel_escrow_bus;
@@ -39,7 +37,6 @@ use teliox::processor::storage::TelEventStorage;
 use teliox::tel::Tel;
 use teliox::transport::GeneralTelTransport;
 
-use crate::config::ControllerConfig;
 use crate::error::ControllerError;
 
 
@@ -49,21 +46,13 @@ pub struct KnownEvents {
     pub storage: Arc<EventStorage>,
     pub oobi_manager: OobiManager,
     pub partially_witnessed_escrow: Arc<PartiallyWitnessedEscrow>,
-    pub transport: Box<dyn Transport + Send + Sync>,
 
-    pub tel: Arc<Tel>,
     pub tel_transport: Box<dyn GeneralTelTransport + Send + Sync>,
+    pub tel: Arc<Tel>,
 }
 
 impl KnownEvents {
-    pub fn new(config: ControllerConfig) -> Result<Self, ControllerError> {
-        let ControllerConfig {
-            db_path,
-            initial_oobis,
-            escrow_config,
-            transport,
-            tel_transport,
-        } = config;
+    pub fn new(tel_transport: Box<dyn GeneralTelTransport + Send + Sync> , db_path: PathBuf, initial_oobis: Vec<LocationScheme>, escrow_config: EscrowConfig) -> Result<Self, ControllerError> {
 
         let db = {
             let mut path = db_path.clone();
@@ -132,33 +121,19 @@ impl KnownEvents {
             storage: kel_storage,
             oobi_manager,
             partially_witnessed_escrow,
-            transport,
+            // transport,
             tel,
             tel_transport: tel_transport,
         };
 
-        if !initial_oobis.is_empty() {
-            async_std::task::block_on(controller.setup_witnesses(&initial_oobis))?;
-        }
-
         Ok(controller)
     }
 
-    async fn setup_witnesses(&self, oobis: &[LocationScheme]) -> Result<(), ControllerError> {
-        for lc in oobis {
-            self.resolve_loc_schema(lc).await?;
-        }
+    pub fn save(&self, message: &Message) -> Result<(), ControllerError> {
+        self.process(message)?;
         Ok(())
     }
 
-    /// Make http request to get identifier's endpoints information.
-    pub async fn resolve_loc_schema(&self, lc: &LocationScheme) -> Result<(), ControllerError> {
-        let oobis = self.transport.request_loc_scheme(lc.clone()).await?;
-        for oobi in oobis {
-            self.process(&Message::Op(oobi))?;
-        }
-        Ok(())
-    }
 
     pub fn get_watchers(
         &self,
@@ -176,21 +151,6 @@ impl KnownEvents {
                 }
             })
             .collect::<Vec<_>>())
-    }
-
-    /// Sends identifier's endpoint information to identifiers's watchers.
-    // TODO use stream instead of json
-    pub async fn send_oobi_to_watcher(
-        &self,
-        id: &IdentifierPrefix,
-        oobi: &Oobi,
-    ) -> Result<(), ControllerError> {
-        for watcher in self.get_watchers(id)?.iter() {
-            self.send_oobi_to(watcher, Scheme::Http, oobi.clone())
-                .await?;
-        }
-
-        Ok(())
     }
 
     // Returns messages if they can be returned immediately, i.e. for query message
@@ -246,128 +206,35 @@ impl KnownEvents {
             .collect())
     }
 
-    pub async fn send_message_to(
+    pub fn find_location(
         &self,
         id: &IdentifierPrefix,
-        scheme: Scheme,
-        msg: Message,
-    ) -> Result<(), ControllerError> {
-        let loc = self
-            .get_loc_schemas(id)?
-            .into_iter()
-            .find(|loc| loc.scheme == scheme);
-        let loc = match loc {
-            Some(loc) => loc,
-            None => {
-                return Err(ControllerError::NoLocationScheme {
-                    id: id.clone(),
-                    scheme,
-                });
-            }
-        };
-        self.transport.send_message(loc, msg).await?;
-        Ok(())
-    }
-
-    pub async fn send_query_to(
-        &self,
-        id: &IdentifierPrefix,
-        scheme: Scheme,
-        query: SignedKelQuery,
-    ) -> Result<PossibleResponse, ControllerError> {
-        let loc = self
-            .get_loc_schemas(id)?
-            .into_iter()
-            .find(|loc| loc.scheme == scheme);
-        let loc = match loc {
-            Some(loc) => loc,
-            None => {
-                return Err(ControllerError::NoLocationScheme {
-                    id: id.clone(),
-                    scheme,
-                });
-            }
-        };
-        Ok(self.transport.send_query(loc, query).await?)
-    }
-
-    async fn send_oobi_to(
-        &self,
-        id: &IdentifierPrefix,
-        scheme: Scheme,
-        oobi: Oobi,
-    ) -> Result<(), ControllerError> {
-        let loc = self
+        scheme: Scheme) -> Result<LocationScheme, ControllerError> {
+            self
             .get_loc_schemas(id)?
             .into_iter()
             .find(|loc| loc.scheme == scheme)
             .ok_or(ControllerError::NoLocationScheme {
                 id: id.clone(),
                 scheme,
-            })?;
-
-        self.transport.resolve_oobi(loc, oobi).await?;
-        Ok(())
-    }
-
-    /// Publish key event to witnesses
-    ///
-    ///  1. send it to all witnesses
-    ///  2. collect witness receipts and process them
-    ///  3. get processed receipts from db and send it to all witnesses
-    pub async fn publish(
-        &self,
-        witness_prefixes: &[BasicPrefix],
-        message: &SignedEventMessage,
-    ) -> Result<(), ControllerError> {
-        for id in witness_prefixes {
-            self.send_message_to(
-                &IdentifierPrefix::Basic(id.clone()),
-                Scheme::Http,
-                Message::Notice(Notice::Event(message.clone())),
-            )
-            .await?;
-            // process collected receipts
-            // send query message for receipt mailbox
-            // TODO: get receipts from mailbox
-            // for receipt in receipts {
-            //     self.process(&receipt)?;
-            // }
+            })
         }
 
-        // Get processed receipts from database to send all of them to witnesses. It
-        // will return one receipt with all witness signatures as one attachment,
-        // not three separate receipts as in `collected_receipts`.
-        let (prefix, sn, digest) = (
-            message.event_message.data.get_prefix(),
-            message.event_message.data.get_sn(),
-            message.event_message.digest(),
-        );
-        let rcts_from_db = self.storage.get_nt_receipts(&prefix, sn, &digest?)?;
+   
+        pub fn find_receipt(&self, id: &IdentifierPrefix, sn: u64, digest: &SelfAddressingIdentifier) -> Result<Option<SignedNontransferableReceipt>, ControllerError> {
+             let rcts_from_db = self.storage.get_nt_receipts(id, sn, digest)?;
+             Ok(rcts_from_db)
 
-        if let Some(receipt) = rcts_from_db {
-            // send receipts to all witnesses
-            for prefix in witness_prefixes {
-                self.send_message_to(
-                    &IdentifierPrefix::Basic(prefix.clone()),
-                    Scheme::Http,
-                    Message::Notice(Notice::NontransferableRct(receipt.clone())),
-                )
-                .await?;
-            }
-        };
+        }
 
-        Ok(())
-    }
 
-    pub async fn incept(
+    pub fn incept(
         &self,
         public_keys: Vec<BasicPrefix>,
         next_pub_keys: Vec<BasicPrefix>,
         witnesses: Vec<LocationScheme>,
         witness_threshold: u64,
     ) -> Result<String, ControllerError> {
-        self.setup_witnesses(&witnesses).await?;
         let witnesses = witnesses
             .iter()
             .map(|wit| {
@@ -418,7 +285,7 @@ impl KnownEvents {
     }
 
     /// Generate and return rotation event for given identifier data
-    pub async fn rotate(
+    pub fn rotate(
         &self,
         id: IdentifierPrefix,
         current_keys: Vec<BasicPrefix>,
@@ -428,7 +295,6 @@ impl KnownEvents {
         witness_to_remove: Vec<BasicPrefix>,
         witness_threshold: u64,
     ) -> Result<String, ControllerError> {
-        self.setup_witnesses(&witness_to_add).await?;
         let witnesses_to_add = witness_to_add
             .iter()
             .map(|wit| {
@@ -539,12 +405,13 @@ impl KnownEvents {
         })
     }
 
-    pub async fn finalize_add_role(
+    pub fn finalize_add_role(
         &self,
         signer_prefix: &IdentifierPrefix,
         event: ReplyEvent,
         sig: Vec<SelfSigningPrefix>,
-    ) -> Result<(), ControllerError> {
+    ) -> Result<(IdentifierPrefix, Vec<Message>), ControllerError> {
+        let mut messages_to_send = vec![];
         let (dest_prefix, role) = match &event.data.data {
             ReplyRoute::EndRoleAdd(role) => (role.eid.clone(), role.role.clone()),
             ReplyRoute::EndRoleCut(role) => (role.eid.clone(), role.role.clone()),
@@ -576,10 +443,8 @@ impl KnownEvents {
                         .get_kel_messages_with_receipts(signer_prefix, None)?
                         .ok_or(ControllerError::UnknownIdentifierError)?;
 
-                    // TODO: send in one request
                     for ev in kel {
-                        self.send_message_to(&dest_prefix, Scheme::Http, Message::Notice(ev))
-                            .await?;
+                        messages_to_send.push(Message::Notice(ev));
                     }
                 };
                 signed_rpy
@@ -588,9 +453,9 @@ impl KnownEvents {
 
         self.process(&signed_reply)?;
 
-        self.send_message_to(&dest_prefix, Scheme::Http, signed_reply.clone())
-            .await?;
-        Ok(())
+        messages_to_send.push(signed_reply.clone());
+
+        Ok((dest_prefix, messages_to_send))
     }
 
     pub fn get_state(&self, id: &IdentifierPrefix) -> Result<IdentifierState, ControllerError> {

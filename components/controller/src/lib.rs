@@ -4,6 +4,7 @@ pub mod identifier_controller;
 pub mod mailbox_updating;
 pub mod messagebox;
 pub mod known_events;
+pub mod communication;
 
 mod test;
 pub mod verifying;

@@ -2,38 +2,14 @@ use keri_core::{
     event_message::signed_event_message::{Message, Op},
     oobi::{EndRole, LocationScheme, Oobi, Role},
     prefix::IdentifierPrefix,
-    query::reply_event::ReplyRoute,
+    query::reply_event::{ReplyRoute, SignedReply},
 };
 
 use crate::{error::ControllerError, known_events::KnownEvents};
 
 impl KnownEvents {
-    pub async fn resolve_oobi(&self, oobi: Oobi) -> Result<(), ControllerError> {
-        match oobi {
-            Oobi::Location(loc) => {
-                let msgs = self.transport.request_loc_scheme(loc).await?;
-                for msg in msgs {
-                    self.process(&Message::Op(msg))?;
-                }
-            }
-            Oobi::EndRole(EndRole { cid, role, eid }) => {
-                // TODO what if more than one
-                let loc = self
-                    .get_loc_schemas(&eid)?
-                    .first()
-                    .ok_or(ControllerError::UnknownIdentifierError)?
-                    .clone();
-                let msgs = self.transport.request_end_role(loc, cid, role, eid).await?;
-                for msg in msgs {
-                    // TODO This ignore signatures. Add verification.
-                    if let Message::Op(Op::Reply(signed_oobi)) = msg {
-                        self.oobi_manager.save_oobi(&signed_oobi)?;
-                    } else {
-                        self.process(&msg)?;
-                    }
-                }
-            }
-        }
+    pub fn save_oobi(&self, reply: &SignedReply) -> Result<(), ControllerError> {
+		self.oobi_manager.save_oobi(reply)?;
         Ok(())
     }
 
