@@ -5,9 +5,9 @@ use keri_core::{
     query::reply_event::ReplyRoute,
 };
 
-use crate::{error::ControllerError, Controller};
+use crate::{error::ControllerError, known_events::KnownEvents};
 
-impl Controller {
+impl KnownEvents {
     pub async fn resolve_oobi(&self, oobi: Oobi) -> Result<(), ControllerError> {
         match oobi {
             Oobi::Location(loc) => {

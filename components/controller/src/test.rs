@@ -14,8 +14,9 @@ use tempfile::Builder;
 use url::Host;
 use witness::{WitnessEscrowConfig, WitnessListener};
 
-use super::{error::ControllerError, identifier_controller::IdentifierController, Controller};
-use crate::ControllerConfig;
+use crate::{config::ControllerConfig, known_events::KnownEvents};
+
+use super::{error::ControllerError, identifier_controller::IdentifierController};
 
 #[async_std::test]
 async fn test_2_wit() -> Result<(), ControllerError> {
@@ -74,7 +75,7 @@ async fn test_2_wit() -> Result<(), ControllerError> {
         TestTransport::new(actors)
     };
 
-    let controller = Arc::new(Controller::new(ControllerConfig {
+    let controller = Arc::new(KnownEvents::new(ControllerConfig {
         db_path: root.path().to_owned(),
         transport: Box::new(transport.clone()),
         ..Default::default()

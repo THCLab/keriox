@@ -3,7 +3,7 @@ use std::{collections::HashMap, net::Ipv4Addr, sync::Arc};
 use anyhow::Result;
 use keri_controller::{
     config::ControllerConfig, identifier_controller::IdentifierController,
-    mailbox_updating::ActionRequired, Controller, Oobi,
+    mailbox_updating::ActionRequired, KnownEvents, Oobi,
 };
 use keri_core::{
     oobi::{EndRole, LocationScheme, Role},
@@ -70,7 +70,7 @@ async fn test_multisig() -> Result<()> {
     // Setup first identifier.
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     let controller1 = Arc::new(
-        Controller::new(ControllerConfig {
+        KnownEvents::new(ControllerConfig {
             db_path: root.path().to_owned(),
             transport: transport.clone(),
             ..Default::default()
@@ -109,7 +109,7 @@ async fn test_multisig() -> Result<()> {
     // Setup second identifier.
     let root2 = Builder::new().prefix("test-db").tempdir().unwrap();
     let controller2 = Arc::new(
-        Controller::new(ControllerConfig {
+        KnownEvents::new(ControllerConfig {
             db_path: root2.path().to_owned(),
             transport,
             ..Default::default()

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use keri_controller::{
     config::ControllerConfig, error::ControllerError, identifier_controller::IdentifierController,
-    BasicPrefix, Controller, CryptoBox, EndRole, IdentifierPrefix, KeyManager, LocationScheme,
+    BasicPrefix, KnownEvents, CryptoBox, EndRole, IdentifierPrefix, KeyManager, LocationScheme,
     Oobi, SelfSigningPrefix,
 };
 use tempfile::Builder;
@@ -35,7 +35,7 @@ async fn indirect_mode_signing() -> Result<(), ControllerError> {
     // The `Controller` structure aggregates all known KEL events (across all
     // identifiers) and offers functions for retrieving them, verifying the
     // integrity of new events, and conducting signature verification.
-    let signer_controller = Arc::new(Controller::new(ControllerConfig {
+    let signer_controller = Arc::new(KnownEvents::new(ControllerConfig {
         db_path: database_path.path().to_owned(),
         ..Default::default()
     })?);
@@ -116,7 +116,7 @@ async fn indirect_mode_signing() -> Result<(), ControllerError> {
     let verifier_database_path = Builder::new().prefix("test-db1").tempdir().unwrap();
     let verifier_key_manager = CryptoBox::new().unwrap();
 
-    let verifying_controller = Arc::new(Controller::new(ControllerConfig {
+    let verifying_controller = Arc::new(KnownEvents::new(ControllerConfig {
         db_path: verifier_database_path.path().to_owned(),
         ..Default::default()
     })?);

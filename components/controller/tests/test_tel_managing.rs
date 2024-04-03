@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use keri_controller::{
     config::ControllerConfig, error::ControllerError, identifier_controller::IdentifierController,
-    BasicPrefix, Controller, CryptoBox, KeyManager, SelfSigningPrefix,
+    BasicPrefix, known_events::KnownEvents, CryptoBox, KeyManager, SelfSigningPrefix,
 };
 use keri_core::actor::prelude::{HashFunction, HashFunctionCode};
 
@@ -13,7 +13,7 @@ async fn test_tel() -> Result<(), ControllerError> {
     // Incept keri identifier
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     let controller1 = Arc::new(
-        Controller::new(ControllerConfig {
+        KnownEvents::new(ControllerConfig {
             db_path: root.path().to_owned(),
             ..Default::default()
         })

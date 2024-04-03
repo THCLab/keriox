@@ -1,7 +1,7 @@
 use std::{path::Path, sync::Arc};
 
 use keri_controller::{
-    config::ControllerConfig, identifier_controller::IdentifierController, BasicPrefix, Controller,
+    config::ControllerConfig, identifier_controller::IdentifierController, BasicPrefix, KnownEvents,
     CryptoBox, IdentifierPrefix, KeyManager, LocationScheme, SelfSigningPrefix,
 };
 use keri_core::{actor::error::ActorError, transport::test::TestTransport};
@@ -17,7 +17,7 @@ pub async fn setup_identifier(
     tel_transport: TelTestTransport,
 ) -> (IdentifierController, CryptoBox) {
     let verifier_controller = Arc::new(
-        Controller::new(ControllerConfig {
+        KnownEvents::new(ControllerConfig {
             db_path: root_path.to_owned(),
             transport: Box::new(transport.clone()),
             tel_transport: Box::new(tel_transport.clone()),

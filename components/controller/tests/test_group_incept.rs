@@ -1,16 +1,16 @@
 use std::sync::Arc;
 
 use keri_controller::{
-    config::ControllerConfig, error::ControllerError, identifier_controller::IdentifierController,
-    BasicPrefix, Controller, CryptoBox, KeyManager, SelfSigningPrefix,
+    config::ControllerConfig, error::ControllerError, identifier_controller::IdentifierController, known_events::KnownEvents,
 };
+use keri_core::{prefix::{BasicPrefix, SelfSigningPrefix}, signer::{CryptoBox, KeyManager}};
 use tempfile::Builder;
 
 #[async_std::test]
 async fn test_group_incept() -> Result<(), ControllerError> {
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
 
-    let controller = Arc::new(Controller::new(ControllerConfig {
+    let controller = Arc::new(KnownEvents::new(ControllerConfig {
         db_path: root.path().to_owned(),
         ..Default::default()
     })?);

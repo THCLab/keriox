@@ -1,18 +1,13 @@
 use std::{collections::HashMap, sync::Arc};
 
 use keri_controller::{
-    config::ControllerConfig, error::ControllerError, identifier_controller::IdentifierController,
-    mailbox_updating::ActionRequired, BasicPrefix, Controller, CryptoBox, IdentifierPrefix,
-    KeyManager, LocationScheme, SelfSigningPrefix,
+    config::ControllerConfig, error::ControllerError, identifier_controller::IdentifierController, known_events::KnownEvents, mailbox_updating::ActionRequired, LocationScheme
 };
 use keri_core::{
-    actor::{error::ActorError, SignedQueryError},
-    event_message::signed_event_message::Message,
-    prefix::IndexedSignature,
-    transport::{
+    actor::{error::ActorError, SignedQueryError}, event_message::signed_event_message::Message, prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix}, signer::{CryptoBox, KeyManager}, transport::{
         test::{TestActorMap, TestTransport},
         TransportError,
-    },
+    }
 };
 use tempfile::Builder;
 use url::Host;
@@ -54,12 +49,12 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     actors.insert((Host::Domain("witness1".to_string()), 3232), witness);
     let transport = TestTransport::new(actors);
 
-    let controller = Arc::new(Controller::new(ControllerConfig {
+    let controller = Arc::new(KnownEvents::new(ControllerConfig {
         db_path: root.path().to_owned(),
         transport: Box::new(transport.clone()),
         ..Default::default()
     })?);
-    let controller2 = Arc::new(Controller::new(ControllerConfig {
+    let controller2 = Arc::new(KnownEvents::new(ControllerConfig {
         db_path: root2.path().to_owned(),
         transport: Box::new(transport.clone()),
         ..Default::default()

@@ -7,9 +7,9 @@ use keri_core::{
     processor::validator::EventValidator,
 };
 
-use crate::{error::ControllerError, Controller};
+use crate::{error::ControllerError, known_events::KnownEvents, };
 
-impl Controller {
+impl KnownEvents {
     /// Parse elements from cesr stream and splits them into oobis to be
     /// resolved and signed credentials.
     pub fn parse_cesr_stream(

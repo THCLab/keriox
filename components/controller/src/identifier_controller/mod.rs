@@ -42,7 +42,7 @@ use keri_core::{
 pub use teliox::query::{SignedTelQuery, TelQueryEvent};
 
 use super::mailbox_updating::ActionRequired;
-use crate::{error::ControllerError, mailbox_updating::MailboxReminder, Controller};
+use crate::{error::ControllerError, known_events::KnownEvents, mailbox_updating::MailboxReminder};
 
 pub enum Query {
     Kel(QueryEvent),
@@ -51,7 +51,7 @@ pub enum Query {
 
 pub struct IdentifierController {
     pub id: IdentifierPrefix,
-    pub source: Arc<Controller>,
+    pub source: Arc<KnownEvents>,
     pub registry_id: Option<IdentifierPrefix>,
     pub to_notify: Vec<SignedEventMessage>,
     pub state: IdentifierState,
@@ -69,7 +69,7 @@ pub struct IdentifierController {
 impl IdentifierController {
     pub fn new(
         id: IdentifierPrefix,
-        kel: Arc<Controller>,
+        kel: Arc<KnownEvents>,
         registry_id: Option<IdentifierPrefix>,
     ) -> Self {
         let events_to_notice: Vec<_> = kel
