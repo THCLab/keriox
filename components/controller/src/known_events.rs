@@ -47,12 +47,12 @@ pub struct KnownEvents {
     pub oobi_manager: OobiManager,
     pub partially_witnessed_escrow: Arc<PartiallyWitnessedEscrow>,
 
-    pub tel_transport: Box<dyn GeneralTelTransport + Send + Sync>,
+    // pub tel_transport: Box<dyn GeneralTelTransport + Send + Sync>,
     pub tel: Arc<Tel>,
 }
 
 impl KnownEvents {
-    pub fn new(tel_transport: Box<dyn GeneralTelTransport + Send + Sync> , db_path: PathBuf, initial_oobis: Vec<LocationScheme>, escrow_config: EscrowConfig) -> Result<Self, ControllerError> {
+    pub fn new(db_path: PathBuf, escrow_config: EscrowConfig) -> Result<Self, ControllerError> {
 
         let db = {
             let mut path = db_path.clone();
@@ -123,7 +123,7 @@ impl KnownEvents {
             partially_witnessed_escrow,
             // transport,
             tel,
-            tel_transport: tel_transport,
+            // tel_transport: tel_transport,
         };
 
         Ok(controller)
@@ -132,6 +132,29 @@ impl KnownEvents {
     pub fn save(&self, message: &Message) -> Result<(), ControllerError> {
         self.process(message)?;
         Ok(())
+    }
+
+    pub fn save_oobi(&self, oobi: &SignedReply) -> Result<(), ControllerError> {
+        Ok(self.oobi_manager.process_oobi(oobi).unwrap())
+    }
+
+     pub fn current_public_keys(&self, id: &IdentifierPrefix) -> Result<Vec<BasicPrefix>, ControllerError> {
+        Ok(self
+            .storage
+            .get_state(id)?
+            .ok_or(ControllerError::UnknownIdentifierError)?
+            .current
+            .public_keys)
+    }
+
+    pub fn next_keys_hashes(&self, id: &IdentifierPrefix) -> Result<Vec<SelfAddressingIdentifier>, ControllerError> {
+        Ok(self
+                    .storage
+                    .get_state(id)?
+                    .ok_or(ControllerError::UnknownIdentifierError)?
+                    .current
+                    .next_keys_data
+                    .next_key_hashes)
     }
 
 
@@ -227,6 +250,18 @@ impl KnownEvents {
 
         }
 
+        pub fn find_kel_with_receipts(&self, id: &IdentifierPrefix) -> Option<Vec<Notice>> {
+            self
+                            .storage
+                            .get_kel_messages_with_receipts(id, None).unwrap()
+        }
+
+        pub fn find_kel(&self, id: &IdentifierPrefix) -> Option<String> {
+            self
+            .storage
+            .get_kel(id).unwrap().map(|kel| String::from_utf8(kel).unwrap())
+        }
+
 
     pub fn incept(
         &self,
@@ -259,7 +294,7 @@ impl KnownEvents {
     /// Returns new established identifier prefix.
     /// Meant to be used for identifiers with one key pair.
     /// Must call `IdentifierController::notify_witnesses` after calling this function.
-    pub async fn finalize_inception(
+    pub fn finalize_inception(
         &self,
         event: &[u8],
         sig: &SelfSigningPrefix,

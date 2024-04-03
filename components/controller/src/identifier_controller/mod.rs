@@ -621,6 +621,9 @@ impl IdentifierController {
         .ok_or(ControllerError::NotGroupParticipantError)
     }
 
+   
+
+
     /// Generates query message of route `mbx` to query own identifier mailbox.
     pub fn query_mailbox(
         &self,

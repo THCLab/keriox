@@ -1,32 +1,21 @@
-use keri_core::{actor::simple_controller::PossibleResponse, event_message::signed_event_message::{Message, Notice, Op, SignedEventMessage}, oobi::{EndRole, LocationScheme, Oobi, Scheme}, prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix}, query::{query_event::SignedKelQuery, reply_event::ReplyEvent}, transport::Transport};
+use std::sync::Arc;
+
+use keri_core::{actor::{error::ActorError, simple_controller::PossibleResponse}, event_message::signed_event_message::{Message, Notice, Op, SignedEventMessage}, oobi::{EndRole, LocationScheme, Oobi, Scheme}, prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix}, query::{query_event::SignedKelQuery, reply_event::ReplyEvent}, transport::Transport};
 use teliox::transport::GeneralTelTransport;
 
-use crate::{config::ControllerConfig, error::ControllerError, known_events::KnownEvents};
+use crate::{error::ControllerError, known_events::KnownEvents};
 
 pub struct Communication {
-	pub events: KnownEvents,
+	pub events: Arc<KnownEvents>,
     pub transport: Box<dyn Transport + Send + Sync>,
     pub tel_transport: Box<dyn GeneralTelTransport + Send + Sync>,
 
 }
 
 impl Communication {
-	pub fn new(config: ControllerConfig) -> Result<Self, ControllerError> {
-		let ControllerConfig {
-            db_path,
-            initial_oobis,
-            escrow_config,
-            transport,
-            tel_transport,
-        } = config;
-
-		let events = KnownEvents::new(tel_transport, db_path, initial_oobis, escrow_config)?;
-		let comm = Communication { events, transport, tel_transport };
-		 if !initial_oobis.is_empty() {
-            async_std::task::block_on(comm.setup_witnesses(&initial_oobis))?;
-        }
-		Ok(comm)
-
+	pub fn new(known_events: Arc<KnownEvents>, transport: Box<dyn Transport<ActorError> + Send + Sync>, 
+    tel_transport: Box<dyn GeneralTelTransport + Send + Sync>) -> Self {
+		Communication { events: known_events, transport, tel_transport }
 	}
 
     /// Make http request to get identifier's endpoints information.
@@ -148,12 +137,7 @@ impl Communication {
         Ok(())
     }
 
-	async fn setup_witnesses(&self, oobis: &[LocationScheme]) -> Result<(), ControllerError> {
-        for lc in oobis {
-            self.resolve_loc_schema(lc).await?;
-        }
-        Ok(())
-    }
+
 
 	    /// Sends identifier's endpoint information to identifiers's watchers.
     // TODO use stream instead of json
@@ -170,44 +154,5 @@ impl Communication {
         Ok(())
     }
 
-	pub async fn incept(
-        &self,
-        public_keys: Vec<BasicPrefix>,
-        next_pub_keys: Vec<BasicPrefix>,
-        witnesses: Vec<LocationScheme>,
-        witness_threshold: u64,
-    ) -> Result<String, ControllerError> {
-        self.setup_witnesses(&witnesses).await?;
-        self.events.incept(public_keys, next_pub_keys, witnesses, witness_threshold)
-    }
-
-	pub async fn rotate(
-        &self,
-        id: IdentifierPrefix,
-        current_keys: Vec<BasicPrefix>,
-        new_next_keys: Vec<BasicPrefix>,
-        new_next_threshold: u64,
-        witness_to_add: Vec<LocationScheme>,
-        witness_to_remove: Vec<BasicPrefix>,
-        witness_threshold: u64,
-    ) -> Result<String, ControllerError> {
-        self.setup_witnesses(&witness_to_add).await?;
-		self.events.rotate(id, current_keys, new_next_keys, new_next_threshold, witness_to_add, witness_to_remove, witness_threshold)
-    }
-
-	pub async fn finalize_add_role(
-        &self,
-        signer_prefix: &IdentifierPrefix,
-        event: ReplyEvent,
-        sig: Vec<SelfSigningPrefix>,
-    ) -> Result<(), ControllerError> {
-			let (dest_identifier, messages_to_send) = self.events.finalize_add_role(signer_prefix, event, sig)?;
-			// TODO: send in one request
-			for ev in messages_to_send {
-				self.send_message_to(&dest_identifier, Scheme::Http, ev)
-					.await?;
-			}
-
-        Ok(())
-    }
+	
 }
