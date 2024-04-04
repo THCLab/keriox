@@ -9,7 +9,6 @@ pub mod identifier;
 pub mod controller;
 
 // mod test;
-// pub mod verifying;
 pub use keri_core::oobi::{EndRole, LocationScheme, Oobi};
 pub use keri_core::signer::{CryptoBox, KeyManager};
 pub use teliox::{

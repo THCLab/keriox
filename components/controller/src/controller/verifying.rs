@@ -9,10 +9,23 @@ use keri_core::{
 
 use crate::{error::ControllerError, known_events::KnownEvents, };
 
-impl KnownEvents {
+impl KnownEvents {    
+    
+    pub fn verify(&self, data: &[u8], signature: &Signature) -> Result<(), ControllerError> {
+        let verifier = EventValidator::new(self.storage.db.clone());
+        verifier.verify(data, signature).map_err(|e| match e {
+            Error::SignatureVerificationError | Error::FaultySignatureVerification => {
+                ControllerError::FaultySignature
+            }
+            Error::MissingSigner => ControllerError::UnknownIdentifierError,
+            Error::EventOutOfOrderError => ControllerError::MissingEventError,
+            e => ControllerError::OtherError(e.to_string()),
+        })
+    }
+
     /// Parse elements from cesr stream and splits them into oobis to be
     /// resolved and signed credentials.
-    pub fn parse_cesr_stream(
+    fn parse_cesr_stream(
         &self,
         stream: &str,
     ) -> Result<(Vec<Oobi>, Vec<ParsedData>), ControllerError> {
@@ -39,26 +52,15 @@ impl KnownEvents {
         Ok((oobis, to_verify))
     }
 
-    pub fn verify(&self, data: &[u8], signature: &Signature) -> Result<(), ControllerError> {
-        let verifier = EventValidator::new(self.storage.db.clone());
-        verifier.verify(data, signature).map_err(|e| match e {
-            Error::SignatureVerificationError | Error::FaultySignatureVerification => {
-                ControllerError::FaultySignature
-            }
-            Error::MissingSigner => ControllerError::UnknownIdentifierError,
-            Error::EventOutOfOrderError => ControllerError::MissingEventError,
-            e => ControllerError::OtherError(e.to_string()),
-        })
-    }
 
-    pub fn verify_from_cesr(&self, stream: &str) -> Result<(), ControllerError> {
+    fn verify_from_cesr(&self, stream: &str) -> Result<(), ControllerError> {
         let (_rest, data) =
             parse_many(stream.as_bytes()).map_err(|_e| ControllerError::CesrFormatError)?;
         self.verify_parsed(&data)
     }
 
     /// Verify signed data that was parsed from cesr stream.
-    pub fn verify_parsed(&self, data: &[ParsedData]) -> Result<(), ControllerError> {
+    fn verify_parsed(&self, data: &[ParsedData]) -> Result<(), ControllerError> {
         let mut err_reasons: Vec<ControllerError> = vec![];
         let (_oks, errs): (Vec<_>, Vec<_>) = data.iter().partition(|d| {
             match d

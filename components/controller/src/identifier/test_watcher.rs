@@ -68,13 +68,13 @@ async fn test_watcher() -> Result<(), ControllerError> {
     // The Event Seal specifies the stage of KEL at the time of signature creation.
     // This enables us to retrieve the correct public keys from KEL during verification.
     // Trying to get current actor event seal.
-    // let inception_event_seal = signing_identifier.get_last_establishment_event_seal();
+    let inception_event_seal = signing_identifier.get_last_establishment_event_seal();
 
-    // // It fails because witness receipts are missing.
-    // assert!(matches!(
-    //     inception_event_seal,
-    //     Err(ControllerError::UnknownIdentifierError)
-    // ));
+    // It fails because witness receipts are missing.
+    assert!(matches!(
+        inception_event_seal,
+        Err(ControllerError::UnknownIdentifierError)
+    ));
 
     // Publish event to actor's witnesses
     signing_identifier.notify_witnesses().await.unwrap();
@@ -97,17 +97,17 @@ async fn test_watcher() -> Result<(), ControllerError> {
     assert!(signing_event_seal.is_ok());
     let signing_event_seal = signing_event_seal.unwrap();
 
-    // // Sign message with established identifier
-    // let first_message = "Hi".as_bytes();
-    // let first_message_signature = vec![SelfSigningPrefix::Ed25519Sha512(
-    //     key_manager.sign(first_message).unwrap(),
-    // )];
+    // Sign message with established identifier
+    let first_message = "Hi".as_bytes();
+    let first_message_signature = vec![SelfSigningPrefix::Ed25519Sha512(
+        key_manager.sign(first_message).unwrap(),
+    )];
 
-    // let first_signature = signing_identifier.transferable_signature(
-    //     first_message,
-    //     signing_event_seal.clone(),
-    //     &first_message_signature,
-    // )?;
+    let first_signature = signing_identifier.transferable_signature(
+        first_message,
+        signing_event_seal.clone(),
+        &first_message_signature,
+    )?;
 
     // Establish verifying identifier
     // Setup database path and key manager.
@@ -239,11 +239,10 @@ async fn test_watcher() -> Result<(), ControllerError> {
     }
 
 	let signer_keys = verifying_identifier.known_events.get_state(&signing_identifier.id)?;
-	// dbg!(signer_keys);
-    // // Verify signed message.
-    // assert!(verifying_controller
-    //     .verify(first_message, &first_signature)
-    //     .is_ok());
+    // Verify signed message.
+    assert!(verifying_controller
+        .verify(first_message, &first_signature)
+        .is_ok());
 
     // Rotate signer keys
     key_manager.rotate()?;
@@ -280,25 +279,25 @@ async fn test_watcher() -> Result<(), ControllerError> {
     }
 
     // Sign message with rotated keys.
-    // let second_message = "Hi".as_bytes();
-    // let second_message_signature = vec![SelfSigningPrefix::Ed25519Sha512(
-    //     key_manager.sign(second_message).unwrap(),
-    // )];
+    let second_message = "Hi".as_bytes();
+    let second_message_signature = vec![SelfSigningPrefix::Ed25519Sha512(
+        key_manager.sign(second_message).unwrap(),
+    )];
 
     let current_event_seal = signing_identifier.get_last_establishment_event_seal()?;
-    // let second_signature = signing_identifier.transferable_signature(
-    //     second_message,
-    //     current_event_seal.clone(),
-    //     &second_message_signature,
-    // )?;
+    let second_signature = signing_identifier.transferable_signature(
+        second_message,
+        current_event_seal.clone(),
+        &second_message_signature,
+    )?;
 
     // Try to verify it, because verifier doesn't know signer's rotation event.
-    // assert!(matches!(
-    //     verifying_controller
-    //         .verify(second_message, &second_signature)
-    //         .unwrap_err(),
-    //     ControllerError::MissingEventError
-    // ));
+    assert!(matches!(
+        verifying_controller
+            .verify(second_message, &second_signature)
+            .unwrap_err(),
+        ControllerError::MissingEventError
+    ));
 
     // Query kel of signing identifier
     let queries_and_signatures: Vec<_> = verifying_identifier
@@ -325,9 +324,9 @@ async fn test_watcher() -> Result<(), ControllerError> {
 	let signer_keys = verifying_identifier.known_events.get_state(&signing_identifier.id)?;
 	dbg!(signer_keys);
 
-    // assert!(verifying_controller
-    //     .verify(second_message, &second_signature)
-    //     .is_ok());
+    assert!(verifying_controller
+        .verify(second_message, &second_signature)
+        .is_ok());
 
     Ok(())
 }

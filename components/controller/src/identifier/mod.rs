@@ -8,11 +8,12 @@ use keri_core::{
 
 use crate::{communication::Communication, error::ControllerError, known_events::KnownEvents};
 
-use self::publishing::QueryCache;
+use self::publish::QueryCache;
 pub mod kel_managing;
-pub mod publishing;
+pub mod publish;
 pub mod query;
 mod mailbox;
+pub mod signing;
 
 pub struct Identifier {
     id: IdentifierPrefix,

@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
-use keri_core::{oobi::LocationScheme, prefix::{BasicPrefix, SelfSigningPrefix}};
+use keri_core::{event_message::signature::Signature, oobi::LocationScheme, prefix::{BasicPrefix, SelfSigningPrefix}};
 
 use crate::{communication::Communication, config::ControllerConfig, error::ControllerError, identifier::Identifier, known_events::KnownEvents};
+pub mod verifying;
 
 pub struct Controller {
 	known_events: Arc<KnownEvents>,
@@ -52,5 +53,10 @@ impl Controller {
             self.communication.resolve_loc_schema(lc).await?;
         }
         Ok(())
+    }
+
+    pub fn verify(&self, data: &[u8], signature: &Signature 
+        ) -> Result<(), ControllerError> {
+        self.known_events.verify(data, signature)
     }
 }
