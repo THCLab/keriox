@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use keri_controller::{
-    config::ControllerConfig, error::ControllerError, identifier_controller::IdentifierController, known_events::KnownEvents,
+    config::ControllerConfig, controller::Controller, error::ControllerError, identifier
 };
 use keri_core::{prefix::{BasicPrefix, SelfSigningPrefix}, signer::{CryptoBox, KeyManager}};
 use tempfile::Builder;
@@ -10,43 +10,36 @@ use tempfile::Builder;
 async fn test_group_incept() -> Result<(), ControllerError> {
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
 
-    let controller = Arc::new(KnownEvents::new(ControllerConfig {
+    let controller = Arc::new(Controller::new(ControllerConfig {
         db_path: root.path().to_owned(),
         ..Default::default()
     })?);
     let km1 = CryptoBox::new()?;
     let km2 = CryptoBox::new()?;
 
-    let mut identifier1 = {
         let pk = BasicPrefix::Ed25519(km1.public_key());
         let npk = BasicPrefix::Ed25519(km1.next_public_key());
 
         let icp_event = controller.incept(vec![pk], vec![npk], vec![], 0).await?;
         let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(icp_event.as_bytes())?);
 
-        let incepted_identifier = controller
-            .finalize_inception(icp_event.as_bytes(), &signature)
-            .await?;
-        IdentifierController::new(incepted_identifier, controller.clone(), None)
-    };
-    identifier1.notify_witnesses().await?;
+        let mut identifier1 = controller
+            .finalize_incept(icp_event.as_bytes(), &signature)?;
 
-    let mut identifier2 = {
-        let pk = BasicPrefix::Ed25519(km2.public_key());
-        let npk = BasicPrefix::Ed25519(km2.next_public_key());
+    // identifier1.notify_witnesses().await?;
 
-        let icp_event = controller.incept(vec![pk], vec![npk], vec![], 0).await?;
-        let signature = SelfSigningPrefix::Ed25519Sha512(km2.sign(icp_event.as_bytes())?);
+    let pk = BasicPrefix::Ed25519(km2.public_key());
+    let npk = BasicPrefix::Ed25519(km2.next_public_key());
 
-        let incepted_identifier = controller
-            .finalize_inception(icp_event.as_bytes(), &signature)
-            .await?;
-        IdentifierController::new(incepted_identifier, controller.clone(), None)
-    };
-    identifier2.notify_witnesses().await?;
+    let icp_event = controller.incept(vec![pk], vec![npk], vec![], 0).await?;
+    let signature = SelfSigningPrefix::Ed25519Sha512(km2.sign(icp_event.as_bytes())?);
+
+    let mut identifier2 = controller
+        .finalize_incept(icp_event.as_bytes(), &signature)?;
+    // identifier2.notify_witnesses().await?;
 
     let (group_inception, exn_messages) =
-        identifier1.incept_group(vec![identifier2.id.clone()], 2, None, None, None)?;
+        identifier1.incept_group(vec![identifier2.id().clone()], 2, None, None, None)?;
 
     let signature_icp = SelfSigningPrefix::Ed25519Sha512(km1.sign(group_inception.as_bytes())?);
     let signature_exn = SelfSigningPrefix::Ed25519Sha512(km1.sign(exn_messages[0].as_bytes())?);
@@ -63,8 +56,7 @@ async fn test_group_incept() -> Result<(), ControllerError> {
         .await?;
 
     let kel = controller
-        .storage
-        .get_kel_messages_with_receipts(&group_id, None)?;
+        .get_kel_with_receipts(&group_id);
     // Event is not yet accepted.
     assert!(kel.is_none());
 
@@ -78,8 +70,7 @@ async fn test_group_incept() -> Result<(), ControllerError> {
         .await?;
 
     let kel = controller
-        .storage
-        .get_kel_messages_with_receipts(&group_id, None)?;
+        .get_kel_with_receipts(&group_id);
     assert!(kel.is_some());
 
     Ok(())

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use keri_core::{event_message::signature::Signature, oobi::LocationScheme, prefix::{BasicPrefix, SelfSigningPrefix}};
+use keri_core::{event_message::signature::Signature, oobi::LocationScheme, prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix}};
 
 use crate::{communication::Communication, config::ControllerConfig, error::ControllerError, identifier::Identifier, known_events::KnownEvents};
 pub mod verifying;
@@ -53,6 +53,10 @@ impl Controller {
             self.communication.resolve_loc_schema(lc).await?;
         }
         Ok(())
+    }
+
+    pub fn get_kel_with_receipts(&self, id: &IdentifierPrefix) -> Option<Vec<keri_core::event_message::signed_event_message::Notice>> {
+        self.known_events.find_kel_with_receipts(id)
     }
 
     pub fn verify(&self, data: &[u8], signature: &Signature 
