@@ -440,6 +440,15 @@ impl KnownEvents {
         })
     }
 
+    pub fn find_witnesses_at_event(
+        &self,
+        event_message: &KeriEvent<KeyEvent>,
+    ) -> Result<Vec<BasicPrefix>, ControllerError> {
+        let state = self.get_state_at_event(event_message)?;
+        Ok(state.witness_config.witnesses)
+    }
+
+
     pub fn finalize_add_role(
         &self,
         signer_prefix: &IdentifierPrefix,

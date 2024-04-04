@@ -1,7 +1,7 @@
 pub mod config;
 pub mod error;
 // pub mod identifier_controller;
-// pub mod mailbox_updating;
+pub mod mailbox_updating;
 // pub mod messagebox;
 pub mod known_events;
 pub mod communication;
