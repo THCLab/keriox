@@ -1,4 +1,4 @@
-use keri_core::{actor::{prelude::SerializationFormats, simple_controller::PossibleResponse}, mailbox::MailboxResponse, oobi::Scheme, prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix}, query::{mailbox::QueryArgsMbx, query_event::{QueryEvent, QueryRoute, SignedKelQuery}}};
+use keri_core::{actor::{prelude::SerializationFormats, simple_controller::PossibleResponse}, event::sections::seal::EventSeal, mailbox::MailboxResponse, oobi::Scheme, prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix}, query::{mailbox::QueryArgsMbx, query_event::{LogsQueryArgs, QueryEvent, QueryRoute, SignedKelQuery}}};
 use keri_core::actor::prelude::HashFunctionCode;
 use crate::{error::ControllerError, mailbox_updating::ActionRequired};
 
@@ -41,6 +41,17 @@ impl Identifier {
                     HashFunctionCode::Blake3_256,
                 )?)
             })
+            .collect()
+    }
+
+    pub fn query_own_watchers(
+        &self,
+        about_who: &EventSeal,
+    ) -> Result<Vec<QueryEvent>, ControllerError> {
+        self.known_events
+            .get_watchers(&self.id)?
+            .into_iter()
+            .map(|watcher| self.query_log(about_who, watcher))
             .collect()
     }
 
@@ -137,5 +148,22 @@ impl Identifier {
         Ok(req)
     }
 
-
+    fn query_log(
+        &self,
+        seal: &EventSeal,
+        watcher: IdentifierPrefix,
+    ) -> Result<QueryEvent, ControllerError> {
+        Ok(QueryEvent::new_query(
+            QueryRoute::Logs {
+                reply_route: "".to_string(),
+                args: LogsQueryArgs {
+                    s: Some(seal.sn),
+                    i: seal.prefix.clone(),
+                    src: Some(watcher),
+                },
+            },
+            SerializationFormats::JSON,
+            HashFunctionCode::Blake3_256,
+        )?)
+    }
 }

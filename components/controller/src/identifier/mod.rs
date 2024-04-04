@@ -1,10 +1,9 @@
 use std::sync::Arc;
-
 #[cfg(test)]
-mod test;
+mod test_watcher;
 
 use keri_core::{
-    event::event_data::EventData, event_message::signed_event_message::SignedEventMessage, prefix::{BasicPrefix, IdentifierPrefix}, state::IdentifierState
+    event::{event_data::EventData, sections::seal::EventSeal}, event_message::signed_event_message::SignedEventMessage, prefix::{BasicPrefix, IdentifierPrefix}, state::IdentifierState
 };
 
 use crate::{communication::Communication, error::ControllerError, known_events::KnownEvents};
@@ -63,7 +62,23 @@ impl Identifier {
         }
     }
 
+    pub fn id(&self) -> &IdentifierPrefix {
+        &self.id
+    }
+
+    pub fn find_state(&self, id: &IdentifierPrefix) -> Result<IdentifierState, ControllerError> {
+        self.known_events.get_state(id)
+    }
+
     pub fn current_public_keys(&self) -> Result<Vec<BasicPrefix>, ControllerError> {
         self.known_events.current_public_keys(&self.id)
+    }
+
+
+    pub fn get_last_establishment_event_seal(&self) -> Result<EventSeal, ControllerError> {
+        self.known_events
+            .storage
+            .get_last_establishment_event_seal(&self.id)?
+            .ok_or(ControllerError::UnknownIdentifierError)
     }
 }
