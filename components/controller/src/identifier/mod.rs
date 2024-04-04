@@ -3,8 +3,9 @@ use std::sync::Arc;
 mod test_watcher;
 
 use keri_core::{
-    event::{event_data::EventData, sections::seal::EventSeal}, event_message::signed_event_message::SignedEventMessage, prefix::{BasicPrefix, IdentifierPrefix}, state::IdentifierState
+    actor::prelude::SelfAddressingIdentifier, event::{event_data::EventData, sections::seal::EventSeal}, event_message::signed_event_message::SignedEventMessage, prefix::{BasicPrefix, IdentifierPrefix}, state::IdentifierState
 };
+use teliox::state::{vc_state::TelState, ManagerTelState};
 
 use crate::{communication::Communication, error::ControllerError, known_events::KnownEvents};
 
@@ -14,9 +15,11 @@ pub mod publish;
 pub mod query;
 mod mailbox;
 pub mod signing;
+pub mod tel;
 
 pub struct Identifier {
     id: IdentifierPrefix,
+    registry_id: Option<IdentifierPrefix>,
     known_events: Arc<KnownEvents>,
     communication: Arc<Communication>,
     pub to_notify: Vec<SignedEventMessage>,
@@ -59,7 +62,8 @@ impl Identifier {
             communication,
             to_notify: events_to_notice,
             query_cache: QueryCache::new(),
-            cached_state: state
+            cached_state: state,
+            registry_id: None,
         }
     }
 
@@ -67,8 +71,20 @@ impl Identifier {
         &self.id
     }
 
+    pub fn registry_id(&self) -> Option<&IdentifierPrefix> {
+        self.registry_id.as_ref()
+    }
+
     pub fn find_state(&self, id: &IdentifierPrefix) -> Result<IdentifierState, ControllerError> {
         self.known_events.get_state(id)
+    }
+
+    pub fn find_management_tel_state(&self, id: &IdentifierPrefix) -> Result<Option<ManagerTelState>, ControllerError> {
+        Ok(self.known_events.tel.get_management_tel_state(id)?)
+    }
+
+    pub fn find_vc_state(&self, vc_hash: &SelfAddressingIdentifier) -> Result<Option<TelState>, ControllerError> {
+        Ok(self.known_events.tel.get_vc_state(vc_hash)?)
     }
 
     pub fn current_public_keys(&self) -> Result<Vec<BasicPrefix>, ControllerError> {

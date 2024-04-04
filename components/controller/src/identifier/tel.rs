@@ -9,15 +9,16 @@ use teliox::seal::{AttachedSourceSeal, EventSourceSeal};
 
 use crate::error::ControllerError;
 
-use super::IdentifierController;
+use super::Identifier;
 
-impl IdentifierController {
+
+impl Identifier {
     /// Generate `vcp` event and `ixn` event with  seal to `vcp`. To finalize
     /// the process, `ixn` need to be signed confirmed with `finalize_event`
     /// function.
     pub fn incept_registry(&mut self) -> Result<(IdentifierPrefix, Vec<u8>), ControllerError> {
         // Create tel
-        let tel = self.source.tel.clone();
+        let tel = self.known_events.tel.clone();
 
         let vcp = tel.make_inception_event(
             self.id.clone(),
@@ -58,7 +59,7 @@ impl IdentifierController {
     ) -> Result<(IdentifierPrefix, Vec<u8>), ControllerError> {
         match self.registry_id.as_ref() {
             Some(registry_id) => {
-                let tel = self.source.tel.clone();
+                let tel = self.known_events.tel.clone();
                 let iss = tel.make_issuance_event(registry_id, credential_digest)?;
 
                 let vc_hash = iss.get_prefix();
@@ -96,7 +97,7 @@ impl IdentifierController {
     ) -> Result<Vec<u8>, ControllerError> {
         match &self.registry_id {
             Some(registry_id) => {
-                let tel = self.source.tel.clone();
+                let tel = self.known_events.tel.clone();
                 let rev = tel.make_revoke_event(registry_id, credential_sai)?;
 
                 let seal = Seal::Event(EventSeal {
@@ -145,15 +146,15 @@ impl IdentifierController {
     }
 
     pub async fn notify_backers(&self) -> Result<(), ControllerError> {
-        let to_notify = self.source.tel.recently_added_events.get();
-        let backers = self.source.get_current_witness_list(&self.id)?;
+        let to_notify = self.known_events.tel.recently_added_events.get();
+        let backers = self.known_events.get_current_witness_list(&self.id)?;
         for backer in backers {
             let location = self
-                .source
+                .known_events
                 .get_loc_schemas(&IdentifierPrefix::Basic(backer))?[0]
                 .clone();
             for event in &to_notify {
-                self.source
+                self.communication
                     .tel_transport
                     .send_tel_event(event.clone(), location.clone())
                     .await
