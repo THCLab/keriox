@@ -1,23 +1,29 @@
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 #[cfg(test)]
 mod test_watcher;
 
 use keri_core::{
-    actor::prelude::SelfAddressingIdentifier, event::{event_data::EventData, sections::seal::EventSeal}, event_message::signed_event_message::{Notice, SignedEventMessage}, oobi::Oobi, prefix::{BasicPrefix, IdentifierPrefix}, state::IdentifierState
+    actor::prelude::SelfAddressingIdentifier,
+    event::{event_data::EventData, sections::seal::EventSeal},
+    event_message::signed_event_message::{Notice, SignedEventMessage},
+    oobi::Oobi,
+    prefix::{BasicPrefix, IdentifierPrefix},
+    state::IdentifierState,
 };
 use teliox::state::{vc_state::TelState, ManagerTelState};
 
 use crate::{communication::Communication, error::ControllerError, known_events::KnownEvents};
 
 use self::publish::QueryCache;
+mod broadcast;
+pub mod delegate;
+pub mod group;
 pub mod kel_managing;
+mod mailbox;
 pub mod publish;
 pub mod query;
-mod mailbox;
 pub mod signing;
 pub mod tel;
-pub mod group;
-pub mod delegate;
 
 pub struct Identifier {
     id: IdentifierPrefix,
@@ -27,6 +33,7 @@ pub struct Identifier {
     pub to_notify: Vec<SignedEventMessage>,
     query_cache: QueryCache,
     cached_state: IdentifierState,
+    pub(crate) broadcasted_rcts: HashSet<(SelfAddressingIdentifier, BasicPrefix, IdentifierPrefix)>,
 }
 
 impl Identifier {
@@ -66,6 +73,7 @@ impl Identifier {
             query_cache: QueryCache::new(),
             cached_state: state,
             registry_id: None,
+            broadcasted_rcts: HashSet::new(),
         }
     }
 
@@ -73,7 +81,11 @@ impl Identifier {
         self.communication.resolve_oobi(oobi).await
     }
 
-    pub async fn send_oobi_to_watcher(&self, id: &IdentifierPrefix, oobi: &Oobi) -> Result<(), ControllerError> {
+    pub async fn send_oobi_to_watcher(
+        &self,
+        id: &IdentifierPrefix,
+        oobi: &Oobi,
+    ) -> Result<(), ControllerError> {
         self.communication.send_oobi_to_watcher(id, oobi).await
     }
 
@@ -89,11 +101,17 @@ impl Identifier {
         self.known_events.get_state(id)
     }
 
-    pub fn find_management_tel_state(&self, id: &IdentifierPrefix) -> Result<Option<ManagerTelState>, ControllerError> {
+    pub fn find_management_tel_state(
+        &self,
+        id: &IdentifierPrefix,
+    ) -> Result<Option<ManagerTelState>, ControllerError> {
         Ok(self.known_events.tel.get_management_tel_state(id)?)
     }
 
-    pub fn find_vc_state(&self, vc_hash: &SelfAddressingIdentifier) -> Result<Option<TelState>, ControllerError> {
+    pub fn find_vc_state(
+        &self,
+        vc_hash: &SelfAddressingIdentifier,
+    ) -> Result<Option<TelState>, ControllerError> {
         Ok(self.known_events.tel.get_vc_state(vc_hash)?)
     }
 
@@ -113,7 +131,6 @@ impl Identifier {
     pub fn get_kel(&self) -> Option<Vec<Notice>> {
         self.known_events.find_kel_with_receipts(&self.id)
     }
-
 
     pub fn get_last_establishment_event_seal(&self) -> Result<EventSeal, ControllerError> {
         self.known_events
