@@ -107,61 +107,6 @@ impl IdentifierController {
         }
     }
 
-    fn last_asked_index(&self, id: &IdentifierPrefix) -> Result<MailboxReminder, ControllerError> {
-        Ok(self
-            .last_asked_index
-            .lock()
-            .map_err(|_| ControllerError::OtherError("Can't lock mutex".to_string()))?
-            .get(id)
-            .cloned()
-            .unwrap_or_default())
-    }
-
-    fn last_asked_group_index(
-        &self,
-        id: &IdentifierPrefix,
-    ) -> Result<MailboxReminder, ControllerError> {
-        Ok(self
-            .last_asked_groups_index
-            .lock()
-            .map_err(|_| ControllerError::OtherError("Can't lock mutex".to_string()))?
-            .get(id)
-            .cloned()
-            .unwrap_or_default())
-    }
-
-    fn update_last_asked_index(
-        &self,
-        id: IdentifierPrefix,
-        res: &MailboxResponse,
-    ) -> Result<(), ControllerError> {
-        let mut indexes = self
-            .last_asked_index
-            .lock()
-            .map_err(|_| ControllerError::OtherError("Can't lock mutex".to_string()))?;
-        let reminder = indexes.entry(id).or_default();
-        reminder.delegate += res.delegate.len();
-        reminder.multisig += res.multisig.len();
-        reminder.receipt += res.receipt.len();
-        Ok(())
-    }
-
-    fn update_last_asked_group_index(
-        &self,
-        id: IdentifierPrefix,
-        res: &MailboxResponse,
-    ) -> Result<(), ControllerError> {
-        let mut indexes = self
-            .last_asked_groups_index
-            .lock()
-            .map_err(|_| ControllerError::OtherError("Can't lock mutex".to_string()))?;
-        let reminder = indexes.entry(id).or_default();
-        reminder.delegate += res.delegate.len();
-        reminder.multisig += res.multisig.len();
-        reminder.receipt += res.receipt.len();
-        Ok(())
-    }
-
     pub fn get_kel(&self) -> Result<String, ControllerError> {
         String::from_utf8(
             self.source

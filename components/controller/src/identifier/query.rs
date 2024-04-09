@@ -139,11 +139,10 @@ impl Identifier {
             self.query_cache.update_last_asked_index(recipient.clone(), res)?;
             req
         } else {
-			todo!()
             // process group mailbox
-            // let group_req = self.process_group_mailbox(res, about_who).await?;
-            // self.query_cache.update_last_asked_group_index(recipient.clone(), res)?;
-            // group_req
+            let group_req = self.process_group_mailbox(res, about_who).await?;
+            self.query_cache.update_last_asked_group_index(recipient.clone(), res)?;
+            group_req
         };
         Ok(req)
     }

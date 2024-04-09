@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
-use keri_core::{event_message::signature::Signature, oobi::LocationScheme, prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix}};
+use keri_core::{event_message::signature::Signature, oobi::LocationScheme, prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix}, state::IdentifierState};
 
 use crate::{communication::Communication, config::ControllerConfig, error::ControllerError, identifier::Identifier, known_events::KnownEvents};
 pub mod verifying;
 
 pub struct Controller {
-	known_events: Arc<KnownEvents>,
+	pub known_events: Arc<KnownEvents>,
 	communication: Arc<Communication>,
 }
 
@@ -63,4 +63,8 @@ impl Controller {
         ) -> Result<(), ControllerError> {
         self.known_events.verify(data, signature)
     }
+
+    pub fn find_state(&self, id: &IdentifierPrefix) -> Result<IdentifierState, ControllerError> {
+        self.known_events.get_state(id)
+    } 
 }

@@ -17,6 +17,7 @@ mod mailbox;
 pub mod signing;
 pub mod tel;
 pub mod group;
+pub mod delegate;
 
 pub struct Identifier {
     id: IdentifierPrefix,
