@@ -61,7 +61,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
         transport: Box::new(transport.clone()),
         ..Default::default()
     })?);
-    
+
     let delegatee_keypair = CryptoBox::new()?;
 
     let pk = BasicPrefix::Ed25519(delegatee_keypair.public_key());
@@ -72,15 +72,19 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
         .await?;
     let signature = SelfSigningPrefix::Ed25519Sha512(delegatee_keypair.sign(icp_event.as_bytes())?);
 
-    let mut delegatee_identifier = delegatee_controller.finalize_incept(icp_event.as_bytes(), &signature)?;
+    let mut delegatee_identifier =
+        delegatee_controller.finalize_incept(icp_event.as_bytes(), &signature)?;
     delegatee_identifier.notify_witnesses().await?;
 
     // Quering mailbox to get receipts
-    let query = delegatee_identifier.query_mailbox(delegatee_identifier.id(), &[witness_id_basic.clone()])?;
+    let query = delegatee_identifier
+        .query_mailbox(delegatee_identifier.id(), &[witness_id_basic.clone()])?;
 
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(delegatee_keypair.sign(&qry.encode()?)?);
-        delegatee_identifier.finalize_query(vec![(qry, signature)]).await?;
+        delegatee_identifier
+            .finalize_query(vec![(qry, signature)])
+            .await?;
     }
     println!("Delegatee: {}", &delegatee_identifier.id());
 
@@ -97,7 +101,8 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     let icp_event = delegator_controller
         .incept(vec![pk], vec![npk], vec![wit_location], 1)
         .await?;
-    let signature = SelfSigningPrefix::Ed25519Sha512(delegator_keyipair.sign(icp_event.as_bytes())?);
+    let signature =
+        SelfSigningPrefix::Ed25519Sha512(delegator_keyipair.sign(icp_event.as_bytes())?);
 
     let mut delegator = delegator_controller.finalize_incept(icp_event.as_bytes(), &signature)?;
     delegator.notify_witnesses().await?;
@@ -120,8 +125,10 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
         Some(delegator.id().clone()),
     )?;
 
-    let signature_icp = SelfSigningPrefix::Ed25519Sha512(delegatee_keypair.sign(delegated_inception.as_bytes())?);
-    let signature_exn = SelfSigningPrefix::Ed25519Sha512(delegatee_keypair.sign(exn_messages[0].as_bytes())?);
+    let signature_icp =
+        SelfSigningPrefix::Ed25519Sha512(delegatee_keypair.sign(delegated_inception.as_bytes())?);
+    let signature_exn =
+        SelfSigningPrefix::Ed25519Sha512(delegatee_keypair.sign(exn_messages[0].as_bytes())?);
 
     // Group initiator needs to use `finalize_group_incept` instead of just
     // `finalize_event`, to send multisig request to other group participants or delegator.
@@ -150,9 +157,11 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
         match &ar[0] {
             ActionRequired::MultisigRequest(_, _) => unreachable!(),
             ActionRequired::DelegationRequest(delegating_event, exn) => {
-                let signature_ixn =
-                    SelfSigningPrefix::Ed25519Sha512(delegator_keyipair.sign(&delegating_event.encode()?)?);
-                let signature_exn = SelfSigningPrefix::Ed25519Sha512(delegator_keyipair.sign(&exn.encode()?)?);
+                let signature_ixn = SelfSigningPrefix::Ed25519Sha512(
+                    delegator_keyipair.sign(&delegating_event.encode()?)?,
+                );
+                let signature_exn =
+                    SelfSigningPrefix::Ed25519Sha512(delegator_keyipair.sign(&exn.encode()?)?);
                 delegator
                     .finalize_group_incept(
                         &delegating_event.encode()?,
@@ -166,7 +175,8 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
                 let query = delegator.query_mailbox(delegator.id(), &[witness_id_basic.clone()])?;
 
                 for qry in query {
-                    let signature = SelfSigningPrefix::Ed25519Sha512(delegator_keyipair.sign(&qry.encode()?)?);
+                    let signature =
+                        SelfSigningPrefix::Ed25519Sha512(delegator_keyipair.sign(&qry.encode()?)?);
                     let action_required = delegator.finalize_query(vec![(qry, signature)]).await?;
                     assert!(action_required.is_empty());
                 }
@@ -193,7 +203,9 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
 
     // Process delegator's icp by identifier who'll request delegation.
     // TODO how child should get delegators kel?
-    let delegators_kel = delegator_controller.get_kel_with_receipts(&delegator.id()).unwrap();
+    let delegators_kel = delegator_controller
+        .get_kel_with_receipts(&delegator.id())
+        .unwrap();
     delegatee_controller
         .known_events
         .save(&Message::Notice(delegators_kel[0].clone()))?; // icp
@@ -206,7 +218,9 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
 
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(delegatee_keypair.sign(&qry.encode()?)?);
-        let ar = delegatee_identifier.finalize_query(vec![(qry, signature)]).await?;
+        let ar = delegatee_identifier
+            .finalize_query(vec![(qry, signature)])
+            .await?;
         assert!(ar.is_empty());
     }
 
@@ -223,7 +237,9 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
 
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(delegatee_keypair.sign(&qry.encode()?)?);
-        let ar = delegatee_identifier.finalize_query(vec![(qry, signature)]).await?;
+        let ar = delegatee_identifier
+            .finalize_query(vec![(qry, signature)])
+            .await?;
         assert!(ar.is_empty());
     }
 

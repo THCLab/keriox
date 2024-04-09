@@ -9,15 +9,14 @@ use crate::error::ControllerError;
 
 use super::Identifier;
 
-
 impl Identifier {
     pub fn sign(
         &self,
         signature: SelfSigningPrefix,
         key_index: u16,
     ) -> Result<Signature, ControllerError> {
-        let last_establishment = 
-            self.known_events
+        let last_establishment = self
+            .known_events
             .storage
             .get_last_establishment_event_seal(&self.id)?
             .ok_or(ControllerError::UnknownIdentifierError)?;

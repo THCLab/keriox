@@ -1,9 +1,12 @@
 use std::sync::Arc;
 
 use keri_controller::{
-    config::ControllerConfig, controller::Controller, error::ControllerError, identifier
+    config::ControllerConfig, controller::Controller, error::ControllerError, identifier,
 };
-use keri_core::{prefix::{BasicPrefix, SelfSigningPrefix}, signer::{CryptoBox, KeyManager}};
+use keri_core::{
+    prefix::{BasicPrefix, SelfSigningPrefix},
+    signer::{CryptoBox, KeyManager},
+};
 use tempfile::Builder;
 
 #[async_std::test]
@@ -17,14 +20,13 @@ async fn test_group_incept() -> Result<(), ControllerError> {
     let km1 = CryptoBox::new()?;
     let km2 = CryptoBox::new()?;
 
-        let pk = BasicPrefix::Ed25519(km1.public_key());
-        let npk = BasicPrefix::Ed25519(km1.next_public_key());
+    let pk = BasicPrefix::Ed25519(km1.public_key());
+    let npk = BasicPrefix::Ed25519(km1.next_public_key());
 
-        let icp_event = controller.incept(vec![pk], vec![npk], vec![], 0).await?;
-        let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(icp_event.as_bytes())?);
+    let icp_event = controller.incept(vec![pk], vec![npk], vec![], 0).await?;
+    let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(icp_event.as_bytes())?);
 
-        let mut identifier1 = controller
-            .finalize_incept(icp_event.as_bytes(), &signature)?;
+    let mut identifier1 = controller.finalize_incept(icp_event.as_bytes(), &signature)?;
 
     // identifier1.notify_witnesses().await?;
 
@@ -34,8 +36,7 @@ async fn test_group_incept() -> Result<(), ControllerError> {
     let icp_event = controller.incept(vec![pk], vec![npk], vec![], 0).await?;
     let signature = SelfSigningPrefix::Ed25519Sha512(km2.sign(icp_event.as_bytes())?);
 
-    let mut identifier2 = controller
-        .finalize_incept(icp_event.as_bytes(), &signature)?;
+    let mut identifier2 = controller.finalize_incept(icp_event.as_bytes(), &signature)?;
     // identifier2.notify_witnesses().await?;
 
     let (group_inception, exn_messages) =
@@ -55,8 +56,7 @@ async fn test_group_incept() -> Result<(), ControllerError> {
         )
         .await?;
 
-    let kel = controller
-        .get_kel_with_receipts(&group_id);
+    let kel = controller.get_kel_with_receipts(&group_id);
     // Event is not yet accepted.
     assert!(kel.is_none());
 
@@ -69,8 +69,7 @@ async fn test_group_incept() -> Result<(), ControllerError> {
         .finalize_group_incept(group_inception.as_bytes(), signature_icp, vec![])
         .await?;
 
-    let kel = controller
-        .get_kel_with_receipts(&group_id);
+    let kel = controller.get_kel_with_receipts(&group_id);
     assert!(kel.is_some());
 
     Ok(())

@@ -1,24 +1,8 @@
 // use super::{error::ControllerError, identifier_controller::IdentifierController};
-use futures::{StreamExt, TryStreamExt};
 use keri_core::{
-    actor::{event_generator, prelude::Message},
-    event::{
-        event_data::EventData,
-        sections::seal::{EventSeal, Seal},
-        KeyEvent,
-    },
-    event_message::{
-        msg::KeriEvent,
-        signed_event_message::{Notice, SignedEventMessage, SignedNontransferableReceipt},
-    },
-    mailbox::{
-        exchange::{ExchangeMessage, ForwardTopic},
-        MailboxResponse,
-    },
-    prefix::IdentifierPrefix, query::mailbox::QueryTopics,
+    event::KeyEvent, event_message::msg::KeriEvent, mailbox::exchange::ExchangeMessage,
+    query::mailbox::QueryTopics,
 };
-
-use crate::{error::ControllerError, identifier::Identifier};
 
 #[derive(Default, Debug, Clone)]
 /// Struct for tracking what was the last indexes of processed mailbox messages.
@@ -32,7 +16,7 @@ pub struct MailboxReminder {
 
 impl MailboxReminder {
     pub fn to_query_topics(&self) -> QueryTopics {
-		QueryTopics {
+        QueryTopics {
             credential: 0,
             receipt: self.receipt,
             replay: 0,
@@ -40,7 +24,7 @@ impl MailboxReminder {
             delegate: self.delegate,
             reply: 0,
         }
-	}
+    }
 }
 
 #[derive(Debug)]

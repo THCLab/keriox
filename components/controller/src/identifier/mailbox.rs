@@ -1,10 +1,20 @@
 use futures::{StreamExt, TryStreamExt};
-use keri_core::{actor::event_generator, event::{event_data::EventData, sections::seal::{EventSeal, Seal}}, event_message::signed_event_message::{Message, Notice, SignedEventMessage, SignedNontransferableReceipt}, mailbox::{exchange::ForwardTopic, MailboxResponse}, prefix::IdentifierPrefix};
+use keri_core::{
+    actor::event_generator,
+    event::{
+        event_data::EventData,
+        sections::seal::{EventSeal, Seal},
+    },
+    event_message::signed_event_message::{
+        Message, Notice, SignedEventMessage, SignedNontransferableReceipt,
+    },
+    mailbox::{exchange::ForwardTopic, MailboxResponse},
+    prefix::IdentifierPrefix,
+};
 
 use crate::{error::ControllerError, mailbox_updating::ActionRequired};
 
 use super::Identifier;
-
 
 impl Identifier {
     pub fn process_receipt(
@@ -163,8 +173,6 @@ impl Identifier {
         }
     }
 
-    
-
     /// Process event from group delegate mailbox. Creates group delegating
     /// event and send it to group multisig mailbox for other group
     /// participants. If signing is required to finish the process it resturns
@@ -187,7 +195,9 @@ impl Identifier {
                         .get_event_by_sn_and_digest(seal.sn, &seal.prefix, &seal.event_digest);
                     if let Some(fully_signed) = fully_signed_event {
                         let witnesses = self.known_events.get_current_witness_list(&self.id)?;
-                        self.communication.publish(&witnesses, &fully_signed).await?;
+                        self.communication
+                            .publish(&witnesses, &fully_signed)
+                            .await?;
                     };
                 };
                 Ok(None)

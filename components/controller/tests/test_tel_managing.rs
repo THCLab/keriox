@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
 use keri_controller::{
-    config::ControllerConfig, controller::Controller, error::ControllerError, BasicPrefix, CryptoBox, KeyManager, SelfSigningPrefix
+    config::ControllerConfig, controller::Controller, error::ControllerError, BasicPrefix,
+    CryptoBox, KeyManager, SelfSigningPrefix,
 };
 use keri_core::actor::prelude::{HashFunction, HashFunctionCode};
 
@@ -41,10 +42,10 @@ async fn test_tel() -> Result<(), ControllerError> {
 
     identifier1.finalize_event(&ixn, signature).await.unwrap();
 
-
     println!("Id registry: {:?}", identifier1.registry_id());
 
-    let mana = identifier1.find_management_tel_state(identifier1.registry_id().unwrap())
+    let mana = identifier1
+        .find_management_tel_state(identifier1.registry_id().unwrap())
         .unwrap()
         .unwrap();
     assert_eq!(mana.sn, 0);

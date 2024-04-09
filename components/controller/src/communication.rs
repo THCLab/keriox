@@ -1,22 +1,35 @@
 use std::sync::Arc;
 
-use keri_core::{actor::{error::ActorError, simple_controller::PossibleResponse}, event_message::signed_event_message::{Message, Notice, Op, SignedEventMessage}, oobi::{EndRole, LocationScheme, Oobi, Scheme}, prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix}, query::{query_event::SignedKelQuery, reply_event::ReplyEvent}, transport::Transport};
+use keri_core::{
+    actor::{error::ActorError, simple_controller::PossibleResponse},
+    event_message::signed_event_message::{Message, Notice, Op, SignedEventMessage},
+    oobi::{EndRole, LocationScheme, Oobi, Scheme},
+    prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+    query::{query_event::SignedKelQuery, reply_event::ReplyEvent},
+    transport::Transport,
+};
 use teliox::transport::GeneralTelTransport;
 
 use crate::{error::ControllerError, known_events::KnownEvents};
 
 pub struct Communication {
-	pub events: Arc<KnownEvents>,
+    pub events: Arc<KnownEvents>,
     pub transport: Box<dyn Transport + Send + Sync>,
     pub tel_transport: Box<dyn GeneralTelTransport + Send + Sync>,
-
 }
 
 impl Communication {
-	pub fn new(known_events: Arc<KnownEvents>, transport: Box<dyn Transport<ActorError> + Send + Sync>, 
-    tel_transport: Box<dyn GeneralTelTransport + Send + Sync>) -> Self {
-		Communication { events: known_events, transport, tel_transport }
-	}
+    pub fn new(
+        known_events: Arc<KnownEvents>,
+        transport: Box<dyn Transport<ActorError> + Send + Sync>,
+        tel_transport: Box<dyn GeneralTelTransport + Send + Sync>,
+    ) -> Self {
+        Communication {
+            events: known_events,
+            transport,
+            tel_transport,
+        }
+    }
 
     /// Make http request to get identifier's endpoints information.
     pub async fn resolve_loc_schema(&self, lc: &LocationScheme) -> Result<(), ControllerError> {
@@ -27,35 +40,37 @@ impl Communication {
         Ok(())
     }
 
-	/// Make http request to get identifier's endpoints information.
+    /// Make http request to get identifier's endpoints information.
     pub async fn resolve_end_role(&self, er: &EndRole) -> Result<(), ControllerError> {
-		let EndRole { cid, role, eid } = er.clone();
-		// TODO what if more than one
-		let loc = self.events.get_loc_schemas(&cid)?
-			.first()
-			.ok_or(ControllerError::UnknownIdentifierError)?
-			.clone();
-		let msgs = self.transport.request_end_role(loc, cid, role, eid).await?;
-		for msg in msgs {
-			// TODO This ignore signatures. Add verification.
-			if let Message::Op(Op::Reply(signed_oobi)) = msg {
-				self.events.save_oobi(&signed_oobi)?;
-			} else {
-				self.events.save(&msg)?;
-			}
-		}
+        let EndRole { cid, role, eid } = er.clone();
+        // TODO what if more than one
+        let loc = self
+            .events
+            .get_loc_schemas(&cid)?
+            .first()
+            .ok_or(ControllerError::UnknownIdentifierError)?
+            .clone();
+        let msgs = self.transport.request_end_role(loc, cid, role, eid).await?;
+        for msg in msgs {
+            // TODO This ignore signatures. Add verification.
+            if let Message::Op(Op::Reply(signed_oobi)) = msg {
+                self.events.save_oobi(&signed_oobi)?;
+            } else {
+                self.events.save(&msg)?;
+            }
+        }
         Ok(())
     }
 
-	/// Make http request to get identifier's endpoints information.
+    /// Make http request to get identifier's endpoints information.
     pub async fn resolve_oobi(&self, oobi: &Oobi) -> Result<(), ControllerError> {
-		match oobi {
-			Oobi::Location(loc) => self.resolve_loc_schema(loc).await,
-			Oobi::EndRole(er) => self.resolve_end_role(er).await,
-		}
-	}
+        match oobi {
+            Oobi::Location(loc) => self.resolve_loc_schema(loc).await,
+            Oobi::EndRole(er) => self.resolve_end_role(er).await,
+        }
+    }
 
-	pub async fn send_message_to(
+    pub async fn send_message_to(
         &self,
         id: &IdentifierPrefix,
         scheme: Scheme,
@@ -66,7 +81,7 @@ impl Communication {
         Ok(())
     }
 
-	pub async fn send_query_to(
+    pub async fn send_query_to(
         &self,
         id: &IdentifierPrefix,
         scheme: Scheme,
@@ -76,7 +91,7 @@ impl Communication {
         Ok(self.transport.send_query(loc, query).await?)
     }
 
-	 async fn send_oobi_to(
+    async fn send_oobi_to(
         &self,
         id: &IdentifierPrefix,
         scheme: Scheme,
@@ -87,7 +102,7 @@ impl Communication {
         Ok(())
     }
 
-	/// Publish key event to witnesses
+    /// Publish key event to witnesses
     ///
     ///  1. send it to all witnesses
     ///  2. collect witness receipts and process them
@@ -120,8 +135,8 @@ impl Communication {
             message.event_message.data.get_sn(),
             message.event_message.digest(),
         );
-       let rcts_from_db = self.events.find_receipt(&prefix, sn, &digest?)?;
- 
+        let rcts_from_db = self.events.find_receipt(&prefix, sn, &digest?)?;
+
         if let Some(receipt) = rcts_from_db {
             // send receipts to all witnesses
             for prefix in witness_prefixes {
@@ -137,9 +152,7 @@ impl Communication {
         Ok(())
     }
 
-
-
-	/// Sends identifier's endpoint information to identifiers's watchers.
+    /// Sends identifier's endpoint information to identifiers's watchers.
     // TODO use stream instead of json
     pub async fn send_oobi_to_watcher(
         &self,
@@ -153,6 +166,4 @@ impl Communication {
 
         Ok(())
     }
-
-	
 }

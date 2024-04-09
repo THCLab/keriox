@@ -1,6 +1,10 @@
 use std::sync::Arc;
 
-use keri_core::{oobi::{EndRole, LocationScheme, Oobi}, prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix}, signer::{CryptoBox, KeyManager}};
+use keri_core::{
+    oobi::{EndRole, LocationScheme, Oobi},
+    prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+    signer::{CryptoBox, KeyManager},
+};
 use tempfile::Builder;
 
 use crate::{config::ControllerConfig, controller::Controller, error::ControllerError};
@@ -37,7 +41,7 @@ async fn test_watcher() -> Result<(), ControllerError> {
     //     db_path: database_path.path().to_owned(),
     //     ..Default::default()
     // })?);
-	 let signer_controller = Arc::new(Controller::new(ControllerConfig {
+    let signer_controller = Arc::new(Controller::new(ControllerConfig {
         db_path: database_path.path().to_owned(),
         ..Default::default()
     })?);
@@ -45,23 +49,23 @@ async fn test_watcher() -> Result<(), ControllerError> {
     // Incept identifier.
     // The `IdentifierController` structure facilitates the management of the
     // Key Event Log specific to a particular identifier.
-        let pk = BasicPrefix::Ed25519(key_manager.public_key());
-        let npk = BasicPrefix::Ed25519(key_manager.next_public_key());
+    let pk = BasicPrefix::Ed25519(key_manager.public_key());
+    let npk = BasicPrefix::Ed25519(key_manager.next_public_key());
 
-	// Create inception event, that needs one witness receipt to be accepted.
-	let icp_event = signer_controller
-		.incept(
-			vec![pk],
-			vec![npk],
-			vec![first_witness_oobi.clone(), second_witness_oobi.clone()],
-			1,
-		)
-		.await?;
-	let signature =
-		SelfSigningPrefix::Ed25519Sha512(key_manager.sign(icp_event.as_bytes()).unwrap());
+    // Create inception event, that needs one witness receipt to be accepted.
+    let icp_event = signer_controller
+        .incept(
+            vec![pk],
+            vec![npk],
+            vec![first_witness_oobi.clone(), second_witness_oobi.clone()],
+            1,
+        )
+        .await?;
+    let signature =
+        SelfSigningPrefix::Ed25519Sha512(key_manager.sign(icp_event.as_bytes()).unwrap());
 
-	let mut signing_identifier = signer_controller
-		.finalize_incept(icp_event.as_bytes(), &signature)?;
+    let mut signing_identifier =
+        signer_controller.finalize_incept(icp_event.as_bytes(), &signature)?;
 
     println!("Signer: {}", &signing_identifier.id);
 
@@ -119,24 +123,23 @@ async fn test_watcher() -> Result<(), ControllerError> {
         ..Default::default()
     })?);
 
-        let pk = BasicPrefix::Ed25519(verifier_key_manager.public_key());
-        let npk = BasicPrefix::Ed25519(verifier_key_manager.next_public_key());
+    let pk = BasicPrefix::Ed25519(verifier_key_manager.public_key());
+    let npk = BasicPrefix::Ed25519(verifier_key_manager.next_public_key());
 
-        // Create inception event, that needs one witness receipt to be accepted.
-        let icp_event = verifying_controller
-            .incept(
-                vec![pk],
-                vec![npk],
-                vec![first_witness_oobi.clone(), second_witness_oobi.clone()],
-                1,
-            )
-            .await?;
-        let signature = SelfSigningPrefix::Ed25519Sha512(
-            verifier_key_manager.sign(icp_event.as_bytes()).unwrap(),
-        );
+    // Create inception event, that needs one witness receipt to be accepted.
+    let icp_event = verifying_controller
+        .incept(
+            vec![pk],
+            vec![npk],
+            vec![first_witness_oobi.clone(), second_witness_oobi.clone()],
+            1,
+        )
+        .await?;
+    let signature =
+        SelfSigningPrefix::Ed25519Sha512(verifier_key_manager.sign(icp_event.as_bytes()).unwrap());
 
-        let mut verifying_identifier = verifying_controller
-            .finalize_incept(icp_event.as_bytes(), &signature)?;
+    let mut verifying_identifier =
+        verifying_controller.finalize_incept(icp_event.as_bytes(), &signature)?;
     println!("Verifier: {}", &verifying_identifier.id);
 
     // Publish event to actor's witnesses
@@ -238,7 +241,9 @@ async fn test_watcher() -> Result<(), ControllerError> {
             .await;
     }
 
-	let signer_keys = verifying_identifier.known_events.get_state(&signing_identifier.id)?;
+    let signer_keys = verifying_identifier
+        .known_events
+        .get_state(&signing_identifier.id)?;
     // Verify signed message.
     assert!(verifying_controller
         .verify(first_message, &first_signature)
@@ -321,8 +326,10 @@ async fn test_watcher() -> Result<(), ControllerError> {
             .await;
     }
 
-	let signer_keys = verifying_identifier.known_events.get_state(&signing_identifier.id)?;
-	dbg!(signer_keys);
+    let signer_keys = verifying_identifier
+        .known_events
+        .get_state(&signing_identifier.id)?;
+    dbg!(signer_keys);
 
     assert!(verifying_controller
         .verify(second_message, &second_signature)

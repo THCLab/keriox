@@ -1,6 +1,9 @@
 use cesrox::primitives::codes::self_addressing::SelfAddressing;
 use keri_core::{
-    actor::prelude::HashFunction, oobi::LocationScheme, prefix::{BasicPrefix, SelfSigningPrefix}, signer::{CryptoBox, KeyManager}
+    actor::prelude::HashFunction,
+    oobi::LocationScheme,
+    prefix::{BasicPrefix, SelfSigningPrefix},
+    signer::{CryptoBox, KeyManager},
 };
 use tempfile::Builder;
 
@@ -70,7 +73,6 @@ async fn test_kel_managing() -> Result<(), ControllerError> {
     Ok(())
 }
 
-
 #[async_std::test]
 async fn test_kel_managing_with_witness() -> Result<(), ControllerError> {
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
@@ -101,11 +103,15 @@ async fn test_kel_managing_with_witness() -> Result<(), ControllerError> {
 
     let mut km = CryptoBox::new()?;
 
-
     let first_pk = BasicPrefix::Ed25519(km.public_key());
     let first_next_npk = BasicPrefix::Ed25519(km.next_public_key());
     let inception_event = controller
-        .incept(vec![first_pk.clone()], vec![first_next_npk], vec![first_witness_oobi, second_witness_oobi], 1)
+        .incept(
+            vec![first_pk.clone()],
+            vec![first_next_npk],
+            vec![first_witness_oobi, second_witness_oobi],
+            1,
+        )
         .await?;
 
     let signature = SelfSigningPrefix::Ed25519Sha512(km.sign(inception_event.as_bytes())?);
@@ -115,13 +121,14 @@ async fn test_kel_managing_with_witness() -> Result<(), ControllerError> {
     let i = identifier.notify_witnesses().await?;
     dbg!(i);
 
-    let queries_to_sign = identifier.query_mailbox(identifier.id(), &[first_witness_id.clone(), second_witness_id.clone()])?;
+    let queries_to_sign = identifier.query_mailbox(
+        identifier.id(),
+        &[first_witness_id.clone(), second_witness_id.clone()],
+    )?;
 
-     // Querying witnesses to get receipts
-    for qry in queries_to_sign
-    {
-        let signature =
-            SelfSigningPrefix::Ed25519Sha512(km.sign(&qry.encode().unwrap()).unwrap());
+    // Querying witnesses to get receipts
+    for qry in queries_to_sign {
+        let signature = SelfSigningPrefix::Ed25519Sha512(km.sign(&qry.encode().unwrap()).unwrap());
         identifier
             .finalize_query(vec![(qry, signature)])
             .await
@@ -131,7 +138,7 @@ async fn test_kel_managing_with_witness() -> Result<(), ControllerError> {
     let keys = identifier.current_public_keys()?;
     assert_eq!(keys, vec![first_pk.clone()]);
 
-        // Rotate signer keys
+    // Rotate signer keys
     km.rotate()?;
     let pk = BasicPrefix::Ed25519(km.public_key());
     let npk = BasicPrefix::Ed25519(km.next_public_key());
@@ -157,14 +164,12 @@ async fn test_kel_managing_with_witness() -> Result<(), ControllerError> {
         )
         .unwrap()
     {
-        let signature =
-            SelfSigningPrefix::Ed25519Sha512(km.sign(&qry.encode().unwrap()).unwrap());
+        let signature = SelfSigningPrefix::Ed25519Sha512(km.sign(&qry.encode().unwrap()).unwrap());
         identifier
             .finalize_query(vec![(qry, signature)])
             .await
             .unwrap();
     }
-
 
     let keys = identifier.current_public_keys()?;
     assert_eq!(keys, vec![pk.clone()]);

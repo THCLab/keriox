@@ -7,10 +7,9 @@ use keri_core::{
     processor::validator::EventValidator,
 };
 
-use crate::{error::ControllerError, known_events::KnownEvents, };
+use crate::{error::ControllerError, known_events::KnownEvents};
 
-impl KnownEvents {    
-    
+impl KnownEvents {
     pub fn verify(&self, data: &[u8], signature: &Signature) -> Result<(), ControllerError> {
         let verifier = EventValidator::new(self.storage.db.clone());
         verifier.verify(data, signature).map_err(|e| match e {
@@ -51,7 +50,6 @@ impl KnownEvents {
 
         Ok((oobis, to_verify))
     }
-
 
     fn verify_from_cesr(&self, stream: &str) -> Result<(), ControllerError> {
         let (_rest, data) =

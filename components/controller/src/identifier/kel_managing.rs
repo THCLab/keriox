@@ -63,20 +63,16 @@ impl Identifier {
             .map_err(|e| ControllerError::EventGenerationError(e.to_string()))
     }
 
-
     pub fn anchor_with_seal(
         &self,
         seal_list: &[Seal],
     ) -> Result<KeriEvent<KeyEvent>, ControllerError> {
-        let state = self
-            .known_events
-            .get_state(&self.id)?;
+        let state = self.known_events.get_state(&self.id)?;
         event_generator::anchor_with_seal(state, seal_list)
             .map_err(|e| ControllerError::EventGenerationError(e.to_string()))
-
     }
 
-        /// Generates reply event with `end_role_add` route.
+    /// Generates reply event with `end_role_add` route.
     pub fn add_watcher(&self, watcher_id: IdentifierPrefix) -> Result<String, ControllerError> {
         String::from_utf8(
             event_generator::generate_end_role(&self.id, &watcher_id, Role::Watcher, true)?

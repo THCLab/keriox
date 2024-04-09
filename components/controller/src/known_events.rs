@@ -9,12 +9,9 @@ use keri_core::prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSig
 use keri_core::processor::escrow::EscrowConfig;
 use keri_core::processor::notification::JustNotification;
 
-
 use keri_core::state::IdentifierState;
 use keri_core::{
-    actor::{
-        self, event_generator, prelude::SelfAddressingIdentifier,
-    },
+    actor::{self, event_generator, prelude::SelfAddressingIdentifier},
     database::{escrow::EscrowDb, SledEventDatabase},
     event::{event_data::EventData, sections::seal::Seal, KeyEvent},
     event_message::{
@@ -39,8 +36,6 @@ use teliox::transport::GeneralTelTransport;
 
 use crate::error::ControllerError;
 
-
-
 pub struct KnownEvents {
     processor: BasicProcessor,
     pub storage: Arc<EventStorage>,
@@ -53,7 +48,6 @@ pub struct KnownEvents {
 
 impl KnownEvents {
     pub fn new(db_path: PathBuf, escrow_config: EscrowConfig) -> Result<Self, ControllerError> {
-
         let db = {
             let mut path = db_path.clone();
             path.push("events");
@@ -138,7 +132,10 @@ impl KnownEvents {
         Ok(self.oobi_manager.process_oobi(oobi).unwrap())
     }
 
-     pub fn current_public_keys(&self, id: &IdentifierPrefix) -> Result<Vec<BasicPrefix>, ControllerError> {
+    pub fn current_public_keys(
+        &self,
+        id: &IdentifierPrefix,
+    ) -> Result<Vec<BasicPrefix>, ControllerError> {
         Ok(self
             .storage
             .get_state(id)?
@@ -147,16 +144,18 @@ impl KnownEvents {
             .public_keys)
     }
 
-    pub fn next_keys_hashes(&self, id: &IdentifierPrefix) -> Result<Vec<SelfAddressingIdentifier>, ControllerError> {
+    pub fn next_keys_hashes(
+        &self,
+        id: &IdentifierPrefix,
+    ) -> Result<Vec<SelfAddressingIdentifier>, ControllerError> {
         Ok(self
-                    .storage
-                    .get_state(id)?
-                    .ok_or(ControllerError::UnknownIdentifierError)?
-                    .current
-                    .next_keys_data
-                    .next_key_hashes)
+            .storage
+            .get_state(id)?
+            .ok_or(ControllerError::UnknownIdentifierError)?
+            .current
+            .next_keys_data
+            .next_key_hashes)
     }
-
 
     pub fn get_watchers(
         &self,
@@ -232,36 +231,39 @@ impl KnownEvents {
     pub fn find_location(
         &self,
         id: &IdentifierPrefix,
-        scheme: Scheme) -> Result<LocationScheme, ControllerError> {
-            self
-            .get_loc_schemas(id)?
+        scheme: Scheme,
+    ) -> Result<LocationScheme, ControllerError> {
+        self.get_loc_schemas(id)?
             .into_iter()
             .find(|loc| loc.scheme == scheme)
             .ok_or(ControllerError::NoLocationScheme {
                 id: id.clone(),
                 scheme,
             })
-        }
+    }
 
-   
-        pub fn find_receipt(&self, id: &IdentifierPrefix, sn: u64, digest: &SelfAddressingIdentifier) -> Result<Option<SignedNontransferableReceipt>, ControllerError> {
-             let rcts_from_db = self.storage.get_nt_receipts(id, sn, digest)?;
-             Ok(rcts_from_db)
+    pub fn find_receipt(
+        &self,
+        id: &IdentifierPrefix,
+        sn: u64,
+        digest: &SelfAddressingIdentifier,
+    ) -> Result<Option<SignedNontransferableReceipt>, ControllerError> {
+        let rcts_from_db = self.storage.get_nt_receipts(id, sn, digest)?;
+        Ok(rcts_from_db)
+    }
 
-        }
+    pub fn find_kel_with_receipts(&self, id: &IdentifierPrefix) -> Option<Vec<Notice>> {
+        self.storage
+            .get_kel_messages_with_receipts(id, None)
+            .unwrap()
+    }
 
-        pub fn find_kel_with_receipts(&self, id: &IdentifierPrefix) -> Option<Vec<Notice>> {
-            self
-                            .storage
-                            .get_kel_messages_with_receipts(id, None).unwrap()
-        }
-
-        pub fn find_kel(&self, id: &IdentifierPrefix) -> Option<String> {
-            self
-            .storage
-            .get_kel(id).unwrap().map(|kel| String::from_utf8(kel).unwrap())
-        }
-
+    pub fn find_kel(&self, id: &IdentifierPrefix) -> Option<String> {
+        self.storage
+            .get_kel(id)
+            .unwrap()
+            .map(|kel| String::from_utf8(kel).unwrap())
+    }
 
     pub fn incept(
         &self,
@@ -447,7 +449,6 @@ impl KnownEvents {
         let state = self.get_state_at_event(event_message)?;
         Ok(state.witness_config.witnesses)
     }
-
 
     pub fn finalize_add_role(
         &self,

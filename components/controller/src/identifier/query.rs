@@ -1,11 +1,21 @@
-use keri_core::{actor::{prelude::SerializationFormats, simple_controller::PossibleResponse}, event::sections::seal::EventSeal, mailbox::MailboxResponse, oobi::Scheme, prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix}, query::{mailbox::QueryArgsMbx, query_event::{LogsQueryArgs, QueryEvent, QueryRoute, SignedKelQuery}}};
-use keri_core::actor::prelude::HashFunctionCode;
 use crate::{error::ControllerError, mailbox_updating::ActionRequired};
+use keri_core::actor::prelude::HashFunctionCode;
+use keri_core::{
+    actor::{prelude::SerializationFormats, simple_controller::PossibleResponse},
+    event::sections::seal::EventSeal,
+    mailbox::MailboxResponse,
+    oobi::Scheme,
+    prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
+    query::{
+        mailbox::QueryArgsMbx,
+        query_event::{LogsQueryArgs, QueryEvent, QueryRoute, SignedKelQuery},
+    },
+};
 
 use super::Identifier;
 
 impl Identifier {
-	/// Generates query message of route `mbx` to query own identifier mailbox.
+    /// Generates query message of route `mbx` to query own identifier mailbox.
     pub fn query_mailbox(
         &self,
         identifier: &IdentifierPrefix,
@@ -55,7 +65,7 @@ impl Identifier {
             .collect()
     }
 
-	/// Joins query events with their signatures, sends it to witness and
+    /// Joins query events with their signatures, sends it to witness and
     /// process its response. If user action is needed to finalize process,
     /// returns proper notification.
     pub async fn finalize_query(
@@ -126,7 +136,7 @@ impl Identifier {
         Ok(actions)
     }
 
-	async fn mailbox_response(
+    async fn mailbox_response(
         &self,
         recipient: &IdentifierPrefix,
         from_who: &IdentifierPrefix,
@@ -136,12 +146,14 @@ impl Identifier {
         let req = if from_who == about_who {
             // process own mailbox
             let req = self.process_own_mailbox(res)?;
-            self.query_cache.update_last_asked_index(recipient.clone(), res)?;
+            self.query_cache
+                .update_last_asked_index(recipient.clone(), res)?;
             req
         } else {
             // process group mailbox
             let group_req = self.process_group_mailbox(res, about_who).await?;
-            self.query_cache.update_last_asked_group_index(recipient.clone(), res)?;
+            self.query_cache
+                .update_last_asked_group_index(recipient.clone(), res)?;
             group_req
         };
         Ok(req)

@@ -1,13 +1,20 @@
-use keri_core::{actor::prelude::SerializationFormats, event::{sections::seal::{EventSeal, Seal}, KeyEvent}, event_message::msg::KeriEvent, mailbox::exchange::{Exchange, ExchangeMessage, ForwardTopic, FwdArgs}};
 use keri_core::actor::prelude::HashFunctionCode;
+use keri_core::{
+    actor::prelude::SerializationFormats,
+    event::{
+        sections::seal::{EventSeal, Seal},
+        KeyEvent,
+    },
+    event_message::msg::KeriEvent,
+    mailbox::exchange::{Exchange, ExchangeMessage, ForwardTopic, FwdArgs},
+};
 
 use crate::error::ControllerError;
 
 use super::Identifier;
 
-
 impl Identifier {
-	/// Generates delegating event (ixn) and exchange event that contains
+    /// Generates delegating event (ixn) and exchange event that contains
     /// delegated event which will be send to delegate after ixn finalization.
     pub fn delegate(
         &self,
@@ -23,7 +30,9 @@ impl Identifier {
                 event_digest,
             })
         };
-        let delegating_event = self.known_events.anchor_with_seal(&self.id, &[delegated_seal])?;
+        let delegating_event = self
+            .known_events
+            .anchor_with_seal(&self.id, &[delegated_seal])?;
         let exn_message = Exchange::Fwd {
             args: FwdArgs {
                 recipient_id: delegate,
@@ -34,5 +43,4 @@ impl Identifier {
         .to_message(SerializationFormats::JSON, HashFunctionCode::Blake3_256)?;
         Ok((delegating_event, exn_message))
     }
-
 }

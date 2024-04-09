@@ -1,12 +1,21 @@
-use keri_core::{actor::{event_generator, MaterialPath}, event::sections::threshold::SignatureThreshold, event_message::{cesr_adapter::{parse_event_type, EventType}, signature::{Signature, SignerData}, signed_event_message::{Message, Op}}, mailbox::exchange::{Exchange, ForwardTopic, SignedExchange}, prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix}};
+use keri_core::{
+    actor::{event_generator, MaterialPath},
+    event::sections::threshold::SignatureThreshold,
+    event_message::{
+        cesr_adapter::{parse_event_type, EventType},
+        signature::{Signature, SignerData},
+        signed_event_message::{Message, Op},
+    },
+    mailbox::exchange::{Exchange, ForwardTopic, SignedExchange},
+    prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
+};
 
 use crate::error::ControllerError;
 
 use super::Identifier;
 
-
 impl Identifier {
-	/// Init group identifier
+    /// Init group identifier
     ///
     /// Returns serialized group icp and list of exchange messages to sign.
     /// Exchanges are meant to be send to witness and forwarded to group
@@ -71,7 +80,7 @@ impl Identifier {
         Ok((serialized_icp, exchanges))
     }
 
-	/// Finalizes group identifier.
+    /// Finalizes group identifier.
     /// Joins event with signature and verifies them.
     /// Must call [`IdentifierController::notify_witnesses`] after calling this function
     /// to send signed exn messages to witness to be forwarded to group participants.
@@ -108,7 +117,7 @@ impl Identifier {
         Ok(group_prefix)
     }
 
-	pub async fn finalize_exchange(
+    pub async fn finalize_exchange(
         &self,
         exchange: &[u8],
         exn_signature: SelfSigningPrefix,
