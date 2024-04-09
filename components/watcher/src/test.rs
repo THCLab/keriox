@@ -105,11 +105,11 @@ async fn test_authentication() -> Result<(), Error> {
 
     // Send query again
     let result = watcher.process_op(query).await;
-    // // Expect error because controller's witness config is empty and latest ksn can't be checked.
-    // assert!(matches!(
-    //     result, Err(ActorError::NoIdentState { ref prefix })
-    //     if prefix == about_controller.prefix()
-    // ));
+    // Expect error because controller's witness config is empty and latest ksn can't be checked.
+    assert!(matches!(
+        result, Err(ActorError::NoIdentState { ref prefix })
+        if prefix == about_controller.prefix()
+    ));
 
     Ok(())
 }

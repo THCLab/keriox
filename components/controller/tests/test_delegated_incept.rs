@@ -5,14 +5,10 @@ use keri_controller::{
     mailbox_updating::ActionRequired, LocationScheme,
 };
 use keri_core::{
-    actor::{error::ActorError, SignedQueryError},
     event_message::signed_event_message::Message,
     prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
     signer::{CryptoBox, KeyManager},
-    transport::{
-        test::{TestActorMap, TestTransport},
-        TransportError,
-    },
+    transport::test::{TestActorMap, TestTransport},
 };
 use tempfile::Builder;
 use url::Host;

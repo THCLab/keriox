@@ -241,9 +241,6 @@ async fn test_watcher() -> Result<(), ControllerError> {
             .await;
     }
 
-    let signer_keys = verifying_identifier
-        .known_events
-        .get_state(&signing_identifier.id)?;
     // Verify signed message.
     assert!(verifying_controller
         .verify(first_message, &first_signature)

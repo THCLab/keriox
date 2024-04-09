@@ -4,8 +4,8 @@ use keri_core::{
     actor::{error::ActorError, simple_controller::PossibleResponse},
     event_message::signed_event_message::{Message, Notice, Op, SignedEventMessage},
     oobi::{EndRole, LocationScheme, Oobi, Scheme},
-    prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
-    query::{query_event::SignedKelQuery, reply_event::ReplyEvent},
+    prefix::{BasicPrefix, IdentifierPrefix},
+    query::query_event::SignedKelQuery,
     transport::Transport,
 };
 use teliox::transport::GeneralTelTransport;

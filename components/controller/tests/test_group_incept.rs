@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use keri_controller::{
-    config::ControllerConfig, controller::Controller, error::ControllerError, identifier,
+    config::ControllerConfig, controller::Controller, error::ControllerError,
 };
 use keri_core::{
     prefix::{BasicPrefix, SelfSigningPrefix},

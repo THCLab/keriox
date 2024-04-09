@@ -121,10 +121,7 @@ mod test {
     use url::Host;
     use witness::{WitnessEscrowConfig, WitnessListener};
 
-    use crate::{
-        config::ControllerConfig, controller::Controller, error::ControllerError,
-        known_events::KnownEvents,
-    };
+    use crate::{config::ControllerConfig, controller::Controller, error::ControllerError};
 
     #[async_std::test]
     async fn test_2_wit() -> Result<(), ControllerError> {

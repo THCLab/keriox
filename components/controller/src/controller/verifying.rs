@@ -24,7 +24,7 @@ impl KnownEvents {
 
     /// Parse elements from cesr stream and splits them into oobis to be
     /// resolved and signed credentials.
-    fn parse_cesr_stream(
+    fn _parse_cesr_stream(
         &self,
         stream: &str,
     ) -> Result<(Vec<Oobi>, Vec<ParsedData>), ControllerError> {
@@ -51,7 +51,7 @@ impl KnownEvents {
         Ok((oobis, to_verify))
     }
 
-    fn verify_from_cesr(&self, stream: &str) -> Result<(), ControllerError> {
+    fn _verify_from_cesr(&self, stream: &str) -> Result<(), ControllerError> {
         let (_rest, data) =
             parse_many(stream.as_bytes()).map_err(|_e| ControllerError::CesrFormatError)?;
         self.verify_parsed(&data)

@@ -1,9 +1,8 @@
 use std::{path::Path, sync::Arc};
 
 use keri_controller::{
-    config::ControllerConfig, controller::Controller, identifier::Identifier,
-    known_events::KnownEvents, BasicPrefix, CryptoBox, IdentifierPrefix, KeyManager,
-    LocationScheme, SelfSigningPrefix,
+    config::ControllerConfig, controller::Controller, identifier::Identifier, BasicPrefix,
+    CryptoBox, IdentifierPrefix, KeyManager, LocationScheme, SelfSigningPrefix,
 };
 use keri_core::{actor::error::ActorError, transport::test::TestTransport};
 use transport::TelTestTransport;
