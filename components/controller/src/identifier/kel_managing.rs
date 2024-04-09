@@ -155,8 +155,8 @@ impl Identifier {
         self.known_events
             .save(&Message::Notice(Notice::Event(signed_message.clone())))?;
 
-        // let st = self.state.clone().apply(&ke)?;
-        // self.state = st;
+        let st = self.cached_state.clone().apply(event)?;
+        self.cached_state = st;
 
         self.to_notify.push(signed_message);
 

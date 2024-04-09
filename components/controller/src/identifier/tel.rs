@@ -2,15 +2,14 @@ use keri_core::actor::prelude::{HashFunctionCode, SelfAddressingIdentifier, Seri
 use keri_core::event::sections::seal::{EventSeal, Seal};
 use keri_core::event_message::msg::KeriEvent;
 use keri_core::event_message::timestamped::Timestamped;
-use keri_core::prefix::IdentifierPrefix;
+use keri_core::prefix::{IdentifierPrefix, IndexedSignature, SelfSigningPrefix};
 use teliox::event::verifiable_event::VerifiableEvent;
-use teliox::query::{TelQueryArgs, TelQueryEvent, TelQueryRoute};
+use teliox::query::{SignedTelQuery, TelQueryArgs, TelQueryEvent, TelQueryRoute};
 use teliox::seal::{AttachedSourceSeal, EventSourceSeal};
 
 use crate::error::ControllerError;
 
 use super::Identifier;
-
 
 impl Identifier {
     /// Generate `vcp` event and `ixn` event with  seal to `vcp`. To finalize
@@ -143,6 +142,39 @@ impl Identifier {
             HashFunctionCode::Blake3_256.into(),
             env,
         )?)
+    }
+
+    pub async fn finalize_tel_query(
+        &self,
+        issuer_id: &IdentifierPrefix,
+        qry: TelQueryEvent,
+        sig: SelfSigningPrefix,
+    ) -> Result<(), ControllerError> {
+        let query = match &self.id {
+            IdentifierPrefix::Basic(bp) => {
+                SignedTelQuery::new_nontrans(qry.clone(), bp.clone(), sig)
+            }
+            _ => {
+                let signatures = vec![IndexedSignature::new_both_same(sig, 0)];
+                SignedTelQuery::new_trans(qry.clone(), self.id.clone(), signatures)
+            }
+        };
+        let witness = self.known_events.get_current_witness_list(issuer_id)?[0].clone();
+        let location = self
+            .known_events
+            .get_loc_schemas(&IdentifierPrefix::Basic(witness))?[0]
+            .clone();
+        let tel_res = self
+            .communication
+            .tel_transport
+            .send_query(query, location)
+            .await
+            .map_err(|e| ControllerError::OtherError(e.to_string()))?;
+        self.known_events
+            .tel
+            .parse_and_process_tel_stream(tel_res.as_bytes())?;
+
+        Ok(())
     }
 
     pub async fn notify_backers(&self) -> Result<(), ControllerError> {

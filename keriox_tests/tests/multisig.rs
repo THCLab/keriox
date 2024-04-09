@@ -2,8 +2,8 @@ use std::{collections::HashMap, net::Ipv4Addr, sync::Arc};
 
 use anyhow::Result;
 use keri_controller::{
-    config::ControllerConfig, identifier_controller::IdentifierController,
-    mailbox_updating::ActionRequired, KnownEvents, Oobi,
+    config::ControllerConfig, controller::Controller, error::ControllerError,
+    mailbox_updating::ActionRequired, Oobi,
 };
 use keri_core::{
     oobi::{EndRole, LocationScheme, Role},
@@ -70,7 +70,7 @@ async fn test_multisig() -> Result<()> {
     // Setup first identifier.
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     let controller1 = Arc::new(
-        KnownEvents::new(ControllerConfig {
+        Controller::new(ControllerConfig {
             db_path: root.path().to_owned(),
             transport: transport.clone(),
             ..Default::default()
@@ -79,37 +79,33 @@ async fn test_multisig() -> Result<()> {
     );
 
     let km1 = CryptoBox::new()?;
-    let mut identifier1 = {
-        let pk = BasicPrefix::Ed25519(km1.public_key());
-        let npk = BasicPrefix::Ed25519(km1.next_public_key());
+    let pk = BasicPrefix::Ed25519(km1.public_key());
+    let npk = BasicPrefix::Ed25519(km1.next_public_key());
 
-        let icp_event = controller1
-            .incept(vec![pk], vec![npk], vec![witness_oobi.clone()], 1)
-            .await
-            .unwrap();
-        let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(icp_event.as_bytes())?);
+    let icp_event = controller1
+        .incept(vec![pk], vec![npk], vec![witness_oobi.clone()], 1)
+        .await
+        .unwrap();
+    let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(icp_event.as_bytes())?);
 
-        let incepted_identifier = controller1
-            .finalize_inception(icp_event.as_bytes(), &signature)
-            .await
-            .unwrap();
-        IdentifierController::new(incepted_identifier, controller1.clone(), None)
-    };
+    let mut identifier1 = controller1
+        .finalize_incept(icp_event.as_bytes(), &signature)
+        .unwrap();
 
     identifier1.notify_witnesses().await?;
     // Quering mailbox to get receipts
-    let query = identifier1.query_mailbox(&identifier1.id, &[witness_id.clone()])?;
+    let query = identifier1.query_mailbox(identifier1.id(), &[witness_id.clone()])?;
 
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(&qry.encode()?)?);
         identifier1.finalize_query(vec![(qry, signature)]).await?;
     }
-    assert!(identifier1.get_kel().is_ok());
+    assert!(identifier1.get_kel().is_some());
 
     // Setup second identifier.
     let root2 = Builder::new().prefix("test-db").tempdir().unwrap();
     let controller2 = Arc::new(
-        KnownEvents::new(ControllerConfig {
+        Controller::new(ControllerConfig {
             db_path: root2.path().to_owned(),
             transport,
             ..Default::default()
@@ -118,35 +114,33 @@ async fn test_multisig() -> Result<()> {
     );
     let km2 = CryptoBox::new()?;
 
-    let mut identifier2 = {
-        let pk = BasicPrefix::Ed25519(km2.public_key());
-        let npk = BasicPrefix::Ed25519(km2.next_public_key());
+    let pk = BasicPrefix::Ed25519(km2.public_key());
+    let npk = BasicPrefix::Ed25519(km2.next_public_key());
 
-        let icp_event = controller2
-            .incept(vec![pk], vec![npk], vec![witness_oobi.clone()], 1)
-            .await
-            .unwrap();
-        let signature = SelfSigningPrefix::Ed25519Sha512(km2.sign(icp_event.as_bytes())?);
+    let icp_event = controller2
+        .incept(vec![pk], vec![npk], vec![witness_oobi.clone()], 1)
+        .await
+        .unwrap();
+    let signature = SelfSigningPrefix::Ed25519Sha512(km2.sign(icp_event.as_bytes())?);
 
-        let incepted_identifier = controller2
-            .finalize_inception(icp_event.as_bytes(), &signature)
-            .await
-            .unwrap();
-        IdentifierController::new(incepted_identifier, controller2.clone(), None)
-    };
+    let mut identifier2 = controller2
+        .finalize_incept(icp_event.as_bytes(), &signature)
+        .unwrap();
     identifier2.notify_witnesses().await?;
 
     // Quering mailbox to get receipts
-    let query = identifier2.query_mailbox(&identifier2.id, &[witness_id.clone()])?;
+    let query = identifier2.query_mailbox(identifier2.id(), &[witness_id.clone()])?;
 
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(km2.sign(&qry.encode()?)?);
         identifier2.finalize_query(vec![(qry, signature)]).await?;
     }
-    assert!(identifier2.get_kel().is_ok());
+    assert!(identifier2.get_kel().is_some());
 
     // Identifier1 adds watcher
-    identifier1.source.resolve_loc_schema(&watcher_oobi).await?;
+    identifier1
+        .resolve_oobi(&Oobi::Location(watcher_oobi.clone()))
+        .await?;
 
     let add_watcher = identifier1
         .add_watcher(IdentifierPrefix::Basic(watcher_id.clone()))
@@ -159,7 +153,7 @@ async fn test_multisig() -> Result<()> {
         .finalize_event(add_watcher.as_bytes(), add_watcher_sig)
         .await?;
     assert_eq!(
-        identifier1.source.get_watchers(&identifier1.id)?,
+        identifier1.watchers()?,
         vec![IdentifierPrefix::Basic(watcher_id)]
     );
 
@@ -169,18 +163,16 @@ async fn test_multisig() -> Result<()> {
         &serde_json::to_string(&witness_oobi).unwrap()
     );
     let oobi2 = EndRole {
-        cid: identifier2.id.clone(),
+        cid: identifier2.id().clone(),
         role: Role::Witness,
         eid: IdentifierPrefix::Basic(witness_id.clone()),
     };
 
     identifier1
-        .source
-        .send_oobi_to_watcher(&identifier1.id, &Oobi::Location(witness_oobi))
+        .send_oobi_to_watcher(&identifier1.id(), &Oobi::Location(witness_oobi))
         .await?;
     identifier1
-        .source
-        .send_oobi_to_watcher(&identifier1.id, &Oobi::EndRole(oobi2))
+        .send_oobi_to_watcher(&identifier1.id(), &Oobi::EndRole(oobi2))
         .await?;
 
     let qry_watcher =
@@ -192,7 +184,7 @@ async fn test_multisig() -> Result<()> {
 
     // Incept group
     let (group_inception, exn_messages) = identifier1.incept_group(
-        vec![identifier2.id.clone()],
+        vec![identifier2.id().clone()],
         2,
         Some(vec![witness_id.clone()]),
         Some(1),
@@ -213,14 +205,12 @@ async fn test_multisig() -> Result<()> {
         )
         .await?;
 
-    let kel = controller1
-        .storage
-        .get_kel_messages_with_receipts(&group_id, None)?;
+    let kel = controller1.get_kel_with_receipts(&group_id);
     // Event is not yet accepted.
     assert!(kel.is_none());
 
     // Quering mailbox to get multisig request
-    let query = identifier2.query_mailbox(&identifier2.id, &[witness_id.clone()])?;
+    let query = identifier2.query_mailbox(&identifier2.id(), &[witness_id.clone()])?;
 
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(km2.sign(&qry.encode()?)?);
@@ -261,11 +251,14 @@ async fn test_multisig() -> Result<()> {
         identifier1.finalize_query(vec![(qry, signature)]).await?;
     }
 
-    let group_state_1 = identifier1.source.storage.get_state(&group_id)?;
-    assert_eq!(group_state_1.unwrap().sn, 0);
+    let group_state_1 = identifier1.find_state(&group_id)?;
+    assert_eq!(group_state_1.sn, 0);
 
-    let group_state_2 = identifier2.source.storage.get_state(&group_id)?;
-    assert!(group_state_2.is_none());
+    let group_state_2 = identifier2.find_state(&group_id);
+    assert!(matches!(
+        group_state_2,
+        Err(ControllerError::UnknownIdentifierError)
+    ));
 
     // Query to have receipt of group inception
     let query = identifier2.query_mailbox(&group_id, &[witness_id.clone()])?;
@@ -275,8 +268,8 @@ async fn test_multisig() -> Result<()> {
         identifier2.finalize_query(vec![(qry, signature)]).await?;
     }
 
-    let group_state_2 = identifier2.source.storage.get_state(&group_id)?;
-    assert_eq!(group_state_2.unwrap().sn, 0);
+    let group_state_2 = identifier2.find_state(&group_id)?;
+    assert_eq!(group_state_2.sn, 0);
 
     Ok(())
 }

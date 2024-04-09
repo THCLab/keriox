@@ -1,9 +1,8 @@
 use std::sync::Arc;
 
 use keri_controller::{
-    config::ControllerConfig, error::ControllerError, identifier_controller::IdentifierController,
-    BasicPrefix, KnownEvents, CryptoBox, EndRole, IdentifierPrefix, KeyManager, LocationScheme,
-    Oobi, SelfSigningPrefix,
+    config::ControllerConfig, controller::Controller, error::ControllerError, BasicPrefix,
+    CryptoBox, EndRole, IdentifierPrefix, KeyManager, LocationScheme, Oobi, SelfSigningPrefix,
 };
 use tempfile::Builder;
 
@@ -35,37 +34,33 @@ async fn indirect_mode_signing() -> Result<(), ControllerError> {
     // The `Controller` structure aggregates all known KEL events (across all
     // identifiers) and offers functions for retrieving them, verifying the
     // integrity of new events, and conducting signature verification.
-    let signer_controller = Arc::new(KnownEvents::new(ControllerConfig {
+    let signer_controller = Arc::new(Controller::new(ControllerConfig {
         db_path: database_path.path().to_owned(),
         ..Default::default()
     })?);
 
     // Incept identifier.
-    // The `IdentifierController` structure facilitates the management of the
+    // The `Identifier` structure facilitates the management of the
     // Key Event Log specific to a particular identifier.
-    let mut signing_identifier: IdentifierController = {
-        let pk = BasicPrefix::Ed25519(key_manager.public_key());
-        let npk = BasicPrefix::Ed25519(key_manager.next_public_key());
+    let pk = BasicPrefix::Ed25519(key_manager.public_key());
+    let npk = BasicPrefix::Ed25519(key_manager.next_public_key());
 
-        // Create inception event, that needs one witness receipt to be accepted.
-        let icp_event = signer_controller
-            .incept(
-                vec![pk],
-                vec![npk],
-                vec![first_witness_oobi.clone(), second_witness_oobi.clone()],
-                1,
-            )
-            .await?;
-        let signature =
-            SelfSigningPrefix::Ed25519Sha512(key_manager.sign(icp_event.as_bytes()).unwrap());
+    // Create inception event, that needs one witness receipt to be accepted.
+    let icp_event = signer_controller
+        .incept(
+            vec![pk],
+            vec![npk],
+            vec![first_witness_oobi.clone(), second_witness_oobi.clone()],
+            1,
+        )
+        .await?;
+    let signature =
+        SelfSigningPrefix::Ed25519Sha512(key_manager.sign(icp_event.as_bytes()).unwrap());
 
-        let identifier = signer_controller
-            .finalize_inception(icp_event.as_bytes(), &signature)
-            .await?;
-        IdentifierController::new(identifier, signer_controller.clone(), None)
-    };
+    let mut signing_identifier =
+        signer_controller.finalize_incept(icp_event.as_bytes(), &signature)?;
 
-    println!("Signer: {}", &signing_identifier.id);
+    println!("Signer: {}", &signing_identifier.id());
 
     // The Event Seal specifies the stage of KEL at the time of signature creation.
     // This enables us to retrieve the correct public keys from KEL during verification.
@@ -83,7 +78,7 @@ async fn indirect_mode_signing() -> Result<(), ControllerError> {
 
     // Querying witness to get receipts
     for qry in signing_identifier
-        .query_mailbox(&signing_identifier.id, &[first_witness_id.clone()])
+        .query_mailbox(signing_identifier.id(), &[first_witness_id.clone()])
         .unwrap()
     {
         let signature =
@@ -116,41 +111,37 @@ async fn indirect_mode_signing() -> Result<(), ControllerError> {
     let verifier_database_path = Builder::new().prefix("test-db1").tempdir().unwrap();
     let verifier_key_manager = CryptoBox::new().unwrap();
 
-    let verifying_controller = Arc::new(KnownEvents::new(ControllerConfig {
+    let verifying_controller = Arc::new(Controller::new(ControllerConfig {
         db_path: verifier_database_path.path().to_owned(),
         ..Default::default()
     })?);
 
-    let mut verifying_identifier: IdentifierController = {
-        let pk = BasicPrefix::Ed25519(verifier_key_manager.public_key());
-        let npk = BasicPrefix::Ed25519(verifier_key_manager.next_public_key());
+    let pk = BasicPrefix::Ed25519(verifier_key_manager.public_key());
+    let npk = BasicPrefix::Ed25519(verifier_key_manager.next_public_key());
 
-        // Create inception event, that needs one witness receipt to be accepted.
-        let icp_event = verifying_controller
-            .incept(
-                vec![pk],
-                vec![npk],
-                vec![first_witness_oobi.clone(), second_witness_oobi.clone()],
-                1,
-            )
-            .await?;
-        let signature = SelfSigningPrefix::Ed25519Sha512(
-            verifier_key_manager.sign(icp_event.as_bytes()).unwrap(),
-        );
+    // Create inception event, that needs one witness receipt to be accepted.
+    let icp_event = verifying_controller
+        .incept(
+            vec![pk],
+            vec![npk],
+            vec![first_witness_oobi.clone(), second_witness_oobi.clone()],
+            1,
+        )
+        .await?;
+    let signature =
+        SelfSigningPrefix::Ed25519Sha512(verifier_key_manager.sign(icp_event.as_bytes()).unwrap());
 
-        let identifier = verifying_controller
-            .finalize_inception(icp_event.as_bytes(), &signature)
-            .await?;
-        IdentifierController::new(identifier, verifying_controller.clone(), None)
-    };
-    println!("Verifier: {}", &verifying_identifier.id);
+    let mut verifying_identifier =
+        verifying_controller.finalize_incept(icp_event.as_bytes(), &signature)?;
+
+    println!("Verifier: {}", verifying_identifier.id());
 
     // Publish event to actor's witnesses
     verifying_identifier.notify_witnesses().await.unwrap();
 
     // Querying witness to get receipts
     for qry in verifying_identifier
-        .query_mailbox(&verifying_identifier.id, &[first_witness_id.clone()])
+        .query_mailbox(verifying_identifier.id(), &[first_witness_id.clone()])
         .unwrap()
     {
         let signature = SelfSigningPrefix::Ed25519Sha512(
@@ -177,10 +168,7 @@ async fn indirect_mode_signing() -> Result<(), ControllerError> {
     .unwrap();
 
     // Resolve watcher oobi
-    verifying_identifier
-        .source
-        .resolve_oobi(watcher_oobi)
-        .await?;
+    verifying_identifier.resolve_oobi(&watcher_oobi).await?;
 
     // Generate and sign event, that will be sent to watcher, so it knows to act
     // as verifier's watcher.
@@ -199,27 +187,19 @@ async fn indirect_mode_signing() -> Result<(), ControllerError> {
 
     for wit_oobi in vec![first_witness_oobi, second_witness_oobi] {
         let oobi = Oobi::Location(wit_oobi);
+        verifying_identifier.resolve_oobi(&oobi).await?;
         verifying_identifier
-            .source
-            .resolve_oobi(oobi.clone())
-            .await?;
-        verifying_identifier
-            .source
-            .send_oobi_to_watcher(&verifying_identifier.id.clone(), &oobi)
+            .send_oobi_to_watcher(&verifying_identifier.id(), &oobi)
             .await?;
     }
     let signer_oobi = EndRole {
-        cid: signing_identifier.id.clone(),
+        cid: signing_identifier.id().clone(),
         role: keri_core::oobi::Role::Witness,
         eid: keri_controller::IdentifierPrefix::Basic(second_witness_id.clone()),
     };
 
     verifying_identifier
-        .source
-        .send_oobi_to_watcher(
-            &verifying_identifier.id.clone(),
-            &Oobi::EndRole(signer_oobi),
-        )
+        .send_oobi_to_watcher(&verifying_identifier.id(), &Oobi::EndRole(signer_oobi))
         .await?;
 
     // Query kel of signing identifier
@@ -270,7 +250,7 @@ async fn indirect_mode_signing() -> Result<(), ControllerError> {
     // Querying witnesses to get receipts
     for qry in signing_identifier
         .query_mailbox(
-            &signing_identifier.id,
+            signing_identifier.id(),
             &[first_witness_id.clone(), second_witness_id.clone()],
         )
         .unwrap()

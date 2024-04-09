@@ -139,7 +139,7 @@ impl Communication {
 
 
 
-	    /// Sends identifier's endpoint information to identifiers's watchers.
+	/// Sends identifier's endpoint information to identifiers's watchers.
     // TODO use stream instead of json
     pub async fn send_oobi_to_watcher(
         &self,

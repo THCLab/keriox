@@ -67,7 +67,7 @@ async fn test_witness_rotation() -> Result<(), ControllerError> {
     };
 
     // Setup identifier with `witness1` as witness
-    let (mut controller, mut controller_keypair) = setup_identifier(
+    let (mut identifier, mut controller_keypair, _) = setup_identifier(
         root0.path(),
         vec![wit1_location.clone()],
         transport.clone(),
@@ -75,14 +75,14 @@ async fn test_witness_rotation() -> Result<(), ControllerError> {
     )
     .await;
 
-    let state = controller.source.get_state(&controller.id)?;
+    let state = identifier.find_state(identifier.id())?;
     assert_eq!(state.sn, 0);
 
     // Rotate witness to `witness2`
     controller_keypair.rotate()?;
     let new_curr = BasicPrefix::Ed25519NT(controller_keypair.public_key());
     let new_next = BasicPrefix::Ed25519NT(controller_keypair.next_public_key());
-    let rotation_event = controller
+    let rotation_event = identifier
         .rotate(
             vec![new_curr],
             vec![new_next],
@@ -95,34 +95,34 @@ async fn test_witness_rotation() -> Result<(), ControllerError> {
 
     let signature =
         SelfSigningPrefix::Ed25519Sha512(controller_keypair.sign(rotation_event.as_bytes())?);
-    controller
+    identifier
         .finalize_event(rotation_event.as_bytes(), signature)
         .await?;
 
-    controller.notify_witnesses().await.unwrap();
-    let cached_witnesses = &controller.state.witness_config.witnesses;
+    let cached_witnesses = &identifier.witnesses();
     // dbg!(&cached_witnesses);
-    let state = controller.source.get_state(&controller.id)?;
+    let state = identifier.find_state(identifier.id())?;
     // Missing witness receipts, so rotation is not accepted yet.
     assert_eq!(state.sn, 0);
     assert_ne!(&state.witness_config.witnesses, cached_witnesses);
 
+    identifier.notify_witnesses().await.unwrap();
     // Querying mailbox to get receipts
-    for qry in controller
-        .query_mailbox(&controller.id, &cached_witnesses)
+    for qry in identifier
+        .query_mailbox(identifier.id(), &cached_witnesses)
         .unwrap()
     {
         let signature = SelfSigningPrefix::Ed25519Sha512(
             controller_keypair.sign(&qry.encode().unwrap()).unwrap(),
         );
-        let act = controller
+        let act = identifier
             .finalize_query(vec![(qry, signature)])
             .await
             .unwrap();
         assert_eq!(act.len(), 0);
     }
 
-    let state = controller.source.get_state(&controller.id)?;
+    let state = identifier.find_state(identifier.id())?;
     assert_eq!(state.sn, 1);
     assert_eq!(&state.witness_config.witnesses, cached_witnesses);
 

@@ -3,7 +3,7 @@ use std::sync::Arc;
 mod test_watcher;
 
 use keri_core::{
-    actor::prelude::SelfAddressingIdentifier, event::{event_data::EventData, sections::seal::EventSeal}, event_message::signed_event_message::SignedEventMessage, prefix::{BasicPrefix, IdentifierPrefix}, state::IdentifierState
+    actor::prelude::SelfAddressingIdentifier, event::{event_data::EventData, sections::seal::EventSeal}, event_message::signed_event_message::{Notice, SignedEventMessage}, oobi::Oobi, prefix::{BasicPrefix, IdentifierPrefix}, state::IdentifierState
 };
 use teliox::state::{vc_state::TelState, ManagerTelState};
 
@@ -69,6 +69,14 @@ impl Identifier {
         }
     }
 
+    pub async fn resolve_oobi(&self, oobi: &Oobi) -> Result<(), ControllerError> {
+        self.communication.resolve_oobi(oobi).await
+    }
+
+    pub async fn send_oobi_to_watcher(&self, id: &IdentifierPrefix, oobi: &Oobi) -> Result<(), ControllerError> {
+        self.communication.send_oobi_to_watcher(id, oobi).await
+    }
+
     pub fn id(&self) -> &IdentifierPrefix {
         &self.id
     }
@@ -91,6 +99,19 @@ impl Identifier {
 
     pub fn current_public_keys(&self) -> Result<Vec<BasicPrefix>, ControllerError> {
         self.known_events.current_public_keys(&self.id)
+    }
+
+    pub fn witnesses(&self) -> Vec<BasicPrefix> {
+        self.cached_state.witness_config.witnesses.clone()
+    }
+
+    pub fn watchers(&self) -> Result<Vec<IdentifierPrefix>, ControllerError> {
+        self.known_events.get_watchers(&self.id)
+    }
+
+    /// Returns own identifier accepted Key Event Log
+    pub fn get_kel(&self) -> Option<Vec<Notice>> {
+        self.known_events.find_kel_with_receipts(&self.id)
     }
 
 
