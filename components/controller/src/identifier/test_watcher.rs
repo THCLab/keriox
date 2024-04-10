@@ -107,9 +107,8 @@ async fn test_watcher() -> Result<(), ControllerError> {
         key_manager.sign(first_message).unwrap(),
     )];
 
-    let first_signature = signing_identifier.transferable_signature(
+    let first_signature = signing_identifier.sign_data(
         first_message,
-        signing_event_seal.clone(),
         &first_message_signature,
     )?;
 
@@ -287,9 +286,8 @@ async fn test_watcher() -> Result<(), ControllerError> {
     )];
 
     let current_event_seal = signing_identifier.get_last_establishment_event_seal()?;
-    let second_signature = signing_identifier.transferable_signature(
+    let second_signature = signing_identifier.sign_data(
         second_message,
-        current_event_seal.clone(),
         &second_message_signature,
     )?;
 

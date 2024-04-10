@@ -100,9 +100,8 @@ async fn indirect_mode_signing() -> Result<(), ControllerError> {
         key_manager.sign(first_message).unwrap(),
     )];
 
-    let first_signature = signing_identifier.transferable_signature(
+    let first_signature = signing_identifier.sign_data(
         first_message,
-        signing_event_seal.clone(),
         &first_message_signature,
     )?;
 
@@ -181,10 +180,9 @@ async fn indirect_mode_signing() -> Result<(), ControllerError> {
         .finalize_event(add_watcher.as_bytes(), signature)
         .await?;
 
-    // Now query about signer kel.
+    // Now query about signer's kel.
     // To find `signing_identifier`s KEL, `verifying_identifier` needs to
     // provide to watcher its oobi and oobi of its witnesses.
-
     for wit_oobi in vec![first_witness_oobi, second_witness_oobi] {
         let oobi = Oobi::Location(wit_oobi);
         verifying_identifier.resolve_oobi(&oobi).await?;
@@ -270,9 +268,8 @@ async fn indirect_mode_signing() -> Result<(), ControllerError> {
     )];
 
     let current_event_seal = signing_identifier.get_last_establishment_event_seal()?;
-    let second_signature = signing_identifier.transferable_signature(
+    let second_signature = signing_identifier.sign_data(
         second_message,
-        current_event_seal.clone(),
         &second_message_signature,
     )?;
 

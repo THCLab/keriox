@@ -22,7 +22,7 @@ impl KnownEvents {
         })
     }
 
-    /// Parse elements from cesr stream and splits them into oobis to be
+    /// Parse elements from CESR stream and splits them into OOBIs to be
     /// resolved and signed credentials.
     fn _parse_cesr_stream(
         &self,
@@ -30,7 +30,7 @@ impl KnownEvents {
     ) -> Result<(Vec<Oobi>, Vec<ParsedData>), ControllerError> {
         let (_rest, data) =
             parse_many(stream.as_bytes()).map_err(|_e| ControllerError::CesrFormatError)?;
-        // Split into oobis and other data
+        // Split into OOBIs and other data
         let (oobis, to_verify): (Vec<Oobi>, Vec<_>) = data.into_iter().partition_map(|d| {
             let oobi: Result<Oobi, _> = match &d.payload {
                 Payload::JSON(json) => serde_json::from_slice(json)
@@ -51,7 +51,7 @@ impl KnownEvents {
         Ok((oobis, to_verify))
     }
 
-    fn _verify_from_cesr(&self, stream: &str) -> Result<(), ControllerError> {
+    fn verify_from_cesr(&self, stream: &str) -> Result<(), ControllerError> {
         let (_rest, data) =
             parse_many(stream.as_bytes()).map_err(|_e| ControllerError::CesrFormatError)?;
         self.verify_parsed(&data)

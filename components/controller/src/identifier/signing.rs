@@ -1,4 +1,4 @@
-use cesrox::{group::Group, ParsedData};
+use cesrox::ParsedData;
 use keri_core::{
     event::sections::seal::EventSeal,
     event_message::signature::{Signature, SignerData},
@@ -10,7 +10,7 @@ use crate::error::ControllerError;
 use super::Identifier;
 
 impl Identifier {
-    pub fn sign(
+    pub fn sign_with_index(
         &self,
         signature: SelfSigningPrefix,
         key_index: u16,
@@ -20,20 +20,23 @@ impl Identifier {
             .storage
             .get_last_establishment_event_seal(&self.id)?
             .ok_or(ControllerError::UnknownIdentifierError)?;
-        let sig_data = SignerData::EventSeal(EventSeal {
-            prefix: self.id.clone(),
-            sn: last_establishment.sn,
-            event_digest: last_establishment.event_digest,
-        });
+        let sig_data = SignerData::EventSeal(last_establishment);
         let indexes_sig = IndexedSignature::new_both_same(signature, key_index);
         Ok(Signature::Transferable(sig_data, vec![indexes_sig]))
+    }
+   
+    // Returns transferable signature of provided data.
+    pub fn sign_data(&self, data: &[u8], signatures: &[SelfSigningPrefix]) -> Result<Signature, ControllerError> {
+        let event_seal = self.get_last_establishment_event_seal()?;
+        self.transferable_signature(data, event_seal, signatures)
+
     }
 
     /// Helper function that produces transferable signature made with
     /// keys corresponding to event in kel that is specified with event_seal. It
     /// computes indexes of provided `SelfSigningIdentifier`s and build `Signature`
     /// from them.
-    pub fn transferable_signature(
+    fn transferable_signature(
         &self,
         data: &[u8],
         event_seal: EventSeal,
@@ -61,24 +64,32 @@ impl Identifier {
         Ok(signature)
     }
 
-    pub fn to_cesr_signature(
+
+    // Returns CESR stream of signed data and signatures.
+    pub fn sign_to_cesr(
         &self,
-        sig: SelfSigningPrefix,
-        index: u16,
+        data: &str,
+        signatures: &[SelfSigningPrefix],
     ) -> Result<String, ControllerError> {
-        let signature: Signature = self.sign(sig, index)?;
-        let group: Group = signature.into();
-        Ok(group.to_cesr_str())
+        // Sign data
+        let signature = self.sign_data(data.as_bytes(), signatures)?;
+        ParsedData {
+            payload: cesrox::payload::Payload::JSON(data.into()),
+            attachments: vec![signature.into()],
+        }
+        .to_cesr()
+        .map(|data| String::from_utf8(data).unwrap())
+        .map_err(|_e| ControllerError::CesrFormatError)
     }
 
-    pub fn sign_to_cesr(
+    pub fn sign_with_index_to_cesr(
         &self,
         data: &str,
         signature: SelfSigningPrefix,
         key_index: u16,
     ) -> Result<String, ControllerError> {
-        // Sign attestation
-        let signature = self.sign(signature, key_index)?;
+        // Sign data
+        let signature = self.sign_with_index(signature, key_index)?;
         ParsedData {
             payload: cesrox::payload::Payload::JSON(data.into()),
             attachments: vec![signature.into()],
