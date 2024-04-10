@@ -100,10 +100,7 @@ async fn indirect_mode_signing() -> Result<(), ControllerError> {
         key_manager.sign(first_message).unwrap(),
     )];
 
-    let first_signature = signing_identifier.sign_data(
-        first_message,
-        &first_message_signature,
-    )?;
+    let first_signature = signing_identifier.sign_data(first_message, &first_message_signature)?;
 
     // Establish verifying identifier
     // Setup database path and key manager.
@@ -268,10 +265,8 @@ async fn indirect_mode_signing() -> Result<(), ControllerError> {
     )];
 
     let current_event_seal = signing_identifier.get_last_establishment_event_seal()?;
-    let second_signature = signing_identifier.sign_data(
-        second_message,
-        &second_message_signature,
-    )?;
+    let second_signature =
+        signing_identifier.sign_data(second_message, &second_message_signature)?;
 
     // Try to verify it, because verifier doesn't know signer's rotation event.
     assert!(matches!(

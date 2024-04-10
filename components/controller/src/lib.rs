@@ -8,7 +8,6 @@ pub mod controller;
 pub mod identifier;
 pub mod known_events;
 
-// mod test;
 pub use keri_core::oobi::{EndRole, LocationScheme, Oobi};
 pub use keri_core::prefix::{
     BasicPrefix, CesrPrimitive, IdentifierPrefix, SeedPrefix, SelfSigningPrefix,

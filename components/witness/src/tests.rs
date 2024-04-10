@@ -1,5 +1,3 @@
-#![cfg(test)]
-
 use std::sync::{Arc, Mutex};
 
 use keri_core::{

@@ -1,3 +1,4 @@
+#[cfg(test)]
 mod tests;
 mod witness;
 mod witness_listener;

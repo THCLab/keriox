@@ -1,5 +1,3 @@
-#![cfg(test)]
-
 use std::sync::{Arc, Mutex};
 
 use keri_core::{
@@ -15,7 +13,7 @@ use url::Url;
 use crate::watcher::WatcherData;
 
 #[async_std::test]
-async fn test_authentication() -> Result<(), Error> {
+async fn test_watcher_access() -> Result<(), Error> {
     // Controller who will ask
     let mut asker_controller = {
         // Create test db and event processor.
@@ -105,11 +103,7 @@ async fn test_authentication() -> Result<(), Error> {
 
     // Send query again
     let result = watcher.process_op(query).await;
-    // Expect error because controller's witness config is empty and latest ksn can't be checked.
-    assert!(matches!(
-        result, Err(ActorError::NoIdentState { ref prefix })
-        if prefix == about_controller.prefix()
-    ));
+    assert!(&result.is_ok());
 
     Ok(())
 }

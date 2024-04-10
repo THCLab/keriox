@@ -24,12 +24,15 @@ impl Identifier {
         let indexes_sig = IndexedSignature::new_both_same(signature, key_index);
         Ok(Signature::Transferable(sig_data, vec![indexes_sig]))
     }
-   
+
     // Returns transferable signature of provided data.
-    pub fn sign_data(&self, data: &[u8], signatures: &[SelfSigningPrefix]) -> Result<Signature, ControllerError> {
+    pub fn sign_data(
+        &self,
+        data: &[u8],
+        signatures: &[SelfSigningPrefix],
+    ) -> Result<Signature, ControllerError> {
         let event_seal = self.get_last_establishment_event_seal()?;
         self.transferable_signature(data, event_seal, signatures)
-
     }
 
     /// Helper function that produces transferable signature made with
@@ -63,7 +66,6 @@ impl Identifier {
         );
         Ok(signature)
     }
-
 
     // Returns CESR stream of signed data and signatures.
     pub fn sign_to_cesr(

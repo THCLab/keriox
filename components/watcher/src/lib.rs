@@ -3,6 +3,7 @@ pub use crate::{
     watcher_listener::WatcherListener,
 };
 
+#[cfg(test)]
 mod test;
 mod watcher;
 mod watcher_listener;
