@@ -1,6 +1,4 @@
 use std::{collections::HashSet, sync::Arc};
-#[cfg(test)]
-mod test_watcher;
 
 use keri_core::{
     actor::prelude::SelfAddressingIdentifier,
