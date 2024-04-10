@@ -70,8 +70,8 @@ async fn test_witness_rotation() -> Result<(), ControllerError> {
     let (mut identifier, mut controller_keypair, _) = setup_identifier(
         root0.path(),
         vec![wit1_location.clone()],
-        transport.clone(),
-        TelTestTransport::new(),
+        Some(transport.clone()),
+        Some(TelTestTransport::new()),
     )
     .await;
 

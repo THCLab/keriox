@@ -32,6 +32,9 @@ pub struct Identifier {
     communication: Arc<Communication>,
     pub to_notify: Vec<SignedEventMessage>,
     query_cache: QueryCache,
+    /// Cached identifier state. It saves the state of identifier, event if last
+    /// event isn't accepted in the KEL yet (e.g. if there are no witness
+    /// receipts yet.)
     cached_state: IdentifierState,
     pub(crate) broadcasted_rcts: HashSet<(SelfAddressingIdentifier, BasicPrefix, IdentifierPrefix)>,
 }
@@ -97,6 +100,7 @@ impl Identifier {
         self.registry_id.as_ref()
     }
 
+    /// Returns accepted IdentifierState of identifier.
     pub fn find_state(&self, id: &IdentifierPrefix) -> Result<IdentifierState, ControllerError> {
         self.known_events.get_state(id)
     }
