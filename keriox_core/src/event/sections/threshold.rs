@@ -1,9 +1,10 @@
 use std::{fmt, str::FromStr};
 
-use crate::error::Error;
 use fraction::{Fraction, One, Zero};
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use serde_hex::{Compact, SerHex};
+
+use super::key_config::SignatureError;
 
 #[derive(Debug, thiserror::Error, Serialize, Deserialize)]
 pub enum ThresholdError {
@@ -94,7 +95,7 @@ pub enum WeightedThreshold {
 }
 
 impl WeightedThreshold {
-    pub fn enough_signatures(&self, sigs_indexes: &[usize]) -> Result<bool, Error> {
+    pub fn enough_signatures(&self, sigs_indexes: &[usize]) -> Result<(), SignatureError> {
         match self {
             WeightedThreshold::Single(clause) => clause.enough_signatures(0, sigs_indexes),
             WeightedThreshold::Multi(clauses) => clauses.enough_signatures(sigs_indexes),
@@ -119,9 +120,9 @@ impl SignatureThreshold {
         )))
     }
 
-    pub fn enough_signatures(&self, sigs_indexes: &[usize]) -> Result<bool, Error> {
+    pub fn enough_signatures(&self, sigs_indexes: &[usize]) -> Result<(), SignatureError> {
         match self {
-            SignatureThreshold::Simple(ref t) => Ok((sigs_indexes.len() as u64) >= *t),
+            SignatureThreshold::Simple(ref t) => if (sigs_indexes.len() as u64) >= *t {Ok(())} else {Err(SignatureError::NotEnoughSigsError)},
             SignatureThreshold::Weighted(ref thresh) => thresh.enough_signatures(sigs_indexes),
         }
     }
@@ -156,8 +157,8 @@ impl ThresholdClause {
         &self,
         start_index: usize,
         sigs_indexes: &[usize],
-    ) -> Result<bool, Error> {
-        Ok(sigs_indexes
+    ) -> Result<(), SignatureError> {
+        (sigs_indexes
             .iter()
             .fold(Some(Zero::zero()), |acc: Option<Fraction>, sig_index| {
                 if let (Some(element), Some(sum)) = (self.0.get(sig_index - start_index), acc) {
@@ -166,8 +167,8 @@ impl ThresholdClause {
                     None
                 }
             })
-            .ok_or_else(|| Error::SemanticError("signature index out of bound".into()))?
-            >= One::one())
+            .ok_or_else(|| SignatureError::MissingIndex)?
+            >= One::one()).then(|| ()).ok_or(SignatureError::NotEnoughSigsError)
     }
 }
 
@@ -196,11 +197,11 @@ impl MultiClauses {
         self.0.iter().map(|l| l.length()).sum()
     }
 
-    pub fn enough_signatures(&self, sigs_indexes: &[usize]) -> Result<bool, Error> {
-        Ok(self
+    pub fn enough_signatures(&self, sigs_indexes: &[usize]) -> Result<(), SignatureError> {
+        self
             .0
             .iter()
-            .fold(Ok((0, true)), |acc, clause| -> Result<_, Error> {
+            .fold(Ok((0, true)), |acc, clause| -> Result<_, SignatureError> {
                 let (start, enough) = acc?;
                 let sigs: Vec<usize> = sigs_indexes
                     .iter()
@@ -211,21 +212,21 @@ impl MultiClauses {
                     .collect();
                 Ok((
                     start + clause.0.len(),
-                    enough && clause.enough_signatures(start, &sigs)?,
+                    enough && clause.enough_signatures(start, &sigs).is_ok(),
                 ))
             })?
-            .1)
+            .1.then(|| ()).ok_or(SignatureError::NotEnoughSigsError)
     }
 }
 
 #[test]
-fn test_enough_sigs() -> Result<(), Error> {
+fn test_enough_sigs() -> Result<(), SignatureError> {
     // Threshold: [[1/1], [1/2, 1/2, 1/2], [1/2,1/2]]
     let wt = MultiClauses::new_from_tuples(vec![vec![(1, 1)], vec![(1, 2), (1, 2), (1, 2)]]);
     let sigs_indexes: Vec<_> = vec![0, 1, 2, 3];
 
     // All signatures.
-    assert!(wt.enough_signatures(&sigs_indexes.clone())?);
+    assert!(wt.enough_signatures(&sigs_indexes.clone()).is_ok());
 
     // Enough signatures.
     let enough = vec![
@@ -233,16 +234,16 @@ fn test_enough_sigs() -> Result<(), Error> {
         sigs_indexes[1].clone(),
         sigs_indexes[3].clone(),
     ];
-    assert!(wt.enough_signatures(&enough.clone())?);
+    assert!(wt.enough_signatures(&enough.clone()).is_ok());
 
     let not_enough = vec![sigs_indexes[0].clone()];
-    assert!(!wt.enough_signatures(&not_enough.clone())?);
+    assert!(!wt.enough_signatures(&not_enough.clone()).is_ok());
 
     Ok(())
 }
 
 #[test]
-pub fn test_weighted_treshold_serialization() -> Result<(), Error> {
+pub fn test_weighted_treshold_serialization() -> Result<(), SignatureError> {
     let multi_threshold = r#"[["1"],["1/2","1/2","1/2"]]"#.to_string();
     let wt: WeightedThreshold = serde_json::from_str(&multi_threshold).unwrap();
     assert!(matches!(wt, WeightedThreshold::Multi(_)));

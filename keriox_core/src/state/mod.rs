@@ -74,7 +74,10 @@ impl WitnessConfig {
                             .map(|att| att.index.current() as usize),
                     )
                     .collect::<Vec<_>>();
-                t.enough_signatures(&indexes)
+                match t.enough_signatures(&indexes) {
+                    Ok(_) => Ok(true),
+                    Err(e) => Err(Error::KeyConfigError(e)),
+                }
             }
         }
     }

@@ -175,7 +175,7 @@ impl WatcherData {
     pub fn get_state_for_prefix(
         &self,
         id: &IdentifierPrefix,
-    ) -> Result<Option<IdentifierState>, Error> {
+    ) -> Option<IdentifierState> {
         self.event_storage.get_state(id)
     }
 
@@ -226,7 +226,7 @@ impl WatcherData {
                 reply_route: _,
                 args,
             } => {
-                let local_state = self.get_state_for_prefix(&args.i)?;
+                let local_state = self.get_state_for_prefix(&args.i);
                 match (local_state, args.s) {
                     (Some(state), Some(sn)) if sn <= state.sn => {
                         // return kel from local db
@@ -242,7 +242,7 @@ impl WatcherData {
                 reply_route: _,
                 args,
             } => {
-                let local_state = self.get_state_for_prefix(&args.i)?;
+                let local_state = self.get_state_for_prefix(&args.i);
                 match (local_state, args.s) {
                     (Some(state), Some(sn)) if sn <= state.sn => {}
                     _ => {
@@ -416,7 +416,7 @@ impl WatcherData {
         id: IdentifierPrefix,
     ) -> Result<BasicPrefix, ActorError> {
         let wit_id = self
-            .get_state_for_prefix(&id)?
+            .get_state_for_prefix(&id)
             .and_then(|state| {
                 state
                     .witness_config
@@ -434,7 +434,7 @@ impl WatcherData {
         id: &IdentifierPrefix,
     ) -> Result<Vec<BasicPrefix>, ActorError> {
         let wit_id = self
-            .get_state_for_prefix(&id)?
+            .get_state_for_prefix(&id)
             .map(|state| state.witness_config.witnesses)
             .ok_or(ActorError::NoIdentState { prefix: id.clone() })?;
         Ok(wit_id)

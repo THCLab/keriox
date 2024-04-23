@@ -489,7 +489,7 @@ impl PartiallyWitnessedEscrow {
         let sn = receipted_event.event_message.data.get_sn();
         let digest = receipted_event.event_message.digest()?;
         let new_state = storage
-            .get_state(&id)?
+            .get_state(&id)
             .unwrap_or_default()
             .apply(receipted_event)?;
 
@@ -815,7 +815,7 @@ impl Notifier for DelegationEscrow {
                         EventData::Drt(_drt) => {
                             let storage = EventStorage::new(self.db.clone());
                             storage
-                                .get_state(&signed_event.event_message.data.get_prefix())?
+                                .get_state(&signed_event.event_message.data.get_prefix())
                                 .ok_or(Error::MissingDelegatingEventError)?
                                 .delegator
                                 .ok_or(Error::MissingDelegatingEventError)

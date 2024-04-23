@@ -43,7 +43,7 @@ fn test_incept() -> Result<(), Error> {
     let signed_inception = inception_event.sign(vec![indexed_signature], None, None);
 
     actor::process_notice(Notice::Event(signed_inception), &processor)?;
-    let state = storage.get_state(&identifier)?;
+    let state = storage.get_state(&identifier);
     assert!(matches!(state, Some(_)));
     assert_eq!(state.unwrap().sn, 0);
 

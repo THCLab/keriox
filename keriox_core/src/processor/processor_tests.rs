@@ -401,7 +401,7 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
     let signed_rotation = rotation.sign(signatures, None, None);
 
     processor.process_notice(&Notice::Event(signed_rotation))?;
-    let state = EventStorage::new(db.clone()).get_state(&id_prefix)?;
+    let state = EventStorage::new(db.clone()).get_state(&id_prefix);
     assert_eq!(state.unwrap().sn, 1);
 
     let current_signers = [&signers[6], &signers[7], &signers[8], &signers[9]];
@@ -450,7 +450,7 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
         Some(signed_rotation)
     );
 
-    let state = EventStorage::new(db.clone()).get_state(&id_prefix)?;
+    let state = EventStorage::new(db.clone()).get_state(&id_prefix);
     assert_eq!(state.unwrap().sn, 1);
 
     // Provide the fourth signature - enough to satisfy prev threshold
@@ -465,7 +465,7 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
         None
     );
 
-    let state = EventStorage::new(db.clone()).get_state(&id_prefix)?;
+    let state = EventStorage::new(db.clone()).get_state(&id_prefix);
     assert_eq!(state.unwrap().sn, 2);
 
     Ok(())
@@ -587,7 +587,7 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
     let signed_rotation = rotation.sign(signatures, None, None);
 
     processor.process_notice(&Notice::Event(signed_rotation))?;
-    let state = storage.get_state(&id_prefix)?.unwrap();
+    let state = storage.get_state(&id_prefix).unwrap();
     assert_eq!(state.sn, 1);
     assert_eq!(&state.current.public_keys, &current_public_keys);
     assert_eq!(
@@ -634,7 +634,7 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
     processor.process_notice(&Notice::Event(signed_rotation))?;
 
     // State shouldn't be updated.
-    let state = storage.get_state(&id_prefix)?.unwrap();
+    let state = storage.get_state(&id_prefix).unwrap();
     assert_eq!(state.sn, 1);
 
     Ok(())
@@ -762,7 +762,7 @@ pub fn test_reserve_rotation() -> Result<(), Error> {
     let signed_rotation = rotation.sign(signatures, None, None);
 
     processor.process_notice(&Notice::Event(signed_rotation))?;
-    let state = storage.get_state(&id_prefix)?.unwrap();
+    let state = storage.get_state(&id_prefix).unwrap();
     assert_eq!(state.sn, 1);
 
     // create partial rotation event. Subset of keys set in inception event as
@@ -818,7 +818,7 @@ pub fn test_reserve_rotation() -> Result<(), Error> {
     let signed_rotation = rotation.sign(signatures, None, None);
 
     processor.process_notice(&Notice::Event(signed_rotation))?;
-    let state = storage.get_state(&id_prefix)?.unwrap();
+    let state = storage.get_state(&id_prefix).unwrap();
     assert_eq!(state.sn, 2);
 
     Ok(())
@@ -894,7 +894,7 @@ pub fn test_custorial_rotation() -> Result<(), Error> {
 
     processor.process_notice(&Notice::Event(signed_icp))?;
     // Inception was accepted
-    assert_eq!(storage.get_state(&id_prefix).unwrap().unwrap().sn, 0);
+    assert_eq!(storage.get_state(&id_prefix).unwrap().sn, 0);
 
     // create rotation event.
     let new_custodian_signers = &signers[6..9];
@@ -945,7 +945,7 @@ pub fn test_custorial_rotation() -> Result<(), Error> {
     let signed_rotation = rotation.sign(owner_signatures, None, None);
 
     processor.process_notice(&Notice::Event(signed_rotation))?;
-    let state = storage.get_state(&id_prefix)?.unwrap();
+    let state = storage.get_state(&id_prefix).unwrap();
     // Rotation is no accepted because of missing new custodial signatures
     assert_eq!(state.sn, 0);
 
@@ -964,7 +964,7 @@ pub fn test_custorial_rotation() -> Result<(), Error> {
     let signed_rotation = rotation.sign(new_custodian_signatures, None, None);
 
     processor.process_notice(&Notice::Event(signed_rotation))?;
-    let state = storage.get_state(&id_prefix)?.unwrap();
+    let state = storage.get_state(&id_prefix).unwrap();
     // Rotation should be accepted
     assert_eq!(state.sn, 1);
 

@@ -57,10 +57,10 @@ impl Signature {
         match self {
             Signature::Transferable(_sigd, sigs) => {
                 let kc = storage
-                    .get_state(&self.get_signer().ok_or(Error::MissingSigner)?)?
+                    .get_state(&self.get_signer().ok_or(Error::MissingSigner)?)
                     .ok_or_else(|| Error::UnknownSigner(self.get_signer().unwrap()))?
                     .current;
-                kc.verify(data, sigs)
+                Ok(kc.verify(data, sigs)?)
             }
             Signature::NonTransferable(Nontransferable::Couplet(couplets)) => Ok(couplets
                 .iter()

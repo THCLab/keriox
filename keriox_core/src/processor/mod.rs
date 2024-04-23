@@ -168,7 +168,7 @@ impl EventProcessor {
 pub fn compute_state(
     db: Arc<SledEventDatabase>,
     id: &IdentifierPrefix,
-) -> Result<Option<IdentifierState>, Error> {
+) -> Option<IdentifierState> {
     if let Some(events) = db.get_kel_finalized_events(id) {
         // start with empty state
         let mut state = IdentifierState::default();
@@ -176,7 +176,7 @@ pub fn compute_state(
         let mut sorted_events = events.collect::<Vec<TimestampedSignedEventMessage>>();
         // TODO why identifier is in database if there are no events for it?
         if sorted_events.is_empty() {
-            return Ok(None);
+            return None;
         };
         sorted_events.sort();
         for event in sorted_events {
@@ -191,9 +191,9 @@ pub fn compute_state(
                 },
             };
         }
-        Ok(Some(state))
+        Some(state)
     } else {
         // no inception event, no state
-        Ok(None)
+        None
     }
 }

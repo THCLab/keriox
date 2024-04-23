@@ -2,6 +2,8 @@ use std::sync::Arc;
 
 #[cfg(feature = "query")]
 use chrono::{DateTime, FixedOffset};
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 use super::event_storage::EventStorage;
 use crate::{
@@ -9,7 +11,7 @@ use crate::{
     error::Error,
     event::{
         event_data::EventData,
-        sections::seal::{EventSeal, Seal},
+        sections::{key_config::SignatureError, seal::{EventSeal, Seal}},
         KeyEvent,
     },
     event_message::{
@@ -27,6 +29,18 @@ use crate::{
     prefix::IdentifierPrefix,
     query::{key_state_notice::KeyStateNotice, reply_event::SignedReply, QueryError},
 };
+
+#[derive(Error, Debug, Serialize, Deserialize)]
+pub enum VerificationError {
+    #[error("Need more data")]
+    NeedMoreData,
+    #[error("Faulty signatures")]
+    FaultySignature,
+    #[error("Unknown signer identifier")]
+    UnknownIdentifierError,
+    #[error(transparent)]
+    SignatureError(#[from] SignatureError)
+}
 
 pub struct EventValidator {
     event_storage: EventStorage,
@@ -51,7 +65,7 @@ impl EventValidator {
         // Compute new state
         let new_state = match self
             .event_storage
-            .get_state(&signed_event.event_message.data.get_prefix())?
+            .get_state(&signed_event.event_message.data.get_prefix())
         {
             Some(state) => {
                 let new_state = signed_event.event_message.apply_to(state.clone())?;
@@ -135,7 +149,7 @@ impl EventValidator {
         } else {
             Err(Error::MissingEvent)
         }?;
-        self.event_storage.get_state(&vrc.body.prefix)
+        Ok(self.event_storage.get_state(&vrc.body.prefix))
     }
 
     pub fn get_receipt_couplets(
@@ -205,36 +219,43 @@ impl EventValidator {
             // There's no receipted event id database so we can't verify signatures
             Err(Error::MissingEvent)
         }?;
-        self.event_storage.get_state(id)
+        Ok(self.event_storage.get_state(id))
     }
 
-    pub fn verify(&self, data: &[u8], sig: &Signature) -> Result<(), Error> {
+    pub fn verify(&self, data: &[u8], sig: &Signature) -> Result<(), VerificationError> {
         match sig {
             Signature::Transferable(signer_data, sigs) => {
                 let seal = match signer_data {
                     SignerData::EventSeal(seal) => Ok(seal.clone()),
                     SignerData::LastEstablishment(id) => self
                         .event_storage
-                        .get_last_establishment_event_seal(id)?
-                        .ok_or(Error::MissingSigner),
-                    SignerData::JustSignatures => Err(Error::MissingSigner),
+                        .get_last_establishment_event_seal(id)
+                        .ok_or(VerificationError::UnknownIdentifierError),
+                    SignerData::JustSignatures => todo!(), //Err(Error::MissingSigner),
                 }?;
                 let kp = self.event_storage.get_keys_at_event(
                     &seal.prefix,
                     seal.sn,
                     &seal.event_digest,
-                )?;
-                (kp.is_some() && kp.unwrap().verify(data, sigs)?)
-                    .then_some(())
-                    .ok_or(Error::SignatureVerificationError)
+                ).unwrap_or_default(); // error means that event wasn't found
+                match kp {
+                    Some(kp) => {
+                        kp.verify(data, sigs)?
+                            .then_some(())
+                            // .ok_or(Error::SignatureVerificationError)
+                            .ok_or(VerificationError::FaultySignature)
+                        },
+                    None => Err(VerificationError::NeedMoreData),
+                }
             }
             Signature::NonTransferable(Nontransferable::Couplet(couplets)) => couplets
                 .iter()
                 .all(|(bp, sign)| bp.verify(data, sign).unwrap())
                 .then_some(())
-                .ok_or(Error::SignatureVerificationError),
+                .ok_or(VerificationError::FaultySignature),
+                // .ok_or(Error::SignatureVerificationError),
             Signature::NonTransferable(Nontransferable::Indexed(_sigs)) => {
-                Err(Error::MissingSigner)
+                Err(VerificationError::UnknownIdentifierError)
             }
         }
     }
@@ -301,7 +322,7 @@ impl EventValidator {
             EventData::Drt(_drt) => {
                 let delegator = self
                     .event_storage
-                    .get_state(&signed_event.event_message.data.get_prefix())?
+                    .get_state(&signed_event.event_message.data.get_prefix())
                     .ok_or_else(|| {
                         Error::SemanticError("Missing state of delegated identifier".into())
                     })?
@@ -337,7 +358,15 @@ impl EventValidator {
             if rpy.signature.get_signer().ok_or(Error::MissingSigner)? != signer_id {
                 return Err(QueryError::Error("Wrong reply message signer".into()).into());
             };
-            self.verify(&rpy.reply.encode()?, &rpy.signature)?;
+            match self.verify(&rpy.reply.encode()?, &rpy.signature) {
+                Ok(_) => {},
+                Err(e) => match e {
+                    VerificationError::NeedMoreData => todo!(),
+                    VerificationError::FaultySignature => todo!(),
+                    VerificationError::UnknownIdentifierError => todo!(),
+                    VerificationError::SignatureError(_) => todo!(),
+                },
+            };
             rpy.reply.check_digest()?;
             let reply_prefix = ksn.state.prefix.clone();
 
@@ -410,7 +439,7 @@ impl EventValidator {
         // check new ksn with actual database state for that prefix
         let state = self
             .event_storage
-            .get_state(&ksn_pre)?
+            .get_state(&ksn_pre)
             .ok_or::<Error>(Error::EventOutOfOrderError)?;
 
         match state.sn.cmp(&ksn_sn) {

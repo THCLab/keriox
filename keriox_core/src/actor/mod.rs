@@ -222,7 +222,7 @@ pub fn process_query(qr: &QueryRoute, storage: &EventStorage) -> Result<ReplyTyp
         QueryRoute::Ksn { args, .. } => {
             // return reply message with ksn inside
             let state = storage
-                .get_state(&args.i)?
+                .get_state(&args.i)
                 .ok_or_else(|| QueryError::UnknownId { id: args.i.clone() })?;
             let ksn = KeyStateNotice::new_ksn(state, SerializationFormats::JSON);
             Ok(ReplyType::Ksn(ksn))

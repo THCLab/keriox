@@ -2,7 +2,7 @@ use said::version::error::Error as VersionError;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{event_message::cesr_adapter::ParseError, prefix::IdentifierPrefix};
+use crate::{event::sections::key_config::SignatureError, event_message::cesr_adapter::ParseError, prefix::IdentifierPrefix, processor::validator::VerificationError};
 
 pub mod serializer_error;
 
@@ -31,12 +31,6 @@ pub enum Error {
 
     #[error("Not enough signatures while verifying")]
     NotEnoughSigsError,
-
-    #[error("Signature duplicate while verifying")]
-    DuplicateSignature,
-
-    #[error("Too many signatures while verifying")]
-    TooManySignatures,
 
     #[error("Not enough receipts")]
     NotEnoughReceiptsError,
@@ -110,6 +104,12 @@ pub enum Error {
 
     #[error("Signing error")]
     SigningError,
+
+    #[error(transparent)]
+    KeyConfigError(SignatureError),
+
+    #[error(transparent)]
+    VerificartionError(#[from] VerificationError)
 }
 
 impl From<VersionError> for Error {
@@ -133,5 +133,14 @@ impl From<sled::Error> for Error {
 impl From<crate::keys::KeysError> for Error {
     fn from(_: crate::keys::KeysError) -> Self {
         Error::SigningError
+    }
+}
+
+impl From<SignatureError> for Error {
+    fn from(value: SignatureError) -> Self {
+        match value {
+            SignatureError::NotEnoughSigsError => Error::NotEnoughSigsError,
+            e => Error::KeyConfigError(e),
+        }
     }
 }

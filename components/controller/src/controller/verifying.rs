@@ -6,18 +6,29 @@ use keri_core::{
     oobi::Oobi,
     processor::validator::EventValidator,
 };
+use thiserror::Error;
 
 use crate::{error::ControllerError, known_events::KnownEvents};
 
+#[derive(Error, Debug)]
+pub enum VerificationError {
+    #[error("Need more data")]
+    NeedMoreData,
+    #[error("Faulty signatures")]
+    FaultySignature,
+    #[error("Unknown signer identifier. Missing OOBI")]
+    UnknownIdentifierError,
+}
+
 impl KnownEvents {
-    pub fn verify(&self, data: &[u8], signature: &Signature) -> Result<(), ControllerError> {
+    pub fn verify(&self, data: &[u8], signature: &Signature) -> Result<(), VerificationError> {
         let verifier = EventValidator::new(self.storage.db.clone());
         verifier.verify(data, signature).map_err(|e| match e {
             Error::SignatureVerificationError | Error::FaultySignatureVerification => {
-                ControllerError::FaultySignature
+                VerificationError::FaultySignature
             }
-            Error::MissingSigner => ControllerError::UnknownIdentifierError,
-            Error::EventOutOfOrderError => ControllerError::MissingEventError,
+            Error::MissingSigner => VerificationError::UnknownIdentifierError,
+            Error::EventOutOfOrderError => VerificationError::NeedMoreData,
             e => ControllerError::OtherError(e.to_string()),
         })
     }

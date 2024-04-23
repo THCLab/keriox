@@ -44,7 +44,7 @@ fn test_out_of_order() -> Result<(), Error> {
     let id: IdentifierPrefix = "EO8cED9H5XPqBdoVatgBkEuSP8yXic7HtWpkex-9e0sL".parse()?;
 
     process_notice(ev1, &processor)?;
-    assert_eq!(storage.get_state(&id).unwrap().unwrap().sn, 0);
+    assert_eq!(storage.get_state(&id).unwrap().sn, 0);
 
     process_notice(ev4.clone(), &processor)?;
     let mut escrowed = ooo_escrow.escrowed_out_of_order.get(&id).unwrap();
@@ -64,7 +64,7 @@ fn test_out_of_order() -> Result<(), Error> {
     assert_eq!(escrowed.next().map(|e| Notice::Event(e)), Some(ev5.clone()));
     assert!(escrowed.next().is_none());
 
-    assert_eq!(storage.get_state(&id).unwrap().unwrap().sn, 0);
+    assert_eq!(storage.get_state(&id).unwrap().sn, 0);
     // check out of order table
     assert_eq!(
         ooo_escrow.escrowed_out_of_order.get(&id).unwrap().count(),
@@ -73,7 +73,7 @@ fn test_out_of_order() -> Result<(), Error> {
 
     process_notice(ev2, &processor)?;
 
-    assert_eq!(storage.get_state(&id).unwrap().unwrap().sn, 4);
+    assert_eq!(storage.get_state(&id).unwrap().sn, 4);
     // Check if out of order is empty
     let mut escrowed = ooo_escrow.escrowed_out_of_order.get(&id).unwrap();
     assert!(escrowed.next().is_none());

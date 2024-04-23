@@ -62,7 +62,7 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
         )?
     };
 
-    assert_eq!(controller.get_state()?, None);
+    assert_eq!(controller.get_state(), None);
 
     let first_witness = {
         let root_witness = Builder::new().prefix("test-db1").tempdir().unwrap();
@@ -103,7 +103,7 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
     )?;
 
     // Shouldn't be accepted in controllers kel, because of missing witness receipts
-    assert_eq!(controller.get_state()?, None);
+    assert_eq!(controller.get_state(), None);
 
     let receipts = [&first_witness, &second_witness]
         .iter()
@@ -125,7 +125,7 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
     assert_eq!(
         first_witness
             .event_storage
-            .get_state(&controller.prefix())?
+            .get_state(&controller.prefix())
             .unwrap()
             .sn,
         0
@@ -133,7 +133,7 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
     assert_eq!(
         second_witness
             .event_storage
-            .get_state(&controller.prefix())?
+            .get_state(&controller.prefix())
             .unwrap()
             .sn,
         0
@@ -145,7 +145,7 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
         .unwrap();
 
     // Still not fully witnessed
-    assert_eq!(controller.get_state()?, None);
+    assert_eq!(controller.get_state(), None);
 
     // process second receipt
     controller
@@ -153,10 +153,10 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
         .unwrap();
 
     // Now fully witnessed, should be in kel
-    assert_eq!(controller.get_state()?.map(|state| state.sn), Some(0));
+    assert_eq!(controller.get_state().map(|state| state.sn), Some(0));
     assert_eq!(
         controller
-            .get_state()?
+            .get_state()
             .map(|state| state.witness_config.witnesses),
         Some(vec![
             first_witness.prefix.clone(),
@@ -178,21 +178,21 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
     assert_eq!(
         first_witness
             .event_storage
-            .get_state(&controller.prefix())?
+            .get_state(&controller.prefix())
             .map(|state| state.sn),
         Some(0)
     );
     assert_eq!(
         second_witness
             .event_storage
-            .get_state(&controller.prefix())?
+            .get_state(&controller.prefix())
             .map(|state| state.sn),
         Some(0)
     );
 
     let rotation_event = controller.rotate(None, Some(&[second_witness.prefix.clone()]), Some(1));
     // Rotation not yet accepted by controller, missing receipts
-    assert_eq!(controller.get_state()?.unwrap().sn, 0);
+    assert_eq!(controller.get_state().unwrap().sn, 0);
     first_witness.process_notice(Notice::Event(rotation_event?))?;
     // first_witness.respond(signer_arc.clone())?;
     let first_receipt = first_witness
@@ -208,7 +208,7 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
     assert_eq!(
         first_witness
             .event_storage
-            .get_state(&controller.prefix())?
+            .get_state(&controller.prefix())
             .unwrap()
             .sn,
         1
@@ -216,11 +216,11 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
 
     // process receipt by controller
     controller.process(&first_receipt)?;
-    assert_eq!(controller.get_state()?.unwrap().sn, 1);
+    assert_eq!(controller.get_state().unwrap().sn, 1);
 
     assert_eq!(
         controller
-            .get_state()?
+            .get_state()
             .map(|state| state.witness_config.witnesses),
         Some(vec![first_witness.prefix.clone(),])
     );
@@ -350,7 +350,7 @@ fn test_qry_rpy() -> Result<(), ActorError> {
         match &response[0] {
             Message::Op(Op::Reply(rpy)) => {
                 if let ReplyRoute::Ksn(_id, ksn) = rpy.reply.get_route() {
-                    assert_eq!(&ksn.state, &alice.get_state().unwrap().unwrap())
+                    assert_eq!(&ksn.state, &alice.get_state().unwrap())
                 }
             }
             _ => unreachable!(),
@@ -821,13 +821,13 @@ pub fn test_multisig() -> Result<(), ActorError> {
         witness.process_exchange(exn_from_cont2)?;
     };
     // Controller2 didin't accept group icp yet because of lack of witness receipt.
-    let state = cont2.get_state_for_id(&group_id)?;
+    let state = cont2.get_state_for_id(&group_id);
     assert_eq!(state, None);
     // Also Controller1 didin't get his exn and receipts.
-    let state = cont1.get_state_for_id(&group_id)?;
+    let state = cont1.get_state_for_id(&group_id);
     assert_eq!(state, None);
 
-    let state = witness.event_storage.get_state(&group_id)?.unwrap();
+    let state = witness.event_storage.get_state(&group_id).unwrap();
     assert_eq!(state.sn, 0);
 
     let group_query_message = cont1.query_groups_mailbox(&witness.prefix)[0].clone();
@@ -843,7 +843,7 @@ pub fn test_multisig() -> Result<(), ActorError> {
         .map(|r| Message::Notice(Notice::NontransferableRct(r)))
         .collect::<Vec<_>>();
     cont2.process(&group_receipt)?;
-    let state = cont2.get_state_for_id(&group_id)?;
+    let state = cont2.get_state_for_id(&group_id);
     assert_eq!(state.unwrap().sn, 0);
 
     // Controller1 asks witness about his mailbox.
@@ -864,7 +864,7 @@ pub fn test_multisig() -> Result<(), ActorError> {
     };
     // Process witness receipt of group event
     cont1.process(&group_receipt)?;
-    let state = cont1.get_state_for_id(&group_id)?;
+    let state = cont1.get_state_for_id(&group_id);
     assert_eq!(state.unwrap().sn, 0);
 
     Ok(())
@@ -1005,10 +1005,10 @@ pub fn test_delegated_multisig() -> Result<(), ActorError> {
     };
 
     // Controller2 didin't accept group dip yet because of lack of witness receipt and delegating event.
-    let state = cont2.get_state_for_id(&group_id)?;
+    let state = cont2.get_state_for_id(&group_id);
     assert_eq!(state, None);
     // Also Controller1 didin't accept it.
-    let state = cont1.get_state_for_id(&group_id)?;
+    let state = cont1.get_state_for_id(&group_id);
     assert_eq!(state, None);
 
     // Request delegating confirmation
@@ -1051,7 +1051,7 @@ pub fn test_delegated_multisig() -> Result<(), ActorError> {
 
         let state = witness
             .event_storage
-            .get_state(delegator.prefix())?
+            .get_state(delegator.prefix())
             .unwrap();
         assert_eq!(state.sn, 1);
     };
@@ -1111,7 +1111,7 @@ pub fn test_delegated_multisig() -> Result<(), ActorError> {
             controller.process(&[Message::Notice(Notice::Event(delegate[0].clone()))])?;
         };
     }
-    let state = cont1.get_state_for_id(&delegator.prefix())?;
+    let state = cont1.get_state_for_id(&delegator.prefix());
     assert_eq!(state.unwrap().sn, 1);
 
     // del escrow should be empty because delegating event was provided
@@ -1128,13 +1128,13 @@ pub fn test_delegated_multisig() -> Result<(), ActorError> {
 
     let state = witness
         .event_storage
-        .get_state(&delegator.prefix())?
+        .get_state(&delegator.prefix())
         .unwrap();
     assert_eq!(state.sn, 1);
 
     // publish delegated event to witness
     witness.process_notice(Notice::Event(dip_with_delegator_seal.clone()))?;
-    let state = witness.event_storage.get_state(&group_id)?.unwrap();
+    let state = witness.event_storage.get_state(&group_id).unwrap();
     assert_eq!(state.sn, 0);
 
     // Child ask about mailbox
@@ -1153,7 +1153,7 @@ pub fn test_delegated_multisig() -> Result<(), ActorError> {
             ))])?;
         };
 
-        let state = controller.get_state_for_id(&group_id)?;
+        let state = controller.get_state_for_id(&group_id);
         assert_eq!(state.unwrap().sn, 0);
     }
 
@@ -1250,10 +1250,10 @@ pub fn test_delegating_multisig() -> Result<(), ActorError> {
     };
 
     // Delegator2 didin't accept group dip yet because of lack of witness receipt.
-    let state = delegator_2.get_state_for_id(&delegator_group_id)?;
+    let state = delegator_2.get_state_for_id(&delegator_group_id);
     assert_eq!(state, None);
     // Also Delegator1 didin't accept it.
-    let state = delegator_1.get_state_for_id(&delegator_group_id)?;
+    let state = delegator_1.get_state_for_id(&delegator_group_id);
     assert_eq!(state, None);
 
     // Delegators ask about group mailbox to get receipt
@@ -1272,9 +1272,9 @@ pub fn test_delegating_multisig() -> Result<(), ActorError> {
         };
     }
 
-    let state = delegator_2.get_state_for_id(&delegator_group_id)?;
+    let state = delegator_2.get_state_for_id(&delegator_group_id);
     assert_eq!(state.unwrap().sn, 0);
-    let state = delegator_1.get_state_for_id(&delegator_group_id)?;
+    let state = delegator_1.get_state_for_id(&delegator_group_id);
     assert_eq!(state.unwrap().sn, 0);
 
     let delegator_kel = delegator_2
@@ -1336,7 +1336,7 @@ pub fn test_delegating_multisig() -> Result<(), ActorError> {
             // Delegating event still not accepted by witness.
             let state = witness
                 .event_storage
-                .get_state(&delegator_group_id)?
+                .get_state(&delegator_group_id)
                 .unwrap();
             assert_eq!(state.sn, 0);
         };
@@ -1397,9 +1397,9 @@ pub fn test_delegating_multisig() -> Result<(), ActorError> {
         };
     }
     // Both delegators accepted delegating event
-    let state = delegator_1.get_state_for_id(&delegator_group_id)?;
+    let state = delegator_1.get_state_for_id(&delegator_group_id);
     assert_eq!(state.unwrap().sn, 1);
-    let state = delegator_2.get_state_for_id(&delegator_group_id)?;
+    let state = delegator_2.get_state_for_id(&delegator_group_id);
     assert_eq!(state.unwrap().sn, 1);
 
     // TODO add function for getting event with signatures and witness receipts
@@ -1445,11 +1445,11 @@ pub fn test_delegating_multisig() -> Result<(), ActorError> {
     };
 
     // Child has current delegator kel.
-    let state = child.get_state_for_id(&delegator_group_id)?;
+    let state = child.get_state_for_id(&delegator_group_id);
     assert_eq!(state.unwrap().sn, 1);
 
     // Delegated child event is not accepted bacause of missing witness receipts.
-    let state = child.get_state_for_id(&delegated_child_id)?;
+    let state = child.get_state_for_id(&delegated_child_id);
     assert_eq!(state, None);
 
     let confirmed_delegate_dip = child
@@ -1472,7 +1472,7 @@ pub fn test_delegating_multisig() -> Result<(), ActorError> {
     };
 
     // Delegated child kel was accepted
-    let state = child.get_state_for_id(&delegated_child_id)?;
+    let state = child.get_state_for_id(&delegated_child_id);
     assert_eq!(state.unwrap().sn, 0);
 
     Ok(())

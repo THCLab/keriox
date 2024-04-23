@@ -105,8 +105,7 @@ mod tests {
         error::Error,
         event::{
             event_data::{inception::InceptionEvent, EventData},
-            sections::{key_config::nxt_commitment, KeyConfig},
-            sections::{threshold::SignatureThreshold, InceptionWitnessConfig},
+            sections::{key_config::nxt_commitment, threshold::SignatureThreshold, InceptionWitnessConfig, KeyConfig},
             KeyEvent,
         },
         keys::{PrivateKey, PublicKey},
@@ -443,7 +442,7 @@ mod tests {
             .build()?;
 
         let res = rotation.apply_to(state);
-        assert!(matches!(res, Err(Error::NotEnoughSigsError)));
+        assert!(matches!(res.unwrap_err(), Error::NotEnoughSigsError));
 
         Ok(())
     }

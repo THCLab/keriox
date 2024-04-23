@@ -343,7 +343,7 @@ impl<K: KeyManager> SimpleController<K> {
         let oobi_rpy = SignedReply::new_trans(
             end_role,
             self.storage
-                .get_last_establishment_event_seal(self.prefix())?
+                .get_last_establishment_event_seal(self.prefix())
                 .unwrap(),
             vec![att_sig],
         );
@@ -394,7 +394,7 @@ impl<K: KeyManager> SimpleController<K> {
         km.rotate()?;
         let state = self
             .storage
-            .get_state(&self.prefix)?
+            .get_state(&self.prefix)
             .ok_or_else(|| Error::SemanticError("There is no state".into()))?;
 
         Ok(event_generator::rotate(
@@ -412,7 +412,7 @@ impl<K: KeyManager> SimpleController<K> {
     pub fn anchor(&self, seal: &[Seal]) -> Result<SignedEventMessage, Error> {
         let state = self
             .storage
-            .get_state(self.prefix())?
+            .get_state(self.prefix())
             .ok_or(Error::SemanticError("missing state".into()))?;
         let ixn = event_generator::anchor_with_seal(state, seal)?;
         // .map_err(|e| Error::SemanticError(e.to_string()))?;
@@ -442,7 +442,7 @@ impl<K: KeyManager> SimpleController<K> {
         if self.groups.contains(group_id) {
             let state = self
                 .storage
-                .get_state(group_id)?
+                .get_state(group_id)
                 .ok_or(Error::SemanticError("missing state".into()))?;
             let ixn = event_generator::anchor_with_seal(state, seals)
                 .map_err(|e| Error::SemanticError(e.to_string()))?;
@@ -486,7 +486,7 @@ impl<K: KeyManager> SimpleController<K> {
         // TODO what if group participant is a group and has more than one
         // public key?
         let own_pk = &self
-            .get_state()?
+            .get_state()
             .ok_or(Error::SemanticError("Unknown state".into()))?
             .current
             .public_keys[0];
@@ -498,7 +498,7 @@ impl<K: KeyManager> SimpleController<K> {
                 .position(|pk| pk == own_pk),
             EventData::Rot(rot) => {
                 let own_npk = &self
-                    .get_state()?
+                    .get_state()
                     .ok_or(Error::SemanticError("Unknown state".into()))?
                     .current
                     .next_keys_data
@@ -521,7 +521,7 @@ impl<K: KeyManager> SimpleController<K> {
                 .position(|pk| pk == own_pk),
             EventData::Ixn(_ixn) => self
                 .storage
-                .get_state(&group_event.get_prefix())?
+                .get_state(&group_event.get_prefix())
                 .ok_or(Error::SemanticError("Unknown state".into()))?
                 .current
                 .public_keys
@@ -562,14 +562,14 @@ impl<K: KeyManager> SimpleController<K> {
         Ok(Some(signed_icp.clone()))
     }
 
-    pub fn get_state(&self) -> Result<Option<IdentifierState>, Error> {
+    pub fn get_state(&self) -> Option<IdentifierState> {
         self.storage.get_state(&self.prefix)
     }
 
     pub fn get_state_for_id(
         &self,
         id: &IdentifierPrefix,
-    ) -> Result<Option<IdentifierState>, Error> {
+    ) -> Option<IdentifierState> {
         self.storage.get_state(id)
     }
 
@@ -596,7 +596,7 @@ impl<K: KeyManager> SimpleController<K> {
                     vec![next_key_hash],
                 ),
                 |mut acc, id| {
-                    let state = self.storage.get_state(id).unwrap().unwrap();
+                    let state = self.storage.get_state(id).unwrap();
                     acc.0.append(&mut state.clone().current.public_keys);
                     acc.1
                         .append(&mut state.clone().current.next_keys_data.next_key_hashes);

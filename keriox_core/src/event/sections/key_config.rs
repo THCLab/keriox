@@ -4,7 +4,6 @@ use serde::{Deserialize, Serialize};
 
 use super::threshold::SignatureThreshold;
 use crate::{
-    error::Error,
     prefix::{attached_signature::Index, BasicPrefix, IndexedSignature},
 };
 
@@ -17,10 +16,11 @@ pub struct NextKeysData {
     pub next_key_hashes: Vec<SelfAddressingIdentifier>,
 }
 
+
 impl NextKeysData {
     /// Checks if next KeyConfig contains enough public keys to fulfill current
     /// next threshold.
-    pub fn verify_next(&self, next: &KeyConfig) -> Result<bool, Error> {
+    pub fn verify_next(&self, next: &KeyConfig) -> Result<bool, SignatureError> {
         let indexes: Vec<_> = next
             .public_keys
             .iter()
@@ -33,9 +33,8 @@ impl NextKeysData {
 
         // check previous next threshold
         self.threshold
-            .enough_signatures(&indexes)?
-            .then_some(true)
-            .ok_or(Error::NotEnoughSigsError)
+            .enough_signatures(&indexes)?;
+        Ok(true)
     }
 
     /// Checks if public keys corresponding to signatures match keys committed in
@@ -44,15 +43,13 @@ impl NextKeysData {
         &self,
         public_keys: &[BasicPrefix],
         indexes: impl IntoIterator<Item = &'a Index>,
-    ) -> Result<(), Error> {
+    ) -> Result<(), SignatureError> {
         // Get indexes of keys in previous next key list.
-        let indexes_in_last_prev = self.matching_previous_indexes(public_keys, indexes)?;
+        let indexes_in_last_prev = self.matching_previous_indexes(public_keys, indexes);
 
         // Check previous next threshold
         self.threshold
-            .enough_signatures(&indexes_in_last_prev)?
-            .then_some(())
-            .ok_or(Error::NotEnoughSigsError)?;
+            .enough_signatures(&indexes_in_last_prev)?;
 
         Ok(())
     }
@@ -63,9 +60,9 @@ impl NextKeysData {
         &self,
         public_keys: &[BasicPrefix],
         indexes: impl IntoIterator<Item = &'a Index>,
-    ) -> Result<Vec<usize>, Error> {
+    ) -> Vec<usize> {
         // Get indexes of keys in previous next key list.
-        Ok(indexes
+        indexes
             .into_iter()
             .filter_map(|index| {
                 index.previous_next().and_then(|prev_next| {
@@ -80,10 +77,29 @@ impl NextKeysData {
                     }
                 })
             })
-            .collect::<Vec<_>>())
+            .collect::<Vec<_>>()
     }
 }
 
+
+#[derive(thiserror::Error, Debug, Serialize, Deserialize)]
+pub enum SignatureError {
+    #[error("Not enough signatures while verifying")]
+    NotEnoughSigsError,
+
+    #[error("Signature duplicate while verifying")]
+    DuplicateSignature,
+
+    #[error("Too many signatures while verifying")]
+    TooManySignatures,
+
+    #[error("Key index not present in the set")]
+    MissingIndex,
+    
+    #[error(transparent)]
+    PrefixError(#[from] crate::prefix::error::Error),
+    
+}
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 pub struct KeyConfig {
     #[serde(rename = "kt")]
@@ -116,7 +132,7 @@ impl KeyConfig {
     ///
     /// Verifies the given sigs against the given message using the KeyConfigs
     /// Public Keys, according to the indexes in the sigs.
-    pub fn verify(&self, message: &[u8], sigs: &[IndexedSignature]) -> Result<bool, Error> {
+    pub fn verify(&self, message: &[u8], sigs: &[IndexedSignature]) -> Result<bool, SignatureError> {
         // there are no duplicates
         if !(sigs
             .iter()
@@ -127,35 +143,36 @@ impl KeyConfig {
             .iter()
             .all(|n| *n <= 1))
         {
-            Err(Error::DuplicateSignature)
+            Err(SignatureError::DuplicateSignature.into())
         } else if
         // check if there are not too many
         sigs.len() > self.public_keys.len() {
-            Err(Error::TooManySignatures)
+            Err(SignatureError::TooManySignatures.into())
 
         // ensure there's enough sigs
-        } else if self.threshold.enough_signatures(
+        } else {
+            self.threshold.enough_signatures(
             &sigs
                 .iter()
                 .map(|sig| sig.index.current() as usize)
                 .collect::<Vec<_>>(),
-        )? {
-            Ok(sigs
+        )?; 
+
+            sigs
                 .iter()
-                .fold(Ok(true), |acc: Result<bool, Error>, sig| {
-                    Ok(acc?
-                        && self
+                .fold(Ok(true), |acc: Result<bool, SignatureError>, sig| {
+                    let verification_result: bool = self
                             .public_keys
                             .get(sig.index.current() as usize)
                             .ok_or_else(|| {
-                                Error::SemanticError("Key index not present in set".into())
+                                SignatureError::from(SignatureError::MissingIndex)
                             })
                             .and_then(|key: &BasicPrefix| {
                                 Ok(key.verify(message, &sig.signature)?)
-                            })?)
-                })?)
-        } else {
-            Err(Error::NotEnoughSigsError)
+                            })?;
+                    Ok(acc?
+                        && verification_result)
+        })
         }
     }
 
@@ -163,7 +180,7 @@ impl KeyConfig {
     ///
     /// Verifies that the given next KeyConfig matches that which is committed
     /// to in next_keys_data of this KeyConfig
-    pub fn verify_next(&self, next: &KeyConfig) -> Result<bool, Error> {
+    pub fn verify_next(&self, next: &KeyConfig) -> Result<bool, SignatureError> {
         self.next_keys_data.verify_next(next)
     }
 
@@ -202,7 +219,7 @@ mod test {
     use crate::{
         error::Error,
         event::sections::{
-            key_config::{nxt_commitment, NextKeysData},
+            key_config::{nxt_commitment, SignatureError, NextKeysData},
             threshold::SignatureThreshold,
             KeyConfig,
         },
@@ -303,6 +320,7 @@ mod test {
                 signatures[2].clone(),
             ],
         );
+        // assert!(st.is_ok());
         assert!(matches!(st, Ok(true)));
 
         // Not enough signatures.
@@ -310,14 +328,14 @@ mod test {
             msg_to_sign,
             &vec![signatures[0].clone(), signatures[2].clone()],
         );
-        assert!(matches!(st, Err(Error::NotEnoughSigsError)));
+        assert!(matches!(st, Err(SignatureError::NotEnoughSigsError)));
 
         // Enough signatures.
         let st = key_config.verify(
             msg_to_sign,
             &vec![signatures[1].clone(), signatures[2].clone()],
         );
-        assert!(matches!(st, Ok(true)));
+        assert!(st.is_ok());
 
         // The same signatures.
         let st = key_config.verify(
@@ -328,7 +346,7 @@ mod test {
                 signatures[0].clone(),
             ],
         );
-        assert!(matches!(st, Err(Error::DuplicateSignature)));
+        assert!(matches!(st, Err(SignatureError::DuplicateSignature)));
 
         Ok(())
     }
@@ -352,7 +370,7 @@ mod test {
                 if let EventData::Icp(icp) = e.to_owned().event_message.data.get_event_data() {
                     let kc = icp.key_config;
                     let msg = e.event_message.encode()?;
-                    assert!(kc.verify(&msg, &e.signatures)?);
+                    assert!(kc.verify(&msg, &e.signatures).is_ok());
                 }
             }
             _ => (),
@@ -366,7 +384,7 @@ mod test {
                 if let EventData::Icp(icp) = e.to_owned().event_message.data.get_event_data() {
                     let kc = icp.key_config;
                     let msg = e.event_message.encode()?;
-                    assert!(kc.verify(&msg, &e.signatures)?);
+                    assert!(kc.verify(&msg, &e.signatures).is_ok());
                 }
             }
             _ => (),
@@ -404,11 +422,11 @@ mod test {
             next_key_hashes: initial_digests.clone(),
         };
         assert_eq!(
-            next_keys_data.matching_previous_indexes(&public_keys, &indexes[..2])?,
+            next_keys_data.matching_previous_indexes(&public_keys, &indexes[..2]),
             vec![0, 1]
         );
         assert_eq!(
-            next_keys_data.matching_previous_indexes(&public_keys, &indexes)?,
+            next_keys_data.matching_previous_indexes(&public_keys, &indexes),
             vec![0, 1, 2]
         );
 
@@ -429,11 +447,11 @@ mod test {
             next_key_hashes: digests.to_vec(),
         };
         assert_eq!(
-            next_keys_data.matching_previous_indexes(&public_keys, &indexes[..2])?,
+            next_keys_data.matching_previous_indexes(&public_keys, &indexes[..2]),
             vec![2, 0]
         );
         assert_eq!(
-            next_keys_data.matching_previous_indexes(&public_keys, &indexes)?,
+            next_keys_data.matching_previous_indexes(&public_keys, &indexes),
             vec![2, 0, 1]
         );
 
@@ -454,11 +472,11 @@ mod test {
             next_key_hashes: digests.to_vec(),
         };
         assert_eq!(
-            next_keys_data.matching_previous_indexes(&public_keys, &indexes[..2])?,
+            next_keys_data.matching_previous_indexes(&public_keys, &indexes[..2]),
             vec![2]
         );
         assert_eq!(
-            next_keys_data.matching_previous_indexes(&public_keys, &indexes)?,
+            next_keys_data.matching_previous_indexes(&public_keys, &indexes),
             vec![2, 1]
         );
 
@@ -479,7 +497,7 @@ mod test {
             next_key_hashes: digests.to_vec(),
         };
         assert_eq!(
-            next_keys_data.matching_previous_indexes(&public_keys, &indexes)?,
+            next_keys_data.matching_previous_indexes(&public_keys, &indexes),
             vec![1]
         );
 

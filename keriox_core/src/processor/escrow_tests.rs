@@ -66,7 +66,7 @@ fn test_process_transferable_receipt() -> Result<(), Error> {
         "EJe_sKQb1otKrz6COIL8VFvBv3DEFvtKaVFGn1vm0IlL".parse::<IdentifierPrefix>()?;
 
     event_processor.process(&icp)?;
-    let controller_id_state = event_storage.get_state(&controller_id)?;
+    let controller_id_state = event_storage.get_state(&controller_id);
     assert_eq!(controller_id_state.clone().unwrap().sn, 0);
 
     // Parse receipt of controller's inception event.
@@ -92,7 +92,7 @@ fn test_process_transferable_receipt() -> Result<(), Error> {
     let val_icp = Message::try_from(parsed).unwrap();
 
     event_processor.process(&val_icp)?;
-    let validator_id_state = event_storage.get_state(&validator_id)?;
+    let validator_id_state = event_storage.get_state(&validator_id);
     assert_eq!(validator_id_state.unwrap().sn, 0);
 
     // Escrowed receipt should be removed and accepted
@@ -113,7 +113,7 @@ fn test_process_transferable_receipt() -> Result<(), Error> {
         1
     );
 
-    let id_state = EventStorage::new(db.clone()).get_state(&controller_id)?;
+    let id_state = EventStorage::new(db.clone()).get_state(&controller_id);
     // Controller's state shouldn't change after processing receipt.
     assert_eq!(controller_id_state, id_state);
 
@@ -159,7 +159,7 @@ pub fn test_not_fully_witnessed() -> Result<(), Error> {
     let icp_msg = Message::try_from(parsed_icp).unwrap();
     event_processor.process(&icp_msg.clone())?;
 
-    let state = event_storage.get_state(&id)?;
+    let state = event_storage.get_state(&id);
     assert_eq!(state, None);
 
     // check if icp is in escrow
@@ -193,7 +193,7 @@ pub fn test_not_fully_witnessed() -> Result<(), Error> {
     );
     assert!(esc.next().is_none());
 
-    let state = event_storage.get_state(&id)?;
+    let state = event_storage.get_state(&id);
     assert_eq!(state, None);
 
     let receipt0_1 = br#"{"v":"KERI10JSON000091_","t":"rct","d":"EJufgwH347N2kobmes1IQw_1pfMipEFFy0RwinZTtah9","i":"EJufgwH347N2kobmes1IQw_1pfMipEFFy0RwinZTtah9","s":"0"}-CABBHndk6cXPCnghFqKt_0SikY1P9z_nIUrHq_SeHgLQCui0BBqAOBXFKVivgf0jh2ySWX1VshnkUYK3ev_L--sPB_onF7w2WhiK2AB7mf4IIuaSQCLumsr2sV77S6U5VMx0CAD"#;
@@ -219,7 +219,7 @@ pub fn test_not_fully_witnessed() -> Result<(), Error> {
     let esc = db.get_receipts_nt(&id).unwrap();
     assert_eq!(esc.count(), 2);
 
-    let state = event_storage.get_state(&id)?.unwrap();
+    let state = event_storage.get_state(&id).unwrap();
     assert_eq!(state.sn, 0);
 
     let receipt0_2 = br#"{"v":"KERI10JSON000091_","t":"rct","d":"EJufgwH347N2kobmes1IQw_1pfMipEFFy0RwinZTtah9","i":"EJufgwH347N2kobmes1IQw_1pfMipEFFy0RwinZTtah9","s":"0"}-CABBJYw25nTX2-tyjqRleJpjysMsqdzsw7Ec6Ta3S9QUULb0BB8xozEus4sX8Tb6Ci0DB5jkuGN8MUfa0CidhIoCrqdBbopUeE6J3ynuDqLMB4V3MG9wlD6t2H2_o0rdVpK8GkM"#;
@@ -384,7 +384,7 @@ fn test_out_of_order() -> Result<(), Error> {
     let id: IdentifierPrefix = "EO8cED9H5XPqBdoVatgBkEuSP8yXic7HtWpkex-9e0sL".parse()?;
 
     processor.process(&ev1)?;
-    assert_eq!(storage.get_state(&id).unwrap().unwrap().sn, 0);
+    assert_eq!(storage.get_state(&id).unwrap().sn, 0);
 
     processor.process(&ev4.clone())?;
     let mut escrowed = ooo_escrow.escrowed_out_of_order.get(&id).unwrap();
@@ -422,7 +422,7 @@ fn test_out_of_order() -> Result<(), Error> {
     );
     assert!(escrowed.next().is_none());
 
-    assert_eq!(storage.get_state(&id).unwrap().unwrap().sn, 0);
+    assert_eq!(storage.get_state(&id).unwrap().sn, 0);
     // check out of order table
     assert_eq!(
         ooo_escrow.escrowed_out_of_order.get(&id).unwrap().count(),
@@ -431,7 +431,7 @@ fn test_out_of_order() -> Result<(), Error> {
 
     processor.process(&ev2)?;
 
-    assert_eq!(storage.get_state(&id).unwrap().unwrap().sn, 4);
+    assert_eq!(storage.get_state(&id).unwrap().sn, 4);
     // Check if out of order is empty
     let mut escrowed = ooo_escrow.escrowed_out_of_order.get(&id).unwrap();
     assert!(escrowed.next().is_none());
@@ -515,7 +515,7 @@ fn test_escrow_missing_signatures() -> Result<(), Error> {
     let id: IdentifierPrefix = "EMTMYJQ3Eaq8YjG94c_GGvihe5cW8vFFXX2PezAwrn2A".parse()?;
 
     processor.process(&ev1)?;
-    assert_eq!(storage.get_state(&id).unwrap().unwrap().sn, 0);
+    assert_eq!(storage.get_state(&id).unwrap().sn, 0);
 
     // Process out of order event without signatures
     processor.process(&event_without_signatures)?;
@@ -587,7 +587,7 @@ fn test_partially_sign_escrow() -> Result<(), Error> {
     assert!(escrowed.next().is_none());
 
     // check if event was accepted into kel
-    assert_eq!(storage.get_state(&id).unwrap(), None);
+    assert_eq!(storage.get_state(&id), None);
 
     // check escrow
     assert_eq!(
@@ -610,7 +610,7 @@ fn test_partially_sign_escrow() -> Result<(), Error> {
         0
     );
     // check if event was accepted
-    assert!(storage.get_state(&id).unwrap().is_some());
+    assert!(storage.get_state(&id).is_some());
 
     let ixn = br#"{"v":"KERI10JSON0000cb_","t":"ixn","d":"EODgCVSGS9S8ZaOr89HKDP_Zll21C8zbUBjbBU1HjGEk","i":"EIL2dvwm6lYAsyKKtzxIEFm51gSfwe3IIZSx8kI8ve7_","s":"1","p":"EIL2dvwm6lYAsyKKtzxIEFm51gSfwe3IIZSx8kI8ve7_","a":[]}-AABABC3seofRQNJPKgqXy6Y2N_VsewM1QkG7Y1hfIOosAKW8EdB9nUvqofUhOdSuH2LUzV3S4uenFe-G8EP_VhQaLAH"#;
     let ixn_first_sig = parse_messagee(ixn);
@@ -628,7 +628,7 @@ fn test_partially_sign_escrow() -> Result<(), Error> {
     processor.process(&ixn_first_sig)?;
 
     // check if event was accepted into kel
-    assert_eq!(storage.get_state(&id).unwrap().unwrap().sn, 0);
+    assert_eq!(storage.get_state(&id).unwrap().sn, 0);
 
     // check escrow
     assert_eq!(
@@ -652,7 +652,7 @@ fn test_partially_sign_escrow() -> Result<(), Error> {
         0
     );
     // check if event was accepted
-    assert_eq!(storage.get_state(&id).unwrap().unwrap().sn, 1);
+    assert_eq!(storage.get_state(&id).unwrap().sn, 1);
 
     let rot = parse_messagee(br#"{"v":"KERI10JSON0002a6_","t":"rot","d":"EBV201a_Q2aMRPB2JlpTybBBO4Osp7o1-jRvSwayYFmy","i":"EIL2dvwm6lYAsyKKtzxIEFm51gSfwe3IIZSx8kI8ve7_","s":"2","p":"EODgCVSGS9S8ZaOr89HKDP_Zll21C8zbUBjbBU1HjGEk","kt":["1/2","1/2","1/2"],"k":["DHqJ2DNmypwMKelWXLgl3V-9pDRcOenM5Wf03O1xx1Ri","DEIISiMvtnaPTpMHkoGs4d0JdbwjreW53OUBfMedLUaF","DDQFJ_uXcZum_DY6NNTtI5UrTEQo6PRWEANpn6hVtfyQ"],"nt":[["1/2","1/2","1/2"],["1","1"]],"n":["EJsp5uWsQOsioYA16kbCZW9HPMr0rEaU4NUvfm6QTYd2","EFxT53mK2-1sAnh8VcLEL1HowQp0t84dfIWRaju5Ef61","EETqITKVCCpOS6aDPiZFJOSWll2i39xaFQkfAYsG18I_","EGGvSfHct9RLnwIMMkNrG7I0bRYO1uoUnP4QbnDFzBI6","ELTnTK-3KiF4zvY9WC0ZJjmFm8NFacQtuNiA8KuQkHQe"],"bt":"0","br":[],"ba":[],"a":[]}-AADAACj5KQr7VHyjvkBETGvqTk_lt2w0-oEVIpO_8acwJNygvJe1-ZsgcK02yBwHJFJ7N-qemGaDRsIxFnuJ3ya3TwAABDu4EVUGhvMWjdMhMgdJ-D_XapyM4lnGbaLKhjc7ndi39LCq-Ap9C4flibBVbqYpbwSyheHRYiyUythE5sks2kEACAkF7H6pJS_-aLAkCDVEFI4hK6aqMojyf--JFHtqVgG1mloIpeDQATu6DODSxv8zTZHwOaJwSERMk3fd6eVXIgG"#);
 
@@ -705,7 +705,7 @@ fn test_out_of_order_cleanup() -> Result<(), Error> {
     let id: IdentifierPrefix = "EO8cED9H5XPqBdoVatgBkEuSP8yXic7HtWpkex-9e0sL".parse()?;
 
     processor.process(&ev1)?;
-    assert_eq!(storage.get_state(&id).unwrap().unwrap().sn, 0);
+    assert_eq!(storage.get_state(&id).unwrap().sn, 0);
 
     // Process out of order event and check escrow.
     processor.process(&ev4.clone())?;
@@ -730,7 +730,7 @@ fn test_out_of_order_cleanup() -> Result<(), Error> {
     assert!(escrowed.next().is_none());
 
     // Stale events shouldn't be save in the kel.
-    assert_eq!(storage.get_state(&id).unwrap().unwrap().sn, 1);
+    assert_eq!(storage.get_state(&id).unwrap().sn, 1);
 
     // Process out of order events once again and check escrow.
     processor.process(&ev4.clone())?;
@@ -750,7 +750,7 @@ fn test_out_of_order_cleanup() -> Result<(), Error> {
     assert!(escrowed.next().is_none());
 
     // Events should be accepted, they're not stale..
-    assert_eq!(storage.get_state(&id).unwrap().unwrap().sn, 3);
+    assert_eq!(storage.get_state(&id).unwrap().sn, 3);
 
     Ok(())
 }
@@ -810,7 +810,7 @@ fn test_partially_sign_escrow_cleanup() -> Result<(), Error> {
     assert!(escrowed.next().is_none());
 
     // check if event was accepted into kel
-    assert_eq!(storage.get_state(&id).unwrap(), None);
+    assert_eq!(storage.get_state(&id), None);
 
     // Wait until escrowed events become stale.
     thread::sleep(Duration::from_secs(1));
@@ -835,7 +835,7 @@ fn test_partially_sign_escrow_cleanup() -> Result<(), Error> {
     assert!(escrowed.next().is_none());
 
     // check if event was accepted into kel
-    assert_eq!(storage.get_state(&id).unwrap(), None);
+    assert_eq!(storage.get_state(&id), None);
 
     // Proces the same event with another signature
     processor.process(&icp_first_sig)?;
@@ -881,7 +881,7 @@ pub fn test_partially_witnessed_escrow_cleanup() -> Result<(), Error> {
     let icp_msg = Message::try_from(parsed_icp).unwrap();
     event_processor.process(&icp_msg.clone())?;
 
-    let state = event_storage.get_state(&id)?;
+    let state = event_storage.get_state(&id);
     assert_eq!(state, None);
 
     let receipt0_0 = br#"{"v":"KERI10JSON000091_","t":"rct","d":"EJufgwH347N2kobmes1IQw_1pfMipEFFy0RwinZTtah9","i":"EJufgwH347N2kobmes1IQw_1pfMipEFFy0RwinZTtah9","s":"0"}-CABBN_PYSns7oFNixSohVW4raBwMV6iYeh0PEZ_bR-38Xev0BDbyebqZQKwn7TqU92Vtw8n2wy5FptP42F1HEmCc9nQLzbXrXuA9SMl9nCZ-vi2bdaeT3aqInXGFAW70QPzM4kJ"#;
@@ -907,7 +907,7 @@ pub fn test_partially_witnessed_escrow_cleanup() -> Result<(), Error> {
     );
     assert!(esc.next().is_none());
 
-    let state = event_storage.get_state(&id)?;
+    let state = event_storage.get_state(&id);
     assert_eq!(state, None);
 
     // Wait until escrowed events become stale.
@@ -921,7 +921,7 @@ pub fn test_partially_witnessed_escrow_cleanup() -> Result<(), Error> {
     assert!(esc.next().is_none());
 
     // check if event was accepted into kel
-    let state = event_storage.get_state(&id)?;
+    let state = event_storage.get_state(&id);
     assert_eq!(state, None);
 
     Ok(())
@@ -975,7 +975,7 @@ pub fn test_nt_receipt_escrow_cleanup() -> Result<(), Error> {
     );
     assert!(esc.next().is_none());
 
-    let state = event_storage.get_state(&id)?;
+    let state = event_storage.get_state(&id);
     assert_eq!(state, None);
 
     // Wait until receipt become stale
@@ -994,7 +994,7 @@ pub fn test_nt_receipt_escrow_cleanup() -> Result<(), Error> {
     let rcp_msg = Message::try_from(parsed_rcp).unwrap();
     event_processor.process(&rcp_msg.clone())?;
 
-    let state = event_storage.get_state(&id)?;
+    let state = event_storage.get_state(&id);
     assert_eq!(state, None);
 
     let mut esc = partially_witnessed_escrow
@@ -1050,7 +1050,7 @@ pub fn test_escrow_receipt_with_wrong_signature() -> Result<(), Error> {
     let icp_msg = Message::try_from(parsed_icp).unwrap();
     event_processor.process(&icp_msg.clone())?;
 
-    let state = event_storage.get_state(&id)?;
+    let state = event_storage.get_state(&id);
     assert_eq!(state, None);
 
     // check if icp is in escrow
@@ -1085,7 +1085,7 @@ pub fn test_escrow_receipt_with_wrong_signature() -> Result<(), Error> {
     );
     assert!(esc.next().is_none());
 
-    let state = event_storage.get_state(&id)?;
+    let state = event_storage.get_state(&id);
     assert_eq!(state, None);
 
     // receipt with wrong signature
@@ -1117,7 +1117,7 @@ pub fn test_escrow_receipt_with_wrong_signature() -> Result<(), Error> {
     let esc = db.get_receipts_nt(&id);
     assert!(esc.is_none());
 
-    let state = event_storage.get_state(&id)?;
+    let state = event_storage.get_state(&id);
     assert_eq!(state, None);
 
     Ok(())
