@@ -1,5 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
+use keri_controller::identifier::query::QueryResponse;
 use keri_controller::{
     error::ControllerError, IdentifierPrefix, KeyManager, LocationScheme, SelfSigningPrefix,
 };
@@ -140,7 +141,7 @@ async fn test_tel_from_witness() -> Result<(), ControllerError> {
     for qry in issuer.query_mailbox(issuer.id(), &[witness_identifier.clone()])? {
         let signature = SelfSigningPrefix::Ed25519Sha512(issuer_keypair.sign(&qry.encode()?)?);
         let act = issuer.finalize_query(vec![(qry, signature)]).await?;
-        assert_eq!(act.len(), 0);
+        matches!(act, QueryResponse::Updates);
     }
 
     let state = issuer.find_state(issuer.id())?;
@@ -161,7 +162,7 @@ async fn test_tel_from_witness() -> Result<(), ControllerError> {
     for qry in issuer.query_mailbox(issuer.id(), &[witness_identifier.clone()])? {
         let signature = SelfSigningPrefix::Ed25519Sha512(issuer_keypair.sign(&qry.encode()?)?);
         let act = issuer.finalize_query(vec![(qry, signature)]).await?;
-        assert_eq!(act.len(), 0);
+        matches!(act, QueryResponse::Updates);
     }
 
     // Provided ixns are accepted in issuer's kel.
@@ -242,7 +243,7 @@ async fn test_tel_from_witness() -> Result<(), ControllerError> {
     for qry in issuer.query_mailbox(issuer.id(), &[witness_identifier.clone()])? {
         let signature = SelfSigningPrefix::Ed25519Sha512(issuer_keypair.sign(&qry.encode()?)?);
         let act = issuer.finalize_query(vec![(qry, signature)]).await?;
-        assert_eq!(act.len(), 0);
+        matches!(act, QueryResponse::Updates);
     }
 
     // Provided ixns are accepted in issuer's kel.

@@ -14,6 +14,13 @@ use keri_core::{
 
 use super::Identifier;
 
+#[derive(Debug)]
+pub enum QueryResponse {
+    Updates,
+    NoUpdates,
+    ActionRequired(Vec<ActionRequired>)
+}
+
 impl Identifier {
     /// Generates query message of route `mbx` to query own identifier mailbox.
     pub fn query_mailbox(
@@ -71,9 +78,10 @@ impl Identifier {
     pub async fn finalize_query(
         &mut self,
         queries: Vec<(QueryEvent, SelfSigningPrefix)>,
-    ) -> Result<Vec<ActionRequired>, ControllerError> {
+    ) -> Result<QueryResponse, ControllerError> {
         let self_id = self.id.clone();
         let mut actions = Vec::new();
+        let mut updates = QueryResponse::NoUpdates;
         for (qry, sig) in queries {
             let (recipient, about_who, from_who) = match qry.get_route() {
                 QueryRoute::Logs {
@@ -116,6 +124,7 @@ impl Identifier {
                 PossibleResponse::Kel(kel) => {
                     for event in kel {
                         self.known_events.process(&event)?;
+                        updates = QueryResponse::Updates;
                     }
                 }
                 PossibleResponse::Mbx(mbx) => {
@@ -128,17 +137,27 @@ impl Identifier {
                                 .mailbox_response(&recipient.unwrap(), from_who, about_who, &mbx)
                                 .await?,
                         );
+<<<<<<< HEAD
                         let witnesses = self
                             .witnesses()
                             .map(|bp| IdentifierPrefix::Basic(bp))
                             .collect::<Vec<_>>();
                         self.broadcast_receipts(&witnesses).await?;
+=======
+                        if !mbx.receipt.is_empty() {
+                            updates = QueryResponse::Updates;
+                        }
+>>>>>>> 1a9a718 (feat: notify if any updates after finalize_query)
                     }
                 }
                 PossibleResponse::Ksn(_) => todo!(),
             };
         }
-        Ok(actions)
+        if !actions.is_empty() {
+            Ok(QueryResponse::ActionRequired(actions))
+        } else {
+            Ok(updates)
+        }
     }
 
     async fn mailbox_response(

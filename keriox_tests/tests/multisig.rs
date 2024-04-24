@@ -215,8 +215,12 @@ async fn test_multisig() -> Result<()> {
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(km2.sign(&qry.encode()?)?);
         let res = identifier2.finalize_query(vec![(qry, signature)]).await?;
+        let action_required = match res {
+            keri_controller::identifier::query::QueryResponse::ActionRequired(ar) => ar,
+            _ => {unreachable!()}
+        };
 
-        match &res[0] {
+        match &action_required[0] {
             ActionRequired::DelegationRequest(_, _) => {
                 unreachable!()
             }

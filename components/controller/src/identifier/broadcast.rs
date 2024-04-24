@@ -122,7 +122,10 @@ mod test {
     use url::Host;
     use witness::{WitnessEscrowConfig, WitnessListener};
 
-    use crate::{config::ControllerConfig, controller::Controller, error::ControllerError};
+    use crate::{
+        config::ControllerConfig, controller::Controller, error::ControllerError,
+        identifier::query::QueryResponse,
+    };
 
     #[async_std::test]
     async fn test_2_wit() -> Result<(), ControllerError> {
@@ -210,7 +213,7 @@ mod test {
         for qry in identifier.query_mailbox(&identifier.id, &[wit1_id.clone(), wit2_id.clone()])? {
             let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(&qry.encode()?)?);
             let act = identifier.finalize_query(vec![(qry, signature)]).await?;
-            assert_eq!(act.len(), 0);
+            matches!(act, QueryResponse::Updates);
         }
 
         assert_eq!(identifier.notify_witnesses().await?, 0);

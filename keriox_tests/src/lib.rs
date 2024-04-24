@@ -1,7 +1,7 @@
 use std::{path::Path, sync::Arc};
 
 use keri_controller::{
-    config::ControllerConfig, controller::Controller, identifier::Identifier, BasicPrefix,
+    config::ControllerConfig, controller::Controller, identifier::{query::QueryResponse, Identifier}, BasicPrefix,
     CryptoBox, IdentifierPrefix, KeyManager, LocationScheme, SelfSigningPrefix,
 };
 use keri_core::{actor::error::ActorError, transport::test::TestTransport};
@@ -80,7 +80,7 @@ pub async fn setup_identifier(
             .finalize_query(vec![(qry, signature)])
             .await
             .unwrap();
-        assert_eq!(act.len(), 0);
+        matches!(act, QueryResponse::Updates);
     }
     (verifier, verifier_keypair, verifier_controller)
 }
