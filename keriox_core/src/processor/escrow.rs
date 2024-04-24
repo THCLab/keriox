@@ -27,7 +27,7 @@ use crate::{
             SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
         },
     },
-    prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+    prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix}, processor::validator::VerificationError,
 };
 
 #[derive(Debug, Clone)]
@@ -736,7 +736,7 @@ impl ReplyEscrow {
                         // remove from escrow
                         self.0.remove_escrowed_reply(&id, &sig_rep)?;
                     }
-                    Err(Error::EventOutOfOrderError) => (), // keep in escrow,
+                    Err(Error::EventOutOfOrderError) | Err(Error::VerificationError(VerificationError::EventNotFound)) => (), // keep in escrow,
                     Err(e) => return Err(e),
                 };
             }

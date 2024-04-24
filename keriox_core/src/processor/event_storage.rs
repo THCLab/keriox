@@ -216,10 +216,36 @@ impl EventStorage {
         &self,
         id: &IdentifierPrefix,
     ) -> Option<EventSeal> {
-        self.get_state(&id).map(|state| {
-            let last_est = state.last_est;
-            EventSeal { prefix: id.clone(), sn: last_est.sn, event_digest: last_est.digest }
-        })
+        let mut state = IdentifierState::default();
+        let mut last_est = None;
+        if let Some(events) = self.db.get_kel_finalized_events(id) {
+            for event in events {
+                state = state.apply(&event.signed_event_message.event_message.data).unwrap();
+                // TODO: is this event.event.event stuff too ugly? =)
+                last_est = match event
+                    .signed_event_message
+                    .event_message
+                    .data
+                    .get_event_data()
+                {
+                    EventData::Icp(_) => Some(event.signed_event_message),
+                    EventData::Rot(_) => Some(event.signed_event_message),
+                    _ => last_est,
+                }
+            }
+        } else {
+            return None;
+        }
+        if let Some(event) = last_est {
+            let event_digest = event.event_message.digest().unwrap();
+            Some(EventSeal {
+                prefix: event.event_message.data.get_prefix(),
+                sn: event.event_message.data.get_sn(),
+                event_digest,
+            })
+        } else {
+            None
+        }
     }
 
     /// Compute State for Prefix and sn

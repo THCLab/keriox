@@ -32,8 +32,8 @@ use crate::{
 
 #[derive(Error, Debug, Serialize, Deserialize)]
 pub enum VerificationError {
-    #[error("Need more data")]
-    NeedMoreData,
+    #[error("Corresponding event not found")]
+    EventNotFound,
     #[error("Faulty signatures")]
     VerificationFailure,
     #[error("Unknown signer identifier")]
@@ -237,14 +237,14 @@ impl EventValidator {
                     &seal.prefix,
                     seal.sn,
                     &seal.event_digest,
-                ).map_err(|_| VerificationError::NeedMoreData)?; // error means that event wasn't found
+                ).map_err(|_| VerificationError::EventNotFound)?; // error means that event wasn't found
                 match kp {
                     Some(kp) => {
                         kp.verify(data, sigs)?
                             .then_some(())
                             .ok_or(VerificationError::VerificationFailure)
                         },
-                    None => Err(VerificationError::NeedMoreData),
+                    None => Err(VerificationError::EventNotFound),
                 }
             }
             Signature::NonTransferable(Nontransferable::Couplet(couplets)) => couplets

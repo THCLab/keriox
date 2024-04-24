@@ -98,7 +98,7 @@ impl EventProcessor {
                     self.db
                         .update_accepted_reply(rpy.clone(), &rpy.reply.get_prefix())?;
                 }
-                Err(Error::VerificationError(VerificationError::NeedMoreData)) => {
+                Err(Error::VerificationError(VerificationError::EventNotFound)) => {
                     self.publisher
                         .notify(&Notification::KsnOutOfOrder(rpy.clone()))?;
                 },

@@ -7,12 +7,6 @@ pub enum Error {
     #[error("Incorrect data length: {0}")]
     IncorrectLengthError(String),
 
-    #[error("Wrong signature type error")]
-    WrongSignatureTypeError,
-
-    #[error("Wrong key type error")]
-    WrongKeyTypeError,
-
     #[error("Wrong seed type error")]
     WrongSeedTypeError,
 

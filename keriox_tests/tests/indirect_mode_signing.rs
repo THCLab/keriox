@@ -269,12 +269,12 @@ async fn indirect_mode_signing() -> Result<(), ControllerError> {
     let second_signature =
         signing_identifier.sign_data(second_message, &second_message_signature)?;
 
-    // Try to verify it, because verifier doesn't know signer's rotation event.
+    // Try to verify it, it should fail, because verifier doesn't know signer's rotation event.
     assert!(matches!(
         verifying_controller
             .verify(second_message, &second_signature)
             .unwrap_err(),
-        VerificationError::NeedMoreData
+        VerificationError::EventNotFound
     ));
 
     // Query kel of signing identifier
@@ -299,11 +299,10 @@ async fn indirect_mode_signing() -> Result<(), ControllerError> {
             .await;
     }
 
-    let res = verifying_controller
+    let verification_result = verifying_controller
         .verify(second_message, &second_signature);
-    dbg!(&res);
     assert!(
-        res.is_ok());
+        verification_result.is_ok());
 
     Ok(())
 }

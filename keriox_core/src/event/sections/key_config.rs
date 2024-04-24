@@ -95,10 +95,12 @@ pub enum SignatureError {
 
     #[error("Key index not present in the set")]
     MissingIndex,
-    
-    #[error(transparent)]
-    PrefixError(#[from] crate::prefix::error::Error),
-    
+
+    #[error("Wrong signature type error")]
+    WrongSignatureTypeError,
+
+    #[error("Wrong key type error")]
+    WrongKeyTypeError,
 }
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 pub struct KeyConfig {

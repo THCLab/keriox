@@ -1,3 +1,5 @@
+use crate::event::sections::key_config::SignatureError;
+
 use self::error::Error;
 use cesrox::primitives::codes::PrimitiveCode;
 pub use cesrox::primitives::CesrPrimitive;
@@ -97,21 +99,21 @@ pub fn verify(
     data: &[u8],
     key: &BasicPrefix,
     signature: &SelfSigningPrefix,
-) -> Result<bool, Error> {
+) -> Result<bool, SignatureError> {
     match key {
         BasicPrefix::Ed25519(pk) | BasicPrefix::Ed25519NT(pk) => match signature {
             SelfSigningPrefix::Ed25519Sha512(signature) => {
                 Ok(pk.verify_ed(data.as_ref(), signature))
             }
-            _ => Err(Error::WrongSignatureTypeError),
+            _ => Err(SignatureError::WrongSignatureTypeError),
         },
         BasicPrefix::ECDSAsecp256k1(key) | BasicPrefix::ECDSAsecp256k1NT(key) => match signature {
             SelfSigningPrefix::ECDSAsecp256k1Sha256(signature) => {
                 Ok(key.verify_ecdsa(data.as_ref(), signature))
             }
-            _ => Err(Error::WrongSignatureTypeError),
+            _ => Err(SignatureError::WrongSignatureTypeError),
         },
-        _ => Err(Error::WrongKeyTypeError),
+        _ => Err(SignatureError::WrongKeyTypeError),
     }
 }
 

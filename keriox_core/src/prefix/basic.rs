@@ -3,7 +3,7 @@ use core::{fmt, str::FromStr};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use super::{error::Error, verify, SelfSigningPrefix};
-use crate::keys::PublicKey;
+use crate::{event::sections::key_config::SignatureError, keys::PublicKey};
 use cesrox::{
     conversion::from_text_to_bytes,
     derivation_code::DerivationCode,
@@ -45,7 +45,7 @@ impl BasicPrefix {
         }
     }
 
-    pub fn verify(&self, data: &[u8], signature: &SelfSigningPrefix) -> Result<bool, Error> {
+    pub fn verify(&self, data: &[u8], signature: &SelfSigningPrefix) -> Result<bool, SignatureError> {
         verify(data, self, signature)
     }
 
