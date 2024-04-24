@@ -33,7 +33,7 @@ impl Identifier {
         let key_config = self
             .known_events
             .storage
-            .get_state(&self.id)?
+            .get_state(&self.id)
             .ok_or(ControllerError::UnknownIdentifierError)?
             .current;
 
@@ -43,7 +43,7 @@ impl Identifier {
             let state = self
                 .known_events
                 .storage
-                .get_state(participant)?
+                .get_state(participant)
                 .ok_or(ControllerError::UnknownIdentifierError)?;
             pks.append(&mut state.clone().current.public_keys);
             npks.append(&mut state.clone().current.next_keys_data.next_key_hashes);

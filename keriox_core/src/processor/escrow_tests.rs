@@ -285,7 +285,7 @@ pub fn test_reply_escrow() -> Result<(), Error> {
     let deserialized_new_rpy = Message::try_from(parsed).unwrap();
 
     // Try to process out of order reply
-    event_processor.process(&deserialized_old_rpy.clone())?;
+    event_processor.process(&deserialized_old_rpy.clone()).unwrap();
 
     let escrow = db.get_escrowed_replys(&identifier);
     assert_eq!(escrow.unwrap().collect::<Vec<_>>().len(), 1);

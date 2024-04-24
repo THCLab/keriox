@@ -4,6 +4,7 @@ use keri_controller::{
     config::ControllerConfig, controller::Controller, error::ControllerError, BasicPrefix,
     CryptoBox, EndRole, IdentifierPrefix, KeyManager, LocationScheme, Oobi, SelfSigningPrefix,
 };
+use keri_core::processor::validator::VerificationError;
 use tempfile::Builder;
 
 #[async_std::test]
@@ -273,7 +274,7 @@ async fn indirect_mode_signing() -> Result<(), ControllerError> {
         verifying_controller
             .verify(second_message, &second_signature)
             .unwrap_err(),
-        ControllerError::MissingEventError
+        VerificationError::NeedMoreData
     ));
 
     // Query kel of signing identifier
@@ -298,9 +299,11 @@ async fn indirect_mode_signing() -> Result<(), ControllerError> {
             .await;
     }
 
-    assert!(verifying_controller
-        .verify(second_message, &second_signature)
-        .is_ok());
+    let res = verifying_controller
+        .verify(second_message, &second_signature);
+    dbg!(&res);
+    assert!(
+        res.is_ok());
 
     Ok(())
 }

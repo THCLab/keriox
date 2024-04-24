@@ -137,7 +137,7 @@ impl KnownEvents {
     ) -> Result<Vec<BasicPrefix>, ControllerError> {
         Ok(self
             .storage
-            .get_state(id)?
+            .get_state(id)
             .ok_or(ControllerError::UnknownIdentifierError)?
             .current
             .public_keys)
@@ -149,7 +149,7 @@ impl KnownEvents {
     ) -> Result<Vec<SelfAddressingIdentifier>, ControllerError> {
         Ok(self
             .storage
-            .get_state(id)?
+            .get_state(id)
             .ok_or(ControllerError::UnknownIdentifierError)?
             .current
             .next_keys_data
@@ -344,7 +344,7 @@ impl KnownEvents {
 
         let state = self
             .storage
-            .get_state(&id)?
+            .get_state(&id)
             .ok_or(ControllerError::UnknownIdentifierError)?;
 
         event_generator::rotate(
@@ -367,7 +367,7 @@ impl KnownEvents {
     ) -> Result<String, ControllerError> {
         let state = self
             .storage
-            .get_state(&id)?
+            .get_state(&id)
             .ok_or(ControllerError::UnknownIdentifierError)?;
         event_generator::anchor(state, payload)
             .map_err(|e| ControllerError::EventGenerationError(e.to_string()))
@@ -381,7 +381,7 @@ impl KnownEvents {
     ) -> Result<KeriEvent<KeyEvent>, ControllerError> {
         let state = self
             .storage
-            .get_state(id)?
+            .get_state(id)
             .ok_or(ControllerError::UnknownIdentifierError)?;
         event_generator::anchor_with_seal(state, payload)
             .map_err(|e| ControllerError::EventGenerationError(e.to_string()))
@@ -393,7 +393,7 @@ impl KnownEvents {
     ) -> Result<Vec<BasicPrefix>, ControllerError> {
         Ok(self
             .storage
-            .get_state(id)?
+            .get_state(id)
             .ok_or(ControllerError::UnknownIdentifierError)?
             .witness_config
             .witnesses)
@@ -425,17 +425,17 @@ impl KnownEvents {
             EventData::Icp(_icp) => IdentifierState::default().apply(event_message)?,
             EventData::Rot(_rot) => self
                 .storage
-                .get_state(&identifier)?
+                .get_state(&identifier)
                 .ok_or(ControllerError::UnknownIdentifierError)?
                 .apply(event_message)?,
             EventData::Ixn(_ixn) => self
                 .storage
-                .get_state(&identifier)?
+                .get_state(&identifier)
                 .ok_or(ControllerError::UnknownIdentifierError)?,
             EventData::Dip(_dip) => IdentifierState::default().apply(event_message)?,
             EventData::Drt(_drt) => self
                 .storage
-                .get_state(&identifier)?
+                .get_state(&identifier)
                 .ok_or(ControllerError::UnknownIdentifierError)?
                 .apply(event_message)?,
         })
@@ -477,7 +477,7 @@ impl KnownEvents {
                 let signed_rpy = Message::Op(Op::Reply(SignedReply::new_trans(
                     event,
                     self.storage
-                        .get_last_establishment_event_seal(signer_prefix)?
+                        .get_last_establishment_event_seal(signer_prefix)
                         .ok_or(ControllerError::UnknownIdentifierError)?,
                     sigs,
                 )));
@@ -504,7 +504,7 @@ impl KnownEvents {
 
     pub fn get_state(&self, id: &IdentifierPrefix) -> Result<IdentifierState, ControllerError> {
         self.storage
-            .get_state(id)?
+            .get_state(id)
             .ok_or(ControllerError::UnknownIdentifierError)
     }
 }

@@ -4,33 +4,17 @@ use keri_core::{
     error::Error,
     event_message::signature::{get_signatures, Signature},
     oobi::Oobi,
-    processor::validator::EventValidator,
+    processor::validator::{EventValidator, VerificationError},
 };
 use thiserror::Error;
 
 use crate::{error::ControllerError, known_events::KnownEvents};
 
-#[derive(Error, Debug)]
-pub enum VerificationError {
-    #[error("Need more data")]
-    NeedMoreData,
-    #[error("Faulty signatures")]
-    FaultySignature,
-    #[error("Unknown signer identifier. Missing OOBI")]
-    UnknownIdentifierError,
-}
 
 impl KnownEvents {
     pub fn verify(&self, data: &[u8], signature: &Signature) -> Result<(), VerificationError> {
         let verifier = EventValidator::new(self.storage.db.clone());
-        verifier.verify(data, signature).map_err(|e| match e {
-            Error::SignatureVerificationError | Error::FaultySignatureVerification => {
-                VerificationError::FaultySignature
-            }
-            Error::MissingSigner => VerificationError::UnknownIdentifierError,
-            Error::EventOutOfOrderError => VerificationError::NeedMoreData,
-            e => ControllerError::OtherError(e.to_string()),
-        })
+        verifier.verify(data, signature)
     }
 
     /// Parse elements from CESR stream and splits them into OOBIs to be
@@ -70,7 +54,7 @@ impl KnownEvents {
 
     /// Verify signed data that was parsed from cesr stream.
     fn verify_parsed(&self, data: &[ParsedData]) -> Result<(), ControllerError> {
-        let mut err_reasons: Vec<ControllerError> = vec![];
+        let mut err_reasons: Vec<VerificationError> = vec![];
         let (_oks, errs): (Vec<_>, Vec<_>) = data.iter().partition(|d| {
             match d
                 .attachments

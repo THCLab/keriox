@@ -109,7 +109,7 @@ pub enum Error {
     KeyConfigError(SignatureError),
 
     #[error(transparent)]
-    VerificartionError(#[from] VerificationError)
+    VerificationError(#[from] VerificationError)
 }
 
 impl From<VersionError> for Error {

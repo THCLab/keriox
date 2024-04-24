@@ -18,7 +18,7 @@ impl Identifier {
         let last_establishment = self
             .known_events
             .storage
-            .get_last_establishment_event_seal(&self.id)?
+            .get_last_establishment_event_seal(&self.id)
             .ok_or(ControllerError::UnknownIdentifierError)?;
         let sig_data = SignerData::EventSeal(last_establishment);
         let indexes_sig = IndexedSignature::new_both_same(signature, key_index);

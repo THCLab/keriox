@@ -141,7 +141,7 @@ impl Identifier {
     pub fn get_last_establishment_event_seal(&self) -> Result<EventSeal, ControllerError> {
         self.known_events
             .storage
-            .get_last_establishment_event_seal(&self.id)?
+            .get_last_establishment_event_seal(&self.id)
             .ok_or(ControllerError::UnknownIdentifierError)
     }
 

@@ -1,10 +1,7 @@
 use std::sync::Arc;
 
 use keri_core::{
-    event_message::signature::Signature,
-    oobi::LocationScheme,
-    prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
-    state::IdentifierState,
+    event_message::signature::Signature, oobi::LocationScheme, prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix}, processor::validator::VerificationError, state::IdentifierState
 };
 
 use crate::{
@@ -84,7 +81,7 @@ impl Controller {
         self.known_events.find_kel_with_receipts(id)
     }
 
-    pub fn verify(&self, data: &[u8], signature: &Signature) -> Result<(), ControllerError> {
+    pub fn verify(&self, data: &[u8], signature: &Signature) -> Result<(), VerificationError> {
         self.known_events.verify(data, signature)
     }
 

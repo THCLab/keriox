@@ -1,6 +1,6 @@
 use keri_core::{
     actor::prelude::VersionError, event_message::cesr_adapter::ParseError, oobi::Scheme,
-    prefix::IdentifierPrefix,
+    prefix::IdentifierPrefix, processor::validator::VerificationError,
 };
 use thiserror::Error;
 
@@ -67,7 +67,7 @@ pub enum ControllerError {
     FaultySignature,
 
     #[error("Verification failed for following elements: {0:?}")]
-    VerificationError(Vec<(ControllerError, String)>),
+    VerificationError(Vec<(VerificationError, String)>),
 
     #[error(transparent)]
     TelError(#[from] teliox::error::Error),

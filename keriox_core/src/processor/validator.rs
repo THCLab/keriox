@@ -35,7 +35,7 @@ pub enum VerificationError {
     #[error("Need more data")]
     NeedMoreData,
     #[error("Faulty signatures")]
-    FaultySignature,
+    VerificationFailure,
     #[error("Unknown signer identifier")]
     UnknownIdentifierError,
     #[error(transparent)]
@@ -237,13 +237,12 @@ impl EventValidator {
                     &seal.prefix,
                     seal.sn,
                     &seal.event_digest,
-                ).unwrap_or_default(); // error means that event wasn't found
+                ).map_err(|_| VerificationError::NeedMoreData)?; // error means that event wasn't found
                 match kp {
                     Some(kp) => {
                         kp.verify(data, sigs)?
                             .then_some(())
-                            // .ok_or(Error::SignatureVerificationError)
-                            .ok_or(VerificationError::FaultySignature)
+                            .ok_or(VerificationError::VerificationFailure)
                         },
                     None => Err(VerificationError::NeedMoreData),
                 }
@@ -252,8 +251,7 @@ impl EventValidator {
                 .iter()
                 .all(|(bp, sign)| bp.verify(data, sign).unwrap())
                 .then_some(())
-                .ok_or(VerificationError::FaultySignature),
-                // .ok_or(Error::SignatureVerificationError),
+                .ok_or(VerificationError::VerificationFailure),
             Signature::NonTransferable(Nontransferable::Indexed(_sigs)) => {
                 Err(VerificationError::UnknownIdentifierError)
             }
@@ -358,15 +356,8 @@ impl EventValidator {
             if rpy.signature.get_signer().ok_or(Error::MissingSigner)? != signer_id {
                 return Err(QueryError::Error("Wrong reply message signer".into()).into());
             };
-            match self.verify(&rpy.reply.encode()?, &rpy.signature) {
-                Ok(_) => {},
-                Err(e) => match e {
-                    VerificationError::NeedMoreData => todo!(),
-                    VerificationError::FaultySignature => todo!(),
-                    VerificationError::UnknownIdentifierError => todo!(),
-                    VerificationError::SignatureError(_) => todo!(),
-                },
-            };
+            self.verify(&rpy.reply.encode()?, &rpy.signature)?;
+
             rpy.reply.check_digest()?;
             let reply_prefix = ksn.state.prefix.clone();
 
