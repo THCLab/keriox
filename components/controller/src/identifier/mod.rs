@@ -1,4 +1,4 @@
-use std::{collections::HashSet, sync::Arc};
+use std::{collections::{HashMap, HashSet}, sync::Arc};
 
 use keri_core::{
     actor::prelude::SelfAddressingIdentifier,
@@ -35,6 +35,7 @@ pub struct Identifier {
     /// receipts yet.)
     cached_state: IdentifierState,
     pub(crate) broadcasted_rcts: HashSet<(SelfAddressingIdentifier, BasicPrefix, IdentifierPrefix)>,
+    cached_identifiers: HashMap<IdentifierPrefix, IdentifierState>
 }
 
 impl Identifier {
@@ -75,6 +76,7 @@ impl Identifier {
             cached_state: state,
             registry_id: None,
             broadcasted_rcts: HashSet::new(),
+            cached_identifiers: HashMap::new(),
         }
     }
 

@@ -1,5 +1,10 @@
+use std::collections::HashSet;
+
 use crate::{error::ControllerError, mailbox_updating::ActionRequired};
+use keri_core::actor::error::ActorError;
 use keri_core::actor::prelude::HashFunctionCode;
+use keri_core::actor::simple_controller::ResponseError;
+use keri_core::transport::TransportError;
 use keri_core::{
     actor::{prelude::SerializationFormats, simple_controller::PossibleResponse},
     event::sections::seal::EventSeal,
@@ -82,6 +87,7 @@ impl Identifier {
         let self_id = self.id.clone();
         let mut actions = Vec::new();
         let mut updates = QueryResponse::NoUpdates;
+        let mut possibly_updated_ids: HashSet<IdentifierPrefix> = HashSet::new();
         for (qry, sig) in queries {
             let (recipient, about_who, from_who) = match qry.get_route() {
                 QueryRoute::Logs {
@@ -119,12 +125,25 @@ impl Identifier {
                 .communication
                 .send_query_to(recipient.as_ref().unwrap(), Scheme::Http, query)
                 .await?;
+            // let res = match res {
+            //     Ok(res) => res,
+            //     Err(err) => {
+            //         match err {
+            //             ControllerError::TransportError(TransportError::RemoteError(ActorError::NoIdentState { prefix })) => {
+                             
+            //                 todo!();
+            //             },
+            //             _ => todo!(),
+            //         }
+            //     },
+            // }
 
             match res {
                 PossibleResponse::Kel(kel) => {
                     for event in kel {
+                        let id = event.get_prefix();
+                        possibly_updated_ids.insert(id);
                         self.known_events.process(&event)?;
-                        updates = QueryResponse::Updates;
                     }
                 }
                 PossibleResponse::Mbx(mbx) => {
@@ -152,6 +171,16 @@ impl Identifier {
                 }
                 PossibleResponse::Ksn(_) => todo!(),
             };
+        }
+        for id in possibly_updated_ids {
+            let db_state = self.find_state(&id).ok();
+            let cached_state = self.cached_identifiers.get(&id);
+            if db_state.as_ref().eq(&cached_state) {
+                updates = QueryResponse::NoUpdates
+            } else {
+                self.cached_identifiers.insert(id, db_state.unwrap());
+                updates = QueryResponse::Updates
+            }
         }
         if !actions.is_empty() {
             Ok(QueryResponse::ActionRequired(actions))
