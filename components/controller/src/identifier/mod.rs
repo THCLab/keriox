@@ -12,7 +12,7 @@ use teliox::state::{vc_state::TelState, ManagerTelState};
 
 use crate::{communication::Communication, error::ControllerError, known_events::KnownEvents};
 
-use self::publish::QueryCache;
+use self::{mechanics::MechanicsError, publish::QueryCache};
 mod broadcast;
 pub mod delegate;
 pub mod group;
@@ -22,6 +22,7 @@ pub mod publish;
 pub mod query;
 pub mod signing;
 pub mod tel;
+pub mod mechanics;
 
 pub struct Identifier {
     id: IdentifierPrefix,
@@ -80,7 +81,7 @@ impl Identifier {
         }
     }
 
-    pub async fn resolve_oobi(&self, oobi: &Oobi) -> Result<(), ControllerError> {
+    pub async fn resolve_oobi(&self, oobi: &Oobi) -> Result<(), MechanicsError> {
         self.communication.resolve_oobi(oobi).await
     }
 
@@ -101,7 +102,7 @@ impl Identifier {
     }
 
     /// Returns accepted IdentifierState of identifier.
-    pub fn find_state(&self, id: &IdentifierPrefix) -> Result<IdentifierState, ControllerError> {
+    pub fn find_state(&self, id: &IdentifierPrefix) -> Result<IdentifierState, MechanicsError> {
         self.known_events.get_state(id)
     }
 
@@ -120,7 +121,7 @@ impl Identifier {
     }
 
     pub fn current_public_keys(&self) -> Result<Vec<BasicPrefix>, ControllerError> {
-        self.known_events.current_public_keys(&self.id)
+        Ok(self.known_events.current_public_keys(&self.id).unwrap())
     }
 
     pub fn witnesses(&self) -> impl Iterator<Item = BasicPrefix> {
@@ -147,7 +148,7 @@ impl Identifier {
             .ok_or(ControllerError::UnknownIdentifierError)
     }
 
-    pub fn get_last_event_seal(&self) -> Result<EventSeal, ControllerError> {
+    pub fn get_last_event_seal(&self) -> Result<EventSeal, MechanicsError> {
         let state = self.known_events.get_state(self.id())?;
         Ok(EventSeal {
             prefix: state.prefix,

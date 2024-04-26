@@ -45,7 +45,7 @@ impl Identifier {
         event_seal: EventSeal,
         signatures: &[SelfSigningPrefix],
     ) -> Result<Signature, ControllerError> {
-        let state = self.known_events.get_state(&self.id)?.current.public_keys;
+        let state = self.known_events.get_state(&self.id).unwrap().current.public_keys;
         let indexed_signatures: Option<Vec<_>> = signatures
             .iter()
             .map(|sig| {

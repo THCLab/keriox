@@ -4,46 +4,21 @@ use keri_core::{
 };
 use thiserror::Error;
 
+use crate::{communication::SendingError, identifier::mechanics::MechanicsError};
+
 #[derive(Error, Debug)]
 pub enum ControllerError {
     #[error("Database error: {0}")]
     DatabaseError(#[from] keri_core::database::DbError),
 
-    #[error("Transport error: {0}")]
-    TransportError(#[from] keri_core::transport::TransportError),
-
-    #[error("Communication error: {0}")]
-    CommunicationError(String),
-
-    #[error("Inception event error: {0}")]
-    InceptionError(String),
-
-    #[error("Can't generate event: {0}")]
-    EventGenerationError(String),
-
-    #[error("Can't parse event")]
-    EventParseError,
-
-    #[error("Wrong event format")]
-    EventFormatError,
+    #[error(transparent)]
+    SendingError(#[from] SendingError),
 
     #[error("Keri event parsing error: {0}")]
     ParseError(#[from] ParseError),
 
-    #[error("Improper witness prefix, should be basic prefix")]
-    WrongWitnessPrefixError,
-
-    #[error("missing event")]
-    MissingEventError,
-
-    #[error("Wrong event type")]
-    WrongEventTypeError,
-
     #[error("Unknown identifier")]
     UnknownIdentifierError,
-
-    #[error("Not group participant")]
-    NotGroupParticipantError,
 
     #[error("transparent")]
     EventProcessingError(#[from] keri_core::error::Error),
@@ -74,4 +49,7 @@ pub enum ControllerError {
 
     #[error("Error: {0}")]
     OtherError(String),
+
+    #[error(transparent)]
+    Mechanic(#[from] MechanicsError)
 }

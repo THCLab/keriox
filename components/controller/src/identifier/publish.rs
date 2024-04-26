@@ -7,7 +7,7 @@ use keri_core::{mailbox::MailboxResponse, prefix::IdentifierPrefix};
 
 use crate::{error::ControllerError, mailbox_updating::MailboxReminder};
 
-use super::Identifier;
+use super::{mechanics::MechanicsError, Identifier};
 
 pub(crate) struct QueryCache {
     last_asked_index: Arc<Mutex<HashMap<IdentifierPrefix, MailboxReminder>>>,
@@ -52,11 +52,11 @@ impl QueryCache {
         &self,
         id: IdentifierPrefix,
         res: &MailboxResponse,
-    ) -> Result<(), ControllerError> {
+    ) -> Result<(), MechanicsError> {
         let mut indexes = self
             .last_asked_index
             .lock()
-            .map_err(|_| ControllerError::OtherError("Can't lock mutex".to_string()))?;
+            .map_err(|_| MechanicsError::LockingError)?;
         let reminder = indexes.entry(id).or_default();
         reminder.delegate += res.delegate.len();
         reminder.multisig += res.multisig.len();
@@ -68,11 +68,11 @@ impl QueryCache {
         &self,
         id: IdentifierPrefix,
         res: &MailboxResponse,
-    ) -> Result<(), ControllerError> {
+    ) -> Result<(), MechanicsError> {
         let mut indexes = self
             .last_asked_groups_index
             .lock()
-            .map_err(|_| ControllerError::OtherError("Can't lock mutex".to_string()))?;
+            .map_err(|_| MechanicsError::LockingError)?;
         let reminder = indexes.entry(id).or_default();
         reminder.delegate += res.delegate.len();
         reminder.multisig += res.multisig.len();
@@ -82,7 +82,7 @@ impl QueryCache {
 }
 
 impl Identifier {
-    pub async fn notify_witnesses(&mut self) -> Result<usize, ControllerError> {
+    pub async fn notify_witnesses(&mut self) -> Result<usize, MechanicsError> {
         let mut n = 0;
         while let Some(ev) = self.to_notify.pop() {
             // Elect the leader

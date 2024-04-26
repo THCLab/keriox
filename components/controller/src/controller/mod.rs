@@ -6,7 +6,7 @@ use keri_core::{
 
 use crate::{
     communication::Communication, config::ControllerConfig, error::ControllerError,
-    identifier::Identifier, known_events::KnownEvents,
+    identifier::{mechanics::MechanicsError, Identifier}, known_events::KnownEvents,
 };
 pub mod verifying;
 
@@ -37,7 +37,7 @@ impl Controller {
             communication: comm,
         };
         if !initial_oobis.is_empty() {
-            async_std::task::block_on(controller.setup_witnesses(&initial_oobis))?;
+            async_std::task::block_on(controller.setup_witnesses(&initial_oobis)).unwrap();
         }
         Ok(controller)
     }
@@ -48,7 +48,7 @@ impl Controller {
         next_pub_keys: Vec<BasicPrefix>,
         witnesses: Vec<LocationScheme>,
         witness_threshold: u64,
-    ) -> Result<String, ControllerError> {
+    ) -> Result<String, MechanicsError> {
         self.setup_witnesses(&witnesses).await?;
         self.known_events
             .incept(public_keys, next_pub_keys, witnesses, witness_threshold)
@@ -59,7 +59,7 @@ impl Controller {
         event: &[u8],
         sig: &SelfSigningPrefix,
     ) -> Result<Identifier, ControllerError> {
-        let initialized_id = self.known_events.finalize_inception(event, sig)?;
+        let initialized_id = self.known_events.finalize_inception(event, sig).unwrap();
         Ok(Identifier::new(
             initialized_id,
             self.known_events.clone(),
@@ -67,7 +67,7 @@ impl Controller {
         ))
     }
 
-    async fn setup_witnesses(&self, oobis: &[LocationScheme]) -> Result<(), ControllerError> {
+    async fn setup_witnesses(&self, oobis: &[LocationScheme]) -> Result<(), MechanicsError> {
         for lc in oobis {
             self.communication.resolve_loc_schema(lc).await?;
         }
@@ -85,7 +85,7 @@ impl Controller {
         self.known_events.verify(data, signature)
     }
 
-    pub fn find_state(&self, id: &IdentifierPrefix) -> Result<IdentifierState, ControllerError> {
+    pub fn find_state(&self, id: &IdentifierPrefix) -> Result<IdentifierState, MechanicsError> {
         self.known_events.get_state(id)
     }
 }

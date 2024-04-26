@@ -156,18 +156,29 @@ impl Identifier {
                                 .mailbox_response(&recipient.unwrap(), from_who, about_who, &mbx)
                                 .await?,
                         );
-<<<<<<< HEAD
                         let witnesses = self
                             .witnesses()
                             .map(|bp| IdentifierPrefix::Basic(bp))
                             .collect::<Vec<_>>();
                         self.broadcast_receipts(&witnesses).await?;
-=======
                         if !mbx.receipt.is_empty() {
                             updates = QueryResponse::Updates;
                         }
->>>>>>> 1a9a718 (feat: notify if any updates after finalize_query)
                     }
+                    // // only process if we actually asked about mailbox
+                    // if let (Some(from_who), Some(about_who)) =
+                    //     (from_who.as_ref(), about_who.as_ref())
+                    // {
+                    //     actions.append(
+                    //         &mut self
+                    //             .mailbox_response(&recipient.unwrap(), from_who, about_who, &mbx
+                    //             .await?,
+                    //     );
+                    //     if !mbx.receipt.is_empty() {
+                    //         updates = QueryResponse::Updates;
+                    //     }
+                    // }
+                    todo!()
                 }
                 PossibleResponse::Ksn(_) => todo!(),
             };
@@ -189,28 +200,28 @@ impl Identifier {
         }
     }
 
-    async fn mailbox_response(
-        &self,
-        recipient: &IdentifierPrefix,
-        from_who: &IdentifierPrefix,
-        about_who: &IdentifierPrefix,
-        res: &MailboxResponse,
-    ) -> Result<Vec<ActionRequired>, ControllerError> {
-        let req = if from_who == about_who {
-            // process own mailbox
-            let req = self.process_own_mailbox(res)?;
-            self.query_cache
-                .update_last_asked_index(recipient.clone(), res)?;
-            req
-        } else {
-            // process group mailbox
-            let group_req = self.process_group_mailbox(res, about_who).await?;
-            self.query_cache
-                .update_last_asked_group_index(recipient.clone(), res)?;
-            group_req
-        };
-        Ok(req)
-    }
+    // async fn mailbox_response(
+    //     &self,
+    //     recipient: &IdentifierPrefix,
+    //     from_who: &IdentifierPrefix,
+    //     about_who: &IdentifierPrefix,
+    //     res: &MailboxResponse,
+    // ) -> Result<Vec<ActionRequired>, ControllerError> {
+    //     let req = if from_who == about_who {
+    //         // process own mailbox
+    //         let req = self.process_own_mailbox(res)?;
+    //         self.query_cache
+    //             .update_last_asked_index(recipient.clone(), res)?;
+    //         req
+    //     } else {
+    //         // process group mailbox
+    //         let group_req = self.process_group_mailbox(res, about_who).await?;
+    //         self.query_cache
+    //             .update_last_asked_group_index(recipient.clone(), res)?;
+    //         group_req
+    //     };
+    //     Ok(req)
+    // } 
 
     fn query_log(
         &self,

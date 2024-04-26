@@ -14,7 +14,7 @@ use keri_core::{
 use crate::error::ControllerError;
 use keri_core::prefix::CesrPrimitive;
 
-use super::Identifier;
+use super::{mechanics::MechanicsError, Identifier};
 
 impl Identifier {
     /// Generate and return rotation event for Identifier
@@ -26,7 +26,7 @@ impl Identifier {
         witness_to_add: Vec<LocationScheme>,
         witness_to_remove: Vec<BasicPrefix>,
         witness_threshold: u64,
-    ) -> Result<String, ControllerError> {
+    ) -> Result<String, MechanicsError> {
         for wit_oobi in &witness_to_add {
             self.communication.resolve_loc_schema(wit_oobi).await?;
         }
@@ -37,7 +37,7 @@ impl Identifier {
                 if let IdentifierPrefix::Basic(bp) = &wit.eid {
                     Ok(bp.clone())
                 } else {
-                    Err(ControllerError::WrongWitnessPrefixError)
+                    Err(MechanicsError::WrongWitnessPrefixError)
                 }
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -53,41 +53,41 @@ impl Identifier {
             witness_to_remove,
             witness_threshold,
         )
-        .map_err(|e| ControllerError::EventGenerationError(e.to_string()))
+        .map_err(|e| MechanicsError::EventGenerationError(e.to_string()))
     }
 
     /// Generate and return interaction event for Identifier
-    pub fn anchor(&self, payload: &[SelfAddressingIdentifier]) -> Result<String, ControllerError> {
+    pub fn anchor(&self, payload: &[SelfAddressingIdentifier]) -> Result<String, MechanicsError> {
         let state = self.known_events.get_state(&self.id)?;
         event_generator::anchor(state, payload)
-            .map_err(|e| ControllerError::EventGenerationError(e.to_string()))
+            .map_err(|e| MechanicsError::EventGenerationError(e.to_string()))
     }
 
     pub fn anchor_with_seal(
         &self,
         seal_list: &[Seal],
-    ) -> Result<KeriEvent<KeyEvent>, ControllerError> {
+    ) -> Result<KeriEvent<KeyEvent>, MechanicsError> {
         let state = self.known_events.get_state(&self.id)?;
         event_generator::anchor_with_seal(state, seal_list)
-            .map_err(|e| ControllerError::EventGenerationError(e.to_string()))
+            .map_err(|e| MechanicsError::EventGenerationError(e.to_string()))
     }
 
     /// Generates reply event with `end_role_add` route.
-    pub fn add_watcher(&self, watcher_id: IdentifierPrefix) -> Result<String, ControllerError> {
+    pub fn add_watcher(&self, watcher_id: IdentifierPrefix) -> Result<String, MechanicsError> {
         String::from_utf8(
             event_generator::generate_end_role(&self.id, &watcher_id, Role::Watcher, true)?
                 .encode()?,
         )
-        .map_err(|_e| ControllerError::EventFormatError)
+        .map_err(|_e| MechanicsError::EventFormatError)
     }
 
     /// Generates reply event with `end_role_cut` route.
-    pub fn remove_watcher(&self, watcher_id: IdentifierPrefix) -> Result<String, ControllerError> {
+    pub fn remove_watcher(&self, watcher_id: IdentifierPrefix) -> Result<String, MechanicsError> {
         String::from_utf8(
             event_generator::generate_end_role(&self.id, &watcher_id, Role::Watcher, false)?
                 .encode()?,
         )
-        .map_err(|_e| ControllerError::EventFormatError)
+        .map_err(|_e| MechanicsError::EventFormatError)
     }
 
     /// Checks signatures and updates database.
@@ -96,9 +96,9 @@ impl Identifier {
         &mut self,
         event: &[u8],
         sig: SelfSigningPrefix,
-    ) -> Result<(), ControllerError> {
+    ) -> Result<(), MechanicsError> {
         let parsed_event =
-            parse_event_type(event).map_err(|_e| ControllerError::EventFormatError)?;
+            parse_event_type(event).map_err(|_e| MechanicsError::EventFormatError)?;
         match parsed_event {
             EventType::KeyEvent(ke) => {
                 // Provide kel for new witnesses
@@ -129,7 +129,7 @@ impl Identifier {
                     Ok(self.finalize_add_role(&self.id, rpy, vec![sig]).await?)
                 }
                 ReplyRoute::EndRoleCut(_) => todo!(),
-                _ => Err(ControllerError::WrongEventTypeError),
+                _ => Err(MechanicsError::WrongEventTypeError),
             },
             EventType::Qry(_) => todo!(),
             EventType::Receipt(_) => todo!(),
@@ -143,7 +143,7 @@ impl Identifier {
         &mut self,
         event: &KeriEvent<KeyEvent>,
         sig: &SelfSigningPrefix,
-    ) -> Result<(), ControllerError> {
+    ) -> Result<(), MechanicsError> {
         let own_index = self.get_index(&event.data).unwrap();
         let signature = IndexedSignature::new_both_same(sig.clone(), own_index as u16);
 
@@ -164,7 +164,7 @@ impl Identifier {
         signer_prefix: &IdentifierPrefix,
         event: ReplyEvent,
         sig: Vec<SelfSigningPrefix>,
-    ) -> Result<(), ControllerError> {
+    ) -> Result<(), MechanicsError> {
         let (dest_identifier, messages_to_send) =
             self.known_events
                 .finalize_add_role(signer_prefix, event, sig)?;
@@ -180,7 +180,7 @@ impl Identifier {
 
     /// Helper function for getting the position of identifier's public key in
     /// group's current keys list.
-    pub(crate) fn get_index(&self, key_event: &KeyEvent) -> Result<usize, ControllerError> {
+    pub(crate) fn get_index(&self, key_event: &KeyEvent) -> Result<usize, MechanicsError> {
         match &key_event.event_data {
             EventData::Icp(icp) => {
                 // TODO what if group participant is a group and has more than one
@@ -223,6 +223,6 @@ impl Identifier {
                     .position(|pk| pk.eq(&own_pk))
             }
         }
-        .ok_or(ControllerError::NotGroupParticipantError)
+        .ok_or(MechanicsError::NotGroupParticipantError)
     }
 }

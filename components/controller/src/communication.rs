@@ -10,7 +10,15 @@ use keri_core::{
 };
 use teliox::transport::GeneralTelTransport;
 
-use crate::{error::ControllerError, known_events::KnownEvents};
+use crate::{error::ControllerError, identifier::mechanics::MechanicsError, known_events::{KnownEvents, OobiRetrieveError}};
+
+#[derive(Debug, thiserror::Error)]
+pub enum SendingError {
+    #[error("Transport error: {0}")]
+    TransportError(#[from] keri_core::transport::TransportError),
+    #[error(transparent)]
+    OobiError(#[from] OobiRetrieveError)
+}
 
 pub struct Communication {
     pub events: Arc<KnownEvents>,
@@ -32,7 +40,7 @@ impl Communication {
     }
 
     /// Make http request to get identifier's endpoints information.
-    pub async fn resolve_loc_schema(&self, lc: &LocationScheme) -> Result<(), ControllerError> {
+    pub async fn resolve_loc_schema(&self, lc: &LocationScheme) -> Result<(), MechanicsError> {
         let oobis = self.transport.request_loc_scheme(lc.clone()).await?;
         for oobi in oobis {
             self.events.save(&Message::Op(oobi))?;
@@ -41,14 +49,15 @@ impl Communication {
     }
 
     /// Make http request to get identifier's endpoints information.
-    pub async fn resolve_end_role(&self, er: &EndRole) -> Result<(), ControllerError> {
+    pub async fn resolve_end_role(&self, er: &EndRole) -> Result<(), MechanicsError> {
         let EndRole { cid, role, eid } = er.clone();
         // TODO what if more than one
         let loc = self
             .events
-            .get_loc_schemas(&cid)?
+            .get_loc_schemas(&cid)
+            .map_err(|e| SendingError::OobiError(e))?
             .first()
-            .ok_or(ControllerError::UnknownIdentifierError)?
+            .ok_or(SendingError::OobiError(OobiRetrieveError::MissingOobi(cid.clone(), None)))?
             .clone();
         let msgs = self.transport.request_end_role(loc, cid, role, eid).await?;
         for msg in msgs {
@@ -63,7 +72,7 @@ impl Communication {
     }
 
     /// Make http request to get identifier's endpoints information.
-    pub async fn resolve_oobi(&self, oobi: &Oobi) -> Result<(), ControllerError> {
+    pub async fn resolve_oobi(&self, oobi: &Oobi) -> Result<(), MechanicsError> {
         match oobi {
             Oobi::Location(loc) => self.resolve_loc_schema(loc).await,
             Oobi::EndRole(er) => self.resolve_end_role(er).await,
@@ -75,7 +84,7 @@ impl Communication {
         id: &IdentifierPrefix,
         scheme: Scheme,
         msg: Message,
-    ) -> Result<(), ControllerError> {
+    ) -> Result<(), SendingError> {
         let loc = self.events.find_location(id, scheme)?;
         self.transport.send_message(loc, msg).await?;
         Ok(())
@@ -86,7 +95,7 @@ impl Communication {
         id: &IdentifierPrefix,
         scheme: Scheme,
         query: SignedKelQuery,
-    ) -> Result<PossibleResponse, ControllerError> {
+    ) -> Result<PossibleResponse, SendingError> {
         let loc = self.events.find_location(id, scheme)?;
         Ok(self.transport.send_query(loc, query).await?)
     }
@@ -96,7 +105,7 @@ impl Communication {
         id: &IdentifierPrefix,
         scheme: Scheme,
         oobi: Oobi,
-    ) -> Result<(), ControllerError> {
+    ) -> Result<(), SendingError> {
         let loc = self.events.find_location(id, scheme)?;
         self.transport.resolve_oobi(loc, oobi).await?;
         Ok(())
@@ -111,7 +120,7 @@ impl Communication {
         &self,
         witness_prefixes: &[BasicPrefix],
         message: &SignedEventMessage,
-    ) -> Result<(), ControllerError> {
+    ) -> Result<(), MechanicsError> {
         for id in witness_prefixes {
             self.send_message_to(
                 &IdentifierPrefix::Basic(id.clone()),

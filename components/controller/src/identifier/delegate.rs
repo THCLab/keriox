@@ -1,4 +1,5 @@
 use keri_core::actor::prelude::HashFunctionCode;
+use keri_core::error::Error;
 use keri_core::{
     actor::prelude::SerializationFormats,
     event::{
@@ -11,6 +12,7 @@ use keri_core::{
 
 use crate::error::ControllerError;
 
+use super::mechanics::MechanicsError;
 use super::Identifier;
 
 impl Identifier {
@@ -19,7 +21,7 @@ impl Identifier {
     pub fn delegate(
         &self,
         delegated_event: &KeriEvent<KeyEvent>,
-    ) -> Result<(KeriEvent<KeyEvent>, ExchangeMessage), ControllerError> {
+    ) -> Result<(KeriEvent<KeyEvent>, ExchangeMessage), MechanicsError> {
         let delegate = delegated_event.data.get_prefix();
         let delegated_seal = {
             let event_digest = delegated_event.digest()?;

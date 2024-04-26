@@ -202,12 +202,12 @@ mod test {
                 vec![wit1_location.clone(), wit2_location.clone()],
                 2,
             )
-            .await?;
+            .await.unwrap();
         let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(icp_event.as_bytes())?);
 
         let mut identifier = controller.finalize_incept(icp_event.as_bytes(), &signature)?;
 
-        assert_eq!(identifier.notify_witnesses().await?, 1);
+        assert_eq!(identifier.notify_witnesses().await.unwrap(), 1);
 
         // Querying mailbox to get receipts
         for qry in identifier.query_mailbox(&identifier.id, &[wit1_id.clone(), wit2_id.clone()])? {

@@ -2,6 +2,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use keri_core::actor::parse_event_stream;
+use keri_core::database::DbError;
+use keri_core::error::{self, Error};
 use keri_core::event_message::signed_event_message::SignedNontransferableReceipt;
 use keri_core::oobi::LocationScheme;
 use keri_core::prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix};
@@ -34,6 +36,16 @@ use teliox::processor::storage::TelEventStorage;
 use teliox::tel::Tel;
 
 use crate::error::ControllerError;
+use crate::identifier::mechanics::MechanicsError;
+
+#[derive(Debug, thiserror::Error)]
+pub enum OobiRetrieveError {
+    #[error("No oobi for {0} identifier")]
+    MissingOobi(IdentifierPrefix, Option<Scheme>),
+    #[error(transparent)]
+    DbError(#[from] DbError)
+
+}
 
 pub struct KnownEvents {
     processor: BasicProcessor,
@@ -122,23 +134,23 @@ impl KnownEvents {
         Ok(controller)
     }
 
-    pub fn save(&self, message: &Message) -> Result<(), ControllerError> {
+    pub fn save(&self, message: &Message) -> Result<(), MechanicsError> {
         self.process(message)?;
         Ok(())
     }
 
-    pub fn save_oobi(&self, oobi: &SignedReply) -> Result<(), ControllerError> {
+    pub fn save_oobi(&self, oobi: &SignedReply) -> Result<(), MechanicsError> {
         Ok(self.oobi_manager.process_oobi(oobi).unwrap())
     }
 
     pub fn current_public_keys(
         &self,
         id: &IdentifierPrefix,
-    ) -> Result<Vec<BasicPrefix>, ControllerError> {
+    ) -> Result<Vec<BasicPrefix>, MechanicsError> {
         Ok(self
             .storage
             .get_state(id)
-            .ok_or(ControllerError::UnknownIdentifierError)?
+            .ok_or(MechanicsError::UnknownIdentifierError(id.clone()))?
             .current
             .public_keys)
     }
@@ -146,11 +158,11 @@ impl KnownEvents {
     pub fn next_keys_hashes(
         &self,
         id: &IdentifierPrefix,
-    ) -> Result<Vec<SelfAddressingIdentifier>, ControllerError> {
+    ) -> Result<Vec<SelfAddressingIdentifier>, MechanicsError> {
         Ok(self
             .storage
             .get_state(id)
-            .ok_or(ControllerError::UnknownIdentifierError)?
+            .ok_or(MechanicsError::UnknownIdentifierError(id.clone()))?
             .current
             .next_keys_data
             .next_key_hashes)
@@ -175,7 +187,7 @@ impl KnownEvents {
     }
 
     // Returns messages if they can be returned immediately, i.e. for query message
-    pub fn process(&self, msg: &Message) -> Result<Option<Vec<Message>>, ControllerError> {
+    pub fn process(&self, msg: &Message) -> Result<Option<Vec<Message>>, Error> {
         let response = match msg.clone() {
             Message::Op(op) => match op {
                 Op::Reply(rpy) => {
@@ -210,35 +222,36 @@ impl KnownEvents {
     pub fn get_loc_schemas(
         &self,
         id: &IdentifierPrefix,
-    ) -> Result<Vec<LocationScheme>, ControllerError> {
-        Ok(self
+    ) -> Result<Vec<LocationScheme>, OobiRetrieveError> {
+        let location_schemas: Vec<_> = self
             .oobi_manager
             .get_loc_scheme(id)?
-            .ok_or(ControllerError::UnknownIdentifierError)?
+            .ok_or(OobiRetrieveError::MissingOobi(id.clone(), None))?
             .iter()
             .filter_map(|lc| {
                 if let ReplyRoute::LocScheme(loc_scheme) = lc.get_route() {
-                    Ok(loc_scheme)
+                    Some(loc_scheme)
                 } else {
-                    Err(ControllerError::WrongEventTypeError)
+                    None
                 }
-                .ok()
             })
-            .collect())
+            .collect();
+        if location_schemas.is_empty() {
+            Err(OobiRetrieveError::MissingOobi(id.clone(), None))
+        } else {
+            Ok(location_schemas)
+        }
     }
 
     pub fn find_location(
         &self,
         id: &IdentifierPrefix,
         scheme: Scheme,
-    ) -> Result<LocationScheme, ControllerError> {
+    ) -> Result<LocationScheme, OobiRetrieveError> {
         self.get_loc_schemas(id)?
             .into_iter()
             .find(|loc| loc.scheme == scheme)
-            .ok_or(ControllerError::NoLocationScheme {
-                id: id.clone(),
-                scheme,
-            })
+            .ok_or(OobiRetrieveError::MissingOobi(id.clone(), Some(scheme)))
     }
 
     pub fn find_receipt(
@@ -246,7 +259,7 @@ impl KnownEvents {
         id: &IdentifierPrefix,
         sn: u64,
         digest: &SelfAddressingIdentifier,
-    ) -> Result<Option<SignedNontransferableReceipt>, ControllerError> {
+    ) -> Result<Option<SignedNontransferableReceipt>, Error> {
         let rcts_from_db = self.storage.get_nt_receipts(id, sn, digest)?;
         Ok(rcts_from_db)
     }
@@ -270,14 +283,14 @@ impl KnownEvents {
         next_pub_keys: Vec<BasicPrefix>,
         witnesses: Vec<LocationScheme>,
         witness_threshold: u64,
-    ) -> Result<String, ControllerError> {
+    ) -> Result<String, MechanicsError> {
         let witnesses = witnesses
             .iter()
             .map(|wit| {
                 if let IdentifierPrefix::Basic(bp) = &wit.eid {
                     Ok(bp.clone())
                 } else {
-                    Err(ControllerError::WrongWitnessPrefixError)
+                    Err(MechanicsError::WrongWitnessPrefixError)
                 }
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -288,7 +301,7 @@ impl KnownEvents {
             witness_threshold,
             None,
         )
-        .map_err(|e| ControllerError::EventGenerationError(e.to_string()))
+        .map_err(|e| MechanicsError::EventGenerationError(e.to_string()))
     }
 
     /// Verifies event signature and adds it to kel.
@@ -299,9 +312,9 @@ impl KnownEvents {
         &self,
         event: &[u8],
         sig: &SelfSigningPrefix,
-    ) -> Result<IdentifierPrefix, ControllerError> {
+    ) -> Result<IdentifierPrefix, MechanicsError> {
         let parsed_event =
-            parse_event_type(event).map_err(|_e| ControllerError::EventParseError)?;
+            parse_event_type(event).map_err(|_e| MechanicsError::EventFormatError)?;
         match parsed_event {
             EventType::KeyEvent(ke) => {
                 if let EventData::Icp(_) = &ke.data.get_event_data() {
@@ -309,92 +322,92 @@ impl KnownEvents {
                     self.finalize_key_event(&ke, sig, 0)?;
                     Ok(ke.data.get_prefix())
                 } else {
-                    Err(ControllerError::InceptionError(
+                    Err(MechanicsError::InceptionError(
                         "Wrong event type, should be inception event".into(),
                     ))
                 }
             }
-            _ => Err(ControllerError::InceptionError(
+            _ => Err(MechanicsError::InceptionError(
                 "Wrong event type, should be inception event".into(),
             )),
         }
     }
 
     /// Generate and return rotation event for given identifier data
-    pub fn rotate(
-        &self,
-        id: IdentifierPrefix,
-        current_keys: Vec<BasicPrefix>,
-        new_next_keys: Vec<BasicPrefix>,
-        new_next_threshold: u64,
-        witness_to_add: Vec<LocationScheme>,
-        witness_to_remove: Vec<BasicPrefix>,
-        witness_threshold: u64,
-    ) -> Result<String, ControllerError> {
-        let witnesses_to_add = witness_to_add
-            .iter()
-            .map(|wit| {
-                if let IdentifierPrefix::Basic(bp) = &wit.eid {
-                    Ok(bp.clone())
-                } else {
-                    Err(ControllerError::WrongWitnessPrefixError)
-                }
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+    // pub fn rotate(
+    //     &self,
+    //     id: IdentifierPrefix,
+    //     current_keys: Vec<BasicPrefix>,
+    //     new_next_keys: Vec<BasicPrefix>,
+    //     new_next_threshold: u64,
+    //     witness_to_add: Vec<LocationScheme>,
+    //     witness_to_remove: Vec<BasicPrefix>,
+    //     witness_threshold: u64,
+    // ) -> Result<String, ControllerError> {
+    //     let witnesses_to_add = witness_to_add
+    //         .iter()
+    //         .map(|wit| {
+    //             if let IdentifierPrefix::Basic(bp) = &wit.eid {
+    //                 Ok(bp.clone())
+    //             } else {
+    //                 Err(ControllerError::WrongWitnessPrefixError)
+    //             }
+    //         })
+    //         .collect::<Result<Vec<_>, _>>()?;
 
-        let state = self
-            .storage
-            .get_state(&id)
-            .ok_or(ControllerError::UnknownIdentifierError)?;
+    //     let state = self
+    //         .storage
+    //         .get_state(&id)
+    //         .ok_or(ControllerError::UnknownIdentifierError)?;
 
-        event_generator::rotate(
-            state,
-            current_keys,
-            new_next_keys,
-            new_next_threshold,
-            witnesses_to_add,
-            witness_to_remove,
-            witness_threshold,
-        )
-        .map_err(|e| ControllerError::EventGenerationError(e.to_string()))
-    }
+    //     event_generator::rotate(
+    //         state,
+    //         current_keys,
+    //         new_next_keys,
+    //         new_next_threshold,
+    //         witnesses_to_add,
+    //         witness_to_remove,
+    //         witness_threshold,
+    //     )
+    //     .map_err(|e| ControllerError::EventGenerationError(e.to_string()))
+    // }
 
     /// Generate and return interaction event for given identifier data
-    pub fn anchor(
-        &self,
-        id: IdentifierPrefix,
-        payload: &[SelfAddressingIdentifier],
-    ) -> Result<String, ControllerError> {
-        let state = self
-            .storage
-            .get_state(&id)
-            .ok_or(ControllerError::UnknownIdentifierError)?;
-        event_generator::anchor(state, payload)
-            .map_err(|e| ControllerError::EventGenerationError(e.to_string()))
-    }
+    // pub fn anchor(
+    //     &self,
+    //     id: IdentifierPrefix,
+    //     payload: &[SelfAddressingIdentifier],
+    // ) -> Result<String, ControllerError> {
+    //     let state = self
+    //         .storage
+    //         .get_state(&id)
+    //         .ok_or(ControllerError::UnknownIdentifierError)?;
+    //     event_generator::anchor(state, payload)
+    //         .map_err(|e| ControllerError::EventGenerationError(e.to_string()))
+    // }
 
     /// Generate and return interaction event for given identifier data
     pub fn anchor_with_seal(
         &self,
         id: &IdentifierPrefix,
         payload: &[Seal],
-    ) -> Result<KeriEvent<KeyEvent>, ControllerError> {
+    ) -> Result<KeriEvent<KeyEvent>, MechanicsError> {
         let state = self
             .storage
             .get_state(id)
-            .ok_or(ControllerError::UnknownIdentifierError)?;
+            .ok_or(MechanicsError::UnknownIdentifierError(id.clone()))?;
         event_generator::anchor_with_seal(state, payload)
-            .map_err(|e| ControllerError::EventGenerationError(e.to_string()))
+            .map_err(|e| MechanicsError::EventGenerationError(e.to_string()))
     }
 
     pub fn get_current_witness_list(
         &self,
         id: &IdentifierPrefix,
-    ) -> Result<Vec<BasicPrefix>, ControllerError> {
+    ) -> Result<Vec<BasicPrefix>, MechanicsError> {
         Ok(self
             .storage
             .get_state(id)
-            .ok_or(ControllerError::UnknownIdentifierError)?
+            .ok_or(MechanicsError::UnknownIdentifierError(id.clone()))?
             .witness_config
             .witnesses)
     }
@@ -406,7 +419,7 @@ impl KnownEvents {
         event: &KeriEvent<KeyEvent>,
         sig: &SelfSigningPrefix,
         own_index: usize,
-    ) -> Result<(), ControllerError> {
+    ) -> Result<(), MechanicsError> {
         let signature = IndexedSignature::new_both_same(sig.clone(), own_index as u16);
 
         let signed_message = event.sign(vec![signature], None, None);
@@ -419,24 +432,24 @@ impl KnownEvents {
     pub fn get_state_at_event(
         &self,
         event_message: &KeriEvent<KeyEvent>,
-    ) -> Result<IdentifierState, ControllerError> {
+    ) -> Result<IdentifierState, MechanicsError> {
         let identifier = event_message.data.get_prefix();
         Ok(match event_message.data.get_event_data() {
             EventData::Icp(_icp) => IdentifierState::default().apply(event_message)?,
             EventData::Rot(_rot) => self
                 .storage
                 .get_state(&identifier)
-                .ok_or(ControllerError::UnknownIdentifierError)?
+                .ok_or(MechanicsError::UnknownIdentifierError(identifier))?
                 .apply(event_message)?,
             EventData::Ixn(_ixn) => self
                 .storage
                 .get_state(&identifier)
-                .ok_or(ControllerError::UnknownIdentifierError)?,
+                .ok_or(MechanicsError::UnknownIdentifierError(identifier))?,
             EventData::Dip(_dip) => IdentifierState::default().apply(event_message)?,
             EventData::Drt(_drt) => self
                 .storage
                 .get_state(&identifier)
-                .ok_or(ControllerError::UnknownIdentifierError)?
+                .ok_or(MechanicsError::UnknownIdentifierError(identifier))?
                 .apply(event_message)?,
         })
     }
@@ -444,7 +457,7 @@ impl KnownEvents {
     pub fn find_witnesses_at_event(
         &self,
         event_message: &KeriEvent<KeyEvent>,
-    ) -> Result<Vec<BasicPrefix>, ControllerError> {
+    ) -> Result<Vec<BasicPrefix>, MechanicsError> {
         let state = self.get_state_at_event(event_message)?;
         Ok(state.witness_config.witnesses)
     }
@@ -454,12 +467,12 @@ impl KnownEvents {
         signer_prefix: &IdentifierPrefix,
         event: ReplyEvent,
         sig: Vec<SelfSigningPrefix>,
-    ) -> Result<(IdentifierPrefix, Vec<Message>), ControllerError> {
+    ) -> Result<(IdentifierPrefix, Vec<Message>), MechanicsError> {
         let mut messages_to_send = vec![];
         let (dest_prefix, role) = match &event.data.data {
             ReplyRoute::EndRoleAdd(role) => (role.eid.clone(), role.role.clone()),
             ReplyRoute::EndRoleCut(role) => (role.eid.clone(), role.role.clone()),
-            _ => return Err(ControllerError::EventFormatError),
+            _ => return Err(MechanicsError::EventFormatError),
         };
         let signed_reply = match signer_prefix {
             IdentifierPrefix::Basic(bp) => Message::Op(Op::Reply(SignedReply::new_nontrans(
@@ -478,14 +491,14 @@ impl KnownEvents {
                     event,
                     self.storage
                         .get_last_establishment_event_seal(signer_prefix)
-                        .ok_or(ControllerError::UnknownIdentifierError)?,
+                        .ok_or(MechanicsError::UnknownIdentifierError(signer_prefix.clone()))?,
                     sigs,
                 )));
                 if Role::Messagebox != role {
                     let kel = self
                         .storage
                         .get_kel_messages_with_receipts(signer_prefix, None)?
-                        .ok_or(ControllerError::UnknownIdentifierError)?;
+                        .ok_or(MechanicsError::UnknownIdentifierError(signer_prefix.clone()))?;
 
                     for ev in kel {
                         messages_to_send.push(Message::Notice(ev));
@@ -502,9 +515,9 @@ impl KnownEvents {
         Ok((dest_prefix, messages_to_send))
     }
 
-    pub fn get_state(&self, id: &IdentifierPrefix) -> Result<IdentifierState, ControllerError> {
+    pub fn get_state(&self, id: &IdentifierPrefix) -> Result<IdentifierState, MechanicsError> {
         self.storage
             .get_state(id)
-            .ok_or(ControllerError::UnknownIdentifierError)
+            .ok_or(MechanicsError::UnknownIdentifierError(id.clone()))
     }
 }

@@ -12,7 +12,7 @@ use keri_core::{
 
 use crate::error::ControllerError;
 
-use super::Identifier;
+use super::{mechanics::MechanicsError, Identifier};
 
 impl Identifier {
     /// Init group identifier
@@ -29,12 +29,12 @@ impl Identifier {
         initial_witness: Option<Vec<BasicPrefix>>,
         witness_threshold: Option<u64>,
         delegator: Option<IdentifierPrefix>,
-    ) -> Result<(String, Vec<String>), ControllerError> {
+    ) -> Result<(String, Vec<String>), MechanicsError> {
         let key_config = self
             .known_events
             .storage
             .get_state(&self.id)
-            .ok_or(ControllerError::UnknownIdentifierError)?
+            .ok_or(MechanicsError::UnknownIdentifierError(self.id.clone()))?
             .current;
 
         let mut pks = key_config.public_keys;
@@ -44,7 +44,7 @@ impl Identifier {
                 .known_events
                 .storage
                 .get_state(participant)
-                .ok_or(ControllerError::UnknownIdentifierError)?;
+                .ok_or(MechanicsError::UnknownIdentifierError(participant.clone()))?;
             pks.append(&mut state.clone().current.public_keys);
             npks.append(&mut state.clone().current.next_keys_data.next_key_hashes);
         }
@@ -59,21 +59,21 @@ impl Identifier {
         )?;
 
         let serialized_icp = String::from_utf8(icp.encode()?)
-            .map_err(|e| ControllerError::EventGenerationError(e.to_string()))?;
+            .map_err(|e| MechanicsError::EventGenerationError(e.to_string()))?;
 
         let mut exchanges = participants
             .iter()
             .map(|id| -> Result<_, _> {
                 let exn = event_generator::exchange(id, &icp, ForwardTopic::Multisig)?.encode()?;
-                String::from_utf8(exn).map_err(|_e| ControllerError::EventFormatError)
+                String::from_utf8(exn).map_err(|_e| MechanicsError::EventFormatError)
             })
-            .collect::<Result<Vec<String>, ControllerError>>()?;
+            .collect::<Result<Vec<String>, MechanicsError>>()?;
 
         if let Some(delegator) = delegator {
             let delegation_request = String::from_utf8(
                 event_generator::exchange(&delegator, &icp, ForwardTopic::Delegate)?.encode()?,
             )
-            .map_err(|_e| ControllerError::EventFormatError)?;
+            .map_err(|_e| MechanicsError::EventFormatError)?;
             exchanges.push(delegation_request);
         }
 
@@ -89,14 +89,14 @@ impl Identifier {
         group_event: &[u8],
         sig: SelfSigningPrefix,
         exchanges: Vec<(Vec<u8>, SelfSigningPrefix)>,
-    ) -> Result<IdentifierPrefix, ControllerError> {
+    ) -> Result<IdentifierPrefix, MechanicsError> {
         // Join icp event with signature
         let key_event =
-            parse_event_type(group_event).map_err(|_e| ControllerError::EventFormatError)?;
+            parse_event_type(group_event).map_err(|_e| MechanicsError::EventFormatError)?;
         let ke = if let EventType::KeyEvent(icp) = key_event {
             icp
         } else {
-            return Err(ControllerError::WrongEventTypeError);
+            return Err(MechanicsError::WrongEventTypeError);
         };
         let own_index = self.get_index(&ke.data)?;
         let group_prefix = ke.data.get_prefix();
@@ -122,12 +122,12 @@ impl Identifier {
         exchange: &[u8],
         exn_signature: SelfSigningPrefix,
         data_signature: IndexedSignature,
-    ) -> Result<(), ControllerError> {
+    ) -> Result<(), MechanicsError> {
         // Join exn messages with their signatures and send it to witness.
         let material_path = MaterialPath::to_path("-a".into());
         // let attached_sig = sigs;
         let parsed_exn =
-            parse_event_type(exchange).map_err(|_e| ControllerError::EventFormatError)?;
+            parse_event_type(exchange).map_err(|_e| MechanicsError::EventFormatError)?;
         if let EventType::Exn(exn) = parsed_exn {
             let Exchange::Fwd {
                 args: _,

@@ -9,6 +9,7 @@ use teliox::seal::{AttachedSourceSeal, EventSourceSeal};
 
 use crate::error::ControllerError;
 
+use super::mechanics::MechanicsError;
 use super::Identifier;
 
 impl Identifier {
@@ -31,7 +32,7 @@ impl Identifier {
             sn: vcp.get_sn(),
             event_digest: vcp.get_digest()?,
         });
-        let ixn = self.anchor_with_seal(&[seal])?;
+        let ixn = self.anchor_with_seal(&[seal]).unwrap();
         let source_seal = EventSourceSeal {
             sn: ixn.data.sn,
             digest: ixn.digest()?,
@@ -67,7 +68,7 @@ impl Identifier {
                     sn: iss.get_sn(),
                     event_digest: iss.get_digest()?,
                 });
-                let ixn = self.anchor_with_seal(&[seal])?;
+                let ixn = self.anchor_with_seal(&[seal]).unwrap();
 
                 let source_seal = EventSourceSeal {
                     sn: ixn.data.sn,
@@ -104,7 +105,7 @@ impl Identifier {
                     sn: rev.get_sn(),
                     event_digest: rev.get_digest()?,
                 });
-                let ixn = self.anchor_with_seal(&[seal])?;
+                let ixn = self.anchor_with_seal(&[seal]).unwrap();
 
                 let source_seal = EventSourceSeal {
                     sn: ixn.data.sn,
@@ -149,7 +150,7 @@ impl Identifier {
         issuer_id: &IdentifierPrefix,
         qry: TelQueryEvent,
         sig: SelfSigningPrefix,
-    ) -> Result<(), ControllerError> {
+    ) -> Result<(), MechanicsError> {
         let query = match &self.id {
             IdentifierPrefix::Basic(bp) => {
                 SignedTelQuery::new_nontrans(qry.clone(), bp.clone(), sig)
@@ -162,35 +163,36 @@ impl Identifier {
         let witness = self.known_events.get_current_witness_list(issuer_id)?[0].clone();
         let location = self
             .known_events
-            .get_loc_schemas(&IdentifierPrefix::Basic(witness))?[0]
+            .get_loc_schemas(&IdentifierPrefix::Basic(witness)).unwrap()[0]
             .clone();
         let tel_res = self
             .communication
             .tel_transport
             .send_query(query, location)
             .await
-            .map_err(|e| ControllerError::OtherError(e.to_string()))?;
+            .map_err(|e| MechanicsError::OtherError(e.to_string()))?;
         self.known_events
             .tel
-            .parse_and_process_tel_stream(tel_res.as_bytes())?;
+            .parse_and_process_tel_stream(tel_res.as_bytes())
+            .map_err(|e| MechanicsError::OtherError(e.to_string()))?;
 
         Ok(())
     }
 
-    pub async fn notify_backers(&self) -> Result<(), ControllerError> {
+    pub async fn notify_backers(&self) -> Result<(), MechanicsError> {
         let to_notify = self.known_events.tel.recently_added_events.get();
         let backers = self.known_events.get_current_witness_list(&self.id)?;
         for backer in backers {
             let location = self
                 .known_events
-                .get_loc_schemas(&IdentifierPrefix::Basic(backer))?[0]
+                .get_loc_schemas(&IdentifierPrefix::Basic(backer)).unwrap()[0]
                 .clone();
             for event in &to_notify {
                 self.communication
                     .tel_transport
                     .send_tel_event(event.clone(), location.clone())
                     .await
-                    .map_err(|e| ControllerError::OtherError(e.to_string()))?;
+                    .map_err(|e| MechanicsError::OtherError(e.to_string()))?;
             }
         }
         Ok(())

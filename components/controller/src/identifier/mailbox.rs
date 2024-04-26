@@ -1,26 +1,22 @@
 use futures::{StreamExt, TryStreamExt};
 use keri_core::{
-    actor::event_generator,
-    event::{
+    actor::event_generator, error::Error, event::{
         event_data::EventData,
         sections::seal::{EventSeal, Seal},
-    },
-    event_message::signed_event_message::{
+    }, event_message::signed_event_message::{
         Message, Notice, SignedEventMessage, SignedNontransferableReceipt,
-    },
-    mailbox::{exchange::ForwardTopic, MailboxResponse},
-    prefix::IdentifierPrefix,
+    }, mailbox::{exchange::ForwardTopic, MailboxResponse}, prefix::IdentifierPrefix
 };
 
 use crate::{error::ControllerError, mailbox_updating::ActionRequired};
 
-use super::Identifier;
+use super::{mechanics::MechanicsError, Identifier};
 
 impl Identifier {
     pub fn process_receipt(
         &self,
         receipt: &SignedNontransferableReceipt,
-    ) -> Result<(), ControllerError> {
+    ) -> Result<(), Error> {
         self.known_events
             .process(&Message::Notice(Notice::NontransferableRct(
                 receipt.clone(),
@@ -31,7 +27,7 @@ impl Identifier {
     pub fn process_own_mailbox(
         &self,
         mb: &MailboxResponse,
-    ) -> Result<Vec<ActionRequired>, ControllerError> {
+    ) -> Result<Vec<ActionRequired>, MechanicsError> {
         for rct in &mb.receipt {
             self.process_receipt(rct)?;
         }
@@ -52,7 +48,7 @@ impl Identifier {
         &self,
         groups: Vec<IdentifierPrefix>,
         mb: &MailboxResponse,
-    ) -> Result<Vec<ActionRequired>, ControllerError> {
+    ) -> Result<Vec<ActionRequired>, MechanicsError> {
         futures::stream::iter(&groups)
             .then(|group_id| self.process_group_mailbox(mb, group_id))
             .try_concat()
@@ -63,7 +59,7 @@ impl Identifier {
         &self,
         mb: &MailboxResponse,
         group_id: &IdentifierPrefix,
-    ) -> Result<Vec<ActionRequired>, ControllerError> {
+    ) -> Result<Vec<ActionRequired>, MechanicsError> {
         for rct in &mb.receipt {
             self.process_receipt(rct)?;
         }
@@ -84,7 +80,7 @@ impl Identifier {
     fn process_own_multisig(
         &self,
         event: &SignedEventMessage,
-    ) -> Result<ActionRequired, ControllerError> {
+    ) -> Result<ActionRequired, MechanicsError> {
         self.known_events
             .process(&Message::Notice(Notice::Event(event.clone())))?;
         let event = event.event_message.clone();
@@ -98,14 +94,14 @@ impl Identifier {
     async fn process_group_multisig(
         &self,
         event: &SignedEventMessage,
-    ) -> Result<(), ControllerError> {
+    ) -> Result<(), MechanicsError> {
         self.known_events
             .process(&Message::Notice(Notice::Event(event.clone())))?;
 
         self.publish(event).await
     }
 
-    async fn publish(&self, event: &SignedEventMessage) -> Result<(), ControllerError> {
+    async fn publish(&self, event: &SignedEventMessage) -> Result<(), MechanicsError> {
         let id = event.event_message.data.get_prefix();
         let fully_signed_event = self
             .known_events
@@ -152,7 +148,7 @@ impl Identifier {
     fn process_own_delegate(
         &self,
         event_to_confirm: &SignedEventMessage,
-    ) -> Result<Option<ActionRequired>, ControllerError> {
+    ) -> Result<Option<ActionRequired>, MechanicsError> {
         match event_to_confirm.event_message.data.get_event_data() {
             // delegating event
             EventData::Icp(_) | EventData::Rot(_) | EventData::Ixn(_) => {
@@ -181,7 +177,7 @@ impl Identifier {
         &self,
         event_to_confirm: &SignedEventMessage,
         group_id: &IdentifierPrefix,
-    ) -> Result<Option<ActionRequired>, ControllerError> {
+    ) -> Result<Option<ActionRequired>, MechanicsError> {
         match event_to_confirm.event_message.data.get_event_data() {
             // delegating event
             EventData::Ixn(ixn) => {
