@@ -147,11 +147,8 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
 
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(delegator_keyipair.sign(&qry.encode()?)?);
-        let ar = delegator.finalize_query(vec![(qry, signature)]).await?;
-        let ar = match ar {
-            QueryResponse::ActionRequired(ar) => ar,
-            _ => unreachable!()
-        };
+        let ar = delegator.finalize_mechanics_query(vec![(qry, signature)]).await?;
+
         assert_eq!(ar.len(), 1);
         match &ar[0] {
             ActionRequired::MultisigRequest(_, _) => unreachable!(),

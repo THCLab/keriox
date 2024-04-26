@@ -1,19 +1,14 @@
 use std::collections::HashSet;
 
-use crate::{error::ControllerError, mailbox_updating::ActionRequired};
-use keri_core::actor::error::ActorError;
+use crate::error::ControllerError;
 use keri_core::actor::prelude::HashFunctionCode;
-use keri_core::actor::simple_controller::ResponseError;
-use keri_core::transport::TransportError;
 use keri_core::{
     actor::{prelude::SerializationFormats, simple_controller::PossibleResponse},
     event::sections::seal::EventSeal,
-    mailbox::MailboxResponse,
-    oobi::Scheme,
-    prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
+    prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     query::{
         mailbox::QueryArgsMbx,
-        query_event::{LogsQueryArgs, QueryEvent, QueryRoute, SignedKelQuery},
+        query_event::{LogsQueryArgs, QueryEvent, QueryRoute},
     },
 };
 
@@ -23,7 +18,6 @@ use super::Identifier;
 pub enum QueryResponse {
     Updates,
     NoUpdates,
-    ActionRequired(Vec<ActionRequired>)
 }
 
 impl Identifier {
@@ -84,61 +78,10 @@ impl Identifier {
         &mut self,
         queries: Vec<(QueryEvent, SelfSigningPrefix)>,
     ) -> Result<QueryResponse, ControllerError> {
-        let self_id = self.id.clone();
-        let mut actions = Vec::new();
         let mut updates = QueryResponse::NoUpdates;
         let mut possibly_updated_ids: HashSet<IdentifierPrefix> = HashSet::new();
         for (qry, sig) in queries {
-            let (recipient, about_who, from_who) = match qry.get_route() {
-                QueryRoute::Logs {
-                    reply_route: _,
-                    args,
-                } => (args.src.clone(), Some(&args.i), Some(&self.id)),
-                QueryRoute::Ksn {
-                    reply_route: _,
-                    args,
-                } => (
-                    args.src.clone(),
-                    // .ok_or_else(|| {
-                    //     ControllerError::QueryArgumentError(
-                    //         "Missing query recipient identifier".into(),
-                    //     )
-                    // })?,
-                    None,
-                    None,
-                ),
-                QueryRoute::Mbx {
-                    reply_route: _,
-                    args,
-                } => (Some(args.src.clone()), Some(&args.i), Some(&args.pre)),
-            };
-            let query = match &self.id {
-                IdentifierPrefix::Basic(bp) => {
-                    SignedKelQuery::new_nontrans(qry.clone(), bp.clone(), sig)
-                }
-                _ => {
-                    let signatures = vec![IndexedSignature::new_both_same(sig, 0)];
-                    SignedKelQuery::new_trans(qry.clone(), self_id.clone(), signatures)
-                }
-            };
-            let res = self
-                .communication
-                .send_query_to(recipient.as_ref().unwrap(), Scheme::Http, query)
-                .await?;
-            // let res = match res {
-            //     Ok(res) => res,
-            //     Err(err) => {
-            //         match err {
-            //             ControllerError::TransportError(TransportError::RemoteError(ActorError::NoIdentState { prefix })) => {
-                             
-            //                 todo!();
-            //             },
-            //             _ => todo!(),
-            //         }
-            //     },
-            // }
-
-            match res {
+            match self.handle_query(&qry, sig).await? {
                 PossibleResponse::Kel(kel) => {
                     for event in kel {
                         let id = event.get_prefix();
@@ -147,38 +90,7 @@ impl Identifier {
                     }
                 }
                 PossibleResponse::Mbx(mbx) => {
-                    // only process if we actually asked about mailbox
-                    if let (Some(from_who), Some(about_who)) =
-                        (from_who.as_ref(), about_who.as_ref())
-                    {
-                        actions.append(
-                            &mut self
-                                .mailbox_response(&recipient.unwrap(), from_who, about_who, &mbx)
-                                .await?,
-                        );
-                        let witnesses = self
-                            .witnesses()
-                            .map(|bp| IdentifierPrefix::Basic(bp))
-                            .collect::<Vec<_>>();
-                        self.broadcast_receipts(&witnesses).await?;
-                        if !mbx.receipt.is_empty() {
-                            updates = QueryResponse::Updates;
-                        }
-                    }
-                    // // only process if we actually asked about mailbox
-                    // if let (Some(from_who), Some(about_who)) =
-                    //     (from_who.as_ref(), about_who.as_ref())
-                    // {
-                    //     actions.append(
-                    //         &mut self
-                    //             .mailbox_response(&recipient.unwrap(), from_who, about_who, &mbx
-                    //             .await?,
-                    //     );
-                    //     if !mbx.receipt.is_empty() {
-                    //         updates = QueryResponse::Updates;
-                    //     }
-                    // }
-                    todo!()
+                    panic!("Unexpected response");
                 }
                 PossibleResponse::Ksn(_) => todo!(),
             };
@@ -193,36 +105,9 @@ impl Identifier {
                 updates = QueryResponse::Updates
             }
         }
-        if !actions.is_empty() {
-            Ok(QueryResponse::ActionRequired(actions))
-        } else {
             Ok(updates)
-        }
     }
-
-    // async fn mailbox_response(
-    //     &self,
-    //     recipient: &IdentifierPrefix,
-    //     from_who: &IdentifierPrefix,
-    //     about_who: &IdentifierPrefix,
-    //     res: &MailboxResponse,
-    // ) -> Result<Vec<ActionRequired>, ControllerError> {
-    //     let req = if from_who == about_who {
-    //         // process own mailbox
-    //         let req = self.process_own_mailbox(res)?;
-    //         self.query_cache
-    //             .update_last_asked_index(recipient.clone(), res)?;
-    //         req
-    //     } else {
-    //         // process group mailbox
-    //         let group_req = self.process_group_mailbox(res, about_who).await?;
-    //         self.query_cache
-    //             .update_last_asked_group_index(recipient.clone(), res)?;
-    //         group_req
-    //     };
-    //     Ok(req)
-    // } 
-
+    
     fn query_log(
         &self,
         seal: &EventSeal,

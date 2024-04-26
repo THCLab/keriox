@@ -2,8 +2,7 @@ use std::{collections::HashMap, net::Ipv4Addr, sync::Arc};
 
 use anyhow::Result;
 use keri_controller::{
-    config::ControllerConfig, controller::Controller, error::ControllerError,
-    mailbox_updating::ActionRequired, Oobi,
+    config::ControllerConfig, controller::Controller, identifier::mechanics::MechanicsError, mailbox_updating::ActionRequired, Oobi
 };
 use keri_core::{
     oobi::{EndRole, LocationScheme, Role},
@@ -214,11 +213,7 @@ async fn test_multisig() -> Result<()> {
 
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(km2.sign(&qry.encode()?)?);
-        let res = identifier2.finalize_query(vec![(qry, signature)]).await?;
-        let action_required = match res {
-            keri_controller::identifier::query::QueryResponse::ActionRequired(ar) => ar,
-            _ => {unreachable!()}
-        };
+        let action_required = identifier2.finalize_mechanics_query(vec![(qry, signature)]).await?;
 
         match &action_required[0] {
             ActionRequired::DelegationRequest(_, _) => {
@@ -261,7 +256,7 @@ async fn test_multisig() -> Result<()> {
     let group_state_2 = identifier2.find_state(&group_id);
     assert!(matches!(
         group_state_2,
-        Err(ControllerError::UnknownIdentifierError)
+        Err(MechanicsError::UnknownIdentifierError(_))
     ));
 
     // Query to have receipt of group inception
