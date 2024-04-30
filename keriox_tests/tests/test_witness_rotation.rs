@@ -99,7 +99,7 @@ async fn test_witness_rotation() -> Result<(), ControllerError> {
         .finalize_event(rotation_event.as_bytes(), signature)
         .await?;
 
-    let cached_witnesses = &identifier.witnesses();
+    let cached_witnesses = &identifier.witnesses().collect::<Vec<_>>();
     // dbg!(&cached_witnesses);
     let state = identifier.find_state(identifier.id())?;
     // Missing witness receipts, so rotation is not accepted yet.

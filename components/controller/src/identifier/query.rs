@@ -69,7 +69,7 @@ impl Identifier {
     /// process its response. If user action is needed to finalize process,
     /// returns proper notification.
     pub async fn finalize_query(
-        &self,
+        &mut self,
         queries: Vec<(QueryEvent, SelfSigningPrefix)>,
     ) -> Result<Vec<ActionRequired>, ControllerError> {
         let self_id = self.id.clone();
@@ -128,6 +128,11 @@ impl Identifier {
                                 .mailbox_response(&recipient.unwrap(), from_who, about_who, &mbx)
                                 .await?,
                         );
+                        let witnesses = self
+                            .witnesses()
+                            .map(|bp| IdentifierPrefix::Basic(bp))
+                            .collect::<Vec<_>>();
+                        self.broadcast_receipts(&witnesses).await?;
                     }
                 }
                 PossibleResponse::Ksn(_) => todo!(),

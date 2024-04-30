@@ -121,8 +121,12 @@ impl Identifier {
         self.known_events.current_public_keys(&self.id)
     }
 
-    pub fn witnesses(&self) -> Vec<BasicPrefix> {
-        self.cached_state.witness_config.witnesses.clone()
+    pub fn witnesses(&self) -> impl Iterator<Item = BasicPrefix> {
+        self.cached_state
+            .witness_config
+            .witnesses
+            .clone()
+            .into_iter()
     }
 
     pub fn watchers(&self) -> Result<Vec<IdentifierPrefix>, ControllerError> {

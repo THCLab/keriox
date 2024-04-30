@@ -1,4 +1,5 @@
 use keri_core::{
+    error::Error,
     event_message::{
         signature::Nontransferable,
         signed_event_message::{Message, Notice, SignedNontransferableReceipt},
@@ -80,7 +81,7 @@ impl Identifier {
     fn get_wit_ids_of_rct(
         &self,
         rct: &SignedNontransferableReceipt,
-    ) -> Result<Vec<BasicPrefix>, ControllerError> {
+    ) -> Result<Vec<BasicPrefix>, Error> {
         let mut wit_ids = Vec::new();
         for sig in &rct.signatures {
             match sig {
@@ -213,8 +214,6 @@ mod test {
         }
 
         assert_eq!(identifier.notify_witnesses().await?, 0);
-        assert_eq!(identifier.broadcast_receipts(&wit_ids).await?, 2);
-        assert_eq!(identifier.broadcast_receipts(&wit_ids).await?, 0);
 
         assert!(matches!(
             witness1.witness_data.event_storage.get_kel_messages_with_receipts(&identifier.id, None)?.unwrap().as_slice(),
