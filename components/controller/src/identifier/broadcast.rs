@@ -216,7 +216,7 @@ mod test {
             let act = identifier
                 .finalize_mechanics_query(vec![(qry, signature)])
                 .await?;
-            matches!(act, QueryResponse::Updates);
+            assert!(act.is_empty());
         }
 
         assert_eq!(identifier.notify_witnesses().await?, 0);

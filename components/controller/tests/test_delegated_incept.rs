@@ -79,7 +79,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(delegatee_keypair.sign(&qry.encode()?)?);
         delegatee_identifier
-            .finalize_query(vec![(qry, signature)])
+            .finalize_mechanics_query(vec![(qry, signature)])
             .await?;
     }
     println!("Delegatee: {}", &delegatee_identifier.id());
@@ -108,8 +108,10 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
 
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(delegator_keyipair.sign(&qry.encode()?)?);
-        let ar = delegator.finalize_query(vec![(qry, signature)]).await?;
-        matches!(ar, QueryResponse::Updates);
+        let ar = delegator
+            .finalize_mechanics_query(vec![(qry, signature)])
+            .await?;
+        assert!(ar.is_empty());
     }
 
     // Generate delegated inception
@@ -176,8 +178,10 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
                 for qry in query {
                     let signature =
                         SelfSigningPrefix::Ed25519Sha512(delegator_keyipair.sign(&qry.encode()?)?);
-                    let action_required = delegator.finalize_query(vec![(qry, signature)]).await?;
-                    matches!(action_required, QueryResponse::Updates);
+                    let action_required = delegator
+                        .finalize_mechanics_query(vec![(qry, signature)])
+                        .await?;
+                    assert!(action_required.is_empty());
                 }
                 let data_signature = IndexedSignature::new_both_same(signature_ixn, 0);
 
@@ -196,8 +200,10 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     let query = delegator.query_mailbox(delegator.id(), &[witness_id_basic.clone()])?;
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(delegator_keyipair.sign(&qry.encode()?)?);
-        let ar = delegator.finalize_query(vec![(qry, signature)]).await?;
-        matches!(ar, QueryResponse::Updates);
+        let ar = delegator
+            .finalize_mechanics_query(vec![(qry, signature)])
+            .await?;
+        assert_eq!(ar.len(), 1);
     }
 
     // Process delegator's icp by identifier who'll request delegation.
@@ -218,9 +224,9 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(delegatee_keypair.sign(&qry.encode()?)?);
         let ar = delegatee_identifier
-            .finalize_query(vec![(qry, signature)])
+            .finalize_mechanics_query(vec![(qry, signature)])
             .await?;
-        matches!(ar, QueryResponse::Updates);
+        assert!(ar.is_empty())
     }
 
     let state = delegatee_identifier.find_state(delegator.id())?;
@@ -237,9 +243,9 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(delegatee_keypair.sign(&qry.encode()?)?);
         let ar = delegatee_identifier
-            .finalize_query(vec![(qry, signature)])
+            .finalize_mechanics_query(vec![(qry, signature)])
             .await?;
-        matches!(ar, QueryResponse::Updates);
+        assert!(ar.is_empty());
     }
 
     // Child kel is accepted

@@ -15,7 +15,10 @@ use keri_core::{
     event_message::signed_event_message::{Notice, Op},
     prefix::IdentifierPrefix,
     processor::escrow::EscrowConfig,
-    query::{query_event::SignedKelQuery, reply_event::SignedReply},
+    query::{
+        query_event::{SignedKelQuery, SignedQueryMessage},
+        reply_event::SignedReply,
+    },
     transport::test::{TestActorMap, TestTransport},
 };
 use tempfile::Builder;
@@ -262,7 +265,9 @@ pub fn watcher_forward_ksn() -> Result<(), Error> {
     watcher.process_reply(witness_oobi).unwrap();
 
     let mut wrong_query = query.clone();
-    if let Op::Query(SignedKelQuery { signature, .. }) = &mut wrong_query {
+    if let Op::Query(SignedQueryMessage::KelQuery(SignedKelQuery { signature, .. })) =
+        &mut wrong_query
+    {
         match signature {
             keri_core::event_message::signature::Signature::Transferable(_, sig) => {
                 if let SelfSigningPrefix::Ed25519Sha512(ref mut bytes) = &mut sig[0].signature {

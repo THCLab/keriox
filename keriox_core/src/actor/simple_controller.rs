@@ -58,7 +58,7 @@ use crate::oobi::{OobiManager, Role};
 use super::parse_reply_stream;
 #[cfg(feature = "query")]
 use crate::query::{
-    query_event::{QueryEvent, QueryRoute, SignedKelQuery},
+    query_event::{QueryEvent, QueryRoute, SignedKelQuery, SignedQueryMessage},
     reply_event::SignedReply,
 };
 
@@ -326,11 +326,13 @@ impl<K: KeyManager> SimpleController<K> {
             0,
         );
         // Qry message signed by Bob
-        Ok(Op::Query(SignedKelQuery::new_trans(
-            qry,
-            self.prefix().clone(),
-            vec![signature],
-        )))
+        Ok(Op::Query(
+            crate::query::query_event::SignedQueryMessage::KelQuery(SignedKelQuery::new_trans(
+                qry,
+                self.prefix().clone(),
+                vec![signature],
+            )),
+        ))
     }
 
     pub fn add_watcher(&self, watcher_id: &IdentifierPrefix) -> Result<Op, Error> {
@@ -473,7 +475,7 @@ impl<K: KeyManager> SimpleController<K> {
                 Message::Op(op) => match op {
                     Op::Exchange(exn) => process_signed_exn(exn.to_owned(), &self.storage),
                     Op::Reply(rpy) => process_signed_oobi(&rpy, &self.oobi_manager, &self.storage),
-                    Op::Query(_) | Op::MailboxQuery(_) => todo!(),
+                    Op::Query(_) => todo!(),
                 },
             })
             .partition(Result::is_ok);
@@ -698,7 +700,7 @@ impl<K: KeyManager> SimpleController<K> {
     }
 
     #[cfg(feature = "mailbox")]
-    pub fn query_mailbox(&self, witness: &BasicPrefix) -> SignedMailboxQuery {
+    pub fn query_mailbox(&self, witness: &BasicPrefix) -> SignedQueryMessage {
         use crate::query::mailbox::{
             MailboxQuery, MailboxRoute, QueryArgsMbx, QueryTopics, SignedMailboxQuery,
         };
@@ -736,11 +738,11 @@ impl<K: KeyManager> SimpleController<K> {
         )];
         let mbx_msg =
             SignedMailboxQuery::new_trans(qry_msg, self.prefix.clone().clone(), signatures);
-        mbx_msg
+        SignedQueryMessage::MailboxQuery(mbx_msg)
     }
 
     #[cfg(feature = "mailbox")]
-    pub fn query_groups_mailbox(&self, witness: &BasicPrefix) -> Vec<SignedMailboxQuery> {
+    pub fn query_groups_mailbox(&self, witness: &BasicPrefix) -> Vec<SignedQueryMessage> {
         use crate::query::mailbox::{MailboxQuery, MailboxRoute, QueryArgsMbx, QueryTopics};
 
         self.groups
@@ -777,7 +779,11 @@ impl<K: KeyManager> SimpleController<K> {
                     SelfSigningPrefix::Ed25519Sha512(signature),
                     0,
                 )];
-                SignedMailboxQuery::new_trans(qry_msg, self.prefix.clone(), signatures)
+                SignedQueryMessage::MailboxQuery(SignedMailboxQuery::new_trans(
+                    qry_msg,
+                    self.prefix.clone(),
+                    signatures,
+                ))
             })
             .collect()
     }

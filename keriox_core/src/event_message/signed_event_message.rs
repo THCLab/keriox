@@ -12,7 +12,7 @@ use crate::{
         KeyEvent,
     },
     prefix::{IdentifierPrefix, IndexedSignature},
-    query::mailbox::SignedMailboxQuery,
+    query::{mailbox::SignedMailboxQuery, query_event::SignedQueryMessage},
     state::{EventSemantics, IdentifierState},
 };
 
@@ -43,9 +43,7 @@ pub enum Op {
     #[cfg(feature = "oobi")]
     Reply(SignedReply),
     #[cfg(feature = "query")]
-    Query(SignedKelQuery),
-    #[cfg(feature = "query")]
-    MailboxQuery(SignedMailboxQuery),
+    Query(SignedQueryMessage),
 }
 
 impl From<Message> for ParsedData {
@@ -76,8 +74,8 @@ impl From<Op> for ParsedData {
             Op::Reply(ksn) => ParsedData::from(ksn),
             #[cfg(feature = "query")]
             Op::Query(qry) => ParsedData::from(qry),
-            #[cfg(feature = "query")]
-            Op::MailboxQuery(qry) => ParsedData::from(qry),
+            // #[cfg(feature = "query")]
+            // Op::MailboxQuery(qry) => ParsedData::from(qry),
             #[cfg(feature = "mailbox")]
             Op::Exchange(exn) => ParsedData::from(exn),
         }
@@ -116,11 +114,10 @@ impl Op {
         match self {
             #[cfg(feature = "oobi")]
             Op::Reply(reply) => reply.reply.get_prefix(),
-            Op::Query(qry) => qry.query.get_prefix(),
+            Op::Query(qry) => qry.prefix(),
             #[cfg(feature = "mailbox")]
             // returns exchange message recipient id
             Op::Exchange(exn) => exn.exchange_message.data.data.get_prefix(),
-            Op::MailboxQuery(qry) => qry.query.get_prefix(),
         }
     }
 }

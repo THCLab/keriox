@@ -41,6 +41,8 @@ mod test_query {
         let qry_str = r#"{"v":"KERI10JSON0000c9_","t":"qry","d":"ENp5aP1sEyT0tYa-Jz6sTlrhW82vp96_j5UKevVB7VEX","dt":"2022-10-25T11:40:27.023790+00:00","r":"ksn","rr":"","q":{"i":"ENRc2DeK48BKJ3ST8mypvngVwEAxw9rZr_GPNP25TmQ_"}}-HABENRc2DeK48BKJ3ST8mypvngVwEAxw9rZr_GPNP25TmQ_-AABAABdEDGCtpvQl_zNlDMCnj9JwKHDKySapQRyzcAuo53DP7NPX5fl-GJYrfqXf3PPTF9tbxWWOUKaWurW5M1EVyIJ"#;
 
         let parsed = parse_event_stream(qry_str.as_bytes()).unwrap();
+        // let signed_query = parsed.get(0).unwrap().clone();
+        // if let Message::Op(Op::Query(signed_query)) = parsed.get(0).unwrap().clone() {
         if let Message::Op(Op::Query(signed_query)) = parsed.get(0).unwrap().clone() {
             let r = process_signed_query(signed_query, &storage)?;
 

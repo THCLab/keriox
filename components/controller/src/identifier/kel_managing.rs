@@ -134,6 +134,7 @@ impl Identifier {
             EventType::Qry(_) => todo!(),
             EventType::Receipt(_) => todo!(),
             EventType::Exn(_) => todo!(),
+            EventType::MailboxQry(_) => todo!(),
         }
     }
 

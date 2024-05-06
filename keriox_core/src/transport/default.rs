@@ -50,7 +50,7 @@ where
                 }
                 Message::Op(op) => match op {
                     #[cfg(feature = "query")]
-                    Op::Query(_) | Op::MailboxQuery(_) => {
+                    Op::Query(_) => {
                         panic!("can't send query in send_message");
                     }
                     #[cfg(feature = "query")]

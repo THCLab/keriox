@@ -4,7 +4,7 @@ use said::version::format::SerializationFormats;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    actor::prelude::Message,
+    actor::{parse_query_stream, prelude::Message},
     error::Error,
     event_message::{
         msg::KeriEvent,
@@ -17,7 +17,7 @@ use crate::{
     query::mailbox::QueryArgsMbx,
 };
 
-use super::mailbox::SignedMailboxQuery;
+use super::mailbox::{MailboxQuery, SignedMailboxQuery};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(tag = "r")]
@@ -86,17 +86,37 @@ impl Typeable for QueryRoute {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
 pub enum SignedQueryMessage {
     KelQuery(SignedKelQuery),
     MailboxQuery(SignedMailboxQuery),
 }
 
+impl SignedQueryMessage {
+    pub fn signature(&self) -> Signature {
+        match self {
+            SignedQueryMessage::KelQuery(qry) => qry.signature.clone(),
+            SignedQueryMessage::MailboxQuery(qry) => qry.signature.clone(),
+        }
+    }
+
+    pub fn prefix(&self) -> IdentifierPrefix {
+        match self {
+            SignedQueryMessage::KelQuery(qry) => qry.query.get_prefix(),
+            SignedQueryMessage::MailboxQuery(qry) => match &qry.query.data.data {
+                super::mailbox::MailboxRoute::Mbx {
+                    reply_route: _,
+                    args,
+                } => args.i.clone(),
+            },
+        }
+    }
+}
+
 impl From<SignedQueryMessage> for Message {
     fn from(value: SignedQueryMessage) -> Self {
-        match value {
-            SignedQueryMessage::KelQuery(qry) => Message::Op(Op::Query(qry)),
-            SignedQueryMessage::MailboxQuery(qry) => Message::Op(Op::MailboxQuery(qry)),
-        }
+        Message::Op(Op::Query(value))
     }
 }
 
@@ -157,12 +177,17 @@ pub fn signed_query_parse() {
         Message::Notice(_) => todo!(),
         Message::Op(Op::Query(sq)) => {
             assert!(matches!(
-                sq.signature,
+                sq.signature(),
                 Signature::Transferable(SignerData::LastEstablishment(_), _)
             ))
         }
         _ => unreachable!(),
     };
+}
+#[test]
+fn test_query_deserialize2() {
+    let input_query = r#"{"v":"KERI10JSON00018e_","t":"qry","d":"EKzixWgm8tbppUuomNpgtXl4ACJoGvCbN06AIx_u3dfo","dt":"2024-05-06T14:32:59.886055+00:00","r":"mbx","rr":"","q":{"pre":"EASI5JckejnF6SAQxKSz2DHJy_oE5MKGS17GypPJ34Yd","topics":{"/receipt":0,"/replay":0,"/reply":0,"/multisig":0,"/credential":0,"/delegate":0},"i":"EASI5JckejnF6SAQxKSz2DHJy_oE5MKGS17GypPJ34Yd","src":"BKCOy7psittpzQMUkJ3hkdtk0x5PsyCthc5cvDcbwhn3"}}"#; //-HABEASI5JckejnF6SAQxKSz2DHJy_oE5MKGS17GypPJ34Yd-AABAAA5MnFbTLKYSRzXG0wtfuuDj80Um7h_tLhoWDGKam9Q89Ifr3NbE01XSONXZ2gWUL4YPEaQRI5VYAR6brZVOVQF"#;
+    let qr: MailboxQuery = serde_json::from_str(input_query).unwrap();
 }
 
 #[test]

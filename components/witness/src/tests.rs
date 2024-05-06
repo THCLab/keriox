@@ -21,7 +21,7 @@ use keri_core::{
         basic_processor::BasicProcessor, escrow::EscrowConfig, event_storage::EventStorage,
         Processor,
     },
-    query::query_event::LogsQueryArgs,
+    query::query_event::{LogsQueryArgs, SignedQueryMessage},
     signer::{CryptoBox, Signer},
 };
 use tempfile::Builder;
@@ -341,7 +341,11 @@ fn test_qry_rpy() -> Result<(), ActorError> {
         0,
     );
     // Qry message signed by Bob
-    let query = SignedKelQuery::new_trans(qry, bob_pref.to_owned(), vec![signature]);
+    let query = SignedQueryMessage::KelQuery(SignedKelQuery::new_trans(
+        qry,
+        bob_pref.to_owned(),
+        vec![signature],
+    ));
 
     let response = witness.process_query(query)?;
 
@@ -384,7 +388,11 @@ fn test_qry_rpy() -> Result<(), ActorError> {
         0,
     );
     // Qry message signed by Bob
-    let query = SignedKelQuery::new_trans(qry, bob_pref.to_owned(), vec![signature]);
+    let query = SignedQueryMessage::KelQuery(SignedKelQuery::new_trans(
+        qry,
+        bob_pref.to_owned(),
+        vec![signature],
+    ));
 
     let response = witness.process_query(query)?;
 
@@ -695,9 +703,11 @@ fn test_invalid_notice() {
     for controller in controllers {
         let mbx_msg = controller.query_mailbox(&witness.prefix);
         let mbx_msg = Message::Op(Op::Query(mbx_msg)).to_cesr().unwrap();
+        println!("{}", String::from_utf8(mbx_msg.clone()).unwrap());
         let result = witness.parse_and_process_queries(&mbx_msg);
 
         // should not be able to query because the inception events didn't go through
+        dbg!(&result);
         assert!(matches!(
             result,
             Err(ActorError::QueryError(SignedQueryError::KeriError(
@@ -1049,10 +1059,7 @@ pub fn test_delegated_multisig() -> Result<(), ActorError> {
         // Send it to witness
         witness.process_notice(Notice::Event(ixn.clone()))?;
 
-        let state = witness
-            .event_storage
-            .get_state(delegator.prefix())
-            .unwrap();
+        let state = witness.event_storage.get_state(delegator.prefix()).unwrap();
         assert_eq!(state.sn, 1);
     };
 

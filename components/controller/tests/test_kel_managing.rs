@@ -130,7 +130,7 @@ async fn test_kel_managing_with_witness() -> Result<(), ControllerError> {
     for qry in queries_to_sign {
         let signature = SelfSigningPrefix::Ed25519Sha512(km.sign(&qry.encode().unwrap()).unwrap());
         identifier
-            .finalize_query(vec![(qry, signature)])
+            .finalize_mechanics_query(vec![(qry, signature)])
             .await
             .unwrap();
     }
@@ -166,7 +166,7 @@ async fn test_kel_managing_with_witness() -> Result<(), ControllerError> {
     {
         let signature = SelfSigningPrefix::Ed25519Sha512(km.sign(&qry.encode().unwrap()).unwrap());
         identifier
-            .finalize_query(vec![(qry, signature)])
+            .finalize_mechanics_query(vec![(qry, signature)])
             .await
             .unwrap();
     }

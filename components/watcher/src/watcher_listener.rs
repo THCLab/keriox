@@ -247,7 +247,7 @@ mod test {
         event_message::signed_event_message::{Message, Op},
         oobi::{Oobi, Role},
         prefix::IdentifierPrefix,
-        query::query_event::{QueryRoute, SignedKelQuery},
+        query::query_event::{QueryRoute, SignedKelQuery, SignedQueryMessage},
     };
 
     #[async_trait::async_trait]
@@ -280,28 +280,34 @@ mod test {
 
             Ok(())
         }
-        async fn send_query(&self, query: SignedKelQuery) -> Result<PossibleResponse, ActorError> {
+        async fn send_query(
+            &self,
+            query: SignedQueryMessage,
+        ) -> Result<PossibleResponse, ActorError> {
             let payload =
-                String::from_utf8(Message::Op(Op::Query(query.clone())).to_cesr().unwrap())
-                    .unwrap();
+                String::from_utf8(Message::from(query.clone()).to_cesr().unwrap()).unwrap();
             let data = actix_web::web::Data::new(self.watcher_data.clone());
             let resp = super::http_handlers::process_query(Bytes::from(payload), data)
                 .await
                 .map_err(|err| err.0)?;
             let resp = resp.into_body().try_into_bytes().unwrap();
-            match query.query.get_route() {
-                QueryRoute::Ksn { .. } => {
-                    let resp = parse_op_stream(&resp).unwrap();
-                    let resp = resp.into_iter().next().unwrap();
-                    let Op::Reply(reply) = resp else {
-                        panic!("wrong response type")
-                    };
-                    Ok(PossibleResponse::Ksn(reply))
+            if let SignedQueryMessage::KelQuery(qry) = query {
+                match qry.query.get_route() {
+                    QueryRoute::Ksn { .. } => {
+                        let resp = parse_op_stream(&resp).unwrap();
+                        let resp = resp.into_iter().next().unwrap();
+                        let Op::Reply(reply) = resp else {
+                            panic!("wrong response type")
+                        };
+                        Ok(PossibleResponse::Ksn(reply))
+                    }
+                    QueryRoute::Logs { .. } => {
+                        let log = parse_event_stream(&resp).unwrap();
+                        Ok(PossibleResponse::Kel(log))
+                    }
                 }
-                QueryRoute::Logs { .. } => {
-                    let log = parse_event_stream(&resp).unwrap();
-                    Ok(PossibleResponse::Kel(log))
-                } 
+            } else {
+                panic!("unexpected query type")
             }
         }
         async fn request_loc_scheme(&self, eid: IdentifierPrefix) -> Result<Vec<Op>, ActorError> {

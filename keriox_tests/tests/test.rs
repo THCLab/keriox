@@ -5,7 +5,7 @@ use keri_controller::{
     CryptoBox, EndRole, IdentifierPrefix, KeyManager, LocationScheme, Oobi, SelfSigningPrefix,
 };
 use keri_core::processor::validator::VerificationError;
-use keri_tests::example::{first_witness_data, second_witness_data, watcher_data};
+use keri_tests::settings::{first_witness_data, second_witness_data, watcher_data};
 use tempfile::Builder;
 
 #[async_std::test]

@@ -16,7 +16,7 @@ use keri_core::{
         notification::JustNotification,
     },
     query::{
-        query_event::{LogsQueryArgs, QueryEvent, QueryRoute, SignedKelQuery},
+        query_event::{LogsQueryArgs, QueryEvent, QueryRoute, SignedKelQuery, SignedQueryMessage},
         reply_event::{ReplyEvent, ReplyRoute, SignedReply},
         ReplyType,
     },
@@ -182,7 +182,8 @@ impl WatcherData {
 
     pub async fn process_op(&self, op: Op) -> Result<Option<PossibleResponse>, ActorError> {
         match op {
-            Op::Query(qry) => Ok(self.process_query(qry).await?),
+            Op::Query(SignedQueryMessage::KelQuery(qry)) => Ok(self.process_query(qry).await?),
+            Op::Query(SignedQueryMessage::MailboxQuery(_qry)) => todo!(),
             Op::Reply(rpy) => {
                 self.process_reply(rpy)?;
                 Ok(None)
@@ -466,9 +467,16 @@ impl WatcherData {
     ) -> Result<Vec<PossibleResponse>, ActorError> {
         let mut responses = Vec::new();
         for query in parse_query_stream(input_stream)? {
-            let result = self.process_query(query).await?;
-            if let Some(response) = result {
-                responses.push(response);
+            match query {
+                keri_core::query::query_event::SignedQueryMessage::KelQuery(kqry) => {
+                    let result = self.process_query(kqry).await?;
+                    if let Some(response) = result {
+                        responses.push(response);
+                    }
+                }
+                keri_core::query::query_event::SignedQueryMessage::MailboxQuery(_mqry) => {
+                    unimplemented!()
+                }
             }
         }
         Ok(responses)
@@ -519,7 +527,13 @@ impl WatcherData {
             None => return Err(ActorError::NoLocation { id: wit_id }),
         };
 
-        let response = self.transport.send_query(loc, query).await?;
+        let response = self
+            .transport
+            .send_query(
+                loc,
+                keri_core::query::query_event::SignedQueryMessage::KelQuery(query),
+            )
+            .await?;
 
         Ok(response)
     }

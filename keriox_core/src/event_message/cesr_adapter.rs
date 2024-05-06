@@ -16,7 +16,10 @@ use crate::{
         sections::seal::{EventSeal, SourceSeal},
         KeyEvent,
     },
-    query::{mailbox::SignedMailboxQuery, query_event::SignedQueryMessage},
+    query::{
+        mailbox::{MailboxQuery, SignedMailboxQuery},
+        query_event::SignedQueryMessage,
+    },
 };
 
 #[cfg(any(feature = "query", feature = "oobi"))]
@@ -74,6 +77,8 @@ pub enum EventType {
     Exn(ExchangeMessage),
     #[cfg(feature = "query")]
     Qry(QueryEvent),
+    #[cfg(feature = "query")]
+    MailboxQry(MailboxQuery),
     #[cfg(any(feature = "query", feature = "oobi"))]
     Rpy(ReplyEvent),
 }
@@ -89,6 +94,7 @@ impl EventType {
             EventType::Rpy(rpy) => rpy.encode(),
             #[cfg(feature = "mailbox")]
             EventType::Exn(exn) => exn.encode(),
+            EventType::MailboxQry(qry) => qry.encode(),
         }
     }
 }
@@ -261,6 +267,9 @@ impl TryFrom<ParsedData> for Message {
             EventType::Rpy(rpy) => Message::Op(signed_reply(rpy, value.attachments)?),
             #[cfg(feature = "mailbox")]
             EventType::Exn(exn) => Message::Op(signed_exchange(exn, value.attachments)?),
+            EventType::MailboxQry(qry) => {
+                Message::Op(signed_management_query(qry, value.attachments)?)
+            }
         };
         Ok(msg)
     }
@@ -289,6 +298,8 @@ impl TryFrom<ParsedData> for Op {
         match et {
             #[cfg(feature = "query")]
             EventType::Qry(qry) => signed_query(qry, value.attachments),
+            #[cfg(feature = "query")]
+            EventType::MailboxQry(qry) => signed_management_query(qry, value.attachments),
             #[cfg(any(feature = "query", feature = "oobi"))]
             EventType::Rpy(rpy) => signed_reply(rpy, value.attachments),
             #[cfg(feature = "mailbox")]
@@ -306,8 +317,8 @@ impl TryFrom<ParsedData> for SignedQueryMessage {
 
     fn try_from(value: ParsedData) -> Result<Self, Self::Error> {
         match Op::try_from(value)? {
-            Op::Query(qry) => Ok(SignedQueryMessage::KelQuery(qry)),
-            Op::MailboxQuery(qry) => Ok(SignedQueryMessage::MailboxQuery(qry)),
+            Op::Query(qry) => Ok(qry),
+            // Op::MailboxQuery(qry) => Ok(SignedQueryMessage::MailboxQuery(qry)),
             _ => Err(ParseError::WrongEventType(
                 "Cannot convert SignedEventData to SignedQuery".to_string(),
             )),
@@ -388,14 +399,37 @@ fn signed_query(qry: QueryEvent, mut attachments: Vec<Group>) -> Result<Op, Pars
         .pop()
         .ok_or_else(|| ParseError::AttachmentError("Missing attachment".into()))?;
     let sigs = get_signatures(att)?;
-    Ok(Op::Query(SignedKelQuery {
+    let qry = SignedQueryMessage::KelQuery(SignedKelQuery {
         query: qry,
         // TODO what if more than one?
         signature: sigs
             .get(0)
             .ok_or(ParseError::AttachmentError("Missing attachment".into()))?
             .clone(),
-    }))
+    });
+    Ok(Op::Query(qry))
+}
+
+#[cfg(feature = "query")]
+fn signed_management_query(
+    qry: MailboxQuery,
+    mut attachments: Vec<Group>,
+) -> Result<Op, ParseError> {
+    use super::signature::get_signatures;
+
+    let att = attachments
+        .pop()
+        .ok_or_else(|| ParseError::AttachmentError("Missing attachment".into()))?;
+    let sigs = get_signatures(att)?;
+    let qry = SignedQueryMessage::MailboxQuery(SignedMailboxQuery {
+        query: qry,
+        // TODO what if more than one?
+        signature: sigs
+            .get(0)
+            .ok_or(ParseError::AttachmentError("Missing attachment".into()))?
+            .clone(),
+    });
+    Ok(Op::Query(qry))
 }
 
 fn signed_key_event(

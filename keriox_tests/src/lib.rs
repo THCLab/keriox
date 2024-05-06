@@ -80,10 +80,10 @@ pub async fn setup_identifier(
             verifier_keypair.sign(&qry.encode().unwrap()).unwrap(),
         );
         let act = verifier
-            .finalize_query(vec![(qry, signature)])
+            .finalize_mechanics_query(vec![(qry, signature)])
             .await
             .unwrap();
-        matches!(act, QueryResponse::Updates);
+        // matches!(act, QueryResponse::Updates);
     }
     (verifier, verifier_keypair, verifier_controller)
 }

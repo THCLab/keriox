@@ -198,7 +198,6 @@ impl KnownEvents {
                     None
                 }
                 Op::Exchange(_) => todo!(),
-                Op::MailboxQuery(_) => todo!(),
             },
             Message::Notice(notice) => {
                 self.processor.process_notice(&notice)?;

@@ -124,7 +124,6 @@ mod test {
                             .await
                             .map_err(|err| err.0)?;
                     }
-                    Op::MailboxQuery(_) => {}
                     Op::Reply(_) => {
                         super::http_handlers::process_reply(payload, data)
                             .await
@@ -144,21 +143,10 @@ mod test {
             &self,
             query: SignedQueryMessage,
         ) -> Result<PossibleResponse, ActorError> {
-            // let payload =
-            //     String::from_utf8(Message::Op(Op::Query(query.clone())).to_cesr().unwrap())
-            //         .unwrap();
-            let payload = match &query {
-                SignedQueryMessage::KelQuery(kqry) => {
-                    String::from_utf8(Message::Op(Op::Query(kqry.clone())).to_cesr().unwrap())
-                        .unwrap()
-                }
-                SignedQueryMessage::MailboxQuery(mqry) => String::from_utf8(
-                    Message::Op(Op::MailboxQuery(mqry.clone()))
-                        .to_cesr()
-                        .unwrap(),
-                )
-                .unwrap(),
-            };
+            let payload =
+                String::from_utf8(Message::Op(Op::Query(query.clone())).to_cesr().unwrap())
+                    .unwrap();
+
             let data = actix_web::web::Data::new(self.witness_data.clone());
             let resp = super::http_handlers::process_query(payload, data)
                 .await

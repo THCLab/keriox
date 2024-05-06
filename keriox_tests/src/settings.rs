@@ -1,4 +1,3 @@
-
 use keri_controller::{BasicPrefix, LocationScheme};
 
 pub fn first_witness_data() -> (BasicPrefix, LocationScheme) {
