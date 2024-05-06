@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use keri_core::actor::parse_event_stream;
 use keri_core::database::DbError;
-use keri_core::error::{self, Error};
+use keri_core::error::Error;
 use keri_core::event_message::signed_event_message::SignedNontransferableReceipt;
 use keri_core::oobi::LocationScheme;
 use keri_core::prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix};

@@ -8,7 +8,7 @@ use crate::{
     event_message::signed_event_message::{Message, Op},
     oobi::{LocationScheme, Oobi, Role},
     prefix::IdentifierPrefix,
-    query::query_event::{SignedKelQuery, SignedQueryMessage},
+    query::query_event::SignedQueryMessage,
 };
 
 #[async_trait::async_trait]

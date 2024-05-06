@@ -22,7 +22,6 @@ use crate::{
     query::{
         key_state_notice::KeyStateNotice,
         query_event::QueryRoute,
-        query_event::SignedKelQuery,
         reply_event::{ReplyRoute, SignedReply},
         ReplyType,
     },

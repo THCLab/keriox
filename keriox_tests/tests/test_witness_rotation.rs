@@ -1,8 +1,8 @@
 use std::{collections::HashMap, sync::Arc};
 
 use keri_controller::{
-    error::ControllerError, identifier::query::QueryResponse, BasicPrefix, IdentifierPrefix,
-    KeyManager, LocationScheme, SelfSigningPrefix,
+    error::ControllerError, BasicPrefix, IdentifierPrefix, KeyManager, LocationScheme,
+    SelfSigningPrefix,
 };
 use keri_core::transport::test::TestTransport;
 use keri_tests::{setup_identifier, transport::TelTestTransport};

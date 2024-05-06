@@ -5,7 +5,7 @@ use keri_core::{
     prefix::{IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
     query::{
         mailbox::{MailboxQuery, MailboxRoute},
-        query_event::{QueryEvent, QueryRoute, SignedKelQuery, SignedQuery},
+        query_event::SignedQuery,
     },
     transport::TransportError,
 };
@@ -71,7 +71,7 @@ impl From<SendingError> for MechanicsError {
             }
             SendingError::TransportError(err) => MechanicsError::Transport(err),
             SendingError::OobiError(OobiRetrieveError::DbError(_)) => todo!(),
-            SendingError::OobiError(OobiRetrieveError::MissingOobi(id, _)) => todo!(),
+            SendingError::OobiError(OobiRetrieveError::MissingOobi(_id, _)) => todo!(),
         }
     }
 }

@@ -1,6 +1,5 @@
 use std::{collections::HashMap, sync::Arc};
 
-use keri_controller::identifier::query::QueryResponse;
 use keri_controller::{
     error::ControllerError, IdentifierPrefix, KeyManager, LocationScheme, SelfSigningPrefix,
 };

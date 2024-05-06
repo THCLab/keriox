@@ -701,9 +701,7 @@ impl<K: KeyManager> SimpleController<K> {
 
     #[cfg(feature = "mailbox")]
     pub fn query_mailbox(&self, witness: &BasicPrefix) -> SignedQueryMessage {
-        use crate::query::mailbox::{
-            MailboxQuery, MailboxRoute, QueryArgsMbx, QueryTopics, SignedMailboxQuery,
-        };
+        use crate::query::mailbox::{MailboxQuery, MailboxRoute, QueryArgsMbx, QueryTopics};
 
         let qry_msg = MailboxQuery::new_query(
             MailboxRoute::Mbx {

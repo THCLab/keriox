@@ -8,8 +8,6 @@ use keri_core::{
     prefix::{BasicPrefix, IdentifierPrefix},
 };
 
-use crate::error::ControllerError;
-
 use super::{mechanics::MechanicsError, Identifier};
 
 impl Identifier {

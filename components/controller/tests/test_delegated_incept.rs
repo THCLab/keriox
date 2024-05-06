@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use keri_controller::{
     config::ControllerConfig, controller::Controller, error::ControllerError,
-    identifier::query::QueryResponse, mailbox_updating::ActionRequired, LocationScheme,
+    mailbox_updating::ActionRequired, LocationScheme,
 };
 use keri_core::{
     event_message::signed_event_message::Message,

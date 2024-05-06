@@ -13,7 +13,7 @@ use keri_core::{
     prefix::IdentifierPrefix,
 };
 
-use crate::{error::ControllerError, mailbox_updating::ActionRequired};
+use crate::mailbox_updating::ActionRequired;
 
 use super::{mechanics::MechanicsError, Identifier};
 

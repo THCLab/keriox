@@ -11,7 +11,6 @@ use keri_core::{
     query::reply_event::{ReplyEvent, ReplyRoute},
 };
 
-use crate::error::ControllerError;
 use keri_core::prefix::CesrPrimitive;
 
 use super::{mechanics::MechanicsError, Identifier};

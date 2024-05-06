@@ -10,8 +10,6 @@ use keri_core::{
     prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
 };
 
-use crate::error::ControllerError;
-
 use super::{mechanics::MechanicsError, Identifier};
 
 impl Identifier {

@@ -1,5 +1,4 @@
 use keri_core::actor::prelude::HashFunctionCode;
-use keri_core::error::Error;
 use keri_core::{
     actor::prelude::SerializationFormats,
     event::{
@@ -9,8 +8,6 @@ use keri_core::{
     event_message::msg::KeriEvent,
     mailbox::exchange::{Exchange, ExchangeMessage, ForwardTopic, FwdArgs},
 };
-
-use crate::error::ControllerError;
 
 use super::mechanics::MechanicsError;
 use super::Identifier;
