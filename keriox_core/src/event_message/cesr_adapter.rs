@@ -9,11 +9,14 @@ use cesrox::{
 use said::version::format::SerializationFormats;
 use serde::{Deserialize, Serialize};
 
-use crate::event::{
-    event_data::EventData,
-    receipt::Receipt,
-    sections::seal::{EventSeal, SourceSeal},
-    KeyEvent,
+use crate::{
+    event::{
+        event_data::EventData,
+        receipt::Receipt,
+        sections::seal::{EventSeal, SourceSeal},
+        KeyEvent,
+    },
+    query::{mailbox::SignedMailboxQuery, query_event::SignedQueryMessage},
 };
 
 #[cfg(any(feature = "query", feature = "oobi"))]
@@ -194,6 +197,28 @@ impl From<SignedKelQuery> for ParsedData {
     }
 }
 
+#[cfg(feature = "query")]
+impl From<SignedMailboxQuery> for ParsedData {
+    fn from(ev: SignedMailboxQuery) -> Self {
+        let groups = signatures_into_groups(&[ev.signature]);
+
+        ParsedData {
+            payload: ev.query.into(),
+            attachments: groups,
+        }
+    }
+}
+
+#[cfg(feature = "query")]
+impl From<SignedQueryMessage> for ParsedData {
+    fn from(ev: SignedQueryMessage) -> Self {
+        match ev {
+            SignedQueryMessage::KelQuery(kqry) => ParsedData::from(kqry),
+            SignedQueryMessage::MailboxQuery(mqry) => ParsedData::from(mqry),
+        }
+    }
+}
+
 #[cfg(feature = "mailbox")]
 impl From<SignedExchange> for ParsedData {
     fn from(ev: SignedExchange) -> Self {
@@ -276,12 +301,13 @@ impl TryFrom<ParsedData> for Op {
 }
 
 #[cfg(feature = "query")]
-impl TryFrom<ParsedData> for SignedKelQuery {
+impl TryFrom<ParsedData> for SignedQueryMessage {
     type Error = ParseError;
 
     fn try_from(value: ParsedData) -> Result<Self, Self::Error> {
         match Op::try_from(value)? {
-            Op::Query(qry) => Ok(qry),
+            Op::Query(qry) => Ok(SignedQueryMessage::KelQuery(qry)),
+            Op::MailboxQuery(qry) => Ok(SignedQueryMessage::MailboxQuery(qry)),
             _ => Err(ParseError::WrongEventType(
                 "Cannot convert SignedEventData to SignedQuery".to_string(),
             )),

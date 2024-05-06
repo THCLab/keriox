@@ -43,8 +43,7 @@ pub enum OobiRetrieveError {
     #[error("No oobi for {0} identifier")]
     MissingOobi(IdentifierPrefix, Option<Scheme>),
     #[error(transparent)]
-    DbError(#[from] DbError)
-
+    DbError(#[from] DbError),
 }
 
 pub struct KnownEvents {
@@ -199,6 +198,7 @@ impl KnownEvents {
                     None
                 }
                 Op::Exchange(_) => todo!(),
+                Op::MailboxQuery(_) => todo!(),
             },
             Message::Notice(notice) => {
                 self.processor.process_notice(&notice)?;
@@ -491,14 +491,18 @@ impl KnownEvents {
                     event,
                     self.storage
                         .get_last_establishment_event_seal(signer_prefix)
-                        .ok_or(MechanicsError::UnknownIdentifierError(signer_prefix.clone()))?,
+                        .ok_or(MechanicsError::UnknownIdentifierError(
+                            signer_prefix.clone(),
+                        ))?,
                     sigs,
                 )));
                 if Role::Messagebox != role {
                     let kel = self
                         .storage
                         .get_kel_messages_with_receipts(signer_prefix, None)?
-                        .ok_or(MechanicsError::UnknownIdentifierError(signer_prefix.clone()))?;
+                        .ok_or(MechanicsError::UnknownIdentifierError(
+                            signer_prefix.clone(),
+                        ))?;
 
                     for ev in kel {
                         messages_to_send.push(Message::Notice(ev));

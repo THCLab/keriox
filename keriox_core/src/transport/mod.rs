@@ -10,7 +10,7 @@ use crate::{
     },
     oobi::{LocationScheme, Oobi, Role},
     prefix::IdentifierPrefix,
-    query::query_event::SignedKelQuery,
+    query::query_event::SignedQueryMessage,
 };
 
 pub mod default;
@@ -39,7 +39,7 @@ where
     async fn send_query(
         &self,
         loc: LocationScheme,
-        qry: SignedKelQuery,
+        qry: SignedQueryMessage,
     ) -> Result<PossibleResponse, TransportError<E>>;
 
     /// Request location scheme for id from other actor.

@@ -9,7 +9,7 @@ use crate::{
     event_message::signed_event_message::{Message, Op},
     oobi::{LocationScheme, Oobi, Role, Scheme},
     prefix::IdentifierPrefix,
-    query::query_event::SignedKelQuery,
+    query::query_event::SignedQueryMessage,
 };
 
 /// Default behavior for communication with other actors.
@@ -50,7 +50,7 @@ where
                 }
                 Message::Op(op) => match op {
                     #[cfg(feature = "query")]
-                    Op::Query(_) => {
+                    Op::Query(_) | Op::MailboxQuery(_) => {
                         panic!("can't send query in send_message");
                     }
                     #[cfg(feature = "query")]
@@ -89,7 +89,7 @@ where
     async fn send_query(
         &self,
         loc: LocationScheme,
-        qry: SignedKelQuery,
+        qry: SignedQueryMessage,
     ) -> Result<PossibleResponse, TransportError<E>> {
         use crate::actor::simple_controller::ResponseError;
 
@@ -100,9 +100,11 @@ where
             }
             Scheme::Tcp => todo!(),
         };
+
+        let op: Message = qry.into();
         let resp = reqwest::Client::new()
             .post(url)
-            .body(Message::Op(Op::Query(qry)).to_cesr().unwrap())
+            .body(op.to_cesr().unwrap())
             .send()
             .await
             .map_err(|e| TransportError::NetworkError(e.to_string()))?;

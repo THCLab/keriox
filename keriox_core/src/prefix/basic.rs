@@ -45,7 +45,11 @@ impl BasicPrefix {
         }
     }
 
-    pub fn verify(&self, data: &[u8], signature: &SelfSigningPrefix) -> Result<bool, SignatureError> {
+    pub fn verify(
+        &self,
+        data: &[u8],
+        signature: &SelfSigningPrefix,
+    ) -> Result<bool, SignatureError> {
         verify(data, self, signature)
     }
 

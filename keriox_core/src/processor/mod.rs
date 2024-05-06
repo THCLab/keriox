@@ -101,7 +101,7 @@ impl EventProcessor {
                 Err(Error::VerificationError(VerificationError::EventNotFound)) => {
                     self.publisher
                         .notify(&Notification::KsnOutOfOrder(rpy.clone()))?;
-                },
+                }
                 Err(Error::EventOutOfOrderError) => {
                     self.publisher
                         .notify(&Notification::KsnOutOfOrder(rpy.clone()))?;
@@ -171,10 +171,7 @@ impl EventProcessor {
 ///
 /// Returns the current State associated with
 /// the given Prefix
-pub fn compute_state(
-    db: Arc<SledEventDatabase>,
-    id: &IdentifierPrefix,
-) -> Option<IdentifierState> {
+pub fn compute_state(db: Arc<SledEventDatabase>, id: &IdentifierPrefix) -> Option<IdentifierState> {
     if let Some(events) = db.get_kel_finalized_events(id) {
         // start with empty state
         let mut state = IdentifierState::default();

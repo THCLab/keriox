@@ -11,7 +11,10 @@ use crate::{
     error::Error,
     event::{
         event_data::EventData,
-        sections::{key_config::SignatureError, seal::{EventSeal, Seal}},
+        sections::{
+            key_config::SignatureError,
+            seal::{EventSeal, Seal},
+        },
         KeyEvent,
     },
     event_message::{
@@ -39,7 +42,7 @@ pub enum VerificationError {
     #[error("Unknown signer identifier")]
     UnknownIdentifierError,
     #[error(transparent)]
-    SignatureError(#[from] SignatureError)
+    SignatureError(#[from] SignatureError),
 }
 
 pub struct EventValidator {
@@ -233,17 +236,15 @@ impl EventValidator {
                         .ok_or(VerificationError::UnknownIdentifierError),
                     SignerData::JustSignatures => todo!(), //Err(Error::MissingSigner),
                 }?;
-                let kp = self.event_storage.get_keys_at_event(
-                    &seal.prefix,
-                    seal.sn,
-                    &seal.event_digest,
-                ).map_err(|_| VerificationError::EventNotFound)?; // error means that event wasn't found
+                let kp = self
+                    .event_storage
+                    .get_keys_at_event(&seal.prefix, seal.sn, &seal.event_digest)
+                    .map_err(|_| VerificationError::EventNotFound)?; // error means that event wasn't found
                 match kp {
-                    Some(kp) => {
-                        kp.verify(data, sigs)?
-                            .then_some(())
-                            .ok_or(VerificationError::VerificationFailure)
-                        },
+                    Some(kp) => kp
+                        .verify(data, sigs)?
+                        .then_some(())
+                        .ok_or(VerificationError::VerificationFailure),
                     None => Err(VerificationError::EventNotFound),
                 }
             }

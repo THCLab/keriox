@@ -299,10 +299,8 @@ async fn indirect_mode_signing() -> Result<(), ControllerError> {
             .await;
     }
 
-    let verification_result = verifying_controller
-        .verify(second_message, &second_signature);
-    assert!(
-        verification_result.is_ok());
+    let verification_result = verifying_controller.verify(second_message, &second_signature);
+    assert!(verification_result.is_ok());
 
     Ok(())
 }

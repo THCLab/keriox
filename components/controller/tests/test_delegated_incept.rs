@@ -1,7 +1,8 @@
 use std::{collections::HashMap, sync::Arc};
 
 use keri_controller::{
-    config::ControllerConfig, controller::Controller, error::ControllerError, identifier::query::QueryResponse, mailbox_updating::ActionRequired, LocationScheme
+    config::ControllerConfig, controller::Controller, error::ControllerError,
+    identifier::query::QueryResponse, mailbox_updating::ActionRequired, LocationScheme,
 };
 use keri_core::{
     event_message::signed_event_message::Message,
@@ -147,7 +148,9 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
 
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(delegator_keyipair.sign(&qry.encode()?)?);
-        let ar = delegator.finalize_mechanics_query(vec![(qry, signature)]).await?;
+        let ar = delegator
+            .finalize_mechanics_query(vec![(qry, signature)])
+            .await?;
 
         assert_eq!(ar.len(), 1);
         match &ar[0] {

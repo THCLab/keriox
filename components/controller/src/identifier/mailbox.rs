@@ -1,11 +1,16 @@
 use futures::{StreamExt, TryStreamExt};
 use keri_core::{
-    actor::event_generator, error::Error, event::{
+    actor::event_generator,
+    error::Error,
+    event::{
         event_data::EventData,
         sections::seal::{EventSeal, Seal},
-    }, event_message::signed_event_message::{
+    },
+    event_message::signed_event_message::{
         Message, Notice, SignedEventMessage, SignedNontransferableReceipt,
-    }, mailbox::{exchange::ForwardTopic, MailboxResponse}, prefix::IdentifierPrefix
+    },
+    mailbox::{exchange::ForwardTopic, MailboxResponse},
+    prefix::IdentifierPrefix,
 };
 
 use crate::{error::ControllerError, mailbox_updating::ActionRequired};
@@ -13,10 +18,7 @@ use crate::{error::ControllerError, mailbox_updating::ActionRequired};
 use super::{mechanics::MechanicsError, Identifier};
 
 impl Identifier {
-    pub fn process_receipt(
-        &self,
-        receipt: &SignedNontransferableReceipt,
-    ) -> Result<(), Error> {
+    pub fn process_receipt(&self, receipt: &SignedNontransferableReceipt) -> Result<(), Error> {
         self.known_events
             .process(&Message::Notice(Notice::NontransferableRct(
                 receipt.clone(),

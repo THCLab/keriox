@@ -58,7 +58,6 @@ async fn test_updates() -> Result<(), ControllerError> {
             .unwrap();
     }
 
-
     // // Sign message with established identifier
     // let first_message = "Hi".as_bytes();
     // let first_message_signature = vec![SelfSigningPrefix::Ed25519Sha512(
@@ -115,9 +114,11 @@ async fn test_updates() -> Result<(), ControllerError> {
 
     // Now setup watcher, to be able to query of signing identifier KEL.
     let (watcher_id, watcher_oobi) = watcher_data();
-    
+
     // Resolve watcher oobi
-    verifying_identifier.resolve_oobi(&Oobi::Location(watcher_oobi)).await?;
+    verifying_identifier
+        .resolve_oobi(&Oobi::Location(watcher_oobi))
+        .await?;
 
     // Generate and sign event, that will be sent to watcher, so it knows to act
     // as verifier's watcher.

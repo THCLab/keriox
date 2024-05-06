@@ -163,7 +163,8 @@ impl Identifier {
         let witness = self.known_events.get_current_witness_list(issuer_id)?[0].clone();
         let location = self
             .known_events
-            .get_loc_schemas(&IdentifierPrefix::Basic(witness)).unwrap()[0]
+            .get_loc_schemas(&IdentifierPrefix::Basic(witness))
+            .unwrap()[0]
             .clone();
         let tel_res = self
             .communication
@@ -185,7 +186,8 @@ impl Identifier {
         for backer in backers {
             let location = self
                 .known_events
-                .get_loc_schemas(&IdentifierPrefix::Basic(backer)).unwrap()[0]
+                .get_loc_schemas(&IdentifierPrefix::Basic(backer))
+                .unwrap()[0]
                 .clone();
             for event in &to_notify {
                 self.communication

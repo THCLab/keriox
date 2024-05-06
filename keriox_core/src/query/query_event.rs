@@ -4,16 +4,20 @@ use said::version::format::SerializationFormats;
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    actor::prelude::Message,
     error::Error,
     event_message::{
         msg::KeriEvent,
         signature::{signatures_into_groups, Nontransferable, Signature, SignerData},
+        signed_event_message::Op,
         timestamped::Timestamped,
         EventTypeTag, Typeable,
     },
     prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
     query::mailbox::QueryArgsMbx,
 };
+
+use super::mailbox::SignedMailboxQuery;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(tag = "r")]
@@ -32,14 +36,6 @@ pub enum QueryRoute {
         #[serde(rename = "q")]
         args: LogsQueryArgs,
     },
-    #[cfg(feature = "mailbox")]
-    #[serde(rename = "mbx")]
-    Mbx {
-        #[serde(rename = "rr")]
-        reply_route: String,
-        #[serde(rename = "q")]
-        args: QueryArgsMbx,
-    },
 }
 
 impl QueryRoute {
@@ -48,8 +44,8 @@ impl QueryRoute {
             // QueryRoute::Log { ref args, .. } => args.i.clone(),
             QueryRoute::Ksn { ref args, .. } => args.i.clone(),
             QueryRoute::Logs { ref args, .. } => args.i.clone(),
-            #[cfg(feature = "mailbox")]
-            QueryRoute::Mbx { ref args, .. } => args.i.clone(),
+            // #[cfg(feature = "mailbox")]
+            // QueryRoute::Mbx { ref args, .. } => args.i.clone(),
         }
     }
 }
@@ -87,6 +83,20 @@ impl Typeable for QueryRoute {
     type TypeTag = EventTypeTag;
     fn get_type(&self) -> EventTypeTag {
         EventTypeTag::Qry
+    }
+}
+
+pub enum SignedQueryMessage {
+    KelQuery(SignedKelQuery),
+    MailboxQuery(SignedMailboxQuery),
+}
+
+impl From<SignedQueryMessage> for Message {
+    fn from(value: SignedQueryMessage) -> Self {
+        match value {
+            SignedQueryMessage::KelQuery(qry) => Message::Op(Op::Query(qry)),
+            SignedQueryMessage::MailboxQuery(qry) => Message::Op(Op::MailboxQuery(qry)),
+        }
     }
 }
 
@@ -160,31 +170,4 @@ fn test_query_deserialize() {
     let input_query = r#"{"v":"KERI10JSON000105_","t":"qry","d":"EHtaQHsKzezkQUEYjMjEv6nIf4AhhR9Zy6AvcfyGCXkI","dt":"2021-01-01T00:00:00.000000+00:00","r":"logs","rr":"","q":{"s":0,"i":"EIaGMMWJFPmtXznY1IIiKDIrg-vIyge6mBl2QV8dDjI3","src":"BGKVzj4ve0VSd8z_AmvhLg4lqcC_9WYX90k03q-R_Ydo"}}"#;
     let qr: QueryEvent = serde_json::from_str(input_query).unwrap();
     assert!(matches!(qr.data.data, QueryRoute::Logs { .. },));
-}
-
-#[test]
-fn test_query_mbx_deserialize() {
-    use crate::query::mailbox::QueryTopics;
-    let input_query = r#"{"v":"KERI10JSON000165_","t":"qry","d":"EKrOiJOMKnTLvJJz0j9hJ5acANkr_DFhVp6HgfjZLOUR","dt":"2022-10-25T09:53:04.454094+00:00","r":"mbx","rr":"","q":{"pre":"EC61gZ9lCKmHAS7U5ehUfEbGId5rcY0D7MirFZHDQcE2","topics":{"/receipt":0,"/replay":0,"/reply":0,"/multisig":0,"/credential":0,"/delegate":0},"i":"EC61gZ9lCKmHAS7U5ehUfEbGId5rcY0D7MirFZHDQcE2","src":"BBilc4-L3tFUnfM_wJr4S4OJanAv_VmF_dJNN6vkf2Ha"}}"#; //-VAj-HABEKYLUMmNPZeEs77Zvclf0bSN5IN-mLfLpx2ySb-HDlk4-AABAAAQY9eL1n96itQTvVTEdKjb-xYFWy-SYylQopNeYpYEW9bJ96h4deDboGOUCzVUCQrZ2kt2UNFL3xSJn4ieWLAC"#;
-    let qr: QueryEvent = serde_json::from_str(input_query).unwrap();
-
-    assert!(matches!(
-        qr.data.data,
-        QueryRoute::Mbx {
-            args: QueryArgsMbx {
-                topics: QueryTopics {
-                    receipt: 0,
-                    replay: 0,
-                    reply: 0,
-                    multisig: 0,
-                    credential: 0,
-                    delegate: 0
-                },
-                ..
-            },
-            ..
-        },
-    ));
-
-    assert_eq!(input_query, &String::from_utf8_lossy(&qr.encode().unwrap()));
 }

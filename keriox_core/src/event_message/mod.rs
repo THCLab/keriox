@@ -105,7 +105,10 @@ mod tests {
         error::Error,
         event::{
             event_data::{inception::InceptionEvent, EventData},
-            sections::{key_config::nxt_commitment, threshold::SignatureThreshold, InceptionWitnessConfig, KeyConfig},
+            sections::{
+                key_config::nxt_commitment, threshold::SignatureThreshold, InceptionWitnessConfig,
+                KeyConfig,
+            },
             KeyEvent,
         },
         keys::{PrivateKey, PublicKey},

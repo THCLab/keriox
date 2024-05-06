@@ -122,7 +122,13 @@ impl SignatureThreshold {
 
     pub fn enough_signatures(&self, sigs_indexes: &[usize]) -> Result<(), SignatureError> {
         match self {
-            SignatureThreshold::Simple(ref t) => if (sigs_indexes.len() as u64) >= *t {Ok(())} else {Err(SignatureError::NotEnoughSigsError)},
+            SignatureThreshold::Simple(ref t) => {
+                if (sigs_indexes.len() as u64) >= *t {
+                    Ok(())
+                } else {
+                    Err(SignatureError::NotEnoughSigsError)
+                }
+            }
             SignatureThreshold::Weighted(ref thresh) => thresh.enough_signatures(sigs_indexes),
         }
     }
@@ -168,7 +174,9 @@ impl ThresholdClause {
                 }
             })
             .ok_or_else(|| SignatureError::MissingIndex)?
-            >= One::one()).then(|| ()).ok_or(SignatureError::NotEnoughSigsError)
+            >= One::one())
+        .then(|| ())
+        .ok_or(SignatureError::NotEnoughSigsError)
     }
 }
 
@@ -198,8 +206,7 @@ impl MultiClauses {
     }
 
     pub fn enough_signatures(&self, sigs_indexes: &[usize]) -> Result<(), SignatureError> {
-        self
-            .0
+        self.0
             .iter()
             .fold(Ok((0, true)), |acc, clause| -> Result<_, SignatureError> {
                 let (start, enough) = acc?;
@@ -215,7 +222,9 @@ impl MultiClauses {
                     enough && clause.enough_signatures(start, &sigs).is_ok(),
                 ))
             })?
-            .1.then(|| ()).ok_or(SignatureError::NotEnoughSigsError)
+            .1
+            .then(|| ())
+            .ok_or(SignatureError::NotEnoughSigsError)
     }
 }
 

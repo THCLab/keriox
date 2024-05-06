@@ -1,9 +1,11 @@
 use std::convert::TryFrom;
 
+use crate::query::mailbox::MailboxRoute;
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "oobi")]
 use crate::oobi::OobiManager;
+use crate::query::query_event::SignedQueryMessage;
 use crate::{
     error::Error,
     event_message::{
@@ -57,9 +59,12 @@ pub fn parse_op_stream(stream: &[u8]) -> Result<Vec<Op>, ParseError> {
 }
 
 #[cfg(any(feature = "query", feature = "oobi"))]
-pub fn parse_query_stream(stream: &[u8]) -> Result<Vec<SignedKelQuery>, ParseError> {
+pub fn parse_query_stream(stream: &[u8]) -> Result<Vec<SignedQueryMessage>, ParseError> {
     let (_rest, queries) = parse_many(stream).map_err(|e| ParseError::CesrError(e.to_string()))?;
-    queries.into_iter().map(SignedKelQuery::try_from).collect()
+    queries
+        .into_iter()
+        .map(SignedQueryMessage::try_from)
+        .collect()
 }
 
 #[cfg(any(feature = "query", feature = "oobi"))]
@@ -179,23 +184,36 @@ fn process_exn(
 
 #[cfg(feature = "query")]
 pub fn process_signed_query(
-    qr: SignedKelQuery,
+    qr: SignedQueryMessage,
     storage: &EventStorage,
 ) -> Result<ReplyType, SignedQueryError> {
-    let signature = qr.signature;
-    // check signatures
-    let ver_result = signature.verify(
-        &qr.query.encode().map_err(|_e| Error::VersionError)?,
-        storage,
-    )?;
-
-    if !ver_result {
-        return Err(SignedQueryError::InvalidSignature);
+    let verify = |data: &[u8], signature: Signature| -> Result<_, SignedQueryError> {
+        let ver_result = signature.verify(&data, storage)?;
+        if !ver_result {
+            Err(SignedQueryError::InvalidSignature)
+        } else {
+            Ok(())
+        }
     };
+    match qr {
+        SignedQueryMessage::KelQuery(kqry) => {
+            let signature = kqry.signature;
+            let data = &kqry.query.encode().map_err(|_e| Error::VersionError)?;
+            // check signatures
+            verify(&data, signature)?;
 
-    // TODO check timestamps
-    // unpack and check what's inside
-    Ok(process_query(qr.query.get_route(), storage)?)
+            // TODO check timestamps
+            // unpack and check what's inside
+            Ok(process_query(kqry.query.get_route(), storage)?)
+        }
+        SignedQueryMessage::MailboxQuery(mqry) => {
+            let signature = mqry.signature;
+            let data = &mqry.query.encode().map_err(|_e| Error::VersionError)?;
+            // check signatures
+            verify(&data, signature)?;
+            Ok(process_mailbox_query(&mqry.query.data.data, storage)?)
+        }
+    }
 }
 
 #[derive(Debug, thiserror::Error, Serialize, Deserialize)]
@@ -227,11 +245,6 @@ pub fn process_query(qr: &QueryRoute, storage: &EventStorage) -> Result<ReplyTyp
             let ksn = KeyStateNotice::new_ksn(state, SerializationFormats::JSON);
             Ok(ReplyType::Ksn(ksn))
         }
-        #[cfg(feature = "mailbox")]
-        QueryRoute::Mbx { args, .. } => {
-            let mail = storage.get_mailbox_messages(args)?;
-            Ok(ReplyType::Mbx(mail))
-        }
         QueryRoute::Logs {
             reply_route: _,
             args,
@@ -243,6 +256,19 @@ pub fn process_query(qr: &QueryRoute, storage: &EventStorage) -> Result<ReplyTyp
                 .map(Message::Notice)
                 .collect();
             Ok(ReplyType::Kel(sn_kel))
+        }
+    }
+}
+
+#[cfg(feature = "query")]
+pub fn process_mailbox_query(
+    qr: &MailboxRoute,
+    storage: &EventStorage,
+) -> Result<ReplyType, QueryError> {
+    match qr {
+        MailboxRoute::Mbx { args, .. } => {
+            let mail = storage.get_mailbox_messages(args)?;
+            Ok(ReplyType::Mbx(mail))
         }
     }
 }

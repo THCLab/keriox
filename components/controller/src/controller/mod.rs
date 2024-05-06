@@ -1,12 +1,19 @@
 use std::sync::Arc;
 
 use keri_core::{
-    event_message::signature::Signature, oobi::LocationScheme, prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix}, processor::validator::VerificationError, state::IdentifierState
+    event_message::signature::Signature,
+    oobi::LocationScheme,
+    prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+    processor::validator::VerificationError,
+    state::IdentifierState,
 };
 
 use crate::{
-    communication::Communication, config::ControllerConfig, error::ControllerError,
-    identifier::{mechanics::MechanicsError, Identifier}, known_events::KnownEvents,
+    communication::Communication,
+    config::ControllerConfig,
+    error::ControllerError,
+    identifier::{mechanics::MechanicsError, Identifier},
+    known_events::KnownEvents,
 };
 pub mod verifying;
 

@@ -172,10 +172,7 @@ impl WatcherData {
         ))
     }
 
-    pub fn get_state_for_prefix(
-        &self,
-        id: &IdentifierPrefix,
-    ) -> Option<IdentifierState> {
+    pub fn get_state_for_prefix(&self, id: &IdentifierPrefix) -> Option<IdentifierState> {
         self.event_storage.get_state(id)
     }
 
@@ -251,7 +248,6 @@ impl WatcherData {
                     }
                 };
             }
-            QueryRoute::Mbx { .. } => {}
         }
 
         let response =

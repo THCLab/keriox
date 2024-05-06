@@ -51,5 +51,5 @@ pub enum ControllerError {
     OtherError(String),
 
     #[error(transparent)]
-    Mechanic(#[from] MechanicsError)
+    Mechanic(#[from] MechanicsError),
 }

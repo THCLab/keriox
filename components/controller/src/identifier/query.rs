@@ -2,6 +2,7 @@ use std::collections::HashSet;
 
 use crate::error::ControllerError;
 use keri_core::actor::prelude::HashFunctionCode;
+use keri_core::query::mailbox::{MailboxQuery, MailboxRoute};
 use keri_core::{
     actor::{prelude::SerializationFormats, simple_controller::PossibleResponse},
     event::sections::seal::EventSeal,
@@ -26,7 +27,7 @@ impl Identifier {
         &self,
         identifier: &IdentifierPrefix,
         witnesses: &[BasicPrefix],
-    ) -> Result<Vec<QueryEvent>, ControllerError> {
+    ) -> Result<Vec<MailboxQuery>, ControllerError> {
         witnesses
             .iter()
             .map(|wit| -> Result<_, ControllerError> {
@@ -40,8 +41,8 @@ impl Identifier {
                     self.query_cache.last_asked_group_index(&recipient)
                 }?;
 
-                Ok(QueryEvent::new_query(
-                    QueryRoute::Mbx {
+                Ok(MailboxQuery::new_query(
+                    MailboxRoute::Mbx {
                         args: QueryArgsMbx {
                             // about who
                             i: identifier.clone(),
@@ -105,9 +106,9 @@ impl Identifier {
                 updates = QueryResponse::Updates
             }
         }
-            Ok(updates)
+        Ok(updates)
     }
-    
+
     fn query_log(
         &self,
         seal: &EventSeal,

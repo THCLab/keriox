@@ -2,7 +2,10 @@ use said::version::error::Error as VersionError;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{event::sections::key_config::SignatureError, event_message::cesr_adapter::ParseError, prefix::IdentifierPrefix, processor::validator::VerificationError};
+use crate::{
+    event::sections::key_config::SignatureError, event_message::cesr_adapter::ParseError,
+    prefix::IdentifierPrefix, processor::validator::VerificationError,
+};
 
 pub mod serializer_error;
 
@@ -109,7 +112,7 @@ pub enum Error {
     KeyConfigError(SignatureError),
 
     #[error(transparent)]
-    VerificationError(#[from] VerificationError)
+    VerificationError(#[from] VerificationError),
 }
 
 impl From<VersionError> for Error {

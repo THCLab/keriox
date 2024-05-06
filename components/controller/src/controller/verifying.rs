@@ -10,7 +10,6 @@ use thiserror::Error;
 
 use crate::{error::ControllerError, known_events::KnownEvents};
 
-
 impl KnownEvents {
     pub fn verify(&self, data: &[u8], signature: &Signature) -> Result<(), VerificationError> {
         let verifier = EventValidator::new(self.storage.db.clone());

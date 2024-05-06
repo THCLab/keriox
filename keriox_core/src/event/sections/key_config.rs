@@ -3,9 +3,7 @@ use said::{derivation::HashFunction, SelfAddressingIdentifier};
 use serde::{Deserialize, Serialize};
 
 use super::threshold::SignatureThreshold;
-use crate::{
-    prefix::{attached_signature::Index, BasicPrefix, IndexedSignature},
-};
+use crate::prefix::{attached_signature::Index, BasicPrefix, IndexedSignature};
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 pub struct NextKeysData {
@@ -15,7 +13,6 @@ pub struct NextKeysData {
     #[serde(rename = "n")]
     pub next_key_hashes: Vec<SelfAddressingIdentifier>,
 }
-
 
 impl NextKeysData {
     /// Checks if next KeyConfig contains enough public keys to fulfill current
@@ -32,8 +29,7 @@ impl NextKeysData {
             .collect();
 
         // check previous next threshold
-        self.threshold
-            .enough_signatures(&indexes)?;
+        self.threshold.enough_signatures(&indexes)?;
         Ok(true)
     }
 
@@ -48,8 +44,7 @@ impl NextKeysData {
         let indexes_in_last_prev = self.matching_previous_indexes(public_keys, indexes);
 
         // Check previous next threshold
-        self.threshold
-            .enough_signatures(&indexes_in_last_prev)?;
+        self.threshold.enough_signatures(&indexes_in_last_prev)?;
 
         Ok(())
     }
@@ -80,7 +75,6 @@ impl NextKeysData {
             .collect::<Vec<_>>()
     }
 }
-
 
 #[derive(thiserror::Error, Debug, Serialize, Deserialize)]
 pub enum SignatureError {
@@ -134,7 +128,11 @@ impl KeyConfig {
     ///
     /// Verifies the given sigs against the given message using the KeyConfigs
     /// Public Keys, according to the indexes in the sigs.
-    pub fn verify(&self, message: &[u8], sigs: &[IndexedSignature]) -> Result<bool, SignatureError> {
+    pub fn verify(
+        &self,
+        message: &[u8],
+        sigs: &[IndexedSignature],
+    ) -> Result<bool, SignatureError> {
         // there are no duplicates
         if !(sigs
             .iter()
@@ -154,27 +152,21 @@ impl KeyConfig {
         // ensure there's enough sigs
         } else {
             self.threshold.enough_signatures(
-            &sigs
-                .iter()
-                .map(|sig| sig.index.current() as usize)
-                .collect::<Vec<_>>(),
-        )?; 
+                &sigs
+                    .iter()
+                    .map(|sig| sig.index.current() as usize)
+                    .collect::<Vec<_>>(),
+            )?;
 
-            sigs
-                .iter()
+            sigs.iter()
                 .fold(Ok(true), |acc: Result<bool, SignatureError>, sig| {
                     let verification_result: bool = self
-                            .public_keys
-                            .get(sig.index.current() as usize)
-                            .ok_or_else(|| {
-                                SignatureError::from(SignatureError::MissingIndex)
-                            })
-                            .and_then(|key: &BasicPrefix| {
-                                Ok(key.verify(message, &sig.signature)?)
-                            })?;
-                    Ok(acc?
-                        && verification_result)
-        })
+                        .public_keys
+                        .get(sig.index.current() as usize)
+                        .ok_or_else(|| SignatureError::from(SignatureError::MissingIndex))
+                        .and_then(|key: &BasicPrefix| Ok(key.verify(message, &sig.signature)?))?;
+                    Ok(acc? && verification_result)
+                })
         }
     }
 
@@ -221,7 +213,7 @@ mod test {
     use crate::{
         error::Error,
         event::sections::{
-            key_config::{nxt_commitment, SignatureError, NextKeysData},
+            key_config::{nxt_commitment, NextKeysData, SignatureError},
             threshold::SignatureThreshold,
             KeyConfig,
         },

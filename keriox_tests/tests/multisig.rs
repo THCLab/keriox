@@ -2,7 +2,8 @@ use std::{collections::HashMap, net::Ipv4Addr, sync::Arc};
 
 use anyhow::Result;
 use keri_controller::{
-    config::ControllerConfig, controller::Controller, identifier::mechanics::MechanicsError, mailbox_updating::ActionRequired, Oobi
+    config::ControllerConfig, controller::Controller, identifier::mechanics::MechanicsError,
+    mailbox_updating::ActionRequired, Oobi,
 };
 use keri_core::{
     oobi::{EndRole, LocationScheme, Role},
@@ -213,7 +214,9 @@ async fn test_multisig() -> Result<()> {
 
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(km2.sign(&qry.encode()?)?);
-        let action_required = identifier2.finalize_mechanics_query(vec![(qry, signature)]).await?;
+        let action_required = identifier2
+            .finalize_mechanics_query(vec![(qry, signature)])
+            .await?;
 
         match &action_required[0] {
             ActionRequired::DelegationRequest(_, _) => {

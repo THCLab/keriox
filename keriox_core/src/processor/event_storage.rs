@@ -38,10 +38,7 @@ impl EventStorage {
         Self { db }
     }
 
-    pub fn get_state(
-        &self,
-        identifier: &IdentifierPrefix,
-    ) -> Option<IdentifierState> {
+    pub fn get_state(&self, identifier: &IdentifierPrefix) -> Option<IdentifierState> {
         compute_state(self.db.clone(), identifier)
     }
 
@@ -212,15 +209,14 @@ impl EventStorage {
     ///
     /// Returns the EventSeal of last establishment event
     /// from KEL of given Prefix.
-    pub fn get_last_establishment_event_seal(
-        &self,
-        id: &IdentifierPrefix,
-    ) -> Option<EventSeal> {
+    pub fn get_last_establishment_event_seal(&self, id: &IdentifierPrefix) -> Option<EventSeal> {
         let mut state = IdentifierState::default();
         let mut last_est = None;
         if let Some(events) = self.db.get_kel_finalized_events(id) {
             for event in events {
-                state = state.apply(&event.signed_event_message.event_message.data).unwrap();
+                state = state
+                    .apply(&event.signed_event_message.event_message.data)
+                    .unwrap();
                 // TODO: is this event.event.event stuff too ugly? =)
                 last_est = match event
                     .signed_event_message

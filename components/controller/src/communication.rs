@@ -5,19 +5,26 @@ use keri_core::{
     event_message::signed_event_message::{Message, Notice, Op, SignedEventMessage},
     oobi::{EndRole, LocationScheme, Oobi, Scheme},
     prefix::{BasicPrefix, IdentifierPrefix},
-    query::query_event::SignedKelQuery,
+    query::{
+        mailbox::SignedMailboxQuery,
+        query_event::{SignedKelQuery, SignedQueryMessage},
+    },
     transport::Transport,
 };
 use teliox::transport::GeneralTelTransport;
 
-use crate::{error::ControllerError, identifier::mechanics::MechanicsError, known_events::{KnownEvents, OobiRetrieveError}};
+use crate::{
+    error::ControllerError,
+    identifier::mechanics::MechanicsError,
+    known_events::{KnownEvents, OobiRetrieveError},
+};
 
 #[derive(Debug, thiserror::Error)]
 pub enum SendingError {
     #[error("Transport error: {0}")]
     TransportError(#[from] keri_core::transport::TransportError),
     #[error(transparent)]
-    OobiError(#[from] OobiRetrieveError)
+    OobiError(#[from] OobiRetrieveError),
 }
 
 pub struct Communication {
@@ -57,7 +64,10 @@ impl Communication {
             .get_loc_schemas(&cid)
             .map_err(|e| SendingError::OobiError(e))?
             .first()
-            .ok_or(SendingError::OobiError(OobiRetrieveError::MissingOobi(cid.clone(), None)))?
+            .ok_or(SendingError::OobiError(OobiRetrieveError::MissingOobi(
+                cid.clone(),
+                None,
+            )))?
             .clone();
         let msgs = self.transport.request_end_role(loc, cid, role, eid).await?;
         for msg in msgs {
@@ -97,7 +107,23 @@ impl Communication {
         query: SignedKelQuery,
     ) -> Result<PossibleResponse, SendingError> {
         let loc = self.events.find_location(id, scheme)?;
-        Ok(self.transport.send_query(loc, query).await?)
+        Ok(self
+            .transport
+            .send_query(loc, SignedQueryMessage::KelQuery(query))
+            .await?)
+    }
+
+    pub async fn send_management_query_to(
+        &self,
+        id: &IdentifierPrefix,
+        scheme: Scheme,
+        query: SignedMailboxQuery,
+    ) -> Result<PossibleResponse, SendingError> {
+        let loc = self.events.find_location(id, scheme)?;
+        Ok(self
+            .transport
+            .send_query(loc, SignedQueryMessage::MailboxQuery(query))
+            .await?)
     }
 
     async fn send_oobi_to(

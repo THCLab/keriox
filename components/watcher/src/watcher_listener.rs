@@ -301,12 +301,7 @@ mod test {
                 QueryRoute::Logs { .. } => {
                     let log = parse_event_stream(&resp).unwrap();
                     Ok(PossibleResponse::Kel(log))
-                }
-                QueryRoute::Mbx { .. } => {
-                    let resp = String::from_utf8(resp.to_vec()).unwrap();
-                    let resp = parse_response(&resp).unwrap();
-                    Ok(resp)
-                }
+                } 
             }
         }
         async fn request_loc_scheme(&self, eid: IdentifierPrefix) -> Result<Vec<Op>, ActorError> {
