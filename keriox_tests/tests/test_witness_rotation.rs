@@ -116,10 +116,9 @@ async fn test_witness_rotation() -> Result<(), ControllerError> {
             controller_keypair.sign(&qry.encode().unwrap()).unwrap(),
         );
         let act = identifier
-            .finalize_query(vec![(qry, signature)])
+            .finalize_mechanics_query(vec![(qry, signature)])
             .await
             .unwrap();
-        matches!(act, QueryResponse::Updates);
     }
 
     let state = identifier.find_state(identifier.id())?;

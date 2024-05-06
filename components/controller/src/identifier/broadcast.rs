@@ -10,7 +10,7 @@ use keri_core::{
 
 use crate::error::ControllerError;
 
-use super::Identifier;
+use super::{mechanics::MechanicsError, Identifier};
 
 impl Identifier {
     /// Send new receipts obtained via [`Self::finalize_query`] to specified witnesses.
@@ -18,7 +18,7 @@ impl Identifier {
     pub async fn broadcast_receipts(
         &mut self,
         dest_wit_ids: &[IdentifierPrefix],
-    ) -> Result<usize, ControllerError> {
+    ) -> Result<usize, MechanicsError> {
         let receipts = self
             .known_events
             .storage
@@ -221,6 +221,12 @@ mod test {
 
         assert_eq!(identifier.notify_witnesses().await?, 0);
 
+        dbg!(witness1
+            .witness_data
+            .event_storage
+            .get_kel_messages_with_receipts(&identifier.id, None)?
+            .unwrap()
+            .as_slice());
         assert!(matches!(
             witness1.witness_data.event_storage.get_kel_messages_with_receipts(&identifier.id, None)?.unwrap().as_slice(),
             [Notice::Event(evt), Notice::NontransferableRct(rct)]

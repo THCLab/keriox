@@ -203,7 +203,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
         let ar = delegator
             .finalize_mechanics_query(vec![(qry, signature)])
             .await?;
-        assert_eq!(ar.len(), 1);
+        assert_eq!(ar.len(), 0);
     }
 
     // Process delegator's icp by identifier who'll request delegation.

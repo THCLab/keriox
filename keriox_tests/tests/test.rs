@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
 use keri_controller::{
-    config::ControllerConfig, controller::Controller, error::ControllerError, BasicPrefix,
-    CryptoBox, EndRole, IdentifierPrefix, KeyManager, LocationScheme, Oobi, SelfSigningPrefix,
+    config::ControllerConfig, controller::Controller, error::ControllerError,
+    identifier::query::QueryResponse, BasicPrefix, CryptoBox, EndRole, IdentifierPrefix,
+    KeyManager, Oobi, SelfSigningPrefix,
 };
 use keri_core::processor::validator::VerificationError;
 use keri_tests::settings::{first_witness_data, second_witness_data, watcher_data};
@@ -53,18 +54,20 @@ async fn test_updates() -> Result<(), ControllerError> {
         let signature =
             SelfSigningPrefix::Ed25519Sha512(key_manager.sign(&qry.encode().unwrap()).unwrap());
         signing_identifier
-            .finalize_query(vec![(qry, signature)])
+            .finalize_mechanics_query(vec![(qry, signature)])
             .await
             .unwrap();
     }
 
-    // // Sign message with established identifier
-    // let first_message = "Hi".as_bytes();
-    // let first_message_signature = vec![SelfSigningPrefix::Ed25519Sha512(
-    //     key_manager.sign(first_message).unwrap(),
-    // )];
+    // Sign message with established identifier
+    let first_message = "Hi".as_bytes();
+    let first_message_signature = vec![SelfSigningPrefix::Ed25519Sha512(
+        key_manager.sign(first_message).unwrap(),
+    )];
 
-    // let first_signature = signing_identifier.sign_data(first_message, &first_message_signature).unwrap();
+    let first_signature = signing_identifier
+        .sign_data(first_message, &first_message_signature)
+        .unwrap();
 
     // Establish verifying identifier
     let verifier_database_path = Builder::new().prefix("test-db1").tempdir().unwrap();
@@ -107,7 +110,7 @@ async fn test_updates() -> Result<(), ControllerError> {
             verifier_key_manager.sign(&qry.encode().unwrap()).unwrap(),
         );
         verifying_identifier
-            .finalize_query(vec![(qry, signature)])
+            .finalize_mechanics_query(vec![(qry, signature)])
             .await
             .unwrap();
     }
@@ -164,114 +167,114 @@ async fn test_updates() -> Result<(), ControllerError> {
         })
         .collect();
 
-    println!("HERE: =============\n");
     let mut q = verifying_identifier
         .finalize_query(queries_and_signatures.clone())
         .await;
-    dbg!(&q);
     // Watcher might need some time to find KEL. Ask about it until it's ready.
-    for i in 0..4 {
-        // q.is_err() {
+    while q.is_err() {
         q = verifying_identifier
             .finalize_query(queries_and_signatures.clone())
             .await;
-        dbg!(&q);
     }
 
+    assert_eq!(q.unwrap(), QueryResponse::Updates);
+
+    // No updates after querying again
+    q = verifying_identifier
+        .finalize_query(queries_and_signatures.clone())
+        .await;
+    assert_eq!(q.unwrap(), QueryResponse::NoUpdates);
+
     // Verify signed message.
-    // assert!(verifying_controller
-    //     .verify(first_message, &first_signature)
-    //     .is_ok());
+    assert!(verifying_controller
+        .verify(first_message, &first_signature)
+        .is_ok());
 
-    // // Rotate signer keys
-    // key_manager.rotate()?;
-    // let pk = BasicPrefix::Ed25519(key_manager.public_key());
-    // let npk = BasicPrefix::Ed25519(key_manager.next_public_key());
+    // Rotate signer keys
+    key_manager.rotate()?;
+    let pk = BasicPrefix::Ed25519(key_manager.public_key());
+    let npk = BasicPrefix::Ed25519(key_manager.next_public_key());
 
-    // // Rotation needs two witness receipts to be accepted
-    // let rotation_event = signing_identifier
-    //     .rotate(vec![pk], vec![npk], 1, vec![], vec![], 2)
-    //     .await?;
+    // Rotation needs two witness receipts to be accepted
+    let rotation_event = signing_identifier
+        .rotate(vec![pk], vec![npk], 1, vec![], vec![], 2)
+        .await?;
 
-    // let signature = SelfSigningPrefix::Ed25519Sha512(key_manager.sign(rotation_event.as_bytes())?);
-    // signing_identifier
-    //     .finalize_event(rotation_event.as_bytes(), signature)
-    //     .await?;
+    let signature = SelfSigningPrefix::Ed25519Sha512(key_manager.sign(rotation_event.as_bytes())?);
+    signing_identifier
+        .finalize_event(rotation_event.as_bytes(), signature)
+        .await?;
 
-    // // Publish event to actor's witnesses
-    // signing_identifier.notify_witnesses().await.unwrap();
+    // Publish event to actor's witnesses
+    signing_identifier.notify_witnesses().await.unwrap();
 
-    // // Querying witnesses to get receipts
-    // for qry in signing_identifier
-    //     .query_mailbox(
-    //         signing_identifier.id(),
-    //         &[first_witness_id.clone(), second_witness_id.clone()],
-    //     )
-    //     .unwrap()
-    // {
-    //     let signature =
-    //         SelfSigningPrefix::Ed25519Sha512(key_manager.sign(&qry.encode().unwrap()).unwrap());
-    //     signing_identifier
-    //         .finalize_query(vec![(qry, signature)])
-    //         .await
-    //         .unwrap();
-    // }
+    // Querying witnesses to get receipts
+    for qry in signing_identifier
+        .query_mailbox(
+            signing_identifier.id(),
+            &[first_witness_id.clone(), second_witness_id.clone()],
+        )
+        .unwrap()
+    {
+        let signature =
+            SelfSigningPrefix::Ed25519Sha512(key_manager.sign(&qry.encode().unwrap()).unwrap());
+        signing_identifier
+            .finalize_mechanics_query(vec![(qry, signature)])
+            .await
+            .unwrap();
+    }
 
-    // // Sign message with rotated keys.
-    // let second_message = "Hi".as_bytes();
-    // let second_message_signature = vec![SelfSigningPrefix::Ed25519Sha512(
-    //     key_manager.sign(second_message).unwrap(),
-    // )];
+    // Sign message with rotated keys.
+    let second_message = "Hi".as_bytes();
+    let second_message_signature = vec![SelfSigningPrefix::Ed25519Sha512(
+        key_manager.sign(second_message).unwrap(),
+    )];
 
-    // let current_event_seal = signing_identifier.get_last_establishment_event_seal()?;
-    // let second_signature =
-    //     signing_identifier.sign_data(second_message, &second_message_signature)?;
+    let current_event_seal = signing_identifier.get_last_establishment_event_seal()?;
+    let second_signature =
+        signing_identifier.sign_data(second_message, &second_message_signature)?;
 
-    // // Try to verify it, it should fail, because verifier doesn't know signer's rotation event.
-    // assert!(matches!(
-    //     verifying_controller
-    //         .verify(second_message, &second_signature)
-    //         .unwrap_err(),
-    //     VerificationError::EventNotFound
-    // ));
+    // Try to verify it, it should fail, because verifier doesn't know signer's rotation event.
+    assert!(matches!(
+        verifying_controller
+            .verify(second_message, &second_signature)
+            .unwrap_err(),
+        VerificationError::EventNotFound
+    ));
 
-    // // Query kel of signing identifier
-    // let queries_and_signatures: Vec<_> = verifying_identifier
-    //     .query_own_watchers(&current_event_seal)?
-    //     .into_iter()
-    //     .map(|qry| {
-    //         let signature = SelfSigningPrefix::Ed25519Sha512(
-    //             verifier_key_manager.sign(&qry.encode().unwrap()).unwrap(),
-    //         );
-    //         (qry, signature)
-    //     })
-    //     .collect();
+    // Query kel of signing identifier
+    let queries_and_signatures: Vec<_> = verifying_identifier
+        .query_own_watchers(&current_event_seal)?
+        .into_iter()
+        .map(|qry| {
+            let signature = SelfSigningPrefix::Ed25519Sha512(
+                verifier_key_manager.sign(&qry.encode().unwrap()).unwrap(),
+            );
+            (qry, signature)
+        })
+        .collect();
 
-    // println!("HERE: ====================\n");
-    // let mut q = verifying_identifier
-    //     .finalize_query(queries_and_signatures.clone())
-    //     .await;
-    // dbg!(&q);
+    let mut q = verifying_identifier
+        .finalize_query(queries_and_signatures.clone())
+        .await;
 
-    // for i in 0..4 {
-    //     // q.is_err() {
-    //     q = verifying_identifier
-    //         .finalize_query(queries_and_signatures.clone())
-    //         .await;
-    //     dbg!(&q);
-    // }
+    // Watcher might need some time to find KEL. Ask about it until it's ready.
+    while q.is_err() {
+        q = verifying_identifier
+            .finalize_query(queries_and_signatures.clone())
+            .await;
+    }
 
-    // // Watcher might need some time to find KEL. Ask about it until it's ready.
-    // while q.is_err() {
-    //     q = verifying_identifier
-    //         .finalize_query(queries_and_signatures.clone())
-    //         .await;
-    // }
+    assert_eq!(q.as_ref().unwrap(), &QueryResponse::Updates);
 
-    // let verification_result = verifying_controller
-    //     .verify(second_message, &second_signature);
-    // assert!(
-    //     verification_result.is_ok());
+    // No updates after querying again
+    q = verifying_identifier
+        .finalize_query(queries_and_signatures.clone())
+        .await;
+    assert_eq!(q.as_ref().unwrap(), &QueryResponse::NoUpdates);
+
+    let verification_result = verifying_controller.verify(second_message, &second_signature);
+    assert!(verification_result.is_ok());
 
     Ok(())
 }

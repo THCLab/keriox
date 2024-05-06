@@ -1,8 +1,12 @@
 use std::collections::HashSet;
 
+use crate::communication::SendingError;
 use crate::error::ControllerError;
 use keri_core::actor::prelude::HashFunctionCode;
+use keri_core::oobi::Scheme;
+use keri_core::prefix::IndexedSignature;
 use keri_core::query::mailbox::{MailboxQuery, MailboxRoute};
+use keri_core::query::query_event::SignedKelQuery;
 use keri_core::{
     actor::{prelude::SerializationFormats, simple_controller::PossibleResponse},
     event::sections::seal::EventSeal,
@@ -15,7 +19,7 @@ use keri_core::{
 
 use super::Identifier;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum QueryResponse {
     Updates,
     NoUpdates,
@@ -107,6 +111,37 @@ impl Identifier {
             }
         }
         Ok(updates)
+    }
+
+    /// Joins query events with their signatures, sends it to witness.
+    pub async fn handle_query(
+        &self,
+        qry: &QueryEvent,
+        sig: SelfSigningPrefix,
+    ) -> Result<PossibleResponse, SendingError> {
+        let recipient = match qry.get_route() {
+            QueryRoute::Logs {
+                reply_route: _,
+                args,
+            } => args.src.clone(),
+            QueryRoute::Ksn {
+                reply_route: _,
+                args,
+            } => args.src.clone(),
+        };
+
+        let query = match &self.id {
+            IdentifierPrefix::Basic(bp) => {
+                SignedKelQuery::new_nontrans(qry.clone(), bp.clone(), sig)
+            }
+            _ => {
+                let signatures = vec![IndexedSignature::new_both_same(sig, 0)];
+                SignedKelQuery::new_trans(qry.clone(), self.id().clone(), signatures)
+            }
+        };
+        self.communication
+            .send_query_to(recipient.as_ref().unwrap(), Scheme::Http, query)
+            .await
     }
 
     fn query_log(

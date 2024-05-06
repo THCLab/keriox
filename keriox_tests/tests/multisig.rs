@@ -98,7 +98,9 @@ async fn test_multisig() -> Result<()> {
 
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(&qry.encode()?)?);
-        identifier1.finalize_query(vec![(qry, signature)]).await?;
+        identifier1
+            .finalize_mechanics_query(vec![(qry, signature)])
+            .await?;
     }
     assert!(identifier1.get_kel().is_some());
 
@@ -133,7 +135,9 @@ async fn test_multisig() -> Result<()> {
 
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(km2.sign(&qry.encode()?)?);
-        identifier2.finalize_query(vec![(qry, signature)]).await?;
+        identifier2
+            .finalize_mechanics_query(vec![(qry, signature)])
+            .await?;
     }
     assert!(identifier2.get_kel().is_some());
 
@@ -242,7 +246,9 @@ async fn test_multisig() -> Result<()> {
 
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(&qry.encode()?)?);
-        identifier1.finalize_query(vec![(qry, signature)]).await?;
+        identifier1
+            .finalize_mechanics_query(vec![(qry, signature)])
+            .await?;
     }
 
     // Query to have receipt of group inception
@@ -250,7 +256,9 @@ async fn test_multisig() -> Result<()> {
 
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(&qry.encode()?)?);
-        identifier1.finalize_query(vec![(qry, signature)]).await?;
+        identifier1
+            .finalize_mechanics_query(vec![(qry, signature)])
+            .await?;
     }
 
     let group_state_1 = identifier1.find_state(&group_id)?;
@@ -267,7 +275,9 @@ async fn test_multisig() -> Result<()> {
 
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(km2.sign(&qry.encode()?)?);
-        identifier2.finalize_query(vec![(qry, signature)]).await?;
+        identifier2
+            .finalize_mechanics_query(vec![(qry, signature)])
+            .await?;
     }
 
     let group_state_2 = identifier2.find_state(&group_id)?;

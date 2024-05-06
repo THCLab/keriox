@@ -85,7 +85,7 @@ async fn indirect_mode_signing() -> Result<(), ControllerError> {
         let signature =
             SelfSigningPrefix::Ed25519Sha512(key_manager.sign(&qry.encode().unwrap()).unwrap());
         signing_identifier
-            .finalize_query(vec![(qry, signature)])
+            .finalize_mechanics_query(vec![(qry, signature)])
             .await
             .unwrap();
     }
@@ -145,7 +145,7 @@ async fn indirect_mode_signing() -> Result<(), ControllerError> {
             verifier_key_manager.sign(&qry.encode().unwrap()).unwrap(),
         );
         verifying_identifier
-            .finalize_query(vec![(qry, signature)])
+            .finalize_mechanics_query(vec![(qry, signature)])
             .await
             .unwrap();
     }
@@ -254,7 +254,7 @@ async fn indirect_mode_signing() -> Result<(), ControllerError> {
         let signature =
             SelfSigningPrefix::Ed25519Sha512(key_manager.sign(&qry.encode().unwrap()).unwrap());
         signing_identifier
-            .finalize_query(vec![(qry, signature)])
+            .finalize_mechanics_query(vec![(qry, signature)])
             .await
             .unwrap();
     }

@@ -21,7 +21,7 @@ pub struct Mechanics {}
 #[derive(Debug, thiserror::Error)]
 pub enum MechanicsError {
     #[error("Watcher don't have identifier {0} oobi")]
-    WatcherDontHaveOobi(IdentifierPrefix),
+    WatcherDosntHaveOobi(IdentifierPrefix),
 
     #[error("Watcher internal error: {0}")]
     WatcherError(#[from] ActorError),
@@ -65,7 +65,7 @@ impl From<SendingError> for MechanicsError {
         match value {
             SendingError::TransportError(TransportError::RemoteError(
                 ActorError::NoIdentState { prefix },
-            )) => MechanicsError::WatcherDontHaveOobi(prefix),
+            )) => MechanicsError::WatcherDosntHaveOobi(prefix),
             SendingError::TransportError(TransportError::RemoteError(err)) => {
                 MechanicsError::WatcherError(err)
             }
@@ -78,55 +78,12 @@ impl From<SendingError> for MechanicsError {
 
 impl Identifier {
     /// Joins query events with their signatures, sends it to witness.
-    pub async fn handle_query(
-        &self,
-        qry: &QueryEvent,
-        sig: SelfSigningPrefix,
-    ) -> Result<PossibleResponse, SendingError> {
-        let recipient = match qry.get_route() {
-            QueryRoute::Logs {
-                reply_route: _,
-                args,
-            } => args.src.clone(),
-            QueryRoute::Ksn {
-                reply_route: _,
-                args,
-            } => args.src.clone(),
-            // QueryRoute::Mbx {
-            //     reply_route: _,
-            //     args,
-            // } => Some(args.src.clone()),
-        };
-
-        let query = match &self.id {
-            IdentifierPrefix::Basic(bp) => {
-                SignedKelQuery::new_nontrans(qry.clone(), bp.clone(), sig)
-            }
-            _ => {
-                let signatures = vec![IndexedSignature::new_both_same(sig, 0)];
-                SignedKelQuery::new_trans(qry.clone(), self.id().clone(), signatures)
-            }
-        };
-        self.communication
-            .send_query_to(recipient.as_ref().unwrap(), Scheme::Http, query)
-            .await
-    }
-
-    /// Joins query events with their signatures, sends it to witness.
     pub async fn handle_management_query(
         &self,
         qry: &MailboxQuery,
         sig: SelfSigningPrefix,
     ) -> Result<PossibleResponse, SendingError> {
         let recipient = match &qry.data.data {
-            // QueryRoute::Logs {
-            //     reply_route: _,
-            //     args,
-            // } => args.src.clone(),
-            // QueryRoute::Ksn {
-            //     reply_route: _,
-            //     args,
-            // } => args.src.clone(),
             MailboxRoute::Mbx {
                 reply_route: _,
                 args,
@@ -168,6 +125,11 @@ impl Identifier {
                                 .mailbox_response(&recipient, from_who, about_who, &mbx)
                                 .await?,
                         );
+                        let witnesses = self
+                            .witnesses()
+                            .map(|bp| IdentifierPrefix::Basic(bp))
+                            .collect::<Vec<_>>();
+                        self.broadcast_receipts(&witnesses).await?;
                     }
                 }
                 _ => panic!("Unexpected response"),
