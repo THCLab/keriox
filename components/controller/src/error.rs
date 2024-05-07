@@ -4,7 +4,7 @@ use keri_core::{
 };
 use thiserror::Error;
 
-use crate::{communication::SendingError, identifier::mechanics::MechanicsError};
+use crate::{communication::SendingError, identifier::{mechanics::MechanicsError, query::WatcherResponseError}};
 
 #[derive(Error, Debug)]
 pub enum ControllerError {
@@ -52,4 +52,8 @@ pub enum ControllerError {
 
     #[error(transparent)]
     Mechanic(#[from] MechanicsError),
+
+    #[error("Watcher response error: {0}")]
+    WatcherResponseError(#[from] WatcherResponseError)
+
 }

@@ -122,7 +122,6 @@ mod test {
 
     use crate::{
         config::ControllerConfig, controller::Controller, error::ControllerError,
-        identifier::query::QueryResponse,
     };
 
     #[async_std::test]
@@ -219,12 +218,6 @@ mod test {
 
         assert_eq!(identifier.notify_witnesses().await?, 0);
 
-        dbg!(witness1
-            .witness_data
-            .event_storage
-            .get_kel_messages_with_receipts(&identifier.id, None)?
-            .unwrap()
-            .as_slice());
         assert!(matches!(
             witness1.witness_data.event_storage.get_kel_messages_with_receipts(&identifier.id, None)?.unwrap().as_slice(),
             [Notice::Event(evt), Notice::NontransferableRct(rct)]

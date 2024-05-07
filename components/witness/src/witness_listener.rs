@@ -168,7 +168,7 @@ mod test {
                     }
                 },
                 SignedQueryMessage::MailboxQuery(qry) => match qry.query.data.data {
-                    query::mailbox::MailboxRoute::Mbx { reply_route, args } => {
+                    query::mailbox::MailboxRoute::Mbx { reply_route: _, args: _ } => {
                         let resp = String::from_utf8(resp.to_vec()).unwrap();
                         let resp = parse_response(&resp).unwrap();
                         Ok(resp)

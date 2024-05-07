@@ -115,7 +115,7 @@ async fn test_witness_rotation() -> Result<(), ControllerError> {
         let signature = SelfSigningPrefix::Ed25519Sha512(
             controller_keypair.sign(&qry.encode().unwrap()).unwrap(),
         );
-        let act = identifier
+        let _act = identifier
             .finalize_mechanics_query(vec![(qry, signature)])
             .await
             .unwrap();

@@ -28,7 +28,7 @@ use crate::{
         },
     },
     prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
-    processor::validator::VerificationError,
+    processor::validator::{MoreInfoError, VerificationError},
 };
 
 #[derive(Debug, Clone)]
@@ -738,7 +738,7 @@ impl ReplyEscrow {
                         self.0.remove_escrowed_reply(&id, &sig_rep)?;
                     }
                     Err(Error::EventOutOfOrderError)
-                    | Err(Error::VerificationError(VerificationError::EventNotFound)) => (), // keep in escrow,
+                    | Err(Error::VerificationError(VerificationError::MoreInfo(MoreInfoError::EventNotFound(_)))) => (), // keep in escrow,
                     Err(e) => return Err(e),
                 };
             }

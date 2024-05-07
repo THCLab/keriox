@@ -90,6 +90,8 @@ impl EventProcessor {
 
     #[cfg(feature = "query")]
     pub fn process_op_reply(&self, rpy: &SignedReply) -> Result<(), Error> {
+        use crate::processor::validator::MoreInfoError;
+
         use self::validator::VerificationError;
 
         match rpy.reply.get_route() {
@@ -98,7 +100,7 @@ impl EventProcessor {
                     self.db
                         .update_accepted_reply(rpy.clone(), &rpy.reply.get_prefix())?;
                 }
-                Err(Error::VerificationError(VerificationError::EventNotFound)) => {
+                Err(Error::VerificationError(VerificationError::MoreInfo(MoreInfoError::EventNotFound(_)))) => {
                     self.publisher
                         .notify(&Notification::KsnOutOfOrder(rpy.clone()))?;
                 }

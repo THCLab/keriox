@@ -53,7 +53,7 @@ fn test_process() -> Result<(), Error> {
 
     // Check if processed event is in kel.
     let icp_from_db = event_storage.get_event_at_sn(&id, 0).unwrap();
-    let re_serialized = icp_from_db.unwrap().signed_event_message.encode().unwrap();
+    let re_serialized = icp_from_db.signed_event_message.encode().unwrap();
     assert_eq!(icp_raw.to_vec(), re_serialized);
 
     let rot_raw = br#"{"v":"KERI10JSON00021c_","t":"rot","d":"EHjzZj4i_-RpTN2Yh-NocajFROJ_GkBtlByhRykqiXgz","i":"EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen","s":"1","p":"EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen","kt":"2","k":["DCjxOXniUc5EUzDqERlXdptfKPHy6jNo_ZGsS4Vd8fAE","DNZHARO4dCJlluv0qezEMRmErIWWc-lzOzolBOQ15tHV","DOCQ4KN1jUlKbfjRteDYt9fxgpq1NK9_MqO5IA7shpED"],"nt":"2","n":["EN8l6yJC2PxribTN0xfri6bLz34Qvj-x3cNwcV3DvT2m","EATiZAHl0kzKID6faaQP2O7zB3Hj7eH3bE-vgKVAtsyU","EG6e7dJhh78ZqeIZ-eMbe-OB3TwFMPmrSsh9k75XIjLP"],"bt":"0","br":[],"ba":[],"a":[]}-AADAAAqV6xpsAAEB_FJP5UdYO5qiJphz8cqXbTjB9SRy8V0wIim-lgafF4o-b7TW0spZtzx2RXUfZLQQCIKZsw99k8AABBP8nfF3t6bf4z7eNoBgUJR-hdhw7wnlljMZkeY5j2KFRI_s8wqtcOFx1A913xarGJlO6UfrqFWo53e9zcD8egIACB8DKLMZcCGICuk98RCEVuS0GsqVngi1d-7gAX0jid42qUcR3aiYDMp2wJhqJn-iHJVvtB-LK7TRTggBtMDjuwB"#;
@@ -62,7 +62,7 @@ fn test_process() -> Result<(), Error> {
 
     // Process rotation event.
     event_processor.process(&deserialized_rot.clone())?;
-    let rot_from_db = event_storage.get_event_at_sn(&id, 1).unwrap().unwrap();
+    let rot_from_db = event_storage.get_event_at_sn(&id, 1).unwrap();
     assert_eq!(rot_from_db.signed_event_message.encode().unwrap(), rot_raw);
 
     // Process the same rotation event one more time.
@@ -81,7 +81,7 @@ fn test_process() -> Result<(), Error> {
     event_processor.process(&deserialized_ixn)?;
 
     // Check if processed event is in db.
-    let ixn_from_db = event_storage.get_event_at_sn(&id, 2).unwrap().unwrap();
+    let ixn_from_db = event_storage.get_event_at_sn(&id, 2).unwrap();
     match deserialized_ixn {
         Message::Notice(Notice::Event(evt)) => assert_eq!(
             ixn_from_db.signed_event_message.event_message.data,
@@ -121,7 +121,7 @@ fn test_process() -> Result<(), Error> {
 
     // Check if processed ixn event is in kel. It shouldn't because of not enough signatures.
     let ixn_from_db = event_storage.get_event_at_sn(&id, 3);
-    assert!(matches!(ixn_from_db, Ok(None)));
+    assert!(matches!(ixn_from_db, None));
 
     // Out of order event.
     let out_of_order_rot_raw = br#"{"v":"KERI10JSON000190_","t":"rot","d":"EG3e42rBNZJ_ijLq6Ch2eNRUGRANwEHohGmnR2U_lH92","i":"EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen","s":"4","p":"ECS66nEGuig1H1gM88HntPIN0fPQomkQPj7CizREZOEx","kt":"2","k":["DOCQ4KN1jUlKbfjRteDYt9fxgpq1NK9_MqO5IA7shpED","DFY1nGjV9oApBzo5Oq5JqjwQsZEQqsCCftzo3WJjMMX-","DE9ZxA3qXegkgDAhOzWP45S3Ruv5ilJSkv5lvthyWNYY"],"nt":"0","n":[],"bt":"0","br":[],"ba":[],"a":[]}-AADAAAyif3K8mg9JE0p98CASi-c9vOhbGqOMUd-CfZGUOTPk3_qfvA-IDLDjm2QDmR6yhAGyhC-6HZRTq8ChC6fIp8OABAHpYJJpsNfNQw6V7QzDWjJ9hfQYq3RlV1XcbxWIXHhwI2nRHxlxyGwufRNeFANZdP10MqcR4IX6nDkdp9YN6IHACBh9wl7YbutrnKfKI-8tCaztpCifUFuR5XY6rOVucWgLXYVJwCYmkl95LMUBJPee4v2pImB0Vftmwt5FJ2lPY8O"#;
@@ -137,7 +137,7 @@ fn test_process() -> Result<(), Error> {
 
     // Check if processed event is in kel. It shouldn't.
     let raw_from_db = event_storage.get_event_at_sn(&id, 4);
-    assert!(matches!(raw_from_db, Ok(None)));
+    assert!(matches!(raw_from_db, None));
 
     let id: IdentifierPrefix = "EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen".parse()?;
     let mut kel = Vec::new();
@@ -203,7 +203,6 @@ fn test_process_delegated() -> Result<(), Error> {
     // Check if processed event is in db.
     let ixn_from_db = event_storage
         .get_event_at_sn(&delegator_prefix, 1)
-        .unwrap()
         .unwrap();
     assert_eq!(
         ixn_from_db.signed_event_message.event_message.encode()?,
@@ -214,7 +213,7 @@ fn test_process_delegated() -> Result<(), Error> {
     event_processor.process(&deserialized_dip)?;
 
     // Check if processed dip event is in db.
-    let dip_from_db = event_storage.get_event_at_sn(&child_prefix, 0)?.unwrap();
+    let dip_from_db = event_storage.get_event_at_sn(&child_prefix, 0).unwrap();
 
     assert_eq!(
         dip_from_db.signed_event_message.event_message.encode()?,
@@ -230,7 +229,7 @@ fn test_process_delegated() -> Result<(), Error> {
 
     // Check if processed event is in db.
     let ixn_from_db = event_storage
-        .get_event_at_sn(&delegator_prefix, 2)?
+        .get_event_at_sn(&delegator_prefix, 2)
         .unwrap();
     assert_eq!(
         ixn_from_db.signed_event_message.event_message.encode()?,
@@ -246,7 +245,7 @@ fn test_process_delegated() -> Result<(), Error> {
     event_processor.process(&deserialized_drt)?;
 
     // Check if processed drt event is in db.
-    let drt_from_db = event_storage.get_event_at_sn(&child_prefix, 1)?.unwrap();
+    let drt_from_db = event_storage.get_event_at_sn(&child_prefix, 1).unwrap();
     assert_eq!(
         drt_from_db.signed_event_message.event_message.encode()?,
         raw_parsed(deserialized_drt)?

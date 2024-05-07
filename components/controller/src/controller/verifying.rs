@@ -1,12 +1,10 @@
 use cesrox::{parse_many, payload::Payload, ParsedData};
 use itertools::Itertools;
 use keri_core::{
-    error::Error,
     event_message::signature::{get_signatures, Signature},
     oobi::Oobi,
     processor::validator::{EventValidator, VerificationError},
 };
-use thiserror::Error;
 
 use crate::{error::ControllerError, known_events::KnownEvents};
 

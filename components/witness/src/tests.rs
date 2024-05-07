@@ -1082,7 +1082,7 @@ pub fn test_delegated_multisig() -> Result<(), ActorError> {
         // TODO return event with attached receipts
         let ixn = delegator
             .storage
-            .get_event_at_sn(delegator.prefix(), 1)?
+            .get_event_at_sn(delegator.prefix(), 1)
             .unwrap()
             .signed_event_message;
         let attached_witness_sig = ixn_receipt.signatures;

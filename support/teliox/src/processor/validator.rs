@@ -46,7 +46,7 @@ impl TelEventValidator {
     ) -> Result<(), Error> {
         let reference_kel_event = self
             .kel_reference
-            .get_event_at_sn(issuer_id, seal.seal.sn)?
+            .get_event_at_sn(issuer_id, seal.seal.sn)
             .ok_or(Error::MissingIssuerEventError)?;
         // Check if digest of found event matches digest from seal
         match &reference_kel_event

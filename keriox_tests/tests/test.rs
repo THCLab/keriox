@@ -5,7 +5,7 @@ use keri_controller::{
     identifier::query::QueryResponse, BasicPrefix, CryptoBox, EndRole, IdentifierPrefix,
     KeyManager, Oobi, SelfSigningPrefix,
 };
-use keri_core::processor::validator::VerificationError;
+use keri_core::processor::validator::{MoreInfoError, VerificationError};
 use keri_tests::settings::{first_witness_data, second_witness_data, watcher_data};
 use tempfile::Builder;
 
@@ -239,7 +239,7 @@ async fn test_updates() -> Result<(), ControllerError> {
         verifying_controller
             .verify(second_message, &second_signature)
             .unwrap_err(),
-        VerificationError::EventNotFound
+        VerificationError::MoreInfo(MoreInfoError::EventNotFound(_))
     ));
 
     // Query kel of signing identifier

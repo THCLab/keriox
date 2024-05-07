@@ -77,7 +77,7 @@ pub async fn setup_identifier(
         let signature = SelfSigningPrefix::Ed25519Sha512(
             verifier_keypair.sign(&qry.encode().unwrap()).unwrap(),
         );
-        let act = verifier
+        let _act = verifier
             .finalize_mechanics_query(vec![(qry, signature)])
             .await
             .unwrap();

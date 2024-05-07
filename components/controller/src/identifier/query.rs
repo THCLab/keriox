@@ -2,11 +2,14 @@ use std::collections::HashSet;
 
 use crate::communication::SendingError;
 use crate::error::ControllerError;
+use crate::known_events::OobiRetrieveError;
+use keri_core::actor::error::ActorError;
 use keri_core::actor::prelude::HashFunctionCode;
 use keri_core::oobi::Scheme;
 use keri_core::prefix::IndexedSignature;
 use keri_core::query::mailbox::{MailboxQuery, MailboxRoute};
 use keri_core::query::query_event::SignedKelQuery;
+use keri_core::transport::TransportError;
 use keri_core::{
     actor::{prelude::SerializationFormats, simple_controller::PossibleResponse},
     event::sections::seal::EventSeal,
@@ -23,6 +26,37 @@ use super::Identifier;
 pub enum QueryResponse {
     Updates,
     NoUpdates,
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum WatcherResponseError {
+    #[error("Unexpected watcher response")]
+    UnexpectedResponse,
+    #[error("Watcher doesn't have OOBI of {0}. Can't find KEL")]
+    UnknownIdentifierOobi(IdentifierPrefix),
+    #[error("Watcher response processing error: {0}")]
+    ResponseProcessingError(#[from] keri_core::error::Error),
+    #[error("Watcher internal error: {0}")]
+    WatcherError(#[from] ActorError),
+    #[error("Transport error: {0}")]
+    Transport(#[from] TransportError),
+    #[error("OOBI error: {0}")]
+    Oobi(#[from] OobiRetrieveError)
+}
+
+impl From<SendingError> for WatcherResponseError {
+    fn from(value: SendingError) -> Self {
+        match value {
+            SendingError::TransportError(TransportError::RemoteError(
+                ActorError::NoIdentState { prefix },
+            )) => WatcherResponseError::UnknownIdentifierOobi(prefix),
+            SendingError::TransportError(TransportError::RemoteError(err)) => {
+                WatcherResponseError::WatcherError(err)
+            }
+            SendingError::TransportError(err) => WatcherResponseError::Transport(err),
+            SendingError::OobiError(e) => e.into(),
+        }
+    }
 }
 
 impl Identifier {
@@ -82,7 +116,7 @@ impl Identifier {
     pub async fn finalize_query(
         &mut self,
         queries: Vec<(QueryEvent, SelfSigningPrefix)>,
-    ) -> Result<QueryResponse, ControllerError> {
+    ) -> Result<QueryResponse, WatcherResponseError> {
         let mut updates = QueryResponse::NoUpdates;
         let mut possibly_updated_ids: HashSet<IdentifierPrefix> = HashSet::new();
         for (qry, sig) in queries {

@@ -184,7 +184,7 @@ pub fn signed_query_parse() {
 fn test_query_deserialize2() {
     use crate::query::mailbox::MailboxQuery;
     let input_query = r#"{"v":"KERI10JSON00018e_","t":"qry","d":"EKzixWgm8tbppUuomNpgtXl4ACJoGvCbN06AIx_u3dfo","dt":"2024-05-06T14:32:59.886055+00:00","r":"mbx","rr":"","q":{"pre":"EASI5JckejnF6SAQxKSz2DHJy_oE5MKGS17GypPJ34Yd","topics":{"/receipt":0,"/replay":0,"/reply":0,"/multisig":0,"/credential":0,"/delegate":0},"i":"EASI5JckejnF6SAQxKSz2DHJy_oE5MKGS17GypPJ34Yd","src":"BKCOy7psittpzQMUkJ3hkdtk0x5PsyCthc5cvDcbwhn3"}}"#; //-HABEASI5JckejnF6SAQxKSz2DHJy_oE5MKGS17GypPJ34Yd-AABAAA5MnFbTLKYSRzXG0wtfuuDj80Um7h_tLhoWDGKam9Q89Ifr3NbE01XSONXZ2gWUL4YPEaQRI5VYAR6brZVOVQF"#;
-    let qr: MailboxQuery = serde_json::from_str(input_query).unwrap();
+    let _qr: MailboxQuery = serde_json::from_str(input_query).unwrap();
 }
 
 #[test]

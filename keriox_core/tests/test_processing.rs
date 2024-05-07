@@ -40,7 +40,7 @@ fn test_process() -> Result<(), Error> {
 
     // Check if processed event is in kel.
     let icp_from_db = storage.get_event_at_sn(&id, 0).unwrap();
-    let re_serialized = icp_from_db.unwrap().signed_event_message.encode().unwrap();
+    let re_serialized = icp_from_db.signed_event_message.encode().unwrap();
     assert_eq!(icp_raw.to_vec(), re_serialized);
 
     let rot_raw = br#"{"v":"KERI10JSON00021c_","t":"rot","d":"EHjzZj4i_-RpTN2Yh-NocajFROJ_GkBtlByhRykqiXgz","i":"EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen","s":"1","p":"EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen","kt":"2","k":["DCjxOXniUc5EUzDqERlXdptfKPHy6jNo_ZGsS4Vd8fAE","DNZHARO4dCJlluv0qezEMRmErIWWc-lzOzolBOQ15tHV","DOCQ4KN1jUlKbfjRteDYt9fxgpq1NK9_MqO5IA7shpED"],"nt":"2","n":["EN8l6yJC2PxribTN0xfri6bLz34Qvj-x3cNwcV3DvT2m","EATiZAHl0kzKID6faaQP2O7zB3Hj7eH3bE-vgKVAtsyU","EG6e7dJhh78ZqeIZ-eMbe-OB3TwFMPmrSsh9k75XIjLP"],"bt":"0","br":[],"ba":[],"a":[]}-AADAAAqV6xpsAAEB_FJP5UdYO5qiJphz8cqXbTjB9SRy8V0wIim-lgafF4o-b7TW0spZtzx2RXUfZLQQCIKZsw99k8AABBP8nfF3t6bf4z7eNoBgUJR-hdhw7wnlljMZkeY5j2KFRI_s8wqtcOFx1A913xarGJlO6UfrqFWo53e9zcD8egIACB8DKLMZcCGICuk98RCEVuS0GsqVngi1d-7gAX0jid42qUcR3aiYDMp2wJhqJn-iHJVvtB-LK7TRTggBtMDjuwB"#;
@@ -48,7 +48,7 @@ fn test_process() -> Result<(), Error> {
 
     // Process rotation event.
     process_notice(deserialized_rot.clone(), &processor)?;
-    let rot_from_db = storage.get_event_at_sn(&id, 1).unwrap().unwrap();
+    let rot_from_db = storage.get_event_at_sn(&id, 1).unwrap();
     assert_eq!(rot_from_db.signed_event_message.encode().unwrap(), rot_raw);
 
     let ixn_raw = br#"{"v":"KERI10JSON0000cb_","t":"ixn","d":"EL6Dpm72KXayaUHYvVHlhPplg69fBvRt1P3YzuOGVpmz","i":"EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen","s":"2","p":"EHjzZj4i_-RpTN2Yh-NocajFROJ_GkBtlByhRykqiXgz","a":[]}-AADAABgep0kbpgl91vvcXziJ7tHY1WVTAcUJyYCBNqTcNuK9AfzLHfKHhJeSC67wFRU845qjLSAC-XwWaqWgyAgw_8MABD5wTnqqJcnLWMA7NZ1vLOTzDspInJrly7O4Kt6Jwzue9z2TXkDXi1jr69JeKbzUQ6c2Ka1qPXAst0JzrOiyuAPACAcLHnOz1Owtgq8mcR_-PpAr91zOTK_Zj9r0V-9P47vzGsYwAxcVshclfhCMhu73aZuZbvQhy9Rxcj-qRz96cIL"#;
@@ -58,7 +58,7 @@ fn test_process() -> Result<(), Error> {
     process_notice(deserialized_ixn, &processor)?;
 
     // Check if processed event is in db.
-    let ixn_from_db = storage.get_event_at_sn(&id, 2).unwrap().unwrap();
+    let ixn_from_db = storage.get_event_at_sn(&id, 2).unwrap();
     assert_eq!(ixn_from_db.signed_event_message.encode().unwrap(), ixn_raw);
 
     let id: IdentifierPrefix = "EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen".parse()?;

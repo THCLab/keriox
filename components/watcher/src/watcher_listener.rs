@@ -242,12 +242,12 @@ mod test {
         actor::{
             error::ActorError,
             parse_event_stream, parse_op_stream,
-            simple_controller::{parse_response, PossibleResponse},
+            simple_controller::PossibleResponse,
         },
         event_message::signed_event_message::{Message, Op},
         oobi::{Oobi, Role},
         prefix::IdentifierPrefix,
-        query::query_event::{QueryRoute, SignedKelQuery, SignedQueryMessage},
+        query::query_event::{QueryRoute, SignedQueryMessage},
     };
 
     #[async_trait::async_trait]

@@ -35,14 +35,24 @@ use crate::{
 
 #[derive(Error, Debug, Serialize, Deserialize)]
 pub enum VerificationError {
-    #[error("Corresponding event not found")]
-    EventNotFound,
     #[error("Faulty signatures")]
     VerificationFailure,
-    #[error("Unknown signer identifier")]
-    UnknownIdentifierError,
     #[error(transparent)]
     SignatureError(#[from] SignatureError),
+    #[error("Not establishment event: {0:?}")]
+    NotEstablishment(EventSeal),
+    #[error("Missing signer identifier")]
+    MissingSignerId,
+    #[error("Needs more info: {0}")]
+    MoreInfo(#[from] MoreInfoError)
+}
+
+#[derive(Error, Debug, Serialize, Deserialize)]
+pub enum MoreInfoError {
+    #[error("Corresponding event not found: {0:?}")]
+    EventNotFound(EventSeal),
+    #[error("Unknown signer identifier: {0}")]
+    UnknownIdentifier(IdentifierPrefix),
 }
 
 pub struct EventValidator {
@@ -130,7 +140,7 @@ impl EventValidator {
         &self,
         vrc: &SignedTransferableReceipt,
     ) -> Result<Option<IdentifierState>, Error> {
-        if let Ok(Some(event)) = self
+        if let Some(event) = self
             .event_storage
             .get_event_at_sn(&vrc.body.prefix, vrc.body.sn)
         {
@@ -138,9 +148,8 @@ impl EventValidator {
                 &vrc.validator_seal.prefix,
                 vrc.validator_seal.sn,
                 &vrc.validator_seal.event_digest,
-            )?;
-            if kp.is_some()
-                && kp.unwrap().verify(
+            )?.ok_or(Error::EventOutOfOrderError)?;
+            if kp.verify(
                     &event.signed_event_message.event_message.encode()?,
                     &vrc.signatures,
                 )?
@@ -205,7 +214,7 @@ impl EventValidator {
     ) -> Result<Option<IdentifierState>, Error> {
         // get event which is being receipted
         let id = &rct.body.prefix.to_owned();
-        if let Ok(Some(event)) = self
+        if let Some(event) = self
             .event_storage
             .get_event_at_sn(&rct.body.prefix, rct.body.sn)
         {
@@ -233,19 +242,19 @@ impl EventValidator {
                     SignerData::LastEstablishment(id) => self
                         .event_storage
                         .get_last_establishment_event_seal(id)
-                        .ok_or(VerificationError::UnknownIdentifierError),
-                    SignerData::JustSignatures => todo!(), //Err(Error::MissingSigner),
+                        .ok_or::<VerificationError>(MoreInfoError::UnknownIdentifier(id.clone()).into()),
+                    SignerData::JustSignatures => Err(VerificationError::MissingSignerId),
                 }?;
                 let kp = self
                     .event_storage
                     .get_keys_at_event(&seal.prefix, seal.sn, &seal.event_digest)
-                    .map_err(|_| VerificationError::EventNotFound)?; // error means that event wasn't found
+                    .map_err(|_| VerificationError::NotEstablishment(seal.clone()))?; // error means that event wasn't found
                 match kp {
                     Some(kp) => kp
                         .verify(data, sigs)?
                         .then_some(())
                         .ok_or(VerificationError::VerificationFailure),
-                    None => Err(VerificationError::EventNotFound),
+                    None => Err(MoreInfoError::EventNotFound(seal).into()),
                 }
             }
             Signature::NonTransferable(Nontransferable::Couplet(couplets)) => couplets
@@ -254,7 +263,7 @@ impl EventValidator {
                 .then_some(())
                 .ok_or(VerificationError::VerificationFailure),
             Signature::NonTransferable(Nontransferable::Indexed(_sigs)) => {
-                Err(VerificationError::UnknownIdentifierError)
+                Err(VerificationError::MissingSignerId)
             }
         }
     }
@@ -269,7 +278,7 @@ impl EventValidator {
         delegated_event: &KeriEvent<KeyEvent>,
     ) -> Result<(), Error> {
         // Check if event of seal's prefix and sn is in db.
-        if let Ok(Some(event)) = self.event_storage.get_event_at_sn(&seal.prefix, seal.sn) {
+        if let Some(event) = self.event_storage.get_event_at_sn(&seal.prefix, seal.sn) {
             // Extract prior_digest and data field from delegating event.
             let data = match event
                 .signed_event_message
@@ -411,7 +420,7 @@ impl EventValidator {
         let ksn_pre = ksn.state.prefix.clone();
         let event_from_db = self
             .event_storage
-            .get_event_at_sn(&ksn_pre, ksn_sn)?
+            .get_event_at_sn(&ksn_pre, ksn_sn)
             .ok_or(Error::EventOutOfOrderError)?
             .signed_event_message
             .event_message;

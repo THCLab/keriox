@@ -1,10 +1,9 @@
 use std::sync::Arc;
 
 use keri_controller::{
-    config::ControllerConfig, controller::Controller, error::ControllerError, BasicPrefix,
-    CryptoBox, EndRole, IdentifierPrefix, KeyManager, LocationScheme, Oobi, SelfSigningPrefix,
+    config::ControllerConfig, controller::Controller, error::ControllerError, identifier::query::QueryResponse, BasicPrefix, CryptoBox, EndRole, IdentifierPrefix, KeyManager, LocationScheme, Oobi, SelfSigningPrefix
 };
-use keri_core::processor::validator::VerificationError;
+use keri_core::processor::validator::{MoreInfoError, VerificationError};
 use tempfile::Builder;
 
 #[async_std::test]
@@ -214,7 +213,7 @@ async fn indirect_mode_signing() -> Result<(), ControllerError> {
         .finalize_query(queries_and_signatures.clone())
         .await;
     // Watcher might need some time to find KEL. Ask about it until it's ready.
-    while q.is_err() {
+    while let Ok(QueryResponse::NoUpdates) = q {
         q = verifying_identifier
             .finalize_query(queries_and_signatures.clone())
             .await;
@@ -274,7 +273,7 @@ async fn indirect_mode_signing() -> Result<(), ControllerError> {
         verifying_controller
             .verify(second_message, &second_signature)
             .unwrap_err(),
-        VerificationError::EventNotFound
+        VerificationError::MoreInfo(MoreInfoError::EventNotFound(_))
     ));
 
     // Query kel of signing identifier
@@ -293,7 +292,7 @@ async fn indirect_mode_signing() -> Result<(), ControllerError> {
         .finalize_query(queries_and_signatures.clone())
         .await;
     // Watcher might need some time to find KEL. Ask about it until it's ready.
-    while q.is_err() {
+    while let Ok(QueryResponse::NoUpdates) = q {
         q = verifying_identifier
             .finalize_query(queries_and_signatures.clone())
             .await;

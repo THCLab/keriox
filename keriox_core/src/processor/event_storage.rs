@@ -120,11 +120,11 @@ impl EventStorage {
         &self,
         id: &IdentifierPrefix,
         sn: u64,
-    ) -> Result<Option<TimestampedSignedEventMessage>, Error> {
+    ) -> Option<TimestampedSignedEventMessage> {
         if let Some(mut events) = self.db.get_kel_finalized_events(id) {
-            Ok(events.find(|event| event.signed_event_message.event_message.data.get_sn() == sn))
+            events.find(|event| event.signed_event_message.event_message.data.get_sn() == sn)
         } else {
-            Ok(None)
+            None
         }
     }
 
@@ -281,7 +281,7 @@ impl EventStorage {
         sn: u64,
         event_digest: &SelfAddressingIdentifier,
     ) -> Result<Option<KeyConfig>, Error> {
-        if let Ok(Some(event)) = self.get_event_at_sn(id, sn) {
+        if let Some(event) = self.get_event_at_sn(id, sn) {
             // if it's the event we're looking for
             if event
                 .signed_event_message
@@ -304,10 +304,10 @@ impl EventStorage {
                     },
                 ))
             } else {
-                Err(Error::SemanticError("Event digests doesn't match".into()))
+                Ok(None)
             }
         } else {
-            Err(Error::EventOutOfOrderError)
+            Ok(None)
         }
     }
 
