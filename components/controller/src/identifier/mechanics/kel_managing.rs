@@ -16,7 +16,6 @@ use crate::identifier::Identifier;
 
 use super::MechanicsError;
 
-
 impl Identifier {
     /// Generate and return rotation event for Identifier
     pub async fn rotate(
@@ -73,7 +72,11 @@ impl Identifier {
             .map_err(|e| MechanicsError::EventGenerationError(e.to_string()))
     }
 
-    pub async fn finalize_rotate(&mut self, event: &[u8], sig: SelfSigningPrefix) -> Result<(), MechanicsError> {
+    pub async fn finalize_rotate(
+        &mut self,
+        event: &[u8],
+        sig: SelfSigningPrefix,
+    ) -> Result<(), MechanicsError> {
         let parsed_event =
             parse_event_type(event).map_err(|_e| MechanicsError::EventFormatError)?;
         if let EventType::KeyEvent(ke) = parsed_event {
@@ -104,14 +107,16 @@ impl Identifier {
         }
     }
 
-    pub async fn finalize_anchor(&mut self, event: &[u8], sig: SelfSigningPrefix) -> Result<(), MechanicsError> {
+    pub async fn finalize_anchor(
+        &mut self,
+        event: &[u8],
+        sig: SelfSigningPrefix,
+    ) -> Result<(), MechanicsError> {
         let parsed_event =
             parse_event_type(event).map_err(|_e| MechanicsError::EventFormatError)?;
         if let EventType::KeyEvent(ke) = parsed_event {
             match &ke.data.event_data {
-                EventData::Ixn(_) => {
-                    self.finalize_key_event(&ke, &sig)
-                },
+                EventData::Ixn(_) => self.finalize_key_event(&ke, &sig),
                 _ => Err(MechanicsError::WrongEventTypeError),
             }
         } else {

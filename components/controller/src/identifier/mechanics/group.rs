@@ -14,7 +14,6 @@ use crate::identifier::Identifier;
 
 use super::MechanicsError;
 
-
 impl Identifier {
     /// Init group identifier
     ///

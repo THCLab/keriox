@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
 use keri_controller::{
-    config::ControllerConfig, controller::Controller, error::ControllerError, identifier::query::QueryResponse, BasicPrefix, CryptoBox, EndRole, IdentifierPrefix, KeyManager, LocationScheme, Oobi, SelfSigningPrefix
+    config::ControllerConfig, controller::Controller, error::ControllerError,
+    identifier::query::QueryResponse, BasicPrefix, CryptoBox, EndRole, IdentifierPrefix,
+    KeyManager, LocationScheme, Oobi, SelfSigningPrefix,
 };
 use keri_core::processor::validator::{MoreInfoError, VerificationError};
 use tempfile::Builder;

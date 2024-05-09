@@ -51,7 +51,7 @@ impl Identifier {
         }
     }
 
-        /// Generate `rev` event and `ixn` event with  seal to `rev`. To finalize
+    /// Generate `rev` event and `ixn` event with  seal to `rev`. To finalize
     /// the process, `ixn` need to be signed confirmed with `finalize_event`
     /// function.
     pub fn revoke(
@@ -88,11 +88,19 @@ impl Identifier {
         }
     }
 
-    pub async fn finalize_issue(&mut self, event: &[u8], sig: SelfSigningPrefix) -> Result<(), MechanicsError> {
+    pub async fn finalize_issue(
+        &mut self,
+        event: &[u8],
+        sig: SelfSigningPrefix,
+    ) -> Result<(), MechanicsError> {
         self.finalize_anchor(event, sig).await
     }
 
-    pub async fn finalize_revoke(&mut self, event: &[u8], sig: SelfSigningPrefix) -> Result<(), MechanicsError> {
+    pub async fn finalize_revoke(
+        &mut self,
+        event: &[u8],
+        sig: SelfSigningPrefix,
+    ) -> Result<(), MechanicsError> {
         self.finalize_anchor(event, sig).await
     }
 
@@ -150,5 +158,4 @@ impl Identifier {
 
         Ok(())
     }
-    
 }

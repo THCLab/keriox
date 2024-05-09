@@ -240,8 +240,7 @@ mod test {
     use actix_web::{body::MessageBody, web::Bytes};
     use keri_core::{
         actor::{
-            error::ActorError,
-            parse_event_stream, parse_op_stream,
+            error::ActorError, parse_event_stream, parse_op_stream,
             simple_controller::PossibleResponse,
         },
         event_message::signed_event_message::{Message, Op},

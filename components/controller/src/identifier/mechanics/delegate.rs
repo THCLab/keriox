@@ -13,7 +13,6 @@ use crate::identifier::Identifier;
 
 use super::MechanicsError;
 
-
 impl Identifier {
     /// Generates delegating event (ixn) and exchange event that contains
     /// delegated event which will be send to delegate after ixn finalization.

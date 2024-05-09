@@ -40,15 +40,15 @@ pub enum VerificationError {
 
     #[error(transparent)]
     SignatureError(#[from] SignatureError),
-    
+
     #[error("Not establishment event: {0:?}")]
     NotEstablishment(EventSeal),
-    
+
     #[error("Missing signer identifier")]
     MissingSignerId,
-    
+
     #[error("Needs more info: {0}")]
-    MoreInfo(#[from] MoreInfoError)
+    MoreInfo(#[from] MoreInfoError),
 }
 
 #[derive(Error, Debug, Serialize, Deserialize)]
@@ -148,16 +148,18 @@ impl EventValidator {
             .event_storage
             .get_event_at_sn(&vrc.body.prefix, vrc.body.sn)
         {
-            let kp = self.event_storage.get_keys_at_event(
-                &vrc.validator_seal.prefix,
-                vrc.validator_seal.sn,
-                &vrc.validator_seal.event_digest,
-            )?.ok_or(Error::EventOutOfOrderError)?;
-            if kp.verify(
-                    &event.signed_event_message.event_message.encode()?,
-                    &vrc.signatures,
+            let kp = self
+                .event_storage
+                .get_keys_at_event(
+                    &vrc.validator_seal.prefix,
+                    vrc.validator_seal.sn,
+                    &vrc.validator_seal.event_digest,
                 )?
-            {
+                .ok_or(Error::EventOutOfOrderError)?;
+            if kp.verify(
+                &event.signed_event_message.event_message.encode()?,
+                &vrc.signatures,
+            )? {
                 Ok(())
             } else {
                 Err(Error::SignatureVerificationError)
@@ -246,7 +248,9 @@ impl EventValidator {
                     SignerData::LastEstablishment(id) => self
                         .event_storage
                         .get_last_establishment_event_seal(id)
-                        .ok_or::<VerificationError>(MoreInfoError::UnknownIdentifier(id.clone()).into()),
+                        .ok_or::<VerificationError>(
+                            MoreInfoError::UnknownIdentifier(id.clone()).into(),
+                        ),
                     SignerData::JustSignatures => Err(VerificationError::MissingSignerId),
                 }?;
                 let kp = self

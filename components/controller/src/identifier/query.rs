@@ -28,8 +28,7 @@ pub enum WatcherResponseError {
     #[error("Watcher response processing error: {0}")]
     ResponseProcessingError(#[from] keri_core::error::Error),
     #[error(transparent)]
-    SendingError(#[from] SendingError)
-    
+    SendingError(#[from] SendingError),
 }
 
 impl Identifier {
@@ -62,8 +61,8 @@ impl Identifier {
                         self.known_events.process(&event)?;
                     }
                 }
-                PossibleResponse::Mbx(mbx) => {
-                    panic!("Unexpected response");
+                PossibleResponse::Mbx(_mbx) => {
+                    return Err(WatcherResponseError::UnexpectedResponse);
                 }
                 PossibleResponse::Ksn(_) => todo!(),
             };

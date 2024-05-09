@@ -1,12 +1,18 @@
-use keri_core::{event::sections::seal::{EventSeal, Seal}, prefix::{IdentifierPrefix, SelfSigningPrefix}};
-use teliox::{event::verifiable_event::VerifiableEvent, seal::{AttachedSourceSeal, EventSourceSeal}};
+use keri_core::{
+    event::sections::seal::{EventSeal, Seal},
+    prefix::{IdentifierPrefix, SelfSigningPrefix},
+};
+use teliox::{
+    event::verifiable_event::VerifiableEvent,
+    seal::{AttachedSourceSeal, EventSourceSeal},
+};
 
 use crate::{error::ControllerError, identifier::Identifier};
 
 use super::MechanicsError;
 
 impl Identifier {
-	/// Generate `vcp` event and `ixn` event with  seal to `vcp`. To finalize
+    /// Generate `vcp` event and `ixn` event with  seal to `vcp`. To finalize
     /// the process, `ixn` need to be signed confirmed with `finalize_event`
     /// function.
     pub fn incept_registry(&mut self) -> Result<(IdentifierPrefix, Vec<u8>), ControllerError> {
@@ -43,11 +49,15 @@ impl Identifier {
         Ok((id, encoded))
     }
 
-	pub async fn finalize_incept_registry(&mut self, event: &[u8], sig: SelfSigningPrefix) -> Result<(), MechanicsError> {
+    pub async fn finalize_incept_registry(
+        &mut self,
+        event: &[u8],
+        sig: SelfSigningPrefix,
+    ) -> Result<(), MechanicsError> {
         self.finalize_anchor(event, sig).await
     }
 
-	pub async fn notify_backers(&self) -> Result<(), MechanicsError> {
+    pub async fn notify_backers(&self) -> Result<(), MechanicsError> {
         let to_notify = self.known_events.tel.recently_added_events.get();
         let backers = self.known_events.get_current_witness_list(&self.id)?;
         for backer in backers {
@@ -66,5 +76,4 @@ impl Identifier {
         }
         Ok(())
     }
-	
 }

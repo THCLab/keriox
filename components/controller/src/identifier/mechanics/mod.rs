@@ -4,17 +4,15 @@ use crate::communication::SendingError;
 
 use self::{broadcast::BroadcastingError, query_mailbox::ResponseProcessingError};
 
-
-pub mod query_mailbox;
-pub mod kel_managing;
 pub mod broadcast;
-mod mailbox;
 pub mod delegate;
 pub mod group;
+pub mod kel_managing;
+mod mailbox;
 pub mod notify_witness;
-pub mod watcher_configuration;
+pub mod query_mailbox;
 pub mod tel_managing;
-
+pub mod watcher_configuration;
 
 #[derive(Debug, thiserror::Error)]
 pub enum MechanicsError {
@@ -61,6 +59,5 @@ pub enum MechanicsError {
     OobiError(#[from] OobiError),
 
     #[error("Broadcasting error: {0}")]
-    BroadcastingError(#[from] BroadcastingError)
+    BroadcastingError(#[from] BroadcastingError),
 }
-

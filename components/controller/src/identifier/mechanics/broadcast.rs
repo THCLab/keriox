@@ -1,8 +1,12 @@
 use keri_core::{
-    actor::prelude::SelfAddressingIdentifier, error::Error, event_message::{
+    actor::prelude::SelfAddressingIdentifier,
+    error::Error,
+    event_message::{
         signature::Nontransferable,
         signed_event_message::{Message, Notice, SignedNontransferableReceipt},
-    }, oobi::Scheme, prefix::{BasicPrefix, IdentifierPrefix}
+    },
+    oobi::Scheme,
+    prefix::{BasicPrefix, IdentifierPrefix},
 };
 
 use crate::{communication::SendingError, identifier::Identifier};
@@ -12,9 +16,8 @@ pub enum BroadcastingError {
     #[error("Sending error while broadcasting events: {0}")]
     SendingError(#[from] SendingError),
     #[error("There's no event of digest: {digest}")]
-    MissingEvent {digest: SelfAddressingIdentifier}
+    MissingEvent { digest: SelfAddressingIdentifier },
 }
-
 
 impl Identifier {
     /// Send new receipts obtained via [`Self::finalize_query`] to specified witnesses.
@@ -35,7 +38,11 @@ impl Identifier {
 
         for rct in receipts {
             let rct_digest = rct.body.receipted_event_digest.clone();
-            let rct_wit_ids = self.get_wit_ids_of_rct(&rct).map_err(|_e| BroadcastingError::MissingEvent { digest: rct_digest.clone() })?;
+            let rct_wit_ids =
+                self.get_wit_ids_of_rct(&rct)
+                    .map_err(|_e| BroadcastingError::MissingEvent {
+                        digest: rct_digest.clone(),
+                    })?;
 
             for dest_wit_id in dest_wit_ids {
                 // Don't send receipt to witness who created it.
@@ -126,9 +133,7 @@ mod test {
     use url::Host;
     use witness::{WitnessEscrowConfig, WitnessListener};
 
-    use crate::{
-        config::ControllerConfig, controller::Controller, error::ControllerError,
-    };
+    use crate::{config::ControllerConfig, controller::Controller, error::ControllerError};
 
     #[async_std::test]
     async fn test_2_wit() -> Result<(), ControllerError> {

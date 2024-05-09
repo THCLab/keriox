@@ -201,9 +201,7 @@ fn test_process_delegated() -> Result<(), Error> {
     };
 
     // Check if processed event is in db.
-    let ixn_from_db = event_storage
-        .get_event_at_sn(&delegator_prefix, 1)
-        .unwrap();
+    let ixn_from_db = event_storage.get_event_at_sn(&delegator_prefix, 1).unwrap();
     assert_eq!(
         ixn_from_db.signed_event_message.event_message.encode()?,
         raw_parsed(deserialized_ixn)?
@@ -228,9 +226,7 @@ fn test_process_delegated() -> Result<(), Error> {
     event_processor.process(&deserialized_ixn_drt)?;
 
     // Check if processed event is in db.
-    let ixn_from_db = event_storage
-        .get_event_at_sn(&delegator_prefix, 2)
-        .unwrap();
+    let ixn_from_db = event_storage.get_event_at_sn(&delegator_prefix, 2).unwrap();
     assert_eq!(
         ixn_from_db.signed_event_message.event_message.encode()?,
         raw_parsed(deserialized_ixn_drt)?

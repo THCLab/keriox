@@ -15,10 +15,10 @@ use keri_core::{
 
 use crate::{identifier::Identifier, mailbox_updating::ActionRequired};
 
-use super::{{MechanicsError, ResponseProcessingError}};
+use super::{MechanicsError, ResponseProcessingError};
 
 impl Identifier {
-     pub(crate) async fn mailbox_response(
+    pub(crate) async fn mailbox_response(
         &self,
         recipient: &IdentifierPrefix,
         from_who: &IdentifierPrefix,
@@ -54,7 +54,8 @@ impl Identifier {
         mb: &MailboxResponse,
     ) -> Result<Vec<ActionRequired>, MechanicsError> {
         for rct in &mb.receipt {
-            self.process_receipt(rct).map_err(ResponseProcessingError::Receipts)?;
+            self.process_receipt(rct)
+                .map_err(ResponseProcessingError::Receipts)?;
         }
 
         Iterator::chain(
@@ -69,24 +70,14 @@ impl Identifier {
         .collect()
     }
 
-    async fn process_groups_mailbox(
-        &self,
-        groups: Vec<IdentifierPrefix>,
-        mb: &MailboxResponse,
-    ) -> Result<Vec<ActionRequired>, MechanicsError> {
-        futures::stream::iter(&groups)
-            .then(|group_id| self.process_group_mailbox(mb, group_id))
-            .try_concat()
-            .await
-    }
-
     async fn process_group_mailbox(
         &self,
         mb: &MailboxResponse,
         group_id: &IdentifierPrefix,
     ) -> Result<Vec<ActionRequired>, MechanicsError> {
         for rct in &mb.receipt {
-            self.process_receipt(rct).map_err(ResponseProcessingError::Receipts)?;
+            self.process_receipt(rct)
+                .map_err(ResponseProcessingError::Receipts)?;
         }
 
         for event in mb.multisig.iter() {
@@ -107,7 +98,8 @@ impl Identifier {
         event: &SignedEventMessage,
     ) -> Result<ActionRequired, MechanicsError> {
         self.known_events
-            .process(&Message::Notice(Notice::Event(event.clone()))).map_err(ResponseProcessingError::Multisig)?;
+            .process(&Message::Notice(Notice::Event(event.clone())))
+            .map_err(ResponseProcessingError::Multisig)?;
         let event = event.event_message.clone();
         let receipient = event.data.get_prefix();
         // Construct exn message (will be stored in group identidfier mailbox)
@@ -121,7 +113,8 @@ impl Identifier {
         event: &SignedEventMessage,
     ) -> Result<(), MechanicsError> {
         self.known_events
-            .process(&Message::Notice(Notice::Event(event.clone()))).map_err(ResponseProcessingError::Multisig)?;
+            .process(&Message::Notice(Notice::Event(event.clone())))
+            .map_err(ResponseProcessingError::Multisig)?;
 
         self.publish(event).await
     }
@@ -178,13 +171,15 @@ impl Identifier {
             // delegating event
             EventData::Icp(_) | EventData::Rot(_) | EventData::Ixn(_) => {
                 self.known_events
-                    .process(&Message::Notice(Notice::Event(event_to_confirm.clone()))).map_err(ResponseProcessingError::Delegate)?;
+                    .process(&Message::Notice(Notice::Event(event_to_confirm.clone())))
+                    .map_err(ResponseProcessingError::Delegate)?;
                 Ok(None)
             }
             // delegated event
             EventData::Dip(_) | EventData::Drt(_) => {
                 self.known_events
-                    .process(&Message::Notice(Notice::Event(event_to_confirm.clone()))).map_err(ResponseProcessingError::Delegate)?;
+                    .process(&Message::Notice(Notice::Event(event_to_confirm.clone())))
+                    .map_err(ResponseProcessingError::Delegate)?;
                 let (delegating_event, exn) = self.delegate(&event_to_confirm.event_message)?;
                 Ok(Some(ActionRequired::DelegationRequest(
                     delegating_event,
@@ -208,7 +203,8 @@ impl Identifier {
             EventData::Ixn(ixn) => {
                 //| EventData::Rot(_) | EventData::Ixn(_) => {
                 self.known_events
-                    .process(&Message::Notice(Notice::Event(event_to_confirm.clone()))).map_err(ResponseProcessingError::Delegate)?;
+                    .process(&Message::Notice(Notice::Event(event_to_confirm.clone())))
+                    .map_err(ResponseProcessingError::Delegate)?;
                 if let Seal::Event(seal) = ixn.data[0].clone() {
                     let fully_signed_event = self
                         .known_events
@@ -226,7 +222,8 @@ impl Identifier {
             // delegated event
             EventData::Dip(_) | EventData::Drt(_) => {
                 self.known_events
-                    .process(&Message::Notice(Notice::Event(event_to_confirm.clone()))).map_err(ResponseProcessingError::Delegate)?;
+                    .process(&Message::Notice(Notice::Event(event_to_confirm.clone())))
+                    .map_err(ResponseProcessingError::Delegate)?;
                 let id = event_to_confirm.event_message.data.get_prefix();
 
                 let seal = Seal::Event(EventSeal {

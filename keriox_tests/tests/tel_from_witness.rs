@@ -161,10 +161,9 @@ async fn test_tel_from_witness() -> Result<(), ControllerError> {
     // Querying mailbox to get receipts
     for qry in issuer.query_mailbox(issuer.id(), &[witness_identifier.clone()])? {
         let signature = SelfSigningPrefix::Ed25519Sha512(issuer_keypair.sign(&qry.encode()?)?);
-        let act = issuer
+        let _act = issuer
             .finalize_query_mailbox(vec![(qry, signature)])
             .await?;
-        // matches!(act, QueryResponse::Updates);
     }
 
     // Provided ixns are accepted in issuer's kel.

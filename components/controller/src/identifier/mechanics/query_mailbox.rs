@@ -1,14 +1,25 @@
-use std::{collections::HashMap, sync::{Arc, Mutex}};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
+use keri_core::actor::prelude::HashFunctionCode;
 use keri_core::{
-    actor::{prelude::SerializationFormats, simple_controller::PossibleResponse}, mailbox::MailboxResponse, oobi::Scheme, prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix}, query::{
+    actor::{prelude::SerializationFormats, simple_controller::PossibleResponse},
+    mailbox::MailboxResponse,
+    oobi::Scheme,
+    prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
+    query::{
         mailbox::{MailboxQuery, MailboxRoute, QueryArgsMbx},
         query_event::SignedQuery,
-}};
-use keri_core::actor::prelude::HashFunctionCode;
+    },
+};
 
 use crate::{
-    communication::SendingError, error::ControllerError, identifier::Identifier, mailbox_updating::{ActionRequired, MailboxReminder}
+    communication::SendingError,
+    error::ControllerError,
+    identifier::Identifier,
+    mailbox_updating::{ActionRequired, MailboxReminder},
 };
 
 use super::MechanicsError;
@@ -65,7 +76,6 @@ impl Identifier {
             .collect()
     }
 
-   
     /// Joins query events with their signatures, sends it to witness and
     /// process its response. If user action is needed to finalize process,
     /// returns proper notification.
@@ -103,7 +113,7 @@ impl Identifier {
         Ok(actions)
     }
 
-     /// Joins query events with their signatures, sends it to witness.
+    /// Joins query events with their signatures, sends it to witness.
     async fn handle_management_query(
         &self,
         qry: &MailboxQuery,
@@ -127,9 +137,7 @@ impl Identifier {
             .send_management_query_to(recipient.as_ref().unwrap(), Scheme::Http, query)
             .await
     }
-
 }
-
 
 pub(crate) struct QueryCache {
     last_asked_index: Arc<Mutex<HashMap<IdentifierPrefix, MailboxReminder>>>,
@@ -202,5 +210,3 @@ impl QueryCache {
         Ok(())
     }
 }
-
-

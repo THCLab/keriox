@@ -2,7 +2,6 @@ use crate::identifier::Identifier;
 
 use super::MechanicsError;
 
-
 impl Identifier {
     pub async fn notify_witnesses(&mut self) -> Result<usize, MechanicsError> {
         let mut n = 0;

@@ -22,7 +22,7 @@ use crate::{
 #[derive(Debug, thiserror::Error)]
 pub enum SendingError {
     #[error("Actor doesn't have identifier {missing} oobi")]
-    WatcherDosntHaveOobi {missing: IdentifierPrefix},
+    WatcherDosntHaveOobi { missing: IdentifierPrefix },
 
     #[error("Actor internal error: {0}")]
     ActorInternalError(#[from] ActorError),
@@ -37,11 +37,11 @@ pub enum SendingError {
 impl From<TransportError> for SendingError {
     fn from(value: TransportError) -> Self {
         match value {
-            TransportError::RemoteError(
-                ActorError::NoIdentState { prefix },
-            ) => Self::WatcherDosntHaveOobi{ missing: prefix},
+            TransportError::RemoteError(ActorError::NoIdentState { prefix }) => {
+                Self::WatcherDosntHaveOobi { missing: prefix }
+            }
             TransportError::RemoteError(internal_error) => Self::ActorInternalError(internal_error),
-            e => Self::TransportError(e)
+            e => Self::TransportError(e),
         }
     }
 }
