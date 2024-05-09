@@ -12,7 +12,10 @@ use keri_core::{
 
 use keri_core::prefix::CesrPrimitive;
 
-use super::{mechanics::MechanicsError, Identifier};
+use crate::identifier::Identifier;
+
+use super::MechanicsError;
+
 
 impl Identifier {
     /// Generate and return rotation event for Identifier

@@ -9,8 +9,10 @@ use keri_core::{
     mailbox::exchange::{Exchange, ExchangeMessage, ForwardTopic, FwdArgs},
 };
 
-use super::mechanics::MechanicsError;
-use super::Identifier;
+use crate::identifier::Identifier;
+
+use super::MechanicsError;
+
 
 impl Identifier {
     /// Generates delegating event (ixn) and exchange event that contains

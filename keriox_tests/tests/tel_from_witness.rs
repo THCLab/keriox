@@ -224,7 +224,7 @@ async fn test_tel_from_witness() -> Result<(), ControllerError> {
     let signature =
         SelfSigningPrefix::Ed25519Sha512(verifier_keypair.sign(&qry.encode().unwrap())?);
     verifier
-        .finalize_tel_query(issuer.id(), qry, signature)
+        .finalize_query_tel(issuer.id(), qry, signature)
         .await?;
 
     let vc_state = verifier.find_vc_state(&sai).unwrap();
@@ -284,7 +284,7 @@ async fn test_tel_from_witness() -> Result<(), ControllerError> {
     let signature =
         SelfSigningPrefix::Ed25519Sha512(verifier_keypair.sign(&qry.encode().unwrap())?);
     verifier
-        .finalize_tel_query(issuer.id(), qry, signature)
+        .finalize_query_tel(issuer.id(), qry, signature)
         .await?;
 
     let vc_state = verifier.find_vc_state(&sai).unwrap();

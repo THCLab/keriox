@@ -1,68 +1,17 @@
 use std::{collections::HashMap, sync::{Arc, Mutex}};
 
 use keri_core::{
-    actor::{prelude::SerializationFormats, simple_controller::PossibleResponse}, mailbox::MailboxResponse, oobi::{error::OobiError, Scheme}, prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix}, query::{
+    actor::{prelude::SerializationFormats, simple_controller::PossibleResponse}, mailbox::MailboxResponse, oobi::Scheme, prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix}, query::{
         mailbox::{MailboxQuery, MailboxRoute, QueryArgsMbx},
         query_event::SignedQuery,
-    }, transport::TransportError
-};
+}};
 use keri_core::actor::prelude::HashFunctionCode;
 
 use crate::{
-    communication::SendingError, error::ControllerError, mailbox_updating::{ActionRequired, MailboxReminder}
+    communication::SendingError, error::ControllerError, identifier::Identifier, mailbox_updating::{ActionRequired, MailboxReminder}
 };
 
-use super::{broadcast::BroadcastingError, Identifier};
-
-pub struct Mechanics {}
-
-#[derive(Debug, thiserror::Error)]
-pub enum MechanicsError {
-    #[error(transparent)]
-    SendingError(#[from] SendingError),
-
-    #[error("Transport error: {0}")]
-    Transport(#[from] TransportError),
-
-    #[error("Can't lock")]
-    LockingError,
-
-    #[error("transparent")]
-    EventProcessingError(#[from] keri_core::error::Error),
-
-    #[error(transparent)]
-    ResponseProcessingError(#[from] ResponseProcessingError),
-
-    #[error("No kel events for {0} saved")]
-    UnknownIdentifierError(IdentifierPrefix),
-
-    #[error("Can't generate event: {0}")]
-    EventGenerationError(String),
-
-    #[error("Not group participant")]
-    NotGroupParticipantError,
-
-    #[error("Error: {0}")]
-    OtherError(String),
-
-    #[error("Wrong event type")]
-    WrongEventTypeError,
-
-    #[error("Wrong event format")]
-    EventFormatError,
-
-    #[error("Inception event error: {0}")]
-    InceptionError(String),
-
-    #[error("Improper witness prefix, should be basic prefix")]
-    WrongWitnessPrefixError,
-
-    #[error("Oobi error: {0}")]
-    OobiError(#[from] OobiError),
-
-    #[error("Broadcasting error: {0}")]
-    BroadcastingError(#[from] BroadcastingError)
-}
+use super::MechanicsError;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ResponseProcessingError {
@@ -77,7 +26,6 @@ pub enum ResponseProcessingError {
 }
 
 impl Identifier {
-
     /// Generates query message of route `mbx` to query own identifier mailbox.
     pub fn query_mailbox(
         &self,

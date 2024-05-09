@@ -1,7 +1,8 @@
 use keri_core::{actor::event_generator, event_message::cesr_adapter::{parse_event_type, EventType}, oobi::{Role, Scheme}, prefix::{IdentifierPrefix, SelfSigningPrefix}, query::reply_event::{ReplyEvent, ReplyRoute}};
 
-use super::{mechanics::MechanicsError, Identifier};
+use crate::identifier::Identifier;
 
+use super::MechanicsError;
 
 impl Identifier {
 	/// Generates reply event with `end_role_add` route.

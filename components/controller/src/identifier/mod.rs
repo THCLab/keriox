@@ -15,18 +15,12 @@ use teliox::state::{vc_state::TelState, ManagerTelState};
 
 use crate::{communication::Communication, error::ControllerError, known_events::KnownEvents};
 
-use self::mechanics::{MechanicsError, QueryCache};
-mod broadcast;
-pub mod delegate;
-pub mod group;
-pub mod kel_managing;
-mod mailbox;
+use self::mechanics::{query_mailbox::QueryCache, MechanicsError};
+
 pub mod mechanics;
-pub mod publish;
 pub mod query;
 pub mod signing;
 pub mod tel;
-pub mod roles;
 
 pub struct Identifier {
     id: IdentifierPrefix,

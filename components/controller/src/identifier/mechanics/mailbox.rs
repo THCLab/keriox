@@ -13,9 +13,9 @@ use keri_core::{
     prefix::IdentifierPrefix,
 };
 
-use crate::mailbox_updating::ActionRequired;
+use crate::{identifier::Identifier, mailbox_updating::ActionRequired};
 
-use super::{mechanics::{MechanicsError, ResponseProcessingError}, Identifier};
+use super::{{MechanicsError, ResponseProcessingError}};
 
 impl Identifier {
      pub(crate) async fn mailbox_response(

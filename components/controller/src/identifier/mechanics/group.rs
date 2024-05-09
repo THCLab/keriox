@@ -10,7 +10,10 @@ use keri_core::{
     prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
 };
 
-use super::{mechanics::MechanicsError, Identifier};
+use crate::identifier::Identifier;
+
+use super::MechanicsError;
+
 
 impl Identifier {
     /// Init group identifier

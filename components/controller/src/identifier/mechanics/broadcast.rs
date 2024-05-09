@@ -5,9 +5,8 @@ use keri_core::{
     }, oobi::Scheme, prefix::{BasicPrefix, IdentifierPrefix}
 };
 
-use crate::communication::SendingError;
+use crate::{communication::SendingError, identifier::Identifier};
 
-use super::Identifier;
 #[derive(thiserror::Error, Debug)]
 pub enum BroadcastingError {
     #[error("Sending error while broadcasting events: {0}")]

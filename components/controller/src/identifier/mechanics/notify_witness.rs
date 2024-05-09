@@ -1,13 +1,7 @@
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex},
-};
+use crate::identifier::Identifier;
 
-use keri_core::{mailbox::MailboxResponse, prefix::IdentifierPrefix};
+use super::MechanicsError;
 
-use crate::{error::ControllerError, mailbox_updating::MailboxReminder};
-
-use super::{mechanics::MechanicsError, Identifier};
 
 impl Identifier {
     pub async fn notify_witnesses(&mut self) -> Result<usize, MechanicsError> {
