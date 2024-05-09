@@ -139,7 +139,7 @@ impl KnownEvents {
     }
 
     pub fn save_oobi(&self, oobi: &SignedReply) -> Result<(), MechanicsError> {
-        Ok(self.oobi_manager.process_oobi(oobi).unwrap())
+        Ok(self.oobi_manager.process_oobi(oobi)?)
     }
 
     pub fn current_public_keys(

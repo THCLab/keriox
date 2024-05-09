@@ -1,14 +1,21 @@
 use keri_core::{
-    error::Error,
-    event_message::{
+    actor::prelude::SelfAddressingIdentifier, error::Error, event_message::{
         signature::Nontransferable,
         signed_event_message::{Message, Notice, SignedNontransferableReceipt},
-    },
-    oobi::Scheme,
-    prefix::{BasicPrefix, IdentifierPrefix},
+    }, oobi::Scheme, prefix::{BasicPrefix, IdentifierPrefix}
 };
 
-use super::{mechanics::MechanicsError, Identifier};
+use crate::communication::SendingError;
+
+use super::Identifier;
+#[derive(thiserror::Error, Debug)]
+pub enum BroadcastingError {
+    #[error("Sending error while broadcasting events: {0}")]
+    SendingError(#[from] SendingError),
+    #[error("There's no event of digest: {digest}")]
+    MissingEvent {digest: SelfAddressingIdentifier}
+}
+
 
 impl Identifier {
     /// Send new receipts obtained via [`Self::finalize_query`] to specified witnesses.
@@ -16,7 +23,7 @@ impl Identifier {
     pub async fn broadcast_receipts(
         &mut self,
         dest_wit_ids: &[IdentifierPrefix],
-    ) -> Result<usize, MechanicsError> {
+    ) -> Result<usize, BroadcastingError> {
         let receipts = self
             .known_events
             .storage
@@ -29,7 +36,7 @@ impl Identifier {
 
         for rct in receipts {
             let rct_digest = rct.body.receipted_event_digest.clone();
-            let rct_wit_ids = self.get_wit_ids_of_rct(&rct)?;
+            let rct_wit_ids = self.get_wit_ids_of_rct(&rct).map_err(|_e| BroadcastingError::MissingEvent { digest: rct_digest.clone() })?;
 
             for dest_wit_id in dest_wit_ids {
                 // Don't send receipt to witness who created it.
@@ -228,8 +235,8 @@ mod test {
         // Force broadcast again to see if witness will accept duplicate signatures
         identifier.broadcasted_rcts.clear();
 
-        assert_eq!(identifier.broadcast_receipts(&wit_ids).await?, 2);
-        assert_eq!(identifier.broadcast_receipts(&wit_ids).await?, 0);
+        assert_eq!(identifier.broadcast_receipts(&wit_ids).await.unwrap(), 2);
+        assert_eq!(identifier.broadcast_receipts(&wit_ids).await.unwrap(), 0);
 
         assert!(matches!(
             witness1.witness_data.event_storage.get_kel_messages_with_receipts(&identifier.id, None)?.unwrap().as_slice(),

@@ -1,30 +1,22 @@
 use keri_core::{
-    actor::{error::ActorError, simple_controller::PossibleResponse},
-    mailbox::MailboxResponse,
-    oobi::Scheme,
-    prefix::{IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
-    query::{
+    actor::simple_controller::PossibleResponse, error, mailbox::MailboxResponse, oobi::{error::OobiError, Scheme}, prefix::{IdentifierPrefix, IndexedSignature, SelfSigningPrefix}, query::{
         mailbox::{MailboxQuery, MailboxRoute},
         query_event::SignedQuery,
-    },
-    transport::TransportError,
+    }, transport::TransportError
 };
 
 use crate::{
-    communication::SendingError, known_events::OobiRetrieveError, mailbox_updating::ActionRequired,
+    communication::SendingError, mailbox_updating::ActionRequired,
 };
 
-use super::Identifier;
+use super::{broadcast::BroadcastingError, Identifier};
 
 pub struct Mechanics {}
 
 #[derive(Debug, thiserror::Error)]
 pub enum MechanicsError {
-    #[error("Watcher don't have identifier {0} oobi")]
-    WatcherDosntHaveOobi(IdentifierPrefix),
-
-    #[error("Watcher internal error: {0}")]
-    WatcherError(#[from] ActorError),
+    #[error(transparent)]
+    SendingError(#[from] SendingError),
 
     #[error("Transport error: {0}")]
     Transport(#[from] TransportError),
@@ -34,6 +26,9 @@ pub enum MechanicsError {
 
     #[error("transparent")]
     EventProcessingError(#[from] keri_core::error::Error),
+
+    #[error(transparent)]
+    ResponseProcessingError(#[from] ResponseProcessingError),
 
     #[error("No kel events for {0} saved")]
     UnknownIdentifierError(IdentifierPrefix),
@@ -58,22 +53,24 @@ pub enum MechanicsError {
 
     #[error("Improper witness prefix, should be basic prefix")]
     WrongWitnessPrefixError,
+
+    #[error("Oobi error: {0}")]
+    OobiError(#[from] OobiError),
+
+    #[error("Broadcasting error: {0}")]
+    BroadcastingError(#[from] BroadcastingError)
 }
 
-impl From<SendingError> for MechanicsError {
-    fn from(value: SendingError) -> Self {
-        match value {
-            SendingError::TransportError(TransportError::RemoteError(
-                ActorError::NoIdentState { prefix },
-            )) => MechanicsError::WatcherDosntHaveOobi(prefix),
-            SendingError::TransportError(TransportError::RemoteError(err)) => {
-                MechanicsError::WatcherError(err)
-            }
-            SendingError::TransportError(err) => MechanicsError::Transport(err),
-            SendingError::OobiError(OobiRetrieveError::DbError(_)) => todo!(),
-            SendingError::OobiError(OobiRetrieveError::MissingOobi(_id, _)) => todo!(),
-        }
-    }
+#[derive(Debug, thiserror::Error)]
+pub enum ResponseProcessingError {
+    #[error("Unexpected response")]
+    UnexpectedResponse,
+    #[error("Error while processing receipts from response: {0}")]
+    Receipts(keri_core::error::Error),
+    #[error("Error while processing multisig from response: {0}")]
+    Multisig(keri_core::error::Error),
+    #[error("Error while processing delegate from response: {0}")]
+    Delegate(keri_core::error::Error),
 }
 
 impl Identifier {

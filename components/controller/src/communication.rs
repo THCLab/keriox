@@ -9,7 +9,7 @@ use keri_core::{
         mailbox::SignedMailboxQuery,
         query_event::{SignedKelQuery, SignedQueryMessage},
     },
-    transport::Transport,
+    transport::{Transport, TransportError},
 };
 use teliox::transport::GeneralTelTransport;
 
@@ -21,10 +21,29 @@ use crate::{
 
 #[derive(Debug, thiserror::Error)]
 pub enum SendingError {
+    #[error("Actor doesn't have identifier {missing} oobi")]
+    WatcherDosntHaveOobi {missing: IdentifierPrefix},
+
+    #[error("Actor internal error: {0}")]
+    ActorInternalError(#[from] ActorError),
+
     #[error("Transport error: {0}")]
-    TransportError(#[from] keri_core::transport::TransportError),
+    TransportError(keri_core::transport::TransportError),
+
     #[error(transparent)]
     OobiError(#[from] OobiRetrieveError),
+}
+
+impl From<TransportError> for SendingError {
+    fn from(value: TransportError) -> Self {
+        match value {
+            TransportError::RemoteError(
+                ActorError::NoIdentState { prefix },
+            ) => Self::WatcherDosntHaveOobi{ missing: prefix},
+            TransportError::RemoteError(internal_error) => Self::ActorInternalError(internal_error),
+            e => Self::TransportError(e)
+        }
+    }
 }
 
 pub struct Communication {
@@ -62,7 +81,7 @@ impl Communication {
         let loc = self
             .events
             .get_loc_schemas(&cid)
-            .map_err(|e| SendingError::OobiError(e))?
+            .map_err(SendingError::OobiError)?
             .first()
             .ok_or(SendingError::OobiError(OobiRetrieveError::MissingOobi(
                 cid.clone(),
