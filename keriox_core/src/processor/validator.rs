@@ -37,12 +37,16 @@ use crate::{
 pub enum VerificationError {
     #[error("Faulty signatures")]
     VerificationFailure,
+
     #[error(transparent)]
     SignatureError(#[from] SignatureError),
+    
     #[error("Not establishment event: {0:?}")]
     NotEstablishment(EventSeal),
+    
     #[error("Missing signer identifier")]
     MissingSignerId,
+    
     #[error("Needs more info: {0}")]
     MoreInfo(#[from] MoreInfoError)
 }

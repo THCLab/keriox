@@ -99,7 +99,7 @@ async fn test_multisig() -> Result<()> {
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(&qry.encode()?)?);
         identifier1
-            .finalize_mechanics_query(vec![(qry, signature)])
+            .finalize_query_mailbox(vec![(qry, signature)])
             .await?;
     }
     assert!(identifier1.get_kel().is_some());
@@ -136,7 +136,7 @@ async fn test_multisig() -> Result<()> {
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(km2.sign(&qry.encode()?)?);
         identifier2
-            .finalize_mechanics_query(vec![(qry, signature)])
+            .finalize_query_mailbox(vec![(qry, signature)])
             .await?;
     }
     assert!(identifier2.get_kel().is_some());
@@ -154,7 +154,7 @@ async fn test_multisig() -> Result<()> {
     let add_watcher_sig = SelfSigningPrefix::Ed25519Sha512(km1.sign(add_watcher.as_bytes())?);
 
     identifier1
-        .finalize_event(add_watcher.as_bytes(), add_watcher_sig)
+        .finalize_add_watcher(add_watcher.as_bytes(), add_watcher_sig)
         .await?;
     assert_eq!(
         identifier1.watchers()?,
@@ -180,7 +180,7 @@ async fn test_multisig() -> Result<()> {
         .await?;
 
     let qry_watcher =
-        identifier1.query_own_watchers(&identifier2.get_last_establishment_event_seal()?)?;
+        identifier1.query_watchers(&identifier2.get_last_establishment_event_seal()?)?;
     for qry in qry_watcher {
         let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(&qry.encode()?)?);
         identifier1.finalize_query(vec![(qry, signature)]).await?;
@@ -219,7 +219,7 @@ async fn test_multisig() -> Result<()> {
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(km2.sign(&qry.encode()?)?);
         let action_required = identifier2
-            .finalize_mechanics_query(vec![(qry, signature)])
+            .finalize_query_mailbox(vec![(qry, signature)])
             .await?;
 
         match &action_required[0] {
@@ -247,7 +247,7 @@ async fn test_multisig() -> Result<()> {
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(&qry.encode()?)?);
         identifier1
-            .finalize_mechanics_query(vec![(qry, signature)])
+            .finalize_query_mailbox(vec![(qry, signature)])
             .await?;
     }
 
@@ -257,7 +257,7 @@ async fn test_multisig() -> Result<()> {
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(&qry.encode()?)?);
         identifier1
-            .finalize_mechanics_query(vec![(qry, signature)])
+            .finalize_query_mailbox(vec![(qry, signature)])
             .await?;
     }
 
@@ -276,7 +276,7 @@ async fn test_multisig() -> Result<()> {
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(km2.sign(&qry.encode()?)?);
         identifier2
-            .finalize_mechanics_query(vec![(qry, signature)])
+            .finalize_query_mailbox(vec![(qry, signature)])
             .await?;
     }
 

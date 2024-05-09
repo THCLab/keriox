@@ -96,7 +96,7 @@ async fn test_witness_rotation() -> Result<(), ControllerError> {
     let signature =
         SelfSigningPrefix::Ed25519Sha512(controller_keypair.sign(rotation_event.as_bytes())?);
     identifier
-        .finalize_event(rotation_event.as_bytes(), signature)
+        .finalize_rotate(rotation_event.as_bytes(), signature)
         .await?;
 
     let cached_witnesses = &identifier.witnesses().collect::<Vec<_>>();
@@ -116,7 +116,7 @@ async fn test_witness_rotation() -> Result<(), ControllerError> {
             controller_keypair.sign(&qry.encode().unwrap()).unwrap(),
         );
         let _act = identifier
-            .finalize_mechanics_query(vec![(qry, signature)])
+            .finalize_query_mailbox(vec![(qry, signature)])
             .await
             .unwrap();
     }

@@ -1,5 +1,7 @@
 use keri_core::actor::prelude::{HashFunctionCode, SelfAddressingIdentifier, SerializationFormats};
+use keri_core::event::event_data::EventData;
 use keri_core::event::sections::seal::{EventSeal, Seal};
+use keri_core::event_message::cesr_adapter::{parse_event_type, EventType};
 use keri_core::event_message::msg::KeriEvent;
 use keri_core::event_message::timestamped::Timestamped;
 use keri_core::prefix::{IdentifierPrefix, IndexedSignature, SelfSigningPrefix};
@@ -86,6 +88,18 @@ impl Identifier {
             }
             None => Err(ControllerError::OtherError("Tel not incepted".into())),
         }
+    }
+
+    pub async fn finalize_issue(&mut self, event: &[u8], sig: SelfSigningPrefix) -> Result<(), MechanicsError> {
+        self.finalize_anchor(event, sig).await
+    }
+
+    pub async fn finalize_revoke(&mut self, event: &[u8], sig: SelfSigningPrefix) -> Result<(), MechanicsError> {
+        self.finalize_anchor(event, sig).await
+    }
+
+    pub async fn finalize_incept_registry(&mut self, event: &[u8], sig: SelfSigningPrefix) -> Result<(), MechanicsError> {
+        self.finalize_anchor(event, sig).await
     }
 
     /// Generate `rev` event and `ixn` event with  seal to `rev`. To finalize

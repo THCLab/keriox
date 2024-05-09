@@ -109,7 +109,7 @@ async fn test_tel_from_witness() -> Result<(), ControllerError> {
         SelfSigningPrefix::Ed25519Sha512(verifier_keypair.sign(add_watcher.as_bytes()).unwrap());
 
     verifier
-        .finalize_event(add_watcher.as_bytes(), signature)
+        .finalize_add_watcher(add_watcher.as_bytes(), signature)
         .await?;
 
     // Setup issuer identifier
@@ -132,7 +132,7 @@ async fn test_tel_from_witness() -> Result<(), ControllerError> {
     let (_vcp_id, vcp_ixn) = issuer.incept_registry()?;
 
     let signature = SelfSigningPrefix::Ed25519Sha512(issuer_keypair.sign(&vcp_ixn)?);
-    issuer.finalize_event(&vcp_ixn, signature).await?;
+    issuer.finalize_incept_registry(&vcp_ixn, signature).await?;
 
     issuer.notify_witnesses().await?;
 
@@ -140,7 +140,7 @@ async fn test_tel_from_witness() -> Result<(), ControllerError> {
     for qry in issuer.query_mailbox(issuer.id(), &[witness_identifier.clone()])? {
         let signature = SelfSigningPrefix::Ed25519Sha512(issuer_keypair.sign(&qry.encode()?)?);
         let _act = issuer
-            .finalize_mechanics_query(vec![(qry, signature)])
+            .finalize_query_mailbox(vec![(qry, signature)])
             .await?;
     }
 
@@ -155,14 +155,14 @@ async fn test_tel_from_witness() -> Result<(), ControllerError> {
     };
 
     let signature = SelfSigningPrefix::Ed25519Sha512(issuer_keypair.sign(&iss_ixn)?);
-    issuer.finalize_event(&iss_ixn, signature).await?;
+    issuer.finalize_issue(&iss_ixn, signature).await?;
     issuer.notify_witnesses().await?;
 
     // Querying mailbox to get receipts
     for qry in issuer.query_mailbox(issuer.id(), &[witness_identifier.clone()])? {
         let signature = SelfSigningPrefix::Ed25519Sha512(issuer_keypair.sign(&qry.encode()?)?);
         let act = issuer
-            .finalize_mechanics_query(vec![(qry, signature)])
+            .finalize_query_mailbox(vec![(qry, signature)])
             .await?;
         // matches!(act, QueryResponse::Updates);
     }
@@ -202,7 +202,7 @@ async fn test_tel_from_witness() -> Result<(), ControllerError> {
 
     // Query kel of signing identifier
     let queries_and_signatures: Vec<_> = verifier
-        .query_own_watchers(&last_event_seal)?
+        .query_watchers(&last_event_seal)?
         .into_iter()
         .map(|qry| {
             let signature = SelfSigningPrefix::Ed25519Sha512(
@@ -238,14 +238,14 @@ async fn test_tel_from_witness() -> Result<(), ControllerError> {
     };
 
     let signature = SelfSigningPrefix::Ed25519Sha512(issuer_keypair.sign(&rev_ixn)?);
-    issuer.finalize_event(&rev_ixn, signature).await?;
+    issuer.finalize_revoke(&rev_ixn, signature).await?;
     issuer.notify_witnesses().await?;
 
     // Querying mailbox to get receipts
     for qry in issuer.query_mailbox(issuer.id(), &[witness_identifier.clone()])? {
         let signature = SelfSigningPrefix::Ed25519Sha512(issuer_keypair.sign(&qry.encode()?)?);
         let _act = issuer
-            .finalize_mechanics_query(vec![(qry, signature)])
+            .finalize_query_mailbox(vec![(qry, signature)])
             .await?;
         // matches!(act, QueryResponse::Updates);
     }
@@ -267,7 +267,7 @@ async fn test_tel_from_witness() -> Result<(), ControllerError> {
     // Query watcher for updates in issuer's KEL
     let last_event_seal = issuer.get_last_event_seal()?;
     let queries_and_signatures: Vec<_> = verifier
-        .query_own_watchers(&last_event_seal)?
+        .query_watchers(&last_event_seal)?
         .into_iter()
         .map(|qry| {
             let signature = SelfSigningPrefix::Ed25519Sha512(

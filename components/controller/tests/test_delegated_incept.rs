@@ -79,7 +79,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(delegatee_keypair.sign(&qry.encode()?)?);
         delegatee_identifier
-            .finalize_mechanics_query(vec![(qry, signature)])
+            .finalize_query_mailbox(vec![(qry, signature)])
             .await?;
     }
     println!("Delegatee: {}", &delegatee_identifier.id());
@@ -109,7 +109,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(delegator_keyipair.sign(&qry.encode()?)?);
         let ar = delegator
-            .finalize_mechanics_query(vec![(qry, signature)])
+            .finalize_query_mailbox(vec![(qry, signature)])
             .await?;
         assert!(ar.is_empty());
     }
@@ -151,7 +151,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(delegator_keyipair.sign(&qry.encode()?)?);
         let ar = delegator
-            .finalize_mechanics_query(vec![(qry, signature)])
+            .finalize_query_mailbox(vec![(qry, signature)])
             .await?;
 
         assert_eq!(ar.len(), 1);
@@ -179,7 +179,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
                     let signature =
                         SelfSigningPrefix::Ed25519Sha512(delegator_keyipair.sign(&qry.encode()?)?);
                     let action_required = delegator
-                        .finalize_mechanics_query(vec![(qry, signature)])
+                        .finalize_query_mailbox(vec![(qry, signature)])
                         .await?;
                     assert!(action_required.is_empty());
                 }
@@ -201,7 +201,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(delegator_keyipair.sign(&qry.encode()?)?);
         let ar = delegator
-            .finalize_mechanics_query(vec![(qry, signature)])
+            .finalize_query_mailbox(vec![(qry, signature)])
             .await?;
         assert_eq!(ar.len(), 0);
     }
@@ -224,7 +224,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(delegatee_keypair.sign(&qry.encode()?)?);
         let ar = delegatee_identifier
-            .finalize_mechanics_query(vec![(qry, signature)])
+            .finalize_query_mailbox(vec![(qry, signature)])
             .await?;
         assert!(ar.is_empty())
     }
@@ -243,7 +243,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(delegatee_keypair.sign(&qry.encode()?)?);
         let ar = delegatee_identifier
-            .finalize_mechanics_query(vec![(qry, signature)])
+            .finalize_query_mailbox(vec![(qry, signature)])
             .await?;
         assert!(ar.is_empty());
     }

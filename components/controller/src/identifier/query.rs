@@ -2,21 +2,15 @@ use std::collections::HashSet;
 
 use crate::communication::SendingError;
 use crate::error::ControllerError;
-use crate::known_events::OobiRetrieveError;
-use keri_core::actor::error::ActorError;
 use keri_core::actor::prelude::HashFunctionCode;
 use keri_core::oobi::Scheme;
 use keri_core::prefix::IndexedSignature;
-use keri_core::query::mailbox::{MailboxQuery, MailboxRoute};
 use keri_core::query::query_event::SignedKelQuery;
 use keri_core::{
     actor::{prelude::SerializationFormats, simple_controller::PossibleResponse},
     event::sections::seal::EventSeal,
-    prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
-    query::{
-        mailbox::QueryArgsMbx,
-        query_event::{LogsQueryArgs, QueryEvent, QueryRoute},
-    },
+    prefix::{IdentifierPrefix, SelfSigningPrefix},
+    query::query_event::{LogsQueryArgs, QueryEvent, QueryRoute},
 };
 
 use super::Identifier;
@@ -39,46 +33,7 @@ pub enum WatcherResponseError {
 }
 
 impl Identifier {
-    /// Generates query message of route `mbx` to query own identifier mailbox.
-    pub fn query_mailbox(
-        &self,
-        identifier: &IdentifierPrefix,
-        witnesses: &[BasicPrefix],
-    ) -> Result<Vec<MailboxQuery>, ControllerError> {
-        witnesses
-            .iter()
-            .map(|wit| -> Result<_, ControllerError> {
-                let recipient = IdentifierPrefix::Basic(wit.clone());
-
-                let reminder = if identifier == &self.id {
-                    // request own mailbox
-                    self.query_cache.last_asked_index(&recipient)
-                } else {
-                    // request group mailbox
-                    self.query_cache.last_asked_group_index(&recipient)
-                }?;
-
-                Ok(MailboxQuery::new_query(
-                    MailboxRoute::Mbx {
-                        args: QueryArgsMbx {
-                            // about who
-                            i: identifier.clone(),
-                            // who is asking
-                            pre: self.id.clone(),
-                            // who will get the query
-                            src: recipient,
-                            topics: reminder.to_query_topics(),
-                        },
-                        reply_route: "".to_string(),
-                    },
-                    SerializationFormats::JSON,
-                    HashFunctionCode::Blake3_256,
-                )?)
-            })
-            .collect()
-    }
-
-    pub fn query_own_watchers(
+    pub fn query_watchers(
         &self,
         about_who: &EventSeal,
     ) -> Result<Vec<QueryEvent>, ControllerError> {
@@ -127,7 +82,7 @@ impl Identifier {
     }
 
     /// Joins query events with their signatures, sends it to witness.
-    pub async fn handle_query(
+    async fn handle_query(
         &self,
         qry: &QueryEvent,
         sig: SelfSigningPrefix,

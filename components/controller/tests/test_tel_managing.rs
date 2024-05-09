@@ -40,7 +40,7 @@ async fn test_tel() -> Result<(), ControllerError> {
     let (_registry_id, ixn) = identifier1.incept_registry().unwrap();
     let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(&ixn).unwrap());
 
-    identifier1.finalize_event(&ixn, signature).await.unwrap();
+    identifier1.finalize_incept_registry(&ixn, signature).await.unwrap();
 
     println!("Id registry: {:?}", identifier1.registry_id());
 
@@ -63,7 +63,7 @@ async fn test_tel() -> Result<(), ControllerError> {
     let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(&issuance_ixn).unwrap());
 
     identifier1
-        .finalize_event(&issuance_ixn, signature)
+        .finalize_issue(&issuance_ixn, signature)
         .await
         .unwrap();
 
@@ -81,7 +81,7 @@ async fn test_tel() -> Result<(), ControllerError> {
     let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(&revocation_ixn).unwrap());
 
     identifier1
-        .finalize_event(&revocation_ixn, signature)
+        .finalize_revoke(&revocation_ixn, signature)
         .await
         .unwrap();
 

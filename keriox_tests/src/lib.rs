@@ -78,7 +78,7 @@ pub async fn setup_identifier(
             verifier_keypair.sign(&qry.encode().unwrap()).unwrap(),
         );
         let _act = verifier
-            .finalize_mechanics_query(vec![(qry, signature)])
+            .finalize_query_mailbox(vec![(qry, signature)])
             .await
             .unwrap();
     }

@@ -50,7 +50,7 @@ async fn test_kel_managing() -> Result<(), ControllerError> {
 
     let signature = SelfSigningPrefix::Ed25519Sha512(km.sign(rotation_event.as_bytes())?);
     identifier
-        .finalize_event(rotation_event.as_bytes(), signature)
+        .finalize_rotate(rotation_event.as_bytes(), signature)
         .await?;
 
     let keys = identifier.current_public_keys()?;
@@ -63,7 +63,7 @@ async fn test_kel_managing() -> Result<(), ControllerError> {
 
     let signature = SelfSigningPrefix::Ed25519Sha512(km.sign(interaction_event.as_bytes())?);
     identifier
-        .finalize_event(interaction_event.as_bytes(), signature)
+        .finalize_anchor(interaction_event.as_bytes(), signature)
         .await?;
     let keys = identifier.current_public_keys()?;
     assert_eq!(keys, vec![second_pk]);
@@ -130,7 +130,7 @@ async fn test_kel_managing_with_witness() -> Result<(), ControllerError> {
     for qry in queries_to_sign {
         let signature = SelfSigningPrefix::Ed25519Sha512(km.sign(&qry.encode().unwrap()).unwrap());
         identifier
-            .finalize_mechanics_query(vec![(qry, signature)])
+            .finalize_query_mailbox(vec![(qry, signature)])
             .await
             .unwrap();
     }
@@ -150,7 +150,7 @@ async fn test_kel_managing_with_witness() -> Result<(), ControllerError> {
 
     let signature = SelfSigningPrefix::Ed25519Sha512(km.sign(rotation_event.as_bytes())?);
     identifier
-        .finalize_event(rotation_event.as_bytes(), signature)
+        .finalize_rotate(rotation_event.as_bytes(), signature)
         .await?;
 
     // Publish event to actor's witnesses
@@ -166,7 +166,7 @@ async fn test_kel_managing_with_witness() -> Result<(), ControllerError> {
     {
         let signature = SelfSigningPrefix::Ed25519Sha512(km.sign(&qry.encode().unwrap()).unwrap());
         identifier
-            .finalize_mechanics_query(vec![(qry, signature)])
+            .finalize_query_mailbox(vec![(qry, signature)])
             .await
             .unwrap();
     }

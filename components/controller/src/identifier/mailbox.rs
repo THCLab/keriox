@@ -18,7 +18,30 @@ use crate::mailbox_updating::ActionRequired;
 use super::{mechanics::{MechanicsError, ResponseProcessingError}, Identifier};
 
 impl Identifier {
-    pub fn process_receipt(&self, receipt: &SignedNontransferableReceipt) -> Result<(), Error> {
+     pub(crate) async fn mailbox_response(
+        &self,
+        recipient: &IdentifierPrefix,
+        from_who: &IdentifierPrefix,
+        about_who: &IdentifierPrefix,
+        res: &MailboxResponse,
+    ) -> Result<Vec<ActionRequired>, MechanicsError> {
+        let req = if from_who == about_who {
+            // process own mailbox
+            let req = self.process_own_mailbox(res)?;
+            self.query_cache
+                .update_last_asked_index(recipient.clone(), res)?;
+            req
+        } else {
+            // process group mailbox
+            let group_req = self.process_group_mailbox(res, about_who).await?;
+            self.query_cache
+                .update_last_asked_group_index(recipient.clone(), res)?;
+            group_req
+        };
+        Ok(req)
+    }
+
+    fn process_receipt(&self, receipt: &SignedNontransferableReceipt) -> Result<(), Error> {
         self.known_events
             .process(&Message::Notice(Notice::NontransferableRct(
                 receipt.clone(),
@@ -26,7 +49,7 @@ impl Identifier {
         Ok(())
     }
 
-    pub fn process_own_mailbox(
+    fn process_own_mailbox(
         &self,
         mb: &MailboxResponse,
     ) -> Result<Vec<ActionRequired>, MechanicsError> {
@@ -46,7 +69,7 @@ impl Identifier {
         .collect()
     }
 
-    pub async fn process_groups_mailbox(
+    async fn process_groups_mailbox(
         &self,
         groups: Vec<IdentifierPrefix>,
         mb: &MailboxResponse,
@@ -57,7 +80,7 @@ impl Identifier {
             .await
     }
 
-    pub async fn process_group_mailbox(
+    async fn process_group_mailbox(
         &self,
         mb: &MailboxResponse,
         group_id: &IdentifierPrefix,

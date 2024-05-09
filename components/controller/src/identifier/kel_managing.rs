@@ -6,9 +6,8 @@ use keri_core::{
         msg::KeriEvent,
         signed_event_message::{Message, Notice},
     },
-    oobi::{LocationScheme, Role, Scheme},
+    oobi::{LocationScheme, Scheme},
     prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
-    query::reply_event::{ReplyEvent, ReplyRoute},
 };
 
 use keri_core::prefix::CesrPrimitive;
@@ -71,75 +70,55 @@ impl Identifier {
             .map_err(|e| MechanicsError::EventGenerationError(e.to_string()))
     }
 
-    /// Generates reply event with `end_role_add` route.
-    pub fn add_watcher(&self, watcher_id: IdentifierPrefix) -> Result<String, MechanicsError> {
-        String::from_utf8(
-            event_generator::generate_end_role(&self.id, &watcher_id, Role::Watcher, true)?
-                .encode()?,
-        )
-        .map_err(|_e| MechanicsError::EventFormatError)
+    pub async fn finalize_rotate(&mut self, event: &[u8], sig: SelfSigningPrefix) -> Result<(), MechanicsError> {
+        let parsed_event =
+            parse_event_type(event).map_err(|_e| MechanicsError::EventFormatError)?;
+        if let EventType::KeyEvent(ke) = parsed_event {
+            // Provide kel for new witnesses
+            // TODO  should add to notify_witness instead of sending directly?
+            match &ke.data.event_data {
+                EventData::Rot(rot) | EventData::Drt(rot) => {
+                    let own_kel = self.known_events.find_kel_with_receipts(&self.id).unwrap();
+                    for witness in &rot.witness_config.graft {
+                        let witness_id = IdentifierPrefix::Basic(witness.clone());
+                        for msg in &own_kel {
+                            self.communication
+                                .send_message_to(
+                                    &witness_id,
+                                    Scheme::Http,
+                                    Message::Notice(msg.clone()),
+                                )
+                                .await?;
+                        }
+                    }
+                }
+                _ => (),
+            };
+            self.finalize_key_event(&ke, &sig)?;
+            Ok(())
+        } else {
+            Err(MechanicsError::WrongEventTypeError)
+        }
     }
 
-    /// Generates reply event with `end_role_cut` route.
-    pub fn remove_watcher(&self, watcher_id: IdentifierPrefix) -> Result<String, MechanicsError> {
-        String::from_utf8(
-            event_generator::generate_end_role(&self.id, &watcher_id, Role::Watcher, false)?
-                .encode()?,
-        )
-        .map_err(|_e| MechanicsError::EventFormatError)
+    pub async fn finalize_anchor(&mut self, event: &[u8], sig: SelfSigningPrefix) -> Result<(), MechanicsError> {
+        let parsed_event =
+            parse_event_type(event).map_err(|_e| MechanicsError::EventFormatError)?;
+        if let EventType::KeyEvent(ke) = parsed_event {
+            match &ke.data.event_data {
+                EventData::Ixn(_) => {
+                    self.finalize_key_event(&ke, &sig)
+                },
+                _ => Err(MechanicsError::WrongEventTypeError),
+            }
+        } else {
+            Err(MechanicsError::WrongEventTypeError)
+        }
     }
 
     /// Checks signatures and updates database.
     /// Must call [`IdentifierController::notify_witnesses`] after calling this function if event is a key event.
-    pub async fn finalize_event(
-        &mut self,
-        event: &[u8],
-        sig: SelfSigningPrefix,
-    ) -> Result<(), MechanicsError> {
-        let parsed_event =
-            parse_event_type(event).map_err(|_e| MechanicsError::EventFormatError)?;
-        match parsed_event {
-            EventType::KeyEvent(ke) => {
-                // Provide kel for new witnesses
-                // TODO  should add to notify_witness instead of sending directly?
-                match &ke.data.event_data {
-                    EventData::Rot(rot) | EventData::Drt(rot) => {
-                        let own_kel = self.known_events.find_kel_with_receipts(&self.id).unwrap();
-                        for witness in &rot.witness_config.graft {
-                            let witness_id = IdentifierPrefix::Basic(witness.clone());
-                            for msg in &own_kel {
-                                self.communication
-                                    .send_message_to(
-                                        &witness_id,
-                                        Scheme::Http,
-                                        Message::Notice(msg.clone()),
-                                    )
-                                    .await?;
-                            }
-                        }
-                    }
-                    _ => (),
-                };
-                self.finalize_key_event(&ke, &sig)?;
-                Ok(())
-            }
-            EventType::Rpy(rpy) => match rpy.get_route() {
-                ReplyRoute::EndRoleAdd(_) => {
-                    Ok(self.finalize_add_role(&self.id, rpy, vec![sig]).await?)
-                }
-                ReplyRoute::EndRoleCut(_) => todo!(),
-                _ => Err(MechanicsError::WrongEventTypeError),
-            },
-            EventType::Qry(_) => todo!(),
-            EventType::Receipt(_) => todo!(),
-            EventType::Exn(_) => todo!(),
-            EventType::MailboxQry(_) => todo!(),
-        }
-    }
-
-    /// Adds signature to event and processes it.
-    /// Should call `IdentifierController::notify_witnesses` after calling this function.
-    fn finalize_key_event(
+    pub(crate) fn finalize_key_event(
         &mut self,
         event: &KeriEvent<KeyEvent>,
         sig: &SelfSigningPrefix,
@@ -155,25 +134,6 @@ impl Identifier {
         self.cached_state = st;
 
         self.to_notify.push(signed_message);
-
-        Ok(())
-    }
-
-    async fn finalize_add_role(
-        &self,
-        signer_prefix: &IdentifierPrefix,
-        event: ReplyEvent,
-        sig: Vec<SelfSigningPrefix>,
-    ) -> Result<(), MechanicsError> {
-        let (dest_identifier, messages_to_send) =
-            self.known_events
-                .finalize_add_role(signer_prefix, event, sig)?;
-        // TODO: send in one request
-        for ev in messages_to_send {
-            self.communication
-                .send_message_to(&dest_identifier, Scheme::Http, ev)
-                .await?;
-        }
 
         Ok(())
     }

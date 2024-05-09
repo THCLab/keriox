@@ -218,7 +218,7 @@ mod test {
         for qry in identifier.query_mailbox(&identifier.id, &[wit1_id.clone(), wit2_id.clone()])? {
             let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(&qry.encode()?)?);
             let act = identifier
-                .finalize_mechanics_query(vec![(qry, signature)])
+                .finalize_query_mailbox(vec![(qry, signature)])
                 .await?;
             assert!(act.is_empty());
         }

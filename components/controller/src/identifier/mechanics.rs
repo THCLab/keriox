@@ -1,12 +1,15 @@
+use std::{collections::HashMap, sync::{Arc, Mutex}};
+
 use keri_core::{
-    actor::simple_controller::PossibleResponse, error, mailbox::MailboxResponse, oobi::{error::OobiError, Scheme}, prefix::{IdentifierPrefix, IndexedSignature, SelfSigningPrefix}, query::{
-        mailbox::{MailboxQuery, MailboxRoute},
+    actor::{prelude::SerializationFormats, simple_controller::PossibleResponse}, mailbox::MailboxResponse, oobi::{error::OobiError, Scheme}, prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix}, query::{
+        mailbox::{MailboxQuery, MailboxRoute, QueryArgsMbx},
         query_event::SignedQuery,
     }, transport::TransportError
 };
+use keri_core::actor::prelude::HashFunctionCode;
 
 use crate::{
-    communication::SendingError, mailbox_updating::ActionRequired,
+    communication::SendingError, error::ControllerError, mailbox_updating::{ActionRequired, MailboxReminder}
 };
 
 use super::{broadcast::BroadcastingError, Identifier};
@@ -74,35 +77,51 @@ pub enum ResponseProcessingError {
 }
 
 impl Identifier {
-    /// Joins query events with their signatures, sends it to witness.
-    pub async fn handle_management_query(
-        &self,
-        qry: &MailboxQuery,
-        sig: SelfSigningPrefix,
-    ) -> Result<PossibleResponse, SendingError> {
-        let recipient = match &qry.data.data {
-            MailboxRoute::Mbx {
-                reply_route: _,
-                args,
-            } => Some(args.src.clone()),
-        };
 
-        let query = match &self.id {
-            IdentifierPrefix::Basic(bp) => SignedQuery::new_nontrans(qry.clone(), bp.clone(), sig),
-            _ => {
-                let signatures = vec![IndexedSignature::new_both_same(sig, 0)];
-                SignedQuery::new_trans(qry.clone(), self.id().clone(), signatures)
-            }
-        };
-        self.communication
-            .send_management_query_to(recipient.as_ref().unwrap(), Scheme::Http, query)
-            .await
+    /// Generates query message of route `mbx` to query own identifier mailbox.
+    pub fn query_mailbox(
+        &self,
+        identifier: &IdentifierPrefix,
+        witnesses: &[BasicPrefix],
+    ) -> Result<Vec<MailboxQuery>, ControllerError> {
+        witnesses
+            .iter()
+            .map(|wit| -> Result<_, ControllerError> {
+                let recipient = IdentifierPrefix::Basic(wit.clone());
+
+                let reminder = if identifier == &self.id {
+                    // request own mailbox
+                    self.query_cache.last_asked_index(&recipient)
+                } else {
+                    // request group mailbox
+                    self.query_cache.last_asked_group_index(&recipient)
+                }?;
+
+                Ok(MailboxQuery::new_query(
+                    MailboxRoute::Mbx {
+                        args: QueryArgsMbx {
+                            // about who
+                            i: identifier.clone(),
+                            // who is asking
+                            pre: self.id.clone(),
+                            // who will get the query
+                            src: recipient,
+                            topics: reminder.to_query_topics(),
+                        },
+                        reply_route: "".to_string(),
+                    },
+                    SerializationFormats::JSON,
+                    HashFunctionCode::Blake3_256,
+                )?)
+            })
+            .collect()
     }
 
+   
     /// Joins query events with their signatures, sends it to witness and
     /// process its response. If user action is needed to finalize process,
     /// returns proper notification.
-    pub async fn finalize_mechanics_query(
+    pub async fn finalize_query_mailbox(
         &mut self,
         queries: Vec<(MailboxQuery, SelfSigningPrefix)>,
     ) -> Result<Vec<ActionRequired>, MechanicsError> {
@@ -136,26 +155,104 @@ impl Identifier {
         Ok(actions)
     }
 
-    pub async fn mailbox_response(
+     /// Joins query events with their signatures, sends it to witness.
+    async fn handle_management_query(
         &self,
-        recipient: &IdentifierPrefix,
-        from_who: &IdentifierPrefix,
-        about_who: &IdentifierPrefix,
-        res: &MailboxResponse,
-    ) -> Result<Vec<ActionRequired>, MechanicsError> {
-        let req = if from_who == about_who {
-            // process own mailbox
-            let req = self.process_own_mailbox(res)?;
-            self.query_cache
-                .update_last_asked_index(recipient.clone(), res)?;
-            req
-        } else {
-            // process group mailbox
-            let group_req = self.process_group_mailbox(res, about_who).await?;
-            self.query_cache
-                .update_last_asked_group_index(recipient.clone(), res)?;
-            group_req
+        qry: &MailboxQuery,
+        sig: SelfSigningPrefix,
+    ) -> Result<PossibleResponse, SendingError> {
+        let recipient = match &qry.data.data {
+            MailboxRoute::Mbx {
+                reply_route: _,
+                args,
+            } => Some(args.src.clone()),
         };
-        Ok(req)
+
+        let query = match &self.id {
+            IdentifierPrefix::Basic(bp) => SignedQuery::new_nontrans(qry.clone(), bp.clone(), sig),
+            _ => {
+                let signatures = vec![IndexedSignature::new_both_same(sig, 0)];
+                SignedQuery::new_trans(qry.clone(), self.id().clone(), signatures)
+            }
+        };
+        self.communication
+            .send_management_query_to(recipient.as_ref().unwrap(), Scheme::Http, query)
+            .await
+    }
+
+}
+
+
+pub(crate) struct QueryCache {
+    last_asked_index: Arc<Mutex<HashMap<IdentifierPrefix, MailboxReminder>>>,
+    last_asked_groups_index: Arc<Mutex<HashMap<IdentifierPrefix, MailboxReminder>>>,
+}
+
+impl QueryCache {
+    pub(crate) fn new() -> Self {
+        Self {
+            last_asked_index: Arc::new(Mutex::new(HashMap::new())),
+            last_asked_groups_index: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+
+    pub fn last_asked_index(
+        &self,
+        id: &IdentifierPrefix,
+    ) -> Result<MailboxReminder, ControllerError> {
+        Ok(self
+            .last_asked_index
+            .lock()
+            .map_err(|_| ControllerError::OtherError("Can't lock mutex".to_string()))?
+            .get(id)
+            .cloned()
+            .unwrap_or_default())
+    }
+
+    pub fn last_asked_group_index(
+        &self,
+        id: &IdentifierPrefix,
+    ) -> Result<MailboxReminder, ControllerError> {
+        Ok(self
+            .last_asked_groups_index
+            .lock()
+            .map_err(|_| ControllerError::OtherError("Can't lock mutex".to_string()))?
+            .get(id)
+            .cloned()
+            .unwrap_or_default())
+    }
+
+    pub fn update_last_asked_index(
+        &self,
+        id: IdentifierPrefix,
+        res: &MailboxResponse,
+    ) -> Result<(), MechanicsError> {
+        let mut indexes = self
+            .last_asked_index
+            .lock()
+            .map_err(|_| MechanicsError::LockingError)?;
+        let reminder = indexes.entry(id).or_default();
+        reminder.delegate += res.delegate.len();
+        reminder.multisig += res.multisig.len();
+        reminder.receipt += res.receipt.len();
+        Ok(())
+    }
+
+    pub fn update_last_asked_group_index(
+        &self,
+        id: IdentifierPrefix,
+        res: &MailboxResponse,
+    ) -> Result<(), MechanicsError> {
+        let mut indexes = self
+            .last_asked_groups_index
+            .lock()
+            .map_err(|_| MechanicsError::LockingError)?;
+        let reminder = indexes.entry(id).or_default();
+        reminder.delegate += res.delegate.len();
+        reminder.multisig += res.multisig.len();
+        reminder.receipt += res.receipt.len();
+        Ok(())
     }
 }
+
+

@@ -54,7 +54,7 @@ async fn test_updates() -> Result<(), ControllerError> {
         let signature =
             SelfSigningPrefix::Ed25519Sha512(key_manager.sign(&qry.encode().unwrap()).unwrap());
         signing_identifier
-            .finalize_mechanics_query(vec![(qry, signature)])
+            .finalize_query_mailbox(vec![(qry, signature)])
             .await
             .unwrap();
     }
@@ -110,7 +110,7 @@ async fn test_updates() -> Result<(), ControllerError> {
             verifier_key_manager.sign(&qry.encode().unwrap()).unwrap(),
         );
         verifying_identifier
-            .finalize_mechanics_query(vec![(qry, signature)])
+            .finalize_query_mailbox(vec![(qry, signature)])
             .await
             .unwrap();
     }
@@ -131,7 +131,7 @@ async fn test_updates() -> Result<(), ControllerError> {
     );
 
     verifying_identifier
-        .finalize_event(add_watcher.as_bytes(), signature)
+        .finalize_add_watcher(add_watcher.as_bytes(), signature)
         .await?;
 
     // Now query about signer's kel.
@@ -157,7 +157,7 @@ async fn test_updates() -> Result<(), ControllerError> {
     // Query kel of signing identifier
     let signing_event_seal = signing_identifier.get_last_event_seal()?;
     let queries_and_signatures: Vec<_> = verifying_identifier
-        .query_own_watchers(&signing_event_seal)?
+        .query_watchers(&signing_event_seal)?
         .into_iter()
         .map(|qry| {
             let signature = SelfSigningPrefix::Ed25519Sha512(
@@ -202,7 +202,7 @@ async fn test_updates() -> Result<(), ControllerError> {
 
     let signature = SelfSigningPrefix::Ed25519Sha512(key_manager.sign(rotation_event.as_bytes())?);
     signing_identifier
-        .finalize_event(rotation_event.as_bytes(), signature)
+        .finalize_rotate(rotation_event.as_bytes(), signature)
         .await?;
 
     // Publish event to actor's witnesses
@@ -219,7 +219,7 @@ async fn test_updates() -> Result<(), ControllerError> {
         let signature =
             SelfSigningPrefix::Ed25519Sha512(key_manager.sign(&qry.encode().unwrap()).unwrap());
         signing_identifier
-            .finalize_mechanics_query(vec![(qry, signature)])
+            .finalize_query_mailbox(vec![(qry, signature)])
             .await
             .unwrap();
     }
@@ -244,7 +244,7 @@ async fn test_updates() -> Result<(), ControllerError> {
 
     // Query kel of signing identifier
     let queries_and_signatures: Vec<_> = verifying_identifier
-        .query_own_watchers(&current_event_seal)?
+        .query_watchers(&current_event_seal)?
         .into_iter()
         .map(|qry| {
             let signature = SelfSigningPrefix::Ed25519Sha512(
