@@ -141,10 +141,17 @@ impl SledEventDatabase {
         receipt: SignedNontransferableReceipt,
         id: &IdentifierPrefix,
     ) -> Result<(), DbError> {
-        self.receipts_nt
-            .push(self.identifiers.designated_key(id)?, receipt)?;
-        self.db.flush()?;
+        let receipt_body = receipt.body;
+        let sigs = receipt.signatures;
+        for sig in sigs {
+            let single_receipt = SignedNontransferableReceipt { body: receipt_body.clone(), signatures: vec![sig] };
+            if !self.receipts_nt.contains_value(&single_receipt) {
+                self.receipts_nt.push(self.identifiers.designated_key(id)?, single_receipt)?;
+                self.db.flush()?;
+            }
+        };
         Ok(())
+        
     }
 
     pub fn get_receipts_nt(
