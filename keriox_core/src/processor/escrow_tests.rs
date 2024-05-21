@@ -7,6 +7,7 @@ use std::{
 };
 
 use cesrox::{parse, parse_many, payload::parse_payload};
+use said::SelfAddressingIdentifier;
 
 use crate::{
     database::{escrow::EscrowDb, SledEventDatabase},
@@ -215,9 +216,17 @@ pub fn test_not_fully_witnessed() -> Result<(), Error> {
         .unwrap();
     assert!(esc.next().is_none());
 
+    let event_digest: SelfAddressingIdentifier = "EJufgwH347N2kobmes1IQw_1pfMipEFFy0RwinZTtah9"
+        .parse()
+        .unwrap();
     // check if receipt was accepted
-    let esc = db.get_receipts_nt(&id).unwrap();
-    assert_eq!(esc.count(), 2);
+    let mut esc = db
+        .get_receipts_nt(&id)
+        .unwrap()
+        .filter(|rct| rct.body.receipted_event_digest.eq(&event_digest));
+    let rct_from_db = esc.next().unwrap();
+    assert_eq!(rct_from_db.signatures.len(), 2);
+    assert_eq!(esc.next(), None);
 
     let state = event_storage.get_state(&id).unwrap();
     assert_eq!(state.sn, 0);
@@ -234,8 +243,13 @@ pub fn test_not_fully_witnessed() -> Result<(), Error> {
         .unwrap();
     assert!(esc.next().is_none());
 
-    let esc = db.get_receipts_nt(&id).unwrap();
-    assert_eq!(esc.count(), 3);
+    let mut esc = db
+        .get_receipts_nt(&id)
+        .unwrap()
+        .filter(|rct| rct.body.receipted_event_digest.eq(&event_digest));
+    let rct_from_db = esc.next().unwrap();
+    assert_eq!(rct_from_db.signatures.len(), 3);
+    assert_eq!(esc.next(), None);
 
     Ok(())
 }

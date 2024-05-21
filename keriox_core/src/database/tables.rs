@@ -168,7 +168,7 @@ where
         }
     }
 
-    /// check if sprovided `u64` key is present in the db
+    /// check if provided `u64` key is present in the db
     ///
     pub fn contains_key(&self, id: u64) -> Result<bool, DbError> {
         Ok(self.tree.contains_key(key_bytes(id))?)

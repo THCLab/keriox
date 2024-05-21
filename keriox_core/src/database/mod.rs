@@ -141,20 +141,41 @@ impl SledEventDatabase {
         receipt: SignedNontransferableReceipt,
         id: &IdentifierPrefix,
     ) -> Result<(), DbError> {
-        let receipt_body = receipt.body;
-        let sigs = receipt.signatures;
-        for sig in sigs {
-            let single_receipt = SignedNontransferableReceipt {
-                body: receipt_body.clone(),
-                signatures: vec![sig],
-            };
-            if !self.receipts_nt.contains_value(&single_receipt) {
-                self.receipts_nt
-                    .push(self.identifiers.designated_key(id)?, single_receipt)?;
+        let designated_key = self.identifiers.designated_key(id)?;
+        match self.receipts_nt.get(designated_key)? {
+            Some(receipts) => {
+                // Update existing receipt with new signature or insert new if doesn't exist.
+                let (found, mut to_insert) =
+                    receipts
+                        .into_iter()
+                        .fold((false, vec![]), |(_, mut acc), mut rct| {
+                            if rct.body.eq(&receipt.body) {
+                                for sig in &receipt.signatures {
+                                    if !rct.signatures.contains(&sig) {
+                                        rct.signatures.push(sig.clone())
+                                    }
+                                }
+                                acc.push(rct);
+                                (true, acc)
+                            } else {
+                                acc.push(rct);
+                                (false, acc)
+                            }
+                        });
+
+                if !found {
+                    to_insert.push(receipt)
+                };
+                self.receipts_nt.put(designated_key, to_insert)?;
                 self.db.flush()?;
+                Ok(())
+            }
+            None => {
+                self.receipts_nt.push(designated_key, receipt)?;
+                self.db.flush()?;
+                Ok(())
             }
         }
-        Ok(())
     }
 
     pub fn get_receipts_nt(

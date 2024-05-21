@@ -6,7 +6,7 @@ use keri_core::{
         signed_event_message::{Message, Notice, SignedNontransferableReceipt},
     },
     oobi::Scheme,
-    prefix::{BasicPrefix, IdentifierPrefix},
+    prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
 };
 
 use crate::{communication::SendingError, identifier::Identifier};
@@ -38,50 +38,53 @@ impl Identifier {
 
         for rct in receipts {
             let rct_digest = rct.body.receipted_event_digest.clone();
-            let rct_wit_ids =
-                self.get_wit_ids_of_rct(&rct)
-                    .map_err(|_e| BroadcastingError::MissingEvent {
-                        digest: rct_digest.clone(),
-                    })?;
+            let couplets = self
+                .couplets(&rct)
+                .map_err(|_e| BroadcastingError::MissingEvent {
+                    digest: rct_digest.clone(),
+                })?;
 
             for dest_wit_id in dest_wit_ids {
-                // Don't send receipt to witness who created it.
-                // TODO: this only works if the target witness ID is a BasicPrefix.
-                if let IdentifierPrefix::Basic(dest_wit_id) = dest_wit_id {
-                    if rct_wit_ids.contains(dest_wit_id) {
+                for (id, sig) in &couplets {
+                    // Don't send receipt to witness who created it.
+                    // TODO: this only works if the target witness ID is a BasicPrefix.
+                    if let IdentifierPrefix::Basic(dest_wit_id) = dest_wit_id {
+                        if id.eq(dest_wit_id) {
+                            continue;
+                        }
+                    }
+
+                    // Don't send the same receipt twice.
+                    if {
+                        self.broadcasted_rcts.contains(&(
+                            rct_digest.clone(),
+                            id.clone(),
+                            dest_wit_id.clone(),
+                        ))
+                    } {
                         continue;
                     }
-                }
+                    let rct_to_send = SignedNontransferableReceipt {
+                        body: rct.body.clone(),
+                        signatures: vec![Nontransferable::Couplet(vec![(id.clone(), sig.clone())])],
+                    };
+                    self.communication
+                        .send_message_to(
+                            dest_wit_id,
+                            Scheme::Http,
+                            Message::Notice(Notice::NontransferableRct(rct_to_send.clone())),
+                        )
+                        .await?;
 
-                // Don't send the same receipt twice.
-                if rct_wit_ids.iter().all(|rct_wit_id| {
-                    self.broadcasted_rcts.contains(&(
-                        rct_digest.clone(),
-                        rct_wit_id.clone(),
-                        dest_wit_id.clone(),
-                    ))
-                }) {
-                    continue;
-                }
-
-                self.communication
-                    .send_message_to(
-                        dest_wit_id,
-                        Scheme::Http,
-                        Message::Notice(Notice::NontransferableRct(rct.clone())),
-                    )
-                    .await?;
-
-                // Remember event digest and witness ID to avoid sending the same receipt twice.
-                for rct_wit_id in &rct_wit_ids {
+                    // Remember event digest and witness ID to avoid sending the same receipt twice.
                     self.broadcasted_rcts.insert((
                         rct_digest.clone(),
-                        rct_wit_id.clone(),
+                        id.clone(),
                         dest_wit_id.clone(),
                     ));
-                }
 
-                n += 1;
+                    n += 1;
+                }
             }
         }
 
@@ -89,10 +92,10 @@ impl Identifier {
     }
 
     /// Get IDs of witnesses who signed given receipt.
-    fn get_wit_ids_of_rct(
+    fn couplets(
         &self,
         rct: &SignedNontransferableReceipt,
-    ) -> Result<Vec<BasicPrefix>, Error> {
+    ) -> Result<Vec<(BasicPrefix, SelfSigningPrefix)>, Error> {
         let mut wit_ids = Vec::new();
         for sig in &rct.signatures {
             match sig {
@@ -103,12 +106,15 @@ impl Identifier {
                             &self.id,
                             &rct.body.receipted_event_digest,
                         )?;
-                        wit_ids.push(wits[sig.index.current() as usize].clone());
+                        wit_ids.push((
+                            wits[sig.index.current() as usize].clone(),
+                            sig.signature.clone(),
+                        ));
                     }
                 }
                 Nontransferable::Couplet(sigs) => {
-                    for (wit_id, _sig) in sigs {
-                        wit_ids.push(wit_id.clone());
+                    for (wit_id, sig) in sigs {
+                        wit_ids.push((wit_id.clone(), sig.clone()));
                     }
                 }
             }
