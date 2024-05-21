@@ -3,7 +3,7 @@ use serde::{ser::SerializeStruct, Deserialize, Serialize};
 
 use super::{msg::KeriEvent, serializer::to_string, signature::Nontransferable};
 #[cfg(feature = "query")]
-use crate::query::reply_event::SignedReply;
+use crate::query::{query_event::SignedQueryMessage, reply_event::SignedReply};
 use crate::{
     error::Error,
     event::{
@@ -12,7 +12,6 @@ use crate::{
         KeyEvent,
     },
     prefix::{IdentifierPrefix, IndexedSignature},
-    query::query_event::SignedQueryMessage,
     state::{EventSemantics, IdentifierState},
 };
 

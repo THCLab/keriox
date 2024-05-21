@@ -1,11 +1,9 @@
 use std::convert::TryFrom;
 
-use crate::query::mailbox::MailboxRoute;
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "oobi")]
 use crate::oobi::OobiManager;
-use crate::query::query_event::SignedQueryMessage;
 use crate::{
     error::Error,
     event_message::{
@@ -21,7 +19,9 @@ use crate::{
     processor::event_storage::EventStorage,
     query::{
         key_state_notice::KeyStateNotice,
+        mailbox::MailboxRoute,
         query_event::QueryRoute,
+        query_event::SignedQueryMessage,
         reply_event::{ReplyRoute, SignedReply},
         ReplyType,
     },

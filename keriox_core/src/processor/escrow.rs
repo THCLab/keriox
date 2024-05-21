@@ -7,8 +7,6 @@ use super::{
     notification::{JustNotification, Notification, NotificationBus, Notifier},
     validator::EventValidator,
 };
-#[cfg(feature = "query")]
-use crate::query::reply_event::ReplyRoute;
 use crate::{
     database::{
         escrow::{Escrow, EscrowDb},
@@ -28,7 +26,11 @@ use crate::{
         },
     },
     prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+};
+#[cfg(feature = "query")]
+use crate::{
     processor::validator::{MoreInfoError, VerificationError},
+    query::reply_event::ReplyRoute,
 };
 
 #[derive(Debug, Clone)]

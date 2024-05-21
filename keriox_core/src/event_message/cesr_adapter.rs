@@ -9,17 +9,11 @@ use cesrox::{
 use said::version::format::SerializationFormats;
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    event::{
-        event_data::EventData,
-        receipt::Receipt,
-        sections::seal::{EventSeal, SourceSeal},
-        KeyEvent,
-    },
-    query::{
-        mailbox::{MailboxQuery, SignedMailboxQuery},
-        query_event::SignedQueryMessage,
-    },
+use crate::event::{
+    event_data::EventData,
+    receipt::Receipt,
+    sections::seal::{EventSeal, SourceSeal},
+    KeyEvent,
 };
 
 #[cfg(any(feature = "query", feature = "oobi"))]
@@ -29,6 +23,8 @@ use crate::event_message::signed_event_message::Op;
 use super::signature::signatures_into_groups;
 #[cfg(feature = "query")]
 use crate::query::{
+    mailbox::{MailboxQuery, SignedMailboxQuery},
+    query_event::SignedQueryMessage,
     query_event::{QueryEvent, SignedKelQuery},
     reply_event::{ReplyEvent, SignedReply},
 };
@@ -94,6 +90,7 @@ impl EventType {
             EventType::Rpy(rpy) => rpy.encode(),
             #[cfg(feature = "mailbox")]
             EventType::Exn(exn) => exn.encode(),
+            #[cfg(feature = "query")]
             EventType::MailboxQry(qry) => qry.encode(),
         }
     }
@@ -267,6 +264,7 @@ impl TryFrom<ParsedData> for Message {
             EventType::Rpy(rpy) => Message::Op(signed_reply(rpy, value.attachments)?),
             #[cfg(feature = "mailbox")]
             EventType::Exn(exn) => Message::Op(signed_exchange(exn, value.attachments)?),
+            #[cfg(feature = "query")]
             EventType::MailboxQry(qry) => {
                 Message::Op(signed_management_query(qry, value.attachments)?)
             }

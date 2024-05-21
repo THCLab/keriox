@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use super::event_storage::EventStorage;
+#[cfg(feature = "query")]
+use crate::query::{key_state_notice::KeyStateNotice, reply_event::SignedReply, QueryError};
 use crate::{
     database::SledEventDatabase,
     error::Error,
@@ -24,13 +26,9 @@ use crate::{
             SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
         },
     },
+    prefix::IdentifierPrefix,
     prefix::{BasicPrefix, SelfSigningPrefix},
     state::{EventSemantics, IdentifierState},
-};
-#[cfg(feature = "query")]
-use crate::{
-    prefix::IdentifierPrefix,
-    query::{key_state_notice::KeyStateNotice, reply_event::SignedReply, QueryError},
 };
 
 #[derive(Error, Debug, Serialize, Deserialize)]
