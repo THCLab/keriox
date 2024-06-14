@@ -161,3 +161,19 @@ fn test_derive_keypair() -> Result<(), Error> {
 
     Ok(())
 }
+
+#[test]
+fn test_derive_from_seed() {
+    use cesrox::primitives::codes::seed::SeedCode;
+    use rand::rngs::OsRng;
+    let ed_keypair = ed25519_dalek::Keypair::generate(&mut OsRng);
+
+    let sp = SeedPrefix::new(
+        SeedCode::RandomSeed256Ed25519,
+        ed_keypair.secret.as_bytes().to_vec(),
+    );
+
+    let (derived_pub_key, derived_priv_key) = sp.derive_key_pair().unwrap();
+    assert_eq!(derived_pub_key.key(), ed_keypair.public.to_bytes());
+    assert_eq!(derived_priv_key.key(), ed_keypair.secret.to_bytes());
+}

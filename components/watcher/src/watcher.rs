@@ -309,7 +309,7 @@ impl WatcherData {
         Ok(())
     }
 
-    /// Forward query to random registered witness and save its response to mailbox.
+    /// Forward query to registered witnesses and save its response to mailbox.
     async fn forward_query(&self, id: &IdentifierPrefix) -> Result<(), ActorError> {
         let witnesses = self.get_witnesses_for_prefix(&id)?;
         for witness in witnesses {
