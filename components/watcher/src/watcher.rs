@@ -1,5 +1,6 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{path::PathBuf, sync::Arc, thread::sleep, time::Duration};
 
+use async_std::channel::{unbounded, Receiver, Sender};
 use itertools::Itertools;
 use keri_core::{
     actor::{
@@ -34,6 +35,7 @@ pub struct WatcherData {
     pub oobi_manager: OobiManager,
     pub signer: Arc<Signer>,
     transport: Box<dyn Transport + Send + Sync>,
+    tx: Sender<IdentifierPrefix>,
 }
 
 pub struct WatcherConfig {
@@ -57,7 +59,7 @@ impl Default for WatcherConfig {
 }
 
 impl WatcherData {
-    pub fn new(config: WatcherConfig) -> Result<Self, Error> {
+    pub fn new(config: WatcherConfig, tx: Sender<IdentifierPrefix>) -> Result<Arc<Self>, Error> {
         let WatcherConfig {
             public_address,
             db_path,
@@ -118,7 +120,8 @@ impl WatcherData {
         );
         oobi_manager.save_oobi(&signed_reply)?;
 
-        Ok(Self {
+
+        let watcher = Arc::new(Self {
             address: public_address,
             prefix,
             processor,
@@ -126,7 +129,9 @@ impl WatcherData {
             signer,
             oobi_manager,
             transport,
-        })
+            tx
+        });
+        Ok(watcher.clone())
     }
 
     /// Get location scheme from OOBI manager and sign it.
@@ -232,7 +237,10 @@ impl WatcherData {
                     }
                     _ => {
                         // query watcher and return info, that it's not ready
-                        let _ = self.update_local_kel(&qry.query.get_prefix()).await;
+                        let id_to_update = qry.query.get_prefix();
+                        self.tx.send(id_to_update).await.unwrap();
+                        return  Err(ActorError::ResponseNotReady);
+                        // let _ = self.update_local_kel(&qry.query.get_prefix()).await;
                     }
                 };
             }
@@ -279,7 +287,9 @@ impl WatcherData {
         }
     }
 
-    async fn update_local_kel(&self, id: &IdentifierPrefix) -> Result<(), ActorError> {
+    pub async fn update_local_kel(&self, id: &IdentifierPrefix) -> Result<(), ActorError> {
+
+        println!("\n\nKey updating started\n\n");
         // Update latest state for prefix
         let _ = self.query_state(id).await;
 
@@ -295,6 +305,7 @@ impl WatcherData {
             // If there is an escrowed reply it means we don't have the most recent data.
             // In this case forward the query to witness.
             self.forward_query(id).await?;
+            println!("\n\nKey updating ended\n\n");
         };
         Ok(())
     }
@@ -455,39 +466,6 @@ impl WatcherData {
             }))
     }
 
-    pub fn parse_and_process_notices(&self, input_stream: &[u8]) -> Result<(), Error> {
-        parse_notice_stream(input_stream)?
-            .into_iter()
-            .try_for_each(|notice| self.process_notice(notice))
-    }
-
-    pub async fn parse_and_process_queries(
-        &self,
-        input_stream: &[u8],
-    ) -> Result<Vec<PossibleResponse>, ActorError> {
-        let mut responses = Vec::new();
-        for query in parse_query_stream(input_stream)? {
-            match query {
-                keri_core::query::query_event::SignedQueryMessage::KelQuery(kqry) => {
-                    let result = self.process_query(kqry).await?;
-                    if let Some(response) = result {
-                        responses.push(response);
-                    }
-                }
-                keri_core::query::query_event::SignedQueryMessage::MailboxQuery(_mqry) => {
-                    unimplemented!()
-                }
-            }
-        }
-        Ok(responses)
-    }
-
-    pub fn parse_and_process_replies(&self, input_stream: &[u8]) -> Result<(), ActorError> {
-        for reply in parse_reply_stream(input_stream)? {
-            self.process_reply(reply)?;
-        }
-        Ok(())
-    }
 
     pub async fn process_ops(&self, ops: Vec<Op>) -> Result<Vec<PossibleResponse>, ActorError> {
         let mut results = Vec::new();
@@ -501,16 +479,18 @@ impl WatcherData {
     }
 
     fn get_loc_schemas(&self, id: &IdentifierPrefix) -> Result<Vec<LocationScheme>, ActorError> {
-        self.get_loc_scheme_for_id(id)?
-            .iter()
-            .map(|lc| {
-                if let ReplyRoute::LocScheme(loc_scheme) = lc.reply.get_route() {
-                    Ok(loc_scheme)
-                } else {
-                    Err(ActorError::WrongReplyRoute)
-                }
-            })
-            .collect()
+        Ok(match self.oobi_manager.get_loc_scheme(id)? {
+            Some(oobis_to_sign) => oobis_to_sign
+                .iter()
+                .filter_map(|oobi_to_sing| {
+                    match &oobi_to_sing.data.data {
+                        ReplyRoute::LocScheme(loc) => Some(loc.clone()),
+                        _ => None,
+                    }
+                })
+                .collect::<Vec<_>>(),
+            None => return Err(ActorError::NoLocation { id: id.clone() }),
+        })
     }
 
     pub async fn send_query_to(
@@ -539,9 +519,29 @@ impl WatcherData {
     }
 }
 
-pub struct Watcher(pub WatcherData);
+pub struct Watcher(pub(crate) Arc<WatcherData>, Receiver<IdentifierPrefix>);
 
 impl Watcher {
+
+    pub fn new(config: WatcherConfig) -> Result<Self, Error> {
+        let (tx, rx) = unbounded();
+        Ok(Watcher(WatcherData::new(config, tx)?, rx))
+    }
+
+    pub fn prefix(&self) -> BasicPrefix {
+        self.0.prefix.clone()
+    }
+
+    pub fn signed_location(&self, eid: &IdentifierPrefix) -> Result<Vec<SignedReply>, ActorError> {
+        self.0.get_loc_scheme_for_id(eid)
+    }
+
+    pub async fn process_update_requests(&self) {
+        if let Ok(received) = self.1.try_recv() {
+            let _ = self.0.update_local_kel(&received).await;
+        }
+    }
+
     pub fn oobi(&self) -> LocationScheme {
         LocationScheme::new(
             IdentifierPrefix::Basic(self.0.prefix.clone()),
@@ -588,4 +588,39 @@ impl Watcher {
         self.0.process_ops(oobis).await?;
         Ok(())
     }
+
+    pub fn parse_and_process_notices(&self, input_stream: &[u8]) -> Result<(), Error> {
+        parse_notice_stream(input_stream)?
+            .into_iter()
+            .try_for_each(|notice| self.0.process_notice(notice))
+    }
+
+    pub async fn parse_and_process_queries(
+        &self,
+        input_stream: &[u8],
+    ) -> Result<Vec<PossibleResponse>, ActorError> {
+        let mut responses = Vec::new();
+        for query in parse_query_stream(input_stream)? {
+            match query {
+                keri_core::query::query_event::SignedQueryMessage::KelQuery(kqry) => {
+                    let result = self.0.process_query(kqry).await?;
+                    if let Some(response) = result {
+                        responses.push(response);
+                    }
+                }
+                keri_core::query::query_event::SignedQueryMessage::MailboxQuery(_mqry) => {
+                    unimplemented!()
+                }
+            }
+        }
+        Ok(responses)
+    }
+
+    pub fn parse_and_process_replies(&self, input_stream: &[u8]) -> Result<(), ActorError> {
+        for reply in parse_reply_stream(input_stream)? {
+            self.0.process_reply(reply)?;
+        }
+        Ok(())
+    }
+    
 }

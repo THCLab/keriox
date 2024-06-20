@@ -6,4 +6,4 @@ pub use crate::{
 #[cfg(test)]
 mod test;
 mod watcher;
-mod watcher_listener;
+pub mod watcher_listener;

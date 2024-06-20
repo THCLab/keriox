@@ -3,7 +3,7 @@ use std::{net::ToSocketAddrs, sync::Arc};
 use actix_web::{dev::Server, web, App, HttpServer};
 use keri_core::{error::Error, oobi::LocationScheme, prefix::BasicPrefix};
 
-use crate::watcher::{Watcher, WatcherConfig, WatcherData};
+use crate::watcher::{Watcher, WatcherConfig};
 
 use self::http_handlers::ApiError;
 
@@ -14,11 +14,14 @@ pub struct WatcherListener {
 impl WatcherListener {
     pub fn new(config: WatcherConfig) -> Result<Self, Error> {
         Ok(Self {
-            watcher_data: Arc::new(Watcher(WatcherData::new(config)?)),
+            watcher_data: Arc::new(Watcher::new(config)?),
         })
     }
 
     pub fn listen_http(self, addr: impl ToSocketAddrs) -> Server {
+        let data = self.watcher_data.clone();
+        actix_web::rt::spawn( update_checking(data));
+        
         let state = web::Data::new(self.watcher_data);
         HttpServer::new(move || {
             App::new()
@@ -52,6 +55,7 @@ impl WatcherListener {
                     actix_web::web::post().to(http_handlers::resolve_oobi),
                 )
         })
+        .disable_signals()
         .bind(addr)
         .unwrap()
         .run()
@@ -69,7 +73,13 @@ impl WatcherListener {
     }
 
     pub fn get_prefix(&self) -> BasicPrefix {
-        self.watcher_data.0.prefix.clone()
+        self.watcher_data.prefix()
+    }
+}
+
+pub async fn update_checking(data: Arc<Watcher>) {
+    loop {
+        data.process_update_requests().await
     }
 }
 
@@ -77,7 +87,7 @@ pub mod http_handlers {
 
     use std::sync::Arc;
 
-    use actix_web::{http::header::ContentType, web, HttpResponse, ResponseError};
+    use actix_web::{http::{header::ContentType, StatusCode}, web, HttpResponse, ResponseError};
     use itertools::Itertools;
     use keri_core::{
         actor::{error::ActorError, prelude::Message},
@@ -85,7 +95,6 @@ pub mod http_handlers {
         oobi::{error::OobiError, EndRole, LocationScheme, Role},
         prefix::IdentifierPrefix,
     };
-    use reqwest::StatusCode;
     use serde::Deserialize;
 
     use crate::watcher::Watcher;
@@ -102,7 +111,7 @@ pub mod http_handlers {
             "\nGot events to process: \n{}",
             String::from_utf8_lossy(&body)
         );
-        data.0
+        data
             .parse_and_process_notices(&body)
             .map_err(ActorError::from)?;
 
@@ -120,7 +129,6 @@ pub mod http_handlers {
             String::from_utf8_lossy(&body)
         );
         let resp = data
-            .0
             .parse_and_process_queries(&body)
             .await?
             .iter()
@@ -141,7 +149,7 @@ pub mod http_handlers {
             String::from_utf8_lossy(&body)
         );
 
-        data.0.parse_and_process_replies(&body)?;
+        data.parse_and_process_replies(&body)?;
 
         Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())
@@ -182,7 +190,7 @@ pub mod http_handlers {
         eid: web::Path<IdentifierPrefix>,
         data: web::Data<Arc<Watcher>>,
     ) -> Result<HttpResponse, ApiError> {
-        let loc_scheme = data.0.get_loc_scheme_for_id(&eid)?;
+        let loc_scheme = data.signed_location(&eid)?;
         let oobis: Vec<u8> = loc_scheme
             .into_iter()
             .flat_map(|sr| {

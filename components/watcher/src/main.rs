@@ -15,7 +15,7 @@ use keri_core::{
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DurationSeconds};
 use url::Url;
-use watcher::{WatcherConfig, WatcherListener};
+use watcher::{WatcherConfig,WatcherListener};
 
 #[derive(Deserialize)]
 pub struct Config {

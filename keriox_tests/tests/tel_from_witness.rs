@@ -1,5 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
+use keri_controller::identifier::query::WatcherResponseError;
 use keri_controller::{
     error::ControllerError, IdentifierPrefix, KeyManager, LocationScheme, SelfSigningPrefix,
 };
@@ -53,12 +54,14 @@ async fn test_tel_from_witness() -> Result<(), ControllerError> {
         };
 
         let watcher_db_path = Builder::new().prefix("cont-test-db").tempdir().unwrap();
-        Arc::new(WatcherListener::new(WatcherConfig {
+        let watcher_listener = Arc::new(WatcherListener::new(WatcherConfig {
             public_address: Url::parse("http://watcher1/").unwrap(),
             db_path: watcher_db_path.path().to_owned(),
             transport: Box::new(watcher_transport),
             ..Default::default()
-        })?)
+        })?);
+        async_std::task::spawn( watcher::watcher_listener::update_checking(watcher_listener.watcher_data.clone()));
+        watcher_listener
     };
 
     let watcher_identifier = watcher.clone().get_prefix();
@@ -276,9 +279,16 @@ async fn test_tel_from_witness() -> Result<(), ControllerError> {
         })
         .collect();
 
-    verifier
+        let mut q = verifier
         .finalize_query(queries_and_signatures.clone())
-        .await?;
+        .await;
+    
+    // Watcher may need some time to find KEL. Query it multiple times.
+    while matches!(q, Err(WatcherResponseError::ResponseNotReady)) {
+        q = verifier
+        .finalize_query(queries_and_signatures.clone())
+        .await;
+    }
 
     let signature =
         SelfSigningPrefix::Ed25519Sha512(verifier_keypair.sign(&qry.encode().unwrap())?);

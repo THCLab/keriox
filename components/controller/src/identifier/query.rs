@@ -2,6 +2,7 @@ use std::collections::HashSet;
 
 use crate::communication::SendingError;
 use crate::error::ControllerError;
+use keri_core::actor::error::ActorError;
 use keri_core::actor::prelude::HashFunctionCode;
 use keri_core::oobi::Scheme;
 use keri_core::prefix::IndexedSignature;
@@ -29,6 +30,8 @@ pub enum WatcherResponseError {
     ResponseProcessingError(#[from] keri_core::error::Error),
     #[error(transparent)]
     SendingError(#[from] SendingError),
+    #[error("Response not ready")]
+    ResponseNotReady,
 }
 
 impl Identifier {
@@ -53,18 +56,20 @@ impl Identifier {
         let mut updates = QueryResponse::NoUpdates;
         let mut possibly_updated_ids: HashSet<IdentifierPrefix> = HashSet::new();
         for (qry, sig) in queries {
-            match self.handle_query(&qry, sig).await? {
-                PossibleResponse::Kel(kel) => {
+            match self.handle_query(&qry, sig).await {
+                Ok(PossibleResponse::Kel(kel)) => {
                     for event in kel {
                         let id = event.get_prefix();
                         possibly_updated_ids.insert(id);
                         self.known_events.process(&event)?;
                     }
                 }
-                PossibleResponse::Mbx(_mbx) => {
+                Ok(PossibleResponse::Mbx(_mbx)) => {
                     return Err(WatcherResponseError::UnexpectedResponse);
                 }
-                PossibleResponse::Ksn(_) => todo!(),
+                Ok(PossibleResponse::Ksn(_)) => todo!(),
+                Err(SendingError::ActorInternalError(ActorError::ResponseNotReady)) => {return Err(WatcherResponseError::ResponseNotReady)},
+                Err(e) => return Err(e.into()),
             };
         }
         for id in possibly_updated_ids {

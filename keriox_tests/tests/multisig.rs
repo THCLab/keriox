@@ -52,7 +52,7 @@ async fn test_multisig() -> Result<()> {
         })?
     };
     let watcher = watcher_listener.watcher_data.clone();
-    let watcher_id = watcher.0.prefix.clone();
+    let watcher_id = watcher.prefix();
     let watcher_oobi = LocationScheme {
         eid: IdentifierPrefix::Basic(watcher_id.clone()),
         scheme: keri_core::oobi::Scheme::Http,
