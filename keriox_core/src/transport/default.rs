@@ -116,7 +116,7 @@ where
         if status.is_success() {
             match parse_response(&body) {
                 Ok(resp) => Ok(resp),
-                Err(ResponseError::EmptyResponse) => Err(TransportError::ResponseNotReady),
+                Err(ResponseError::EmptyResponse) => Err(TransportError::EmptyResponse),
                 Err(ResponseError::Unparsable(e)) => Err(TransportError::InvalidResponse(e)),
             }
         } else {

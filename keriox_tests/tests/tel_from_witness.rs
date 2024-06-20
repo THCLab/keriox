@@ -60,7 +60,9 @@ async fn test_tel_from_witness() -> Result<(), ControllerError> {
             transport: Box::new(watcher_transport),
             ..Default::default()
         })?);
-        async_std::task::spawn( watcher::watcher_listener::update_checking(watcher_listener.watcher_data.clone()));
+        async_std::task::spawn(watcher::watcher_listener::update_checking(
+            watcher_listener.watcher_data.clone(),
+        ));
         watcher_listener
     };
 
@@ -279,15 +281,15 @@ async fn test_tel_from_witness() -> Result<(), ControllerError> {
         })
         .collect();
 
-        let mut q = verifier
+    let mut q = verifier
         .finalize_query(queries_and_signatures.clone())
         .await;
-    
+
     // Watcher may need some time to find KEL. Query it multiple times.
     while matches!(q, Err(WatcherResponseError::ResponseNotReady)) {
         q = verifier
-        .finalize_query(queries_and_signatures.clone())
-        .await;
+            .finalize_query(queries_and_signatures.clone())
+            .await;
     }
 
     let signature =

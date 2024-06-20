@@ -35,6 +35,7 @@ pub struct WatcherData {
     pub oobi_manager: OobiManager,
     pub signer: Arc<Signer>,
     transport: Box<dyn Transport + Send + Sync>,
+    /// Watcher will update KEL of the identifiers that have been sent to this channel.
     tx: Sender<IdentifierPrefix>,
 }
 
@@ -120,7 +121,6 @@ impl WatcherData {
         );
         oobi_manager.save_oobi(&signed_reply)?;
 
-
         let watcher = Arc::new(Self {
             address: public_address,
             prefix,
@@ -129,7 +129,7 @@ impl WatcherData {
             signer,
             oobi_manager,
             transport,
-            tx
+            tx,
         });
         Ok(watcher.clone())
     }
@@ -153,6 +153,16 @@ impl WatcherData {
                 .collect::<Result<_, Error>>()?,
             None => return Err(ActorError::NoLocation { id: eid.clone() }),
         })
+    }
+
+    pub fn get_end_role_for_id(
+        &self,
+        cid: &IdentifierPrefix,
+        role: Role,
+    ) -> Result<Vec<SignedReply>, ActorError> {
+        self.oobi_manager
+            .get_end_role(&cid, role)
+            .map_err(ActorError::from)
     }
 
     pub fn get_signed_ksn_for_prefix(
@@ -232,15 +242,13 @@ impl WatcherData {
                 let local_state = self.get_state_for_prefix(&args.i);
                 match (local_state, args.s) {
                     (Some(state), Some(sn)) if sn <= state.sn => {
-                        // return kel from local db
-                        // let kel = self.event_storage.get_kel_messages_with_receipts(&qry.query.get_prefix(), Some(sn))?;
+                        // KEL is already in database
                     }
                     _ => {
                         // query watcher and return info, that it's not ready
                         let id_to_update = qry.query.get_prefix();
                         self.tx.send(id_to_update).await.unwrap();
-                        return  Err(ActorError::ResponseNotReady);
-                        // let _ = self.update_local_kel(&qry.query.get_prefix()).await;
+                        return Err(ActorError::ResponseNotReady);
                     }
                 };
             }
@@ -288,7 +296,6 @@ impl WatcherData {
     }
 
     pub async fn update_local_kel(&self, id: &IdentifierPrefix) -> Result<(), ActorError> {
-
         println!("\n\nKey updating started\n\n");
         // Update latest state for prefix
         let _ = self.query_state(id).await;
@@ -466,7 +473,6 @@ impl WatcherData {
             }))
     }
 
-
     pub async fn process_ops(&self, ops: Vec<Op>) -> Result<Vec<PossibleResponse>, ActorError> {
         let mut results = Vec::new();
         for op in ops {
@@ -482,11 +488,9 @@ impl WatcherData {
         Ok(match self.oobi_manager.get_loc_scheme(id)? {
             Some(oobis_to_sign) => oobis_to_sign
                 .iter()
-                .filter_map(|oobi_to_sing| {
-                    match &oobi_to_sing.data.data {
-                        ReplyRoute::LocScheme(loc) => Some(loc.clone()),
-                        _ => None,
-                    }
+                .filter_map(|oobi_to_sing| match &oobi_to_sing.data.data {
+                    ReplyRoute::LocScheme(loc) => Some(loc.clone()),
+                    _ => None,
                 })
                 .collect::<Vec<_>>(),
             None => return Err(ActorError::NoLocation { id: id.clone() }),
@@ -519,40 +523,45 @@ impl WatcherData {
     }
 }
 
-pub struct Watcher(pub(crate) Arc<WatcherData>, Receiver<IdentifierPrefix>);
+pub struct Watcher {
+    pub(crate) watcher_data: Arc<WatcherData>,
+    recv: Receiver<IdentifierPrefix>,
+}
 
 impl Watcher {
-
     pub fn new(config: WatcherConfig) -> Result<Self, Error> {
         let (tx, rx) = unbounded();
-        Ok(Watcher(WatcherData::new(config, tx)?, rx))
+        Ok(Watcher {
+            watcher_data: WatcherData::new(config, tx)?,
+            recv: rx,
+        })
     }
 
     pub fn prefix(&self) -> BasicPrefix {
-        self.0.prefix.clone()
+        self.watcher_data.prefix.clone()
     }
 
     pub fn signed_location(&self, eid: &IdentifierPrefix) -> Result<Vec<SignedReply>, ActorError> {
-        self.0.get_loc_scheme_for_id(eid)
+        self.watcher_data.get_loc_scheme_for_id(eid)
     }
 
     pub async fn process_update_requests(&self) {
-        if let Ok(received) = self.1.try_recv() {
-            let _ = self.0.update_local_kel(&received).await;
+        if let Ok(received) = self.recv.try_recv() {
+            let _ = self.watcher_data.update_local_kel(&received).await;
         }
     }
 
     pub fn oobi(&self) -> LocationScheme {
         LocationScheme::new(
-            IdentifierPrefix::Basic(self.0.prefix.clone()),
-            self.0.address.scheme().parse().unwrap(),
-            self.0.address.clone(),
+            IdentifierPrefix::Basic(self.prefix()),
+            self.watcher_data.address.scheme().parse().unwrap(),
+            self.watcher_data.address.clone(),
         )
     }
     pub async fn resolve_end_role(&self, er: EndRole) -> Result<(), ActorError> {
         // find endpoint data of endpoint provider identifier
         let loc_scheme = self
-            .0
+            .watcher_data
             .get_loc_scheme_for_id(&er.eid.clone())?
             .get(0)
             .ok_or(ActorError::NoLocation { id: er.eid.clone() })?
@@ -563,17 +572,17 @@ impl Watcher {
 
         if let ReplyRoute::LocScheme(loc) = loc_scheme {
             let oobis = self
-                .0
+                .watcher_data
                 .transport
                 .request_end_role(loc, er.cid, er.role, er.eid)
                 .await?;
             for m in oobis {
                 match m {
                     Message::Op(op) => {
-                        self.0.process_op(op).await?;
+                        self.watcher_data.process_op(op).await?;
                     }
                     Message::Notice(not) => {
-                        self.0.process_notice(not)?;
+                        self.watcher_data.process_notice(not)?;
                     }
                 }
             }
@@ -584,15 +593,19 @@ impl Watcher {
     }
 
     pub async fn resolve_loc_scheme(&self, loc: &LocationScheme) -> Result<(), ActorError> {
-        let oobis = self.0.transport.request_loc_scheme(loc.clone()).await?;
-        self.0.process_ops(oobis).await?;
+        let oobis = self
+            .watcher_data
+            .transport
+            .request_loc_scheme(loc.clone())
+            .await?;
+        self.watcher_data.process_ops(oobis).await?;
         Ok(())
     }
 
     pub fn parse_and_process_notices(&self, input_stream: &[u8]) -> Result<(), Error> {
         parse_notice_stream(input_stream)?
             .into_iter()
-            .try_for_each(|notice| self.0.process_notice(notice))
+            .try_for_each(|notice| self.watcher_data.process_notice(notice))
     }
 
     pub async fn parse_and_process_queries(
@@ -603,7 +616,7 @@ impl Watcher {
         for query in parse_query_stream(input_stream)? {
             match query {
                 keri_core::query::query_event::SignedQueryMessage::KelQuery(kqry) => {
-                    let result = self.0.process_query(kqry).await?;
+                    let result = self.watcher_data.process_query(kqry).await?;
                     if let Some(response) = result {
                         responses.push(response);
                     }
@@ -618,9 +631,8 @@ impl Watcher {
 
     pub fn parse_and_process_replies(&self, input_stream: &[u8]) -> Result<(), ActorError> {
         for reply in parse_reply_stream(input_stream)? {
-            self.0.process_reply(reply)?;
+            self.watcher_data.process_reply(reply)?;
         }
         Ok(())
     }
-    
 }

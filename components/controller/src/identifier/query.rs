@@ -68,7 +68,9 @@ impl Identifier {
                     return Err(WatcherResponseError::UnexpectedResponse);
                 }
                 Ok(PossibleResponse::Ksn(_)) => todo!(),
-                Err(SendingError::ActorInternalError(ActorError::ResponseNotReady)) => {return Err(WatcherResponseError::ResponseNotReady)},
+                Err(SendingError::ActorInternalError(ActorError::ResponseNotReady)) => {
+                    return Err(WatcherResponseError::ResponseNotReady)
+                }
                 Err(e) => return Err(e.into()),
             };
         }

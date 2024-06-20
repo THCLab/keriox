@@ -56,7 +56,7 @@ pub enum ActorError {
     GeneralError(String),
 
     #[error("Response not ready")]
-    ResponseNotReady
+    ResponseNotReady,
 }
 
 #[cfg(feature = "oobi")]

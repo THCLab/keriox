@@ -73,8 +73,6 @@ pub enum TransportError<E = ActorError> {
     InvalidResponse(#[from] ParseError),
     #[error("Unknown error: {0}")]
     UnknownError(String),
-    #[error("Response is not ready")]
-    ResponseNotReady,
     #[error("remote error: {0}")]
     RemoteError(E),
 }

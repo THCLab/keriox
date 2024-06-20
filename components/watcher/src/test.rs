@@ -107,17 +107,16 @@ async fn test_watcher_access() -> Result<(), Error> {
     let query = asker_controller.query_ksn(about_controller.prefix())?;
 
     // Send query message to watcher before sending end role oobi
-    let err = watcher.0.process_op(query.clone()).await;
+    let err = watcher.watcher_data.process_op(query.clone()).await;
 
     assert!(matches!(err, Err(ActorError::MissingRole { .. })));
 
     // Create and send end role oobi to watcher
-    let end_role =
-        asker_controller.add_watcher(&IdentifierPrefix::Basic(watcher.prefix()))?;
-    watcher.0.process_op(end_role).await.unwrap();
+    let end_role = asker_controller.add_watcher(&IdentifierPrefix::Basic(watcher.prefix()))?;
+    watcher.watcher_data.process_op(end_role).await.unwrap();
 
     // Send query again
-    let result = watcher.0.process_op(query).await;
+    let result = watcher.watcher_data.process_op(query).await;
     assert!(&result.is_ok());
 
     Ok(())
@@ -229,17 +228,16 @@ pub fn watcher_forward_ksn() -> Result<(), Error> {
     let query = asker_controller.query_ksn(about_controller.prefix())?;
 
     // Send query message to watcher before sending end role oobi
-    let err = futures::executor::block_on(watcher.0.process_op(query.clone()));
+    let err = futures::executor::block_on(watcher.watcher_data.process_op(query.clone()));
 
     assert!(matches!(err, Err(ActorError::MissingRole { .. })));
 
     // Create and send end role oobi to watcher
-    let end_role =
-        asker_controller.add_watcher(&IdentifierPrefix::Basic(watcher.prefix()))?;
-    futures::executor::block_on(watcher.0.process_op(end_role)).unwrap();
+    let end_role = asker_controller.add_watcher(&IdentifierPrefix::Basic(watcher.prefix()))?;
+    futures::executor::block_on(watcher.watcher_data.process_op(end_role)).unwrap();
 
     // Send query again
-    let _result = futures::executor::block_on(watcher.0.process_op(query.clone()));
+    let _result = futures::executor::block_on(watcher.watcher_data.process_op(query.clone()));
     // Expect error because no loc scheme for witness.
     // assert!(matches!(
     //     result, Err(ActorError::NoLocation { ref id })
@@ -262,7 +260,7 @@ pub fn watcher_forward_ksn() -> Result<(), Error> {
                 .unwrap(),
         ),
     );
-    watcher.0.process_reply(witness_oobi).unwrap();
+    watcher.watcher_data.process_reply(witness_oobi).unwrap();
 
     let mut wrong_query = query.clone();
     if let Op::Query(SignedQueryMessage::KelQuery(SignedKelQuery { signature, .. })) =
@@ -281,7 +279,7 @@ pub fn watcher_forward_ksn() -> Result<(), Error> {
     }
 
     // Send wrong query
-    let result = futures::executor::block_on(watcher.0.process_op(wrong_query));
+    let result = futures::executor::block_on(watcher.watcher_data.process_op(wrong_query));
 
     assert!(matches!(
         result,
@@ -291,7 +289,7 @@ pub fn watcher_forward_ksn() -> Result<(), Error> {
     ));
 
     // Send query again
-    let result = futures::executor::block_on(watcher.0.process_op(query));
+    let result = futures::executor::block_on(watcher.watcher_data.process_op(query));
 
     assert!(matches!(
         result,

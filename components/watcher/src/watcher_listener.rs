@@ -20,8 +20,8 @@ impl WatcherListener {
 
     pub fn listen_http(self, addr: impl ToSocketAddrs) -> Server {
         let data = self.watcher_data.clone();
-        actix_web::rt::spawn( update_checking(data));
-        
+        actix_web::rt::spawn(update_checking(data));
+
         let state = web::Data::new(self.watcher_data);
         HttpServer::new(move || {
             App::new()
@@ -87,7 +87,10 @@ pub mod http_handlers {
 
     use std::sync::Arc;
 
-    use actix_web::{http::{header::ContentType, StatusCode}, web, HttpResponse, ResponseError};
+    use actix_web::{
+        http::{header::ContentType, StatusCode},
+        web, HttpResponse, ResponseError,
+    };
     use itertools::Itertools;
     use keri_core::{
         actor::{error::ActorError, prelude::Message},
@@ -111,8 +114,7 @@ pub mod http_handlers {
             "\nGot events to process: \n{}",
             String::from_utf8_lossy(&body)
         );
-        data
-            .parse_and_process_notices(&body)
+        data.parse_and_process_notices(&body)
             .map_err(ActorError::from)?;
 
         Ok(HttpResponse::Ok()
@@ -210,12 +212,8 @@ pub mod http_handlers {
     ) -> Result<HttpResponse, ApiError> {
         let (cid, role, eid) = path.into_inner();
 
-        let end_role = data
-            .0
-            .oobi_manager
-            .get_end_role(&cid, role)
-            .map_err(ActorError::from)?;
-        let loc_scheme = data.0.get_loc_scheme_for_id(&eid)?;
+        let end_role = data.watcher_data.get_end_role_for_id(&cid, role)?;
+        let loc_scheme = data.watcher_data.get_loc_scheme_for_id(&eid)?;
         let oobis: Vec<u8> = end_role
             .into_iter()
             .chain(loc_scheme.into_iter())
