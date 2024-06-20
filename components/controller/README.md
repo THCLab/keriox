@@ -13,8 +13,9 @@ Most functions require a three step process to either establish new Identifier a
 ### `Controller` structure
 
 The `Controller` structure encapsulates logic for saving incoming KERI events and retrieving them from the database, as well as computing the current state of saved Identifiers. It also provides methods for generating new identifiers based on the provided public keys (`incept` and `finalize_inception`).
+
 ### Managing KEL
 
-The `IdentifierController` structure combines the data stored in the `Controller` with a specific, already established identifier. Its main responsibility is to manage the concrete identifier's Key Event Log, which includes tasks such as generating events, publishing them to witnesses, and adding watchers.
+The `Identifier` structure combines the data stored in the `Controller` with a specific, already established identifier. Its main responsibility is to manage the concrete identifier's Key Event Log, which includes tasks such as generating events, publishing them to witnesses, and adding watchers.
 
 For examples checkout `components/controller/tests` folder.

@@ -28,7 +28,7 @@ We furthermore support bindings to NodeJS and Dart. See our [keri-bindings](http
 This repository provides implementation of KERI. Core protocol features are implemented in [`keriox_core`](https://github.com/THCLab/keriox/tree/master/keriox_core) workspace. Repository contains also workspaces for following KERI components:
 * High level interface for [Witness](./components/witness)
 * High level interface for [Watcher](./components/watcher)
-* High level interface for [Controller](./components/src/controller)
+* High level interface for [Controller](./components/controller)
 
 For ready to use client libraries, we encourage to visit https://github.com/THCLab/keri-bindings that provide bindings to other languages via FFI layer. 
 
