@@ -1,4 +1,4 @@
-use std::{path::PathBuf, sync::Arc, thread::sleep, time::Duration};
+use std::{path::PathBuf, sync::Arc};
 
 use async_std::channel::{unbounded, Receiver, Sender};
 use itertools::Itertools;
@@ -247,8 +247,8 @@ impl WatcherData {
                     _ => {
                         // query watcher and return info, that it's not ready
                         let id_to_update = qry.query.get_prefix();
-                        self.tx.send(id_to_update).await.unwrap();
-                        return Err(ActorError::ResponseNotReady);
+                        self.tx.send(id_to_update.clone()).await.unwrap();
+                        return Err(ActorError::NotFound(id_to_update));
                     }
                 };
             }
@@ -296,7 +296,6 @@ impl WatcherData {
     }
 
     pub async fn update_local_kel(&self, id: &IdentifierPrefix) -> Result<(), ActorError> {
-        println!("\n\nKey updating started\n\n");
         // Update latest state for prefix
         let _ = self.query_state(id).await;
 
@@ -312,7 +311,6 @@ impl WatcherData {
             // If there is an escrowed reply it means we don't have the most recent data.
             // In this case forward the query to witness.
             self.forward_query(id).await?;
-            println!("\n\nKey updating ended\n\n");
         };
         Ok(())
     }

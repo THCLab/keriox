@@ -286,7 +286,7 @@ async fn test_tel_from_witness() -> Result<(), ControllerError> {
         .await;
 
     // Watcher may need some time to find KEL. Query it multiple times.
-    while matches!(q, Err(WatcherResponseError::ResponseNotReady)) {
+    while matches!(q, Err(WatcherResponseError::KELNotFound(_))) {
         q = verifier
             .finalize_query(queries_and_signatures.clone())
             .await;

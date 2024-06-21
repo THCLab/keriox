@@ -30,8 +30,8 @@ pub enum WatcherResponseError {
     ResponseProcessingError(#[from] keri_core::error::Error),
     #[error(transparent)]
     SendingError(#[from] SendingError),
-    #[error("Response not ready")]
-    ResponseNotReady,
+    #[error("KEL of {0} not found")]
+    KELNotFound(IdentifierPrefix),
 }
 
 impl Identifier {
@@ -68,8 +68,8 @@ impl Identifier {
                     return Err(WatcherResponseError::UnexpectedResponse);
                 }
                 Ok(PossibleResponse::Ksn(_)) => todo!(),
-                Err(SendingError::ActorInternalError(ActorError::ResponseNotReady)) => {
-                    return Err(WatcherResponseError::ResponseNotReady)
+                Err(SendingError::ActorInternalError(ActorError::NotFound(id))) => {
+                    return Err(WatcherResponseError::KELNotFound(id))
                 }
                 Err(e) => return Err(e.into()),
             };

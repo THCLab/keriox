@@ -55,8 +55,8 @@ pub enum ActorError {
     #[error("Error: {0}")]
     GeneralError(String),
 
-    #[error("Response not ready")]
-    ResponseNotReady,
+    #[error("KEL not found")]
+    NotFound(IdentifierPrefix),
 }
 
 #[cfg(feature = "oobi")]
