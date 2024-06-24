@@ -183,7 +183,7 @@ async fn test_multisig() -> Result<()> {
         identifier1.query_watchers(&identifier2.get_last_establishment_event_seal()?)?;
     for qry in qry_watcher {
         let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(&qry.encode()?)?);
-        identifier1.finalize_query(vec![(qry, signature)]).await?;
+        identifier1.finalize_query(vec![(qry, signature)]).await;
     }
 
     // Incept group

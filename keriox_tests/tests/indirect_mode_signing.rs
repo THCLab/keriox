@@ -211,12 +211,12 @@ async fn indirect_mode_signing() -> Result<(), ControllerError> {
         })
         .collect();
 
-    let mut q = verifying_identifier
+    let (mut response, _) = verifying_identifier
         .finalize_query(queries_and_signatures.clone())
         .await;
     // Watcher might need some time to find KEL. Ask about it until it's ready.
-    while let Ok(QueryResponse::NoUpdates) = q {
-        q = verifying_identifier
+    while let QueryResponse::NoUpdates = response {
+        (response, _) = verifying_identifier
             .finalize_query(queries_and_signatures.clone())
             .await;
     }
@@ -290,12 +290,12 @@ async fn indirect_mode_signing() -> Result<(), ControllerError> {
         })
         .collect();
 
-    let mut q = verifying_identifier
+    let (mut response, _) = verifying_identifier
         .finalize_query(queries_and_signatures.clone())
         .await;
     // Watcher might need some time to find KEL. Ask about it until it's ready.
-    while let Ok(QueryResponse::NoUpdates) = q {
-        q = verifying_identifier
+    while let QueryResponse::NoUpdates = response {
+        (response, _) = verifying_identifier
             .finalize_query(queries_and_signatures.clone())
             .await;
     }

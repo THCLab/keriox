@@ -1,6 +1,5 @@
 use std::{collections::HashMap, sync::Arc};
 
-use keri_controller::identifier::query::WatcherResponseError;
 use keri_controller::{
     error::ControllerError, IdentifierPrefix, KeyManager, LocationScheme, SelfSigningPrefix,
 };
@@ -218,7 +217,7 @@ async fn test_tel_from_witness() -> Result<(), ControllerError> {
 
     verifier
         .finalize_query(queries_and_signatures.clone())
-        .await?;
+        .await;
 
     let issuers_state_in_verifier = verifier_controller.find_state(issuer.id()).unwrap();
     assert_eq!(issuers_state_in_verifier.sn, 2);
@@ -281,13 +280,13 @@ async fn test_tel_from_witness() -> Result<(), ControllerError> {
         })
         .collect();
 
-    let mut q = verifier
+    let (_updates, mut errs) = verifier
         .finalize_query(queries_and_signatures.clone())
         .await;
 
     // Watcher may need some time to find KEL. Query it multiple times.
-    while matches!(q, Err(WatcherResponseError::KELNotFound(_))) {
-        q = verifier
+    while !errs.is_empty() {
+        (_, errs) = verifier
             .finalize_query(queries_and_signatures.clone())
             .await;
     }

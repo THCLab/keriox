@@ -167,23 +167,23 @@ async fn test_updates() -> Result<(), ControllerError> {
         })
         .collect();
 
-    let mut q = verifying_identifier
+    let (mut response, mut errors) = verifying_identifier
         .finalize_query(queries_and_signatures.clone())
         .await;
     // Watcher might need some time to find KEL. Ask about it until it's ready.
-    while q.is_err() {
-        q = verifying_identifier
+    while !errors.is_empty() {
+        (response, errors) = verifying_identifier
             .finalize_query(queries_and_signatures.clone())
             .await;
     }
 
-    assert_eq!(q.unwrap(), QueryResponse::Updates);
+    assert_eq!(response, QueryResponse::Updates);
 
     // No updates after querying again
-    q = verifying_identifier
+    (response, _) = verifying_identifier
         .finalize_query(queries_and_signatures.clone())
         .await;
-    assert_eq!(q.unwrap(), QueryResponse::NoUpdates);
+    assert_eq!(response, QueryResponse::NoUpdates);
 
     // Verify signed message.
     assert!(verifying_controller
@@ -254,24 +254,24 @@ async fn test_updates() -> Result<(), ControllerError> {
         })
         .collect();
 
-    let mut q = verifying_identifier
+    let (mut response, mut errors) = verifying_identifier
         .finalize_query(queries_and_signatures.clone())
         .await;
 
     // Watcher might need some time to find KEL. Ask about it until it's ready.
-    while q.is_err() {
-        q = verifying_identifier
+    while !errors.is_empty() {
+        (response, errors) = verifying_identifier
             .finalize_query(queries_and_signatures.clone())
             .await;
     }
 
-    assert_eq!(q.as_ref().unwrap(), &QueryResponse::Updates);
+    assert_eq!(&response, &QueryResponse::Updates);
 
     // No updates after querying again
-    q = verifying_identifier
+    (response, _) = verifying_identifier
         .finalize_query(queries_and_signatures.clone())
         .await;
-    assert_eq!(q.as_ref().unwrap(), &QueryResponse::NoUpdates);
+    assert_eq!(&response, &QueryResponse::NoUpdates);
 
     let verification_result = verifying_controller.verify(second_message, &second_signature);
     assert!(verification_result.is_ok());

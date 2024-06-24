@@ -2,8 +2,10 @@ use std::collections::HashSet;
 
 use crate::communication::SendingError;
 use crate::error::ControllerError;
+use futures::future::join_all;
 use keri_core::actor::error::ActorError;
 use keri_core::actor::prelude::HashFunctionCode;
+use keri_core::error::Error;
 use keri_core::oobi::Scheme;
 use keri_core::prefix::IndexedSignature;
 use keri_core::query::query_event::SignedKelQuery;
@@ -26,8 +28,8 @@ pub enum QueryResponse {
 pub enum WatcherResponseError {
     #[error("Unexpected watcher response")]
     UnexpectedResponse,
-    #[error("Watcher response processing error: {0}")]
-    ResponseProcessingError(#[from] keri_core::error::Error),
+    #[error("Watcher response processing error: {0:?}")]
+    ResponseProcessingError(Vec<keri_core::error::Error>),
     #[error(transparent)]
     SendingError(#[from] SendingError),
     #[error("KEL of {0} not found")]
@@ -46,34 +48,74 @@ impl Identifier {
             .collect()
     }
 
-    /// Joins query events with their signatures, sends it to witness and
-    /// process its response. If user action is needed to finalize process,
-    /// returns proper notification.
+    async fn finalize_single_query(
+        &self,
+        qry: QueryEvent,
+        sig: SelfSigningPrefix,
+    ) -> Result<HashSet<IdentifierPrefix>, WatcherResponseError> {
+        match self.handle_query(qry, sig).await {
+            Ok(PossibleResponse::Kel(kel)) => {
+                let mut possibly_updated_ids = HashSet::new();
+                let errs = kel
+                    .into_iter()
+                    .filter_map(|event| {
+                        let id = event.get_prefix();
+                        possibly_updated_ids.insert(id);
+                        match self.known_events.process(&event) {
+                            Ok(_) => None,
+                            Err(err) => Some(err),
+                        }
+                    })
+                    .collect::<Vec<Error>>();
+                if errs.is_empty() {
+                    Ok(possibly_updated_ids)
+                } else {
+                    Err(WatcherResponseError::ResponseProcessingError(errs))
+                }
+            }
+            Ok(PossibleResponse::Mbx(_mbx)) => Err(WatcherResponseError::UnexpectedResponse),
+            Ok(PossibleResponse::Ksn(_)) => Err(WatcherResponseError::UnexpectedResponse),
+            Err(SendingError::ActorInternalError(ActorError::NotFound(id))) => {
+                Err(WatcherResponseError::KELNotFound(id))
+            }
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    /// Joins query events with their signatures, sends it to recipient and
+    /// process its response. Returns a tuple containing two elements:
+    ///     1. A notification if any identifier's KEL (Key Event Log) was updated.
+    ///     2. A list of errors that occurred either during sending or on the recipient side.
     pub async fn finalize_query(
         &mut self,
         queries: Vec<(QueryEvent, SelfSigningPrefix)>,
-    ) -> Result<QueryResponse, WatcherResponseError> {
+    ) -> (QueryResponse, Vec<WatcherResponseError>) {
         let mut updates = QueryResponse::NoUpdates;
-        let mut possibly_updated_ids: HashSet<IdentifierPrefix> = HashSet::new();
-        for (qry, sig) in queries {
-            match self.handle_query(&qry, sig).await {
-                Ok(PossibleResponse::Kel(kel)) => {
-                    for event in kel {
-                        let id = event.get_prefix();
-                        possibly_updated_ids.insert(id);
-                        self.known_events.process(&event)?;
-                    }
-                }
-                Ok(PossibleResponse::Mbx(_mbx)) => {
-                    return Err(WatcherResponseError::UnexpectedResponse);
-                }
-                Ok(PossibleResponse::Ksn(_)) => todo!(),
-                Err(SendingError::ActorInternalError(ActorError::NotFound(id))) => {
-                    return Err(WatcherResponseError::KELNotFound(id))
-                }
-                Err(e) => return Err(e.into()),
-            };
-        }
+        let res = join_all(
+            queries
+                .into_iter()
+                .map(|(qry, sig)| self.finalize_single_query(qry, sig)),
+        )
+        .await;
+
+        let (possibly_updated_ids, errs) =
+            res.into_iter()
+                .fold(
+                    (HashSet::new(), vec![]),
+                    |(mut oks, mut errs), result| match result {
+                        Ok(set) => {
+                            for id in set {
+                                oks.insert(id);
+                            }
+                            (oks, errs)
+                        }
+                        Err(e) => {
+                            errs.push(e);
+                            (oks, errs)
+                        }
+                    },
+                );
+
         for id in possibly_updated_ids {
             let db_state = self.find_state(&id).ok();
             let cached_state = self.cached_identifiers.get(&id);
@@ -84,13 +126,13 @@ impl Identifier {
                 updates = QueryResponse::Updates
             }
         }
-        Ok(updates)
+        (updates, errs)
     }
 
     /// Joins query events with their signatures, sends it to witness.
     async fn handle_query(
         &self,
-        qry: &QueryEvent,
+        qry: QueryEvent,
         sig: SelfSigningPrefix,
     ) -> Result<PossibleResponse, SendingError> {
         let recipient = match qry.get_route() {
