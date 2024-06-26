@@ -48,11 +48,7 @@ impl<T: Serialize + Clone, D: Serialize + Typeable<TypeTag = T> + Clone> TypedEv
             .ok_or(Error::IncorrectDigest)
     }
 
-    pub fn new(
-        format: SerializationFormats,
-        derivation: HashFunction,
-        event: D,
-    ) -> Result<Self, Error> {
+    pub fn new(format: SerializationFormats, derivation: HashFunction, event: D) -> Self {
         let tmp_serialization_info = SerializationInfo::new_empty("KERI".to_string(), 1, 0, format);
 
         let mut tmp_self = Self {
@@ -67,7 +63,7 @@ impl<T: Serialize + Clone, D: Serialize + Typeable<TypeTag = T> + Clone> TypedEv
         let event_len = encoded.len();
         tmp_self.serialization_info.size = event_len;
         tmp_self.compute_digest(&hash_function, &format);
-        Ok(tmp_self)
+        tmp_self
     }
 
     pub fn encode(&self) -> Result<Vec<u8>, Error> {

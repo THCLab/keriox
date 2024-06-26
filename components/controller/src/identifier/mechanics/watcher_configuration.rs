@@ -14,7 +14,7 @@ impl Identifier {
     /// Generates reply event with `end_role_add` route.
     pub fn add_watcher(&self, watcher_id: IdentifierPrefix) -> Result<String, MechanicsError> {
         String::from_utf8(
-            event_generator::generate_end_role(&self.id, &watcher_id, Role::Watcher, true)?
+            event_generator::generate_end_role(&self.id, &watcher_id, Role::Watcher, true)
                 .encode()?,
         )
         .map_err(|_e| MechanicsError::EventFormatError)
@@ -23,7 +23,7 @@ impl Identifier {
     /// Generates reply event with `end_role_cut` route.
     pub fn remove_watcher(&self, watcher_id: IdentifierPrefix) -> Result<String, MechanicsError> {
         String::from_utf8(
-            event_generator::generate_end_role(&self.id, &watcher_id, Role::Watcher, false)?
+            event_generator::generate_end_role(&self.id, &watcher_id, Role::Watcher, false)
                 .encode()?,
         )
         .map_err(|_e| MechanicsError::EventFormatError)

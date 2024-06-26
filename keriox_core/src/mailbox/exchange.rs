@@ -37,7 +37,7 @@ impl Exchange {
         self,
         format: SerializationFormats,
         derivation: HashFunctionCode,
-    ) -> Result<ExchangeMessage, Error> {
+    ) -> ExchangeMessage {
         KeriEvent::new(format, derivation.into(), Timestamped::new(self))
     }
 }

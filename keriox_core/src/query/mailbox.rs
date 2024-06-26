@@ -2,7 +2,6 @@ use said::{derivation::HashFunctionCode, sad::SerializationFormats};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    error::Error,
     event_message::{msg::KeriEvent, timestamped::Timestamped, EventTypeTag, Typeable},
     prefix::IdentifierPrefix,
 };
@@ -17,7 +16,7 @@ impl MailboxQuery {
         route: MailboxRoute,
         serialization_format: SerializationFormats,
         derivation: HashFunctionCode,
-    ) -> Result<Self, Error> {
+    ) -> Self {
         let env = Timestamped::new(route);
         KeriEvent::new(serialization_format, derivation.into(), env)
     }

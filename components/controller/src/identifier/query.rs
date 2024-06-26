@@ -176,6 +176,6 @@ impl Identifier {
             },
             SerializationFormats::JSON,
             HashFunctionCode::Blake3_256,
-        )?)
+        ))
     }
 }

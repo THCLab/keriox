@@ -61,7 +61,7 @@ impl QueryEvent {
         route: QueryRoute,
         serialization_format: SerializationFormats,
         derivation: HashFunctionCode,
-    ) -> Result<Self, Error> {
+    ) -> Self {
         let env = Timestamped::new(route);
         KeriEvent::new(serialization_format, derivation.into(), env)
     }

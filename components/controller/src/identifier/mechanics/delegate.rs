@@ -40,7 +40,7 @@ impl Identifier {
             },
             to_forward: delegating_event.clone(),
         }
-        .to_message(SerializationFormats::JSON, HashFunctionCode::Blake3_256)?;
+        .to_message(SerializationFormats::JSON, HashFunctionCode::Blake3_256);
         Ok((delegating_event, exn_message))
     }
 }

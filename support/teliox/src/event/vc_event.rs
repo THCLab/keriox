@@ -121,7 +121,7 @@ impl VCEvent {
             format,
             derivation.into(),
             timestamped,
-        )?)
+        ))
     }
 
     pub fn registry_id(&self) -> Result<IdentifierPrefix, Error> {

@@ -188,7 +188,7 @@ pub fn generate_end_role(
     watcher_id: &IdentifierPrefix,
     role: Role,
     enabled: bool,
-) -> Result<ReplyEvent, Error> {
+) -> ReplyEvent {
     use said::derivation::HashFunctionCode;
     use said::version::format::SerializationFormats;
 
@@ -208,14 +208,13 @@ pub fn generate_end_role(
         HashFunctionCode::Blake3_256,
         SerializationFormats::JSON,
     )
-    .map_err(|e| Error::EventGenerationError(e.to_string()))
 }
 #[cfg(feature = "mailbox")]
 pub fn exchange(
     receipient: &IdentifierPrefix,
     data: &KeriEvent<KeyEvent>,
     topic: ForwardTopic,
-) -> Result<ExchangeMessage, Error> {
+) -> ExchangeMessage {
     use said::derivation::HashFunctionCode;
     use said::version::format::SerializationFormats;
 
@@ -234,5 +233,4 @@ pub fn exchange(
         HashFunctionCode::Blake3_256.into(),
         event,
     )
-    .map_err(|e| Error::EventGenerationError(e.to_string()))
 }

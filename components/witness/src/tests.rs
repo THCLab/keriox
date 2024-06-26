@@ -328,7 +328,7 @@ fn test_qry_rpy() -> Result<(), ActorError> {
         },
         SerializationFormats::JSON,
         HashFunctionCode::Blake3_256,
-    )?;
+    );
 
     // sign message by bob
     let signature = IndexedSignature::new_both_same(
@@ -375,7 +375,7 @@ fn test_qry_rpy() -> Result<(), ActorError> {
         },
         SerializationFormats::JSON,
         HashFunctionCode::Blake3_256,
-    )?;
+    );
 
     // sign message by bob
     let signature = IndexedSignature::new_both_same(

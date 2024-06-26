@@ -46,7 +46,7 @@ impl KeyEvent {
             (IdentifierPrefix::SelfAddressing(_), EventData::Dip(dip)) => {
                 dip.incept_self_addressing(derivation.clone(), format)
             }
-            _ => KeriEvent::new(format, derivation, self),
+            _ => Ok(KeriEvent::new(format, derivation, self)),
         }
     }
 }

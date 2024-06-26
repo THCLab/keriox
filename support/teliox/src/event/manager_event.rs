@@ -62,7 +62,7 @@ impl ManagerTelEvent {
             format,
             derivation.into(),
             self,
-        )?)
+        ))
     }
 }
 

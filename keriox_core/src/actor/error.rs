@@ -57,6 +57,9 @@ pub enum ActorError {
 
     #[error("KEL not found")]
     NotFound(IdentifierPrefix),
+
+    #[error("Unexpected response: {0}")]
+    UnexpectedResponse(String),
 }
 
 #[cfg(feature = "oobi")]

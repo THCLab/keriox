@@ -1,6 +1,7 @@
 use std::{path::PathBuf, sync::Arc};
 
 use async_std::channel::{unbounded, Receiver, Sender};
+use futures::future::join_all;
 use itertools::Itertools;
 use keri_core::{
     actor::{
@@ -25,7 +26,6 @@ use keri_core::{
     state::IdentifierState,
     transport::{default::DefaultTransport, Transport},
 };
-use rand::prelude::SliceRandom;
 
 pub struct WatcherData {
     address: url::Url,
@@ -113,7 +113,7 @@ impl WatcherData {
             ReplyRoute::LocScheme(loc_scheme),
             HashFunctionCode::Blake3_256,
             SerializationFormats::JSON,
-        )?;
+        );
         let signed_reply = SignedReply::new_nontrans(
             reply.clone(),
             prefix.clone(),
@@ -177,7 +177,7 @@ impl WatcherData {
             ReplyRoute::Ksn(IdentifierPrefix::Basic(self.prefix.clone()), ksn),
             HashFunctionCode::Blake3_256,
             SerializationFormats::JSON,
-        )?;
+        );
 
         let signature = SelfSigningPrefix::Ed25519Sha512(signer.sign(&rpy.encode()?)?);
         Ok(SignedReply::new_nontrans(
@@ -284,7 +284,7 @@ impl WatcherData {
                     ReplyRoute::Ksn(IdentifierPrefix::Basic(self.prefix.clone()), ksn),
                     HashFunctionCode::Blake3_256,
                     SerializationFormats::JSON,
-                )?;
+                );
 
                 let signature = SelfSigningPrefix::Ed25519Sha512(self.signer.sign(&rpy.encode()?)?);
                 let reply = SignedReply::new_nontrans(rpy, self.prefix.clone(), signature);
@@ -343,7 +343,7 @@ impl WatcherData {
                 route,
                 SerializationFormats::JSON,
                 HashFunctionCode::Blake3_256,
-            )?;
+            );
             // Create a new signed message
             let sigs = SelfSigningPrefix::Ed25519Sha512(self.signer.sign(qry.encode()?)?);
             let signed_qry = SignedKelQuery::new_nontrans(qry.clone(), self.prefix.clone(), sigs);
@@ -381,11 +381,27 @@ impl WatcherData {
 
     /// Query witness about KSN for given prefix and save its response to db.
     /// Returns ID of witness that responded.
-    async fn query_state(&self, prefix: &IdentifierPrefix) -> Result<BasicPrefix, ActorError> {
+    async fn query_state(&self, prefix: &IdentifierPrefix) -> Result<(), ActorError> {
+        let wits_id = self.get_witnesses_for_prefix(&prefix)?;
+        let _r: Vec<Result<_, _>> = join_all(wits_id.into_iter().map(|id| {
+            let id = IdentifierPrefix::Basic(id);
+
+            self.ksn_update(&prefix, id)
+        }))
+        .await;
+
+        Ok(())
+    }
+
+    async fn ksn_update(
+        &self,
+        about_id: &IdentifierPrefix,
+        wit_id: IdentifierPrefix,
+    ) -> Result<(), ActorError> {
         let query_args = LogsQueryArgs {
-            i: prefix.clone(),
+            i: about_id.clone(),
             s: None,
-            src: None,
+            src: Some(wit_id.clone()),
         };
 
         let qry = QueryEvent::new_query(
@@ -395,50 +411,25 @@ impl WatcherData {
             },
             SerializationFormats::JSON,
             HashFunctionCode::Blake3_256,
-        )?;
+        );
 
         // sign message by watcher
         let signature = SelfSigningPrefix::Ed25519Sha512(
-            (self.signer).sign(
+            self.signer.sign(
                 serde_json::to_vec(&qry)
                     .map_err(|e| keri_core::error::Error::SerializationError(e.to_string()))?,
             )?,
         );
-
         let query = SignedKelQuery::new_nontrans(qry, self.prefix.clone(), signature);
-
-        let wit_id = self.get_random_witness_for_prefix(prefix.clone())?;
-
-        let resp = self
-            .send_query_to(IdentifierPrefix::Basic(wit_id.clone()), Scheme::Http, query)
-            .await?;
+        let resp = self.send_query_to(wit_id, Scheme::Http, query).await?;
 
         let resp = match resp {
             PossibleResponse::Ksn(ksn) => ksn,
-            _ => panic!("Invalid response"),
+            e => return Err(ActorError::UnexpectedResponse(e.to_string())),
         };
 
         self.process_reply(resp)?;
-
-        Ok(wit_id)
-    }
-
-    /// Get witnesses for prefix and choose one randomly
-    fn get_random_witness_for_prefix(
-        &self,
-        id: IdentifierPrefix,
-    ) -> Result<BasicPrefix, ActorError> {
-        let wit_id = self
-            .get_state_for_prefix(&id)
-            .and_then(|state| {
-                state
-                    .witness_config
-                    .witnesses
-                    .choose(&mut rand::thread_rng())
-                    .cloned()
-            })
-            .ok_or(ActorError::NoIdentState { prefix: id })?;
-        Ok(wit_id)
+        Ok(())
     }
 
     /// Get witnesses for prefix and choose one randomly

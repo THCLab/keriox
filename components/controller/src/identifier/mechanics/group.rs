@@ -64,14 +64,14 @@ impl Identifier {
         let mut exchanges = participants
             .iter()
             .map(|id| -> Result<_, _> {
-                let exn = event_generator::exchange(id, &icp, ForwardTopic::Multisig)?.encode()?;
+                let exn = event_generator::exchange(id, &icp, ForwardTopic::Multisig).encode()?;
                 String::from_utf8(exn).map_err(|_e| MechanicsError::EventFormatError)
             })
             .collect::<Result<Vec<String>, MechanicsError>>()?;
 
         if let Some(delegator) = delegator {
             let delegation_request = String::from_utf8(
-                event_generator::exchange(&delegator, &icp, ForwardTopic::Delegate)?.encode()?,
+                event_generator::exchange(&delegator, &icp, ForwardTopic::Delegate).encode()?,
             )
             .map_err(|_e| MechanicsError::EventFormatError)?;
             exchanges.push(delegation_request);

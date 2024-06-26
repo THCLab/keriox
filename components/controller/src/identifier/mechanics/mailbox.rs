@@ -103,7 +103,7 @@ impl Identifier {
         let event = event.event_message.clone();
         let receipient = event.data.get_prefix();
         // Construct exn message (will be stored in group identidfier mailbox)
-        let exn = event_generator::exchange(&receipient, &event, ForwardTopic::Multisig)?;
+        let exn = event_generator::exchange(&receipient, &event, ForwardTopic::Multisig);
         Ok(ActionRequired::MultisigRequest(event, exn))
     }
 
@@ -231,7 +231,7 @@ impl Identifier {
                 });
 
                 let ixn = self.known_events.anchor_with_seal(group_id, &[seal])?;
-                let exn = event_generator::exchange(group_id, &ixn, ForwardTopic::Multisig)?;
+                let exn = event_generator::exchange(group_id, &ixn, ForwardTopic::Multisig);
                 Ok(Some(ActionRequired::DelegationRequest(ixn, exn)))
             }
             _ => todo!(),

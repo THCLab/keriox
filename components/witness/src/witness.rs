@@ -238,7 +238,7 @@ impl Witness {
             ReplyRoute::LocScheme(loc_scheme),
             HashFunctionCode::Blake3_256,
             SerializationFormats::JSON,
-        )?;
+        );
         let signed_reply = SignedReply::new_nontrans(
             reply.clone(),
             prefix,
@@ -291,7 +291,7 @@ impl Witness {
             ReplyRoute::Ksn(IdentifierPrefix::Basic(self.prefix.clone()), ksn),
             HashFunctionCode::Blake3_256,
             SerializationFormats::JSON,
-        )?;
+        );
 
         let signature = SelfSigningPrefix::Ed25519Sha512(signer.sign(rpy.encode()?)?);
         Ok(SignedReply::new_nontrans(
@@ -345,7 +345,7 @@ impl Witness {
                     ReplyRoute::Ksn(IdentifierPrefix::Basic(self.prefix.clone()), ksn),
                     HashFunctionCode::Blake3_256,
                     SerializationFormats::JSON,
-                )?;
+                );
 
                 let signature = SelfSigningPrefix::Ed25519Sha512(self.signer.sign(rpy.encode()?)?);
                 let reply = SignedReply::new_nontrans(rpy, self.prefix.clone(), signature);

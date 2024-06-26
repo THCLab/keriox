@@ -313,7 +313,7 @@ impl<K: KeyManager> SimpleController<K> {
             },
             SerializationFormats::JSON,
             HashFunctionCode::Blake3_256,
-        )?;
+        );
 
         // sign message by bob
         let signature = IndexedSignature::new_both_same(
@@ -337,8 +337,7 @@ impl<K: KeyManager> SimpleController<K> {
 
     pub fn add_watcher(&self, watcher_id: &IdentifierPrefix) -> Result<Op, Error> {
         let end_role =
-            event_generator::generate_end_role(&self.prefix(), watcher_id, Role::Watcher, true)
-                .unwrap();
+            event_generator::generate_end_role(&self.prefix(), watcher_id, Role::Watcher, true);
         let sed: Vec<u8> = end_role.encode()?;
         let sig = self.key_manager.clone().lock().unwrap().sign(&sed)?;
         let att_sig = IndexedSignature::new_both_same(SelfSigningPrefix::Ed25519Sha512(sig), 0);
@@ -661,7 +660,7 @@ impl<K: KeyManager> SimpleController<K> {
             },
             to_forward: data.event_message.clone(),
         }
-        .to_message(SerializationFormats::JSON, HashFunctionCode::Blake3_256)?;
+        .to_message(SerializationFormats::JSON, HashFunctionCode::Blake3_256);
 
         let sigs = vec![Signature::Transferable(
             SignerData::JustSignatures,
@@ -722,8 +721,7 @@ impl<K: KeyManager> SimpleController<K> {
             },
             SerializationFormats::JSON,
             HashFunctionCode::Blake3_256,
-        )
-        .unwrap();
+        );
         let signature = self
             .key_manager
             .lock()
@@ -765,8 +763,7 @@ impl<K: KeyManager> SimpleController<K> {
                     },
                     SerializationFormats::JSON,
                     HashFunctionCode::Blake3_256,
-                )
-                .unwrap();
+                );
                 let signature = self
                     .key_manager
                     .lock()

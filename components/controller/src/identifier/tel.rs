@@ -121,7 +121,7 @@ impl Identifier {
             SerializationFormats::JSON,
             HashFunctionCode::Blake3_256.into(),
             env,
-        )?)
+        ))
     }
 
     pub async fn finalize_query_tel(

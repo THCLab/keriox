@@ -136,7 +136,7 @@ impl ReplyEvent {
         route: ReplyRoute,
         self_addressing: HashFunctionCode,
         serialization: SerializationFormats,
-    ) -> Result<ReplyEvent, Error> {
+    ) -> ReplyEvent {
         let env = Timestamped::new(route);
         KeriEvent::new(serialization, self_addressing.into(), env)
     }
