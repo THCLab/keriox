@@ -1,3 +1,5 @@
+use futures::future::join_all;
+
 use crate::identifier::Identifier;
 
 use super::MechanicsError;
@@ -5,7 +7,7 @@ use super::MechanicsError;
 impl Identifier {
     pub async fn notify_witnesses(&mut self) -> Result<usize, MechanicsError> {
         let mut n = 0;
-        while let Some(ev) = self.to_notify.pop() {
+        let to_notify = self.to_notify.iter().filter_map(|ev| {
             // Elect the leader
             // Leader is identifier with minimal index among all participants who
             // sign event. He will send message to witness.
@@ -19,11 +21,17 @@ impl Identifier {
             if min_sig_idx == id_idx {
                 let witnesses = self
                     .known_events
-                    .find_witnesses_at_event(&ev.event_message)?;
-                self.communication.publish(&witnesses, &ev).await?;
+                    .find_witnesses_at_event(&ev.event_message)
+                    .expect("Can't find witnesses");
                 n += 1;
+                Some(self.communication.publish(witnesses, &ev))
+            } else {
+                None
             }
-        }
+        });
+        join_all(to_notify).await;
+        self.to_notify.clear();
+
         Ok(n)
     }
 }

@@ -41,7 +41,7 @@ impl Identifier {
         // TODO: send in one request
         for ev in messages_to_send {
             self.communication
-                .send_message_to(&dest_identifier, Scheme::Http, ev)
+                .send_message_to(dest_identifier.clone(), Scheme::Http, ev)
                 .await?;
         }
         Ok(())

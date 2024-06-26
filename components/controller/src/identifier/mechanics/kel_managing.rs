@@ -90,7 +90,7 @@ impl Identifier {
                         for msg in &own_kel {
                             self.communication
                                 .send_message_to(
-                                    &witness_id,
+                                    witness_id.clone(),
                                     Scheme::Http,
                                     Message::Notice(msg.clone()),
                                 )

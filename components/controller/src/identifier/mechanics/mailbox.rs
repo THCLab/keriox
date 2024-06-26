@@ -155,7 +155,7 @@ impl Identifier {
                     .get_state_at_event(&to_publish.event_message)?
                     .witness_config
                     .witnesses;
-                self.communication.publish(&witnesses, &to_publish).await
+                self.communication.publish(witnesses, &to_publish).await
             }
             None => Ok(()),
         }
@@ -212,9 +212,7 @@ impl Identifier {
                         .get_event_by_sn_and_digest(seal.sn, &seal.prefix, &seal.event_digest);
                     if let Some(fully_signed) = fully_signed_event {
                         let witnesses = self.known_events.get_current_witness_list(&self.id)?;
-                        self.communication
-                            .publish(&witnesses, &fully_signed)
-                            .await?;
+                        self.communication.publish(witnesses, &fully_signed).await?;
                     };
                 };
                 Ok(None)

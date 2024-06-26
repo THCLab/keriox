@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use futures::future::join_all;
 use keri_core::{
     actor::{error::ActorError, simple_controller::PossibleResponse},
     event_message::signed_event_message::{Message, Notice, Op, SignedEventMessage},
@@ -110,11 +111,11 @@ impl Communication {
 
     pub async fn send_message_to(
         &self,
-        id: &IdentifierPrefix,
+        id: IdentifierPrefix,
         scheme: Scheme,
         msg: Message,
     ) -> Result<(), SendingError> {
-        let loc = self.events.find_location(id, scheme)?;
+        let loc = self.events.find_location(&id, scheme)?;
         self.transport.send_message(loc, msg).await?;
         Ok(())
     }
@@ -163,24 +164,9 @@ impl Communication {
     ///  3. get processed receipts from db and send it to all witnesses
     pub async fn publish(
         &self,
-        witness_prefixes: &[BasicPrefix],
+        witness_prefixes: Vec<BasicPrefix>,
         message: &SignedEventMessage,
     ) -> Result<(), MechanicsError> {
-        for id in witness_prefixes {
-            self.send_message_to(
-                &IdentifierPrefix::Basic(id.clone()),
-                Scheme::Http,
-                Message::Notice(Notice::Event(message.clone())),
-            )
-            .await?;
-            // process collected receipts
-            // send query message for receipt mailbox
-            // TODO: get receipts from mailbox
-            // for receipt in receipts {
-            //     self.process(&receipt)?;
-            // }
-        }
-
         // Get processed receipts from database to send all of them to witnesses. It
         // will return one receipt with all witness signatures as one attachment,
         // not three separate receipts as in `collected_receipts`.
@@ -189,19 +175,29 @@ impl Communication {
             message.event_message.data.get_sn(),
             message.event_message.digest(),
         );
-        let rcts_from_db = self.events.find_receipt(&prefix, sn, &digest?)?;
+        let rcts_from_db = self
+            .events
+            .find_receipt(&prefix, sn, &digest?)?
+            .map(|rct| Message::Notice(Notice::NontransferableRct(rct)));
 
-        if let Some(receipt) = rcts_from_db {
-            // send receipts to all witnesses
-            for prefix in witness_prefixes {
-                self.send_message_to(
-                    &IdentifierPrefix::Basic(prefix.clone()),
-                    Scheme::Http,
-                    Message::Notice(Notice::NontransferableRct(receipt.clone())),
-                )
-                .await?;
-            }
+        let messages_to_send = if let Some(receipt) = rcts_from_db {
+            vec![Message::Notice(Notice::Event(message.clone())), receipt]
+        } else {
+            vec![Message::Notice(Notice::Event(message.clone()))]
         };
+
+        join_all(
+            itertools::iproduct!(messages_to_send, witness_prefixes).map(
+                |(message, witness_id)| {
+                    self.send_message_to(
+                        IdentifierPrefix::Basic(witness_id.clone()),
+                        Scheme::Http,
+                        message.clone(),
+                    )
+                },
+            ),
+        )
+        .await;
 
         Ok(())
     }

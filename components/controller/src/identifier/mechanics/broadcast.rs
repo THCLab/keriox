@@ -70,7 +70,7 @@ impl Identifier {
                     };
                     self.communication
                         .send_message_to(
-                            dest_wit_id,
+                            dest_wit_id.clone(),
                             Scheme::Http,
                             Message::Notice(Notice::NontransferableRct(rct_to_send.clone())),
                         )
