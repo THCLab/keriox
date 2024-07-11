@@ -173,6 +173,17 @@ impl Tel {
             .collect::<Vec<_>>())
     }
 
+    pub fn get_management_tel(
+        &self,
+        registry_id: &IdentifierPrefix,
+    ) -> Result<Option<impl DoubleEndedIterator + Iterator<Item = VerifiableEvent>>, Error> {
+        Ok(self
+            .processor
+            .tel_reference
+            .db
+            .get_management_events(&registry_id))
+    }
+
     pub fn get_management_tel_state(
         &self,
         id: &IdentifierPrefix,

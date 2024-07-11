@@ -140,11 +140,8 @@ impl Identifier {
             }
         };
         let witness = self.known_events.get_current_witness_list(issuer_id)?[0].clone();
-        let location = self
-            .known_events
-            .get_loc_schemas(&IdentifierPrefix::Basic(witness))
-            .unwrap()[0]
-            .clone();
+        let watcher = self.watchers().unwrap()[0].clone();
+        let location = self.known_events.get_loc_schemas(&watcher).unwrap()[0].clone();
         let tel_res = self
             .communication
             .tel_transport

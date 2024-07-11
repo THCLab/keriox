@@ -49,11 +49,11 @@ impl WitnessListener {
                 )
                 .route(
                     "/oobi/{id}",
-                    actix_web::web::get().to(http_handlers::get_eid_oobi),
+                    actix_web::web::get().to(http_handlers::resolve_location),
                 )
                 .route(
                     "/oobi/{cid}/{role}/{eid}",
-                    actix_web::web::get().to(http_handlers::get_cid_oobi),
+                    actix_web::web::get().to(http_handlers::resolve_role),
                 )
                 .route(
                     "/process",
@@ -181,7 +181,7 @@ mod test {
         }
         async fn request_loc_scheme(&self, eid: IdentifierPrefix) -> Result<Vec<Op>, ActorError> {
             let data = actix_web::web::Data::new(self.witness_data.clone());
-            let resp = super::http_handlers::get_eid_oobi(eid.into(), data)
+            let resp = super::http_handlers::resolve_location(eid.into(), data)
                 .await
                 .map_err(|err| err.0)?;
             let resp = resp.into_body().try_into_bytes().unwrap();
@@ -195,7 +195,7 @@ mod test {
             eid: IdentifierPrefix,
         ) -> Result<Vec<Message>, ActorError> {
             let data = actix_web::web::Data::new(self.witness_data.clone());
-            let resp = super::http_handlers::get_cid_oobi((cid, role, eid).into(), data)
+            let resp = super::http_handlers::resolve_role((cid, role, eid).into(), data)
                 .await
                 .map_err(|err| err.0)?;
             let resp = resp.into_body().try_into_bytes().unwrap();
@@ -232,7 +232,7 @@ pub mod http_handlers {
         Ok(HttpResponse::Ok().json(data.oobi()))
     }
 
-    pub async fn get_eid_oobi(
+    pub async fn resolve_location(
         eid: web::Path<IdentifierPrefix>,
         data: web::Data<Arc<Witness>>,
     ) -> Result<HttpResponse, ApiError> {
@@ -255,45 +255,59 @@ pub mod http_handlers {
             .body(String::from_utf8(oobis).unwrap()))
     }
 
-    pub async fn get_cid_oobi(
+    pub async fn resolve_role(
         path: web::Path<(IdentifierPrefix, Role, IdentifierPrefix)>,
         data: web::Data<Arc<Witness>>,
     ) -> Result<HttpResponse, ApiError> {
         let (cid, role, eid) = path.into_inner();
 
-        let end_role = data
-            .oobi_manager
-            .get_end_role(&cid, role)
-            .map_err(ActorError::DbError)?;
-        let loc_scheme = data
-            .get_loc_scheme_for_id(&eid)
-            .map_err(ActorError::KeriError)?
-            .unwrap_or_default();
-        // (for now) Append controller kel to be able to verify end role signature.
-        // TODO use ksn instead
-        let oobis = end_role
-            .into_iter()
-            .chain(loc_scheme.into_iter())
-            .map(|sr| {
-                let sed = Message::Op(Op::Reply(sr));
-                sed.to_cesr().map_err(|_| Error::CesrError)
-            })
-            .flatten_ok()
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(ActorError::KeriError)?;
-        let res: Vec<_> = data
-            .event_storage
-            .get_kel_messages_with_receipts(&cid, None)
-            .map_err(ActorError::KeriError)?
-            .unwrap_or_default()
-            .into_iter()
-            .flat_map(|not| Message::Notice(not).to_cesr().unwrap())
-            .chain(oobis)
-            .collect();
+        let end_role = data.oobi_manager.get_end_role(&cid, role);
+        let response = match end_role {
+            Ok(role_oobi) => {
+                let location_signed = data
+                    .get_loc_scheme_for_id(&eid)
+                    .map_err(ActorError::KeriError)?
+                    .unwrap_or_default();
+
+                // Join end role OOBI with location OOBIs and serialize to CESR.
+                let oobis = role_oobi
+                    .into_iter()
+                    .chain(location_signed.into_iter())
+                    .map(|sr| {
+                        let sed = Message::Op(Op::Reply(sr));
+                        sed.to_cesr().map_err(|_| Error::CesrError)
+                    })
+                    .flatten_ok()
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(ActorError::KeriError)?;
+
+                // (for now) Append controller kel to be able to verify end role signature.
+                // TODO use ksn instead
+                data.event_storage
+                    .get_kel_messages_with_receipts(&cid, None)
+                    .map_err(ActorError::KeriError)?
+                    .unwrap_or_default()
+                    .into_iter()
+                    .flat_map(|not| Message::Notice(not).to_cesr().unwrap())
+                    .chain(oobis)
+                    .collect::<Vec<_>>()
+            }
+            // If signed end role OOBI not found, check if it is TEL id.
+            Err(e) => {
+                let management_tel = data.tel.get_management_tel(&cid).unwrap();
+                match management_tel {
+                    Some(management_tel) => management_tel
+                        .map(|tel_event| tel_event.serialize().unwrap())
+                        .flatten()
+                        .collect(),
+                    None => return Err(ApiError(ActorError::DbError(e))),
+                }
+            }
+        };
 
         Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())
-            .body(String::from_utf8(res).unwrap()))
+            .body(String::from_utf8(response).unwrap()))
     }
 
     pub async fn process_notice(

@@ -12,7 +12,7 @@ use witness::Witness;
 
 pub enum TelTestActor {
     Witness(Arc<Witness>),
-    Watcher(Watcher),
+    Watcher(Arc<Watcher>),
 }
 
 impl TelTestActor {
