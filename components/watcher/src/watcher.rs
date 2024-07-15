@@ -26,17 +26,20 @@ use keri_core::{
     state::IdentifierState,
     transport::{default::DefaultTransport, Transport},
 };
+use teliox::{database::EventDatabase, event::verifiable_event::VerifiableEvent, processor::{storage::TelEventStorage, TelReplyType}, tel::Tel};
+use teliox::event::parse_tel_query_stream;
 
 pub struct WatcherData {
     address: url::Url,
     pub prefix: BasicPrefix,
     pub processor: BasicProcessor,
-    event_storage: EventStorage,
+    event_storage: Arc<EventStorage>,
     pub oobi_manager: OobiManager,
     pub signer: Arc<Signer>,
     transport: Box<dyn Transport + Send + Sync>,
     /// Watcher will update KEL of the identifiers that have been sent to this channel.
     tx: Sender<IdentifierPrefix>,
+    tel: Arc<Tel>,
 }
 
 pub struct WatcherConfig {
@@ -84,7 +87,7 @@ impl WatcherData {
         };
 
         let oobi_manager = {
-            let mut path = db_path;
+            let mut path = db_path.clone();
             path.push("oobi");
             OobiManager::new(&path)
         };
@@ -101,7 +104,7 @@ impl WatcherData {
         let prefix = BasicPrefix::Ed25519NT(signer.public_key()); // watcher uses non transferable key
         let processor = BasicProcessor::new(db.clone(), Some(notification_bus));
 
-        let storage = EventStorage::new(db);
+        let storage = Arc::new(EventStorage::new(db));
 
         // construct witness loc scheme oobi
         let loc_scheme = LocationScheme::new(
@@ -121,6 +124,34 @@ impl WatcherData {
         );
         oobi_manager.save_oobi(&signed_reply)?;
 
+        // Initiate tel and it's escrows
+        let mut tel_path = db_path.clone();
+        let tel_events_db = {
+            tel_path.push("tel");
+            tel_path.push("events");
+            Arc::new(EventDatabase::new(&tel_path).unwrap())
+        };
+
+        let tel_escrow_db = {
+            let mut tel_path = db_path.clone();
+            tel_path.push("tel");
+            tel_path.push("escrow");
+            Arc::new(EscrowDb::new(&tel_path)?)
+        };
+        let tel_storage = Arc::new(TelEventStorage::new(tel_events_db));
+        let (tel_bus, _missing_issuer, _out_of_order, _missing_registy) = teliox::processor::escrow::default_escrow_bus(
+            tel_storage.clone(),
+            storage.clone(),
+            tel_escrow_db.clone(),
+        )
+        .unwrap();
+
+        let tel = Arc::new(Tel::new(
+            tel_storage.clone(),
+            storage.clone(),
+            Some(tel_bus),
+        ));
+
         let watcher = Arc::new(Self {
             address: public_address,
             prefix,
@@ -130,6 +161,7 @@ impl WatcherData {
             oobi_manager,
             transport,
             tx,
+            tel,
         });
         Ok(watcher.clone())
     }
@@ -624,4 +656,27 @@ impl Watcher {
         }
         Ok(())
     }
+
+    pub fn parse_and_process_tel_queries(
+        &self,
+        input_stream: &[u8],
+    ) -> Result<Vec<TelReplyType>, ActorError> {
+        Ok(parse_tel_query_stream(input_stream)
+            .unwrap()
+            .into_iter()
+            .map(|qry| self.watcher_data.tel.processor.process_signed_query(qry))
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap())
+    }
+
+    pub fn parse_and_process_tel_events(&self, input_stream: &[u8]) -> Result<(), ActorError> {
+        VerifiableEvent::parse(input_stream)
+            .unwrap()
+            .into_iter()
+            .map(|tel_event| self.watcher_data.tel.processor.process(tel_event))
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        Ok(())
+    }
+
 }
