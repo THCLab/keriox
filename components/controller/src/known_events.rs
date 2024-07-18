@@ -174,6 +174,7 @@ impl KnownEvents {
         Ok(self
             .oobi_manager
             .get_end_role(id, Role::Watcher)?
+            .unwrap_or_default()
             .into_iter()
             .filter_map(|r| {
                 if let ReplyRoute::EndRoleAdd(adds) = r.reply.get_route() {

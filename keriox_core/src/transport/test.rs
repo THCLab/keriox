@@ -21,7 +21,7 @@ pub trait TestActor<E: Error = ActorError> {
         cid: IdentifierPrefix,
         role: Role,
         eid: IdentifierPrefix,
-    ) -> Result<Vec<Message>, E>;
+    ) -> Result<Vec<u8>, E>;
     async fn resolve_oobi(&self, msg: Oobi) -> Result<(), E>;
 }
 
@@ -121,7 +121,7 @@ where
         cid: IdentifierPrefix,
         role: Role,
         eid: IdentifierPrefix,
-    ) -> Result<Vec<Message>, TransportError<E>> {
+    ) -> Result<Vec<u8>, TransportError<E>> {
         let (host, port) = match loc.url.origin() {
             url::Origin::Tuple(_scheme, host, port) => (host, port),
             _ => return Err(TransportError::NetworkError("Wrong url".into())),

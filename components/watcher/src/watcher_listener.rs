@@ -79,7 +79,8 @@ impl WatcherListener {
 
 pub async fn update_checking(data: Arc<Watcher>) {
     loop {
-        data.process_update_requests().await
+        data.process_update_requests().await;
+        data.process_update_tel_requests().await;
     }
 }
 
@@ -228,6 +229,24 @@ pub mod http_handlers {
             .body(String::from_utf8(oobis).unwrap()))
     }
 
+    pub async fn process_tel_query(
+        post_data: String,
+        data: web::Data<Arc<Watcher>>,
+    ) -> Result<HttpResponse, ApiError> {
+        println!("\nGot tel query to process: \n{}", post_data);
+        let resp = data
+            .parse_and_process_tel_queries(post_data.as_bytes())
+            .await?
+            .iter()
+            .map(|msg| msg.to_string())
+            .collect::<Vec<_>>()
+            .join("");
+        println!("\nWatcher responds with: {}", resp);
+        Ok(HttpResponse::Ok()
+            .content_type(ContentType::plaintext())
+            .body(resp))
+    }
+
     #[derive(Debug, derive_more::Display, derive_more::From, derive_more::Error)]
     pub struct ApiError(pub ActorError);
 
@@ -329,14 +348,13 @@ mod test {
             cid: IdentifierPrefix,
             role: Role,
             eid: IdentifierPrefix,
-        ) -> Result<Vec<Message>, ActorError> {
+        ) -> Result<Vec<u8>, ActorError> {
             let data = actix_web::web::Data::new(self.watcher_data.clone());
             let resp = super::http_handlers::get_cid_oobi((cid, role, eid).into(), data)
                 .await
                 .map_err(|err| err.0)?;
             let resp = resp.into_body().try_into_bytes().unwrap();
-            let resp = parse_event_stream(resp.as_ref()).unwrap();
-            Ok(resp)
+            Ok(resp.to_vec())
         }
         async fn resolve_oobi(&self, msg: Oobi) -> Result<(), ActorError> {
             let data = actix_web::web::Data::new(self.watcher_data.clone());

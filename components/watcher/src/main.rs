@@ -14,6 +14,7 @@ use keri_core::{
 };
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DurationSeconds};
+use teliox::transport::TelTransport;
 use url::Url;
 use watcher::{WatcherConfig, WatcherListener};
 
@@ -128,6 +129,7 @@ async fn main() -> anyhow::Result<()> {
         db_path: cfg.db_path.clone(),
         priv_key: cfg.seed,
         transport: Box::new(DefaultTransport::new()),
+        tel_transport: Box::new(TelTransport),
         escrow_config: cfg.escrow_config,
     })?;
 

@@ -30,14 +30,14 @@ impl TelTestActor {
                 .map(|msg| msg.to_string())
                 .collect::<Vec<_>>()
                 .join(""),
-            TelTestActor::Watcher(wat) => {
-                    wat.parse_and_process_tel_queries(&input_stream)
-                    .unwrap()
-                    .into_iter()
-                    .map(|msg| msg.to_string())
-                    .collect::<Vec<_>>()
-                    .join("")
-            },
+            TelTestActor::Watcher(wat) => wat
+                .parse_and_process_tel_queries(&input_stream)
+                .await
+                .unwrap()
+                .into_iter()
+                .map(|msg| msg.to_string())
+                .collect::<Vec<_>>()
+                .join(""),
         };
         Ok(response)
     }

@@ -56,7 +56,7 @@ where
         cid: IdentifierPrefix,
         role: Role,
         eid: IdentifierPrefix,
-    ) -> Result<Vec<Message>, TransportError<E>>;
+    ) -> Result<Vec<u8>, TransportError<E>>;
 
     /// Orders other actor to [`request_loc_scheme`](Transport::request_loc_scheme) or [`request_end_role`](Transport::request_end_role) and save result to its DB.
     /// Should use `resolve` endpoint.

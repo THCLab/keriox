@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use futures::future::join_all;
 use keri_core::{
-    actor::{error::ActorError, simple_controller::PossibleResponse},
+    actor::{error::ActorError, parse_event_stream, simple_controller::PossibleResponse},
     event_message::signed_event_message::{Message, Notice, Op, SignedEventMessage},
     oobi::{EndRole, LocationScheme, Oobi, Scheme},
     prefix::{BasicPrefix, IdentifierPrefix},
@@ -89,7 +89,9 @@ impl Communication {
                 None,
             )))?
             .clone();
-        let msgs = self.transport.request_end_role(loc, cid, role, eid).await?;
+        let response = self.transport.request_end_role(loc, cid, role, eid).await?;
+
+        let msgs = parse_event_stream(response.as_ref()).unwrap();
         for msg in msgs {
             // TODO This ignore signatures. Add verification.
             if let Message::Op(Op::Reply(signed_oobi)) = msg {

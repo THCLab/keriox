@@ -39,13 +39,12 @@ impl TelEventValidator {
 
     /// Checks if kel event pointed by seal has seal to tel event inside.
     pub fn check_kel_event(
-        &self,
+        kel_reference: Arc<EventStorage>,
         seal: &AttachedSourceSeal,
         issuer_id: &IdentifierPrefix,
         expected_digest: SelfAddressingIdentifier,
     ) -> Result<(), Error> {
-        let reference_kel_event = self
-            .kel_reference
+        let reference_kel_event = kel_reference
             .get_event_at_sn(issuer_id, seal.seal.sn)
             .ok_or(Error::MissingIssuerEventError)?;
         // Check if digest of found event matches digest from seal
@@ -96,7 +95,12 @@ impl TelEventValidator {
             }
         };
 
-        self.check_kel_event(seal, &id, event.digest().unwrap())?;
+        Self::check_kel_event(
+            self.kel_reference.clone(),
+            seal,
+            &id,
+            event.digest().unwrap(),
+        )?;
 
         let state = self
             .db
@@ -119,7 +123,12 @@ impl TelEventValidator {
             .compute_management_tel_state(&registry_id)?
             .ok_or(Error::MissingRegistryError)?
             .issuer;
-        self.check_kel_event(seal, &issuer_id, vc_event.digest().unwrap())?;
+        Self::check_kel_event(
+            self.kel_reference.clone(),
+            seal,
+            &issuer_id,
+            vc_event.digest().unwrap(),
+        )?;
         self.db
             .compute_vc_state(&vc_event.data.data.prefix)?
             .unwrap_or_default()

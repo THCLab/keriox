@@ -161,7 +161,7 @@ where
         cid: IdentifierPrefix,
         role: Role,
         eid: IdentifierPrefix,
-    ) -> Result<Vec<Message>, TransportError<E>> {
+    ) -> Result<Vec<u8>, TransportError<E>> {
         // {url}/oobi/{cid}/{role}/{eid}
         let url = loc
             .url
@@ -187,7 +187,7 @@ where
                 .await
                 .map_err(|e| TransportError::NetworkError(e.to_string()))?;
 
-            let ops = parse_event_stream(&body)?;
+            let ops = body.to_vec();
             Ok(ops)
         } else {
             let body = resp

@@ -162,8 +162,8 @@ impl OobiManager {
         &self,
         id: &IdentifierPrefix,
         role: Role,
-    ) -> Result<Vec<SignedReply>, DbError> {
-        Ok(self.store.get_end_role(id, role)?.unwrap_or_default())
+    ) -> Result<Option<Vec<SignedReply>>, DbError> {
+        Ok(self.store.get_end_role(id, role)?)
         // .map(|e_list| e_list.into_iter().map(|e| e.reply).collect()))
     }
 

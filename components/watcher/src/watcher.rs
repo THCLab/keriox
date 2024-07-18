@@ -1,16 +1,25 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    collections::HashMap,
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
 
 use async_std::channel::{unbounded, Receiver, Sender};
 use futures::future::join_all;
 use itertools::Itertools;
 use keri_core::{
     actor::{
-        error::ActorError, parse_notice_stream, parse_query_stream, parse_reply_stream, prelude::*,
-        simple_controller::PossibleResponse, QueryError, SignedQueryError,
+        error::ActorError, parse_event_stream, parse_notice_stream, parse_query_stream,
+        parse_reply_stream, prelude::*, simple_controller::PossibleResponse, QueryError,
+        SignedQueryError,
     },
     database::{escrow::EscrowDb, DbError},
     error::Error,
-    event_message::signed_event_message::{Message, Notice, Op},
+    event_message::{
+        msg::KeriEvent,
+        signed_event_message::{Message, Notice, Op},
+        timestamped::Timestamped,
+    },
     oobi::{error::OobiError, EndRole, LocationScheme, OobiManager, Role, Scheme},
     prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     processor::{
@@ -26,8 +35,41 @@ use keri_core::{
     state::IdentifierState,
     transport::{default::DefaultTransport, Transport},
 };
-use teliox::{database::EventDatabase, event::verifiable_event::VerifiableEvent, processor::{storage::TelEventStorage, TelReplyType}, tel::Tel};
 use teliox::event::parse_tel_query_stream;
+use teliox::{
+    database::EventDatabase,
+    event::verifiable_event::VerifiableEvent,
+    processor::{storage::TelEventStorage, validator::TelEventValidator, TelReplyType},
+    query::{SignedTelQuery, TelQueryArgs, TelQueryRoute},
+    tel::Tel,
+    transport::{GeneralTelTransport, TelTransport},
+};
+
+enum WitnessResp {
+    Kel(Vec<Message>),
+    Tel(Vec<VerifiableEvent>),
+}
+pub struct TelToForward {
+    tel: Mutex<HashMap<(IdentifierPrefix, IdentifierPrefix), Vec<u8>>>,
+}
+
+impl TelToForward {
+    pub fn new() -> Self {
+        Self {
+            tel: Mutex::new(HashMap::new()),
+        }
+    }
+
+    pub fn save(&self, about_ri: IdentifierPrefix, about_vc_id: IdentifierPrefix, tel: Vec<u8>) {
+        let mut saving = self.tel.lock().unwrap();
+        saving.insert((about_ri.clone(), about_vc_id.clone()), tel);
+    }
+
+    pub fn get(&self, ri: IdentifierPrefix, vc_id: IdentifierPrefix) -> Option<Vec<u8>> {
+        let mut saving = self.tel.lock().unwrap();
+        saving.get(&(ri, vc_id)).cloned()
+    }
+}
 
 pub struct WatcherData {
     address: url::Url,
@@ -37,9 +79,12 @@ pub struct WatcherData {
     pub oobi_manager: OobiManager,
     pub signer: Arc<Signer>,
     transport: Box<dyn Transport + Send + Sync>,
+    tel_transport: Box<dyn GeneralTelTransport + Send + Sync>,
     /// Watcher will update KEL of the identifiers that have been sent to this channel.
     tx: Sender<IdentifierPrefix>,
-    tel: Arc<Tel>,
+    /// Watcher will update TEL of the identifiers (registry_id, vc_id) that have been sent to this channel.
+    tel_tx: Sender<(IdentifierPrefix, IdentifierPrefix)>,
+    tel_to_forward: Arc<TelToForward>,
 }
 
 pub struct WatcherConfig {
@@ -47,6 +92,7 @@ pub struct WatcherConfig {
     pub db_path: PathBuf,
     pub priv_key: Option<String>,
     pub transport: Box<dyn Transport + Send + Sync>,
+    pub tel_transport: Box<dyn GeneralTelTransport + Send + Sync>,
     pub escrow_config: EscrowConfig,
 }
 
@@ -57,18 +103,24 @@ impl Default for WatcherConfig {
             db_path: PathBuf::from("db"),
             priv_key: None,
             transport: Box::new(DefaultTransport::new()),
+            tel_transport: Box::new(TelTransport),
             escrow_config: EscrowConfig::default(),
         }
     }
 }
 
 impl WatcherData {
-    pub fn new(config: WatcherConfig, tx: Sender<IdentifierPrefix>) -> Result<Arc<Self>, Error> {
+    pub fn new(
+        config: WatcherConfig,
+        tx: Sender<IdentifierPrefix>,
+        tel_tx: Sender<(IdentifierPrefix, IdentifierPrefix)>,
+    ) -> Result<Arc<Self>, Error> {
         let WatcherConfig {
             public_address,
             db_path,
             priv_key,
             transport,
+            tel_transport,
             escrow_config,
         } = config;
 
@@ -139,12 +191,13 @@ impl WatcherData {
             Arc::new(EscrowDb::new(&tel_path)?)
         };
         let tel_storage = Arc::new(TelEventStorage::new(tel_events_db));
-        let (tel_bus, _missing_issuer, _out_of_order, _missing_registy) = teliox::processor::escrow::default_escrow_bus(
-            tel_storage.clone(),
-            storage.clone(),
-            tel_escrow_db.clone(),
-        )
-        .unwrap();
+        let (tel_bus, _missing_issuer, _out_of_order, _missing_registy) =
+            teliox::processor::escrow::default_escrow_bus(
+                tel_storage.clone(),
+                storage.clone(),
+                tel_escrow_db.clone(),
+            )
+            .unwrap();
 
         let tel = Arc::new(Tel::new(
             tel_storage.clone(),
@@ -161,7 +214,9 @@ impl WatcherData {
             oobi_manager,
             transport,
             tx,
-            tel,
+            tel_to_forward: Arc::new(TelToForward::new()),
+            tel_tx,
+            tel_transport,
         });
         Ok(watcher.clone())
     }
@@ -194,6 +249,7 @@ impl WatcherData {
     ) -> Result<Vec<SignedReply>, ActorError> {
         self.oobi_manager
             .get_end_role(&cid, role)
+            .map(|el| el.unwrap_or_default())
             .map_err(ActorError::from)
     }
 
@@ -425,6 +481,52 @@ impl WatcherData {
         Ok(())
     }
 
+    async fn tel_update(
+        &self,
+        about_ri: &IdentifierPrefix,
+        about_vc_id: &IdentifierPrefix,
+        wit_id: IdentifierPrefix,
+    ) -> Result<(), ActorError> {
+        let location = self.oobi_manager.get_loc_scheme(&wit_id)?.unwrap()[0]
+            .clone()
+            .data
+            .data;
+        let loc = if let ReplyRoute::LocScheme(loc) = location {
+            loc
+        } else {
+            todo!()
+        };
+        let route = TelQueryRoute::Tels {
+            reply_route: "".into(),
+            args: TelQueryArgs {
+                i: Some(about_vc_id.clone()),
+                ri: Some(about_ri.clone()),
+            },
+        };
+        let env = Timestamped::new(route);
+        let qry = KeriEvent::new(
+            SerializationFormats::JSON,
+            HashFunctionCode::Blake3_256.into(),
+            env,
+        );
+
+        // sign message by watcher
+        let signature = SelfSigningPrefix::Ed25519Sha512(
+            self.signer.sign(
+                serde_json::to_vec(&qry)
+                    .map_err(|e| keri_core::error::Error::SerializationError(e.to_string()))?,
+            )?,
+        );
+        let query = SignedTelQuery::new_nontrans(qry, self.prefix.clone(), signature);
+        let resp = self.tel_transport.send_query(query, loc).await.unwrap();
+        self.tel_to_forward.save(
+            about_ri.clone(),
+            about_vc_id.clone(),
+            resp.as_bytes().to_vec(),
+        );
+        Ok(())
+    }
+
     async fn ksn_update(
         &self,
         about_id: &IdentifierPrefix,
@@ -464,7 +566,7 @@ impl WatcherData {
         Ok(())
     }
 
-    /// Get witnesses for prefix and choose one randomly
+    /// Get witnesses for prefix
     fn get_witnesses_for_prefix(
         &self,
         id: &IdentifierPrefix,
@@ -481,6 +583,7 @@ impl WatcherData {
         Ok(self
             .oobi_manager
             .get_end_role(cid, Role::Watcher)?
+            .unwrap()
             .iter()
             .filter_map(|reply| {
                 if let ReplyRoute::EndRoleAdd(role) = reply.reply.get_route() {
@@ -544,17 +647,45 @@ impl WatcherData {
     }
 }
 
+struct RegistryMapping {
+    mapping: Mutex<HashMap<IdentifierPrefix, IdentifierPrefix>>,
+}
+
+impl RegistryMapping {
+    pub fn new() -> Self {
+        Self {
+            mapping: Mutex::new(HashMap::new()),
+        }
+    }
+    pub fn save(&self, key: IdentifierPrefix, value: IdentifierPrefix) -> Result<(), Error> {
+        let mut data = self.mapping.lock().unwrap();
+        data.insert(key, value);
+        Ok(())
+    }
+
+    pub fn get(&self, key: &IdentifierPrefix) -> Option<IdentifierPrefix> {
+        let data = self.mapping.lock().unwrap();
+        data.get(key).map(|id| id.clone())
+    }
+}
+
 pub struct Watcher {
     pub(crate) watcher_data: Arc<WatcherData>,
     recv: Receiver<IdentifierPrefix>,
+    tel_recv: Receiver<(IdentifierPrefix, IdentifierPrefix)>,
+    // Maps registry id to witness id provided by oobi
+    registry_id_mapping: RegistryMapping,
 }
 
 impl Watcher {
     pub fn new(config: WatcherConfig) -> Result<Self, Error> {
         let (tx, rx) = unbounded();
+        let (tel_tx, tel_rx) = unbounded();
         Ok(Watcher {
-            watcher_data: WatcherData::new(config, tx)?,
+            watcher_data: WatcherData::new(config, tx, tel_tx)?,
             recv: rx,
+            tel_recv: tel_rx,
+            registry_id_mapping: RegistryMapping::new(),
         })
     }
 
@@ -569,6 +700,18 @@ impl Watcher {
     pub async fn process_update_requests(&self) {
         if let Ok(received) = self.recv.try_recv() {
             let _ = self.watcher_data.update_local_kel(&received).await;
+        }
+    }
+
+    pub async fn process_update_tel_requests(&self) {
+        if let Ok((ri, vc_id)) = self.tel_recv.try_recv() {
+            let who_ask = self.registry_id_mapping.get(&ri).unwrap();
+            println!("Need to ask about {}, source: {}", ri, who_ask);
+
+            self.watcher_data
+                .tel_update(&ri, &vc_id, who_ask.clone())
+                .await
+                .unwrap();
         }
     }
 
@@ -595,18 +738,48 @@ impl Watcher {
             let oobis = self
                 .watcher_data
                 .transport
-                .request_end_role(loc, er.cid, er.role, er.eid)
+                .request_end_role(loc, er.cid.clone(), er.role, er.eid.clone())
                 .await?;
-            for m in oobis {
-                match m {
-                    Message::Op(op) => {
-                        self.watcher_data.process_op(op).await?;
+            match Self::parse_witness_response(&oobis)? {
+                WitnessResp::Kel(kel_event) => {
+                    for m in kel_event {
+                        match m {
+                            Message::Op(op) => {
+                                self.watcher_data.process_op(op).await?;
+                            }
+                            Message::Notice(not) => {
+                                self.watcher_data.process_notice(not)?;
+                            }
+                        }
                     }
-                    Message::Notice(not) => {
-                        self.watcher_data.process_notice(not)?;
+                }
+                WitnessResp::Tel(tel_events) => {
+                    // check tel event?
+                    for ev in tel_events {
+                        let digest = ev.event.get_digest().unwrap();
+                        let issuer_id = match ev.event {
+                            teliox::event::Event::Management(man) => match man.data.event_type {
+                                teliox::event::manager_event::ManagerEventType::Vcp(vcp) => {
+                                    vcp.issuer_id.clone()
+                                }
+                                teliox::event::manager_event::ManagerEventType::Vrt(_) => todo!(),
+                            },
+                            teliox::event::Event::Vc(_) => todo!(),
+                        };
+                        let seal = &ev.seal;
+                        TelEventValidator::check_kel_event(
+                            self.watcher_data.event_storage.clone(),
+                            seal,
+                            &issuer_id,
+                            digest,
+                        )
+                        .unwrap();
+                        self.registry_id_mapping
+                            .save(er.cid.clone(), er.eid.clone())?;
                     }
                 }
             }
+            //
             Ok(())
         } else {
             Err(OobiError::InvalidMessageType)?
@@ -621,6 +794,18 @@ impl Watcher {
             .await?;
         self.watcher_data.process_ops(oobis).await?;
         Ok(())
+    }
+
+    fn parse_witness_response(input: &[u8]) -> Result<WitnessResp, ActorError> {
+        match parse_event_stream(input) {
+            Ok(msgs) => Ok(WitnessResp::Kel(msgs)),
+            Err(_) => {
+                // try to parse tel event
+                VerifiableEvent::parse(input)
+                    .map(|tel_events| WitnessResp::Tel(tel_events))
+                    .map_err(|e| ActorError::GeneralError(e.to_string()))
+            }
+        }
     }
 
     pub fn parse_and_process_notices(&self, input_stream: &[u8]) -> Result<(), Error> {
@@ -657,26 +842,39 @@ impl Watcher {
         Ok(())
     }
 
-    pub fn parse_and_process_tel_queries(
+    pub async fn parse_and_process_tel_queries(
         &self,
         input_stream: &[u8],
     ) -> Result<Vec<TelReplyType>, ActorError> {
-        Ok(parse_tel_query_stream(input_stream)
-            .unwrap()
-            .into_iter()
-            .map(|qry| self.watcher_data.tel.processor.process_signed_query(qry))
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap())
-    }
+        let tel_queries = parse_tel_query_stream(input_stream).unwrap().into_iter();
 
-    pub fn parse_and_process_tel_events(&self, input_stream: &[u8]) -> Result<(), ActorError> {
-        VerifiableEvent::parse(input_stream)
-            .unwrap()
-            .into_iter()
-            .map(|tel_event| self.watcher_data.tel.processor.process(tel_event))
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap();
-        Ok(())
+        let mut out = vec![];
+        for qry in tel_queries {
+            // TODO Verify signature
+            let (ri, vc_id) = match qry.query.data.data {
+                TelQueryRoute::Tels {
+                    reply_route: _,
+                    args,
+                } => (args.ri.unwrap(), args.i.unwrap()),
+            };
+            // Check if you have tel to forward
+            match self
+                .watcher_data
+                .tel_to_forward
+                .get(ri.clone(), vc_id.clone())
+            {
+                // if yes, just forward
+                Some(tel) => out.push(TelReplyType::Tel(tel.clone())),
+                // if no query witness
+                None => {
+                    self.watcher_data
+                        .tel_tx
+                        .send((ri.clone(), vc_id.clone()))
+                        .await
+                        .unwrap();
+                }
+            };
+        }
+        Ok(out)
     }
-
 }
