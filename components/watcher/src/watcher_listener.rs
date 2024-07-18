@@ -3,26 +3,26 @@ use std::{net::ToSocketAddrs, sync::Arc};
 use actix_web::{dev::Server, web, App, HttpServer};
 use keri_core::{error::Error, oobi::LocationScheme, prefix::BasicPrefix};
 
-use crate::watcher::{Watcher, WatcherConfig};
+use crate::{watcher::Watcher, WatcherConfig};
 
 use self::http_handlers::ApiError;
 
 pub struct WatcherListener {
-    pub watcher_data: Arc<Watcher>,
+    pub watcher: Arc<Watcher>,
 }
 
 impl WatcherListener {
     pub fn new(config: WatcherConfig) -> Result<Self, Error> {
         Ok(Self {
-            watcher_data: Arc::new(Watcher::new(config)?),
+            watcher: Arc::new(Watcher::new(config)?),
         })
     }
 
     pub fn listen_http(self, addr: impl ToSocketAddrs) -> Server {
-        let data = self.watcher_data.clone();
+        let data = self.watcher.clone();
         actix_web::rt::spawn(update_checking(data));
 
-        let state = web::Data::new(self.watcher_data);
+        let state = web::Data::new(self.watcher);
         HttpServer::new(move || {
             App::new()
                 .app_data(state.clone())
@@ -66,14 +66,14 @@ impl WatcherListener {
         initial_oobis: &[LocationScheme],
     ) -> Result<(), ApiError> {
         for lc in initial_oobis.iter() {
-            self.watcher_data.resolve_loc_scheme(lc).await?;
+            self.watcher.resolve_loc_scheme(lc).await?;
         }
 
         Ok(())
     }
 
     pub fn get_prefix(&self) -> BasicPrefix {
-        self.watcher_data.prefix()
+        self.watcher.prefix()
     }
 }
 
@@ -278,7 +278,7 @@ mod test {
     impl keri_core::transport::test::TestActor for super::WatcherListener {
         async fn send_message(&self, msg: Message) -> Result<(), ActorError> {
             let payload = String::from_utf8(msg.to_cesr().unwrap()).unwrap();
-            let data = actix_web::web::Data::new(self.watcher_data.clone());
+            let data = actix_web::web::Data::new(self.watcher.clone());
             match msg {
                 Message::Notice(_) => {
                     super::http_handlers::process_notice(Bytes::from(payload), data)
@@ -310,7 +310,7 @@ mod test {
         ) -> Result<PossibleResponse, ActorError> {
             let payload =
                 String::from_utf8(Message::from(query.clone()).to_cesr().unwrap()).unwrap();
-            let data = actix_web::web::Data::new(self.watcher_data.clone());
+            let data = actix_web::web::Data::new(self.watcher.clone());
             let resp = super::http_handlers::process_query(Bytes::from(payload), data)
                 .await
                 .map_err(|err| err.0)?;
@@ -335,7 +335,7 @@ mod test {
             }
         }
         async fn request_loc_scheme(&self, eid: IdentifierPrefix) -> Result<Vec<Op>, ActorError> {
-            let data = actix_web::web::Data::new(self.watcher_data.clone());
+            let data = actix_web::web::Data::new(self.watcher.clone());
             let resp = super::http_handlers::get_eid_oobi(eid.into(), data)
                 .await
                 .map_err(|err| err.0)?;
@@ -349,7 +349,7 @@ mod test {
             role: Role,
             eid: IdentifierPrefix,
         ) -> Result<Vec<u8>, ActorError> {
-            let data = actix_web::web::Data::new(self.watcher_data.clone());
+            let data = actix_web::web::Data::new(self.watcher.clone());
             let resp = super::http_handlers::get_cid_oobi((cid, role, eid).into(), data)
                 .await
                 .map_err(|err| err.0)?;
@@ -357,7 +357,7 @@ mod test {
             Ok(resp.to_vec())
         }
         async fn resolve_oobi(&self, msg: Oobi) -> Result<(), ActorError> {
-            let data = actix_web::web::Data::new(self.watcher_data.clone());
+            let data = actix_web::web::Data::new(self.watcher.clone());
             let resp = super::http_handlers::resolve_oobi(
                 Bytes::from(serde_json::to_string(&msg).unwrap()),
                 data,

@@ -60,7 +60,7 @@ async fn test_tel_from_witness() -> Result<(), ControllerError> {
             ..Default::default()
         })?);
         async_std::task::spawn(watcher::watcher_listener::update_checking(
-            watcher_listener.watcher_data.clone(),
+            watcher_listener.watcher.clone(),
         ));
         watcher_listener
     };

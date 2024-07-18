@@ -51,7 +51,7 @@ async fn test_multisig() -> Result<()> {
             ..Default::default()
         })?
     };
-    let watcher = watcher_listener.watcher_data.clone();
+    let watcher = watcher_listener.watcher.clone();
     let watcher_id = watcher.prefix();
     let watcher_oobi = LocationScheme {
         eid: IdentifierPrefix::Basic(watcher_id.clone()),
