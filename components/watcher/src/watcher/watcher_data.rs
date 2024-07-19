@@ -60,7 +60,7 @@ pub struct WatcherData {
     tx: Sender<IdentifierPrefix>,
     /// Watcher will update TEL of the identifiers (registry_id, vc_id) that have been sent to this channel.
     pub tel_tx: Sender<(IdentifierPrefix, IdentifierPrefix)>,
-    pub tel_to_forward: Arc<TelToForward>,
+    pub(super) tel_to_forward: Arc<TelToForward>,
 }
 
 impl WatcherData {
@@ -68,7 +68,7 @@ impl WatcherData {
         config: WatcherConfig,
         tx: Sender<IdentifierPrefix>,
         tel_tx: Sender<(IdentifierPrefix, IdentifierPrefix)>,
-    ) -> Result<Arc<Self>, Error> {
+    ) -> Result<Arc<Self>, ActorError> {
         let WatcherConfig {
             public_address,
             db_path,
@@ -115,7 +115,9 @@ impl WatcherData {
         // construct witness loc scheme oobi
         let loc_scheme = LocationScheme::new(
             IdentifierPrefix::Basic(prefix.clone()),
-            public_address.scheme().parse().unwrap(),
+            public_address.scheme().parse().map_err(|_e| {
+                ActorError::GeneralError(format!("Unsupported scheme {}", public_address.scheme()))
+            })?,
             public_address.clone(),
         );
         let reply = ReplyEvent::new_reply(
@@ -155,7 +157,7 @@ impl WatcherData {
             Some(oobis_to_sign) => oobis_to_sign
                 .iter()
                 .map(|oobi_to_sing| {
-                    let signature = self.signer.sign(oobi_to_sing.encode().unwrap())?;
+                    let signature = self.signer.sign(oobi_to_sing.encode()?)?;
                     Ok(SignedReply::new_nontrans(
                         oobi_to_sing.clone(),
                         self.prefix.clone(),
@@ -260,7 +262,9 @@ impl WatcherData {
                     _ => {
                         // query watcher and return info, that it's not ready
                         let id_to_update = qry.query.get_prefix();
-                        self.tx.send(id_to_update.clone()).await.unwrap();
+                        self.tx.send(id_to_update.clone()).await.map_err(|_e| {
+                            ActorError::GeneralError("Internal watcher error".to_string())
+                        })?;
                         return Err(ActorError::NotFound(id_to_update));
                     }
                 };
@@ -412,14 +416,17 @@ impl WatcherData {
         about_vc_id: &IdentifierPrefix,
         wit_id: IdentifierPrefix,
     ) -> Result<(), ActorError> {
-        let location = self.oobi_manager.get_loc_scheme(&wit_id)?.unwrap()[0]
+        let location = self
+            .oobi_manager
+            .get_loc_scheme(&wit_id)?
+            .ok_or(ActorError::NoLocation { id: wit_id })?[0]
             .clone()
             .data
             .data;
         let loc = if let ReplyRoute::LocScheme(loc) = location {
             loc
         } else {
-            todo!()
+            return Err(ActorError::WrongReplyRoute);
         };
         let route = TelQueryRoute::Tels {
             reply_route: "".into(),
@@ -443,7 +450,11 @@ impl WatcherData {
             )?,
         );
         let query = SignedTelQuery::new_nontrans(qry, self.prefix.clone(), signature);
-        let resp = self.tel_transport.send_query(query, loc).await.unwrap();
+        let resp = self
+            .tel_transport
+            .send_query(query, loc)
+            .await
+            .map_err(|e| ActorError::GeneralError(e.to_string()))?;
         self.tel_to_forward.save(
             about_ri.clone(),
             about_vc_id.clone(),

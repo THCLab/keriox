@@ -91,7 +91,12 @@ impl Communication {
             .clone();
         let response = self.transport.request_end_role(loc, cid, role, eid).await?;
 
-        let msgs = parse_event_stream(response.as_ref()).unwrap();
+        let msgs = parse_event_stream(response.as_ref()).map_err(|e| {
+            MechanicsError::OtherError(format!(
+                "Can't parse response while oobi resolving: {}",
+                e.to_string()
+            ))
+        })?;
         for msg in msgs {
             // TODO This ignore signatures. Add verification.
             if let Message::Op(Op::Reply(signed_oobi)) = msg {

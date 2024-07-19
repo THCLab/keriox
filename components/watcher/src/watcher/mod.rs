@@ -41,7 +41,7 @@ pub struct Watcher {
 }
 
 impl Watcher {
-    pub fn new(config: WatcherConfig) -> Result<Self, Error> {
+    pub fn new(config: WatcherConfig) -> Result<Self, ActorError> {
         let (tx, rx) = unbounded();
         let (tel_tx, tel_rx) = unbounded();
         Ok(Watcher {

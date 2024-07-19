@@ -3,7 +3,7 @@ use serde::Deserialize;
 use super::{Transport, TransportError};
 use crate::{
     actor::{
-        parse_event_stream, parse_op_stream,
+        parse_op_stream,
         simple_controller::{parse_response, PossibleResponse},
     },
     event_message::signed_event_message::{Message, Op},

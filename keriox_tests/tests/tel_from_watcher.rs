@@ -2,10 +2,8 @@ use std::time::Duration;
 use std::{collections::HashMap, sync::Arc};
 
 use async_std::task::sleep;
-use keri_controller::{
-    error::ControllerError, IdentifierPrefix, KeyManager, LocationScheme, SelfSigningPrefix,
-};
 use keri_controller::{EndRole, Oobi};
+use keri_controller::{IdentifierPrefix, KeyManager, LocationScheme, SelfSigningPrefix};
 use keri_core::actor::prelude::{HashFunction, HashFunctionCode};
 use keri_core::transport::test::TestTransport;
 use keri_tests::{
@@ -19,7 +17,7 @@ use watcher::{WatcherConfig, WatcherListener};
 use witness::{WitnessEscrowConfig, WitnessListener};
 
 #[async_std::test]
-async fn test_tel_from_watcher() -> Result<(), ControllerError> {
+async fn test_tel_from_watcher() -> Result<(), anyhow::Error> {
     let verifier_db_path = Builder::new().prefix("test-db0").tempdir().unwrap();
     let issuer_db_path = Builder::new().prefix("test-db").tempdir().unwrap();
 

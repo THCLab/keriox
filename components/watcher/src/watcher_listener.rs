@@ -1,7 +1,7 @@
 use std::{net::ToSocketAddrs, sync::Arc};
 
 use actix_web::{dev::Server, web, App, HttpServer};
-use keri_core::{error::Error, oobi::LocationScheme, prefix::BasicPrefix};
+use keri_core::{actor::error::ActorError, oobi::LocationScheme, prefix::BasicPrefix};
 
 use crate::{watcher::Watcher, WatcherConfig};
 
@@ -12,7 +12,7 @@ pub struct WatcherListener {
 }
 
 impl WatcherListener {
-    pub fn new(config: WatcherConfig) -> Result<Self, Error> {
+    pub fn new(config: WatcherConfig) -> Result<Self, ActorError> {
         Ok(Self {
             watcher: Arc::new(Watcher::new(config)?),
         })
@@ -194,13 +194,15 @@ pub mod http_handlers {
         data: web::Data<Arc<Watcher>>,
     ) -> Result<HttpResponse, ApiError> {
         let loc_scheme = data.signed_location(&eid)?;
-        let oobis: Vec<u8> = loc_scheme
+        let oobis = loc_scheme
             .into_iter()
-            .flat_map(|sr| {
+            .map(|sr| {
                 let sed = Message::Op(Op::Reply(sr));
-                sed.to_cesr().unwrap()
+                sed.to_cesr()
             })
-            .collect();
+            .flatten_ok()
+            .collect::<Result<Vec<u8>, _>>()
+            .map_err(|e| ApiError(ActorError::GeneralError(e.to_string())))?;
 
         Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())
@@ -215,14 +217,16 @@ pub mod http_handlers {
 
         let end_role = data.watcher_data.get_end_role_for_id(&cid, role)?;
         let loc_scheme = data.watcher_data.get_loc_scheme_for_id(&eid)?;
-        let oobis: Vec<u8> = end_role
+        let oobis = end_role
             .into_iter()
             .chain(loc_scheme.into_iter())
-            .flat_map(|sr| {
+            .map(|sr| {
                 let sed = Message::Op(Op::Reply(sr));
-                sed.to_cesr().unwrap()
+                sed.to_cesr()
             })
-            .collect();
+            .flatten_ok()
+            .collect::<Result<Vec<u8>, _>>()
+            .map_err(|e| ApiError(ActorError::GeneralError(e.to_string())))?;
 
         Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())

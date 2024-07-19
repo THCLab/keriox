@@ -11,7 +11,6 @@ use keri_core::{
         SignedQueryError,
     },
     database::{escrow::EscrowDb, SledEventDatabase},
-    error::Error,
     event_message::signed_event_message::{Notice, Op},
     prefix::IdentifierPrefix,
     processor::escrow::EscrowConfig,
@@ -28,7 +27,7 @@ use witness::{WitnessEscrowConfig, WitnessListener};
 use crate::{Watcher, WatcherConfig};
 
 #[async_std::test]
-async fn test_watcher_access() -> Result<(), Error> {
+async fn test_watcher_access() -> Result<(), ActorError> {
     // Controller who will ask
     let mut asker_controller = {
         // Create test db and event processor.
@@ -123,7 +122,7 @@ async fn test_watcher_access() -> Result<(), Error> {
 }
 
 #[test]
-pub fn watcher_forward_ksn() -> Result<(), Error> {
+pub fn watcher_forward_ksn() -> Result<(), ActorError> {
     let witness_url = url::Url::parse("http://witness1").unwrap();
 
     let witness_listener = {
