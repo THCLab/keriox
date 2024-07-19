@@ -1,5 +1,7 @@
+use std::time::Duration;
 use std::{collections::HashMap, sync::Arc};
 
+use async_std::task::sleep;
 use keri_controller::{
     error::ControllerError, IdentifierPrefix, KeyManager, LocationScheme, SelfSigningPrefix,
 };
@@ -17,18 +19,18 @@ use watcher::{WatcherConfig, WatcherListener};
 use witness::{WitnessEscrowConfig, WitnessListener};
 
 #[async_std::test]
-async fn test_tel_from_witness() -> Result<(), ControllerError> {
+async fn test_tel_from_watcher() -> Result<(), ControllerError> {
     let verifier_db_path = Builder::new().prefix("test-db0").tempdir().unwrap();
     let issuer_db_path = Builder::new().prefix("test-db").tempdir().unwrap();
 
     // Setup test witness
-    let witness_url = url::Url::parse("http://witness1/").unwrap();
-    let witness = {
+    let verifier_witness_url = url::Url::parse("http://witness1/").unwrap();
+    let verifier_witness = {
         let seed = "AK8F6AAiYDpXlWdj2O5F5-6wNCCNJh2A4XOlqwR_HwwH";
         let witness_db_path = Builder::new().prefix("test-wit1-db").tempdir().unwrap();
         Arc::new(
             WitnessListener::setup(
-                witness_url.clone(),
+                verifier_witness_url.clone(),
                 witness_db_path.path(),
                 Some(seed.to_string()),
                 WitnessEscrowConfig::default(),
@@ -37,26 +39,71 @@ async fn test_tel_from_witness() -> Result<(), ControllerError> {
         )
     };
 
-    let witness_identifier = witness.get_prefix();
-    let witness_location = LocationScheme {
-        eid: IdentifierPrefix::Basic(witness_identifier.clone()),
+    let verifier_witness_id = verifier_witness.get_prefix();
+    let verifier_witness_location = LocationScheme {
+        eid: IdentifierPrefix::Basic(verifier_witness_id.clone()),
         scheme: keri_core::oobi::Scheme::Http,
-        url: witness_url,
+        url: verifier_witness_url,
+    };
+
+    // Setup second test witness
+    let issuer_witness_url = url::Url::parse("http://witness2/").unwrap();
+    let issuer_witness = {
+        let seed = "AK8F6AAiYDpXlWdj2O5F5-6wNCCNJh2A4XOlqwR_Hwwg";
+        let witness_db_path = Builder::new().prefix("test-wit2-db").tempdir().unwrap();
+        Arc::new(
+            WitnessListener::setup(
+                issuer_witness_url.clone(),
+                witness_db_path.path(),
+                Some(seed.to_string()),
+                WitnessEscrowConfig::default(),
+            )
+            .unwrap(),
+        )
+    };
+
+    let issuer_witness_id = issuer_witness.get_prefix();
+    let issuer_witness_location = LocationScheme {
+        eid: IdentifierPrefix::Basic(issuer_witness_id.clone()),
+        scheme: keri_core::oobi::Scheme::Http,
+        url: issuer_witness_url,
     };
 
     // Setup test watcher
     let watcher = {
         let watcher_transport = {
             let mut actors: keri_core::transport::test::TestActorMap = HashMap::new();
-            actors.insert((Host::Domain("witness1".to_string()), 80), witness.clone());
+            actors.insert(
+                (Host::Domain("witness1".to_string()), 80),
+                verifier_witness.clone(),
+            );
+            actors.insert(
+                (Host::Domain("witness2".to_string()), 80),
+                issuer_witness.clone(),
+            );
             TestTransport::new(actors)
         };
+
+        let trans = TelTestTransport::new();
+        trans
+            .insert(
+                (Host::Domain("witness1".to_string()), 80),
+                TelTestActor::Witness(verifier_witness.witness_data.clone()),
+            )
+            .await;
+        trans
+            .insert(
+                (Host::Domain("witness2".to_string()), 80),
+                TelTestActor::Witness(issuer_witness.witness_data.clone()),
+            )
+            .await;
 
         let watcher_db_path = Builder::new().prefix("cont-test-db").tempdir().unwrap();
         let watcher_listener = Arc::new(WatcherListener::new(WatcherConfig {
             public_address: Url::parse("http://watcher1/").unwrap(),
             db_path: watcher_db_path.path().to_owned(),
             transport: Box::new(watcher_transport),
+            tel_transport: Box::new(trans),
             ..Default::default()
         })?);
         async_std::task::spawn(watcher::watcher_listener::update_checking(
@@ -76,7 +123,14 @@ async fn test_tel_from_witness() -> Result<(), ControllerError> {
     // with watcher and witness.
     let transport = {
         let mut actors: keri_core::transport::test::TestActorMap = HashMap::new();
-        actors.insert((Host::Domain("witness1".to_string()), 80), witness.clone());
+        actors.insert(
+            (Host::Domain("witness1".to_string()), 80),
+            verifier_witness.clone(),
+        );
+        actors.insert(
+            (Host::Domain("witness2".to_string()), 80),
+            issuer_witness.clone(),
+        );
         actors.insert((Host::Domain("watcher1".to_string()), 80), watcher.clone());
         TestTransport::new(actors)
     };
@@ -86,7 +140,19 @@ async fn test_tel_from_witness() -> Result<(), ControllerError> {
         trans
             .insert(
                 (Host::Domain("witness1".to_string()), 80),
-                TelTestActor::Witness(witness.witness_data.clone()),
+                TelTestActor::Witness(verifier_witness.witness_data.clone()),
+            )
+            .await;
+        trans
+            .insert(
+                (Host::Domain("witness2".to_string()), 80),
+                TelTestActor::Witness(issuer_witness.witness_data.clone()),
+            )
+            .await;
+        trans
+            .insert(
+                (Host::Domain("watcher1".to_string()), 80),
+                TelTestActor::Watcher(watcher.watcher.clone()),
             )
             .await;
         trans
@@ -95,7 +161,7 @@ async fn test_tel_from_witness() -> Result<(), ControllerError> {
     // Setup verifier identifier
     let (mut verifier, verifier_keypair, verifier_controller) = setup_identifier(
         verifier_db_path.path(),
-        vec![witness_location.clone()],
+        vec![verifier_witness_location.clone()],
         Some(transport.clone()),
         Some(tel_transport.clone()),
     )
@@ -119,9 +185,9 @@ async fn test_tel_from_witness() -> Result<(), ControllerError> {
     // Setup issuer identifier
     let (mut issuer, issuer_keypair, _issuer_controller) = setup_identifier(
         issuer_db_path.path(),
-        vec![witness_location.clone()],
+        vec![issuer_witness_location.clone()],
         Some(transport),
-        Some(tel_transport),
+        Some(tel_transport.clone()),
     )
     .await;
 
@@ -141,7 +207,7 @@ async fn test_tel_from_witness() -> Result<(), ControllerError> {
     issuer.notify_witnesses().await?;
 
     // Querying mailbox to get receipts
-    for qry in issuer.query_mailbox(issuer.id(), &[witness_identifier.clone()])? {
+    for qry in issuer.query_mailbox(issuer.id(), &[issuer_witness_id.clone()])? {
         let signature = SelfSigningPrefix::Ed25519Sha512(issuer_keypair.sign(&qry.encode()?)?);
         let _act = issuer
             .finalize_query_mailbox(vec![(qry, signature)])
@@ -163,7 +229,7 @@ async fn test_tel_from_witness() -> Result<(), ControllerError> {
     issuer.notify_witnesses().await?;
 
     // Querying mailbox to get receipts
-    for qry in issuer.query_mailbox(issuer.id(), &[witness_identifier.clone()])? {
+    for qry in issuer.query_mailbox(issuer.id(), &[issuer_witness_id.clone()])? {
         let signature = SelfSigningPrefix::Ed25519Sha512(issuer_keypair.sign(&qry.encode()?)?);
         let _act = issuer
             .finalize_query_mailbox(vec![(qry, signature)])
@@ -188,15 +254,15 @@ async fn test_tel_from_witness() -> Result<(), ControllerError> {
 
     // To find `signing_identifier`s KEL, verifying_identifier` needs to
     // provide to watcher its oobi and oobi of its witnesses.
-    for wit_oobi in vec![witness_location] {
+    for wit_oobi in vec![issuer_witness_location] {
         let oobi = Oobi::Location(wit_oobi);
-        verifier.resolve_oobi(&oobi).await?;
+        // verifier.resolve_oobi(&oobi).await?;
         verifier.send_oobi_to_watcher(&verifier.id(), &oobi).await?;
     }
     let signer_oobi = EndRole {
         cid: issuer.id().clone(),
         role: keri_core::oobi::Role::Witness,
-        eid: keri_controller::IdentifierPrefix::Basic(witness_identifier.clone()),
+        eid: keri_controller::IdentifierPrefix::Basic(issuer_witness_id.clone()),
     };
 
     verifier
@@ -222,6 +288,30 @@ async fn test_tel_from_witness() -> Result<(), ControllerError> {
     let issuers_state_in_verifier = verifier_controller.find_state(issuer.id()).unwrap();
     assert_eq!(issuers_state_in_verifier.sn, 2);
 
+    // To find issuer`s TEL, verifier needs to provide to watcher its oobi
+    println!("\n\nRegistry id: {}", registry_id);
+
+    let signer_tel_oobi = EndRole {
+        cid: registry_id.clone(),
+        role: keri_core::oobi::Role::Witness,
+        eid: keri_controller::IdentifierPrefix::Basic(issuer_witness_id.clone()),
+    };
+
+    verifier
+        .send_oobi_to_watcher(&verifier.id(), &Oobi::EndRole(signer_tel_oobi))
+        .await?;
+
+    // Query witness about issuer's TEL.
+    let qry = verifier.query_tel(registry_id.clone(), vc_hash.clone())?;
+    let signature =
+        SelfSigningPrefix::Ed25519Sha512(verifier_keypair.sign(&qry.encode().unwrap())?);
+    verifier
+        .finalize_query_tel(issuer.id(), qry, signature)
+        .await?;
+
+    // Give watcher a moment to find TEL and ask again
+    sleep(Duration::from_secs(1)).await;
+
     // Query witness about issuer's TEL.
     let qry = verifier.query_tel(registry_id, vc_hash.clone())?;
     let signature =
@@ -245,12 +335,11 @@ async fn test_tel_from_witness() -> Result<(), ControllerError> {
     issuer.notify_witnesses().await?;
 
     // Querying mailbox to get receipts
-    for qry in issuer.query_mailbox(issuer.id(), &[witness_identifier.clone()])? {
+    for qry in issuer.query_mailbox(issuer.id(), &[issuer_witness_id.clone()])? {
         let signature = SelfSigningPrefix::Ed25519Sha512(issuer_keypair.sign(&qry.encode()?)?);
         let _act = issuer
             .finalize_query_mailbox(vec![(qry, signature)])
             .await?;
-        // matches!(act, QueryResponse::Updates);
     }
 
     // Provided ixns are accepted in issuer's kel.
@@ -261,11 +350,6 @@ async fn test_tel_from_witness() -> Result<(), ControllerError> {
     assert!(matches!(vc_state, Some(TelState::Revoked)));
     // Now publish corresponding tel events to backers. Verifier can find them there.
     issuer.notify_backers().await.unwrap();
-
-    // Check vc state with verifier identifier
-    // Query witness about issuer's tel again.
-    let registry_id = issuer.registry_id().unwrap().clone();
-    let qry = verifier.query_tel(registry_id, vc_hash.clone())?;
 
     // Query watcher for updates in issuer's KEL
     let last_event_seal = issuer.get_last_event_seal()?;
@@ -291,6 +375,19 @@ async fn test_tel_from_witness() -> Result<(), ControllerError> {
             .await;
     }
 
+    // Query witness about issuer's tel again.
+    let registry_id = issuer.registry_id().unwrap().clone();
+    let qry = verifier.query_tel(registry_id.clone(), vc_hash.clone())?;
+    let signature =
+        SelfSigningPrefix::Ed25519Sha512(verifier_keypair.sign(&qry.encode().unwrap())?);
+    verifier
+        .finalize_query_tel(issuer.id(), qry, signature)
+        .await?;
+
+    // Give watcher a moment to find TEL and ask again
+    sleep(Duration::from_secs(1)).await;
+
+    let qry = verifier.query_tel(registry_id, vc_hash.clone())?;
     let signature =
         SelfSigningPrefix::Ed25519Sha512(verifier_keypair.sign(&qry.encode().unwrap())?);
     verifier

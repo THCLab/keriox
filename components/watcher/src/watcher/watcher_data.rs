@@ -508,7 +508,7 @@ impl WatcherData {
         Ok(self
             .oobi_manager
             .get_end_role(cid, Role::Watcher)?
-            .unwrap()
+            .unwrap_or_default()
             .iter()
             .filter_map(|reply| {
                 if let ReplyRoute::EndRoleAdd(role) = reply.reply.get_route() {
