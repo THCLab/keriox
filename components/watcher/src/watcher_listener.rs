@@ -32,11 +32,11 @@ impl WatcherListener {
                 )
                 .route(
                     "/oobi/{id}",
-                    actix_web::web::get().to(http_handlers::get_eid_oobi),
+                    actix_web::web::get().to(http_handlers::resolve_location),
                 )
                 .route(
                     "/oobi/{cid}/{role}/{eid}",
-                    actix_web::web::get().to(http_handlers::get_cid_oobi),
+                    actix_web::web::get().to(http_handlers::resolve_role),
                 )
                 .route(
                     "/process",
@@ -80,7 +80,7 @@ impl WatcherListener {
 pub async fn update_checking(data: Arc<Watcher>) {
     loop {
         data.process_update_requests().await;
-        data.process_update_tel_requests().await;
+        let _ = data.process_update_tel_requests().await;
     }
 }
 
@@ -189,7 +189,7 @@ pub mod http_handlers {
         Ok(HttpResponse::Ok().finish())
     }
 
-    pub async fn get_eid_oobi(
+    pub async fn resolve_location(
         eid: web::Path<IdentifierPrefix>,
         data: web::Data<Arc<Watcher>>,
     ) -> Result<HttpResponse, ApiError> {
@@ -209,7 +209,7 @@ pub mod http_handlers {
             .body(String::from_utf8(oobis).unwrap()))
     }
 
-    pub async fn get_cid_oobi(
+    pub async fn resolve_role(
         path: web::Path<(IdentifierPrefix, Role, IdentifierPrefix)>,
         data: web::Data<Arc<Watcher>>,
     ) -> Result<HttpResponse, ApiError> {
@@ -340,7 +340,7 @@ mod test {
         }
         async fn request_loc_scheme(&self, eid: IdentifierPrefix) -> Result<Vec<Op>, ActorError> {
             let data = actix_web::web::Data::new(self.watcher.clone());
-            let resp = super::http_handlers::get_eid_oobi(eid.into(), data)
+            let resp = super::http_handlers::resolve_location(eid.into(), data)
                 .await
                 .map_err(|err| err.0)?;
             let resp = resp.into_body().try_into_bytes().unwrap();
@@ -354,7 +354,7 @@ mod test {
             eid: IdentifierPrefix,
         ) -> Result<Vec<u8>, ActorError> {
             let data = actix_web::web::Data::new(self.watcher.clone());
-            let resp = super::http_handlers::get_cid_oobi((cid, role, eid).into(), data)
+            let resp = super::http_handlers::resolve_role((cid, role, eid).into(), data)
                 .await
                 .map_err(|err| err.0)?;
             let resp = resp.into_body().try_into_bytes().unwrap();

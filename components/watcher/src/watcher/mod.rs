@@ -66,16 +66,21 @@ impl Watcher {
         }
     }
 
-    pub async fn process_update_tel_requests(&self) {
+    pub async fn process_update_tel_requests(&self) -> Result<(), ActorError> {
         if let Ok((ri, vc_id)) = self.tel_recv.try_recv() {
-            let who_ask = self.registry_id_mapping.get(&ri).unwrap();
-            println!("Need to ask about {}, source: {}", ri, who_ask);
+            let who_to_ask = self
+                .registry_id_mapping
+                .get(&ri)
+                .ok_or(ActorError::GeneralError(format!(
+                    "Can't find TEL fo id: {}",
+                    ri
+                )))?;
 
             self.watcher_data
-                .tel_update(&ri, &vc_id, who_ask.clone())
-                .await
-                .unwrap();
-        }
+                .tel_update(&ri, &vc_id, who_to_ask.clone())
+                .await?;
+        };
+        Ok(())
     }
 
     pub fn oobi(&self) -> LocationScheme {
@@ -117,7 +122,7 @@ impl Watcher {
                     }
                 }
                 WitnessResp::Tel(tel_events) => {
-                    // check tel event?
+                    // check tel event
                     for ev in tel_events {
                         let digest = ev.event.get_digest().unwrap();
                         let issuer_id = match ev.event {
@@ -209,7 +214,9 @@ impl Watcher {
         &self,
         input_stream: &[u8],
     ) -> Result<Vec<TelReplyType>, ActorError> {
-        let tel_queries = parse_tel_query_stream(input_stream).unwrap().into_iter();
+        let tel_queries = parse_tel_query_stream(input_stream)
+            .map_err(|_e| ActorError::GeneralError("Can't parse TEL query stream".to_string()))?
+            .into_iter();
 
         let mut out = vec![];
         for qry in tel_queries {
@@ -218,8 +225,16 @@ impl Watcher {
                 TelQueryRoute::Tels {
                     reply_route: _,
                     args,
-                } => (args.ri.unwrap(), args.i.unwrap()),
+                } => match (args.ri, args.i) {
+                    (Some(ri), Some(i)) => (ri, i),
+                    _ => {
+                        return Err(ActorError::GeneralError(
+                            "Wrong TEL query format. `ri` and `i` field required".to_string(),
+                        ))
+                    }
+                },
             };
+
             // Check if you have tel to forward
             match self
                 .watcher_data
@@ -234,7 +249,11 @@ impl Watcher {
                         .tel_tx
                         .send((ri.clone(), vc_id.clone()))
                         .await
-                        .unwrap();
+                        .map_err(|_e| {
+                            ActorError::GeneralError(
+                                "Internal watcher error: channel problem".to_string(),
+                            )
+                        })?;
                 }
             };
         }
