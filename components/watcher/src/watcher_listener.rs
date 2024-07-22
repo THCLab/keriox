@@ -54,6 +54,10 @@ impl WatcherListener {
                     "/resolve",
                     actix_web::web::post().to(http_handlers::resolve_oobi),
                 )
+                .route(
+                    "/query/tel",
+                    actix_web::web::post().to(http_handlers::process_tel_query),
+                )
         })
         .disable_signals()
         .bind(addr)
