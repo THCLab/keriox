@@ -126,7 +126,6 @@ impl Identifier {
 
     pub async fn finalize_query_tel(
         &self,
-        issuer_id: &IdentifierPrefix,
         qry: TelQueryEvent,
         sig: SelfSigningPrefix,
     ) -> Result<(), MechanicsError> {

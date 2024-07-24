@@ -142,7 +142,10 @@ impl WatcherData {
             oobi_manager,
             transport,
             tx,
-            tel_to_forward: Arc::new(TelToForward::new(tel_storage_path)),
+            tel_to_forward: Arc::new(
+                TelToForward::new(tel_storage_path)
+                    .map_err(|e| ActorError::GeneralError(e.to_string()))?,
+            ),
             tel_tx,
             tel_transport,
         });
@@ -456,11 +459,8 @@ impl WatcherData {
             .send_query(query, loc)
             .await
             .map_err(|e| ActorError::GeneralError(e.to_string()))?;
-        self.tel_to_forward.save(
-            about_ri.clone(),
-            about_vc_id.clone(),
-            resp,
-        );
+        self.tel_to_forward
+            .save(about_ri.clone(), about_vc_id.clone(), resp);
         Ok(())
     }
 

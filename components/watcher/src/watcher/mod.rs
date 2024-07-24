@@ -44,11 +44,13 @@ impl Watcher {
     pub fn new(config: WatcherConfig) -> Result<Self, ActorError> {
         let (tx, rx) = unbounded();
         let (tel_tx, tel_rx) = unbounded();
+        let tel_storage_path = config.tel_storage_path.clone();
         Ok(Watcher {
             watcher_data: WatcherData::new(config, tx, tel_tx)?,
             recv: rx,
             tel_recv: tel_rx,
-            registry_id_mapping: RegistryMapping::new(),
+            registry_id_mapping: RegistryMapping::new(&tel_storage_path)
+                .map_err(|e| ActorError::GeneralError(e.to_string()))?,
         })
     }
 
@@ -71,6 +73,7 @@ impl Watcher {
             let who_to_ask = self
                 .registry_id_mapping
                 .get(&ri)
+                .map_err(|e| ActorError::GeneralError(e.to_string()))?
                 .ok_or(ActorError::GeneralError(format!(
                     "Can't find TEL fo id: {}",
                     ri
@@ -143,7 +146,8 @@ impl Watcher {
                         )
                         .unwrap();
                         self.registry_id_mapping
-                            .save(er.cid.clone(), er.eid.clone())?;
+                            .save(er.cid.clone(), er.eid.clone())
+                            .map_err(|e| ActorError::GeneralError(e.to_string()))?;
                     }
                 }
             }
@@ -240,9 +244,7 @@ impl Watcher {
                 .send((ri.clone(), vc_id.clone()))
                 .await
                 .map_err(|_e| {
-                    ActorError::GeneralError(
-                        "Internal watcher error: channel problem".to_string(),
-                    )
+                    ActorError::GeneralError("Internal watcher error: channel problem".to_string())
                 })?;
 
             // Check if you have tel to forward
@@ -250,10 +252,10 @@ impl Watcher {
                 .watcher_data
                 .tel_to_forward
                 .get(ri.clone(), vc_id.clone())
-                .map_err(|e| ActorError::GeneralError(e.to_string()))? {
+                .map_err(|e| ActorError::GeneralError(e.to_string()))?
+            {
                 out.push(TelReplyType::Tel(tel.clone().as_bytes().to_vec()))
             };
-
         }
         Ok(out)
     }

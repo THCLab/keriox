@@ -1,31 +1,50 @@
-use std::{collections::HashMap, fs::{self, create_dir_all, File, OpenOptions}, io::{BufRead, BufReader, Write}, path::{Path, PathBuf}, sync::Mutex};
+use std::{
+    fs::{self, File, OpenOptions},
+    io::{BufRead, BufReader, Write},
+    path::{Path, PathBuf},
+};
 
-use keri_core::{error::Error, prefix::IdentifierPrefix};
+use keri_core::prefix::IdentifierPrefix;
 
 #[derive(thiserror::Error, Debug)]
 pub enum StoreError {
     #[error(transparent)]
-    FileError(#[from] std::io::Error)
+    FileError(#[from] std::io::Error),
+    #[error("Value parse error: {0}")]
+    ValueParsing(String),
 }
 struct Store(PathBuf);
 
+trait StoreKey {
+    fn key(&self) -> String;
+}
+
+struct VCKey {
+    ri: IdentifierPrefix,
+    vc_id: IdentifierPrefix,
+}
+
+impl StoreKey for VCKey {
+    fn key(&self) -> String {
+        [self.ri.to_string(), self.vc_id.to_string()].join(",")
+    }
+}
+
 impl Store {
-    pub fn new(path: PathBuf) -> Self {
+    pub fn new(path: PathBuf) -> Result<Self, StoreError> {
         // Create file if doesn't exist.
-        let file = OpenOptions::new()
+        let _file = OpenOptions::new()
             .read(true)
             .write(true)
             .create(true)
-            .open(&path).unwrap();
-        println!("\ncreated: {}", &path.to_str().unwrap()); 
-        Store(path)
+            .open(&path)?;
+        Ok(Store(path))
     }
 
-    fn get(&self, key: (IdentifierPrefix, IdentifierPrefix)) -> Result<Option<String>, StoreError> {
+    fn get<K: StoreKey>(&self, key: &K) -> Result<Option<String>, StoreError> {
         let br = BufReader::new(File::open(&self.0)?);
-        let out = br.lines().filter_map(|line| line.ok())
-        .find_map(|line| 
-            if line.contains(&format!("{},{}", key.0, key.1)) {
+        let out = br.lines().filter_map(|line| line.ok()).find_map(|line| {
+            if line.contains(&key.key()) {
                 let mut splitted = line.splitn(2, ":");
                 let _key = splitted.next();
                 let value = splitted.next();
@@ -33,41 +52,41 @@ impl Store {
             } else {
                 None
             }
-        );
+        });
         Ok(out.map(|el| el.to_string()))
     }
 
-    pub fn save(&self, key: (IdentifierPrefix, IdentifierPrefix), value: String) {
-
+    pub fn save<K: StoreKey>(&self, key: K, value: String) -> Result<(), StoreError> {
         let lines = {
-            let br = BufReader::new(File::open(&self.0).unwrap());
+            let br = BufReader::new(File::open(&self.0)?);
             br.lines()
         };
 
         let mut found = false;
-        let new_lines = lines.map(|line| {
-            if line.as_ref().unwrap().contains(&format!("{},{}", key.0, key.1)) {
-                let new_line = format!("{},{}:{}", key.0, key.1,value);
-                found = true;
-                new_line
-            } else {
-                line.unwrap()
-            }
+        let new_lines = lines.filter_map(|line| {
+            line.map(|l| {
+                if l.contains(&key.key()) {
+                    let new_line = format!("{}:{}", key.key(), value);
+                    found = true;
+                    new_line
+                } else {
+                    l
+                }
+            })
+            .ok()
         });
         let new_contents = {
             let new_contents = new_lines.fold(String::new(), |a, b| a + &b + "\n");
             if !found {
-                    [new_contents, format!("{},{}:{}", key.0, key.1, value)].join("")
-                } else {
-                    new_contents
-                } 
-            };
+                [new_contents, format!("{}:{}", key.key(), value)].join("")
+            } else {
+                new_contents
+            }
+        };
 
         let mut f = fs::File::create(&self.0).expect("no file found");
-        f.write_all(new_contents.as_bytes()).unwrap();
-
-
-
+        f.write_all(new_contents.as_bytes())?;
+        Ok(())
     }
 }
 
@@ -75,28 +94,44 @@ impl Store {
 /// identifier. Watcher doesn't check provided TEL events, just save them and
 /// forward to recipient when it sends query message.
 pub(super) struct TelToForward {
-    /// The key is a tuple of Registry identifiers nad Vc idettifier, and the
+    /// The key is a tuple of Registry identifiers nad Vc identifier, and the
     /// value is collected TEL events
-    tel: Mutex<Store>,
+    tel: Store,
 }
 
 impl TelToForward {
-    pub fn new(path: PathBuf) -> Self {
-        let store = Store::new(path);
+    pub fn new(path: PathBuf) -> Result<Self, StoreError> {
+        let store = Store::new(path)?;
 
-        Self {
-            tel: Mutex::new(store),
-        }
+        Ok(Self { tel: store })
     }
 
-    pub fn save(&self, about_ri: IdentifierPrefix, about_vc_id: IdentifierPrefix, tel: String) {
-        let saving = self.tel.lock().unwrap();
-        saving.save((about_ri.clone(), about_vc_id.clone()), tel);
+    pub fn save(
+        &self,
+        about_ri: IdentifierPrefix,
+        about_vc_id: IdentifierPrefix,
+        tel: String,
+    ) -> Result<(), StoreError> {
+        let vc_key = VCKey {
+            ri: about_ri,
+            vc_id: about_vc_id,
+        };
+        self.tel.save(vc_key, tel)
     }
 
-    pub fn get(&self, ri: IdentifierPrefix, vc_id: IdentifierPrefix) -> Result<Option<String>, StoreError> {
-        let saving = self.tel.lock().unwrap();
-        saving.get((ri, vc_id))
+    pub fn get(
+        &self,
+        ri: IdentifierPrefix,
+        vc_id: IdentifierPrefix,
+    ) -> Result<Option<String>, StoreError> {
+        let vc_key = VCKey { ri, vc_id };
+        self.tel.get(&vc_key)
+    }
+}
+
+impl StoreKey for IdentifierPrefix {
+    fn key(&self) -> String {
+        self.to_string()
     }
 }
 
@@ -105,23 +140,24 @@ impl TelToForward {
 /// Those are provided to watcher by identifier using oobi.
 pub(super) struct RegistryMapping {
     /// Key is registry identifier, and value is witness identifier.
-    mapping: Mutex<HashMap<IdentifierPrefix, IdentifierPrefix>>,
+    mapping: Store,
 }
 
 impl RegistryMapping {
-    pub fn new() -> Self {
-        Self {
-            mapping: Mutex::new(HashMap::new()),
-        }
+    pub fn new(path: &Path) -> Result<Self, StoreError> {
+        Ok(Self {
+            mapping: Store::new(path.to_path_buf())?,
+        })
     }
-    pub fn save(&self, key: IdentifierPrefix, value: IdentifierPrefix) -> Result<(), Error> {
-        let mut data = self.mapping.lock().unwrap();
-        data.insert(key, value);
+    pub fn save(&self, key: IdentifierPrefix, value: IdentifierPrefix) -> Result<(), StoreError> {
+        self.mapping.save(key, value.to_string())?;
         Ok(())
     }
 
-    pub fn get(&self, key: &IdentifierPrefix) -> Option<IdentifierPrefix> {
-        let data = self.mapping.lock().unwrap();
-        data.get(key).map(|id| id.clone())
+    pub fn get(&self, key: &IdentifierPrefix) -> Result<Option<IdentifierPrefix>, StoreError> {
+        self.mapping
+            .get(key)?
+            .map(|id| id.parse().map_err(|_e| StoreError::ValueParsing(id)))
+            .transpose()
     }
 }
