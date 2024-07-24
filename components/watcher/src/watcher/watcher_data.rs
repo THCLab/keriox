@@ -460,7 +460,8 @@ impl WatcherData {
             .await
             .map_err(|e| ActorError::GeneralError(e.to_string()))?;
         self.tel_to_forward
-            .save(about_ri.clone(), about_vc_id.clone(), resp);
+            .save(about_ri.clone(), about_vc_id.clone(), resp)
+            .map_err(|e| ActorError::GeneralError(e.to_string()))?;
         Ok(())
     }
 

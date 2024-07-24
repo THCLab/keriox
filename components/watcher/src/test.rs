@@ -91,11 +91,15 @@ async fn test_watcher_access() -> Result<(), ActorError> {
         .encode()
         .unwrap();
 
+    let watcher_tel_dir = Builder::new().prefix("cont-test-tel-db").tempdir().unwrap();
+    let watcher_tel_path = watcher_tel_dir.path().join("tel_storage");
+
     let url = Url::parse("http://some/dummy/url").unwrap();
     let root = Builder::new().prefix("cont-test-db").tempdir().unwrap();
     let watcher = Watcher::new(crate::WatcherConfig {
         public_address: url,
         db_path: root.path().to_owned(),
+        tel_storage_path: watcher_tel_path,
         ..Default::default()
     })?;
 
@@ -209,10 +213,14 @@ pub fn watcher_forward_ksn() -> Result<(), ActorError> {
 
     let url = url::Url::parse("http://some/dummy/url").unwrap();
     let root = Builder::new().prefix("cont-test-db").tempdir().unwrap();
+    let watcher_tel_dir = Builder::new().prefix("cont-test-tel-db").tempdir().unwrap();
+    let watcher_tel_path = watcher_tel_dir.path().join("tel_storage");
+
     let watcher = Watcher::new(WatcherConfig {
         public_address: url,
         db_path: root.path().to_owned(),
         transport: Box::new(transport),
+        tel_storage_path: watcher_tel_path,
         ..Default::default()
     })?;
 

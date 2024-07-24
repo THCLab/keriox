@@ -42,12 +42,16 @@ async fn test_multisig() -> Result<()> {
     let transport = Box::new(TestTransport::new(actors));
 
     let watcher_url = Url::parse("http://127.0.0.1:3236").unwrap();
+    let watcher_tel_dir = Builder::new().prefix("cont-test-tel-db").tempdir().unwrap();
+    let watcher_tel_path = watcher_tel_dir.path().join("tel_storage");
+
     let watcher_listener = {
         let root = Builder::new().prefix("cont-test-db").tempdir().unwrap();
         WatcherListener::new(WatcherConfig {
             public_address: watcher_url.clone(),
             db_path: root.path().to_owned(),
             transport,
+            tel_storage_path: watcher_tel_path,
             ..Default::default()
         })?
     };
