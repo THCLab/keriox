@@ -67,6 +67,9 @@ async fn test_tel_from_watcher() -> Result<(), anyhow::Error> {
         url: issuer_witness_url,
     };
 
+    let watcher_tel_dir = Builder::new().prefix("cont-test-tel-db").tempdir().unwrap();
+    let watcher_tel_path = watcher_tel_dir.path().join("tel_storage");
+
     // Setup test watcher
     let watcher = {
         let watcher_transport = {
@@ -102,6 +105,7 @@ async fn test_tel_from_watcher() -> Result<(), anyhow::Error> {
             db_path: watcher_db_path.path().to_owned(),
             transport: Box::new(watcher_transport),
             tel_transport: Box::new(trans),
+            tel_storage_path: watcher_tel_path.to_path_buf(),
             ..Default::default()
         })?);
         async_std::task::spawn(watcher::watcher_listener::update_checking(

@@ -234,28 +234,26 @@ impl Watcher {
                     }
                 },
             };
+            // Query witness about new tel events
+            self.watcher_data
+                .tel_tx
+                .send((ri.clone(), vc_id.clone()))
+                .await
+                .map_err(|_e| {
+                    ActorError::GeneralError(
+                        "Internal watcher error: channel problem".to_string(),
+                    )
+                })?;
 
             // Check if you have tel to forward
-            match self
+            if let Some(tel) = self
                 .watcher_data
                 .tel_to_forward
                 .get(ri.clone(), vc_id.clone())
-            {
-                // if yes, just forward
-                Some(tel) => out.push(TelReplyType::Tel(tel.clone())),
-                // if no query witness
-                None => {
-                    self.watcher_data
-                        .tel_tx
-                        .send((ri.clone(), vc_id.clone()))
-                        .await
-                        .map_err(|_e| {
-                            ActorError::GeneralError(
-                                "Internal watcher error: channel problem".to_string(),
-                            )
-                        })?;
-                }
+                .map_err(|e| ActorError::GeneralError(e.to_string()))? {
+                out.push(TelReplyType::Tel(tel.clone().as_bytes().to_vec()))
             };
+
         }
         Ok(out)
     }

@@ -76,6 +76,7 @@ impl WatcherData {
             transport,
             tel_transport,
             escrow_config,
+            tel_storage_path,
         } = config;
 
         let signer = Arc::new(
@@ -141,7 +142,7 @@ impl WatcherData {
             oobi_manager,
             transport,
             tx,
-            tel_to_forward: Arc::new(TelToForward::new()),
+            tel_to_forward: Arc::new(TelToForward::new(tel_storage_path)),
             tel_tx,
             tel_transport,
         });
@@ -458,7 +459,7 @@ impl WatcherData {
         self.tel_to_forward.save(
             about_ri.clone(),
             about_vc_id.clone(),
-            resp.as_bytes().to_vec(),
+            resp,
         );
         Ok(())
     }

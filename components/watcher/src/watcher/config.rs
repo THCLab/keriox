@@ -12,6 +12,7 @@ pub struct WatcherConfig {
     pub priv_key: Option<String>,
     pub transport: Box<dyn Transport + Send + Sync>,
     pub tel_transport: Box<dyn GeneralTelTransport + Send + Sync>,
+    pub tel_storage_path: PathBuf,
     pub escrow_config: EscrowConfig,
 }
 
@@ -23,6 +24,7 @@ impl Default for WatcherConfig {
             priv_key: None,
             transport: Box::new(DefaultTransport::new()),
             tel_transport: Box::new(TelTransport),
+            tel_storage_path: PathBuf::from("tel_storage"),
             escrow_config: EscrowConfig::default(),
         }
     }

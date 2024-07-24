@@ -35,6 +35,8 @@ pub struct Config {
 
     #[serde(default, deserialize_with = "deserialize_escrow_config")]
     escrow_config: EscrowConfig,
+
+    tel_storage_path: PathBuf,
 }
 
 #[serde_as]
@@ -131,6 +133,7 @@ async fn main() -> anyhow::Result<()> {
         transport: Box::new(DefaultTransport::new()),
         tel_transport: Box::new(TelTransport),
         escrow_config: cfg.escrow_config,
+        tel_storage_path: cfg.tel_storage_path,
     })?;
 
     // Resolve oobi to know how to find witness
