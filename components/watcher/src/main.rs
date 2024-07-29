@@ -99,6 +99,10 @@ struct Args {
     #[serde(skip_serializing_if = "Option::is_none")]
     db_path: Option<PathBuf>,
 
+    #[arg(short = 't', long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tel_storage_path: Option<PathBuf>,
+    
     #[arg(short = 'u', long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     public_url: Option<Url>,
