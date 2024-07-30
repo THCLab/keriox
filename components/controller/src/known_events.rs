@@ -51,8 +51,6 @@ pub struct KnownEvents {
     pub storage: Arc<EventStorage>,
     pub oobi_manager: OobiManager,
     pub partially_witnessed_escrow: Arc<PartiallyWitnessedEscrow>,
-
-    // pub tel_transport: Box<dyn GeneralTelTransport + Send + Sync>,
     pub tel: Arc<Tel>,
 }
 

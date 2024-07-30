@@ -1,6 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
-    sync::Arc,
+    sync::{Arc, Mutex},
 };
 
 use keri_core::{
@@ -25,7 +25,7 @@ pub mod tel;
 pub struct Identifier {
     id: IdentifierPrefix,
     registry_id: Option<IdentifierPrefix>,
-    known_events: Arc<KnownEvents>,
+    pub(crate) known_events: Arc<KnownEvents>,
     communication: Arc<Communication>,
     pub to_notify: Vec<SignedEventMessage>,
     query_cache: QueryCache,
@@ -34,12 +34,13 @@ pub struct Identifier {
     /// receipts yet.)
     cached_state: IdentifierState,
     pub(crate) broadcasted_rcts: HashSet<(SelfAddressingIdentifier, BasicPrefix, IdentifierPrefix)>,
-    cached_identifiers: HashMap<IdentifierPrefix, IdentifierState>,
+    cached_identifiers: Mutex<HashMap<IdentifierPrefix, IdentifierState>>,
 }
 
 impl Identifier {
     pub fn new(
         id: IdentifierPrefix,
+        registry_id: Option<IdentifierPrefix>,
         known_events: Arc<KnownEvents>,
         communication: Arc<Communication>,
     ) -> Self {
@@ -73,9 +74,9 @@ impl Identifier {
             to_notify: events_to_notice,
             query_cache: QueryCache::new(),
             cached_state: state,
-            registry_id: None,
+            registry_id,
             broadcasted_rcts: HashSet::new(),
-            cached_identifiers: HashMap::new(),
+            cached_identifiers: Mutex::new(HashMap::new()),
         }
     }
 
@@ -135,8 +136,13 @@ impl Identifier {
     }
 
     /// Returns own identifier accepted Key Event Log
-    pub fn get_kel(&self) -> Option<Vec<Notice>> {
+    pub fn get_own_kel(&self) -> Option<Vec<Notice>> {
         self.known_events.find_kel_with_receipts(&self.id)
+    }
+
+    /// Returns identifier accepted Key Event Log
+    pub fn get_kel(&self, id: &IdentifierPrefix) -> Option<Vec<Notice>> {
+        self.known_events.find_kel_with_receipts(id)
     }
 
     pub fn get_last_establishment_event_seal(&self) -> Result<EventSeal, ControllerError> {

@@ -7,7 +7,14 @@ members = [\n\
     "keriox_core",\n\
     "components/witness",\n\
     "support/teliox",\n\
-]' > Cargo.toml
+]\n\
+[workspace.package]\n\
+repository = "https://github.com/THCLab/keriox"\n\
+authors = [\n\
+    "Human Colossus Foundation <contact@humancolossus.org>",\n\
+]\n\
+edition = "2021"\n\
+license = "EUPL-1.2"' > Cargo.toml
 COPY ./components components
 COPY ./keriox_core keriox_core
 COPY ./support/teliox support/teliox

@@ -106,7 +106,7 @@ async fn test_multisig() -> Result<()> {
             .finalize_query_mailbox(vec![(qry, signature)])
             .await?;
     }
-    assert!(identifier1.get_kel().is_some());
+    assert!(identifier1.get_own_kel().is_some());
 
     // Setup second identifier.
     let root2 = Builder::new().prefix("test-db").tempdir().unwrap();
@@ -143,7 +143,7 @@ async fn test_multisig() -> Result<()> {
             .finalize_query_mailbox(vec![(qry, signature)])
             .await?;
     }
-    assert!(identifier2.get_kel().is_some());
+    assert!(identifier2.get_own_kel().is_some());
 
     // Identifier1 adds watcher
     identifier1

@@ -34,6 +34,8 @@ pub enum WatcherResponseError {
     SendingError(#[from] SendingError),
     #[error("KEL of {0} not found")]
     KELNotFound(IdentifierPrefix),
+    #[error("Poison error")]
+    PoisonError,
 }
 
 impl Identifier {
@@ -87,7 +89,7 @@ impl Identifier {
     ///     1. A notification if any identifier's KEL (Key Event Log) was updated.
     ///     2. A list of errors that occurred either during sending or on the recipient side.
     pub async fn finalize_query(
-        &mut self,
+        &self,
         queries: Vec<(QueryEvent, SelfSigningPrefix)>,
     ) -> (QueryResponse, Vec<WatcherResponseError>) {
         let mut updates = QueryResponse::NoUpdates;
@@ -98,7 +100,7 @@ impl Identifier {
         )
         .await;
 
-        let (possibly_updated_ids, errs) =
+        let (possibly_updated_ids, mut errs) =
             res.into_iter()
                 .fold(
                     (HashSet::new(), vec![]),
@@ -118,11 +120,24 @@ impl Identifier {
 
         for id in possibly_updated_ids {
             let db_state = self.find_state(&id).ok();
-            let cached_state = self.cached_identifiers.get(&id);
-            if db_state.as_ref().eq(&cached_state) {
+
+            let cached_state = match self.cached_identifiers.lock() {
+                Ok(ids) => ids.get(&id).map(|a| a.clone()),
+                Err(_e) => {
+                    errs.push(WatcherResponseError::PoisonError);
+                    None
+                }
+            };
+
+            if db_state.as_ref().eq(&cached_state.as_ref()) {
                 updates = QueryResponse::NoUpdates
             } else {
-                self.cached_identifiers.insert(id, db_state.unwrap());
+                match self.cached_identifiers.lock() {
+                    Ok(mut ids) => {
+                        ids.insert(id, db_state.unwrap());
+                    }
+                    Err(_e) => errs.push(WatcherResponseError::PoisonError),
+                };
                 updates = QueryResponse::Updates
             }
         }
@@ -171,6 +186,25 @@ impl Identifier {
                 args: LogsQueryArgs {
                     s: Some(seal.sn),
                     i: seal.prefix.clone(),
+                    src: Some(watcher),
+                },
+            },
+            SerializationFormats::JSON,
+            HashFunctionCode::Blake3_256,
+        ))
+    }
+
+    pub fn query_full_log(
+        &self,
+        id: &IdentifierPrefix,
+        watcher: IdentifierPrefix,
+    ) -> Result<QueryEvent, ControllerError> {
+        Ok(QueryEvent::new_query(
+            QueryRoute::Logs {
+                reply_route: "".to_string(),
+                args: LogsQueryArgs {
+                    s: None,
+                    i: id.clone(),
                     src: Some(watcher),
                 },
             },

@@ -81,7 +81,7 @@ impl Communication {
         // TODO what if more than one
         let loc = self
             .events
-            .get_loc_schemas(&cid)
+            .get_loc_schemas(&eid)
             .map_err(SendingError::OobiError)?
             .first()
             .ok_or(SendingError::OobiError(OobiRetrieveError::MissingOobi(

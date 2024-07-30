@@ -1,32 +1,37 @@
 use keri_core::{
-    event_message::signed_event_message::{Message, Op},
-    oobi::{EndRole, LocationScheme, Oobi, Role},
+    oobi::{EndRole, LocationScheme, Role},
     prefix::IdentifierPrefix,
-    query::reply_event::{ReplyRoute, SignedReply},
+    query::reply_event::ReplyRoute,
 };
 
-use crate::{error::ControllerError, known_events::KnownEvents};
+use crate::{error::ControllerError, identifier::Identifier, known_events::OobiRetrieveError};
 
-impl KnownEvents {
-    pub fn save_oobi(&self, reply: &SignedReply) -> Result<(), ControllerError> {
-		self.oobi_manager.save_oobi(reply)?;
-        Ok(())
+impl Identifier {
+    pub fn get_location(
+        &self,
+        identifier: &IdentifierPrefix,
+    ) -> Result<Vec<LocationScheme>, OobiRetrieveError> {
+        self.known_events.get_loc_schemas(identifier)
     }
 
-    pub fn get_messagebox_location(
+    pub fn get_role_location(
         &self,
         id: &IdentifierPrefix,
+        role: Role,
     ) -> Result<Vec<LocationScheme>, ControllerError> {
         Ok(self
+            .known_events
             .oobi_manager
-            .get_end_role(id, Role::Messagebox)?
+            .get_end_role(id, role)?
+            .unwrap_or_default()
             .into_iter()
             .filter_map(|r| {
                 if let ReplyRoute::EndRoleAdd(adds) = r.reply.get_route() {
                     let locations = self
+                        .known_events
                         .oobi_manager
                         .get_loc_scheme(&adds.eid)
-                        .unwrap()
+                        .unwrap_or_default()
                         .unwrap()
                         .into_iter();
                     Some(locations.filter_map(|rep| {
@@ -44,13 +49,16 @@ impl KnownEvents {
             .collect())
     }
 
-    pub fn get_messagebox_end_role(
+    pub fn get_end_role(
         &self,
         id: &IdentifierPrefix,
+        role: Role,
     ) -> Result<Vec<EndRole>, ControllerError> {
         let end_roles = self
+            .known_events
             .oobi_manager
-            .get_end_role(id, Role::Messagebox)?
+            .get_end_role(id, role)?
+            .unwrap_or_default()
             .into_iter()
             .map(|reply| match reply.reply.data.data {
                 ReplyRoute::EndRoleAdd(end_role) => end_role,

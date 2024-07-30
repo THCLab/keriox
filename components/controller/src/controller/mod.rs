@@ -19,7 +19,7 @@ pub mod verifying;
 
 pub struct Controller {
     pub known_events: Arc<KnownEvents>,
-    communication: Arc<Communication>,
+    pub communication: Arc<Communication>,
 }
 
 impl Controller {
@@ -69,6 +69,7 @@ impl Controller {
         let initialized_id = self.known_events.finalize_inception(event, sig).unwrap();
         Ok(Identifier::new(
             initialized_id,
+            None,
             self.known_events.clone(),
             self.communication.clone(),
         ))
