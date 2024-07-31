@@ -1,5 +1,9 @@
 # KERIOX
 
+## What is KERIOX in a nutshell?
+
+KERIOX is a Rust implementation of the [Decentralized Key Management System (DKMS)](https://dkms.colossi.network/) that under the hood uses the [Key Event Receipt Infrastructure (KERI)](https://trustoverip.github.io/tswg-keri-specification/) protocol.
+
 ## Usage
 
 - Running infrastructure, see the following [example](https://github.com/THCLab/dkms-demo/tree/main/infrastructure).
@@ -13,7 +17,7 @@ KERI provides the same security and verifiability properties for transactions as
 
 ## License
 
-EUPL 1.2 
+EUPL 1.2
 
 We have distilled the most crucial license specifics to make your adoption seamless: [see here for details](https://github.com/THCLab/licensing).
 
@@ -26,12 +30,14 @@ We furthermore support bindings to NodeJS and Dart. See our [keri-bindings](http
 ## Organization
 
 This repository provides implementation of KERI. Core protocol features are implemented in [`keriox_core`](https://github.com/THCLab/keriox/tree/master/keriox_core) workspace. Repository contains also workspaces for following KERI components:
-* High level interface for [Witness](./components/witness)
-* High level interface for [Watcher](./components/watcher)
-* High level interface for [Controller](./components/controller)
 
-For ready to use client libraries, we encourage to visit https://github.com/THCLab/keri-bindings that provide bindings to other languages via FFI layer. 
+- High level interface for [Witness](./components/witness)
+- High level interface for [Watcher](./components/watcher)
+- High level interface for [Controller](./components/controller)
+
+For ready to use client libraries, we encourage to visit https://github.com/THCLab/keri-bindings that provide bindings to other languages via FFI layer.
 
 For ready to use infrastructure components, see our prebaked Docker images:
-* [Witness](https://ghcr.io/thclab/keriox-witness)
-* [Watcher](https://ghcr.io/thclab/keriox-watcher)
+
+- [Witness](https://ghcr.io/thclab/keriox-witness)
+- [Watcher](https://ghcr.io/thclab/keriox-watcher)
