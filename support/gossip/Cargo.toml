@@ -15,3 +15,7 @@ serde = { version = "1.0", features = ["derive"] }
 uuid = { version = "0.8", features = ["v4", "serde"] }
 log = "0.4.16"
 thiserror = "1.0"
+
+[package.metadata.release]
+pre-release-hook = ["ls"]
+release = false
