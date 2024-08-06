@@ -78,6 +78,8 @@ impl WatcherData {
             escrow_config,
             tel_storage_path,
         } = config;
+        let mut tel_to_forward_path = tel_storage_path.clone();
+        tel_to_forward_path.push("to_forward");
 
         let signer = Arc::new(
             priv_key
@@ -143,7 +145,7 @@ impl WatcherData {
             transport,
             tx,
             tel_to_forward: Arc::new(
-                TelToForward::new(tel_storage_path)
+                TelToForward::new(tel_to_forward_path)
                     .map_err(|e| ActorError::GeneralError(e.to_string()))?,
             ),
             tel_tx,
@@ -460,7 +462,7 @@ impl WatcherData {
             .await
             .map_err(|e| ActorError::GeneralError(e.to_string()))?;
         self.tel_to_forward
-            .save(about_ri.clone(), about_vc_id.clone(), resp)
+            .save(about_ri, about_vc_id, resp)
             .map_err(|e| ActorError::GeneralError(e.to_string()))?;
         Ok(())
     }

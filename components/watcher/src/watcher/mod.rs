@@ -2,7 +2,7 @@ pub mod config;
 mod tel_providing;
 mod watcher_data;
 
-use std::sync::Arc;
+use std::{fs::create_dir_all, sync::Arc};
 
 use async_std::channel::{unbounded, Receiver};
 use keri_core::{
@@ -45,11 +45,14 @@ impl Watcher {
         let (tx, rx) = unbounded();
         let (tel_tx, tel_rx) = unbounded();
         let tel_storage_path = config.tel_storage_path.clone();
+        create_dir_all(&tel_storage_path).unwrap();
+        let mut registry_ids_storage_path = tel_storage_path.clone();
+        registry_ids_storage_path.push("registry");
         Ok(Watcher {
             watcher_data: WatcherData::new(config, tx, tel_tx)?,
             recv: rx,
             tel_recv: tel_rx,
-            registry_id_mapping: RegistryMapping::new(&tel_storage_path)
+            registry_id_mapping: RegistryMapping::new(&registry_ids_storage_path)
                 .map_err(|e| ActorError::GeneralError(e.to_string()))?,
         })
     }
@@ -73,9 +76,10 @@ impl Watcher {
             let who_to_ask = self
                 .registry_id_mapping
                 .get(&ri)
-                .map_err(|e| ActorError::GeneralError(e.to_string()))?
+                .map_err(|e| ActorError::GeneralError(e.to_string()))
+                .unwrap()
                 .ok_or(ActorError::GeneralError(format!(
-                    "Can't find TEL fo id: {}",
+                    "Can't find TEL of id: {}",
                     ri
                 )))?;
 
@@ -251,7 +255,7 @@ impl Watcher {
             if let Some(tel) = self
                 .watcher_data
                 .tel_to_forward
-                .get(ri.clone(), vc_id.clone())
+                .get(&ri, &vc_id)
                 .map_err(|e| ActorError::GeneralError(e.to_string()))?
             {
                 out.push(TelReplyType::Tel(tel.clone().as_bytes().to_vec()))
