@@ -26,3 +26,4 @@ license = "EUPL-1.2"
 #publish=false
 #shared-version=false
 #tag-name="v{{version}}"
+tag=false

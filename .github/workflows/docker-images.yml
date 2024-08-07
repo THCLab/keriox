@@ -3,7 +3,7 @@ name: Build docker images
 on:
   push:
     tags:
-      - 'witness-v*'
+      - "v*"
 
 jobs:
   build-witness:
