@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.12.5] - 2024-08-07
+
+### ⚙️ Miscellaneous Tasks
+
+- Add CHANGELOG.md
+
 ## [0.12.4] - 2024-08-07
 
 ### ⚙️ Miscellaneous Tasks
