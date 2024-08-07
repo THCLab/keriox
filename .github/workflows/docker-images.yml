@@ -4,7 +4,6 @@ on:
   push:
     tags:
       - 'witness-v*'
-      - 'watcher-v*'
 
 jobs:
   build-witness:
