@@ -3,7 +3,8 @@ name: Build docker images
 on:
   push:
     tags:
-      - v[0-9]+.*
+      - witness-v\d+\.\d+\.\d+.*
+      - watcher-v\d+\.\d+\.\d+.*
 
 jobs:
   build-witness:
