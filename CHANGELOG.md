@@ -2,11 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.12.6] - 2024-08-08
+
+### ⚙️ Miscellaneous Tasks
+
+- Update ci.yml
+- Create publish.yml
+
 ## [0.12.5] - 2024-08-07
 
 ### ⚙️ Miscellaneous Tasks
 
 - Add CHANGELOG.md
+- Release
 
 ## [0.12.4] - 2024-08-07
 
