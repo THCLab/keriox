@@ -1,0 +1,21 @@
+name: Publish to crates.io
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  publish_keriox_core:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - uses: katyo/publish-crates@v2
+        with:
+          path: "./keriox_core"
+          registry-token: ${{ secrets.CRATES_TOKEN }}
