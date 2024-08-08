@@ -6,7 +6,7 @@ KERIOX is a **Rust** implementation of the [Decentralized Key Management System 
 
 ## Usage
 
-- For running infrastructure (Witnesses, etc.), see the following [example](https://github.com/THCLab/dkms-demo/tree/main/infrastructure).
+- For running infrastructure (Witnesses, etc.), see https://github.com/THCLab/ambient-infrastructure
 - Running Controller, the infrastructure client
   - for Rust client, see [test](https://github.com/THCLab/keriox/blob/master/keriox_tests/tests/indirect_mode_signing.rs).
   - for FFI bindings (clients for different programming languages), see https://github.com/THCLab/keri-bindings
