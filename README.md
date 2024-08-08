@@ -2,16 +2,18 @@
 
 ## What is KERIOX in a nutshell?
 
-KERIOX is a Rust implementation of the [Decentralized Key Management System (DKMS)](https://dkms.colossi.network/) that under the hood uses the [Key Event Receipt Infrastructure (KERI)](https://trustoverip.github.io/tswg-keri-specification/) protocol.
+KERIOX is a **Rust** implementation of the [Decentralized Key Management System (DKMS)](https://dkms.colossi.network/) that under the hood uses the [Key Event Receipt Infrastructure (KERI)](https://trustoverip.github.io/tswg-keri-specification/) protocol.
 
 ## Usage
 
-- Running infrastructure, see the following [example](https://github.com/THCLab/dkms-demo/tree/main/infrastructure).
-- Running Controller (infrastructure client) see [test](https://github.com/THCLab/keriox/blob/master/keriox_tests/tests/indirect_mode_signing.rs).
+- For running infrastructure (Witnesses, etc.), see the following [example](https://github.com/THCLab/dkms-demo/tree/main/infrastructure).
+- Running Controller, the infrastructure client
+  - for Rust client, see [test](https://github.com/THCLab/keriox/blob/master/keriox_tests/tests/indirect_mode_signing.rs).
+  - for FFI bindings (clients for different programming languages), see https://github.com/THCLab/keri-bindings
 
 ## Introduction
 
-KERIOX is an open source Rust implementation of the [ Key Event Receipt Infrastructure (KERI) ](https://weboftrust.github.io/ietf-keri/draft-ssmith-keri.html), a system designed to provide a secure identifier-based trust spanning layer for any stack. [The current version of the KERI paper can be found here](https://github.com/SmithSamuelM/Papers/blob/master/whitepapers/KERI_WP_2.x.web.pdf).
+KERIOX is an open-source Rust implementation of the [ Key Event Receipt Infrastructure (KERI) ](https://weboftrust.github.io/ietf-keri/draft-ssmith-keri.html), a system designed to provide a secure identifier-based trust spanning layer for any stack. [The current version of the KERI paper can be found here](https://github.com/SmithSamuelM/Papers/blob/master/whitepapers/KERI_WP_2.x.web.pdf).
 
 KERI provides the same security and verifiability properties for transactions as a blockchain or distributed ledger can, without the overhead of requiring an absolute global ordering of transactions. Because of this, there is no need for a canonical chain and thus there is no "KERI Chain" or "KERI Network". KERI Identifiers can be generated independently in a self-sovereign and privacy-preserving manner and are secured via a self-certifying post-quantum resistant key management scheme based on blinded pre-rotation, auditable and flexible key events and a distributed conflict resolution algorithm called KAACE.
 
@@ -29,15 +31,8 @@ We furthermore support bindings to NodeJS and Dart. See our [keri-bindings](http
 
 ## Organization
 
-This repository provides implementation of KERI. Core protocol features are implemented in [`keriox_core`](https://github.com/THCLab/keriox/tree/master/keriox_core) workspace. Repository contains also workspaces for following KERI components:
+This repository provides the implementation of the KERI protocol. [`keriox_core`](https://github.com/THCLab/keriox/tree/master/keriox_core) brings the core protocol features that are further consumed by the following concepts:
 
-- High level interface for [Witness](./components/witness)
-- High level interface for [Watcher](./components/watcher)
-- High level interface for [Controller](./components/controller)
-
-For ready to use client libraries, we encourage to visit https://github.com/THCLab/keri-bindings that provide bindings to other languages via FFI layer.
-
-For ready to use infrastructure components, see our prebaked Docker images:
-
-- [Witness](https://ghcr.io/thclab/keriox-witness)
-- [Watcher](https://ghcr.io/thclab/keriox-watcher)
+- [Witness](./components/witness): the KERI Witness
+- [Watcher](./components/watcher): the KERI Watcher
+- [Controller](./components/controller): the client for accessing the infrastructure
