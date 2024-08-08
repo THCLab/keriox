@@ -2,7 +2,9 @@
 
 ## What is KERIOX in a nutshell?
 
-KERIOX is a **Rust** implementation of the [Decentralized Key Management System (DKMS)](https://dkms.colossi.network/) that under the hood uses the [Key Event Receipt Infrastructure (KERI)](https://trustoverip.github.io/tswg-keri-specification/) protocol.
+KERIOX is a **Rust** implementation of the [Decentralized Key Management System (DKMS)](https://dkms.colossi.network/) that under the hood uses the [Key Event Receipt Infrastructure (KERI)](https://trustoverip.github.io/tswg-keri-specification/) protocol. 
+
+The [Human Colossus Foundation](https://humancolossus.foundation/) has been developing and maintaining KERIOX since 2020.
 
 ## Usage
 
