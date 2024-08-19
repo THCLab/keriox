@@ -264,6 +264,13 @@ impl WatcherData {
                 match (local_state, args.s) {
                     (Some(state), Some(sn)) if sn <= state.sn => {
                         // KEL is already in database
+                    },
+                    (Some(state), None) => {
+                        // Check for updates.
+                        let id_to_update = qry.query.get_prefix();
+                        self.tx.send(id_to_update.clone()).await.map_err(|_e| {
+                            ActorError::GeneralError("Internal watcher error".to_string())
+                        })?;
                     }
                     _ => {
                         // query watcher and return info, that it's not ready
