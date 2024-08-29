@@ -111,6 +111,9 @@ async fn test_tel_from_watcher() -> Result<(), anyhow::Error> {
         async_std::task::spawn(watcher::watcher_listener::update_checking(
             watcher_listener.watcher.clone(),
         ));
+        async_std::task::spawn(watcher::watcher_listener::update_tel_checking(
+            watcher_listener.watcher.clone(),
+        ));
         watcher_listener
     };
 

@@ -20,6 +20,7 @@ impl WatcherListener {
 
     pub fn listen_http(self, addr: impl ToSocketAddrs) -> Server {
         let data = self.watcher.clone();
+        actix_web::rt::spawn(update_tel_checking(data.clone()));
         actix_web::rt::spawn(update_checking(data));
 
         let state = web::Data::new(self.watcher);
@@ -82,10 +83,11 @@ impl WatcherListener {
 }
 
 pub async fn update_checking(data: Arc<Watcher>) {
-    loop {
-        data.process_update_requests().await;
-        let _ = data.process_update_tel_requests().await;
-    }
+    data.process_update_requests().await;
+}
+
+pub async fn update_tel_checking(data: Arc<Watcher>) {
+    let _ = data.process_update_tel_requests().await;
 }
 
 pub mod http_handlers {

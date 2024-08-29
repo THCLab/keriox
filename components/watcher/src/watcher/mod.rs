@@ -66,13 +66,13 @@ impl Watcher {
     }
 
     pub async fn process_update_requests(&self) {
-        if let Ok(received) = self.recv.try_recv() {
+        while let Ok(received) = self.recv.recv().await {
             let _ = self.watcher_data.update_local_kel(&received).await;
         }
     }
 
     pub async fn process_update_tel_requests(&self) -> Result<(), ActorError> {
-        if let Ok((ri, vc_id)) = self.tel_recv.try_recv() {
+        while let Ok((ri, vc_id)) = self.tel_recv.recv().await {
             let who_to_ask = self
                 .registry_id_mapping
                 .get(&ri)
@@ -86,7 +86,7 @@ impl Watcher {
             self.watcher_data
                 .tel_update(&ri, &vc_id, who_to_ask.clone())
                 .await?;
-        };
+        }
         Ok(())
     }
 
