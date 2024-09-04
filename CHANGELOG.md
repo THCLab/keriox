@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.13.0] - 2024-09-04
+
+### 🚀 Features
+
+- Expose `verify_from_cesr` function
+
 ## [0.12.7] - 2024-08-30
 
 ### 🐛 Bug Fixes
@@ -14,6 +20,7 @@ All notable changes to this project will be documented in this file.
 - Update README.md
 - Update README.md
 - Update README.md
+- Release
 
 ## [0.12.6] - 2024-08-08
 
