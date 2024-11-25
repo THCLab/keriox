@@ -1,6 +1,6 @@
 [package]
 name = "teliox"
-version = "0.13.0"
+version = "0.14.0"
 description = "Library for the Transaction Event Log"
 authors.workspace = true
 edition.workspace = true
@@ -10,7 +10,7 @@ repository.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-keri-core = {path = "../../keriox_core", version = "0.13.0", features = ["oobi", "mailbox"]}
+keri-core = {path = "../../keriox_core", version = "0.14.0", features = ["oobi", "mailbox"]}
 said = { version = "0.4.0" }
 cesrox = { version = "0.1.4" }
 base64 = "0.13.0"

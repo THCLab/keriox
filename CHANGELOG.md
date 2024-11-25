@@ -2,11 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.14.0] - 2024-11-25
+
+### 🚀 Features
+
+- Add info endpoint for witness and watcher
+
 ## [0.13.0] - 2024-09-04
 
 ### 🚀 Features
 
 - Expose `verify_from_cesr` function
+
+### ⚙️ Miscellaneous Tasks
+
+- Release
 
 ## [0.12.7] - 2024-08-30
 
