@@ -79,6 +79,7 @@ impl WitnessListener {
                     "/forward",
                     actix_web::web::post().to(http_handlers::process_exchange),
                 )
+                .route("/info", actix_web::web::get().to(http_handlers::info))
         })
         .bind(addr)
         .unwrap()
@@ -213,7 +214,7 @@ pub mod http_handlers {
 
     use actix_web::{
         http::{header::ContentType, StatusCode},
-        web, HttpResponse, ResponseError,
+        web, HttpResponse, Responder, ResponseError,
     };
     use itertools::Itertools;
     use keri_core::{
@@ -425,6 +426,16 @@ pub mod http_handlers {
         }
 
         Ok(HttpResponse::Ok().body(()))
+    }
+
+    pub async fn info() -> impl Responder {
+        let version = option_env!("CARGO_PKG_VERSION");
+        if let Some(version) = version {
+            HttpResponse::Ok().json(serde_json::json!({ "version": version }))
+        } else {
+            HttpResponse::InternalServerError()
+                .json(serde_json::json!({ "error": "Failed to retrieve version information" }))
+        }
     }
 
     #[derive(Debug, derive_more::Display, derive_more::From, derive_more::Error)]

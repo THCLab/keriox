@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::event::KeyEvent;
 use crate::event_message::msg::KeriEvent;
 use crate::event_message::timestamped::Timestamped;
-use crate::{error::Error, prefix::IdentifierPrefix};
+use crate::prefix::IdentifierPrefix;
 
 use crate::event_message::{signature::Signature, EventTypeTag, Typeable};
 
@@ -75,7 +75,7 @@ impl Typeable for Exchange {
 }
 
 #[test]
-fn test_exn_serialization() -> Result<(), Error> {
+fn test_exn_serialization() -> Result<(), crate::error::Error> {
     let exn_event = r#"{"v":"KERI10JSON0002f1_","t":"exn","d":"EPfS_lQ-hZIFX6ug1ggLlzVN09VnCWsubpE-jAC1Fx0W","dt":"2022-10-25T09:53:04.117732+00:00","r":"/fwd","q":{"pre":"EJccSRTfXYF6wrUVuenAIHzwcx3hJugeiJsEKmndi5q1","topic":"multisig"},"a":{"v":"KERI10JSON000215_","t":"icp","d":"EC61gZ9lCKmHAS7U5ehUfEbGId5rcY0D7MirFZHDQcE2","i":"EC61gZ9lCKmHAS7U5ehUfEbGId5rcY0D7MirFZHDQcE2","s":"0","kt":"2","k":["DOZlWGPfDHLMf62zSFzE8thHmnQUOgA3_Y-KpOyF9ScG","DHGb2qY9WwZ1sBnC9Ip0F-M8QjTM27ftI-3jTGF9mc6K"],"nt":"2","n":["EBvD5VIVvf6NpP9GRmTqu_Cd1KN0RKrKNfPJ-uhIxurj","EHlpcaxffvtcpoUUMTc6tpqAVtb2qnOYVk_3HRsZ34PH"],"bt":"3","b":["BBilc4-L3tFUnfM_wJr4S4OJanAv_VmF_dJNN6vkf2Ha","BLskRTInXnMxWaGqcpSyMgo0nYbalW99cGZESrz3zapM","BIKKuvBwpmDVA4Ds-EpL5bt9OqPzWPja2LigFYZN2YfX"],"c":[],"a":[]}}"#; //-HABEKYLUMmNPZeEs77Zvclf0bSN5IN-mLfLpx2ySb-HDlk4-AABAACJvddJrANYlrJ7CxEU9Z_AKJMxJZ7PNSyZeS4F6x2qZ2vTLtmD6mOOQ748TlddgB2ZFAMYt3xtzNdfrYNHS4IA-LAZ5AABAA-a-AABABBng3jTIIx_YUX-tS0caV1aV9QOvD5IM7WKt_wQz6Hvjm7nPhJgElP6K4Pu2JAIqCO93wBgBOx1DD3iawt0rb4"#;
 
     let parsed: ExchangeMessage = serde_json::from_str(exn_event).unwrap();
