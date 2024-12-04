@@ -1,3 +1,4 @@
+use crate::http_routing::configure_routes;
 use std::{net::ToSocketAddrs, sync::Arc};
 
 use actix_web::{dev::Server, web, App, HttpServer};
@@ -27,42 +28,7 @@ impl WatcherListener {
         HttpServer::new(move || {
             App::new()
                 .app_data(state.clone())
-                .route(
-                    "/introduce",
-                    actix_web::web::get().to(http_handlers::introduce),
-                )
-                .route(
-                    "/oobi/{id}",
-                    actix_web::web::get().to(http_handlers::resolve_location),
-                )
-                .route(
-                    "/oobi/{cid}/{role}/{eid}",
-                    actix_web::web::get().to(http_handlers::resolve_role),
-                )
-                .route(
-                    "/process",
-                    actix_web::web::post().to(http_handlers::process_notice),
-                )
-                .route(
-                    "/query",
-                    actix_web::web::post().to(http_handlers::process_query),
-                )
-                .route(
-                    "/register",
-                    actix_web::web::post().to(http_handlers::process_reply),
-                )
-                .route(
-                    "/resolve",
-                    actix_web::web::post().to(http_handlers::resolve_oobi),
-                )
-                .route(
-                    "/query/tel",
-                    actix_web::web::post().to(http_handlers::process_tel_query),
-                )
-                .route(
-                    "info",
-                    actix_web::web::get().to(http_handlers::info),
-                )
+                .configure(configure_routes)
         })
         .disable_signals()
         .bind(addr)
@@ -99,7 +65,8 @@ pub mod http_handlers {
     use std::sync::Arc;
 
     use actix_web::{
-        http::{header::ContentType, StatusCode}, web, HttpResponse, Responder, ResponseError
+        http::{header::ContentType, StatusCode},
+        web, HttpResponse, Responder, ResponseError,
     };
     use itertools::Itertools;
     use keri_core::{
@@ -273,8 +240,7 @@ pub mod http_handlers {
         }
     }
 
-   pub async fn info(
-    ) -> impl Responder {
+    pub async fn info() -> impl Responder {
         let version = option_env!("CARGO_PKG_VERSION");
         if let Some(version) = version {
             HttpResponse::Ok().json(serde_json::json!({ "version": version }))
@@ -282,8 +248,7 @@ pub mod http_handlers {
             HttpResponse::InternalServerError()
                 .json(serde_json::json!({ "error": "Failed to retrieve version information" }))
         }
-        
-    } 
+    }
 }
 
 mod test {

@@ -3,6 +3,7 @@ pub use crate::{
     watcher_listener::WatcherListener,
 };
 
+mod http_routing;
 #[cfg(test)]
 mod test;
 mod watcher;
