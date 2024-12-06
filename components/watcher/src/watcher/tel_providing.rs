@@ -38,7 +38,7 @@ impl Store {
         // Create file if doesn't exist.
         let _file = OpenOptions::new()
             .read(true)
-            .write(true)
+            .append(true)
             .create(true)
             .open(&path)?;
         Ok(Store(path))
