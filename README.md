@@ -10,9 +10,9 @@ The [Human Colossus Foundation](https://humancolossus.foundation/) has been deve
 
 - For running example infrastructure (Witnesses, etc.), see https://github.com/THCLab/ambient-infrastructure
 - Connect to the Infrastructure
+  - for Command-Line Interface (CLI)-based interaction, use [`dkms-bin`](https://github.com/THCLab/dkms-bin) 
   - for Rust client, see [test](https://github.com/THCLab/keriox/blob/master/keriox_tests/tests/indirect_mode_signing.rs).
   - for FFI bindings (clients for different programming languages), see https://github.com/THCLab/keri-bindings
-  - for CLI-based interaction, use [`dkms-bin`](https://github.com/THCLab/dkms-bin) 
 
 ## Introduction
 
