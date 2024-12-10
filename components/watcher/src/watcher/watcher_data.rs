@@ -264,7 +264,7 @@ impl WatcherData {
                 match (local_state, args.s) {
                     (Some(state), Some(sn)) if sn <= state.sn => {
                         // KEL is already in database
-                    },
+                    }
                     (Some(state), None) => {
                         // Check for updates.
                         let id_to_update = qry.query.get_prefix();

@@ -14,6 +14,9 @@ pub enum ControllerError {
     #[error("Database error: {0}")]
     DatabaseError(#[from] keri_core::database::DbError),
 
+    #[error("SQL error: {0}")]
+    SQLError(#[from] rusqlite::Error),
+
     #[error(transparent)]
     SendingError(#[from] SendingError),
 

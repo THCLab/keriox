@@ -12,7 +12,10 @@ use crate::{
     communication::Communication,
     config::ControllerConfig,
     error::ControllerError,
-    identifier::{mechanics::MechanicsError, Identifier},
+    identifier::{
+        mechanics::{query_mailbox::QueryCache, MechanicsError},
+        Identifier,
+    },
     known_events::KnownEvents,
 };
 pub mod verifying;
@@ -20,6 +23,7 @@ pub mod verifying;
 pub struct Controller {
     pub known_events: Arc<KnownEvents>,
     pub communication: Arc<Communication>,
+    pub query_cache: Arc<QueryCache>,
 }
 
 impl Controller {
@@ -32,6 +36,10 @@ impl Controller {
             tel_transport,
         } = config;
 
+        let mut query_db_path = db_path.clone();
+        query_db_path.push("query_cache");
+
+        let query_cache = Arc::new(QueryCache::new(&query_db_path)?);
         let events = Arc::new(KnownEvents::new(db_path, escrow_config)?);
         let comm = Arc::new(Communication {
             events: events.clone(),
@@ -42,6 +50,7 @@ impl Controller {
         let controller = Self {
             known_events: events.clone(),
             communication: comm,
+            query_cache,
         };
         if !initial_oobis.is_empty() {
             async_std::task::block_on(controller.setup_witnesses(&initial_oobis)).unwrap();
@@ -72,6 +81,7 @@ impl Controller {
             None,
             self.known_events.clone(),
             self.communication.clone(),
+            self.query_cache.clone(),
         ))
     }
 

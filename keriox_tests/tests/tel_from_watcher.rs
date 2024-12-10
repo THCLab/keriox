@@ -164,7 +164,7 @@ async fn test_tel_from_watcher() -> Result<(), anyhow::Error> {
     };
 
     // Setup verifier identifier
-    let (mut verifier, verifier_keypair, verifier_controller) = setup_identifier(
+    let (verifier, verifier_keypair, verifier_controller) = setup_identifier(
         verifier_db_path.path(),
         vec![verifier_witness_location.clone()],
         Some(transport.clone()),

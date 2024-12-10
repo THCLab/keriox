@@ -28,7 +28,7 @@ pub struct Identifier {
     pub(crate) known_events: Arc<KnownEvents>,
     communication: Arc<Communication>,
     pub to_notify: Vec<SignedEventMessage>,
-    query_cache: QueryCache,
+    query_cache: Arc<QueryCache>,
     /// Cached identifier state. It saves the state of identifier, event if last
     /// event isn't accepted in the KEL yet (e.g. if there are no witness
     /// receipts yet.)
@@ -43,6 +43,7 @@ impl Identifier {
         registry_id: Option<IdentifierPrefix>,
         known_events: Arc<KnownEvents>,
         communication: Arc<Communication>,
+        db: Arc<QueryCache>,
     ) -> Self {
         // Load events that need to be notified to witnesses
         let events_to_notice: Vec<_> = known_events
@@ -63,16 +64,18 @@ impl Identifier {
                     None
                 }
             });
-            IdentifierState::default()
-                .apply(&not_accepted_incept.unwrap())
-                .unwrap()
+            if let Some(incept) = not_accepted_incept {
+                IdentifierState::default().apply(&incept).unwrap()
+            } else {
+                IdentifierState::default()
+            }
         };
         Self {
             id,
             known_events,
             communication,
             to_notify: events_to_notice,
-            query_cache: QueryCache::new(),
+            query_cache: db,
             cached_state: state,
             registry_id,
             broadcasted_rcts: HashSet::new(),

@@ -13,7 +13,7 @@ use keri_core::{
     prefix::IdentifierPrefix,
 };
 
-use crate::{identifier::Identifier, mailbox_updating::ActionRequired};
+use crate::{error::ControllerError, identifier::Identifier, mailbox_updating::ActionRequired};
 
 use super::{MechanicsError, ResponseProcessingError};
 
@@ -24,18 +24,17 @@ impl Identifier {
         from_who: &IdentifierPrefix,
         about_who: &IdentifierPrefix,
         res: &MailboxResponse,
-    ) -> Result<Vec<ActionRequired>, MechanicsError> {
+    ) -> Result<Vec<ActionRequired>, ControllerError> {
         let req = if from_who == about_who {
             // process own mailbox
             let req = self.process_own_mailbox(res)?;
-            self.query_cache
-                .update_last_asked_index(recipient.clone(), res)?;
+            self.query_cache.update_last_asked_index(recipient, res)?;
             req
         } else {
             // process group mailbox
             let group_req = self.process_group_mailbox(res, about_who).await?;
             self.query_cache
-                .update_last_asked_group_index(recipient.clone(), res)?;
+                .update_last_asked_group_index(recipient, res)?;
             group_req
         };
         Ok(req)
@@ -162,7 +161,7 @@ impl Identifier {
     }
 
     /// Process event from delegate mailbox. If signing is required to finish
-    /// the process it resturns proper notification.
+    /// the process it returns proper notification.
     fn process_own_delegate(
         &self,
         event_to_confirm: &SignedEventMessage,
