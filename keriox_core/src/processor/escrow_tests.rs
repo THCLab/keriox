@@ -108,7 +108,7 @@ fn test_process_transferable_receipt() -> Result<(), Error> {
     assert_eq!(
         event_storage
             .events_db
-            .get_receipts_t(QueryParameters::All{ id: &validator_id})
+            .get_receipts_t(QueryParameters::All { id: &validator_id })
             .unwrap()
             .count(),
         1
@@ -221,7 +221,7 @@ pub fn test_not_fully_witnessed() -> Result<(), Error> {
         .unwrap();
     // check if receipt was accepted
     let mut esc = db
-        .get_receipts_nt(QueryParameters::All { id: &id})
+        .get_receipts_nt(QueryParameters::All { id: &id })
         .unwrap()
         .filter(|rct| rct.body.receipted_event_digest.eq(&event_digest));
     let rct_from_db = esc.next().unwrap();
@@ -244,7 +244,7 @@ pub fn test_not_fully_witnessed() -> Result<(), Error> {
     assert!(esc.next().is_none());
 
     let mut esc = db
-        .get_receipts_nt(QueryParameters::All { id: &id})
+        .get_receipts_nt(QueryParameters::All { id: &id })
         .unwrap()
         .filter(|rct| rct.body.receipted_event_digest.eq(&event_digest));
     let rct_from_db = esc.next().unwrap();
@@ -395,7 +395,11 @@ fn test_out_of_order() -> Result<(), Error> {
                 JustNotification::KeyEventAdded,
             ],
         )?;
-        (processor, EventStorage::new(witness_db.clone(), witness_db.clone()), ooo_escrow)
+        (
+            processor,
+            EventStorage::new(witness_db.clone(), witness_db.clone()),
+            ooo_escrow,
+        )
     };
     let id: IdentifierPrefix = "EO8cED9H5XPqBdoVatgBkEuSP8yXic7HtWpkex-9e0sL".parse()?;
 
@@ -570,7 +574,11 @@ fn test_partially_sign_escrow() -> Result<(), Error> {
         ));
         processor.register_observer(ps_escrow.clone(), &[JustNotification::PartiallySigned])?;
 
-        (processor, EventStorage::new(witness_db.clone(), witness_db.clone()), ps_escrow)
+        (
+            processor,
+            EventStorage::new(witness_db.clone(), witness_db.clone()),
+            ps_escrow,
+        )
     };
 
     let parse_messagee = |raw_event| {
@@ -716,7 +724,11 @@ fn test_out_of_order_cleanup() -> Result<(), Error> {
         )?;
 
         std::fs::create_dir_all(path).unwrap();
-        (processor, EventStorage::new(witness_db.clone(), witness_db.clone()), ooo_escrow)
+        (
+            processor,
+            EventStorage::new(witness_db.clone(), witness_db.clone()),
+            ooo_escrow,
+        )
     };
     let id: IdentifierPrefix = "EO8cED9H5XPqBdoVatgBkEuSP8yXic7HtWpkex-9e0sL".parse()?;
 
@@ -793,7 +805,11 @@ fn test_partially_sign_escrow_cleanup() -> Result<(), Error> {
         ));
         processor.register_observer(ps_escrow.clone(), &[JustNotification::PartiallySigned])?;
 
-        (processor, EventStorage::new(witness_db.clone(), witness_db.clone()), ps_escrow)
+        (
+            processor,
+            EventStorage::new(witness_db.clone(), witness_db.clone()),
+            ps_escrow,
+        )
     };
 
     let parse_messagee = |raw_event| {
@@ -1130,7 +1146,7 @@ pub fn test_escrow_receipt_with_wrong_signature() -> Result<(), Error> {
     assert!(esc.next().is_none());
 
     // check if receipt was accepted
-    let esc = db.get_receipts_nt(QueryParameters::All { id: &id});
+    let esc = db.get_receipts_nt(QueryParameters::All { id: &id });
     assert!(esc.is_none());
 
     let state = event_storage.get_state(&id);

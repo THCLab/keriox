@@ -2,6 +2,7 @@ use std::convert::TryFrom;
 
 use serde::{Deserialize, Serialize};
 
+use crate::database::EventDatabase;
 #[cfg(feature = "oobi")]
 use crate::oobi::OobiManager;
 use crate::{
@@ -26,7 +27,6 @@ use crate::{
         ReplyType,
     },
 };
-use crate::database::EventDatabase; 
 #[cfg(feature = "mailbox")]
 use crate::{
     event_message::{signature::Signature, signed_event_message::SignedEventMessage},
@@ -125,7 +125,10 @@ pub fn process_signed_oobi<D: EventDatabase>(
 }
 
 #[cfg(feature = "mailbox")]
-pub fn process_signed_exn<D: EventDatabase>(exn: SignedExchange, storage: &EventStorage<D>) -> Result<(), Error> {
+pub fn process_signed_exn<D: EventDatabase>(
+    exn: SignedExchange,
+    storage: &EventStorage<D>,
+) -> Result<(), Error> {
     let exn_message = &exn.exchange_message;
     let verification_result =
         exn.signature
@@ -141,7 +144,7 @@ pub fn process_signed_exn<D: EventDatabase>(exn: SignedExchange, storage: &Event
 }
 
 #[cfg(feature = "mailbox")]
-fn process_exn<D:EventDatabase>(
+fn process_exn<D: EventDatabase>(
     exn: &ExchangeMessage,
     attachemnt: (MaterialPath, Vec<Signature>),
     storage: &EventStorage<D>,
@@ -235,7 +238,10 @@ pub enum SignedQueryError {
 }
 
 #[cfg(feature = "query")]
-pub fn process_query<D:EventDatabase>(qr: &QueryRoute, storage: &EventStorage<D>) -> Result<ReplyType, QueryError> {
+pub fn process_query<D: EventDatabase>(
+    qr: &QueryRoute,
+    storage: &EventStorage<D>,
+) -> Result<ReplyType, QueryError> {
     match qr {
         QueryRoute::Ksn { args, .. } => {
             // return reply message with ksn inside

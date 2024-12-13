@@ -6,7 +6,7 @@ use crate::event_message::signed_event_message::{
     SignedEventMessage, SignedNontransferableReceipt,
 };
 
-use super::{tables::SledEventTreeVec, timestamped::TimestampedSignedEventMessage, sled::DbError};
+use super::{sled::DbError, tables::SledEventTreeVec, timestamped::TimestampedSignedEventMessage};
 
 pub struct MailboxData {
     db: Arc<sled::Db>,

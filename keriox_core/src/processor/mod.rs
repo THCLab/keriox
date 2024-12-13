@@ -20,7 +20,9 @@ use self::{
 #[cfg(feature = "query")]
 use crate::query::reply_event::{ReplyRoute, SignedReply};
 use crate::{
-    database::{sled::SledEventDatabase, timestamped::TimestampedSignedEventMessage, EventDatabase},
+    database::{
+        sled::SledEventDatabase, timestamped::TimestampedSignedEventMessage, EventDatabase,
+    },
     error::Error,
     event::receipt::Receipt,
     event_message::signed_event_message::{
@@ -71,7 +73,7 @@ pub struct EventProcessor<D: EventDatabase> {
     publisher: NotificationBus,
 }
 
-impl<D:EventDatabase> EventProcessor<D> {
+impl<D: EventDatabase> EventProcessor<D> {
     pub fn new(db: Arc<SledEventDatabase>, publisher: NotificationBus, events_db: Arc<D>) -> Self {
         let validator = EventValidator::new(db.clone(), events_db.clone());
         Self {
@@ -122,11 +124,21 @@ impl<D:EventDatabase> EventProcessor<D> {
 
     pub fn process_notice<F>(&self, notice: &Notice, processing_strategy: F) -> Result<(), Error>
     where
-        F: Fn(Arc<D>, Arc<SledEventDatabase>, &NotificationBus, SignedEventMessage) -> Result<(), Error>,
+        F: Fn(
+            Arc<D>,
+            Arc<SledEventDatabase>,
+            &NotificationBus,
+            SignedEventMessage,
+        ) -> Result<(), Error>,
     {
         match notice {
             Notice::Event(signed_event) => {
-                processing_strategy(self.events_db.clone(), self.db.clone(), &self.publisher, signed_event.clone())?;
+                processing_strategy(
+                    self.events_db.clone(),
+                    self.db.clone(),
+                    &self.publisher,
+                    signed_event.clone(),
+                )?;
                 // check if receipts are attached
                 if let Some(witness_receipts) = &signed_event.witness_receipts {
                     // Create and process witness receipts
@@ -179,7 +191,8 @@ impl<D:EventDatabase> EventProcessor<D> {
 /// Returns the current State associated with
 /// the given Prefix
 pub fn compute_state(db: Arc<SledEventDatabase>, id: &IdentifierPrefix) -> Option<IdentifierState> {
-    if let Some(events) = db.get_kel_finalized_events(crate::database::QueryParameters::All { id }) {
+    if let Some(events) = db.get_kel_finalized_events(crate::database::QueryParameters::All { id })
+    {
         // start with empty state
         let mut state = IdentifierState::default();
         // we sort here to get inception first

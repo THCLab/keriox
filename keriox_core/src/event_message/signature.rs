@@ -2,7 +2,11 @@ use cesrox::{group::Group, primitives::IndexedSignature as CesrIndexedSignature}
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    database::EventDatabase, error::Error, event::sections::seal::EventSeal, prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix}, processor::event_storage::EventStorage
+    database::EventDatabase,
+    error::Error,
+    event::sections::seal::EventSeal,
+    prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
+    processor::event_storage::EventStorage,
 };
 
 use super::cesr_adapter::ParseError;
@@ -50,7 +54,11 @@ impl Signature {
         }
     }
 
-    pub fn verify<D: EventDatabase>(&self, data: &[u8], storage: &EventStorage<D>) -> Result<bool, Error> {
+    pub fn verify<D: EventDatabase>(
+        &self,
+        data: &[u8],
+        storage: &EventStorage<D>,
+    ) -> Result<bool, Error> {
         match self {
             Signature::Transferable(_sigd, sigs) => {
                 let kc = storage

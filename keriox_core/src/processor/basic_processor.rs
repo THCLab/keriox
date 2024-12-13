@@ -40,7 +40,8 @@ impl Processor for BasicProcessor {
 
 impl BasicProcessor {
     pub fn new(db: Arc<SledEventDatabase>, notification_bus: Option<NotificationBus>) -> Self {
-        let processor = EventProcessor::new(db.clone(), notification_bus.unwrap_or_default(), db.clone());
+        let processor =
+            EventProcessor::new(db.clone(), notification_bus.unwrap_or_default(), db.clone());
         Self(processor)
     }
 

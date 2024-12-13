@@ -5,9 +5,9 @@ use std::{path::Path, sync::Arc, time::Duration};
 use crate::prefix::IdentifierPrefix;
 
 use super::{
+    sled::DbError,
     tables::{SledEventTree, SledEventTreeVec},
     timestamped::Timestamped,
-    sled::DbError,
 };
 
 /// Collection of values, which removes values older than `duration`

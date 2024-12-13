@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use super::compute_state;
-use crate::{database::{EventDatabase, QueryParameters}, event_message::signed_event_message::SignedEventMessage};
 #[cfg(feature = "query")]
 use crate::query::{
     key_state_notice::KeyStateNotice, mailbox::QueryArgsMbx, reply_event::SignedReply,
@@ -9,8 +8,8 @@ use crate::query::{
 use crate::{
     actor::prelude::Message,
     database::{
+        sled::SledEventDatabase,
         timestamped::{Timestamped, TimestampedSignedEventMessage},
-        sled::SledEventDatabase
     },
     error::Error,
     event::{
@@ -20,6 +19,10 @@ use crate::{
     event_message::signed_event_message::{Notice, SignedNontransferableReceipt},
     prefix::{BasicPrefix, IdentifierPrefix},
     state::{EventSemantics, IdentifierState},
+};
+use crate::{
+    database::{EventDatabase, QueryParameters},
+    event_message::signed_event_message::SignedEventMessage,
 };
 #[cfg(feature = "query")]
 use said::version::format::SerializationFormats;
@@ -63,7 +66,10 @@ impl<D: EventDatabase> EventStorage<D> {
     ///
     /// Returns the current validated KEL for a given Prefix
     pub fn get_kel_messages(&self, id: &IdentifierPrefix) -> Result<Option<Vec<Notice>>, Error> {
-        match self.db.get_kel_finalized_events(QueryParameters::All { id }) {
+        match self
+            .db
+            .get_kel_finalized_events(QueryParameters::All { id })
+        {
             Some(events) => Ok(Some(
                 events
                     .map(|event| Notice::Event(event.signed_event_message))
@@ -78,7 +84,9 @@ impl<D: EventDatabase> EventStorage<D> {
         id: &IdentifierPrefix,
         sn: Option<u64>,
     ) -> Result<Option<Vec<Notice>>, Error> {
-        let events = self.db.get_kel_finalized_events(QueryParameters::All { id });
+        let events = self
+            .db
+            .get_kel_finalized_events(QueryParameters::All { id });
         Ok(match (events, sn) {
             (None, _) => None,
             (Some(events), None) => self.collect_with_receipts(events),
@@ -122,7 +130,10 @@ impl<D: EventDatabase> EventStorage<D> {
         id: &IdentifierPrefix,
         sn: u64,
     ) -> Option<TimestampedSignedEventMessage> {
-        if let Some(mut events) = self.db.get_kel_finalized_events(QueryParameters::All { id }) {
+        if let Some(mut events) = self
+            .db
+            .get_kel_finalized_events(QueryParameters::All { id })
+        {
             events.find(|event| event.signed_event_message.event_message.data.get_sn() == sn)
         } else {
             None
@@ -213,7 +224,10 @@ impl<D: EventDatabase> EventStorage<D> {
     pub fn get_last_establishment_event_seal(&self, id: &IdentifierPrefix) -> Option<EventSeal> {
         let mut state = IdentifierState::default();
         let mut last_est = None;
-        if let Some(events) = self.db.get_kel_finalized_events(QueryParameters::All { id }) {
+        if let Some(events) = self
+            .db
+            .get_kel_finalized_events(QueryParameters::All { id })
+        {
             for event in events {
                 state = state
                     .apply(&event.signed_event_message.event_message.data)
@@ -255,7 +269,10 @@ impl<D: EventDatabase> EventStorage<D> {
         sn: u64,
     ) -> Result<Option<IdentifierState>, Error> {
         let mut state = IdentifierState::default();
-        if let Some(events) = self.db.get_kel_finalized_events(QueryParameters::All { id }) {
+        if let Some(events) = self
+            .db
+            .get_kel_finalized_events(QueryParameters::All { id })
+        {
             // TODO: testing approach if events come out sorted already (as they should coz of put sequence)
             let mut sorted_events = events.collect::<Vec<TimestampedSignedEventMessage>>();
             sorted_events.sort();
@@ -318,13 +335,15 @@ impl<D: EventDatabase> EventStorage<D> {
         sn: u64,
         validator_pref: &IdentifierPrefix,
     ) -> Result<bool, Error> {
-        Ok(if let Some(receipts) = self.db.get_receipts_t(QueryParameters::All { id }) {
-            receipts
-                .filter(|r| r.body.sn.eq(&sn))
-                .any(|receipt| receipt.validator_seal.prefix.eq(validator_pref))
-        } else {
-            false
-        })
+        Ok(
+            if let Some(receipts) = self.db.get_receipts_t(QueryParameters::All { id }) {
+                receipts
+                    .filter(|r| r.body.sn.eq(&sn))
+                    .any(|receipt| receipt.validator_seal.prefix.eq(validator_pref))
+            } else {
+                false
+            },
+        )
     }
 
     pub fn get_nt_receipts(

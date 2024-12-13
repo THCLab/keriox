@@ -1,5 +1,3 @@
-
-
 use std::{
     path::{Path, PathBuf},
     sync::Arc,
@@ -9,7 +7,10 @@ use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "mailbox")]
 use super::mailbox::MailboxData;
-use super::{tables::{SledEventTree, SledEventTreeVec}, EventDatabase, QueryParameters};
+use super::{
+    tables::{SledEventTree, SledEventTreeVec},
+    EventDatabase, QueryParameters,
+};
 
 #[cfg(feature = "query")]
 use crate::query::reply_event::SignedReply;
@@ -28,7 +29,6 @@ use crate::{
 use super::timestamped::TimestampedSignedEventMessage;
 
 impl EventDatabase for SledEventDatabase {
-  
     fn add_kel_finalized_event(
         &self,
         event: SignedEventMessage,
@@ -39,7 +39,6 @@ impl EventDatabase for SledEventDatabase {
         self.db.flush()?;
         Ok(())
     }
- 
 
     fn get_kel_finalized_events(
         &self,
@@ -49,10 +48,10 @@ impl EventDatabase for SledEventDatabase {
             QueryParameters::BySn { id, sn } => todo!(),
             QueryParameters::ByDigest { digest } => todo!(),
             QueryParameters::Range { id, start, limit } => todo!(),
-            QueryParameters::All { id } => self.key_event_logs
-            .iter_values(self.identifiers.designated_key(id).ok()?),
+            QueryParameters::All { id } => self
+                .key_event_logs
+                .iter_values(self.identifiers.designated_key(id).ok()?),
         }
-        
     }
 
     fn add_receipt_t(
@@ -70,14 +69,14 @@ impl EventDatabase for SledEventDatabase {
         &self,
         params: QueryParameters,
     ) -> Option<impl DoubleEndedIterator<Item = SignedTransferableReceipt>> {
-        match  params {
+        match params {
             QueryParameters::BySn { id, sn } => todo!(),
             QueryParameters::ByDigest { digest } => todo!(),
             QueryParameters::Range { id, start, limit } => todo!(),
-            QueryParameters::All { id } => self.receipts_t
-            .iter_values(self.identifiers.designated_key(id).ok()?),
+            QueryParameters::All { id } => self
+                .receipts_t
+                .iter_values(self.identifiers.designated_key(id).ok()?),
         }
-        
     }
 
     fn add_receipt_nt(
@@ -130,8 +129,9 @@ impl EventDatabase for SledEventDatabase {
             QueryParameters::BySn { id, sn } => todo!(),
             QueryParameters::ByDigest { digest } => todo!(),
             QueryParameters::Range { id, start, limit } => todo!(),
-            QueryParameters::All { id } => self.receipts_nt
-            .iter_values(self.identifiers.designated_key(id).ok()?),
+            QueryParameters::All { id } => self
+                .receipts_nt
+                .iter_values(self.identifiers.designated_key(id).ok()?),
         }
     }
 }
@@ -191,7 +191,6 @@ impl SledEventDatabase {
             db,
         })
     }
-
 
     pub fn add_likely_duplicious_event(
         &self,
