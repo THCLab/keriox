@@ -4,7 +4,7 @@ mod test_oobi {
 
     use keri_core::{
         actor::{parse_event_stream, process_reply},
-        database::SledEventDatabase,
+        database::sled::SledEventDatabase,
         error::Error,
         event_message::signed_event_message::{Message, Op},
         processor::{basic_processor::BasicProcessor, event_storage::EventStorage},

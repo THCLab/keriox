@@ -9,7 +9,7 @@ use super::event_storage::EventStorage;
 #[cfg(feature = "query")]
 use crate::query::{key_state_notice::KeyStateNotice, reply_event::SignedReply, QueryError};
 use crate::{
-    database::SledEventDatabase,
+    database::sled::SledEventDatabase,
     error::Error,
     event::{
         event_data::EventData,

@@ -6,7 +6,7 @@ use super::{Role, Scheme};
 use crate::{
     database::{
         tables::{SledEventTree, SledEventTreeVec},
-        DbError,
+        sled::DbError,
     },
     error::Error,
     prefix::IdentifierPrefix,

@@ -10,7 +10,7 @@ use super::{
 use crate::{
     database::{
         escrow::{Escrow, EscrowDb},
-        SledEventDatabase,
+        sled::SledEventDatabase,
     },
     error::Error,
     event::{

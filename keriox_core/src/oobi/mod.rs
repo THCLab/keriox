@@ -7,7 +7,7 @@ use url::Url;
 
 use self::error::OobiError;
 use crate::{
-    database::DbError,
+    database::sled::DbError,
     error::Error,
     event_message::signed_event_message::{Message, Op},
     prefix::IdentifierPrefix,
@@ -185,7 +185,7 @@ pub mod error {
         Keri(#[from] crate::error::Error),
 
         #[error("DB error")]
-        Db(#[from] crate::database::DbError),
+        Db(#[from] crate::database::sled::DbError),
 
         #[error("Oobi parse error: {0}")]
         Parse(String),

@@ -7,7 +7,7 @@ use crate::prefix::IdentifierPrefix;
 use super::{
     tables::{SledEventTree, SledEventTreeVec},
     timestamped::Timestamped,
-    DbError,
+    sled::DbError,
 };
 
 /// Collection of values, which removes values older than `duration`

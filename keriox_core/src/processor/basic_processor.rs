@@ -8,7 +8,7 @@ use super::{
 #[cfg(feature = "query")]
 use crate::query::reply_event::SignedReply;
 use crate::{
-    database::SledEventDatabase,
+    database::sled::SledEventDatabase,
     error::Error,
     event_message::signed_event_message::{Notice, SignedEventMessage},
 };

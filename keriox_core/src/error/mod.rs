@@ -88,7 +88,7 @@ pub enum Error {
     QueryError(#[from] crate::query::QueryError),
 
     #[error(transparent)]
-    DbError(#[from] crate::database::DbError),
+    DbError(#[from] crate::database::sled::DbError),
 
     #[error("Event generation error: {0}")]
     EventGenerationError(String),

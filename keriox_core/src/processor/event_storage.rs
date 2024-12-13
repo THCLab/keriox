@@ -10,7 +10,7 @@ use crate::{
     actor::prelude::Message,
     database::{
         timestamped::{Timestamped, TimestampedSignedEventMessage},
-        SledEventDatabase,
+        sled::SledEventDatabase,
     },
     error::Error,
     event::{

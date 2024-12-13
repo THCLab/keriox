@@ -20,7 +20,7 @@ use self::{
 #[cfg(feature = "query")]
 use crate::query::reply_event::{ReplyRoute, SignedReply};
 use crate::{
-    database::{timestamped::TimestampedSignedEventMessage, SledEventDatabase},
+    database::{timestamped::TimestampedSignedEventMessage, sled::SledEventDatabase},
     error::Error,
     event::receipt::Receipt,
     event_message::signed_event_message::{

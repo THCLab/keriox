@@ -4,7 +4,7 @@ mod test_query {
 
     use keri_core::{
         actor::{parse_event_stream, prelude::*},
-        database::{escrow::EscrowDb, SledEventDatabase},
+        database::{escrow::EscrowDb, sled::SledEventDatabase},
         event_message::signed_event_message::Op,
         processor::{
             escrow::{default_escrow_bus, EscrowConfig},

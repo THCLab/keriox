@@ -3,7 +3,7 @@ use std::sync::Arc;
 use cesrox::primitives::codes::basic::Basic;
 use keri_core::{
     actor,
-    database::SledEventDatabase,
+    database::sled::SledEventDatabase,
     error::Error,
     event_message::{
         event_msg_builder::EventMsgBuilder, signed_event_message::Notice, EventTypeTag,

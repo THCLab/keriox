@@ -22,7 +22,7 @@ use crate::mailbox::{
 };
 use crate::{
     actor::parse_event_stream,
-    database::{escrow::EscrowDb, SledEventDatabase},
+    database::{escrow::EscrowDb, sled::SledEventDatabase},
     error::Error,
     event::{
         event_data::EventData,

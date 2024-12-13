@@ -109,7 +109,7 @@ mod tests {
 
     use keri_core::{
         actor::parse_event_stream,
-        database::{escrow::EscrowDb, SledEventDatabase},
+        database::{escrow::EscrowDb, sled::SledEventDatabase},
         prefix::IdentifierPrefix,
         processor::{basic_processor::BasicProcessor, event_storage::EventStorage, Processor},
     };

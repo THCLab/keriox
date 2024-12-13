@@ -7,7 +7,7 @@ use crate::oobi::{error::OobiError, Role};
 #[cfg(feature = "oobi")]
 use crate::transport::TransportError;
 use crate::{
-    actor::SignedQueryError, database::DbError, error::Error as KeriError, prefix::IdentifierPrefix,
+    actor::SignedQueryError, database::sled::DbError, error::Error as KeriError, prefix::IdentifierPrefix,
 };
 use said::version::error::Error as VersionError;
 

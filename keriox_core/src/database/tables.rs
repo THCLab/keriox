@@ -4,7 +4,7 @@ use std::{convert::TryInto, marker::PhantomData};
 use arrayref::array_ref;
 use serde::{de::DeserializeOwned, Serialize};
 
-use super::DbError;
+use super::sled::DbError;
 
 /// Imitates collection table per key
 ///

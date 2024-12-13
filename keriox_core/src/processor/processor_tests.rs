@@ -3,7 +3,7 @@ use std::{convert::TryFrom, fs, sync::Arc};
 use cesrox::{parse, parse_many, primitives::CesrPrimitive};
 
 use crate::{
-    database::{escrow::EscrowDb, SledEventDatabase},
+    database::{escrow::EscrowDb, sled::SledEventDatabase},
     error::Error,
     event::sections::threshold::SignatureThreshold,
     event_message::{

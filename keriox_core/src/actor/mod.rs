@@ -221,7 +221,7 @@ pub enum SignedQueryError {
     KeriError(#[from] crate::error::Error),
 
     #[error(transparent)]
-    DbError(#[from] crate::database::DbError),
+    DbError(#[from] crate::database::sled::DbError),
 
     #[error(transparent)]
     QueryError(#[from] QueryError),
@@ -278,7 +278,7 @@ pub enum QueryError {
     KeriError(#[from] crate::error::Error),
 
     #[error(transparent)]
-    DbError(#[from] crate::database::DbError),
+    DbError(#[from] crate::database::sled::DbError),
 
     #[error("unknown identifier {id:?}")]
     UnknownId { id: IdentifierPrefix },
@@ -293,7 +293,7 @@ pub mod prelude {
     pub use crate::query::ReplyType;
     pub use crate::{
         actor::process_notice,
-        database::SledEventDatabase,
+        database::sled::SledEventDatabase,
         event_message::signed_event_message::Message,
         processor::{basic_processor::BasicProcessor, event_storage::EventStorage, Processor},
     };

@@ -10,7 +10,7 @@ use cesrox::{parse, parse_many, payload::parse_payload};
 use said::SelfAddressingIdentifier;
 
 use crate::{
-    database::{escrow::EscrowDb, SledEventDatabase},
+    database::{escrow::EscrowDb, sled::SledEventDatabase},
     error::Error,
     event_message::{
         cesr_adapter::EventType,

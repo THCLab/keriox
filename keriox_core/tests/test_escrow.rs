@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use keri_core::{
     actor::{parse_notice_stream, process_notice},
-    database::{escrow::EscrowDb, SledEventDatabase},
+    database::{escrow::EscrowDb, sled::SledEventDatabase},
     error::Error,
     event_message::signed_event_message::Notice,
     prefix::IdentifierPrefix,
