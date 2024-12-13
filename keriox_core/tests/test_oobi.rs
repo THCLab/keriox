@@ -21,7 +21,7 @@ mod test_oobi {
 
         let (processor, storage, oobi_manager) = (
             BasicProcessor::new(db.clone(), None),
-            EventStorage::new(db.clone()),
+            EventStorage::new(db.clone(), db.clone()),
             OobiManager::new(oobi_root.path()),
         );
         let events = parse_event_stream(oobi_rpy.as_bytes()).unwrap();

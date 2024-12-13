@@ -5,7 +5,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::query::mailbox::SignedMailboxQuery;
+use crate::{database::EventDatabase, query::mailbox::SignedMailboxQuery};
 use crate::{event_message::cesr_adapter::ParseError, query::query_event::LogsQueryArgs};
 use cesrox::{cesr_proof::MaterialPath, parse, primitives::CesrPrimitive};
 use said::derivation::{HashFunction, HashFunctionCode};
@@ -201,27 +201,28 @@ impl fmt::Display for PossibleResponse {
 
 /// Helper struct for events generation, signing and processing.
 /// Used in tests.
-pub struct SimpleController<K: KeyManager + 'static> {
+pub struct SimpleController<K: KeyManager + 'static, D: EventDatabase> {
     prefix: IdentifierPrefix,
     pub key_manager: Arc<Mutex<K>>,
     processor: BasicProcessor,
     oobi_manager: OobiManager,
-    pub storage: EventStorage,
+    pub storage: EventStorage<D>,
     pub groups: Vec<IdentifierPrefix>,
     pub not_fully_witnessed_escrow: Arc<PartiallyWitnessedEscrow>,
     pub ooo_escrow: Arc<OutOfOrderEscrow>,
     pub delegation_escrow: Arc<DelegationEscrow>,
 }
 
-impl<K: KeyManager> SimpleController<K> {
+impl<K: KeyManager, D: EventDatabase> SimpleController<K, D> {
     // incept a state and keys
     pub fn new(
         db: Arc<SledEventDatabase>,
+        event_db: Arc<D>,
         escrow_db: Arc<EscrowDb>,
         key_manager: Arc<Mutex<K>>,
         oobi_db_path: &Path,
         escrow_config: EscrowConfig,
-    ) -> Result<SimpleController<K>, Error> {
+    ) -> Result<SimpleController<K, D>, Error> {
         let (not_bus, (ooo, _, partially_witnesses, del_escrow)) =
             default_escrow_bus(db.clone(), escrow_db, escrow_config);
         let processor = BasicProcessor::new(db.clone(), Some(not_bus));
@@ -231,7 +232,7 @@ impl<K: KeyManager> SimpleController<K> {
             key_manager,
             oobi_manager: OobiManager::new(oobi_db_path),
             processor,
-            storage: EventStorage::new(db),
+            storage: EventStorage::new(db, event_db),
             groups: vec![],
             not_fully_witnessed_escrow: partially_witnesses,
             ooo_escrow: ooo,

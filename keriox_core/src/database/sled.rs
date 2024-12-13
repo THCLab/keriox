@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "mailbox")]
 use super::mailbox::MailboxData;
-use super::tables::{SledEventTree, SledEventTreeVec};
+use super::{tables::{SledEventTree, SledEventTreeVec}, EventDatabase, QueryParameters};
 
 #[cfg(feature = "query")]
 use crate::query::reply_event::SignedReply;
@@ -26,6 +26,115 @@ use crate::{
 };
 
 use super::timestamped::TimestampedSignedEventMessage;
+
+impl EventDatabase for SledEventDatabase {
+  
+    fn add_kel_finalized_event(
+        &self,
+        event: SignedEventMessage,
+        id: &IdentifierPrefix,
+    ) -> Result<(), DbError> {
+        self.key_event_logs
+            .push(self.identifiers.designated_key(id)?, event.into())?;
+        self.db.flush()?;
+        Ok(())
+    }
+ 
+
+    fn get_kel_finalized_events(
+        &self,
+        params: QueryParameters,
+    ) -> Option<impl DoubleEndedIterator<Item = TimestampedSignedEventMessage>> {
+        match params {
+            QueryParameters::BySn { id, sn } => todo!(),
+            QueryParameters::ByDigest { digest } => todo!(),
+            QueryParameters::Range { id, start, limit } => todo!(),
+            QueryParameters::All { id } => self.key_event_logs
+            .iter_values(self.identifiers.designated_key(id).ok()?),
+        }
+        
+    }
+
+    fn add_receipt_t(
+        &self,
+        receipt: SignedTransferableReceipt,
+        id: &IdentifierPrefix,
+    ) -> Result<(), DbError> {
+        self.receipts_t
+            .push(self.identifiers.designated_key(id)?, receipt)?;
+        self.db.flush()?;
+        Ok(())
+    }
+
+    fn get_receipts_t(
+        &self,
+        params: QueryParameters,
+    ) -> Option<impl DoubleEndedIterator<Item = SignedTransferableReceipt>> {
+        match  params {
+            QueryParameters::BySn { id, sn } => todo!(),
+            QueryParameters::ByDigest { digest } => todo!(),
+            QueryParameters::Range { id, start, limit } => todo!(),
+            QueryParameters::All { id } => self.receipts_t
+            .iter_values(self.identifiers.designated_key(id).ok()?),
+        }
+        
+    }
+
+    fn add_receipt_nt(
+        &self,
+        receipt: SignedNontransferableReceipt,
+        id: &IdentifierPrefix,
+    ) -> Result<(), DbError> {
+        let designated_key = self.identifiers.designated_key(id)?;
+        match self.receipts_nt.get(designated_key)? {
+            Some(receipts) => {
+                // Update existing receipt with new signature or insert new if doesn't exist.
+                let (found, mut to_insert) =
+                    receipts
+                        .into_iter()
+                        .fold((false, vec![]), |(_, mut acc), mut rct| {
+                            if rct.body.eq(&receipt.body) {
+                                for sig in &receipt.signatures {
+                                    if !rct.signatures.contains(&sig) {
+                                        rct.signatures.push(sig.clone())
+                                    }
+                                }
+                                acc.push(rct);
+                                (true, acc)
+                            } else {
+                                acc.push(rct);
+                                (false, acc)
+                            }
+                        });
+
+                if !found {
+                    to_insert.push(receipt)
+                };
+                self.receipts_nt.put(designated_key, to_insert)?;
+                self.db.flush()?;
+                Ok(())
+            }
+            None => {
+                self.receipts_nt.push(designated_key, receipt)?;
+                self.db.flush()?;
+                Ok(())
+            }
+        }
+    }
+
+    fn get_receipts_nt(
+        &self,
+        params: QueryParameters,
+    ) -> Option<impl DoubleEndedIterator<Item = SignedNontransferableReceipt>> {
+        match params {
+            QueryParameters::BySn { id, sn } => todo!(),
+            QueryParameters::ByDigest { digest } => todo!(),
+            QueryParameters::Range { id, start, limit } => todo!(),
+            QueryParameters::All { id } => self.receipts_nt
+            .iter_values(self.identifiers.designated_key(id).ok()?),
+        }
+    }
+}
 
 pub struct SledEventDatabase {
     db: Arc<sled::Db>,
@@ -83,115 +192,6 @@ impl SledEventDatabase {
         })
     }
 
-    pub fn add_kel_finalized_event(
-        &self,
-        event: SignedEventMessage,
-        id: &IdentifierPrefix,
-    ) -> Result<(), DbError> {
-        self.key_event_logs
-            .push(self.identifiers.designated_key(id)?, event.into())?;
-        self.db.flush()?;
-        Ok(())
-    }
-
-    pub fn get_kel_finalized_events(
-        &self,
-        id: &IdentifierPrefix,
-    ) -> Option<impl DoubleEndedIterator<Item = TimestampedSignedEventMessage>> {
-        self.key_event_logs
-            .iter_values(self.identifiers.designated_key(id).ok()?)
-    }
-
-    pub fn remove_kel_finalized_event(
-        &self,
-        id: &IdentifierPrefix,
-        event: &SignedEventMessage,
-    ) -> Result<(), DbError> {
-        self.key_event_logs
-            .remove(self.identifiers.designated_key(id)?, &event.into())?;
-        self.db.flush()?;
-        Ok(())
-    }
-
-    pub fn add_receipt_t(
-        &self,
-        receipt: SignedTransferableReceipt,
-        id: &IdentifierPrefix,
-    ) -> Result<(), DbError> {
-        self.receipts_t
-            .push(self.identifiers.designated_key(id)?, receipt)?;
-        self.db.flush()?;
-        Ok(())
-    }
-
-    pub fn get_receipts_t(
-        &self,
-        id: &IdentifierPrefix,
-    ) -> Option<impl DoubleEndedIterator<Item = SignedTransferableReceipt>> {
-        self.receipts_t
-            .iter_values(self.identifiers.designated_key(id).ok()?)
-    }
-
-    pub fn add_receipt_nt(
-        &self,
-        receipt: SignedNontransferableReceipt,
-        id: &IdentifierPrefix,
-    ) -> Result<(), DbError> {
-        let designated_key = self.identifiers.designated_key(id)?;
-        match self.receipts_nt.get(designated_key)? {
-            Some(receipts) => {
-                // Update existing receipt with new signature or insert new if doesn't exist.
-                let (found, mut to_insert) =
-                    receipts
-                        .into_iter()
-                        .fold((false, vec![]), |(_, mut acc), mut rct| {
-                            if rct.body.eq(&receipt.body) {
-                                for sig in &receipt.signatures {
-                                    if !rct.signatures.contains(&sig) {
-                                        rct.signatures.push(sig.clone())
-                                    }
-                                }
-                                acc.push(rct);
-                                (true, acc)
-                            } else {
-                                acc.push(rct);
-                                (false, acc)
-                            }
-                        });
-
-                if !found {
-                    to_insert.push(receipt)
-                };
-                self.receipts_nt.put(designated_key, to_insert)?;
-                self.db.flush()?;
-                Ok(())
-            }
-            None => {
-                self.receipts_nt.push(designated_key, receipt)?;
-                self.db.flush()?;
-                Ok(())
-            }
-        }
-    }
-
-    pub fn get_receipts_nt(
-        &self,
-        id: &IdentifierPrefix,
-    ) -> Option<impl DoubleEndedIterator<Item = SignedNontransferableReceipt>> {
-        self.receipts_nt
-            .iter_values(self.identifiers.designated_key(id).ok()?)
-    }
-
-    pub fn remove_receipts_nt(&self, id: &IdentifierPrefix) -> Result<(), DbError> {
-        if let Some(receipts) = self.get_receipts_nt(id) {
-            for receipt in receipts {
-                self.receipts_nt
-                    .remove(self.identifiers.designated_key(id)?, &receipt)?;
-            }
-        }
-        self.db.flush()?;
-        Ok(())
-    }
 
     pub fn add_likely_duplicious_event(
         &self,

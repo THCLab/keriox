@@ -14,10 +14,11 @@ use keri_core::{
 };
 
 pub struct WitnessProcessor {
-    processor: EventProcessor,
+    processor: EventProcessor<Self::Database>,
 }
 
 impl Processor for WitnessProcessor {
+    type Database = SledEventDatabase;
     fn register_observer(
         &mut self,
         observer: Arc<dyn Notifier + Send + Sync>,
@@ -97,7 +98,7 @@ impl WitnessProcessor {
                 JustNotification::KeyEventAdded,
             ],
         );
-        let processor = EventProcessor::new(db, bus);
+        let processor = EventProcessor::new(db, bus, db.clone());
         Self { processor }
     }
 

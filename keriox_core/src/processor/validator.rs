@@ -9,7 +9,7 @@ use super::event_storage::EventStorage;
 #[cfg(feature = "query")]
 use crate::query::{key_state_notice::KeyStateNotice, reply_event::SignedReply, QueryError};
 use crate::{
-    database::sled::SledEventDatabase,
+    database::{sled::SledEventDatabase, EventDatabase},
     error::Error,
     event::{
         event_data::EventData,
@@ -26,8 +26,7 @@ use crate::{
             SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
         },
     },
-    prefix::IdentifierPrefix,
-    prefix::{BasicPrefix, SelfSigningPrefix},
+    prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     state::{EventSemantics, IdentifierState},
 };
 
@@ -57,14 +56,14 @@ pub enum MoreInfoError {
     UnknownIdentifier(IdentifierPrefix),
 }
 
-pub struct EventValidator {
-    event_storage: EventStorage,
+pub struct EventValidator<D: EventDatabase> {
+    event_storage: EventStorage<D>,
 }
 
-impl EventValidator {
-    pub fn new(db: Arc<SledEventDatabase>) -> Self {
+impl<D: EventDatabase> EventValidator<D> {
+    pub fn new(db: Arc<SledEventDatabase>, event_database: Arc<D>) -> Self {
         Self {
-            event_storage: EventStorage::new(db),
+            event_storage: EventStorage::new(db, event_database),
         }
     }
 
@@ -358,7 +357,7 @@ impl EventValidator {
     }
 }
 
-impl EventValidator {
+impl<D: EventDatabase> EventValidator<D> {
     #[cfg(feature = "query")]
     pub fn process_signed_ksn_reply(
         &self,
@@ -498,7 +497,7 @@ fn test_validate_seal() -> Result<(), Error> {
             event_digest: delegated_event_digest,
         };
 
-        let validator = EventValidator::new(db.clone());
+        let validator = EventValidator::new(db.clone(), db.clone());
         // Try to validate seal before processing delegating event
         assert!(matches!(
             validator.validate_seal(seal.clone(), &dip.event_message),

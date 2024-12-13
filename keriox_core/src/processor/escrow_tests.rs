@@ -10,7 +10,7 @@ use cesrox::{parse, parse_many, payload::parse_payload};
 use said::SelfAddressingIdentifier;
 
 use crate::{
-    database::{escrow::EscrowDb, sled::SledEventDatabase},
+    database::{escrow::EscrowDb, sled::SledEventDatabase, EventDatabase, QueryParameters},
     error::Error,
     event_message::{
         cesr_adapter::EventType,
@@ -39,7 +39,7 @@ fn test_process_transferable_receipt() -> Result<(), Error> {
 
     // let (not_bus, _ooo_escrow) = default_escrow_bus(db.clone(), escrow_db);
     let mut event_processor = BasicProcessor::new(Arc::clone(&db), None);
-    let event_storage = EventStorage::new(Arc::clone(&db));
+    let event_storage = EventStorage::new(Arc::clone(&db), Arc::clone(&db));
 
     // Register transferable receipts escrow, to save and reprocess out of order receipts events
     let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
@@ -107,14 +107,14 @@ fn test_process_transferable_receipt() -> Result<(), Error> {
     );
     assert_eq!(
         event_storage
-            .db
-            .get_receipts_t(&validator_id)
+            .events_db
+            .get_receipts_t(QueryParameters::All{ id: &validator_id})
             .unwrap()
             .count(),
         1
     );
 
-    let id_state = EventStorage::new(db.clone()).get_state(&controller_id);
+    let id_state = EventStorage::new(db.clone(), Arc::clone(&db)).get_state(&controller_id);
     // Controller's state shouldn't change after processing receipt.
     assert_eq!(controller_id_state, id_state);
 
@@ -131,7 +131,7 @@ pub fn test_not_fully_witnessed() -> Result<(), Error> {
     fs::create_dir_all(root.path()).unwrap();
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
     let mut event_processor = BasicProcessor::new(Arc::clone(&db), None);
-    let event_storage = EventStorage::new(Arc::clone(&db));
+    let event_storage = EventStorage::new(Arc::clone(&db), Arc::clone(&db));
 
     // Register not fully witnessed escrow, to save and reprocess events
     let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
@@ -221,7 +221,7 @@ pub fn test_not_fully_witnessed() -> Result<(), Error> {
         .unwrap();
     // check if receipt was accepted
     let mut esc = db
-        .get_receipts_nt(&id)
+        .get_receipts_nt(QueryParameters::All { id: &id})
         .unwrap()
         .filter(|rct| rct.body.receipted_event_digest.eq(&event_digest));
     let rct_from_db = esc.next().unwrap();
@@ -244,7 +244,7 @@ pub fn test_not_fully_witnessed() -> Result<(), Error> {
     assert!(esc.next().is_none());
 
     let mut esc = db
-        .get_receipts_nt(&id)
+        .get_receipts_nt(QueryParameters::All { id: &id})
         .unwrap()
         .filter(|rct| rct.body.receipted_event_digest.eq(&event_digest));
     let rct_from_db = esc.next().unwrap();
@@ -395,7 +395,7 @@ fn test_out_of_order() -> Result<(), Error> {
                 JustNotification::KeyEventAdded,
             ],
         )?;
-        (processor, EventStorage::new(witness_db.clone()), ooo_escrow)
+        (processor, EventStorage::new(witness_db.clone(), witness_db.clone()), ooo_escrow)
     };
     let id: IdentifierPrefix = "EO8cED9H5XPqBdoVatgBkEuSP8yXic7HtWpkex-9e0sL".parse()?;
 
@@ -523,7 +523,7 @@ fn test_escrow_missing_signatures() -> Result<(), Error> {
         std::fs::create_dir_all(path).unwrap();
         (
             BasicProcessor::new(witness_db.clone(), None),
-            EventStorage::new(witness_db.clone()),
+            EventStorage::new(witness_db.clone(), witness_db.clone()),
             ooo_escrow,
             ps_escrow,
         )
@@ -570,7 +570,7 @@ fn test_partially_sign_escrow() -> Result<(), Error> {
         ));
         processor.register_observer(ps_escrow.clone(), &[JustNotification::PartiallySigned])?;
 
-        (processor, EventStorage::new(witness_db.clone()), ps_escrow)
+        (processor, EventStorage::new(witness_db.clone(), witness_db.clone()), ps_escrow)
     };
 
     let parse_messagee = |raw_event| {
@@ -716,7 +716,7 @@ fn test_out_of_order_cleanup() -> Result<(), Error> {
         )?;
 
         std::fs::create_dir_all(path).unwrap();
-        (processor, EventStorage::new(witness_db.clone()), ooo_escrow)
+        (processor, EventStorage::new(witness_db.clone(), witness_db.clone()), ooo_escrow)
     };
     let id: IdentifierPrefix = "EO8cED9H5XPqBdoVatgBkEuSP8yXic7HtWpkex-9e0sL".parse()?;
 
@@ -793,7 +793,7 @@ fn test_partially_sign_escrow_cleanup() -> Result<(), Error> {
         ));
         processor.register_observer(ps_escrow.clone(), &[JustNotification::PartiallySigned])?;
 
-        (processor, EventStorage::new(witness_db.clone()), ps_escrow)
+        (processor, EventStorage::new(witness_db.clone(), witness_db.clone()), ps_escrow)
     };
 
     let parse_messagee = |raw_event| {
@@ -869,7 +869,7 @@ pub fn test_partially_witnessed_escrow_cleanup() -> Result<(), Error> {
     fs::create_dir_all(root.path()).unwrap();
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
     let mut event_processor = BasicProcessor::new(Arc::clone(&db), None);
-    let event_storage = EventStorage::new(Arc::clone(&db));
+    let event_storage = EventStorage::new(Arc::clone(&db), Arc::clone(&db));
     // Register not fully witnessed escrow, to save and reprocess events
     let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
     let escrow_db = Arc::new(EscrowDb::new(escrow_root.path())?);
@@ -953,7 +953,7 @@ pub fn test_nt_receipt_escrow_cleanup() -> Result<(), Error> {
     fs::create_dir_all(root.path()).unwrap();
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
     let mut event_processor = BasicProcessor::new(Arc::clone(&db), None);
-    let event_storage = EventStorage::new(Arc::clone(&db));
+    let event_storage = EventStorage::new(Arc::clone(&db), Arc::clone(&db));
 
     // Register not fully witnessed escrow, to save and reprocess events
     let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
@@ -1037,7 +1037,7 @@ pub fn test_escrow_receipt_with_wrong_signature() -> Result<(), Error> {
     fs::create_dir_all(root.path()).unwrap();
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
     let mut event_processor = BasicProcessor::new(Arc::clone(&db), None);
-    let event_storage = EventStorage::new(Arc::clone(&db));
+    let event_storage = EventStorage::new(Arc::clone(&db), Arc::clone(&db));
 
     // Register not fully witnessed escrow, to save and reprocess events
     let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
@@ -1130,7 +1130,7 @@ pub fn test_escrow_receipt_with_wrong_signature() -> Result<(), Error> {
     assert!(esc.next().is_none());
 
     // check if receipt was accepted
-    let esc = db.get_receipts_nt(&id);
+    let esc = db.get_receipts_nt(QueryParameters::All { id: &id});
     assert!(esc.is_none());
 
     let state = event_storage.get_state(&id);

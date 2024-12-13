@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use super::compute_state;
-use crate::event_message::signed_event_message::SignedEventMessage;
+use crate::{database::{EventDatabase, QueryParameters}, event_message::signed_event_message::SignedEventMessage};
 #[cfg(feature = "query")]
 use crate::query::{
     key_state_notice::KeyStateNotice, mailbox::QueryArgsMbx, reply_event::SignedReply,
@@ -10,7 +10,7 @@ use crate::{
     actor::prelude::Message,
     database::{
         timestamped::{Timestamped, TimestampedSignedEventMessage},
-        sled::SledEventDatabase,
+        sled::SledEventDatabase
     },
     error::Error,
     event::{
@@ -28,14 +28,15 @@ use said::SelfAddressingIdentifier;
 #[cfg(feature = "mailbox")]
 use crate::mailbox::MailboxResponse;
 
-pub struct EventStorage {
+pub struct EventStorage<D: EventDatabase> {
+    pub events_db: Arc<D>,
     pub db: Arc<SledEventDatabase>,
 }
 
 // Collection of methods for getting data from database.
-impl EventStorage {
-    pub fn new(db: Arc<SledEventDatabase>) -> Self {
-        Self { db }
+impl<D: EventDatabase> EventStorage<D> {
+    pub fn new(db: Arc<SledEventDatabase>, events_db: Arc<D>) -> Self {
+        Self { db, events_db }
     }
 
     pub fn get_state(&self, identifier: &IdentifierPrefix) -> Option<IdentifierState> {
@@ -62,7 +63,7 @@ impl EventStorage {
     ///
     /// Returns the current validated KEL for a given Prefix
     pub fn get_kel_messages(&self, id: &IdentifierPrefix) -> Result<Option<Vec<Notice>>, Error> {
-        match self.db.get_kel_finalized_events(id) {
+        match self.db.get_kel_finalized_events(QueryParameters::All { id }) {
             Some(events) => Ok(Some(
                 events
                     .map(|event| Notice::Event(event.signed_event_message))
@@ -77,7 +78,7 @@ impl EventStorage {
         id: &IdentifierPrefix,
         sn: Option<u64>,
     ) -> Result<Option<Vec<Notice>>, Error> {
-        let events = self.db.get_kel_finalized_events(id);
+        let events = self.db.get_kel_finalized_events(QueryParameters::All { id });
         Ok(match (events, sn) {
             (None, _) => None,
             (Some(events), None) => self.collect_with_receipts(events),
@@ -121,7 +122,7 @@ impl EventStorage {
         id: &IdentifierPrefix,
         sn: u64,
     ) -> Option<TimestampedSignedEventMessage> {
-        if let Some(mut events) = self.db.get_kel_finalized_events(id) {
+        if let Some(mut events) = self.db.get_kel_finalized_events(QueryParameters::All { id }) {
             events.find(|event| event.signed_event_message.event_message.data.get_sn() == sn)
         } else {
             None
@@ -212,7 +213,7 @@ impl EventStorage {
     pub fn get_last_establishment_event_seal(&self, id: &IdentifierPrefix) -> Option<EventSeal> {
         let mut state = IdentifierState::default();
         let mut last_est = None;
-        if let Some(events) = self.db.get_kel_finalized_events(id) {
+        if let Some(events) = self.db.get_kel_finalized_events(QueryParameters::All { id }) {
             for event in events {
                 state = state
                     .apply(&event.signed_event_message.event_message.data)
@@ -254,7 +255,7 @@ impl EventStorage {
         sn: u64,
     ) -> Result<Option<IdentifierState>, Error> {
         let mut state = IdentifierState::default();
-        if let Some(events) = self.db.get_kel_finalized_events(id) {
+        if let Some(events) = self.db.get_kel_finalized_events(QueryParameters::All { id }) {
             // TODO: testing approach if events come out sorted already (as they should coz of put sequence)
             let mut sorted_events = events.collect::<Vec<TimestampedSignedEventMessage>>();
             sorted_events.sort();
@@ -317,7 +318,7 @@ impl EventStorage {
         sn: u64,
         validator_pref: &IdentifierPrefix,
     ) -> Result<bool, Error> {
-        Ok(if let Some(receipts) = self.db.get_receipts_t(id) {
+        Ok(if let Some(receipts) = self.db.get_receipts_t(QueryParameters::All { id }) {
             receipts
                 .filter(|r| r.body.sn.eq(&sn))
                 .any(|receipt| receipt.validator_seal.prefix.eq(validator_pref))
@@ -328,11 +329,11 @@ impl EventStorage {
 
     pub fn get_nt_receipts(
         &self,
-        prefix: &IdentifierPrefix,
+        id: &IdentifierPrefix,
         sn: u64,
         digest: &SelfAddressingIdentifier,
     ) -> Result<Option<SignedNontransferableReceipt>, Error> {
-        match self.db.get_receipts_nt(prefix) {
+        match self.db.get_receipts_nt(QueryParameters::All { id }) {
             Some(events) => Ok(events
                 .filter(|rcp| rcp.body.sn == sn && &rcp.body.receipted_event_digest == digest)
                 .reduce(|acc, rct| {

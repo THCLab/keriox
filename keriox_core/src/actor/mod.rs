@@ -26,6 +26,7 @@ use crate::{
         ReplyType,
     },
 };
+use crate::database::EventDatabase; 
 #[cfg(feature = "mailbox")]
 use crate::{
     event_message::{signature::Signature, signed_event_message::SignedEventMessage},
@@ -91,7 +92,7 @@ pub fn process_reply<P: Processor>(
     sr: SignedReply,
     #[cfg(feature = "oobi")] oobi_manager: &OobiManager,
     processor: &P,
-    event_storage: &EventStorage,
+    event_storage: &EventStorage<P::Database>,
 ) -> Result<(), Error> {
     match sr.reply.get_route() {
         #[cfg(feature = "oobi")]
@@ -103,14 +104,14 @@ pub fn process_reply<P: Processor>(
 }
 
 #[cfg(feature = "oobi")]
-pub fn process_signed_oobi(
+pub fn process_signed_oobi<D: EventDatabase>(
     signed_oobi: &SignedReply,
     oobi_manager: &OobiManager,
-    event_storage: &EventStorage,
+    event_storage: &EventStorage<D>,
 ) -> Result<(), Error> {
     use crate::processor::validator::EventValidator;
 
-    let validator = EventValidator::new(event_storage.db.clone());
+    let validator = EventValidator::new(event_storage.db.clone(), event_storage.db.clone());
     // check signature
     validator.verify(&signed_oobi.reply.encode()?, &signed_oobi.signature)?;
     // check digest
@@ -124,7 +125,7 @@ pub fn process_signed_oobi(
 }
 
 #[cfg(feature = "mailbox")]
-pub fn process_signed_exn(exn: SignedExchange, storage: &EventStorage) -> Result<(), Error> {
+pub fn process_signed_exn<D: EventDatabase>(exn: SignedExchange, storage: &EventStorage<D>) -> Result<(), Error> {
     let exn_message = &exn.exchange_message;
     let verification_result =
         exn.signature
@@ -140,10 +141,10 @@ pub fn process_signed_exn(exn: SignedExchange, storage: &EventStorage) -> Result
 }
 
 #[cfg(feature = "mailbox")]
-fn process_exn(
+fn process_exn<D:EventDatabase>(
     exn: &ExchangeMessage,
     attachemnt: (MaterialPath, Vec<Signature>),
-    storage: &EventStorage,
+    storage: &EventStorage<D>,
 ) -> Result<(), Error> {
     let (receipient, to_forward, topic) = match &exn.data.data {
         Exchange::Fwd { args, to_forward } => (&args.recipient_id, to_forward, &args.topic),
@@ -182,9 +183,9 @@ fn process_exn(
 }
 
 #[cfg(feature = "query")]
-pub fn process_signed_query(
+pub fn process_signed_query<D: EventDatabase>(
     qr: SignedQueryMessage,
-    storage: &EventStorage,
+    storage: &EventStorage<D>,
 ) -> Result<ReplyType, SignedQueryError> {
     let verify = |data: &[u8], signature: Signature| -> Result<_, SignedQueryError> {
         let ver_result = signature.verify(&data, storage)?;
@@ -234,7 +235,7 @@ pub enum SignedQueryError {
 }
 
 #[cfg(feature = "query")]
-pub fn process_query(qr: &QueryRoute, storage: &EventStorage) -> Result<ReplyType, QueryError> {
+pub fn process_query<D:EventDatabase>(qr: &QueryRoute, storage: &EventStorage<D>) -> Result<ReplyType, QueryError> {
     match qr {
         QueryRoute::Ksn { args, .. } => {
             // return reply message with ksn inside
@@ -260,9 +261,9 @@ pub fn process_query(qr: &QueryRoute, storage: &EventStorage) -> Result<ReplyTyp
 }
 
 #[cfg(feature = "query")]
-pub fn process_mailbox_query(
+pub fn process_mailbox_query<D: EventDatabase>(
     qr: &MailboxRoute,
-    storage: &EventStorage,
+    storage: &EventStorage<D>,
 ) -> Result<ReplyType, QueryError> {
     match qr {
         MailboxRoute::Mbx { args, .. } => {

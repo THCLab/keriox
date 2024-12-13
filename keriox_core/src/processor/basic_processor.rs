@@ -8,14 +8,15 @@ use super::{
 #[cfg(feature = "query")]
 use crate::query::reply_event::SignedReply;
 use crate::{
-    database::sled::SledEventDatabase,
+    database::{sled::SledEventDatabase, EventDatabase},
     error::Error,
     event_message::signed_event_message::{Notice, SignedEventMessage},
 };
 
-pub struct BasicProcessor(EventProcessor);
+pub struct BasicProcessor(EventProcessor<<BasicProcessor as Processor>::Database>);
 
 impl Processor for BasicProcessor {
+    type Database = SledEventDatabase;
     fn register_observer(
         &mut self,
         observer: Arc<dyn Notifier + Send + Sync>,
@@ -39,17 +40,18 @@ impl Processor for BasicProcessor {
 
 impl BasicProcessor {
     pub fn new(db: Arc<SledEventDatabase>, notification_bus: Option<NotificationBus>) -> Self {
-        let processor = EventProcessor::new(db.clone(), notification_bus.unwrap_or_default());
+        let processor = EventProcessor::new(db.clone(), notification_bus.unwrap_or_default(), db.clone());
         Self(processor)
     }
 
-    fn basic_processing_strategy(
+    fn basic_processing_strategy<D: EventDatabase>(
+        events_db: Arc<D>,
         db: Arc<SledEventDatabase>,
         publisher: &NotificationBus,
         signed_event: SignedEventMessage,
     ) -> Result<(), Error> {
         let id = &signed_event.event_message.data.get_prefix();
-        let validator = EventValidator::new(db.clone());
+        let validator = EventValidator::new(db.clone(), events_db);
         match validator.validate_event(&signed_event) {
             Ok(_) => {
                 db.add_kel_finalized_event(signed_event.clone(), id)?;

@@ -27,7 +27,7 @@ fn test_incept() -> Result<(), Error> {
 
     let (processor, storage) = (
         BasicProcessor::new(db.clone(), None),
-        EventStorage::new(db.clone()),
+        EventStorage::new(db.clone(), db.clone()),
     );
 
     let inception_event = EventMsgBuilder::new(EventTypeTag::Icp)

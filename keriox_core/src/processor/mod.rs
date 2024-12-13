@@ -20,7 +20,7 @@ use self::{
 #[cfg(feature = "query")]
 use crate::query::reply_event::{ReplyRoute, SignedReply};
 use crate::{
-    database::{timestamped::TimestampedSignedEventMessage, sled::SledEventDatabase},
+    database::{sled::SledEventDatabase, timestamped::TimestampedSignedEventMessage, EventDatabase},
     error::Error,
     event::receipt::Receipt,
     event_message::signed_event_message::{
@@ -31,6 +31,7 @@ use crate::{
 };
 
 pub trait Processor {
+    type Database: EventDatabase;
     fn process_notice(&self, notice: &Notice) -> Result<(), Error>;
 
     #[cfg(feature = "query")]
@@ -63,16 +64,18 @@ pub trait Processor {
     }
 }
 
-pub struct EventProcessor {
+pub struct EventProcessor<D: EventDatabase> {
+    events_db: Arc<D>,
     db: Arc<SledEventDatabase>,
-    validator: EventValidator,
+    validator: EventValidator<D>,
     publisher: NotificationBus,
 }
 
-impl EventProcessor {
-    pub fn new(db: Arc<SledEventDatabase>, publisher: NotificationBus) -> Self {
-        let validator = EventValidator::new(db.clone());
+impl<D:EventDatabase> EventProcessor<D> {
+    pub fn new(db: Arc<SledEventDatabase>, publisher: NotificationBus, events_db: Arc<D>) -> Self {
+        let validator = EventValidator::new(db.clone(), events_db.clone());
         Self {
+            events_db,
             db,
             validator,
             publisher,
@@ -119,11 +122,11 @@ impl EventProcessor {
 
     pub fn process_notice<F>(&self, notice: &Notice, processing_strategy: F) -> Result<(), Error>
     where
-        F: Fn(Arc<SledEventDatabase>, &NotificationBus, SignedEventMessage) -> Result<(), Error>,
+        F: Fn(Arc<D>, Arc<SledEventDatabase>, &NotificationBus, SignedEventMessage) -> Result<(), Error>,
     {
         match notice {
             Notice::Event(signed_event) => {
-                processing_strategy(self.db.clone(), &self.publisher, signed_event.clone())?;
+                processing_strategy(self.events_db.clone(), self.db.clone(), &self.publisher, signed_event.clone())?;
                 // check if receipts are attached
                 if let Some(witness_receipts) = &signed_event.witness_receipts {
                     // Create and process witness receipts
@@ -176,7 +179,7 @@ impl EventProcessor {
 /// Returns the current State associated with
 /// the given Prefix
 pub fn compute_state(db: Arc<SledEventDatabase>, id: &IdentifierPrefix) -> Option<IdentifierState> {
-    if let Some(events) = db.get_kel_finalized_events(id) {
+    if let Some(events) = db.get_kel_finalized_events(crate::database::QueryParameters::All { id }) {
         // start with empty state
         let mut state = IdentifierState::default();
         // we sort here to get inception first

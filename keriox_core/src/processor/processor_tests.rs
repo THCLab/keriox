@@ -35,7 +35,7 @@ fn test_process() -> Result<(), Error> {
     let (not_bus, (ooo_escrow, ps_escrow, _pw_escrow, _)) =
         default_escrow_bus(db.clone(), escrow_db, EscrowConfig::default());
     let event_processor = BasicProcessor::new(Arc::clone(&db), Some(not_bus));
-    let event_storage = EventStorage::new(Arc::clone(&db));
+    let event_storage = EventStorage::new(Arc::clone(&db), Arc::clone(&db));
     // Events and sigs are from keripy `test_multisig_digprefix` test.
     // (keripy/tests/core/test_eventing.py#1138)
 
@@ -167,7 +167,7 @@ fn test_process_delegated() -> Result<(), Error> {
     let (not_bus, _ooo_escrow) = default_escrow_bus(db.clone(), escrow_db, EscrowConfig::default());
 
     let event_processor = BasicProcessor::new(Arc::clone(&db), Some(not_bus));
-    let event_storage = EventStorage::new(Arc::clone(&db));
+    let event_storage = EventStorage::new(Arc::clone(&db), Arc::clone(&db));
     // Events and sigs are from keripy `test_delegation` test.
     // (keripy/tests/core/test_delegating.py)
 
@@ -268,7 +268,7 @@ fn test_compute_state_at_sn() -> Result<(), Error> {
     let (not_bus, _ooo_escrow) = default_escrow_bus(db.clone(), escrow_db, EscrowConfig::default());
 
     let event_processor = BasicProcessor::new(Arc::clone(&db), Some(not_bus));
-    let event_storage = EventStorage::new(Arc::clone(&db));
+    let event_storage = EventStorage::new(Arc::clone(&db), Arc::clone(&db));
 
     let kerl_str = br#"{"v":"KERI10JSON000159_","t":"icp","d":"EFb-WY7Ie1WPEgsioZz1CyzwnuCg-C9k2QCNpcUfM5Jf","i":"EFb-WY7Ie1WPEgsioZz1CyzwnuCg-C9k2QCNpcUfM5Jf","s":"0","kt":"1","k":["DIwDbi2Sr1kLZFpsX0Od6Y8ariGVLLjZXxBC5bXEI85e"],"nt":"1","n":["ELhmgZ5JFc-ACs9TJxHMxtcKzQxKXLhlAmUT_sKf1-l7"],"bt":"0","b":["DM73ulUG2_DJyA27DfxBXT5SJ5U3A3c2oeG8Z4bUOgyL"],"c":[],"a":[]}-AABAAAPGpCUdR6EfVWROUjpuTsxg5BIcMnfi7PDciv8VuY9NqZ0ioRoaHxMZue_5ALys86sX4aQzKqm_bID3ZBwlMUP{"v":"KERI10JSON000160_","t":"rot","d":"EBHj01Xvz4yfCnScRh3QgeoE7ntSaVcQwRRQkBTHrHX5","i":"EFb-WY7Ie1WPEgsioZz1CyzwnuCg-C9k2QCNpcUfM5Jf","s":"1","p":"EFb-WY7Ie1WPEgsioZz1CyzwnuCg-C9k2QCNpcUfM5Jf","kt":"1","k":["DGbzWMG2eMghiXRfbbU_JfCB06R1WPE86nYD1XNFRpsL"],"nt":"1","n":["EJypM7yvZBRF-CXqJcCg5j7syRngnwy6TLdq8pSMP9ct"],"bt":"0","br":[],"ba":[],"a":[]}-AABAADbXBjlIg0SgXHzK7YMp1SasIDrRZ2zBG8Ulqee3GtsOBPXG-LFLpmNSa-5EARl3Jq6hn1wZmtagVX3u-U0qN8C{"v":"KERI10JSON000160_","t":"rot","d":"EJUn-ix3QWTa5dyCYaMnyUMLMrkHNXmJPlM6sPpZm8eo","i":"EFb-WY7Ie1WPEgsioZz1CyzwnuCg-C9k2QCNpcUfM5Jf","s":"2","p":"EBHj01Xvz4yfCnScRh3QgeoE7ntSaVcQwRRQkBTHrHX5","kt":"1","k":["DNMcalsTFQRW_gr-0uOo-0GYMSMqrDh-RBmQ9k_tfg5x"],"nt":"1","n":["EAk5C3kZzIWylApdvVdTPRmnGxw8AnhluGBtNVZ-MQlj"],"bt":"0","br":[],"ba":[],"a":[]}-AABAADb7X_2Am8I3G9U8_rMiEpjLVW1AqCJpE2Xn1_dy3grzF6BiGS6hkXlkdBE4tKg3panQkAGgGmWOFMa0wIe8cUN{"v":"KERI10JSON000160_","t":"rot","d":"EDYkjQ0T1CDBpqkSmZiuUEBgIhlwq4CNUXw9Z6pRWrRQ","i":"EFb-WY7Ie1WPEgsioZz1CyzwnuCg-C9k2QCNpcUfM5Jf","s":"3","p":"EJUn-ix3QWTa5dyCYaMnyUMLMrkHNXmJPlM6sPpZm8eo","kt":"1","k":["DGKuTfTIkfsaDGbI_c16ZQ1e_CyC2VCAi5sAgR4Kd-De"],"nt":"1","n":["EDFasM0kFMfgVRV2maR2xEnCT28yr9Cwbjb8AWudLfTB"],"bt":"0","br":[],"ba":[],"a":[]}-AABAAARXXCBpfCrmQ7WmD5WQYjgq--6vYULSMW6RRhXT-lWCe6pDtiP6VqGVO7CQHOF45BN1VfpUIZBjoQMOJxqXREE{"v":"KERI10JSON000160_","t":"rot","d":"EE7l2mmUQVgicVhBbfwHkmzVxeAzYhxDAe2vlZPjJ2Yg","i":"EFb-WY7Ie1WPEgsioZz1CyzwnuCg-C9k2QCNpcUfM5Jf","s":"4","p":"EDYkjQ0T1CDBpqkSmZiuUEBgIhlwq4CNUXw9Z6pRWrRQ","kt":"1","k":["DB-2T6cfJtJp6ZKcTaA31qTZRp8Jh9Xs0RpThQWh6-0X"],"nt":"1","n":["EC2AwY44hG7GbKKjpu39yg9sq_2h80184XPO-v7BBJw8"],"bt":"0","br":[],"ba":[],"a":[]}-AABAADm6yCLOiht10BodxeL8U4gCmZQMFZ6IjYgPaX8xBvNZFb-4Kdk3STrIOm7M2XWQ2V7xyu--VrhI4TExqqjvFcB"#;
     // Process kerl
@@ -396,7 +396,7 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
     let signed_rotation = rotation.sign(signatures, None, None);
 
     processor.process_notice(&Notice::Event(signed_rotation))?;
-    let state = EventStorage::new(db.clone()).get_state(&id_prefix);
+    let state = EventStorage::new(db.clone(), Arc::clone(&db)).get_state(&id_prefix);
     assert_eq!(state.unwrap().sn, 1);
 
     let current_signers = [&signers[6], &signers[7], &signers[8], &signers[9]];
@@ -445,7 +445,7 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
         Some(signed_rotation)
     );
 
-    let state = EventStorage::new(db.clone()).get_state(&id_prefix);
+    let state = EventStorage::new(db.clone(), Arc::clone(&db)).get_state(&id_prefix);
     assert_eq!(state.unwrap().sn, 1);
 
     // Provide the fourth signature - enough to satisfy prev threshold
@@ -460,7 +460,7 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
         None
     );
 
-    let state = EventStorage::new(db.clone()).get_state(&id_prefix);
+    let state = EventStorage::new(db.clone(), Arc::clone(&db)).get_state(&id_prefix);
     assert_eq!(state.unwrap().sn, 2);
 
     Ok(())
@@ -482,7 +482,7 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
             default_escrow_bus(db.clone(), escrow_db, EscrowConfig::default());
         (
             BasicProcessor::new(db.clone(), Some(not_bus)),
-            EventStorage::new(db.clone()),
+            EventStorage::new(db.clone(), Arc::clone(&db)),
         )
     };
     // setup keypairs
@@ -651,7 +651,7 @@ pub fn test_reserve_rotation() -> Result<(), Error> {
             default_escrow_bus(db.clone(), escrow_db, EscrowConfig::default());
         (
             BasicProcessor::new(db.clone(), Some(not_bus)),
-            EventStorage::new(db.clone()),
+            EventStorage::new(db.clone(), Arc::clone(&db)),
         )
     };
     // setup keypairs
@@ -835,7 +835,7 @@ pub fn test_custorial_rotation() -> Result<(), Error> {
             default_escrow_bus(db.clone(), escrow_db, EscrowConfig::default());
         (
             BasicProcessor::new(db.clone(), Some(not_bus)),
-            EventStorage::new(db.clone()),
+            EventStorage::new(db.clone(), Arc::clone(&db)),
         )
     };
     // setup keypairs

@@ -11,6 +11,7 @@ use crate::{
     database::{
         escrow::{Escrow, EscrowDb},
         sled::SledEventDatabase,
+        EventDatabase,
     },
     error::Error,
     event::{
@@ -189,7 +190,7 @@ impl OutOfOrderEscrow {
     ) -> Result<(), Error> {
         if let Some(esc) = self.escrowed_out_of_order.get(id) {
             for event in esc {
-                let validator = EventValidator::new(self.db.clone());
+                let validator = EventValidator::new(self.db.clone(), self.db.clone());
                 match validator.validate_event(&event) {
                     Ok(_) => {
                         // add to kel
@@ -289,7 +290,7 @@ impl PartiallySignedEscrow {
                 ..signed_event.to_owned()
             };
 
-            let validator = EventValidator::new(self.db.clone());
+            let validator = EventValidator::new(self.db.clone(), self.db.clone());
             match validator.validate_event(&new_event) {
                 Ok(_) => {
                     // add to kel
@@ -487,7 +488,7 @@ impl PartiallyWitnessedEscrow {
         receipted_event: &SignedEventMessage,
         additional_receipt: Option<SignedNontransferableReceipt>,
     ) -> Result<(), Error> {
-        let storage = EventStorage::new(self.db.clone());
+        let storage = EventStorage::new(self.db.clone(), self.db.clone());
         let id = receipted_event.event_message.data.get_prefix();
         let sn = receipted_event.event_message.data.get_sn();
         let digest = receipted_event.event_message.digest()?;
@@ -666,7 +667,7 @@ impl TransReceiptsEscrow {
     ) -> Result<(), Error> {
         if let Some(esc) = self.escrowed_trans_receipts.get(id) {
             for timestamped_receipt in esc {
-                let validator = EventValidator::new(self.db.clone());
+                let validator = EventValidator::new(self.db.clone(), self.db.clone());
                 match validator.validate_validator_receipt(&timestamped_receipt) {
                     Ok(_) => {
                         // add to receipts
@@ -723,7 +724,7 @@ impl ReplyEscrow {
 
         if let Some(esc) = self.0.get_all_escrowed_replys() {
             for sig_rep in esc {
-                let validator = EventValidator::new(self.0.clone());
+                let validator = EventValidator::new(self.0.clone(), self.0.clone());
                 let id = if let ReplyRoute::Ksn(_id, ksn) = sig_rep.reply.get_route() {
                     Ok(ksn.state.prefix)
                 } else {
@@ -819,7 +820,7 @@ impl Notifier for DelegationEscrow {
                     let delegators_id = match &signed_event.event_message.data.event_data {
                         EventData::Dip(dip) => Ok(dip.delegator.clone()),
                         EventData::Drt(_drt) => {
-                            let storage = EventStorage::new(self.db.clone());
+                            let storage = EventStorage::new(self.db.clone(), self.db.clone());
                             storage
                                 .get_state(&signed_event.event_message.data.get_prefix())
                                 .ok_or(Error::MissingDelegatingEventError)?
@@ -865,7 +866,7 @@ impl DelegationEscrow {
                     },
                     None => event.clone(),
                 };
-                let validator = EventValidator::new(self.db.clone());
+                let validator = EventValidator::new(self.db.clone(), self.db.clone());
                 match validator.validate_event(&delegated_event) {
                     Ok(_) => {
                         // add to kel

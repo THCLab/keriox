@@ -54,7 +54,7 @@ impl Notifier for WitnessReceiptGenerator {
                     self.respond_to_key_event(&event.event_message, self.signer.clone())?;
                 let prefix = &event.event_message.data.get_prefix(); //&non_trans_receipt.body.event.prefix.clone();
                 self.storage
-                    .db
+                    .events_db
                     .add_receipt_nt(non_trans_receipt.clone(), prefix)?;
                 bus.notify(&Notification::ReceiptAccepted)?;
                 self.storage.add_mailbox_receipt(non_trans_receipt)?;
@@ -62,14 +62,14 @@ impl Notifier for WitnessReceiptGenerator {
             }
             Notification::PartiallyWitnessed(prt) => {
                 self.storage
-                    .db
+                    .events_db
                     .add_kel_finalized_event(prt.clone(), &prt.event_message.data.get_prefix())?;
                 bus.notify(&Notification::KeyEventAdded(prt.clone()))?;
                 let non_trans_receipt =
                     self.respond_to_key_event(&prt.event_message, self.signer.clone())?;
                 let prefix = &non_trans_receipt.body.prefix.clone();
                 self.storage
-                    .db
+                    .events_db
                     .add_receipt_nt(non_trans_receipt.clone(), prefix)?;
                 bus.notify(&Notification::ReceiptAccepted)?;
                 self.storage.add_mailbox_receipt(non_trans_receipt)
@@ -81,7 +81,7 @@ impl Notifier for WitnessReceiptGenerator {
 
 impl WitnessReceiptGenerator {
     pub fn new(signer: Arc<Signer>, db: Arc<SledEventDatabase>) -> Self {
-        let storage = EventStorage::new(db);
+        let storage = EventStorage::new(db.clone(), db.clone());
         let prefix = BasicPrefix::Ed25519NT(signer.public_key());
         Self {
             prefix,
@@ -158,7 +158,7 @@ impl Witness {
         let db = Arc::new(SledEventDatabase::new(events_path.as_path())?);
         let escrow_db = Arc::new(EscrowDb::new(escrow_path.as_path())?);
         let mut witness_processor = WitnessProcessor::new(db.clone(), escrow_db, escrow_config);
-        let event_storage = Arc::new(EventStorage::new(db.clone()));
+        let event_storage = Arc::new(EventStorage::new(db.clone(), db.clone()));
 
         let receipt_generator = Arc::new(WitnessReceiptGenerator::new(signer.clone(), db));
         witness_processor.register_observer(
