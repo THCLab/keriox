@@ -5,7 +5,7 @@ const EVENTS: TableDefinition<&str, &[u8]> = TableDefinition::new("events");
 // Nontransferable receipts storage. (identifier, sn, witness identifier) -> signature couplet
 const RCTS: MultimapTableDefinition<&str, u64> = MultimapTableDefinition::new("rcts");
 /// Signatures storage. (event digest, signature index) -> serialized event
-const SIGS: MultimapTableDefinition<&str, &[u8]> = MultimapTableDefinition::new("sigs");
+const SIGS: MultimapTableDefinition<(&str, u64), &[u8]> = MultimapTableDefinition::new("sigs");
 
 use std::path::Path;
 
@@ -20,8 +20,6 @@ use crate::{
         signed_event_message::{
             Notice, SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
         },
-        timestamped::Timestamped,
-        TimestampedEventMessage,
     },
     prefix::{IdentifierPrefix, IndexedSignature},
 };
@@ -82,10 +80,11 @@ impl EventDatabase for RedbDatabase {
         id: &IdentifierPrefix,
     ) -> Result<(), RedbError> {
         let event = &signed_event.event_message;
-        let digest = &event.digest().map_err(|_e| RedbError::MissingDigest)?;
         self.insert_key_event(event)?;
+        let id = &event.data.prefix;
+        let sn = event.data.sn;
         for signature in &signed_event.signatures {
-            self.insert_indexed_signatures(digest, signature)?;
+            self.insert_indexed_signatures(&id, sn, signature)?;
         }
         self.save_to_kel(event)?;
         Ok(())
@@ -169,13 +168,17 @@ impl RedbDatabase {
 
     fn insert_indexed_signatures(
         &self,
-        digest: &SelfAddressingIdentifier,
+        identifier: &IdentifierPrefix,
+        sn: u64,
         signature: &IndexedSignature,
     ) -> Result<(), RedbError> {
         let write_txn = self.db.begin_write()?;
         {
             let mut table = write_txn.open_multimap_table(SIGS)?;
-            table.insert(digest.to_str().as_str(), signature.to_str().as_bytes())?;
+            table.insert(
+                (identifier.to_str().as_str(), sn),
+                signature.to_str().as_bytes(),
+            )?;
         }
         write_txn.commit()?;
         Ok(())
@@ -184,40 +187,27 @@ impl RedbDatabase {
     fn get_event_by_digest(
         &self,
         said: &SelfAddressingIdentifier,
-    ) -> Result<Option<SignedEventMessage>, RedbError> {
+    ) -> Result<Option<KeriEvent<KeyEvent>>, RedbError> {
         let read_txn = self.db.begin_read()?;
         let table = read_txn.open_table(EVENTS)?;
 
         if let Some(event) = table.get(said.to_str().as_str())? {
             let value: KeriEvent<KeyEvent> =
                 serde_json::from_slice(event.value()).map_err(|_| RedbError::WrongValue)?;
-
-            let table = read_txn.open_multimap_table(SIGS)?;
-            let signatures = table
-                .get(&said.to_str().as_str())?
-                .map(|el| {
-                    let sig: IndexedSignature = std::str::from_utf8(el.unwrap().value())
-                        .unwrap()
-                        .parse()
-                        .unwrap();
-                    sig
-                })
-                .collect();
-            let signed_event = SignedEventMessage::new(&value, signatures, None, None);
-            Ok(Some(signed_event))
+            Ok(Some(value))
         } else {
             Ok(None)
         }
     }
 
-    fn get_signatures_by_digest(
+    fn get_signatures(
         &self,
-        said: &SelfAddressingIdentifier,
+        key: (&str, u64),
     ) -> Result<Option<impl Iterator<Item = IndexedSignature>>, RedbError> {
         let read_txn = self.db.begin_read()?;
 
         let table = read_txn.open_multimap_table(SIGS)?;
-        let signatures = table.get(&said.to_str().as_str())?.map(|sig| match sig {
+        let signatures = table.get(key)?.map(|sig| match sig {
             Ok(sig) => std::str::from_utf8(sig.value())
                 .unwrap()
                 .parse::<IndexedSignature>()
@@ -233,25 +223,31 @@ impl RedbDatabase {
         from: u64,
         limit: u64,
     ) -> Vec<timestamped::Timestamped<SignedEventMessage>> {
-        let read_txn = self.db.begin_read().unwrap();
-
-        let table = read_txn.open_table(KELS).unwrap();
-        let e = table
-            .range((id.to_str().as_str(), from)..(id.to_str().as_str(), from + limit))
-            .unwrap();
-
-        e.map(|entry| {
-            let (_key, value) = entry.unwrap();
-            let value = value.value();
-            let said = &std::str::from_utf8(&value)
-                .map_err(|_e| RedbError::WrongValue)
+        let digests = {
+            let read_txn = self.db.begin_read().unwrap();
+            let table = read_txn.open_table(KELS).unwrap();
+            table
+                .range((id.to_str().as_str(), from)..(id.to_str().as_str(), from + limit))
                 .unwrap()
-                .parse()
-                .map_err(|_e| RedbError::WrongValue)
-                .unwrap();
-            TimestampedSignedEventMessage::new(self.get_event_by_digest(said).unwrap().unwrap())
-        })
-        .collect()
+        };
+
+        digests
+            .map(|entry| {
+                let (key, value) = entry.unwrap();
+                let signatures = self.get_signatures(key.value()).unwrap().unwrap().collect();
+
+                let said = &std::str::from_utf8(&value.value())
+                    .map_err(|_e| RedbError::WrongValue)
+                    .unwrap()
+                    .parse()
+                    .map_err(|_e| RedbError::WrongValue)
+                    .unwrap();
+                let event = self.get_event_by_digest(said).unwrap().unwrap();
+                TimestampedSignedEventMessage::new(SignedEventMessage::new(
+                    &event, signatures, None, None,
+                ))
+            })
+            .collect()
     }
 
     pub fn insert_message(&self, event: &Message) -> Result<(), RedbError> {
@@ -259,9 +255,10 @@ impl RedbDatabase {
             Message::Notice(Notice::Event(signed_event_message)) => {
                 let event = &signed_event_message.event_message;
                 let signatures = &signed_event_message.signatures;
-                let digest = &event.digest().map_err(|_e| RedbError::MissingDigest)?;
+                let id = &event.data.prefix;
+                let sn = event.data.sn;
                 for signature in signatures {
-                    self.insert_indexed_signatures(digest, signature)?;
+                    self.insert_indexed_signatures(id, sn, signature)?;
                 }
                 self.insert_key_event(event)?;
                 self.save_to_kel(event)?;
@@ -278,9 +275,7 @@ impl RedbDatabase {
 fn test_retrieve_kel() {
     use crate::actor::parse_event_stream;
     use tempfile::NamedTempFile;
-
     // Create test db path.
-    // let root = Builder::new().prefix("test-db").tempdir().unwrap();
     let file_path = NamedTempFile::new().unwrap();
 
     // Open a sled database
@@ -292,6 +287,9 @@ fn test_retrieve_kel() {
     let second_icp_raw = br#"{"v":"KERI10JSON000159_","t":"icp","d":"EFb-WY7Ie1WPEgsioZz1CyzwnuCg-C9k2QCNpcUfM5Jf","i":"EFb-WY7Ie1WPEgsioZz1CyzwnuCg-C9k2QCNpcUfM5Jf","s":"0","kt":"1","k":["DIwDbi2Sr1kLZFpsX0Od6Y8ariGVLLjZXxBC5bXEI85e"],"nt":"1","n":["ELhmgZ5JFc-ACs9TJxHMxtcKzQxKXLhlAmUT_sKf1-l7"],"bt":"0","b":["DM73ulUG2_DJyA27DfxBXT5SJ5U3A3c2oeG8Z4bUOgyL"],"c":[],"a":[]}-AABAAAPGpCUdR6EfVWROUjpuTsxg5BIcMnfi7PDciv8VuY9NqZ0ioRoaHxMZue_5ALys86sX4aQzKqm_bID3ZBwlMUP"#;
 
     let first_id: IdentifierPrefix = "EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen"
+        .parse()
+        .unwrap();
+    let second_id: IdentifierPrefix = "EFb-WY7Ie1WPEgsioZz1CyzwnuCg-C9k2QCNpcUfM5Jf"
         .parse()
         .unwrap();
 
@@ -306,16 +304,14 @@ fn test_retrieve_kel() {
         .parse()
         .unwrap();
     let events = db.get_event_by_digest(&ev_digest).unwrap().unwrap();
-    assert_eq!(events.encode().unwrap(), icp_raw);
+    let expected_event = &icp_raw[..487]; // icp event without signatures
+    assert_eq!(events.encode().unwrap(), expected_event);
 
-    let sigs_from_db = db.get_signatures_by_digest(&ev_digest).unwrap().unwrap();
+    let sigs_from_db = db.get_signatures((&first_id.to_str(), 0)).unwrap().unwrap();
     assert_eq!(sigs_from_db.count(), 3);
 
-    let second_ev_digest: SelfAddressingIdentifier = "EFb-WY7Ie1WPEgsioZz1CyzwnuCg-C9k2QCNpcUfM5Jf"
-        .parse()
-        .unwrap();
     let sigs_from_db = db
-        .get_signatures_by_digest(&second_ev_digest)
+        .get_signatures((&second_id.to_str(), 0))
         .unwrap()
         .unwrap();
     assert_eq!(sigs_from_db.count(), 1);
