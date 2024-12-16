@@ -29,6 +29,7 @@ use crate::{
 use super::timestamped::TimestampedSignedEventMessage;
 
 impl EventDatabase for SledEventDatabase {
+    type Error = DbError;
     fn add_kel_finalized_event(
         &self,
         event: SignedEventMessage,

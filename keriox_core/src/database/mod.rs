@@ -12,6 +12,7 @@ use crate::{
 pub mod escrow;
 #[cfg(feature = "mailbox")]
 pub mod mailbox;
+mod redb;
 pub mod sled;
 pub(crate) mod tables;
 pub(crate) mod timestamped;
@@ -35,23 +36,24 @@ pub enum QueryParameters<'a> {
 }
 
 pub trait EventDatabase {
+    type Error;
     fn add_kel_finalized_event(
         &self,
         event: SignedEventMessage,
         id: &IdentifierPrefix,
-    ) -> Result<(), DbError>;
+    ) -> Result<(), Self::Error>;
 
     fn add_receipt_t(
         &self,
         receipt: SignedTransferableReceipt,
         id: &IdentifierPrefix,
-    ) -> Result<(), DbError>;
+    ) -> Result<(), Self::Error>;
 
     fn add_receipt_nt(
         &self,
         receipt: SignedNontransferableReceipt,
         id: &IdentifierPrefix,
-    ) -> Result<(), DbError>;
+    ) -> Result<(), Self::Error>;
 
     fn get_kel_finalized_events(
         &self,
