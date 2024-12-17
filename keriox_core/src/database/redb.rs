@@ -2,14 +2,19 @@
 const KELS: TableDefinition<(&str, u64), &[u8]> = TableDefinition::new("kels");
 /// Events store. (event digest) -> serialized event
 const EVENTS: TableDefinition<&str, &[u8]> = TableDefinition::new("events");
-// Nontransferable receipts storage. (identifier, sn, witness identifier) -> signature couplet
-const RCTS: MultimapTableDefinition<&str, u64> = MultimapTableDefinition::new("rcts");
-/// Signatures storage. (event digest, signature index) -> serialized event
-const SIGS: MultimapTableDefinition<(&str, u64), &[u8]> = MultimapTableDefinition::new("sigs");
+/// Nontransferable receipts storage. (identifier, sn, witness identifier) -> signature couplet
+const NONTRANS_RCTS: MultimapTableDefinition<(&str, u64), &[u8]> =
+    MultimapTableDefinition::new("nontrans_receipts");
+/// Nontransferable receipts storage. (identifier, sn, witness identifier) -> signature couplet
+const TRANS_RCTS: MultimapTableDefinition<(&str, u64), &[u8]> =
+    MultimapTableDefinition::new("trans_receipts");
+/// Signatures storage. ((identifier, sn), signature index) -> serialized event
+const SIGS: MultimapTableDefinition<(&str, u64), &[u8]> =
+    MultimapTableDefinition::new("signatures");
 
 use std::path::Path;
 
-use redb::{Database, MultimapTableDefinition, TableDefinition};
+use redb::{Database, MultimapTableDefinition, ReadableMultimapTable, TableDefinition};
 use said::SelfAddressingIdentifier;
 
 use crate::{
@@ -17,6 +22,7 @@ use crate::{
     event::KeyEvent,
     event_message::{
         msg::KeriEvent,
+        signature::Nontransferable,
         signed_event_message::{
             Notice, SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
         },
@@ -86,6 +92,9 @@ impl EventDatabase for RedbDatabase {
         for signature in &signed_event.signatures {
             self.insert_indexed_signatures(&id, sn, signature)?;
         }
+        if let Some(wits) = signed_event.witness_receipts {
+            self.save_nontrans_recepit(&id.to_str(), sn, &wits)?;
+        };
         self.save_to_kel(event)?;
         Ok(())
     }
@@ -95,7 +104,11 @@ impl EventDatabase for RedbDatabase {
         receipt: SignedTransferableReceipt,
         id: &IdentifierPrefix,
     ) -> Result<(), RedbError> {
-        todo!()
+        let sn = receipt.body.sn;
+        let id = receipt.body.prefix;
+        let receipts = receipt.signatures;
+        // self.save_to_nontrans_recepit(id, sn, nontrans)
+        todo!();
     }
 
     fn add_receipt_nt(
@@ -103,7 +116,10 @@ impl EventDatabase for RedbDatabase {
         receipt: SignedNontransferableReceipt,
         id: &IdentifierPrefix,
     ) -> Result<(), RedbError> {
-        todo!()
+        let sn = receipt.body.sn;
+        let id = receipt.body.prefix;
+        let receipts = receipt.signatures;
+        self.save_nontrans_recepit(&id.to_str(), sn, &receipts)
     }
 
     fn get_kel_finalized_events(
@@ -164,6 +180,40 @@ impl RedbDatabase {
         write_txn.commit()?;
 
         Ok(())
+    }
+
+    fn save_nontrans_recepit(
+        &self,
+        id: &str,
+        sn: u64,
+        nontrans: &[Nontransferable],
+    ) -> Result<(), RedbError> {
+        let write_txn = self.db.begin_write()?;
+        {
+            let mut table = write_txn.open_multimap_table(NONTRANS_RCTS)?;
+
+            for sig in nontrans {
+                let sig = serde_json::to_vec(sig).unwrap();
+                table.insert((id, sn), sig.as_slice())?;
+            }
+        }
+        write_txn.commit()?;
+
+        Ok(())
+    }
+
+    fn get_nontrans_recepits(&self, id: &str, sn: u64) -> Result<Vec<Nontransferable>, RedbError> {
+        let value = {
+            let read_txn = self.db.begin_read()?;
+            let table = read_txn.open_multimap_table(NONTRANS_RCTS)?;
+            table.get((id, sn))
+        }?
+        .map(|sig| match sig {
+            Ok(sig) => serde_json::from_slice(sig.value()).unwrap(),
+            Err(_) => todo!(),
+        });
+
+        Ok(value.collect())
     }
 
     fn insert_indexed_signatures(
@@ -278,7 +328,6 @@ fn test_retrieve_kel() {
     // Create test db path.
     let file_path = NamedTempFile::new().unwrap();
 
-    // Open a sled database
     let db = RedbDatabase::new(file_path.path()).unwrap();
 
     let icp_raw: &[u8] = br#"{"v":"KERI10JSON0001e7_","t":"icp","d":"EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen","i":"EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen","s":"0","kt":"2","k":["DErocgXD2RGSyvn3MObcx59jeOsEQhv2TqHirVkzrp0Q","DFXLiTjiRdSBPLL6hLa0rskIxk3dh4XwJLfctkJFLRSS","DE9YgIQVgpLwocTVrG8tidKScsQSMWwLWywNC48fhq4f"],"nt":"2","n":["EDJk5EEpC4-tQ7YDwBiKbpaZahh1QCyQOnZRF7p2i8k8","EAXfDjKvUFRj-IEB_o4y-Y_qeJAjYfZtOMD9e7vHNFss","EN8l6yJC2PxribTN0xfri6bLz34Qvj-x3cNwcV3DvT2m"],"bt":"0","b":[],"c":[],"a":[]}-AADAAD4SyJSYlsQG22MGXzRGz2PTMqpkgOyUfq7cS99sC2BCWwdVmEMKiTEeWe5kv-l_d9auxdadQuArLtAGEArW8wEABD0z_vQmFImZXfdR-0lclcpZFfkJJJNXDcUNrf7a-mGsxNLprJo-LROwDkH5m7tVrb-a1jcor2dHD9Jez-r4bQIACBFeU05ywfZycLdR0FxCvAR9BfV9im8tWe1DglezqJLf-vHRQSChY1KafbYNc96hYYpbuN90WzuCRMgV8KgRsEC"#;
@@ -323,4 +372,35 @@ fn test_retrieve_kel() {
         .map(|ev| ev.signed_event_message.encode().unwrap())
         .collect::<Vec<_>>();
     assert_eq!(part_of_kel_events, vec![rot_raw, ixn_raw]);
+}
+
+#[test]
+fn test_retrieve_receipts() {
+    use crate::actor::parse_event_stream;
+    use tempfile::NamedTempFile;
+    // Create test db path.
+    let file_path = NamedTempFile::new().unwrap();
+
+    let db = RedbDatabase::new(file_path.path()).unwrap();
+
+    let receipt0_0 = br#"{"v":"KERI10JSON000091_","t":"rct","d":"EJufgwH347N2kobmes1IQw_1pfMipEFFy0RwinZTtah9","i":"EJufgwH347N2kobmes1IQw_1pfMipEFFy0RwinZTtah9","s":"0"}-CABBN_PYSns7oFNixSohVW4raBwMV6iYeh0PEZ_bR-38Xev0BDbyebqZQKwn7TqU92Vtw8n2wy5FptP42F1HEmCc9nQLzbXrXuA9SMl9nCZ-vi2bdaeT3aqInXGFAW70QPzM4kJ"#;
+    let receipt0_1 = br#"{"v":"KERI10JSON000091_","t":"rct","d":"EJufgwH347N2kobmes1IQw_1pfMipEFFy0RwinZTtah9","i":"EJufgwH347N2kobmes1IQw_1pfMipEFFy0RwinZTtah9","s":"0"}-CABBHndk6cXPCnghFqKt_0SikY1P9z_nIUrHq_SeHgLQCui0BBqAOBXFKVivgf0jh2ySWX1VshnkUYK3ev_L--sPB_onF7w2WhiK2AB7mf4IIuaSQCLumsr2sV77S6U5VMx0CAD"#;
+
+    let first_id: IdentifierPrefix = "EJufgwH347N2kobmes1IQw_1pfMipEFFy0RwinZTtah9"
+        .parse()
+        .unwrap();
+
+    for event in [receipt0_0, receipt0_1] {
+        let evs = parse_event_stream(event).unwrap();
+        let ev = evs.first().unwrap();
+        match ev {
+            Message::Notice(Notice::NontransferableRct(rct)) => {
+                db.add_receipt_nt(rct.clone(), &first_id).unwrap();
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    let retrived_rcts = db.get_nontrans_recepits(&first_id.to_str(), 0).unwrap();
+    assert_eq!(retrived_rcts.len(), 2);
 }
