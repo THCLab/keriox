@@ -14,15 +14,16 @@ const SIGS: MultimapTableDefinition<(&str, u64), &[u8]> =
 
 use std::path::Path;
 
-use redb::{Database, MultimapTableDefinition, ReadableMultimapTable, TableDefinition};
+use redb::{Database, MultimapTableDefinition, TableDefinition};
 use said::SelfAddressingIdentifier;
+use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
     actor::prelude::Message,
     event::KeyEvent,
     event_message::{
         msg::KeriEvent,
-        signature::Nontransferable,
+        signature::{Nontransferable, Transferable},
         signed_event_message::{
             Notice, SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
         },
@@ -89,11 +90,10 @@ impl EventDatabase for RedbDatabase {
         self.insert_key_event(event)?;
         let id = &event.data.prefix;
         let sn = event.data.sn;
-        for signature in &signed_event.signatures {
-            self.insert_indexed_signatures(&id, sn, signature)?;
-        }
+        
+        self.insert_indexed_signatures(&id, sn, &signed_event.signatures)?;
         if let Some(wits) = signed_event.witness_receipts {
-            self.save_nontrans_recepit(&id.to_str(), sn, &wits)?;
+            self.insert_nontrans_recepit(&id.to_str(), sn, &wits)?;
         };
         self.save_to_kel(event)?;
         Ok(())
@@ -106,9 +106,8 @@ impl EventDatabase for RedbDatabase {
     ) -> Result<(), RedbError> {
         let sn = receipt.body.sn;
         let id = receipt.body.prefix;
-        let receipts = receipt.signatures;
-        // self.save_to_nontrans_recepit(id, sn, nontrans)
-        todo!();
+        let transferable = Transferable::Seal(receipt.validator_seal, receipt.signatures);
+        self.insert_trans_recepit(&id.to_str(), sn, &[transferable])
     }
 
     fn add_receipt_nt(
@@ -119,7 +118,7 @@ impl EventDatabase for RedbDatabase {
         let sn = receipt.body.sn;
         let id = receipt.body.prefix;
         let receipts = receipt.signatures;
-        self.save_nontrans_recepit(&id.to_str(), sn, &receipts)
+        self.insert_nontrans_recepit(&id.to_str(), sn, &receipts)
     }
 
     fn get_kel_finalized_events(
@@ -141,6 +140,15 @@ impl EventDatabase for RedbDatabase {
         &self,
         params: super::QueryParameters,
     ) -> Option<impl DoubleEndedIterator<Item = SignedTransferableReceipt>> {
+        // match params {
+        //     QueryParameters::BySn { id, sn } => {
+        //         let trans = self.get_trans_recepits(&id.to_string(), sn).unwrap();
+        //         let receipt = Receipt::new(said::sad::SerializationFormats::JSON, receipted_event_digest, id, sn);
+        //     },
+        //     QueryParameters::ByDigest { digest } => todo!(),
+        //     QueryParameters::Range { id, start, limit } => todo!(),
+        //     QueryParameters::All { id } => todo!(),
+        // }
         Some(vec![].into_iter())
     }
 
@@ -182,57 +190,77 @@ impl RedbDatabase {
         Ok(())
     }
 
-    fn save_nontrans_recepit(
-        &self,
-        id: &str,
-        sn: u64,
-        nontrans: &[Nontransferable],
-    ) -> Result<(), RedbError> {
+    fn insert_with_sn_key<V: Serialize>(&self, table: MultimapTableDefinition<(&str, u64), &[u8]>, id: &str, sn: u64, values: &[V]) -> Result<(), RedbError> {
         let write_txn = self.db.begin_write()?;
         {
-            let mut table = write_txn.open_multimap_table(NONTRANS_RCTS)?;
+            let mut table = write_txn.open_multimap_table(table)?;
 
-            for sig in nontrans {
-                let sig = serde_json::to_vec(sig).unwrap();
+            for value in values {
+                let sig = serde_json::to_vec(value).unwrap();
                 table.insert((id, sn), sig.as_slice())?;
             }
         }
         write_txn.commit()?;
 
         Ok(())
+
+    }
+    
+    fn insert_nontrans_recepit(
+        &self,
+        id: &str,
+        sn: u64,
+        nontrans: &[Nontransferable],
+    ) -> Result<(), RedbError> {
+        self.insert_with_sn_key(NONTRANS_RCTS, id, sn, nontrans)
     }
 
-    fn get_nontrans_recepits(&self, id: &str, sn: u64) -> Result<Vec<Nontransferable>, RedbError> {
-        let value = {
-            let read_txn = self.db.begin_read()?;
-            let table = read_txn.open_multimap_table(NONTRANS_RCTS)?;
-            table.get((id, sn))
-        }?
-        .map(|sig| match sig {
-            Ok(sig) => serde_json::from_slice(sig.value()).unwrap(),
-            Err(_) => todo!(),
-        });
-
-        Ok(value.collect())
+    fn insert_trans_recepit(
+        &self,
+        id: &str,
+        sn: u64,
+        trans: &[Transferable],
+    ) -> Result<(), RedbError> {
+        self.insert_with_sn_key(TRANS_RCTS, id, sn, trans)
     }
 
     fn insert_indexed_signatures(
         &self,
         identifier: &IdentifierPrefix,
         sn: u64,
-        signature: &IndexedSignature,
+        signatures: &[IndexedSignature],
     ) -> Result<(), RedbError> {
-        let write_txn = self.db.begin_write()?;
-        {
-            let mut table = write_txn.open_multimap_table(SIGS)?;
-            table.insert(
-                (identifier.to_str().as_str(), sn),
-                signature.to_str().as_bytes(),
-            )?;
-        }
-        write_txn.commit()?;
-        Ok(())
+        self.insert_with_sn_key(SIGS, &identifier.to_str(), sn, signatures)
     }
+
+    
+    fn get_by_sn_key<'de, V: DeserializeOwned>(&self, table: MultimapTableDefinition<(&str, u64), &[u8]>, id: &str, sn: u64) -> Result<impl Iterator<Item = V>, RedbError> {
+        let from_db_iterator = {
+            let read_txn = self.db.begin_read()?;
+            let table = read_txn.open_multimap_table(table)?;
+            table.get((id, sn))
+        }?;
+        Ok(from_db_iterator.map(|sig| match sig {
+            Ok(sig) => {
+                let value = sig.value();
+                serde_json::from_slice(value).unwrap()
+            },
+            Err(_) => todo!(),
+        }))
+
+    }
+
+    fn get_nontrans_recepits(&self, id: &str, sn: u64) -> Result<impl Iterator<Item = Nontransferable>, RedbError> {
+        self.get_by_sn_key::<Nontransferable>(NONTRANS_RCTS, id, sn)
+    }
+
+    fn get_trans_recepits(&self, id: &str, sn: u64) -> Result<impl Iterator<Item = Transferable>, RedbError> {
+        self.get_by_sn_key::<Transferable>(TRANS_RCTS, id, sn)
+    }
+
+    
+
+
 
     fn get_event_by_digest(
         &self,
@@ -254,17 +282,7 @@ impl RedbDatabase {
         &self,
         key: (&str, u64),
     ) -> Result<Option<impl Iterator<Item = IndexedSignature>>, RedbError> {
-        let read_txn = self.db.begin_read()?;
-
-        let table = read_txn.open_multimap_table(SIGS)?;
-        let signatures = table.get(key)?.map(|sig| match sig {
-            Ok(sig) => std::str::from_utf8(sig.value())
-                .unwrap()
-                .parse::<IndexedSignature>()
-                .unwrap(),
-            Err(_) => todo!(),
-        });
-        Ok(Some(signatures))
+        Ok(Some(self.get_by_sn_key(SIGS, key.0, key.1)?))
     }
 
     pub fn get_kel<'a>(
@@ -307,9 +325,7 @@ impl RedbDatabase {
                 let signatures = &signed_event_message.signatures;
                 let id = &event.data.prefix;
                 let sn = event.data.sn;
-                for signature in signatures {
-                    self.insert_indexed_signatures(id, sn, signature)?;
-                }
+                self.insert_indexed_signatures(id, sn, signatures)?;
                 self.insert_key_event(event)?;
                 self.save_to_kel(event)?;
             }
@@ -402,5 +418,5 @@ fn test_retrieve_receipts() {
     }
 
     let retrived_rcts = db.get_nontrans_recepits(&first_id.to_str(), 0).unwrap();
-    assert_eq!(retrived_rcts.len(), 2);
+    assert_eq!(retrived_rcts.count(), 2);
 }
