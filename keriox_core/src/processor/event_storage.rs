@@ -14,9 +14,13 @@ use crate::{
     error::Error,
     event::{
         event_data::EventData,
+        receipt::Receipt,
         sections::{seal::EventSeal, KeyConfig},
     },
-    event_message::signed_event_message::{Notice, SignedNontransferableReceipt},
+    event_message::{
+        signature::Transferable,
+        signed_event_message::{Notice, SignedNontransferableReceipt},
+    },
     prefix::{BasicPrefix, IdentifierPrefix},
     state::{EventSemantics, IdentifierState},
 };
@@ -24,7 +28,6 @@ use crate::{
     database::{EventDatabase, QueryParameters},
     event_message::signed_event_message::SignedEventMessage,
 };
-#[cfg(feature = "query")]
 use said::version::format::SerializationFormats;
 use said::SelfAddressingIdentifier;
 
@@ -336,10 +339,13 @@ impl<D: EventDatabase> EventStorage<D> {
         validator_pref: &IdentifierPrefix,
     ) -> Result<bool, Error> {
         Ok(
-            if let Some(receipts) = self.db.get_receipts_t(QueryParameters::All { id }) {
-                receipts
-                    .filter(|r| r.body.sn.eq(&sn))
-                    .any(|receipt| receipt.validator_seal.prefix.eq(validator_pref))
+            if let Some(mut receipts) = self.db.get_receipts_t(QueryParameters::BySn {
+                id: id.clone(),
+                sn: sn,
+            }) {
+                receipts.any(|receipt| match receipt {
+                    Transferable::Seal(event_seal, _vec) => event_seal.prefix.eq(validator_pref),
+                })
             } else {
                 false
             },
@@ -352,17 +358,18 @@ impl<D: EventDatabase> EventStorage<D> {
         sn: u64,
         digest: &SelfAddressingIdentifier,
     ) -> Result<Option<SignedNontransferableReceipt>, Error> {
-        match self.db.get_receipts_nt(QueryParameters::All { id }) {
-            Some(events) => Ok(events
-                .filter(|rcp| rcp.body.sn == sn && &rcp.body.receipted_event_digest == digest)
-                .reduce(|acc, rct| {
-                    let mut new_signatures = acc.signatures;
-                    new_signatures.append(&mut rct.signatures.clone());
-                    SignedNontransferableReceipt {
-                        signatures: new_signatures,
-                        ..acc
-                    }
-                })),
+        match self
+            .db
+            .get_receipts_nt(QueryParameters::BySn { id: id.clone(), sn })
+        {
+            Some(events) => {
+                let sigs = events.collect::<Vec<_>>();
+                let body = Receipt::new(SerializationFormats::JSON, digest.clone(), id.clone(), sn);
+                Ok(Some(SignedNontransferableReceipt {
+                    body,
+                    signatures: sigs,
+                }))
+            }
             None => Ok(None),
         }
     }

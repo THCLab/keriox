@@ -90,7 +90,7 @@ impl EventDatabase for RedbDatabase {
         self.insert_key_event(event)?;
         let id = &event.data.prefix;
         let sn = event.data.sn;
-        
+
         self.insert_indexed_signatures(&id, sn, &signed_event.signatures)?;
         if let Some(wits) = signed_event.witness_receipts {
             self.insert_nontrans_recepit(&id.to_str(), sn, &wits)?;
@@ -139,7 +139,7 @@ impl EventDatabase for RedbDatabase {
     fn get_receipts_t(
         &self,
         params: super::QueryParameters,
-    ) -> Option<impl DoubleEndedIterator<Item = SignedTransferableReceipt>> {
+    ) -> Option<impl DoubleEndedIterator<Item = Transferable>> {
         // match params {
         //     QueryParameters::BySn { id, sn } => {
         //         let trans = self.get_trans_recepits(&id.to_string(), sn).unwrap();
@@ -155,7 +155,7 @@ impl EventDatabase for RedbDatabase {
     fn get_receipts_nt(
         &self,
         params: super::QueryParameters,
-    ) -> Option<impl DoubleEndedIterator<Item = SignedNontransferableReceipt>> {
+    ) -> Option<impl DoubleEndedIterator<Item = Nontransferable>> {
         Some(vec![].into_iter())
     }
 }
@@ -190,7 +190,13 @@ impl RedbDatabase {
         Ok(())
     }
 
-    fn insert_with_sn_key<V: Serialize>(&self, table: MultimapTableDefinition<(&str, u64), &[u8]>, id: &str, sn: u64, values: &[V]) -> Result<(), RedbError> {
+    fn insert_with_sn_key<V: Serialize>(
+        &self,
+        table: MultimapTableDefinition<(&str, u64), &[u8]>,
+        id: &str,
+        sn: u64,
+        values: &[V],
+    ) -> Result<(), RedbError> {
         let write_txn = self.db.begin_write()?;
         {
             let mut table = write_txn.open_multimap_table(table)?;
@@ -203,9 +209,8 @@ impl RedbDatabase {
         write_txn.commit()?;
 
         Ok(())
-
     }
-    
+
     fn insert_nontrans_recepit(
         &self,
         id: &str,
@@ -233,8 +238,12 @@ impl RedbDatabase {
         self.insert_with_sn_key(SIGS, &identifier.to_str(), sn, signatures)
     }
 
-    
-    fn get_by_sn_key<'de, V: DeserializeOwned>(&self, table: MultimapTableDefinition<(&str, u64), &[u8]>, id: &str, sn: u64) -> Result<impl Iterator<Item = V>, RedbError> {
+    fn get_by_sn_key<'de, V: DeserializeOwned>(
+        &self,
+        table: MultimapTableDefinition<(&str, u64), &[u8]>,
+        id: &str,
+        sn: u64,
+    ) -> Result<impl Iterator<Item = V>, RedbError> {
         let from_db_iterator = {
             let read_txn = self.db.begin_read()?;
             let table = read_txn.open_multimap_table(table)?;
@@ -244,23 +253,36 @@ impl RedbDatabase {
             Ok(sig) => {
                 let value = sig.value();
                 serde_json::from_slice(value).unwrap()
-            },
+            }
             Err(_) => todo!(),
         }))
-
     }
 
-    fn get_nontrans_recepits(&self, id: &str, sn: u64) -> Result<impl Iterator<Item = Nontransferable>, RedbError> {
+    fn get_nontrans_recepits(
+        &self,
+        id: &str,
+        sn: u64,
+    ) -> Result<impl Iterator<Item = Nontransferable>, RedbError> {
         self.get_by_sn_key::<Nontransferable>(NONTRANS_RCTS, id, sn)
     }
 
-    fn get_trans_recepits(&self, id: &str, sn: u64) -> Result<impl Iterator<Item = Transferable>, RedbError> {
+    fn get_trans_recepits(
+        &self,
+        id: &str,
+        sn: u64,
+    ) -> Result<impl Iterator<Item = Transferable>, RedbError> {
         self.get_by_sn_key::<Transferable>(TRANS_RCTS, id, sn)
     }
 
-    
-
-
+    // fn get_event_digest(&self, identifier: &IdentifierPrefix, sn: u64) -> Result<Option<SelfAddressingIdentifier>, RedbError> {
+    //     let digests = {
+    //         let read_txn = self.db.begin_read().unwrap();
+    //         let table = read_txn.open_table(KELS).unwrap();
+    //         table.get((identifier.to_str().as_str(), sn))?.map(|value| {
+    //             let (key, value) = value.value()
+    //     })
+    //     };
+    // }
 
     fn get_event_by_digest(
         &self,
@@ -331,6 +353,7 @@ impl RedbDatabase {
             }
             Message::Notice(Notice::NontransferableRct(_signed_nontransferable_receipt)) => todo!(),
             Message::Notice(Notice::TransferableRct(_signed_transferable_receipt)) => todo!(),
+            #[cfg(any(feature = "query", feature = "oobi"))]
             Message::Op(_) => todo!(),
         };
         Ok(())

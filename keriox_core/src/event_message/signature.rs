@@ -27,9 +27,8 @@ pub enum Nontransferable {
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum Transferable {
-    Seal(EventSeal, Vec<IndexedSignature>)
+    Seal(EventSeal, Vec<IndexedSignature>),
 }
-
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum SignerData {

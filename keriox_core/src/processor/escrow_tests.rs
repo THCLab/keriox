@@ -108,7 +108,10 @@ fn test_process_transferable_receipt() -> Result<(), Error> {
     assert_eq!(
         event_storage
             .events_db
-            .get_receipts_t(QueryParameters::All { id: &validator_id })
+            .get_receipts_t(QueryParameters::BySn {
+                id: validator_id,
+                sn: 0
+            })
             .unwrap()
             .count(),
         1
@@ -220,13 +223,14 @@ pub fn test_not_fully_witnessed() -> Result<(), Error> {
         .parse()
         .unwrap();
     // check if receipt was accepted
-    let mut esc = db
-        .get_receipts_nt(QueryParameters::All { id: &id })
-        .unwrap()
-        .filter(|rct| rct.body.receipted_event_digest.eq(&event_digest));
-    let rct_from_db = esc.next().unwrap();
-    assert_eq!(rct_from_db.signatures.len(), 2);
-    assert_eq!(esc.next(), None);
+    let esc = db
+        .get_receipts_nt(QueryParameters::BySn {
+            id: id.clone(),
+            sn: 0,
+        })
+        .unwrap();
+
+    assert_eq!(esc.count(), 2);
 
     let state = event_storage.get_state(&id).unwrap();
     assert_eq!(state.sn, 0);
@@ -244,12 +248,9 @@ pub fn test_not_fully_witnessed() -> Result<(), Error> {
     assert!(esc.next().is_none());
 
     let mut esc = db
-        .get_receipts_nt(QueryParameters::All { id: &id })
-        .unwrap()
-        .filter(|rct| rct.body.receipted_event_digest.eq(&event_digest));
-    let rct_from_db = esc.next().unwrap();
-    assert_eq!(rct_from_db.signatures.len(), 3);
-    assert_eq!(esc.next(), None);
+        .get_receipts_nt(QueryParameters::BySn { id: id, sn: 0 })
+        .unwrap();
+    assert_eq!(esc.count(), 3);
 
     Ok(())
 }
@@ -1146,7 +1147,10 @@ pub fn test_escrow_receipt_with_wrong_signature() -> Result<(), Error> {
     assert!(esc.next().is_none());
 
     // check if receipt was accepted
-    let esc = db.get_receipts_nt(QueryParameters::All { id: &id });
+    let esc = db.get_receipts_nt(QueryParameters::BySn {
+        id: id.clone(),
+        sn: 0,
+    });
     assert!(esc.is_none());
 
     let state = event_storage.get_state(&id);

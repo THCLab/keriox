@@ -1,10 +1,12 @@
 use said::SelfAddressingIdentifier;
-use sled::DbError;
 use timestamped::TimestampedSignedEventMessage;
 
 use crate::{
-    event_message::signed_event_message::{
-        SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
+    event_message::{
+        signature::{Nontransferable, Transferable},
+        signed_event_message::{
+            SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
+        },
     },
     prefix::IdentifierPrefix,
 };
@@ -62,11 +64,11 @@ pub trait EventDatabase {
 
     fn get_receipts_t(
         &self,
-        parans: QueryParameters,
-    ) -> Option<impl DoubleEndedIterator<Item = SignedTransferableReceipt>>;
+        params: QueryParameters,
+    ) -> Option<impl DoubleEndedIterator<Item = Transferable>>;
 
     fn get_receipts_nt(
         &self,
         params: QueryParameters,
-    ) -> Option<impl DoubleEndedIterator<Item = SignedNontransferableReceipt>>;
+    ) -> Option<impl DoubleEndedIterator<Item = Nontransferable>>;
 }

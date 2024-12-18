@@ -18,6 +18,7 @@ use crate::{
     event::KeyEvent,
     event_message::{
         msg::KeriEvent,
+        signature::{Nontransferable, Transferable},
         signed_event_message::{
             SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
         },
@@ -69,14 +70,25 @@ impl EventDatabase for SledEventDatabase {
     fn get_receipts_t(
         &self,
         params: QueryParameters,
-    ) -> Option<impl DoubleEndedIterator<Item = SignedTransferableReceipt>> {
+    ) -> Option<impl DoubleEndedIterator<Item = Transferable>> {
         match params {
-            QueryParameters::BySn { id, sn } => todo!(),
+            QueryParameters::BySn { id, sn } => {
+                match self
+                    .receipts_t
+                    .iter_values(self.identifiers.designated_key(&id).ok()?)
+                {
+                    Some(rcts) => {
+                        let transferables = rcts
+                            .filter(|rct| rct.body.sn == sn)
+                            .map(|rct| Transferable::Seal(rct.validator_seal, rct.signatures));
+                        Some(transferables.collect::<Vec<_>>().into_iter())
+                    }
+                    None => None,
+                }
+            }
             QueryParameters::ByDigest { digest } => todo!(),
             QueryParameters::Range { id, start, limit } => todo!(),
-            QueryParameters::All { id } => self
-                .receipts_t
-                .iter_values(self.identifiers.designated_key(id).ok()?),
+            QueryParameters::All { id } => todo!(),
         }
     }
 
@@ -125,14 +137,45 @@ impl EventDatabase for SledEventDatabase {
     fn get_receipts_nt(
         &self,
         params: QueryParameters,
-    ) -> Option<impl DoubleEndedIterator<Item = SignedNontransferableReceipt>> {
+    ) -> Option<impl DoubleEndedIterator<Item = Nontransferable>> {
         match params {
-            QueryParameters::BySn { id, sn } => todo!(),
+            QueryParameters::BySn { id, sn } => {
+                let rcts = self
+                    .receipts_nt
+                    .iter_values(self.identifiers.designated_key(&id).ok()?);
+                match rcts {
+                    Some(rcts) => {
+                        let out = rcts
+                            .filter_map(|rct| {
+                                if rct.body.sn == sn {
+                                    Some(rct.signatures)
+                                } else {
+                                    None
+                                }
+                            })
+                            .flatten()
+                            .collect::<Vec<_>>()
+                            .into_iter();
+                        Some(out)
+                    }
+                    None => None,
+                }
+            }
             QueryParameters::ByDigest { digest } => todo!(),
             QueryParameters::Range { id, start, limit } => todo!(),
-            QueryParameters::All { id } => self
-                .receipts_nt
-                .iter_values(self.identifiers.designated_key(id).ok()?),
+            QueryParameters::All { id } => {
+                let rcts = self
+                    .receipts_nt
+                    .iter_values(self.identifiers.designated_key(id).ok()?);
+                match rcts {
+                    Some(rcts) => Some(
+                        rcts.flat_map(|rct| rct.signatures)
+                            .collect::<Vec<_>>()
+                            .into_iter(),
+                    ),
+                    None => None,
+                }
+            }
         }
     }
 }
