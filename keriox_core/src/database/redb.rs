@@ -1,16 +1,27 @@
 /// Kel storage. (identifier, sn) -> event digest
+/// The `KELS` table links an identifier and sequence number to the digest of an event, 
+/// referencing the actual event stored in the `EVENTS` table.
 const KELS: TableDefinition<(&str, u64), &[u8]> = TableDefinition::new("kels");
-/// Events store. (event digest) -> serialized event
+
+/// Events store. (event digest) -> key event
+/// The `EVENTS` table directly stores the event data, which other tables reference 
+/// by its digest.
 const EVENTS: TableDefinition<&str, &[u8]> = TableDefinition::new("events");
-/// Nontransferable receipts storage. (identifier, sn, witness identifier) -> signature couplet
-const NONTRANS_RCTS: MultimapTableDefinition<(&str, u64), &[u8]> =
-    MultimapTableDefinition::new("nontrans_receipts");
-/// Nontransferable receipts storage. (identifier, sn, witness identifier) -> signature couplet
-const TRANS_RCTS: MultimapTableDefinition<(&str, u64), &[u8]> =
-    MultimapTableDefinition::new("trans_receipts");
-/// Signatures storage. ((identifier, sn), signature index) -> serialized event
+
+/// Signatures storage. (identifier, sn) -> signature
+/// The `SIGS` table links an identifier and sequence number to one or more 
+/// signatures.
 const SIGS: MultimapTableDefinition<(&str, u64), &[u8]> =
     MultimapTableDefinition::new("signatures");
+
+/// Nontransferable receipts storage. (identifier, sn) -> signature couplet (one or more)
+const NONTRANS_RCTS: MultimapTableDefinition<(&str, u64), &[u8]> =
+    MultimapTableDefinition::new("nontrans_receipts");
+
+/// Nontransferable receipts storage. (identifier, sn) -> transferable receipt (one or more)
+const TRANS_RCTS: MultimapTableDefinition<(&str, u64), &[u8]> =
+    MultimapTableDefinition::new("trans_receipts");
+
 
 use std::path::Path;
 
@@ -93,7 +104,7 @@ impl EventDatabase for RedbDatabase {
 
         self.insert_indexed_signatures(&id, sn, &signed_event.signatures)?;
         if let Some(wits) = signed_event.witness_receipts {
-            self.insert_nontrans_recepit(&id.to_str(), sn, &wits)?;
+            self.insert_nontrans_receipt(&id.to_str(), sn, &wits)?;
         };
         self.save_to_kel(event)?;
         Ok(())
@@ -107,7 +118,7 @@ impl EventDatabase for RedbDatabase {
         let sn = receipt.body.sn;
         let id = receipt.body.prefix;
         let transferable = Transferable::Seal(receipt.validator_seal, receipt.signatures);
-        self.insert_trans_recepit(&id.to_str(), sn, &[transferable])
+        self.insert_trans_receipt(&id.to_str(), sn, &[transferable])
     }
 
     fn add_receipt_nt(
@@ -118,7 +129,7 @@ impl EventDatabase for RedbDatabase {
         let sn = receipt.body.sn;
         let id = receipt.body.prefix;
         let receipts = receipt.signatures;
-        self.insert_nontrans_recepit(&id.to_str(), sn, &receipts)
+        self.insert_nontrans_receipt(&id.to_str(), sn, &receipts)
     }
 
     fn get_kel_finalized_events(
@@ -140,27 +151,29 @@ impl EventDatabase for RedbDatabase {
         &self,
         params: super::QueryParameters,
     ) -> Option<impl DoubleEndedIterator<Item = Transferable>> {
-        // match params {
-        //     QueryParameters::BySn { id, sn } => {
-        //         let trans = self.get_trans_recepits(&id.to_string(), sn).unwrap();
-        //         let receipt = Receipt::new(said::sad::SerializationFormats::JSON, receipted_event_digest, id, sn);
-        //     },
-        //     QueryParameters::ByDigest { digest } => todo!(),
-        //     QueryParameters::Range { id, start, limit } => todo!(),
-        //     QueryParameters::All { id } => todo!(),
-        // }
-        Some(vec![].into_iter())
+        match params {
+            QueryParameters::BySn { id, sn } => self.get_trans_receipts(&id.to_str(), sn).ok(),
+            QueryParameters::ByDigest { digest } => todo!(),
+            QueryParameters::Range { id, start, limit } => todo!(),
+            QueryParameters::All { id } => todo!(),
+        }
     }
 
     fn get_receipts_nt(
         &self,
         params: super::QueryParameters,
     ) -> Option<impl DoubleEndedIterator<Item = Nontransferable>> {
-        Some(vec![].into_iter())
+        match params {
+            QueryParameters::BySn { id, sn } => self.get_nontrans_receipts(&id.to_str(), sn).ok(),
+            QueryParameters::ByDigest { digest } => todo!(),
+            QueryParameters::Range { id, start, limit } => todo!(),
+            QueryParameters::All { id } => todo!(),
+        }
     }
 }
 
 impl RedbDatabase {
+    /// Saves provided event into key event table. Key is it's digest and value is event.
     fn insert_key_event(&self, event: &KeriEvent<KeyEvent>) -> Result<(), RedbError> {
         let digest = event.digest().map_err(|_e| RedbError::MissingDigest)?;
         let value = event.encode().map_err(|_err| RedbError::WrongValue)?;
@@ -175,6 +188,7 @@ impl RedbDatabase {
         Ok(())
     }
 
+    /// Saves KEL event of given identifier. Key is identifier and sn of event, and value is event digest. 
     fn save_to_kel(&self, event: &KeriEvent<KeyEvent>) -> Result<(), RedbError> {
         let digest = event.digest().map_err(|_e| RedbError::MissingDigest)?;
 
@@ -211,7 +225,7 @@ impl RedbDatabase {
         Ok(())
     }
 
-    fn insert_nontrans_recepit(
+    fn insert_nontrans_receipt(
         &self,
         id: &str,
         sn: u64,
@@ -220,7 +234,7 @@ impl RedbDatabase {
         self.insert_with_sn_key(NONTRANS_RCTS, id, sn, nontrans)
     }
 
-    fn insert_trans_recepit(
+    fn insert_trans_receipt(
         &self,
         id: &str,
         sn: u64,
@@ -243,7 +257,7 @@ impl RedbDatabase {
         table: MultimapTableDefinition<(&str, u64), &[u8]>,
         id: &str,
         sn: u64,
-    ) -> Result<impl Iterator<Item = V>, RedbError> {
+    ) -> Result<impl DoubleEndedIterator<Item = V>, RedbError> {
         let from_db_iterator = {
             let read_txn = self.db.begin_read()?;
             let table = read_txn.open_multimap_table(table)?;
@@ -258,31 +272,37 @@ impl RedbDatabase {
         }))
     }
 
-    fn get_nontrans_recepits(
+    fn get_nontrans_receipts(
         &self,
         id: &str,
         sn: u64,
-    ) -> Result<impl Iterator<Item = Nontransferable>, RedbError> {
+    ) -> Result<impl DoubleEndedIterator<Item = Nontransferable>, RedbError> {
         self.get_by_sn_key::<Nontransferable>(NONTRANS_RCTS, id, sn)
     }
 
-    fn get_trans_recepits(
+    fn get_trans_receipts(
         &self,
         id: &str,
         sn: u64,
-    ) -> Result<impl Iterator<Item = Transferable>, RedbError> {
+    ) -> Result<impl DoubleEndedIterator<Item = Transferable>, RedbError> {
         self.get_by_sn_key::<Transferable>(TRANS_RCTS, id, sn)
     }
 
-    // fn get_event_digest(&self, identifier: &IdentifierPrefix, sn: u64) -> Result<Option<SelfAddressingIdentifier>, RedbError> {
-    //     let digests = {
-    //         let read_txn = self.db.begin_read().unwrap();
-    //         let table = read_txn.open_table(KELS).unwrap();
-    //         table.get((identifier.to_str().as_str(), sn))?.map(|value| {
-    //             let (key, value) = value.value()
-    //     })
-    //     };
-    // }
+    fn get_event_digest(
+        &self,
+        identifier: &IdentifierPrefix,
+        sn: u64,
+    ) -> Result<Option<SelfAddressingIdentifier>, RedbError> {
+        Ok({
+            let read_txn = self.db.begin_read().unwrap();
+            let table = read_txn.open_table(KELS).unwrap();
+            table.get((identifier.to_str().as_str(), sn))?.map(|value| {
+                let digest: SelfAddressingIdentifier =
+                    serde_json::from_slice(value.value()).unwrap();
+                digest
+            })
+        })
+    }
 
     fn get_event_by_digest(
         &self,
@@ -307,7 +327,7 @@ impl RedbDatabase {
         Ok(Some(self.get_by_sn_key(SIGS, key.0, key.1)?))
     }
 
-    pub fn get_kel<'a>(
+    fn get_kel<'a>(
         &'a self,
         id: &IdentifierPrefix,
         from: u64,
@@ -339,25 +359,6 @@ impl RedbDatabase {
             })
             .collect()
     }
-
-    pub fn insert_message(&self, event: &Message) -> Result<(), RedbError> {
-        match event {
-            Message::Notice(Notice::Event(signed_event_message)) => {
-                let event = &signed_event_message.event_message;
-                let signatures = &signed_event_message.signatures;
-                let id = &event.data.prefix;
-                let sn = event.data.sn;
-                self.insert_indexed_signatures(id, sn, signatures)?;
-                self.insert_key_event(event)?;
-                self.save_to_kel(event)?;
-            }
-            Message::Notice(Notice::NontransferableRct(_signed_nontransferable_receipt)) => todo!(),
-            Message::Notice(Notice::TransferableRct(_signed_transferable_receipt)) => todo!(),
-            #[cfg(any(feature = "query", feature = "oobi"))]
-            Message::Op(_) => todo!(),
-        };
-        Ok(())
-    }
 }
 
 #[test]
@@ -384,7 +385,12 @@ fn test_retrieve_kel() {
     for event in [icp_raw, rot_raw, ixn_raw, second_icp_raw] {
         let evs = parse_event_stream(event).unwrap();
         let ev = evs.first().unwrap();
-        db.insert_message(ev).unwrap();
+        match ev {
+            Message::Notice(Notice::Event(event)) => {
+                db.add_kel_finalized_event(event.clone(), &event.event_message.data.get_prefix()).unwrap();
+            },
+            _ => unreachable!(),
+        }
     }
 
     // Find event by digest
@@ -440,6 +446,6 @@ fn test_retrieve_receipts() {
         }
     }
 
-    let retrived_rcts = db.get_nontrans_recepits(&first_id.to_str(), 0).unwrap();
+    let retrived_rcts = db.get_nontrans_receipts(&first_id.to_str(), 0).unwrap();
     assert_eq!(retrived_rcts.count(), 2);
 }
