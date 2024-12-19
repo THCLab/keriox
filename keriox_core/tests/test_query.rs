@@ -4,13 +4,14 @@ mod test_query {
 
     use keri_core::{
         actor::{parse_event_stream, prelude::*},
-        database::{escrow::EscrowDb, sled::SledEventDatabase},
+        database::{escrow::EscrowDb, redb::RedbDatabase, sled::SledEventDatabase},
         event_message::signed_event_message::Op,
         processor::{
             escrow::{default_escrow_bus, EscrowConfig},
             event_storage::EventStorage,
         },
     };
+    use tempfile::NamedTempFile;
 
     #[test]
     pub fn test_ksn_query() -> Result<(), Box<dyn std::error::Error>> {
@@ -21,12 +22,14 @@ mod test_query {
 
         let escrow_root = Builder::new().prefix("test-db").tempdir().unwrap();
         let escrow_db = Arc::new(EscrowDb::new(escrow_root.path())?);
+        let events_db_path = NamedTempFile::new().unwrap();
+        let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
 
         let (notification_bus, (_ooo_escrow, _ps_esrow, _pw_escrow, _)) =
-            default_escrow_bus(db.clone(), escrow_db, EscrowConfig::default());
+            default_escrow_bus(events_db.clone(), db.clone(), escrow_db, EscrowConfig::default());
 
         let (processor, storage) = (
-            BasicProcessor::new(db.clone(), Some(notification_bus)),
+            BasicProcessor::new(events_db.clone(), db.clone(), Some(notification_bus)),
             EventStorage::new(db.clone(), db.clone()),
         );
         // Process inception event and its receipts. To accept inception event it must be fully witnessed.

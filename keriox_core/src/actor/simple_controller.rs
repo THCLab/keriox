@@ -204,16 +204,16 @@ impl fmt::Display for PossibleResponse {
 pub struct SimpleController<K: KeyManager + 'static, D: EventDatabase> {
     prefix: IdentifierPrefix,
     pub key_manager: Arc<Mutex<K>>,
-    processor: BasicProcessor,
+    processor: BasicProcessor<D>,
     oobi_manager: OobiManager,
     pub storage: EventStorage<D>,
     pub groups: Vec<IdentifierPrefix>,
-    pub not_fully_witnessed_escrow: Arc<PartiallyWitnessedEscrow>,
-    pub ooo_escrow: Arc<OutOfOrderEscrow>,
-    pub delegation_escrow: Arc<DelegationEscrow>,
+    pub not_fully_witnessed_escrow: Arc<PartiallyWitnessedEscrow<D>>,
+    pub ooo_escrow: Arc<OutOfOrderEscrow<D>>,
+    pub delegation_escrow: Arc<DelegationEscrow<D>>,
 }
 
-impl<K: KeyManager, D: EventDatabase> SimpleController<K, D> {
+impl<K: KeyManager, D: EventDatabase + Send + Sync + 'static> SimpleController<K, D> {
     // incept a state and keys
     pub fn new(
         db: Arc<SledEventDatabase>,
@@ -224,15 +224,15 @@ impl<K: KeyManager, D: EventDatabase> SimpleController<K, D> {
         escrow_config: EscrowConfig,
     ) -> Result<SimpleController<K, D>, Error> {
         let (not_bus, (ooo, _, partially_witnesses, del_escrow)) =
-            default_escrow_bus(db.clone(), escrow_db, escrow_config);
-        let processor = BasicProcessor::new(db.clone(), Some(not_bus));
+            default_escrow_bus(event_db.clone(), db.clone(), escrow_db, escrow_config);
+        let processor = BasicProcessor::new(event_db.clone(), db.clone(), Some(not_bus));
 
         Ok(SimpleController {
             prefix: IdentifierPrefix::default(),
             key_manager,
             oobi_manager: OobiManager::new(oobi_db_path),
             processor,
-            storage: EventStorage::new(db, event_db),
+            storage: EventStorage::new(event_db.clone(), db),
             groups: vec![],
             not_fully_witnessed_escrow: partially_witnesses,
             ooo_escrow: ooo,

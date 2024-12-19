@@ -3,7 +3,7 @@ use std::sync::Arc;
 use cesrox::primitives::codes::basic::Basic;
 use keri_core::{
     actor,
-    database::sled::SledEventDatabase,
+    database::{redb::RedbDatabase, sled::SledEventDatabase},
     error::Error,
     event_message::{
         event_msg_builder::EventMsgBuilder, signed_event_message::Notice, EventTypeTag,
@@ -12,7 +12,7 @@ use keri_core::{
     processor::{basic_processor::BasicProcessor, event_storage::EventStorage},
     signer::{CryptoBox, KeyManager},
 };
-use tempfile::Builder;
+use tempfile::{Builder, NamedTempFile};
 
 #[test]
 fn test_incept() -> Result<(), Error> {
@@ -24,9 +24,11 @@ fn test_incept() -> Result<(), Error> {
     // Setup events database
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
+    let events_db_path = NamedTempFile::new().unwrap();
+        let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
 
     let (processor, storage) = (
-        BasicProcessor::new(db.clone(), None),
+        BasicProcessor::new(events_db.clone(), db.clone(), None),
         EventStorage::new(db.clone(), db.clone()),
     );
 

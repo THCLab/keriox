@@ -2,12 +2,13 @@ use std::{fs, sync::Arc};
 
 use keri_core::{
     actor::{parse_event_stream, parse_notice_stream, process_notice},
-    database::sled::SledEventDatabase,
+    database::{redb::RedbDatabase, sled::SledEventDatabase},
     error::Error,
     event_message::signed_event_message::{Message, Notice},
     prefix::IdentifierPrefix,
     processor::{basic_processor::BasicProcessor, event_storage::EventStorage},
 };
+use tempfile::NamedTempFile;
 
 #[test]
 fn test_process() -> Result<(), Error> {
@@ -18,9 +19,12 @@ fn test_process() -> Result<(), Error> {
     fs::create_dir_all(root.path()).unwrap();
 
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
+    let events_db_path = NamedTempFile::new().unwrap();
+        let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
+
 
     let (processor, storage) = (
-        BasicProcessor::new(db.clone(), None),
+        BasicProcessor::new(events_db.clone(), db.clone(), None),
         EventStorage::new(db.clone(), db.clone()),
     );
 

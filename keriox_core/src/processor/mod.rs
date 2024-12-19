@@ -34,6 +34,7 @@ use crate::{
 
 pub trait Processor {
     type Database: EventDatabase;
+    type EscrowDatabase: EventDatabase;
     fn process_notice(&self, notice: &Notice) -> Result<(), Error>;
 
     #[cfg(feature = "query")]
@@ -190,7 +191,10 @@ impl<D: EventDatabase> EventProcessor<D> {
 ///
 /// Returns the current State associated with
 /// the given Prefix
-pub fn compute_state(db: Arc<SledEventDatabase>, id: &IdentifierPrefix) -> Option<IdentifierState> {
+pub fn compute_state<D: EventDatabase>(
+    db: Arc<D>,
+    id: &IdentifierPrefix,
+) -> Option<IdentifierState> {
     if let Some(events) = db.get_kel_finalized_events(crate::database::QueryParameters::All { id })
     {
         // start with empty state

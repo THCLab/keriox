@@ -14,7 +14,7 @@ use crate::{
 pub mod escrow;
 #[cfg(feature = "mailbox")]
 pub mod mailbox;
-mod redb;
+pub mod redb;
 pub mod sled;
 pub(crate) mod tables;
 pub(crate) mod timestamped;

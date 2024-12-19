@@ -36,17 +36,20 @@ use crate::mailbox::MailboxResponse;
 
 pub struct EventStorage<D: EventDatabase> {
     pub events_db: Arc<D>,
-    pub db: Arc<SledEventDatabase>,
+    pub escrow_db: Arc<SledEventDatabase>,
 }
 
 // Collection of methods for getting data from database.
 impl<D: EventDatabase> EventStorage<D> {
-    pub fn new(db: Arc<SledEventDatabase>, events_db: Arc<D>) -> Self {
-        Self { db, events_db }
+    pub fn new(events_db: Arc<D>, escrow_db: Arc<SledEventDatabase>) -> Self {
+        Self {
+            escrow_db,
+            events_db,
+        }
     }
 
     pub fn get_state(&self, identifier: &IdentifierPrefix) -> Option<IdentifierState> {
-        compute_state(self.db.clone(), identifier)
+        compute_state(self.events_db.clone(), identifier)
     }
 
     /// Get KEL for Prefix
@@ -70,7 +73,7 @@ impl<D: EventDatabase> EventStorage<D> {
     /// Returns the current validated KEL for a given Prefix
     pub fn get_kel_messages(&self, id: &IdentifierPrefix) -> Result<Option<Vec<Notice>>, Error> {
         match self
-            .db
+            .events_db
             .get_kel_finalized_events(QueryParameters::All { id })
         {
             Some(events) => Ok(Some(
@@ -88,7 +91,7 @@ impl<D: EventDatabase> EventStorage<D> {
         sn: Option<u64>,
     ) -> Result<Option<Vec<Notice>>, Error> {
         let events = self
-            .db
+            .events_db
             .get_kel_finalized_events(QueryParameters::All { id });
         Ok(match (events, sn) {
             (None, _) => None,
@@ -134,7 +137,7 @@ impl<D: EventDatabase> EventStorage<D> {
         sn: u64,
     ) -> Option<TimestampedSignedEventMessage> {
         if let Some(mut events) = self
-            .db
+            .events_db
             .get_kel_finalized_events(QueryParameters::All { id })
         {
             events.find(|event| event.signed_event_message.event_message.data.get_sn() == sn)
@@ -149,7 +152,8 @@ impl<D: EventDatabase> EventStorage<D> {
         receipient: &IdentifierPrefix,
         to_forward: SignedEventMessage,
     ) -> Result<(), Error> {
-        self.db.add_mailbox_multisig(to_forward, receipient)?;
+        self.escrow_db
+            .add_mailbox_multisig(to_forward, receipient)?;
 
         Ok(())
     }
@@ -160,7 +164,8 @@ impl<D: EventDatabase> EventStorage<D> {
         receipient: &IdentifierPrefix,
         to_forward: SignedEventMessage,
     ) -> Result<(), Error> {
-        self.db.add_mailbox_delegate(to_forward, receipient)?;
+        self.escrow_db
+            .add_mailbox_delegate(to_forward, receipient)?;
 
         Ok(())
     }
@@ -168,7 +173,7 @@ impl<D: EventDatabase> EventStorage<D> {
     #[cfg(feature = "mailbox")]
     pub fn add_mailbox_receipt(&self, receipt: SignedNontransferableReceipt) -> Result<(), Error> {
         let id = receipt.body.prefix.clone();
-        self.db.add_mailbox_receipt(receipt, &id)?;
+        self.escrow_db.add_mailbox_receipt(receipt, &id)?;
 
         Ok(())
     }
@@ -176,7 +181,7 @@ impl<D: EventDatabase> EventStorage<D> {
     #[cfg(feature = "mailbox")]
     pub fn add_mailbox_reply(&self, reply: SignedEventMessage) -> Result<(), Error> {
         let id = reply.event_message.data.get_prefix();
-        self.db.add_mailbox_reply(reply, &id)?;
+        self.escrow_db.add_mailbox_reply(reply, &id)?;
 
         Ok(())
     }
@@ -187,13 +192,13 @@ impl<D: EventDatabase> EventStorage<D> {
 
         // query receipts
         let receipt = self
-            .db
+            .escrow_db
             .get_mailbox_receipts(&id)
             .map(|it| it.skip(args.topics.receipt).collect())
             .unwrap_or_default();
 
         let multisig = self
-            .db
+            .escrow_db
             .get_mailbox_multisig(&id)
             .map(|it| {
                 it.skip(args.topics.multisig)
@@ -203,7 +208,7 @@ impl<D: EventDatabase> EventStorage<D> {
             .unwrap_or_default();
 
         let delegate = self
-            .db
+            .escrow_db
             .get_mailbox_delegate(&id)
             .map(|it| {
                 it.skip(args.topics.delegate)
@@ -228,7 +233,7 @@ impl<D: EventDatabase> EventStorage<D> {
         let mut state = IdentifierState::default();
         let mut last_est = None;
         if let Some(events) = self
-            .db
+            .escrow_db
             .get_kel_finalized_events(QueryParameters::All { id })
         {
             for event in events {
@@ -273,8 +278,8 @@ impl<D: EventDatabase> EventStorage<D> {
     ) -> Result<Option<IdentifierState>, Error> {
         let mut state = IdentifierState::default();
         if let Some(events) = self
-            .db
-            .get_kel_finalized_events(QueryParameters::All { id })
+            .events_db
+            .get_kel_finalized_events(QueryParameters::Range { id: id.clone(), start: 0, limit: sn + 1  })
         {
             // TODO: testing approach if events come out sorted already (as they should coz of put sequence)
             let mut sorted_events = events.collect::<Vec<TimestampedSignedEventMessage>>();
@@ -339,7 +344,7 @@ impl<D: EventDatabase> EventStorage<D> {
         validator_pref: &IdentifierPrefix,
     ) -> Result<bool, Error> {
         Ok(
-            if let Some(mut receipts) = self.db.get_receipts_t(QueryParameters::BySn {
+            if let Some(mut receipts) = self.escrow_db.get_receipts_t(QueryParameters::BySn {
                 id: id.clone(),
                 sn: sn,
             }) {
@@ -359,7 +364,7 @@ impl<D: EventDatabase> EventStorage<D> {
         digest: &SelfAddressingIdentifier,
     ) -> Result<Option<SignedNontransferableReceipt>, Error> {
         match self
-            .db
+            .events_db
             .get_receipts_nt(QueryParameters::BySn { id: id.clone(), sn })
         {
             Some(events) => {
@@ -382,7 +387,7 @@ impl<D: EventDatabase> EventStorage<D> {
     ) -> Option<SignedReply> {
         use crate::query::reply_event::ReplyRoute;
 
-        self.db
+        self.escrow_db
             .get_accepted_replys(creator_prefix)
             .and_then(|mut o| {
                 o.find(|r: &SignedReply| {
@@ -443,7 +448,7 @@ impl<D: EventDatabase> EventStorage<D> {
         id: &IdentifierPrefix,
         event: impl EventSemantics,
     ) -> Result<Option<IdentifierState>, Error> {
-        if let Some(state) = compute_state(self.db.clone(), id) {
+        if let Some(state) = compute_state(self.escrow_db.clone(), id) {
             Ok(Some(event.apply_to(state)?))
         } else {
             Ok(None)

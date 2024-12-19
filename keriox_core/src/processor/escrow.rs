@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::{fmt::Debug, sync::Arc, time::Duration};
 
 use said::SelfAddressingIdentifier;
 
@@ -55,17 +55,18 @@ impl Default for EscrowConfig {
     }
 }
 
-pub fn default_escrow_bus(
-    event_db: Arc<SledEventDatabase>,
+pub fn default_escrow_bus<D: EventDatabase + Send + Sync + 'static>(
+    event_db: Arc<D>,
+    sled_db: Arc<SledEventDatabase>,
     escrow_db: Arc<EscrowDb>,
     escrow_config: EscrowConfig,
 ) -> (
     NotificationBus,
     (
-        Arc<OutOfOrderEscrow>,
-        Arc<PartiallySignedEscrow>,
-        Arc<PartiallyWitnessedEscrow>,
-        Arc<DelegationEscrow>,
+        Arc<OutOfOrderEscrow<D>>,
+        Arc<PartiallySignedEscrow<D>>,
+        Arc<PartiallyWitnessedEscrow<D>>,
+        Arc<DelegationEscrow<D>>,
     ),
 ) {
     let mut bus = NotificationBus::new();
@@ -73,6 +74,7 @@ pub fn default_escrow_bus(
     // Register out of order escrow, to save and reprocess out of order events
     let ooo_escrow = Arc::new(OutOfOrderEscrow::new(
         event_db.clone(),
+        sled_db.clone(),
         escrow_db.clone(),
         escrow_config.out_of_order_timeout,
     ));
@@ -86,6 +88,7 @@ pub fn default_escrow_bus(
 
     let ps_escrow = Arc::new(PartiallySignedEscrow::new(
         event_db.clone(),
+        sled_db.clone(),
         escrow_db.clone(),
         escrow_config.partially_signed_timeout,
     ));
@@ -93,6 +96,7 @@ pub fn default_escrow_bus(
 
     let pw_escrow = Arc::new(PartiallyWitnessedEscrow::new(
         event_db.clone(),
+        sled_db.clone(),
         escrow_db.clone(),
         escrow_config.partially_witnessed_timeout,
     ));
@@ -107,6 +111,7 @@ pub fn default_escrow_bus(
     bus.register_observer(
         Arc::new(TransReceiptsEscrow::new(
             event_db.clone(),
+            sled_db.clone(),
             escrow_db.clone(),
             escrow_config.trans_receipt_timeout,
         )),
@@ -118,6 +123,7 @@ pub fn default_escrow_bus(
 
     let delegation_escrow = Arc::new(DelegationEscrow::new(
         event_db,
+        sled_db,
         escrow_db,
         escrow_config.delegation_timeout,
     ));
@@ -132,16 +138,23 @@ pub fn default_escrow_bus(
     (bus, (ooo_escrow, ps_escrow, pw_escrow, delegation_escrow))
 }
 
-pub struct OutOfOrderEscrow {
-    db: Arc<SledEventDatabase>,
+pub struct OutOfOrderEscrow<D: EventDatabase> {
+    db: Arc<D>,
+    old_db: Arc<SledEventDatabase>,
     pub escrowed_out_of_order: Escrow<SignedEventMessage>,
 }
 
-impl OutOfOrderEscrow {
-    pub fn new(db: Arc<SledEventDatabase>, escrow_db: Arc<EscrowDb>, duration: Duration) -> Self {
+impl<D: EventDatabase> OutOfOrderEscrow<D> {
+    pub fn new(
+        db: Arc<D>,
+        sled_db: Arc<SledEventDatabase>,
+        escrow_db: Arc<EscrowDb>,
+        duration: Duration,
+    ) -> Self {
         let escrow = Escrow::new(b"ooes", duration, escrow_db);
         Self {
             db,
+            old_db: sled_db,
             escrowed_out_of_order: escrow,
         }
     }
@@ -161,7 +174,7 @@ impl OutOfOrderEscrow {
         })
     }
 }
-impl Notifier for OutOfOrderEscrow {
+impl<D: EventDatabase> Notifier for OutOfOrderEscrow<D> {
     fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error> {
         match notification {
             Notification::KeyEventAdded(ev_message) => {
@@ -182,7 +195,7 @@ impl Notifier for OutOfOrderEscrow {
     }
 }
 
-impl OutOfOrderEscrow {
+impl<D: EventDatabase> OutOfOrderEscrow<D> {
     pub fn process_out_of_order_events(
         &self,
         bus: &NotificationBus,
@@ -190,11 +203,11 @@ impl OutOfOrderEscrow {
     ) -> Result<(), Error> {
         if let Some(esc) = self.escrowed_out_of_order.get(id) {
             for event in esc {
-                let validator = EventValidator::new(self.db.clone(), self.db.clone());
+                let validator = EventValidator::new(self.old_db.clone(), self.db.clone());
                 match validator.validate_event(&event) {
                     Ok(_) => {
                         // add to kel
-                        self.db.add_kel_finalized_event(event.clone(), id)?;
+                        self.db.add_kel_finalized_event(event.clone(), id);
                         // remove from escrow
                         self.escrowed_out_of_order.remove(id, &event)?;
                         bus.notify(&Notification::KeyEventAdded(event))?;
@@ -214,20 +227,29 @@ impl OutOfOrderEscrow {
     }
 }
 
-pub struct PartiallySignedEscrow {
-    db: Arc<SledEventDatabase>,
+pub struct PartiallySignedEscrow<D: EventDatabase> {
+    db: Arc<D>,
+    old_db: Arc<SledEventDatabase>,
     pub escrowed_partially_signed: Escrow<SignedEventMessage>,
 }
 
-impl PartiallySignedEscrow {
-    pub fn new(db: Arc<SledEventDatabase>, escrow_db: Arc<EscrowDb>, duration: Duration) -> Self {
+impl<D: EventDatabase> PartiallySignedEscrow<D> {
+    pub fn new(
+        db: Arc<D>,
+        sled_db: Arc<SledEventDatabase>,
+        escrow_db: Arc<EscrowDb>,
+        duration: Duration,
+    ) -> Self {
         let escrow = Escrow::new(b"pses", duration, escrow_db);
         Self {
             db,
+            old_db: sled_db,
             escrowed_partially_signed: escrow,
         }
     }
+}
 
+impl<D: EventDatabase> PartiallySignedEscrow<D> {
     pub fn get_partially_signed_for_event(
         &self,
         event: KeriEvent<KeyEvent>,
@@ -248,7 +270,7 @@ impl PartiallySignedEscrow {
         Ok(())
     }
 }
-impl Notifier for PartiallySignedEscrow {
+impl<D: EventDatabase> Notifier for PartiallySignedEscrow<D> {
     fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error> {
         match notification {
             Notification::PartiallySigned(ev) => {
@@ -264,7 +286,7 @@ impl Notifier for PartiallySignedEscrow {
     }
 }
 
-impl PartiallySignedEscrow {
+impl<D: EventDatabase> PartiallySignedEscrow<D> {
     pub fn process_partially_signed_events(
         &self,
         bus: &NotificationBus,
@@ -290,11 +312,13 @@ impl PartiallySignedEscrow {
                 ..signed_event.to_owned()
             };
 
-            let validator = EventValidator::new(self.db.clone(), self.db.clone());
+            let validator = EventValidator::new(self.old_db.clone(), self.db.clone());
             match validator.validate_event(&new_event) {
                 Ok(_) => {
                     // add to kel
-                    self.db.add_kel_finalized_event(new_event.clone(), &id)?;
+                    self.db
+                        .add_kel_finalized_event(new_event.clone(), &id)
+                        .unwrap_or_default();
                     // remove from escrow
                     self.remove_partially_signed(&new_event.event_message)?;
                     bus.notify(&Notification::KeyEventAdded(new_event))?;
@@ -336,16 +360,23 @@ impl PartiallySignedEscrow {
 
 /// Store partially witnessed events and nontransferable receipts of events that
 /// wasn't accepted into kel yet.
-pub struct PartiallyWitnessedEscrow {
-    db: Arc<SledEventDatabase>,
+pub struct PartiallyWitnessedEscrow<D: EventDatabase> {
+    db: Arc<D>,
+    old_db: Arc<SledEventDatabase>,
     pub(crate) escrowed_partially_witnessed: Escrow<SignedEventMessage>,
     pub(crate) escrowed_nontranferable_receipts: Escrow<SignedNontransferableReceipt>,
 }
 
-impl PartiallyWitnessedEscrow {
-    pub fn new(db: Arc<SledEventDatabase>, escrow_db: Arc<EscrowDb>, duration: Duration) -> Self {
+impl<D: EventDatabase> PartiallyWitnessedEscrow<D> {
+    pub fn new(
+        db: Arc<D>,
+        old_db: Arc<SledEventDatabase>,
+        escrow_db: Arc<EscrowDb>,
+        duration: Duration,
+    ) -> Self {
         Self {
             db,
+            old_db,
             escrowed_partially_witnessed: Escrow::new(b"pwes", duration, escrow_db.clone()),
             escrowed_nontranferable_receipts: Escrow::new(b"ures", duration, escrow_db.clone()),
         }
@@ -419,9 +450,11 @@ impl PartiallyWitnessedEscrow {
             .into_iter()
             .try_for_each(|receipt| {
                 self.escrowed_nontranferable_receipts
-                    .remove(&id, &receipt)?;
+                    .remove(&id, &receipt)
+                    .unwrap();
                 self.db.add_receipt_nt(receipt.clone(), &id)
-            })?)
+            })
+            .unwrap_or_default())
     }
 
     /// Returns receipt couplets of event
@@ -488,7 +521,7 @@ impl PartiallyWitnessedEscrow {
         receipted_event: &SignedEventMessage,
         additional_receipt: Option<SignedNontransferableReceipt>,
     ) -> Result<(), Error> {
-        let storage = EventStorage::new(self.db.clone(), self.db.clone());
+        let storage = EventStorage::new(self.db.clone(), self.old_db.clone());
         let id = receipted_event.event_message.data.get_prefix();
         let sn = receipted_event.event_message.data.get_sn();
         let digest = receipted_event.event_message.digest()?;
@@ -559,7 +592,8 @@ impl PartiallyWitnessedEscrow {
             .ok_or(Error::NotEnoughReceiptsError)
     }
 }
-impl Notifier for PartiallyWitnessedEscrow {
+
+impl<D: EventDatabase> Notifier for PartiallyWitnessedEscrow<D> {
     fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error> {
         match notification {
             Notification::ReceiptOutOfOrder(ooo) => {
@@ -578,13 +612,13 @@ impl Notifier for PartiallyWitnessedEscrow {
                             Ok(_) => {
                                 // accept event and remove receipts
                                 self.db
-                                    .add_kel_finalized_event(receipted_event.clone(), &id)?;
+                                    .add_kel_finalized_event(receipted_event.clone(), &id);
                                 // remove from escrow
                                 self.escrowed_partially_witnessed
                                     .remove(&id, &receipted_event)?;
                                 // accept receipts and remove them from escrow
                                 self.accept_receipts_for(&receipted_event)?;
-                                self.db.add_receipt_nt(ooo.to_owned(), &id)?;
+                                self.db.add_receipt_nt(ooo.to_owned(), &id);
                                 bus.notify(&Notification::KeyEventAdded(receipted_event))?;
                             }
                             Err(Error::SignatureVerificationError) => {
@@ -629,19 +663,26 @@ impl Notifier for PartiallyWitnessedEscrow {
     }
 }
 
-pub struct TransReceiptsEscrow {
-    db: Arc<SledEventDatabase>,
+pub struct TransReceiptsEscrow<D: EventDatabase> {
+    db: Arc<D>,
+    old_db: Arc<SledEventDatabase>,
     pub(crate) escrowed_trans_receipts: Escrow<SignedTransferableReceipt>,
 }
-impl TransReceiptsEscrow {
-    pub fn new(db: Arc<SledEventDatabase>, escrow_db: Arc<EscrowDb>, duration: Duration) -> Self {
+impl<D: EventDatabase> TransReceiptsEscrow<D> {
+    pub fn new(
+        db: Arc<D>,
+        sled_db: Arc<SledEventDatabase>,
+        escrow_db: Arc<EscrowDb>,
+        duration: Duration,
+    ) -> Self {
         Self {
             db,
+            old_db: sled_db,
             escrowed_trans_receipts: Escrow::new(b"vres", duration, escrow_db.clone()),
         }
     }
 }
-impl Notifier for TransReceiptsEscrow {
+impl<D: EventDatabase> Notifier for TransReceiptsEscrow<D> {
     fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error> {
         match notification {
             Notification::KeyEventAdded(event) => {
@@ -659,7 +700,7 @@ impl Notifier for TransReceiptsEscrow {
         Ok(())
     }
 }
-impl TransReceiptsEscrow {
+impl<D: EventDatabase> TransReceiptsEscrow<D> {
     pub fn process_t_receipts_escrow(
         &self,
         id: &IdentifierPrefix,
@@ -667,11 +708,11 @@ impl TransReceiptsEscrow {
     ) -> Result<(), Error> {
         if let Some(esc) = self.escrowed_trans_receipts.get(id) {
             for timestamped_receipt in esc {
-                let validator = EventValidator::new(self.db.clone(), self.db.clone());
+                let validator = EventValidator::new(self.old_db.clone(), self.db.clone());
                 match validator.validate_validator_receipt(&timestamped_receipt) {
                     Ok(_) => {
                         // add to receipts
-                        self.db.add_receipt_t(timestamped_receipt.clone(), id)?;
+                        self.db.add_receipt_t(timestamped_receipt.clone(), id);
                         // remove from escrow
                         self.escrowed_trans_receipts
                             .remove(id, &timestamped_receipt)?;
@@ -753,16 +794,23 @@ impl ReplyEscrow {
 }
 
 /// Stores delegated events until delegating event is provided
-pub struct DelegationEscrow {
-    db: Arc<SledEventDatabase>,
+pub struct DelegationEscrow<D: EventDatabase> {
+    db: Arc<D>,
+    sled_db: Arc<SledEventDatabase>,
     pub delegation_escrow: Escrow<SignedEventMessage>,
 }
 
-impl DelegationEscrow {
-    pub fn new(db: Arc<SledEventDatabase>, escrow_db: Arc<EscrowDb>, duration: Duration) -> Self {
+impl<D: EventDatabase> DelegationEscrow<D> {
+    pub fn new(
+        db: Arc<D>,
+        sled_db: Arc<SledEventDatabase>,
+        escrow_db: Arc<EscrowDb>,
+        duration: Duration,
+    ) -> Self {
         let escrow = Escrow::new(b"dees", duration, escrow_db);
         Self {
             db,
+            sled_db,
             delegation_escrow: escrow,
         }
     }
@@ -784,7 +832,7 @@ impl DelegationEscrow {
     }
 }
 
-impl Notifier for DelegationEscrow {
+impl<D: EventDatabase> Notifier for DelegationEscrow<D> {
     fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error> {
         match notification {
             Notification::KeyEventAdded(ev_message) => {
@@ -820,7 +868,7 @@ impl Notifier for DelegationEscrow {
                     let delegators_id = match &signed_event.event_message.data.event_data {
                         EventData::Dip(dip) => Ok(dip.delegator.clone()),
                         EventData::Drt(_drt) => {
-                            let storage = EventStorage::new(self.db.clone(), self.db.clone());
+                            let storage = EventStorage::new(self.db.clone(), self.sled_db.clone());
                             storage
                                 .get_state(&signed_event.event_message.data.get_prefix())
                                 .ok_or(Error::MissingDelegatingEventError)?
@@ -843,7 +891,7 @@ impl Notifier for DelegationEscrow {
     }
 }
 
-impl DelegationEscrow {
+impl<D: EventDatabase> DelegationEscrow<D> {
     pub fn process_delegation_events(
         &self,
         bus: &NotificationBus,
@@ -866,13 +914,13 @@ impl DelegationEscrow {
                     },
                     None => event.clone(),
                 };
-                let validator = EventValidator::new(self.db.clone(), self.db.clone());
+                let validator = EventValidator::new(self.sled_db.clone(), self.db.clone());
                 match validator.validate_event(&delegated_event) {
                     Ok(_) => {
                         // add to kel
                         let child_id = event.event_message.data.get_prefix();
                         self.db
-                            .add_kel_finalized_event(delegated_event.clone(), &child_id)?;
+                            .add_kel_finalized_event(delegated_event.clone(), &child_id);
                         // remove from escrow
                         self.delegation_escrow.remove(delegator_id, &event)?;
                         bus.notify(&Notification::KeyEventAdded(event))?;

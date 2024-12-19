@@ -331,7 +331,7 @@ impl WatcherData {
 
         let escrowed_replies = self
             .event_storage
-            .db
+            .escrow_db
             .get_escrowed_replys(&id)
             .into_iter()
             .flatten()

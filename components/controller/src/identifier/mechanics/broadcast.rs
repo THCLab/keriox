@@ -29,7 +29,7 @@ impl Identifier {
         let receipts = self
             .known_events
             .storage
-            .db
+            .escrow_db
             .get_receipts_nt(&self.id)
             .into_iter()
             .flatten()

@@ -13,10 +13,11 @@ use crate::{
     event_message::signed_event_message::{Notice, SignedEventMessage},
 };
 
-pub struct BasicProcessor(EventProcessor<<BasicProcessor as Processor>::Database>);
+pub struct BasicProcessor<D: EventDatabase>(EventProcessor<D>);
 
-impl Processor for BasicProcessor {
-    type Database = SledEventDatabase;
+impl<D: EventDatabase> Processor for BasicProcessor<D> {
+    type Database = D;
+    type EscrowDatabase = SledEventDatabase;
     fn register_observer(
         &mut self,
         observer: Arc<dyn Notifier + Send + Sync>,
@@ -38,24 +39,32 @@ impl Processor for BasicProcessor {
     }
 }
 
-impl BasicProcessor {
-    pub fn new(db: Arc<SledEventDatabase>, notification_bus: Option<NotificationBus>) -> Self {
-        let processor =
-            EventProcessor::new(db.clone(), notification_bus.unwrap_or_default(), db.clone());
+impl<D: EventDatabase> BasicProcessor<D> {
+    pub fn new(
+        db: Arc<D>,
+        escrow_db: Arc<SledEventDatabase>,
+        notification_bus: Option<NotificationBus>,
+    ) -> Self {
+        let processor = EventProcessor::new(
+            escrow_db.clone(),
+            notification_bus.unwrap_or_default(),
+            db.clone(),
+        );
         Self(processor)
     }
 
-    fn basic_processing_strategy<D: EventDatabase>(
+    fn basic_processing_strategy(
         events_db: Arc<D>,
         db: Arc<SledEventDatabase>,
         publisher: &NotificationBus,
         signed_event: SignedEventMessage,
     ) -> Result<(), Error> {
         let id = &signed_event.event_message.data.get_prefix();
-        let validator = EventValidator::new(db.clone(), events_db);
+        let validator = EventValidator::new(db.clone(), events_db.clone());
         match validator.validate_event(&signed_event) {
             Ok(_) => {
-                db.add_kel_finalized_event(signed_event.clone(), id)?;
+                println!("HERE");
+                events_db.add_kel_finalized_event(signed_event.clone(), id).map_err(|_e| Error::DbError)?;
                 publisher.notify(&Notification::KeyEventAdded(signed_event))
             }
             Err(Error::EventOutOfOrderError) => {

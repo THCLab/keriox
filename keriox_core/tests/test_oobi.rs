@@ -4,11 +4,12 @@ mod test_oobi {
 
     use keri_core::{
         actor::{parse_event_stream, process_reply},
-        database::sled::SledEventDatabase,
+        database::{redb::RedbDatabase, sled::SledEventDatabase},
         error::Error,
         event_message::signed_event_message::{Message, Op},
         processor::{basic_processor::BasicProcessor, event_storage::EventStorage},
     };
+    use tempfile::NamedTempFile;
     #[test]
     fn processs_oobi() -> Result<(), Error> {
         use keri_core::oobi::OobiManager;
@@ -19,9 +20,11 @@ mod test_oobi {
         let root = Builder::new().prefix("oobi-db").tempdir().unwrap();
         let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
 
+        let events_db_path = NamedTempFile::new().unwrap();
+        let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
         let (processor, storage, oobi_manager) = (
-            BasicProcessor::new(db.clone(), None),
-            EventStorage::new(db.clone(), db.clone()),
+            BasicProcessor::new(events_db.clone(), db.clone(), None),
+            EventStorage::new(events_db.clone(), db.clone()),
             OobiManager::new(oobi_root.path()),
         );
         let events = parse_event_stream(oobi_rpy.as_bytes()).unwrap();

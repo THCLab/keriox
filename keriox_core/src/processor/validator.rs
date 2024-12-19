@@ -9,7 +9,7 @@ use super::event_storage::EventStorage;
 #[cfg(feature = "query")]
 use crate::query::{key_state_notice::KeyStateNotice, reply_event::SignedReply, QueryError};
 use crate::{
-    database::{sled::SledEventDatabase, EventDatabase},
+    database::{redb::RedbDatabase, sled::SledEventDatabase, EventDatabase},
     error::Error,
     event::{
         event_data::EventData,
@@ -63,7 +63,7 @@ pub struct EventValidator<D: EventDatabase> {
 impl<D: EventDatabase> EventValidator<D> {
     pub fn new(db: Arc<SledEventDatabase>, event_database: Arc<D>) -> Self {
         Self {
-            event_storage: EventStorage::new(db, event_database),
+            event_storage: EventStorage::new(event_database, db),
         }
     }
 
@@ -467,12 +467,15 @@ fn test_validate_seal() -> Result<(), Error> {
         event_message::signed_event_message::{Message, Notice},
         processor::{basic_processor::BasicProcessor, Processor},
     };
+    use tempfile::NamedTempFile;
 
     // Create test db and event processor.
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     fs::create_dir_all(root.path()).unwrap();
+    let events_db_path = NamedTempFile::new().unwrap();
+    let events_database = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-    let event_processor = BasicProcessor::new(Arc::clone(&db), None);
+    let event_processor = BasicProcessor::new(events_database, Arc::clone(&db), None);
 
     // Events and sigs are from keripy `test_delegation` test.
     // (keripy/tests/core/test_delegating.py:#test_delegation)

@@ -1,15 +1,15 @@
 /// Kel storage. (identifier, sn) -> event digest
-/// The `KELS` table links an identifier and sequence number to the digest of an event, 
+/// The `KELS` table links an identifier and sequence number to the digest of an event,
 /// referencing the actual event stored in the `EVENTS` table.
 const KELS: TableDefinition<(&str, u64), &[u8]> = TableDefinition::new("kels");
 
 /// Events store. (event digest) -> key event
-/// The `EVENTS` table directly stores the event data, which other tables reference 
+/// The `EVENTS` table directly stores the event data, which other tables reference
 /// by its digest.
 const EVENTS: TableDefinition<&str, &[u8]> = TableDefinition::new("events");
 
 /// Signatures storage. (identifier, sn) -> signature
-/// The `SIGS` table links an identifier and sequence number to one or more 
+/// The `SIGS` table links an identifier and sequence number to one or more
 /// signatures.
 const SIGS: MultimapTableDefinition<(&str, u64), &[u8]> =
     MultimapTableDefinition::new("signatures");
@@ -21,7 +21,6 @@ const NONTRANS_RCTS: MultimapTableDefinition<(&str, u64), &[u8]> =
 /// Nontransferable receipts storage. (identifier, sn) -> transferable receipt (one or more)
 const TRANS_RCTS: MultimapTableDefinition<(&str, u64), &[u8]> =
     MultimapTableDefinition::new("trans_receipts");
-
 
 use std::path::Path;
 
@@ -79,7 +78,7 @@ pub enum KeyError {
     UnparsableIndex,
 }
 
-struct RedbDatabase {
+pub struct RedbDatabase {
     db: Database,
 }
 
@@ -97,6 +96,7 @@ impl EventDatabase for RedbDatabase {
         signed_event: SignedEventMessage,
         id: &IdentifierPrefix,
     ) -> Result<(), RedbError> {
+        dbg!(&signed_event);
         let event = &signed_event.event_message;
         self.insert_key_event(event)?;
         let id = &event.data.prefix;
@@ -143,7 +143,7 @@ impl EventDatabase for RedbDatabase {
             QueryParameters::Range { id, start, limit } => {
                 Some(self.get_kel(&id, start, limit).into_iter())
             }
-            QueryParameters::All { id } => todo!(),
+            QueryParameters::All { id } => self.get_full_kel(id).map(|kel| kel.into_iter()),
         }
     }
 
@@ -188,7 +188,7 @@ impl RedbDatabase {
         Ok(())
     }
 
-    /// Saves KEL event of given identifier. Key is identifier and sn of event, and value is event digest. 
+    /// Saves KEL event of given identifier. Key is identifier and sn of event, and value is event digest.
     fn save_to_kel(&self, event: &KeriEvent<KeyEvent>) -> Result<(), RedbError> {
         let digest = event.digest().map_err(|_e| RedbError::MissingDigest)?;
 
@@ -359,6 +359,43 @@ impl RedbDatabase {
             })
             .collect()
     }
+
+    fn get_full_kel<'a>(
+        &'a self,
+        id: &IdentifierPrefix,
+    ) -> Option<Vec<timestamped::Timestamped<SignedEventMessage>>> {
+        let digests = {
+            let read_txn = self.db.begin_read().unwrap();
+            let table = read_txn.open_table(KELS);
+            match table {
+                Ok(table) => {
+                    table
+                        .range((id.to_str().as_str(), 0)..(id.to_str().as_str(), u64::MAX))
+                        .unwrap()
+                },
+                Err(e) => return  None,
+            }
+            
+        };
+
+        Some(digests
+            .map(|entry| {
+                let (key, value) = entry.unwrap();
+                let signatures = self.get_signatures(key.value()).unwrap().unwrap().collect();
+
+                let said = &std::str::from_utf8(&value.value())
+                    .map_err(|_e| RedbError::WrongValue)
+                    .unwrap()
+                    .parse()
+                    .map_err(|_e| RedbError::WrongValue)
+                    .unwrap();
+                let event = self.get_event_by_digest(said).unwrap().unwrap();
+                TimestampedSignedEventMessage::new(SignedEventMessage::new(
+                    &event, signatures, None, None,
+                ))
+            })
+            .collect())
+    }
 }
 
 #[test]
@@ -387,8 +424,9 @@ fn test_retrieve_kel() {
         let ev = evs.first().unwrap();
         match ev {
             Message::Notice(Notice::Event(event)) => {
-                db.add_kel_finalized_event(event.clone(), &event.event_message.data.get_prefix()).unwrap();
-            },
+                db.add_kel_finalized_event(event.clone(), &event.event_message.data.get_prefix())
+                    .unwrap();
+            }
             _ => unreachable!(),
         }
     }
@@ -417,6 +455,14 @@ fn test_retrieve_kel() {
         .map(|ev| ev.signed_event_message.encode().unwrap())
         .collect::<Vec<_>>();
     assert_eq!(part_of_kel_events, vec![rot_raw, ixn_raw]);
+
+    // Retrieve KEL in range
+    let part_of_kel_events = db
+        .get_kel(&first_id, 0, 2)
+        .iter()
+        .map(|ev| ev.signed_event_message.encode().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(part_of_kel_events, vec![icp_raw, rot_raw]);
 }
 
 #[test]
