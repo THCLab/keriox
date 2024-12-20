@@ -14,6 +14,11 @@ use cesrox::{
 };
 
 #[derive(Clone, Eq, PartialEq, Hash)]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
+#[rkyv(
+    compare(PartialEq),
+    derive(Debug),
+)]
 pub enum BasicPrefix {
     ECDSAsecp256k1NT(PublicKey),
     ECDSAsecp256k1(PublicKey),
@@ -147,7 +152,7 @@ fn serialize_deserialize() {
     let serialized = serde_json::to_string(&bp);
     assert!(serialized.is_ok());
 
-    let deserialized = serde_json::from_str(&serialized.unwrap());
+    let deserialized = serde_json::from_str::<BasicPrefix>(&serialized.unwrap());
 
     assert!(deserialized.is_ok());
     assert_eq!(bp, deserialized.unwrap());

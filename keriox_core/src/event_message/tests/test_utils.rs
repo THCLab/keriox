@@ -120,7 +120,7 @@ fn test_update_identifier_state(
     assert_eq!(new_state.current.public_keys[0], current_key_pref);
     assert_eq!(new_state.current.threshold, SignatureThreshold::Simple(1));
     assert_eq!(new_state.current.next_keys_data, next_keys_data);
-    assert_eq!(new_state.witness_config.witnesses, vec![]);
+    assert!(new_state.witness_config.witnesses.is_empty());
     assert_eq!(
         new_state.witness_config.tally,
         SignatureThreshold::Simple(0)

@@ -3,7 +3,10 @@ use said::{derivation::{HashFunction, HashFunctionCode}, SelfAddressingIdentifie
 use rkyv::{with::With, Archive, Deserialize, Serialize};
 use rkyv::util::AlignedVec;
 
-#[derive(Archive, Serialize, Deserialize, Debug, PartialEq)]
+use crate::{event_message::signature::{ArchivedNontransferable, Nontransferable}, prefix::{attached_signature::ArchivedIndexedSignature, IndexedSignature}};
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, Eq, Hash)]
+#[derive(Archive, rkyv::Serialize, rkyv::Deserialize, PartialEq)]
 pub(crate) struct SaidValue {
 	#[rkyv(with = SAIDef)]
 	said: SelfAddressingIdentifier
@@ -18,6 +21,16 @@ pub fn deserialize_said(bytes: &[u8]) -> Result<SelfAddressingIdentifier, rkyv::
 	let archived: &ArchivedSAIDef = rkyv::access(&bytes)?;
 	let deserialized: SelfAddressingIdentifier = rkyv::deserialize(With::<ArchivedSAIDef, SAIDef>::cast(archived))?;
 	Ok(deserialized)
+}
+
+pub fn deserialize_nontransferable(bytes: &[u8]) -> Result<Nontransferable, rkyv::rancor::Failure> {
+	let archived = rkyv::access::<ArchivedNontransferable, rkyv::rancor::Failure>(&bytes).unwrap();
+    rkyv::deserialize::<Nontransferable, rkyv::rancor::Failure>(archived)
+}
+
+pub fn deserialize_indexed_signatures(bytes: &[u8]) -> Result<IndexedSignature, rkyv::rancor::Failure> {
+	let archived = rkyv::access::<ArchivedIndexedSignature, rkyv::rancor::Failure>(&bytes).unwrap();
+    rkyv::deserialize::<IndexedSignature, rkyv::rancor::Failure>(archived)
 }
 
 #[derive(Archive, Serialize, Deserialize)]
@@ -96,6 +109,8 @@ fn test_rkyv_said_serialization() -> Result<(), rkyv::rancor::Failure> {
 
     let deserialized: SelfAddressingIdentifier =
         rkyv::deserialize(With::<ArchivedSAIDef, SAIDef>::cast(archived))?;
+
+	// let des = rkyv_adapter::deserialize_element::<ArchivedSAIDef, SAIDef, SelfAddressingIdentifier>(&bytes);
 
     assert_eq!(value, deserialized);
 

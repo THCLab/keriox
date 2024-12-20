@@ -193,7 +193,7 @@ mod tests {
         assert_eq!(s0.current.public_keys[0], pref0);
         assert_eq!(s0.current.threshold, SignatureThreshold::Simple(1));
         assert_eq!(s0.current.next_keys_data, nxt);
-        assert_eq!(s0.witness_config.witnesses, vec![]);
+        assert!(s0.witness_config.witnesses.is_empty());
         assert_eq!(s0.witness_config.tally, SignatureThreshold::Simple(0));
 
         Ok(())
@@ -280,7 +280,7 @@ mod tests {
         assert_eq!(s0.current.public_keys[1], enc_pref_0);
         assert_eq!(s0.current.threshold, SignatureThreshold::default());
         assert_eq!(s0.current.next_keys_data, nexter_pref);
-        assert_eq!(s0.witness_config.witnesses, vec![]);
+        assert!(s0.witness_config.witnesses.is_empty());
         assert_eq!(s0.witness_config.tally, SignatureThreshold::Simple(0));
 
         Ok(())

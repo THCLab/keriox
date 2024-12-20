@@ -13,6 +13,11 @@ use super::{error::Error, CesrPrimitive};
 ///
 /// A self signing prefix derivation outputs a signature as its derivative (2.3.5)
 #[derive(PartialEq, Clone, Hash, Eq)]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
+#[rkyv(
+    compare(PartialEq),
+    derive(Debug),
+)]
 pub enum SelfSigningPrefix {
     Ed25519Sha512(Vec<u8>),
     ECDSAsecp256k1Sha256(Vec<u8>),
