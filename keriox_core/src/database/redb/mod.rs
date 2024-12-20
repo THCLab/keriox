@@ -1,3 +1,5 @@
+mod rkyv_adapter;
+
 /// Kel storage. (identifier, sn) -> event digest
 /// The `KELS` table links an identifier and sequence number to the digest of an event,
 /// referencing the actual event stored in the `EVENTS` table.
@@ -6,7 +8,7 @@ const KELS: TableDefinition<(&str, u64), &[u8]> = TableDefinition::new("kels");
 /// Events store. (event digest) -> key event
 /// The `EVENTS` table directly stores the event data, which other tables reference
 /// by its digest.
-const EVENTS: TableDefinition<&str, &[u8]> = TableDefinition::new("events");
+const EVENTS: TableDefinition<&[u8], &[u8]> = TableDefinition::new("events");
 
 /// Signatures storage. (identifier, sn) -> signature
 /// The `SIGS` table links an identifier and sequence number to one or more
@@ -25,17 +27,17 @@ const TRANS_RCTS: MultimapTableDefinition<(&str, u64), &[u8]> =
 use std::path::Path;
 
 use redb::{Database, MultimapTableDefinition, TableDefinition};
+use rkyv_adapter::{SAIDef, SaidValue};
 use said::SelfAddressingIdentifier;
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
-    actor::prelude::Message,
     event::KeyEvent,
     event_message::{
         msg::KeriEvent,
         signature::{Nontransferable, Transferable},
         signed_event_message::{
-            Notice, SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
+            SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
         },
     },
     prefix::{IdentifierPrefix, IndexedSignature},
@@ -45,6 +47,7 @@ use cesrox::primitives::CesrPrimitive;
 use self::timestamped::TimestampedSignedEventMessage;
 
 use super::{timestamped, EventDatabase, QueryParameters};
+
 
 #[derive(Debug, thiserror::Error)]
 pub enum RedbError {
@@ -96,7 +99,6 @@ impl EventDatabase for RedbDatabase {
         signed_event: SignedEventMessage,
         id: &IdentifierPrefix,
     ) -> Result<(), RedbError> {
-        dbg!(&signed_event);
         let event = &signed_event.event_message;
         self.insert_key_event(event)?;
         let id = &event.data.prefix;
@@ -181,7 +183,8 @@ impl RedbDatabase {
         let write_txn = self.db.begin_write()?;
         {
             let mut table = write_txn.open_table(EVENTS)?;
-            table.insert(digest.to_str().as_str(), &value.as_ref())?;
+            let key = rkyv_adapter::serialize_said(&digest).unwrap();
+            table.insert(key.as_slice(), &value.as_ref())?;
         }
         write_txn.commit()?;
 
@@ -197,7 +200,8 @@ impl RedbDatabase {
             let mut table = write_txn.open_table(KELS)?;
             let id = event.data.prefix.to_str();
             let sn = event.data.sn;
-            table.insert((id.as_str(), sn), digest.to_str().as_bytes())?;
+            let serialized_said = rkyv_adapter::serialize_said(&digest).unwrap();
+            table.insert((id.as_str(), sn), &serialized_said.as_slice())?;
         }
         write_txn.commit()?;
 
@@ -297,8 +301,9 @@ impl RedbDatabase {
             let read_txn = self.db.begin_read().unwrap();
             let table = read_txn.open_table(KELS).unwrap();
             table.get((identifier.to_str().as_str(), sn))?.map(|value| {
+
                 let digest: SelfAddressingIdentifier =
-                    serde_json::from_slice(value.value()).unwrap();
+                    rkyv_adapter::deserialize_said(value.value()).unwrap();
                 digest
             })
         })
@@ -311,7 +316,24 @@ impl RedbDatabase {
         let read_txn = self.db.begin_read()?;
         let table = read_txn.open_table(EVENTS)?;
 
-        if let Some(event) = table.get(said.to_str().as_str())? {
+        let key = rkyv_adapter::serialize_said(&said).unwrap();
+        if let Some(event) = table.get(key.as_slice())? {
+            let value: KeriEvent<KeyEvent> =
+                serde_json::from_slice(event.value()).map_err(|_| RedbError::WrongValue)?;
+            Ok(Some(value))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn get_event_by_serialized_key(
+        &self,
+        said_arch: &[u8],
+    ) -> Result<Option<KeriEvent<KeyEvent>>, RedbError> {
+        let read_txn = self.db.begin_read()?;
+        let table = read_txn.open_table(EVENTS)?;
+
+        if let Some(event) = table.get(said_arch)? {
             let value: KeriEvent<KeyEvent> =
                 serde_json::from_slice(event.value()).map_err(|_| RedbError::WrongValue)?;
             Ok(Some(value))
@@ -346,13 +368,7 @@ impl RedbDatabase {
                 let (key, value) = entry.unwrap();
                 let signatures = self.get_signatures(key.value()).unwrap().unwrap().collect();
 
-                let said = &std::str::from_utf8(&value.value())
-                    .map_err(|_e| RedbError::WrongValue)
-                    .unwrap()
-                    .parse()
-                    .map_err(|_e| RedbError::WrongValue)
-                    .unwrap();
-                let event = self.get_event_by_digest(said).unwrap().unwrap();
+                let event = self.get_event_by_serialized_key(&value.value()).unwrap().unwrap();
                 TimestampedSignedEventMessage::new(SignedEventMessage::new(
                     &event, signatures, None, None,
                 ))
@@ -401,6 +417,7 @@ impl RedbDatabase {
 #[test]
 fn test_retrieve_kel() {
     use crate::actor::parse_event_stream;
+    use crate::event_message::signed_event_message::{Message, Notice};
     use tempfile::NamedTempFile;
     // Create test db path.
     let file_path = NamedTempFile::new().unwrap();
@@ -467,6 +484,7 @@ fn test_retrieve_kel() {
 
 #[test]
 fn test_retrieve_receipts() {
+    use crate::event_message::signed_event_message::{Message, Notice};
     use crate::actor::parse_event_stream;
     use tempfile::NamedTempFile;
     // Create test db path.
