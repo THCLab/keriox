@@ -138,7 +138,7 @@ impl<D: EventDatabase> EventStorage<D> {
     ) -> Option<TimestampedSignedEventMessage> {
         if let Some(mut events) = self
             .events_db
-            .get_kel_finalized_events(QueryParameters::All { id })
+            .get_kel_finalized_events(QueryParameters::BySn { id: id.clone(), sn })
         {
             events.find(|event| event.signed_event_message.event_message.data.get_sn() == sn)
         } else {

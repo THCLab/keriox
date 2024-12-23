@@ -12,6 +12,18 @@ pub(crate) struct SaidValue {
 	said: SelfAddressingIdentifier
 }
 
+impl From<SelfAddressingIdentifier> for SaidValue {
+	fn from(value: SelfAddressingIdentifier) -> Self {
+		Self {said: value}
+	}
+}
+
+impl From<SaidValue> for SelfAddressingIdentifier {
+	fn from(value: SaidValue) -> Self {
+		value.said
+	}
+}
+
 pub fn serialize_said(said: &SelfAddressingIdentifier) -> Result<AlignedVec, rkyv::rancor::Failure> {
 		Ok(rkyv::to_bytes(With::<SelfAddressingIdentifier, SAIDef>::cast(said))?)
 

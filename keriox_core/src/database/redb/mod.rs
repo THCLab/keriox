@@ -1,4 +1,5 @@
-pub(crate) mod rkyv_adapter;
+pub(crate) mod said_wrapper;
+pub(crate) mod serialization_info_wrapper;
 
 /// Kel storage. (identifier, sn) -> event digest
 /// The `KELS` table links an identifier and sequence number to the digest of an event,
@@ -26,9 +27,9 @@ const TRANS_RCTS: MultimapTableDefinition<(&str, u64), &[u8]> =
 
 use std::path::Path;
 
-use redb::{Database, MultimapTableDefinition, MultimapValue, TableDefinition};
+use redb::{Database, MultimapTableDefinition, TableDefinition};
 use rkyv::{api::high::HighSerializer, ser::allocator::ArenaHandle, util::AlignedVec};
-use rkyv_adapter::deserialize_indexed_signatures;
+use said_wrapper::{deserialize_indexed_signatures, deserialize_said};
 use said::SelfAddressingIdentifier;
 use serde::de::DeserializeOwned;
 
@@ -141,7 +142,7 @@ impl EventDatabase for RedbDatabase {
     ) -> Option<impl DoubleEndedIterator<Item = super::timestamped::TimestampedSignedEventMessage>>
     {
         match params {
-            QueryParameters::BySn { id, sn } => todo!(),
+            QueryParameters::BySn { id, sn } => Some(self.get_kel(&id, sn, 1).into_iter()),
             QueryParameters::ByDigest { digest } => todo!(),
             QueryParameters::Range { id, start, limit } => {
                 Some(self.get_kel(&id, start, limit).into_iter())
@@ -179,12 +180,13 @@ impl RedbDatabase {
     /// Saves provided event into key event table. Key is it's digest and value is event.
     fn insert_key_event(&self, event: &KeriEvent<KeyEvent>) -> Result<(), RedbError> {
         let digest = event.digest().map_err(|_e| RedbError::MissingDigest)?;
+        // todo
         let value = event.encode().map_err(|_err| RedbError::WrongValue)?;
 
         let write_txn = self.db.begin_write()?;
         {
             let mut table = write_txn.open_table(EVENTS)?;
-            let key = rkyv_adapter::serialize_said(&digest).unwrap();
+            let key = said_wrapper::serialize_said(&digest).unwrap();
             table.insert(key.as_slice(), &value.as_ref())?;
         }
         write_txn.commit()?;
@@ -201,7 +203,7 @@ impl RedbDatabase {
             let mut table = write_txn.open_table(KELS)?;
             let id = event.data.prefix.to_str();
             let sn = event.data.sn;
-            let serialized_said = rkyv_adapter::serialize_said(&digest).unwrap();
+            let serialized_said = said_wrapper::serialize_said(&digest).unwrap();
             table.insert((id.as_str(), sn), &serialized_said.as_slice())?;
         }
         write_txn.commit()?;
@@ -291,7 +293,7 @@ impl RedbDatabase {
         }?;
         Ok(from_db_iterator.map(|sig| match sig {
             Ok(sig) => {
-                rkyv_adapter::deserialize_nontransferable(sig.value()).unwrap() 
+                said_wrapper::deserialize_nontransferable(sig.value()).unwrap() 
             }
             Err(_) => todo!(),
         }))
@@ -318,7 +320,7 @@ impl RedbDatabase {
             table.get((identifier.to_str().as_str(), sn))?.map(|value| {
 
                 let digest: SelfAddressingIdentifier =
-                    rkyv_adapter::deserialize_said(value.value()).unwrap();
+                    said_wrapper::deserialize_said(value.value()).unwrap();
                 digest
             })
         })
@@ -331,7 +333,7 @@ impl RedbDatabase {
         let read_txn = self.db.begin_read()?;
         let table = read_txn.open_table(EVENTS)?;
 
-        let key = rkyv_adapter::serialize_said(&said).unwrap();
+        let key = said_wrapper::serialize_said(&said).unwrap();
         if let Some(event) = table.get(key.as_slice())? {
             let value: KeriEvent<KeyEvent> =
                 serde_json::from_slice(event.value()).map_err(|_| RedbError::WrongValue)?;
@@ -425,13 +427,10 @@ impl RedbDatabase {
                 let (key, value) = entry.unwrap();
                 let signatures = self.get_signatures(key.value()).unwrap().unwrap().collect();
 
-                let said = &std::str::from_utf8(&value.value())
-                    .map_err(|_e| RedbError::WrongValue)
-                    .unwrap()
-                    .parse()
+                let said = deserialize_said(&value.value())// &std::str::from_utf8(&value.value())
                     .map_err(|_e| RedbError::WrongValue)
                     .unwrap();
-                let event = self.get_event_by_digest(said).unwrap().unwrap();
+                let event = self.get_event_by_serialized_key(value.value()).unwrap().unwrap();
                 TimestampedSignedEventMessage::new(SignedEventMessage::new(
                     &event, signatures, None, None,
                 ))
