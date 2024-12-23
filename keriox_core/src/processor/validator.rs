@@ -475,7 +475,7 @@ fn test_validate_seal() -> Result<(), Error> {
     let events_db_path = NamedTempFile::new().unwrap();
     let events_database = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-    let event_processor = BasicProcessor::new(events_database, Arc::clone(&db), None);
+    let event_processor = BasicProcessor::new(events_database.clone(), Arc::clone(&db), None);
 
     // Events and sigs are from keripy `test_delegation` test.
     // (keripy/tests/core/test_delegating.py:#test_delegation)
@@ -500,7 +500,7 @@ fn test_validate_seal() -> Result<(), Error> {
             event_digest: delegated_event_digest,
         };
 
-        let validator = EventValidator::new(db.clone(), db.clone());
+        let validator = EventValidator::new(db.clone(), events_database.clone());
         // Try to validate seal before processing delegating event
         assert!(matches!(
             validator.validate_seal(seal.clone(), &dip.event_message),
