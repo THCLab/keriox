@@ -1,12 +1,14 @@
 use said::{derivation::{HashFunction, HashFunctionCode}, SelfAddressingIdentifier};
 
 use rkyv::{with::With, Archive, Deserialize, Serialize};
-use rkyv::util::AlignedVec;
 
-use crate::{event_message::signature::{ArchivedNontransferable, Nontransferable}, prefix::{attached_signature::ArchivedIndexedSignature, IndexedSignature}};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, Eq, Hash)]
 #[derive(Archive, rkyv::Serialize, rkyv::Deserialize, PartialEq)]
+// #[rkyv(
+//     compare(PartialEq),
+//     derive(Debug),
+// )]
 pub(crate) struct SaidValue {
 	#[rkyv(with = SAIDef)]
 	said: SelfAddressingIdentifier
@@ -24,29 +26,13 @@ impl From<SaidValue> for SelfAddressingIdentifier {
 	}
 }
 
-pub fn serialize_said(said: &SelfAddressingIdentifier) -> Result<AlignedVec, rkyv::rancor::Failure> {
-		Ok(rkyv::to_bytes(With::<SelfAddressingIdentifier, SAIDef>::cast(said))?)
-
-}
-
-pub fn deserialize_said(bytes: &[u8]) -> Result<SelfAddressingIdentifier, rkyv::rancor::Failure> {
-	let archived: &ArchivedSAIDef = rkyv::access(&bytes)?;
-	let deserialized: SelfAddressingIdentifier = rkyv::deserialize(With::<ArchivedSAIDef, SAIDef>::cast(archived))?;
-	Ok(deserialized)
-}
-
-pub fn deserialize_nontransferable(bytes: &[u8]) -> Result<Nontransferable, rkyv::rancor::Failure> {
-	let archived = rkyv::access::<ArchivedNontransferable, rkyv::rancor::Failure>(&bytes).unwrap();
-    rkyv::deserialize::<Nontransferable, rkyv::rancor::Failure>(archived)
-}
-
-pub fn deserialize_indexed_signatures(bytes: &[u8]) -> Result<IndexedSignature, rkyv::rancor::Failure> {
-	let archived = rkyv::access::<ArchivedIndexedSignature, rkyv::rancor::Failure>(&bytes).unwrap();
-    rkyv::deserialize::<IndexedSignature, rkyv::rancor::Failure>(archived)
-}
 
 #[derive(Archive, Serialize, Deserialize)]
-#[rkyv(remote = SelfAddressingIdentifier)] 
+#[rkyv(remote = SelfAddressingIdentifier)]
+// #[rkyv(
+//     compare(PartialEq),
+//     derive(Debug),
+// )]
 pub(crate) struct SAIDef {
 	#[rkyv(with = HashFunctionDef)]
 	pub derivation: HashFunction,
@@ -60,8 +46,12 @@ impl From<SAIDef> for SelfAddressingIdentifier {
 	}
 }
 
-#[derive(Archive, Serialize, Deserialize)]
+#[derive(Archive, Serialize, Deserialize, PartialEq)]
 #[rkyv(remote = HashFunction)]
+// #[rkyv(
+//     compare(PartialEq),
+//     derive(Debug),
+// )]
 struct HashFunctionDef { 
 	#[rkyv(getter = HashFunctionDef::get_code, with = HashFunctionCodeDef)]
 	pub f: HashFunctionCode
@@ -74,15 +64,18 @@ impl HashFunctionDef {
 
 }    
 
-// Deriving `Deserialize` with `remote = ..` requires a `From` implementation.
 impl From<HashFunctionDef> for HashFunction {
 	fn from(value: HashFunctionDef) -> Self {
 	   value.f.into() 
 	}
 }
 
-#[derive(Archive, Serialize, Deserialize)]
+#[derive(Archive, Serialize, Deserialize, PartialEq)]
 #[rkyv(remote = HashFunctionCode)] 
+#[rkyv(
+    compare(PartialEq),
+    derive(Debug),
+)]
 enum HashFunctionCodeDef {
 	Blake3_256,
 	Blake2B256(Vec<u8>),
@@ -110,6 +103,19 @@ impl From<HashFunctionCodeDef> for HashFunctionCode {
 		}
 	}
 }
+
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
+// #[rkyv(
+//     compare(PartialEq),
+//     derive(Debug),
+// )]
+struct OptionalSaid {
+    value: SaidValue
+}
+
+
+
+
 
 #[test]
 fn test_rkyv_said_serialization() -> Result<(), rkyv::rancor::Failure> {

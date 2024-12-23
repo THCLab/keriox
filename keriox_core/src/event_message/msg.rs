@@ -4,18 +4,27 @@ use said::{
 };
 use serde::{Deserialize, Serialize};
 
+use crate::database::redb::rkyv_adapter::said_wrapper::{SAIDef, SaidValue};
+use crate::database::redb::rkyv_adapter::serialization_info_wrapper::SerializationInfoDef;
 use crate::error::Error;
 
 use super::{EventTypeTag, Typeable};
 
 pub type KeriEvent<D> = TypedEvent<EventTypeTag, D>;
 
+
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, SAD)]
+// #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
+// #[rkyv(
+//     compare(PartialEq),
+//     derive(Debug),
+// )]
 pub struct TypedEvent<T: Serialize + Clone, D: Serialize + Clone + Typeable<TypeTag = T>> {
     /// Serialization Information
     ///
     /// Encodes the version, size and serialization format of the event
     #[serde(rename = "v")]
+    // #[rkyv(with = SerializationInfoDef)]
     pub serialization_info: SerializationInfo,
 
     #[serde(rename = "t")]
@@ -28,6 +37,7 @@ pub struct TypedEvent<T: Serialize + Clone, D: Serialize + Clone + Typeable<Type
     /// SAI.
     #[said]
     #[serde(rename = "d")]
+    // #[rkyv(with = SAIDef)]
     pub digest: Option<SelfAddressingIdentifier>,
     #[serde(flatten)]
     pub data: D,

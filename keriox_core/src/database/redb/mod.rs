@@ -1,5 +1,4 @@
-pub(crate) mod said_wrapper;
-pub(crate) mod serialization_info_wrapper;
+pub(crate) mod rkyv_adapter;
 
 /// Kel storage. (identifier, sn) -> event digest
 /// The `KELS` table links an identifier and sequence number to the digest of an event,
@@ -29,7 +28,7 @@ use std::path::Path;
 
 use redb::{Database, MultimapTableDefinition, TableDefinition};
 use rkyv::{api::high::HighSerializer, ser::allocator::ArenaHandle, util::AlignedVec};
-use said_wrapper::{deserialize_indexed_signatures, deserialize_said};
+use rkyv_adapter::{deserialize_indexed_signatures, deserialize_said};
 use said::SelfAddressingIdentifier;
 use serde::de::DeserializeOwned;
 
@@ -186,7 +185,7 @@ impl RedbDatabase {
         let write_txn = self.db.begin_write()?;
         {
             let mut table = write_txn.open_table(EVENTS)?;
-            let key = said_wrapper::serialize_said(&digest).unwrap();
+            let key = rkyv_adapter::serialize_said(&digest).unwrap();
             table.insert(key.as_slice(), &value.as_ref())?;
         }
         write_txn.commit()?;
@@ -203,7 +202,7 @@ impl RedbDatabase {
             let mut table = write_txn.open_table(KELS)?;
             let id = event.data.prefix.to_str();
             let sn = event.data.sn;
-            let serialized_said = said_wrapper::serialize_said(&digest).unwrap();
+            let serialized_said = rkyv_adapter::serialize_said(&digest).unwrap();
             table.insert((id.as_str(), sn), &serialized_said.as_slice())?;
         }
         write_txn.commit()?;
@@ -293,7 +292,7 @@ impl RedbDatabase {
         }?;
         Ok(from_db_iterator.map(|sig| match sig {
             Ok(sig) => {
-                said_wrapper::deserialize_nontransferable(sig.value()).unwrap() 
+                rkyv_adapter::deserialize_nontransferable(sig.value()).unwrap() 
             }
             Err(_) => todo!(),
         }))
@@ -320,7 +319,7 @@ impl RedbDatabase {
             table.get((identifier.to_str().as_str(), sn))?.map(|value| {
 
                 let digest: SelfAddressingIdentifier =
-                    said_wrapper::deserialize_said(value.value()).unwrap();
+                    rkyv_adapter::deserialize_said(value.value()).unwrap();
                 digest
             })
         })
@@ -333,7 +332,7 @@ impl RedbDatabase {
         let read_txn = self.db.begin_read()?;
         let table = read_txn.open_table(EVENTS)?;
 
-        let key = said_wrapper::serialize_said(&said).unwrap();
+        let key = rkyv_adapter::serialize_said(&said).unwrap();
         if let Some(event) = table.get(key.as_slice())? {
             let value: KeriEvent<KeyEvent> =
                 serde_json::from_slice(event.value()).map_err(|_| RedbError::WrongValue)?;
