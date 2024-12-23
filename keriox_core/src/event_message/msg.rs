@@ -12,7 +12,6 @@ use super::{EventTypeTag, Typeable};
 
 pub type KeriEvent<D> = TypedEvent<EventTypeTag, D>;
 
-
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, SAD)]
 // #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
 // #[rkyv(

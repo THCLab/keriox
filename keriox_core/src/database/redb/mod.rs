@@ -49,7 +49,6 @@ use self::timestamped::TimestampedSignedEventMessage;
 
 use super::{timestamped, EventDatabase, QueryParameters};
 
-
 #[derive(Debug, thiserror::Error)]
 pub enum RedbError {
     #[error("Failed to create database. Reason: {0}")]
@@ -179,8 +178,8 @@ impl RedbDatabase {
     /// Saves provided event into key event table. Key is it's digest and value is event.
     fn insert_key_event(&self, event: &KeriEvent<KeyEvent>) -> Result<(), RedbError> {
         let digest = event.digest().map_err(|_e| RedbError::MissingDigest)?;
-        // todo
-        let value = event.encode().map_err(|_err| RedbError::WrongValue)?;
+        // todo: serialize with rkyv
+        let value = serde_json::to_vec(event).map_err(|_err| RedbError::WrongValue)?;
 
         let write_txn = self.db.begin_write()?;
         {
@@ -210,7 +209,9 @@ impl RedbDatabase {
         Ok(())
     }
 
-    fn insert_with_sn_key<V: for<'a> rkyv::Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rkyv::rancor::Failure>>>(
+    fn insert_with_sn_key<
+        V: for<'a> rkyv::Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rkyv::rancor::Failure>>,
+    >(
         &self,
         table: MultimapTableDefinition<(&str, u64), &[u8]>,
         id: &str,
@@ -259,7 +260,7 @@ impl RedbDatabase {
         self.insert_with_sn_key(SIGS, &identifier.to_str(), sn, signatures)
     }
 
-    fn get_by_sn_key< V: DeserializeOwned>(
+    fn get_by_sn_key<V: DeserializeOwned>(
         &self,
         table: MultimapTableDefinition<(&str, u64), &[u8]>,
         id: &str,
@@ -267,13 +268,14 @@ impl RedbDatabase {
     ) -> Result<impl DoubleEndedIterator<Item = V>, RedbError> {
         let from_db_iterator = {
             let read_txn = self.db.begin_read()?;
-            let table: redb::ReadOnlyMultimapTable<(&str, u64), &[u8]> = read_txn.open_multimap_table(table)?;
+            let table: redb::ReadOnlyMultimapTable<(&str, u64), &[u8]> =
+                read_txn.open_multimap_table(table)?;
             table.get((id, sn))
         }?;
         Ok(from_db_iterator.map(|sig| match sig {
             Ok(sig) => {
                 let value = sig.value();
-                
+
                 serde_json::from_slice(value).unwrap()
             }
             Err(_) => todo!(),
@@ -291,9 +293,7 @@ impl RedbDatabase {
             table.get((id, sn))
         }?;
         Ok(from_db_iterator.map(|sig| match sig {
-            Ok(sig) => {
-                rkyv_adapter::deserialize_nontransferable(sig.value()).unwrap() 
-            }
+            Ok(sig) => rkyv_adapter::deserialize_nontransferable(sig.value()).unwrap(),
             Err(_) => todo!(),
         }))
     }
@@ -317,7 +317,6 @@ impl RedbDatabase {
             let read_txn = self.db.begin_read().unwrap();
             let table = read_txn.open_table(KELS).unwrap();
             table.get((identifier.to_str().as_str(), sn))?.map(|value| {
-
                 let digest: SelfAddressingIdentifier =
                     rkyv_adapter::deserialize_said(value.value()).unwrap();
                 digest
@@ -362,16 +361,14 @@ impl RedbDatabase {
         &self,
         key: (&str, u64),
     ) -> Result<Option<impl Iterator<Item = IndexedSignature>>, RedbError> {
-
         let from_db_iterator = {
             let read_txn = self.db.begin_read()?;
-            let table: redb::ReadOnlyMultimapTable<(&str, u64), &[u8]> = read_txn.open_multimap_table(SIGS)?;
+            let table: redb::ReadOnlyMultimapTable<(&str, u64), &[u8]> =
+                read_txn.open_multimap_table(SIGS)?;
             table.get(key)
         }?;
         Ok(Some(from_db_iterator.map(|sig| match sig {
-            Ok(sig) => {
-                deserialize_indexed_signatures(sig.value()).unwrap()
-            }
+            Ok(sig) => deserialize_indexed_signatures(sig.value()).unwrap(),
             Err(_) => todo!(),
         })))
     }
@@ -395,7 +392,10 @@ impl RedbDatabase {
                 let (key, value) = entry.unwrap();
                 let signatures = self.get_signatures(key.value()).unwrap().unwrap().collect();
 
-                let event = self.get_event_by_serialized_key(&value.value()).unwrap().unwrap();
+                let event = self
+                    .get_event_by_serialized_key(&value.value())
+                    .unwrap()
+                    .unwrap();
                 TimestampedSignedEventMessage::new(SignedEventMessage::new(
                     &event, signatures, None, None,
                 ))
@@ -411,38 +411,40 @@ impl RedbDatabase {
             let read_txn = self.db.begin_read().unwrap();
             let table = read_txn.open_table(KELS);
             match table {
-                Ok(table) => {
-                    table
-                        .range((id.to_str().as_str(), 0)..(id.to_str().as_str(), u64::MAX))
-                        .unwrap()
-                },
-                Err(e) => return  None,
+                Ok(table) => table
+                    .range((id.to_str().as_str(), 0)..(id.to_str().as_str(), u64::MAX))
+                    .unwrap(),
+                Err(e) => return None,
             }
-            
         };
 
-        Some(digests
-            .map(|entry| {
-                let (key, value) = entry.unwrap();
-                let signatures = self.get_signatures(key.value()).unwrap().unwrap().collect();
+        Some(
+            digests
+                .map(|entry| {
+                    let (key, value) = entry.unwrap();
+                    let signatures = self.get_signatures(key.value()).unwrap().unwrap().collect();
 
-                let said = deserialize_said(&value.value())// &std::str::from_utf8(&value.value())
-                    .map_err(|_e| RedbError::WrongValue)
-                    .unwrap();
-                let event = self.get_event_by_serialized_key(value.value()).unwrap().unwrap();
-                TimestampedSignedEventMessage::new(SignedEventMessage::new(
-                    &event, signatures, None, None,
-                ))
-            })
-            .collect())
+                    let said = deserialize_said(&value.value()) // &std::str::from_utf8(&value.value())
+                        .map_err(|_e| RedbError::WrongValue)
+                        .unwrap();
+                    let event = self
+                        .get_event_by_serialized_key(value.value())
+                        .unwrap()
+                        .unwrap();
+                    TimestampedSignedEventMessage::new(SignedEventMessage::new(
+                        &event, signatures, None, None,
+                    ))
+                })
+                .collect(),
+        )
     }
 }
 
 #[test]
 fn test_retrieve_kel() {
     use crate::actor::parse_event_stream;
-    use crate::event_message::EventTypeTag;
     use crate::event_message::signed_event_message::{Message, Notice};
+    use crate::event_message::EventTypeTag;
     use tempfile::NamedTempFile;
     // Create test db path.
     let file_path = NamedTempFile::new().unwrap();
@@ -492,44 +494,79 @@ fn test_retrieve_kel() {
     assert_eq!(sigs_from_db.count(), 1);
 
     // Retrieve KEL in range
-    let mut part_of_kel_events = db
-        .get_kel(&first_id, 1, 2)
-        .into_iter();
+    let mut part_of_kel_events = db.get_kel(&first_id, 1, 2).into_iter();
 
     let rot = part_of_kel_events.next().unwrap();
-    assert_eq!(rot.signed_event_message.event_message.event_type, EventTypeTag::Rot);
-    assert_eq!(rot.signed_event_message.event_message.digest, Some("EHjzZj4i_-RpTN2Yh-NocajFROJ_GkBtlByhRykqiXgz".parse().unwrap()));
+    assert_eq!(
+        rot.signed_event_message.event_message.event_type,
+        EventTypeTag::Rot
+    );
+    assert_eq!(
+        rot.signed_event_message.event_message.digest,
+        Some(
+            "EHjzZj4i_-RpTN2Yh-NocajFROJ_GkBtlByhRykqiXgz"
+                .parse()
+                .unwrap()
+        )
+    );
     assert_eq!(rot.signed_event_message.signatures.len(), 3);
 
     let ixn = part_of_kel_events.next().unwrap();
-    assert_eq!(ixn.signed_event_message.event_message.event_type, EventTypeTag::Ixn);
-    assert_eq!(ixn.signed_event_message.event_message.digest, Some("EL6Dpm72KXayaUHYvVHlhPplg69fBvRt1P3YzuOGVpmz".parse().unwrap()));
+    assert_eq!(
+        ixn.signed_event_message.event_message.event_type,
+        EventTypeTag::Ixn
+    );
+    assert_eq!(
+        ixn.signed_event_message.event_message.digest,
+        Some(
+            "EL6Dpm72KXayaUHYvVHlhPplg69fBvRt1P3YzuOGVpmz"
+                .parse()
+                .unwrap()
+        )
+    );
     assert_eq!(ixn.signed_event_message.signatures.len(), 3);
 
     assert_eq!(part_of_kel_events.next(), None);
-    
+
     // Retrieve KEL in range
-    let mut part_of_kel_events = db
-        .get_kel(&first_id, 0, 2)
-        .into_iter();;
+    let mut part_of_kel_events = db.get_kel(&first_id, 0, 2).into_iter();
     let icp = part_of_kel_events.next().unwrap();
-    assert_eq!(icp.signed_event_message.event_message.event_type, EventTypeTag::Icp);
-    assert_eq!(icp.signed_event_message.event_message.digest, Some("EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen".parse().unwrap()));
+    assert_eq!(
+        icp.signed_event_message.event_message.event_type,
+        EventTypeTag::Icp
+    );
+    assert_eq!(
+        icp.signed_event_message.event_message.digest,
+        Some(
+            "EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen"
+                .parse()
+                .unwrap()
+        )
+    );
     assert_eq!(icp.signed_event_message.signatures.len(), 3);
-    
+
     let rot = part_of_kel_events.next().unwrap();
-    assert_eq!(rot.signed_event_message.event_message.event_type, EventTypeTag::Rot);
-    assert_eq!(rot.signed_event_message.event_message.digest, Some("EHjzZj4i_-RpTN2Yh-NocajFROJ_GkBtlByhRykqiXgz".parse().unwrap()));
+    assert_eq!(
+        rot.signed_event_message.event_message.event_type,
+        EventTypeTag::Rot
+    );
+    assert_eq!(
+        rot.signed_event_message.event_message.digest,
+        Some(
+            "EHjzZj4i_-RpTN2Yh-NocajFROJ_GkBtlByhRykqiXgz"
+                .parse()
+                .unwrap()
+        )
+    );
     assert_eq!(rot.signed_event_message.signatures.len(), 3);
 
     assert_eq!(part_of_kel_events.next(), None);
-    
 }
 
 #[test]
 fn test_retrieve_receipts() {
-    use crate::event_message::signed_event_message::{Message, Notice};
     use crate::actor::parse_event_stream;
+    use crate::event_message::signed_event_message::{Message, Notice};
     use tempfile::NamedTempFile;
     // Create test db path.
     let file_path = NamedTempFile::new().unwrap();

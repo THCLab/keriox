@@ -20,8 +20,7 @@ fn test_process() -> Result<(), Error> {
 
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
     let events_db_path = NamedTempFile::new().unwrap();
-        let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
-
+    let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
 
     let (processor, storage) = (
         BasicProcessor::new(events_db.clone(), db.clone(), None),

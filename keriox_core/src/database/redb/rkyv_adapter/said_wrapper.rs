@@ -1,31 +1,43 @@
-use said::{derivation::{HashFunction, HashFunctionCode}, SelfAddressingIdentifier};
+use said::{
+    derivation::{HashFunction, HashFunctionCode},
+    SelfAddressingIdentifier,
+};
 
 use rkyv::{with::With, Archive, Deserialize, Serialize};
 
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, Eq, Hash)]
-#[derive(Archive, rkyv::Serialize, rkyv::Deserialize, PartialEq)]
+#[derive(
+    Debug,
+    Clone,
+    serde::Serialize,
+    serde::Deserialize,
+    Default,
+    Eq,
+    Hash,
+    Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+    PartialEq,
+)]
 // #[rkyv(
 //     compare(PartialEq),
 //     derive(Debug),
 // )]
 pub(crate) struct SaidValue {
-	#[rkyv(with = SAIDef)]
-	said: SelfAddressingIdentifier
+    #[rkyv(with = SAIDef)]
+    said: SelfAddressingIdentifier,
 }
 
 impl From<SelfAddressingIdentifier> for SaidValue {
-	fn from(value: SelfAddressingIdentifier) -> Self {
-		Self {said: value}
-	}
+    fn from(value: SelfAddressingIdentifier) -> Self {
+        Self { said: value }
+    }
 }
 
 impl From<SaidValue> for SelfAddressingIdentifier {
-	fn from(value: SaidValue) -> Self {
-		value.said
-	}
+    fn from(value: SaidValue) -> Self {
+        value.said
+    }
 }
-
 
 #[derive(Archive, Serialize, Deserialize)]
 #[rkyv(remote = SelfAddressingIdentifier)]
@@ -34,16 +46,16 @@ impl From<SaidValue> for SelfAddressingIdentifier {
 //     derive(Debug),
 // )]
 pub(crate) struct SAIDef {
-	#[rkyv(with = HashFunctionDef)]
-	pub derivation: HashFunction,
-	pub digest: Vec<u8>,
+    #[rkyv(with = HashFunctionDef)]
+    pub derivation: HashFunction,
+    pub digest: Vec<u8>,
 }
 
 // Deriving `Deserialize` with `remote = ..` requires a `From` implementation.
 impl From<SAIDef> for SelfAddressingIdentifier {
-	fn from(value: SAIDef) -> Self {
-		Self::new(value.derivation, value.digest)
-	}
+    fn from(value: SAIDef) -> Self {
+        Self::new(value.derivation, value.digest)
+    }
 }
 
 #[derive(Archive, Serialize, Deserialize, PartialEq)]
@@ -52,56 +64,52 @@ impl From<SAIDef> for SelfAddressingIdentifier {
 //     compare(PartialEq),
 //     derive(Debug),
 // )]
-struct HashFunctionDef { 
-	#[rkyv(getter = HashFunctionDef::get_code, with = HashFunctionCodeDef)]
-	pub f: HashFunctionCode
+struct HashFunctionDef {
+    #[rkyv(getter = HashFunctionDef::get_code, with = HashFunctionCodeDef)]
+    pub f: HashFunctionCode,
 }
 
 impl HashFunctionDef {
-	fn get_code(foo: &HashFunction) -> HashFunctionCode {
-		foo.into()
-	}
-
-}    
+    fn get_code(foo: &HashFunction) -> HashFunctionCode {
+        foo.into()
+    }
+}
 
 impl From<HashFunctionDef> for HashFunction {
-	fn from(value: HashFunctionDef) -> Self {
-	   value.f.into() 
-	}
+    fn from(value: HashFunctionDef) -> Self {
+        value.f.into()
+    }
 }
 
 #[derive(Archive, Serialize, Deserialize, PartialEq)]
-#[rkyv(remote = HashFunctionCode)] 
-#[rkyv(
-    compare(PartialEq),
-    derive(Debug),
-)]
+#[rkyv(remote = HashFunctionCode)]
+#[rkyv(compare(PartialEq), derive(Debug))]
 enum HashFunctionCodeDef {
-	Blake3_256,
-	Blake2B256(Vec<u8>),
-	Blake2S256(Vec<u8>),
-	SHA3_256,
-	SHA2_256,
-	Blake3_512,
-	SHA3_512,
-	Blake2B512,
-	SHA2_512,
+    Blake3_256,
+    Blake2B256(Vec<u8>),
+    Blake2S256(Vec<u8>),
+    SHA3_256,
+    SHA2_256,
+    Blake3_512,
+    SHA3_512,
+    Blake2B512,
+    SHA2_512,
 }
 
 impl From<HashFunctionCodeDef> for HashFunctionCode {
-	fn from(value: HashFunctionCodeDef) -> Self {
-		match value {
-			HashFunctionCodeDef::Blake3_256 => HashFunctionCode::Blake3_256,
-			HashFunctionCodeDef::Blake2B256(vec) => HashFunctionCode::Blake2B256(vec),
-			HashFunctionCodeDef::Blake2S256(vec) => HashFunctionCode::Blake2S256(vec),
-			HashFunctionCodeDef::SHA3_256 => HashFunctionCode::SHA3_256,
-			HashFunctionCodeDef::SHA2_256 => HashFunctionCode::SHA2_256,
-			HashFunctionCodeDef::Blake3_512 => HashFunctionCode::Blake3_512,
-			HashFunctionCodeDef::SHA3_512 => HashFunctionCode::SHA3_512,
-			HashFunctionCodeDef::Blake2B512 => HashFunctionCode::Blake2B512,
-			HashFunctionCodeDef::SHA2_512 => HashFunctionCode::SHA2_512,
-		}
-	}
+    fn from(value: HashFunctionCodeDef) -> Self {
+        match value {
+            HashFunctionCodeDef::Blake3_256 => HashFunctionCode::Blake3_256,
+            HashFunctionCodeDef::Blake2B256(vec) => HashFunctionCode::Blake2B256(vec),
+            HashFunctionCodeDef::Blake2S256(vec) => HashFunctionCode::Blake2S256(vec),
+            HashFunctionCodeDef::SHA3_256 => HashFunctionCode::SHA3_256,
+            HashFunctionCodeDef::SHA2_256 => HashFunctionCode::SHA2_256,
+            HashFunctionCodeDef::Blake3_512 => HashFunctionCode::Blake3_512,
+            HashFunctionCodeDef::SHA3_512 => HashFunctionCode::SHA3_512,
+            HashFunctionCodeDef::Blake2B512 => HashFunctionCode::Blake2B512,
+            HashFunctionCodeDef::SHA2_512 => HashFunctionCode::SHA2_512,
+        }
+    }
 }
 
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
@@ -110,25 +118,23 @@ impl From<HashFunctionCodeDef> for HashFunctionCode {
 //     derive(Debug),
 // )]
 struct OptionalSaid {
-    value: SaidValue
+    value: SaidValue,
 }
-
-
-
-
 
 #[test]
 fn test_rkyv_said_serialization() -> Result<(), rkyv::rancor::Failure> {
-	let value: SelfAddressingIdentifier = "EJe_sKQb1otKrz6COIL8VFvBv3DEFvtKaVFGn1vm0IlL".parse().unwrap();
+    let value: SelfAddressingIdentifier = "EJe_sKQb1otKrz6COIL8VFvBv3DEFvtKaVFGn1vm0IlL"
+        .parse()
+        .unwrap();
 
     let bytes = rkyv::to_bytes(With::<SelfAddressingIdentifier, SAIDef>::cast(&value))?;
-	dbg!(&bytes);
+    dbg!(&bytes);
     let archived: &ArchivedSAIDef = rkyv::access(&bytes)?;
 
     let deserialized: SelfAddressingIdentifier =
         rkyv::deserialize(With::<ArchivedSAIDef, SAIDef>::cast(archived))?;
 
-	// let des = rkyv_adapter::deserialize_element::<ArchivedSAIDef, SAIDef, SelfAddressingIdentifier>(&bytes);
+    // let des = rkyv_adapter::deserialize_element::<ArchivedSAIDef, SAIDef, SelfAddressingIdentifier>(&bytes);
 
     assert_eq!(value, deserialized);
 

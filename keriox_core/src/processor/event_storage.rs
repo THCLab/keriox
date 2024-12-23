@@ -279,7 +279,11 @@ impl<D: EventDatabase> EventStorage<D> {
         let mut state = IdentifierState::default();
         if let Some(events) = self
             .events_db
-            .get_kel_finalized_events(QueryParameters::Range { id: id.clone(), start: 0, limit: sn + 1  })
+            .get_kel_finalized_events(QueryParameters::Range {
+                id: id.clone(),
+                start: 0,
+                limit: sn + 1,
+            })
         {
             // TODO: testing approach if events come out sorted already (as they should coz of put sequence)
             let mut sorted_events = events.collect::<Vec<TimestampedSignedEventMessage>>();

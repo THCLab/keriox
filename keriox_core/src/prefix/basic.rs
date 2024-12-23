@@ -13,12 +13,8 @@ use cesrox::{
     },
 };
 
-#[derive(Clone, Eq, PartialEq, Hash)]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
-#[rkyv(
-    compare(PartialEq),
-    derive(Debug),
-)]
+#[derive(Clone, Eq, PartialEq, Hash, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
+#[rkyv(compare(PartialEq), derive(Debug))]
 pub enum BasicPrefix {
     ECDSAsecp256k1NT(PublicKey),
     ECDSAsecp256k1(PublicKey),

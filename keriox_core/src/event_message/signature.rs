@@ -19,8 +19,16 @@ pub enum Signature {
     NonTransferable(Nontransferable),
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
+#[derive(
+    Serialize,
+    Deserialize,
+    Debug,
+    Clone,
+    PartialEq,
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+)]
 #[rkyv(
     // This will generate a PartialEq impl between our unarchived
     // and archived types

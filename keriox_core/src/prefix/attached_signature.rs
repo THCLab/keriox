@@ -14,12 +14,8 @@ use cesrox::{
 use core::str::FromStr;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-#[derive(Debug, PartialEq, Clone)]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
-#[rkyv(
-    compare(PartialEq),
-    derive(Debug),
-)]
+#[derive(Debug, PartialEq, Clone, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
+#[rkyv(compare(PartialEq), derive(Debug))]
 pub enum Index {
     CurrentOnly(u16),
     BothSame(u16),
@@ -43,12 +39,8 @@ impl Index {
         }
     }
 }
-#[derive(Debug, PartialEq, Clone)]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
-#[rkyv(
-    compare(PartialEq),
-    derive(Debug),
-)]
+#[derive(Debug, PartialEq, Clone, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
+#[rkyv(compare(PartialEq), derive(Debug))]
 pub struct IndexedSignature {
     pub index: Index,
     pub signature: SelfSigningPrefix,

@@ -90,7 +90,6 @@ pub enum Error {
     #[error(transparent)]
     SledDbError(#[from] crate::database::sled::DbError),
 
-
     #[error("Databsase err")]
     DbError,
 

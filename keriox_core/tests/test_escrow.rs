@@ -31,13 +31,17 @@ fn test_out_of_order() -> Result<(), Error> {
     let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
     let escrow_db = Arc::new(EscrowDb::new(escrow_root.path()).unwrap());
     let events_db_path = NamedTempFile::new().unwrap();
-        let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
+    let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
 
     // We'll use here default escrow configuration. However, it is possible to
     // use only selected escrow types. For examples checkout tests in
     // `processor/escrow_tests.rs`.
-    let (not_bus, (ooo_escrow, _, _, _)) =
-        default_escrow_bus(events_db.clone(), db.clone(), escrow_db, EscrowConfig::default());
+    let (not_bus, (ooo_escrow, _, _, _)) = default_escrow_bus(
+        events_db.clone(),
+        db.clone(),
+        escrow_db,
+        EscrowConfig::default(),
+    );
 
     let (processor, storage) = (
         BasicProcessor::new(events_db.clone(), db.clone(), Some(not_bus)),

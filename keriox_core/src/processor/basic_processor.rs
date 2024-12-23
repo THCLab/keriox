@@ -63,7 +63,9 @@ impl<D: EventDatabase> BasicProcessor<D> {
         let validator = EventValidator::new(db.clone(), events_db.clone());
         match validator.validate_event(&signed_event) {
             Ok(_) => {
-                events_db.add_kel_finalized_event(signed_event.clone(), id).map_err(|_e| Error::DbError)?;
+                events_db
+                    .add_kel_finalized_event(signed_event.clone(), id)
+                    .map_err(|_e| Error::DbError)?;
                 publisher.notify(&Notification::KeyEventAdded(signed_event))
             }
             Err(Error::EventOutOfOrderError) => {
