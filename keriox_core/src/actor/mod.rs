@@ -2,20 +2,11 @@ use std::convert::TryFrom;
 
 use serde::{Deserialize, Serialize};
 
-use crate::database::EventDatabase;
 #[cfg(feature = "oobi")]
 use crate::oobi::OobiManager;
-use crate::{
-    error::Error,
-    event_message::{
-        cesr_adapter::ParseError,
-        signed_event_message::{Message, Notice},
-    },
-    prefix::IdentifierPrefix,
-    processor::Processor,
-};
 #[cfg(feature = "query")]
 use crate::{
+    database::EventDatabase,
     event_message::signed_event_message::Op,
     processor::event_storage::EventStorage,
     query::{
@@ -26,6 +17,15 @@ use crate::{
         reply_event::{ReplyRoute, SignedReply},
         ReplyType,
     },
+};
+use crate::{
+    error::Error,
+    event_message::{
+        cesr_adapter::ParseError,
+        signed_event_message::{Message, Notice},
+    },
+    prefix::IdentifierPrefix,
+    processor::Processor,
 };
 #[cfg(feature = "mailbox")]
 use crate::{

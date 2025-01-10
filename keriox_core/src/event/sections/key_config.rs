@@ -257,7 +257,7 @@ pub fn nxt_commitment(
 #[cfg(test)]
 mod test {
     use cesrox::{parse, primitives::CesrPrimitive};
-    use said::{derivation::HashFunction, derivation::HashFunctionCode, SelfAddressingIdentifier};
+    use said::{derivation::HashFunction, derivation::HashFunctionCode};
 
     use crate::{
         error::Error,

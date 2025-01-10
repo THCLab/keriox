@@ -3,15 +3,11 @@ use said::{
     SelfAddressingIdentifier,
 };
 
-use rkyv::{with::With, Archive, Deserialize, Serialize};
+use rkyv::{Archive, Deserialize, Serialize};
 
 #[derive(
     Debug, Clone, Default, Eq, Hash, Archive, rkyv::Serialize, rkyv::Deserialize, PartialEq,
 )]
-// #[rkyv(
-//     compare(PartialEq),
-//     derive(Debug),
-// )]
 #[rkyv(derive(Debug))]
 pub(crate) struct SaidValue {
     #[rkyv(with = SAIDef)]
@@ -125,6 +121,7 @@ struct OptionalSaid {
 
 #[test]
 fn test_rkyv_said_serialization() -> Result<(), rkyv::rancor::Failure> {
+    use rkyv::with::With;
     let value: SelfAddressingIdentifier = "EJe_sKQb1otKrz6COIL8VFvBv3DEFvtKaVFGn1vm0IlL"
         .parse()
         .unwrap();

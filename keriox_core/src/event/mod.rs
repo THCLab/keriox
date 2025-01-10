@@ -13,8 +13,16 @@ use crate::error::Error;
 use crate::state::EventSemantics;
 use serde_hex::{Compact, SerHex};
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
+#[derive(
+    Serialize,
+    Deserialize,
+    Debug,
+    Clone,
+    PartialEq,
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+)]
 #[rkyv(derive(Debug))]
 pub struct KeyEvent {
     #[serde(rename = "i")]

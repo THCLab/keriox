@@ -164,7 +164,9 @@ impl<D: EventDatabase> EventProcessor<D> {
                 let id = &rct.body.prefix;
                 match self.validator.validate_witness_receipt(rct) {
                     Ok(_) => {
-                        self.db.add_receipt_nt(rct.to_owned(), id)?;
+                        self.events_db
+                            .add_receipt_nt(rct.to_owned(), id)
+                            .map_err(|_| Error::DbError)?;
                         self.publisher.notify(&Notification::ReceiptAccepted)
                     }
                     Err(Error::MissingEvent) => self
@@ -175,7 +177,9 @@ impl<D: EventDatabase> EventProcessor<D> {
             }
             Notice::TransferableRct(vrc) => match self.validator.validate_validator_receipt(vrc) {
                 Ok(_) => {
-                    self.db.add_receipt_t(vrc.clone(), &vrc.body.prefix)?;
+                    self.events_db
+                        .add_receipt_t(vrc.clone(), &vrc.body.prefix)
+                        .map_err(|_| Error::DbError)?;
                     self.publisher.notify(&Notification::ReceiptAccepted)
                 }
                 Err(Error::MissingEvent) | Err(Error::EventOutOfOrderError) => self

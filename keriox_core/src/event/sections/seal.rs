@@ -57,7 +57,7 @@ impl DigestSeal {
 #[rkyv(derive(Debug))]
 pub struct RootSeal {
     #[serde(rename = "rd")]
-    pub tree_root: SaidValue,
+    tree_root: SaidValue,
 }
 
 #[derive(
@@ -124,7 +124,7 @@ pub struct LocationSeal {
     pub ilk: String,
 
     #[serde(rename = "p")]
-    pub prior_digest: SaidValue,
+    prior_digest: SaidValue,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]

@@ -20,8 +20,7 @@ impl From<core::num::ParseIntError> for ThresholdError {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
+#[derive(Debug, Clone, PartialEq, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
 #[rkyv(derive(Debug))]
 pub struct ThresholdFraction {
     #[rkyv(with = rkyv_serialization::FractionDef)]

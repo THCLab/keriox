@@ -42,7 +42,17 @@ pub enum Nontransferable {
     Couplet(Vec<(BasicPrefix, SelfSigningPrefix)>),
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(
+    Serialize,
+    Deserialize,
+    Debug,
+    Clone,
+    PartialEq,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+    rkyv::Archive,
+)]
+#[rkyv(derive(Debug))]
 pub enum Transferable {
     Seal(EventSeal, Vec<IndexedSignature>),
 }

@@ -224,10 +224,7 @@ impl EventMsgBuilder {
             EventTypeTag::Ixn => KeyEvent::new(
                 prefix,
                 self.sn,
-                EventData::Ixn(InteractionEvent {
-                    previous_event_hash: self.prev_event.into(),
-                    data: self.data,
-                }),
+                EventData::Ixn(InteractionEvent::new(self.prev_event.into(), self.data)),
             )
             .to_message(self.format, self.derivation)?,
             EventTypeTag::Dip => {

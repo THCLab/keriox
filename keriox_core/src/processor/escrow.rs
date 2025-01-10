@@ -140,7 +140,7 @@ pub fn default_escrow_bus<D: EventDatabase + Send + Sync + 'static>(
 
 pub struct OutOfOrderEscrow<D: EventDatabase> {
     db: Arc<D>,
-    old_db: Arc<SledEventDatabase>,
+    sled_db: Arc<SledEventDatabase>,
     pub escrowed_out_of_order: Escrow<SignedEventMessage>,
 }
 
@@ -154,7 +154,7 @@ impl<D: EventDatabase> OutOfOrderEscrow<D> {
         let escrow = Escrow::new(b"ooes", duration, escrow_db);
         Self {
             db,
-            old_db: sled_db,
+            sled_db,
             escrowed_out_of_order: escrow,
         }
     }
@@ -203,11 +203,13 @@ impl<D: EventDatabase> OutOfOrderEscrow<D> {
     ) -> Result<(), Error> {
         if let Some(esc) = self.escrowed_out_of_order.get(id) {
             for event in esc {
-                let validator = EventValidator::new(self.old_db.clone(), self.db.clone());
+                let validator = EventValidator::new(self.sled_db.clone(), self.db.clone());
                 match validator.validate_event(&event) {
                     Ok(_) => {
                         // add to kel
-                        self.db.add_kel_finalized_event(event.clone(), id);
+                        self.db
+                            .add_kel_finalized_event(event.clone(), id)
+                            .map_err(|_| Error::DbError)?;
                         // remove from escrow
                         self.escrowed_out_of_order.remove(id, &event)?;
                         bus.notify(&Notification::KeyEventAdded(event))?;
@@ -612,13 +614,16 @@ impl<D: EventDatabase> Notifier for PartiallyWitnessedEscrow<D> {
                             Ok(_) => {
                                 // accept event and remove receipts
                                 self.db
-                                    .add_kel_finalized_event(receipted_event.clone(), &id);
+                                    .add_kel_finalized_event(receipted_event.clone(), &id)
+                                    .map_err(|_| Error::DbError)?;
                                 // remove from escrow
                                 self.escrowed_partially_witnessed
                                     .remove(&id, &receipted_event)?;
                                 // accept receipts and remove them from escrow
                                 self.accept_receipts_for(&receipted_event)?;
-                                self.db.add_receipt_nt(ooo.to_owned(), &id);
+                                self.db
+                                    .add_receipt_nt(ooo.to_owned(), &id)
+                                    .map_err(|_| Error::DbError)?;
                                 bus.notify(&Notification::KeyEventAdded(receipted_event))?;
                             }
                             Err(Error::SignatureVerificationError) => {
@@ -712,7 +717,9 @@ impl<D: EventDatabase> TransReceiptsEscrow<D> {
                 match validator.validate_validator_receipt(&timestamped_receipt) {
                     Ok(_) => {
                         // add to receipts
-                        self.db.add_receipt_t(timestamped_receipt.clone(), id);
+                        self.db
+                            .add_receipt_t(timestamped_receipt.clone(), id)
+                            .map_err(|_| Error::DbError)?;
                         // remove from escrow
                         self.escrowed_trans_receipts
                             .remove(id, &timestamped_receipt)?;
@@ -920,7 +927,8 @@ impl<D: EventDatabase> DelegationEscrow<D> {
                         // add to kel
                         let child_id = event.event_message.data.get_prefix();
                         self.db
-                            .add_kel_finalized_event(delegated_event.clone(), &child_id);
+                            .add_kel_finalized_event(delegated_event.clone(), &child_id)
+                            .map_err(|_| Error::DbError)?;
                         // remove from escrow
                         self.delegation_escrow.remove(delegator_id, &event)?;
                         bus.notify(&Notification::KeyEventAdded(event))?;

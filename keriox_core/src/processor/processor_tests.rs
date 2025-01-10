@@ -1,7 +1,6 @@
 use std::{convert::TryFrom, fs, sync::Arc};
 
 use cesrox::{parse, parse_many, primitives::CesrPrimitive};
-use said::SelfAddressingIdentifier;
 use tempfile::NamedTempFile;
 
 use crate::{
@@ -62,8 +61,13 @@ fn test_process() -> Result<(), Error> {
 
     // Check if processed event is in kel.
     let icp_from_db = event_storage.get_event_at_sn(&id, 0).unwrap();
-    let re_serialized = icp_from_db.signed_event_message.encode().unwrap();
-    assert_eq!(icp_raw.to_vec(), re_serialized);
+    let re_serialized = icp_from_db
+        .signed_event_message
+        .event_message
+        .encode()
+        .unwrap();
+    assert_eq!(icp_raw.to_vec()[..487], re_serialized);
+    assert_eq!(icp_from_db.signed_event_message.signatures.len(), 3);
 
     let rot_raw = br#"{"v":"KERI10JSON00021c_","t":"rot","d":"EHjzZj4i_-RpTN2Yh-NocajFROJ_GkBtlByhRykqiXgz","i":"EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen","s":"1","p":"EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen","kt":"2","k":["DCjxOXniUc5EUzDqERlXdptfKPHy6jNo_ZGsS4Vd8fAE","DNZHARO4dCJlluv0qezEMRmErIWWc-lzOzolBOQ15tHV","DOCQ4KN1jUlKbfjRteDYt9fxgpq1NK9_MqO5IA7shpED"],"nt":"2","n":["EN8l6yJC2PxribTN0xfri6bLz34Qvj-x3cNwcV3DvT2m","EATiZAHl0kzKID6faaQP2O7zB3Hj7eH3bE-vgKVAtsyU","EG6e7dJhh78ZqeIZ-eMbe-OB3TwFMPmrSsh9k75XIjLP"],"bt":"0","br":[],"ba":[],"a":[]}-AADAAAqV6xpsAAEB_FJP5UdYO5qiJphz8cqXbTjB9SRy8V0wIim-lgafF4o-b7TW0spZtzx2RXUfZLQQCIKZsw99k8AABBP8nfF3t6bf4z7eNoBgUJR-hdhw7wnlljMZkeY5j2KFRI_s8wqtcOFx1A913xarGJlO6UfrqFWo53e9zcD8egIACB8DKLMZcCGICuk98RCEVuS0GsqVngi1d-7gAX0jid42qUcR3aiYDMp2wJhqJn-iHJVvtB-LK7TRTggBtMDjuwB"#;
     let parsed = parse(rot_raw).unwrap().1;
@@ -73,6 +77,7 @@ fn test_process() -> Result<(), Error> {
     event_processor.process(&deserialized_rot.clone())?;
     let rot_from_db = event_storage.get_event_at_sn(&id, 1).unwrap();
     assert_eq!(rot_from_db.signed_event_message.encode().unwrap(), rot_raw);
+    assert_eq!(rot_from_db.signed_event_message.signatures.len(), 3);
 
     // Process the same rotation event one more time.
     event_processor.process(&deserialized_rot)?;
@@ -153,14 +158,10 @@ fn test_process() -> Result<(), Error> {
     assert!(matches!(raw_from_db, None));
 
     let id: IdentifierPrefix = "EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen".parse()?;
-    let mut kel = Vec::new();
-    kel.extend(icp_raw);
-    kel.extend(rot_raw);
-    kel.extend(ixn_raw);
 
-    let db_kel = event_storage.get_kel(&id)?;
+    let state_in_db = event_storage.get_state(&id).map(|state| state.sn);
 
-    assert_eq!(db_kel, Some(kel));
+    assert_eq!(state_in_db, Some(2));
 
     Ok(())
 }

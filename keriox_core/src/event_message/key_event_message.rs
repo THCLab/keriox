@@ -135,7 +135,7 @@ impl EventSemantics for KeriEvent<KeyEvent> {
             (EventData::Ixn(ref inter), _) => {
                 check_event_digest(self)?;
                 self.data.apply_to(state.clone()).and_then(|next_state| {
-                    if inter.previous_event_hash.said.eq(&state.last_event_digest) {
+                    if state.last_event_digest.eq(inter.previous_event_hash()) {
                         Ok(IdentifierState {
                             last_event_digest: event_digest,
                             ..next_state

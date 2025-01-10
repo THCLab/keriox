@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 #[rkyv(derive(Debug))]
 pub struct InteractionEvent {
     #[serde(rename = "p")]
-    pub previous_event_hash: SaidValue,
+    previous_event_hash: SaidValue,
 
     #[serde(rename = "a")]
     pub data: Vec<Seal>,
@@ -30,6 +30,10 @@ impl InteractionEvent {
             previous_event_hash: previous_event_hash.into(),
             data,
         }
+    }
+
+    pub fn previous_event_hash(&self) -> &SelfAddressingIdentifier {
+        &self.previous_event_hash.said
     }
 }
 

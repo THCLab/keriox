@@ -29,11 +29,9 @@ use std::path::Path;
 use redb::{Database, MultimapTableDefinition, TableDefinition};
 use rkyv::{
     api::high::HighSerializer, rancor::Failure, ser::allocator::ArenaHandle, util::AlignedVec,
-    with::With,
 };
-use rkyv_adapter::{deserialize_indexed_signatures, deserialize_said};
+use rkyv_adapter::deserialize_indexed_signatures;
 use said::SelfAddressingIdentifier;
-use serde::de::DeserializeOwned;
 
 use crate::{
     event::KeyEvent,
@@ -93,6 +91,16 @@ pub struct RedbDatabase {
 impl RedbDatabase {
     pub fn new(db_path: &Path) -> Result<Self, RedbError> {
         let db = Database::create(db_path)?;
+        // Create tables
+        let write_txn = db.begin_write()?;
+        {
+            write_txn.open_table(EVENTS)?;
+            write_txn.open_table(KELS)?;
+            write_txn.open_multimap_table(SIGS)?;
+            write_txn.open_multimap_table(TRANS_RCTS)?;
+            write_txn.open_multimap_table(NONTRANS_RCTS)?;
+        }
+        write_txn.commit()?;
         Ok(Self { db })
     }
 }
@@ -102,7 +110,7 @@ impl EventDatabase for RedbDatabase {
     fn add_kel_finalized_event(
         &self,
         signed_event: SignedEventMessage,
-        id: &IdentifierPrefix,
+        _id: &IdentifierPrefix,
     ) -> Result<(), RedbError> {
         let event = &signed_event.event_message;
         self.insert_key_event(event)?;
@@ -120,7 +128,7 @@ impl EventDatabase for RedbDatabase {
     fn add_receipt_t(
         &self,
         receipt: SignedTransferableReceipt,
-        id: &IdentifierPrefix,
+        _id: &IdentifierPrefix,
     ) -> Result<(), RedbError> {
         let sn = receipt.body.sn;
         let id = receipt.body.prefix;
@@ -131,7 +139,7 @@ impl EventDatabase for RedbDatabase {
     fn add_receipt_nt(
         &self,
         receipt: SignedNontransferableReceipt,
-        id: &IdentifierPrefix,
+        _id: &IdentifierPrefix,
     ) -> Result<(), RedbError> {
         let sn = receipt.body.sn;
         let id = receipt.body.prefix;
@@ -250,8 +258,7 @@ impl RedbDatabase {
         sn: u64,
         trans: &[Transferable],
     ) -> Result<(), RedbError> {
-        todo!()
-        // self.insert_with_sn_key(TRANS_RCTS, id, sn, trans)
+        self.insert_with_sn_key(TRANS_RCTS, id, sn, trans)
     }
 
     fn insert_indexed_signatures(
@@ -261,28 +268,6 @@ impl RedbDatabase {
         signatures: &[IndexedSignature],
     ) -> Result<(), RedbError> {
         self.insert_with_sn_key(SIGS, &identifier.to_str(), sn, signatures)
-    }
-
-    fn get_by_sn_key<V: DeserializeOwned>(
-        &self,
-        table: MultimapTableDefinition<(&str, u64), &[u8]>,
-        id: &str,
-        sn: u64,
-    ) -> Result<impl DoubleEndedIterator<Item = V>, RedbError> {
-        let from_db_iterator = {
-            let read_txn = self.db.begin_read()?;
-            let table: redb::ReadOnlyMultimapTable<(&str, u64), &[u8]> =
-                read_txn.open_multimap_table(table)?;
-            table.get((id, sn))
-        }?;
-        Ok(from_db_iterator.map(|sig| match sig {
-            Ok(sig) => {
-                let value = sig.value();
-
-                serde_json::from_slice(value).unwrap()
-            }
-            Err(_) => todo!(),
-        }))
     }
 
     fn get_nontrans_receipts(
@@ -306,9 +291,15 @@ impl RedbDatabase {
         id: &str,
         sn: u64,
     ) -> Result<impl DoubleEndedIterator<Item = Transferable>, RedbError> {
-        todo!();
-        Ok(vec![].into_iter())
-        // self.get_by_sn_key::<Transferable>(TRANS_RCTS, id, sn)
+        let from_db_iterator = {
+            let read_txn = self.db.begin_read()?;
+            let table = read_txn.open_multimap_table(TRANS_RCTS)?;
+            table.get((id, sn))
+        }?;
+        Ok(from_db_iterator.map(|sig| match sig {
+            Ok(sig) => rkyv_adapter::deserialize_transferable(sig.value()).unwrap(),
+            Err(_) => todo!(),
+        }))
     }
 
     fn get_event_digest(
@@ -420,7 +411,7 @@ impl RedbDatabase {
                 Ok(table) => table
                     .range((id.to_str().as_str(), 0)..(id.to_str().as_str(), u64::MAX))
                     .unwrap(),
-                Err(e) => return None,
+                Err(_e) => return None,
             }
         };
 
@@ -430,9 +421,6 @@ impl RedbDatabase {
                     let (key, value) = entry.unwrap();
                     let signatures = self.get_signatures(key.value()).unwrap().unwrap().collect();
 
-                    let said = deserialize_said(&value.value()) // &std::str::from_utf8(&value.value())
-                        .map_err(|_e| RedbError::WrongValue)
-                        .unwrap();
                     let event = self
                         .get_event_by_serialized_key(value.value())
                         .unwrap()

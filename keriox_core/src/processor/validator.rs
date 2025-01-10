@@ -9,7 +9,7 @@ use super::event_storage::EventStorage;
 #[cfg(feature = "query")]
 use crate::query::{key_state_notice::KeyStateNotice, reply_event::SignedReply, QueryError};
 use crate::{
-    database::{redb::RedbDatabase, sled::SledEventDatabase, EventDatabase},
+    database::{sled::SledEventDatabase, EventDatabase},
     error::Error,
     event::{
         event_data::EventData,
@@ -456,6 +456,7 @@ fn test_validate_seal() -> Result<(), Error> {
     use tempfile::Builder;
 
     use crate::{
+        database::redb::RedbDatabase,
         event_message::signed_event_message::{Message, Notice},
         processor::{basic_processor::BasicProcessor, Processor},
     };

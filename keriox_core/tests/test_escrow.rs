@@ -45,7 +45,7 @@ fn test_out_of_order() -> Result<(), Error> {
 
     let (processor, storage) = (
         BasicProcessor::new(events_db.clone(), db.clone(), Some(not_bus)),
-        EventStorage::new(db.clone(), db.clone()),
+        EventStorage::new(events_db.clone(), db.clone()),
     );
 
     let id: IdentifierPrefix = "EO8cED9H5XPqBdoVatgBkEuSP8yXic7HtWpkex-9e0sL".parse()?;
