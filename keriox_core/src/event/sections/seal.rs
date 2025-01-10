@@ -1,9 +1,19 @@
-use crate::prefix::IdentifierPrefix;
+use crate::{database::redb::rkyv_adapter::said_wrapper::SaidValue, prefix::IdentifierPrefix};
 use said::SelfAddressingIdentifier;
 use serde::{Deserialize, Serialize};
 use serde_hex::{Compact, SerHex};
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(
+    Serialize,
+    Deserialize,
+    Debug,
+    Clone,
+    PartialEq,
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+)]
+#[rkyv(derive(Debug))]
 #[serde(untagged)]
 pub enum Seal {
     Location(LocationSeal),
@@ -12,19 +22,56 @@ pub enum Seal {
     Root(RootSeal),
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(
+    Serialize,
+    Deserialize,
+    Debug,
+    Clone,
+    PartialEq,
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+)]
+#[rkyv(derive(Debug))]
 pub struct DigestSeal {
     #[serde(rename = "d")]
-    pub dig: SelfAddressingIdentifier,
+    dig: SaidValue,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+impl DigestSeal {
+    pub fn new(said: SelfAddressingIdentifier) -> Self {
+        Self { dig: said.into() }
+    }
+}
+
+#[derive(
+    Serialize,
+    Deserialize,
+    Debug,
+    Clone,
+    PartialEq,
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+)]
+#[rkyv(derive(Debug))]
 pub struct RootSeal {
     #[serde(rename = "rd")]
-    pub tree_root: SelfAddressingIdentifier,
+    pub tree_root: SaidValue,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
+#[derive(
+    Serialize,
+    Deserialize,
+    Debug,
+    Clone,
+    Default,
+    PartialEq,
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+)]
+#[rkyv(derive(Debug))]
 pub struct EventSeal {
     #[serde(rename = "i")]
     pub prefix: IdentifierPrefix,
@@ -33,10 +80,39 @@ pub struct EventSeal {
     pub sn: u64,
 
     #[serde(rename = "d")]
-    pub event_digest: SelfAddressingIdentifier,
+    event_digest: SaidValue,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
+impl EventSeal {
+    pub fn new(
+        identifier: IdentifierPrefix,
+        sn: u64,
+        event_digest: SelfAddressingIdentifier,
+    ) -> Self {
+        Self {
+            prefix: identifier,
+            sn,
+            event_digest: event_digest.into(),
+        }
+    }
+
+    pub fn event_digest(&self) -> SelfAddressingIdentifier {
+        self.event_digest.said.clone()
+    }
+}
+
+#[derive(
+    Serialize,
+    Deserialize,
+    Debug,
+    Clone,
+    Default,
+    PartialEq,
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+)]
+#[rkyv(derive(Debug))]
 pub struct LocationSeal {
     #[serde(rename = "i")]
     pub prefix: IdentifierPrefix,
@@ -48,7 +124,7 @@ pub struct LocationSeal {
     pub ilk: String,
 
     #[serde(rename = "p")]
-    pub prior_digest: SelfAddressingIdentifier,
+    pub prior_digest: SaidValue,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]

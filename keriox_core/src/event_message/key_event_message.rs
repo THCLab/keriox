@@ -99,7 +99,7 @@ impl EventSemantics for KeriEvent<KeyEvent> {
                     // to the state. It will return EventOutOfOrderError or
                     // EventDuplicateError in that cases.
                     self.data.apply_to(state.clone()).and_then(|next_state| {
-                        if rot.previous_event_hash.eq(&state.last_event_digest) {
+                        if state.last_event_digest.eq(rot.previous_event_hash()) {
                             Ok(IdentifierState {
                                 last_event_digest: event_digest,
                                 ..next_state
@@ -120,7 +120,7 @@ impl EventSemantics for KeriEvent<KeyEvent> {
                         Err(Error::SemanticError(
                             "Applying delegated rotation to non-delegated state.".into(),
                         ))
-                    } else if drt.previous_event_hash.eq(&state.last_event_digest) {
+                    } else if state.last_event_digest.eq(drt.previous_event_hash()) {
                         Ok(IdentifierState {
                             last_event_digest: event_digest.clone(),
                             ..next_state
@@ -135,7 +135,7 @@ impl EventSemantics for KeriEvent<KeyEvent> {
             (EventData::Ixn(ref inter), _) => {
                 check_event_digest(self)?;
                 self.data.apply_to(state.clone()).and_then(|next_state| {
-                    if inter.previous_event_hash.eq(&state.last_event_digest) {
+                    if inter.previous_event_hash.said.eq(&state.last_event_digest) {
                         Ok(IdentifierState {
                             last_event_digest: event_digest,
                             ..next_state
@@ -163,12 +163,12 @@ pub fn verify_identifier_binding(icp_event: &KeriEvent<KeyEvent>) -> Result<bool
                     .first()
                     .ok_or_else(|| Error::SemanticError("Missing public key".into()))?)),
             IdentifierPrefix::SelfAddressing(sap) => {
-                Ok(icp_event.compare_digest(sap)? && icp_event.digest()?.eq(sap))
+                Ok(icp_event.compare_digest(&sap.said)? && icp_event.digest()?.eq(&sap.said))
             }
             IdentifierPrefix::SelfSigning(_ssp) => todo!(),
         },
         EventData::Dip(_dip) => match &icp_event.data.get_prefix() {
-            IdentifierPrefix::SelfAddressing(sap) => icp_event.compare_digest(sap),
+            IdentifierPrefix::SelfAddressing(sap) => icp_event.compare_digest(&sap.said),
             _ => todo!(),
         },
         _ => Err(Error::SemanticError("Not an ICP or DIP event".into())),

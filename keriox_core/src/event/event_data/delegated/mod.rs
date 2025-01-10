@@ -14,7 +14,17 @@ use said::derivation::HashFunctionCode;
 use said::sad::SAD;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(
+    Serialize,
+    Deserialize,
+    Debug,
+    Clone,
+    PartialEq,
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+)]
+#[rkyv(derive(Debug))]
 pub struct DelegatedInceptionEvent {
     #[serde(flatten)]
     pub inception_data: InceptionEvent,
@@ -40,14 +50,14 @@ impl DelegatedInceptionEvent {
         dummy_event.compute_digest(&code, &format);
         let digest = dummy_event.prefix.unwrap();
         let event = KeyEvent::new(
-            IdentifierPrefix::SelfAddressing(digest.clone()),
+            IdentifierPrefix::self_addressing(digest.clone()),
             0,
             EventData::Dip(self),
         );
         Ok(KeriEvent {
             serialization_info: dummy_event.serialization_info,
             event_type: event.get_type(),
-            digest: Some(digest),
+            digest: Some(digest.into()),
             data: event,
         })
     }

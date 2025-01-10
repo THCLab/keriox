@@ -3,18 +3,55 @@ use said::{derivation::HashFunction, SelfAddressingIdentifier};
 use serde::{Deserialize, Serialize};
 
 use super::threshold::SignatureThreshold;
-use crate::prefix::{attached_signature::Index, BasicPrefix, IndexedSignature};
+use crate::{
+    database::redb::rkyv_adapter::said_wrapper::SaidValue,
+    prefix::{attached_signature::Index, BasicPrefix, IndexedSignature},
+};
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
+#[derive(
+    Serialize,
+    Deserialize,
+    Debug,
+    Clone,
+    Default,
+    PartialEq,
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+)]
+#[rkyv(derive(Debug))]
+
 pub struct NextKeysData {
     #[serde(rename = "nt")]
     pub threshold: SignatureThreshold,
 
     #[serde(rename = "n")]
-    pub next_key_hashes: Vec<SelfAddressingIdentifier>,
+    next_key_hashes: Vec<SaidValue>,
 }
 
 impl NextKeysData {
+    pub fn new(
+        threshold: SignatureThreshold,
+        next_keys_hashes: impl IntoIterator<Item = SelfAddressingIdentifier>,
+    ) -> Self {
+        let next_keys = next_keys_hashes
+            .into_iter()
+            .map(|said| said.into())
+            .collect();
+        Self {
+            threshold,
+            next_key_hashes: next_keys,
+        }
+    }
+
+    pub fn next_keys_hashes(&self) -> Vec<SelfAddressingIdentifier> {
+        self.next_key_hashes
+            .clone()
+            .into_iter()
+            .map(|said| said.into())
+            .collect()
+    }
+
     /// Checks if next KeyConfig contains enough public keys to fulfill current
     /// next threshold.
     pub fn verify_next(&self, next: &KeyConfig) -> Result<bool, SignatureError> {
@@ -24,7 +61,7 @@ impl NextKeysData {
             .filter_map(|key| {
                 self.next_key_hashes
                     .iter()
-                    .position(|dig| dig.verify_binding(key.to_str().as_bytes()))
+                    .position(|dig| dig.said.verify_binding(key.to_str().as_bytes()))
             })
             .collect();
 
@@ -66,6 +103,7 @@ impl NextKeysData {
                         public_keys.get(index.current() as usize),
                     ) {
                         (Some(prev_next_digest), Some(current)) => prev_next_digest
+                            .said
                             .verify_binding(current.to_str().as_bytes())
                             .then_some(prev_next as usize),
                         _ => None,
@@ -96,7 +134,18 @@ pub enum SignatureError {
     #[error("Wrong key type error")]
     WrongKeyTypeError,
 }
-#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
+#[derive(
+    Serialize,
+    Deserialize,
+    Debug,
+    Clone,
+    Default,
+    PartialEq,
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+)]
+#[rkyv(derive(Debug))]
 pub struct KeyConfig {
     #[serde(rename = "kt")]
     pub threshold: SignatureThreshold,
@@ -197,7 +246,7 @@ pub fn nxt_commitment(
 ) -> NextKeysData {
     let next_key_hashes = keys
         .iter()
-        .map(|bp| derivation.derive(bp.to_str().as_bytes()))
+        .map(|bp| derivation.derive(bp.to_str().as_bytes()).into())
         .collect();
     NextKeysData {
         threshold,
@@ -213,7 +262,7 @@ mod test {
     use crate::{
         error::Error,
         event::sections::{
-            key_config::{nxt_commitment, NextKeysData, SignatureError},
+            key_config::{nxt_commitment, NextKeysData, SaidValue, SignatureError},
             threshold::SignatureThreshold,
             KeyConfig,
         },
@@ -237,13 +286,15 @@ mod test {
         let nxt = nxt_commitment(sith, &next_keys, &HashFunctionCode::Blake3_256.into());
 
         let threshold = SignatureThreshold::multi_weighted(vec![vec![(1, 2), (1, 2), (1, 2)]]);
-        let next_key_hashes: Vec<SelfAddressingIdentifier> = [
+        let next_key_hashes: Vec<SaidValue> = [
             "EFQZkN8MMEtZzaS-Tq1EEbH886vsf5SzwicSn_ywbzTy",
             "ENOQnUj8GNr1ICJ1P4qmC3-aHTrpZqKVpZhvHCBVWE1p",
             "EDFH1MfEJWlI9PpMbgBi_RGP7L4UivrLfozFucuEaWVH",
         ]
         .iter()
-        .map(|sai| sai.parse().unwrap())
+        .map(|sai| SaidValue {
+            said: sai.parse().unwrap(),
+        })
         .collect();
 
         assert_eq!(
@@ -411,10 +462,7 @@ mod test {
         // Corresponding previous next keys in the same order as in current keys.
         let indexes = vec![Index::BothSame(0), Index::BothSame(1), Index::BothSame(2)];
 
-        let next_keys_data = NextKeysData {
-            threshold: threshold.clone(),
-            next_key_hashes: initial_digests.clone(),
-        };
+        let next_keys_data = NextKeysData::new(threshold.clone(), initial_digests.clone());
         assert_eq!(
             next_keys_data.matching_previous_indexes(&public_keys, &indexes[..2]),
             vec![0, 1]
@@ -436,10 +484,7 @@ mod test {
             initial_digests[0].clone(),
         ];
 
-        let next_keys_data = NextKeysData {
-            threshold: threshold.clone(),
-            next_key_hashes: digests.to_vec(),
-        };
+        let next_keys_data = NextKeysData::new(threshold.clone(), digests.to_vec());
         assert_eq!(
             next_keys_data.matching_previous_indexes(&public_keys, &indexes[..2]),
             vec![2, 0]
@@ -461,10 +506,7 @@ mod test {
             initial_digests[1].clone(),
         ];
 
-        let next_keys_data = NextKeysData {
-            threshold: threshold.clone(),
-            next_key_hashes: digests.to_vec(),
-        };
+        let next_keys_data = NextKeysData::new(threshold.clone(), digests.to_vec());
         assert_eq!(
             next_keys_data.matching_previous_indexes(&public_keys, &indexes[..2]),
             vec![2]
@@ -486,10 +528,7 @@ mod test {
             hash_function.derive("Bad digest".as_bytes()),
         ];
 
-        let next_keys_data = NextKeysData {
-            threshold: threshold.clone(),
-            next_key_hashes: digests.to_vec(),
-        };
+        let next_keys_data = NextKeysData::new(threshold.clone(), digests.to_vec());
         assert_eq!(
             next_keys_data.matching_previous_indexes(&public_keys, &indexes),
             vec![1]

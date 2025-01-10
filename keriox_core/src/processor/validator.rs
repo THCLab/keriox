@@ -150,7 +150,7 @@ impl<D: EventDatabase> EventValidator<D> {
                 .get_keys_at_event(
                     &vrc.validator_seal.prefix,
                     vrc.validator_seal.sn,
-                    &vrc.validator_seal.event_digest,
+                    &vrc.validator_seal.event_digest(),
                 )?
                 .ok_or(Error::EventOutOfOrderError)?;
             if kp.verify(
@@ -252,7 +252,7 @@ impl<D: EventDatabase> EventValidator<D> {
                 }?;
                 let kp = self
                     .event_storage
-                    .get_keys_at_event(&seal.prefix, seal.sn, &seal.event_digest)
+                    .get_keys_at_event(&seal.prefix, seal.sn, &seal.event_digest())
                     .map_err(|_| VerificationError::NotEstablishment(seal.clone()))?; // error means that event wasn't found
                 match kp {
                     Some(kp) => kp
@@ -300,7 +300,7 @@ impl<D: EventDatabase> EventValidator<D> {
             // Check if event seal list contains delegating event seal.
             if !data.iter().any(|s| match s {
                 Seal::Event(es) => delegated_event
-                    .compare_digest(&es.event_digest)
+                    .compare_digest(&es.event_digest())
                     .unwrap_or(false),
                 _ => false,
             }) {
@@ -326,11 +326,7 @@ impl<D: EventDatabase> EventValidator<D> {
                     .as_ref()
                     .map(|seal| (seal.sn, seal.digest.clone()))
                     .ok_or_else(|| Error::MissingDelegatorSealError(dip.delegator.clone()))?;
-                Some(EventSeal {
-                    prefix: dip.delegator,
-                    sn,
-                    event_digest: dig,
-                })
+                Some(EventSeal::new(dip.delegator, sn, dig.into()))
             }
             EventData::Drt(_drt) => {
                 let delegator = self
@@ -346,11 +342,7 @@ impl<D: EventDatabase> EventValidator<D> {
                     .as_ref()
                     .map(|seal| (seal.sn, seal.digest.clone()))
                     .ok_or_else(|| Error::MissingDelegatorSealError(delegator.clone()))?;
-                Some(EventSeal {
-                    prefix: delegator,
-                    sn,
-                    event_digest: dig,
-                })
+                Some(EventSeal::new(delegator, sn, dig.into()))
             }
             _ => None,
         })
@@ -494,11 +486,7 @@ fn test_validate_seal() -> Result<(), Error> {
     if let Message::Notice(Notice::Event(dip)) = msg {
         let delegated_event_digest = dip.event_message.digest()?;
         // Construct delegating seal.
-        let seal = EventSeal {
-            prefix: delegator_id,
-            sn: 1,
-            event_digest: delegated_event_digest,
-        };
+        let seal = EventSeal::new(delegator_id, 1, delegated_event_digest.into());
 
         let validator = EventValidator::new(db.clone(), events_database.clone());
         // Try to validate seal before processing delegating event

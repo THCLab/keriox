@@ -6,7 +6,7 @@ use cesrox::{
     primitives::IndexedSignature as CesrIndexedSignature,
     ParsedData,
 };
-use said::version::format::SerializationFormats;
+use said::{version::format::SerializationFormats, SelfAddressingIdentifier};
 use serde::{Deserialize, Serialize};
 
 use crate::event::{
@@ -161,13 +161,9 @@ impl From<SignedNontransferableReceipt> for ParsedData {
 impl From<SignedTransferableReceipt> for ParsedData {
     fn from(rcp: SignedTransferableReceipt) -> ParsedData {
         let seal = rcp.validator_seal;
+        let event_digest = seal.event_digest();
         let signatures = rcp.signatures.into_iter().map(|sig| sig.into()).collect();
-        let quadruple = (
-            seal.prefix.into(),
-            seal.sn,
-            seal.event_digest.into(),
-            signatures,
-        );
+        let quadruple = (seal.prefix.into(), seal.sn, event_digest.into(), signatures);
         let group = Group::TransIndexedSigGroups(vec![quadruple]);
 
         ParsedData {
@@ -354,6 +350,8 @@ impl TryFrom<ParsedData> for SignedExchange {
 
 #[cfg(feature = "oobi")]
 fn signed_reply(rpy: ReplyEvent, mut attachments: Vec<Group>) -> Result<Op, ParseError> {
+    use said::SelfAddressingIdentifier;
+
     match attachments
         .pop()
         .ok_or_else(|| ParseError::AttachmentError("Missing attachment".into()))?
@@ -373,11 +371,11 @@ fn signed_reply(rpy: ReplyEvent, mut attachments: Vec<Group>) -> Result<Op, Pars
                 .last()
                 .ok_or_else(|| ParseError::AttachmentError("More than one seal".into()))?
                 .to_owned();
-            let seal = EventSeal {
-                prefix: prefix.into(),
-                sn: sn,
-                event_digest: digest.into(),
-            };
+            let seal = EventSeal::new(
+                prefix.into(),
+                sn,
+                SelfAddressingIdentifier::from(digest).into(),
+            );
             let sigs = sigs.into_iter().map(|sig| sig.into()).collect();
             Ok(Op::Reply(SignedReply::new_trans(rpy, seal, sigs)))
         }
@@ -571,11 +569,11 @@ fn signed_receipt(
                 // TODO what if more than one?
                 .last()
                 .ok_or_else(|| ParseError::AttachmentError("Empty seals".into()))?;
-            let seal = EventSeal {
-                prefix: prefix.clone().into(),
-                sn: *sn,
-                event_digest: event_digest.clone().into(),
-            };
+            let seal = EventSeal::new(
+                prefix.clone().into(),
+                *sn,
+                SelfAddressingIdentifier::from(event_digest.clone()).into(),
+            );
             let converted_signatures = sigs.iter().map(|sig| sig.clone().into()).collect();
             Ok(Notice::TransferableRct(SignedTransferableReceipt::new(
                 event_message,

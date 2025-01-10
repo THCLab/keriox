@@ -1,4 +1,7 @@
-use crate::event::sections::key_config::SignatureError;
+use crate::{
+    database::redb::rkyv_adapter::said_wrapper::SaidValue,
+    event::sections::key_config::SignatureError,
+};
 
 use self::error::Error;
 use cesrox::primitives::codes::PrimitiveCode;
@@ -20,11 +23,26 @@ pub use basic::BasicPrefix;
 pub use seed::SeedPrefix;
 pub use self_signing::SelfSigningPrefix;
 
-#[derive(Debug, PartialEq, Clone, Eq, Hash)]
+#[derive(Debug, PartialEq, Clone, Eq, Hash, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
+#[rkyv(derive(Debug))]
 pub enum IdentifierPrefix {
     Basic(BasicPrefix),
-    SelfAddressing(SelfAddressingIdentifier),
+    SelfAddressing(SaidValue),
     SelfSigning(SelfSigningPrefix),
+}
+
+impl IdentifierPrefix {
+    pub fn self_addressing(said: SelfAddressingIdentifier) -> Self {
+        IdentifierPrefix::SelfAddressing(said.into())
+    }
+
+    pub fn basic(bp: BasicPrefix) -> Self {
+        IdentifierPrefix::Basic(bp)
+    }
+
+    pub fn self_signing(self_signing: SelfSigningPrefix) -> Self {
+        IdentifierPrefix::SelfSigning(self_signing)
+    }
 }
 
 impl Display for IdentifierPrefix {
@@ -39,7 +57,7 @@ impl FromStr for IdentifierPrefix {
         match BasicPrefix::from_str(s) {
             Ok(bp) => Ok(Self::Basic(bp)),
             Err(_) => match SelfAddressingIdentifier::from_str(s) {
-                Ok(sa) => Ok(Self::SelfAddressing(sa)),
+                Ok(sa) => Ok(Self::SelfAddressing(sa.into())),
                 Err(_) => Ok(Self::SelfSigning(SelfSigningPrefix::from_str(s)?)),
             },
         }
@@ -50,14 +68,14 @@ impl CesrPrimitive for IdentifierPrefix {
     fn derivative(&self) -> Vec<u8> {
         match self {
             Self::Basic(bp) => bp.derivative(),
-            Self::SelfAddressing(sap) => sap.derivative(),
+            Self::SelfAddressing(sap) => sap.said.derivative(),
             Self::SelfSigning(ssp) => ssp.derivative(),
         }
     }
     fn derivation_code(&self) -> PrimitiveCode {
         match self {
             Self::Basic(bp) => bp.derivation_code(),
-            Self::SelfAddressing(sap) => sap.derivation_code(),
+            Self::SelfAddressing(sap) => sap.said.derivation_code(),
             Self::SelfSigning(ssp) => ssp.derivation_code(),
         }
     }
@@ -87,7 +105,7 @@ impl<'de> Deserialize<'de> for IdentifierPrefix {
 
 impl Default for IdentifierPrefix {
     fn default() -> Self {
-        IdentifierPrefix::SelfAddressing(SelfAddressingIdentifier::default())
+        IdentifierPrefix::SelfAddressing(SelfAddressingIdentifier::default().into())
     }
 }
 

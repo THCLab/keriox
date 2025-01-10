@@ -6,25 +6,16 @@ use said::{
 use rkyv::{with::With, Archive, Deserialize, Serialize};
 
 #[derive(
-    Debug,
-    Clone,
-    serde::Serialize,
-    serde::Deserialize,
-    Default,
-    Eq,
-    Hash,
-    Archive,
-    rkyv::Serialize,
-    rkyv::Deserialize,
-    PartialEq,
+    Debug, Clone, Default, Eq, Hash, Archive, rkyv::Serialize, rkyv::Deserialize, PartialEq,
 )]
 // #[rkyv(
 //     compare(PartialEq),
 //     derive(Debug),
 // )]
+#[rkyv(derive(Debug))]
 pub(crate) struct SaidValue {
     #[rkyv(with = SAIDef)]
-    said: SelfAddressingIdentifier,
+    pub(crate) said: SelfAddressingIdentifier,
 }
 
 impl From<SelfAddressingIdentifier> for SaidValue {
@@ -39,19 +30,33 @@ impl From<SaidValue> for SelfAddressingIdentifier {
     }
 }
 
+impl serde::Serialize for SaidValue {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.said.serialize(serializer)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for SaidValue {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        SelfAddressingIdentifier::deserialize(deserializer).map(|said| SaidValue { said })
+    }
+}
+
 #[derive(Archive, Serialize, Deserialize)]
 #[rkyv(remote = SelfAddressingIdentifier)]
-// #[rkyv(
-//     compare(PartialEq),
-//     derive(Debug),
-// )]
+#[rkyv(derive(Debug))]
 pub(crate) struct SAIDef {
     #[rkyv(with = HashFunctionDef)]
     pub derivation: HashFunction,
     pub digest: Vec<u8>,
 }
 
-// Deriving `Deserialize` with `remote = ..` requires a `From` implementation.
 impl From<SAIDef> for SelfAddressingIdentifier {
     fn from(value: SAIDef) -> Self {
         Self::new(value.derivation, value.digest)
@@ -60,10 +65,7 @@ impl From<SAIDef> for SelfAddressingIdentifier {
 
 #[derive(Archive, Serialize, Deserialize, PartialEq)]
 #[rkyv(remote = HashFunction)]
-// #[rkyv(
-//     compare(PartialEq),
-//     derive(Debug),
-// )]
+#[rkyv(derive(Debug))]
 struct HashFunctionDef {
     #[rkyv(getter = HashFunctionDef::get_code, with = HashFunctionCodeDef)]
     pub f: HashFunctionCode,

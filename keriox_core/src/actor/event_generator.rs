@@ -149,11 +149,7 @@ pub fn anchor(
 ) -> Result<String, Error> {
     let seal_list = payload
         .iter()
-        .map(|seal| {
-            Seal::Digest(DigestSeal {
-                dig: seal.to_owned(),
-            })
-        })
+        .map(|seal| Seal::Digest(DigestSeal::new(seal.to_owned())))
         .collect();
     let ixn = EventMsgBuilder::new(EventTypeTag::Ixn)
         .with_prefix(&state.prefix)

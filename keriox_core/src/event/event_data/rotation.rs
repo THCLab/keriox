@@ -1,5 +1,6 @@
 use super::super::sections::{seal::*, KeyConfig, RotationWitnessConfig};
 use crate::{
+    database::redb::rkyv_adapter::said_wrapper::SaidValue,
     error::Error,
     prefix::BasicPrefix,
     state::{EventSemantics, IdentifierState, LastEstablishmentData, WitnessConfig},
@@ -10,10 +11,20 @@ use serde::{Deserialize, Serialize};
 /// Rotation Event
 ///
 /// Describes the rotation (rot) event data
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(
+    Serialize,
+    Deserialize,
+    Debug,
+    Clone,
+    PartialEq,
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+)]
+#[rkyv(derive(Debug))]
 pub struct RotationEvent {
     #[serde(rename = "p")]
-    pub previous_event_hash: SelfAddressingIdentifier,
+    previous_event_hash: SaidValue,
 
     #[serde(flatten)]
     pub key_config: KeyConfig,
@@ -23,6 +34,26 @@ pub struct RotationEvent {
 
     #[serde(rename = "a")]
     pub data: Vec<Seal>,
+}
+
+impl RotationEvent {
+    pub fn new(
+        previous_event_hash: SelfAddressingIdentifier,
+        kc: KeyConfig,
+        witness_config: RotationWitnessConfig,
+        data: Vec<Seal>,
+    ) -> Self {
+        Self {
+            previous_event_hash: previous_event_hash.into(),
+            key_config: kc,
+            witness_config,
+            data,
+        }
+    }
+
+    pub fn previous_event_hash(&self) -> &SelfAddressingIdentifier {
+        &self.previous_event_hash.said
+    }
 }
 
 impl EventSemantics for RotationEvent {

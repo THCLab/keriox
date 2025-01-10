@@ -169,10 +169,7 @@ impl EventMsgBuilder {
 
     pub fn build(self) -> Result<KeriEvent<KeyEvent>, Error> {
         let next_key_hash = if let Some(hashes) = self.next_keys_hashes {
-            NextKeysData {
-                threshold: self.next_key_threshold,
-                next_key_hashes: hashes,
-            }
+            NextKeysData::new(self.next_key_threshold, hashes)
         } else {
             nxt_commitment(self.next_key_threshold, &self.next_keys, &self.derivation)
         };
@@ -212,23 +209,23 @@ impl EventMsgBuilder {
             EventTypeTag::Rot => KeyEvent::new(
                 prefix,
                 self.sn,
-                EventData::Rot(RotationEvent {
-                    previous_event_hash: self.prev_event,
+                EventData::Rot(RotationEvent::new(
+                    self.prev_event,
                     key_config,
-                    witness_config: RotationWitnessConfig {
+                    RotationWitnessConfig {
                         tally: self.witness_threshold,
                         prune: self.witness_to_remove,
                         graft: self.witness_to_add,
                     },
-                    data: self.data,
-                }),
+                    self.data,
+                )),
             )
             .to_message(self.format, self.derivation)?,
             EventTypeTag::Ixn => KeyEvent::new(
                 prefix,
                 self.sn,
                 EventData::Ixn(InteractionEvent {
-                    previous_event_hash: self.prev_event,
+                    previous_event_hash: self.prev_event.into(),
                     data: self.data,
                 }),
             )
@@ -250,12 +247,12 @@ impl EventMsgBuilder {
                 .incept_self_addressing(self.derivation, self.format)?
             }
             EventTypeTag::Drt => {
-                let rotation_data = RotationEvent {
-                    previous_event_hash: self.prev_event,
+                let rotation_data = RotationEvent::new(
+                    self.prev_event,
                     key_config,
-                    witness_config: RotationWitnessConfig::default(),
-                    data: self.data,
-                };
+                    RotationWitnessConfig::default(),
+                    self.data,
+                );
                 KeyEvent::new(prefix, self.sn, EventData::Drt(rotation_data))
                     .to_message(self.format, self.derivation)?
             }

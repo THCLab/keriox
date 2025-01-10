@@ -21,7 +21,16 @@ pub trait Typeable {
     fn get_type(&self) -> Self::TypeTag;
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(
+    Clone,
+    Debug,
+    Serialize,
+    Deserialize,
+    PartialEq,
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+)]
 #[serde(rename_all = "lowercase")]
 pub enum EventTypeTag {
     Icp,
@@ -373,7 +382,7 @@ mod tests {
         let icp_digest = icp.digest()?;
         assert_eq!(
             id_prefix,
-            IdentifierPrefix::SelfAddressing(icp_digest.clone())
+            IdentifierPrefix::self_addressing(icp_digest.clone())
         );
         assert_eq!(
             id_prefix.to_str(),

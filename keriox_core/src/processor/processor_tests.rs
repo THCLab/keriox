@@ -1,6 +1,7 @@
 use std::{convert::TryFrom, fs, sync::Arc};
 
 use cesrox::{parse, parse_many, primitives::CesrPrimitive};
+use said::SelfAddressingIdentifier;
 use tempfile::NamedTempFile;
 
 use crate::{
@@ -309,18 +310,18 @@ fn test_compute_state_at_sn() -> Result<(), Error> {
                 .unwrap();
         });
 
-    let event_seal = EventSeal {
-        prefix: "EFb-WY7Ie1WPEgsioZz1CyzwnuCg-C9k2QCNpcUfM5Jf".parse()?,
-        sn: 2,
-        event_digest: "EJUn-ix3QWTa5dyCYaMnyUMLMrkHNXmJPlM6sPpZm8eo".parse()?,
-    };
+    let event_seal = EventSeal::new(
+        "EFb-WY7Ie1WPEgsioZz1CyzwnuCg-C9k2QCNpcUfM5Jf".parse()?,
+        2,
+        "EJUn-ix3QWTa5dyCYaMnyUMLMrkHNXmJPlM6sPpZm8eo".parse()?,
+    );
 
     let state_at_sn = event_storage
         .compute_state_at_sn(&event_seal.prefix, event_seal.sn)?
         .unwrap();
     assert_eq!(state_at_sn.sn, event_seal.sn);
     assert_eq!(state_at_sn.prefix, event_seal.prefix);
-    assert_eq!(event_seal.event_digest, state_at_sn.last_event_digest);
+    assert_eq!(event_seal.event_digest(), state_at_sn.last_event_digest);
 
     Ok(())
 }
@@ -369,7 +370,7 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
     let icp_digest = icp.digest()?;
     assert_eq!(
         id_prefix,
-        IdentifierPrefix::SelfAddressing(icp_digest.clone())
+        IdentifierPrefix::SelfAddressing(icp_digest.clone().into())
     );
     assert_eq!(
         id_prefix.to_str(),
@@ -552,7 +553,7 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
     let icp_digest = icp.digest()?;
     assert_eq!(
         id_prefix,
-        IdentifierPrefix::SelfAddressing(icp_digest.clone())
+        IdentifierPrefix::SelfAddressing(icp_digest.clone().into())
     );
     assert_eq!(
         id_prefix.to_str(),
@@ -736,7 +737,7 @@ pub fn test_reserve_rotation() -> Result<(), Error> {
     let icp_digest = icp.digest()?;
     assert_eq!(
         id_prefix,
-        IdentifierPrefix::SelfAddressing(icp_digest.clone())
+        IdentifierPrefix::SelfAddressing(icp_digest.clone().into())
     );
 
     // sign inception event
@@ -924,7 +925,7 @@ pub fn test_custorial_rotation() -> Result<(), Error> {
     let icp_digest = icp.digest()?;
     assert_eq!(
         id_prefix,
-        IdentifierPrefix::SelfAddressing(icp_digest.clone())
+        IdentifierPrefix::SelfAddressing(icp_digest.clone().into())
     );
 
     // sign inception event

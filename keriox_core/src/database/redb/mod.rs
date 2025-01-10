@@ -27,7 +27,10 @@ const TRANS_RCTS: MultimapTableDefinition<(&str, u64), &[u8]> =
 use std::path::Path;
 
 use redb::{Database, MultimapTableDefinition, TableDefinition};
-use rkyv::{api::high::HighSerializer, ser::allocator::ArenaHandle, util::AlignedVec};
+use rkyv::{
+    api::high::HighSerializer, rancor::Failure, ser::allocator::ArenaHandle, util::AlignedVec,
+    with::With,
+};
 use rkyv_adapter::{deserialize_indexed_signatures, deserialize_said};
 use said::SelfAddressingIdentifier;
 use serde::de::DeserializeOwned;
@@ -71,6 +74,8 @@ pub enum RedbError {
     NotFound(SelfAddressingIdentifier),
     #[error("No digest in provided event")]
     MissingDigest,
+    #[error("Rkyv error: {0}")]
+    Rkyv(#[from] rkyv::rancor::Error),
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -178,13 +183,11 @@ impl RedbDatabase {
     /// Saves provided event into key event table. Key is it's digest and value is event.
     fn insert_key_event(&self, event: &KeriEvent<KeyEvent>) -> Result<(), RedbError> {
         let digest = event.digest().map_err(|_e| RedbError::MissingDigest)?;
-        // todo: serialize with rkyv
-        let value = serde_json::to_vec(event).map_err(|_err| RedbError::WrongValue)?;
-
+        let value = rkyv::to_bytes::<rkyv::rancor::Error>(event)?;
         let write_txn = self.db.begin_write()?;
         {
             let mut table = write_txn.open_table(EVENTS)?;
-            let key = rkyv_adapter::serialize_said(&digest).unwrap();
+            let key = rkyv_adapter::serialize_said(&digest)?;
             table.insert(key.as_slice(), &value.as_ref())?;
         }
         write_txn.commit()?;
@@ -201,7 +204,7 @@ impl RedbDatabase {
             let mut table = write_txn.open_table(KELS)?;
             let id = event.data.prefix.to_str();
             let sn = event.data.sn;
-            let serialized_said = rkyv_adapter::serialize_said(&digest).unwrap();
+            let serialized_said = rkyv_adapter::serialize_said(&digest)?;
             table.insert((id.as_str(), sn), &serialized_said.as_slice())?;
         }
         write_txn.commit()?;
@@ -210,7 +213,7 @@ impl RedbDatabase {
     }
 
     fn insert_with_sn_key<
-        V: for<'a> rkyv::Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rkyv::rancor::Failure>>,
+        V: for<'a> rkyv::Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rkyv::rancor::Error>>,
     >(
         &self,
         table: MultimapTableDefinition<(&str, u64), &[u8]>,
@@ -223,7 +226,7 @@ impl RedbDatabase {
             let mut table = write_txn.open_multimap_table(table)?;
 
             for value in values {
-                let sig = rkyv::to_bytes(value).unwrap();
+                let sig = rkyv::to_bytes(value)?;
                 table.insert((id, sn), sig.as_slice())?;
             }
         }
@@ -315,12 +318,15 @@ impl RedbDatabase {
     ) -> Result<Option<SelfAddressingIdentifier>, RedbError> {
         Ok({
             let read_txn = self.db.begin_read().unwrap();
-            let table = read_txn.open_table(KELS).unwrap();
-            table.get((identifier.to_str().as_str(), sn))?.map(|value| {
-                let digest: SelfAddressingIdentifier =
-                    rkyv_adapter::deserialize_said(value.value()).unwrap();
-                digest
-            })
+            let table = read_txn.open_table(KELS)?;
+            table
+                .get((identifier.to_str().as_str(), sn))?
+                .map(|value| -> Result<SelfAddressingIdentifier, RedbError> {
+                    let digest: SelfAddressingIdentifier =
+                        rkyv_adapter::deserialize_said(value.value())?;
+                    Ok(digest)
+                })
+                .transpose()?
         })
     }
 
@@ -333,9 +339,9 @@ impl RedbDatabase {
 
         let key = rkyv_adapter::serialize_said(&said).unwrap();
         if let Some(event) = table.get(key.as_slice())? {
-            let value: KeriEvent<KeyEvent> =
-                serde_json::from_slice(event.value()).map_err(|_| RedbError::WrongValue)?;
-            Ok(Some(value))
+            let bytes = event.value().to_vec();
+            let deserialized: KeriEvent<KeyEvent> = rkyv::from_bytes::<_, Failure>(&bytes).unwrap();
+            Ok(Some(deserialized))
         } else {
             Ok(None)
         }
@@ -349,9 +355,9 @@ impl RedbDatabase {
         let table = read_txn.open_table(EVENTS)?;
 
         if let Some(event) = table.get(said_arch)? {
-            let value: KeriEvent<KeyEvent> =
-                serde_json::from_slice(event.value()).map_err(|_| RedbError::WrongValue)?;
-            Ok(Some(value))
+            let bytes = event.value().to_vec();
+            let deser: KeriEvent<KeyEvent> = rkyv::from_bytes::<_, Failure>(&bytes).unwrap();
+            Ok(Some(deser))
         } else {
             Ok(None)
         }
@@ -486,7 +492,7 @@ fn test_retrieve_kel() {
     let sigs_from_db = db.get_signatures((&first_id.to_str(), 0)).unwrap().unwrap();
     assert_eq!(sigs_from_db.count(), 3);
 
-    // Warning: order of retrived signaturesisn't the same as insertion order
+    // Warning: order of retrieved signatures isn't the same as insertion order
     let sigs_from_db = db
         .get_signatures((&second_id.to_str(), 0))
         .unwrap()
@@ -505,8 +511,9 @@ fn test_retrieve_kel() {
         rot.signed_event_message.event_message.digest,
         Some(
             "EHjzZj4i_-RpTN2Yh-NocajFROJ_GkBtlByhRykqiXgz"
-                .parse()
+                .parse::<SelfAddressingIdentifier>()
                 .unwrap()
+                .into()
         )
     );
     assert_eq!(rot.signed_event_message.signatures.len(), 3);
@@ -520,8 +527,9 @@ fn test_retrieve_kel() {
         ixn.signed_event_message.event_message.digest,
         Some(
             "EL6Dpm72KXayaUHYvVHlhPplg69fBvRt1P3YzuOGVpmz"
-                .parse()
+                .parse::<SelfAddressingIdentifier>()
                 .unwrap()
+                .into()
         )
     );
     assert_eq!(ixn.signed_event_message.signatures.len(), 3);
@@ -539,8 +547,9 @@ fn test_retrieve_kel() {
         icp.signed_event_message.event_message.digest,
         Some(
             "EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen"
-                .parse()
+                .parse::<SelfAddressingIdentifier>()
                 .unwrap()
+                .into()
         )
     );
     assert_eq!(icp.signed_event_message.signatures.len(), 3);
@@ -554,8 +563,9 @@ fn test_retrieve_kel() {
         rot.signed_event_message.event_message.digest,
         Some(
             "EHjzZj4i_-RpTN2Yh-NocajFROJ_GkBtlByhRykqiXgz"
-                .parse()
+                .parse::<SelfAddressingIdentifier>()
                 .unwrap()
+                .into()
         )
     );
     assert_eq!(rot.signed_event_message.signatures.len(), 3);

@@ -903,7 +903,7 @@ impl<D: EventDatabase> DelegationEscrow<D> {
             for event in esc {
                 let event_digest = event.event_message.digest()?;
                 let seal = anchored_seals.iter().find(|seal| {
-                    seal.event_digest == event_digest
+                    seal.event_digest() == event_digest
                         && seal.sn == event.event_message.data.get_sn()
                         && seal.prefix == event.event_message.data.get_prefix()
                 });

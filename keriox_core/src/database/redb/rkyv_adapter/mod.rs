@@ -10,29 +10,27 @@ use crate::{
 pub(crate) mod said_wrapper;
 pub(crate) mod serialization_info_wrapper;
 
-pub fn serialize_said(
-    said: &SelfAddressingIdentifier,
-) -> Result<AlignedVec, rkyv::rancor::Failure> {
+pub fn serialize_said(said: &SelfAddressingIdentifier) -> Result<AlignedVec, rkyv::rancor::Error> {
     Ok(rkyv::to_bytes(
         With::<SelfAddressingIdentifier, SAIDef>::cast(said),
     )?)
 }
 
-pub fn deserialize_said(bytes: &[u8]) -> Result<SelfAddressingIdentifier, rkyv::rancor::Failure> {
+pub fn deserialize_said(bytes: &[u8]) -> Result<SelfAddressingIdentifier, rkyv::rancor::Error> {
     let archived: &ArchivedSAIDef = rkyv::access(&bytes)?;
     let deserialized: SelfAddressingIdentifier =
         rkyv::deserialize(With::<ArchivedSAIDef, SAIDef>::cast(archived))?;
     Ok(deserialized)
 }
 
-pub fn deserialize_nontransferable(bytes: &[u8]) -> Result<Nontransferable, rkyv::rancor::Failure> {
+pub fn deserialize_nontransferable(bytes: &[u8]) -> Result<Nontransferable, rkyv::rancor::Error> {
     let archived = rkyv::access::<ArchivedNontransferable, rkyv::rancor::Failure>(&bytes).unwrap();
-    rkyv::deserialize::<Nontransferable, rkyv::rancor::Failure>(archived)
+    rkyv::deserialize::<Nontransferable, rkyv::rancor::Error>(archived)
 }
 
 pub fn deserialize_indexed_signatures(
     bytes: &[u8],
-) -> Result<IndexedSignature, rkyv::rancor::Failure> {
-    let archived = rkyv::access::<ArchivedIndexedSignature, rkyv::rancor::Failure>(&bytes).unwrap();
-    rkyv::deserialize::<IndexedSignature, rkyv::rancor::Failure>(archived)
+) -> Result<IndexedSignature, rkyv::rancor::Error> {
+    let archived = rkyv::access::<ArchivedIndexedSignature, rkyv::rancor::Error>(&bytes).unwrap();
+    rkyv::deserialize::<IndexedSignature, rkyv::rancor::Error>(archived)
 }

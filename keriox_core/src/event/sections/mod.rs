@@ -8,7 +8,17 @@ pub mod threshold;
 pub use key_config::KeyConfig;
 
 use self::threshold::SignatureThreshold;
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(
+    Serialize,
+    Deserialize,
+    Debug,
+    Clone,
+    PartialEq,
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+)]
+#[rkyv(derive(Debug))]
 pub struct RotationWitnessConfig {
     #[serde(rename = "bt")]
     pub tally: SignatureThreshold,
@@ -20,7 +30,17 @@ pub struct RotationWitnessConfig {
     pub graft: Vec<BasicPrefix>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(
+    Serialize,
+    Deserialize,
+    Debug,
+    Clone,
+    PartialEq,
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+)]
+#[rkyv(derive(Debug))]
 pub struct InceptionWitnessConfig {
     #[serde(rename = "bt")]
     pub tally: SignatureThreshold,

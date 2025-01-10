@@ -19,7 +19,17 @@ use serde::{Deserialize, Serialize};
 /// Inception Event
 ///
 /// Describes the inception (icp) event data,
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(
+    Serialize,
+    Deserialize,
+    Debug,
+    Clone,
+    PartialEq,
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+)]
+#[rkyv(derive(Debug))]
 pub struct InceptionEvent {
     #[serde(flatten)]
     pub key_config: KeyConfig,
@@ -64,14 +74,14 @@ impl InceptionEvent {
         dummy_event.compute_digest(&code, &format);
         let digest = dummy_event.prefix.unwrap();
         let event = KeyEvent::new(
-            IdentifierPrefix::SelfAddressing(digest.clone()),
+            IdentifierPrefix::self_addressing(digest.clone()),
             0,
             EventData::Icp(self),
         );
         Ok(KeriEvent {
             serialization_info: dummy_event.serialization_info,
             event_type: event.get_type(),
-            digest: Some(digest),
+            digest: Some(digest.into()),
             data: event,
         })
     }
@@ -127,10 +137,7 @@ fn test_inception_data_derivation() -> Result<(), Error> {
             .unwrap(),
     ];
 
-    let next_keys_data = NextKeysData {
-        threshold: SignatureThreshold::Simple(2),
-        next_key_hashes: next_keys_hashes,
-    };
+    let next_keys_data = NextKeysData::new(SignatureThreshold::Simple(2), next_keys_hashes);
     let key_config = KeyConfig::new(keys, next_keys_data, Some(SignatureThreshold::Simple(2)));
     let icp_data = InceptionEvent::new(key_config.clone(), None, None).incept_self_addressing(
         HashFunctionCode::Blake3_256.into(),

@@ -1,4 +1,5 @@
 use cesrox::{group::Group, primitives::IndexedSignature as CesrIndexedSignature};
+use said::SelfAddressingIdentifier;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -104,12 +105,15 @@ pub fn signatures_into_groups(sigs: &[Signature]) -> Vec<Group> {
         (vec![], vec![], vec![], vec![], vec![]),
         |(mut trans_seal, mut trans_last, mut nontrans, mut indexed, mut witness_indexed), sig| {
             match sig {
-                Signature::Transferable(SignerData::EventSeal(seal), sig) => trans_seal.push((
-                    seal.prefix.into(),
-                    seal.sn,
-                    seal.event_digest.into(),
-                    sig.into_iter().map(|sig| sig.into()).collect(),
-                )),
+                Signature::Transferable(SignerData::EventSeal(seal), sig) => {
+                    let event_digest = seal.event_digest();
+                    trans_seal.push((
+                        seal.prefix.into(),
+                        seal.sn,
+                        event_digest.into(),
+                        sig.into_iter().map(|sig| sig.into()).collect(),
+                    ))
+                }
                 Signature::Transferable(SignerData::LastEstablishment(id), sig) => {
                     trans_last.push((id.into(), sig.into_iter().map(|sig| sig.into()).collect()))
                 }
@@ -179,11 +183,11 @@ pub fn get_signatures(group: Group) -> Result<Vec<Signature>, ParseError> {
             .map(|(id, sn, digest, sigs)| {
                 let signatures = sigs.into_iter().map(|sig| sig.into()).collect();
                 Signature::Transferable(
-                    SignerData::EventSeal(EventSeal {
-                        prefix: id.into(),
+                    SignerData::EventSeal(EventSeal::new(
+                        id.into(),
                         sn,
-                        event_digest: digest.into(),
-                    }),
+                        SelfAddressingIdentifier::from(digest),
+                    )),
                     signatures,
                 )
             })
@@ -225,16 +229,15 @@ impl Into<Group> for crate::event_message::signature::Signature {
                 let signatures: Vec<CesrIndexedSignature> =
                     signature.into_iter().map(|sig| sig.into()).collect();
                 match seal {
-                    crate::event_message::signature::SignerData::EventSeal(EventSeal {
-                        prefix,
-                        sn,
-                        event_digest,
-                    }) => Group::TransIndexedSigGroups(vec![(
-                        prefix.into(),
-                        sn,
-                        event_digest.into(),
-                        signatures,
-                    )]),
+                    crate::event_message::signature::SignerData::EventSeal(event_seal) => {
+                        let event_digest = event_seal.event_digest();
+                        Group::TransIndexedSigGroups(vec![(
+                            event_seal.prefix.into(),
+                            event_seal.sn,
+                            event_digest.into(),
+                            signatures,
+                        )])
+                    }
                     crate::event_message::signature::SignerData::LastEstablishment(id) => {
                         Group::LastEstSignaturesGroups(vec![(id.into(), signatures)])
                     }

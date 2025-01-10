@@ -67,21 +67,24 @@ impl From<(u64, Digest)> for SourceSeal {
 
 impl From<(Digest, u64, Digest)> for EventSeal {
     fn from((identifier, sn, digest): (Digest, u64, Digest)) -> Self {
-        EventSeal {
-            prefix: IdentifierPrefix::SelfAddressing(identifier.into()),
+        let said: SelfAddressingIdentifier = identifier.into();
+        let digest_said: SelfAddressingIdentifier = digest.into();
+        EventSeal::new(
+            IdentifierPrefix::SelfAddressing(said.into()),
             sn,
-            event_digest: digest.into(),
-        }
+            digest_said.into(),
+        )
     }
 }
 
 impl From<(PublicKey, u64, Digest)> for EventSeal {
     fn from((identifier, sn, digest): (PublicKey, u64, Digest)) -> Self {
-        EventSeal {
-            prefix: IdentifierPrefix::Basic(identifier.into()),
+        let digest_said: SelfAddressingIdentifier = digest.into();
+        EventSeal::new(
+            IdentifierPrefix::Basic(identifier.into()),
             sn,
-            event_digest: digest.into(),
-        }
+            digest_said.into(),
+        )
     }
 }
 
@@ -93,7 +96,7 @@ impl From<Identifier> for IdentifierPrefix {
                 crate::keys::PublicKey::new(identifier.1),
             )),
             IdentifierCode::SelfAddressing(sa) => IdentifierPrefix::SelfAddressing(
-                SelfAddressingIdentifier::new(sa.into(), identifier.1),
+                SelfAddressingIdentifier::new(sa.into(), identifier.1).into(),
             ),
         }
     }
@@ -149,7 +152,7 @@ impl Into<Identifier> for IdentifierPrefix {
                 (IdentifierCode::Basic(bp.get_code()), self.derivative())
             }
             IdentifierPrefix::SelfAddressing(sa) => (
-                IdentifierCode::SelfAddressing((&sa.derivation).into()),
+                IdentifierCode::SelfAddressing((&sa.said.derivation).into()),
                 self.derivative(),
             ),
             IdentifierPrefix::SelfSigning(_ss) => todo!(),

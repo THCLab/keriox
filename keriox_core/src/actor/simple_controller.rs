@@ -505,7 +505,7 @@ impl<K: KeyManager, D: EventDatabase + Send + Sync + 'static> SimpleController<K
                     .ok_or(Error::SemanticError("Unknown state".into()))?
                     .current
                     .next_keys_data
-                    .next_key_hashes[0];
+                    .next_keys_hashes()[0];
                 rot.key_config
                     .public_keys
                     .iter()
@@ -599,7 +599,7 @@ impl<K: KeyManager, D: EventDatabase + Send + Sync + 'static> SimpleController<K
                     let state = self.storage.get_state(id).unwrap();
                     acc.0.append(&mut state.clone().current.public_keys);
                     acc.1
-                        .append(&mut state.clone().current.next_keys_data.next_key_hashes);
+                        .append(&mut state.clone().current.next_keys_data.next_keys_hashes());
                     acc
                 },
             );
@@ -837,11 +837,11 @@ impl<K: KeyManager, D: EventDatabase + Send + Sync + 'static> SimpleController<K
         self.process(&[Message::Notice(Notice::Event(event_to_confirm.clone()))])?;
         let id = event_to_confirm.event_message.data.get_prefix();
 
-        let seal = Seal::Event(EventSeal {
-            prefix: id.clone(),
-            sn: event_to_confirm.event_message.data.get_sn(),
-            event_digest: event_to_confirm.event_message.digest()?,
-        });
+        let seal = Seal::Event(EventSeal::new(
+            id.clone(),
+            event_to_confirm.event_message.data.get_sn(),
+            event_to_confirm.event_message.digest()?,
+        ));
 
         let ixn = self.anchor(&vec![seal])?;
         self.create_forward_message(&id, &ixn, ForwardTopic::Delegate)
@@ -856,11 +856,11 @@ impl<K: KeyManager, D: EventDatabase + Send + Sync + 'static> SimpleController<K
         self.process(&[Message::Notice(Notice::Event(event_to_confirm.clone()))])?;
         let id = event_to_confirm.event_message.data.get_prefix();
 
-        let seal = Seal::Event(EventSeal {
-            prefix: id.clone(),
-            sn: event_to_confirm.event_message.data.get_sn(),
-            event_digest: event_to_confirm.event_message.digest()?,
-        });
+        let seal = Seal::Event(EventSeal::new(
+            id.clone(),
+            event_to_confirm.event_message.data.get_sn(),
+            event_to_confirm.event_message.digest()?,
+        ));
 
         let ixn = self.anchor_group(group_id, &vec![seal])?;
         self.create_forward_message(&group_id, &ixn, ForwardTopic::Multisig)

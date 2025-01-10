@@ -257,11 +257,11 @@ impl<D: EventDatabase> EventStorage<D> {
         }
         if let Some(event) = last_est {
             let event_digest = event.event_message.digest().unwrap();
-            Some(EventSeal {
-                prefix: event.event_message.data.get_prefix(),
-                sn: event.event_message.data.get_sn(),
-                event_digest,
-            })
+            Some(EventSeal::new(
+                event.event_message.data.get_prefix(),
+                event.event_message.data.get_sn(),
+                event_digest.into(),
+            ))
         } else {
             None
         }

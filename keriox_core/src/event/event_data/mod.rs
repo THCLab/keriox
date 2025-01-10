@@ -18,8 +18,18 @@ pub use self::{
 /// Event Data
 ///
 /// Event Data conveys the semantic content of a KERI event.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(
+    Serialize,
+    Deserialize,
+    Debug,
+    Clone,
+    PartialEq,
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+)]
 #[serde(untagged, rename_all = "lowercase")]
+#[rkyv(derive(Debug))]
 pub enum EventData {
     Dip(DelegatedInceptionEvent),
     Icp(InceptionEvent),

@@ -21,7 +21,10 @@ impl From<core::num::ParseIntError> for ThresholdError {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
+#[rkyv(derive(Debug))]
 pub struct ThresholdFraction {
+    #[rkyv(with = rkyv_serialization::FractionDef)]
     fraction: Fraction,
 }
 
@@ -81,6 +84,8 @@ impl Serialize for ThresholdFraction {
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(untagged)]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
+#[rkyv(derive(Debug))]
 pub enum SignatureThreshold {
     #[serde(with = "SerHex::<Compact>")]
     Simple(u64),
@@ -89,6 +94,8 @@ pub enum SignatureThreshold {
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(untagged)]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
+#[rkyv(derive(Debug))]
 pub enum WeightedThreshold {
     Single(ThresholdClause),
     Multi(MultiClauses),
@@ -139,7 +146,17 @@ impl Default for SignatureThreshold {
         Self::Simple(1)
     }
 }
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(
+    Serialize,
+    Deserialize,
+    Debug,
+    Clone,
+    PartialEq,
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+)]
+#[rkyv(derive(Debug))]
 pub struct ThresholdClause(Vec<ThresholdFraction>);
 
 impl ThresholdClause {
@@ -180,7 +197,18 @@ impl ThresholdClause {
     }
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+#[derive(
+    Deserialize,
+    Serialize,
+    Debug,
+    Clone,
+    PartialEq,
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+)]
+#[rkyv(derive(Debug))]
+
 pub struct MultiClauses(Vec<ThresholdClause>);
 
 impl MultiClauses {
@@ -225,6 +253,67 @@ impl MultiClauses {
             .1
             .then(|| ())
             .ok_or(SignatureError::NotEnoughSigsError)
+    }
+}
+
+mod rkyv_serialization {
+    use fraction::Fraction;
+
+    #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
+    #[rkyv(remote = fraction::Sign)]
+    #[rkyv(derive(Debug))]
+    pub enum SignDef {
+        Plus,
+        Minus,
+    }
+
+    impl From<SignDef> for fraction::Sign {
+        fn from(value: SignDef) -> Self {
+            match value {
+                SignDef::Plus => Self::Plus,
+                SignDef::Minus => Self::Minus,
+            }
+        }
+    }
+
+    #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
+    #[rkyv(remote = Fraction)]
+    #[rkyv(derive(Debug))]
+    pub enum FractionDef {
+        Rational(
+            #[rkyv(with = SignDef)] fraction::Sign,
+            #[rkyv(with = RatioDef)] fraction::Ratio<u64>,
+        ),
+        Infinity(#[rkyv(with = SignDef)] fraction::Sign),
+        NaN,
+    }
+
+    impl From<FractionDef> for Fraction {
+        fn from(value: FractionDef) -> Self {
+            match value {
+                FractionDef::Rational(sign, ratio) => Fraction::Rational(sign, ratio),
+                FractionDef::Infinity(sign) => Fraction::Infinity(sign),
+                FractionDef::NaN => Fraction::NaN,
+            }
+        }
+    }
+
+    #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
+    #[rkyv(remote = fraction::Ratio<u64>)]
+    #[rkyv(derive(Debug))]
+    pub struct RatioDef {
+        /// Numerator.
+        #[rkyv(getter = fraction::Ratio::numer)]
+        numer: u64,
+        /// Denominator.
+        #[rkyv(getter = fraction::Ratio::denom)]
+        denom: u64,
+    }
+
+    impl From<RatioDef> for fraction::Ratio<u64> {
+        fn from(value: RatioDef) -> Self {
+            Self::new(value.numer, value.denom)
+        }
     }
 }
 
