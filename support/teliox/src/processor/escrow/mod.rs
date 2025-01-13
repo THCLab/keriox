@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use keri_core::{database::escrow::EscrowDb, processor::event_storage::EventStorage};
+use keri_core::{database::{escrow::EscrowDb, redb::RedbDatabase}, processor::event_storage::EventStorage};
 
 use crate::error::Error;
 
@@ -17,7 +17,7 @@ pub mod out_of_order;
 
 pub fn default_escrow_bus(
     tel_storage: Arc<super::storage::TelEventStorage>,
-    kel_storage: Arc<EventStorage>,
+    kel_storage: Arc<EventStorage<RedbDatabase>>,
     tel_escrow_db: Arc<EscrowDb>,
 ) -> Result<
     (

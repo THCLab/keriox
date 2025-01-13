@@ -7,10 +7,7 @@ use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "mailbox")]
 use super::mailbox::MailboxData;
-use super::{
-    tables::{SledEventTree, SledEventTreeVec},
-    EventDatabase, QueryParameters,
-};
+use super::tables::{SledEventTree, SledEventTreeVec};
 
 #[cfg(feature = "query")]
 use crate::query::reply_event::SignedReply;
@@ -18,7 +15,6 @@ use crate::{
     event::KeyEvent,
     event_message::{
         msg::KeriEvent,
-        signature::{Nontransferable, Transferable},
         signed_event_message::{
             SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
         },
@@ -179,15 +175,9 @@ use super::timestamped::TimestampedSignedEventMessage;
 
 pub struct SledEventDatabase {
     db: Arc<sled::Db>,
-    // "iids" tree
+    // // "iids" tree
     // this thing is expensive, but everything else is cheeeeeep
     identifiers: SledEventTree<IdentifierPrefix>,
-    // "kels" tree
-    key_event_logs: SledEventTreeVec<TimestampedSignedEventMessage>,
-    // "vrcs" tree
-    receipts_t: SledEventTreeVec<SignedTransferableReceipt>,
-    // "rcts" tree
-    receipts_nt: SledEventTreeVec<SignedNontransferableReceipt>,
     #[cfg(feature = "query")]
     accepted_rpy: SledEventTreeVec<SignedReply>,
 
@@ -217,9 +207,6 @@ impl SledEventDatabase {
 
         Ok(Self {
             identifiers: SledEventTree::new(db.open_tree(b"iids")?),
-            receipts_t: SledEventTreeVec::new(db.open_tree(b"vrcs")?),
-            receipts_nt: SledEventTreeVec::new(db.open_tree(b"rcts")?),
-            key_event_logs: SledEventTreeVec::new(db.open_tree(b"kels")?),
             likely_duplicious_events: SledEventTreeVec::new(db.open_tree(b"ldes")?),
             duplicitous_events: SledEventTreeVec::new(db.open_tree(b"dels")?),
             #[cfg(feature = "query")]

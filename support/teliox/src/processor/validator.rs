@@ -1,12 +1,10 @@
 use std::sync::Arc;
 
 use keri_core::{
-    event::{
-        event_data::{EventData, InteractionEvent},
+    database::redb::RedbDatabase, event::{
+        event_data::EventData,
         sections::seal::Seal,
-    },
-    prefix::IdentifierPrefix,
-    processor::event_storage::EventStorage,
+    }, prefix::IdentifierPrefix, processor::event_storage::EventStorage
 };
 use said::SelfAddressingIdentifier;
 
@@ -25,12 +23,12 @@ use crate::{
 use super::TelEventStorage;
 
 pub struct TelEventValidator {
-    kel_reference: Arc<EventStorage>,
+    kel_reference: Arc<EventStorage<RedbDatabase>>,
     db: TelEventStorage,
 }
 
 impl TelEventValidator {
-    pub fn new(db: Arc<EventDatabase>, kel_reference: Arc<EventStorage>) -> Self {
+    pub fn new(db: Arc<EventDatabase>, kel_reference: Arc<EventStorage<RedbDatabase>>) -> Self {
         Self {
             db: TelEventStorage::new(db),
             kel_reference,
@@ -39,7 +37,7 @@ impl TelEventValidator {
 
     /// Checks if kel event pointed by seal has seal to tel event inside.
     pub fn check_kel_event(
-        kel_reference: Arc<EventStorage>,
+        kel_reference: Arc<EventStorage<RedbDatabase>>,
         seal: &AttachedSourceSeal,
         issuer_id: &IdentifierPrefix,
         expected_digest: SelfAddressingIdentifier,
@@ -51,9 +49,9 @@ impl TelEventValidator {
         match &reference_kel_event
             .signed_event_message
             .event_message
-            .digest
+            .digest()
         {
-            Some(dig) if dig == &seal.seal.digest => Ok(()),
+            Ok(dig) if dig == &seal.seal.digest => Ok(()),
             _ => Err(Error::DigestsNotMatchError),
         }?;
         // Check if found event has tel event anchored
@@ -62,13 +60,10 @@ impl TelEventValidator {
             .event_message
             .data
             .event_data;
-        if let EventData::Ixn(InteractionEvent {
-            data,
-            previous_event_hash: _,
-        }) = event_type
+        if let EventData::Ixn(ixn) = event_type
         {
-            if data.into_iter().any(|seal| match seal {
-                Seal::Event(es) => es.event_digest.eq(&expected_digest),
+            if ixn.data.into_iter().any(|seal| match seal {
+                Seal::Event(es) => es.event_digest().eq(&expected_digest),
                 _ => false,
             }) {
                 Ok(())

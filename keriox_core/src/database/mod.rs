@@ -1,4 +1,3 @@
-use said::SelfAddressingIdentifier;
 use timestamped::TimestampedSignedEventMessage;
 
 use crate::{

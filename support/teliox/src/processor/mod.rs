@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use keri_core::processor::event_storage::EventStorage;
+use keri_core::{database::redb::RedbDatabase, processor::event_storage::EventStorage};
 
 use crate::{
     error::Error,
@@ -20,14 +20,14 @@ pub mod storage;
 pub mod validator;
 
 pub struct TelEventProcessor {
-    kel_reference: Arc<EventStorage>,
+    kel_reference: Arc<EventStorage<RedbDatabase>>,
     pub tel_reference: Arc<TelEventStorage>,
     pub publisher: TelNotificationBus,
 }
 
 impl TelEventProcessor {
     pub fn new(
-        kel_reference: Arc<EventStorage>,
+        kel_reference: Arc<EventStorage<RedbDatabase>>,
         tel_reference: Arc<TelEventStorage>,
         tel_publisher: Option<TelNotificationBus>,
     ) -> Self {

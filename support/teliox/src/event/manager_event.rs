@@ -163,7 +163,7 @@ impl Inc {
         format: SerializationFormats,
     ) -> Result<ManagerTelEvent, Error> {
         Ok(ManagerTelEvent::new(
-            &IdentifierPrefix::SelfAddressing(derivation.derive(
+            &IdentifierPrefix::self_addressing(derivation.derive(
                 &DummyEvent::derive_inception_data(self.clone(), &derivation.into(), format)?,
             )),
             0,

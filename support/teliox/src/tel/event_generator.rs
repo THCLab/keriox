@@ -76,7 +76,7 @@ pub fn make_simple_issuance_event(
     serialization_format: Option<&SerializationFormats>,
 ) -> Result<Event, Error> {
     let iss = VCEventType::Iss(SimpleIssuance { registry_id });
-    let vc_prefix = IdentifierPrefix::SelfAddressing(vc_hash);
+    let vc_prefix = IdentifierPrefix::self_addressing(vc_hash);
     Ok(Event::Vc(VCEvent::new(vc_prefix, 0, iss).to_message(
         *serialization_format.unwrap_or(&SerializationFormats::JSON),
         derivation.unwrap_or(&HashFunctionCode::Blake3_256).clone(),
@@ -89,13 +89,13 @@ pub fn make_issuance_event(
     derivation: Option<&HashFunctionCode>,
     serialization_format: Option<&SerializationFormats>,
 ) -> Result<Event, Error> {
-    let registry_anchor = EventSeal {
-        prefix: state.prefix.clone(),
-        sn: state.sn,
-        event_digest: state.last.clone(),
-    };
+    let registry_anchor = EventSeal::new(
+        state.prefix.clone(),
+        state.sn,
+        state.last.clone(),
+    );
     let iss = VCEventType::Bis(Issuance::new(state.issuer.clone(), registry_anchor));
-    let vc_prefix = IdentifierPrefix::SelfAddressing(vc_hash);
+    let vc_prefix = IdentifierPrefix::self_addressing(vc_hash);
     Ok(Event::Vc(VCEvent::new(vc_prefix, 0, iss).to_message(
         *serialization_format.unwrap_or(&SerializationFormats::JSON),
         derivation.unwrap_or(&HashFunctionCode::Blake3_256).clone(),
@@ -113,7 +113,7 @@ pub fn make_simple_revoke_event(
         registry_id: state.prefix.clone(),
         prev_event_hash: last_vc_event_hash,
     });
-    let vc_prefix = IdentifierPrefix::SelfAddressing(vc_hash.to_owned());
+    let vc_prefix = IdentifierPrefix::self_addressing(vc_hash.to_owned());
 
     Ok(Event::Vc(
         VCEvent::new(vc_prefix, state.sn + 1, rev).to_message(
@@ -130,16 +130,15 @@ pub fn make_revoke_event(
     derivation: Option<&HashFunctionCode>,
     serialization_format: Option<&SerializationFormats>,
 ) -> Result<Event, Error> {
-    let registry_anchor = EventSeal {
-        prefix: state.prefix.to_owned(),
-        sn: state.sn,
-        event_digest: state.last.clone(),
-    };
+    let registry_anchor = EventSeal::new(state.prefix.to_owned(),
+        state.sn,
+        state.last.clone(),
+);
     let rev = VCEventType::Brv(Revocation {
         prev_event_hash: last_vc_event_hash,
         registry_anchor: Some(registry_anchor),
     });
-    let vc_prefix = IdentifierPrefix::SelfAddressing(vc_hash.to_owned());
+    let vc_prefix = IdentifierPrefix::self_addressing(vc_hash.to_owned());
 
     Ok(Event::Vc(
         VCEvent::new(vc_prefix, state.sn + 1, rev).to_message(

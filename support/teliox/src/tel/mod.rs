@@ -12,7 +12,7 @@ use crate::{
     },
     state::{vc_state::TelState, ManagerTelState},
 };
-use keri_core::{prefix::IdentifierPrefix, processor::event_storage::EventStorage};
+use keri_core::{database::redb::RedbDatabase, prefix::IdentifierPrefix, processor::event_storage::EventStorage};
 use said::SelfAddressingIdentifier;
 
 pub mod event_generator;
@@ -50,7 +50,7 @@ pub struct Tel {
 impl Tel {
     pub fn new(
         tel_reference: Arc<TelEventStorage>,
-        kel_reference: Arc<EventStorage>,
+        kel_reference: Arc<EventStorage<RedbDatabase>>,
         publisher: Option<TelNotificationBus>,
     ) -> Self {
         let added_events = Arc::new(RecentlyAddedEvents::new());
@@ -150,7 +150,7 @@ impl Tel {
         &self,
         vc_hash: &SelfAddressingIdentifier,
     ) -> Result<Option<TelState>, Error> {
-        let vc_prefix = IdentifierPrefix::SelfAddressing(vc_hash.to_owned());
+        let vc_prefix = IdentifierPrefix::self_addressing(vc_hash.to_owned());
         self.processor.tel_reference.compute_vc_state(&vc_prefix)
     }
 
@@ -161,7 +161,7 @@ impl Tel {
         let vc_events = self
             .processor
             .tel_reference
-            .get_events(&IdentifierPrefix::SelfAddressing(vc_hash.clone()))?;
+            .get_events(&IdentifierPrefix::self_addressing(vc_hash.clone()))?;
         let registry_id = vc_events[0].event.get_registry_id()?;
         Ok(self
             .processor

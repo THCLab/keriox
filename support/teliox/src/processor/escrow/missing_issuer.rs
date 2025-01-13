@@ -1,7 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use keri_core::{
-    database::escrow::{Escrow, EscrowDb},
+    database::{escrow::{Escrow, EscrowDb}, redb::RedbDatabase},
     prefix::IdentifierPrefix,
     processor::{
         event_storage::EventStorage,
@@ -20,7 +20,7 @@ use crate::{
 };
 
 pub struct MissingIssuerEscrow {
-    kel_reference: Arc<EventStorage>,
+    kel_reference: Arc<EventStorage<RedbDatabase>>,
     tel_reference: Arc<TelEventStorage>,
     publisher: TelNotificationBus,
     escrowed_missing_issuer: Escrow<VerifiableEvent>,
@@ -31,7 +31,7 @@ impl MissingIssuerEscrow {
         db: Arc<TelEventStorage>,
         escrow_db: Arc<EscrowDb>,
         duration: Duration,
-        kel_reference: Arc<EventStorage>,
+        kel_reference: Arc<EventStorage<RedbDatabase>>,
         bus: TelNotificationBus,
     ) -> Self {
         let escrow = Escrow::new(b"mie.", duration, escrow_db);
@@ -54,7 +54,7 @@ impl Notifier for MissingIssuerEscrow {
             Notification::KeyEventAdded(ev_message) => {
                 let digest = ev_message.event_message.digest()?;
 
-                self.process_missing_issuer_escrow(&IdentifierPrefix::SelfAddressing(digest))
+                self.process_missing_issuer_escrow(&IdentifierPrefix::self_addressing(digest))
                     .unwrap();
             }
             _ => {
@@ -77,7 +77,7 @@ impl TelNotifier for MissingIssuerEscrow {
         match notification {
             TelNotification::MissingIssuer(event) => {
                 let missing_event_digest =
-                    IdentifierPrefix::SelfAddressing(event.seal.seal.digest.clone());
+                    IdentifierPrefix::self_addressing(event.seal.seal.digest.clone());
                 self.escrowed_missing_issuer
                     .add(&missing_event_digest, event.clone())
                     .map_err(|_e| Error::EscrowDatabaseError)
@@ -140,7 +140,7 @@ mod tests {
 
     use keri_core::{
         actor::parse_event_stream,
-        database::{escrow::EscrowDb, sled::SledEventDatabase},
+        database::{escrow::EscrowDb, redb::RedbDatabase, sled::SledEventDatabase},
         prefix::IdentifierPrefix,
         processor::{
             basic_processor::BasicProcessor, event_storage::EventStorage,
@@ -166,10 +166,12 @@ mod tests {
         use tempfile::Builder;
 
         // Setup issuer key event log. Without ixn events tel event's can't be validated.
-        let keri_root = Builder::new().prefix("test-db").tempdir().unwrap();
-        let keri_db = Arc::new(SledEventDatabase::new(keri_root.path()).unwrap());
-        let mut keri_processor = BasicProcessor::new(keri_db.clone(), None);
-        let keri_storage = Arc::new(EventStorage::new(keri_db.clone()));
+        let keri_root = Builder::new().prefix("test-db").tempfile().unwrap();
+        let keri_db = Arc::new(RedbDatabase::new(keri_root.path()).unwrap());
+        let escrow_root = Builder::new().prefix("test-db").tempdir().unwrap();
+        let escrow_db = Arc::new(SledEventDatabase::new(escrow_root.path()).unwrap());
+        let mut keri_processor = BasicProcessor::new(keri_db.clone(), escrow_db.clone(), None);
+        let keri_storage = Arc::new(EventStorage::new(keri_db.clone(), escrow_db));
 
         let issuer_kel = r#"{"v":"KERI10JSON00012b_","t":"icp","d":"EETk5xW-rl2TgHTTXr8m5kGXiC30m3gMgsYcBAjOE9eI","i":"EETk5xW-rl2TgHTTXr8m5kGXiC30m3gMgsYcBAjOE9eI","s":"0","kt":"1","k":["DHdoiqT1iac2HI6-HfCYcc01Piz2FTTPvZDFt6vADioD"],"nt":"1","n":["EH8IzIWeQFiUr3rr2dh8xAiW9Akwl6EooDt8iduQYyq_"],"bt":"0","b":[],"c":[],"a":[]}-AABAABvFFeXb9uW2G16o3C9xJZvY3a_utMPxd4NIUcGWRTqykMO1NzKwjsA_AQrOEwgO5jselWHREcK6vcAxRfv6-QC{"v":"KERI10JSON00013a_","t":"ixn","d":"EMOzEVoFjbkS3ZS5JtmJO4LeZ4gydbr8iXNrEQAt1OR2","i":"EETk5xW-rl2TgHTTXr8m5kGXiC30m3gMgsYcBAjOE9eI","s":"1","p":"EETk5xW-rl2TgHTTXr8m5kGXiC30m3gMgsYcBAjOE9eI","a":[{"i":"EF3TVac5quxrbLGLKAHF21laISjMgjYQAIg3OsTen969","s":"0","d":"ENIKpuUkjM-1K2Sv_TZwF_k8FTVkefAgy8sIpiFp0uWh"}]}-AABAACvrSS_EZUMKQ6Ax8FaB_Sf99O0y6MmfoRDBKMphVWWtuCOlFQm6N0XrTwtYxO3pO0AEZkJ1vzu52-RDK-w3YAN{"v":"KERI10JSON00013a_","t":"ixn","d":"EDvnfU2yMZUXEy9D_22YOkeSZOq6YG9zfItawvx3GR_6","i":"EETk5xW-rl2TgHTTXr8m5kGXiC30m3gMgsYcBAjOE9eI","s":"2","p":"EMOzEVoFjbkS3ZS5JtmJO4LeZ4gydbr8iXNrEQAt1OR2","a":[{"i":"EC8Oej-3HAUpBY_kxzBK3B-0RV9j4dXw1H0NRKxJg7g-","s":"0","d":"EDBM1ys50vEJxRzvBjTOrmOhokELjVtozXy3ZbJ8-KFk"}]}-AABAAABtEQ7SoGt2IcZBMX0GaEaMqGdMsrGpj1fABDKgE5dA7s7AGXTkWrZjzA4GXkGXuOspi6upqBhpxr6d5ySeKQH"#;
 
