@@ -154,7 +154,6 @@ impl EventDatabase for RedbDatabase {
     {
         match params {
             QueryParameters::BySn { id, sn } => Some(self.get_kel(&id, sn, 1).into_iter()),
-            QueryParameters::ByDigest { digest } => todo!(),
             QueryParameters::Range { id, start, limit } => {
                 Some(self.get_kel(&id, start, limit).into_iter())
             }
@@ -168,7 +167,6 @@ impl EventDatabase for RedbDatabase {
     ) -> Option<impl DoubleEndedIterator<Item = Transferable>> {
         match params {
             QueryParameters::BySn { id, sn } => self.get_trans_receipts(&id.to_str(), sn).ok(),
-            QueryParameters::ByDigest { digest } => todo!(),
             QueryParameters::Range { id, start, limit } => todo!(),
             QueryParameters::All { id } => todo!(),
         }
@@ -180,7 +178,6 @@ impl EventDatabase for RedbDatabase {
     ) -> Option<impl DoubleEndedIterator<Item = Nontransferable>> {
         match params {
             QueryParameters::BySn { id, sn } => self.get_nontrans_receipts(&id.to_str(), sn).ok(),
-            QueryParameters::ByDigest { digest } => todo!(),
             QueryParameters::Range { id, start, limit } => todo!(),
             QueryParameters::All { id } => todo!(),
         }

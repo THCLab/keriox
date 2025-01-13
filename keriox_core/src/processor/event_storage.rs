@@ -233,7 +233,7 @@ impl<D: EventDatabase> EventStorage<D> {
         let mut state = IdentifierState::default();
         let mut last_est = None;
         if let Some(events) = self
-            .escrow_db
+            .events_db
             .get_kel_finalized_events(QueryParameters::All { id })
         {
             for event in events {
@@ -348,7 +348,7 @@ impl<D: EventDatabase> EventStorage<D> {
         validator_pref: &IdentifierPrefix,
     ) -> Result<bool, Error> {
         Ok(
-            if let Some(mut receipts) = self.escrow_db.get_receipts_t(QueryParameters::BySn {
+            if let Some(mut receipts) = self.events_db.get_receipts_t(QueryParameters::BySn {
                 id: id.clone(),
                 sn: sn,
             }) {
@@ -452,7 +452,7 @@ impl<D: EventDatabase> EventStorage<D> {
         id: &IdentifierPrefix,
         event: impl EventSemantics,
     ) -> Result<Option<IdentifierState>, Error> {
-        if let Some(state) = compute_state(self.escrow_db.clone(), id) {
+        if let Some(state) = compute_state(self.events_db.clone(), id) {
             Ok(Some(event.apply_to(state)?))
         } else {
             Ok(None)

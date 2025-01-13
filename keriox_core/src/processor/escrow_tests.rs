@@ -280,7 +280,7 @@ pub fn test_reply_escrow() -> Result<(), Error> {
     let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
     let mut event_processor = BasicProcessor::new(events_db.clone(), Arc::clone(&db), None);
     event_processor.register_observer(
-        Arc::new(ReplyEscrow::new(db.clone())),
+        Arc::new(ReplyEscrow::new(db.clone(), events_db.clone())),
         &[
             JustNotification::KeyEventAdded,
             #[cfg(feature = "query")]
@@ -832,7 +832,7 @@ fn test_partially_sign_escrow_cleanup() -> Result<(), Error> {
 
         (
             processor,
-            EventStorage::new(witness_db.clone(), witness_db.clone()),
+            EventStorage::new(events_db, witness_db.clone()),
             ps_escrow,
         )
     };
@@ -912,7 +912,7 @@ pub fn test_partially_witnessed_escrow_cleanup() -> Result<(), Error> {
     let events_db_path = NamedTempFile::new().unwrap();
     let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
     let mut event_processor = BasicProcessor::new(events_db.clone(), Arc::clone(&db), None);
-    let event_storage = EventStorage::new(Arc::clone(&db), Arc::clone(&db));
+    let event_storage = EventStorage::new(Arc::clone(&events_db), Arc::clone(&db));
     // Register not fully witnessed escrow, to save and reprocess events
     let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
     let escrow_db = Arc::new(EscrowDb::new(escrow_root.path())?);
@@ -999,7 +999,7 @@ pub fn test_nt_receipt_escrow_cleanup() -> Result<(), Error> {
     let events_db_path = NamedTempFile::new().unwrap();
     let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
     let mut event_processor = BasicProcessor::new(events_db.clone(), Arc::clone(&db), None);
-    let event_storage = EventStorage::new(Arc::clone(&db), Arc::clone(&db));
+    let event_storage = EventStorage::new(Arc::clone(&events_db), Arc::clone(&db));
 
     // Register not fully witnessed escrow, to save and reprocess events
     let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();

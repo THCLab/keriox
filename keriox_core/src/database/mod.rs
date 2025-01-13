@@ -24,9 +24,6 @@ pub enum QueryParameters<'a> {
         id: IdentifierPrefix,
         sn: u64,
     },
-    ByDigest {
-        digest: SelfAddressingIdentifier,
-    },
     Range {
         id: IdentifierPrefix,
         start: u64,

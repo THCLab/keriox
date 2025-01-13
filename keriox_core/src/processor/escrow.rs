@@ -741,21 +741,24 @@ impl<D: EventDatabase> TransReceiptsEscrow<D> {
 
 #[cfg(feature = "query")]
 #[derive(Clone)]
-pub struct ReplyEscrow(Arc<SledEventDatabase>);
+pub struct ReplyEscrow<D: EventDatabase> {
+    events_db: Arc<D>,
+    escrow_db: Arc<SledEventDatabase>
+}
+
 #[cfg(feature = "query")]
-impl ReplyEscrow {
-    pub fn new(db: Arc<SledEventDatabase>) -> Self {
-        Self(db)
+impl<D: EventDatabase> ReplyEscrow<D> {
+    pub fn new(db: Arc<SledEventDatabase>, events_db: Arc<D>) -> Self {
+        Self { escrow_db: db, events_db}
     }
 }
 #[cfg(feature = "query")]
-impl Notifier for ReplyEscrow {
+impl<D: EventDatabase> Notifier for ReplyEscrow<D> {
     fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error> {
         match notification {
             Notification::KsnOutOfOrder(rpy) => {
                 if let ReplyRoute::Ksn(_id, ksn) = rpy.reply.get_route() {
-                    // let id = ksn.state.prefix;
-                    self.0.add_escrowed_reply(rpy.clone(), &ksn.state.prefix)?;
+                    self.escrow_db.add_escrowed_reply(rpy.clone(), &ksn.state.prefix)?;
                 };
                 Ok(())
             }
@@ -766,13 +769,13 @@ impl Notifier for ReplyEscrow {
 }
 
 #[cfg(feature = "query")]
-impl ReplyEscrow {
+impl<D: EventDatabase> ReplyEscrow<D> {
     pub fn process_reply_escrow(&self, _bus: &NotificationBus) -> Result<(), Error> {
         use crate::query::QueryError;
 
-        if let Some(esc) = self.0.get_all_escrowed_replys() {
+        if let Some(esc) = self.escrow_db.get_all_escrowed_replys() {
             for sig_rep in esc {
-                let validator = EventValidator::new(self.0.clone(), self.0.clone());
+                let validator = EventValidator::new(self.escrow_db.clone(), self.events_db.clone());
                 let id = if let ReplyRoute::Ksn(_id, ksn) = sig_rep.reply.get_route() {
                     Ok(ksn.state.prefix)
                 } else {
@@ -780,13 +783,13 @@ impl ReplyEscrow {
                 }?;
                 match validator.process_signed_ksn_reply(&sig_rep) {
                     Ok(_) => {
-                        self.0.remove_escrowed_reply(&id, &sig_rep)?;
-                        self.0.update_accepted_reply(sig_rep, &id)?;
+                        self.escrow_db.remove_escrowed_reply(&id, &sig_rep)?;
+                        self.escrow_db.update_accepted_reply(sig_rep, &id)?;
                     }
                     Err(Error::SignatureVerificationError)
                     | Err(Error::QueryError(QueryError::StaleRpy)) => {
                         // remove from escrow
-                        self.0.remove_escrowed_reply(&id, &sig_rep)?;
+                        self.escrow_db.remove_escrowed_reply(&id, &sig_rep)?;
                     }
                     Err(Error::EventOutOfOrderError)
                     | Err(Error::VerificationError(VerificationError::MoreInfo(

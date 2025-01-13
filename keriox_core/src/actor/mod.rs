@@ -113,7 +113,7 @@ pub fn process_signed_oobi<D: EventDatabase>(
 
     let validator = EventValidator::new(
         event_storage.escrow_db.clone(),
-        event_storage.escrow_db.clone(),
+        event_storage.events_db.clone(),
     );
     // check signature
     validator.verify(&signed_oobi.reply.encode()?, &signed_oobi.signature)?;

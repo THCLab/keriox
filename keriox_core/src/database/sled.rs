@@ -29,156 +29,153 @@ use crate::{
 
 use super::timestamped::TimestampedSignedEventMessage;
 
-impl EventDatabase for SledEventDatabase {
-    type Error = DbError;
-    fn add_kel_finalized_event(
-        &self,
-        event: SignedEventMessage,
-        id: &IdentifierPrefix,
-    ) -> Result<(), DbError> {
-        self.key_event_logs
-            .push(self.identifiers.designated_key(id)?, event.into())?;
-        self.db.flush()?;
-        Ok(())
-    }
+// impl EventDatabase for SledEventDatabase {
+//     type Error = DbError;
+//     fn add_kel_finalized_event(
+//         &self,
+//         event: SignedEventMessage,
+//         id: &IdentifierPrefix,
+//     ) -> Result<(), DbError> {
+//         self.key_event_logs
+//             .push(self.identifiers.designated_key(id)?, event.into())?;
+//         self.db.flush()?;
+//         Ok(())
+//     }
 
-    fn get_kel_finalized_events(
-        &self,
-        params: QueryParameters,
-    ) -> Option<impl DoubleEndedIterator<Item = TimestampedSignedEventMessage>> {
-        match params {
-            QueryParameters::BySn { id, sn } => todo!(),
-            QueryParameters::ByDigest { digest } => todo!(),
-            QueryParameters::Range { id, start, limit } => todo!(),
-            QueryParameters::All { id } => self
-                .key_event_logs
-                .iter_values(self.identifiers.designated_key(id).ok()?),
-        }
-    }
+//     fn get_kel_finalized_events(
+//         &self,
+//         params: QueryParameters,
+//     ) -> Option<impl DoubleEndedIterator<Item = TimestampedSignedEventMessage>> {
+//         match params {
+//             QueryParameters::BySn { id, sn } => todo!(),
+//             QueryParameters::Range { id, start, limit } => todo!(),
+//             QueryParameters::All { id } => self
+//                 .key_event_logs
+//                 .iter_values(self.identifiers.designated_key(id).ok()?),
+//         }
+//     }
 
-    fn add_receipt_t(
-        &self,
-        receipt: SignedTransferableReceipt,
-        id: &IdentifierPrefix,
-    ) -> Result<(), DbError> {
-        self.receipts_t
-            .push(self.identifiers.designated_key(id)?, receipt)?;
-        self.db.flush()?;
-        Ok(())
-    }
+//     fn add_receipt_t(
+//         &self,
+//         receipt: SignedTransferableReceipt,
+//         id: &IdentifierPrefix,
+//     ) -> Result<(), DbError> {
+//         self.receipts_t
+//             .push(self.identifiers.designated_key(id)?, receipt)?;
+//         self.db.flush()?;
+//         Ok(())
+//     }
 
-    fn get_receipts_t(
-        &self,
-        params: QueryParameters,
-    ) -> Option<impl DoubleEndedIterator<Item = Transferable>> {
-        match params {
-            QueryParameters::BySn { id, sn } => {
-                match self
-                    .receipts_t
-                    .iter_values(self.identifiers.designated_key(&id).ok()?)
-                {
-                    Some(rcts) => {
-                        let transferables = rcts
-                            .filter(|rct| rct.body.sn == sn)
-                            .map(|rct| Transferable::Seal(rct.validator_seal, rct.signatures));
-                        Some(transferables.collect::<Vec<_>>().into_iter())
-                    }
-                    None => None,
-                }
-            }
-            QueryParameters::ByDigest { digest } => todo!(),
-            QueryParameters::Range { id, start, limit } => todo!(),
-            QueryParameters::All { id } => todo!(),
-        }
-    }
+//     fn get_receipts_t(
+//         &self,
+//         params: QueryParameters,
+//     ) -> Option<impl DoubleEndedIterator<Item = Transferable>> {
+//         match params {
+//             QueryParameters::BySn { id, sn } => {
+//                 match self
+//                     .receipts_t
+//                     .iter_values(self.identifiers.designated_key(&id).ok()?)
+//                 {
+//                     Some(rcts) => {
+//                         let transferables = rcts
+//                             .filter(|rct| rct.body.sn == sn)
+//                             .map(|rct| Transferable::Seal(rct.validator_seal, rct.signatures));
+//                         Some(transferables.collect::<Vec<_>>().into_iter())
+//                     }
+//                     None => None,
+//                 }
+//             }
+//             QueryParameters::Range { id, start, limit } => todo!(),
+//             QueryParameters::All { id } => todo!(),
+//         }
+//     }
 
-    fn add_receipt_nt(
-        &self,
-        receipt: SignedNontransferableReceipt,
-        id: &IdentifierPrefix,
-    ) -> Result<(), DbError> {
-        let designated_key = self.identifiers.designated_key(id)?;
-        match self.receipts_nt.get(designated_key)? {
-            Some(receipts) => {
-                // Update existing receipt with new signature or insert new if doesn't exist.
-                let (found, mut to_insert) =
-                    receipts
-                        .into_iter()
-                        .fold((false, vec![]), |(_, mut acc), mut rct| {
-                            if rct.body.eq(&receipt.body) {
-                                for sig in &receipt.signatures {
-                                    if !rct.signatures.contains(&sig) {
-                                        rct.signatures.push(sig.clone())
-                                    }
-                                }
-                                acc.push(rct);
-                                (true, acc)
-                            } else {
-                                acc.push(rct);
-                                (false, acc)
-                            }
-                        });
+//     fn add_receipt_nt(
+//         &self,
+//         receipt: SignedNontransferableReceipt,
+//         id: &IdentifierPrefix,
+//     ) -> Result<(), DbError> {
+//         let designated_key = self.identifiers.designated_key(id)?;
+//         match self.receipts_nt.get(designated_key)? {
+//             Some(receipts) => {
+//                 // Update existing receipt with new signature or insert new if doesn't exist.
+//                 let (found, mut to_insert) =
+//                     receipts
+//                         .into_iter()
+//                         .fold((false, vec![]), |(_, mut acc), mut rct| {
+//                             if rct.body.eq(&receipt.body) {
+//                                 for sig in &receipt.signatures {
+//                                     if !rct.signatures.contains(&sig) {
+//                                         rct.signatures.push(sig.clone())
+//                                     }
+//                                 }
+//                                 acc.push(rct);
+//                                 (true, acc)
+//                             } else {
+//                                 acc.push(rct);
+//                                 (false, acc)
+//                             }
+//                         });
 
-                if !found {
-                    to_insert.push(receipt)
-                };
-                self.receipts_nt.put(designated_key, to_insert)?;
-                self.db.flush()?;
-                Ok(())
-            }
-            None => {
-                self.receipts_nt.push(designated_key, receipt)?;
-                self.db.flush()?;
-                Ok(())
-            }
-        }
-    }
+//                 if !found {
+//                     to_insert.push(receipt)
+//                 };
+//                 self.receipts_nt.put(designated_key, to_insert)?;
+//                 self.db.flush()?;
+//                 Ok(())
+//             }
+//             None => {
+//                 self.receipts_nt.push(designated_key, receipt)?;
+//                 self.db.flush()?;
+//                 Ok(())
+//             }
+//         }
+//     }
 
-    fn get_receipts_nt(
-        &self,
-        params: QueryParameters,
-    ) -> Option<impl DoubleEndedIterator<Item = Nontransferable>> {
-        match params {
-            QueryParameters::BySn { id, sn } => {
-                let rcts = self
-                    .receipts_nt
-                    .iter_values(self.identifiers.designated_key(&id).ok()?);
-                match rcts {
-                    Some(rcts) => {
-                        let out = rcts
-                            .filter_map(|rct| {
-                                if rct.body.sn == sn {
-                                    Some(rct.signatures)
-                                } else {
-                                    None
-                                }
-                            })
-                            .flatten()
-                            .collect::<Vec<_>>()
-                            .into_iter();
-                        Some(out)
-                    }
-                    None => None,
-                }
-            }
-            QueryParameters::ByDigest { digest } => todo!(),
-            QueryParameters::Range { id, start, limit } => todo!(),
-            QueryParameters::All { id } => {
-                let rcts = self
-                    .receipts_nt
-                    .iter_values(self.identifiers.designated_key(id).ok()?);
-                match rcts {
-                    Some(rcts) => Some(
-                        rcts.flat_map(|rct| rct.signatures)
-                            .collect::<Vec<_>>()
-                            .into_iter(),
-                    ),
-                    None => None,
-                }
-            }
-        }
-    }
-}
+//     fn get_receipts_nt(
+//         &self,
+//         params: QueryParameters,
+//     ) -> Option<impl DoubleEndedIterator<Item = Nontransferable>> {
+//         match params {
+//             QueryParameters::BySn { id, sn } => {
+//                 let rcts = self
+//                     .receipts_nt
+//                     .iter_values(self.identifiers.designated_key(&id).ok()?);
+//                 match rcts {
+//                     Some(rcts) => {
+//                         let out = rcts
+//                             .filter_map(|rct| {
+//                                 if rct.body.sn == sn {
+//                                     Some(rct.signatures)
+//                                 } else {
+//                                     None
+//                                 }
+//                             })
+//                             .flatten()
+//                             .collect::<Vec<_>>()
+//                             .into_iter();
+//                         Some(out)
+//                     }
+//                     None => None,
+//                 }
+//             }
+//             QueryParameters::Range { id, start, limit } => todo!(),
+//             QueryParameters::All { id } => {
+//                 let rcts = self
+//                     .receipts_nt
+//                     .iter_values(self.identifiers.designated_key(id).ok()?);
+//                 match rcts {
+//                     Some(rcts) => Some(
+//                         rcts.flat_map(|rct| rct.signatures)
+//                             .collect::<Vec<_>>()
+//                             .into_iter(),
+//                     ),
+//                     None => None,
+//                 }
+//             }
+//         }
+//     }
+// }
 
 pub struct SledEventDatabase {
     db: Arc<sled::Db>,

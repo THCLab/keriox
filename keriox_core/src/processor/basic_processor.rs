@@ -17,7 +17,6 @@ pub struct BasicProcessor<D: EventDatabase>(EventProcessor<D>);
 
 impl<D: EventDatabase> Processor for BasicProcessor<D> {
     type Database = D;
-    type EscrowDatabase = SledEventDatabase;
     fn register_observer(
         &mut self,
         observer: Arc<dyn Notifier + Send + Sync>,

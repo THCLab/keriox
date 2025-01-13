@@ -34,7 +34,6 @@ use crate::{
 
 pub trait Processor {
     type Database: EventDatabase;
-    type EscrowDatabase: EventDatabase;
     fn process_notice(&self, notice: &Notice) -> Result<(), Error>;
 
     #[cfg(feature = "query")]
