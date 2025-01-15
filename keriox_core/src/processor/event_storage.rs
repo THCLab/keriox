@@ -108,18 +108,19 @@ impl<D: EventDatabase> EventStorage<D> {
     where
         I: IntoIterator<Item = Timestamped<SignedEventMessage>>,
     {
-        let evs = events
+        let evs: Vec<_> = events
             .into_iter()
             .flat_map(|event: Timestamped<SignedEventMessage>| {
+                dbg!((&event.signed_event_message.event_message.data.get_prefix(), &event.signed_event_message.event_message.data.get_sn()));
                 let rcts_from_db = self
                     .get_nt_receipts(
                         &event.signed_event_message.event_message.data.get_prefix(),
                         event.signed_event_message.event_message.data.get_sn(),
-                        &event
-                            .signed_event_message
-                            .event_message
-                            .digest()
-                            .expect("Event with no digest"),
+                        // &event
+                        //     .signed_event_message
+                        //     .event_message
+                        //     .digest()
+                        //     .expect("Event with no digest"),
                     )
                     .unwrap()
                     .map(Notice::NontransferableRct);
@@ -127,8 +128,12 @@ impl<D: EventDatabase> EventStorage<D> {
                     Some(rct) => vec![Notice::Event(event.signed_event_message), rct],
                     None => vec![Notice::Event(event.into())],
                 }
-            });
-        Some(evs.collect())
+            }).collect();
+        if evs.is_empty() {
+            None
+        } else {
+            Some(evs)
+        }
     }
 
     pub fn get_event_at_sn(
@@ -365,19 +370,16 @@ impl<D: EventDatabase> EventStorage<D> {
         &self,
         id: &IdentifierPrefix,
         sn: u64,
-        digest: &SelfAddressingIdentifier,
+        // digest: &SelfAddressingIdentifier,
     ) -> Result<Option<SignedNontransferableReceipt>, Error> {
         match self
             .events_db
             .get_receipts_nt(QueryParameters::BySn { id: id.clone(), sn })
         {
-            Some(events) => {
-                let sigs = events.collect::<Vec<_>>();
-                let body = Receipt::new(SerializationFormats::JSON, digest.clone(), id.clone(), sn);
-                Ok(Some(SignedNontransferableReceipt {
-                    body,
-                    signatures: sigs,
-                }))
+            Some(mut events) => {
+                let sigs = events.next();
+                // let body = Receipt::new(SerializationFormats::JSON, digest.clone(), id.clone(), sn);
+                Ok(sigs)
             }
             None => Ok(None),
         }

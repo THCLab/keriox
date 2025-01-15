@@ -66,5 +66,5 @@ pub trait EventDatabase {
     fn get_receipts_nt(
         &self,
         params: QueryParameters,
-    ) -> Option<impl DoubleEndedIterator<Item = Nontransferable>>;
+    ) -> Option<impl DoubleEndedIterator<Item = SignedNontransferableReceipt>>;
 }

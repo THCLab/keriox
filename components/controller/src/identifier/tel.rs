@@ -26,11 +26,11 @@ impl Identifier {
                 let iss = tel.make_issuance_event(registry_id, credential_digest)?;
 
                 let vc_hash = iss.get_prefix();
-                let seal = Seal::Event(EventSeal {
-                    prefix: iss.get_prefix(),
-                    sn: iss.get_sn(),
-                    event_digest: iss.get_digest()?,
-                });
+                let seal = Seal::Event(EventSeal::new(
+                    iss.get_prefix(),
+                    iss.get_sn(),
+                    iss.get_digest()?,
+                ));
                 let ixn = self.anchor_with_seal(&[seal]).unwrap();
 
                 let source_seal = EventSourceSeal {
@@ -63,11 +63,11 @@ impl Identifier {
                 let tel = self.known_events.tel.clone();
                 let rev = tel.make_revoke_event(registry_id, credential_sai)?;
 
-                let seal = Seal::Event(EventSeal {
-                    prefix: rev.get_prefix(),
-                    sn: rev.get_sn(),
-                    event_digest: rev.get_digest()?,
-                });
+                let seal = Seal::Event(EventSeal::new(
+                    rev.get_prefix(),
+                    rev.get_sn(),
+                    rev.get_digest()?,
+                ));
                 let ixn = self.anchor_with_seal(&[seal]).unwrap();
 
                 let source_seal = EventSourceSeal {

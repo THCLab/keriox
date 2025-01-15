@@ -1,7 +1,10 @@
 use std::{sync::Arc, time::Duration};
 
 use keri_core::{
-    database::{escrow::{Escrow, EscrowDb}, redb::RedbDatabase},
+    database::{
+        escrow::{Escrow, EscrowDb},
+        redb::RedbDatabase,
+    },
     prefix::IdentifierPrefix,
     processor::event_storage::EventStorage,
 };
@@ -129,7 +132,7 @@ mod tests {
         let keri_root = Builder::new().prefix("test-db").tempfile().unwrap();
         let keri_db = Arc::new(RedbDatabase::new(keri_root.path()).unwrap());
         let escrow_root = Builder::new().prefix("test-db").tempdir().unwrap();
-        let escrow_db = Arc::new(SledEventDatabase::new(escrow_root.path()).unwrap()); 
+        let escrow_db = Arc::new(SledEventDatabase::new(escrow_root.path()).unwrap());
         let keri_processor = BasicProcessor::new(keri_db.clone(), escrow_db.clone(), None);
         let keri_storage = Arc::new(EventStorage::new(keri_db.clone(), escrow_db.clone()));
 

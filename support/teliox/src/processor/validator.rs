@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
 use keri_core::{
-    database::redb::RedbDatabase, event::{
-        event_data::EventData,
-        sections::seal::Seal,
-    }, prefix::IdentifierPrefix, processor::event_storage::EventStorage
+    database::redb::RedbDatabase,
+    event::{event_data::EventData, sections::seal::Seal},
+    prefix::IdentifierPrefix,
+    processor::event_storage::EventStorage,
 };
 use said::SelfAddressingIdentifier;
 
@@ -60,8 +60,7 @@ impl TelEventValidator {
             .event_message
             .data
             .event_data;
-        if let EventData::Ixn(ixn) = event_type
-        {
+        if let EventData::Ixn(ixn) = event_type {
             if ixn.data.into_iter().any(|seal| match seal {
                 Seal::Event(es) => es.event_digest().eq(&expected_digest),
                 _ => false,

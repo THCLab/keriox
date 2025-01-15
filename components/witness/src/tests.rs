@@ -7,7 +7,7 @@ use keri_core::{
         simple_controller::{PossibleResponse, SimpleController},
         SignedQueryError,
     },
-    database::{escrow::EscrowDb, SledEventDatabase},
+    database::{escrow::EscrowDb, redb::RedbDatabase, sled::SledEventDatabase},
     error::Error,
     event::sections::{
         seal::{EventSeal, Seal},
@@ -44,6 +44,9 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
         std::fs::create_dir_all(root.path()).unwrap();
         let db_controller = Arc::new(SledEventDatabase::new(root.path()).unwrap());
 
+        let events_root = Builder::new().tempfile().unwrap();
+        let events_db = Arc::new(RedbDatabase::new(events_root.path()).unwrap());
+
         let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
         let escrow_db = Arc::new(EscrowDb::new(escrow_root.path()).unwrap());
 
@@ -55,6 +58,7 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
         };
         SimpleController::new(
             Arc::clone(&db_controller),
+            Arc::clone(&events_db),
             escrow_db,
             key_manager,
             oobi_root.path(),
@@ -242,11 +246,15 @@ fn test_qry_rpy() -> Result<(), ActorError> {
 
     // Create test db and event processor.
     let root = Builder::new().prefix("test-alice-db").tempdir().unwrap();
+    let redb_root = Builder::new().tempfile().unwrap();
     let alice_oobi_root = Builder::new().prefix("test-db").tempdir().unwrap();
     let alice_db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
+    let alice_redb = Arc::new(RedbDatabase::new(redb_root.path()).unwrap());
     let alice_escrow_db = Arc::new(EscrowDb::new(root.path())?);
     let root = Builder::new().prefix("test_bob-db").tempdir().unwrap();
     let bob_oobi_root = Builder::new().prefix("test-db").tempdir().unwrap();
+    let bob_redb_root = Builder::new().tempfile().unwrap();
+    let bob_redb = Arc::new(RedbDatabase::new(bob_redb_root.path()).unwrap());
     let bob_db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
     let bob_escrow_db = Arc::new(EscrowDb::new(root.path())?);
 
@@ -271,6 +279,7 @@ fn test_qry_rpy() -> Result<(), ActorError> {
     // Init alice.
     let mut alice = SimpleController::new(
         Arc::clone(&alice_db),
+        Arc::clone(&alice_redb),
         Arc::clone(&alice_escrow_db),
         Arc::clone(&alice_key_manager),
         alice_oobi_root.path(),
@@ -285,6 +294,7 @@ fn test_qry_rpy() -> Result<(), ActorError> {
     // Init bob.
     let mut bob = SimpleController::new(
         Arc::clone(&bob_db),
+        Arc::clone(&bob_redb),
         Arc::clone(&bob_escrow_db),
         Arc::clone(&bob_key_manager),
         bob_oobi_root.path(),
@@ -441,10 +451,13 @@ pub fn test_key_state_notice() -> Result<(), Error> {
         std::fs::create_dir_all(root.path()).unwrap();
         let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
         let bob_escrow_db = Arc::new(EscrowDb::new(root.path())?);
+        let bob_redb_root = Builder::new().tempfile().unwrap();
+        let bob_redb = Arc::new(RedbDatabase::new(bob_redb_root.path()).unwrap());
 
         let bob_key_manager = Arc::new(Mutex::new(CryptoBox::new()?));
         SimpleController::new(
             Arc::clone(&db),
+            Arc::clone(&bob_redb),
             Arc::clone(&bob_escrow_db),
             Arc::clone(&bob_key_manager),
             oobi_root.path(),
@@ -456,9 +469,12 @@ pub fn test_key_state_notice() -> Result<(), Error> {
         let root = Builder::new().prefix("test-db2").tempdir().unwrap();
         std::fs::create_dir_all(root.path()).unwrap();
         let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
+
+        let alice_redb_root = Builder::new().tempfile().unwrap();
+        let alice_redb = Arc::new(RedbDatabase::new(alice_redb_root.path()).unwrap());
         (
-            BasicProcessor::new(db.clone(), None),
-            EventStorage::new(db.clone()),
+            BasicProcessor::new(alice_redb.clone(), db.clone(), None),
+            EventStorage::new(alice_redb.clone(), db.clone()),
         )
     };
 
@@ -563,9 +579,12 @@ fn test_mbx() {
             std::fs::create_dir_all(root.path()).unwrap();
             let db_controller = Arc::new(SledEventDatabase::new(root.path()).unwrap());
             let escrow_db_controller = Arc::new(EscrowDb::new(root.path()).unwrap());
+            let redb_root = Builder::new().tempfile().unwrap();
+            let redb = Arc::new(RedbDatabase::new(redb_root.path()).unwrap());
             let key_manager = Arc::new(Mutex::new(CryptoBox::new().unwrap()));
             SimpleController::new(
                 Arc::clone(&db_controller),
+                Arc::clone(&redb),
                 Arc::clone(&escrow_db_controller),
                 key_manager,
                 oobi_root.path(),
@@ -643,10 +662,13 @@ fn test_invalid_notice() {
                 .unwrap();
             std::fs::create_dir_all(root.path()).unwrap();
             let db_controller = Arc::new(SledEventDatabase::new(root.path()).unwrap());
+            let redb_root = Builder::new().tempfile().unwrap();
+            let redb = Arc::new(RedbDatabase::new(redb_root.path()).unwrap());
             let escrow_db_controller = Arc::new(EscrowDb::new(root.path()).unwrap());
             let key_manager = Arc::new(Mutex::new(CryptoBox::new().unwrap()));
             SimpleController::new(
                 Arc::clone(&db_controller),
+                Arc::clone(&redb),
                 Arc::clone(&escrow_db_controller),
                 key_manager,
                 oobi_root.path(),
@@ -743,9 +765,12 @@ pub fn test_multisig() -> Result<(), ActorError> {
         let oobi_root = Builder::new().prefix("cont1-db-oobi").tempdir().unwrap();
         let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
         let cont1_escrow_db = Arc::new(EscrowDb::new(root.path())?);
+        let redb_root = Builder::new().tempfile().unwrap();
+        let redb = Arc::new(RedbDatabase::new(redb_root.path()).unwrap());
 
         SimpleController::new(
             Arc::clone(&db),
+            Arc::clone(&redb),
             Arc::clone(&cont1_escrow_db),
             Arc::clone(&cont1_key_manager),
             oobi_root.path(),
@@ -770,9 +795,12 @@ pub fn test_multisig() -> Result<(), ActorError> {
         let oobi_root = Builder::new().prefix("cont2-db-oobi").tempdir().unwrap();
         let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
         let cont2_escrow_db = Arc::new(EscrowDb::new(root.path())?);
+        let redb_root = Builder::new().tempfile().unwrap();
+        let redb = Arc::new(RedbDatabase::new(redb_root.path()).unwrap());
 
         SimpleController::new(
             Arc::clone(&db),
+            Arc::clone(&redb),
             Arc::clone(&cont2_escrow_db),
             Arc::clone(&cont2_key_manager),
             oobi_root.path(),
@@ -881,7 +909,7 @@ pub fn test_multisig() -> Result<(), ActorError> {
 }
 
 // Helper function that creates controller, makes and publish its inception event.
-fn setup_controller(witness: &Witness) -> Result<SimpleController<CryptoBox>, Error> {
+fn setup_controller(witness: &Witness) -> Result<SimpleController<CryptoBox, RedbDatabase>, Error> {
     let mut cont1 = {
         // Create test db and event processor.
         let cont1_key_manager = Arc::new(Mutex::new(CryptoBox::new()?));
@@ -889,9 +917,12 @@ fn setup_controller(witness: &Witness) -> Result<SimpleController<CryptoBox>, Er
         let oobi_root = Builder::new().prefix("cont1-db-oobi").tempdir().unwrap();
         let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
         let cont1_escrow_db = Arc::new(EscrowDb::new(root.path())?);
+        let redb_root = Builder::new().tempfile().unwrap();
+        let redb = Arc::new(RedbDatabase::new(redb_root.path()).unwrap());
 
         SimpleController::new(
             Arc::clone(&db),
+            Arc::clone(&redb),
             Arc::clone(&cont1_escrow_db),
             Arc::clone(&cont1_key_manager),
             oobi_root.path(),
@@ -1049,11 +1080,10 @@ pub fn test_delegated_multisig() -> Result<(), ActorError> {
         delegator.process(&[Message::Notice(Notice::Event(group_icp_to_confirm))])?;
 
         // make delegating event
-        let seal = Seal::Event(EventSeal {
-            prefix: group_id.clone(),
-            sn: 0,
-            event_digest: dip_digest.clone(),
-        });
+        let seal = Seal::Event(EventSeal::new(group_id.clone(),
+            0,
+            dip_digest.clone(),
+        ));
 
         let ixn = delegator.anchor(&vec![seal])?;
         // Send it to witness

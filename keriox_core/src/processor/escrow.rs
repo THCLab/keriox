@@ -743,13 +743,16 @@ impl<D: EventDatabase> TransReceiptsEscrow<D> {
 #[derive(Clone)]
 pub struct ReplyEscrow<D: EventDatabase> {
     events_db: Arc<D>,
-    escrow_db: Arc<SledEventDatabase>
+    escrow_db: Arc<SledEventDatabase>,
 }
 
 #[cfg(feature = "query")]
 impl<D: EventDatabase> ReplyEscrow<D> {
     pub fn new(db: Arc<SledEventDatabase>, events_db: Arc<D>) -> Self {
-        Self { escrow_db: db, events_db}
+        Self {
+            escrow_db: db,
+            events_db,
+        }
     }
 }
 #[cfg(feature = "query")]
@@ -758,7 +761,8 @@ impl<D: EventDatabase> Notifier for ReplyEscrow<D> {
         match notification {
             Notification::KsnOutOfOrder(rpy) => {
                 if let ReplyRoute::Ksn(_id, ksn) = rpy.reply.get_route() {
-                    self.escrow_db.add_escrowed_reply(rpy.clone(), &ksn.state.prefix)?;
+                    self.escrow_db
+                        .add_escrowed_reply(rpy.clone(), &ksn.state.prefix)?;
                 };
                 Ok(())
             }

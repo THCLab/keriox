@@ -24,17 +24,17 @@ const NONTRANS_RCTS: MultimapTableDefinition<(&str, u64), &[u8]> =
 const TRANS_RCTS: MultimapTableDefinition<(&str, u64), &[u8]> =
     MultimapTableDefinition::new("trans_receipts");
 
-use std::path::Path;
+use std::{path::Path, u64};
 
 use redb::{Database, MultimapTableDefinition, TableDefinition};
 use rkyv::{
     api::high::HighSerializer, rancor::Failure, ser::allocator::ArenaHandle, util::AlignedVec,
 };
 use rkyv_adapter::deserialize_indexed_signatures;
-use said::SelfAddressingIdentifier;
+use said::{sad::SerializationFormats, SelfAddressingIdentifier};
 
 use crate::{
-    event::KeyEvent,
+    event::{receipt::Receipt, KeyEvent},
     event_message::{
         msg::KeriEvent,
         signature::{Nontransferable, Transferable},
@@ -175,11 +175,11 @@ impl EventDatabase for RedbDatabase {
     fn get_receipts_nt(
         &self,
         params: super::QueryParameters,
-    ) -> Option<impl DoubleEndedIterator<Item = Nontransferable>> {
+    ) -> Option<impl DoubleEndedIterator<Item = SignedNontransferableReceipt>> {
         match params {
-            QueryParameters::BySn { id, sn } => self.get_nontrans_receipts(&id.to_str(), sn).ok(),
-            QueryParameters::Range { id, start, limit } => todo!(),
-            QueryParameters::All { id } => todo!(),
+            QueryParameters::BySn { id, sn } => self.get_nontrans_receipts_range(&id.to_str(), sn, 1).ok().map(|e| e.into_iter()),
+            QueryParameters::Range { id, start, limit } => self.get_nontrans_receipts_range(&id.to_str(), start, limit).ok().map(|e| e.into_iter()),
+            QueryParameters::All { id } => self.get_nontrans_receipts_range(&id.to_str(), 0, u64::MAX).ok().map(|e| e.into_iter()),
         }
     }
 }
@@ -267,20 +267,79 @@ impl RedbDatabase {
         self.insert_with_sn_key(SIGS, &identifier.to_str(), sn, signatures)
     }
 
-    fn get_nontrans_receipts(
+    fn get_nontrans_couplets(
         &self,
         id: &str,
         sn: u64,
-    ) -> Result<impl DoubleEndedIterator<Item = Nontransferable>, RedbError> {
+    ) -> Result<impl Iterator<Item = Nontransferable>, RedbError> {
         let from_db_iterator = {
             let read_txn = self.db.begin_read()?;
             let table = read_txn.open_multimap_table(NONTRANS_RCTS)?;
             table.get((id, sn))
         }?;
-        Ok(from_db_iterator.map(|sig| match sig {
-            Ok(sig) => rkyv_adapter::deserialize_nontransferable(sig.value()).unwrap(),
-            Err(_) => todo!(),
-        }))
+        let nontrans = from_db_iterator.map(|sig| match sig {
+            Ok(sig) => Ok(rkyv_adapter::deserialize_nontransferable(sig.value()).unwrap()),
+            Err(e) => Err(RedbError::from(e)),
+        }).collect::<Result<Vec<_>, _>>();
+        nontrans.map(|el| el.into_iter())
+    }
+
+    fn get_nontrans_receipts_range(
+        &self,
+        id: &str,
+        start: u64, 
+        limit: u64
+    ) -> Result<
+        Vec<SignedNontransferableReceipt>, RedbError>
+    {
+        let from_db_iterator = {
+            let read_txn = self.db.begin_read()?;
+            let table = read_txn.open_multimap_table(NONTRANS_RCTS)?;
+            table.range((id, start)..(id, start+limit))
+        }?;
+        let out: Vec<SignedNontransferableReceipt> = from_db_iterator
+            .map(|sig| {
+                match sig {
+                    Ok((key, value)) => {
+                        let (identifier, sn) = key.value();
+                        let id = identifier.parse().unwrap();
+                        let digest = self.get_event_digest(&id, sn).unwrap();
+                        let nontrans = value.map(|value| match value {
+                        Ok(element) => {
+                            rkyv_adapter::deserialize_nontransferable(element.value()).unwrap()
+                        }
+                        Err(_) => todo!(),
+                    }).collect::<Vec<_>>();
+                    let rct = Receipt::new(SerializationFormats::JSON, digest.unwrap(), id, sn);
+                    SignedNontransferableReceipt { body: rct, signatures: nontrans }
+                },
+                    Err(_) => todo!(),
+                }}
+            ).collect();
+        Ok(out)
+    }
+
+    fn get_all_nontrans_receipts_couplets(
+        &self,
+        id: &str,
+    ) -> Result<Box<dyn DoubleEndedIterator<Item = Nontransferable>>, RedbError> {
+        let from_db_iterator = {
+            let read_txn = self.db.begin_read()?;
+            let table = read_txn.open_multimap_table(NONTRANS_RCTS)?;
+            table.range((id, 0)..(id, u64::MAX))
+        }?;
+        let out = from_db_iterator
+            .map(|sig| match sig {
+                Ok((_key, value)) => value.map(|value| match value {
+                    Ok(element) => {
+                        rkyv_adapter::deserialize_nontransferable(element.value()).unwrap()
+                    }
+                    Err(_) => todo!(),
+                }),
+                Err(_) => todo!(),
+            })
+            .flatten();
+        Ok(Box::new(out))
     }
 
     fn get_trans_receipts(
@@ -571,11 +630,14 @@ fn test_retrieve_receipts() {
     let receipt0_0 = br#"{"v":"KERI10JSON000091_","t":"rct","d":"EJufgwH347N2kobmes1IQw_1pfMipEFFy0RwinZTtah9","i":"EJufgwH347N2kobmes1IQw_1pfMipEFFy0RwinZTtah9","s":"0"}-CABBN_PYSns7oFNixSohVW4raBwMV6iYeh0PEZ_bR-38Xev0BDbyebqZQKwn7TqU92Vtw8n2wy5FptP42F1HEmCc9nQLzbXrXuA9SMl9nCZ-vi2bdaeT3aqInXGFAW70QPzM4kJ"#;
     let receipt0_1 = br#"{"v":"KERI10JSON000091_","t":"rct","d":"EJufgwH347N2kobmes1IQw_1pfMipEFFy0RwinZTtah9","i":"EJufgwH347N2kobmes1IQw_1pfMipEFFy0RwinZTtah9","s":"0"}-CABBHndk6cXPCnghFqKt_0SikY1P9z_nIUrHq_SeHgLQCui0BBqAOBXFKVivgf0jh2ySWX1VshnkUYK3ev_L--sPB_onF7w2WhiK2AB7mf4IIuaSQCLumsr2sV77S6U5VMx0CAD"#;
 
+    let receipt1_0 = br#"{"v":"KERI10JSON000091_","t":"rct","d":"EJufgwH347N2kobmes1IQw_1pfMipEFFy0RwinZTtah9","i":"EJufgwH347N2kobmes1IQw_1pfMipEFFy0RwinZTtah9","s":"1"}-CABBHndk6cXPCnghFqKt_0SikY1P9z_nIUrHq_SeHgLQCui0BBqAOBXFKVivgf0jh2ySWX1VshnkUYK3ev_L--sPB_onF7w2WhiK2AB7mf4IIuaSQCLumsr2sV77S6U5VMx0CAD"#;
+    let receipt1_1 = br#"{"v":"KERI10JSON000091_","t":"rct","d":"EJufgwH347N2kobmes1IQw_1pfMipEFFy0RwinZTtah9","i":"EJufgwH347N2kobmes1IQw_1pfMipEFFy0RwinZTtah9","s":"1"}-CABBN_PYSns7oFNixSohVW4raBwMV6iYeh0PEZ_bR-38Xev0BDbyebqZQKwn7TqU92Vtw8n2wy5FptP42F1HEmCc9nQLzbXrXuA9SMl9nCZ-vi2bdaeT3aqInXGFAW70QPzM4kJ"#;
+
     let first_id: IdentifierPrefix = "EJufgwH347N2kobmes1IQw_1pfMipEFFy0RwinZTtah9"
         .parse()
         .unwrap();
 
-    for event in [receipt0_0, receipt0_1] {
+    for event in [receipt0_0, receipt0_1, receipt1_0, receipt1_1] {
         let evs = parse_event_stream(event).unwrap();
         let ev = evs.first().unwrap();
         match ev {
@@ -586,6 +648,9 @@ fn test_retrieve_receipts() {
         }
     }
 
-    let retrived_rcts = db.get_nontrans_receipts(&first_id.to_str(), 0).unwrap();
+    let retrived_rcts = db.get_nontrans_couplets(&first_id.to_str(), 0).unwrap();
     assert_eq!(retrived_rcts.count(), 2);
+
+    let all_retrived_rcts = db.get_all_nontrans_receipts_couplets(&first_id.to_str()).unwrap();
+    assert_eq!(all_retrived_rcts.count(), 4);
 }

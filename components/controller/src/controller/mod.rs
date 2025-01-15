@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use async_std::fs::create_dir_all;
 use keri_core::{
     event_message::signature::Signature,
     oobi::LocationScheme,
@@ -35,12 +36,12 @@ impl Controller {
             transport,
             tel_transport,
         } = config;
-
+        std::fs::create_dir_all(&db_path).unwrap();
         let mut query_db_path = db_path.clone();
         query_db_path.push("query_cache");
 
-        let query_cache = Arc::new(QueryCache::new(&query_db_path)?);
         let events = Arc::new(KnownEvents::new(db_path, escrow_config)?);
+        let query_cache = Arc::new(QueryCache::new(&query_db_path)?);
         let comm = Arc::new(Communication {
             events: events.clone(),
             transport,

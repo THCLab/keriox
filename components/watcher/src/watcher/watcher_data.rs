@@ -1,13 +1,13 @@
-use std::sync::Arc;
+use std::{fs::File, sync::Arc};
 
 use async_std::channel::Sender;
 use futures::future::join_all;
 use itertools::Itertools;
-use keri_core::event_message::{
+use keri_core::{database::{redb::RedbDatabase, sled::{DbError, SledEventDatabase}}, event_message::{
     msg::KeriEvent,
     signed_event_message::{Message, Notice, Op},
     timestamped::Timestamped,
-};
+}};
 use keri_core::oobi::LocationScheme;
 use keri_core::prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix};
 use keri_core::processor::escrow::default_escrow_bus;
@@ -27,7 +27,7 @@ use keri_core::{
     oobi::{Role, Scheme},
 };
 use keri_core::{
-    database::{escrow::EscrowDb, DbError, SledEventDatabase},
+    database::escrow::EscrowDb,
     error::Error,
 };
 use keri_core::{
@@ -50,8 +50,8 @@ use super::{config::WatcherConfig, tel_providing::TelToForward};
 pub struct WatcherData {
     pub address: url::Url,
     pub prefix: BasicPrefix,
-    pub processor: BasicProcessor,
-    pub event_storage: Arc<EventStorage>,
+    pub processor: BasicProcessor<RedbDatabase>,
+    pub event_storage: Arc<EventStorage<RedbDatabase>>,
     pub oobi_manager: OobiManager,
     pub signer: Arc<Signer>,
     pub transport: Box<dyn Transport + Send + Sync>,
@@ -88,6 +88,12 @@ impl WatcherData {
         );
 
         let db = Arc::new(SledEventDatabase::new(db_path.clone())?);
+        let events_db = {
+            let mut path = db_path.clone();
+            path.push("events_database");
+            let _file = File::create(&path).unwrap();
+            Arc::new(RedbDatabase::new(&path).unwrap())
+        };
 
         let escrow_db = {
             let mut path = db_path.clone();
@@ -101,9 +107,9 @@ impl WatcherData {
             OobiManager::new(&path)
         };
 
-        let (mut notification_bus, _) = default_escrow_bus(db.clone(), escrow_db, escrow_config);
+        let (mut notification_bus, _) = default_escrow_bus(events_db.clone(), db.clone(), escrow_db, escrow_config);
         notification_bus.register_observer(
-            Arc::new(ReplyEscrow::new(db.clone())),
+            Arc::new(ReplyEscrow::new(db.clone(), events_db.clone())),
             vec![
                 JustNotification::KeyEventAdded,
                 JustNotification::KsnOutOfOrder,
@@ -111,9 +117,9 @@ impl WatcherData {
         );
 
         let prefix = BasicPrefix::Ed25519NT(signer.public_key()); // watcher uses non transferable key
-        let processor = BasicProcessor::new(db.clone(), Some(notification_bus));
+        let processor = BasicProcessor::new(events_db.clone(), db.clone(), Some(notification_bus));
 
-        let storage = Arc::new(EventStorage::new(db));
+        let storage = Arc::new(EventStorage::new(events_db, db));
 
         // construct witness loc scheme oobi
         let loc_scheme = LocationScheme::new(

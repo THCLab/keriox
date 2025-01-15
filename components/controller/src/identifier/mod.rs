@@ -157,10 +157,10 @@ impl Identifier {
 
     pub fn get_last_event_seal(&self) -> Result<EventSeal, MechanicsError> {
         let state = self.known_events.get_state(self.id())?;
-        Ok(EventSeal {
-            prefix: state.prefix,
-            sn: state.sn,
-            event_digest: state.last_event_digest,
-        })
+        Ok(EventSeal::new(
+            state.prefix,
+            state.sn,
+            state.last_event_digest,
+        ))
     }
 }

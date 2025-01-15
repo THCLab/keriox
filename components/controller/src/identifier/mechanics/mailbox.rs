@@ -208,7 +208,7 @@ impl Identifier {
                     let fully_signed_event = self
                         .known_events
                         .partially_witnessed_escrow
-                        .get_event_by_sn_and_digest(seal.sn, &seal.prefix, &seal.event_digest);
+                        .get_event_by_sn_and_digest(seal.sn, &seal.prefix, &seal.event_digest());
                     if let Some(fully_signed) = fully_signed_event {
                         let witnesses = self.known_events.get_current_witness_list(&self.id)?;
                         self.communication.publish(witnesses, &fully_signed).await?;
@@ -223,11 +223,11 @@ impl Identifier {
                     .map_err(ResponseProcessingError::Delegate)?;
                 let id = event_to_confirm.event_message.data.get_prefix();
 
-                let seal = Seal::Event(EventSeal {
-                    prefix: id,
-                    sn: event_to_confirm.event_message.data.get_sn(),
-                    event_digest: event_to_confirm.event_message.digest()?,
-                });
+                let seal = Seal::Event(EventSeal::new(
+                    id,
+                    event_to_confirm.event_message.data.get_sn(),
+                    event_to_confirm.event_message.digest()?,
+                ));
 
                 let ixn = self.known_events.anchor_with_seal(group_id, &[seal])?;
                 let exn = event_generator::exchange(group_id, &ixn, ForwardTopic::Multisig);

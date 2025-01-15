@@ -116,7 +116,7 @@ impl<D: EventDatabase> EventValidator<D> {
             let digest = &signed_event.event_message.digest()?;
 
             let (mut couples, mut indexed) = (vec![], vec![]);
-            if let Some(rcts) = self.event_storage.get_nt_receipts(prefix, sn, digest)? {
+            if let Some(rcts) = self.event_storage.get_nt_receipts(prefix, sn)? {
                 rcts.signatures.iter().for_each(|s| match s {
                     Nontransferable::Couplet(c) => {
                         couples.append(&mut c.clone());

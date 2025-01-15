@@ -89,11 +89,7 @@ pub fn make_issuance_event(
     derivation: Option<&HashFunctionCode>,
     serialization_format: Option<&SerializationFormats>,
 ) -> Result<Event, Error> {
-    let registry_anchor = EventSeal::new(
-        state.prefix.clone(),
-        state.sn,
-        state.last.clone(),
-    );
+    let registry_anchor = EventSeal::new(state.prefix.clone(), state.sn, state.last.clone());
     let iss = VCEventType::Bis(Issuance::new(state.issuer.clone(), registry_anchor));
     let vc_prefix = IdentifierPrefix::self_addressing(vc_hash);
     Ok(Event::Vc(VCEvent::new(vc_prefix, 0, iss).to_message(
@@ -130,10 +126,7 @@ pub fn make_revoke_event(
     derivation: Option<&HashFunctionCode>,
     serialization_format: Option<&SerializationFormats>,
 ) -> Result<Event, Error> {
-    let registry_anchor = EventSeal::new(state.prefix.to_owned(),
-        state.sn,
-        state.last.clone(),
-);
+    let registry_anchor = EventSeal::new(state.prefix.to_owned(), state.sn, state.last.clone());
     let rev = VCEventType::Brv(Revocation {
         prev_event_hash: last_vc_event_hash,
         registry_anchor: Some(registry_anchor),

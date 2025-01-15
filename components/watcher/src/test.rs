@@ -10,7 +10,7 @@ use keri_core::{
         simple_controller::{PossibleResponse, SimpleController},
         SignedQueryError,
     },
-    database::{escrow::EscrowDb, SledEventDatabase},
+    database::{escrow::EscrowDb, redb::RedbDatabase, sled::SledEventDatabase},
     event_message::signed_event_message::{Notice, Op},
     prefix::IdentifierPrefix,
     processor::escrow::EscrowConfig,
@@ -35,6 +35,9 @@ async fn test_watcher_access() -> Result<(), ActorError> {
         std::fs::create_dir_all(root.path()).unwrap();
         let db_controller = Arc::new(SledEventDatabase::new(root.path()).unwrap());
 
+        let events_db_path = Builder::new().tempfile().unwrap();
+        let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
+
         let escrow_root = Builder::new().prefix("test-db-escrow1").tempdir().unwrap();
         let escrow_db = Arc::new(EscrowDb::new(escrow_root.path()).unwrap());
 
@@ -46,6 +49,7 @@ async fn test_watcher_access() -> Result<(), ActorError> {
         };
         SimpleController::new(
             Arc::clone(&db_controller),
+            Arc::clone(&events_db),
             escrow_db,
             key_manager,
             oobi_root.path(),
@@ -66,6 +70,9 @@ async fn test_watcher_access() -> Result<(), ActorError> {
         let root = Builder::new().prefix("test-db2").tempdir().unwrap();
         let db_controller = Arc::new(SledEventDatabase::new(root.path()).unwrap());
 
+        let events_db_path = Builder::new().tempfile().unwrap();
+        let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
+
         let escrow_root = Builder::new().prefix("test-db-escrow2").tempdir().unwrap();
         let escrow_db = Arc::new(EscrowDb::new(escrow_root.path()).unwrap());
 
@@ -77,6 +84,7 @@ async fn test_watcher_access() -> Result<(), ActorError> {
         };
         SimpleController::new(
             Arc::clone(&db_controller),
+            Arc::clone(&events_db),
             escrow_db,
             key_manager,
             oobi_root.path(),
@@ -149,6 +157,8 @@ pub fn watcher_forward_ksn() -> Result<(), ActorError> {
         let root = Builder::new().prefix("test-db1").tempdir().unwrap();
         std::fs::create_dir_all(root.path()).unwrap();
         let db_controller = Arc::new(SledEventDatabase::new(root.path()).unwrap());
+        let events_db_path = Builder::new().tempfile().unwrap();
+        let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
 
         let escrow_root = Builder::new().prefix("test-db-escrow1").tempdir().unwrap();
         let escrow_db = Arc::new(EscrowDb::new(escrow_root.path()).unwrap());
@@ -161,6 +171,7 @@ pub fn watcher_forward_ksn() -> Result<(), ActorError> {
         };
         SimpleController::new(
             Arc::clone(&db_controller),
+            Arc::clone(&events_db),
             escrow_db,
             key_manager,
             oobi_root.path(),
@@ -177,6 +188,9 @@ pub fn watcher_forward_ksn() -> Result<(), ActorError> {
         let root = Builder::new().prefix("test-db2").tempdir().unwrap();
         let db_controller = Arc::new(SledEventDatabase::new(root.path()).unwrap());
 
+        let events_db_path = Builder::new().tempfile().unwrap();
+        let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
+
         let escrow_root = Builder::new().prefix("test-db-escrow2").tempdir().unwrap();
         let escrow_db = Arc::new(EscrowDb::new(escrow_root.path()).unwrap());
 
@@ -188,6 +202,7 @@ pub fn watcher_forward_ksn() -> Result<(), ActorError> {
         };
         SimpleController::new(
             Arc::clone(&db_controller),
+            Arc::clone(&events_db),
             escrow_db,
             key_manager,
             oobi_root.path(),

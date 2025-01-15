@@ -225,7 +225,7 @@ async fn test_tel_from_watcher() -> Result<(), anyhow::Error> {
     // Issue message. It'll generate ixn message, that need to be signed.
     let (vc_hash, iss_ixn) = issuer.issue(credential_said)?;
     let sai = match &vc_hash {
-        IdentifierPrefix::SelfAddressing(sai) => sai.clone(),
+        IdentifierPrefix::SelfAddressing(sai) => sai.said.clone(),
         _ => unreachable!(),
     };
 
@@ -327,7 +327,7 @@ async fn test_tel_from_watcher() -> Result<(), anyhow::Error> {
     // Revoke issued message
     let rev_ixn = issuer.revoke(&sai)?;
     let sai = match &vc_hash {
-        IdentifierPrefix::SelfAddressing(sai) => sai.clone(),
+        IdentifierPrefix::SelfAddressing(sai) => sai.said.clone(),
         _ => unreachable!(),
     };
 

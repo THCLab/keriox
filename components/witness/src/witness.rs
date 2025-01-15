@@ -1,6 +1,5 @@
 use std::{
-    path::{Path, PathBuf},
-    sync::Arc,
+    fs::File, path::{Path, PathBuf}, sync::Arc
 };
 
 use keri_core::{
@@ -8,29 +7,19 @@ use keri_core::{
         error::ActorError, parse_exchange_stream, parse_notice_stream, parse_query_stream,
         parse_reply_stream, prelude::*, process_reply, process_signed_exn, process_signed_query,
         simple_controller::PossibleResponse,
-    },
-    error::Error,
-    event::KeyEvent,
-    event_message::{
+    }, database::{redb::RedbDatabase, sled::DbError, EventDatabase}, error::Error, event::KeyEvent, event_message::{
         event_msg_builder::ReceiptBuilder,
         msg::KeriEvent,
         signature::Nontransferable,
         signed_event_message::{Notice, SignedNontransferableReceipt},
-    },
-    mailbox::MailboxResponse,
-    oobi::{LocationScheme, OobiManager},
-    prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
-    processor::notification::{Notification, NotificationBus, Notifier},
-    query::{
+    }, mailbox::MailboxResponse, oobi::{LocationScheme, OobiManager}, prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix}, processor::notification::{Notification, NotificationBus, Notifier}, query::{
         mailbox::{QueryArgsMbx, QueryTopics},
         reply_event::{ReplyEvent, ReplyRoute, SignedReply},
         ReplyType,
-    },
-    signer::Signer,
+    }, signer::Signer
 };
 use serde::{Deserialize, Serialize};
 use teliox::{
-    database::EventDatabase,
     event::{parse_tel_query_stream, verifiable_event::VerifiableEvent},
     processor::{escrow::default_escrow_bus, storage::TelEventStorage, TelReplyType},
     tel::Tel,
@@ -43,7 +32,7 @@ use crate::witness_processor::{WitnessEscrowConfig, WitnessProcessor};
 pub struct WitnessReceiptGenerator {
     pub prefix: BasicPrefix,
     pub signer: Arc<Signer>,
-    pub storage: EventStorage,
+    pub storage: EventStorage<RedbDatabase>,
 }
 
 impl Notifier for WitnessReceiptGenerator {
@@ -80,8 +69,8 @@ impl Notifier for WitnessReceiptGenerator {
 }
 
 impl WitnessReceiptGenerator {
-    pub fn new(signer: Arc<Signer>, db: Arc<SledEventDatabase>) -> Self {
-        let storage = EventStorage::new(db.clone(), db.clone());
+    pub fn new(signer: Arc<Signer>, db: Arc<SledEventDatabase>, events_db: Arc<RedbDatabase>) -> Self {
+        let storage = EventStorage::new(events_db.clone(), db.clone());
         let prefix = BasicPrefix::Ed25519NT(signer.public_key());
         Self {
             prefix,
@@ -120,7 +109,7 @@ pub enum WitnessError {
     TelError(#[from] teliox::error::Error),
 
     #[error(transparent)]
-    DatabaseError(#[from] keri_core::database::DbError),
+    DatabaseError(#[from] DbError),
 
     #[error("Signing error")]
     SigningError,
@@ -130,7 +119,7 @@ pub struct Witness {
     pub address: Url,
     pub prefix: BasicPrefix,
     pub processor: WitnessProcessor,
-    pub event_storage: Arc<EventStorage>,
+    pub event_storage: Arc<EventStorage<RedbDatabase>>,
     pub oobi_manager: OobiManager,
     pub signer: Arc<Signer>,
     pub receipt_generator: Arc<WitnessReceiptGenerator>,
@@ -150,17 +139,23 @@ impl Witness {
         events_path.push(event_path);
         let mut escrow_path = events_path.clone();
         let mut tel_path = events_path.clone();
+        let mut events_database_path= events_path.clone();
 
         events_path.push("events");
         escrow_path.push("escrow");
 
         let prefix = BasicPrefix::Ed25519NT(signer.public_key());
         let db = Arc::new(SledEventDatabase::new(events_path.as_path())?);
-        let escrow_db = Arc::new(EscrowDb::new(escrow_path.as_path())?);
-        let mut witness_processor = WitnessProcessor::new(db.clone(), escrow_db, escrow_config);
-        let event_storage = Arc::new(EventStorage::new(db.clone(), db.clone()));
 
-        let receipt_generator = Arc::new(WitnessReceiptGenerator::new(signer.clone(), db));
+        events_database_path.push("events_database");
+        let _file = File::create(&events_database_path).unwrap();
+
+        let events_db = Arc::new(RedbDatabase::new(&events_database_path).map_err(|e| Error::DbError)?);
+        let escrow_db = Arc::new(EscrowDb::new(escrow_path.as_path())?);
+        let mut witness_processor = WitnessProcessor::new(events_db.clone(), db.clone(), escrow_db, escrow_config);
+        let event_storage = Arc::new(EventStorage::new(events_db.clone(), db.clone()));
+
+        let receipt_generator = Arc::new(WitnessReceiptGenerator::new(signer.clone(), db, events_db.clone()));
         witness_processor.register_observer(
             receipt_generator.clone(),
             &[
@@ -173,7 +168,7 @@ impl Witness {
         let tel_events_db = {
             tel_path.push("tel");
             tel_path.push("events");
-            Arc::new(EventDatabase::new(&tel_path).unwrap())
+            Arc::new(teliox::database::EventDatabase::new(&tel_path).unwrap())
         };
 
         let tel_escrow_db = {

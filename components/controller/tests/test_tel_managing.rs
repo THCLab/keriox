@@ -60,7 +60,7 @@ async fn test_tel() -> Result<(), ControllerError> {
 
     let (vc_id, issuance_ixn) = identifier1.issue(credential_said).unwrap();
     let vc_hash = match vc_id {
-        keri_controller::IdentifierPrefix::SelfAddressing(sai) => sai.clone(),
+        keri_controller::IdentifierPrefix::SelfAddressing(sai) => sai.said.clone(),
         _ => unreachable!(),
     };
     let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(&issuance_ixn).unwrap());

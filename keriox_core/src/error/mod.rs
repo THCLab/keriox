@@ -3,8 +3,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
-    event::sections::key_config::SignatureError, event_message::cesr_adapter::ParseError,
-    prefix::IdentifierPrefix, processor::validator::VerificationError,
+    database::redb::RedbError, event::sections::key_config::SignatureError, event_message::cesr_adapter::ParseError, prefix::IdentifierPrefix, processor::validator::VerificationError
 };
 
 pub mod serializer_error;
@@ -90,7 +89,7 @@ pub enum Error {
     #[error(transparent)]
     SledDbError(#[from] crate::database::sled::DbError),
 
-    #[error("Databsase err")]
+    #[error("Database err")]
     DbError,
 
     #[error("Event generation error: {0}")]
@@ -133,6 +132,12 @@ impl From<said::error::Error> for Error {
 impl From<sled::Error> for Error {
     fn from(_: sled::Error) -> Self {
         Error::SledError
+    }
+}
+
+impl From<RedbError> for Error {
+    fn from(_: RedbError) -> Self {
+        Error::DbError
     }
 }
 

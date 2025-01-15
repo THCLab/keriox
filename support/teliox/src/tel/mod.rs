@@ -12,7 +12,9 @@ use crate::{
     },
     state::{vc_state::TelState, ManagerTelState},
 };
-use keri_core::{database::redb::RedbDatabase, prefix::IdentifierPrefix, processor::event_storage::EventStorage};
+use keri_core::{
+    database::redb::RedbDatabase, prefix::IdentifierPrefix, processor::event_storage::EventStorage,
+};
 use said::SelfAddressingIdentifier;
 
 pub mod event_generator;

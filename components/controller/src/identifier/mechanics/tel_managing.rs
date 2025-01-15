@@ -26,11 +26,11 @@ impl Identifier {
             vec![],
         )?;
         let id = vcp.get_prefix();
-        let seal = Seal::Event(EventSeal {
-            prefix: vcp.get_prefix(),
-            sn: vcp.get_sn(),
-            event_digest: vcp.get_digest()?,
-        });
+        let seal = Seal::Event(EventSeal::new(
+            vcp.get_prefix(),
+            vcp.get_sn(),
+            vcp.get_digest()?,
+        ));
         let ixn = self.anchor_with_seal(&[seal]).unwrap();
         let source_seal = EventSourceSeal {
             sn: ixn.data.sn,

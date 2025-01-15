@@ -229,14 +229,15 @@ pub fn test_not_fully_witnessed() -> Result<(), Error> {
     assert!(esc.next().is_none());
 
     // check if receipt was accepted
-    let esc = events_db
+    let mut esc = events_db
         .get_receipts_nt(QueryParameters::BySn {
             id: id.clone(),
             sn: 0,
         })
         .unwrap();
 
-    assert_eq!(esc.count(), 2);
+    let receipt = esc.next().unwrap();
+    assert_eq!(receipt.signatures.len(), 2);
 
     let state = event_storage.get_state(&id).unwrap();
     assert_eq!(state.sn, 0);
@@ -253,10 +254,11 @@ pub fn test_not_fully_witnessed() -> Result<(), Error> {
         .unwrap();
     assert!(esc.next().is_none());
 
-    let esc = events_db
+    let mut esc = events_db
         .get_receipts_nt(QueryParameters::BySn { id: id, sn: 0 })
         .unwrap();
-    assert_eq!(esc.count(), 3);
+    let receipt = esc.next().unwrap();
+    assert_eq!(receipt.signatures.len(), 3);
 
     Ok(())
 }

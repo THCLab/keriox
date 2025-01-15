@@ -1,7 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use keri_core::{
-    database::{escrow::EscrowDb, SledEventDatabase},
+    database::{escrow::EscrowDb, redb::RedbDatabase, sled::SledEventDatabase, EventDatabase},
     error::Error,
     event_message::signed_event_message::{Notice, SignedEventMessage},
     processor::{
@@ -14,11 +14,11 @@ use keri_core::{
 };
 
 pub struct WitnessProcessor {
-    processor: EventProcessor<Self::Database>,
+    processor: EventProcessor<<WitnessProcessor as keri_core::processor::Processor>::Database>,
 }
 
 impl Processor for WitnessProcessor {
-    type Database = SledEventDatabase;
+    type Database = RedbDatabase;
     fn register_observer(
         &mut self,
         observer: Arc<dyn Notifier + Send + Sync>,
@@ -60,13 +60,15 @@ impl Default for WitnessEscrowConfig {
 
 impl WitnessProcessor {
     pub fn new(
-        db: Arc<SledEventDatabase>,
+        redb: Arc<RedbDatabase>,
+        sled_db: Arc<SledEventDatabase>,
         escrow_db: Arc<EscrowDb>,
         escrow_config: WitnessEscrowConfig,
     ) -> Self {
         let mut bus = NotificationBus::new();
         let partially_signed_escrow = Arc::new(PartiallySignedEscrow::new(
-            db.clone(),
+            redb.clone(),
+            sled_db.clone(),
             escrow_db.clone(),
             escrow_config.partially_signed_timeout,
         ));
@@ -75,7 +77,8 @@ impl WitnessProcessor {
             vec![JustNotification::PartiallySigned],
         );
         let out_of_order_escrow = Arc::new(OutOfOrderEscrow::new(
-            db.clone(),
+            redb.clone(),
+            sled_db.clone(),
             escrow_db.clone(),
             escrow_config.out_of_order_timeout,
         ));
@@ -87,7 +90,8 @@ impl WitnessProcessor {
             ],
         );
         let deleating_escrow = Arc::new(DelegationEscrow::new(
-            db.clone(),
+            redb.clone(),
+            sled_db.clone(),
             escrow_db,
             escrow_config.delegation_timeout,
         ));
@@ -98,23 +102,24 @@ impl WitnessProcessor {
                 JustNotification::KeyEventAdded,
             ],
         );
-        let processor = EventProcessor::new(db, bus, db.clone());
+        let processor = EventProcessor::new(sled_db, bus, redb.clone());
         Self { processor }
     }
 
     /// Witness processing strategy
     ///
     /// Ignore not fully witness error and accept not fully witnessed events.
-    fn witness_processing_strategy(
-        db: Arc<SledEventDatabase>,
+    fn witness_processing_strategy<D: EventDatabase>(
+        db: Arc<D>,
+        escrow_db: Arc<SledEventDatabase>,
         publisher: &NotificationBus,
         signed_event: SignedEventMessage,
     ) -> Result<(), Error> {
         let id = &signed_event.event_message.data.get_prefix();
-        let validator = EventValidator::new(db.clone());
+        let validator = EventValidator::new(escrow_db.clone(), db.clone());
         match validator.validate_event(&signed_event) {
             Ok(_) => {
-                db.add_kel_finalized_event(signed_event.clone(), id)?;
+                db.add_kel_finalized_event(signed_event.clone(), id).map_err(|e| Error::DbError)?;
                 publisher.notify(&Notification::KeyEventAdded(signed_event))
             }
             Err(Error::EventOutOfOrderError) => {
@@ -124,14 +129,14 @@ impl WitnessProcessor {
                 publisher.notify(&Notification::MissingDelegatingEvent(signed_event))
             }
             Err(Error::NotEnoughReceiptsError) => {
-                db.add_kel_finalized_event(signed_event.clone(), id)?;
+                db.add_kel_finalized_event(signed_event.clone(), id).map_err(|e| Error::DbError)?;
                 publisher.notify(&Notification::KeyEventAdded(signed_event))
             }
             Err(Error::NotEnoughSigsError) => {
                 publisher.notify(&Notification::PartiallySigned(signed_event))
             }
             Err(Error::EventDuplicateError) => {
-                db.add_duplicious_event(signed_event.clone(), id)?;
+                escrow_db.add_duplicious_event(signed_event.clone(), id)?;
                 publisher.notify(&Notification::DupliciousEvent(signed_event))
             }
             Err(e) => Err(e),

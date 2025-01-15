@@ -2,7 +2,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use keri_core::actor::parse_event_stream;
-use keri_core::database::DbError;
+use keri_core::database::redb::RedbDatabase;
+use keri_core::database::sled::{DbError, SledEventDatabase};
 use keri_core::error::Error;
 use keri_core::event_message::signed_event_message::SignedNontransferableReceipt;
 use keri_core::oobi::LocationScheme;
@@ -11,10 +12,11 @@ use keri_core::prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSig
 use keri_core::processor::escrow::EscrowConfig;
 use keri_core::processor::notification::JustNotification;
 
+use keri_core::processor::Processor;
 use keri_core::state::IdentifierState;
 use keri_core::{
     actor::{self, event_generator, prelude::SelfAddressingIdentifier},
-    database::{escrow::EscrowDb, SledEventDatabase},
+    database::escrow::EscrowDb,
     event::{event_data::EventData, sections::seal::Seal, KeyEvent},
     event_message::{
         cesr_adapter::{parse_event_type, EventType},
@@ -26,7 +28,6 @@ use keri_core::{
         basic_processor::BasicProcessor,
         escrow::{default_escrow_bus, PartiallyWitnessedEscrow},
         event_storage::EventStorage,
-        Processor,
     },
     query::reply_event::{ReplyEvent, ReplyRoute, SignedReply},
 };
@@ -47,15 +48,21 @@ pub enum OobiRetrieveError {
 }
 
 pub struct KnownEvents {
-    processor: BasicProcessor,
-    pub storage: Arc<EventStorage>,
+    processor: BasicProcessor<RedbDatabase>,
+    pub storage: Arc<EventStorage<RedbDatabase>>,
     pub oobi_manager: OobiManager,
-    pub partially_witnessed_escrow: Arc<PartiallyWitnessedEscrow>,
+    pub partially_witnessed_escrow: Arc<PartiallyWitnessedEscrow<RedbDatabase>>,
     pub tel: Arc<Tel>,
 }
 
 impl KnownEvents {
     pub fn new(db_path: PathBuf, escrow_config: EscrowConfig) -> Result<Self, ControllerError> {
+        let event_database = {
+            let mut path = db_path.clone();
+            path.push("events_database");
+            Arc::new(RedbDatabase::new(&path)?)
+        };
+
         let db = {
             let mut path = db_path.clone();
             path.push("events");
@@ -82,9 +89,9 @@ impl KnownEvents {
                 partially_witnessed_escrow,
                 _delegation_escrow,
             ),
-        ) = default_escrow_bus(db.clone(), escrow_db, escrow_config);
+        ) = default_escrow_bus(event_database.clone(), db.clone(), escrow_db, escrow_config);
 
-        let kel_storage = Arc::new(EventStorage::new(db.clone()));
+        let kel_storage = Arc::new(EventStorage::new(event_database.clone(), db.clone()));
 
         // Initiate tel and it's escrows
         let tel_events_db = {
@@ -119,7 +126,11 @@ impl KnownEvents {
         );
 
         let controller = Self {
-            processor: BasicProcessor::new(db.clone(), Some(notification_bus)),
+            processor: BasicProcessor::new(
+                event_database.clone(),
+                db.clone(),
+                Some(notification_bus),
+            ),
             storage: kel_storage,
             oobi_manager,
             partially_witnessed_escrow,
@@ -162,7 +173,7 @@ impl KnownEvents {
             .ok_or(MechanicsError::UnknownIdentifierError(id.clone()))?
             .current
             .next_keys_data
-            .next_key_hashes)
+            .next_keys_hashes())
     }
 
     pub fn get_watchers(
@@ -258,8 +269,15 @@ impl KnownEvents {
         sn: u64,
         digest: &SelfAddressingIdentifier,
     ) -> Result<Option<SignedNontransferableReceipt>, Error> {
-        let rcts_from_db = self.storage.get_nt_receipts(id, sn, digest)?;
-        Ok(rcts_from_db)
+        let rcts_from_db = self.storage.get_nt_receipts(id, sn)?;
+        match &rcts_from_db {
+            Some(rct) => if rct.body.receipted_event_digest.eq(digest) {
+                Ok(rcts_from_db)
+            } else {
+                Ok(None)
+            },
+            None => Ok(None),
+        }
     }
 
     pub fn find_kel_with_receipts(&self, id: &IdentifierPrefix) -> Option<Vec<Notice>> {

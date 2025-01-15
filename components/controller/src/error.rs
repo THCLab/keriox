@@ -1,6 +1,10 @@
 use keri_core::{
-    actor::prelude::VersionError, event_message::cesr_adapter::ParseError, oobi::Scheme,
-    prefix::IdentifierPrefix, processor::validator::VerificationError,
+    actor::prelude::VersionError,
+    database::{redb::RedbError, sled::DbError},
+    event_message::cesr_adapter::ParseError,
+    oobi::Scheme,
+    prefix::IdentifierPrefix,
+    processor::validator::VerificationError,
 };
 use thiserror::Error;
 
@@ -12,7 +16,10 @@ use crate::{
 #[derive(Error, Debug)]
 pub enum ControllerError {
     #[error("Database error: {0}")]
-    DatabaseError(#[from] keri_core::database::DbError),
+    DatabaseError(#[from] DbError),
+
+    #[error("Redb error: {0}")]
+    RedbError(#[from] RedbError),
 
     #[error("SQL error: {0}")]
     SQLError(#[from] rusqlite::Error),

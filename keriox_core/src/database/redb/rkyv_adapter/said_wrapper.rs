@@ -9,9 +9,9 @@ use rkyv::{Archive, Deserialize, Serialize};
     Debug, Clone, Default, Eq, Hash, Archive, rkyv::Serialize, rkyv::Deserialize, PartialEq,
 )]
 #[rkyv(derive(Debug))]
-pub(crate) struct SaidValue {
+pub struct SaidValue {
     #[rkyv(with = SAIDef)]
-    pub(crate) said: SelfAddressingIdentifier,
+    pub said: SelfAddressingIdentifier,
 }
 
 impl From<SelfAddressingIdentifier> for SaidValue {

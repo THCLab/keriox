@@ -38,7 +38,7 @@ impl Identifier {
             .current;
 
         let mut pks = key_config.public_keys;
-        let mut npks = key_config.next_keys_data.next_key_hashes;
+        let mut npks = key_config.next_keys_data.next_keys_hashes();
         for participant in &participants {
             let state = self
                 .known_events
@@ -46,7 +46,7 @@ impl Identifier {
                 .get_state(participant)
                 .ok_or(MechanicsError::UnknownIdentifierError(participant.clone()))?;
             pks.append(&mut state.clone().current.public_keys);
-            npks.append(&mut state.clone().current.next_keys_data.next_key_hashes);
+            npks.append(&mut state.clone().current.next_keys_data.next_keys_hashes());
         }
 
         let icp = event_generator::incept_with_next_hashes(

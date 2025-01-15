@@ -1,5 +1,6 @@
 use keri_core::{
     actor::prelude::SelfAddressingIdentifier,
+    database::EventDatabase,
     error::Error,
     event_message::{
         signature::Nontransferable,
@@ -29,8 +30,8 @@ impl Identifier {
         let receipts = self
             .known_events
             .storage
-            .escrow_db
-            .get_receipts_nt(&self.id)
+            .events_db
+            .get_receipts_nt(keri_core::database::QueryParameters::All { id: &self.id })
             .into_iter()
             .flatten()
             .collect::<Vec<_>>();
@@ -128,12 +129,7 @@ mod test {
     use std::{collections::HashMap, sync::Arc};
 
     use keri_core::{
-        event::event_data::EventData,
-        event_message::signed_event_message::Notice,
-        oobi::LocationScheme,
-        prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
-        signer::{CryptoBox, KeyManager},
-        transport::test::{TestActorMap, TestTransport},
+        event::event_data::EventData, event_message::signed_event_message::Notice, oobi::LocationScheme, prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix}, signer::{CryptoBox, KeyManager}, transport::test::{TestActorMap, TestTransport}
     };
     use tempfile::Builder;
     use url::Host;
@@ -234,7 +230,6 @@ mod test {
         }
 
         assert_eq!(identifier.notify_witnesses().await?, 0);
-
         assert!(matches!(
             witness1.witness_data.event_storage.get_kel_messages_with_receipts(&identifier.id, None)?.unwrap().as_slice(),
             [Notice::Event(evt), Notice::NontransferableRct(rct)]

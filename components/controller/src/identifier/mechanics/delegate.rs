@@ -24,11 +24,7 @@ impl Identifier {
         let delegated_seal = {
             let event_digest = delegated_event.digest()?;
             let sn = delegated_event.data.get_sn();
-            Seal::Event(EventSeal {
-                prefix: delegate.clone(),
-                sn,
-                event_digest,
-            })
+            Seal::Event(EventSeal::new(delegate.clone(), sn, event_digest))
         };
         let delegating_event = self
             .known_events
