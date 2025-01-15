@@ -129,7 +129,12 @@ mod test {
     use std::{collections::HashMap, sync::Arc};
 
     use keri_core::{
-        event::event_data::EventData, event_message::signed_event_message::Notice, oobi::LocationScheme, prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix}, signer::{CryptoBox, KeyManager}, transport::test::{TestActorMap, TestTransport}
+        event::event_data::EventData,
+        event_message::signed_event_message::Notice,
+        oobi::LocationScheme,
+        prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+        signer::{CryptoBox, KeyManager},
+        transport::test::{TestActorMap, TestTransport},
     };
     use tempfile::Builder;
     use url::Host;

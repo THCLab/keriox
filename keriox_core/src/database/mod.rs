@@ -2,7 +2,7 @@ use timestamped::TimestampedSignedEventMessage;
 
 use crate::{
     event_message::{
-        signature::{Nontransferable, Transferable},
+        signature::Transferable,
         signed_event_message::{
             SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
         },

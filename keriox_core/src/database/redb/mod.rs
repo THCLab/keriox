@@ -167,8 +167,8 @@ impl EventDatabase for RedbDatabase {
     ) -> Option<impl DoubleEndedIterator<Item = Transferable>> {
         match params {
             QueryParameters::BySn { id, sn } => self.get_trans_receipts(&id.to_str(), sn).ok(),
-            QueryParameters::Range { id, start, limit } => todo!(),
-            QueryParameters::All { id } => todo!(),
+            QueryParameters::Range { id: _, start: _, limit: _ } => todo!(),
+            QueryParameters::All { id: _ } => todo!(),
         }
     }
 
@@ -177,9 +177,18 @@ impl EventDatabase for RedbDatabase {
         params: super::QueryParameters,
     ) -> Option<impl DoubleEndedIterator<Item = SignedNontransferableReceipt>> {
         match params {
-            QueryParameters::BySn { id, sn } => self.get_nontrans_receipts_range(&id.to_str(), sn, 1).ok().map(|e| e.into_iter()),
-            QueryParameters::Range { id, start, limit } => self.get_nontrans_receipts_range(&id.to_str(), start, limit).ok().map(|e| e.into_iter()),
-            QueryParameters::All { id } => self.get_nontrans_receipts_range(&id.to_str(), 0, u64::MAX).ok().map(|e| e.into_iter()),
+            QueryParameters::BySn { id, sn } => self
+                .get_nontrans_receipts_range(&id.to_str(), sn, 1)
+                .ok()
+                .map(|e| e.into_iter()),
+            QueryParameters::Range { id, start, limit } => self
+                .get_nontrans_receipts_range(&id.to_str(), start, limit)
+                .ok()
+                .map(|e| e.into_iter()),
+            QueryParameters::All { id } => self
+                .get_nontrans_receipts_range(&id.to_str(), 0, u64::MAX)
+                .ok()
+                .map(|e| e.into_iter()),
         }
     }
 }
@@ -277,45 +286,49 @@ impl RedbDatabase {
             let table = read_txn.open_multimap_table(NONTRANS_RCTS)?;
             table.get((id, sn))
         }?;
-        let nontrans = from_db_iterator.map(|sig| match sig {
-            Ok(sig) => Ok(rkyv_adapter::deserialize_nontransferable(sig.value()).unwrap()),
-            Err(e) => Err(RedbError::from(e)),
-        }).collect::<Result<Vec<_>, _>>();
+        let nontrans = from_db_iterator
+            .map(|sig| match sig {
+                Ok(sig) => Ok(rkyv_adapter::deserialize_nontransferable(sig.value()).unwrap()),
+                Err(e) => Err(RedbError::from(e)),
+            })
+            .collect::<Result<Vec<_>, _>>();
         nontrans.map(|el| el.into_iter())
     }
 
     fn get_nontrans_receipts_range(
         &self,
         id: &str,
-        start: u64, 
-        limit: u64
-    ) -> Result<
-        Vec<SignedNontransferableReceipt>, RedbError>
-    {
+        start: u64,
+        limit: u64,
+    ) -> Result<Vec<SignedNontransferableReceipt>, RedbError> {
         let from_db_iterator = {
             let read_txn = self.db.begin_read()?;
             let table = read_txn.open_multimap_table(NONTRANS_RCTS)?;
-            table.range((id, start)..(id, start+limit))
+            table.range((id, start)..(id, start + limit))
         }?;
         let out: Vec<SignedNontransferableReceipt> = from_db_iterator
-            .map(|sig| {
-                match sig {
-                    Ok((key, value)) => {
-                        let (identifier, sn) = key.value();
-                        let id = identifier.parse().unwrap();
-                        let digest = self.get_event_digest(&id, sn).unwrap();
-                        let nontrans = value.map(|value| match value {
-                        Ok(element) => {
-                            rkyv_adapter::deserialize_nontransferable(element.value()).unwrap()
-                        }
-                        Err(_) => todo!(),
-                    }).collect::<Vec<_>>();
+            .map(|sig| match sig {
+                Ok((key, value)) => {
+                    let (identifier, sn) = key.value();
+                    let id = identifier.parse().unwrap();
+                    let digest = self.get_event_digest(&id, sn).unwrap();
+                    let nontrans = value
+                        .map(|value| match value {
+                            Ok(element) => {
+                                rkyv_adapter::deserialize_nontransferable(element.value()).unwrap()
+                            }
+                            Err(_) => todo!(),
+                        })
+                        .collect::<Vec<_>>();
                     let rct = Receipt::new(SerializationFormats::JSON, digest.unwrap(), id, sn);
-                    SignedNontransferableReceipt { body: rct, signatures: nontrans }
-                },
-                    Err(_) => todo!(),
-                }}
-            ).collect();
+                    SignedNontransferableReceipt {
+                        body: rct,
+                        signatures: nontrans,
+                    }
+                }
+                Err(_) => todo!(),
+            })
+            .collect();
         Ok(out)
     }
 
@@ -651,6 +664,8 @@ fn test_retrieve_receipts() {
     let retrived_rcts = db.get_nontrans_couplets(&first_id.to_str(), 0).unwrap();
     assert_eq!(retrived_rcts.count(), 2);
 
-    let all_retrived_rcts = db.get_all_nontrans_receipts_couplets(&first_id.to_str()).unwrap();
+    let all_retrived_rcts = db
+        .get_all_nontrans_receipts_couplets(&first_id.to_str())
+        .unwrap();
     assert_eq!(all_retrived_rcts.count(), 4);
 }

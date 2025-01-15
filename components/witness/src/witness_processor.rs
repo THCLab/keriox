@@ -119,7 +119,8 @@ impl WitnessProcessor {
         let validator = EventValidator::new(escrow_db.clone(), db.clone());
         match validator.validate_event(&signed_event) {
             Ok(_) => {
-                db.add_kel_finalized_event(signed_event.clone(), id).map_err(|e| Error::DbError)?;
+                db.add_kel_finalized_event(signed_event.clone(), id)
+                    .map_err(|_| Error::DbError)?;
                 publisher.notify(&Notification::KeyEventAdded(signed_event))
             }
             Err(Error::EventOutOfOrderError) => {
@@ -129,7 +130,8 @@ impl WitnessProcessor {
                 publisher.notify(&Notification::MissingDelegatingEvent(signed_event))
             }
             Err(Error::NotEnoughReceiptsError) => {
-                db.add_kel_finalized_event(signed_event.clone(), id).map_err(|e| Error::DbError)?;
+                db.add_kel_finalized_event(signed_event.clone(), id)
+                    .map_err(|_| Error::DbError)?;
                 publisher.notify(&Notification::KeyEventAdded(signed_event))
             }
             Err(Error::NotEnoughSigsError) => {

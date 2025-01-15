@@ -3,7 +3,9 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
-    database::redb::RedbError, event::sections::key_config::SignatureError, event_message::cesr_adapter::ParseError, prefix::IdentifierPrefix, processor::validator::VerificationError
+    database::redb::RedbError, event::sections::key_config::SignatureError,
+    event_message::cesr_adapter::ParseError, prefix::IdentifierPrefix,
+    processor::validator::VerificationError,
 };
 
 pub mod serializer_error;

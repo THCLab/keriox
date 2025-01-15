@@ -271,11 +271,13 @@ impl KnownEvents {
     ) -> Result<Option<SignedNontransferableReceipt>, Error> {
         let rcts_from_db = self.storage.get_nt_receipts(id, sn)?;
         match &rcts_from_db {
-            Some(rct) => if rct.body.receipted_event_digest.eq(digest) {
-                Ok(rcts_from_db)
-            } else {
-                Ok(None)
-            },
+            Some(rct) => {
+                if rct.body.receipted_event_digest.eq(digest) {
+                    Ok(rcts_from_db)
+                } else {
+                    Ok(None)
+                }
+            }
             None => Ok(None),
         }
     }

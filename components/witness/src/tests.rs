@@ -1080,10 +1080,7 @@ pub fn test_delegated_multisig() -> Result<(), ActorError> {
         delegator.process(&[Message::Notice(Notice::Event(group_icp_to_confirm))])?;
 
         // make delegating event
-        let seal = Seal::Event(EventSeal::new(group_id.clone(),
-            0,
-            dip_digest.clone(),
-        ));
+        let seal = Seal::Event(EventSeal::new(group_id.clone(), 0, dip_digest.clone()));
 
         let ixn = delegator.anchor(&vec![seal])?;
         // Send it to witness

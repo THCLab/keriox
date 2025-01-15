@@ -113,7 +113,6 @@ impl<D: EventDatabase> EventValidator<D> {
             // check if there are enough receipts and escrow
             let sn = signed_event.event_message.data.get_sn();
             let prefix = &signed_event.event_message.data.get_prefix();
-            let digest = &signed_event.event_message.digest()?;
 
             let (mut couples, mut indexed) = (vec![], vec![]);
             if let Some(rcts) = self.event_storage.get_nt_receipts(prefix, sn)? {

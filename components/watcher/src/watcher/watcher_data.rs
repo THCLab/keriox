@@ -3,11 +3,6 @@ use std::{fs::File, sync::Arc};
 use async_std::channel::Sender;
 use futures::future::join_all;
 use itertools::Itertools;
-use keri_core::{database::{redb::RedbDatabase, sled::{DbError, SledEventDatabase}}, event_message::{
-    msg::KeriEvent,
-    signed_event_message::{Message, Notice, Op},
-    timestamped::Timestamped,
-}};
 use keri_core::oobi::LocationScheme;
 use keri_core::prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix};
 use keri_core::processor::escrow::default_escrow_bus;
@@ -26,9 +21,17 @@ use keri_core::{
     },
     oobi::{Role, Scheme},
 };
+use keri_core::{database::escrow::EscrowDb, error::Error};
 use keri_core::{
-    database::escrow::EscrowDb,
-    error::Error,
+    database::{
+        redb::RedbDatabase,
+        sled::{DbError, SledEventDatabase},
+    },
+    event_message::{
+        msg::KeriEvent,
+        signed_event_message::{Message, Notice, Op},
+        timestamped::Timestamped,
+    },
 };
 use keri_core::{
     oobi::OobiManager,
@@ -107,7 +110,8 @@ impl WatcherData {
             OobiManager::new(&path)
         };
 
-        let (mut notification_bus, _) = default_escrow_bus(events_db.clone(), db.clone(), escrow_db, escrow_config);
+        let (mut notification_bus, _) =
+            default_escrow_bus(events_db.clone(), db.clone(), escrow_db, escrow_config);
         notification_bus.register_observer(
             Arc::new(ReplyEscrow::new(db.clone(), events_db.clone())),
             vec![
@@ -271,7 +275,7 @@ impl WatcherData {
                     (Some(state), Some(sn)) if sn <= state.sn => {
                         // KEL is already in database
                     }
-                    (Some(state), None) => {
+                    (Some(_state), None) => {
                         // Check for updates.
                         let id_to_update = qry.query.get_prefix();
                         self.tx.send(id_to_update.clone()).await.map_err(|_e| {

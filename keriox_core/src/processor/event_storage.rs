@@ -14,7 +14,6 @@ use crate::{
     error::Error,
     event::{
         event_data::EventData,
-        receipt::Receipt,
         sections::{seal::EventSeal, KeyConfig},
     },
     event_message::{
@@ -111,16 +110,10 @@ impl<D: EventDatabase> EventStorage<D> {
         let evs: Vec<_> = events
             .into_iter()
             .flat_map(|event: Timestamped<SignedEventMessage>| {
-                dbg!((&event.signed_event_message.event_message.data.get_prefix(), &event.signed_event_message.event_message.data.get_sn()));
                 let rcts_from_db = self
                     .get_nt_receipts(
                         &event.signed_event_message.event_message.data.get_prefix(),
                         event.signed_event_message.event_message.data.get_sn(),
-                        // &event
-                        //     .signed_event_message
-                        //     .event_message
-                        //     .digest()
-                        //     .expect("Event with no digest"),
                     )
                     .unwrap()
                     .map(Notice::NontransferableRct);
@@ -128,7 +121,8 @@ impl<D: EventDatabase> EventStorage<D> {
                     Some(rct) => vec![Notice::Event(event.signed_event_message), rct],
                     None => vec![Notice::Event(event.into())],
                 }
-            }).collect();
+            })
+            .collect();
         if evs.is_empty() {
             None
         } else {

@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use async_std::fs::create_dir_all;
 use keri_core::{
     event_message::signature::Signature,
     oobi::LocationScheme,
