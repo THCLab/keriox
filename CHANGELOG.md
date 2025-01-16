@@ -2,6 +2,46 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.15.0] - 2025-01-16
+
+### 🚀 Features
+
+- Use redb crate
+- Save nontransferable receipts
+- Save transferable receipts
+- Use redb for event storing
+- Implement rkyv traits for SerializationInfo
+- Implement rkyv::Serialize for KeiEvent
+
+### 🐛 Bug Fixes
+
+- Update tables keys
+- Fix validation test
+- Cargo fmt
+- Fix failing tests
+- Update teliox workspace
+- Align workspaces with db changes
+
+### 🚜 Refactor
+
+- Implement EventDatabase for sled
+- Reformat
+- Update EventDatabase trait
+- Redb submodule cleanup
+- Use rkyv crate in redb submodule
+- Use rkyv for storing attachments
+- Restructure rkyv submodule
+- Reformat and fix warnings
+- Reformat and fix warnings
+
+### Refacor
+
+- Add database/sled submodule
+
+### Refacrtor
+
+- Database module cleanup
+
 ## [0.14.2] - 2024-12-11
 
 ### 🚀 Features
@@ -11,6 +51,7 @@ All notable changes to this project will be documented in this file.
 ### ⚙️ Miscellaneous Tasks
 
 - Update README.md
+- Release
 
 ## [0.14.1] - 2024-12-06
 
