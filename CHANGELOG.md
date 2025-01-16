@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.15.1] - 2025-01-16
+
+### 🐛 Bug Fixes
+
+- Add bundled feat to rusqlite
+
 ## [0.15.0] - 2025-01-16
 
 ### 🚀 Features
@@ -33,6 +39,10 @@ All notable changes to this project will be documented in this file.
 - Restructure rkyv submodule
 - Reformat and fix warnings
 - Reformat and fix warnings
+
+### ⚙️ Miscellaneous Tasks
+
+- Release
 
 ### Refacor
 
@@ -121,27 +131,27 @@ All notable changes to this project will be documented in this file.
 - Update docker-images.yml
 - Release
 
-## [keri-controller-v0.12.3] - 2024-08-07
+## [witness-v0.12.3] - 2024-08-07
 
 ### ⚙️ Miscellaneous Tasks
 
 - Release
 
-## [keri-controller-v0.12.2] - 2024-08-07
-
-### ⚙️ Miscellaneous Tasks
-
-- Update docker-images.yml
-- Release
-
-## [keri-controller-v0.12.1] - 2024-08-07
+## [witness-v0.12.2] - 2024-08-07
 
 ### ⚙️ Miscellaneous Tasks
 
 - Update docker-images.yml
 - Release
 
-## [keri-controller-v0.12.0] - 2024-08-07
+## [witness-v0.12.1] - 2024-08-07
+
+### ⚙️ Miscellaneous Tasks
+
+- Update docker-images.yml
+- Release
+
+## [witness-v0.12.0] - 2024-08-07
 
 ### 🐛 Bug Fixes
 
@@ -326,7 +336,7 @@ All notable changes to this project will be documented in this file.
 - Rename package controller to keri-controller
 - Release
 
-## [0.4.1-tel] - 2023-07-19
+## [0.3.0] - 2023-04-25
 
 ### Action
 
@@ -341,6 +351,117 @@ All notable changes to this project will be documented in this file.
 
 ### 🚀 Features
 
+- *(deps)* Add ursa as dependancy
+- *(wasm)* Add wasm-bindgen as a dependancy
+- *(derivation)* Initial empty impl
+- *(derivation)* Initial enum
+- *(drv)* Impl FromStr+PartialEq+Display for Derivation
+- *(drv)* Add stubbed derivation procedure modules
+- *(drv)* Implement blake2b and the SHA digests
+- *(drv)* Impl Debug for Derivation
+- *(wasm)* Expose derivation procedures to wasm
+- *(prefix)* Initial prefix mod added
+- *(prefix)* Prefix struct and stub traits
+- *(parse)* Implement FromStr for prefix
+- *(prefix)* Padding util fns
+- *(prefix)* Impl to_str for Prefix
+- *(serde)* Add serde support to Prefix
+- *(events)* Initial events mod
+- *(configs)* Add KeyConfig and WitnessConfig structs
+- *(events)* Add stubbed event data types
+- *(events)* Add Event struct & EventData enum
+- *(event_message)* Event message struct
+- *(events)* Fix EventData ser/der
+- *(versioned messages)* Add VersionedEventMessage
+- *(dfs ser)* Impl DepthFirstSerializer
+- *(error)* Add initial Error type
+- *(CryptoError)* Add a wrapper for CryptoError
+- *(state)* Initial state type
+- *(semantics)* Add EventSemantics trait
+- *(Signatory)* Add Signatory type
+- *(Delegated)* Add DelegatedIdentifierState type
+- *(sem)* Impl EventSemantics for Event and EventMessage
+- *(icp)* Impl EventSemantics for icp event
+- *(verify)* Defn and use Verifiable trait
+- *(verification)* Mostly impl Verifiable
+- *(verify)* Impl verify using Prefixes
+- *(state)* Derive debug for state
+- *(readme)* Add basic readme
+- *(deps)* Add convenience wasm-pack optional features
+- *(prefix)* Impl a prefix enum type
+- *(drv)* Remove unnecessary derivation code
+- *(codes)* Update derivation codes
+- *(cargo)* Remove unnecessary dep
+- *(sigs)* Rename sigs -> idxs
+- *(ddo)* Add ddo and convenience fns
+- *(validate)* Use kel instead of string
+- *(ursa)* Export ursa from lib
+- *(el)* Define & impl EventLog
+- *(err)* Better ser/de errors
+- *(pref)* Better prefix types
+- *(pref)* Propagate prefix types
+- *(dbug)* Derive Debug on event data types
+- *(events)* Update serialized sig representation
+- *(clone)* Derive clone for eventmessage
+- *(vs)* Add size to version string
+- *(delegated)* Wip delegated
+- *(selfaddressing)* Test a simple self-addressing
+- *(hex)* Use unpadded hex strings for all ints
+- *(ser)* Impl better version string logic
+- *(sigs)* Impl parsing a signature stream
+- *(parse)* Move signed event parsing to file
+- *(derive)* Impl derive basic from seed
+- *(sed)* Impl parse/transcode of sed from event str
+- *(parse)* Impl parse&validate stream
+- *(blake3)* Add blake3 digests
+- *(icp_ver)* Validate icp event prefixes
+- *(dc)* Impl derivation codes themselves
+- *(sigs)* Add attached sig codes
+- *(prefix)* Use codes in prefix impls
+- *(sigs)* Improve ergo, fix attached sig struct
+- *(rotation)* Semantics of rotation event
+- *(ixn)* Initial ixn event structure
+- *(seal)* Add seals
+- *(rot)* Add data to rot, rename prev -> dig
+- *(vrc)* Initial validator receipt definition
+- *(signer)* Add signer module
+- *(signer)* Add CryptoBox struct
+- *(keri)* Add keri module
+- *(d evt)* Delegated inception & rotation structures
+- *(wits)* All witnesses are basic prefixes, always
+- *(nxt)* Verify nxt, update tests
+- *(kc)* Ensure sig set params fit key config exactly
+- *(db)* Wip new trait
+- *(lmdb)* WIP stab at lmdb impl
+- *(trait)* Remove generics and lifetimes
+- *(db)* Get state from db
+- *(bc)* Use bincode for value storage
+- *(lmdb)* Impl new and simplify basic insertions
+- *(bc)* Use bincode for all writing
+- *(proc)* Add event application errors
+- *(proc)* Escrow partially signed event
+- *(proc)* Process validator receipt
+- *(nxt)* Update nxt creation to use xor
+- *(icp)* Improved icp creation
+- *(kc)* Update keyconfig usage
+- *(parse)* Parse &[u8] instead of &str
+- *(parse)* Parse gives ref to original bytes
+- *(deser)* Add Deserialized enum to get receipts deser right
+- *(events)* Make Dip/Drt fields pub and add rct fields
+- *(escrow)* Add escrow fns for receipts
+- *(proc)* Use Deserialized enum for processing
+- *(delegation)* Dip event processing
+- *(delegation)* Add delegator field to state
+- *(delegation)* Drt event processing
+- *(dip)* Verify identifier binding for dip event
+- *(event)* Check delegator before applying event
+- *(mgpk)* Add messagePack error type & encoder
+- *(mgpk)* Impl mgpk_message
+- *(mgpk_sed)* Impl sed extraction for mgpk
+- *(sa pref)* Impl new icp logic for SA icp
+- *(icp)* New inception process for icp and dip
+- *(ver binding)* Allow verify_binding to use DummyEvent
+- *(no nxt)* Add support for abandonment/no nxt
 - *(eq)* Derive PartialEq for lots of stuff
 - *(get_kerl)* Impl get_kerl on db and processor
 - *(keri)* Add get_state_for_seal function
@@ -415,6 +536,45 @@ All notable changes to this project will be documented in this file.
 
 ### 🐛 Bug Fixes
 
+- *(prefix)* Deriv code strs already padded
+- *(sigs)* Fix verification and make sig codes explicit
+- *(message)* Fix event message and prefix issues
+- *(iwk)* Make IcpWithKeys fields public
+- *(m)* Fix parsing and serializing signed events
+- *(basic_pref)* Fix ed25519 codes
+- *(attached)* Fix codes and index decoding
+- *(parsing)* Fix signed json parsing & improve icp
+- *(ev parsing)* Fix event sig splitting
+- *(sig parse)* Allow incomplete sigs to err, not fail
+- *(stream)* Fix fail on no event, stub stream test
+- *(event_sig)* Use correct data for event sig/ver
+- *(RoT)* Fix verifying identifier and tests
+- *(state)* Backhash checking
+- *(state)* Serialize last event without signature
+- *(vrc)* Use EventSeal instead of just any Seal
+- *(dm)* Use EventLog struct
+- *(tests)* Generate nxt correctly
+- *(evmsg)* Return out of order and duplicate error
+- *(proc)* Minor refactor
+- *(parse)* Make message non-pub
+- *(test)* Fix db test
+- *(db)* Use specific witness/non-attached sig types
+- *(parse)* Update signed_event_stream_validate
+- *(keri)* Update keri/mod for Deserialized
+- *(apply)* Apply EventMessage not Event
+- *(seal)* Fix seal deserialization
+- *(state)* Rename delegated_keys field
+- *(msg)* Separate fns for getting inception data
+- *(proc)* Escrow delegated out of order events
+- *(tests)* Fix seals and event tests
+- *(db_test)* Update test vector in db test
+- *(db)* Add open/create db tolerance
+- *(seal)* Add sn field and update tests
+- *(tests)* Update test vectors in delegation test
+- *(delegation)* Update validate seal function
+- *(receipt)* Rename validator_seal field
+- *(process)* Update validator receipt processing
+- *(tests)* Update validate seal test
 - *(seed)* Make key generation match keripy
 - *(keri)* Update responding to icp event
 - *(keri)* Add get_kerl function
@@ -495,6 +655,28 @@ All notable changes to this project will be documented in this file.
 
 ### 🚜 Refactor
 
+- *(EventData)* Move EventData def to event_data
+- *(state)* Rename State -> IdentityState
+- *(sem)* Use Error for result error types
+- *(sem)* Move EventSemantics def to state/mod
+- *(serde)* Clean up serde renames, threshold types
+- *(derivation)* Simplfy and restructure Derivations
+- *(utils)* Use refs
+- *(sig)* Move sig parsing to file
+- *(parse sig)* Rename signature->attached_signature
+- *(dfs)* Impl dfs ser more rigourously
+- *(sed)* Use transcode fn as recommended
+- *(clean)* Remove unused extra seals, use verify_binding
+- *(keys)* Make KeyConfig useful, use in State
+- *(dlgt)* Remove delegated state, unused
+- *(db)* Move higher fns to trait def
+- *(proc)* Split into multiple files
+- *(ser)* Dont use & for enums
+- *(ver)* Remove Verifiable trait, doesnt always fit
+- *(proc)* Avoid clones and fix borrows with match
+- *(labels)* New labels in serialized events
+- *(tests)* Refactor event_message test utils
+- *(all)* Minor refactor
 - *(keri)* Update keri mod to use processor
 - *(keri)* Use event_msg_builder
 - *(signer)* Add KeyManager trait
@@ -524,8 +706,47 @@ All notable changes to this project will be documented in this file.
 - Remove unwraps
 - Split processor and escrow tests
 
+### 📚 Documentation
+
+- *(drv)* Add some basic rustdoc comments
+- *(derivation)* Add some rustdoc to Derivation
+- *(rct)* Add some context doc to receipt types
+
+### 🎨 Styling
+
+- *(use)* Make traits nicer
+
 ### 🧪 Testing
 
+- *(prefix)* Add simple tests for Prefix
+- *(event)* Add small ser/de test
+- *(verify)* Add a unit test for verify
+- *(event)* Fix deser test, add prev to rot event
+- *(message)* Test for creating/applying an event
+- *(event_message)* Fix event message test
+- *(stream)* Add test for keriox-generated stream
+- *(parse)* Fix test with new sig ver
+- *(stream)* Fix test fail case, add new case
+- *(pref)* Add prefix test and ev len check test
+- *(prefix)* Add prefix serialization tests
+- *(event_msg)* Test applying event msg to state
+- *(ixn)* Test applying ixn event msg to state
+- *(dm)* Add direct mode test
+- *(db)* Add basic test for dbs
+- *(proc)* Test process function
+- *(proc)* Add process receipt test
+- *(nxt)* Add test for correct nxt creation
+- *(nxt)* Minor neatness
+- *(all)* Update tests so they run
+- *(proc)* Update test vectors
+- *(parse)* Event parsing test
+- *(proc)* Make `test_process` pass
+- *(proc)* Dip event processing test
+- *(delegation)* Drt event processing test
+- *(delegation)* Delegated event applying test
+- *(event)* Update parsing and processing tests
+- *(em)* Update event_message parse test vectors
+- *(proc)* Update processor tests
 - *(seed)* Add keypair derivation test
 - *(thres)* Add verify test
 - *(parse)* Add attachment parsing test
@@ -539,6 +760,9 @@ All notable changes to this project will be documented in this file.
 
 ### ⚙️ Miscellaneous Tasks
 
+- *(rename)* Rename keriox -> keri
+- *(license)* Add DIF as licensor
+- *(dfs)* Remove dfs serializer, no longer used
 - *(ursa)* Change ursa branch ref to main
 - *(ursa)* Pin ursa commit to pre-build-issues
 
@@ -624,284 +848,5 @@ All notable changes to this project will be documented in this file.
 - *(event)* Update event labels and test vectors
 - *(rct)* Add transferable receipt serialization
 - *(events)* Add digest field to events
-
-## [0.5.0] - 2021-01-26
-
-### 🚀 Features
-
-- *(delegation)* Dip event processing
-- *(delegation)* Add delegator field to state
-- *(delegation)* Drt event processing
-- *(dip)* Verify identifier binding for dip event
-- *(event)* Check delegator before applying event
-- *(mgpk)* Add messagePack error type & encoder
-- *(mgpk)* Impl mgpk_message
-- *(mgpk_sed)* Impl sed extraction for mgpk
-- *(sa pref)* Impl new icp logic for SA icp
-- *(icp)* New inception process for icp and dip
-- *(ver binding)* Allow verify_binding to use DummyEvent
-- *(no nxt)* Add support for abandonment/no nxt
-
-### 🐛 Bug Fixes
-
-- *(state)* Rename delegated_keys field
-- *(msg)* Separate fns for getting inception data
-- *(proc)* Escrow delegated out of order events
-- *(tests)* Fix seals and event tests
-- *(db_test)* Update test vector in db test
-- *(db)* Add open/create db tolerance
-- *(seal)* Add sn field and update tests
-- *(tests)* Update test vectors in delegation test
-- *(delegation)* Update validate seal function
-- *(receipt)* Rename validator_seal field
-- *(process)* Update validator receipt processing
-- *(tests)* Update validate seal test
-
-### 🚜 Refactor
-
-- *(labels)* New labels in serialized events
-- *(tests)* Refactor event_message test utils
-- *(all)* Minor refactor
-
-### 🧪 Testing
-
-- *(proc)* Dip event processing test
-- *(delegation)* Drt event processing test
-- *(delegation)* Delegated event applying test
-- *(event)* Update parsing and processing tests
-- *(em)* Update event_message parse test vectors
-- *(proc)* Update processor tests
-
-### ⚙️ Miscellaneous Tasks
-
-- *(dfs)* Remove dfs serializer, no longer used
-
-## [0.4.0] - 2020-12-21
-
-### 🚀 Features
-
-- *(rotation)* Semantics of rotation event
-- *(ixn)* Initial ixn event structure
-- *(seal)* Add seals
-- *(rot)* Add data to rot, rename prev -> dig
-- *(vrc)* Initial validator receipt definition
-- *(signer)* Add signer module
-- *(signer)* Add CryptoBox struct
-- *(keri)* Add keri module
-- *(d evt)* Delegated inception & rotation structures
-- *(wits)* All witnesses are basic prefixes, always
-- *(nxt)* Verify nxt, update tests
-- *(kc)* Ensure sig set params fit key config exactly
-- *(db)* Wip new trait
-- *(lmdb)* WIP stab at lmdb impl
-- *(trait)* Remove generics and lifetimes
-- *(db)* Get state from db
-- *(bc)* Use bincode for value storage
-- *(lmdb)* Impl new and simplify basic insertions
-- *(bc)* Use bincode for all writing
-- *(proc)* Add event application errors
-- *(proc)* Escrow partially signed event
-- *(proc)* Process validator receipt
-- *(nxt)* Update nxt creation to use xor
-- *(icp)* Improved icp creation
-- *(kc)* Update keyconfig usage
-- *(parse)* Parse &[u8] instead of &str
-- *(parse)* Parse gives ref to original bytes
-- *(deser)* Add Deserialized enum to get receipts deser right
-- *(events)* Make Dip/Drt fields pub and add rct fields
-- *(escrow)* Add escrow fns for receipts
-- *(proc)* Use Deserialized enum for processing
-
-### 🐛 Bug Fixes
-
-- *(state)* Backhash checking
-- *(state)* Serialize last event without signature
-- *(vrc)* Use EventSeal instead of just any Seal
-- *(dm)* Use EventLog struct
-- *(tests)* Generate nxt correctly
-- *(evmsg)* Return out of order and duplicate error
-- *(proc)* Minor refactor
-- *(parse)* Make message non-pub
-- *(test)* Fix db test
-- *(db)* Use specific witness/non-attached sig types
-- *(parse)* Update signed_event_stream_validate
-- *(keri)* Update keri/mod for Deserialized
-- *(apply)* Apply EventMessage not Event
-- *(seal)* Fix seal deserialization
-
-### 🚜 Refactor
-
-- *(clean)* Remove unused extra seals, use verify_binding
-- *(keys)* Make KeyConfig useful, use in State
-- *(dlgt)* Remove delegated state, unused
-- *(db)* Move higher fns to trait def
-- *(proc)* Split into multiple files
-- *(ser)* Dont use & for enums
-- *(ver)* Remove Verifiable trait, doesnt always fit
-- *(proc)* Avoid clones and fix borrows with match
-
-### 📚 Documentation
-
-- *(rct)* Add some context doc to receipt types
-
-### 🧪 Testing
-
-- *(prefix)* Add prefix serialization tests
-- *(event_msg)* Test applying event msg to state
-- *(ixn)* Test applying ixn event msg to state
-- *(dm)* Add direct mode test
-- *(db)* Add basic test for dbs
-- *(proc)* Test process function
-- *(proc)* Add process receipt test
-- *(nxt)* Add test for correct nxt creation
-- *(nxt)* Minor neatness
-- *(all)* Update tests so they run
-- *(proc)* Update test vectors
-- *(parse)* Event parsing test
-- *(proc)* Make `test_process` pass
-
-### ⚙️ Miscellaneous Tasks
-
-- *(license)* Add DIF as licensor
-
-## [0.3.0] - 2020-09-17
-
-### 🚀 Features
-
-- *(icp_ver)* Validate icp event prefixes
-- *(dc)* Impl derivation codes themselves
-- *(sigs)* Add attached sig codes
-- *(prefix)* Use codes in prefix impls
-- *(sigs)* Improve ergo, fix attached sig struct
-
-### 🐛 Bug Fixes
-
-- *(event_sig)* Use correct data for event sig/ver
-- *(RoT)* Fix verifying identifier and tests
-
-### 🧪 Testing
-
-- *(parse)* Fix test with new sig ver
-- *(stream)* Fix test fail case, add new case
-- *(pref)* Add prefix test and ev len check test
-
-## [0.2.0] - 2020-09-10
-
-### 🚀 Features
-
-- *(deps)* Add ursa as dependancy
-- *(wasm)* Add wasm-bindgen as a dependancy
-- *(derivation)* Initial empty impl
-- *(derivation)* Initial enum
-- *(drv)* Impl FromStr+PartialEq+Display for Derivation
-- *(drv)* Add stubbed derivation procedure modules
-- *(drv)* Implement blake2b and the SHA digests
-- *(drv)* Impl Debug for Derivation
-- *(wasm)* Expose derivation procedures to wasm
-- *(prefix)* Initial prefix mod added
-- *(prefix)* Prefix struct and stub traits
-- *(parse)* Implement FromStr for prefix
-- *(prefix)* Padding util fns
-- *(prefix)* Impl to_str for Prefix
-- *(serde)* Add serde support to Prefix
-- *(events)* Initial events mod
-- *(configs)* Add KeyConfig and WitnessConfig structs
-- *(events)* Add stubbed event data types
-- *(events)* Add Event struct & EventData enum
-- *(event_message)* Event message struct
-- *(events)* Fix EventData ser/der
-- *(versioned messages)* Add VersionedEventMessage
-- *(dfs ser)* Impl DepthFirstSerializer
-- *(error)* Add initial Error type
-- *(CryptoError)* Add a wrapper for CryptoError
-- *(state)* Initial state type
-- *(semantics)* Add EventSemantics trait
-- *(Signatory)* Add Signatory type
-- *(Delegated)* Add DelegatedIdentifierState type
-- *(sem)* Impl EventSemantics for Event and EventMessage
-- *(icp)* Impl EventSemantics for icp event
-- *(verify)* Defn and use Verifiable trait
-- *(verification)* Mostly impl Verifiable
-- *(verify)* Impl verify using Prefixes
-- *(state)* Derive debug for state
-- *(readme)* Add basic readme
-- *(deps)* Add convenience wasm-pack optional features
-- *(prefix)* Impl a prefix enum type
-- *(drv)* Remove unnecessary derivation code
-- *(codes)* Update derivation codes
-- *(cargo)* Remove unnecessary dep
-- *(sigs)* Rename sigs -> idxs
-- *(ddo)* Add ddo and convenience fns
-- *(validate)* Use kel instead of string
-- *(ursa)* Export ursa from lib
-- *(el)* Define & impl EventLog
-- *(err)* Better ser/de errors
-- *(pref)* Better prefix types
-- *(pref)* Propagate prefix types
-- *(dbug)* Derive Debug on event data types
-- *(events)* Update serialized sig representation
-- *(clone)* Derive clone for eventmessage
-- *(vs)* Add size to version string
-- *(delegated)* Wip delegated
-- *(selfaddressing)* Test a simple self-addressing
-- *(hex)* Use unpadded hex strings for all ints
-- *(ser)* Impl better version string logic
-- *(sigs)* Impl parsing a signature stream
-- *(parse)* Move signed event parsing to file
-- *(derive)* Impl derive basic from seed
-- *(sed)* Impl parse/transcode of sed from event str
-- *(parse)* Impl parse&validate stream
-- *(blake3)* Add blake3 digests
-
-### 🐛 Bug Fixes
-
-- *(prefix)* Deriv code strs already padded
-- *(sigs)* Fix verification and make sig codes explicit
-- *(message)* Fix event message and prefix issues
-- *(iwk)* Make IcpWithKeys fields public
-- *(m)* Fix parsing and serializing signed events
-- *(basic_pref)* Fix ed25519 codes
-- *(attached)* Fix codes and index decoding
-- *(parsing)* Fix signed json parsing & improve icp
-- *(ev parsing)* Fix event sig splitting
-- *(sig parse)* Allow incomplete sigs to err, not fail
-- *(stream)* Fix fail on no event, stub stream test
-
-### 🚜 Refactor
-
-- *(EventData)* Move EventData def to event_data
-- *(state)* Rename State -> IdentityState
-- *(sem)* Use Error for result error types
-- *(sem)* Move EventSemantics def to state/mod
-- *(serde)* Clean up serde renames, threshold types
-- *(derivation)* Simplfy and restructure Derivations
-- *(utils)* Use refs
-- *(sig)* Move sig parsing to file
-- *(parse sig)* Rename signature->attached_signature
-- *(dfs)* Impl dfs ser more rigourously
-- *(sed)* Use transcode fn as recommended
-
-### 📚 Documentation
-
-- *(drv)* Add some basic rustdoc comments
-- *(derivation)* Add some rustdoc to Derivation
-
-### 🎨 Styling
-
-- *(use)* Make traits nicer
-
-### 🧪 Testing
-
-- *(prefix)* Add simple tests for Prefix
-- *(event)* Add small ser/de test
-- *(verify)* Add a unit test for verify
-- *(event)* Fix deser test, add prev to rot event
-- *(message)* Test for creating/applying an event
-- *(event_message)* Fix event message test
-- *(stream)* Add test for keriox-generated stream
-
-### ⚙️ Miscellaneous Tasks
-
-- *(rename)* Rename keriox -> keri
 
 <!-- generated by git-cliff -->
