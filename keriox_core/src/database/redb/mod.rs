@@ -167,7 +167,11 @@ impl EventDatabase for RedbDatabase {
     ) -> Option<impl DoubleEndedIterator<Item = Transferable>> {
         match params {
             QueryParameters::BySn { id, sn } => self.get_trans_receipts(&id.to_str(), sn).ok(),
-            QueryParameters::Range { id: _, start: _, limit: _ } => todo!(),
+            QueryParameters::Range {
+                id: _,
+                start: _,
+                limit: _,
+            } => todo!(),
             QueryParameters::All { id: _ } => todo!(),
         }
     }

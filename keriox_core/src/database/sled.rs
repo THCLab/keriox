@@ -15,9 +15,7 @@ use crate::{
     event::KeyEvent,
     event_message::{
         msg::KeriEvent,
-        signed_event_message::{
-            SignedEventMessage, SignedNontransferableReceipt,
-        },
+        signed_event_message::{SignedEventMessage, SignedNontransferableReceipt},
         TimestampedEventMessage,
     },
     prefix::IdentifierPrefix,

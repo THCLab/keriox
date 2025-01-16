@@ -99,7 +99,7 @@ impl Identifier {
                         );
                         let witnesses = self
                             .witnesses()
-                            .map(|bp| IdentifierPrefix::Basic(bp))
+                            .map(IdentifierPrefix::Basic)
                             .collect::<Vec<_>>();
                         self.broadcast_receipts(&witnesses)
                             .await
