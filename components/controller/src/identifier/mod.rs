@@ -21,6 +21,7 @@ pub mod mechanics;
 pub mod query;
 pub mod signing;
 pub mod tel;
+pub mod nontransferable;
 
 pub struct Identifier {
     id: IdentifierPrefix,
