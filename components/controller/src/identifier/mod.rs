@@ -18,10 +18,10 @@ use crate::{communication::Communication, error::ControllerError, known_events::
 use self::mechanics::{query_mailbox::QueryCache, MechanicsError};
 
 pub mod mechanics;
+pub mod nontransferable;
 pub mod query;
 pub mod signing;
 pub mod tel;
-pub mod nontransferable;
 
 pub struct Identifier {
     id: IdentifierPrefix,

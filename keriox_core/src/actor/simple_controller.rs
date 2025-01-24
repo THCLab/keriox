@@ -305,6 +305,7 @@ impl<K: KeyManager, D: EventDatabase + Send + Sync + 'static> SimpleController<K
             i: prefix.clone(),
             s: None,
             src: None,
+            limit: None,
         };
 
         let qry = QueryEvent::new_query(

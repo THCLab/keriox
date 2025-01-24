@@ -46,7 +46,7 @@ impl Identifier {
         self.known_events
             .get_watchers(&self.id)?
             .into_iter()
-            .map(|watcher| self.query_log(about_who, watcher))
+            .map(|watcher| self.query_log_range(&about_who.prefix, 0, about_who.sn, watcher))
             .collect()
     }
 
@@ -175,18 +175,21 @@ impl Identifier {
             .await
     }
 
-    fn query_log(
+    fn query_log_range(
         &self,
-        seal: &EventSeal,
+        id: &IdentifierPrefix,
+        sn: u64,
+        limit: u64,
         watcher: IdentifierPrefix,
     ) -> Result<QueryEvent, ControllerError> {
         Ok(QueryEvent::new_query(
             QueryRoute::Logs {
                 reply_route: "".to_string(),
                 args: LogsQueryArgs {
-                    s: Some(seal.sn),
-                    i: seal.prefix.clone(),
+                    s: Some(sn),
+                    i: id.clone(),
                     src: Some(watcher),
+                    limit: Some(limit),
                 },
             },
             SerializationFormats::JSON,
@@ -206,6 +209,7 @@ impl Identifier {
                     s: None,
                     i: id.clone(),
                     src: Some(watcher),
+                    limit: None,
                 },
             },
             SerializationFormats::JSON,

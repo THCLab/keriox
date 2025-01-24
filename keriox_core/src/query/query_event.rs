@@ -49,6 +49,8 @@ impl QueryRoute {
 pub struct LogsQueryArgs {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub s: Option<u64>,
+    #[serde(rename = "l", skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u64>,
     pub i: IdentifierPrefix,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub src: Option<IdentifierPrefix>,

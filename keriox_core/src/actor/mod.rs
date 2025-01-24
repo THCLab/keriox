@@ -258,13 +258,21 @@ pub fn process_query<D: EventDatabase>(
             reply_route: _,
             args,
         } => {
-            let sn_kel = storage
-                .get_kel_messages_with_receipts(&args.i, args.s)?
-                .ok_or_else(|| QueryError::UnknownId { id: args.i.clone() })?
-                .into_iter()
-                .map(Message::Notice)
-                .collect();
-            Ok(ReplyType::Kel(sn_kel))
+            let response = match (args.s, args.limit) {
+                (None, _) => storage.get_kel_messages_with_receipts_all(&args.i)?,
+                (Some(sn), None) => storage
+                    .get_event_at_sn(&args.i, sn)
+                    .map(|event| vec![Notice::Event(event.signed_event_message)]),
+                (Some(sn), Some(limit)) => {
+                    storage.get_kel_messages_with_receipts_range(&args.i, sn, limit)?
+                }
+            }
+            .ok_or_else(|| QueryError::UnknownId { id: args.i.clone() })?
+            .into_iter()
+            .map(Message::Notice)
+            .collect::<Vec<_>>();
+
+            Ok(ReplyType::Kel(response))
         }
     }
 }

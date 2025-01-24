@@ -155,7 +155,7 @@ impl EventDatabase for RedbDatabase {
         match params {
             QueryParameters::BySn { id, sn } => Some(self.get_kel(&id, sn, 1).into_iter()),
             QueryParameters::Range { id, start, limit } => {
-                Some(self.get_kel(&id, start, limit).into_iter())
+                Some(self.get_kel(&id, start, limit + 1).into_iter())
             }
             QueryParameters::All { id } => self.get_full_kel(id).map(|kel| kel.into_iter()),
         }

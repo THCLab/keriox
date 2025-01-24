@@ -283,7 +283,7 @@ pub mod http_handlers {
 
                     Ok(data
                         .event_storage
-                        .get_kel_messages_with_receipts(&cid, None)
+                        .get_kel_messages_with_receipts_all(&cid)
                         .map_err(ActorError::KeriError)?
                         .unwrap_or_default()
                         .into_iter()
@@ -320,7 +320,7 @@ pub mod http_handlers {
                     // TODO use ksn instead
                     Ok(data
                         .event_storage
-                        .get_kel_messages_with_receipts(&cid, None)
+                        .get_kel_messages_with_receipts_all(&cid)
                         .map_err(ActorError::KeriError)?
                         .unwrap_or_default()
                         .into_iter()

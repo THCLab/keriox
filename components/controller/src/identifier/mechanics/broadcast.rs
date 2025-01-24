@@ -236,7 +236,7 @@ mod test {
 
         assert_eq!(identifier.notify_witnesses().await?, 0);
         assert!(matches!(
-            witness1.witness_data.event_storage.get_kel_messages_with_receipts(&identifier.id, None)?.unwrap().as_slice(),
+            witness1.witness_data.event_storage.get_kel_messages_with_receipts_all(&identifier.id)?.unwrap().as_slice(),
             [Notice::Event(evt), Notice::NontransferableRct(rct)]
             if matches!(evt.event_message.data.event_data, EventData::Icp(_))
                 && matches!(rct.signatures.len(), 2)
@@ -249,7 +249,7 @@ mod test {
         assert_eq!(identifier.broadcast_receipts(&wit_ids).await.unwrap(), 0);
 
         assert!(matches!(
-            witness1.witness_data.event_storage.get_kel_messages_with_receipts(&identifier.id, None)?.unwrap().as_slice(),
+            witness1.witness_data.event_storage.get_kel_messages_with_receipts_all(&identifier.id)?.unwrap().as_slice(),
             [Notice::Event(evt), Notice::NontransferableRct(rct)]
                 if matches!(evt.event_message.data.event_data, EventData::Icp(_))
                 && matches!(rct.signatures.len(), 2)

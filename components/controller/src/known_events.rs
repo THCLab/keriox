@@ -283,9 +283,7 @@ impl KnownEvents {
     }
 
     pub fn find_kel_with_receipts(&self, id: &IdentifierPrefix) -> Option<Vec<Notice>> {
-        self.storage
-            .get_kel_messages_with_receipts(id, None)
-            .unwrap()
+        self.storage.get_kel_messages_with_receipts_all(id).unwrap()
     }
 
     pub fn find_kel(&self, id: &IdentifierPrefix) -> Option<String> {
@@ -517,7 +515,7 @@ impl KnownEvents {
                 if Role::Messagebox != role {
                     let kel = self
                         .storage
-                        .get_kel_messages_with_receipts(signer_prefix, None)?
+                        .get_kel_messages_with_receipts_all(signer_prefix)?
                         .ok_or(MechanicsError::UnknownIdentifierError(
                             signer_prefix.clone(),
                         ))?;

@@ -329,6 +329,7 @@ fn test_qry_rpy() -> Result<(), ActorError> {
         i: alice.prefix().clone(),
         s: None,
         src: Some(alice.prefix().clone()),
+        limit: None,
     };
 
     let qry = QueryEvent::new_query(
@@ -377,6 +378,7 @@ fn test_qry_rpy() -> Result<(), ActorError> {
         i: alice.prefix().clone(),
         s: None,
         src: None,
+        limit: None,
     };
     let qry = QueryEvent::new_query(
         QueryRoute::Logs {
@@ -408,7 +410,7 @@ fn test_qry_rpy() -> Result<(), ActorError> {
 
     let alice_kel = alice
         .storage
-        .get_kel_messages_with_receipts(alice.prefix(), None)?
+        .get_kel_messages_with_receipts_all(alice.prefix())?
         .into_iter()
         .flatten()
         .map(Message::Notice)
@@ -969,21 +971,21 @@ pub fn test_delegated_multisig() -> Result<(), ActorError> {
     // Process inceptions of other group participants
     let cont1_kel = cont1
         .storage
-        .get_kel_messages_with_receipts(cont1.prefix(), None)?
+        .get_kel_messages_with_receipts_all(cont1.prefix())?
         .unwrap()
         .into_iter()
         .map(|not| Message::Notice(not))
         .collect::<Vec<_>>();
     let cont2_kel = cont2
         .storage
-        .get_kel_messages_with_receipts(cont2.prefix(), None)?
+        .get_kel_messages_with_receipts_all(cont2.prefix())?
         .unwrap()
         .into_iter()
         .map(|not| Message::Notice(not))
         .collect::<Vec<_>>();
     let delegator_kel = delegator
         .storage
-        .get_kel_messages_with_receipts(delegator.prefix(), None)?
+        .get_kel_messages_with_receipts_all(delegator.prefix())?
         .unwrap()
         .into_iter()
         .map(|not| Message::Notice(not))
@@ -1217,14 +1219,14 @@ pub fn test_delegating_multisig() -> Result<(), ActorError> {
 
     let delegator1_kel = delegator_1
         .storage
-        .get_kel_messages_with_receipts(delegator_1.prefix(), None)?
+        .get_kel_messages_with_receipts_all(delegator_1.prefix())?
         .unwrap()
         .into_iter()
         .map(|not| Message::Notice(not))
         .collect::<Vec<_>>();
     let delegator2_kel = delegator_2
         .storage
-        .get_kel_messages_with_receipts(delegator_2.prefix(), None)?
+        .get_kel_messages_with_receipts_all(delegator_2.prefix())?
         .unwrap()
         .into_iter()
         .map(|not| Message::Notice(not))
@@ -1313,7 +1315,7 @@ pub fn test_delegating_multisig() -> Result<(), ActorError> {
 
     let delegator_kel = delegator_2
         .storage
-        .get_kel_messages_with_receipts(&delegator_group_id, None)?
+        .get_kel_messages_with_receipts_all(&delegator_group_id)?
         .unwrap()
         .into_iter()
         .map(|not| Message::Notice(not))
@@ -1439,7 +1441,7 @@ pub fn test_delegating_multisig() -> Result<(), ActorError> {
     // TODO add function for getting event with signatures and witness receipts
     let fully_witnessed_ixn = delegator_1
         .storage
-        .get_kel_messages_with_receipts(&delegator_group_id, None)?
+        .get_kel_messages_with_receipts_all(&delegator_group_id)?
         .unwrap()
         .clone();
 

@@ -84,23 +84,34 @@ impl<D: EventDatabase> EventStorage<D> {
         }
     }
 
-    pub fn get_kel_messages_with_receipts(
+    pub fn get_kel_messages_with_receipts_all(
         &self,
         id: &IdentifierPrefix,
-        sn: Option<u64>,
     ) -> Result<Option<Vec<Notice>>, Error> {
         let events = self
             .events_db
             .get_kel_finalized_events(QueryParameters::All { id });
-        Ok(match (events, sn) {
-            (None, _) => None,
-            (Some(events), None) => self.collect_with_receipts(events),
-            (Some(events), Some(sn)) => {
-                let evs =
-                    events.filter(|ev| ev.signed_event_message.event_message.data.get_sn() <= sn);
-                self.collect_with_receipts(evs)
-            }
+        Ok(match (events) {
+            None => None,
+            Some(events) => self.collect_with_receipts(events),
         })
+    }
+
+    pub fn get_kel_messages_with_receipts_range(
+        &self,
+        id: &IdentifierPrefix,
+        sn: u64,
+        limit: u64,
+    ) -> Result<Option<Vec<Notice>>, Error> {
+        let events = self
+            .events_db
+            .get_kel_finalized_events(QueryParameters::Range {
+                id: id.clone(),
+                start: sn,
+                limit,
+            })
+            .and_then(|events| self.collect_with_receipts(events));
+        Ok(events)
     }
 
     fn collect_with_receipts<'a, I>(&self, events: I) -> Option<Vec<Notice>>

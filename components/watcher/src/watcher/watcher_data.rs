@@ -271,11 +271,14 @@ impl WatcherData {
                 args,
             } => {
                 let local_state = self.get_state_for_prefix(&args.i);
-                match (local_state, args.s) {
-                    (Some(state), Some(sn)) if sn <= state.sn => {
+                match (local_state, args.s, args.limit) {
+                    (Some(state), Some(sn), Some(limit)) if sn + limit <= state.sn => {
                         // KEL is already in database
                     }
-                    (Some(_state), None) => {
+                    (Some(state), Some(sn), None) if sn <= state.sn => {
+                        // KEL is already in database
+                    }
+                    (Some(_state), None, None) => {
                         // Check for updates.
                         let id_to_update = qry.query.get_prefix();
                         self.tx.send(id_to_update.clone()).await.map_err(|_e| {
@@ -376,6 +379,7 @@ impl WatcherData {
                     i: id.clone(),
                     s: None,
                     src: Some(witness_id.clone()),
+                    limit: None,
                 },
             };
 
@@ -493,6 +497,7 @@ impl WatcherData {
             i: about_id.clone(),
             s: None,
             src: Some(wit_id.clone()),
+            limit: None,
         };
 
         let qry = QueryEvent::new_query(

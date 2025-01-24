@@ -375,6 +375,7 @@ async fn test_tel_from_watcher() -> Result<(), anyhow::Error> {
             .finalize_query(queries_and_signatures.clone())
             .await;
     }
+    assert_eq!(verifier.find_state(issuer.id()).unwrap().sn, 3);
 
     // Query witness about issuer's tel again.
     let registry_id = issuer.registry_id().unwrap().clone();

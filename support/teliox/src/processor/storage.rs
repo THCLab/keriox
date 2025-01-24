@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use keri_core::prefix::IdentifierPrefix;
+use keri_core::{event, prefix::IdentifierPrefix};
 
 use crate::{
     database::EventDatabase,
@@ -114,16 +114,24 @@ impl TelEventStorage {
                 reply_route: _,
                 args,
             } => {
-                let management_tel = self
-                    .get_management_events(args.ri.as_ref().unwrap())?
-                    .unwrap();
-                let vc_tel = self
-                    .get_events(args.i.as_ref().unwrap())?
-                    .into_iter()
-                    .flat_map(|event| event.serialize().unwrap());
-                Ok(TelReplyType::Tel(
-                    management_tel.into_iter().chain(vc_tel).collect(),
-                ))
+                let management_tel = args
+                    .ri
+                    .as_ref()
+                    .map(|ri| self.get_management_events(ri))
+                    .transpose()?
+                    .unwrap_or_default()
+                    .unwrap_or_default();
+                if let Some(vc_id) = &args.i {
+                    let vc_tel = self
+                        .get_events(&vc_id)?
+                        .into_iter()
+                        .flat_map(|event| event.serialize().unwrap());
+                    Ok(TelReplyType::Tel(
+                        management_tel.into_iter().chain(vc_tel).collect(),
+                    ))
+                } else {
+                    Ok(TelReplyType::Tel(management_tel))
+                }
             }
         }
     }
