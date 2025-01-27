@@ -272,7 +272,7 @@ impl WatcherData {
             } => {
                 let local_state = self.get_state_for_prefix(&args.i);
                 match (local_state, args.s, args.limit) {
-                    (Some(state), Some(sn), Some(limit)) if sn + limit <= state.sn => {
+                    (Some(state), Some(sn), Some(limit)) if sn + limit - 1 <= state.sn => {
                         // KEL is already in database
                     }
                     (Some(state), Some(sn), None) if sn <= state.sn => {

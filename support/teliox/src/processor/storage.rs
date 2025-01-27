@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use keri_core::{event, prefix::IdentifierPrefix};
+use keri_core::prefix::IdentifierPrefix;
 
 use crate::{
     database::EventDatabase,

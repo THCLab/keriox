@@ -91,7 +91,7 @@ impl<D: EventDatabase> EventStorage<D> {
         let events = self
             .events_db
             .get_kel_finalized_events(QueryParameters::All { id });
-        Ok(match (events) {
+        Ok(match events {
             None => None,
             Some(events) => self.collect_with_receipts(events),
         })

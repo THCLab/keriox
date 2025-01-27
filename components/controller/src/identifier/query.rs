@@ -46,7 +46,7 @@ impl Identifier {
         self.known_events
             .get_watchers(&self.id)?
             .into_iter()
-            .map(|watcher| self.query_log_range(&about_who.prefix, 0, about_who.sn, watcher))
+            .map(|watcher| self.query_log_range(&about_who.prefix, 0, about_who.sn + 1, watcher))
             .collect()
     }
 

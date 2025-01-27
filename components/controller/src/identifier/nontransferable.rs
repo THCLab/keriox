@@ -1,25 +1,21 @@
 use std::sync::Arc;
 
 use crate::{
-    communication::Communication, error::ControllerError, known_events::KnownEvents, BasicPrefix,
-    IdentifierPrefix, LocationScheme, SeedPrefix, SelfSigningPrefix,
+    communication::Communication, error::ControllerError, BasicPrefix, IdentifierPrefix,
+    LocationScheme, SelfSigningPrefix,
 };
 use keri_core::{
     actor::{
         prelude::{HashFunctionCode, SerializationFormats},
         simple_controller::PossibleResponse,
     },
-    event::sections::seal::EventSeal,
     event_message::{
         msg::KeriEvent,
-        signature::{self, Nontransferable, Signature},
+        signature::{Nontransferable, Signature},
         timestamped::Timestamped,
     },
     oobi::Scheme,
-    processor::escrow::EscrowConfig,
     query::query_event::{LogsQueryArgs, QueryEvent, QueryRoute, SignedKelQuery},
-    signer::Signer,
-    transport::default::DefaultTransport,
 };
 use teliox::query::{SignedTelQuery, TelQueryArgs, TelQueryEvent, TelQueryRoute};
 
