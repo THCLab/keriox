@@ -21,8 +21,8 @@ impl WatcherListener {
 
     pub fn listen_http(self, addr: impl ToSocketAddrs) -> Server {
         let data = self.watcher.clone();
-        actix_web::rt::spawn(update_tel_checking(data.clone()));
-        actix_web::rt::spawn(update_checking(data));
+        async_std::task::spawn(update_tel_checking(data.clone()));
+        async_std::task::spawn(update_checking(data));
 
         let state = web::Data::new(self.watcher);
         HttpServer::new(move || {
@@ -30,7 +30,6 @@ impl WatcherListener {
                 .app_data(state.clone())
                 .configure(configure_routes)
         })
-        .disable_signals()
         .bind(addr)
         .unwrap()
         .run()

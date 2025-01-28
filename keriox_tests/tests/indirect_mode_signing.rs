@@ -3,31 +3,18 @@ use std::sync::Arc;
 use keri_controller::{
     config::ControllerConfig, controller::Controller, error::ControllerError,
     identifier::query::QueryResponse, BasicPrefix, CryptoBox, EndRole, IdentifierPrefix,
-    KeyManager, LocationScheme, Oobi, SelfSigningPrefix,
+    KeyManager, Oobi, SelfSigningPrefix,
 };
 use keri_core::processor::validator::{MoreInfoError, VerificationError};
+use keri_tests::settings::InfrastructureContext;
 use tempfile::Builder;
+use test_context::test_context;
 
+#[test_context(InfrastructureContext)]
 #[async_std::test]
-async fn indirect_mode_signing() -> Result<(), ControllerError> {
-    let first_witness_id: BasicPrefix = "BDg3H7Sr-eES0XWXiO8nvMxW6mD_1LxLeE1nuiZxhGp4"
-        .parse()
-        .unwrap();
-    // OOBI (Out-Of-Band Introduction) specifies the way how actors can be found.
-    let first_witness_oobi: LocationScheme = serde_json::from_str(&format!(
-        r#"{{"eid":{:?},"scheme":"http","url":"http://witness2.sandbox.argo.colossi.network/"}}"#,
-        first_witness_id
-    ))
-    .unwrap();
-
-    let second_witness_id: BasicPrefix = "BDg1zxxf8u4Hx5IPraZzmStfSCZFZbDzMHjqVcFW5OfP"
-        .parse()
-        .unwrap();
-    let second_witness_oobi: LocationScheme = serde_json::from_str(&format!(
-        r#"{{"eid":{:?},"scheme":"http","url":"http://witness3.sandbox.argo.colossi.network/"}}"#,
-        second_witness_id
-    ))
-    .unwrap();
+async fn indirect_mode_signing(ctx: &mut InfrastructureContext) -> Result<(), ControllerError> {
+    let (first_witness_id, first_witness_oobi) = ctx.first_witness_data();
+    let (second_witness_id, second_witness_oobi) = ctx.second_witness_data();
 
     // Setup database path and key manager.
     let database_path = Builder::new().prefix("test-db0").tempdir().unwrap();
@@ -156,21 +143,14 @@ async fn indirect_mode_signing() -> Result<(), ControllerError> {
     assert!(inception_event_seal.is_ok());
 
     // Now setup watcher, to be able to query of signing identifier KEL.
-    let watcher_id: IdentifierPrefix = "BF2t2NPc1bwptY1hYV0YCib1JjQ11k9jtuaZemecPF5b"
-        .parse()
-        .unwrap();
-    let watcher_oobi: Oobi = serde_json::from_str(&format!(
-        r#"{{"eid":"{}","scheme":"http","url":"http://watcher.sandbox.argo.colossi.network/"}}"#,
-        watcher_id
-    ))
-    .unwrap();
+    let (watcher_id, watcher_oobi) = ctx.watcher_data();
 
     // Resolve watcher oobi
-    verifying_identifier.resolve_oobi(&watcher_oobi).await?;
+    verifying_identifier.resolve_oobi(&Oobi::Location(watcher_oobi)).await?;
 
     // Generate and sign event, that will be sent to watcher, so it knows to act
     // as verifier's watcher.
-    let add_watcher = verifying_identifier.add_watcher(watcher_id)?;
+    let add_watcher = verifying_identifier.add_watcher(IdentifierPrefix::Basic(watcher_id))?;
     let signature = SelfSigningPrefix::Ed25519Sha512(
         verifier_key_manager.sign(add_watcher.as_bytes()).unwrap(),
     );

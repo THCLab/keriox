@@ -6,13 +6,15 @@ use keri_controller::{
     KeyManager, Oobi, SelfSigningPrefix,
 };
 use keri_core::processor::validator::{MoreInfoError, VerificationError};
-use keri_tests::settings::{first_witness_data, second_witness_data, watcher_data};
+use keri_tests::settings::InfrastructureContext;
 use tempfile::Builder;
+use test_context::test_context;
 
+#[test_context(InfrastructureContext)]
 #[async_std::test]
-async fn test_updates() -> Result<(), ControllerError> {
-    let (first_witness_id, first_witness_oobi) = first_witness_data();
-    let (second_witness_id, second_witness_oobi) = second_witness_data();
+async fn test_updates(ctx: &mut InfrastructureContext) -> Result<(), ControllerError> {
+    let (first_witness_id, first_witness_oobi) = ctx.first_witness_data();
+    let (second_witness_id, second_witness_oobi) = ctx.second_witness_data();
 
     // Setup signing identifier.
     let database_path = Builder::new().prefix("test-db0").tempdir().unwrap();
@@ -116,7 +118,7 @@ async fn test_updates() -> Result<(), ControllerError> {
     }
 
     // Now setup watcher, to be able to query of signing identifier KEL.
-    let (watcher_id, watcher_oobi) = watcher_data();
+    let (watcher_id, watcher_oobi) = ctx.watcher_data();
 
     // Resolve watcher oobi
     verifying_identifier

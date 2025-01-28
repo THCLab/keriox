@@ -371,6 +371,7 @@ async fn test_tel_from_watcher() -> Result<(), anyhow::Error> {
 
     // Watcher may need some time to find KEL. Query it multiple times.
     while !errs.is_empty() {
+        sleep(Duration::from_secs(1)).await;
         (_, errs) = verifier
             .finalize_query(queries_and_signatures.clone())
             .await;

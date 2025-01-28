@@ -1,77 +1,23 @@
-use std::{collections::HashMap, sync::Arc};
-
 use keri_controller::{
-    error::ControllerError, BasicPrefix, IdentifierPrefix, KeyManager, LocationScheme,
-    SelfSigningPrefix,
+    error::ControllerError, BasicPrefix, KeyManager, SelfSigningPrefix,
 };
-use keri_core::transport::test::TestTransport;
-use keri_tests::{setup_identifier, transport::TelTestTransport};
+use keri_tests::{settings::InfrastructureContext, setup_identifier};
 use tempfile::Builder;
-use url::Host;
-use witness::{WitnessEscrowConfig, WitnessListener};
+use test_context::test_context;
 
+#[test_context(InfrastructureContext)]
 #[async_std::test]
-async fn test_witness_rotation() -> Result<(), ControllerError> {
-    use url::Url;
+async fn test_witness_rotation(ctx: &mut InfrastructureContext) -> Result<(), ControllerError> {
     let root0 = Builder::new().prefix("test-db0").tempdir().unwrap();
 
-    // Setup first witness
-    let witness1 = {
-        let seed = "AK8F6AAiYDpXlWdj2O5F5-6wNCCNJh2A4XOlqwR_HwwH";
-        let witness_root = Builder::new().prefix("test-wit1-db").tempdir().unwrap();
-        Arc::new(
-            WitnessListener::setup(
-                url::Url::parse("http://witness1/").unwrap(),
-                witness_root.path(),
-                Some(seed.to_string()),
-                WitnessEscrowConfig::default(),
-            )
-            .unwrap(),
-        )
-    };
-
-    let wit1_id = witness1.get_prefix();
-    let wit1_location = LocationScheme {
-        eid: IdentifierPrefix::Basic(wit1_id.clone()),
-        scheme: keri_core::oobi::Scheme::Http,
-        url: Url::parse("http://witness1/").unwrap(),
-    };
-
-    // Setup second witness
-    let witness2 = {
-        // let seed = "AK8F6AAiYDpXlWdj2O5F5-6wNCCNJh2A4XOlqwR_HwwH";
-        let witness_root = Builder::new().prefix("test-wit2-db").tempdir().unwrap();
-        Arc::new(
-            WitnessListener::setup(
-                url::Url::parse("http://witness2/").unwrap(),
-                witness_root.path(),
-                None,
-                WitnessEscrowConfig::default(),
-            )
-            .unwrap(),
-        )
-    };
-
-    let wit2_id = witness2.get_prefix();
-    let wit2_location = LocationScheme {
-        eid: IdentifierPrefix::Basic(wit2_id.clone()),
-        scheme: keri_core::oobi::Scheme::Http,
-        url: Url::parse("http://witness2/").unwrap(),
-    };
-
-    let transport = {
-        let mut actors: keri_core::transport::test::TestActorMap = HashMap::new();
-        actors.insert((Host::Domain("witness1".to_string()), 80), witness1.clone());
-        actors.insert((Host::Domain("witness2".to_string()), 80), witness2.clone());
-        TestTransport::new(actors)
-    };
+    let (first_witness_id, first_witness_oobi) = ctx.first_witness_data();
+    let (_second_witness_id, second_witness_oobi) = ctx.second_witness_data();
 
     // Setup identifier with `witness1` as witness
     let (mut identifier, mut controller_keypair, _) = setup_identifier(
         root0.path(),
-        vec![wit1_location.clone()],
-        Some(transport.clone()),
-        Some(TelTestTransport::new()),
+        vec![first_witness_oobi.clone()],
+        None, None,
     )
     .await;
 
@@ -87,8 +33,8 @@ async fn test_witness_rotation() -> Result<(), ControllerError> {
             vec![new_curr],
             vec![new_next],
             1,
-            vec![wit2_location],
-            vec![wit1_id],
+            vec![second_witness_oobi],
+            vec![first_witness_id],
             1,
         )
         .await?;
