@@ -1,5 +1,6 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
+use async_std::task::sleep;
 use keri_controller::{
     config::ControllerConfig, controller::Controller, error::ControllerError,
     identifier::query::QueryResponse, BasicPrefix, CryptoBox, EndRole, IdentifierPrefix,
@@ -174,6 +175,7 @@ async fn test_updates(ctx: &mut InfrastructureContext) -> Result<(), ControllerE
         .await;
     // Watcher might need some time to find KEL. Ask about it until it's ready.
     while !errors.is_empty() {
+        sleep(Duration::from_millis(500)).await;
         (response, errors) = verifying_identifier
             .finalize_query(queries_and_signatures.clone())
             .await;
@@ -262,6 +264,7 @@ async fn test_updates(ctx: &mut InfrastructureContext) -> Result<(), ControllerE
 
     // Watcher might need some time to find KEL. Ask about it until it's ready.
     while !errors.is_empty() {
+        sleep(Duration::from_millis(500)).await;
         (response, errors) = verifying_identifier
             .finalize_query(queries_and_signatures.clone())
             .await;
