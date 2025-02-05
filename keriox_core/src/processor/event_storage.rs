@@ -48,7 +48,7 @@ impl<D: EventDatabase> EventStorage<D> {
     }
 
     pub fn get_state(&self, identifier: &IdentifierPrefix) -> Option<IdentifierState> {
-        compute_state(self.events_db.clone(), identifier)
+        self.events_db.get_key_state(identifier)
     }
 
     /// Get KEL for Prefix
