@@ -7,7 +7,7 @@ use crate::{
             SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
         },
     },
-    prefix::IdentifierPrefix,
+    prefix::IdentifierPrefix, state::IdentifierState,
 };
 
 pub mod escrow;
@@ -52,6 +52,11 @@ pub trait EventDatabase {
         receipt: SignedNontransferableReceipt,
         id: &IdentifierPrefix,
     ) -> Result<(), Self::Error>;
+
+    fn get_key_state(
+        &self,
+        id: &IdentifierPrefix,
+    ) -> Option<IdentifierState>;
 
     fn get_kel_finalized_events(
         &self,

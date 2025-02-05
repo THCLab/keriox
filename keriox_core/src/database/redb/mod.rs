@@ -5,6 +5,11 @@ pub(crate) mod rkyv_adapter;
 /// referencing the actual event stored in the `EVENTS` table.
 const KELS: TableDefinition<(&str, u64), &[u8]> = TableDefinition::new("kels");
 
+/// Key states storage. (identifier) -> key state
+/// The `KEY_STATES` table stores the state of each identifier, which is updated
+/// as events are processed.
+const KEY_STATES: TableDefinition<&str, &[u8]> = TableDefinition::new("key_states");
+
 /// Events store. (event digest) -> key event
 /// The `EVENTS` table directly stores the event data, which other tables reference
 /// by its digest.
@@ -26,7 +31,7 @@ const TRANS_RCTS: MultimapTableDefinition<(&str, u64), &[u8]> =
 
 use std::{path::Path, u64};
 
-use redb::{Database, MultimapTableDefinition, TableDefinition};
+use redb::{Database, MultimapTableDefinition, ReadableTable, TableDefinition};
 use rkyv::{
     api::high::HighSerializer, rancor::Failure, ser::allocator::ArenaHandle, util::AlignedVec,
 };
@@ -42,7 +47,7 @@ use crate::{
             SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
         },
     },
-    prefix::{IdentifierPrefix, IndexedSignature},
+    prefix::{IdentifierPrefix, IndexedSignature}, state::IdentifierState,
 };
 use cesrox::primitives::CesrPrimitive;
 
@@ -105,6 +110,7 @@ impl RedbDatabase {
         {
             write_txn.open_table(EVENTS)?;
             write_txn.open_table(KELS)?;
+            write_txn.open_table(KEY_STATES)?;
             write_txn.open_multimap_table(SIGS)?;
             write_txn.open_multimap_table(TRANS_RCTS)?;
             write_txn.open_multimap_table(NONTRANS_RCTS)?;
@@ -135,6 +141,7 @@ impl EventDatabase for RedbDatabase {
         };
 
         self.save_to_kel(&txn_mode, event)?;
+        self.update_key_state(&txn_mode, event)?;
 
         write_txn.commit()?;
         Ok(())
@@ -160,6 +167,18 @@ impl EventDatabase for RedbDatabase {
         let id = receipt.body.prefix;
         let receipts = receipt.signatures;
         self.insert_nontrans_receipt(&WriteTxnMode::CreateNew, &id.to_str(), sn, &receipts)
+    }
+
+    fn get_key_state(&self, id: &IdentifierPrefix) -> Option<IdentifierState> {
+        let read_txn = self.db.begin_read().unwrap();
+        let table = read_txn.open_table(KEY_STATES).unwrap();
+        let key = id.to_str();
+        if let Some(key_state) = table.get(key.as_str()).unwrap() {
+            let bytes = key_state.value();
+            Some(rkyv_adapter::deserialize_identifier_state(bytes).unwrap())
+        } else {
+            None
+        }
     }
 
     fn get_kel_finalized_events(
@@ -257,6 +276,25 @@ impl RedbDatabase {
                 let sig = rkyv::to_bytes(value)?;
                 table.insert((id, sn), sig.as_slice())?;
             }
+            Ok(())
+        })
+    }
+
+    fn update_key_state(&self, txn_mode: &WriteTxnMode, event: &KeriEvent<KeyEvent>) -> Result<(), RedbError> {
+        self.execute_in_transaction(txn_mode, |write_txn| {
+            let mut table = write_txn.open_table(KEY_STATES)?;
+            let key = event.data.prefix.to_str();
+
+            let key_state = if let Some(key_state) = table.get(key.as_str())? {
+                let bytes = key_state.value();
+                rkyv_adapter::deserialize_identifier_state(bytes).unwrap()
+            } else {
+                IdentifierState::default()
+            };
+            let key_state = key_state.apply(event).unwrap();
+            let value = rkyv::to_bytes::<rkyv::rancor::Error>(&key_state)?;
+            table.insert(key.as_str(), value.as_ref())?;
+
             Ok(())
         })
     }
