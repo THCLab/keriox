@@ -197,7 +197,7 @@ mod tests {
 
         assert_eq!(s0.prefix, IdentifierPrefix::Basic(pref0.clone()));
         assert_eq!(s0.sn, 0);
-        assert!(icp_m.compare_digest(&s0.last_event_digest)?);
+        assert!(icp_m.compare_digest(&s0.last_event_digest.into())?);
         assert_eq!(s0.current.public_keys.len(), 1);
         assert_eq!(s0.current.public_keys[0], pref0);
         assert_eq!(s0.current.threshold, SignatureThreshold::Simple(1));
@@ -283,7 +283,7 @@ mod tests {
 
         assert_eq!(s0.prefix, icp.data.get_prefix());
         assert_eq!(s0.sn, 0);
-        assert!(icp.compare_digest(&s0.last_event_digest)?);
+        assert!(icp.compare_digest(&s0.last_event_digest.into())?);
         assert_eq!(s0.current.public_keys.len(), 2);
         assert_eq!(s0.current.public_keys[0], sig_pref_0);
         assert_eq!(s0.current.public_keys[1], enc_pref_0);

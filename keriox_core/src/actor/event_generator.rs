@@ -132,7 +132,7 @@ fn make_rotation(
     EventMsgBuilder::new(EventTypeTag::Rot)
         .with_prefix(&state.prefix)
         .with_sn(state.sn + 1)
-        .with_previous_event(&state.last_event_digest)
+        .with_previous_event(&state.last_event_digest.into())
         .with_keys(current_keys)
         .with_next_keys(new_next_keys)
         .with_witness_to_add(&witness_to_add)
@@ -154,7 +154,7 @@ pub fn anchor(
     let ixn = EventMsgBuilder::new(EventTypeTag::Ixn)
         .with_prefix(&state.prefix)
         .with_sn(state.sn + 1)
-        .with_previous_event(&state.last_event_digest)
+        .with_previous_event(&state.last_event_digest.into())
         .with_seal(seal_list)
         .build()
         .map_err(|e| Error::EventGenerationError(e.to_string()))?
@@ -170,7 +170,7 @@ pub fn anchor_with_seal(
     let ev = EventMsgBuilder::new(EventTypeTag::Ixn)
         .with_prefix(&state.prefix)
         .with_sn(state.sn + 1)
-        .with_previous_event(&state.last_event_digest)
+        .with_previous_event(&state.last_event_digest.into())
         .with_seal(seal_list.to_owned())
         .build()
         .map_err(|e| Error::EventGenerationError(e.to_string()))?;
