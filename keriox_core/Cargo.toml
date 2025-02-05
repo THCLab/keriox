@@ -56,11 +56,17 @@ rkyv = "0.8.9"
 
 [dev-dependencies]
 sodiumoxide = "0.2.6"
-hex = "0.4.3"
 tempfile = { version = "3.1" }
+hex = "0.4.3"
+criterion = { version = "0.4", features = ["async_std"]}
 
 [package.metadata.release]
 publish = false
 tag=true
 tag-name="v{{version}}"
 pre-release-hook = ["git", "cliff", "--tag", "{{version}}", "-r", "../", "--output", "../CHANGELOG.md" ]
+
+
+[[bench]]
+name = "bench"
+harness = false
