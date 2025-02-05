@@ -84,6 +84,15 @@ pub enum KeyError {
     UnparsableIndex,
 }
 
+
+/// Represents the mode for executing database transactions.
+enum WriteTxnMode<'a> {
+    /// Initiates a new transaction that is committed after operations are executed.
+    CreateNew,
+    /// Utilizes an already active transaction for operations.
+    UseExisting(&'a redb::WriteTransaction),
+}
+
 pub struct RedbDatabase {
     db: Database,
 }
@@ -112,16 +121,22 @@ impl EventDatabase for RedbDatabase {
         signed_event: SignedEventMessage,
         _id: &IdentifierPrefix,
     ) -> Result<(), RedbError> {
+        let write_txn = self.db.begin_write()?;
+        let txn_mode = WriteTxnMode::UseExisting(&write_txn);
+
         let event = &signed_event.event_message;
-        self.insert_key_event(event)?;
+        self.insert_key_event(&txn_mode, event)?;
+
         let id = &event.data.prefix;
         let sn = event.data.sn;
-
-        self.insert_indexed_signatures(&id, sn, &signed_event.signatures)?;
+        self.insert_indexed_signatures(&txn_mode, id, sn, &signed_event.signatures)?;
         if let Some(wits) = signed_event.witness_receipts {
-            self.insert_nontrans_receipt(&id.to_str(), sn, &wits)?;
+            self.insert_nontrans_receipt(&txn_mode, &id.to_str(), sn, &wits)?;
         };
-        self.save_to_kel(event)?;
+
+        self.save_to_kel(&txn_mode, event)?;
+
+        write_txn.commit()?;
         Ok(())
     }
 
@@ -144,7 +159,7 @@ impl EventDatabase for RedbDatabase {
         let sn = receipt.body.sn;
         let id = receipt.body.prefix;
         let receipts = receipt.signatures;
-        self.insert_nontrans_receipt(&id.to_str(), sn, &receipts)
+        self.insert_nontrans_receipt(&WriteTxnMode::CreateNew, &id.to_str(), sn, &receipts)
     }
 
     fn get_kel_finalized_events(
@@ -199,67 +214,61 @@ impl EventDatabase for RedbDatabase {
 
 impl RedbDatabase {
     /// Saves provided event into key event table. Key is it's digest and value is event.
-    fn insert_key_event(&self, event: &KeriEvent<KeyEvent>) -> Result<(), RedbError> {
+    fn insert_key_event(&self, txn_mode: &WriteTxnMode, event: &KeriEvent<KeyEvent>) -> Result<(), RedbError> {
         let digest = event.digest().map_err(|_e| RedbError::MissingDigest)?;
         let value = rkyv::to_bytes::<rkyv::rancor::Error>(event)?;
-        let write_txn = self.db.begin_write()?;
-        {
+
+        self.execute_in_transaction(txn_mode, |write_txn| {
             let mut table = write_txn.open_table(EVENTS)?;
             let key = rkyv_adapter::serialize_said(&digest)?;
             table.insert(key.as_slice(), &value.as_ref())?;
-        }
-        write_txn.commit()?;
-
-        Ok(())
+            Ok(())
+        })
     }
 
     /// Saves KEL event of given identifier. Key is identifier and sn of event, and value is event digest.
-    fn save_to_kel(&self, event: &KeriEvent<KeyEvent>) -> Result<(), RedbError> {
+    fn save_to_kel(&self, txn_mode: &WriteTxnMode, event: &KeriEvent<KeyEvent>) -> Result<(), RedbError> {
         let digest = event.digest().map_err(|_e| RedbError::MissingDigest)?;
 
-        let write_txn = self.db.begin_write()?;
-        {
+        self.execute_in_transaction(txn_mode, |write_txn| {
             let mut table = write_txn.open_table(KELS)?;
             let id = event.data.prefix.to_str();
             let sn = event.data.sn;
             let serialized_said = rkyv_adapter::serialize_said(&digest)?;
             table.insert((id.as_str(), sn), &serialized_said.as_slice())?;
-        }
-        write_txn.commit()?;
-
-        Ok(())
+            Ok(())
+        })
     }
 
     fn insert_with_sn_key<
         V: for<'a> rkyv::Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rkyv::rancor::Error>>,
     >(
         &self,
+        txn_mode: &WriteTxnMode,
         table: MultimapTableDefinition<(&str, u64), &[u8]>,
         id: &str,
         sn: u64,
         values: &[V],
     ) -> Result<(), RedbError> {
-        let write_txn = self.db.begin_write()?;
-        {
+        self.execute_in_transaction(txn_mode, |write_txn| {
             let mut table = write_txn.open_multimap_table(table)?;
 
             for value in values {
                 let sig = rkyv::to_bytes(value)?;
                 table.insert((id, sn), sig.as_slice())?;
             }
-        }
-        write_txn.commit()?;
-
-        Ok(())
+            Ok(())
+        })
     }
 
     fn insert_nontrans_receipt(
         &self,
+        txn_mode: &WriteTxnMode,
         id: &str,
         sn: u64,
         nontrans: &[Nontransferable],
     ) -> Result<(), RedbError> {
-        self.insert_with_sn_key(NONTRANS_RCTS, id, sn, nontrans)
+        self.insert_with_sn_key(txn_mode, NONTRANS_RCTS, id, sn, nontrans)
     }
 
     fn insert_trans_receipt(
@@ -268,16 +277,17 @@ impl RedbDatabase {
         sn: u64,
         trans: &[Transferable],
     ) -> Result<(), RedbError> {
-        self.insert_with_sn_key(TRANS_RCTS, id, sn, trans)
+        self.insert_with_sn_key(&WriteTxnMode::CreateNew, TRANS_RCTS, id, sn, trans)
     }
 
     fn insert_indexed_signatures(
         &self,
+        txn_mode: &WriteTxnMode,
         identifier: &IdentifierPrefix,
         sn: u64,
         signatures: &[IndexedSignature],
     ) -> Result<(), RedbError> {
-        self.insert_with_sn_key(SIGS, &identifier.to_str(), sn, signatures)
+        self.insert_with_sn_key(txn_mode, SIGS, &identifier.to_str(), sn, signatures)
     }
 
     fn get_nontrans_couplets(
@@ -532,6 +542,31 @@ impl RedbDatabase {
         } else {
             Some(kel)
         }
+    }
+
+    /// Executes a given operation within a transaction context.
+    /// Uses an existing transaction if `WriteTxnMode::UseExisting` is specified.
+    /// Creates and commits a new transaction if `WriteTxnMode::CreateNew` is specified.
+    fn execute_in_transaction<F>(
+        &self,
+        txn_mode: &WriteTxnMode,
+        operation: F,
+    ) -> Result<(), RedbError>
+    where
+        F: FnOnce(&redb::WriteTransaction) -> Result<(), RedbError>,
+    {
+        match *txn_mode {
+            WriteTxnMode::UseExisting(existing_txn) => {
+                operation(existing_txn)?;
+            }
+            WriteTxnMode::CreateNew => {
+                let txn = self.db.begin_write()?;
+                operation(&txn)?;
+                txn.commit()?;
+            }
+        };
+
+        Ok(())
     }
 }
 
