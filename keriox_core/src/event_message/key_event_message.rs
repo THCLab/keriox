@@ -72,12 +72,13 @@ impl EventSemantics for KeriEvent<KeyEvent> {
                 .then_some(())
                 .ok_or(Error::IncorrectDigest)
         };
+        let last_event_digest: SelfAddressingIdentifier = state.last_event_digest.clone().into();
         // Update state.last with serialized current event message.
         match (self.data.get_event_data(), &self.event_type) {
             (EventData::Icp(_), _) | (EventData::Dip(_), _) => {
                 if verify_identifier_binding(self)? {
                     self.data.apply_to(IdentifierState {
-                        last_event_digest: event_digest,
+                        last_event_digest: event_digest.into(),
                         ..state
                     })
                 } else {
@@ -99,9 +100,9 @@ impl EventSemantics for KeriEvent<KeyEvent> {
                     // to the state. It will return EventOutOfOrderError or
                     // EventDuplicateError in that cases.
                     self.data.apply_to(state.clone()).and_then(|next_state| {
-                        if state.last_event_digest.eq(rot.previous_event_hash()) {
+                        if last_event_digest.eq(rot.previous_event_hash()) {
                             Ok(IdentifierState {
-                                last_event_digest: event_digest,
+                                last_event_digest: event_digest.into(),
                                 ..next_state
                             })
                         } else {
@@ -120,9 +121,9 @@ impl EventSemantics for KeriEvent<KeyEvent> {
                         Err(Error::SemanticError(
                             "Applying delegated rotation to non-delegated state.".into(),
                         ))
-                    } else if state.last_event_digest.eq(drt.previous_event_hash()) {
+                    } else if last_event_digest.eq(drt.previous_event_hash()) {
                         Ok(IdentifierState {
-                            last_event_digest: event_digest.clone(),
+                            last_event_digest: event_digest.clone().into(),
                             ..next_state
                         })
                     } else {
@@ -135,9 +136,9 @@ impl EventSemantics for KeriEvent<KeyEvent> {
             (EventData::Ixn(ref inter), _) => {
                 check_event_digest(self)?;
                 self.data.apply_to(state.clone()).and_then(|next_state| {
-                    if state.last_event_digest.eq(inter.previous_event_hash()) {
+                    if last_event_digest.eq(inter.previous_event_hash()) {
                         Ok(IdentifierState {
-                            last_event_digest: event_digest,
+                            last_event_digest: event_digest.into(),
                             ..next_state
                         })
                     } else {

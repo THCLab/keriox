@@ -421,7 +421,7 @@ impl<D: EventDatabase> EventValidator<D> {
             .signed_event_message
             .event_message;
         event_from_db
-            .compare_digest(&ksn.state.last_event_digest)?
+            .compare_digest(&ksn.state.last_event_digest.clone().into())?
             .then_some(())
             .ok_or::<Error>(Error::IncorrectDigest)?;
 

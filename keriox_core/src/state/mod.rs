@@ -1,31 +1,54 @@
 use std::collections::HashSet;
 
 use crate::{
+    database::redb::rkyv_adapter::said_wrapper::SaidValue,
     error::Error,
     event::{
         event_data::EventData,
         sections::{threshold::SignatureThreshold, KeyConfig},
     },
     event_message::EventTypeTag,
-    prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
+    prefix::{
+        BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix,
+    },
 };
-use said::SelfAddressingIdentifier;
 use serde::{Deserialize, Serialize};
 use serde_hex::{Compact, SerHex};
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
+#[derive(
+    Serialize,
+    Deserialize,
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Default,
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+)]
 pub struct LastEstablishmentData {
     #[serde(rename = "s", with = "SerHex::<Compact>")]
     pub(crate) sn: u64,
     #[serde(rename = "d")]
-    pub(crate) digest: SelfAddressingIdentifier,
+    pub(crate) digest: SaidValue,
     #[serde(rename = "br")]
     pub(crate) br: Vec<BasicPrefix>,
     #[serde(rename = "ba")]
     pub(crate) ba: Vec<BasicPrefix>,
 }
 
-#[derive(Default, PartialEq, Debug, Clone, Serialize, Deserialize)]
+#[derive(
+    Default,
+    PartialEq,
+    Debug,
+    Clone,
+    Serialize,
+    Deserialize,
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+)]
 pub struct WitnessConfig {
     #[serde(rename = "bt")]
     pub tally: SignatureThreshold,
@@ -85,7 +108,17 @@ impl WitnessConfig {
 /// Identifier State
 ///
 /// represents the accumulated state after applying events, based on section 13 of the paper
-#[derive(Default, PartialEq, Debug, Clone, Serialize, Deserialize)]
+#[derive(
+    Default,
+    PartialEq,
+    Debug,
+    Clone,
+    Serialize,
+    Deserialize,
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+)]
 pub struct IdentifierState {
     #[serde(rename = "i")]
     pub prefix: IdentifierPrefix,
@@ -94,10 +127,10 @@ pub struct IdentifierState {
     pub sn: u64,
 
     #[serde(rename = "d")]
-    pub last_event_digest: SelfAddressingIdentifier,
+    pub last_event_digest: SaidValue,
 
     #[serde(rename = "p")]
-    pub last_previous: Option<SelfAddressingIdentifier>,
+    pub last_previous: Option<SaidValue>,
 
     #[serde(rename = "et")]
     pub last_event_type: Option<EventTypeTag>,
