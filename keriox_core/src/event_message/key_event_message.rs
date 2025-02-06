@@ -72,7 +72,7 @@ impl EventSemantics for KeriEvent<KeyEvent> {
                 .then_some(())
                 .ok_or(Error::IncorrectDigest)
         };
-        let last_event_digest: SelfAddressingIdentifier = state.last_event_digest.clone().into();
+        let last_event_digest = &state.last_event_digest.said;
         // Update state.last with serialized current event message.
         match (self.data.get_event_data(), &self.event_type) {
             (EventData::Icp(_), _) | (EventData::Dip(_), _) => {
