@@ -159,7 +159,7 @@ impl Identifier {
         Ok(EventSeal::new(
             state.prefix,
             state.sn,
-            state.last_event_digest,
+            state.last_event_digest.said,
         ))
     }
 }
