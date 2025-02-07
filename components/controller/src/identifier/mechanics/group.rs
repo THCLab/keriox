@@ -155,12 +155,13 @@ impl Identifier {
                 )]
             };
 
+            let kc = self.find_state(&self.id)?.current;
+            let index = self.index_in_current_keys(&kc)?;
             let signature = vec![Signature::Transferable(
                 SignerData::LastEstablishment(self.id.clone()),
                 vec![IndexedSignature::new_both_same(
                     exn_signature,
-                    // TODO
-                    0,
+                    index as u16,
                 )],
             )];
             let signer_exn = Message::Op(Op::Exchange(SignedExchange {

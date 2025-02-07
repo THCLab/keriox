@@ -30,7 +30,7 @@ impl MailboxReminder {
 #[derive(Debug)]
 pub enum ActionRequired {
     MultisigRequest(KeriEvent<KeyEvent>, ExchangeMessage),
-    // Contains delegating event and exchange message that will be send to
-    // delegate after delegating event confirmation.
+    /// Contains delegating event and exchange message that will be send to
+    /// delegate after delegating event confirmation.
     DelegationRequest(KeriEvent<KeyEvent>, ExchangeMessage),
 }

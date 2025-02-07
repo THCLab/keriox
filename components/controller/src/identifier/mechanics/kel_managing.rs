@@ -1,6 +1,6 @@
 use keri_core::{
     actor::{event_generator, prelude::SelfAddressingIdentifier},
-    event::{event_data::EventData, sections::seal::Seal, KeyEvent},
+    event::{event_data::EventData, sections::{seal::Seal, KeyConfig}, KeyEvent},
     event_message::{
         cesr_adapter::{parse_event_type, EventType},
         msg::KeriEvent,
@@ -146,18 +146,23 @@ impl Identifier {
         Ok(())
     }
 
+    pub fn index_in_current_keys(&self, key_config: &KeyConfig) -> Result<usize, MechanicsError> {
+        // TODO what if group participant is a group and has more than one
+        // public key?
+        let own_pk = self.known_events.current_public_keys(&self.id)?[0].clone();
+        key_config
+            .public_keys
+            .iter()
+            .position(|pk| pk.eq(&own_pk))
+            .ok_or(MechanicsError::NotGroupParticipantError)
+    }
+
     /// Helper function for getting the position of identifier's public key in
     /// group's current keys list.
     pub(crate) fn get_index(&self, key_event: &KeyEvent) -> Result<usize, MechanicsError> {
         match &key_event.event_data {
             EventData::Icp(icp) => {
-                // TODO what if group participant is a group and has more than one
-                // public key?
-                let own_pk = self.known_events.current_public_keys(&self.id)?[0].clone();
-                icp.key_config
-                    .public_keys
-                    .iter()
-                    .position(|pk| pk.eq(&own_pk))
+                self.index_in_current_keys(&icp.key_config)
             }
             EventData::Rot(rot) => {
                 let own_npk = &self.known_events.next_keys_hashes(&self.id)?[0];
@@ -165,16 +170,10 @@ impl Identifier {
                     .public_keys
                     .iter()
                     .position(|pk| own_npk.verify_binding(pk.to_str().as_bytes()))
+                    .ok_or(MechanicsError::NotGroupParticipantError)
             }
             EventData::Dip(dip) => {
-                // TODO what if group participant is a group and has more than one
-                // public key?
-                let own_pk = self.known_events.current_public_keys(&self.id)?[0].clone();
-                dip.inception_data
-                    .key_config
-                    .public_keys
-                    .iter()
-                    .position(|pk| pk.eq(&own_pk))
+                self.index_in_current_keys(&dip.inception_data.key_config)
             }
             EventData::Drt(drt) => {
                 let own_npk = &self.known_events.next_keys_hashes(&self.id)?[0];
@@ -182,6 +181,7 @@ impl Identifier {
                     .public_keys
                     .iter()
                     .position(|pk| own_npk.verify_binding(pk.to_str().as_bytes()))
+                    .ok_or(MechanicsError::NotGroupParticipantError)
             }
             EventData::Ixn(_ixn) => {
                 let own_pk = self.known_events.current_public_keys(&self.id)?[0].clone();
@@ -189,8 +189,8 @@ impl Identifier {
                     .current_public_keys(&key_event.get_prefix())?
                     .iter()
                     .position(|pk| pk.eq(&own_pk))
+                    .ok_or(MechanicsError::NotGroupParticipantError)
             }
         }
-        .ok_or(MechanicsError::NotGroupParticipantError)
     }
 }

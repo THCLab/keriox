@@ -74,15 +74,15 @@ impl Identifier {
         mb: &MailboxResponse,
         group_id: &IdentifierPrefix,
     ) -> Result<Vec<ActionRequired>, MechanicsError> {
-        for rct in &mb.receipt {
-            self.process_receipt(rct)
-                .map_err(ResponseProcessingError::Receipts)?;
-        }
+
 
         for event in mb.multisig.iter() {
             self.process_group_multisig(event).await?;
         }
-
+        for rct in &mb.receipt {
+            self.process_receipt(rct)
+                .map_err(ResponseProcessingError::Receipts)?;
+        }
         futures::stream::iter(&mb.delegate)
             .then(|del_event| self.process_group_delegate(del_event, group_id))
             .try_filter_map(|del| async move { Ok(del) })
@@ -190,7 +190,7 @@ impl Identifier {
 
     /// Process event from group delegate mailbox. Creates group delegating
     /// event and send it to group multisig mailbox for other group
-    /// participants. If signing is required to finish the process it resturns
+    /// participants. If signing is required to finish the process it returns
     /// proper notification.
     async fn process_group_delegate(
         &self,

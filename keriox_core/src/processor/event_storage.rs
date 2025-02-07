@@ -250,7 +250,6 @@ impl<D: EventDatabase> EventStorage<D> {
                 state = state
                     .apply(&event.signed_event_message.event_message.data)
                     .unwrap();
-                // TODO: is this event.event.event stuff too ugly? =)
                 last_est = match event
                     .signed_event_message
                     .event_message
