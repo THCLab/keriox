@@ -79,15 +79,18 @@ impl Identifier {
         for event in mb.multisig.iter() {
             self.process_group_multisig(event).await?;
         }
+        
+        let action_required = futures::stream::iter(&mb.delegate)
+            .then(|del_event| self.process_group_delegate(del_event, group_id))
+            .try_filter_map(|del| async move { Ok(del) })
+            .try_collect::<Vec<_>>()
+            .await;
+
         for rct in &mb.receipt {
             self.process_receipt(rct)
                 .map_err(ResponseProcessingError::Receipts)?;
         }
-        futures::stream::iter(&mb.delegate)
-            .then(|del_event| self.process_group_delegate(del_event, group_id))
-            .try_filter_map(|del| async move { Ok(del) })
-            .try_collect::<Vec<_>>()
-            .await
+        action_required
     }
 
     /// Returns exn message that contains signed multisig event and will be
@@ -231,6 +234,7 @@ impl Identifier {
 
                 let ixn = self.known_events.anchor_with_seal(group_id, &[seal])?;
                 let exn = event_generator::exchange(group_id, &ixn, ForwardTopic::Multisig);
+                // let (delegating_event, exn) = self.delegate(&event_to_confirm.event_message)?;
                 Ok(Some(ActionRequired::DelegationRequest(ixn, exn)))
             }
             _ => todo!(),

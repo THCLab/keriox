@@ -26,7 +26,7 @@ pub mod tel;
 pub struct Identifier {
     id: IdentifierPrefix,
     registry_id: Option<IdentifierPrefix>,
-    pub(crate) known_events: Arc<KnownEvents>,
+    pub known_events: Arc<KnownEvents>,
     communication: Arc<Communication>,
     pub to_notify: Vec<SignedEventMessage>,
     query_cache: Arc<QueryCache>,
