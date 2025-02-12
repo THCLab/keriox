@@ -1,6 +1,4 @@
-use keri_controller::{
-    error::ControllerError, BasicPrefix, KeyManager, SelfSigningPrefix,
-};
+use keri_controller::{error::ControllerError, BasicPrefix, KeyManager, SelfSigningPrefix};
 use keri_tests::{settings::InfrastructureContext, setup_identifier};
 use tempfile::Builder;
 use test_context::test_context;
@@ -14,12 +12,8 @@ async fn test_witness_rotation(ctx: &mut InfrastructureContext) -> Result<(), Co
     let (_second_witness_id, second_witness_oobi) = ctx.second_witness_data();
 
     // Setup identifier with `witness1` as witness
-    let (mut identifier, mut controller_keypair, _) = setup_identifier(
-        root0.path(),
-        vec![first_witness_oobi.clone()],
-        None, None,
-    )
-    .await;
+    let (mut identifier, mut controller_keypair, _) =
+        setup_identifier(root0.path(), vec![first_witness_oobi.clone()], None, None).await;
 
     let state = identifier.find_state(identifier.id())?;
     assert_eq!(state.sn, 0);

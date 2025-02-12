@@ -1,6 +1,10 @@
 use keri_core::{
     actor::{event_generator, prelude::SelfAddressingIdentifier},
-    event::{event_data::EventData, sections::{seal::Seal, KeyConfig}, KeyEvent},
+    event::{
+        event_data::EventData,
+        sections::{seal::Seal, KeyConfig},
+        KeyEvent,
+    },
     event_message::{
         cesr_adapter::{parse_event_type, EventType},
         msg::KeriEvent,
@@ -161,9 +165,7 @@ impl Identifier {
     /// group's current keys list.
     pub(crate) fn get_index(&self, key_event: &KeyEvent) -> Result<usize, MechanicsError> {
         match &key_event.event_data {
-            EventData::Icp(icp) => {
-                self.index_in_current_keys(&icp.key_config)
-            }
+            EventData::Icp(icp) => self.index_in_current_keys(&icp.key_config),
             EventData::Rot(rot) => {
                 let own_npk = &self.known_events.next_keys_hashes(&self.id)?[0];
                 rot.key_config
@@ -172,9 +174,7 @@ impl Identifier {
                     .position(|pk| own_npk.verify_binding(pk.to_str().as_bytes()))
                     .ok_or(MechanicsError::NotGroupParticipantError)
             }
-            EventData::Dip(dip) => {
-                self.index_in_current_keys(&dip.inception_data.key_config)
-            }
+            EventData::Dip(dip) => self.index_in_current_keys(&dip.inception_data.key_config),
             EventData::Drt(drt) => {
                 let own_npk = &self.known_events.next_keys_hashes(&self.id)?[0];
                 drt.key_config

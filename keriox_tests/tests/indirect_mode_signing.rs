@@ -146,7 +146,9 @@ async fn indirect_mode_signing(ctx: &mut InfrastructureContext) -> Result<(), Co
     let (watcher_id, watcher_oobi) = ctx.watcher_data();
 
     // Resolve watcher oobi
-    verifying_identifier.resolve_oobi(&Oobi::Location(watcher_oobi)).await?;
+    verifying_identifier
+        .resolve_oobi(&Oobi::Location(watcher_oobi))
+        .await?;
 
     // Generate and sign event, that will be sent to watcher, so it knows to act
     // as verifier's watcher.

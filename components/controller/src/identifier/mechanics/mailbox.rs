@@ -74,12 +74,10 @@ impl Identifier {
         mb: &MailboxResponse,
         group_id: &IdentifierPrefix,
     ) -> Result<Vec<ActionRequired>, MechanicsError> {
-
-
         for event in mb.multisig.iter() {
             self.process_group_multisig(event).await?;
         }
-        
+
         let action_required = futures::stream::iter(&mb.delegate)
             .then(|del_event| self.process_group_delegate(del_event, group_id))
             .try_filter_map(|del| async move { Ok(del) })

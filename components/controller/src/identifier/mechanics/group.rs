@@ -159,10 +159,7 @@ impl Identifier {
             let index = self.index_in_current_keys(&kc)?;
             let signature = vec![Signature::Transferable(
                 SignerData::LastEstablishment(self.id.clone()),
-                vec![IndexedSignature::new_both_same(
-                    exn_signature,
-                    index as u16,
-                )],
+                vec![IndexedSignature::new_both_same(exn_signature, index as u16)],
             )];
             let signer_exn = Message::Op(Op::Exchange(SignedExchange {
                 exchange_message: exn,

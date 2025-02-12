@@ -1,6 +1,10 @@
 use std::sync::Arc;
 
-use keri_controller::{config::ControllerConfig, controller::Controller, error::ControllerError, identifier::Identifier, mailbox_updating::ActionRequired, BasicPrefix, CryptoBox, KeyManager, SelfSigningPrefix};
+use keri_controller::{
+    config::ControllerConfig, controller::Controller, error::ControllerError,
+    mailbox_updating::ActionRequired, BasicPrefix, CryptoBox, KeyManager,
+    SelfSigningPrefix,
+};
 use keri_core::{actor::prelude::Message, prefix::IndexedSignature};
 use keri_tests::settings::InfrastructureContext;
 use tempfile::Builder;
@@ -8,26 +12,33 @@ use test_context::test_context;
 
 #[test_context(InfrastructureContext)]
 #[async_std::test]
-async fn single_delegator_single_delegatee(ctx: &mut InfrastructureContext) -> Result<(), ControllerError> {
-	let (first_witness_id, first_witness_oobi) = ctx.first_witness_data();
+async fn single_delegator_single_delegatee(
+    ctx: &mut InfrastructureContext,
+) -> Result<(), ControllerError> {
+    let (first_witness_id, first_witness_oobi) = ctx.first_witness_data();
 
-	// Setup delegator identifier
+    // Setup delegator identifier
     let delegator_root = Builder::new().prefix("test-db").tempdir().unwrap();
-	let delegator_keypair = CryptoBox::new()?;
+    let delegator_keypair = CryptoBox::new()?;
 
     let delegator_pk = BasicPrefix::Ed25519(delegator_keypair.public_key());
     let delegator_npk = BasicPrefix::Ed25519(delegator_keypair.next_public_key());
 
     let delegatee_root = Builder::new().prefix("test-db2").tempdir().unwrap();
-	
-	// Setup delegator identifier
+
+    // Setup delegator identifier
     let delegator_controller = Arc::new(Controller::new(ControllerConfig {
         db_path: delegator_root.path().to_owned(),
         ..Default::default()
     })?);
 
-	 let icp_event = delegator_controller
-        .incept(vec![delegator_pk], vec![delegator_npk], vec![first_witness_oobi.clone()], 1)
+    let icp_event = delegator_controller
+        .incept(
+            vec![delegator_pk],
+            vec![delegator_npk],
+            vec![first_witness_oobi.clone()],
+            1,
+        )
         .await?;
     let signature = SelfSigningPrefix::Ed25519Sha512(delegator_keypair.sign(icp_event.as_bytes())?);
 
@@ -47,8 +58,8 @@ async fn single_delegator_single_delegatee(ctx: &mut InfrastructureContext) -> R
     }
     println!("Delegator: {}", &delegator_identifier.id());
 
-	// Setup delegatee
-	// TODO why we need to setup identifier before incept group to create delegated identifier?
+    // Setup delegatee
+    // TODO why we need to setup identifier before incept group to create delegated identifier?
     let delegatee_controller = Arc::new(Controller::new(ControllerConfig {
         db_path: delegatee_root.path().to_owned(),
         ..Default::default()
@@ -69,8 +80,10 @@ async fn single_delegator_single_delegatee(ctx: &mut InfrastructureContext) -> R
     temporary_delegatee_identifier.notify_witnesses().await?;
 
     // Quering mailbox to get receipts
-    let query = temporary_delegatee_identifier
-        .query_mailbox(temporary_delegatee_identifier.id(), &[first_witness_id.clone()])?;
+    let query = temporary_delegatee_identifier.query_mailbox(
+        temporary_delegatee_identifier.id(),
+        &[first_witness_id.clone()],
+    )?;
 
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(delegatee_keypair.sign(&qry.encode()?)?);
@@ -79,7 +92,7 @@ async fn single_delegator_single_delegatee(ctx: &mut InfrastructureContext) -> R
             .await?;
     }
 
-	// Generate delegated inception and exn, that is provide delegation request to delegator.
+    // Generate delegated inception and exn, that is provide delegation request to delegator.
     let (delegated_inception, exn_messages) = temporary_delegatee_identifier.incept_group(
         vec![],
         1,
@@ -105,10 +118,10 @@ async fn single_delegator_single_delegatee(ctx: &mut InfrastructureContext) -> R
     // Event is not yet accepted. Missing delegating event.
     assert!(kel.is_none());
 
-
-	// Delegation accept process
+    // Delegation accept process
     // Delegator asks about his mailbox to get delegated event.
-    let query = delegator_identifier.query_mailbox(delegator_identifier.id(), &[first_witness_id.clone()])?;
+    let query = delegator_identifier
+        .query_mailbox(delegator_identifier.id(), &[first_witness_id.clone()])?;
 
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(delegator_keypair.sign(&qry.encode()?)?);
@@ -135,7 +148,8 @@ async fn single_delegator_single_delegatee(ctx: &mut InfrastructureContext) -> R
                 delegator_identifier.notify_witnesses().await?;
 
                 // Query for receipts
-                let query = delegator_identifier.query_mailbox(delegator_identifier.id(), &[first_witness_id.clone()])?;
+                let query = delegator_identifier
+                    .query_mailbox(delegator_identifier.id(), &[first_witness_id.clone()])?;
 
                 for qry in query {
                     let signature =
@@ -152,7 +166,8 @@ async fn single_delegator_single_delegatee(ctx: &mut InfrastructureContext) -> R
                     .await?;
 
                 // ixn was accepted
-                let delegators_state = delegator_controller.find_state(delegator_identifier.id())?;
+                let delegators_state =
+                    delegator_controller.find_state(delegator_identifier.id())?;
                 assert_eq!(delegators_state.sn, 1);
             }
         };
@@ -171,7 +186,8 @@ async fn single_delegator_single_delegatee(ctx: &mut InfrastructureContext) -> R
         .save(&Message::Notice(delegators_kel[1].clone()))?; // receipt
 
     // Ask about delegated identifier mailbox
-    let query = temporary_delegatee_identifier.query_mailbox(&delegatee_id, &[first_witness_id.clone()])?;
+    let query =
+        temporary_delegatee_identifier.query_mailbox(&delegatee_id, &[first_witness_id.clone()])?;
 
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(delegatee_keypair.sign(&qry.encode()?)?);
@@ -190,7 +206,8 @@ async fn single_delegator_single_delegatee(ctx: &mut InfrastructureContext) -> R
     assert!(state.is_err());
 
     // Get mailbox for receipts.
-    let query = temporary_delegatee_identifier.query_mailbox(&delegatee_id, &[first_witness_id.clone()])?;
+    let query =
+        temporary_delegatee_identifier.query_mailbox(&delegatee_id, &[first_witness_id.clone()])?;
 
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(delegatee_keypair.sign(&qry.encode()?)?);
@@ -204,5 +221,5 @@ async fn single_delegator_single_delegatee(ctx: &mut InfrastructureContext) -> R
     let state = temporary_delegatee_identifier.find_state(&delegatee_id)?;
     assert_eq!(state.sn, 0);
 
-	Ok(())
+    Ok(())
 }

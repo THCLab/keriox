@@ -36,7 +36,6 @@ impl AsyncTestContext for InfrastructureContext {
 
         async_std::task::spawn(first_witness.listen_http((Ipv4Addr::UNSPECIFIED, 3232)));
 
-
         let second_witness = {
             let wit_root = Builder::new().prefix("wit-db").tempdir().unwrap();
             Arc::new(
@@ -88,11 +87,10 @@ impl AsyncTestContext for InfrastructureContext {
         }
     }
 
-    async fn teardown(self) {
-    }
+    async fn teardown(self) {}
 }
 
-impl  InfrastructureContext {
+impl InfrastructureContext {
     pub fn first_witness_data(&self) -> (BasicPrefix, LocationScheme) {
         if let IdentifierPrefix::Basic(bp) = &self.first_witness_oobi.eid {
             (bp.clone(), self.first_witness_oobi.clone())
