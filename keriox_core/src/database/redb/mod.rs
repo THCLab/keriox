@@ -733,6 +733,16 @@ fn test_retrieve_kel() {
     assert_eq!(rot.signed_event_message.signatures.len(), 3);
 
     assert_eq!(part_of_kel_events.next(), None);
+
+    let key_state = db.get_key_state(&first_id).unwrap();
+    assert_eq!(key_state.sn, 2);
+    assert_eq!(
+        key_state.last_event_digest,
+        "EL6Dpm72KXayaUHYvVHlhPplg69fBvRt1P3YzuOGVpmz"
+            .parse::<SelfAddressingIdentifier>()
+            .unwrap()
+            .into()
+    );
 }
 
 #[test]
