@@ -90,11 +90,9 @@ impl<D: EventDatabase> EventStorage<D> {
     ) -> Result<Option<Vec<Notice>>, Error> {
         let events = self
             .events_db
-            .get_kel_finalized_events(QueryParameters::All { id });
-        Ok(match events {
-            None => None,
-            Some(events) => self.collect_with_receipts(events),
-        })
+            .get_kel_finalized_events(QueryParameters::All { id })
+            .map(|events| events.map(|e| Notice::Event(e.signed_event_message)).collect());
+        Ok(events)
     }
 
     pub fn get_kel_messages_with_receipts_range(

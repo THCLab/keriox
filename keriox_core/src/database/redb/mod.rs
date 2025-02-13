@@ -299,6 +299,25 @@ impl RedbDatabase {
         nontrans.map(|el| el.into_iter())
     }
 
+    fn get_nontrans_couplets_by_key(
+        &self,
+        key: (&str, u64),
+    ) -> Result<impl Iterator<Item = Nontransferable>, RedbError> {
+        let from_db_iterator = {
+            let read_txn = self.db.begin_read()?;
+            let table = read_txn.open_multimap_table(NONTRANS_RCTS)?;
+            table.get(key)
+        }?;
+        let nontrans = from_db_iterator
+            .map(|sig| match sig {
+                Ok(sig) => Ok(rkyv_adapter::deserialize_nontransferable(sig.value()).unwrap()),
+                Err(e) => Err(RedbError::from(e)),
+            })
+            .collect::<Result<Vec<_>, _>>();
+        nontrans.map(|el| el.into_iter())
+    }
+
+
     fn get_nontrans_receipts_range(
         &self,
         id: &str,
@@ -493,13 +512,14 @@ impl RedbDatabase {
                 .map(|entry| {
                     let (key, value) = entry.unwrap();
                     let signatures = self.get_signatures(key.value()).unwrap().unwrap().collect();
+                    let receipts = self.get_nontrans_couplets_by_key(key.value()).unwrap().collect();
 
                     let event = self
                         .get_event_by_serialized_key(value.value())
                         .unwrap()
                         .unwrap();
                     TimestampedSignedEventMessage::new(SignedEventMessage::new(
-                        &event, signatures, None, None,
+                        &event, signatures, Some(receipts), None,
                     ))
                 })
                 .collect(),
