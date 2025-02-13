@@ -335,9 +335,6 @@ async fn multi_delegator_multi_delegatee(
         .known_events
         .process(&Message::Notice(delegators_kel[0].clone()))?; // icp
 
-    delegatee_identifier1
-        .known_events
-        .process(&Message::Notice(delegators_kel[1].clone()))?; // receipt
     let state = delegatee_identifier1.find_state(&delegator_group_id)?;
     assert_eq!(state.sn, 0);
 
@@ -345,9 +342,6 @@ async fn multi_delegator_multi_delegatee(
         .known_events
         .process(&Message::Notice(delegators_kel[0].clone()))?; // icp
 
-    delegatee_identifier2
-        .known_events
-        .process(&Message::Notice(delegators_kel[1].clone()))?; // receipt
     let state = delegatee_identifier2.find_state(&delegator_group_id)?;
     assert_eq!(state.sn, 0);
 

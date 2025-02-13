@@ -1,13 +1,10 @@
+use futures::future::join_all;
 use keri_core::{
     actor::prelude::SelfAddressingIdentifier,
     database::EventDatabase,
-    error::Error,
-    event_message::{
-        signature::Nontransferable,
-        signed_event_message::{Message, Notice, SignedNontransferableReceipt},
-    },
+    event_message::signed_event_message::{Message, Notice},
     oobi::Scheme,
-    prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+    prefix::IdentifierPrefix,
 };
 
 use crate::{communication::SendingError, identifier::Identifier};
@@ -26,101 +23,29 @@ impl Identifier {
     pub async fn broadcast_receipts(
         &mut self,
         dest_wit_ids: &[IdentifierPrefix],
-    ) -> Result<usize, BroadcastingError> {
-        let receipts = self
-            .known_events
-            .storage
-            .events_db
-            .get_receipts_nt(keri_core::database::QueryParameters::All { id: &self.id })
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>();
-        let mut n = 0;
+    ) -> Result<(), BroadcastingError> {
+        for witness in dest_wit_ids {
+            let sn = self.query_cache.load_published_receipts_sn(witness).unwrap();
+            let receipts_to_publish = self.known_events.storage.events_db.get_receipts_nt(
+                keri_core::database::QueryParameters::Range { id: self.id.clone(), start: sn as u64, limit: 10 }
+            ).unwrap();
 
-        for rct in receipts {
-            let rct_digest = rct.body.receipted_event_digest.clone();
-            let couplets = self
-                .couplets(&rct)
-                .map_err(|_e| BroadcastingError::MissingEvent {
-                    digest: rct_digest.clone(),
-                })?;
-
-            for dest_wit_id in dest_wit_ids {
-                for (id, sig) in &couplets {
-                    // Don't send receipt to witness who created it.
-                    // TODO: this only works if the target witness ID is a BasicPrefix.
-                    if let IdentifierPrefix::Basic(dest_wit_id) = dest_wit_id {
-                        if id.eq(dest_wit_id) {
-                            continue;
-                        }
-                    }
-
-                    // Don't send the same receipt twice.
-                    if {
-                        self.broadcasted_rcts.contains(&(
-                            rct_digest.clone(),
-                            id.clone(),
-                            dest_wit_id.clone(),
-                        ))
-                    } {
-                        continue;
-                    }
-                    let rct_to_send = SignedNontransferableReceipt {
-                        body: rct.body.clone(),
-                        signatures: vec![Nontransferable::Couplet(vec![(id.clone(), sig.clone())])],
-                    };
-                    self.communication
+            let mut max_sn = 0;
+            let receipts_futures = receipts_to_publish.map(|rct| {
+                max_sn = rct.body.sn.max(max_sn);
+                self.communication
                         .send_message_to(
-                            dest_wit_id.clone(),
+                            witness.clone(),
                             Scheme::Http,
-                            Message::Notice(Notice::NontransferableRct(rct_to_send.clone())),
+                            Message::Notice(Notice::NontransferableRct(rct.clone())),
                         )
-                        .await?;
-
-                    // Remember event digest and witness ID to avoid sending the same receipt twice.
-                    self.broadcasted_rcts.insert((
-                        rct_digest.clone(),
-                        id.clone(),
-                        dest_wit_id.clone(),
-                    ));
-
-                    n += 1;
-                }
-            }
+                        
+            });
+            join_all(receipts_futures).await;
+            self.query_cache.update_last_published_receipt(witness, max_sn).unwrap();
         }
 
-        Ok(n)
-    }
-
-    /// Get IDs of witnesses who signed given receipt.
-    fn couplets(
-        &self,
-        rct: &SignedNontransferableReceipt,
-    ) -> Result<Vec<(BasicPrefix, SelfSigningPrefix)>, Error> {
-        let mut wit_ids = Vec::new();
-        for sig in &rct.signatures {
-            match sig {
-                Nontransferable::Indexed(sigs) => {
-                    for sig in sigs {
-                        let wits = self.known_events.storage.get_witnesses_at_event(
-                            rct.body.sn,
-                            &self.id,
-                            &rct.body.receipted_event_digest,
-                        )?;
-                        wit_ids.push((
-                            wits[sig.index.current() as usize].clone(),
-                            sig.signature.clone(),
-                        ));
-                    }
-                }
-                Nontransferable::Couplet(sigs) => {
-                    for (wit_id, sig) in sigs {
-                        wit_ids.push((wit_id.clone(), sig.clone()));
-                    }
-                }
-            }
-        }
-        Ok(wit_ids)
+        Ok(())
     }
 }
 
@@ -187,11 +112,6 @@ mod test {
             url: Url::parse("http://witness2/").unwrap(),
         };
 
-        let wit_ids = [
-            IdentifierPrefix::Basic(wit1_id.clone()),
-            IdentifierPrefix::Basic(wit2_id.clone()),
-        ];
-
         let transport = {
             let mut actors: TestActorMap = HashMap::new();
             actors.insert((Host::Domain("witness1".to_string()), 80), witness1.clone());
@@ -237,22 +157,9 @@ mod test {
         assert_eq!(identifier.notify_witnesses().await?, 0);
         assert!(matches!(
             witness1.witness_data.event_storage.get_kel_messages_with_receipts_all(&identifier.id)?.unwrap().as_slice(),
-            [Notice::Event(evt), Notice::NontransferableRct(rct)]
+            [Notice::Event(evt)]
             if matches!(evt.event_message.data.event_data, EventData::Icp(_))
-                && matches!(rct.signatures.len(), 2)
-        ));
-
-        // Force broadcast again to see if witness will accept duplicate signatures
-        identifier.broadcasted_rcts.clear();
-
-        assert_eq!(identifier.broadcast_receipts(&wit_ids).await.unwrap(), 2);
-        assert_eq!(identifier.broadcast_receipts(&wit_ids).await.unwrap(), 0);
-
-        assert!(matches!(
-            witness1.witness_data.event_storage.get_kel_messages_with_receipts_all(&identifier.id)?.unwrap().as_slice(),
-            [Notice::Event(evt), Notice::NontransferableRct(rct)]
-                if matches!(evt.event_message.data.event_data, EventData::Icp(_))
-                && matches!(rct.signatures.len(), 2)
+                && matches!(evt.witness_receipts.as_ref().unwrap().len(), 2)
         ));
 
         Ok(())

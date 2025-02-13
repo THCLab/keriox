@@ -507,8 +507,7 @@ impl RedbDatabase {
             }
         };
 
-        Some(
-            digests
+        let kel = digests
                 .map(|entry| {
                     let (key, value) = entry.unwrap();
                     let signatures = self.get_signatures(key.value()).unwrap().unwrap().collect();
@@ -522,8 +521,12 @@ impl RedbDatabase {
                         &event, signatures, Some(receipts), None,
                     ))
                 })
-                .collect(),
-        )
+                .collect::<Vec<_>>();
+        if kel.is_empty() {
+            None
+        } else {
+            Some(kel)
+        }
     }
 }
 

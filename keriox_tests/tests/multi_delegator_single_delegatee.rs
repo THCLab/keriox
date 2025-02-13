@@ -233,9 +233,6 @@ async fn multi_delegator_single_delegatee(
         .known_events
         .process(&Message::Notice(delegators_kel[0].clone()))?; // icp
 
-    temporary_delegatee_identifier
-        .known_events
-        .process(&Message::Notice(delegators_kel[1].clone()))?; // receipt
     let state = temporary_delegatee_identifier.find_state(&delegator_group_id)?;
     assert_eq!(state.sn, 0);
     // Ask about delegated identifier mailbox

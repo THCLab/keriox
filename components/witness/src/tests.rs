@@ -1446,16 +1446,21 @@ pub fn test_delegating_multisig() -> Result<(), ActorError> {
         .clone();
 
     // leader should collect signatures and receipts of ixn event
-    let ixn_to_forward = if let Notice::NontransferableRct(rct) = fully_witnessed_ixn[3].clone() {
-        let couplets = rct.signatures;
-        // there is only one witness so index will be 0
-        SignedEventMessage {
-            witness_receipts: Some(couplets),
-            ..fully_signed_ixn.clone()
-        }
+    let ixn_to_forward = if let Notice::Event(event) = fully_witnessed_ixn[1].clone() {
+        event
     } else {
         unreachable!()
     };
+    // let ixn_to_forward = if let Notice::NontransferableRct(rct) = fully_witnessed_ixn[2].clone() {
+    //     let couplets = rct.signatures;
+    //     // there is only one witness so index will be 0
+    //     SignedEventMessage {
+    //         witness_receipts: Some(couplets),
+    //         ..fully_signed_ixn.clone()
+    //     }
+    // } else {
+    //     unreachable!()
+    // };
 
     let exn_to_child = delegator_1.create_forward_message(
         &delegated_child_id,
