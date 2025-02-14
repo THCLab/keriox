@@ -2,8 +2,7 @@ use std::sync::Arc;
 
 use keri_controller::{
     config::ControllerConfig, controller::Controller, error::ControllerError,
-    mailbox_updating::ActionRequired, BasicPrefix, CryptoBox, KeyManager,
-    SelfSigningPrefix,
+    mailbox_updating::ActionRequired, BasicPrefix, CryptoBox, KeyManager, SelfSigningPrefix,
 };
 use keri_core::{actor::prelude::Message, prefix::IndexedSignature};
 use keri_tests::settings::InfrastructureContext;

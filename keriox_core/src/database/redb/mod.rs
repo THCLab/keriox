@@ -317,7 +317,6 @@ impl RedbDatabase {
         nontrans.map(|el| el.into_iter())
     }
 
-
     fn get_nontrans_receipts_range(
         &self,
         id: &str,
@@ -508,20 +507,26 @@ impl RedbDatabase {
         };
 
         let kel = digests
-                .map(|entry| {
-                    let (key, value) = entry.unwrap();
-                    let signatures = self.get_signatures(key.value()).unwrap().unwrap().collect();
-                    let receipts = self.get_nontrans_couplets_by_key(key.value()).unwrap().collect();
+            .map(|entry| {
+                let (key, value) = entry.unwrap();
+                let signatures = self.get_signatures(key.value()).unwrap().unwrap().collect();
+                let receipts = self
+                    .get_nontrans_couplets_by_key(key.value())
+                    .unwrap()
+                    .collect();
 
-                    let event = self
-                        .get_event_by_serialized_key(value.value())
-                        .unwrap()
-                        .unwrap();
-                    TimestampedSignedEventMessage::new(SignedEventMessage::new(
-                        &event, signatures, Some(receipts), None,
-                    ))
-                })
-                .collect::<Vec<_>>();
+                let event = self
+                    .get_event_by_serialized_key(value.value())
+                    .unwrap()
+                    .unwrap();
+                TimestampedSignedEventMessage::new(SignedEventMessage::new(
+                    &event,
+                    signatures,
+                    Some(receipts),
+                    None,
+                ))
+            })
+            .collect::<Vec<_>>();
         if kel.is_empty() {
             None
         } else {

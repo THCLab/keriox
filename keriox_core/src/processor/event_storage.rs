@@ -91,7 +91,11 @@ impl<D: EventDatabase> EventStorage<D> {
         let events = self
             .events_db
             .get_kel_finalized_events(QueryParameters::All { id })
-            .map(|events| events.map(|e| Notice::Event(e.signed_event_message)).collect());
+            .map(|events| {
+                events
+                    .map(|e| Notice::Event(e.signed_event_message))
+                    .collect()
+            });
         Ok(events)
     }
 

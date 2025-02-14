@@ -15,6 +15,8 @@ pub enum BroadcastingError {
     SendingError(#[from] SendingError),
     #[error("There's no event of digest: {digest}")]
     MissingEvent { digest: SelfAddressingIdentifier },
+    #[error("Cache saving error")]
+    CacheSavingError,
 }
 
 impl Identifier {
@@ -25,24 +27,33 @@ impl Identifier {
         dest_wit_ids: &[IdentifierPrefix],
     ) -> Result<(), BroadcastingError> {
         for witness in dest_wit_ids {
-            let sn = self.query_cache.load_published_receipts_sn(witness).unwrap();
+            let sn = self
+                .query_cache
+                .load_published_receipts_sn(witness)
+                .map_err(|_| BroadcastingError::CacheSavingError)?;
             let receipts_to_publish = self.known_events.storage.events_db.get_receipts_nt(
-                keri_core::database::QueryParameters::Range { id: self.id.clone(), start: sn as u64, limit: 10 }
-            ).unwrap();
+                keri_core::database::QueryParameters::Range {
+                    id: self.id.clone(),
+                    start: sn as u64,
+                    limit: 10,
+                },
+            );
 
-            let mut max_sn = 0;
-            let receipts_futures = receipts_to_publish.map(|rct| {
-                max_sn = rct.body.sn.max(max_sn);
-                self.communication
-                        .send_message_to(
-                            witness.clone(),
-                            Scheme::Http,
-                            Message::Notice(Notice::NontransferableRct(rct.clone())),
-                        )
-                        
-            });
-            join_all(receipts_futures).await;
-            self.query_cache.update_last_published_receipt(witness, max_sn).unwrap();
+            if let Some(receipts_to_publish) = receipts_to_publish {
+                let mut max_sn = 0;
+                let receipts_futures = receipts_to_publish.map(|rct| {
+                    max_sn = rct.body.sn.max(max_sn);
+                    self.communication.send_message_to(
+                        witness.clone(),
+                        Scheme::Http,
+                        Message::Notice(Notice::NontransferableRct(rct.clone())),
+                    )
+                });
+                join_all(receipts_futures).await;
+                self.query_cache
+                    .update_last_published_receipt(witness, max_sn)
+                    .unwrap();
+            }
         }
 
         Ok(())
@@ -144,6 +155,12 @@ mod test {
         let mut identifier = controller.finalize_incept(icp_event.as_bytes(), &signature)?;
 
         assert_eq!(identifier.notify_witnesses().await.unwrap(), 1);
+        assert!(matches!(
+            witness1.witness_data.event_storage.get_kel_messages_with_receipts_all(&identifier.id)?.unwrap().as_slice(),
+            [Notice::Event(evt)]
+            if matches!(evt.event_message.data.event_data, EventData::Icp(_))
+                && matches!(evt.witness_receipts.as_ref().unwrap().len(), 1)
+        ));
 
         // Querying mailbox to get receipts
         for qry in identifier.query_mailbox(&identifier.id, &[wit1_id.clone(), wit2_id.clone()])? {
@@ -155,6 +172,7 @@ mod test {
         }
 
         assert_eq!(identifier.notify_witnesses().await?, 0);
+        // Check if receipts was broadcasted
         assert!(matches!(
             witness1.witness_data.event_storage.get_kel_messages_with_receipts_all(&identifier.id)?.unwrap().as_slice(),
             [Notice::Event(evt)]

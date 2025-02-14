@@ -198,7 +198,7 @@ impl IdentifierCache {
             connection: conn,
             own_table: own_table_name,
             groups_table: group_table_name,
-            receipt_table: receipts_table_name
+            receipt_table: receipts_table_name,
         })
     }
 
@@ -250,14 +250,10 @@ impl IdentifierCache {
          WHERE identifier = ?1",
                 self.receipt_table
             ),
-            params![
-                key.to_string(),
-                sn,
-            ],
+            params![key.to_string(), sn,],
         )?;
         Ok(())
     }
-
 
     pub fn load_published_receipts_sn(
         &self,
@@ -278,7 +274,6 @@ impl IdentifierCache {
             Ok(0)
         }
     }
-
 
     pub fn last_asked_index(
         &self,
