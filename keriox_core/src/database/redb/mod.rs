@@ -1,3 +1,4 @@
+pub(crate) mod loging;
 pub(crate) mod rkyv_adapter;
 
 /// Kel storage. (identifier, sn) -> event digest
@@ -10,31 +11,10 @@ const KELS: TableDefinition<(&str, u64), &[u8]> = TableDefinition::new("kels");
 /// as events are processed.
 const KEY_STATES: TableDefinition<&str, &[u8]> = TableDefinition::new("key_states");
 
-/// Events store. (event digest) -> key event
-/// The `EVENTS` table directly stores the event data, which other tables reference
-/// by its digest.
-const EVENTS: TableDefinition<&[u8], &[u8]> = TableDefinition::new("events");
+use std::{path::Path, sync::Arc, u64};
 
-/// Signatures storage. (identifier, sn) -> signature
-/// The `SIGS` table links an identifier and sequence number to one or more
-/// signatures.
-const SIGS: MultimapTableDefinition<&[u8], &[u8]> = MultimapTableDefinition::new("signatures");
-
-/// Nontransferable receipts storage. (identifier, sn) -> signature couplet (one or more)
-const NONTRANS_RCTS: MultimapTableDefinition<&[u8], &[u8]> =
-    MultimapTableDefinition::new("nontrans_receipts");
-
-/// Nontransferable receipts storage. (identifier, sn) -> transferable receipt (one or more)
-const TRANS_RCTS: MultimapTableDefinition<&[u8], &[u8]> =
-    MultimapTableDefinition::new("trans_receipts");
-
-use std::{path::Path, u64};
-
-use redb::{Database, MultimapTableDefinition, ReadableTable, TableDefinition};
-use rkyv::{
-    api::high::HighSerializer, rancor::Failure, ser::allocator::ArenaHandle, util::AlignedVec,
-};
-use rkyv_adapter::deserialize_indexed_signatures;
+use loging::LogDatabase;
+use redb::{Database, ReadableTable, TableDefinition};
 use said::{sad::SerializationFormats, SelfAddressingIdentifier};
 
 use crate::{
@@ -90,32 +70,29 @@ pub enum KeyError {
 }
 
 /// Represents the mode for executing database transactions.
-enum WriteTxnMode<'a> {
+pub(crate) enum WriteTxnMode<'a> {
     /// Initiates a new transaction that is committed after operations are executed.
     CreateNew,
     /// Utilizes an already active transaction for operations.
     UseExisting(&'a redb::WriteTransaction),
 }
-
 pub struct RedbDatabase {
-    db: Database,
+    db: Arc<Database>,
+    log_db: LogDatabase,
 }
 
 impl RedbDatabase {
     pub fn new(db_path: &Path) -> Result<Self, RedbError> {
-        let db = Database::create(db_path)?;
+        let db = Arc::new(Database::create(db_path)?);
+        let log_db = LogDatabase::new(db.clone())?;
         // Create tables
         let write_txn = db.begin_write()?;
         {
-            write_txn.open_table(EVENTS)?;
             write_txn.open_table(KELS)?;
             write_txn.open_table(KEY_STATES)?;
-            write_txn.open_multimap_table(SIGS)?;
-            write_txn.open_multimap_table(TRANS_RCTS)?;
-            write_txn.open_multimap_table(NONTRANS_RCTS)?;
         }
         write_txn.commit()?;
-        Ok(Self { db })
+        Ok(Self { db, log_db })
     }
 }
 
@@ -129,17 +106,10 @@ impl EventDatabase for RedbDatabase {
         let write_txn = self.db.begin_write()?;
         let txn_mode = WriteTxnMode::UseExisting(&write_txn);
 
-        let event = &signed_event.event_message;
-        self.insert_key_event(&txn_mode, event)?;
-        let digest = event.digest().map_err(|_e| RedbError::MissingDigest)?;
+        self.log_db.log_event(&txn_mode, &signed_event)?;
 
-        self.insert_indexed_signatures(&txn_mode, &digest, &signed_event.signatures)?;
-        if let Some(wits) = signed_event.witness_receipts {
-            self.insert_nontrans_receipt(&txn_mode, &digest, &wits)?;
-        };
-
-        self.save_to_kel(&txn_mode, event)?;
-        self.update_key_state(&txn_mode, event)?;
+        self.save_to_kel(&txn_mode, &signed_event.event_message)?;
+        self.update_key_state(&txn_mode, &signed_event.event_message)?;
 
         write_txn.commit()?;
         Ok(())
@@ -152,7 +122,7 @@ impl EventDatabase for RedbDatabase {
     ) -> Result<(), RedbError> {
         let digest = receipt.body.receipted_event_digest;
         let transferable = Transferable::Seal(receipt.validator_seal, receipt.signatures);
-        self.insert_trans_receipt(&digest, &[transferable])
+        self.log_db.insert_trans_receipt(&digest, &[transferable])
     }
 
     fn add_receipt_nt(
@@ -162,7 +132,11 @@ impl EventDatabase for RedbDatabase {
     ) -> Result<(), RedbError> {
         let receipted_event_digest = receipt.body.receipted_event_digest;
         let receipts = receipt.signatures;
-        self.insert_nontrans_receipt(&WriteTxnMode::CreateNew, &receipted_event_digest, &receipts)
+        self.log_db.insert_nontrans_receipt(
+            &WriteTxnMode::CreateNew,
+            &receipted_event_digest,
+            &receipts,
+        )
     }
 
     fn get_key_state(&self, id: &IdentifierPrefix) -> Option<IdentifierState> {
@@ -199,7 +173,7 @@ impl EventDatabase for RedbDatabase {
             QueryParameters::BySn { id, sn } => self
                 .get_event_digest(&id, sn)
                 .unwrap()
-                .and_then(|said| self.get_trans_receipts_by_digest(&said).ok()),
+                .and_then(|said| self.log_db.get_trans_receipts(&said).ok()),
             QueryParameters::Range {
                 id: _,
                 start: _,
@@ -231,23 +205,6 @@ impl EventDatabase for RedbDatabase {
 }
 
 impl RedbDatabase {
-    /// Saves provided event into key event table. Key is it's digest and value is event.
-    fn insert_key_event(
-        &self,
-        txn_mode: &WriteTxnMode,
-        event: &KeriEvent<KeyEvent>,
-    ) -> Result<(), RedbError> {
-        let digest = event.digest().map_err(|_e| RedbError::MissingDigest)?;
-        let value = rkyv::to_bytes::<rkyv::rancor::Error>(event)?;
-
-        self.execute_in_transaction(txn_mode, |write_txn| {
-            let mut table = write_txn.open_table(EVENTS)?;
-            let key = rkyv_adapter::serialize_said(&digest)?;
-            table.insert(key.as_slice(), &value.as_ref())?;
-            Ok(())
-        })
-    }
-
     /// Saves KEL event of given identifier. Key is identifier and sn of event, and value is event digest.
     fn save_to_kel(
         &self,
@@ -256,7 +213,7 @@ impl RedbDatabase {
     ) -> Result<(), RedbError> {
         let digest = event.digest().map_err(|_e| RedbError::MissingDigest)?;
 
-        self.execute_in_transaction(txn_mode, |write_txn| {
+        execute_in_transaction(self.db.clone(), txn_mode, |write_txn| {
             let mut table = write_txn.open_table(KELS)?;
             let id = event.data.prefix.to_str();
             let sn = event.data.sn;
@@ -266,33 +223,12 @@ impl RedbDatabase {
         })
     }
 
-    fn insert_with_digest_key<
-        V: for<'a> rkyv::Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rkyv::rancor::Error>>,
-    >(
-        &self,
-        txn_mode: &WriteTxnMode,
-        table: MultimapTableDefinition<&[u8], &[u8]>,
-        said: &SelfAddressingIdentifier,
-        values: &[V],
-    ) -> Result<(), RedbError> {
-        let serialized_said = rkyv_adapter::serialize_said(said)?;
-        self.execute_in_transaction(txn_mode, |write_txn| {
-            let mut table = write_txn.open_multimap_table(table)?;
-
-            for value in values {
-                let sig = rkyv::to_bytes(value)?;
-                table.insert(serialized_said.as_slice(), sig.as_slice())?;
-            }
-            Ok(())
-        })
-    }
-
     fn update_key_state(
         &self,
         txn_mode: &WriteTxnMode,
         event: &KeriEvent<KeyEvent>,
     ) -> Result<(), RedbError> {
-        self.execute_in_transaction(txn_mode, |write_txn| {
+        execute_in_transaction(self.db.clone(), txn_mode, |write_txn| {
             let mut table = write_txn.open_table(KEY_STATES)?;
             let key = event.data.prefix.to_str();
 
@@ -310,56 +246,23 @@ impl RedbDatabase {
         })
     }
 
-    fn insert_nontrans_receipt(
+    fn get_event_digest(
         &self,
-        txn_mode: &WriteTxnMode,
-        said: &SelfAddressingIdentifier,
-        nontrans: &[Nontransferable],
-    ) -> Result<(), RedbError> {
-        self.insert_with_digest_key(txn_mode, NONTRANS_RCTS, said, nontrans)
-    }
-
-    fn insert_trans_receipt(
-        &self,
-        said: &SelfAddressingIdentifier,
-        trans: &[Transferable],
-    ) -> Result<(), RedbError> {
-        self.insert_with_digest_key(&WriteTxnMode::CreateNew, TRANS_RCTS, &said, trans)
-    }
-
-    fn insert_indexed_signatures(
-        &self,
-        txn_mode: &WriteTxnMode,
-        said: &SelfAddressingIdentifier,
-        signatures: &[IndexedSignature],
-    ) -> Result<(), RedbError> {
-        self.insert_with_digest_key(txn_mode, SIGS, said, signatures)
-    }
-
-    fn get_nontrans_couplets_by_said(
-        &self,
-        said: &SelfAddressingIdentifier,
-    ) -> Result<impl Iterator<Item = Nontransferable>, RedbError> {
-        let said = rkyv_adapter::serialize_said(said)?;
-        self.get_nontrans_couplets_by_key(&said)
-    }
-
-    fn get_nontrans_couplets_by_key(
-        &self,
-        key: &[u8],
-    ) -> Result<impl Iterator<Item = Nontransferable>, RedbError> {
-        let from_db_iterator = {
-            let read_txn = self.db.begin_read()?;
-            let table = read_txn.open_multimap_table(NONTRANS_RCTS)?;
-            table.get(key)
-        }?;
-        let nontrans = from_db_iterator
-            .map(|sig| match sig {
-                Ok(sig) => Ok(rkyv_adapter::deserialize_nontransferable(sig.value()).unwrap()),
-                Err(e) => Err(RedbError::from(e)),
-            })
-            .collect::<Result<Vec<_>, _>>();
-        nontrans.map(|el| el.into_iter())
+        identifier: &IdentifierPrefix,
+        sn: u64,
+    ) -> Result<Option<SelfAddressingIdentifier>, RedbError> {
+        Ok({
+            let read_txn = self.db.begin_read().unwrap();
+            let table = read_txn.open_table(KELS)?;
+            table
+                .get((identifier.to_str().as_str(), sn))?
+                .map(|value| -> Result<SelfAddressingIdentifier, RedbError> {
+                    let digest: SelfAddressingIdentifier =
+                        rkyv_adapter::deserialize_said(value.value())?;
+                    Ok(digest)
+                })
+                .transpose()?
+        })
     }
 
     fn get_nontrans_receipts_range(
@@ -378,9 +281,11 @@ impl RedbDatabase {
                 Ok((_, value)) => {
                     let said = rkyv_adapter::deserialize_said(value.value()).unwrap();
                     let nontrans = self
+                        .log_db
                         .get_nontrans_couplets_by_key(value.value())
                         .unwrap()
-                        .collect();
+                        .map(|vec| vec.collect())
+                        .unwrap_or_default();
                     let identifier = id.parse().unwrap();
                     let rct = Receipt::new(SerializationFormats::JSON, said, identifier, start);
                     SignedNontransferableReceipt {
@@ -405,101 +310,16 @@ impl RedbDatabase {
         }?;
         let out = corresponding_digests
             .map(|digest| match digest {
-                Ok((_, value)) => self.get_nontrans_couplets_by_key(value.value()).unwrap(),
+                Ok((_, value)) => self
+                    .log_db
+                    .get_nontrans_couplets_by_key(value.value())
+                    .unwrap()
+                    .unwrap(),
                 Err(_) => todo!(),
             })
             .flatten();
 
         Ok(Box::new(out.collect::<Vec<_>>().into_iter()))
-    }
-
-    fn get_trans_receipts_by_digest(
-        &self,
-        said: &SelfAddressingIdentifier,
-    ) -> Result<impl DoubleEndedIterator<Item = Transferable>, RedbError> {
-        let key = rkyv_adapter::serialize_said(said)?;
-        self.get_trans_receipts_by_serialized_key(key.as_slice())
-    }
-
-    fn get_trans_receipts_by_serialized_key(
-        &self,
-        key: &[u8],
-    ) -> Result<impl DoubleEndedIterator<Item = Transferable>, RedbError> {
-        let from_db_iterator = {
-            let read_txn = self.db.begin_read()?;
-            let table = read_txn.open_multimap_table(TRANS_RCTS)?;
-            table.get(key)
-        }?;
-        Ok(from_db_iterator.map(|sig| match sig {
-            Ok(sig) => rkyv_adapter::deserialize_transferable(sig.value()).unwrap(),
-            Err(_) => todo!(),
-        }))
-    }
-
-    fn get_event_digest(
-        &self,
-        identifier: &IdentifierPrefix,
-        sn: u64,
-    ) -> Result<Option<SelfAddressingIdentifier>, RedbError> {
-        Ok({
-            let read_txn = self.db.begin_read().unwrap();
-            let table = read_txn.open_table(KELS)?;
-            table
-                .get((identifier.to_str().as_str(), sn))?
-                .map(|value| -> Result<SelfAddressingIdentifier, RedbError> {
-                    let digest: SelfAddressingIdentifier =
-                        rkyv_adapter::deserialize_said(value.value())?;
-                    Ok(digest)
-                })
-                .transpose()?
-        })
-    }
-
-    fn get_event_by_digest(
-        &self,
-        said: &SelfAddressingIdentifier,
-    ) -> Result<Option<KeriEvent<KeyEvent>>, RedbError> {
-        let key = rkyv_adapter::serialize_said(&said).unwrap();
-        self.get_event_by_serialized_key(&key.as_slice())
-    }
-    fn get_event_by_serialized_key(
-        &self,
-        said_arch: &[u8],
-    ) -> Result<Option<KeriEvent<KeyEvent>>, RedbError> {
-        let read_txn = self.db.begin_read()?;
-        let table = read_txn.open_table(EVENTS)?;
-
-        if let Some(event) = table.get(said_arch)? {
-            let bytes = event.value().to_vec();
-            let deser: KeriEvent<KeyEvent> = rkyv::from_bytes::<_, Failure>(&bytes).unwrap();
-            Ok(Some(deser))
-        } else {
-            Ok(None)
-        }
-    }
-
-    fn get_signatures_by_digest(
-        &self,
-        said: &SelfAddressingIdentifier,
-    ) -> Result<Option<impl Iterator<Item = IndexedSignature>>, RedbError> {
-        let key = rkyv_adapter::serialize_said(&said).unwrap();
-        self.get_signatures_by_serialized_key(&key.as_slice())
-    }
-
-    fn get_signatures_by_serialized_key(
-        &self,
-        key: &[u8],
-    ) -> Result<Option<impl Iterator<Item = IndexedSignature>>, RedbError> {
-        let from_db_iterator = {
-            let read_txn = self.db.begin_read()?;
-            let table: redb::ReadOnlyMultimapTable<&[u8], &[u8]> =
-                read_txn.open_multimap_table(SIGS)?;
-            table.get(key)
-        }?;
-        Ok(Some(from_db_iterator.map(|sig| match sig {
-            Ok(sig) => deserialize_indexed_signatures(sig.value()).unwrap(),
-            Err(_) => todo!(),
-        })))
     }
 
     fn get_kel<'a>(
@@ -519,19 +339,9 @@ impl RedbDatabase {
         digests
             .map(|entry| {
                 let (_, value) = entry.unwrap();
-                let signatures = self
-                    .get_signatures_by_serialized_key(&value.value())
+                self.log_db
+                    .get_signed_event_by_serialized_key(value.value())
                     .unwrap()
-                    .unwrap()
-                    .collect();
-
-                let event = self
-                    .get_event_by_serialized_key(&value.value())
-                    .unwrap()
-                    .unwrap();
-                TimestampedSignedEventMessage::new(SignedEventMessage::new(
-                    &event, signatures, None, None,
-                ))
             })
             .collect()
     }
@@ -554,26 +364,9 @@ impl RedbDatabase {
         let kel = digests
             .map(|entry| {
                 let (_key, value) = entry.unwrap();
-                let signatures = self
-                    .get_signatures_by_serialized_key(&value.value())
+                self.log_db
+                    .get_signed_event_by_serialized_key(value.value())
                     .unwrap()
-                    .unwrap()
-                    .collect();
-                let receipts = self
-                    .get_nontrans_couplets_by_key(value.value())
-                    .unwrap()
-                    .collect();
-
-                let event = self
-                    .get_event_by_serialized_key(value.value())
-                    .unwrap()
-                    .unwrap();
-                TimestampedSignedEventMessage::new(SignedEventMessage::new(
-                    &event,
-                    signatures,
-                    Some(receipts),
-                    None,
-                ))
             })
             .collect::<Vec<_>>();
         if kel.is_empty() {
@@ -582,31 +375,31 @@ impl RedbDatabase {
             Some(kel)
         }
     }
+}
 
-    /// Executes a given operation within a transaction context.
-    /// Uses an existing transaction if `WriteTxnMode::UseExisting` is specified.
-    /// Creates and commits a new transaction if `WriteTxnMode::CreateNew` is specified.
-    fn execute_in_transaction<F>(
-        &self,
-        txn_mode: &WriteTxnMode,
-        operation: F,
-    ) -> Result<(), RedbError>
-    where
-        F: FnOnce(&redb::WriteTransaction) -> Result<(), RedbError>,
-    {
-        match *txn_mode {
-            WriteTxnMode::UseExisting(existing_txn) => {
-                operation(existing_txn)?;
-            }
-            WriteTxnMode::CreateNew => {
-                let txn = self.db.begin_write()?;
-                operation(&txn)?;
-                txn.commit()?;
-            }
-        };
+/// Executes a given operation within a transaction context.
+/// Uses an existing transaction if `WriteTxnMode::UseExisting` is specified.
+/// Creates and commits a new transaction if `WriteTxnMode::CreateNew` is specified.
+pub(crate) fn execute_in_transaction<F>(
+    db: Arc<Database>,
+    txn_mode: &WriteTxnMode,
+    operation: F,
+) -> Result<(), RedbError>
+where
+    F: FnOnce(&redb::WriteTransaction) -> Result<(), RedbError>,
+{
+    match *txn_mode {
+        WriteTxnMode::UseExisting(existing_txn) => {
+            operation(existing_txn)?;
+        }
+        WriteTxnMode::CreateNew => {
+            let txn = db.begin_write()?;
+            operation(&txn)?;
+            txn.commit()?;
+        }
+    };
 
-        Ok(())
-    }
+    Ok(())
 }
 
 #[test]
@@ -644,24 +437,13 @@ fn test_retrieve_kel() {
         }
     }
 
-    // Find event by digest
-    let ev_digest: SelfAddressingIdentifier = "EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen"
-        .parse()
-        .unwrap();
-    let events = db.get_event_by_digest(&ev_digest).unwrap().unwrap();
+    let first_event = &db.get_kel(&first_id, 0, 1)[0].signed_event_message;
+
     let expected_event = &icp_raw[..487]; // icp event without signatures
-    assert_eq!(events.encode().unwrap(), expected_event);
+    assert_eq!(first_event.event_message.encode().unwrap(), expected_event);
 
-    let sigs_from_db = db.get_signatures_by_digest(&ev_digest).unwrap().unwrap();
-    assert_eq!(sigs_from_db.count(), 3);
-
-    // Find event by digest
-    let ev_digest: SelfAddressingIdentifier = "EFb-WY7Ie1WPEgsioZz1CyzwnuCg-C9k2QCNpcUfM5Jf"
-        .parse()
-        .unwrap();
-    // Warning: order of retrieved signatures isn't the same as insertion order
-    let sigs_from_db = db.get_signatures_by_digest(&ev_digest).unwrap().unwrap();
-    assert_eq!(sigs_from_db.count(), 1);
+    let sigs_from_db = &first_event.signatures;
+    assert_eq!(sigs_from_db.len(), 3);
 
     // Retrieve KEL in range
     let mut part_of_kel_events = db.get_kel(&first_id, 1, 2).into_iter();
@@ -745,54 +527,4 @@ fn test_retrieve_kel() {
             .unwrap()
             .into()
     );
-}
-
-#[test]
-fn test_retrieve_receipts() {
-    use crate::actor::parse_event_stream;
-    use crate::event_message::signed_event_message::{Message, Notice};
-    use tempfile::NamedTempFile;
-    // Create test db path.
-    let file_path = NamedTempFile::new().unwrap();
-
-    let db = RedbDatabase::new(file_path.path()).unwrap();
-
-    let receipt0_0 = br#"{"v":"KERI10JSON000091_","t":"rct","d":"EJufgwH347N2kobmes1IQw_1pfMipEFFy0RwinZTtah9","i":"EJufgwH347N2kobmes1IQw_1pfMipEFFy0RwinZTtah9","s":"0"}-CABBN_PYSns7oFNixSohVW4raBwMV6iYeh0PEZ_bR-38Xev0BDbyebqZQKwn7TqU92Vtw8n2wy5FptP42F1HEmCc9nQLzbXrXuA9SMl9nCZ-vi2bdaeT3aqInXGFAW70QPzM4kJ"#;
-    let receipt0_1 = br#"{"v":"KERI10JSON000091_","t":"rct","d":"EJufgwH347N2kobmes1IQw_1pfMipEFFy0RwinZTtah9","i":"EJufgwH347N2kobmes1IQw_1pfMipEFFy0RwinZTtah9","s":"0"}-CABBHndk6cXPCnghFqKt_0SikY1P9z_nIUrHq_SeHgLQCui0BBqAOBXFKVivgf0jh2ySWX1VshnkUYK3ev_L--sPB_onF7w2WhiK2AB7mf4IIuaSQCLumsr2sV77S6U5VMx0CAD"#;
-
-    let receipt1_0 = br#"{"v":"KERI10JSON000091_","t":"rct","d":"EBgRuemKRwpDnemmrA9bbWyp0Ar4BHVv4ZjIv8mBGJxj","i":"EPNYUP688XxtHUfxeHlqxqSduMHmWrpjRzlUCKPtvB7t","s":"2"}-CABBDg1zxxf8u4Hx5IPraZzmStfSCZFZbDzMHjqVcFW5OfP0BCjSM8pvkBQNcx3yN1fPMfaOqGllSBsYX9bijFWQV_d9PxJI1dvxt5lW4xAf9SGWb28Nzt3J0MOsO69aYMy0XMD"#;
-    let receipt1_1 = br#"{"v":"KERI10JSON000091_","t":"rct","d":"EBgRuemKRwpDnemmrA9bbWyp0Ar4BHVv4ZjIv8mBGJxj","i":"EPNYUP688XxtHUfxeHlqxqSduMHmWrpjRzlUCKPtvB7t","s":"2"}-CABBJq7UABlttINuWJh1Xl2lkqZG4NTdUdqnbFJDa6ZyxCC0BBRh0mufCacSimM85yV0kcFnx6U76XR5vibN4biUtzmrjl_s2yvVUDBu3vZvRwH-wy6FgU02WydaFmmeysG_pAN"#;
-
-    let first_id: IdentifierPrefix = "EJufgwH347N2kobmes1IQw_1pfMipEFFy0RwinZTtah9"
-        .parse()
-        .unwrap();
-
-    for event in [receipt0_0, receipt0_1, receipt1_0, receipt1_1] {
-        let evs = parse_event_stream(event).unwrap();
-        let ev = evs.first().unwrap();
-        match ev {
-            Message::Notice(Notice::NontransferableRct(rct)) => {
-                db.add_receipt_nt(rct.clone(), &first_id).unwrap();
-            }
-            _ => unreachable!(),
-        }
-    }
-
-    let recipted_event_digest: SelfAddressingIdentifier =
-        "EJufgwH347N2kobmes1IQw_1pfMipEFFy0RwinZTtah9"
-            .parse()
-            .unwrap();
-    let retrived_rcts = db
-        .get_nontrans_couplets_by_said(&recipted_event_digest)
-        .unwrap();
-    assert_eq!(retrived_rcts.count(), 2);
-
-    let recipted_event_digest: SelfAddressingIdentifier =
-        "EBgRuemKRwpDnemmrA9bbWyp0Ar4BHVv4ZjIv8mBGJxj"
-            .parse()
-            .unwrap();
-    let retrived_rcts = db
-        .get_nontrans_couplets_by_said(&recipted_event_digest)
-        .unwrap();
-    assert_eq!(retrived_rcts.count(), 2);
 }
