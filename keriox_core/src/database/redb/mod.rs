@@ -1,3 +1,4 @@
+pub mod escrow_database;
 pub(crate) mod loging;
 pub(crate) mod rkyv_adapter;
 
@@ -77,14 +78,14 @@ pub(crate) enum WriteTxnMode<'a> {
     UseExisting(&'a redb::WriteTransaction),
 }
 pub struct RedbDatabase {
-    db: Arc<Database>,
-    log_db: LogDatabase,
+    pub(crate) db: Arc<Database>,
+    pub(crate) log_db: Arc<LogDatabase>,
 }
 
 impl RedbDatabase {
     pub fn new(db_path: &Path) -> Result<Self, RedbError> {
         let db = Arc::new(Database::create(db_path)?);
-        let log_db = LogDatabase::new(db.clone())?;
+        let log_db = Arc::new(LogDatabase::new(db.clone())?);
         // Create tables
         let write_txn = db.begin_write()?;
         {

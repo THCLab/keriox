@@ -5,7 +5,11 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::{database::EventDatabase, query::mailbox::SignedMailboxQuery};
+use crate::{
+    database::{redb::RedbDatabase, EventDatabase},
+    processor::escrow::maybe_out_of_order_escrow::MaybeOutOfOrderEscrow,
+    query::mailbox::SignedMailboxQuery,
+};
 use crate::{event_message::cesr_adapter::ParseError, query::query_event::LogsQueryArgs};
 use cesrox::{cesr_proof::MaterialPath, parse, primitives::CesrPrimitive};
 use said::derivation::{HashFunction, HashFunctionCode};
@@ -40,10 +44,7 @@ use crate::{
     prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
     processor::{
         basic_processor::BasicProcessor,
-        escrow::{
-            default_escrow_bus, DelegationEscrow, EscrowConfig, OutOfOrderEscrow,
-            PartiallyWitnessedEscrow,
-        },
+        escrow::{default_escrow_bus, DelegationEscrow, EscrowConfig, PartiallyWitnessedEscrow},
         event_storage::EventStorage,
         Processor,
     },
@@ -209,20 +210,21 @@ pub struct SimpleController<K: KeyManager + 'static, D: EventDatabase> {
     pub storage: EventStorage<D>,
     pub groups: Vec<IdentifierPrefix>,
     pub not_fully_witnessed_escrow: Arc<PartiallyWitnessedEscrow<D>>,
-    pub ooo_escrow: Arc<OutOfOrderEscrow<D>>,
+    pub ooo_escrow: Arc<MaybeOutOfOrderEscrow>,
     pub delegation_escrow: Arc<DelegationEscrow<D>>,
 }
 
-impl<K: KeyManager, D: EventDatabase + Send + Sync + 'static> SimpleController<K, D> {
+// impl<K: KeyManager, D: EventDatabase + Send + Sync + 'static> SimpleController<K, D> {
+impl<K: KeyManager> SimpleController<K, RedbDatabase> {
     // incept a state and keys
     pub fn new(
         db: Arc<SledEventDatabase>,
-        event_db: Arc<D>,
+        event_db: Arc<RedbDatabase>,
         escrow_db: Arc<EscrowDb>,
         key_manager: Arc<Mutex<K>>,
         oobi_db_path: &Path,
         escrow_config: EscrowConfig,
-    ) -> Result<SimpleController<K, D>, Error> {
+    ) -> Result<SimpleController<K, RedbDatabase>, Error> {
         let (not_bus, (ooo, _, partially_witnesses, del_escrow)) =
             default_escrow_bus(event_db.clone(), db.clone(), escrow_db, escrow_config);
         let processor = BasicProcessor::new(event_db.clone(), db.clone(), Some(not_bus));

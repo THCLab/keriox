@@ -149,7 +149,11 @@ fn test_process() -> Result<(), Error> {
     event_processor.process(&out_of_order_rot)?;
     // should be saved in out of order escrow
     assert_eq!(
-        ooo_escrow.escrowed_out_of_order.get(&id).unwrap().count(),
+        ooo_escrow
+            .escrowed_out_of_order
+            .get_from_sn(&id, 0)
+            .unwrap()
+            .count(),
         1
     );
 
@@ -322,7 +326,10 @@ fn test_compute_state_at_sn() -> Result<(), Error> {
         .unwrap();
     assert_eq!(state_at_sn.sn, event_seal.sn);
     assert_eq!(state_at_sn.prefix, event_seal.prefix);
-    assert_eq!(event_seal.event_digest(), state_at_sn.last_event_digest.into());
+    assert_eq!(
+        event_seal.event_digest(),
+        state_at_sn.last_event_digest.into()
+    );
 
     Ok(())
 }

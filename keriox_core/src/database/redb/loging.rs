@@ -41,6 +41,9 @@ use super::{
     RedbError, WriteTxnMode,
 };
 
+/// Stores all incoming signed events and enables retrieval by event digest.  
+/// Events are split into separate tables for events, signatures, and receipts,  
+/// with the digest serving as the key in each table.
 pub(crate) struct LogDatabase {
     db: Arc<Database>,
 }

@@ -1,5 +1,7 @@
+pub mod maybe_out_of_order_escrow;
 use std::{fmt::Debug, sync::Arc, time::Duration};
 
+use maybe_out_of_order_escrow::{MaybeOutOfOrderEscrow, SnKeyEscrow};
 use said::SelfAddressingIdentifier;
 
 use super::{
@@ -9,9 +11,7 @@ use super::{
 };
 use crate::{
     database::{
-        escrow::{Escrow, EscrowDb},
-        sled::SledEventDatabase,
-        EventDatabase,
+        escrow::{Escrow, EscrowDb}, redb::{escrow_database::SnKeyDatabase, RedbDatabase}, sled::SledEventDatabase, EventDatabase
     },
     error::Error,
     event::{
@@ -55,27 +55,28 @@ impl Default for EscrowConfig {
     }
 }
 
-pub fn default_escrow_bus<D: EventDatabase + Send + Sync + 'static>(
-    event_db: Arc<D>,
+pub fn default_escrow_bus(
+    event_db: Arc<RedbDatabase>,
     sled_db: Arc<SledEventDatabase>,
     escrow_db: Arc<EscrowDb>,
     escrow_config: EscrowConfig,
 ) -> (
     NotificationBus,
     (
-        Arc<OutOfOrderEscrow<D>>,
-        Arc<PartiallySignedEscrow<D>>,
-        Arc<PartiallyWitnessedEscrow<D>>,
-        Arc<DelegationEscrow<D>>,
+        Arc<MaybeOutOfOrderEscrow>,
+        Arc<PartiallySignedEscrow<RedbDatabase>>,
+        Arc<PartiallyWitnessedEscrow<RedbDatabase>>,
+        Arc<DelegationEscrow<RedbDatabase>>,
     ),
 ) {
     let mut bus = NotificationBus::new();
 
+    let ooo_escrowdb = SnKeyEscrow::new(Arc::new(SnKeyDatabase::new(event_db.db.clone()).unwrap()), event_db.log_db.clone()); 
     // Register out of order escrow, to save and reprocess out of order events
-    let ooo_escrow = Arc::new(OutOfOrderEscrow::new(
+    let ooo_escrow = Arc::new(MaybeOutOfOrderEscrow::new(
         event_db.clone(),
+        ooo_escrowdb,
         sled_db.clone(),
-        escrow_db.clone(),
         escrow_config.out_of_order_timeout,
     ));
     bus.register_observer(
@@ -138,96 +139,96 @@ pub fn default_escrow_bus<D: EventDatabase + Send + Sync + 'static>(
     (bus, (ooo_escrow, ps_escrow, pw_escrow, delegation_escrow))
 }
 
-pub struct OutOfOrderEscrow<D: EventDatabase> {
-    db: Arc<D>,
-    sled_db: Arc<SledEventDatabase>,
-    pub escrowed_out_of_order: Escrow<SignedEventMessage>,
-}
+// pub struct OutOfOrderEscrow<D: EventDatabase> {
+//     db: Arc<D>,
+//     sled_db: Arc<SledEventDatabase>,
+//     pub escrowed_out_of_order: Escrow<SignedEventMessage>,
+// }
 
-impl<D: EventDatabase> OutOfOrderEscrow<D> {
-    pub fn new(
-        db: Arc<D>,
-        sled_db: Arc<SledEventDatabase>,
-        escrow_db: Arc<EscrowDb>,
-        duration: Duration,
-    ) -> Self {
-        let escrow = Escrow::new(b"ooes", duration, escrow_db);
-        Self {
-            db,
-            sled_db,
-            escrowed_out_of_order: escrow,
-        }
-    }
+// impl<D: EventDatabase> OutOfOrderEscrow<D> {
+//     pub fn new(
+//         db: Arc<D>,
+//         sled_db: Arc<SledEventDatabase>,
+//         escrow_db: Arc<EscrowDb>,
+//         duration: Duration,
+//     ) -> Self {
+//         let escrow = Escrow::new(b"ooes", duration, escrow_db);
+//         Self {
+//             db,
+//             sled_db,
+//             escrowed_out_of_order: escrow,
+//         }
+//     }
 
-    pub fn get_event_by_sn_and_digest(
-        &self,
-        sn: u64,
-        id: &IdentifierPrefix,
-        event_digest: &SelfAddressingIdentifier,
-    ) -> Option<SignedEventMessage> {
-        self.escrowed_out_of_order.get(id).and_then(|mut events| {
-            events.find(|event| {
-                event.event_message.data.sn == sn
-                    && &event.event_message.data.prefix == id
-                    && event.event_message.digest().ok().as_ref() == Some(event_digest)
-            })
-        })
-    }
-}
-impl<D: EventDatabase> Notifier for OutOfOrderEscrow<D> {
-    fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error> {
-        match notification {
-            Notification::KeyEventAdded(ev_message) => {
-                let id = ev_message.event_message.data.get_prefix();
-                self.process_out_of_order_events(bus, &id)?;
-            }
-            Notification::OutOfOrder(signed_event) => {
-                // ignore events with no signatures
-                if !signed_event.signatures.is_empty() {
-                    let id = signed_event.event_message.data.get_prefix();
-                    self.escrowed_out_of_order.add(&id, signed_event.clone())?;
-                }
-            }
-            _ => return Err(Error::SemanticError("Wrong notification".into())),
-        }
+//     pub fn get_event_by_sn_and_digest(
+//         &self,
+//         sn: u64,
+//         id: &IdentifierPrefix,
+//         event_digest: &SelfAddressingIdentifier,
+//     ) -> Option<SignedEventMessage> {
+//         self.escrowed_out_of_order.get(id).and_then(|mut events| {
+//             events.find(|event| {
+//                 event.event_message.data.sn == sn
+//                     && &event.event_message.data.prefix == id
+//                     && event.event_message.digest().ok().as_ref() == Some(event_digest)
+//             })
+//         })
+//     }
+// }
+// impl<D: EventDatabase> Notifier for OutOfOrderEscrow<D> {
+//     fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error> {
+//         match notification {
+//             Notification::KeyEventAdded(ev_message) => {
+//                 let id = ev_message.event_message.data.get_prefix();
+//                 self.process_out_of_order_events(bus, &id)?;
+//             }
+//             Notification::OutOfOrder(signed_event) => {
+//                 // ignore events with no signatures
+//                 if !signed_event.signatures.is_empty() {
+//                     let id = signed_event.event_message.data.get_prefix();
+//                     self.escrowed_out_of_order.add(&id, signed_event.clone())?;
+//                 }
+//             }
+//             _ => return Err(Error::SemanticError("Wrong notification".into())),
+//         }
 
-        Ok(())
-    }
-}
+//         Ok(())
+//     }
+// }
 
-impl<D: EventDatabase> OutOfOrderEscrow<D> {
-    pub fn process_out_of_order_events(
-        &self,
-        bus: &NotificationBus,
-        id: &IdentifierPrefix,
-    ) -> Result<(), Error> {
-        if let Some(esc) = self.escrowed_out_of_order.get(id) {
-            for event in esc {
-                let validator = EventValidator::new(self.sled_db.clone(), self.db.clone());
-                match validator.validate_event(&event) {
-                    Ok(_) => {
-                        // add to kel
-                        self.db
-                            .add_kel_finalized_event(event.clone(), id)
-                            .map_err(|_| Error::DbError)?;
-                        // remove from escrow
-                        self.escrowed_out_of_order.remove(id, &event)?;
-                        bus.notify(&Notification::KeyEventAdded(event))?;
-                        // stop processing the escrow if kel was updated. It needs to start again.
-                        break;
-                    }
-                    Err(Error::SignatureVerificationError) => {
-                        // remove from escrow
-                        self.escrowed_out_of_order.remove(id, &event)?;
-                    }
-                    Err(_e) => (), // keep in escrow,
-                }
-            }
-        };
+// impl<D: EventDatabase> OutOfOrderEscrow<D> {
+//     pub fn process_out_of_order_events(
+//         &self,
+//         bus: &NotificationBus,
+//         id: &IdentifierPrefix,
+//     ) -> Result<(), Error> {
+//         if let Some(esc) = self.escrowed_out_of_order.get(id) {
+//             for event in esc {
+//                 let validator = EventValidator::new(self.sled_db.clone(), self.db.clone());
+//                 match validator.validate_event(&event) {
+//                     Ok(_) => {
+//                         // add to kel
+//                         self.db
+//                             .add_kel_finalized_event(event.clone(), id)
+//                             .map_err(|_| Error::DbError)?;
+//                         // remove from escrow
+//                         self.escrowed_out_of_order.remove(id, &event)?;
+//                         bus.notify(&Notification::KeyEventAdded(event))?;
+//                         // stop processing the escrow if kel was updated. It needs to start again.
+//                         break;
+//                     }
+//                     Err(Error::SignatureVerificationError) => {
+//                         // remove from escrow
+//                         self.escrowed_out_of_order.remove(id, &event)?;
+//                     }
+//                     Err(_e) => (), // keep in escrow,
+//                 }
+//             }
+//         };
 
-        Ok(())
-    }
-}
+//         Ok(())
+//     }
+// }
 
 pub struct PartiallySignedEscrow<D: EventDatabase> {
     db: Arc<D>,
