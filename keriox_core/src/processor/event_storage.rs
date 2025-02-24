@@ -424,8 +424,9 @@ impl<D: EventDatabase> EventStorage<D> {
     ) -> Result<Option<IdentifierState>, Error> {
         let new_state = self.compute_state_at_sn(id, sn)?;
         if let Some(ref state) = new_state {
-            let last_event_digest: SelfAddressingIdentifier = state.last_event_digest.clone().into();
-            if  last_event_digest.eq(event_digest)  {
+            let last_event_digest: SelfAddressingIdentifier =
+                state.last_event_digest.clone().into();
+            if last_event_digest.eq(event_digest) {
                 Ok(new_state)
             } else {
                 Err(Error::SemanticError(

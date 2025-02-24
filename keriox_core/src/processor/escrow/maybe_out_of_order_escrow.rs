@@ -26,13 +26,16 @@ pub struct MaybeOutOfOrderEscrow {
 impl MaybeOutOfOrderEscrow {
     pub fn new(
         db: Arc<RedbDatabase>,
-        escrow_db: SnKeyEscrow,
         mailbox_db: Arc<SledEventDatabase>,
         duration: Duration,
     ) -> Self {
+        let ooo_escrowdb = SnKeyEscrow::new(
+            Arc::new(SnKeyDatabase::new(db.db.clone()).unwrap()),
+            db.log_db.clone(),
+        );
         Self {
             db,
-            escrowed_out_of_order: escrow_db,
+            escrowed_out_of_order: ooo_escrowdb,
             mailbox_db,
         }
     }
@@ -97,7 +100,7 @@ pub struct SnKeyEscrow {
 }
 
 impl SnKeyEscrow {
-    pub fn new(escrow: Arc<SnKeyDatabase>, log: Arc<LogDatabase>) -> Self {
+    pub(crate) fn new(escrow: Arc<SnKeyDatabase>, log: Arc<LogDatabase>) -> Self {
         Self { escrow, log }
     }
 
@@ -180,13 +183,9 @@ fn test_out_of_order() -> Result<(), Error> {
         let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
         let mut processor = BasicProcessor::new(events_db.clone(), mailbox_db.clone(), None);
 
-        let esc_db = Arc::new(SnKeyDatabase::new(events_db.clone().db.clone()).unwrap());
-        let sn_key_escrow = SnKeyEscrow::new(esc_db, events_db.clone().log_db.clone());
-
         // Register out of order escrow, to save and reprocess out of order events
         let new_ooo = Arc::new(MaybeOutOfOrderEscrow::new(
             events_db.clone(),
-            sn_key_escrow,
             mailbox_db.clone(),
             Duration::from_secs(60),
         ));

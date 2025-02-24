@@ -6,7 +6,8 @@ use crate::{
     event_message::signature::{
         ArchivedNontransferable, ArchivedTransferable, Nontransferable, Transferable,
     },
-    prefix::{attached_signature::ArchivedIndexedSignature, IndexedSignature}, state::IdentifierState,
+    prefix::{attached_signature::ArchivedIndexedSignature, IndexedSignature},
+    state::IdentifierState,
 };
 
 pub(crate) mod said_wrapper;
@@ -42,12 +43,9 @@ pub fn deserialize_indexed_signatures(
     rkyv::deserialize::<IndexedSignature, rkyv::rancor::Error>(archived)
 }
 
-pub fn deserialize_identifier_state(
-    bytes: &[u8],
-) -> Result<IdentifierState, rkyv::rancor::Error> {
-    let mut aligned_bytes = AlignedVec::<
-        { std::mem::align_of::<IdentifierState>() },
-    >::with_capacity(bytes.len());
+pub fn deserialize_identifier_state(bytes: &[u8]) -> Result<IdentifierState, rkyv::rancor::Error> {
+    let mut aligned_bytes =
+        AlignedVec::<{ std::mem::align_of::<IdentifierState>() }>::with_capacity(bytes.len());
     aligned_bytes.extend_from_slice(bytes);
 
     rkyv::from_bytes::<IdentifierState, rkyv::rancor::Error>(&aligned_bytes)

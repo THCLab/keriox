@@ -5,7 +5,10 @@ use keri_core::{
     error::Error,
     event_message::signed_event_message::{Notice, SignedEventMessage},
     processor::{
-        escrow::{DelegationEscrow, EscrowConfig, OutOfOrderEscrow, PartiallySignedEscrow},
+        escrow::{
+            maybe_out_of_order_escrow::MaybeOutOfOrderEscrow, DelegationEscrow, EscrowConfig,
+            PartiallySignedEscrow,
+        },
         notification::{JustNotification, Notification, NotificationBus, Notifier},
         validator::EventValidator,
         EventProcessor, Processor,
@@ -76,10 +79,9 @@ impl WitnessProcessor {
             partially_signed_escrow,
             vec![JustNotification::PartiallySigned],
         );
-        let out_of_order_escrow = Arc::new(OutOfOrderEscrow::new(
+        let out_of_order_escrow = Arc::new(MaybeOutOfOrderEscrow::new(
             redb.clone(),
             sled_db.clone(),
-            escrow_db.clone(),
             escrow_config.out_of_order_timeout,
         ));
         bus.register_observer(

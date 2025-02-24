@@ -27,12 +27,10 @@ use crate::{
             SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
         },
     },
-    prefix::{IdentifierPrefix, IndexedSignature},
+    prefix::IdentifierPrefix,
     state::IdentifierState,
 };
 use cesrox::primitives::CesrPrimitive;
-
-use self::timestamped::TimestampedSignedEventMessage;
 
 use super::{timestamped, EventDatabase, QueryParameters};
 
