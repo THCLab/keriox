@@ -1,4 +1,4 @@
-FROM rust:1.81 as build
+FROM rust:1.85 as build
 
 WORKDIR /app
 RUN echo '[workspace] \n\
