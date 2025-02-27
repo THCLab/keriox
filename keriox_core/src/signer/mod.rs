@@ -1,9 +1,10 @@
+use rand::rngs::OsRng;
+
 use crate::{
     error::Error,
     keys::{KeysError, PrivateKey, PublicKey},
     prefix::SeedPrefix,
 };
-use rand::rngs::OsRng;
 
 pub trait KeyManager {
     fn sign(&self, msg: &[u8]) -> Result<Vec<u8>, Error>;
@@ -65,17 +66,17 @@ pub struct Signer {
 impl Signer {
     /// Creates a new Signer with a random key.
     pub fn new() -> Self {
-        let ed = ed25519_dalek::Keypair::generate(&mut OsRng);
-        let pub_key = PublicKey::new(ed.public.to_bytes().to_vec());
-        let priv_key = PrivateKey::new(ed.secret.to_bytes().to_vec());
+        let ed = ed25519_dalek::SigningKey::generate(&mut OsRng);
+        let pub_key = PublicKey::new(ed.verifying_key().to_bytes().to_vec());
+        let priv_key = PrivateKey::new(ed.to_bytes().to_vec());
 
         Signer { pub_key, priv_key }
     }
 
     /// Creates a new Signer with the given ED25519_dalek private key.
-    pub fn new_with_key(priv_key: &[u8]) -> Result<Self, ed25519_dalek::SignatureError> {
-        let priv_key = ed25519_dalek::SecretKey::from_bytes(priv_key)?;
-        let pub_key = ed25519_dalek::PublicKey::from(&priv_key);
+    pub fn new_with_key(priv_key: &[u8; 32]) -> Result<Self, ed25519_dalek::SignatureError> {
+        let priv_key = ed25519_dalek::SigningKey::from_bytes(priv_key);
+        let pub_key = ed25519_dalek::VerifyingKey::from(&priv_key);
 
         Ok(Signer {
             priv_key: PrivateKey::new(priv_key.as_bytes().to_vec()),
@@ -108,8 +109,8 @@ impl Default for Signer {
 }
 
 fn generate_key_pair() -> Result<(PublicKey, PrivateKey), Error> {
-    let kp = ed25519_dalek::Keypair::generate(&mut OsRng {});
-    let (vk, sk) = (kp.public, kp.secret);
+    let kp = ed25519_dalek::SigningKey::generate(&mut OsRng {});
+    let (vk, sk) = (kp.verifying_key(), kp);
     let vk = PublicKey::new(vk.to_bytes().to_vec());
     let sk = PrivateKey::new(sk.to_bytes().to_vec());
     Ok((vk, sk))
@@ -145,7 +146,7 @@ pub(crate) fn setup_signers() -> Vec<Signer> {
             .unwrap()
             .derive_key_pair()
             .unwrap();
-        Signer::new_with_key(&sk.key()).unwrap()
+        Signer::new_with_key(&sk.key().try_into().unwrap()).unwrap()
     })
     .collect::<Vec<_>>()
 }

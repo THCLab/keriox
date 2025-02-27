@@ -308,7 +308,7 @@ mod test {
 
     #[test]
     fn test_threshold() -> Result<(), Error> {
-        use ed25519_dalek::Keypair;
+        use ed25519_dalek::SigningKey;
         use rand::rngs::OsRng;
 
         use crate::{
@@ -319,10 +319,10 @@ mod test {
         let (pub_keys, priv_keys): (Vec<BasicPrefix>, Vec<PrivateKey>) = [0, 1, 2]
             .iter()
             .map(|_| {
-                let kp = Keypair::generate(&mut OsRng);
+                let kp = SigningKey::generate(&mut OsRng);
                 (
-                    BasicPrefix::Ed25519(PublicKey::new(kp.public.to_bytes().to_vec())),
-                    PrivateKey::new(kp.secret.to_bytes().to_vec()),
+                    BasicPrefix::Ed25519(PublicKey::new(kp.verifying_key().to_bytes().to_vec())),
+                    PrivateKey::new(kp.to_bytes().to_vec()),
                 )
             })
             .unzip();
@@ -333,8 +333,8 @@ mod test {
             let next_keys: Vec<BasicPrefix> = [1, 2]
                 .iter()
                 .map(|_| {
-                    let kp = Keypair::generate(&mut OsRng);
-                    BasicPrefix::Ed25519(PublicKey::new(kp.public.to_bytes().to_vec()))
+                    let kp = SigningKey::generate(&mut OsRng);
+                    BasicPrefix::Ed25519(PublicKey::new(kp.verifying_key().to_bytes().to_vec()))
                 })
                 .collect();
             nxt_commitment(

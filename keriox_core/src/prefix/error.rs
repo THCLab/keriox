@@ -1,6 +1,7 @@
-use ed25519_dalek;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+use crate::keys::KeysError;
 
 #[derive(Error, Debug, Serialize, Deserialize)]
 pub enum Error {
@@ -16,12 +17,6 @@ pub enum Error {
     #[error(transparent)]
     ParseError(#[from] cesrox::error::Error),
 
-    #[error("ED25519Dalek signature error")]
-    Ed25519DalekSignatureError,
-}
-
-impl From<ed25519_dalek::SignatureError> for Error {
-    fn from(_: ed25519_dalek::SignatureError) -> Self {
-        Error::Ed25519DalekSignatureError
-    }
+    #[error(transparent)]
+    KeysError(#[from] KeysError),
 }

@@ -21,7 +21,7 @@ use crate::{
     keys::PublicKey,
     prefix::{BasicPrefix, IdentifierPrefix},
 };
-use ed25519_dalek::Keypair;
+use ed25519_dalek::SigningKey;
 use rand::rngs::OsRng;
 use said::version::format::SerializationFormats;
 use said::{
@@ -54,10 +54,10 @@ pub struct EventMsgBuilder {
 impl EventMsgBuilder {
     pub fn new(event_type: EventTypeTag) -> Self {
         let mut rng = OsRng {};
-        let kp = Keypair::generate(&mut rng);
-        let nkp = Keypair::generate(&mut rng);
-        let pk = PublicKey::new(kp.public.to_bytes().to_vec());
-        let npk = PublicKey::new(nkp.public.to_bytes().to_vec());
+        let kp = SigningKey::generate(&mut rng);
+        let nkp = SigningKey::generate(&mut rng);
+        let pk = PublicKey::new(kp.verifying_key().to_bytes().to_vec());
+        let npk = PublicKey::new(nkp.verifying_key().to_bytes().to_vec());
         let hash_function: HashFunction = HashFunctionCode::Blake3_256.into();
         let basic_pref = BasicPrefix::Ed25519(pk);
         EventMsgBuilder {

@@ -7,7 +7,7 @@ use crate::{
     prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
     state::IdentifierState,
 };
-use ed25519_dalek::Keypair;
+use ed25519_dalek::SigningKey;
 use rand::rngs::OsRng;
 use said::{derivation::HashFunctionCode, SelfAddressingIdentifier};
 
@@ -28,9 +28,9 @@ pub struct TestStateData {
 /// Create initial `TestStateData`, before application of any Event.
 /// Provides only keypair for next event.
 fn get_initial_test_data() -> Result<TestStateData, Error> {
-    let keypair = Keypair::generate(&mut OsRng);
-    let pk = PublicKey::new(keypair.public.as_bytes().to_vec());
-    let sk = PrivateKey::new(keypair.secret.as_bytes().to_vec());
+    let keypair = SigningKey::generate(&mut OsRng);
+    let pk = PublicKey::new(keypair.verifying_key().as_bytes().to_vec());
+    let sk = PrivateKey::new(keypair.as_bytes().to_vec());
 
     Ok(TestStateData {
         state: IdentifierState::default(),
@@ -57,9 +57,9 @@ fn test_update_identifier_state(
     if event_type.is_establishment_event() {
         cur_pk = next_pk;
         cur_sk = next_sk;
-        let keypair = Keypair::generate(&mut OsRng);
-        let pk = PublicKey::new(keypair.public.as_bytes().to_vec());
-        let sk = PrivateKey::new(keypair.secret.as_bytes().to_vec());
+        let keypair = SigningKey::generate(&mut OsRng);
+        let pk = PublicKey::new(keypair.verifying_key().as_bytes().to_vec());
+        let sk = PrivateKey::new(keypair.as_bytes().to_vec());
         next_pk = pk;
         next_sk = sk;
     };

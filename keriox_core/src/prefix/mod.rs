@@ -157,7 +157,7 @@ pub fn derive(seed: &SeedPrefix, transferable: bool) -> Result<BasicPrefix, Erro
 mod tests {
     use super::*;
     use crate::keys::{PrivateKey, PublicKey};
-    use ed25519_dalek::Keypair;
+    use ed25519_dalek::SigningKey;
     use rand::rngs::OsRng;
     use said::derivation::{HashFunction, HashFunctionCode};
 
@@ -204,7 +204,8 @@ mod tests {
     #[test]
     fn simple_serialize() -> Result<(), Error> {
         let pref = BasicPrefix::Ed25519NT(PublicKey::new(
-            ed25519_dalek::PublicKey::from_bytes(&[0; 32])?
+            ed25519_dalek::VerifyingKey::from_bytes(&[0; 32])
+                .unwrap()
                 .to_bytes()
                 .to_vec(),
         ));
@@ -221,9 +222,9 @@ mod tests {
     fn verify() -> Result<(), Error> {
         let data_string = "hello there";
 
-        let kp = Keypair::generate(&mut OsRng);
-        let pub_key = PublicKey::new(kp.public.to_bytes().to_vec());
-        let priv_key = PrivateKey::new(kp.secret.to_bytes().to_vec());
+        let kp = SigningKey::generate(&mut OsRng);
+        let pub_key = PublicKey::new(kp.verifying_key().to_bytes().to_vec());
+        let priv_key = PrivateKey::new(kp.to_bytes().to_vec());
 
         let key_prefix = BasicPrefix::Ed25519NT(pub_key);
 
@@ -294,7 +295,8 @@ mod tests {
         // Test BasicPrefix serialization.
         assert_eq!(
             BasicPrefix::Ed25519NT(PublicKey::new(
-                ed25519_dalek::PublicKey::from_bytes(&[0; 32])?
+                ed25519_dalek::VerifyingKey::from_bytes(&[0; 32])
+                    .unwrap()
                     .to_bytes()
                     .to_vec()
             ))
@@ -303,7 +305,8 @@ mod tests {
         );
         assert_eq!(
             BasicPrefix::X25519(PublicKey::new(
-                ed25519_dalek::PublicKey::from_bytes(&[0; 32])?
+                ed25519_dalek::VerifyingKey::from_bytes(&[0; 32])
+                    .unwrap()
                     .to_bytes()
                     .to_vec()
             ))
@@ -312,7 +315,8 @@ mod tests {
         );
         assert_eq!(
             BasicPrefix::Ed25519(PublicKey::new(
-                ed25519_dalek::PublicKey::from_bytes(&[0; 32])?
+                ed25519_dalek::VerifyingKey::from_bytes(&[0; 32])
+                    .unwrap()
                     .to_bytes()
                     .to_vec()
             ))

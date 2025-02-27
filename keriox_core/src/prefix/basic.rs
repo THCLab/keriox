@@ -138,12 +138,12 @@ impl<'de> Deserialize<'de> for BasicPrefix {
 
 #[test]
 fn serialize_deserialize() {
-    use ed25519_dalek::Keypair;
+    use ed25519_dalek::SigningKey;
     use rand::rngs::OsRng;
 
-    let kp = Keypair::generate(&mut OsRng);
+    let kp = SigningKey::generate(&mut OsRng);
 
-    let bp = BasicPrefix::Ed25519(PublicKey::new(kp.public.to_bytes().to_vec()));
+    let bp = BasicPrefix::Ed25519(PublicKey::new(kp.verifying_key().to_bytes().to_vec()));
 
     let serialized = serde_json::to_string(&bp);
     assert!(serialized.is_ok());
@@ -156,19 +156,19 @@ fn serialize_deserialize() {
 
 #[test]
 fn to_from_string() {
-    use ed25519_dalek::Keypair;
+    use ed25519_dalek::SigningKey;
     use rand::rngs::OsRng;
 
     use crate::keys::PrivateKey;
 
-    let kp = Keypair::generate(&mut OsRng);
+    let kp = SigningKey::generate(&mut OsRng);
 
-    let signer = PrivateKey::new(kp.secret.to_bytes().to_vec());
+    let signer = PrivateKey::new(kp.to_bytes().to_vec());
 
     let message = b"hello there";
     let sig = SelfSigningPrefix::Ed25519Sha512(signer.sign_ed(message).unwrap());
 
-    let bp = BasicPrefix::Ed25519(PublicKey::new(kp.public.to_bytes().to_vec()));
+    let bp = BasicPrefix::Ed25519(PublicKey::new(kp.verifying_key().to_bytes().to_vec()));
 
     assert!(bp.verify(message, &sig).unwrap());
 

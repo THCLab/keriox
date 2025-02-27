@@ -126,7 +126,7 @@ mod tests {
         state::{EventSemantics, IdentifierState},
     };
     use cesrox::primitives::CesrPrimitive;
-    use ed25519_dalek::Keypair;
+    use ed25519_dalek::SigningKey;
     use rand::rngs::OsRng;
     use said::derivation::HashFunctionCode;
     use said::version::format::SerializationFormats;
@@ -134,15 +134,15 @@ mod tests {
     #[test]
     fn basic_create() -> Result<(), Error> {
         // hi Ed!
-        let kp0 = Keypair::generate(&mut OsRng);
-        let kp1 = Keypair::generate(&mut OsRng);
+        let kp0 = SigningKey::generate(&mut OsRng);
+        let kp1 = SigningKey::generate(&mut OsRng);
 
         // get two ed25519 keypairs
-        let pub_key0 = PublicKey::new(kp0.public.to_bytes().to_vec());
-        let priv_key0 = PrivateKey::new(kp0.secret.to_bytes().to_vec());
+        let pub_key0 = PublicKey::new(kp0.verifying_key().to_bytes().to_vec());
+        let priv_key0 = PrivateKey::new(kp0.to_bytes().to_vec());
         let (pub_key1, _priv_key1) = (
-            PublicKey::new(kp1.public.to_bytes().to_vec()),
-            PrivateKey::new(kp1.secret.to_bytes().to_vec()),
+            PublicKey::new(kp1.verifying_key().to_bytes().to_vec()),
+            PrivateKey::new(kp1.to_bytes().to_vec()),
         );
 
         // initial signing key prefix
@@ -211,26 +211,29 @@ mod tests {
     #[test]
     fn self_addressing_create() -> Result<(), Error> {
         // hi Ed!
-        let kp0 = Keypair::generate(&mut OsRng);
-        let kp1 = Keypair::generate(&mut OsRng);
-        let kp2 = Keypair::generate(&mut OsRng);
+        let kp0 = SigningKey::generate(&mut OsRng);
+        let kp1 = SigningKey::generate(&mut OsRng);
+        let kp2 = SigningKey::generate(&mut OsRng);
 
         // get two ed25519 keypairs
-        let pub_key0 = PublicKey::new(kp0.public.to_bytes().to_vec());
-        let priv_key0 = PrivateKey::new(kp0.secret.to_bytes().to_vec());
+        let pub_key0 = PublicKey::new(kp0.verifying_key().to_bytes().to_vec());
+        let priv_key0 = PrivateKey::new(kp0.to_bytes().to_vec());
         let (pub_key1, sig_key_1) = (
-            PublicKey::new(kp1.public.to_bytes().to_vec()),
-            PrivateKey::new(kp1.secret.to_bytes().to_vec()),
+            PublicKey::new(kp1.verifying_key().to_bytes().to_vec()),
+            PrivateKey::new(kp1.to_bytes().to_vec()),
         );
 
         // hi X!
         // let x = XChaCha20Poly1305::new((&priv_key0.into_bytes()[..]).into());
 
         // get two X25519 keypairs
-        let (enc_key_0, _enc_priv_0) = (PublicKey::new(kp2.public.to_bytes().to_vec()), sig_key_1);
+        let (enc_key_0, _enc_priv_0) = (
+            PublicKey::new(kp2.verifying_key().to_bytes().to_vec()),
+            sig_key_1,
+        );
         let (enc_key_1, _enc_priv_1) = (
-            PublicKey::new(kp2.public.to_bytes().to_vec()),
-            PrivateKey::new(kp2.secret.to_bytes().to_vec()),
+            PublicKey::new(kp2.verifying_key().to_bytes().to_vec()),
+            PrivateKey::new(kp2.to_bytes().to_vec()),
         );
 
         // initial key set

@@ -1,4 +1,4 @@
-use ed25519_dalek::{ExpandedSecretKey, SecretKey};
+use ed25519_dalek::{Signer, Verifier};
 use k256::ecdsa::{signature::Signer as EcdsaSigner, Signature as EcdsaSignature, SigningKey};
 use k256::ecdsa::{signature::Verifier as EcdsaVerifier, VerifyingKey};
 use serde_derive::{Deserialize, Serialize};
@@ -6,8 +6,12 @@ use zeroize::Zeroize;
 
 #[derive(Debug, thiserror::Error, Serialize, Deserialize)]
 pub enum KeysError {
+    #[error("ED25519Dalek key error")]
+    Ed25519DalekKeyError,
     #[error("ED25519Dalek signature error")]
     Ed25519DalekSignatureError,
+    #[error("ECDSA signature error")]
+    EcdsaError,
 }
 
 impl From<ed25519_dalek::SignatureError> for KeysError {
@@ -36,7 +40,12 @@ impl PublicKey {
     }
 
     pub fn verify_ed(&self, msg: &[u8], sig: &[u8]) -> bool {
-        if let Ok(key) = ed25519_dalek::PublicKey::from_bytes(&self.key()) {
+        let binding = self.key();
+        let key: &[u8; 32] = match binding.as_slice().try_into() {
+            Ok(arr) => arr,
+            Err(_) => panic!("Vector does not have exactly 32 elements"),
+        };
+        if let Ok(key) = ed25519_dalek::VerifyingKey::from_bytes(key) {
             use arrayref::array_ref;
             if sig.len() != 64 {
                 return false;
@@ -80,17 +89,17 @@ impl PrivateKey {
     }
 
     pub fn sign_ecdsa(&self, msg: &[u8]) -> Result<Vec<u8>, KeysError> {
-        let sig: EcdsaSignature = EcdsaSigner::sign(&SigningKey::from_bytes(&self.key)?, msg);
+        let sig: EcdsaSignature = EcdsaSigner::sign(
+            &SigningKey::from_bytes(&self.key).map_err(|_e| KeysError::Ed25519DalekKeyError)?,
+            msg,
+        );
         Ok(sig.as_ref().to_vec())
     }
 
     pub fn sign_ed(&self, msg: &[u8]) -> Result<Vec<u8>, KeysError> {
-        let sk = SecretKey::from_bytes(&self.key).map_err(KeysError::from)?;
-        let pk = ed25519_dalek::PublicKey::from(&sk);
-        Ok(ExpandedSecretKey::from(&sk)
-            .sign(msg, &pk)
-            .as_ref()
-            .to_vec())
+        let sk = ed25519_dalek::SigningKey::from_bytes(arrayref::array_ref![self.key, 0, 32]);
+
+        Ok(sk.sign(msg).to_vec())
     }
 
     pub fn key(&self) -> Vec<u8> {
@@ -109,7 +118,7 @@ fn libsodium_to_ed25519_dalek_compat() {
     use ed25519_dalek::Signature;
     use rand::rngs::OsRng;
 
-    let kp = ed25519_dalek::Keypair::generate(&mut OsRng);
+    let kp = ed25519_dalek::SigningKey::generate(&mut OsRng);
 
     let msg = b"are libsodium and dalek compatible?";
 
@@ -117,11 +126,11 @@ fn libsodium_to_ed25519_dalek_compat() {
 
     use sodiumoxide::crypto::sign;
 
-    let sodium_pk = sign::ed25519::PublicKey::from_slice(&kp.public.to_bytes());
+    let sodium_pk = sign::ed25519::PublicKey::from_slice(&kp.verifying_key().to_bytes());
     assert!(sodium_pk.is_some());
     let sodium_pk = sodium_pk.unwrap();
-    let mut sodium_sk_concat = kp.secret.to_bytes().to_vec();
-    sodium_sk_concat.append(&mut kp.public.to_bytes().to_vec().clone());
+    let mut sodium_sk_concat = kp.to_bytes().to_vec();
+    sodium_sk_concat.append(&mut kp.verifying_key().to_bytes().to_vec().clone());
     let sodium_sk = sign::ed25519::SecretKey::from_slice(&sodium_sk_concat);
     assert!(sodium_sk.is_some());
     let sodium_sk = sodium_sk.unwrap();
@@ -137,7 +146,7 @@ fn libsodium_to_ed25519_dalek_compat() {
     assert!(kp
         .verify(
             msg,
-            &Signature::from_bytes(&arrayref::array_ref!(sodium_sig, 0, 64).to_owned()).unwrap()
+            &Signature::from_bytes(&arrayref::array_ref!(sodium_sig, 0, 64).to_owned())
         )
         .is_ok());
 }

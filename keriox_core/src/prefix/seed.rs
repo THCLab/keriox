@@ -1,13 +1,13 @@
+use std::str::FromStr;
+
 use super::error::Error;
 use super::CesrPrimitive;
-use crate::keys::{PrivateKey, PublicKey};
+use crate::keys::{KeysError, PrivateKey, PublicKey};
 use cesrox::{
     conversion::from_text_to_bytes,
     derivation_code::DerivationCode,
     primitives::codes::{seed::SeedCode, PrimitiveCode},
 };
-use core::str::FromStr;
-use ed25519_dalek::SecretKey;
 use k256::ecdsa::{SigningKey, VerifyingKey};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -32,14 +32,17 @@ impl SeedPrefix {
     pub fn derive_key_pair(&self) -> Result<(PublicKey, PrivateKey), Error> {
         match self {
             Self::RandomSeed256Ed25519(seed) => {
-                let secret = SecretKey::from_bytes(seed)?;
-                let vk =
-                    PublicKey::new(ed25519_dalek::PublicKey::from(&secret).as_bytes().to_vec());
-                let sk = PrivateKey::new(secret.as_bytes().to_vec());
+                let key: &[u8; 32] = match seed.as_slice().try_into() {
+                    Ok(arr) => arr,
+                    Err(_) => return Err(KeysError::Ed25519DalekKeyError.into()),
+                };
+                let secret = ed25519_dalek::SigningKey::from_bytes(key);
+                let vk = PublicKey::new(secret.verifying_key().to_bytes().to_vec());
+                let sk = PrivateKey::new(secret.to_bytes().to_vec());
                 Ok((vk, sk))
             }
             Self::RandomSeed256ECDSAsecp256k1(seed) => {
-                let sk = SigningKey::from_bytes(seed)?;
+                let sk = SigningKey::from_bytes(seed).map_err(|_e| KeysError::EcdsaError)?;
                 Ok((
                     PublicKey::new(VerifyingKey::from(&sk).to_bytes().to_vec()),
                     PrivateKey::new(sk.to_bytes().to_vec()),
@@ -166,14 +169,14 @@ fn test_derive_keypair() -> Result<(), Error> {
 fn test_derive_from_seed() {
     use cesrox::primitives::codes::seed::SeedCode;
     use rand::rngs::OsRng;
-    let ed_keypair = ed25519_dalek::Keypair::generate(&mut OsRng);
+    let ed_keypair = ed25519_dalek::SigningKey::generate(&mut OsRng);
 
     let sp = SeedPrefix::new(
         SeedCode::RandomSeed256Ed25519,
-        ed_keypair.secret.as_bytes().to_vec(),
+        ed_keypair.as_bytes().to_vec(),
     );
 
     let (derived_pub_key, derived_priv_key) = sp.derive_key_pair().unwrap();
-    assert_eq!(derived_pub_key.key(), ed_keypair.public.to_bytes());
-    assert_eq!(derived_priv_key.key(), ed_keypair.secret.to_bytes());
+    assert_eq!(derived_pub_key.key(), ed_keypair.verifying_key().to_bytes());
+    assert_eq!(derived_priv_key.key(), ed_keypair.to_bytes());
 }
