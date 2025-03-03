@@ -30,7 +30,7 @@ impl MaybeOutOfOrderEscrow {
         duration: Duration,
     ) -> Self {
         let ooo_escrowdb = SnKeyEscrow::new(
-            Arc::new(SnKeyDatabase::new(db.db.clone()).unwrap()),
+            Arc::new(SnKeyDatabase::new(db.db.clone(), "out_of_order_escrow").unwrap()),
             db.log_db.clone(),
         );
         Self {

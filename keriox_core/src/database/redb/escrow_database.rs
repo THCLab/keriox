@@ -10,38 +10,37 @@ use crate::prefix::IdentifierPrefix;
 
 use super::{rkyv_adapter, RedbError};
 
-/// Out Of Order Escrow. (identifier, sn) -> event digest
-/// The `PSE` table links an identifier and sequence number to the digest of an event,
-/// referencing the actual event stored in the `EVENTS` table in EventDatabase.
-const PSE: MultimapTableDefinition<(&str, u64), &[u8]> =
-    MultimapTableDefinition::new("out_of_order_escrow");
-
-/// Timestamps. timestamp -> digest
-/// The `TIME` table links a timestamp of when an event was saved in the database to the digest of an event.
-const TIME: TableDefinition<u64, &[u8]> = TableDefinition::new("time");
-
-/// Timestamps. digest -> timestamp
-/// The `DTS` table links digest of an event witch time when an event was saved in the database.
-const DTS: TableDefinition<&[u8], u64> = TableDefinition::new("timestamps");
-
 /// Storage for digests of escrowed events.
 /// The digest of an escrowed event can be used to retrieve the full event from the `LogDatabase`.  
 /// The storage is indexed by a tuple of (identifier, sn), with the value being the event's digest.
 pub struct SnKeyDatabase {
     db: Arc<Database>,
+    /// Escrowed events. (identifier, sn) -> event digest
+    /// The `PSE` table links an identifier and sequence number to the digest of an event,
+    /// referencing the actual event stored in the `EVENTS` table in EventDatabase.
+    sn_key_table: MultimapTableDefinition<'static, (&'static str, u64), &'static [u8]>,
+    /// Timestamps. digest -> timestamp
+    /// The `DTS` table links digest of an event witch time when an event was saved in the database.
+    dts_table: TableDefinition<'static, &'static [u8], u64>,
 }
 
 impl SnKeyDatabase {
-    pub fn new(db: Arc<Database>) -> Result<Self, RedbError> {
+    pub fn new(db: Arc<Database>, table_name: &'static str) -> Result<Self, RedbError> {
         // Create tables
+        let pse = MultimapTableDefinition::new(table_name);
+        let dts = TableDefinition::new("timestamps");
+
         let write_txn = db.begin_write()?;
         {
-            write_txn.open_multimap_table(PSE)?;
-            write_txn.open_table(DTS)?;
-            write_txn.open_table(TIME)?;
+            write_txn.open_multimap_table(pse)?;
+            write_txn.open_table(dts)?;
         }
         write_txn.commit()?;
-        Ok(Self { db })
+        Ok(Self {
+            db,
+            sn_key_table: pse,
+            dts_table: dts,
+        })
     }
 
     pub fn insert(
@@ -52,11 +51,11 @@ impl SnKeyDatabase {
     ) -> Result<(), RedbError> {
         let write_txn = self.db.begin_write()?;
         {
-            let mut table = (&write_txn).open_multimap_table(PSE)?;
+            let mut table = (&write_txn).open_multimap_table(self.sn_key_table)?;
             let value = rkyv_adapter::serialize_said(&digest)?;
             table.insert((identifier.to_string().as_str(), sn), value.as_ref())?;
 
-            let mut table = (&write_txn).open_table(DTS)?;
+            let mut table = (&write_txn).open_table(self.dts_table)?;
             let value = get_current_timestamp();
             let key = rkyv_adapter::serialize_said(&digest)?;
             table.insert(key.as_slice(), &value)?;
@@ -71,7 +70,7 @@ impl SnKeyDatabase {
         sn: u64,
     ) -> Result<impl Iterator<Item = SelfAddressingIdentifier>, RedbError> {
         let read_txn = self.db.begin_read()?;
-        let table = read_txn.open_multimap_table(PSE)?;
+        let table = read_txn.open_multimap_table(self.sn_key_table)?;
         let value = table.get((identifier.to_string().as_str(), sn))?;
         let out = value.filter_map(|value| match value {
             Ok(value) => {
@@ -89,7 +88,7 @@ impl SnKeyDatabase {
         sn: u64,
     ) -> Result<impl Iterator<Item = SelfAddressingIdentifier>, RedbError> {
         let read_txn = self.db.begin_read()?;
-        let table = read_txn.open_multimap_table(PSE)?;
+        let table = read_txn.open_multimap_table(self.sn_key_table)?;
         let lower_bound = identifier.to_string();
         let upper_bound = {
             let mut bytes = lower_bound.as_bytes().to_vec();
@@ -123,11 +122,11 @@ impl SnKeyDatabase {
     ) -> Result<(), RedbError> {
         let write_txn = self.db.begin_write()?;
         {
-            let mut table = write_txn.open_multimap_table(PSE)?;
+            let mut table = write_txn.open_multimap_table(self.sn_key_table)?;
             let said = rkyv_adapter::serialize_said(said).unwrap();
             table.remove((identifier.to_string().as_str(), sn), said.as_slice())?;
 
-            let mut table = write_txn.open_table(DTS)?;
+            let mut table = write_txn.open_table(self.dts_table)?;
             table.remove(said.as_slice())?;
         }
 
