@@ -7,7 +7,10 @@ use std::{
 
 use crate::{
     database::{redb::RedbDatabase, EventDatabase},
-    processor::escrow::maybe_out_of_order_escrow::MaybeOutOfOrderEscrow,
+    processor::escrow::{
+        maybe_out_of_order_escrow::MaybeOutOfOrderEscrow,
+        partially_witnessed_escrow::PartiallyWitnessedEscrow,
+    },
     query::mailbox::SignedMailboxQuery,
 };
 use crate::{event_message::cesr_adapter::ParseError, query::query_event::LogsQueryArgs};
@@ -44,7 +47,7 @@ use crate::{
     prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
     processor::{
         basic_processor::BasicProcessor,
-        escrow::{default_escrow_bus, DelegationEscrow, EscrowConfig, PartiallyWitnessedEscrow},
+        escrow::{default_escrow_bus, DelegationEscrow, EscrowConfig},
         event_storage::EventStorage,
         Processor,
     },
@@ -209,7 +212,7 @@ pub struct SimpleController<K: KeyManager + 'static, D: EventDatabase> {
     oobi_manager: OobiManager,
     pub storage: EventStorage<D>,
     pub groups: Vec<IdentifierPrefix>,
-    pub not_fully_witnessed_escrow: Arc<PartiallyWitnessedEscrow<D>>,
+    pub not_fully_witnessed_escrow: Arc<PartiallyWitnessedEscrow>,
     pub ooo_escrow: Arc<MaybeOutOfOrderEscrow>,
     pub delegation_escrow: Arc<DelegationEscrow<D>>,
 }

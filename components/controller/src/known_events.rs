@@ -9,6 +9,7 @@ use keri_core::event_message::signed_event_message::SignedNontransferableReceipt
 use keri_core::oobi::LocationScheme;
 use keri_core::prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix};
 
+use keri_core::processor::escrow::partially_witnessed_escrow::PartiallyWitnessedEscrow;
 use keri_core::processor::escrow::EscrowConfig;
 use keri_core::processor::notification::JustNotification;
 
@@ -25,9 +26,7 @@ use keri_core::{
     },
     oobi::{OobiManager, Role, Scheme},
     processor::{
-        basic_processor::BasicProcessor,
-        escrow::{default_escrow_bus, PartiallyWitnessedEscrow},
-        event_storage::EventStorage,
+        basic_processor::BasicProcessor, escrow::default_escrow_bus, event_storage::EventStorage,
     },
     query::reply_event::{ReplyEvent, ReplyRoute, SignedReply},
 };

@@ -3,16 +3,16 @@
 /// by its digest.
 const EVENTS: TableDefinition<&[u8], &[u8]> = TableDefinition::new("events");
 
-/// Signatures storage. (identifier, sn) -> signature
-/// The `SIGS` table links an identifier and sequence number to one or more
+/// Signatures storage. (event digest) -> signature
+/// The `SIGS` table links event digest to one or more
 /// signatures.
 const SIGS: MultimapTableDefinition<&[u8], &[u8]> = MultimapTableDefinition::new("signatures");
 
-/// Nontransferable receipts storage. (identifier, sn) -> signature couplet (one or more)
+/// Nontransferable receipts storage. (event digest) -> signature couplet (one or more)
 const NONTRANS_RCTS: MultimapTableDefinition<&[u8], &[u8]> =
     MultimapTableDefinition::new("nontrans_receipts");
 
-/// Nontransferable receipts storage. (identifier, sn) -> transferable receipt (one or more)
+/// Nontransferable receipts storage. (event digest) -> transferable receipt (one or more)
 const TRANS_RCTS: MultimapTableDefinition<&[u8], &[u8]> =
     MultimapTableDefinition::new("trans_receipts");
 
@@ -20,7 +20,10 @@ use std::sync::Arc;
 
 use redb::{Database, MultimapTableDefinition, TableDefinition};
 use rkyv::{
-    api::high::HighSerializer, rancor::Failure, ser::allocator::ArenaHandle, util::AlignedVec,
+    api::high::HighSerializer,
+    rancor::{self, Failure},
+    ser::allocator::ArenaHandle,
+    util::AlignedVec,
 };
 use said::SelfAddressingIdentifier;
 
@@ -30,7 +33,7 @@ use crate::{
     event_message::{
         msg::KeriEvent,
         signature::{Nontransferable, Transferable},
-        signed_event_message::SignedEventMessage,
+        signed_event_message::{SignedEventMessage, SignedNontransferableReceipt},
     },
     prefix::IndexedSignature,
 };
@@ -79,6 +82,28 @@ impl LogDatabase {
         };
         Ok(())
     }
+
+    pub fn log_receipt(
+        &self,
+        txn_mode: &WriteTxnMode,
+        signed_receipt: &SignedNontransferableReceipt,
+    ) -> Result<(), RedbError> {
+        let digest = &signed_receipt.body.receipted_event_digest;
+
+        self.insert_nontrans_receipt(&txn_mode, digest, &signed_receipt.signatures)?;
+        Ok(())
+    }
+
+    // pub fn remove_receipt(
+    //     &self,
+    //     txn_mode: &WriteTxnMode,
+    //     signed_receipt: &SignedNontransferableReceipt,
+    // ) -> Result<(), RedbError> {
+    //     let digest = &signed_receipt.body.receipted_event_digest;
+
+    //     // self.db.remove_receipt(txn_mode, signed_receipt)
+    //     Ok(())
+    // }
 
     pub fn get_signed_event(
         &self,
@@ -187,6 +212,24 @@ impl LogDatabase {
         nontrans: &[Nontransferable],
     ) -> Result<(), RedbError> {
         self.insert_with_digest_key(txn_mode, NONTRANS_RCTS, said, nontrans)
+    }
+
+    pub(super) fn remove_nontrans_receipt(
+        &self,
+        txn_mode: &WriteTxnMode,
+        said: &SelfAddressingIdentifier,
+        nontrans: &[Nontransferable],
+    ) -> Result<(), RedbError> {
+        let serialized_said = rkyv_adapter::serialize_said(said)?;
+        execute_in_transaction(self.db.clone(), txn_mode, |write_txn| {
+            let mut table = write_txn.open_multimap_table(NONTRANS_RCTS)?;
+
+            for value in nontrans {
+                let value = rkyv::to_bytes::<rancor::Error>(value)?;
+                table.remove(serialized_said.as_slice(), value.as_slice())?;
+            }
+            Ok(())
+        })
     }
 
     pub(super) fn insert_trans_receipt(

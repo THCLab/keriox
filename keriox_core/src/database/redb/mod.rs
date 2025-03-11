@@ -204,6 +204,16 @@ impl EventDatabase for RedbDatabase {
 }
 
 impl RedbDatabase {
+    pub fn accept_to_kel(
+        &self,
+        txn_mode: &WriteTxnMode,
+        event: &KeriEvent<KeyEvent>,
+    ) -> Result<(), RedbError> {
+        self.save_to_kel(txn_mode, event)?;
+        self.update_key_state(txn_mode, event)?;
+
+        Ok(())
+    }
     /// Saves KEL event of given identifier. Key is identifier and sn of event, and value is event digest.
     fn save_to_kel(
         &self,

@@ -1,5 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
+use said::SelfAddressingIdentifier;
+
 use crate::{
     actor::prelude::SledEventDatabase,
     database::{
@@ -102,6 +104,17 @@ pub struct SnKeyEscrow {
 impl SnKeyEscrow {
     pub(crate) fn new(escrow: Arc<SnKeyDatabase>, log: Arc<LogDatabase>) -> Self {
         Self { escrow, log }
+    }
+
+    pub fn save_digest(
+        &self,
+        id: &IdentifierPrefix,
+        sn: u64,
+        event_digest: &SelfAddressingIdentifier,
+    ) -> Result<(), RedbError> {
+        self.escrow.insert(id, sn, event_digest)?;
+
+        Ok(())
     }
 
     pub fn insert(&self, event: &SignedEventMessage) -> Result<(), RedbError> {
