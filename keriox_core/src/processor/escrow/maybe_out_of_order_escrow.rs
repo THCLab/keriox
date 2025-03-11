@@ -9,7 +9,8 @@ use crate::{
         EventDatabase,
     },
     error::Error,
-    event_message::signed_event_message::SignedEventMessage,
+    event::KeyEvent,
+    event_message::{msg::KeriEvent, signed_event_message::SignedEventMessage},
     prefix::IdentifierPrefix,
 };
 
@@ -79,14 +80,14 @@ impl MaybeOutOfOrderEscrow {
                         .add_kel_finalized_event(event.clone(), id)
                         .map_err(|_| Error::DbError)?;
                     // remove from escrow
-                    self.escrowed_out_of_order.remove(&event);
+                    self.escrowed_out_of_order.remove(&event.event_message);
                     bus.notify(&Notification::KeyEventAdded(event))?;
                     // stop processing the escrow if kel was updated. It needs to start again.
                     break;
                 }
                 Err(Error::SignatureVerificationError) => {
                     // remove from escrow
-                    self.escrowed_out_of_order.remove(&event);
+                    self.escrowed_out_of_order.remove(&event.event_message);
                 }
                 Err(_e) => (), // keep in escrow,
             }
@@ -133,11 +134,11 @@ impl SnKeyEscrow {
         identifier: &IdentifierPrefix,
         sn: u64,
     ) -> Result<impl Iterator<Item = SignedEventMessage> + 'a, RedbError> {
-        Ok(self.escrow.get(identifier, sn)?.map(move |said| {
+        Ok(self.escrow.get(identifier, sn)?.filter_map(move |said| {
             self.log
                 .get_signed_event(&said)
                 .unwrap()
-                .signed_event_message
+                .map(|el| el.signed_event_message)
         }))
     }
 
@@ -153,15 +154,29 @@ impl SnKeyEscrow {
                 self.log
                     .get_signed_event(&said)
                     .unwrap()
+                    .unwrap()
                     .signed_event_message
             }))
     }
 
-    pub fn remove(&self, event: &SignedEventMessage) {
-        let said = event.event_message.digest().unwrap();
-        let id = event.event_message.data.get_prefix();
-        let sn = event.event_message.data.sn;
+    pub fn remove(&self, event: &KeriEvent<KeyEvent>) {
+        let said = event.digest().unwrap();
+        let id = event.data.get_prefix();
+        let sn = event.data.sn;
         self.escrow.remove(&id, sn, &said).unwrap();
+    }
+
+    pub fn contains(
+        &self,
+        id: &IdentifierPrefix,
+        sn: u64,
+        digest: &SelfAddressingIdentifier,
+    ) -> Result<bool, RedbError> {
+        Ok(self
+            .escrow
+            .get(id, sn)?
+            .find(|said| said == digest)
+            .is_some())
     }
 }
 

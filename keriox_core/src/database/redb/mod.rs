@@ -155,13 +155,18 @@ impl EventDatabase for RedbDatabase {
         params: super::QueryParameters,
     ) -> Option<impl DoubleEndedIterator<Item = super::timestamped::TimestampedSignedEventMessage>>
     {
-        match params {
-            QueryParameters::BySn { id, sn } => Some(self.get_kel(&id, sn, 1).into_iter()),
-            QueryParameters::Range { id, start, limit } => {
-                Some(self.get_kel(&id, start, limit).into_iter())
-            }
+        let out = match params {
+            QueryParameters::BySn { id, sn } => self
+                .get_kel(&id, sn, 1)
+                .map(|el| Some(el.into_iter()))
+                .unwrap(),
+            QueryParameters::Range { id, start, limit } => self
+                .get_kel(&id, start, limit)
+                .map(|el| Some(el.into_iter()))
+                .unwrap(),
             QueryParameters::All { id } => self.get_full_kel(id).map(|kel| kel.into_iter()),
-        }
+        };
+        out
     }
 
     fn get_receipts_t(
@@ -336,21 +341,19 @@ impl RedbDatabase {
         id: &IdentifierPrefix,
         from: u64,
         limit: u64,
-    ) -> Vec<timestamped::Timestamped<SignedEventMessage>> {
+    ) -> Result<Vec<timestamped::Timestamped<SignedEventMessage>>, RedbError> {
         let digests = {
-            let read_txn = self.db.begin_read().unwrap();
-            let table = read_txn.open_table(KELS).unwrap();
-            table
-                .range((id.to_str().as_str(), from)..(id.to_str().as_str(), from + limit))
-                .unwrap()
+            let read_txn = self.db.begin_read()?;
+            let table = read_txn.open_table(KELS)?;
+            table.range((id.to_str().as_str(), from)..(id.to_str().as_str(), from + limit))?
         };
 
         digests
-            .map(|entry| {
+            .filter_map(|entry| {
                 let (_, value) = entry.unwrap();
                 self.log_db
                     .get_signed_event_by_serialized_key(value.value())
-                    .unwrap()
+                    .transpose()
             })
             .collect()
     }
@@ -375,6 +378,7 @@ impl RedbDatabase {
                 let (_key, value) = entry.unwrap();
                 self.log_db
                     .get_signed_event_by_serialized_key(value.value())
+                    .unwrap()
                     .unwrap()
             })
             .collect::<Vec<_>>();
@@ -412,7 +416,7 @@ where
 }
 
 #[test]
-fn test_retrieve_kel() {
+fn test_retrieve_kel() -> Result<(), RedbError> {
     use crate::actor::parse_event_stream;
     use crate::event_message::signed_event_message::{Message, Notice};
     use crate::event_message::EventTypeTag;
@@ -446,7 +450,7 @@ fn test_retrieve_kel() {
         }
     }
 
-    let first_event = &db.get_kel(&first_id, 0, 1)[0].signed_event_message;
+    let first_event = &db.get_kel(&first_id, 0, 1)?[0].signed_event_message;
 
     let expected_event = &icp_raw[..487]; // icp event without signatures
     assert_eq!(first_event.event_message.encode().unwrap(), expected_event);
@@ -455,7 +459,7 @@ fn test_retrieve_kel() {
     assert_eq!(sigs_from_db.len(), 3);
 
     // Retrieve KEL in range
-    let mut part_of_kel_events = db.get_kel(&first_id, 1, 2).into_iter();
+    let mut part_of_kel_events = db.get_kel(&first_id, 1, 2)?.into_iter();
 
     let rot = part_of_kel_events.next().unwrap();
     assert_eq!(
@@ -492,7 +496,7 @@ fn test_retrieve_kel() {
     assert_eq!(part_of_kel_events.next(), None);
 
     // Retrieve KEL in range
-    let mut part_of_kel_events = db.get_kel(&first_id, 0, 2).into_iter();
+    let mut part_of_kel_events = db.get_kel(&first_id, 0, 2)?.into_iter();
     let icp = part_of_kel_events.next().unwrap();
     assert_eq!(
         icp.signed_event_message.event_message.event_type,
@@ -536,4 +540,5 @@ fn test_retrieve_kel() {
             .unwrap()
             .into()
     );
+    Ok(())
 }

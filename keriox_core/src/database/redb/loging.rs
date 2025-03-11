@@ -108,7 +108,7 @@ impl LogDatabase {
     pub fn get_signed_event(
         &self,
         said: &SelfAddressingIdentifier,
-    ) -> Result<TimestampedSignedEventMessage, RedbError> {
+    ) -> Result<Option<TimestampedSignedEventMessage>, RedbError> {
         let key = rkyv_adapter::serialize_said(said)?;
         self.get_signed_event_by_serialized_key(key.as_slice())
     }
@@ -150,21 +150,23 @@ impl LogDatabase {
     pub(super) fn get_signed_event_by_serialized_key(
         &self,
         key: &[u8],
-    ) -> Result<TimestampedSignedEventMessage, RedbError> {
+    ) -> Result<Option<TimestampedSignedEventMessage>, RedbError> {
         let signatures = self
             .get_signatures_by_serialized_key(&key)
             .unwrap()
             .unwrap()
             .collect();
 
-        let event = self.get_event_by_serialized_key(&key).unwrap().unwrap();
-        let receipts = self
-            .get_nontrans_couplets_by_key(key)
-            .unwrap()
-            .map(|vec| vec.collect());
-        Ok(TimestampedSignedEventMessage::new(SignedEventMessage::new(
-            &event, signatures, receipts, None,
-        )))
+        let event = self.get_event_by_serialized_key(&key)?;
+        Ok(event.map(|ev| {
+            let receipts = self
+                .get_nontrans_couplets_by_key(key)
+                .unwrap()
+                .map(|vec| vec.collect());
+            TimestampedSignedEventMessage::new(SignedEventMessage::new(
+                &ev, signatures, receipts, None,
+            ))
+        }))
     }
 
     /// Saves provided event into key event table. Key is it's digest and value is event.
