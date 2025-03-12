@@ -77,21 +77,21 @@ async fn test_kel_managing() -> Result<(), ControllerError> {
 async fn test_kel_managing_with_witness() -> Result<(), ControllerError> {
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
 
-    let first_witness_id: BasicPrefix = "BDg3H7Sr-eES0XWXiO8nvMxW6mD_1LxLeE1nuiZxhGp4"
+    let first_witness_id: BasicPrefix = "BNJJhjUnhlw-lsbYdehzLsX1hJMG9QJlK_wJ5AunJLrM"
         .parse()
         .unwrap();
     // OOBI (Out-Of-Band Introduction) specifies the way how actors can be found.
     let first_witness_oobi: LocationScheme = serde_json::from_str(&format!(
-        r#"{{"eid":{:?},"scheme":"http","url":"http://witness2.sandbox.argo.colossi.network/"}}"#,
+        r#"{{"eid":{:?},"scheme":"http","url":"http://w1.ea.argo.colossi.network/"}}"#,
         first_witness_id
     ))
     .unwrap();
 
-    let second_witness_id: BasicPrefix = "BDg1zxxf8u4Hx5IPraZzmStfSCZFZbDzMHjqVcFW5OfP"
+    let second_witness_id: BasicPrefix = "BFdfJEbC7__AqZdrXkxmW3THnZmIeJzCGpzJpgN6Ettw"
         .parse()
         .unwrap();
     let second_witness_oobi: LocationScheme = serde_json::from_str(&format!(
-        r#"{{"eid":{:?},"scheme":"http","url":"http://witness3.sandbox.argo.colossi.network/"}}"#,
+        r#"{{"eid":{:?},"scheme":"http","url":"http://w2.ea.argo.colossi.network/"}}"#,
         second_witness_id
     ))
     .unwrap();
