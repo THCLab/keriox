@@ -27,12 +27,9 @@ use crate::{
     },
     event_message::{
         msg::KeriEvent,
-        signature::Nontransferable,
-        signed_event_message::{
-            SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
-        },
+        signed_event_message::{SignedEventMessage, SignedTransferableReceipt},
     },
-    prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+    prefix::IdentifierPrefix,
 };
 #[cfg(feature = "query")]
 use crate::{
@@ -102,7 +99,6 @@ pub fn default_escrow_bus(
     let pw_escrow = Arc::new(PartiallyWitnessedEscrow::new(
         event_db.clone(),
         sled_db.clone(),
-        escrow_db.clone(),
         escrow_config.partially_witnessed_timeout,
     ));
     bus.register_observer(

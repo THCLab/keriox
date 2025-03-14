@@ -27,6 +27,7 @@ use crate::{
     database::{EventDatabase, QueryParameters},
     event_message::signed_event_message::SignedEventMessage,
 };
+#[cfg(feature = "query")]
 use said::version::format::SerializationFormats;
 use said::SelfAddressingIdentifier;
 

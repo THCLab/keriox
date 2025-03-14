@@ -209,7 +209,7 @@ impl EventDatabase for RedbDatabase {
 }
 
 impl RedbDatabase {
-    pub fn accept_to_kel(
+    pub(crate) fn accept_to_kel(
         &self,
         txn_mode: &WriteTxnMode,
         event: &KeriEvent<KeyEvent>,
@@ -432,9 +432,6 @@ fn test_retrieve_kel() -> Result<(), RedbError> {
     let second_icp_raw = br#"{"v":"KERI10JSON000159_","t":"icp","d":"EFb-WY7Ie1WPEgsioZz1CyzwnuCg-C9k2QCNpcUfM5Jf","i":"EFb-WY7Ie1WPEgsioZz1CyzwnuCg-C9k2QCNpcUfM5Jf","s":"0","kt":"1","k":["DIwDbi2Sr1kLZFpsX0Od6Y8ariGVLLjZXxBC5bXEI85e"],"nt":"1","n":["ELhmgZ5JFc-ACs9TJxHMxtcKzQxKXLhlAmUT_sKf1-l7"],"bt":"0","b":["DM73ulUG2_DJyA27DfxBXT5SJ5U3A3c2oeG8Z4bUOgyL"],"c":[],"a":[]}-AABAAAPGpCUdR6EfVWROUjpuTsxg5BIcMnfi7PDciv8VuY9NqZ0ioRoaHxMZue_5ALys86sX4aQzKqm_bID3ZBwlMUP"#;
 
     let first_id: IdentifierPrefix = "EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen"
-        .parse()
-        .unwrap();
-    let second_id: IdentifierPrefix = "EFb-WY7Ie1WPEgsioZz1CyzwnuCg-C9k2QCNpcUfM5Jf"
         .parse()
         .unwrap();
 

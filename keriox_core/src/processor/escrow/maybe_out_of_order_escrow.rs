@@ -30,7 +30,7 @@ impl MaybeOutOfOrderEscrow {
     pub fn new(
         db: Arc<RedbDatabase>,
         mailbox_db: Arc<SledEventDatabase>,
-        duration: Duration,
+        _duration: Duration,
     ) -> Self {
         let ooo_escrowdb = SnKeyEscrow::new(
             Arc::new(SnKeyDatabase::new(db.db.clone(), "out_of_order_escrow").unwrap()),

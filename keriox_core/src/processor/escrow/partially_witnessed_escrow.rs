@@ -4,20 +4,13 @@ use said::SelfAddressingIdentifier;
 
 use crate::{
     actor::prelude::{EventStorage, SledEventDatabase},
-    database::{
-        escrow::EscrowDb,
-        redb::{
-            escrow_database::SnKeyDatabase, loging::LogDatabase, RedbDatabase, RedbError,
-            WriteTxnMode,
-        },
+    database::redb::{
+        escrow_database::SnKeyDatabase, loging::LogDatabase, RedbDatabase, RedbError, WriteTxnMode,
     },
     error::Error,
-    event::KeyEvent,
     event_message::{
-        msg::TypedEvent,
         signature::Nontransferable,
         signed_event_message::{SignedEventMessage, SignedNontransferableReceipt},
-        EventTypeTag,
     },
     prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
     processor::notification::{Notification, NotificationBus, Notifier},
@@ -35,13 +28,8 @@ pub struct PartiallyWitnessedEscrow {
 }
 
 impl PartiallyWitnessedEscrow {
-    pub fn new(
-        db: Arc<RedbDatabase>,
-        old_db: Arc<SledEventDatabase>,
-        escrow_db: Arc<EscrowDb>,
-        duration: Duration,
-    ) -> Self {
-        let pwe_escrowdb = SnKeyEscrow::new(
+    pub fn new(db: Arc<RedbDatabase>, old_db: Arc<SledEventDatabase>, _duration: Duration) -> Self {
+        let pwe_escrow_db = SnKeyEscrow::new(
             Arc::new(SnKeyDatabase::new(db.db.clone(), "partially_signed_escrow").unwrap()),
             db.log_db.clone(),
         );
@@ -49,10 +37,11 @@ impl PartiallyWitnessedEscrow {
             log: db.log_db.clone(),
             db,
             old_db,
-            escrowed_partially_witnessed: pwe_escrowdb,
+            escrowed_partially_witnessed: pwe_escrow_db,
         }
     }
 
+    /// Returns all escrowed partially witness events of given identifier.
     pub fn get_partially_witnessed_events<'a>(
         &'a self,
         id: &IdentifierPrefix,
@@ -60,7 +49,7 @@ impl PartiallyWitnessedEscrow {
         self.escrowed_partially_witnessed.get_from_sn(id, 0)
     }
 
-    /// Return escrowed partially witness events of given identifier, sn and
+    /// Returns escrowed partially witness events of given identifier, sn and
     /// digest.
     pub fn get_event_by_sn_and_digest(
         &self,
@@ -81,20 +70,18 @@ impl PartiallyWitnessedEscrow {
         }
     }
 
+    /// Returns escrowed witness receipts for the event identified by the
+    /// identifier, serial number (sn), and digest.
     fn get_escrowed_receipts(
         &self,
         id: &IdentifierPrefix,
         sn: u64,
         digest: &SelfAddressingIdentifier,
-    ) -> Option<impl Iterator<Item = Nontransferable>> {
-        if self
-            .escrowed_partially_witnessed
-            .contains(id, sn, digest)
-            .unwrap()
-        {
-            self.log.get_nontrans_couplets(digest).unwrap()
+    ) -> Result<Option<impl Iterator<Item = Nontransferable>>, RedbError> {
+        if self.escrowed_partially_witnessed.contains(id, sn, digest)? {
+            self.log.get_nontrans_couplets(digest)
         } else {
-            None
+            Ok(None)
         }
     }
 
@@ -125,7 +112,8 @@ impl PartiallyWitnessedEscrow {
         Ok(())
     }
 
-    /// Returns receipt couplets of event
+    /// Helper function for getting receipt couplets of event from iterator of
+    /// Nontransferable
     fn get_receipt_couplets(
         rct: impl IntoIterator<Item = Nontransferable>,
         witnesses: &[BasicPrefix],
@@ -152,51 +140,7 @@ impl PartiallyWitnessedEscrow {
         Ok(couplets.into_iter().chain(indexes?).collect())
     }
 
-    /// Verify escrowed receipts and remove those with wrong
-    /// signatures.
-    pub fn validate_receipts(
-        &self,
-        rcts: impl IntoIterator<Item = Nontransferable>,
-        receipted_event: &TypedEvent<EventTypeTag, KeyEvent>,
-        witnesses: &[BasicPrefix],
-    ) -> Result<(), Error> {
-        // verify receipts signatuers
-        let serialized_event = receipted_event.encode()?;
-        Self::get_receipt_couplets(rcts, witnesses)?
-            .into_iter()
-            .try_for_each(|(witness, signature)| {
-                if witness.verify(&serialized_event, &signature)? {
-                    Ok(())
-                } else {
-                    self.escrowed_partially_witnessed.remove(&receipted_event);
-                    Err(Error::SignatureVerificationError)
-                }
-            })
-    }
-
-    /// Verify escrowed receipts and remove those with wrong
-    /// signatures.
-    pub fn validate_receipt(
-        &self,
-        rct: &Nontransferable,
-        receipted_event: &TypedEvent<EventTypeTag, KeyEvent>,
-        witnesses: &[BasicPrefix],
-    ) -> Result<(), Error> {
-        // verify receipts signatuers
-        let serialized_event = receipted_event.encode()?;
-        Self::get_receipt_couplets([rct.clone()], witnesses)?
-            .into_iter()
-            .try_for_each(|(witness, signature)| {
-                if witness.verify(&serialized_event, &signature)? {
-                    Ok(())
-                } else {
-                    self.escrowed_partially_witnessed.remove(&receipted_event);
-                    Err(Error::SignatureVerificationError)
-                }
-            })
-    }
-
-    pub fn validate_partialy_witnessed(
+    pub fn validate_partially_witnessed(
         &self,
         receipted_event: &SignedEventMessage,
         additional_receipt: Option<SignedNontransferableReceipt>,
@@ -233,8 +177,18 @@ impl PartiallyWitnessedEscrow {
             .then_some(())
             .ok_or(Error::SignatureVerificationError)?;
 
+        // Check signatures of receipts in database. Can be wrong if receipt came before event 
+        if let Some(escrowed_receipts) = self.get_escrowed_receipts(&id, sn, &digest)? {
+            self.validate_receipts(
+                escrowed_receipts,
+                &digest,
+                &receipted_event.event_message.encode()?,
+                &new_state.witness_config.witnesses,
+            )?;
+        }
+
         let (couplets, indexed) = match (
-            self.get_escrowed_receipts(&id, sn, &digest),
+            self.get_escrowed_receipts(&id, sn, &digest)?,
             additional_receipt,
         ) {
             (None, None) => (vec![], vec![]),
@@ -251,6 +205,37 @@ impl PartiallyWitnessedEscrow {
         Ok(())
     }
 
+    /// Verify escrowed receipts and remove those with wrong
+    /// signatures.
+    fn validate_receipts(
+        &self,
+        rcts: impl IntoIterator<Item = Nontransferable>,
+        event_digest: &SelfAddressingIdentifier,
+        serialized_receipted_event: &[u8],
+        witnesses: &[BasicPrefix],
+    ) -> Result<(), RedbError> {
+        let wrong_non = rcts.into_iter().filter(|nontran| match nontran {
+            Nontransferable::Indexed(indexed_sigs) => !indexed_sigs.iter().all(|inx| {
+                let witness_id = witnesses.get(inx.index.current() as usize);
+                match witness_id {
+                    Some(id) => id
+                        .verify(&serialized_receipted_event, &inx.signature)
+                        .unwrap_or(false),
+                    None => false,
+                }
+            }),
+            Nontransferable::Couplet(couplets_sigs) => !couplets_sigs
+                .iter()
+                .all(|(bp, sp)| bp.verify(&serialized_receipted_event, sp).unwrap_or(false)),
+        });
+
+        self.log
+            .remove_nontrans_receipt(&WriteTxnMode::CreateNew, event_digest, wrong_non)?;
+        Ok(())
+    }
+
+    /// Helper function for splitting iterator of transferable into couplets and
+    /// indexed signatures.
     fn extract_receipt<I: IntoIterator<Item = Nontransferable>>(
         nontrans: I,
     ) -> (Vec<(BasicPrefix, SelfSigningPrefix)>, Vec<IndexedSignature>) {
@@ -285,7 +270,7 @@ impl Notifier for PartiallyWitnessedEscrow {
                     Some(receipted_event) => {
                         // verify receipt signature
                         match self
-                            .validate_partialy_witnessed(&receipted_event, Some(ooo.to_owned()))
+                            .validate_partially_witnessed(&receipted_event, Some(ooo.to_owned()))
                         {
                             Ok(_) => {
                                 self.log.log_receipt(&WriteTxnMode::CreateNew, &ooo)?;
@@ -331,7 +316,7 @@ impl Notifier for PartiallyWitnessedEscrow {
             Notification::PartiallyWitnessed(signed_event) => {
                 // ignore events with no signatures
                 if !signed_event.signatures.is_empty() {
-                    match self.validate_partialy_witnessed(signed_event, None) {
+                    match self.validate_partially_witnessed(signed_event, None) {
                         Ok(_) => {
                             self.log
                                 .log_event(&WriteTxnMode::CreateNew, &signed_event)?;
@@ -372,7 +357,7 @@ mod tests {
 
     use crate::{
         actor::prelude::{BasicProcessor, EventStorage, Message, SledEventDatabase},
-        database::{escrow::EscrowDb, redb::RedbDatabase, EventDatabase, QueryParameters},
+        database::{redb::RedbDatabase, EventDatabase, QueryParameters},
         error::Error,
         event_message::signed_event_message::Notice,
         prefix::IdentifierPrefix,
@@ -397,12 +382,9 @@ mod tests {
         let event_storage = EventStorage::new(Arc::clone(&events_db), Arc::clone(&db));
 
         // Register not fully witnessed escrow, to save and reprocess events
-        let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
-        let escrow_db = Arc::new(EscrowDb::new(escrow_root.path())?);
         let partially_witnessed_escrow = Arc::new(PartiallyWitnessedEscrow::new(
             events_db.clone(),
             db.clone(),
-            escrow_db,
             Duration::from_secs(10),
         ));
         event_processor.register_observer(
@@ -469,6 +451,7 @@ mod tests {
         // Check if receipt was saved in escrow
         let esc = partially_witnessed_escrow
             .get_escrowed_receipts(&id, 0, &digest)
+            .unwrap()
             .unwrap();
         assert_eq!(esc.count(), 1);
 
@@ -488,7 +471,9 @@ mod tests {
         assert!(esc.next().is_none());
 
         // Receipts should be removed from escrow, because threshold was met
-        let esc = partially_witnessed_escrow.get_escrowed_receipts(&id, 0, &digest);
+        let esc = partially_witnessed_escrow
+            .get_escrowed_receipts(&id, 0, &digest)
+            .unwrap();
         assert!(esc.is_none());
 
         // check if receipt was accepted
@@ -511,7 +496,9 @@ mod tests {
         event_processor.process(&rcp_msg.clone())?;
 
         // check if receipt was escrowed, shouldn't be.
-        let esc = partially_witnessed_escrow.get_escrowed_receipts(&id, 0, &digest);
+        let esc = partially_witnessed_escrow
+            .get_escrowed_receipts(&id, 0, &digest)
+            .unwrap();
         assert!(esc.is_none());
 
         let mut esc = events_db
@@ -538,12 +525,9 @@ mod tests {
         let event_storage = EventStorage::new(Arc::clone(&events_db), Arc::clone(&db));
 
         // Register not fully witnessed escrow, to save and reprocess events
-        let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
-        let escrow_db = Arc::new(EscrowDb::new(escrow_root.path())?);
         let partially_witnessed_escrow = Arc::new(PartiallyWitnessedEscrow::new(
             events_db.clone(),
             db.clone(),
-            escrow_db,
             Duration::from_secs(10),
         ));
         event_processor.register_observer(
@@ -610,6 +594,7 @@ mod tests {
         // Check if receipt was escrowed
         let mut escrowed_receipts = partially_witnessed_escrow
             .get_escrowed_receipts(&id, 0, &digest)
+            .unwrap()
             .unwrap();
         match rcp_msg_0 {
             Message::Notice(Notice::NontransferableRct(ref rct)) => {
@@ -649,6 +634,7 @@ mod tests {
         // Check if receipt was escrowed. Shouldn't be because of wrong signature
         let escrowed_receipts = partially_witnessed_escrow
             .get_escrowed_receipts(&id, 0, &digest)
+            .unwrap()
             .unwrap();
         assert_eq!(escrowed_receipts.count(), 1);
 
@@ -680,12 +666,9 @@ mod tests {
         let event_storage = EventStorage::new(Arc::clone(&events_db), Arc::clone(&db));
 
         // Register not fully witnessed escrow, to save and reprocess events
-        let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
-        let escrow_db = Arc::new(EscrowDb::new(escrow_root.path())?);
         let partially_witnessed_escrow = Arc::new(PartiallyWitnessedEscrow::new(
             events_db.clone(),
             db.clone(),
-            escrow_db,
             Duration::from_secs(10),
         ));
         event_processor.register_observer(
@@ -713,6 +696,7 @@ mod tests {
         // Check if receipt was escrowed
         let mut escrowed_receipts = partially_witnessed_escrow
             .get_escrowed_receipts(&id, 0, &digest)
+            .unwrap()
             .unwrap();
         match rcp_msg_0 {
             Message::Notice(Notice::NontransferableRct(ref rct)) => {
@@ -733,6 +717,7 @@ mod tests {
         // Check if receipt was escrowed.
         let escrowed_receipts = partially_witnessed_escrow
             .get_escrowed_receipts(&id, 0, &digest)
+            .unwrap()
             .unwrap();
         assert_eq!(escrowed_receipts.count(), 2);
 
@@ -753,7 +738,9 @@ mod tests {
         assert!(esc.next().is_none());
 
         // check if receipt escrow is empty
-        let esc = partially_witnessed_escrow.get_escrowed_receipts(&id, 0, &digest);
+        let esc = partially_witnessed_escrow
+            .get_escrowed_receipts(&id, 0, &digest)
+            .unwrap();
         assert!(esc.is_none());
 
         // check if receipt was accepted
@@ -762,6 +749,96 @@ mod tests {
             sn: 0,
         });
         assert_eq!(esc.unwrap().next().unwrap().signatures.len(), 2);
+
+        Ok(())
+    }
+
+    #[test]
+    pub fn test_out_of_order_receipt_with_wrong_sig() -> Result<(), Error> {
+        use tempfile::Builder;
+
+        // Create test db and event processor.
+        // events taken from keripy/tests/core/test_witness.py:def test_indexed_witness_replay():
+        let root = Builder::new().prefix("test-db").tempdir().unwrap();
+        fs::create_dir_all(root.path()).unwrap();
+        let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
+        let events_db_path = NamedTempFile::new().unwrap();
+        let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
+        let mut event_processor = BasicProcessor::new(events_db.clone(), Arc::clone(&db), None);
+        let event_storage = EventStorage::new(Arc::clone(&events_db), Arc::clone(&db));
+
+        // Register not fully witnessed escrow, to save and reprocess events
+        let partially_witnessed_escrow = Arc::new(PartiallyWitnessedEscrow::new(
+            events_db.clone(),
+            db.clone(),
+            Duration::from_secs(10),
+        ));
+        event_processor.register_observer(
+            partially_witnessed_escrow.clone(),
+            &[
+                JustNotification::PartiallyWitnessed,
+                JustNotification::ReceiptOutOfOrder,
+            ],
+        )?;
+
+        // check if receipt was escrowed
+        let id: IdentifierPrefix = "EJufgwH347N2kobmes1IQw_1pfMipEFFy0RwinZTtah9"
+            .parse()
+            .unwrap();
+        let digest: SelfAddressingIdentifier = "EJufgwH347N2kobmes1IQw_1pfMipEFFy0RwinZTtah9"
+            .parse()
+            .unwrap();
+
+        // first receipt
+        let receipt0_0 = br#"{"v":"KERI10JSON000091_","t":"rct","d":"EJufgwH347N2kobmes1IQw_1pfMipEFFy0RwinZTtah9","i":"EJufgwH347N2kobmes1IQw_1pfMipEFFy0RwinZTtah9","s":"0"}-CABBN_PYSns7oFNixSohVW4raBwMV6iYeh0PEZ_bR-38Xev0BDbyebqZQKwn7TqU92Vtw8n2wy5FptP42F1HEmCc9nQLzbXrXuA9SMl9nCZ-vi2bdaeT3aqInXGFAW70QPzM4kJ"#;
+        let parsed_rcp = parse(receipt0_0).unwrap().1;
+        let rcp_msg_0 = Message::try_from(parsed_rcp).unwrap();
+        event_processor.process(&rcp_msg_0.clone())?;
+
+        // Check if receipt was escrowed
+        let mut escrowed_receipts = partially_witnessed_escrow
+            .get_escrowed_receipts(&id, 0, &digest)
+            .unwrap()
+            .unwrap();
+        match rcp_msg_0 {
+            Message::Notice(Notice::NontransferableRct(ref rct)) => {
+                let nontrans_receipts = rct.signatures[0].clone();
+                let escrowed_receipts_from_escrow = escrowed_receipts.next().unwrap();
+                assert!(escrowed_receipts.next().is_none());
+                assert_eq!(nontrans_receipts, escrowed_receipts_from_escrow);
+            }
+            _ => panic!("Expected NontransferableRct, got {:?}", rcp_msg_0),
+        }
+
+        // second receipt, wrong signature
+        let receipt0_1 = br#"{"v":"KERI10JSON000091_","t":"rct","d":"EJufgwH347N2kobmes1IQw_1pfMipEFFy0RwinZTtah9","i":"EJufgwH347N2kobmes1IQw_1pfMipEFFy0RwinZTtah9","s":"0"}-CABBHndk6cXPCnghFqKt_0SikY1P9z_nIUrHq_SeHgLQCui0BBqAOBXFKVivgf0jh2ySWX1VshnkUYK3ev_L--sPB_onF7w2WhiK2AB7mf4IIuaSQCLumsr2sV77S6U5VMx0CAF"#;
+        let parsed_rcp = parse(receipt0_1).unwrap().1;
+        let rcp_msg_1 = Message::try_from(parsed_rcp).unwrap();
+        event_processor.process(&rcp_msg_1.clone())?;
+
+        // Check if receipt was escrowed.
+        let escrowed_receipts = partially_witnessed_escrow
+            .get_escrowed_receipts(&id, 0, &digest)
+            .unwrap()
+            .unwrap();
+        assert_eq!(escrowed_receipts.count(), 2);
+
+        // process icp event
+        let icp_raw = br#"{"v":"KERI10JSON000273_","t":"icp","d":"EJufgwH347N2kobmes1IQw_1pfMipEFFy0RwinZTtah9","i":"EJufgwH347N2kobmes1IQw_1pfMipEFFy0RwinZTtah9","s":"0","kt":"2","k":["DLQ_T1HC_zZU5b3NsYhCQUX0c9GwyZW7U8pzkKTcFSod","DMW_TkkFsaufVLI0bYWjT7U8zZ_FV7PEiRF3W8RVGfpQ","DJEBW__ddS11UGhY_gofa4_PUE6SGU9wHFfk43AYW1zs"],"nt":"2","n":["EMBt6FEXUuQ02zCXVQicX2W60mmNy8VLiKUlokSf75WZ","EDTF0ZjY5ANPsHIONhplNVDOUEo5aQY9TiDTT3lm0JN6","EKw8rv7Uiugd6r7Zydvg6vY8MOQTOZtP43FodCH88hxk"],"bt":"2","b":["BN_PYSns7oFNixSohVW4raBwMV6iYeh0PEZ_bR-38Xev","BHndk6cXPCnghFqKt_0SikY1P9z_nIUrHq_SeHgLQCui","BJYw25nTX2-tyjqRleJpjysMsqdzsw7Ec6Ta3S9QUULb"],"c":[],"a":[]}-AADAABkmPJEhi5Pr8f-F4FEiBxU-5DF_Ff1LcyyYaOimqlPxs13RJWABWHx_NLQQ8L5O-pGW_zQ7dOWLP098IPoNFcJABAt-w_ejAVim4DrnqFQtZTwtoOqJrsvA1SWRvO-wu_FdyZDtcGhucP4Rl01irWx8MZlrCuY9QnftssqYcBTWBYOACAKMyHHcQ3htd4_NZwzBAUGgc0SxDdzeDvVeZa4g3iVfK4w0BMAOav2ebH8rcW6WoxsQcNyDHjkfYNTM4KNv50I"#;
+        let parsed_icp = parse(icp_raw).unwrap().1;
+        let icp_msg = Message::try_from(parsed_icp).unwrap();
+        event_processor.process(&icp_msg.clone())?;
+
+        // Check if receipt with wrong signature was removed
+        let escrowed_receipts = partially_witnessed_escrow
+            .get_escrowed_receipts(&id, 0, &digest)
+            .unwrap()
+            .unwrap();
+        assert_eq!(escrowed_receipts.count(), 1);
+
+        // Event wasn't accepted because it's not fully witnessed
+        let state = event_storage.get_state(&id);
+        assert!(state.is_none());
 
         Ok(())
     }

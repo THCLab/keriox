@@ -503,8 +503,6 @@ fn test_out_of_order_cleanup() -> Result<(), Error> {
         let mut processor = BasicProcessor::new(events_db.clone(), sled_db.clone(), None);
 
         // Register out of order escrow, to save and reprocess out of order events
-        let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
-        let escrow_db = Arc::new(EscrowDb::new(escrow_root.path())?);
         let ooo_escrow = Arc::new(MaybeOutOfOrderEscrow::new(
             events_db.clone(),
             sled_db.clone(),
@@ -700,12 +698,9 @@ pub fn test_partially_witnessed_escrow_cleanup() -> Result<(), Error> {
     let mut event_processor = BasicProcessor::new(events_db.clone(), Arc::clone(&db), None);
     let event_storage = EventStorage::new(Arc::clone(&events_db), Arc::clone(&db));
     // Register not fully witnessed escrow, to save and reprocess events
-    let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
-    let escrow_db = Arc::new(EscrowDb::new(escrow_root.path())?);
     let partially_witnessed_escrow = Arc::new(PartiallyWitnessedEscrow::new(
         events_db.clone(),
         db.clone(),
-        escrow_db,
         Duration::from_secs(1),
     ));
     event_processor.register_observer(

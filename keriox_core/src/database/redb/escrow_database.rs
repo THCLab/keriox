@@ -16,11 +16,11 @@ use super::{rkyv_adapter, RedbError};
 pub struct SnKeyDatabase {
     db: Arc<Database>,
     /// Escrowed events. (identifier, sn) -> event digest
-    /// The `PSE` table links an identifier and sequence number to the digest of an event,
+    /// Table links an identifier and sequence number to the digest of an event,
     /// referencing the actual event stored in the `EVENTS` table in EventDatabase.
     sn_key_table: MultimapTableDefinition<'static, (&'static str, u64), &'static [u8]>,
     /// Timestamps. digest -> timestamp
-    /// The `DTS` table links digest of an event witch time when an event was saved in the database.
+    /// Table links digest of an event witch time when an event was saved in the database.
     dts_table: TableDefinition<'static, &'static [u8], u64>,
 }
 

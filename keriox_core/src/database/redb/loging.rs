@@ -102,17 +102,6 @@ impl LogDatabase {
         Ok(())
     }
 
-    // pub fn remove_receipt(
-    //     &self,
-    //     txn_mode: &WriteTxnMode,
-    //     signed_receipt: &SignedNontransferableReceipt,
-    // ) -> Result<(), RedbError> {
-    //     let digest = &signed_receipt.body.receipted_event_digest;
-
-    //     // self.db.remove_receipt(txn_mode, signed_receipt)
-    //     Ok(())
-    // }
-
     pub fn get_signed_event(
         &self,
         said: &SelfAddressingIdentifier,
@@ -244,18 +233,18 @@ impl LogDatabase {
         })
     }
 
-    pub(super) fn remove_nontrans_receipt(
+    pub(crate) fn remove_nontrans_receipt(
         &self,
         txn_mode: &WriteTxnMode,
         said: &SelfAddressingIdentifier,
-        nontrans: &[Nontransferable],
+        nontrans: impl IntoIterator<Item = Nontransferable>,
     ) -> Result<(), RedbError> {
         let serialized_said = rkyv_adapter::serialize_said(said)?;
         execute_in_transaction(self.db.clone(), txn_mode, |write_txn| {
             let mut table = write_txn.open_multimap_table(NONTRANS_RCTS)?;
 
             for value in nontrans {
-                let value = rkyv::to_bytes::<rancor::Error>(value)?;
+                let value = rkyv::to_bytes::<rancor::Error>(&value)?;
                 table.remove(serialized_said.as_slice(), value.as_slice())?;
             }
             Ok(())
