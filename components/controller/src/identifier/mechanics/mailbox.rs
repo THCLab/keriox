@@ -128,7 +128,10 @@ impl Identifier {
                 event.event_message.data.get_sn(),
                 &id,
                 &event.event_message.digest()?,
-            );
+            )
+            .map_err(|_e| {
+                MechanicsError::OtherError("Partially signed database error".to_string())
+            })?;
 
         let own_index = self.get_index(&event.event_message.data)?;
         // Elect the leader
@@ -209,7 +212,12 @@ impl Identifier {
                     let fully_signed_event = self
                         .known_events
                         .partially_witnessed_escrow
-                        .get_event_by_sn_and_digest(seal.sn, &seal.prefix, &seal.event_digest());
+                        .get_event_by_sn_and_digest(seal.sn, &seal.prefix, &seal.event_digest())
+                        .map_err(|_e| {
+                            MechanicsError::OtherError(
+                                "Partially signed database error".to_string(),
+                            )
+                        })?;
                     if let Some(fully_signed) = fully_signed_event {
                         let witnesses = self.known_events.get_current_witness_list(&self.id)?;
                         self.communication.publish(witnesses, &fully_signed).await?;

@@ -48,10 +48,8 @@ impl Identifier {
         // Load events that need to be notified to witnesses
         let events_to_notice: Vec<_> = known_events
             .partially_witnessed_escrow
-            .get_partially_witnessed_events()
-            .iter()
-            .filter(|ev| ev.event_message.data.prefix == id)
-            .cloned()
+            .get_partially_witnessed_events(&id)
+            .unwrap()
             .collect();
         // Cache state. It can be not fully witnessed.
         let state = if let Ok(state) = known_events.get_state(&id) {

@@ -814,7 +814,7 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase> {
             event.event_message.data.get_sn(),
             &id,
             &event.event_message.digest()?,
-        );
+        )?;
 
         let own_index = self.get_index(&event.event_message.data)?;
         // Elect the leader

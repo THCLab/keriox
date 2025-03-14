@@ -139,10 +139,8 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
         )
         .await?;
 
-    println!("before get_kel_messages_with_receipts");
     let kel = delegatee_controller.get_kel_with_receipts(&delegate_id);
     // Event is not yet accepted. Missing delegating event.
-    println!("after get_kel_messages_with_receipts");
     assert!(kel.is_none());
 
     // Delegator asks about his mailbox to get delegated event.

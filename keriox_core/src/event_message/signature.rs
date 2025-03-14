@@ -30,13 +30,7 @@ pub enum Signature {
     rkyv::Serialize,
     rkyv::Deserialize,
 )]
-#[rkyv(
-    // This will generate a PartialEq impl between our unarchived
-    // and archived types
-    compare(PartialEq),
-    // Derives can be passed through to the generated type:
-    derive(Debug),
-)]
+#[rkyv(compare(PartialEq), derive(Debug))]
 pub enum Nontransferable {
     Indexed(Vec<IndexedSignature>),
     Couplet(Vec<(BasicPrefix, SelfSigningPrefix)>),

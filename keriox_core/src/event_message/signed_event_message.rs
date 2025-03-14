@@ -172,7 +172,7 @@ impl Serialize for SignedEventMessage {
             }
             if let Some(ref seal) = self.delegator_seal {
                 let att_seal =
-                    Group::SourceSealCouples(vec![(seal.sn, seal.digest.clone().into())]);
+                    Group::SourceSealCouples(vec![(seal.sn, seal.digest.said.clone().into())]);
                 em.serialize_field("", &att_seal.to_cesr_str())?;
             }
 

@@ -6,7 +6,10 @@ use crate::{
     actor::prelude::{EventStorage, SledEventDatabase},
     database::{
         escrow::EscrowDb,
-        redb::{escrow_database::SnKeyDatabase, loging::LogDatabase, RedbDatabase, WriteTxnMode},
+        redb::{
+            escrow_database::SnKeyDatabase, loging::LogDatabase, RedbDatabase, RedbError,
+            WriteTxnMode,
+        },
     },
     error::Error,
     event::KeyEvent,
@@ -16,7 +19,7 @@ use crate::{
         signed_event_message::{SignedEventMessage, SignedNontransferableReceipt},
         EventTypeTag,
     },
-    prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+    prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
     processor::notification::{Notification, NotificationBus, Notifier},
 };
 
@@ -47,9 +50,14 @@ impl PartiallyWitnessedEscrow {
             db,
             old_db,
             escrowed_partially_witnessed: pwe_escrowdb,
-            // escrowed_partially_witnessed: Escrow::new(b"pwes", duration, escrow_db.clone()),
-            // escrowed_nontranferable_receipts: Escrow::new(b"ures", duration, escrow_db.clone()),
         }
+    }
+
+    pub fn get_partially_witnessed_events<'a>(
+        &'a self,
+        id: &IdentifierPrefix,
+    ) -> Result<impl Iterator<Item = SignedEventMessage> + 'a, RedbError> {
+        self.escrowed_partially_witnessed.get_from_sn(id, 0)
     }
 
     /// Return escrowed partially witness events of given identifier, sn and
@@ -59,24 +67,18 @@ impl PartiallyWitnessedEscrow {
         sn: u64,
         id: &IdentifierPrefix,
         event_digest: &SelfAddressingIdentifier,
-    ) -> Option<SignedEventMessage> {
-        let event = self.log.get_event(event_digest).unwrap();
-        let witness_receipts = self
-            .log
-            .get_nontrans_couplets(event_digest)
-            .unwrap()
-            .map(|evs| evs.collect::<Vec<_>>());
-        let signatures = self
-            .log
-            .get_signatures(event_digest)
-            .unwrap()
-            .map(|evs| evs.collect::<Vec<_>>());
-        event.map(|event| SignedEventMessage {
-            event_message: event,
-            signatures: signatures.unwrap(),
-            witness_receipts: witness_receipts,
-            delegator_seal: None,
-        })
+    ) -> Result<Option<SignedEventMessage>, RedbError> {
+        if self
+            .escrowed_partially_witnessed
+            .contains(id, sn, event_digest)?
+        {
+            Ok(self
+                .log
+                .get_signed_event(&event_digest)?
+                .map(|ev| ev.signed_event_message))
+        } else {
+            Ok(None)
+        }
     }
 
     fn get_escrowed_receipts(
@@ -231,46 +233,41 @@ impl PartiallyWitnessedEscrow {
             .then_some(())
             .ok_or(Error::SignatureVerificationError)?;
 
-        let (couplets, indexed) =
-            if let Some(escrowed_nontrans) = self.get_escrowed_receipts(&id, sn, &digest) {
-                // Verify signatures of all receipts and remove those with wrong signatures
-                escrowed_nontrans
-                    .filter(|rct| {
-                        self.validate_receipt(
-                            rct,
-                            &receipted_event.event_message,
-                            &new_state.witness_config.witnesses,
-                        )
-                        .is_ok()
-                    })
-                    .chain(if let Some(rct) = additional_receipt {
-                        rct.signatures
-                    } else {
-                        Vec::default()
-                    })
-                    .fold(
-                        (vec![], vec![]),
-                        |(mut all_couplets, mut all_indexed), snr| {
-                            match snr {
-                                Nontransferable::Indexed(indexed_sigs) => {
-                                    all_indexed.append(&mut indexed_sigs.clone())
-                                }
-                                Nontransferable::Couplet(couplets_sigs) => {
-                                    all_couplets.append(&mut couplets_sigs.clone())
-                                }
-                            };
-                            (all_couplets, all_indexed)
-                        },
-                    )
-            } else {
-                (vec![], vec![])
-            };
+        let (couplets, indexed) = match (
+            self.get_escrowed_receipts(&id, sn, &digest),
+            additional_receipt,
+        ) {
+            (None, None) => (vec![], vec![]),
+            (None, Some(rct)) => Self::extract_receipt(rct.signatures),
+            (Some(receipts), None) => Self::extract_receipt(receipts),
+            (Some(receipts), Some(rct)) => Self::extract_receipt(receipts.chain(rct.signatures)),
+        };
+
         new_state
             .witness_config
             .enough_receipts(couplets, indexed)?
             .then_some(())
             .ok_or(Error::NotEnoughReceiptsError)?;
         Ok(())
+    }
+
+    fn extract_receipt<I: IntoIterator<Item = Nontransferable>>(
+        nontrans: I,
+    ) -> (Vec<(BasicPrefix, SelfSigningPrefix)>, Vec<IndexedSignature>) {
+        nontrans.into_iter().fold(
+            (vec![], vec![]),
+            |(mut all_couplets, mut all_indexed), snr| {
+                match snr {
+                    Nontransferable::Indexed(indexed_sigs) => {
+                        all_indexed.append(&mut indexed_sigs.clone())
+                    }
+                    Nontransferable::Couplet(couplets_sigs) => {
+                        all_couplets.append(&mut couplets_sigs.clone())
+                    }
+                };
+                (all_couplets, all_indexed)
+            },
+        )
     }
 }
 
@@ -283,7 +280,7 @@ impl Notifier for PartiallyWitnessedEscrow {
                 let sn = ooo.body.sn;
                 let id = ooo.body.prefix.clone();
                 // look for receipted event in partially witnessed. If there's no event yet, escrow receipt.
-                match self.get_event_by_sn_and_digest(sn, &id, &ooo.body.receipted_event_digest) {
+                match self.get_event_by_sn_and_digest(sn, &id, &ooo.body.receipted_event_digest)? {
                     None => self.escrow_receipt(ooo.clone(), bus),
                     Some(receipted_event) => {
                         // verify receipt signature

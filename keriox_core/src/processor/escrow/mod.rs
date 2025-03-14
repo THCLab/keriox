@@ -475,10 +475,10 @@ impl<D: EventDatabase> Notifier for DelegationEscrow<D> {
                     })
                     .collect();
                 if !seals.is_empty() {
-                    let potential_delegator_seal = SourceSeal {
-                        sn: ev_message.event_message.data.get_sn(),
-                        digest: ev_message.event_message.digest()?,
-                    };
+                    let potential_delegator_seal = SourceSeal::new(
+                        ev_message.event_message.data.get_sn(),
+                        ev_message.event_message.digest()?,
+                    );
                     self.process_delegation_events(bus, &id, seals, potential_delegator_seal)?;
                 }
             }

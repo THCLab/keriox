@@ -136,15 +136,29 @@ pub struct DelegatingEventSeal {
     pub commitment: SelfAddressingIdentifier,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(
+    Serialize,
+    Deserialize,
+    Debug,
+    Clone,
+    PartialEq,
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+)]
+#[rkyv(derive(Debug))]
+
 pub struct SourceSeal {
     pub sn: u64,
-    pub digest: SelfAddressingIdentifier,
+    pub digest: SaidValue,
 }
 
 impl SourceSeal {
     pub fn new(sn: u64, digest: SelfAddressingIdentifier) -> Self {
-        Self { sn, digest }
+        Self {
+            sn,
+            digest: digest.into(),
+        }
     }
 }
 

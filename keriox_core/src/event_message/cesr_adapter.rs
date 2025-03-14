@@ -99,7 +99,7 @@ impl EventType {
 impl From<&SignedEventMessage> for ParsedData {
     fn from(ev: &SignedEventMessage) -> Self {
         let mut attachments = if let Some(SourceSeal { sn, digest }) = ev.delegator_seal.clone() {
-            vec![Group::SourceSealCouples(vec![(sn, digest.into())])]
+            vec![Group::SourceSealCouples(vec![(sn, digest.said.into())])]
         } else {
             vec![]
         };

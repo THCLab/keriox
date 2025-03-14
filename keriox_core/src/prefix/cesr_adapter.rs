@@ -58,10 +58,7 @@ impl From<Signature> for SelfSigningPrefix {
 
 impl From<(u64, Digest)> for SourceSeal {
     fn from((sn, digest): (u64, Digest)) -> Self {
-        SourceSeal {
-            sn,
-            digest: digest.into(),
-        }
+        SourceSeal::new(sn, digest.into())
     }
 }
 

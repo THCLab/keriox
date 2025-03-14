@@ -3,6 +3,7 @@ use said::SelfAddressingIdentifier;
 use said_wrapper::{ArchivedSAIDef, SAIDef};
 
 use crate::{
+    event::sections::seal::{ArchivedSourceSeal, SourceSeal},
     event_message::signature::{
         ArchivedNontransferable, ArchivedTransferable, Nontransferable, Transferable,
     },
@@ -41,6 +42,11 @@ pub fn deserialize_indexed_signatures(
 ) -> Result<IndexedSignature, rkyv::rancor::Error> {
     let archived = rkyv::access::<ArchivedIndexedSignature, rkyv::rancor::Error>(&bytes).unwrap();
     rkyv::deserialize::<IndexedSignature, rkyv::rancor::Error>(archived)
+}
+
+pub fn deserialize_source_seal(bytes: &[u8]) -> Result<SourceSeal, rkyv::rancor::Error> {
+    let archived = rkyv::access::<ArchivedSourceSeal, rkyv::rancor::Error>(&bytes).unwrap();
+    rkyv::deserialize::<SourceSeal, rkyv::rancor::Error>(archived)
 }
 
 pub fn deserialize_identifier_state(bytes: &[u8]) -> Result<IdentifierState, rkyv::rancor::Error> {

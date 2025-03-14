@@ -16,6 +16,9 @@ const NONTRANS_RCTS: MultimapTableDefinition<&[u8], &[u8]> =
 const TRANS_RCTS: MultimapTableDefinition<&[u8], &[u8]> =
     MultimapTableDefinition::new("trans_receipts");
 
+/// Delegating Event Seals (event digest) -> seal
+const SEALS: TableDefinition<&[u8], &[u8]> = TableDefinition::new("seals");
+
 use std::sync::Arc;
 
 use redb::{Database, MultimapTableDefinition, TableDefinition};
@@ -29,7 +32,7 @@ use said::SelfAddressingIdentifier;
 
 use crate::{
     database::timestamped::TimestampedSignedEventMessage,
-    event::KeyEvent,
+    event::{sections::seal::SourceSeal, KeyEvent},
     event_message::{
         msg::KeriEvent,
         signature::{Nontransferable, Transferable},
@@ -40,7 +43,7 @@ use crate::{
 
 use super::{
     execute_in_transaction,
-    rkyv_adapter::{self, deserialize_indexed_signatures},
+    rkyv_adapter::{self, deserialize_indexed_signatures, deserialize_source_seal},
     RedbError, WriteTxnMode,
 };
 
@@ -60,6 +63,7 @@ impl LogDatabase {
             write_txn.open_multimap_table(SIGS)?;
             write_txn.open_multimap_table(TRANS_RCTS)?;
             write_txn.open_multimap_table(NONTRANS_RCTS)?;
+            write_txn.open_table(SEALS)?;
         }
         write_txn.commit()?;
         Ok(Self { db })
@@ -80,6 +84,10 @@ impl LogDatabase {
         if let Some(wits) = &signed_event.witness_receipts {
             self.insert_nontrans_receipt(&txn_mode, &digest, &wits)?;
         };
+
+        if let Some(delegator_seal) = &signed_event.delegator_seal {
+            self.insert_source_seal(&txn_mode, &digest, delegator_seal)?;
+        }
         Ok(())
     }
 
@@ -156,6 +164,7 @@ impl LogDatabase {
             .unwrap()
             .unwrap()
             .collect();
+        let source_seal = self.get_delegator_seal_by_serialized_key(key)?;
 
         let event = self.get_event_by_serialized_key(&key)?;
         Ok(event.map(|ev| {
@@ -164,7 +173,10 @@ impl LogDatabase {
                 .unwrap()
                 .map(|vec| vec.collect());
             TimestampedSignedEventMessage::new(SignedEventMessage::new(
-                &ev, signatures, receipts, None,
+                &ev,
+                signatures,
+                receipts,
+                source_seal,
             ))
         }))
     }
@@ -214,6 +226,22 @@ impl LogDatabase {
         nontrans: &[Nontransferable],
     ) -> Result<(), RedbError> {
         self.insert_with_digest_key(txn_mode, NONTRANS_RCTS, said, nontrans)
+    }
+
+    pub(super) fn insert_source_seal(
+        &self,
+        txn_mode: &WriteTxnMode,
+        said: &SelfAddressingIdentifier,
+        seal: &SourceSeal,
+    ) -> Result<(), RedbError> {
+        let serialized_said = rkyv_adapter::serialize_said(said)?;
+        execute_in_transaction(self.db.clone(), txn_mode, |write_txn| {
+            let mut table = write_txn.open_table(SEALS)?;
+
+            let seal = rkyv::to_bytes::<rkyv::rancor::Error>(seal)?;
+            table.insert(serialized_said.as_slice(), seal.as_ref())?;
+            Ok(())
+        })
     }
 
     pub(super) fn remove_nontrans_receipt(
@@ -320,6 +348,18 @@ impl LogDatabase {
             Ok(sig) => deserialize_indexed_signatures(sig.value()).unwrap(),
             Err(_) => todo!(),
         })))
+    }
+
+    fn get_delegator_seal_by_serialized_key(
+        &self,
+        key: &[u8],
+    ) -> Result<Option<SourceSeal>, RedbError> {
+        let maybe_seal = {
+            let read_txn = self.db.begin_read()?;
+            let table = read_txn.open_table(SEALS)?;
+            table.get(key)
+        }?;
+        Ok(maybe_seal.map(|seal| deserialize_source_seal(seal.value()).unwrap()))
     }
 }
 

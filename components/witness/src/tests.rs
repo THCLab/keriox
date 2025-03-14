@@ -1160,6 +1160,7 @@ pub fn test_delegated_multisig() -> Result<(), ActorError> {
     let dip_with_delegator_seal = cont1
         .not_fully_witnessed_escrow
         .get_event_by_sn_and_digest(0, &group_id, &dip_digest)
+        .unwrap()
         .unwrap();
 
     let state = witness
@@ -1496,6 +1497,7 @@ pub fn test_delegating_multisig() -> Result<(), ActorError> {
     let confirmed_delegate_dip = child
         .not_fully_witnessed_escrow
         .get_event_by_sn_and_digest(0, &delegated_child_id, &dip_digest)
+        .unwrap()
         .unwrap();
 
     // Child sends it to witness
