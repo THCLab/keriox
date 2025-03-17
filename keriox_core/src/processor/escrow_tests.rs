@@ -2,7 +2,7 @@ use std::{
     convert::{TryFrom, TryInto},
     fs,
     sync::Arc,
-    thread::{self, sleep},
+    thread::{self},
     time::Duration,
 };
 

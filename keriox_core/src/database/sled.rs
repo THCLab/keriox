@@ -9,13 +9,16 @@ use serde::{Deserialize, Serialize};
 use super::mailbox::MailboxData;
 use super::tables::{SledEventTree, SledEventTreeVec};
 
+#[cfg(feature = "mailbox")]
+use crate::event_message::signed_event_message::SignedNontransferableReceipt;
+
 #[cfg(feature = "query")]
 use crate::query::reply_event::SignedReply;
 use crate::{
     event::KeyEvent,
     event_message::{
         msg::KeriEvent,
-        signed_event_message::{SignedEventMessage, SignedNontransferableReceipt},
+        signed_event_message::SignedEventMessage,
         TimestampedEventMessage,
     },
     prefix::IdentifierPrefix,
