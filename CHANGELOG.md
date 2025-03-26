@@ -2,6 +2,70 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.17.0-rc3] - 2025-03-26
+
+### 🐛 Bug Fixes
+
+- Refactor escrow database
+- Adjust delegation tests
+- Validate receipt signatures in pw escrow
+- Allow setting next threshold in group incept
+
+### 🚜 Refactor
+
+- Add partially witnessed escrow submodule
+- Adjust partially escrow tests
+
+### ⚙️ Miscellaneous Tasks
+
+- Remove unused imports
+
+## [0.17.0-rc2] - 2025-03-12
+
+### 🐛 Bug Fixes
+
+- Update watcher dependencies
+- Update failing test
+
+### ⚙️ Miscellaneous Tasks
+
+- Update dependencies
+
+## [0.17.0-rc1] - 2025-02-27
+
+### 🚀 Features
+
+- Derive rkyv's Archive, Serialize, and Deserialize for IdentifierState
+- Persist identifier key states in events_db for better tracking
+- Replace compute_state function with get_key_state in EventStorage
+- Change keys in database
+- Use redb in out of order escrow
+
+### 🐛 Bug Fixes
+
+- Compute signature index instead of using 0
+- Return receipts as attachments
+- Save published receipts sn in db
+- Execute add_kel_finalized_event operations in transaction
+- Update witness and watcher workspaces
+
+### 🚜 Refactor
+
+- Remove unnecessary clone
+- Split redb module into multiple files
+
+### 🧪 Testing
+
+- Add delegation tests
+- Add assertions for key_state in test_retrieve_kel
+
+### ⚙️ Miscellaneous Tasks
+
+- Reformat and fix warnings
+- Add processing events benchmark
+- Cargo fmt and update test
+- Update rust version in dockers
+
 ## [0.16.0] - 2025-01-29
 
 ### 🚀 Features
@@ -14,6 +78,10 @@ All notable changes to this project will be documented in this file.
 
 - Warnings and failing tests
 - Fix test_updates
+
+### ⚙️ Miscellaneous Tasks
+
+- Release
 
 ## [0.15.1] - 2025-01-16
 
