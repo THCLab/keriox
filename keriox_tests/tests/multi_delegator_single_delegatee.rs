@@ -56,6 +56,7 @@ async fn multi_delegator_single_delegatee(
     let (group_inception, exn_messages) = identifier1.incept_group(
         vec![identifier2.id().clone()],
         2,
+        Some(2),
         Some(vec![witness_id.clone()]),
         Some(1),
         None,
@@ -162,6 +163,7 @@ async fn multi_delegator_single_delegatee(
     let (delegated_inception, exn_messages) = temporary_delegatee_identifier.incept_group(
         vec![],
         1,
+        Some(1),
         Some(vec![witness_id.clone()]),
         Some(1),
         Some(delegator_group_id.clone()),

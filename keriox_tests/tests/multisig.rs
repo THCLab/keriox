@@ -141,6 +141,7 @@ async fn test_multisig(ctx: &mut InfrastructureContext) -> Result<()> {
     let (group_inception, exn_messages) = identifier1.incept_group(
         vec![identifier2.id().clone()],
         2,
+        Some(2),
         Some(vec![witness_id.clone()]),
         Some(1),
         None,

@@ -60,6 +60,7 @@ async fn multi_delegator_multi_delegatee(
     let (group_inception, exn_messages) = delegator_identifier1.incept_group(
         vec![delegator_identifier2.id().clone()],
         2,
+        Some(2),
         Some(vec![witness_id.clone()]),
         Some(1),
         None,
@@ -218,6 +219,7 @@ async fn multi_delegator_multi_delegatee(
     let (delegatee_group_inception, exn_messages) = delegatee_identifier1.incept_group(
         vec![delegatee_identifier2.id().clone()],
         2,
+        Some(2),
         Some(vec![witness_id.clone()]),
         Some(1),
         Some(delegator_group_id.clone()),
