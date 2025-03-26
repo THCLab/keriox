@@ -614,6 +614,7 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase> {
                 pks,
                 signature_threshold,
                 npks,
+                signature_threshold,
                 initial_witness.unwrap_or_default(),
                 witness_threshold.unwrap_or(0),
                 delegator.as_ref(),

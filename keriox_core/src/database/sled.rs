@@ -17,9 +17,7 @@ use crate::query::reply_event::SignedReply;
 use crate::{
     event::KeyEvent,
     event_message::{
-        msg::KeriEvent,
-        signed_event_message::SignedEventMessage,
-        TimestampedEventMessage,
+        msg::KeriEvent, signed_event_message::SignedEventMessage, TimestampedEventMessage,
     },
     prefix::IdentifierPrefix,
 };

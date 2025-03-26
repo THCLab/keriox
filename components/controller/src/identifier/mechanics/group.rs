@@ -26,6 +26,7 @@ impl Identifier {
         &self,
         participants: Vec<IdentifierPrefix>,
         signature_threshold: u64,
+        next_keys_threshold: Option<u64>,
         initial_witness: Option<Vec<BasicPrefix>>,
         witness_threshold: Option<u64>,
         delegator: Option<IdentifierPrefix>,
@@ -49,10 +50,15 @@ impl Identifier {
             npks.append(&mut state.clone().current.next_keys_data.next_keys_hashes());
         }
 
+        let current_sig_threshold = SignatureThreshold::Simple(signature_threshold);
+        let next_sig_threshold = next_keys_threshold
+            .map(|sig| SignatureThreshold::Simple(sig))
+            .unwrap_or(current_sig_threshold.clone());
         let icp = event_generator::incept_with_next_hashes(
             pks,
-            &SignatureThreshold::Simple(signature_threshold),
+            &current_sig_threshold,
             npks,
+            &next_sig_threshold,
             initial_witness.unwrap_or_default(),
             witness_threshold.unwrap_or(0),
             delegator.as_ref(),

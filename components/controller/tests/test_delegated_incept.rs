@@ -118,6 +118,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     let (delegated_inception, exn_messages) = delegatee_identifier.incept_group(
         vec![],
         1,
+        Some(1),
         Some(vec![witness_id_basic.clone()]),
         Some(1),
         Some(delegator.id().clone()),

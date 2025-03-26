@@ -20,6 +20,7 @@ url = "2.3.1"
 cesrox = { version = "0.1.4" }
 itertools = "0.11.0"
 rusqlite = { version = "0.32.1", features = ["bundled"] }
+serde = "1.0.219"
 
 [dev-dependencies]
 witness = { path = "../witness" }

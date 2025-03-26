@@ -51,6 +51,7 @@ pub fn incept_with_next_hashes(
     public_keys: Vec<BasicPrefix>,
     signature_threshold: &SignatureThreshold,
     next_pub_keys: Vec<SelfAddressingIdentifier>,
+    next_keys_threshold: &SignatureThreshold,
     witnesses: Vec<BasicPrefix>,
     witness_threshold: u64,
     delegator_id: Option<&IdentifierPrefix>,
@@ -91,6 +92,7 @@ pub fn incept_with_next_hashes(
         .with_keys(public_keys)
         .with_threshold(signature_threshold)
         .with_next_keys_hashes(next_pub_keys)
+        .with_next_threshold(next_keys_threshold)
         .with_witness_list(witnesses.as_slice())
         .with_witness_threshold(&SignatureThreshold::Simple(witness_threshold))
         .build()

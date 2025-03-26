@@ -27,7 +27,7 @@ impl MailboxReminder {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub enum ActionRequired {
     MultisigRequest(KeriEvent<KeyEvent>, ExchangeMessage),
     /// Contains delegating event and exchange message that will be send to

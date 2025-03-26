@@ -177,7 +177,7 @@ impl PartiallyWitnessedEscrow {
             .then_some(())
             .ok_or(Error::SignatureVerificationError)?;
 
-        // Check signatures of receipts in database. Can be wrong if receipt came before event 
+        // Check signatures of receipts in database. Can be wrong if receipt came before event
         if let Some(escrowed_receipts) = self.get_escrowed_receipts(&id, sn, &digest)? {
             self.validate_receipts(
                 escrowed_receipts,
