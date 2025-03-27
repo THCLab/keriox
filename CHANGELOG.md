@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.17.0-rc4] - 2025-03-27
+
+### 🐛 Bug Fixes
+
+- Correct test failures
+- Correct signature index computation
+
 ## [0.17.0-rc3] - 2025-03-26
 
 ### 🐛 Bug Fixes
@@ -19,6 +26,7 @@ All notable changes to this project will be documented in this file.
 ### ⚙️ Miscellaneous Tasks
 
 - Remove unused imports
+- Release
 
 ## [0.17.0-rc2] - 2025-03-12
 
