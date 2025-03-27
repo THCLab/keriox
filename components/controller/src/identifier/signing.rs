@@ -56,9 +56,10 @@ impl Identifier {
             .map(|sig| {
                 (
                     sig,
-                    (state
-                        .iter()
-                        .position(|bp| bp.verify(data, sig).ok().is_some())),
+                    (state.iter().position(|bp| match bp.verify(data, sig).ok() {
+                        Some(result) => result,
+                        None => false,
+                    })),
                 )
             })
             .map(|(sig, index)| {
