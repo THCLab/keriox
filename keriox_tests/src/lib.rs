@@ -111,7 +111,7 @@ pub async fn handle_delegation_request(
                 let signature_ixn =
                     SelfSigningPrefix::Ed25519Sha512(keypair.sign(&delegating_event.encode()?)?);
                 let signature_exn = SelfSigningPrefix::Ed25519Sha512(keypair.sign(&exn.encode()?)?);
-                id.finalize_group_incept(
+                id.finalize_group_event(
                     &delegating_event.encode()?,
                     signature_ixn.clone(),
                     vec![(exn.encode()?, signature_exn)],

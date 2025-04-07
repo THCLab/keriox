@@ -163,7 +163,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
                 let signature_exn =
                     SelfSigningPrefix::Ed25519Sha512(delegator_keyipair.sign(&exn.encode()?)?);
                 delegator
-                    .finalize_group_incept(
+                    .finalize_group_event(
                         &delegating_event.encode()?,
                         signature_ixn.clone(),
                         vec![],

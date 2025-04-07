@@ -1,10 +1,8 @@
 use keri_core::{
     actor::{event_generator, MaterialPath},
-    event::sections::threshold::SignatureThreshold,
+    event::{sections::threshold::SignatureThreshold, KeyEvent},
     event_message::{
-        cesr_adapter::{parse_event_type, EventType},
-        signature::{Signature, SignerData},
-        signed_event_message::{Message, Op},
+        cesr_adapter::{parse_event_type, EventType}, msg::KeriEvent, signature::{Signature, SignerData}, signed_event_message::{Message, Op}, EventTypeTag
     },
     mailbox::exchange::{Exchange, ForwardTopic, SignedExchange},
     prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
@@ -87,9 +85,6 @@ impl Identifier {
     }
 
     /// Finalizes group identifier.
-    /// Joins event with signature and verifies them.
-    /// Must call [`IdentifierController::notify_witnesses`] after calling this function
-    /// to send signed exn messages to witness to be forwarded to group participants.
     pub async fn finalize_group_incept(
         &mut self,
         group_event: &[u8],
@@ -100,18 +95,55 @@ impl Identifier {
         let key_event =
             parse_event_type(group_event).map_err(|_e| MechanicsError::EventFormatError)?;
         let ke = if let EventType::KeyEvent(icp) = key_event {
+            match icp.event_type {
+                EventTypeTag::Icp | EventTypeTag::Dip => {icp}
+                _ => Err(MechanicsError::InceptionError(
+                    "Event is not inception".to_string(),
+                ))?,
+            }
+        } else {
+            return Err(MechanicsError::WrongEventTypeError);
+        };
+        let group_prefix = ke.data.get_prefix();
+       self.finalize_event(&ke, sig, exchanges).await?;
+        Ok(group_prefix)
+    }
+
+    /// Finalizes group event.
+    pub async fn finalize_group_event(
+        &mut self,
+        group_event: &[u8],
+        sig: SelfSigningPrefix,
+        exchanges: Vec<(Vec<u8>, SelfSigningPrefix)>,
+    ) -> Result<(), MechanicsError> {
+        // Join icp event with signature
+        let key_event =
+            parse_event_type(group_event).map_err(|_e| MechanicsError::EventFormatError)?;
+        let ke = if let EventType::KeyEvent(icp) = key_event {
             icp
         } else {
             return Err(MechanicsError::WrongEventTypeError);
         };
-        let own_index = self.get_index(&ke.data)?;
-        let group_prefix = ke.data.get_prefix();
+        self.finalize_event(&ke, sig, exchanges).await?;
+        Ok(())
+    }
 
-        self.known_events.finalize_key_event(&ke, &sig, own_index)?;
+    /// Finalizes group event.
+    /// Joins event with signature and verifies them.
+    async fn finalize_event(
+        &mut self,
+        key_event: &KeriEvent<KeyEvent>,
+        sig: SelfSigningPrefix,
+        exchanges: Vec<(Vec<u8>, SelfSigningPrefix)>,
+    ) -> Result<(), MechanicsError> {
+
+        let own_index = self.get_index(&key_event.data)?;
+
+        self.known_events.finalize_key_event(&key_event, &sig, own_index)?;
 
         let signature = IndexedSignature::new_both_same(sig.clone(), own_index as u16);
 
-        let signed_message = ke.sign(vec![signature], None, None);
+        let signed_message = key_event.sign(vec![signature], None, None);
         self.to_notify.push(signed_message);
 
         let att_signature = IndexedSignature::new_both_same(sig, own_index as u16);
@@ -120,8 +152,9 @@ impl Identifier {
             self.finalize_exchange(&exn, signature, att_signature.clone())
                 .await?;
         }
-        Ok(group_prefix)
+        Ok(())
     }
+
 
     pub async fn finalize_exchange(
         &self,

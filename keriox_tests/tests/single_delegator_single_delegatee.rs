@@ -139,7 +139,7 @@ async fn single_delegator_single_delegatee(
                 let signature_exn =
                     SelfSigningPrefix::Ed25519Sha512(delegator_keypair.sign(&exn.encode()?)?);
                 delegator_identifier
-                    .finalize_group_incept(
+                    .finalize_group_event(
                         &delegating_event.encode()?,
                         signature_ixn.clone(),
                         vec![],

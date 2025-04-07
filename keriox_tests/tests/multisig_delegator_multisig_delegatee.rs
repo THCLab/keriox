@@ -107,7 +107,7 @@ async fn multi_delegator_multi_delegatee(
                 let signature_exn =
                     SelfSigningPrefix::Ed25519Sha512(delegator_km2.sign(&exn.encode()?)?);
                 delegator_identifier2
-                    .finalize_group_incept(
+                    .finalize_group_event(
                         &multisig_event.encode()?,
                         signature_ixn.clone(),
                         vec![(exn.encode()?, signature_exn)],
@@ -268,7 +268,7 @@ async fn multi_delegator_multi_delegatee(
                 let signature_exn =
                     SelfSigningPrefix::Ed25519Sha512(delegatee_km2.sign(&exn.encode()?)?);
                 delegatee_identifier2
-                    .finalize_group_incept(
+                    .finalize_group_event(
                         &multisig_event.encode()?,
                         signature_ixn.clone(),
                         vec![(exn.encode()?, signature_exn)],
