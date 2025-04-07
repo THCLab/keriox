@@ -206,8 +206,9 @@ async fn test_tel_from_watcher() -> Result<(), anyhow::Error> {
     // Incept registry. It'll generate ixn that need to be signed.
     let (_vcp_id, vcp_ixn) = issuer.incept_registry()?;
 
-    let signature = SelfSigningPrefix::Ed25519Sha512(issuer_keypair.sign(&vcp_ixn)?);
-    issuer.finalize_incept_registry(&vcp_ixn, signature).await?;
+    let vcp_ixn_cesr = vcp_ixn.encode()?;
+    let signature = SelfSigningPrefix::Ed25519Sha512(issuer_keypair.sign(&vcp_ixn_cesr)?);
+    issuer.finalize_incept_registry(&vcp_ixn_cesr, signature).await?;
 
     issuer.notify_witnesses().await?;
 
@@ -228,9 +229,10 @@ async fn test_tel_from_watcher() -> Result<(), anyhow::Error> {
         IdentifierPrefix::SelfAddressing(sai) => sai.said.clone(),
         _ => unreachable!(),
     };
+    let iss_ixn_cesr = iss_ixn.encode()?;
 
-    let signature = SelfSigningPrefix::Ed25519Sha512(issuer_keypair.sign(&iss_ixn)?);
-    issuer.finalize_issue(&iss_ixn, signature).await?;
+    let signature = SelfSigningPrefix::Ed25519Sha512(issuer_keypair.sign(&iss_ixn_cesr)?);
+    issuer.finalize_issue(&iss_ixn_cesr, signature).await?;
     issuer.notify_witnesses().await?;
 
     // Querying mailbox to get receipts

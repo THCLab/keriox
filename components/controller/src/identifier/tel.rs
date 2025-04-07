@@ -1,7 +1,9 @@
 use keri_core::actor::prelude::{HashFunctionCode, SelfAddressingIdentifier, SerializationFormats};
 use keri_core::event::sections::seal::{EventSeal, Seal};
-use keri_core::event_message::msg::KeriEvent;
+use keri_core::event::KeyEvent;
+use keri_core::event_message::msg::{KeriEvent, TypedEvent};
 use keri_core::event_message::timestamped::Timestamped;
+use keri_core::event_message::EventTypeTag;
 use keri_core::prefix::{IdentifierPrefix, IndexedSignature, SelfSigningPrefix};
 use teliox::event::verifiable_event::VerifiableEvent;
 use teliox::query::{SignedTelQuery, TelQueryArgs, TelQueryEvent, TelQueryRoute};
@@ -19,7 +21,7 @@ impl Identifier {
     pub fn issue(
         &self,
         credential_digest: SelfAddressingIdentifier,
-    ) -> Result<(IdentifierPrefix, Vec<u8>), ControllerError> {
+    ) -> Result<(IdentifierPrefix, TypedEvent<EventTypeTag, KeyEvent>), ControllerError> {
         match self.registry_id.as_ref() {
             Some(registry_id) => {
                 let tel = self.known_events.tel.clone();
@@ -37,7 +39,6 @@ impl Identifier {
                     sn: ixn.data.sn,
                     digest: ixn.digest()?,
                 };
-                let encoded_ixn = ixn.encode()?;
 
                 let verifiable_event = VerifiableEvent {
                     event: iss,
@@ -45,7 +46,7 @@ impl Identifier {
                 };
                 tel.processor.process(verifiable_event)?;
 
-                Ok((vc_hash, encoded_ixn))
+                Ok((vc_hash, ixn))
             }
             None => Err(ControllerError::OtherError("Tel not incepted".into())),
         }

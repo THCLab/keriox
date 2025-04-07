@@ -1,6 +1,5 @@
 use keri_core::{
-    event::sections::seal::{EventSeal, Seal},
-    prefix::{IdentifierPrefix, SelfSigningPrefix},
+    event::{sections::seal::{EventSeal, Seal}, KeyEvent}, event_message::{msg::TypedEvent, EventTypeTag}, prefix::{IdentifierPrefix, SelfSigningPrefix}
 };
 use teliox::{
     event::verifiable_event::VerifiableEvent,
@@ -15,7 +14,7 @@ impl Identifier {
     /// Generate `vcp` event and `ixn` event with  seal to `vcp`. To finalize
     /// the process, `ixn` need to be signed confirmed with `finalize_event`
     /// function.
-    pub fn incept_registry(&mut self) -> Result<(IdentifierPrefix, Vec<u8>), ControllerError> {
+    pub fn incept_registry(&mut self) -> Result<(IdentifierPrefix, TypedEvent<EventTypeTag, KeyEvent>), ControllerError> {
         // Create tel
         let tel = self.known_events.tel.clone();
 
@@ -36,7 +35,6 @@ impl Identifier {
             sn: ixn.data.sn,
             digest: ixn.digest()?,
         };
-        let encoded = ixn.encode()?;
 
         let verifiable_event = VerifiableEvent {
             event: vcp,
@@ -46,7 +44,7 @@ impl Identifier {
         tel.processor.process(verifiable_event)?;
         self.registry_id = Some(id.clone());
 
-        Ok((id, encoded))
+        Ok((id, ixn))
     }
 
     pub async fn finalize_incept_registry(
