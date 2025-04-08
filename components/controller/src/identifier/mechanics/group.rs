@@ -89,7 +89,7 @@ impl Identifier {
         &mut self,
         group_event: &[u8],
         sig: SelfSigningPrefix,
-        exchanges: Vec<(Vec<u8>, SelfSigningPrefix)>,
+        exchanges: Vec<(Vec<u8>, Signature)>,
     ) -> Result<IdentifierPrefix, MechanicsError> {
         // Join icp event with signature
         let key_event =
@@ -114,7 +114,7 @@ impl Identifier {
         &mut self,
         group_event: &[u8],
         sig: SelfSigningPrefix,
-        exchanges: Vec<(Vec<u8>, SelfSigningPrefix)>,
+        exchanges: Vec<(Vec<u8>, Signature)>,
     ) -> Result<(), MechanicsError> {
         // Join icp event with signature
         let key_event =
@@ -134,7 +134,7 @@ impl Identifier {
         &mut self,
         key_event: &KeriEvent<KeyEvent>,
         sig: SelfSigningPrefix,
-        exchanges: Vec<(Vec<u8>, SelfSigningPrefix)>,
+        exchanges: Vec<(Vec<u8>, Signature)>,
     ) -> Result<(), MechanicsError> {
 
         let own_index = self.get_index(&key_event.data)?;
@@ -159,7 +159,7 @@ impl Identifier {
     pub async fn finalize_exchange(
         &self,
         exchange: &[u8],
-        exn_signature: SelfSigningPrefix,
+        exn_signature: Signature,
         data_signature: IndexedSignature,
     ) -> Result<(), MechanicsError> {
         // Join exn messages with their signatures and send it to witness.
@@ -194,15 +194,9 @@ impl Identifier {
                 )]
             };
 
-            let kc = self.find_state(&self.id)?.current;
-            let index = self.index_in_current_keys(&kc)?;
-            let signature = vec![Signature::Transferable(
-                SignerData::LastEstablishment(self.id.clone()),
-                vec![IndexedSignature::new_both_same(exn_signature, index as u16)],
-            )];
             let signer_exn = Message::Op(Op::Exchange(SignedExchange {
                 exchange_message: exn,
-                signature,
+                signature: vec![exn_signature],
                 data_signature: (material_path.clone(), sigs.clone()),
             }));
             let wits = self

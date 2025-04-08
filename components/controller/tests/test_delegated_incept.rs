@@ -128,6 +128,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
         SelfSigningPrefix::Ed25519Sha512(delegatee_keypair.sign(delegated_inception.as_bytes())?);
     let signature_exn =
         SelfSigningPrefix::Ed25519Sha512(delegatee_keypair.sign(exn_messages[0].as_bytes())?);
+    let exn_index_signature = delegatee_identifier.sign_with_index(signature_exn, 0)?;
 
     // Group initiator needs to use `finalize_group_incept` instead of just
     // `finalize_event`, to send multisig request to other group participants or delegator.
@@ -136,7 +137,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
         .finalize_group_incept(
             delegated_inception.as_bytes(),
             signature_icp.clone(),
-            vec![(exn_messages[0].as_bytes().to_vec(), signature_exn.clone())],
+            vec![(exn_messages[0].as_bytes().to_vec(), exn_index_signature)],
         )
         .await?;
 
@@ -162,6 +163,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
                 );
                 let signature_exn =
                     SelfSigningPrefix::Ed25519Sha512(delegator_keyipair.sign(&exn.encode()?)?);
+                let exn_index_signature = delegator.sign_with_index(signature_exn, 0).unwrap();
                 delegator
                     .finalize_group_event(
                         &delegating_event.encode()?,
@@ -185,7 +187,7 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
                 let data_signature = IndexedSignature::new_both_same(signature_ixn, 0);
 
                 delegator
-                    .finalize_exchange(&exn.encode()?, signature_exn, data_signature)
+                    .finalize_exchange(&exn.encode()?, exn_index_signature, data_signature)
                     .await?;
 
                 // ixn was accepted

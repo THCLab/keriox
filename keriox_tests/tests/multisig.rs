@@ -149,6 +149,7 @@ async fn test_multisig(ctx: &mut InfrastructureContext) -> Result<()> {
 
     let signature_icp = SelfSigningPrefix::Ed25519Sha512(km1.sign(group_inception.as_bytes())?);
     let signature_exn = SelfSigningPrefix::Ed25519Sha512(km1.sign(exn_messages[0].as_bytes())?);
+    let exn_index_signature = identifier1.sign_with_index(signature_exn, 0)?;
 
     // Group initiator needs to use `finalize_group_incept` instead of just
     // `finalize_event`, to send multisig request to other group participants.
@@ -157,7 +158,7 @@ async fn test_multisig(ctx: &mut InfrastructureContext) -> Result<()> {
         .finalize_group_incept(
             group_inception.as_bytes(),
             signature_icp,
-            vec![(exn_messages[0].as_bytes().to_vec(), signature_exn)],
+            vec![(exn_messages[0].as_bytes().to_vec(), exn_index_signature)],
         )
         .await?;
 
@@ -182,11 +183,12 @@ async fn test_multisig(ctx: &mut InfrastructureContext) -> Result<()> {
                 let signature_ixn =
                     SelfSigningPrefix::Ed25519Sha512(km2.sign(&multisig_event.encode()?)?);
                 let signature_exn = SelfSigningPrefix::Ed25519Sha512(km2.sign(&exn.encode()?)?);
+                let exn_index_signature = identifier2.sign_with_index(signature_exn, 0)?;
                 identifier2
                     .finalize_group_event(
                         &multisig_event.encode()?,
                         signature_ixn.clone(),
-                        vec![(exn.encode()?, signature_exn)],
+                        vec![(exn.encode()?, exn_index_signature)],
                     )
                     .await?;
             }

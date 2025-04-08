@@ -1,4 +1,3 @@
-use futures::{StreamExt, TryStreamExt};
 use keri_core::{
     actor::event_generator,
     error::Error,
@@ -74,21 +73,29 @@ impl Identifier {
         mb: &MailboxResponse,
         group_id: &IdentifierPrefix,
     ) -> Result<Vec<ActionRequired>, MechanicsError> {
-        for event in mb.multisig.iter() {
-            self.process_group_multisig(event).await?;
+        let mut actions = vec![];
+
+        for multisig in &mb.multisig {
+            let ar = self.process_group_multisig(&multisig)
+                .await?;
+            if let Some(ar) = ar {
+                actions.push(ar);
+            }
         }
 
-        let action_required = futures::stream::iter(&mb.delegate)
-            .then(|del_event| self.process_group_delegate(del_event, group_id))
-            .try_filter_map(|del| async move { Ok(del) })
-            .try_collect::<Vec<_>>()
-            .await;
+        for delegate in &mb.delegate {
+            let ar = self.process_group_delegate(&delegate, group_id)
+                .await?;
+            if let Some(ar) = ar {
+                actions.push(ar);
+            }
+        }
 
         for rct in &mb.receipt {
             self.process_receipt(rct)
                 .map_err(ResponseProcessingError::Receipts)?;
         }
-        action_required
+        Ok(actions)
     }
 
     /// Returns exn message that contains signed multisig event and will be
@@ -101,9 +108,9 @@ impl Identifier {
             .process(&Message::Notice(Notice::Event(event.clone())))
             .map_err(ResponseProcessingError::Multisig)?;
         let event = event.event_message.clone();
-        let receipient = event.data.get_prefix();
-        // Construct exn message (will be stored in group identidfier mailbox)
-        let exn = event_generator::exchange(&receipient, &event, ForwardTopic::Multisig);
+        let recipient = event.data.get_prefix();
+        // Construct exn message (will be stored in group identifier mailbox)
+        let exn = event_generator::exchange(&recipient, &event, ForwardTopic::Multisig);
         Ok(ActionRequired::MultisigRequest(event, exn))
     }
 
@@ -111,12 +118,24 @@ impl Identifier {
     async fn process_group_multisig(
         &self,
         event: &SignedEventMessage,
-    ) -> Result<(), MechanicsError> {
+    ) -> Result<Option<ActionRequired>, MechanicsError> {
         self.known_events
             .process(&Message::Notice(Notice::Event(event.clone())))
             .map_err(ResponseProcessingError::Multisig)?;
-
-        self.publish(event).await
+        self.publish(&event).await?;
+        match &event.event_message.data.event_data {
+            EventData::Icp(_inception_event) => {
+                
+                Ok(None)
+            },
+            _ => {
+                let event_message = event.event_message.clone();
+                let recipient = event_message.data.get_prefix();
+                // Construct exn message (will be stored in group identifier mailbox)
+                let exn = event_generator::exchange(&recipient, &event_message, ForwardTopic::Multisig);
+                Ok(Some(ActionRequired::MultisigRequest(event_message, exn)))
+            },
+        }
     }
 
     async fn publish(&self, event: &SignedEventMessage) -> Result<(), MechanicsError> {

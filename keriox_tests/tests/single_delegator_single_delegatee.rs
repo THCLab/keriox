@@ -105,12 +105,13 @@ async fn single_delegator_single_delegatee(
         SelfSigningPrefix::Ed25519Sha512(delegatee_keypair.sign(delegated_inception.as_bytes())?);
     let signature_exn =
         SelfSigningPrefix::Ed25519Sha512(delegatee_keypair.sign(exn_messages[0].as_bytes())?);
+    let exn_index_signature = temporary_delegatee_identifier.sign_with_index(signature_exn, 0)?;
 
     let delegatee_id = temporary_delegatee_identifier
         .finalize_group_incept(
             delegated_inception.as_bytes(),
             signature_icp.clone(),
-            vec![(exn_messages[0].as_bytes().to_vec(), signature_exn.clone())],
+            vec![(exn_messages[0].as_bytes().to_vec(), exn_index_signature.clone())],
         )
         .await?;
 
@@ -160,9 +161,11 @@ async fn single_delegator_single_delegatee(
                     assert!(action_required.is_empty());
                 }
                 let data_signature = IndexedSignature::new_both_same(signature_ixn, 0);
+                let exn_index_signature = delegator_identifier.sign_with_index(signature_exn, 0)?;
+
 
                 delegator_identifier
-                    .finalize_exchange(&exn.encode()?, signature_exn, data_signature)
+                    .finalize_exchange(&exn.encode()?, exn_index_signature, data_signature)
                     .await?;
 
                 // ixn was accepted

@@ -149,13 +149,13 @@ pub fn process_signed_exn<D: EventDatabase>(
 #[cfg(feature = "mailbox")]
 fn process_exn<D: EventDatabase>(
     exn: &ExchangeMessage,
-    attachemnt: (MaterialPath, Vec<Signature>),
+    attachment: (MaterialPath, Vec<Signature>),
     storage: &EventStorage<D>,
 ) -> Result<(), Error> {
-    let (receipient, to_forward, topic) = match &exn.data.data {
+    let (recipient, to_forward, topic) = match &exn.data.data {
         Exchange::Fwd { args, to_forward } => (&args.recipient_id, to_forward, &args.topic),
     };
-    let (sigs, witness_receipts) = attachemnt.1.into_iter().fold(
+    let (sigs, witness_receipts) = attachment.1.into_iter().fold(
         (vec![], vec![]),
         |(mut signatures, mut witness_receipts), s| {
             match s {
@@ -179,10 +179,10 @@ fn process_exn<D: EventDatabase>(
 
     match topic {
         ForwardTopic::Multisig => {
-            storage.add_mailbox_multisig(receipient, signed_to_forward)?;
+            storage.add_mailbox_multisig(recipient, signed_to_forward)?;
         }
         ForwardTopic::Delegate => {
-            storage.add_mailbox_delegate(receipient, signed_to_forward)?;
+            storage.add_mailbox_delegate(recipient, signed_to_forward)?;
         }
     };
     Ok(())
