@@ -2,12 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.17.0-rc5] - 2025-04-08
+
+### 🚀 Features
+
+- Add finalize_group_event function
+
+### 🐛 Bug Fixes
+
+- Update incept_registry and issue functions
+- Update finalize group event function
+
 ## [0.17.0-rc4] - 2025-03-27
 
 ### 🐛 Bug Fixes
 
 - Correct test failures
 - Correct signature index computation
+
+### ⚙️ Miscellaneous Tasks
+
+- Release
 
 ## [0.17.0-rc3] - 2025-03-26
 

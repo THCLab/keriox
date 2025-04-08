@@ -1,6 +1,6 @@
 [package]
 name = "watcher"
-version = "0.17.0-rc4"
+version = "0.17.0-rc5"
 publish = false
 authors.workspace = true
 edition.workspace = true
