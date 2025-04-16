@@ -11,11 +11,13 @@ use keri_core::{
     prefix::{BasicPrefix, IdentifierPrefix},
     state::IdentifierState,
 };
+#[cfg(feature = "query_cache")]
+use mechanics::cache::IdentifierCache;
 use teliox::state::{vc_state::TelState, ManagerTelState};
 
 use crate::{communication::Communication, error::ControllerError, known_events::KnownEvents};
 
-use self::mechanics::{query_mailbox::IdentifierCache, MechanicsError};
+use self::mechanics::MechanicsError;
 
 pub mod mechanics;
 pub mod nontransferable;
@@ -29,6 +31,7 @@ pub struct Identifier {
     pub known_events: Arc<KnownEvents>,
     communication: Arc<Communication>,
     pub to_notify: Vec<SignedEventMessage>,
+    #[cfg(feature = "query_cache")]
     query_cache: Arc<IdentifierCache>,
     /// Cached identifier state. It saves the state of identifier, event if last
     /// event isn't accepted in the KEL yet (e.g. if there are no witness
@@ -43,7 +46,7 @@ impl Identifier {
         registry_id: Option<IdentifierPrefix>,
         known_events: Arc<KnownEvents>,
         communication: Arc<Communication>,
-        db: Arc<IdentifierCache>,
+        #[cfg(feature = "query_cache")] db: Arc<IdentifierCache>,
     ) -> Self {
         // Load events that need to be notified to witnesses
         let events_to_notice: Vec<_> = known_events
@@ -73,6 +76,7 @@ impl Identifier {
             known_events,
             communication,
             to_notify: events_to_notice,
+            #[cfg(feature = "query_cache")]
             query_cache: db,
             cached_state: state,
             registry_id,

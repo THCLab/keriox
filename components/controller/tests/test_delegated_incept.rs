@@ -14,6 +14,7 @@ use tempfile::Builder;
 use url::Host;
 use witness::{WitnessEscrowConfig, WitnessListener};
 
+#[cfg(feature = "query_cache")]
 #[async_std::test]
 async fn test_delegated_incept() -> Result<(), ControllerError> {
     use url::Url;

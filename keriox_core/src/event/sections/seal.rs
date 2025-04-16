@@ -1,3 +1,5 @@
+use std::fmt::{self, Display};
+
 use crate::{database::redb::rkyv_adapter::said_wrapper::SaidValue, prefix::IdentifierPrefix};
 use said::SelfAddressingIdentifier;
 use serde::{Deserialize, Serialize};
@@ -63,7 +65,7 @@ pub struct RootSeal {
 #[derive(
     Serialize,
     Deserialize,
-    Debug,
+    // Debug,
     Clone,
     Default,
     PartialEq,
@@ -98,6 +100,19 @@ impl EventSeal {
 
     pub fn event_digest(&self) -> SelfAddressingIdentifier {
         self.event_digest.said.clone()
+    }
+}
+
+impl Display for EventSeal{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", serde_json::to_string(self).unwrap())
+    }
+}
+
+impl fmt::Debug for EventSeal {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // Just forward to Display
+        write!(f, "{}", self)
     }
 }
 

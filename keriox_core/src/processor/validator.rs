@@ -50,7 +50,7 @@ pub enum VerificationError {
 
 #[derive(Error, Debug, Serialize, Deserialize)]
 pub enum MoreInfoError {
-    #[error("Corresponding event not found: {0:?}")]
+    #[error("Corresponding event not found: {0}")]
     EventNotFound(EventSeal),
     #[error("Unknown signer identifier: {0}")]
     UnknownIdentifier(IdentifierPrefix),

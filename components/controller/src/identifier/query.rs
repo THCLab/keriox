@@ -118,6 +118,7 @@ impl Identifier {
                     },
                 );
 
+        #[cfg(feature = "query_cache")]
         for id in possibly_updated_ids {
             let db_state = self.find_state(&id).ok();
 

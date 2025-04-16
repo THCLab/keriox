@@ -8,12 +8,14 @@ use keri_core::{
     state::IdentifierState,
 };
 
+#[cfg(feature = "query_cache")]
+use crate::identifier::mechanics::cache::IdentifierCache;
 use crate::{
     communication::Communication,
     config::ControllerConfig,
     error::ControllerError,
     identifier::{
-        mechanics::{query_mailbox::IdentifierCache, MechanicsError},
+        mechanics::MechanicsError,
         Identifier,
     },
     known_events::KnownEvents,
@@ -23,6 +25,7 @@ pub mod verifying;
 pub struct Controller {
     pub known_events: Arc<KnownEvents>,
     pub communication: Arc<Communication>,
+    #[cfg(feature = "query_cache")]
     pub cache: Arc<IdentifierCache>,
 }
 
@@ -40,6 +43,8 @@ impl Controller {
         query_db_path.push("query_cache");
 
         let events = Arc::new(KnownEvents::new(db_path, escrow_config)?);
+        
+        #[cfg(feature = "query_cache")]
         let query_cache = Arc::new(IdentifierCache::new(&query_db_path)?);
         let comm = Arc::new(Communication {
             events: events.clone(),
@@ -50,6 +55,7 @@ impl Controller {
         let controller = Self {
             known_events: events.clone(),
             communication: comm,
+            #[cfg(feature = "query_cache")]
             cache: query_cache,
         };
         if !initial_oobis.is_empty() {
@@ -81,6 +87,7 @@ impl Controller {
             None,
             self.known_events.clone(),
             self.communication.clone(),
+            #[cfg(feature = "query_cache")]
             self.cache.clone(),
         ))
     }

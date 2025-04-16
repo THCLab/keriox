@@ -13,6 +13,8 @@ pub mod notify_witness;
 pub mod query_mailbox;
 pub mod tel_managing;
 pub mod watcher_configuration;
+#[cfg(feature = "query_cache")]
+pub mod cache;
 
 #[derive(Debug, thiserror::Error)]
 pub enum MechanicsError {

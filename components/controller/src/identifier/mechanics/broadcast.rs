@@ -27,10 +27,16 @@ impl Identifier {
         dest_wit_ids: &[IdentifierPrefix],
     ) -> Result<(), BroadcastingError> {
         for witness in dest_wit_ids {
+
+            #[cfg(feature = "query_cache")]
             let sn = self
                 .query_cache
                 .load_published_receipts_sn(witness)
                 .map_err(|_| BroadcastingError::CacheSavingError)?;
+            
+            #[cfg(not(feature = "query_cache"))]
+            let sn = 0;
+
             let receipts_to_publish = self.known_events.storage.events_db.get_receipts_nt(
                 keri_core::database::QueryParameters::Range {
                     id: self.id.clone(),
@@ -50,6 +56,8 @@ impl Identifier {
                     )
                 });
                 join_all(receipts_futures).await;
+                
+                #[cfg(feature = "query_cache")]
                 self.query_cache
                     .update_last_published_receipt(witness, max_sn)
                     .unwrap();
