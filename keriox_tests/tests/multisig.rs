@@ -15,7 +15,7 @@ use tempfile::Builder;
 use test_context::test_context;
 
 #[test_context(InfrastructureContext)]
-#[async_std::test]
+#[actix_rt::test]
 async fn test_multisig(ctx: &mut InfrastructureContext) -> Result<()> {
     let (witness_id, witness_oobi) = ctx.first_witness_data();
     let (watcher_id, watcher_oobi) = ctx.watcher_data();

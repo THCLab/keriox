@@ -8,7 +8,7 @@ use test_context::test_context;
 
 #[ignore]
 #[test_context(InfrastructureContext)]
-#[async_std::test]
+#[actix_rt::test]
 async fn multi_delegator_multi_delegatee(
     ctx: &mut InfrastructureContext,
 ) -> Result<(), ControllerError> {

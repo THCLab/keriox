@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use async_std::sync::Mutex;
+use futures::lock::Mutex;
 use keri_controller::LocationScheme;
 use teliox::{
     event::verifiable_event::VerifiableEvent,

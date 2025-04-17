@@ -11,7 +11,7 @@ use tempfile::Builder;
 use test_context::test_context;
 
 #[test_context(InfrastructureContext)]
-#[async_std::test]
+#[actix_rt::test]
 async fn indirect_mode_signing(ctx: &mut InfrastructureContext) -> Result<(), ControllerError> {
     let (first_witness_id, first_witness_oobi) = ctx.first_witness_data();
     let (second_witness_id, second_witness_oobi) = ctx.second_witness_data();

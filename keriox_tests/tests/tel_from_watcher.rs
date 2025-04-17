@@ -1,7 +1,8 @@
 use std::time::Duration;
 use std::{collections::HashMap, sync::Arc};
 
-use async_std::task::sleep;
+use actix_rt::spawn;
+use actix_rt::time::sleep;
 use keri_controller::{EndRole, Oobi};
 use keri_controller::{IdentifierPrefix, KeyManager, LocationScheme, SelfSigningPrefix};
 use keri_core::actor::prelude::{HashFunction, HashFunctionCode};
@@ -16,7 +17,7 @@ use url::{Host, Url};
 use watcher::{WatcherConfig, WatcherListener};
 use witness::{WitnessEscrowConfig, WitnessListener};
 
-#[async_std::test]
+#[actix_rt::test]
 async fn test_tel_from_watcher() -> Result<(), anyhow::Error> {
     let verifier_db_path = Builder::new().prefix("test-db0").tempdir().unwrap();
     let issuer_db_path = Builder::new().prefix("test-db").tempdir().unwrap();
@@ -108,10 +109,10 @@ async fn test_tel_from_watcher() -> Result<(), anyhow::Error> {
             tel_storage_path: watcher_tel_path.to_path_buf(),
             ..Default::default()
         })?);
-        async_std::task::spawn(watcher::watcher_listener::update_checking(
+        spawn(watcher::watcher_listener::update_checking(
             watcher_listener.watcher.clone(),
         ));
-        async_std::task::spawn(watcher::watcher_listener::update_tel_checking(
+        spawn(watcher::watcher_listener::update_tel_checking(
             watcher_listener.watcher.clone(),
         ));
         watcher_listener
@@ -387,15 +388,17 @@ async fn test_tel_from_watcher() -> Result<(), anyhow::Error> {
         SelfSigningPrefix::Ed25519Sha512(verifier_keypair.sign(&qry.encode().unwrap())?);
     verifier.finalize_query_tel(qry, signature).await?;
 
-    // Give watcher a moment to find TEL and ask again
-    sleep(Duration::from_secs(1)).await;
-
-    let qry = verifier.query_tel(registry_id, vc_hash.clone())?;
-    let signature =
-        SelfSigningPrefix::Ed25519Sha512(verifier_keypair.sign(&qry.encode().unwrap())?);
-    verifier.finalize_query_tel(qry, signature).await?;
-
+   
     let vc_state = verifier.find_vc_state(&sai).unwrap();
+    if let None = vc_state {
+        // Give watcher a moment to find TEL and ask again
+        sleep(Duration::from_secs(1)).await;
+
+        let qry = verifier.query_tel(registry_id, vc_hash.clone())?;
+        let signature =
+            SelfSigningPrefix::Ed25519Sha512(verifier_keypair.sign(&qry.encode().unwrap())?);
+        verifier.finalize_query_tel(qry, signature).await?;
+    };
     assert!(matches!(vc_state, Some(TelState::Revoked)));
 
     Ok(())

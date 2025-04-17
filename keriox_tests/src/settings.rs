@@ -34,7 +34,7 @@ impl AsyncTestContext for InfrastructureContext {
             url: Url::parse("http://127.0.0.1:3232").unwrap(),
         };
 
-        async_std::task::spawn(first_witness.listen_http((Ipv4Addr::UNSPECIFIED, 3232)));
+        actix_rt::spawn(first_witness.listen_http((Ipv4Addr::UNSPECIFIED, 3232)));
 
         let second_witness = {
             let wit_root = Builder::new().prefix("wit-db").tempdir().unwrap();
@@ -55,7 +55,7 @@ impl AsyncTestContext for InfrastructureContext {
             url: Url::parse("http://127.0.0.1:3233").unwrap(),
         };
 
-        async_std::task::spawn(second_witness.listen_http((Ipv4Addr::UNSPECIFIED, 3233)));
+        actix_rt::spawn(second_witness.listen_http((Ipv4Addr::UNSPECIFIED, 3233)));
 
         let watcher_url = Url::parse("http://127.0.0.1:3236").unwrap();
         let watcher_tel_dir = Builder::new().prefix("cont-test-tel-db").tempdir().unwrap();
@@ -78,7 +78,7 @@ impl AsyncTestContext for InfrastructureContext {
             scheme: keri_core::oobi::Scheme::Http,
             url: watcher_url.clone(),
         };
-        async_std::task::spawn(watcher_listener.listen_http((Ipv4Addr::UNSPECIFIED, 3236)));
+        actix_rt::spawn(watcher_listener.listen_http((Ipv4Addr::UNSPECIFIED, 3236)));
 
         InfrastructureContext {
             first_witness_oobi,

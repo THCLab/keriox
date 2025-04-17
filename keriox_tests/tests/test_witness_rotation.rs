@@ -4,7 +4,7 @@ use tempfile::Builder;
 use test_context::test_context;
 
 #[test_context(InfrastructureContext)]
-#[async_std::test]
+#[actix_rt::test]
 async fn test_witness_rotation(ctx: &mut InfrastructureContext) -> Result<(), ControllerError> {
     let root0 = Builder::new().prefix("test-db0").tempdir().unwrap();
 

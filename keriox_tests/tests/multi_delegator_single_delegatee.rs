@@ -8,7 +8,7 @@ use test_context::test_context;
 
 #[ignore]
 #[test_context(InfrastructureContext)]
-#[async_std::test]
+#[actix_rt::test]
 async fn multi_delegator_single_delegatee(
     ctx: &mut InfrastructureContext,
 ) -> Result<(), ControllerError> {
@@ -251,7 +251,7 @@ async fn multi_delegator_single_delegatee(
         (qry, sig)
     }).collect::<Vec<_>>();
 
-    let ar = temporary_delegatee_identifier
+    let _ar = temporary_delegatee_identifier
         .finalize_query_mailbox(queries_and_signatures).await?;
 
     let state = temporary_delegatee_identifier.find_state(&delegator_group_id)?;

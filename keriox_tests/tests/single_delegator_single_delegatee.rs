@@ -10,7 +10,7 @@ use tempfile::Builder;
 use test_context::test_context;
 
 #[test_context(InfrastructureContext)]
-#[async_std::test]
+#[actix_rt::test]
 async fn single_delegator_single_delegatee(
     ctx: &mut InfrastructureContext,
 ) -> Result<(), ControllerError> {
