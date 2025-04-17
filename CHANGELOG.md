@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.17.0] - 2025-04-17
+
+### 🚀 Features
+
+- Add query_cache feature
+
+### 🐛 Bug Fixes
+
+- Remove async-std from watcher
+- Update tests workspace
+
 ## [0.17.0-rc5] - 2025-04-08
 
 ### 🚀 Features
@@ -12,6 +23,10 @@ All notable changes to this project will be documented in this file.
 
 - Update incept_registry and issue functions
 - Update finalize group event function
+
+### ⚙️ Miscellaneous Tasks
+
+- Release
 
 ## [0.17.0-rc4] - 2025-03-27
 
