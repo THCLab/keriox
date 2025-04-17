@@ -1,7 +1,7 @@
 use crate::http_routing::configure_routes;
 use std::{net::ToSocketAddrs, sync::Arc};
 
-use actix_web::{dev::Server, web, App, HttpServer};
+use actix_web::{dev::Server, rt::spawn, web, App, HttpServer};
 use keri_core::{actor::error::ActorError, oobi::LocationScheme, prefix::BasicPrefix};
 
 use crate::{watcher::Watcher, WatcherConfig};
@@ -21,8 +21,8 @@ impl WatcherListener {
 
     pub fn listen_http(self, addr: impl ToSocketAddrs) -> Server {
         let data = self.watcher.clone();
-        async_std::task::spawn(update_tel_checking(data.clone()));
-        async_std::task::spawn(update_checking(data));
+        spawn(update_tel_checking(data.clone()));
+        spawn(update_checking(data));
 
         let state = web::Data::new(self.watcher);
         HttpServer::new(move || {
@@ -112,6 +112,7 @@ pub mod http_handlers {
             .iter()
             .map(|msg| msg.to_string())
             .join("");
+        println!("\nResponds with: {}", &resp);
 
         Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())

@@ -1,6 +1,5 @@
 use std::{fs::File, sync::Arc};
 
-use async_std::channel::Sender;
 use futures::future::join_all;
 use itertools::Itertools;
 use keri_core::oobi::LocationScheme;
@@ -47,6 +46,7 @@ use keri_core::{
 };
 use teliox::query::{SignedTelQuery, TelQueryArgs, TelQueryRoute};
 use teliox::transport::GeneralTelTransport;
+use tokio::sync::mpsc::Sender;
 
 use super::{config::WatcherConfig, tel_providing::TelToForward};
 

@@ -2,9 +2,8 @@ pub mod config;
 mod tel_providing;
 mod watcher_data;
 
-use std::{fs::create_dir_all, sync::Arc};
+use std::{fs::create_dir_all, sync::{Arc, Mutex}};
 
-use async_std::channel::{unbounded, Receiver};
 use keri_core::{
     actor::{
         error::ActorError, parse_event_stream, parse_notice_stream, parse_query_stream,
@@ -23,6 +22,7 @@ use teliox::{
     processor::{validator::TelEventValidator, TelReplyType},
     query::TelQueryRoute,
 };
+use tokio::sync::mpsc::{channel, Receiver};
 use watcher_data::WatcherData;
 
 use crate::WatcherConfig;
@@ -34,24 +34,24 @@ enum WitnessResp {
 
 pub struct Watcher {
     pub(crate) watcher_data: Arc<WatcherData>,
-    recv: Receiver<IdentifierPrefix>,
-    tel_recv: Receiver<(IdentifierPrefix, IdentifierPrefix)>,
+    recv: Mutex<Receiver<IdentifierPrefix>>,
+    tel_recv: Mutex<Receiver<(IdentifierPrefix, IdentifierPrefix)>>,
     // Maps registry id to witness id provided by oobi
     registry_id_mapping: RegistryMapping,
 }
 
 impl Watcher {
     pub fn new(config: WatcherConfig) -> Result<Self, ActorError> {
-        let (tx, rx) = unbounded();
-        let (tel_tx, tel_rx) = unbounded();
+        let (tx, rx) = channel::<IdentifierPrefix>(100);
+        let (tel_tx, tel_rx) = channel::<(IdentifierPrefix, IdentifierPrefix)>(100);
         let tel_storage_path = config.tel_storage_path.clone();
         create_dir_all(&tel_storage_path).unwrap();
         let mut registry_ids_storage_path = tel_storage_path.clone();
         registry_ids_storage_path.push("registry");
         Ok(Watcher {
             watcher_data: WatcherData::new(config, tx, tel_tx)?,
-            recv: rx,
-            tel_recv: tel_rx,
+            recv: Mutex::new(rx),
+            tel_recv: Mutex::new(tel_rx),
             registry_id_mapping: RegistryMapping::new(&registry_ids_storage_path)
                 .map_err(|e| ActorError::GeneralError(e.to_string()))?,
         })
@@ -66,13 +66,16 @@ impl Watcher {
     }
 
     pub async fn process_update_requests(&self) {
-        while let Ok(received) = self.recv.recv().await {
+        let mut recv = self.recv.lock().unwrap();
+
+        while let Some(received) = recv.recv().await {
             let _ = self.watcher_data.update_local_kel(&received).await;
         }
     }
 
     pub async fn process_update_tel_requests(&self) -> Result<(), ActorError> {
-        while let Ok((ri, vc_id)) = self.tel_recv.recv().await {
+        let mut recv = self.tel_recv.lock().unwrap();
+        while let Some((ri, vc_id)) = recv.recv().await {
             let who_to_ask = self
                 .registry_id_mapping
                 .get(&ri)

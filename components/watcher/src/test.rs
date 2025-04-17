@@ -26,7 +26,7 @@ use witness::{WitnessEscrowConfig, WitnessListener};
 
 use crate::{Watcher, WatcherConfig};
 
-#[async_std::test]
+#[actix_web::test]
 async fn test_watcher_access() -> Result<(), ActorError> {
     // Controller who will ask
     let mut asker_controller = {
@@ -133,8 +133,8 @@ async fn test_watcher_access() -> Result<(), ActorError> {
     Ok(())
 }
 
-#[test]
-pub fn watcher_forward_ksn() -> Result<(), ActorError> {
+#[actix_web::test]
+pub async fn watcher_forward_ksn() -> Result<(), ActorError> {
     let witness_url = url::Url::parse("http://witness1").unwrap();
 
     let witness_listener = {
@@ -250,16 +250,16 @@ pub fn watcher_forward_ksn() -> Result<(), ActorError> {
     let query = asker_controller.query_ksn(about_controller.prefix())?;
 
     // Send query message to watcher before sending end role oobi
-    let err = futures::executor::block_on(watcher.watcher_data.process_op(query.clone()));
+    let err = watcher.watcher_data.process_op(query.clone()).await;
 
     assert!(matches!(err, Err(ActorError::MissingRole { .. })));
 
     // Create and send end role oobi to watcher
     let end_role = asker_controller.add_watcher(&IdentifierPrefix::Basic(watcher.prefix()))?;
-    futures::executor::block_on(watcher.watcher_data.process_op(end_role)).unwrap();
+    watcher.watcher_data.process_op(end_role).await.unwrap();
 
     // Send query again
-    let _result = futures::executor::block_on(watcher.watcher_data.process_op(query.clone()));
+    let _result = watcher.watcher_data.process_op(query.clone()).await.unwrap();
     // Expect error because no loc scheme for witness.
     // assert!(matches!(
     //     result, Err(ActorError::NoLocation { ref id })
@@ -301,7 +301,7 @@ pub fn watcher_forward_ksn() -> Result<(), ActorError> {
     }
 
     // Send wrong query
-    let result = futures::executor::block_on(watcher.watcher_data.process_op(wrong_query));
+    let result = watcher.watcher_data.process_op(wrong_query).await;
 
     assert!(matches!(
         result,
@@ -311,7 +311,7 @@ pub fn watcher_forward_ksn() -> Result<(), ActorError> {
     ));
 
     // Send query again
-    let result = futures::executor::block_on(watcher.watcher_data.process_op(query));
+    let result = watcher.watcher_data.process_op(query).await;
 
     assert!(matches!(
         result,

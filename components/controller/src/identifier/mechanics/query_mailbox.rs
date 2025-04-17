@@ -9,6 +9,9 @@ use keri_core::{
     },
 };
 
+#[cfg(not(feature = "query_cache"))]
+use crate::mailbox_updating::MailboxReminder;
+
 use crate::{
     communication::SendingError,
     error::ControllerError,
