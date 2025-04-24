@@ -6,8 +6,7 @@ use keri_core::{
     event_message::signed_event_message::{Notice, SignedEventMessage},
     processor::{
         escrow::{
-            maybe_out_of_order_escrow::MaybeOutOfOrderEscrow, DelegationEscrow, EscrowConfig,
-            PartiallySignedEscrow,
+            maybe_out_of_order_escrow::MaybeOutOfOrderEscrow, partially_signed_escrow::PartiallySignedEscrow, DelegationEscrow, EscrowConfig
         },
         notification::{JustNotification, Notification, NotificationBus, Notifier},
         validator::EventValidator,

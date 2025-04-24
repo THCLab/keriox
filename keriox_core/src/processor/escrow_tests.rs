@@ -23,9 +23,7 @@ use crate::{
     processor::{
         basic_processor::BasicProcessor,
         escrow::{
-            maybe_out_of_order_escrow::MaybeOutOfOrderEscrow,
-            partially_witnessed_escrow::PartiallyWitnessedEscrow, PartiallySignedEscrow,
-            TransReceiptsEscrow,
+            maybe_out_of_order_escrow::MaybeOutOfOrderEscrow, partially_signed_escrow::PartiallySignedEscrow, partially_witnessed_escrow::PartiallyWitnessedEscrow, TransReceiptsEscrow
         },
         event_storage::EventStorage,
         notification::JustNotification,
