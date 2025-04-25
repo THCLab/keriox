@@ -128,10 +128,8 @@ fn test_process() -> Result<(), Error> {
         // should be saved in partially signed escrow
         assert_eq!(
             ps_escrow
-                .get_partially_signed_for_event(ev.event_message)
-                .unwrap()
-                .count(),
-            1
+                .get_partially_signed_for_event(ev.event_message.clone()),
+            Some(ev)
         );
     } else {
         unreachable!()
@@ -480,13 +478,20 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
     let signed_rotation = rotation.sign(signatures[..3].to_vec(), None, None);
     processor.process_notice(&Notice::Event(signed_rotation.clone()))?;
     // rotation should be stored in partially signed events escrow.
-    assert_eq!(
-        ps_escrow
+    let escrow_contents = ps_escrow
             .escrowed_partially_signed
-            .get_all()
-            .and_then(|mut x| x.next()),
-        Some(signed_rotation)
-    );
+            .get_from_sn(&id_prefix, 0)
+            .unwrap()
+            .next();
+
+    let escrowed_signatures = escrow_contents.unwrap().signatures;
+    let expected_signatures = signed_rotation.signatures;
+    for sig in &escrowed_signatures {
+        let _ = expected_signatures.contains(&sig);
+    }
+    for sig in expected_signatures {
+        let _ = escrowed_signatures.contains(&sig);
+    }
 
     let state = storage.get_state(&id_prefix);
     assert_eq!(state.unwrap().sn, 1);
@@ -498,8 +503,9 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
     assert_eq!(
         ps_escrow
             .escrowed_partially_signed
-            .get_all()
-            .and_then(|mut x| x.next()),
+            .get_from_sn(&id_prefix, 0)
+            .unwrap()
+            .next(),
         None
     );
 

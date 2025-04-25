@@ -93,7 +93,6 @@ pub fn default_escrow_bus(
     let ps_escrow = Arc::new(PartiallySignedEscrow::new(
         event_db.clone(),
         sled_db.clone(),
-        escrow_db.clone(),
         escrow_config.partially_signed_timeout,
     ));
     bus.register_observer(ps_escrow.clone(), vec![JustNotification::PartiallySigned]);
