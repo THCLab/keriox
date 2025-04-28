@@ -289,8 +289,6 @@ mod tests {
             let mut processor = BasicProcessor::new(events_db.clone(), sled_db.clone(), None);
 
             // Register partially signed escrow, to save and reprocess partially signed events
-            let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
-            let escrow_db = Arc::new(EscrowDb::new(escrow_root.path())?);
             let ps_escrow = Arc::new(PartiallySignedEscrow::new(
                 events_db.clone(),
                 sled_db.clone(),

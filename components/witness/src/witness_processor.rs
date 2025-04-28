@@ -1,12 +1,13 @@
 use std::{sync::Arc, time::Duration};
 
 use keri_core::{
-    database::{escrow::EscrowDb, redb::RedbDatabase, sled::SledEventDatabase, EventDatabase},
+    database::{redb::RedbDatabase, sled::SledEventDatabase, EventDatabase},
     error::Error,
     event_message::signed_event_message::{Notice, SignedEventMessage},
     processor::{
         escrow::{
-            maybe_out_of_order_escrow::MaybeOutOfOrderEscrow, partially_signed_escrow::PartiallySignedEscrow, DelegationEscrow, EscrowConfig
+            delegation_escrow::DelegationEscrow, maybe_out_of_order_escrow::MaybeOutOfOrderEscrow,
+            partially_signed_escrow::PartiallySignedEscrow, EscrowConfig,
         },
         notification::{JustNotification, Notification, NotificationBus, Notifier},
         validator::EventValidator,
@@ -64,14 +65,12 @@ impl WitnessProcessor {
     pub fn new(
         redb: Arc<RedbDatabase>,
         sled_db: Arc<SledEventDatabase>,
-        escrow_db: Arc<EscrowDb>,
         escrow_config: WitnessEscrowConfig,
     ) -> Self {
         let mut bus = NotificationBus::new();
         let partially_signed_escrow = Arc::new(PartiallySignedEscrow::new(
             redb.clone(),
             sled_db.clone(),
-            escrow_db.clone(),
             escrow_config.partially_signed_timeout,
         ));
         bus.register_observer(
@@ -93,7 +92,6 @@ impl WitnessProcessor {
         let deleating_escrow = Arc::new(DelegationEscrow::new(
             redb.clone(),
             sled_db.clone(),
-            escrow_db,
             escrow_config.delegation_timeout,
         ));
         bus.register_observer(

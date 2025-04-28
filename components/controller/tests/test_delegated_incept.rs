@@ -213,12 +213,13 @@ async fn test_delegated_incept() -> Result<(), ControllerError> {
     let delegators_kel = delegator_controller
         .get_kel_with_receipts(&delegator.id())
         .unwrap();
+    dbg!(&delegators_kel);
     delegatee_controller
         .known_events
         .save(&Message::Notice(delegators_kel[0].clone()))?; // icp
-    delegatee_controller
-        .known_events
-        .save(&Message::Notice(delegators_kel[1].clone()))?; // receipt
+                                                             // delegatee_controller
+                                                             //     .known_events
+                                                             //     .save(&Message::Notice(delegators_kel[1].clone()))?; // receipt
 
     // Ask about delegated identifier mailbox
     let query = delegatee_identifier.query_mailbox(&delegate_id, &[witness_id_basic.clone()])?;

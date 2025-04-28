@@ -47,7 +47,7 @@ use crate::{
     prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
     processor::{
         basic_processor::BasicProcessor,
-        escrow::{default_escrow_bus, DelegationEscrow, EscrowConfig},
+        escrow::{default_escrow_bus, delegation_escrow::DelegationEscrow, EscrowConfig},
         event_storage::EventStorage,
         Processor,
     },

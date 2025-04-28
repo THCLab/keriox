@@ -129,6 +129,21 @@ impl SnKeyEscrow {
         Ok(())
     }
 
+    pub fn insert_key_value(
+        &self,
+        id: &IdentifierPrefix,
+        sn: u64,
+        event: &SignedEventMessage,
+    ) -> Result<(), RedbError> {
+        self.log
+            .log_event(&crate::database::redb::WriteTxnMode::CreateNew, &event)?;
+        let said = event.event_message.digest().unwrap();
+
+        self.escrow.insert(&id, sn, &said)?;
+
+        Ok(())
+    }
+
     pub fn get<'a>(
         &'a self,
         identifier: &IdentifierPrefix,
