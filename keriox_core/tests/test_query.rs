@@ -4,7 +4,7 @@ mod test_query {
 
     use keri_core::{
         actor::{parse_event_stream, prelude::*},
-        database::{escrow::EscrowDb, redb::RedbDatabase, sled::SledEventDatabase},
+        database::{redb::RedbDatabase, sled::SledEventDatabase},
         event_message::signed_event_message::Op,
         processor::{
             escrow::{default_escrow_bus, EscrowConfig},
@@ -20,15 +20,12 @@ mod test_query {
         let root = Builder::new().prefix("test-db").tempdir().unwrap();
         let db = Arc::new(SledEventDatabase::new(root.path())?);
 
-        let escrow_root = Builder::new().prefix("test-db").tempdir().unwrap();
-        let escrow_db = Arc::new(EscrowDb::new(escrow_root.path())?);
         let events_db_path = NamedTempFile::new().unwrap();
         let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
 
         let (notification_bus, (_ooo_escrow, _ps_esrow, _pw_escrow, _)) = default_escrow_bus(
             events_db.clone(),
             db.clone(),
-            escrow_db,
             EscrowConfig::default(),
         );
 

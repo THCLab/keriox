@@ -13,10 +13,7 @@ fn setup_processor() -> (
 ) {
     use tempfile::{Builder, NamedTempFile};
 
-    use keri_core::{
-        database::escrow::EscrowDb,
-        processor::escrow::{default_escrow_bus, EscrowConfig},
-    };
+    use keri_core::processor::escrow::{default_escrow_bus, EscrowConfig};
     // Create test db and event processor.
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     std::fs::create_dir_all(root.path()).unwrap();
@@ -24,13 +21,9 @@ fn setup_processor() -> (
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
     let events_db_path = NamedTempFile::new().unwrap();
     let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
-    let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
-
-    let escrow_db = Arc::new(EscrowDb::new(escrow_root.path()).unwrap());
     let (not_bus, (_ooo_escrow, _, _, _)) = default_escrow_bus(
         events_db.clone(),
         db.clone(),
-        escrow_db,
         EscrowConfig::default(),
     );
 

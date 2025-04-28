@@ -53,7 +53,6 @@ impl<D: EventDatabase> Notifier for DelegationEscrow<D> {
     fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error> {
         match notification {
             Notification::KeyEventAdded(ev_message) => {
-                println!("\nKey event added in del escrow: {:?}", &ev_message);
                 // delegator's prefix
                 let id = ev_message.event_message.data.get_prefix();
                 // get anchored data
@@ -77,16 +76,10 @@ impl<D: EventDatabase> Notifier for DelegationEscrow<D> {
                         ev_message.event_message.data.get_sn(),
                         ev_message.event_message.digest()?,
                     );
-                    println!(
-                        "\nPotential delegator seal: {:?}",
-                        &potential_delegator_seal
-                    );
                     self.process_delegation_events(bus, &id, seals, potential_delegator_seal)?;
                 }
             }
             Notification::MissingDelegatingEvent(signed_event) => {
-                println!("\nMissing delegating event: {:?}", &signed_event);
-                
                 // ignore events with no signatures
                 if !signed_event.signatures.is_empty() {
                     let delegator_id = match &signed_event.event_message.data.event_data {
@@ -108,10 +101,6 @@ impl<D: EventDatabase> Notifier for DelegationEscrow<D> {
                     let sn = if let Some(delegator_seal) = delegator_seal {
                         delegator_seal.sn
                     } else {0};
-                    println!(
-                        "\nMissing delegating event: {:?} for delegator: {:?}",
-                        signed_event, delegator_id
-                    );
                     self.delegation_escrow.insert_key_value(&delegator_id , sn, signed_event)?;
                 }
             }
@@ -132,7 +121,6 @@ impl<D: EventDatabase> DelegationEscrow<D> {
     ) -> Result<(), Error> {
         if let Ok(esc) = self.delegation_escrow.get_from_sn(delegator_id, 0) {
             for event in esc {
-                println!("\n\nProcessing escrowed delegation event: {:?}", event);
                 let event_digest = event.event_message.digest()?;
                 let seal = anchored_seals.iter().find(|seal| {
                     seal.event_digest() == event_digest

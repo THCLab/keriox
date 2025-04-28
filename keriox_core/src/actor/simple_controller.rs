@@ -29,7 +29,7 @@ use crate::mailbox::{
 };
 use crate::{
     actor::parse_event_stream,
-    database::{escrow::EscrowDb, sled::SledEventDatabase},
+    database::sled::SledEventDatabase,
     error::Error,
     event::{
         event_data::EventData,
@@ -223,13 +223,12 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase> {
     pub fn new(
         db: Arc<SledEventDatabase>,
         event_db: Arc<RedbDatabase>,
-        escrow_db: Arc<EscrowDb>,
         key_manager: Arc<Mutex<K>>,
         oobi_db_path: &Path,
         escrow_config: EscrowConfig,
     ) -> Result<SimpleController<K, RedbDatabase>, Error> {
         let (not_bus, (ooo, _, partially_witnesses, del_escrow)) =
-            default_escrow_bus(event_db.clone(), db.clone(), escrow_db, escrow_config);
+            default_escrow_bus(event_db.clone(), db.clone(), escrow_config);
         let processor = BasicProcessor::new(event_db.clone(), db.clone(), Some(not_bus));
 
         Ok(SimpleController {

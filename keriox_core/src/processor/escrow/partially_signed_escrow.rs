@@ -158,7 +158,7 @@ mod tests {
 
     use crate::{
         actor::prelude::{BasicProcessor, EventStorage, Message, SledEventDatabase},
-        database::{escrow::EscrowDb, redb::RedbDatabase},
+        database::redb::RedbDatabase,
         error::Error,
         event_message::{
             cesr_adapter::EventType,

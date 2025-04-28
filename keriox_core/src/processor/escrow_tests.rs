@@ -1,18 +1,17 @@
 use std::{
-    convert::{TryFrom, TryInto},
+    convert::TryFrom,
     fs,
     sync::Arc,
     thread::{self},
     time::Duration,
 };
 
-use cesrox::{parse, parse_many, payload::parse_payload};
+use cesrox::{parse, parse_many};
 use tempfile::NamedTempFile;
 
 use crate::{
     database::{
-        escrow::EscrowDb, redb::RedbDatabase, sled::SledEventDatabase, EventDatabase,
-        QueryParameters,
+        redb::RedbDatabase, sled::SledEventDatabase,
     },
     error::Error,
     event_message::signed_event_message::{Message, Notice},
@@ -22,112 +21,13 @@ use crate::{
         escrow::{
             maybe_out_of_order_escrow::MaybeOutOfOrderEscrow,
             partially_signed_escrow::PartiallySignedEscrow,
-            partially_witnessed_escrow::PartiallyWitnessedEscrow, TransReceiptsEscrow,
+            partially_witnessed_escrow::PartiallyWitnessedEscrow,
         },
         event_storage::EventStorage,
         notification::JustNotification,
         Processor,
     },
 };
-
-#[test]
-fn test_process_transferable_receipt() -> Result<(), Error> {
-    use tempfile::Builder;
-
-    // Create test db and event processor.
-    let root = Builder::new().prefix("test-db").tempdir().unwrap();
-    fs::create_dir_all(root.path()).unwrap();
-    let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-
-    // let (not_bus, _ooo_escrow) = default_escrow_bus(db.clone(), escrow_db);
-    let events_db_path = NamedTempFile::new().unwrap();
-    let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
-    let mut event_processor = BasicProcessor::new(events_db.clone(), Arc::clone(&db), None);
-    let event_storage = EventStorage::new(Arc::clone(&events_db), Arc::clone(&db));
-
-    // Register transferable receipts escrow, to save and reprocess out of order receipts events
-    let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
-    let escrow_db = Arc::new(EscrowDb::new(escrow_root.path())?);
-    let trans_receipts_escrow = Arc::new(TransReceiptsEscrow::new(
-        events_db.clone(),
-        db.clone(),
-        escrow_db,
-        Duration::from_secs(10),
-    ));
-    event_processor.register_observer(
-        trans_receipts_escrow.clone(),
-        &[
-            JustNotification::TransReceiptOutOfOrder,
-            JustNotification::KeyEventAdded,
-        ],
-    )?;
-
-    // Events and sigs are from keripy `test_direct_mode` test.
-    // (keripy/tests/core/test_eventing.py)
-    // Parse and process controller's inception event.
-    let icp_raw = br#"{"v":"KERI10JSON00012b_","t":"icp","d":"EJe_sKQb1otKrz6COIL8VFvBv3DEFvtKaVFGn1vm0IlL","i":"EJe_sKQb1otKrz6COIL8VFvBv3DEFvtKaVFGn1vm0IlL","s":"0","kt":"1","k":["DC8kCMHKrYZewclvG9vj1R1nSspiRwPi-ByqRwFuyq4i"],"nt":"1","n":["EBPlMwLJ5rSKWCaZq4bczEHLQvYX3P7cILmBzy0Pp4O4"],"bt":"0","b":[],"c":[],"a":[]}-AABAAAWQ0yBzzzVsOJPDkKzbDPzfYXEF5xmQgJSEKXcDO3XMVSL2DmDRYZV73huYX5BAsfzIhBXggKKAcGcEfT38R8L"#;
-    let parsed = parse(icp_raw).unwrap().1;
-    let icp = Message::try_from(parsed).unwrap();
-    let controller_id =
-        "EJe_sKQb1otKrz6COIL8VFvBv3DEFvtKaVFGn1vm0IlL".parse::<IdentifierPrefix>()?;
-
-    event_processor.process(&icp)?;
-    let controller_id_state = event_storage.get_state(&controller_id);
-    assert_eq!(controller_id_state.clone().unwrap().sn, 0);
-
-    // Parse receipt of controller's inception event.
-    let vrc_raw = br#"{"v":"KERI10JSON000091_","t":"rct","d":"EJe_sKQb1otKrz6COIL8VFvBv3DEFvtKaVFGn1vm0IlL","i":"EJe_sKQb1otKrz6COIL8VFvBv3DEFvtKaVFGn1vm0IlL","s":"0"}-FABEAzjKx3hSVJArKpIOVt2KfTRjq8st22hL25Ho9vnNodz0AAAAAAAAAAAAAAAAAAAAAAAEAzjKx3hSVJArKpIOVt2KfTRjq8st22hL25Ho9vnNodz-AABAAD-iI61odpZQjzm0fN9ZATjHx-KjQ9W3-CIlvhowwUaPC5KnQAIGYFuWJyRgAQalYVSEWoyMK2id_ONTFUE-NcF"#;
-    let parsed = parse(vrc_raw).unwrap().1;
-    let rcp = Message::try_from(parsed).unwrap();
-
-    event_processor.process(&rcp.clone())?;
-    // Validator not yet in db. Event should be escrowed.
-    let validator_id = "EAzjKx3hSVJArKpIOVt2KfTRjq8st22hL25Ho9vnNodz".parse()?;
-    assert_eq!(
-        trans_receipts_escrow
-            .escrowed_trans_receipts
-            .get(&validator_id)
-            .unwrap()
-            .count(),
-        1
-    );
-
-    // Parse and process validator's inception event.
-    let val_icp_raw = br#"{"v":"KERI10JSON00012b_","t":"icp","d":"EAzjKx3hSVJArKpIOVt2KfTRjq8st22hL25Ho9vnNodz","i":"EAzjKx3hSVJArKpIOVt2KfTRjq8st22hL25Ho9vnNodz","s":"0","kt":"1","k":["BF5b1hKlY38RoAhR7G8CExP4qjHFvbHx25Drp5Jj2j4p"],"nt":"1","n":["ECoxJfQH0GUrlDKoC3U-neGY1CJib7VyZGh6QhdJtWoT"],"bt":"0","b":[],"c":[],"a":[]}-AABAACOKLyxKvQyy_TvkfQffGnk-p0cc1H11dpxV8gbxvYGm5kfvqPerlorqD21hGRAqvyFQJ967Y8lFl_dxTaal2cA"#;
-    let parsed = parse(val_icp_raw).unwrap().1;
-    let val_icp = Message::try_from(parsed).unwrap();
-
-    event_processor.process(&val_icp)?;
-    let validator_id_state = event_storage.get_state(&validator_id);
-    assert_eq!(validator_id_state.unwrap().sn, 0);
-
-    // Escrowed receipt should be removed and accepted
-    assert_eq!(
-        trans_receipts_escrow
-            .escrowed_trans_receipts
-            .get(&validator_id)
-            .unwrap()
-            .count(),
-        0
-    );
-    assert_eq!(
-        event_storage
-            .events_db
-            .get_receipts_t(QueryParameters::BySn {
-                id: controller_id.clone(),
-                sn: 0
-            })
-            .unwrap()
-            .count(),
-        1
-    );
-
-    let id_state = EventStorage::new(events_db.clone(), Arc::clone(&db)).get_state(&controller_id);
-    // Controller's state shouldn't change after processing receipt.
-    assert_eq!(controller_id_state, id_state);
-
-    Ok(())
-}
 
 #[cfg(feature = "query")]
 #[test]
@@ -362,8 +262,6 @@ fn test_partially_sign_escrow_cleanup() -> Result<(), Error> {
         let mut processor = BasicProcessor::new(events_db.clone(), witness_db.clone(), None);
 
         // Register partially signed escrow, to save and reprocess partially signed events
-        let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
-        let escrow_db = Arc::new(EscrowDb::new(escrow_root.path())?);
         let ps_escrow = Arc::new(PartiallySignedEscrow::new(
             events_db.clone(),
             witness_db.clone(),

@@ -4,7 +4,7 @@ use cesrox::{parse, parse_many, primitives::CesrPrimitive};
 use tempfile::NamedTempFile;
 
 use crate::{
-    database::{escrow::EscrowDb, redb::RedbDatabase, sled::SledEventDatabase},
+    database::{redb::RedbDatabase, sled::SledEventDatabase},
     error::Error,
     event::sections::threshold::SignatureThreshold,
     event_message::{
@@ -28,17 +28,14 @@ fn test_process() -> Result<(), Error> {
 
     // Create test db and event processor.
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
-    let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
     fs::create_dir_all(root.path()).unwrap();
     let events_db_path = NamedTempFile::new().unwrap();
     let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
 
     let sled_db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-    let escrow_db = Arc::new(EscrowDb::new(escrow_root.path()).unwrap());
     let (not_bus, (ooo_escrow, ps_escrow, _pw_escrow, _)) = default_escrow_bus(
         events_db.clone(),
         sled_db.clone(),
-        escrow_db,
         EscrowConfig::default(),
     );
     let event_processor =
@@ -176,16 +173,13 @@ fn test_process_delegated() -> Result<(), Error> {
     fs::create_dir_all(root.path()).unwrap();
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
 
-    let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
     fs::create_dir_all(root.path()).unwrap();
-    let escrow_db = Arc::new(EscrowDb::new(escrow_root.path()).unwrap());
 
     let events_db_path = NamedTempFile::new().unwrap();
     let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
     let (not_bus, _ooo_escrow) = default_escrow_bus(
         events_db.clone(),
         db.clone(),
-        escrow_db,
         EscrowConfig::default(),
     );
 
@@ -285,16 +279,13 @@ fn test_compute_state_at_sn() -> Result<(), Error> {
     fs::create_dir_all(root.path()).unwrap();
     let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
 
-    let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
     fs::create_dir_all(root.path()).unwrap();
-    let escrow_db = Arc::new(EscrowDb::new(escrow_root.path()).unwrap());
 
     let events_db_path = NamedTempFile::new().unwrap();
     let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
     let (not_bus, _ooo_escrow) = default_escrow_bus(
         events_db.clone(),
         db.clone(),
-        escrow_db,
         EscrowConfig::default(),
     );
 
@@ -340,15 +331,12 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
     std::fs::create_dir_all(path).unwrap();
     let db = Arc::new(SledEventDatabase::new(path).unwrap());
 
-    let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
-    let escrow_db = Arc::new(EscrowDb::new(escrow_root.path()).unwrap());
     let events_db_path = NamedTempFile::new().unwrap();
     let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
 
     let (not_bus, (_, ps_escrow, _, _)) = default_escrow_bus(
         events_db.clone(),
         db.clone(),
-        escrow_db,
         EscrowConfig::default(),
     );
 
@@ -524,15 +512,11 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
         std::fs::create_dir_all(path).unwrap();
         let db = Arc::new(SledEventDatabase::new(path).unwrap());
 
-        let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
-        let escrow_db = Arc::new(EscrowDb::new(escrow_root.path()).unwrap());
-
         let events_db_path = NamedTempFile::new().unwrap();
         let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
         let (not_bus, _ooo_escrow) = default_escrow_bus(
             events_db.clone(),
             db.clone(),
-            escrow_db,
             EscrowConfig::default(),
         );
         (
@@ -699,15 +683,11 @@ pub fn test_reserve_rotation() -> Result<(), Error> {
         std::fs::create_dir_all(path).unwrap();
         let db = Arc::new(SledEventDatabase::new(path).unwrap());
 
-        let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
-        let escrow_db = Arc::new(EscrowDb::new(escrow_root.path()).unwrap());
-
         let events_db_path = NamedTempFile::new().unwrap();
         let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
         let (not_bus, _ooo_escrow) = default_escrow_bus(
             events_db.clone(),
             db.clone(),
-            escrow_db,
             EscrowConfig::default(),
         );
         (
@@ -889,15 +869,11 @@ pub fn test_custorial_rotation() -> Result<(), Error> {
         std::fs::create_dir_all(path).unwrap();
         let db = Arc::new(SledEventDatabase::new(path).unwrap());
 
-        let escrow_root = Builder::new().prefix("test-db-escrow").tempdir().unwrap();
-        let escrow_db = Arc::new(EscrowDb::new(escrow_root.path()).unwrap());
-
         let events_db_path = NamedTempFile::new().unwrap();
         let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
         let (not_bus, _ooo_escrow) = default_escrow_bus(
             events_db.clone(),
             db.clone(),
-            escrow_db,
             EscrowConfig::default(),
         );
         (

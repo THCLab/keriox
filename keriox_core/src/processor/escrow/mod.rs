@@ -16,14 +16,11 @@ use super::{
 };
 use crate::{
     database::{
-        escrow::{Escrow, EscrowDb},
         redb::RedbDatabase,
         sled::SledEventDatabase,
         EventDatabase,
     },
     error::Error,
-    event_message::signed_event_message::SignedTransferableReceipt,
-    prefix::IdentifierPrefix,
 };
 #[cfg(feature = "query")]
 use crate::{
@@ -55,7 +52,6 @@ impl Default for EscrowConfig {
 pub fn default_escrow_bus(
     event_db: Arc<RedbDatabase>,
     sled_db: Arc<SledEventDatabase>,
-    escrow_db: Arc<EscrowDb>,
     escrow_config: EscrowConfig,
 ) -> (
     NotificationBus,
@@ -102,19 +98,6 @@ pub fn default_escrow_bus(
         ],
     );
 
-    bus.register_observer(
-        Arc::new(TransReceiptsEscrow::new(
-            event_db.clone(),
-            sled_db.clone(),
-            escrow_db.clone(),
-            escrow_config.trans_receipt_timeout,
-        )),
-        vec![
-            JustNotification::KeyEventAdded,
-            JustNotification::TransReceiptOutOfOrder,
-        ],
-    );
-
     let delegation_escrow = Arc::new(DelegationEscrow::new(
         event_db,
         sled_db,
@@ -129,77 +112,6 @@ pub fn default_escrow_bus(
     );
 
     (bus, (ooo_escrow, ps_escrow, pw_escrow, delegation_escrow))
-}
-
-pub struct TransReceiptsEscrow<D: EventDatabase> {
-    db: Arc<D>,
-    old_db: Arc<SledEventDatabase>,
-    pub(crate) escrowed_trans_receipts: Escrow<SignedTransferableReceipt>,
-}
-impl<D: EventDatabase> TransReceiptsEscrow<D> {
-    pub fn new(
-        db: Arc<D>,
-        sled_db: Arc<SledEventDatabase>,
-        escrow_db: Arc<EscrowDb>,
-        duration: Duration,
-    ) -> Self {
-        Self {
-            db,
-            old_db: sled_db,
-            escrowed_trans_receipts: Escrow::new(b"vres", duration, escrow_db.clone()),
-        }
-    }
-}
-impl<D: EventDatabase> Notifier for TransReceiptsEscrow<D> {
-    fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error> {
-        match notification {
-            Notification::KeyEventAdded(event) => {
-                self.process_t_receipts_escrow(&event.event_message.data.get_prefix(), bus)?;
-            }
-            Notification::TransReceiptOutOfOrder(receipt) => {
-                // ignore events with no signatures
-                if !receipt.signatures.is_empty() {
-                    let id = receipt.validator_seal.prefix.clone();
-                    self.escrowed_trans_receipts.add(&id, receipt.to_owned())?;
-                }
-            }
-            _ => return Err(Error::SemanticError("Wrong notification".into())),
-        }
-        Ok(())
-    }
-}
-impl<D: EventDatabase> TransReceiptsEscrow<D> {
-    pub fn process_t_receipts_escrow(
-        &self,
-        id: &IdentifierPrefix,
-        bus: &NotificationBus,
-    ) -> Result<(), Error> {
-        if let Some(esc) = self.escrowed_trans_receipts.get(id) {
-            for timestamped_receipt in esc {
-                let validator = EventValidator::new(self.old_db.clone(), self.db.clone());
-                match validator.validate_validator_receipt(&timestamped_receipt) {
-                    Ok(_) => {
-                        // add to receipts
-                        self.db
-                            .add_receipt_t(timestamped_receipt.clone(), id)
-                            .map_err(|_| Error::DbError)?;
-                        // remove from escrow
-                        self.escrowed_trans_receipts
-                            .remove(id, &timestamped_receipt)?;
-                        bus.notify(&Notification::ReceiptAccepted)?;
-                    }
-                    Err(Error::SignatureVerificationError) => {
-                        // remove from escrow
-                        self.escrowed_trans_receipts
-                            .remove(id, &timestamped_receipt)?;
-                    }
-                    Err(e) => return Err(e), // keep in escrow,
-                }
-            }
-        };
-
-        Ok(())
-    }
 }
 
 #[cfg(feature = "query")]

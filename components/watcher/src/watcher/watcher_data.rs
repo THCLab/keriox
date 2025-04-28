@@ -20,7 +20,7 @@ use keri_core::{
     },
     oobi::{Role, Scheme},
 };
-use keri_core::{database::escrow::EscrowDb, error::Error};
+use keri_core::error::Error;
 use keri_core::{
     database::{
         redb::RedbDatabase,
@@ -98,12 +98,6 @@ impl WatcherData {
             Arc::new(RedbDatabase::new(&path).unwrap())
         };
 
-        let escrow_db = {
-            let mut path = db_path.clone();
-            path.push("escrow");
-            Arc::new(EscrowDb::new(path)?)
-        };
-
         let oobi_manager = {
             let mut path = db_path.clone();
             path.push("oobi");
@@ -111,7 +105,7 @@ impl WatcherData {
         };
 
         let (mut notification_bus, _) =
-            default_escrow_bus(events_db.clone(), db.clone(), escrow_db, escrow_config);
+            default_escrow_bus(events_db.clone(), db.clone(), escrow_config);
         notification_bus.register_observer(
             Arc::new(ReplyEscrow::new(db.clone(), events_db.clone())),
             vec![

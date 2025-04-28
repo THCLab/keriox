@@ -68,12 +68,6 @@ impl KnownEvents {
             Arc::new(SledEventDatabase::new(&path)?)
         };
 
-        let escrow_db = {
-            let mut path = db_path.clone();
-            path.push("escrow");
-            Arc::new(EscrowDb::new(&path)?)
-        };
-
         let oobi_manager = {
             let mut path = db_path.clone();
             path.push("oobis");
@@ -88,7 +82,7 @@ impl KnownEvents {
                 partially_witnessed_escrow,
                 _delegation_escrow,
             ),
-        ) = default_escrow_bus(event_database.clone(), db.clone(), escrow_db, escrow_config);
+        ) = default_escrow_bus(event_database.clone(), db.clone(), escrow_config);
 
         let kel_storage = Arc::new(EventStorage::new(event_database.clone(), db.clone()));
 
