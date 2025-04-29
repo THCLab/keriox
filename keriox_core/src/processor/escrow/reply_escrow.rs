@@ -75,6 +75,7 @@ impl<D: EventDatabase> ReplyEscrow<D> {
     }
 }
 
+#[cfg(test)]
 mod tests {
     use crate::{
         actor::prelude::{BasicProcessor, Message, SledEventDatabase},
@@ -84,13 +85,12 @@ mod tests {
         prefix::IdentifierPrefix,
         processor::{escrow::reply_escrow::ReplyEscrow, notification::JustNotification, Processor},
     };
+    use cesrox::{parse, parse_many};
+    use std::{fs, sync::Arc};
+    use tempfile::{Builder, NamedTempFile};
+
     #[test]
-    fn test_reply_escrow() -> Result<(), Error> {
-        use std::{fs, sync::Arc};
-
-        use cesrox::{parse, parse_many};
-        use tempfile::{Builder, NamedTempFile};
-
+    pub fn test_reply_escrow() -> Result<(), Error> {
         // Create test db and event processor.
         let root = Builder::new().prefix("test-db").tempdir().unwrap();
         fs::create_dir_all(root.path()).unwrap();

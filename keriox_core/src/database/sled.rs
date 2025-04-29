@@ -14,13 +14,7 @@ use crate::event_message::signed_event_message::SignedNontransferableReceipt;
 
 #[cfg(feature = "query")]
 use crate::query::reply_event::SignedReply;
-use crate::{
-    event::KeyEvent,
-    event_message::{
-        msg::KeriEvent, signed_event_message::SignedEventMessage, TimestampedEventMessage,
-    },
-    prefix::IdentifierPrefix,
-};
+use crate::{event_message::signed_event_message::SignedEventMessage, prefix::IdentifierPrefix};
 
 use super::timestamped::TimestampedSignedEventMessage;
 
@@ -31,11 +25,6 @@ pub struct SledEventDatabase {
     identifiers: SledEventTree<IdentifierPrefix>,
     #[cfg(feature = "query")]
     accepted_rpy: SledEventTreeVec<SignedReply>,
-
-    // "ldes" tree
-    likely_duplicious_events: SledEventTreeVec<TimestampedEventMessage>,
-    // "dels" tree
-    duplicitous_events: SledEventTreeVec<TimestampedSignedEventMessage>,
 
     #[cfg(feature = "query")]
     escrowed_replys: SledEventTreeVec<SignedReply>,
@@ -58,8 +47,6 @@ impl SledEventDatabase {
 
         Ok(Self {
             identifiers: SledEventTree::new(db.open_tree(b"iids")?),
-            likely_duplicious_events: SledEventTreeVec::new(db.open_tree(b"ldes")?),
-            duplicitous_events: SledEventTreeVec::new(db.open_tree(b"dels")?),
             #[cfg(feature = "query")]
             accepted_rpy: SledEventTreeVec::new(db.open_tree(b"knas")?),
             #[cfg(feature = "mailbox")]
@@ -69,42 +56,6 @@ impl SledEventDatabase {
             escrowed_replys: SledEventTreeVec::new(db.open_tree(b"knes")?),
             db,
         })
-    }
-
-    pub fn add_likely_duplicious_event(
-        &self,
-        event: KeriEvent<KeyEvent>,
-        id: &IdentifierPrefix,
-    ) -> Result<(), DbError> {
-        self.likely_duplicious_events
-            .push(self.identifiers.designated_key(id)?, event.into())?;
-        self.db.flush()?;
-        Ok(())
-    }
-
-    pub fn get_likely_duplicitous_events(
-        &self,
-        id: &IdentifierPrefix,
-    ) -> Option<impl DoubleEndedIterator<Item = TimestampedEventMessage>> {
-        self.likely_duplicious_events
-            .iter_values(self.identifiers.designated_key(id).ok()?)
-    }
-
-    pub fn add_duplicious_event(
-        &self,
-        event: SignedEventMessage,
-        id: &IdentifierPrefix,
-    ) -> Result<(), DbError> {
-        self.duplicitous_events
-            .push(self.identifiers.designated_key(id)?, event.into())
-    }
-
-    pub fn get_duplicious_events(
-        &self,
-        id: &IdentifierPrefix,
-    ) -> Option<impl DoubleEndedIterator<Item = TimestampedSignedEventMessage>> {
-        self.duplicitous_events
-            .iter_values(self.identifiers.designated_key(id).ok()?)
     }
 
     #[cfg(feature = "query")]

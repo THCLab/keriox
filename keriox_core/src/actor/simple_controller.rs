@@ -227,7 +227,7 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase> {
         oobi_db_path: &Path,
         escrow_config: EscrowConfig,
     ) -> Result<SimpleController<K, RedbDatabase>, Error> {
-        let (not_bus, (ooo, _, partially_witnesses, del_escrow)) =
+        let (not_bus, (ooo, _, partially_witnesses, del_escrow, _duplicates)) =
             default_escrow_bus(event_db.clone(), db.clone(), escrow_config);
         let processor = BasicProcessor::new(event_db.clone(), db.clone(), Some(not_bus));
 

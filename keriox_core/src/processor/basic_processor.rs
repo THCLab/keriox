@@ -77,7 +77,6 @@ impl<D: EventDatabase> BasicProcessor<D> {
                 publisher.notify(&Notification::PartiallySigned(signed_event))
             }
             Err(Error::EventDuplicateError) => {
-                db.add_duplicious_event(signed_event.clone(), id)?;
                 publisher.notify(&Notification::DupliciousEvent(signed_event))
             }
             Err(Error::MissingDelegatingEventError | Error::MissingDelegatorSealError(_)) => {

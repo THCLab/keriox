@@ -79,7 +79,7 @@ pub enum JustNotification {
     ReceiptEscrowed,
     ReceiptOutOfOrder,
     TransReceiptOutOfOrder,
-    DupliciousEvent,
+    DuplicitousEvent,
     MissingDelegatingEvent,
     #[cfg(feature = "query")]
     KsnOutOfOrder,
@@ -106,7 +106,7 @@ impl From<&Notification> for JustNotification {
             Notification::ReceiptEscrowed => JustNotification::ReceiptEscrowed,
             Notification::ReceiptOutOfOrder(_) => JustNotification::ReceiptOutOfOrder,
             Notification::TransReceiptOutOfOrder(_) => JustNotification::TransReceiptOutOfOrder,
-            Notification::DupliciousEvent(_) => JustNotification::DupliciousEvent,
+            Notification::DupliciousEvent(_) => JustNotification::DuplicitousEvent,
             #[cfg(feature = "query")]
             Notification::KsnOutOfOrder(_) => JustNotification::KsnOutOfOrder,
             Notification::MissingDelegatingEvent(_) => JustNotification::MissingDelegatingEvent,

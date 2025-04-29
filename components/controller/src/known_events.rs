@@ -81,6 +81,7 @@ impl KnownEvents {
                 _partially_signed_escrow,
                 partially_witnessed_escrow,
                 _delegation_escrow,
+                _duplicates,
             ),
         ) = default_escrow_bus(event_database.clone(), db.clone(), escrow_config);
 
