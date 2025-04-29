@@ -5,6 +5,7 @@ use itertools::Itertools;
 use keri_core::oobi::LocationScheme;
 use keri_core::prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix};
 use keri_core::processor::escrow::default_escrow_bus;
+use keri_core::processor::escrow::reply_escrow::ReplyEscrow;
 use keri_core::query::{
     reply_event::{ReplyEvent, ReplyRoute, SignedReply},
     ReplyType,
@@ -39,7 +40,7 @@ use keri_core::{
     transport::Transport,
 };
 use keri_core::{
-    processor::{escrow::ReplyEscrow, notification::JustNotification},
+    processor::notification::JustNotification,
     query::query_event::{
         LogsQueryArgs, QueryEvent, QueryRoute, SignedKelQuery, SignedQueryMessage,
     },

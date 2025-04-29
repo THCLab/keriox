@@ -323,7 +323,7 @@ mod tests {
         }
         .unwrap();
 
-        let mut escrowed = ps_escrow
+        let escrowed = ps_escrow
             .get_partially_signed_for_event(icp_event.clone())
             .unwrap();
         assert_eq!(
