@@ -107,7 +107,7 @@ impl Identifier {
         .map_err(|_e| ControllerError::CesrFormatError)
     }
 
-    pub fn verify_from_cesr(&self, stream: &str) -> Result<(), ControllerError> {
+    pub fn verify_from_cesr(&self, stream: &[u8]) -> Result<(), ControllerError> {
         self.known_events.verify_from_cesr(stream)
     }
 }
