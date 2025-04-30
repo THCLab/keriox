@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.17.1] - 2025-04-30
+
+### 🚜 Refactor
+
+- Update verify_from_cesr arguments
+
 ## [0.17.0] - 2025-04-17
 
 ### 🚀 Features
@@ -12,6 +18,10 @@ All notable changes to this project will be documented in this file.
 
 - Remove async-std from watcher
 - Update tests workspace
+
+### ⚙️ Miscellaneous Tasks
+
+- Release
 
 ## [0.17.0-rc5] - 2025-04-08
 

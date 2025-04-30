@@ -1,6 +1,6 @@
 [package]
 name = "keri-controller"
-version = "0.17.0"
+version = "0.17.1"
 description = "KERI Identifier Management Library"
 authors.workspace = true
 edition.workspace = true
@@ -15,8 +15,8 @@ query_cache = []
 [dependencies]
 async-std = { version = "1.12.0", features = ["attributes", "tokio1"] }
 futures = "0.3.24"
-keri-core = { path = "../../keriox_core", version = "0.17.0", features = ["oobi", "mailbox"] }
-teliox = {path = "../../support/teliox", version = "0.17.0" }
+keri-core = { path = "../../keriox_core", version = "0.17.1", features = ["oobi", "mailbox"] }
+teliox = {path = "../../support/teliox", version = "0.17.1" }
 thiserror = "1.0"
 serde_json = "1.0"
 url = "2.3.1"
