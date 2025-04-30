@@ -135,7 +135,7 @@ impl SnKeyDatabase {
     }
 }
 
-fn get_current_timestamp() -> u64 {
+pub(crate) fn get_current_timestamp() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("Time went backwards")
