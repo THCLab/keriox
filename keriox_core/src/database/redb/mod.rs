@@ -17,12 +17,12 @@ const KEY_STATES: TableDefinition<&str, &[u8]> = TableDefinition::new("key_state
 use std::{path::Path, sync::Arc, u64};
 
 #[cfg(feature = "query")]
+use crate::query::reply_event::SignedReply;
+#[cfg(feature = "query")]
 use ksn_log::AcceptedKsn;
 use loging::LogDatabase;
 use redb::{Database, ReadableTable, TableDefinition};
 use said::{sad::SerializationFormats, SelfAddressingIdentifier};
-#[cfg(feature = "query")]
-use crate::query::reply_event::SignedReply;
 
 use crate::{
     event::{receipt::Receipt, KeyEvent},

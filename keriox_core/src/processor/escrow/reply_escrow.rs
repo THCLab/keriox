@@ -3,13 +3,22 @@ use std::sync::Arc;
 use said::SelfAddressingIdentifier;
 
 use crate::{
-    actor::prelude::SledEventDatabase, database::{
-        redb::{escrow_database::SnKeyDatabase, ksn_log::{AcceptedKsn, KsnLogDatabase}, RedbDatabase, RedbError},
+    actor::prelude::SledEventDatabase,
+    database::{
+        redb::{
+            escrow_database::SnKeyDatabase,
+            ksn_log::{AcceptedKsn, KsnLogDatabase},
+            RedbDatabase, RedbError,
+        },
         EventDatabase,
-    }, error::Error, prefix::IdentifierPrefix, processor::{
+    },
+    error::Error,
+    prefix::IdentifierPrefix,
+    processor::{
         notification::{Notification, NotificationBus, Notifier},
         validator::{EventValidator, MoreInfoError, VerificationError},
-    }, query::reply_event::{ReplyEvent, ReplyRoute, SignedReply}
+    },
+    query::reply_event::{ReplyEvent, ReplyRoute, SignedReply},
 };
 
 #[derive(Clone)]
@@ -48,46 +57,44 @@ impl<D: EventDatabase> Notifier for ReplyEscrow<D> {
                 let id = ev.event_message.data.get_prefix();
                 let sn = ev.event_message.data.sn;
                 self.process_reply_escrow(bus, &id, sn)
-            },
+            }
             _ => Ok(()),
         }
     }
 }
 
 impl<D: EventDatabase> ReplyEscrow<D> {
-    pub fn process_reply_escrow(&self, _bus: &NotificationBus, id: &IdentifierPrefix, sn: u64) -> Result<(), Error> {
+    pub fn process_reply_escrow(
+        &self,
+        _bus: &NotificationBus,
+        id: &IdentifierPrefix,
+        sn: u64,
+    ) -> Result<(), Error> {
         use crate::query::QueryError;
 
-        // if let Some(esc) =  .escrow_db.get_all_escrowed_replys() {
-            for sig_rep in self.escrowed_reply.get_from_sn(id, sn)? {
-                let validator = EventValidator::new(self.escrow_db.clone(), self.events_db.clone());
-                let id = if let ReplyRoute::Ksn(_id, ksn) = sig_rep.reply.get_route() {
-                    Ok(ksn.state.prefix)
-                } else {
-                    Err(Error::SemanticError("Wrong event type".into()))
-                }?;
-                match validator.process_signed_ksn_reply(&sig_rep) {
-                    Ok(_) => {
-                        self.escrowed_reply.remove(&sig_rep.reply);
-                        self.accepted_ksn.insert(sig_rep.clone())?;
-                    }
-                    Err(Error::SignatureVerificationError)
-                    | Err(Error::QueryError(QueryError::StaleRpy)) => {
-                        // remove from escrow
-                        self.escrowed_reply.remove(&sig_rep.reply);
-                    }
-                    Err(Error::EventOutOfOrderError)
-                    | Err(Error::VerificationError(VerificationError::MoreInfo(
-                        MoreInfoError::EventNotFound(_),
-                    ))) => (), // keep in escrow,
-                    Err(e) => return Err(e),
-                };
+        for sig_rep in self.escrowed_reply.get_from_sn(id, sn)? {
+            let validator = EventValidator::new(self.escrow_db.clone(), self.events_db.clone());
+            match validator.process_signed_ksn_reply(&sig_rep) {
+                Ok(_) => {
+                    self.escrowed_reply.remove(&sig_rep.reply);
+                    self.accepted_ksn.insert(sig_rep.clone())?;
+                }
+                Err(Error::SignatureVerificationError)
+                | Err(Error::QueryError(QueryError::StaleRpy)) => {
+                    // remove from escrow
+                    self.escrowed_reply.remove(&sig_rep.reply);
+                }
+                Err(Error::EventOutOfOrderError)
+                | Err(Error::VerificationError(VerificationError::MoreInfo(
+                    MoreInfoError::EventNotFound(_),
+                ))) => (), // keep in escrow,
+                Err(e) => return Err(e),
             };
+        }
         // };
         Ok(())
     }
 }
-
 
 pub struct SnKeyReplyEscrow {
     escrow: Arc<SnKeyDatabase>,
@@ -132,21 +139,14 @@ impl SnKeyReplyEscrow {
         Ok(self
             .escrow
             .get_grater_then(identifier, sn)?
-            .map(move |said| {
-                self.log
-                    .get_signed_reply(&said)
-                    .unwrap()
-                    .unwrap()
-            }))
+            .map(move |said| self.log.get_signed_reply(&said).unwrap().unwrap()))
     }
 
     pub fn remove(&self, event: &ReplyEvent) {
         let said = event.digest().unwrap();
         let id = event.get_prefix();
         let sn = match &event.data.data {
-            ReplyRoute::Ksn(identifier_prefix, key_state_notice) => {
-                key_state_notice.state.sn
-            },
+            ReplyRoute::Ksn(identifier_prefix, key_state_notice) => key_state_notice.state.sn,
             _ => todo!(),
         };
         self.escrow.remove(&id, sn, &said).unwrap();
@@ -223,7 +223,10 @@ mod tests {
             .process(&deserialized_old_rpy.clone())
             .unwrap();
 
-        let escrow = rpy_escrow.escrowed_reply.get_from_sn(&identifier, 0).unwrap();
+        let escrow = rpy_escrow
+            .escrowed_reply
+            .get_from_sn(&identifier, 0)
+            .unwrap();
         assert_eq!(escrow.collect::<Vec<_>>().len(), 1);
 
         let accepted_rpys = rpy_escrow.clone().accepted_ksn.get_all(&identifier)?;
@@ -244,7 +247,10 @@ mod tests {
         // Try to process new out of order reply
         // reply event should be escrowed, accepted reply shouldn't change
         event_processor.process(&deserialized_new_rpy.clone())?;
-        let mut escrow = rpy_escrow.escrowed_reply.get_from_sn(&identifier, 0).unwrap();
+        let mut escrow = rpy_escrow
+            .escrowed_reply
+            .get_from_sn(&identifier, 0)
+            .unwrap();
         assert_eq!(
             Message::Op(Op::Reply(escrow.next().unwrap())),
             deserialized_new_rpy

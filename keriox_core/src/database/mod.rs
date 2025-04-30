@@ -1,5 +1,7 @@
 use timestamped::TimestampedSignedEventMessage;
 
+#[cfg(feature = "query")]
+use crate::query::reply_event::SignedReply;
 use crate::{
     event_message::{
         signature::Transferable,
@@ -10,8 +12,6 @@ use crate::{
     prefix::IdentifierPrefix,
     state::IdentifierState,
 };
-#[cfg(feature = "query")]
-use crate::query::reply_event::SignedReply;
 
 pub mod escrow;
 #[cfg(feature = "mailbox")]

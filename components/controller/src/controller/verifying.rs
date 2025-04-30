@@ -47,8 +47,7 @@ impl KnownEvents {
     }
 
     pub fn verify_from_cesr(&self, stream: &[u8]) -> Result<(), ControllerError> {
-        let (_rest, data) =
-            parse_many(stream).map_err(|_e| ControllerError::CesrFormatError)?;
+        let (_rest, data) = parse_many(stream).map_err(|_e| ControllerError::CesrFormatError)?;
         self.verify_parsed(&data)
     }
 
