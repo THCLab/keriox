@@ -3,7 +3,7 @@ use std::{sync::Arc, time::Duration};
 use said::SelfAddressingIdentifier;
 
 use crate::{
-    actor::prelude::{EventStorage, SledEventDatabase},
+    actor::prelude::EventStorage,
     database::{
         redb::{escrow_database::SnKeyDatabase, RedbDatabase},
         EventDatabase,
@@ -26,7 +26,6 @@ use super::maybe_out_of_order_escrow::SnKeyEscrow;
 /// Stores delegated events until delegating event is provided
 pub struct DelegationEscrow<D: EventDatabase> {
     db: Arc<D>,
-    sled_db: Arc<SledEventDatabase>,
     // Key of this escrow is (delegator's identifier, delegator's event sn if available).
     pub delegation_escrow: SnKeyEscrow,
 }
@@ -34,7 +33,6 @@ pub struct DelegationEscrow<D: EventDatabase> {
 impl DelegationEscrow<RedbDatabase> {
     pub fn new(
         db: Arc<RedbDatabase>,
-        sled_db: Arc<SledEventDatabase>,
         _duration: Duration,
     ) -> Self {
         let escrow_db = SnKeyEscrow::new(
@@ -43,7 +41,6 @@ impl DelegationEscrow<RedbDatabase> {
         );
         Self {
             db,
-            sled_db,
             delegation_escrow: escrow_db,
         }
     }
@@ -66,7 +63,7 @@ impl DelegationEscrow<RedbDatabase> {
     }
 }
 
-impl<D: EventDatabase> Notifier for DelegationEscrow<D> {
+impl Notifier for DelegationEscrow<RedbDatabase> {
     fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error> {
         match notification {
             Notification::KeyEventAdded(ev_message) => {
@@ -102,7 +99,7 @@ impl<D: EventDatabase> Notifier for DelegationEscrow<D> {
                     let delegator_id = match &signed_event.event_message.data.event_data {
                         EventData::Dip(dip) => Ok(dip.delegator.clone()),
                         EventData::Drt(_drt) => {
-                            let storage = EventStorage::new(self.db.clone(), self.sled_db.clone());
+                            let storage = EventStorage::new(self.db.clone());
                             storage
                                 .get_state(&signed_event.event_message.data.get_prefix())
                                 .ok_or(Error::MissingDelegatingEventError)?
@@ -131,7 +128,7 @@ impl<D: EventDatabase> Notifier for DelegationEscrow<D> {
     }
 }
 
-impl<D: EventDatabase> DelegationEscrow<D> {
+impl DelegationEscrow<RedbDatabase> {
     pub fn process_delegation_events(
         &self,
         bus: &NotificationBus,
@@ -154,7 +151,7 @@ impl<D: EventDatabase> DelegationEscrow<D> {
                     },
                     None => event.clone(),
                 };
-                let validator = EventValidator::new(self.sled_db.clone(), self.db.clone());
+                let validator = EventValidator::new(self.db.clone());
                 match validator.validate_event(&delegated_event) {
                     Ok(_) => {
                         // add to kel

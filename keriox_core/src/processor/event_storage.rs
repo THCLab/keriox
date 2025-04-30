@@ -5,11 +5,12 @@ use super::compute_state;
 use crate::query::{
     key_state_notice::KeyStateNotice, mailbox::QueryArgsMbx, reply_event::SignedReply,
 };
+#[cfg(feature = "mailbox")]
+use crate::database::mailbox::MailboxData;
 use crate::{
     actor::prelude::Message,
     database::{
-        sled::SledEventDatabase,
-        timestamped::{Timestamped, TimestampedSignedEventMessage},
+        redb::RedbDatabase, timestamped::{Timestamped, TimestampedSignedEventMessage}
     },
     error::Error,
     event::{
@@ -36,18 +37,23 @@ use crate::mailbox::MailboxResponse;
 
 pub struct EventStorage<D: EventDatabase> {
     pub events_db: Arc<D>,
-    pub escrow_db: Arc<SledEventDatabase>,
+    #[cfg(feature = "mailbox")]
+    pub mailbox_data: MailboxData,
 }
 
 // Collection of methods for getting data from database.
-impl<D: EventDatabase> EventStorage<D> {
-    pub fn new(events_db: Arc<D>, escrow_db: Arc<SledEventDatabase>) -> Self {
+impl EventStorage<RedbDatabase> {
+    pub fn new(events_db: Arc<RedbDatabase>) -> Self {
+        let mailbox_data = MailboxData::new(events_db.db.clone()).unwrap();
         Self {
-            escrow_db,
+            // escrow_db,
             events_db,
+            mailbox_data: mailbox_data,
         }
     }
+}
 
+impl<D: EventDatabase> EventStorage<D> {
     pub fn get_state(&self, identifier: &IdentifierPrefix) -> Option<IdentifierState> {
         self.events_db.get_key_state(identifier)
     }
@@ -165,8 +171,7 @@ impl<D: EventDatabase> EventStorage<D> {
         receipient: &IdentifierPrefix,
         to_forward: SignedEventMessage,
     ) -> Result<(), Error> {
-        self.escrow_db
-            .add_mailbox_multisig(to_forward, receipient)?;
+        self.mailbox_data.add_mailbox_multisig(receipient, to_forward)?;
 
         Ok(())
     }
@@ -177,8 +182,8 @@ impl<D: EventDatabase> EventStorage<D> {
         receipient: &IdentifierPrefix,
         to_forward: SignedEventMessage,
     ) -> Result<(), Error> {
-        self.escrow_db
-            .add_mailbox_delegate(to_forward, receipient)?;
+        self.mailbox_data
+            .add_mailbox_delegate(receipient, to_forward)?;
 
         Ok(())
     }
@@ -186,7 +191,7 @@ impl<D: EventDatabase> EventStorage<D> {
     #[cfg(feature = "mailbox")]
     pub fn add_mailbox_receipt(&self, receipt: SignedNontransferableReceipt) -> Result<(), Error> {
         let id = receipt.body.prefix.clone();
-        self.escrow_db.add_mailbox_receipt(receipt, &id)?;
+        self.mailbox_data.add_mailbox_receipt(&id, receipt)?;
 
         Ok(())
     }
@@ -194,7 +199,7 @@ impl<D: EventDatabase> EventStorage<D> {
     #[cfg(feature = "mailbox")]
     pub fn add_mailbox_reply(&self, reply: SignedEventMessage) -> Result<(), Error> {
         let id = reply.event_message.data.get_prefix();
-        self.escrow_db.add_mailbox_reply(reply, &id)?;
+        self.mailbox_data.add_mailbox_reply(&id, reply)?;
 
         Ok(())
     }
@@ -205,13 +210,13 @@ impl<D: EventDatabase> EventStorage<D> {
 
         // query receipts
         let receipt = self
-            .escrow_db
+            .mailbox_data
             .get_mailbox_receipts(&id)
             .map(|it| it.skip(args.topics.receipt).collect())
             .unwrap_or_default();
 
         let multisig = self
-            .escrow_db
+            .mailbox_data
             .get_mailbox_multisig(&id)
             .map(|it| {
                 it.skip(args.topics.multisig)
@@ -221,7 +226,7 @@ impl<D: EventDatabase> EventStorage<D> {
             .unwrap_or_default();
 
         let delegate = self
-            .escrow_db
+            .mailbox_data
             .get_mailbox_delegate(&id)
             .map(|it| {
                 it.skip(args.topics.delegate)

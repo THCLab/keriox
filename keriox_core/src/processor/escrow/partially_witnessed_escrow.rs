@@ -3,7 +3,7 @@ use std::{sync::Arc, time::Duration};
 use said::SelfAddressingIdentifier;
 
 use crate::{
-    actor::prelude::{EventStorage, SledEventDatabase},
+    actor::prelude::EventStorage,
     database::redb::{
         escrow_database::SnKeyDatabase, loging::LogDatabase, RedbDatabase, RedbError, WriteTxnMode,
     },
@@ -23,12 +23,11 @@ use super::maybe_out_of_order_escrow::SnKeyEscrow;
 pub struct PartiallyWitnessedEscrow {
     db: Arc<RedbDatabase>,
     log: Arc<LogDatabase>,
-    old_db: Arc<SledEventDatabase>,
     pub(crate) escrowed_partially_witnessed: SnKeyEscrow,
 }
 
 impl PartiallyWitnessedEscrow {
-    pub fn new(db: Arc<RedbDatabase>, old_db: Arc<SledEventDatabase>, _duration: Duration) -> Self {
+    pub fn new(db: Arc<RedbDatabase>,_duration: Duration) -> Self {
         let pwe_escrow_db = SnKeyEscrow::new(
             Arc::new(SnKeyDatabase::new(db.db.clone(), "partially_signed_escrow").unwrap()),
             db.log_db.clone(),
@@ -36,7 +35,6 @@ impl PartiallyWitnessedEscrow {
         Self {
             log: db.log_db.clone(),
             db,
-            old_db,
             escrowed_partially_witnessed: pwe_escrow_db,
         }
     }
@@ -145,7 +143,7 @@ impl PartiallyWitnessedEscrow {
         receipted_event: &SignedEventMessage,
         additional_receipt: Option<SignedNontransferableReceipt>,
     ) -> Result<(), Error> {
-        let storage = EventStorage::new(self.db.clone(), self.old_db.clone());
+        let storage = EventStorage::new(self.db.clone());
         let id = receipted_event.event_message.data.get_prefix();
         let sn = receipted_event.event_message.data.get_sn();
         let digest = receipted_event.event_message.digest()?;
@@ -356,7 +354,7 @@ mod tests {
     use tempfile::NamedTempFile;
 
     use crate::{
-        actor::prelude::{BasicProcessor, EventStorage, Message, SledEventDatabase},
+        actor::prelude::{BasicProcessor, EventStorage, Message},
         database::{redb::RedbDatabase, EventDatabase, QueryParameters},
         error::Error,
         event_message::signed_event_message::Notice,
@@ -377,14 +375,12 @@ mod tests {
         fs::create_dir_all(root.path()).unwrap();
         let events_db_path = NamedTempFile::new().unwrap();
         let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
-        let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-        let mut event_processor = BasicProcessor::new(events_db.clone(), Arc::clone(&db), None);
-        let event_storage = EventStorage::new(Arc::clone(&events_db), Arc::clone(&db));
+        let mut event_processor = BasicProcessor::new(events_db.clone(), None);
+        let event_storage = EventStorage::new(Arc::clone(&events_db));
 
         // Register not fully witnessed escrow, to save and reprocess events
         let partially_witnessed_escrow = Arc::new(PartiallyWitnessedEscrow::new(
             events_db.clone(),
-            db.clone(),
             Duration::from_secs(10),
         ));
         event_processor.register_observer(
@@ -518,16 +514,14 @@ mod tests {
         // events taken from keripy/tests/core/test_witness.py:def test_indexed_witness_replay():
         let root = Builder::new().prefix("test-db").tempdir().unwrap();
         fs::create_dir_all(root.path()).unwrap();
-        let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
         let events_db_path = NamedTempFile::new().unwrap();
         let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
-        let mut event_processor = BasicProcessor::new(events_db.clone(), Arc::clone(&db), None);
-        let event_storage = EventStorage::new(Arc::clone(&events_db), Arc::clone(&db));
+        let mut event_processor = BasicProcessor::new(events_db.clone(), None);
+        let event_storage = EventStorage::new(Arc::clone(&events_db));
 
         // Register not fully witnessed escrow, to save and reprocess events
         let partially_witnessed_escrow = Arc::new(PartiallyWitnessedEscrow::new(
             events_db.clone(),
-            db.clone(),
             Duration::from_secs(10),
         ));
         event_processor.register_observer(
@@ -659,16 +653,14 @@ mod tests {
         // events taken from keripy/tests/core/test_witness.py:def test_indexed_witness_replay():
         let root = Builder::new().prefix("test-db").tempdir().unwrap();
         fs::create_dir_all(root.path()).unwrap();
-        let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
         let events_db_path = NamedTempFile::new().unwrap();
         let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
-        let mut event_processor = BasicProcessor::new(events_db.clone(), Arc::clone(&db), None);
-        let event_storage = EventStorage::new(Arc::clone(&events_db), Arc::clone(&db));
+        let mut event_processor = BasicProcessor::new(events_db.clone(), None);
+        let event_storage = EventStorage::new(Arc::clone(&events_db));
 
         // Register not fully witnessed escrow, to save and reprocess events
         let partially_witnessed_escrow = Arc::new(PartiallyWitnessedEscrow::new(
             events_db.clone(),
-            db.clone(),
             Duration::from_secs(10),
         ));
         event_processor.register_observer(
@@ -761,16 +753,14 @@ mod tests {
         // events taken from keripy/tests/core/test_witness.py:def test_indexed_witness_replay():
         let root = Builder::new().prefix("test-db").tempdir().unwrap();
         fs::create_dir_all(root.path()).unwrap();
-        let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
         let events_db_path = NamedTempFile::new().unwrap();
         let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
-        let mut event_processor = BasicProcessor::new(events_db.clone(), Arc::clone(&db), None);
-        let event_storage = EventStorage::new(Arc::clone(&events_db), Arc::clone(&db));
+        let mut event_processor = BasicProcessor::new(events_db.clone(), None);
+        let event_storage = EventStorage::new(Arc::clone(&events_db));
 
         // Register not fully witnessed escrow, to save and reprocess events
         let partially_witnessed_escrow = Arc::new(PartiallyWitnessedEscrow::new(
             events_db.clone(),
-            db.clone(),
             Duration::from_secs(10),
         ));
         event_processor.register_observer(

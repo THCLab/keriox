@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "oobi")]
 use crate::oobi::OobiManager;
+#[cfg(feature = "oobi")]
+use crate::database::redb::RedbDatabase;
 #[cfg(feature = "query")]
 use crate::{
     database::EventDatabase,
@@ -88,7 +90,7 @@ pub fn process_notice<P: Processor>(msg: Notice, processor: &P) -> Result<(), Er
 }
 
 #[cfg(feature = "query")]
-pub fn process_reply<P: Processor>(
+pub fn process_reply<P: Processor<Database = RedbDatabase>>(
     sr: SignedReply,
     #[cfg(feature = "oobi")] oobi_manager: &OobiManager,
     processor: &P,
@@ -104,15 +106,14 @@ pub fn process_reply<P: Processor>(
 }
 
 #[cfg(feature = "oobi")]
-pub fn process_signed_oobi<D: EventDatabase>(
+pub fn process_signed_oobi(
     signed_oobi: &SignedReply,
     oobi_manager: &OobiManager,
-    event_storage: &EventStorage<D>,
+    event_storage: &EventStorage<RedbDatabase>,
 ) -> Result<(), Error> {
     use crate::processor::validator::EventValidator;
 
     let validator = EventValidator::new(
-        event_storage.escrow_db.clone(),
         event_storage.events_db.clone(),
     );
     // check signature
@@ -311,7 +312,6 @@ pub mod prelude {
     pub use crate::query::ReplyType;
     pub use crate::{
         actor::process_notice,
-        database::sled::SledEventDatabase,
         event_message::signed_event_message::Message,
         processor::{basic_processor::BasicProcessor, event_storage::EventStorage, Processor},
     };

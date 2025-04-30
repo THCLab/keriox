@@ -28,7 +28,7 @@ impl SnKeyDatabase {
     pub fn new(db: Arc<Database>, table_name: &'static str) -> Result<Self, RedbError> {
         // Create tables
         let pse = MultimapTableDefinition::new(table_name);
-        let dts = TableDefinition::new("timestamps");
+        let dts = TableDefinition::new("timestamps_escrow");
 
         let write_txn = db.begin_write()?;
         {

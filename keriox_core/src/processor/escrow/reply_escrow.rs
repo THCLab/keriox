@@ -3,7 +3,6 @@ use std::sync::Arc;
 use said::SelfAddressingIdentifier;
 
 use crate::{
-    actor::prelude::SledEventDatabase,
     database::{
         redb::{
             escrow_database::SnKeyDatabase,
@@ -24,27 +23,25 @@ use crate::{
 #[derive(Clone)]
 pub struct ReplyEscrow<D: EventDatabase> {
     events_db: Arc<D>,
-    escrow_db: Arc<SledEventDatabase>,
     accepted_ksn: Arc<AcceptedKsn>,
     escrowed_reply: Arc<SnKeyReplyEscrow>,
 }
 
 impl ReplyEscrow<RedbDatabase> {
-    pub fn new(db: Arc<SledEventDatabase>, events_db: Arc<RedbDatabase>) -> Self {
+    pub fn new(events_db: Arc<RedbDatabase>) -> Self {
         let acc = Arc::new(AcceptedKsn::new(events_db.db.clone()).unwrap());
         let reply_esc_db = Arc::new(SnKeyReplyEscrow::new(
             Arc::new(SnKeyDatabase::new(events_db.db.clone(), "reply_escrow").unwrap()),
             acc.ksn_log.clone(),
         ));
         Self {
-            escrow_db: db,
             events_db,
             accepted_ksn: acc,
             escrowed_reply: reply_esc_db,
         }
     }
 }
-impl<D: EventDatabase> Notifier for ReplyEscrow<D> {
+impl Notifier for ReplyEscrow<RedbDatabase> {
     fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error> {
         match notification {
             Notification::KsnOutOfOrder(rpy) => {
@@ -63,7 +60,7 @@ impl<D: EventDatabase> Notifier for ReplyEscrow<D> {
     }
 }
 
-impl<D: EventDatabase> ReplyEscrow<D> {
+impl ReplyEscrow<RedbDatabase> {
     pub fn process_reply_escrow(
         &self,
         _bus: &NotificationBus,
@@ -73,7 +70,7 @@ impl<D: EventDatabase> ReplyEscrow<D> {
         use crate::query::QueryError;
 
         for sig_rep in self.escrowed_reply.get_from_sn(id, sn)? {
-            let validator = EventValidator::new(self.escrow_db.clone(), self.events_db.clone());
+            let validator = EventValidator::new( self.events_db.clone());
             match validator.process_signed_ksn_reply(&sig_rep) {
                 Ok(_) => {
                     self.escrowed_reply.remove(&sig_rep.reply);
@@ -169,7 +166,7 @@ impl SnKeyReplyEscrow {
 #[cfg(test)]
 mod tests {
     use crate::{
-        actor::prelude::{BasicProcessor, Message, SledEventDatabase},
+        actor::prelude::{BasicProcessor, Message},
         database::redb::RedbDatabase,
         error::Error,
         event_message::signed_event_message::Op,
@@ -185,11 +182,10 @@ mod tests {
         // Create test db and event processor.
         let root = Builder::new().prefix("test-db").tempdir().unwrap();
         fs::create_dir_all(root.path()).unwrap();
-        let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
         let events_db_path = NamedTempFile::new().unwrap();
         let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
-        let mut event_processor = BasicProcessor::new(events_db.clone(), Arc::clone(&db), None);
-        let rpy_escrow = Arc::new(ReplyEscrow::new(db.clone(), events_db.clone()));
+        let mut event_processor = BasicProcessor::new(events_db.clone(), None);
+        let rpy_escrow = Arc::new(ReplyEscrow::new(events_db.clone()));
         event_processor.register_observer(
             rpy_escrow.clone(),
             &[

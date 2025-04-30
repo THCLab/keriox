@@ -10,7 +10,7 @@ use cesrox::{parse, parse_many};
 use tempfile::NamedTempFile;
 
 use crate::{
-    database::{redb::RedbDatabase, sled::SledEventDatabase},
+    database::redb::RedbDatabase,
     error::Error,
     event_message::signed_event_message::{Message, Notice},
     prefix::IdentifierPrefix,
@@ -47,15 +47,13 @@ fn test_out_of_order_cleanup() -> Result<(), Error> {
     let (processor, storage, ooo_escrow) = {
         let witness_root = Builder::new().prefix("test-db").tempdir().unwrap();
         let path = witness_root.path();
-        let sled_db = Arc::new(SledEventDatabase::new(path).unwrap());
         let events_db_path = NamedTempFile::new().unwrap();
         let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
-        let mut processor = BasicProcessor::new(events_db.clone(), sled_db.clone(), None);
+        let mut processor = BasicProcessor::new(events_db.clone(), None);
 
         // Register out of order escrow, to save and reprocess out of order events
         let ooo_escrow = Arc::new(MaybeOutOfOrderEscrow::new(
             events_db.clone(),
-            sled_db.clone(),
             Duration::from_secs(1),
         ));
         processor.register_observer(
@@ -69,7 +67,7 @@ fn test_out_of_order_cleanup() -> Result<(), Error> {
         std::fs::create_dir_all(path).unwrap();
         (
             processor,
-            EventStorage::new(events_db.clone(), sled_db.clone()),
+            EventStorage::new(events_db.clone()),
             ooo_escrow,
         )
     };
@@ -147,23 +145,21 @@ fn test_partially_sign_escrow_cleanup() -> Result<(), Error> {
     let (processor, storage, ps_escrow) = {
         let witness_root = Builder::new().prefix("test-db").tempdir().unwrap();
         let path = witness_root.path();
-        let witness_db = Arc::new(SledEventDatabase::new(path).unwrap());
         std::fs::create_dir_all(path).unwrap();
         let events_db_path = NamedTempFile::new().unwrap();
         let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
-        let mut processor = BasicProcessor::new(events_db.clone(), witness_db.clone(), None);
+        let mut processor = BasicProcessor::new(events_db.clone(), None);
 
         // Register partially signed escrow, to save and reprocess partially signed events
         let ps_escrow = Arc::new(PartiallySignedEscrow::new(
             events_db.clone(),
-            witness_db.clone(),
             Duration::from_secs(1),
         ));
         processor.register_observer(ps_escrow.clone(), &[JustNotification::PartiallySigned])?;
 
         (
             processor,
-            EventStorage::new(events_db, witness_db.clone()),
+            EventStorage::new(events_db),
             ps_escrow,
         )
     };
@@ -236,15 +232,13 @@ pub fn test_partially_witnessed_escrow_cleanup() -> Result<(), Error> {
     // events taken from keripy/tests/core/test_witness.py:def test_indexed_witness_replay():
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     fs::create_dir_all(root.path()).unwrap();
-    let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
     let events_db_path = NamedTempFile::new().unwrap();
     let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
-    let mut event_processor = BasicProcessor::new(events_db.clone(), Arc::clone(&db), None);
-    let event_storage = EventStorage::new(Arc::clone(&events_db), Arc::clone(&db));
+    let mut event_processor = BasicProcessor::new(events_db.clone(), None);
+    let event_storage = EventStorage::new(Arc::clone(&events_db));
     // Register not fully witnessed escrow, to save and reprocess events
     let partially_witnessed_escrow = Arc::new(PartiallyWitnessedEscrow::new(
         events_db.clone(),
-        db.clone(),
         Duration::from_secs(1),
     ));
     event_processor.register_observer(

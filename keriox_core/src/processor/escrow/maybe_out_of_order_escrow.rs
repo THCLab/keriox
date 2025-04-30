@@ -3,7 +3,6 @@ use std::{sync::Arc, time::Duration};
 use said::SelfAddressingIdentifier;
 
 use crate::{
-    actor::prelude::SledEventDatabase,
     database::{
         redb::{escrow_database::SnKeyDatabase, loging::LogDatabase, RedbDatabase, RedbError},
         EventDatabase,
@@ -22,14 +21,11 @@ use crate::processor::{
 pub struct MaybeOutOfOrderEscrow {
     db: Arc<RedbDatabase>,
     pub(crate) escrowed_out_of_order: SnKeyEscrow,
-    // TODO remove this. It's to init validator struct
-    pub(crate) mailbox_db: Arc<SledEventDatabase>,
 }
 
 impl MaybeOutOfOrderEscrow {
     pub fn new(
         db: Arc<RedbDatabase>,
-        mailbox_db: Arc<SledEventDatabase>,
         _duration: Duration,
     ) -> Self {
         let ooo_escrowdb = SnKeyEscrow::new(
@@ -39,7 +35,6 @@ impl MaybeOutOfOrderEscrow {
         Self {
             db,
             escrowed_out_of_order: ooo_escrowdb,
-            mailbox_db,
         }
     }
 }
@@ -72,7 +67,7 @@ impl MaybeOutOfOrderEscrow {
         sn: u64,
     ) -> Result<(), Error> {
         for event in self.escrowed_out_of_order.get_from_sn(id, sn)? {
-            let validator = EventValidator::new(self.mailbox_db.clone(), self.db.clone());
+            let validator = EventValidator::new(self.db.clone());
             match validator.validate_event(&event) {
                 Ok(_) => {
                     // add to kel
@@ -221,15 +216,13 @@ fn test_out_of_order() -> Result<(), Error> {
     let (processor, storage, ooo_escrow) = {
         let witness_root = Builder::new().prefix("test-db").tempdir().unwrap();
         let path = witness_root.path();
-        let mailbox_db = Arc::new(SledEventDatabase::new(path).unwrap());
         let events_db_path = NamedTempFile::new().unwrap();
         let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
-        let mut processor = BasicProcessor::new(events_db.clone(), mailbox_db.clone(), None);
+        let mut processor = BasicProcessor::new(events_db.clone(), None);
 
         // Register out of order escrow, to save and reprocess out of order events
         let new_ooo = Arc::new(MaybeOutOfOrderEscrow::new(
             events_db.clone(),
-            mailbox_db.clone(),
             Duration::from_secs(60),
         ));
         processor.register_observer(
@@ -241,7 +234,7 @@ fn test_out_of_order() -> Result<(), Error> {
         )?;
         (
             processor,
-            EventStorage::new(events_db.clone(), mailbox_db.clone()),
+            EventStorage::new(events_db.clone()),
             new_ooo,
         )
     };

@@ -21,7 +21,7 @@ use self::{
 use crate::query::reply_event::{ReplyRoute, SignedReply};
 use crate::{
     database::{
-        sled::SledEventDatabase, timestamped::TimestampedSignedEventMessage, EventDatabase,
+        redb::RedbDatabase, timestamped::TimestampedSignedEventMessage, EventDatabase
     },
     error::Error,
     event::receipt::Receipt,
@@ -68,21 +68,22 @@ pub trait Processor {
 
 pub struct EventProcessor<D: EventDatabase> {
     events_db: Arc<D>,
-    db: Arc<SledEventDatabase>,
     validator: EventValidator<D>,
     publisher: NotificationBus,
 }
 
-impl<D: EventDatabase> EventProcessor<D> {
-    pub fn new(db: Arc<SledEventDatabase>, publisher: NotificationBus, events_db: Arc<D>) -> Self {
-        let validator = EventValidator::new(db.clone(), events_db.clone());
+impl EventProcessor<RedbDatabase> {
+    pub fn new(publisher: NotificationBus, events_db: Arc<RedbDatabase>) -> Self {
+        let validator = EventValidator::new(events_db.clone());
         Self {
             events_db,
-            db,
             validator,
             publisher,
         }
     }
+}
+
+impl<D: EventDatabase> EventProcessor<D> {
 
     pub fn register_observer(
         &mut self,
@@ -127,7 +128,7 @@ impl<D: EventDatabase> EventProcessor<D> {
     where
         F: Fn(
             Arc<D>,
-            Arc<SledEventDatabase>,
+            // Arc<SledEventDatabase>,
             &NotificationBus,
             SignedEventMessage,
         ) -> Result<(), Error>,
@@ -136,7 +137,7 @@ impl<D: EventDatabase> EventProcessor<D> {
             Notice::Event(signed_event) => {
                 processing_strategy(
                     self.events_db.clone(),
-                    self.db.clone(),
+                    // self.db.clone(),
                     &self.publisher,
                     signed_event.clone(),
                 )?;

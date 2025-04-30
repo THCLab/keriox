@@ -4,7 +4,7 @@ mod test_query {
 
     use keri_core::{
         actor::{parse_event_stream, prelude::*},
-        database::{redb::RedbDatabase, sled::SledEventDatabase},
+        database::redb::RedbDatabase,
         event_message::signed_event_message::Op,
         processor::{
             escrow::{default_escrow_bus, EscrowConfig},
@@ -18,17 +18,16 @@ mod test_query {
         use tempfile::Builder;
 
         let root = Builder::new().prefix("test-db").tempdir().unwrap();
-        let db = Arc::new(SledEventDatabase::new(root.path())?);
 
         let events_db_path = NamedTempFile::new().unwrap();
         let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
 
         let (notification_bus, (_ooo_escrow, _ps_esrow, _pw_escrow, _, _)) =
-            default_escrow_bus(events_db.clone(), db.clone(), EscrowConfig::default());
+            default_escrow_bus(events_db.clone(), EscrowConfig::default());
 
         let (processor, storage) = (
-            BasicProcessor::new(events_db.clone(), db.clone(), Some(notification_bus)),
-            EventStorage::new(events_db.clone(), db.clone()),
+            BasicProcessor::new(events_db.clone(), Some(notification_bus)),
+            EventStorage::new(events_db.clone()),
         );
         // Process inception event and its receipts. To accept inception event it must be fully witnessed.
         let events_raw = r#"{"v":"KERI10JSON000159_","t":"icp","d":"ENRc2DeK48BKJ3ST8mypvngVwEAxw9rZr_GPNP25TmQ_","i":"ENRc2DeK48BKJ3ST8mypvngVwEAxw9rZr_GPNP25TmQ_","s":"0","kt":"1","k":["DDhKvndcqZlJNx-mtC_5eTy7UiuxOPVgAV3HsmofP2Ll"],"nt":"1","n":["EOOlrw-1jQHp8IfE1mfOb_ikXpHksVSyZ0RCnu5X0Rfg"],"bt":"0","b":["DNjeO6mfXSbrFFdk5UjDmioaho6ON0Sp6JMfhKz2jJF-"],"c":[],"a":[]}-AABAAD34oIVuxmLLKldRCzhfxR9hNg2SOMbOKZn1hp6D1OBmA6Hut6gSID21vFk50ost8_-VNbjHIQnHZ8WulUJ_yQL{"v":"KERI10JSON000091_","t":"rct","d":"ENRc2DeK48BKJ3ST8mypvngVwEAxw9rZr_GPNP25TmQ_","i":"ENRc2DeK48BKJ3ST8mypvngVwEAxw9rZr_GPNP25TmQ_","s":"0"}-CABDNjeO6mfXSbrFFdk5UjDmioaho6ON0Sp6JMfhKz2jJF-0BCTI8wy4v_Iyiyh4cSuG02R-K4GZHMXQVyC3yckpPpev0yWUiuera6q7ErDIQDLvjnMG5UuE2Ycw8-sxzeybicP"#;

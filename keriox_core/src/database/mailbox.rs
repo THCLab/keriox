@@ -6,7 +6,7 @@ use crate::{event_message::signed_event_message::{
     SignedEventMessage, SignedNontransferableReceipt,
 }, prefix::IdentifierPrefix};
 
-use super::{redb::{escrow_database::get_current_timestamp, RedbError}, sled::DbError, timestamped::TimestampedSignedEventMessage};
+use super::{redb::{escrow_database::get_current_timestamp, RedbError}, timestamped::TimestampedSignedEventMessage};
 
 
 /// Storage for elements in mailbox.
@@ -23,7 +23,7 @@ impl<D: serde::Serialize + serde::de::DeserializeOwned> MailboxTopicDatabase<D> 
     pub fn new(db: Arc<Database>, table_name: &'static str) -> Result<Self, RedbError> {
         // Create tables
         let pse = TableDefinition::new(table_name);
-        let dts = TableDefinition::new("timestamps");
+        let dts = TableDefinition::new("timestamps_mailbox");
 
         let write_txn = db.begin_write()?;
         {
@@ -106,12 +106,12 @@ pub struct MailboxData {
 }
 
 impl MailboxData {
-    pub fn new(db: Arc<Database>) -> Result<Self, DbError> {
+    pub fn new(db: Arc<Database>) -> Result<Self, RedbError> {
         Ok(Self {
-            mailbox_receipts: MailboxTopicDatabase::new(db.clone(), "mbxrct").unwrap(),
-            mailbox_replies: MailboxTopicDatabase::new(db.clone(), "mbxrpy").unwrap(),
-            mailbox_multisig: MailboxTopicDatabase::new(db.clone(),"mbxm").unwrap(),
-            mailbox_delegate: MailboxTopicDatabase::new(db.clone(),"mbxd").unwrap(),
+            mailbox_receipts: MailboxTopicDatabase::new(db.clone(), "mbxrct")?,
+            mailbox_replies: MailboxTopicDatabase::new(db.clone(), "mbxrpy")?,
+            mailbox_multisig: MailboxTopicDatabase::new(db.clone(),"mbxm")?,
+            mailbox_delegate: MailboxTopicDatabase::new(db.clone(),"mbxd")?,
             db,
         })
     }

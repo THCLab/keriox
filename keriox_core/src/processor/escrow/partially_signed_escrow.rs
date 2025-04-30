@@ -1,7 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
 use crate::{
-    actor::prelude::SledEventDatabase,
     database::{
         redb::{escrow_database::SnKeyDatabase, RedbDatabase},
         EventDatabase,
@@ -19,14 +18,12 @@ use super::maybe_out_of_order_escrow::SnKeyEscrow;
 
 pub struct PartiallySignedEscrow<D: EventDatabase> {
     db: Arc<D>,
-    old_db: Arc<SledEventDatabase>,
     pub escrowed_partially_signed: SnKeyEscrow,
 }
 
 impl PartiallySignedEscrow<RedbDatabase> {
     pub fn new(
         db: Arc<RedbDatabase>,
-        sled_db: Arc<SledEventDatabase>,
         _duration: Duration,
     ) -> Self {
         let escrow_db = SnKeyEscrow::new(
@@ -35,7 +32,6 @@ impl PartiallySignedEscrow<RedbDatabase> {
         );
         Self {
             db,
-            old_db: sled_db,
             escrowed_partially_signed: escrow_db,
         }
     }
@@ -61,7 +57,7 @@ impl<D: EventDatabase> PartiallySignedEscrow<D> {
     }
 }
 
-impl<D: EventDatabase> Notifier for PartiallySignedEscrow<D> {
+impl Notifier for PartiallySignedEscrow<RedbDatabase> {
     fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error> {
         match notification {
             Notification::PartiallySigned(ev) => {
@@ -77,7 +73,7 @@ impl<D: EventDatabase> Notifier for PartiallySignedEscrow<D> {
     }
 }
 
-impl<D: EventDatabase> PartiallySignedEscrow<D> {
+impl PartiallySignedEscrow<RedbDatabase> {
     pub fn process_partially_signed_events(
         &self,
         bus: &NotificationBus,
@@ -104,7 +100,7 @@ impl<D: EventDatabase> PartiallySignedEscrow<D> {
                 ..signed_event.to_owned()
             };
 
-            let validator = EventValidator::new(self.old_db.clone(), self.db.clone());
+            let validator = EventValidator::new(self.db.clone());
             match validator.validate_event(&new_event) {
                 Ok(_) => {
                     // add to kel
@@ -157,7 +153,7 @@ mod tests {
     use tempfile::NamedTempFile;
 
     use crate::{
-        actor::prelude::{BasicProcessor, EventStorage, Message, SledEventDatabase},
+        actor::prelude::{BasicProcessor, EventStorage, Message},
         database::redb::RedbDatabase,
         error::Error,
         event_message::{
@@ -210,13 +206,11 @@ mod tests {
             let path = witness_root.path();
             let events_db_path = NamedTempFile::new().unwrap();
             let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
-            let witness_db = Arc::new(SledEventDatabase::new(path).unwrap());
-            let mut processor = BasicProcessor::new(events_db.clone(), witness_db.clone(), None);
+            let mut processor = BasicProcessor::new(events_db.clone(), None);
 
             // Register out of order escrow, to save and reprocess out of order events
             let ooo_escrow = Arc::new(MaybeOutOfOrderEscrow::new(
                 events_db.clone(),
-                witness_db.clone(),
                 Duration::from_secs(10),
             ));
             processor.register_observer(
@@ -229,7 +223,6 @@ mod tests {
 
             let ps_escrow = Arc::new(PartiallySignedEscrow::new(
                 events_db.clone(),
-                witness_db.clone(),
                 Duration::from_secs(10),
             ));
             processor.register_observer(
@@ -242,8 +235,8 @@ mod tests {
 
             std::fs::create_dir_all(path).unwrap();
             (
-                BasicProcessor::new(events_db.clone(), witness_db.clone(), None),
-                EventStorage::new(events_db.clone(), witness_db.clone()),
+                BasicProcessor::new(events_db.clone(),  None),
+                EventStorage::new(events_db.clone()),
                 ooo_escrow,
                 ps_escrow,
             )
@@ -282,23 +275,21 @@ mod tests {
         let (processor, storage, ps_escrow) = {
             let witness_root = Builder::new().prefix("test-db").tempdir().unwrap();
             let path = witness_root.path();
-            let sled_db = Arc::new(SledEventDatabase::new(path).unwrap());
             std::fs::create_dir_all(path).unwrap();
             let events_db_path = NamedTempFile::new().unwrap();
             let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
-            let mut processor = BasicProcessor::new(events_db.clone(), sled_db.clone(), None);
+            let mut processor = BasicProcessor::new(events_db.clone(), None);
 
             // Register partially signed escrow, to save and reprocess partially signed events
             let ps_escrow = Arc::new(PartiallySignedEscrow::new(
                 events_db.clone(),
-                sled_db.clone(),
                 Duration::from_secs(10),
             ));
             processor.register_observer(ps_escrow.clone(), &[JustNotification::PartiallySigned])?;
 
             (
                 processor,
-                EventStorage::new(events_db.clone(), sled_db.clone()),
+                EventStorage::new(events_db.clone()),
                 ps_escrow,
             )
         };

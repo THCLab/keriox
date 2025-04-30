@@ -29,7 +29,6 @@ use crate::mailbox::{
 };
 use crate::{
     actor::parse_event_stream,
-    database::sled::SledEventDatabase,
     error::Error,
     event::{
         event_data::EventData,
@@ -221,22 +220,21 @@ pub struct SimpleController<K: KeyManager + 'static, D: EventDatabase> {
 impl<K: KeyManager> SimpleController<K, RedbDatabase> {
     // incept a state and keys
     pub fn new(
-        db: Arc<SledEventDatabase>,
         event_db: Arc<RedbDatabase>,
         key_manager: Arc<Mutex<K>>,
         oobi_db_path: &Path,
         escrow_config: EscrowConfig,
     ) -> Result<SimpleController<K, RedbDatabase>, Error> {
         let (not_bus, (ooo, _, partially_witnesses, del_escrow, _duplicates)) =
-            default_escrow_bus(event_db.clone(), db.clone(), escrow_config);
-        let processor = BasicProcessor::new(event_db.clone(), db.clone(), Some(not_bus));
+            default_escrow_bus(event_db.clone(), escrow_config);
+        let processor = BasicProcessor::new(event_db.clone(), Some(not_bus));
 
         Ok(SimpleController {
             prefix: IdentifierPrefix::default(),
             key_manager,
             oobi_manager: OobiManager::new(oobi_db_path),
             processor,
-            storage: EventStorage::new(event_db.clone(), db),
+            storage: EventStorage::new(event_db.clone()),
             groups: vec![],
             not_fully_witnessed_escrow: partially_witnesses,
             ooo_escrow: ooo,

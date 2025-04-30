@@ -15,7 +15,7 @@ use partially_signed_escrow::PartiallySignedEscrow;
 use partially_witnessed_escrow::PartiallyWitnessedEscrow;
 
 use super::notification::{JustNotification, NotificationBus};
-use crate::database::{redb::RedbDatabase, sled::SledEventDatabase};
+use crate::database::redb::RedbDatabase;
 
 #[derive(Debug, Clone)]
 pub struct EscrowConfig {
@@ -40,7 +40,6 @@ impl Default for EscrowConfig {
 
 pub fn default_escrow_bus(
     event_db: Arc<RedbDatabase>,
-    sled_db: Arc<SledEventDatabase>,
     escrow_config: EscrowConfig,
 ) -> (
     NotificationBus,
@@ -57,7 +56,6 @@ pub fn default_escrow_bus(
     // Register out of order escrow, to save and reprocess out of order events
     let ooo_escrow = Arc::new(MaybeOutOfOrderEscrow::new(
         event_db.clone(),
-        sled_db.clone(),
         escrow_config.out_of_order_timeout,
     ));
     bus.register_observer(
@@ -70,14 +68,12 @@ pub fn default_escrow_bus(
 
     let ps_escrow = Arc::new(PartiallySignedEscrow::new(
         event_db.clone(),
-        sled_db.clone(),
         escrow_config.partially_signed_timeout,
     ));
     bus.register_observer(ps_escrow.clone(), vec![JustNotification::PartiallySigned]);
 
     let pw_escrow = Arc::new(PartiallyWitnessedEscrow::new(
         event_db.clone(),
-        sled_db.clone(),
         escrow_config.partially_witnessed_timeout,
     ));
     bus.register_observer(
@@ -90,7 +86,6 @@ pub fn default_escrow_bus(
 
     let delegation_escrow = Arc::new(DelegationEscrow::new(
         event_db.clone(),
-        sled_db,
         escrow_config.delegation_timeout,
     ));
     bus.register_observer(

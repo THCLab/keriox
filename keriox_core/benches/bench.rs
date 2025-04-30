@@ -2,7 +2,7 @@ use cesrox::parse_many;
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use keri_core::{
     actor::prelude::{BasicProcessor, EventStorage},
-    database::{redb::RedbDatabase, sled::SledEventDatabase},
+    database::redb::RedbDatabase,
     event_message::signed_event_message::Notice,
 };
 use std::{hint::black_box, path::Path, sync::Arc};
@@ -18,15 +18,14 @@ fn setup_processor() -> (
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     std::fs::create_dir_all(root.path()).unwrap();
 
-    let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
     let events_db_path = NamedTempFile::new().unwrap();
     let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
     let (not_bus, (_ooo_escrow, _, _, _, _)) =
-        default_escrow_bus(events_db.clone(), db.clone(), EscrowConfig::default());
+        default_escrow_bus(events_db.clone(), EscrowConfig::default());
 
     let (processor, storage) = (
-        BasicProcessor::new(events_db.clone(), db.clone(), Some(not_bus)),
-        EventStorage::new(events_db.clone(), db.clone()),
+        BasicProcessor::new(events_db.clone(), Some(not_bus)),
+        EventStorage::new(events_db.clone()),
     );
     (Arc::new(processor), storage)
 }

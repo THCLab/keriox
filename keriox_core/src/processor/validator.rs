@@ -9,7 +9,7 @@ use super::event_storage::EventStorage;
 #[cfg(feature = "query")]
 use crate::query::{key_state_notice::KeyStateNotice, reply_event::SignedReply, QueryError};
 use crate::{
-    database::{sled::SledEventDatabase, EventDatabase},
+    database::{redb::RedbDatabase, EventDatabase},
     error::Error,
     event::{
         event_data::EventData,
@@ -60,12 +60,14 @@ pub struct EventValidator<D: EventDatabase> {
     event_storage: EventStorage<D>,
 }
 
-impl<D: EventDatabase> EventValidator<D> {
-    pub fn new(db: Arc<SledEventDatabase>, event_database: Arc<D>) -> Self {
+impl EventValidator<RedbDatabase> {
+    pub fn new(event_database: Arc<RedbDatabase>) -> Self {
         Self {
-            event_storage: EventStorage::new(event_database, db),
+            event_storage: EventStorage::new(event_database),
         }
     }
+}
+impl<D: EventDatabase> EventValidator<D> {
 
     /// Validate Event
     ///
@@ -466,8 +468,7 @@ fn test_validate_seal() -> Result<(), Error> {
     fs::create_dir_all(root.path()).unwrap();
     let events_db_path = NamedTempFile::new().unwrap();
     let events_database = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
-    let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-    let event_processor = BasicProcessor::new(events_database.clone(), Arc::clone(&db), None);
+    let event_processor = BasicProcessor::new(events_database.clone(), None);
 
     // Events and sigs are from keripy `test_delegation` test.
     // (keripy/tests/core/test_delegating.py:#test_delegation)
@@ -488,7 +489,7 @@ fn test_validate_seal() -> Result<(), Error> {
         // Construct delegating seal.
         let seal = EventSeal::new(delegator_id, 1, delegated_event_digest.into());
 
-        let validator = EventValidator::new(db.clone(), events_database.clone());
+        let validator = EventValidator::new(events_database.clone());
         // Try to validate seal before processing delegating event
         assert!(matches!(
             validator.validate_seal(seal.clone(), &dip.event_message),

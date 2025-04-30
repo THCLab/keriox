@@ -8,15 +8,15 @@ use super::{
 #[cfg(feature = "query")]
 use crate::query::reply_event::SignedReply;
 use crate::{
-    database::{sled::SledEventDatabase, EventDatabase},
+    database::{redb::RedbDatabase, EventDatabase},
     error::Error,
     event_message::signed_event_message::{Notice, SignedEventMessage},
 };
 
 pub struct BasicProcessor<D: EventDatabase>(EventProcessor<D>);
 
-impl<D: EventDatabase> Processor for BasicProcessor<D> {
-    type Database = D;
+impl Processor for BasicProcessor<RedbDatabase> {
+    type Database = RedbDatabase;
     fn register_observer(
         &mut self,
         observer: Arc<dyn Notifier + Send + Sync>,
@@ -38,14 +38,12 @@ impl<D: EventDatabase> Processor for BasicProcessor<D> {
     }
 }
 
-impl<D: EventDatabase> BasicProcessor<D> {
+impl BasicProcessor<RedbDatabase> {
     pub fn new(
-        db: Arc<D>,
-        escrow_db: Arc<SledEventDatabase>,
+        db: Arc<RedbDatabase>,
         notification_bus: Option<NotificationBus>,
     ) -> Self {
         let processor = EventProcessor::new(
-            escrow_db.clone(),
             notification_bus.unwrap_or_default(),
             db.clone(),
         );
@@ -53,13 +51,12 @@ impl<D: EventDatabase> BasicProcessor<D> {
     }
 
     fn basic_processing_strategy(
-        events_db: Arc<D>,
-        db: Arc<SledEventDatabase>,
+        events_db: Arc<RedbDatabase>,
         publisher: &NotificationBus,
         signed_event: SignedEventMessage,
     ) -> Result<(), Error> {
         let id = &signed_event.event_message.data.get_prefix();
-        let validator = EventValidator::new(db.clone(), events_db.clone());
+        let validator = EventValidator::new(events_db.clone());
         match validator.validate_event(&signed_event) {
             Ok(_) => {
                 events_db
