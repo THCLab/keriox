@@ -5,7 +5,6 @@ use rusqlite::{params, Connection};
 
 use crate::{error::ControllerError, mailbox_updating::MailboxReminder};
 
-
 /// A structure that stores the state of already retrieved mailbox events and already published receipts.
 pub struct IdentifierCache {
     connection: Connection,

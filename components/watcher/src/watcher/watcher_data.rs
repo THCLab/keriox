@@ -2,6 +2,7 @@ use std::{fs::File, sync::Arc};
 
 use futures::future::join_all;
 use itertools::Itertools;
+use keri_core::error::Error;
 use keri_core::oobi::LocationScheme;
 use keri_core::prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix};
 use keri_core::processor::escrow::default_escrow_bus;
@@ -21,7 +22,6 @@ use keri_core::{
     },
     oobi::{Role, Scheme},
 };
-use keri_core::error::Error;
 use keri_core::{
     database::{
         redb::RedbDatabase,

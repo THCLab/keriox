@@ -222,12 +222,12 @@ async fn multi_delegator_single_delegatee(
         (qry, sig)
     });
     let _action_required = identifier1
-            .finalize_query_mailbox(queries_and_signatures.collect())
-            .await
-            .unwrap();
+        .finalize_query_mailbox(queries_and_signatures.collect())
+        .await
+        .unwrap();
 
-            // dbg!(action_required);
-        // assert!(action_required.is_empty());
+    // dbg!(action_required);
+    // assert!(action_required.is_empty());
 
     let delegators_state = controller1.find_state(&delegator_group_id)?;
     assert_eq!(delegators_state.sn, 1);
@@ -246,13 +246,19 @@ async fn multi_delegator_single_delegatee(
     // Ask about delegated identifier mailbox
     let query =
         temporary_delegatee_identifier.query_mailbox(&delegatee_id, &[witness_id.clone()])?;
-    let queries_and_signatures = query.into_iter().map(|qry| {
-        let sig = SelfSigningPrefix::Ed25519Sha512(delegatee_keypair.sign(&qry.encode().unwrap()).unwrap());
-        (qry, sig)
-    }).collect::<Vec<_>>();
+    let queries_and_signatures = query
+        .into_iter()
+        .map(|qry| {
+            let sig = SelfSigningPrefix::Ed25519Sha512(
+                delegatee_keypair.sign(&qry.encode().unwrap()).unwrap(),
+            );
+            (qry, sig)
+        })
+        .collect::<Vec<_>>();
 
     let _ar = temporary_delegatee_identifier
-        .finalize_query_mailbox(queries_and_signatures).await?;
+        .finalize_query_mailbox(queries_and_signatures)
+        .await?;
 
     let state = temporary_delegatee_identifier.find_state(&delegator_group_id)?;
     assert_eq!(state.sn, 1);

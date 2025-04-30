@@ -14,10 +14,7 @@ use crate::{
     communication::Communication,
     config::ControllerConfig,
     error::ControllerError,
-    identifier::{
-        mechanics::MechanicsError,
-        Identifier,
-    },
+    identifier::{mechanics::MechanicsError, Identifier},
     known_events::KnownEvents,
 };
 pub mod verifying;
@@ -43,7 +40,7 @@ impl Controller {
         query_db_path.push("query_cache");
 
         let events = Arc::new(KnownEvents::new(db_path, escrow_config)?);
-        
+
         #[cfg(feature = "query_cache")]
         let query_cache = Arc::new(IdentifierCache::new(&query_db_path)?);
         let comm = Arc::new(Communication {

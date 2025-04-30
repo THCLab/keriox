@@ -5,6 +5,8 @@ use crate::communication::SendingError;
 use self::{broadcast::BroadcastingError, query_mailbox::ResponseProcessingError};
 
 pub mod broadcast;
+#[cfg(feature = "query_cache")]
+pub mod cache;
 pub mod delegate;
 pub mod group;
 pub mod kel_managing;
@@ -13,8 +15,6 @@ pub mod notify_witness;
 pub mod query_mailbox;
 pub mod tel_managing;
 pub mod watcher_configuration;
-#[cfg(feature = "query_cache")]
-pub mod cache;
 
 #[derive(Debug, thiserror::Error)]
 pub enum MechanicsError {

@@ -2,7 +2,10 @@ pub mod config;
 mod tel_providing;
 mod watcher_data;
 
-use std::{fs::create_dir_all, sync::{Arc, Mutex}};
+use std::{
+    fs::create_dir_all,
+    sync::{Arc, Mutex},
+};
 
 use keri_core::{
     actor::{

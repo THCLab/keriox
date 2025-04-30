@@ -103,7 +103,7 @@ impl EventSeal {
     }
 }
 
-impl Display for EventSeal{
+impl Display for EventSeal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", serde_json::to_string(self).unwrap())
     }

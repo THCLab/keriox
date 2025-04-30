@@ -1,4 +1,6 @@
 pub mod escrow_database;
+#[cfg(feature = "query")]
+pub(crate) mod ksn_log;
 pub(crate) mod loging;
 pub(crate) mod rkyv_adapter;
 
@@ -14,9 +16,13 @@ const KEY_STATES: TableDefinition<&str, &[u8]> = TableDefinition::new("key_state
 
 use std::{path::Path, sync::Arc, u64};
 
+#[cfg(feature = "query")]
+use ksn_log::AcceptedKsn;
 use loging::LogDatabase;
 use redb::{Database, ReadableTable, TableDefinition};
 use said::{sad::SerializationFormats, SelfAddressingIdentifier};
+#[cfg(feature = "query")]
+use crate::query::reply_event::SignedReply;
 
 use crate::{
     event::{receipt::Receipt, KeyEvent},
@@ -78,6 +84,8 @@ pub(crate) enum WriteTxnMode<'a> {
 pub struct RedbDatabase {
     pub(crate) db: Arc<Database>,
     pub(crate) log_db: Arc<LogDatabase>,
+    #[cfg(feature = "query")]
+    accepted_rpy: Arc<AcceptedKsn>,
 }
 
 impl RedbDatabase {
@@ -91,7 +99,12 @@ impl RedbDatabase {
             write_txn.open_table(KEY_STATES)?;
         }
         write_txn.commit()?;
-        Ok(Self { db, log_db })
+        Ok(Self {
+            db: db.clone(),
+            log_db,
+            #[cfg(feature = "query")]
+            accepted_rpy: Arc::new(AcceptedKsn::new(db.clone())?),
+        })
     }
 }
 
@@ -205,6 +218,16 @@ impl EventDatabase for RedbDatabase {
                 .ok()
                 .map(|e| e.into_iter()),
         }
+    }
+
+    #[cfg(feature = "query")]
+    fn save_reply(&self, reply: SignedReply) -> Result<(), Self::Error> {
+        self.accepted_rpy.insert(reply)
+    }
+
+    #[cfg(feature = "query")]
+    fn get_reply(&self, id: &IdentifierPrefix, from_who: &IdentifierPrefix) -> Option<SignedReply> {
+        self.accepted_rpy.get(id, from_who).unwrap()
     }
 }
 

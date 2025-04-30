@@ -102,8 +102,9 @@ impl<D: EventDatabase> EventProcessor<D> {
         match rpy.reply.get_route() {
             ReplyRoute::Ksn(_, _) => match self.validator.process_signed_ksn_reply(rpy) {
                 Ok(_) => {
-                    self.db
-                        .update_accepted_reply(rpy.clone(), &rpy.reply.get_prefix())?;
+                    self.events_db
+                        .save_reply(rpy.clone())
+                        .map_err(|_e| Error::DbError)?;
                 }
                 Err(Error::VerificationError(VerificationError::MoreInfo(
                     MoreInfoError::EventNotFound(_),

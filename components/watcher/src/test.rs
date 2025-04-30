@@ -243,7 +243,11 @@ pub async fn watcher_forward_ksn() -> Result<(), ActorError> {
     watcher.watcher_data.process_op(end_role).await.unwrap();
 
     // Send query again
-    let _result = watcher.watcher_data.process_op(query.clone()).await.unwrap();
+    let _result = watcher
+        .watcher_data
+        .process_op(query.clone())
+        .await
+        .unwrap();
     // Expect error because no loc scheme for witness.
     // assert!(matches!(
     //     result, Err(ActorError::NoLocation { ref id })

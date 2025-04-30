@@ -103,21 +103,20 @@ pub async fn handle_delegation_request(
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(keypair.sign(&qry.encode()?)?);
         let ar = id.finalize_query_mailbox(vec![(qry, signature)]).await?;
-        
+
         match &ar[0] {
             ActionRequired::MultisigRequest(multisig_event, exn) => {
                 let signature_ixn =
                     SelfSigningPrefix::Ed25519Sha512(keypair.sign(&multisig_event.encode()?)?);
                 let signature_exn = SelfSigningPrefix::Ed25519Sha512(keypair.sign(&exn.encode()?)?);
                 let exn_index_signature = id.sign_with_index(signature_exn, 0)?;
-                id
-                    .finalize_group_event(
-                        &multisig_event.encode()?,
-                        signature_ixn.clone(),
-                        vec![(exn.encode()?, exn_index_signature)],
-                    )
-                    .await?;
-            },
+                id.finalize_group_event(
+                    &multisig_event.encode()?,
+                    signature_ixn.clone(),
+                    vec![(exn.encode()?, exn_index_signature)],
+                )
+                .await?;
+            }
             ActionRequired::DelegationRequest(delegating_event, exn) => {
                 let signature_ixn =
                     SelfSigningPrefix::Ed25519Sha512(keypair.sign(&delegating_event.encode()?)?);
@@ -139,9 +138,8 @@ pub async fn handle_delegation_request(
 
                 for qry in query {
                     let signature = SelfSigningPrefix::Ed25519Sha512(keypair.sign(&qry.encode()?)?);
-                    let _action_required = id
-                        .finalize_query_mailbox(vec![(qry, signature)])
-                        .await?;
+                    let _action_required =
+                        id.finalize_query_mailbox(vec![(qry, signature)]).await?;
                     // assert!(action_required.is_empty());
                 }
 

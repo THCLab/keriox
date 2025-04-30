@@ -1,8 +1,8 @@
 pub mod delegation_escrow;
+pub mod duplicitous_events;
 pub mod maybe_out_of_order_escrow;
 pub mod partially_signed_escrow;
 pub mod partially_witnessed_escrow;
-pub mod duplicitous_events;
 #[cfg(feature = "query")]
 pub mod reply_escrow;
 
@@ -49,7 +49,7 @@ pub fn default_escrow_bus(
         Arc<PartiallySignedEscrow<RedbDatabase>>,
         Arc<PartiallyWitnessedEscrow>,
         Arc<DelegationEscrow<RedbDatabase>>,
-        Arc<DuplicitousEvents>
+        Arc<DuplicitousEvents>,
     ),
 ) {
     let mut bus = NotificationBus::new();
@@ -102,12 +102,10 @@ pub fn default_escrow_bus(
     );
 
     let dup = Arc::new(DuplicitousEvents::new(event_db));
-    bus.register_observer(
-        dup.clone(),
-        vec![
-            JustNotification::DuplicitousEvent,
-        ],
-    );
+    bus.register_observer(dup.clone(), vec![JustNotification::DuplicitousEvent]);
 
-    (bus, (ooo_escrow, ps_escrow, pw_escrow, delegation_escrow, dup))
+    (
+        bus,
+        (ooo_escrow, ps_escrow, pw_escrow, delegation_escrow, dup),
+    )
 }

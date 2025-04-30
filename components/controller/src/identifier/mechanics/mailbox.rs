@@ -78,16 +78,14 @@ impl Identifier {
         let mut actions = vec![];
 
         for multisig in &mb.multisig {
-            let ar = self.process_group_multisig(&multisig)
-                .await?;
+            let ar = self.process_group_multisig(&multisig).await?;
             if let Some(ar) = ar {
                 actions.push(ar);
             }
         }
 
         for delegate in &mb.delegate {
-            let ar = self.process_group_delegate(&delegate, group_id)
-                .await?;
+            let ar = self.process_group_delegate(&delegate, group_id).await?;
             if let Some(ar) = ar {
                 actions.push(ar);
             }
@@ -126,17 +124,15 @@ impl Identifier {
             .map_err(ResponseProcessingError::Multisig)?;
         self.publish(&event).await?;
         match &event.event_message.data.event_data {
-            EventData::Icp(_inception_event) => {
-                
-                Ok(None)
-            },
+            EventData::Icp(_inception_event) => Ok(None),
             _ => {
                 let event_message = event.event_message.clone();
                 let recipient = event_message.data.get_prefix();
                 // Construct exn message (will be stored in group identifier mailbox)
-                let exn = event_generator::exchange(&recipient, &event_message, ForwardTopic::Multisig);
+                let exn =
+                    event_generator::exchange(&recipient, &event_message, ForwardTopic::Multisig);
                 Ok(Some(ActionRequired::MultisigRequest(event_message, exn)))
-            },
+            }
         }
     }
 

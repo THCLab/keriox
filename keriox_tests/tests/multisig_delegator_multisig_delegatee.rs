@@ -108,7 +108,8 @@ async fn multi_delegator_multi_delegatee(
                 );
                 let signature_exn =
                     SelfSigningPrefix::Ed25519Sha512(delegator_km2.sign(&exn.encode()?)?);
-                let exn_index_signature = delegator_identifier2.sign_with_index(signature_exn, 0)?;
+                let exn_index_signature =
+                    delegator_identifier2.sign_with_index(signature_exn, 0)?;
                 delegator_identifier2
                     .finalize_group_event(
                         &multisig_event.encode()?,
@@ -235,8 +236,10 @@ async fn multi_delegator_multi_delegatee(
         .map(|exn| {
             let signature_exn =
                 SelfSigningPrefix::Ed25519Sha512(delegatee_km1.sign(exn.as_bytes()).unwrap());
-                
-            let exn_index_signature = delegatee_identifier1.sign_with_index(signature_exn, 0).unwrap();
+
+            let exn_index_signature = delegatee_identifier1
+                .sign_with_index(signature_exn, 0)
+                .unwrap();
             (exn.as_bytes().to_vec(), exn_index_signature)
         })
         .collect();
@@ -272,7 +275,9 @@ async fn multi_delegator_multi_delegatee(
                 );
                 let signature_exn =
                     SelfSigningPrefix::Ed25519Sha512(delegatee_km2.sign(&exn.encode()?)?);
-                let exn_index_signature = delegatee_identifier2.sign_with_index(signature_exn, 0).unwrap();
+                let exn_index_signature = delegatee_identifier2
+                    .sign_with_index(signature_exn, 0)
+                    .unwrap();
                 delegatee_identifier2
                     .finalize_group_event(
                         &multisig_event.encode()?,

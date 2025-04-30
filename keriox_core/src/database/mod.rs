@@ -10,6 +10,8 @@ use crate::{
     prefix::IdentifierPrefix,
     state::IdentifierState,
 };
+#[cfg(feature = "query")]
+use crate::query::reply_event::SignedReply;
 
 pub mod escrow;
 #[cfg(feature = "mailbox")]
@@ -70,4 +72,9 @@ pub trait EventDatabase {
         &self,
         params: QueryParameters,
     ) -> Option<impl DoubleEndedIterator<Item = SignedNontransferableReceipt>>;
+
+    #[cfg(feature = "query")]
+    fn save_reply(&self, reply: SignedReply) -> Result<(), Self::Error>;
+    #[cfg(feature = "query")]
+    fn get_reply(&self, id: &IdentifierPrefix, from_who: &IdentifierPrefix) -> Option<SignedReply>;
 }

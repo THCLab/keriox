@@ -23,8 +23,6 @@ pub struct SledEventDatabase {
     // // "iids" tree
     // this thing is expensive, but everything else is cheeeeeep
     identifiers: SledEventTree<IdentifierPrefix>,
-    #[cfg(feature = "query")]
-    accepted_rpy: SledEventTreeVec<SignedReply>,
 
     #[cfg(feature = "query")]
     escrowed_replys: SledEventTreeVec<SignedReply>,
@@ -47,8 +45,6 @@ impl SledEventDatabase {
 
         Ok(Self {
             identifiers: SledEventTree::new(db.open_tree(b"iids")?),
-            #[cfg(feature = "query")]
-            accepted_rpy: SledEventTreeVec::new(db.open_tree(b"knas")?),
             #[cfg(feature = "mailbox")]
             mailbox: MailboxData::new(db.clone())?,
 
@@ -56,58 +52,6 @@ impl SledEventDatabase {
             escrowed_replys: SledEventTreeVec::new(db.open_tree(b"knes")?),
             db,
         })
-    }
-
-    #[cfg(feature = "query")]
-    pub fn update_accepted_reply(
-        &self,
-        rpy: SignedReply,
-        id: &IdentifierPrefix,
-    ) -> Result<(), DbError> {
-        use crate::query::reply_event::ReplyRoute;
-
-        match self
-            .accepted_rpy
-            .iter_values(self.identifiers.designated_key(id)?)
-        {
-            Some(rpys) => {
-                let filtered = rpys
-                    .filter(|s| match (s.reply.get_route(), rpy.reply.get_route()) {
-                        (ReplyRoute::Ksn(id1, _), ReplyRoute::Ksn(id2, _)) => id1 != id2,
-                        _ => true,
-                    })
-                    .chain(Some(rpy.clone()).into_iter())
-                    .collect();
-                self.accepted_rpy
-                    .put(self.identifiers.designated_key(id)?, filtered)
-            }
-            None => self
-                .accepted_rpy
-                .push(self.identifiers.designated_key(id)?, rpy),
-        }?;
-        self.db.flush()?;
-        Ok(())
-    }
-
-    #[cfg(feature = "query")]
-    pub fn get_accepted_replys(
-        &self,
-        id: &IdentifierPrefix,
-    ) -> Option<impl DoubleEndedIterator<Item = SignedReply>> {
-        self.accepted_rpy
-            .iter_values(self.identifiers.designated_key(id).ok()?)
-    }
-
-    #[cfg(feature = "query")]
-    pub fn remove_accepted_reply(
-        &self,
-        id: &IdentifierPrefix,
-        rpy: SignedReply,
-    ) -> Result<(), DbError> {
-        self.accepted_rpy
-            .remove(self.identifiers.designated_key(id)?, &rpy)?;
-        self.db.flush()?;
-        Ok(())
     }
 
     #[cfg(feature = "query")]

@@ -41,9 +41,9 @@ async fn test_group_incept() -> Result<(), ControllerError> {
         identifier1.incept_group(vec![identifier2.id().clone()], 2, Some(2), None, None, None)?;
 
     let signature_icp = SelfSigningPrefix::Ed25519Sha512(km1.sign(group_inception.as_bytes())?);
-    
+
     let signature_exn = SelfSigningPrefix::Ed25519Sha512(km1.sign(exn_messages[0].as_bytes())?);
-   
+
     let exn_index_signature = identifier1.sign_with_index(signature_exn, 0)?;
 
     // Group initiator needs to use `finalize_group_incept` instead of just

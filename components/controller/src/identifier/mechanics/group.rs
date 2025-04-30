@@ -2,7 +2,11 @@ use keri_core::{
     actor::{event_generator, MaterialPath},
     event::{sections::threshold::SignatureThreshold, KeyEvent},
     event_message::{
-        cesr_adapter::{parse_event_type, EventType}, msg::KeriEvent, signature::{Signature, SignerData}, signed_event_message::{Message, Op}, EventTypeTag
+        cesr_adapter::{parse_event_type, EventType},
+        msg::KeriEvent,
+        signature::{Signature, SignerData},
+        signed_event_message::{Message, Op},
+        EventTypeTag,
     },
     mailbox::exchange::{Exchange, ForwardTopic, SignedExchange},
     prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
@@ -96,7 +100,7 @@ impl Identifier {
             parse_event_type(group_event).map_err(|_e| MechanicsError::EventFormatError)?;
         let ke = if let EventType::KeyEvent(icp) = key_event {
             match icp.event_type {
-                EventTypeTag::Icp | EventTypeTag::Dip => {icp}
+                EventTypeTag::Icp | EventTypeTag::Dip => icp,
                 _ => Err(MechanicsError::InceptionError(
                     "Event is not inception".to_string(),
                 ))?,
@@ -105,7 +109,7 @@ impl Identifier {
             return Err(MechanicsError::WrongEventTypeError);
         };
         let group_prefix = ke.data.get_prefix();
-       self.finalize_event(&ke, sig, exchanges).await?;
+        self.finalize_event(&ke, sig, exchanges).await?;
         Ok(group_prefix)
     }
 
@@ -136,10 +140,10 @@ impl Identifier {
         sig: SelfSigningPrefix,
         exchanges: Vec<(Vec<u8>, Signature)>,
     ) -> Result<(), MechanicsError> {
-
         let own_index = self.get_index(&key_event.data)?;
 
-        self.known_events.finalize_key_event(&key_event, &sig, own_index)?;
+        self.known_events
+            .finalize_key_event(&key_event, &sig, own_index)?;
 
         let signature = IndexedSignature::new_both_same(sig.clone(), own_index as u16);
 
@@ -154,7 +158,6 @@ impl Identifier {
         }
         Ok(())
     }
-
 
     pub async fn finalize_exchange(
         &self,

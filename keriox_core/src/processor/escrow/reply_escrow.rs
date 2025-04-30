@@ -2,7 +2,10 @@ use std::sync::Arc;
 
 use crate::{
     actor::prelude::SledEventDatabase,
-    database::{redb::RedbDatabase, EventDatabase},
+    database::{
+        redb::{ksn_log::AcceptedKsn, RedbDatabase},
+        EventDatabase,
+    },
     error::Error,
     processor::{
         notification::{Notification, NotificationBus, Notifier},
@@ -15,13 +18,17 @@ use crate::{
 pub struct ReplyEscrow<D: EventDatabase> {
     events_db: Arc<D>,
     escrow_db: Arc<SledEventDatabase>,
+    accepted_ksn: Arc<AcceptedKsn>,
+    // ksns: Arc<KsnLogDatabase>
 }
 
 impl ReplyEscrow<RedbDatabase> {
     pub fn new(db: Arc<SledEventDatabase>, events_db: Arc<RedbDatabase>) -> Self {
+        let acc = Arc::new(AcceptedKsn::new(events_db.db.clone()).unwrap());
         Self {
             escrow_db: db,
             events_db,
+            accepted_ksn: acc,
         }
     }
 }
@@ -56,7 +63,7 @@ impl<D: EventDatabase> ReplyEscrow<D> {
                 match validator.process_signed_ksn_reply(&sig_rep) {
                     Ok(_) => {
                         self.escrow_db.remove_escrowed_reply(&id, &sig_rep)?;
-                        self.escrow_db.update_accepted_reply(sig_rep, &id)?;
+                        self.accepted_ksn.insert(sig_rep.clone())?;
                     }
                     Err(Error::SignatureVerificationError)
                     | Err(Error::QueryError(QueryError::StaleRpy)) => {
@@ -98,8 +105,9 @@ mod tests {
         let events_db_path = NamedTempFile::new().unwrap();
         let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
         let mut event_processor = BasicProcessor::new(events_db.clone(), Arc::clone(&db), None);
+        let rpy_escrow = Arc::new(ReplyEscrow::new(db.clone(), events_db.clone()));
         event_processor.register_observer(
-            Arc::new(ReplyEscrow::new(db.clone(), events_db.clone())),
+            rpy_escrow.clone(),
             &[
                 JustNotification::KeyEventAdded,
                 JustNotification::KsnOutOfOrder,
@@ -134,8 +142,8 @@ mod tests {
         let escrow = db.get_escrowed_replys(&identifier);
         assert_eq!(escrow.unwrap().collect::<Vec<_>>().len(), 1);
 
-        let accepted_rpys = db.get_accepted_replys(&identifier);
-        assert!(accepted_rpys.is_none());
+        let accepted_rpys = rpy_escrow.clone().accepted_ksn.get_all(&identifier)?;
+        assert!(accepted_rpys.is_empty());
 
         // process kel events and update escrow
         // reply event should be unescrowed and save as accepted
@@ -146,8 +154,8 @@ mod tests {
         let escrow = db.get_escrowed_replys(&identifier);
         assert_eq!(escrow.unwrap().collect::<Vec<_>>().len(), 0);
 
-        let accepted_rpys = db.get_accepted_replys(&identifier);
-        assert_eq!(accepted_rpys.unwrap().collect::<Vec<_>>().len(), 1);
+        let accepted_rpys = rpy_escrow.accepted_ksn.get_all(&identifier)?;
+        assert_eq!(accepted_rpys.len(), 1);
 
         // Try to process new out of order reply
         // reply event should be escrowed, accepted reply shouldn't change
@@ -159,12 +167,12 @@ mod tests {
         );
         assert!(escrow.next().is_none());
 
-        let mut accepted_rpys = db.get_accepted_replys(&identifier).unwrap();
+        let accepted_rpys = rpy_escrow.accepted_ksn.get_all(&identifier)?;
+        assert_eq!(accepted_rpys.len(), 1);
         assert_eq!(
-            Message::Op(Op::Reply(accepted_rpys.next().unwrap())),
+            Message::Op(Op::Reply(accepted_rpys[0].clone())),
             deserialized_old_rpy
         );
-        assert!(accepted_rpys.next().is_none());
 
         // process rest of kel and update escrow
         // reply event should be unescrowed and save as accepted
@@ -175,13 +183,13 @@ mod tests {
         let escrow = db.get_escrowed_replys(&identifier);
         assert_eq!(escrow.unwrap().collect::<Vec<_>>().len(), 0);
 
-        let mut accepted_rpys = db.get_accepted_replys(&identifier).unwrap();
+        let accepted_rpys = rpy_escrow.accepted_ksn.get_all(&identifier)?;
 
+        assert_eq!(accepted_rpys.len(), 1);
         assert_eq!(
-            Message::Op(Op::Reply(accepted_rpys.next().unwrap())),
+            Message::Op(Op::Reply(accepted_rpys[0].clone())),
             deserialized_new_rpy
         );
-        assert!(accepted_rpys.next().is_none());
 
         Ok(())
     }

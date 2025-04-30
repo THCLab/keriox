@@ -2,10 +2,26 @@ use std::{sync::Arc, time::Duration};
 
 use said::SelfAddressingIdentifier;
 
-use crate::{actor::prelude::{EventStorage, SledEventDatabase}, database::{redb::{escrow_database::SnKeyDatabase, RedbDatabase}, EventDatabase}, error::Error, event::{event_data::EventData, sections::seal::{EventSeal, Seal, SourceSeal}}, event_message::signed_event_message::SignedEventMessage, prefix::IdentifierPrefix, processor::{notification::{Notification, NotificationBus, Notifier}, validator::EventValidator}};
+use crate::{
+    actor::prelude::{EventStorage, SledEventDatabase},
+    database::{
+        redb::{escrow_database::SnKeyDatabase, RedbDatabase},
+        EventDatabase,
+    },
+    error::Error,
+    event::{
+        event_data::EventData,
+        sections::seal::{EventSeal, Seal, SourceSeal},
+    },
+    event_message::signed_event_message::SignedEventMessage,
+    prefix::IdentifierPrefix,
+    processor::{
+        notification::{Notification, NotificationBus, Notifier},
+        validator::EventValidator,
+    },
+};
 
 use super::maybe_out_of_order_escrow::SnKeyEscrow;
-
 
 /// Stores delegated events until delegating event is provided
 pub struct DelegationEscrow<D: EventDatabase> {
@@ -38,7 +54,8 @@ impl DelegationEscrow<RedbDatabase> {
         delegator_id: &IdentifierPrefix,
         event_digest: &SelfAddressingIdentifier,
     ) -> Option<SignedEventMessage> {
-        self.delegation_escrow.get(delegator_id, sn)
+        self.delegation_escrow
+            .get(delegator_id, sn)
             .ok()
             .and_then(|mut events| {
                 events.find(|event| {
@@ -100,8 +117,11 @@ impl<D: EventDatabase> Notifier for DelegationEscrow<D> {
                     let delegator_seal = signed_event.delegator_seal.clone();
                     let sn = if let Some(delegator_seal) = delegator_seal {
                         delegator_seal.sn
-                    } else {0};
-                    self.delegation_escrow.insert_key_value(&delegator_id , sn, signed_event)?;
+                    } else {
+                        0
+                    };
+                    self.delegation_escrow
+                        .insert_key_value(&delegator_id, sn, signed_event)?;
                 }
             }
             _ => return Err(Error::SemanticError("Wrong notification".into())),

@@ -38,7 +38,7 @@ async fn test_tel() -> Result<(), ControllerError> {
 
     // Incept management TEL
     let (_registry_id, ixn) = identifier1.incept_registry().unwrap();
-	let ixn_encoded = ixn.encode().unwrap();
+    let ixn_encoded = ixn.encode().unwrap();
     let signature = SelfSigningPrefix::Ed25519Sha512(km1.sign(&ixn_encoded).unwrap());
 
     identifier1
@@ -60,7 +60,7 @@ async fn test_tel() -> Result<(), ControllerError> {
         HashFunction::from(HashFunctionCode::Blake3_256).derive(credential.as_bytes());
 
     let (vc_id, issuance_ixn) = identifier1.issue(credential_said).unwrap();
-	let issuance_ixn_cesr = issuance_ixn.encode().unwrap();
+    let issuance_ixn_cesr = issuance_ixn.encode().unwrap();
     let vc_hash = match vc_id {
         keri_controller::IdentifierPrefix::SelfAddressing(sai) => sai.said.clone(),
         _ => unreachable!(),

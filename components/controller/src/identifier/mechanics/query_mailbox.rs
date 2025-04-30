@@ -13,9 +13,7 @@ use keri_core::{
 use crate::mailbox_updating::MailboxReminder;
 
 use crate::{
-    communication::SendingError,
-    error::ControllerError,
-    identifier::Identifier,
+    communication::SendingError, error::ControllerError, identifier::Identifier,
     mailbox_updating::ActionRequired,
 };
 

@@ -398,19 +398,7 @@ impl<D: EventDatabase> EventStorage<D> {
         creator_prefix: &IdentifierPrefix,
         signer_prefix: &IdentifierPrefix,
     ) -> Option<SignedReply> {
-        use crate::query::reply_event::ReplyRoute;
-
-        self.escrow_db
-            .get_accepted_replys(creator_prefix)
-            .and_then(|mut o| {
-                o.find(|r: &SignedReply| {
-                    if let ReplyRoute::Ksn(signer, _ksn) = r.reply.get_route() {
-                        &signer == signer_prefix
-                    } else {
-                        false
-                    }
-                })
-            })
+        self.events_db.get_reply(creator_prefix, signer_prefix)
     }
 
     /// Compute state at event given by sn and digest.

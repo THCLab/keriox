@@ -209,7 +209,9 @@ async fn test_tel_from_watcher() -> Result<(), anyhow::Error> {
 
     let vcp_ixn_cesr = vcp_ixn.encode()?;
     let signature = SelfSigningPrefix::Ed25519Sha512(issuer_keypair.sign(&vcp_ixn_cesr)?);
-    issuer.finalize_incept_registry(&vcp_ixn_cesr, signature).await?;
+    issuer
+        .finalize_incept_registry(&vcp_ixn_cesr, signature)
+        .await?;
 
     issuer.notify_witnesses().await?;
 
@@ -388,7 +390,6 @@ async fn test_tel_from_watcher() -> Result<(), anyhow::Error> {
         SelfSigningPrefix::Ed25519Sha512(verifier_keypair.sign(&qry.encode().unwrap())?);
     verifier.finalize_query_tel(qry, signature).await?;
 
-   
     let vc_state = verifier.find_vc_state(&sai).unwrap();
     if let None = vc_state {
         // Give watcher a moment to find TEL and ask again
