@@ -1,17 +1,15 @@
 use std::sync::Arc;
 
+use said::SelfAddressingIdentifier;
+
 use crate::{
-    actor::prelude::SledEventDatabase,
-    database::{
-        redb::{ksn_log::AcceptedKsn, RedbDatabase},
+    actor::prelude::SledEventDatabase, database::{
+        redb::{escrow_database::SnKeyDatabase, ksn_log::{AcceptedKsn, KsnLogDatabase}, RedbDatabase, RedbError},
         EventDatabase,
-    },
-    error::Error,
-    processor::{
+    }, error::Error, prefix::IdentifierPrefix, processor::{
         notification::{Notification, NotificationBus, Notifier},
         validator::{EventValidator, MoreInfoError, VerificationError},
-    },
-    query::reply_event::ReplyRoute,
+    }, query::reply_event::{ReplyEvent, ReplyRoute, SignedReply}
 };
 
 #[derive(Clone)]
@@ -19,16 +17,21 @@ pub struct ReplyEscrow<D: EventDatabase> {
     events_db: Arc<D>,
     escrow_db: Arc<SledEventDatabase>,
     accepted_ksn: Arc<AcceptedKsn>,
-    // ksns: Arc<KsnLogDatabase>
+    escrowed_reply: Arc<SnKeyReplyEscrow>,
 }
 
 impl ReplyEscrow<RedbDatabase> {
     pub fn new(db: Arc<SledEventDatabase>, events_db: Arc<RedbDatabase>) -> Self {
         let acc = Arc::new(AcceptedKsn::new(events_db.db.clone()).unwrap());
+        let reply_esc_db = Arc::new(SnKeyReplyEscrow::new(
+            Arc::new(SnKeyDatabase::new(events_db.db.clone(), "reply_escrow").unwrap()),
+            acc.ksn_log.clone(),
+        ));
         Self {
             escrow_db: db,
             events_db,
             accepted_ksn: acc,
+            escrowed_reply: reply_esc_db,
         }
     }
 }
@@ -37,23 +40,26 @@ impl<D: EventDatabase> Notifier for ReplyEscrow<D> {
         match notification {
             Notification::KsnOutOfOrder(rpy) => {
                 if let ReplyRoute::Ksn(_id, ksn) = rpy.reply.get_route() {
-                    self.escrow_db
-                        .add_escrowed_reply(rpy.clone(), &ksn.state.prefix)?;
+                    self.escrowed_reply.insert(rpy)?;
                 };
                 Ok(())
             }
-            &Notification::KeyEventAdded(_) => self.process_reply_escrow(bus),
+            Notification::KeyEventAdded(ev) => {
+                let id = ev.event_message.data.get_prefix();
+                let sn = ev.event_message.data.sn;
+                self.process_reply_escrow(bus, &id, sn)
+            },
             _ => Ok(()),
         }
     }
 }
 
 impl<D: EventDatabase> ReplyEscrow<D> {
-    pub fn process_reply_escrow(&self, _bus: &NotificationBus) -> Result<(), Error> {
+    pub fn process_reply_escrow(&self, _bus: &NotificationBus, id: &IdentifierPrefix, sn: u64) -> Result<(), Error> {
         use crate::query::QueryError;
 
-        if let Some(esc) = self.escrow_db.get_all_escrowed_replys() {
-            for sig_rep in esc {
+        // if let Some(esc) =  .escrow_db.get_all_escrowed_replys() {
+            for sig_rep in self.escrowed_reply.get_from_sn(id, sn)? {
                 let validator = EventValidator::new(self.escrow_db.clone(), self.events_db.clone());
                 let id = if let ReplyRoute::Ksn(_id, ksn) = sig_rep.reply.get_route() {
                     Ok(ksn.state.prefix)
@@ -62,13 +68,13 @@ impl<D: EventDatabase> ReplyEscrow<D> {
                 }?;
                 match validator.process_signed_ksn_reply(&sig_rep) {
                     Ok(_) => {
-                        self.escrow_db.remove_escrowed_reply(&id, &sig_rep)?;
+                        self.escrowed_reply.remove(&sig_rep.reply);
                         self.accepted_ksn.insert(sig_rep.clone())?;
                     }
                     Err(Error::SignatureVerificationError)
                     | Err(Error::QueryError(QueryError::StaleRpy)) => {
                         // remove from escrow
-                        self.escrow_db.remove_escrowed_reply(&id, &sig_rep)?;
+                        self.escrowed_reply.remove(&sig_rep.reply);
                     }
                     Err(Error::EventOutOfOrderError)
                     | Err(Error::VerificationError(VerificationError::MoreInfo(
@@ -76,9 +82,87 @@ impl<D: EventDatabase> ReplyEscrow<D> {
                     ))) => (), // keep in escrow,
                     Err(e) => return Err(e),
                 };
-            }
-        };
+            };
+        // };
         Ok(())
+    }
+}
+
+
+pub struct SnKeyReplyEscrow {
+    escrow: Arc<SnKeyDatabase>,
+    log: Arc<KsnLogDatabase>,
+}
+
+impl SnKeyReplyEscrow {
+    pub(crate) fn new(escrow: Arc<SnKeyDatabase>, log: Arc<KsnLogDatabase>) -> Self {
+        Self { escrow, log }
+    }
+
+    pub fn save_digest(
+        &self,
+        id: &IdentifierPrefix,
+        sn: u64,
+        event_digest: &SelfAddressingIdentifier,
+    ) -> Result<(), RedbError> {
+        self.escrow.insert(id, sn, event_digest)?;
+
+        Ok(())
+    }
+
+    pub fn insert(&self, event: &SignedReply) -> Result<(), RedbError> {
+        self.log
+            .log_reply(&crate::database::redb::WriteTxnMode::CreateNew, &event)?;
+        let said = event.reply.digest().unwrap();
+        let id = event.reply.get_prefix();
+        let sn = match &event.reply.data.data {
+            ReplyRoute::Ksn(identifier_prefix, key_state_notice) => key_state_notice.state.sn,
+            _ => todo!(),
+        };
+        self.escrow.insert(&id, sn, &said)?;
+
+        Ok(())
+    }
+
+    pub fn get_from_sn<'a>(
+        &'a self,
+        identifier: &IdentifierPrefix,
+        sn: u64,
+    ) -> Result<impl Iterator<Item = SignedReply> + 'a, RedbError> {
+        Ok(self
+            .escrow
+            .get_grater_then(identifier, sn)?
+            .map(move |said| {
+                self.log
+                    .get_signed_reply(&said)
+                    .unwrap()
+                    .unwrap()
+            }))
+    }
+
+    pub fn remove(&self, event: &ReplyEvent) {
+        let said = event.digest().unwrap();
+        let id = event.get_prefix();
+        let sn = match &event.data.data {
+            ReplyRoute::Ksn(identifier_prefix, key_state_notice) => {
+                key_state_notice.state.sn
+            },
+            _ => todo!(),
+        };
+        self.escrow.remove(&id, sn, &said).unwrap();
+    }
+
+    pub fn contains(
+        &self,
+        id: &IdentifierPrefix,
+        sn: u64,
+        digest: &SelfAddressingIdentifier,
+    ) -> Result<bool, RedbError> {
+        Ok(self
+            .escrow
+            .get(id, sn)?
+            .find(|said| said == digest)
+            .is_some())
     }
 }
 
@@ -139,8 +223,8 @@ mod tests {
             .process(&deserialized_old_rpy.clone())
             .unwrap();
 
-        let escrow = db.get_escrowed_replys(&identifier);
-        assert_eq!(escrow.unwrap().collect::<Vec<_>>().len(), 1);
+        let escrow = rpy_escrow.escrowed_reply.get_from_sn(&identifier, 0).unwrap();
+        assert_eq!(escrow.collect::<Vec<_>>().len(), 1);
 
         let accepted_rpys = rpy_escrow.clone().accepted_ksn.get_all(&identifier)?;
         assert!(accepted_rpys.is_empty());
@@ -151,7 +235,7 @@ mod tests {
             event_processor.process(&ev).unwrap();
         });
 
-        let escrow = db.get_escrowed_replys(&identifier);
+        let escrow = rpy_escrow.escrowed_reply.get_from_sn(&identifier, 0);
         assert_eq!(escrow.unwrap().collect::<Vec<_>>().len(), 0);
 
         let accepted_rpys = rpy_escrow.accepted_ksn.get_all(&identifier)?;
@@ -160,7 +244,7 @@ mod tests {
         // Try to process new out of order reply
         // reply event should be escrowed, accepted reply shouldn't change
         event_processor.process(&deserialized_new_rpy.clone())?;
-        let mut escrow = db.get_escrowed_replys(&identifier).unwrap();
+        let mut escrow = rpy_escrow.escrowed_reply.get_from_sn(&identifier, 0).unwrap();
         assert_eq!(
             Message::Op(Op::Reply(escrow.next().unwrap())),
             deserialized_new_rpy
@@ -180,7 +264,7 @@ mod tests {
             event_processor.process(&ev).unwrap();
         });
 
-        let escrow = db.get_escrowed_replys(&identifier);
+        let escrow = rpy_escrow.escrowed_reply.get_from_sn(&identifier, 0);
         assert_eq!(escrow.unwrap().collect::<Vec<_>>().len(), 0);
 
         let accepted_rpys = rpy_escrow.accepted_ksn.get_all(&identifier)?;

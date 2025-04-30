@@ -7,13 +7,11 @@ use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "mailbox")]
 use super::mailbox::MailboxData;
-use super::tables::{SledEventTree, SledEventTreeVec};
+use super::tables::SledEventTree;
 
 #[cfg(feature = "mailbox")]
 use crate::event_message::signed_event_message::SignedNontransferableReceipt;
 
-#[cfg(feature = "query")]
-use crate::query::reply_event::SignedReply;
 use crate::{event_message::signed_event_message::SignedEventMessage, prefix::IdentifierPrefix};
 
 use super::timestamped::TimestampedSignedEventMessage;
@@ -23,9 +21,6 @@ pub struct SledEventDatabase {
     // // "iids" tree
     // this thing is expensive, but everything else is cheeeeeep
     identifiers: SledEventTree<IdentifierPrefix>,
-
-    #[cfg(feature = "query")]
-    escrowed_replys: SledEventTreeVec<SignedReply>,
 
     #[cfg(feature = "mailbox")]
     mailbox: MailboxData,
@@ -47,49 +42,8 @@ impl SledEventDatabase {
             identifiers: SledEventTree::new(db.open_tree(b"iids")?),
             #[cfg(feature = "mailbox")]
             mailbox: MailboxData::new(db.clone())?,
-
-            #[cfg(feature = "query")]
-            escrowed_replys: SledEventTreeVec::new(db.open_tree(b"knes")?),
             db,
         })
-    }
-
-    #[cfg(feature = "query")]
-    pub fn add_escrowed_reply(
-        &self,
-        rpy: SignedReply,
-        id: &IdentifierPrefix,
-    ) -> Result<(), DbError> {
-        self.escrowed_replys
-            .push(self.identifiers.designated_key(id)?, rpy)?;
-        self.db.flush()?;
-        Ok(())
-    }
-
-    #[cfg(feature = "query")]
-    pub fn get_escrowed_replys(
-        &self,
-        id: &IdentifierPrefix,
-    ) -> Option<impl DoubleEndedIterator<Item = SignedReply>> {
-        self.escrowed_replys
-            .iter_values(self.identifiers.designated_key(id).ok()?)
-    }
-
-    #[cfg(feature = "query")]
-    pub fn remove_escrowed_reply(
-        &self,
-        id: &IdentifierPrefix,
-        rpy: &SignedReply,
-    ) -> Result<(), DbError> {
-        self.escrowed_replys
-            .remove(self.identifiers.designated_key(id)?, rpy)?;
-        self.db.flush()?;
-        Ok(())
-    }
-
-    #[cfg(feature = "query")]
-    pub fn get_all_escrowed_replys(&self) -> Option<impl DoubleEndedIterator<Item = SignedReply>> {
-        self.escrowed_replys.get_all()
     }
 
     #[cfg(feature = "mailbox")]

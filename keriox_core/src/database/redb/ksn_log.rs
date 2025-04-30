@@ -21,7 +21,7 @@ const ACCEPTED_KSN: TableDefinition<(&str, &str), &str> = TableDefinition::new("
 
 /// Stores last accepted Key State Notices for performing BADA logic.  
 pub struct AcceptedKsn {
-    ksn_log: Arc<KsnLogDatabase>,
+    pub ksn_log: Arc<KsnLogDatabase>,
     db: Arc<Database>,
 }
 
