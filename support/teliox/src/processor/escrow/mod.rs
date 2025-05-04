@@ -1,11 +1,8 @@
 use std::{sync::Arc, time::Duration};
 
-use keri_core::{
-    database::{escrow::EscrowDb, redb::RedbDatabase},
-    processor::event_storage::EventStorage,
-};
+use keri_core::{database::redb::RedbDatabase, processor::event_storage::EventStorage};
 
-use crate::error::Error;
+use crate::{database::escrow::EscrowDb, error::Error};
 
 use self::{
     missing_issuer::MissingIssuerEscrow, missing_registry::MissingRegistryEscrow,

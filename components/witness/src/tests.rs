@@ -7,7 +7,7 @@ use keri_core::{
         simple_controller::{PossibleResponse, SimpleController},
         SignedQueryError,
     },
-    database::{redb::RedbDatabase, sled::SledEventDatabase},
+    database::redb::RedbDatabase,
     error::Error,
     event::sections::{
         seal::{EventSeal, Seal},
@@ -234,12 +234,8 @@ fn test_qry_rpy() -> Result<(), ActorError> {
     use tempfile::Builder;
 
     // Create test db and event processor.
-    let root = Builder::new().prefix("test-alice-db").tempdir().unwrap();
     let redb_root = Builder::new().tempfile().unwrap();
-    let alice_oobi_root = Builder::new().prefix("test-db").tempdir().unwrap();
     let alice_redb = Arc::new(RedbDatabase::new(redb_root.path()).unwrap());
-    let root = Builder::new().prefix("test_bob-db").tempdir().unwrap();
-    let bob_oobi_root = Builder::new().prefix("test-db").tempdir().unwrap();
     let bob_redb_root = Builder::new().tempfile().unwrap();
     let bob_redb = Arc::new(RedbDatabase::new(bob_redb_root.path()).unwrap());
 

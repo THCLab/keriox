@@ -1,14 +1,8 @@
-use serde::{de::DeserializeOwned, Serialize};
+use keri_core::{database::timestamped::Timestamped, prefix::IdentifierPrefix};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use sled::{Db, Tree};
+use sled_tables::tables::{SledEventTree, SledEventTreeVec};
 use std::{path::Path, sync::Arc, time::Duration};
-
-use crate::prefix::IdentifierPrefix;
-
-use super::{
-    sled::DbError,
-    tables::{SledEventTree, SledEventTreeVec},
-    timestamped::Timestamped,
-};
 
 /// Collection of values, which removes values older than `duration`
 ///
@@ -61,19 +55,19 @@ impl<T: Serialize + DeserializeOwned + PartialEq + Clone> Escrow<T> {
 
     pub fn remove(&self, id: &IdentifierPrefix, event: &T) -> Result<(), DbError> {
         let id_key = self.escrow_db.get_key(id)?;
-        self.tree.remove(id_key, &event.into())?;
+        self.tree.remove(id_key, event.into())?;
         self.escrow_db.db.flush()?;
         Ok(())
     }
 
-    pub fn get_all(&self) -> Option<impl DoubleEndedIterator<Item = T>> {
-        // TODO should return result?
-        let keys = self.tree.get_keys().unwrap();
-        keys.for_each(|key| self.cleanup(key).unwrap());
-        self.tree
-            .get_all()
-            .map(|t| t.map(|t| t.signed_event_message))
-    }
+    // pub fn get_all(&self) -> Option<impl DoubleEndedIterator<Item = T>> {
+    //     // TODO should return result?
+    //     let keys = self.tree.get_keys().unwrap();
+    //     keys.for_each(|key| self.cleanup(key).unwrap());
+    //     self.tree
+    //         .get_all()
+    //         .map(|t| t.map(|t| t.signed_event_message))
+    // }
 }
 
 pub struct EscrowDb {
@@ -100,6 +94,33 @@ impl EscrowDb {
     }
 
     pub fn get_key(&self, id: &IdentifierPrefix) -> Result<u64, DbError> {
-        self.identifiers.designated_key(id)
+        Ok(self.identifiers.designated_key(id))
+    }
+}
+
+#[derive(Debug, thiserror::Error, Serialize, Deserialize)]
+pub enum DbError {
+    // TODO: more variants
+    #[error("sled error")]
+    Sled,
+    #[error("serde error")]
+    Serde,
+}
+
+impl From<sled_tables::error::Error> for DbError {
+    fn from(_: sled_tables::error::Error) -> Self {
+        DbError::Sled
+    }
+}
+
+impl From<sled::Error> for DbError {
+    fn from(_: sled::Error) -> Self {
+        DbError::Sled
+    }
+}
+
+impl From<serde_cbor::Error> for DbError {
+    fn from(_: serde_cbor::Error) -> Self {
+        DbError::Serde
     }
 }

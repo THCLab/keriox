@@ -35,6 +35,7 @@ use keri_core::{
 };
 use serde::{Deserialize, Serialize};
 use teliox::{
+    database::escrow::EscrowDb,
     event::{parse_tel_query_stream, verifiable_event::VerifiableEvent},
     processor::{escrow::default_escrow_bus, storage::TelEventStorage, TelReplyType},
     tel::Tel,
@@ -155,7 +156,7 @@ impl Witness {
         oobi_path: &Path,
         escrow_config: WitnessEscrowConfig,
     ) -> Result<Self, WitnessError> {
-        use keri_core::{database::escrow::EscrowDb, processor::notification::JustNotification};
+        use keri_core::processor::notification::JustNotification;
         let mut events_path = PathBuf::new();
         events_path.push(event_path);
         let mut escrow_path = events_path.clone();

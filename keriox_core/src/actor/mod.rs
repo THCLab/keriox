@@ -227,9 +227,6 @@ pub enum SignedQueryError {
     KeriError(#[from] crate::error::Error),
 
     #[error(transparent)]
-    DbError(#[from] crate::database::sled::DbError),
-
-    #[error(transparent)]
     QueryError(#[from] QueryError),
 
     #[error("unknown signer with id {id:?}")]
@@ -293,9 +290,6 @@ pub fn process_mailbox_query<D: EventDatabase>(
 pub enum QueryError {
     #[error(transparent)]
     KeriError(#[from] crate::error::Error),
-
-    #[error(transparent)]
-    DbError(#[from] crate::database::sled::DbError),
 
     #[error("unknown identifier {id:?}")]
     UnknownId { id: IdentifierPrefix },

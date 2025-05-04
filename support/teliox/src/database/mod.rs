@@ -5,6 +5,7 @@ use sled_tables::{
     tables::{SledEventTree, SledEventTreeVec},
 };
 use std::{path::Path, sync::Arc};
+pub mod escrow;
 
 pub struct EventDatabase {
     db: Arc<sled::Db>,

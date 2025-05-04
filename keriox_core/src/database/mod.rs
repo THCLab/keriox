@@ -13,13 +13,10 @@ use crate::{
     state::IdentifierState,
 };
 
-pub mod escrow;
 #[cfg(feature = "mailbox")]
 pub mod mailbox;
 pub mod redb;
-pub mod sled;
-pub(crate) mod tables;
-pub(crate) mod timestamped;
+pub mod timestamped;
 
 pub enum QueryParameters<'a> {
     BySn {

@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use keri_core::actor::parse_event_stream;
 use keri_core::database::redb::{RedbDatabase, RedbError};
-use keri_core::database::sled::{DbError, SledEventDatabase};
 use keri_core::error::Error;
 use keri_core::event_message::signed_event_message::SignedNontransferableReceipt;
 use keri_core::oobi::LocationScheme;
@@ -17,7 +16,6 @@ use keri_core::processor::Processor;
 use keri_core::state::IdentifierState;
 use keri_core::{
     actor::{self, event_generator, prelude::SelfAddressingIdentifier},
-    database::escrow::EscrowDb,
     event::{event_data::EventData, sections::seal::Seal, KeyEvent},
     event_message::{
         cesr_adapter::{parse_event_type, EventType},
@@ -30,6 +28,7 @@ use keri_core::{
     },
     query::reply_event::{ReplyEvent, ReplyRoute, SignedReply},
 };
+use teliox::database::escrow::EscrowDb;
 use teliox::database::EventDatabase;
 use teliox::processor::escrow::default_escrow_bus as tel_escrow_bus;
 use teliox::processor::storage::TelEventStorage;
@@ -89,7 +88,7 @@ impl KnownEvents {
             let mut path = db_path.clone();
             path.push("tel");
             path.push("escrow");
-            Arc::new(EscrowDb::new(&path)?)
+            Arc::new(EscrowDb::new(&path).map_err(|e| ControllerError::OtherError(e.to_string()))?)
         };
         let tel_storage = Arc::new(TelEventStorage::new(tel_events_db));
         let (tel_bus, missing_issuer, _out_of_order, _missing_registy) = tel_escrow_bus(

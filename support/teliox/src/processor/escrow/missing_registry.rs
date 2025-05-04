@@ -1,15 +1,11 @@
 use std::{sync::Arc, time::Duration};
 
 use keri_core::{
-    database::{
-        escrow::{Escrow, EscrowDb},
-        redb::RedbDatabase,
-    },
-    prefix::IdentifierPrefix,
-    processor::event_storage::EventStorage,
+    database::redb::RedbDatabase, prefix::IdentifierPrefix, processor::event_storage::EventStorage,
 };
 
 use crate::{
+    database::escrow::{Escrow, EscrowDb},
     error::Error,
     event::verifiable_event::VerifiableEvent,
     processor::{
@@ -112,13 +108,13 @@ mod tests {
 
     use keri_core::{
         actor::parse_event_stream,
-        database::{escrow::EscrowDb, redb::RedbDatabase, sled::SledEventDatabase},
+        database::redb::RedbDatabase,
         prefix::IdentifierPrefix,
         processor::{basic_processor::BasicProcessor, event_storage::EventStorage, Processor},
     };
 
     use crate::{
-        database::EventDatabase,
+        database::{escrow::EscrowDb, EventDatabase},
         error::Error,
         event::verifiable_event::VerifiableEvent,
         processor::{

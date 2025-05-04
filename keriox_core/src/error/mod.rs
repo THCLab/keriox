@@ -88,9 +88,6 @@ pub enum Error {
     #[error(transparent)]
     QueryError(#[from] crate::query::QueryError),
 
-    #[error(transparent)]
-    SledDbError(#[from] crate::database::sled::DbError),
-
     #[error("Database err")]
     DbError,
 
@@ -128,12 +125,6 @@ impl From<VersionError> for Error {
 impl From<said::error::Error> for Error {
     fn from(_: said::error::Error) -> Self {
         Error::SAIError
-    }
-}
-
-impl From<sled::Error> for Error {
-    fn from(_: sled::Error) -> Self {
-        Error::SledError
     }
 }
 

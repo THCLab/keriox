@@ -24,10 +24,7 @@ use keri_core::{
     oobi::{Role, Scheme},
 };
 use keri_core::{
-    database::{
-        redb::RedbDatabase,
-        sled::{DbError, SledEventDatabase},
-    },
+    database::redb::RedbDatabase,
     event_message::{
         msg::KeriEvent,
         signed_event_message::{Message, Notice, Op},
