@@ -70,7 +70,7 @@ impl ReplyEscrow<RedbDatabase> {
         use crate::query::QueryError;
 
         for sig_rep in self.escrowed_reply.get_from_sn(id, sn)? {
-            let validator = EventValidator::new( self.events_db.clone());
+            let validator = EventValidator::new(self.events_db.clone());
             match validator.process_signed_ksn_reply(&sig_rep) {
                 Ok(_) => {
                     self.escrowed_reply.remove(&sig_rep.reply);
@@ -90,6 +90,10 @@ impl ReplyEscrow<RedbDatabase> {
         }
         // };
         Ok(())
+    }
+
+    pub fn get_all(&self, id: &IdentifierPrefix) -> Result<Vec<SignedReply>, Error> {
+        Ok(self.escrowed_reply.get_from_sn(id, 0)?.collect())
     }
 }
 

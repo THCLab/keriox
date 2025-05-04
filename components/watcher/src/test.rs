@@ -10,7 +10,7 @@ use keri_core::{
         simple_controller::{PossibleResponse, SimpleController},
         SignedQueryError,
     },
-    database::{redb::RedbDatabase, sled::SledEventDatabase},
+    database::redb::RedbDatabase,
     event_message::signed_event_message::{Notice, Op},
     prefix::IdentifierPrefix,
     processor::escrow::EscrowConfig,
@@ -31,10 +31,6 @@ async fn test_watcher_access() -> Result<(), ActorError> {
     // Controller who will ask
     let mut asker_controller = {
         // Create test db and event processor.
-        let root = Builder::new().prefix("test-db1").tempdir().unwrap();
-        std::fs::create_dir_all(root.path()).unwrap();
-        let db_controller = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-
         let events_db_path = Builder::new().tempfile().unwrap();
         let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
 
@@ -45,7 +41,6 @@ async fn test_watcher_access() -> Result<(), ActorError> {
             Arc::new(Mutex::new(CryptoBox::new().unwrap()))
         };
         SimpleController::new(
-            Arc::clone(&db_controller),
             Arc::clone(&events_db),
             key_manager,
             oobi_root.path(),
@@ -63,9 +58,6 @@ async fn test_watcher_access() -> Result<(), ActorError> {
     // Controller about witch we will ask
     let mut about_controller = {
         // Create test db and event processor.
-        let root = Builder::new().prefix("test-db2").tempdir().unwrap();
-        let db_controller = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-
         let events_db_path = Builder::new().tempfile().unwrap();
         let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
 
@@ -76,7 +68,6 @@ async fn test_watcher_access() -> Result<(), ActorError> {
             Arc::new(Mutex::new(CryptoBox::new().unwrap()))
         };
         SimpleController::new(
-            Arc::clone(&db_controller),
             Arc::clone(&events_db),
             key_manager,
             oobi_root.path(),
@@ -148,7 +139,6 @@ pub async fn watcher_forward_ksn() -> Result<(), ActorError> {
         // Create test db and event processor.
         let root = Builder::new().prefix("test-db1").tempdir().unwrap();
         std::fs::create_dir_all(root.path()).unwrap();
-        let db_controller = Arc::new(SledEventDatabase::new(root.path()).unwrap());
         let events_db_path = Builder::new().tempfile().unwrap();
         let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
 
@@ -159,7 +149,6 @@ pub async fn watcher_forward_ksn() -> Result<(), ActorError> {
             Arc::new(Mutex::new(CryptoBox::new().unwrap()))
         };
         SimpleController::new(
-            Arc::clone(&db_controller),
             Arc::clone(&events_db),
             key_manager,
             oobi_root.path(),
@@ -173,9 +162,6 @@ pub async fn watcher_forward_ksn() -> Result<(), ActorError> {
     // Controller about which we will ask
     let mut about_controller = {
         // Create test db and event processor.
-        let root = Builder::new().prefix("test-db2").tempdir().unwrap();
-        let db_controller = Arc::new(SledEventDatabase::new(root.path()).unwrap());
-
         let events_db_path = Builder::new().tempfile().unwrap();
         let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
 
@@ -186,7 +172,6 @@ pub async fn watcher_forward_ksn() -> Result<(), ActorError> {
             Arc::new(Mutex::new(CryptoBox::new().unwrap()))
         };
         SimpleController::new(
-            Arc::clone(&db_controller),
             Arc::clone(&events_db),
             key_manager,
             oobi_root.path(),

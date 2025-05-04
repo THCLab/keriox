@@ -10,7 +10,7 @@ use keri_core::{
         parse_reply_stream, prelude::*, process_reply, process_signed_exn, process_signed_query,
         simple_controller::PossibleResponse,
     },
-    database::{redb::RedbDatabase, sled::DbError, EventDatabase},
+    database::{mailbox::MailboxData, redb::RedbDatabase, sled::DbError, EventDatabase},
     error::Error,
     event::KeyEvent,
     event_message::{
@@ -81,12 +81,8 @@ impl Notifier for WitnessReceiptGenerator {
 }
 
 impl WitnessReceiptGenerator {
-    pub fn new(
-        signer: Arc<Signer>,
-        db: Arc<SledEventDatabase>,
-        events_db: Arc<RedbDatabase>,
-    ) -> Self {
-        let storage = EventStorage::new(events_db.clone(), db.clone());
+    pub fn new(signer: Arc<Signer>, events_db: Arc<RedbDatabase>) -> Self {
+        let storage = EventStorage::new(events_db.clone());
         let prefix = BasicPrefix::Ed25519NT(signer.public_key());
         Self {
             prefix,
@@ -161,20 +157,17 @@ impl Witness {
         escrow_path.push("escrow");
 
         let prefix = BasicPrefix::Ed25519NT(signer.public_key());
-        let db = Arc::new(SledEventDatabase::new(events_path.as_path())?);
 
         events_database_path.push("events_database");
         let _file = File::create(&events_database_path).unwrap();
 
         let events_db =
             Arc::new(RedbDatabase::new(&events_database_path).map_err(|_| Error::DbError)?);
-        let mut witness_processor =
-            WitnessProcessor::new(events_db.clone(), db.clone(), escrow_config);
-        let event_storage = Arc::new(EventStorage::new(events_db.clone(), db.clone()));
+        let mut witness_processor = WitnessProcessor::new(events_db.clone(), escrow_config);
+        let event_storage = Arc::new(EventStorage::new(events_db.clone()));
 
         let receipt_generator = Arc::new(WitnessReceiptGenerator::new(
             signer.clone(),
-            db,
             events_db.clone(),
         ));
         witness_processor.register_observer(

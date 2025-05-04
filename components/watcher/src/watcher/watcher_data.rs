@@ -65,6 +65,7 @@ pub struct WatcherData {
     /// Watcher will update TEL of the identifiers (registry_id, vc_id) that have been sent to this channel.
     pub tel_tx: Sender<(IdentifierPrefix, IdentifierPrefix)>,
     pub(super) tel_to_forward: Arc<TelToForward>,
+    reply_escrow: Arc<ReplyEscrow<RedbDatabase>>,
 }
 
 impl WatcherData {
@@ -91,7 +92,6 @@ impl WatcherData {
                 .unwrap_or_else(|| Ok(Signer::new()))?,
         );
 
-        let db = Arc::new(SledEventDatabase::new(db_path.clone())?);
         let events_db = {
             let mut path = db_path.clone();
             path.push("events_database");
@@ -105,10 +105,10 @@ impl WatcherData {
             OobiManager::new(&path)
         };
 
-        let (mut notification_bus, _) =
-            default_escrow_bus(events_db.clone(), db.clone(), escrow_config);
+        let (mut notification_bus, _) = default_escrow_bus(events_db.clone(), escrow_config);
+        let reply_escrow = Arc::new(ReplyEscrow::new(events_db.clone()));
         notification_bus.register_observer(
-            Arc::new(ReplyEscrow::new(db.clone(), events_db.clone())),
+            reply_escrow.clone(),
             vec![
                 JustNotification::KeyEventAdded,
                 JustNotification::KsnOutOfOrder,
@@ -116,9 +116,9 @@ impl WatcherData {
         );
 
         let prefix = BasicPrefix::Ed25519NT(signer.public_key()); // watcher uses non transferable key
-        let processor = BasicProcessor::new(events_db.clone(), db.clone(), Some(notification_bus));
+        let processor = BasicProcessor::new(events_db.clone(), Some(notification_bus));
 
-        let storage = Arc::new(EventStorage::new(events_db, db));
+        let storage = Arc::new(EventStorage::new(events_db));
 
         // construct witness loc scheme oobi
         let loc_scheme = LocationScheme::new(
@@ -155,6 +155,7 @@ impl WatcherData {
             ),
             tel_tx,
             tel_transport,
+            reply_escrow,
         });
         Ok(watcher.clone())
     }
@@ -338,9 +339,8 @@ impl WatcherData {
         let _ = self.query_state(id).await;
 
         let escrowed_replies = self
-            .event_storage
-            .escrow_db
-            .get_escrowed_replys(&id)
+            .reply_escrow
+            .get_all(&id)
             .into_iter()
             .flatten()
             .collect_vec();

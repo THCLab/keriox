@@ -39,14 +39,8 @@ impl Processor for BasicProcessor<RedbDatabase> {
 }
 
 impl BasicProcessor<RedbDatabase> {
-    pub fn new(
-        db: Arc<RedbDatabase>,
-        notification_bus: Option<NotificationBus>,
-    ) -> Self {
-        let processor = EventProcessor::new(
-            notification_bus.unwrap_or_default(),
-            db.clone(),
-        );
+    pub fn new(db: Arc<RedbDatabase>, notification_bus: Option<NotificationBus>) -> Self {
+        let processor = EventProcessor::new(notification_bus.unwrap_or_default(), db.clone());
         Self(processor)
     }
 

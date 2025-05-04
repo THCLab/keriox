@@ -3,9 +3,9 @@ use std::convert::TryFrom;
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "oobi")]
-use crate::oobi::OobiManager;
-#[cfg(feature = "oobi")]
 use crate::database::redb::RedbDatabase;
+#[cfg(feature = "oobi")]
+use crate::oobi::OobiManager;
 #[cfg(feature = "query")]
 use crate::{
     database::EventDatabase,
@@ -113,9 +113,7 @@ pub fn process_signed_oobi(
 ) -> Result<(), Error> {
     use crate::processor::validator::EventValidator;
 
-    let validator = EventValidator::new(
-        event_storage.events_db.clone(),
-    );
+    let validator = EventValidator::new(event_storage.events_db.clone());
     // check signature
     validator.verify(&signed_oobi.reply.encode()?, &signed_oobi.signature)?;
     // check digest

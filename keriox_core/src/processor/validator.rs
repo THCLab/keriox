@@ -68,7 +68,6 @@ impl EventValidator<RedbDatabase> {
     }
 }
 impl<D: EventDatabase> EventValidator<D> {
-
     /// Validate Event
     ///
     /// Validates a Key Event against the latest state

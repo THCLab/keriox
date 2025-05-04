@@ -1,16 +1,17 @@
 use std::sync::Arc;
 
 use super::compute_state;
+#[cfg(feature = "mailbox")]
+use crate::database::mailbox::MailboxData;
 #[cfg(feature = "query")]
 use crate::query::{
     key_state_notice::KeyStateNotice, mailbox::QueryArgsMbx, reply_event::SignedReply,
 };
-#[cfg(feature = "mailbox")]
-use crate::database::mailbox::MailboxData;
 use crate::{
     actor::prelude::Message,
     database::{
-        redb::RedbDatabase, timestamped::{Timestamped, TimestampedSignedEventMessage}
+        redb::RedbDatabase,
+        timestamped::{Timestamped, TimestampedSignedEventMessage},
     },
     error::Error,
     event::{
@@ -46,7 +47,6 @@ impl EventStorage<RedbDatabase> {
     pub fn new(events_db: Arc<RedbDatabase>) -> Self {
         let mailbox_data = MailboxData::new(events_db.db.clone()).unwrap();
         Self {
-            // escrow_db,
             events_db,
             mailbox_data: mailbox_data,
         }
@@ -171,7 +171,8 @@ impl<D: EventDatabase> EventStorage<D> {
         receipient: &IdentifierPrefix,
         to_forward: SignedEventMessage,
     ) -> Result<(), Error> {
-        self.mailbox_data.add_mailbox_multisig(receipient, to_forward)?;
+        self.mailbox_data
+            .add_mailbox_multisig(receipient, to_forward)?;
 
         Ok(())
     }

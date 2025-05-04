@@ -65,11 +65,7 @@ fn test_out_of_order_cleanup() -> Result<(), Error> {
         )?;
 
         std::fs::create_dir_all(path).unwrap();
-        (
-            processor,
-            EventStorage::new(events_db.clone()),
-            ooo_escrow,
-        )
+        (processor, EventStorage::new(events_db.clone()), ooo_escrow)
     };
     let id: IdentifierPrefix = "EO8cED9H5XPqBdoVatgBkEuSP8yXic7HtWpkex-9e0sL".parse()?;
 
@@ -157,11 +153,7 @@ fn test_partially_sign_escrow_cleanup() -> Result<(), Error> {
         ));
         processor.register_observer(ps_escrow.clone(), &[JustNotification::PartiallySigned])?;
 
-        (
-            processor,
-            EventStorage::new(events_db),
-            ps_escrow,
-        )
+        (processor, EventStorage::new(events_db), ps_escrow)
     };
 
     let parse_messagee = |raw_event| {

@@ -1,7 +1,5 @@
-use std::{sync::Arc, time::Duration};
-
 use keri_core::{
-    database::{redb::RedbDatabase, sled::SledEventDatabase, EventDatabase},
+    database::{redb::RedbDatabase, EventDatabase},
     error::Error,
     event_message::signed_event_message::{Notice, SignedEventMessage},
     processor::{
@@ -15,6 +13,7 @@ use keri_core::{
     },
     query::reply_event::SignedReply,
 };
+use std::{sync::Arc, time::Duration};
 
 pub struct WitnessProcessor {
     processor: EventProcessor<<WitnessProcessor as keri_core::processor::Processor>::Database>,
@@ -62,15 +61,10 @@ impl Default for WitnessEscrowConfig {
 }
 
 impl WitnessProcessor {
-    pub fn new(
-        redb: Arc<RedbDatabase>,
-        sled_db: Arc<SledEventDatabase>,
-        escrow_config: WitnessEscrowConfig,
-    ) -> Self {
+    pub fn new(redb: Arc<RedbDatabase>, escrow_config: WitnessEscrowConfig) -> Self {
         let mut bus = NotificationBus::new();
         let partially_signed_escrow = Arc::new(PartiallySignedEscrow::new(
             redb.clone(),
-            sled_db.clone(),
             escrow_config.partially_signed_timeout,
         ));
         bus.register_observer(
@@ -79,7 +73,6 @@ impl WitnessProcessor {
         );
         let out_of_order_escrow = Arc::new(MaybeOutOfOrderEscrow::new(
             redb.clone(),
-            sled_db.clone(),
             escrow_config.out_of_order_timeout,
         ));
         bus.register_observer(
@@ -91,7 +84,6 @@ impl WitnessProcessor {
         );
         let deleating_escrow = Arc::new(DelegationEscrow::new(
             redb.clone(),
-            sled_db.clone(),
             escrow_config.delegation_timeout,
         ));
         bus.register_observer(
@@ -101,21 +93,20 @@ impl WitnessProcessor {
                 JustNotification::KeyEventAdded,
             ],
         );
-        let processor = EventProcessor::new(sled_db, bus, redb.clone());
+        let processor = EventProcessor::new(bus, redb.clone());
         Self { processor }
     }
 
     /// Witness processing strategy
     ///
     /// Ignore not fully witness error and accept not fully witnessed events.
-    fn witness_processing_strategy<D: EventDatabase>(
-        db: Arc<D>,
-        escrow_db: Arc<SledEventDatabase>,
+    fn witness_processing_strategy(
+        db: Arc<RedbDatabase>,
         publisher: &NotificationBus,
         signed_event: SignedEventMessage,
     ) -> Result<(), Error> {
         let id = &signed_event.event_message.data.get_prefix();
-        let validator = EventValidator::new(escrow_db.clone(), db.clone());
+        let validator = EventValidator::new(db.clone());
         match validator.validate_event(&signed_event) {
             Ok(_) => {
                 db.add_kel_finalized_event(signed_event.clone(), id)

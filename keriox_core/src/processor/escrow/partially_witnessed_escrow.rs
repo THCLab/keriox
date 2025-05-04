@@ -27,7 +27,7 @@ pub struct PartiallyWitnessedEscrow {
 }
 
 impl PartiallyWitnessedEscrow {
-    pub fn new(db: Arc<RedbDatabase>,_duration: Duration) -> Self {
+    pub fn new(db: Arc<RedbDatabase>, _duration: Duration) -> Self {
         let pwe_escrow_db = SnKeyEscrow::new(
             Arc::new(SnKeyDatabase::new(db.db.clone(), "partially_signed_escrow").unwrap()),
             db.log_db.clone(),

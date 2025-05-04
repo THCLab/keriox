@@ -31,10 +31,7 @@ pub struct DelegationEscrow<D: EventDatabase> {
 }
 
 impl DelegationEscrow<RedbDatabase> {
-    pub fn new(
-        db: Arc<RedbDatabase>,
-        _duration: Duration,
-    ) -> Self {
+    pub fn new(db: Arc<RedbDatabase>, _duration: Duration) -> Self {
         let escrow_db = SnKeyEscrow::new(
             Arc::new(SnKeyDatabase::new(db.db.clone(), "delegation_escrow").unwrap()),
             db.log_db.clone(),

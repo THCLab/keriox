@@ -62,12 +62,6 @@ impl KnownEvents {
             Arc::new(RedbDatabase::new(&path)?)
         };
 
-        let db = {
-            let mut path = db_path.clone();
-            path.push("events");
-            Arc::new(SledEventDatabase::new(&path)?)
-        };
-
         let oobi_manager = {
             let mut path = db_path.clone();
             path.push("oobis");
@@ -83,9 +77,9 @@ impl KnownEvents {
                 _delegation_escrow,
                 _duplicates,
             ),
-        ) = default_escrow_bus(event_database.clone(), db.clone(), escrow_config);
+        ) = default_escrow_bus(event_database.clone(), escrow_config);
 
-        let kel_storage = Arc::new(EventStorage::new(event_database.clone(), db.clone()));
+        let kel_storage = Arc::new(EventStorage::new(event_database.clone()));
 
         // Initiate tel and it's escrows
         let tel_events_db = {
@@ -120,11 +114,7 @@ impl KnownEvents {
         );
 
         let controller = Self {
-            processor: BasicProcessor::new(
-                event_database.clone(),
-                db.clone(),
-                Some(notification_bus),
-            ),
+            processor: BasicProcessor::new(event_database.clone(), Some(notification_bus)),
             storage: kel_storage,
             oobi_manager,
             partially_witnessed_escrow,

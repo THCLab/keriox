@@ -24,10 +24,7 @@ pub struct MaybeOutOfOrderEscrow {
 }
 
 impl MaybeOutOfOrderEscrow {
-    pub fn new(
-        db: Arc<RedbDatabase>,
-        _duration: Duration,
-    ) -> Self {
+    pub fn new(db: Arc<RedbDatabase>, _duration: Duration) -> Self {
         let ooo_escrowdb = SnKeyEscrow::new(
             Arc::new(SnKeyDatabase::new(db.db.clone(), "out_of_order_escrow").unwrap()),
             db.log_db.clone(),
@@ -232,11 +229,7 @@ fn test_out_of_order() -> Result<(), Error> {
                 JustNotification::KeyEventAdded,
             ],
         )?;
-        (
-            processor,
-            EventStorage::new(events_db.clone()),
-            new_ooo,
-        )
+        (processor, EventStorage::new(events_db.clone()), new_ooo)
     };
     let id: IdentifierPrefix = "EO8cED9H5XPqBdoVatgBkEuSP8yXic7HtWpkex-9e0sL".parse()?;
 

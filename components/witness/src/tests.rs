@@ -7,7 +7,7 @@ use keri_core::{
         simple_controller::{PossibleResponse, SimpleController},
         SignedQueryError,
     },
-    database::{escrow::EscrowDb, redb::RedbDatabase, sled::SledEventDatabase},
+    database::{redb::RedbDatabase, sled::SledEventDatabase},
     error::Error,
     event::sections::{
         seal::{EventSeal, Seal},
@@ -42,7 +42,6 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
         // Create test db and event processor.
         let root = Builder::new().prefix("test-db").tempdir().unwrap();
         std::fs::create_dir_all(root.path()).unwrap();
-        let db_controller = Arc::new(SledEventDatabase::new(root.path()).unwrap());
 
         let events_root = Builder::new().tempfile().unwrap();
         let events_db = Arc::new(RedbDatabase::new(events_root.path()).unwrap());
@@ -54,7 +53,6 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
             Arc::new(Mutex::new(CryptoBox::new()?))
         };
         SimpleController::new(
-            Arc::clone(&db_controller),
             Arc::clone(&events_db),
             key_manager,
             oobi_root.path(),
@@ -111,7 +109,7 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
             let not = Notice::Event(inception_event.clone());
             w.process_notice(not).unwrap();
             w.event_storage
-                .escrow_db
+                .mailbox_data
                 .get_mailbox_receipts(controller.prefix())
                 .into_iter()
                 .flatten()
@@ -197,7 +195,7 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
     // first_witness.respond(signer_arc.clone())?;
     let first_receipt = first_witness
         .event_storage
-        .escrow_db
+        .mailbox_data
         .get_mailbox_receipts(controller.prefix())
         .unwrap()
         .map(Notice::NontransferableRct)
@@ -244,13 +242,11 @@ fn test_qry_rpy() -> Result<(), ActorError> {
     let root = Builder::new().prefix("test-alice-db").tempdir().unwrap();
     let redb_root = Builder::new().tempfile().unwrap();
     let alice_oobi_root = Builder::new().prefix("test-db").tempdir().unwrap();
-    let alice_db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
     let alice_redb = Arc::new(RedbDatabase::new(redb_root.path()).unwrap());
     let root = Builder::new().prefix("test_bob-db").tempdir().unwrap();
     let bob_oobi_root = Builder::new().prefix("test-db").tempdir().unwrap();
     let bob_redb_root = Builder::new().tempfile().unwrap();
     let bob_redb = Arc::new(RedbDatabase::new(bob_redb_root.path()).unwrap());
-    let bob_db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
 
     let witness_root = Builder::new().prefix("test-db").tempdir().unwrap();
     let witness_oobi_root = Builder::new().prefix("test-db").tempdir().unwrap();
@@ -272,7 +268,6 @@ fn test_qry_rpy() -> Result<(), ActorError> {
 
     // Init alice.
     let mut alice = SimpleController::new(
-        Arc::clone(&alice_db),
         Arc::clone(&alice_redb),
         Arc::clone(&alice_key_manager),
         alice_oobi_root.path(),
@@ -286,7 +281,6 @@ fn test_qry_rpy() -> Result<(), ActorError> {
 
     // Init bob.
     let mut bob = SimpleController::new(
-        Arc::clone(&bob_db),
         Arc::clone(&bob_redb),
         Arc::clone(&bob_key_manager),
         bob_oobi_root.path(),
@@ -304,7 +298,7 @@ fn test_qry_rpy() -> Result<(), ActorError> {
     // send receipts to alice
     let receipt_to_alice = witness
         .event_storage
-        .escrow_db
+        .mailbox_data
         .get_mailbox_receipts(alice.prefix())
         .unwrap()
         .map(Notice::NontransferableRct)
@@ -443,13 +437,11 @@ pub fn test_key_state_notice() -> Result<(), Error> {
         let root = Builder::new().prefix("test-db").tempdir().unwrap();
         let oobi_root = Builder::new().prefix("alice-db-oobi").tempdir().unwrap();
         std::fs::create_dir_all(root.path()).unwrap();
-        let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
         let bob_redb_root = Builder::new().tempfile().unwrap();
         let bob_redb = Arc::new(RedbDatabase::new(bob_redb_root.path()).unwrap());
 
         let bob_key_manager = Arc::new(Mutex::new(CryptoBox::new()?));
         SimpleController::new(
-            Arc::clone(&db),
             Arc::clone(&bob_redb),
             Arc::clone(&bob_key_manager),
             oobi_root.path(),
@@ -460,13 +452,12 @@ pub fn test_key_state_notice() -> Result<(), Error> {
     let (alice_processor, alice_storage) = {
         let root = Builder::new().prefix("test-db2").tempdir().unwrap();
         std::fs::create_dir_all(root.path()).unwrap();
-        let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
 
         let alice_redb_root = Builder::new().tempfile().unwrap();
         let alice_redb = Arc::new(RedbDatabase::new(alice_redb_root.path()).unwrap());
         (
-            BasicProcessor::new(alice_redb.clone(), db.clone(), None),
-            EventStorage::new(alice_redb.clone(), db.clone()),
+            BasicProcessor::new(alice_redb.clone(), None),
+            EventStorage::new(alice_redb.clone()),
         )
     };
 
@@ -569,12 +560,10 @@ fn test_mbx() {
                 .tempdir()
                 .unwrap();
             std::fs::create_dir_all(root.path()).unwrap();
-            let db_controller = Arc::new(SledEventDatabase::new(root.path()).unwrap());
             let redb_root = Builder::new().tempfile().unwrap();
             let redb = Arc::new(RedbDatabase::new(redb_root.path()).unwrap());
             let key_manager = Arc::new(Mutex::new(CryptoBox::new().unwrap()));
             SimpleController::new(
-                Arc::clone(&db_controller),
                 Arc::clone(&redb),
                 key_manager,
                 oobi_root.path(),
@@ -651,12 +640,10 @@ fn test_invalid_notice() {
                 .tempdir()
                 .unwrap();
             std::fs::create_dir_all(root.path()).unwrap();
-            let db_controller = Arc::new(SledEventDatabase::new(root.path()).unwrap());
             let redb_root = Builder::new().tempfile().unwrap();
             let redb = Arc::new(RedbDatabase::new(redb_root.path()).unwrap());
             let key_manager = Arc::new(Mutex::new(CryptoBox::new().unwrap()));
             SimpleController::new(
-                Arc::clone(&db_controller),
                 Arc::clone(&redb),
                 key_manager,
                 oobi_root.path(),
@@ -749,14 +736,11 @@ pub fn test_multisig() -> Result<(), ActorError> {
     let mut cont1 = {
         // Create test db and event processor.
         let cont1_key_manager = Arc::new(Mutex::new(CryptoBox::new()?));
-        let root = Builder::new().prefix("test-db").tempdir().unwrap();
         let oobi_root = Builder::new().prefix("cont1-db-oobi").tempdir().unwrap();
-        let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
         let redb_root = Builder::new().tempfile().unwrap();
         let redb = Arc::new(RedbDatabase::new(redb_root.path()).unwrap());
 
         SimpleController::new(
-            Arc::clone(&db),
             Arc::clone(&redb),
             Arc::clone(&cont1_key_manager),
             oobi_root.path(),
@@ -777,14 +761,11 @@ pub fn test_multisig() -> Result<(), ActorError> {
     let mut cont2 = {
         // Create test db and event processor.
         let cont2_key_manager = Arc::new(Mutex::new(CryptoBox::new()?));
-        let root = Builder::new().prefix("test-db").tempdir().unwrap();
         let oobi_root = Builder::new().prefix("cont2-db-oobi").tempdir().unwrap();
-        let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
         let redb_root = Builder::new().tempfile().unwrap();
         let redb = Arc::new(RedbDatabase::new(redb_root.path()).unwrap());
 
         SimpleController::new(
-            Arc::clone(&db),
             Arc::clone(&redb),
             Arc::clone(&cont2_key_manager),
             oobi_root.path(),
@@ -899,12 +880,10 @@ fn setup_controller(witness: &Witness) -> Result<SimpleController<CryptoBox, Red
         let cont1_key_manager = Arc::new(Mutex::new(CryptoBox::new()?));
         let root = Builder::new().prefix("db-root").tempdir().unwrap();
         let oobi_root = Builder::new().prefix("cont1-db-oobi").tempdir().unwrap();
-        let db = Arc::new(SledEventDatabase::new(root.path()).unwrap());
         let redb_root = Builder::new().tempfile().unwrap();
         let redb = Arc::new(RedbDatabase::new(redb_root.path()).unwrap());
 
         SimpleController::new(
-            Arc::clone(&db),
             Arc::clone(&redb),
             Arc::clone(&cont1_key_manager),
             oobi_root.path(),

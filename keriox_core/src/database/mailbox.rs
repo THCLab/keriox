@@ -2,12 +2,15 @@ use std::{marker::PhantomData, sync::Arc};
 
 use redb::{Database, TableDefinition};
 
-use crate::{event_message::signed_event_message::{
-    SignedEventMessage, SignedNontransferableReceipt,
-}, prefix::IdentifierPrefix};
+use crate::{
+    event_message::signed_event_message::{SignedEventMessage, SignedNontransferableReceipt},
+    prefix::IdentifierPrefix,
+};
 
-use super::{redb::{escrow_database::get_current_timestamp, RedbError}, timestamped::TimestampedSignedEventMessage};
-
+use super::{
+    redb::{escrow_database::get_current_timestamp, RedbError},
+    timestamped::TimestampedSignedEventMessage,
+};
 
 /// Storage for elements in mailbox.
 pub struct MailboxTopicDatabase<D: serde::Serialize + serde::de::DeserializeOwned> {
@@ -59,16 +62,12 @@ impl<D: serde::Serialize + serde::de::DeserializeOwned> MailboxTopicDatabase<D> 
         Ok(())
     }
 
-    pub fn get(
-        &self,
-        identifier: &IdentifierPrefix,
-        sn: u64,
-    ) -> Result<Option<D>, RedbError> {
+    pub fn get(&self, identifier: &IdentifierPrefix, sn: u64) -> Result<Option<D>, RedbError> {
         let read_txn = self.db.begin_read()?;
         let table = read_txn.open_table(self.sn_key_table)?;
-        Ok(table.get((identifier.to_string().as_str(), sn))?
-            .map(|value| serde_cbor::from_slice(value.value()).unwrap()
-            ))
+        Ok(table
+            .get((identifier.to_string().as_str(), sn))?
+            .map(|value| serde_cbor::from_slice(value.value()).unwrap()))
     }
 
     pub fn get_grater_then(
@@ -110,8 +109,8 @@ impl MailboxData {
         Ok(Self {
             mailbox_receipts: MailboxTopicDatabase::new(db.clone(), "mbxrct")?,
             mailbox_replies: MailboxTopicDatabase::new(db.clone(), "mbxrpy")?,
-            mailbox_multisig: MailboxTopicDatabase::new(db.clone(),"mbxm")?,
-            mailbox_delegate: MailboxTopicDatabase::new(db.clone(),"mbxd")?,
+            mailbox_multisig: MailboxTopicDatabase::new(db.clone(), "mbxm")?,
+            mailbox_delegate: MailboxTopicDatabase::new(db.clone(), "mbxd")?,
             db,
         })
     }
@@ -133,7 +132,11 @@ impl MailboxData {
         Some(self.mailbox_receipts.get_grater_then(key, 0).unwrap())
     }
 
-    pub fn add_mailbox_reply(&self, key: &IdentifierPrefix, reply: SignedEventMessage) -> Result<(), RedbError> {
+    pub fn add_mailbox_reply(
+        &self,
+        key: &IdentifierPrefix,
+        reply: SignedEventMessage,
+    ) -> Result<(), RedbError> {
         // TODO what if already is saved?
         self.mailbox_replies.insert(key, 0, &reply)
     }
@@ -145,7 +148,11 @@ impl MailboxData {
         Some(self.mailbox_replies.get_grater_then(key, 0).unwrap())
     }
 
-    pub fn add_mailbox_multisig(&self, key: &IdentifierPrefix, event: SignedEventMessage) -> Result<(), RedbError> {
+    pub fn add_mailbox_multisig(
+        &self,
+        key: &IdentifierPrefix,
+        event: SignedEventMessage,
+    ) -> Result<(), RedbError> {
         self.mailbox_multisig.insert(key, 0, &event.into())
     }
 

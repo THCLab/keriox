@@ -22,10 +22,7 @@ pub struct PartiallySignedEscrow<D: EventDatabase> {
 }
 
 impl PartiallySignedEscrow<RedbDatabase> {
-    pub fn new(
-        db: Arc<RedbDatabase>,
-        _duration: Duration,
-    ) -> Self {
+    pub fn new(db: Arc<RedbDatabase>, _duration: Duration) -> Self {
         let escrow_db = SnKeyEscrow::new(
             Arc::new(SnKeyDatabase::new(db.db.clone(), "partially_signed_escrow").unwrap()),
             db.log_db.clone(),
@@ -235,7 +232,7 @@ mod tests {
 
             std::fs::create_dir_all(path).unwrap();
             (
-                BasicProcessor::new(events_db.clone(),  None),
+                BasicProcessor::new(events_db.clone(), None),
                 EventStorage::new(events_db.clone()),
                 ooo_escrow,
                 ps_escrow,
@@ -287,11 +284,7 @@ mod tests {
             ));
             processor.register_observer(ps_escrow.clone(), &[JustNotification::PartiallySigned])?;
 
-            (
-                processor,
-                EventStorage::new(events_db.clone()),
-                ps_escrow,
-            )
+            (processor, EventStorage::new(events_db.clone()), ps_escrow)
         };
 
         let parse_messagee = |raw_event| {

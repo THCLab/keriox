@@ -20,9 +20,7 @@ use self::{
 #[cfg(feature = "query")]
 use crate::query::reply_event::{ReplyRoute, SignedReply};
 use crate::{
-    database::{
-        redb::RedbDatabase, timestamped::TimestampedSignedEventMessage, EventDatabase
-    },
+    database::{redb::RedbDatabase, timestamped::TimestampedSignedEventMessage, EventDatabase},
     error::Error,
     event::receipt::Receipt,
     event_message::signed_event_message::{
@@ -84,7 +82,6 @@ impl EventProcessor<RedbDatabase> {
 }
 
 impl<D: EventDatabase> EventProcessor<D> {
-
     pub fn register_observer(
         &mut self,
         observer: Arc<dyn Notifier + Send + Sync>,
