@@ -10,7 +10,10 @@ use keri_core::{
         parse_reply_stream, prelude::*, process_reply, process_signed_exn, process_signed_query,
         simple_controller::PossibleResponse,
     },
-    database::{mailbox::MailboxData, redb::RedbDatabase, sled::DbError, EventDatabase},
+    database::{
+        redb::{RedbDatabase, RedbError},
+        EventDatabase,
+    },
     error::Error,
     event::KeyEvent,
     event_message::{
@@ -120,11 +123,17 @@ pub enum WitnessError {
     #[error(transparent)]
     TelError(#[from] teliox::error::Error),
 
-    #[error(transparent)]
-    DatabaseError(#[from] DbError),
+    #[error("Db error: {0}")]
+    DatabaseError(String),
 
     #[error("Signing error")]
     SigningError,
+}
+
+impl From<RedbError> for WitnessError {
+    fn from(err: RedbError) -> Self {
+        WitnessError::DatabaseError(err.to_string())
+    }
 }
 
 pub struct Witness {
@@ -189,7 +198,9 @@ impl Witness {
             let mut tel_path = events_path.clone();
             tel_path.push("tel");
             tel_path.push("escrow");
-            Arc::new(EscrowDb::new(&tel_path)?)
+            Arc::new(
+                EscrowDb::new(&tel_path).map_err(|e| WitnessError::DatabaseError(e.to_string()))?,
+            )
         };
         let tel_storage = Arc::new(TelEventStorage::new(tel_events_db));
         let (tel_bus, _missing_issuer, _out_of_order, _missing_registy) = default_escrow_bus(
@@ -212,7 +223,7 @@ impl Witness {
             signer,
             event_storage,
             receipt_generator,
-            oobi_manager: OobiManager::new(oobi_path),
+            oobi_manager: OobiManager::new(events_db.clone()),
             tel,
         })
     }
@@ -269,23 +280,19 @@ impl Witness {
         )
     }
 
-    pub fn get_loc_scheme_for_id(
-        &self,
-        eid: &IdentifierPrefix,
-    ) -> Result<Option<Vec<SignedReply>>, Error> {
-        Ok(self.oobi_manager.get_loc_scheme(eid)?.map(|oobis_to_sign| {
-            oobis_to_sign
-                .iter()
-                .map(|oobi_to_sing| {
-                    let signature = self.signer.sign(oobi_to_sing.encode().unwrap()).unwrap();
-                    SignedReply::new_nontrans(
-                        oobi_to_sing.clone(),
-                        self.prefix.clone(),
-                        SelfSigningPrefix::Ed25519Sha512(signature),
-                    )
-                })
-                .collect()
-        }))
+    pub fn get_loc_scheme_for_id(&self, eid: &IdentifierPrefix) -> Result<Vec<SignedReply>, Error> {
+        let oobis_to_sign = self.oobi_manager.get_loc_scheme(eid)?;
+        oobis_to_sign
+            .iter()
+            .map(|oobi_to_sing| {
+                let signature = self.signer.sign(oobi_to_sing.encode().unwrap()).unwrap();
+                Ok(SignedReply::new_nontrans(
+                    oobi_to_sing.clone(),
+                    self.prefix.clone(),
+                    SelfSigningPrefix::Ed25519Sha512(signature),
+                ))
+            })
+            .collect()
     }
 
     pub fn get_signed_ksn_for_prefix(

@@ -108,8 +108,7 @@ impl AcceptedKsn {
 }
 
 /// Stores incoming Replay messages with inside Key State Notices.  
-/// Events are split into separate tables for reply and signatures,  
-/// with the digest serving as the key in each table.
+/// Key in the table is a digest of the event, and value is the event itself.
 pub(crate) struct KsnLogDatabase {
     db: Arc<Database>,
 }

@@ -32,7 +32,6 @@ impl Identifier {
                         .oobi_manager
                         .get_loc_scheme(&adds.eid)
                         .unwrap_or_default()
-                        .unwrap()
                         .into_iter();
                     Some(locations.filter_map(|rep| {
                         if let ReplyRoute::LocScheme(loc) = rep.data.data {

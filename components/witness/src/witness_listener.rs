@@ -238,8 +238,7 @@ pub mod http_handlers {
     ) -> Result<HttpResponse, ApiError> {
         let loc_scheme = data
             .get_loc_scheme_for_id(&eid)
-            .map_err(ActorError::KeriError)?
-            .unwrap_or_default();
+            .map_err(ActorError::KeriError)?;
         let oobis: Vec<u8> = loc_scheme
             .into_iter()
             .map(|sr| {
@@ -274,7 +273,6 @@ pub mod http_handlers {
                     let location_signed = data
                         .get_loc_scheme_for_id(&eid)
                         .map_err(ActorError::KeriError)?
-                        .unwrap_or_default()
                         .into_iter()
                         .flat_map(|location| {
                             let sed = Message::Op(Op::Reply(location));
@@ -296,14 +294,12 @@ pub mod http_handlers {
             let end_role = data
                 .oobi_manager
                 .get_end_role(&cid, role.clone())
-                .map_err(|e| ActorError::DbError(e))?;
+                .map_err(|e| ActorError::DbError(e.to_string()))?;
             match end_role {
                 Some(role_oobi) => {
                     let location_signed = data
                         .get_loc_scheme_for_id(&eid)
-                        .map_err(ActorError::KeriError)?
-                        .unwrap_or_default();
-
+                        .map_err(ActorError::KeriError)?;
                     // Join end role OOBI with location OOBIs and serialize to CESR.
                     let oobis = role_oobi
                         .into_iter()

@@ -34,19 +34,11 @@ async fn test_watcher_access() -> Result<(), ActorError> {
         let events_db_path = Builder::new().tempfile().unwrap();
         let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
 
-        let oobi_root = Builder::new().prefix("oobi-test-db1").tempdir().unwrap();
-
         let key_manager = {
             use keri_core::signer::CryptoBox;
             Arc::new(Mutex::new(CryptoBox::new().unwrap()))
         };
-        SimpleController::new(
-            Arc::clone(&events_db),
-            key_manager,
-            oobi_root.path(),
-            EscrowConfig::default(),
-        )
-        .unwrap()
+        SimpleController::new(Arc::clone(&events_db), key_manager, EscrowConfig::default()).unwrap()
     };
 
     let asker_icp = asker_controller
@@ -61,19 +53,11 @@ async fn test_watcher_access() -> Result<(), ActorError> {
         let events_db_path = Builder::new().tempfile().unwrap();
         let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
 
-        let oobi_root = Builder::new().prefix("oobi-test-db2").tempdir().unwrap();
-
         let key_manager = {
             use keri_core::signer::CryptoBox;
             Arc::new(Mutex::new(CryptoBox::new().unwrap()))
         };
-        SimpleController::new(
-            Arc::clone(&events_db),
-            key_manager,
-            oobi_root.path(),
-            EscrowConfig::default(),
-        )
-        .unwrap()
+        SimpleController::new(Arc::clone(&events_db), key_manager, EscrowConfig::default()).unwrap()
     };
 
     let about_icp = about_controller
@@ -142,19 +126,11 @@ pub async fn watcher_forward_ksn() -> Result<(), ActorError> {
         let events_db_path = Builder::new().tempfile().unwrap();
         let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
 
-        let oobi_root = Builder::new().prefix("oobi-test-db1").tempdir().unwrap();
-
         let key_manager = {
             use keri_core::signer::CryptoBox;
             Arc::new(Mutex::new(CryptoBox::new().unwrap()))
         };
-        SimpleController::new(
-            Arc::clone(&events_db),
-            key_manager,
-            oobi_root.path(),
-            EscrowConfig::default(),
-        )
-        .unwrap()
+        SimpleController::new(Arc::clone(&events_db), key_manager, EscrowConfig::default()).unwrap()
     };
 
     let asker_icp = asker_controller.incept(None, None, None).unwrap();
@@ -165,19 +141,11 @@ pub async fn watcher_forward_ksn() -> Result<(), ActorError> {
         let events_db_path = Builder::new().tempfile().unwrap();
         let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
 
-        let oobi_root = Builder::new().prefix("oobi-test-db2").tempdir().unwrap();
-
         let key_manager = {
             use keri_core::signer::CryptoBox;
             Arc::new(Mutex::new(CryptoBox::new().unwrap()))
         };
-        SimpleController::new(
-            Arc::clone(&events_db),
-            key_manager,
-            oobi_root.path(),
-            EscrowConfig::default(),
-        )
-        .unwrap()
+        SimpleController::new(Arc::clone(&events_db), key_manager, EscrowConfig::default()).unwrap()
     };
 
     let about_icp = about_controller
@@ -243,7 +211,6 @@ pub async fn watcher_forward_ksn() -> Result<(), ActorError> {
     let witness_oobis = witness
         .oobi_manager
         .get_loc_scheme(&IdentifierPrefix::Basic(witness.prefix.clone()))
-        .unwrap()
         .unwrap();
     let witness_oobi = SignedReply::new_nontrans(
         witness_oobis[0].clone(),

@@ -1,15 +1,13 @@
 use http::StatusCode;
 
+use crate::database::redb::RedbError;
 use crate::event_message::cesr_adapter::ParseError;
 use crate::keys::KeysError;
 #[cfg(feature = "oobi")]
 use crate::oobi::{error::OobiError, Role};
 #[cfg(feature = "oobi")]
 use crate::transport::TransportError;
-use crate::{
-    actor::SignedQueryError, database::sled::DbError, error::Error as KeriError,
-    prefix::IdentifierPrefix,
-};
+use crate::{actor::SignedQueryError, error::Error as KeriError, prefix::IdentifierPrefix};
 use said::version::error::Error as VersionError;
 
 #[derive(Debug, thiserror::Error, serde::Serialize, serde::Deserialize)]
@@ -21,8 +19,8 @@ pub enum ActorError {
     #[error("keri error")]
     KeriError(#[from] KeriError),
 
-    #[error("DB error")]
-    DbError(#[from] DbError),
+    #[error("DB error: {0}")]
+    DbError(String),
 
     #[cfg(feature = "oobi")]
     #[error("OOBI error")]
@@ -73,6 +71,12 @@ impl From<TransportError> for ActorError {
 impl From<VersionError> for ActorError {
     fn from(err: VersionError) -> Self {
         ActorError::KeriError(err.into())
+    }
+}
+
+impl From<RedbError> for ActorError {
+    fn from(err: RedbError) -> Self {
+        ActorError::DbError(err.to_string())
     }
 }
 

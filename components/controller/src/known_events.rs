@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use keri_core::actor::parse_event_stream;
-use keri_core::database::redb::RedbDatabase;
+use keri_core::database::redb::{RedbDatabase, RedbError};
 use keri_core::database::sled::{DbError, SledEventDatabase};
 use keri_core::error::Error;
 use keri_core::event_message::signed_event_message::SignedNontransferableReceipt;
@@ -43,7 +43,7 @@ pub enum OobiRetrieveError {
     #[error("No oobi for {0} identifier")]
     MissingOobi(IdentifierPrefix, Option<Scheme>),
     #[error(transparent)]
-    DbError(#[from] DbError),
+    DbError(#[from] RedbError),
 }
 
 pub struct KnownEvents {
@@ -62,11 +62,7 @@ impl KnownEvents {
             Arc::new(RedbDatabase::new(&path)?)
         };
 
-        let oobi_manager = {
-            let mut path = db_path.clone();
-            path.push("oobis");
-            OobiManager::new(&path)
-        };
+        let oobi_manager = OobiManager::new(event_database.clone());
 
         let (
             mut notification_bus,
@@ -219,7 +215,6 @@ impl KnownEvents {
         let location_schemas: Vec<_> = self
             .oobi_manager
             .get_loc_scheme(id)?
-            .ok_or(OobiRetrieveError::MissingOobi(id.clone(), None))?
             .iter()
             .filter_map(|lc| {
                 if let ReplyRoute::LocScheme(loc_scheme) = lc.get_route() {

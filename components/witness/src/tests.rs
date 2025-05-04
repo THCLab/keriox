@@ -52,12 +52,7 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
             use keri_core::signer::CryptoBox;
             Arc::new(Mutex::new(CryptoBox::new()?))
         };
-        SimpleController::new(
-            Arc::clone(&events_db),
-            key_manager,
-            oobi_root.path(),
-            EscrowConfig::default(),
-        )?
+        SimpleController::new(Arc::clone(&events_db), key_manager, EscrowConfig::default())?
     };
 
     assert_eq!(controller.get_state(), None);
@@ -270,7 +265,6 @@ fn test_qry_rpy() -> Result<(), ActorError> {
     let mut alice = SimpleController::new(
         Arc::clone(&alice_redb),
         Arc::clone(&alice_key_manager),
-        alice_oobi_root.path(),
         EscrowConfig::default(),
     )?;
 
@@ -283,7 +277,6 @@ fn test_qry_rpy() -> Result<(), ActorError> {
     let mut bob = SimpleController::new(
         Arc::clone(&bob_redb),
         Arc::clone(&bob_key_manager),
-        bob_oobi_root.path(),
         EscrowConfig::default(),
     )?;
 
@@ -444,7 +437,6 @@ pub fn test_key_state_notice() -> Result<(), Error> {
         SimpleController::new(
             Arc::clone(&bob_redb),
             Arc::clone(&bob_key_manager),
-            oobi_root.path(),
             EscrowConfig::default(),
         )?
     };
@@ -563,13 +555,7 @@ fn test_mbx() {
             let redb_root = Builder::new().tempfile().unwrap();
             let redb = Arc::new(RedbDatabase::new(redb_root.path()).unwrap());
             let key_manager = Arc::new(Mutex::new(CryptoBox::new().unwrap()));
-            SimpleController::new(
-                Arc::clone(&redb),
-                key_manager,
-                oobi_root.path(),
-                EscrowConfig::default(),
-            )
-            .unwrap()
+            SimpleController::new(Arc::clone(&redb), key_manager, EscrowConfig::default()).unwrap()
         })
         .collect::<Vec<_>>();
 
@@ -643,13 +629,7 @@ fn test_invalid_notice() {
             let redb_root = Builder::new().tempfile().unwrap();
             let redb = Arc::new(RedbDatabase::new(redb_root.path()).unwrap());
             let key_manager = Arc::new(Mutex::new(CryptoBox::new().unwrap()));
-            SimpleController::new(
-                Arc::clone(&redb),
-                key_manager,
-                oobi_root.path(),
-                EscrowConfig::default(),
-            )
-            .unwrap()
+            SimpleController::new(Arc::clone(&redb), key_manager, EscrowConfig::default()).unwrap()
         })
         .collect::<Vec<_>>();
 
@@ -743,7 +723,6 @@ pub fn test_multisig() -> Result<(), ActorError> {
         SimpleController::new(
             Arc::clone(&redb),
             Arc::clone(&cont1_key_manager),
-            oobi_root.path(),
             EscrowConfig::default(),
         )?
     };
@@ -768,7 +747,6 @@ pub fn test_multisig() -> Result<(), ActorError> {
         SimpleController::new(
             Arc::clone(&redb),
             Arc::clone(&cont2_key_manager),
-            oobi_root.path(),
             EscrowConfig::default(),
         )?
     };
@@ -886,7 +864,6 @@ fn setup_controller(witness: &Witness) -> Result<SimpleController<CryptoBox, Red
         SimpleController::new(
             Arc::clone(&redb),
             Arc::clone(&cont1_key_manager),
-            oobi_root.path(),
             EscrowConfig::default(),
         )?
     };

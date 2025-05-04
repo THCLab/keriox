@@ -48,6 +48,7 @@ impl EventStorage<RedbDatabase> {
         let mailbox_data = MailboxData::new(events_db.db.clone()).unwrap();
         Self {
             events_db,
+            #[cfg(feature = "mailbox")]
             mailbox_data: mailbox_data,
         }
     }

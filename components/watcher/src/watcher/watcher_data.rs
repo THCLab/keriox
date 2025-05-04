@@ -2,6 +2,7 @@ use std::{fs::File, sync::Arc};
 
 use futures::future::join_all;
 use itertools::Itertools;
+use keri_core::database::redb::RedbError;
 use keri_core::error::Error;
 use keri_core::oobi::LocationScheme;
 use keri_core::prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix};
@@ -99,11 +100,7 @@ impl WatcherData {
             Arc::new(RedbDatabase::new(&path).unwrap())
         };
 
-        let oobi_manager = {
-            let mut path = db_path.clone();
-            path.push("oobi");
-            OobiManager::new(&path)
-        };
+        let oobi_manager = OobiManager::new(events_db.clone());
 
         let (mut notification_bus, _) = default_escrow_bus(events_db.clone(), escrow_config);
         let reply_escrow = Arc::new(ReplyEscrow::new(events_db.clone()));
@@ -165,8 +162,11 @@ impl WatcherData {
         &self,
         eid: &IdentifierPrefix,
     ) -> Result<Vec<SignedReply>, ActorError> {
-        Ok(match self.oobi_manager.get_loc_scheme(eid)? {
-            Some(oobis_to_sign) => oobis_to_sign
+        let loc_scheme = self.oobi_manager.get_loc_scheme(eid)?;
+        if loc_scheme.is_empty() {
+            return Err(ActorError::NoLocation { id: eid.clone() });
+        } else {
+            loc_scheme
                 .iter()
                 .map(|oobi_to_sing| {
                     let signature = self.signer.sign(oobi_to_sing.encode()?)?;
@@ -176,9 +176,8 @@ impl WatcherData {
                         SelfSigningPrefix::Ed25519Sha512(signature),
                     ))
                 })
-                .collect::<Result<_, Error>>()?,
-            None => return Err(ActorError::NoLocation { id: eid.clone() }),
-        })
+                .collect::<Result<_, ActorError>>()
+        }
     }
 
     pub fn get_end_role_for_id(
@@ -438,10 +437,7 @@ impl WatcherData {
         about_vc_id: &IdentifierPrefix,
         wit_id: IdentifierPrefix,
     ) -> Result<(), ActorError> {
-        let location = self
-            .oobi_manager
-            .get_loc_scheme(&wit_id)?
-            .ok_or(ActorError::NoLocation { id: wit_id })?[0]
+        let location = self.oobi_manager.get_loc_scheme(&wit_id)?[0]
             .clone()
             .data
             .data;
@@ -536,7 +532,7 @@ impl WatcherData {
     }
 
     /// Query roles in oobi manager to check if controller with given ID is allowed to communicate with us.
-    fn check_role(&self, cid: &IdentifierPrefix) -> Result<bool, DbError> {
+    fn check_role(&self, cid: &IdentifierPrefix) -> Result<bool, RedbError> {
         Ok(self
             .oobi_manager
             .get_end_role(cid, Role::Watcher)?
@@ -566,16 +562,18 @@ impl WatcherData {
     }
 
     fn get_loc_schemas(&self, id: &IdentifierPrefix) -> Result<Vec<LocationScheme>, ActorError> {
-        Ok(match self.oobi_manager.get_loc_scheme(id)? {
-            Some(oobis_to_sign) => oobis_to_sign
+        let oobis = self.oobi_manager.get_loc_scheme(id)?;
+        if oobis.is_empty() {
+            Err(ActorError::NoLocation { id: id.clone() })
+        } else {
+            Ok(oobis
                 .iter()
                 .filter_map(|oobi_to_sing| match &oobi_to_sing.data.data {
                     ReplyRoute::LocScheme(loc) => Some(loc.clone()),
                     _ => None,
                 })
-                .collect::<Vec<_>>(),
-            None => return Err(ActorError::NoLocation { id: id.clone() }),
-        })
+                .collect::<Vec<_>>())
+        }
     }
 
     pub async fn send_query_to(

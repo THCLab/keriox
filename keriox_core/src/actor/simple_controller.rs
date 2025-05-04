@@ -222,7 +222,6 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase> {
     pub fn new(
         event_db: Arc<RedbDatabase>,
         key_manager: Arc<Mutex<K>>,
-        oobi_db_path: &Path,
         escrow_config: EscrowConfig,
     ) -> Result<SimpleController<K, RedbDatabase>, Error> {
         let (not_bus, (ooo, _, partially_witnesses, del_escrow, _duplicates)) =
@@ -232,7 +231,7 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase> {
         Ok(SimpleController {
             prefix: IdentifierPrefix::default(),
             key_manager,
-            oobi_manager: OobiManager::new(oobi_db_path),
+            oobi_manager: OobiManager::new(event_db.clone()),
             processor,
             storage: EventStorage::new(event_db.clone()),
             groups: vec![],

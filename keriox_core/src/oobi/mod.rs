@@ -1,4 +1,4 @@
-use std::{convert::TryFrom, path::Path};
+use std::{convert::TryFrom, sync::Arc};
 
 use cesrox::parse_many;
 use serde::{Deserialize, Serialize};
@@ -7,7 +7,7 @@ use url::Url;
 
 use self::error::OobiError;
 use crate::{
-    database::sled::DbError,
+    database::redb::{RedbDatabase, RedbError},
     error::Error,
     event_message::signed_event_message::{Message, Op},
     prefix::IdentifierPrefix,
@@ -88,9 +88,15 @@ pub struct OobiManager {
 }
 
 impl OobiManager {
-    pub fn new(oobi_db_path: &Path) -> Self {
+    pub fn new(events_db: Arc<RedbDatabase>) -> Self {
         Self {
-            store: OobiStorage::new(oobi_db_path).unwrap(),
+            store: OobiStorage::new(events_db.db.clone()).unwrap(),
+        }
+    }
+
+    pub fn new_from_db(db: Arc<redb::Database>) -> Self {
+        Self {
+            store: OobiStorage::new(db.clone()).unwrap(),
         }
     }
 
@@ -104,7 +110,11 @@ impl OobiManager {
                     return Err(OobiError::SignerMismatch);
                 };
 
-                if let Some(old_rpy) = self.store.get_last_loc_scheme(&lc.eid, &lc.scheme)? {
+                if let Some(old_rpy) = self
+                    .store
+                    .get_last_loc_scheme(&lc.eid, &lc.scheme)
+                    .map_err(|err| OobiError::Db(err.to_string()))?
+                {
                     bada_logic(rpy, &old_rpy)?;
                 };
                 Ok(())
@@ -115,7 +125,8 @@ impl OobiManager {
                 };
                 if let Some(old_rpy) = self
                     .store
-                    .get_end_role(&er.cid, er.role)?
+                    .get_end_role(&er.cid, er.role)
+                    .map_err(|err| OobiError::Db(err.to_string()))?
                     .and_then(|rpys| rpys.last().cloned())
                 {
                     bada_logic(rpy, &old_rpy)?;
@@ -144,27 +155,25 @@ impl OobiManager {
             })?;
         Ok(())
     }
-    pub fn save_oobi(&self, signed_oobi: &SignedReply) -> Result<(), DbError> {
+    pub fn save_oobi(&self, signed_oobi: &SignedReply) -> Result<(), RedbError> {
         self.store.save_oobi(signed_oobi)
     }
 
-    pub fn get_loc_scheme(
-        &self,
-        id: &IdentifierPrefix,
-    ) -> Result<Option<Vec<ReplyEvent>>, DbError> {
+    pub fn get_loc_scheme(&self, id: &IdentifierPrefix) -> Result<Vec<ReplyEvent>, RedbError> {
         Ok(self
             .store
             .get_oobis_for_eid(id)?
-            .map(|replies| replies.into_iter().map(|e| e.reply).collect()))
+            .into_iter()
+            .map(|e| e.reply)
+            .collect())
     }
 
     pub fn get_end_role(
         &self,
         id: &IdentifierPrefix,
         role: Role,
-    ) -> Result<Option<Vec<SignedReply>>, DbError> {
-        Ok(self.store.get_end_role(id, role)?)
-        // .map(|e_list| e_list.into_iter().map(|e| e.reply).collect()))
+    ) -> Result<Option<Vec<SignedReply>>, RedbError> {
+        self.store.get_end_role(id, role)
     }
 
     /// Assumes that signatures were verified.
@@ -179,13 +188,15 @@ pub mod error {
     use serde::{Deserialize, Serialize};
     use thiserror::Error;
 
+    use crate::database::redb::RedbError;
+
     #[derive(Error, Debug, Serialize, Deserialize)]
     pub enum OobiError {
         #[error("Keri error")]
         Keri(#[from] crate::error::Error),
 
-        #[error("DB error")]
-        Db(#[from] crate::database::sled::DbError),
+        #[error("DB error: {0}")]
+        Db(String),
 
         #[error("Oobi parse error: {0}")]
         Parse(String),
@@ -199,12 +210,21 @@ pub mod error {
         #[error("invalid message type")]
         InvalidMessageType,
     }
+
+    impl From<RedbError> for OobiError {
+        fn from(err: RedbError) -> Self {
+            OobiError::Db(err.to_string())
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
 
+    use std::sync::Arc;
+
     use cesrox::parse_many;
+    use tempfile::NamedTempFile;
 
     use super::{error::OobiError, EndRole, LocationScheme};
     use crate::{
@@ -222,17 +242,10 @@ mod tests {
     }
 
     fn setup_oobi_manager() -> OobiManager {
-        use std::fs;
+        let tmp_path = NamedTempFile::new().unwrap();
+        let redb = Arc::new(redb::Database::create(tmp_path.path()).unwrap());
 
-        use tempfile::Builder;
-
-        // Create test db and event processor.
-        let root = Builder::new().prefix("test-db").tempdir().unwrap();
-        fs::create_dir_all(root.path()).unwrap();
-        let oobi_root = Builder::new().prefix("oobi-test-db").tempdir().unwrap();
-        fs::create_dir_all(oobi_root.path()).unwrap();
-
-        OobiManager::new(oobi_root.path())
+        OobiManager::new_from_db(redb)
     }
 
     #[test]
@@ -250,10 +263,10 @@ mod tests {
                 .parse::<IdentifierPrefix>()
                 .unwrap(),
         )?;
-        assert!(res.is_some());
+        assert!(!res.is_empty());
 
         assert_eq!(
-        res.unwrap().iter().map(|oobi| oobi.reply.get_route()).collect::<Vec<_>>(),
+        res.iter().map(|oobi| oobi.reply.get_route()).collect::<Vec<_>>(),
         vec![
             ReplyRoute::LocScheme(serde_json::from_str(r#"{"eid":"BuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw","scheme":"http","url":"http://127.0.0.1:5643/"}"#).unwrap()),
             ReplyRoute::LocScheme(serde_json::from_str(r#"{"eid":"BuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw","scheme":"tcp","url":"tcp://127.0.0.1:5633/"}"#).unwrap()),
@@ -277,17 +290,16 @@ mod tests {
                 .parse::<IdentifierPrefix>()
                 .unwrap(),
         )?;
-        assert!(res.is_some());
+        assert!(!res.is_empty());
         // Save timestamps of last accepted oobis.
         let timestamps = res
             .clone()
-            .unwrap()
             .iter()
             .map(|reply| reply.reply.get_timestamp())
             .collect::<Vec<_>>();
 
         assert_eq!(
-        res.unwrap().iter().map(|oobi| oobi.reply.get_route()).collect::<Vec<_>>(),
+        res.iter().map(|oobi| oobi.reply.get_route()).collect::<Vec<_>>(),
         vec![
             ReplyRoute::LocScheme(serde_json::from_str(r#"{"eid":"Bgoq68HCmYNUDgOz4Skvlu306o_NY-NrYuKAVhk3Zh9c","scheme":"http","url":"http://127.0.0.1:5644/"}"#).unwrap()),
             ReplyRoute::LocScheme(serde_json::from_str(r#"{"eid":"Bgoq68HCmYNUDgOz4Skvlu306o_NY-NrYuKAVhk3Zh9c","scheme":"tcp","url":"tcp://127.0.0.1:5634/"}"#).unwrap())
@@ -302,18 +314,17 @@ mod tests {
                 .parse::<IdentifierPrefix>()
                 .unwrap(),
         )?;
-        assert!(res.is_some());
+        assert!(!res.is_empty());
         // Save timestamps of last accepted oobis.
         let timestamps2 = res
             .clone()
-            .unwrap()
             .iter()
             .map(|reply| reply.reply.get_timestamp())
             .collect::<Vec<_>>();
 
         // The same oobis should be in database.
         assert_eq!(
-        res.unwrap().iter().map(|oobi| oobi.reply.get_route()).collect::<Vec<_>>(),
+        res.iter().map(|oobi| oobi.reply.get_route()).collect::<Vec<_>>(),
         vec![
             ReplyRoute::LocScheme(serde_json::from_str(r#"{"eid":"Bgoq68HCmYNUDgOz4Skvlu306o_NY-NrYuKAVhk3Zh9c","scheme":"http","url":"http://127.0.0.1:5644/"}"#).unwrap()),
             ReplyRoute::LocScheme(serde_json::from_str(r#"{"eid":"Bgoq68HCmYNUDgOz4Skvlu306o_NY-NrYuKAVhk3Zh9c","scheme":"tcp","url":"tcp://127.0.0.1:5634/"}"#).unwrap())
