@@ -1,7 +1,6 @@
 use std::{
     convert::TryInto,
     fmt,
-    path::Path,
     sync::{Arc, Mutex},
 };
 

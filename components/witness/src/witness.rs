@@ -153,7 +153,6 @@ impl Witness {
         address: Url,
         signer: Arc<Signer>,
         event_path: &Path,
-        oobi_path: &Path,
         escrow_config: WitnessEscrowConfig,
     ) -> Result<Self, WitnessError> {
         use keri_core::processor::notification::JustNotification;
@@ -232,7 +231,6 @@ impl Witness {
     pub fn setup(
         public_address: url::Url,
         event_db_path: &Path,
-        oobi_db_path: &Path,
         priv_key: Option<String>,
         escrow_config: WitnessEscrowConfig,
     ) -> Result<Self, WitnessError> {
@@ -248,13 +246,7 @@ impl Witness {
             public_address.scheme().parse().unwrap(),
             public_address.clone(),
         );
-        let witness = Witness::new(
-            public_address,
-            signer.clone(),
-            event_db_path,
-            oobi_db_path,
-            escrow_config,
-        )?;
+        let witness = Witness::new(public_address, signer.clone(), event_db_path, escrow_config)?;
         let reply = ReplyEvent::new_reply(
             ReplyRoute::LocScheme(loc_scheme),
             HashFunctionCode::Blake3_256,
@@ -354,6 +346,7 @@ impl Witness {
         &self,
         qry: keri_core::query::query_event::SignedQueryMessage,
     ) -> Result<Option<PossibleResponse>, ActorError> {
+        println!("Processing query: {:?}", qry);
         let response = process_signed_query(qry, &self.event_storage)?;
 
         match response {

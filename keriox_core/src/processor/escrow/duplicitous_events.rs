@@ -25,7 +25,7 @@ impl DuplicitousEvents {
 }
 
 impl Notifier for DuplicitousEvents {
-    fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error> {
+    fn notify(&self, notification: &Notification, _bus: &NotificationBus) -> Result<(), Error> {
         match notification {
             Notification::DupliciousEvent(ev_message) => {
                 self.events.insert(ev_message)?;

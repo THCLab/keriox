@@ -31,7 +31,6 @@ impl WitnessListener {
             witness_data: Arc::new(Witness::setup(
                 pub_addr,
                 event_db_path,
-                oobi_path.as_path(),
                 priv_key,
                 escrow_config,
             )?),

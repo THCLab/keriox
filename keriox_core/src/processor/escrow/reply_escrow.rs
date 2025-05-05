@@ -45,7 +45,7 @@ impl Notifier for ReplyEscrow<RedbDatabase> {
     fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error> {
         match notification {
             Notification::KsnOutOfOrder(rpy) => {
-                if let ReplyRoute::Ksn(_id, ksn) = rpy.reply.get_route() {
+                if let ReplyRoute::Ksn(_id, _ksn) = rpy.reply.get_route() {
                     self.escrowed_reply.insert(rpy)?;
                 };
                 Ok(())
@@ -124,7 +124,7 @@ impl SnKeyReplyEscrow {
         let said = event.reply.digest().unwrap();
         let id = event.reply.get_prefix();
         let sn = match &event.reply.data.data {
-            ReplyRoute::Ksn(identifier_prefix, key_state_notice) => key_state_notice.state.sn,
+            ReplyRoute::Ksn(_identifier_prefix, key_state_notice) => key_state_notice.state.sn,
             _ => todo!(),
         };
         self.escrow.insert(&id, sn, &said)?;
@@ -147,7 +147,7 @@ impl SnKeyReplyEscrow {
         let said = event.digest().unwrap();
         let id = event.get_prefix();
         let sn = match &event.data.data {
-            ReplyRoute::Ksn(identifier_prefix, key_state_notice) => key_state_notice.state.sn,
+            ReplyRoute::Ksn(_identifier_prefix, key_state_notice) => key_state_notice.state.sn,
             _ => todo!(),
         };
         self.escrow.remove(&id, sn, &said).unwrap();

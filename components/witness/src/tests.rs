@@ -46,8 +46,6 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
         let events_root = Builder::new().tempfile().unwrap();
         let events_db = Arc::new(RedbDatabase::new(events_root.path()).unwrap());
 
-        let oobi_root = Builder::new().prefix("test-db").tempdir().unwrap();
-
         let key_manager = {
             use keri_core::signer::CryptoBox;
             Arc::new(Mutex::new(CryptoBox::new()?))
@@ -59,12 +57,10 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
 
     let first_witness = {
         let root_witness = Builder::new().prefix("test-db1").tempdir().unwrap();
-        let oobi_root = Builder::new().prefix("test-db_oobi").tempdir().unwrap();
         std::fs::create_dir_all(root_witness.path()).unwrap();
         Witness::setup(
             url::Url::parse("http://some/url").unwrap(),
             root_witness.path(),
-            oobi_root.path(),
             Some(seed1.into()),
             WitnessEscrowConfig::default(),
         )
@@ -73,12 +69,10 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
 
     let second_witness = {
         let root_witness = Builder::new().prefix("test-db1").tempdir().unwrap();
-        let oobi_root = Builder::new().prefix("test-db_oobi").tempdir().unwrap();
         std::fs::create_dir_all(root_witness.path()).unwrap();
         Witness::setup(
             url::Url::parse("http://some/url").unwrap(),
             root_witness.path(),
-            oobi_root.path(),
             Some(seed2.into()),
             WitnessEscrowConfig::default(),
         )
@@ -240,14 +234,12 @@ fn test_qry_rpy() -> Result<(), ActorError> {
     let bob_redb = Arc::new(RedbDatabase::new(bob_redb_root.path()).unwrap());
 
     let witness_root = Builder::new().prefix("test-db").tempdir().unwrap();
-    let witness_oobi_root = Builder::new().prefix("test-db").tempdir().unwrap();
     let signer = Signer::new();
     let signer_arc = Arc::new(signer);
     let witness = Witness::new(
         Url::parse("http://example.com").unwrap(),
         signer_arc,
         witness_root.path(),
-        witness_oobi_root.path(),
         WitnessEscrowConfig::default(),
     )
     .unwrap();
@@ -407,14 +399,12 @@ pub fn test_key_state_notice() -> Result<(), Error> {
     let signer_arc = Arc::new(signer);
     let witness = {
         let witness_root = Builder::new().prefix("test-db").tempdir().unwrap();
-        let witness_root_oobi = Builder::new().prefix("test-db").tempdir().unwrap();
         let path = witness_root.path();
         std::fs::create_dir_all(path).unwrap();
         Witness::new(
             Url::parse("http://example.com").unwrap(),
             signer_arc.clone(),
             path,
-            witness_root_oobi.path(),
             WitnessEscrowConfig::default(),
         )
         .unwrap()
@@ -424,7 +414,6 @@ pub fn test_key_state_notice() -> Result<(), Error> {
     let mut bob = {
         // Create test db and event processor.
         let root = Builder::new().prefix("test-db").tempdir().unwrap();
-        let oobi_root = Builder::new().prefix("alice-db-oobi").tempdir().unwrap();
         std::fs::create_dir_all(root.path()).unwrap();
         let bob_redb_root = Builder::new().tempfile().unwrap();
         let bob_redb = Arc::new(RedbDatabase::new(bob_redb_root.path()).unwrap());
@@ -543,10 +532,6 @@ fn test_mbx() {
                 .prefix(&format!("test-ctrl-{i}"))
                 .tempdir()
                 .unwrap();
-            let oobi_root = tempfile::Builder::new()
-                .prefix(&format!("test-ctrl-{i}"))
-                .tempdir()
-                .unwrap();
             std::fs::create_dir_all(root.path()).unwrap();
             let redb_root = Builder::new().tempfile().unwrap();
             let redb = Arc::new(RedbDatabase::new(redb_root.path()).unwrap());
@@ -560,16 +545,11 @@ fn test_mbx() {
             .prefix("test-witness")
             .tempdir()
             .unwrap();
-        let oobi_root = tempfile::Builder::new()
-            .prefix(&"test-oobi".to_string())
-            .tempdir()
-            .unwrap();
         std::fs::create_dir_all(root.path()).unwrap();
         Witness::new(
             Url::parse("http://example.com").unwrap(),
             signer,
             root.path(),
-            oobi_root.path(),
             WitnessEscrowConfig::default(),
         )
         .unwrap()
@@ -617,10 +597,6 @@ fn test_invalid_notice() {
                 .prefix(&format!("test-ctrl-{i}"))
                 .tempdir()
                 .unwrap();
-            let oobi_root = tempfile::Builder::new()
-                .prefix(&format!("test-ctrl-{i}"))
-                .tempdir()
-                .unwrap();
             std::fs::create_dir_all(root.path()).unwrap();
             let redb_root = Builder::new().tempfile().unwrap();
             let redb = Arc::new(RedbDatabase::new(redb_root.path()).unwrap());
@@ -634,16 +610,11 @@ fn test_invalid_notice() {
             .prefix("test-witness")
             .tempdir()
             .unwrap();
-        let oobi_root = tempfile::Builder::new()
-            .prefix(&"test-oobi".to_string())
-            .tempdir()
-            .unwrap();
         std::fs::create_dir_all(root.path()).unwrap();
         Witness::new(
             Url::parse("http://example.com").unwrap(),
             signer,
             root.path(),
-            oobi_root.path(),
             WitnessEscrowConfig::default(),
         )
         .unwrap()
@@ -696,13 +667,11 @@ pub fn test_multisig() -> Result<(), ActorError> {
     let signer_arc = Arc::new(signer);
     let witness = {
         let witness_root = Builder::new().prefix("test-db").tempdir().unwrap();
-        let witness_root_oobi = Builder::new().prefix("test-db").tempdir().unwrap();
         let path = witness_root.path();
         Witness::new(
             Url::parse("http://example.com").unwrap(),
             signer_arc,
             path,
-            witness_root_oobi.path(),
             WitnessEscrowConfig::default(),
         )
         .unwrap()
@@ -712,7 +681,6 @@ pub fn test_multisig() -> Result<(), ActorError> {
     let mut cont1 = {
         // Create test db and event processor.
         let cont1_key_manager = Arc::new(Mutex::new(CryptoBox::new()?));
-        let oobi_root = Builder::new().prefix("cont1-db-oobi").tempdir().unwrap();
         let redb_root = Builder::new().tempfile().unwrap();
         let redb = Arc::new(RedbDatabase::new(redb_root.path()).unwrap());
 
@@ -736,7 +704,6 @@ pub fn test_multisig() -> Result<(), ActorError> {
     let mut cont2 = {
         // Create test db and event processor.
         let cont2_key_manager = Arc::new(Mutex::new(CryptoBox::new()?));
-        let oobi_root = Builder::new().prefix("cont2-db-oobi").tempdir().unwrap();
         let redb_root = Builder::new().tempfile().unwrap();
         let redb = Arc::new(RedbDatabase::new(redb_root.path()).unwrap());
 
@@ -852,8 +819,6 @@ fn setup_controller(witness: &Witness) -> Result<SimpleController<CryptoBox, Red
     let mut cont1 = {
         // Create test db and event processor.
         let cont1_key_manager = Arc::new(Mutex::new(CryptoBox::new()?));
-        let root = Builder::new().prefix("db-root").tempdir().unwrap();
-        let oobi_root = Builder::new().prefix("cont1-db-oobi").tempdir().unwrap();
         let redb_root = Builder::new().tempfile().unwrap();
         let redb = Arc::new(RedbDatabase::new(redb_root.path()).unwrap());
 
@@ -881,13 +846,11 @@ pub fn test_delegated_multisig() -> Result<(), ActorError> {
     let signer_arc = Arc::new(signer);
     let witness = {
         let witness_root = Builder::new().prefix("test-db").tempdir().unwrap();
-        let witness_root_oobi = Builder::new().prefix("test-db").tempdir().unwrap();
         let path = witness_root.path();
         Witness::new(
             Url::parse("http://example.com").unwrap(),
             signer_arc,
             path,
-            witness_root_oobi.path(),
             WitnessEscrowConfig::default(),
         )
         .unwrap()
@@ -979,10 +942,10 @@ pub fn test_delegated_multisig() -> Result<(), ActorError> {
         cont1.process_multisig(group_icp)?;
     };
 
-    // Controller2 didin't accept group dip yet because of lack of witness receipt and delegating event.
+    // Controller2 didn't accept group dip yet because of lack of witness receipt and delegating event.
     let state = cont2.get_state_for_id(&group_id);
     assert_eq!(state, None);
-    // Also Controller1 didin't accept it.
+    // Also Controller1 didn't accept it.
     let state = cont1.get_state_for_id(&group_id);
     assert_eq!(state, None);
 
@@ -1135,13 +1098,11 @@ pub fn test_delegating_multisig() -> Result<(), ActorError> {
     let signer_arc = Arc::new(signer);
     let witness = {
         let witness_root = Builder::new().prefix("test-db").tempdir().unwrap();
-        let witness_root_oobi = Builder::new().prefix("test-db").tempdir().unwrap();
         let path = witness_root.path();
         Witness::new(
             Url::parse("http://example.com").unwrap(),
             signer_arc,
             path,
-            witness_root_oobi.path(),
             WitnessEscrowConfig::default(),
         )
         .unwrap()
@@ -1323,13 +1284,9 @@ pub fn test_delegating_multisig() -> Result<(), ActorError> {
                 delegate: _,
             })) = response
             {
-                assert_eq!(multisig.len(), 3);
+                assert_eq!(multisig.len(), 2);
 
                 let ixn_to_confirm = multisig[1].clone();
-                let signed_event = delegator.process_group_multisig(ixn_to_confirm)?;
-                // assert!(signed_event.is_none());
-
-                let ixn_to_confirm = multisig[2].clone();
                 let signed_event = delegator.process_group_multisig(ixn_to_confirm)?;
 
                 Ok(signed_event)
@@ -1350,7 +1307,7 @@ pub fn test_delegating_multisig() -> Result<(), ActorError> {
         .unwrap();
 
     // Collect witness receipts and send delegating event to child
-    // Delegators ask about group mailbox to get receipts
+    // Delegator ask about group mailbox to get receipts
     for delegator in vec![&delegator_1, &delegator_2] {
         let mbx_query = delegator.query_groups_mailbox(&witness.prefix);
 

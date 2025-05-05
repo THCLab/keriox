@@ -1,6 +1,7 @@
 use std::{marker::PhantomData, sync::Arc};
 
 use redb::{Database, TableDefinition};
+use said::SelfAddressingIdentifier;
 
 use crate::{
     event_message::signed_event_message::{SignedEventMessage, SignedNontransferableReceipt},
@@ -8,7 +9,7 @@ use crate::{
 };
 
 use super::{
-    redb::{escrow_database::get_current_timestamp, RedbError},
+    redb::{escrow_database::get_current_timestamp, loging::LogDatabase, RedbError},
     timestamped::TimestampedSignedEventMessage,
 };
 
@@ -97,21 +98,22 @@ impl<D: serde::Serialize + serde::de::DeserializeOwned> MailboxTopicDatabase<D> 
 }
 
 pub struct MailboxData {
-    db: Arc<Database>,
     mailbox_receipts: MailboxTopicDatabase<SignedNontransferableReceipt>,
     mailbox_replies: MailboxTopicDatabase<SignedEventMessage>,
-    mailbox_multisig: MailboxTopicDatabase<TimestampedSignedEventMessage>,
-    mailbox_delegate: MailboxTopicDatabase<TimestampedSignedEventMessage>,
+    mailbox_multisig: MailboxTopicDatabase<SelfAddressingIdentifier>,
+    mailbox_delegate: MailboxTopicDatabase<SelfAddressingIdentifier>,
+    log_db: LogDatabase,
 }
 
 impl MailboxData {
     pub fn new(db: Arc<Database>) -> Result<Self, RedbError> {
+        let log_db = LogDatabase::new(db.clone())?;
         Ok(Self {
             mailbox_receipts: MailboxTopicDatabase::new(db.clone(), "mbxrct")?,
             mailbox_replies: MailboxTopicDatabase::new(db.clone(), "mbxrpy")?,
             mailbox_multisig: MailboxTopicDatabase::new(db.clone(), "mbxm")?,
             mailbox_delegate: MailboxTopicDatabase::new(db.clone(), "mbxd")?,
-            db,
+            log_db,
         })
     }
 
@@ -121,7 +123,8 @@ impl MailboxData {
         receipt: SignedNontransferableReceipt,
     ) -> Result<(), RedbError> {
         // TODO what if already is saved?
-        self.mailbox_receipts.insert(key, 0, &receipt)?;
+        let sn = receipt.body.sn;
+        self.mailbox_receipts.insert(key, sn, &receipt)?;
         Ok(())
     }
 
@@ -153,14 +156,19 @@ impl MailboxData {
         key: &IdentifierPrefix,
         event: SignedEventMessage,
     ) -> Result<(), RedbError> {
-        self.mailbox_multisig.insert(key, 0, &event.into())
+        let sn = event.event_message.data.get_sn();
+        let digest = event.event_message.digest().unwrap();
+        self.log_db
+            .log_event(&super::redb::WriteTxnMode::CreateNew, &event)?;
+        self.mailbox_multisig.insert(key, sn, &digest)
     }
 
-    pub fn get_mailbox_multisig(
-        &self,
+    pub fn get_mailbox_multisig<'a>(
+        &'a self,
         key: &IdentifierPrefix,
-    ) -> Option<impl DoubleEndedIterator<Item = TimestampedSignedEventMessage>> {
-        Some(self.mailbox_multisig.get_grater_then(key, 0).unwrap())
+    ) -> Option<impl DoubleEndedIterator<Item = TimestampedSignedEventMessage> + 'a> {
+        let digests = self.mailbox_multisig.get_grater_then(key, 0).unwrap();
+        Some(digests.map(|dig| self.log_db.get_signed_event(&dig).unwrap().unwrap()))
     }
 
     pub fn add_mailbox_delegate(
@@ -168,14 +176,19 @@ impl MailboxData {
         key: &IdentifierPrefix,
         delegated: SignedEventMessage,
     ) -> Result<(), RedbError> {
-        self.mailbox_delegate.insert(key, 0, &delegated.into())?;
+        let sn = delegated.event_message.data.get_sn();
+        let digest = delegated.event_message.digest().unwrap();
+        self.log_db
+            .log_event(&super::redb::WriteTxnMode::CreateNew, &delegated)?;
+        self.mailbox_delegate.insert(key, sn, &digest)?;
         Ok(())
     }
 
-    pub fn get_mailbox_delegate(
-        &self,
+    pub fn get_mailbox_delegate<'a>(
+        &'a self,
         key: &IdentifierPrefix,
-    ) -> Option<impl DoubleEndedIterator<Item = TimestampedSignedEventMessage>> {
-        Some(self.mailbox_delegate.get_grater_then(key, 0).unwrap())
+    ) -> Option<impl DoubleEndedIterator<Item = TimestampedSignedEventMessage> + 'a> {
+        let digests = self.mailbox_delegate.get_grater_then(key, 0).unwrap();
+        Some(digests.map(|dig| self.log_db.get_signed_event(&dig).unwrap().unwrap()))
     }
 }
