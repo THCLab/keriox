@@ -6,7 +6,6 @@ use keri_tests::{handle_delegation_request, settings::InfrastructureContext, set
 use tempfile::Builder;
 use test_context::test_context;
 
-#[ignore]
 #[test_context(InfrastructureContext)]
 #[actix_rt::test]
 async fn multi_delegator_single_delegatee(
@@ -201,6 +200,7 @@ async fn multi_delegator_single_delegatee(
     )
     .await
     .unwrap();
+	
     handle_delegation_request(
         &mut identifier2,
         &km2,
