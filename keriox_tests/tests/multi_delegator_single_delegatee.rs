@@ -200,7 +200,7 @@ async fn multi_delegator_single_delegatee(
     )
     .await
     .unwrap();
-	
+
     handle_delegation_request(
         &mut identifier2,
         &km2,
@@ -225,9 +225,6 @@ async fn multi_delegator_single_delegatee(
         .finalize_query_mailbox(queries_and_signatures.collect())
         .await
         .unwrap();
-
-    // dbg!(action_required);
-    // assert!(action_required.is_empty());
 
     let delegators_state = controller1.find_state(&delegator_group_id)?;
     assert_eq!(delegators_state.sn, 1);

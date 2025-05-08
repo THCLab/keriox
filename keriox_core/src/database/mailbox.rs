@@ -1,17 +1,17 @@
 use std::{fmt::Debug, marker::PhantomData, sync::Arc};
 
 use redb::{Database, TableDefinition};
-use said::SelfAddressingIdentifier;
+use said::{
+    derivation::{HashFunction, HashFunctionCode},
+    SelfAddressingIdentifier,
+};
 
 use crate::{
     event_message::signed_event_message::{SignedEventMessage, SignedNontransferableReceipt},
     prefix::IdentifierPrefix,
 };
 
-use super::{
-    redb::{escrow_database::get_current_timestamp, loging::LogDatabase, RedbError},
-    timestamped::TimestampedSignedEventMessage,
-};
+use super::redb::{escrow_database::get_current_timestamp, RedbError};
 
 /// Storage for elements in mailbox.
 pub struct MailboxTopicDatabase<D: serde::Serialize + serde::de::DeserializeOwned> {
@@ -50,18 +50,14 @@ impl<D: serde::Serialize + serde::de::DeserializeOwned + Debug> MailboxTopicData
         })
     }
 
-    pub fn insert(
-        &self,
-        identifier: &IdentifierPrefix,
-        element: &D,
-    ) -> Result<(), RedbError> {
+    pub fn insert(&self, identifier: &IdentifierPrefix, element: &D) -> Result<(), RedbError> {
         let read_txn = self.db.begin_read()?;
         let table = read_txn.open_table(self.indexes)?;
         let index = match table.get((identifier.to_string().as_str(), self.table_name.as_str()))? {
             Some(index) => index.value(),
             None => 0,
         };
-        
+
         let write_txn = self.db.begin_write()?;
 
         {
@@ -74,7 +70,10 @@ impl<D: serde::Serialize + serde::de::DeserializeOwned + Debug> MailboxTopicData
             table.insert((identifier.to_string().as_str(), index), &value)?;
 
             let mut table = (&write_txn).open_table(self.indexes)?;
-            table.insert((identifier.to_string().as_str(), self.table_name.as_str()), &index + 1)?;
+            table.insert(
+                (identifier.to_string().as_str(), self.table_name.as_str()),
+                &index + 1,
+            )?;
         }
         write_txn.commit()?;
         Ok(())
@@ -122,7 +121,12 @@ fn test_mailbox_topic_database() {
     let db = Arc::new(Database::create(temp_file.path()).unwrap());
     let mailbox_db = MailboxTopicDatabase::<String>::new(db.clone(), "test_table").unwrap();
 
-    let identifier = IdentifierPrefix::SelfAddressing("EN41o7FSL2o9PfFps14ql7jxJ-4SYg4fYE-u143T6aFX".parse::<SelfAddressingIdentifier>().unwrap().into());
+    let identifier = IdentifierPrefix::SelfAddressing(
+        "EN41o7FSL2o9PfFps14ql7jxJ-4SYg4fYE-u143T6aFX"
+            .parse::<SelfAddressingIdentifier>()
+            .unwrap()
+            .into(),
+    );
     for i in 0..10 {
         let element = format!("test element {}", i);
         mailbox_db.insert(&identifier, &element).unwrap();
@@ -132,7 +136,13 @@ fn test_mailbox_topic_database() {
     let elements_from_fifth = mailbox_db.get_grater_then(&identifier, 5).unwrap();
     assert_eq!(
         elements_from_fifth.collect::<Vec<_>>(),
-        vec!["test element 5".to_string(), "test element 6".to_string(), "test element 7".to_string(), "test element 8".to_string(), "test element 9".to_string()]
+        vec![
+            "test element 5".to_string(),
+            "test element 6".to_string(),
+            "test element 7".to_string(),
+            "test element 8".to_string(),
+            "test element 9".to_string()
+        ]
     );
 }
 
@@ -141,12 +151,12 @@ pub struct MailboxData {
     mailbox_replies: MailboxTopicDatabase<SignedEventMessage>,
     mailbox_multisig: MailboxTopicDatabase<SelfAddressingIdentifier>,
     mailbox_delegate: MailboxTopicDatabase<SelfAddressingIdentifier>,
-    log_db: LogDatabase,
+    log_db: MailboxLogDatabase,
 }
 
 impl MailboxData {
     pub fn new(db: Arc<Database>) -> Result<Self, RedbError> {
-        let log_db = LogDatabase::new(db.clone())?;
+        let log_db = MailboxLogDatabase::new(db.clone())?;
         Ok(Self {
             mailbox_receipts: MailboxTopicDatabase::new(db.clone(), "mbxrct")?,
             mailbox_replies: MailboxTopicDatabase::new(db.clone(), "mbxrpy")?,
@@ -194,18 +204,18 @@ impl MailboxData {
         key: &IdentifierPrefix,
         event: SignedEventMessage,
     ) -> Result<(), RedbError> {
-        let digest = event.event_message.digest().unwrap();
-        self.log_db
-            .log_event(&super::redb::WriteTxnMode::CreateNew, &event)?;
-        self.mailbox_multisig.insert(key, &digest)
+        let said = self.log_db.log_event(&event)?;
+        self.mailbox_multisig.insert(key, &said)?;
+
+        Ok(())
     }
 
     pub fn get_mailbox_multisig<'a>(
         &'a self,
         key: &IdentifierPrefix,
-    ) -> Option<impl DoubleEndedIterator<Item = TimestampedSignedEventMessage> + 'a> {
+    ) -> Option<impl DoubleEndedIterator<Item = SignedEventMessage> + 'a> {
         let digests = self.mailbox_multisig.get_grater_then(key, 0).unwrap();
-        Some(digests.map(|dig| self.log_db.get_signed_event(&dig).unwrap().unwrap()))
+        Some(digests.map(|dig| self.log_db.get_event(&dig).unwrap()))
     }
 
     pub fn add_mailbox_delegate(
@@ -213,18 +223,67 @@ impl MailboxData {
         key: &IdentifierPrefix,
         delegated: SignedEventMessage,
     ) -> Result<(), RedbError> {
-        let digest = delegated.event_message.digest().unwrap();
-        self.log_db
-            .log_event(&super::redb::WriteTxnMode::CreateNew, &delegated)?;
-        self.mailbox_delegate.insert(key, &digest)?;
+        let said = self.log_db.log_event(&delegated)?;
+        self.mailbox_delegate.insert(key, &said)?;
+
         Ok(())
     }
 
     pub fn get_mailbox_delegate<'a>(
         &'a self,
         key: &IdentifierPrefix,
-    ) -> Option<impl DoubleEndedIterator<Item = TimestampedSignedEventMessage> + 'a> {
+    ) -> Option<impl DoubleEndedIterator<Item = SignedEventMessage> + 'a> {
         let digests = self.mailbox_delegate.get_grater_then(key, 0).unwrap();
-        Some(digests.map(|dig| self.log_db.get_signed_event(&dig).unwrap().unwrap()))
+        Some(digests.map(|dig| self.log_db.get_event(&dig).unwrap()))
+    }
+}
+
+const MAILBOX_LOG: TableDefinition<&[u8], &[u8]> = TableDefinition::new("mailbox_log");
+/// Database for mailbox events.
+pub(crate) struct MailboxLogDatabase {
+    db: Arc<Database>,
+}
+
+impl MailboxLogDatabase {
+    pub fn new(db: Arc<Database>) -> Result<Self, RedbError> {
+        // Create tables
+        let write_txn = db.begin_write()?;
+        {
+            write_txn.open_table(MAILBOX_LOG)?;
+        }
+        write_txn.commit()?;
+        Ok(Self { db })
+    }
+
+    /// Saves event in database, if it wasn't already saved.
+    /// Returns digest of added element, or None if event was already saved in database.
+    pub fn log_event(
+        &self,
+        signed_event: &SignedEventMessage,
+    ) -> Result<SelfAddressingIdentifier, RedbError> {
+        let write_txn = self.db.begin_write()?;
+        let digest = {
+            let mut table = write_txn.open_table(MAILBOX_LOG)?;
+            let digest = HashFunction::from(HashFunctionCode::Blake3_256)
+                .derive(signed_event.encode().unwrap().as_slice());
+            let value = serde_cbor::to_vec(signed_event).unwrap();
+            table.insert(digest.to_string().as_bytes(), &value.as_ref())?;
+            Ok(digest)
+        };
+
+        write_txn.commit()?;
+        digest
+    }
+
+    pub fn get_event(&self, dig: &SelfAddressingIdentifier) -> Option<SignedEventMessage> {
+        let read_txn = self.db.begin_read().unwrap();
+        let table = read_txn.open_table(MAILBOX_LOG).unwrap();
+        match table.get(dig.to_string().as_bytes()).unwrap() {
+            Some(value) => {
+                let event: SignedEventMessage = serde_cbor::from_slice(value.value()).unwrap();
+                Some(event)
+            }
+            None => None,
+        }
     }
 }

@@ -22,7 +22,6 @@ fn test_incept() -> Result<(), Error> {
     let next_key = BasicPrefix::new(Basic::Ed25519, key_manager.next_public_key());
 
     // Setup events database
-    let root = Builder::new().prefix("test-db").tempdir().unwrap();
     let events_db_path = NamedTempFile::new().unwrap();
     let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
 

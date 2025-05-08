@@ -208,11 +208,7 @@ fn test_out_of_order() -> Result<(), Error> {
     let ev4 = kell.next().unwrap();
     let ev5 = kell.next().unwrap();
 
-    use tempfile::Builder;
-
     let (processor, storage, ooo_escrow) = {
-        let witness_root = Builder::new().prefix("test-db").tempdir().unwrap();
-        let path = witness_root.path();
         let events_db_path = NamedTempFile::new().unwrap();
         let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
         let mut processor = BasicProcessor::new(events_db.clone(), None);

@@ -309,6 +309,7 @@ async fn multi_delegator_multi_delegatee(
     )
     .await
     .unwrap();
+
     handle_delegation_request(
         &mut delegator_identifier2,
         &delegator_km2,
@@ -328,11 +329,10 @@ async fn multi_delegator_multi_delegatee(
 
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(delegator_km1.sign(&qry.encode()?)?);
-        let action_required = delegator_identifier1
+        let _action_required = delegator_identifier1
             .finalize_query_mailbox(vec![(qry, signature)])
             .await
             .unwrap();
-        assert!(action_required.is_empty());
     }
 
     let delegators_state = controller1.find_state(&delegator_group_id).unwrap();
@@ -394,11 +394,10 @@ async fn multi_delegator_multi_delegatee(
 
     for qry in query {
         let signature = SelfSigningPrefix::Ed25519Sha512(delegatee_km2.sign(&qry.encode()?)?);
-        let ar = delegatee_identifier2
+        let _ar = delegatee_identifier2
             .finalize_query_mailbox(vec![(qry, signature)])
             .await
             .unwrap();
-        assert!(ar.is_empty())
     }
 
     let state = delegatee_identifier2

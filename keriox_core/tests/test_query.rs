@@ -17,8 +17,6 @@ mod test_query {
     pub fn test_ksn_query() -> Result<(), Box<dyn std::error::Error>> {
         use tempfile::Builder;
 
-        let root = Builder::new().prefix("test-db").tempdir().unwrap();
-
         let events_db_path = NamedTempFile::new().unwrap();
         let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
 

@@ -220,21 +220,13 @@ impl<D: EventDatabase> EventStorage<D> {
         let multisig = self
             .mailbox_data
             .get_mailbox_multisig(&id)
-            .map(|it| {
-                it.skip(args.topics.multisig)
-                    .map(|ev| ev.signed_event_message)
-                    .collect()
-            })
+            .map(|it| it.skip(args.topics.multisig).collect())
             .unwrap_or_default();
 
         let delegate = self
             .mailbox_data
             .get_mailbox_delegate(&id)
-            .map(|it| {
-                it.skip(args.topics.delegate)
-                    .map(|ev| ev.signed_event_message)
-                    .collect()
-            })
+            .map(|it| it.skip(args.topics.delegate).collect())
             .unwrap_or_default();
 
         // TODO: query and return the rest of topics

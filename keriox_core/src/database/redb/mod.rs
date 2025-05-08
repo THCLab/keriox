@@ -64,6 +64,8 @@ pub enum RedbError {
     MissingDigest,
     #[error("Rkyv error: {0}")]
     Rkyv(#[from] rkyv::rancor::Error),
+    #[error("Already saved: {0}")]
+    AlreadySaved(SelfAddressingIdentifier),
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -118,10 +120,10 @@ impl EventDatabase for RedbDatabase {
         let write_txn = self.db.begin_write()?;
         let txn_mode = WriteTxnMode::UseExisting(&write_txn);
 
+        self.update_key_state(&txn_mode, &signed_event.event_message)?;
         self.log_db.log_event(&txn_mode, &signed_event)?;
 
         self.save_to_kel(&txn_mode, &signed_event.event_message)?;
-        self.update_key_state(&txn_mode, &signed_event.event_message)?;
 
         write_txn.commit()?;
         Ok(())
@@ -275,7 +277,10 @@ impl RedbDatabase {
             } else {
                 IdentifierState::default()
             };
-            let key_state = key_state.apply(event).unwrap();
+
+            let key_state = key_state
+                .apply(event)
+                .map_err(|_e| RedbError::AlreadySaved(event.digest().unwrap()))?;
             let value = rkyv::to_bytes::<rkyv::rancor::Error>(&key_state)?;
             table.insert(key.as_str(), value.as_ref())?;
 
