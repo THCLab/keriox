@@ -211,23 +211,29 @@ impl<D: EventDatabase> EventStorage<D> {
         let id = args.i.clone();
 
         // query receipts
-        let receipt = self
+        let receipt = match self
             .mailbox_data
-            .get_mailbox_receipts(&id)
-            .map(|it| it.skip(args.topics.receipt).collect())
-            .unwrap_or_default();
+            .get_mailbox_receipts(&id, args.topics.receipt as u64)
+        {
+            Some(receipts) => receipts.collect(),
+            None => vec![],
+        };
 
-        let multisig = self
+        let multisig = match self
             .mailbox_data
-            .get_mailbox_multisig(&id)
-            .map(|it| it.skip(args.topics.multisig).collect())
-            .unwrap_or_default();
+            .get_mailbox_multisig(&id, args.topics.multisig as u64)
+        {
+            Some(multisig) => multisig.collect(),
+            None => vec![],
+        };
 
-        let delegate = self
+        let delegate = match self
             .mailbox_data
-            .get_mailbox_delegate(&id)
-            .map(|it| it.skip(args.topics.delegate).collect())
-            .unwrap_or_default();
+            .get_mailbox_delegate(&id, args.topics.delegate as u64)
+        {
+            Some(delegate) => delegate.collect(),
+            None => vec![],
+        };
 
         // TODO: query and return the rest of topics
         Ok(MailboxResponse {

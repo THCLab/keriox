@@ -179,8 +179,13 @@ impl MailboxData {
     pub fn get_mailbox_receipts(
         &self,
         key: &IdentifierPrefix,
+        from_index: u64,
     ) -> Option<impl DoubleEndedIterator<Item = SignedNontransferableReceipt>> {
-        Some(self.mailbox_receipts.get_grater_then(key, 0).unwrap())
+        Some(
+            self.mailbox_receipts
+                .get_grater_then(key, from_index)
+                .unwrap(),
+        )
     }
 
     pub fn add_mailbox_reply(
@@ -213,8 +218,12 @@ impl MailboxData {
     pub fn get_mailbox_multisig<'a>(
         &'a self,
         key: &IdentifierPrefix,
+        from_index: u64,
     ) -> Option<impl DoubleEndedIterator<Item = SignedEventMessage> + 'a> {
-        let digests = self.mailbox_multisig.get_grater_then(key, 0).unwrap();
+        let digests = self
+            .mailbox_multisig
+            .get_grater_then(key, from_index)
+            .unwrap();
         Some(digests.map(|dig| self.log_db.get_event(&dig).unwrap()))
     }
 
@@ -232,8 +241,12 @@ impl MailboxData {
     pub fn get_mailbox_delegate<'a>(
         &'a self,
         key: &IdentifierPrefix,
+        from_index: u64,
     ) -> Option<impl DoubleEndedIterator<Item = SignedEventMessage> + 'a> {
-        let digests = self.mailbox_delegate.get_grater_then(key, 0).unwrap();
+        let digests = self
+            .mailbox_delegate
+            .get_grater_then(key, from_index)
+            .unwrap();
         Some(digests.map(|dig| self.log_db.get_event(&dig).unwrap()))
     }
 }

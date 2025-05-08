@@ -99,7 +99,7 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
             w.process_notice(not).unwrap();
             w.event_storage
                 .mailbox_data
-                .get_mailbox_receipts(controller.prefix())
+                .get_mailbox_receipts(controller.prefix(), 0)
                 .into_iter()
                 .flatten()
         })
@@ -185,7 +185,7 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
     let first_receipt = first_witness
         .event_storage
         .mailbox_data
-        .get_mailbox_receipts(controller.prefix())
+        .get_mailbox_receipts(controller.prefix(), 0)
         .unwrap()
         .map(Notice::NontransferableRct)
         .map(Message::Notice)
@@ -280,7 +280,7 @@ fn test_qry_rpy() -> Result<(), ActorError> {
     let receipt_to_alice = witness
         .event_storage
         .mailbox_data
-        .get_mailbox_receipts(alice.prefix())
+        .get_mailbox_receipts(alice.prefix(), 0)
         .unwrap()
         .map(Notice::NontransferableRct)
         .map(Message::Notice)
