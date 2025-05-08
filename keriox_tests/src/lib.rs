@@ -104,68 +104,71 @@ pub async fn handle_delegation_request(
         let signature = SelfSigningPrefix::Ed25519Sha512(keypair.sign(&qry.encode()?)?);
         let ar = id.finalize_query_mailbox(vec![(qry, signature)]).await?;
 
-        match &ar[0] {
-            ActionRequired::MultisigRequest(multisig_event, exn) => {
-                let signature_ixn =
-                    SelfSigningPrefix::Ed25519Sha512(keypair.sign(&multisig_event.encode()?)?);
-                let signature_exn = SelfSigningPrefix::Ed25519Sha512(keypair.sign(&exn.encode()?)?);
-                let exn_index_signature = id.sign_with_index(signature_exn, 0)?;
-                id.finalize_group_event(
-                    &multisig_event.encode()?,
-                    signature_ixn.clone(),
-                    vec![(exn.encode()?, exn_index_signature)],
-                )
-                .await?;
-            }
-            ActionRequired::DelegationRequest(delegating_event, exn) => {
-                let signature_ixn =
-                    SelfSigningPrefix::Ed25519Sha512(keypair.sign(&delegating_event.encode()?)?);
-                let signature_exn = SelfSigningPrefix::Ed25519Sha512(keypair.sign(&exn.encode()?)?);
-                let kc = id.find_state(id.id()).unwrap().current;
-                let index = id.index_in_current_keys(&kc)?;
-                let exn_index_signature = id.sign_with_index(signature_exn, index as u16)?;
-                id.finalize_group_event(
-                    &delegating_event.encode()?,
-                    signature_ixn.clone(),
-                    vec![(exn.encode()?, exn_index_signature)],
-                )
-                .await
-                .unwrap();
-                id.notify_witnesses().await?;
-
-                // Query for receipts
-                let query = id.query_mailbox(&delegator_group_id, witness_id)?;
-
-                for qry in query {
-                    let signature = SelfSigningPrefix::Ed25519Sha512(keypair.sign(&qry.encode()?)?);
-                    let _action_required =
-                        id.finalize_query_mailbox(vec![(qry, signature)]).await?;
-                    // assert!(action_required.is_empty());
-                }
-
-                let kc = id.find_state(&delegator_group_id).unwrap().current;
-                let index = id.index_in_current_keys(&kc).unwrap();
-                // send accepted event to child
-                let exn_message = Exchange::Fwd {
-                    args: FwdArgs {
-                        recipient_id: delegatee_id.clone(),
-                        topic: ForwardTopic::Delegate,
-                    },
-                    to_forward: delegating_event.clone(),
-                }
-                .to_message(SerializationFormats::JSON, HashFunctionCode::Blake3_256);
-                let signature_exn =
-                    SelfSigningPrefix::Ed25519Sha512(keypair.sign(&exn_message.encode()?)?);
-
-                let data_signature = IndexedSignature::new_both_same(signature_ixn, index as u16);
-
-                let kc = id.find_state(&id.id()).unwrap().current;
-                let index = id.index_in_current_keys(&kc).unwrap();
-                let exn_index_signature = id.sign_with_index(signature_exn, index as u16)?;
-                id.finalize_exchange(&exn_message.encode()?, exn_index_signature, data_signature)
+        for ar in ar {
+            match &ar {
+                ActionRequired::MultisigRequest(multisig_event, exn) => {
+                    let signature_ixn =
+                        SelfSigningPrefix::Ed25519Sha512(keypair.sign(&multisig_event.encode()?)?);
+                    let signature_exn = SelfSigningPrefix::Ed25519Sha512(keypair.sign(&exn.encode()?)?);
+                    let kc = id.find_state(id.id()).unwrap().current;
+                    let index = id.index_in_current_keys(&kc)?;
+                    let exn_index_signature = id.sign_with_index(signature_exn, index as u16)?;
+                    id.finalize_group_event(
+                        &multisig_event.encode()?,
+                        signature_ixn.clone(),
+                        vec![(exn.encode()?, exn_index_signature)],
+                    )
                     .await?;
-            }
-        };
-    }
+                }
+                ActionRequired::DelegationRequest(delegating_event, exn) => {
+                    let signature_ixn =
+                        SelfSigningPrefix::Ed25519Sha512(keypair.sign(&delegating_event.encode()?)?);
+                    let signature_exn = SelfSigningPrefix::Ed25519Sha512(keypair.sign(&exn.encode()?)?);
+                    let kc = id.find_state(id.id()).unwrap().current;
+                    let index = id.index_in_current_keys(&kc)?;
+                    let exn_index_signature = id.sign_with_index(signature_exn, index as u16)?;
+                    id.finalize_group_event(
+                        &delegating_event.encode()?,
+                        signature_ixn.clone(),
+                        vec![(exn.encode()?, exn_index_signature)],
+                    )
+                    .await
+                    .unwrap();
+                    id.notify_witnesses().await?;
+
+                    // Query for receipts
+                    let query = id.query_mailbox(&delegator_group_id, witness_id)?;
+
+                    for qry in query {
+                        let signature = SelfSigningPrefix::Ed25519Sha512(keypair.sign(&qry.encode()?)?);
+                        let _action_required =
+                            id.finalize_query_mailbox(vec![(qry, signature)]).await?;
+                        // assert!(action_required.is_empty());
+                    }
+
+                    let kc = id.find_state(&delegator_group_id).unwrap().current;
+                    let index = id.index_in_current_keys(&kc).unwrap();
+                    // send accepted event to child
+                    let exn_message = Exchange::Fwd {
+                        args: FwdArgs {
+                            recipient_id: delegatee_id.clone(),
+                            topic: ForwardTopic::Delegate,
+                        },
+                        to_forward: delegating_event.clone(),
+                    }
+                    .to_message(SerializationFormats::JSON, HashFunctionCode::Blake3_256);
+                    let signature_exn =
+                        SelfSigningPrefix::Ed25519Sha512(keypair.sign(&exn_message.encode()?)?);
+
+                    let data_signature = IndexedSignature::new_both_same(signature_ixn, index as u16);
+
+                    let kc = id.find_state(&id.id()).unwrap().current;
+                    let index = id.index_in_current_keys(&kc).unwrap();
+                    let exn_index_signature = id.sign_with_index(signature_exn, index as u16)?;
+                    id.finalize_exchange(&exn_message.encode()?, exn_index_signature, data_signature)
+                        .await?;
+                }
+            };
+        }}
     Ok(())
 }

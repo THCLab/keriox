@@ -280,9 +280,7 @@ pub fn process_mailbox_query<D: EventDatabase>(
 ) -> Result<ReplyType, QueryError> {
     match qr {
         MailboxRoute::Mbx { args, .. } => {
-            dbg!(args);
             let mail = storage.get_mailbox_messages(args)?;
-            dbg!(&mail);
             Ok(ReplyType::Mbx(mail))
         }
     }

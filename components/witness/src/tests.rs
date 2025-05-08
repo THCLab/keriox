@@ -1284,9 +1284,12 @@ pub fn test_delegating_multisig() -> Result<(), ActorError> {
                 delegate: _,
             })) = response
             {
-                assert_eq!(multisig.len(), 2);
+                assert_eq!(multisig.len(), 3);
 
                 let ixn_to_confirm = multisig[1].clone();
+                let _signed_event = delegator.process_group_multisig(ixn_to_confirm)?;
+
+                let ixn_to_confirm = multisig[2].clone();
                 let signed_event = delegator.process_group_multisig(ixn_to_confirm)?;
 
                 Ok(signed_event)
