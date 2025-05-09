@@ -16,14 +16,13 @@ use crate::event::{
     KeyEvent,
 };
 
-#[cfg(any(feature = "query", feature = "oobi"))]
+#[cfg(feature = "query")]
 use crate::event_message::signed_event_message::Op;
 
 #[cfg(feature = "query")]
 use super::signature::signatures_into_groups;
 #[cfg(feature = "query")]
 use crate::query::{
-    mailbox::{MailboxQuery, SignedMailboxQuery},
     query_event::SignedQueryMessage,
     query_event::{QueryEvent, SignedKelQuery},
     reply_event::{ReplyEvent, SignedReply},
@@ -33,6 +32,7 @@ use crate::query::{
 use crate::{
     event_message::signature,
     mailbox::exchange::{ExchangeMessage, SignedExchange},
+    query::mailbox::{MailboxQuery, SignedMailboxQuery},
 };
 
 use super::{
@@ -73,7 +73,7 @@ pub enum EventType {
     Exn(ExchangeMessage),
     #[cfg(feature = "query")]
     Qry(QueryEvent),
-    #[cfg(feature = "query")]
+    #[cfg(feature = "mailbox")]
     MailboxQry(MailboxQuery),
     #[cfg(any(feature = "query", feature = "oobi"))]
     Rpy(ReplyEvent),
@@ -90,7 +90,7 @@ impl EventType {
             EventType::Rpy(rpy) => rpy.encode(),
             #[cfg(feature = "mailbox")]
             EventType::Exn(exn) => exn.encode(),
-            #[cfg(feature = "query")]
+            #[cfg(feature = "mailbox")]
             EventType::MailboxQry(qry) => qry.encode(),
         }
     }
@@ -196,7 +196,7 @@ impl From<SignedKelQuery> for ParsedData {
     }
 }
 
-#[cfg(feature = "query")]
+#[cfg(feature = "mailbox")]
 impl From<SignedMailboxQuery> for ParsedData {
     fn from(ev: SignedMailboxQuery) -> Self {
         let groups = signatures_into_groups(&[ev.signature]);
@@ -213,6 +213,7 @@ impl From<SignedQueryMessage> for ParsedData {
     fn from(ev: SignedQueryMessage) -> Self {
         match ev {
             SignedQueryMessage::KelQuery(kqry) => ParsedData::from(kqry),
+            #[cfg(feature = "mailbox")]
             SignedQueryMessage::MailboxQuery(mqry) => ParsedData::from(mqry),
         }
     }
@@ -256,11 +257,11 @@ impl TryFrom<ParsedData> for Message {
             EventType::Receipt(rct) => Message::Notice(signed_receipt(rct, value.attachments)?),
             #[cfg(feature = "query")]
             EventType::Qry(qry) => Message::Op(signed_query(qry, value.attachments)?),
-            #[cfg(any(feature = "query", feature = "oobi"))]
+            #[cfg(feature = "query")]
             EventType::Rpy(rpy) => Message::Op(signed_reply(rpy, value.attachments)?),
             #[cfg(feature = "mailbox")]
             EventType::Exn(exn) => Message::Op(signed_exchange(exn, value.attachments)?),
-            #[cfg(feature = "query")]
+            #[cfg(feature = "mailbox")]
             EventType::MailboxQry(qry) => {
                 Message::Op(signed_management_query(qry, value.attachments)?)
             }
@@ -292,9 +293,9 @@ impl TryFrom<ParsedData> for Op {
         match et {
             #[cfg(feature = "query")]
             EventType::Qry(qry) => signed_query(qry, value.attachments),
-            #[cfg(feature = "query")]
+            #[cfg(feature = "mailbox")]
             EventType::MailboxQry(qry) => signed_management_query(qry, value.attachments),
-            #[cfg(any(feature = "query", feature = "oobi"))]
+            #[cfg(feature = "oobi")]
             EventType::Rpy(rpy) => signed_reply(rpy, value.attachments),
             #[cfg(feature = "mailbox")]
             EventType::Exn(exn) => signed_exchange(exn, value.attachments),
@@ -348,7 +349,7 @@ impl TryFrom<ParsedData> for SignedExchange {
     }
 }
 
-#[cfg(feature = "oobi")]
+#[cfg(feature = "query")]
 fn signed_reply(rpy: ReplyEvent, mut attachments: Vec<Group>) -> Result<Op, ParseError> {
     use said::SelfAddressingIdentifier;
 
@@ -406,7 +407,7 @@ fn signed_query(qry: QueryEvent, mut attachments: Vec<Group>) -> Result<Op, Pars
     Ok(Op::Query(qry))
 }
 
-#[cfg(feature = "query")]
+#[cfg(feature = "mailbox")]
 fn signed_management_query(
     qry: MailboxQuery,
     mut attachments: Vec<Group>,

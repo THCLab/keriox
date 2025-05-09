@@ -4,7 +4,7 @@ use serde::Deserialize;
 
 use super::{Transport, TransportError};
 use crate::{
-    actor::{error::ActorError, simple_controller::PossibleResponse},
+    actor::{error::ActorError, possible_response::PossibleResponse},
     event_message::signed_event_message::{Message, Op},
     oobi::{LocationScheme, Oobi, Role},
     prefix::IdentifierPrefix,

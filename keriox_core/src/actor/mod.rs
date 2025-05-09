@@ -2,18 +2,17 @@ use std::convert::TryFrom;
 
 use serde::{Deserialize, Serialize};
 
-#[cfg(feature = "oobi")]
+#[cfg(feature = "query")]
 use crate::database::redb::RedbDatabase;
 #[cfg(feature = "oobi")]
 use crate::oobi::OobiManager;
 #[cfg(feature = "query")]
 use crate::{
     database::EventDatabase,
-    event_message::signed_event_message::Op,
+    event_message::{signature::Signature, signed_event_message::Op},
     processor::event_storage::EventStorage,
     query::{
         key_state_notice::KeyStateNotice,
-        mailbox::MailboxRoute,
         query_event::QueryRoute,
         query_event::SignedQueryMessage,
         reply_event::{ReplyRoute, SignedReply},
@@ -31,8 +30,9 @@ use crate::{
 };
 #[cfg(feature = "mailbox")]
 use crate::{
-    event_message::{signature::Signature, signed_event_message::SignedEventMessage},
+    event_message::signed_event_message::SignedEventMessage,
     mailbox::exchange::{Exchange, ExchangeMessage, ForwardTopic, SignedExchange},
+    query::mailbox::MailboxRoute,
 };
 pub use cesrox::cesr_proof::MaterialPath;
 use cesrox::parse_many;
@@ -41,7 +41,10 @@ use said::version::format::SerializationFormats;
 
 pub mod error;
 pub mod event_generator;
-#[cfg(all(feature = "query", feature = "oobi", feature = "mailbox"))]
+
+#[cfg(feature = "query")]
+pub mod possible_response;
+#[cfg(all(feature = "mailbox", feature = "oobi"))]
 pub mod simple_controller;
 
 pub fn parse_event_stream(stream: &[u8]) -> Result<Vec<Message>, ParseError> {
@@ -69,7 +72,7 @@ pub fn parse_query_stream(stream: &[u8]) -> Result<Vec<SignedQueryMessage>, Pars
         .collect()
 }
 
-#[cfg(any(feature = "query", feature = "oobi"))]
+#[cfg(feature = "query")]
 pub fn parse_reply_stream(stream: &[u8]) -> Result<Vec<SignedReply>, ParseError> {
     let (_rest, replies) = parse_many(stream).map_err(|e| ParseError::CesrError(e.to_string()))?;
     replies.into_iter().map(SignedReply::try_from).collect()
@@ -211,6 +214,7 @@ pub fn process_signed_query<D: EventDatabase>(
             // unpack and check what's inside
             Ok(process_query(kqry.query.get_route(), storage)?)
         }
+        #[cfg(feature = "mailbox")]
         SignedQueryMessage::MailboxQuery(mqry) => {
             let signature = mqry.signature;
             let data = &mqry.query.encode().map_err(|_e| Error::VersionError)?;
@@ -273,7 +277,7 @@ pub fn process_query<D: EventDatabase>(
     }
 }
 
-#[cfg(feature = "query")]
+#[cfg(feature = "mailbox")]
 pub fn process_mailbox_query<D: EventDatabase>(
     qr: &MailboxRoute,
     storage: &EventStorage<D>,

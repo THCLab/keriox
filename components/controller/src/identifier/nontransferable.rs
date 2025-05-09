@@ -6,8 +6,8 @@ use crate::{
 };
 use keri_core::{
     actor::{
+        possible_response::PossibleResponse,
         prelude::{HashFunctionCode, SerializationFormats},
-        simple_controller::PossibleResponse,
     },
     event_message::{
         msg::KeriEvent,

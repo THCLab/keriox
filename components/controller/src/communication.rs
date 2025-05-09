@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use futures::future::join_all;
 use keri_core::{
-    actor::{error::ActorError, parse_event_stream, simple_controller::PossibleResponse},
+    actor::{error::ActorError, parse_event_stream, possible_response::PossibleResponse},
     event_message::signed_event_message::{Message, Notice, Op, SignedEventMessage},
     oobi::{EndRole, LocationScheme, Oobi, Scheme},
     prefix::{BasicPrefix, IdentifierPrefix},

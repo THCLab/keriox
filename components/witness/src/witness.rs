@@ -7,8 +7,8 @@ use std::{
 use keri_core::{
     actor::{
         error::ActorError, parse_exchange_stream, parse_notice_stream, parse_query_stream,
-        parse_reply_stream, prelude::*, process_reply, process_signed_exn, process_signed_query,
-        simple_controller::PossibleResponse,
+        parse_reply_stream, possible_response::PossibleResponse, prelude::*, process_reply,
+        process_signed_exn, process_signed_query,
     },
     database::{
         redb::{RedbDatabase, RedbError},

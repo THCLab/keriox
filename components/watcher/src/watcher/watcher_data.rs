@@ -2,6 +2,7 @@ use std::{fs::File, sync::Arc};
 
 use futures::future::join_all;
 use itertools::Itertools;
+use keri_core::actor::possible_response::PossibleResponse;
 use keri_core::database::redb::RedbError;
 use keri_core::error::Error;
 use keri_core::oobi::LocationScheme;
@@ -17,9 +18,7 @@ use keri_core::{
     actor::{
         error::ActorError,
         prelude::{HashFunctionCode, SerializationFormats},
-        process_notice, process_reply,
-        simple_controller::PossibleResponse,
-        QueryError, SignedQueryError,
+        process_notice, process_reply, QueryError, SignedQueryError,
     },
     oobi::{Role, Scheme},
 };

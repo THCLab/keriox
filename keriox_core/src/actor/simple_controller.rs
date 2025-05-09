@@ -1,9 +1,9 @@
 use std::{
     convert::TryInto,
-    fmt,
     sync::{Arc, Mutex},
 };
 
+use crate::query::query_event::LogsQueryArgs;
 use crate::{
     database::{redb::RedbDatabase, EventDatabase},
     processor::escrow::{
@@ -12,22 +12,16 @@ use crate::{
     },
     query::mailbox::SignedMailboxQuery,
 };
-use crate::{event_message::cesr_adapter::ParseError, query::query_event::LogsQueryArgs};
 use cesrox::{cesr_proof::MaterialPath, parse, primitives::CesrPrimitive};
 use said::derivation::{HashFunction, HashFunctionCode};
 use said::version::format::SerializationFormats;
-use serde::{Deserialize, Serialize};
 
 use super::{
     event_generator, prelude::Message, process_notice, process_signed_exn, process_signed_oobi,
 };
 #[cfg(feature = "mailbox")]
-use crate::mailbox::{
-    exchange::{Exchange, ForwardTopic, FwdArgs, SignedExchange},
-    MailboxResponse,
-};
+use crate::mailbox::exchange::{Exchange, ForwardTopic, FwdArgs, SignedExchange};
 use crate::{
-    actor::parse_event_stream,
     error::Error,
     event::{
         event_data::EventData,
@@ -57,149 +51,10 @@ use crate::{
 use crate::oobi::{OobiManager, Role};
 
 #[cfg(feature = "query")]
-use super::parse_reply_stream;
-#[cfg(feature = "query")]
 use crate::query::{
     query_event::{QueryEvent, QueryRoute, SignedKelQuery, SignedQueryMessage},
     reply_event::SignedReply,
 };
-
-#[cfg(feature = "query")]
-#[derive(PartialEq, Debug, Clone)]
-pub enum PossibleResponse {
-    Kel(Vec<Message>),
-    Mbx(MailboxResponse),
-    Ksn(SignedReply),
-}
-
-#[derive(Debug, thiserror::Error, Serialize, Deserialize)]
-pub enum ResponseError {
-    #[error("Empty response")]
-    EmptyResponse,
-    #[error("Can't parse response: {0}")]
-    Unparsable(#[from] ParseError),
-}
-
-impl PossibleResponse {
-    fn display(&self) -> Result<Vec<u8>, Error> {
-        Ok(match self {
-            PossibleResponse::Kel(kel) => kel
-                .iter()
-                .map(|message| -> Result<_, Error> { message.to_cesr() })
-                .collect::<Result<Vec<Vec<u8>>, Error>>()?
-                .concat(),
-            PossibleResponse::Mbx(mbx) => {
-                let receipts_stream = mbx
-                    .receipt
-                    .clone()
-                    .into_iter()
-                    .map(|rct| Message::Notice(Notice::NontransferableRct(rct)).to_cesr())
-                    .collect::<Result<Vec<Vec<u8>>, Error>>()?
-                    .concat();
-                let multisig_stream = mbx
-                    .multisig
-                    .clone()
-                    .into_iter()
-                    .map(|rct| Message::Notice(Notice::Event(rct)).to_cesr())
-                    .collect::<Result<Vec<Vec<u8>>, Error>>()?
-                    .concat();
-                let delegate_stream = mbx
-                    .delegate
-                    .clone()
-                    .into_iter()
-                    .map(|rct| Message::Notice(Notice::Event(rct)).to_cesr())
-                    .collect::<Result<Vec<Vec<u8>>, Error>>()?
-                    .concat();
-                #[derive(Serialize)]
-                struct GroupedResponse {
-                    receipt: String,
-                    multisig: String,
-                    delegate: String,
-                }
-                serde_json::to_vec(&GroupedResponse {
-                    receipt: String::from_utf8(receipts_stream)
-                        .map_err(|e| Error::SerializationError(e.to_string()))?,
-                    multisig: String::from_utf8(multisig_stream)
-                        .map_err(|e| Error::SerializationError(e.to_string()))?,
-                    delegate: String::from_utf8(delegate_stream)
-                        .map_err(|e| Error::SerializationError(e.to_string()))?,
-                })
-                .map_err(|e| Error::SerializationError(e.to_string()))?
-            }
-            PossibleResponse::Ksn(ksn) => Message::Op(Op::Reply(ksn.clone())).to_cesr()?,
-        })
-    }
-}
-
-#[cfg(feature = "query")]
-pub fn parse_response(response: &str) -> Result<PossibleResponse, ResponseError> {
-    Ok(match parse_mailbox_response(response) {
-        Err(_) => match parse_reply_stream(response.as_bytes()) {
-            Ok(a) if a.is_empty() => return Err(ResponseError::EmptyResponse),
-            Ok(rep) => PossibleResponse::Ksn(rep[0].clone()),
-            Err(_e) => {
-                let events = parse_event_stream(response.as_bytes())?;
-                PossibleResponse::Kel(events)
-            }
-        },
-        Ok(res) => res,
-    })
-}
-
-#[cfg(feature = "mailbox")]
-pub fn parse_mailbox_response(response: &str) -> Result<PossibleResponse, ParseError> {
-    #[derive(Deserialize, Debug)]
-    struct GroupedResponse {
-        receipt: String,
-        multisig: String,
-        delegate: String,
-    }
-    let res: GroupedResponse =
-        serde_json::from_str(&response).map_err(|e| ParseError::DeserializeError(e.to_string()))?;
-    let receipts = parse_event_stream(res.receipt.as_bytes())?
-        .into_iter()
-        .map(|rct| {
-            if let Message::Notice(Notice::NontransferableRct(rct)) = rct {
-                rct
-            } else {
-                unreachable!()
-            }
-        })
-        .collect::<Vec<_>>();
-    let multisig = parse_event_stream(res.multisig.as_bytes())?
-        .into_iter()
-        .map(|msg| {
-            if let Message::Notice(Notice::Event(event)) = msg {
-                event
-            } else {
-                unreachable!()
-            }
-        })
-        .collect::<Vec<_>>();
-    let delegate = parse_event_stream(res.delegate.as_bytes())?
-        .into_iter()
-        .map(|msg| {
-            if let Message::Notice(Notice::Event(event)) = msg {
-                event
-            } else {
-                unreachable!()
-            }
-        })
-        .collect::<Vec<_>>();
-    Ok(PossibleResponse::Mbx(MailboxResponse {
-        receipt: receipts,
-        multisig: multisig,
-        delegate,
-    }))
-}
-
-impl fmt::Display for PossibleResponse {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let str = self.display().map_err(|_e| fmt::Error)?;
-        f.write_str(&String::from_utf8(str).map_err(|_e| fmt::Error)?)?;
-        Ok(())
-    }
-}
 
 /// Helper struct for events generation, signing and processing.
 /// Used in tests.
@@ -337,6 +192,7 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase> {
         ))
     }
 
+    #[cfg(feature = "oobi")]
     pub fn add_watcher(&self, watcher_id: &IdentifierPrefix) -> Result<Op, Error> {
         let end_role =
             event_generator::generate_end_role(&self.prefix(), watcher_id, Role::Watcher, true);
@@ -649,7 +505,6 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase> {
         Ok((signed, exchanges))
     }
 
-    #[cfg(feature = "mailbox")]
     pub fn create_forward_message(
         &self,
         receipient: &IdentifierPrefix,
@@ -788,6 +643,7 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase> {
 
     /// Returns exn message that contains signed multisig event and will be
     /// forward to group identifier's mailbox.
+    #[cfg(feature = "mailbox")]
     pub fn process_own_multisig(
         &mut self,
         event: SignedEventMessage,
@@ -846,6 +702,7 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase> {
         ));
 
         let ixn = self.anchor(&vec![seal])?;
+        #[cfg(feature = "mailbox")]
         self.create_forward_message(&id, &ixn, ForwardTopic::Delegate)
     }
 
@@ -865,6 +722,7 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase> {
         ));
 
         let ixn = self.anchor_group(group_id, &vec![seal])?;
+        #[cfg(feature = "mailbox")]
         self.create_forward_message(&group_id, &ixn, ForwardTopic::Multisig)
     }
 

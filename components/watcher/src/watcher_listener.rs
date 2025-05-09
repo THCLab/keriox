@@ -256,7 +256,7 @@ mod test {
     use keri_core::{
         actor::{
             error::ActorError, parse_event_stream, parse_op_stream,
-            simple_controller::PossibleResponse,
+            possible_response::PossibleResponse,
         },
         event_message::signed_event_message::{Message, Op},
         oobi::{Oobi, Role},

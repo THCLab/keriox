@@ -3,6 +3,8 @@ use said::derivation::HashFunctionCode;
 use said::version::format::SerializationFormats;
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "mailbox")]
+use super::mailbox::SignedMailboxQuery;
 use crate::{
     actor::prelude::Message,
     error::Error,
@@ -15,8 +17,6 @@ use crate::{
     },
     prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
 };
-
-use super::mailbox::SignedMailboxQuery;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(tag = "r")]
@@ -88,6 +88,7 @@ impl Typeable for QueryRoute {
 #[serde(untagged)]
 pub enum SignedQueryMessage {
     KelQuery(SignedKelQuery),
+    #[cfg(feature = "mailbox")]
     MailboxQuery(SignedMailboxQuery),
 }
 
@@ -95,6 +96,7 @@ impl SignedQueryMessage {
     pub fn signature(&self) -> Signature {
         match self {
             SignedQueryMessage::KelQuery(qry) => qry.signature.clone(),
+            #[cfg(feature = "mailbox")]
             SignedQueryMessage::MailboxQuery(qry) => qry.signature.clone(),
         }
     }
@@ -102,6 +104,7 @@ impl SignedQueryMessage {
     pub fn prefix(&self) -> IdentifierPrefix {
         match self {
             SignedQueryMessage::KelQuery(qry) => qry.query.get_prefix(),
+            #[cfg(feature = "mailbox")]
             SignedQueryMessage::MailboxQuery(qry) => match &qry.query.data.data {
                 super::mailbox::MailboxRoute::Mbx {
                     reply_route: _,
@@ -182,6 +185,7 @@ pub fn signed_query_parse() {
         _ => unreachable!(),
     };
 }
+#[cfg(feature = "mailbox")]
 #[test]
 fn test_query_deserialize2() {
     use crate::query::mailbox::MailboxQuery;

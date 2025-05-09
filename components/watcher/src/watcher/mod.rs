@@ -10,7 +10,7 @@ use std::{
 use keri_core::{
     actor::{
         error::ActorError, parse_event_stream, parse_notice_stream, parse_query_stream,
-        parse_reply_stream, simple_controller::PossibleResponse,
+        parse_reply_stream, possible_response::PossibleResponse,
     },
     error::Error,
     event_message::signed_event_message::Message,

@@ -6,9 +6,8 @@ use std::{
 use keri_controller::SelfSigningPrefix;
 use keri_core::{
     actor::{
-        error::ActorError,
-        simple_controller::{PossibleResponse, SimpleController},
-        SignedQueryError,
+        error::ActorError, possible_response::PossibleResponse,
+        simple_controller::SimpleController, SignedQueryError,
     },
     database::redb::RedbDatabase,
     event_message::signed_event_message::{Notice, Op},

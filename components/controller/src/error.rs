@@ -15,6 +15,7 @@ pub enum ControllerError {
     #[error("Redb error: {0}")]
     RedbError(#[from] RedbError),
 
+    #[cfg(feature = "query_cache")]
     #[error("SQL error: {0}")]
     SQLError(#[from] rusqlite::Error),
 

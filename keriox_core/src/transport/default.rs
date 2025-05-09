@@ -1,11 +1,10 @@
 use serde::Deserialize;
 
 use super::{Transport, TransportError};
+#[cfg(feature = "query")]
+use crate::actor::possible_response::PossibleResponse;
 use crate::{
-    actor::{
-        parse_op_stream,
-        simple_controller::{parse_response, PossibleResponse},
-    },
+    actor::parse_op_stream,
     event_message::signed_event_message::{Message, Op},
     oobi::{LocationScheme, Oobi, Role, Scheme},
     prefix::IdentifierPrefix,
@@ -91,7 +90,7 @@ where
         loc: LocationScheme,
         qry: SignedQueryMessage,
     ) -> Result<PossibleResponse, TransportError<E>> {
-        use crate::actor::simple_controller::ResponseError;
+        use crate::actor::possible_response::{parse_response, ResponseError};
 
         let url = match loc.scheme {
             Scheme::Http => {

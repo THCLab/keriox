@@ -21,7 +21,7 @@ use crate::mailbox::exchange::SignedExchange;
 #[derive(Clone, Debug, PartialEq)]
 pub enum Message {
     Notice(Notice),
-    #[cfg(any(feature = "query", feature = "oobi"))]
+    #[cfg(feature = "query")]
     Op(Op),
 }
 
@@ -39,7 +39,7 @@ pub enum Notice {
 pub enum Op {
     #[cfg(feature = "mailbox")]
     Exchange(SignedExchange),
-    #[cfg(feature = "oobi")]
+    #[cfg(feature = "query")]
     Reply(SignedReply),
     #[cfg(feature = "query")]
     Query(SignedQueryMessage),
@@ -65,11 +65,11 @@ impl From<Notice> for ParsedData {
     }
 }
 
-#[cfg(any(feature = "query", feature = "oobi"))]
+#[cfg(feature = "query")]
 impl From<Op> for ParsedData {
     fn from(op: Op) -> Self {
         match op {
-            #[cfg(feature = "oobi")]
+            #[cfg(feature = "query")]
             Op::Reply(ksn) => ParsedData::from(ksn),
             #[cfg(feature = "query")]
             Op::Query(qry) => ParsedData::from(qry),
@@ -107,11 +107,10 @@ impl Notice {
     }
 }
 
-#[cfg(any(feature = "query", feature = "oobi"))]
+#[cfg(feature = "query")]
 impl Op {
     pub fn get_prefix(&self) -> IdentifierPrefix {
         match self {
-            #[cfg(feature = "oobi")]
             Op::Reply(reply) => reply.reply.get_prefix(),
             Op::Query(qry) => qry.prefix(),
             #[cfg(feature = "mailbox")]

@@ -4,13 +4,14 @@ use crate::communication::SendingError;
 use crate::error::ControllerError;
 use futures::future::join_all;
 use keri_core::actor::error::ActorError;
+use keri_core::actor::possible_response::PossibleResponse;
 use keri_core::actor::prelude::HashFunctionCode;
 use keri_core::error::Error;
 use keri_core::oobi::Scheme;
 use keri_core::prefix::IndexedSignature;
 use keri_core::query::query_event::SignedKelQuery;
 use keri_core::{
-    actor::{prelude::SerializationFormats, simple_controller::PossibleResponse},
+    actor::prelude::SerializationFormats,
     event::sections::seal::EventSeal,
     prefix::{IdentifierPrefix, SelfSigningPrefix},
     query::query_event::{LogsQueryArgs, QueryEvent, QueryRoute},

@@ -1,6 +1,7 @@
+use keri_core::actor::possible_response::PossibleResponse;
 use keri_core::actor::prelude::HashFunctionCode;
 use keri_core::{
-    actor::{prelude::SerializationFormats, simple_controller::PossibleResponse},
+    actor::prelude::SerializationFormats,
     oobi::Scheme,
     prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
     query::{

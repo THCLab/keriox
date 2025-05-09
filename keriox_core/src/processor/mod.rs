@@ -56,7 +56,7 @@ pub trait Processor {
             Message::Op(op) => match op {
                 #[cfg(feature = "query")]
                 Op::Query(_query) => panic!("processor can't handle query op"),
-                #[cfg(feature = "oobi")]
+                #[cfg(feature = "query")]
                 Op::Reply(reply) => self.process_op_reply(reply),
                 _ => todo!(),
             },

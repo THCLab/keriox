@@ -12,7 +12,7 @@ use keri_core::{
     processor::{basic_processor::BasicProcessor, event_storage::EventStorage},
     signer::{CryptoBox, KeyManager},
 };
-use tempfile::{Builder, NamedTempFile};
+use tempfile::NamedTempFile;
 
 #[test]
 fn test_incept() -> Result<(), Error> {

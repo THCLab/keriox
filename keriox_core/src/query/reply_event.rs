@@ -102,11 +102,12 @@ impl<'de> Deserialize<'de> for ReplyRoute {
 
         if let Some(id_prefix) = tag.strip_prefix("/ksn/") {
             let id: IdentifierPrefix = id_prefix.parse().map_err(de::Error::custom)?;
-            let ksn = if let ReplyType::K(ksn) = reply_data {
-                Ok(ksn)
-            } else {
-                Err(Error::SemanticError("Wrong route".into())).map_err(de::Error::custom)
-            }?;
+            let ksn = match reply_data {
+                ReplyType::K(ksn) => ksn,
+                _ => {
+                    return Err(de::Error::custom("Wrong route"));
+                }
+            };
             Ok(ReplyRoute::Ksn(id, ksn))
         } else {
             match (&tag[..], reply_data) {

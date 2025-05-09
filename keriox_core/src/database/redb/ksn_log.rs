@@ -38,12 +38,12 @@ impl AcceptedKsn {
     }
 
     pub fn insert(&self, reply: SignedReply) -> Result<(), RedbError> {
-        let (from_who, about_who) = if let ReplyRoute::Ksn(id, ksn) = reply.reply.get_route() {
-            Ok((id, ksn.state.prefix))
-        } else {
-            Err(Error::SemanticError("Wrong event type".into()))
+        let (from_who, about_who) = match reply.reply.get_route() {
+            ReplyRoute::Ksn(id, ksn) => Ok((id, ksn.state.prefix)),
+            _ => Err(Error::SemanticError("Wrong event type".into())),
         }
         .unwrap();
+
         let write_txn = self.db.begin_write()?;
         {
             let mut table = (&write_txn).open_table(ACCEPTED_KSN)?;

@@ -3,7 +3,7 @@ use std::error::Error;
 use serde::Deserialize;
 
 use crate::{
-    actor::{error::ActorError, simple_controller::PossibleResponse},
+    actor::{error::ActorError, possible_response::PossibleResponse},
     event_message::{
         cesr_adapter::ParseError,
         signed_event_message::{Message, Op},

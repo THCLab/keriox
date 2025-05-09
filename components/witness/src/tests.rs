@@ -3,8 +3,9 @@ use std::sync::{Arc, Mutex};
 use keri_core::{
     actor::{
         error::ActorError,
+        possible_response::PossibleResponse,
         prelude::{HashFunctionCode, SerializationFormats},
-        simple_controller::{PossibleResponse, SimpleController},
+        simple_controller::SimpleController,
         SignedQueryError,
     },
     database::redb::RedbDatabase,

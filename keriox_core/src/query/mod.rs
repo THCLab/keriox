@@ -9,6 +9,7 @@ use self::key_state_notice::KeyStateNotice;
 use thiserror::Error;
 
 pub mod key_state_notice;
+#[cfg(feature = "mailbox")]
 pub mod mailbox;
 pub mod query_event;
 pub mod reply_event;

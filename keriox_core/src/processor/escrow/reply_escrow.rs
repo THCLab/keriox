@@ -45,8 +45,11 @@ impl Notifier for ReplyEscrow<RedbDatabase> {
     fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error> {
         match notification {
             Notification::KsnOutOfOrder(rpy) => {
-                if let ReplyRoute::Ksn(_id, _ksn) = rpy.reply.get_route() {
-                    self.escrowed_reply.insert(rpy)?;
+                match rpy.reply.get_route() {
+                    ReplyRoute::Ksn(_id, _ksn) => {
+                        self.escrowed_reply.insert(rpy)?;
+                    }
+                    _ => return Err(Error::SemanticError("Wrong event type".to_string())),
                 };
                 Ok(())
             }

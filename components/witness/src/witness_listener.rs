@@ -96,7 +96,7 @@ mod test {
         actor::{
             error::ActorError,
             parse_event_stream, parse_op_stream,
-            simple_controller::{parse_response, PossibleResponse},
+            possible_response::{parse_response, PossibleResponse},
         },
         event_message::signed_event_message::{Message, Op},
         oobi::Role,

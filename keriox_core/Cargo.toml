@@ -14,9 +14,9 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 default = []
-query = []
+query = ["serde_cbor"]
 oobi = ["query", "url", "strum_macros", "strum", "reqwest", "async-trait", "serde_cbor"]
-mailbox = ["query"]
+mailbox = ["query", "serde_cbor"]
 
 [dependencies]
 bytes = "1.3.0"

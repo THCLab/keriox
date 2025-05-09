@@ -1,12 +1,8 @@
 use std::sync::Arc;
 
 use super::compute_state;
-#[cfg(feature = "mailbox")]
-use crate::database::mailbox::MailboxData;
 #[cfg(feature = "query")]
-use crate::query::{
-    key_state_notice::KeyStateNotice, mailbox::QueryArgsMbx, reply_event::SignedReply,
-};
+use crate::query::{key_state_notice::KeyStateNotice, reply_event::SignedReply};
 use crate::{
     actor::prelude::Message,
     database::{
@@ -25,6 +21,8 @@ use crate::{
     prefix::{BasicPrefix, IdentifierPrefix},
     state::{EventSemantics, IdentifierState},
 };
+#[cfg(feature = "mailbox")]
+use crate::{database::mailbox::MailboxData, query::mailbox::QueryArgsMbx};
 use crate::{
     database::{EventDatabase, QueryParameters},
     event_message::signed_event_message::SignedEventMessage,
@@ -45,6 +43,7 @@ pub struct EventStorage<D: EventDatabase> {
 // Collection of methods for getting data from database.
 impl EventStorage<RedbDatabase> {
     pub fn new(events_db: Arc<RedbDatabase>) -> Self {
+        #[cfg(feature = "mailbox")]
         let mailbox_data = MailboxData::new(events_db.db.clone()).unwrap();
         Self {
             events_db,
