@@ -2,11 +2,53 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.17.2] - 2025-05-09
+
+### 🚀 Features
+
+- Remove sled from partially signed escrow
+
+### 🐛 Bug Fixes
+
+- Fix failing tests
+- Use index in table instead of event sn in mailbox db
+- *(mailbox)* Prevent saving the same element multiple times
+- *(mailbox)* Allow getting messages from index
+- Resolve feature dependency issues
+
+### 🚜 Refactor
+
+- Add partially_signed_escrow submodule
+- Move tests to partially_signed_escrow submodule
+- Remove sled from delegation escrow
+- Remove unused code
+- Add reply escrow submodule
+- Add duplicitous event submodule
+- Store accepted replys in redb
+- Remove sled from reply escrow
+- Use redb for mailbox storage
+- Remove SledEventDatabase from keri_core workspace
+- Align workspaces with changes
+- Remove sled db from oobi module
+- Remove sled dependency
+
+### 🧪 Testing
+
+- Add mailbox table test
+
+### ⚙️ Miscellaneous Tasks
+
+- Cargo fmt
+
 ## [0.17.1] - 2025-04-30
 
 ### 🚜 Refactor
 
 - Update verify_from_cesr arguments
+
+### ⚙️ Miscellaneous Tasks
+
+- Release
 
 ## [0.17.0] - 2025-04-17
 
