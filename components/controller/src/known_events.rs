@@ -29,6 +29,7 @@ use keri_core::{
     query::reply_event::{ReplyEvent, ReplyRoute, SignedReply},
 };
 use teliox::database::escrow::EscrowDb;
+use teliox::database::sled_db::SledEventDatabase;
 use teliox::database::EventDatabase;
 use teliox::processor::escrow::default_escrow_bus as tel_escrow_bus;
 use teliox::processor::storage::TelEventStorage;
@@ -50,7 +51,7 @@ pub struct KnownEvents {
     pub storage: Arc<EventStorage<RedbDatabase>>,
     pub oobi_manager: OobiManager,
     pub partially_witnessed_escrow: Arc<PartiallyWitnessedEscrow>,
-    pub tel: Arc<Tel>,
+    pub tel: Arc<Tel<SledEventDatabase>>,
 }
 
 impl KnownEvents {

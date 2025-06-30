@@ -22,15 +22,18 @@ use crate::{
 
 use super::TelEventStorage;
 
-pub struct TelEventValidator {
+pub struct TelEventValidator<D: EventDatabase> {
     kel_reference: Arc<EventStorage<RedbDatabase>>,
-    db: TelEventStorage,
+    db: Arc<TelEventStorage<D>>,
 }
 
-impl TelEventValidator {
-    pub fn new(db: Arc<EventDatabase>, kel_reference: Arc<EventStorage<RedbDatabase>>) -> Self {
+impl<D: EventDatabase> TelEventValidator<D> {
+    pub fn new(
+        db: Arc<TelEventStorage<D>>,
+        kel_reference: Arc<EventStorage<RedbDatabase>>,
+    ) -> Self {
         Self {
-            db: TelEventStorage::new(db),
+            db: db.clone(),
             kel_reference,
         }
     }

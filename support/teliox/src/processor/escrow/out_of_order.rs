@@ -5,7 +5,10 @@ use keri_core::{
 };
 
 use crate::{
-    database::escrow::{Escrow, EscrowDb},
+    database::{
+        escrow::{Escrow, EscrowDb},
+        EventDatabase,
+    },
     error::Error,
     event::verifiable_event::VerifiableEvent,
     processor::{
@@ -15,15 +18,15 @@ use crate::{
     },
 };
 
-pub struct OutOfOrderEscrow {
-    tel_reference: Arc<TelEventStorage>,
+pub struct OutOfOrderEscrow<D: EventDatabase> {
+    tel_reference: Arc<TelEventStorage<D>>,
     kel_reference: Arc<EventStorage<RedbDatabase>>,
     escrowed_out_of_order: Escrow<VerifiableEvent>,
 }
 
-impl OutOfOrderEscrow {
+impl<D: EventDatabase> OutOfOrderEscrow<D> {
     pub fn new(
-        tel_reference: Arc<TelEventStorage>,
+        tel_reference: Arc<TelEventStorage<D>>,
         kel_reference: Arc<EventStorage<RedbDatabase>>,
         escrow_db: Arc<EscrowDb>,
         duration: Duration,
@@ -37,7 +40,7 @@ impl OutOfOrderEscrow {
     }
 }
 
-impl TelNotifier for OutOfOrderEscrow {
+impl<D: EventDatabase> TelNotifier for OutOfOrderEscrow<D> {
     fn notify(
         &self,
         notification: &TelNotification,
@@ -59,7 +62,7 @@ impl TelNotifier for OutOfOrderEscrow {
     }
 }
 
-impl OutOfOrderEscrow {
+impl<D: EventDatabase> OutOfOrderEscrow<D> {
     pub fn process_out_of_order_events(
         &self,
         bus: &TelNotificationBus,
@@ -67,10 +70,8 @@ impl OutOfOrderEscrow {
     ) -> Result<(), Error> {
         if let Some(esc) = self.escrowed_out_of_order.get(id) {
             for event in esc {
-                let validator = TelEventValidator::new(
-                    self.tel_reference.db.clone(),
-                    self.kel_reference.clone(),
-                );
+                let validator =
+                    TelEventValidator::new(self.tel_reference.clone(), self.kel_reference.clone());
                 match validator.validate(&event) {
                     Ok(_) => {
                         // remove from escrow
@@ -109,7 +110,7 @@ mod tests {
     };
 
     use crate::{
-        database::{escrow::EscrowDb, EventDatabase},
+        database::{escrow::EscrowDb, sled_db::SledEventDatabase, EventDatabase},
         error::Error,
         event::verifiable_event::VerifiableEvent,
         processor::{
@@ -127,7 +128,6 @@ mod tests {
         // Setup issuer key event log. Without ixn events tel event's can't be validated.
         let keri_root = Builder::new().prefix("test-db").tempfile().unwrap();
         let keri_db = Arc::new(RedbDatabase::new(keri_root.path()).unwrap());
-        let escrow_root = Builder::new().prefix("test-db").tempdir().unwrap();
         let keri_processor = BasicProcessor::new(keri_db.clone(), None);
         let keri_storage = Arc::new(EventStorage::new(keri_db.clone()));
 
@@ -141,7 +141,7 @@ mod tests {
         // Initiate tel and it's escrows
         let tel_root = Builder::new().prefix("test-db").tempdir().unwrap();
         let tel_escrow_root = Builder::new().prefix("test-db").tempdir().unwrap();
-        let tel_events_db = Arc::new(EventDatabase::new(&tel_root.path()).unwrap());
+        let tel_events_db = Arc::new(SledEventDatabase::new(&tel_root.path()).unwrap());
 
         let tel_escrow_db = Arc::new(EscrowDb::new(&tel_escrow_root.path()).unwrap());
 

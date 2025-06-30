@@ -5,7 +5,10 @@ use keri_core::{
 };
 
 use crate::{
-    database::escrow::{Escrow, EscrowDb},
+    database::{
+        escrow::{Escrow, EscrowDb},
+        EventDatabase,
+    },
     error::Error,
     event::verifiable_event::VerifiableEvent,
     processor::{
@@ -15,15 +18,15 @@ use crate::{
     },
 };
 
-pub struct MissingRegistryEscrow {
-    tel_reference: Arc<TelEventStorage>,
+pub struct MissingRegistryEscrow<D: EventDatabase> {
+    tel_reference: Arc<TelEventStorage<D>>,
     kel_reference: Arc<EventStorage<RedbDatabase>>,
     escrowed_missing_registry: Escrow<VerifiableEvent>,
 }
 
-impl MissingRegistryEscrow {
+impl<D: EventDatabase> MissingRegistryEscrow<D> {
     pub fn new(
-        tel_reference: Arc<TelEventStorage>,
+        tel_reference: Arc<TelEventStorage<D>>,
         kel_reference: Arc<EventStorage<RedbDatabase>>,
         escrow_db: Arc<EscrowDb>,
         duration: Duration,
@@ -37,7 +40,7 @@ impl MissingRegistryEscrow {
     }
 }
 
-impl TelNotifier for MissingRegistryEscrow {
+impl<D: EventDatabase> TelNotifier for MissingRegistryEscrow<D> {
     fn notify(
         &self,
         notification: &TelNotification,
@@ -60,7 +63,7 @@ impl TelNotifier for MissingRegistryEscrow {
     }
 }
 
-impl MissingRegistryEscrow {
+impl<D: EventDatabase> MissingRegistryEscrow<D> {
     pub fn process_missing_registry(
         &self,
         bus: &TelNotificationBus,
@@ -68,10 +71,8 @@ impl MissingRegistryEscrow {
     ) -> Result<(), Error> {
         if let Some(esc) = self.escrowed_missing_registry.get(id) {
             for event in esc {
-                let validator = TelEventValidator::new(
-                    self.tel_reference.db.clone(),
-                    self.kel_reference.clone(),
-                );
+                let validator =
+                    TelEventValidator::new(self.tel_reference.clone(), self.kel_reference.clone());
                 match validator.validate(&event) {
                     Ok(_) => {
                         // remove from escrow
@@ -114,7 +115,7 @@ mod tests {
     };
 
     use crate::{
-        database::{escrow::EscrowDb, EventDatabase},
+        database::{escrow::EscrowDb, sled_db::SledEventDatabase, EventDatabase},
         error::Error,
         event::verifiable_event::VerifiableEvent,
         processor::{
@@ -145,7 +146,7 @@ mod tests {
         // Initiate tel and it's escrows
         let tel_root = Builder::new().prefix("test-db").tempdir().unwrap();
         let tel_escrow_root = Builder::new().prefix("test-db").tempdir().unwrap();
-        let tel_events_db = Arc::new(EventDatabase::new(&tel_root.path()).unwrap());
+        let tel_events_db = Arc::new(SledEventDatabase::new(&tel_root.path()).unwrap());
 
         let tel_escrow_db = Arc::new(EscrowDb::new(&tel_escrow_root.path()).unwrap());
 

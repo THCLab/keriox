@@ -1,68 +1,29 @@
 use crate::{error::Error, event::verifiable_event::VerifiableEvent};
 use keri_core::prefix::IdentifierPrefix;
-use sled_tables::{
-    self,
-    tables::{SledEventTree, SledEventTreeVec},
-};
-use std::{path::Path, sync::Arc};
+use std::path::Path;
 pub mod escrow;
+pub mod sled_db;
 
-pub struct EventDatabase {
-    db: Arc<sled::Db>,
-    // "iids" tree
-    identifiers: SledEventTree<IdentifierPrefix>,
-    // "tels" tree
-    tel_events: SledEventTreeVec<VerifiableEvent>,
-    // "man" tree
-    management_events: SledEventTreeVec<VerifiableEvent>,
-}
+pub trait EventDatabase {
+    fn new(path: impl AsRef<Path>) -> Result<Self, Error>
+    where
+        Self: Sized;
 
-impl EventDatabase {
-    pub fn new(path: impl AsRef<Path>) -> Result<Self, Error> {
-        let db = Arc::new(sled::open(path)?);
-        Ok(Self {
-            db: db.clone(),
-            identifiers: SledEventTree::new(db.open_tree(b"iids")?),
-            tel_events: SledEventTreeVec::new(db.open_tree(b"tels")?),
-            management_events: SledEventTreeVec::new(db.open_tree(b"mans")?),
-        })
-    }
+    fn add_new_event(&self, event: VerifiableEvent, id: &IdentifierPrefix) -> Result<(), Error>;
 
-    pub fn add_new_event(
+    fn get_events(
+        &self,
+        id: &IdentifierPrefix,
+    ) -> Option<impl DoubleEndedIterator<Item = VerifiableEvent>>;
+
+    fn add_new_management_event(
         &self,
         event: VerifiableEvent,
         id: &IdentifierPrefix,
-    ) -> Result<(), Error> {
-        self.tel_events
-            .push(self.identifiers.designated_key(id), event)?;
-        self.db.flush()?;
-        Ok(())
-    }
+    ) -> Result<(), Error>;
 
-    pub fn get_events(
+    fn get_management_events(
         &self,
         id: &IdentifierPrefix,
-    ) -> Option<impl DoubleEndedIterator<Item = VerifiableEvent>> {
-        self.tel_events
-            .iter_values(self.identifiers.designated_key(id))
-    }
-
-    pub fn add_new_management_event(
-        &self,
-        event: VerifiableEvent,
-        id: &IdentifierPrefix,
-    ) -> Result<(), Error> {
-        self.management_events
-            .push(self.identifiers.designated_key(id), event)?;
-        self.db.flush()?;
-        Ok(())
-    }
-
-    pub fn get_management_events(
-        &self,
-        id: &IdentifierPrefix,
-    ) -> Option<impl DoubleEndedIterator<Item = VerifiableEvent>> {
-        self.management_events
-            .iter_values(self.identifiers.designated_key(id))
-    }
+    ) -> Option<impl DoubleEndedIterator<Item = VerifiableEvent>>;
 }

@@ -3,6 +3,7 @@ use std::sync::Arc;
 use keri_core::{database::redb::RedbDatabase, processor::event_storage::EventStorage};
 
 use crate::{
+    database::EventDatabase,
     error::Error,
     event::{verifiable_event::VerifiableEvent, Event},
     query::SignedTelQuery,
@@ -19,16 +20,16 @@ pub mod notification;
 pub mod storage;
 pub mod validator;
 
-pub struct TelEventProcessor {
+pub struct TelEventProcessor<D: EventDatabase> {
     kel_reference: Arc<EventStorage<RedbDatabase>>,
-    pub tel_reference: Arc<TelEventStorage>,
+    pub tel_reference: Arc<TelEventStorage<D>>,
     pub publisher: TelNotificationBus,
 }
 
-impl TelEventProcessor {
+impl<D: EventDatabase> TelEventProcessor<D> {
     pub fn new(
         kel_reference: Arc<EventStorage<RedbDatabase>>,
-        tel_reference: Arc<TelEventStorage>,
+        tel_reference: Arc<TelEventStorage<D>>,
         tel_publisher: Option<TelNotificationBus>,
     ) -> Self {
         Self {
@@ -50,7 +51,7 @@ impl TelEventProcessor {
     // Checks verifiable event and adds it to database.
     pub fn process(&self, event: VerifiableEvent) -> Result<(), Error> {
         let validator =
-            TelEventValidator::new(self.tel_reference.db.clone(), self.kel_reference.clone());
+            TelEventValidator::new(self.tel_reference.clone(), self.kel_reference.clone());
         match &event.event.clone() {
             Event::Management(ref man) => match validator.validate_management(man, &event.seal) {
                 Ok(_) => {

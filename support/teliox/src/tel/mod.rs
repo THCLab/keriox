@@ -1,10 +1,9 @@
 use std::sync::{Arc, RwLock};
 
 use crate::{
+    database::EventDatabase,
     error::Error,
-    event::manager_event::Config,
-    event::verifiable_event::VerifiableEvent,
-    event::Event,
+    event::{manager_event::Config, verifiable_event::VerifiableEvent, Event},
     processor::{
         notification::{TelNotification, TelNotificationBus, TelNotificationKind, TelNotifier},
         storage::TelEventStorage,
@@ -44,14 +43,14 @@ impl TelNotifier for RecentlyAddedEvents {
 }
 
 /// Transaction Event Log
-pub struct Tel {
-    pub processor: TelEventProcessor,
+pub struct Tel<D: EventDatabase> {
+    pub processor: TelEventProcessor<D>,
     pub recently_added_events: Arc<RecentlyAddedEvents>,
 }
 
-impl Tel {
+impl<D: EventDatabase> Tel<D> {
     pub fn new(
-        tel_reference: Arc<TelEventStorage>,
+        tel_reference: Arc<TelEventStorage<D>>,
         kel_reference: Arc<EventStorage<RedbDatabase>>,
         publisher: Option<TelNotificationBus>,
     ) -> Self {
@@ -175,15 +174,18 @@ impl Tel {
             .collect::<Vec<_>>())
     }
 
-    pub fn get_management_tel(
-        &self,
-        registry_id: &IdentifierPrefix,
-    ) -> Result<Option<impl DoubleEndedIterator + Iterator<Item = VerifiableEvent>>, Error> {
+    pub fn get_management_tel<'a>(
+        &'a self,
+        registry_id: &'a IdentifierPrefix,
+    ) -> Result<Option<Box<dyn DoubleEndedIterator<Item = VerifiableEvent> + 'a>>, Error> {
         Ok(self
             .processor
             .tel_reference
             .db
-            .get_management_events(&registry_id))
+            .get_management_events(registry_id)
+            .map(|iter| {
+                Box::new(iter) as Box<dyn DoubleEndedIterator<Item = VerifiableEvent> + 'a>
+            }))
     }
 
     pub fn get_management_tel_state(
