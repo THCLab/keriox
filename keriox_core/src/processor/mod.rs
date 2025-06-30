@@ -20,7 +20,7 @@ use self::{
 #[cfg(feature = "query")]
 use crate::query::reply_event::{ReplyRoute, SignedReply};
 use crate::{
-    database::{redb::RedbDatabase, timestamped::TimestampedSignedEventMessage, EventDatabase},
+    database::{timestamped::TimestampedSignedEventMessage, EventDatabase},
     error::Error,
     event::receipt::Receipt,
     event_message::signed_event_message::{
@@ -31,7 +31,7 @@ use crate::{
 };
 
 pub trait Processor {
-    type Database: EventDatabase;
+    type Database: EventDatabase + 'static;
     fn process_notice(&self, notice: &Notice) -> Result<(), Error>;
 
     #[cfg(feature = "query")]
@@ -70,7 +70,7 @@ pub struct EventProcessor<D: EventDatabase> {
     publisher: NotificationBus,
 }
 
-impl EventProcessor<RedbDatabase> {
+/* impl EventProcessor<RedbDatabase> {
     pub fn new(publisher: NotificationBus, events_db: Arc<RedbDatabase>) -> Self {
         let validator = EventValidator::new(events_db.clone());
         Self {
@@ -79,9 +79,18 @@ impl EventProcessor<RedbDatabase> {
             publisher,
         }
     }
-}
+} */
 
-impl<D: EventDatabase> EventProcessor<D> {
+impl<D: EventDatabase + 'static> EventProcessor<D> {
+    pub fn new(publisher: NotificationBus, events_db: Arc<D>) -> Self {
+        let validator = EventValidator::new(events_db.clone());
+        Self {
+            events_db,
+            validator,
+            publisher,
+        }
+    }
+
     pub fn register_observer(
         &mut self,
         observer: Arc<dyn Notifier + Send + Sync>,

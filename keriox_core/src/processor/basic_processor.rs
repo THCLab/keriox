@@ -8,15 +8,15 @@ use super::{
 #[cfg(feature = "query")]
 use crate::query::reply_event::SignedReply;
 use crate::{
-    database::{redb::RedbDatabase, EventDatabase},
+    database::EventDatabase,
     error::Error,
     event_message::signed_event_message::{Notice, SignedEventMessage},
 };
 
 pub struct BasicProcessor<D: EventDatabase>(EventProcessor<D>);
 
-impl Processor for BasicProcessor<RedbDatabase> {
-    type Database = RedbDatabase;
+impl<D: EventDatabase + 'static> Processor for BasicProcessor<D> {
+    type Database = D;
     fn register_observer(
         &mut self,
         observer: Arc<dyn Notifier + Send + Sync>,
@@ -38,14 +38,14 @@ impl Processor for BasicProcessor<RedbDatabase> {
     }
 }
 
-impl BasicProcessor<RedbDatabase> {
-    pub fn new(db: Arc<RedbDatabase>, notification_bus: Option<NotificationBus>) -> Self {
+impl<D: EventDatabase + 'static> BasicProcessor<D> {
+    pub fn new(db: Arc<D>, notification_bus: Option<NotificationBus>) -> Self {
         let processor = EventProcessor::new(notification_bus.unwrap_or_default(), db.clone());
         Self(processor)
     }
 
     fn basic_processing_strategy(
-        events_db: Arc<RedbDatabase>,
+        events_db: Arc<D>,
         publisher: &NotificationBus,
         signed_event: SignedEventMessage,
     ) -> Result<(), Error> {

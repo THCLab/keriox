@@ -2,8 +2,9 @@ use std::{sync::Arc, time::Duration};
 
 use crate::{
     database::{
-        redb::{escrow_database::SnKeyDatabase, RedbDatabase},
         EventDatabase,
+        EscrowDatabase,
+        EscrowCreator,
     },
     error::Error,
     event::KeyEvent,
@@ -14,31 +15,24 @@ use crate::{
     },
 };
 
-use super::maybe_out_of_order_escrow::SnKeyEscrow;
-
-pub struct PartiallySignedEscrow<D: EventDatabase> {
+pub struct PartiallySignedEscrow<D: EventDatabase + EscrowCreator> {
     db: Arc<D>,
-    pub escrowed_partially_signed: SnKeyEscrow,
+    pub escrowed_partially_signed: D::EscrowDatabaseType,
 }
 
-impl PartiallySignedEscrow<RedbDatabase> {
-    pub fn new(db: Arc<RedbDatabase>, _duration: Duration) -> Self {
-        let escrow_db = SnKeyEscrow::new(
-            Arc::new(SnKeyDatabase::new(db.db.clone(), "partially_signed_escrow").unwrap()),
-            db.log_db.clone(),
-        );
+impl<D: EventDatabase + EscrowCreator + 'static> PartiallySignedEscrow<D> {
+    pub fn new(db: Arc<D>, _duration: Duration) -> Self {
+        let escrow_db = db.create_escrow_db("partially_signed_escrow");
         Self {
             db,
             escrowed_partially_signed: escrow_db,
         }
     }
-}
 
-impl<D: EventDatabase> PartiallySignedEscrow<D> {
     pub fn get_partially_signed_for_event(
         &self,
-        event: KeriEvent<KeyEvent>,
-    ) -> Option<SignedEventMessage> {
+        event: KeriEvent<KeyEvent>
+    ) -> Option<SignedEventMessage> where <D::EscrowDatabaseType as crate::database::EscrowDatabase>::Error: std::fmt::Debug {
         let id = event.data.get_prefix();
         let sn = event.data.sn;
         self.escrowed_partially_signed
@@ -52,25 +46,7 @@ impl<D: EventDatabase> PartiallySignedEscrow<D> {
 
         Ok(())
     }
-}
 
-impl Notifier for PartiallySignedEscrow<RedbDatabase> {
-    fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error> {
-        match notification {
-            Notification::PartiallySigned(ev) => {
-                if ev.signatures.is_empty() {
-                    // ignore events with no signatures
-                    Ok(())
-                } else {
-                    self.process_partially_signed_events(bus, ev)
-                }
-            }
-            _ => Err(Error::SemanticError("Wrong notification".into())),
-        }
-    }
-}
-
-impl PartiallySignedEscrow<RedbDatabase> {
     pub fn process_partially_signed_events(
         &self,
         bus: &NotificationBus,
@@ -80,7 +56,7 @@ impl PartiallySignedEscrow<RedbDatabase> {
         let sn = signed_event.event_message.data.sn;
         if let Some(esc) = self
             .escrowed_partially_signed
-            .get(&id, sn)?
+            .get(&id, sn).map_err(|_| Error::DbError)?
             .find(|event| event.event_message == signed_event.event_message)
         {
             let mut signatures = esc.signatures;
@@ -128,17 +104,33 @@ impl PartiallySignedEscrow<RedbDatabase> {
                         signatures: without_duplicates,
                         ..signed_event.to_owned()
                     };
-                    self.escrowed_partially_signed.insert(&to_add)?;
+                    self.escrowed_partially_signed.insert(&to_add).map_err(|_| Error::DbError)?;
                 }
                 Err(_e) => {
                     // keep in escrow
                 }
             }
         } else {
-            self.escrowed_partially_signed.insert(signed_event)?;
+            self.escrowed_partially_signed.insert(signed_event).map_err(|_| Error::DbError)?;
         };
 
         Ok(())
+    }
+}
+
+impl<D: EventDatabase + EscrowCreator + 'static> Notifier for PartiallySignedEscrow<D> {
+    fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error> {
+        match notification {
+            Notification::PartiallySigned(ev) => {
+                if ev.signatures.is_empty() {
+                    // ignore events with no signatures
+                    Ok(())
+                } else {
+                    self.process_partially_signed_events(bus, ev)
+                }
+            }
+            _ => Err(Error::SemanticError("Wrong notification".into())),
+        }
     }
 }
 
@@ -151,7 +143,7 @@ mod tests {
 
     use crate::{
         actor::prelude::{BasicProcessor, EventStorage, Message},
-        database::redb::RedbDatabase,
+        database::{redb::RedbDatabase, EscrowDatabase},
         error::Error,
         event_message::{
             cesr_adapter::EventType,

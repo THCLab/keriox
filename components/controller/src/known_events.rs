@@ -50,7 +50,7 @@ pub struct KnownEvents {
     processor: BasicProcessor<RedbDatabase>,
     pub storage: Arc<EventStorage<RedbDatabase>>,
     pub oobi_manager: OobiManager,
-    pub partially_witnessed_escrow: Arc<PartiallyWitnessedEscrow>,
+    pub partially_witnessed_escrow: Arc<PartiallyWitnessedEscrow<RedbDatabase>>,
     pub tel: Arc<Tel<SledEventDatabase>>,
 }
 

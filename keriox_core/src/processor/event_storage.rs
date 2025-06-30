@@ -40,16 +40,22 @@ pub struct EventStorage<D: EventDatabase> {
     pub mailbox_data: MailboxData,
 }
 
-// Collection of methods for getting data from database.
-impl EventStorage<RedbDatabase> {
-    pub fn new(events_db: Arc<RedbDatabase>) -> Self {
+impl<D: EventDatabase + std::any::Any> EventStorage<D> {
+    pub fn new(events_db: Arc<D>) -> Self {
         #[cfg(feature = "mailbox")]
-        let mailbox_data = MailboxData::new(events_db.db.clone()).unwrap();
-        Self {
-            events_db,
-            #[cfg(feature = "mailbox")]
-            mailbox_data: mailbox_data,
+        {
+            if let Some(redb_db) = (events_db.as_ref() as &dyn std::any::Any).downcast_ref::<RedbDatabase>() {
+                let mailbox_data = MailboxData::new(redb_db.db.clone()).unwrap();
+                Self {
+                    events_db,
+                    mailbox_data,
+                }
+            } else {
+                panic!("Expected RedbDatabase for mailbox feature");
+            }
         }
+        #[cfg(not(feature = "mailbox"))]
+        Self { events_db }
     }
 }
 

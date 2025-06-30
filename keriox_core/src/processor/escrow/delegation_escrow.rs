@@ -5,8 +5,7 @@ use said::SelfAddressingIdentifier;
 use crate::{
     actor::prelude::EventStorage,
     database::{
-        redb::{escrow_database::SnKeyDatabase, RedbDatabase},
-        EventDatabase,
+        SequencedEventDatabase, EventDatabase, EscrowDatabase, EscrowCreator
     },
     error::Error,
     event::{
@@ -21,21 +20,17 @@ use crate::{
     },
 };
 
-use super::maybe_out_of_order_escrow::SnKeyEscrow;
-
 /// Stores delegated events until delegating event is provided
-pub struct DelegationEscrow<D: EventDatabase> {
+pub struct DelegationEscrow<D: EventDatabase + EscrowCreator> {
     db: Arc<D>,
     // Key of this escrow is (delegator's identifier, delegator's event sn if available).
-    pub delegation_escrow: SnKeyEscrow,
+    pub delegation_escrow: D::EscrowDatabaseType,
 }
 
-impl DelegationEscrow<RedbDatabase> {
-    pub fn new(db: Arc<RedbDatabase>, _duration: Duration) -> Self {
-        let escrow_db = SnKeyEscrow::new(
-            Arc::new(SnKeyDatabase::new(db.db.clone(), "delegation_escrow").unwrap()),
-            db.log_db.clone(),
-        );
+
+impl <D: EventDatabase + EscrowCreator + 'static> DelegationEscrow<D> {
+    pub fn new(db: Arc<D>, _duration: Duration) -> Self {
+        let escrow_db = db.create_escrow_db("delegation_escrow");
         Self {
             db,
             delegation_escrow: escrow_db,
@@ -58,9 +53,62 @@ impl DelegationEscrow<RedbDatabase> {
                 })
             })
     }
+
+    pub fn process_delegation_events(
+        &self,
+        bus: &NotificationBus,
+        delegator_id: &IdentifierPrefix,
+        anchored_seals: Vec<EventSeal>,
+        potential_delegator_seal: SourceSeal,
+    ) -> Result<(), Error> {
+        if let Ok(esc) = self.delegation_escrow.get_from_sn(delegator_id, 0) {
+            for event in esc {
+                let event_digest = event.event_message.digest()?;
+                let seal = anchored_seals.iter().find(|seal| {
+                    seal.event_digest() == event_digest
+                        && seal.sn == event.event_message.data.get_sn()
+                        && seal.prefix == event.event_message.data.get_prefix()
+                });
+                let delegated_event = match seal {
+                    Some(_s) => SignedEventMessage {
+                        delegator_seal: Some(potential_delegator_seal.clone()),
+                        ..event.clone()
+                    },
+                    None => event.clone(),
+                };
+                let validator = EventValidator::new(self.db.clone());
+                match validator.validate_event(&delegated_event) {
+                    Ok(_) => {
+                        // add to kel
+                        let child_id = event.event_message.data.get_prefix();
+                        self.db
+                            .add_kel_finalized_event(delegated_event.clone(), &child_id)
+                            .map_err(|_| Error::DbError)?;
+                        // remove from escrow
+                        self.delegation_escrow.remove(&event.event_message);
+                        bus.notify(&Notification::KeyEventAdded(event))?;
+                        // stop processing the escrow if kel was updated. It needs to start again.
+                        break;
+                    }
+                    Err(Error::SignatureVerificationError) => {
+                        // remove from escrow
+                        self.delegation_escrow.remove(&event.event_message);
+                    }
+                    Err(Error::NotEnoughReceiptsError) => {
+                        // remove from escrow
+                        self.delegation_escrow.remove(&event.event_message);
+                        bus.notify(&Notification::PartiallyWitnessed(delegated_event))?;
+                    }
+                    Err(_e) => (), // keep in escrow,
+                }
+            }
+        };
+
+        Ok(())
+    }
 }
 
-impl Notifier for DelegationEscrow<RedbDatabase> {
+impl <D: EventDatabase + EscrowCreator + 'static> Notifier for DelegationEscrow<D> {
     fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error> {
         match notification {
             Notification::KeyEventAdded(ev_message) => {
@@ -115,66 +163,12 @@ impl Notifier for DelegationEscrow<RedbDatabase> {
                         0
                     };
                     self.delegation_escrow
-                        .insert_key_value(&delegator_id, sn, signed_event)?;
+                        .insert_key_value(&delegator_id, sn, signed_event)
+                        .map_err(|_| Error::DbError)?;
                 }
             }
             _ => return Err(Error::SemanticError("Wrong notification".into())),
         }
-
-        Ok(())
-    }
-}
-
-impl DelegationEscrow<RedbDatabase> {
-    pub fn process_delegation_events(
-        &self,
-        bus: &NotificationBus,
-        delegator_id: &IdentifierPrefix,
-        anchored_seals: Vec<EventSeal>,
-        potential_delegator_seal: SourceSeal,
-    ) -> Result<(), Error> {
-        if let Ok(esc) = self.delegation_escrow.get_from_sn(delegator_id, 0) {
-            for event in esc {
-                let event_digest = event.event_message.digest()?;
-                let seal = anchored_seals.iter().find(|seal| {
-                    seal.event_digest() == event_digest
-                        && seal.sn == event.event_message.data.get_sn()
-                        && seal.prefix == event.event_message.data.get_prefix()
-                });
-                let delegated_event = match seal {
-                    Some(_s) => SignedEventMessage {
-                        delegator_seal: Some(potential_delegator_seal.clone()),
-                        ..event.clone()
-                    },
-                    None => event.clone(),
-                };
-                let validator = EventValidator::new(self.db.clone());
-                match validator.validate_event(&delegated_event) {
-                    Ok(_) => {
-                        // add to kel
-                        let child_id = event.event_message.data.get_prefix();
-                        self.db
-                            .add_kel_finalized_event(delegated_event.clone(), &child_id)
-                            .map_err(|_| Error::DbError)?;
-                        // remove from escrow
-                        self.delegation_escrow.remove(&event.event_message);
-                        bus.notify(&Notification::KeyEventAdded(event))?;
-                        // stop processing the escrow if kel was updated. It needs to start again.
-                        break;
-                    }
-                    Err(Error::SignatureVerificationError) => {
-                        // remove from escrow
-                        self.delegation_escrow.remove(&event.event_message);
-                    }
-                    Err(Error::NotEnoughReceiptsError) => {
-                        // remove from escrow
-                        self.delegation_escrow.remove(&event.event_message);
-                        bus.notify(&Notification::PartiallyWitnessed(delegated_event))?;
-                    }
-                    Err(_e) => (), // keep in escrow,
-                }
-            }
-        };
 
         Ok(())
     }
