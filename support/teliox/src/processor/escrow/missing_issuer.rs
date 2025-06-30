@@ -12,7 +12,7 @@ use keri_core::{
 use crate::{
     database::{
         escrow::{Escrow, EscrowDb},
-        EventDatabase,
+        TelEventDatabase,
     },
     error::Error,
     event::{verifiable_event::VerifiableEvent, Event},
@@ -23,14 +23,14 @@ use crate::{
     },
 };
 
-pub struct MissingIssuerEscrow<D: EventDatabase> {
+pub struct MissingIssuerEscrow<D: TelEventDatabase> {
     kel_reference: Arc<EventStorage<RedbDatabase>>,
     tel_reference: Arc<TelEventStorage<D>>,
     publisher: TelNotificationBus,
     escrowed_missing_issuer: Escrow<VerifiableEvent>,
 }
 
-impl<D: EventDatabase> MissingIssuerEscrow<D> {
+impl<D: TelEventDatabase> MissingIssuerEscrow<D> {
     pub fn new(
         db: Arc<TelEventStorage<D>>,
         escrow_db: Arc<EscrowDb>,
@@ -48,7 +48,7 @@ impl<D: EventDatabase> MissingIssuerEscrow<D> {
         }
     }
 }
-impl<D: EventDatabase> Notifier for MissingIssuerEscrow<D> {
+impl<D: TelEventDatabase> Notifier for MissingIssuerEscrow<D> {
     fn notify(
         &self,
         notification: &Notification,
@@ -72,7 +72,7 @@ impl<D: EventDatabase> Notifier for MissingIssuerEscrow<D> {
     }
 }
 
-impl<D: EventDatabase> TelNotifier for MissingIssuerEscrow<D> {
+impl<D: TelEventDatabase> TelNotifier for MissingIssuerEscrow<D> {
     fn notify(
         &self,
         notification: &TelNotification,
@@ -91,7 +91,7 @@ impl<D: EventDatabase> TelNotifier for MissingIssuerEscrow<D> {
     }
 }
 
-impl<D: EventDatabase> MissingIssuerEscrow<D> {
+impl<D: TelEventDatabase> MissingIssuerEscrow<D> {
     /// Reprocess escrowed events that need issuer event of given digest for acceptance.
     pub fn process_missing_issuer_escrow(&self, id: &IdentifierPrefix) -> Result<(), Error> {
         if let Some(esc) = self.escrowed_missing_issuer.get(id) {
@@ -151,7 +151,7 @@ mod tests {
     };
 
     use crate::{
-        database::{escrow::EscrowDb, sled_db::SledEventDatabase, EventDatabase},
+        database::{escrow::EscrowDb, sled_db::SledEventDatabase, TelEventDatabase},
         error::Error,
         event::{manager_event, verifiable_event::VerifiableEvent},
         processor::{

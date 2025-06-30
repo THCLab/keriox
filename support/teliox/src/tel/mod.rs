@@ -1,7 +1,7 @@
 use std::sync::{Arc, RwLock};
 
 use crate::{
-    database::EventDatabase,
+    database::TelEventDatabase,
     error::Error,
     event::{manager_event::Config, verifiable_event::VerifiableEvent, Event},
     processor::{
@@ -43,12 +43,12 @@ impl TelNotifier for RecentlyAddedEvents {
 }
 
 /// Transaction Event Log
-pub struct Tel<D: EventDatabase> {
+pub struct Tel<D: TelEventDatabase> {
     pub processor: TelEventProcessor<D>,
     pub recently_added_events: Arc<RecentlyAddedEvents>,
 }
 
-impl<D: EventDatabase> Tel<D> {
+impl<D: TelEventDatabase> Tel<D> {
     pub fn new(
         tel_reference: Arc<TelEventStorage<D>>,
         kel_reference: Arc<EventStorage<RedbDatabase>>,

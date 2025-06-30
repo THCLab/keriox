@@ -191,7 +191,7 @@ impl Witness {
         let tel_events_db = {
             tel_path.push("tel");
             tel_path.push("events");
-            Arc::new(teliox::database::EventDatabase::new(&tel_path).unwrap())
+            Arc::new(teliox::database::TelEventDatabase::new(&tel_path).unwrap())
         };
 
         let tel_escrow_db = {

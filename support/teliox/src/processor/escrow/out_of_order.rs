@@ -7,7 +7,7 @@ use keri_core::{
 use crate::{
     database::{
         escrow::{Escrow, EscrowDb},
-        EventDatabase,
+        TelEventDatabase,
     },
     error::Error,
     event::verifiable_event::VerifiableEvent,
@@ -18,13 +18,13 @@ use crate::{
     },
 };
 
-pub struct OutOfOrderEscrow<D: EventDatabase> {
+pub struct OutOfOrderEscrow<D: TelEventDatabase> {
     tel_reference: Arc<TelEventStorage<D>>,
     kel_reference: Arc<EventStorage<RedbDatabase>>,
     escrowed_out_of_order: Escrow<VerifiableEvent>,
 }
 
-impl<D: EventDatabase> OutOfOrderEscrow<D> {
+impl<D: TelEventDatabase> OutOfOrderEscrow<D> {
     pub fn new(
         tel_reference: Arc<TelEventStorage<D>>,
         kel_reference: Arc<EventStorage<RedbDatabase>>,
@@ -40,7 +40,7 @@ impl<D: EventDatabase> OutOfOrderEscrow<D> {
     }
 }
 
-impl<D: EventDatabase> TelNotifier for OutOfOrderEscrow<D> {
+impl<D: TelEventDatabase> TelNotifier for OutOfOrderEscrow<D> {
     fn notify(
         &self,
         notification: &TelNotification,
@@ -62,7 +62,7 @@ impl<D: EventDatabase> TelNotifier for OutOfOrderEscrow<D> {
     }
 }
 
-impl<D: EventDatabase> OutOfOrderEscrow<D> {
+impl<D: TelEventDatabase> OutOfOrderEscrow<D> {
     pub fn process_out_of_order_events(
         &self,
         bus: &TelNotificationBus,
@@ -110,7 +110,7 @@ mod tests {
     };
 
     use crate::{
-        database::{escrow::EscrowDb, sled_db::SledEventDatabase, EventDatabase},
+        database::{escrow::EscrowDb, sled_db::SledEventDatabase, TelEventDatabase},
         error::Error,
         event::verifiable_event::VerifiableEvent,
         processor::{

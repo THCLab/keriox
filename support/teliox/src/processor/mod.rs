@@ -3,7 +3,7 @@ use std::sync::Arc;
 use keri_core::{database::redb::RedbDatabase, processor::event_storage::EventStorage};
 
 use crate::{
-    database::EventDatabase,
+    database::TelEventDatabase,
     error::Error,
     event::{verifiable_event::VerifiableEvent, Event},
     query::SignedTelQuery,
@@ -20,13 +20,13 @@ pub mod notification;
 pub mod storage;
 pub mod validator;
 
-pub struct TelEventProcessor<D: EventDatabase> {
+pub struct TelEventProcessor<D: TelEventDatabase> {
     kel_reference: Arc<EventStorage<RedbDatabase>>,
     pub tel_reference: Arc<TelEventStorage<D>>,
     pub publisher: TelNotificationBus,
 }
 
-impl<D: EventDatabase> TelEventProcessor<D> {
+impl<D: TelEventDatabase> TelEventProcessor<D> {
     pub fn new(
         kel_reference: Arc<EventStorage<RedbDatabase>>,
         tel_reference: Arc<TelEventStorage<D>>,

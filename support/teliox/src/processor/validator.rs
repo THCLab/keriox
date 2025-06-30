@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use keri_core::{
-    database::redb::RedbDatabase,
+    database::EventDatabase,
     event::{event_data::EventData, sections::seal::Seal},
     prefix::IdentifierPrefix,
     processor::event_storage::EventStorage,
@@ -9,7 +9,7 @@ use keri_core::{
 use said::SelfAddressingIdentifier;
 
 use crate::{
-    database::EventDatabase,
+    database::TelEventDatabase,
     error::Error,
     event::{
         manager_event::{ManagerEventType, ManagerTelEventMessage},
@@ -22,16 +22,13 @@ use crate::{
 
 use super::TelEventStorage;
 
-pub struct TelEventValidator<D: EventDatabase> {
-    kel_reference: Arc<EventStorage<RedbDatabase>>,
+pub struct TelEventValidator<D: TelEventDatabase, K: EventDatabase> {
+    kel_reference: Arc<EventStorage<K>>,
     db: Arc<TelEventStorage<D>>,
 }
 
-impl<D: EventDatabase> TelEventValidator<D> {
-    pub fn new(
-        db: Arc<TelEventStorage<D>>,
-        kel_reference: Arc<EventStorage<RedbDatabase>>,
-    ) -> Self {
+impl<D: TelEventDatabase, K: EventDatabase> TelEventValidator<D, K> {
+    pub fn new(db: Arc<TelEventStorage<D>>, kel_reference: Arc<EventStorage<K>>) -> Self {
         Self {
             db: db.clone(),
             kel_reference,
@@ -40,7 +37,7 @@ impl<D: EventDatabase> TelEventValidator<D> {
 
     /// Checks if kel event pointed by seal has seal to tel event inside.
     pub fn check_kel_event(
-        kel_reference: Arc<EventStorage<RedbDatabase>>,
+        kel_reference: Arc<EventStorage<K>>,
         seal: &AttachedSourceSeal,
         issuer_id: &IdentifierPrefix,
         expected_digest: SelfAddressingIdentifier,
