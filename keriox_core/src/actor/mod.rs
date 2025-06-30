@@ -2,8 +2,6 @@ use std::convert::TryFrom;
 
 use serde::{Deserialize, Serialize};
 
-#[cfg(feature = "query")]
-use crate::database::redb::RedbDatabase;
 #[cfg(feature = "oobi")]
 use crate::oobi::OobiManager;
 #[cfg(feature = "query")]
@@ -93,7 +91,7 @@ pub fn process_notice<P: Processor>(msg: Notice, processor: &P) -> Result<(), Er
 }
 
 #[cfg(feature = "query")]
-pub fn process_reply<P: Processor<Database = RedbDatabase>>(
+pub fn process_reply<P: Processor>(
     sr: SignedReply,
     #[cfg(feature = "oobi")] oobi_manager: &OobiManager,
     processor: &P,
@@ -109,10 +107,10 @@ pub fn process_reply<P: Processor<Database = RedbDatabase>>(
 }
 
 #[cfg(feature = "oobi")]
-pub fn process_signed_oobi(
+pub fn process_signed_oobi<D: EventDatabase + 'static>(
     signed_oobi: &SignedReply,
     oobi_manager: &OobiManager,
-    event_storage: &EventStorage<RedbDatabase>,
+    event_storage: &EventStorage<D>,
 ) -> Result<(), Error> {
     use crate::processor::validator::EventValidator;
 
