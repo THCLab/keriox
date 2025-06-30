@@ -1,7 +1,7 @@
 pub mod escrow_database;
 #[cfg(feature = "query")]
 pub(crate) mod ksn_log;
-pub(crate) mod loging;
+pub mod loging;
 pub(crate) mod rkyv_adapter;
 
 /// Kel storage. (identifier, sn) -> event digest
@@ -38,7 +38,7 @@ use crate::{
 };
 use cesrox::primitives::CesrPrimitive;
 
-use super::{timestamped, EventDatabase, QueryParameters};
+use super::{timestamped, EventDatabase, LogDatabase as LogDatabaseTrait, QueryParameters};
 
 #[derive(Debug, thiserror::Error)]
 pub enum RedbError {
@@ -77,7 +77,7 @@ pub enum KeyError {
 }
 
 /// Represents the mode for executing database transactions.
-pub(crate) enum WriteTxnMode<'a> {
+pub enum WriteTxnMode<'a> {
     /// Initiates a new transaction that is committed after operations are executed.
     CreateNew,
     /// Utilizes an already active transaction for operations.
@@ -112,6 +112,12 @@ impl RedbDatabase {
 
 impl EventDatabase for RedbDatabase {
     type Error = RedbError;
+    type LogDatabaseType = LogDatabase;
+
+    fn get_log_db(&self) -> Arc<Self::LogDatabaseType> {
+        self.log_db.clone()
+    }
+
     fn add_kel_finalized_event(
         &self,
         signed_event: SignedEventMessage,
@@ -189,10 +195,14 @@ impl EventDatabase for RedbDatabase {
         params: super::QueryParameters,
     ) -> Option<impl DoubleEndedIterator<Item = Transferable>> {
         match params {
-            QueryParameters::BySn { id, sn } => self
-                .get_event_digest(&id, sn)
-                .unwrap()
-                .and_then(|said| self.log_db.get_trans_receipts(&said).ok()),
+            QueryParameters::BySn { id, sn } => {
+                if let Ok(Some(said)) = self.get_event_digest(&id, sn) {
+                    let receipts = self.log_db.get_trans_receipts(&said).ok()?;
+                    Some(receipts.collect::<Vec<_>>().into_iter())
+                } else {
+                    None
+                }
+            }
             QueryParameters::Range {
                 id: _,
                 start: _,
@@ -222,6 +232,17 @@ impl EventDatabase for RedbDatabase {
         }
     }
 
+    fn accept_to_kel(
+        &self,
+        event: &KeriEvent<KeyEvent>,
+    ) -> Result<(), RedbError> {
+        let txn_mode = WriteTxnMode::CreateNew;
+        self.save_to_kel(&txn_mode, event)?;
+        self.update_key_state(&txn_mode, event)?;
+
+        Ok(())
+    }
+
     #[cfg(feature = "query")]
     fn save_reply(&self, reply: SignedReply) -> Result<(), Self::Error> {
         self.accepted_rpy.insert(reply)
@@ -234,16 +255,6 @@ impl EventDatabase for RedbDatabase {
 }
 
 impl RedbDatabase {
-    pub(crate) fn accept_to_kel(
-        &self,
-        txn_mode: &WriteTxnMode,
-        event: &KeriEvent<KeyEvent>,
-    ) -> Result<(), RedbError> {
-        self.save_to_kel(txn_mode, event)?;
-        self.update_key_state(txn_mode, event)?;
-
-        Ok(())
-    }
     /// Saves KEL event of given identifier. Key is identifier and sn of event, and value is event digest.
     fn save_to_kel(
         &self,

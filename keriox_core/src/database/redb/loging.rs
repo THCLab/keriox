@@ -31,7 +31,7 @@ use rkyv::{
 use said::SelfAddressingIdentifier;
 
 use crate::{
-    database::timestamped::TimestampedSignedEventMessage,
+    database::{timestamped::TimestampedSignedEventMessage},
     event::{sections::seal::SourceSeal, KeyEvent},
     event_message::{
         msg::KeriEvent,
@@ -40,6 +40,8 @@ use crate::{
     },
     prefix::IndexedSignature,
 };
+
+use crate::database::LogDatabase as LogDatabaseTrait;
 
 use super::{
     execute_in_transaction,
@@ -50,12 +52,16 @@ use super::{
 /// Stores all incoming signed events and enables retrieval by event digest.  
 /// Events are split into separate tables for events, signatures, and receipts,  
 /// with the digest serving as the key in each table.
-pub(crate) struct LogDatabase {
+pub struct LogDatabase {
     db: Arc<Database>,
 }
 
-impl LogDatabase {
-    pub fn new(db: Arc<Database>) -> Result<Self, RedbError> {
+impl<'db> LogDatabaseTrait<'db> for LogDatabase {
+    type DatabaseType = Database;
+    type Error = RedbError;
+    type TransactionType = WriteTxnMode<'db>;
+
+    fn new(db: Arc<Database>) -> Result<Self, RedbError> {
         // Create tables
         let write_txn = db.begin_write()?;
         {
@@ -69,7 +75,7 @@ impl LogDatabase {
         Ok(Self { db })
     }
 
-    pub fn log_event(
+    fn log_event(
         &self,
         txn_mode: &WriteTxnMode,
         signed_event: &SignedEventMessage,
@@ -91,7 +97,14 @@ impl LogDatabase {
         Ok(())
     }
 
-    pub fn log_receipt(
+    fn log_event_with_new_transaction(
+        &self,
+        signed_event: &SignedEventMessage,
+    ) -> Result<(), RedbError> {
+        self.log_event(&WriteTxnMode::CreateNew, signed_event)
+    }
+
+    fn log_receipt(
         &self,
         txn_mode: &WriteTxnMode,
         signed_receipt: &SignedNontransferableReceipt,
@@ -102,7 +115,14 @@ impl LogDatabase {
         Ok(())
     }
 
-    pub fn get_signed_event(
+    fn log_receipt_with_new_transaction(
+        &self,
+        signed_receipt: &SignedNontransferableReceipt,
+    ) -> Result<(), RedbError> {
+        self.log_receipt(&WriteTxnMode::CreateNew, signed_receipt)
+    }
+
+    fn get_signed_event(
         &self,
         said: &SelfAddressingIdentifier,
     ) -> Result<Option<TimestampedSignedEventMessage>, RedbError> {
@@ -110,7 +130,7 @@ impl LogDatabase {
         self.get_signed_event_by_serialized_key(key.as_slice())
     }
 
-    pub fn get_event(
+    fn get_event(
         &self,
         said: &SelfAddressingIdentifier,
     ) -> Result<Option<KeriEvent<KeyEvent>>, RedbError> {
@@ -118,7 +138,7 @@ impl LogDatabase {
         self.get_event_by_serialized_key(&key.as_slice())
     }
 
-    pub fn get_signatures(
+    fn get_signatures(
         &self,
         said: &SelfAddressingIdentifier,
     ) -> Result<Option<impl Iterator<Item = IndexedSignature>>, RedbError> {
@@ -126,7 +146,7 @@ impl LogDatabase {
         self.get_signatures_by_serialized_key(&key.as_slice())
     }
 
-    pub fn get_nontrans_couplets(
+    fn get_nontrans_couplets(
         &self,
         said: &SelfAddressingIdentifier,
     ) -> Result<Option<impl Iterator<Item = Nontransferable>>, RedbError> {
@@ -134,12 +154,38 @@ impl LogDatabase {
         self.get_nontrans_couplets_by_key(&said)
     }
 
-    pub fn get_trans_receipts(
+    fn get_trans_receipts(
         &self,
         said: &SelfAddressingIdentifier,
     ) -> Result<impl DoubleEndedIterator<Item = Transferable>, RedbError> {
         let key = rkyv_adapter::serialize_said(said)?;
         self.get_trans_receipts_by_serialized_key(key.as_slice())
+    }
+
+    fn remove_nontrans_receipt(
+        &self,
+        txn_mode: &WriteTxnMode,
+        said: &SelfAddressingIdentifier,
+        nontrans: impl IntoIterator<Item = Nontransferable>,
+    ) -> Result<(), RedbError> {
+        let serialized_said = rkyv_adapter::serialize_said(said)?;
+        execute_in_transaction(self.db.clone(), txn_mode, |write_txn| {
+            let mut table = write_txn.open_multimap_table(NONTRANS_RCTS)?;
+
+            for value in nontrans {
+                let value = rkyv::to_bytes::<rancor::Error>(&value)?;
+                table.remove(serialized_said.as_slice(), value.as_slice())?;
+            }
+            Ok(())
+        })
+    }
+
+    fn remove_nontrans_receipt_with_new_transaction(
+        &self,
+        said: &SelfAddressingIdentifier,
+        nontrans: impl IntoIterator<Item = Nontransferable>,
+    ) -> Result<(), RedbError> {
+        self.remove_nontrans_receipt(&WriteTxnMode::CreateNew, said, nontrans)
     }
 }
 
@@ -229,24 +275,6 @@ impl LogDatabase {
 
             let seal = rkyv::to_bytes::<rkyv::rancor::Error>(seal)?;
             table.insert(serialized_said.as_slice(), seal.as_ref())?;
-            Ok(())
-        })
-    }
-
-    pub(crate) fn remove_nontrans_receipt(
-        &self,
-        txn_mode: &WriteTxnMode,
-        said: &SelfAddressingIdentifier,
-        nontrans: impl IntoIterator<Item = Nontransferable>,
-    ) -> Result<(), RedbError> {
-        let serialized_said = rkyv_adapter::serialize_said(said)?;
-        execute_in_transaction(self.db.clone(), txn_mode, |write_txn| {
-            let mut table = write_txn.open_multimap_table(NONTRANS_RCTS)?;
-
-            for value in nontrans {
-                let value = rkyv::to_bytes::<rancor::Error>(&value)?;
-                table.remove(serialized_said.as_slice(), value.as_slice())?;
-            }
             Ok(())
         })
     }
@@ -357,6 +385,7 @@ fn test_retrieve_by_digest() {
     use crate::actor::parse_event_stream;
     use crate::event_message::signed_event_message::{Message, Notice};
     use tempfile::NamedTempFile;
+    use crate::database::LogDatabase as LogDb;
     // Create test db path.
     let file_path = NamedTempFile::new().unwrap();
 

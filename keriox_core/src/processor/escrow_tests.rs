@@ -10,14 +10,14 @@ use cesrox::{parse, parse_many};
 use tempfile::NamedTempFile;
 
 use crate::{
-    database::redb::RedbDatabase,
+    database::{redb::{escrow_database::SnKeyDatabase, RedbDatabase}, EscrowDatabase, SequencedEventDatabase},
     error::Error,
     event_message::signed_event_message::{Message, Notice},
     prefix::IdentifierPrefix,
     processor::{
         basic_processor::BasicProcessor,
         escrow::{
-            maybe_out_of_order_escrow::MaybeOutOfOrderEscrow,
+            maybe_out_of_order_escrow::{MaybeOutOfOrderEscrow, SnKeyEscrow},
             partially_signed_escrow::PartiallySignedEscrow,
             partially_witnessed_escrow::PartiallyWitnessedEscrow,
         },
@@ -48,12 +48,21 @@ fn test_out_of_order_cleanup() -> Result<(), Error> {
         let witness_root = Builder::new().prefix("test-db").tempdir().unwrap();
         let path = witness_root.path();
         let events_db_path = NamedTempFile::new().unwrap();
-        let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
+        let redb = RedbDatabase::new(events_db_path.path()).unwrap();
+        let ooo_escrowdb = SnKeyEscrow::new(
+            Arc::new(
+                SnKeyDatabase::new(redb.db.clone(), "out_of_order_escrow")
+                    .unwrap(),
+            ),
+            redb.log_db.clone(),
+        );
+        let events_db = Arc::new(redb);
         let mut processor = BasicProcessor::new(events_db.clone(), None);
 
         // Register out of order escrow, to save and reprocess out of order events
         let ooo_escrow = Arc::new(MaybeOutOfOrderEscrow::new(
             events_db.clone(),
+            // ooo_escrowdb,
             Duration::from_secs(1),
         ));
         processor.register_observer(
@@ -225,12 +234,21 @@ pub fn test_partially_witnessed_escrow_cleanup() -> Result<(), Error> {
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
     fs::create_dir_all(root.path()).unwrap();
     let events_db_path = NamedTempFile::new().unwrap();
-    let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
+
+    let redb = RedbDatabase::new(events_db_path.path()).unwrap();
+    let pwe_escrow_db = SnKeyEscrow::new(
+        Arc::new(SnKeyDatabase::new(redb.db.clone(), "partially_signed_escrow").unwrap()),
+        redb.log_db.clone(),
+    );
+    let log_db = redb.log_db.clone();
+    let events_db = Arc::new(redb);
     let mut event_processor = BasicProcessor::new(events_db.clone(), None);
     let event_storage = EventStorage::new(Arc::clone(&events_db));
     // Register not fully witnessed escrow, to save and reprocess events
     let partially_witnessed_escrow = Arc::new(PartiallyWitnessedEscrow::new(
         events_db.clone(),
+        pwe_escrow_db,
+        log_db,
         Duration::from_secs(1),
     ));
     event_processor.register_observer(

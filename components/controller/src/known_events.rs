@@ -8,6 +8,7 @@ use keri_core::event_message::signed_event_message::SignedNontransferableReceipt
 use keri_core::oobi::LocationScheme;
 use keri_core::prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix};
 
+use keri_core::processor::escrow::maybe_out_of_order_escrow::SnKeyEscrow;
 use keri_core::processor::escrow::partially_witnessed_escrow::PartiallyWitnessedEscrow;
 use keri_core::processor::escrow::EscrowConfig;
 use keri_core::processor::notification::JustNotification;
@@ -49,7 +50,7 @@ pub struct KnownEvents {
     processor: BasicProcessor<RedbDatabase>,
     pub storage: Arc<EventStorage<RedbDatabase>>,
     pub oobi_manager: OobiManager,
-    pub partially_witnessed_escrow: Arc<PartiallyWitnessedEscrow>,
+    pub partially_witnessed_escrow: Arc<PartiallyWitnessedEscrow<RedbDatabase, SnKeyEscrow>>,
     pub tel: Arc<Tel>,
 }
 

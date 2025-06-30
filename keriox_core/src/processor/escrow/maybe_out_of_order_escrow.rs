@@ -4,8 +4,10 @@ use said::SelfAddressingIdentifier;
 
 use crate::{
     database::{
-        redb::{escrow_database::SnKeyDatabase, loging::LogDatabase, RedbDatabase, RedbError},
-        EventDatabase,
+        redb::{
+            escrow_database::SnKeyDatabase, loging::LogDatabase, RedbDatabase,
+            RedbError,
+        }, EscrowDatabase, EventDatabase, LogDatabase as _, SequencedEventDatabase
     },
     error::Error,
     event::KeyEvent,
@@ -18,52 +20,47 @@ use crate::processor::{
     validator::EventValidator,
 };
 
-pub struct MaybeOutOfOrderEscrow {
-    db: Arc<RedbDatabase>,
-    pub(crate) escrowed_out_of_order: SnKeyEscrow,
+pub trait EscrowCreator {
+    type EscrowDatabaseType: EscrowDatabase;
+    fn create_escrow_db(&self, table_name: &'static str) -> Self::EscrowDatabaseType;
 }
 
-impl MaybeOutOfOrderEscrow {
-    pub fn new(db: Arc<RedbDatabase>, _duration: Duration) -> Self {
-        let ooo_escrowdb = SnKeyEscrow::new(
-            Arc::new(SnKeyDatabase::new(db.db.clone(), "out_of_order_escrow").unwrap()),
-            db.log_db.clone(),
-        );
+impl EscrowCreator for RedbDatabase {
+    type EscrowDatabaseType = SnKeyEscrow;
+
+    fn create_escrow_db(&self, table_name: &'static str) -> Self::EscrowDatabaseType {
+        SnKeyEscrow::new(
+            Arc::new(
+                SnKeyDatabase::new(self.db.clone(), table_name)
+                    .unwrap(),
+            ),
+            self.log_db.clone(),
+        )
+    }
+}
+
+pub struct MaybeOutOfOrderEscrow<D: EventDatabase + EscrowCreator> {
+    db: Arc<D>,
+    pub(crate) escrowed_out_of_order: D::EscrowDatabaseType,
+}
+
+impl<D: EventDatabase + EscrowCreator + 'static> MaybeOutOfOrderEscrow<D> {
+    pub fn new(db: Arc<D>, _duration: Duration) -> Self {
+        let escrow_db = db.create_escrow_db("out_of_order_escrow");
+
         Self {
             db,
-            escrowed_out_of_order: ooo_escrowdb,
+            escrowed_out_of_order: escrow_db,
         }
     }
-}
-impl Notifier for MaybeOutOfOrderEscrow {
-    fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error> {
-        match notification {
-            Notification::KeyEventAdded(ev_message) => {
-                let id = ev_message.event_message.data.get_prefix();
-                let sn = ev_message.event_message.data.sn;
-                self.process_out_of_order_events(bus, &id, sn)?;
-            }
-            Notification::OutOfOrder(signed_event) => {
-                // ignore events with no signatures
-                if !signed_event.signatures.is_empty() {
-                    self.escrowed_out_of_order.insert(signed_event)?;
-                }
-            }
-            _ => return Err(Error::SemanticError("Wrong notification".into())),
-        }
 
-        Ok(())
-    }
-}
-
-impl MaybeOutOfOrderEscrow {
     pub fn process_out_of_order_events(
         &self,
         bus: &NotificationBus,
         id: &IdentifierPrefix,
         sn: u64,
     ) -> Result<(), Error> {
-        for event in self.escrowed_out_of_order.get_from_sn(id, sn)? {
+        for event in self.escrowed_out_of_order.get_from_sn(id, sn).map_err(|_| Error::DbError)? {
             let validator = EventValidator::new(self.db.clone());
             match validator.validate_event(&event) {
                 Ok(_) => {
@@ -89,17 +86,69 @@ impl MaybeOutOfOrderEscrow {
     }
 }
 
+impl<D: EventDatabase + EscrowCreator + 'static> Notifier for MaybeOutOfOrderEscrow<D> {
+    fn notify(
+        &self,
+        notification: &Notification,
+        bus: &NotificationBus,
+    ) -> Result<(), Error> {
+        match notification {
+            Notification::KeyEventAdded(ev_message) => {
+                let id = ev_message.event_message.data.get_prefix();
+                let sn = ev_message.event_message.data.sn;
+                self.process_out_of_order_events(bus, &id, sn)?;
+            }
+            Notification::OutOfOrder(signed_event) => {
+                // ignore events with no signatures
+                if !signed_event.signatures.is_empty() {
+                    self.escrowed_out_of_order.insert(signed_event).map_err(|_| Error::DbError)?;
+                }
+            }
+            _ => return Err(Error::SemanticError("Wrong notification".into())),
+        }
+
+        Ok(())
+    }
+}
+
 pub struct SnKeyEscrow {
-    escrow: Arc<SnKeyDatabase>,
+    escrow: Arc<
+        dyn SequencedEventDatabase<
+            DatabaseType = redb::Database,
+            Error = RedbError,
+            DigestIter = Box<
+                dyn Iterator<Item = said::SelfAddressingIdentifier>,
+            >,
+        >,
+    >,
     log: Arc<LogDatabase>,
 }
 
-impl SnKeyEscrow {
-    pub(crate) fn new(escrow: Arc<SnKeyDatabase>, log: Arc<LogDatabase>) -> Self {
+impl crate::database::EscrowDatabase for SnKeyEscrow {
+    type EscrowDatabaseType = redb::Database;
+    type LogDatabaseType = LogDatabase;
+    type Error = RedbError;
+    type EventIter = Box<dyn Iterator<Item = SignedEventMessage> + Send>;
+
+    fn new(
+        escrow: Arc<
+            dyn SequencedEventDatabase<
+                DatabaseType = Self::EscrowDatabaseType,
+                Error = Self::Error,
+                DigestIter = Box<
+                    dyn Iterator<Item = said::SelfAddressingIdentifier>,
+                >,
+            >,
+        >,
+        log: Arc<LogDatabase>,
+    ) -> Self
+    where
+        Self: Sized,
+    {
         Self { escrow, log }
     }
 
-    pub fn save_digest(
+    fn save_digest(
         &self,
         id: &IdentifierPrefix,
         sn: u64,
@@ -110,9 +159,11 @@ impl SnKeyEscrow {
         Ok(())
     }
 
-    pub fn insert(&self, event: &SignedEventMessage) -> Result<(), RedbError> {
-        self.log
-            .log_event(&crate::database::redb::WriteTxnMode::CreateNew, &event)?;
+    fn insert(&self, event: &SignedEventMessage) -> Result<(), RedbError> {
+        self.log.log_event(
+            &crate::database::redb::WriteTxnMode::CreateNew,
+            &event,
+        )?;
         let said = event.event_message.digest().unwrap();
         let id = event.event_message.data.get_prefix();
         let sn = event.event_message.data.sn;
@@ -121,14 +172,16 @@ impl SnKeyEscrow {
         Ok(())
     }
 
-    pub fn insert_key_value(
+    fn insert_key_value(
         &self,
         id: &IdentifierPrefix,
         sn: u64,
         event: &SignedEventMessage,
     ) -> Result<(), RedbError> {
-        self.log
-            .log_event(&crate::database::redb::WriteTxnMode::CreateNew, &event)?;
+        self.log.log_event(
+            &crate::database::redb::WriteTxnMode::CreateNew,
+            &event,
+        )?;
         let said = event.event_message.digest().unwrap();
 
         self.escrow.insert(&id, sn, &said)?;
@@ -136,44 +189,54 @@ impl SnKeyEscrow {
         Ok(())
     }
 
-    pub fn get<'a>(
-        &'a self,
+    fn get(
+        &self,
         identifier: &IdentifierPrefix,
         sn: u64,
-    ) -> Result<impl Iterator<Item = SignedEventMessage> + 'a, RedbError> {
-        Ok(self.escrow.get(identifier, sn)?.filter_map(move |said| {
-            self.log
-                .get_signed_event(&said)
-                .unwrap()
+    ) -> Result<Self::EventIter, Self::Error> {
+        let saids = self.escrow.get(identifier, sn)?;
+        let saids_vec: Vec<_> = saids.collect();
+
+        let log = Arc::clone(&self.log);
+
+        let events = saids_vec.into_iter().filter_map(move |said| {
+            log.get_signed_event(&said)
+                .ok()
+                .flatten()
                 .map(|el| el.signed_event_message)
-        }))
+        });
+
+        Ok(Box::new(events))
     }
 
-    pub fn get_from_sn<'a>(
-        &'a self,
+    fn get_from_sn(
+        &self,
         identifier: &IdentifierPrefix,
         sn: u64,
-    ) -> Result<impl Iterator<Item = SignedEventMessage> + 'a, RedbError> {
-        Ok(self
-            .escrow
-            .get_grater_then(identifier, sn)?
-            .map(move |said| {
-                self.log
-                    .get_signed_event(&said)
-                    .unwrap()
-                    .unwrap()
-                    .signed_event_message
-            }))
+    ) -> Result<Self::EventIter, Self::Error> {
+        let saids = self.escrow.get_greater_than(identifier, sn)?;
+        let saids_vec: Vec<_> = saids.collect();
+
+        let log = Arc::clone(&self.log);
+
+        let events = saids_vec.into_iter().filter_map(move |said| {
+            log.get_signed_event(&said)
+                .ok()
+                .flatten()
+                .map(|el| el.signed_event_message)
+        });
+
+        Ok(Box::new(events))
     }
 
-    pub fn remove(&self, event: &KeriEvent<KeyEvent>) {
+    fn remove(&self, event: &KeriEvent<KeyEvent>) {
         let said = event.digest().unwrap();
         let id = event.data.get_prefix();
         let sn = event.data.sn;
         self.escrow.remove(&id, sn, &said).unwrap();
     }
 
-    pub fn contains(
+    fn contains(
         &self,
         id: &IdentifierPrefix,
         sn: u64,
@@ -210,12 +273,21 @@ fn test_out_of_order() -> Result<(), Error> {
 
     let (processor, storage, ooo_escrow) = {
         let events_db_path = NamedTempFile::new().unwrap();
-        let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
+        let redb = RedbDatabase::new(events_db_path.path()).unwrap();
+        let ooo_escrowdb = SnKeyEscrow::new(
+            Arc::new(
+                SnKeyDatabase::new(redb.db.clone(), "out_of_order_escrow")
+                    .unwrap(),
+            ),
+            redb.log_db.clone(),
+        );
+        let events_db = Arc::new(redb);
         let mut processor = BasicProcessor::new(events_db.clone(), None);
 
         // Register out of order escrow, to save and reprocess out of order events
         let new_ooo = Arc::new(MaybeOutOfOrderEscrow::new(
             events_db.clone(),
+            // ooo_escrowdb,
             Duration::from_secs(60),
         ));
         processor.register_observer(
@@ -227,7 +299,8 @@ fn test_out_of_order() -> Result<(), Error> {
         )?;
         (processor, EventStorage::new(events_db.clone()), new_ooo)
     };
-    let id: IdentifierPrefix = "EO8cED9H5XPqBdoVatgBkEuSP8yXic7HtWpkex-9e0sL".parse()?;
+    let id: IdentifierPrefix =
+        "EO8cED9H5XPqBdoVatgBkEuSP8yXic7HtWpkex-9e0sL".parse()?;
 
     processor.process(&ev1)?;
     assert_eq!(storage.get_state(&id).unwrap().sn, 0);

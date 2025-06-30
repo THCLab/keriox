@@ -5,6 +5,7 @@ use tempfile::NamedTempFile;
 
 use crate::{
     database::redb::RedbDatabase,
+    database::EscrowDatabase,
     error::Error,
     event::sections::threshold::SignatureThreshold,
     event_message::{

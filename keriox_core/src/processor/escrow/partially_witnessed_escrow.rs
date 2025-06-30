@@ -4,9 +4,9 @@ use said::SelfAddressingIdentifier;
 
 use crate::{
     actor::prelude::EventStorage,
-    database::redb::{
-        escrow_database::SnKeyDatabase, loging::LogDatabase, RedbDatabase, RedbError, WriteTxnMode,
-    },
+    database::{redb::{
+        loging::LogDatabase as RedbLogDatabase, WriteTxnMode,
+    }, EscrowDatabase, EventDatabase, LogDatabase},
     error::Error,
     event_message::{
         signature::Nontransferable,
@@ -16,26 +16,23 @@ use crate::{
     processor::notification::{Notification, NotificationBus, Notifier},
 };
 
-use super::maybe_out_of_order_escrow::SnKeyEscrow;
+use super::maybe_out_of_order_escrow::EscrowCreator;
 
 /// Store partially witnessed events and nontransferable receipts of events that
 /// wasn't accepted into kel yet.
-pub struct PartiallyWitnessedEscrow {
-    db: Arc<RedbDatabase>,
-    log: Arc<LogDatabase>,
-    pub(crate) escrowed_partially_witnessed: SnKeyEscrow,
+pub struct PartiallyWitnessedEscrow<D: EventDatabase + EscrowCreator> {
+    db: Arc<D>,
+    log: Arc<D::LogDatabaseType>,
+    pub(crate) escrowed_partially_witnessed: D::EscrowDatabaseType,
 }
 
-impl PartiallyWitnessedEscrow {
-    pub fn new(db: Arc<RedbDatabase>, _duration: Duration) -> Self {
-        let pwe_escrow_db = SnKeyEscrow::new(
-            Arc::new(SnKeyDatabase::new(db.db.clone(), "partially_signed_escrow").unwrap()),
-            db.log_db.clone(),
-        );
+impl<D: EventDatabase + EscrowCreator + 'static> PartiallyWitnessedEscrow<D> {
+    pub fn new(db: Arc<D>, log_db: Arc<D::LogDatabaseType>, _duration: Duration) -> Self {
+        let escrow_db = db.create_escrow_db("partially_witnessed_escrow");
         Self {
-            log: db.log_db.clone(),
+            log: log_db,
             db,
-            escrowed_partially_witnessed: pwe_escrow_db,
+            escrowed_partially_witnessed: escrow_db,
         }
     }
 
@@ -43,8 +40,8 @@ impl PartiallyWitnessedEscrow {
     pub fn get_partially_witnessed_events<'a>(
         &'a self,
         id: &IdentifierPrefix,
-    ) -> Result<impl Iterator<Item = SignedEventMessage> + 'a, RedbError> {
-        self.escrowed_partially_witnessed.get_from_sn(id, 0)
+    ) -> Result<impl Iterator<Item = SignedEventMessage> + 'a, Error> {
+        self.escrowed_partially_witnessed.get_from_sn(id, 0).map_err(|_| Error::DbError )
     }
 
     /// Returns escrowed partially witness events of given identifier, sn and
@@ -54,14 +51,16 @@ impl PartiallyWitnessedEscrow {
         sn: u64,
         id: &IdentifierPrefix,
         event_digest: &SelfAddressingIdentifier,
-    ) -> Result<Option<SignedEventMessage>, RedbError> {
+    ) -> Result<Option<SignedEventMessage>, Error> {
         if self
             .escrowed_partially_witnessed
-            .contains(id, sn, event_digest)?
+            .contains(id, sn, event_digest)
+            .map_err(|_| Error::DbError)?
         {
             Ok(self
                 .log
-                .get_signed_event(&event_digest)?
+                .get_signed_event(&event_digest)
+                .map_err(|_| Error::DbError)?
                 .map(|ev| ev.signed_event_message))
         } else {
             Ok(None)
@@ -70,14 +69,14 @@ impl PartiallyWitnessedEscrow {
 
     /// Returns escrowed witness receipts for the event identified by the
     /// identifier, serial number (sn), and digest.
-    fn get_escrowed_receipts(
-        &self,
+    fn get_escrowed_receipts<'a>(
+        &'a self,
         id: &IdentifierPrefix,
         sn: u64,
-        digest: &SelfAddressingIdentifier,
-    ) -> Result<Option<impl Iterator<Item = Nontransferable>>, RedbError> {
-        if self.escrowed_partially_witnessed.contains(id, sn, digest)? {
-            self.log.get_nontrans_couplets(digest)
+        digest: &'a SelfAddressingIdentifier,
+    ) -> Result<Option<impl Iterator<Item = Nontransferable> + 'a>, Error> {
+        if self.escrowed_partially_witnessed.contains(id, sn, digest).map_err(|_| Error::DbError)? {
+            self.log.get_nontrans_couplets(digest).map_err(|_| Error::DbError)
         } else {
             Ok(None)
         }
@@ -96,9 +95,10 @@ impl PartiallyWitnessedEscrow {
             let id = &receipt.body.prefix;
             let sn = receipt.body.sn;
             let digest = &receipt.body.receipted_event_digest;
-            self.log.log_receipt(&WriteTxnMode::CreateNew, &receipt)?;
+            self.log.log_receipt_with_new_transaction(&receipt)
+            .map_err(|_| Error::DbError)?;
             self.escrowed_partially_witnessed
-                .save_digest(id, sn, digest)?;
+                .save_digest(id, sn, digest).map_err(|_| Error::DbError)?;
 
             bus.notify(&Notification::ReceiptEscrowed)
         }
@@ -211,7 +211,7 @@ impl PartiallyWitnessedEscrow {
         event_digest: &SelfAddressingIdentifier,
         serialized_receipted_event: &[u8],
         witnesses: &[BasicPrefix],
-    ) -> Result<(), RedbError> {
+    ) -> Result<(), Error> {
         let wrong_non = rcts.into_iter().filter(|nontran| match nontran {
             Nontransferable::Indexed(indexed_sigs) => !indexed_sigs.iter().all(|inx| {
                 let witness_id = witnesses.get(inx.index.current() as usize);
@@ -228,7 +228,7 @@ impl PartiallyWitnessedEscrow {
         });
 
         self.log
-            .remove_nontrans_receipt(&WriteTxnMode::CreateNew, event_digest, wrong_non)?;
+            .remove_nontrans_receipt_with_new_transaction(event_digest, wrong_non).map_err(|_| Error::DbError)?;
         Ok(())
     }
 
@@ -254,7 +254,7 @@ impl PartiallyWitnessedEscrow {
     }
 }
 
-impl Notifier for PartiallyWitnessedEscrow {
+impl<D: EventDatabase + EscrowCreator + 'static> Notifier for PartiallyWitnessedEscrow<D> {
     fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error> {
         match notification {
             Notification::ReceiptOutOfOrder(ooo) => {
@@ -263,6 +263,10 @@ impl Notifier for PartiallyWitnessedEscrow {
                 let sn = ooo.body.sn;
                 let id = ooo.body.prefix.clone();
                 // look for receipted event in partially witnessed. If there's no event yet, escrow receipt.
+                log::info!(
+                    "Checking escrowed partially witnessed events for id: {}, sn: {}",
+                    id, sn
+                );
                 match self.get_event_by_sn_and_digest(sn, &id, &ooo.body.receipted_event_digest)? {
                     None => self.escrow_receipt(ooo.clone(), bus),
                     Some(receipted_event) => {
@@ -271,11 +275,11 @@ impl Notifier for PartiallyWitnessedEscrow {
                             .validate_partially_witnessed(&receipted_event, Some(ooo.to_owned()))
                         {
                             Ok(_) => {
-                                self.log.log_receipt(&WriteTxnMode::CreateNew, &ooo)?;
+                                self.log.log_receipt_with_new_transaction(&ooo)
+                                .map_err(|_| Error::DbError)?;
                                 // accept event and remove receipts
                                 self.db
                                     .accept_to_kel(
-                                        &WriteTxnMode::CreateNew,
                                         &receipted_event.event_message,
                                     )
                                     .map_err(|_| Error::DbError)?;
@@ -313,32 +317,31 @@ impl Notifier for PartiallyWitnessedEscrow {
             }
             Notification::PartiallyWitnessed(signed_event) => {
                 // ignore events with no signatures
-                if !signed_event.signatures.is_empty() {
-                    match self.validate_partially_witnessed(signed_event, None) {
-                        Ok(_) => {
-                            self.log
-                                .log_event(&WriteTxnMode::CreateNew, &signed_event)?;
-                            // accept event and remove receipts
-                            self.db
-                                .accept_to_kel(
-                                    &WriteTxnMode::CreateNew,
-                                    &signed_event.event_message,
-                                )
-                                .map_err(|_| Error::DbError)?;
-                            // accept receipts and remove them from escrow
-                            self.accept_receipts_for(&signed_event)?;
-
-                            bus.notify(&Notification::KeyEventAdded(signed_event.clone()))?;
-                        }
-                        Err(Error::SignatureVerificationError) => (),
-                        Err(_) => {
-                            self.escrowed_partially_witnessed.insert(&signed_event)?;
-                        }
-                    };
-                    Ok(())
-                } else {
-                    Ok(())
+                if signed_event.signatures.is_empty() {
+                    return Ok(());
                 }
+                match self.validate_partially_witnessed(signed_event, None) {
+                    Ok(_) => {
+                        self.log
+                            .log_event_with_new_transaction(&signed_event)
+                            .map_err(|_| Error::DbError)?;
+                        // accept event and remove receipts
+                        self.db
+                            .accept_to_kel(
+                                &signed_event.event_message,
+                            )
+                            .map_err(|_| Error::DbError)?;
+                        // accept receipts and remove them from escrow
+                        self.accept_receipts_for(&signed_event)?;
+
+                        bus.notify(&Notification::KeyEventAdded(signed_event.clone()))?;
+                    }
+                    Err(Error::SignatureVerificationError) => (),
+                    Err(_) => {
+                        self.escrowed_partially_witnessed.insert(&signed_event).map_err(|_| Error::DbError)?;
+                    }
+                };
+                Ok(())
             }
             _ => Err(Error::SemanticError("Wrong notification".into())),
         }
@@ -355,12 +358,12 @@ mod tests {
 
     use crate::{
         actor::prelude::{BasicProcessor, EventStorage, Message},
-        database::{redb::RedbDatabase, EventDatabase, QueryParameters},
+        database::{redb::{escrow_database::SnKeyDatabase, RedbDatabase}, EscrowDatabase, EventDatabase, QueryParameters, SequencedEventDatabase},
         error::Error,
         event_message::signed_event_message::Notice,
         prefix::IdentifierPrefix,
         processor::{
-            escrow::partially_witnessed_escrow::PartiallyWitnessedEscrow,
+            escrow::{maybe_out_of_order_escrow::SnKeyEscrow, partially_witnessed_escrow::PartiallyWitnessedEscrow},
             notification::JustNotification, Processor,
         },
     };
@@ -374,13 +377,17 @@ mod tests {
         let root = Builder::new().prefix("test-db").tempdir().unwrap();
         fs::create_dir_all(root.path()).unwrap();
         let events_db_path = NamedTempFile::new().unwrap();
-        let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
+
+        let redb = RedbDatabase::new(events_db_path.path()).unwrap();
+        let log_db = redb.log_db.clone();
+        let events_db = Arc::new(redb);
         let mut event_processor = BasicProcessor::new(events_db.clone(), None);
         let event_storage = EventStorage::new(Arc::clone(&events_db));
 
         // Register not fully witnessed escrow, to save and reprocess events
         let partially_witnessed_escrow = Arc::new(PartiallyWitnessedEscrow::new(
             events_db.clone(),
+            log_db,
             Duration::from_secs(10),
         ));
         event_processor.register_observer(
@@ -498,7 +505,7 @@ mod tests {
         assert!(esc.is_none());
 
         let mut esc = events_db
-            .get_receipts_nt(QueryParameters::BySn { id: id, sn: 0 })
+            .get_receipts_nt(QueryParameters::BySn { id, sn: 0 })
             .unwrap();
         let receipt = esc.next().unwrap();
         assert_eq!(receipt.signatures.len(), 3);
@@ -515,13 +522,17 @@ mod tests {
         let root = Builder::new().prefix("test-db").tempdir().unwrap();
         fs::create_dir_all(root.path()).unwrap();
         let events_db_path = NamedTempFile::new().unwrap();
-        let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
+
+        let redb = RedbDatabase::new(events_db_path.path()).unwrap();
+        let log_db = redb.log_db.clone();
+        let events_db = Arc::new(redb);
         let mut event_processor = BasicProcessor::new(events_db.clone(), None);
         let event_storage = EventStorage::new(Arc::clone(&events_db));
 
         // Register not fully witnessed escrow, to save and reprocess events
         let partially_witnessed_escrow = Arc::new(PartiallyWitnessedEscrow::new(
             events_db.clone(),
+            log_db,
             Duration::from_secs(10),
         ));
         event_processor.register_observer(
@@ -654,13 +665,17 @@ mod tests {
         let root = Builder::new().prefix("test-db").tempdir().unwrap();
         fs::create_dir_all(root.path()).unwrap();
         let events_db_path = NamedTempFile::new().unwrap();
-        let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
+
+        let redb = RedbDatabase::new(events_db_path.path()).unwrap();
+        let log_db = redb.log_db.clone();
+        let events_db = Arc::new(redb);
         let mut event_processor = BasicProcessor::new(events_db.clone(), None);
         let event_storage = EventStorage::new(Arc::clone(&events_db));
 
         // Register not fully witnessed escrow, to save and reprocess events
         let partially_witnessed_escrow = Arc::new(PartiallyWitnessedEscrow::new(
             events_db.clone(),
+            log_db,
             Duration::from_secs(10),
         ));
         event_processor.register_observer(
@@ -754,13 +769,17 @@ mod tests {
         let root = Builder::new().prefix("test-db").tempdir().unwrap();
         fs::create_dir_all(root.path()).unwrap();
         let events_db_path = NamedTempFile::new().unwrap();
-        let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
+
+        let redb = RedbDatabase::new(events_db_path.path()).unwrap();
+        let log_db = redb.log_db.clone();
+        let events_db = Arc::new(redb);
         let mut event_processor = BasicProcessor::new(events_db.clone(), None);
         let event_storage = EventStorage::new(Arc::clone(&events_db));
 
         // Register not fully witnessed escrow, to save and reprocess events
         let partially_witnessed_escrow = Arc::new(PartiallyWitnessedEscrow::new(
             events_db.clone(),
+            log_db,
             Duration::from_secs(10),
         ));
         event_processor.register_observer(

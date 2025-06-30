@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::query::query_event::LogsQueryArgs;
+use crate::{processor::escrow::maybe_out_of_order_escrow::{EscrowCreator, SnKeyEscrow}, query::query_event::LogsQueryArgs};
 use crate::{
     database::{redb::RedbDatabase, EventDatabase},
     processor::escrow::{
@@ -58,15 +58,15 @@ use crate::query::{
 
 /// Helper struct for events generation, signing and processing.
 /// Used in tests.
-pub struct SimpleController<K: KeyManager + 'static, D: EventDatabase> {
+pub struct SimpleController<K: KeyManager + 'static, D: EventDatabase + EscrowCreator> {
     prefix: IdentifierPrefix,
     pub key_manager: Arc<Mutex<K>>,
     processor: BasicProcessor<D>,
     oobi_manager: OobiManager,
     pub storage: EventStorage<D>,
     pub groups: Vec<IdentifierPrefix>,
-    pub not_fully_witnessed_escrow: Arc<PartiallyWitnessedEscrow>,
-    pub ooo_escrow: Arc<MaybeOutOfOrderEscrow>,
+    pub not_fully_witnessed_escrow: Arc<PartiallyWitnessedEscrow<D, SnKeyEscrow>>,
+    pub ooo_escrow: Arc<MaybeOutOfOrderEscrow<D>>,
     pub delegation_escrow: Arc<DelegationEscrow<D>>,
 }
 

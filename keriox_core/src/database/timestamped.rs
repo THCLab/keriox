@@ -10,7 +10,7 @@ use crate::{
     },
 };
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Timestamped<M> {
     pub timestamp: DateTime<Local>,
     pub signed_event_message: M,

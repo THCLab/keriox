@@ -60,8 +60,8 @@ pub struct EventValidator<D: EventDatabase> {
     event_storage: EventStorage<D>,
 }
 
-impl EventValidator<RedbDatabase> {
-    pub fn new(event_database: Arc<RedbDatabase>) -> Self {
+impl<D: EventDatabase + std::any::Any> EventValidator<D> {
+    pub fn new(event_database: Arc<D>) -> Self {
         Self {
             event_storage: EventStorage::new(event_database),
         }
@@ -93,7 +93,7 @@ impl<D: EventDatabase> EventValidator<D> {
                     )?;
                 }
                 new_state
-            }
+            },
             None => signed_event
                 .event_message
                 .apply_to(IdentifierState::default())?,

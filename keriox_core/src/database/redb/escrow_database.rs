@@ -6,7 +6,7 @@ use std::{
 use redb::{Database, MultimapTableDefinition, TableDefinition};
 use said::SelfAddressingIdentifier;
 
-use crate::prefix::IdentifierPrefix;
+use crate::{database::SequencedEventDatabase, prefix::IdentifierPrefix};
 
 use super::{rkyv_adapter, RedbError};
 
@@ -18,14 +18,22 @@ pub struct SnKeyDatabase {
     /// Escrowed events. (identifier, sn) -> event digest
     /// Table links an identifier and sequence number to the digest of an event,
     /// referencing the actual event stored in the `EVENTS` table in EventDatabase.
-    sn_key_table: MultimapTableDefinition<'static, (&'static str, u64), &'static [u8]>,
+    sn_key_table:
+        MultimapTableDefinition<'static, (&'static str, u64), &'static [u8]>,
     /// Timestamps. digest -> timestamp
     /// Table links digest of an event witch time when an event was saved in the database.
     dts_table: TableDefinition<'static, &'static [u8], u64>,
 }
 
-impl SnKeyDatabase {
-    pub fn new(db: Arc<Database>, table_name: &'static str) -> Result<Self, RedbError> {
+impl SequencedEventDatabase for SnKeyDatabase {
+    type DatabaseType = redb::Database;
+    type Error = RedbError;
+    type DigestIter = Box<dyn Iterator<Item = SelfAddressingIdentifier>>;
+
+    fn new(
+        db: Arc<Self::DatabaseType>,
+        table_name: &'static str,
+    ) -> Result<Self, RedbError> {
         // Create tables
         let pse = MultimapTableDefinition::new(table_name);
         let dts = TableDefinition::new("timestamps_escrow");
@@ -43,7 +51,7 @@ impl SnKeyDatabase {
         })
     }
 
-    pub fn insert(
+    fn insert(
         &self,
         identifier: &IdentifierPrefix,
         sn: u64,
@@ -51,9 +59,13 @@ impl SnKeyDatabase {
     ) -> Result<(), RedbError> {
         let write_txn = self.db.begin_write()?;
         {
-            let mut table = (&write_txn).open_multimap_table(self.sn_key_table)?;
+            let mut table =
+                (&write_txn).open_multimap_table(self.sn_key_table)?;
             let value = rkyv_adapter::serialize_said(&digest)?;
-            table.insert((identifier.to_string().as_str(), sn), value.as_ref())?;
+            table.insert(
+                (identifier.to_string().as_str(), sn),
+                value.as_ref(),
+            )?;
 
             let mut table = (&write_txn).open_table(self.dts_table)?;
             let value = get_current_timestamp();
@@ -64,29 +76,30 @@ impl SnKeyDatabase {
         Ok(())
     }
 
-    pub fn get(
+    fn get(
         &self,
         identifier: &IdentifierPrefix,
         sn: u64,
-    ) -> Result<impl Iterator<Item = SelfAddressingIdentifier>, RedbError> {
+    ) -> Result<Self::DigestIter, RedbError> {
         let read_txn = self.db.begin_read()?;
         let table = read_txn.open_multimap_table(self.sn_key_table)?;
         let value = table.get((identifier.to_string().as_str(), sn))?;
         let out = value.filter_map(|value| match value {
             Ok(value) => {
-                let said = rkyv_adapter::deserialize_said(value.value()).unwrap();
+                let said =
+                    rkyv_adapter::deserialize_said(value.value()).unwrap();
                 Some(said)
             }
             _ => None,
         });
-        Ok(out)
+        Ok(Box::new(out))
     }
 
-    pub fn get_grater_then(
+    fn get_greater_than(
         &self,
         identifier: &IdentifierPrefix,
         sn: u64,
-    ) -> Result<impl Iterator<Item = SelfAddressingIdentifier>, RedbError> {
+    ) -> Result<Self::DigestIter, RedbError> {
         let read_txn = self.db.begin_read()?;
         let table = read_txn.open_multimap_table(self.sn_key_table)?;
         let lower_bound = identifier.to_string();
@@ -100,21 +113,25 @@ impl SnKeyDatabase {
         let out = table
             .range((lower_bound.as_str(), sn)..(upper_bound.as_str(), 0))?
             .filter_map(|range| match range {
-                Ok((_key, value)) => Some(value.filter_map(|value| match value {
-                    Ok(value) => {
-                        let said = rkyv_adapter::deserialize_said(value.value()).unwrap();
-                        Some(said)
-                    }
-                    Err(_) => None,
-                })),
+                Ok((_key, value)) => {
+                    Some(value.filter_map(|value| match value {
+                        Ok(value) => {
+                            let said =
+                                rkyv_adapter::deserialize_said(value.value())
+                                    .unwrap();
+                            Some(said)
+                        }
+                        Err(_) => None,
+                    }))
+                }
                 _ => None,
             })
             .flatten();
 
-        Ok(out)
+        Ok(Box::new(out))
     }
 
-    pub fn remove(
+    fn remove(
         &self,
         identifier: &IdentifierPrefix,
         sn: u64,
@@ -124,7 +141,10 @@ impl SnKeyDatabase {
         {
             let mut table = write_txn.open_multimap_table(self.sn_key_table)?;
             let said = rkyv_adapter::serialize_said(said).unwrap();
-            table.remove((identifier.to_string().as_str(), sn), said.as_slice())?;
+            table.remove(
+                (identifier.to_string().as_str(), sn),
+                said.as_slice(),
+            )?;
 
             let mut table = write_txn.open_table(self.dts_table)?;
             table.remove(said.as_slice())?;
