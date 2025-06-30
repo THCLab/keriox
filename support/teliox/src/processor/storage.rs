@@ -12,11 +12,11 @@ use crate::{
 
 use super::TelReplyType;
 
-pub struct TelEventStorage {
-    pub db: Arc<EventDatabase>,
+pub struct TelEventStorage<D: EventDatabase> {
+    pub db: Arc<D>,
 }
-impl TelEventStorage {
-    pub fn new(db: Arc<EventDatabase>) -> Self {
+impl<D: EventDatabase> TelEventStorage<D> {
+    pub fn new(db: Arc<D>) -> Self {
         Self { db }
     }
 
