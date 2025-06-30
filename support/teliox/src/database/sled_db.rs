@@ -1,4 +1,4 @@
-use crate::{database::EventDatabase, error::Error, event::verifiable_event::VerifiableEvent};
+use crate::{database::TelEventDatabase, error::Error, event::verifiable_event::VerifiableEvent};
 use keri_core::prefix::IdentifierPrefix;
 use sled_tables::{
     self,
@@ -16,7 +16,7 @@ pub struct SledEventDatabase {
     management_events: SledEventTreeVec<VerifiableEvent>,
 }
 
-impl EventDatabase for SledEventDatabase {
+impl TelEventDatabase for SledEventDatabase {
     fn new(path: impl AsRef<Path>) -> Result<Self, Error> {
         let db = Arc::new(sled::open(path)?);
         Ok(Self {

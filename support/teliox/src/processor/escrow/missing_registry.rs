@@ -7,7 +7,7 @@ use keri_core::{
 use crate::{
     database::{
         escrow::{Escrow, EscrowDb},
-        EventDatabase,
+        TelEventDatabase,
     },
     error::Error,
     event::verifiable_event::VerifiableEvent,
@@ -18,13 +18,13 @@ use crate::{
     },
 };
 
-pub struct MissingRegistryEscrow<D: EventDatabase> {
+pub struct MissingRegistryEscrow<D: TelEventDatabase> {
     tel_reference: Arc<TelEventStorage<D>>,
     kel_reference: Arc<EventStorage<RedbDatabase>>,
     escrowed_missing_registry: Escrow<VerifiableEvent>,
 }
 
-impl<D: EventDatabase> MissingRegistryEscrow<D> {
+impl<D: TelEventDatabase> MissingRegistryEscrow<D> {
     pub fn new(
         tel_reference: Arc<TelEventStorage<D>>,
         kel_reference: Arc<EventStorage<RedbDatabase>>,
@@ -40,7 +40,7 @@ impl<D: EventDatabase> MissingRegistryEscrow<D> {
     }
 }
 
-impl<D: EventDatabase> TelNotifier for MissingRegistryEscrow<D> {
+impl<D: TelEventDatabase> TelNotifier for MissingRegistryEscrow<D> {
     fn notify(
         &self,
         notification: &TelNotification,
@@ -63,7 +63,7 @@ impl<D: EventDatabase> TelNotifier for MissingRegistryEscrow<D> {
     }
 }
 
-impl<D: EventDatabase> MissingRegistryEscrow<D> {
+impl<D: TelEventDatabase> MissingRegistryEscrow<D> {
     pub fn process_missing_registry(
         &self,
         bus: &TelNotificationBus,
@@ -115,7 +115,7 @@ mod tests {
     };
 
     use crate::{
-        database::{escrow::EscrowDb, sled_db::SledEventDatabase, EventDatabase},
+        database::{escrow::EscrowDb, sled_db::SledEventDatabase, TelEventDatabase},
         error::Error,
         event::verifiable_event::VerifiableEvent,
         processor::{

@@ -4,7 +4,7 @@ use std::path::Path;
 pub mod escrow;
 pub mod sled_db;
 
-pub trait EventDatabase {
+pub trait TelEventDatabase {
     fn new(path: impl AsRef<Path>) -> Result<Self, Error>
     where
         Self: Sized;

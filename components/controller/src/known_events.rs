@@ -30,7 +30,7 @@ use keri_core::{
 };
 use teliox::database::escrow::EscrowDb;
 use teliox::database::sled_db::SledEventDatabase;
-use teliox::database::EventDatabase;
+use teliox::database::TelEventDatabase;
 use teliox::processor::escrow::default_escrow_bus as tel_escrow_bus;
 use teliox::processor::storage::TelEventStorage;
 use teliox::tel::Tel;
@@ -82,7 +82,7 @@ impl KnownEvents {
             let mut path = db_path.clone();
             path.push("tel");
             path.push("events");
-            Arc::new(EventDatabase::new(&path)?)
+            Arc::new(TelEventDatabase::new(&path)?)
         };
 
         let tel_escrow_db = {
