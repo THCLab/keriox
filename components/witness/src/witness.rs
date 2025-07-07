@@ -35,7 +35,7 @@ use keri_core::{
 };
 use serde::{Deserialize, Serialize};
 use teliox::{
-    database::{escrow::EscrowDb, sled_db::SledEventDatabase},
+    database::{escrow::EscrowDb, redb::RedbTelDatabase},
     event::{parse_tel_query_stream, verifiable_event::VerifiableEvent},
     processor::{escrow::default_escrow_bus, storage::TelEventStorage, TelReplyType},
     tel::Tel,
@@ -145,7 +145,7 @@ pub struct Witness {
     pub oobi_manager: OobiManager,
     pub signer: Arc<Signer>,
     pub receipt_generator: Arc<WitnessReceiptGenerator>,
-    pub tel: Arc<Tel<SledEventDatabase>>,
+    pub tel: Arc<Tel<RedbTelDatabase>>,
 }
 
 impl Witness {

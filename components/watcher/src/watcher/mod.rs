@@ -20,7 +20,7 @@ use keri_core::{
     query::reply_event::{ReplyRoute, SignedReply},
 };
 use tel_providing::RegistryMapping;
-use teliox::{database::sled_db::SledEventDatabase, event::parse_tel_query_stream};
+use teliox::{database::redb::RedbTelDatabase, event::parse_tel_query_stream};
 use teliox::{
     event::verifiable_event::VerifiableEvent,
     processor::{validator::TelEventValidator, TelReplyType},
@@ -149,7 +149,7 @@ impl Watcher {
                             teliox::event::Event::Vc(_) => todo!(),
                         };
                         let seal = &ev.seal;
-                        TelEventValidator::<SledEventDatabase, RedbDatabase>::check_kel_event(
+                        TelEventValidator::<RedbTelDatabase, RedbDatabase>::check_kel_event(
                             self.watcher_data.event_storage.clone(),
                             seal,
                             &issuer_id,

@@ -3,7 +3,7 @@ use std::{sync::Arc, time::Duration};
 use keri_core::{database::redb::RedbDatabase, processor::event_storage::EventStorage};
 
 use crate::{
-    database::{escrow::EscrowDb, redb::RedbTelDatabase, },
+    database::{escrow::EscrowDb, redb::RedbTelDatabase},
     error::Error,
 };
 

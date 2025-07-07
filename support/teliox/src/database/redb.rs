@@ -6,7 +6,7 @@ use crate::{
 use keri_core::prefix::IdentifierPrefix;
 use redb::{Database, TableDefinition};
 use sled_tables::{self};
-use std::{path::Path, sync::Arc};
+use std::{fs, path::Path, sync::Arc};
 
 /// Events store. (event digest) -> tel event
 /// The `EVENTS` table directly stores the event data, which other tables reference
@@ -29,6 +29,9 @@ pub struct RedbTelDatabase {
 
 impl TelEventDatabase for RedbTelDatabase {
     fn new(db_path: impl AsRef<Path>) -> Result<Self, Error> {
+        if let Some(parent) = db_path.as_ref().parent() {
+            fs::create_dir_all(parent).unwrap();
+        }
         let db = Arc::new(Database::create(db_path).unwrap());
         // Create tables
         let write_txn = db.begin_write()?;
@@ -52,14 +55,10 @@ impl TelEventDatabase for RedbTelDatabase {
             )?;
         }
         match event.event {
-            Event::Management(typed_event) => {
-                let id = typed_event.data.prefix.clone();
-                let sn = typed_event.data.sn.clone();
-                {
-                    let mut man_tel_table = write_txn.open_table(MANAGEMENT_TELS)?;
-                    man_tel_table
-                        .insert((id.to_string().as_str(), sn), key.to_string().as_bytes())?;
-                }
+            Event::Management(_) => {
+                return Err(Error::Generic(
+                    "Wrong TEL event, VC event expected".to_string(),
+                ));
             }
             Event::Vc(typed_event) => {
                 let id = typed_event.data.data.prefix.clone();
@@ -89,7 +88,7 @@ impl TelEventDatabase for RedbTelDatabase {
         };
 
         let events_table = read_txn.open_table(EVENTS).unwrap();
-        let out: Vec<_> = digests
+        let mut out_iter = digests
             .filter_map(|entry| {
                 let (_key, value) = entry.unwrap();
                 let v = events_table.get(value.value()).unwrap();
@@ -99,11 +98,11 @@ impl TelEventDatabase for RedbTelDatabase {
                     event
                 })
             })
-            .collect();
-        if out.is_empty() {
+            .peekable();
+        if out_iter.peek().is_none() {
             None
         } else {
-            Some(out.into_iter())
+            Some(out_iter.collect::<Vec<_>>().into_iter())
         }
     }
 
@@ -131,14 +130,10 @@ impl TelEventDatabase for RedbTelDatabase {
                         .insert((id.to_string().as_str(), sn), key.to_string().as_bytes())?;
                 }
             }
-            Event::Vc(typed_event) => {
-                let id = typed_event.data.data.prefix.clone();
-                let sn = typed_event.data.data.sn.clone();
-                {
-                    let mut man_tel_table = write_txn.open_table(VC_TELS)?;
-                    man_tel_table
-                        .insert((id.to_string().as_str(), sn), key.to_string().as_bytes())?;
-                }
+            Event::Vc(_) => {
+                return Err(Error::Generic(
+                    "Wrong TEL event, management event expected".to_string(),
+                ));
             }
         }
         write_txn.commit()?;
@@ -158,7 +153,7 @@ impl TelEventDatabase for RedbTelDatabase {
         };
 
         let events_table = read_txn.open_table(EVENTS).unwrap();
-        let out: Vec<_> = digests
+        let mut out_iter = digests
             .filter_map(|entry| {
                 let (_key, value) = entry.unwrap();
                 let v = events_table.get(value.value()).unwrap();
@@ -168,9 +163,11 @@ impl TelEventDatabase for RedbTelDatabase {
                     event
                 })
             })
-            .collect();
-        if out.is_empty() {None} else {
-            Some(out.into_iter())
+            .peekable();
+        if out_iter.peek().is_none() {
+            None
+        } else {
+            Some(out_iter.collect::<Vec<_>>().into_iter())
         }
     }
 }
