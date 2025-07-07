@@ -10,6 +10,9 @@ pub enum Error {
     #[error("Sled database error")]
     SledError,
 
+    #[error("Redb database error")]
+    RedbError,
+
     #[error("{0}")]
     Generic(String),
 
@@ -47,6 +50,30 @@ pub enum Error {
 impl From<sled::Error> for Error {
     fn from(_: sled::Error) -> Self {
         Error::SledError
+    }
+}
+
+impl From<redb::TransactionError> for Error {
+    fn from(_: redb::TransactionError) -> Self {
+        Error::RedbError
+    }
+}
+
+impl From<redb::TableError> for Error {
+    fn from(_: redb::TableError) -> Self {
+        Error::RedbError
+    }
+}
+
+impl From<redb::CommitError> for Error {
+    fn from(_: redb::CommitError) -> Self {
+        Error::RedbError
+    }
+}
+
+impl From<redb::StorageError> for Error {
+    fn from(_: redb::StorageError) -> Self {
+        Error::RedbError
     }
 }
 

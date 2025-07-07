@@ -151,7 +151,7 @@ mod tests {
     };
 
     use crate::{
-        database::{escrow::EscrowDb, sled_db::SledEventDatabase, TelEventDatabase},
+        database::{escrow::EscrowDb, redb::RedbTelDatabase, TelEventDatabase},
         error::Error,
         event::{manager_event, verifiable_event::VerifiableEvent},
         processor::{
@@ -183,9 +183,9 @@ mod tests {
         keri_processor.process(&issuer_icp)?;
 
         // Initiate tel and it's escrows
-        let tel_root = Builder::new().prefix("test-db").tempdir().unwrap();
+        let tel_root = Builder::new().prefix("test-db").tempfile().unwrap();
         let tel_escrow_root = Builder::new().prefix("test-db").tempdir().unwrap();
-        let tel_events_db = Arc::new(SledEventDatabase::new(&tel_root.path()).unwrap());
+        let tel_events_db = Arc::new(RedbTelDatabase::new(&tel_root.path()).unwrap());
 
         let tel_escrow_db = Arc::new(EscrowDb::new(&tel_escrow_root.path()).unwrap());
 
