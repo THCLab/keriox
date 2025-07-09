@@ -9,6 +9,7 @@ members = [
     "components/witness",
     "components/watcher",
     "components/controller",
+    "keriox_sdk",
 ]
 
 [workspace.package]
