@@ -23,9 +23,6 @@ arrayref = "0.3.6"
 sled = { version = "0.34.6"}
 serde_cbor = "0.11.1"
 sled-tables = "0.2.0"
-reqwest = { version = "0.11"}
-async-trait = "0.1.57"
-
 
 [dev-dependencies]
 tempfile = "3.1"

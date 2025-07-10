@@ -12,7 +12,7 @@ use keri_core::{
     },
     transport::{Transport, TransportError},
 };
-use teliox::transport::GeneralTelTransport;
+use teliox::{event::verifiable_event::VerifiableEvent, query::SignedTelQuery};
 
 use crate::{
     error::ControllerError,
@@ -30,6 +30,9 @@ pub enum SendingError {
 
     #[error("Transport error: {0}")]
     TransportError(keri_core::transport::TransportError),
+
+    #[error("Http request error: {0}")]
+    HTTPError(#[from] reqwest::Error),
 
     #[error(transparent)]
     OobiError(#[from] OobiRetrieveError),
@@ -50,14 +53,14 @@ impl From<TransportError> for SendingError {
 pub struct Communication {
     pub events: Arc<KnownEvents>,
     pub transport: Box<dyn Transport + Send + Sync>,
-    pub tel_transport: Box<dyn GeneralTelTransport + Send + Sync>,
+    pub tel_transport: Box<dyn IdentifierTelTransport + Send + Sync>,
 }
 
 impl Communication {
     pub fn new(
         known_events: Arc<KnownEvents>,
         transport: Box<dyn Transport<ActorError> + Send + Sync>,
-        tel_transport: Box<dyn GeneralTelTransport + Send + Sync>,
+        tel_transport: Box<dyn IdentifierTelTransport + Send + Sync>,
     ) -> Self {
         Communication {
             events: known_events,
@@ -220,6 +223,76 @@ impl Communication {
             self.send_oobi_to(watcher, Scheme::Http, oobi.clone())
                 .await?;
         }
+
+        Ok(())
+    }
+
+    pub async fn send_tel_query(
+        &self,
+        qry: SignedTelQuery,
+        location: LocationScheme,
+    ) -> Result<String, SendingError> {
+        self.tel_transport.send_query(qry, location).await
+    }
+
+    pub async fn send_tel_event(
+        &self,
+        event: VerifiableEvent,
+        location: LocationScheme,
+    ) -> Result<(), SendingError> {
+        self.tel_transport.send_tel_event(event, location).await
+    }
+}
+
+#[async_trait::async_trait]
+pub trait IdentifierTelTransport {
+    async fn send_query(
+        &self,
+        qry: SignedTelQuery,
+        location: LocationScheme,
+    ) -> Result<String, SendingError>;
+    async fn send_tel_event(
+        &self,
+        qry: VerifiableEvent,
+        location: LocationScheme,
+    ) -> Result<(), SendingError>;
+}
+
+pub struct HTTPTelTransport;
+
+#[async_trait::async_trait]
+impl IdentifierTelTransport for HTTPTelTransport {
+    async fn send_query(
+        &self,
+        qry: SignedTelQuery,
+        location: LocationScheme,
+    ) -> Result<String, SendingError> {
+        let url = match location.scheme {
+            Scheme::Http => location.url.join("query/tel").unwrap(),
+            Scheme::Tcp => todo!(),
+        };
+        let resp = reqwest::Client::new()
+            .post(url)
+            .body(qry.to_cesr().unwrap())
+            .send()
+            .await?;
+
+        Ok(resp.text().await?)
+    }
+
+    async fn send_tel_event(
+        &self,
+        event: VerifiableEvent,
+        location: LocationScheme,
+    ) -> Result<(), SendingError> {
+        let url = match location.scheme {
+            Scheme::Http => location.url.join("process/tel").unwrap(),
+            Scheme::Tcp => todo!(),
+        };
+        let client = reqwest::Client::new();
+        let query = event.serialize().unwrap();
+        let resp = client.post(url).body(query).send().await?;
+        resp.text().await?;
 
         Ok(())
     }

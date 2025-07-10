@@ -1,13 +1,13 @@
 use std::{collections::HashMap, sync::Arc};
 
 use futures::lock::Mutex;
-use keri_controller::LocationScheme;
-use teliox::{
-    event::verifiable_event::VerifiableEvent,
-    query::SignedTelQuery,
-    transport::{GeneralTelTransport, TransportError},
+use keri_controller::{
+    communication::{IdentifierTelTransport, SendingError},
+    LocationScheme,
 };
-use watcher::Watcher;
+use keri_core::transport::TransportError;
+use teliox::{event::verifiable_event::VerifiableEvent, query::SignedTelQuery};
+use watcher::{transport::WatcherTelTransport, Watcher};
 use witness::Witness;
 
 pub enum TelTestActor {
@@ -50,7 +50,7 @@ impl TelTestActor {
         match self {
             TelTestActor::Witness(wit) => wit
                 .parse_and_process_tel_events(&input_stream)
-                .map_err(|_err| TransportError::NetworkError)?,
+                .map_err(|_err| TransportError::NetworkError("Wrong payload".to_string()))?,
             TelTestActor::Watcher(_wat) => todo!(),
         };
         Ok(())
@@ -86,24 +86,23 @@ impl Clone for TelTestTransport {
 }
 
 #[async_trait::async_trait]
-impl GeneralTelTransport for TelTestTransport {
+impl IdentifierTelTransport for TelTestTransport {
     async fn send_query(
         &self,
         qry: SignedTelQuery,
         loc: LocationScheme,
-    ) -> Result<String, TransportError> {
+    ) -> Result<String, SendingError> {
         let (host, port) = match loc.url.origin() {
             url::Origin::Tuple(_scheme, host, port) => (host, port),
-            _ => return Err(TransportError::NetworkError),
+            _ => return Err(TransportError::NetworkError("Wrong address".to_string()).into()),
         };
-        let actors = self.actors.lock().await; //.map_err(|_e| TransportError::InvalidResponse)?;
+        let actors = self.actors.lock().await; 
         let actor = actors
             .get(&(host, port))
-            .ok_or(TransportError::NetworkError)?;
-        let resp = actor
-            .send_query(qry, loc)
-            .await
-            .map_err(|_err| TransportError::InvalidResponse)?;
+            .ok_or(TransportError::NetworkError(
+                "Address not found".to_string(),
+            ))?;
+        let resp = actor.send_query(qry, loc).await?;
 
         Ok(resp)
     }
@@ -111,20 +110,33 @@ impl GeneralTelTransport for TelTestTransport {
         &self,
         qry: VerifiableEvent,
         loc: LocationScheme,
-    ) -> Result<(), TransportError> {
+    ) -> Result<(), SendingError> {
         let (host, port) = match loc.url.origin() {
             url::Origin::Tuple(_scheme, host, port) => (host, port),
-            _ => return Err(TransportError::NetworkError),
+            _ => return Err(TransportError::NetworkError("Wrong address".to_string()).into()),
         };
 
         let actors = self.actors.lock().await;
         actors
             .get(&(host, port))
-            .ok_or(TransportError::NetworkError)?
+            .ok_or(TransportError::NetworkError(
+                "Address not found".to_string(),
+            ))?
             .send_tel_event(qry, loc)
-            .await
-            .map_err(|_err| TransportError::InvalidResponse)?;
-
+            .await?;
         Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl WatcherTelTransport for TelTestTransport {
+    async fn send_query(
+        &self,
+        qry: SignedTelQuery,
+        location: LocationScheme,
+    ) -> Result<String, watcher::transport::TransportError> {
+       IdentifierTelTransport::send_query(self, qry, location)
+            .await
+            .map_err(|_e| watcher::transport::TransportError::NetworkError) 
     }
 }
