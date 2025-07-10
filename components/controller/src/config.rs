@@ -5,14 +5,15 @@ use keri_core::{
     processor::escrow::EscrowConfig,
     transport::{default::DefaultTransport, Transport},
 };
-use teliox::transport::{GeneralTelTransport, TelTransport};
+
+use crate::communication::{HTTPTelTransport, IdentifierTelTransport};
 
 pub struct ControllerConfig {
     pub db_path: PathBuf,
     pub initial_oobis: Vec<LocationScheme>,
     pub escrow_config: EscrowConfig,
     pub transport: Box<dyn Transport + Send + Sync>,
-    pub tel_transport: Box<dyn GeneralTelTransport + Send + Sync>,
+    pub tel_transport: Box<dyn IdentifierTelTransport + Send + Sync>,
 }
 
 impl Default for ControllerConfig {
@@ -22,7 +23,7 @@ impl Default for ControllerConfig {
             initial_oobis: vec![],
             escrow_config: EscrowConfig::default(),
             transport: Box::new(DefaultTransport::new()),
-            tel_transport: Box::new(TelTransport),
+            tel_transport: Box::new(HTTPTelTransport),
         }
     }
 }

@@ -143,8 +143,7 @@ impl Identifier {
         let location = self.known_events.get_loc_schemas(&watcher).unwrap()[0].clone();
         let tel_res = self
             .communication
-            .tel_transport
-            .send_query(query, location)
+            .send_tel_query(query, location)
             .await
             .map_err(|e| MechanicsError::OtherError(e.to_string()))?;
         self.known_events

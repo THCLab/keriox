@@ -43,8 +43,9 @@ use keri_core::{
     },
 };
 use teliox::query::{SignedTelQuery, TelQueryArgs, TelQueryRoute};
-use teliox::transport::GeneralTelTransport;
 use tokio::sync::mpsc::Sender;
+
+use crate::transport::WatcherTelTransport;
 
 use super::{config::WatcherConfig, tel_providing::TelToForward};
 
@@ -56,7 +57,7 @@ pub struct WatcherData {
     pub oobi_manager: OobiManager,
     pub signer: Arc<Signer>,
     pub transport: Box<dyn Transport + Send + Sync>,
-    pub tel_transport: Box<dyn GeneralTelTransport + Send + Sync>,
+    pub tel_transport: Box<dyn WatcherTelTransport + Send + Sync>,
     /// Watcher will update KEL of the identifiers that have been sent to this channel.
     tx: Sender<IdentifierPrefix>,
     /// Watcher will update TEL of the identifiers (registry_id, vc_id) that have been sent to this channel.
@@ -76,9 +77,9 @@ impl WatcherData {
             db_path,
             priv_key,
             transport,
-            tel_transport,
             escrow_config,
             tel_storage_path,
+            tel_transport,
         } = config;
         let mut tel_to_forward_path = tel_storage_path.clone();
         tel_to_forward_path.push("to_forward");

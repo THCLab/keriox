@@ -7,10 +7,9 @@ use keri_controller::{EndRole, Oobi};
 use keri_controller::{IdentifierPrefix, KeyManager, LocationScheme, SelfSigningPrefix};
 use keri_core::actor::prelude::{HashFunction, HashFunctionCode};
 use keri_core::transport::test::TestTransport;
-use keri_tests::{
-    setup_identifier,
-    transport::{TelTestActor, TelTestTransport},
-};
+use keri_tests::setup_identifier;
+use keri_tests::transport::TelTestActor;
+use keri_tests::transport::TelTestTransport;
 use teliox::state::vc_state::TelState;
 use tempfile::Builder;
 use url::{Host, Url};

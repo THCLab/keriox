@@ -6,5 +6,6 @@ pub use crate::{
 mod http_routing;
 #[cfg(test)]
 mod test;
+pub mod transport;
 mod watcher;
 pub mod watcher_listener;

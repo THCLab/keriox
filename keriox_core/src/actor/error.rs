@@ -16,6 +16,9 @@ pub enum ActorError {
     #[error("network request failed")]
     TransportError(Box<TransportError>),
 
+    #[error("HTTP request failed: {0}")]
+    HTTPError(String),
+
     #[error("keri error")]
     KeriError(#[from] KeriError),
 
@@ -71,6 +74,12 @@ impl From<TransportError> for ActorError {
 impl From<VersionError> for ActorError {
     fn from(err: VersionError) -> Self {
         ActorError::KeriError(err.into())
+    }
+}
+
+impl From<reqwest::Error> for ActorError {
+    fn from(err: reqwest::Error) -> Self {
+        ActorError::HTTPError(err.to_string())
     }
 }
 
