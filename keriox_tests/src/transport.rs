@@ -96,7 +96,7 @@ impl IdentifierTelTransport for TelTestTransport {
             url::Origin::Tuple(_scheme, host, port) => (host, port),
             _ => return Err(TransportError::NetworkError("Wrong address".to_string()).into()),
         };
-        let actors = self.actors.lock().await; 
+        let actors = self.actors.lock().await;
         let actor = actors
             .get(&(host, port))
             .ok_or(TransportError::NetworkError(
@@ -135,8 +135,8 @@ impl WatcherTelTransport for TelTestTransport {
         qry: SignedTelQuery,
         location: LocationScheme,
     ) -> Result<String, watcher::transport::TransportError> {
-       IdentifierTelTransport::send_query(self, qry, location)
+        IdentifierTelTransport::send_query(self, qry, location)
             .await
-            .map_err(|_e| watcher::transport::TransportError::NetworkError) 
+            .map_err(|_e| watcher::transport::TransportError::NetworkError)
     }
 }

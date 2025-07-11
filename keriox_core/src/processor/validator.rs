@@ -93,7 +93,7 @@ impl<D: EventDatabase> EventValidator<D> {
                     )?;
                 }
                 new_state
-            },
+            }
             None => signed_event
                 .event_message
                 .apply_to(IdentifierState::default())?,

@@ -4,7 +4,7 @@ use said::SelfAddressingIdentifier;
 
 use crate::{
     actor::prelude::EventStorage,
-    database::{EscrowDatabase, EventDatabase, EscrowCreator,LogDatabase},
+    database::{EscrowCreator, EscrowDatabase, EventDatabase, LogDatabase},
     error::Error,
     event_message::{
         signature::Nontransferable,
@@ -37,7 +37,9 @@ impl<D: EventDatabase + EscrowCreator + 'static> PartiallyWitnessedEscrow<D> {
         &'a self,
         id: &IdentifierPrefix,
     ) -> Result<impl Iterator<Item = SignedEventMessage> + 'a, Error> {
-        self.escrowed_partially_witnessed.get_from_sn(id, 0).map_err(|_| Error::DbError )
+        self.escrowed_partially_witnessed
+            .get_from_sn(id, 0)
+            .map_err(|_| Error::DbError)
     }
 
     /// Returns escrowed partially witness events of given identifier, sn and
@@ -71,8 +73,14 @@ impl<D: EventDatabase + EscrowCreator + 'static> PartiallyWitnessedEscrow<D> {
         sn: u64,
         digest: &'a SelfAddressingIdentifier,
     ) -> Result<Option<impl Iterator<Item = Nontransferable> + 'a>, Error> {
-        if self.escrowed_partially_witnessed.contains(id, sn, digest).map_err(|_| Error::DbError)? {
-            self.log.get_nontrans_couplets(digest).map_err(|_| Error::DbError)
+        if self
+            .escrowed_partially_witnessed
+            .contains(id, sn, digest)
+            .map_err(|_| Error::DbError)?
+        {
+            self.log
+                .get_nontrans_couplets(digest)
+                .map_err(|_| Error::DbError)
         } else {
             Ok(None)
         }
@@ -91,10 +99,12 @@ impl<D: EventDatabase + EscrowCreator + 'static> PartiallyWitnessedEscrow<D> {
             let id = &receipt.body.prefix;
             let sn = receipt.body.sn;
             let digest = &receipt.body.receipted_event_digest;
-            self.log.log_receipt_with_new_transaction(&receipt)
-            .map_err(|_| Error::DbError)?;
+            self.log
+                .log_receipt_with_new_transaction(&receipt)
+                .map_err(|_| Error::DbError)?;
             self.escrowed_partially_witnessed
-                .save_digest(id, sn, digest).map_err(|_| Error::DbError)?;
+                .save_digest(id, sn, digest)
+                .map_err(|_| Error::DbError)?;
 
             bus.notify(&Notification::ReceiptEscrowed)
         }
@@ -224,7 +234,8 @@ impl<D: EventDatabase + EscrowCreator + 'static> PartiallyWitnessedEscrow<D> {
         });
 
         self.log
-            .remove_nontrans_receipt_with_new_transaction(event_digest, wrong_non).map_err(|_| Error::DbError)?;
+            .remove_nontrans_receipt_with_new_transaction(event_digest, wrong_non)
+            .map_err(|_| Error::DbError)?;
         Ok(())
     }
 
@@ -267,13 +278,12 @@ impl<D: EventDatabase + EscrowCreator + 'static> Notifier for PartiallyWitnessed
                             .validate_partially_witnessed(&receipted_event, Some(ooo.to_owned()))
                         {
                             Ok(_) => {
-                                self.log.log_receipt_with_new_transaction(&ooo)
-                                .map_err(|_| Error::DbError)?;
+                                self.log
+                                    .log_receipt_with_new_transaction(&ooo)
+                                    .map_err(|_| Error::DbError)?;
                                 // accept event and remove receipts
                                 self.db
-                                    .accept_to_kel(
-                                        &receipted_event.event_message,
-                                    )
+                                    .accept_to_kel(&receipted_event.event_message)
                                     .map_err(|_| Error::DbError)?;
                                 // accept receipts and remove them from escrow
                                 self.accept_receipts_for(&receipted_event)?;
@@ -319,9 +329,7 @@ impl<D: EventDatabase + EscrowCreator + 'static> Notifier for PartiallyWitnessed
                             .map_err(|_| Error::DbError)?;
                         // accept event and remove receipts
                         self.db
-                            .accept_to_kel(
-                                &signed_event.event_message,
-                            )
+                            .accept_to_kel(&signed_event.event_message)
                             .map_err(|_| Error::DbError)?;
                         // accept receipts and remove them from escrow
                         self.accept_receipts_for(&signed_event)?;
@@ -330,7 +338,9 @@ impl<D: EventDatabase + EscrowCreator + 'static> Notifier for PartiallyWitnessed
                     }
                     Err(Error::SignatureVerificationError) => (),
                     Err(_) => {
-                        self.escrowed_partially_witnessed.insert(&signed_event).map_err(|_| Error::DbError)?;
+                        self.escrowed_partially_witnessed
+                            .insert(&signed_event)
+                            .map_err(|_| Error::DbError)?;
                     }
                 };
                 Ok(())

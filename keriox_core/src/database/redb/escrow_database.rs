@@ -6,19 +6,21 @@ use std::{
 use redb::{Database, MultimapTableDefinition, TableDefinition};
 use said::SelfAddressingIdentifier;
 
-use crate::{database::{EscrowCreator, EscrowDatabase, SequencedEventDatabase, LogDatabase as _}, event::KeyEvent, event_message::{msg::KeriEvent, signed_event_message::SignedEventMessage}, prefix::IdentifierPrefix};
+use crate::{
+    database::{EscrowCreator, EscrowDatabase, LogDatabase as _, SequencedEventDatabase},
+    event::KeyEvent,
+    event_message::{msg::KeriEvent, signed_event_message::SignedEventMessage},
+    prefix::IdentifierPrefix,
+};
 
-use super::{rkyv_adapter, RedbError, RedbDatabase, LogDatabase};
+use super::{rkyv_adapter, LogDatabase, RedbDatabase, RedbError};
 
 impl EscrowCreator for RedbDatabase {
     type EscrowDatabaseType = SnKeyEscrow;
 
     fn create_escrow_db(&self, table_name: &'static str) -> Self::EscrowDatabaseType {
         SnKeyEscrow::new(
-            Arc::new(
-                SnKeyDatabase::new(self.db.clone(), table_name)
-                    .unwrap(),
-            ),
+            Arc::new(SnKeyDatabase::new(self.db.clone(), table_name).unwrap()),
             self.log_db.clone(),
         )
     }
@@ -29,9 +31,7 @@ pub struct SnKeyEscrow {
         dyn SequencedEventDatabase<
             DatabaseType = redb::Database,
             Error = RedbError,
-            DigestIter = Box<
-                dyn Iterator<Item = said::SelfAddressingIdentifier>,
-            >,
+            DigestIter = Box<dyn Iterator<Item = said::SelfAddressingIdentifier>>,
         >,
     >,
     log: Arc<LogDatabase>,
@@ -48,9 +48,7 @@ impl crate::database::EscrowDatabase for SnKeyEscrow {
             dyn SequencedEventDatabase<
                 DatabaseType = Self::EscrowDatabaseType,
                 Error = Self::Error,
-                DigestIter = Box<
-                    dyn Iterator<Item = said::SelfAddressingIdentifier>,
-                >,
+                DigestIter = Box<dyn Iterator<Item = said::SelfAddressingIdentifier>>,
             >,
         >,
         log: Arc<LogDatabase>,
@@ -73,10 +71,8 @@ impl crate::database::EscrowDatabase for SnKeyEscrow {
     }
 
     fn insert(&self, event: &SignedEventMessage) -> Result<(), RedbError> {
-        self.log.log_event(
-            &crate::database::redb::WriteTxnMode::CreateNew,
-            &event,
-        )?;
+        self.log
+            .log_event(&crate::database::redb::WriteTxnMode::CreateNew, &event)?;
         let said = event.event_message.digest().unwrap();
         let id = event.event_message.data.get_prefix();
         let sn = event.event_message.data.sn;
@@ -91,10 +87,8 @@ impl crate::database::EscrowDatabase for SnKeyEscrow {
         sn: u64,
         event: &SignedEventMessage,
     ) -> Result<(), RedbError> {
-        self.log.log_event(
-            &crate::database::redb::WriteTxnMode::CreateNew,
-            &event,
-        )?;
+        self.log
+            .log_event(&crate::database::redb::WriteTxnMode::CreateNew, &event)?;
         let said = event.event_message.digest().unwrap();
 
         self.escrow.insert(&id, sn, &said)?;
@@ -102,11 +96,7 @@ impl crate::database::EscrowDatabase for SnKeyEscrow {
         Ok(())
     }
 
-    fn get(
-        &self,
-        identifier: &IdentifierPrefix,
-        sn: u64,
-    ) -> Result<Self::EventIter, Self::Error> {
+    fn get(&self, identifier: &IdentifierPrefix, sn: u64) -> Result<Self::EventIter, Self::Error> {
         let saids = self.escrow.get(identifier, sn)?;
         let saids_vec: Vec<_> = saids.collect();
 
@@ -163,7 +153,6 @@ impl crate::database::EscrowDatabase for SnKeyEscrow {
     }
 }
 
-
 /// Storage for digests of escrowed events.
 /// The digest of an escrowed event can be used to retrieve the full event from the `LogDatabase`.  
 /// The storage is indexed by a tuple of (identifier, sn), with the value being the event's digest.
@@ -172,8 +161,7 @@ pub struct SnKeyDatabase {
     /// Escrowed events. (identifier, sn) -> event digest
     /// Table links an identifier and sequence number to the digest of an event,
     /// referencing the actual event stored in the `EVENTS` table in EventDatabase.
-    sn_key_table:
-        MultimapTableDefinition<'static, (&'static str, u64), &'static [u8]>,
+    sn_key_table: MultimapTableDefinition<'static, (&'static str, u64), &'static [u8]>,
     /// Timestamps. digest -> timestamp
     /// Table links digest of an event witch time when an event was saved in the database.
     dts_table: TableDefinition<'static, &'static [u8], u64>,
@@ -184,10 +172,7 @@ impl SequencedEventDatabase for SnKeyDatabase {
     type Error = RedbError;
     type DigestIter = Box<dyn Iterator<Item = SelfAddressingIdentifier>>;
 
-    fn new(
-        db: Arc<Self::DatabaseType>,
-        table_name: &'static str,
-    ) -> Result<Self, RedbError> {
+    fn new(db: Arc<Self::DatabaseType>, table_name: &'static str) -> Result<Self, RedbError> {
         // Create tables
         let pse = MultimapTableDefinition::new(table_name);
         let dts = TableDefinition::new("timestamps_escrow");
@@ -213,13 +198,9 @@ impl SequencedEventDatabase for SnKeyDatabase {
     ) -> Result<(), RedbError> {
         let write_txn = self.db.begin_write()?;
         {
-            let mut table =
-                (&write_txn).open_multimap_table(self.sn_key_table)?;
+            let mut table = (&write_txn).open_multimap_table(self.sn_key_table)?;
             let value = rkyv_adapter::serialize_said(&digest)?;
-            table.insert(
-                (identifier.to_string().as_str(), sn),
-                value.as_ref(),
-            )?;
+            table.insert((identifier.to_string().as_str(), sn), value.as_ref())?;
 
             let mut table = (&write_txn).open_table(self.dts_table)?;
             let value = get_current_timestamp();
@@ -230,18 +211,13 @@ impl SequencedEventDatabase for SnKeyDatabase {
         Ok(())
     }
 
-    fn get(
-        &self,
-        identifier: &IdentifierPrefix,
-        sn: u64,
-    ) -> Result<Self::DigestIter, RedbError> {
+    fn get(&self, identifier: &IdentifierPrefix, sn: u64) -> Result<Self::DigestIter, RedbError> {
         let read_txn = self.db.begin_read()?;
         let table = read_txn.open_multimap_table(self.sn_key_table)?;
         let value = table.get((identifier.to_string().as_str(), sn))?;
         let out = value.filter_map(|value| match value {
             Ok(value) => {
-                let said =
-                    rkyv_adapter::deserialize_said(value.value()).unwrap();
+                let said = rkyv_adapter::deserialize_said(value.value()).unwrap();
                 Some(said)
             }
             _ => None,
@@ -267,17 +243,13 @@ impl SequencedEventDatabase for SnKeyDatabase {
         let out = table
             .range((lower_bound.as_str(), sn)..(upper_bound.as_str(), 0))?
             .filter_map(|range| match range {
-                Ok((_key, value)) => {
-                    Some(value.filter_map(|value| match value {
-                        Ok(value) => {
-                            let said =
-                                rkyv_adapter::deserialize_said(value.value())
-                                    .unwrap();
-                            Some(said)
-                        }
-                        Err(_) => None,
-                    }))
-                }
+                Ok((_key, value)) => Some(value.filter_map(|value| match value {
+                    Ok(value) => {
+                        let said = rkyv_adapter::deserialize_said(value.value()).unwrap();
+                        Some(said)
+                    }
+                    Err(_) => None,
+                })),
                 _ => None,
             })
             .flatten();
@@ -295,10 +267,7 @@ impl SequencedEventDatabase for SnKeyDatabase {
         {
             let mut table = write_txn.open_multimap_table(self.sn_key_table)?;
             let said = rkyv_adapter::serialize_said(said).unwrap();
-            table.remove(
-                (identifier.to_string().as_str(), sn),
-                said.as_slice(),
-            )?;
+            table.remove((identifier.to_string().as_str(), sn), said.as_slice())?;
 
             let mut table = write_txn.open_table(self.dts_table)?;
             table.remove(said.as_slice())?;
