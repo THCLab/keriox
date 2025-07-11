@@ -50,7 +50,10 @@ pub fn default_escrow_bus<D>(
         Arc<DelegationEscrow<D>>,
         Arc<DuplicitousEvents<D>>,
     ),
-) where D: EventDatabase + EscrowCreator + Sync + Send + 'static {
+)
+where
+    D: EventDatabase + EscrowCreator + Sync + Send + 'static,
+{
     let mut bus = NotificationBus::new();
 
     // Register out of order escrow, to save and reprocess out of order events
@@ -58,7 +61,10 @@ pub fn default_escrow_bus<D>(
         event_db.clone(),
         escrow_config.out_of_order_timeout,
     ));
-    println!("Registering out of order escrow with timeout: {:?}", escrow_config.out_of_order_timeout);
+    println!(
+        "Registering out of order escrow with timeout: {:?}",
+        escrow_config.out_of_order_timeout
+    );
     bus.register_observer(
         ooo_escrow.clone(),
         vec![

@@ -1,11 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use crate::{
-    database::{
-        EventDatabase,
-        EscrowDatabase,
-        EscrowCreator,
-    },
+    database::{EscrowCreator, EscrowDatabase, EventDatabase},
     error::Error,
     event::KeyEvent,
     event_message::{msg::KeriEvent, signed_event_message::SignedEventMessage},
@@ -31,8 +27,11 @@ impl<D: EventDatabase + EscrowCreator + 'static> PartiallySignedEscrow<D> {
 
     pub fn get_partially_signed_for_event(
         &self,
-        event: KeriEvent<KeyEvent>
-    ) -> Option<SignedEventMessage> where <D::EscrowDatabaseType as crate::database::EscrowDatabase>::Error: std::fmt::Debug {
+        event: KeriEvent<KeyEvent>,
+    ) -> Option<SignedEventMessage>
+    where
+        <D::EscrowDatabaseType as crate::database::EscrowDatabase>::Error: std::fmt::Debug,
+    {
         let id = event.data.get_prefix();
         let sn = event.data.sn;
         self.escrowed_partially_signed
@@ -56,7 +55,8 @@ impl<D: EventDatabase + EscrowCreator + 'static> PartiallySignedEscrow<D> {
         let sn = signed_event.event_message.data.sn;
         if let Some(esc) = self
             .escrowed_partially_signed
-            .get(&id, sn).map_err(|_| Error::DbError)?
+            .get(&id, sn)
+            .map_err(|_| Error::DbError)?
             .find(|event| event.event_message == signed_event.event_message)
         {
             let mut signatures = esc.signatures;
@@ -104,14 +104,18 @@ impl<D: EventDatabase + EscrowCreator + 'static> PartiallySignedEscrow<D> {
                         signatures: without_duplicates,
                         ..signed_event.to_owned()
                     };
-                    self.escrowed_partially_signed.insert(&to_add).map_err(|_| Error::DbError)?;
+                    self.escrowed_partially_signed
+                        .insert(&to_add)
+                        .map_err(|_| Error::DbError)?;
                 }
                 Err(_e) => {
                     // keep in escrow
                 }
             }
         } else {
-            self.escrowed_partially_signed.insert(signed_event).map_err(|_| Error::DbError)?;
+            self.escrowed_partially_signed
+                .insert(signed_event)
+                .map_err(|_| Error::DbError)?;
         };
 
         Ok(())

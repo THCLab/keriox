@@ -36,6 +36,9 @@ pub enum SendingError {
 
     #[error(transparent)]
     OobiError(#[from] OobiRetrieveError),
+
+    #[error("Invalid url: {0}")]
+    InvalidUrl(#[from] url::ParseError),
 }
 
 impl From<TransportError> for SendingError {
@@ -268,7 +271,7 @@ impl IdentifierTelTransport for HTTPTelTransport {
         location: LocationScheme,
     ) -> Result<String, SendingError> {
         let url = match location.scheme {
-            Scheme::Http => location.url.join("query/tel").unwrap(),
+            Scheme::Http => location.url.join("query/tel")?,
             Scheme::Tcp => todo!(),
         };
         let resp = reqwest::Client::new()
@@ -286,7 +289,7 @@ impl IdentifierTelTransport for HTTPTelTransport {
         location: LocationScheme,
     ) -> Result<(), SendingError> {
         let url = match location.scheme {
-            Scheme::Http => location.url.join("process/tel").unwrap(),
+            Scheme::Http => location.url.join("process/tel")?,
             Scheme::Tcp => todo!(),
         };
         let client = reqwest::Client::new();

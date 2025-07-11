@@ -4,12 +4,12 @@ use std::{
 };
 
 use crate::{
-    database::{redb::RedbDatabase, EventDatabase, EscrowCreator},
+    database::{redb::RedbDatabase, EscrowCreator, EventDatabase},
     processor::escrow::{
         maybe_out_of_order_escrow::MaybeOutOfOrderEscrow,
         partially_witnessed_escrow::PartiallyWitnessedEscrow,
     },
-    query::{mailbox::SignedMailboxQuery, query_event::LogsQueryArgs}
+    query::{mailbox::SignedMailboxQuery, query_event::LogsQueryArgs},
 };
 use cesrox::{cesr_proof::MaterialPath, parse, primitives::CesrPrimitive};
 use said::derivation::{HashFunction, HashFunctionCode};

@@ -31,7 +31,7 @@ use rkyv::{
 use said::SelfAddressingIdentifier;
 
 use crate::{
-    database::{timestamped::TimestampedSignedEventMessage},
+    database::timestamped::TimestampedSignedEventMessage,
     event::{sections::seal::SourceSeal, KeyEvent},
     event_message::{
         msg::KeriEvent,
@@ -383,9 +383,9 @@ impl LogDatabase {
 #[test]
 fn test_retrieve_by_digest() {
     use crate::actor::parse_event_stream;
+    use crate::database::LogDatabase as LogDb;
     use crate::event_message::signed_event_message::{Message, Notice};
     use tempfile::NamedTempFile;
-    use crate::database::LogDatabase as LogDb;
     // Create test db path.
     let file_path = NamedTempFile::new().unwrap();
 
