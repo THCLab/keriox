@@ -232,10 +232,7 @@ impl EventDatabase for RedbDatabase {
         }
     }
 
-    fn accept_to_kel(
-        &self,
-        event: &KeriEvent<KeyEvent>,
-    ) -> Result<(), RedbError> {
+    fn accept_to_kel(&self, event: &KeriEvent<KeyEvent>) -> Result<(), RedbError> {
         let txn_mode = WriteTxnMode::CreateNew;
         self.save_to_kel(&txn_mode, event)?;
         self.update_key_state(&txn_mode, event)?;

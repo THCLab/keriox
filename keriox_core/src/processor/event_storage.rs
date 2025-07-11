@@ -44,7 +44,9 @@ impl<D: EventDatabase + std::any::Any> EventStorage<D> {
     pub fn new(events_db: Arc<D>) -> Self {
         #[cfg(feature = "mailbox")]
         {
-            if let Some(redb_db) = (events_db.as_ref() as &dyn std::any::Any).downcast_ref::<RedbDatabase>() {
+            if let Some(redb_db) =
+                (events_db.as_ref() as &dyn std::any::Any).downcast_ref::<RedbDatabase>()
+            {
                 let mailbox_data = MailboxData::new(redb_db.db.clone()).unwrap();
                 Self {
                     events_db,

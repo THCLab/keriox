@@ -130,8 +130,7 @@ impl NontransferableIdentifier {
 
         let tel_res = self
             .communication
-            .tel_transport
-            .send_query(signed_qry, witness_location)
+            .send_tel_query(signed_qry, witness_location)
             .await
             .map_err(|e| MechanicsError::OtherError(e.to_string()))?;
         Ok(tel_res)

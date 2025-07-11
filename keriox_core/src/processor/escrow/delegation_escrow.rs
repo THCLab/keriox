@@ -4,9 +4,7 @@ use said::SelfAddressingIdentifier;
 
 use crate::{
     actor::prelude::EventStorage,
-    database::{
-        SequencedEventDatabase, EventDatabase, EscrowDatabase, EscrowCreator
-    },
+    database::{EscrowCreator, EscrowDatabase, EventDatabase, SequencedEventDatabase},
     error::Error,
     event::{
         event_data::EventData,
@@ -27,8 +25,7 @@ pub struct DelegationEscrow<D: EventDatabase + EscrowCreator> {
     pub delegation_escrow: D::EscrowDatabaseType,
 }
 
-
-impl <D: EventDatabase + EscrowCreator + 'static> DelegationEscrow<D> {
+impl<D: EventDatabase + EscrowCreator + 'static> DelegationEscrow<D> {
     pub fn new(db: Arc<D>, _duration: Duration) -> Self {
         let escrow_db = db.create_escrow_db("delegation_escrow");
         Self {
@@ -108,7 +105,7 @@ impl <D: EventDatabase + EscrowCreator + 'static> DelegationEscrow<D> {
     }
 }
 
-impl <D: EventDatabase + EscrowCreator + 'static> Notifier for DelegationEscrow<D> {
+impl<D: EventDatabase + EscrowCreator + 'static> Notifier for DelegationEscrow<D> {
     fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error> {
         match notification {
             Notification::KeyEventAdded(ev_message) => {

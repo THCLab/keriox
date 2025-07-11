@@ -73,7 +73,6 @@ impl Identifier {
                 .clone();
             for event in &to_notify {
                 self.communication
-                    .tel_transport
                     .send_tel_event(event.clone(), location.clone())
                     .await
                     .map_err(|e| MechanicsError::OtherError(e.to_string()))?;

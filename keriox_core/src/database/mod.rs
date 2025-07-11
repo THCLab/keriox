@@ -10,8 +10,7 @@ use crate::{
         msg::KeriEvent,
         signature::{Nontransferable, Transferable},
         signed_event_message::{
-            SignedEventMessage, SignedNontransferableReceipt,
-            SignedTransferableReceipt,
+            SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
         },
     },
     prefix::{IdentifierPrefix, IndexedSignature},
@@ -79,19 +78,12 @@ pub trait EventDatabase {
         params: QueryParameters,
     ) -> Option<impl DoubleEndedIterator<Item = SignedNontransferableReceipt>>;
 
-    fn accept_to_kel(
-        &self,
-        event: &KeriEvent<KeyEvent>,
-    ) -> Result<(), Self::Error>;
+    fn accept_to_kel(&self, event: &KeriEvent<KeyEvent>) -> Result<(), Self::Error>;
 
     #[cfg(feature = "query")]
     fn save_reply(&self, reply: SignedReply) -> Result<(), Self::Error>;
     #[cfg(feature = "query")]
-    fn get_reply(
-        &self,
-        id: &IdentifierPrefix,
-        from_who: &IdentifierPrefix,
-    ) -> Option<SignedReply>;
+    fn get_reply(&self, id: &IdentifierPrefix, from_who: &IdentifierPrefix) -> Option<SignedReply>;
 }
 
 pub trait LogDatabase<'db>: Send + Sync {
@@ -169,10 +161,7 @@ pub trait SequencedEventDatabase: Send + Sync {
     type Error;
     type DigestIter: Iterator<Item = said::SelfAddressingIdentifier>;
 
-    fn new(
-        db: Arc<Self::DatabaseType>,
-        table_name: &'static str,
-    ) -> Result<Self, Self::Error>
+    fn new(db: Arc<Self::DatabaseType>, table_name: &'static str) -> Result<Self, Self::Error>
     where
         Self: Sized;
 
@@ -183,11 +172,7 @@ pub trait SequencedEventDatabase: Send + Sync {
         digest: &said::SelfAddressingIdentifier,
     ) -> Result<(), Self::Error>;
 
-    fn get(
-        &self,
-        identifier: &IdentifierPrefix,
-        sn: u64,
-    ) -> Result<Self::DigestIter, Self::Error>;
+    fn get(&self, identifier: &IdentifierPrefix, sn: u64) -> Result<Self::DigestIter, Self::Error>;
 
     fn get_greater_than(
         &self,
@@ -219,9 +204,7 @@ pub trait EscrowDatabase: Send + Sync {
             dyn SequencedEventDatabase<
                 DatabaseType = Self::EscrowDatabaseType,
                 Error = Self::Error,
-                DigestIter = Box<
-                    dyn Iterator<Item = said::SelfAddressingIdentifier>,
-                >,
+                DigestIter = Box<dyn Iterator<Item = said::SelfAddressingIdentifier>>,
             >,
         >,
         log: Arc<Self::LogDatabaseType>,
@@ -245,11 +228,7 @@ pub trait EscrowDatabase: Send + Sync {
         event: &SignedEventMessage,
     ) -> Result<(), Self::Error>;
 
-    fn get(
-        &self,
-        identifier: &IdentifierPrefix,
-        sn: u64,
-    ) -> Result<Self::EventIter, Self::Error>;
+    fn get(&self, identifier: &IdentifierPrefix, sn: u64) -> Result<Self::EventIter, Self::Error>;
 
     fn get_from_sn(
         &self,

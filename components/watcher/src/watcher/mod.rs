@@ -11,7 +11,13 @@ use keri_core::{
     actor::{
         error::ActorError, parse_event_stream, parse_notice_stream, parse_query_stream,
         parse_reply_stream, possible_response::PossibleResponse,
-    }, database::redb::RedbDatabase, error::Error, event_message::signed_event_message::Message, oobi::{error::OobiError, EndRole, LocationScheme}, prefix::{BasicPrefix, IdentifierPrefix}, query::reply_event::{ReplyRoute, SignedReply}
+    },
+    database::redb::RedbDatabase,
+    error::Error,
+    event_message::signed_event_message::Message,
+    oobi::{error::OobiError, EndRole, LocationScheme},
+    prefix::{BasicPrefix, IdentifierPrefix},
+    query::reply_event::{ReplyRoute, SignedReply},
 };
 use tel_providing::RegistryMapping;
 use teliox::{database::sled_db::SledEventDatabase, event::parse_tel_query_stream};

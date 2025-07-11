@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use crate::{
-    error::Error,
     database::{EscrowCreator, EscrowDatabase},
+    error::Error,
     event_message::signed_event_message::SignedEventMessage,
     prefix::IdentifierPrefix,
     processor::notification::{Notification, NotificationBus, Notifier},
@@ -38,4 +38,3 @@ impl<D: EscrowCreator> Notifier for DuplicitousEvents<D> {
         Ok(())
     }
 }
-
