@@ -1,5 +1,6 @@
 use crate::{error::Error, event::verifiable_event::VerifiableEvent};
-use keri_core::prefix::IdentifierPrefix;
+use keri_core::{database::redb::WriteTxnMode, prefix::IdentifierPrefix};
+use said::SelfAddressingIdentifier;
 use std::path::Path;
 pub mod escrow;
 pub mod redb;
@@ -16,14 +17,13 @@ pub trait TelEventDatabase {
         id: &IdentifierPrefix,
     ) -> Option<impl DoubleEndedIterator<Item = VerifiableEvent>>;
 
-    fn add_new_management_event(
-        &self,
-        event: VerifiableEvent,
-        id: &IdentifierPrefix,
-    ) -> Result<(), Error>;
-
     fn get_management_events(
         &self,
         id: &IdentifierPrefix,
     ) -> Option<impl DoubleEndedIterator<Item = VerifiableEvent>>;
+}
+
+pub trait TelLogDatabase {
+    fn log_event(&self, event: &VerifiableEvent, transaction: &WriteTxnMode) -> Result<(), Error>;
+    fn get(&self, digest: &SelfAddressingIdentifier) -> Result<Option<VerifiableEvent>, Error>;
 }

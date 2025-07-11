@@ -57,7 +57,7 @@ impl<D: TelEventDatabase> TelEventProcessor<D> {
                 Ok(_) => {
                     self.tel_reference
                         .db
-                        .add_new_management_event(event.clone(), &man.data.prefix)
+                        .add_new_event(event.clone(), &man.data.prefix)
                         .unwrap();
                     self.publisher
                         .notify(&TelNotification::TelEventAdded(event))?;
@@ -80,30 +80,32 @@ impl<D: TelEventDatabase> TelEventProcessor<D> {
                     e => Err(e),
                 },
             },
-            Event::Vc(ref vc_ev) => match validator.validate_vc(vc_ev, &event.seal) {
-                Ok(_) => {
-                    self.tel_reference
-                        .db
-                        .add_new_event(event.clone(), &vc_ev.data.data.prefix)
-                        .unwrap();
-                    self.publisher
-                        .notify(&TelNotification::TelEventAdded(event))
+            Event::Vc(ref vc_ev) => {
+                match validator.validate_vc(vc_ev, &event.seal) {
+                    Ok(_) => {
+                        self.tel_reference
+                            .db
+                            .add_new_event(event.clone(), &vc_ev.data.data.prefix)
+                            .unwrap();
+                        self.publisher
+                            .notify(&TelNotification::TelEventAdded(event))
+                    }
+                    Err(Error::MissingIssuerEventError) => self
+                        .publisher
+                        .notify(&TelNotification::MissingIssuer(event)),
+                    Err(Error::MissingRegistryError) => self
+                        .publisher
+                        .notify(&TelNotification::MissingRegistry(event)),
+                    Err(Error::OutOfOrderError) => {
+                        self.publisher.notify(&TelNotification::OutOfOrder(event))
+                    }
+                    Err(Error::EventAlreadySavedError) => {
+                        // Means that vc of given id is already accepted
+                        Ok(())
+                    }
+                    Err(e) => Err(e),
                 }
-                Err(Error::MissingIssuerEventError) => self
-                    .publisher
-                    .notify(&TelNotification::MissingIssuer(event)),
-                Err(Error::MissingRegistryError) => self
-                    .publisher
-                    .notify(&TelNotification::MissingRegistry(event)),
-                Err(Error::OutOfOrderError) => {
-                    self.publisher.notify(&TelNotification::OutOfOrder(event))
-                }
-                Err(Error::EventAlreadySavedError) => {
-                    // Means that vc of given id is already accepted
-                    Ok(())
-                }
-                Err(e) => Err(e),
-            },
+            }
         }
     }
 

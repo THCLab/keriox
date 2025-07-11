@@ -1,11 +1,16 @@
 use crate::{
-    database::TelEventDatabase,
+    database::{TelEventDatabase, TelLogDatabase},
     error::Error,
-    event::{verifiable_event::VerifiableEvent, Event},
+    event::{
+        manager_event::ManagerTelEventMessage, vc_event::VCEventMessage,
+        verifiable_event::VerifiableEvent, Event,
+    },
 };
-use keri_core::prefix::IdentifierPrefix;
-use redb::{Database, TableDefinition};
-use sled_tables::{self};
+use keri_core::{
+    database::redb::{execute_in_transaction, WriteTxnMode},
+    prefix::IdentifierPrefix,
+};
+use redb::{Database, ReadTransaction, TableDefinition};
 use std::{fs, path::Path, sync::Arc};
 
 /// Events store. (event digest) -> tel event
@@ -24,7 +29,171 @@ const VC_TELS: TableDefinition<(&str, u64), &[u8]> = TableDefinition::new("kels"
 const MANAGEMENT_TELS: TableDefinition<(&str, u64), &[u8]> = TableDefinition::new("kels");
 
 pub struct RedbTelDatabase {
+    events_log: Arc<LogTelDb>,
+    tel_digests: Arc<TelEventsDb>,
     db: Arc<Database>,
+}
+
+pub struct TelEventsDb {
+    db: Arc<Database>,
+}
+
+impl TelEventsDb {
+    pub fn new(db: Arc<Database>) -> Result<Self, Error> {
+        // Create tables
+        let write_txn = db.begin_write()?;
+        {
+            write_txn.open_table(VC_TELS)?;
+            write_txn.open_table(MANAGEMENT_TELS)?;
+        }
+        write_txn.commit()?;
+        Ok(Self { db })
+    }
+
+    fn add_vc_event_digest(
+        &self,
+        vc_event: VCEventMessage,
+        txn_mode: &WriteTxnMode,
+    ) -> Result<(), Error> {
+        let id = vc_event.data.data.prefix.clone();
+        let sn = vc_event.data.data.sn.clone();
+        let said = vc_event
+            .digest()
+            .map_err(|_e| Error::Generic("Event does not have a digest".to_string()))?;
+        execute_in_transaction(self.db.clone(), txn_mode, |write_txn| {
+            {
+                let mut man_tel_table = write_txn.open_table(VC_TELS)?;
+                man_tel_table.insert((id.to_string().as_str(), sn), said.to_string().as_bytes())?;
+            };
+            Ok(())
+        })
+        .map_err(|e| Error::Generic(format!("Failed to insert digest: {}", e)))
+    }
+
+    fn add_management_event_digest(
+        &self,
+        vc_event: ManagerTelEventMessage,
+        txn_mode: &WriteTxnMode,
+    ) -> Result<(), Error> {
+        let id = vc_event.data.prefix.clone();
+        let sn = vc_event.data.sn.clone();
+        let said = vc_event
+            .digest()
+            .map_err(|_e| Error::Generic("Event does not have a digest".to_string()))?;
+        execute_in_transaction(self.db.clone(), txn_mode, |write_txn| {
+            {
+                let mut man_tel_table = write_txn.open_table(MANAGEMENT_TELS)?;
+                man_tel_table.insert((id.to_string().as_str(), sn), said.to_string().as_bytes())?;
+            };
+            Ok(())
+        })
+        .map_err(|e| Error::Generic(format!("Failed to insert digest: {}", e)))
+    }
+
+    pub fn get_vc_events(
+        &self,
+        id: &IdentifierPrefix,
+        txn: &ReadTransaction,
+    ) -> impl Iterator<Item = Vec<u8>> {
+        let table = txn.open_table(VC_TELS).unwrap();
+        table
+            .range((id.to_string().as_str(), 0)..(id.to_string().as_str(), u64::MAX))
+            .unwrap()
+            .map(|entry| {
+                // let (_key, value) = entry.unwrap();
+                entry.unwrap().1.value().to_vec()
+            })
+    }
+
+    pub fn get_management_events(
+        &self,
+        id: &IdentifierPrefix,
+        txn: &ReadTransaction,
+    ) -> impl Iterator<Item = Vec<u8>> {
+        let table = txn.open_table(MANAGEMENT_TELS).unwrap();
+        table
+            .range((id.to_string().as_str(), 0)..(id.to_string().as_str(), u64::MAX))
+            .unwrap()
+            .map(|entry| {
+                // let (_key, value) = entry.unwrap();
+                entry.unwrap().1.value().to_vec()
+            })
+    }
+}
+
+pub struct LogTelDb {
+    db: Arc<Database>,
+}
+
+impl LogTelDb {
+    pub fn new(db: Arc<Database>) -> Result<Self, Error> {
+        // Create tables
+        let write_txn = db.begin_write()?;
+        {            
+            write_txn.open_table(EVENTS)?;
+        }
+        write_txn.commit()?;
+        Ok(Self { db })
+    }
+
+    /// Saves provided event into key event table. Key is it's digest and value is event.
+    fn log_event(&self, event: &VerifiableEvent, transaction: &WriteTxnMode) -> Result<(), Error> {
+        let digest = event
+            .event
+            .get_digest()
+            .map_err(|_e| Error::Generic("Event does not have a digest".to_string()))?;
+        let value = serde_cbor::to_vec(&event)
+            .map_err(|_e| Error::Generic("Failed to serialize event".to_string()))?;
+
+        execute_in_transaction(self.db.clone(), transaction, |write_txn| {
+            let mut table = write_txn.open_table(EVENTS)?;
+            let key = digest.to_string();
+            table.insert(key.as_bytes(), &value.as_ref())?;
+            Ok(())
+        })
+        .map_err(|e| Error::Generic(format!("Failed to log event: {}", e)))
+    }
+
+    fn get(
+        &self,
+        digest: &said::SelfAddressingIdentifier,
+    ) -> Result<Option<VerifiableEvent>, Error> {
+        let read_txn = self.db.begin_read()?;
+        let table = read_txn.open_table(EVENTS)?;
+        if let Some(value) = table.get(digest.to_string().as_bytes())? {
+            let cbor_event = value.value().to_vec();
+            let event: VerifiableEvent = serde_cbor::from_slice(&cbor_event).unwrap();
+            Ok(Some(event))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn get_by_serialized_key(&self, digest: &[u8]) -> Result<Option<VerifiableEvent>, Error> {
+        let read_txn = self.db.begin_read()?;
+        let table = read_txn.open_table(EVENTS)?;
+        if let Some(value) = table.get(digest)? {
+            let cbor_event = value.value().to_vec();
+            let event: VerifiableEvent = serde_cbor::from_slice(&cbor_event).unwrap();
+            Ok(Some(event))
+        } else {
+            Ok(None)
+        }
+    }
+}
+
+impl TelLogDatabase for RedbTelDatabase {
+    /// Saves provided event. Key is it's digest and value is event.
+    fn log_event(&self, event: &VerifiableEvent, transaction: &WriteTxnMode) -> Result<(), Error> {
+        self.events_log.log_event(event, transaction)
+    }
+
+    fn get(
+        &self,
+        digest: &said::SelfAddressingIdentifier,
+    ) -> Result<Option<VerifiableEvent>, Error> {
+        self.events_log.get(digest)
+    }
 }
 
 impl TelEventDatabase for RedbTelDatabase {
@@ -33,41 +202,28 @@ impl TelEventDatabase for RedbTelDatabase {
             fs::create_dir_all(parent).unwrap();
         }
         let db = Arc::new(Database::create(db_path).unwrap());
-        // Create tables
-        let write_txn = db.begin_write()?;
-        {
-            write_txn.open_table(EVENTS)?;
-            write_txn.open_table(VC_TELS)?;
-            write_txn.open_table(MANAGEMENT_TELS)?;
-        }
-        write_txn.commit()?;
-        Ok(Self { db })
+        let log = Arc::new(LogTelDb::new(db.clone())?);
+        let events_db = TelEventsDb::new(db.clone())?;
+        Ok(Self {
+            events_log: log,
+            tel_digests: Arc::new(events_db),
+            db,
+        })
     }
 
     fn add_new_event(&self, event: VerifiableEvent, id: &IdentifierPrefix) -> Result<(), Error> {
         let write_txn = self.db.begin_write()?;
-        let key = event.get_event().get_digest().unwrap();
-        {
-            let mut table = write_txn.open_table(EVENTS)?;
-            table.insert(
-                key.to_string().as_bytes(),
-                serde_cbor::to_vec(&event).unwrap().as_slice(),
-            )?;
-        }
+        let txn_mode = WriteTxnMode::UseExisting(&write_txn);
+        self.events_log.log_event(&event, &txn_mode)?;
+
         match event.event {
-            Event::Management(_) => {
-                return Err(Error::Generic(
-                    "Wrong TEL event, VC event expected".to_string(),
-                ));
+            Event::Management(typed_event) => {
+                self.tel_digests
+                    .add_management_event_digest(typed_event, &txn_mode)?;
             }
             Event::Vc(typed_event) => {
-                let id = typed_event.data.data.prefix.clone();
-                let sn = typed_event.data.data.sn.clone();
-                {
-                    let mut man_tel_table = write_txn.open_table(VC_TELS)?;
-                    man_tel_table
-                        .insert((id.to_string().as_str(), sn), key.to_string().as_bytes())?;
-                }
+                self.tel_digests
+                    .add_vc_event_digest(typed_event, &txn_mode)?;
             }
         }
         write_txn.commit()?;
@@ -80,24 +236,10 @@ impl TelEventDatabase for RedbTelDatabase {
         id: &IdentifierPrefix,
     ) -> Option<impl DoubleEndedIterator<Item = VerifiableEvent>> {
         let read_txn = self.db.begin_read().unwrap();
-        let digests = {
-            let table = read_txn.open_table(VC_TELS).unwrap();
-            table
-                .range((id.to_string().as_str(), 0)..(id.to_string().as_str(), u64::MAX))
-                .unwrap()
-        };
+        let digests = self.tel_digests.get_vc_events(id, &read_txn);
 
-        let events_table = read_txn.open_table(EVENTS).unwrap();
         let mut out_iter = digests
-            .filter_map(|entry| {
-                let (_key, value) = entry.unwrap();
-                let v = events_table.get(value.value()).unwrap();
-                v.map(|v| {
-                    let cbor_event = v.value().to_vec();
-                    let event: VerifiableEvent = serde_cbor::from_slice(&cbor_event).unwrap();
-                    event
-                })
-            })
+            .filter_map(|entry| self.events_log.get_by_serialized_key(&entry).unwrap())
             .peekable();
         if out_iter.peek().is_none() {
             None
@@ -106,63 +248,16 @@ impl TelEventDatabase for RedbTelDatabase {
         }
     }
 
-    fn add_new_management_event(
-        &self,
-        event: VerifiableEvent,
-        id: &IdentifierPrefix,
-    ) -> Result<(), Error> {
-        let write_txn = self.db.begin_write()?;
-        let key = event.get_event().get_digest().unwrap();
-        {
-            let mut table = write_txn.open_table(EVENTS)?;
-            table.insert(
-                key.to_string().as_bytes(),
-                serde_cbor::to_vec(&event).unwrap().as_slice(),
-            )?;
-        }
-        match event.event {
-            Event::Management(typed_event) => {
-                let id = typed_event.data.prefix.clone();
-                let sn = typed_event.data.sn.clone();
-                {
-                    let mut man_tel_table = write_txn.open_table(MANAGEMENT_TELS)?;
-                    man_tel_table
-                        .insert((id.to_string().as_str(), sn), key.to_string().as_bytes())?;
-                }
-            }
-            Event::Vc(_) => {
-                return Err(Error::Generic(
-                    "Wrong TEL event, management event expected".to_string(),
-                ));
-            }
-        }
-        write_txn.commit()?;
-        Ok(())
-    }
 
     fn get_management_events(
         &self,
         id: &IdentifierPrefix,
     ) -> Option<impl DoubleEndedIterator<Item = VerifiableEvent>> {
         let read_txn = self.db.begin_read().unwrap();
-        let digests = {
-            let table = read_txn.open_table(MANAGEMENT_TELS).unwrap();
-            table
-                .range((id.to_string().as_str(), 0)..(id.to_string().as_str(), u64::MAX))
-                .unwrap()
-        };
+        let digests = self.tel_digests.get_management_events(id, &read_txn);
 
-        let events_table = read_txn.open_table(EVENTS).unwrap();
         let mut out_iter = digests
-            .filter_map(|entry| {
-                let (_key, value) = entry.unwrap();
-                let v = events_table.get(value.value()).unwrap();
-                v.map(|v| {
-                    let cbor_event = v.value().to_vec();
-                    let event: VerifiableEvent = serde_cbor::from_slice(&cbor_event).unwrap();
-                    event
-                })
-            })
+            .filter_map(|entry| self.events_log.get_by_serialized_key(&entry).unwrap())
             .peekable();
         if out_iter.peek().is_none() {
             None

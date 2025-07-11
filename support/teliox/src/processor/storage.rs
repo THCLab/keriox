@@ -98,14 +98,8 @@ impl<D: TelEventDatabase> TelEventStorage<D> {
     }
 
     pub fn add_event(&self, event: VerifiableEvent) -> Result<(), Error> {
-        match &event.event {
-            Event::Management(_man) => self
-                .db
-                .add_new_management_event(event.clone(), &event.get_event().get_prefix()),
-            Event::Vc(_vc) => self
-                .db
-                .add_new_event(event.clone(), &event.get_event().get_prefix()),
-        }
+        self.db
+            .add_new_event(event.clone(), &event.get_event().get_prefix())
     }
 
     pub fn process_query(&self, qry: &TelQueryRoute) -> Result<TelReplyType, Error> {

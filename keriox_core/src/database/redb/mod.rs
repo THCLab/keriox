@@ -429,7 +429,7 @@ impl RedbDatabase {
 /// Executes a given operation within a transaction context.
 /// Uses an existing transaction if `WriteTxnMode::UseExisting` is specified.
 /// Creates and commits a new transaction if `WriteTxnMode::CreateNew` is specified.
-pub(crate) fn execute_in_transaction<F>(
+pub fn execute_in_transaction<F>(
     db: Arc<Database>,
     txn_mode: &WriteTxnMode,
     operation: F,
