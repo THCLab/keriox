@@ -2,6 +2,7 @@ use crate::{error::Error, event::verifiable_event::VerifiableEvent};
 use keri_core::{database::redb::WriteTxnMode, prefix::IdentifierPrefix};
 use said::SelfAddressingIdentifier;
 use std::path::Path;
+pub(crate) mod digest_key_database;
 pub mod escrow;
 pub mod redb;
 

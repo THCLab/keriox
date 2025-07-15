@@ -129,7 +129,7 @@ impl LogTelDb {
     pub fn new(db: Arc<Database>) -> Result<Self, Error> {
         // Create tables
         let write_txn = db.begin_write()?;
-        {            
+        {
             write_txn.open_table(EVENTS)?;
         }
         write_txn.commit()?;
@@ -247,7 +247,6 @@ impl TelEventDatabase for RedbTelDatabase {
             Some(out_iter.collect::<Vec<_>>().into_iter())
         }
     }
-
 
     fn get_management_events(
         &self,
