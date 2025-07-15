@@ -1,16 +1,15 @@
 use std::{sync::Arc, time::Duration};
 
 use keri_core::{
-    database::redb::RedbDatabase, prefix::IdentifierPrefix, processor::event_storage::EventStorage,
+    database::redb::{RedbDatabase, WriteTxnMode},
+    prefix::IdentifierPrefix,
+    processor::event_storage::EventStorage,
 };
+use redb::Database;
 
 use crate::{
-    database::{
-        escrow::{Escrow, EscrowDb},
-        TelEventDatabase,
-    },
+    database::{digest_key_database::DigestKeyDatabase, TelEventDatabase, TelLogDatabase},
     error::Error,
-    event::verifiable_event::VerifiableEvent,
     processor::{
         notification::{TelNotification, TelNotificationBus, TelNotifier},
         storage::TelEventStorage,
@@ -21,17 +20,18 @@ use crate::{
 pub struct MissingRegistryEscrow<D: TelEventDatabase> {
     tel_reference: Arc<TelEventStorage<D>>,
     kel_reference: Arc<EventStorage<RedbDatabase>>,
-    escrowed_missing_registry: Escrow<VerifiableEvent>,
+    // Key is the registry id, value is the escrowed tel events digests
+    escrowed_missing_registry: DigestKeyDatabase,
 }
 
 impl<D: TelEventDatabase> MissingRegistryEscrow<D> {
     pub fn new(
         tel_reference: Arc<TelEventStorage<D>>,
         kel_reference: Arc<EventStorage<RedbDatabase>>,
-        escrow_db: Arc<EscrowDb>,
+        escrow_db: Arc<Database>,
         duration: Duration,
     ) -> Self {
-        let escrow = Escrow::new(b"mre.", duration, escrow_db);
+        let escrow = DigestKeyDatabase::new(escrow_db);
         Self {
             tel_reference,
             kel_reference,
@@ -40,7 +40,7 @@ impl<D: TelEventDatabase> MissingRegistryEscrow<D> {
     }
 }
 
-impl<D: TelEventDatabase> TelNotifier for MissingRegistryEscrow<D> {
+impl<D: TelEventDatabase + TelLogDatabase> TelNotifier for MissingRegistryEscrow<D> {
     fn notify(
         &self,
         notification: &TelNotification,
@@ -49,8 +49,12 @@ impl<D: TelEventDatabase> TelNotifier for MissingRegistryEscrow<D> {
         match notification {
             TelNotification::MissingRegistry(signed_event) => {
                 let registry_id = signed_event.event.get_registry_id()?;
+                let value = signed_event.event.get_digest()?;
+                self.tel_reference
+                    .db
+                    .log_event(signed_event, &WriteTxnMode::CreateNew)?;
                 self.escrowed_missing_registry
-                    .add(&registry_id, signed_event.clone())
+                    .insert(&registry_id.to_string().as_str(), &value)
                     .map_err(|_e| Error::EscrowDatabaseError)?;
                 Ok(())
             }
@@ -63,21 +67,22 @@ impl<D: TelEventDatabase> TelNotifier for MissingRegistryEscrow<D> {
     }
 }
 
-impl<D: TelEventDatabase> MissingRegistryEscrow<D> {
+impl<D: TelEventDatabase + TelLogDatabase> MissingRegistryEscrow<D> {
     pub fn process_missing_registry(
         &self,
         bus: &TelNotificationBus,
         id: &IdentifierPrefix,
     ) -> Result<(), Error> {
-        if let Some(esc) = self.escrowed_missing_registry.get(id) {
-            for event in esc {
+        if let Ok(esc) = self.escrowed_missing_registry.get(&id.to_string().as_str()) {
+            for digest in esc {
+                let event = self.tel_reference.db.get(&digest)?.unwrap();
                 let validator =
                     TelEventValidator::new(self.tel_reference.clone(), self.kel_reference.clone());
                 match validator.validate(&event) {
                     Ok(_) => {
                         // remove from escrow
                         self.escrowed_missing_registry
-                            .remove(id, &event)
+                            .remove(id, &digest)
                             .map_err(|_e| Error::EscrowDatabaseError)?;
                         // accept tel event
                         self.tel_reference.add_event(event.clone())?;
@@ -88,10 +93,10 @@ impl<D: TelEventDatabase> MissingRegistryEscrow<D> {
                     }
                     Err(Error::MissingSealError) => {
                         // remove from escrow
-                        self.escrowed_missing_registry.remove(id, &event).unwrap();
+                        self.escrowed_missing_registry.remove(id, &digest).unwrap();
                     }
                     Err(Error::MissingIssuerEventError) => {
-                        self.escrowed_missing_registry.remove(id, &event).unwrap();
+                        self.escrowed_missing_registry.remove(id, &digest).unwrap();
                         bus.notify(&TelNotification::MissingIssuer(event.clone()))?;
                     }
                     Err(_e) => {} // keep in escrow,
@@ -113,6 +118,7 @@ mod tests {
         prefix::IdentifierPrefix,
         processor::{basic_processor::BasicProcessor, event_storage::EventStorage, Processor},
     };
+    use redb::Database;
 
     use crate::{
         database::{escrow::EscrowDb, redb::RedbTelDatabase, TelEventDatabase},
@@ -145,10 +151,10 @@ mod tests {
 
         // Initiate tel and it's escrows
         let tel_root = Builder::new().prefix("test-db").tempfile().unwrap();
-        let tel_escrow_root = Builder::new().prefix("test-db").tempdir().unwrap();
+        let tel_escrow_root = Builder::new().prefix("test-db2").tempfile().unwrap();
         let tel_events_db = Arc::new(RedbTelDatabase::new(&tel_root.path()).unwrap());
 
-        let tel_escrow_db = Arc::new(EscrowDb::new(&tel_escrow_root.path()).unwrap());
+        let escrow_db = Arc::new(Database::create(tel_escrow_root.path()).unwrap());
 
         let tel_storage = Arc::new(TelEventStorage::new(tel_events_db));
         let tel_bus = TelNotificationBus::new();
@@ -156,7 +162,7 @@ mod tests {
         let missing_registry_escrow = Arc::new(MissingRegistryEscrow::new(
             tel_storage.clone(),
             keri_storage.clone(),
-            tel_escrow_db,
+            escrow_db,
             Duration::from_secs(100),
         ));
 

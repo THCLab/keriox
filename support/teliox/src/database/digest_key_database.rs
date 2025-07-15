@@ -5,7 +5,6 @@ use said::SelfAddressingIdentifier;
 
 use crate::error::Error;
 
-
 pub struct DigestKeyDatabase {
     pub db: Arc<redb::Database>,
     /// Escrowed events. KEL event digest -> TEL event digest
@@ -23,39 +22,45 @@ impl DigestKeyDatabase {
         }
     }
 
-    pub fn insert(
+    pub fn insert<K: AsRef<str>>(
         &self,
-        id: &SelfAddressingIdentifier,
-        event_digest: SelfAddressingIdentifier,
+        id: &K,
+        event_digest: &SelfAddressingIdentifier,
     ) -> Result<(), Error> {
         let tx = self.db.begin_write()?;
         {
             let mut table = tx.open_multimap_table(self.digest_key_table)?;
-            let key = id.to_string();
+            let key = id.as_ref();
             let value = event_digest.to_string();
 
-            table.insert(&key.as_str(), value.as_str())?;
+            table.insert(&key, value.as_str())?;
         }
         tx.commit()?;
 
         Ok(())
     }
 
-    pub fn get(&self, digest: &SelfAddressingIdentifier) -> Result<Vec<SelfAddressingIdentifier>, Error> {
+    pub fn get<K: AsRef<str>>(&self, digest: &K) -> Result<Vec<SelfAddressingIdentifier>, Error> {
         let tx = self.db.begin_read()?;
         let table = tx.open_multimap_table(self.digest_key_table)?;
-        let key = digest.to_string();
+        let key = digest.as_ref();
 
-        let out = table.get(&key.as_str())
+        let out = table
+            .get(&key.as_ref())
             .unwrap()
             .map(|val| {
                 let said = val.unwrap();
                 said.value().parse().unwrap()
-            }).collect();
+            })
+            .collect();
         Ok(out)
     }
 
-    pub fn remove(&self, digest: &SelfAddressingIdentifier, kel_ev_digest: &SelfAddressingIdentifier) -> Result<(), Error> {
+    pub fn remove<K: ToString>(
+        &self,
+        digest: &K,
+        kel_ev_digest: &SelfAddressingIdentifier,
+    ) -> Result<(), Error> {
         let tx = self.db.begin_write()?;
         {
             let mut table = tx.open_multimap_table(self.digest_key_table)?;

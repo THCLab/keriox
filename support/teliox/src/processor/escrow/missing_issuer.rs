@@ -80,9 +80,9 @@ impl<D: TelEventDatabase + TelLogDatabase> TelNotifier for MissingIssuerEscrow<D
                 self.tel_reference
                     .db
                     .log_event(&event, &WriteTxnMode::CreateNew)?;
-                let missing_event_digest = event.seal.seal.digest.clone();
+                let missing_event_digest = event.seal.seal.digest.clone().to_string();
                 self.escrowed_missing_issuer
-                    .insert(&missing_event_digest, tel_event_digest)
+                    .insert(&missing_event_digest.as_str(), &tel_event_digest)
                     .map_err(|_e| Error::EscrowDatabaseError)
             }
             _ => return Err(Error::Generic("Wrong notification".into())),
@@ -96,7 +96,7 @@ impl<D: TelEventDatabase + TelLogDatabase> MissingIssuerEscrow<D> {
         &self,
         said: &SelfAddressingIdentifier,
     ) -> Result<(), Error> {
-        if let Ok(esc) = self.escrowed_missing_issuer.get(said) {
+        if let Ok(esc) = self.escrowed_missing_issuer.get(&said.to_string().as_str()) {
             for digest in esc {
                 let event = self.tel_reference.db.get(&digest)?.unwrap();
                 let kel_event_digest = event.event.get_digest()?;

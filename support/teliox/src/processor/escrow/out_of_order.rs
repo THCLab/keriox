@@ -1,7 +1,10 @@
 use std::{sync::Arc, time::Duration};
 
 use keri_core::{
-    database::{redb::{escrow_database::SnKeyDatabase, RedbDatabase, WriteTxnMode}, SequencedEventDatabase},
+    database::{
+        redb::{escrow_database::SnKeyDatabase, RedbDatabase, WriteTxnMode},
+        SequencedEventDatabase,
+    },
     prefix::IdentifierPrefix,
     processor::event_storage::EventStorage,
 };
