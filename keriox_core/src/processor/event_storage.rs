@@ -5,10 +5,7 @@ use super::compute_state;
 use crate::query::{key_state_notice::KeyStateNotice, reply_event::SignedReply};
 use crate::{
     actor::prelude::Message,
-    database::{
-        redb::RedbDatabase,
-        timestamped::{Timestamped, TimestampedSignedEventMessage},
-    },
+    database::timestamped::{Timestamped, TimestampedSignedEventMessage},
     error::Error,
     event::{
         event_data::EventData,
@@ -22,7 +19,10 @@ use crate::{
     state::{EventSemantics, IdentifierState},
 };
 #[cfg(feature = "mailbox")]
-use crate::{database::mailbox::MailboxData, query::mailbox::QueryArgsMbx};
+use crate::{
+    database::{mailbox::MailboxData, redb::RedbDatabase},
+    query::mailbox::QueryArgsMbx,
+};
 use crate::{
     database::{EventDatabase, QueryParameters},
     event_message::signed_event_message::SignedEventMessage,

@@ -1,7 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
 use keri_core::{database::redb::RedbDatabase, processor::event_storage::EventStorage};
-use redb::Database;
 
 use crate::{
     database::{redb::RedbTelDatabase, EscrowDatabase},

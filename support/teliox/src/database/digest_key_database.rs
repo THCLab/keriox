@@ -8,13 +8,12 @@ use crate::error::Error;
 pub struct DigestKeyDatabase {
     pub db: Arc<redb::Database>,
     /// Escrowed events. KEL event digest -> TEL event digest
-    /// Table links a missing KEL event digest to the digest of TEL event.
     digest_key_table: MultimapTableDefinition<'static, &'static str, &'static str>,
 }
 
 impl DigestKeyDatabase {
-    pub fn new(db: Arc<redb::Database>) -> Self {
-        let digest_key_table = MultimapTableDefinition::new("missing_issuer_escrow");
+    pub fn new(db: Arc<redb::Database>, name: &'static str) -> Self {
+        let digest_key_table = MultimapTableDefinition::new(name);
 
         Self {
             db,

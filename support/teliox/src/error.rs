@@ -67,4 +67,3 @@ impl From<redb::StorageError> for Error {
         Error::RedbError
     }
 }
-

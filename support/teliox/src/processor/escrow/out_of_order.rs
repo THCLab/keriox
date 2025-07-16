@@ -8,7 +8,6 @@ use keri_core::{
     prefix::IdentifierPrefix,
     processor::event_storage::EventStorage,
 };
-use redb::Database;
 
 use crate::{
     database::{EscrowDatabase, TelEventDatabase, TelLogDatabase},
@@ -56,8 +55,7 @@ impl<D: TelEventDatabase + TelLogDatabase> TelNotifier for OutOfOrderEscrow<D> {
                 let event = signed_event.get_event();
                 let key_id = event.get_prefix();
                 self.tel_log
-                    .log_event(signed_event, &WriteTxnMode::CreateNew)
-                    .unwrap();
+                    .log_event(signed_event, &WriteTxnMode::CreateNew)?;
                 let sn = event.get_sn();
                 let digest = event.get_digest()?;
 
@@ -87,7 +85,10 @@ impl<D: TelEventDatabase + TelLogDatabase> OutOfOrderEscrow<D> {
                     .tel_log
                     .get(&said)
                     .map_err(|e| Error::EscrowDatabaseError(e.to_string()))?
-                    .unwrap();
+                    .ok_or(Error::Generic(format!(
+                        "Event of digest {} not found in out of order escrow",
+                        said
+                    )))?;
                 let validator =
                     TelEventValidator::new(self.tel_reference.clone(), self.kel_reference.clone());
                 match validator.validate(&event) {
@@ -105,7 +106,9 @@ impl<D: TelEventDatabase + TelLogDatabase> OutOfOrderEscrow<D> {
                     }
                     Err(Error::MissingSealError) => {
                         // remove from escrow
-                        self.escrowed_out_of_order.remove(id, sn, &said).unwrap();
+                        self.escrowed_out_of_order
+                            .remove(id, sn, &said)
+                            .map_err(|e| Error::EscrowDatabaseError(e.to_string()))?;
                     }
                     Err(_e) => {} // keep in escrow,
                 }

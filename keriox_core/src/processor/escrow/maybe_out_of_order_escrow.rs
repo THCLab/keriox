@@ -1,7 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use crate::{
-    database::{EscrowCreator, EscrowDatabase, EventDatabase, SequencedEventDatabase},
+    database::{EscrowCreator, EscrowDatabase, EventDatabase},
     error::Error,
     prefix::IdentifierPrefix,
 };

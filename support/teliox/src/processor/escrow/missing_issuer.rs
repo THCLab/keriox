@@ -10,7 +10,9 @@ use keri_core::{
 use said::SelfAddressingIdentifier;
 
 use crate::{
-    database::{digest_key_database::DigestKeyDatabase, EscrowDatabase, TelEventDatabase, TelLogDatabase},
+    database::{
+        digest_key_database::DigestKeyDatabase, EscrowDatabase, TelEventDatabase, TelLogDatabase,
+    },
     error::Error,
     event::Event,
     processor::{
@@ -35,7 +37,7 @@ impl<D: TelEventDatabase> MissingIssuerEscrow<D> {
         kel_reference: Arc<EventStorage<RedbDatabase>>,
         bus: TelNotificationBus,
     ) -> Self {
-        let escrow = DigestKeyDatabase::new(escrow_db.0.clone());
+        let escrow = DigestKeyDatabase::new(escrow_db.0.clone(), "missing_issuer_escrow");
 
         let tel_event_storage = Arc::new(TelEventStorage::new(db.clone()));
         Self {

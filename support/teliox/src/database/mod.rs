@@ -1,8 +1,12 @@
 use crate::{error::Error, event::verifiable_event::VerifiableEvent};
-use keri_core::{database::redb::WriteTxnMode, prefix::IdentifierPrefix};
 use ::redb::Database;
+use keri_core::{database::redb::WriteTxnMode, prefix::IdentifierPrefix};
 use said::SelfAddressingIdentifier;
-use std::{fs::{create_dir_all, exists}, path::Path, sync::Arc};
+use std::{
+    fs::{create_dir_all, exists},
+    path::Path,
+    sync::Arc,
+};
 pub(crate) mod digest_key_database;
 pub mod redb;
 
@@ -42,7 +46,8 @@ impl EscrowDatabase {
                 }
             }
         }
-        let db = Database::create(file_path).map_err(|e| Error::EscrowDatabaseError(e.to_string()))?;
+        let db =
+            Database::create(file_path).map_err(|e| Error::EscrowDatabaseError(e.to_string()))?;
         Ok(Self(Arc::new(db)))
     }
 }

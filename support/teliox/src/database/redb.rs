@@ -114,10 +114,7 @@ impl TelEventsDb {
         table
             .range((id.to_string().as_str(), 0)..(id.to_string().as_str(), u64::MAX))
             .unwrap()
-            .map(|entry| {
-                // let (_key, value) = entry.unwrap();
-                entry.unwrap().1.value().to_vec()
-            })
+            .map(|entry| entry.unwrap().1.value().to_vec())
     }
 }
 

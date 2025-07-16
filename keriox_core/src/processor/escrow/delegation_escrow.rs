@@ -4,7 +4,7 @@ use said::SelfAddressingIdentifier;
 
 use crate::{
     actor::prelude::EventStorage,
-    database::{EscrowCreator, EscrowDatabase, EventDatabase, SequencedEventDatabase},
+    database::{EscrowCreator, EscrowDatabase, EventDatabase},
     error::Error,
     event::{
         event_data::EventData,

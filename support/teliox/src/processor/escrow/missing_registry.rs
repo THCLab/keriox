@@ -5,10 +5,11 @@ use keri_core::{
     prefix::IdentifierPrefix,
     processor::event_storage::EventStorage,
 };
-use redb::Database;
 
 use crate::{
-    database::{digest_key_database::DigestKeyDatabase, EscrowDatabase, TelEventDatabase, TelLogDatabase},
+    database::{
+        digest_key_database::DigestKeyDatabase, EscrowDatabase, TelEventDatabase, TelLogDatabase,
+    },
     error::Error,
     processor::{
         notification::{TelNotification, TelNotificationBus, TelNotifier},
@@ -31,7 +32,7 @@ impl<D: TelEventDatabase> MissingRegistryEscrow<D> {
         escrow_db: &EscrowDatabase,
         duration: Duration,
     ) -> Self {
-        let escrow = DigestKeyDatabase::new(escrow_db.0.clone());
+        let escrow = DigestKeyDatabase::new(escrow_db.0.clone(), "missing_registry_escrow");
         let tel_event_storage = Arc::new(TelEventStorage::new(tel_reference.clone()));
         Self {
             tel_reference: tel_event_storage,
