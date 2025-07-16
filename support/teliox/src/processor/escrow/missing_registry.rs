@@ -8,7 +8,7 @@ use keri_core::{
 use redb::Database;
 
 use crate::{
-    database::{digest_key_database::DigestKeyDatabase, TelEventDatabase, TelLogDatabase},
+    database::{digest_key_database::DigestKeyDatabase, EscrowDatabase, TelEventDatabase, TelLogDatabase},
     error::Error,
     processor::{
         notification::{TelNotification, TelNotificationBus, TelNotifier},
@@ -26,14 +26,15 @@ pub struct MissingRegistryEscrow<D: TelEventDatabase> {
 
 impl<D: TelEventDatabase> MissingRegistryEscrow<D> {
     pub fn new(
-        tel_reference: Arc<TelEventStorage<D>>,
+        tel_reference: Arc<D>,
         kel_reference: Arc<EventStorage<RedbDatabase>>,
-        escrow_db: Arc<Database>,
+        escrow_db: &EscrowDatabase,
         duration: Duration,
     ) -> Self {
-        let escrow = DigestKeyDatabase::new(escrow_db);
+        let escrow = DigestKeyDatabase::new(escrow_db.0.clone());
+        let tel_event_storage = Arc::new(TelEventStorage::new(tel_reference.clone()));
         Self {
-            tel_reference,
+            tel_reference: tel_event_storage,
             kel_reference,
             escrowed_missing_registry: escrow,
         }
@@ -55,7 +56,7 @@ impl<D: TelEventDatabase + TelLogDatabase> TelNotifier for MissingRegistryEscrow
                     .log_event(signed_event, &WriteTxnMode::CreateNew)?;
                 self.escrowed_missing_registry
                     .insert(&registry_id.to_string().as_str(), &value)
-                    .map_err(|_e| Error::EscrowDatabaseError)?;
+                    .map_err(|e| Error::EscrowDatabaseError(e.to_string()))?;
                 Ok(())
             }
             TelNotification::TelEventAdded(event) => {
@@ -83,7 +84,7 @@ impl<D: TelEventDatabase + TelLogDatabase> MissingRegistryEscrow<D> {
                         // remove from escrow
                         self.escrowed_missing_registry
                             .remove(id, &digest)
-                            .map_err(|_e| Error::EscrowDatabaseError)?;
+                            .map_err(|e| Error::EscrowDatabaseError(e.to_string()))?;
                         // accept tel event
                         self.tel_reference.add_event(event.clone())?;
 
@@ -121,7 +122,7 @@ mod tests {
     use redb::Database;
 
     use crate::{
-        database::{escrow::EscrowDb, redb::RedbTelDatabase, TelEventDatabase},
+        database::{redb::RedbTelDatabase, EscrowDatabase, TelEventDatabase},
         error::Error,
         event::verifiable_event::VerifiableEvent,
         processor::{
@@ -154,15 +155,15 @@ mod tests {
         let tel_escrow_root = Builder::new().prefix("test-db2").tempfile().unwrap();
         let tel_events_db = Arc::new(RedbTelDatabase::new(&tel_root.path()).unwrap());
 
-        let escrow_db = Arc::new(Database::create(tel_escrow_root.path()).unwrap());
+        let escrow_db = EscrowDatabase::new(tel_escrow_root.path()).unwrap();
 
-        let tel_storage = Arc::new(TelEventStorage::new(tel_events_db));
+        let tel_storage = Arc::new(TelEventStorage::new(tel_events_db.clone()));
         let tel_bus = TelNotificationBus::new();
 
         let missing_registry_escrow = Arc::new(MissingRegistryEscrow::new(
-            tel_storage.clone(),
+            tel_events_db.clone(),
             keri_storage.clone(),
-            escrow_db,
+            &escrow_db,
             Duration::from_secs(100),
         ));
 

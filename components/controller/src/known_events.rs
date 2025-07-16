@@ -28,9 +28,8 @@ use keri_core::{
     },
     query::reply_event::{ReplyEvent, ReplyRoute, SignedReply},
 };
-use teliox::database::escrow::EscrowDb;
 use teliox::database::redb::RedbTelDatabase;
-use teliox::database::TelEventDatabase;
+use teliox::database::{EscrowDatabase, TelEventDatabase};
 use teliox::processor::escrow::default_escrow_bus as tel_escrow_bus;
 use teliox::processor::storage::TelEventStorage;
 use teliox::tel::Tel;
@@ -82,27 +81,20 @@ impl KnownEvents {
             let mut path = db_path.clone();
             path.push("tel");
             path.push("events");
-            Arc::new(TelEventDatabase::new(&path)?)
+            Arc::new(RedbTelDatabase::new(&path)?)
         };
 
         let tel_escrow_db = {
             let mut path = db_path.clone();
             path.push("tel");
             path.push("escrow");
-            Arc::new(EscrowDb::new(&path).map_err(|e| ControllerError::OtherError(e.to_string()))?)
+            EscrowDatabase::new(&path).map_err(|e| ControllerError::OtherError(e.to_string()))?
         };
-        let tel_storage = Arc::new(TelEventStorage::new(tel_events_db));
-        let (tel_bus, missing_issuer, _out_of_order, _missing_registy) = tel_escrow_bus(
-            tel_storage.clone(),
-            kel_storage.clone(),
-            tel_escrow_db.clone(),
-        )?;
+        let (tel_bus, missing_issuer, _out_of_order, _missing_registy) =
+            tel_escrow_bus(tel_events_db.clone(), kel_storage.clone(), tel_escrow_db)?;
 
-        let tel = Arc::new(Tel::new(
-            tel_storage.clone(),
-            kel_storage.clone(),
-            Some(tel_bus),
-        ));
+        let tel_storage = Arc::new(TelEventStorage::new(tel_events_db.clone()));
+        let tel = Arc::new(Tel::new(tel_storage, kel_storage.clone(), Some(tel_bus)));
 
         notification_bus.register_observer(
             missing_issuer.clone(),
@@ -114,9 +106,7 @@ impl KnownEvents {
             storage: kel_storage,
             oobi_manager,
             partially_witnessed_escrow,
-            // transport,
             tel,
-            // tel_transport: tel_transport,
         };
 
         Ok(controller)

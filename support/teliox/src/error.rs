@@ -7,9 +7,6 @@ pub enum Error {
     #[error(transparent)]
     KeriError(#[from] KeriError),
 
-    #[error("Sled database error")]
-    SledError,
-
     #[error("Redb database error")]
     RedbError,
 
@@ -19,8 +16,8 @@ pub enum Error {
     #[error("Tel event encoding error")]
     EncodingError(String),
 
-    #[error("Escrow database error")]
-    EscrowDatabaseError,
+    #[error("Escrow database error: {0}")]
+    EscrowDatabaseError(String),
 
     #[error("Error")]
     MissingSealError,
@@ -47,12 +44,6 @@ pub enum Error {
     RwLockingError,
 }
 
-impl From<sled::Error> for Error {
-    fn from(_: sled::Error) -> Self {
-        Error::SledError
-    }
-}
-
 impl From<redb::TransactionError> for Error {
     fn from(_: redb::TransactionError) -> Self {
         Error::RedbError
@@ -77,8 +68,3 @@ impl From<redb::StorageError> for Error {
     }
 }
 
-impl From<sled_tables::error::Error> for Error {
-    fn from(_: sled_tables::error::Error) -> Self {
-        Error::SledError
-    }
-}

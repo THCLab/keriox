@@ -1,5 +1,4 @@
 use std::{
-    fs::File,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -35,7 +34,7 @@ use keri_core::{
 };
 use serde::{Deserialize, Serialize};
 use teliox::{
-    database::{escrow::EscrowDb, redb::RedbTelDatabase},
+    database::{redb::RedbTelDatabase, EscrowDatabase, TelEventDatabase},
     event::{parse_tel_query_stream, verifiable_event::VerifiableEvent},
     processor::{escrow::default_escrow_bus, storage::TelEventStorage, TelReplyType},
     tel::Tel,
@@ -168,7 +167,6 @@ impl Witness {
         let prefix = BasicPrefix::Ed25519NT(signer.public_key());
 
         events_database_path.push("events_database");
-        let _file = File::create(&events_database_path).unwrap();
 
         let events_db =
             Arc::new(RedbDatabase::new(&events_database_path).map_err(|_| Error::DbError)?);
@@ -191,27 +189,22 @@ impl Witness {
         let tel_events_db = {
             tel_path.push("tel");
             tel_path.push("events");
-            Arc::new(teliox::database::TelEventDatabase::new(&tel_path).unwrap())
+            Arc::new(RedbTelDatabase::new(&tel_path).unwrap())
         };
 
         let tel_escrow_db = {
             let mut tel_path = events_path.clone();
             tel_path.push("tel");
             tel_path.push("escrow");
-            Arc::new(
-                EscrowDb::new(&tel_path).map_err(|e| WitnessError::DatabaseError(e.to_string()))?,
-            )
+            EscrowDatabase::new(&tel_path)
+                .map_err(|e| WitnessError::DatabaseError(e.to_string()))?
         };
-        let tel_storage = Arc::new(TelEventStorage::new(tel_events_db));
-        let (tel_bus, _missing_issuer, _out_of_order, _missing_registy) = default_escrow_bus(
-            tel_storage.clone(),
-            event_storage.clone(),
-            tel_escrow_db.clone(),
-        )
-        .unwrap();
+        let (tel_bus, _missing_issuer, _out_of_order, _missing_registy) =
+            default_escrow_bus(tel_events_db.clone(), event_storage.clone(), tel_escrow_db)
+                .unwrap();
 
         let tel = Arc::new(Tel::new(
-            tel_storage.clone(),
+            Arc::new(TelEventStorage::new(tel_events_db.clone())),
             event_storage.clone(),
             Some(tel_bus),
         ));

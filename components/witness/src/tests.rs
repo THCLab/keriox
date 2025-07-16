@@ -611,7 +611,9 @@ fn test_invalid_notice() {
             .prefix("test-witness")
             .tempdir()
             .unwrap();
-        std::fs::create_dir_all(root.path()).unwrap();
+        if !std::fs::exists(root.path()).unwrap() {
+            std::fs::create_dir_all(root.path()).unwrap();
+        }
         Witness::new(
             Url::parse("http://example.com").unwrap(),
             signer,

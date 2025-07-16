@@ -10,7 +10,7 @@ use keri_core::{
 use said::SelfAddressingIdentifier;
 
 use crate::{
-    database::{digest_key_database::DigestKeyDatabase, TelEventDatabase, TelLogDatabase},
+    database::{digest_key_database::DigestKeyDatabase, EscrowDatabase, TelEventDatabase, TelLogDatabase},
     error::Error,
     event::Event,
     processor::{
@@ -29,16 +29,17 @@ pub struct MissingIssuerEscrow<D: TelEventDatabase> {
 
 impl<D: TelEventDatabase> MissingIssuerEscrow<D> {
     pub fn new(
-        db: Arc<TelEventStorage<D>>,
-        escrow_db: Arc<redb::Database>,
+        db: Arc<D>,
+        escrow_db: &EscrowDatabase,
         duration: Duration,
         kel_reference: Arc<EventStorage<RedbDatabase>>,
         bus: TelNotificationBus,
     ) -> Self {
-        let escrow = DigestKeyDatabase::new(escrow_db);
+        let escrow = DigestKeyDatabase::new(escrow_db.0.clone());
 
+        let tel_event_storage = Arc::new(TelEventStorage::new(db.clone()));
         Self {
-            tel_reference: db,
+            tel_reference: tel_event_storage,
             escrowed_missing_issuer: escrow,
             kel_reference,
             publisher: bus,
@@ -83,7 +84,7 @@ impl<D: TelEventDatabase + TelLogDatabase> TelNotifier for MissingIssuerEscrow<D
                 let missing_event_digest = event.seal.seal.digest.clone().to_string();
                 self.escrowed_missing_issuer
                     .insert(&missing_event_digest.as_str(), &tel_event_digest)
-                    .map_err(|_e| Error::EscrowDatabaseError)
+                    .map_err(|e| Error::EscrowDatabaseError(e.to_string()))
             }
             _ => return Err(Error::Generic("Wrong notification".into())),
         }
@@ -111,7 +112,7 @@ impl<D: TelEventDatabase + TelLogDatabase> MissingIssuerEscrow<D> {
                         // remove from escrow
                         self.escrowed_missing_issuer
                             .remove(said, &event.event.get_digest()?)
-                            .map_err(|_e| Error::EscrowDatabaseError)?;
+                            .map_err(|e| Error::EscrowDatabaseError(e.to_string()))?;
                         // accept tel event
                         self.tel_reference.add_event(event.clone())?;
 
@@ -162,7 +163,7 @@ mod tests {
     use redb::Database;
 
     use crate::{
-        database::{redb::RedbTelDatabase, TelEventDatabase},
+        database::{redb::RedbTelDatabase, EscrowDatabase, TelEventDatabase},
         error::Error,
         event::{manager_event, verifiable_event::VerifiableEvent},
         processor::{
@@ -197,15 +198,15 @@ mod tests {
         let tel_root = Builder::new().prefix("test-db").tempfile().unwrap();
         let tel_escrow_root = Builder::new().prefix("test-db").tempfile().unwrap();
 
-        let db = Arc::new(Database::create(tel_escrow_root).unwrap());
+        let db = EscrowDatabase::new(tel_escrow_root.path()).unwrap();
         let tel_events_db = Arc::new(RedbTelDatabase::new(&tel_root.path()).unwrap());
 
-        let tel_storage = Arc::new(TelEventStorage::new(tel_events_db));
+        let tel_storage = Arc::new(TelEventStorage::new(tel_events_db.clone()));
         let tel_bus = TelNotificationBus::new();
 
         let missing_issuer_escrow = Arc::new(MissingIssuerEscrow::new(
-            tel_storage.clone(),
-            db,
+            tel_events_db,
+            &db,
             Duration::from_secs(100),
             keri_storage.clone(),
             tel_bus.clone(),

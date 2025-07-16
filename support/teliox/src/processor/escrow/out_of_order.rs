@@ -11,7 +11,7 @@ use keri_core::{
 use redb::Database;
 
 use crate::{
-    database::{TelEventDatabase, TelLogDatabase},
+    database::{EscrowDatabase, TelEventDatabase, TelLogDatabase},
     error::Error,
     processor::{
         notification::{TelNotification, TelNotificationBus, TelNotifier},
@@ -31,10 +31,10 @@ impl<D: TelEventDatabase + TelLogDatabase> OutOfOrderEscrow<D> {
     pub fn new(
         tel_reference: Arc<D>,
         kel_reference: Arc<EventStorage<RedbDatabase>>,
-        escrow_db: Arc<Database>,
+        escrow_db: &EscrowDatabase,
         duration: Duration,
     ) -> Self {
-        let escrow = SnKeyDatabase::new(escrow_db, "out_of_order").unwrap();
+        let escrow = SnKeyDatabase::new(escrow_db.0.clone(), "out_of_order").unwrap();
         let tel_event_storage = Arc::new(TelEventStorage::new(tel_reference.clone()));
         Self {
             tel_reference: tel_event_storage,
@@ -63,7 +63,7 @@ impl<D: TelEventDatabase + TelLogDatabase> TelNotifier for OutOfOrderEscrow<D> {
 
                 self.escrowed_out_of_order
                     .insert(&key_id, sn, &digest)
-                    .map_err(|_e| Error::EscrowDatabaseError)
+                    .map_err(|e| Error::EscrowDatabaseError(e.to_string()))
             }
             TelNotification::TelEventAdded(event) => {
                 let sn = event.get_event().get_sn();
@@ -86,7 +86,7 @@ impl<D: TelEventDatabase + TelLogDatabase> OutOfOrderEscrow<D> {
                 let event = self
                     .tel_log
                     .get(&said)
-                    .map_err(|_e| Error::EscrowDatabaseError)?
+                    .map_err(|e| Error::EscrowDatabaseError(e.to_string()))?
                     .unwrap();
                 let validator =
                     TelEventValidator::new(self.tel_reference.clone(), self.kel_reference.clone());
@@ -95,7 +95,7 @@ impl<D: TelEventDatabase + TelLogDatabase> OutOfOrderEscrow<D> {
                         // remove from escrow
                         self.escrowed_out_of_order
                             .remove(id, sn, &said)
-                            .map_err(|_e| Error::EscrowDatabaseError)?;
+                            .map_err(|e| Error::EscrowDatabaseError(e.to_string()))?;
                         // accept tel event
                         self.tel_reference.add_event(event.clone())?;
 
@@ -129,7 +129,7 @@ mod tests {
     use redb::Database;
 
     use crate::{
-        database::{redb::RedbTelDatabase, TelEventDatabase},
+        database::{redb::RedbTelDatabase, EscrowDatabase, TelEventDatabase},
         error::Error,
         event::verifiable_event::VerifiableEvent,
         processor::{
@@ -162,7 +162,7 @@ mod tests {
         let tel_escrow_root = Builder::new().prefix("test-db").tempfile().unwrap();
         let tel_events_db = Arc::new(RedbTelDatabase::new(&tel_root.path()).unwrap());
 
-        let escrow_db = Arc::new(Database::create(&tel_escrow_root.path()).unwrap());
+        let escrow_db = EscrowDatabase::new(&tel_escrow_root.path()).unwrap();
 
         let tel_storage = Arc::new(TelEventStorage::new(tel_events_db.clone()));
         let tel_bus = TelNotificationBus::new();
@@ -170,7 +170,7 @@ mod tests {
         let out_of_order_escrow = Arc::new(OutOfOrderEscrow::new(
             tel_events_db,
             keri_storage.clone(),
-            escrow_db,
+            &escrow_db,
             Duration::from_secs(100),
         ));
 
