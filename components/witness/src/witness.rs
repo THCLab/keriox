@@ -144,7 +144,7 @@ pub struct Witness {
     pub oobi_manager: OobiManager,
     pub signer: Arc<Signer>,
     pub receipt_generator: Arc<WitnessReceiptGenerator>,
-    pub tel: Arc<Tel<RedbTelDatabase>>,
+    pub tel: Arc<Tel<RedbTelDatabase, RedbDatabase>>,
 }
 
 impl Witness {

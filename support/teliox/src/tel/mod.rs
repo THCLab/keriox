@@ -12,7 +12,7 @@ use crate::{
     state::{vc_state::TelState, ManagerTelState},
 };
 use keri_core::{
-    database::redb::RedbDatabase, prefix::IdentifierPrefix, processor::event_storage::EventStorage,
+    database::{redb::RedbDatabase, EventDatabase}, prefix::IdentifierPrefix, processor::event_storage::EventStorage,
 };
 use said::SelfAddressingIdentifier;
 
@@ -43,15 +43,15 @@ impl TelNotifier for RecentlyAddedEvents {
 }
 
 /// Transaction Event Log
-pub struct Tel<D: TelEventDatabase> {
-    pub processor: TelEventProcessor<D>,
+pub struct Tel<D: TelEventDatabase, K: EventDatabase> {
+    pub processor: TelEventProcessor<D, K>,
     pub recently_added_events: Arc<RecentlyAddedEvents>,
 }
 
-impl<D: TelEventDatabase> Tel<D> {
+impl<D: TelEventDatabase, K: EventDatabase> Tel<D, K> {
     pub fn new(
         tel_reference: Arc<TelEventStorage<D>>,
-        kel_reference: Arc<EventStorage<RedbDatabase>>,
+        kel_reference: Arc<EventStorage<K>>,
         publisher: Option<TelNotificationBus>,
     ) -> Self {
         let added_events = Arc::new(RecentlyAddedEvents::new());
