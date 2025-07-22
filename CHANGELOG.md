@@ -18,6 +18,10 @@ All notable changes to this project will be documented in this file.
 - Remove unwraps and run cargo fmt
 - Use redb in teliox out of order escrow
 
+### ⚙️ Miscellaneous Tasks
+
+- Release
+
 ## [0.17.2] - 2025-05-09
 
 ### 🚀 Features
