@@ -5,14 +5,14 @@ use crate::event_message::cesr_adapter::ParseError;
 use crate::keys::KeysError;
 #[cfg(feature = "oobi")]
 use crate::oobi::{error::OobiError, Role};
-#[cfg(feature = "oobi")]
+#[cfg(feature = "oobi-manager")]
 use crate::transport::TransportError;
 use crate::{actor::SignedQueryError, error::Error as KeriError, prefix::IdentifierPrefix};
 use said::version::error::Error as VersionError;
 
 #[derive(Debug, thiserror::Error, serde::Serialize, serde::Deserialize)]
 pub enum ActorError {
-    #[cfg(feature = "oobi")]
+    #[cfg(feature = "oobi-manager")]
     #[error("network request failed")]
     TransportError(Box<TransportError>),
 
@@ -61,7 +61,7 @@ pub enum ActorError {
     UnexpectedResponse(String),
 }
 
-#[cfg(feature = "oobi")]
+#[cfg(feature = "oobi-manager")]
 impl From<TransportError> for ActorError {
     fn from(err: TransportError) -> Self {
         ActorError::TransportError(Box::new(err))

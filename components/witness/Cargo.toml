@@ -20,7 +20,7 @@ itertools = { version = "0.10.3" }
 serde = { version = "1.0", features = ["derive"] }
 serde_with = "2.2.0"
 url = { version = "2.2.2", features = ["serde"] }
-keri-core = { path = "../../keriox_core", features = ["oobi", "mailbox"] }
+keri-core = { path = "../../keriox_core", features = ["oobi-manager", "mailbox"] }
 log = "0.4.17"
 serde_json = "1.0"
 teliox = {path = "../../support/teliox"}

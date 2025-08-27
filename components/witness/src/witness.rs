@@ -22,7 +22,8 @@ use keri_core::{
         signed_event_message::{Notice, SignedNontransferableReceipt},
     },
     mailbox::MailboxResponse,
-    oobi::{LocationScheme, OobiManager},
+    oobi::LocationScheme,
+    oobi_manager::OobiManager,
     prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     processor::notification::{Notification, NotificationBus, Notifier},
     query::{

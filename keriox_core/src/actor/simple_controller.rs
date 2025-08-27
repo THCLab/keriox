@@ -46,8 +46,10 @@ use crate::{
     state::IdentifierState,
 };
 
-#[cfg(feature = "oobi")]
-use crate::oobi::{OobiManager, Role};
+#[cfg(feature = "oobi-manager")]
+use crate::oobi::Role;
+#[cfg(feature = "oobi-manager")]
+use crate::oobi_manager::OobiManager;
 
 #[cfg(feature = "query")]
 use crate::query::{

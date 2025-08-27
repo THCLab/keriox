@@ -2,7 +2,8 @@ use std::sync::Arc;
 
 use redb::{MultimapTableDefinition, TableDefinition};
 
-use super::{Role, Scheme};
+use super::Role;
+use crate::oobi::Scheme;
 use crate::{
     database::redb::RedbError,
     prefix::IdentifierPrefix,
@@ -101,6 +102,10 @@ impl OobiStorage {
     }
 
     pub fn save_oobi(&self, signed_reply: &SignedReply) -> Result<(), RedbError> {
+        println!(
+            "\n\nSaving oobi for route: {:?}\n",
+            signed_reply.reply.get_route()
+        );
         match signed_reply.reply.get_route() {
             ReplyRoute::Ksn(_, _) => todo!(),
             ReplyRoute::LocScheme(loc_scheme) => {

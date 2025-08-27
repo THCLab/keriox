@@ -8,11 +8,13 @@ pub mod keys;
 pub mod mailbox;
 #[cfg(feature = "oobi")]
 pub mod oobi;
+#[cfg(feature = "oobi-manager")]
+pub mod oobi_manager;
 pub mod prefix;
 pub mod processor;
 #[cfg(feature = "query")]
 pub mod query;
 pub mod signer;
 pub mod state;
-#[cfg(feature = "oobi")]
+#[cfg(feature = "oobi-manager")]
 pub mod transport;

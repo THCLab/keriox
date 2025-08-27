@@ -2,8 +2,8 @@ use std::convert::TryFrom;
 
 use serde::{Deserialize, Serialize};
 
-#[cfg(feature = "oobi")]
-use crate::oobi::OobiManager;
+#[cfg(feature = "oobi-manager")]
+use crate::oobi_manager::OobiManager;
 #[cfg(feature = "query")]
 use crate::{
     database::EventDatabase,
@@ -42,7 +42,7 @@ pub mod event_generator;
 
 #[cfg(feature = "query")]
 pub mod possible_response;
-#[cfg(all(feature = "mailbox", feature = "oobi"))]
+#[cfg(all(feature = "mailbox", feature = "oobi-manager"))]
 pub mod simple_controller;
 
 pub fn parse_event_stream(stream: &[u8]) -> Result<Vec<Message>, ParseError> {
@@ -55,13 +55,13 @@ pub fn parse_notice_stream(stream: &[u8]) -> Result<Vec<Notice>, ParseError> {
     notices.into_iter().map(Notice::try_from).collect()
 }
 
-#[cfg(any(feature = "query", feature = "oobi"))]
+#[cfg(any(feature = "query", feature = "oobi-manager"))]
 pub fn parse_op_stream(stream: &[u8]) -> Result<Vec<Op>, ParseError> {
     let (_rest, ops) = parse_many(stream).map_err(|e| ParseError::CesrError(e.to_string()))?;
     ops.into_iter().map(Op::try_from).collect()
 }
 
-#[cfg(any(feature = "query", feature = "oobi"))]
+#[cfg(any(feature = "query", feature = "oobi-manager"))]
 pub fn parse_query_stream(stream: &[u8]) -> Result<Vec<SignedQueryMessage>, ParseError> {
     let (_rest, queries) = parse_many(stream).map_err(|e| ParseError::CesrError(e.to_string()))?;
     queries
@@ -93,20 +93,21 @@ pub fn process_notice<P: Processor>(msg: Notice, processor: &P) -> Result<(), Er
 #[cfg(feature = "query")]
 pub fn process_reply<P: Processor>(
     sr: SignedReply,
-    #[cfg(feature = "oobi")] oobi_manager: &OobiManager,
+    #[cfg(feature = "oobi-manager")] oobi_manager: &OobiManager,
     processor: &P,
     event_storage: &EventStorage<P::Database>,
 ) -> Result<(), Error> {
     match sr.reply.get_route() {
-        #[cfg(feature = "oobi")]
+        #[cfg(feature = "oobi-manager")]
         ReplyRoute::LocScheme(_) | ReplyRoute::EndRoleAdd(_) | ReplyRoute::EndRoleCut(_) => {
             process_signed_oobi(&sr, oobi_manager, event_storage)
         }
         ReplyRoute::Ksn(_, _) => processor.process_op_reply(&sr),
+        _ => { Ok(()) }
     }
 }
 
-#[cfg(feature = "oobi")]
+#[cfg(feature = "oobi-manager")]
 pub fn process_signed_oobi<D: EventDatabase + 'static>(
     signed_oobi: &SignedReply,
     oobi_manager: &OobiManager,
@@ -120,7 +121,7 @@ pub fn process_signed_oobi<D: EventDatabase + 'static>(
     // check digest
     signed_oobi.reply.check_digest()?;
     // save
-    oobi_manager
+    let r = oobi_manager
         .process_oobi(signed_oobi)
         .map_err(|e| Error::SemanticError(e.to_string()))?;
 
@@ -298,7 +299,7 @@ pub enum QueryError {
 }
 
 pub mod prelude {
-    #[cfg(feature = "oobi")]
+    #[cfg(feature = "oobi-manager")]
     pub use crate::actor::process_signed_oobi;
     #[cfg(feature = "query")]
     pub use crate::actor::{process_reply, process_signed_query};

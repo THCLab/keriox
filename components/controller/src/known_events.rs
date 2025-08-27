@@ -22,7 +22,8 @@ use keri_core::{
         msg::KeriEvent,
         signed_event_message::{Message, Notice, Op},
     },
-    oobi::{OobiManager, Role, Scheme},
+    oobi::{Role, Scheme},
+    oobi_manager::OobiManager,
     processor::{
         basic_processor::BasicProcessor, escrow::default_escrow_bus, event_storage::EventStorage,
     },

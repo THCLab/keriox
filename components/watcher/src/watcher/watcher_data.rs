@@ -31,7 +31,7 @@ use keri_core::{
     },
 };
 use keri_core::{
-    oobi::OobiManager,
+    oobi_manager::OobiManager,
     processor::{basic_processor::BasicProcessor, event_storage::EventStorage},
     signer::Signer,
     transport::Transport,
