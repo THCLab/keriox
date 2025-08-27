@@ -8,6 +8,10 @@ All notable changes to this project will be documented in this file.
 
 - Separate OobiManager into its own module
 
+### ⚙️ Miscellaneous Tasks
+
+- Release
+
 ## [0.17.6] - 2025-07-24
 
 ### ⚙️ Miscellaneous Tasks

@@ -1,6 +1,6 @@
 [package]
 name = "keri-core"
-version = "0.17.7"
+version = "0.17.8"
 description = "Core library for the Key Event Receipt Infrastructure"
 authors.workspace = true
 edition.workspace = true
