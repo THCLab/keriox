@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.17.7] - 2025-08-27
+
+### 🚜 Refactor
+
+- Separate OobiManager into its own module
+
+## [0.17.6] - 2025-07-24
+
+### ⚙️ Miscellaneous Tasks
+
+- Release
+
 ## [0.17.5] - 2025-07-22
 
 ### ⚙️ Miscellaneous Tasks
