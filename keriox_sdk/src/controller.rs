@@ -74,23 +74,30 @@ impl<
         Ok(Identifier::new(id_prefix, self.event_storage.clone()))
     }
 
-    pub fn process_kel(&self, messages: &[Message]) -> Result<(), String> {
-        messages.iter().try_for_each(|msg| {
-            let id: IdentifierPrefix =
-                "EHIydjfGpSu8mKvrDeWWPaV-mBPeP6Ad7DE6v5fZv2ps"
-                    .parse()
-                    .map_err(|_e| {
-                        "Failed to parse identifier prefix".to_string()
-                    })?;
-
-            match msg {
-                Message::Notice(notice) => self
-                    .processor
-                    .process_notice(notice)
-                    .map_err(|e| e.to_string()),
-                Message::Op(_) => {
-                    Err("Operation messages are not supported".to_string())
+    pub fn load_identifier(
+        &self,
+        id: &IdentifierPrefix,
+    ) -> Result<Identifier<D>, String> {
+        self.event_storage
+            .get_kel_messages_with_receipts_all(id)
+            .map_err(|e| e.to_string())
+            .and_then(|kel| {
+                if kel.is_none_or(|v| v.is_empty()) {
+                    Err("No KEL found for the identifier".to_string())
+                } else {
+                    Ok(Identifier::new(id.clone(), self.event_storage.clone()))
                 }
+            })
+    }
+
+    pub fn process_kel(&self, messages: &[Message]) -> Result<(), String> {
+        messages.iter().try_for_each(|msg| match msg {
+            Message::Notice(notice) => self
+                .processor
+                .process_notice(notice)
+                .map_err(|e| e.to_string()),
+            Message::Op(_) => {
+                Err("Operation messages are not supported".to_string())
             }
         })?;
 

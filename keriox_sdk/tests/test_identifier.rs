@@ -86,12 +86,7 @@ async fn test_init_id() -> Result<(), ()> {
         serde_json::from_value(id_str).map_err(|_e| ())?;
     let witness_prefix: IdentifierPrefix =
         serde_json::from_value(witness_id).map_err(|_e| ())?;
-    let witness = match witness_prefix {
-        IdentifierPrefix::Basic(witness) => witness,
-        _ => panic!("Invalid witness prefix"),
-    };
-    println!("Witness: {:?}", witness);
-    let q = signing_identifier.get_log_query(id, 0, 10, witness);
+    let q = signing_identifier.get_log_query(id, witness_prefix);
     let signature_qry = Signature::NonTransferable(Nontransferable::Couplet(vec![(
             public_keys[0].clone(),
             SelfSigningPrefix::new(
@@ -131,8 +126,14 @@ async fn test_init_id() -> Result<(), ()> {
     })?;
 
     // let msg = r#"{"v":"ACDC10JSON000207_","d":"EGRIIeNj2HIP787COJFiQbYqsp6UwAR22oeqWsEVhq42","i":"EHIydjfGpSu8mKvrDeWWPaV-mBPeP6Ad7DE6v5fZv2ps","ri":"EMDfCDynqGvpaN7Fbm5FADyfS98q_WUkPKmbZapBB1J_","s":"EHLjK9n1i1osh8SPYpyotPxC8IeBqtdfK-Qrz4_TZp6G","a":{"d":"ENaVuh9EMbTGgVjbnPHDZDDxvhsvzIZsuvTEIkFa3JPP","a":{"last_name":"KOWALSKI","first_name":"JAN","birth_date":"07.04.1964","birth_place":"WARSZAWA","issue_date":"06.03.2019","expiry_date":"18.01.2028","issuer":"PREZYDENT m.st. WARSZAWY","pesel":"64040738293","number":"SP006/15/1"}}}"#;
-    let vc_said: said::SelfAddressingIdentifier = "EGRIIeNj2HIP787COJFiQbYqsp6UwAR22oeqWsEVhq42".parse().unwrap();
-    let registry_id: said::SelfAddressingIdentifier = "EMDfCDynqGvpaN7Fbm5FADyfS98q_WUkPKmbZapBB1J_".parse().unwrap();
+    let vc_said: said::SelfAddressingIdentifier =
+        "EGRIIeNj2HIP787COJFiQbYqsp6UwAR22oeqWsEVhq42"
+            .parse()
+            .unwrap();
+    let registry_id: said::SelfAddressingIdentifier =
+        "EMDfCDynqGvpaN7Fbm5FADyfS98q_WUkPKmbZapBB1J_"
+            .parse()
+            .unwrap();
 
     let tel_qry = signing_identifier
         .get_tel_query(
