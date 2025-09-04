@@ -144,13 +144,15 @@ impl<D: EventDatabase> Identifier<D> {
         &self,
         identifier: IdentifierPrefix,
         witness: IdentifierPrefix,
+        from_sn: Option<u64>,
+        limit: Option<u64>,
     ) -> QueryEvent {
         QueryEvent::new_query(
             QueryRoute::Logs {
                 reply_route: "".to_string(),
                 args: LogsQueryArgs {
-                    s: None,
-                    limit: None,
+                    s: from_sn,
+                    limit,
                     i: identifier,
                     src: Some(witness),
                 },

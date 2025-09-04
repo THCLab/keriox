@@ -86,7 +86,7 @@ async fn test_init_id() -> Result<(), ()> {
         serde_json::from_value(id_str).map_err(|_e| ())?;
     let witness_prefix: IdentifierPrefix =
         serde_json::from_value(witness_id).map_err(|_e| ())?;
-    let q = signing_identifier.get_log_query(id, witness_prefix);
+    let q = signing_identifier.get_log_query(id, witness_prefix, None, None);
     let signature_qry = Signature::NonTransferable(Nontransferable::Couplet(vec![(
             public_keys[0].clone(),
             SelfSigningPrefix::new(
