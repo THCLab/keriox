@@ -16,7 +16,7 @@ use keri_core::{
         basic_processor::BasicProcessor,
         escrow::{default_escrow_bus, EscrowConfig},
         Processor,
-    },
+    }, state::IdentifierState,
 };
 use teliox::{
     database::TelEventDatabase, processor::storage::TelEventStorage,
@@ -115,6 +115,10 @@ impl<
         vc_hash: &said::SelfAddressingIdentifier,
     ) -> Result<Option<TelState>, String> {
         self.tel.get_vc_state(vc_hash).map_err(|e| e.to_string())
+    }
+
+    pub fn get_state(&self, id: &IdentifierPrefix) -> Option<IdentifierState> {
+        self.event_storage.get_state(id)
     }
 
     fn finalize_inception(
