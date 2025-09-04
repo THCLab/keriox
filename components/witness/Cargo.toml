@@ -1,6 +1,6 @@
 [package]
 name = "witness"
-version = "0.17.8"
+version = "0.17.9"
 publish = false
 authors.workspace = true
 edition.workspace = true
