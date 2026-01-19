@@ -28,3 +28,9 @@ license = "EUPL-1.2"
 #shared-version=false
 #tag-name="v{{version}}"
 tag=false
+
+[patch.crates-io]
+# Pin both rmp and rmp-serde to compatible versions from git
+# rmp 0.8.11 has the read_data_* functions that rmp-serde 0.15.x needs
+rmp = { git = "https://github.com/3Hren/msgpack-rust", tag = "rmp/v0.8.11" }
+rmp-serde = { git = "https://github.com/3Hren/msgpack-rust", tag = "rmp-serde/v0.15.4" }
