@@ -18,6 +18,7 @@ query = ["serde_cbor"]
 oobi = ["url", "strum_macros", "strum"]
 oobi-manager = ["oobi", "query", "reqwest", "async-trait", "serde_cbor"]
 mailbox = ["query", "serde_cbor"]
+postgres-backend= ["sqlx", "async-std"]
 
 [dependencies]
 bytes = "1.3.0"
@@ -52,6 +53,10 @@ url = { version = "2.2.2", features = ["serde"], optional = true }
 strum_macros = { version = "0.24", optional = true }
 strum = { version = "0.24", optional = true }
 rkyv = "0.8.9"
+
+# postgres db deps
+sqlx = { version = "0.8", features = ["runtime-async-std", "postgres"], optional = true }
+async-std = { version = "1", features = ["attributes"], optional = true }
 
 [dev-dependencies]
 sodiumoxide = "0.2.6"

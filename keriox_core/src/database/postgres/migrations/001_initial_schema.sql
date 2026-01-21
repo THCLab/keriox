@@ -1,0 +1,111 @@
+-- ===========================================
+-- KEL Tables (EventDatabase)
+-- ===========================================
+
+-- Maps (identifier, sn) -> event_digest
+-- ReDB: KELS: TableDefinition<(&str, u64), &[u8]>
+CREATE TABLE kels (
+    identifier TEXT NOT NULL,
+    sn BIGINT NOT NULL,
+    digest BYTEA NOT NULL,
+    PRIMARY KEY (identifier, sn)  -- UNIQUE constraint prevents duplicate sn
+);
+CREATE INDEX idx_kels_identifier ON kels(identifier);
+
+-- Maps identifier -> serialized IdentifierState
+-- ReDB: KEY_STATES: TableDefinition<&str, &[u8]>
+CREATE TABLE key_states (
+    identifier TEXT PRIMARY KEY,
+    state_data BYTEA NOT NULL  -- rkyv serialized IdentifierState
+);
+
+-- Maps digest -> serialized event
+-- ReDB: EVENTS: TableDefinition<&[u8], &[u8]>
+CREATE TABLE events (
+    digest BYTEA PRIMARY KEY,
+    event_data BYTEA NOT NULL  -- rkyv serialized KeriEvent<KeyEvent>
+);
+
+-- Multimap: digest -> multiple signatures
+-- ReDB: SIGS: MultimapTableDefinition<&[u8], &[u8]>
+CREATE TABLE signatures (
+    digest BYTEA NOT NULL,
+    signature_data BYTEA NOT NULL,  -- rkyv serialized IndexedSignature
+    PRIMARY KEY (digest, signature_data)  -- Prevents duplicate signatures
+);
+
+-- Multimap: digest -> multiple non-transferable receipts
+-- ReDB: NONTRANS_RCTS: MultimapTableDefinition<&[u8], &[u8]>
+CREATE TABLE nontrans_receipts (
+    digest BYTEA NOT NULL,
+    receipt_data BYTEA NOT NULL,  -- rkyv serialized Nontransferable
+    PRIMARY KEY (digest, receipt_data)
+);
+
+-- Multimap: digest -> multiple transferable receipts
+-- ReDB: TRANS_RCTS: MultimapTableDefinition<&[u8], &[u8]>
+CREATE TABLE trans_receipts (
+    digest BYTEA NOT NULL,
+    receipt_data BYTEA NOT NULL,  -- rkyv serialized Transferable
+    PRIMARY KEY (digest, receipt_data)
+);
+
+-- Maps digest -> seal data
+-- ReDB: SEALS: TableDefinition<&[u8], &[u8]>
+CREATE TABLE seals (
+    digest BYTEA PRIMARY KEY,
+    seal_data BYTEA NOT NULL  -- rkyv serialized SourceSeal
+);
+
+-- ===========================================
+-- TEL Tables (TelEventDatabase)
+-- ===========================================
+
+-- TEL events storage
+-- ReDB: EVENTS: TableDefinition<&[u8], &[u8]>
+CREATE TABLE tel_events (
+    digest BYTEA PRIMARY KEY,
+    event_data BYTEA NOT NULL  -- CBOR serialized VerifiableEvent
+);
+
+-- VC TEL index: (vc_identifier, sn) -> event_digest
+-- ReDB: VC_TELS: TableDefinition<(&str, u64), &[u8]>
+CREATE TABLE vc_tels (
+    identifier TEXT NOT NULL,
+    sn BIGINT NOT NULL,
+    digest BYTEA NOT NULL,
+    PRIMARY KEY (identifier, sn)
+);
+CREATE INDEX idx_vc_tels_identifier ON vc_tels(identifier);
+
+-- Management TEL index: (registry_identifier, sn) -> event_digest
+-- ReDB: MANAGEMENT_TELS: TableDefinition<(&str, u64), &[u8]>
+CREATE TABLE management_tels (
+    identifier TEXT NOT NULL,
+    sn BIGINT NOT NULL,
+    digest BYTEA NOT NULL,
+    PRIMARY KEY (identifier, sn)
+);
+CREATE INDEX idx_management_tels_identifier ON management_tels(identifier);
+
+-- ===========================================
+-- Escrow Tables
+-- ===========================================
+
+-- Unified escrow table (replaces dynamic MultimapTableDefinition per escrow type)
+-- ReDB: sn_key_table: MultimapTableDefinition<(&str, u64), &[u8]>
+CREATE TABLE escrow_events (
+    escrow_type TEXT NOT NULL,  -- 'partially_signed', 'out_of_order', 'partially_witnessed', etc.
+    identifier TEXT NOT NULL,
+    sn BIGINT NOT NULL,
+    digest BYTEA NOT NULL,
+    PRIMARY KEY (escrow_type, identifier, sn, digest)  -- Allows multiple digests per (type, id, sn)
+);
+CREATE INDEX idx_escrow_lookup ON escrow_events(escrow_type, identifier, sn);
+
+-- Escrow timestamps
+-- ReDB: dts_table: TableDefinition<&[u8], u64>
+CREATE TABLE escrow_timestamps (
+    digest BYTEA PRIMARY KEY,
+    timestamp_secs BIGINT NOT NULL  -- seconds since UNIX_EPOCH
+);

@@ -20,6 +20,9 @@ use crate::{
 #[cfg(feature = "mailbox")]
 pub mod mailbox;
 pub mod redb;
+
+#[cfg(feature = "postgres-backend")]
+pub mod postgres;
 pub mod timestamped;
 
 pub enum QueryParameters<'a> {
