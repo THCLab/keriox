@@ -142,7 +142,7 @@ mod tests {
     }
 
     #[async_std::test]
-    #[ignore] // Run with: cargo test -p keri-core --features postgres-backend -- --ignored
+    #[ignore]
     async fn test_postgres_migrations() {
         let db = PostgresDatabase::new(&get_database_url())
             .await
