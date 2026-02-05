@@ -116,6 +116,15 @@ impl<S: OobiStorageBackend> OobiManager<S> {
     }
 }
 
+// Generic constructor for any storage backend
+impl<S: OobiStorageBackend> OobiManager<S> {
+    /// Create a new OobiManager with a custom storage backend
+    pub fn new_with_storage(store: S) -> Self {
+        Self { store }
+    }
+}
+
+// ReDB-specific constructors (backward compatible)
 impl OobiManager {
     pub fn new(events_db: Arc<RedbDatabase>) -> Self {
         Self {

@@ -49,6 +49,8 @@ use crate::{
 #[cfg(feature = "oobi-manager")]
 use crate::oobi::Role;
 #[cfg(feature = "oobi-manager")]
+use crate::oobi_manager::storage::{OobiStorageBackend, RedbOobiStorage};
+#[cfg(feature = "oobi-manager")]
 use crate::oobi_manager::OobiManager;
 
 #[cfg(feature = "query")]
@@ -59,11 +61,20 @@ use crate::query::{
 
 /// Helper struct for events generation, signing and processing.
 /// Used in tests.
-pub struct SimpleController<K: KeyManager + 'static, D: EventDatabase + EscrowCreator> {
+///
+/// Generic over:
+/// - `K`: Key manager implementation
+/// - `D`: Event database implementation
+/// - `S`: OOBI storage backend (defaults to RedbOobiStorage for backward compatibility)
+pub struct SimpleController<
+    K: KeyManager + 'static,
+    D: EventDatabase + EscrowCreator,
+    S: OobiStorageBackend = RedbOobiStorage,
+> {
     prefix: IdentifierPrefix,
     pub key_manager: Arc<Mutex<K>>,
     processor: BasicProcessor<D>,
-    oobi_manager: OobiManager,
+    oobi_manager: OobiManager<S>,
     pub storage: EventStorage<D>,
     pub groups: Vec<IdentifierPrefix>,
     pub not_fully_witnessed_escrow: Arc<PartiallyWitnessedEscrow<D>>,
@@ -71,8 +82,40 @@ pub struct SimpleController<K: KeyManager + 'static, D: EventDatabase + EscrowCr
     pub delegation_escrow: Arc<DelegationEscrow<D>>,
 }
 
+// Generic impl for any database and OOBI storage backend
+impl<
+        K: KeyManager,
+        D: EventDatabase + EscrowCreator + Send + Sync + 'static,
+        S: OobiStorageBackend,
+    > SimpleController<K, D, S>
+{
+    /// Create a new SimpleController with a custom OOBI manager
+    pub fn new_with_oobi_manager(
+        event_db: Arc<D>,
+        key_manager: Arc<Mutex<K>>,
+        oobi_manager: OobiManager<S>,
+        escrow_config: EscrowConfig,
+    ) -> Result<SimpleController<K, D, S>, Error> {
+        let (not_bus, (ooo, _, partially_witnesses, del_escrow, _duplicates)) =
+            default_escrow_bus(event_db.clone(), escrow_config);
+        let processor = BasicProcessor::new(event_db.clone(), Some(not_bus));
+
+        Ok(SimpleController {
+            prefix: IdentifierPrefix::default(),
+            key_manager,
+            oobi_manager,
+            processor,
+            storage: EventStorage::new(event_db.clone()),
+            groups: vec![],
+            not_fully_witnessed_escrow: partially_witnesses,
+            ooo_escrow: ooo,
+            delegation_escrow: del_escrow,
+        })
+    }
+}
+
 // impl<K: KeyManager, D: EventDatabase + Send + Sync + 'static> SimpleController<K, D> {
-impl<K: KeyManager> SimpleController<K, RedbDatabase> {
+impl<K: KeyManager> SimpleController<K, RedbDatabase, RedbOobiStorage> {
     // incept a state and keys
     pub fn new(
         event_db: Arc<RedbDatabase>,

@@ -7,8 +7,10 @@ use crate::database::{postgres::error::PostgresError, EventDatabase};
 mod error;
 mod escrow_database;
 mod loging;
+pub mod oobi_storage;
 
 pub use loging::PostgresLogDatabase;
+pub use oobi_storage::PostgresOobiStorage;
 
 pub struct PgConfig {
     pub database_url: String,
@@ -151,5 +153,46 @@ mod tests {
         db.run_migrations().await.expect("Failed to run migrations");
 
         println!("Migrations completed successfully!");
+    }
+
+    #[cfg(all(feature = "mailbox", feature = "oobi-manager"))]
+    #[async_std::test]
+    #[ignore]
+    async fn test_simple_controller_with_postgres() {
+        use crate::{
+            actor::simple_controller::SimpleController, oobi_manager::OobiManager,
+            processor::escrow::EscrowConfig, signer::CryptoBox,
+        };
+        use std::sync::Mutex;
+
+        let db = PostgresDatabase::new(&get_database_url())
+            .await
+            .expect("Failed to connect to database");
+
+        db.run_migrations().await.expect("Failed to run migrations");
+
+        let db = Arc::new(db);
+
+        let pool = sqlx::PgPool::connect(&get_database_url())
+            .await
+            .expect("Failed to create pool");
+        let oobi_storage = PostgresOobiStorage::new(pool);
+        let oobi_manager = OobiManager::new_with_storage(oobi_storage);
+
+        let key_manager = Arc::new(Mutex::new(CryptoBox::new().unwrap()));
+
+        let controller = SimpleController::new_with_oobi_manager(
+            db,
+            key_manager,
+            oobi_manager,
+            EscrowConfig::default(),
+        );
+
+        assert!(
+            controller.is_ok(),
+            "Failed to create SimpleController with Postgres"
+        );
+
+        println!("SimpleController with Postgres created successfully!");
     }
 }
