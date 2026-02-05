@@ -17,10 +17,32 @@ const LOCATION: TableDefinition<(&str, &str), &[u8]> = TableDefinition::new("loc
 const END_ROLE: MultimapTableDefinition<(&[u8], &[u8]), &[u8]> =
     MultimapTableDefinition::new("end_role");
 
-pub struct OobiStorage {
+/// Trait for OOBI storage backends
+pub trait OobiStorageBackend: Send + Sync {
+    type Error: std::error::Error + Send + Sync + 'static;
+
+    fn get_oobis_for_eid(&self, id: &IdentifierPrefix) -> Result<Vec<SignedReply>, Self::Error>;
+
+    fn get_last_loc_scheme(
+        &self,
+        eid: &IdentifierPrefix,
+        scheme: &Scheme,
+    ) -> Result<Option<SignedReply>, Self::Error>;
+
+    fn get_end_role(
+        &self,
+        cid: &IdentifierPrefix,
+        role: Role,
+    ) -> Result<Option<Vec<SignedReply>>, Self::Error>;
+
+    fn save_oobi(&self, signed_reply: &SignedReply) -> Result<(), Self::Error>;
+}
+
+pub struct RedbOobiStorage {
     db: Arc<redb::Database>,
 }
-impl OobiStorage {
+
+impl RedbOobiStorage {
     pub fn new(db: Arc<redb::Database>) -> Result<Self, RedbError> {
         // Create tables
         let write_txn = db.begin_write()?;
@@ -31,8 +53,12 @@ impl OobiStorage {
         write_txn.commit()?;
         Ok(Self { db })
     }
+}
 
-    pub fn get_oobis_for_eid(&self, id: &IdentifierPrefix) -> Result<Vec<SignedReply>, RedbError> {
+impl OobiStorageBackend for RedbOobiStorage {
+    type Error = RedbError;
+
+    fn get_oobis_for_eid(&self, id: &IdentifierPrefix) -> Result<Vec<SignedReply>, Self::Error> {
         let str_id = id.to_string();
         let start = (str_id.as_str(), "");
 
@@ -58,11 +84,11 @@ impl OobiStorage {
         Ok(out)
     }
 
-    pub fn get_last_loc_scheme(
+    fn get_last_loc_scheme(
         &self,
         eid: &IdentifierPrefix,
         scheme: &Scheme,
-    ) -> Result<Option<SignedReply>, RedbError> {
+    ) -> Result<Option<SignedReply>, Self::Error> {
         let read_txn = self.db.begin_read().unwrap();
         let table = read_txn.open_table(LOCATION).unwrap();
         let el = table
@@ -79,11 +105,11 @@ impl OobiStorage {
         Ok(out)
     }
 
-    pub fn get_end_role(
+    fn get_end_role(
         &self,
         cid: &IdentifierPrefix,
         role: Role,
-    ) -> Result<Option<Vec<SignedReply>>, RedbError> {
+    ) -> Result<Option<Vec<SignedReply>>, Self::Error> {
         let read_txn = self.db.begin_read().unwrap();
         let table = read_txn.open_multimap_table(END_ROLE).unwrap();
         let entry = table
@@ -101,7 +127,7 @@ impl OobiStorage {
         Ok(out)
     }
 
-    pub fn save_oobi(&self, signed_reply: &SignedReply) -> Result<(), RedbError> {
+    fn save_oobi(&self, signed_reply: &SignedReply) -> Result<(), Self::Error> {
         println!(
             "\n\nSaving oobi for route: {:?}\n",
             signed_reply.reply.get_route()

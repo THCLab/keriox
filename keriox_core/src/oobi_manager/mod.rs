@@ -1,10 +1,12 @@
+use crate::{
+    database::redb::{RedbDatabase, RedbError},
+    oobi::{error::OobiError, Role},
+};
 use std::{convert::TryFrom, sync::Arc};
-use crate::oobi::{Role, error::OobiError};
 
 use cesrox::parse_many;
 
 use crate::{
-    database::redb::{RedbDatabase, RedbError},
     error::Error,
     event_message::signed_event_message::{Message, Op},
     prefix::IdentifierPrefix,
@@ -13,30 +15,19 @@ use crate::{
 
 pub mod storage;
 
-use self::storage::OobiStorage;
+use self::storage::{OobiStorageBackend, RedbOobiStorage};
 
-pub struct OobiManager {
-    store: OobiStorage,
+pub struct OobiManager<S: OobiStorageBackend = RedbOobiStorage> {
+    store: S,
 }
 
-impl OobiManager {
-    pub fn new(events_db: Arc<RedbDatabase>) -> Self {
-        Self {
-            store: OobiStorage::new(events_db.db.clone()).unwrap(),
-        }
+impl<S: OobiStorageBackend> OobiManager<S> {
+    pub fn with_storage(store: S) -> Self {
+        Self { store }
     }
 
-    pub fn new_from_db(db: Arc<redb::Database>) -> Self {
-        Self {
-            store: OobiStorage::new(db.clone()).unwrap(),
-        }
-    }
-
-    /// Checks oobi signer and bada logic. Assumes signatures already
-    /// verified.
     pub fn check_oobi_reply(&self, rpy: &SignedReply) -> Result<(), OobiError> {
         match rpy.reply.get_route() {
-            // check if signature was made by oobi creator
             ReplyRoute::LocScheme(lc) => {
                 if rpy.signature.get_signer().ok_or(Error::MissingSigner)? != lc.get_eid() {
                     return Err(OobiError::SignerMismatch);
@@ -79,7 +70,9 @@ impl OobiManager {
                 match msg {
                     Message::Op(Op::Reply(oobi_rpy)) => {
                         self.check_oobi_reply(&oobi_rpy)?;
-                        self.store.save_oobi(&oobi_rpy)?;
+                        self.store
+                            .save_oobi(&oobi_rpy)
+                            .map_err(|e| OobiError::Db(e.to_string()))?;
                         Ok(())
                     }
                     _ => Err(OobiError::InvalidMessageType),
@@ -87,14 +80,18 @@ impl OobiManager {
             })?;
         Ok(())
     }
-    pub fn save_oobi(&self, signed_oobi: &SignedReply) -> Result<(), RedbError> {
-        self.store.save_oobi(signed_oobi)
+
+    pub fn save_oobi(&self, signed_oobi: &SignedReply) -> Result<(), OobiError> {
+        self.store
+            .save_oobi(signed_oobi)
+            .map_err(|e| OobiError::Db(e.to_string()))
     }
 
-    pub fn get_loc_scheme(&self, id: &IdentifierPrefix) -> Result<Vec<ReplyEvent>, RedbError> {
+    pub fn get_loc_scheme(&self, id: &IdentifierPrefix) -> Result<Vec<ReplyEvent>, OobiError> {
         Ok(self
             .store
-            .get_oobis_for_eid(id)?
+            .get_oobis_for_eid(id)
+            .map_err(|e| OobiError::Db(e.to_string()))?
             .into_iter()
             .map(|e| e.reply)
             .collect())
@@ -104,17 +101,32 @@ impl OobiManager {
         &self,
         id: &IdentifierPrefix,
         role: Role,
-    ) -> Result<Option<Vec<SignedReply>>, RedbError> {
-        self.store.get_end_role(id, role)
+    ) -> Result<Option<Vec<SignedReply>>, OobiError> {
+        self.store
+            .get_end_role(id, role)
+            .map_err(|e| OobiError::Db(e.to_string()))
     }
 
-    /// Assumes that signatures were verified.
     pub fn process_oobi(&self, oobi_rpy: &SignedReply) -> Result<(), OobiError> {
-        println!("\nProcessing oobi");
         self.check_oobi_reply(oobi_rpy)?;
-        println!("Checked\n");
-        self.store.save_oobi(oobi_rpy)?;
+        self.store
+            .save_oobi(oobi_rpy)
+            .map_err(|e| OobiError::Db(e.to_string()))?;
         Ok(())
+    }
+}
+
+impl OobiManager {
+    pub fn new(events_db: Arc<RedbDatabase>) -> Self {
+        Self {
+            store: RedbOobiStorage::new(events_db.db.clone()).unwrap(),
+        }
+    }
+
+    pub fn new_from_db(db: Arc<redb::Database>) -> Self {
+        Self {
+            store: RedbOobiStorage::new(db).unwrap(),
+        }
     }
 }
 
@@ -133,7 +145,7 @@ mod tests {
     use tempfile::NamedTempFile;
 
     use crate::{
-        oobi::error::OobiError,
+        oobi::error::OobiError, oobi_manager::storage::OobiStorageBackend,
         oobi_manager::OobiManager, prefix::IdentifierPrefix, query::reply_event::ReplyRoute,
     };
 

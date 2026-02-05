@@ -109,3 +109,25 @@ CREATE TABLE escrow_timestamps (
     digest BYTEA PRIMARY KEY,
     timestamp_secs BIGINT NOT NULL  -- seconds since UNIX_EPOCH
 );
+
+-- ===========================================
+-- OOBI Tables
+-- ===========================================
+
+-- Location scheme OOBIs: (eid, scheme) -> OOBI data
+CREATE TABLE location_oobis (
+    eid TEXT NOT NULL,
+    scheme TEXT NOT NULL,
+    oobi_data BYTEA NOT NULL,
+    PRIMARY KEY (eid, scheme)
+);
+
+-- End role OOBIs: (cid, role) -> multiple OOBIs
+CREATE TABLE end_role_oobis (
+    id SERIAL PRIMARY KEY,
+    cid TEXT NOT NULL,
+    role TEXT NOT NULL,
+    eid TEXT NOT NULL,
+    oobi_data BYTEA NOT NULL
+);
+CREATE INDEX idx_end_role_lookup ON end_role_oobis(cid, role);
