@@ -1,76 +1,69 @@
-# Changelog
-
-All notable changes to this project will be documented in this file.
-
-## [0.17.8] - 2025-08-27
-
-### ⚙️ Miscellaneous Tasks
-
-- Release
-
-## [0.17.7] - 2025-08-27
-
-### 🚜 Refactor
-
-- Separate OobiManager into its own module
-
-### ⚙️ Miscellaneous Tasks
-
-- Release
-
-## [0.17.6] - 2025-07-24
-
-### ⚙️ Miscellaneous Tasks
-
-- Release
-
-## [0.17.5] - 2025-07-22
-
-### ⚙️ Miscellaneous Tasks
-
-- Release
-
-## [0.17.4] - 2025-07-22
-
-### ⚙️ Miscellaneous Tasks
-
-- Release
-
-## [0.17.3] - 2025-07-22
+## [0.17.10] - 2026-02-07
 
 ### 🚀 Features
 
-- Enhance database abstraction in keri-core
-
-### 💼 Other
-
-- Clean up imports and apply cargo fmt
-
-### 🚜 Refactor
-
-- Remove transport module from teliox
-- Remove unwraps and run cargo fmt
-- Use redb in teliox out of order escrow
-
-### ⚙️ Miscellaneous Tasks
-
-- Release
-
-## [0.17.2] - 2025-05-09
-
-### 🚀 Features
-
+- Add info endpoint for witness and watcher
+- Use redb crate
+- Save nontransferable receipts
+- Save transferable receipts
+- Use redb for event storing
+- Implement rkyv traits for SerializationInfo
+- Implement rkyv::Serialize for KeiEvent
+- Add limit argument to query
+- Derive rkyv's Archive, Serialize, and Deserialize for IdentifierState
+- Persist identifier key states in events_db for better tracking
+- Replace compute_state function with get_key_state in EventStorage
+- Change keys in database
+- Use redb in out of order escrow
+- Add query_cache feature
 - Remove sled from partially signed escrow
+- Enhance database abstraction in keri-core
 
 ### 🐛 Bug Fixes
 
+- Update tables keys
+- Fix validation test
+- Cargo fmt
+- Fix failing tests
+- Update teliox workspace
+- Align workspaces with db changes
+- Warnings and failing tests
+- Compute signature index instead of using 0
+- Return receipts as attachments
+- Save published receipts sn in db
+- Execute add_kel_finalized_event operations in transaction
+- Update witness and watcher workspaces
+- Refactor escrow database
+- Adjust delegation tests
+- Validate receipt signatures in pw escrow
+- Allow setting next threshold in group incept
+- Update finalize group event function
 - Fix failing tests
 - *(mailbox)* Prevent saving the same element multiple times
 - *(mailbox)* Allow getting messages from index
 - Resolve feature dependency issues
 
+### 💼 Other
+
+- Add database/sled submodule
+- Database module cleanup
+- Clean up imports and apply cargo fmt
+
 ### 🚜 Refactor
 
+- Implement EventDatabase for sled
+- Reformat
+- Update EventDatabase trait
+- Redb submodule cleanup
+- Use rkyv crate in redb submodule
+- Use rkyv for storing attachments
+- Restructure rkyv submodule
+- Reformat and fix warnings
+- Reformat and fix warnings
+- Remove unnecessary clone
+- Split redb module into multiple files
+- Add partially witnessed escrow submodule
+- Adjust partially escrow tests
 - Add partially_signed_escrow submodule
 - Move tests to partially_signed_escrow submodule
 - Remove sled from delegation escrow
@@ -84,221 +77,76 @@ All notable changes to this project will be documented in this file.
 - Align workspaces with changes
 - Remove sled db from oobi module
 - Remove sled dependency
-
-### 🧪 Testing
-
-- Add mailbox table test
-
-### ⚙️ Miscellaneous Tasks
-
-- Cargo fmt
-- Release
-
-## [0.17.1] - 2025-04-30
-
-### ⚙️ Miscellaneous Tasks
-
-- Release
-
-## [0.17.0] - 2025-04-17
-
-### 🚀 Features
-
-- Add query_cache feature
-
-### ⚙️ Miscellaneous Tasks
-
-- Release
-
-## [0.17.0-rc5] - 2025-04-08
-
-### 🐛 Bug Fixes
-
-- Update finalize group event function
-
-### ⚙️ Miscellaneous Tasks
-
-- Release
-
-## [0.17.0-rc4] - 2025-03-27
-
-### ⚙️ Miscellaneous Tasks
-
-- Release
-
-## [0.17.0-rc3] - 2025-03-26
-
-### 🚀 Features
-
-- Derive rkyv's Archive, Serialize, and Deserialize for IdentifierState
-- Persist identifier key states in events_db for better tracking
-- Replace compute_state function with get_key_state in EventStorage
-- Change keys in database
-- Use redb in out of order escrow
-
-### 🐛 Bug Fixes
-
-- Compute signature index instead of using 0
-- Return receipts as attachments
-- Save published receipts sn in db
-- Execute add_kel_finalized_event operations in transaction
-- Update witness and watcher workspaces
-- Refactor escrow database
-- Adjust delegation tests
-- Validate receipt signatures in pw escrow
-- Allow setting next threshold in group incept
-
-### 🚜 Refactor
-
-- Remove unnecessary clone
-- Split redb module into multiple files
-- Add partially witnessed escrow submodule
-- Adjust partially escrow tests
+- Remove transport module from teliox
+- Remove unwraps and run cargo fmt
+- Use redb in teliox out of order escrow
+- Separate OobiManager into its own module
 
 ### 🧪 Testing
 
 - Add assertions for key_state in test_retrieve_kel
+- Add mailbox table test
 
 ### ⚙️ Miscellaneous Tasks
 
+- Release
+- Release
+- Release
+- Release
+- Release
+- Release
+- Release
+- Release
 - Add processing events benchmark
 - Cargo fmt and update test
 - Update dependencies
 - Remove unused imports
 - Release
-
-## [0.16.0] - 2025-01-29
-
-### 🚀 Features
-
-- Add limit argument to query
-
-### 🐛 Bug Fixes
-
-- Warnings and failing tests
-
-### ⚙️ Miscellaneous Tasks
-
 - Release
-
-## [0.15.1] - 2025-01-16
-
-### ⚙️ Miscellaneous Tasks
-
 - Release
-
-## [0.15.0] - 2025-01-16
-
-### 🚀 Features
-
-- Use redb crate
-- Save nontransferable receipts
-- Save transferable receipts
-- Use redb for event storing
-- Implement rkyv traits for SerializationInfo
-- Implement rkyv::Serialize for KeiEvent
-
-### 🐛 Bug Fixes
-
-- Update tables keys
-- Fix validation test
+- Release
+- Release
 - Cargo fmt
-- Fix failing tests
-- Update teliox workspace
-- Align workspaces with db changes
-
-### 💼 Other
-
-- Add database/sled submodule
-- Database module cleanup
-
-### 🚜 Refactor
-
-- Implement EventDatabase for sled
-- Reformat
-- Update EventDatabase trait
-- Redb submodule cleanup
-- Use rkyv crate in redb submodule
-- Use rkyv for storing attachments
-- Restructure rkyv submodule
-- Reformat and fix warnings
-- Reformat and fix warnings
-
-### ⚙️ Miscellaneous Tasks
-
 - Release
-
-## [0.14.2] - 2024-12-11
-
-### ⚙️ Miscellaneous Tasks
-
 - Release
-
-## [0.14.1] - 2024-12-06
-
-### ⚙️ Miscellaneous Tasks
-
 - Release
-
-## [0.14.0] - 2024-11-25
-
-### 🚀 Features
-
-- Add info endpoint for witness and watcher
-
-### ⚙️ Miscellaneous Tasks
-
 - Release
-
-## [0.13.0] - 2024-09-04
-
-### ⚙️ Miscellaneous Tasks
-
 - Release
-
-## [0.12.7] - 2024-08-30
-
-### ⚙️ Miscellaneous Tasks
-
 - Release
-
+- Release
+- Release
+- Bump cesrox and said
 ## [0.12.6] - 2024-08-08
 
 ### ⚙️ Miscellaneous Tasks
 
 - Release
-
 ## [0.12.5] - 2024-08-07
 
 ### ⚙️ Miscellaneous Tasks
 
 - Add CHANGELOG.md
 - Release
-
 ## [0.12.4] - 2024-08-07
 
 ### ⚙️ Miscellaneous Tasks
 
 - Release
-
 ## [keri-controller-v0.12.3] - 2024-08-07
 
 ### ⚙️ Miscellaneous Tasks
 
 - Release
-
 ## [keri-controller-v0.12.2] - 2024-08-07
 
 ### ⚙️ Miscellaneous Tasks
 
 - Release
-
 ## [keri-controller-v0.12.1] - 2024-08-07
 
 ### ⚙️ Miscellaneous Tasks
 
 - Release
-
 ## [keri-controller-v0.4.2] - 2024-08-05
 
 ### 💼 Other
@@ -308,7 +156,6 @@ All notable changes to this project will be documented in this file.
 ### ⚙️ Miscellaneous Tasks
 
 - Release
-
 ## [keri-controller-v0.4.1] - 2024-08-01
 
 ### 🐛 Bug Fixes
@@ -331,7 +178,6 @@ All notable changes to this project will be documented in this file.
 - Add comments to config files
 - Reformat and minor refactor
 - Release
-
 ## [keri-controller-v0.4.0] - 2024-05-21
 
 ### 🐛 Bug Fixes
@@ -355,7 +201,6 @@ All notable changes to this project will be documented in this file.
 ### ⚙️ Miscellaneous Tasks
 
 - Release
-
 ## [keri-controller-v0.2.0] - 2024-03-22
 
 ### 🐛 Bug Fixes
@@ -380,7 +225,6 @@ All notable changes to this project will be documented in this file.
 - Rename package controller to keri-controller
 - Release
 - Release
-
 ## [0.4.2] - 2023-10-04
 
 ### 🚀 Features
@@ -421,5 +265,3 @@ All notable changes to this project will be documented in this file.
 ### 🧪 Testing
 
 - Ksn query forwarding
-
-<!-- generated by git-cliff -->
