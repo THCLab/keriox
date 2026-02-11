@@ -36,24 +36,21 @@ use crate::mailbox::MailboxResponse;
 
 pub struct EventStorage<D: EventDatabase> {
     pub events_db: Arc<D>,
+    //workaround: for pg implementation
     #[cfg(feature = "mailbox")]
-    pub mailbox_data: MailboxData,
+    pub mailbox_data: Option<MailboxData>,
 }
 
 impl<D: EventDatabase + std::any::Any> EventStorage<D> {
     pub fn new(events_db: Arc<D>) -> Self {
         #[cfg(feature = "mailbox")]
         {
-            if let Some(redb_db) =
-                (events_db.as_ref() as &dyn std::any::Any).downcast_ref::<RedbDatabase>()
-            {
-                let mailbox_data = MailboxData::new(redb_db.db.clone()).unwrap();
-                Self {
-                    events_db,
-                    mailbox_data,
-                }
-            } else {
-                panic!("Expected RedbDatabase for mailbox feature");
+            let mailbox_data = (events_db.as_ref() as &dyn std::any::Any)
+                .downcast_ref::<RedbDatabase>()
+                .map(|redb_db| MailboxData::new(redb_db.db.clone()).unwrap());
+            Self {
+                events_db,
+                mailbox_data,
             }
         }
         #[cfg(not(feature = "mailbox"))]
@@ -174,12 +171,19 @@ impl<D: EventDatabase> EventStorage<D> {
     }
 
     #[cfg(feature = "mailbox")]
+    fn mailbox(&self) -> Result<&MailboxData, Error> {
+        self.mailbox_data.as_ref().ok_or_else(|| {
+            Error::SemanticError("Mailbox not available for this database backend".into())
+        })
+    }
+
+    #[cfg(feature = "mailbox")]
     pub fn add_mailbox_multisig(
         &self,
         receipient: &IdentifierPrefix,
         to_forward: SignedEventMessage,
     ) -> Result<(), Error> {
-        self.mailbox_data
+        self.mailbox()?
             .add_mailbox_multisig(receipient, to_forward)?;
 
         Ok(())
@@ -191,7 +195,7 @@ impl<D: EventDatabase> EventStorage<D> {
         receipient: &IdentifierPrefix,
         to_forward: SignedEventMessage,
     ) -> Result<(), Error> {
-        self.mailbox_data
+        self.mailbox()?
             .add_mailbox_delegate(receipient, to_forward)?;
 
         Ok(())
@@ -200,7 +204,7 @@ impl<D: EventDatabase> EventStorage<D> {
     #[cfg(feature = "mailbox")]
     pub fn add_mailbox_receipt(&self, receipt: SignedNontransferableReceipt) -> Result<(), Error> {
         let id = receipt.body.prefix.clone();
-        self.mailbox_data.add_mailbox_receipt(&id, receipt)?;
+        self.mailbox()?.add_mailbox_receipt(&id, receipt)?;
 
         Ok(())
     }
@@ -208,36 +212,28 @@ impl<D: EventDatabase> EventStorage<D> {
     #[cfg(feature = "mailbox")]
     pub fn add_mailbox_reply(&self, reply: SignedEventMessage) -> Result<(), Error> {
         let id = reply.event_message.data.get_prefix();
-        self.mailbox_data.add_mailbox_reply(&id, reply)?;
+        self.mailbox()?.add_mailbox_reply(&id, reply)?;
 
         Ok(())
     }
 
     #[cfg(feature = "mailbox")]
     pub fn get_mailbox_messages(&self, args: &QueryArgsMbx) -> Result<MailboxResponse, Error> {
+        let mailbox = self.mailbox()?;
         let id = args.i.clone();
 
         // query receipts
-        let receipt = match self
-            .mailbox_data
-            .get_mailbox_receipts(&id, args.topics.receipt as u64)
-        {
+        let receipt = match mailbox.get_mailbox_receipts(&id, args.topics.receipt as u64) {
             Some(receipts) => receipts.collect(),
             None => vec![],
         };
 
-        let multisig = match self
-            .mailbox_data
-            .get_mailbox_multisig(&id, args.topics.multisig as u64)
-        {
+        let multisig = match mailbox.get_mailbox_multisig(&id, args.topics.multisig as u64) {
             Some(multisig) => multisig.collect(),
             None => vec![],
         };
 
-        let delegate = match self
-            .mailbox_data
-            .get_mailbox_delegate(&id, args.topics.delegate as u64)
-        {
+        let delegate = match mailbox.get_mailbox_delegate(&id, args.topics.delegate as u64) {
             Some(delegate) => delegate.collect(),
             None => vec![],
         };

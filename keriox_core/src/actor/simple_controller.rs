@@ -3,21 +3,23 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+#[cfg(feature = "mailbox")]
+use crate::query::mailbox::SignedMailboxQuery;
 use crate::{
     database::{redb::RedbDatabase, EscrowCreator, EventDatabase},
     processor::escrow::{
         maybe_out_of_order_escrow::MaybeOutOfOrderEscrow,
         partially_witnessed_escrow::PartiallyWitnessedEscrow,
     },
-    query::{mailbox::SignedMailboxQuery, query_event::LogsQueryArgs},
+    query::query_event::LogsQueryArgs,
 };
 use cesrox::{cesr_proof::MaterialPath, parse, primitives::CesrPrimitive};
 use said::derivation::{HashFunction, HashFunctionCode};
 use said::version::format::SerializationFormats;
 
-use super::{
-    event_generator, prelude::Message, process_notice, process_signed_exn, process_signed_oobi,
-};
+#[cfg(feature = "mailbox")]
+use super::process_signed_exn;
+use super::{event_generator, prelude::Message, process_notice, process_signed_oobi};
 #[cfg(feature = "mailbox")]
 use crate::mailbox::exchange::{Exchange, ForwardTopic, FwdArgs, SignedExchange};
 use crate::{
@@ -112,35 +114,7 @@ impl<
             delegation_escrow: del_escrow,
         })
     }
-}
 
-// impl<K: KeyManager, D: EventDatabase + Send + Sync + 'static> SimpleController<K, D> {
-impl<K: KeyManager> SimpleController<K, RedbDatabase, RedbOobiStorage> {
-    // incept a state and keys
-    pub fn new(
-        event_db: Arc<RedbDatabase>,
-        key_manager: Arc<Mutex<K>>,
-        escrow_config: EscrowConfig,
-    ) -> Result<SimpleController<K, RedbDatabase>, Error> {
-        let (not_bus, (ooo, _, partially_witnesses, del_escrow, _duplicates)) =
-            default_escrow_bus(event_db.clone(), escrow_config);
-        let processor = BasicProcessor::new(event_db.clone(), Some(not_bus));
-
-        Ok(SimpleController {
-            prefix: IdentifierPrefix::default(),
-            key_manager,
-            oobi_manager: OobiManager::new(event_db.clone()),
-            processor,
-            storage: EventStorage::new(event_db.clone()),
-            groups: vec![],
-            not_fully_witnessed_escrow: partially_witnesses,
-            ooo_escrow: ooo,
-            delegation_escrow: del_escrow,
-        })
-    }
-
-    /// Getter of the instance prefix
-    ///
     pub fn prefix(&self) -> &IdentifierPrefix {
         &self.prefix
     }
@@ -194,7 +168,6 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase, RedbOobiStorage> {
             .process_notice(&Notice::Event(signed.clone()))?;
 
         self.prefix = signed.event_message.data.get_prefix();
-        // No need to generate receipt
 
         Ok(signed)
     }
@@ -216,7 +189,6 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase, RedbOobiStorage> {
             HashFunctionCode::Blake3_256,
         );
 
-        // sign message by bob
         let signature = IndexedSignature::new_both_same(
             SelfSigningPrefix::Ed25519Sha512(
                 Arc::clone(&self.key_manager)
@@ -226,7 +198,6 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase, RedbOobiStorage> {
             ),
             0,
         );
-        // Qry message signed by Bob
         Ok(Op::Query(
             crate::query::query_event::SignedQueryMessage::KelQuery(SignedKelQuery::new_trans(
                 qry,
@@ -319,7 +290,6 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase, RedbOobiStorage> {
             .get_state(self.prefix())
             .ok_or(Error::SemanticError("missing state".into()))?;
         let ixn = event_generator::anchor_with_seal(state, seal)?;
-        // .map_err(|e| Error::SemanticError(e.to_string()))?;
         let km = self.key_manager.lock().map_err(|_| Error::MutexPoisoned)?;
         let signature = km.sign(&ixn.encode()?)?;
 
@@ -384,11 +354,7 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase, RedbOobiStorage> {
         Ok(())
     }
 
-    /// Returns position of identifier's public key in group's current keys
-    /// list.
     fn get_index(&self, group_event: &KeyEvent) -> Result<usize, Error> {
-        // TODO what if group participant is a group and has more than one
-        // public key?
         let own_pk = &self
             .get_state()
             .ok_or(Error::SemanticError("Unknown state".into()))?
@@ -435,8 +401,6 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase, RedbOobiStorage> {
         .ok_or(Error::SemanticError("Not group participant".into()))
     }
 
-    /// Checks multisig event and sign it if it wasn't sign by controller
-    /// earlier.
     pub fn process_multisig(
         &mut self,
         event: SignedEventMessage,
@@ -444,10 +408,8 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase, RedbOobiStorage> {
         self.process(&[Message::Notice(Notice::Event(event.clone()))])?;
         let group_prefix = event.event_message.data.get_prefix();
 
-        // Process partially signed group icp
         let index = self.get_index(&event.event_message.data)?;
 
-        // sign and process inception event
         let second_signature = IndexedSignature::new_both_same(
             SelfSigningPrefix::Ed25519Sha512(
                 self.key_manager
@@ -474,8 +436,6 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase, RedbOobiStorage> {
         self.storage.get_state(id)
     }
 
-    /// Generates group inception event signed by controller and exchange
-    /// messages to group participants from `participants` argument.
     pub fn group_incept(
         &mut self,
         participants: Vec<IdentifierPrefix>,
@@ -685,8 +645,6 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase, RedbOobiStorage> {
             .collect()
     }
 
-    /// Returns exn message that contains signed multisig event and will be
-    /// forward to group identifier's mailbox.
     #[cfg(feature = "mailbox")]
     pub fn process_own_multisig(
         &mut self,
@@ -694,11 +652,9 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase, RedbOobiStorage> {
     ) -> Result<SignedExchange, Error> {
         let signed_icp = self.process_multisig(event)?.unwrap();
         let receipient = signed_icp.event_message.data.get_prefix();
-        // Construct exn message (will be stored in group identidfier mailbox)
         self.create_forward_message(&receipient, &signed_icp, ForwardTopic::Multisig)
     }
 
-    /// If leader and event is fully signed, return event to forward to witness.
     pub fn process_group_multisig(
         &self,
         event: SignedEventMessage,
@@ -713,9 +669,6 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase, RedbOobiStorage> {
         )?;
 
         let own_index = self.get_index(&event.event_message.data)?;
-        // Elect the leader
-        // Leader is identifier with minimal index among all participants who
-        // sign event. He will send message to witness.
         Ok(fully_signed_event.and_then(|ev| {
             ev.signatures
                 .iter()
@@ -731,7 +684,6 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase, RedbOobiStorage> {
         }))
     }
 
-    /// Create delegating event, pack it in exn message (delegate topic).
     pub fn process_own_delegate(
         &mut self,
         event_to_confirm: SignedEventMessage,
@@ -750,7 +702,6 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase, RedbOobiStorage> {
         self.create_forward_message(&id, &ixn, ForwardTopic::Delegate)
     }
 
-    /// Create delegating event, pack it in exn message to group identifier (multisig topic).
     pub fn process_group_delegate(
         &self,
         event_to_confirm: SignedEventMessage,
@@ -773,5 +724,30 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase, RedbOobiStorage> {
     pub fn process_receipt(&self, receipt: SignedNontransferableReceipt) -> Result<(), Error> {
         self.process(&[Message::Notice(Notice::NontransferableRct(receipt))])?;
         Ok(())
+    }
+}
+
+// Redb-specific constructor (backward compatibility)
+impl<K: KeyManager> SimpleController<K, RedbDatabase, RedbOobiStorage> {
+    pub fn new(
+        event_db: Arc<RedbDatabase>,
+        key_manager: Arc<Mutex<K>>,
+        escrow_config: EscrowConfig,
+    ) -> Result<SimpleController<K, RedbDatabase>, Error> {
+        let (not_bus, (ooo, _, partially_witnesses, del_escrow, _duplicates)) =
+            default_escrow_bus(event_db.clone(), escrow_config);
+        let processor = BasicProcessor::new(event_db.clone(), Some(not_bus));
+
+        Ok(SimpleController {
+            prefix: IdentifierPrefix::default(),
+            key_manager,
+            oobi_manager: OobiManager::new(event_db.clone()),
+            processor,
+            storage: EventStorage::new(event_db.clone()),
+            groups: vec![],
+            not_fully_witnessed_escrow: partially_witnesses,
+            ooo_escrow: ooo,
+            delegation_escrow: del_escrow,
+        })
     }
 }

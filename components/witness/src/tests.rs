@@ -100,6 +100,8 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
             w.process_notice(not).unwrap();
             w.event_storage
                 .mailbox_data
+                .as_ref()
+                .unwrap()
                 .get_mailbox_receipts(controller.prefix(), 0)
                 .into_iter()
                 .flatten()
@@ -186,6 +188,8 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
     let first_receipt = first_witness
         .event_storage
         .mailbox_data
+        .as_ref()
+        .unwrap()
         .get_mailbox_receipts(controller.prefix(), 0)
         .unwrap()
         .map(Notice::NontransferableRct)
@@ -281,6 +285,8 @@ fn test_qry_rpy() -> Result<(), ActorError> {
     let receipt_to_alice = witness
         .event_storage
         .mailbox_data
+        .as_ref()
+        .unwrap()
         .get_mailbox_receipts(alice.prefix(), 0)
         .unwrap()
         .map(Notice::NontransferableRct)
