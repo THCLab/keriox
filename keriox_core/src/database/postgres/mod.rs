@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, vec::IntoIter};
 
 use cesrox::primitives::CesrPrimitive;
 use sqlx::{postgres::PgPoolOptions, PgPool, Row};
@@ -17,6 +17,8 @@ pub mod oobi_storage;
 
 pub use loging::PostgresLogDatabase;
 pub use oobi_storage::PostgresOobiStorage;
+
+use super::{timestamped::TimestampedSignedEventMessage, QueryParameters};
 
 pub struct PgConfig {
     pub database_url: String,
@@ -168,33 +170,38 @@ impl EventDatabase for PostgresDatabase {
 
     fn get_kel_finalized_events(
         &self,
-        params: super::QueryParameters,
-    ) -> Option<impl DoubleEndedIterator<Item = super::timestamped::TimestampedSignedEventMessage>>
-    {
-        None::<std::vec::IntoIter<super::timestamped::TimestampedSignedEventMessage>>
+        params: QueryParameters,
+    ) -> Option<impl DoubleEndedIterator<Item = TimestampedSignedEventMessage>> {
+        let result = match params {
+            QueryParameters::BySn { id, sn } => self.get_kel(&id, sn, 1),
+            QueryParameters::Range { id, start, limit } => self.get_kel(&id, start, limit),
+            QueryParameters::All { id } => self.get_kel(id, 0, u64::MAX),
+        };
+
+        match result {
+            Ok(kel) if kel.is_empty() => None,
+            Ok(kel) => Some(kel.into_iter()),
+            Err(_) => None::<std::vec::IntoIter<TimestampedSignedEventMessage>>,
+        }
     }
 
     fn get_receipts_t(
         &self,
-        params: super::QueryParameters,
+        params: QueryParameters,
     ) -> Option<impl DoubleEndedIterator<Item = crate::event_message::signature::Transferable>>
     {
-        None::<std::vec::IntoIter<crate::event_message::signature::Transferable>>
+        None::<IntoIter<crate::event_message::signature::Transferable>>
     }
 
     fn get_receipts_nt(
         &self,
-        params: super::QueryParameters,
+        params: QueryParameters,
     ) -> Option<
         impl DoubleEndedIterator<
             Item = crate::event_message::signed_event_message::SignedNontransferableReceipt,
         >,
     > {
-        None::<
-            std::vec::IntoIter<
-                crate::event_message::signed_event_message::SignedNontransferableReceipt,
-            >,
-        >
+        None::<IntoIter<crate::event_message::signed_event_message::SignedNontransferableReceipt>>
     }
 
     fn accept_to_kel(
@@ -216,6 +223,50 @@ impl EventDatabase for PostgresDatabase {
         from_who: &IdentifierPrefix,
     ) -> Option<crate::query::reply_event::SignedReply> {
         todo!()
+    }
+}
+
+impl PostgresDatabase {
+    fn get_kel(
+        &self,
+        id: &IdentifierPrefix,
+        from: u64,
+        limit: u64,
+    ) -> Result<Vec<TimestampedSignedEventMessage>, PostgresError> {
+        let prefix = id.to_str();
+        let from_sn = from as i64;
+
+        async_std::task::block_on(async {
+            let rows = if limit == u64::MAX {
+                sqlx::query(
+                    "SELECT digest FROM kels WHERE identifier = $1 AND sn >= $2 ORDER BY sn ASC",
+                )
+                .bind(&prefix)
+                .bind(from_sn)
+                .fetch_all(&self.pool)
+                .await?
+            } else {
+                let end_sn = from.saturating_add(limit) as i64;
+                sqlx::query(
+                    "SELECT digest FROM kels WHERE identifier = $1 AND sn >= $2 AND sn < $3 ORDER BY sn ASC",
+                )
+                .bind(&prefix)
+                .bind(from_sn)
+                .bind(end_sn)
+                .fetch_all(&self.pool)
+                .await?
+            };
+
+            let mut events = Vec::new();
+            for row in rows {
+                let digest_bytes: Vec<u8> = row.get("digest");
+                let said = rkyv_adapter::deserialize_said(&digest_bytes)?;
+                if let Some(timestamped_event) = self.log_db.get_signed_event(&said)? {
+                    events.push(timestamped_event);
+                }
+            }
+            Ok(events)
+        })
     }
 }
 
@@ -336,5 +387,90 @@ mod tests {
         );
 
         println!("Inception test passed! Prefix: {}", controller.prefix());
+    }
+
+    #[cfg(all(feature = "mailbox", feature = "oobi-manager"))]
+    #[async_std::test]
+    #[ignore]
+    async fn test_postgres_get_kel() {
+        use crate::{
+            actor::simple_controller::SimpleController, database::QueryParameters,
+            event_message::EventTypeTag, oobi_manager::OobiManager,
+            processor::escrow::EscrowConfig, signer::CryptoBox,
+        };
+        use std::sync::Mutex;
+
+        let db = PostgresDatabase::new(&get_database_url())
+            .await
+            .expect("Failed to connect to database");
+        db.run_migrations().await.expect("Failed to run migrations");
+        let db = Arc::new(db);
+
+        let pool = sqlx::PgPool::connect(&get_database_url())
+            .await
+            .expect("Failed to create pool");
+        let oobi_storage = PostgresOobiStorage::new(pool);
+        let oobi_manager = OobiManager::new_with_storage(oobi_storage);
+        let key_manager = Arc::new(Mutex::new(CryptoBox::new().unwrap()));
+
+        let mut controller = SimpleController::new_with_oobi_manager(
+            db.clone(),
+            key_manager,
+            oobi_manager,
+            EscrowConfig::default(),
+        )
+        .expect("Failed to create SimpleController");
+
+        let signed_icp = controller
+            .incept(None, None, None)
+            .expect("Failed to incept");
+
+        let prefix = signed_icp.event_message.data.get_prefix();
+
+        // Retrieve by sn=0
+        let kel_sn0 = db.get_kel(&prefix, 0, 1).expect("get_kel failed");
+        assert_eq!(kel_sn0.len(), 1);
+        assert_eq!(
+            kel_sn0[0].signed_event_message.event_message.event_type,
+            EventTypeTag::Icp
+        );
+        assert_eq!(
+            kel_sn0[0]
+                .signed_event_message
+                .event_message
+                .data
+                .get_prefix(),
+            prefix
+        );
+
+        // Retrieve full KEL via get_kel_finalized_events
+        let full_kel: Vec<_> = db
+            .get_kel_finalized_events(QueryParameters::All { id: &prefix })
+            .expect("Full KEL should exist")
+            .collect();
+        assert_eq!(full_kel.len(), 1);
+        assert_eq!(
+            full_kel[0].signed_event_message.event_message.event_type,
+            EventTypeTag::Icp
+        );
+
+        // Retrieve via BySn
+        let by_sn: Vec<_> = db
+            .get_kel_finalized_events(QueryParameters::BySn {
+                id: prefix.clone(),
+                sn: 0,
+            })
+            .expect("BySn should return event")
+            .collect();
+        assert_eq!(by_sn.len(), 1);
+
+        // Non-existent sn returns None
+        let empty = db.get_kel_finalized_events(QueryParameters::BySn {
+            id: prefix.clone(),
+            sn: 99,
+        });
+        assert!(empty.is_none());
+
+        println!("test_postgres_get_kel passed! Prefix: {}", prefix);
     }
 }
