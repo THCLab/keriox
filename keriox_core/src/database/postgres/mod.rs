@@ -1,15 +1,18 @@
 use std::{sync::Arc, vec::IntoIter};
 
 use cesrox::primitives::CesrPrimitive;
+use said::{sad::SerializationFormats, SelfAddressingIdentifier};
 use sqlx::{postgres::PgPoolOptions, PgPool, Row};
 
 use crate::{
     database::{postgres::error::PostgresError, redb::rkyv_adapter, EventDatabase, LogDatabase},
-    event::KeyEvent,
+    event::{receipt::Receipt, KeyEvent},
     event_message::{
         msg::KeriEvent,
-        signature::Transferable,
-        signed_event_message::{SignedEventMessage, SignedTransferableReceipt},
+        signature::{Nontransferable, Transferable},
+        signed_event_message::{
+            SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
+        },
     },
     prefix::IdentifierPrefix,
     state::IdentifierState,
@@ -90,6 +93,101 @@ impl PostgresDatabase {
         Ok(())
     }
 
+    fn get_event_digest(
+        &self,
+        identifier: &IdentifierPrefix,
+        sn: u64,
+    ) -> Result<Option<SelfAddressingIdentifier>, PostgresError> {
+        async_std::task::block_on(async {
+            let row = sqlx::query("SELECT digest FROM kels WHERE identifier = $1 AND sn = $2")
+                .bind(identifier.to_str())
+                .bind(sn as i64)
+                .fetch_optional(&self.pool)
+                .await?;
+
+            if let Some(row) = row {
+                let digest_bytes: Vec<u8> = row.get("digest");
+                let digest = rkyv_adapter::deserialize_said(&digest_bytes)?;
+                Ok(Some(digest))
+            } else {
+                Ok(None)
+            }
+        })
+    }
+
+    fn get_nontrans_receipts_range(
+        &self,
+        id: &str,
+        start: u64,
+        limit: u64,
+    ) -> Result<Vec<SignedNontransferableReceipt>, PostgresError> {
+        async_std::task::block_on(async {
+            let rows = if limit == u64::MAX {
+                sqlx::query(
+                    "SELECT k.sn, k.digest, nr.receipt_data \
+                     FROM kels k \
+                     LEFT JOIN nontrans_receipts nr ON k.digest = nr.digest \
+                     WHERE k.identifier = $1 AND k.sn >= $2 \
+                     ORDER BY k.sn ASC",
+                )
+                .bind(id)
+                .bind(start as i64)
+                .fetch_all(&self.pool)
+                .await?
+            } else {
+                let end_sn = start.saturating_add(limit) as i64;
+                sqlx::query(
+                    "SELECT k.sn, k.digest, nr.receipt_data \
+                     FROM kels k \
+                     LEFT JOIN nontrans_receipts nr ON k.digest = nr.digest \
+                     WHERE k.identifier = $1 AND k.sn >= $2 AND k.sn < $3 \
+                     ORDER BY k.sn ASC",
+                )
+                .bind(id)
+                .bind(start as i64)
+                .bind(end_sn)
+                .fetch_all(&self.pool)
+                .await?
+            };
+
+            // Group rows by sn — multiple rows per sn when there are multiple receipts
+            let mut grouped: std::collections::BTreeMap<u64, (Vec<u8>, Vec<Nontransferable>)> =
+                std::collections::BTreeMap::new();
+
+            for row in rows {
+                let sn: i64 = row.get("sn");
+                let digest_bytes: Vec<u8> = row.get("digest");
+                let receipt_data: Option<Vec<u8>> = row.get("receipt_data");
+
+                let entry = grouped
+                    .entry(sn as u64)
+                    .or_insert_with(|| (digest_bytes, Vec::new()));
+
+                if let Some(bytes) = receipt_data {
+                    if let Ok(nt) = rkyv_adapter::deserialize_nontransferable(&bytes) {
+                        entry.1.push(nt);
+                    }
+                }
+            }
+
+            let identifier: IdentifierPrefix = id.parse().unwrap();
+            let receipts = grouped
+                .into_iter()
+                .map(|(sn, (digest_bytes, nontrans))| {
+                    let said = rkyv_adapter::deserialize_said(&digest_bytes).unwrap();
+                    let rct =
+                        Receipt::new(SerializationFormats::JSON, said, identifier.clone(), sn);
+                    SignedNontransferableReceipt {
+                        body: rct,
+                        signatures: nontrans,
+                    }
+                })
+                .collect();
+
+            Ok(receipts)
+        })
+    }
+
     async fn save_to_kel(
         &self,
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
@@ -157,7 +255,7 @@ impl EventDatabase for PostgresDatabase {
 
     fn add_receipt_nt(
         &self,
-        receipt: crate::event_message::signed_event_message::SignedNontransferableReceipt,
+        receipt: SignedNontransferableReceipt,
         _id: &IdentifierPrefix,
     ) -> Result<(), Self::Error> {
         let receipted_event_digest = receipt.body.receipted_event_digest;
@@ -200,20 +298,43 @@ impl EventDatabase for PostgresDatabase {
     fn get_receipts_t(
         &self,
         params: QueryParameters,
-    ) -> Option<impl DoubleEndedIterator<Item = crate::event_message::signature::Transferable>>
-    {
-        None::<IntoIter<crate::event_message::signature::Transferable>>
+    ) -> Option<impl DoubleEndedIterator<Item = Transferable>> {
+        match params {
+            QueryParameters::BySn { id, sn } => {
+                if let Ok(Some(said)) = self.get_event_digest(&id, sn) {
+                    let receipts = self.log_db.get_trans_receipts(&said).ok()?;
+                    Some(receipts.collect::<Vec<_>>().into_iter())
+                } else {
+                    None
+                }
+            }
+            QueryParameters::Range {
+                id: _,
+                start: _,
+                limit: _,
+            } => todo!(),
+            QueryParameters::All { id: _ } => todo!(),
+        }
     }
 
     fn get_receipts_nt(
         &self,
         params: QueryParameters,
-    ) -> Option<
-        impl DoubleEndedIterator<
-            Item = crate::event_message::signed_event_message::SignedNontransferableReceipt,
-        >,
-    > {
-        None::<IntoIter<crate::event_message::signed_event_message::SignedNontransferableReceipt>>
+    ) -> Option<impl DoubleEndedIterator<Item = SignedNontransferableReceipt>> {
+        match params {
+            QueryParameters::BySn { id, sn } => self
+                .get_nontrans_receipts_range(&id.to_str(), sn, 1)
+                .ok()
+                .map(|e| e.into_iter()),
+            QueryParameters::Range { id, start, limit } => self
+                .get_nontrans_receipts_range(&id.to_str(), start, limit)
+                .ok()
+                .map(|e| e.into_iter()),
+            QueryParameters::All { id } => self
+                .get_nontrans_receipts_range(&id.to_str(), 0, u64::MAX)
+                .ok()
+                .map(|e| e.into_iter()),
+        }
     }
 
     fn accept_to_kel(&self, event: &KeriEvent<KeyEvent>) -> Result<(), Self::Error> {
