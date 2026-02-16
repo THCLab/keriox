@@ -1,11 +1,13 @@
 use std::{sync::Arc, vec::IntoIter};
 
+use async_std::task::block_on;
 use cesrox::primitives::CesrPrimitive;
 use sqlx::{postgres::PgPoolOptions, PgPool, Row};
 
 use crate::{
     database::{postgres::error::PostgresError, redb::rkyv_adapter, EventDatabase, LogDatabase},
-    event_message::signed_event_message::SignedEventMessage,
+    event::KeyEvent,
+    event_message::{msg::KeriEvent, signed_event_message::SignedEventMessage},
     prefix::IdentifierPrefix,
     state::IdentifierState,
 };
@@ -51,7 +53,7 @@ impl PostgresDatabase {
     async fn update_key_state(
         &self,
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-        event: &crate::event_message::msg::KeriEvent<crate::event::KeyEvent>,
+        event: &KeriEvent<KeyEvent>,
     ) -> Result<(), PostgresError> {
         let prefix = event.data.prefix.to_str();
 
@@ -88,7 +90,7 @@ impl PostgresDatabase {
     async fn save_to_kel(
         &self,
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-        event: &crate::event_message::msg::KeriEvent<crate::event::KeyEvent>,
+        event: &KeriEvent<KeyEvent>,
     ) -> Result<(), PostgresError> {
         let prefix = event.data.prefix.to_str();
         let digest = event.digest().map_err(|_| PostgresError::MissingDigest)?;
@@ -204,11 +206,16 @@ impl EventDatabase for PostgresDatabase {
         None::<IntoIter<crate::event_message::signed_event_message::SignedNontransferableReceipt>>
     }
 
-    fn accept_to_kel(
-        &self,
-        event: &crate::event_message::msg::KeriEvent<crate::event::KeyEvent>,
-    ) -> Result<(), Self::Error> {
-        todo!()
+    fn accept_to_kel(&self, event: &KeriEvent<KeyEvent>) -> Result<(), Self::Error> {
+        async_std::task::block_on(async {
+            let mut tx = self.pool.begin().await?;
+
+            self.update_key_state(&mut tx, &event).await?;
+            self.save_to_kel(&mut tx, &event).await?;
+
+            tx.commit().await?;
+            Ok(())
+        })
     }
 
     #[cfg(feature = "query")]
