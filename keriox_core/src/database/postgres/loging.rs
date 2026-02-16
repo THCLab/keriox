@@ -251,14 +251,17 @@ impl<'db> LogDatabaseTrait<'db> for PostgresLogDatabase {
         txn: &Self::TransactionType,
         signed_receipt: &crate::event_message::signed_event_message::SignedNontransferableReceipt,
     ) -> Result<(), Self::Error> {
-        todo!()
+        let digest = &signed_receipt.body.receipted_event_digest;
+
+        self.insert_nontrans_receipt(digest, &signed_receipt.signatures)?;
+        Ok(())
     }
 
     fn log_receipt_with_new_transaction(
         &self,
         signed_receipt: &crate::event_message::signed_event_message::SignedNontransferableReceipt,
     ) -> Result<(), Self::Error> {
-        todo!()
+        self.log_receipt(&PostgresWriteTxnMode::CreateNew, &signed_receipt)
     }
 
     fn get_signed_event(
