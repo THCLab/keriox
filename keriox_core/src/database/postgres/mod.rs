@@ -1,13 +1,16 @@
 use std::{sync::Arc, vec::IntoIter};
 
-use async_std::task::block_on;
 use cesrox::primitives::CesrPrimitive;
 use sqlx::{postgres::PgPoolOptions, PgPool, Row};
 
 use crate::{
     database::{postgres::error::PostgresError, redb::rkyv_adapter, EventDatabase, LogDatabase},
     event::KeyEvent,
-    event_message::{msg::KeriEvent, signed_event_message::SignedEventMessage},
+    event_message::{
+        msg::KeriEvent,
+        signature::Transferable,
+        signed_event_message::{SignedEventMessage, SignedTransferableReceipt},
+    },
     prefix::IdentifierPrefix,
     state::IdentifierState,
 };
@@ -143,18 +146,25 @@ impl EventDatabase for PostgresDatabase {
 
     fn add_receipt_t(
         &self,
-        receipt: crate::event_message::signed_event_message::SignedTransferableReceipt,
+        receipt: SignedTransferableReceipt,
         id: &IdentifierPrefix,
     ) -> Result<(), Self::Error> {
-        todo!()
+        let digest = receipt.body.receipted_event_digest;
+        let transferable = Transferable::Seal(receipt.validator_seal, receipt.signatures);
+
+        self.log_db.insert_trans_receipt(&digest, &[transferable])
     }
 
     fn add_receipt_nt(
         &self,
         receipt: crate::event_message::signed_event_message::SignedNontransferableReceipt,
-        id: &IdentifierPrefix,
+        _id: &IdentifierPrefix,
     ) -> Result<(), Self::Error> {
-        todo!()
+        let receipted_event_digest = receipt.body.receipted_event_digest;
+        let receipts = receipt.signatures;
+
+        self.log_db
+            .insert_nontrans_receipt(&receipted_event_digest, &receipts)
     }
 
     fn get_key_state(&self, id: &IdentifierPrefix) -> Option<IdentifierState> {

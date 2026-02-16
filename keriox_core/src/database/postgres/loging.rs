@@ -1,5 +1,7 @@
 use crate::{
-    database::{postgres::error::PostgresError, LogDatabase as LogDatabaseTrait},
+    database::{
+        postgres::error::PostgresError, redb::rkyv_adapter, LogDatabase as LogDatabaseTrait,
+    },
     event_message::{
         signature::{Nontransferable, Transferable},
         signed_event_message::SignedEventMessage,
@@ -7,6 +9,8 @@ use crate::{
     prefix::IndexedSignature,
 };
 
+use rkyv::{api::high::HighSerializer, ser::allocator::ArenaHandle, util::AlignedVec};
+use said::SelfAddressingIdentifier;
 use sqlx::{PgPool, Row};
 
 pub struct PostgresLogDatabase {
@@ -29,6 +33,54 @@ impl PostgresLogDatabase {
 
     pub fn pool(&self) -> &PgPool {
         &self.pool
+    }
+
+    fn insert_with_digest_key<
+        V: for<'a> rkyv::Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rkyv::rancor::Error>>,
+    >(
+        &self,
+        table: &str,
+        value_column: &str,
+        said: &SelfAddressingIdentifier,
+        values: &[V],
+    ) -> Result<(), PostgresError> {
+        let serialized_said = rkyv_adapter::serialize_said(said)?;
+        let query = format!(
+            "INSERT INTO {table} (digest, {value_column}) VALUES ($1, $2) \
+             ON CONFLICT (digest, {value_column}) DO NOTHING"
+        );
+
+        async_std::task::block_on(async {
+            let mut tx = self.pool.begin().await?;
+
+            for value in values {
+                let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(value)?;
+                sqlx::query(&query)
+                    .bind(serialized_said.as_ref())
+                    .bind(bytes.as_ref())
+                    .execute(&mut *tx)
+                    .await?;
+            }
+
+            tx.commit().await?;
+            Ok(())
+        })
+    }
+
+    pub(super) fn insert_nontrans_receipt(
+        &self,
+        said: &SelfAddressingIdentifier,
+        nontrans: &[Nontransferable],
+    ) -> Result<(), PostgresError> {
+        self.insert_with_digest_key("nontrans_receipts", "receipt_data", said, nontrans)
+    }
+
+    pub(super) fn insert_trans_receipt(
+        &self,
+        said: &SelfAddressingIdentifier,
+        trans: &[Transferable],
+    ) -> Result<(), PostgresError> {
+        self.insert_with_digest_key("trans_receipts", "receipt_data", said, trans)
     }
 
     /// Workaround: The `LogDatabase` trait takes `&Self::TransactionType` (immutable),
