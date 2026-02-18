@@ -73,6 +73,7 @@ impl EscrowDatabase for PostgresSnKeyEscrow {
         self.escrow.insert(id, sn, event_digest)
     }
 
+    //TODO: do i need a transaction here
     fn insert(&self, event: &SignedEventMessage) -> Result<(), Self::Error> {
         self.log
             .log_event(&PostgresWriteTxnMode::CreateNew, event)?;
@@ -84,6 +85,7 @@ impl EscrowDatabase for PostgresSnKeyEscrow {
         Ok(())
     }
 
+    //TODO: do I need transaction here
     fn insert_key_value(
         &self,
         id: &IdentifierPrefix,
