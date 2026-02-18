@@ -1,7 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use keri_core::{
-    database::redb::{RedbDatabase, WriteTxnMode},
+    database::{redb::WriteTxnMode, EventDatabase},
     prefix::IdentifierPrefix,
     processor::event_storage::EventStorage,
 };
@@ -18,17 +18,17 @@ use crate::{
     },
 };
 
-pub struct MissingRegistryEscrow<D: TelEventDatabase> {
+pub struct MissingRegistryEscrow<D: TelEventDatabase, K: EventDatabase> {
     tel_reference: Arc<TelEventStorage<D>>,
-    kel_reference: Arc<EventStorage<RedbDatabase>>,
+    kel_reference: Arc<EventStorage<K>>,
     // Key is the registry id, value is the escrowed tel events digests
     escrowed_missing_registry: DigestKeyDatabase,
 }
 
-impl<D: TelEventDatabase> MissingRegistryEscrow<D> {
+impl<D: TelEventDatabase, K: EventDatabase> MissingRegistryEscrow<D, K> {
     pub fn new(
         tel_reference: Arc<D>,
-        kel_reference: Arc<EventStorage<RedbDatabase>>,
+        kel_reference: Arc<EventStorage<K>>,
         escrow_db: &EscrowDatabase,
         duration: Duration,
     ) -> Self {
@@ -42,7 +42,7 @@ impl<D: TelEventDatabase> MissingRegistryEscrow<D> {
     }
 }
 
-impl<D: TelEventDatabase + TelLogDatabase> TelNotifier for MissingRegistryEscrow<D> {
+impl<D: TelEventDatabase + TelLogDatabase, K: EventDatabase> TelNotifier for MissingRegistryEscrow<D, K> {
     fn notify(
         &self,
         notification: &TelNotification,
@@ -69,7 +69,7 @@ impl<D: TelEventDatabase + TelLogDatabase> TelNotifier for MissingRegistryEscrow
     }
 }
 
-impl<D: TelEventDatabase + TelLogDatabase> MissingRegistryEscrow<D> {
+impl<D: TelEventDatabase + TelLogDatabase, K: EventDatabase> MissingRegistryEscrow<D, K> {
     pub fn process_missing_registry(
         &self,
         bus: &TelNotificationBus,

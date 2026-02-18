@@ -1,5 +1,5 @@
 use super::super::sections::seal::*;
-use crate::database::redb::rkyv_adapter::said_wrapper::SaidValue;
+use crate::database::rkyv_adapter::said_wrapper::SaidValue;
 use crate::error::Error;
 use crate::state::{EventSemantics, IdentifierState};
 use said::SelfAddressingIdentifier;

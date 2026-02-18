@@ -1,9 +1,9 @@
 use std::{sync::Arc, time::Duration};
 
-use keri_core::{database::redb::RedbDatabase, processor::event_storage::EventStorage};
+use keri_core::{database::EventDatabase, processor::event_storage::EventStorage};
 
 use crate::{
-    database::{redb::RedbTelDatabase, EscrowDatabase},
+    database::{EscrowDatabase, TelEventDatabase, TelLogDatabase},
     error::Error,
     processor::notification::TelNotificationKind,
 };
@@ -19,16 +19,16 @@ pub mod missing_issuer;
 pub mod missing_registry;
 pub mod out_of_order;
 
-pub fn default_escrow_bus(
-    tel_storage: Arc<RedbTelDatabase>,
-    kel_storage: Arc<EventStorage<RedbDatabase>>,
+pub fn default_escrow_bus<D: TelEventDatabase + TelLogDatabase + Send + Sync + 'static, K: EventDatabase + Send + Sync + 'static>(
+    tel_storage: Arc<D>,
+    kel_storage: Arc<EventStorage<K>>,
     tel_escrow_db: EscrowDatabase,
 ) -> Result<
     (
         TelNotificationBus,
-        Arc<MissingIssuerEscrow<RedbTelDatabase>>,
-        Arc<OutOfOrderEscrow<RedbTelDatabase>>,
-        Arc<MissingRegistryEscrow<RedbTelDatabase>>,
+        Arc<MissingIssuerEscrow<D, K>>,
+        Arc<OutOfOrderEscrow<D, K>>,
+        Arc<MissingRegistryEscrow<D, K>>,
     ),
     Error,
 > {

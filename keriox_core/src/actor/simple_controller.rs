@@ -3,8 +3,10 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+#[cfg(feature = "storage-redb")]
+use crate::database::redb::RedbDatabase;
 use crate::{
-    database::{redb::RedbDatabase, EscrowCreator, EventDatabase},
+    database::{EscrowCreator, EventDatabase},
     processor::escrow::{
         maybe_out_of_order_escrow::MaybeOutOfOrderEscrow,
         partially_witnessed_escrow::PartiallyWitnessedEscrow,
@@ -72,6 +74,7 @@ pub struct SimpleController<K: KeyManager + 'static, D: EventDatabase + EscrowCr
 }
 
 // impl<K: KeyManager, D: EventDatabase + Send + Sync + 'static> SimpleController<K, D> {
+#[cfg(feature = "storage-redb")]
 impl<K: KeyManager> SimpleController<K, RedbDatabase> {
     // incept a state and keys
     pub fn new(

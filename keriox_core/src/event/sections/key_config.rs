@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use super::threshold::SignatureThreshold;
 use crate::{
-    database::redb::rkyv_adapter::said_wrapper::SaidValue,
+    database::rkyv_adapter::said_wrapper::SaidValue,
     prefix::{attached_signature::Index, BasicPrefix, IndexedSignature},
 };
 
