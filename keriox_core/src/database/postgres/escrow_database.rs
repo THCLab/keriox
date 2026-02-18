@@ -1,7 +1,4 @@
-use std::{
-    sync::Arc,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::sync::Arc;
 
 use said::SelfAddressingIdentifier;
 use sqlx::{PgPool, Row};
