@@ -1,4 +1,7 @@
-use std::sync::Arc;
+use std::{
+    sync::Arc,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use said::SelfAddressingIdentifier;
 use sqlx::{PgPool, Row};
@@ -9,7 +12,7 @@ use crate::{
             error::PostgresError, loging::PostgresWriteTxnMode, PostgresDatabase,
             PostgresLogDatabase,
         },
-        redb::rkyv_adapter,
+        redb::rkyv_adapter::{self, serialize_said},
         EscrowCreator, EscrowDatabase, LogDatabase as _, SequencedEventDatabase,
     },
     event::KeyEvent,
@@ -177,7 +180,10 @@ impl SequencedEventDatabase for PostgresSnKeyDatabase {
     where
         Self: Sized,
     {
-        todo!()
+        Ok(Self {
+            pool: (*db).clone(),
+            escrow_type: table_name,
+        })
     }
 
     fn insert(
@@ -185,12 +191,50 @@ impl SequencedEventDatabase for PostgresSnKeyDatabase {
         identifier: &IdentifierPrefix,
         sn: u64,
         digest: &said::SelfAddressingIdentifier,
-    ) -> Result<(), Self::Error> {
-        todo!()
+    ) -> Result<(), PostgresError> {
+        let id_str = identifier.to_string();
+        let digest_bytes = rkyv_adapter::serialize_said(digest)?;
+        async_std::task::block_on(
+            sqlx::query(
+                "INSERT INTO escrow_events (escrow_type, identifier, sn, digest) \
+                    VALUES ($1, $2, $3, $4) \
+                    ON CONFLICT DO NOTHING",
+            )
+            .bind(self.escrow_type)
+            .bind(&id_str)
+            .bind(sn as i64)
+            .bind(digest_bytes.as_slice())
+            .execute(&self.pool),
+        )?;
+        Ok(())
     }
 
-    fn get(&self, identifier: &IdentifierPrefix, sn: u64) -> Result<Self::DigestIter, Self::Error> {
-        todo!()
+    fn get(
+        &self,
+        identifier: &IdentifierPrefix,
+        sn: u64,
+    ) -> Result<Self::DigestIter, PostgresError> {
+        let id_str = identifier.to_string();
+        let rows = async_std::task::block_on(
+            sqlx::query(
+                "SELECT digest FROM escrow_events \
+                 WHERE escrow_type = $1 AND identifier = $2 AND sn = $3",
+            )
+            .bind(self.escrow_type)
+            .bind(&id_str)
+            .bind(sn as i64)
+            .fetch_all(&self.pool),
+        )?;
+
+        let digests = rows
+            .into_iter()
+            .filter_map(|row| {
+                let bytes: Vec<u8> = row.get("digest");
+                rkyv_adapter::deserialize_said(&bytes).ok()
+            })
+            .collect::<Vec<_>>();
+
+        Ok(Box::new(digests.into_iter()))
     }
 
     fn get_greater_than(
@@ -227,7 +271,20 @@ impl SequencedEventDatabase for PostgresSnKeyDatabase {
         identifier: &IdentifierPrefix,
         sn: u64,
         said: &said::SelfAddressingIdentifier,
-    ) -> Result<(), Self::Error> {
-        todo!()
+    ) -> Result<(), PostgresError> {
+        let id_str = identifier.to_string();
+        let digest_bytes = serialize_said(said)?;
+        async_std::task::block_on(
+            sqlx::query(
+                "DELETE FROM escrow_events \
+                 WHERE escrow_type = $1 AND identifier = $2 AND sn = $3 AND digest = $4",
+            )
+            .bind(self.escrow_type)
+            .bind(&id_str)
+            .bind(sn as i64)
+            .bind(digest_bytes.as_slice())
+            .execute(&self.pool),
+        )?;
+        Ok(())
     }
 }
