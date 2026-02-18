@@ -3,14 +3,18 @@ use crate::{
         postgres::error::PostgresError, redb::rkyv_adapter,
         timestamped::TimestampedSignedEventMessage, LogDatabase as LogDatabaseTrait,
     },
+    event::KeyEvent,
     event_message::{
+        msg::KeriEvent,
         signature::{Nontransferable, Transferable},
         signed_event_message::SignedEventMessage,
     },
     prefix::IndexedSignature,
 };
 
-use rkyv::{api::high::HighSerializer, ser::allocator::ArenaHandle, util::AlignedVec};
+use rkyv::{
+    api::high::HighSerializer, rancor::Failure, ser::allocator::ArenaHandle, util::AlignedVec,
+};
 use said::SelfAddressingIdentifier;
 use sqlx::{PgPool, Row};
 
@@ -158,26 +162,26 @@ impl PostgresLogDatabase {
         Ok(())
     }
 }
-//TODO: provide sync wrapper around the async methods using block_in_place ??
 impl<'db> LogDatabaseTrait<'db> for PostgresLogDatabase {
     type DatabaseType = PgPool;
     type Error = PostgresError;
     type TransactionType = PostgresWriteTxnMode;
 
-    fn new(db: std::sync::Arc<Self::DatabaseType>) -> Result<Self, Self::Error>
+    fn new(db: std::sync::Arc<Self::DatabaseType>) -> Result<Self, PostgresError>
     where
         Self: Sized,
     {
-        todo!()
+        Ok(Self {
+            pool: (*db).clone(),
+        })
     }
 
+    //TODO: add transaction
     fn log_event(
         &self,
         txn: &Self::TransactionType,
         signed_event: &SignedEventMessage,
     ) -> Result<(), Self::Error> {
-        use crate::database::redb::rkyv_adapter;
-
         let digest = signed_event
             .event_message
             .digest()
@@ -269,11 +273,6 @@ impl<'db> LogDatabaseTrait<'db> for PostgresLogDatabase {
         &self,
         said: &said::SelfAddressingIdentifier,
     ) -> Result<Option<TimestampedSignedEventMessage>, Self::Error> {
-        //fix this why do I need use craete ?
-        use crate::database::redb::rkyv_adapter;
-        use crate::database::timestamped::TimestampedSignedEventMessage;
-        use crate::event_message::signed_event_message::SignedEventMessage;
-
         let key = rkyv_adapter::serialize_said(said)?;
 
         async_std::task::block_on(async {
@@ -289,8 +288,7 @@ impl<'db> LogDatabaseTrait<'db> for PostgresLogDatabase {
             };
 
             let event_bytes: Vec<u8> = event_row.get("event_data");
-            let event: crate::event_message::msg::KeriEvent<crate::event::KeyEvent> =
-                rkyv::from_bytes::<_, rkyv::rancor::Failure>(&event_bytes).unwrap();
+            let event: KeriEvent<KeyEvent> = rkyv::from_bytes::<_, Failure>(&event_bytes).unwrap();
 
             // 2. Fetch signatures
             let sig_rows = sqlx::query("SELECT signature_data FROM signatures WHERE digest = $1")
@@ -347,10 +345,7 @@ impl<'db> LogDatabaseTrait<'db> for PostgresLogDatabase {
     fn get_event(
         &self,
         said: &said::SelfAddressingIdentifier,
-    ) -> Result<Option<crate::event_message::msg::KeriEvent<crate::event::KeyEvent>>, Self::Error>
-    {
-        use crate::database::redb::rkyv_adapter;
-
+    ) -> Result<Option<KeriEvent<KeyEvent>>, Self::Error> {
         let key = rkyv_adapter::serialize_said(said)?;
 
         async_std::task::block_on(async {
@@ -362,7 +357,7 @@ impl<'db> LogDatabaseTrait<'db> for PostgresLogDatabase {
             match row {
                 Some(row) => {
                     let bytes: Vec<u8> = row.get("event_data");
-                    let event = rkyv::from_bytes::<_, rkyv::rancor::Failure>(&bytes).unwrap();
+                    let event = rkyv::from_bytes::<_, Failure>(&bytes).unwrap();
                     Ok(Some(event))
                 }
                 None => Ok(None),
