@@ -161,6 +161,102 @@ impl PostgresLogDatabase {
 
         Ok(())
     }
+
+    pub(super) fn get_nontrans_couplets_by_key(
+        &self,
+        key: &[u8],
+    ) -> Result<Option<impl Iterator<Item = Nontransferable>>, PostgresError> {
+        async_std::task::block_on(async {
+            let rows = sqlx::query("SELECT receipt_data FROM nontrans_receipts WHERE digest = $1")
+                .bind(key)
+                .fetch_all(&self.pool)
+                .await?;
+
+            let nontrans = rows
+                .into_iter()
+                .map(|row| {
+                    let bytes: Vec<u8> = row.get("receipt_data");
+                    rkyv_adapter::deserialize_nontransferable(&bytes).map_err(PostgresError::from)
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+
+            Ok(if nontrans.is_empty() {
+                None
+            } else {
+                Some(nontrans.into_iter())
+            })
+        })
+    }
+
+    fn get_trans_receipts_by_serialized_key(
+        &self,
+        key: &[u8],
+    ) -> Result<impl DoubleEndedIterator<Item = Transferable>, PostgresError> {
+        async_std::task::block_on(async {
+            let rows = sqlx::query("SELECT receipt_data FROM trans_receipts WHERE digest = $1")
+                .bind(key)
+                .fetch_all(&self.pool)
+                .await?;
+
+            let trans = rows
+                .into_iter()
+                .map(|row| {
+                    let bytes: Vec<u8> = row.get("receipt_data");
+                    rkyv_adapter::deserialize_transferable(&bytes).map_err(PostgresError::from)
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+
+            Ok(trans.into_iter())
+        })
+    }
+
+    fn get_event_by_serialized_key(
+        &self,
+        as_slice: &&[u8],
+    ) -> Result<Option<KeriEvent<KeyEvent>>, PostgresError> {
+        async_std::task::block_on(async {
+            let row = sqlx::query("SELECT event_data FROM events WHERE digest = $1")
+                .bind(*as_slice)
+                .fetch_optional(&self.pool)
+                .await?;
+
+            match row {
+                Some(row) => {
+                    let bytes: Vec<u8> = row.get("event_data");
+                    let event = rkyv::from_bytes::<_, Failure>(&bytes).unwrap();
+                    Ok(Some(event))
+                }
+                None => Ok(None),
+            }
+        })
+    }
+
+    fn get_signatures_by_serialized_key(
+        &self,
+        key: &[u8],
+    ) -> Result<Option<impl Iterator<Item = IndexedSignature>>, PostgresError> {
+        async_std::task::block_on(async {
+            let rows = sqlx::query("SELECT signature_data FROM signatures WHERE digest = $1")
+                .bind(key)
+                .fetch_all(&self.pool)
+                .await?;
+
+            let sigs = rows
+                .into_iter()
+                .map(|row| {
+                    let bytes: Vec<u8> = row.get("signature_data");
+                    rkyv_adapter::deserialize_indexed_signatures(&bytes)
+                        .map_err(PostgresError::from)
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+
+            Ok(if sigs.is_empty() {
+                None
+            } else {
+                Some(sigs.into_iter())
+            })
+        })
+    }
 }
 impl<'db> LogDatabaseTrait<'db> for PostgresLogDatabase {
     type DatabaseType = PgPool;
@@ -347,43 +443,32 @@ impl<'db> LogDatabaseTrait<'db> for PostgresLogDatabase {
         said: &said::SelfAddressingIdentifier,
     ) -> Result<Option<KeriEvent<KeyEvent>>, Self::Error> {
         let key = rkyv_adapter::serialize_said(said)?;
-
-        async_std::task::block_on(async {
-            let row = sqlx::query("SELECT event_data FROM events WHERE digest = $1")
-                .bind(key.as_ref())
-                .fetch_optional(&self.pool)
-                .await?;
-
-            match row {
-                Some(row) => {
-                    let bytes: Vec<u8> = row.get("event_data");
-                    let event = rkyv::from_bytes::<_, Failure>(&bytes).unwrap();
-                    Ok(Some(event))
-                }
-                None => Ok(None),
-            }
-        })
+        self.get_event_by_serialized_key(&key.as_slice())
     }
 
     fn get_signatures(
         &self,
         said: &said::SelfAddressingIdentifier,
-    ) -> Result<Option<impl Iterator<Item = IndexedSignature>>, Self::Error> {
-        Ok(None::<std::vec::IntoIter<IndexedSignature>>)
+    ) -> Result<Option<impl Iterator<Item = IndexedSignature>>, PostgresError> {
+        let key = rkyv_adapter::serialize_said(said)?;
+        self.get_signatures_by_serialized_key(key.as_ref())
     }
 
     fn get_nontrans_couplets(
         &self,
         said: &said::SelfAddressingIdentifier,
-    ) -> Result<Option<impl Iterator<Item = Nontransferable>>, Self::Error> {
-        Ok(None::<std::vec::IntoIter<Nontransferable>>)
+    ) -> Result<Option<impl Iterator<Item = Nontransferable>>, PostgresError> {
+        let serialized_said = rkyv_adapter::serialize_said(said)?;
+        self.get_nontrans_couplets_by_key(serialized_said.as_ref())
     }
 
     fn get_trans_receipts(
         &self,
         said: &said::SelfAddressingIdentifier,
-    ) -> Result<impl DoubleEndedIterator<Item = Transferable>, Self::Error> {
-        Ok(Vec::<Transferable>::new().into_iter())
+    ) -> Result<impl DoubleEndedIterator<Item = Transferable>, PostgresError> {
+        let key = rkyv_adapter::serialize_said(said)?;
+
+        self.get_trans_receipts_by_serialized_key(key.as_slice())
     }
 
     fn remove_nontrans_receipt(
@@ -392,14 +477,38 @@ impl<'db> LogDatabaseTrait<'db> for PostgresLogDatabase {
         said: &said::SelfAddressingIdentifier,
         nontrans: impl IntoIterator<Item = Nontransferable>,
     ) -> Result<(), Self::Error> {
-        todo!()
+        async_std::task::block_on(async {
+            let serialized_said = rkyv_adapter::serialize_said(said)?;
+
+            let receipt_bytes: Result<Vec<Vec<u8>>, _> = nontrans
+                .into_iter()
+                .map(|receipt| {
+                    rkyv::to_bytes::<rkyv::rancor::Error>(&receipt)
+                        .map(|b| b.to_vec())
+                        .map_err(PostgresError::from)
+                })
+                .collect();
+            let receipt_bytes = receipt_bytes?;
+
+            if !receipt_bytes.is_empty() {
+                let receipt_refs: Vec<&[u8]> = receipt_bytes.iter().map(Vec::as_slice).collect();
+                sqlx::query(
+                    "DELETE FROM nontrans_receipts WHERE digest = $1 AND receipt_data = ANY($2)",
+                )
+                .bind(serialized_said.as_ref())
+                .bind(receipt_refs.as_slice())
+                .execute(&self.pool)
+                .await?;
+            }
+            Ok(())
+        })
     }
 
     fn remove_nontrans_receipt_with_new_transaction(
         &self,
         said: &said::SelfAddressingIdentifier,
         nontrans: impl IntoIterator<Item = Nontransferable>,
-    ) -> Result<(), Self::Error> {
-        todo!()
+    ) -> Result<(), PostgresError> {
+        self.remove_nontrans_receipt(&PostgresWriteTxnMode::CreateNew, said, nontrans)
     }
 }
