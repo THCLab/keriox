@@ -5,11 +5,15 @@ use sqlx::{PgPool, Row};
 
 use crate::{
     database::{
-        postgres::{error::PostgresError, PostgresDatabase, PostgresLogDatabase},
+        postgres::{
+            error::PostgresError, loging::PostgresWriteTxnMode, PostgresDatabase,
+            PostgresLogDatabase,
+        },
         redb::rkyv_adapter,
         EscrowCreator, EscrowDatabase, LogDatabase as _, SequencedEventDatabase,
     },
-    event_message::signed_event_message::SignedEventMessage,
+    event::KeyEvent,
+    event_message::{msg::KeriEvent, signed_event_message::SignedEventMessage},
     prefix::IdentifierPrefix,
 };
 
@@ -66,27 +70,49 @@ impl EscrowDatabase for PostgresSnKeyEscrow {
         sn: u64,
         event_digest: &said::SelfAddressingIdentifier,
     ) -> Result<(), Self::Error> {
-        todo!()
+        self.escrow.insert(id, sn, event_digest)
     }
 
-    fn insert(
-        &self,
-        event: &crate::event_message::signed_event_message::SignedEventMessage,
-    ) -> Result<(), Self::Error> {
-        todo!()
+    fn insert(&self, event: &SignedEventMessage) -> Result<(), Self::Error> {
+        self.log
+            .log_event(&PostgresWriteTxnMode::CreateNew, event)?;
+        let said = event.event_message.digest().unwrap();
+        let id = event.event_message.data.get_prefix();
+        let sn = event.event_message.data.sn;
+        self.escrow.insert(&id, sn, &said)?;
+
+        Ok(())
     }
 
     fn insert_key_value(
         &self,
         id: &IdentifierPrefix,
         sn: u64,
-        event: &crate::event_message::signed_event_message::SignedEventMessage,
+        event: &SignedEventMessage,
     ) -> Result<(), Self::Error> {
-        todo!()
+        self.log
+            .log_event(&PostgresWriteTxnMode::CreateNew, &event)?;
+        let said = event.event_message.digest().unwrap();
+
+        self.escrow.insert(&id, sn, &said)?;
+
+        Ok(())
     }
 
     fn get(&self, identifier: &IdentifierPrefix, sn: u64) -> Result<Self::EventIter, Self::Error> {
-        todo!()
+        let saids = self.escrow.get(identifier, sn)?;
+        let saids_vec: Vec<_> = saids.collect();
+
+        let log = Arc::clone(&self.log);
+
+        let events = saids_vec.into_iter().filter_map(move |said| {
+            log.get_signed_event(&said)
+                .ok()
+                .flatten()
+                .map(|el| el.signed_event_message)
+        });
+
+        Ok(Box::new(events))
     }
 
     fn get_from_sn(
@@ -107,8 +133,11 @@ impl EscrowDatabase for PostgresSnKeyEscrow {
         Ok(Box::new(events))
     }
 
-    fn remove(&self, event: &crate::event_message::msg::KeriEvent<crate::event::KeyEvent>) {
-        todo!()
+    fn remove(&self, event: &KeriEvent<KeyEvent>) {
+        let said = event.digest().unwrap();
+        let id = event.data.get_prefix();
+        let sn = event.data.sn;
+        self.escrow.remove(&id, sn, &said).unwrap();
     }
 
     fn contains(
@@ -116,8 +145,12 @@ impl EscrowDatabase for PostgresSnKeyEscrow {
         id: &IdentifierPrefix,
         sn: u64,
         digest: &said::SelfAddressingIdentifier,
-    ) -> Result<bool, Self::Error> {
-        todo!()
+    ) -> Result<bool, PostgresError> {
+        Ok(self
+            .escrow
+            .get(id, sn)?
+            .find(|said| said == digest)
+            .is_some())
     }
 }
 
@@ -131,8 +164,6 @@ impl PostgresSnKeyDatabase {
     pub fn new(pool: PgPool, escrow_type: &'static str) -> Self {
         Self { pool, escrow_type }
     }
-
-    //todo: other
 }
 
 impl SequencedEventDatabase for PostgresSnKeyDatabase {
@@ -166,7 +197,7 @@ impl SequencedEventDatabase for PostgresSnKeyDatabase {
         &self,
         identifier: &IdentifierPrefix,
         sn: u64,
-    ) -> Result<Self::DigestIter, Self::Error> {
+    ) -> Result<Self::DigestIter, PostgresError> {
         let id_str = identifier.to_string();
         let rows = async_std::task::block_on(
             sqlx::query(

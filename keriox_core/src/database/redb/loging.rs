@@ -49,8 +49,8 @@ use super::{
     RedbError, WriteTxnMode,
 };
 
-/// Stores all incoming signed events and enables retrieval by event digest.  
-/// Events are split into separate tables for events, signatures, and receipts,  
+/// Stores all incoming signed events and enables retrieval by event digest.
+/// Events are split into separate tables for events, signatures, and receipts,
 /// with the digest serving as the key in each table.
 pub struct LogDatabase {
     db: Arc<Database>,
@@ -121,7 +121,6 @@ impl<'db> LogDatabaseTrait<'db> for LogDatabase {
     ) -> Result<(), RedbError> {
         self.log_receipt(&WriteTxnMode::CreateNew, signed_receipt)
     }
-
     fn get_signed_event(
         &self,
         said: &SelfAddressingIdentifier,

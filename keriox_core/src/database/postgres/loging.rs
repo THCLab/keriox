@@ -1,6 +1,7 @@
 use crate::{
     database::{
-        postgres::error::PostgresError, redb::rkyv_adapter, LogDatabase as LogDatabaseTrait,
+        postgres::error::PostgresError, redb::rkyv_adapter,
+        timestamped::TimestampedSignedEventMessage, LogDatabase as LogDatabaseTrait,
     },
     event_message::{
         signature::{Nontransferable, Transferable},
@@ -267,8 +268,8 @@ impl<'db> LogDatabaseTrait<'db> for PostgresLogDatabase {
     fn get_signed_event(
         &self,
         said: &said::SelfAddressingIdentifier,
-    ) -> Result<Option<crate::database::timestamped::TimestampedSignedEventMessage>, Self::Error>
-    {
+    ) -> Result<Option<TimestampedSignedEventMessage>, Self::Error> {
+        //fix this why do I need use craete ?
         use crate::database::redb::rkyv_adapter;
         use crate::database::timestamped::TimestampedSignedEventMessage;
         use crate::event_message::signed_event_message::SignedEventMessage;
