@@ -18,8 +18,8 @@ mod test_query {
         let events_db_path = NamedTempFile::new().unwrap();
         let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
 
-        let (notification_bus, (_ooo_escrow, _ps_esrow, _pw_escrow, _, _)) =
-            default_escrow_bus(events_db.clone(), EscrowConfig::default());
+        let (notification_bus, _escrows) =
+            default_escrow_bus(events_db.clone(), EscrowConfig::default(), None);
 
         let (processor, storage) = (
             BasicProcessor::new(events_db.clone(), Some(notification_bus)),

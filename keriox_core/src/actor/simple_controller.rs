@@ -82,8 +82,8 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase> {
         key_manager: Arc<Mutex<K>>,
         escrow_config: EscrowConfig,
     ) -> Result<SimpleController<K, RedbDatabase>, Error> {
-        let (not_bus, (ooo, _, partially_witnesses, del_escrow, _duplicates)) =
-            default_escrow_bus(event_db.clone(), escrow_config);
+        let (not_bus, escrows) =
+            default_escrow_bus(event_db.clone(), escrow_config, None);
         let processor = BasicProcessor::new(event_db.clone(), Some(not_bus));
 
         Ok(SimpleController {
@@ -93,9 +93,9 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase> {
             processor,
             storage: EventStorage::new(event_db.clone()),
             groups: vec![],
-            not_fully_witnessed_escrow: partially_witnesses,
-            ooo_escrow: ooo,
-            delegation_escrow: del_escrow,
+            not_fully_witnessed_escrow: escrows.partially_witnessed,
+            ooo_escrow: escrows.out_of_order,
+            delegation_escrow: escrows.delegation,
         })
     }
 

@@ -64,16 +64,8 @@ impl KnownEvents {
 
         let oobi_manager = OobiManager::new(event_database.clone());
 
-        let (
-            notification_bus,
-            (
-                _out_of_order_escrow,
-                _partially_signed_escrow,
-                partially_witnessed_escrow,
-                _delegation_escrow,
-                _duplicates,
-            ),
-        ) = default_escrow_bus(event_database.clone(), escrow_config);
+        let (notification_bus, escrows) =
+            default_escrow_bus(event_database.clone(), escrow_config, None);
 
         let kel_storage = Arc::new(EventStorage::new(event_database.clone()));
 
@@ -106,7 +98,7 @@ impl KnownEvents {
             processor: BasicProcessor::new(event_database.clone(), Some(notification_bus)),
             storage: kel_storage,
             oobi_manager,
-            partially_witnessed_escrow,
+            partially_witnessed_escrow: escrows.partially_witnessed,
             tel,
         };
 
