@@ -79,6 +79,9 @@ pub enum Error {
     #[error("mutex is poisoned")]
     MutexPoisoned,
 
+    #[error("RwLock poisoned")]
+    RwLockingError,
+
     #[error("Incorrect event digest")]
     IncorrectDigest,
 

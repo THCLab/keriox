@@ -65,7 +65,7 @@ impl KnownEvents {
         let oobi_manager = OobiManager::new(event_database.clone());
 
         let (
-            mut notification_bus,
+            notification_bus,
             (
                 _out_of_order_escrow,
                 _partially_signed_escrow,

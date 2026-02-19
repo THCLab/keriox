@@ -171,7 +171,7 @@ impl Witness {
 
         let events_db =
             Arc::new(RedbDatabase::new(&events_database_path).map_err(|_| Error::DbError)?);
-        let mut witness_processor = WitnessProcessor::new(events_db.clone(), escrow_config);
+        let witness_processor = WitnessProcessor::new(events_db.clone(), escrow_config);
         let event_storage = Arc::new(EventStorage::new_redb(events_db.clone()));
 
         let receipt_generator = Arc::new(WitnessReceiptGenerator::new(

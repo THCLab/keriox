@@ -99,7 +99,7 @@ impl WatcherData {
 
         let oobi_manager = OobiManager::new(events_db.clone());
 
-        let (mut notification_bus, _) = default_escrow_bus(events_db.clone(), escrow_config);
+        let (notification_bus, _) = default_escrow_bus(events_db.clone(), escrow_config);
         let reply_escrow = Arc::new(ReplyEscrow::new(events_db.clone()));
         notification_bus.register_observer(
             reply_escrow.clone(),

@@ -196,7 +196,7 @@ mod tests {
         fs::create_dir_all(root.path()).unwrap();
         let events_db_path = NamedTempFile::new().unwrap();
         let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
-        let mut event_processor = BasicProcessor::new(events_db.clone(), None);
+        let event_processor = BasicProcessor::new(events_db.clone(), None);
         let rpy_escrow = Arc::new(ReplyEscrow::new(events_db.clone()));
         event_processor.register_observer(
             rpy_escrow.clone(),
