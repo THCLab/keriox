@@ -1,9 +1,11 @@
-use std::{sync::Arc, vec::IntoIter};
+use std::sync::Arc;
 
 use cesrox::primitives::CesrPrimitive;
 use said::{sad::SerializationFormats, SelfAddressingIdentifier};
 use sqlx::{postgres::PgPoolOptions, PgPool, Row};
-
+mod ksn_log;
+#[cfg(feature = "query")]
+use crate::query::reply_event::SignedReply;
 use crate::{
     database::{postgres::error::PostgresError, redb::rkyv_adapter, EventDatabase, LogDatabase},
     event::{receipt::Receipt, KeyEvent},
@@ -17,6 +19,7 @@ use crate::{
     prefix::IdentifierPrefix,
     state::IdentifierState,
 };
+use ksn_log::AcceptedKsn;
 
 mod error;
 mod escrow_database;
@@ -35,6 +38,8 @@ pub struct PgConfig {
 pub struct PostgresDatabase {
     pool: PgPool,
     log_db: Arc<PostgresLogDatabase>,
+    #[cfg(feature = "query")]
+    accepted_rpy: Arc<AcceptedKsn>,
 }
 
 impl PostgresDatabase {
@@ -46,7 +51,15 @@ impl PostgresDatabase {
 
         let log_db = Arc::new(PostgresLogDatabase::new(pool.clone()));
 
-        Ok(Self { pool, log_db })
+        #[cfg(feature = "query")]
+        let accepted_rpy = Arc::new(AcceptedKsn::new(pool.clone()));
+
+        Ok(Self {
+            pool,
+            log_db,
+            #[cfg(feature = "query")]
+            accepted_rpy,
+        })
     }
 
     pub async fn run_migrations(&self) -> Result<(), PostgresError> {
@@ -350,17 +363,13 @@ impl EventDatabase for PostgresDatabase {
     }
 
     #[cfg(feature = "query")]
-    fn save_reply(&self, reply: crate::query::reply_event::SignedReply) -> Result<(), Self::Error> {
-        todo!()
+    fn save_reply(&self, reply: SignedReply) -> Result<(), Self::Error> {
+        self.accepted_rpy.insert(reply)
     }
 
     #[cfg(feature = "query")]
-    fn get_reply(
-        &self,
-        id: &IdentifierPrefix,
-        from_who: &IdentifierPrefix,
-    ) -> Option<crate::query::reply_event::SignedReply> {
-        todo!()
+    fn get_reply(&self, id: &IdentifierPrefix, from_who: &IdentifierPrefix) -> Option<SignedReply> {
+        self.accepted_rpy.get(id, from_who).unwrap()
     }
 }
 

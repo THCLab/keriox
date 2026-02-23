@@ -131,3 +131,22 @@ CREATE TABLE end_role_oobis (
     oobi_data BYTEA NOT NULL
 );
 CREATE INDEX idx_end_role_lookup ON end_role_oobis(cid, role);
+
+
+-- ===========================================
+-- KSN Tables
+-- ===========================================
+
+-- Maps digest -> serialized SignedReply (KSN log)
+CREATE TABLE ksns (
+    digest BYTEA PRIMARY KEY,
+    ksn_data BYTEA NOT NULL  -- CBOR serialized SignedReply
+);
+
+-- Maps (about_who, from_who) -> digest (accepted KSN index)
+CREATE TABLE accepted_ksns (
+    about_who TEXT NOT NULL,
+    from_who  TEXT NOT NULL,
+    digest    BYTEA NOT NULL,
+    PRIMARY KEY (about_who, from_who)
+);
