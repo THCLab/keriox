@@ -8,6 +8,10 @@ use std::{
     sync::Arc,
 };
 pub(crate) mod digest_key_database;
+#[cfg(feature = "postgres-backend")]
+mod postgres;
+#[cfg(feature = "postgres-backend")]
+pub use postgres::PostgresTelDatabase;
 pub mod redb;
 
 pub trait TelEventDatabase {

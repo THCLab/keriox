@@ -22,7 +22,11 @@ chrono = { version = "0.4.18", features = ["serde"] }
 arrayref = "0.3.6"
 serde_cbor = "0.11.1"
 redb = "2.6.0"
+sqlx = { version = "0.8", features = ["runtime-async-std", "postgres"], optional = true }
+async-std = { version = "1", features = ["attributes"], optional = true }
 
+[features]
+postgres-backend = ["sqlx", "async-std"]
 
 [dev-dependencies]
 tempfile = "3.1"
