@@ -13,7 +13,7 @@ cesrox = { version = "0.1.8", features = ["cesr-proof"] }
 serde_json = "1"
 serde_cbor = { version = "0.11" }
 said = { version = "0.4.3", features = ["macros"]}
-teliox = { path = "../support/teliox", version = "0.17.11", default-features = false }
+teliox = { path = "../support/teliox", version = "0.17.12", default-features = false }
 log = "0.4"
 
 [dev-dependencies]
