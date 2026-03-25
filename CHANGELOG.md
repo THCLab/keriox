@@ -10,6 +10,7 @@
 - Bump cesrox and said
 - Clean release configuration and provide developer guide
 - Improve git cliff and changelog generation
+- Fix release version for the commit
 ## [0.17.9] - 2025-09-04
 
 ### 🚀 Features
