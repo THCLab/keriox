@@ -30,5 +30,4 @@ thiserror = "1.0.43"
 tempfile = { version = "3.1" }
 
 [package.metadata.release]
-pre-release-hook = ["ls"]
 publish = false

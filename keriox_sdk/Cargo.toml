@@ -25,5 +25,4 @@ url = { version = "2.2.2", features = ["serde"] }
 tokio = { version = "1", features = ["full"] }
 
 [package.metadata.release]
-pre-release-hook = ["ls"]
 publish = false

@@ -21,10 +21,5 @@ edition = "2021"
 license = "EUPL-1.2"
 
 [workspace.metadata.release]
-
-#pre-release-hook = ["git", "cliff", "-o", "CHANGELOG.md", "--tag", "{{version}}" ]
 pre-release-commit-message = "chore: Release v{{version}}"
-#publish=false
-#shared-version=false
-#tag-name="v{{version}}"
-tag=false
+tag = false

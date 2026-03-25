@@ -37,5 +37,4 @@ futures = { version = "0.3.13" }
 tempfile = { version = "3.1" }
 
 [package.metadata.release]
-pre-release-hook = ["ls"]
 publish = false

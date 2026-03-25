@@ -32,5 +32,4 @@ witness = { path = "../witness" }
 tempfile = { version = "3.1" }
 
 [package.metadata.release]
-pre-release-hook = ["ls"]
 publish = false
