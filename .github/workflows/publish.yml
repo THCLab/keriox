@@ -19,3 +19,18 @@ jobs:
         with:
           path: "./keriox_core"
           registry-token: ${{ secrets.CRATES_TOKEN }}
+
+  publish_keri_sdk:
+    runs-on: ubuntu-22.04
+    needs: publish_keriox_core
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - uses: katyo/publish-crates@v2
+        with:
+          path: "./keriox_sdk"
+          registry-token: ${{ secrets.CRATES_TOKEN }}
