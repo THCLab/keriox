@@ -61,10 +61,6 @@ where
         event_db.clone(),
         escrow_config.out_of_order_timeout,
     ));
-    println!(
-        "Registering out of order escrow with timeout: {:?}",
-        escrow_config.out_of_order_timeout
-    );
     bus.register_observer(
         ooo_escrow.clone(),
         vec![
