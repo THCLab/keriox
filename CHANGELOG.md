@@ -1,3 +1,8 @@
+## [0.17.12] - 2026-03-25
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump rust version for docker images
 ## [0.17.11] - 2026-03-25
 
 ### 🐛 Bug Fixes
