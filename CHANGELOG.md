@@ -1,9 +1,15 @@
-## [0.17.10] - 2026-03-25
+## [0.17.11] - 2026-03-25
+
+### 🐛 Bug Fixes
+
+- Set correctly version for release commit
 
 ### ⚙️ Miscellaneous Tasks
 
 - Remove println causing issue with parsing output
 - Bump cesrox and said
+- Release
+- Clean release configuration and provide developer guide
 ## [0.17.9] - 2025-09-04
 
 ### 🚀 Features
