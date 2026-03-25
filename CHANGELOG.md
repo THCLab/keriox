@@ -1,3 +1,9 @@
+## [0.17.13] - 2026-03-25
+
+### ⚙️ Miscellaneous Tasks
+
+- Add keri sdk action for publishing
+- Revert consolidate commit to avoid multiple commits for each crate
 ## [0.17.12] - 2026-03-25
 
 ### ⚙️ Miscellaneous Tasks
