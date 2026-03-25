@@ -11,6 +11,7 @@
 - Clean release configuration and provide developer guide
 - Improve git cliff and changelog generation
 - Fix release version for the commit
+- Update changelog, set filter unconvential to false
 ## [0.17.9] - 2025-09-04
 
 ### 🚀 Features
@@ -57,10 +58,6 @@
 ### 🐛 Bug Fixes
 
 - Update workspaces
-
-### 💼 Other
-
-- Clean up imports and apply cargo fmt
 
 ### 🚜 Refactor
 
@@ -240,11 +237,6 @@
 - Update teliox workspace
 - Align workspaces with db changes
 
-### 💼 Other
-
-- Add database/sled submodule
-- Database module cleanup
-
 ### 🚜 Refactor
 
 - Implement EventDatabase for sled
@@ -328,11 +320,6 @@
 ### 🐛 Bug Fixes
 
 - *(watcher)* Prevent overwriting tel
-## [keri-controller-v0.4.2] - 2024-08-05
-
-### 💼 Other
-
-- Update cargos
 ## [keri-controller-v0.4.1] - 2024-08-01
 
 ### 🚀 Features
@@ -354,10 +341,6 @@
 - *(watcher)* Store tel to forward in file
 - *(watcher)* Save registry ids in file
 - Set watcher storage paths in tests
-
-### 💼 Other
-
-- Make watcher collect tels for identifier
 
 ### 🚜 Refactor
 
@@ -386,15 +369,12 @@
 - Fix failing test
 - Split `finalize_query`
 - Fix errors
+- Fix failing tests
 - Tests in keriox_tests module
 - Clippy warnings
 - Don't save the same receipt twice
 - Fix failing test
 - Features build error
-
-### 💼 Other
-
-- Add MechanicsError
 
 ### 🚜 Refactor
 
@@ -448,10 +428,6 @@
 - Save not fully witnessed state
 - Fix errors
 
-### 💼 Other
-
-- Update watcher.Dockerfile
-
 ### 🧪 Testing
 
 - Add basic kel managing test
@@ -472,13 +448,6 @@
 - Add description
 - Add description
 - Update README.md
-## [0.3.0] - 2023-04-25
-
-### 💼 Other
-
-- Set custom name of the docker file
-- Fix repo name for action
-- Change to main repo instead of fork
 ## [0.1.0] - 2023-03-29
 
 ### 🚀 Features
@@ -597,11 +566,84 @@
 - *(eq)* Derive PartialEq for lots of stuff
 - *(get_kerl)* Impl get_kerl on db and processor
 - *(keri)* Add get_state_for_seal function
+- Feat(sled) last_event_at_sn() implemented
+- Feat(sled) SledEventDatabase proper instantiation
+- Feat(sled) tables restructure
+- Feat(sled) tables restructure
+- Feat(sled) IdentifierPrefix DB id get + set
+- Feat(sled) log_event() and last_event_at_sn() impl
+- Feat(sled) get_kers() impl
+- Feat(sled) tables docs + cleanup
+- Feat(sled) has_receipt() impl
+- Feat(sled) NEW db api examples to work with structs directly
+- Feat(sled) TimestampedEvent impl
+- Feat(sled) db getters and setters except receipts
+- Feat(sled) v0.7 DB replacement initial
+- Feat(sled) processor compute_state & compute_state_at_sn refactor
+- Feat(sled) get_last_establishment_event_seal & get_key_at_event refactor
+- Feat(sled) validate_seal refactor
+- Feat(sled) process_event() refactoring
+- Feat(sled) get_kerl() initial refactoring
+- Feat(sled) get_kerl() .serialize() refactoring
+- Feat(sled) get_kerl pre receipts
+
+Co-authored-by: Edyta Pawlak <edyta@postacnormalna.pl>
+- Feat(sled) has_receipt refactoring
+- Feat(sled) has_receipt check all under given sn
+- Feat(sled) process_validator_receipt refactoring
+- Feat(sled) process_witness_receipt part refactoring. receipt transformation needed
+- Feat(sled) process_witness_receipt refactoring v2
+- Feat(sled) processor refactoring compiles
+- Feat(sled) process_validator_receipt refactor allign + keri mod tests
+- Feat(sled) get_event_at_sn impl and refactoring
+- Feat(sled) keri mod tests refactor compile
+- Feat(sled) test_direct_mode ok
+- Feat(sled) processor alignment
 - *(thresh)* Add WeightedThreshold to KeyConfig
 - *(thresh)* Update verify in KeyConfig
 - *(thresh)* Update threshold serialization
 - *(thresh)* Fix threshold parsing
 - *(thres)* Add multi clauses threshold
+- Feat(witness rotation) rotation event extended processing
+- Feat(witness rotation) minus clone
+- Feat(process_escrow) DB remove implementation for some tables
+- Feat(unified_tables) out of order table cleanup and compute_state() ignore out_of_order
+- Feat(unified_tables) event comparison fix and test improvements
+- Feat(unified_tables) out_of_order single table refactoring
+- Feat(kerl) transferable receipts inclusion
+- Feat(async) processing ALMOST working
+- Feat(async) process with String errors
+- Feat(async) process with reader only
+- Feat(async) async stream processing done
+- Feat(crates update) k256, base64 version bumps
+- Feat(async) single message processing
+- Feat(async) message metadata processing
+- Feat(async) whole chunk of received data processing
+- Feat(async) KERI instance and response generation
+- Feat(async) payload size enum and parser
+- Feat(async) payload size parser inclusion
+- Feat(async) async processor stream parser improvements
+- Feat(async) PayloadType extension with master_code_size() method
+- Feat(async) Base64 master code parsing for attachments done
+- Feat(async) Arc shared pinned Keri instance
+- Feat(serializer) serializer error impl
+- Feat(serializer) initial KeriSerializer impl
+- Feat(serializer) impl Serializer and SignedEvenMessage serialization with master code
+- Feat(serializer) serialization working
+- Feat(serializer) additional test
+- Feat(serializer) serialization for both DB and qb64 alligned
+- Feat(response) respond_single method implementation
+- Feat(respones) async respond_single use
+- Feat(hash) derive Hash for IdentifierPrefix
+- Feat(test) keri test module comile only on tests, not on build
+- Feat(async) channel to track processed message for sync purposes
+- Feat(async) replaced mpsc::Sender with async_std::channel::Sender
+- Feat(async) Arc for DB in Keri instance for safe thread sharing
+- Feat(wallet-rs) wallet-rs as KeyProvider; Arc and RefCell for KeyProvider for thread safety;
+- Feat(SignedNontransferableReceipt) Keri make_ntr() and generate_ntr() methods
+- Feat(NTR) new() and serialize() for NontransferableReceipt
+- Feat(wallet) feature annotation move
+- Feat(interaction) basic inter-identifier interaction
 - *(ev_msg)* Add Counter enum
 - *(parse)* Move parsing counter to parse module
 - *(del)* Add atachements to SignedEventMessage
@@ -717,7 +759,16 @@
 - *(tests)* Update and fix tests
 - *(processor)* Fix get_keys_at_event
 - *(test)* Comment tests that need delegation update
+- Fix(ed25519) sig crate update allignment
+- Fix(cleanup) warnings cleaned up
+- Fix(keri) typo fix
+- Fix(incept_with_extra_keys) verification key ordering - should be first
+- Fix(warnings) feature-gated async functionality to prevent dead code
+- Fixme(event) event named property repetitive cumbersomeness cleanup
+- Fix(signatures) faulty signatures detection on verification
+- Fix(conflicts) merge conflicts resolution
 - *(key)* Remove derive (de)serialize for priv key
+- Fix(merge #78) renaming alligned with new changes
 - *(tests)* Fix tests and reformat
 - *(codes)* Move code calculations to payload_type
 - *(attachement)* Change structures names
@@ -781,83 +832,31 @@
 - *(demo)* Add_initial oobis to watcher config
 - *(demo)* Remove tcp settings
 - *(demo)* Update witness and watcher demo
+- Fix field order in query msg
+- Fix test_query in witness
+- Fix test_qry_rpy in witness
+- Fix mbx test
+- Fix warnings
+- Fix processor tests
+- Fix test not fully witnessed
+- Fix test_mbx
+- Fix test_validate_seal
+- Fix controller example
+- Fix warnings
+- Fix tests
+- Fix tests
+- Fix oobi processing in controller
 - Update anchor function in controller
 - Add missing signatures verification
+- Fix warnings
+- Fix test_ksn_query
 - Save escrowed events into separate file
-
-### 💼 Other
-
-- *(event)* Update event labels and test vectors
-- *(rct)* Add transferable receipt serialization
-- *(all)* Remove unwraps
-- *(all)* Remove unused code and unwraps
-- *(ev_msg)* Move parsing to separate module
-- *(parse)* Fix tests
-- *(parse)* Fix tests
-- *(parse)* Move prefix parsing to parse module
-- *(parse)* Move payload type to parse module
-- *(parse)* Move serialization to parse module
-- *(parse)* Rename Deserialized to Message
-- *(ev_msg)* Add convesion to common message type
-- *(parsing_mod)* Restructure parsing module
-- *(tests)* Remove unused code
-- *(event_parsing)* Remove unused code
-- *(qry)* Remove generic argument from Envelope
-- *(qry)* Query module reformat
-- *(state)* Add fields to IdentifierState
-- *(qry)* Fix query test and reformat
-- *(parsing)* Add common enum for parsed events
-- *(qry)* Fix async_processing
-- *(qry)* Minor refactor
-- *(events)* Add digest field to events
-- *(event)* Separate receipt event from EventData
-- *(event)* Add SaidEvent wrapper
-- *(state)* Use last event digest in state
-- *(all)* Remove unused Option
-- *(EventType)* Stop using string as event type
-- *(ev_msg)* Split mod.rs into multiple files
-- *(tests)* Remove unused code
-- *(all)* Reformat code
-- *(all)* Fix clippy warnings
-- *(state)* Add WitnessConfig struct
-- *(witness)* Remove CryptoBox from Witness
-- *(processor)* Separate event validation logic
-- *(processor)* Add EventStorage struct
-- *(escrow)* Use observer for escrow
-- *(escrow)* Add Reply Escrow
-- *(qry)* Remove redundant error type
-- *(witness)* Remove unnecessary code
-- *(escrow)* Minor refacotr
-- *(all)* Remove unwraps
-- *(all)* Minor refactor
-- *(escrow)* Add db reference to escrows
-- *(processor)* Renaming
-- *(processor)* Specify notification type
-- *(processor)* Add submodule for notification
-- *(processor)* Fix clippy warnings
-- *(escrow)* Remove unwraps
-- *(proc)* Stop returning state from process func
-- *(keri)* Move wallet feature funcs to separate file
-- *(proc)* Use notification bus in Keri struct
-- *(all)* Reformat and fix warnings
-- *(all)* Reformat and fix warnings
-- *(parse)* Cesr reprezentation of message
-- *(witness)* Get signer from argument
-- *(witness)* Add getter of db reference
-- *(all)* Fix warnings and reformat
-- *(oobi)* Remove redundant struct
-- *(oobi)* Add mutex to oobi manager
-- *(oobi)* Add OobiStorage struct
-- *(all)* Minor refactor
-- *(reply)* Add common ReplyRoute enum
-- *(all)* Minor refactor
-- *(oobis)* Add role enum
-- *(all)* Remove unused code
-- *(all)* Minor refactor and reformat
-- *(processor)* Remove unused code
-- *(parsing)* Remove unwraps
-- *(parsing)* Add event message parsing
-- High level multisig functions
+- Fix tests
+- Fix remaining errors
+- Fix electing leader
+- Fix test attempt 1
+- Fix error
+- Fix errors
 
 ### 🚜 Refactor
 
@@ -886,6 +885,7 @@
 - *(keri)* Update keri mod to use processor
 - *(keri)* Use event_msg_builder
 - *(signer)* Add KeyManager trait
+- Refactoring complete - tests failing
 - *(thresh)* Add separate threshold mod
 - *(thresh)* Rename limen
 - *(thresh)* Refactor enough_sigs function
@@ -895,6 +895,7 @@
 - *(signer)* Remove seeds from cryptobox
 - *(ev_msg)* Separate signed message submodule
 - *(log)* Remove log module
+- Refactor RefCell -> Box for Keri struct's KeyManager
 - Use notification bus as processor field
 - Enable choosing processing strategy
 - Make process return messages
@@ -903,6 +904,7 @@
 - Remove respond function
 - Update witness tests
 - Move witness_processor to witness crate
+- Refactor watcher
 - Remove direct mode test
 - Remove component struct
 - Remove clone
@@ -917,6 +919,8 @@
 - *(drv)* Add some basic rustdoc comments
 - *(derivation)* Add some rustdoc to Derivation
 - *(rct)* Add some context doc to receipt types
+- Docs
+- Docs and var names
 
 ### 🎨 Styling
 
@@ -962,7 +966,11 @@
 - *(escrow)* Add partially signed test
 - *(oobi)* Add oobi tests
 - Query mbx with multiple controllers
+- Test wip 1
 - Ksn query forwarding
+- Test transport initial impl
+- Test remote error
+- Test 2 witnesses wip
 
 ### ⚙️ Miscellaneous Tasks
 

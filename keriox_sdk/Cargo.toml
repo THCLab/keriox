@@ -8,7 +8,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-keri-core = { path = "../keriox_core", version = "0.17.10", features = ["query", "oobi"] }
+keri-core = { path = "../keriox_core", version = "0.17.11", features = ["query", "oobi"] }
 cesrox = { version = "0.1.8", features = ["cesr-proof"] }
 serde_json = "1"
 serde_cbor = { version = "0.11" }
