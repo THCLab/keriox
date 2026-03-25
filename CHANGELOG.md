@@ -8,27 +8,19 @@
 
 - Remove println causing issue with parsing output
 - Bump cesrox and said
-- Release
 - Clean release configuration and provide developer guide
+- Improve git cliff and changelog generation
 ## [0.17.9] - 2025-09-04
 
 ### 🚀 Features
 
 - Add get_state method in keri-sdk to retrieve identifier state
 - Add `from_sn`, `limit` parameters for `get_log_query` in keri-sdk
-
-### ⚙️ Miscellaneous Tasks
-
-- Release
 ## [0.17.8] - 2025-08-27
 
 ### 🐛 Bug Fixes
 
 - Add "oobi" feature to keri-core dependency in keri-sdk
-
-### ⚙️ Miscellaneous Tasks
-
-- Release
 ## [0.17.7] - 2025-08-27
 
 ### 🚀 Features
@@ -38,37 +30,21 @@
 ### 🚜 Refactor
 
 - Separate OobiManager into its own module
-
-### ⚙️ Miscellaneous Tasks
-
-- Release
 ## [0.17.6] - 2025-07-24
 
 ### 🚜 Refactor
 
 - Remove acdc dependency from keri-sdk in test
-
-### ⚙️ Miscellaneous Tasks
-
-- Release
 ## [0.17.5] - 2025-07-22
 
 ### 🐛 Bug Fixes
 
 - Add version for keri-core dependency in teliox
-
-### ⚙️ Miscellaneous Tasks
-
-- Release
 ## [0.17.4] - 2025-07-22
 
 ### 🐛 Bug Fixes
 
 - Pin acdc dependency to specific version and revision in keri-sdk
-
-### ⚙️ Miscellaneous Tasks
-
-- Release
 ## [0.17.3] - 2025-07-22
 
 ### 🚀 Features
@@ -97,10 +73,6 @@
 - Use redb in teliox missing registry escrow
 - Remove sled dependencies
 - Update Tel struct to support generic EventDatabase
-
-### ⚙️ Miscellaneous Tasks
-
-- Release
 ## [0.17.2] - 2025-05-09
 
 ### 🚀 Features
@@ -138,16 +110,11 @@
 ### ⚙️ Miscellaneous Tasks
 
 - Cargo fmt
-- Release
 ## [0.17.1] - 2025-04-30
 
 ### 🚜 Refactor
 
 - Update verify_from_cesr arguments
-
-### ⚙️ Miscellaneous Tasks
-
-- Release
 ## [0.17.0] - 2025-04-17
 
 ### 🚀 Features
@@ -158,10 +125,6 @@
 
 - Remove async-std from watcher
 - Update tests workspace
-
-### ⚙️ Miscellaneous Tasks
-
-- Release
 ## [0.17.0-rc5] - 2025-04-08
 
 ### 🚀 Features
@@ -172,20 +135,12 @@
 
 - Update incept_registry and issue functions
 - Update finalize group event function
-
-### ⚙️ Miscellaneous Tasks
-
-- Release
 ## [0.17.0-rc4] - 2025-03-27
 
 ### 🐛 Bug Fixes
 
 - Correct test failures
 - Correct signature index computation
-
-### ⚙️ Miscellaneous Tasks
-
-- Release
 ## [0.17.0-rc3] - 2025-03-26
 
 ### 🐛 Bug Fixes
@@ -203,7 +158,6 @@
 ### ⚙️ Miscellaneous Tasks
 
 - Remove unused imports
-- Release
 ## [0.17.0-rc2] - 2025-03-12
 
 ### 🐛 Bug Fixes
@@ -260,19 +214,11 @@
 
 - Warnings and failing tests
 - Fix test_updates
-
-### ⚙️ Miscellaneous Tasks
-
-- Release
 ## [0.15.1] - 2025-01-16
 
 ### 🐛 Bug Fixes
 
 - Add bundled feat to rusqlite
-
-### ⚙️ Miscellaneous Tasks
-
-- Release
 ## [0.15.0] - 2025-01-16
 
 ### 🚀 Features
@@ -309,10 +255,6 @@
 - Restructure rkyv submodule
 - Reformat and fix warnings
 - Reformat and fix warnings
-
-### ⚙️ Miscellaneous Tasks
-
-- Release
 ## [0.14.2] - 2024-12-11
 
 ### 🚀 Features
@@ -322,7 +264,6 @@
 ### ⚙️ Miscellaneous Tasks
 
 - Update README.md
-- Release
 ## [0.14.1] - 2024-12-06
 
 ### 🐛 Bug Fixes
@@ -333,25 +274,16 @@
 ### ⚙️ Miscellaneous Tasks
 
 - Update README.md
-- Release
 ## [0.14.0] - 2024-11-25
 
 ### 🚀 Features
 
 - Add info endpoint for witness and watcher
-
-### ⚙️ Miscellaneous Tasks
-
-- Release
 ## [0.13.0] - 2024-09-04
 
 ### 🚀 Features
 
 - Expose `verify_from_cesr` function
-
-### ⚙️ Miscellaneous Tasks
-
-- Release
 ## [0.12.7] - 2024-08-30
 
 ### 🐛 Bug Fixes
@@ -364,43 +296,32 @@
 - Update README.md
 - Update README.md
 - Update README.md
-- Release
 ## [0.12.6] - 2024-08-08
 
 ### ⚙️ Miscellaneous Tasks
 
 - Update ci.yml
 - Create publish.yml
-- Release
 ## [0.12.5] - 2024-08-07
 
 ### ⚙️ Miscellaneous Tasks
 
 - Add CHANGELOG.md
-- Release
 ## [0.12.4] - 2024-08-07
 
 ### ⚙️ Miscellaneous Tasks
 
 - Update docker-images.yml
-- Release
-## [keri-controller-v0.12.3] - 2024-08-07
-
-### ⚙️ Miscellaneous Tasks
-
-- Release
 ## [keri-controller-v0.12.2] - 2024-08-07
 
 ### ⚙️ Miscellaneous Tasks
 
 - Update docker-images.yml
-- Release
 ## [keri-controller-v0.12.1] - 2024-08-07
 
 ### ⚙️ Miscellaneous Tasks
 
 - Update docker-images.yml
-- Release
 ## [keri-controller-v0.12.0] - 2024-08-07
 
 ### 🐛 Bug Fixes
@@ -411,10 +332,6 @@
 ### 💼 Other
 
 - Update cargos
-
-### ⚙️ Miscellaneous Tasks
-
-- Release
 ## [keri-controller-v0.4.1] - 2024-08-01
 
 ### 🚀 Features
@@ -454,7 +371,6 @@
 - Add release section
 - Update README
 - Update release section
-- Release
 ## [keri-controller-v0.4.0] - 2024-05-21
 
 ### 🚀 Features
@@ -487,10 +403,6 @@
 - Rename functions
 - Add mechanics submodule
 - Cargo fmt
-
-### ⚙️ Miscellaneous Tasks
-
-- Release
 ## [keri-controller-v0.3.0] - 2024-04-11
 
 ### 🐛 Bug Fixes
@@ -518,10 +430,6 @@
 - Fix clippy warnings
 - Reformat and cleanup
 - Tests cleanup
-
-### ⚙️ Miscellaneous Tasks
-
-- Release
 ## [keri-controller-v0.2.0] - 2024-03-22
 
 ### 🐛 Bug Fixes
@@ -559,14 +467,10 @@
 - Update cargo.toml
 - Update cargo.toml
 - Rename package controller to keri-controller
-- Release
 - Update cargo toml
 - Add description
-- Release
 - Add description
-- Release
 - Update README.md
-- Release
 ## [0.3.0] - 2023-04-25
 
 ### 💼 Other

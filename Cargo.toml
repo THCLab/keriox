@@ -22,4 +22,5 @@ license = "EUPL-1.2"
 
 [workspace.metadata.release]
 pre-release-commit-message = "chore: Release v{{version}}"
+consolidate-commits = false
 tag = false
