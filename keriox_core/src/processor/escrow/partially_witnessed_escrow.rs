@@ -383,7 +383,7 @@ mod tests {
         let redb = RedbDatabase::new(events_db_path.path()).unwrap();
         let log_db = redb.log_db.clone();
         let events_db = Arc::new(redb);
-        let mut event_processor = BasicProcessor::new(events_db.clone(), None);
+        let event_processor = BasicProcessor::new(events_db.clone(), None);
         let event_storage = EventStorage::new(Arc::clone(&events_db));
 
         // Register not fully witnessed escrow, to save and reprocess events
@@ -528,7 +528,7 @@ mod tests {
         let redb = RedbDatabase::new(events_db_path.path()).unwrap();
         let log_db = redb.log_db.clone();
         let events_db = Arc::new(redb);
-        let mut event_processor = BasicProcessor::new(events_db.clone(), None);
+        let event_processor = BasicProcessor::new(events_db.clone(), None);
         let event_storage = EventStorage::new(Arc::clone(&events_db));
 
         // Register not fully witnessed escrow, to save and reprocess events
@@ -671,7 +671,7 @@ mod tests {
         let redb = RedbDatabase::new(events_db_path.path()).unwrap();
         let log_db = redb.log_db.clone();
         let events_db = Arc::new(redb);
-        let mut event_processor = BasicProcessor::new(events_db.clone(), None);
+        let event_processor = BasicProcessor::new(events_db.clone(), None);
         let event_storage = EventStorage::new(Arc::clone(&events_db));
 
         // Register not fully witnessed escrow, to save and reprocess events
@@ -775,7 +775,7 @@ mod tests {
         let redb = RedbDatabase::new(events_db_path.path()).unwrap();
         let log_db = redb.log_db.clone();
         let events_db = Arc::new(redb);
-        let mut event_processor = BasicProcessor::new(events_db.clone(), None);
+        let event_processor = BasicProcessor::new(events_db.clone(), None);
         let event_storage = EventStorage::new(Arc::clone(&events_db));
 
         // Register not fully witnessed escrow, to save and reprocess events

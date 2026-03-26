@@ -5,8 +5,8 @@ use said::{
 use serde::{Deserialize, Serialize};
 
 use super::{EventTypeTag, Typeable};
-use crate::database::redb::rkyv_adapter::said_wrapper::SaidValue;
-use crate::database::redb::rkyv_adapter::serialization_info_wrapper::SerializationInfoDef;
+use crate::database::rkyv_adapter::said_wrapper::SaidValue;
+use crate::database::rkyv_adapter::serialization_info_wrapper::SerializationInfoDef;
 use crate::error::Error;
 
 pub type KeriEvent<D> = TypedEvent<EventTypeTag, D>;

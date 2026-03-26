@@ -38,23 +38,23 @@ impl Default for EscrowConfig {
     }
 }
 
+pub struct EscrowSet<D: EventDatabase + EscrowCreator> {
+    pub out_of_order: Arc<MaybeOutOfOrderEscrow<D>>,
+    pub partially_signed: Arc<PartiallySignedEscrow<D>>,
+    pub partially_witnessed: Arc<PartiallyWitnessedEscrow<D>>,
+    pub delegation: Arc<DelegationEscrow<D>>,
+    pub duplicitous: Arc<DuplicitousEvents<D>>,
+}
+
 pub fn default_escrow_bus<D>(
     event_db: Arc<D>,
     escrow_config: EscrowConfig,
-) -> (
-    NotificationBus,
-    (
-        Arc<MaybeOutOfOrderEscrow<D>>,
-        Arc<PartiallySignedEscrow<D>>,
-        Arc<PartiallyWitnessedEscrow<D>>,
-        Arc<DelegationEscrow<D>>,
-        Arc<DuplicitousEvents<D>>,
-    ),
-)
+    notification_bus: Option<NotificationBus>,
+) -> (NotificationBus, EscrowSet<D>)
 where
     D: EventDatabase + EscrowCreator + Sync + Send + 'static,
 {
-    let mut bus = NotificationBus::new();
+    let bus = notification_bus.unwrap_or_default();
 
     // Register out of order escrow, to save and reprocess out of order events
     let ooo_escrow = Arc::new(MaybeOutOfOrderEscrow::new(
@@ -105,6 +105,12 @@ where
 
     (
         bus,
-        (ooo_escrow, ps_escrow, pw_escrow, delegation_escrow, dup),
+        EscrowSet {
+            out_of_order: ooo_escrow,
+            partially_signed: ps_escrow,
+            partially_witnessed: pw_escrow,
+            delegation: delegation_escrow,
+            duplicitous: dup,
+        },
     )
 }
