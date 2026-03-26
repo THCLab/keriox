@@ -1,8 +1,6 @@
 use crate::{
     database::{
-        postgres::error::PostgresError,
-        rkyv_adapter,
-        timestamped::TimestampedSignedEventMessage,
+        postgres::error::PostgresError, rkyv_adapter, timestamped::TimestampedSignedEventMessage,
         LogDatabase as LogDatabaseTrait,
     },
     event::KeyEvent,
@@ -94,8 +92,6 @@ impl PostgresLogDatabase {
     /// which prevents passing a `&mut sqlx::Transaction` through the trait's `log_event`.
     /// This async method accepts an existing transaction directly so callers like
     /// `add_kel_finalized_event` can log events within the same transaction.
-    /// TODO: Consider changing the trait to take `&mut Self::TransactionType` so this
-    /// can be unified with `log_event`.
     pub async fn log_event_with_tx(
         &self,
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
@@ -273,7 +269,6 @@ impl<'db> LogDatabaseTrait<'db> for PostgresLogDatabase {
         })
     }
 
-    //TODO: add transaction
     fn log_event(
         &self,
         txn: &Self::TransactionType,
