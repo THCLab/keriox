@@ -208,11 +208,11 @@ impl PostgresLogDatabase {
 
     fn get_event_by_serialized_key(
         &self,
-        as_slice: &&[u8],
+        as_slice: &[u8],
     ) -> Result<Option<KeriEvent<KeyEvent>>, PostgresError> {
         async_std::task::block_on(async {
             let row = sqlx::query("SELECT event_data FROM events WHERE digest = $1")
-                .bind(*as_slice)
+                .bind(as_slice)
                 .fetch_optional(&self.pool)
                 .await?;
 
@@ -438,7 +438,7 @@ impl<'db> LogDatabaseTrait<'db> for PostgresLogDatabase {
         said: &said::SelfAddressingIdentifier,
     ) -> Result<Option<KeriEvent<KeyEvent>>, Self::Error> {
         let key = rkyv_adapter::serialize_said(said)?;
-        self.get_event_by_serialized_key(&key.as_slice())
+        self.get_event_by_serialized_key(key.as_slice())
     }
 
     fn get_signatures(
