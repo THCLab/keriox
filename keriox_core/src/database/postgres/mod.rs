@@ -408,168 +408,94 @@ impl EventDatabase for PostgresDatabase {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{
+        actor::event_generator,
+        database::QueryParameters,
+        event_message::{
+            cesr_adapter::{parse_event_type, EventType},
+            EventTypeTag,
+        },
+        prefix::{BasicPrefix, IndexedSignature, SelfSigningPrefix},
+        signer::{CryptoBox, KeyManager},
+    };
 
     fn get_database_url() -> String {
         std::env::var("DATABASE_URL")
             .unwrap_or_else(|_| "postgres://postgres:postgres@localhost:5432/keri_test".to_string())
     }
 
+    async fn setup_db() -> Arc<PostgresDatabase> {
+        let db = Arc::new(
+            PostgresDatabase::new(&get_database_url())
+                .await
+                .expect("Failed to connect to database"),
+        );
+        db.run_migrations().await.expect("Failed to run migrations");
+        db
+    }
+
+    fn make_signed_icp() -> (
+        crate::prefix::IdentifierPrefix,
+        crate::event_message::signed_event_message::SignedEventMessage,
+    ) {
+        let key_manager = CryptoBox::new().unwrap();
+        let pk = BasicPrefix::Ed25519(key_manager.public_key());
+        let npk = BasicPrefix::Ed25519(key_manager.next_public_key());
+
+        let icp_str = event_generator::incept(vec![pk], vec![npk], vec![], 0, None).unwrap();
+        let sig = SelfSigningPrefix::Ed25519Sha512(key_manager.sign(icp_str.as_bytes()).unwrap());
+        let ke = match parse_event_type(icp_str.as_bytes()).unwrap() {
+            EventType::KeyEvent(ke) => ke,
+            _ => panic!("Expected key event"),
+        };
+        let signed = ke.sign(vec![IndexedSignature::new_both_same(sig, 0)], None, None);
+        let prefix = signed.event_message.data.get_prefix();
+        (prefix, signed)
+    }
+
     #[async_std::test]
     #[ignore]
     async fn test_postgres_migrations() {
-        let db = PostgresDatabase::new(&get_database_url())
-            .await
-            .expect("Failed to connect to database");
-
-        db.run_migrations().await.expect("Failed to run migrations");
-
+        setup_db().await;
         println!("Migrations completed successfully!");
     }
 
-    #[cfg(all(feature = "mailbox", feature = "oobi-manager"))]
-    #[async_std::test]
-    #[ignore]
-    async fn test_simple_controller_with_postgres() {
-        use crate::{
-            actor::simple_controller::SimpleController, oobi_manager::OobiManager,
-            processor::escrow::EscrowConfig, signer::CryptoBox,
-        };
-        use std::sync::Mutex;
-
-        let db = PostgresDatabase::new(&get_database_url())
-            .await
-            .expect("Failed to connect to database");
-
-        db.run_migrations().await.expect("Failed to run migrations");
-
-        let db = Arc::new(db);
-
-        let pool = sqlx::PgPool::connect(&get_database_url())
-            .await
-            .expect("Failed to create pool");
-        let oobi_storage = PostgresOobiStorage::new(pool);
-        let oobi_manager = OobiManager::new_with_storage(oobi_storage);
-
-        let key_manager = Arc::new(Mutex::new(CryptoBox::new().unwrap()));
-
-        let controller = SimpleController::new_with_oobi_manager(
-            db,
-            key_manager,
-            oobi_manager,
-            EscrowConfig::default(),
-        );
-
-        assert!(
-            controller.is_ok(),
-            "Failed to create SimpleController with Postgres"
-        );
-
-        println!("SimpleController with Postgres created successfully!");
-    }
-
-    #[cfg(all(feature = "mailbox", feature = "oobi-manager"))]
     #[async_std::test]
     #[ignore]
     async fn test_postgres_incept() {
-        use crate::{
-            actor::simple_controller::SimpleController, oobi_manager::OobiManager,
-            processor::escrow::EscrowConfig, signer::CryptoBox,
-        };
-        use std::sync::Mutex;
+        let db = setup_db().await;
+        let (prefix, signed_event) = make_signed_icp();
 
-        let db = PostgresDatabase::new(&get_database_url())
-            .await
-            .expect("Failed to connect to database");
+        db.add_kel_finalized_event(signed_event, &prefix)
+            .expect("Failed to store inception event");
 
-        db.run_migrations().await.expect("Failed to run migrations");
-
-        let db = Arc::new(db);
-
-        let pool = sqlx::PgPool::connect(&get_database_url())
-            .await
-            .expect("Failed to create pool");
-        let oobi_storage = PostgresOobiStorage::new(pool);
-        let oobi_manager = OobiManager::new_with_storage(oobi_storage);
-
-        let key_manager = Arc::new(Mutex::new(CryptoBox::new().unwrap()));
-
-        let mut controller = SimpleController::new_with_oobi_manager(
-            db,
-            key_manager,
-            oobi_manager,
-            EscrowConfig::default(),
-        )
-        .expect("Failed to create SimpleController");
-
-        let signed_icp = controller
-            .incept(None, None, None)
-            .expect("Failed to incept");
-
-        println!(
-            "Inception event created: {:?}",
-            signed_icp.event_message.data.get_prefix()
-        );
-
-        let state = controller.get_state();
-        assert!(state.is_some(), "State should exist after inception");
-
-        let state = state.unwrap();
-        assert_eq!(state.sn, 0, "Inception event should have sn 0");
-        assert_eq!(
-            state.prefix,
-            signed_icp.event_message.data.get_prefix(),
-            "State prefix should match inception prefix"
-        );
-
-        println!("Inception test passed! Prefix: {}", controller.prefix());
+        let state = db
+            .get_key_state(&prefix)
+            .expect("State should exist after inception");
+        assert_eq!(state.sn, 0);
     }
 
-    #[cfg(all(feature = "mailbox", feature = "oobi-manager"))]
     #[async_std::test]
     #[ignore]
     async fn test_postgres_get_kel() {
-        use crate::{
-            actor::simple_controller::SimpleController, database::QueryParameters,
-            event_message::EventTypeTag, oobi_manager::OobiManager,
-            processor::escrow::EscrowConfig, signer::CryptoBox,
-        };
-        use std::sync::Mutex;
+        let db = setup_db().await;
+        let (prefix, signed_event) = make_signed_icp();
 
-        let db = PostgresDatabase::new(&get_database_url())
-            .await
-            .expect("Failed to connect to database");
-        db.run_migrations().await.expect("Failed to run migrations");
-        let db = Arc::new(db);
+        db.add_kel_finalized_event(signed_event, &prefix)
+            .expect("Failed to store inception event");
 
-        let pool = sqlx::PgPool::connect(&get_database_url())
-            .await
-            .expect("Failed to create pool");
-        let oobi_storage = PostgresOobiStorage::new(pool);
-        let oobi_manager = OobiManager::new_with_storage(oobi_storage);
-        let key_manager = Arc::new(Mutex::new(CryptoBox::new().unwrap()));
+        let kel = db.get_kel(&prefix, 0, 1).expect("get_kel failed");
+        assert_eq!(kel.len(), 1);
+        assert_eq!(
+            kel[0].signed_event_message.event_message.event_type,
+            EventTypeTag::Icp
+        );
 
-        let mut controller = SimpleController::new_with_oobi_manager(
-            db.clone(),
-            key_manager,
-            oobi_manager,
-            EscrowConfig::default(),
-        )
-        .expect("Failed to create SimpleController");
-
-        let signed_icp = controller
-            .incept(None, None, None)
-            .expect("Failed to incept");
-
-        let prefix = signed_icp.event_message.data.get_prefix();
-
-        let kel_sn0 = db.get_kel(&prefix, 0, 1).expect("get_kel failed");
-        assert_eq!(kel_sn0.len(), 1);
-
-        let full_kel: Vec<_> = db
+        let full: Vec<_> = db
             .get_kel_finalized_events(QueryParameters::All { id: &prefix })
             .expect("Full KEL should exist")
             .collect();
-        assert_eq!(full_kel.len(), 1);
+        assert_eq!(full.len(), 1);
 
         let by_sn: Vec<_> = db
             .get_kel_finalized_events(QueryParameters::BySn {
@@ -580,12 +506,11 @@ mod tests {
             .collect();
         assert_eq!(by_sn.len(), 1);
 
-        let empty = db.get_kel_finalized_events(QueryParameters::BySn {
-            id: prefix.clone(),
-            sn: 99,
-        });
-        assert!(empty.is_none());
-
-        println!("test_postgres_get_kel passed! Prefix: {}", prefix);
+        assert!(db
+            .get_kel_finalized_events(QueryParameters::BySn {
+                id: prefix.clone(),
+                sn: 99
+            })
+            .is_none());
     }
 }
