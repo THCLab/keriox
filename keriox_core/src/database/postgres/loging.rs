@@ -271,7 +271,7 @@ impl<'db> LogDatabaseTrait<'db> for PostgresLogDatabase {
 
     fn log_event(
         &self,
-        txn: &Self::TransactionType,
+        _txn: &Self::TransactionType,
         signed_event: &SignedEventMessage,
     ) -> Result<(), Self::Error> {
         let digest = signed_event
@@ -345,7 +345,7 @@ impl<'db> LogDatabaseTrait<'db> for PostgresLogDatabase {
 
     fn log_receipt(
         &self,
-        txn: &Self::TransactionType,
+        _txn: &Self::TransactionType,
         signed_receipt: &crate::event_message::signed_event_message::SignedNontransferableReceipt,
     ) -> Result<(), Self::Error> {
         let digest = &signed_receipt.body.receipted_event_digest;
@@ -467,7 +467,7 @@ impl<'db> LogDatabaseTrait<'db> for PostgresLogDatabase {
 
     fn remove_nontrans_receipt(
         &self,
-        txn_mode: &Self::TransactionType,
+        _txn_mode: &Self::TransactionType,
         said: &said::SelfAddressingIdentifier,
         nontrans: impl IntoIterator<Item = Nontransferable>,
     ) -> Result<(), Self::Error> {

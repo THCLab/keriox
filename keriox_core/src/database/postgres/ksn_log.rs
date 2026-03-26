@@ -5,7 +5,7 @@ use sqlx::{PgPool, Row};
 
 use crate::{
     database::{
-        postgres::{error::PostgresError, loging::PostgresWriteTxnMode},
+        postgres::error::PostgresError,
         rkyv_adapter,
     },
     prefix::IdentifierPrefix,
@@ -117,40 +117,6 @@ impl AcceptedKsn {
 impl KsnLogDatabase {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
-    }
-
-    fn insert_ksn(
-        &self,
-        _txn_mode: &PostgresWriteTxnMode,
-        event: &SignedReply,
-    ) -> Result<(), PostgresError> {
-        let digest = event
-            .reply
-            .digest()
-            .map_err(|_| PostgresError::MissingDigest)?;
-        let serialized_digest = rkyv_adapter::serialize_said(&digest)?;
-        let value = serde_cbor::to_vec(event).unwrap();
-
-        async_std::task::block_on(async {
-            sqlx::query(
-                "INSERT INTO ksns (digest, ksn_data) VALUES ($1, $2) \
-                      ON CONFLICT (digest) DO NOTHING",
-            )
-            .bind(serialized_digest.as_ref())
-            .bind(value.as_slice())
-            .execute(&self.pool)
-            .await?;
-            Ok(())
-        })
-    }
-
-    pub fn log_reply(
-        &self,
-        txn_mode: &PostgresWriteTxnMode,
-        signed_event: &SignedReply,
-    ) -> Result<(), PostgresError> {
-        self.insert_ksn(txn_mode, signed_event)?;
-        Ok(())
     }
 
     pub fn get_signed_reply(
