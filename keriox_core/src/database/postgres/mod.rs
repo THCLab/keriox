@@ -33,6 +33,20 @@ pub use loging::PostgresLogDatabase;
 
 use super::{timestamped::TimestampedSignedEventMessage, QueryParameters};
 
+/// Configuration for the PostgreSQL connection pool.
+pub struct PostgresConfig {
+    /// Maximum number of connections in the pool.
+    pub max_connections: u32,
+}
+
+impl Default for PostgresConfig {
+    fn default() -> Self {
+        Self {
+            max_connections: 10,
+        }
+    }
+}
+
 pub struct PostgresDatabase {
     pub(crate) pool: PgPool,
     pub(crate) log_db: Arc<PostgresLogDatabase>,
@@ -42,8 +56,15 @@ pub struct PostgresDatabase {
 
 impl PostgresDatabase {
     pub async fn new(database_url: &str) -> Result<Self, PostgresError> {
+        Self::new_with_config(database_url, PostgresConfig::default()).await
+    }
+
+    pub async fn new_with_config(
+        database_url: &str,
+        config: PostgresConfig,
+    ) -> Result<Self, PostgresError> {
         let pool = PgPoolOptions::new()
-            .max_connections(10)
+            .max_connections(config.max_connections)
             .connect(database_url)
             .await?;
 
