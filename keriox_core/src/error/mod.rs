@@ -2,10 +2,11 @@ use said::version::error::Error as VersionError;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+#[cfg(feature = "storage-redb")]
+use crate::database::redb::RedbError;
 use crate::{
-    database::redb::RedbError, event::sections::key_config::SignatureError,
-    event_message::cesr_adapter::ParseError, prefix::IdentifierPrefix,
-    processor::validator::VerificationError,
+    event::sections::key_config::SignatureError, event_message::cesr_adapter::ParseError,
+    prefix::IdentifierPrefix, processor::validator::VerificationError,
 };
 
 pub mod serializer_error;
@@ -128,6 +129,7 @@ impl From<said::error::Error> for Error {
     }
 }
 
+#[cfg(feature = "storage-redb")]
 impl From<RedbError> for Error {
     fn from(_: RedbError) -> Self {
         Error::DbError

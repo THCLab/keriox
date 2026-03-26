@@ -1,6 +1,6 @@
 use std::fmt::{self, Display};
 
-use crate::{database::redb::rkyv_adapter::said_wrapper::SaidValue, prefix::IdentifierPrefix};
+use crate::{database::rkyv_adapter::said_wrapper::SaidValue, prefix::IdentifierPrefix};
 use said::SelfAddressingIdentifier;
 use serde::{Deserialize, Serialize};
 use serde_hex::{Compact, SerHex};

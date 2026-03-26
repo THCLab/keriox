@@ -2,15 +2,14 @@ use std::sync::Arc;
 
 use said::SelfAddressingIdentifier;
 
+#[cfg(feature = "storage-redb")]
+use crate::database::redb::{
+    escrow_database::SnKeyDatabase,
+    ksn_log::{AcceptedKsn, KsnLogDatabase},
+    RedbDatabase, RedbError,
+};
 use crate::{
-    database::{
-        redb::{
-            escrow_database::SnKeyDatabase,
-            ksn_log::{AcceptedKsn, KsnLogDatabase},
-            RedbDatabase, RedbError,
-        },
-        EventDatabase, SequencedEventDatabase,
-    },
+    database::{EventDatabase, SequencedEventDatabase},
     error::Error,
     prefix::IdentifierPrefix,
     processor::{
@@ -20,6 +19,7 @@ use crate::{
     query::reply_event::{ReplyEvent, ReplyRoute, SignedReply},
 };
 
+#[cfg(feature = "storage-redb")]
 #[derive(Clone)]
 pub struct ReplyEscrow<D: EventDatabase> {
     events_db: Arc<D>,
@@ -27,6 +27,7 @@ pub struct ReplyEscrow<D: EventDatabase> {
     escrowed_reply: Arc<SnKeyReplyEscrow>,
 }
 
+#[cfg(feature = "storage-redb")]
 impl ReplyEscrow<RedbDatabase> {
     pub fn new(events_db: Arc<RedbDatabase>) -> Self {
         let acc = Arc::new(AcceptedKsn::new(events_db.db.clone()).unwrap());
@@ -41,6 +42,7 @@ impl ReplyEscrow<RedbDatabase> {
         }
     }
 }
+#[cfg(feature = "storage-redb")]
 impl Notifier for ReplyEscrow<RedbDatabase> {
     fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error> {
         match notification {
@@ -63,6 +65,7 @@ impl Notifier for ReplyEscrow<RedbDatabase> {
     }
 }
 
+#[cfg(feature = "storage-redb")]
 impl ReplyEscrow<RedbDatabase> {
     pub fn process_reply_escrow(
         &self,
@@ -100,11 +103,13 @@ impl ReplyEscrow<RedbDatabase> {
     }
 }
 
+#[cfg(feature = "storage-redb")]
 pub struct SnKeyReplyEscrow {
     escrow: Arc<SnKeyDatabase>,
     log: Arc<KsnLogDatabase>,
 }
 
+#[cfg(feature = "storage-redb")]
 impl SnKeyReplyEscrow {
     pub(crate) fn new(escrow: Arc<SnKeyDatabase>, log: Arc<KsnLogDatabase>) -> Self {
         Self { escrow, log }

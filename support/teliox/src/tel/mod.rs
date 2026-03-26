@@ -12,7 +12,7 @@ use crate::{
     state::{vc_state::TelState, ManagerTelState},
 };
 use keri_core::{
-    database::{redb::RedbDatabase, EventDatabase}, prefix::IdentifierPrefix, processor::event_storage::EventStorage,
+    database::EventDatabase, prefix::IdentifierPrefix, processor::event_storage::EventStorage,
 };
 use said::SelfAddressingIdentifier;
 

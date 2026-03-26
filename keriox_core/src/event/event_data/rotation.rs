@@ -1,6 +1,6 @@
 use super::super::sections::{seal::*, KeyConfig, RotationWitnessConfig};
 use crate::{
-    database::redb::rkyv_adapter::said_wrapper::SaidValue,
+    database::rkyv_adapter::said_wrapper::SaidValue,
     error::Error,
     prefix::BasicPrefix,
     state::{EventSemantics, IdentifierState, LastEstablishmentData, WitnessConfig},

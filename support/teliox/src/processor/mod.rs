@@ -15,6 +15,7 @@ use self::{
     validator::TelEventValidator,
 };
 
+#[cfg(feature = "storage-redb")]
 pub mod escrow;
 pub mod notification;
 pub mod storage;
