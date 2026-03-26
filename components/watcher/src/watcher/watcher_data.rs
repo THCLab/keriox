@@ -112,7 +112,7 @@ impl WatcherData {
         let prefix = BasicPrefix::Ed25519NT(signer.public_key()); // watcher uses non transferable key
         let processor = BasicProcessor::new(events_db.clone(), Some(notification_bus));
 
-        let storage = Arc::new(EventStorage::new(events_db));
+        let storage = Arc::new(EventStorage::new_redb(events_db));
 
         // construct witness loc scheme oobi
         let loc_scheme = LocationScheme::new(

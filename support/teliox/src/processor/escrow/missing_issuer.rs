@@ -1,7 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use keri_core::{
-    database::redb::{RedbDatabase, WriteTxnMode},
+    database::{redb::WriteTxnMode, EventDatabase},
     processor::{
         event_storage::EventStorage,
         notification::{Notification, NotificationBus, Notifier},
@@ -22,19 +22,19 @@ use crate::{
     },
 };
 
-pub struct MissingIssuerEscrow<D: TelEventDatabase> {
-    kel_reference: Arc<EventStorage<RedbDatabase>>,
+pub struct MissingIssuerEscrow<D: TelEventDatabase, K: EventDatabase> {
+    kel_reference: Arc<EventStorage<K>>,
     tel_reference: Arc<TelEventStorage<D>>,
     publisher: TelNotificationBus,
     escrowed_missing_issuer: DigestKeyDatabase,
 }
 
-impl<D: TelEventDatabase> MissingIssuerEscrow<D> {
+impl<D: TelEventDatabase, K: EventDatabase> MissingIssuerEscrow<D, K> {
     pub fn new(
         db: Arc<D>,
         escrow_db: &EscrowDatabase,
         duration: Duration,
-        kel_reference: Arc<EventStorage<RedbDatabase>>,
+        kel_reference: Arc<EventStorage<K>>,
         bus: TelNotificationBus,
     ) -> Self {
         let escrow = DigestKeyDatabase::new(escrow_db.0.clone(), "missing_issuer_escrow");
@@ -48,7 +48,7 @@ impl<D: TelEventDatabase> MissingIssuerEscrow<D> {
         }
     }
 }
-impl<D: TelEventDatabase + TelLogDatabase> Notifier for MissingIssuerEscrow<D> {
+impl<D: TelEventDatabase + TelLogDatabase, K: EventDatabase> Notifier for MissingIssuerEscrow<D, K> {
     fn notify(
         &self,
         notification: &Notification,
@@ -71,7 +71,7 @@ impl<D: TelEventDatabase + TelLogDatabase> Notifier for MissingIssuerEscrow<D> {
     }
 }
 
-impl<D: TelEventDatabase + TelLogDatabase> TelNotifier for MissingIssuerEscrow<D> {
+impl<D: TelEventDatabase + TelLogDatabase, K: EventDatabase> TelNotifier for MissingIssuerEscrow<D, K> {
     fn notify(
         &self,
         notification: &TelNotification,
@@ -93,7 +93,7 @@ impl<D: TelEventDatabase + TelLogDatabase> TelNotifier for MissingIssuerEscrow<D
     }
 }
 
-impl<D: TelEventDatabase + TelLogDatabase> MissingIssuerEscrow<D> {
+impl<D: TelEventDatabase + TelLogDatabase, K: EventDatabase> MissingIssuerEscrow<D, K> {
     /// Reprocess escrowed events that need issuer event of given digest for acceptance.
     pub fn process_missing_issuer_escrow(
         &self,
