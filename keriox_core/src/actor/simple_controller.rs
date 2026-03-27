@@ -89,7 +89,7 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase> {
         Ok(SimpleController {
             prefix: IdentifierPrefix::default(),
             key_manager,
-            oobi_manager: OobiManager::new(event_db.clone()),
+            oobi_manager: OobiManager::new(event_db.clone())?,
             processor,
             storage: EventStorage::new(event_db.clone()),
             groups: vec![],

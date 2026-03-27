@@ -28,8 +28,12 @@ mod escrow_database;
 #[cfg(feature = "query")]
 mod ksn_log;
 mod loging;
+#[cfg(feature = "oobi-manager")]
+pub mod oobi_storage;
 
 pub use loging::PostgresLogDatabase;
+#[cfg(feature = "oobi-manager")]
+pub use oobi_storage::PostgresOobiStorage;
 
 use super::{timestamped::TimestampedSignedEventMessage, QueryParameters};
 

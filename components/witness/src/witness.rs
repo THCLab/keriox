@@ -137,6 +137,12 @@ impl From<RedbError> for WitnessError {
     }
 }
 
+impl From<keri_core::oobi::error::OobiError> for WitnessError {
+    fn from(err: keri_core::oobi::error::OobiError) -> Self {
+        WitnessError::DatabaseError(err.to_string())
+    }
+}
+
 pub struct Witness {
     pub address: Url,
     pub prefix: BasicPrefix,
@@ -217,7 +223,7 @@ impl Witness {
             signer,
             event_storage,
             receipt_generator,
-            oobi_manager: OobiManager::new(events_db.clone()),
+            oobi_manager: OobiManager::new(events_db.clone())?,
             tel,
         })
     }
