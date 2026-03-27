@@ -10,7 +10,35 @@ To use this library, a third-party key provider that derives public-private key 
 
 ## Available Features
 
+- `storage-redb` *(default)*: enables [redb](https://github.com/cberner/redb) as the persistent storage backend. Without this feature, an in-memory `MemoryDatabase` is available for testing or plugging in custom backends.
 - `query`: enables query messages and their processing logic.
 - `oobi`: provides events and logic for the [oobi discovery mechanism](https://weboftrust.github.io/ietf-oobi/draft-ssmith-oobi.html).
-- `mailbox`: enables the storing of messages intended for other identifiers and provide them to recipient later. This feature is meant for witnesses and watchers.
+- `oobi-manager`: high-level OOBI management. Implies `oobi`, `query`, and `storage-redb`.
+- `mailbox`: enables the storing of messages intended for other identifiers and provides them to recipients later. This feature is meant for witnesses and watchers. Implies `query` and `storage-redb`.
+
+## Architecture
+
+### NotificationBus
+
+`NotificationBus` is a pluggable dispatch abstraction for event notifications. The default implementation dispatches in-process, but custom implementations (e.g. SQS for serverless environments) can be injected:
+
+```rust
+// Use the default in-process dispatch:
+let bus = NotificationBus::new();
+
+// Or provide a custom dispatch:
+let bus = NotificationBus::from_dispatch(my_custom_dispatch);
+```
+
+You can also pass an existing bus to `default_escrow_bus` via `Some(bus)` to share a single dispatch across escrows.
+
+### EscrowSet
+
+`EscrowSet<D>` is a named struct (replacing the previous anonymous tuple) returned by `default_escrow_bus`. It provides typed access to each escrow:
+
+- `out_of_order` -- events received before their dependencies
+- `partially_signed` -- events awaiting additional signatures
+- `partially_witnessed` -- events awaiting additional witness receipts
+- `delegation` -- delegated events awaiting approval
+- `duplicitous` -- detected duplicitous events
 

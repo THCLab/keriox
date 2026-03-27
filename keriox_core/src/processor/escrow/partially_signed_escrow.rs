@@ -199,7 +199,7 @@ mod tests {
             let path = witness_root.path();
             let events_db_path = NamedTempFile::new().unwrap();
             let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
-            let mut processor = BasicProcessor::new(events_db.clone(), None);
+            let processor = BasicProcessor::new(events_db.clone(), None);
 
             // Register out of order escrow, to save and reprocess out of order events
             let ooo_escrow = Arc::new(MaybeOutOfOrderEscrow::new(
@@ -271,7 +271,7 @@ mod tests {
             std::fs::create_dir_all(path).unwrap();
             let events_db_path = NamedTempFile::new().unwrap();
             let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
-            let mut processor = BasicProcessor::new(events_db.clone(), None);
+            let processor = BasicProcessor::new(events_db.clone(), None);
 
             // Register partially signed escrow, to save and reprocess partially signed events
             let ps_escrow = Arc::new(PartiallySignedEscrow::new(

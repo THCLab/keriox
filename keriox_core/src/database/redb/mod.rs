@@ -2,7 +2,7 @@ pub mod escrow_database;
 #[cfg(feature = "query")]
 pub(crate) mod ksn_log;
 pub mod loging;
-pub(crate) mod rkyv_adapter;
+pub(crate) use super::rkyv_adapter;
 
 /// Kel storage. (identifier, sn) -> event digest
 /// The `KELS` table links an identifier and sequence number to the digest of an event,

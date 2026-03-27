@@ -2,8 +2,8 @@ use std::{sync::Arc, time::Duration};
 
 use keri_core::{
     database::{
-        redb::{escrow_database::SnKeyDatabase, RedbDatabase, WriteTxnMode},
-        SequencedEventDatabase,
+        redb::{escrow_database::SnKeyDatabase, WriteTxnMode},
+        EventDatabase, SequencedEventDatabase,
     },
     prefix::IdentifierPrefix,
     processor::event_storage::EventStorage,
@@ -19,17 +19,17 @@ use crate::{
     },
 };
 
-pub struct OutOfOrderEscrow<D: TelEventDatabase + TelLogDatabase> {
+pub struct OutOfOrderEscrow<D: TelEventDatabase + TelLogDatabase, K: EventDatabase> {
     tel_reference: Arc<TelEventStorage<D>>,
-    kel_reference: Arc<EventStorage<RedbDatabase>>,
+    kel_reference: Arc<EventStorage<K>>,
     tel_log: Arc<D>,
     escrowed_out_of_order: SnKeyDatabase,
 }
 
-impl<D: TelEventDatabase + TelLogDatabase> OutOfOrderEscrow<D> {
+impl<D: TelEventDatabase + TelLogDatabase, K: EventDatabase> OutOfOrderEscrow<D, K> {
     pub fn new(
         tel_reference: Arc<D>,
-        kel_reference: Arc<EventStorage<RedbDatabase>>,
+        kel_reference: Arc<EventStorage<K>>,
         escrow_db: &EscrowDatabase,
         duration: Duration,
     ) -> Self {
@@ -44,7 +44,7 @@ impl<D: TelEventDatabase + TelLogDatabase> OutOfOrderEscrow<D> {
     }
 }
 
-impl<D: TelEventDatabase + TelLogDatabase> TelNotifier for OutOfOrderEscrow<D> {
+impl<D: TelEventDatabase + TelLogDatabase, K: EventDatabase> TelNotifier for OutOfOrderEscrow<D, K> {
     fn notify(
         &self,
         notification: &TelNotification,
@@ -72,7 +72,7 @@ impl<D: TelEventDatabase + TelLogDatabase> TelNotifier for OutOfOrderEscrow<D> {
     }
 }
 
-impl<D: TelEventDatabase + TelLogDatabase> OutOfOrderEscrow<D> {
+impl<D: TelEventDatabase + TelLogDatabase, K: EventDatabase> OutOfOrderEscrow<D, K> {
     pub fn process_out_of_order_events(
         &self,
         bus: &TelNotificationBus,
