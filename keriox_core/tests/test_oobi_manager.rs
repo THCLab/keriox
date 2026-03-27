@@ -20,7 +20,7 @@ mod test_oobi_manager {
         let (processor, storage, oobi_manager) = (
             BasicProcessor::new(events_db.clone(), None),
             EventStorage::new(events_db.clone()),
-            OobiManager::new(events_db.clone()),
+            OobiManager::new(events_db.clone()).unwrap(),
         );
         let events = parse_event_stream(oobi_rpy.as_bytes()).unwrap();
         for event in events {

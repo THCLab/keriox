@@ -42,8 +42,14 @@ use crate::identifier::mechanics::MechanicsError;
 pub enum OobiRetrieveError {
     #[error("No oobi for {0} identifier")]
     MissingOobi(IdentifierPrefix, Option<Scheme>),
-    #[error(transparent)]
-    DbError(#[from] RedbError),
+    #[error("Database error: {0}")]
+    DbError(String),
+}
+
+impl From<keri_core::oobi::error::OobiError> for OobiRetrieveError {
+    fn from(e: keri_core::oobi::error::OobiError) -> Self {
+        OobiRetrieveError::DbError(e.to_string())
+    }
 }
 
 pub struct KnownEvents {
@@ -62,7 +68,7 @@ impl KnownEvents {
             Arc::new(RedbDatabase::new(&path)?)
         };
 
-        let oobi_manager = OobiManager::new(event_database.clone());
+        let oobi_manager = OobiManager::new(event_database.clone())?;
 
         let (
             mut notification_bus,

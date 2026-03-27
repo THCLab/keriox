@@ -136,6 +136,13 @@ impl From<RedbError> for Error {
     }
 }
 
+#[cfg(feature = "oobi")]
+impl From<crate::oobi::error::OobiError> for Error {
+    fn from(e: crate::oobi::error::OobiError) -> Self {
+        Error::SemanticError(e.to_string())
+    }
+}
+
 impl From<crate::keys::KeysError> for Error {
     fn from(_: crate::keys::KeysError) -> Self {
         Error::SigningError

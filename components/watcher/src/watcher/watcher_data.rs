@@ -3,8 +3,8 @@ use std::{fs::File, sync::Arc};
 use futures::future::join_all;
 use itertools::Itertools;
 use keri_core::actor::possible_response::PossibleResponse;
-use keri_core::database::redb::RedbError;
 use keri_core::error::Error;
+use keri_core::oobi::error::OobiError;
 use keri_core::oobi::LocationScheme;
 use keri_core::prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix};
 use keri_core::processor::escrow::default_escrow_bus;
@@ -97,7 +97,7 @@ impl WatcherData {
             Arc::new(RedbDatabase::new(&path).unwrap())
         };
 
-        let oobi_manager = OobiManager::new(events_db.clone());
+        let oobi_manager = OobiManager::new(events_db.clone())?;
 
         let (mut notification_bus, _) = default_escrow_bus(events_db.clone(), escrow_config);
         let reply_escrow = Arc::new(ReplyEscrow::new(events_db.clone()));
@@ -529,7 +529,7 @@ impl WatcherData {
     }
 
     /// Query roles in oobi manager to check if controller with given ID is allowed to communicate with us.
-    fn check_role(&self, cid: &IdentifierPrefix) -> Result<bool, RedbError> {
+    fn check_role(&self, cid: &IdentifierPrefix) -> Result<bool, OobiError> {
         Ok(self
             .oobi_manager
             .get_end_role(cid, Role::Watcher)?

@@ -1,7 +1,7 @@
 use keri_core::{
     actor::prelude::VersionError, database::redb::RedbError,
-    event_message::cesr_adapter::ParseError, oobi::Scheme, prefix::IdentifierPrefix,
-    processor::validator::VerificationError,
+    event_message::cesr_adapter::ParseError, oobi::Scheme, oobi::error::OobiError,
+    prefix::IdentifierPrefix, processor::validator::VerificationError,
 };
 use thiserror::Error;
 
@@ -58,9 +58,18 @@ pub enum ControllerError {
     #[error("Error: {0}")]
     OtherError(String),
 
+    #[error("Oobi error: {0}")]
+    OobiError(String),
+
     #[error(transparent)]
     Mechanic(#[from] MechanicsError),
 
     #[error("Watcher response error: {0}")]
     WatcherResponseError(#[from] WatcherResponseError),
+}
+
+impl From<OobiError> for ControllerError {
+    fn from(e: OobiError) -> Self {
+        ControllerError::OobiError(e.to_string())
+    }
 }
