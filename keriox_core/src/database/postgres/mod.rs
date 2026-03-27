@@ -52,7 +52,7 @@ impl Default for PostgresConfig {
 }
 
 pub struct PostgresDatabase {
-    pub(crate) pool: PgPool,
+    pub pool: PgPool,
     pub(crate) log_db: Arc<PostgresLogDatabase>,
     #[cfg(feature = "query")]
     accepted_rpy: Arc<AcceptedKsn>,

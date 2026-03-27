@@ -1,7 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use keri_core::{
-    database::{redb::WriteTxnMode, EventDatabase},
+    database::EventDatabase,
     processor::{
         event_storage::EventStorage,
         notification::{Notification, NotificationBus, Notifier},
@@ -10,9 +10,7 @@ use keri_core::{
 use said::SelfAddressingIdentifier;
 
 use crate::{
-    database::{
-        digest_key_database::DigestKeyDatabase, EscrowDatabase, TelEventDatabase, TelLogDatabase,
-    },
+    database::{TelEscrowDatabase, TelEventDatabase},
     error::Error,
     event::Event,
     processor::{
@@ -22,33 +20,36 @@ use crate::{
     },
 };
 
-pub struct MissingIssuerEscrow<D: TelEventDatabase, K: EventDatabase> {
+pub struct MissingIssuerEscrow<D: TelEventDatabase, K: EventDatabase, E: TelEscrowDatabase> {
     kel_reference: Arc<EventStorage<K>>,
     tel_reference: Arc<TelEventStorage<D>>,
     publisher: TelNotificationBus,
-    escrowed_missing_issuer: DigestKeyDatabase,
+    escrow_db: Arc<E>,
 }
 
-impl<D: TelEventDatabase, K: EventDatabase> MissingIssuerEscrow<D, K> {
+impl<D: TelEventDatabase, K: EventDatabase, E: TelEscrowDatabase>
+    MissingIssuerEscrow<D, K, E>
+{
     pub fn new(
         db: Arc<D>,
-        escrow_db: &EscrowDatabase,
-        duration: Duration,
+        escrow_db: Arc<E>,
+        _duration: Duration,
         kel_reference: Arc<EventStorage<K>>,
         bus: TelNotificationBus,
     ) -> Self {
-        let escrow = DigestKeyDatabase::new(escrow_db.0.clone(), "missing_issuer_escrow");
-
-        let tel_event_storage = Arc::new(TelEventStorage::new(db.clone()));
+        let tel_event_storage = Arc::new(TelEventStorage::new(db));
         Self {
             tel_reference: tel_event_storage,
-            escrowed_missing_issuer: escrow,
+            escrow_db,
             kel_reference,
             publisher: bus,
         }
     }
 }
-impl<D: TelEventDatabase + TelLogDatabase, K: EventDatabase> Notifier for MissingIssuerEscrow<D, K> {
+
+impl<D: TelEventDatabase, K: EventDatabase, E: TelEscrowDatabase> Notifier
+    for MissingIssuerEscrow<D, K, E>
+{
     fn notify(
         &self,
         notification: &Notification,
@@ -57,7 +58,6 @@ impl<D: TelEventDatabase + TelLogDatabase, K: EventDatabase> Notifier for Missin
         match notification {
             Notification::KeyEventAdded(ev_message) => {
                 let digest = ev_message.event_message.digest()?;
-
                 self.process_missing_issuer_escrow(&digest).unwrap();
             }
             _ => {
@@ -66,12 +66,13 @@ impl<D: TelEventDatabase + TelLogDatabase, K: EventDatabase> Notifier for Missin
                 ))
             }
         }
-
         Ok(())
     }
 }
 
-impl<D: TelEventDatabase + TelLogDatabase, K: EventDatabase> TelNotifier for MissingIssuerEscrow<D, K> {
+impl<D: TelEventDatabase, K: EventDatabase, E: TelEscrowDatabase> TelNotifier
+    for MissingIssuerEscrow<D, K, E>
+{
     fn notify(
         &self,
         notification: &TelNotification,
@@ -80,12 +81,10 @@ impl<D: TelEventDatabase + TelLogDatabase, K: EventDatabase> TelNotifier for Mis
         match notification {
             TelNotification::MissingIssuer(event) => {
                 let tel_event_digest = event.event.get_digest()?;
-                self.tel_reference
-                    .db
-                    .log_event(&event, &WriteTxnMode::CreateNew)?;
+                self.tel_reference.db.log_event(event)?;
                 let missing_event_digest = event.seal.seal.digest.clone().to_string();
-                self.escrowed_missing_issuer
-                    .insert(&missing_event_digest.as_str(), &tel_event_digest)
+                self.escrow_db
+                    .missing_issuer_insert(&missing_event_digest, &tel_event_digest)
                     .map_err(|e| Error::EscrowDatabaseError(e.to_string()))
             }
             _ => return Err(Error::Generic("Wrong notification".into())),
@@ -93,15 +92,16 @@ impl<D: TelEventDatabase + TelLogDatabase, K: EventDatabase> TelNotifier for Mis
     }
 }
 
-impl<D: TelEventDatabase + TelLogDatabase, K: EventDatabase> MissingIssuerEscrow<D, K> {
-    /// Reprocess escrowed events that need issuer event of given digest for acceptance.
+impl<D: TelEventDatabase, K: EventDatabase, E: TelEscrowDatabase>
+    MissingIssuerEscrow<D, K, E>
+{
     pub fn process_missing_issuer_escrow(
         &self,
         said: &SelfAddressingIdentifier,
     ) -> Result<(), Error> {
-        if let Ok(esc) = self.escrowed_missing_issuer.get(&said.to_string().as_str()) {
+        if let Ok(esc) = self.escrow_db.missing_issuer_get(&said.to_string()) {
             for digest in esc {
-                let event = self.tel_reference.db.get(&digest)?.unwrap();
+                let event = self.tel_reference.db.get_event(&digest)?.unwrap();
                 let kel_event_digest = event.event.get_digest()?;
                 let validator =
                     TelEventValidator::new(self.tel_reference.clone(), self.kel_reference.clone());
@@ -111,40 +111,35 @@ impl<D: TelEventDatabase + TelLogDatabase, K: EventDatabase> MissingIssuerEscrow
                 };
                 match result {
                     Ok(_) => {
-                        // remove from escrow
-                        self.escrowed_missing_issuer
-                            .remove(said, &event.event.get_digest()?)
+                        self.escrow_db
+                            .missing_issuer_remove(&said.to_string(), &event.event.get_digest()?)
                             .map_err(|e| Error::EscrowDatabaseError(e.to_string()))?;
-                        // accept tel event
                         self.tel_reference.add_event(event.clone())?;
-
                         self.publisher
                             .notify(&TelNotification::TelEventAdded(event))?;
                     }
                     Err(Error::MissingSealError) => {
-                        // remove from escrow
-                        self.escrowed_missing_issuer
-                            .remove(said, &kel_event_digest)
+                        self.escrow_db
+                            .missing_issuer_remove(&said.to_string(), &kel_event_digest)
                             .unwrap();
                     }
                     Err(Error::OutOfOrderError) => {
-                        self.escrowed_missing_issuer
-                            .remove(said, &kel_event_digest)
+                        self.escrow_db
+                            .missing_issuer_remove(&said.to_string(), &kel_event_digest)
                             .unwrap();
                         self.publisher.notify(&TelNotification::OutOfOrder(event))?;
                     }
                     Err(Error::MissingRegistryError) => {
-                        self.escrowed_missing_issuer
-                            .remove(said, &kel_event_digest)
+                        self.escrow_db
+                            .missing_issuer_remove(&said.to_string(), &kel_event_digest)
                             .unwrap();
                         self.publisher
                             .notify(&TelNotification::MissingRegistry(event))?;
                     }
-                    Err(_e) => (), // keep in escrow,
+                    Err(_e) => (),
                 }
             }
         };
-
         Ok(())
     }
 }
@@ -162,10 +157,9 @@ mod tests {
             notification::JustNotification, Processor,
         },
     };
-    use redb::Database;
 
     use crate::{
-        database::{redb::RedbTelDatabase, EscrowDatabase, TelEventDatabase},
+        database::{redb::RedbTelDatabase, EscrowDatabase},
         error::Error,
         event::{manager_event, verifiable_event::VerifiableEvent},
         processor::{
@@ -181,7 +175,6 @@ mod tests {
     pub fn test_missing_issuer_escrow() -> Result<(), Error> {
         use tempfile::Builder;
 
-        // Setup issuer key event log. Without ixn events tel event's can't be validated.
         let keri_root = Builder::new().prefix("test-db").tempfile().unwrap();
         let keri_db = Arc::new(RedbDatabase::new(keri_root.path()).unwrap());
         let mut keri_processor = BasicProcessor::new(keri_db.clone(), None);
@@ -193,14 +186,12 @@ mod tests {
         let issuer_icp = kel[0].clone();
         let issuer_vcp_ixn = kel[1].clone();
 
-        // Incept identifier
         keri_processor.process(&issuer_icp)?;
 
-        // Initiate tel and it's escrows
         let tel_root = Builder::new().prefix("test-db").tempfile().unwrap();
         let tel_escrow_root = Builder::new().prefix("test-db").tempfile().unwrap();
 
-        let db = EscrowDatabase::new(tel_escrow_root.path()).unwrap();
+        let db = Arc::new(EscrowDatabase::new(tel_escrow_root.path()).unwrap());
         let tel_events_db = Arc::new(RedbTelDatabase::new(&tel_root.path()).unwrap());
 
         let tel_storage = Arc::new(TelEventStorage::new(tel_events_db.clone()));
@@ -208,7 +199,7 @@ mod tests {
 
         let missing_issuer_escrow = Arc::new(MissingIssuerEscrow::new(
             tel_events_db,
-            &db,
+            db,
             Duration::from_secs(100),
             keri_storage.clone(),
             tel_bus.clone(),
@@ -224,7 +215,7 @@ mod tests {
             &vec![JustNotification::KeyEventAdded],
         )?;
 
-        let processor = TelEventProcessor::new(keri_storage, tel_storage.clone(), Some(tel_bus)); // TelEventProcessor{database: TelEventDatabase::new(db, db_escrow)};
+        let processor = TelEventProcessor::new(keri_storage, tel_storage.clone(), Some(tel_bus));
 
         let issuer_prefix: IdentifierPrefix = "EETk5xW-rl2TgHTTXr8m5kGXiC30m3gMgsYcBAjOE9eI"
             .parse()
@@ -246,23 +237,16 @@ mod tests {
         )?;
 
         let management_tel_prefix = vcp.get_prefix();
-
-        // before applying vcp to management tel, insert anchor event seal with proper ixn event data.
         let verifiable_vcp = VerifiableEvent::new(vcp.clone(), dummy_source_seal.clone().into());
         processor.process(verifiable_vcp.clone())?;
 
-        // Check management state. Vcp event should't be accepted, because of
-        // missing issuer event. It should be in missing issuer escrow.
         let st = tel_storage.compute_management_tel_state(&management_tel_prefix)?;
         assert_eq!(st, None);
 
-        // check if vcp event is in db.
         let man_event_from_db =
             tel_storage.get_management_event_at_sn(&management_tel_prefix, 0)?;
         assert!(man_event_from_db.is_none());
 
-        // Process missing ixn in issuer's kel. Now escrowed vcp event should be
-        // accepted.
         keri_processor.process(&issuer_vcp_ixn)?;
 
         let management_state = tel_storage
@@ -270,7 +254,6 @@ mod tests {
             .unwrap();
         assert_eq!(management_state.sn, 0);
 
-        // check if vcp event is in db.
         let man_event_from_db =
             tel_storage.get_management_event_at_sn(&management_tel_prefix, 0)?;
         assert!(man_event_from_db.is_some());
