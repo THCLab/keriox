@@ -18,7 +18,7 @@ pub struct BasicProcessor<D: EventDatabase>(EventProcessor<D>);
 impl<D: EventDatabase + 'static> Processor for BasicProcessor<D> {
     type Database = D;
     fn register_observer(
-        &mut self,
+        &self,
         observer: Arc<dyn Notifier + Send + Sync>,
         notification: &[JustNotification],
     ) -> Result<(), Error> {

@@ -50,7 +50,7 @@ fn test_out_of_order_cleanup() -> Result<(), Error> {
         let events_db_path = NamedTempFile::new().unwrap();
         let redb = RedbDatabase::new(events_db_path.path()).unwrap();
         let events_db = Arc::new(redb);
-        let mut processor = BasicProcessor::new(events_db.clone(), None);
+        let processor = BasicProcessor::new(events_db.clone(), None);
 
         // Register out of order escrow, to save and reprocess out of order events
         let ooo_escrow = Arc::new(MaybeOutOfOrderEscrow::new(
@@ -145,7 +145,7 @@ fn test_partially_sign_escrow_cleanup() -> Result<(), Error> {
         std::fs::create_dir_all(path).unwrap();
         let events_db_path = NamedTempFile::new().unwrap();
         let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
-        let mut processor = BasicProcessor::new(events_db.clone(), None);
+        let processor = BasicProcessor::new(events_db.clone(), None);
 
         // Register partially signed escrow, to save and reprocess partially signed events
         let ps_escrow = Arc::new(PartiallySignedEscrow::new(
@@ -230,7 +230,7 @@ pub fn test_partially_witnessed_escrow_cleanup() -> Result<(), Error> {
     let redb = RedbDatabase::new(events_db_path.path()).unwrap();
     let log_db = redb.log_db.clone();
     let events_db = Arc::new(redb);
-    let mut event_processor = BasicProcessor::new(events_db.clone(), None);
+    let event_processor = BasicProcessor::new(events_db.clone(), None);
     let event_storage = EventStorage::new(Arc::clone(&events_db));
     // Register not fully witnessed escrow, to save and reprocess events
     let partially_witnessed_escrow = Arc::new(PartiallyWitnessedEscrow::new(

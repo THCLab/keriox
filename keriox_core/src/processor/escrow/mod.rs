@@ -54,7 +54,7 @@ pub fn default_escrow_bus<D>(
 where
     D: EventDatabase + EscrowCreator + Sync + Send + 'static,
 {
-    let mut bus = NotificationBus::new();
+    let bus = NotificationBus::new();
 
     // Register out of order escrow, to save and reprocess out of order events
     let ooo_escrow = Arc::new(MaybeOutOfOrderEscrow::new(

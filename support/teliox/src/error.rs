@@ -44,24 +44,28 @@ pub enum Error {
     RwLockingError,
 }
 
+#[cfg(feature = "storage-redb")]
 impl From<redb::TransactionError> for Error {
     fn from(_: redb::TransactionError) -> Self {
         Error::RedbError
     }
 }
 
+#[cfg(feature = "storage-redb")]
 impl From<redb::TableError> for Error {
     fn from(_: redb::TableError) -> Self {
         Error::RedbError
     }
 }
 
+#[cfg(feature = "storage-redb")]
 impl From<redb::CommitError> for Error {
     fn from(_: redb::CommitError) -> Self {
         Error::RedbError
     }
 }
 
+#[cfg(feature = "storage-redb")]
 impl From<redb::StorageError> for Error {
     fn from(_: redb::StorageError) -> Self {
         Error::RedbError

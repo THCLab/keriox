@@ -111,7 +111,7 @@ fn test_out_of_order() -> Result<(), Error> {
         let events_db_path = NamedTempFile::new().unwrap();
         let redb = RedbDatabase::new(events_db_path.path()).unwrap();
         let events_db = Arc::new(redb);
-        let mut processor = BasicProcessor::new(events_db.clone(), None);
+        let processor = BasicProcessor::new(events_db.clone(), None);
 
         // Register out of order escrow, to save and reprocess out of order events
         let new_ooo = Arc::new(MaybeOutOfOrderEscrow::new(
