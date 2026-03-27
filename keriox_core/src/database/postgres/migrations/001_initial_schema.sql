@@ -61,32 +61,55 @@ CREATE TABLE seals (
 -- TEL Tables (TelEventDatabase)
 -- ===========================================
 
--- TEL events storage
--- ReDB: EVENTS: TableDefinition<&[u8], &[u8]>
+-- TEL events storage: digest -> CBOR serialized VerifiableEvent
 CREATE TABLE tel_events (
-    digest BYTEA PRIMARY KEY,
-    event_data BYTEA NOT NULL  -- CBOR serialized VerifiableEvent
+    digest TEXT PRIMARY KEY,
+    event_data BYTEA NOT NULL
 );
 
 -- VC TEL index: (vc_identifier, sn) -> event_digest
--- ReDB: VC_TELS: TableDefinition<(&str, u64), &[u8]>
 CREATE TABLE vc_tels (
     identifier TEXT NOT NULL,
     sn BIGINT NOT NULL,
-    digest BYTEA NOT NULL,
+    digest TEXT NOT NULL,
     PRIMARY KEY (identifier, sn)
 );
 CREATE INDEX idx_vc_tels_identifier ON vc_tels(identifier);
 
 -- Management TEL index: (registry_identifier, sn) -> event_digest
--- ReDB: MANAGEMENT_TELS: TableDefinition<(&str, u64), &[u8]>
 CREATE TABLE management_tels (
     identifier TEXT NOT NULL,
     sn BIGINT NOT NULL,
-    digest BYTEA NOT NULL,
+    digest TEXT NOT NULL,
     PRIMARY KEY (identifier, sn)
 );
 CREATE INDEX idx_management_tels_identifier ON management_tels(identifier);
+
+-- ===========================================
+-- TEL Escrow Tables (TelEscrowDatabase)
+-- ===========================================
+
+-- Missing KEL issuer event escrow: kel_digest -> [tel_digest]
+CREATE TABLE tel_missing_issuer_escrow (
+    kel_digest TEXT NOT NULL,
+    tel_digest TEXT NOT NULL,
+    PRIMARY KEY (kel_digest, tel_digest)
+);
+
+-- Out-of-order TEL events escrow: (identifier, sn) -> [tel_digest]
+CREATE TABLE tel_out_of_order_escrow (
+    identifier TEXT NOT NULL,
+    sn BIGINT NOT NULL,
+    tel_digest TEXT NOT NULL,
+    PRIMARY KEY (identifier, sn, tel_digest)
+);
+
+-- Missing registry TEL events escrow: registry_id -> [tel_digest]
+CREATE TABLE tel_missing_registry_escrow (
+    registry_id TEXT NOT NULL,
+    tel_digest TEXT NOT NULL,
+    PRIMARY KEY (registry_id, tel_digest)
+);
 
 -- ===========================================
 -- Escrow Tables
