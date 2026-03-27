@@ -3,8 +3,10 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+#[cfg(feature = "storage-redb")]
+use crate::database::redb::RedbDatabase;
 use crate::{
-    database::{redb::RedbDatabase, EscrowCreator, EventDatabase},
+    database::{EscrowCreator, EventDatabase},
     processor::escrow::{
         maybe_out_of_order_escrow::MaybeOutOfOrderEscrow,
         partially_witnessed_escrow::PartiallyWitnessedEscrow,
@@ -72,6 +74,7 @@ pub struct SimpleController<K: KeyManager + 'static, D: EventDatabase + EscrowCr
 }
 
 // impl<K: KeyManager, D: EventDatabase + Send + Sync + 'static> SimpleController<K, D> {
+#[cfg(feature = "storage-redb")]
 impl<K: KeyManager> SimpleController<K, RedbDatabase> {
     // incept a state and keys
     pub fn new(
@@ -79,8 +82,8 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase> {
         key_manager: Arc<Mutex<K>>,
         escrow_config: EscrowConfig,
     ) -> Result<SimpleController<K, RedbDatabase>, Error> {
-        let (not_bus, (ooo, _, partially_witnesses, del_escrow, _duplicates)) =
-            default_escrow_bus(event_db.clone(), escrow_config);
+        let (not_bus, escrows) =
+            default_escrow_bus(event_db.clone(), escrow_config, None);
         let processor = BasicProcessor::new(event_db.clone(), Some(not_bus));
 
         Ok(SimpleController {
@@ -90,9 +93,9 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase> {
             processor,
             storage: EventStorage::new(event_db.clone()),
             groups: vec![],
-            not_fully_witnessed_escrow: partially_witnesses,
-            ooo_escrow: ooo,
-            delegation_escrow: del_escrow,
+            not_fully_witnessed_escrow: escrows.partially_witnessed,
+            ooo_escrow: escrows.out_of_order,
+            delegation_escrow: escrows.delegation,
         })
     }
 

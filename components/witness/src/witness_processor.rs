@@ -22,7 +22,7 @@ pub struct WitnessProcessor {
 impl Processor for WitnessProcessor {
     type Database = RedbDatabase;
     fn register_observer(
-        &mut self,
+        &self,
         observer: Arc<dyn Notifier + Send + Sync>,
         notifications: &[JustNotification],
     ) -> Result<(), Error> {
@@ -62,7 +62,7 @@ impl Default for WitnessEscrowConfig {
 
 impl WitnessProcessor {
     pub fn new(redb: Arc<RedbDatabase>, escrow_config: WitnessEscrowConfig) -> Self {
-        let mut bus = NotificationBus::new();
+        let bus = NotificationBus::new();
         let partially_signed_escrow = Arc::new(PartiallySignedEscrow::new(
             redb.clone(),
             escrow_config.partially_signed_timeout,

@@ -1,13 +1,12 @@
 use crate::{error::Error, event::verifiable_event::VerifiableEvent};
-use ::redb::Database;
-use keri_core::{database::redb::WriteTxnMode, prefix::IdentifierPrefix};
+use keri_core::prefix::IdentifierPrefix;
+#[cfg(feature = "storage-redb")]
 use said::SelfAddressingIdentifier;
-use std::{
-    fs::{create_dir_all, exists},
-    path::Path,
-    sync::Arc,
-};
+use std::path::Path;
+
+#[cfg(feature = "storage-redb")]
 pub(crate) mod digest_key_database;
+#[cfg(feature = "storage-redb")]
 pub mod redb;
 
 pub trait TelEventDatabase {
@@ -28,15 +27,23 @@ pub trait TelEventDatabase {
     ) -> Option<impl DoubleEndedIterator<Item = VerifiableEvent>>;
 }
 
+#[cfg(feature = "storage-redb")]
 pub trait TelLogDatabase {
-    fn log_event(&self, event: &VerifiableEvent, transaction: &WriteTxnMode) -> Result<(), Error>;
+    fn log_event(
+        &self,
+        event: &VerifiableEvent,
+        transaction: &keri_core::database::redb::WriteTxnMode,
+    ) -> Result<(), Error>;
     fn get(&self, digest: &SelfAddressingIdentifier) -> Result<Option<VerifiableEvent>, Error>;
 }
 
-pub struct EscrowDatabase(pub(crate) Arc<Database>);
+#[cfg(feature = "storage-redb")]
+pub struct EscrowDatabase(pub(crate) std::sync::Arc<::redb::Database>);
 
+#[cfg(feature = "storage-redb")]
 impl EscrowDatabase {
     pub fn new(file_path: &Path) -> Result<Self, Error> {
+        use std::fs::{create_dir_all, exists};
         // Create file if not exists
         if !std::fs::exists(file_path).map_err(|e| Error::EscrowDatabaseError(e.to_string()))? {
             if let Some(parent) = file_path.parent() {
@@ -46,8 +53,8 @@ impl EscrowDatabase {
                 }
             }
         }
-        let db =
-            Database::create(file_path).map_err(|e| Error::EscrowDatabaseError(e.to_string()))?;
-        Ok(Self(Arc::new(db)))
+        let db = ::redb::Database::create(file_path)
+            .map_err(|e| Error::EscrowDatabaseError(e.to_string()))?;
+        Ok(Self(std::sync::Arc::new(db)))
     }
 }
