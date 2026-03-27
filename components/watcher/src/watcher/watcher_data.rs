@@ -99,7 +99,7 @@ impl WatcherData {
 
         let oobi_manager = OobiManager::new(events_db.clone());
 
-        let (mut notification_bus, _) = default_escrow_bus(events_db.clone(), escrow_config);
+        let (notification_bus, _escrows) = default_escrow_bus(events_db.clone(), escrow_config, None);
         let reply_escrow = Arc::new(ReplyEscrow::new(events_db.clone()));
         notification_bus.register_observer(
             reply_escrow.clone(),
@@ -112,7 +112,7 @@ impl WatcherData {
         let prefix = BasicPrefix::Ed25519NT(signer.public_key()); // watcher uses non transferable key
         let processor = BasicProcessor::new(events_db.clone(), Some(notification_bus));
 
-        let storage = Arc::new(EventStorage::new(events_db));
+        let storage = Arc::new(EventStorage::new_redb(events_db));
 
         // construct witness loc scheme oobi
         let loc_scheme = LocationScheme::new(

@@ -60,7 +60,7 @@ pub struct EventValidator<D: EventDatabase> {
     event_storage: EventStorage<D>,
 }
 
-impl<D: EventDatabase + std::any::Any> EventValidator<D> {
+impl<D: EventDatabase> EventValidator<D> {
     pub fn new(event_database: Arc<D>) -> Self {
         Self {
             event_storage: EventStorage::new(event_database),

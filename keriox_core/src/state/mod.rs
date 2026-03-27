@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use crate::{
-    database::redb::rkyv_adapter::said_wrapper::SaidValue,
+    database::rkyv_adapter::said_wrapper::SaidValue,
     error::Error,
     event::{
         event_data::EventData,

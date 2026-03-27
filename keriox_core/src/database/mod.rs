@@ -19,7 +19,10 @@ use crate::{
 
 #[cfg(feature = "mailbox")]
 pub mod mailbox;
+pub mod memory;
+#[cfg(feature = "storage-redb")]
 pub mod redb;
+pub(crate) mod rkyv_adapter;
 pub mod timestamped;
 
 pub enum QueryParameters<'a> {
