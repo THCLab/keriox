@@ -242,7 +242,7 @@ impl SequencedEventDatabase for PostgresSnKeyDatabase {
         let rows = async_std::task::block_on(
             sqlx::query(
                 "SELECT digest FROM escrow_events \
-                    WHERE escrow_type = $1 AND identifier = $2 AND sn > $3 \
+                    WHERE escrow_type = $1 AND identifier = $2 AND sn >= $3 \
                     ORDER BY sn ASC",
             )
             .bind(self.escrow_type)

@@ -10,6 +10,9 @@ repository.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
+default = ["storage-redb"]
+storage-redb = ["keri-core/storage-redb", "teliox/storage-redb"]
+storage-postgres = ["keri-core/storage-postgres", "teliox/storage-postgres"]
 query_cache = ["rusqlite"]
 
 [dependencies]
@@ -30,6 +33,23 @@ async-trait = "0.1.57"
 [dev-dependencies]
 witness = { path = "../witness" }
 tempfile = { version = "3.1" }
+sqlx = { version = "0.8", features = ["postgres", "runtime-tokio"] }
+
+[[test]]
+name = "test_kel_managing_postgres"
+required-features = ["storage-postgres"]
+
+[[test]]
+name = "test_tel_managing_postgres"
+required-features = ["storage-postgres"]
+
+[[test]]
+name = "test_group_incept_postgres"
+required-features = ["storage-postgres"]
+
+[[test]]
+name = "test_delegated_incept_postgres"
+required-features = ["storage-postgres", "query_cache"]
 
 [package.metadata.release]
 pre-release-hook = ["ls"]
