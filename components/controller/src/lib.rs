@@ -20,4 +20,9 @@ pub use teliox::{
 #[cfg(feature = "storage-redb")]
 pub use known_events::RedbKnownEvents;
 #[cfg(feature = "storage-redb")]
-pub use controller::RedbController;
+pub use controller::{RedbController, RedbIdentifier};
+
+#[cfg(feature = "storage-postgres")]
+pub use known_events::PostgresKnownEvents;
+#[cfg(feature = "storage-postgres")]
+pub use controller::{PostgresController, PostgresIdentifier};
