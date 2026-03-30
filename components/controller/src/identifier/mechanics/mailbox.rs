@@ -1,5 +1,6 @@
 use keri_core::{
     actor::event_generator,
+    database::{EscrowCreator, EventDatabase},
     error::Error,
     event::{
         event_data::EventData,
@@ -9,14 +10,21 @@ use keri_core::{
         Message, Notice, SignedEventMessage, SignedNontransferableReceipt,
     },
     mailbox::{exchange::ForwardTopic, MailboxResponse},
+    oobi_manager::storage::OobiStorageBackend,
     prefix::IdentifierPrefix,
 };
+use teliox::database::TelEventDatabase;
 
 use crate::{error::ControllerError, identifier::Identifier, mailbox_updating::ActionRequired};
 
 use super::{MechanicsError, ResponseProcessingError};
 
-impl Identifier {
+impl<D, T, S> Identifier<D, T, S>
+where
+    D: EventDatabase + EscrowCreator + Send + Sync + 'static,
+    T: TelEventDatabase + Send + Sync + 'static,
+    S: OobiStorageBackend,
+{
     pub(crate) async fn mailbox_response(
         &self,
         recipient: &IdentifierPrefix,

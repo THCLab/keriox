@@ -9,25 +9,37 @@ use keri_core::{
         possible_response::PossibleResponse,
         prelude::{HashFunctionCode, SerializationFormats},
     },
+    database::{EscrowCreator, EventDatabase},
     event_message::{
         msg::KeriEvent,
         signature::{Nontransferable, Signature},
         timestamped::Timestamped,
     },
     oobi::Scheme,
+    oobi_manager::storage::OobiStorageBackend,
     query::query_event::{LogsQueryArgs, QueryEvent, QueryRoute, SignedKelQuery},
 };
-use teliox::query::{SignedTelQuery, TelQueryArgs, TelQueryEvent, TelQueryRoute};
+use teliox::{database::TelEventDatabase, query::{SignedTelQuery, TelQueryArgs, TelQueryEvent, TelQueryRoute}};
 
 use super::mechanics::MechanicsError;
 
-pub struct NontransferableIdentifier {
+pub struct NontransferableIdentifier<D, T, S>
+where
+    D: EventDatabase + EscrowCreator + 'static,
+    T: TelEventDatabase + 'static,
+    S: OobiStorageBackend,
+{
     id: BasicPrefix,
-    communication: Arc<Communication>,
+    communication: Arc<Communication<D, T, S>>,
 }
 
-impl NontransferableIdentifier {
-    pub fn new(public_key: BasicPrefix, communication: Arc<Communication>) -> Self {
+impl<D, T, S> NontransferableIdentifier<D, T, S>
+where
+    D: EventDatabase + EscrowCreator + Send + Sync + 'static,
+    T: TelEventDatabase + Send + Sync + 'static,
+    S: OobiStorageBackend,
+{
+    pub fn new(public_key: BasicPrefix, communication: Arc<Communication<D, T, S>>) -> Self {
         Self {
             id: public_key,
             communication,

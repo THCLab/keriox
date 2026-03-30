@@ -16,3 +16,8 @@ pub use keri_core::signer::{CryptoBox, KeyManager};
 pub use teliox::{
     event::parse_tel_query_stream, state::vc_state::TelState, state::ManagerTelState,
 };
+
+#[cfg(feature = "storage-redb")]
+pub use known_events::RedbKnownEvents;
+#[cfg(feature = "storage-redb")]
+pub use controller::RedbController;

@@ -1,14 +1,22 @@
 use cesrox::{parse_many, payload::Payload, ParsedData};
 use itertools::Itertools;
 use keri_core::{
+    database::{EscrowCreator, EventDatabase},
     event_message::signature::{get_signatures, Signature},
     oobi::Oobi,
+    oobi_manager::storage::OobiStorageBackend,
     processor::validator::{EventValidator, VerificationError},
 };
+use teliox::database::TelEventDatabase;
 
 use crate::{error::ControllerError, known_events::KnownEvents};
 
-impl KnownEvents {
+impl<D, T, S> KnownEvents<D, T, S>
+where
+    D: EventDatabase + EscrowCreator + Send + Sync + 'static,
+    T: TelEventDatabase + Send + Sync + 'static,
+    S: OobiStorageBackend,
+{
     pub fn verify(&self, data: &[u8], signature: &Signature) -> Result<(), VerificationError> {
         let verifier = EventValidator::new(self.storage.events_db.clone());
         verifier.verify(data, signature)

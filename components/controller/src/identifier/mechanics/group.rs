@@ -1,5 +1,6 @@
 use keri_core::{
     actor::{event_generator, MaterialPath},
+    database::{EscrowCreator, EventDatabase},
     event::{sections::threshold::SignatureThreshold, KeyEvent},
     event_message::{
         cesr_adapter::{parse_event_type, EventType},
@@ -9,14 +10,21 @@ use keri_core::{
         EventTypeTag,
     },
     mailbox::exchange::{Exchange, ForwardTopic, SignedExchange},
+    oobi_manager::storage::OobiStorageBackend,
     prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
 };
+use teliox::database::TelEventDatabase;
 
 use crate::identifier::Identifier;
 
 use super::MechanicsError;
 
-impl Identifier {
+impl<D, T, S> Identifier<D, T, S>
+where
+    D: EventDatabase + EscrowCreator + Send + Sync + 'static,
+    T: TelEventDatabase + Send + Sync + 'static,
+    S: OobiStorageBackend,
+{
     /// Init group identifier
     ///
     /// Returns serialized group icp and list of exchange messages to sign.

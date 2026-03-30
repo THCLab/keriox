@@ -1,15 +1,23 @@
 use cesrox::ParsedData;
 use keri_core::{
+    database::{EscrowCreator, EventDatabase},
     event::sections::seal::EventSeal,
     event_message::signature::{Signature, SignerData},
+    oobi_manager::storage::OobiStorageBackend,
     prefix::{IndexedSignature, SelfSigningPrefix},
 };
+use teliox::database::TelEventDatabase;
 
 use crate::error::ControllerError;
 
 use super::Identifier;
 
-impl Identifier {
+impl<D, T, S> Identifier<D, T, S>
+where
+    D: EventDatabase + EscrowCreator + Send + Sync + 'static,
+    T: TelEventDatabase + Send + Sync + 'static,
+    S: OobiStorageBackend,
+{
     pub fn sign_with_index(
         &self,
         signature: SelfSigningPrefix,

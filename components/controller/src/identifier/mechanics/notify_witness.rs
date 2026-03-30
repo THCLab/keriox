@@ -1,10 +1,18 @@
 use futures::future::join_all;
+use keri_core::database::{EscrowCreator, EventDatabase};
+use keri_core::oobi_manager::storage::OobiStorageBackend;
+use teliox::database::TelEventDatabase;
 
 use crate::identifier::Identifier;
 
 use super::MechanicsError;
 
-impl Identifier {
+impl<D, T, S> Identifier<D, T, S>
+where
+    D: EventDatabase + EscrowCreator + Send + Sync + 'static,
+    T: TelEventDatabase + Send + Sync + 'static,
+    S: OobiStorageBackend,
+{
     pub async fn notify_witnesses(&mut self) -> Result<usize, MechanicsError> {
         let mut n = 0;
         let to_notify = self.to_notify.iter().filter_map(|ev| {

@@ -2,10 +2,11 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use keri_core::actor::parse_event_stream;
-use keri_core::database::redb::{RedbDatabase, RedbError};
+use keri_core::database::{EscrowCreator, EventDatabase};
 use keri_core::error::Error;
 use keri_core::event_message::signed_event_message::SignedNontransferableReceipt;
 use keri_core::oobi::LocationScheme;
+use keri_core::oobi_manager::storage::OobiStorageBackend;
 use keri_core::prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix};
 
 use keri_core::processor::escrow::partially_witnessed_escrow::PartiallyWitnessedEscrow;
@@ -29,8 +30,8 @@ use keri_core::{
     },
     query::reply_event::{ReplyEvent, ReplyRoute, SignedReply},
 };
-use teliox::database::redb::RedbTelDatabase;
-use teliox::database::{EscrowDatabase, TelEventDatabase};
+use teliox::database::TelEventDatabase;
+use teliox::database::TelEscrowDatabase;
 use teliox::processor::escrow::default_escrow_bus as tel_escrow_bus;
 use teliox::processor::storage::TelEventStorage;
 use teliox::tel::Tel;
@@ -52,63 +53,60 @@ impl From<keri_core::oobi::error::OobiError> for OobiRetrieveError {
     }
 }
 
-pub struct KnownEvents {
-    processor: BasicProcessor<RedbDatabase>,
-    pub storage: Arc<EventStorage<RedbDatabase>>,
-    pub oobi_manager: OobiManager,
-    pub partially_witnessed_escrow: Arc<PartiallyWitnessedEscrow<RedbDatabase>>,
-    pub tel: Arc<Tel<RedbTelDatabase, RedbDatabase>>,
+pub struct KnownEvents<D, T, S>
+where
+    D: EventDatabase + EscrowCreator + 'static,
+    T: TelEventDatabase + 'static,
+    S: OobiStorageBackend,
+{
+    processor: BasicProcessor<D>,
+    pub storage: Arc<EventStorage<D>>,
+    pub oobi_manager: OobiManager<S>,
+    pub partially_witnessed_escrow: Arc<PartiallyWitnessedEscrow<D>>,
+    pub tel: Arc<Tel<T, D>>,
 }
 
-impl KnownEvents {
-    pub fn new(db_path: PathBuf, escrow_config: EscrowConfig) -> Result<Self, ControllerError> {
-        let event_database = {
-            let mut path = db_path.clone();
-            path.push("events_database");
-            Arc::new(RedbDatabase::new(&path)?)
-        };
-
-        let oobi_manager = OobiManager::new(event_database.clone())?;
-
-        let (notification_bus, escrows) =
-            default_escrow_bus(event_database.clone(), escrow_config, None);
-
-        let kel_storage = Arc::new(EventStorage::new(event_database.clone()));
-
-        // Initiate tel and it's escrows
-        let tel_events_db = {
-            let mut path = db_path.clone();
-            path.push("tel");
-            path.push("events");
-            Arc::new(RedbTelDatabase::new(&path)?)
-        };
-
-        let tel_escrow_db = {
-            let mut path = db_path.clone();
-            path.push("tel");
-            path.push("escrow");
-            EscrowDatabase::new(&path).map_err(|e| ControllerError::OtherError(e.to_string()))?
-        };
-        let (tel_bus, missing_issuer, _out_of_order, _missing_registy) =
-            tel_escrow_bus(tel_events_db.clone(), kel_storage.clone(), tel_escrow_db)?;
-
-        let tel_storage = Arc::new(TelEventStorage::new(tel_events_db.clone()));
+impl<D, T, S> KnownEvents<D, T, S>
+where
+    D: EventDatabase + EscrowCreator + Send + Sync + 'static,
+    T: TelEventDatabase + Send + Sync + 'static,
+    S: OobiStorageBackend,
+{
+    pub fn new(
+        event_db: Arc<D>,
+        oobi_storage: S,
+        tel_db: Arc<T>,
+        tel_escrow_db: impl TelEscrowDatabase + 'static,
+        escrow_config: EscrowConfig,
+    ) -> Result<Self, ControllerError> {
+        let oobi_manager = OobiManager::with_storage(oobi_storage);
+        let (
+            mut notification_bus,
+            (
+                _out_of_order_escrow,
+                _partially_signed_escrow,
+                partially_witnessed_escrow,
+                _delegation_escrow,
+                _duplicates,
+            ),
+        ) = default_escrow_bus(event_db.clone(), escrow_config);
+        let kel_storage = Arc::new(EventStorage::new(event_db.clone()));
+        let (tel_bus, missing_issuer, _out_of_order, _missing_registry) =
+            tel_escrow_bus(tel_db.clone(), kel_storage.clone(), tel_escrow_db)
+                .map_err(|e| ControllerError::OtherError(e.to_string()))?;
+        let tel_storage = Arc::new(TelEventStorage::new(tel_db.clone()));
         let tel = Arc::new(Tel::new(tel_storage, kel_storage.clone(), Some(tel_bus)));
-
         notification_bus.register_observer(
             missing_issuer.clone(),
             vec![JustNotification::KeyEventAdded],
         );
-
-        let controller = Self {
-            processor: BasicProcessor::new(event_database.clone(), Some(notification_bus)),
+        Ok(Self {
+            processor: BasicProcessor::new(event_db.clone(), Some(notification_bus)),
             storage: kel_storage,
             oobi_manager,
             partially_witnessed_escrow: escrows.partially_witnessed,
             tel,
-        };
-
-        Ok(controller)
+        })
     }
 
     pub fn save(&self, message: &Message) -> Result<(), MechanicsError> {
@@ -317,59 +315,6 @@ impl KnownEvents {
         }
     }
 
-    /// Generate and return rotation event for given identifier data
-    // pub fn rotate(
-    //     &self,
-    //     id: IdentifierPrefix,
-    //     current_keys: Vec<BasicPrefix>,
-    //     new_next_keys: Vec<BasicPrefix>,
-    //     new_next_threshold: u64,
-    //     witness_to_add: Vec<LocationScheme>,
-    //     witness_to_remove: Vec<BasicPrefix>,
-    //     witness_threshold: u64,
-    // ) -> Result<String, ControllerError> {
-    //     let witnesses_to_add = witness_to_add
-    //         .iter()
-    //         .map(|wit| {
-    //             if let IdentifierPrefix::Basic(bp) = &wit.eid {
-    //                 Ok(bp.clone())
-    //             } else {
-    //                 Err(ControllerError::WrongWitnessPrefixError)
-    //             }
-    //         })
-    //         .collect::<Result<Vec<_>, _>>()?;
-
-    //     let state = self
-    //         .storage
-    //         .get_state(&id)
-    //         .ok_or(ControllerError::UnknownIdentifierError)?;
-
-    //     event_generator::rotate(
-    //         state,
-    //         current_keys,
-    //         new_next_keys,
-    //         new_next_threshold,
-    //         witnesses_to_add,
-    //         witness_to_remove,
-    //         witness_threshold,
-    //     )
-    //     .map_err(|e| ControllerError::EventGenerationError(e.to_string()))
-    // }
-
-    /// Generate and return interaction event for given identifier data
-    // pub fn anchor(
-    //     &self,
-    //     id: IdentifierPrefix,
-    //     payload: &[SelfAddressingIdentifier],
-    // ) -> Result<String, ControllerError> {
-    //     let state = self
-    //         .storage
-    //         .get_state(&id)
-    //         .ok_or(ControllerError::UnknownIdentifierError)?;
-    //     event_generator::anchor(state, payload)
-    //         .map_err(|e| ControllerError::EventGenerationError(e.to_string()))
-    // }
-
     /// Generate and return interaction event for given identifier data
     pub fn anchor_with_seal(
         &self,
@@ -507,5 +452,75 @@ impl KnownEvents {
         self.storage
             .get_state(id)
             .ok_or(MechanicsError::UnknownIdentifierError(id.clone()))
+    }
+}
+
+#[cfg(feature = "storage-redb")]
+use keri_core::database::redb::RedbDatabase;
+#[cfg(feature = "storage-redb")]
+use keri_core::oobi_manager::storage::RedbOobiStorage;
+#[cfg(feature = "storage-redb")]
+use teliox::database::redb::RedbTelDatabase;
+#[cfg(feature = "storage-redb")]
+use teliox::database::EscrowDatabase;
+
+#[cfg(feature = "storage-redb")]
+pub type RedbKnownEvents = KnownEvents<RedbDatabase, RedbTelDatabase, RedbOobiStorage>;
+
+#[cfg(feature = "storage-redb")]
+impl RedbKnownEvents {
+    pub fn with_redb(db_path: PathBuf, escrow_config: EscrowConfig) -> Result<Self, ControllerError> {
+        let event_database = {
+            let mut path = db_path.clone();
+            path.push("events_database");
+            Arc::new(RedbDatabase::new(&path).map_err(|e| ControllerError::DatabaseError(e.to_string()))?)
+        };
+        let oobi_storage = RedbOobiStorage::new(event_database.db.clone())
+            .map_err(|e| ControllerError::DatabaseError(e.to_string()))?;
+        let tel_db = {
+            let mut path = db_path.clone();
+            path.push("tel");
+            path.push("events");
+            Arc::new(RedbTelDatabase::new(&path).map_err(|e| ControllerError::OtherError(e.to_string()))?)
+        };
+        let tel_escrow_db = {
+            let mut path = db_path.clone();
+            path.push("tel");
+            path.push("escrow");
+            EscrowDatabase::new(&path).map_err(|e| ControllerError::OtherError(e.to_string()))?
+        };
+        Self::new(event_database, oobi_storage, tel_db, tel_escrow_db, escrow_config)
+    }
+}
+
+#[cfg(feature = "storage-postgres")]
+use keri_core::database::postgres::PostgresDatabase;
+#[cfg(feature = "storage-postgres")]
+use keri_core::database::postgres::oobi_storage::PostgresOobiStorage;
+#[cfg(feature = "storage-postgres")]
+use teliox::database::postgres::{PostgresTelDatabase, PostgresTelEscrowDatabase};
+
+#[cfg(feature = "storage-postgres")]
+pub type PostgresKnownEvents = KnownEvents<PostgresDatabase, PostgresTelDatabase, PostgresOobiStorage>;
+
+#[cfg(feature = "storage-postgres")]
+impl PostgresKnownEvents {
+    pub async fn with_postgres(
+        database_url: &str,
+        escrow_config: EscrowConfig,
+    ) -> Result<Self, ControllerError> {
+        let event_db = Arc::new(
+            PostgresDatabase::new(database_url)
+                .await
+                .map_err(|e| ControllerError::DatabaseError(e.to_string()))?,
+        );
+        event_db
+            .run_migrations()
+            .await
+            .map_err(|e| ControllerError::DatabaseError(e.to_string()))?;
+        let oobi_storage = PostgresOobiStorage::new(event_db.pool.clone());
+        let tel_db = Arc::new(PostgresTelDatabase::new(event_db.pool.clone()));
+        let tel_escrow_db = PostgresTelEscrowDatabase::new(event_db.pool.clone());
+        Self::new(event_db, oobi_storage, tel_db, tel_escrow_db, escrow_config)
     }
 }
