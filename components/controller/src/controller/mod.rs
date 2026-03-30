@@ -111,9 +111,13 @@ use teliox::database::postgres::PostgresTelDatabase;
 
 #[cfg(feature = "storage-redb")]
 pub type RedbController = Controller<RedbDatabase, RedbTelDatabase, RedbOobiStorage>;
+#[cfg(feature = "storage-redb")]
+pub type RedbIdentifier = crate::identifier::Identifier<RedbDatabase, RedbTelDatabase, RedbOobiStorage>;
 
 #[cfg(feature = "storage-postgres")]
 pub type PostgresController = Controller<PostgresDatabase, PostgresTelDatabase, PostgresOobiStorage>;
+#[cfg(feature = "storage-postgres")]
+pub type PostgresIdentifier = crate::identifier::Identifier<PostgresDatabase, PostgresTelDatabase, PostgresOobiStorage>;
 
 #[cfg(feature = "storage-redb")]
 impl RedbController {

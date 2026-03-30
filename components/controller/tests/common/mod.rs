@@ -1,11 +1,39 @@
 use sqlx::postgres::PgPoolOptions;
 
-pub fn get_database_url() -> String {
-    std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgres://postgres:postgres@localhost:5432/keri_controller_test".to_string())
+/// Returns the base postgres URL (without database name) from DATABASE_URL, or a default.
+fn base_url() -> String {
+    let url = std::env::var("DATABASE_URL")
+        .unwrap_or_else(|_| "postgres://postgres:postgres@localhost:5432/placeholder".to_string());
+    let (base, _) = url.rsplit_once('/').expect("Invalid DATABASE_URL");
+    base.to_string()
 }
 
-/// Drops and recreates the test database once per test binary so each run starts fresh.
+/// Returns a database name unique to this test binary so parallel test runs never share a database.
+fn binary_db_name() -> String {
+    // Use the explicit DATABASE_URL db name when set, otherwise derive from the binary name.
+    if let Ok(url) = std::env::var("DATABASE_URL") {
+        let (_, db_name) = url.rsplit_once('/').expect("Invalid DATABASE_URL");
+        return db_name.to_string();
+    }
+    let binary_name = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.file_stem().map(|s| s.to_string_lossy().into_owned()))
+        .unwrap_or_else(|| "unknown".to_string());
+    // Sanitize: keep only alphanumeric and underscores, max 63 chars (Postgres limit).
+    let safe: String = binary_name
+        .chars()
+        .map(|c| if c.is_alphanumeric() || c == '_' { c } else { '_' })
+        .take(55)
+        .collect();
+    format!("keri_test_{}", safe)
+}
+
+pub fn get_database_url() -> String {
+    format!("{}/{}", base_url(), binary_db_name())
+}
+
+/// Drops and recreates this binary's test database once per process so each run starts fresh.
+/// Each test binary gets its own database, so concurrent `cargo test` runs don't race.
 pub fn ensure_clean_db() {
     static INIT: std::sync::Mutex<bool> = std::sync::Mutex::new(false);
     let mut done = INIT.lock().unwrap();
@@ -14,11 +42,10 @@ pub fn ensure_clean_db() {
     }
     let result = std::panic::catch_unwind(|| {
         async_std::task::block_on(async {
-            let url = get_database_url();
-            let (base, db_name) = url.rsplit_once('/').expect("Invalid DATABASE_URL");
+            let db_name = binary_db_name();
             let admin = PgPoolOptions::new()
                 .max_connections(2)
-                .connect(&format!("{}/postgres", base))
+                .connect(&format!("{}/postgres", base_url()))
                 .await
                 .expect("Failed to connect to admin db");
             let _ = sqlx::query(&format!("DROP DATABASE IF EXISTS \"{}\" WITH (FORCE)", db_name))
