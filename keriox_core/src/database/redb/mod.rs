@@ -84,7 +84,7 @@ pub enum WriteTxnMode<'a> {
     UseExisting(&'a redb::WriteTransaction),
 }
 pub struct RedbDatabase {
-    pub(crate) db: Arc<Database>,
+    pub db: Arc<Database>,
     pub(crate) log_db: Arc<LogDatabase>,
     #[cfg(feature = "query")]
     accepted_rpy: Arc<AcceptedKsn>,

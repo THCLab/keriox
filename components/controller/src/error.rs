@@ -1,5 +1,5 @@
 use keri_core::{
-    actor::prelude::VersionError, database::redb::RedbError,
+    actor::prelude::VersionError,
     event_message::cesr_adapter::ParseError, oobi::Scheme, oobi::error::OobiError,
     prefix::IdentifierPrefix, processor::validator::VerificationError,
 };
@@ -12,8 +12,8 @@ use crate::{
 
 #[derive(Error, Debug)]
 pub enum ControllerError {
-    #[error("Redb error: {0}")]
-    RedbError(#[from] RedbError),
+    #[error("Database error: {0}")]
+    DatabaseError(String),
 
     #[cfg(feature = "query_cache")]
     #[error("SQL error: {0}")]

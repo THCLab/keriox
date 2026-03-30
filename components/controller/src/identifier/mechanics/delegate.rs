@@ -1,4 +1,6 @@
 use keri_core::actor::prelude::HashFunctionCode;
+use keri_core::database::{EscrowCreator, EventDatabase};
+use keri_core::oobi_manager::storage::OobiStorageBackend;
 use keri_core::{
     actor::prelude::SerializationFormats,
     event::{
@@ -8,12 +10,18 @@ use keri_core::{
     event_message::msg::KeriEvent,
     mailbox::exchange::{Exchange, ExchangeMessage, ForwardTopic, FwdArgs},
 };
+use teliox::database::TelEventDatabase;
 
 use crate::identifier::Identifier;
 
 use super::MechanicsError;
 
-impl Identifier {
+impl<D, T, S> Identifier<D, T, S>
+where
+    D: EventDatabase + EscrowCreator + Send + Sync + 'static,
+    T: TelEventDatabase + Send + Sync + 'static,
+    S: OobiStorageBackend,
+{
     /// Generates delegating event (ixn) and exchange event that contains
     /// delegated event which will be send to delegate after ixn finalization.
     pub fn delegate(

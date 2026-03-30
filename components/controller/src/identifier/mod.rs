@@ -5,15 +5,17 @@ use std::{
 
 use keri_core::{
     actor::prelude::SelfAddressingIdentifier,
+    database::{EscrowCreator, EventDatabase},
     event::{event_data::EventData, sections::seal::EventSeal},
     event_message::signed_event_message::{Notice, SignedEventMessage},
     oobi::Oobi,
+    oobi_manager::storage::OobiStorageBackend,
     prefix::{BasicPrefix, IdentifierPrefix},
     state::IdentifierState,
 };
 #[cfg(feature = "query_cache")]
 use mechanics::cache::IdentifierCache;
-use teliox::state::{vc_state::TelState, ManagerTelState};
+use teliox::{database::TelEventDatabase, state::{vc_state::TelState, ManagerTelState}};
 
 use crate::{communication::Communication, error::ControllerError, known_events::KnownEvents};
 
@@ -25,11 +27,16 @@ pub mod query;
 pub mod signing;
 pub mod tel;
 
-pub struct Identifier {
+pub struct Identifier<D, T, S>
+where
+    D: EventDatabase + EscrowCreator + 'static,
+    T: TelEventDatabase + 'static,
+    S: OobiStorageBackend,
+{
     id: IdentifierPrefix,
     registry_id: Option<IdentifierPrefix>,
-    pub known_events: Arc<KnownEvents>,
-    communication: Arc<Communication>,
+    pub known_events: Arc<KnownEvents<D, T, S>>,
+    communication: Arc<Communication<D, T, S>>,
     pub to_notify: Vec<SignedEventMessage>,
     #[cfg(feature = "query_cache")]
     query_cache: Arc<IdentifierCache>,
@@ -40,12 +47,17 @@ pub struct Identifier {
     cached_identifiers: Mutex<HashMap<IdentifierPrefix, IdentifierState>>,
 }
 
-impl Identifier {
+impl<D, T, S> Identifier<D, T, S>
+where
+    D: EventDatabase + EscrowCreator + Send + Sync + 'static,
+    T: TelEventDatabase + Send + Sync + 'static,
+    S: OobiStorageBackend,
+{
     pub fn new(
         id: IdentifierPrefix,
         registry_id: Option<IdentifierPrefix>,
-        known_events: Arc<KnownEvents>,
-        communication: Arc<Communication>,
+        known_events: Arc<KnownEvents<D, T, S>>,
+        communication: Arc<Communication<D, T, S>>,
         #[cfg(feature = "query_cache")] db: Arc<IdentifierCache>,
     ) -> Self {
         // Load events that need to be notified to witnesses

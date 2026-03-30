@@ -6,8 +6,10 @@ use futures::future::join_all;
 use keri_core::actor::error::ActorError;
 use keri_core::actor::possible_response::PossibleResponse;
 use keri_core::actor::prelude::HashFunctionCode;
+use keri_core::database::{EscrowCreator, EventDatabase};
 use keri_core::error::Error;
 use keri_core::oobi::Scheme;
+use keri_core::oobi_manager::storage::OobiStorageBackend;
 use keri_core::prefix::IndexedSignature;
 use keri_core::query::query_event::SignedKelQuery;
 use keri_core::{
@@ -16,6 +18,7 @@ use keri_core::{
     prefix::{IdentifierPrefix, SelfSigningPrefix},
     query::query_event::{LogsQueryArgs, QueryEvent, QueryRoute},
 };
+use teliox::database::TelEventDatabase;
 
 use super::Identifier;
 
@@ -39,7 +42,12 @@ pub enum WatcherResponseError {
     PoisonError,
 }
 
-impl Identifier {
+impl<D, T, S> Identifier<D, T, S>
+where
+    D: EventDatabase + EscrowCreator + Send + Sync + 'static,
+    T: TelEventDatabase + Send + Sync + 'static,
+    S: OobiStorageBackend,
+{
     pub fn query_watchers(
         &self,
         about_who: &EventSeal,
