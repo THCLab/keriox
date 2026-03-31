@@ -14,18 +14,16 @@ pub mod storage;
 
 use self::storage::OobiStorageBackend;
 
-#[cfg(feature = "storage-redb")]
-use self::storage::RedbOobiStorage;
-
-#[cfg(feature = "storage-redb")]
-pub struct OobiManager<S: OobiStorageBackend = RedbOobiStorage> {
-    store: S,
-}
-
-#[cfg(not(feature = "storage-redb"))]
 pub struct OobiManager<S: OobiStorageBackend> {
     store: S,
 }
+
+#[cfg(feature = "storage-redb")]
+pub type RedbOobiManager = OobiManager<self::storage::RedbOobiStorage>;
+
+#[cfg(feature = "storage-postgres")]
+pub type PostgresOobiManager =
+    OobiManager<crate::database::postgres::oobi_storage::PostgresOobiStorage>;
 
 impl<S: OobiStorageBackend> OobiManager<S> {
     pub fn with_storage(store: S) -> Self {
@@ -125,17 +123,17 @@ impl<S: OobiStorageBackend> OobiManager<S> {
 }
 
 #[cfg(feature = "storage-redb")]
-impl OobiManager<RedbOobiStorage> {
+impl OobiManager<self::storage::RedbOobiStorage> {
     /// Create a redb-backed OobiManager from a `RedbDatabase` wrapper.
     pub fn new(events_db: std::sync::Arc<crate::database::redb::RedbDatabase>) -> Result<Self, OobiError> {
-        let store = RedbOobiStorage::new(events_db.db.clone())
+        let store = self::storage::RedbOobiStorage::new(events_db.db.clone())
             .map_err(|e| OobiError::Db(e.to_string()))?;
         Ok(Self { store })
     }
 
     /// Create a redb-backed OobiManager directly from a raw redb `Database`.
     pub fn new_redb(db: std::sync::Arc<redb::Database>) -> Result<Self, OobiError> {
-        let store = RedbOobiStorage::new(db).map_err(|e| OobiError::Db(e.to_string()))?;
+        let store = self::storage::RedbOobiStorage::new(db).map_err(|e| OobiError::Db(e.to_string()))?;
         Ok(Self { store })
     }
 }
@@ -159,12 +157,12 @@ mod tests {
 
     use crate::{
         oobi::error::OobiError,
-        oobi_manager::OobiManager,
+        oobi_manager::{OobiManager, RedbOobiManager},
         prefix::IdentifierPrefix,
         query::reply_event::ReplyRoute,
     };
 
-    fn setup_oobi_manager() -> OobiManager {
+    fn setup_oobi_manager() -> RedbOobiManager {
         let tmp_path = NamedTempFile::new().unwrap();
         let redb = Arc::new(redb::Database::create(tmp_path.path()).unwrap());
         OobiManager::new_redb(redb).unwrap()
