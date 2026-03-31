@@ -475,7 +475,7 @@ impl RedbKnownEvents {
             path.push("events_database");
             Arc::new(RedbDatabase::new(&path).map_err(|e| ControllerError::DatabaseError(e.to_string()))?)
         };
-        let oobi_storage = RedbOobiStorage::new(event_database.db.clone())
+        let oobi_storage = RedbOobiStorage::new(event_database.raw_db())
             .map_err(|e| ControllerError::DatabaseError(e.to_string()))?;
         let tel_db = {
             let mut path = db_path.clone();
