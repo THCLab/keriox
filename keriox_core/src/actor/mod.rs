@@ -3,7 +3,7 @@ use std::convert::TryFrom;
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "oobi-manager")]
-use crate::oobi_manager::OobiManager;
+use crate::oobi_manager::{storage::OobiStorageBackend, OobiManager};
 #[cfg(feature = "query")]
 use crate::{
     database::EventDatabase,
@@ -91,9 +91,9 @@ pub fn process_notice<P: Processor>(msg: Notice, processor: &P) -> Result<(), Er
 }
 
 #[cfg(feature = "query")]
-pub fn process_reply<P: Processor>(
+pub fn process_reply<P: Processor, #[cfg(feature = "oobi-manager")] S: OobiStorageBackend>(
     sr: SignedReply,
-    #[cfg(feature = "oobi-manager")] oobi_manager: &OobiManager,
+    #[cfg(feature = "oobi-manager")] oobi_manager: &OobiManager<S>,
     processor: &P,
     event_storage: &EventStorage<P::Database>,
 ) -> Result<(), Error> {
@@ -108,9 +108,9 @@ pub fn process_reply<P: Processor>(
 }
 
 #[cfg(feature = "oobi-manager")]
-pub fn process_signed_oobi<D: EventDatabase + 'static>(
+pub fn process_signed_oobi<D: EventDatabase + 'static, S: OobiStorageBackend>(
     signed_oobi: &SignedReply,
-    oobi_manager: &OobiManager,
+    oobi_manager: &OobiManager<S>,
     event_storage: &EventStorage<D>,
 ) -> Result<(), Error> {
     use crate::processor::validator::EventValidator;
