@@ -20,17 +20,17 @@ impl PostgresTelDatabase {
         &self,
         index_table: &'static str,
         id: &IdentifierPrefix,
-    ) -> Option<impl DoubleEndedIterator<Item = VerifiableEvent>> {
+    ) -> Result<Vec<VerifiableEvent>, Error> {
         let id_str = id.to_string();
         let pool = self.pool.clone();
-        let events: Vec<VerifiableEvent> = async_std::task::block_on(async move {
+        async_std::task::block_on(async move {
             let query =
                 format!("SELECT digest FROM {index_table} WHERE identifier = $1 ORDER BY sn ASC");
             let rows: Vec<(String,)> = sqlx::query_as(&query)
                 .bind(&id_str)
                 .fetch_all(&pool)
                 .await
-                .unwrap_or_default();
+                .map_err(|e| Error::Generic(e.to_string()))?;
 
             let mut events = Vec::new();
             for (digest,) in rows {
@@ -39,21 +39,16 @@ impl PostgresTelDatabase {
                         .bind(&digest)
                         .fetch_optional(&pool)
                         .await
-                        .unwrap_or(None);
+                        .map_err(|e| Error::Generic(e.to_string()))?;
 
                 if let Some((data,)) = maybe {
-                    if let Ok(event) = serde_cbor::from_slice::<VerifiableEvent>(&data) {
-                        events.push(event);
-                    }
+                    let event = serde_cbor::from_slice::<VerifiableEvent>(&data)
+                        .map_err(|e| Error::Generic(format!("Deserialization error: {}", e)))?;
+                    events.push(event);
                 }
             }
-            events
-        });
-        if events.is_empty() {
-            None
-        } else {
-            Some(events.into_iter())
-        }
+            Ok(events)
+        })
     }
 }
 
@@ -125,14 +120,16 @@ impl TelEventDatabase for PostgresTelDatabase {
         &self,
         id: &IdentifierPrefix,
     ) -> Option<impl DoubleEndedIterator<Item = VerifiableEvent>> {
-        self.get_events_from_index("vc_tels", id)
+        let events = self.get_events_from_index("vc_tels", id).ok()?;
+        (!events.is_empty()).then(|| events.into_iter())
     }
 
     fn get_management_events(
         &self,
         id: &IdentifierPrefix,
     ) -> Option<impl DoubleEndedIterator<Item = VerifiableEvent>> {
-        self.get_events_from_index("management_tels", id)
+        let events = self.get_events_from_index("management_tels", id).ok()?;
+        (!events.is_empty()).then(|| events.into_iter())
     }
 
     fn log_event(&self, event: &VerifiableEvent) -> Result<(), Error> {

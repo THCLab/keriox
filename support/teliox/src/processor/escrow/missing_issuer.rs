@@ -121,18 +121,18 @@ impl<D: TelEventDatabase, K: EventDatabase, E: TelEscrowDatabase>
                     Err(Error::MissingSealError) => {
                         self.escrow_db
                             .missing_issuer_remove(&said.to_string(), &kel_event_digest)
-                            .unwrap();
+                            .map_err(|e| Error::EscrowDatabaseError(e.to_string()))?;
                     }
                     Err(Error::OutOfOrderError) => {
                         self.escrow_db
                             .missing_issuer_remove(&said.to_string(), &kel_event_digest)
-                            .unwrap();
+                            .map_err(|e| Error::EscrowDatabaseError(e.to_string()))?;
                         self.publisher.notify(&TelNotification::OutOfOrder(event))?;
                     }
                     Err(Error::MissingRegistryError) => {
                         self.escrow_db
                             .missing_issuer_remove(&said.to_string(), &kel_event_digest)
-                            .unwrap();
+                            .map_err(|e| Error::EscrowDatabaseError(e.to_string()))?;
                         self.publisher
                             .notify(&TelNotification::MissingRegistry(event))?;
                     }
