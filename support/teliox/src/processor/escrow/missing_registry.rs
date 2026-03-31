@@ -92,12 +92,12 @@ impl<D: TelEventDatabase, K: EventDatabase, E: TelEscrowDatabase>
                     Err(Error::MissingSealError) => {
                         self.escrow_db
                             .missing_registry_remove(&id.to_string(), &digest)
-                            .unwrap();
+                            .map_err(|e| Error::EscrowDatabaseError(e.to_string()))?;
                     }
                     Err(Error::MissingIssuerEventError) => {
                         self.escrow_db
                             .missing_registry_remove(&id.to_string(), &digest)
-                            .unwrap();
+                            .map_err(|e| Error::EscrowDatabaseError(e.to_string()))?;
                         bus.notify(&TelNotification::MissingIssuer(event.clone()))?;
                     }
                     Err(_e) => {}
