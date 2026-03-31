@@ -92,7 +92,7 @@ impl OobiStorageBackend for PostgresOobiStorage {
                     .execute(&self.pool)
                     .await?;
                 }
-                ReplyRoute::EndRoleAdd(end_role) | ReplyRoute::EndRoleCut(end_role) => {
+                ReplyRoute::EndRoleAdd(end_role) => {
                     sqlx::query(
                         r#"INSERT INTO end_role_oobis (cid, role, eid, oobi_data)
                            VALUES ($1, $2, $3, $4)"#,
@@ -104,7 +104,22 @@ impl OobiStorageBackend for PostgresOobiStorage {
                     .execute(&self.pool)
                     .await?;
                 }
-                _ => {}
+                ReplyRoute::EndRoleCut(end_role) => {
+                    // TODO: EndRoleCut should DELETE the role from storage.
+                    // Currently inserts the Cut event, matching redb behaviour,
+                    // pending a proper removal implementation.
+                    sqlx::query(
+                        r#"INSERT INTO end_role_oobis (cid, role, eid, oobi_data)
+                           VALUES ($1, $2, $3, $4)"#,
+                    )
+                    .bind(end_role.cid.to_string())
+                    .bind(serde_json::to_string(&end_role.role)?)
+                    .bind(end_role.eid.to_string())
+                    .bind(serde_cbor::to_vec(signed_reply)?)
+                    .execute(&self.pool)
+                    .await?;
+                }
+                ReplyRoute::Ksn(_, _) => todo!(),
             }
             Ok(())
         })
