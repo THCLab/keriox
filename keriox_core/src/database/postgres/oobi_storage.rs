@@ -26,10 +26,9 @@ impl OobiStorageBackend for PostgresOobiStorage {
                     .fetch_all(&self.pool)
                     .await?;
 
-            Ok(rows
-                .into_iter()
-                .filter_map(|(oobi_data,)| serde_cbor::from_slice(&oobi_data).ok())
-                .collect())
+            rows.into_iter()
+                .map(|(oobi_data,)| serde_cbor::from_slice(&oobi_data).map_err(Into::into))
+                .collect::<Result<Vec<SignedReply>, Self::Error>>()
         })
     }
 
@@ -43,11 +42,12 @@ impl OobiStorageBackend for PostgresOobiStorage {
                 r#"SELECT oobi_data FROM location_oobis WHERE eid = $1 AND scheme = $2"#,
             )
             .bind(eid.to_string())
-            .bind(serde_json::to_string(scheme).unwrap())
+            .bind(serde_json::to_string(scheme)?)
             .fetch_optional(&self.pool)
             .await?;
 
-            Ok(row.and_then(|(oobi_data,)| serde_cbor::from_slice(&oobi_data).ok()))
+            row.map(|(oobi_data,)| serde_cbor::from_slice(&oobi_data).map_err(Into::into))
+                .transpose()
         })
     }
 
@@ -61,7 +61,7 @@ impl OobiStorageBackend for PostgresOobiStorage {
                 r#"SELECT oobi_data FROM end_role_oobis WHERE cid = $1 AND role = $2"#,
             )
             .bind(cid.to_string())
-            .bind(serde_json::to_string(&role).unwrap())
+            .bind(serde_json::to_string(&role)?)
             .fetch_all(&self.pool)
             .await?;
 
@@ -69,11 +69,11 @@ impl OobiStorageBackend for PostgresOobiStorage {
                 return Ok(None);
             }
 
-            Ok(Some(
-                rows.into_iter()
-                    .filter_map(|(oobi_data,)| serde_cbor::from_slice(&oobi_data).ok())
-                    .collect(),
-            ))
+            let replies = rows
+                .into_iter()
+                .map(|(oobi_data,)| serde_cbor::from_slice(&oobi_data).map_err(Into::into))
+                .collect::<Result<Vec<SignedReply>, Self::Error>>()?;
+            Ok(Some(replies))
         })
     }
 
@@ -87,8 +87,8 @@ impl OobiStorageBackend for PostgresOobiStorage {
                            ON CONFLICT (eid, scheme) DO UPDATE SET oobi_data = $3"#,
                     )
                     .bind(loc_scheme.get_eid().to_string())
-                    .bind(serde_json::to_string(&loc_scheme.scheme).unwrap())
-                    .bind(serde_cbor::to_vec(signed_reply).unwrap())
+                    .bind(serde_json::to_string(&loc_scheme.scheme)?)
+                    .bind(serde_cbor::to_vec(signed_reply)?)
                     .execute(&self.pool)
                     .await?;
                 }
@@ -98,9 +98,9 @@ impl OobiStorageBackend for PostgresOobiStorage {
                            VALUES ($1, $2, $3, $4)"#,
                     )
                     .bind(end_role.cid.to_string())
-                    .bind(serde_json::to_string(&end_role.role).unwrap())
+                    .bind(serde_json::to_string(&end_role.role)?)
                     .bind(end_role.eid.to_string())
-                    .bind(serde_cbor::to_vec(signed_reply).unwrap())
+                    .bind(serde_cbor::to_vec(signed_reply)?)
                     .execute(&self.pool)
                     .await?;
                 }
