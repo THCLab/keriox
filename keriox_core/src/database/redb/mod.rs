@@ -84,7 +84,7 @@ pub enum WriteTxnMode<'a> {
     UseExisting(&'a redb::WriteTransaction),
 }
 pub struct RedbDatabase {
-    pub db: Arc<Database>,
+    pub(crate) db: Arc<Database>,
     pub(crate) log_db: Arc<LogDatabase>,
     #[cfg(feature = "query")]
     accepted_rpy: Arc<AcceptedKsn>,
@@ -107,6 +107,10 @@ impl RedbDatabase {
             #[cfg(feature = "query")]
             accepted_rpy: Arc::new(AcceptedKsn::new(db.clone())?),
         })
+    }
+
+    pub fn raw_db(&self) -> Arc<Database> {
+        self.db.clone()
     }
 }
 
