@@ -1,0 +1,85 @@
+//! Error types for the keri-sdk crate.
+//!
+//! All public functions in this crate return [`Result<T>`], which is an alias
+//! for `std::result::Result<T, Error>`. Import the alias with
+//! `use keri_sdk::Result;` or use it fully-qualified as `keri_sdk::Result<T>`.
+//!
+//! Most variants carry enough context to identify the failing operation without
+//! needing to inspect the wrapped upstream error. Where an upstream error is
+//! propagated transparently it is wrapped in one of the `Controller`,
+//! `Mechanics`, or `Signing` variants.
+
+use keri_controller::IdentifierPrefix;
+use keri_core::actor::prelude::SelfAddressingIdentifier;
+
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum Error {
+    // ── Transparent upstream wrappers ─────────────────────────────────────────
+
+    /// Wraps errors from the `keri-controller` layer.
+    #[error(transparent)]
+    Controller(#[from] keri_controller::error::ControllerError),
+
+    /// Wraps errors from the identifier mechanics layer.
+    #[error(transparent)]
+    Mechanics(#[from] keri_controller::identifier::mechanics::MechanicsError),
+
+    /// Wraps key-signing errors.
+    #[error("signing error: {0}")]
+    Signing(String),
+
+    // ── Specific actionable variants ──────────────────────────────────────────
+
+    /// The requested identifier is not known to this controller.
+    #[error("identifier not found: {0}")]
+    IdentifierNotFound(IdentifierPrefix),
+
+    /// The identifier has no watchers configured.
+    #[error("no watchers configured for identifier: {0}")]
+    NoWatchers(IdentifierPrefix),
+
+    /// The identifier has no witnesses configured.
+    #[error("no witnesses configured for identifier: {0}")]
+    NoWitnesses(IdentifierPrefix),
+
+    /// A credential registry has not been incepted for this identifier.
+    #[error("registry not incepted for identifier: {0}")]
+    RegistryNotIncepted(IdentifierPrefix),
+
+    /// The credential is not known in the local TEL.
+    #[error("credential not found in TEL: {0}")]
+    CredentialNotFound(SelfAddressingIdentifier),
+
+    /// Signature verification failed.
+    #[error("verification failed: {0}")]
+    VerificationFailed(String),
+
+    /// CESR stream could not be parsed.
+    #[error("CESR parse error: {0}")]
+    CesrParseError(String),
+
+    /// A CESR / CBOR / JSON encoding step failed.
+    #[error("encoding error: {0}")]
+    EncodingError(String),
+
+    /// A disk I/O or database persistence error.
+    #[error("persistence error: {0}")]
+    PersistenceError(String),
+
+    /// OOBI resolution failed for a specific identifier.
+    #[error("OOBI resolution failed for {id}: {reason}")]
+    OobiResolutionFailed {
+        /// The identifier whose OOBI could not be resolved.
+        id: IdentifierPrefix,
+        /// A human-readable description of what went wrong.
+        reason: String,
+    },
+
+    /// A catch-all for errors that do not fit a more specific variant.
+    #[error("{0}")]
+    Other(String),
+}
+
+/// Convenience alias — all SDK functions return this type.
+pub type Result<T> = std::result::Result<T, Error>;

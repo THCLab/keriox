@@ -1,184 +1,322 @@
-use keri_core::{
-    actor::{
-        event_generator,
-        prelude::{
-            EventStorage, HashFunctionCode, Message, SerializationFormats,
-        },
-    },
-    database::EventDatabase,
-    event_message::{
-        cesr_adapter::{parse_event_type, EventType},
-        msg::KeriEvent,
-        signed_event_message::{Notice, Op},
-        timestamped::Timestamped,
-    },
-    oobi::Role,
-    prefix::{IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
-    query::{
-        query_event::{LogsQueryArgs, QueryEvent, QueryRoute},
-        reply_event::{ReplyEvent, ReplyRoute, SignedReply},
-    },
+use keri_controller::{
+    identifier::query::QueryResponse,
+    BasicPrefix, IdentifierPrefix, LocationScheme, Oobi, SelfSigningPrefix,
 };
-use std::sync::Arc;
-use teliox::query::{TelQueryArgs, TelQueryEvent, TelQueryRoute};
+use keri_core::{
+    actor::prelude::SelfAddressingIdentifier,
+    event::sections::seal::EventSeal,
+    event_message::{
+        msg::TypedEvent,
+        signature::Signature,
+        signed_event_message::Notice,
+        EventTypeTag,
+    },
+    event::KeyEvent,
+    query::{
+        mailbox::MailboxQuery,
+        query_event::QueryEvent,
+    },
+    state::IdentifierState,
+};
+use teliox::{
+    query::{TelQueryEvent},
+    state::{vc_state::TelState, ManagerTelState},
+};
 
-pub struct Identifier<D: EventDatabase> {
-    pub id: IdentifierPrefix,
-    event_storage: Arc<EventStorage<D>>,
+use crate::error::Result;
+
+pub use keri_controller::identifier::query::WatcherResponseError;
+pub use keri_controller::mailbox_updating::ActionRequired;
+
+/// Concrete identifier wrapping `keri_controller::controller::RedbIdentifier`.
+pub struct Identifier {
+    pub(crate) inner: keri_controller::RedbIdentifier,
 }
 
-impl<D: EventDatabase> Identifier<D> {
-    pub fn new(
-        id: IdentifierPrefix,
-        event_storage: Arc<EventStorage<D>>,
-    ) -> Self {
-        Self { id, event_storage }
+impl Identifier {
+    // ── Identity ────────────────────────────────────────────────────────────
+
+    pub fn id(&self) -> &IdentifierPrefix {
+        self.inner.id()
     }
 
-    pub fn get_prefix(&self) -> &IdentifierPrefix {
-        &self.id
+    pub fn registry_id(&self) -> Option<&IdentifierPrefix> {
+        self.inner.registry_id()
     }
 
+    // ── State / KEL accessors ────────────────────────────────────────────────
+
+    /// Returns accepted `IdentifierState` for any known identifier.
+    pub fn find_state(&self, id: &IdentifierPrefix) -> Result<IdentifierState> {
+        Ok(self.inner.find_state(id)?)
+    }
+
+    pub fn current_public_keys(&self) -> Result<Vec<BasicPrefix>> {
+        Ok(self.inner.current_public_keys()?)
+    }
+
+    pub fn witnesses(&self) -> impl Iterator<Item = BasicPrefix> + '_ {
+        self.inner.witnesses()
+    }
+
+    pub fn watchers(&self) -> Result<Vec<IdentifierPrefix>> {
+        Ok(self.inner.watchers()?)
+    }
+
+    /// Returns own identifier's accepted KEL with receipts.
     pub fn get_own_kel(&self) -> Option<Vec<Notice>> {
-        self.event_storage
-            .get_kel_messages_with_receipts_all(&self.id)
-            .unwrap()
+        self.inner.get_own_kel()
     }
 
+    /// Returns any identifier's accepted KEL with receipts.
+    pub fn get_kel(&self, id: &IdentifierPrefix) -> Option<Vec<Notice>> {
+        self.inner.get_kel(id)
+    }
+
+    // ── KEL management ──────────────────────────────────────────────────────
+
+    /// Generate an interaction event anchoring the given SAIs.
+    pub fn anchor(
+        &self,
+        payload: &[SelfAddressingIdentifier],
+    ) -> Result<String> {
+        Ok(self.inner.anchor(payload)?)
+    }
+
+    /// Generate a rotation event.
+    pub async fn rotate(
+        &self,
+        current_keys: Vec<BasicPrefix>,
+        new_next_keys: Vec<BasicPrefix>,
+        new_next_threshold: u64,
+        witness_to_add: Vec<LocationScheme>,
+        witness_to_remove: Vec<BasicPrefix>,
+        witness_threshold: u64,
+    ) -> Result<String> {
+        Ok(self
+            .inner
+            .rotate(
+                current_keys,
+                new_next_keys,
+                new_next_threshold,
+                witness_to_add,
+                witness_to_remove,
+                witness_threshold,
+            )
+            .await?)
+    }
+
+    /// Finalise a rotation event (sign + save + queue for witness notification).
+    pub async fn finalize_rotate(
+        &mut self,
+        event: &[u8],
+        sig: SelfSigningPrefix,
+    ) -> Result<()> {
+        Ok(self.inner.finalize_rotate(event, sig).await?)
+    }
+
+    /// Finalise an interaction event (sign + save + queue for witness notification).
+    pub async fn finalize_anchor(
+        &mut self,
+        event: &[u8],
+        sig: SelfSigningPrefix,
+    ) -> Result<()> {
+        Ok(self.inner.finalize_anchor(event, sig).await?)
+    }
+
+    /// Send pending events to witnesses, returns the number of events sent.
+    pub async fn notify_witnesses(&mut self) -> Result<usize> {
+        Ok(self.inner.notify_witnesses().await?)
+    }
+
+    // ── OOBI / watcher ──────────────────────────────────────────────────────
+
+    pub async fn resolve_oobi(&self, oobi: &Oobi) -> Result<()> {
+        Ok(self.inner.resolve_oobi(oobi).await?)
+    }
+
+    pub async fn send_oobi_to_watcher(
+        &self,
+        id: &IdentifierPrefix,
+        oobi: &Oobi,
+    ) -> Result<()> {
+        Ok(self.inner.send_oobi_to_watcher(id, oobi).await?)
+    }
+
+    /// Generate an `end_role_add` reply event for the given watcher.
     pub fn add_watcher(
         &self,
         watcher_id: IdentifierPrefix,
-    ) -> Result<String, String> {
-        String::from_utf8(
-            event_generator::generate_end_role(
-                &self.id,
-                &watcher_id,
-                Role::Watcher,
-                true,
-            )
-            .encode()
-            .map_err(|_| "Event encoding error".to_string())?,
-        )
-        .map_err(|_| "Event format error".to_string())
+    ) -> Result<String> {
+        Ok(self.inner.add_watcher(watcher_id)?)
     }
 
-    pub fn finalize_add_watcher(
+    /// Generate an `end_role_cut` reply event for the given watcher.
+    pub fn remove_watcher(
+        &self,
+        watcher_id: IdentifierPrefix,
+    ) -> Result<String> {
+        Ok(self.inner.remove_watcher(watcher_id)?)
+    }
+
+    /// Sign and send the `end_role_add` reply to the watcher.
+    pub async fn finalize_add_watcher(
         &self,
         event: &[u8],
         sig: SelfSigningPrefix,
-    ) -> Result<(IdentifierPrefix, Vec<Message>), String> {
-        let parsed_event = parse_event_type(event)
-            .map_err(|_| "Event parsing error".to_string())?;
-        match parsed_event {
-            EventType::Rpy(rpy) => match rpy.get_route() {
-                ReplyRoute::EndRoleAdd(_) => Ok(self
-                    .finalize_add_role(&self.id, rpy, vec![sig])
-                    .unwrap()),
-                ReplyRoute::EndRoleCut(_) => todo!(),
-                _ => Err("Wrong reply route".to_string()),
-            },
-            _ => Err("Event is not a reply".to_string()),
-        }
+    ) -> Result<()> {
+        Ok(self.inner.finalize_add_watcher(event, sig).await?)
     }
 
-    fn finalize_add_role(
+    // ── Signing / verification ──────────────────────────────────────────────
+
+    /// Return CESR stream containing the payload + transferable signature.
+    pub fn sign_to_cesr(
         &self,
-        signer_prefix: &IdentifierPrefix,
-        event: ReplyEvent,
-        sig: Vec<SelfSigningPrefix>,
-    ) -> Result<(IdentifierPrefix, Vec<Message>), String> {
-        let mut messages_to_send = vec![];
-        let (dest_prefix, role) = match &event.data.data {
-            ReplyRoute::EndRoleAdd(role) => {
-                (role.eid.clone(), role.role.clone())
-            }
-            ReplyRoute::EndRoleCut(role) => {
-                (role.eid.clone(), role.role.clone())
-            }
-            _ => return Err("Wrong reply route".to_string()),
-        };
-        let signed_reply = match signer_prefix {
-            IdentifierPrefix::Basic(bp) => Message::Op(Op::Reply(
-                SignedReply::new_nontrans(event, bp.clone(), sig[0].clone()),
-            )),
-            _ => {
-                let sigs = sig
-                    .into_iter()
-                    .enumerate()
-                    .map(|(i, sig)| {
-                        IndexedSignature::new_both_same(sig, i as u16)
-                    })
-                    .collect();
-
-                let signed_rpy =
-                    Message::Op(Op::Reply(SignedReply::new_trans(
-                        event,
-                        self.event_storage
-                            .get_last_establishment_event_seal(signer_prefix)
-                            .ok_or(
-                                "Failed to get last establishment event seal"
-                                    .to_string(),
-                            )?,
-                        sigs,
-                    )));
-                if Role::Messagebox != role {
-                    let kel = self
-                        .event_storage
-                        .get_kel_messages_with_receipts_all(signer_prefix)
-                        .map_err(|_| "Failed to get KEL messages".to_string())?
-                        .ok_or("Identifier not found".to_string())?;
-
-                    for ev in kel {
-                        messages_to_send.push(Message::Notice(ev));
-                    }
-                };
-                signed_rpy
-            }
-        };
-
-        messages_to_send.push(signed_reply.clone());
-        Ok((dest_prefix, messages_to_send))
+        data: &str,
+        signatures: &[SelfSigningPrefix],
+    ) -> Result<String> {
+        Ok(self.inner.sign_to_cesr(data, signatures)?)
     }
 
-    pub fn get_log_query(
+    /// Build a `Signature` from raw bytes + `SelfSigningPrefix`es.
+    pub fn sign_data(
         &self,
-        identifier: IdentifierPrefix,
-        witness: IdentifierPrefix,
-        from_sn: Option<u64>,
-        limit: Option<u64>,
-    ) -> QueryEvent {
-        QueryEvent::new_query(
-            QueryRoute::Logs {
-                reply_route: "".to_string(),
-                args: LogsQueryArgs {
-                    s: from_sn,
-                    limit,
-                    i: identifier,
-                    src: Some(witness),
-                },
-            },
-            SerializationFormats::JSON,
-            HashFunctionCode::Blake3_256,
-        )
+        data: &[u8],
+        signatures: &[SelfSigningPrefix],
+    ) -> Result<Signature> {
+        Ok(self.inner.sign_data(data, signatures)?)
     }
 
-    pub fn get_tel_query(
+    /// Verify a CESR stream (payload + attached signatures) against known KEL.
+    pub fn verify_from_cesr(&self, stream: &[u8]) -> Result<()> {
+        Ok(self.inner.verify_from_cesr(stream)?)
+    }
+
+    // ── TEL / Credential ────────────────────────────────────────────────────
+
+    /// Generate a `vcp` inception event and anchor `ixn`.
+    pub fn incept_registry(
+        &mut self,
+    ) -> Result<(IdentifierPrefix, TypedEvent<EventTypeTag, KeyEvent>)> {
+        Ok(self.inner.incept_registry()?)
+    }
+
+    /// Finalise registry inception (sign + save the anchor ixn).
+    pub async fn finalize_incept_registry(
+        &mut self,
+        event: &[u8],
+        sig: SelfSigningPrefix,
+    ) -> Result<()> {
+        Ok(self.inner.finalize_incept_registry(event, sig).await?)
+    }
+
+    /// Send TEL events to backers (witnesses).
+    pub async fn notify_backers(&self) -> Result<()> {
+        Ok(self.inner.notify_backers().await?)
+    }
+
+    /// Generate `iss` event + anchor `ixn`. Returns (vc_id, ixn_event).
+    pub fn issue(
+        &self,
+        credential_digest: SelfAddressingIdentifier,
+    ) -> Result<(IdentifierPrefix, TypedEvent<EventTypeTag, KeyEvent>)> {
+        Ok(self.inner.issue(credential_digest)?)
+    }
+
+    /// Generate `rev` event + anchor `ixn` (encoded). Returns encoded ixn bytes.
+    pub fn revoke(
+        &self,
+        credential_sai: &SelfAddressingIdentifier,
+    ) -> Result<Vec<u8>> {
+        Ok(self.inner.revoke(credential_sai)?)
+    }
+
+    /// Build a TEL query event.
+    pub fn query_tel(
         &self,
         registry_id: IdentifierPrefix,
         vc_identifier: IdentifierPrefix,
-    ) -> Result<TelQueryEvent, String> {
-        let route = TelQueryRoute::Tels {
-            reply_route: "".into(),
-            args: TelQueryArgs {
-                i: Some(vc_identifier),
-                ri: Some(registry_id),
-            },
-        };
-        let env = Timestamped::new(route);
-        Ok(KeriEvent::new(
-            SerializationFormats::JSON,
-            HashFunctionCode::Blake3_256.into(),
-            env,
-        ))
+    ) -> Result<TelQueryEvent> {
+        Ok(self.inner.query_tel(registry_id, vc_identifier)?)
+    }
+
+    /// Sign + send TEL query, process the response.
+    pub async fn finalize_query_tel(
+        &self,
+        qry: TelQueryEvent,
+        sig: SelfSigningPrefix,
+    ) -> Result<()> {
+        Ok(self.inner.finalize_query_tel(qry, sig).await?)
+    }
+
+    /// Look up a VC's current `TelState` in the local TEL.
+    pub fn find_vc_state(
+        &self,
+        vc_hash: &SelfAddressingIdentifier,
+    ) -> Result<Option<TelState>> {
+        Ok(self.inner.find_vc_state(vc_hash)?)
+    }
+
+    /// Look up a registry's management TEL state.
+    pub fn find_management_tel_state(
+        &self,
+        id: &IdentifierPrefix,
+    ) -> Result<Option<ManagerTelState>> {
+        Ok(self.inner.find_management_tel_state(id)?)
+    }
+
+    // ── Mailbox / watcher queries ────────────────────────────────────────────
+
+    /// Generate mailbox query events for each of the given witnesses.
+    pub fn query_mailbox(
+        &self,
+        identifier: &IdentifierPrefix,
+        witnesses: &[BasicPrefix],
+    ) -> Result<Vec<MailboxQuery>> {
+        Ok(self.inner.query_mailbox(identifier, witnesses)?)
+    }
+
+    /// Sign + send mailbox queries, process responses. Returns required actions.
+    pub async fn finalize_query_mailbox(
+        &mut self,
+        queries: Vec<(MailboxQuery, SelfSigningPrefix)>,
+    ) -> Result<Vec<ActionRequired>> {
+        Ok(self.inner.finalize_query_mailbox(queries).await?)
+    }
+
+    /// Generate watcher query events for an identifier.
+    pub fn query_watchers(
+        &self,
+        about_who: &EventSeal,
+    ) -> Result<Vec<QueryEvent>> {
+        Ok(self.inner.query_watchers(about_who)?)
+    }
+
+    /// Sign + send watcher queries, process responses.
+    pub async fn finalize_query(
+        &self,
+        queries: Vec<(QueryEvent, SelfSigningPrefix)>,
+    ) -> (QueryResponse, Vec<WatcherResponseError>) {
+        self.inner.finalize_query(queries).await
+    }
+
+    /// Generate a full-log watcher query for an identifier.
+    pub fn query_full_log(
+        &self,
+        id: &IdentifierPrefix,
+        watcher: IdentifierPrefix,
+    ) -> Result<QueryEvent> {
+        Ok(self.inner.query_full_log(id, watcher)?)
+    }
+
+    // ── Low-level seal helpers ───────────────────────────────────────────────
+
+    pub fn get_last_establishment_event_seal(&self) -> Result<EventSeal> {
+        Ok(self.inner.get_last_establishment_event_seal()?)
+    }
+
+    pub fn get_last_event_seal(&self) -> Result<EventSeal> {
+        Ok(self.inner.get_last_event_seal()?)
     }
 }
