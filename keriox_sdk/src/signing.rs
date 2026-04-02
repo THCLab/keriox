@@ -10,8 +10,8 @@
 //! use keri_sdk::{signing, Identifier, Signer};
 //! use std::sync::Arc;
 //!
-//! # fn example(id: &Identifier, signer: &Signer) -> keri_sdk::Result<()> {
-//! let envelope = signing::sign(id, signer, b"hello world")?;
+//! # fn example(id: &Identifier, signer: Arc<Signer>) -> keri_sdk::Result<()> {
+//! let envelope = signing::sign(id, &signer, b"hello world")?;
 //! println!("CESR: {}", envelope.cesr);
 //!
 //! let verified = signing::verify(id, envelope.cesr.as_bytes())?;
@@ -21,11 +21,11 @@
 //! ```
 
 use keri_core::event_message::signature::{get_signatures, Signature};
-use keri_core::signer::Signer;
 
 use crate::{
     error::{Error, Result},
     identifier::Identifier,
+    operations::SigningBackend,
     types::{SignedEnvelope, VerifiedPayload},
 };
 
@@ -36,9 +36,8 @@ use crate::{
 
 fn wrap_payload(data: &[u8]) -> Result<String> {
     let (p, e): (&str, &str) = if let Ok(s) = std::str::from_utf8(data) {
-        (s, "text")  // valid UTF-8: store as-is
+        (s, "text")
     } else {
-        // binary: store as base64url
         return Ok(serde_json::to_string(&serde_json::json!({
             "p": base64::encode_config(data, base64::URL_SAFE_NO_PAD),
             "e": "b64"
@@ -73,12 +72,14 @@ fn unwrap_payload(json_bytes: &[u8]) -> Result<Vec<u8>> {
 /// - [`Error::Signing`] if the signer fails.
 /// - [`Error::EncodingError`] if JSON serialisation of the wrapper fails.
 /// - [`Error::Controller`] if the CESR envelope cannot be built.
-pub fn sign(identifier: &Identifier, signer: &Signer, data: &[u8]) -> Result<SignedEnvelope> {
+pub fn sign<S: SigningBackend>(
+    identifier: &Identifier,
+    signer: &S,
+    data: &[u8],
+) -> Result<SignedEnvelope> {
     let json_payload = wrap_payload(data)?;
 
-    let raw_sig = signer
-        .sign(json_payload.as_bytes())
-        .map_err(|e| Error::Signing(e.to_string()))?;
+    let raw_sig = signer.sign_data(json_payload.as_bytes())?;
 
     let sig = keri_controller::SelfSigningPrefix::new(
         cesrox::primitives::codes::self_signing::SelfSigning::Ed25519Sha512,
@@ -101,7 +102,11 @@ pub fn sign(identifier: &Identifier, signer: &Signer, data: &[u8]) -> Result<Sig
 ///
 /// # Errors
 /// Same as [`sign`].
-pub fn sign_json(identifier: &Identifier, signer: &Signer, json: &str) -> Result<SignedEnvelope> {
+pub fn sign_json<S: SigningBackend>(
+    identifier: &Identifier,
+    signer: &S,
+    json: &str,
+) -> Result<SignedEnvelope> {
     sign(identifier, signer, json.as_bytes())
 }
 

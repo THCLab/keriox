@@ -21,6 +21,13 @@ rand = "0.8.5"
 ed25519-dalek = { version = "2.1.0", features = ["rand_core"] }
 base64 = "0.13"
 
+keri-keyprovider = { path = "../keri_keyprovider", version = "0.1.0", optional = true, features = ["software"] }
+tokio = { version = "1", features = ["full"], optional = true }
+
+[features]
+default = []
+keyprovider = ["keri-keyprovider", "tokio"]
+
 [dev-dependencies]
 keri-core = { path = "../keriox_core", version = "0.17.13" }
 tempfile = { version = "3.20" }
