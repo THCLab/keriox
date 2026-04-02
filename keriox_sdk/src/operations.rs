@@ -3,20 +3,23 @@
 //! These functions combine multiple low-level steps (event generation,
 //! signing, witness notification, mailbox queries) so callers don't need to
 //! orchestrate individual calls. All signing is done internally with the
-//! provided [`Signer`] — callers never touch raw CESR prefix types.
+//! provided signer — callers never touch raw CESR prefix types.
+//!
+//! When the `keyprovider` feature is enabled, all functions accept
+//! [`KeriSigner`](crate::keyprovider_adapter::KeriSigner) which can wrap
+//! either a legacy `Signer` or any `KeyProvider` implementation.
+//! Without the feature, they accept `Arc<Signer>`.
 //!
 //! For persistence of identifiers across sessions see [`crate::store`].
 //! For signing arbitrary payloads see [`crate::signing`].
 
 use std::path::PathBuf;
-use std::sync::Arc;
 
 use keri_controller::{BasicPrefix, IdentifierPrefix, LocationScheme, Oobi, SelfSigningPrefix};
 use keri_core::{
     actor::prelude::SelfAddressingIdentifier,
     prefix::IndexedSignature,
     query::mailbox::SignedMailboxQuery,
-    signer::Signer,
 };
 
 use crate::{
@@ -26,12 +29,66 @@ use crate::{
     types::{IdentifierConfig, RotationConfig},
 };
 
+// ── Signer abstraction ────────────────────────────────────────────────────────
+
+/// Trait abstracting what operations need from a signer.
+///
+/// Implemented for `Arc<Signer>` (always) and
+/// `KeriSigner` (when the `keyprovider` feature is enabled).
+/// Trait abstracting what operations need from any signer.
+///
+/// Implemented for `Arc<Signer>` (always) and
+/// `KeriSigner` (when the `keyprovider` feature is enabled).
+pub trait SigningBackend {
+    /// Sign a message, returning raw signature bytes.
+    fn sign_data(&self, data: &[u8]) -> Result<Vec<u8>>;
+    /// Return the public key.
+    fn public_key(&self) -> keri_core::keys::PublicKey;
+}
+
+impl SigningBackend for std::sync::Arc<keri_core::signer::Signer> {
+    fn sign_data(&self, data: &[u8]) -> Result<Vec<u8>> {
+        self.sign(data)
+            .map_err(|e| Error::Signing(e.to_string()))
+    }
+
+    fn public_key(&self) -> keri_core::keys::PublicKey {
+        keri_core::signer::Signer::public_key(self)
+    }
+}
+
+#[cfg(feature = "keyprovider")]
+impl SigningBackend for crate::keyprovider_adapter::KeriSigner {
+    fn sign_data(&self, data: &[u8]) -> Result<Vec<u8>> {
+        self.sign(data)
+    }
+
+    fn public_key(&self) -> keri_core::keys::PublicKey {
+        self.public_key()
+    }
+}
+
+#[cfg(feature = "keyprovider")]
+impl SigningBackend for std::sync::Arc<dyn keri_keyprovider::KeyProvider> {
+    fn sign_data(&self, data: &[u8]) -> Result<Vec<u8>> {
+        tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(async {
+                self.sign(data).await
+            })
+        })
+        .map_err(|e| Error::Signing(e.to_string()))
+    }
+
+    fn public_key(&self) -> keri_core::keys::PublicKey {
+        let pk_data = keri_keyprovider::KeyProvider::public_key(self);
+        keri_core::keys::PublicKey::new(pk_data.bytes.clone())
+    }
+}
+
 // ── Internal helpers ─────────────────────────────────────────────────────────
 
-pub(crate) fn ed25519_sig(signer: &Signer, data: &[u8]) -> Result<SelfSigningPrefix> {
-    let bytes = signer
-        .sign(data)
-        .map_err(|e| Error::Signing(e.to_string()))?;
+pub(crate) fn ed25519_sig(signer: &dyn SigningBackend, data: &[u8]) -> Result<SelfSigningPrefix> {
+    let bytes = signer.sign_data(data)?;
     Ok(SelfSigningPrefix::new(
         cesrox::primitives::codes::self_signing::SelfSigning::Ed25519Sha512,
         bytes,
@@ -53,9 +110,9 @@ pub(crate) fn ed25519_sig(signer: &Signer, data: &[u8]) -> Result<SelfSigningPre
 /// - [`Error::Controller`] if event generation or finalisation fails.
 /// - [`Error::Mechanics`] if witness notification or mailbox queries fail.
 /// - [`Error::Signing`] if the signer fails to produce a signature.
-pub async fn create_identifier(
-    db_path: PathBuf,
-    signer: Arc<Signer>,
+pub async fn create_identifier<S: SigningBackend + Clone + 'static>(
+    db_path: std::path::PathBuf,
+    signer: S,
     next_pk: BasicPrefix,
     config: IdentifierConfig,
 ) -> Result<Identifier> {
@@ -74,17 +131,17 @@ pub async fn create_identifier(
 
     for wit in &config.witnesses {
         if let IdentifierPrefix::Basic(wit_id) = &wit.eid {
-            _query_mailbox(&mut id, signer.clone(), wit_id).await?;
+            _query_mailbox(&mut id, &signer, wit_id).await?;
         }
         id.send_oobi_to_watcher(id.id(), &Oobi::Location(wit.clone()))
             .await?;
         if let IdentifierPrefix::Basic(wit_id) = &wit.eid {
-            _query_mailbox(&mut id, signer.clone(), wit_id).await?;
+            _query_mailbox(&mut id, &signer, wit_id).await?;
         }
     }
 
     for watch in &config.watchers {
-        add_watcher(&mut id, signer.clone(), watch).await?;
+        add_watcher(&mut id, &signer, watch).await?;
     }
 
     Ok(id)
@@ -95,9 +152,9 @@ pub async fn create_identifier(
 /// # Deprecated
 /// Use [`create_identifier`] with an [`IdentifierConfig`] instead.
 #[deprecated(since = "0.2.0", note = "use create_identifier with IdentifierConfig")]
-pub async fn setup_identifier(
+pub async fn setup_identifier<S: SigningBackend + Clone + 'static>(
     controller: &Controller,
-    signer: Arc<Signer>,
+    signer: S,
     next_pk: BasicPrefix,
     witnesses: Vec<LocationScheme>,
     witness_threshold: u64,
@@ -117,17 +174,17 @@ pub async fn setup_identifier(
 
     for wit in &witnesses {
         if let IdentifierPrefix::Basic(wit_id) = &wit.eid {
-            _query_mailbox(&mut id, signer.clone(), wit_id).await?;
+            _query_mailbox(&mut id, &signer, wit_id).await?;
         }
         id.send_oobi_to_watcher(id.id(), &Oobi::Location(wit.clone()))
             .await?;
         if let IdentifierPrefix::Basic(wit_id) = &wit.eid {
-            _query_mailbox(&mut id, signer.clone(), wit_id).await?;
+            _query_mailbox(&mut id, &signer, wit_id).await?;
         }
     }
 
     for watch in &watchers {
-        add_watcher(&mut id, signer.clone(), watch).await?;
+        add_watcher(&mut id, &signer, watch).await?;
     }
 
     Ok(id)
@@ -141,14 +198,14 @@ pub async fn setup_identifier(
 /// # Errors
 /// - [`Error::Mechanics`] if OOBI resolution or the network call fails.
 /// - [`Error::Signing`] if signing the reply fails.
-pub async fn add_watcher(
+pub async fn add_watcher<S: SigningBackend>(
     id: &mut Identifier,
-    km: Arc<Signer>,
+    km: &S,
     watcher_oobi: &LocationScheme,
 ) -> Result<()> {
     id.resolve_oobi(&Oobi::Location(watcher_oobi.clone())).await?;
     let rpy = id.add_watcher(watcher_oobi.eid.clone())?;
-    let sig = ed25519_sig(&km, rpy.as_bytes())?;
+    let sig = ed25519_sig(km, rpy.as_bytes())?;
     id.finalize_add_watcher(rpy.as_bytes(), sig).await?;
     Ok(())
 }
@@ -162,9 +219,9 @@ pub async fn add_watcher(
 /// - [`Error::Controller`] if rotation event generation fails.
 /// - [`Error::Mechanics`] if witness notification or mailbox queries fail.
 /// - [`Error::Signing`] if signing fails.
-pub async fn rotate(
+pub async fn rotate<S: SigningBackend + Clone + 'static>(
     id: &mut Identifier,
-    current_signer: Arc<Signer>,
+    current_signer: S,
     config: RotationConfig,
 ) -> Result<()> {
     let current_keys = vec![BasicPrefix::Ed25519NT(current_signer.public_key())];
@@ -187,7 +244,7 @@ pub async fn rotate(
 
     let witnesses = id.find_state(id.id())?.witness_config.witnesses;
     for witness in witnesses {
-        _query_mailbox(id, current_signer.clone(), &witness).await?;
+        _query_mailbox(id, &current_signer, &witness).await?;
     }
 
     Ok(())
@@ -198,9 +255,9 @@ pub async fn rotate(
 /// # Deprecated
 /// Use [`rotate`] with a [`RotationConfig`] instead.
 #[deprecated(since = "0.2.0", note = "use rotate with RotationConfig")]
-pub async fn rotate_identifier(
+pub async fn rotate_identifier<S: SigningBackend + Clone + 'static>(
     id: &mut Identifier,
-    current_signer: Arc<Signer>,
+    current_signer: S,
     new_next_keys: Vec<BasicPrefix>,
     new_next_threshold: u64,
     witness_to_add: Vec<LocationScheme>,
@@ -226,7 +283,7 @@ pub async fn rotate_identifier(
 
     let witnesses = id.find_state(id.id())?.witness_config.witnesses;
     for witness in witnesses {
-        _query_mailbox(id, current_signer.clone(), &witness).await?;
+        _query_mailbox(id, &current_signer, &witness).await?;
     }
 
     Ok(())
@@ -242,9 +299,9 @@ pub async fn rotate_identifier(
 /// - [`Error::Controller`] if registry inception or encoding fails.
 /// - [`Error::Mechanics`] on network failures.
 /// - [`Error::Signing`] if signing fails.
-pub async fn incept_registry(
+pub async fn incept_registry<S: SigningBackend + Clone + 'static>(
     id: &mut Identifier,
-    signer: Arc<Signer>,
+    signer: S,
 ) -> Result<IdentifierPrefix> {
     let (reg_id, ixn) = id.incept_registry()?;
     let encoded_ixn = ixn
@@ -256,7 +313,7 @@ pub async fn incept_registry(
 
     let witnesses = id.find_state(id.id())?.witness_config.witnesses;
     for witness in &witnesses {
-        _query_mailbox(id, signer.clone(), witness).await?;
+        _query_mailbox(id, &signer, witness).await?;
     }
 
     id.notify_backers().await?;
@@ -273,9 +330,9 @@ pub async fn incept_registry(
 /// - [`Error::Controller`] if event generation or encoding fails.
 /// - [`Error::Mechanics`] on network failures.
 /// - [`Error::Signing`] if signing fails.
-pub async fn issue(
+pub async fn issue<S: SigningBackend + Clone + 'static>(
     id: &mut Identifier,
-    signer: Arc<Signer>,
+    signer: S,
     credential_said: SelfAddressingIdentifier,
 ) -> Result<()> {
     let (_vc_id, ixn) = id.issue(credential_said)?;
@@ -291,7 +348,7 @@ pub async fn issue(
         .witness_config
         .witnesses;
     for witness in &witnesses {
-        _query_mailbox(id, signer.clone(), witness).await?;
+        _query_mailbox(id, &signer, witness).await?;
     }
 
     id.notify_backers().await?;
@@ -304,10 +361,10 @@ pub async fn issue(
 /// # Deprecated
 /// Use [`issue`] instead.
 #[deprecated(since = "0.2.0", note = "use issue(id, signer, cred_said)")]
-pub async fn issue_credential(
+pub async fn issue_credential<S: SigningBackend + Clone + 'static>(
     identifier: &mut Identifier,
     cred_said: SelfAddressingIdentifier,
-    km: Arc<Signer>,
+    km: S,
 ) -> Result<()> {
     issue(identifier, km, cred_said).await
 }
@@ -321,9 +378,9 @@ pub async fn issue_credential(
 /// - [`Error::Controller`] if event generation fails.
 /// - [`Error::Mechanics`] on network failures.
 /// - [`Error::Signing`] if signing fails.
-pub async fn revoke(
+pub async fn revoke<S: SigningBackend + Clone + 'static>(
     id: &mut Identifier,
-    signer: Arc<Signer>,
+    signer: S,
     credential_said: &SelfAddressingIdentifier,
 ) -> Result<()> {
     let ixn = id.revoke(credential_said)?;
@@ -336,7 +393,7 @@ pub async fn revoke(
         .witness_config
         .witnesses;
     for witness in &witnesses {
-        _query_mailbox(id, signer.clone(), witness).await?;
+        _query_mailbox(id, &signer, witness).await?;
     }
 
     id.notify_backers().await?;
@@ -349,10 +406,10 @@ pub async fn revoke(
 /// # Deprecated
 /// Use [`revoke`] instead.
 #[deprecated(since = "0.2.0", note = "use revoke(id, signer, cred_said)")]
-pub async fn revoke_credential(
+pub async fn revoke_credential<S: SigningBackend + Clone + 'static>(
     identifier: &mut Identifier,
     cred_said: &SelfAddressingIdentifier,
-    km: Arc<Signer>,
+    km: S,
 ) -> Result<()> {
     revoke(identifier, km, cred_said).await
 }
@@ -367,27 +424,24 @@ pub async fn revoke_credential(
 /// - [`Error::Mechanics`] on network or processing failures.
 /// - [`Error::Signing`] if signing fails.
 /// - [`Error::EncodingError`] if query encoding fails.
-pub async fn query_mailbox(
+pub async fn query_mailbox<S: SigningBackend>(
     id: &mut Identifier,
-    km: Arc<Signer>,
+    km: S,
     witness_id: &BasicPrefix,
 ) -> Result<Vec<SignedMailboxQuery>> {
-    _query_mailbox(id, km, witness_id).await
+    _query_mailbox(id, &km, witness_id).await
 }
 
 // Private implementation to avoid name collision with Identifier::query_mailbox.
-async fn _query_mailbox(
+async fn _query_mailbox<S: SigningBackend>(
     id: &mut Identifier,
-    km: Arc<Signer>,
+    km: &S,
     witness_id: &BasicPrefix,
 ) -> Result<Vec<SignedMailboxQuery>> {
     let mut out = vec![];
     for qry in id.query_mailbox(id.id(), &[witness_id.clone()])? {
         let encoded = qry.encode().map_err(|e| Error::EncodingError(e.to_string()))?;
-        let sig = SelfSigningPrefix::Ed25519Sha512(
-            km.sign(&encoded)
-                .map_err(|e| Error::Signing(e.to_string()))?,
-        );
+        let sig = SelfSigningPrefix::Ed25519Sha512(km.sign_data(&encoded)?);
         let signatures = vec![IndexedSignature::new_both_same(sig.clone(), 0)];
         let signed_qry =
             SignedMailboxQuery::new_trans(qry.clone(), id.id().clone(), signatures);
