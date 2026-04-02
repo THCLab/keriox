@@ -23,7 +23,7 @@ use keri_core::{
     },
     mailbox::MailboxResponse,
     oobi::LocationScheme,
-    oobi_manager::OobiManager,
+    oobi_manager::{OobiManager, RedbOobiManager, RedbOobiStorage, storage::OobiStorageBackend},
     prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     processor::notification::{Notification, NotificationBus, Notifier},
     query::{
@@ -143,23 +143,24 @@ impl From<keri_core::oobi::error::OobiError> for WitnessError {
     }
 }
 
-pub struct Witness {
+pub struct Witness<S: OobiStorageBackend> {
     pub address: Url,
     pub prefix: BasicPrefix,
     pub processor: WitnessProcessor,
     pub event_storage: Arc<EventStorage<RedbDatabase>>,
-    pub oobi_manager: OobiManager,
+    pub oobi_manager: OobiManager<S>,
     pub signer: Arc<Signer>,
     pub receipt_generator: Arc<WitnessReceiptGenerator>,
     pub tel: Arc<Tel<RedbTelDatabase, RedbDatabase>>,
 }
 
-impl Witness {
+impl<S: OobiStorageBackend> Witness<S> {
     pub fn new(
         address: Url,
         signer: Arc<Signer>,
         event_path: &Path,
         escrow_config: WitnessEscrowConfig,
+        oobi_manager: OobiManager<S>,
     ) -> Result<Self, WitnessError> {
         use keri_core::processor::notification::JustNotification;
         let mut events_path = PathBuf::new();
@@ -223,30 +224,45 @@ impl Witness {
             signer,
             event_storage,
             receipt_generator,
-            oobi_manager: OobiManager::new(events_db.clone())?,
+            oobi_manager,
             tel,
         })
     }
+}
 
-    pub fn setup(
+impl Witness<RedbOobiStorage> {
+    pub fn setup_with_redb(
         public_address: url::Url,
         event_db_path: &Path,
         priv_key: Option<String>,
         escrow_config: WitnessEscrowConfig,
-    ) -> Result<Self, WitnessError> {
+    ) -> Result<Witness<RedbOobiStorage>, WitnessError> {
         let signer = Arc::new(
             priv_key
                 .map(|key| Signer::new_with_seed(&key.parse()?))
                 .unwrap_or_else(|| Ok(Signer::new()))?,
         );
         let prefix = BasicPrefix::Ed25519NT(signer.public_key());
+
+        // Create oobi manager database in a separate location
+        let mut oobi_database_path = PathBuf::from(event_db_path);
+        oobi_database_path.push("oobi_database");
+        let oobi_db =
+            Arc::new(RedbDatabase::new(&oobi_database_path).map_err(|_| Error::DbError)?);
+
         // construct witness loc scheme oobi
         let loc_scheme = LocationScheme::new(
             IdentifierPrefix::Basic(prefix.clone()),
             public_address.scheme().parse().unwrap(),
             public_address.clone(),
         );
-        let witness = Witness::new(public_address, signer.clone(), event_db_path, escrow_config)?;
+        let witness = Witness::new(
+            public_address,
+            signer.clone(),
+            event_db_path,
+            escrow_config,
+            RedbOobiManager::new(oobi_db)?,
+        )?;
         let reply = ReplyEvent::new_reply(
             ReplyRoute::LocScheme(loc_scheme),
             HashFunctionCode::Blake3_256,
@@ -264,7 +280,9 @@ impl Witness {
         witness.oobi_manager.save_oobi(&signed_reply)?;
         Ok(witness)
     }
+}
 
+impl<S: OobiStorageBackend> Witness<S> {
     pub fn oobi(&self) -> LocationScheme {
         LocationScheme::new(
             IdentifierPrefix::Basic(self.prefix.clone()),

@@ -82,14 +82,8 @@ where
         let oobi_manager = OobiManager::with_storage(oobi_storage);
         let (
             mut notification_bus,
-            (
-                _out_of_order_escrow,
-                _partially_signed_escrow,
-                partially_witnessed_escrow,
-                _delegation_escrow,
-                _duplicates,
-            ),
-        ) = default_escrow_bus(event_db.clone(), escrow_config);
+            escrow_set,
+        ) = default_escrow_bus(event_db.clone(), escrow_config, None);
         let kel_storage = Arc::new(EventStorage::new(event_db.clone()));
         let (tel_bus, missing_issuer, _out_of_order, _missing_registry) =
             tel_escrow_bus(tel_db.clone(), kel_storage.clone(), tel_escrow_db)
@@ -104,7 +98,7 @@ where
             processor: BasicProcessor::new(event_db.clone(), Some(notification_bus)),
             storage: kel_storage,
             oobi_manager,
-            partially_witnessed_escrow: escrows.partially_witnessed,
+            partially_witnessed_escrow: escrow_set.partially_witnessed,
             tel,
         })
     }

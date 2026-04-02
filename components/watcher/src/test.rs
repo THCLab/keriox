@@ -70,7 +70,7 @@ async fn test_watcher_access() -> Result<(), ActorError> {
 
     let url = Url::parse("http://some/dummy/url").unwrap();
     let root = Builder::new().prefix("cont-test-db").tempdir().unwrap();
-    let watcher = Watcher::new(crate::WatcherConfig {
+    let watcher = Watcher::setup_with_redb(crate::WatcherConfig {
         public_address: url,
         db_path: root.path().to_owned(),
         tel_storage_path: watcher_tel_path,
@@ -107,7 +107,7 @@ pub async fn watcher_forward_ksn() -> Result<(), ActorError> {
         let root_witness = Builder::new().prefix("test-wit").tempdir().unwrap();
 
         Arc::new(
-            WitnessListener::setup(
+            WitnessListener::setup_with_redb(
                 witness_url,
                 root_witness.path(),
                 Some("ArwXoACJgOleVZ2PY7kXn7rA0II0mHYDhc6WrBH8fDAc".into()),
@@ -167,7 +167,7 @@ pub async fn watcher_forward_ksn() -> Result<(), ActorError> {
     let watcher_tel_dir = Builder::new().prefix("cont-test-tel-db").tempdir().unwrap();
     let watcher_tel_path = watcher_tel_dir.path().join("tel_storage");
 
-    let watcher = Watcher::new(WatcherConfig {
+    let watcher = Watcher::setup_with_redb(WatcherConfig {
         public_address: url,
         db_path: root.path().to_owned(),
         transport: Box::new(transport),

@@ -31,7 +31,7 @@ use keri_core::{
     },
 };
 use keri_core::{
-    oobi_manager::OobiManager,
+    oobi_manager::{OobiManager, storage::OobiStorageBackend},
     processor::{basic_processor::BasicProcessor, event_storage::EventStorage},
     signer::Signer,
     transport::Transport,
@@ -49,12 +49,12 @@ use crate::transport::WatcherTelTransport;
 
 use super::{config::WatcherConfig, tel_providing::TelToForward};
 
-pub struct WatcherData {
+pub struct WatcherData<S: OobiStorageBackend> {
     pub address: url::Url,
     pub prefix: BasicPrefix,
     pub processor: BasicProcessor<RedbDatabase>,
     pub event_storage: Arc<EventStorage<RedbDatabase>>,
-    pub oobi_manager: OobiManager,
+    pub oobi_manager: OobiManager<S>,
     pub signer: Arc<Signer>,
     pub transport: Box<dyn Transport + Send + Sync>,
     pub tel_transport: Box<dyn WatcherTelTransport + Send + Sync>,
@@ -66,11 +66,12 @@ pub struct WatcherData {
     reply_escrow: Arc<ReplyEscrow<RedbDatabase>>,
 }
 
-impl WatcherData {
+impl<S: OobiStorageBackend> WatcherData<S> {
     pub fn new(
         config: WatcherConfig,
         tx: Sender<IdentifierPrefix>,
         tel_tx: Sender<(IdentifierPrefix, IdentifierPrefix)>,
+        oobi_manager: OobiManager<S>,
     ) -> Result<Arc<Self>, ActorError> {
         let WatcherConfig {
             public_address,
@@ -96,8 +97,6 @@ impl WatcherData {
             let _file = File::create(&path).unwrap();
             Arc::new(RedbDatabase::new(&path).unwrap())
         };
-
-        let oobi_manager = OobiManager::new(events_db.clone())?;
 
         let (notification_bus, _escrows) = default_escrow_bus(events_db.clone(), escrow_config, None);
         let reply_escrow = Arc::new(ReplyEscrow::new(events_db.clone()));

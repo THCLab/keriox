@@ -12,7 +12,11 @@ use crate::{
 
 pub mod storage;
 
-use self::storage::OobiStorageBackend;
+pub use self::storage::OobiStorageBackend;
+#[cfg(feature = "storage-redb")]
+pub use self::storage::RedbOobiStorage;
+#[cfg(feature = "storage-postgres")]
+pub use crate::database::postgres::oobi_storage::PostgresOobiStorage;
 
 pub struct OobiManager<S: OobiStorageBackend> {
     store: S,
