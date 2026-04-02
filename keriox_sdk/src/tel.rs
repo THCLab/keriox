@@ -8,7 +8,7 @@
 //! creating a registry see [`crate::operations::incept_registry`].
 
 use keri_controller::IdentifierPrefix;
-use keri_core::{actor::prelude::SelfAddressingIdentifier, signer::Signer};
+use keri_core::actor::prelude::SelfAddressingIdentifier;
 use teliox::state::vc_state::TelState;
 
 use crate::{
@@ -29,17 +29,15 @@ use crate::{
 /// - [`Error::RegistryNotIncepted`] if `registry_id` is not known locally.
 /// - [`Error::Mechanics`] on network or processing failures.
 /// - [`Error::Signing`] if signing the query fails.
-pub async fn check_credential_status(
+pub async fn check_credential_status<S: crate::operations::SigningBackend>(
     id: &Identifier,
-    signer: &Signer,
+    signer: &S,
     registry_id: &IdentifierPrefix,
     credential_said: &SelfAddressingIdentifier,
 ) -> Result<CredentialStatus> {
-    // Make sure the registry is known.
     id.find_management_tel_state(registry_id)?
         .ok_or_else(|| Error::RegistryNotIncepted(registry_id.clone()))?;
 
-    // Build a VC identifier from the credential SAID.
     let vc_id = IdentifierPrefix::self_addressing(credential_said.clone());
 
     let qry = id.query_tel(registry_id.clone(), vc_id)?;

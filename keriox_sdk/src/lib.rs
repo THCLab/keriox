@@ -83,6 +83,9 @@ pub mod store;
 pub mod tel;
 pub mod types;
 
+#[cfg(feature = "keyprovider")]
+pub mod keyprovider_adapter;
+
 pub use controller::Controller;
 pub use error::{Error, Result};
 pub use identifier::Identifier;
