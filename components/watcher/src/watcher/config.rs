@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, time::Duration};
 
 use keri_core::{
     processor::escrow::EscrowConfig,
@@ -15,6 +15,9 @@ pub struct WatcherConfig {
     pub tel_transport: Box<dyn WatcherTelTransport + Send + Sync>,
     pub tel_storage_path: PathBuf,
     pub escrow_config: EscrowConfig,
+    /// Interval between background witness polling cycles.
+    /// Set to Duration::ZERO to disable polling.
+    pub poll_interval: Duration,
 }
 
 impl Default for WatcherConfig {
@@ -27,6 +30,7 @@ impl Default for WatcherConfig {
             tel_transport: Box::new(HttpTelTransport),
             tel_storage_path: PathBuf::from("tel_storage"),
             escrow_config: EscrowConfig::default(),
+            poll_interval: Duration::from_secs(30),
         }
     }
 }

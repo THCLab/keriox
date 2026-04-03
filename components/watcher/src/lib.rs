@@ -1,5 +1,5 @@
 pub use crate::{
-    watcher::{config::WatcherConfig, Watcher},
+    watcher::{config::WatcherConfig, health::WitnessHealthTracker, poller::WitnessPoller, Watcher},
     watcher_listener::WatcherListener,
 };
 
