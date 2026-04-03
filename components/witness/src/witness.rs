@@ -364,7 +364,7 @@ impl<S: OobiStorageBackend> Witness<S> {
         &self,
         qry: keri_core::query::query_event::SignedQueryMessage,
     ) -> Result<Option<PossibleResponse>, ActorError> {
-        println!("Processing query: {:?}", qry);
+        tracing::debug!(?qry, "Processing query");
         let response = process_signed_query(qry, &self.event_storage)?;
 
         match response {

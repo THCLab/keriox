@@ -104,10 +104,8 @@ pub mod http_handlers {
         body: web::Bytes,
         data: web::Data<Arc<Watcher<S>>>,
     ) -> Result<HttpResponse, ApiError> {
-        println!(
-            "\nGot events to process: \n{}",
-            String::from_utf8_lossy(&body)
-        );
+        tracing::info!("Processing notice");
+        tracing::debug!(payload = %String::from_utf8_lossy(&body), "Notice payload");
         data.parse_and_process_notices(&body)
             .map_err(ActorError::from)?;
 
@@ -120,17 +118,15 @@ pub mod http_handlers {
         body: web::Bytes,
         data: web::Data<Arc<Watcher<S>>>,
     ) -> Result<HttpResponse, ApiError> {
-        println!(
-            "\nGot queries to process: \n{}",
-            String::from_utf8_lossy(&body)
-        );
+        tracing::info!("Processing query");
+        tracing::debug!(payload = %String::from_utf8_lossy(&body), "Query payload");
         let resp = data
             .parse_and_process_queries(&body)
             .await?
             .iter()
             .map(|msg| msg.to_string())
             .join("");
-        println!("\nResponds with: {}", &resp);
+        tracing::debug!(response = %resp, "Query response");
 
         Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())
@@ -141,10 +137,8 @@ pub mod http_handlers {
         body: web::Bytes,
         data: web::Data<Arc<Watcher<S>>>,
     ) -> Result<HttpResponse, ApiError> {
-        println!(
-            "\nGot replies to process: \n{}",
-            String::from_utf8_lossy(&body)
-        );
+        tracing::info!("Processing reply");
+        tracing::debug!(payload = %String::from_utf8_lossy(&body), "Reply payload");
 
         data.parse_and_process_replies(&body)?;
 
@@ -157,10 +151,8 @@ pub mod http_handlers {
         body: web::Bytes,
         data: web::Data<Arc<Watcher<S>>>,
     ) -> Result<HttpResponse, ApiError> {
-        println!(
-            "\nGot oobi to resolve: \n{}",
-            String::from_utf8_lossy(&body)
-        );
+        tracing::info!("Resolving OOBI");
+        tracing::debug!(payload = %String::from_utf8_lossy(&body), "OOBI payload");
 
         #[derive(Debug, Deserialize)]
         #[serde(untagged)]
@@ -231,7 +223,8 @@ pub mod http_handlers {
         post_data: String,
         data: web::Data<Arc<Watcher<S>>>,
     ) -> Result<HttpResponse, ApiError> {
-        println!("\nGot tel query to process: \n{}", post_data);
+        tracing::info!("Processing TEL query");
+        tracing::debug!(payload = %post_data, "TEL query payload");
         let resp = data
             .parse_and_process_tel_queries(post_data.as_bytes())
             .await?
@@ -239,7 +232,7 @@ pub mod http_handlers {
             .map(|msg| msg.to_string())
             .collect::<Vec<_>>()
             .join("");
-        println!("\nWatcher responds with: {}", resp);
+        tracing::debug!(response = %resp, "TEL query response");
         Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())
             .body(resp))

@@ -15,6 +15,7 @@ use keri_core::{
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DurationSeconds};
 use url::Url;
+use tracing::info;
 use watcher::{transport::HttpTelTransport, WatcherConfig, WatcherListener};
 
 #[derive(Deserialize)]
@@ -119,8 +120,15 @@ const ENV_PREFIX: &str = "WATCHER_";
 
 #[actix_web::main]
 async fn main() -> anyhow::Result<()> {
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+        )
+        .init();
+
     let args = Args::parse();
-    println!("Using config file: {:?}", args.config_file);
+    info!(config_file = %args.config_file, "Loading configuration");
 
     let cfg = Figment::new()
         .merge(Yaml::file(args.config_file.clone()))
@@ -150,14 +158,11 @@ async fn main() -> anyhow::Result<()> {
         url: cfg.public_url.clone(),
     };
 
-    println!(
-        "Watcher {} is listening on port {}",
-        watcher_id.to_str(),
-        cfg.http_port,
-    );
-    println!(
-        "Watcher's oobi: {}",
-        serde_json::to_string(&watcher_loc_scheme).unwrap()
+    info!(
+        watcher_id = %watcher_id.to_str(),
+        port = cfg.http_port,
+        oobi = %serde_json::to_string(&watcher_loc_scheme).unwrap(),
+        "Watcher started",
     );
 
     watcher_listener
