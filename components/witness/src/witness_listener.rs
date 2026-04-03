@@ -395,11 +395,8 @@ pub mod http_handlers {
         post_data: String,
         data: web::Data<Arc<Witness<S>>>,
     ) -> Result<HttpResponse, ApiError> {
-        println!(
-            "\nWitness {} got notice to process: \n{}",
-            &data.prefix.to_str(),
-            post_data
-        );
+        tracing::info!(witness = %data.prefix.to_str(), "Processing notice");
+        tracing::debug!(payload = %post_data, "Notice payload");
         data.parse_and_process_notices(post_data.as_bytes())
             .map_err(ActorError::KeriError)?;
         Ok(HttpResponse::Ok()
@@ -411,18 +408,15 @@ pub mod http_handlers {
         post_data: String,
         data: web::Data<Arc<Witness<S>>>,
     ) -> Result<HttpResponse, ApiError> {
-        println!(
-            "\nWitness {} got query to process: \n{}",
-            &data.prefix.to_str(),
-            post_data
-        );
+        tracing::info!(witness = %data.prefix.to_str(), "Processing query");
+        tracing::debug!(payload = %post_data, "Query payload");
         let resp = data
             .parse_and_process_queries(post_data.as_bytes())?
             .iter()
             .map(|msg| msg.to_string())
             .collect::<Vec<_>>()
             .join("");
-        println!("\nWitness responds with: {}", resp);
+        tracing::debug!(response = %resp, "Query response");
         Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())
             .body(resp))
@@ -432,14 +426,15 @@ pub mod http_handlers {
         post_data: String,
         data: web::Data<Arc<Witness<S>>>,
     ) -> Result<HttpResponse, ApiError> {
-        println!("\nGot tel query to process: \n{}", post_data);
+        tracing::info!("Processing TEL query");
+        tracing::debug!(payload = %post_data, "TEL query payload");
         let resp = data
             .parse_and_process_tel_queries(post_data.as_bytes())?
             .iter()
             .map(|msg| msg.to_string())
             .collect::<Vec<_>>()
             .join("");
-        println!("\nWitness responds with: {}", resp);
+        tracing::debug!(response = %resp, "TEL query response");
         Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())
             .body(resp))
@@ -449,7 +444,8 @@ pub mod http_handlers {
         post_data: String,
         data: web::Data<Arc<Witness<S>>>,
     ) -> Result<HttpResponse, ApiError> {
-        println!("\nGot reply to process: \n{}", post_data);
+        tracing::info!("Processing reply");
+        tracing::debug!(payload = %post_data, "Reply payload");
         data.parse_and_process_replies(post_data.as_bytes())?;
 
         Ok(HttpResponse::Ok()
@@ -461,7 +457,8 @@ pub mod http_handlers {
         post_data: String,
         data: web::Data<Arc<Witness<S>>>,
     ) -> Result<HttpResponse, ApiError> {
-        println!("\nGot exchange to process: \n{}", post_data);
+        tracing::info!("Processing exchange");
+        tracing::debug!(payload = %post_data, "Exchange payload");
         data.parse_and_process_exchanges(post_data.as_bytes())?;
 
         Ok(HttpResponse::Ok()
@@ -473,7 +470,8 @@ pub mod http_handlers {
         post_data: String,
         data: web::Data<Arc<Witness<S>>>,
     ) -> Result<HttpResponse, ApiError> {
-        println!("\nGot tel event to process: \n{}", post_data);
+        tracing::info!("Processing TEL event");
+        tracing::debug!(payload = %post_data, "TEL event payload");
         let parsed = VerifiableEvent::parse(post_data.as_bytes()).unwrap();
         for ev in parsed {
             data.tel.processor.process(ev).unwrap()
