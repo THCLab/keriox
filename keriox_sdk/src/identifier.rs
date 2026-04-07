@@ -395,6 +395,36 @@ impl Identifier {
         Ok(())
     }
 
+    // ── OOBI location helpers ──────────────────────────────────────────────
+
+    /// Get known location schemes for an identifier.
+    pub fn get_location(
+        &self,
+        id: &IdentifierPrefix,
+    ) -> Result<Vec<LocationScheme>> {
+        self.inner
+            .get_location(id)
+            .map_err(|e| crate::error::Error::Other(e.to_string()))
+    }
+
+    /// Get location schemes for identifiers serving a specific role for `id`.
+    pub fn get_role_location(
+        &self,
+        id: &IdentifierPrefix,
+        role: keri_core::oobi::Role,
+    ) -> Result<Vec<LocationScheme>> {
+        Ok(self.inner.get_role_location(id, role)?)
+    }
+
+    /// Get end-role entries for an identifier and role.
+    pub fn get_end_role(
+        &self,
+        id: &IdentifierPrefix,
+        role: keri_core::oobi::Role,
+    ) -> Result<Vec<keri_controller::EndRole>> {
+        Ok(self.inner.get_end_role(id, role)?)
+    }
+
     // ── Low-level seal helpers ───────────────────────────────────────────────
 
     pub fn get_last_establishment_event_seal(&self) -> Result<EventSeal> {
