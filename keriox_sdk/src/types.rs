@@ -40,6 +40,54 @@ pub struct RotationConfig {
     pub witness_threshold: u64,
 }
 
+// ── Delegation config ────────────────────────────────────────────────────────
+
+/// Configuration for creating a delegated identifier (delegatee side).
+///
+/// Used by [`crate::operations::create_delegated_identifier`] and
+/// [`crate::store::KeriStore::create_delegated`].
+#[derive(Debug, Clone)]
+pub struct DelegationConfig {
+    /// The delegator's identifier prefix.
+    pub delegator: IdentifierPrefix,
+    /// Witness OOBIs for the delegated identifier.
+    pub witnesses: Vec<LocationScheme>,
+    /// Witness signing threshold.
+    pub witness_threshold: u64,
+    /// Watcher OOBIs to configure after delegation is accepted.
+    pub watchers: Vec<LocationScheme>,
+}
+
+/// A pending delegation request discovered by the delegator.
+///
+/// Extracted from [`ActionRequired::DelegationRequest`] via [`DelegationRequest::try_from`].
+/// Pass this to [`crate::operations::approve_delegation`] to approve.
+#[derive(Debug)]
+pub struct DelegationRequest {
+    /// The delegating IXN event to be signed by the delegator.
+    pub delegating_event: keri_core::event_message::msg::KeriEvent<keri_core::event::KeyEvent>,
+    /// The exchange message to forward to the delegatee after approval.
+    pub exchange: keri_core::mailbox::exchange::ExchangeMessage,
+}
+
+impl TryFrom<keri_controller::mailbox_updating::ActionRequired> for DelegationRequest {
+    type Error = keri_controller::mailbox_updating::ActionRequired;
+
+    fn try_from(
+        action: keri_controller::mailbox_updating::ActionRequired,
+    ) -> std::result::Result<Self, Self::Error> {
+        match action {
+            keri_controller::mailbox_updating::ActionRequired::DelegationRequest(ev, exn) => {
+                Ok(DelegationRequest {
+                    delegating_event: ev,
+                    exchange: exn,
+                })
+            }
+            other => Err(other),
+        }
+    }
+}
+
 // ── Signing / verification result types ──────────────────────────────────────
 
 /// A CESR-encoded signed payload ready for transport.
