@@ -27,7 +27,7 @@ cesrox = { version = "0.1.8" }
 itertools = "0.11.0"
 rusqlite = { version = "0.32.1", features = ["bundled"], optional = true}
 serde = "1.0.219"
-reqwest = "0.12.22"
+reqwest = { version = "0.12.22", default-features = false, features = ["rustls-tls"] }
 async-trait = "0.1.57"
 tracing = "0.1"
 

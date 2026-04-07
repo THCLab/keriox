@@ -24,3 +24,11 @@ license = "EUPL-1.2"
 [workspace.metadata.release]
 pre-release-commit-message = "chore: Release"
 tag = false
+
+[profile.mobile-release]
+inherits = "release"
+opt-level = "z"
+lto = true
+strip = true
+codegen-units = 1
+panic = "abort"

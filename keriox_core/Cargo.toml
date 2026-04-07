@@ -53,7 +53,7 @@ async-std = { version = "1", features = ["attributes"], optional = true }
 
 # oobis dependecies
 async-trait = { version = "0.1.57", optional = true }
-reqwest = { version = "0.11", optional = true }
+reqwest = { version = "0.11", optional = true, default-features = false, features = ["rustls-tls"] }
 url = { version = "2.2.2", features = ["serde"], optional = true }
 strum_macros = { version = "0.24", optional = true }
 strum = { version = "0.24", optional = true }
