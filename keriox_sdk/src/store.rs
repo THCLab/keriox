@@ -232,6 +232,18 @@ impl KeriStore {
         self.write_file(alias, "reg_id", &registry_id.to_str())
     }
 
+    /// Persist the identifier prefix for an alias.
+    ///
+    /// Used when creating identifiers through the operations layer directly
+    /// (bypassing [`KeriStore::create`]).
+    ///
+    /// # Errors
+    /// - [`Error::PersistenceError`] on I/O failures.
+    pub fn save_id(&self, alias: &str, id: &IdentifierPrefix) -> Result<()> {
+        use keri_core::prefix::CesrPrimitive;
+        self.write_file(alias, "id", &id.to_str())
+    }
+
     /// Create a delegated identifier (delegatee side).
     ///
     /// Generates random Ed25519 key pairs, creates a temporary identifier,
@@ -470,7 +482,10 @@ impl KeriStore {
     }
 
     fn write_file(&self, alias: &str, filename: &str, content: &str) -> Result<()> {
-        let path = self.alias_dir(alias).join(filename);
+        let alias_dir = self.alias_dir(alias);
+        std::fs::create_dir_all(&alias_dir)
+            .map_err(|e| Error::PersistenceError(format!("cannot create alias dir: {e}")))?;
+        let path = alias_dir.join(filename);
         std::fs::write(&path, content)
             .map_err(|e| Error::PersistenceError(format!("cannot write {filename}: {e}")))
     }
