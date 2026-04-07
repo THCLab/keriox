@@ -1,9 +1,9 @@
 use std::{path::Path, sync::Arc};
 
 use keri_controller::{
-    config::ControllerConfig, controller::Controller, error::ControllerError,
-    identifier::Identifier, mailbox_updating::ActionRequired, BasicPrefix, CryptoBox,
-    IdentifierPrefix, KeyManager, LocationScheme, SelfSigningPrefix,
+    config::ControllerConfig, error::ControllerError, mailbox_updating::ActionRequired,
+    BasicPrefix, CryptoBox, IdentifierPrefix, KeyManager, LocationScheme, RedbController,
+    RedbIdentifier, SelfSigningPrefix,
 };
 use keri_core::{
     actor::error::ActorError,
@@ -23,24 +23,24 @@ pub async fn setup_identifier(
     witness_locations: Vec<LocationScheme>,
     transport: Option<TestTransport<ActorError>>,
     tel_transport: Option<TelTestTransport>,
-) -> (Identifier, CryptoBox, Arc<Controller>) {
+) -> (RedbIdentifier, CryptoBox, Arc<RedbController>) {
     let verifier_controller = Arc::new(
         match (transport, tel_transport) {
-            (None, None) => Controller::new(ControllerConfig {
+            (None, None) => RedbController::new(ControllerConfig {
                 db_path: root_path.to_owned(),
                 ..Default::default()
             }),
-            (None, Some(tel_transport)) => Controller::new(ControllerConfig {
+            (None, Some(tel_transport)) => RedbController::new(ControllerConfig {
                 db_path: root_path.to_owned(),
                 tel_transport: Box::new(tel_transport.clone()),
                 ..Default::default()
             }),
-            (Some(transport), None) => Controller::new(ControllerConfig {
+            (Some(transport), None) => RedbController::new(ControllerConfig {
                 db_path: root_path.to_owned(),
                 transport: Box::new(transport.clone()),
                 ..Default::default()
             }),
-            (Some(transport), Some(tel_transport)) => Controller::new(ControllerConfig {
+            (Some(transport), Some(tel_transport)) => RedbController::new(ControllerConfig {
                 db_path: root_path.to_owned(),
                 transport: Box::new(transport.clone()),
                 tel_transport: Box::new(tel_transport.clone()),
@@ -93,7 +93,7 @@ pub async fn setup_identifier(
 }
 
 pub async fn handle_delegation_request(
-    id: &mut Identifier,
+    id: &mut RedbIdentifier,
     keypair: &CryptoBox,
     witness_id: &[BasicPrefix],
     delegator_group_id: IdentifierPrefix,

@@ -27,7 +27,7 @@ async fn test_tel_from_watcher() -> Result<(), anyhow::Error> {
         let seed = "AK8F6AAiYDpXlWdj2O5F5-6wNCCNJh2A4XOlqwR_HwwH";
         let witness_db_path = Builder::new().prefix("test-wit1-db").tempdir().unwrap();
         Arc::new(
-            WitnessListener::setup(
+            WitnessListener::setup_with_redb(
                 verifier_witness_url.clone(),
                 witness_db_path.path(),
                 Some(seed.to_string()),
@@ -50,7 +50,7 @@ async fn test_tel_from_watcher() -> Result<(), anyhow::Error> {
         let seed = "AK8F6AAiYDpXlWdj2O5F5-6wNCCNJh2A4XOlqwR_Hwwg";
         let witness_db_path = Builder::new().prefix("test-wit2-db").tempdir().unwrap();
         Arc::new(
-            WitnessListener::setup(
+            WitnessListener::setup_with_redb(
                 issuer_witness_url.clone(),
                 witness_db_path.path(),
                 Some(seed.to_string()),
@@ -100,7 +100,7 @@ async fn test_tel_from_watcher() -> Result<(), anyhow::Error> {
             .await;
 
         let watcher_db_path = Builder::new().prefix("cont-test-db").tempdir().unwrap();
-        let watcher_listener = Arc::new(WatcherListener::new(WatcherConfig {
+        let watcher_listener = Arc::new(WatcherListener::setup_with_redb(WatcherConfig {
             public_address: Url::parse("http://watcher1/").unwrap(),
             db_path: watcher_db_path.path().to_owned(),
             transport: Box::new(watcher_transport),

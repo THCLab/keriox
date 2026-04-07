@@ -3,7 +3,7 @@ use std::{sync::Arc, time::Duration};
 use keri_core::{database::EventDatabase, processor::event_storage::EventStorage};
 
 use crate::{
-    database::{EscrowDatabase, TelEventDatabase, TelLogDatabase},
+    database::{TelEscrowDatabase, TelEventDatabase},
     error::Error,
     processor::notification::TelNotificationKind,
 };
@@ -19,36 +19,42 @@ pub mod missing_issuer;
 pub mod missing_registry;
 pub mod out_of_order;
 
-pub fn default_escrow_bus<D: TelEventDatabase + TelLogDatabase + Send + Sync + 'static, K: EventDatabase + Send + Sync + 'static>(
+pub fn default_escrow_bus<
+    D: TelEventDatabase + Send + Sync + 'static,
+    K: EventDatabase + Send + Sync + 'static,
+    E: TelEscrowDatabase + 'static,
+>(
     tel_storage: Arc<D>,
     kel_storage: Arc<EventStorage<K>>,
-    tel_escrow_db: EscrowDatabase,
+    tel_escrow_db: E,
 ) -> Result<
     (
         TelNotificationBus,
-        Arc<MissingIssuerEscrow<D, K>>,
-        Arc<OutOfOrderEscrow<D, K>>,
-        Arc<MissingRegistryEscrow<D, K>>,
+        Arc<MissingIssuerEscrow<D, K, E>>,
+        Arc<OutOfOrderEscrow<D, K, E>>,
+        Arc<MissingRegistryEscrow<D, K, E>>,
     ),
     Error,
 > {
+    let escrow_db = Arc::new(tel_escrow_db);
+
     let out_of_order_escrow = Arc::new(OutOfOrderEscrow::new(
         tel_storage.clone(),
         kel_storage.clone(),
-        &tel_escrow_db,
+        escrow_db.clone(),
         Duration::from_secs(100),
     ));
     let missing_registry_escrow = Arc::new(MissingRegistryEscrow::new(
         tel_storage.clone(),
         kel_storage.clone(),
-        &tel_escrow_db,
+        escrow_db.clone(),
         Duration::from_secs(100),
     ));
     let tel_bus = TelNotificationBus::new();
 
     let missing_issuer_escrow = Arc::new(MissingIssuerEscrow::new(
         tel_storage.clone(),
-        &tel_escrow_db,
+        escrow_db,
         Duration::from_secs(100),
         kel_storage.clone(),
         tel_bus.clone(),

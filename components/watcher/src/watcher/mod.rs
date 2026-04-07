@@ -16,6 +16,7 @@ use keri_core::{
     error::Error,
     event_message::signed_event_message::Message,
     oobi::{error::OobiError, EndRole, LocationScheme},
+    oobi_manager::{OobiManager, RedbOobiManager, RedbOobiStorage, storage::OobiStorageBackend},
     prefix::{BasicPrefix, IdentifierPrefix},
     query::reply_event::{ReplyRoute, SignedReply},
 };
@@ -36,16 +37,16 @@ enum WitnessResp {
     Tel(Vec<VerifiableEvent>),
 }
 
-pub struct Watcher {
-    pub(crate) watcher_data: Arc<WatcherData>,
+pub struct Watcher<S: OobiStorageBackend> {
+    pub(crate) watcher_data: Arc<WatcherData<S>>,
     recv: Mutex<Receiver<IdentifierPrefix>>,
     tel_recv: Mutex<Receiver<(IdentifierPrefix, IdentifierPrefix)>>,
     // Maps registry id to witness id provided by oobi
     registry_id_mapping: RegistryMapping,
 }
 
-impl Watcher {
-    pub fn new(config: WatcherConfig) -> Result<Self, ActorError> {
+impl<S: OobiStorageBackend> Watcher<S> {
+    pub fn new(config: WatcherConfig, oobi_manager: OobiManager<S>) -> Result<Self, ActorError> {
         let (tx, rx) = channel::<IdentifierPrefix>(100);
         let (tel_tx, tel_rx) = channel::<(IdentifierPrefix, IdentifierPrefix)>(100);
         let tel_storage_path = config.tel_storage_path.clone();
@@ -53,7 +54,7 @@ impl Watcher {
         let mut registry_ids_storage_path = tel_storage_path.clone();
         registry_ids_storage_path.push("registry");
         Ok(Watcher {
-            watcher_data: WatcherData::new(config, tx, tel_tx)?,
+            watcher_data: WatcherData::new(config, tx, tel_tx, oobi_manager)?,
             recv: Mutex::new(rx),
             tel_recv: Mutex::new(tel_rx),
             registry_id_mapping: RegistryMapping::new(&registry_ids_storage_path)
@@ -104,6 +105,22 @@ impl Watcher {
             self.watcher_data.address.clone(),
         )
     }
+}
+
+impl Watcher<RedbOobiStorage> {
+    pub fn setup_with_redb(config: WatcherConfig) -> Result<Self, ActorError> {
+        use std::path::PathBuf;
+
+        // Create oobi manager database in a separate location
+        let mut oobi_db_path = config.db_path.clone();
+        oobi_db_path.push("oobi_database");
+        let oobi_db = Arc::new(RedbDatabase::new(&oobi_db_path).unwrap());
+        let oobi_manager = RedbOobiManager::new(oobi_db)?;
+        Self::new(config, oobi_manager)
+    }
+}
+
+impl<S: OobiStorageBackend> Watcher<S> {
     pub async fn resolve_end_role(&self, er: EndRole) -> Result<(), ActorError> {
         // find endpoint data of endpoint provider identifier
         let loc_scheme = self

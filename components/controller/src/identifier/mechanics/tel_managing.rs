@@ -1,12 +1,15 @@
 use keri_core::{
+    database::{EscrowCreator, EventDatabase},
     event::{
         sections::seal::{EventSeal, Seal},
         KeyEvent,
     },
     event_message::{msg::TypedEvent, EventTypeTag},
+    oobi_manager::storage::OobiStorageBackend,
     prefix::{IdentifierPrefix, SelfSigningPrefix},
 };
 use teliox::{
+    database::TelEventDatabase,
     event::verifiable_event::VerifiableEvent,
     seal::{AttachedSourceSeal, EventSourceSeal},
 };
@@ -15,7 +18,12 @@ use crate::{error::ControllerError, identifier::Identifier};
 
 use super::MechanicsError;
 
-impl Identifier {
+impl<D, T, S> Identifier<D, T, S>
+where
+    D: EventDatabase + EscrowCreator + Send + Sync + 'static,
+    T: TelEventDatabase + Send + Sync + 'static,
+    S: OobiStorageBackend,
+{
     /// Generate `vcp` event and `ixn` event with  seal to `vcp`. To finalize
     /// the process, `ixn` need to be signed confirmed with `finalize_event`
     /// function.

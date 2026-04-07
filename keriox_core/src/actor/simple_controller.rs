@@ -51,7 +51,11 @@ use crate::{
 #[cfg(feature = "oobi-manager")]
 use crate::oobi::Role;
 #[cfg(feature = "oobi-manager")]
-use crate::oobi_manager::OobiManager;
+use crate::oobi_manager::{OobiManager, RedbOobiManager};
+#[cfg(feature = "oobi-manager")]
+use crate::oobi_manager::storage::OobiStorageBackend;
+#[cfg(feature = "oobi-manager")]
+use crate::oobi_manager::storage::RedbOobiStorage;
 
 #[cfg(feature = "query")]
 use crate::query::{
@@ -61,11 +65,24 @@ use crate::query::{
 
 /// Helper struct for events generation, signing and processing.
 /// Used in tests.
+#[cfg(feature = "oobi-manager")]
+pub struct SimpleController<K: KeyManager + 'static, D: EventDatabase + EscrowCreator, S: OobiStorageBackend> {
+    prefix: IdentifierPrefix,
+    pub key_manager: Arc<Mutex<K>>,
+    processor: BasicProcessor<D>,
+    oobi_manager: OobiManager<S>,
+    pub storage: EventStorage<D>,
+    pub groups: Vec<IdentifierPrefix>,
+    pub not_fully_witnessed_escrow: Arc<PartiallyWitnessedEscrow<D>>,
+    pub ooo_escrow: Arc<MaybeOutOfOrderEscrow<D>>,
+    pub delegation_escrow: Arc<DelegationEscrow<D>>,
+}
+
+#[cfg(not(feature = "oobi-manager"))]
 pub struct SimpleController<K: KeyManager + 'static, D: EventDatabase + EscrowCreator> {
     prefix: IdentifierPrefix,
     pub key_manager: Arc<Mutex<K>>,
     processor: BasicProcessor<D>,
-    oobi_manager: OobiManager,
     pub storage: EventStorage<D>,
     pub groups: Vec<IdentifierPrefix>,
     pub not_fully_witnessed_escrow: Arc<PartiallyWitnessedEscrow<D>>,
@@ -75,13 +92,14 @@ pub struct SimpleController<K: KeyManager + 'static, D: EventDatabase + EscrowCr
 
 // impl<K: KeyManager, D: EventDatabase + Send + Sync + 'static> SimpleController<K, D> {
 #[cfg(feature = "storage-redb")]
-impl<K: KeyManager> SimpleController<K, RedbDatabase> {
+#[cfg(feature = "oobi-manager")]
+impl<K: KeyManager> SimpleController<K, RedbDatabase, RedbOobiStorage> {
     // incept a state and keys
     pub fn new(
         event_db: Arc<RedbDatabase>,
         key_manager: Arc<Mutex<K>>,
         escrow_config: EscrowConfig,
-    ) -> Result<SimpleController<K, RedbDatabase>, Error> {
+    ) -> Result<SimpleController<K, RedbDatabase, RedbOobiStorage>, Error> {
         let (not_bus, escrows) =
             default_escrow_bus(event_db.clone(), escrow_config, None);
         let processor = BasicProcessor::new(event_db.clone(), Some(not_bus));
@@ -89,7 +107,7 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase> {
         Ok(SimpleController {
             prefix: IdentifierPrefix::default(),
             key_manager,
-            oobi_manager: OobiManager::new(event_db.clone()),
+            oobi_manager: RedbOobiManager::new(event_db.clone())?,
             processor,
             storage: EventStorage::new(event_db.clone()),
             groups: vec![],

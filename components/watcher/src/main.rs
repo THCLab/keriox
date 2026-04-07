@@ -129,7 +129,7 @@ async fn main() -> anyhow::Result<()> {
         .extract::<Config>()
         .context("Failed to load config")?;
 
-    let watcher_listener = WatcherListener::new(WatcherConfig {
+    let watcher_listener = WatcherListener::setup_with_redb(WatcherConfig {
         public_address: cfg.public_url.clone(),
         db_path: cfg.db_path.clone(),
         priv_key: cfg.seed,

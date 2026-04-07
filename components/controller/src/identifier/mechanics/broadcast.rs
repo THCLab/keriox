@@ -1,11 +1,13 @@
 use futures::future::join_all;
 use keri_core::{
     actor::prelude::SelfAddressingIdentifier,
-    database::EventDatabase,
+    database::{EscrowCreator, EventDatabase},
     event_message::signed_event_message::{Message, Notice},
     oobi::Scheme,
+    oobi_manager::storage::OobiStorageBackend,
     prefix::IdentifierPrefix,
 };
+use teliox::database::TelEventDatabase;
 
 use crate::{communication::SendingError, identifier::Identifier};
 
@@ -19,7 +21,12 @@ pub enum BroadcastingError {
     CacheSavingError,
 }
 
-impl Identifier {
+impl<D, T, S> Identifier<D, T, S>
+where
+    D: EventDatabase + EscrowCreator + Send + Sync + 'static,
+    T: TelEventDatabase + Send + Sync + 'static,
+    S: OobiStorageBackend,
+{
     /// Send new receipts obtained via [`Self::finalize_query`] to specified witnesses.
     /// Returns number of new receipts sent per witness or first error.
     pub async fn broadcast_receipts(
@@ -94,7 +101,7 @@ mod test {
             let seed = "AK8F6AAiYDpXlWdj2O5F5-6wNCCNJh2A4XOlqwR_HwwH";
             let witness_root = Builder::new().prefix("test-wit1-db").tempdir().unwrap();
             Arc::new(
-                WitnessListener::setup(
+                WitnessListener::setup_with_redb(
                     url::Url::parse("http://witness1/").unwrap(),
                     witness_root.path(),
                     Some(seed.to_string()),
@@ -107,7 +114,7 @@ mod test {
             let seed = "AJZ7ZLd7unQ4IkMUwE69NXcvDO9rrmmRH_Xk3TPu9BpP";
             let witness_root = Builder::new().prefix("test-wit2-db").tempdir().unwrap();
             Arc::new(
-                WitnessListener::setup(
+                WitnessListener::setup_with_redb(
                     url::Url::parse("http://witness2/").unwrap(),
                     witness_root.path(),
                     Some(seed.to_string()),

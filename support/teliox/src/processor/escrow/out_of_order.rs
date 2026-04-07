@@ -1,16 +1,13 @@
 use std::{sync::Arc, time::Duration};
 
 use keri_core::{
-    database::{
-        redb::{escrow_database::SnKeyDatabase, WriteTxnMode},
-        EventDatabase, SequencedEventDatabase,
-    },
+    database::EventDatabase,
     prefix::IdentifierPrefix,
     processor::event_storage::EventStorage,
 };
 
 use crate::{
-    database::{EscrowDatabase, TelEventDatabase, TelLogDatabase},
+    database::{TelEscrowDatabase, TelEventDatabase},
     error::Error,
     processor::{
         notification::{TelNotification, TelNotificationBus, TelNotifier},
@@ -19,32 +16,33 @@ use crate::{
     },
 };
 
-pub struct OutOfOrderEscrow<D: TelEventDatabase + TelLogDatabase, K: EventDatabase> {
+pub struct OutOfOrderEscrow<D: TelEventDatabase, K: EventDatabase, E: TelEscrowDatabase> {
     tel_reference: Arc<TelEventStorage<D>>,
     kel_reference: Arc<EventStorage<K>>,
-    tel_log: Arc<D>,
-    escrowed_out_of_order: SnKeyDatabase,
+    escrow_db: Arc<E>,
 }
 
-impl<D: TelEventDatabase + TelLogDatabase, K: EventDatabase> OutOfOrderEscrow<D, K> {
+impl<D: TelEventDatabase, K: EventDatabase, E: TelEscrowDatabase>
+    OutOfOrderEscrow<D, K, E>
+{
     pub fn new(
         tel_reference: Arc<D>,
         kel_reference: Arc<EventStorage<K>>,
-        escrow_db: &EscrowDatabase,
-        duration: Duration,
+        escrow_db: Arc<E>,
+        _duration: Duration,
     ) -> Self {
-        let escrow = SnKeyDatabase::new(escrow_db.0.clone(), "out_of_order").unwrap();
-        let tel_event_storage = Arc::new(TelEventStorage::new(tel_reference.clone()));
+        let tel_event_storage = Arc::new(TelEventStorage::new(tel_reference));
         Self {
             tel_reference: tel_event_storage,
             kel_reference,
-            escrowed_out_of_order: escrow,
-            tel_log: tel_reference,
+            escrow_db,
         }
     }
 }
 
-impl<D: TelEventDatabase + TelLogDatabase, K: EventDatabase> TelNotifier for OutOfOrderEscrow<D, K> {
+impl<D: TelEventDatabase, K: EventDatabase, E: TelEscrowDatabase> TelNotifier
+    for OutOfOrderEscrow<D, K, E>
+{
     fn notify(
         &self,
         notification: &TelNotification,
@@ -54,13 +52,11 @@ impl<D: TelEventDatabase + TelLogDatabase, K: EventDatabase> TelNotifier for Out
             TelNotification::OutOfOrder(signed_event) => {
                 let event = signed_event.get_event();
                 let key_id = event.get_prefix();
-                self.tel_log
-                    .log_event(signed_event, &WriteTxnMode::CreateNew)?;
+                self.tel_reference.db.log_event(signed_event)?;
                 let sn = event.get_sn();
                 let digest = event.get_digest()?;
-
-                self.escrowed_out_of_order
-                    .insert(&key_id, sn, &digest)
+                self.escrow_db
+                    .out_of_order_insert(&key_id, sn, &digest)
                     .map_err(|e| Error::EscrowDatabaseError(e.to_string()))
             }
             TelNotification::TelEventAdded(event) => {
@@ -72,18 +68,21 @@ impl<D: TelEventDatabase + TelLogDatabase, K: EventDatabase> TelNotifier for Out
     }
 }
 
-impl<D: TelEventDatabase + TelLogDatabase, K: EventDatabase> OutOfOrderEscrow<D, K> {
+impl<D: TelEventDatabase, K: EventDatabase, E: TelEscrowDatabase>
+    OutOfOrderEscrow<D, K, E>
+{
     pub fn process_out_of_order_events(
         &self,
         bus: &TelNotificationBus,
         id: &IdentifierPrefix,
         sn: u64,
     ) -> Result<(), Error> {
-        if let Ok(esc) = self.escrowed_out_of_order.get(id, sn + 1) {
+        if let Ok(esc) = self.escrow_db.out_of_order_get(id, sn + 1) {
             for said in esc {
                 let event = self
-                    .tel_log
-                    .get(&said)
+                    .tel_reference
+                    .db
+                    .get_event(&said)
                     .map_err(|e| Error::EscrowDatabaseError(e.to_string()))?
                     .ok_or(Error::Generic(format!(
                         "Event of digest {} not found in out of order escrow",
@@ -93,28 +92,22 @@ impl<D: TelEventDatabase + TelLogDatabase, K: EventDatabase> OutOfOrderEscrow<D,
                     TelEventValidator::new(self.tel_reference.clone(), self.kel_reference.clone());
                 match validator.validate(&event) {
                     Ok(_) => {
-                        // remove from escrow
-                        self.escrowed_out_of_order
-                            .remove(id, sn, &said)
+                        self.escrow_db
+                            .out_of_order_remove(id, sn, &said)
                             .map_err(|e| Error::EscrowDatabaseError(e.to_string()))?;
-                        // accept tel event
                         self.tel_reference.add_event(event.clone())?;
-
                         bus.notify(&TelNotification::TelEventAdded(event.clone()))?;
-                        // stop processing the escrow if tel was updated. It needs to start again.
                         break;
                     }
                     Err(Error::MissingSealError) => {
-                        // remove from escrow
-                        self.escrowed_out_of_order
-                            .remove(id, sn, &said)
+                        self.escrow_db
+                            .out_of_order_remove(id, sn, &said)
                             .map_err(|e| Error::EscrowDatabaseError(e.to_string()))?;
                     }
-                    Err(_e) => {} // keep in escrow,
+                    Err(_e) => {}
                 }
             }
         };
-
         Ok(())
     }
 }
@@ -129,10 +122,9 @@ mod tests {
         prefix::IdentifierPrefix,
         processor::{basic_processor::BasicProcessor, event_storage::EventStorage, Processor},
     };
-    use redb::Database;
 
     use crate::{
-        database::{redb::RedbTelDatabase, EscrowDatabase, TelEventDatabase},
+        database::{redb::RedbTelDatabase, EscrowDatabase},
         error::Error,
         event::verifiable_event::VerifiableEvent,
         processor::{
@@ -147,7 +139,6 @@ mod tests {
     pub fn test_out_of_order_escrow() -> Result<(), Error> {
         use tempfile::Builder;
 
-        // Setup issuer key event log. Without ixn events tel event's can't be validated.
         let keri_root = Builder::new().prefix("test-db").tempfile().unwrap();
         let keri_db = Arc::new(RedbDatabase::new(keri_root.path()).unwrap());
         let keri_processor = BasicProcessor::new(keri_db.clone(), None);
@@ -160,12 +151,11 @@ mod tests {
             keri_processor.process(&event)?;
         }
 
-        // Initiate tel and it's escrows
         let tel_root = Builder::new().prefix("test-db").tempfile().unwrap();
         let tel_escrow_root = Builder::new().prefix("test-db").tempfile().unwrap();
         let tel_events_db = Arc::new(RedbTelDatabase::new(&tel_root.path()).unwrap());
 
-        let escrow_db = EscrowDatabase::new(&tel_escrow_root.path()).unwrap();
+        let escrow_db = Arc::new(EscrowDatabase::new(&tel_escrow_root.path()).unwrap());
 
         let tel_storage = Arc::new(TelEventStorage::new(tel_events_db.clone()));
         let tel_bus = TelNotificationBus::new();
@@ -173,7 +163,7 @@ mod tests {
         let out_of_order_escrow = Arc::new(OutOfOrderEscrow::new(
             tel_events_db,
             keri_storage.clone(),
-            &escrow_db,
+            escrow_db,
             Duration::from_secs(100),
         ));
 
@@ -193,24 +183,19 @@ mod tests {
         let rev = parsed_tel[2].clone();
 
         let processor = TelEventProcessor::new(keri_storage, tel_storage.clone(), Some(tel_bus));
-        // Incept registry
         processor.process(vcp)?;
 
-        // Process out of order event.
         processor.process(rev)?;
 
         let vc_hash: IdentifierPrefix = "EEvXZtq623byRrE7h34J7sosXnSlXT5oKMuvntyqTgVa"
             .parse()
             .unwrap();
 
-        // Check vc tel state. Iss event should't be accepted, because of
-        // missing issuance event. It should be in out of order escrow.
         let st = tel_storage.compute_vc_state(&vc_hash)?;
         assert!(st.is_none());
         let st = tel_storage.compute_vc_state(&vc_hash)?;
         assert!(st.is_none());
 
-        // Process missing event
         processor.process(iss)?;
 
         let st = tel_storage.compute_vc_state(&vc_hash)?;

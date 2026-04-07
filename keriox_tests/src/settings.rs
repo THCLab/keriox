@@ -18,7 +18,7 @@ impl AsyncTestContext for InfrastructureContext {
         let first_witness = {
             let wit_root = Builder::new().prefix("wit-db").tempdir().unwrap();
             Arc::new(
-                WitnessListener::setup(
+                WitnessListener::setup_with_redb(
                     Url::parse("http://127.0.0.1:3232").unwrap(),
                     wit_root.path(),
                     Some("ArwXoACJgOleVZ2PY7kXn7rA0II0mHYDhc6WrBH8fDAc".to_string()),
@@ -39,7 +39,7 @@ impl AsyncTestContext for InfrastructureContext {
         let second_witness = {
             let wit_root = Builder::new().prefix("wit-db").tempdir().unwrap();
             Arc::new(
-                WitnessListener::setup(
+                WitnessListener::setup_with_redb(
                     Url::parse("http://127.0.0.1:3233").unwrap(),
                     wit_root.path(),
                     Some("ArwXoACJgOleVZ2PY7kXn7rA0II0mHYDhc6WrBH8fDAd".to_string()),
@@ -63,7 +63,7 @@ impl AsyncTestContext for InfrastructureContext {
 
         let watcher_listener = {
             let root = Builder::new().prefix("watcher-test-db").tempdir().unwrap();
-            WatcherListener::new(WatcherConfig {
+            WatcherListener::setup_with_redb(WatcherConfig {
                 public_address: watcher_url.clone(),
                 db_path: root.path().to_owned(),
                 tel_storage_path: watcher_tel_path,

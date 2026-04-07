@@ -108,7 +108,7 @@ async fn main() -> Result<()> {
         .extract::<Config>()
         .context("Failed to load config")?;
 
-    let witness_listener = WitnessListener::setup(
+    let witness_listener = WitnessListener::setup_with_redb(
         cfg.public_url.clone(),
         cfg.db_path.as_path(),
         cfg.seed,

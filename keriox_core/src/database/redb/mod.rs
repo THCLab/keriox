@@ -108,6 +108,10 @@ impl RedbDatabase {
             accepted_rpy: Arc::new(AcceptedKsn::new(db.clone())?),
         })
     }
+
+    pub fn raw_db(&self) -> Arc<Database> {
+        self.db.clone()
+    }
 }
 
 impl EventDatabase for RedbDatabase {

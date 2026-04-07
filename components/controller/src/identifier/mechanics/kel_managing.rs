@@ -1,5 +1,6 @@
 use keri_core::{
     actor::{event_generator, prelude::SelfAddressingIdentifier},
+    database::{EscrowCreator, EventDatabase},
     event::{
         event_data::EventData,
         sections::{seal::Seal, KeyConfig},
@@ -11,16 +12,23 @@ use keri_core::{
         signed_event_message::{Message, Notice},
     },
     oobi::{LocationScheme, Scheme},
+    oobi_manager::storage::OobiStorageBackend,
     prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
 };
 
 use keri_core::prefix::CesrPrimitive;
+use teliox::database::TelEventDatabase;
 
 use crate::identifier::Identifier;
 
 use super::MechanicsError;
 
-impl Identifier {
+impl<D, T, S> Identifier<D, T, S>
+where
+    D: EventDatabase + EscrowCreator + Send + Sync + 'static,
+    T: TelEventDatabase + Send + Sync + 'static,
+    S: OobiStorageBackend,
+{
     /// Generate and return rotation event for Identifier
     pub async fn rotate(
         &self,

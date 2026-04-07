@@ -29,6 +29,7 @@ use tempfile::Builder;
 use url::Url;
 
 use crate::{witness::Witness, witness_processor::WitnessEscrowConfig};
+use keri_core::oobi_manager::{OobiManager, RedbOobiManager};
 
 #[test]
 fn test_not_fully_witnessed() -> Result<(), Error> {
@@ -59,7 +60,7 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
     let first_witness = {
         let root_witness = Builder::new().prefix("test-db1").tempdir().unwrap();
         std::fs::create_dir_all(root_witness.path()).unwrap();
-        Witness::setup(
+        Witness::setup_with_redb(
             url::Url::parse("http://some/url").unwrap(),
             root_witness.path(),
             Some(seed1.into()),
@@ -71,7 +72,7 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
     let second_witness = {
         let root_witness = Builder::new().prefix("test-db1").tempdir().unwrap();
         std::fs::create_dir_all(root_witness.path()).unwrap();
-        Witness::setup(
+        Witness::setup_with_redb(
             url::Url::parse("http://some/url").unwrap(),
             root_witness.path(),
             Some(seed2.into()),
@@ -237,11 +238,19 @@ fn test_qry_rpy() -> Result<(), ActorError> {
     let witness_root = Builder::new().prefix("test-db").tempdir().unwrap();
     let signer = Signer::new();
     let signer_arc = Arc::new(signer);
+
+    // Create oobi manager database in a separate location
+    let mut oobi_database_path = witness_root.path().to_path_buf();
+    oobi_database_path.push("oobi_database");
+    let oobi_db = Arc::new(RedbDatabase::new(&oobi_database_path).unwrap());
+    let oobi_manager = RedbOobiManager::new(oobi_db).unwrap();
+
     let witness = Witness::new(
         Url::parse("http://example.com").unwrap(),
         signer_arc,
         witness_root.path(),
         WitnessEscrowConfig::default(),
+        oobi_manager,
     )
     .unwrap();
 
@@ -402,11 +411,19 @@ pub fn test_key_state_notice() -> Result<(), Error> {
         let witness_root = Builder::new().prefix("test-db").tempdir().unwrap();
         let path = witness_root.path();
         std::fs::create_dir_all(path).unwrap();
+
+        // Create oobi manager database in a separate location
+        let mut oobi_database_path = witness_root.path().to_path_buf();
+        oobi_database_path.push("oobi_database");
+        let oobi_db = Arc::new(RedbDatabase::new(&oobi_database_path).unwrap());
+        let oobi_manager = RedbOobiManager::new(oobi_db).unwrap();
+
         Witness::new(
             Url::parse("http://example.com").unwrap(),
             signer_arc.clone(),
             path,
             WitnessEscrowConfig::default(),
+            oobi_manager,
         )
         .unwrap()
     };
@@ -547,11 +564,19 @@ fn test_mbx() {
             .tempdir()
             .unwrap();
         std::fs::create_dir_all(root.path()).unwrap();
+
+        // Create oobi manager database in a separate location
+        let mut oobi_database_path = root.path().to_path_buf();
+        oobi_database_path.push("oobi_database");
+        let oobi_db = Arc::new(RedbDatabase::new(&oobi_database_path).unwrap());
+        let oobi_manager = RedbOobiManager::new(oobi_db).unwrap();
+
         Witness::new(
             Url::parse("http://example.com").unwrap(),
             signer,
             root.path(),
             WitnessEscrowConfig::default(),
+            oobi_manager,
         )
         .unwrap()
     };
@@ -614,11 +639,19 @@ fn test_invalid_notice() {
         if !std::fs::exists(root.path()).unwrap() {
             std::fs::create_dir_all(root.path()).unwrap();
         }
+
+        // Create oobi manager database in a separate location
+        let mut oobi_database_path = root.path().to_path_buf();
+        oobi_database_path.push("oobi_database");
+        let oobi_db = Arc::new(RedbDatabase::new(&oobi_database_path).unwrap());
+        let oobi_manager = RedbOobiManager::new(oobi_db).unwrap();
+
         Witness::new(
             Url::parse("http://example.com").unwrap(),
             signer,
             root.path(),
             WitnessEscrowConfig::default(),
+            oobi_manager,
         )
         .unwrap()
     };
@@ -666,15 +699,12 @@ fn test_invalid_notice() {
 
 #[test]
 pub fn test_multisig() -> Result<(), ActorError> {
-    let signer = Signer::new();
-    let signer_arc = Arc::new(signer);
     let witness = {
         let witness_root = Builder::new().prefix("test-db").tempdir().unwrap();
-        let path = witness_root.path();
-        Witness::new(
+        Witness::setup_with_redb(
             Url::parse("http://example.com").unwrap(),
-            signer_arc,
-            path,
+            witness_root.path(),
+            None,
             WitnessEscrowConfig::default(),
         )
         .unwrap()
@@ -818,7 +848,7 @@ pub fn test_multisig() -> Result<(), ActorError> {
 }
 
 // Helper function that creates controller, makes and publish its inception event.
-fn setup_controller(witness: &Witness) -> Result<SimpleController<CryptoBox, RedbDatabase>, Error> {
+fn setup_controller(witness: &Witness<keri_core::oobi_manager::RedbOobiStorage>) -> Result<SimpleController<CryptoBox, RedbDatabase, keri_core::oobi_manager::RedbOobiStorage>, Error> {
     let mut cont1 = {
         // Create test db and event processor.
         let cont1_key_manager = Arc::new(Mutex::new(CryptoBox::new()?));
@@ -845,15 +875,12 @@ fn setup_controller(witness: &Witness) -> Result<SimpleController<CryptoBox, Red
 
 #[test]
 pub fn test_delegated_multisig() -> Result<(), ActorError> {
-    let signer = Signer::new();
-    let signer_arc = Arc::new(signer);
     let witness = {
         let witness_root = Builder::new().prefix("test-db").tempdir().unwrap();
-        let path = witness_root.path();
-        Witness::new(
+        Witness::setup_with_redb(
             Url::parse("http://example.com").unwrap(),
-            signer_arc,
-            path,
+            witness_root.path(),
+            None,
             WitnessEscrowConfig::default(),
         )
         .unwrap()
@@ -1097,15 +1124,12 @@ pub fn test_delegated_multisig() -> Result<(), ActorError> {
 
 #[test]
 pub fn test_delegating_multisig() -> Result<(), ActorError> {
-    let signer = Signer::new();
-    let signer_arc = Arc::new(signer);
     let witness = {
         let witness_root = Builder::new().prefix("test-db").tempdir().unwrap();
-        let path = witness_root.path();
-        Witness::new(
+        Witness::setup_with_redb(
             Url::parse("http://example.com").unwrap(),
-            signer_arc,
-            path,
+            witness_root.path(),
+            None,
             WitnessEscrowConfig::default(),
         )
         .unwrap()

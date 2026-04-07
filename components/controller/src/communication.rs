@@ -3,8 +3,10 @@ use std::sync::Arc;
 use futures::future::join_all;
 use keri_core::{
     actor::{error::ActorError, parse_event_stream, possible_response::PossibleResponse},
+    database::{EscrowCreator, EventDatabase},
     event_message::signed_event_message::{Message, Notice, Op, SignedEventMessage},
     oobi::{EndRole, LocationScheme, Oobi, Scheme},
+    oobi_manager::storage::OobiStorageBackend,
     prefix::{BasicPrefix, IdentifierPrefix},
     query::{
         mailbox::SignedMailboxQuery,
@@ -12,7 +14,7 @@ use keri_core::{
     },
     transport::{Transport, TransportError},
 };
-use teliox::{event::verifiable_event::VerifiableEvent, query::SignedTelQuery};
+use teliox::{database::TelEventDatabase, event::verifiable_event::VerifiableEvent, query::SignedTelQuery};
 
 use crate::{
     error::ControllerError,
@@ -53,15 +55,25 @@ impl From<TransportError> for SendingError {
     }
 }
 
-pub struct Communication {
-    pub events: Arc<KnownEvents>,
+pub struct Communication<D, T, S>
+where
+    D: EventDatabase + EscrowCreator + 'static,
+    T: TelEventDatabase + 'static,
+    S: OobiStorageBackend,
+{
+    pub events: Arc<KnownEvents<D, T, S>>,
     pub transport: Box<dyn Transport + Send + Sync>,
     pub tel_transport: Box<dyn IdentifierTelTransport + Send + Sync>,
 }
 
-impl Communication {
+impl<D, T, S> Communication<D, T, S>
+where
+    D: EventDatabase + EscrowCreator + Send + Sync + 'static,
+    T: TelEventDatabase + Send + Sync + 'static,
+    S: OobiStorageBackend,
+{
     pub fn new(
-        known_events: Arc<KnownEvents>,
+        known_events: Arc<KnownEvents<D, T, S>>,
         transport: Box<dyn Transport<ActorError> + Send + Sync>,
         tel_transport: Box<dyn IdentifierTelTransport + Send + Sync>,
     ) -> Self {

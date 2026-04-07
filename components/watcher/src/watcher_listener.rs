@@ -2,20 +2,20 @@ use crate::http_routing::configure_routes;
 use std::{net::ToSocketAddrs, sync::Arc};
 
 use actix_web::{dev::Server, rt::spawn, web, App, HttpServer};
-use keri_core::{actor::error::ActorError, oobi::LocationScheme, prefix::BasicPrefix};
+use keri_core::{actor::error::ActorError, oobi::LocationScheme, oobi_manager::RedbOobiStorage, oobi_manager::storage::OobiStorageBackend, prefix::BasicPrefix};
 
 use crate::{watcher::Watcher, WatcherConfig};
 
 use self::http_handlers::ApiError;
 
-pub struct WatcherListener {
-    pub watcher: Arc<Watcher>,
+pub struct WatcherListener<S: OobiStorageBackend> {
+    pub watcher: Arc<Watcher<S>>,
 }
 
-impl WatcherListener {
-    pub fn new(config: WatcherConfig) -> Result<Self, ActorError> {
+impl<S: OobiStorageBackend + 'static> WatcherListener<S> {
+    pub fn new(config: WatcherConfig, oobi_manager: keri_core::oobi_manager::OobiManager<S>) -> Result<Self, ActorError> {
         Ok(Self {
-            watcher: Arc::new(Watcher::new(config)?),
+            watcher: Arc::new(Watcher::new(config, oobi_manager)?),
         })
     }
 
@@ -34,7 +34,23 @@ impl WatcherListener {
         .unwrap()
         .run()
     }
+}
 
+impl WatcherListener<RedbOobiStorage> {
+    pub fn setup_with_redb(config: WatcherConfig) -> Result<Self, ActorError> {
+        use std::path::PathBuf;
+        use keri_core::{database::redb::RedbDatabase, oobi_manager::RedbOobiManager};
+
+        // Create oobi manager database in a separate location
+        let mut oobi_db_path = config.db_path.clone();
+        oobi_db_path.push("oobi_database");
+        let oobi_db = Arc::new(RedbDatabase::new(&oobi_db_path).unwrap());
+        let oobi_manager = RedbOobiManager::new(oobi_db)?;
+        Self::new(config, oobi_manager)
+    }
+}
+
+impl<S: OobiStorageBackend> WatcherListener<S> {
     pub async fn resolve_initial_oobis(
         &self,
         initial_oobis: &[LocationScheme],
@@ -51,11 +67,11 @@ impl WatcherListener {
     }
 }
 
-pub async fn update_checking(data: Arc<Watcher>) {
+pub async fn update_checking<S: OobiStorageBackend>(data: Arc<Watcher<S>>) {
     data.process_update_requests().await;
 }
 
-pub async fn update_tel_checking(data: Arc<Watcher>) {
+pub async fn update_tel_checking<S: OobiStorageBackend>(data: Arc<Watcher<S>>) {
     let _ = data.process_update_tel_requests().await;
 }
 
@@ -72,19 +88,21 @@ pub mod http_handlers {
         actor::{error::ActorError, prelude::Message},
         event_message::signed_event_message::Op,
         oobi::{error::OobiError, EndRole, LocationScheme, Role},
+        oobi_manager::RedbOobiStorage,
+        oobi_manager::storage::OobiStorageBackend,
         prefix::IdentifierPrefix,
     };
     use serde::Deserialize;
 
     use crate::watcher::Watcher;
 
-    pub async fn introduce(data: web::Data<Arc<Watcher>>) -> Result<HttpResponse, ApiError> {
+    pub async fn introduce<S: OobiStorageBackend>(data: web::Data<Arc<Watcher<S>>>) -> Result<HttpResponse, ApiError> {
         Ok(HttpResponse::Ok().json(data.oobi()))
     }
 
-    pub async fn process_notice(
+    pub async fn process_notice<S: OobiStorageBackend>(
         body: web::Bytes,
-        data: web::Data<Arc<Watcher>>,
+        data: web::Data<Arc<Watcher<S>>>,
     ) -> Result<HttpResponse, ApiError> {
         println!(
             "\nGot events to process: \n{}",
@@ -98,9 +116,9 @@ pub mod http_handlers {
             .body(()))
     }
 
-    pub async fn process_query(
+    pub async fn process_query<S: OobiStorageBackend>(
         body: web::Bytes,
-        data: web::Data<Arc<Watcher>>,
+        data: web::Data<Arc<Watcher<S>>>,
     ) -> Result<HttpResponse, ApiError> {
         println!(
             "\nGot queries to process: \n{}",
@@ -119,9 +137,9 @@ pub mod http_handlers {
             .body(resp))
     }
 
-    pub async fn process_reply(
+    pub async fn process_reply<S: OobiStorageBackend>(
         body: web::Bytes,
-        data: web::Data<Arc<Watcher>>,
+        data: web::Data<Arc<Watcher<S>>>,
     ) -> Result<HttpResponse, ApiError> {
         println!(
             "\nGot replies to process: \n{}",
@@ -135,9 +153,9 @@ pub mod http_handlers {
             .body(()))
     }
 
-    pub async fn resolve_oobi(
+    pub async fn resolve_oobi<S: OobiStorageBackend>(
         body: web::Bytes,
-        data: web::Data<Arc<Watcher>>,
+        data: web::Data<Arc<Watcher<S>>>,
     ) -> Result<HttpResponse, ApiError> {
         println!(
             "\nGot oobi to resolve: \n{}",
@@ -165,9 +183,9 @@ pub mod http_handlers {
         Ok(HttpResponse::Ok().finish())
     }
 
-    pub async fn resolve_location(
+    pub async fn resolve_location<S: OobiStorageBackend>(
         eid: web::Path<IdentifierPrefix>,
-        data: web::Data<Arc<Watcher>>,
+        data: web::Data<Arc<Watcher<S>>>,
     ) -> Result<HttpResponse, ApiError> {
         let loc_scheme = data.signed_location(&eid)?;
         let oobis = loc_scheme
@@ -185,9 +203,9 @@ pub mod http_handlers {
             .body(String::from_utf8(oobis).unwrap()))
     }
 
-    pub async fn resolve_role(
+    pub async fn resolve_role<S: OobiStorageBackend>(
         path: web::Path<(IdentifierPrefix, Role, IdentifierPrefix)>,
-        data: web::Data<Arc<Watcher>>,
+        data: web::Data<Arc<Watcher<S>>>,
     ) -> Result<HttpResponse, ApiError> {
         let (cid, role, eid) = path.into_inner();
 
@@ -209,9 +227,9 @@ pub mod http_handlers {
             .body(String::from_utf8(oobis).unwrap()))
     }
 
-    pub async fn process_tel_query(
+    pub async fn process_tel_query<S: OobiStorageBackend>(
         post_data: String,
-        data: web::Data<Arc<Watcher>>,
+        data: web::Data<Arc<Watcher<S>>>,
     ) -> Result<HttpResponse, ApiError> {
         println!("\nGot tel query to process: \n{}", post_data);
         let resp = data
@@ -240,6 +258,60 @@ pub mod http_handlers {
         }
     }
 
+    // Concrete wrapper functions for Redb backend (used for HTTP routing)
+    pub async fn introduce_redb(data: web::Data<Arc<Watcher<RedbOobiStorage>>>) -> Result<HttpResponse, ApiError> {
+        introduce(data).await
+    }
+
+    pub async fn process_notice_redb(
+        body: web::Bytes,
+        data: web::Data<Arc<Watcher<RedbOobiStorage>>>,
+    ) -> Result<HttpResponse, ApiError> {
+        process_notice(body, data).await
+    }
+
+    pub async fn process_query_redb(
+        body: web::Bytes,
+        data: web::Data<Arc<Watcher<RedbOobiStorage>>>,
+    ) -> Result<HttpResponse, ApiError> {
+        process_query(body, data).await
+    }
+
+    pub async fn process_reply_redb(
+        body: web::Bytes,
+        data: web::Data<Arc<Watcher<RedbOobiStorage>>>,
+    ) -> Result<HttpResponse, ApiError> {
+        process_reply(body, data).await
+    }
+
+    pub async fn resolve_oobi_redb(
+        body: web::Bytes,
+        data: web::Data<Arc<Watcher<RedbOobiStorage>>>,
+    ) -> Result<HttpResponse, ApiError> {
+        resolve_oobi(body, data).await
+    }
+
+    pub async fn resolve_location_redb(
+        eid: web::Path<IdentifierPrefix>,
+        data: web::Data<Arc<Watcher<RedbOobiStorage>>>,
+    ) -> Result<HttpResponse, ApiError> {
+        resolve_location(eid, data).await
+    }
+
+    pub async fn resolve_role_redb(
+        path: web::Path<(IdentifierPrefix, Role, IdentifierPrefix)>,
+        data: web::Data<Arc<Watcher<RedbOobiStorage>>>,
+    ) -> Result<HttpResponse, ApiError> {
+        resolve_role(path, data).await
+    }
+
+    pub async fn process_tel_query_redb(
+        post_data: String,
+        data: web::Data<Arc<Watcher<RedbOobiStorage>>>,
+    ) -> Result<HttpResponse, ApiError> {
+        process_tel_query(post_data, data).await
+    }
+
     pub async fn info() -> impl Responder {
         let version = option_env!("CARGO_PKG_VERSION");
         if let Some(version) = version {
@@ -260,12 +332,13 @@ mod test {
         },
         event_message::signed_event_message::{Message, Op},
         oobi::{Oobi, Role},
+        oobi_manager::storage::OobiStorageBackend,
         prefix::IdentifierPrefix,
         query::query_event::{QueryRoute, SignedQueryMessage},
     };
 
     #[async_trait::async_trait]
-    impl keri_core::transport::test::TestActor for super::WatcherListener {
+    impl<S: OobiStorageBackend> keri_core::transport::test::TestActor for super::WatcherListener<S> {
         async fn send_message(&self, msg: Message) -> Result<(), ActorError> {
             let payload = String::from_utf8(msg.to_cesr().unwrap()).unwrap();
             let data = actix_web::web::Data::new(self.watcher.clone());

@@ -1,12 +1,15 @@
 use std::sync::Arc;
 
 use keri_core::{
+    database::{EscrowCreator, EventDatabase},
     event_message::signature::Signature,
     oobi::LocationScheme,
+    oobi_manager::storage::OobiStorageBackend,
     prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     processor::validator::VerificationError,
     state::IdentifierState,
 };
+use teliox::database::TelEventDatabase;
 
 #[cfg(feature = "query_cache")]
 use crate::identifier::mechanics::cache::IdentifierCache;
@@ -19,48 +22,24 @@ use crate::{
 };
 pub mod verifying;
 
-pub struct Controller {
-    pub known_events: Arc<KnownEvents>,
-    pub communication: Arc<Communication>,
+pub struct Controller<D, T, S>
+where
+    D: EventDatabase + EscrowCreator + 'static,
+    T: TelEventDatabase + 'static,
+    S: OobiStorageBackend,
+{
+    pub known_events: Arc<KnownEvents<D, T, S>>,
+    pub communication: Arc<Communication<D, T, S>>,
     #[cfg(feature = "query_cache")]
     pub cache: Arc<IdentifierCache>,
 }
 
-impl Controller {
-    pub fn new(config: ControllerConfig) -> Result<Self, ControllerError> {
-        let ControllerConfig {
-            db_path,
-            initial_oobis,
-            escrow_config,
-            transport,
-            tel_transport,
-        } = config;
-        std::fs::create_dir_all(&db_path).unwrap();
-        let mut query_db_path = db_path.clone();
-        query_db_path.push("query_cache");
-
-        let events = Arc::new(KnownEvents::new(db_path, escrow_config)?);
-
-        #[cfg(feature = "query_cache")]
-        let query_cache = Arc::new(IdentifierCache::new(&query_db_path)?);
-        let comm = Arc::new(Communication {
-            events: events.clone(),
-            transport,
-            tel_transport,
-        });
-
-        let controller = Self {
-            known_events: events.clone(),
-            communication: comm,
-            #[cfg(feature = "query_cache")]
-            cache: query_cache,
-        };
-        if !initial_oobis.is_empty() {
-            async_std::task::block_on(controller.setup_witnesses(&initial_oobis)).unwrap();
-        }
-        Ok(controller)
-    }
-
+impl<D, T, S> Controller<D, T, S>
+where
+    D: EventDatabase + EscrowCreator + Send + Sync + 'static,
+    T: TelEventDatabase + Send + Sync + 'static,
+    S: OobiStorageBackend,
+{
     pub async fn incept(
         &self,
         public_keys: Vec<BasicPrefix>,
@@ -77,7 +56,7 @@ impl Controller {
         &self,
         event: &[u8],
         sig: &SelfSigningPrefix,
-    ) -> Result<Identifier, ControllerError> {
+    ) -> Result<Identifier<D, T, S>, ControllerError> {
         let initialized_id = self.known_events.finalize_inception(event, sig).unwrap();
         Ok(Identifier::new(
             initialized_id,
@@ -111,3 +90,13 @@ impl Controller {
         self.known_events.get_state(id)
     }
 }
+
+#[cfg(feature = "storage-redb")]
+mod redb;
+#[cfg(feature = "storage-redb")]
+pub use redb::{RedbController, RedbIdentifier};
+
+#[cfg(feature = "storage-postgres")]
+mod postgres;
+#[cfg(feature = "storage-postgres")]
+pub use postgres::{PostgresController, PostgresIdentifier};

@@ -1,5 +1,7 @@
 use keri_core::actor::possible_response::PossibleResponse;
 use keri_core::actor::prelude::HashFunctionCode;
+use keri_core::database::{EscrowCreator, EventDatabase};
+use keri_core::oobi_manager::storage::OobiStorageBackend;
 use keri_core::{
     actor::prelude::SerializationFormats,
     oobi::Scheme,
@@ -9,6 +11,7 @@ use keri_core::{
         query_event::SignedQuery,
     },
 };
+use teliox::database::TelEventDatabase;
 
 #[cfg(not(feature = "query_cache"))]
 use crate::mailbox_updating::MailboxReminder;
@@ -32,7 +35,12 @@ pub enum ResponseProcessingError {
     Delegate(keri_core::error::Error),
 }
 
-impl Identifier {
+impl<D, T, S> Identifier<D, T, S>
+where
+    D: EventDatabase + EscrowCreator + Send + Sync + 'static,
+    T: TelEventDatabase + Send + Sync + 'static,
+    S: OobiStorageBackend,
+{
     /// Generates query message of route `mbx` to query own identifier mailbox.
     pub fn query_mailbox(
         &self,

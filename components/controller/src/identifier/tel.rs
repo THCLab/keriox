@@ -1,10 +1,13 @@
 use keri_core::actor::prelude::{HashFunctionCode, SelfAddressingIdentifier, SerializationFormats};
+use keri_core::database::{EscrowCreator, EventDatabase};
 use keri_core::event::sections::seal::{EventSeal, Seal};
 use keri_core::event::KeyEvent;
 use keri_core::event_message::msg::{KeriEvent, TypedEvent};
 use keri_core::event_message::timestamped::Timestamped;
 use keri_core::event_message::EventTypeTag;
+use keri_core::oobi_manager::storage::OobiStorageBackend;
 use keri_core::prefix::{IdentifierPrefix, IndexedSignature, SelfSigningPrefix};
+use teliox::database::TelEventDatabase;
 use teliox::event::verifiable_event::VerifiableEvent;
 use teliox::query::{SignedTelQuery, TelQueryArgs, TelQueryEvent, TelQueryRoute};
 use teliox::seal::{AttachedSourceSeal, EventSourceSeal};
@@ -14,7 +17,12 @@ use crate::error::ControllerError;
 use super::mechanics::MechanicsError;
 use super::Identifier;
 
-impl Identifier {
+impl<D, T, S> Identifier<D, T, S>
+where
+    D: EventDatabase + EscrowCreator + Send + Sync + 'static,
+    T: TelEventDatabase + Send + Sync + 'static,
+    S: OobiStorageBackend,
+{
     /// Generate `iss` event and `ixn` event with  seal to `iss`. To finalize
     /// the process, `ixn` need to be signed confirmed with `finalize_event`
     /// function.

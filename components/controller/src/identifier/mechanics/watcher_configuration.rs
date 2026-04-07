@@ -1,16 +1,24 @@
 use keri_core::{
     actor::event_generator,
+    database::{EscrowCreator, EventDatabase},
     event_message::cesr_adapter::{parse_event_type, EventType},
     oobi::{Role, Scheme},
+    oobi_manager::storage::OobiStorageBackend,
     prefix::{IdentifierPrefix, SelfSigningPrefix},
     query::reply_event::{ReplyEvent, ReplyRoute},
 };
+use teliox::database::TelEventDatabase;
 
 use crate::identifier::Identifier;
 
 use super::MechanicsError;
 
-impl Identifier {
+impl<D, T, S> Identifier<D, T, S>
+where
+    D: EventDatabase + EscrowCreator + Send + Sync + 'static,
+    T: TelEventDatabase + Send + Sync + 'static,
+    S: OobiStorageBackend,
+{
     /// Generates reply event with `end_role_add` route.
     pub fn add_watcher(&self, watcher_id: IdentifierPrefix) -> Result<String, MechanicsError> {
         String::from_utf8(

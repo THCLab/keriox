@@ -1,5 +1,5 @@
 use crate::{
-    database::{TelEventDatabase, TelLogDatabase},
+    database::TelEventDatabase,
     error::Error,
     event::{
         manager_event::ManagerTelEventMessage, vc_event::VCEventMessage,
@@ -11,6 +11,7 @@ use keri_core::{
     prefix::IdentifierPrefix,
 };
 use redb::{Database, ReadTransaction, TableDefinition};
+use said::SelfAddressingIdentifier;
 use std::{fs, path::Path, sync::Arc};
 
 /// Events store. (event digest) -> tel event
@@ -179,22 +180,8 @@ impl LogTelDb {
     }
 }
 
-impl TelLogDatabase for RedbTelDatabase {
-    /// Saves provided event. Key is it's digest and value is event.
-    fn log_event(&self, event: &VerifiableEvent, transaction: &WriteTxnMode) -> Result<(), Error> {
-        self.events_log.log_event(event, transaction)
-    }
-
-    fn get(
-        &self,
-        digest: &said::SelfAddressingIdentifier,
-    ) -> Result<Option<VerifiableEvent>, Error> {
-        self.events_log.get(digest)
-    }
-}
-
-impl TelEventDatabase for RedbTelDatabase {
-    fn new(db_path: impl AsRef<Path>) -> Result<Self, Error> {
+impl RedbTelDatabase {
+    pub fn new(db_path: impl AsRef<Path>) -> Result<Self, Error> {
         if let Some(parent) = db_path.as_ref().parent() {
             fs::create_dir_all(parent).unwrap();
         }
@@ -207,7 +194,9 @@ impl TelEventDatabase for RedbTelDatabase {
             db,
         })
     }
+}
 
+impl TelEventDatabase for RedbTelDatabase {
     fn add_new_event(&self, event: VerifiableEvent, id: &IdentifierPrefix) -> Result<(), Error> {
         let write_txn = self.db.begin_write()?;
         let txn_mode = WriteTxnMode::UseExisting(&write_txn);
@@ -260,5 +249,16 @@ impl TelEventDatabase for RedbTelDatabase {
         } else {
             Some(out_iter.collect::<Vec<_>>().into_iter())
         }
+    }
+
+    fn log_event(&self, event: &VerifiableEvent) -> Result<(), Error> {
+        self.events_log.log_event(event, &WriteTxnMode::CreateNew)
+    }
+
+    fn get_event(
+        &self,
+        digest: &SelfAddressingIdentifier,
+    ) -> Result<Option<VerifiableEvent>, Error> {
+        self.events_log.get(digest)
     }
 }

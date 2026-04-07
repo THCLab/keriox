@@ -6,33 +6,39 @@ use std::{
 
 use actix_web::{dev::Server, web::Data, App, HttpServer};
 use anyhow::Result;
-use keri_core::{self, prefix::BasicPrefix};
+use keri_core::{self, oobi_manager::RedbOobiStorage, oobi_manager::storage::OobiStorageBackend, prefix::BasicPrefix};
 
 use crate::{
     witness::{Witness, WitnessError},
     witness_processor::WitnessEscrowConfig,
 };
 
-pub struct WitnessListener {
-    pub witness_data: Arc<Witness>,
+pub struct WitnessListener<S: OobiStorageBackend> {
+    pub witness_data: Arc<Witness<S>>,
 }
 
-impl WitnessListener {
+impl<S: OobiStorageBackend + 'static> WitnessListener<S> {
     pub fn setup(
         pub_addr: url::Url,
         event_db_path: &Path,
         priv_key: Option<String>,
         escrow_config: WitnessEscrowConfig,
+        oobi_manager: keri_core::oobi_manager::OobiManager<S>,
     ) -> Result<Self, WitnessError> {
         let mut oobi_path = PathBuf::new();
         oobi_path.push(event_db_path);
         oobi_path.push("oobi");
+        let signer = match priv_key {
+            Some(key) => Arc::new(keri_core::signer::Signer::new_with_seed(&key.parse().unwrap()).unwrap()),
+            None => Arc::new(keri_core::signer::Signer::new()),
+        };
         Ok(Self {
-            witness_data: Arc::new(Witness::setup(
+            witness_data: Arc::new(Witness::new(
                 pub_addr,
+                signer,
                 event_db_path,
-                priv_key,
                 escrow_config,
+                oobi_manager,
             )?),
         })
     }
@@ -44,39 +50,39 @@ impl WitnessListener {
                 .app_data(state.clone())
                 .route(
                     "/introduce",
-                    actix_web::web::get().to(http_handlers::introduce),
+                    actix_web::web::get().to(http_handlers::introduce_redb),
                 )
                 .route(
                     "/oobi/{id}",
-                    actix_web::web::get().to(http_handlers::resolve_location),
+                    actix_web::web::get().to(http_handlers::resolve_location_redb),
                 )
                 .route(
                     "/oobi/{cid}/{role}/{eid}",
-                    actix_web::web::get().to(http_handlers::resolve_role),
+                    actix_web::web::get().to(http_handlers::resolve_role_redb),
                 )
                 .route(
                     "/process",
-                    actix_web::web::post().to(http_handlers::process_notice),
+                    actix_web::web::post().to(http_handlers::process_notice_redb),
                 )
                 .route(
                     "/query",
-                    actix_web::web::post().to(http_handlers::process_query),
+                    actix_web::web::post().to(http_handlers::process_query_redb),
                 )
                 .route(
                     "/query/tel",
-                    actix_web::web::post().to(http_handlers::process_tel_query),
+                    actix_web::web::post().to(http_handlers::process_tel_query_redb),
                 )
                 .route(
                     "/process/tel",
-                    actix_web::web::post().to(http_handlers::process_tel_events),
+                    actix_web::web::post().to(http_handlers::process_tel_events_redb),
                 )
                 .route(
                     "/register",
-                    actix_web::web::post().to(http_handlers::process_reply),
+                    actix_web::web::post().to(http_handlers::process_reply_redb),
                 )
                 .route(
                     "/forward",
-                    actix_web::web::post().to(http_handlers::process_exchange),
+                    actix_web::web::post().to(http_handlers::process_exchange_redb),
                 )
                 .route("/info", actix_web::web::get().to(http_handlers::info))
         })
@@ -90,6 +96,56 @@ impl WitnessListener {
     }
 }
 
+impl WitnessListener<RedbOobiStorage> {
+    pub fn setup_with_redb(
+        pub_addr: url::Url,
+        event_db_path: &Path,
+        priv_key: Option<String>,
+        escrow_config: WitnessEscrowConfig,
+    ) -> Result<Self, WitnessError> {
+        use keri_core::{database::redb::RedbDatabase, oobi_manager::RedbOobiManager};
+
+        // Create oobi manager database in a separate location
+        let oobi_db_path = event_db_path.join("oobi_database");
+        let oobi_db = Arc::new(RedbDatabase::new(&oobi_db_path).unwrap());
+        let oobi_manager = RedbOobiManager::new(oobi_db)?;
+
+        let signer = Arc::new(
+            priv_key
+                .as_ref()
+                .map(|key| keri_core::signer::Signer::new_with_seed(&key.parse().unwrap()))
+                .unwrap_or_else(|| Ok(keri_core::signer::Signer::new()))?,
+        );
+        let prefix = keri_core::prefix::BasicPrefix::Ed25519NT(signer.public_key());
+
+        // construct witness loc scheme oobi
+        let loc_scheme = keri_core::oobi::LocationScheme::new(
+            keri_core::prefix::IdentifierPrefix::Basic(prefix.clone()),
+            pub_addr.scheme().parse().unwrap(),
+            pub_addr.clone(),
+        );
+        let witness = Self::setup(pub_addr, event_db_path, priv_key, escrow_config, oobi_manager)?;
+
+        let reply = keri_core::query::reply_event::ReplyEvent::new_reply(
+            keri_core::query::reply_event::ReplyRoute::LocScheme(loc_scheme),
+            keri_core::actor::prelude::HashFunctionCode::Blake3_256,
+            keri_core::actor::prelude::SerializationFormats::JSON,
+        );
+        let signed_reply = keri_core::query::reply_event::SignedReply::new_nontrans(
+            reply.clone(),
+            prefix,
+            keri_core::prefix::SelfSigningPrefix::Ed25519Sha512(
+                signer
+                    .sign(reply.encode().unwrap())
+                    .map_err(|_e| WitnessError::SigningError)?,
+            ),
+        );
+        witness.witness_data.oobi_manager.save_oobi(&signed_reply)?;
+
+        Ok(witness)
+    }
+}
+
 mod test {
     use actix_web::body::MessageBody;
     use keri_core::{
@@ -100,6 +156,7 @@ mod test {
         },
         event_message::signed_event_message::{Message, Op},
         oobi::Role,
+        oobi_manager::storage::OobiStorageBackend,
         prefix::IdentifierPrefix,
         query::{
             self,
@@ -108,7 +165,7 @@ mod test {
     };
 
     #[async_trait::async_trait]
-    impl keri_core::transport::test::TestActor for super::WitnessListener {
+    impl<S: OobiStorageBackend> keri_core::transport::test::TestActor for super::WitnessListener<S> {
         async fn send_message(&self, msg: Message) -> Result<(), ActorError> {
             let payload = String::from_utf8(msg.to_cesr().unwrap()).unwrap();
             let data = actix_web::web::Data::new(self.witness_data.clone());
@@ -221,19 +278,21 @@ pub mod http_handlers {
         error::Error,
         event_message::signed_event_message::Op,
         oobi::Role,
+        oobi_manager::RedbOobiStorage,
+        oobi_manager::storage::OobiStorageBackend,
         prefix::{CesrPrimitive, IdentifierPrefix},
     };
     use teliox::event::verifiable_event::VerifiableEvent;
 
     use crate::witness::Witness;
 
-    pub async fn introduce(data: web::Data<Arc<Witness>>) -> Result<HttpResponse, ApiError> {
+    pub async fn introduce<S: OobiStorageBackend>(data: web::Data<Arc<Witness<S>>>) -> Result<HttpResponse, ApiError> {
         Ok(HttpResponse::Ok().json(data.oobi()))
     }
 
-    pub async fn resolve_location(
+    pub async fn resolve_location<S: OobiStorageBackend>(
         eid: web::Path<IdentifierPrefix>,
-        data: web::Data<Arc<Witness>>,
+        data: web::Data<Arc<Witness<S>>>,
     ) -> Result<HttpResponse, ApiError> {
         let loc_scheme = data
             .get_loc_scheme_for_id(&eid)
@@ -253,9 +312,9 @@ pub mod http_handlers {
             .body(String::from_utf8(oobis).unwrap()))
     }
 
-    pub async fn resolve_role(
+    pub async fn resolve_role<S: OobiStorageBackend>(
         path: web::Path<(IdentifierPrefix, Role, IdentifierPrefix)>,
-        data: web::Data<Arc<Witness>>,
+        data: web::Data<Arc<Witness<S>>>,
     ) -> Result<HttpResponse, ApiError> {
         let (cid, role, eid) = path.into_inner();
         let out = if role == Role::Witness {
@@ -332,9 +391,9 @@ pub mod http_handlers {
             .body(String::from_utf8(out?).unwrap()))
     }
 
-    pub async fn process_notice(
+    pub async fn process_notice<S: OobiStorageBackend>(
         post_data: String,
-        data: web::Data<Arc<Witness>>,
+        data: web::Data<Arc<Witness<S>>>,
     ) -> Result<HttpResponse, ApiError> {
         println!(
             "\nWitness {} got notice to process: \n{}",
@@ -348,9 +407,9 @@ pub mod http_handlers {
             .body(()))
     }
 
-    pub async fn process_query(
+    pub async fn process_query<S: OobiStorageBackend>(
         post_data: String,
-        data: web::Data<Arc<Witness>>,
+        data: web::Data<Arc<Witness<S>>>,
     ) -> Result<HttpResponse, ApiError> {
         println!(
             "\nWitness {} got query to process: \n{}",
@@ -369,9 +428,9 @@ pub mod http_handlers {
             .body(resp))
     }
 
-    pub async fn process_tel_query(
+    pub async fn process_tel_query<S: OobiStorageBackend>(
         post_data: String,
-        data: web::Data<Arc<Witness>>,
+        data: web::Data<Arc<Witness<S>>>,
     ) -> Result<HttpResponse, ApiError> {
         println!("\nGot tel query to process: \n{}", post_data);
         let resp = data
@@ -386,9 +445,9 @@ pub mod http_handlers {
             .body(resp))
     }
 
-    pub async fn process_reply(
+    pub async fn process_reply<S: OobiStorageBackend>(
         post_data: String,
-        data: web::Data<Arc<Witness>>,
+        data: web::Data<Arc<Witness<S>>>,
     ) -> Result<HttpResponse, ApiError> {
         println!("\nGot reply to process: \n{}", post_data);
         data.parse_and_process_replies(post_data.as_bytes())?;
@@ -398,9 +457,9 @@ pub mod http_handlers {
             .body(()))
     }
 
-    pub async fn process_exchange(
+    pub async fn process_exchange<S: OobiStorageBackend>(
         post_data: String,
-        data: web::Data<Arc<Witness>>,
+        data: web::Data<Arc<Witness<S>>>,
     ) -> Result<HttpResponse, ApiError> {
         println!("\nGot exchange to process: \n{}", post_data);
         data.parse_and_process_exchanges(post_data.as_bytes())?;
@@ -410,9 +469,9 @@ pub mod http_handlers {
             .body(()))
     }
 
-    pub async fn process_tel_events(
+    pub async fn process_tel_events<S: OobiStorageBackend>(
         post_data: String,
-        data: web::Data<Arc<Witness>>,
+        data: web::Data<Arc<Witness<S>>>,
     ) -> Result<HttpResponse, ApiError> {
         println!("\nGot tel event to process: \n{}", post_data);
         let parsed = VerifiableEvent::parse(post_data.as_bytes()).unwrap();
@@ -444,5 +503,66 @@ pub mod http_handlers {
         fn error_response(&self) -> HttpResponse {
             HttpResponse::build(self.status_code()).json(&self.0)
         }
+    }
+
+    // Concrete wrapper functions for Redb backend (used for HTTP routing)
+    pub async fn introduce_redb(data: web::Data<Arc<Witness<RedbOobiStorage>>>) -> Result<HttpResponse, ApiError> {
+        introduce(data).await
+    }
+
+    pub async fn process_notice_redb(
+        body: String,
+        data: web::Data<Arc<Witness<RedbOobiStorage>>>,
+    ) -> Result<HttpResponse, ApiError> {
+        process_notice(body, data).await
+    }
+
+    pub async fn process_query_redb(
+        body: String,
+        data: web::Data<Arc<Witness<RedbOobiStorage>>>,
+    ) -> Result<HttpResponse, ApiError> {
+        process_query(body, data).await
+    }
+
+    pub async fn process_tel_query_redb(
+        post_data: String,
+        data: web::Data<Arc<Witness<RedbOobiStorage>>>,
+    ) -> Result<HttpResponse, ApiError> {
+        process_tel_query(post_data, data).await
+    }
+
+    pub async fn process_reply_redb(
+        body: String,
+        data: web::Data<Arc<Witness<RedbOobiStorage>>>,
+    ) -> Result<HttpResponse, ApiError> {
+        process_reply(body, data).await
+    }
+
+    pub async fn process_exchange_redb(
+        post_data: String,
+        data: web::Data<Arc<Witness<RedbOobiStorage>>>,
+    ) -> Result<HttpResponse, ApiError> {
+        process_exchange(post_data, data).await
+    }
+
+    pub async fn process_tel_events_redb(
+        post_data: String,
+        data: web::Data<Arc<Witness<RedbOobiStorage>>>,
+    ) -> Result<HttpResponse, ApiError> {
+        process_tel_events(post_data, data).await
+    }
+
+    pub async fn resolve_location_redb(
+        eid: web::Path<IdentifierPrefix>,
+        data: web::Data<Arc<Witness<RedbOobiStorage>>>,
+    ) -> Result<HttpResponse, ApiError> {
+        resolve_location(eid, data).await
+    }
+
+    pub async fn resolve_role_redb(
+        path: web::Path<(IdentifierPrefix, Role, IdentifierPrefix)>,
+        data: web::Data<Arc<Witness<RedbOobiStorage>>>,
+    ) -> Result<HttpResponse, ApiError> {
+        resolve_role(path, data).await
     }
 }
