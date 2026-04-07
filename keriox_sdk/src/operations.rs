@@ -84,7 +84,7 @@ impl SigningBackend for std::sync::Arc<dyn keri_keyprovider::KeyProvider> {
     }
 
     fn public_key(&self) -> keri_core::keys::PublicKey {
-        let pk_data = keri_keyprovider::KeyProvider::public_key(self);
+        let pk_data = (**self).public_key();
         keri_core::keys::PublicKey::new(pk_data.bytes.clone())
     }
 }

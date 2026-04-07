@@ -27,6 +27,7 @@ tokio = { version = "1", features = ["full"], optional = true }
 [features]
 default = []
 keyprovider = ["keri-keyprovider", "tokio"]
+mobile = ["keri-keyprovider/host", "keri-keyprovider/software", "tokio"]
 
 [dev-dependencies]
 keri-core = { path = "../keriox_core", version = "0.17.13" }
