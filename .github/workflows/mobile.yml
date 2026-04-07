@@ -1,0 +1,64 @@
+name: Mobile SDK
+
+on:
+  push:
+    branches: [mobile-sdk]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check-mobile-feature:
+    name: Check mobile feature
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Check keri-sdk (mobile)
+        run: cargo check -p keri-sdk --features mobile
+      - name: Check keri-keyprovider (host)
+        run: cargo check -p keri-keyprovider --features host
+      - name: Check keri-keyprovider (host+software)
+        run: cargo check -p keri-keyprovider --features "host,software"
+      - name: Test keri-keyprovider (host)
+        run: cargo test -p keri-keyprovider --features host
+
+  check-android-target:
+    name: Check Android target
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+      - name: Setup Android NDK
+        uses: nttld/setup-ndk@v1
+        id: setup-ndk
+        with:
+          ndk-version: r26d
+      - name: Install cargo-ndk
+        uses: baptiste0928/cargo-install-action@v3
+        with:
+          crate: cargo-ndk
+      - name: Check keri-keyprovider (Android ARM64)
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: cargo ndk -t arm64-v8a check -p keri-keyprovider --features "host,software"
+      - name: Check keri-sdk mobile (Android ARM64)
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: cargo ndk -t arm64-v8a check -p keri-sdk --features mobile
+
+  check-ios-target:
+    name: Check iOS target
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios
+      - name: Check keri-keyprovider (iOS ARM64)
+        run: cargo check -p keri-keyprovider --features "host,software" --target aarch64-apple-ios
+      - name: Check keri-sdk mobile (iOS ARM64)
+        run: cargo check -p keri-sdk --features mobile --target aarch64-apple-ios
