@@ -141,3 +141,6 @@ pub mod file_encrypted;
 
 #[cfg(feature = "os-keychain")]
 pub mod os_keychain;
+
+#[cfg(feature = "host")]
+pub mod host;
