@@ -73,6 +73,14 @@ impl DelegationRequest {
     pub fn identifier(&self) -> IdentifierPrefix {
         self.delegating_event.data.get_prefix()
     }
+
+    /// Consume and return the underlying `ActionRequired` for low-level storage.
+    pub fn into_action_required(self) -> keri_controller::mailbox_updating::ActionRequired {
+        keri_controller::mailbox_updating::ActionRequired::DelegationRequest(
+            self.delegating_event,
+            self.exchange,
+        )
+    }
 }
 
 impl TryFrom<keri_controller::mailbox_updating::ActionRequired> for DelegationRequest {
@@ -127,6 +135,14 @@ impl MultisigRequest {
     /// The group identifier prefix this request is for.
     pub fn group_prefix(&self) -> IdentifierPrefix {
         self.event.data.get_prefix()
+    }
+
+    /// Consume and return the underlying `ActionRequired` for low-level storage.
+    pub fn into_action_required(self) -> keri_controller::mailbox_updating::ActionRequired {
+        keri_controller::mailbox_updating::ActionRequired::MultisigRequest(
+            self.event,
+            self.exchange,
+        )
     }
 }
 
@@ -188,6 +204,14 @@ impl PendingRequest {
         match self {
             Self::Multisig(r) => Some(r),
             _ => None,
+        }
+    }
+
+    /// Consume and return the underlying `ActionRequired` for low-level storage.
+    pub fn into_action_required(self) -> keri_controller::mailbox_updating::ActionRequired {
+        match self {
+            Self::Delegation(r) => r.into_action_required(),
+            Self::Multisig(r) => r.into_action_required(),
         }
     }
 }
