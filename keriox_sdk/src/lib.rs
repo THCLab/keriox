@@ -91,8 +91,8 @@ pub use error::{Error, Result};
 pub use identifier::Identifier;
 pub use identifier::{ActionRequired, WatcherResponseError};
 pub use types::{
-    CredentialStatus, DelegationConfig, DelegationRequest, IdentifierConfig, RotationConfig,
-    SignedEnvelope, VerifiedPayload,
+    CredentialStatus, DelegationConfig, DelegationRequest, GroupConfig, IdentifierConfig,
+    MultisigRequest, RotationConfig, SignedEnvelope, VerifiedPayload,
 };
 pub use store::KeriStore;
 pub use tel::{check_credential_status, get_credential_status};

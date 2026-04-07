@@ -42,8 +42,8 @@ use crate::{
     controller::Controller,
     error::{Error, Result},
     identifier::Identifier,
-    operations::{create_identifier, create_delegated_identifier},
-    types::{DelegationConfig, IdentifierConfig},
+    operations::{create_identifier, create_delegated_identifier, create_group_identifier},
+    types::{DelegationConfig, GroupConfig, IdentifierConfig},
 };
 
 /// Manages a directory of named KERI identifiers.
@@ -329,6 +329,119 @@ impl KeriStore {
         let s = self.read_file(alias, "delegator_id")?;
         IdentifierPrefix::from_str(s.trim())
             .map_err(|_| Error::PersistenceError("invalid delegator_id".into()))
+    }
+
+    /// Create a multisig group identifier and persist metadata (initiator side).
+    ///
+    /// The caller's individual identifier must already exist under
+    /// `member_alias`. This method creates a new alias directory for the
+    /// group that stores the group prefix, participant list, and a back-
+    /// reference to the member alias.
+    ///
+    /// Other participants must still co-sign via
+    /// [`crate::operations::join_group`], and all participants must call
+    /// [`crate::operations::collect_group_signatures`] to finalise.
+    ///
+    /// Returns the group `IdentifierPrefix`.
+    ///
+    /// # Errors
+    /// - [`Error::PersistenceError`] on I/O failures.
+    /// - Propagates errors from [`create_group_identifier`].
+    pub async fn create_group(
+        &self,
+        group_alias: &str,
+        member_alias: &str,
+        config: GroupConfig,
+    ) -> Result<IdentifierPrefix> {
+        let mut id = self.load(member_alias)?;
+        let signer = self.load_signer(member_alias)?;
+
+        let participants = config.participants.clone();
+        let group_prefix = create_group_identifier(&mut id, &signer, config).await?;
+
+        // Persist group metadata under the group alias.
+        let alias_dir = self.alias_dir(group_alias);
+        std::fs::create_dir_all(&alias_dir)
+            .map_err(|e| Error::PersistenceError(format!("cannot create alias dir: {e}")))?;
+
+        use keri_core::prefix::CesrPrimitive;
+        self.write_file(group_alias, "group_id", &group_prefix.to_str())?;
+        self.write_file(group_alias, "member_alias", member_alias)?;
+
+        let participant_strs: Vec<String> =
+            participants.iter().map(|p| p.to_str()).collect();
+        let json = serde_json::to_string(&participant_strs)
+            .map_err(|e| Error::PersistenceError(format!("cannot serialise participants: {e}")))?;
+        self.write_file(group_alias, "participants", &json)?;
+
+        Ok(group_prefix)
+    }
+
+    /// Persist group metadata after joining a group (joiner side).
+    ///
+    /// Call this after [`crate::operations::join_group`] to record the group
+    /// prefix, participant list, and member alias for later retrieval.
+    ///
+    /// # Errors
+    /// - [`Error::PersistenceError`] on I/O failures.
+    pub fn save_group(
+        &self,
+        group_alias: &str,
+        group_id: &IdentifierPrefix,
+        participants: &[IdentifierPrefix],
+        member_alias: &str,
+    ) -> Result<()> {
+        let alias_dir = self.alias_dir(group_alias);
+        std::fs::create_dir_all(&alias_dir)
+            .map_err(|e| Error::PersistenceError(format!("cannot create alias dir: {e}")))?;
+
+        use keri_core::prefix::CesrPrimitive;
+        self.write_file(group_alias, "group_id", &group_id.to_str())?;
+        self.write_file(group_alias, "member_alias", member_alias)?;
+
+        let participant_strs: Vec<String> =
+            participants.iter().map(|p| p.to_str()).collect();
+        let json = serde_json::to_string(&participant_strs)
+            .map_err(|e| Error::PersistenceError(format!("cannot serialise participants: {e}")))?;
+        self.write_file(group_alias, "participants", &json)?;
+
+        Ok(())
+    }
+
+    /// Load the group identifier prefix for an alias.
+    ///
+    /// # Errors
+    /// - [`Error::PersistenceError`] if the `group_id` file is missing or invalid.
+    pub fn load_group_prefix(&self, alias: &str) -> Result<IdentifierPrefix> {
+        let s = self.read_file(alias, "group_id")?;
+        IdentifierPrefix::from_str(s.trim())
+            .map_err(|_| Error::PersistenceError("invalid group_id".into()))
+    }
+
+    /// Load the participant list for a group alias.
+    ///
+    /// # Errors
+    /// - [`Error::PersistenceError`] if the `participants` file is missing or invalid.
+    pub fn load_group_participants(&self, alias: &str) -> Result<Vec<IdentifierPrefix>> {
+        let json = self.read_file(alias, "participants")?;
+        let strs: Vec<String> = serde_json::from_str(&json)
+            .map_err(|e| Error::PersistenceError(format!("invalid participants JSON: {e}")))?;
+        strs.iter()
+            .map(|s| {
+                IdentifierPrefix::from_str(s.trim())
+                    .map_err(|_| Error::PersistenceError(format!("invalid participant: {s}")))
+            })
+            .collect()
+    }
+
+    /// Load the member alias for a group alias (back-reference to the
+    /// individual identifier used by this participant).
+    ///
+    /// # Errors
+    /// - [`Error::PersistenceError`] if the `member_alias` file is missing.
+    pub fn load_group_member_alias(&self, alias: &str) -> Result<String> {
+        self.read_file(alias, "member_alias")
+            .map(|s| s.trim().to_owned())
     }
 
     /// List all stored aliases in this store.
