@@ -78,4 +78,24 @@ impl Controller {
     pub fn find_state(&self, id: &IdentifierPrefix) -> Result<IdentifierState> {
         Ok(self.inner.find_state(id)?)
     }
+
+    /// Reconstruct an `Identifier` from a known prefix and optional registry.
+    ///
+    /// Use this to load an identifier whose database already exists at the
+    /// controller's `db_path`.
+    pub fn load_identifier(
+        &self,
+        id: IdentifierPrefix,
+        registry_id: Option<IdentifierPrefix>,
+    ) -> Identifier {
+        use keri_controller::controller::RedbIdentifier;
+        Identifier {
+            inner: RedbIdentifier::new(
+                id,
+                registry_id,
+                self.inner.known_events.clone(),
+                self.inner.communication.clone(),
+            ),
+        }
+    }
 }
