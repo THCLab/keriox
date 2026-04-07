@@ -44,3 +44,15 @@ This repository provides the implementation of the KERI protocol. [`keriox_core`
 - [Watcher](./components/watcher): the KERI Watcher
 - [Controller](./components/controller): the client for accessing the infrastructure
 - [SDK](./keriox_sdk): high-level SDK providing `KeriRuntime` and `Controller` for KERI+TEL operations
+- [Key Provider](./keri_keyprovider): pluggable cryptographic signing abstraction (software, file-encrypted, OS keychain, host-callback for mobile)
+
+## Mobile support
+
+KERIOX supports mobile targets (Android API 30+ and iOS) via:
+
+- **`mobile` feature flag** on `keri-sdk` — enables `host` + `software` key providers, uses `rustls` for TLS
+- **`HostCallbackKeyProvider`** in `keri_keyprovider` — delegates all signing to host platform callbacks (Android Keystore / iOS Keychain). Private keys never enter Rust memory.
+- **`rustls`** TLS backend — pure Rust, no OpenSSL dependency
+- **`redb`** storage — pure Rust, no mmap, works on both Android and iOS app sandboxes
+
+See the [mobile SDK CI workflow](./.github/workflows/mobile.yml) for cross-compilation verification.
