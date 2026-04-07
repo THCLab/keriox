@@ -33,8 +33,8 @@ fn test_process() -> Result<(), Error> {
     let events_db_path = NamedTempFile::new().unwrap();
     let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
 
-    let (not_bus, (ooo_escrow, ps_escrow, _pw_escrow, _, duplicates)) =
-        default_escrow_bus(events_db.clone(), EscrowConfig::default());
+    let (not_bus, escrows) =
+        default_escrow_bus(events_db.clone(), EscrowConfig::default(), None);
     let event_processor = BasicProcessor::new(Arc::clone(&events_db), Some(not_bus));
     let event_storage = EventStorage::new(Arc::clone(&events_db));
     // Events and sigs are from keripy `test_multisig_digprefix` test.
@@ -75,7 +75,7 @@ fn test_process() -> Result<(), Error> {
     // Process the same rotation event one more time.
     event_processor.process(&deserialized_rot)?;
     // should be saved as duplicious event
-    assert_eq!(duplicates.get(&id).unwrap().len(), 1);
+    assert_eq!(escrows.duplicitous.get(&id).unwrap().len(), 1);
 
     let ixn_raw = br#"{"v":"KERI10JSON0000cb_","t":"ixn","d":"EL6Dpm72KXayaUHYvVHlhPplg69fBvRt1P3YzuOGVpmz","i":"EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen","s":"2","p":"EHjzZj4i_-RpTN2Yh-NocajFROJ_GkBtlByhRykqiXgz","a":[]}-AADAABgep0kbpgl91vvcXziJ7tHY1WVTAcUJyYCBNqTcNuK9AfzLHfKHhJeSC67wFRU845qjLSAC-XwWaqWgyAgw_8MABD5wTnqqJcnLWMA7NZ1vLOTzDspInJrly7O4Kt6Jwzue9z2TXkDXi1jr69JeKbzUQ6c2Ka1qPXAst0JzrOiyuAPACAcLHnOz1Owtgq8mcR_-PpAr91zOTK_Zj9r0V-9P47vzGsYwAxcVshclfhCMhu73aZuZbvQhy9Rxcj-qRz96cIL"#;
     let parsed = parse(ixn_raw).unwrap().1;
@@ -113,7 +113,7 @@ fn test_process() -> Result<(), Error> {
     if let Notice::Event(ev) = partially_signed_deserialized_ixn {
         // should be saved in partially signed escrow
         assert_eq!(
-            ps_escrow.get_partially_signed_for_event(ev.event_message.clone()),
+            escrows.partially_signed.get_partially_signed_for_event(ev.event_message.clone()),
             Some(ev)
         );
     } else {
@@ -132,7 +132,7 @@ fn test_process() -> Result<(), Error> {
     event_processor.process(&out_of_order_rot)?;
     // should be saved in out of order escrow
     assert_eq!(
-        ooo_escrow
+        escrows.out_of_order
             .escrowed_out_of_order
             .get_from_sn(&id, 0)
             .unwrap()
@@ -162,7 +162,7 @@ fn test_process_delegated() -> Result<(), Error> {
 
     let events_db_path = NamedTempFile::new().unwrap();
     let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
-    let (not_bus, _ooo_escrow) = default_escrow_bus(events_db.clone(), EscrowConfig::default());
+    let (not_bus, _escrows) = default_escrow_bus(events_db.clone(), EscrowConfig::default(), None);
 
     let event_processor = BasicProcessor::new(Arc::clone(&events_db), Some(not_bus));
     let event_storage = EventStorage::new(Arc::clone(&events_db));
@@ -260,7 +260,7 @@ fn test_compute_state_at_sn() -> Result<(), Error> {
 
     let events_db_path = NamedTempFile::new().unwrap();
     let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
-    let (not_bus, _ooo_escrow) = default_escrow_bus(events_db.clone(), EscrowConfig::default());
+    let (not_bus, _escrows) = default_escrow_bus(events_db.clone(), EscrowConfig::default(), None);
 
     let event_processor = BasicProcessor::new(events_db.clone(), Some(not_bus));
     let event_storage = EventStorage::new(Arc::clone(&events_db));
@@ -306,8 +306,8 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
     let events_db_path = NamedTempFile::new().unwrap();
     let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
 
-    let (not_bus, (_, ps_escrow, _, _, _)) =
-        default_escrow_bus(events_db.clone(), EscrowConfig::default());
+    let (not_bus, escrows) =
+        default_escrow_bus(events_db.clone(), EscrowConfig::default(), None);
 
     let processor = BasicProcessor::new(events_db.clone(), Some(not_bus));
     let storage = EventStorage::new(events_db.clone());
@@ -435,7 +435,7 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
     let signed_rotation = rotation.sign(signatures[..3].to_vec(), None, None);
     processor.process_notice(&Notice::Event(signed_rotation.clone()))?;
     // rotation should be stored in partially signed events escrow.
-    let escrow_contents = ps_escrow
+    let escrow_contents = escrows.partially_signed
         .escrowed_partially_signed
         .get_from_sn(&id_prefix, 0)
         .unwrap()
@@ -458,7 +458,7 @@ pub fn test_partial_rotation_simple_threshold() -> Result<(), Error> {
     processor.process_notice(&Notice::Event(signed_rotation.clone()))?;
     // rotation should be removed from partially signed events escrow.
     assert_eq!(
-        ps_escrow
+        escrows.partially_signed
             .escrowed_partially_signed
             .get_from_sn(&id_prefix, 0)
             .unwrap()
@@ -482,7 +482,7 @@ pub fn test_partial_rotation_weighted_threshold() -> Result<(), Error> {
 
         let events_db_path = NamedTempFile::new().unwrap();
         let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
-        let (not_bus, _ooo_escrow) = default_escrow_bus(events_db.clone(), EscrowConfig::default());
+        let (not_bus, _escrows) = default_escrow_bus(events_db.clone(), EscrowConfig::default(), None);
         (
             BasicProcessor::new(events_db.clone(), Some(not_bus)),
             EventStorage::new(events_db.clone()),
@@ -648,7 +648,7 @@ pub fn test_reserve_rotation() -> Result<(), Error> {
 
         let events_db_path = NamedTempFile::new().unwrap();
         let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
-        let (not_bus, _ooo_escrow) = default_escrow_bus(events_db.clone(), EscrowConfig::default());
+        let (not_bus, _escrows) = default_escrow_bus(events_db.clone(), EscrowConfig::default(), None);
         (
             BasicProcessor::new(events_db.clone(), Some(not_bus)),
             EventStorage::new(events_db.clone()),
@@ -829,7 +829,7 @@ pub fn test_custorial_rotation() -> Result<(), Error> {
 
         let events_db_path = NamedTempFile::new().unwrap();
         let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
-        let (not_bus, _ooo_escrow) = default_escrow_bus(events_db.clone(), EscrowConfig::default());
+        let (not_bus, _escrows) = default_escrow_bus(events_db.clone(), EscrowConfig::default(), None);
         (
             BasicProcessor::new(events_db.clone(), Some(not_bus)),
             EventStorage::new(events_db.clone()),

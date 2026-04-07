@@ -99,7 +99,7 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
             let not = Notice::Event(inception_event.clone());
             w.process_notice(not).unwrap();
             w.event_storage
-                .mailbox_data
+                .mailbox_data.as_ref().unwrap()
                 .get_mailbox_receipts(controller.prefix(), 0)
                 .into_iter()
                 .flatten()
@@ -185,7 +185,7 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
     // first_witness.respond(signer_arc.clone())?;
     let first_receipt = first_witness
         .event_storage
-        .mailbox_data
+        .mailbox_data.as_ref().unwrap()
         .get_mailbox_receipts(controller.prefix(), 0)
         .unwrap()
         .map(Notice::NontransferableRct)
@@ -280,7 +280,7 @@ fn test_qry_rpy() -> Result<(), ActorError> {
     // send receipts to alice
     let receipt_to_alice = witness
         .event_storage
-        .mailbox_data
+        .mailbox_data.as_ref().unwrap()
         .get_mailbox_receipts(alice.prefix(), 0)
         .unwrap()
         .map(Notice::NontransferableRct)

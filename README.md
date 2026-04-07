@@ -20,6 +20,10 @@ KERIOX is an open-source Rust implementation of the [ Key Event Receipt Infrastr
 
 KERI provides the same security and verifiability properties for transactions as a blockchain or distributed ledger can, without the overhead of requiring an absolute global ordering of transactions. Because of this, there is no need for a canonical chain and thus there is no "KERI Chain" or "KERI Network". KERI Identifiers can be generated independently in a self-sovereign and privacy-preserving manner and are secured via a self-certifying post-quantum resistant key management scheme based on blinded pre-rotation, auditable and flexible key events and a distributed conflict resolution algorithm called KAACE.
 
+## Architecture
+
+KERIOX is designed around pluggable abstractions that allow it to run in diverse environments. The `EventDatabase` trait abstracts storage so that backends can be swapped at compile time; `redb` is the default (feature-flagged as `storage-redb`), and an in-memory implementation is available for testing or custom backends. Notification dispatch is also pluggable via `NotificationBus`, which supports injectable dispatch strategies suitable for serverless environments such as SQS-backed message routing. The `KeriRuntime<D>` struct bundles the processor, storage, escrows, and notification bus into a single composable unit, enabling thin Lambda handlers or other lightweight entry points.
+
 ## License
 
 EUPL 1.2
@@ -39,3 +43,4 @@ This repository provides the implementation of the KERI protocol. [`keriox_core`
 - [Witness](./components/witness): the KERI Witness
 - [Watcher](./components/watcher): the KERI Watcher
 - [Controller](./components/controller): the client for accessing the infrastructure
+- [SDK](./keriox_sdk): high-level SDK providing `KeriRuntime` and `Controller` for KERI+TEL operations

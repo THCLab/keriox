@@ -1,5 +1,6 @@
 use http::StatusCode;
 
+#[cfg(feature = "storage-redb")]
 use crate::database::redb::RedbError;
 use crate::event_message::cesr_adapter::ParseError;
 use crate::keys::KeysError;
@@ -74,6 +75,7 @@ impl From<VersionError> for ActorError {
     }
 }
 
+#[cfg(feature = "storage-redb")]
 impl From<RedbError> for ActorError {
     fn from(err: RedbError) -> Self {
         ActorError::DbError(err.to_string())

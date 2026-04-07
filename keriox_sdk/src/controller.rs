@@ -14,7 +14,8 @@ use keri_core::{
     },
     processor::{
         basic_processor::BasicProcessor,
-        escrow::{default_escrow_bus, EscrowConfig},
+        escrow::{default_escrow_bus, EscrowConfig, EscrowSet},
+        notification::NotificationBus,
         Processor,
     }, state::IdentifierState,
 };
@@ -25,10 +26,42 @@ use teliox::{
 
 use crate::Identifier;
 
-pub struct Controller<D: EventDatabase + 'static, T: TelEventDatabase> {
-    processor: Arc<BasicProcessor<D>>,
-    event_storage: Arc<EventStorage<D>>,
-    tel: Arc<Tel<T, D>>,
+pub struct KeriRuntime<D: EventDatabase + EscrowCreator + Send + Sync + 'static> {
+    pub processor: Arc<BasicProcessor<D>>,
+    pub storage: Arc<EventStorage<D>>,
+    pub escrows: EscrowSet<D>,
+    pub notification_bus: NotificationBus,
+}
+
+impl<D: EventDatabase + EscrowCreator + Send + Sync + 'static> KeriRuntime<D> {
+    pub fn new(event_db: Arc<D>) -> Self {
+        Self::with_config(event_db, EscrowConfig::default(), None)
+    }
+
+    pub fn with_config(
+        event_db: Arc<D>,
+        escrow_config: EscrowConfig,
+        notification_bus: Option<NotificationBus>,
+    ) -> Self {
+        let (bus, escrows) =
+            default_escrow_bus(event_db.clone(), escrow_config, notification_bus);
+
+        let processor =
+            Arc::new(BasicProcessor::new(event_db.clone(), Some(bus.clone())));
+        let storage = Arc::new(EventStorage::new(event_db));
+
+        Self {
+            processor,
+            storage,
+            escrows,
+            notification_bus: bus,
+        }
+    }
+}
+
+pub struct Controller<D: EventDatabase + EscrowCreator + Send + Sync + 'static, T: TelEventDatabase> {
+    pub kel: KeriRuntime<D>,
+    pub tel: Arc<Tel<T, D>>,
 }
 
 impl<
@@ -37,22 +70,13 @@ impl<
     > Controller<D, T>
 {
     pub fn new(event_db: Arc<D>, tel_db: Arc<T>) -> Self {
-        let (not_bus, _) =
-            default_escrow_bus(event_db.clone(), EscrowConfig::default());
+        let kel = KeriRuntime::new(event_db);
 
-        let processor =
-            Arc::new(BasicProcessor::new(event_db.clone(), Some(not_bus)));
-
-        let kel_storage = Arc::new(EventStorage::new(event_db.clone()));
         let tel_storage = Arc::new(TelEventStorage::new(tel_db));
         let tel =
-            Arc::new(Tel::new(tel_storage.clone(), kel_storage.clone(), None));
+            Arc::new(Tel::new(tel_storage.clone(), kel.storage.clone(), None));
 
-        Self {
-            processor,
-            event_storage: kel_storage,
-            tel,
-        }
+        Self { kel, tel }
     }
 
     pub fn incept(
@@ -71,21 +95,21 @@ impl<
     ) -> Result<Identifier<D>, ()> {
         let id_prefix = self.finalize_inception(event, sig)?;
 
-        Ok(Identifier::new(id_prefix, self.event_storage.clone()))
+        Ok(Identifier::new(id_prefix, self.kel.storage.clone()))
     }
 
     pub fn load_identifier(
         &self,
         id: &IdentifierPrefix,
     ) -> Result<Identifier<D>, String> {
-        self.event_storage
+        self.kel.storage
             .get_kel_messages_with_receipts_all(id)
             .map_err(|e| e.to_string())
             .and_then(|kel| {
                 if kel.is_none_or(|v| v.is_empty()) {
                     Err("No KEL found for the identifier".to_string())
                 } else {
-                    Ok(Identifier::new(id.clone(), self.event_storage.clone()))
+                    Ok(Identifier::new(id.clone(), self.kel.storage.clone()))
                 }
             })
     }
@@ -93,7 +117,7 @@ impl<
     pub fn process_kel(&self, messages: &[Message]) -> Result<(), String> {
         messages.iter().try_for_each(|msg| match msg {
             Message::Notice(notice) => self
-                .processor
+                .kel.processor
                 .process_notice(notice)
                 .map_err(|e| e.to_string()),
             Message::Op(_) => {
@@ -118,7 +142,7 @@ impl<
     }
 
     pub fn get_state(&self, id: &IdentifierPrefix) -> Option<IdentifierState> {
-        self.event_storage.get_state(id)
+        self.kel.storage.get_state(id)
     }
 
     fn finalize_inception(
@@ -150,7 +174,7 @@ impl<
             IndexedSignature::new_both_same(sig.clone(), own_index as u16);
 
         let signed_message = event.sign(vec![signature], None, None);
-        self.processor
+        self.kel.processor
             .process_notice(&Notice::Event(signed_message))
             .map_err(|_e| ())?;
 

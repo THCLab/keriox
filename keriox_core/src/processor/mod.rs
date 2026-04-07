@@ -38,7 +38,7 @@ pub trait Processor {
     fn process_op_reply(&self, reply: &SignedReply) -> Result<(), Error>;
 
     fn register_observer(
-        &mut self,
+        &self,
         observer: Arc<dyn Notifier + Send + Sync>,
         notifications: &[JustNotification],
     ) -> Result<(), Error>;
@@ -92,7 +92,7 @@ impl<D: EventDatabase + 'static> EventProcessor<D> {
     }
 
     pub fn register_observer(
-        &mut self,
+        &self,
         observer: Arc<dyn Notifier + Send + Sync>,
         notifications: Vec<JustNotification>,
     ) -> Result<(), Error> {
