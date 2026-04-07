@@ -22,15 +22,14 @@ use keri_core::{
     query::mailbox::SignedMailboxQuery,
 };
 
-use keri_core::event_message::signed_event_message::Notice;
 
 use crate::{
     controller::Controller,
     error::{Error, Result},
     identifier::{Identifier, ActionRequired},
     types::{
-        DelegationConfig, DelegationRequest, GroupConfig, IdentifierConfig, MultisigRequest,
-        RotationConfig,
+        DelegationConfig, DelegationRequest, IdentifierConfig, MultisigConfig, MultisigRequest,
+        PendingRequest, RotationConfig,
     },
 };
 
@@ -152,49 +151,6 @@ pub async fn create_identifier<S: SigningBackend + Clone + 'static>(
     Ok(id)
 }
 
-/// Create a new identifier (deprecated alias for [`create_identifier`]).
-///
-/// # Deprecated
-/// Use [`create_identifier`] with an [`IdentifierConfig`] instead.
-#[deprecated(since = "0.2.0", note = "use create_identifier with IdentifierConfig")]
-pub async fn setup_identifier<S: SigningBackend + Clone + 'static>(
-    controller: &Controller,
-    signer: S,
-    next_pk: BasicPrefix,
-    witnesses: Vec<LocationScheme>,
-    witness_threshold: u64,
-    watchers: Vec<LocationScheme>,
-) -> Result<Identifier> {
-    let pks = vec![BasicPrefix::Ed25519(signer.public_key())];
-    let npks = vec![next_pk];
-
-    let inception_event = controller
-        .incept(pks, npks, witnesses.clone(), witness_threshold)
-        .await?;
-
-    let sig = ed25519_sig(&signer, inception_event.as_bytes())?;
-    let mut id = controller.finalize_incept(inception_event.as_bytes(), &sig)?;
-
-    id.notify_witnesses().await?;
-
-    for wit in &witnesses {
-        if let IdentifierPrefix::Basic(wit_id) = &wit.eid {
-            _query_mailbox(&mut id, &signer, wit_id).await?;
-        }
-        id.send_oobi_to_watcher(id.id(), &Oobi::Location(wit.clone()))
-            .await?;
-        if let IdentifierPrefix::Basic(wit_id) = &wit.eid {
-            _query_mailbox(&mut id, &signer, wit_id).await?;
-        }
-    }
-
-    for watch in &watchers {
-        add_watcher(&mut id, &signer, watch).await?;
-    }
-
-    Ok(id)
-}
-
 /// Add and configure a watcher for an identifier.
 ///
 /// Resolves the watcher's OOBI, generates an `end_role_add` reply, signs it,
@@ -240,45 +196,6 @@ pub async fn rotate<S: SigningBackend + Clone + 'static>(
             config.witness_to_add,
             config.witness_to_remove,
             config.witness_threshold,
-        )
-        .await?;
-
-    let sig = ed25519_sig(&current_signer, rotation_event.as_bytes())?;
-    id.finalize_rotate(rotation_event.as_bytes(), sig).await?;
-    id.notify_witnesses().await?;
-
-    let witnesses = id.find_state(id.id())?.witness_config.witnesses;
-    for witness in witnesses {
-        _query_mailbox(id, &current_signer, &witness).await?;
-    }
-
-    Ok(())
-}
-
-/// Rotation with explicit positional args (deprecated alias for [`rotate`]).
-///
-/// # Deprecated
-/// Use [`rotate`] with a [`RotationConfig`] instead.
-#[deprecated(since = "0.2.0", note = "use rotate with RotationConfig")]
-pub async fn rotate_identifier<S: SigningBackend + Clone + 'static>(
-    id: &mut Identifier,
-    current_signer: S,
-    new_next_keys: Vec<BasicPrefix>,
-    new_next_threshold: u64,
-    witness_to_add: Vec<LocationScheme>,
-    witness_to_remove: Vec<BasicPrefix>,
-    witness_threshold: u64,
-) -> Result<()> {
-    let current_keys = vec![BasicPrefix::Ed25519NT(current_signer.public_key())];
-
-    let rotation_event = id
-        .rotate(
-            current_keys,
-            new_next_keys,
-            new_next_threshold,
-            witness_to_add,
-            witness_to_remove,
-            witness_threshold,
         )
         .await?;
 
@@ -361,19 +278,6 @@ pub async fn issue<S: SigningBackend + Clone + 'static>(
     Ok(())
 }
 
-/// Issue a credential — deprecated positional-arg alias for [`issue`].
-///
-/// # Deprecated
-/// Use [`issue`] instead.
-#[deprecated(since = "0.2.0", note = "use issue(id, signer, cred_said)")]
-pub async fn issue_credential<S: SigningBackend + Clone + 'static>(
-    identifier: &mut Identifier,
-    cred_said: SelfAddressingIdentifier,
-    km: S,
-) -> Result<()> {
-    issue(identifier, km, cred_said).await
-}
-
 /// Revoke a credential (TEL `rev` + anchor `ixn` + witness/backer notification).
 ///
 /// After this call the credential identified by `credential_said` is in the
@@ -404,19 +308,6 @@ pub async fn revoke<S: SigningBackend + Clone + 'static>(
     id.notify_backers().await?;
 
     Ok(())
-}
-
-/// Revoke a credential — deprecated positional-arg alias for [`revoke`].
-///
-/// # Deprecated
-/// Use [`revoke`] instead.
-#[deprecated(since = "0.2.0", note = "use revoke(id, signer, cred_said)")]
-pub async fn revoke_credential<S: SigningBackend + Clone + 'static>(
-    identifier: &mut Identifier,
-    cred_said: &SelfAddressingIdentifier,
-    km: S,
-) -> Result<()> {
-    revoke(identifier, km, cred_said).await
 }
 
 /// Sign and send mailbox queries to a single witness; return the signed queries.
@@ -478,80 +369,6 @@ async fn _query_mailbox_for<S: SigningBackend>(
 
 // ── Delegation operations ────────────────────────────────────────────────────
 
-/// Create a delegated identifier (delegatee side, step 1 of 2).
-///
-/// Internally creates a temporary helper identifier, generates a DIP
-/// (delegated inception) event, signs it, and sends the delegation request
-/// to the delegator via witnesses.
-///
-/// The delegated identifier is **not** yet accepted — the delegator must
-/// approve it first. After approval, call [`finalize_delegation`] with
-/// the returned `Identifier` and prefix.
-///
-/// Returns `(temporary_identifier, delegated_prefix)`.
-///
-/// # Errors
-/// - [`Error::Controller`] on event generation failures.
-/// - [`Error::Mechanics`] on network failures.
-/// - [`Error::Signing`] if signing fails.
-pub async fn create_delegated_identifier<S: SigningBackend + Clone + 'static>(
-    db_path: PathBuf,
-    signer: S,
-    next_pk: BasicPrefix,
-    config: DelegationConfig,
-) -> Result<(Identifier, IdentifierPrefix)> {
-    // Step 1: Create a temporary identifier (needed by incept_group).
-    let temp_config = IdentifierConfig {
-        witnesses: config.witnesses.clone(),
-        witness_threshold: config.witness_threshold,
-        watchers: vec![], // watchers configured after delegation is accepted
-    };
-    let mut temp_id = create_identifier(db_path, signer.clone(), next_pk, temp_config).await?;
-
-    // Step 2: Extract witness BasicPrefixes for the delegated identifier.
-    let witness_ids: Vec<BasicPrefix> = config
-        .witnesses
-        .iter()
-        .filter_map(|w| {
-            if let IdentifierPrefix::Basic(b) = &w.eid {
-                Some(b.clone())
-            } else {
-                None
-            }
-        })
-        .collect();
-
-    // Step 3: Generate delegated inception (DIP) + exchange messages.
-    let (dip, exn_messages) = temp_id.incept_group(
-        vec![],
-        1,
-        Some(1),
-        Some(witness_ids),
-        Some(config.witness_threshold),
-        Some(config.delegator),
-    )?;
-
-    // Step 4: Sign and finalise.
-    let sig_icp = ed25519_sig(&signer, dip.as_bytes())?;
-
-    // The last exchange message is the delegation request to the delegator.
-    let delegation_exn = exn_messages
-        .last()
-        .ok_or_else(|| Error::DelegationError("no exchange message generated".into()))?;
-    let sig_exn = ed25519_sig(&signer, delegation_exn.as_bytes())?;
-    let exn_index_sig = temp_id.sign_with_index(sig_exn, 0)?;
-
-    let delegated_prefix = temp_id
-        .finalize_group_incept(
-            dip.as_bytes(),
-            sig_icp,
-            vec![(delegation_exn.as_bytes().to_vec(), exn_index_sig)],
-        )
-        .await?;
-
-    Ok((temp_id, delegated_prefix))
-}
-
 /// Approve a pending delegation request (delegator side).
 ///
 /// Signs the delegating IXN event, notifies witnesses, queries the mailbox
@@ -603,68 +420,150 @@ pub async fn approve_delegation<S: SigningBackend + Clone + 'static>(
     Ok(())
 }
 
-/// Complete the delegation process after the delegator approves (delegatee
-/// side, step 2 of 2).
+// ── Multisig operations ──────────────────────────────────────────────────────
+
+/// Request a delegated identifier (delegatee side, step 1 of 2).
 ///
-/// Saves the delegator's KEL into the local database, then queries the
-/// delegated identifier's mailbox until the DIP event is accepted.
+/// Sends a delegation request to the delegator specified in `config`.
+/// The returned identifier is **not** yet accepted — the delegator must
+/// approve it first (see [`approve_delegation`]).
 ///
-/// `delegator_kel` is the delegator's KEL (inception + receipts) obtained
-/// out-of-band or via OOBI resolution.
+/// After approval, call [`complete_delegation`] with the returned values.
+///
+/// Returns `(identifier_handle, delegated_prefix)`.
 ///
 /// # Errors
+/// - [`Error::Controller`] on event generation failures.
+/// - [`Error::Mechanics`] on network failures.
+/// - [`Error::Signing`] if signing fails.
+pub async fn request_delegation<S: SigningBackend + Clone + 'static>(
+    db_path: PathBuf,
+    signer: S,
+    next_pk: BasicPrefix,
+    config: DelegationConfig,
+) -> Result<(Identifier, IdentifierPrefix)> {
+    // Create a temporary identifier (needed by incept_group).
+    let temp_config = IdentifierConfig {
+        witnesses: config.witnesses.clone(),
+        witness_threshold: config.witness_threshold,
+        watchers: vec![], // watchers configured after delegation is accepted
+    };
+    let mut temp_id = create_identifier(db_path, signer.clone(), next_pk, temp_config).await?;
+
+    // Extract witness BasicPrefixes for the delegated identifier.
+    let witness_ids: Vec<BasicPrefix> = config
+        .witnesses
+        .iter()
+        .filter_map(|w| {
+            if let IdentifierPrefix::Basic(b) = &w.eid {
+                Some(b.clone())
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    // Generate delegated inception (DIP) + exchange messages.
+    let (dip, exn_messages) = temp_id.incept_group(
+        vec![],
+        1,
+        Some(1),
+        Some(witness_ids),
+        Some(config.witness_threshold),
+        Some(config.delegator),
+    )?;
+
+    // Sign and finalise.
+    let sig_icp = ed25519_sig(&signer, dip.as_bytes())?;
+
+    let delegation_exn = exn_messages
+        .last()
+        .ok_or_else(|| Error::DelegationError("no exchange message generated".into()))?;
+    let sig_exn = ed25519_sig(&signer, delegation_exn.as_bytes())?;
+    let exn_index_sig = temp_id.sign_with_index(sig_exn, 0)?;
+
+    let delegated_prefix = temp_id
+        .finalize_group_incept(
+            dip.as_bytes(),
+            sig_icp,
+            vec![(delegation_exn.as_bytes().to_vec(), exn_index_sig)],
+        )
+        .await?;
+
+    Ok((temp_id, delegated_prefix))
+}
+
+/// Complete the delegation after the delegator has approved (delegatee
+/// side, step 2 of 2).
+///
+/// Retrieves the delegator's key event log from the local database
+/// and queries the delegated identifier's mailbox to finalise acceptance.
+///
+/// # Preconditions
+/// The delegator's OOBI must have been resolved beforehand so that their
+/// key event log is available locally (e.g. via
+/// `identifier.resolve_oobi(&delegator_oobi)`).
+///
+/// # Errors
+/// - [`Error::DelegatorKelNotAvailable`] if the delegator's events are
+///   not in the local database. Resolve the delegator's OOBI first.
+/// - [`Error::NoWitnesses`] if the identifier has no witnesses configured.
 /// - [`Error::Mechanics`] on network or mailbox failures.
 /// - [`Error::Signing`] if signing fails.
-pub async fn finalize_delegation<S: SigningBackend + Clone + 'static>(
+pub async fn complete_delegation<S: SigningBackend + Clone + 'static>(
     temp_id: &mut Identifier,
     signer: &S,
     delegated_prefix: &IdentifierPrefix,
-    delegator_kel: Vec<Notice>,
-    witnesses: &[BasicPrefix],
+    delegator_id: &IdentifierPrefix,
 ) -> Result<()> {
-    // Save the delegator's KEL events into local DB.
+    // Get witnesses from identifier state.
+    let witnesses: Vec<BasicPrefix> = temp_id.witnesses().collect();
+    if witnesses.is_empty() {
+        return Err(Error::NoWitnesses(temp_id.id().clone()));
+    }
+
+    // Get delegator's KEL from local DB.
+    let delegator_kel = temp_id
+        .get_kel(delegator_id)
+        .ok_or_else(|| Error::DelegatorKelNotAvailable(delegator_id.clone()))?;
+
+    // Save the delegator's KEL notices into local DB.
     for notice in &delegator_kel {
         temp_id.save_notice(notice)?;
     }
 
-    // Query mailbox for the delegated identifier to get the delegating event.
-    for witness in witnesses {
+    // Query mailbox for the delegated identifier (two rounds).
+    for witness in &witnesses {
         _query_mailbox_for(temp_id, signer, delegated_prefix, witness).await?;
     }
-
-    // Query again to get witness receipts (the DIP may now be accepted).
-    for witness in witnesses {
+    for witness in &witnesses {
         _query_mailbox_for(temp_id, signer, delegated_prefix, witness).await?;
     }
 
     Ok(())
 }
 
-// ── Multisig operations ──────────────────────────────────────────────────────
-
-/// Create a multisig group identifier (initiator side).
+/// Create a multisig identifier (initiator side).
 ///
-/// Generates the group inception event, signs it with the caller's key,
-/// and sends exchange messages to all other participants via witnesses.
+/// Generates the group inception event, signs it, and sends invitations
+/// to all other members via witnesses. The identifier is **not** yet
+/// accepted — other members must co-sign via [`accept_multisig`], and
+/// all members must call [`sync_multisig`] to finalise.
 ///
-/// The group identifier is **not** yet accepted — other participants must
-/// co-sign via [`join_group`], and all participants must call
-/// [`collect_group_signatures`] to finalise.
-///
-/// Returns the group `IdentifierPrefix`.
+/// Returns the multisig `IdentifierPrefix`.
 ///
 /// # Preconditions
 /// - `id` must be a fully established individual identifier with witnesses.
-/// - The caller must have resolved all participants' KELs (via watcher/OOBI).
+/// - The caller must have resolved all members' OOBIs.
 ///
 /// # Errors
-/// - [`Error::Controller`] if group inception generation fails.
+/// - [`Error::Controller`] if event generation fails.
 /// - [`Error::Mechanics`] on network failures.
 /// - [`Error::Signing`] if signing fails.
-pub async fn create_group_identifier<S: SigningBackend + Clone + 'static>(
+pub async fn create_multisig<S: SigningBackend + Clone + 'static>(
     id: &mut Identifier,
     signer: &S,
-    config: GroupConfig,
+    config: MultisigConfig,
 ) -> Result<IdentifierPrefix> {
     let witness_ids: Vec<BasicPrefix> = config
         .witnesses
@@ -679,9 +578,9 @@ pub async fn create_group_identifier<S: SigningBackend + Clone + 'static>(
         .collect();
 
     let (icp, exn_messages) = id.incept_group(
-        config.participants,
-        config.signature_threshold,
-        config.next_keys_threshold,
+        config.members,
+        config.threshold,
+        Some(config.threshold),
         Some(witness_ids),
         Some(config.witness_threshold),
         config.delegator,
@@ -689,7 +588,6 @@ pub async fn create_group_identifier<S: SigningBackend + Clone + 'static>(
 
     let sig_icp = ed25519_sig(signer, icp.as_bytes())?;
 
-    // Sign each exchange message (one per participant, plus optional delegation).
     let mut exchange_pairs = Vec::with_capacity(exn_messages.len());
     for exn in &exn_messages {
         let sig_exn = ed25519_sig(signer, exn.as_bytes())?;
@@ -704,17 +602,19 @@ pub async fn create_group_identifier<S: SigningBackend + Clone + 'static>(
     Ok(group_prefix)
 }
 
-/// Co-sign a multisig group event discovered in the mailbox (joiner side).
+/// Accept a multisig invitation discovered in the mailbox (joiner side).
 ///
-/// The `request` is obtained by calling [`query_multisig_requests`] or by
-/// converting an [`ActionRequired::MultisigRequest`] into a
-/// [`MultisigRequest`].
+/// Co-signs the group event and forwards the signature to other members
+/// via witnesses.
+///
+/// The `request` is obtained from [`poll_pending_requests`] or by
+/// converting an `ActionRequired::MultisigRequest`.
 ///
 /// # Errors
 /// - [`Error::EncodingError`] if event encoding fails.
 /// - [`Error::Mechanics`] on network failures.
 /// - [`Error::Signing`] if signing fails.
-pub async fn join_group<S: SigningBackend + Clone + 'static>(
+pub async fn accept_multisig<S: SigningBackend + Clone + 'static>(
     id: &mut Identifier,
     signer: &S,
     request: MultisigRequest,
@@ -742,58 +642,68 @@ pub async fn join_group<S: SigningBackend + Clone + 'static>(
     Ok(())
 }
 
-/// Collect co-signatures and witness receipts for a group event.
+/// Synchronise the multisig identifier state.
 ///
-/// Queries the group identifier's mailbox in two rounds (matching the
-/// protocol requirement for signature collection followed by receipt
-/// collection). Must be called by **all** participants after the group
-/// event has been co-signed by enough participants.
+/// Queries the multisig identifier's mailbox to collect co-signatures
+/// from other members and witness receipts. Must be called by **all**
+/// members after enough co-signatures have been submitted.
 ///
 /// After this call, verify acceptance with
-/// `id.find_state(group_id)`.
+/// `id.find_state(multisig_id)`.
 ///
 /// # Errors
+/// - [`Error::NoWitnesses`] if the identifier has no witnesses configured.
 /// - [`Error::Mechanics`] on network or mailbox failures.
 /// - [`Error::Signing`] if signing fails.
-pub async fn collect_group_signatures<S: SigningBackend + Clone + 'static>(
+pub async fn sync_multisig<S: SigningBackend + Clone + 'static>(
     id: &mut Identifier,
     signer: &S,
-    group_id: &IdentifierPrefix,
-    witnesses: &[BasicPrefix],
+    multisig_id: &IdentifierPrefix,
 ) -> Result<()> {
-    // Round 1: collect co-signatures from other participants.
-    for witness in witnesses {
-        _query_mailbox_for(id, signer, group_id, witness).await?;
+    let witnesses: Vec<BasicPrefix> = id.witnesses().collect();
+    if witnesses.is_empty() {
+        return Err(Error::NoWitnesses(id.id().clone()));
+    }
+
+    // Round 1: collect co-signatures from other members.
+    for witness in &witnesses {
+        _query_mailbox_for(id, signer, multisig_id, witness).await?;
     }
 
     // Round 2: collect witness receipts.
-    for witness in witnesses {
-        _query_mailbox_for(id, signer, group_id, witness).await?;
+    for witness in &witnesses {
+        _query_mailbox_for(id, signer, multisig_id, witness).await?;
     }
 
     Ok(())
 }
 
-/// Query this participant's mailbox for pending multisig requests.
+/// Poll for pending delegation or multisig requests in this
+/// identifier's mailbox.
 ///
-/// Returns a list of [`MultisigRequest`] items found, filtering out
-/// non-multisig actions. This is a convenience wrapper around
-/// [`query_mailbox`] + [`MultisigRequest::try_from`].
+/// Returns all discovered requests as [`PendingRequest`] items. Use
+/// [`PendingRequest::into_delegation`] or
+/// [`PendingRequest::into_multisig`] to extract the specific type and
+/// pass it to [`approve_delegation`] or [`accept_multisig`].
 ///
 /// # Errors
+/// - [`Error::NoWitnesses`] if the identifier has no witnesses configured.
 /// - [`Error::Mechanics`] on network failures.
 /// - [`Error::Signing`] if signing fails.
-pub async fn query_multisig_requests<S: SigningBackend + Clone + 'static>(
+pub async fn poll_pending_requests<S: SigningBackend + Clone + 'static>(
     id: &mut Identifier,
     signer: &S,
-    witnesses: &[BasicPrefix],
-) -> Result<Vec<MultisigRequest>> {
+) -> Result<Vec<PendingRequest>> {
     let own_id = id.id().clone();
+    let witnesses: Vec<BasicPrefix> = id.witnesses().collect();
+    if witnesses.is_empty() {
+        return Err(Error::NoWitnesses(own_id));
+    }
     let mut requests = vec![];
-    for witness in witnesses {
+    for witness in &witnesses {
         let actions = _query_mailbox_for(id, signer, &own_id, witness).await?;
         for action in actions {
-            if let Ok(req) = MultisigRequest::try_from(action) {
+            if let Ok(req) = PendingRequest::try_from(action) {
                 requests.push(req);
             }
         }
