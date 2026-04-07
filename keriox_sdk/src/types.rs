@@ -44,7 +44,7 @@ pub struct RotationConfig {
 
 /// Configuration for creating a delegated identifier (delegatee side).
 ///
-/// Used by [`crate::operations::create_delegated_identifier`] and
+/// Used by [`crate::operations::request_delegation`] and
 /// [`crate::store::KeriStore::create_delegated`].
 #[derive(Debug, Clone)]
 pub struct DelegationConfig {
@@ -64,10 +64,15 @@ pub struct DelegationConfig {
 /// Pass this to [`crate::operations::approve_delegation`] to approve.
 #[derive(Debug)]
 pub struct DelegationRequest {
-    /// The delegating IXN event to be signed by the delegator.
-    pub delegating_event: keri_core::event_message::msg::KeriEvent<keri_core::event::KeyEvent>,
-    /// The exchange message to forward to the delegatee after approval.
-    pub exchange: keri_core::mailbox::exchange::ExchangeMessage,
+    pub(crate) delegating_event: keri_core::event_message::msg::KeriEvent<keri_core::event::KeyEvent>,
+    pub(crate) exchange: keri_core::mailbox::exchange::ExchangeMessage,
+}
+
+impl DelegationRequest {
+    /// The identifier prefix of the delegatee requesting delegation.
+    pub fn identifier(&self) -> IdentifierPrefix {
+        self.delegating_event.data.get_prefix()
+    }
 }
 
 impl TryFrom<keri_controller::mailbox_updating::ActionRequired> for DelegationRequest {
@@ -90,36 +95,39 @@ impl TryFrom<keri_controller::mailbox_updating::ActionRequired> for DelegationRe
 
 // ── Multisig config ──────────────────────────────────────────────────────────
 
-/// Configuration for creating a multisig group identifier.
+/// Configuration for creating a multisig identifier.
 ///
-/// Used by [`crate::operations::create_group_identifier`] and
-/// [`crate::store::KeriStore::create_group`].
+/// Used by [`crate::operations::create_multisig`] and
+/// [`crate::store::KeriStore::create_multisig_group`].
 #[derive(Debug, Clone)]
-pub struct GroupConfig {
-    /// Other participants' identifier prefixes (not including the caller).
-    pub participants: Vec<IdentifierPrefix>,
+pub struct MultisigConfig {
+    /// Other members' identifier prefixes (not including the caller).
+    pub members: Vec<IdentifierPrefix>,
     /// Number of signatures required to authorise a group event.
-    pub signature_threshold: u64,
-    /// Number of next-key commitments required (defaults to `signature_threshold` if `None`).
-    pub next_keys_threshold: Option<u64>,
-    /// Witness OOBIs for the group identifier.
+    pub threshold: u64,
+    /// Witness OOBIs for the multisig identifier.
     pub witnesses: Vec<LocationScheme>,
     /// Witness signing threshold.
     pub witness_threshold: u64,
-    /// Optional delegator (for a delegated group identifier).
+    /// Optional delegator (for a delegated multisig identifier).
     pub delegator: Option<IdentifierPrefix>,
 }
 
 /// A pending multisig request discovered in the mailbox.
 ///
 /// Extracted from [`ActionRequired::MultisigRequest`] via [`MultisigRequest::try_from`].
-/// Pass this to [`crate::operations::join_group`] to co-sign the event.
+/// Pass this to [`crate::operations::accept_multisig`] to co-sign the event.
 #[derive(Debug)]
 pub struct MultisigRequest {
-    /// The group key event (ICP/ROT/IXN) to be co-signed.
-    pub event: keri_core::event_message::msg::KeriEvent<keri_core::event::KeyEvent>,
-    /// The exchange message to forward after signing.
-    pub exchange: keri_core::mailbox::exchange::ExchangeMessage,
+    pub(crate) event: keri_core::event_message::msg::KeriEvent<keri_core::event::KeyEvent>,
+    pub(crate) exchange: keri_core::mailbox::exchange::ExchangeMessage,
+}
+
+impl MultisigRequest {
+    /// The group identifier prefix this request is for.
+    pub fn group_prefix(&self) -> IdentifierPrefix {
+        self.event.data.get_prefix()
+    }
 }
 
 impl TryFrom<keri_controller::mailbox_updating::ActionRequired> for MultisigRequest {
@@ -136,6 +144,73 @@ impl TryFrom<keri_controller::mailbox_updating::ActionRequired> for MultisigRequ
                 })
             }
             other => Err(other),
+        }
+    }
+}
+
+// ── Unified pending request ──────────────────────────────────────────────────
+
+/// A pending request discovered in the mailbox.
+///
+/// Returned by [`crate::operations::poll_pending_requests`]. Use the
+/// convenience methods or pattern-match to determine the request type
+/// and pass it to [`crate::operations::approve_delegation`] or
+/// [`crate::operations::accept_multisig`] accordingly.
+#[derive(Debug)]
+pub enum PendingRequest {
+    /// A delegation request from a delegatee awaiting approval.
+    Delegation(DelegationRequest),
+    /// A multisig event from another participant awaiting co-signature.
+    Multisig(MultisigRequest),
+}
+
+impl PendingRequest {
+    /// Returns `true` if this is a delegation request.
+    pub fn is_delegation(&self) -> bool {
+        matches!(self, Self::Delegation(_))
+    }
+
+    /// Returns `true` if this is a multisig request.
+    pub fn is_multisig(&self) -> bool {
+        matches!(self, Self::Multisig(_))
+    }
+
+    /// Consume and return the inner delegation request, if any.
+    pub fn into_delegation(self) -> Option<DelegationRequest> {
+        match self {
+            Self::Delegation(r) => Some(r),
+            _ => None,
+        }
+    }
+
+    /// Consume and return the inner multisig request, if any.
+    pub fn into_multisig(self) -> Option<MultisigRequest> {
+        match self {
+            Self::Multisig(r) => Some(r),
+            _ => None,
+        }
+    }
+}
+
+impl TryFrom<keri_controller::mailbox_updating::ActionRequired> for PendingRequest {
+    type Error = keri_controller::mailbox_updating::ActionRequired;
+
+    fn try_from(
+        action: keri_controller::mailbox_updating::ActionRequired,
+    ) -> std::result::Result<Self, Self::Error> {
+        match action {
+            keri_controller::mailbox_updating::ActionRequired::DelegationRequest(ev, exn) => {
+                Ok(PendingRequest::Delegation(DelegationRequest {
+                    delegating_event: ev,
+                    exchange: exn,
+                }))
+            }
+            keri_controller::mailbox_updating::ActionRequired::MultisigRequest(ev, exn) => {
+                Ok(PendingRequest::Multisig(MultisigRequest {
+                    event: ev,
+                    exchange: exn,
+                }))
+            }
         }
     }
 }

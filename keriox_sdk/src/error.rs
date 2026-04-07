@@ -92,6 +92,11 @@ pub enum Error {
     #[error("multisig error: {0}")]
     MultisigError(String),
 
+    /// The delegator's key event log is not available locally.
+    /// Resolve the delegator's OOBI before calling `complete_delegation`.
+    #[error("delegator KEL not available locally for {0}; resolve the delegator's OOBI first")]
+    DelegatorKelNotAvailable(IdentifierPrefix),
+
     /// A catch-all for errors that do not fit a more specific variant.
     #[error("{0}")]
     Other(String),
