@@ -8,21 +8,25 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+keri-controller = { path = "../components/controller", version = "0.17.13" }
 keri-core = { path = "../keriox_core", version = "0.17.13", features = ["query", "oobi"] }
 cesrox = { version = "0.1.8", features = ["cesr-proof"] }
 serde_json = "1"
 serde_cbor = { version = "0.11" }
 said = { version = "0.4.3", features = ["macros"]}
 teliox = { path = "../support/teliox", version = "0.17.13", default-features = false }
+thiserror = "1.0"
 log = "0.4"
+rand = "0.8.5"
+ed25519-dalek = { version = "2.1.0", features = ["rand_core"] }
+base64 = "0.13"
 
 [dev-dependencies]
+keri-core = { path = "../keriox_core", version = "0.17.13" }
 tempfile = { version = "3.20" }
-ed25519-dalek = {version = "2.1.0", features = ["rand_core"] }
-rand = "0.8.5"
+tokio = { version = "1", features = ["full"] }
 reqwest = { version = "0.11", features = ["json"] }
 url = { version = "2.2.2", features = ["serde"] }
-tokio = { version = "1", features = ["full"] }
 
 [package.metadata.release]
 publish = false

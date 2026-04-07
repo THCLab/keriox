@@ -1,0 +1,279 @@
+//! Persistent storage for named KERI identifiers.
+//!
+//! [`KeriStore`] manages a root directory that holds one sub-directory per
+//! *alias* (a human-readable name for an identifier). Each alias directory
+//! stores the Redb database, the current and next signing-key seeds, the
+//! identifier prefix, and an optional registry prefix.
+//!
+//! The on-disk layout is identical to the one used by `dkms-bin`, so existing
+//! databases can be opened without migration.
+//!
+//! See [`crate::operations`] for the functions that use the identifiers
+//! returned by this module.
+//!
+//! # Disk layout
+//!
+//! ```text
+//! <root>/
+//!   <alias>/
+//!     db/           ← Redb database directory
+//!     priv_key      ← current SeedPrefix (KERI canonical text)
+//!     next_priv_key ← next SeedPrefix (KERI canonical text)
+//!     id            ← IdentifierPrefix (KERI canonical text)
+//!     reg_id        ← IdentifierPrefix (optional, set after incept_registry)
+//! ```
+
+use std::{
+    path::PathBuf,
+    str::FromStr,
+    sync::Arc,
+};
+
+use keri_controller::{
+    controller::RedbIdentifier,
+    IdentifierPrefix,
+};
+use keri_core::{
+    prefix::SeedPrefix,
+    signer::Signer,
+};
+
+use crate::{
+    controller::Controller,
+    error::{Error, Result},
+    identifier::Identifier,
+    operations::create_identifier,
+    types::IdentifierConfig,
+};
+
+/// Manages a directory of named KERI identifiers.
+///
+/// Each identifier is stored under `<root>/<alias>/` using the standard
+/// disk layout. Use [`KeriStore::open`] to create or open a store, then
+/// [`KeriStore::create`] to provision new identifiers and [`KeriStore::load`]
+/// to restore them across sessions.
+pub struct KeriStore {
+    root: PathBuf,
+}
+
+impl KeriStore {
+    /// Open (or create) a store rooted at `root`.
+    ///
+    /// Creates the root directory if it does not exist.
+    ///
+    /// # Errors
+    /// - [`Error::PersistenceError`] if the directory cannot be created.
+    pub fn open(root: PathBuf) -> Result<Self> {
+        std::fs::create_dir_all(&root)
+            .map_err(|e| Error::PersistenceError(format!("cannot create store root: {e}")))?;
+        Ok(Self { root })
+    }
+
+    /// Create a brand-new identifier, persist all state, and return the live
+    /// handle together with the current signer.
+    ///
+    /// Generates random Ed25519 key pairs for the current and next keys
+    /// internally. `config` controls witnesses and watchers.
+    ///
+    /// # Errors
+    /// - [`Error::PersistenceError`] on I/O failures.
+    /// - Propagates errors from [`create_identifier`].
+    pub async fn create(
+        &self,
+        alias: &str,
+        config: IdentifierConfig,
+    ) -> Result<(Identifier, Arc<Signer>)> {
+        use cesrox::primitives::codes::seed::SeedCode;
+        use rand::rngs::OsRng;
+
+        let current_ed = ed25519_dalek::SigningKey::generate(&mut OsRng);
+        let next_ed = ed25519_dalek::SigningKey::generate(&mut OsRng);
+
+        let current_seed = SeedPrefix::new(
+            SeedCode::RandomSeed256Ed25519,
+            current_ed.as_bytes().to_vec(),
+        );
+        let next_seed = SeedPrefix::new(
+            SeedCode::RandomSeed256Ed25519,
+            next_ed.as_bytes().to_vec(),
+        );
+
+        self.create_with_seeds(alias, current_seed, next_seed, config).await
+    }
+
+    /// Create a brand-new identifier with caller-provided seeds.
+    ///
+    /// Useful for deterministic key derivation (e.g. from a mnemonic). The
+    /// seeds are persisted to disk and the identifier is fully incepted before
+    /// returning.
+    ///
+    /// # Errors
+    /// - [`Error::PersistenceError`] on I/O failures.
+    /// - [`Error::Signing`] if the seed cannot produce a key pair.
+    /// - Propagates errors from [`create_identifier`].
+    pub async fn create_with_seeds(
+        &self,
+        alias: &str,
+        current_seed: SeedPrefix,
+        next_seed: SeedPrefix,
+        config: IdentifierConfig,
+    ) -> Result<(Identifier, Arc<Signer>)> {
+        let alias_dir = self.alias_dir(alias);
+        std::fs::create_dir_all(&alias_dir)
+            .map_err(|e| Error::PersistenceError(format!("cannot create alias dir: {e}")))?;
+
+        let db_path = alias_dir.join("db");
+
+        let signer = Arc::new(
+            Signer::new_with_seed(&current_seed)
+                .map_err(|e| Error::Signing(e.to_string()))?,
+        );
+
+        let (next_pub_key, _) = next_seed.derive_key_pair()
+            .map_err(|e| Error::Signing(e.to_string()))?;
+
+        let next_pk = keri_controller::BasicPrefix::Ed25519NT(next_pub_key);
+
+        let id = create_identifier(db_path, signer.clone(), next_pk, config).await?;
+
+        // Persist seeds and identifier prefix.
+        use keri_core::prefix::CesrPrimitive;
+        self.write_file(alias, "priv_key", &current_seed.to_str())?;
+        self.write_file(alias, "next_priv_key", &next_seed.to_str())?;
+        self.write_file(alias, "id", &id.id().to_str())?;
+
+        Ok((id, signer))
+    }
+
+    /// Load an existing identifier from disk.
+    ///
+    /// Reconstructs the `Identifier` by opening the Redb database and reading
+    /// the persisted identifier prefix. The signing key is **not** loaded here
+    /// — use [`KeriStore::load_signer`] for that.
+    ///
+    /// # Errors
+    /// - [`Error::PersistenceError`] if the alias directory or files are missing.
+    /// - [`Error::IdentifierNotFound`] if the `id` file cannot be parsed.
+    /// - [`Error::Controller`] if the database cannot be opened.
+    pub fn load(&self, alias: &str) -> Result<Identifier> {
+        let alias_dir = self.alias_dir(alias);
+        let db_path = alias_dir.join("db");
+
+        let id_str = self.read_file(alias, "id")?;
+        let id_prefix = IdentifierPrefix::from_str(id_str.trim())
+            .map_err(|_| Error::IdentifierNotFound(
+                IdentifierPrefix::SelfAddressing(Default::default())
+            ))?;
+
+        let reg_id = self.read_file(alias, "reg_id").ok()
+            .and_then(|s| IdentifierPrefix::from_str(s.trim()).ok());
+
+        let controller = Controller::new(db_path)?;
+
+        // Reconstruct the inner RedbIdentifier using the controller's shared state.
+        let inner = RedbIdentifier::new(
+            id_prefix,
+            reg_id,
+            controller.inner.known_events.clone(),
+            controller.inner.communication.clone(),
+        );
+
+        Ok(Identifier { inner })
+    }
+
+    /// Load the current signing key for an alias.
+    ///
+    /// # Errors
+    /// - [`Error::PersistenceError`] if the `priv_key` file is missing or invalid.
+    /// - [`Error::Signing`] if the seed cannot produce a signer.
+    pub fn load_signer(&self, alias: &str) -> Result<Arc<Signer>> {
+        let seed = self.load_seed(alias, "priv_key")?;
+        let signer = Signer::new_with_seed(&seed)
+            .map_err(|e| Error::Signing(e.to_string()))?;
+        Ok(Arc::new(signer))
+    }
+
+    /// Load the next signing key (used as the current key after rotation).
+    ///
+    /// # Errors
+    /// - [`Error::PersistenceError`] if the `next_priv_key` file is missing or invalid.
+    /// - [`Error::Signing`] if the seed cannot produce a signer.
+    pub fn load_next_signer(&self, alias: &str) -> Result<Arc<Signer>> {
+        let seed = self.load_seed(alias, "next_priv_key")?;
+        let signer = Signer::new_with_seed(&seed)
+            .map_err(|e| Error::Signing(e.to_string()))?;
+        Ok(Arc::new(signer))
+    }
+
+    /// Commit a rotation: promote `next_priv_key` → `priv_key`, persist a new
+    /// next seed, and save the updated identifier prefix.
+    ///
+    /// Call this after [`crate::operations::rotate`] has succeeded.
+    ///
+    /// # Errors
+    /// - [`Error::PersistenceError`] on I/O failures.
+    pub fn save_rotation(&self, alias: &str, new_next_seed: SeedPrefix) -> Result<()> {
+        // Promote: next becomes current.
+        let next_content = self.read_file(alias, "next_priv_key")?;
+        self.write_file(alias, "priv_key", &next_content)?;
+
+        use keri_core::prefix::CesrPrimitive;
+        self.write_file(alias, "next_priv_key", &new_next_seed.to_str())?;
+
+        Ok(())
+    }
+
+    /// Persist a registry identifier after [`crate::operations::incept_registry`].
+    ///
+    /// # Errors
+    /// - [`Error::PersistenceError`] on I/O failures.
+    pub fn save_registry(&self, alias: &str, registry_id: &IdentifierPrefix) -> Result<()> {
+        use keri_core::prefix::CesrPrimitive;
+        self.write_file(alias, "reg_id", &registry_id.to_str())
+    }
+
+    /// List all stored aliases in this store.
+    ///
+    /// # Errors
+    /// - [`Error::PersistenceError`] if the root directory cannot be read.
+    pub fn list_aliases(&self) -> Result<Vec<String>> {
+        let mut aliases = vec![];
+        for entry in std::fs::read_dir(&self.root)
+            .map_err(|e| Error::PersistenceError(format!("cannot read store root: {e}")))?
+        {
+            let entry = entry
+                .map_err(|e| Error::PersistenceError(format!("directory entry error: {e}")))?;
+            if entry.path().is_dir() {
+                if let Some(name) = entry.file_name().to_str() {
+                    aliases.push(name.to_owned());
+                }
+            }
+        }
+        aliases.sort();
+        Ok(aliases)
+    }
+
+    // ── Private helpers ───────────────────────────────────────────────────────
+
+    fn alias_dir(&self, alias: &str) -> PathBuf {
+        self.root.join(alias)
+    }
+
+    fn write_file(&self, alias: &str, filename: &str, content: &str) -> Result<()> {
+        let path = self.alias_dir(alias).join(filename);
+        std::fs::write(&path, content)
+            .map_err(|e| Error::PersistenceError(format!("cannot write {filename}: {e}")))
+    }
+
+    fn read_file(&self, alias: &str, filename: &str) -> Result<String> {
+        let path = self.alias_dir(alias).join(filename);
+        std::fs::read_to_string(&path)
+            .map_err(|e| Error::PersistenceError(format!("cannot read {filename}: {e}")))
+    }
+
+    fn load_seed(&self, alias: &str, filename: &str) -> Result<SeedPrefix> {
+        let s = self.read_file(alias, filename)?;
+        SeedPrefix::from_str(s.trim())
+            .map_err(|e| Error::PersistenceError(format!("invalid seed in {filename}: {e}")))
+    }
+}
