@@ -28,6 +28,8 @@ use crate::error::Result;
 pub use keri_controller::identifier::query::WatcherResponseError;
 pub use keri_controller::mailbox_updating::ActionRequired;
 
+use keri_core::prefix::IndexedSignature;
+
 /// Concrete identifier wrapping `keri_controller::controller::RedbIdentifier`.
 pub struct Identifier {
     pub(crate) inner: keri_controller::RedbIdentifier,
@@ -308,6 +310,89 @@ impl Identifier {
         watcher: IdentifierPrefix,
     ) -> Result<QueryEvent> {
         Ok(self.inner.query_full_log(id, watcher)?)
+    }
+
+    // ── Delegation / group ────────────────────────────────────────────────────
+
+    /// Generate a delegated (or group) inception event and exchange messages.
+    ///
+    /// If `delegator` is provided, a DIP (delegated inception) is created and
+    /// a delegation-request exchange is appended to the returned list.
+    /// Returns `(serialized_event, vec_of_serialized_exchanges)`.
+    pub fn incept_group(
+        &self,
+        participants: Vec<IdentifierPrefix>,
+        signature_threshold: u64,
+        next_keys_threshold: Option<u64>,
+        initial_witnesses: Option<Vec<BasicPrefix>>,
+        witness_threshold: Option<u64>,
+        delegator: Option<IdentifierPrefix>,
+    ) -> Result<(String, Vec<String>)> {
+        Ok(self.inner.incept_group(
+            participants,
+            signature_threshold,
+            next_keys_threshold,
+            initial_witnesses,
+            witness_threshold,
+            delegator,
+        )?)
+    }
+
+    /// Finalise a group/delegated inception event. Returns the new prefix.
+    pub async fn finalize_group_incept(
+        &mut self,
+        group_event: &[u8],
+        sig: SelfSigningPrefix,
+        exchanges: Vec<(Vec<u8>, Signature)>,
+    ) -> Result<IdentifierPrefix> {
+        Ok(self
+            .inner
+            .finalize_group_incept(group_event, sig, exchanges)
+            .await?)
+    }
+
+    /// Finalise a group event (e.g. a delegating IXN).
+    pub async fn finalize_group_event(
+        &mut self,
+        group_event: &[u8],
+        sig: SelfSigningPrefix,
+        exchanges: Vec<(Vec<u8>, Signature)>,
+    ) -> Result<()> {
+        Ok(self
+            .inner
+            .finalize_group_event(group_event, sig, exchanges)
+            .await?)
+    }
+
+    /// Finalise an exchange message (e.g. delegation approval forwarding).
+    pub async fn finalize_exchange(
+        &self,
+        exchange: &[u8],
+        exn_signature: Signature,
+        data_signature: IndexedSignature,
+    ) -> Result<()> {
+        Ok(self
+            .inner
+            .finalize_exchange(exchange, exn_signature, data_signature)
+            .await?)
+    }
+
+    /// Create a transferable signature at a specific key index.
+    pub fn sign_with_index(
+        &self,
+        signature: SelfSigningPrefix,
+        key_index: u16,
+    ) -> Result<Signature> {
+        Ok(self.inner.sign_with_index(signature, key_index)?)
+    }
+
+    /// Save an external notice (e.g. a delegator's KEL event) into the local DB.
+    pub fn save_notice(&self, notice: &Notice) -> Result<()> {
+        use keri_core::event_message::signed_event_message::Message;
+        self.inner
+            .known_events
+            .save(&Message::Notice(notice.clone()))?;
+        Ok(())
     }
 
     // ── Low-level seal helpers ───────────────────────────────────────────────

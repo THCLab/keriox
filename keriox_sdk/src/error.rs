@@ -76,6 +76,14 @@ pub enum Error {
         reason: String,
     },
 
+    /// No pending delegation request was found in the mailbox.
+    #[error("no delegation request found")]
+    NoDelegationRequest,
+
+    /// A delegation-specific error.
+    #[error("delegation error: {0}")]
+    DelegationError(String),
+
     /// A catch-all for errors that do not fit a more specific variant.
     #[error("{0}")]
     Other(String),

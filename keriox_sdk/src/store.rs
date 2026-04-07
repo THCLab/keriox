@@ -42,8 +42,8 @@ use crate::{
     controller::Controller,
     error::{Error, Result},
     identifier::Identifier,
-    operations::create_identifier,
-    types::IdentifierConfig,
+    operations::{create_identifier, create_delegated_identifier},
+    types::{DelegationConfig, IdentifierConfig},
 };
 
 /// Manages a directory of named KERI identifiers.
@@ -230,6 +230,105 @@ impl KeriStore {
     pub fn save_registry(&self, alias: &str, registry_id: &IdentifierPrefix) -> Result<()> {
         use keri_core::prefix::CesrPrimitive;
         self.write_file(alias, "reg_id", &registry_id.to_str())
+    }
+
+    /// Create a delegated identifier (delegatee side).
+    ///
+    /// Generates random Ed25519 key pairs, creates a temporary identifier,
+    /// sends a delegation request to the delegator via witnesses, and
+    /// persists all state. The delegated identifier is **not** yet accepted
+    /// — the delegator must approve it first.
+    ///
+    /// After approval, call [`crate::operations::finalize_delegation`] with
+    /// the returned `Identifier` to complete the process.
+    ///
+    /// Returns `(temporary_identifier, delegated_prefix, current_signer)`.
+    ///
+    /// # Errors
+    /// - [`Error::PersistenceError`] on I/O failures.
+    /// - Propagates errors from [`create_delegated_identifier`].
+    pub async fn create_delegated(
+        &self,
+        alias: &str,
+        config: DelegationConfig,
+    ) -> Result<(Identifier, IdentifierPrefix, Arc<Signer>)> {
+        use cesrox::primitives::codes::seed::SeedCode;
+        use rand::rngs::OsRng;
+
+        let current_ed = ed25519_dalek::SigningKey::generate(&mut OsRng);
+        let next_ed = ed25519_dalek::SigningKey::generate(&mut OsRng);
+
+        let current_seed = SeedPrefix::new(
+            SeedCode::RandomSeed256Ed25519,
+            current_ed.as_bytes().to_vec(),
+        );
+        let next_seed = SeedPrefix::new(
+            SeedCode::RandomSeed256Ed25519,
+            next_ed.as_bytes().to_vec(),
+        );
+
+        let alias_dir = self.alias_dir(alias);
+        std::fs::create_dir_all(&alias_dir)
+            .map_err(|e| Error::PersistenceError(format!("cannot create alias dir: {e}")))?;
+
+        let db_path = alias_dir.join("db");
+
+        let signer = Arc::new(
+            Signer::new_with_seed(&current_seed)
+                .map_err(|e| Error::Signing(e.to_string()))?,
+        );
+
+        let (next_pub_key, _) = next_seed
+            .derive_key_pair()
+            .map_err(|e| Error::Signing(e.to_string()))?;
+        let next_pk = keri_controller::BasicPrefix::Ed25519NT(next_pub_key);
+
+        let delegator_id = config.delegator.clone();
+        let (temp_id, delegated_prefix) =
+            create_delegated_identifier(db_path, signer.clone(), next_pk, config).await?;
+
+        // Persist seeds, temporary identifier, delegated prefix, and delegator.
+        use keri_core::prefix::CesrPrimitive;
+        self.write_file(alias, "priv_key", &current_seed.to_str())?;
+        self.write_file(alias, "next_priv_key", &next_seed.to_str())?;
+        self.write_file(alias, "id", &temp_id.id().to_str())?;
+        self.write_file(alias, "delegated_id", &delegated_prefix.to_str())?;
+        self.write_file(alias, "delegator_id", &delegator_id.to_str())?;
+
+        Ok((temp_id, delegated_prefix, signer))
+    }
+
+    /// Persist the delegator identifier for an alias.
+    ///
+    /// # Errors
+    /// - [`Error::PersistenceError`] on I/O failures.
+    pub fn save_delegator(&self, alias: &str, delegator_id: &IdentifierPrefix) -> Result<()> {
+        use keri_core::prefix::CesrPrimitive;
+        self.write_file(alias, "delegator_id", &delegator_id.to_str())
+    }
+
+    /// Load the delegated identifier prefix for an alias.
+    ///
+    /// Returns an error if this alias is not a delegated identifier.
+    ///
+    /// # Errors
+    /// - [`Error::PersistenceError`] if the `delegated_id` file is missing or invalid.
+    pub fn load_delegated_prefix(&self, alias: &str) -> Result<IdentifierPrefix> {
+        let s = self.read_file(alias, "delegated_id")?;
+        IdentifierPrefix::from_str(s.trim())
+            .map_err(|_| Error::PersistenceError("invalid delegated_id".into()))
+    }
+
+    /// Load the delegator identifier prefix for an alias.
+    ///
+    /// Returns an error if this alias is not a delegated identifier.
+    ///
+    /// # Errors
+    /// - [`Error::PersistenceError`] if the `delegator_id` file is missing or invalid.
+    pub fn load_delegator(&self, alias: &str) -> Result<IdentifierPrefix> {
+        let s = self.read_file(alias, "delegator_id")?;
+        IdentifierPrefix::from_str(s.trim())
+            .map_err(|_| Error::PersistenceError("invalid delegator_id".into()))
     }
 
     /// List all stored aliases in this store.

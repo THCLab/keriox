@@ -22,11 +22,13 @@ use keri_core::{
     query::mailbox::SignedMailboxQuery,
 };
 
+use keri_core::event_message::signed_event_message::Notice;
+
 use crate::{
     controller::Controller,
     error::{Error, Result},
-    identifier::Identifier,
-    types::{IdentifierConfig, RotationConfig},
+    identifier::{Identifier, ActionRequired},
+    types::{DelegationConfig, DelegationRequest, IdentifierConfig, RotationConfig},
 };
 
 // ── Signer abstraction ────────────────────────────────────────────────────────
@@ -449,4 +451,188 @@ async fn _query_mailbox<S: SigningBackend>(
         out.push(signed_qry);
     }
     Ok(out)
+}
+
+/// Like `_query_mailbox` but queries for an arbitrary identifier (not just
+/// the identifier's own prefix). Returns any `ActionRequired` items.
+async fn _query_mailbox_for<S: SigningBackend>(
+    id: &mut Identifier,
+    km: &S,
+    about: &IdentifierPrefix,
+    witness_id: &BasicPrefix,
+) -> Result<Vec<ActionRequired>> {
+    let mut actions = vec![];
+    for qry in id.query_mailbox(about, &[witness_id.clone()])? {
+        let encoded = qry
+            .encode()
+            .map_err(|e| Error::EncodingError(e.to_string()))?;
+        let sig = SelfSigningPrefix::Ed25519Sha512(km.sign_data(&encoded)?);
+        let result = id.finalize_query_mailbox(vec![(qry, sig)]).await?;
+        actions.extend(result);
+    }
+    Ok(actions)
+}
+
+// ── Delegation operations ────────────────────────────────────────────────────
+
+/// Create a delegated identifier (delegatee side, step 1 of 2).
+///
+/// Internally creates a temporary helper identifier, generates a DIP
+/// (delegated inception) event, signs it, and sends the delegation request
+/// to the delegator via witnesses.
+///
+/// The delegated identifier is **not** yet accepted — the delegator must
+/// approve it first. After approval, call [`finalize_delegation`] with
+/// the returned `Identifier` and prefix.
+///
+/// Returns `(temporary_identifier, delegated_prefix)`.
+///
+/// # Errors
+/// - [`Error::Controller`] on event generation failures.
+/// - [`Error::Mechanics`] on network failures.
+/// - [`Error::Signing`] if signing fails.
+pub async fn create_delegated_identifier<S: SigningBackend + Clone + 'static>(
+    db_path: PathBuf,
+    signer: S,
+    next_pk: BasicPrefix,
+    config: DelegationConfig,
+) -> Result<(Identifier, IdentifierPrefix)> {
+    // Step 1: Create a temporary identifier (needed by incept_group).
+    let temp_config = IdentifierConfig {
+        witnesses: config.witnesses.clone(),
+        witness_threshold: config.witness_threshold,
+        watchers: vec![], // watchers configured after delegation is accepted
+    };
+    let mut temp_id = create_identifier(db_path, signer.clone(), next_pk, temp_config).await?;
+
+    // Step 2: Extract witness BasicPrefixes for the delegated identifier.
+    let witness_ids: Vec<BasicPrefix> = config
+        .witnesses
+        .iter()
+        .filter_map(|w| {
+            if let IdentifierPrefix::Basic(b) = &w.eid {
+                Some(b.clone())
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    // Step 3: Generate delegated inception (DIP) + exchange messages.
+    let (dip, exn_messages) = temp_id.incept_group(
+        vec![],
+        1,
+        Some(1),
+        Some(witness_ids),
+        Some(config.witness_threshold),
+        Some(config.delegator),
+    )?;
+
+    // Step 4: Sign and finalise.
+    let sig_icp = ed25519_sig(&signer, dip.as_bytes())?;
+
+    // The last exchange message is the delegation request to the delegator.
+    let delegation_exn = exn_messages
+        .last()
+        .ok_or_else(|| Error::DelegationError("no exchange message generated".into()))?;
+    let sig_exn = ed25519_sig(&signer, delegation_exn.as_bytes())?;
+    let exn_index_sig = temp_id.sign_with_index(sig_exn, 0)?;
+
+    let delegated_prefix = temp_id
+        .finalize_group_incept(
+            dip.as_bytes(),
+            sig_icp,
+            vec![(delegation_exn.as_bytes().to_vec(), exn_index_sig)],
+        )
+        .await?;
+
+    Ok((temp_id, delegated_prefix))
+}
+
+/// Approve a pending delegation request (delegator side).
+///
+/// Signs the delegating IXN event, notifies witnesses, queries the mailbox
+/// for receipts, and sends the exchange message (approval notification) to
+/// the delegatee via witnesses.
+///
+/// The `request` is typically obtained by calling
+/// [`query_mailbox`] and converting the resulting
+/// [`ActionRequired::DelegationRequest`] into a [`DelegationRequest`].
+///
+/// # Errors
+/// - [`Error::Mechanics`] on network failures.
+/// - [`Error::Signing`] if signing fails.
+/// - [`Error::EncodingError`] if event encoding fails.
+pub async fn approve_delegation<S: SigningBackend + Clone + 'static>(
+    id: &mut Identifier,
+    signer: &S,
+    request: DelegationRequest,
+) -> Result<()> {
+    let encoded_ixn = request
+        .delegating_event
+        .encode()
+        .map_err(|e| Error::EncodingError(e.to_string()))?;
+    let encoded_exn = request
+        .exchange
+        .encode()
+        .map_err(|e| Error::EncodingError(e.to_string()))?;
+
+    let sig_ixn = ed25519_sig(signer, &encoded_ixn)?;
+
+    // Finalise the delegating IXN.
+    id.finalize_group_event(&encoded_ixn, sig_ixn.clone(), vec![])
+        .await?;
+    id.notify_witnesses().await?;
+
+    // Query mailbox for IXN receipts.
+    let witnesses = id.find_state(id.id())?.witness_config.witnesses;
+    for witness in &witnesses {
+        _query_mailbox(id, signer, witness).await?;
+    }
+
+    // Send exchange (approval) to delegatee via witnesses.
+    let sig_exn = ed25519_sig(signer, &encoded_exn)?;
+    let data_signature = IndexedSignature::new_both_same(sig_ixn, 0);
+    let exn_index_sig = id.sign_with_index(sig_exn, 0)?;
+    id.finalize_exchange(&encoded_exn, exn_index_sig, data_signature)
+        .await?;
+
+    Ok(())
+}
+
+/// Complete the delegation process after the delegator approves (delegatee
+/// side, step 2 of 2).
+///
+/// Saves the delegator's KEL into the local database, then queries the
+/// delegated identifier's mailbox until the DIP event is accepted.
+///
+/// `delegator_kel` is the delegator's KEL (inception + receipts) obtained
+/// out-of-band or via OOBI resolution.
+///
+/// # Errors
+/// - [`Error::Mechanics`] on network or mailbox failures.
+/// - [`Error::Signing`] if signing fails.
+pub async fn finalize_delegation<S: SigningBackend + Clone + 'static>(
+    temp_id: &mut Identifier,
+    signer: &S,
+    delegated_prefix: &IdentifierPrefix,
+    delegator_kel: Vec<Notice>,
+    witnesses: &[BasicPrefix],
+) -> Result<()> {
+    // Save the delegator's KEL events into local DB.
+    for notice in &delegator_kel {
+        temp_id.save_notice(notice)?;
+    }
+
+    // Query mailbox for the delegated identifier to get the delegating event.
+    for witness in witnesses {
+        _query_mailbox_for(temp_id, signer, delegated_prefix, witness).await?;
+    }
+
+    // Query again to get witness receipts (the DIP may now be accepted).
+    for witness in witnesses {
+        _query_mailbox_for(temp_id, signer, delegated_prefix, witness).await?;
+    }
+
+    Ok(())
 }
