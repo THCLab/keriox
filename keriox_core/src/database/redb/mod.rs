@@ -353,6 +353,7 @@ impl RedbDatabase {
         Ok(out)
     }
 
+    #[allow(dead_code)]
     fn get_all_nontrans_receipts_couplets(
         &self,
         id: &str,

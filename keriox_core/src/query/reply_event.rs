@@ -244,7 +244,7 @@ impl SignedReply {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::event_message::cesr_adapter::{parse_cesr_stream, parse_cesr_stream_many};
+    use crate::event_message::cesr_adapter::parse_cesr_stream;
 
     #[test]
     pub fn reply_parse() {

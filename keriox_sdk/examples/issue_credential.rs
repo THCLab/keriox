@@ -19,7 +19,7 @@ async fn main() -> keri_sdk::Result<()> {
     let store = KeriStore::open(PathBuf::from(tmp.path()))?;
 
     // No witnesses — offline demo only. Real deployments need at least one.
-    let (mut identifier, signer) = store.create("issuer", IdentifierConfig::default()).await?;
+    let (identifier, _signer) = store.create("issuer", IdentifierConfig::default()).await?;
     println!("Issuer: {}", identifier.id());
 
     // ── 2. Incept a credential registry ──────────────────────────────────────

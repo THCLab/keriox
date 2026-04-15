@@ -29,7 +29,7 @@ use tempfile::Builder;
 use url::Url;
 
 use crate::{witness::Witness, witness_processor::WitnessEscrowConfig};
-use keri_core::oobi_manager::{OobiManager, RedbOobiManager};
+use keri_core::oobi_manager::RedbOobiManager;
 
 #[test]
 fn test_not_fully_witnessed() -> Result<(), Error> {
