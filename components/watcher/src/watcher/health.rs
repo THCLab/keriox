@@ -117,10 +117,7 @@ impl WitnessHealthTracker {
     pub fn is_healthy(&self, witness_id: &IdentifierPrefix) -> bool {
         let key = witness_id.to_string();
         let records = self.records.read().unwrap();
-        records
-            .get(&key)
-            .map(|h| h.is_healthy())
-            .unwrap_or(true) // unknown witnesses are assumed healthy
+        records.get(&key).map(|h| h.is_healthy()).unwrap_or(true) // unknown witnesses are assumed healthy
     }
 
     /// Get health snapshot for all tracked witnesses.

@@ -14,7 +14,9 @@ use keri_core::{
     },
     transport::{Transport, TransportError},
 };
-use teliox::{database::TelEventDatabase, event::verifiable_event::VerifiableEvent, query::SignedTelQuery};
+use teliox::{
+    database::TelEventDatabase, event::verifiable_event::VerifiableEvent, query::SignedTelQuery,
+};
 
 use crate::{
     error::ControllerError,

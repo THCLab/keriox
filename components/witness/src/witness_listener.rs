@@ -6,7 +6,10 @@ use std::{
 
 use actix_web::{dev::Server, web::Data, App, HttpServer};
 use anyhow::Result;
-use keri_core::{self, oobi_manager::RedbOobiStorage, oobi_manager::storage::OobiStorageBackend, prefix::BasicPrefix};
+use keri_core::{
+    self, oobi_manager::storage::OobiStorageBackend, oobi_manager::RedbOobiStorage,
+    prefix::BasicPrefix,
+};
 
 use crate::{
     witness::{Witness, WitnessError},
@@ -29,7 +32,9 @@ impl<S: OobiStorageBackend + 'static> WitnessListener<S> {
         oobi_path.push(event_db_path);
         oobi_path.push("oobi");
         let signer = match priv_key {
-            Some(key) => Arc::new(keri_core::signer::Signer::new_with_seed(&key.parse().unwrap()).unwrap()),
+            Some(key) => {
+                Arc::new(keri_core::signer::Signer::new_with_seed(&key.parse().unwrap()).unwrap())
+            }
             None => Arc::new(keri_core::signer::Signer::new()),
         };
         Ok(Self {
@@ -124,7 +129,13 @@ impl WitnessListener<RedbOobiStorage> {
             pub_addr.scheme().parse().unwrap(),
             pub_addr.clone(),
         );
-        let witness = Self::setup(pub_addr, event_db_path, priv_key, escrow_config, oobi_manager)?;
+        let witness = Self::setup(
+            pub_addr,
+            event_db_path,
+            priv_key,
+            escrow_config,
+            oobi_manager,
+        )?;
 
         let reply = keri_core::query::reply_event::ReplyEvent::new_reply(
             keri_core::query::reply_event::ReplyRoute::LocScheme(loc_scheme),
@@ -278,15 +289,17 @@ pub mod http_handlers {
         error::Error,
         event_message::signed_event_message::Op,
         oobi::Role,
-        oobi_manager::RedbOobiStorage,
         oobi_manager::storage::OobiStorageBackend,
+        oobi_manager::RedbOobiStorage,
         prefix::{CesrPrimitive, IdentifierPrefix},
     };
     use teliox::event::verifiable_event::VerifiableEvent;
 
     use crate::witness::Witness;
 
-    pub async fn introduce<S: OobiStorageBackend>(data: web::Data<Arc<Witness<S>>>) -> Result<HttpResponse, ApiError> {
+    pub async fn introduce<S: OobiStorageBackend>(
+        data: web::Data<Arc<Witness<S>>>,
+    ) -> Result<HttpResponse, ApiError> {
         Ok(HttpResponse::Ok().json(data.oobi()))
     }
 
@@ -504,7 +517,9 @@ pub mod http_handlers {
     }
 
     // Concrete wrapper functions for Redb backend (used for HTTP routing)
-    pub async fn introduce_redb(data: web::Data<Arc<Witness<RedbOobiStorage>>>) -> Result<HttpResponse, ApiError> {
+    pub async fn introduce_redb(
+        data: web::Data<Arc<Witness<RedbOobiStorage>>>,
+    ) -> Result<HttpResponse, ApiError> {
         introduce(data).await
     }
 

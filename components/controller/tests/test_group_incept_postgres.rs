@@ -2,7 +2,9 @@ mod common;
 
 use std::sync::Arc;
 
-use keri_controller::{config::ControllerConfig, controller::PostgresController, error::ControllerError};
+use keri_controller::{
+    config::ControllerConfig, controller::PostgresController, error::ControllerError,
+};
 use keri_core::{
     prefix::{BasicPrefix, SelfSigningPrefix},
     signer::{CryptoBox, KeyManager},

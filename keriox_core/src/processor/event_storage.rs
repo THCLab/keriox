@@ -19,10 +19,7 @@ use crate::{
     state::{EventSemantics, IdentifierState},
 };
 #[cfg(feature = "mailbox")]
-use crate::{
-    database::mailbox::MailboxData,
-    query::mailbox::QueryArgsMbx,
-};
+use crate::{database::mailbox::MailboxData, query::mailbox::QueryArgsMbx};
 use crate::{
     database::{EventDatabase, QueryParameters},
     event_message::signed_event_message::SignedEventMessage,
@@ -236,23 +233,17 @@ impl<D: EventDatabase> EventStorage<D> {
         let id = args.i.clone();
 
         // query receipts
-        let receipt = match mailbox
-            .get_mailbox_receipts(&id, args.topics.receipt as u64)
-        {
+        let receipt = match mailbox.get_mailbox_receipts(&id, args.topics.receipt as u64) {
             Some(receipts) => receipts.collect(),
             None => vec![],
         };
 
-        let multisig = match mailbox
-            .get_mailbox_multisig(&id, args.topics.multisig as u64)
-        {
+        let multisig = match mailbox.get_mailbox_multisig(&id, args.topics.multisig as u64) {
             Some(multisig) => multisig.collect(),
             None => vec![],
         };
 
-        let delegate = match mailbox
-            .get_mailbox_delegate(&id, args.topics.delegate as u64)
-        {
+        let delegate = match mailbox.get_mailbox_delegate(&id, args.topics.delegate as u64) {
             Some(delegate) => delegate.collect(),
             None => vec![],
         };

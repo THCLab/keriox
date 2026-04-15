@@ -3,10 +3,8 @@ mod common;
 use std::sync::Arc;
 
 use keri_controller::{
-    config::ControllerConfig,
-    controller::PostgresController,
-    error::ControllerError,
-    BasicPrefix, CryptoBox, KeyManager, SelfSigningPrefix,
+    config::ControllerConfig, controller::PostgresController, error::ControllerError, BasicPrefix,
+    CryptoBox, KeyManager, SelfSigningPrefix,
 };
 use keri_core::actor::prelude::{HashFunction, HashFunctionCode};
 use tempfile::Builder;

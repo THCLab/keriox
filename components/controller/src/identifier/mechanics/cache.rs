@@ -100,12 +100,11 @@ impl IdentifierCache {
         {
             let mut tbl = write_txn.open_table(table)?;
             let key_str = key.to_string();
-            let (receipt, multisig, delegate) =
-                if let Some(existing) = tbl.get(key_str.as_str())? {
-                    existing.value()
-                } else {
-                    (0, 0, 0)
-                };
+            let (receipt, multisig, delegate) = if let Some(existing) = tbl.get(key_str.as_str())? {
+                existing.value()
+            } else {
+                (0, 0, 0)
+            };
             tbl.insert(
                 key_str.as_str(),
                 (

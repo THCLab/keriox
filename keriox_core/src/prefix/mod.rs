@@ -1,6 +1,5 @@
 use crate::{
-    database::rkyv_adapter::said_wrapper::SaidValue,
-    event::sections::key_config::SignatureError,
+    database::rkyv_adapter::said_wrapper::SaidValue, event::sections::key_config::SignatureError,
 };
 
 use self::error::Error;

@@ -260,8 +260,8 @@ where
                     status
                 )));
             }
-            let err = serde_json::from_str(&body)
-                .map_err(|_| TransportError::UnknownError(body))?;
+            let err =
+                serde_json::from_str(&body).map_err(|_| TransportError::UnknownError(body))?;
             return Err(TransportError::RemoteError(err));
         }
         Ok(())

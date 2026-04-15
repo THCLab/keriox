@@ -90,38 +90,35 @@ pub use controller::Controller;
 pub use error::{Error, Result};
 pub use identifier::Identifier;
 pub use identifier::{ActionRequired, WatcherResponseError};
+pub use store::KeriStore;
+pub use tel::{check_credential_status, get_credential_status};
 pub use types::{
     CredentialStatus, DelegationConfig, DelegationRequest, IdentifierConfig, MultisigConfig,
     MultisigRequest, PendingRequest, RotationConfig, SignedEnvelope, VerifiedPayload,
 };
-pub use store::KeriStore;
-pub use tel::{check_credential_status, get_credential_status};
 
 // Prefix / key types — consumers don't need keri-controller directly
+pub use keri_controller::config::ControllerConfig;
+pub use keri_controller::identifier::query::QueryResponse;
 pub use keri_controller::{
     BasicPrefix, CesrPrimitive, EndRole, IdentifierPrefix, KeyManager, LocationScheme, Oobi,
     SeedPrefix, SelfSigningPrefix,
 };
-pub use keri_controller::config::ControllerConfig;
-pub use keri_controller::identifier::query::QueryResponse;
 
 // Core types
 pub use keri_core::{
-    actor::prelude::SelfAddressingIdentifier,
-    event::sections::seal::EventSeal,
-    event_message::signature::Signature,
-    prefix::IndexedSignature,
-    signer::Signer,
+    actor::prelude::SelfAddressingIdentifier, event::sections::seal::EventSeal,
+    event_message::signature::Signature, prefix::IndexedSignature, signer::Signer,
 };
 
 // TEL state types
-pub use teliox::state::{vc_state::TelState, ManagerTelState};
 pub use teliox::query::TelQueryEvent;
+pub use teliox::state::{vc_state::TelState, ManagerTelState};
 
 // Watcher/mailbox query types (kept for consumers that need low-level access)
 pub use keri_core::query::query_event::QueryEvent;
 // Re-export underlying crates for advanced consumers that need low-level access
-pub use keri_core;
-pub use keri_controller;
 pub use cesrox;
+pub use keri_controller;
+pub use keri_core;
 pub use said;

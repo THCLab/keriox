@@ -1,9 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use keri_core::{
-    database::EventDatabase,
-    prefix::IdentifierPrefix,
-    processor::event_storage::EventStorage,
+    database::EventDatabase, prefix::IdentifierPrefix, processor::event_storage::EventStorage,
 };
 
 use crate::{
@@ -22,9 +20,7 @@ pub struct MissingRegistryEscrow<D: TelEventDatabase, K: EventDatabase, E: TelEs
     escrow_db: Arc<E>,
 }
 
-impl<D: TelEventDatabase, K: EventDatabase, E: TelEscrowDatabase>
-    MissingRegistryEscrow<D, K, E>
-{
+impl<D: TelEventDatabase, K: EventDatabase, E: TelEscrowDatabase> MissingRegistryEscrow<D, K, E> {
     pub fn new(
         tel_reference: Arc<D>,
         kel_reference: Arc<EventStorage<K>>,
@@ -67,9 +63,7 @@ impl<D: TelEventDatabase, K: EventDatabase, E: TelEscrowDatabase> TelNotifier
     }
 }
 
-impl<D: TelEventDatabase, K: EventDatabase, E: TelEscrowDatabase>
-    MissingRegistryEscrow<D, K, E>
-{
+impl<D: TelEventDatabase, K: EventDatabase, E: TelEscrowDatabase> MissingRegistryEscrow<D, K, E> {
     pub fn process_missing_registry(
         &self,
         bus: &TelNotificationBus,

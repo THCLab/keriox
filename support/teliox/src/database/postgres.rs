@@ -1,7 +1,7 @@
 use crate::{
     database::{TelEscrowDatabase, TelEventDatabase},
     error::Error,
-    event::{Event, verifiable_event::VerifiableEvent},
+    event::{verifiable_event::VerifiableEvent, Event},
 };
 use keri_core::prefix::IdentifierPrefix;
 use said::SelfAddressingIdentifier;
@@ -215,10 +215,7 @@ impl TelEscrowDatabase for PostgresTelEscrowDatabase {
         })
     }
 
-    fn missing_issuer_get(
-        &self,
-        kel_digest: &str,
-    ) -> Result<Vec<SelfAddressingIdentifier>, Error> {
+    fn missing_issuer_get(&self, kel_digest: &str) -> Result<Vec<SelfAddressingIdentifier>, Error> {
         let pool = self.pool.clone();
         let kel = kel_digest.to_string();
         async_std::task::block_on(async move {
@@ -443,9 +440,12 @@ mod tests {
                     .await
                     .expect("Failed to connect to admin db");
                 // Drop and recreate to get a clean schema
-                let _ = sqlx::query(&format!("DROP DATABASE IF EXISTS \"{}\" WITH (FORCE)", db_name))
-                    .execute(&admin)
-                    .await;
+                let _ = sqlx::query(&format!(
+                    "DROP DATABASE IF EXISTS \"{}\" WITH (FORCE)",
+                    db_name
+                ))
+                .execute(&admin)
+                .await;
                 sqlx::query(&format!("CREATE DATABASE \"{}\"", db_name))
                     .execute(&admin)
                     .await
@@ -454,9 +454,7 @@ mod tests {
                 let db = PostgresDatabase::new(&url)
                     .await
                     .expect("Failed to connect to database");
-                db.run_migrations()
-                    .await
-                    .expect("Failed to run migrations");
+                db.run_migrations().await.expect("Failed to run migrations");
             });
         });
         if result.is_err() {
@@ -523,8 +521,9 @@ mod tests {
     async fn test_get_event_missing_returns_none() {
         let db = PostgresTelDatabase::new(setup_pool().await);
         // Valid SAI format (E prefix = Blake3-256, 44 chars) that is never inserted
-        let digest: said::SelfAddressingIdentifier =
-            "EAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".parse().unwrap();
+        let digest: said::SelfAddressingIdentifier = "EAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+            .parse()
+            .unwrap();
         let result = db.get_event(&digest).unwrap();
         assert_eq!(result, None);
     }
@@ -573,12 +572,14 @@ mod tests {
         let tel_digest = vcp.event.get_digest().unwrap();
         let registry_id = "EPafIvNeW6xYZZhmXBO3hc3GtCHv-8jDgdZsKAFffhLN";
 
-        db.missing_registry_insert(registry_id, &tel_digest).unwrap();
+        db.missing_registry_insert(registry_id, &tel_digest)
+            .unwrap();
 
         let results = db.missing_registry_get(registry_id).unwrap();
         assert!(results.contains(&tel_digest));
 
-        db.missing_registry_remove(registry_id, &tel_digest).unwrap();
+        db.missing_registry_remove(registry_id, &tel_digest)
+            .unwrap();
 
         let results = db.missing_registry_get(registry_id).unwrap();
         assert!(!results.contains(&tel_digest));

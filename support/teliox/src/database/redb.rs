@@ -197,7 +197,7 @@ impl RedbTelDatabase {
 }
 
 impl TelEventDatabase for RedbTelDatabase {
-    fn add_new_event(&self, event: VerifiableEvent, id: &IdentifierPrefix) -> Result<(), Error> {
+    fn add_new_event(&self, event: VerifiableEvent, _id: &IdentifierPrefix) -> Result<(), Error> {
         let write_txn = self.db.begin_write()?;
         let txn_mode = WriteTxnMode::UseExisting(&write_txn);
         self.events_log.log_event(&event, &txn_mode)?;

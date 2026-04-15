@@ -2,7 +2,10 @@ use crate::http_routing::configure_routes;
 use std::{net::ToSocketAddrs, sync::Arc};
 
 use actix_web::{dev::Server, rt::spawn, web, App, HttpServer};
-use keri_core::{actor::error::ActorError, oobi::LocationScheme, oobi_manager::RedbOobiStorage, oobi_manager::storage::OobiStorageBackend, prefix::BasicPrefix};
+use keri_core::{
+    actor::error::ActorError, oobi::LocationScheme, oobi_manager::storage::OobiStorageBackend,
+    oobi_manager::RedbOobiStorage, prefix::BasicPrefix,
+};
 
 use crate::{watcher::Watcher, WatcherConfig};
 
@@ -13,7 +16,10 @@ pub struct WatcherListener<S: OobiStorageBackend> {
 }
 
 impl<S: OobiStorageBackend + 'static> WatcherListener<S> {
-    pub fn new(config: WatcherConfig, oobi_manager: keri_core::oobi_manager::OobiManager<S>) -> Result<Self, ActorError> {
+    pub fn new(
+        config: WatcherConfig,
+        oobi_manager: keri_core::oobi_manager::OobiManager<S>,
+    ) -> Result<Self, ActorError> {
         Ok(Self {
             watcher: Arc::new(Watcher::new(config, oobi_manager)?),
         })
@@ -39,7 +45,6 @@ impl<S: OobiStorageBackend + 'static> WatcherListener<S> {
 
 impl WatcherListener<RedbOobiStorage> {
     pub fn setup_with_redb(config: WatcherConfig) -> Result<Self, ActorError> {
-        use std::path::PathBuf;
         use keri_core::{database::redb::RedbDatabase, oobi_manager::RedbOobiManager};
 
         // Create oobi manager database in a separate location
@@ -93,15 +98,17 @@ pub mod http_handlers {
         actor::{error::ActorError, prelude::Message},
         event_message::signed_event_message::Op,
         oobi::{error::OobiError, EndRole, LocationScheme, Role},
-        oobi_manager::RedbOobiStorage,
         oobi_manager::storage::OobiStorageBackend,
+        oobi_manager::RedbOobiStorage,
         prefix::IdentifierPrefix,
     };
     use serde::Deserialize;
 
     use crate::watcher::Watcher;
 
-    pub async fn introduce<S: OobiStorageBackend>(data: web::Data<Arc<Watcher<S>>>) -> Result<HttpResponse, ApiError> {
+    pub async fn introduce<S: OobiStorageBackend>(
+        data: web::Data<Arc<Watcher<S>>>,
+    ) -> Result<HttpResponse, ApiError> {
         Ok(HttpResponse::Ok().json(data.oobi()))
     }
 
@@ -257,7 +264,9 @@ pub mod http_handlers {
     }
 
     // Concrete wrapper functions for Redb backend (used for HTTP routing)
-    pub async fn introduce_redb(data: web::Data<Arc<Watcher<RedbOobiStorage>>>) -> Result<HttpResponse, ApiError> {
+    pub async fn introduce_redb(
+        data: web::Data<Arc<Watcher<RedbOobiStorage>>>,
+    ) -> Result<HttpResponse, ApiError> {
         introduce(data).await
     }
 

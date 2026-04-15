@@ -1,7 +1,4 @@
-use crate::{
-    prefix::IdentifierPrefix,
-    query::reply_event::SignedReply,
-};
+use crate::{prefix::IdentifierPrefix, query::reply_event::SignedReply};
 
 use super::Role;
 use crate::oobi::Scheme;

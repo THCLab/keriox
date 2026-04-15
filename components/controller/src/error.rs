@@ -1,7 +1,6 @@
 use keri_core::{
-    actor::prelude::VersionError,
-    event_message::cesr_adapter::ParseError, oobi::Scheme, oobi::error::OobiError,
-    prefix::IdentifierPrefix, processor::validator::VerificationError,
+    actor::prelude::VersionError, event_message::cesr_adapter::ParseError, oobi::error::OobiError,
+    oobi::Scheme, prefix::IdentifierPrefix, processor::validator::VerificationError,
 };
 use thiserror::Error;
 

@@ -23,26 +23,16 @@
 //!     reg_id        ← IdentifierPrefix (optional, set after incept_registry)
 //! ```
 
-use std::{
-    path::PathBuf,
-    str::FromStr,
-    sync::Arc,
-};
+use std::{path::PathBuf, str::FromStr, sync::Arc};
 
-use keri_controller::{
-    controller::RedbIdentifier,
-    IdentifierPrefix,
-};
-use keri_core::{
-    prefix::SeedPrefix,
-    signer::Signer,
-};
+use keri_controller::{controller::RedbIdentifier, IdentifierPrefix};
+use keri_core::{prefix::SeedPrefix, signer::Signer};
 
 use crate::{
     controller::Controller,
     error::{Error, Result},
     identifier::Identifier,
-    operations::{create_identifier, request_delegation, create_multisig},
+    operations::{create_identifier, create_multisig, request_delegation},
     types::{DelegationConfig, IdentifierConfig, MultisigConfig},
 };
 
@@ -93,12 +83,11 @@ impl KeriStore {
             SeedCode::RandomSeed256Ed25519,
             current_ed.as_bytes().to_vec(),
         );
-        let next_seed = SeedPrefix::new(
-            SeedCode::RandomSeed256Ed25519,
-            next_ed.as_bytes().to_vec(),
-        );
+        let next_seed =
+            SeedPrefix::new(SeedCode::RandomSeed256Ed25519, next_ed.as_bytes().to_vec());
 
-        self.create_with_seeds(alias, current_seed, next_seed, config).await
+        self.create_with_seeds(alias, current_seed, next_seed, config)
+            .await
     }
 
     /// Create a brand-new identifier with caller-provided seeds.
@@ -125,11 +114,11 @@ impl KeriStore {
         let db_path = alias_dir.join("db");
 
         let signer = Arc::new(
-            Signer::new_with_seed(&current_seed)
-                .map_err(|e| Error::Signing(e.to_string()))?,
+            Signer::new_with_seed(&current_seed).map_err(|e| Error::Signing(e.to_string()))?,
         );
 
-        let (next_pub_key, _) = next_seed.derive_key_pair()
+        let (next_pub_key, _) = next_seed
+            .derive_key_pair()
             .map_err(|e| Error::Signing(e.to_string()))?;
 
         let next_pk = keri_controller::BasicPrefix::Ed25519NT(next_pub_key);
@@ -160,12 +149,13 @@ impl KeriStore {
         let db_path = alias_dir.join("db");
 
         let id_str = self.read_file(alias, "id")?;
-        let id_prefix = IdentifierPrefix::from_str(id_str.trim())
-            .map_err(|_| Error::IdentifierNotFound(
-                IdentifierPrefix::SelfAddressing(Default::default())
-            ))?;
+        let id_prefix = IdentifierPrefix::from_str(id_str.trim()).map_err(|_| {
+            Error::IdentifierNotFound(IdentifierPrefix::SelfAddressing(Default::default()))
+        })?;
 
-        let reg_id = self.read_file(alias, "reg_id").ok()
+        let reg_id = self
+            .read_file(alias, "reg_id")
+            .ok()
             .and_then(|s| IdentifierPrefix::from_str(s.trim()).ok());
 
         let controller = Controller::new(db_path)?;
@@ -189,8 +179,7 @@ impl KeriStore {
     /// - [`Error::Signing`] if the seed cannot produce a signer.
     pub fn load_signer(&self, alias: &str) -> Result<Arc<Signer>> {
         let seed = self.load_seed(alias, "priv_key")?;
-        let signer = Signer::new_with_seed(&seed)
-            .map_err(|e| Error::Signing(e.to_string()))?;
+        let signer = Signer::new_with_seed(&seed).map_err(|e| Error::Signing(e.to_string()))?;
         Ok(Arc::new(signer))
     }
 
@@ -201,8 +190,7 @@ impl KeriStore {
     /// - [`Error::Signing`] if the seed cannot produce a signer.
     pub fn load_next_signer(&self, alias: &str) -> Result<Arc<Signer>> {
         let seed = self.load_seed(alias, "next_priv_key")?;
-        let signer = Signer::new_with_seed(&seed)
-            .map_err(|e| Error::Signing(e.to_string()))?;
+        let signer = Signer::new_with_seed(&seed).map_err(|e| Error::Signing(e.to_string()))?;
         Ok(Arc::new(signer))
     }
 
@@ -275,10 +263,8 @@ impl KeriStore {
             SeedCode::RandomSeed256Ed25519,
             current_ed.as_bytes().to_vec(),
         );
-        let next_seed = SeedPrefix::new(
-            SeedCode::RandomSeed256Ed25519,
-            next_ed.as_bytes().to_vec(),
-        );
+        let next_seed =
+            SeedPrefix::new(SeedCode::RandomSeed256Ed25519, next_ed.as_bytes().to_vec());
 
         let alias_dir = self.alias_dir(alias);
         std::fs::create_dir_all(&alias_dir)
@@ -287,8 +273,7 @@ impl KeriStore {
         let db_path = alias_dir.join("db");
 
         let signer = Arc::new(
-            Signer::new_with_seed(&current_seed)
-                .map_err(|e| Error::Signing(e.to_string()))?,
+            Signer::new_with_seed(&current_seed).map_err(|e| Error::Signing(e.to_string()))?,
         );
 
         let (next_pub_key, _) = next_seed

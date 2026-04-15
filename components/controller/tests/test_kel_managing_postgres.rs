@@ -8,9 +8,7 @@ use keri_core::{
 };
 
 use keri_controller::{
-    config::ControllerConfig,
-    controller::PostgresController,
-    error::ControllerError,
+    config::ControllerConfig, controller::PostgresController, error::ControllerError,
 };
 use tempfile::Builder;
 

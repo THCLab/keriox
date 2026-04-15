@@ -33,10 +33,10 @@ async fn main() -> keri_sdk::Result<()> {
     //
     // In a real system, generate this from a random seed. Here we use a
     // well-known test seed string for reproducibility.
-    let fresh_next_seed: SeedPrefix =
-        "ACrmDHtPQjnM8H9pyKA-QBNdfZ-xixTlRZTS8WXCrrMH".parse().unwrap();
-    let (fresh_next_pub_key, _) = fresh_next_seed.derive_key_pair()
-        .expect("derive key pair");
+    let fresh_next_seed: SeedPrefix = "ACrmDHtPQjnM8H9pyKA-QBNdfZ-xixTlRZTS8WXCrrMH"
+        .parse()
+        .unwrap();
+    let (fresh_next_pub_key, _) = fresh_next_seed.derive_key_pair().expect("derive key pair");
     let new_next_pk = BasicPrefix::Ed25519NT(fresh_next_pub_key);
 
     // ── 5. Rotate (requires witnesses in a real deployment) ───────────────────

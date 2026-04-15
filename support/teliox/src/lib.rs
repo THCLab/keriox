@@ -7,6 +7,6 @@ pub mod seal;
 pub mod state;
 pub mod tel;
 
-pub use database::{TelEscrowDatabase, TelEventDatabase};
 #[cfg(feature = "storage-postgres")]
 pub use database::postgres::{PostgresTelDatabase, PostgresTelEscrowDatabase};
+pub use database::{TelEscrowDatabase, TelEventDatabase};

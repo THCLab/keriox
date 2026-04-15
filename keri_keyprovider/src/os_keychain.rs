@@ -13,8 +13,8 @@ use std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 
 use crate::{
-    software::SoftwareKeyProvider, KeyProvider, KeyProviderError, KeyProviderFactory, PublicKeyData,
-    Result, SignatureAlgorithm,
+    software::SoftwareKeyProvider, KeyProvider, KeyProviderError, KeyProviderFactory,
+    PublicKeyData, Result, SignatureAlgorithm,
 };
 
 /// Persistent key provider backed by the OS-native keychain.
@@ -43,11 +43,9 @@ impl OsKeychainProvider {
         let provider = SoftwareKeyProvider::generate(&label, algorithm)?;
         let public_data = provider.public_key().clone();
 
-        let seed = provider
-            .ed25519_seed_bytes()
-            .ok_or_else(|| {
-                KeyProviderError::UnsupportedAlgorithm("only Ed25519 supported".into())
-            })?;
+        let seed = provider.ed25519_seed_bytes().ok_or_else(|| {
+            KeyProviderError::UnsupportedAlgorithm("only Ed25519 supported".into())
+        })?;
 
         let entry = keyring::Entry::new(&service_name, &label).map_err(|e| {
             KeyProviderError::Other(format!("failed to create keychain entry: {e}"))
@@ -85,9 +83,8 @@ impl OsKeychainProvider {
 
     /// Unlock by reading the seed from the OS keychain.
     pub fn unlock(&self) -> Result<()> {
-        let entry = keyring::Entry::new(&self.service_name, &self.label).map_err(|e| {
-            KeyProviderError::Other(format!("failed to open keychain entry: {e}"))
-        })?;
+        let entry = keyring::Entry::new(&self.service_name, &self.label)
+            .map_err(|e| KeyProviderError::Other(format!("failed to open keychain entry: {e}")))?;
         let hex_seed = entry.get_password().map_err(|e| {
             KeyProviderError::AuthenticationFailed(format!("failed to read from keychain: {e}"))
         })?;
@@ -119,7 +116,9 @@ fn hex_encode(bytes: &[u8]) -> String {
 
 fn hex_to_bytes(hex: &str) -> Result<Vec<u8>> {
     if hex.len() % 2 != 0 {
-        return Err(KeyProviderError::InvalidKeyMaterial("odd-length hex string".into()));
+        return Err(KeyProviderError::InvalidKeyMaterial(
+            "odd-length hex string".into(),
+        ));
     }
     (0..hex.len())
         .step_by(2)
@@ -178,9 +177,8 @@ impl KeyProviderFactory for OsKeychainProviderFactory {
     }
 
     async fn open(&self, label: &str) -> Result<Arc<dyn KeyProvider>> {
-        let entry = keyring::Entry::new(&self.service_name, label).map_err(|e| {
-            KeyProviderError::Other(format!("failed to open keychain entry: {e}"))
-        })?;
+        let entry = keyring::Entry::new(&self.service_name, label)
+            .map_err(|e| KeyProviderError::Other(format!("failed to open keychain entry: {e}")))?;
 
         let hex_seed = entry.get_password().map_err(|e| {
             KeyProviderError::NotFound(format!("key '{label}' not found in keychain: {e}"))
@@ -213,12 +211,11 @@ impl KeyProviderFactory for OsKeychainProviderFactory {
     }
 
     async fn delete(&self, label: &str) -> Result<()> {
-        let entry = keyring::Entry::new(&self.service_name, label).map_err(|e| {
-            KeyProviderError::Other(format!("failed to open keychain entry: {e}"))
-        })?;
-        entry.delete_credential().map_err(|e| {
-            KeyProviderError::Other(format!("failed to delete from keychain: {e}"))
-        })?;
+        let entry = keyring::Entry::new(&self.service_name, label)
+            .map_err(|e| KeyProviderError::Other(format!("failed to open keychain entry: {e}")))?;
+        entry
+            .delete_credential()
+            .map_err(|e| KeyProviderError::Other(format!("failed to delete from keychain: {e}")))?;
         Ok(())
     }
 }

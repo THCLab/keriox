@@ -6,8 +6,7 @@ use async_trait::async_trait;
 use rand::rngs::OsRng;
 
 use crate::{
-    KeyProvider, KeyProviderError, KeyProviderFactory,
-    PublicKeyData, Result, SignatureAlgorithm,
+    KeyProvider, KeyProviderError, KeyProviderFactory, PublicKeyData, Result, SignatureAlgorithm,
 };
 
 /// In-memory Ed25519 or secp256k1 signing key.
@@ -158,13 +157,9 @@ mod tests {
         assert_eq!(sig.len(), 64);
 
         let pk_bytes = &provider.public_key().bytes;
-        let pk = ed25519_dalek::VerifyingKey::from_bytes(
-            pk_bytes.as_slice().try_into().unwrap(),
-        )
-        .unwrap();
-        let signature = ed25519_dalek::Signature::from_bytes(
-            sig.as_slice().try_into().unwrap(),
-        );
+        let pk = ed25519_dalek::VerifyingKey::from_bytes(pk_bytes.as_slice().try_into().unwrap())
+            .unwrap();
+        let signature = ed25519_dalek::Signature::from_bytes(sig.as_slice().try_into().unwrap());
         assert!(pk.verify(msg, &signature).is_ok());
     }
 
@@ -179,8 +174,14 @@ mod tests {
     #[tokio::test]
     async fn factory_creates_unique_keys() {
         let factory = SoftwareKeyProviderFactory;
-        let p1 = factory.create("a", SignatureAlgorithm::Ed25519).await.unwrap();
-        let p2 = factory.create("b", SignatureAlgorithm::Ed25519).await.unwrap();
+        let p1 = factory
+            .create("a", SignatureAlgorithm::Ed25519)
+            .await
+            .unwrap();
+        let p2 = factory
+            .create("b", SignatureAlgorithm::Ed25519)
+            .await
+            .unwrap();
         assert_ne!(p1.public_key().bytes, p2.public_key().bytes);
     }
 

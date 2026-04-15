@@ -4,10 +4,7 @@ use said::SelfAddressingIdentifier;
 use sqlx::{PgPool, Row};
 
 use crate::{
-    database::{
-        postgres::error::PostgresError,
-        rkyv_adapter,
-    },
+    database::{postgres::error::PostgresError, rkyv_adapter},
     prefix::IdentifierPrefix,
     query::reply_event::{ReplyRoute, SignedReply},
 };

@@ -45,10 +45,7 @@ impl InProcessDispatch {
 
 impl NotificationDispatch for InProcessDispatch {
     fn dispatch(&self, notification: &Notification) -> Result<(), Error> {
-        let observers = self
-            .observers
-            .read()
-            .map_err(|_| Error::RwLockingError)?;
+        let observers = self.observers.read().map_err(|_| Error::RwLockingError)?;
         let bus = self.bus.get().ok_or_else(|| {
             Error::SemanticError("InProcessDispatch: bus back-reference not set".into())
         })?;
@@ -65,10 +62,7 @@ impl NotificationDispatch for InProcessDispatch {
         observer: Arc<dyn Notifier + Send + Sync>,
         notifications: Vec<JustNotification>,
     ) -> Result<(), Error> {
-        let mut observers = self
-            .observers
-            .write()
-            .map_err(|_| Error::RwLockingError)?;
+        let mut observers = self.observers.write().map_err(|_| Error::RwLockingError)?;
         for notification in notifications {
             observers
                 .entry(notification)

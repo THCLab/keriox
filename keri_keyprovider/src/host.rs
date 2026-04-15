@@ -14,20 +14,15 @@ use std::sync::Arc;
 use async_trait::async_trait;
 
 use crate::{
-    KeyProvider, KeyProviderError, KeyProviderFactory, PublicKeyData,
-    Result, SignatureAlgorithm,
+    KeyProvider, KeyProviderError, KeyProviderFactory, PublicKeyData, Result, SignatureAlgorithm,
 };
 
-type SignCallback =
-    Arc<dyn Fn(&str, &[u8]) -> Result<Vec<u8>> + Send + Sync>;
-type PublicKeyCallback =
-    Arc<dyn Fn(&str) -> Result<PublicKeyData> + Send + Sync>;
+type SignCallback = Arc<dyn Fn(&str, &[u8]) -> Result<Vec<u8>> + Send + Sync>;
+type PublicKeyCallback = Arc<dyn Fn(&str) -> Result<PublicKeyData> + Send + Sync>;
 type CreateKeyCallback =
     Arc<dyn Fn(&str, SignatureAlgorithm) -> Result<PublicKeyData> + Send + Sync>;
-type DeleteKeyCallback =
-    Arc<dyn Fn(&str) -> Result<()> + Send + Sync>;
-type ListKeysCallback =
-    Arc<dyn Fn() -> Result<Vec<String>> + Send + Sync>;
+type DeleteKeyCallback = Arc<dyn Fn(&str) -> Result<()> + Send + Sync>;
+type ListKeysCallback = Arc<dyn Fn() -> Result<Vec<String>> + Send + Sync>;
 
 /// Key provider that delegates signing to a host platform callback.
 ///
@@ -112,13 +107,21 @@ impl KeyProviderFactory for HostKeyProviderFactory {
     ) -> Result<Arc<dyn KeyProvider>> {
         let public_data = (self.create_fn)(label, algorithm)?;
         let sign_fn = self.sign_fn.clone();
-        Ok(Arc::new(HostCallbackKeyProvider::new(label, public_data, sign_fn)))
+        Ok(Arc::new(HostCallbackKeyProvider::new(
+            label,
+            public_data,
+            sign_fn,
+        )))
     }
 
     async fn open(&self, label: &str) -> Result<Arc<dyn KeyProvider>> {
         let public_data = (self.open_fn)(label)?;
         let sign_fn = self.sign_fn.clone();
-        Ok(Arc::new(HostCallbackKeyProvider::new(label, public_data, sign_fn)))
+        Ok(Arc::new(HostCallbackKeyProvider::new(
+            label,
+            public_data,
+            sign_fn,
+        )))
     }
 
     async fn list(&self) -> Result<Vec<String>> {
@@ -146,7 +149,11 @@ mod tests {
 
         let create_fn = move |label: &str, algo: SignatureAlgorithm| {
             let pk = PublicKeyData::new(algo, vec![1u8; 32]);
-            store_clone.lock().unwrap().keys.push((label.to_string(), pk.clone()));
+            store_clone
+                .lock()
+                .unwrap()
+                .keys
+                .push((label.to_string(), pk.clone()));
             Ok(pk)
         };
 
@@ -186,7 +193,10 @@ mod tests {
 
         let factory = HostKeyProviderFactory::new(create_fn, open_fn, sign_fn, delete_fn, list_fn);
 
-        let provider = factory.create("test-key", SignatureAlgorithm::Ed25519).await.unwrap();
+        let provider = factory
+            .create("test-key", SignatureAlgorithm::Ed25519)
+            .await
+            .unwrap();
         assert_eq!(provider.label(), "test-key");
         assert_eq!(provider.public_key().bytes, vec![1u8; 32]);
 
