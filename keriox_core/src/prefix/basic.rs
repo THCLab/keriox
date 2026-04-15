@@ -87,8 +87,7 @@ impl FromStr for BasicPrefix {
         let code = CesrBasic::from_str(s)?;
 
         if s.len() == code.full_size() {
-            let k_vec =
-                from_text_to_bytes(s[code.code_size()..].as_bytes())?[code.code_size()..].to_vec();
+            let k_vec = from_text_to_bytes(&s[code.code_size()..])?[code.code_size()..].to_vec();
             Ok(Self::new(code, PublicKey::new(k_vec)))
         } else {
             Err(Error::IncorrectLengthError(s.into()))

@@ -13,7 +13,6 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum SeedPrefix {
-    RandomSeed128(Vec<u8>),
     RandomSeed256Ed25519(Vec<u8>),
     RandomSeed256ECDSAsecp256k1(Vec<u8>),
     RandomSeed448(Vec<u8>),
@@ -22,7 +21,6 @@ pub enum SeedPrefix {
 impl SeedPrefix {
     pub fn new(code: SeedCode, value: Vec<u8>) -> Self {
         match code {
-            SeedCode::RandomSeed128 => Self::RandomSeed128(value),
             SeedCode::RandomSeed256Ed25519 => Self::RandomSeed256Ed25519(value),
             SeedCode::RandomSeed256ECDSAsecp256k1 => Self::RandomSeed256ECDSAsecp256k1(value),
             SeedCode::RandomSeed448 => Self::RandomSeed448(value),
@@ -60,8 +58,7 @@ impl FromStr for SeedPrefix {
         let code = SeedCode::from_str(s)?;
 
         if s.len() == code.full_size() {
-            let k_vec =
-                from_text_to_bytes(s[code.code_size()..].as_bytes())?[code.code_size()..].to_vec();
+            let k_vec = from_text_to_bytes(&s[code.code_size()..])?[code.code_size()..].to_vec();
             Ok(Self::new(code, k_vec))
         } else {
             Err(Error::IncorrectLengthError(s.into()))
@@ -75,7 +72,6 @@ impl CesrPrimitive for SeedPrefix {
             Self::RandomSeed256Ed25519(seed) => seed.to_owned(),
             Self::RandomSeed256ECDSAsecp256k1(seed) => seed.to_owned(),
             Self::RandomSeed448(seed) => seed.to_owned(),
-            Self::RandomSeed128(seed) => seed.to_owned(),
         }
     }
     fn derivation_code(&self) -> PrimitiveCode {
@@ -85,7 +81,6 @@ impl CesrPrimitive for SeedPrefix {
                 PrimitiveCode::Seed(SeedCode::RandomSeed256ECDSAsecp256k1)
             }
             Self::RandomSeed448(_) => PrimitiveCode::Seed(SeedCode::RandomSeed448),
-            Self::RandomSeed128(_) => PrimitiveCode::Seed(SeedCode::RandomSeed448),
         }
     }
 }

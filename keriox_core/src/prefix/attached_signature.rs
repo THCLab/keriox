@@ -85,7 +85,7 @@ impl FromStr for IndexedSignature {
             } else {
                 0
             };
-            let s_vec = from_text_to_bytes(s[code.code_size()..].as_bytes())?[lead..].to_vec();
+            let s_vec = from_text_to_bytes(&s[code.code_size()..])?[lead..].to_vec();
             let ssp = SelfSigningPrefix::new(code.code, s_vec);
 
             Ok(Self {
