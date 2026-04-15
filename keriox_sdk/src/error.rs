@@ -84,6 +84,14 @@ pub enum Error {
     #[error("delegation error: {0}")]
     DelegationError(String),
 
+    /// No pending multisig request was found in the mailbox.
+    #[error("no multisig request found")]
+    NoMultisigRequest,
+
+    /// A multisig-specific error.
+    #[error("multisig error: {0}")]
+    MultisigError(String),
+
     /// A catch-all for errors that do not fit a more specific variant.
     #[error("{0}")]
     Other(String),

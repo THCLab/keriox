@@ -25,7 +25,10 @@ use crate::{
     controller::Controller,
     error::{Error, Result},
     identifier::{Identifier, ActionRequired},
-    types::{DelegationConfig, DelegationRequest, IdentifierConfig, RotationConfig},
+    types::{
+        DelegationConfig, DelegationRequest, GroupConfig, IdentifierConfig, MultisigRequest,
+        RotationConfig,
+    },
 };
 
 // ── Internal helpers ─────────────────────────────────────────────────────────
@@ -581,4 +584,165 @@ pub async fn finalize_delegation<S: SigningBackend + Clone + 'static>(
     }
 
     Ok(())
+}
+
+// ── Multisig operations ──────────────────────────────────────────────────────
+
+/// Create a multisig group identifier (initiator side).
+///
+/// Generates the group inception event, signs it with the caller's key,
+/// and sends exchange messages to all other participants via witnesses.
+///
+/// The group identifier is **not** yet accepted — other participants must
+/// co-sign via [`join_group`], and all participants must call
+/// [`collect_group_signatures`] to finalise.
+///
+/// Returns the group `IdentifierPrefix`.
+///
+/// # Preconditions
+/// - `id` must be a fully established individual identifier with witnesses.
+/// - The caller must have resolved all participants' KELs (via watcher/OOBI).
+///
+/// # Errors
+/// - [`Error::Controller`] if group inception generation fails.
+/// - [`Error::Mechanics`] on network failures.
+/// - [`Error::Signing`] if signing fails.
+pub async fn create_group_identifier<S: SigningBackend + Clone + 'static>(
+    id: &mut Identifier,
+    signer: &S,
+    config: GroupConfig,
+) -> Result<IdentifierPrefix> {
+    let witness_ids: Vec<BasicPrefix> = config
+        .witnesses
+        .iter()
+        .filter_map(|w| {
+            if let IdentifierPrefix::Basic(b) = &w.eid {
+                Some(b.clone())
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    let (icp, exn_messages) = id.incept_group(
+        config.participants,
+        config.signature_threshold,
+        config.next_keys_threshold,
+        Some(witness_ids),
+        Some(config.witness_threshold),
+        config.delegator,
+    )?;
+
+    let sig_icp = ed25519_sig(signer, icp.as_bytes())?;
+
+    // Sign each exchange message (one per participant, plus optional delegation).
+    let mut exchange_pairs = Vec::with_capacity(exn_messages.len());
+    for exn in &exn_messages {
+        let sig_exn = ed25519_sig(signer, exn.as_bytes())?;
+        let exn_index_sig = id.sign_with_index(sig_exn, 0)?;
+        exchange_pairs.push((exn.as_bytes().to_vec(), exn_index_sig));
+    }
+
+    let group_prefix = id
+        .finalize_group_incept(icp.as_bytes(), sig_icp, exchange_pairs)
+        .await?;
+
+    Ok(group_prefix)
+}
+
+/// Co-sign a multisig group event discovered in the mailbox (joiner side).
+///
+/// The `request` is obtained by calling [`query_multisig_requests`] or by
+/// converting an [`ActionRequired::MultisigRequest`] into a
+/// [`MultisigRequest`].
+///
+/// # Errors
+/// - [`Error::EncodingError`] if event encoding fails.
+/// - [`Error::Mechanics`] on network failures.
+/// - [`Error::Signing`] if signing fails.
+pub async fn join_group<S: SigningBackend + Clone + 'static>(
+    id: &mut Identifier,
+    signer: &S,
+    request: MultisigRequest,
+) -> Result<()> {
+    let encoded_event = request
+        .event
+        .encode()
+        .map_err(|e| Error::EncodingError(e.to_string()))?;
+    let encoded_exn = request
+        .exchange
+        .encode()
+        .map_err(|e| Error::EncodingError(e.to_string()))?;
+
+    let sig_event = ed25519_sig(signer, &encoded_event)?;
+    let sig_exn = ed25519_sig(signer, &encoded_exn)?;
+    let exn_index_sig = id.sign_with_index(sig_exn, 0)?;
+
+    id.finalize_group_event(
+        &encoded_event,
+        sig_event,
+        vec![(encoded_exn, exn_index_sig)],
+    )
+    .await?;
+
+    Ok(())
+}
+
+/// Collect co-signatures and witness receipts for a group event.
+///
+/// Queries the group identifier's mailbox in two rounds (matching the
+/// protocol requirement for signature collection followed by receipt
+/// collection). Must be called by **all** participants after the group
+/// event has been co-signed by enough participants.
+///
+/// After this call, verify acceptance with
+/// `id.find_state(group_id)`.
+///
+/// # Errors
+/// - [`Error::Mechanics`] on network or mailbox failures.
+/// - [`Error::Signing`] if signing fails.
+pub async fn collect_group_signatures<S: SigningBackend + Clone + 'static>(
+    id: &mut Identifier,
+    signer: &S,
+    group_id: &IdentifierPrefix,
+    witnesses: &[BasicPrefix],
+) -> Result<()> {
+    // Round 1: collect co-signatures from other participants.
+    for witness in witnesses {
+        _query_mailbox_for(id, signer, group_id, witness).await?;
+    }
+
+    // Round 2: collect witness receipts.
+    for witness in witnesses {
+        _query_mailbox_for(id, signer, group_id, witness).await?;
+    }
+
+    Ok(())
+}
+
+/// Query this participant's mailbox for pending multisig requests.
+///
+/// Returns a list of [`MultisigRequest`] items found, filtering out
+/// non-multisig actions. This is a convenience wrapper around
+/// [`query_mailbox`] + [`MultisigRequest::try_from`].
+///
+/// # Errors
+/// - [`Error::Mechanics`] on network failures.
+/// - [`Error::Signing`] if signing fails.
+pub async fn query_multisig_requests<S: SigningBackend + Clone + 'static>(
+    id: &mut Identifier,
+    signer: &S,
+    witnesses: &[BasicPrefix],
+) -> Result<Vec<MultisigRequest>> {
+    let own_id = id.id().clone();
+    let mut requests = vec![];
+    for witness in witnesses {
+        let actions = _query_mailbox_for(id, signer, &own_id, witness).await?;
+        for action in actions {
+            if let Ok(req) = MultisigRequest::try_from(action) {
+                requests.push(req);
+            }
+        }
+    }
+    Ok(requests)
 }
