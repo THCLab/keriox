@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use serde::Deserialize;
 
 use super::{Transport, TransportError};
@@ -10,6 +12,14 @@ use crate::{
     prefix::IdentifierPrefix,
     query::query_event::SignedQueryMessage,
 };
+
+fn http_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(10))
+        .timeout(Duration::from_secs(30))
+        .build()
+        .expect("Failed to build HTTP client")
+}
 
 /// Default behavior for communication with other actors.
 /// Serializes a keri message, does a net request, and deserializes the response.
@@ -66,7 +76,7 @@ where
             },
             Scheme::Tcp => todo!(),
         };
-        let resp = reqwest::Client::new()
+        let resp = http_client()
             .post(url)
             .body(msg.to_cesr().unwrap())
             .send()
@@ -108,7 +118,7 @@ where
         };
 
         let op: Message = qry.into();
-        let resp = reqwest::Client::new()
+        let resp = http_client()
             .post(url)
             .body(op.to_cesr().unwrap())
             .send()
@@ -146,7 +156,9 @@ where
             .unwrap()
             .join(&loc.eid.to_string())
             .unwrap();
-        let resp = reqwest::get(url)
+        let resp = http_client()
+            .get(url)
+            .send()
             .await
             .map_err(|e| TransportError::NetworkError(e.to_string()))?;
         if resp.status().is_success() {
@@ -197,7 +209,9 @@ where
             .unwrap()
             .join(&eid.to_string())
             .unwrap();
-        let resp = reqwest::get(url)
+        let resp = http_client()
+            .get(url)
+            .send()
             .await
             .map_err(|e| TransportError::NetworkError(e.to_string()))?;
         if resp.status().is_success() {
@@ -227,8 +241,7 @@ where
     }
 
     async fn resolve_oobi(&self, loc: LocationScheme, oobi: Oobi) -> Result<(), TransportError<E>> {
-        let client = reqwest::Client::new();
-        let resp = client
+        let resp = http_client()
             .post(format!("{}resolve", loc.url))
             .body(serde_json::to_string(&oobi).unwrap())
             .send()
