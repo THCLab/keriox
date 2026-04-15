@@ -3,7 +3,10 @@ use std::path::PathBuf;
 use keri_controller::{
     config::ControllerConfig, controller::RedbController, IdentifierPrefix, SelfSigningPrefix,
 };
-use keri_core::state::IdentifierState;
+use keri_core::{
+    event_message::signed_event_message::Message,
+    state::IdentifierState,
+};
 
 use crate::{error::Result, Identifier};
 
@@ -71,6 +74,25 @@ impl Controller {
     /// Return the accepted `IdentifierState` for a known identifier.
     pub fn find_state(&self, id: &IdentifierPrefix) -> Result<IdentifierState> {
         Ok(self.inner.find_state(id)?)
+    }
+
+    /// Process a single KEL message (notice, reply, etc.).
+    pub fn process(&self, msg: &Message) -> Result<()> {
+        self.inner
+            .known_events
+            .process(msg)
+            .map_err(|e| crate::Error::Other(e.to_string()))?;
+        Ok(())
+    }
+
+    /// Parse and process a TEL event stream from raw bytes.
+    pub fn process_tel_stream(&self, stream: &[u8]) -> Result<()> {
+        self.inner
+            .known_events
+            .tel
+            .parse_and_process_tel_stream(stream)
+            .map_err(|e| crate::Error::Other(e.to_string()))?;
+        Ok(())
     }
 
     /// Reconstruct an `Identifier` from a known prefix and optional registry.
