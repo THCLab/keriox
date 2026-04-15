@@ -558,7 +558,7 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase, RedbOobiStorage> {
         } else {
             sigs
         };
-        let mat = MaterialPath::to_path("-a".into());
+        let mat = MaterialPath::create_from_str("-a".into());
         let ssp = {
             SelfSigningPrefix::Ed25519Sha512(
                 self.key_manager
