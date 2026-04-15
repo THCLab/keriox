@@ -425,64 +425,79 @@ impl<S: OobiStorageBackend> WatcherData<S> {
         from_sn: u64,
     ) -> Result<(), ActorError> {
         let witnesses = self.get_witnesses_for_prefix(&id)?;
-        for witness in witnesses {
+
+        // Build and send queries to all witnesses in parallel
+        let results = join_all(witnesses.into_iter().map(|witness| {
             let witness_id = IdentifierPrefix::Basic(witness);
-            let route = QueryRoute::Logs {
-                reply_route: "".to_string(),
-                args: LogsQueryArgs {
-                    i: id.clone(),
-                    s: if from_sn > 0 { Some(from_sn) } else { None },
-                    src: Some(witness_id.clone()),
-                    limit: None,
-                },
-            };
+            let id = id.clone();
+            async move {
+                let route = QueryRoute::Logs {
+                    reply_route: "".to_string(),
+                    args: LogsQueryArgs {
+                        i: id.clone(),
+                        s: if from_sn > 0 { Some(from_sn) } else { None },
+                        src: Some(witness_id.clone()),
+                        limit: None,
+                    },
+                };
 
-            let qry = QueryEvent::new_query(
-                route,
-                SerializationFormats::JSON,
-                HashFunctionCode::Blake3_256,
-            );
-            // Create a new signed message
-            let sigs = SelfSigningPrefix::Ed25519Sha512(self.signer.sign(qry.encode()?)?);
-            let signed_qry = SignedKelQuery::new_nontrans(qry.clone(), self.prefix.clone(), sigs);
+                let qry = QueryEvent::new_query(
+                    route,
+                    SerializationFormats::JSON,
+                    HashFunctionCode::Blake3_256,
+                );
+                let sigs =
+                    SelfSigningPrefix::Ed25519Sha512(self.signer.sign(qry.encode()?)?);
+                let signed_qry =
+                    SignedKelQuery::new_nontrans(qry.clone(), self.prefix.clone(), sigs);
 
-            let resp = self
-                .send_query_to(
-                    witness_id.clone(),
-                    keri_core::oobi::Scheme::Http,
-                    signed_qry,
-                )
-                .await;
+                let resp = self
+                    .send_query_to(
+                        witness_id.clone(),
+                        keri_core::oobi::Scheme::Http,
+                        signed_qry,
+                    )
+                    .await;
 
-            let resp = match resp {
-                Ok(r) => r,
-                Err(e) => {
-                    tracing::warn!(
-                        witness = %witness_id,
-                        prefix = %id,
-                        error = %e,
-                        "Failed to fetch KEL from witness, trying next"
-                    );
-                    continue;
+                match resp {
+                    Ok(r) => Ok((witness_id, r)),
+                    Err(e) => {
+                        tracing::warn!(
+                            witness = %witness_id,
+                            prefix = %id,
+                            error = %e,
+                            "Failed to fetch KEL from witness"
+                        );
+                        Err(e)
+                    }
                 }
-            };
+            }
+        }))
+        .await;
 
-            match resp {
-                PossibleResponse::Ksn(rpy) => {
-                    self.process_reply(rpy)?;
-                }
-                PossibleResponse::Kel(msgs) => {
-                    for msg in msgs {
-                        if let Message::Notice(notice) = msg {
-                            self.process_notice(notice.clone())?;
-                            if let Notice::Event(evt) = notice {
-                                self.event_storage.add_mailbox_reply(evt)?;
+        // Process all successful responses
+        for result in results {
+            if let Ok((witness_id, resp)) = result {
+                match resp {
+                    PossibleResponse::Ksn(rpy) => {
+                        self.process_reply(rpy)?;
+                    }
+                    PossibleResponse::Kel(msgs) => {
+                        for msg in msgs {
+                            if let Message::Notice(notice) = msg {
+                                self.process_notice(notice.clone())?;
+                                if let Notice::Event(evt) = notice {
+                                    self.event_storage.add_mailbox_reply(evt)?;
+                                }
                             }
                         }
                     }
-                }
-                PossibleResponse::Mbx(_mbx) => {
-                    tracing::error!("Unexpected MBX response from witness {}", witness_id);
+                    PossibleResponse::Mbx(_mbx) => {
+                        tracing::error!(
+                            "Unexpected MBX response from witness {}",
+                            witness_id
+                        );
+                    }
                 }
             }
         }
