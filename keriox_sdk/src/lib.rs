@@ -117,3 +117,8 @@ pub use teliox::query::TelQueryEvent;
 
 // Watcher/mailbox query types (kept for consumers that need low-level access)
 pub use keri_core::query::query_event::QueryEvent;
+// Re-export underlying crates for advanced consumers that need low-level access
+pub use keri_core;
+pub use keri_controller;
+pub use cesrox;
+pub use said;
