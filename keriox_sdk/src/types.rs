@@ -88,6 +88,58 @@ impl TryFrom<keri_controller::mailbox_updating::ActionRequired> for DelegationRe
     }
 }
 
+// ── Multisig config ──────────────────────────────────────────────────────────
+
+/// Configuration for creating a multisig group identifier.
+///
+/// Used by [`crate::operations::create_group_identifier`] and
+/// [`crate::store::KeriStore::create_group`].
+#[derive(Debug, Clone)]
+pub struct GroupConfig {
+    /// Other participants' identifier prefixes (not including the caller).
+    pub participants: Vec<IdentifierPrefix>,
+    /// Number of signatures required to authorise a group event.
+    pub signature_threshold: u64,
+    /// Number of next-key commitments required (defaults to `signature_threshold` if `None`).
+    pub next_keys_threshold: Option<u64>,
+    /// Witness OOBIs for the group identifier.
+    pub witnesses: Vec<LocationScheme>,
+    /// Witness signing threshold.
+    pub witness_threshold: u64,
+    /// Optional delegator (for a delegated group identifier).
+    pub delegator: Option<IdentifierPrefix>,
+}
+
+/// A pending multisig request discovered in the mailbox.
+///
+/// Extracted from [`ActionRequired::MultisigRequest`] via [`MultisigRequest::try_from`].
+/// Pass this to [`crate::operations::join_group`] to co-sign the event.
+#[derive(Debug)]
+pub struct MultisigRequest {
+    /// The group key event (ICP/ROT/IXN) to be co-signed.
+    pub event: keri_core::event_message::msg::KeriEvent<keri_core::event::KeyEvent>,
+    /// The exchange message to forward after signing.
+    pub exchange: keri_core::mailbox::exchange::ExchangeMessage,
+}
+
+impl TryFrom<keri_controller::mailbox_updating::ActionRequired> for MultisigRequest {
+    type Error = keri_controller::mailbox_updating::ActionRequired;
+
+    fn try_from(
+        action: keri_controller::mailbox_updating::ActionRequired,
+    ) -> std::result::Result<Self, Self::Error> {
+        match action {
+            keri_controller::mailbox_updating::ActionRequired::MultisigRequest(ev, exn) => {
+                Ok(MultisigRequest {
+                    event: ev,
+                    exchange: exn,
+                })
+            }
+            other => Err(other),
+        }
+    }
+}
+
 // ── Signing / verification result types ──────────────────────────────────────
 
 /// A CESR-encoded signed payload ready for transport.
