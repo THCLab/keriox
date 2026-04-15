@@ -4,7 +4,6 @@ use keri_core::database::postgres::PostgresDatabase;
 use keri_core::database::postgres::oobi_storage::PostgresOobiStorage;
 use teliox::database::postgres::PostgresTelDatabase;
 
-#[cfg(feature = "query_cache")]
 use crate::identifier::mechanics::cache::IdentifierCache;
 use crate::{
     communication::Communication,
@@ -25,23 +24,20 @@ impl PostgresController {
         config: ControllerConfig,
     ) -> Result<Self, ControllerError> {
         let ControllerConfig {
-            db_path: _db_path,
+            db_path,
             initial_oobis,
             escrow_config,
             transport,
             tel_transport,
         } = config;
 
-        #[cfg(feature = "query_cache")]
-        let mut query_db_path = _db_path.clone();
-        #[cfg(feature = "query_cache")]
+        let mut query_db_path = db_path;
         query_db_path.push("query_cache");
 
         let events = Arc::new(
             PostgresKnownEvents::with_postgres(database_url, escrow_config).await?,
         );
 
-        #[cfg(feature = "query_cache")]
         let query_cache = Arc::new(IdentifierCache::new(&query_db_path)?);
 
         let comm = Arc::new(Communication {
@@ -53,7 +49,6 @@ impl PostgresController {
         let controller = Self {
             known_events: events.clone(),
             communication: comm,
-            #[cfg(feature = "query_cache")]
             cache: query_cache,
         };
         if !initial_oobis.is_empty() {

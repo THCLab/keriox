@@ -4,7 +4,6 @@ use keri_core::database::redb::RedbDatabase;
 use keri_core::oobi_manager::storage::RedbOobiStorage;
 use teliox::database::redb::RedbTelDatabase;
 
-#[cfg(feature = "query_cache")]
 use crate::identifier::mechanics::cache::IdentifierCache;
 use crate::{
     communication::Communication,
@@ -29,14 +28,11 @@ impl RedbController {
             tel_transport,
         } = config;
         std::fs::create_dir_all(&db_path).unwrap();
-        #[cfg(feature = "query_cache")]
         let mut query_db_path = db_path.clone();
-        #[cfg(feature = "query_cache")]
         query_db_path.push("query_cache");
 
         let events = Arc::new(RedbKnownEvents::with_redb(db_path, escrow_config)?);
 
-        #[cfg(feature = "query_cache")]
         let query_cache = Arc::new(IdentifierCache::new(&query_db_path)?);
         let comm = Arc::new(Communication {
             events: events.clone(),
@@ -47,7 +43,6 @@ impl RedbController {
         let controller = Self {
             known_events: events.clone(),
             communication: comm,
-            #[cfg(feature = "query_cache")]
             cache: query_cache,
         };
         if !initial_oobis.is_empty() {

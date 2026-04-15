@@ -13,9 +13,6 @@ use keri_core::{
 };
 use teliox::database::TelEventDatabase;
 
-#[cfg(not(feature = "query_cache"))]
-use crate::mailbox_updating::MailboxReminder;
-
 use crate::{
     communication::SendingError, error::ControllerError, identifier::Identifier,
     mailbox_updating::ActionRequired,
@@ -52,7 +49,6 @@ where
             .map(|wit| -> Result<_, ControllerError> {
                 let recipient = IdentifierPrefix::Basic(wit.clone());
 
-                #[cfg(feature = "query_cache")]
                 let reminder = if identifier == &self.id {
                     // request own mailbox
                     self.query_cache.last_asked_index(&recipient)
@@ -60,8 +56,6 @@ where
                     // request group mailbox
                     self.query_cache.last_asked_group_index(&recipient)
                 }?;
-                #[cfg(not(feature = "query_cache"))]
-                let reminder = MailboxReminder::default();
 
                 Ok(MailboxQuery::new_query(
                     MailboxRoute::Mbx {

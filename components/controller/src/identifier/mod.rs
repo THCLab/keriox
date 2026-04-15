@@ -13,7 +13,6 @@ use keri_core::{
     prefix::{BasicPrefix, IdentifierPrefix},
     state::IdentifierState,
 };
-#[cfg(feature = "query_cache")]
 use mechanics::cache::IdentifierCache;
 use teliox::{database::TelEventDatabase, state::{vc_state::TelState, ManagerTelState}};
 
@@ -38,7 +37,6 @@ where
     pub known_events: Arc<KnownEvents<D, T, S>>,
     communication: Arc<Communication<D, T, S>>,
     pub to_notify: Vec<SignedEventMessage>,
-    #[cfg(feature = "query_cache")]
     query_cache: Arc<IdentifierCache>,
     /// Cached identifier state. It saves the state of identifier, event if last
     /// event isn't accepted in the KEL yet (e.g. if there are no witness
@@ -58,7 +56,7 @@ where
         registry_id: Option<IdentifierPrefix>,
         known_events: Arc<KnownEvents<D, T, S>>,
         communication: Arc<Communication<D, T, S>>,
-        #[cfg(feature = "query_cache")] db: Arc<IdentifierCache>,
+        db: Arc<IdentifierCache>,
     ) -> Self {
         // Load events that need to be notified to witnesses
         let events_to_notice: Vec<_> = known_events
@@ -88,7 +86,6 @@ where
             known_events,
             communication,
             to_notify: events_to_notice,
-            #[cfg(feature = "query_cache")]
             query_cache: db,
             cached_state: state,
             registry_id,
