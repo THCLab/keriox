@@ -73,10 +73,17 @@ where
             .await
             .map_err(|e| TransportError::NetworkError(e.to_string()))?;
         if !resp.status().is_success() {
+            let status = resp.status();
             let body = resp
                 .text()
                 .await
                 .map_err(|e| TransportError::NetworkError(e.to_string()))?;
+            if body.is_empty() {
+                return Err(TransportError::NetworkError(format!(
+                    "Remote returned {} with empty body",
+                    status
+                )));
+            }
             let err =
                 serde_json::from_str(&body).map_err(|_e| TransportError::UnknownError(body))?;
             return Err(TransportError::RemoteError(err));
@@ -119,6 +126,12 @@ where
                 Err(ResponseError::Unparsable(e)) => Err(TransportError::InvalidResponse(e)),
             }
         } else {
+            if body.is_empty() {
+                return Err(TransportError::NetworkError(format!(
+                    "Remote returned {} with empty body",
+                    status
+                )));
+            }
             let err =
                 serde_json::from_str(&body).map_err(|_| TransportError::UnknownError(body))?;
             Err(TransportError::RemoteError(err))
@@ -144,10 +157,17 @@ where
             let ops = parse_op_stream(&body)?;
             Ok(ops)
         } else {
+            let status = resp.status();
             let body = resp
                 .text()
                 .await
                 .map_err(|e| TransportError::NetworkError(e.to_string()))?;
+            if body.is_empty() {
+                return Err(TransportError::NetworkError(format!(
+                    "Remote returned {} with empty body",
+                    status
+                )));
+            }
             let err =
                 serde_json::from_str(&body).map_err(|_e| TransportError::UnknownError(body))?;
             Err(TransportError::RemoteError(err))
@@ -189,10 +209,17 @@ where
             let ops = body.to_vec();
             Ok(ops)
         } else {
+            let status = resp.status();
             let body = resp
                 .text()
                 .await
                 .map_err(|e| TransportError::NetworkError(e.to_string()))?;
+            if body.is_empty() {
+                return Err(TransportError::NetworkError(format!(
+                    "Remote returned {} with empty body",
+                    status
+                )));
+            }
             let err =
                 serde_json::from_str(&body).map_err(|_e| TransportError::UnknownError(body))?;
             Err(TransportError::RemoteError(err))
@@ -209,12 +236,19 @@ where
             .map_err(|e| TransportError::NetworkError(e.to_string()))?;
 
         if !resp.status().is_success() {
+            let status = resp.status();
             let body = resp
                 .text()
                 .await
                 .map_err(|e| TransportError::NetworkError(e.to_string()))?;
+            if body.is_empty() {
+                return Err(TransportError::NetworkError(format!(
+                    "Remote returned {} with empty body",
+                    status
+                )));
+            }
             let err = serde_json::from_str(&body)
-                .map_err(|e| TransportError::NetworkError(e.to_string()))?;
+                .map_err(|_| TransportError::UnknownError(body))?;
             return Err(TransportError::RemoteError(err));
         }
         Ok(())
