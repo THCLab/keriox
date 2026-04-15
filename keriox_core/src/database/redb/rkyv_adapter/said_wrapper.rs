@@ -84,8 +84,8 @@ impl From<HashFunctionDef> for HashFunction {
 #[rkyv(compare(PartialEq), derive(Debug))]
 enum HashFunctionCodeDef {
     Blake3_256,
-    Blake2B256(Vec<u8>),
-    Blake2S256(Vec<u8>),
+    Blake2B256,
+    Blake2S256,
     SHA3_256,
     SHA2_256,
     Blake3_512,
@@ -98,8 +98,8 @@ impl From<HashFunctionCodeDef> for HashFunctionCode {
     fn from(value: HashFunctionCodeDef) -> Self {
         match value {
             HashFunctionCodeDef::Blake3_256 => HashFunctionCode::Blake3_256,
-            HashFunctionCodeDef::Blake2B256(vec) => HashFunctionCode::Blake2B256(vec),
-            HashFunctionCodeDef::Blake2S256(vec) => HashFunctionCode::Blake2S256(vec),
+            HashFunctionCodeDef::Blake2B256 => HashFunctionCode::Blake2B256,
+            HashFunctionCodeDef::Blake2S256 => HashFunctionCode::Blake2S256,
             HashFunctionCodeDef::SHA3_256 => HashFunctionCode::SHA3_256,
             HashFunctionCodeDef::SHA2_256 => HashFunctionCode::SHA2_256,
             HashFunctionCodeDef::Blake3_512 => HashFunctionCode::Blake3_512,

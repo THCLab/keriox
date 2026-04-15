@@ -350,12 +350,12 @@ mod tests {
             ["E".to_string(), "A".repeat(43)].join("")
         );
         assert_eq!(
-            SelfAddressingIdentifier::new(HashFunctionCode::Blake2B256(vec!()).into(), vec![0; 32])
+            SelfAddressingIdentifier::new(HashFunctionCode::Blake2B256.into(), vec![0; 32])
                 .to_str(),
             ["F".to_string(), "A".repeat(43)].join("")
         );
         assert_eq!(
-            SelfAddressingIdentifier::new(HashFunctionCode::Blake2S256(vec!()).into(), vec![0; 32])
+            SelfAddressingIdentifier::new(HashFunctionCode::Blake2S256.into(), vec![0; 32])
                 .to_str(),
             ["G".to_string(), "A".repeat(43)].join("")
         );
