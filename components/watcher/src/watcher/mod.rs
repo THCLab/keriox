@@ -1,6 +1,8 @@
 pub mod config;
+pub mod health;
+pub mod poller;
 mod tel_providing;
-mod watcher_data;
+pub(crate) mod watcher_data;
 
 use std::{
     fs::create_dir_all,
@@ -20,6 +22,7 @@ use keri_core::{
     prefix::{BasicPrefix, IdentifierPrefix},
     query::reply_event::{ReplyRoute, SignedReply},
 };
+use poller::WitnessPoller;
 use tel_providing::RegistryMapping;
 use teliox::{database::redb::RedbTelDatabase, event::parse_tel_query_stream};
 use teliox::{
@@ -28,7 +31,7 @@ use teliox::{
     query::TelQueryRoute,
 };
 use tokio::sync::mpsc::{channel, Receiver};
-use watcher_data::WatcherData;
+use watcher_data::{UpdateRequest, WatcherData};
 
 use crate::WatcherConfig;
 
@@ -39,31 +42,57 @@ enum WitnessResp {
 
 pub struct Watcher<S: OobiStorageBackend> {
     pub(crate) watcher_data: Arc<WatcherData<S>>,
-    recv: Mutex<Receiver<IdentifierPrefix>>,
+    recv: Mutex<Receiver<UpdateRequest>>,
     tel_recv: Mutex<Receiver<(IdentifierPrefix, IdentifierPrefix)>>,
     // Maps registry id to witness id provided by oobi
     registry_id_mapping: RegistryMapping,
+    /// Background poller for proactively fetching KEL updates from witnesses.
+    pub(crate) poller: Arc<WitnessPoller<S>>,
 }
 
 impl<S: OobiStorageBackend> Watcher<S> {
     pub fn new(config: WatcherConfig, oobi_manager: OobiManager<S>) -> Result<Self, ActorError> {
-        let (tx, rx) = channel::<IdentifierPrefix>(100);
+        let (tx, rx) = channel::<UpdateRequest>(100);
         let (tel_tx, tel_rx) = channel::<(IdentifierPrefix, IdentifierPrefix)>(100);
         let tel_storage_path = config.tel_storage_path.clone();
+        let poll_interval = config.poll_interval;
         create_dir_all(&tel_storage_path).unwrap();
         let mut registry_ids_storage_path = tel_storage_path.clone();
         registry_ids_storage_path.push("registry");
+        let watcher_data = WatcherData::new(config, tx, tel_tx, oobi_manager)?;
+        let poller = Arc::new(WitnessPoller::new(watcher_data.clone(), poll_interval));
         Ok(Watcher {
-            watcher_data: WatcherData::new(config, tx, tel_tx, oobi_manager)?,
+            watcher_data,
             recv: Mutex::new(rx),
             tel_recv: Mutex::new(tel_rx),
             registry_id_mapping: RegistryMapping::new(&registry_ids_storage_path)
                 .map_err(|e| ActorError::GeneralError(e.to_string()))?,
+            poller,
         })
     }
 
     pub fn prefix(&self) -> BasicPrefix {
         self.watcher_data.prefix.clone()
+    }
+
+    /// Register an AID for proactive background polling.
+    pub fn track_aid(&self, id: IdentifierPrefix) {
+        self.poller.track_aid(id);
+    }
+
+    /// Remove an AID from background polling.
+    pub fn untrack_aid(&self, id: &IdentifierPrefix) {
+        self.poller.untrack_aid(id);
+    }
+
+    /// Subscribe to an AID for priority polling at the base interval.
+    pub fn subscribe_aid(&self, id: IdentifierPrefix) {
+        self.poller.subscribe(id);
+    }
+
+    /// Unsubscribe from priority polling. AID remains tracked with adaptive intervals.
+    pub fn unsubscribe_aid(&self, id: &IdentifierPrefix) {
+        self.poller.unsubscribe(id);
     }
 
     pub fn signed_location(&self, eid: &IdentifierPrefix) -> Result<Vec<SignedReply>, ActorError> {
@@ -73,8 +102,12 @@ impl<S: OobiStorageBackend> Watcher<S> {
     pub async fn process_update_requests(&self) {
         let mut recv = self.recv.lock().unwrap();
 
-        while let Some(received) = recv.recv().await {
-            let _ = self.watcher_data.update_local_kel(&received).await;
+        while let Some(request) = recv.recv().await {
+            let result = self.watcher_data.update_local_kel(&request.id).await;
+            // Signal completion if a waiter is listening.
+            if let Some(done) = request.completion {
+                let _ = done.send(result);
+            }
         }
     }
 
@@ -179,7 +212,8 @@ impl<S: OobiStorageBackend> Watcher<S> {
                     }
                 }
             }
-            //
+            // Auto-track the AID for proactive polling
+            self.poller.track_aid(er.cid.clone());
             Ok(())
         } else {
             Err(OobiError::InvalidMessageType)?
