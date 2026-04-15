@@ -18,6 +18,7 @@ use url::Url;
 use tracing::info;
 use watcher::{transport::HttpTelTransport, WatcherConfig, WatcherListener};
 
+#[serde_as]
 #[derive(Deserialize)]
 pub struct Config {
     db_path: PathBuf,
@@ -37,6 +38,12 @@ pub struct Config {
     escrow_config: EscrowConfig,
 
     tel_storage_path: PathBuf,
+
+    /// Interval in seconds between background witness polling cycles.
+    /// Defaults to 30 seconds. Set to 0 to disable.
+    #[serde_as(as = "Option<DurationSeconds>")]
+    #[serde(default)]
+    poll_interval: Option<Duration>,
 }
 
 #[serde_as]
@@ -145,6 +152,7 @@ async fn main() -> anyhow::Result<()> {
         tel_transport: Box::new(HttpTelTransport),
         escrow_config: cfg.escrow_config,
         tel_storage_path: cfg.tel_storage_path,
+        poll_interval: cfg.poll_interval.unwrap_or(Duration::from_secs(30)),
     })?;
 
     // Resolve oobi to know how to find witness

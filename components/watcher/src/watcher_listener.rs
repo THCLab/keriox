@@ -22,7 +22,8 @@ impl<S: OobiStorageBackend + 'static> WatcherListener<S> {
     pub fn listen_http(self, addr: impl ToSocketAddrs) -> Server {
         let data = self.watcher.clone();
         spawn(update_tel_checking(data.clone()));
-        spawn(update_checking(data));
+        spawn(update_checking(data.clone()));
+        spawn(witness_polling(data));
 
         let state = web::Data::new(self.watcher);
         HttpServer::new(move || {
@@ -73,6 +74,10 @@ pub async fn update_checking<S: OobiStorageBackend>(data: Arc<Watcher<S>>) {
 
 pub async fn update_tel_checking<S: OobiStorageBackend>(data: Arc<Watcher<S>>) {
     let _ = data.process_update_tel_requests().await;
+}
+
+pub async fn witness_polling<S: OobiStorageBackend>(data: Arc<Watcher<S>>) {
+    data.poller.run().await;
 }
 
 pub mod http_handlers {
@@ -303,6 +308,30 @@ pub mod http_handlers {
         data: web::Data<Arc<Watcher<RedbOobiStorage>>>,
     ) -> Result<HttpResponse, ApiError> {
         process_tel_query(post_data, data).await
+    }
+
+    pub async fn health<S: OobiStorageBackend>(
+        data: web::Data<Arc<Watcher<S>>>,
+    ) -> Result<HttpResponse, ApiError> {
+        let witness_health = data.watcher_data.health_tracker.get_all_health();
+        let tracked_aids = data.poller.tracked_aid_ids();
+
+        #[derive(serde::Serialize)]
+        struct HealthResponse {
+            tracked_aids: usize,
+            witnesses: std::collections::HashMap<String, crate::watcher::health::WitnessHealth>,
+        }
+
+        Ok(HttpResponse::Ok().json(HealthResponse {
+            tracked_aids: tracked_aids.len(),
+            witnesses: witness_health,
+        }))
+    }
+
+    pub async fn health_redb(
+        data: web::Data<Arc<Watcher<RedbOobiStorage>>>,
+    ) -> Result<HttpResponse, ApiError> {
+        health(data).await
     }
 
     pub async fn info() -> impl Responder {

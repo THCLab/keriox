@@ -47,7 +47,14 @@ use tokio::sync::mpsc::Sender;
 
 use crate::transport::WatcherTelTransport;
 
-use super::{config::WatcherConfig, tel_providing::TelToForward};
+use super::{config::WatcherConfig, health::WitnessHealthTracker, tel_providing::TelToForward};
+
+/// A KEL update request with an optional completion signal.
+pub(crate) struct UpdateRequest {
+    pub id: IdentifierPrefix,
+    /// If set, the sender will be notified when the update completes.
+    pub completion: Option<tokio::sync::oneshot::Sender<Result<(), ActorError>>>,
+}
 
 pub struct WatcherData<S: OobiStorageBackend> {
     pub address: url::Url,
@@ -59,17 +66,18 @@ pub struct WatcherData<S: OobiStorageBackend> {
     pub transport: Box<dyn Transport + Send + Sync>,
     pub tel_transport: Box<dyn WatcherTelTransport + Send + Sync>,
     /// Watcher will update KEL of the identifiers that have been sent to this channel.
-    tx: Sender<IdentifierPrefix>,
+    tx: Sender<UpdateRequest>,
     /// Watcher will update TEL of the identifiers (registry_id, vc_id) that have been sent to this channel.
     pub tel_tx: Sender<(IdentifierPrefix, IdentifierPrefix)>,
     pub(super) tel_to_forward: Arc<TelToForward>,
     reply_escrow: Arc<ReplyEscrow<RedbDatabase>>,
+    pub(crate) health_tracker: Arc<WitnessHealthTracker>,
 }
 
 impl<S: OobiStorageBackend> WatcherData<S> {
-    pub fn new(
+    pub(crate) fn new(
         config: WatcherConfig,
-        tx: Sender<IdentifierPrefix>,
+        tx: Sender<UpdateRequest>,
         tel_tx: Sender<(IdentifierPrefix, IdentifierPrefix)>,
         oobi_manager: OobiManager<S>,
     ) -> Result<Arc<Self>, ActorError> {
@@ -81,6 +89,7 @@ impl<S: OobiStorageBackend> WatcherData<S> {
             escrow_config,
             tel_storage_path,
             tel_transport,
+            poll_interval: _, // handled by Watcher, not WatcherData
         } = config;
         let mut tel_to_forward_path = tel_storage_path.clone();
         tel_to_forward_path.push("to_forward");
@@ -149,6 +158,7 @@ impl<S: OobiStorageBackend> WatcherData<S> {
             tel_tx,
             tel_transport,
             reply_escrow,
+            health_tracker: Arc::new(WitnessHealthTracker::new()),
         });
         Ok(watcher.clone())
     }
@@ -262,29 +272,65 @@ impl<S: OobiStorageBackend> WatcherData<S> {
                 args,
             } => {
                 let local_state = self.get_state_for_prefix(&args.i);
-                match (local_state, args.s, args.limit) {
-                    (Some(state), Some(sn), Some(limit)) if sn + limit - 1 <= state.sn => {
-                        // KEL is already in database
-                    }
-                    (Some(state), Some(sn), None) if sn <= state.sn => {
-                        // KEL is already in database
-                    }
-                    (Some(_state), None, None) => {
-                        // Check for updates.
-                        let id_to_update = qry.query.get_prefix();
-                        self.tx.send(id_to_update.clone()).await.map_err(|_e| {
-                            ActorError::GeneralError("Internal watcher error".to_string())
-                        })?;
-                    }
-                    _ => {
-                        // query watcher and return info, that it's not ready
-                        let id_to_update = qry.query.get_prefix();
-                        self.tx.send(id_to_update.clone()).await.map_err(|_e| {
-                            ActorError::GeneralError("Internal watcher error".to_string())
-                        })?;
-                        return Err(ActorError::NotFound(id_to_update));
-                    }
+                let needs_update = match (local_state, args.s, args.limit) {
+                    (Some(state), Some(sn), Some(limit)) if sn + limit - 1 <= state.sn => false,
+                    (Some(state), Some(sn), None) if sn <= state.sn => false,
+                    _ => true,
                 };
+
+                if needs_update {
+                    let id_to_update = qry.query.get_prefix();
+                    // Send update request and await its completion with a timeout.
+                    let (done_tx, done_rx) = tokio::sync::oneshot::channel();
+                    self.tx
+                        .send(UpdateRequest {
+                            id: id_to_update.clone(),
+                            completion: Some(done_tx),
+                        })
+                        .await
+                        .map_err(|_e| {
+                            ActorError::GeneralError("Internal watcher error".to_string())
+                        })?;
+
+                    // Wait up to 10 seconds for the update to complete.
+                    match tokio::time::timeout(
+                        std::time::Duration::from_secs(10),
+                        done_rx,
+                    )
+                    .await
+                    {
+                        Ok(Ok(Ok(()))) => {
+                            // Update succeeded, check if we now have the data
+                            let updated_state = self.get_state_for_prefix(&args.i);
+                            let still_missing = match (updated_state, args.s, args.limit) {
+                                (Some(state), Some(sn), Some(limit))
+                                    if sn + limit - 1 <= state.sn =>
+                                {
+                                    false
+                                }
+                                (Some(state), Some(sn), None) if sn <= state.sn => false,
+                                (None, _, _) => true,
+                                _ => true,
+                            };
+                            if still_missing {
+                                return Err(ActorError::NotFound(id_to_update));
+                            }
+                        }
+                        Ok(Ok(Err(e))) => {
+                            tracing::warn!(error = %e, "KEL update failed");
+                            return Err(ActorError::NotFound(id_to_update));
+                        }
+                        Ok(Err(_)) => {
+                            // Completion channel dropped — update task died
+                            return Err(ActorError::NotFound(id_to_update));
+                        }
+                        Err(_) => {
+                            // Timeout
+                            tracing::warn!(prefix = %id_to_update, "KEL update timed out");
+                            return Err(ActorError::NotFound(id_to_update));
+                        }
+                    }
+                }
             }
             QueryRoute::Ksn {
                 reply_route: _,
@@ -330,21 +376,34 @@ impl<S: OobiStorageBackend> WatcherData<S> {
     }
 
     pub async fn update_local_kel(&self, id: &IdentifierPrefix) -> Result<(), ActorError> {
-        // Update latest state for prefix
-        let _ = self.query_state(id).await;
+        // Query all witnesses for the latest KSN and get the highest reported SN.
+        let witness_sn = self.query_state(id).await?;
 
-        let escrowed_replies = self
-            .reply_escrow
-            .get_all(&id)
-            .into_iter()
-            .flatten()
-            .collect_vec();
+        // Compare against locally stored KEL state.
+        let local_sn = self
+            .event_storage
+            .get_state(id)
+            .map(|s| s.sn)
+            .unwrap_or(0);
 
-        if !escrowed_replies.is_empty() {
-            // If there is an escrowed reply it means we don't have the most recent data.
-            // In this case forward the query to witness.
-            self.forward_query(id).await?;
-        };
+        if local_sn < witness_sn {
+            // We are behind — fetch the missing KEL events from witnesses.
+            self.forward_query_from(id, local_sn).await?;
+        } else {
+            // Even if SN matches, check if there are escrowed replies waiting
+            // for events we may have missed (e.g. receipts, delegations).
+            let escrowed_replies = self
+                .reply_escrow
+                .get_all(&id)
+                .into_iter()
+                .flatten()
+                .collect_vec();
+
+            if !escrowed_replies.is_empty() {
+                self.forward_query_from(id, local_sn).await?;
+            }
+        }
+
         Ok(())
     }
 
@@ -359,7 +418,12 @@ impl<S: OobiStorageBackend> WatcherData<S> {
     }
 
     /// Forward query to registered witnesses and save its response to mailbox.
-    async fn forward_query(&self, id: &IdentifierPrefix) -> Result<(), ActorError> {
+    /// Fetches events starting from `from_sn` to avoid re-fetching the entire KEL.
+    pub(crate) async fn forward_query_from(
+        &self,
+        id: &IdentifierPrefix,
+        from_sn: u64,
+    ) -> Result<(), ActorError> {
         let witnesses = self.get_witnesses_for_prefix(&id)?;
         for witness in witnesses {
             let witness_id = IdentifierPrefix::Basic(witness);
@@ -367,7 +431,7 @@ impl<S: OobiStorageBackend> WatcherData<S> {
                 reply_route: "".to_string(),
                 args: LogsQueryArgs {
                     i: id.clone(),
-                    s: None,
+                    s: if from_sn > 0 { Some(from_sn) } else { None },
                     src: Some(witness_id.clone()),
                     limit: None,
                 },
@@ -388,7 +452,20 @@ impl<S: OobiStorageBackend> WatcherData<S> {
                     keri_core::oobi::Scheme::Http,
                     signed_qry,
                 )
-                .await?;
+                .await;
+
+            let resp = match resp {
+                Ok(r) => r,
+                Err(e) => {
+                    tracing::warn!(
+                        witness = %witness_id,
+                        prefix = %id,
+                        error = %e,
+                        "Failed to fetch KEL from witness, trying next"
+                    );
+                    continue;
+                }
+            };
 
             match resp {
                 PossibleResponse::Ksn(rpy) => {
@@ -405,7 +482,7 @@ impl<S: OobiStorageBackend> WatcherData<S> {
                     }
                 }
                 PossibleResponse::Mbx(_mbx) => {
-                    panic!("Unexpected response type MBX");
+                    tracing::error!("Unexpected MBX response from witness {}", witness_id);
                 }
             }
         }
@@ -413,18 +490,46 @@ impl<S: OobiStorageBackend> WatcherData<S> {
         Ok(())
     }
 
-    /// Query witness about KSN for given prefix and save its response to db.
-    /// Returns ID of witness that responded.
-    async fn query_state(&self, prefix: &IdentifierPrefix) -> Result<(), ActorError> {
+    /// Query all witnesses about KSN for given prefix.
+    /// Returns the highest SN reported by any witness.
+    pub(crate) async fn query_state(&self, prefix: &IdentifierPrefix) -> Result<u64, ActorError> {
         let wits_id = self.get_witnesses_for_prefix(&prefix)?;
-        let _r: Vec<Result<_, _>> = join_all(wits_id.into_iter().map(|id| {
+        let results: Vec<Result<u64, ActorError>> = join_all(wits_id.into_iter().map(|id| {
             let id = IdentifierPrefix::Basic(id);
-
             self.ksn_update(&prefix, id)
         }))
         .await;
 
-        Ok(())
+        let mut max_sn: u64 = 0;
+        let mut any_success = false;
+        for result in results {
+            match result {
+                Ok(sn) => {
+                    any_success = true;
+                    if sn > max_sn {
+                        max_sn = sn;
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        prefix = %prefix,
+                        error = %e,
+                        "Failed to get KSN from witness"
+                    );
+                }
+            }
+        }
+
+        if !any_success && max_sn == 0 {
+            // Fall back to local state if all witnesses failed
+            max_sn = self
+                .event_storage
+                .get_state(prefix)
+                .map(|s| s.sn)
+                .unwrap_or(0);
+        }
+
+        Ok(max_sn)
     }
 
     pub(crate) async fn tel_update(
@@ -475,11 +580,13 @@ impl<S: OobiStorageBackend> WatcherData<S> {
         Ok(())
     }
 
+    /// Query a specific witness for the KSN of a prefix.
+    /// Returns the SN reported by the witness.
     async fn ksn_update(
         &self,
         about_id: &IdentifierPrefix,
         wit_id: IdentifierPrefix,
-    ) -> Result<(), ActorError> {
+    ) -> Result<u64, ActorError> {
         let query_args = LogsQueryArgs {
             i: about_id.clone(),
             s: None,
@@ -504,15 +611,38 @@ impl<S: OobiStorageBackend> WatcherData<S> {
             )?,
         );
         let query = SignedKelQuery::new_nontrans(qry, self.prefix.clone(), signature);
-        let resp = self.send_query_to(wit_id, Scheme::Http, query).await?;
+
+        let start = std::time::Instant::now();
+        let resp = match self.send_query_to(wit_id.clone(), Scheme::Http, query).await {
+            Ok(r) => r,
+            Err(e) => {
+                self.health_tracker
+                    .record_failure(&wit_id, e.to_string());
+                return Err(e);
+            }
+        };
 
         let resp = match resp {
             PossibleResponse::Ksn(ksn) => ksn,
-            e => return Err(ActorError::UnexpectedResponse(e.to_string())),
+            e => {
+                let err = ActorError::UnexpectedResponse(e.to_string());
+                self.health_tracker
+                    .record_failure(&wit_id, err.to_string());
+                return Err(err);
+            }
+        };
+
+        // Extract the SN from the KSN reply before processing it.
+        let route = resp.reply.get_route();
+        let sn = match route {
+            ReplyRoute::Ksn(_, ksn) => ksn.state.sn,
+            _ => 0,
         };
 
         self.process_reply(resp)?;
-        Ok(())
+        self.health_tracker
+            .record_success(&wit_id, start.elapsed());
+        Ok(sn)
     }
 
     /// Get witnesses for prefix
