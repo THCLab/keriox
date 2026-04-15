@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use keri_core::oobi::{LocationScheme, Scheme};
 use teliox::query::SignedTelQuery;
 
@@ -18,6 +20,14 @@ pub enum TransportError {
     InvalidResponse,
 }
 
+fn http_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(10))
+        .timeout(Duration::from_secs(30))
+        .build()
+        .expect("Failed to build HTTP client")
+}
+
 pub struct HttpTelTransport;
 
 #[async_trait::async_trait]
@@ -31,7 +41,7 @@ impl WatcherTelTransport for HttpTelTransport {
             Scheme::Http => location.url.join("query/tel").unwrap(),
             Scheme::Tcp => todo!(),
         };
-        let resp = reqwest::Client::new()
+        let resp = http_client()
             .post(url)
             .body(qry.to_cesr().unwrap())
             .send()
