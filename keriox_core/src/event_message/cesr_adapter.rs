@@ -574,18 +574,31 @@ fn signed_management_query(
     qry: MailboxQuery,
     mut attachments: Vec<Group>,
 ) -> Result<Op, ParseError> {
-    use super::signature::get_signatures;
+    use super::signature::{get_signatures, Signature, SignerData};
+    use crate::query::mailbox::MailboxRoute;
+
+    let signer = match &qry.data.data {
+        MailboxRoute::Mbx { args, .. } => args.pre.clone(),
+    };
 
     let att = attachments
         .pop()
         .ok_or_else(|| ParseError::AttachmentError("Missing attachment".into()))?;
-    let sigs = get_signatures(att)?;
+    let mut sigs = get_signatures(att)?;
+    let signature = sigs
+        .into_iter()
+        .next()
+        .ok_or(ParseError::AttachmentError("Missing attachment".into()))?;
+    let signature = match signature {
+        Signature::Transferable(SignerData::JustSignatures, indexed_sigs) => {
+            Signature::Transferable(SignerData::LastEstablishment(signer), indexed_sigs)
+        }
+        other => other,
+    };
+
     let qry = SignedQueryMessage::MailboxQuery(SignedMailboxQuery {
         query: qry,
-        signature: sigs
-            .get(0)
-            .ok_or(ParseError::AttachmentError("Missing attachment".into()))?
-            .clone(),
+        signature,
     });
     Ok(Op::Query(qry))
 }
