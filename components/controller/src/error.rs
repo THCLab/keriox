@@ -15,9 +15,8 @@ pub enum ControllerError {
     #[error("Database error: {0}")]
     DatabaseError(String),
 
-    #[cfg(feature = "query_cache")]
-    #[error("SQL error: {0}")]
-    SQLError(#[from] rusqlite::Error),
+    #[error("Cache error: {0}")]
+    CacheError(String),
 
     #[error(transparent)]
     SendingError(#[from] SendingError),
@@ -71,5 +70,35 @@ pub enum ControllerError {
 impl From<OobiError> for ControllerError {
     fn from(e: OobiError) -> Self {
         ControllerError::OobiError(e.to_string())
+    }
+}
+
+impl From<redb::DatabaseError> for ControllerError {
+    fn from(e: redb::DatabaseError) -> Self {
+        ControllerError::CacheError(e.to_string())
+    }
+}
+
+impl From<redb::TransactionError> for ControllerError {
+    fn from(e: redb::TransactionError) -> Self {
+        ControllerError::CacheError(e.to_string())
+    }
+}
+
+impl From<redb::TableError> for ControllerError {
+    fn from(e: redb::TableError) -> Self {
+        ControllerError::CacheError(e.to_string())
+    }
+}
+
+impl From<redb::StorageError> for ControllerError {
+    fn from(e: redb::StorageError) -> Self {
+        ControllerError::CacheError(e.to_string())
+    }
+}
+
+impl From<redb::CommitError> for ControllerError {
+    fn from(e: redb::CommitError) -> Self {
+        ControllerError::CacheError(e.to_string())
     }
 }

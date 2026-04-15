@@ -11,7 +11,6 @@ use keri_core::{
 };
 use teliox::database::TelEventDatabase;
 
-#[cfg(feature = "query_cache")]
 use crate::identifier::mechanics::cache::IdentifierCache;
 use crate::{
     communication::Communication,
@@ -30,7 +29,6 @@ where
 {
     pub known_events: Arc<KnownEvents<D, T, S>>,
     pub communication: Arc<Communication<D, T, S>>,
-    #[cfg(feature = "query_cache")]
     pub cache: Arc<IdentifierCache>,
 }
 
@@ -63,7 +61,6 @@ where
             None,
             self.known_events.clone(),
             self.communication.clone(),
-            #[cfg(feature = "query_cache")]
             self.cache.clone(),
         ))
     }

@@ -176,7 +176,6 @@ impl KeriStore {
             reg_id,
             controller.inner.known_events.clone(),
             controller.inner.communication.clone(),
-            #[cfg(feature = "query_cache")]
             controller.inner.cache.clone(),
         );
 

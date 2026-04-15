@@ -35,13 +35,11 @@ where
         let req = if from_who == about_who {
             // process own mailbox
             let req = self.process_own_mailbox(res)?;
-            #[cfg(feature = "query_cache")]
             self.query_cache.update_last_asked_index(recipient, res)?;
             req
         } else {
             // process group mailbox
             let group_req = self.process_group_mailbox(res, about_who).await?;
-            #[cfg(feature = "query_cache")]
             self.query_cache
                 .update_last_asked_group_index(recipient, res)?;
             group_req

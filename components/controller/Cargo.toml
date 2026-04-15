@@ -13,7 +13,6 @@ repository.workspace = true
 default = ["storage-redb"]
 storage-redb = ["keri-core/storage-redb", "teliox/storage-redb"]
 storage-postgres = ["keri-core/storage-postgres", "teliox/storage-postgres"]
-query_cache = ["rusqlite"]
 
 [dependencies]
 async-std = { version = "1.12.0", features = ["attributes", "tokio1"] }
@@ -25,7 +24,7 @@ serde_json = "1.0"
 url = "2.3.1"
 cesrox = { version = "0.1.8" }
 itertools = "0.11.0"
-rusqlite = { version = "0.32.1", features = ["bundled"], optional = true}
+redb = "2.3.0"
 serde = "1.0.219"
 reqwest = { version = "0.12.22", default-features = false, features = ["rustls-tls"] }
 async-trait = "0.1.57"
@@ -50,7 +49,7 @@ required-features = ["storage-postgres"]
 
 [[test]]
 name = "test_delegated_incept_postgres"
-required-features = ["storage-postgres", "query_cache"]
+required-features = ["storage-postgres"]
 
 [package.metadata.release]
 publish = false

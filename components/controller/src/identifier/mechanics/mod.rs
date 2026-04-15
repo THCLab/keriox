@@ -5,7 +5,6 @@ use crate::communication::SendingError;
 use self::{broadcast::BroadcastingError, query_mailbox::ResponseProcessingError};
 
 pub mod broadcast;
-#[cfg(feature = "query_cache")]
 pub mod cache;
 pub mod delegate;
 pub mod group;

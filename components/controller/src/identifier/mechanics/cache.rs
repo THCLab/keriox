@@ -1,95 +1,47 @@
-use std::path::Path;
+use std::{path::Path, sync::Arc};
 
 use keri_core::{mailbox::MailboxResponse, prefix::IdentifierPrefix};
-use rusqlite::{params, Connection};
+use redb::{Database, ReadableTable, TableDefinition};
 
 use crate::{error::ControllerError, mailbox_updating::MailboxReminder};
 
+const OWN_INDEX: TableDefinition<&str, (u64, u64, u64)> = TableDefinition::new("own_index");
+const GROUP_INDEX: TableDefinition<&str, (u64, u64, u64)> = TableDefinition::new("group_index");
+const PUBLISHED_RECEIPTS: TableDefinition<&str, u64> = TableDefinition::new("published_receipts");
+
 /// A structure that stores the state of already retrieved mailbox events and already published receipts.
 pub struct IdentifierCache {
-    connection: Connection,
-    own_table: String,
-    groups_table: String,
-    receipt_table: String,
+    db: Arc<Database>,
 }
 
 impl IdentifierCache {
-    pub fn new(db_file: &Path) -> Result<Self, rusqlite::Error> {
-        let conn = Connection::open(db_file)?;
-        let own_table_name = "own_index".to_string();
-        let group_table_name = "group_index".to_string();
-        let receipts_table_name = "published_receipts".to_string();
-
-        // Create the table if it doesn't exist
-        conn.execute(
-            &format!(
-                "CREATE TABLE IF NOT EXISTS {} (
-                identifier TEXT PRIMARY KEY,
-                receipt INTEGER NOT NULL,
-                multisig INTEGER NOT NULL,
-                delegate INTEGER NOT NULL
-            )",
-                own_table_name
-            ),
-            [],
-        )?;
-
-        // Create the table if it doesn't exist
-        conn.execute(
-            &format!(
-                "CREATE TABLE IF NOT EXISTS {} (
-                identifier TEXT PRIMARY KEY,
-                receipt INTEGER NOT NULL,
-                multisig INTEGER NOT NULL,
-                delegate INTEGER NOT NULL
-            )",
-                group_table_name
-            ),
-            [],
-        )?;
-
-        // Create the table if it doesn't exist
-        conn.execute(
-            &format!(
-                "CREATE TABLE IF NOT EXISTS {} (
-                identifier TEXT PRIMARY KEY,
-                sn INTEGER NOT NULL
-            )",
-                receipts_table_name
-            ),
-            [],
-        )?;
-
-        Ok(Self {
-            connection: conn,
-            own_table: own_table_name,
-            groups_table: group_table_name,
-            receipt_table: receipts_table_name,
-        })
+    pub fn new(db_file: &Path) -> Result<Self, ControllerError> {
+        let db = Database::create(db_file)?;
+        // Create tables if they don't exist
+        let write_txn = db.begin_write()?;
+        {
+            write_txn.open_table(OWN_INDEX)?;
+            write_txn.open_table(GROUP_INDEX)?;
+            write_txn.open_table(PUBLISHED_RECEIPTS)?;
+        }
+        write_txn.commit()?;
+        Ok(Self { db: Arc::new(db) })
     }
 
     fn load_mailbox_remainder(
         &self,
-        table_name: &str,
+        table: TableDefinition<&str, (u64, u64, u64)>,
         id: &IdentifierPrefix,
     ) -> Result<MailboxReminder, ControllerError> {
-        let mut stmt = self.connection.prepare(&format!(
-            "SELECT receipt, multisig, delegate FROM {} WHERE identifier = ?1",
-            table_name
-        ))?;
-
-        let mut rows = stmt.query(params![id.to_string()])?;
-
-        // Fetch the first row (assuming there is only one match)
-        if let Some(row) = rows.next()? {
-            let receipt: usize = row.get(0)?;
-            let multisig: usize = row.get(1)?;
-            let delegate: usize = row.get(2)?;
-
+        let read_txn = self.db.begin_read()?;
+        let tbl = read_txn.open_table(table)?;
+        let key = id.to_string();
+        if let Some(value) = tbl.get(key.as_str())? {
+            let (receipt, multisig, delegate) = value.value();
             Ok(MailboxReminder {
-                receipt,
-                multisig,
-                delegate,
+                receipt: receipt as usize,
+                multisig: multisig as usize,
+                delegate: delegate as usize,
             })
         } else {
             Ok(MailboxReminder::default())
@@ -100,24 +52,13 @@ impl IdentifierCache {
         &self,
         key: &IdentifierPrefix,
         sn: u64,
-    ) -> Result<(), rusqlite::Error> {
-        self.connection.execute(
-            &format!(
-                "INSERT OR IGNORE INTO {} (identifier, sn)
-        VALUES (?, 0);",
-                self.receipt_table
-            ),
-            params![key.to_string()],
-        )?;
-        self.connection.execute(
-            &format!(
-                "UPDATE {} 
-         SET sn = ?2
-         WHERE identifier = ?1",
-                self.receipt_table
-            ),
-            params![key.to_string(), sn,],
-        )?;
+    ) -> Result<(), ControllerError> {
+        let write_txn = self.db.begin_write()?;
+        {
+            let mut tbl = write_txn.open_table(PUBLISHED_RECEIPTS)?;
+            tbl.insert(key.to_string().as_str(), sn)?;
+        }
+        write_txn.commit()?;
         Ok(())
     }
 
@@ -125,17 +66,11 @@ impl IdentifierCache {
         &self,
         id: &IdentifierPrefix,
     ) -> Result<usize, ControllerError> {
-        let mut stmt = self.connection.prepare(&format!(
-            "SELECT sn FROM {} WHERE identifier = ?1",
-            self.receipt_table
-        ))?;
-
-        let mut rows = stmt.query(params![id.to_string()])?;
-
-        // Fetch the first row (assuming there is only one match)
-        if let Some(row) = rows.next()? {
-            let sn: usize = row.get(0)?;
-            Ok(sn)
+        let read_txn = self.db.begin_read()?;
+        let tbl = read_txn.open_table(PUBLISHED_RECEIPTS)?;
+        let key = id.to_string();
+        if let Some(value) = tbl.get(key.as_str())? {
+            Ok(value.value() as usize)
         } else {
             Ok(0)
         }
@@ -145,46 +80,42 @@ impl IdentifierCache {
         &self,
         id: &IdentifierPrefix,
     ) -> Result<MailboxReminder, ControllerError> {
-        self.load_mailbox_remainder(&self.own_table, id)
+        self.load_mailbox_remainder(OWN_INDEX, id)
     }
 
     pub fn last_asked_group_index(
         &self,
         id: &IdentifierPrefix,
     ) -> Result<MailboxReminder, ControllerError> {
-        self.load_mailbox_remainder(&self.groups_table, id)
+        self.load_mailbox_remainder(GROUP_INDEX, id)
     }
 
-    pub fn update_mailbox_remainder(
+    fn update_mailbox_remainder(
         &self,
-        table_name: &str,
+        table: TableDefinition<&str, (u64, u64, u64)>,
         key: &IdentifierPrefix,
         res: &MailboxResponse,
-    ) -> Result<(), rusqlite::Error> {
-        self.connection.execute(
-            &format!(
-                "INSERT OR IGNORE INTO {} (identifier, receipt, multisig, delegate)
-        VALUES (?, 0, 0, 0);",
-                table_name
-            ),
-            params![key.to_string()],
-        )?;
-        self.connection.execute(
-            &format!(
-                "UPDATE {} 
-         SET receipt = receipt + ?1, 
-             multisig = multisig + ?2, 
-             delegate = delegate + ?3 
-         WHERE identifier = ?4",
-                table_name,
-            ),
-            params![
-                res.receipt.len(),
-                res.multisig.len(),
-                res.delegate.len(),
-                key.to_string()
-            ],
-        )?;
+    ) -> Result<(), ControllerError> {
+        let write_txn = self.db.begin_write()?;
+        {
+            let mut tbl = write_txn.open_table(table)?;
+            let key_str = key.to_string();
+            let (receipt, multisig, delegate) =
+                if let Some(existing) = tbl.get(key_str.as_str())? {
+                    existing.value()
+                } else {
+                    (0, 0, 0)
+                };
+            tbl.insert(
+                key_str.as_str(),
+                (
+                    receipt + res.receipt.len() as u64,
+                    multisig + res.multisig.len() as u64,
+                    delegate + res.delegate.len() as u64,
+                ),
+            )?;
+        }
+        write_txn.commit()?;
         Ok(())
     }
 
@@ -192,16 +123,16 @@ impl IdentifierCache {
         &self,
         key: &IdentifierPrefix,
         res: &MailboxResponse,
-    ) -> Result<(), rusqlite::Error> {
-        self.update_mailbox_remainder(&self.own_table, key, res)
+    ) -> Result<(), ControllerError> {
+        self.update_mailbox_remainder(OWN_INDEX, key, res)
     }
 
     pub fn update_last_asked_group_index(
         &self,
         id: &IdentifierPrefix,
         res: &MailboxResponse,
-    ) -> Result<(), rusqlite::Error> {
-        self.update_mailbox_remainder(&self.groups_table, id, res)
+    ) -> Result<(), ControllerError> {
+        self.update_mailbox_remainder(GROUP_INDEX, id, res)
     }
 }
 

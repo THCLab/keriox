@@ -1,4 +1,3 @@
-#[cfg(feature = "query_cache")]
 mod test_delegated_incept_postgres {
     mod common {
         include!("common/mod.rs");

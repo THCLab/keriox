@@ -14,7 +14,7 @@ said = { version = "0.4.0" }
 teliox = {path = "../support/teliox"}
 watcher = { path = "../components/watcher" }
 witness = { path = "../components/witness" }
-keri-controller = { path = "../components/controller", features = ["query_cache"]}
+keri-controller = { path = "../components/controller" }
 anyhow = "1"
 serde_json = "1.0"
 test-context = "0.4.1"
