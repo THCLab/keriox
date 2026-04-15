@@ -5,11 +5,11 @@ use keri_controller::{
     communication::{IdentifierTelTransport, SendingError},
     LocationScheme,
 };
+use keri_core::oobi_manager::RedbOobiStorage;
 use keri_core::transport::TransportError;
 use teliox::{event::verifiable_event::VerifiableEvent, query::SignedTelQuery};
 use watcher::{transport::WatcherTelTransport, Watcher};
 use witness::Witness;
-use keri_core::oobi_manager::RedbOobiStorage;
 
 pub enum TelTestActor {
     Witness(Arc<Witness<RedbOobiStorage>>),

@@ -8,8 +8,8 @@
 
 use std::sync::Arc;
 
-use keri_core::{keys::PublicKey, signer::Signer};
 use keri_controller::BasicPrefix;
+use keri_core::{keys::PublicKey, signer::Signer};
 
 use crate::error::Error;
 
@@ -35,15 +35,11 @@ impl KeriSigner {
     /// (the call is CPU-bound and completes immediately for software keys).
     pub fn sign(&self, msg: &[u8]) -> crate::Result<Vec<u8>> {
         match self {
-            KeriSigner::Legacy(s) => s
-                .sign(msg)
-                .map_err(|e| Error::Signing(e.to_string())),
+            KeriSigner::Legacy(s) => s.sign(msg).map_err(|e| Error::Signing(e.to_string())),
             KeriSigner::Provider(p) => {
                 let msg = msg.to_vec();
                 tokio::task::block_in_place(|| {
-                    tokio::runtime::Handle::current().block_on(async {
-                        p.sign(&msg).await
-                    })
+                    tokio::runtime::Handle::current().block_on(async { p.sign(&msg).await })
                 })
                 .map_err(|e| Error::Signing(e.to_string()))
             }
@@ -54,9 +50,7 @@ impl KeriSigner {
     pub fn public_key(&self) -> PublicKey {
         match self {
             KeriSigner::Legacy(s) => s.public_key(),
-            KeriSigner::Provider(p) => {
-                PublicKey::new(p.public_key().bytes.clone())
-            }
+            KeriSigner::Provider(p) => PublicKey::new(p.public_key().bytes.clone()),
         }
     }
 

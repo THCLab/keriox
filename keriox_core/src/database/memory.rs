@@ -139,18 +139,14 @@ impl EventDatabase for MemoryDatabase {
     ) -> Option<impl DoubleEndedIterator<Item = TimestampedSignedEventMessage>> {
         let events = self.events.read().unwrap();
         match params {
-            QueryParameters::All { id } => {
-                events.get(id).cloned().map(|v| v.into_iter())
-            }
-            QueryParameters::BySn { ref id, sn } => {
-                events.get(id).map(|evts| {
-                    evts.iter()
-                        .filter(move |e| e.signed_event_message.event_message.data.get_sn() == sn)
-                        .cloned()
-                        .collect::<Vec<_>>()
-                        .into_iter()
-                })
-            }
+            QueryParameters::All { id } => events.get(id).cloned().map(|v| v.into_iter()),
+            QueryParameters::BySn { ref id, sn } => events.get(id).map(|evts| {
+                evts.iter()
+                    .filter(move |e| e.signed_event_message.event_message.data.get_sn() == sn)
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .into_iter()
+            }),
             QueryParameters::Range {
                 ref id,
                 start,
@@ -174,9 +170,10 @@ impl EventDatabase for MemoryDatabase {
     ) -> Option<impl DoubleEndedIterator<Item = Transferable>> {
         let receipts = self.receipts_t.read().unwrap();
         match params {
-            QueryParameters::BySn { ref id, sn } => {
-                receipts.get(&(id.clone(), sn)).cloned().map(|v| v.into_iter())
-            }
+            QueryParameters::BySn { ref id, sn } => receipts
+                .get(&(id.clone(), sn))
+                .cloned()
+                .map(|v| v.into_iter()),
             _ => None,
         }
     }
@@ -187,9 +184,10 @@ impl EventDatabase for MemoryDatabase {
     ) -> Option<impl DoubleEndedIterator<Item = SignedNontransferableReceipt>> {
         let receipts = self.receipts_nt.read().unwrap();
         match params {
-            QueryParameters::BySn { ref id, sn } => {
-                receipts.get(&(id.clone(), sn)).cloned().map(|v| v.into_iter())
-            }
+            QueryParameters::BySn { ref id, sn } => receipts
+                .get(&(id.clone(), sn))
+                .cloned()
+                .map(|v| v.into_iter()),
             _ => None,
         }
     }
@@ -207,19 +205,12 @@ impl EventDatabase for MemoryDatabase {
             .signature
             .get_signer()
             .ok_or_else(|| Error::SemanticError("Missing signer".into()))?;
-        self.replies
-            .write()
-            .unwrap()
-            .insert((id, signer), reply);
+        self.replies.write().unwrap().insert((id, signer), reply);
         Ok(())
     }
 
     #[cfg(feature = "query")]
-    fn get_reply(
-        &self,
-        id: &IdentifierPrefix,
-        from_who: &IdentifierPrefix,
-    ) -> Option<SignedReply> {
+    fn get_reply(&self, id: &IdentifierPrefix, from_who: &IdentifierPrefix) -> Option<SignedReply> {
         self.replies
             .read()
             .unwrap()
@@ -249,7 +240,10 @@ impl MemoryLogDatabase {
     fn log_event_internal(&self, event: &SignedEventMessage) {
         if let Ok(digest) = event.event_message.digest() {
             let timestamped = Timestamped::new(event.clone());
-            self.events.write().unwrap().insert(digest.clone(), timestamped);
+            self.events
+                .write()
+                .unwrap()
+                .insert(digest.clone(), timestamped);
             self.signatures
                 .write()
                 .unwrap()
@@ -429,11 +423,7 @@ impl SequencedEventDatabase for MemorySequencedEventDb {
         Ok(())
     }
 
-    fn get(
-        &self,
-        identifier: &IdentifierPrefix,
-        sn: u64,
-    ) -> Result<Self::DigestIter, Self::Error> {
+    fn get(&self, identifier: &IdentifierPrefix, sn: u64) -> Result<Self::DigestIter, Self::Error> {
         let data = self.data.read().unwrap();
         let items = data
             .get(&(identifier.clone(), sn))
@@ -462,7 +452,12 @@ impl SequencedEventDatabase for MemorySequencedEventDb {
         sn: u64,
         said: &SelfAddressingIdentifier,
     ) -> Result<(), Self::Error> {
-        if let Some(v) = self.data.write().unwrap().get_mut(&(identifier.clone(), sn)) {
+        if let Some(v) = self
+            .data
+            .write()
+            .unwrap()
+            .get_mut(&(identifier.clone(), sn))
+        {
             v.retain(|d| d != said);
         }
         Ok(())
@@ -528,11 +523,7 @@ impl EscrowDatabase for MemoryEscrowDb {
         Ok(())
     }
 
-    fn get(
-        &self,
-        identifier: &IdentifierPrefix,
-        sn: u64,
-    ) -> Result<Self::EventIter, Self::Error> {
+    fn get(&self, identifier: &IdentifierPrefix, sn: u64) -> Result<Self::EventIter, Self::Error> {
         let digests = self.sequenced.get(identifier, sn)?;
         let events: Vec<_> = digests
             .filter_map(|d| {
@@ -609,9 +600,7 @@ mod tests {
     use crate::{
         error::Error,
         event_message::signed_event_message::{Message, Notice},
-        processor::{
-            basic_processor::BasicProcessor, event_storage::EventStorage, Processor,
-        },
+        processor::{basic_processor::BasicProcessor, event_storage::EventStorage, Processor},
     };
 
     #[test]

@@ -6,11 +6,8 @@ mod test_delegated_incept_postgres {
     use std::{collections::HashMap, sync::Arc};
 
     use keri_controller::{
-        config::ControllerConfig,
-        controller::PostgresController,
-        error::ControllerError,
-        mailbox_updating::ActionRequired,
-        LocationScheme,
+        config::ControllerConfig, controller::PostgresController, error::ControllerError,
+        mailbox_updating::ActionRequired, LocationScheme,
     };
     use keri_core::{
         event_message::signed_event_message::Message,
@@ -179,11 +176,9 @@ mod test_delegated_incept_postgres {
                     let signature_ixn = SelfSigningPrefix::Ed25519Sha512(
                         delegator_keypair.sign(&delegating_event.encode()?)?,
                     );
-                    let signature_exn = SelfSigningPrefix::Ed25519Sha512(
-                        delegator_keypair.sign(&exn.encode()?)?,
-                    );
-                    let exn_index_signature =
-                        delegator.sign_with_index(signature_exn, 0).unwrap();
+                    let signature_exn =
+                        SelfSigningPrefix::Ed25519Sha512(delegator_keypair.sign(&exn.encode()?)?);
+                    let exn_index_signature = delegator.sign_with_index(signature_exn, 0).unwrap();
                     delegator
                         .finalize_group_event(
                             &delegating_event.encode()?,

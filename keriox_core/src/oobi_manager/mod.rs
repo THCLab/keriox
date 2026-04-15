@@ -129,7 +129,9 @@ impl<S: OobiStorageBackend> OobiManager<S> {
 #[cfg(feature = "storage-redb")]
 impl OobiManager<self::storage::RedbOobiStorage> {
     /// Create a redb-backed OobiManager from a `RedbDatabase` wrapper.
-    pub fn new(events_db: std::sync::Arc<crate::database::redb::RedbDatabase>) -> Result<Self, OobiError> {
+    pub fn new(
+        events_db: std::sync::Arc<crate::database::redb::RedbDatabase>,
+    ) -> Result<Self, OobiError> {
         let store = self::storage::RedbOobiStorage::new(events_db.db.clone())
             .map_err(|e| OobiError::Db(e.to_string()))?;
         Ok(Self { store })
@@ -137,7 +139,8 @@ impl OobiManager<self::storage::RedbOobiStorage> {
 
     /// Create a redb-backed OobiManager directly from a raw redb `Database`.
     pub fn new_redb(db: std::sync::Arc<redb::Database>) -> Result<Self, OobiError> {
-        let store = self::storage::RedbOobiStorage::new(db).map_err(|e| OobiError::Db(e.to_string()))?;
+        let store =
+            self::storage::RedbOobiStorage::new(db).map_err(|e| OobiError::Db(e.to_string()))?;
         Ok(Self { store })
     }
 }

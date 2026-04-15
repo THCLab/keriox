@@ -22,7 +22,13 @@ fn binary_db_name() -> String {
     // Sanitize: keep only alphanumeric and underscores, max 63 chars (Postgres limit).
     let safe: String = binary_name
         .chars()
-        .map(|c| if c.is_alphanumeric() || c == '_' { c } else { '_' })
+        .map(|c| {
+            if c.is_alphanumeric() || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
         .take(55)
         .collect();
     format!("keri_test_{}", safe)
@@ -48,9 +54,12 @@ pub fn ensure_clean_db() {
                 .connect(&format!("{}/postgres", base_url()))
                 .await
                 .expect("Failed to connect to admin db");
-            let _ = sqlx::query(&format!("DROP DATABASE IF EXISTS \"{}\" WITH (FORCE)", db_name))
-                .execute(&admin)
-                .await;
+            let _ = sqlx::query(&format!(
+                "DROP DATABASE IF EXISTS \"{}\" WITH (FORCE)",
+                db_name
+            ))
+            .execute(&admin)
+            .await;
             sqlx::query(&format!("CREATE DATABASE \"{}\"", db_name))
                 .execute(&admin)
                 .await

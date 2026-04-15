@@ -51,11 +51,11 @@ use crate::{
 #[cfg(feature = "oobi-manager")]
 use crate::oobi::Role;
 #[cfg(feature = "oobi-manager")]
-use crate::oobi_manager::{OobiManager, RedbOobiManager};
-#[cfg(feature = "oobi-manager")]
 use crate::oobi_manager::storage::OobiStorageBackend;
 #[cfg(feature = "oobi-manager")]
 use crate::oobi_manager::storage::RedbOobiStorage;
+#[cfg(feature = "oobi-manager")]
+use crate::oobi_manager::{OobiManager, RedbOobiManager};
 
 #[cfg(feature = "query")]
 use crate::query::{
@@ -66,7 +66,11 @@ use crate::query::{
 /// Helper struct for events generation, signing and processing.
 /// Used in tests.
 #[cfg(feature = "oobi-manager")]
-pub struct SimpleController<K: KeyManager + 'static, D: EventDatabase + EscrowCreator, S: OobiStorageBackend> {
+pub struct SimpleController<
+    K: KeyManager + 'static,
+    D: EventDatabase + EscrowCreator,
+    S: OobiStorageBackend,
+> {
     prefix: IdentifierPrefix,
     pub key_manager: Arc<Mutex<K>>,
     processor: BasicProcessor<D>,
@@ -100,8 +104,7 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase, RedbOobiStorage> {
         key_manager: Arc<Mutex<K>>,
         escrow_config: EscrowConfig,
     ) -> Result<SimpleController<K, RedbDatabase, RedbOobiStorage>, Error> {
-        let (not_bus, escrows) =
-            default_escrow_bus(event_db.clone(), escrow_config, None);
+        let (not_bus, escrows) = default_escrow_bus(event_db.clone(), escrow_config, None);
         let processor = BasicProcessor::new(event_db.clone(), Some(not_bus));
 
         Ok(SimpleController {

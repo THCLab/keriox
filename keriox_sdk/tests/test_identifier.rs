@@ -103,10 +103,9 @@ async fn test_incept_and_watcher_event_generation() {
         .finalize_incept(inception_event.as_bytes(), &sig)
         .unwrap();
 
-    let fake_watcher_id: IdentifierPrefix =
-        "BNJJhjUnhlw-lsbYdehzLsX1hJMG9QJlK_wJ5AunJLrM"
-            .parse()
-            .unwrap();
+    let fake_watcher_id: IdentifierPrefix = "BNJJhjUnhlw-lsbYdehzLsX1hJMG9QJlK_wJ5AunJLrM"
+        .parse()
+        .unwrap();
 
     let rpy = identifier.add_watcher(fake_watcher_id);
     assert!(rpy.is_ok(), "add_watcher event generation failed");

@@ -4,10 +4,10 @@ use said::SelfAddressingIdentifier;
 
 #[cfg(feature = "storage-redb")]
 pub(crate) mod digest_key_database;
-#[cfg(feature = "storage-redb")]
-pub mod redb;
 #[cfg(feature = "storage-postgres")]
 pub mod postgres;
+#[cfg(feature = "storage-redb")]
+pub mod redb;
 
 pub trait TelEventDatabase: Send + Sync {
     fn add_new_event(&self, event: VerifiableEvent, id: &IdentifierPrefix) -> Result<(), Error>;
@@ -37,10 +37,7 @@ pub trait TelEscrowDatabase: Send + Sync {
         tel_digest: &SelfAddressingIdentifier,
     ) -> Result<(), Error>;
 
-    fn missing_issuer_get(
-        &self,
-        kel_digest: &str,
-    ) -> Result<Vec<SelfAddressingIdentifier>, Error>;
+    fn missing_issuer_get(&self, kel_digest: &str) -> Result<Vec<SelfAddressingIdentifier>, Error>;
 
     fn missing_issuer_remove(
         &self,
@@ -113,9 +110,11 @@ impl EscrowDatabase {
 
         let missing_issuer =
             digest_key_database::DigestKeyDatabase::new(db.clone(), "missing_issuer_escrow");
-        let out_of_order =
-            keri_core::database::redb::escrow_database::SnKeyDatabase::new(db.clone(), "out_of_order")
-                .map_err(|e| Error::EscrowDatabaseError(e.to_string()))?;
+        let out_of_order = keri_core::database::redb::escrow_database::SnKeyDatabase::new(
+            db.clone(),
+            "out_of_order",
+        )
+        .map_err(|e| Error::EscrowDatabaseError(e.to_string()))?;
         let missing_registry =
             digest_key_database::DigestKeyDatabase::new(db, "missing_registry_escrow");
 
@@ -137,10 +136,7 @@ impl TelEscrowDatabase for EscrowDatabase {
         self.missing_issuer.insert(&kel_digest, tel_digest)
     }
 
-    fn missing_issuer_get(
-        &self,
-        kel_digest: &str,
-    ) -> Result<Vec<SelfAddressingIdentifier>, Error> {
+    fn missing_issuer_get(&self, kel_digest: &str) -> Result<Vec<SelfAddressingIdentifier>, Error> {
         self.missing_issuer.get(&kel_digest)
     }
 

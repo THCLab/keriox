@@ -12,8 +12,8 @@ use keri_core::{
 };
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DurationSeconds};
+use tracing::info;
 use url::Url;
-use tracing::{info};
 use witness::{WitnessEscrowConfig, WitnessListener};
 
 #[derive(Deserialize)]

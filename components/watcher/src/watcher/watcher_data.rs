@@ -31,7 +31,7 @@ use keri_core::{
     },
 };
 use keri_core::{
-    oobi_manager::{OobiManager, storage::OobiStorageBackend},
+    oobi_manager::{storage::OobiStorageBackend, OobiManager},
     processor::{basic_processor::BasicProcessor, event_storage::EventStorage},
     signer::Signer,
     transport::Transport,
@@ -107,7 +107,8 @@ impl<S: OobiStorageBackend> WatcherData<S> {
             Arc::new(RedbDatabase::new(&path).unwrap())
         };
 
-        let (notification_bus, _escrows) = default_escrow_bus(events_db.clone(), escrow_config, None);
+        let (notification_bus, _escrows) =
+            default_escrow_bus(events_db.clone(), escrow_config, None);
         let reply_escrow = Arc::new(ReplyEscrow::new(events_db.clone()));
         notification_bus.register_observer(
             reply_escrow.clone(),
@@ -293,12 +294,7 @@ impl<S: OobiStorageBackend> WatcherData<S> {
                         })?;
 
                     // Wait up to 10 seconds for the update to complete.
-                    match tokio::time::timeout(
-                        std::time::Duration::from_secs(10),
-                        done_rx,
-                    )
-                    .await
-                    {
+                    match tokio::time::timeout(std::time::Duration::from_secs(10), done_rx).await {
                         Ok(Ok(Ok(()))) => {
                             // Update succeeded, check if we now have the data
                             let updated_state = self.get_state_for_prefix(&args.i);
@@ -380,11 +376,7 @@ impl<S: OobiStorageBackend> WatcherData<S> {
         let witness_sn = self.query_state(id).await?;
 
         // Compare against locally stored KEL state.
-        let local_sn = self
-            .event_storage
-            .get_state(id)
-            .map(|s| s.sn)
-            .unwrap_or(0);
+        let local_sn = self.event_storage.get_state(id).map(|s| s.sn).unwrap_or(0);
 
         if local_sn < witness_sn {
             // We are behind — fetch the missing KEL events from witnesses.
@@ -446,8 +438,7 @@ impl<S: OobiStorageBackend> WatcherData<S> {
                     SerializationFormats::JSON,
                     HashFunctionCode::Blake3_256,
                 );
-                let sigs =
-                    SelfSigningPrefix::Ed25519Sha512(self.signer.sign(qry.encode()?)?);
+                let sigs = SelfSigningPrefix::Ed25519Sha512(self.signer.sign(qry.encode()?)?);
                 let signed_qry =
                     SignedKelQuery::new_nontrans(qry.clone(), self.prefix.clone(), sigs);
 
@@ -493,10 +484,7 @@ impl<S: OobiStorageBackend> WatcherData<S> {
                         }
                     }
                     PossibleResponse::Mbx(_mbx) => {
-                        tracing::error!(
-                            "Unexpected MBX response from witness {}",
-                            witness_id
-                        );
+                        tracing::error!("Unexpected MBX response from witness {}", witness_id);
                     }
                 }
             }
@@ -628,11 +616,13 @@ impl<S: OobiStorageBackend> WatcherData<S> {
         let query = SignedKelQuery::new_nontrans(qry, self.prefix.clone(), signature);
 
         let start = std::time::Instant::now();
-        let resp = match self.send_query_to(wit_id.clone(), Scheme::Http, query).await {
+        let resp = match self
+            .send_query_to(wit_id.clone(), Scheme::Http, query)
+            .await
+        {
             Ok(r) => r,
             Err(e) => {
-                self.health_tracker
-                    .record_failure(&wit_id, e.to_string());
+                self.health_tracker.record_failure(&wit_id, e.to_string());
                 return Err(e);
             }
         };
@@ -641,8 +631,7 @@ impl<S: OobiStorageBackend> WatcherData<S> {
             PossibleResponse::Ksn(ksn) => ksn,
             e => {
                 let err = ActorError::UnexpectedResponse(e.to_string());
-                self.health_tracker
-                    .record_failure(&wit_id, err.to_string());
+                self.health_tracker.record_failure(&wit_id, err.to_string());
                 return Err(err);
             }
         };
@@ -655,8 +644,7 @@ impl<S: OobiStorageBackend> WatcherData<S> {
         };
 
         self.process_reply(resp)?;
-        self.health_tracker
-            .record_success(&wit_id, start.elapsed());
+        self.health_tracker.record_success(&wit_id, start.elapsed());
         Ok(sn)
     }
 

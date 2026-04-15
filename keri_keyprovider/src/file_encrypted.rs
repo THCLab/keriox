@@ -11,18 +11,15 @@ use std::{
     time::{Duration, Instant},
 };
 
+use argon2::{Algorithm, Argon2, Version};
 use async_trait::async_trait;
-use chacha20poly1305::{
-    aead::Aead, Key, KeyInit, XChaCha20Poly1305, XNonce,
-};
-use argon2::{Argon2, Algorithm, Version};
+use chacha20poly1305::{aead::Aead, Key, KeyInit, XChaCha20Poly1305, XNonce};
 use rand::RngCore;
 use zeroize::Zeroize;
 
 use crate::{
-    software::SoftwareKeyProvider,
-    EncryptedKeyExport, KeyProvider, KeyProviderError, KeyProviderFactory, KdfParams, PublicKeyData,
-    Result, SignatureAlgorithm,
+    software::SoftwareKeyProvider, EncryptedKeyExport, KdfParams, KeyProvider, KeyProviderError,
+    KeyProviderFactory, PublicKeyData, Result, SignatureAlgorithm,
 };
 
 const FILE_VERSION: u8 = 1;
@@ -60,8 +57,13 @@ pub(crate) fn encrypt_seed(
 }
 
 fn derive_key(passphrase: &[u8], salt: &[u8], params: &KdfParams) -> Result<[u8; 32]> {
-    let config = argon2::Params::new(params.mem_cost, params.time_cost, params.parallelism, Some(32))
-        .map_err(|e| KeyProviderError::EncryptionError(format!("invalid argon2 params: {e}")))?;
+    let config = argon2::Params::new(
+        params.mem_cost,
+        params.time_cost,
+        params.parallelism,
+        Some(32),
+    )
+    .map_err(|e| KeyProviderError::EncryptionError(format!("invalid argon2 params: {e}")))?;
     let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, config);
     let mut key = [0u8; 32];
     argon2
@@ -76,7 +78,9 @@ fn decrypt_seed(passphrase: &[u8], export: &EncryptedKeyExport) -> Result<Vec<u8
     let nonce = XNonce::from_slice(&export.nonce);
     cipher
         .decrypt(nonce, export.ciphertext.as_slice())
-        .map_err(|_| KeyProviderError::AuthenticationFailed("wrong passphrase or corrupted data".into()))
+        .map_err(|_| {
+            KeyProviderError::AuthenticationFailed("wrong passphrase or corrupted data".into())
+        })
 }
 
 /// Persistent key provider backed by encrypted files on disk.
@@ -117,9 +121,9 @@ impl FileEncryptedProvider {
         auto_lock_timeout: Duration,
     ) -> Result<Self> {
         let provider = SoftwareKeyProvider::generate(label.into(), algorithm)?;
-        let seed = provider
-            .ed25519_seed_bytes()
-            .ok_or_else(|| KeyProviderError::UnsupportedAlgorithm("only Ed25519 supported".into()))?;
+        let seed = provider.ed25519_seed_bytes().ok_or_else(|| {
+            KeyProviderError::UnsupportedAlgorithm("only Ed25519 supported".into())
+        })?;
 
         let export = encrypt_seed(passphrase, &seed, provider.label(), algorithm)?;
         write_key_file(&path, &export)?;
@@ -175,10 +179,9 @@ impl FileEncryptedProvider {
 
         let provider = match export.algorithm {
             SignatureAlgorithm::Ed25519 => {
-                let seed_arr: [u8; 32] = seed
-                    .as_slice()
-                    .try_into()
-                    .map_err(|_| KeyProviderError::InvalidKeyMaterial("seed must be 32 bytes".into()))?;
+                let seed_arr: [u8; 32] = seed.as_slice().try_into().map_err(|_| {
+                    KeyProviderError::InvalidKeyMaterial("seed must be 32 bytes".into())
+                })?;
                 SoftwareKeyProvider::from_ed25519_bytes(&self.label, &seed_arr)?
             }
             SignatureAlgorithm::EcdsaSecp256k1 => {
@@ -241,7 +244,9 @@ fn read_key_file(path: &Path) -> Result<EncryptedKeyExport> {
     let data = std::fs::read(path)?;
     if data.len() < 66 {
         // 1 + 1 + 24 + 32 + 4 + 4 = 66 minimum (before ciphertext)
-        return Err(KeyProviderError::InvalidKeyMaterial("key file too short".into()));
+        return Err(KeyProviderError::InvalidKeyMaterial(
+            "key file too short".into(),
+        ));
     }
     let version = data[0];
     if version != FILE_VERSION {
@@ -252,7 +257,11 @@ fn read_key_file(path: &Path) -> Result<EncryptedKeyExport> {
     let algorithm = match data[1] {
         0 => SignatureAlgorithm::Ed25519,
         1 => SignatureAlgorithm::EcdsaSecp256k1,
-        _ => return Err(KeyProviderError::InvalidKeyMaterial("unknown algorithm code".into())),
+        _ => {
+            return Err(KeyProviderError::InvalidKeyMaterial(
+                "unknown algorithm code".into(),
+            ))
+        }
     };
     let nonce = data[2..26].to_vec();
     let salt = data[26..58].to_vec();
@@ -282,10 +291,7 @@ impl KeyProvider for FileEncryptedProvider {
         self.ensure_unlocked().await?;
         let inner = {
             let state = self.unlocked.lock().unwrap();
-            state
-                .inner
-                .clone()
-                .ok_or(KeyProviderError::Locked)?
+            state.inner.clone().ok_or(KeyProviderError::Locked)?
         };
         inner.sign(message).await
     }
@@ -305,10 +311,7 @@ impl KeyProvider for FileEncryptedProvider {
     async fn export_encrypted(&self, passphrase: &str) -> Result<EncryptedKeyExport> {
         let seed = {
             let state = self.unlocked.lock().unwrap();
-            state
-                .seed
-                .clone()
-                .ok_or(KeyProviderError::Locked)?
+            state.seed.clone().ok_or(KeyProviderError::Locked)?
         };
         encrypt_seed(passphrase.as_bytes(), &seed, &self.label, self.algorithm)
     }
@@ -436,8 +439,9 @@ impl KeyProviderFactory for FileEncryptedProviderFactory {
 fn read_passphrase(_prompt: &str) -> Result<String> {
     #[cfg(feature = "rpassword")]
     {
-        rpassword::read_password()
-            .map_err(|e| KeyProviderError::AuthenticationFailed(format!("failed to read passphrase: {e}")))
+        rpassword::read_password().map_err(|e| {
+            KeyProviderError::AuthenticationFailed(format!("failed to read passphrase: {e}"))
+        })
     }
     #[cfg(not(feature = "rpassword"))]
     {
@@ -501,7 +505,8 @@ mod tests {
     #[test]
     fn encrypt_decrypt_roundtrip() {
         let seed = [42u8; 32];
-        let export = encrypt_seed(b"passphrase", &seed, "test", SignatureAlgorithm::Ed25519).unwrap();
+        let export =
+            encrypt_seed(b"passphrase", &seed, "test", SignatureAlgorithm::Ed25519).unwrap();
         let decrypted = decrypt_seed(b"passphrase", &export).unwrap();
         assert_eq!(decrypted.as_slice(), seed);
     }
@@ -509,7 +514,8 @@ mod tests {
     #[test]
     fn wrong_passphrase_decrypt_fails() {
         let seed = [42u8; 32];
-        let export = encrypt_seed(b"passphrase", &seed, "test", SignatureAlgorithm::Ed25519).unwrap();
+        let export =
+            encrypt_seed(b"passphrase", &seed, "test", SignatureAlgorithm::Ed25519).unwrap();
         assert!(decrypt_seed(b"wrong", &export).is_err());
     }
 }

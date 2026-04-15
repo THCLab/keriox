@@ -4,10 +4,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use keri_core::{
-    oobi_manager::storage::OobiStorageBackend,
-    prefix::IdentifierPrefix,
-};
+use keri_core::{oobi_manager::storage::OobiStorageBackend, prefix::IdentifierPrefix};
 use tokio::time::sleep;
 
 use super::watcher_data::WatcherData;
@@ -224,9 +221,7 @@ impl<S: OobiStorageBackend> WitnessPoller<S> {
                 .unwrap_or(0);
 
             if local_sn < witness_sn {
-                self.watcher_data
-                    .forward_query_from(aid, local_sn)
-                    .await?;
+                self.watcher_data.forward_query_from(aid, local_sn).await?;
             }
         }
 

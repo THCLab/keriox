@@ -14,7 +14,10 @@ use keri_core::{
     state::IdentifierState,
 };
 use mechanics::cache::IdentifierCache;
-use teliox::{database::TelEventDatabase, state::{vc_state::TelState, ManagerTelState}};
+use teliox::{
+    database::TelEventDatabase,
+    state::{vc_state::TelState, ManagerTelState},
+};
 
 use crate::{communication::Communication, error::ControllerError, known_events::KnownEvents};
 

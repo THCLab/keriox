@@ -23,7 +23,7 @@ use keri_core::{
     },
     mailbox::MailboxResponse,
     oobi::LocationScheme,
-    oobi_manager::{OobiManager, RedbOobiManager, RedbOobiStorage, storage::OobiStorageBackend},
+    oobi_manager::{storage::OobiStorageBackend, OobiManager, RedbOobiManager, RedbOobiStorage},
     prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     processor::notification::{Notification, NotificationBus, Notifier},
     query::{
@@ -35,7 +35,7 @@ use keri_core::{
 };
 use serde::{Deserialize, Serialize};
 use teliox::{
-    database::{redb::RedbTelDatabase, EscrowDatabase, TelEventDatabase},
+    database::{redb::RedbTelDatabase, EscrowDatabase},
     event::{parse_tel_query_stream, verifiable_event::VerifiableEvent},
     processor::{escrow::default_escrow_bus, storage::TelEventStorage, TelReplyType},
     tel::Tel,
@@ -247,8 +247,7 @@ impl Witness<RedbOobiStorage> {
         // Create oobi manager database in a separate location
         let mut oobi_database_path = PathBuf::from(event_db_path);
         oobi_database_path.push("oobi_database");
-        let oobi_db =
-            Arc::new(RedbDatabase::new(&oobi_database_path).map_err(|_| Error::DbError)?);
+        let oobi_db = Arc::new(RedbDatabase::new(&oobi_database_path).map_err(|_| Error::DbError)?);
 
         // construct witness loc scheme oobi
         let loc_scheme = LocationScheme::new(

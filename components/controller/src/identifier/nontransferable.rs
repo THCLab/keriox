@@ -19,7 +19,10 @@ use keri_core::{
     oobi_manager::storage::OobiStorageBackend,
     query::query_event::{LogsQueryArgs, QueryEvent, QueryRoute, SignedKelQuery},
 };
-use teliox::{database::TelEventDatabase, query::{SignedTelQuery, TelQueryArgs, TelQueryEvent, TelQueryRoute}};
+use teliox::{
+    database::TelEventDatabase,
+    query::{SignedTelQuery, TelQueryArgs, TelQueryEvent, TelQueryRoute},
+};
 
 use super::mechanics::MechanicsError;
 

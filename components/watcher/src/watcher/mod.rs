@@ -18,7 +18,7 @@ use keri_core::{
     error::Error,
     event_message::signed_event_message::Message,
     oobi::{error::OobiError, EndRole, LocationScheme},
-    oobi_manager::{OobiManager, RedbOobiManager, RedbOobiStorage, storage::OobiStorageBackend},
+    oobi_manager::{storage::OobiStorageBackend, OobiManager, RedbOobiManager, RedbOobiStorage},
     prefix::{BasicPrefix, IdentifierPrefix},
     query::reply_event::{ReplyRoute, SignedReply},
 };
@@ -142,8 +142,6 @@ impl<S: OobiStorageBackend> Watcher<S> {
 
 impl Watcher<RedbOobiStorage> {
     pub fn setup_with_redb(config: WatcherConfig) -> Result<Self, ActorError> {
-        use std::path::PathBuf;
-
         // Create oobi manager database in a separate location
         let mut oobi_db_path = config.db_path.clone();
         oobi_db_path.push("oobi_database");

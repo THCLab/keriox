@@ -27,9 +27,7 @@ pub struct MissingIssuerEscrow<D: TelEventDatabase, K: EventDatabase, E: TelEscr
     escrow_db: Arc<E>,
 }
 
-impl<D: TelEventDatabase, K: EventDatabase, E: TelEscrowDatabase>
-    MissingIssuerEscrow<D, K, E>
-{
+impl<D: TelEventDatabase, K: EventDatabase, E: TelEscrowDatabase> MissingIssuerEscrow<D, K, E> {
     pub fn new(
         db: Arc<D>,
         escrow_db: Arc<E>,
@@ -92,9 +90,7 @@ impl<D: TelEventDatabase, K: EventDatabase, E: TelEscrowDatabase> TelNotifier
     }
 }
 
-impl<D: TelEventDatabase, K: EventDatabase, E: TelEscrowDatabase>
-    MissingIssuerEscrow<D, K, E>
-{
+impl<D: TelEventDatabase, K: EventDatabase, E: TelEscrowDatabase> MissingIssuerEscrow<D, K, E> {
     pub fn process_missing_issuer_escrow(
         &self,
         said: &SelfAddressingIdentifier,

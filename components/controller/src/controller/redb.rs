@@ -6,11 +6,8 @@ use teliox::database::redb::RedbTelDatabase;
 
 use crate::identifier::mechanics::cache::IdentifierCache;
 use crate::{
-    communication::Communication,
-    config::ControllerConfig,
-    error::ControllerError,
-    identifier::Identifier,
-    known_events::RedbKnownEvents,
+    communication::Communication, config::ControllerConfig, error::ControllerError,
+    identifier::Identifier, known_events::RedbKnownEvents,
 };
 
 use super::Controller;

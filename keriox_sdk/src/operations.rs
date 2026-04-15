@@ -17,16 +17,14 @@ use std::path::PathBuf;
 
 use keri_controller::{BasicPrefix, IdentifierPrefix, LocationScheme, Oobi, SelfSigningPrefix};
 use keri_core::{
-    actor::prelude::SelfAddressingIdentifier,
-    prefix::IndexedSignature,
+    actor::prelude::SelfAddressingIdentifier, prefix::IndexedSignature,
     query::mailbox::SignedMailboxQuery,
 };
-
 
 use crate::{
     controller::Controller,
     error::{Error, Result},
-    identifier::{Identifier, ActionRequired},
+    identifier::{ActionRequired, Identifier},
     types::{
         DelegationConfig, DelegationRequest, IdentifierConfig, MultisigConfig, MultisigRequest,
         PendingRequest, RotationConfig,
@@ -52,8 +50,7 @@ pub trait SigningBackend {
 
 impl SigningBackend for std::sync::Arc<keri_core::signer::Signer> {
     fn sign_data(&self, data: &[u8]) -> Result<Vec<u8>> {
-        self.sign(data)
-            .map_err(|e| Error::Signing(e.to_string()))
+        self.sign(data).map_err(|e| Error::Signing(e.to_string()))
     }
 
     fn public_key(&self) -> keri_core::keys::PublicKey {
@@ -76,9 +73,7 @@ impl SigningBackend for crate::keyprovider_adapter::KeriSigner {
 impl SigningBackend for std::sync::Arc<dyn keri_keyprovider::KeyProvider> {
     fn sign_data(&self, data: &[u8]) -> Result<Vec<u8>> {
         tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(async {
-                self.sign(data).await
-            })
+            tokio::runtime::Handle::current().block_on(async { self.sign(data).await })
         })
         .map_err(|e| Error::Signing(e.to_string()))
     }
@@ -125,7 +120,12 @@ pub async fn create_identifier<S: SigningBackend + Clone + 'static>(
     let npks = vec![next_pk];
 
     let inception_event = controller
-        .incept(pks, npks, config.witnesses.clone(), config.witness_threshold)
+        .incept(
+            pks,
+            npks,
+            config.witnesses.clone(),
+            config.witness_threshold,
+        )
         .await?;
 
     let sig = ed25519_sig(&signer, inception_event.as_bytes())?;
@@ -164,7 +164,8 @@ pub async fn add_watcher<S: SigningBackend>(
     km: &S,
     watcher_oobi: &LocationScheme,
 ) -> Result<()> {
-    id.resolve_oobi(&Oobi::Location(watcher_oobi.clone())).await?;
+    id.resolve_oobi(&Oobi::Location(watcher_oobi.clone()))
+        .await?;
     let rpy = id.add_watcher(watcher_oobi.eid.clone())?;
     let sig = ed25519_sig(km, rpy.as_bytes())?;
     id.finalize_add_watcher(rpy.as_bytes(), sig).await?;
@@ -265,10 +266,7 @@ pub async fn issue<S: SigningBackend + Clone + 'static>(
     id.finalize_anchor(&encoded_ixn, sig).await?;
     id.notify_witnesses().await?;
 
-    let witnesses = id
-        .find_state(id.id())?
-        .witness_config
-        .witnesses;
+    let witnesses = id.find_state(id.id())?.witness_config.witnesses;
     for witness in &witnesses {
         _query_mailbox(id, &signer, witness).await?;
     }
@@ -297,10 +295,7 @@ pub async fn revoke<S: SigningBackend + Clone + 'static>(
     id.finalize_anchor(&ixn, sig).await?;
     id.notify_witnesses().await?;
 
-    let witnesses = id
-        .find_state(id.id())?
-        .witness_config
-        .witnesses;
+    let witnesses = id.find_state(id.id())?.witness_config.witnesses;
     for witness in &witnesses {
         _query_mailbox(id, &signer, witness).await?;
     }
@@ -336,11 +331,12 @@ async fn _query_mailbox<S: SigningBackend>(
 ) -> Result<Vec<SignedMailboxQuery>> {
     let mut out = vec![];
     for qry in id.query_mailbox(id.id(), &[witness_id.clone()])? {
-        let encoded = qry.encode().map_err(|e| Error::EncodingError(e.to_string()))?;
+        let encoded = qry
+            .encode()
+            .map_err(|e| Error::EncodingError(e.to_string()))?;
         let sig = SelfSigningPrefix::Ed25519Sha512(km.sign_data(&encoded)?);
         let signatures = vec![IndexedSignature::new_both_same(sig.clone(), 0)];
-        let signed_qry =
-            SignedMailboxQuery::new_trans(qry.clone(), id.id().clone(), signatures);
+        let signed_qry = SignedMailboxQuery::new_trans(qry.clone(), id.id().clone(), signatures);
         id.finalize_query_mailbox(vec![(qry, sig)]).await?;
         out.push(signed_qry);
     }

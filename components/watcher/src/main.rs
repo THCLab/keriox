@@ -14,8 +14,8 @@ use keri_core::{
 };
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DurationSeconds};
-use url::Url;
 use tracing::info;
+use url::Url;
 use watcher::{transport::HttpTelTransport, WatcherConfig, WatcherListener};
 
 #[serde_as]

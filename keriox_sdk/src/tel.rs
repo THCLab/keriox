@@ -41,7 +41,9 @@ pub async fn check_credential_status<S: crate::operations::SigningBackend>(
     let vc_id = IdentifierPrefix::self_addressing(credential_said.clone());
 
     let qry = id.query_tel(registry_id.clone(), vc_id)?;
-    let encoded = qry.encode().map_err(|e| Error::EncodingError(e.to_string()))?;
+    let encoded = qry
+        .encode()
+        .map_err(|e| Error::EncodingError(e.to_string()))?;
     let sig = ed25519_sig(signer, &encoded)?;
     id.finalize_query_tel(qry, sig).await?;
 

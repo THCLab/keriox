@@ -103,7 +103,6 @@ pub fn process_reply<P: Processor, #[cfg(feature = "oobi-manager")] S: OobiStora
             process_signed_oobi(&sr, oobi_manager, event_storage)
         }
         ReplyRoute::Ksn(_, _) => processor.process_op_reply(&sr),
-        _ => { Ok(()) }
     }
 }
 
@@ -121,7 +120,7 @@ pub fn process_signed_oobi<D: EventDatabase + 'static, S: OobiStorageBackend>(
     // check digest
     signed_oobi.reply.check_digest()?;
     // save
-    let r = oobi_manager
+    oobi_manager
         .process_oobi(signed_oobi)
         .map_err(|e| Error::SemanticError(e.to_string()))?;
 

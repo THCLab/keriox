@@ -1,9 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use keri_core::{
-    database::EventDatabase,
-    prefix::IdentifierPrefix,
-    processor::event_storage::EventStorage,
+    database::EventDatabase, prefix::IdentifierPrefix, processor::event_storage::EventStorage,
 };
 
 use crate::{
@@ -22,9 +20,7 @@ pub struct OutOfOrderEscrow<D: TelEventDatabase, K: EventDatabase, E: TelEscrowD
     escrow_db: Arc<E>,
 }
 
-impl<D: TelEventDatabase, K: EventDatabase, E: TelEscrowDatabase>
-    OutOfOrderEscrow<D, K, E>
-{
+impl<D: TelEventDatabase, K: EventDatabase, E: TelEscrowDatabase> OutOfOrderEscrow<D, K, E> {
     pub fn new(
         tel_reference: Arc<D>,
         kel_reference: Arc<EventStorage<K>>,
@@ -68,9 +64,7 @@ impl<D: TelEventDatabase, K: EventDatabase, E: TelEscrowDatabase> TelNotifier
     }
 }
 
-impl<D: TelEventDatabase, K: EventDatabase, E: TelEscrowDatabase>
-    OutOfOrderEscrow<D, K, E>
-{
+impl<D: TelEventDatabase, K: EventDatabase, E: TelEscrowDatabase> OutOfOrderEscrow<D, K, E> {
     pub fn process_out_of_order_events(
         &self,
         bus: &TelNotificationBus,

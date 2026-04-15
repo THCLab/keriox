@@ -41,7 +41,8 @@ fn wrap_payload(data: &[u8]) -> Result<String> {
         return Ok(serde_json::to_string(&serde_json::json!({
             "p": base64::encode_config(data, base64::URL_SAFE_NO_PAD),
             "e": "b64"
-        })).map_err(|e| Error::EncodingError(e.to_string()))?);
+        }))
+        .map_err(|e| Error::EncodingError(e.to_string()))?);
     };
     serde_json::to_string(&serde_json::json!({ "p": p, "e": e }))
         .map_err(|e| Error::EncodingError(e.to_string()))
@@ -110,7 +111,6 @@ pub fn sign_json<S: SigningBackend>(
     sign(identifier, signer, json.as_bytes())
 }
 
-
 /// Verify a CESR-signed envelope against the local KEL.
 ///
 /// Parses the CESR stream, verifies every attached signature against the
@@ -151,8 +151,8 @@ pub fn verify(identifier: &Identifier, cesr: &[u8]) -> Result<VerifiedPayload> {
 /// # Errors
 /// - [`Error::CesrParseError`] if `cesr` is not a valid CESR stream.
 pub fn parse_signed_envelope(cesr: &[u8]) -> Result<(Vec<u8>, Vec<Signature>)> {
-    let (_rest, parsed) = cesrox::parse(cesr)
-        .map_err(|e| Error::CesrParseError(format!("{e:?}")))?;
+    let (_rest, parsed) =
+        cesrox::parse(cesr).map_err(|e| Error::CesrParseError(format!("{e:?}")))?;
 
     let payload = parsed.payload.to_vec();
 

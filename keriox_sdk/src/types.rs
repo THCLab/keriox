@@ -64,7 +64,8 @@ pub struct DelegationConfig {
 /// Pass this to [`crate::operations::approve_delegation`] to approve.
 #[derive(Debug)]
 pub struct DelegationRequest {
-    pub(crate) delegating_event: keri_core::event_message::msg::KeriEvent<keri_core::event::KeyEvent>,
+    pub(crate) delegating_event:
+        keri_core::event_message::msg::KeriEvent<keri_core::event::KeyEvent>,
     pub(crate) exchange: keri_core::mailbox::exchange::ExchangeMessage,
 }
 

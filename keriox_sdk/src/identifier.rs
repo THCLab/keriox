@@ -1,25 +1,19 @@
 use keri_controller::{
-    identifier::query::QueryResponse,
-    BasicPrefix, IdentifierPrefix, LocationScheme, Oobi, SelfSigningPrefix,
+    identifier::query::QueryResponse, BasicPrefix, IdentifierPrefix, LocationScheme, Oobi,
+    SelfSigningPrefix,
 };
 use keri_core::{
     actor::prelude::SelfAddressingIdentifier,
     event::sections::seal::EventSeal,
-    event_message::{
-        msg::TypedEvent,
-        signature::Signature,
-        signed_event_message::Notice,
-        EventTypeTag,
-    },
     event::KeyEvent,
-    query::{
-        mailbox::MailboxQuery,
-        query_event::QueryEvent,
+    event_message::{
+        msg::TypedEvent, signature::Signature, signed_event_message::Notice, EventTypeTag,
     },
+    query::{mailbox::MailboxQuery, query_event::QueryEvent},
     state::IdentifierState,
 };
 use teliox::{
-    query::{TelQueryEvent},
+    query::TelQueryEvent,
     state::{vc_state::TelState, ManagerTelState},
 };
 
@@ -78,10 +72,7 @@ impl Identifier {
     // ── KEL management ──────────────────────────────────────────────────────
 
     /// Generate an interaction event anchoring the given SAIs.
-    pub fn anchor(
-        &self,
-        payload: &[SelfAddressingIdentifier],
-    ) -> Result<String> {
+    pub fn anchor(&self, payload: &[SelfAddressingIdentifier]) -> Result<String> {
         Ok(self.inner.anchor(payload)?)
     }
 
@@ -109,20 +100,12 @@ impl Identifier {
     }
 
     /// Finalise a rotation event (sign + save + queue for witness notification).
-    pub async fn finalize_rotate(
-        &mut self,
-        event: &[u8],
-        sig: SelfSigningPrefix,
-    ) -> Result<()> {
+    pub async fn finalize_rotate(&mut self, event: &[u8], sig: SelfSigningPrefix) -> Result<()> {
         Ok(self.inner.finalize_rotate(event, sig).await?)
     }
 
     /// Finalise an interaction event (sign + save + queue for witness notification).
-    pub async fn finalize_anchor(
-        &mut self,
-        event: &[u8],
-        sig: SelfSigningPrefix,
-    ) -> Result<()> {
+    pub async fn finalize_anchor(&mut self, event: &[u8], sig: SelfSigningPrefix) -> Result<()> {
         Ok(self.inner.finalize_anchor(event, sig).await?)
     }
 
@@ -137,56 +120,34 @@ impl Identifier {
         Ok(self.inner.resolve_oobi(oobi).await?)
     }
 
-    pub async fn send_oobi_to_watcher(
-        &self,
-        id: &IdentifierPrefix,
-        oobi: &Oobi,
-    ) -> Result<()> {
+    pub async fn send_oobi_to_watcher(&self, id: &IdentifierPrefix, oobi: &Oobi) -> Result<()> {
         Ok(self.inner.send_oobi_to_watcher(id, oobi).await?)
     }
 
     /// Generate an `end_role_add` reply event for the given watcher.
-    pub fn add_watcher(
-        &self,
-        watcher_id: IdentifierPrefix,
-    ) -> Result<String> {
+    pub fn add_watcher(&self, watcher_id: IdentifierPrefix) -> Result<String> {
         Ok(self.inner.add_watcher(watcher_id)?)
     }
 
     /// Generate an `end_role_cut` reply event for the given watcher.
-    pub fn remove_watcher(
-        &self,
-        watcher_id: IdentifierPrefix,
-    ) -> Result<String> {
+    pub fn remove_watcher(&self, watcher_id: IdentifierPrefix) -> Result<String> {
         Ok(self.inner.remove_watcher(watcher_id)?)
     }
 
     /// Sign and send the `end_role_add` reply to the watcher.
-    pub async fn finalize_add_watcher(
-        &self,
-        event: &[u8],
-        sig: SelfSigningPrefix,
-    ) -> Result<()> {
+    pub async fn finalize_add_watcher(&self, event: &[u8], sig: SelfSigningPrefix) -> Result<()> {
         Ok(self.inner.finalize_add_watcher(event, sig).await?)
     }
 
     // ── Signing / verification ──────────────────────────────────────────────
 
     /// Return CESR stream containing the payload + transferable signature.
-    pub fn sign_to_cesr(
-        &self,
-        data: &str,
-        signatures: &[SelfSigningPrefix],
-    ) -> Result<String> {
+    pub fn sign_to_cesr(&self, data: &str, signatures: &[SelfSigningPrefix]) -> Result<String> {
         Ok(self.inner.sign_to_cesr(data, signatures)?)
     }
 
     /// Build a `Signature` from raw bytes + `SelfSigningPrefix`es.
-    pub fn sign_data(
-        &self,
-        data: &[u8],
-        signatures: &[SelfSigningPrefix],
-    ) -> Result<Signature> {
+    pub fn sign_data(&self, data: &[u8], signatures: &[SelfSigningPrefix]) -> Result<Signature> {
         Ok(self.inner.sign_data(data, signatures)?)
     }
 
@@ -227,10 +188,7 @@ impl Identifier {
     }
 
     /// Generate `rev` event + anchor `ixn` (encoded). Returns encoded ixn bytes.
-    pub fn revoke(
-        &self,
-        credential_sai: &SelfAddressingIdentifier,
-    ) -> Result<Vec<u8>> {
+    pub fn revoke(&self, credential_sai: &SelfAddressingIdentifier) -> Result<Vec<u8>> {
         Ok(self.inner.revoke(credential_sai)?)
     }
 
@@ -253,10 +211,7 @@ impl Identifier {
     }
 
     /// Look up a VC's current `TelState` in the local TEL.
-    pub fn find_vc_state(
-        &self,
-        vc_hash: &SelfAddressingIdentifier,
-    ) -> Result<Option<TelState>> {
+    pub fn find_vc_state(&self, vc_hash: &SelfAddressingIdentifier) -> Result<Option<TelState>> {
         Ok(self.inner.find_vc_state(vc_hash)?)
     }
 
@@ -288,10 +243,7 @@ impl Identifier {
     }
 
     /// Generate watcher query events for an identifier.
-    pub fn query_watchers(
-        &self,
-        about_who: &EventSeal,
-    ) -> Result<Vec<QueryEvent>> {
+    pub fn query_watchers(&self, about_who: &EventSeal) -> Result<Vec<QueryEvent>> {
         Ok(self.inner.query_watchers(about_who)?)
     }
 
@@ -398,10 +350,7 @@ impl Identifier {
     // ── OOBI location helpers ──────────────────────────────────────────────
 
     /// Get known location schemes for an identifier.
-    pub fn get_location(
-        &self,
-        id: &IdentifierPrefix,
-    ) -> Result<Vec<LocationScheme>> {
+    pub fn get_location(&self, id: &IdentifierPrefix) -> Result<Vec<LocationScheme>> {
         self.inner
             .get_location(id)
             .map_err(|e| crate::error::Error::Other(e.to_string()))

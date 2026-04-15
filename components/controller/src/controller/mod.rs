@@ -14,7 +14,6 @@ use teliox::database::TelEventDatabase;
 use crate::identifier::mechanics::cache::IdentifierCache;
 use crate::{
     communication::Communication,
-    config::ControllerConfig,
     error::ControllerError,
     identifier::{mechanics::MechanicsError, Identifier},
     known_events::KnownEvents,

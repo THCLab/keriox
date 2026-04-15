@@ -45,10 +45,7 @@ pub trait KeyProvider: Send + Sync {
     }
 
     /// Rotate: replace the current key with a new one.
-    async fn rotate(
-        &mut self,
-        _new_next_public_key: PublicKeyData,
-    ) -> Result<()> {
+    async fn rotate(&mut self, _new_next_public_key: PublicKeyData) -> Result<()> {
         Err(KeyProviderError::unsupported("rotate"))
     }
 
@@ -58,10 +55,7 @@ pub trait KeyProvider: Send + Sync {
     }
 
     /// Export the key material in encrypted form for backup/migration.
-    async fn export_encrypted(
-        &self,
-        _passphrase: &str,
-    ) -> Result<EncryptedKeyExport> {
+    async fn export_encrypted(&self, _passphrase: &str) -> Result<EncryptedKeyExport> {
         Err(KeyProviderError::unsupported("export"))
     }
 }

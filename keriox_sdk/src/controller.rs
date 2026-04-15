@@ -1,9 +1,7 @@
 use std::path::PathBuf;
 
 use keri_controller::{
-    config::ControllerConfig,
-    controller::RedbController,
-    IdentifierPrefix, SelfSigningPrefix,
+    config::ControllerConfig, controller::RedbController, IdentifierPrefix, SelfSigningPrefix,
 };
 use keri_core::state::IdentifierState;
 
@@ -48,11 +46,7 @@ impl Controller {
     }
 
     /// Finalize inception by attaching a signature, returning the resulting `Identifier`.
-    pub fn finalize_incept(
-        &self,
-        event: &[u8],
-        sig: &SelfSigningPrefix,
-    ) -> Result<Identifier> {
+    pub fn finalize_incept(&self, event: &[u8], sig: &SelfSigningPrefix) -> Result<Identifier> {
         let inner_id = self.inner.finalize_incept(event, sig)?;
         Ok(Identifier { inner: inner_id })
     }

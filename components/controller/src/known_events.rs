@@ -30,8 +30,8 @@ use keri_core::{
     },
     query::reply_event::{ReplyEvent, ReplyRoute, SignedReply},
 };
-use teliox::database::TelEventDatabase;
 use teliox::database::TelEscrowDatabase;
+use teliox::database::TelEventDatabase;
 use teliox::processor::escrow::default_escrow_bus as tel_escrow_bus;
 use teliox::processor::storage::TelEventStorage;
 use teliox::tel::Tel;
@@ -80,10 +80,8 @@ where
         escrow_config: EscrowConfig,
     ) -> Result<Self, ControllerError> {
         let oobi_manager = OobiManager::with_storage(oobi_storage);
-        let (
-            mut notification_bus,
-            escrow_set,
-        ) = default_escrow_bus(event_db.clone(), escrow_config, None);
+        let (notification_bus, escrow_set) =
+            default_escrow_bus(event_db.clone(), escrow_config, None);
         let kel_storage = Arc::new(EventStorage::new(event_db.clone()));
         let (tel_bus, missing_issuer, _out_of_order, _missing_registry) =
             tel_escrow_bus(tel_db.clone(), kel_storage.clone(), tel_escrow_db)
@@ -463,11 +461,17 @@ pub type RedbKnownEvents = KnownEvents<RedbDatabase, RedbTelDatabase, RedbOobiSt
 
 #[cfg(feature = "storage-redb")]
 impl RedbKnownEvents {
-    pub fn with_redb(db_path: PathBuf, escrow_config: EscrowConfig) -> Result<Self, ControllerError> {
+    pub fn with_redb(
+        db_path: PathBuf,
+        escrow_config: EscrowConfig,
+    ) -> Result<Self, ControllerError> {
         let event_database = {
             let mut path = db_path.clone();
             path.push("events_database");
-            Arc::new(RedbDatabase::new(&path).map_err(|e| ControllerError::DatabaseError(e.to_string()))?)
+            Arc::new(
+                RedbDatabase::new(&path)
+                    .map_err(|e| ControllerError::DatabaseError(e.to_string()))?,
+            )
         };
         let oobi_storage = RedbOobiStorage::new(event_database.raw_db())
             .map_err(|e| ControllerError::DatabaseError(e.to_string()))?;
@@ -475,7 +479,10 @@ impl RedbKnownEvents {
             let mut path = db_path.clone();
             path.push("tel");
             path.push("events");
-            Arc::new(RedbTelDatabase::new(&path).map_err(|e| ControllerError::OtherError(e.to_string()))?)
+            Arc::new(
+                RedbTelDatabase::new(&path)
+                    .map_err(|e| ControllerError::OtherError(e.to_string()))?,
+            )
         };
         let tel_escrow_db = {
             let mut path = db_path.clone();
@@ -483,19 +490,26 @@ impl RedbKnownEvents {
             path.push("escrow");
             EscrowDatabase::new(&path).map_err(|e| ControllerError::OtherError(e.to_string()))?
         };
-        Self::new(event_database, oobi_storage, tel_db, tel_escrow_db, escrow_config)
+        Self::new(
+            event_database,
+            oobi_storage,
+            tel_db,
+            tel_escrow_db,
+            escrow_config,
+        )
     }
 }
 
 #[cfg(feature = "storage-postgres")]
-use keri_core::database::postgres::PostgresDatabase;
-#[cfg(feature = "storage-postgres")]
 use keri_core::database::postgres::oobi_storage::PostgresOobiStorage;
+#[cfg(feature = "storage-postgres")]
+use keri_core::database::postgres::PostgresDatabase;
 #[cfg(feature = "storage-postgres")]
 use teliox::database::postgres::{PostgresTelDatabase, PostgresTelEscrowDatabase};
 
 #[cfg(feature = "storage-postgres")]
-pub type PostgresKnownEvents = KnownEvents<PostgresDatabase, PostgresTelDatabase, PostgresOobiStorage>;
+pub type PostgresKnownEvents =
+    KnownEvents<PostgresDatabase, PostgresTelDatabase, PostgresOobiStorage>;
 
 #[cfg(feature = "storage-postgres")]
 impl PostgresKnownEvents {

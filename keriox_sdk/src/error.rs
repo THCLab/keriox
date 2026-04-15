@@ -16,7 +16,6 @@ use keri_core::actor::prelude::SelfAddressingIdentifier;
 #[non_exhaustive]
 pub enum Error {
     // ── Transparent upstream wrappers ─────────────────────────────────────────
-
     /// Wraps errors from the `keri-controller` layer.
     #[error(transparent)]
     Controller(#[from] keri_controller::error::ControllerError),
@@ -30,7 +29,6 @@ pub enum Error {
     Signing(String),
 
     // ── Specific actionable variants ──────────────────────────────────────────
-
     /// The requested identifier is not known to this controller.
     #[error("identifier not found: {0}")]
     IdentifierNotFound(IdentifierPrefix),
