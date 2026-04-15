@@ -16,8 +16,8 @@ storage-postgres = ["keri-core/storage-postgres", "sqlx", "async-std"]
 
 [dependencies]
 keri-core = {path = "../../keriox_core", version= "0.17.13", features = ["query"]}
-said = { version = "0.4.3" }
-cesrox = { version = "0.1.7" }
+said = { version = "0.5.2" }
+cesrox = { version = "2.0.0-alpha.3" }
 base64 = "0.13.0"
 serde = "1.0"
 serde_json = "1.0"
