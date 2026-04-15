@@ -2,6 +2,7 @@ use std::convert::TryFrom;
 
 use serde::{Deserialize, Serialize};
 
+use crate::event_message::cesr_adapter::parse_cesr_stream_many;
 #[cfg(feature = "oobi-manager")]
 use crate::oobi_manager::{storage::OobiStorageBackend, OobiManager};
 #[cfg(feature = "query")]
@@ -33,7 +34,6 @@ use crate::{
     query::mailbox::MailboxRoute,
 };
 pub use cesrox::cesr_proof::MaterialPath;
-use cesrox::parse_many;
 #[cfg(feature = "query")]
 use said::version::format::SerializationFormats;
 
@@ -46,25 +46,25 @@ pub mod possible_response;
 pub mod simple_controller;
 
 pub fn parse_event_stream(stream: &[u8]) -> Result<Vec<Message>, ParseError> {
-    let (_rest, events) = parse_many(stream).map_err(|e| ParseError::CesrError(e.to_string()))?;
-    events.into_iter().map(Message::try_from).collect()
+    let messages = parse_cesr_stream_many(stream)?;
+    messages.into_iter().map(Message::try_from).collect()
 }
 
 pub fn parse_notice_stream(stream: &[u8]) -> Result<Vec<Notice>, ParseError> {
-    let (_rest, notices) = parse_many(stream).map_err(|e| ParseError::CesrError(e.to_string()))?;
-    notices.into_iter().map(Notice::try_from).collect()
+    let messages = parse_cesr_stream_many(stream)?;
+    messages.into_iter().map(Notice::try_from).collect()
 }
 
 #[cfg(any(feature = "query", feature = "oobi-manager"))]
 pub fn parse_op_stream(stream: &[u8]) -> Result<Vec<Op>, ParseError> {
-    let (_rest, ops) = parse_many(stream).map_err(|e| ParseError::CesrError(e.to_string()))?;
-    ops.into_iter().map(Op::try_from).collect()
+    let messages = parse_cesr_stream_many(stream)?;
+    messages.into_iter().map(Op::try_from).collect()
 }
 
 #[cfg(any(feature = "query", feature = "oobi-manager"))]
 pub fn parse_query_stream(stream: &[u8]) -> Result<Vec<SignedQueryMessage>, ParseError> {
-    let (_rest, queries) = parse_many(stream).map_err(|e| ParseError::CesrError(e.to_string()))?;
-    queries
+    let messages = parse_cesr_stream_many(stream)?;
+    messages
         .into_iter()
         .map(SignedQueryMessage::try_from)
         .collect()
@@ -72,18 +72,14 @@ pub fn parse_query_stream(stream: &[u8]) -> Result<Vec<SignedQueryMessage>, Pars
 
 #[cfg(feature = "query")]
 pub fn parse_reply_stream(stream: &[u8]) -> Result<Vec<SignedReply>, ParseError> {
-    let (_rest, replies) = parse_many(stream).map_err(|e| ParseError::CesrError(e.to_string()))?;
-    replies.into_iter().map(SignedReply::try_from).collect()
+    let messages = parse_cesr_stream_many(stream)?;
+    messages.into_iter().map(SignedReply::try_from).collect()
 }
 
 #[cfg(feature = "mailbox")]
 pub fn parse_exchange_stream(stream: &[u8]) -> Result<Vec<SignedExchange>, ParseError> {
-    let (_rest, exchanges) =
-        parse_many(stream).map_err(|e| ParseError::CesrError(e.to_string()))?;
-    exchanges
-        .into_iter()
-        .map(SignedExchange::try_from)
-        .collect()
+    let messages = parse_cesr_stream_many(stream)?;
+    messages.into_iter().map(SignedExchange::try_from).collect()
 }
 
 pub fn process_notice<P: Processor>(msg: Notice, processor: &P) -> Result<(), Error> {

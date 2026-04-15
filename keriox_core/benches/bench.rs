@@ -1,9 +1,8 @@
-use cesrox::parse_many;
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use keri_core::{
     actor::prelude::{BasicProcessor, EventStorage},
     database::redb::RedbDatabase,
-    event_message::signed_event_message::Notice,
+    event_message::{cesr_adapter::parse_cesr_stream_many, signed_event_message::Notice},
 };
 use std::{hint::black_box, path::Path, sync::Arc};
 
@@ -39,7 +38,7 @@ fn load_input<P: AsRef<Path>>(path: &P) -> Vec<u8> {
 }
 
 fn process_stream(processor: Arc<BasicProcessor<RedbDatabase>>, stream: &[u8]) {
-    let (_rest, parsed) = parse_many(black_box(&stream)).unwrap();
+    let parsed = parse_cesr_stream_many(black_box(&stream)).unwrap();
     let notices: Result<Vec<_>, _> = parsed.into_iter().map(Notice::try_from).collect();
     for notice in notices.unwrap() {
         keri_core::actor::process_notice(notice, processor.as_ref()).unwrap()

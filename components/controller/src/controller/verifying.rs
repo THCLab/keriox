@@ -1,8 +1,10 @@
-use cesrox::{parse_many, payload::Payload, ParsedData};
 use itertools::Itertools;
 use keri_core::{
     database::{EscrowCreator, EventDatabase},
-    event_message::signature::{get_signatures, Signature},
+    event_message::{
+        cesr_adapter::{parse_cesr_stream_many, CesrMessage},
+        signature::{get_signatures, Signature},
+    },
     oobi::Oobi,
     oobi_manager::storage::OobiStorageBackend,
     processor::validator::{EventValidator, VerificationError},
@@ -22,23 +24,20 @@ where
         verifier.verify(data, signature)
     }
 
-    /// Parse elements from CESR stream and splits them into OOBIs to be
-    /// resolved and signed credentials.
     fn _parse_cesr_stream(
         &self,
         stream: &str,
-    ) -> Result<(Vec<Oobi>, Vec<ParsedData>), ControllerError> {
-        let (_rest, data) =
-            parse_many(stream.as_bytes()).map_err(|_e| ControllerError::CesrFormatError)?;
-        // Split into OOBIs and other data
+    ) -> Result<(Vec<Oobi>, Vec<CesrMessage>), ControllerError> {
+        let data = parse_cesr_stream_many(stream.as_bytes())
+            .map_err(|_e| ControllerError::CesrFormatError)?;
         let (oobis, to_verify): (Vec<Oobi>, Vec<_>) = data.into_iter().partition_map(|d| {
             let oobi: Result<Oobi, _> = match &d.payload {
-                Payload::JSON(json) => serde_json::from_slice(json)
+                cesrox::payload::Payload::JSON(json) => serde_json::from_slice(json)
                     .map_err(|_e| ControllerError::OtherError("Wrong JSON".to_string())),
-                Payload::CBOR(_) => Err(ControllerError::OtherError(
+                cesrox::payload::Payload::CBOR(_) => Err(ControllerError::OtherError(
                     "CBOR format not implemented yet".to_string(),
                 )),
-                Payload::MGPK(_) => Err(ControllerError::OtherError(
+                cesrox::payload::Payload::MGPK(_) => Err(ControllerError::OtherError(
                     "MGPK format not implemented yet".to_string(),
                 )),
             };
@@ -52,12 +51,11 @@ where
     }
 
     pub fn verify_from_cesr(&self, stream: &[u8]) -> Result<(), ControllerError> {
-        let (_rest, data) = parse_many(stream).map_err(|_e| ControllerError::CesrFormatError)?;
+        let data = parse_cesr_stream_many(stream).map_err(|_e| ControllerError::CesrFormatError)?;
         self.verify_parsed(&data)
     }
 
-    /// Verify signed data that was parsed from cesr stream.
-    fn verify_parsed(&self, data: &[ParsedData]) -> Result<(), ControllerError> {
+    fn verify_parsed(&self, data: &[CesrMessage]) -> Result<(), ControllerError> {
         let mut err_reasons: Vec<VerificationError> = vec![];
         let (_oks, errs): (Vec<_>, Vec<_>) = data.iter().partition(|d| {
             match d
@@ -66,9 +64,9 @@ where
                 .flat_map(|a| get_signatures(a.clone()).unwrap())
                 .try_for_each(|s| {
                     let payload = match &d.payload {
-                        Payload::JSON(json) => json,
-                        Payload::CBOR(cbor) => cbor,
-                        Payload::MGPK(mgpk) => mgpk,
+                        cesrox::payload::Payload::JSON(json) => json,
+                        cesrox::payload::Payload::CBOR(cbor) => cbor,
+                        cesrox::payload::Payload::MGPK(mgpk) => mgpk,
                     };
                     self.verify(payload, &s)
                 }) {

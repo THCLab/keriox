@@ -1,5 +1,4 @@
 use cesrox::{group::Group, primitives::IndexedSignature as CesrIndexedSignature};
-use said::SelfAddressingIdentifier;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -14,9 +13,7 @@ use super::cesr_adapter::ParseError;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum Signature {
-    /// Created by transferable identifier
     Transferable(SignerData, Vec<IndexedSignature>),
-    /// Created by nontransferable identifier
     NonTransferable(Nontransferable),
 }
 
@@ -73,7 +70,6 @@ impl Signature {
         match self {
             Signature::Transferable(signer_data, _) => signer_data.get_signer(),
             Signature::NonTransferable(Nontransferable::Couplet(couplets)) => {
-                // TODO
                 Some(IdentifierPrefix::Basic(couplets[0].0.clone()))
             }
             Signature::NonTransferable(Nontransferable::Indexed(_)) => None,
@@ -104,22 +100,15 @@ impl Signature {
 }
 
 pub fn signatures_into_groups(sigs: &[Signature]) -> Vec<Group> {
-    // Group same type of signature in one attachment
     let (trans_seal, trans_last, nontrans, indexed, witness_indexed) = sigs.iter().cloned().fold(
         (vec![], vec![], vec![], vec![], vec![]),
         |(mut trans_seal, mut trans_last, mut nontrans, mut indexed, mut witness_indexed), sig| {
             match sig {
                 Signature::Transferable(SignerData::EventSeal(seal), sig) => {
-                    let event_digest = seal.event_digest();
-                    trans_seal.push((
-                        seal.prefix.into(),
-                        seal.sn,
-                        event_digest.into(),
-                        sig.into_iter().map(|sig| sig.into()).collect(),
-                    ))
+                    trans_seal.push((seal, sig.into_iter().map(|sig| sig.into()).collect()))
                 }
                 Signature::Transferable(SignerData::LastEstablishment(id), sig) => {
-                    trans_last.push((id.into(), sig.into_iter().map(|sig| sig.into()).collect()))
+                    trans_last.push((id, sig.into_iter().map(|sig| sig.into()).collect()))
                 }
                 Signature::Transferable(SignerData::JustSignatures, sig) => {
                     indexed.append(&mut sig.into_iter().map(|sig| sig.into()).collect())
@@ -139,12 +128,21 @@ pub fn signatures_into_groups(sigs: &[Signature]) -> Vec<Group> {
     );
 
     let mut attachments = vec![];
-    if !trans_seal.is_empty() {
-        attachments.push(Group::TransIndexedSigGroups(trans_seal));
+
+    for (seal, sigs) in trans_seal {
+        let event_digest = seal.event_digest();
+        attachments.push(Group::AnchoringSeals(vec![(
+            seal.prefix.into(),
+            seal.sn,
+            event_digest.into(),
+        )]));
+        attachments.push(Group::IndexedControllerSignatures(sigs));
     }
-    if !trans_last.is_empty() {
-        attachments.push(Group::LastEstSignaturesGroups(trans_last));
+
+    for (_id, sigs) in trans_last {
+        attachments.push(Group::IndexedControllerSignatures(sigs));
     }
+
     if !nontrans.is_empty() {
         attachments.push(Group::NontransReceiptCouples(nontrans));
     };
@@ -175,27 +173,6 @@ pub fn get_signatures(group: Group) -> Result<Vec<Signature>, ParseError> {
                 signatures,
             ))])
         }
-        Group::LastEstSignaturesGroups(sigs) => Ok(sigs
-            .into_iter()
-            .map(|(id, sigs)| {
-                let signatures = sigs.into_iter().map(|sig| sig.into()).collect();
-                Signature::Transferable(SignerData::LastEstablishment(id.into()), signatures)
-            })
-            .collect()),
-        Group::TransIndexedSigGroups(sigs) => Ok(sigs
-            .into_iter()
-            .map(|(id, sn, digest, sigs)| {
-                let signatures = sigs.into_iter().map(|sig| sig.into()).collect();
-                Signature::Transferable(
-                    SignerData::EventSeal(EventSeal::new(
-                        id.into(),
-                        sn,
-                        SelfAddressingIdentifier::from(digest),
-                    )),
-                    signatures,
-                )
-            })
-            .collect()),
         Group::IndexedWitnessSignatures(sigs) => {
             let signatures = sigs.into_iter().map(|sig| sig.into()).collect();
             Ok(vec![Signature::NonTransferable(Nontransferable::Indexed(
@@ -235,15 +212,14 @@ impl Into<Group> for crate::event_message::signature::Signature {
                 match seal {
                     crate::event_message::signature::SignerData::EventSeal(event_seal) => {
                         let event_digest = event_seal.event_digest();
-                        Group::TransIndexedSigGroups(vec![(
+                        Group::AnchoringSeals(vec![(
                             event_seal.prefix.into(),
                             event_seal.sn,
                             event_digest.into(),
-                            signatures,
                         )])
                     }
-                    crate::event_message::signature::SignerData::LastEstablishment(id) => {
-                        Group::LastEstSignaturesGroups(vec![(id.into(), signatures)])
+                    crate::event_message::signature::SignerData::LastEstablishment(_id) => {
+                        Group::IndexedControllerSignatures(signatures)
                     }
                     crate::event_message::signature::SignerData::JustSignatures => {
                         Group::IndexedControllerSignatures(signatures)

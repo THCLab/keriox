@@ -28,7 +28,8 @@ impl VerifiableEvent {
     }
 
     pub fn parse(stream: &[u8]) -> Result<Vec<Self>, Error> {
-        let events = cesrox::parse_many(stream).unwrap().1;
+        let events = keri_core::event_message::cesr_adapter::parse_cesr_stream_many(stream)
+            .map_err(|e| Error::Generic(e.to_string()))?;
         events
             .into_iter()
             .map(|ev| -> Result<Self, Error> {

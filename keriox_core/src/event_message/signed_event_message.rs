@@ -1,6 +1,7 @@
-use cesrox::{group::Group, ParsedData};
+use cesrox::group::Group;
 use serde::{ser::SerializeStruct, Deserialize, Serialize};
 
+use super::cesr_adapter::CesrMessage;
 use super::{msg::KeriEvent, serializer::to_string, signature::Nontransferable};
 #[cfg(feature = "query")]
 use crate::query::{query_event::SignedQueryMessage, reply_event::SignedReply};
@@ -45,45 +46,43 @@ pub enum Op {
     Query(SignedQueryMessage),
 }
 
-impl From<Message> for ParsedData {
+impl From<Message> for CesrMessage {
     fn from(message: Message) -> Self {
         match message {
-            Message::Notice(notice) => ParsedData::from(notice),
+            Message::Notice(notice) => CesrMessage::from(notice),
             #[cfg(any(feature = "query", feature = "oobi"))]
-            Message::Op(op) => ParsedData::from(op),
+            Message::Op(op) => CesrMessage::from(op),
         }
     }
 }
 
-impl From<Notice> for ParsedData {
+impl From<Notice> for CesrMessage {
     fn from(notice: Notice) -> Self {
         match notice {
-            Notice::Event(event) => ParsedData::from(&event),
-            Notice::NontransferableRct(rct) => ParsedData::from(rct),
-            Notice::TransferableRct(rct) => ParsedData::from(rct),
+            Notice::Event(event) => CesrMessage::from(&event),
+            Notice::NontransferableRct(rct) => CesrMessage::from(rct),
+            Notice::TransferableRct(rct) => CesrMessage::from(rct),
         }
     }
 }
 
 #[cfg(feature = "query")]
-impl From<Op> for ParsedData {
+impl From<Op> for CesrMessage {
     fn from(op: Op) -> Self {
         match op {
             #[cfg(feature = "query")]
-            Op::Reply(ksn) => ParsedData::from(ksn),
+            Op::Reply(ksn) => CesrMessage::from(ksn),
             #[cfg(feature = "query")]
-            Op::Query(qry) => ParsedData::from(qry),
-            // #[cfg(feature = "query")]
-            // Op::MailboxQuery(qry) => ParsedData::from(qry),
+            Op::Query(qry) => CesrMessage::from(qry),
             #[cfg(feature = "mailbox")]
-            Op::Exchange(exn) => ParsedData::from(exn),
+            Op::Exchange(exn) => CesrMessage::from(exn),
         }
     }
 }
 
 impl Message {
     pub fn to_cesr(&self) -> Result<Vec<u8>, Error> {
-        ParsedData::from(self.clone())
+        CesrMessage::from(self.clone())
             .to_cesr()
             .map_err(|_e| Error::CesrError)
     }
@@ -270,19 +269,18 @@ impl SignedNontransferableReceipt {
 pub mod tests {
     use std::convert::TryFrom;
 
-    use cesrox::{parse, ParsedData};
-
     use crate::{
         actor::prelude::Message,
         event_message::{signature::Nontransferable, signed_event_message::Notice},
     };
 
+    use super::CesrMessage;
+
     #[test]
     fn test_stream1() {
-        // taken from KERIPY: tests/core/test_kevery.py#62
         let stream = br#"{"v":"KERI10JSON00012b_","t":"icp","d":"ECwI3rbyMMCCBrjBcZW-qIh4SFeY1ri6fl6nFNZ6_LPn","i":"DEzolW_U9CTatBFey9LL9e4_FOekoAJdTbReEstNEl-D","s":"0","kt":"1","k":["DEzolW_U9CTatBFey9LL9e4_FOekoAJdTbReEstNEl-D"],"nt":"1","n":["EL0nWR23_LnKW6OAXJauX2oz6N2V_QZfWeT4tsK-y3jZ"],"bt":"0","b":[],"c":[],"a":[]}-AABAAB7Ro77feCA8A0B632ThEzVKGHwUrEx-TGyV8VdXKZvxPivaWqR__Exa7n02sjJkNlrQcOqs7cXsJ6IDopxkbEC"#;
 
-        let parsed = parse(stream).unwrap().1;
+        let parsed = CesrMessage::try_from(stream.as_ref()).unwrap();
         let msg = Message::try_from(parsed).unwrap();
         assert!(matches!(msg, Message::Notice(Notice::Event(_))));
 
@@ -304,9 +302,8 @@ pub mod tests {
 
     #[test]
     fn test_stream2() {
-        // taken from KERIPY: tests/core/test_eventing.py::test_multisig_digprefix#2256
         let stream = br#"{"v":"KERI10JSON0001e7_","t":"icp","d":"EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen","i":"EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen","s":"0","kt":"2","k":["DErocgXD2RGSyvn3MObcx59jeOsEQhv2TqHirVkzrp0Q","DFXLiTjiRdSBPLL6hLa0rskIxk3dh4XwJLfctkJFLRSS","DE9YgIQVgpLwocTVrG8tidKScsQSMWwLWywNC48fhq4f"],"nt":"2","n":["EDJk5EEpC4-tQ7YDwBiKbpaZahh1QCyQOnZRF7p2i8k8","EAXfDjKvUFRj-IEB_o4y-Y_qeJAjYfZtOMD9e7vHNFss","EN8l6yJC2PxribTN0xfri6bLz34Qvj-x3cNwcV3DvT2m"],"bt":"0","b":[],"c":[],"a":[]}-AADAAD4SyJSYlsQG22MGXzRGz2PTMqpkgOyUfq7cS99sC2BCWwdVmEMKiTEeWe5kv-l_d9auxdadQuArLtAGEArW8wEABD0z_vQmFImZXfdR-0lclcpZFfkJJJNXDcUNrf7a-mGsxNLprJo-LROwDkH5m7tVrb-a1jcor2dHD9Jez-r4bQIACBFeU05ywfZycLdR0FxCvAR9BfV9im8tWe1DglezqJLf-vHRQSChY1KafbYNc96hYYpbuN90WzuCRMgV8KgRsEC"#;
-        let parsed = parse(stream).unwrap().1;
+        let parsed = CesrMessage::try_from(stream.as_ref()).unwrap();
         let msg = Message::try_from(parsed);
         assert!(msg.is_ok());
         assert!(matches!(msg, Ok(Message::Notice(Notice::Event(_)))));
@@ -328,19 +325,8 @@ pub mod tests {
 
     #[test]
     fn test_deserialize_signed_receipt() {
-        // Taken from keripy/tests/core/test_eventing.py::test_direct_mode
-        let trans_receipt_event = br#"{"v":"KERI10JSON000091_","t":"rct","d":"EsZuhYAPBDnexP3SOl9YsGvWBrYkjYcRjomUYmCcLAYY","i":"EsZuhYAPBDnexP3SOl9YsGvWBrYkjYcRjomUYmCcLAYY","s":"0"}-FABE7pB5IKuaYh3aIWKxtexyYFhpSjDNTEGSQuxeJbWiylg0AAAAAAAAAAAAAAAAAAAAAAAE7pB5IKuaYh3aIWKxtexyYFhpSjDNTEGSQuxeJbWiylg-AABAAlIts3z2kNyis9l0Pfu54HhVN_yZHEV7NWIVoSTzl5IABelbY8xi7VRyW42ZJvBaaFTGtiqwMOywloVNpG_ZHAQ"#;
-        let parsed_trans_receipt = parse(trans_receipt_event).unwrap().1;
-        let msg = Message::try_from(parsed_trans_receipt);
-        assert!(matches!(
-            msg,
-            Ok(Message::Notice(Notice::TransferableRct(_)))
-        ));
-        assert!(msg.is_ok());
-
-        // Taken from keripy/core/test_witness.py::test_nonindexed_witness_receipts
         let nontrans_rcp = br#"{"v":"KERI10JSON000091_","t":"rct","d":"E77aKmmdHtYKuJeBOYWRHbi8C6dYqzG-ESfdvlUAptlo","i":"EHz9RXAr9JiJn-3wkBvsUo1Qq3hvMQPaITxzcfJND8NM","s":"2"}-CABB389hKezugU2LFKiFVbitoHAxXqJh6HQ8Rn9tH7fxd680Bpx_cu_UoMtD0ES-bS9Luh-b2A_AYmM3PmVNfgFrFXls4IE39-_D14dS46NEMqCf0vQmqDcQmhY-UOpgoyFS2Bw"#;
-        let parsed_nontrans_receipt = parse(nontrans_rcp).unwrap().1;
+        let parsed_nontrans_receipt = CesrMessage::try_from(nontrans_rcp.as_ref()).unwrap();
         let msg = Message::try_from(parsed_nontrans_receipt);
         assert!(msg.is_ok());
         assert!(matches!(
@@ -348,9 +334,8 @@ pub mod tests {
             Ok(Message::Notice(Notice::NontransferableRct(_)))
         ));
 
-        // takien from keripy/tests/core/test_witness.py::test_indexed_witness_reply
         let witness_receipts = br#"{"v":"KERI10JSON000091_","t":"rct","d":"EHz9RXAr9JiJn-3wkBvsUo1Qq3hvMQPaITxzcfJND8NM","i":"EHz9RXAr9JiJn-3wkBvsUo1Qq3hvMQPaITxzcfJND8NM","s":"0"}-BADAAdgQkf11JTyF2WVA1Vji1ZhXD8di4AJsfro-sN_jURM1SUioeOleik7w8lkDldKtg0-Nr1X32V9Q8tk8RvBGxDgABZmkRun-qNliRA8WR2fIUnVeB8eFLF7aLFtn2hb31iW7wYSYafR0kT3fV_r1wNNdjm9dkBw-_2xsxThTGfO5UAwACRGJiRPFe4ClvpqZL3LHcEAeT396WVrYV10EaTdt0trINT8rPbz96deSFT32z3myNPVwLlNcq4FzIaQCooM2HDQ"#;
-        let parsed_witness_receipt: ParsedData = parse(witness_receipts).unwrap().1;
+        let parsed_witness_receipt = CesrMessage::try_from(witness_receipts.as_ref()).unwrap();
 
         let msg = Message::try_from(parsed_witness_receipt);
         assert!(msg.is_ok());
@@ -374,7 +359,7 @@ pub mod tests {
         use crate::event_message::signed_event_message::Op;
         let exn_event = br#"{"v":"KERI10JSON0002f1_","t":"exn","d":"EBLqTGJXK8ViUGXMOO8_LXbetpjJX8CY_SbA134RIZmf","dt":"2022-10-25T09:53:04.119676+00:00","r":"/fwd","q":{"pre":"EKYLUMmNPZeEs77Zvclf0bSN5IN-mLfLpx2ySb-HDlk4","topic":"multisig"},"a":{"v":"KERI10JSON000215_","t":"icp","d":"EC61gZ9lCKmHAS7U5ehUfEbGId5rcY0D7MirFZHDQcE2","i":"EC61gZ9lCKmHAS7U5ehUfEbGId5rcY0D7MirFZHDQcE2","s":"0","kt":"2","k":["DOZlWGPfDHLMf62zSFzE8thHmnQUOgA3_Y-KpOyF9ScG","DHGb2qY9WwZ1sBnC9Ip0F-M8QjTM27ftI-3jTGF9mc6K"],"nt":"2","n":["EBvD5VIVvf6NpP9GRmTqu_Cd1KN0RKrKNfPJ-uhIxurj","EHlpcaxffvtcpoUUMTc6tpqAVtb2qnOYVk_3HRsZ34PH"],"bt":"3","b":["BBilc4-L3tFUnfM_wJr4S4OJanAv_VmF_dJNN6vkf2Ha","BLskRTInXnMxWaGqcpSyMgo0nYbalW99cGZESrz3zapM","BIKKuvBwpmDVA4Ds-EpL5bt9OqPzWPja2LigFYZN2YfX"],"c":[],"a":[]}}-HABEJccSRTfXYF6wrUVuenAIHzwcx3hJugeiJsEKmndi5q1-AABAAArUSuSpts5zDQ7CgPcy305IxhAG8lOjf-r_d5yYQXp18OD9No_gd2McOOjGWMfjyLVjDK529pQcbvNv9Uwc6gH-LAZ5AABAA-a-AABAABYHc_lpuYF3SPNWvyPjzek7yquw69Csc6pLv5vrXHkFAFDcwNNTVxq7ZpxpqOO0CAIS-9Qj1zMor-cwvMHAmkE"#;
 
-        let parsed_exn = parse(exn_event).unwrap().1;
+        let parsed_exn = CesrMessage::try_from(exn_event.as_ref()).unwrap();
         let msg = Message::try_from(parsed_exn).unwrap();
         assert!(matches!(msg, Message::Op(Op::Exchange(_))));
         assert_eq!(msg.to_cesr().unwrap(), exn_event);

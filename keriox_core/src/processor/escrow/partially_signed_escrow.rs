@@ -142,7 +142,8 @@ impl<D: EventDatabase + EscrowCreator + 'static> Notifier for PartiallySignedEsc
 mod tests {
     use std::{sync::Arc, time::Duration};
 
-    use cesrox::{parse, parse_many, payload::parse_payload};
+    use crate::event_message::cesr_adapter::parse_cesr_stream_many;
+    use cesrox::payload::parse_payload;
     use tempfile::NamedTempFile;
 
     use crate::{
@@ -150,7 +151,7 @@ mod tests {
         database::{redb::RedbDatabase, EscrowDatabase},
         error::Error,
         event_message::{
-            cesr_adapter::EventType,
+            cesr_adapter::{parse_cesr_stream, EventType},
             signed_event_message::{Notice, SignedEventMessage},
         },
         prefix::IdentifierPrefix,
@@ -168,9 +169,8 @@ mod tests {
     fn test_escrow_missing_signatures() -> Result<(), Error> {
         let kel = br#"{"v":"KERI10JSON000159_","t":"icp","d":"EMTMYJQ3Eaq8YjG94c_GGvihe5cW8vFFXX2PezAwrn2A","i":"EMTMYJQ3Eaq8YjG94c_GGvihe5cW8vFFXX2PezAwrn2A","s":"0","kt":"1","k":["DJPJ89wKDXMW9Mrg18nZdqp37gCEXuCrTojzVXhHwGT6"],"nt":"1","n":["ENey4-IfkllvEDtKtlFXlr0bhAFFfHQp-n6n2MYEick0"],"bt":"0","b":["DHEOrU8GRgLhjFxz-72koNrxJ5Gyj57B_ZGmYjqbOf4W"],"c":[],"a":[]}-AABAACuardPTXF2hZVuFkhbD6-r84g6p3RoZl_nJRVH6kEOmqxZpw1fj37b7s8LJ649TecIu4Pxb-A2Lu05AptmlBkO{"v":"KERI10JSON000160_","t":"rot","d":"EIBUvQrJbIHvkzQt1hZs1-chTR7FELwknEhQKTS-ku_e","i":"EMTMYJQ3Eaq8YjG94c_GGvihe5cW8vFFXX2PezAwrn2A","s":"1","p":"EMTMYJQ3Eaq8YjG94c_GGvihe5cW8vFFXX2PezAwrn2A","kt":"1","k":["DGuK-ColPgPuH_FCZopzjQAoMN2aNzk3rioNewx1_2El"],"nt":"1","n":["EB78ym8c7Z86gmZWZawXYCk5uMy8H6fC5iPdd3d7VPvk"],"bt":"0","br":[],"ba":[],"a":[]}-AABAAAyw89UHMWvXFyDxJva0uCslgPadFzdNnhFzVjaCvvmV0l6vtXKln1wiy382QbOb69u9DuPgIQUdXLIW9xMJAMI"#;
         let event_without_signature_str = br#"{"v":"KERI10JSON0000cb_","t":"ixn","d":"ENSAcKy3MKyQoYJtXVaNiWHHcFSKwnnN0X_x9-i70q0N","i":"EMTMYJQ3Eaq8YjG94c_GGvihe5cW8vFFXX2PezAwrn2A","s":"2","p":"EIBUvQrJbIHvkzQt1hZs1-chTR7FELwknEhQKTS-ku_e","a":[]}-AABAAC-Oy9w2O16tEzQfIW1TjExYyRbQyBeuc6Etrkdc-QIN_wS3iyw_LYqLI6Zmp34UBkdNv0ZLEjTTcX8dyuJVq0M"#;
-        let mut kell = parse_many(kel)
+        let mut kell = parse_cesr_stream_many(kel)
             .unwrap()
-            .1
             .into_iter()
             .map(|e| Message::try_from(e).unwrap());
         let ev1 = kell.next().unwrap();
@@ -284,7 +284,7 @@ mod tests {
         };
 
         let parse_messagee = |raw_event| {
-            let parsed = parse(raw_event).unwrap().1;
+            let parsed = parse_cesr_stream(raw_event).unwrap();
             Message::try_from(parsed).unwrap()
         };
 

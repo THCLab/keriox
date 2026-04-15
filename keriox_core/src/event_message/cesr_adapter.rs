@@ -4,7 +4,7 @@ use cesrox::{
     group::Group,
     payload::{parse_payload, Payload},
     primitives::IndexedSignature as CesrIndexedSignature,
-    ParsedData,
+    value::Value,
 };
 use said::{version::format::SerializationFormats, SelfAddressingIdentifier};
 use serde::{Deserialize, Serialize};
@@ -57,6 +57,128 @@ pub enum ParseError {
     WrongEventType(String),
 }
 
+pub struct CesrMessage {
+    pub payload: Payload,
+    pub attachments: Vec<Group>,
+}
+
+impl CesrMessage {
+    pub fn to_cesr(&self) -> Result<Vec<u8>, ()> {
+        let mut result = self.payload.to_vec();
+        for att in &self.attachments {
+            result.extend_from_slice(att.to_cesr_str().as_bytes());
+        }
+        Ok(result)
+    }
+}
+
+fn flatten_universal_groups(values: Vec<Value>) -> (Option<Payload>, Vec<Group>) {
+    let mut payload = None;
+    let mut groups = vec![];
+    for v in values {
+        match v {
+            Value::Payload(p) => payload = Some(p),
+            Value::SpecificGroup(g) => groups.push(g),
+            Value::UniversalGroup(_code, inner) => {
+                let (_inner_payload, inner_groups) = flatten_universal_groups(inner);
+                if _inner_payload.is_some() && payload.is_none() {
+                    payload = _inner_payload;
+                }
+                groups.extend(inner_groups);
+            }
+            _ => {}
+        }
+    }
+    (payload, groups)
+}
+
+impl TryFrom<&[u8]> for CesrMessage {
+    type Error = ParseError;
+
+    fn try_from(stream: &[u8]) -> Result<Self, Self::Error> {
+        parse_cesr_stream(stream)
+    }
+}
+
+pub fn parse_cesr_stream_many(stream: &[u8]) -> Result<Vec<CesrMessage>, ParseError> {
+    let text = std::str::from_utf8(stream).map_err(|e| ParseError::CesrError(e.to_string()))?;
+    let (_rest, values) =
+        cesrox::parse_all(text).map_err(|e| ParseError::CesrError(e.to_string()))?;
+
+    let mut messages = vec![];
+    let mut current_payload: Option<Payload> = None;
+    let mut current_groups: Vec<Group> = vec![];
+
+    for v in values {
+        match v {
+            Value::Payload(p) => {
+                if let Some(payload) = current_payload.take() {
+                    messages.push(CesrMessage {
+                        payload,
+                        attachments: std::mem::take(&mut current_groups),
+                    });
+                }
+                current_payload = Some(p);
+            }
+            Value::SpecificGroup(g) => current_groups.push(g),
+            Value::UniversalGroup(_code, inner) => {
+                let (inner_payload, inner_groups) = flatten_universal_groups(inner);
+                if let Some(p) = inner_payload {
+                    if let Some(payload) = current_payload.take() {
+                        messages.push(CesrMessage {
+                            payload,
+                            attachments: std::mem::take(&mut current_groups),
+                        });
+                    }
+                    current_payload = Some(p);
+                }
+                current_groups.extend(inner_groups);
+            }
+            _ => {}
+        }
+    }
+
+    if let Some(payload) = current_payload {
+        messages.push(CesrMessage {
+            payload,
+            attachments: current_groups,
+        });
+    }
+
+    Ok(messages)
+}
+
+pub fn parse_cesr_stream(stream: &[u8]) -> Result<CesrMessage, ParseError> {
+    let text = std::str::from_utf8(stream).map_err(|e| ParseError::CesrError(e.to_string()))?;
+    let (_rest, values) =
+        cesrox::parse_all(text).map_err(|e| ParseError::CesrError(e.to_string()))?;
+
+    let (payload, groups) = flatten_universal_groups(values);
+    let payload = payload.ok_or_else(|| ParseError::CesrError("No payload found".into()))?;
+
+    Ok(CesrMessage {
+        payload,
+        attachments: groups,
+    })
+}
+
+pub fn parse_cesr_stream_extra(stream: &[u8]) -> Result<(&str, CesrMessage), ParseError> {
+    let text = std::str::from_utf8(stream).map_err(|e| ParseError::CesrError(e.to_string()))?;
+    let (rest, values) =
+        cesrox::parse_all(text).map_err(|e| ParseError::CesrError(e.to_string()))?;
+
+    let (payload, groups) = flatten_universal_groups(values);
+    let payload = payload.ok_or_else(|| ParseError::CesrError("No payload found".into()))?;
+
+    Ok((
+        rest,
+        CesrMessage {
+            payload,
+            attachments: groups,
+        },
+    ))
+}
+
 pub fn parse_event_type(input: &[u8]) -> Result<EventType, ParseError> {
     parse_payload(input)
         .map_err(|e| ParseError::CesrError(e.to_string()))?
@@ -96,13 +218,26 @@ impl EventType {
     }
 }
 
-impl From<&SignedEventMessage> for ParsedData {
+fn encode_transferable_seal(seal: &EventSeal, sigs: Vec<CesrIndexedSignature>) -> Vec<Group> {
+    let event_digest = seal.event_digest();
+    vec![
+        Group::AnchoringSeals(vec![(
+            seal.prefix.clone().into(),
+            seal.sn,
+            event_digest.into(),
+        )]),
+        Group::IndexedControllerSignatures(sigs),
+    ]
+}
+
+impl From<&SignedEventMessage> for CesrMessage {
     fn from(ev: &SignedEventMessage) -> Self {
-        let mut attachments = if let Some(SourceSeal { sn, digest }) = ev.delegator_seal.clone() {
-            vec![Group::SourceSealCouples(vec![(sn, digest.said.into())])]
-        } else {
-            vec![]
-        };
+        let mut attachments: Vec<Group> =
+            if let Some(SourceSeal { sn, digest }) = ev.delegator_seal.clone() {
+                vec![Group::SourceSealCouples(vec![(sn, digest.said.into())])]
+            } else {
+                vec![]
+            };
         let sigs = ev
             .signatures
             .clone()
@@ -129,7 +264,7 @@ impl From<&SignedEventMessage> for ParsedData {
             });
         };
 
-        ParsedData {
+        CesrMessage {
             payload: ev.event_message.clone().into(),
             attachments,
         }
@@ -148,36 +283,35 @@ impl<T: Serialize + Clone, D: Typeable<TypeTag = T> + Serialize + Clone> From<Ty
     }
 }
 
-impl From<SignedNontransferableReceipt> for ParsedData {
-    fn from(rcp: SignedNontransferableReceipt) -> ParsedData {
+impl From<SignedNontransferableReceipt> for CesrMessage {
+    fn from(rcp: SignedNontransferableReceipt) -> CesrMessage {
         let attachments: Vec<Group> = rcp.signatures.into_iter().map(|sig| sig.into()).collect();
-        ParsedData {
+        CesrMessage {
             payload: rcp.body.into(),
             attachments,
         }
     }
 }
 
-impl From<SignedTransferableReceipt> for ParsedData {
-    fn from(rcp: SignedTransferableReceipt) -> ParsedData {
+impl From<SignedTransferableReceipt> for CesrMessage {
+    fn from(rcp: SignedTransferableReceipt) -> CesrMessage {
         let seal = rcp.validator_seal;
-        let event_digest = seal.event_digest();
-        let signatures = rcp.signatures.into_iter().map(|sig| sig.into()).collect();
-        let quadruple = (seal.prefix.into(), seal.sn, event_digest.into(), signatures);
-        let group = Group::TransIndexedSigGroups(vec![quadruple]);
+        let signatures: Vec<CesrIndexedSignature> =
+            rcp.signatures.into_iter().map(|sig| sig.into()).collect();
+        let attachments = encode_transferable_seal(&seal, signatures);
 
-        ParsedData {
+        CesrMessage {
             payload: rcp.body.into(),
-            attachments: vec![group],
+            attachments,
         }
     }
 }
 
 #[cfg(feature = "query")]
-impl From<SignedReply> for ParsedData {
+impl From<SignedReply> for CesrMessage {
     fn from(ev: SignedReply) -> Self {
         let attachments = vec![ev.signature.into()];
-        ParsedData {
+        CesrMessage {
             payload: ev.reply.into(),
             attachments,
         }
@@ -185,11 +319,11 @@ impl From<SignedReply> for ParsedData {
 }
 
 #[cfg(feature = "query")]
-impl From<SignedKelQuery> for ParsedData {
+impl From<SignedKelQuery> for CesrMessage {
     fn from(ev: SignedKelQuery) -> Self {
         let groups = signatures_into_groups(&[ev.signature]);
 
-        ParsedData {
+        CesrMessage {
             payload: ev.query.into(),
             attachments: groups,
         }
@@ -197,11 +331,11 @@ impl From<SignedKelQuery> for ParsedData {
 }
 
 #[cfg(feature = "mailbox")]
-impl From<SignedMailboxQuery> for ParsedData {
+impl From<SignedMailboxQuery> for CesrMessage {
     fn from(ev: SignedMailboxQuery) -> Self {
         let groups = signatures_into_groups(&[ev.signature]);
 
-        ParsedData {
+        CesrMessage {
             payload: ev.query.into(),
             attachments: groups,
         }
@@ -209,18 +343,18 @@ impl From<SignedMailboxQuery> for ParsedData {
 }
 
 #[cfg(feature = "query")]
-impl From<SignedQueryMessage> for ParsedData {
+impl From<SignedQueryMessage> for CesrMessage {
     fn from(ev: SignedQueryMessage) -> Self {
         match ev {
-            SignedQueryMessage::KelQuery(kqry) => ParsedData::from(kqry),
+            SignedQueryMessage::KelQuery(kqry) => CesrMessage::from(kqry),
             #[cfg(feature = "mailbox")]
-            SignedQueryMessage::MailboxQuery(mqry) => ParsedData::from(mqry),
+            SignedQueryMessage::MailboxQuery(mqry) => CesrMessage::from(mqry),
         }
     }
 }
 
 #[cfg(feature = "mailbox")]
-impl From<SignedExchange> for ParsedData {
+impl From<SignedExchange> for CesrMessage {
     fn from(ev: SignedExchange) -> Self {
         let mut attachments = signature::signatures_into_groups(&ev.signature);
 
@@ -228,7 +362,7 @@ impl From<SignedExchange> for ParsedData {
 
         let data_attachment = Group::PathedMaterialQuadruplet(ev.data_signature.0, data_signatures);
         attachments.push(data_attachment);
-        ParsedData {
+        CesrMessage {
             payload: ev.exchange_message.into(),
             attachments,
         }
@@ -248,10 +382,10 @@ impl TryFrom<Payload> for EventType {
     }
 }
 
-impl TryFrom<ParsedData> for Message {
+impl TryFrom<CesrMessage> for Message {
     type Error = ParseError;
 
-    fn try_from(value: ParsedData) -> Result<Self, Self::Error> {
+    fn try_from(value: CesrMessage) -> Result<Self, Self::Error> {
         let msg = match value.payload.try_into()? {
             EventType::KeyEvent(ev) => Message::Notice(signed_key_event(ev, value.attachments)?),
             EventType::Receipt(rct) => Message::Notice(signed_receipt(rct, value.attachments)?),
@@ -270,10 +404,10 @@ impl TryFrom<ParsedData> for Message {
     }
 }
 
-impl TryFrom<ParsedData> for Notice {
+impl TryFrom<CesrMessage> for Notice {
     type Error = ParseError;
 
-    fn try_from(value: ParsedData) -> Result<Self, Self::Error> {
+    fn try_from(value: CesrMessage) -> Result<Self, Self::Error> {
         match Message::try_from(value)? {
             Message::Notice(notice) => Ok(notice),
             #[cfg(feature = "query")]
@@ -285,10 +419,10 @@ impl TryFrom<ParsedData> for Notice {
 }
 
 #[cfg(any(feature = "query", feature = "oobi"))]
-impl TryFrom<ParsedData> for Op {
+impl TryFrom<CesrMessage> for Op {
     type Error = ParseError;
 
-    fn try_from(value: ParsedData) -> Result<Self, Self::Error> {
+    fn try_from(value: CesrMessage) -> Result<Self, Self::Error> {
         let et: EventType = value.payload.try_into()?;
         match et {
             #[cfg(feature = "query")]
@@ -307,13 +441,12 @@ impl TryFrom<ParsedData> for Op {
 }
 
 #[cfg(feature = "query")]
-impl TryFrom<ParsedData> for SignedQueryMessage {
+impl TryFrom<CesrMessage> for SignedQueryMessage {
     type Error = ParseError;
 
-    fn try_from(value: ParsedData) -> Result<Self, Self::Error> {
+    fn try_from(value: CesrMessage) -> Result<Self, Self::Error> {
         match Op::try_from(value)? {
             Op::Query(qry) => Ok(qry),
-            // Op::MailboxQuery(qry) => Ok(SignedQueryMessage::MailboxQuery(qry)),
             _ => Err(ParseError::WrongEventType(
                 "Cannot convert SignedEventData to SignedQuery".to_string(),
             )),
@@ -322,10 +455,10 @@ impl TryFrom<ParsedData> for SignedQueryMessage {
 }
 
 #[cfg(feature = "query")]
-impl TryFrom<ParsedData> for SignedReply {
+impl TryFrom<CesrMessage> for SignedReply {
     type Error = ParseError;
 
-    fn try_from(value: ParsedData) -> Result<Self, Self::Error> {
+    fn try_from(value: CesrMessage) -> Result<Self, Self::Error> {
         match Op::try_from(value)? {
             Op::Reply(rpy) => Ok(rpy),
             _ => Err(ParseError::WrongEventType(
@@ -336,10 +469,10 @@ impl TryFrom<ParsedData> for SignedReply {
 }
 
 #[cfg(feature = "mailbox")]
-impl TryFrom<ParsedData> for SignedExchange {
+impl TryFrom<CesrMessage> for SignedExchange {
     type Error = ParseError;
 
-    fn try_from(value: ParsedData) -> Result<Self, Self::Error> {
+    fn try_from(value: CesrMessage) -> Result<Self, Self::Error> {
         match Op::try_from(value)? {
             Op::Exchange(exn) => Ok(exn),
             _ => Err(ParseError::WrongEventType(
@@ -349,10 +482,49 @@ impl TryFrom<ParsedData> for SignedExchange {
     }
 }
 
+fn decode_transferable_receipt(
+    attachments: &[Group],
+) -> Option<(EventSeal, Vec<crate::prefix::IndexedSignature>)> {
+    let seals: Vec<_> = attachments
+        .iter()
+        .filter_map(|att| {
+            if let Group::AnchoringSeals(seals) = att {
+                Some(seals)
+            } else {
+                None
+            }
+        })
+        .flatten()
+        .collect();
+
+    let sigs: Vec<_> = attachments
+        .iter()
+        .filter_map(|att| {
+            if let Group::IndexedControllerSignatures(sigs) = att {
+                Some(sigs)
+            } else {
+                None
+            }
+        })
+        .flatten()
+        .collect();
+
+    if seals.is_empty() || sigs.is_empty() {
+        return None;
+    }
+
+    let (id, sn, digest) = seals.first()?;
+    let seal = EventSeal::new(
+        id.clone().into(),
+        *sn,
+        SelfAddressingIdentifier::from(digest.clone()),
+    );
+    let converted_sigs = sigs.into_iter().map(|sig| sig.clone().into()).collect();
+    Some((seal, converted_sigs))
+}
+
 #[cfg(feature = "query")]
 fn signed_reply(rpy: ReplyEvent, mut attachments: Vec<Group>) -> Result<Op, ParseError> {
-    use said::SelfAddressingIdentifier;
-
     match attachments
         .pop()
         .ok_or_else(|| ParseError::AttachmentError("Missing attachment".into()))?
@@ -366,25 +538,16 @@ fn signed_reply(rpy: ReplyEvent, mut attachments: Vec<Group>) -> Result<Op, Pars
                 signature.into(),
             )))
         }
-        Group::TransIndexedSigGroups(data) => {
-            let (prefix, sn, digest, sigs) = data
-                // TODO what if more than one?
-                .last()
-                .ok_or_else(|| ParseError::AttachmentError("More than one seal".into()))?
-                .to_owned();
-            let seal = EventSeal::new(
-                prefix.into(),
-                sn,
-                SelfAddressingIdentifier::from(digest).into(),
-            );
-            let sigs = sigs.into_iter().map(|sig| sig.into()).collect();
-            Ok(Op::Reply(SignedReply::new_trans(rpy, seal, sigs)))
+        Group::AnchoringSeals(_) => {
+            if let Some((seal, sigs)) = decode_transferable_receipt(&attachments) {
+                Ok(Op::Reply(SignedReply::new_trans(rpy, seal, sigs)))
+            } else {
+                Err(ParseError::AttachmentError(
+                    "Missing signatures for transferable reply".into(),
+                ))
+            }
         }
-        Group::Frame(atts) => signed_reply(rpy, atts),
-        _ => {
-            // Improper payload type
-            Err(ParseError::AttachmentError("Improper payload type".into()))
-        }
+        _ => Err(ParseError::AttachmentError("Improper payload type".into())),
     }
 }
 
@@ -398,7 +561,6 @@ fn signed_query(qry: QueryEvent, mut attachments: Vec<Group>) -> Result<Op, Pars
     let sigs = get_signatures(att)?;
     let qry = SignedQueryMessage::KelQuery(SignedKelQuery {
         query: qry,
-        // TODO what if more than one?
         signature: sigs
             .get(0)
             .ok_or(ParseError::AttachmentError("Missing attachment".into()))?
@@ -420,7 +582,6 @@ fn signed_management_query(
     let sigs = get_signatures(att)?;
     let qry = SignedQueryMessage::MailboxQuery(SignedMailboxQuery {
         query: qry,
-        // TODO what if more than one?
         signature: sigs
             .get(0)
             .ok_or(ParseError::AttachmentError("Missing attachment".into()))?
@@ -452,12 +613,9 @@ fn signed_key_event(
                     Some(Group::SourceSealCouples(seals)),
                 ) => Ok((Some(seals), sigs)),
                 (Group::IndexedControllerSignatures(sigs), None) => Ok((None, sigs)),
-                _ => {
-                    // Improper attachment type
-                    Err(ParseError::AttachmentError(
-                        "Improper attachment type".into(),
-                    ))
-                }
+                _ => Err(ParseError::AttachmentError(
+                    "Improper attachment type".into(),
+                )),
             }?;
 
             let delegator_seal = if let Some(seal) = seals {
@@ -479,15 +637,8 @@ fn signed_key_event(
             )))
         }
         _ => {
-            let signatures = if let Group::Frame(atts) = attachments
-                .first()
-                .cloned()
-                .ok_or_else(|| ParseError::AttachmentError("Missing attachment".into()))?
-            {
-                atts
-            } else {
-                attachments
-            };
+            let signatures = attachments;
+
             let controller_sigs = signatures
                 .iter()
                 .cloned()
@@ -525,18 +676,14 @@ fn signed_key_event(
                 } else {
                     Some(witness_sigs)
                 },
-                // TODO parse delegator seal attachment
                 None,
             )))
         }
     }
 }
 
-fn signed_receipt(
-    event_message: Receipt,
-    mut attachments: Vec<Group>,
-) -> Result<Notice, ParseError> {
-    let nontransferable = attachments
+fn signed_receipt(event_message: Receipt, attachments: Vec<Group>) -> Result<Notice, ParseError> {
+    let nontransferable: Vec<_> = attachments
         .iter()
         .filter_map(|att| match att {
             Group::IndexedWitnessSignatures(sigs) => {
@@ -545,49 +692,41 @@ fn signed_receipt(
             }
             Group::NontransReceiptCouples(couples) => Some(Nontransferable::Couplet(
                 couples
-                    .into_iter()
+                    .iter()
                     .map(|(bp, sp)| (bp.clone().into(), sp.clone().into()))
                     .collect(),
             )),
             _ => None,
         })
         .collect();
-    let att = attachments
-        .pop()
-        .ok_or_else(|| ParseError::AttachmentError("Missing attachment".into()))?;
 
-    match att {
-        // Should be nontransferable receipt
-        Group::NontransReceiptCouples(_) | Group::IndexedWitnessSignatures(_) => {
-            Ok(Notice::NontransferableRct(SignedNontransferableReceipt {
-                body: event_message,
-                signatures: nontransferable,
-            }))
-        }
-        Group::TransIndexedSigGroups(data) => {
-            // Should be transferable receipt
-            let (prefix, sn, event_digest, sigs) = data
-                // TODO what if more than one?
-                .last()
-                .ok_or_else(|| ParseError::AttachmentError("Empty seals".into()))?;
-            let seal = EventSeal::new(
-                prefix.clone().into(),
-                *sn,
-                SelfAddressingIdentifier::from(event_digest.clone()).into(),
-            );
-            let converted_signatures = sigs.iter().map(|sig| sig.clone().into()).collect();
-            Ok(Notice::TransferableRct(SignedTransferableReceipt::new(
+    let has_anchoring_seals = attachments
+        .iter()
+        .any(|att| matches!(att, Group::AnchoringSeals(_)));
+
+    let has_nontrans = attachments.iter().any(|att| {
+        matches!(att, Group::NontransReceiptCouples(_))
+            || matches!(att, Group::IndexedWitnessSignatures(_))
+    });
+
+    if has_anchoring_seals {
+        if let Some((seal, converted_signatures)) = decode_transferable_receipt(&attachments) {
+            return Ok(Notice::TransferableRct(SignedTransferableReceipt::new(
                 event_message,
                 seal,
                 converted_signatures,
-            )))
-        }
-        Group::Frame(atts) => signed_receipt(event_message, atts),
-        _ => {
-            // Improper payload type
-            Err(ParseError::AttachmentError("Improper payload type".into()))
+            )));
         }
     }
+
+    if has_nontrans {
+        return Ok(Notice::NontransferableRct(SignedNontransferableReceipt {
+            body: event_message,
+            signatures: nontransferable,
+        }));
+    }
+
+    Err(ParseError::AttachmentError("Improper payload type".into()))
 }
 
 #[cfg(feature = "mailbox")]
@@ -627,8 +766,6 @@ pub fn signed_exchange(exn: ExchangeMessage, attachments: Vec<Group>) -> Result<
 
 #[cfg(test)]
 pub mod test {
-    use cesrox::{parse, parse_many};
-
     use crate::{
         event::{receipt::Receipt, KeyEvent},
         event_message::msg::KeriEvent,
@@ -636,41 +773,34 @@ pub mod test {
 
     #[test]
     fn test_signed_event() {
-        // taken from KERIPY: tests/core/test_eventing.py::test_multisig_digprefix#2255
         let stream = br#"{"v":"KERI10JSON0001e7_","t":"icp","d":"EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen","i":"EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen","s":"0","kt":"2","k":["DErocgXD2RGSyvn3MObcx59jeOsEQhv2TqHirVkzrp0Q","DFXLiTjiRdSBPLL6hLa0rskIxk3dh4XwJLfctkJFLRSS","DE9YgIQVgpLwocTVrG8tidKScsQSMWwLWywNC48fhq4f"],"nt":"2","n":["EDJk5EEpC4-tQ7YDwBiKbpaZahh1QCyQOnZRF7p2i8k8","EAXfDjKvUFRj-IEB_o4y-Y_qeJAjYfZtOMD9e7vHNFss","EN8l6yJC2PxribTN0xfri6bLz34Qvj-x3cNwcV3DvT2m"],"bt":"0","b":[],"c":[],"a":[]}-AADAAD4SyJSYlsQG22MGXzRGz2PTMqpkgOyUfq7cS99sC2BCWwdVmEMKiTEeWe5kv-l_d9auxdadQuArLtAGEArW8wEABD0z_vQmFImZXfdR-0lclcpZFfkJJJNXDcUNrf7a-mGsxNLprJo-LROwDkH5m7tVrb-a1jcor2dHD9Jez-r4bQIACBFeU05ywfZycLdR0FxCvAR9BfV9im8tWe1DglezqJLf-vHRQSChY1KafbYNc96hYYpbuN90WzuCRMgV8KgRsEC"#;
-        let parsed = parse(stream);
+        let parsed = super::parse_cesr_stream(stream);
         assert!(parsed.is_ok());
-        assert_eq!(parsed.unwrap().1.to_cesr().unwrap(), stream);
+        assert_eq!(parsed.unwrap().to_cesr().unwrap(), stream);
     }
 
     #[test]
     fn test_key_event_parsing() {
-        // Inception event.
         let stream = br#"{"v":"KERI10JSON0000fd_","t":"icp","d":"EMW0zK3bagYPO6gx3w7Ua90f-I7x5kGIaI4Xeq9W8_As","i":"BFs8BBx86uytIM0D2BhsE5rrqVIT8ef8mflpNceHo4XH","s":"0","kt":"1","k":["BFs8BBx86uytIM0D2BhsE5rrqVIT8ef8mflpNceHo4XH"],"nt":"0","n":[],"bt":"0","b":[],"c":[],"a":[]}"#;
         let event: KeriEvent<KeyEvent> = serde_json::from_slice(stream).unwrap();
         assert_eq!(event.encode().unwrap(), stream);
 
-        // Rotation event.
         let stream = br#"{"v":"KERI10JSON000160_","t":"rot","d":"EFl8nvRCbN2xQJI75nBXp-gaXuHJw8zheVjwMN_rB-pb","i":"DFs8BBx86uytIM0D2BhsE5rrqVIT8ef8mflpNceHo4XH","s":"1","p":"EJQUyxnzIAtmZPoq9f4fExeGN0qfJmaFnUEKTwIiTBPj","kt":"1","k":["DB4GWvru73jWZKpNgMQp8ayDRin0NG0Ymn_RXQP_v-PQ"],"nt":"1","n":["EIsKL3B6Zz5ICGxCQp-SoLXjwOrdlSbLJrEn21c2zVaU"],"bt":"0","br":[],"ba":[],"a":[]}"#;
         let event: KeriEvent<KeyEvent> = serde_json::from_slice(stream).unwrap();
         assert_eq!(event.encode().unwrap(), stream);
 
-        // Interaction event without seals.
         let stream = br#"{"v":"KERI10JSON0000cb_","t":"ixn","d":"EKKccCumVQdgxvsrSXvuTtjmS28Xqf3zRJ8T6peKgl9J","i":"DFs8BBx86uytIM0D2BhsE5rrqVIT8ef8mflpNceHo4XH","s":"2","p":"ECauhEzA4DJDXVDnNQiGQ0sKXa6sx_GgS8Ebdzm4E-kQ","a":[]}"#;
         let event: KeriEvent<KeyEvent> = serde_json::from_slice(stream).unwrap();
         assert_eq!(event.encode().unwrap(), stream);
 
-        // Interaction event with seal.
         let stream = br#"{"v":"KERI10JSON00013a_","t":"ixn","d":"EJtQndkvwnMpVGE5oVVbLWSCm-jLviGw1AOOkzBvNwsS","i":"EA_SbBUZYwqLVlAAn14d6QUBQCSReJlZ755JqTgmRhXH","s":"1","p":"EA_SbBUZYwqLVlAAn14d6QUBQCSReJlZ755JqTgmRhXH","a":[{"i":"EHng2fV42DdKb5TLMIs6bbjFkPNmIdQ5mSFn6BTnySJj","s":"0","d":"EHng2fV42DdKb5TLMIs6bbjFkPNmIdQ5mSFn6BTnySJj"}]}"#;
         let event: KeriEvent<KeyEvent> = serde_json::from_slice(stream).unwrap();
         assert_eq!(event.encode().unwrap(), stream);
 
-        // Delegated inception event.
         let stream = br#"{"v":"KERI10JSON00015f_","t":"dip","d":"EHng2fV42DdKb5TLMIs6bbjFkPNmIdQ5mSFn6BTnySJj","i":"EHng2fV42DdKb5TLMIs6bbjFkPNmIdQ5mSFn6BTnySJj","s":"0","kt":"1","k":["DLitcfMnabnLt-PNCaXdVwX45wsG93Wd8eW9QiZrlKYQ"],"nt":"1","n":["EDjXvWdaNJx7pAIr72Va6JhHxc7Pf4ScYJG496ky8lK8"],"bt":"0","b":[],"c":[],"a":[],"di":"EA_SbBUZYwqLVlAAn14d6QUBQCSReJlZ755JqTgmRhXH"}"#;
         let event: KeriEvent<KeyEvent> = serde_json::from_slice(stream).unwrap();
         assert_eq!(event.encode().unwrap(), stream);
 
-        // Delegated rotation event.
         let stream = br#"{"v":"KERI10JSON000160_","t":"drt","d":"EMBBBkaLV7i6wNgfz3giib2ItrHsr548mtIflW0Hrbuv","i":"EN3PglLbr4mJblS4dyqbqlpUa735hVmLOhYUbUztxaiH","s":"4","p":"EANkcl_QewzrRSKH2p9zUskHI462CuIMS_HQIO132Z30","kt":"1","k":["DPLt4YqQsWZ5DPztI32mSyTJPRESONvE9KbETtCVYIeH"],"nt":"1","n":["EIsKL3B6Zz5ICGxCQp-SoLXjwOrdlSbLJrEn21c2zVaU"],"bt":"0","br":[],"ba":[],"a":[]}"#;
         let event: KeriEvent<KeyEvent> = serde_json::from_slice(stream).unwrap();
         assert_eq!(event.encode().unwrap(), stream);
@@ -678,9 +808,8 @@ pub mod test {
 
     #[test]
     fn test_receipt_parsing() {
-        // Receipt event
         let stream = br#"{"v":"KERI10JSON000091_","t":"rct","d":"EKKccCumVQdgxvsrSXvuTtjmS28Xqf3zRJ8T6peKgl9J","i":"DFs8BBx86uytIM0D2BhsE5rrqVIT8ef8mflpNceHo4XH","s":"0"}"#;
-        let event = parse(stream).unwrap().1;
+        let event = super::parse_cesr_stream(stream).unwrap();
         assert_eq!(event.to_cesr().unwrap(), stream);
 
         let event: Receipt = serde_json::from_slice(stream).unwrap();
@@ -693,12 +822,12 @@ pub mod test {
         use std::convert::TryInto;
 
         use crate::event_message::cesr_adapter::EventType;
-        // taken from keripy keripy/tests/core/test_eventing.py::test_messegize
+
         let qry_event = br#"{"v":"KERI10JSON000105_","t":"qry","d":"EHtaQHsKzezkQUEYjMjEv6nIf4AhhR9Zy6AvcfyGCXkI","dt":"2021-01-01T00:00:00.000000+00:00","r":"logs","rr":"","q":{"s":0,"i":"EIaGMMWJFPmtXznY1IIiKDIrg-vIyge6mBl2QV8dDjI3","src":"BGKVzj4ve0VSd8z_AmvhLg4lqcC_9WYX90k03q-R_Ydo"}}"#;
         let rest = "something more".as_bytes();
         let stream = [qry_event, rest].concat();
 
-        let (_extra, event) = parse(&stream).unwrap();
+        let (_extra, event) = super::parse_cesr_stream_extra(&stream).unwrap();
         assert!(matches!(
             event.payload.clone().try_into().unwrap(),
             EventType::Qry(_)
@@ -706,52 +835,21 @@ pub mod test {
         assert_eq!(&event.to_cesr().unwrap(), qry_event);
     }
 
-    #[cfg(feature = "mailbox")]
-    #[test]
-    fn test_exn() {
-        use crate::event_message::cesr_adapter::EventType;
-        use std::convert::TryInto;
-        let exn_event = br#"{"v":"KERI10JSON0002f1_","t":"exn","d":"EBLqTGJXK8ViUGXMOO8_LXbetpjJX8CY_SbA134RIZmf","dt":"2022-10-25T09:53:04.119676+00:00","r":"/fwd","q":{"pre":"EKYLUMmNPZeEs77Zvclf0bSN5IN-mLfLpx2ySb-HDlk4","topic":"multisig"},"a":{"v":"KERI10JSON000215_","t":"icp","d":"EC61gZ9lCKmHAS7U5ehUfEbGId5rcY0D7MirFZHDQcE2","i":"EC61gZ9lCKmHAS7U5ehUfEbGId5rcY0D7MirFZHDQcE2","s":"0","kt":"2","k":["DOZlWGPfDHLMf62zSFzE8thHmnQUOgA3_Y-KpOyF9ScG","DHGb2qY9WwZ1sBnC9Ip0F-M8QjTM27ftI-3jTGF9mc6K"],"nt":"2","n":["EBvD5VIVvf6NpP9GRmTqu_Cd1KN0RKrKNfPJ-uhIxurj","EHlpcaxffvtcpoUUMTc6tpqAVtb2qnOYVk_3HRsZ34PH"],"bt":"3","b":["BBilc4-L3tFUnfM_wJr4S4OJanAv_VmF_dJNN6vkf2Ha","BLskRTInXnMxWaGqcpSyMgo0nYbalW99cGZESrz3zapM","BIKKuvBwpmDVA4Ds-EpL5bt9OqPzWPja2LigFYZN2YfX"],"c":[],"a":[]}}-HABEJccSRTfXYF6wrUVuenAIHzwcx3hJugeiJsEKmndi5q1-AABAAArUSuSpts5zDQ7CgPcy305IxhAG8lOjf-r_d5yYQXp18OD9No_gd2McOOjGWMfjyLVjDK529pQcbvNv9Uwc6gH-LAZ5AABAA-a-AABAABYHc_lpuYF3SPNWvyPjzek7yquw69Csc6pLv5vrXHkFAFDcwNNTVxq7ZpxpqOO0CAIS-9Qj1zMor-cwvMHAmkE')"#;
-
-        let (_extra, event) = parse(exn_event).unwrap();
-        assert!(matches!(
-            event.payload.try_into().unwrap(),
-            EventType::Exn(_)
-        ));
-    }
-
-    #[cfg(feature = "query")]
-    #[test]
-    fn test_reply() {
-        use crate::event_message::cesr_adapter::EventType;
-        use std::convert::TryInto;
-        let rpy = br#"{"v":"KERI10JSON00029d_","t":"rpy","d":"EYFMuK9IQmHvq9KaJ1r67_MMCq5GnQEgLyN9YPamR3r0","dt":"2021-01-01T00:00:00.000000+00:00","r":"/ksn/E7YbTIkWWyNwOxZQTTnrs6qn8jFbu2A8zftQ33JYQFQ0","a":{"v":"KERI10JSON0001e2_","i":"E7YbTIkWWyNwOxZQTTnrs6qn8jFbu2A8zftQ33JYQFQ0","s":"3","p":"EF7f4gNFCbJz6ZHLacIi_bbIq7kaWAFOzX7ncU_vs5Qg","d":"EOPSPvHHVmU9IIdHa5ksisoVrOnmHRps_tx3OsZSQQ30","f":"3","dt":"2021-01-01T00:00:00.000000+00:00","et":"rot","kt":"1","k":["DrcAz_gmDTuWIHn_mOQDeSK_aJIRiw5IMzPD7igzEDb0"],"nt":"1","n":["EK7ZUmFebD2st48Yvtzc9LajV3Yg2mkeeDzVRL-7uKrU"],"bt":"0","b":[],"c":[],"ee":{"s":"3","d":"EOPSPvHHVmU9IIdHa5ksisoVrOnmHRps_tx3OsZSQQ30","br":[],"ba":[]},"di":""}}-VA0-FABE7YbTIkWWyNwOxZQTTnrs6qn8jFbu2A8zftQ33JYQFQ00AAAAAAAAAAAAAAAAAAAAAAwEOPSPvHHVmU9IIdHa5ksisoVrOnmHRps_tx3OsZSQQ30-AABAAYsqumzPM0bIo04gJ4Ln0zAOsGVnjHZrFjjjS49hGx_nQKbXuD1D4J_jNoEa4TPtPDnQ8d0YcJ4TIRJb-XouJBg"#;
-        let rest = "something more".as_bytes();
-        let stream = [rpy, rest].concat();
-
-        let (_extra, event) = parse(&stream).unwrap();
-        assert!(matches!(
-            event.payload.try_into().unwrap(),
-            EventType::Rpy(_)
-        ));
-    }
-
     #[cfg(feature = "query")]
     #[test]
     fn test_signed_qry() {
-        // Taken from keripy/tests/core/test_eventing.py::test_messagize (line 1471)
         let stream = br#"{"v":"KERI10JSON0000c9_","t":"qry","d":"E-WvgxrllmjGFhpn0oOiBkAVz3-dEm3bbiV_5qwj81xo","dt":"2021-01-01T00:00:00.000000+00:00","r":"log","rr":"","q":{"i":"DyvCLRr5luWmp7keDvDuLP0kIqcyBYq79b3Dho1QvrjI"}}-VAj-HABEZOIsLsfrVdBvULlg3Hg_Y1r-hadS82ZpglBLojPIQhg-AABAAuISeZIVO_wXjIrGJ-VcVMxr285OkKzAqVEQqVPFx8Ht2A9GQFB-zRA18J1lpqVphOnnXbTc51WR4uAvK90EHBg"#;
-        let se = parse(&stream[..stream.len() - 1]);
+        let se = super::parse_cesr_stream(&stream[..stream.len() - 1]);
         assert!(se.is_err());
-        let se = parse(stream);
+        let se = super::parse_cesr_stream(stream);
         assert!(se.is_ok());
     }
 
     #[test]
     fn test_signed_events_stream() {
-        // Taken from keripy/tests/core/test_kevery.py::test kevery
-        let kerl_str= br#"{"v":"KERI10JSON000120_","t":"icp","d":"EG4EuTsxPiRM7soX10XXzNsS1KqXKUp8xsQ-kW_tWHoI","i":"DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","s":"0","kt":"1","k":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA"],"n":"EPYuj8mq_PYYsoBKkzX1kxSPGYBWaIya3slgCOyOtlqU","bt":"0","b":[],"c":[],"a":[]}-AABAA0aSisI4ZZTH_6JCqsvAsEpuf_Jq6bDbvPWj_eCDnAGbSARqYHipNs-9W7MHnwnMfIXwLpcoJkKGrQ-SiaklhAw{"v":"KERI10JSON000155_","t":"rot","d":"Ej30AgJV14mTTs427F3kILLrP_l03a27APg2FBO0-QtA","i":"DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","s":"1","p":"EG4EuTsxPiRM7soX10XXzNsS1KqXKUp8xsQ-kW_tWHoI","kt":"1","k":["DVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI"],"n":"E-dapdcC6XR1KWmWDsNl4J_OxcGxNZw1Xd95JH5a34fI","bt":"0","br":[],"ba":[],"a":[]}-AABAAwoiqt07w2UInzzo2DmtwkBfqX1-tTO4cYk_7YdlbJ95qA7PO5sEUkER8fZySQMNCVh64ruAh1yoew3TikwVGAQ{"v":"KERI10JSON000155_","t":"rot","d":"EmtXXRjyz6IdeX4201BgXKRDBm74gGqJF2r2umMMAL6I","i":"DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","s":"2","p":"Ej30AgJV14mTTs427F3kILLrP_l03a27APg2FBO0-QtA","kt":"1","k":["DT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8"],"n":"EKrLE2h2nh3ClyJNEjKaikHWT7G-ngimNpK-QgVQv9As","bt":"0","br":[],"ba":[],"a":[]}-AABAAW_RsDfAcHkknyzh9oeliH90KGPJEI8AP3rJPyuTnpVg8yOVtSIp_JFlyRwjV5SEQOqddAcRV6JtaQO8oXtWFCQ{"v":"KERI10JSON0000cb_","t":"ixn","d":"EY7E4RJXPe7FF1zQPbpSMIY-TYz9eAmNIhuprPYqTQ5o","i":"DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","s":"3","p":"EmtXXRjyz6IdeX4201BgXKRDBm74gGqJF2r2umMMAL6I","a":[]}-AABAAlB0Ui5NHJpcifXUB6bAutmpZkhSgwxyI5jEZ2JGVBgTI02sC0Ugbq3q0EpOae7ruXW-eabUz2s0FAs26jGwVBg{"v":"KERI10JSON0000cb_","t":"ixn","d":"ENVzbZieVIjYLYkPWQy0gfua11KqdRG-oku5Ut8Dl6hU","i":"DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","s":"4","p":"EY7E4RJXPe7FF1zQPbpSMIY-TYz9eAmNIhuprPYqTQ5o","a":[]}-AABAAWITFg460TXvYvxxzN62vpqpLs-vGgeGAbd-onY3DYxd5e3AljHh85pTum4Ha48F5dui9IVYqYvuYJCG8p8KvDw{"v":"KERI10JSON000155_","t":"rot","d":"E6wrLhilpPo4ePq7m7ZccEcKjwPD2q9mqzLUb_aO2Hi0","i":"DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","s":"5","p":"ENVzbZieVIjYLYkPWQy0gfua11KqdRG-oku5Ut8Dl6hU","kt":"1","k":["DKPE5eeJRzkRTMOoRGVd2m18o8fLqM2j9kaxLhV3x8AQ"],"n":"EhVTfJFfl6L0Z0432mDUxeaqB_hlWPJ2qUuzG95gEyJU","bt":"0","br":[],"ba":[],"a":[]}-AABAAnqz-vnMx1cqe_SkcIrlx092UhbYzvvkHXjtxfuNDDcqnVtH11_8ZPaWomn3n963_bFTjjRhJaAH1SK8LU7s1DA{"v":"KERI10JSON0000cb_","t":"ixn","d":"Ek9gvRbkCt-wlgQBoV1PGm2iI__gaPURtJ3YrNFsXLzE","i":"DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","s":"6","p":"E6wrLhilpPo4ePq7m7ZccEcKjwPD2q9mqzLUb_aO2Hi0","a":[]}-AABAAwGGWMNDpu8t4NuF_3M0jnkn3P063oUHmluwRwsyCg5tIvu-BfwIJRruAsCKry4LaI84dJAfAT5KJnG8xz9lJCw"#;
-        let (rest, messages) = parse_many(kerl_str).unwrap();
+        let kerl_str= br#"{"v":"KERI10JSON000120_","t":"icp","d":"EG4EuTsxPiRM7soX10XXzNsS1KqXKUp8xsQ-kW_tWHoI","i":"DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","s":"0","kt":"1","k":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA"],"n":"EPYuj8mq_PYYsoBKkzX1kxSPGYBWaIya3slgCOyOtlqU","bt":"0","b":[],"c":[],"a":[]}-AABAA0aSisI4ZZTH_6JCqsvAsEpuf_Jq6bDbvPWj_eCDnAGbSARqYHipNs-9W7MHnwnMfIXwLpcoJkKGrQ-SiaklhAw{"v":"KERI10JSON000155_","t":"rot","d":"Ej30AgJV14mTTs427F3kILLrP_l03a27APg2FBO0-QtA","i":"DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","s":"1","p":"EG4EuTsxPiRM7soX10XXzNsS1KqXKUp8xsQ-kW_tWHoI","kt":"1","k":["DVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI"],"n":"E-dapdcC6XR1KWmWDsNl4J_OxcGxNZw1Xd95JH5a34fI","bt":"0","br":[],"ba":[],"a":[]}-AABAAwoiqt07w2UInzzo2DmtwkBfqX1-tTO4cYk_7YdlbJ95qA7PO5sEUkER8fZySQMNCVh64ruAh1yoew3TikwVGAQ{"v":"KERI10JSON000155_","t":"rot","d":"EmtXXRjyz6IdeX4201BgXKRDBm74gGqJF2r2umMMAL6I","i":"DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","s":"2","p":"Ej30AgJV14mTTs427F3kILLrP_l03a27APg2FBO0-QtA","kt":"1","k":["DT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8"],"n":"EKrLE2h2nh3ClyJNEjKaikHWT7G-ngimNpK-QgVQv9As","bt":"0","br":[],"ba":[],"a":[]}-AABAAW_RsDfAcHkknyzh9oeliH90KGPJEI8AP3rJPyuTnpVg8yOVtSIp_JFlyRwjV5SEQOqddAcRV6JtaQO8oXtWFCQ{"v":"KERI10JSON0000cb_","t":"ixn","d":"EY7E4RJXPe7FF1zQPbpSMIY-TYz9eAmNIhuprPYqTQ5o","i":"DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","s":"3","p":"EmtXXRjyz6IdeX4201BgXKRDBm74gGqJF2r2umMMAL6I","a":[]}-AABAAlB0Ui5NHJpcifXUB6bAutmpZkhSgwxyI5jEZ2JGVBgTI02sC0Ugbq3q0EpOae7ruXW-eabUz2s0FAs26jGwVBg{"v":"KERI10JSON0000cb_","t":"ixn","d":"ENVzbZieVIjYLYkPWQy0gfua11KqdRG-oku5Ut8Dl6hU","i":"DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","s":"4","p":"EY7E4RJXPe7FF1zQPbpSMIY-TYz9eAmNIhuprPYqTQ5o","a":[]}-AABAAWITFg460TXvYvxxzN62vpqpLs-vGgeGAbd-onY3DYxd5e3AljHh85pTum4Ha48F5dui9IVYqYvuYJCG8p8KvDw{"v":"KERI10JSON000155_","t":"rot","d":"E6wrLhilpPo4ePq7m7ZccEcKjwPD2q9mqzLUb_aO2Hi0","i":"DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","s":"5","p":"ENVzbZieVIjYLYkPWQy0gfua11KqdRG-oku5Ut8Dl6hU","kt":"1","k":["DKPE5eeJRzkRTMOoRGVd2m18o8fLqM2j9kaxLhV3x8AQ"],"nt":"1","n":["EAYqAyYI6FqMrmMjmDSJVbfJjpKCS6mkzF7V3VcyzFCQ"],"bt":"0","br":[],"ba":[],"a":[]}-AABAAwOLC3kPAV22hL1JRYbkjNI62NT4VhR6W7x2FcZ-xtW7g4diCFx46YTMeF_-TDRaHJ1zyOhR5DYjkSKBDFoFCg"#;
+        let text = std::str::from_utf8(kerl_str).unwrap();
+        let (rest, messages) = cesrox::parse_all(text).unwrap();
 
         assert!(rest.is_empty());
         assert_eq!(messages.len(), 7);

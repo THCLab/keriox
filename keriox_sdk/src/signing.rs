@@ -151,8 +151,8 @@ pub fn verify(identifier: &Identifier, cesr: &[u8]) -> Result<VerifiedPayload> {
 /// # Errors
 /// - [`Error::CesrParseError`] if `cesr` is not a valid CESR stream.
 pub fn parse_signed_envelope(cesr: &[u8]) -> Result<(Vec<u8>, Vec<Signature>)> {
-    let (_rest, parsed) =
-        cesrox::parse(cesr).map_err(|e| Error::CesrParseError(format!("{e:?}")))?;
+    let parsed = keri_core::event_message::cesr_adapter::parse_cesr_stream(cesr)
+        .map_err(|e| Error::CesrParseError(format!("{e:?}")))?;
 
     let payload = parsed.payload.to_vec();
 

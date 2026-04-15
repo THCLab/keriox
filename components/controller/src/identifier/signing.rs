@@ -1,8 +1,10 @@
-use cesrox::ParsedData;
 use keri_core::{
     database::{EscrowCreator, EventDatabase},
     event::sections::seal::EventSeal,
-    event_message::signature::{Signature, SignerData},
+    event_message::{
+        cesr_adapter::CesrMessage,
+        signature::{Signature, SignerData},
+    },
     oobi_manager::storage::OobiStorageBackend,
     prefix::{IndexedSignature, SelfSigningPrefix},
 };
@@ -89,7 +91,7 @@ where
     ) -> Result<String, ControllerError> {
         // Sign data
         let signature = self.sign_data(data.as_bytes(), signatures)?;
-        ParsedData {
+        CesrMessage {
             payload: cesrox::payload::Payload::JSON(data.into()),
             attachments: vec![signature.into()],
         }
@@ -106,7 +108,7 @@ where
     ) -> Result<String, ControllerError> {
         // Sign data
         let signature = self.sign_with_index(signature, key_index)?;
-        ParsedData {
+        CesrMessage {
             payload: cesrox::payload::Payload::JSON(data.into()),
             attachments: vec![signature.into()],
         }

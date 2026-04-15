@@ -10,7 +10,7 @@ futures = "0.3.24"
 keri-core = { path = "../keriox_core", features = ["oobi"] }
 tempfile = "3.3.0"
 url = "2.2.2"
-said = { version = "0.4.0" } 
+said = { version = "0.5.2" } 
 teliox = {path = "../support/teliox"}
 watcher = { path = "../components/watcher" }
 witness = { path = "../components/witness" }

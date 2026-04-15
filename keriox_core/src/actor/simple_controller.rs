@@ -5,6 +5,7 @@ use std::{
 
 #[cfg(feature = "storage-redb")]
 use crate::database::redb::RedbDatabase;
+use crate::event_message::cesr_adapter::parse_cesr_stream;
 use crate::{
     database::{EscrowCreator, EventDatabase},
     processor::escrow::{
@@ -13,7 +14,7 @@ use crate::{
     },
     query::{mailbox::SignedMailboxQuery, query_event::LogsQueryArgs},
 };
-use cesrox::{cesr_proof::MaterialPath, parse, primitives::CesrPrimitive};
+use cesrox::{cesr_proof::MaterialPath, primitives::CesrPrimitive};
 use said::derivation::{HashFunction, HashFunctionCode};
 use said::version::format::SerializationFormats;
 
@@ -157,7 +158,7 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase, RedbOobiStorage> {
         )
         .unwrap();
         let signature = km.sign(icp.as_bytes())?;
-        let key_event = parse(icp.as_bytes()).unwrap().1.payload;
+        let key_event = parse_cesr_stream(icp.as_bytes()).unwrap().payload;
         let signed = if let EventType::KeyEvent(icp) = key_event.try_into()? {
             icp.sign(
                 vec![IndexedSignature::new_both_same(
@@ -248,7 +249,7 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase, RedbOobiStorage> {
         let km = self.key_manager.lock().map_err(|_| Error::MutexPoisoned)?;
         let signature = km.sign(rot.as_bytes())?;
 
-        let key_event = parse(rot.as_bytes()).unwrap().1.payload;
+        let key_event = parse_cesr_stream(rot.as_bytes()).unwrap().payload;
 
         let signed = if let EventType::KeyEvent(rot) = key_event.try_into()? {
             rot.sign(
@@ -499,7 +500,7 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase, RedbOobiStorage> {
             .encode()?;
 
             let signature = km.sign(&icp)?;
-            let key_event = parse(&icp).unwrap().1.payload;
+            let key_event = parse_cesr_stream(&icp).unwrap().payload;
             if let EventType::KeyEvent(icp) = key_event.try_into()? {
                 icp.sign(
                     vec![IndexedSignature::new_both_same(

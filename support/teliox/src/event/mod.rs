@@ -4,7 +4,8 @@ use crate::{
 };
 
 use self::{manager_event::ManagerTelEventMessage, vc_event::VCEventMessage};
-use cesrox::{group::Group, parse_many};
+use cesrox::group::Group;
+use keri_core::event_message::cesr_adapter::parse_cesr_stream_many;
 use keri_core::{
     event_message::{cesr_adapter::ParseError, signature::get_signatures},
     prefix::IdentifierPrefix,
@@ -80,16 +81,17 @@ fn signed_tel_query(
 }
 
 pub fn parse_tel_query_stream(stream: &[u8]) -> Result<Vec<SignedTelQuery>, ParseError> {
-    let (_rest, queries) = parse_many(stream).unwrap();
+    let queries =
+        parse_cesr_stream_many(stream).map_err(|e| ParseError::CesrError(e.to_string()))?;
     queries
-        .iter()
+        .into_iter()
         .map(|qry| {
             let q: TelQueryEvent = match &qry.payload {
                 cesrox::payload::Payload::JSON(json) => serde_json::from_slice(&json).unwrap(),
                 cesrox::payload::Payload::CBOR(_) => todo!(),
                 cesrox::payload::Payload::MGPK(_) => todo!(),
             };
-            signed_tel_query(q, qry.attachments.clone())
+            signed_tel_query(q, qry.attachments)
         })
         .collect()
 }
