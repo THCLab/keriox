@@ -95,6 +95,8 @@ impl Controller {
                 registry_id,
                 self.inner.known_events.clone(),
                 self.inner.communication.clone(),
+                #[cfg(feature = "query_cache")]
+                self.inner.cache.clone(),
             ),
         }
     }
