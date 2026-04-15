@@ -83,12 +83,16 @@ pub mod store;
 pub mod tel;
 pub mod types;
 
+#[cfg(feature = "keyprovider")]
+pub mod keyprovider_adapter;
+
 pub use controller::Controller;
 pub use error::{Error, Result};
 pub use identifier::Identifier;
 pub use identifier::{ActionRequired, WatcherResponseError};
 pub use types::{
-    CredentialStatus, IdentifierConfig, RotationConfig, SignedEnvelope, VerifiedPayload,
+    CredentialStatus, DelegationConfig, DelegationRequest, IdentifierConfig, MultisigConfig,
+    MultisigRequest, PendingRequest, RotationConfig, SignedEnvelope, VerifiedPayload,
 };
 pub use store::KeriStore;
 pub use tel::{check_credential_status, get_credential_status};
@@ -106,6 +110,7 @@ pub use keri_core::{
     actor::prelude::SelfAddressingIdentifier,
     event::sections::seal::EventSeal,
     event_message::signature::Signature,
+    prefix::IndexedSignature,
     signer::Signer,
 };
 
@@ -115,3 +120,8 @@ pub use teliox::query::TelQueryEvent;
 
 // Watcher/mailbox query types (kept for consumers that need low-level access)
 pub use keri_core::query::query_event::QueryEvent;
+// Re-export underlying crates for advanced consumers that need low-level access
+pub use keri_core;
+pub use keri_controller;
+pub use cesrox;
+pub use said;

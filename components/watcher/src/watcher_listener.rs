@@ -22,7 +22,8 @@ impl<S: OobiStorageBackend + 'static> WatcherListener<S> {
     pub fn listen_http(self, addr: impl ToSocketAddrs) -> Server {
         let data = self.watcher.clone();
         spawn(update_tel_checking(data.clone()));
-        spawn(update_checking(data));
+        spawn(update_checking(data.clone()));
+        spawn(witness_polling(data));
 
         let state = web::Data::new(self.watcher);
         HttpServer::new(move || {
@@ -75,6 +76,10 @@ pub async fn update_tel_checking<S: OobiStorageBackend>(data: Arc<Watcher<S>>) {
     let _ = data.process_update_tel_requests().await;
 }
 
+pub async fn witness_polling<S: OobiStorageBackend>(data: Arc<Watcher<S>>) {
+    data.poller.run().await;
+}
+
 pub mod http_handlers {
 
     use std::sync::Arc;
@@ -104,10 +109,8 @@ pub mod http_handlers {
         body: web::Bytes,
         data: web::Data<Arc<Watcher<S>>>,
     ) -> Result<HttpResponse, ApiError> {
-        println!(
-            "\nGot events to process: \n{}",
-            String::from_utf8_lossy(&body)
-        );
+        tracing::info!("Processing notice");
+        tracing::debug!(payload = %String::from_utf8_lossy(&body), "Notice payload");
         data.parse_and_process_notices(&body)
             .map_err(ActorError::from)?;
 
@@ -120,17 +123,15 @@ pub mod http_handlers {
         body: web::Bytes,
         data: web::Data<Arc<Watcher<S>>>,
     ) -> Result<HttpResponse, ApiError> {
-        println!(
-            "\nGot queries to process: \n{}",
-            String::from_utf8_lossy(&body)
-        );
+        tracing::info!("Processing query");
+        tracing::debug!(payload = %String::from_utf8_lossy(&body), "Query payload");
         let resp = data
             .parse_and_process_queries(&body)
             .await?
             .iter()
             .map(|msg| msg.to_string())
             .join("");
-        println!("\nResponds with: {}", &resp);
+        tracing::debug!(response = %resp, "Query response");
 
         Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())
@@ -141,10 +142,8 @@ pub mod http_handlers {
         body: web::Bytes,
         data: web::Data<Arc<Watcher<S>>>,
     ) -> Result<HttpResponse, ApiError> {
-        println!(
-            "\nGot replies to process: \n{}",
-            String::from_utf8_lossy(&body)
-        );
+        tracing::info!("Processing reply");
+        tracing::debug!(payload = %String::from_utf8_lossy(&body), "Reply payload");
 
         data.parse_and_process_replies(&body)?;
 
@@ -157,10 +156,8 @@ pub mod http_handlers {
         body: web::Bytes,
         data: web::Data<Arc<Watcher<S>>>,
     ) -> Result<HttpResponse, ApiError> {
-        println!(
-            "\nGot oobi to resolve: \n{}",
-            String::from_utf8_lossy(&body)
-        );
+        tracing::info!("Resolving OOBI");
+        tracing::debug!(payload = %String::from_utf8_lossy(&body), "OOBI payload");
 
         #[derive(Debug, Deserialize)]
         #[serde(untagged)]
@@ -231,7 +228,8 @@ pub mod http_handlers {
         post_data: String,
         data: web::Data<Arc<Watcher<S>>>,
     ) -> Result<HttpResponse, ApiError> {
-        println!("\nGot tel query to process: \n{}", post_data);
+        tracing::info!("Processing TEL query");
+        tracing::debug!(payload = %post_data, "TEL query payload");
         let resp = data
             .parse_and_process_tel_queries(post_data.as_bytes())
             .await?
@@ -239,7 +237,7 @@ pub mod http_handlers {
             .map(|msg| msg.to_string())
             .collect::<Vec<_>>()
             .join("");
-        println!("\nWatcher responds with: {}", resp);
+        tracing::debug!(response = %resp, "TEL query response");
         Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())
             .body(resp))
@@ -310,6 +308,30 @@ pub mod http_handlers {
         data: web::Data<Arc<Watcher<RedbOobiStorage>>>,
     ) -> Result<HttpResponse, ApiError> {
         process_tel_query(post_data, data).await
+    }
+
+    pub async fn health<S: OobiStorageBackend>(
+        data: web::Data<Arc<Watcher<S>>>,
+    ) -> Result<HttpResponse, ApiError> {
+        let witness_health = data.watcher_data.health_tracker.get_all_health();
+        let tracked_aids = data.poller.tracked_aid_ids();
+
+        #[derive(serde::Serialize)]
+        struct HealthResponse {
+            tracked_aids: usize,
+            witnesses: std::collections::HashMap<String, crate::watcher::health::WitnessHealth>,
+        }
+
+        Ok(HttpResponse::Ok().json(HealthResponse {
+            tracked_aids: tracked_aids.len(),
+            witnesses: witness_health,
+        }))
+    }
+
+    pub async fn health_redb(
+        data: web::Data<Arc<Watcher<RedbOobiStorage>>>,
+    ) -> Result<HttpResponse, ApiError> {
+        health(data).await
     }
 
     pub async fn info() -> impl Responder {

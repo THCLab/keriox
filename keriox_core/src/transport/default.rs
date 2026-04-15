@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use serde::Deserialize;
 
 use super::{Transport, TransportError};
@@ -10,6 +12,14 @@ use crate::{
     prefix::IdentifierPrefix,
     query::query_event::SignedQueryMessage,
 };
+
+fn http_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(10))
+        .timeout(Duration::from_secs(30))
+        .build()
+        .expect("Failed to build HTTP client")
+}
 
 /// Default behavior for communication with other actors.
 /// Serializes a keri message, does a net request, and deserializes the response.
@@ -66,17 +76,24 @@ where
             },
             Scheme::Tcp => todo!(),
         };
-        let resp = reqwest::Client::new()
+        let resp = http_client()
             .post(url)
             .body(msg.to_cesr().unwrap())
             .send()
             .await
             .map_err(|e| TransportError::NetworkError(e.to_string()))?;
         if !resp.status().is_success() {
+            let status = resp.status();
             let body = resp
                 .text()
                 .await
                 .map_err(|e| TransportError::NetworkError(e.to_string()))?;
+            if body.is_empty() {
+                return Err(TransportError::NetworkError(format!(
+                    "Remote returned {} with empty body",
+                    status
+                )));
+            }
             let err =
                 serde_json::from_str(&body).map_err(|_e| TransportError::UnknownError(body))?;
             return Err(TransportError::RemoteError(err));
@@ -101,7 +118,7 @@ where
         };
 
         let op: Message = qry.into();
-        let resp = reqwest::Client::new()
+        let resp = http_client()
             .post(url)
             .body(op.to_cesr().unwrap())
             .send()
@@ -119,6 +136,12 @@ where
                 Err(ResponseError::Unparsable(e)) => Err(TransportError::InvalidResponse(e)),
             }
         } else {
+            if body.is_empty() {
+                return Err(TransportError::NetworkError(format!(
+                    "Remote returned {} with empty body",
+                    status
+                )));
+            }
             let err =
                 serde_json::from_str(&body).map_err(|_| TransportError::UnknownError(body))?;
             Err(TransportError::RemoteError(err))
@@ -133,7 +156,9 @@ where
             .unwrap()
             .join(&loc.eid.to_string())
             .unwrap();
-        let resp = reqwest::get(url)
+        let resp = http_client()
+            .get(url)
+            .send()
             .await
             .map_err(|e| TransportError::NetworkError(e.to_string()))?;
         if resp.status().is_success() {
@@ -144,10 +169,17 @@ where
             let ops = parse_op_stream(&body)?;
             Ok(ops)
         } else {
+            let status = resp.status();
             let body = resp
                 .text()
                 .await
                 .map_err(|e| TransportError::NetworkError(e.to_string()))?;
+            if body.is_empty() {
+                return Err(TransportError::NetworkError(format!(
+                    "Remote returned {} with empty body",
+                    status
+                )));
+            }
             let err =
                 serde_json::from_str(&body).map_err(|_e| TransportError::UnknownError(body))?;
             Err(TransportError::RemoteError(err))
@@ -177,7 +209,9 @@ where
             .unwrap()
             .join(&eid.to_string())
             .unwrap();
-        let resp = reqwest::get(url)
+        let resp = http_client()
+            .get(url)
+            .send()
             .await
             .map_err(|e| TransportError::NetworkError(e.to_string()))?;
         if resp.status().is_success() {
@@ -189,10 +223,17 @@ where
             let ops = body.to_vec();
             Ok(ops)
         } else {
+            let status = resp.status();
             let body = resp
                 .text()
                 .await
                 .map_err(|e| TransportError::NetworkError(e.to_string()))?;
+            if body.is_empty() {
+                return Err(TransportError::NetworkError(format!(
+                    "Remote returned {} with empty body",
+                    status
+                )));
+            }
             let err =
                 serde_json::from_str(&body).map_err(|_e| TransportError::UnknownError(body))?;
             Err(TransportError::RemoteError(err))
@@ -200,8 +241,7 @@ where
     }
 
     async fn resolve_oobi(&self, loc: LocationScheme, oobi: Oobi) -> Result<(), TransportError<E>> {
-        let client = reqwest::Client::new();
-        let resp = client
+        let resp = http_client()
             .post(format!("{}resolve", loc.url))
             .body(serde_json::to_string(&oobi).unwrap())
             .send()
@@ -209,12 +249,19 @@ where
             .map_err(|e| TransportError::NetworkError(e.to_string()))?;
 
         if !resp.status().is_success() {
+            let status = resp.status();
             let body = resp
                 .text()
                 .await
                 .map_err(|e| TransportError::NetworkError(e.to_string()))?;
+            if body.is_empty() {
+                return Err(TransportError::NetworkError(format!(
+                    "Remote returned {} with empty body",
+                    status
+                )));
+            }
             let err = serde_json::from_str(&body)
-                .map_err(|e| TransportError::NetworkError(e.to_string()))?;
+                .map_err(|_| TransportError::UnknownError(body))?;
             return Err(TransportError::RemoteError(err));
         }
         Ok(())

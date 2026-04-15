@@ -15,8 +15,10 @@ use keri_core::{
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DurationSeconds};
 use url::Url;
+use tracing::info;
 use watcher::{transport::HttpTelTransport, WatcherConfig, WatcherListener};
 
+#[serde_as]
 #[derive(Deserialize)]
 pub struct Config {
     db_path: PathBuf,
@@ -36,6 +38,12 @@ pub struct Config {
     escrow_config: EscrowConfig,
 
     tel_storage_path: PathBuf,
+
+    /// Interval in seconds between background witness polling cycles.
+    /// Defaults to 30 seconds. Set to 0 to disable.
+    #[serde_as(as = "Option<DurationSeconds>")]
+    #[serde(default)]
+    poll_interval: Option<Duration>,
 }
 
 #[serde_as]
@@ -119,8 +127,15 @@ const ENV_PREFIX: &str = "WATCHER_";
 
 #[actix_web::main]
 async fn main() -> anyhow::Result<()> {
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+        )
+        .init();
+
     let args = Args::parse();
-    println!("Using config file: {:?}", args.config_file);
+    info!(config_file = %args.config_file, "Loading configuration");
 
     let cfg = Figment::new()
         .merge(Yaml::file(args.config_file.clone()))
@@ -137,6 +152,7 @@ async fn main() -> anyhow::Result<()> {
         tel_transport: Box::new(HttpTelTransport),
         escrow_config: cfg.escrow_config,
         tel_storage_path: cfg.tel_storage_path,
+        poll_interval: cfg.poll_interval.unwrap_or(Duration::from_secs(30)),
     })?;
 
     // Resolve oobi to know how to find witness
@@ -150,14 +166,11 @@ async fn main() -> anyhow::Result<()> {
         url: cfg.public_url.clone(),
     };
 
-    println!(
-        "Watcher {} is listening on port {}",
-        watcher_id.to_str(),
-        cfg.http_port,
-    );
-    println!(
-        "Watcher's oobi: {}",
-        serde_json::to_string(&watcher_loc_scheme).unwrap()
+    info!(
+        watcher_id = %watcher_id.to_str(),
+        port = cfg.http_port,
+        oobi = %serde_json::to_string(&watcher_loc_scheme).unwrap(),
+        "Watcher started",
     );
 
     watcher_listener

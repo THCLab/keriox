@@ -13,6 +13,7 @@ use keri_core::{
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DurationSeconds};
 use url::Url;
+use tracing::{info};
 use witness::{WitnessEscrowConfig, WitnessListener};
 
 #[derive(Deserialize)]
@@ -97,9 +98,16 @@ const ENV_PREFIX: &str = "WITNESS_";
 
 #[actix_web::main]
 async fn main() -> Result<()> {
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+        )
+        .init();
+
     let args = Args::parse();
 
-    println!("Using config file {:?}", args.config_file);
+    info!(config_file = %args.config_file, "Loading configuration");
 
     let cfg = Figment::new()
         .merge(Yaml::file(args.config_file.clone()))
@@ -122,14 +130,11 @@ async fn main() -> Result<()> {
         url: cfg.public_url.clone(),
     };
 
-    println!(
-        "\nWitness {} is listening on port {}",
-        witness_listener.get_prefix().to_str(),
-        cfg.http_port,
-    );
-    println!(
-        "Witness's oobi: {}",
-        serde_json::to_string(&witness_loc_scheme).unwrap()
+    info!(
+        witness_id = %witness_listener.get_prefix().to_str(),
+        port = cfg.http_port,
+        oobi = %serde_json::to_string(&witness_loc_scheme).unwrap(),
+        "Witness started",
     );
 
     let http_handle = witness_listener.listen_http((Ipv4Addr::UNSPECIFIED, cfg.http_port));

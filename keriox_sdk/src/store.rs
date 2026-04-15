@@ -42,8 +42,8 @@ use crate::{
     controller::Controller,
     error::{Error, Result},
     identifier::Identifier,
-    operations::create_identifier,
-    types::IdentifierConfig,
+    operations::{create_identifier, request_delegation, create_multisig},
+    types::{DelegationConfig, IdentifierConfig, MultisigConfig},
 };
 
 /// Manages a directory of named KERI identifiers.
@@ -232,6 +232,193 @@ impl KeriStore {
         self.write_file(alias, "reg_id", &registry_id.to_str())
     }
 
+    /// Create a delegated identifier (delegatee side).
+    ///
+    /// Generates random Ed25519 key pairs, creates a temporary identifier,
+    /// sends a delegation request to the delegator via witnesses, and
+    /// persists all state. The delegated identifier is **not** yet accepted
+    /// — the delegator must approve it first.
+    ///
+    /// After approval, call [`crate::operations::complete_delegation`] with
+    /// the returned `Identifier` to complete the process.
+    ///
+    /// Returns `(temporary_identifier, delegated_prefix, current_signer)`.
+    ///
+    /// # Errors
+    /// - [`Error::PersistenceError`] on I/O failures.
+    /// - Propagates errors from [`request_delegation`].
+    pub async fn create_delegated(
+        &self,
+        alias: &str,
+        config: DelegationConfig,
+    ) -> Result<(Identifier, IdentifierPrefix, Arc<Signer>)> {
+        use cesrox::primitives::codes::seed::SeedCode;
+        use rand::rngs::OsRng;
+
+        let current_ed = ed25519_dalek::SigningKey::generate(&mut OsRng);
+        let next_ed = ed25519_dalek::SigningKey::generate(&mut OsRng);
+
+        let current_seed = SeedPrefix::new(
+            SeedCode::RandomSeed256Ed25519,
+            current_ed.as_bytes().to_vec(),
+        );
+        let next_seed = SeedPrefix::new(
+            SeedCode::RandomSeed256Ed25519,
+            next_ed.as_bytes().to_vec(),
+        );
+
+        let alias_dir = self.alias_dir(alias);
+        std::fs::create_dir_all(&alias_dir)
+            .map_err(|e| Error::PersistenceError(format!("cannot create alias dir: {e}")))?;
+
+        let db_path = alias_dir.join("db");
+
+        let signer = Arc::new(
+            Signer::new_with_seed(&current_seed)
+                .map_err(|e| Error::Signing(e.to_string()))?,
+        );
+
+        let (next_pub_key, _) = next_seed
+            .derive_key_pair()
+            .map_err(|e| Error::Signing(e.to_string()))?;
+        let next_pk = keri_controller::BasicPrefix::Ed25519NT(next_pub_key);
+
+        let delegator_id = config.delegator.clone();
+        let (temp_id, delegated_prefix) =
+            request_delegation(db_path, signer.clone(), next_pk, config).await?;
+
+        // Persist seeds, temporary identifier, delegated prefix, and delegator.
+        use keri_core::prefix::CesrPrimitive;
+        self.write_file(alias, "priv_key", &current_seed.to_str())?;
+        self.write_file(alias, "next_priv_key", &next_seed.to_str())?;
+        self.write_file(alias, "id", &temp_id.id().to_str())?;
+        self.write_file(alias, "delegated_id", &delegated_prefix.to_str())?;
+        self.write_file(alias, "delegator_id", &delegator_id.to_str())?;
+
+        Ok((temp_id, delegated_prefix, signer))
+    }
+
+    /// Persist the delegator identifier for an alias.
+    ///
+    /// # Errors
+    /// - [`Error::PersistenceError`] on I/O failures.
+    pub fn save_delegator(&self, alias: &str, delegator_id: &IdentifierPrefix) -> Result<()> {
+        use keri_core::prefix::CesrPrimitive;
+        self.write_file(alias, "delegator_id", &delegator_id.to_str())
+    }
+
+    /// Load the delegated identifier prefix for an alias.
+    ///
+    /// Returns an error if this alias is not a delegated identifier.
+    ///
+    /// # Errors
+    /// - [`Error::PersistenceError`] if the `delegated_id` file is missing or invalid.
+    pub fn load_delegated_prefix(&self, alias: &str) -> Result<IdentifierPrefix> {
+        let s = self.read_file(alias, "delegated_id")?;
+        IdentifierPrefix::from_str(s.trim())
+            .map_err(|_| Error::PersistenceError("invalid delegated_id".into()))
+    }
+
+    /// Load the delegator identifier prefix for an alias.
+    ///
+    /// Returns an error if this alias is not a delegated identifier.
+    ///
+    /// # Errors
+    /// - [`Error::PersistenceError`] if the `delegator_id` file is missing or invalid.
+    pub fn load_delegator(&self, alias: &str) -> Result<IdentifierPrefix> {
+        let s = self.read_file(alias, "delegator_id")?;
+        IdentifierPrefix::from_str(s.trim())
+            .map_err(|_| Error::PersistenceError("invalid delegator_id".into()))
+    }
+
+    // ── Multisig group methods (preferred names) ──────────────────────────────
+
+    /// Create a multisig group identifier and persist metadata (initiator side).
+    ///
+    /// The caller's individual identifier must already exist under
+    /// `member_alias`. This method creates a new alias directory for the
+    /// group that stores the group prefix, member list, and a back-reference
+    /// to the member alias.
+    ///
+    /// Other participants must still co-sign via
+    /// [`crate::operations::accept_multisig`], and all participants must call
+    /// [`crate::operations::sync_multisig`] to finalise.
+    ///
+    /// Returns the group `IdentifierPrefix`.
+    ///
+    /// # Errors
+    /// - [`Error::PersistenceError`] on I/O failures.
+    /// - Propagates errors from [`create_multisig`].
+    pub async fn create_multisig_group(
+        &self,
+        group_alias: &str,
+        member_alias: &str,
+        config: MultisigConfig,
+    ) -> Result<IdentifierPrefix> {
+        let mut id = self.load(member_alias)?;
+        let signer = self.load_signer(member_alias)?;
+
+        let members = config.members.clone();
+        let group_prefix = create_multisig(&mut id, &signer, config).await?;
+
+        self.persist_group_metadata(group_alias, &group_prefix, &members, member_alias)?;
+
+        Ok(group_prefix)
+    }
+
+    /// Persist multisig group metadata after joining (joiner side).
+    ///
+    /// Call this after [`crate::operations::accept_multisig`] to record the
+    /// group prefix, member list, and member alias for later retrieval.
+    ///
+    /// # Errors
+    /// - [`Error::PersistenceError`] on I/O failures.
+    pub fn save_multisig(
+        &self,
+        group_alias: &str,
+        group_id: &IdentifierPrefix,
+        members: &[IdentifierPrefix],
+        member_alias: &str,
+    ) -> Result<()> {
+        self.persist_group_metadata(group_alias, group_id, members, member_alias)
+    }
+
+    /// Load the multisig group identifier prefix for an alias.
+    ///
+    /// # Errors
+    /// - [`Error::PersistenceError`] if the `group_id` file is missing or invalid.
+    pub fn load_multisig_prefix(&self, alias: &str) -> Result<IdentifierPrefix> {
+        let s = self.read_file(alias, "group_id")?;
+        IdentifierPrefix::from_str(s.trim())
+            .map_err(|_| Error::PersistenceError("invalid group_id".into()))
+    }
+
+    /// Load the member list for a multisig group alias.
+    ///
+    /// # Errors
+    /// - [`Error::PersistenceError`] if the `participants` file is missing or invalid.
+    pub fn load_multisig_members(&self, alias: &str) -> Result<Vec<IdentifierPrefix>> {
+        let json = self.read_file(alias, "participants")?;
+        let strs: Vec<String> = serde_json::from_str(&json)
+            .map_err(|e| Error::PersistenceError(format!("invalid participants JSON: {e}")))?;
+        strs.iter()
+            .map(|s| {
+                IdentifierPrefix::from_str(s.trim())
+                    .map_err(|_| Error::PersistenceError(format!("invalid participant: {s}")))
+            })
+            .collect()
+    }
+
+    /// Load the member alias for a multisig group (back-reference to the
+    /// individual identifier used by this participant).
+    ///
+    /// # Errors
+    /// - [`Error::PersistenceError`] if the `member_alias` file is missing.
+    pub fn load_multisig_member_alias(&self, alias: &str) -> Result<String> {
+        self.read_file(alias, "member_alias")
+            .map(|s| s.trim().to_owned())
+    }
+
     /// List all stored aliases in this store.
     ///
     /// # Errors
@@ -254,6 +441,29 @@ impl KeriStore {
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
+
+    fn persist_group_metadata(
+        &self,
+        group_alias: &str,
+        group_id: &IdentifierPrefix,
+        members: &[IdentifierPrefix],
+        member_alias: &str,
+    ) -> Result<()> {
+        let alias_dir = self.alias_dir(group_alias);
+        std::fs::create_dir_all(&alias_dir)
+            .map_err(|e| Error::PersistenceError(format!("cannot create alias dir: {e}")))?;
+
+        use keri_core::prefix::CesrPrimitive;
+        self.write_file(group_alias, "group_id", &group_id.to_str())?;
+        self.write_file(group_alias, "member_alias", member_alias)?;
+
+        let member_strs: Vec<String> = members.iter().map(|p| p.to_str()).collect();
+        let json = serde_json::to_string(&member_strs)
+            .map_err(|e| Error::PersistenceError(format!("cannot serialise members: {e}")))?;
+        self.write_file(group_alias, "participants", &json)?;
+
+        Ok(())
+    }
 
     fn alias_dir(&self, alias: &str) -> PathBuf {
         self.root.join(alias)
