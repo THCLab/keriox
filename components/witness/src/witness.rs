@@ -393,9 +393,20 @@ impl<S: OobiStorageBackend> Witness<S> {
         &self,
         input_stream: &[u8],
     ) -> Result<Vec<PossibleResponse>, ActorError> {
-        parse_query_stream(input_stream)?
+        eprintln!(
+            "[DEBUG-WITNESS] parse_and_process_queries: {} bytes",
+            input_stream.len()
+        );
+        let queries = parse_query_stream(input_stream)?;
+        eprintln!("[DEBUG-WITNESS] parsed {} queries", queries.len());
+        queries
             .into_iter()
-            .map(|qry| self.process_query(qry))
+            .map(|qry| {
+                eprintln!("[DEBUG-WITNESS] processing query...");
+                let result = self.process_query(qry);
+                eprintln!("[DEBUG-WITNESS] query result: {:?}", result.as_ref().err());
+                result
+            })
             .filter_map(Result::transpose)
             .collect()
     }

@@ -179,6 +179,18 @@ pub fn get_signatures(group: Group) -> Result<Vec<Signature>, ParseError> {
                 signatures,
             ))])
         }
+        Group::AnchoringSeals(_) => Ok(vec![]),
+        Group::TransferableIdxSigGroups(groups) => {
+            let mut sigs = vec![];
+            for (id, indexed) in groups {
+                let signatures = indexed.into_iter().map(|sig| sig.into()).collect();
+                sigs.push(Signature::Transferable(
+                    SignerData::LastEstablishment(id.into()),
+                    signatures,
+                ));
+            }
+            Ok(sigs)
+        }
         _ => Err(ParseError::AttachmentError(
             "Improper attachment type".into(),
         )),

@@ -3,7 +3,7 @@ use keri_core::{
     event::sections::seal::EventSeal,
     event_message::{
         cesr_adapter::CesrMessage,
-        signature::{Signature, SignerData},
+        signature::{signatures_into_groups, Signature, SignerData},
     },
     oobi_manager::storage::OobiStorageBackend,
     prefix::{IndexedSignature, SelfSigningPrefix},
@@ -89,11 +89,10 @@ where
         data: &str,
         signatures: &[SelfSigningPrefix],
     ) -> Result<String, ControllerError> {
-        // Sign data
         let signature = self.sign_data(data.as_bytes(), signatures)?;
         CesrMessage {
             payload: cesrox::payload::Payload::JSON(data.into()),
-            attachments: vec![signature.into()],
+            attachments: signatures_into_groups(&[signature]),
         }
         .to_cesr()
         .map(|data| String::from_utf8(data).unwrap())
@@ -106,11 +105,10 @@ where
         signature: SelfSigningPrefix,
         key_index: u16,
     ) -> Result<String, ControllerError> {
-        // Sign data
         let signature = self.sign_with_index(signature, key_index)?;
         CesrMessage {
             payload: cesrox::payload::Payload::JSON(data.into()),
-            attachments: vec![signature.into()],
+            attachments: signatures_into_groups(&[signature]),
         }
         .to_cesr()
         .map(|data| String::from_utf8(data).unwrap())

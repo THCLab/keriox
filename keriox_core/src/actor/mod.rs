@@ -210,7 +210,8 @@ pub fn process_signed_query<D: EventDatabase>(
         }
         #[cfg(feature = "mailbox")]
         SignedQueryMessage::MailboxQuery(mqry) => {
-            let signature = mqry.signature;
+            let signature = mqry.signature.clone();
+            eprintln!("[DEBUG] MailboxQuery signature: {:?}", signature);
             let data = &mqry.query.encode().map_err(|_e| Error::VersionError)?;
             // check signatures
             verify(&data, signature)?;

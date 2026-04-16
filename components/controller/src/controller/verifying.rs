@@ -1,14 +1,16 @@
 use itertools::Itertools;
 use keri_core::{
     database::{EscrowCreator, EventDatabase},
+    event::sections::seal::EventSeal,
     event_message::{
         cesr_adapter::{parse_cesr_stream_many, CesrMessage},
-        signature::{get_signatures, Signature},
+        signature::{Signature, SignerData},
     },
     oobi::Oobi,
     oobi_manager::storage::OobiStorageBackend,
     processor::validator::{EventValidator, VerificationError},
 };
+use said::SelfAddressingIdentifier;
 use teliox::database::TelEventDatabase;
 
 use crate::{error::ControllerError, known_events::KnownEvents};
@@ -58,18 +60,17 @@ where
     fn verify_parsed(&self, data: &[CesrMessage]) -> Result<(), ControllerError> {
         let mut err_reasons: Vec<VerificationError> = vec![];
         let (_oks, errs): (Vec<_>, Vec<_>) = data.iter().partition(|d| {
-            match d
-                .attachments
-                .iter()
-                .flat_map(|a| get_signatures(a.clone()).unwrap())
-                .try_for_each(|s| {
-                    let payload = match &d.payload {
-                        cesrox::payload::Payload::JSON(json) => json,
-                        cesrox::payload::Payload::CBOR(cbor) => cbor,
-                        cesrox::payload::Payload::MGPK(mgpk) => mgpk,
-                    };
-                    self.verify(payload, &s)
-                }) {
+            let attachments = &d.attachments;
+            let signatures = collect_signatures(attachments);
+            let payload = match &d.payload {
+                cesrox::payload::Payload::JSON(json) => json,
+                cesrox::payload::Payload::CBOR(cbor) => cbor,
+                cesrox::payload::Payload::MGPK(mgpk) => mgpk,
+            };
+            match signatures
+                .into_iter()
+                .try_for_each(|s| self.verify(payload, &s))
+            {
                 Ok(_) => true,
                 Err(err) => {
                     err_reasons.push(err);
@@ -87,4 +88,73 @@ where
             Err(ControllerError::VerificationError(err.collect()))
         }
     }
+}
+
+fn collect_signatures(attachments: &[cesrox::group::Group]) -> Vec<Signature> {
+    use cesrox::group::Group;
+    use keri_core::event_message::signature::Nontransferable;
+
+    let mut signatures = Vec::new();
+    let mut i = 0;
+    while i < attachments.len() {
+        match &attachments[i] {
+            Group::AnchoringSeals(seals) => {
+                if let Some(seal) = seals.first() {
+                    let seal = EventSeal::new(
+                        seal.0.clone().into(),
+                        seal.1,
+                        SelfAddressingIdentifier::from(seal.2.clone()),
+                    );
+                    i += 1;
+                    let indexed_sigs = if i < attachments.len() {
+                        if let Group::IndexedControllerSignatures(sigs) = &attachments[i] {
+                            sigs.iter().map(|s| s.clone().into()).collect()
+                        } else {
+                            vec![]
+                        }
+                    } else {
+                        vec![]
+                    };
+                    if !indexed_sigs.is_empty() {
+                        i += 1;
+                    }
+                    signatures.push(Signature::Transferable(
+                        SignerData::EventSeal(seal),
+                        indexed_sigs,
+                    ));
+                } else {
+                    i += 1;
+                }
+            }
+            Group::IndexedControllerSignatures(sigs) => {
+                let indexed_sigs: Vec<_> = sigs.iter().map(|s| s.clone().into()).collect();
+                signatures.push(Signature::Transferable(
+                    SignerData::JustSignatures,
+                    indexed_sigs,
+                ));
+                i += 1;
+            }
+            Group::NontransReceiptCouples(couplets) => {
+                let couples: Vec<_> = couplets
+                    .iter()
+                    .map(|(bp, sp)| (bp.clone().into(), sp.clone().into()))
+                    .collect();
+                signatures.push(Signature::NonTransferable(Nontransferable::Couplet(
+                    couples,
+                )));
+                i += 1;
+            }
+            Group::IndexedWitnessSignatures(sigs) => {
+                let indexed_sigs: Vec<_> = sigs.iter().map(|s| s.clone().into()).collect();
+                signatures.push(Signature::NonTransferable(Nontransferable::Indexed(
+                    indexed_sigs,
+                )));
+                i += 1;
+            }
+            _ => {
+                i += 1;
+            }
+        }
+    }
+    signatures
 }

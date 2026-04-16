@@ -421,10 +421,12 @@ pub mod http_handlers {
         post_data: String,
         data: web::Data<Arc<Witness<S>>>,
     ) -> Result<HttpResponse, ApiError> {
+        eprintln!("[DEBUG-WITNESS] process_query received: {} bytes", post_data.len());
         tracing::info!(witness = %data.prefix.to_str(), "Processing query");
         tracing::debug!(payload = %post_data, "Query payload");
         let resp = data
-            .parse_and_process_queries(post_data.as_bytes())?
+            .parse_and_process_queries(post_data.as_bytes())
+            .map_err(|e| { eprintln!("[DEBUG-WITNESS] parse_and_process_queries error: {:?}", e); ApiError(e) })?
             .iter()
             .map(|msg| msg.to_string())
             .collect::<Vec<_>>()
