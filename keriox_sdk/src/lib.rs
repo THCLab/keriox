@@ -49,13 +49,12 @@
 //!
 //! ```no_run
 //! use keri_sdk::{
-//!     operations::{incept_registry, issue},
-//!     tel::check_credential_status,
+//!     operations::{incept_registry, issue_str},
+//!     tel::check_credential_status_str,
 //!     store::KeriStore,
 //!     types::IdentifierConfig,
 //! };
-//! use keri_core::actor::prelude::SelfAddressingIdentifier;
-//! use std::{path::PathBuf, str::FromStr};
+//! use std::path::PathBuf;
 //!
 //! # #[tokio::main]
 //! # async fn main() -> keri_sdk::Result<()> {
@@ -64,16 +63,18 @@
 //!
 //! let registry_id = incept_registry(&mut id, signer.clone()).await?;
 //!
-//! let cred_said: SelfAddressingIdentifier =
-//!     "EBdXt3gIXOf2BBWNHdSXCJnFJL5OuQPyM5K0neuniccM".parse().unwrap();
-//! issue(&mut id, signer.clone(), cred_said.clone()).await?;
+//! let cred_said = "EBdXt3gIXOf2BBWNHdSXCJnFJL5OuQPyM5K0neuniccM";
+//! issue_str(&mut id, signer.clone(), cred_said).await?;
 //!
-//! let status = check_credential_status(&id, &signer, &registry_id, &cred_said).await?;
+//! // registry_id.to_str() converts IdentifierPrefix to its CESR text form
+//! use keri_sdk::CesrPrimitive;
+//! let status = check_credential_status_str(&id, &signer, &registry_id.to_str(), cred_said).await?;
 //! println!("Status: {:?}", status);
 //! # Ok(())
 //! # }
 //! ```
 
+pub mod advanced;
 pub mod controller;
 pub mod error;
 pub mod identifier;
@@ -87,10 +88,7 @@ pub mod types;
 #[cfg(feature = "keyprovider")]
 pub mod keyprovider_adapter;
 
-#[cfg(feature = "keyprovider")]
-pub use keyprovider_adapter::KeriSigner;
-#[cfg(feature = "keyprovider")]
-pub use keri_keyprovider::KeyProvider;
+// ── High-level SDK types (the primary public API) ────────────────────────────
 
 pub use controller::Controller;
 pub use error::{Error, Result};
@@ -103,27 +101,35 @@ pub use types::{
     MultisigRequest, PendingRequest, RotationConfig, SignedEnvelope, VerifiedPayload,
 };
 
-// Prefix / key types — consumers don't need keri-controller directly
+#[cfg(feature = "keyprovider")]
+pub use keyprovider_adapter::KeriSigner;
+#[cfg(feature = "keyprovider")]
+pub use keri_keyprovider::KeyProvider;
+
+// ── Commonly-needed prefix / key types ───────────────────────────────────────
+// These appear in public API signatures and are needed by most consumers.
+
+pub use keri_controller::{
+    BasicPrefix, CesrPrimitive, IdentifierPrefix, LocationScheme, Oobi, SeedPrefix,
+    SelfSigningPrefix,
+};
+pub use keri_core::{actor::prelude::SelfAddressingIdentifier, signer::Signer};
+
+// ── Advanced types (re-exported for backward compatibility) ──────────────────
+// Prefer importing from `keri_sdk::advanced::*` for low-level access.
+// These re-exports will be removed in a future major version.
+
 pub use keri_controller::config::ControllerConfig;
 pub use keri_controller::identifier::query::QueryResponse;
-pub use keri_controller::{
-    BasicPrefix, CesrPrimitive, EndRole, IdentifierPrefix, KeyManager, LocationScheme, Oobi,
-    SeedPrefix, SelfSigningPrefix,
-};
-
-// Core types
+pub use keri_controller::{EndRole, KeyManager};
 pub use keri_core::{
-    actor::prelude::SelfAddressingIdentifier, event::sections::seal::EventSeal,
-    event_message::signature::Signature, prefix::IndexedSignature, signer::Signer,
+    event::sections::seal::EventSeal, event_message::signature::Signature,
+    prefix::IndexedSignature, query::query_event::QueryEvent,
 };
-
-// TEL state types
 pub use teliox::query::TelQueryEvent;
 pub use teliox::state::{vc_state::TelState, ManagerTelState};
 
-// Watcher/mailbox query types (kept for consumers that need low-level access)
-pub use keri_core::query::query_event::QueryEvent;
-// Re-export underlying crates for advanced consumers that need low-level access
+// Full crate re-exports for advanced consumers — prefer `keri_sdk::advanced::*`
 pub use cesrox;
 pub use keri_controller;
 pub use keri_core;
