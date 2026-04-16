@@ -142,6 +142,34 @@ pub fn verify(identifier: &Identifier, cesr: &[u8]) -> Result<VerifiedPayload> {
     Ok(VerifiedPayload { payload, signer_id })
 }
 
+/// Sign a JSON string and return a CESR stream with the raw JSON as payload.
+///
+/// Unlike [`sign`] and [`sign_json`], this does **not** wrap the data in a
+/// `{"p":"…"}` envelope. The resulting CESR stream contains the exact `json`
+/// string as the JSON payload followed by transferable Ed25519 signature
+/// attachments.
+///
+/// This is the format protocols like mesagkesto expect:
+/// `<JSON_payload><CESR_signatures>`.
+///
+/// # Errors
+/// - [`Error::Signing`] if the signer fails.
+/// - [`Error::Controller`] if the CESR envelope cannot be built.
+pub fn sign_to_cesr<S: SigningBackend>(
+    identifier: &Identifier,
+    signer: &S,
+    json: &str,
+) -> Result<String> {
+    let raw_sig = signer.sign_data(json.as_bytes())?;
+
+    let sig = keri_controller::SelfSigningPrefix::new(
+        cesrox::primitives::codes::self_signing::SelfSigning::Ed25519Sha512,
+        raw_sig,
+    );
+
+    Ok(identifier.sign_to_cesr(json, &[sig])?)
+}
+
 /// Parse a CESR stream into raw payload bytes and attached signatures.
 ///
 /// This is a low-level helper for when you need to inspect signature details
