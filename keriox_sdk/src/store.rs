@@ -212,6 +212,36 @@ impl KeriStore {
         Ok(())
     }
 
+    /// Rotate keys for an identifier: generate a new next key pair, perform
+    /// the rotation via [`crate::operations::rotate`], and persist the updated
+    /// seeds.
+    ///
+    /// This is a high-level convenience that wraps the full rotation lifecycle.
+    /// For external key providers (Android Keystore, HSMs), use
+    /// [`crate::operations::rotate`] directly with your `SigningBackend`.
+    ///
+    /// # Errors
+    /// - [`Error::PersistenceError`] on I/O failures.
+    /// - [`Error::Signing`] if key generation or signing fails.
+    /// - Propagates errors from [`crate::operations::rotate`].
+    pub async fn rotate(&self, alias: &str) -> Result<()> {
+        let (new_next_seed, new_next_pk) = crate::keys::generate_ed25519()?;
+
+        let mut id = self.load(alias)?;
+        let signer = self.load_signer(alias)?;
+
+        let config = crate::types::RotationConfig {
+            new_next_pk,
+            witness_to_add: vec![],
+            witness_to_remove: vec![],
+            witness_threshold: 0,
+        };
+        crate::operations::rotate(&mut id, signer, config).await?;
+
+        self.save_rotation(alias, new_next_seed)?;
+        Ok(())
+    }
+
     /// Persist a registry identifier after [`crate::operations::incept_registry`].
     ///
     /// # Errors
