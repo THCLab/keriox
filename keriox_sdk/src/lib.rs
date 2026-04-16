@@ -87,6 +87,11 @@ pub mod types;
 #[cfg(feature = "keyprovider")]
 pub mod keyprovider_adapter;
 
+#[cfg(feature = "keyprovider")]
+pub use keyprovider_adapter::KeriSigner;
+#[cfg(feature = "keyprovider")]
+pub use keri_keyprovider::KeyProvider;
+
 pub use controller::Controller;
 pub use error::{Error, Result};
 pub use identifier::Identifier;

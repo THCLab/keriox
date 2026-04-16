@@ -468,6 +468,71 @@ impl KeriStore {
         Ok(aliases)
     }
 
+    // ── Key provider integration (behind `keyprovider` feature) ────────────────
+
+    /// Create an identifier using an external key provider.
+    ///
+    /// Unlike [`create`](KeriStore::create), this method does **not** generate
+    /// or persist any seed material on disk — the key provider handles all
+    /// signing. Only the identifier prefix is persisted.
+    ///
+    /// This is the preferred method for mobile platforms (Android Keystore,
+    /// iOS Secure Enclave) where private keys must never leave the OS-level
+    /// secure enclave.
+    ///
+    /// # Errors
+    /// - [`Error::PersistenceError`] on I/O failures.
+    /// - Propagates errors from [`create_identifier`](crate::operations::create_identifier).
+    #[cfg(feature = "keyprovider")]
+    pub async fn create_with_provider(
+        &self,
+        alias: &str,
+        provider: std::sync::Arc<dyn keri_keyprovider::KeyProvider>,
+        next_public_key: keri_controller::BasicPrefix,
+        config: IdentifierConfig,
+    ) -> Result<(Identifier, crate::keyprovider_adapter::KeriSigner)> {
+        let alias_dir = self.alias_dir(alias);
+        std::fs::create_dir_all(&alias_dir)
+            .map_err(|e| Error::PersistenceError(format!("cannot create alias dir: {e}")))?;
+
+        let db_path = alias_dir.join("db");
+
+        let keri_signer = crate::keyprovider_adapter::KeriSigner::from(provider);
+        let id = crate::operations::create_identifier(
+            db_path,
+            keri_signer.clone(),
+            next_public_key,
+            config,
+        )
+        .await?;
+
+        // Persist identifier prefix (no seeds — keys are managed externally).
+        use keri_core::prefix::CesrPrimitive;
+        self.write_file(alias, "id", &id.id().to_str())?;
+
+        Ok((id, keri_signer))
+    }
+
+    /// Load an existing identifier and pair it with an external key provider.
+    ///
+    /// Use this when keys are managed by a platform keystore (Android, iOS)
+    /// and the identifier was previously created with
+    /// [`create_with_provider`](KeriStore::create_with_provider).
+    ///
+    /// # Errors
+    /// - [`Error::PersistenceError`] if the alias directory or `id` file is missing.
+    /// - [`Error::Controller`] if the database cannot be opened.
+    #[cfg(feature = "keyprovider")]
+    pub fn load_with_provider(
+        &self,
+        alias: &str,
+        provider: std::sync::Arc<dyn keri_keyprovider::KeyProvider>,
+    ) -> Result<(Identifier, crate::keyprovider_adapter::KeriSigner)> {
+        let id = self.load(alias)?;
+        let keri_signer = crate::keyprovider_adapter::KeriSigner::from(provider);
+        Ok((id, keri_signer))
+    }
+
     // ── Private helpers ───────────────────────────────────────────────────────
 
     fn persist_group_metadata(
