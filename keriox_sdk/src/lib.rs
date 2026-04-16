@@ -77,6 +77,7 @@
 pub mod controller;
 pub mod error;
 pub mod identifier;
+pub mod keys;
 pub mod operations;
 pub mod signing;
 pub mod store;
