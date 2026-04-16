@@ -95,6 +95,10 @@ pub enum Error {
     #[error("delegator KEL not available locally for {0}; resolve the delegator's OOBI first")]
     DelegatorKelNotAvailable(IdentifierPrefix),
 
+    /// Failed to parse a string as an identifier prefix or SAID.
+    #[error("failed to parse identifier or SAID: {0}")]
+    ParseError(String),
+
     /// A catch-all for errors that do not fit a more specific variant.
     #[error("{0}")]
     Other(String),

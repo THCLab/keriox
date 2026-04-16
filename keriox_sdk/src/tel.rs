@@ -67,3 +67,41 @@ pub fn get_credential_status(
         Some(TelState::NotIssued) | None => Ok(CredentialStatus::Unknown),
     }
 }
+
+// ── String-accepting convenience variants ────────────────────────────────────
+
+/// Like [`check_credential_status`], but accepts `registry_id` and
+/// `credential_said` as `&str`.
+///
+/// # Errors
+/// - [`Error::ParseError`] if either string is not a valid identifier/SAID.
+/// - All errors from [`check_credential_status`].
+pub async fn check_credential_status_str<S: crate::operations::SigningBackend>(
+    id: &Identifier,
+    signer: &S,
+    registry_id: &str,
+    credential_said: &str,
+) -> Result<CredentialStatus> {
+    let reg_id: IdentifierPrefix = registry_id
+        .parse()
+        .map_err(|_| Error::ParseError(format!("invalid registry ID: {registry_id}")))?;
+    let said: SelfAddressingIdentifier = credential_said
+        .parse()
+        .map_err(|_| Error::ParseError(format!("invalid credential SAID: {credential_said}")))?;
+    check_credential_status(id, signer, &reg_id, &said).await
+}
+
+/// Like [`get_credential_status`], but accepts `credential_said` as a `&str`.
+///
+/// # Errors
+/// - [`Error::ParseError`] if the string is not a valid SAID.
+/// - All errors from [`get_credential_status`].
+pub fn get_credential_status_str(
+    id: &Identifier,
+    credential_said: &str,
+) -> Result<CredentialStatus> {
+    let said: SelfAddressingIdentifier = credential_said
+        .parse()
+        .map_err(|_| Error::ParseError(format!("invalid credential SAID: {credential_said}")))?;
+    get_credential_status(id, &said)
+}

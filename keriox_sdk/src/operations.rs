@@ -706,3 +706,39 @@ pub async fn poll_pending_requests<S: SigningBackend + Clone + 'static>(
     }
     Ok(requests)
 }
+
+// ── String-accepting convenience variants ────────────────────────────────────
+
+/// Like [`issue`], but accepts the credential SAID as a `&str`.
+///
+/// Parses the string into a [`SelfAddressingIdentifier`] internally.
+///
+/// # Errors
+/// - [`Error::ParseError`] if `credential_said` is not a valid SAID.
+/// - All errors from [`issue`].
+pub async fn issue_str<S: SigningBackend + Clone + 'static>(
+    id: &mut Identifier,
+    signer: S,
+    credential_said: &str,
+) -> Result<()> {
+    let said: SelfAddressingIdentifier = credential_said
+        .parse()
+        .map_err(|_| Error::ParseError(format!("invalid credential SAID: {credential_said}")))?;
+    issue(id, signer, said).await
+}
+
+/// Like [`revoke`], but accepts the credential SAID as a `&str`.
+///
+/// # Errors
+/// - [`Error::ParseError`] if `credential_said` is not a valid SAID.
+/// - All errors from [`revoke`].
+pub async fn revoke_str<S: SigningBackend + Clone + 'static>(
+    id: &mut Identifier,
+    signer: S,
+    credential_said: &str,
+) -> Result<()> {
+    let said: SelfAddressingIdentifier = credential_said
+        .parse()
+        .map_err(|_| Error::ParseError(format!("invalid credential SAID: {credential_said}")))?;
+    revoke(id, signer, &said).await
+}
