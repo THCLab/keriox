@@ -22,8 +22,8 @@ teliox = {path = "../../support/teliox", version = "0.17.13" }
 thiserror = "1.0"
 serde_json = "1.0"
 url = "2.3.1"
-cesrox = { version = "2.0.0-beta.3", features = ["cesr-proof"] }
-said = { version = "0.5.2" }
+cesrox = { version = "2.0.0-beta.5", features = ["cesr-proof"] }
+said = { version = "0.5.3-beta.1" }
 itertools = "0.11.0"
 redb = "2.3.0"
 serde = "1.0.219"

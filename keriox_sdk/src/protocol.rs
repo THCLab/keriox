@@ -41,6 +41,21 @@ pub use keri_controller::RedbController;
 
 pub use keri_core::error::Error as CoreError;
 pub use keri_core::keys::KeysError;
+pub use keri_core::prefix::error::Error as PrefixError;
+
+// ── Event internals ────────────────────────────────────────────────────────
+
+pub use keri_core::event::event_data::EventData;
+pub use keri_core::event::sections::threshold::SignatureThreshold;
+
+// ── Actor / query types ────────────────────────────────────────────────────
+
+pub use keri_core::actor::error::ActorError;
+pub use keri_core::actor::possible_response::PossibleResponse;
+pub use keri_core::actor::{QueryError, SignedQueryError};
+pub use keri_core::database::redb::RedbDatabase;
+pub use keri_core::oobi_manager::storage::RedbOobiStorage;
+pub use keri_controller::communication::SendingError;
 
 // ── TEL ─────────────────────────────────────────────────────────────────────
 
@@ -49,5 +64,6 @@ pub use teliox::database::redb::RedbTelDatabase;
 // ── SAID ────────────────────────────────────────────────────────────────────
 
 pub use said::derivation::{HashFunction, HashFunctionCode};
+pub use said::error::Error as SaidError;
 pub use said::sad::{DerivationCode, SerializationFormats};
 pub use said::version::Encode;
