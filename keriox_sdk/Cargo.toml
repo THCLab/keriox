@@ -10,11 +10,11 @@ repository.workspace = true
 [dependencies]
 keri-controller = { path = "../components/controller", version = "0.17.13" }
 keri-core = { path = "../keriox_core", version = "0.17.13", features = ["query", "oobi"] }
-cesrox = { version = "2.0.0-beta.3", features = ["cesr-proof"] }
+cesrox = { version = "2.0.0-beta.5", features = ["cesr-proof"] }
 serde_json = "1"
 serde_cbor = { version = "0.11" }
-said = { version = "0.5.2", features = ["macros"]}
-teliox = { path = "../support/teliox", version = "0.17.13", default-features = false }
+said = { version = "0.5.3-beta.1", features = ["macros"]}
+teliox = { path = "../support/teliox", version = "0.17.13" }
 thiserror = "1.0"
 log = "0.4"
 rand = "0.8.5"
