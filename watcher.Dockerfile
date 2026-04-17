@@ -1,5 +1,8 @@
 FROM rust:1.91 AS build
 
+ARG GIT_VERSION_SUFFIX
+ENV GIT_VERSION_SUFFIX=${GIT_VERSION_SUFFIX}
+
 WORKDIR /app
 RUN echo '[workspace] \n\
 \n\
