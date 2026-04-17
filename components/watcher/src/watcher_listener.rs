@@ -344,13 +344,10 @@ pub mod http_handlers {
     }
 
     pub async fn info() -> impl Responder {
-        let version = option_env!("CARGO_PKG_VERSION");
-        if let Some(version) = version {
-            HttpResponse::Ok().json(serde_json::json!({ "version": version }))
-        } else {
-            HttpResponse::InternalServerError()
-                .json(serde_json::json!({ "error": "Failed to retrieve version information" }))
-        }
+        let version = env!("CARGO_PKG_VERSION");
+        let git_suffix = option_env!("GIT_VERSION_SUFFIX").unwrap_or("");
+        let full_version = format!("{version}{git_suffix}");
+        HttpResponse::Ok().json(serde_json::json!({ "version": full_version }))
     }
 }
 
