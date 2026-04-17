@@ -166,7 +166,11 @@ where
                 .bytes()
                 .await
                 .map_err(|e| TransportError::NetworkError(e.to_string()))?;
-            let ops = parse_op_stream(&body)?;
+            eprintln!("[DEBUG-TRANSPORT] loc_scheme response body ({} bytes): {}", body.len(), String::from_utf8_lossy(&body[..body.len().min(300)]));
+            let ops = parse_op_stream(&body).map_err(|e| {
+                eprintln!("[DEBUG-TRANSPORT] parse_op_stream error: {:?}", e);
+                e
+            })?;
             Ok(ops)
         } else {
             let status = resp.status();
