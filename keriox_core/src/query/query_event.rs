@@ -166,7 +166,7 @@ where
 pub fn signed_query_parse() {
     use crate::event_message::cesr_adapter::parse_cesr_stream;
 
-    let input_query = br#"{"v":"KERI10JSON0000ff_","t":"qry","d":"EKZbZZs0KweJm_VbpHBqM6Uvn0tCOoQRQ4okoyoKKXVH","dt":"2024-02-29T13:37:25.671274+00:00","r":"logs","rr":"","q":{"i":"EAz8-amlMgzWkUAcGLzPR5SZ57K0fLaG6eV3DK9SHadw","src":"BLogequWU0j7imRMuDrPChX9BCWuhZJVWawP9zuibmlk"}}-AABAACGk8GcwX1BXQ2KKIncFH1h3tpSDd4rfU4zUC0gEIIwDv2IPnL7WlvyIxcKcO7yv17FbfX1DpWAiHfCEWZlrWMP"#;
+    let input_query = br#"{"v":"KERI10JSON0000ff_","t":"qry","d":"EKZbZZs0KweJm_VbpHBqM6Uvn0tCOoQRQ4okoyoKKXVH","dt":"2024-02-29T13:37:25.671274+00:00","r":"logs","rr":"","q":{"i":"EAz8-amlMgzWkUAcGLzPR5SZ57K0fLaG6eV3DK9SHadw","src":"BLogequWU0j7imRMuDrPChX9BCWuhZJVWawP9zuibmlk"}}-KABAACGk8GcwX1BXQ2KKIncFH1h3tpSDd4rfU4zUC0gEIIwDv2IPnL7WlvyIxcKcO7yv17FbfX1DpWAiHfCEWZlrWMP"#;
 
     let parsed = parse_cesr_stream(input_query).unwrap();
     let deserialized_qry = Message::try_from(parsed).unwrap();
@@ -186,7 +186,7 @@ pub fn signed_query_parse() {
 #[test]
 fn test_query_deserialize2() {
     use crate::query::mailbox::MailboxQuery;
-    let input_query = r#"{"v":"KERI10JSON00018e_","t":"qry","d":"EKzixWgm8tbppUuomNpgtXl4ACJoGvCbN06AIx_u3dfo","dt":"2024-05-06T14:32:59.886055+00:00","r":"mbx","rr":"","q":{"pre":"EASI5JckejnF6SAQxKSz2DHJy_oE5MKGS17GypPJ34Yd","topics":{"/receipt":0,"/replay":0,"/reply":0,"/multisig":0,"/credential":0,"/delegate":0},"i":"EASI5JckejnF6SAQxKSz2DHJy_oE5MKGS17GypPJ34Yd","src":"BKCOy7psittpzQMUkJ3hkdtk0x5PsyCthc5cvDcbwhn3"}}"#; //-AABAAA5MnFbTLKYSRzXG0wtfuuDj80Um7h_tLhoWDGKam9Q89Ifr3NbE01XSONXZ2gWUL4YPEaQRI5VYAR6brZVOVQF"#;
+    let input_query = r#"{"v":"KERI10JSON00018e_","t":"qry","d":"EKzixWgm8tbppUuomNpgtXl4ACJoGvCbN06AIx_u3dfo","dt":"2024-05-06T14:32:59.886055+00:00","r":"mbx","rr":"","q":{"pre":"EASI5JckejnF6SAQxKSz2DHJy_oE5MKGS17GypPJ34Yd","topics":{"/receipt":0,"/replay":0,"/reply":0,"/multisig":0,"/credential":0,"/delegate":0},"i":"EASI5JckejnF6SAQxKSz2DHJy_oE5MKGS17GypPJ34Yd","src":"BKCOy7psittpzQMUkJ3hkdtk0x5PsyCthc5cvDcbwhn3"}}"#; //-KABAAA5MnFbTLKYSRzXG0wtfuuDj80Um7h_tLhoWDGKam9Q89Ifr3NbE01XSONXZ2gWUL4YPEaQRI5VYAR6brZVOVQF"#;
     let _qr: MailboxQuery = serde_json::from_str(input_query).unwrap();
 }
 

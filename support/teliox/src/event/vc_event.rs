@@ -199,7 +199,7 @@ fn test_tel_event_serialization() -> Result<(), Error> {
     let rev_ev: VCEventMessage = serde_json::from_str(&rev_raw).unwrap();
     assert_eq!(serde_json::to_string(&rev_ev).unwrap(), rev_raw);
 
-    let bis_raw = r#"{"v":"KERI10JSON000162_","t":"bis","d":"EF60WQClTmmJqbuHFHBAwmKiCT8RdE4rs6sIVC3s2_AH","i":"EC8Oej-3HAUpBY_kxzBK3B-0RV9j4dXw1H0NRKxJg7g-","s":"0","ii":"EKKJ0FoLxO1TYmyuprguKO7kJ7Hbn0m0Wuk5aMtSrMtY","ra":{"i":"EIZlA3TANi3p8vEu4VQMjPnY0sPFAag1ekIwyyR6lAsq","s":"0","d":"EFSL6HebpbWsxKxfdS4t6NbKTdO4hAUIAxvhmWVf3Z8o"},"dt":"2023-01-10T10:33:57.273969+00:00"}"#; //-GAB0AAAAAAAAAAAAAAAAAAAAAAQEJJR2nmwyYAfSVPzhzS6b5CMZAoTNZH3ULvaU6Z-i0d8"#;
+    let bis_raw = r#"{"v":"KERI10JSON000162_","t":"bis","d":"EF60WQClTmmJqbuHFHBAwmKiCT8RdE4rs6sIVC3s2_AH","i":"EC8Oej-3HAUpBY_kxzBK3B-0RV9j4dXw1H0NRKxJg7g-","s":"0","ii":"EKKJ0FoLxO1TYmyuprguKO7kJ7Hbn0m0Wuk5aMtSrMtY","ra":{"i":"EIZlA3TANi3p8vEu4VQMjPnY0sPFAag1ekIwyyR6lAsq","s":"0","d":"EFSL6HebpbWsxKxfdS4t6NbKTdO4hAUIAxvhmWVf3Z8o"},"dt":"2023-01-10T10:33:57.273969+00:00"}"#; //-SAB0AAAAAAAAAAAAAAAAAAAAAAQEJJR2nmwyYAfSVPzhzS6b5CMZAoTNZH3ULvaU6Z-i0d8"#;
     let bis_ev: VCEventMessage = serde_json::from_str(&bis_raw).unwrap();
     assert_eq!(serde_json::to_string(&bis_ev).unwrap(), bis_raw);
 
