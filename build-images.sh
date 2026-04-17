@@ -26,13 +26,13 @@ echo "Building with GIT_VERSION_SUFFIX=${GIT_VERSION_SUFFIX} tag=${TAG}"
 docker build \
     --build-arg GIT_VERSION_SUFFIX="$GIT_VERSION_SUFFIX" \
     -f witness.Dockerfile \
-    -t witness:"$TAG" \
+    -t keriox-witness:"$TAG" \
     .
 
 docker build \
     --build-arg GIT_VERSION_SUFFIX="$GIT_VERSION_SUFFIX" \
     -f watcher.Dockerfile \
-    -t watcher:"$TAG" \
+    -t keriox-watcher:"$TAG" \
     .
 
-echo "Built witness:${TAG} and watcher:${TAG}"
+echo "Built keriox-witness:${TAG} and keriox-watcher:${TAG}"
