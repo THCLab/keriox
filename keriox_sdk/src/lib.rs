@@ -80,6 +80,7 @@ pub mod error;
 pub mod identifier;
 pub mod keys;
 pub mod oobi;
+pub mod oobi_store;
 pub mod operations;
 pub mod protocol;
 pub mod signing;
@@ -96,6 +97,7 @@ pub use controller::Controller;
 pub use error::{Error, Result};
 pub use identifier::Identifier;
 pub use identifier::{ActionRequired, WatcherResponseError};
+pub use oobi_store::OobiStore;
 pub use store::KeriStore;
 pub use tel::{check_credential_status, get_credential_status};
 pub use types::{
