@@ -8,9 +8,12 @@ use keri_core::event_message::{
     cesr_adapter::parse_cesr_stream_many,
     signed_event_message::{Message, Op},
 };
-use keri_core::query::reply_event::SignedReply;
+use keri_core::query::reply_event::{ReplyEvent, ReplyRoute, SignedReply};
+use said::derivation::HashFunctionCode;
+use said::sad::SerializationFormats;
 
 use crate::error::{Error, Result};
+use crate::{BasicPrefix, LocationScheme, SelfSigningPrefix, Signer};
 
 /// Extract the AID from an OOBI JSON string.
 ///
@@ -72,4 +75,56 @@ pub fn replies_to_cesr_stream(replies: &[SignedReply]) -> Result<Vec<u8>> {
         acc.append(&mut cesr);
         Ok(acc)
     })
+}
+
+/// Build a signed location-scheme OOBI reply for an identifier.
+///
+/// Creates a `ReplyEvent` containing the given location scheme, signs it
+/// with the provided signer, and returns the `SignedReply`.
+pub fn build_location_reply(
+    identifier: &BasicPrefix,
+    signer: &Signer,
+    loc_scheme: LocationScheme,
+) -> Result<SignedReply> {
+    let reply = ReplyEvent::new_reply(
+        ReplyRoute::LocScheme(loc_scheme),
+        HashFunctionCode::Blake3_256,
+        SerializationFormats::JSON,
+    );
+    let encoded = reply
+        .encode()
+        .map_err(|e| Error::EncodingError(e.to_string()))?;
+    let sig = signer
+        .sign(&encoded)
+        .map_err(|e| Error::Signing(e.to_string()))?;
+    Ok(SignedReply::new_nontrans(
+        reply,
+        identifier.clone(),
+        SelfSigningPrefix::Ed25519Sha512(sig),
+    ))
+}
+
+/// Build signed OOBI replies for all location schemes associated with an
+/// identifier, signing each with the given signer.
+pub fn build_location_replies(
+    identifier: &BasicPrefix,
+    signer: &Signer,
+    replies: &[ReplyEvent],
+) -> Result<Vec<SignedReply>> {
+    replies
+        .iter()
+        .map(|reply| {
+            let encoded = reply
+                .encode()
+                .map_err(|e| Error::EncodingError(e.to_string()))?;
+            let sig = signer
+                .sign(&encoded)
+                .map_err(|e| Error::Signing(e.to_string()))?;
+            Ok(SignedReply::new_nontrans(
+                reply.clone(),
+                identifier.clone(),
+                SelfSigningPrefix::Ed25519Sha512(sig),
+            ))
+        })
+        .collect()
 }
