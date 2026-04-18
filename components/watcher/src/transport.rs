@@ -38,7 +38,7 @@ impl WatcherTelTransport for HttpTelTransport {
         location: LocationScheme,
     ) -> Result<String, TransportError> {
         let url = match location.scheme {
-            Scheme::Http => location.url.join("query/tel").unwrap(),
+            Scheme::Http | Scheme::Https => location.url.join("query/tel").unwrap(),
             Scheme::Tcp => todo!(),
         };
         let resp = http_client()

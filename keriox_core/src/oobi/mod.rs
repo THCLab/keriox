@@ -52,6 +52,8 @@ impl LocationScheme {
 pub enum Scheme {
     #[strum(serialize = "http")]
     Http,
+    #[strum(serialize = "https")]
+    Https,
     #[strum(serialize = "tcp")]
     Tcp,
 }

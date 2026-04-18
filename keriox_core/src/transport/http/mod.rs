@@ -34,7 +34,7 @@ pub trait HttpTransport {
         E: for<'de> Deserialize<'de>,
     {
         let url = match loc.scheme {
-            Scheme::Http => match &msg {
+            Scheme::Http | Scheme::Https => match &msg {
                 Message::Notice(_) => {
                     // {url}/process
                     loc.url.join("process").unwrap()
@@ -85,7 +85,7 @@ pub trait HttpTransport {
         E: for<'de> Deserialize<'de>,
     {
         let url = match loc.scheme {
-            Scheme::Http => {
+            Scheme::Http | Scheme::Https => {
                 // {url}/query
                 loc.url.join("query").unwrap()
             }
