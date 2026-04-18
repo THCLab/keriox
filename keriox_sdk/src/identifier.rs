@@ -156,6 +156,96 @@ impl Identifier {
         Ok(self.inner.verify_from_cesr(stream)?)
     }
 
+    /// Verify a single signature against known KEL state.
+    ///
+    /// Returns `Ok(Some(identifier))` for transferable signatures where the
+    /// signer can be identified, `Ok(None)` for non-transferable signatures,
+    /// or an error if verification fails or the KEL is missing.
+    pub fn verify_signature(
+        &self,
+        data: &[u8],
+        signature: &Signature,
+    ) -> Result<Option<IdentifierPrefix>> {
+        use keri_core::event_message::signature::SignerData;
+
+        match signature {
+            Signature::Transferable(sigd, sigs) => {
+                let (kc, id, event_sai): (
+                    Option<keri_core::event::sections::key_config::KeyConfig>,
+                    _,
+                    Option<crate::SelfAddressingIdentifier>,
+                ) = match sigd {
+                    SignerData::EventSeal(es) => (
+                        self.inner
+                            .known_events
+                            .storage
+                            .get_keys_at_event(&es.prefix, es.sn, &es.event_digest())
+                            .ok()
+                            .flatten(),
+                        es.prefix.clone(),
+                        Some(es.event_digest()),
+                    ),
+                    SignerData::LastEstablishment(id) => (
+                        self.inner
+                            .known_events
+                            .storage
+                            .get_state(id)
+                            .map(|e| e.current),
+                        id.clone(),
+                        None,
+                    ),
+                    SignerData::JustSignatures => {
+                        return Err(crate::error::Error::VerificationFailed(
+                            "JustSignatures without anchoring seal".into(),
+                        ));
+                    }
+                };
+                match kc {
+                    Some(k) => {
+                        let valid = k.verify(data, sigs).map_err(|e| {
+                            crate::error::Error::VerificationFailed(e.to_string())
+                        })?;
+                        if valid {
+                            Ok(Some(id))
+                        } else {
+                            Err(crate::error::Error::VerificationFailed(
+                                "signature did not verify".into(),
+                            ))
+                        }
+                    }
+                    None => Err(crate::error::Error::MissingKelEvent {
+                        id,
+                        event_sai,
+                    }),
+                }
+            }
+            Signature::NonTransferable(_nt) => {
+                self.inner.known_events.verify(data, signature)?;
+                Ok(None)
+            }
+        }
+    }
+
+    /// Verify multiple signatures against known KEL state.
+    ///
+    /// Returns `Ok(Some(identifier))` if any transferable signature reveals
+    /// the signer's AID, `Ok(None)` for non-transferable-only signatures.
+    /// Fails if any signature is invalid or KEL is missing.
+    pub fn verify_signatures(
+        &self,
+        data: &[u8],
+        signatures: &[Signature],
+    ) -> Result<Option<IdentifierPrefix>> {
+        let mut sender_id = None;
+        for sig in signatures {
+            let id = self.verify_signature(data, sig)?;
+            if sender_id.is_none() && id.is_some() {
+                sender_id = id;
+            }
+        }
+        Ok(sender_id)
+    }
+
     // ── TEL / Credential ────────────────────────────────────────────────────
 
     /// Generate a `vcp` inception event and anchor `ixn`.

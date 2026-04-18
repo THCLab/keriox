@@ -20,7 +20,11 @@
 //! # }
 //! ```
 
-use keri_core::event_message::signature::{get_signatures, Signature};
+use cesrox::group::Group;
+use keri_core::event::sections::seal::EventSeal;
+use keri_core::event_message::signature::{get_signatures, Signature, SignerData};
+use said::derivation::{HashFunction, HashFunctionCode};
+use said::SelfAddressingIdentifier;
 
 use crate::{
     error::{Error, Result},
@@ -184,12 +188,102 @@ pub fn parse_signed_envelope(cesr: &[u8]) -> Result<(Vec<u8>, Vec<Signature>)> {
 
     let payload = parsed.payload.to_vec();
 
-    let sigs: Vec<Signature> = parsed
-        .attachments
-        .into_iter()
-        .filter_map(|group| get_signatures(group).ok())
-        .flatten()
-        .collect();
+    let sigs = collect_signatures(&parsed.attachments);
 
     Ok((payload, sigs))
+}
+
+/// Compute a Blake3-256 content hash (SAID) of arbitrary data and return it
+/// as a hex string.
+///
+/// This is the standard hash function used throughout KERI for content
+/// addressing. Use it whenever you need a deterministic, collision-resistant
+/// digest of a message or payload.
+pub fn content_hash(data: &[u8]) -> String {
+    let digest: HashFunction = HashFunctionCode::Blake3_256.into();
+    digest.derive(data).to_string()
+}
+
+/// Compute a Blake3-256 content hash (SAID) and return the typed
+/// [`SelfAddressingIdentifier`].
+///
+/// Use this when you need the SAID as a typed value rather than a string
+/// (e.g. for storage keys or response identifiers).
+pub fn content_sai(data: &[u8]) -> SelfAddressingIdentifier {
+    let digest: HashFunction = HashFunctionCode::Blake3_256.into();
+    digest.derive(data)
+}
+
+fn collect_signatures(attachments: &[Group]) -> Vec<Signature> {
+    let mut signatures = Vec::new();
+    let mut i = 0;
+    while i < attachments.len() {
+        match &attachments[i] {
+            Group::AnchoringSeals(seals) => {
+                if let Some(seal) = seals.first() {
+                    let seal = EventSeal::new(
+                        seal.0.clone().into(),
+                        seal.1,
+                        SelfAddressingIdentifier::from(seal.2.clone()),
+                    );
+                    i += 1;
+                    let indexed_sigs = if i < attachments.len() {
+                        if let Group::IndexedControllerSignatures(sigs) = &attachments[i] {
+                            sigs.iter().map(|s| s.clone().into()).collect()
+                        } else {
+                            vec![]
+                        }
+                    } else {
+                        vec![]
+                    };
+                    if !indexed_sigs.is_empty() {
+                        i += 1;
+                    }
+                    signatures.push(Signature::Transferable(
+                        SignerData::EventSeal(seal),
+                        indexed_sigs,
+                    ));
+                } else {
+                    i += 1;
+                }
+            }
+            _ => {
+                if let Ok(sigs) = get_signatures(attachments[i].clone()) {
+                    signatures.extend(sigs);
+                }
+                i += 1;
+            }
+        }
+    }
+    signatures
+}
+
+/// Sign data with a non-transferable (basic) key and produce a CESR stream.
+///
+/// The resulting bytes are `payload || CESR-attachment` where the attachment
+/// is a `NontransReceiptCouples` group containing the signer's public key
+/// and Ed25519 signature.
+///
+/// This is the format expected by services like mesagkesto for
+/// authenticating requests.
+pub fn sign_nontransferable(
+    public_key: &keri_controller::BasicPrefix,
+    signer: &keri_core::signer::Signer,
+    payload: &[u8],
+) -> Result<Vec<u8>> {
+    let raw_sig = signer
+        .sign(payload)
+        .map_err(|e| Error::Signing(e.to_string()))?;
+
+    let sig = keri_controller::SelfSigningPrefix::new(
+        cesrox::primitives::codes::self_signing::SelfSigning::Ed25519Sha512,
+        raw_sig,
+    );
+
+    let group =
+        cesrox::group::Group::NontransReceiptCouples(vec![(public_key.clone().into(), sig.into())]);
+
+    let mut stream = payload.to_vec();
+    stream.extend_from_slice(group.to_cesr_str().as_bytes());
+    Ok(stream)
 }

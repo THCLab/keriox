@@ -79,6 +79,7 @@ pub mod controller;
 pub mod error;
 pub mod identifier;
 pub mod keys;
+pub mod oobi;
 pub mod operations;
 pub mod protocol;
 pub mod signing;

@@ -53,6 +53,13 @@ pub enum Error {
     #[error("verification failed: {0}")]
     VerificationFailed(String),
 
+    /// Missing KEL event for the given identifier — OOBI may need to be resolved first.
+    #[error("missing KEL event for {id}")]
+    MissingKelEvent {
+        id: IdentifierPrefix,
+        event_sai: Option<SelfAddressingIdentifier>,
+    },
+
     /// CESR stream could not be parsed.
     #[error("CESR parse error: {0}")]
     CesrParseError(String),
@@ -102,6 +109,18 @@ pub enum Error {
     /// A catch-all for errors that do not fit a more specific variant.
     #[error("{0}")]
     Other(String),
+}
+
+impl From<keri_core::processor::validator::VerificationError> for Error {
+    fn from(e: keri_core::processor::validator::VerificationError) -> Self {
+        Error::VerificationFailed(e.to_string())
+    }
+}
+
+impl From<keri_core::error::Error> for Error {
+    fn from(e: keri_core::error::Error) -> Self {
+        Error::VerificationFailed(e.to_string())
+    }
 }
 
 /// Convenience alias — all SDK functions return this type.
