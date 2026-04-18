@@ -1,4 +1,0 @@
-[patch.crates-io]
-cesrox = { path = "../cesrox/cesr" }
-said = { path = "../cesrox/said" }
-sad_macros = { path = "../cesrox/said/sad_macros" }
