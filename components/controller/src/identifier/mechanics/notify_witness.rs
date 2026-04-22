@@ -37,7 +37,11 @@ where
                 None
             }
         });
-        join_all(to_notify).await;
+
+        let results = join_all(to_notify).await;
+        for res in results {
+            res?;
+        }
         self.to_notify.clear();
 
         Ok(n)
