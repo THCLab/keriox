@@ -1,10 +1,8 @@
-//! Witness notification should surface transport failures from `publish`.
+//! Regression test for witness notification error handling.
 //!
-//! See `publish_bug.md`: today `Communication::publish` and
-//! `Identifier::notify_witnesses` drop `send_message` errors and clear
-//! `to_notify`. The test below asserts the **correct** contract: it **fails**
-//! on the current codebase and should pass once those errors propagate and the
-//! queue is only cleared after success.
+//! `Communication::publish` must propagate `send_message` failures, and
+//! `notify_witnesses` must return `Err` and leave `to_notify` unchanged so the
+//! caller can retry.
 
 use std::{collections::HashMap, sync::Arc};
 

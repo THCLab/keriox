@@ -211,7 +211,7 @@ where
             vec![Message::Notice(Notice::Event(message.clone()))]
         };
 
-        join_all(
+        let sends = join_all(
             itertools::iproduct!(messages_to_send, witness_prefixes).map(
                 |(message, witness_id)| {
                     self.send_message_to(
@@ -223,6 +223,10 @@ where
             ),
         )
         .await;
+
+        for res in sends {
+            res?;
+        }
 
         Ok(())
     }

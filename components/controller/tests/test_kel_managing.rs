@@ -1,13 +1,18 @@
+use std::{collections::HashMap, sync::Arc};
+
 use cesrox::primitives::codes::self_addressing::SelfAddressing;
 use keri_core::{
     actor::prelude::HashFunction,
-    oobi::LocationScheme,
-    prefix::{BasicPrefix, SelfSigningPrefix},
+    oobi::{LocationScheme, Scheme},
+    prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     signer::{CryptoBox, KeyManager},
+    transport::test::TestTransport,
 };
 use tempfile::Builder;
+use url::Host;
 
 use keri_controller::{config::ControllerConfig, controller::Controller, error::ControllerError};
+use witness::{WitnessEscrowConfig, WitnessListener};
 
 #[async_std::test]
 async fn test_kel_managing() -> Result<(), ControllerError> {
@@ -77,27 +82,56 @@ async fn test_kel_managing() -> Result<(), ControllerError> {
 async fn test_kel_managing_with_witness() -> Result<(), ControllerError> {
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
 
-    let first_witness_id: BasicPrefix = "BNJJhjUnhlw-lsbYdehzLsX1hJMG9QJlK_wJ5AunJLrM"
-        .parse()
-        .unwrap();
-    // OOBI (Out-Of-Band Introduction) specifies the way how actors can be found.
-    let first_witness_oobi: LocationScheme = serde_json::from_str(&format!(
-        r#"{{"eid":{:?},"scheme":"http","url":"http://w1.ea.argo.colossi.network/"}}"#,
-        first_witness_id
-    ))
-    .unwrap();
+    let witness1 = {
+        let seed = "AK8F6AAiYDpXlWdj2O5F5-6wNCCNJh2A4XOlqwR_HwwH";
+        let witness_root = Builder::new().prefix("test-kel-wit1-db").tempdir().unwrap();
+        Arc::new(
+            WitnessListener::setup_with_redb(
+                url::Url::parse("http://witness1/").unwrap(),
+                witness_root.path(),
+                Some(seed.to_string()),
+                WitnessEscrowConfig::default(),
+            )
+            .unwrap(),
+        )
+    };
+    let witness2 = {
+        let seed = "AJZ7ZLd7unQ4IkMUwE69NXcvDO9rrmmRH_Xk3TPu9BpP";
+        let witness_root = Builder::new().prefix("test-kel-wit2-db").tempdir().unwrap();
+        Arc::new(
+            WitnessListener::setup_with_redb(
+                url::Url::parse("http://witness2/").unwrap(),
+                witness_root.path(),
+                Some(seed.to_string()),
+                WitnessEscrowConfig::default(),
+            )
+            .unwrap(),
+        )
+    };
 
-    let second_witness_id: BasicPrefix = "BFdfJEbC7__AqZdrXkxmW3THnZmIeJzCGpzJpgN6Ettw"
-        .parse()
-        .unwrap();
-    let second_witness_oobi: LocationScheme = serde_json::from_str(&format!(
-        r#"{{"eid":{:?},"scheme":"http","url":"http://w2.ea.argo.colossi.network/"}}"#,
-        second_witness_id
-    ))
-    .unwrap();
+    let first_witness_id = witness1.get_prefix();
+    let first_witness_oobi = LocationScheme {
+        eid: IdentifierPrefix::Basic(first_witness_id.clone()),
+        scheme: Scheme::Http,
+        url: url::Url::parse("http://witness1/").unwrap(),
+    };
+    let second_witness_id = witness2.get_prefix();
+    let second_witness_oobi = LocationScheme {
+        eid: IdentifierPrefix::Basic(second_witness_id.clone()),
+        scheme: Scheme::Http,
+        url: url::Url::parse("http://witness2/").unwrap(),
+    };
+
+    let transport = {
+        let mut actors: keri_core::transport::test::TestActorMap = HashMap::new();
+        actors.insert((Host::Domain("witness1".to_string()), 80), witness1.clone());
+        actors.insert((Host::Domain("witness2".to_string()), 80), witness2.clone());
+        TestTransport::new(actors)
+    };
 
     let controller = Controller::new(ControllerConfig {
         db_path: root.path().to_owned(),
+        transport: Box::new(transport),
         ..Default::default()
     })?;
 
@@ -118,8 +152,7 @@ async fn test_kel_managing_with_witness() -> Result<(), ControllerError> {
 
     let mut identifier = controller.finalize_incept(inception_event.as_bytes(), &signature)?;
 
-    let i = identifier.notify_witnesses().await?;
-    dbg!(i);
+    assert_eq!(identifier.notify_witnesses().await?, 1);
 
     let queries_to_sign = identifier.query_mailbox(
         identifier.id(),
