@@ -189,6 +189,65 @@ async fn test_sign_and_verify() {
     assert_eq!(verified.payload, message);
 }
 
+/// Repeated create → drop → load cycles do not panic with DatabaseAlreadyOpen.
+///
+/// Before the controller cache was added, each `load()` call opened a fresh
+/// set of redb databases. If any `Arc` clone was still alive (e.g. held by an
+/// in-flight async task), the exclusive flock would conflict and the call would
+/// fail with `DatabaseAlreadyOpen`. With the per-path controller cache the same
+/// `Arc<Controller>` — and therefore the same `Arc<Database>` handles — are
+/// reused, making it impossible to open the same files twice.
+#[tokio::test]
+async fn test_keri_store_load_after_drop_no_flock_race() {
+    let root = tempfile::Builder::new()
+        .prefix("keri-store")
+        .tempdir()
+        .unwrap();
+
+    let store = KeriStore::open(PathBuf::from(root.path())).unwrap();
+
+    store
+        .create("alpha", IdentifierConfig::default())
+        .await
+        .unwrap();
+
+    for _ in 0..20 {
+        let id = store.load("alpha").unwrap();
+        assert!(id.get_own_kel().is_some());
+        drop(id);
+    }
+}
+
+/// Switching between two aliases back-to-back does not race on the redb flock.
+#[tokio::test]
+async fn test_keri_store_alias_switching_no_flock_race() {
+    let root = tempfile::Builder::new()
+        .prefix("keri-store")
+        .tempdir()
+        .unwrap();
+
+    let store = KeriStore::open(PathBuf::from(root.path())).unwrap();
+
+    store
+        .create("alias_a", IdentifierConfig::default())
+        .await
+        .unwrap();
+    store
+        .create("alias_b", IdentifierConfig::default())
+        .await
+        .unwrap();
+
+    for _ in 0..20 {
+        let id_a = store.load("alias_a").unwrap();
+        assert!(id_a.get_own_kel().is_some());
+        drop(id_a);
+
+        let id_b = store.load("alias_b").unwrap();
+        assert!(id_b.get_own_kel().is_some());
+        drop(id_b);
+    }
+}
+
 /// parse_signed_envelope extracts the payload and signatures.
 #[tokio::test]
 async fn test_parse_signed_envelope() {

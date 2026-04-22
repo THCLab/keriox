@@ -116,6 +116,15 @@ pub async fn create_identifier<S: SigningBackend + Clone + 'static>(
     config: IdentifierConfig,
 ) -> Result<Identifier> {
     let controller = Controller::new(db_path)?;
+    create_identifier_with_controller(&controller, signer, next_pk, config).await
+}
+
+pub(crate) async fn create_identifier_with_controller<S: SigningBackend + Clone + 'static>(
+    controller: &Controller,
+    signer: S,
+    next_pk: BasicPrefix,
+    config: IdentifierConfig,
+) -> Result<Identifier> {
     let pks = vec![BasicPrefix::Ed25519(signer.public_key())];
     let npks = vec![next_pk];
 

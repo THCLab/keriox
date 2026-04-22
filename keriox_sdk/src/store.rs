@@ -23,7 +23,12 @@
 //!     reg_id        ← IdentifierPrefix (optional, set after incept_registry)
 //! ```
 
-use std::{path::PathBuf, str::FromStr, sync::Arc};
+use std::{
+    collections::HashMap,
+    path::PathBuf,
+    str::FromStr,
+    sync::{Arc, Mutex},
+};
 
 use keri_controller::{controller::RedbIdentifier, IdentifierPrefix};
 use keri_core::{prefix::SeedPrefix, signer::Signer};
@@ -32,7 +37,7 @@ use crate::{
     controller::Controller,
     error::{Error, Result},
     identifier::Identifier,
-    operations::{create_identifier, create_multisig, request_delegation},
+    operations::{create_identifier_with_controller, create_multisig, request_delegation},
     types::{DelegationConfig, IdentifierConfig, MultisigConfig},
 };
 
@@ -44,6 +49,7 @@ use crate::{
 /// to restore them across sessions.
 pub struct KeriStore {
     root: PathBuf,
+    controllers: Mutex<HashMap<PathBuf, Arc<Controller>>>,
 }
 
 impl KeriStore {
@@ -56,7 +62,10 @@ impl KeriStore {
     pub fn open(root: PathBuf) -> Result<Self> {
         std::fs::create_dir_all(&root)
             .map_err(|e| Error::PersistenceError(format!("cannot create store root: {e}")))?;
-        Ok(Self { root })
+        Ok(Self {
+            root,
+            controllers: Mutex::new(HashMap::new()),
+        })
     }
 
     /// Create a brand-new identifier, persist all state, and return the live
@@ -123,9 +132,10 @@ impl KeriStore {
 
         let next_pk = keri_controller::BasicPrefix::Ed25519NT(next_pub_key);
 
-        let id = create_identifier(db_path, signer.clone(), next_pk, config).await?;
+        let controller = self.get_or_create_controller(db_path)?;
+        let id = create_identifier_with_controller(&controller, signer.clone(), next_pk, config)
+            .await?;
 
-        // Persist seeds and identifier prefix.
         use keri_core::prefix::CesrPrimitive;
         self.write_file(alias, "priv_key", &current_seed.to_str())?;
         self.write_file(alias, "next_priv_key", &next_seed.to_str())?;
@@ -158,9 +168,8 @@ impl KeriStore {
             .ok()
             .and_then(|s| IdentifierPrefix::from_str(s.trim()).ok());
 
-        let controller = Controller::new(db_path)?;
+        let controller = self.get_or_create_controller(db_path)?;
 
-        // Reconstruct the inner RedbIdentifier using the controller's shared state.
         let inner = RedbIdentifier::new(
             id_prefix,
             reg_id,
@@ -497,16 +506,16 @@ impl KeriStore {
 
         let db_path = alias_dir.join("db");
 
+        let controller = self.get_or_create_controller(db_path)?;
         let keri_signer = crate::keyprovider_adapter::KeriSigner::from(provider);
-        let id = crate::operations::create_identifier(
-            db_path,
+        let id = crate::operations::create_identifier_with_controller(
+            &controller,
             keri_signer.clone(),
             next_public_key,
             config,
         )
         .await?;
 
-        // Persist identifier prefix (no seeds — keys are managed externally).
         use keri_core::prefix::CesrPrimitive;
         self.write_file(alias, "id", &id.id().to_str())?;
 
@@ -534,6 +543,16 @@ impl KeriStore {
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
+
+    fn get_or_create_controller(&self, db_path: PathBuf) -> Result<Arc<Controller>> {
+        let mut cache = self.controllers.lock().unwrap();
+        if let Some(ctrl) = cache.get(&db_path) {
+            return Ok(ctrl.clone());
+        }
+        let ctrl = Arc::new(Controller::new(db_path.clone())?);
+        cache.insert(db_path, ctrl.clone());
+        Ok(ctrl)
+    }
 
     fn persist_group_metadata(
         &self,
