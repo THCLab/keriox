@@ -138,3 +138,4 @@ pub use cesrox;
 pub use keri_controller;
 pub use keri_core;
 pub use said;
+pub use teliox;
