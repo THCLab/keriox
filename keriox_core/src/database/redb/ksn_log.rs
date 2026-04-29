@@ -137,7 +137,7 @@ impl KsnLogDatabase {
             let mut table = write_txn.open_table(KSN)?;
             let key = rkyv_adapter::serialize_said(&digest)?;
             table.insert(key.as_slice(), &value.as_ref())?;
-            dbg!("Inserted KSN: key: {:?}, \nvalue: {:?}, ", digest, event);
+            tracing::trace!(?digest, "Inserted KSN");
             Ok(())
         })
     }
