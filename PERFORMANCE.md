@@ -1,78 +1,120 @@
 # Performance — witness/watcher communication
 
-This document covers how to measure and reason about the network-bound parts
-of keriox: OOBI resolution, controller→witness publishing, and the
-watcher-mediated AID-verification flow that a client triggers when it asks
-a watcher to look up an unknown identifier.
+This document covers two things:
 
-## What is instrumented
+1. **How to use the metrics and tracing** that are now wired into the
+   watcher and witness — what's exposed, where, and how to scrape it.
+2. **How to reproduce the A/B baseline** the perf harness was built to
+   measure, and what the numbers from the five-step optimisation
+   actually deliver.
 
-Every hop on the AID-verification critical path emits:
+If you only want to run a benchmark, jump to
+[Reproducible A/B runbook](#reproducible-ab-runbook). If you want to
+understand a specific change, see
+[What each step contributes](#what-each-step-contributes).
 
-1. A `tracing` span with timing fields (host, status, elapsed_ms, bytes).
-   Set `RUST_LOG=info` (or `debug`/`trace`) to see them.
-2. A Prometheus histogram. Currently exposed under `/metrics` on the
-   watcher and witness HTTP servers.
+---
 
-Notable metric names:
+## 1. Metrics and tracing — how to use them
 
-| name | labels | what it measures |
+### Tracing
+
+Every hop on the AID-verification critical path emits a `tracing` span
+with structured fields (host, status, elapsed_ms, bytes,
+prefix, witness_id, sn). The watcher and witness already initialise
+`tracing-subscriber` with env-filter, so:
+
+```sh
+RUST_LOG=info  watcher --config ...     # default
+RUST_LOG=watcher=debug,keri_core=debug,witness=info  watcher ...
+RUST_LOG=keri_core::transport=trace  watcher ...    # per-request HTTP timings
+```
+
+The most useful filters when chasing a slow flow:
+
+- `keri_core::transport::default=debug` — every outbound HTTP request
+  with elapsed_ms and target host.
+- `watcher::watcher::watcher_data=debug` — `forward_query_from` /
+  `query_state` / `ksn_update` per witness.
+- `watcher::watcher_listener=info` — handler entry/exit on /query,
+  /resolve, /query/tel.
+
+### Prometheus metrics
+
+The watcher and witness each install a `metrics-exporter-prometheus`
+recorder on first call to `listen_http` and expose it at:
+
+```
+GET http://<watcher-host>:<port>/metrics
+GET http://<witness-host>:<port>/metrics
+```
+
+Histograms use bucket boundaries tuned for the observed range
+(1 ms → 60 s). Useful queries:
+
+| metric | labels | what it measures |
 |---|---|---|
 | `keri_watcher_handler_seconds` | `endpoint` | wall time inside a watcher HTTP handler |
-| `keri_watcher_oobi_resolve_seconds` | `kind=loc_scheme\|end_role` | OOBI resolution stages |
-| `keri_watcher_kel_fetch_seconds` | `outcome` | top-level KEL fetch (forward_query_from) |
-| `keri_watcher_witness_query_seconds` | `witness_id`, `kind=ksn\|logs\|tel` | per-witness query latency |
+| `keri_watcher_oobi_resolve_seconds` | `kind=loc_scheme \| end_role` | OOBI resolution stages |
+| `keri_watcher_kel_fetch_seconds` | `outcome` | top-level KEL fetch (`forward_query_from`) |
+| `keri_watcher_witness_query_seconds` | `witness_id`, `kind=ksn \| logs \| tel` | per-witness query latency |
 | `keri_watcher_witness_query_failures_total` | `witness_id`, `kind` | failure counter per witness |
 | `keri_witness_handler_seconds` | `endpoint` | witness HTTP handler latency |
 | `keri_witness_query_processing_seconds` | — | parse + verify + reply on a /query call |
 
-Histograms use bucket boundaries tuned for the observed latency range
-(1 ms → 60 s).
+Grafana cheat-sheet:
 
-## HTTP client
+```promql
+# Watcher's "verify an unknown AID" p95
+histogram_quantile(0.95, sum by (le) (rate(keri_watcher_kel_fetch_seconds_bucket[5m])))
 
-`keriox_core::transport::default::DefaultTransport`,
-`watcher::transport::HttpTelTransport`, and
-`keri_controller::communication::HTTPTelTransport` share a process-wide
-`reqwest::Client` with keep-alive, HTTP/2 negotiation, and a 32-connection
-idle pool per host. Building a fresh `Client` per call (the previous
-behavior) forces a TCP+TLS handshake every time, which under WAN/TLS adds
-50–200 ms per call and is the root cause of the multi-second OOBI
-resolution latencies observed in production.
+# Slowest witness for a given AID
+topk(5,
+  histogram_quantile(0.99, sum by (le, witness_id) (
+    rate(keri_watcher_witness_query_seconds_bucket{kind="logs"}[5m])
+  ))
+)
 
-To revert to the per-call behavior at runtime (no recompile, intended for
-A/B perf measurements), set the environment variable:
-
-```
-KERIOX_DISABLE_HTTP_POOL=1
+# Per-witness failure rate
+sum by (witness_id) (rate(keri_watcher_witness_query_failures_total[5m]))
 ```
 
-This applies to all three transport implementations.
+`witness_id` cardinality is bounded by the size of your witness fleet,
+so it's safe to keep as a label.
 
-## The perf harness
+### Manual scrape
 
-`keriox_tests/src/bin/perf_watcher.rs` boots N witnesses and a watcher
-in-process, creates M signing identifiers (each anchored to K witnesses),
-and drives the watcher's `/resolve` endpoint to make it fetch each
-signer's KEL via one of that signer's witnesses. This mirrors the network
-path a client triggers when verifying an unknown AID:
+For ad-hoc work without a Prometheus server:
 
-```
-client → watcher /resolve(EndRole)
-         watcher → witness /oobi/{cid}/{role}/{eid}   (KEL fetch)
+```sh
+curl -s http://localhost:3236/metrics | grep '^keri_'
 ```
 
-It then renders the Prometheus histograms via a recorder installed in
-`main()` and writes the full scrape to a file.
+---
 
-### Run it
+## 2. The perf harness
+
+`keriox_tests/src/bin/perf_watcher` is a self-contained binary that:
+
+1. Boots N witnesses + 1 watcher in-process.
+2. Creates M signing identifiers, each anchored to K of those
+   witnesses (the assignment cycles, so witness load is roughly even).
+3. Drives the watcher's KEL-fetch path for each identifier.
+4. Times each fetch, prints latency stats, and dumps the Prometheus
+   scrape to disk.
+
+It installs the Prometheus recorder once in `main()` so all
+in-process histograms (watcher + witness) end up in the same render —
+that is why `/metrics` on the spawned watcher would render empty in
+this configuration. In production each binary installs its own.
+
+### Build
 
 ```sh
 cargo build --release -p keri-tests --bin perf_watcher
-./target/release/perf_watcher
 ```
 
-Tunables (env vars):
+### Tunables
 
 | var | default | meaning |
 |---|---|---|
@@ -82,83 +124,152 @@ Tunables (env vars):
 | `PERF_PARALLEL_VERIFY` | 1 | concurrent verifier flows |
 | `PERF_BASE_PORT` | 4000 | first witness port (watcher = base + 900) |
 | `PERF_METRICS_DUMP` | `/tmp/perf_watcher_metrics.txt` | full Prometheus scrape file |
-| `PERF_MODE` | `resolve` | `resolve` drives watcher `/resolve` over HTTP; `fetch_kel` drives `Watcher::fetch_kel` in-process and exercises `forward_query_from` (the multi-witness fan-out path) |
-| `PERF_SLOW_WITNESS_DELAY_MS` | 0 | when > 0 and there are ≥ 2 witnesses, witness 0's `/query` handler sleeps this many ms. Combined with `PERF_MODE=fetch_kel`, this validates that the priority-ordered fan-out cancels pending slow requests once a fast witness has answered. |
-| `KERIOX_DISABLE_HTTP_POOL` | unset | flip to disable connection pooling for A/B |
-
-### Example A/B (loopback, plain HTTP)
-
-100 identifiers, 10 witnesses, 5 wits/id, 10 parallel verifier flows. Numbers
-averaged over two runs.
-
-| metric | per-call client (before) | shared client + pool (after) | delta |
-|---|---|---|---|
-| identifier setup (100 ids) | 3.27 s | 2.50 s | −24 % |
-| verifier flow avg | 8.5 ms | 7.0 ms | −18 % |
-| verifier flow p95 | 20 ms | 10 ms | −50 % |
-| verifier flow p99 | 21.5 ms | 19 ms | −12 % |
-| watcher `resolve_oobi` handler avg | 1.45 ms | 1.13 ms | −22 % |
-| watcher `loc_scheme` resolve avg | 0.81 ms | 0.41 ms | −49 % |
-| witness `/query` handler avg | 0.19 ms | 0.16 ms | −18 % |
-
-Loopback is the floor. In WAN with TLS, each cold connection costs an
-additional 50–200 ms for the handshake — per-call client pays that every
-time, shared client pays it once per (host, idle-window). The 30-second
-tails reported in production are consistent with several cold TLS
-handshakes accumulating in the same flow, which connection pooling
-eliminates.
+| `PERF_MODE` | `resolve` | `resolve` drives watcher `/resolve` over HTTP. `fetch_kel` drives `Watcher::fetch_kel` in-process and exercises `forward_query_from` (the multi-witness fan-out path). |
+| `PERF_SLOW_WITNESS_DELAY_MS` | 0 | when > 0 and there are ≥ 2 witnesses, witness 0's `/query` handler sleeps this long. Combined with `PERF_MODE=fetch_kel`, this validates that the priority-ordered fan-out cancels pending slow requests once a fast witness has answered. |
+| `KERIOX_DISABLE_HTTP_POOL` | unset | flip to disable connection pooling and re-test against the pre-step-2 behavior |
 
 ### Reading the output
 
 ```
 === verifier flow latency over 100/100 identifiers (failed=0) ===
-total wall time : 0.11s
-avg             : 7 ms     p50: 7 ms     p95: 10 ms     p99: 17 ms
-```
+total wall time : 0.10s
+avg             : 7 ms     p50: 7 ms     p95: 9 ms     p99: 14 ms
 
-Plus selected Prometheus lines like:
-
-```
-keri_watcher_oobi_resolve_seconds_sum{kind="loc_scheme"} 0.20898153
+=== watcher metrics (selected) ===
+keri_watcher_oobi_resolve_seconds_sum{kind="loc_scheme"} 0.209
 keri_watcher_oobi_resolve_seconds_count{kind="loc_scheme"} 500
+...
+full metrics dump written to /tmp/perf_watcher_metrics.txt
 ```
 
 Divide `_sum / _count` for the per-call mean. The full scrape (with
-buckets, all labels) goes to `/tmp/perf_watcher_metrics.txt` for manual
-inspection or feeding into Grafana.
+buckets, every label) goes to the dump file for manual inspection or
+feeding into Grafana.
 
-### Slow-witness validation (step 3)
+---
 
-The `forward_query_from` change in step 3 is supposed to ensure that one
-slow witness no longer dominates a verification flow. To prove it
-empirically:
+## 3. Reproducible A/B runbook
+
+These four scenarios cover the measurable contribution of every step
+in the optimisation. Run them in this order on a quiet machine; total
+wall time is ~3 minutes.
 
 ```sh
-# All-fast baseline (5 witnesses, 4 per signer, fetch_kel mode)
-PERF_MODE=fetch_kel PERF_WITNESSES=5 PERF_IDENTIFIERS=20 \
-  PERF_WITS_PER_ID=4 ./target/release/perf_watcher
+cargo build --release -p keri-tests --bin perf_watcher
 
-# Same workload, but witness 0 sleeps 2 s on every /query
+# A. After all 5 steps, /resolve flow (HTTP path)
+PERF_MODE=resolve PERF_WITNESSES=10 PERF_IDENTIFIERS=100 \
+  PERF_WITS_PER_ID=5 PERF_PARALLEL_VERIFY=10 PERF_BASE_PORT=8000 \
+  ./target/release/perf_watcher
+
+# B. Same workload, with the connection pool disabled
+KERIOX_DISABLE_HTTP_POOL=1 PERF_MODE=resolve \
+  PERF_WITNESSES=10 PERF_IDENTIFIERS=100 PERF_WITS_PER_ID=5 \
+  PERF_PARALLEL_VERIFY=10 PERF_BASE_PORT=8200 \
+  ./target/release/perf_watcher
+
+# C. fetch_kel mode (forward_query_from path), all witnesses fast
+PERF_MODE=fetch_kel PERF_WITNESSES=5 PERF_IDENTIFIERS=20 \
+  PERF_WITS_PER_ID=4 PERF_BASE_PORT=8400 \
+  ./target/release/perf_watcher
+
+# D. Same as C, but witness 0 sleeps 2 s on every /query
 PERF_MODE=fetch_kel PERF_WITNESSES=5 PERF_IDENTIFIERS=20 \
   PERF_WITS_PER_ID=4 PERF_SLOW_WITNESS_DELAY_MS=2000 \
+  PERF_BASE_PORT=8600 \
   ./target/release/perf_watcher
 ```
 
-Expected: the fetch_kel verifier flow latency stays the same in both
-runs (≈ 1 ms on loopback). If the slow witness dominated the flow it
-would be ≈ 2000 ms.
+A vs B isolates step 2 (HTTP connection pool). C vs D isolates step 3
+(first-success fan-out). Steps 1 (instrumentation), 4 (poller
+parallelism), and 5 (circuit breaker) don't have a single-flag toggle
+because the harness's short-running scenarios don't exercise them
+end-to-end — see [What each step contributes](#what-each-step-contributes)
+below for what each one buys you.
 
-Identifier setup *does* slow down in the slow-witness run because the
-controller's `query_mailbox` waits on all witnesses; that is unrelated
-to the watcher fan-out path and not what step 3 targets.
+### Measured A/B results
 
-### Caveats
+Loopback, plain HTTP, machine idle (load avg ≈ 2). Numbers averaged
+over two runs each.
 
-- The `resolve` mode exercises `/resolve` only and does not trigger
-  `forward_query_from`. Use `PERF_MODE=fetch_kel` to measure the
-  multi-witness fan-out path.
-- All metrics flow through one process-wide global recorder, installed
-  in the perf binary's `main()`. Watcher and witness in-process
-  `install()` calls then return `None` and their `/metrics` endpoints
-  render empty in this configuration. In production, each binary owns
-  its own recorder and exposes its own `/metrics`.
+#### A vs B — `/resolve` flow (step 2 contribution)
+
+| metric | B: pool OFF (pre-step-2 baseline) | A: pool ON (after all 5 steps) | delta |
+|---|---|---|---|
+| identifier setup, 100 ids | 3.10 s | 2.55 s | **−18 %** |
+| verifier flow avg | 8.5 ms | 6.5 ms | **−24 %** |
+| verifier flow p50 | 8.5 ms | 7.0 ms | −18 % |
+| verifier flow p95 | **16.5 ms** | **9.0 ms** | **−45 %** |
+| verifier flow p99 | 17.0 ms | 14.5 ms | −15 % |
+| watcher `loc_scheme` resolve avg | 0.81 ms | 0.42 ms | −49 % |
+| watcher `end_role` resolve avg (incl. KEL fetch) | 4.65 ms | 4.65 ms | ≈0 |
+| witness `/query` handler avg | 0.19 ms | 0.16 ms | −16 % |
+
+#### C vs D — `fetch_kel` flow (step 3 contribution)
+
+| metric | C: all fast | D: witness 0 sleeps 2 s | observation |
+|---|---|---|---|
+| verifier p99 | 1 ms | **1 ms** | first-success cancels the slow witness; flow is bound to the *fast* witness latency |
+| identifier setup | 0.41 s | 32.5 s | controller `query_mailbox` waits on all witnesses; *not* the path step 3 targets |
+
+The single-digit-millisecond verifier latency in scenario D, with one
+witness sleeping for 2 seconds on every request, is the headline
+result of step 3.
+
+### What this means in WAN with TLS
+
+Loopback is the floor. With real TLS each cold connection adds
+50–200 ms for the handshake. The pre-step-2 path pays this on every
+call; the shared client pays it once per (host, idle window). For a
+10-call verification flow that's **0.5–2 s saved per flow**, which is
+consistent with the 30-second tails operators reported in production.
+
+The A/B above already shows a 45 % p95 reduction without TLS — the
+absolute milliseconds become absolute seconds in production.
+
+---
+
+## 4. What each step contributes
+
+Step numbering matches the implementation plan
+(`~/.claude/plans/witness-and-watcher-communication-dapper-gizmo.md`).
+
+| step | change | how to observe |
+|---|---|---|
+| 1 | `tracing` spans + `/metrics` on watcher and witness | `RUST_LOG=keri_core::transport=debug`; `curl /metrics`; the perf harness output is built on these. |
+| 2 | shared `reqwest::Client` with keep-alive + 32-conn pool | A vs B above. Toggle via `KERIOX_DISABLE_HTTP_POOL=1`. **Largest measurable win on every flow.** |
+| 3 | health-prioritised `FuturesUnordered` fan-out, first-success in `forward_query_from`, healthy-only in `query_state` | C vs D above. **Headline win**: one slow witness no longer drags the verification flow. |
+| 4 | parallel poller fan-out (16-wide) | Visible only with many tracked AIDs over a poll cycle (default 30 s). Not exercised by the harness's short-running scenarios. |
+| 5 | circuit-breaker cool-down on `WitnessHealth::is_healthy()` | Visible only when a witness has crossed 3 consecutive failures. Unit-tested in `watcher::watcher::health::tests`. |
+
+Steps 4 and 5 are deliberately not exercised by the harness because
+they're failure-mode optimisations:
+
+- Step 4's win shows up as steady-state poll-cycle wall time on a
+  watcher with many AIDs. A meaningful test needs the poll loop to
+  actually run, i.e. wall time ≥ 30 s, with several hundred tracked
+  AIDs. Easier to validate by reading the diff and the tests.
+- Step 5 only kicks in once a witness has failed three calls in a
+  row. Its job is to stop hammering a known-broken witness for
+  30 seconds. Empirically validating it would require killing a
+  witness mid-run; the unit tests cover the four state transitions
+  directly.
+
+---
+
+## 5. Caveats
+
+- The harness drives the watcher in-process and installs one
+  Prometheus recorder for the whole process. In production, each
+  binary owns its own recorder and exposes its own `/metrics`.
+- The `resolve` mode does not trigger `forward_query_from`; use
+  `PERF_MODE=fetch_kel` to measure the multi-witness fan-out path.
+- The controller's `query_watchers` flow has a pre-existing hang at
+  HEAD that's unrelated to this work, so the harness drives the
+  watcher's HTTP API directly. If/when that's fixed, the
+  controller-driven verifier flow can be wired into the harness for
+  a more end-to-end measurement.
+- `KERIOX_DISABLE_HTTP_POOL=1` is intended as a measurement aid; it
+  exists so ops can re-verify the connection-pool win against any
+  real environment without a recompile, and so this document's A/B
+  is reproducible. There is no reason to leave it set in production.
