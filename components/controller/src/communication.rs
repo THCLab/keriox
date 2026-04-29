@@ -1,6 +1,8 @@
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
+use std::time::{Duration, Instant};
 
 use futures::future::join_all;
+use tracing::{debug, instrument};
 use keri_core::{
     actor::{error::ActorError, parse_event_stream, possible_response::PossibleResponse},
     database::{EscrowCreator, EventDatabase},
@@ -277,8 +279,30 @@ pub trait IdentifierTelTransport {
 
 pub struct HTTPTelTransport;
 
+/// Process-wide HTTP client for the controller's TEL transport. See
+/// `keri_core::transport::default` for rationale and the
+/// `KERIOX_DISABLE_HTTP_POOL` A/B-toggle env var.
+fn shared_http_client() -> reqwest::Client {
+    fn build() -> reqwest::Client {
+        reqwest::Client::builder()
+            .connect_timeout(Duration::from_secs(10))
+            .timeout(Duration::from_secs(30))
+            .pool_idle_timeout(Duration::from_secs(90))
+            .pool_max_idle_per_host(32)
+            .tcp_keepalive(Duration::from_secs(60))
+            .build()
+            .expect("Failed to build HTTP client")
+    }
+    if std::env::var_os("KERIOX_DISABLE_HTTP_POOL").is_some() {
+        return build();
+    }
+    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+    CLIENT.get_or_init(build).clone()
+}
+
 #[async_trait::async_trait]
 impl IdentifierTelTransport for HTTPTelTransport {
+    #[instrument(skip_all, fields(host = location.url.host_str().unwrap_or("?")))]
     async fn send_query(
         &self,
         qry: SignedTelQuery,
@@ -288,15 +312,26 @@ impl IdentifierTelTransport for HTTPTelTransport {
             Scheme::Http | Scheme::Https => location.url.join("query/tel")?,
             Scheme::Tcp => todo!(),
         };
-        let resp = reqwest::Client::new()
-            .post(url)
+        let started = Instant::now();
+        let resp = shared_http_client()
+            .post(url.clone())
             .body(qry.to_cesr().unwrap())
             .send()
             .await?;
 
-        Ok(resp.text().await?)
+        let status = resp.status();
+        let body = resp.text().await?;
+        debug!(
+            elapsed_ms = started.elapsed().as_millis() as u64,
+            status = status.as_u16(),
+            body_bytes = body.len(),
+            url = %url,
+            "controller tel send_query completed"
+        );
+        Ok(body)
     }
 
+    #[instrument(skip_all, fields(host = location.url.host_str().unwrap_or("?")))]
     async fn send_tel_event(
         &self,
         event: VerifiableEvent,
@@ -306,10 +341,21 @@ impl IdentifierTelTransport for HTTPTelTransport {
             Scheme::Http | Scheme::Https => location.url.join("process/tel")?,
             Scheme::Tcp => todo!(),
         };
-        let client = reqwest::Client::new();
+        let started = Instant::now();
         let query = event.serialize().unwrap();
-        let resp = client.post(url).body(query).send().await?;
+        let resp = shared_http_client()
+            .post(url.clone())
+            .body(query)
+            .send()
+            .await?;
+        let status = resp.status();
         resp.text().await?;
+        debug!(
+            elapsed_ms = started.elapsed().as_millis() as u64,
+            status = status.as_u16(),
+            url = %url,
+            "controller tel send_tel_event completed"
+        );
 
         Ok(())
     }
