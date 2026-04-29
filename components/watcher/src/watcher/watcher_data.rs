@@ -411,11 +411,16 @@ impl<S: OobiStorageBackend> WatcherData<S> {
 
     /// Forward query to registered witnesses and save its response to mailbox.
     /// Fetches events starting from `from_sn` to avoid re-fetching the entire KEL.
+    #[tracing::instrument(skip(self), fields(prefix = %id, from_sn))]
     pub(crate) async fn forward_query_from(
         &self,
         id: &IdentifierPrefix,
         from_sn: u64,
     ) -> Result<(), ActorError> {
+        let _outer = crate::metrics::LatencyTimer::new(
+            crate::metrics::names::KEL_FETCH_SECONDS,
+            vec![("outcome", "completed".to_string())],
+        );
         let witnesses = self.get_witnesses_for_prefix(&id)?;
 
         // Build and send queries to all witnesses in parallel
@@ -442,6 +447,13 @@ impl<S: OobiStorageBackend> WatcherData<S> {
                 let signed_qry =
                     SignedKelQuery::new_nontrans(qry.clone(), self.prefix.clone(), sigs);
 
+                let _per_witness = crate::metrics::LatencyTimer::new(
+                    crate::metrics::names::WITNESS_QUERY_SECONDS,
+                    vec![
+                        ("witness_id", witness_id.to_string()),
+                        ("kind", "logs".to_string()),
+                    ],
+                );
                 let resp = self
                     .send_query_to(
                         witness_id.clone(),
@@ -453,6 +465,12 @@ impl<S: OobiStorageBackend> WatcherData<S> {
                 match resp {
                     Ok(r) => Ok((witness_id, r)),
                     Err(e) => {
+                        metrics::counter!(
+                            crate::metrics::names::WITNESS_QUERY_FAILURES_TOTAL,
+                            "witness_id" => witness_id.to_string(),
+                            "kind" => "logs"
+                        )
+                        .increment(1);
                         tracing::warn!(
                             witness = %witness_id,
                             prefix = %id,
@@ -495,6 +513,7 @@ impl<S: OobiStorageBackend> WatcherData<S> {
 
     /// Query all witnesses about KSN for given prefix.
     /// Returns the highest SN reported by any witness.
+    #[tracing::instrument(skip(self), fields(prefix = %prefix))]
     pub(crate) async fn query_state(&self, prefix: &IdentifierPrefix) -> Result<u64, ActorError> {
         let wits_id = self.get_witnesses_for_prefix(&prefix)?;
         let results: Vec<Result<u64, ActorError>> = join_all(wits_id.into_iter().map(|id| {
@@ -585,11 +604,19 @@ impl<S: OobiStorageBackend> WatcherData<S> {
 
     /// Query a specific witness for the KSN of a prefix.
     /// Returns the SN reported by the witness.
+    #[tracing::instrument(skip(self), fields(prefix = %about_id, witness = %wit_id))]
     async fn ksn_update(
         &self,
         about_id: &IdentifierPrefix,
         wit_id: IdentifierPrefix,
     ) -> Result<u64, ActorError> {
+        let _per_witness = crate::metrics::LatencyTimer::new(
+            crate::metrics::names::WITNESS_QUERY_SECONDS,
+            vec![
+                ("witness_id", wit_id.to_string()),
+                ("kind", "ksn".to_string()),
+            ],
+        );
         let query_args = LogsQueryArgs {
             i: about_id.clone(),
             s: None,

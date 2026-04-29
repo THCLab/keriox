@@ -1,3 +1,4 @@
+pub mod metrics;
 #[cfg(test)]
 mod tests;
 mod witness;

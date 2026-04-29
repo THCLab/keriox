@@ -1,8 +1,15 @@
 use crate::watcher_listener::http_handlers;
-use actix_web::web;
+use actix_web::{web, HttpResponse};
+
+async fn metrics_handler() -> HttpResponse {
+    HttpResponse::Ok()
+        .content_type("text/plain; version=0.0.4; charset=utf-8")
+        .body(crate::metrics::render())
+}
 
 pub fn configure_routes(cfg: &mut web::ServiceConfig) {
-    cfg.route(
+    cfg.route("/metrics", actix_web::web::get().to(metrics_handler))
+    .route(
         "/introduce",
         actix_web::web::get().to(http_handlers::introduce_redb),
     )

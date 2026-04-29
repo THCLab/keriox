@@ -41,8 +41,10 @@ use teliox::{
     tel::Tel,
 };
 use thiserror::Error;
+use tracing::{debug, instrument, trace, warn};
 use url::Url;
 
+use crate::metrics::{names, LatencyTimer};
 use crate::witness_processor::{WitnessEscrowConfig, WitnessProcessor};
 
 pub struct WitnessReceiptGenerator {
@@ -389,22 +391,22 @@ impl<S: OobiStorageBackend> Witness<S> {
             .try_for_each(|notice| self.process_notice(notice))
     }
 
+    #[instrument(skip_all, fields(bytes = input_stream.len()))]
     pub fn parse_and_process_queries(
         &self,
         input_stream: &[u8],
     ) -> Result<Vec<PossibleResponse>, ActorError> {
-        eprintln!(
-            "[DEBUG-WITNESS] parse_and_process_queries: {} bytes",
-            input_stream.len()
-        );
+        let _timer = LatencyTimer::new(names::QUERY_PROCESSING_SECONDS, vec![]);
         let queries = parse_query_stream(input_stream)?;
-        eprintln!("[DEBUG-WITNESS] parsed {} queries", queries.len());
+        debug!(query_count = queries.len(), "parsed queries");
         queries
             .into_iter()
             .map(|qry| {
-                eprintln!("[DEBUG-WITNESS] processing query...");
+                trace!("processing query");
                 let result = self.process_query(qry);
-                eprintln!("[DEBUG-WITNESS] query result: {:?}", result.as_ref().err());
+                if let Err(e) = result.as_ref() {
+                    warn!(error = ?e, "query processing failed");
+                }
                 result
             })
             .filter_map(Result::transpose)

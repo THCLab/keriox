@@ -4,7 +4,7 @@ use std::{
     sync::Arc,
 };
 
-use actix_web::{dev::Server, web::Data, App, HttpServer};
+use actix_web::{dev::Server, web::Data, App, HttpResponse, HttpServer};
 use anyhow::Result;
 use keri_core::{
     self, oobi_manager::storage::OobiStorageBackend, oobi_manager::RedbOobiStorage,
@@ -15,6 +15,12 @@ use crate::{
     witness::{Witness, WitnessError},
     witness_processor::WitnessEscrowConfig,
 };
+
+async fn metrics_handler() -> HttpResponse {
+    HttpResponse::Ok()
+        .content_type("text/plain; version=0.0.4; charset=utf-8")
+        .body(crate::metrics::render())
+}
 
 pub struct WitnessListener<S: OobiStorageBackend> {
     pub witness_data: Arc<Witness<S>>,
@@ -49,10 +55,16 @@ impl<S: OobiStorageBackend + 'static> WitnessListener<S> {
     }
 
     pub fn listen_http(&self, addr: impl ToSocketAddrs) -> Server {
+        // Install Prometheus recorder before any handler runs. Idempotent.
+        let _ = crate::metrics::install();
         let state = Data::new(self.witness_data.clone());
         HttpServer::new(move || {
             App::new()
                 .app_data(state.clone())
+                .route(
+                    "/metrics",
+                    actix_web::web::get().to(metrics_handler),
+                )
                 .route(
                     "/introduce",
                     actix_web::web::get().to(http_handlers::introduce_redb),
@@ -115,28 +127,25 @@ impl WitnessListener<RedbOobiStorage> {
         let oobi_db = Arc::new(RedbDatabase::new(&oobi_db_path).unwrap());
         let oobi_manager = RedbOobiManager::new(oobi_db)?;
 
-        let signer = Arc::new(
-            priv_key
-                .as_ref()
-                .map(|key| keri_core::signer::Signer::new_with_seed(&key.parse().unwrap()))
-                .unwrap_or_else(|| Ok(keri_core::signer::Signer::new()))?,
-        );
-        let prefix = keri_core::prefix::BasicPrefix::Ed25519NT(signer.public_key());
-
-        // construct witness loc scheme oobi
-        let loc_scheme = keri_core::oobi::LocationScheme::new(
-            keri_core::prefix::IdentifierPrefix::Basic(prefix.clone()),
-            pub_addr.scheme().parse().unwrap(),
-            pub_addr.clone(),
-        );
         let witness = Self::setup(
-            pub_addr,
+            pub_addr.clone(),
             event_db_path,
             priv_key,
             escrow_config,
             oobi_manager,
         )?;
 
+        // Derive prefix and signer from the actual witness, not a separate
+        // freshly-generated key — when `priv_key` is None, `setup` produces a
+        // random signer and any OOBI registered against a different signer
+        // would be unreachable.
+        let prefix = witness.witness_data.prefix.clone();
+        let signer = witness.witness_data.signer.clone();
+        let loc_scheme = keri_core::oobi::LocationScheme::new(
+            keri_core::prefix::IdentifierPrefix::Basic(prefix.clone()),
+            pub_addr.scheme().parse().unwrap(),
+            pub_addr,
+        );
         let reply = keri_core::query::reply_event::ReplyEvent::new_reply(
             keri_core::query::reply_event::ReplyRoute::LocScheme(loc_scheme),
             keri_core::actor::prelude::HashFunctionCode::Blake3_256,
@@ -417,21 +426,27 @@ pub mod http_handlers {
             .body(()))
     }
 
+    #[tracing::instrument(skip_all, fields(bytes = post_data.len(), witness = %data.prefix.to_str()))]
     pub async fn process_query<S: OobiStorageBackend>(
         post_data: String,
         data: web::Data<Arc<Witness<S>>>,
     ) -> Result<HttpResponse, ApiError> {
-        eprintln!("[DEBUG-WITNESS] process_query received: {} bytes", post_data.len());
-        tracing::info!(witness = %data.prefix.to_str(), "Processing query");
-        tracing::debug!(payload = %post_data, "Query payload");
+        let _timer = crate::metrics::LatencyTimer::new(
+            crate::metrics::names::HANDLER_SECONDS,
+            vec![("endpoint", "query".to_string())],
+        );
+        tracing::info!("Processing query");
         let resp = data
             .parse_and_process_queries(post_data.as_bytes())
-            .map_err(|e| { eprintln!("[DEBUG-WITNESS] parse_and_process_queries error: {:?}", e); ApiError(e) })?
+            .map_err(|e| {
+                tracing::warn!(error = ?e, "parse_and_process_queries failed");
+                ApiError(e)
+            })?
             .iter()
             .map(|msg| msg.to_string())
             .collect::<Vec<_>>()
             .join("");
-        tracing::debug!(response = %resp, "Query response");
+        tracing::debug!(response_bytes = resp.len(), "Query response");
         Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())
             .body(resp))

@@ -26,6 +26,9 @@ impl<S: OobiStorageBackend + 'static> WatcherListener<S> {
     }
 
     pub fn listen_http(self, addr: impl ToSocketAddrs) -> Server {
+        // Install Prometheus recorder before any handler runs so the first
+        // metric emission has somewhere to land. Idempotent.
+        let _ = crate::metrics::install();
         let data = self.watcher.clone();
         spawn(update_tel_checking(data.clone()));
         spawn(update_checking(data.clone()));
@@ -126,10 +129,15 @@ pub mod http_handlers {
             .body(()))
     }
 
+    #[tracing::instrument(skip_all, fields(bytes = body.len()))]
     pub async fn process_query<S: OobiStorageBackend>(
         body: web::Bytes,
         data: web::Data<Arc<Watcher<S>>>,
     ) -> Result<HttpResponse, ApiError> {
+        let _timer = crate::metrics::LatencyTimer::new(
+            crate::metrics::names::HANDLER_SECONDS,
+            vec![("endpoint", "query".to_string())],
+        );
         tracing::info!("Processing query");
         tracing::debug!(payload = %String::from_utf8_lossy(&body), "Query payload");
         let resp = data
@@ -138,7 +146,7 @@ pub mod http_handlers {
             .iter()
             .map(|msg| msg.to_string())
             .join("");
-        tracing::debug!(response = %resp, "Query response");
+        tracing::debug!(response_bytes = resp.len(), "Query response");
 
         Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())
@@ -159,10 +167,15 @@ pub mod http_handlers {
             .body(()))
     }
 
+    #[tracing::instrument(skip_all, fields(bytes = body.len()))]
     pub async fn resolve_oobi<S: OobiStorageBackend>(
         body: web::Bytes,
         data: web::Data<Arc<Watcher<S>>>,
     ) -> Result<HttpResponse, ApiError> {
+        let _timer = crate::metrics::LatencyTimer::new(
+            crate::metrics::names::HANDLER_SECONDS,
+            vec![("endpoint", "resolve_oobi".to_string())],
+        );
         tracing::info!("Resolving OOBI");
         tracing::debug!(payload = %String::from_utf8_lossy(&body), "OOBI payload");
 
@@ -173,16 +186,29 @@ pub mod http_handlers {
             LocationScheme(LocationScheme),
         }
 
-        match serde_json::from_slice(&body).map_err(|_| {
+        let kind = match serde_json::from_slice(&body).map_err(|_| {
             ApiError(OobiError::Parse(String::from_utf8_lossy(&body).to_string()).into())
         })? {
             RequestData::EndRole(end_role) => {
+                let kind = "end_role";
+                let _stage = crate::metrics::LatencyTimer::new(
+                    crate::metrics::names::OOBI_RESOLVE_SECONDS,
+                    vec![("kind", kind.to_string())],
+                );
                 data.resolve_end_role(end_role).await?;
+                kind
             }
             RequestData::LocationScheme(loc_scheme) => {
+                let kind = "loc_scheme";
+                let _stage = crate::metrics::LatencyTimer::new(
+                    crate::metrics::names::OOBI_RESOLVE_SECONDS,
+                    vec![("kind", kind.to_string())],
+                );
                 data.resolve_loc_scheme(&loc_scheme).await?;
+                kind
             }
-        }
+        };
+        tracing::debug!(kind, "OOBI resolution finished");
 
         Ok(HttpResponse::Ok().finish())
     }
@@ -231,10 +257,15 @@ pub mod http_handlers {
             .body(String::from_utf8(oobis).unwrap()))
     }
 
+    #[tracing::instrument(skip_all, fields(bytes = post_data.len()))]
     pub async fn process_tel_query<S: OobiStorageBackend>(
         post_data: String,
         data: web::Data<Arc<Watcher<S>>>,
     ) -> Result<HttpResponse, ApiError> {
+        let _timer = crate::metrics::LatencyTimer::new(
+            crate::metrics::names::HANDLER_SECONDS,
+            vec![("endpoint", "tel_query".to_string())],
+        );
         tracing::info!("Processing TEL query");
         tracing::debug!(payload = %post_data, "TEL query payload");
         let resp = data
