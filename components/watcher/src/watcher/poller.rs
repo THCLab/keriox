@@ -4,10 +4,19 @@ use std::{
     time::{Duration, Instant},
 };
 
+use futures::stream::{FuturesUnordered, StreamExt};
 use keri_core::{oobi_manager::storage::OobiStorageBackend, prefix::IdentifierPrefix};
 use tokio::time::sleep;
 
 use super::watcher_data::WatcherData;
+
+/// Cap on how many AIDs the poller will fetch concurrently in a single
+/// cycle. Each poll fans out one query per witness, so the *effective*
+/// concurrent HTTP requests are roughly this number times witnesses per
+/// AID. Bounded to keep the total within the shared HTTP client's
+/// connection pool ceiling and avoid pathological fan-out at large AID
+/// counts.
+const MAX_CONCURRENT_POLLS: usize = 16;
 
 /// Tracks the polling state for a single AID.
 #[derive(Debug, Clone)]
@@ -168,35 +177,73 @@ impl<S: OobiStorageBackend> WitnessPoller<S> {
             "Polling due AIDs"
         );
 
-        for (aid, tracked) in due_aids {
-            match self.poll_aid(&aid, &tracked).await {
-                Ok(new_sn) => {
-                    let mut tracked_map = self.tracked_aids.write().unwrap();
-                    if let Some(entry) = tracked_map.get_mut(&aid) {
-                        entry.last_polled = Some(Instant::now());
-                        if new_sn > entry.last_known_sn {
-                            tracing::info!(
-                                prefix = %aid,
-                                old_sn = entry.last_known_sn,
-                                new_sn = new_sn,
-                                "AID updated via polling"
-                            );
-                            entry.last_known_sn = new_sn;
-                            entry.last_changed = Some(Instant::now());
-                        }
+        // Fan out polls with bounded concurrency. Each AID's poll is
+        // independent so they're safe to run in parallel; the bound stops
+        // a large tracked-AID set from saturating the connection pool.
+        // Tracked-state writes happen sequentially as each future
+        // completes, which is fine because they're all keyed by AID and
+        // touch disjoint map entries.
+        let mut in_flight: FuturesUnordered<_> = FuturesUnordered::new();
+        let mut iter = due_aids.into_iter();
+        for _ in 0..MAX_CONCURRENT_POLLS {
+            if let Some((aid, tracked)) = iter.next() {
+                in_flight.push(self.poll_one(aid, tracked));
+            } else {
+                break;
+            }
+        }
+        while let Some((aid, result)) = in_flight.next().await {
+            self.apply_poll_result(&aid, result);
+            if let Some((next_aid, next_tracked)) = iter.next() {
+                in_flight.push(self.poll_one(next_aid, next_tracked));
+            }
+        }
+    }
+
+    async fn poll_one(
+        &self,
+        aid: IdentifierPrefix,
+        tracked: TrackedAid,
+    ) -> (
+        IdentifierPrefix,
+        Result<u64, keri_core::actor::error::ActorError>,
+    ) {
+        let result = self.poll_aid(&aid, &tracked).await;
+        (aid, result)
+    }
+
+    fn apply_poll_result(
+        &self,
+        aid: &IdentifierPrefix,
+        result: Result<u64, keri_core::actor::error::ActorError>,
+    ) {
+        match result {
+            Ok(new_sn) => {
+                let mut tracked_map = self.tracked_aids.write().unwrap();
+                if let Some(entry) = tracked_map.get_mut(aid) {
+                    entry.last_polled = Some(Instant::now());
+                    if new_sn > entry.last_known_sn {
+                        tracing::info!(
+                            prefix = %aid,
+                            old_sn = entry.last_known_sn,
+                            new_sn = new_sn,
+                            "AID updated via polling"
+                        );
+                        entry.last_known_sn = new_sn;
+                        entry.last_changed = Some(Instant::now());
                     }
                 }
-                Err(e) => {
-                    tracing::warn!(
-                        prefix = %aid,
-                        error = %e,
-                        "Failed to poll AID"
-                    );
-                    // Still update last_polled to avoid hammering on errors
-                    let mut tracked_map = self.tracked_aids.write().unwrap();
-                    if let Some(entry) = tracked_map.get_mut(&aid) {
-                        entry.last_polled = Some(Instant::now());
-                    }
+            }
+            Err(e) => {
+                tracing::warn!(
+                    prefix = %aid,
+                    error = %e,
+                    "Failed to poll AID"
+                );
+                // Still update last_polled to avoid hammering on errors.
+                let mut tracked_map = self.tracked_aids.write().unwrap();
+                if let Some(entry) = tracked_map.get_mut(aid) {
+                    entry.last_polled = Some(Instant::now());
                 }
             }
         }
