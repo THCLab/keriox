@@ -99,6 +99,20 @@ impl<S: OobiStorageBackend> Watcher<S> {
         self.watcher_data.get_loc_scheme_for_id(eid)
     }
 
+    /// Drive the multi-witness KEL fetch path directly, without needing a
+    /// signed `/query` from a controller. Intended for benchmarks and
+    /// integration tests that want to measure
+    /// [`WatcherData::forward_query_from`] in isolation — production
+    /// traffic should still arrive via the `/query` HTTP handler so
+    /// signature verification runs first.
+    pub async fn fetch_kel(
+        &self,
+        id: &IdentifierPrefix,
+        from_sn: u64,
+    ) -> Result<(), ActorError> {
+        self.watcher_data.forward_query_from(id, from_sn).await
+    }
+
     pub async fn process_update_requests(&self) {
         let mut recv = self.recv.lock().unwrap();
 

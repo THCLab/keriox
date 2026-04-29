@@ -55,9 +55,23 @@ impl<S: OobiStorageBackend + 'static> WitnessListener<S> {
     }
 
     pub fn listen_http(&self, addr: impl ToSocketAddrs) -> Server {
+        self.listen_http_with_query_delay(addr, std::time::Duration::ZERO)
+    }
+
+    /// Variant of [`Self::listen_http`] that injects a fixed sleep before
+    /// every `/query` handler invocation. Used by performance harnesses
+    /// to validate that watcher-side fan-out cancels pending requests
+    /// once a faster witness has answered. Pass [`Duration::ZERO`] to
+    /// behave exactly like [`Self::listen_http`].
+    pub fn listen_http_with_query_delay(
+        &self,
+        addr: impl ToSocketAddrs,
+        query_delay: std::time::Duration,
+    ) -> Server {
         // Install Prometheus recorder before any handler runs. Idempotent.
         let _ = crate::metrics::install();
         let state = Data::new(self.witness_data.clone());
+        let delay = query_delay;
         HttpServer::new(move || {
             App::new()
                 .app_data(state.clone())
@@ -83,7 +97,18 @@ impl<S: OobiStorageBackend + 'static> WitnessListener<S> {
                 )
                 .route(
                     "/query",
-                    actix_web::web::post().to(http_handlers::process_query_redb),
+                    actix_web::web::post().to(
+                        move |body: String,
+                              data: Data<Arc<Witness<RedbOobiStorage>>>| {
+                            let delay = delay;
+                            async move {
+                                if !delay.is_zero() {
+                                    actix_web::rt::time::sleep(delay).await;
+                                }
+                                http_handlers::process_query_redb(body, data).await
+                            }
+                        },
+                    ),
                 )
                 .route(
                     "/query/tel",

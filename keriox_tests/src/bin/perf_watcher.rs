@@ -26,6 +26,17 @@
 //!   PERF_BASE_PORT        default 4000 first witness port (watcher = base + 900)
 //!   PERF_PARALLEL_VERIFY  default 1    verifier flows to run concurrently
 //!   PERF_METRICS_DUMP     default /tmp/perf_watcher_metrics.txt
+//!   PERF_MODE             default "resolve"
+//!                            "resolve"   : drive watcher /resolve over HTTP
+//!                            "fetch_kel" : drive Watcher::fetch_kel in-process,
+//!                                          which exercises forward_query_from
+//!                                          and the FuturesUnordered fan-out.
+//!   PERF_SLOW_WITNESS_DELAY_MS default 0
+//!                            When > 0 and there are >= 2 witnesses, the FIRST
+//!                            witness's /query handler sleeps this long. Use
+//!                            with PERF_MODE=fetch_kel to verify that a
+//!                            single slow witness no longer dominates the
+//!                            overall latency.
 //!
 //! Run: `cargo run --release -p keri-tests --bin perf_watcher`
 
@@ -46,7 +57,8 @@ use keri_controller::{
 use metrics_exporter_prometheus::{Matcher, PrometheusBuilder, PrometheusHandle};
 use tempfile::Builder;
 use url::Url;
-use watcher::{WatcherConfig, WatcherListener};
+use keri_core::oobi_manager::RedbOobiStorage;
+use watcher::{Watcher, WatcherConfig, WatcherListener};
 use witness::{WitnessEscrowConfig, WitnessListener};
 
 #[derive(Clone)]
@@ -89,14 +101,21 @@ async fn main() -> Result<()> {
     let wits_per_id = env_usize("PERF_WITS_PER_ID", 3).min(n_witnesses);
     let base_port: u16 = env_usize("PERF_BASE_PORT", 4000) as u16;
     let parallel_verify = env_usize("PERF_PARALLEL_VERIFY", 1).max(1);
+    let slow_witness_delay = Duration::from_millis(env_usize("PERF_SLOW_WITNESS_DELAY_MS", 0) as u64);
+    let mode = std::env::var("PERF_MODE").unwrap_or_else(|_| "resolve".to_string());
     let watcher_port = base_port + 900;
 
     println!(
-        "perf_watcher config: witnesses={} identifiers={} wits_per_id={} parallel_verify={} base_port={}",
-        n_witnesses, n_identifiers, wits_per_id, parallel_verify, base_port
+        "perf_watcher config: witnesses={} identifiers={} wits_per_id={} parallel_verify={} base_port={} mode={} slow_witness_delay_ms={}",
+        n_witnesses, n_identifiers, wits_per_id, parallel_verify, base_port, mode,
+        slow_witness_delay.as_millis()
     );
 
     // 1. Boot witnesses ------------------------------------------------------
+    // The first witness gets the slow-/query delay (if any). We pick witness
+    // 0 because the priority_order code in step 3 has no health history yet
+    // at startup, so all witnesses are "tied" and the slow one will be
+    // included in the fan-out — exactly the worst case we want to stress.
     let mut witnesses: Vec<WitnessHandle> = Vec::with_capacity(n_witnesses);
     for i in 0..n_witnesses {
         let port = base_port + i as u16;
@@ -112,7 +131,10 @@ async fn main() -> Result<()> {
             WitnessEscrowConfig::default(),
         )?);
         let id = listener.get_prefix();
-        actix_rt::spawn(listener.listen_http((Ipv4Addr::UNSPECIFIED, port)));
+        let delay = if i == 0 { slow_witness_delay } else { Duration::ZERO };
+        actix_rt::spawn(
+            listener.listen_http_with_query_delay((Ipv4Addr::UNSPECIFIED, port), delay),
+        );
         witnesses.push(WitnessHandle {
             id: id.clone(),
             oobi: LocationScheme {
@@ -133,6 +155,7 @@ async fn main() -> Result<()> {
         tel_storage_path: watcher_tel_path,
         ..Default::default()
     })?;
+    let watcher_arc: Arc<Watcher<RedbOobiStorage>> = watcher_listener.watcher.clone();
     actix_rt::spawn(watcher_listener.listen_http((Ipv4Addr::UNSPECIFIED, watcher_port)));
 
     // Give servers a moment to bind.
@@ -159,23 +182,46 @@ async fn main() -> Result<()> {
         setup_elapsed.as_millis() as f64 / n_identifiers as f64
     );
 
-    // 4. Drive watcher /resolve for each signer, optionally in parallel -----
-    println!("running verifier flow over {} identifiers...", n_identifiers);
+    // 4. Drive verifier flow per signer ------------------------------------
     let http = reqwest::Client::builder()
-        .timeout(Duration::from_secs(30))
+        .timeout(Duration::from_secs(60))
         .build()?;
     let mut latencies_ms: Vec<u128> = Vec::with_capacity(n_identifiers);
     let mut failures: Vec<String> = vec![];
+
+    // For fetch_kel mode, we need the watcher to know about the witnesses
+    // and to have the AID's KEL state loaded before forward_query_from has
+    // anything sensible to do. Run the /resolve flow once as a warmup; the
+    // measured loop only times fetch_kel.
+    if mode == "fetch_kel" {
+        println!("warming watcher KEL state for {} identifiers...", n_identifiers);
+        for signer in &signers {
+            run_verifier_resolve(signer, &watcher_url, &http).await?;
+        }
+    }
+
+    println!(
+        "running verifier flow ({}) over {} identifiers...",
+        mode, n_identifiers
+    );
     let verify_start = Instant::now();
 
     for chunk in signers.chunks(parallel_verify) {
-        let futs = chunk.iter().enumerate().map(|(idx, signer)| {
+        let futs = chunk.iter().map(|signer| {
             let signer = signer.clone();
             let watcher_url = watcher_url.clone();
             let http = http.clone();
+            let mode = mode.clone();
+            let watcher_arc = watcher_arc.clone();
             async move {
                 let t = Instant::now();
-                let r = run_verifier(idx, &signer, &watcher_url, &http).await;
+                let r = match mode.as_str() {
+                    "fetch_kel" => watcher_arc
+                        .fetch_kel(&signer.id, 0)
+                        .await
+                        .map_err(|e| anyhow::anyhow!(e.to_string())),
+                    _ => run_verifier_resolve(&signer, &watcher_url, &http).await,
+                };
                 (t.elapsed(), r)
             }
         });
@@ -301,8 +347,7 @@ async fn create_signer(idx: usize, witnesses: &[&WitnessHandle]) -> Result<Signe
 /// Step 2 is the headline AID-verification-equivalent latency: from the
 /// outside it looks like "I asked the watcher about an unknown AID, how
 /// long until it had the KEL?".
-async fn run_verifier(
-    _idx: usize,
+async fn run_verifier_resolve(
     signer: &Signer,
     watcher_url: &Url,
     http: &reqwest::Client,

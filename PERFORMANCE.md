@@ -82,6 +82,8 @@ Tunables (env vars):
 | `PERF_PARALLEL_VERIFY` | 1 | concurrent verifier flows |
 | `PERF_BASE_PORT` | 4000 | first witness port (watcher = base + 900) |
 | `PERF_METRICS_DUMP` | `/tmp/perf_watcher_metrics.txt` | full Prometheus scrape file |
+| `PERF_MODE` | `resolve` | `resolve` drives watcher `/resolve` over HTTP; `fetch_kel` drives `Watcher::fetch_kel` in-process and exercises `forward_query_from` (the multi-witness fan-out path) |
+| `PERF_SLOW_WITNESS_DELAY_MS` | 0 | when > 0 and there are ≥ 2 witnesses, witness 0's `/query` handler sleeps this many ms. Combined with `PERF_MODE=fetch_kel`, this validates that the priority-ordered fan-out cancels pending slow requests once a fast witness has answered. |
 | `KERIOX_DISABLE_HTTP_POOL` | unset | flip to disable connection pooling for A/B |
 
 ### Example A/B (loopback, plain HTTP)
@@ -125,14 +127,36 @@ Divide `_sum / _count` for the per-call mean. The full scrape (with
 buckets, all labels) goes to `/tmp/perf_watcher_metrics.txt` for manual
 inspection or feeding into Grafana.
 
+### Slow-witness validation (step 3)
+
+The `forward_query_from` change in step 3 is supposed to ensure that one
+slow witness no longer dominates a verification flow. To prove it
+empirically:
+
+```sh
+# All-fast baseline (5 witnesses, 4 per signer, fetch_kel mode)
+PERF_MODE=fetch_kel PERF_WITNESSES=5 PERF_IDENTIFIERS=20 \
+  PERF_WITS_PER_ID=4 ./target/release/perf_watcher
+
+# Same workload, but witness 0 sleeps 2 s on every /query
+PERF_MODE=fetch_kel PERF_WITNESSES=5 PERF_IDENTIFIERS=20 \
+  PERF_WITS_PER_ID=4 PERF_SLOW_WITNESS_DELAY_MS=2000 \
+  ./target/release/perf_watcher
+```
+
+Expected: the fetch_kel verifier flow latency stays the same in both
+runs (≈ 1 ms on loopback). If the slow witness dominated the flow it
+would be ≈ 2000 ms.
+
+Identifier setup *does* slow down in the slow-witness run because the
+controller's `query_mailbox` waits on all witnesses; that is unrelated
+to the watcher fan-out path and not what step 3 targets.
+
 ### Caveats
 
-- The harness drives the watcher via its public HTTP `/resolve` endpoint
-  rather than the controller's `query_watchers` flow, because the
-  `query_updates.rs` test that exercises the latter has a pre-existing
-  hang at HEAD that's unrelated to the perf work. `forward_query_from`
-  and `query_state` are therefore not exercised yet, so their histograms
-  read zero. Extending the harness to drive `/query` is a follow-up.
+- The `resolve` mode exercises `/resolve` only and does not trigger
+  `forward_query_from`. Use `PERF_MODE=fetch_kel` to measure the
+  multi-witness fan-out path.
 - All metrics flow through one process-wide global recorder, installed
   in the perf binary's `main()`. Watcher and witness in-process
   `install()` calls then return `None` and their `/metrics` endpoints
