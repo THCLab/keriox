@@ -1,5 +1,8 @@
 # Developer Guide
 
+For performance instrumentation, the `perf_watcher` harness, and how to
+A/B-test transport-layer changes, see [`PERFORMANCE.md`](PERFORMANCE.md).
+
 ## Prerequisites
 
 - Rust toolchain (stable) — [rustup.rs](https://rustup.rs)
