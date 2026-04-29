@@ -30,6 +30,30 @@ pub struct Identifier {
 }
 
 impl Identifier {
+    /// Construct an `Identifier` from an existing `RedbIdentifier`.
+    ///
+    /// Escape hatch for consumers that need to build an `Identifier` outside
+    /// of [`crate::store::KeriStore`] — for example, loading a multisig group
+    /// identifier using an already-resolved prefix and a controller shared
+    /// with the initiating member alias. Most users should prefer
+    /// [`KeriStore::load`](crate::store::KeriStore::load).
+    pub fn from_inner(inner: keri_controller::RedbIdentifier) -> Self {
+        Self { inner }
+    }
+
+    /// Borrow the underlying `RedbIdentifier`.
+    ///
+    /// Low-level escape hatch paired with [`from_inner`]. Most SDK users
+    /// should not need this — prefer the public methods on `Identifier`.
+    pub fn inner(&self) -> &keri_controller::RedbIdentifier {
+        &self.inner
+    }
+
+    /// Mutably borrow the underlying `RedbIdentifier`.
+    pub fn inner_mut(&mut self) -> &mut keri_controller::RedbIdentifier {
+        &mut self.inner
+    }
+
     // ── Identity ────────────────────────────────────────────────────────────
 
     pub fn id(&self) -> &IdentifierPrefix {
