@@ -66,9 +66,26 @@ impl WitnessHealth {
     }
 
     /// Whether this witness is considered healthy (responsive).
+    ///
+    /// A small circuit breaker: once a witness crosses
+    /// [`Self::FAILURE_THRESHOLD`] consecutive failures it's marked
+    /// unhealthy for [`Self::COOL_DOWN`]. After the cool-down expires
+    /// the next call treats it as healthy again — that call is the
+    /// "probe": if it succeeds, `consecutive_failures` resets to zero
+    /// in `record_success`; if it fails, the timer restarts. There's no
+    /// explicit half-open state, just a read of `last_failure`.
     pub fn is_healthy(&self) -> bool {
-        self.consecutive_failures < 3
+        if self.consecutive_failures < Self::FAILURE_THRESHOLD {
+            return true;
+        }
+        match self.last_failure {
+            Some(t) => t.elapsed() >= Self::COOL_DOWN,
+            None => true,
+        }
     }
+
+    pub const FAILURE_THRESHOLD: u64 = 3;
+    pub const COOL_DOWN: Duration = Duration::from_secs(30);
 }
 
 /// Aggregated health status for the watcher's view of a specific AID.
@@ -181,5 +198,62 @@ impl WitnessHealthTracker {
             healthy_witnesses: healthy_count,
             degraded: healthy_count == 0 && !witness_ids.is_empty(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fresh_health_is_healthy() {
+        let h = WitnessHealth::default();
+        assert!(h.is_healthy());
+    }
+
+    #[test]
+    fn opens_at_failure_threshold() {
+        let mut h = WitnessHealth::default();
+        for _ in 0..WitnessHealth::FAILURE_THRESHOLD {
+            h.record_failure("boom".into());
+        }
+        assert!(!h.is_healthy(), "should be unhealthy after threshold failures");
+    }
+
+    #[test]
+    fn cooldown_allows_probe() {
+        let mut h = WitnessHealth::default();
+        for _ in 0..WitnessHealth::FAILURE_THRESHOLD {
+            h.record_failure("boom".into());
+        }
+        // Simulate cool-down elapsing by rewinding last_failure.
+        h.last_failure = Some(Instant::now() - WitnessHealth::COOL_DOWN - Duration::from_secs(1));
+        assert!(h.is_healthy(), "should be healthy after cool-down (probe)");
+    }
+
+    #[test]
+    fn success_after_failures_resets_state() {
+        let mut h = WitnessHealth::default();
+        for _ in 0..WitnessHealth::FAILURE_THRESHOLD {
+            h.record_failure("boom".into());
+        }
+        assert!(!h.is_healthy());
+        h.record_success(Duration::from_millis(20));
+        assert!(h.is_healthy());
+        assert_eq!(h.consecutive_failures, 0);
+    }
+
+    #[test]
+    fn probe_failure_keeps_circuit_open() {
+        let mut h = WitnessHealth::default();
+        for _ in 0..WitnessHealth::FAILURE_THRESHOLD {
+            h.record_failure("boom".into());
+        }
+        // Cool-down elapses, probe is permitted.
+        h.last_failure = Some(Instant::now() - WitnessHealth::COOL_DOWN - Duration::from_secs(1));
+        assert!(h.is_healthy());
+        // Probe fails — last_failure resets to now, circuit closes again.
+        h.record_failure("still bad".into());
+        assert!(!h.is_healthy());
     }
 }
