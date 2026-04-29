@@ -126,6 +126,38 @@ impl WitnessHealthTracker {
         records.clone()
     }
 
+    /// Order a witness list by query priority, splitting into a healthy
+    /// front (sorted ascending by EMA response time) and a degraded tail.
+    /// Unknown witnesses are treated as healthy with zero average latency
+    /// so they get tried before known-slow ones — that gives them a chance
+    /// to register a baseline.
+    ///
+    /// Callers that want to fail fast should iterate the returned list and
+    /// stop at `degraded_start` (the second tuple element); the tail is only
+    /// useful as a fallback when every healthy witness has failed.
+    pub fn priority_order(
+        &self,
+        witness_ids: &[IdentifierPrefix],
+    ) -> (Vec<IdentifierPrefix>, usize) {
+        let records = self.records.read().unwrap();
+        let mut healthy: Vec<(IdentifierPrefix, f64)> = vec![];
+        let mut degraded: Vec<(IdentifierPrefix, f64)> = vec![];
+        for w in witness_ids {
+            let key = w.to_string();
+            match records.get(&key) {
+                Some(h) if h.is_healthy() => healthy.push((w.clone(), h.avg_response_ms)),
+                Some(h) => degraded.push((w.clone(), h.avg_response_ms)),
+                None => healthy.push((w.clone(), 0.0)),
+            }
+        }
+        healthy.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+        degraded.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+        let degraded_start = healthy.len();
+        let mut out: Vec<IdentifierPrefix> = healthy.into_iter().map(|(w, _)| w).collect();
+        out.extend(degraded.into_iter().map(|(w, _)| w));
+        (out, degraded_start)
+    }
+
     /// Get health status for witnesses of a specific AID.
     pub fn get_aid_health(
         &self,

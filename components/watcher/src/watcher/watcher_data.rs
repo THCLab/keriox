@@ -1,6 +1,7 @@
-use std::{fs::File, sync::Arc};
+use std::{fs::File, sync::Arc, time::Instant};
 
 use futures::future::join_all;
+use futures::stream::{FuturesUnordered, StreamExt};
 use itertools::Itertools;
 use keri_core::actor::possible_response::PossibleResponse;
 use keri_core::error::Error;
@@ -72,6 +73,7 @@ pub struct WatcherData<S: OobiStorageBackend> {
     pub(super) tel_to_forward: Arc<TelToForward>,
     reply_escrow: Arc<ReplyEscrow<RedbDatabase>>,
     pub(crate) health_tracker: Arc<WitnessHealthTracker>,
+    kel_update_timeout: std::time::Duration,
 }
 
 impl<S: OobiStorageBackend> WatcherData<S> {
@@ -90,6 +92,7 @@ impl<S: OobiStorageBackend> WatcherData<S> {
             tel_storage_path,
             tel_transport,
             poll_interval: _, // handled by Watcher, not WatcherData
+            kel_update_timeout,
         } = config;
         let mut tel_to_forward_path = tel_storage_path.clone();
         tel_to_forward_path.push("to_forward");
@@ -160,6 +163,7 @@ impl<S: OobiStorageBackend> WatcherData<S> {
             tel_transport,
             reply_escrow,
             health_tracker: Arc::new(WitnessHealthTracker::new()),
+            kel_update_timeout,
         });
         Ok(watcher.clone())
     }
@@ -293,8 +297,11 @@ impl<S: OobiStorageBackend> WatcherData<S> {
                             ActorError::GeneralError("Internal watcher error".to_string())
                         })?;
 
-                    // Wait up to 10 seconds for the update to complete.
-                    match tokio::time::timeout(std::time::Duration::from_secs(10), done_rx).await {
+                    // Wait for the update to complete, bounded by the
+                    // configured timeout. A client verifying an unknown AID
+                    // generally prefers a fast "not yet" + retry over a
+                    // long block here.
+                    match tokio::time::timeout(self.kel_update_timeout, done_rx).await {
                         Ok(Ok(Ok(()))) => {
                             // Update succeeded, check if we now have the data
                             let updated_state = self.get_state_for_prefix(&args.i);
@@ -322,7 +329,11 @@ impl<S: OobiStorageBackend> WatcherData<S> {
                         }
                         Err(_) => {
                             // Timeout
-                            tracing::warn!(prefix = %id_to_update, "KEL update timed out");
+                            tracing::warn!(
+                                prefix = %id_to_update,
+                                timeout_ms = self.kel_update_timeout.as_millis() as u64,
+                                "KEL update timed out"
+                            );
                             return Err(ActorError::NotFound(id_to_update));
                         }
                     }
@@ -411,6 +422,15 @@ impl<S: OobiStorageBackend> WatcherData<S> {
 
     /// Forward query to registered witnesses and save its response to mailbox.
     /// Fetches events starting from `from_sn` to avoid re-fetching the entire KEL.
+    ///
+    /// Witnesses are queried in health-priority order: known-healthy ones
+    /// first, sorted by EMA response time (so the historically fastest
+    /// goes first), then degraded ones as a fallback. Queries fan out via
+    /// `FuturesUnordered`, and we return as soon as a response gives us
+    /// the KEL covering `from_sn` — any still-pending requests are
+    /// dropped, which `reqwest` translates into TCP-level cancellation.
+    /// This is the change that stops the user-facing verification flow
+    /// from waiting on the slowest witness.
     #[tracing::instrument(skip(self), fields(prefix = %id, from_sn))]
     pub(crate) async fn forward_query_from(
         &self,
@@ -421,33 +441,40 @@ impl<S: OobiStorageBackend> WatcherData<S> {
             crate::metrics::names::KEL_FETCH_SECONDS,
             vec![("outcome", "completed".to_string())],
         );
-        let witnesses = self.get_witnesses_for_prefix(&id)?;
+        let witnesses_basic = self.get_witnesses_for_prefix(&id)?;
+        let witness_ips: Vec<IdentifierPrefix> = witnesses_basic
+            .into_iter()
+            .map(IdentifierPrefix::Basic)
+            .collect();
+        let (ordered, degraded_start) = self.health_tracker.priority_order(&witness_ips);
 
-        // Build and send queries to all witnesses in parallel
-        let results = join_all(witnesses.into_iter().map(|witness| {
-            let witness_id = IdentifierPrefix::Basic(witness);
-            let id = id.clone();
-            async move {
-                let route = QueryRoute::Logs {
-                    reply_route: "".to_string(),
-                    args: LogsQueryArgs {
-                        i: id.clone(),
-                        s: if from_sn > 0 { Some(from_sn) } else { None },
-                        src: Some(witness_id.clone()),
-                        limit: None,
-                    },
-                };
-
-                let qry = QueryEvent::new_query(
-                    route,
-                    SerializationFormats::JSON,
-                    HashFunctionCode::Blake3_256,
-                );
-                let sigs = SelfSigningPrefix::Ed25519Sha512(self.signer.sign(qry.encode()?)?);
-                let signed_qry =
-                    SignedKelQuery::new_nontrans(qry.clone(), self.prefix.clone(), sigs);
-
-                let _per_witness = crate::metrics::LatencyTimer::new(
+        let mut futs = FuturesUnordered::new();
+        for (rank, witness_id) in ordered.iter().enumerate() {
+            let witness_id = witness_id.clone();
+            let id_inner = id.clone();
+            let route = QueryRoute::Logs {
+                reply_route: "".to_string(),
+                args: LogsQueryArgs {
+                    i: id_inner.clone(),
+                    s: if from_sn > 0 { Some(from_sn) } else { None },
+                    src: Some(witness_id.clone()),
+                    limit: None,
+                },
+            };
+            let qry = QueryEvent::new_query(
+                route,
+                SerializationFormats::JSON,
+                HashFunctionCode::Blake3_256,
+            );
+            let qry_bytes = qry.encode().map_err(ActorError::from)?;
+            let sigs = SelfSigningPrefix::Ed25519Sha512(
+                self.signer.sign(qry_bytes).map_err(ActorError::from)?,
+            );
+            let signed_qry =
+                SignedKelQuery::new_nontrans(qry.clone(), self.prefix.clone(), sigs);
+            futs.push(async move {
+                let started = Instant::now();
+                let _timer = crate::metrics::LatencyTimer::new(
                     crate::metrics::names::WITNESS_QUERY_SECONDS,
                     vec![
                         ("witness_id", witness_id.to_string()),
@@ -455,59 +482,82 @@ impl<S: OobiStorageBackend> WatcherData<S> {
                     ],
                 );
                 let resp = self
-                    .send_query_to(
-                        witness_id.clone(),
-                        keri_core::oobi::Scheme::Http,
-                        signed_qry,
-                    )
+                    .send_query_to(witness_id.clone(), Scheme::Http, signed_qry)
                     .await;
+                (witness_id, rank, started.elapsed(), resp)
+            });
+        }
 
-                match resp {
-                    Ok(r) => Ok((witness_id, r)),
-                    Err(e) => {
-                        metrics::counter!(
-                            crate::metrics::names::WITNESS_QUERY_FAILURES_TOTAL,
-                            "witness_id" => witness_id.to_string(),
-                            "kind" => "logs"
-                        )
-                        .increment(1);
-                        tracing::warn!(
-                            witness = %witness_id,
-                            prefix = %id,
-                            error = %e,
-                            "Failed to fetch KEL from witness"
-                        );
-                        Err(e)
-                    }
-                }
-            }
-        }))
-        .await;
-
-        // Process all successful responses
-        for result in results {
-            if let Ok((witness_id, resp)) = result {
-                match resp {
-                    PossibleResponse::Ksn(rpy) => {
-                        self.process_reply(rpy)?;
-                    }
-                    PossibleResponse::Kel(msgs) => {
-                        for msg in msgs {
-                            if let Message::Notice(notice) = msg {
-                                self.process_notice(notice.clone())?;
-                                if let Notice::Event(evt) = notice {
-                                    self.event_storage.add_mailbox_reply(evt)?;
+        let mut got_any_success = false;
+        while let Some((witness_id, rank, elapsed, resp)) = futs.next().await {
+            match resp {
+                Ok(r) => {
+                    got_any_success = true;
+                    self.health_tracker.record_success(&witness_id, elapsed);
+                    let satisfied = match r {
+                        PossibleResponse::Ksn(rpy) => {
+                            self.process_reply(rpy)?;
+                            // KSN reply alone doesn't tell us we have the KEL events
+                            // up to from_sn; only Kel replies do. Keep going.
+                            false
+                        }
+                        PossibleResponse::Kel(msgs) => {
+                            for msg in msgs {
+                                if let Message::Notice(notice) = msg {
+                                    self.process_notice(notice.clone())?;
+                                    if let Notice::Event(evt) = notice {
+                                        self.event_storage.add_mailbox_reply(evt)?;
+                                    }
                                 }
                             }
+                            // Did this fill the requested window?
+                            self.event_storage
+                                .get_state(id)
+                                .map(|s| s.sn >= from_sn)
+                                .unwrap_or(false)
                         }
+                        PossibleResponse::Mbx(_mbx) => {
+                            tracing::error!(
+                                "Unexpected MBX response from witness {}",
+                                witness_id
+                            );
+                            false
+                        }
+                    };
+                    if satisfied {
+                        tracing::debug!(
+                            witness = %witness_id,
+                            rank,
+                            healthy_pool = degraded_start,
+                            "KEL covered by witness; returning early"
+                        );
+                        // Drop `futs` to cancel the rest.
+                        return Ok(());
                     }
-                    PossibleResponse::Mbx(_mbx) => {
-                        tracing::error!("Unexpected MBX response from witness {}", witness_id);
-                    }
+                }
+                Err(e) => {
+                    self.health_tracker
+                        .record_failure(&witness_id, e.to_string());
+                    metrics::counter!(
+                        crate::metrics::names::WITNESS_QUERY_FAILURES_TOTAL,
+                        "witness_id" => witness_id.to_string(),
+                        "kind" => "logs"
+                    )
+                    .increment(1);
+                    tracing::warn!(
+                        witness = %witness_id,
+                        prefix = %id,
+                        error = %e,
+                        rank,
+                        "Failed to fetch KEL from witness"
+                    );
                 }
             }
         }
 
+        if !got_any_success {
+            tracing::warn!(prefix = %id, "all witnesses failed for KEL fetch");
+        }
         Ok(())
     }
 
@@ -516,8 +566,20 @@ impl<S: OobiStorageBackend> WatcherData<S> {
     #[tracing::instrument(skip(self), fields(prefix = %prefix))]
     pub(crate) async fn query_state(&self, prefix: &IdentifierPrefix) -> Result<u64, ActorError> {
         let wits_id = self.get_witnesses_for_prefix(&prefix)?;
-        let results: Vec<Result<u64, ActorError>> = join_all(wits_id.into_iter().map(|id| {
-            let id = IdentifierPrefix::Basic(id);
+        // Use only healthy witnesses for the parallel fan-out; if none
+        // qualify, fall back to all of them (better to probe a degraded
+        // witness than return stale local state forever).
+        let witness_ips: Vec<IdentifierPrefix> = wits_id
+            .into_iter()
+            .map(IdentifierPrefix::Basic)
+            .collect();
+        let (ordered, degraded_start) = self.health_tracker.priority_order(&witness_ips);
+        let to_query: Vec<IdentifierPrefix> = if degraded_start == 0 {
+            ordered
+        } else {
+            ordered.into_iter().take(degraded_start).collect()
+        };
+        let results: Vec<Result<u64, ActorError>> = join_all(to_query.into_iter().map(|id| {
             self.ksn_update(&prefix, id)
         }))
         .await;

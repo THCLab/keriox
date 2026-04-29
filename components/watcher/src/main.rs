@@ -44,6 +44,12 @@ pub struct Config {
     #[serde_as(as = "Option<DurationSeconds>")]
     #[serde(default)]
     poll_interval: Option<Duration>,
+
+    /// How long the watcher waits for a triggered KEL update to complete
+    /// before returning NotFound to the caller. Defaults to 5 seconds.
+    #[serde_as(as = "Option<DurationSeconds>")]
+    #[serde(default)]
+    kel_update_timeout: Option<Duration>,
 }
 
 #[serde_as]
@@ -153,6 +159,9 @@ async fn main() -> anyhow::Result<()> {
         escrow_config: cfg.escrow_config,
         tel_storage_path: cfg.tel_storage_path,
         poll_interval: cfg.poll_interval.unwrap_or(Duration::from_secs(30)),
+        kel_update_timeout: cfg
+            .kel_update_timeout
+            .unwrap_or(Duration::from_secs(5)),
     })?;
 
     // Resolve oobi to know how to find witness

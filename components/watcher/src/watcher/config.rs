@@ -18,6 +18,12 @@ pub struct WatcherConfig {
     /// Interval between background witness polling cycles.
     /// Set to Duration::ZERO to disable polling.
     pub poll_interval: Duration,
+    /// How long `process_query` waits for a triggered KEL update to
+    /// complete before giving up and returning `NotFound` to the caller.
+    /// Lower values trade completeness for responsiveness — a client
+    /// asking the watcher to verify an unknown AID would rather get a
+    /// fast "not yet" and re-query than block here.
+    pub kel_update_timeout: Duration,
 }
 
 impl Default for WatcherConfig {
@@ -31,6 +37,7 @@ impl Default for WatcherConfig {
             tel_storage_path: PathBuf::from("tel_storage"),
             escrow_config: EscrowConfig::default(),
             poll_interval: Duration::from_secs(30),
+            kel_update_timeout: Duration::from_secs(5),
         }
     }
 }
