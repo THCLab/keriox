@@ -1,4 +1,4 @@
-use crate::http_routing::configure_routes;
+use crate::http_routing::{configure_admin_routes, configure_routes};
 use std::{net::ToSocketAddrs, sync::Arc};
 
 use actix_web::{dev::Server, rt::spawn, web, App, HttpServer};
@@ -29,6 +29,8 @@ impl<S: OobiStorageBackend + 'static> WatcherListener<S> {
         // Install Prometheus recorder before any handler runs so the first
         // metric emission has somewhere to land. Idempotent.
         let _ = crate::metrics::install();
+        crate::metrics::record_build_info();
+        crate::metrics::sampler::spawn(self.watcher.clone());
         let data = self.watcher.clone();
         spawn(update_tel_checking(data.clone()));
         spawn(update_checking(data.clone()));
@@ -39,6 +41,26 @@ impl<S: OobiStorageBackend + 'static> WatcherListener<S> {
             App::new()
                 .app_data(state.clone())
                 .configure(configure_routes)
+        })
+        .bind(addr)
+        .unwrap()
+        .run()
+    }
+
+    /// Spawn the admin HTTP server on a private interface. Hosts only
+    /// operator-facing endpoints (`/metrics`, `/health`, `/info`); the
+    /// public listener does not include `/metrics` so internal state is
+    /// not scrapeable from caller traffic. Both servers share the same
+    /// `Watcher` so the sampler task started by [`Self::listen_http`]
+    /// already populates the gauges this endpoint serves.
+    pub fn listen_admin(&self, addr: impl ToSocketAddrs) -> Server {
+        let _ = crate::metrics::install();
+        crate::metrics::record_build_info();
+        let state = web::Data::new(self.watcher.clone());
+        HttpServer::new(move || {
+            App::new()
+                .app_data(state.clone())
+                .configure(configure_admin_routes)
         })
         .bind(addr)
         .unwrap()
@@ -186,16 +208,33 @@ pub mod http_handlers {
             LocationScheme(LocationScheme),
         }
 
-        let kind = match serde_json::from_slice(&body).map_err(|_| {
+        let parsed = serde_json::from_slice(&body).map_err(|_| {
             ApiError(OobiError::Parse(String::from_utf8_lossy(&body).to_string()).into())
-        })? {
+        })?;
+        let kind = match parsed {
             RequestData::EndRole(end_role) => {
                 let kind = "end_role";
                 let _stage = crate::metrics::LatencyTimer::new(
                     crate::metrics::names::OOBI_RESOLVE_SECONDS,
                     vec![("kind", kind.to_string())],
                 );
-                data.resolve_end_role(end_role).await?;
+                match data.resolve_end_role(end_role).await {
+                    Ok(()) => {
+                        metrics::counter!(
+                            crate::metrics::names::OOBI_RESOLUTIONS_TOTAL,
+                            "kind" => kind, "outcome" => "ok"
+                        )
+                        .increment(1);
+                    }
+                    Err(e) => {
+                        metrics::counter!(
+                            crate::metrics::names::OOBI_RESOLUTIONS_TOTAL,
+                            "kind" => kind, "outcome" => "err"
+                        )
+                        .increment(1);
+                        return Err(e.into());
+                    }
+                }
                 kind
             }
             RequestData::LocationScheme(loc_scheme) => {
@@ -204,7 +243,23 @@ pub mod http_handlers {
                     crate::metrics::names::OOBI_RESOLVE_SECONDS,
                     vec![("kind", kind.to_string())],
                 );
-                data.resolve_loc_scheme(&loc_scheme).await?;
+                match data.resolve_loc_scheme(&loc_scheme).await {
+                    Ok(()) => {
+                        metrics::counter!(
+                            crate::metrics::names::OOBI_RESOLUTIONS_TOTAL,
+                            "kind" => kind, "outcome" => "ok"
+                        )
+                        .increment(1);
+                    }
+                    Err(e) => {
+                        metrics::counter!(
+                            crate::metrics::names::OOBI_RESOLUTIONS_TOTAL,
+                            "kind" => kind, "outcome" => "err"
+                        )
+                        .increment(1);
+                        return Err(e.into());
+                    }
+                }
                 kind
             }
         };

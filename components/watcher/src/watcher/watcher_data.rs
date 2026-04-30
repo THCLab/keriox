@@ -334,6 +334,11 @@ impl<S: OobiStorageBackend> WatcherData<S> {
                                 timeout_ms = self.kel_update_timeout.as_millis() as u64,
                                 "KEL update timed out"
                             );
+                            metrics::counter!(
+                                crate::metrics::names::KEL_FETCH_TOTAL,
+                                "outcome" => "timeout"
+                            )
+                            .increment(1);
                             return Err(ActorError::NotFound(id_to_update));
                         }
                     }
@@ -441,6 +446,12 @@ impl<S: OobiStorageBackend> WatcherData<S> {
             crate::metrics::names::KEL_FETCH_SECONDS,
             vec![("outcome", "completed".to_string())],
         );
+        let _inflight = crate::metrics::InflightGuard::enter();
+        metrics::counter!(
+            crate::metrics::names::KEL_FETCH_TOTAL,
+            "outcome" => "completed"
+        )
+        .increment(1);
         let witnesses_basic = self.get_witnesses_for_prefix(&id)?;
         let witness_ips: Vec<IdentifierPrefix> = witnesses_basic
             .into_iter()

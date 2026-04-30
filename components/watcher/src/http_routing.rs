@@ -7,9 +7,14 @@ async fn metrics_handler() -> HttpResponse {
         .body(crate::metrics::render())
 }
 
+/// Public-facing routes — these terminate caller traffic (controllers,
+/// other watchers, witnesses). `/metrics` is intentionally absent: it
+/// lives only on the admin port so internal timings, witness IDs, and
+/// AID counts are not scrapeable from the public network. `/info` and
+/// `/health` stay here for backwards compatibility (load balancers,
+/// existing scripts).
 pub fn configure_routes(cfg: &mut web::ServiceConfig) {
-    cfg.route("/metrics", actix_web::web::get().to(metrics_handler))
-    .route(
+    cfg.route(
         "/introduce",
         actix_web::web::get().to(http_handlers::introduce_redb),
     )
@@ -41,9 +46,22 @@ pub fn configure_routes(cfg: &mut web::ServiceConfig) {
         "/query/tel",
         actix_web::web::post().to(http_handlers::process_tel_query_redb),
     )
-    .route("info", actix_web::web::get().to(http_handlers::info))
+    .route("/info", actix_web::web::get().to(http_handlers::info))
     .route(
         "/health",
         actix_web::web::get().to(http_handlers::health_redb),
     );
+}
+
+/// Admin-only routes mounted on a private interface. Exposes `/metrics`
+/// for Prometheus, plus duplicates of `/health` and `/info` so an operator
+/// can probe an instance even when the public listener is firewalled or
+/// degraded.
+pub fn configure_admin_routes(cfg: &mut web::ServiceConfig) {
+    cfg.route("/metrics", actix_web::web::get().to(metrics_handler))
+        .route("/info", actix_web::web::get().to(http_handlers::info))
+        .route(
+            "/health",
+            actix_web::web::get().to(http_handlers::health_redb),
+        );
 }

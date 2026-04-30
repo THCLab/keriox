@@ -29,6 +29,19 @@ pub struct Config {
     /// HTTP listen port.
     http_port: u16,
 
+    /// Optional admin port hosting `/metrics`, `/health` and `/info`. Bound
+    /// to [`Self::admin_bind`] (default loopback) so the metrics surface
+    /// stays off the public network unless an operator explicitly opens it.
+    /// `None` disables the admin listener entirely.
+    #[serde(default)]
+    admin_port: Option<u16>,
+
+    /// Bind address for the admin listener. Defaults to `127.0.0.1` —
+    /// switch to `0.0.0.0` (and firewall the port) only when the scrape
+    /// target is on a different host than the watcher.
+    #[serde(default)]
+    admin_bind: Option<String>,
+
     /// Witness private key
     seed: Option<String>,
 
@@ -124,6 +137,14 @@ struct Args {
     #[serde(skip_serializing_if = "Option::is_none")]
     http_port: Option<u16>,
 
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    admin_port: Option<u16>,
+
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    admin_bind: Option<String>,
+
     #[arg(short = 's', long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     seed: Option<String>,
@@ -181,6 +202,27 @@ async fn main() -> anyhow::Result<()> {
         oobi = %serde_json::to_string(&watcher_loc_scheme).unwrap(),
         "Watcher started",
     );
+
+    // Bring up the admin listener first so operators can scrape `/metrics`
+    // and `/health` even if the public port is firewalled or slow to come
+    // up. Run as a detached background task: a failure to bind the admin
+    // port is logged but does not take down the watcher — losing metrics
+    // is strictly less bad than dropping public traffic.
+    if let Some(admin_port) = cfg.admin_port {
+        let admin_bind = cfg
+            .admin_bind
+            .clone()
+            .unwrap_or_else(|| "127.0.0.1".to_string());
+        info!(bind = %admin_bind, port = admin_port, "Watcher admin listener");
+        let admin_handle = watcher_listener.listen_admin((admin_bind.as_str(), admin_port));
+        actix_web::rt::spawn(async move {
+            if let Err(e) = admin_handle.await {
+                tracing::error!(error = %e, "Admin listener exited with error");
+            }
+        });
+    } else {
+        info!("Watcher admin listener disabled (no admin_port configured)");
+    }
 
     watcher_listener
         .listen_http((Ipv4Addr::UNSPECIFIED, cfg.http_port))

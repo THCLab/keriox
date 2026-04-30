@@ -6,6 +6,11 @@ seed: "Alntkt3u6dDgiQxTATr01dy8M72uuaZEf9eTdM-70Gk8" # Private key in CESR forma
                                                      # is not provided, a randomly generated
                                                      # key pair will be used.
 http_port: 3236
+# Admin port hosts /metrics, /health, /info. Bound to admin_bind below
+# (default 127.0.0.1) so the metrics surface is not reachable from the
+# public network. Comment out admin_port to disable the admin listener.
+admin_port: 9101
+admin_bind: "127.0.0.1"
 initial_oobis: []
 escrow_config:
   default_timeout: 60

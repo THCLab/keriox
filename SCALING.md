@@ -175,6 +175,29 @@ qualitatively better.
 - WAN-with-TLS measurement of all of the above. Loopback shows the
   *floor*; the wins from steps 2–3 grow significantly under TLS.
 
+## What to watch in metrics
+
+Each scaling concern in this document has a corresponding signal on the
+admin `/metrics` endpoint. Wire these into a Grafana dashboard so the
+"do we need to scale?" question has a quantitative answer instead of
+guesswork:
+
+| Concern | Signal | Trigger |
+|---|---|---|
+| Single watcher tracking too many AIDs | `keri_watcher_tracked_aids` | climbs past your memory budget; cycle time grows |
+| Polling cycle saturating | `histogram_quantile(0.95, keri_watcher_poll_cycle_seconds_bucket)` | exceeds `poll_interval` — bounded concurrency is no longer enough |
+| Witness fleet degrading | `keri_watcher_monitored_witnesses{state="tripped"}` | non-zero for sustained windows |
+| Specific witness flaky | `rate(keri_watcher_witness_query_failures_total[5m])` per `witness_id` | one witness dominates failures → rotate it out |
+| Watcher saturating its connection pool | `keri_watcher_inflight_queries` | approaches `MAX_CONCURRENT_POLLS × witnesses_per_AID` |
+| Witness redb single-writer hitting its ceiling | `histogram_quantile(0.95, keri_witness_handler_seconds_bucket{endpoint="process"})` | p95 climbs into hundreds of ms — the cue to consider item 3/4 below |
+| Verifier flow degrading end-to-end | `histogram_quantile(0.95, keri_watcher_kel_fetch_seconds_bucket{outcome="completed"})` | regression vs the A/B baseline in PERFORMANCE.md |
+| KEL fetch timing out | `rate(keri_watcher_kel_fetch_total{outcome="timeout"}[5m])` | non-zero — increase `kel_update_timeout` or investigate slow witnesses |
+
+`witness_id` cardinality is bounded by your fleet size, so it's safe as
+a label. AID-level cardinality is intentionally absent — the watcher
+deliberately does not emit per-AID metrics because tracked AIDs scale
+with users.
+
 ## TL;DR for prioritisation
 
 1. **Cheap, big bang for the buck**: item 1 (controller first-tally

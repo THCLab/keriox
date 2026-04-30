@@ -70,15 +70,12 @@ impl<S: OobiStorageBackend + 'static> WitnessListener<S> {
     ) -> Server {
         // Install Prometheus recorder before any handler runs. Idempotent.
         let _ = crate::metrics::install();
+        crate::metrics::record_build_info();
         let state = Data::new(self.witness_data.clone());
         let delay = query_delay;
         HttpServer::new(move || {
             App::new()
                 .app_data(state.clone())
-                .route(
-                    "/metrics",
-                    actix_web::web::get().to(metrics_handler),
-                )
                 .route(
                     "/introduce",
                     actix_web::web::get().to(http_handlers::introduce_redb),
@@ -126,6 +123,31 @@ impl<S: OobiStorageBackend + 'static> WitnessListener<S> {
                     "/forward",
                     actix_web::web::post().to(http_handlers::process_exchange_redb),
                 )
+                .route("/info", actix_web::web::get().to(http_handlers::info))
+        })
+        .bind(addr)
+        .unwrap()
+        .run()
+    }
+
+    /// Spawn the admin HTTP server. Hosts only operator-facing endpoints
+    /// (`/metrics`, `/health`, `/info`) so they can be bound to a private
+    /// interface and firewalled from public traffic. Shares no state with
+    /// the public listener beyond the `Witness` itself.
+    ///
+    /// `/health` is currently a thin "200 OK" liveness probe — the witness
+    /// has no per-witness health tracker like the watcher does, but the
+    /// endpoint exists so load balancers and orchestrators have a
+    /// dedicated probe path.
+    pub fn listen_admin(&self, addr: impl ToSocketAddrs) -> Server {
+        let _ = crate::metrics::install();
+        crate::metrics::record_build_info();
+        let state = Data::new(self.witness_data.clone());
+        HttpServer::new(move || {
+            App::new()
+                .app_data(state.clone())
+                .route("/metrics", actix_web::web::get().to(metrics_handler))
+                .route("/health", actix_web::web::get().to(http_handlers::health))
                 .route("/info", actix_web::web::get().to(http_handlers::info))
         })
         .bind(addr)
@@ -334,6 +356,11 @@ pub mod http_handlers {
     pub async fn introduce<S: OobiStorageBackend>(
         data: web::Data<Arc<Witness<S>>>,
     ) -> Result<HttpResponse, ApiError> {
+        metrics::counter!(
+            crate::metrics::names::OOBI_RESOLUTIONS_TOTAL,
+            "kind" => "introduce"
+        )
+        .increment(1);
         Ok(HttpResponse::Ok().json(data.oobi()))
     }
 
@@ -341,6 +368,11 @@ pub mod http_handlers {
         eid: web::Path<IdentifierPrefix>,
         data: web::Data<Arc<Witness<S>>>,
     ) -> Result<HttpResponse, ApiError> {
+        metrics::counter!(
+            crate::metrics::names::OOBI_RESOLUTIONS_TOTAL,
+            "kind" => "loc"
+        )
+        .increment(1);
         let loc_scheme = data
             .get_loc_scheme_for_id(&eid)
             .map_err(ActorError::KeriError)?;
@@ -363,6 +395,11 @@ pub mod http_handlers {
         path: web::Path<(IdentifierPrefix, Role, IdentifierPrefix)>,
         data: web::Data<Arc<Witness<S>>>,
     ) -> Result<HttpResponse, ApiError> {
+        metrics::counter!(
+            crate::metrics::names::OOBI_RESOLUTIONS_TOTAL,
+            "kind" => "role"
+        )
+        .increment(1);
         let (cid, role, eid) = path.into_inner();
         let out = if role == Role::Witness {
             // Check if it is TEL identifier
@@ -444,8 +481,22 @@ pub mod http_handlers {
     ) -> Result<HttpResponse, ApiError> {
         tracing::info!(witness = %data.prefix.to_str(), "Processing notice");
         tracing::debug!(payload = %post_data, "Notice payload");
-        data.parse_and_process_notices(post_data.as_bytes())
-            .map_err(ActorError::KeriError)?;
+        let outcome = match data.parse_and_process_notices(post_data.as_bytes()) {
+            Ok(()) => "ok",
+            Err(e) => {
+                metrics::counter!(
+                    crate::metrics::names::EVENTS_PROCESSED_TOTAL,
+                    "kind" => "notice", "outcome" => "err"
+                )
+                .increment(1);
+                return Err(ApiError(ActorError::KeriError(e)));
+            }
+        };
+        metrics::counter!(
+            crate::metrics::names::EVENTS_PROCESSED_TOTAL,
+            "kind" => "notice", "outcome" => outcome
+        )
+        .increment(1);
         Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())
             .body(()))
@@ -456,22 +507,36 @@ pub mod http_handlers {
         post_data: String,
         data: web::Data<Arc<Witness<S>>>,
     ) -> Result<HttpResponse, ApiError> {
-        let _timer = crate::metrics::LatencyTimer::new(
+        let mut _timer = crate::metrics::LatencyTimer::new(
             crate::metrics::names::HANDLER_SECONDS,
             vec![("endpoint", "query".to_string())],
         );
         tracing::info!("Processing query");
-        let resp = data
-            .parse_and_process_queries(post_data.as_bytes())
-            .map_err(|e| {
+        let resp = match data.parse_and_process_queries(post_data.as_bytes()) {
+            Ok(out) => out,
+            Err(e) => {
                 tracing::warn!(error = ?e, "parse_and_process_queries failed");
-                ApiError(e)
-            })?
+                metrics::counter!(
+                    crate::metrics::names::QUERIES_TOTAL,
+                    "kind" => "kel", "outcome" => "err"
+                )
+                .increment(1);
+                _timer.set_status(e.http_status_code().as_u16());
+                return Err(ApiError(e));
+            }
+        };
+        let resp = resp
             .iter()
             .map(|msg| msg.to_string())
             .collect::<Vec<_>>()
             .join("");
         tracing::debug!(response_bytes = resp.len(), "Query response");
+        metrics::counter!(
+            crate::metrics::names::QUERIES_TOTAL,
+            "kind" => "kel", "outcome" => "ok"
+        )
+        .increment(1);
+        _timer.set_status(200);
         Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())
             .body(resp))
@@ -483,13 +548,28 @@ pub mod http_handlers {
     ) -> Result<HttpResponse, ApiError> {
         tracing::info!("Processing TEL query");
         tracing::debug!(payload = %post_data, "TEL query payload");
-        let resp = data
-            .parse_and_process_tel_queries(post_data.as_bytes())?
+        let resp = match data.parse_and_process_tel_queries(post_data.as_bytes()) {
+            Ok(r) => r,
+            Err(e) => {
+                metrics::counter!(
+                    crate::metrics::names::QUERIES_TOTAL,
+                    "kind" => "tel", "outcome" => "err"
+                )
+                .increment(1);
+                return Err(e.into());
+            }
+        };
+        let resp = resp
             .iter()
             .map(|msg| msg.to_string())
             .collect::<Vec<_>>()
             .join("");
         tracing::debug!(response = %resp, "TEL query response");
+        metrics::counter!(
+            crate::metrics::names::QUERIES_TOTAL,
+            "kind" => "tel", "outcome" => "ok"
+        )
+        .increment(1);
         Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())
             .body(resp))
@@ -501,7 +581,22 @@ pub mod http_handlers {
     ) -> Result<HttpResponse, ApiError> {
         tracing::info!("Processing reply");
         tracing::debug!(payload = %post_data, "Reply payload");
-        data.parse_and_process_replies(post_data.as_bytes())?;
+        let outcome = match data.parse_and_process_replies(post_data.as_bytes()) {
+            Ok(()) => "ok",
+            Err(e) => {
+                metrics::counter!(
+                    crate::metrics::names::EVENTS_PROCESSED_TOTAL,
+                    "kind" => "reply", "outcome" => "err"
+                )
+                .increment(1);
+                return Err(e.into());
+            }
+        };
+        metrics::counter!(
+            crate::metrics::names::EVENTS_PROCESSED_TOTAL,
+            "kind" => "reply", "outcome" => outcome
+        )
+        .increment(1);
 
         Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())
@@ -514,7 +609,22 @@ pub mod http_handlers {
     ) -> Result<HttpResponse, ApiError> {
         tracing::info!("Processing exchange");
         tracing::debug!(payload = %post_data, "Exchange payload");
-        data.parse_and_process_exchanges(post_data.as_bytes())?;
+        let outcome = match data.parse_and_process_exchanges(post_data.as_bytes()) {
+            Ok(()) => "ok",
+            Err(e) => {
+                metrics::counter!(
+                    crate::metrics::names::EVENTS_PROCESSED_TOTAL,
+                    "kind" => "exchange", "outcome" => "err"
+                )
+                .increment(1);
+                return Err(e.into());
+            }
+        };
+        metrics::counter!(
+            crate::metrics::names::EVENTS_PROCESSED_TOTAL,
+            "kind" => "exchange", "outcome" => outcome
+        )
+        .increment(1);
 
         Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())
@@ -531,6 +641,11 @@ pub mod http_handlers {
         for ev in parsed {
             data.tel.processor.process(ev).unwrap()
         }
+        metrics::counter!(
+            crate::metrics::names::EVENTS_PROCESSED_TOTAL,
+            "kind" => "tel", "outcome" => "ok"
+        )
+        .increment(1);
 
         Ok(HttpResponse::Ok().body(()))
     }
@@ -540,6 +655,13 @@ pub mod http_handlers {
         let git_suffix = option_env!("GIT_VERSION_SUFFIX").unwrap_or("");
         let full_version = format!("{version}{git_suffix}");
         HttpResponse::Ok().json(serde_json::json!({ "version": full_version }))
+    }
+
+    /// Liveness probe for the admin port. Always returns 200 OK as long as
+    /// the actix runtime is responsive — actual health signals (escrow
+    /// depth, redb errors) live in `/metrics`.
+    pub async fn health() -> impl Responder {
+        HttpResponse::Ok().json(serde_json::json!({ "status": "ok" }))
     }
 
     #[derive(Debug, derive_more::Display, derive_more::From, derive_more::Error)]

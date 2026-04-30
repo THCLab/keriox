@@ -158,6 +158,10 @@ impl<S: OobiStorageBackend> WitnessPoller<S> {
 
     /// Poll only AIDs whose adaptive interval has elapsed.
     async fn poll_due_aids(&self) {
+        let _cycle_timer = crate::metrics::LatencyTimer::new(
+            crate::metrics::names::POLL_CYCLE_SECONDS,
+            vec![],
+        );
         let due_aids: Vec<(IdentifierPrefix, TrackedAid)> = {
             let tracked = self.tracked_aids.read().unwrap();
             tracked
@@ -166,6 +170,13 @@ impl<S: OobiStorageBackend> WitnessPoller<S> {
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect()
         };
+
+        // Always observe the cycle's fan-out size, even when zero —
+        // dashboards plot the histogram count and want to see "we ran a
+        // cycle and found nothing to do" distinguishable from "we never
+        // ran a cycle".
+        metrics::histogram!(crate::metrics::names::POLL_AIDS_PER_CYCLE)
+            .record(due_aids.len() as f64);
 
         if due_aids.is_empty() {
             return;

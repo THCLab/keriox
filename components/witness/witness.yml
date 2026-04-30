@@ -1,5 +1,10 @@
 db_path: "db/"
 http_port: 3237
+# Admin port hosts /metrics, /health, /info. Bound to admin_bind below
+# (default 127.0.0.1) so the metrics surface is not reachable from the
+# public network. Comment out admin_port to disable the admin listener.
+admin_port: 9100
+admin_bind: "127.0.0.1"
 public_url: "http://localhost:3232/"
 seed: "ArwXoACJgOleVZ2PY7kXn7rA0II0mHYDhc6WrBH8fDAc" # Private key in CESR format used by the witness. If this field is not provided, a randomly generated key pair will be used.
 escrow_config:

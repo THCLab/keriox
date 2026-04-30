@@ -42,15 +42,25 @@ The most useful filters when chasing a slow flow:
 ### Prometheus metrics
 
 The watcher and witness each install a `metrics-exporter-prometheus`
-recorder on first call to `listen_http` and expose it at:
+recorder. `/metrics` is served from a dedicated **admin port** bound to
+loopback by default (`127.0.0.1:9100` for witness, `127.0.0.1:9101` for
+watcher). The public port no longer exposes metrics — internal timings,
+witness IDs and AID counts must not be scrapeable from caller traffic.
 
 ```
-GET http://<watcher-host>:<port>/metrics
-GET http://<witness-host>:<port>/metrics
+GET http://127.0.0.1:9101/metrics   # watcher (admin)
+GET http://127.0.0.1:9100/metrics   # witness (admin)
 ```
+
+To scrape from a Prometheus server on another host, set
+`admin_bind: "0.0.0.0"` in `watcher.yml` / `witness.yml` and firewall the
+port (or expose it via a k8s ClusterIP service with NetworkPolicy). The
+admin port also serves `/health` and `/info` for orchestrator probes.
 
 Histograms use bucket boundaries tuned for the observed range
-(1 ms → 60 s). Useful queries:
+(1 ms → 60 s).
+
+**Latency histograms**
 
 | metric | labels | what it measures |
 |---|---|---|
@@ -58,9 +68,36 @@ Histograms use bucket boundaries tuned for the observed range
 | `keri_watcher_oobi_resolve_seconds` | `kind=loc_scheme \| end_role` | OOBI resolution stages |
 | `keri_watcher_kel_fetch_seconds` | `outcome` | top-level KEL fetch (`forward_query_from`) |
 | `keri_watcher_witness_query_seconds` | `witness_id`, `kind=ksn \| logs \| tel` | per-witness query latency |
-| `keri_watcher_witness_query_failures_total` | `witness_id`, `kind` | failure counter per witness |
+| `keri_watcher_poll_cycle_seconds` | — | wall time of one `poll_due_aids` cycle |
+| `keri_watcher_poll_aids_per_cycle` | — | number of AIDs polled per cycle |
 | `keri_witness_handler_seconds` | `endpoint` | witness HTTP handler latency |
 | `keri_witness_query_processing_seconds` | — | parse + verify + reply on a /query call |
+
+**Throughput counters**
+
+| metric | labels | what it measures |
+|---|---|---|
+| `keri_watcher_http_requests_total` | `endpoint`, `status` | watcher request volume + status mix |
+| `keri_watcher_kel_fetch_total` | `outcome=completed \| timeout` | KEL fetch outcomes (paired with the histogram) |
+| `keri_watcher_oobi_resolutions_total` | `kind`, `outcome` | OOBI resolutions handled |
+| `keri_watcher_witness_query_failures_total` | `witness_id`, `kind` | failure counter per witness |
+| `keri_witness_http_requests_total` | `endpoint`, `status` | witness request volume |
+| `keri_witness_oobi_resolutions_total` | `kind=loc \| role \| introduce` | OOBI resolutions served |
+| `keri_witness_events_processed_total` | `kind`, `outcome` | inbound events (notice/reply/exchange/tel) |
+| `keri_witness_queries_total` | `kind=kel \| tel`, `outcome` | inbound queries served |
+
+**Scaling gauges** (refreshed by a 10s sampler on the watcher)
+
+| metric | labels | what it measures |
+|---|---|---|
+| `keri_watcher_tracked_aids` | — | AIDs currently being polled (capacity headline) |
+| `keri_watcher_monitored_witnesses` | `state=healthy \| tripped` | per-state witness count |
+| `keri_watcher_witness_consecutive_failures` | `witness_id` | live circuit-breaker counter |
+| `keri_watcher_witness_avg_response_ms` | `witness_id` | EMA latency per witness |
+| `keri_watcher_circuit_breaker_open` | `witness_id` | 1 when in cool-down, 0 otherwise |
+| `keri_watcher_inflight_queries` | — | concurrent KEL fetches in flight |
+| `keri_watcher_build_info` | `version` | always 1; identifies the running build |
+| `keri_witness_build_info` | `version` | always 1; identifies the running build |
 
 Grafana cheat-sheet:
 
@@ -84,11 +121,17 @@ so it's safe to keep as a label.
 
 ### Manual scrape
 
-For ad-hoc work without a Prometheus server:
+For ad-hoc work without a Prometheus server (admin port, loopback by
+default):
 
 ```sh
-curl -s http://localhost:3236/metrics | grep '^keri_'
+curl -s http://127.0.0.1:9101/metrics | grep '^keri_'   # watcher
+curl -s http://127.0.0.1:9100/metrics | grep '^keri_'   # witness
 ```
+
+The public port (3236 / 3237) no longer serves `/metrics` — a `404` from
+the public port is expected and is the security feature that motivates
+the split.
 
 ---
 
