@@ -1450,3 +1450,196 @@ pub fn test_delegating_multisig() -> Result<(), ActorError> {
 
     Ok(())
 }
+
+/// Witness disaster recovery: simulate total data loss on a witness while the
+/// controller (and the witness's signing key) survives. The controller must be
+/// able to re-publish its KEL and the witness must rebuild its store and
+/// reissue fresh non-transferable receipts that verify against the same
+/// `BasicPrefix`. This guards the duplicate-event acceptance path in
+/// `WitnessProcessor` and the receipt re-emission in `WitnessReceiptGenerator`,
+/// both of which are load-bearing for surviving a wipe without forcing a
+/// witness rotation.
+#[test]
+fn test_witness_disaster_recovery() -> Result<(), Error> {
+    use keri_core::event::sections::seal::{DigestSeal, Seal};
+    use keri_core::event_message::signature::Nontransferable;
+
+    // Witness signing key — kept across the wipe. Same key in == same prefix out.
+    let signer = Arc::new(Signer::new());
+    let witness_address = Url::parse("http://example.com").unwrap();
+
+    // Witness DB root — survives across both witness instances.
+    let witness_root = Builder::new().prefix("test-witness-dr").tempdir().unwrap();
+    std::fs::create_dir_all(witness_root.path()).unwrap();
+
+    let build_oobi_manager = || {
+        let mut p = witness_root.path().to_path_buf();
+        p.push("oobi_database");
+        let oobi_db = Arc::new(RedbDatabase::new(&p).unwrap());
+        RedbOobiManager::new(oobi_db).unwrap()
+    };
+
+    // Controller — independent of the witness, naturally survives the wipe.
+    let controller_root = Builder::new().prefix("test-ctrl-dr").tempdir().unwrap();
+    std::fs::create_dir_all(controller_root.path()).unwrap();
+    let ctrl_redb_root = Builder::new().tempfile().unwrap();
+    let ctrl_redb = Arc::new(RedbDatabase::new(ctrl_redb_root.path()).unwrap());
+    let key_manager = Arc::new(Mutex::new(CryptoBox::new().unwrap()));
+    let mut controller =
+        SimpleController::new(Arc::clone(&ctrl_redb), key_manager, EscrowConfig::default())?;
+
+    // ---- Phase 1: pre-disaster — publish a small KEL ----
+    let witness = Witness::new(
+        witness_address.clone(),
+        signer.clone(),
+        witness_root.path(),
+        WitnessEscrowConfig::default(),
+        build_oobi_manager(),
+    )
+    .unwrap();
+    let original_prefix = witness.prefix.clone();
+
+    let icp = controller.incept(Some(vec![witness.prefix.clone()]), Some(1), None)?;
+    witness.process_notice(Notice::Event(icp.clone()))?;
+
+    // Feed the icp receipt back to the controller so the icp leaves the
+    // partially-witnessed escrow and the AID's state is established.
+    let icp_digest = icp.event_message.digest()?;
+    {
+        let mbx_qry = controller.query_mailbox(&witness.prefix);
+        let bytes = Message::Op(Op::Query(mbx_qry)).to_cesr().unwrap();
+        let resp = witness.parse_and_process_queries(&bytes).unwrap();
+        if let PossibleResponse::Mbx(mbx) = &resp[0] {
+            for receipt in &mbx.receipt {
+                controller.process_receipt(receipt.clone())?;
+            }
+        }
+    }
+
+    // One ixn anchored against the icp's own digest, just to cover sn > 0.
+    let ixn = controller.anchor(&[Seal::Digest(DigestSeal::new(icp_digest))])?;
+    witness.process_notice(Notice::Event(ixn.clone()))?;
+
+    let published: Vec<SignedEventMessage> = vec![icp.clone(), ixn.clone()];
+
+    // Sanity: pre-wipe receipts exist and cover both events.
+    let pre_wipe_receipts: Vec<_> = {
+        let mbx_qry = controller.query_mailbox(&witness.prefix);
+        let bytes = Message::Op(Op::Query(mbx_qry)).to_cesr().unwrap();
+        let resp = witness.parse_and_process_queries(&bytes).unwrap();
+        match &resp[0] {
+            PossibleResponse::Mbx(mbx) => mbx.receipt.clone(),
+            other => panic!("expected mailbox response, got {:?}", other),
+        }
+    };
+    assert!(
+        pre_wipe_receipts.iter().any(|r| r.body.sn == 0),
+        "missing receipt for icp before wipe"
+    );
+    assert!(
+        pre_wipe_receipts.iter().any(|r| r.body.sn == 1),
+        "missing receipt for ixn before wipe"
+    );
+
+    // ---- Phase 2: disaster — wipe the witness on disk ----
+    drop(witness); // release Redb file handles
+    for sub in ["events_database", "oobi_database", "events", "escrow", "tel"] {
+        let p = witness_root.path().join(sub);
+        if !p.exists() {
+            continue;
+        }
+        if p.is_dir() {
+            std::fs::remove_dir_all(&p).unwrap();
+        } else {
+            std::fs::remove_file(&p).unwrap();
+        }
+    }
+    assert!(
+        !witness_root.path().join("events_database").exists(),
+        "events_database should be gone"
+    );
+
+    // ---- Phase 3: recovery — reconstruct with same key, replay KEL ----
+    let witness_recovered = Witness::new(
+        witness_address,
+        signer.clone(),
+        witness_root.path(),
+        WitnessEscrowConfig::default(),
+        build_oobi_manager(),
+    )
+    .unwrap();
+    assert_eq!(
+        witness_recovered.prefix, original_prefix,
+        "prefix must survive a wipe when the signing key is preserved"
+    );
+    // The recovered witness has no record of the AID yet.
+    assert!(
+        witness_recovered
+            .event_storage
+            .get_state(controller.prefix())
+            .is_none(),
+        "wiped witness should have no state for the AID before replay"
+    );
+
+    for evt in &published {
+        witness_recovered
+            .process_notice(Notice::Event(evt.clone()))
+            .expect("witness must accept re-published events");
+    }
+
+    // KEL is rebuilt up to the last event.
+    let recovered_state = witness_recovered
+        .event_storage
+        .get_state(controller.prefix())
+        .expect("state must be present after replay");
+    assert_eq!(recovered_state.sn, 1);
+
+    // ---- Phase 4: assert receipts are reissued and verify cryptographically ----
+    let post_recovery_receipts: Vec<_> = {
+        let mbx_qry = controller.query_mailbox(&witness_recovered.prefix);
+        let bytes = Message::Op(Op::Query(mbx_qry)).to_cesr().unwrap();
+        let resp = witness_recovered.parse_and_process_queries(&bytes).unwrap();
+        match &resp[0] {
+            PossibleResponse::Mbx(mbx) => mbx.receipt.clone(),
+            other => panic!("expected mailbox response, got {:?}", other),
+        }
+    };
+    assert!(
+        post_recovery_receipts.iter().any(|r| r.body.sn == 0),
+        "missing reissued receipt for icp"
+    );
+    assert!(
+        post_recovery_receipts.iter().any(|r| r.body.sn == 1),
+        "missing reissued receipt for ixn"
+    );
+
+    for receipt in &post_recovery_receipts {
+        assert_eq!(receipt.body.prefix, controller.prefix().clone());
+        // The witness signs the receipted event's encoded bytes, not the
+        // receipt body — see WitnessReceiptGenerator::respond_to_key_event.
+        let receipted_event = published
+            .iter()
+            .find(|e| e.event_message.data.get_sn() == receipt.body.sn)
+            .expect("receipt must reference a published event");
+        let signed_bytes = receipted_event.event_message.encode()?;
+        let mut verified_against_original = false;
+        for sig in &receipt.signatures {
+            match sig {
+                Nontransferable::Couplet(couplets) => {
+                    for (bp, ssp) in couplets {
+                        assert_eq!(bp, &original_prefix, "receipt signer must equal recovered witness prefix");
+                        assert!(
+                            bp.verify(&signed_bytes, ssp).unwrap(),
+                            "reissued receipt signature must verify against the receipted event"
+                        );
+                        verified_against_original = true;
+                    }
+                }
+                Nontransferable::Indexed(_) => panic!("expected couplet, got indexed signature"),
+            }
+        }
+        assert!(verified_against_original, "receipt had no couplet signatures");
+    }
+
+    Ok(())
+}
