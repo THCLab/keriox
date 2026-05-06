@@ -139,8 +139,13 @@ pub fn signatures_into_groups(sigs: &[Signature]) -> Vec<Group> {
         attachments.push(Group::IndexedControllerSignatures(sigs));
     }
 
-    for (_id, sigs) in trans_last {
-        attachments.push(Group::IndexedControllerSignatures(sigs));
+    if !trans_last.is_empty() {
+        attachments.push(Group::TransLastIdxSigGroups(
+            trans_last
+                .into_iter()
+                .map(|(id, sigs)| (id.into(), sigs))
+                .collect(),
+        ));
     }
 
     if !nontrans.is_empty() {
@@ -180,6 +185,13 @@ pub fn get_signatures(group: Group) -> Result<Vec<Signature>, ParseError> {
             ))])
         }
         Group::AnchoringSeals(_) => Ok(vec![]),
+        Group::TransLastIdxSigGroups(entries) => Ok(entries
+            .into_iter()
+            .map(|(id, sigs)| {
+                let sigs = sigs.into_iter().map(|s| s.into()).collect();
+                Signature::Transferable(SignerData::LastEstablishment(id.into()), sigs)
+            })
+            .collect()),
         _ => Err(ParseError::AttachmentError(
             "Improper attachment type".into(),
         )),
@@ -219,8 +231,8 @@ impl Into<Group> for crate::event_message::signature::Signature {
                             event_digest.into(),
                         )])
                     }
-                    crate::event_message::signature::SignerData::LastEstablishment(_id) => {
-                        Group::IndexedControllerSignatures(signatures)
+                    crate::event_message::signature::SignerData::LastEstablishment(id) => {
+                        Group::TransLastIdxSigGroups(vec![(id.into(), signatures)])
                     }
                     crate::event_message::signature::SignerData::JustSignatures => {
                         Group::IndexedControllerSignatures(signatures)
