@@ -25,6 +25,24 @@ use crate::{
 /// per call (pre-optimization behavior). Intended only for A/B perf testing
 /// — flip at startup, no recompile needed. `reqwest::Client` is Arc-backed
 /// internally, so cloning the cached instance is cheap.
+/// Format a reqwest error with its `source()` chain in one string.
+/// `reqwest::Error::to_string()` only shows the top-level message
+/// (e.g. "error sending request for url (...)") and discards the
+/// actual cause — TLS handshake failure, connection reset, decode
+/// failure, etc. — leaving operators no way to tell categories of
+/// network failure apart. Used in the `.map_err(...)` of every
+/// `.send()` / `.text()` / `.bytes()` call below.
+fn fmt_reqwest_error(e: &reqwest::Error) -> String {
+    let mut out = format!("{e}");
+    let mut src: Option<&dyn std::error::Error> = std::error::Error::source(e);
+    while let Some(inner) = src {
+        out.push_str(" -> ");
+        out.push_str(&format!("{inner}"));
+        src = inner.source();
+    }
+    out
+}
+
 fn shared_http_client() -> reqwest::Client {
     fn build() -> reqwest::Client {
         reqwest::Client::builder()
@@ -94,7 +112,7 @@ where
             .body(msg.to_cesr().unwrap())
             .send()
             .await
-            .map_err(|e| TransportError::NetworkError(e.to_string()))?;
+            .map_err(|e| TransportError::NetworkError(fmt_reqwest_error(&e)))?;
         debug!(
             elapsed_ms = started.elapsed().as_millis() as u64,
             status = resp.status().as_u16(),
@@ -106,7 +124,7 @@ where
             let body = resp
                 .text()
                 .await
-                .map_err(|e| TransportError::NetworkError(e.to_string()))?;
+                .map_err(|e| TransportError::NetworkError(fmt_reqwest_error(&e)))?;
             if body.is_empty() {
                 return Err(TransportError::NetworkError(format!(
                     "Remote returned {} with empty body",
@@ -141,12 +159,12 @@ where
             .body(op.to_cesr().unwrap())
             .send()
             .await
-            .map_err(|e| TransportError::NetworkError(e.to_string()))?;
+            .map_err(|e| TransportError::NetworkError(fmt_reqwest_error(&e)))?;
         let status = resp.status();
         let body = resp
             .text()
             .await
-            .map_err(|e| TransportError::NetworkError(e.to_string()))?;
+            .map_err(|e| TransportError::NetworkError(fmt_reqwest_error(&e)))?;
         debug!(
             elapsed_ms = started.elapsed().as_millis() as u64,
             status = status.as_u16(),
@@ -187,13 +205,13 @@ where
             .get(url.clone())
             .send()
             .await
-            .map_err(|e| TransportError::NetworkError(e.to_string()))?;
+            .map_err(|e| TransportError::NetworkError(fmt_reqwest_error(&e)))?;
         let status = resp.status();
         if status.is_success() {
             let body = resp
                 .bytes()
                 .await
-                .map_err(|e| TransportError::NetworkError(e.to_string()))?;
+                .map_err(|e| TransportError::NetworkError(fmt_reqwest_error(&e)))?;
             trace!(
                 bytes = body.len(),
                 preview = %String::from_utf8_lossy(&body[..body.len().min(300)]),
@@ -215,7 +233,7 @@ where
             let body = resp
                 .text()
                 .await
-                .map_err(|e| TransportError::NetworkError(e.to_string()))?;
+                .map_err(|e| TransportError::NetworkError(fmt_reqwest_error(&e)))?;
             debug!(
                 elapsed_ms = started.elapsed().as_millis() as u64,
                 status = status.as_u16(),
@@ -263,13 +281,13 @@ where
             .get(url.clone())
             .send()
             .await
-            .map_err(|e| TransportError::NetworkError(e.to_string()))?;
+            .map_err(|e| TransportError::NetworkError(fmt_reqwest_error(&e)))?;
         let status = resp.status();
         if status.is_success() {
             let body = resp
                 .bytes()
                 .await
-                .map_err(|e| TransportError::NetworkError(e.to_string()))?;
+                .map_err(|e| TransportError::NetworkError(fmt_reqwest_error(&e)))?;
 
             debug!(
                 elapsed_ms = started.elapsed().as_millis() as u64,
@@ -283,7 +301,7 @@ where
             let body = resp
                 .text()
                 .await
-                .map_err(|e| TransportError::NetworkError(e.to_string()))?;
+                .map_err(|e| TransportError::NetworkError(fmt_reqwest_error(&e)))?;
             if body.is_empty() {
                 return Err(TransportError::NetworkError(format!(
                     "Remote returned {} with empty body",
@@ -304,7 +322,7 @@ where
             .body(serde_json::to_string(&oobi).unwrap())
             .send()
             .await
-            .map_err(|e| TransportError::NetworkError(e.to_string()))?;
+            .map_err(|e| TransportError::NetworkError(fmt_reqwest_error(&e)))?;
         debug!(
             elapsed_ms = started.elapsed().as_millis() as u64,
             status = resp.status().as_u16(),
@@ -316,7 +334,7 @@ where
             let body = resp
                 .text()
                 .await
-                .map_err(|e| TransportError::NetworkError(e.to_string()))?;
+                .map_err(|e| TransportError::NetworkError(fmt_reqwest_error(&e)))?;
             if body.is_empty() {
                 return Err(TransportError::NetworkError(format!(
                     "Remote returned {} with empty body",
