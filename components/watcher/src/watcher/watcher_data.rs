@@ -303,19 +303,13 @@ impl<S: OobiStorageBackend> WatcherData<S> {
                     // long block here.
                     match tokio::time::timeout(self.kel_update_timeout, done_rx).await {
                         Ok(Ok(Ok(()))) => {
-                            // Update succeeded, check if we now have the data
+                            // Update succeeded, check if we now have the data.
                             let updated_state = self.get_state_for_prefix(&args.i);
-                            let still_missing = match (updated_state, args.s, args.limit) {
-                                (Some(state), Some(sn), Some(limit))
-                                    if sn + limit - 1 <= state.sn =>
-                                {
-                                    false
-                                }
-                                (Some(state), Some(sn), None) if sn <= state.sn => false,
-                                (None, _, _) => true,
-                                _ => true,
-                            };
-                            if still_missing {
+                            if logs_query_still_missing(
+                                updated_state.as_ref().map(|s| s.sn),
+                                args.s,
+                                args.limit,
+                            ) {
                                 return Err(ActorError::NotFound(id_to_update));
                             }
                         }
@@ -838,5 +832,79 @@ impl<S: OobiStorageBackend> WatcherData<S> {
             ReplyRoute::LocScheme(loc) => Ok(loc),
             _ => Err(ActorError::WrongReplyRoute),
         }
+    }
+}
+
+/// Decide whether a watcher should answer a `logs` query with
+/// `NotFound` because its local store is insufficient.
+///
+/// Inputs are the watcher's current head sequence number for the
+/// queried prefix (`local_head_sn`, `None` when the prefix is unknown)
+/// and the query's optional sequence-floor (`args.s`) and limit
+/// (`args.limit`).
+///
+/// A `logs` query without `s` is a full-log request: the caller wants
+/// every event we know about the prefix and `process_query` will pull
+/// them from `event_storage::get_kel_messages_with_receipts_all`. So
+/// as long as we have any local state at all we are not "missing"
+/// anything answerable — returning `NotFound` here would silently
+/// fail every full-log query even when the watcher had been seeded.
+/// That was the original bug: the match's `_ => true` catch-all hit
+/// every `(Some(_), None, _)` and the controller saw
+/// `KELNotFound` despite the watcher's store containing the icp +
+/// receipts pushed by the controller seconds earlier.
+pub(crate) fn logs_query_still_missing(
+    local_head_sn: Option<u64>,
+    args_s: Option<u64>,
+    args_limit: Option<u64>,
+) -> bool {
+    match (local_head_sn, args_s, args_limit) {
+        // Range query: we satisfy it if our head reaches sn+limit-1.
+        (Some(state_sn), Some(sn), Some(limit)) => sn + limit - 1 > state_sn,
+        // Open-ended-from-sn query: satisfied as long as head reaches sn.
+        (Some(state_sn), Some(sn), None) => sn > state_sn,
+        // Full-log query (no floor): any local state means we have
+        // something to return.
+        (Some(_), None, _) => false,
+        // No state at all → genuinely missing.
+        (None, _, _) => true,
+    }
+}
+
+#[cfg(test)]
+mod still_missing_tests {
+    use super::logs_query_still_missing;
+
+    #[test]
+    fn full_log_query_with_local_state_is_not_missing() {
+        // Regression: previously the catch-all `_ => true` hit
+        // `(Some(_), None, None)` and the controller saw KELNotFound
+        // for every `query_full_log` call, even when the watcher had
+        // the peer's icp + receipts in its event store.
+        assert!(!logs_query_still_missing(Some(0), None, None));
+        assert!(!logs_query_still_missing(Some(5), None, None));
+        assert!(!logs_query_still_missing(Some(0), None, Some(10)));
+    }
+
+    #[test]
+    fn no_local_state_is_missing() {
+        assert!(logs_query_still_missing(None, None, None));
+        assert!(logs_query_still_missing(None, Some(0), None));
+        assert!(logs_query_still_missing(None, Some(3), Some(5)));
+    }
+
+    #[test]
+    fn ranged_query_compares_against_local_head() {
+        // sn..(sn+limit-1) inclusive must be within the head.
+        assert!(!logs_query_still_missing(Some(4), Some(0), Some(5))); // 0..=4 ≤ 4
+        assert!(logs_query_still_missing(Some(3), Some(0), Some(5))); //  0..=4 > 3
+        assert!(!logs_query_still_missing(Some(10), Some(3), Some(2))); // 3..=4 ≤ 10
+    }
+
+    #[test]
+    fn open_from_sn_query_compares_floor_against_head() {
+        assert!(!logs_query_still_missing(Some(5), Some(0), None));
+        assert!(!logs_query_still_missing(Some(5), Some(5), None));
+        assert!(logs_query_still_missing(Some(4), Some(5), None));
     }
 }
