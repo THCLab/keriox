@@ -606,9 +606,23 @@ impl<S: OobiStorageBackend> WatcherData<S> {
                     }
                 }
                 Err(e) => {
+                    // `ActorError::TransportError(_)`'s Display collapses
+                    // to "network request failed", which is the actual
+                    // user-visible error for ksn_update problems. Walk
+                    // the source chain and dump Debug so operators can
+                    // distinguish DNS / TLS / non-2xx / unparseable body
+                    // without a debugger.
+                    let mut chain = format!("{e}");
+                    let mut src: Option<&dyn std::error::Error> = std::error::Error::source(&e);
+                    while let Some(inner) = src {
+                        chain.push_str(" -> ");
+                        chain.push_str(&format!("{inner}"));
+                        src = inner.source();
+                    }
                     tracing::warn!(
                         prefix = %prefix,
-                        error = %e,
+                        error = %chain,
+                        error_debug = ?e,
                         "Failed to get KSN from witness"
                     );
                 }
