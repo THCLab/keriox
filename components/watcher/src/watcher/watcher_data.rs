@@ -21,7 +21,7 @@ use keri_core::{
         prelude::{HashFunctionCode, SerializationFormats},
         process_notice, process_reply, QueryError, SignedQueryError,
     },
-    oobi::{Role, Scheme},
+    oobi::Role,
 };
 use keri_core::{
     database::redb::RedbDatabase,
@@ -493,7 +493,7 @@ impl<S: OobiStorageBackend> WatcherData<S> {
                     ],
                 );
                 let resp = self
-                    .send_query_to(witness_id.clone(), Scheme::Http, signed_qry)
+                    .send_query_to(witness_id.clone(), signed_qry)
                     .await;
                 (witness_id, rank, started.elapsed(), resp)
             });
@@ -633,27 +633,7 @@ impl<S: OobiStorageBackend> WatcherData<S> {
         about_vc_id: &IdentifierPrefix,
         wit_id: IdentifierPrefix,
     ) -> Result<(), ActorError> {
-        // Pick the freshest reply by `dt` rather than the first row.
-        // See the matching note in `Watcher::resolve_end_role`: redb
-        // returns rows in lexicographic `(eid, scheme)` order, so
-        // stacked replies after a witness's scheme migration leave the
-        // older entry sorting first and we'd contact an obsolete
-        // endpoint.
-        let location = self
-            .oobi_manager
-            .get_loc_scheme(&wit_id)?
-            .into_iter()
-            .max_by_key(|r| r.get_timestamp())
-            .ok_or(ActorError::NoLocation {
-                id: wit_id.clone(),
-            })?
-            .data
-            .data;
-        let loc = if let ReplyRoute::LocScheme(loc) = location {
-            loc
-        } else {
-            return Err(ActorError::WrongReplyRoute);
-        };
+        let loc = self.latest_loc_scheme(&wit_id)?;
         let route = TelQueryRoute::Tels {
             reply_route: "".into(),
             args: TelQueryArgs {
@@ -729,7 +709,7 @@ impl<S: OobiStorageBackend> WatcherData<S> {
 
         let start = std::time::Instant::now();
         let resp = match self
-            .send_query_to(wit_id.clone(), Scheme::Http, query)
+            .send_query_to(wit_id.clone(), query)
             .await
         {
             Ok(r) => r,
@@ -802,34 +782,12 @@ impl<S: OobiStorageBackend> WatcherData<S> {
         Ok(results)
     }
 
-    fn get_loc_schemas(&self, id: &IdentifierPrefix) -> Result<Vec<LocationScheme>, ActorError> {
-        let oobis = self.oobi_manager.get_loc_scheme(id)?;
-        if oobis.is_empty() {
-            Err(ActorError::NoLocation { id: id.clone() })
-        } else {
-            Ok(oobis
-                .iter()
-                .filter_map(|oobi_to_sing| match &oobi_to_sing.data.data {
-                    ReplyRoute::LocScheme(loc) => Some(loc.clone()),
-                    _ => None,
-                })
-                .collect::<Vec<_>>())
-        }
-    }
-
     pub async fn send_query_to(
         &self,
         wit_id: IdentifierPrefix,
-        scheme: Scheme,
         query: SignedKelQuery,
     ) -> Result<PossibleResponse, ActorError> {
-        let locs = self.get_loc_schemas(&wit_id)?;
-        let loc = locs.into_iter().find(|loc| loc.scheme == scheme);
-
-        let loc = match loc {
-            Some(loc) => loc,
-            None => return Err(ActorError::NoLocation { id: wit_id }),
-        };
+        let loc = self.latest_loc_scheme(&wit_id)?;
 
         let response = self
             .transport
@@ -840,5 +798,31 @@ impl<S: OobiStorageBackend> WatcherData<S> {
             .await?;
 
         Ok(response)
+    }
+
+    /// Pick the freshest `LocationScheme` reply for `eid`, regardless
+    /// of scheme. The OOBI store keeps every signed loc reply we ever
+    /// ingested — including obsolete ones from before a witness's
+    /// scheme migration — and the older entries sort first in storage
+    /// order. KERI's bada logic already says the newest `dt` wins;
+    /// callers that previously hardcoded `Scheme::Http` therefore
+    /// silently selected stale endpoints. Use this helper from any
+    /// path that wants "current" rather than "specific scheme".
+    fn latest_loc_scheme(
+        &self,
+        eid: &IdentifierPrefix,
+    ) -> Result<LocationScheme, ActorError> {
+        let replies = self.oobi_manager.get_loc_scheme(eid)?;
+        if replies.is_empty() {
+            return Err(ActorError::NoLocation { id: eid.clone() });
+        }
+        let latest = replies
+            .into_iter()
+            .max_by_key(|r| r.get_timestamp())
+            .ok_or_else(|| ActorError::NoLocation { id: eid.clone() })?;
+        match latest.data.data {
+            ReplyRoute::LocScheme(loc) => Ok(loc),
+            _ => Err(ActorError::WrongReplyRoute),
+        }
     }
 }
