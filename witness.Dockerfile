@@ -26,7 +26,13 @@ RUN cargo fetch
 RUN cargo build --release --package witness
 
 FROM debian:12-slim
-RUN apt update && apt install libssl-dev -y
+# `ca-certificates` is the trust-anchor store OpenSSL/native-tls reads
+# from. debian:12-slim does not ship it, and without it any outbound
+# HTTPS request from the witness fails TLS verification. Symmetric
+# with the same line in watcher.Dockerfile.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libssl-dev ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /app/target/release/witness .
 COPY --from=build /app/components/witness/witness.yml .

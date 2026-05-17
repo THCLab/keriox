@@ -29,7 +29,17 @@ RUN cargo fetch
 RUN cargo build --release --package watcher
 
 FROM debian:12-slim
-RUN apt update && apt install libssl-dev -y
+# `ca-certificates` is the trust-anchor store OpenSSL/native-tls reads
+# from. debian:12-slim does not ship it, and without it every outbound
+# HTTPS request from the watcher fails with
+# "unable to get local issuer certificate" — the watcher then cannot
+# fetch KSN / KEL events from witnesses over TLS and every signed
+# query coming in bounces back as InvalidSignature / NotFound to the
+# controller. Keep both packages so libssl is available for runtime
+# linking and ca-certificates populates /etc/ssl/certs.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libssl-dev ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /app/target/release/watcher .
 COPY --from=build /app/components/watcher/watcher.yml .
