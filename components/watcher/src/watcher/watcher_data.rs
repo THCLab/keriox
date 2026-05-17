@@ -633,8 +633,20 @@ impl<S: OobiStorageBackend> WatcherData<S> {
         about_vc_id: &IdentifierPrefix,
         wit_id: IdentifierPrefix,
     ) -> Result<(), ActorError> {
-        let location = self.oobi_manager.get_loc_scheme(&wit_id)?[0]
-            .clone()
+        // Pick the freshest reply by `dt` rather than the first row.
+        // See the matching note in `Watcher::resolve_end_role`: redb
+        // returns rows in lexicographic `(eid, scheme)` order, so
+        // stacked replies after a witness's scheme migration leave the
+        // older entry sorting first and we'd contact an obsolete
+        // endpoint.
+        let location = self
+            .oobi_manager
+            .get_loc_scheme(&wit_id)?
+            .into_iter()
+            .max_by_key(|r| r.get_timestamp())
+            .ok_or(ActorError::NoLocation {
+                id: wit_id.clone(),
+            })?
             .data
             .data;
         let loc = if let ReplyRoute::LocScheme(loc) = location {

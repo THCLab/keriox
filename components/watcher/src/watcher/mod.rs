@@ -167,11 +167,20 @@ impl Watcher<RedbOobiStorage> {
 
 impl<S: OobiStorageBackend> Watcher<S> {
     pub async fn resolve_end_role(&self, er: EndRole) -> Result<(), ActorError> {
-        // find endpoint data of endpoint provider identifier
+        // find endpoint data of endpoint provider identifier.
+        // Pick the freshest reply by `dt`, not just the first row redb
+        // hands back. The OOBI store keys rows by `(eid, scheme)` and
+        // iterates lexicographically, so when a witness has migrated
+        // (e.g. http→https) both reply events are stored and the older
+        // http one sorts first — leaving us pointed at a stale endpoint
+        // even though we just ingested the newer https reply. KERI's
+        // bada logic already says "newer dt supersedes" so we follow
+        // the same rule here.
         let loc_scheme = self
             .watcher_data
             .get_loc_scheme_for_id(&er.eid.clone())?
-            .get(0)
+            .into_iter()
+            .max_by_key(|r| r.reply.get_timestamp())
             .ok_or(ActorError::NoLocation { id: er.eid.clone() })?
             .reply
             .data
