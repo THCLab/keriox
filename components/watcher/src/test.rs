@@ -259,3 +259,147 @@ pub async fn watcher_forward_ksn() -> Result<(), ActorError> {
 
     Ok(())
 }
+
+/// Regression test for the http→https loc-scheme migration bug.
+///
+/// When a witness migrates its self-advertised scheme (e.g. http→https)
+/// both signed reply events stay in the OOBI store. Before the fix the
+/// watcher returned them in lexicographic key order — `"http"` sorts
+/// before `"https"` byte-by-byte — and `.get(0)` / hardcoded
+/// `Scheme::Http` lookups deterministically pinned every subsequent
+/// query at the stale endpoint. After the fix the watcher must pick
+/// the reply with the latest `dt` regardless of scheme, matching
+/// what `bada_logic` already enforces at ingest time.
+///
+/// This test stores two valid signed loc replies for the same eid
+/// (http with the older `dt`, https with the newer one), feeds them to
+/// the watcher via `process_reply`, and asserts `latest_loc_scheme`
+/// returns the https one. Order of insertion is exercised both ways so
+/// a future change that re-introduces "first row wins" fails here
+/// regardless of which reply lands in the store first.
+#[actix_web::test]
+async fn latest_loc_scheme_picks_newest_dt() -> Result<(), ActorError> {
+    use keri_core::{
+        event_message::msg::KeriEvent,
+        event_message::timestamped::Timestamped,
+        oobi::{LocationScheme, Scheme},
+        query::reply_event::{ReplyEvent, ReplyRoute, SignedReply},
+        prefix::BasicPrefix,
+        signer::Signer,
+    };
+    use keri_controller::SelfSigningPrefix;
+    use chrono::{DateTime, FixedOffset, TimeZone};
+    use keri_core::actor::prelude::{HashFunctionCode, SerializationFormats};
+
+    // A witness identity: any Ed25519 keypair will do — the watcher only
+    // checks that signatures on the loc replies verify against the eid,
+    // not that the eid is a real running witness.
+    let witness_signer = Signer::new();
+    let witness_pk = witness_signer.public_key();
+    let witness_prefix = BasicPrefix::Ed25519(witness_pk);
+    let witness_eid = IdentifierPrefix::Basic(witness_prefix.clone());
+
+    // Spin up a watcher with on-disk redb so the OOBI manager exercises
+    // the same storage path production uses.
+    let root = Builder::new().prefix("watcher-loc-scheme-test").tempdir().unwrap();
+    let watcher_tel_dir = Builder::new().prefix("watcher-loc-scheme-tel").tempdir().unwrap();
+    let watcher_tel_path = watcher_tel_dir.path().join("tel_storage");
+    let dummy_public = Url::parse("http://watcher-under-test/").unwrap();
+    let watcher = Watcher::setup_with_redb(WatcherConfig {
+        public_address: dummy_public,
+        db_path: root.path().to_owned(),
+        tel_storage_path: watcher_tel_path,
+        ..Default::default()
+    })?;
+
+    // Build two LocScheme reply events for the same witness with
+    // explicit, well-ordered timestamps. We construct the Timestamped
+    // wrapper manually so the test does not depend on wall-clock
+    // resolution to separate the two replies — that flakes on fast
+    // machines with the default `Timestamped::new(...)`.
+    let make_reply = |scheme: Scheme, url: &str, dt: DateTime<FixedOffset>| -> SignedReply {
+        let loc = LocationScheme::new(witness_eid.clone(), scheme, Url::parse(url).unwrap());
+        // `ReplyEvent::new_reply` uses `Utc::now()` internally; rebuild
+        // through `KeriEvent::new` so we get a deterministic `dt`.
+        let env = Timestamped {
+            timestamp: dt,
+            data: ReplyRoute::LocScheme(loc),
+        };
+        let reply: ReplyEvent = KeriEvent::new(
+            SerializationFormats::JSON,
+            HashFunctionCode::Blake3_256.into(),
+            env,
+        );
+        let sig_bytes = witness_signer.sign(reply.encode().unwrap()).unwrap();
+        SignedReply::new_nontrans(
+            reply,
+            witness_prefix.clone(),
+            SelfSigningPrefix::Ed25519Sha512(sig_bytes),
+        )
+    };
+
+    let dt_old: DateTime<FixedOffset> = FixedOffset::east_opt(0)
+        .unwrap()
+        .with_ymd_and_hms(2026, 4, 18, 6, 34, 3)
+        .single()
+        .unwrap();
+    let dt_new: DateTime<FixedOffset> = FixedOffset::east_opt(0)
+        .unwrap()
+        .with_ymd_and_hms(2026, 5, 6, 6, 1, 23)
+        .single()
+        .unwrap();
+
+    let http_reply = make_reply(Scheme::Http, "http://witness-under-test/", dt_old);
+    let https_reply = make_reply(Scheme::Https, "https://witness-under-test/", dt_new);
+
+    // Case 1: ingest http first, then https. https has the newer dt
+    // so it must win regardless of which row redb ranges first.
+    watcher.watcher_data.process_reply(http_reply.clone()).unwrap();
+    watcher.watcher_data.process_reply(https_reply.clone()).unwrap();
+
+    let picked = watcher.watcher_data.latest_loc_scheme(&witness_eid)?;
+    assert_eq!(picked.scheme, Scheme::Https,
+        "after a http→https migration the newer-dt reply must win even though \
+         redb stores http under a lexicographically-smaller scheme key");
+    assert_eq!(picked.url.as_str(), "https://witness-under-test/");
+
+    // Case 2: insertion order should not affect the outcome. Use a
+    // fresh watcher so the previous replies don't leak in.
+    let root2 = Builder::new().prefix("watcher-loc-scheme-test-2").tempdir().unwrap();
+    let watcher_tel_dir2 = Builder::new().prefix("watcher-loc-scheme-tel-2").tempdir().unwrap();
+    let watcher_tel_path2 = watcher_tel_dir2.path().join("tel_storage");
+    let watcher2 = Watcher::setup_with_redb(WatcherConfig {
+        public_address: Url::parse("http://watcher-under-test-2/").unwrap(),
+        db_path: root2.path().to_owned(),
+        tel_storage_path: watcher_tel_path2,
+        ..Default::default()
+    })?;
+    watcher2.watcher_data.process_reply(https_reply.clone()).unwrap();
+    watcher2.watcher_data.process_reply(http_reply.clone()).unwrap();
+
+    let picked2 = watcher2.watcher_data.latest_loc_scheme(&witness_eid)?;
+    assert_eq!(picked2.scheme, Scheme::Https,
+        "insertion order must not influence the selection");
+    assert_eq!(picked2.url.as_str(), "https://witness-under-test/");
+
+    // Case 3: empty OOBI store yields NoLocation, not a panic or stale
+    // value. Use yet another fresh watcher so the assertion does not
+    // depend on test execution order.
+    let root3 = Builder::new().prefix("watcher-loc-scheme-test-3").tempdir().unwrap();
+    let watcher_tel_dir3 = Builder::new().prefix("watcher-loc-scheme-tel-3").tempdir().unwrap();
+    let watcher_tel_path3 = watcher_tel_dir3.path().join("tel_storage");
+    let watcher3 = Watcher::setup_with_redb(WatcherConfig {
+        public_address: Url::parse("http://watcher-under-test-3/").unwrap(),
+        db_path: root3.path().to_owned(),
+        tel_storage_path: watcher_tel_path3,
+        ..Default::default()
+    })?;
+    let unknown_eid = IdentifierPrefix::Basic(BasicPrefix::Ed25519(Signer::new().public_key()));
+    let err = watcher3.watcher_data.latest_loc_scheme(&unknown_eid);
+    assert!(
+        matches!(err, Err(ActorError::NoLocation { ref id }) if id == &unknown_eid),
+        "expected NoLocation for unknown eid, got {err:?}"
+    );
+
+    Ok(())
+}

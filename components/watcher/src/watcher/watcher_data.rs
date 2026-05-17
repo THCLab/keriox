@@ -808,7 +808,7 @@ impl<S: OobiStorageBackend> WatcherData<S> {
     /// callers that previously hardcoded `Scheme::Http` therefore
     /// silently selected stale endpoints. Use this helper from any
     /// path that wants "current" rather than "specific scheme".
-    fn latest_loc_scheme(
+    pub(crate) fn latest_loc_scheme(
         &self,
         eid: &IdentifierPrefix,
     ) -> Result<LocationScheme, ActorError> {

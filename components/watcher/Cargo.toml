@@ -39,6 +39,7 @@ keri-controller = { path = "../controller" }
 witness = { path = "../witness" }
 futures = { version = "0.3.13" }
 tempfile = { version = "3.1" }
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 
 [package.metadata.release]
 publish = false
