@@ -26,8 +26,8 @@ use crate::{
     error::{Error, Result},
     identifier::{ActionRequired, Identifier},
     types::{
-        DelegationConfig, DelegationRequest, IdentifierConfig, MultisigConfig, MultisigRequest,
-        PendingRequest, RotationConfig,
+        DelegationConfig, DelegationRequest, GroupRotationConfig, IdentifierConfig,
+        MultisigConfig, MultisigRequest, PendingRequest, RotationConfig,
     },
 };
 
@@ -607,13 +607,83 @@ pub async fn create_multisig<S: SigningBackend + Clone + 'static>(
     Ok(group_prefix)
 }
 
-/// Accept a multisig invitation discovered in the mailbox (joiner side).
+/// Rotate the keys of an established multisig (group) identifier.
 ///
-/// Co-signs the group event and forwards the signature to other members
-/// via witnesses.
+/// Builds a `rot` event against `group_id`, signs it with the caller's
+/// `signer`, signs and forwards an exchange message to every other
+/// remaining member, finalises the local state, and synchronises with
+/// witnesses on both the caller's and the group's mailbox planes.
 ///
-/// The `request` is obtained from [`poll_pending_requests`] or by
-/// converting an `ActionRequired::MultisigRequest`.
+/// `config.new_participants` is the full post-rotation member set. The
+/// caller (the local identifier) does not need to appear in it
+/// (self-eviction is permitted) but must currently be a member of the
+/// group's key set.
+///
+/// When `config.new_signature_threshold > 1` this call only contributes
+/// the caller's signature; remaining co-signers complete the rotation
+/// via [`accept_multisig`] (which already handles both inception and
+/// rotation events) followed by [`sync_multisig`] on every member.
+///
+/// Removal and key refresh are supported. Adding a member whose
+/// next-key digest was not pre-committed in the prior establishment
+/// event is rejected by KERI verifiers; that scenario is out of scope.
+///
+/// # Errors
+/// - [`Error::Controller`] if event generation or threshold validation fails.
+/// - [`Error::Mechanics`] on network failures.
+/// - [`Error::Signing`] if signing fails.
+pub async fn rotate_group<S: SigningBackend + Clone + 'static>(
+    id: &mut Identifier,
+    signer: &S,
+    group_id: &IdentifierPrefix,
+    config: GroupRotationConfig,
+) -> Result<()> {
+    let (rot_event, exn_messages) = id
+        .rotate_group(
+            group_id,
+            config.new_participants,
+            config.new_signature_threshold,
+            config.new_next_threshold,
+            config.witness_to_add,
+            config.witness_to_remove,
+            config.witness_threshold,
+        )
+        .await?;
+
+    let sig_rot = ed25519_sig(signer, rot_event.as_bytes())?;
+
+    let mut exchange_pairs = Vec::with_capacity(exn_messages.len());
+    for exn in &exn_messages {
+        let sig_exn = ed25519_sig(signer, exn.as_bytes())?;
+        let exn_index_sig = id.sign_with_index(sig_exn, 0)?;
+        exchange_pairs.push((exn.as_bytes().to_vec(), exn_index_sig));
+    }
+
+    id.finalize_group_event(rot_event.as_bytes(), sig_rot, exchange_pairs)
+        .await?;
+    id.notify_witnesses().await?;
+
+    let caller_witnesses = id.find_state(id.id())?.witness_config.witnesses;
+    for witness in &caller_witnesses {
+        _query_mailbox(id, signer, witness).await?;
+    }
+    let group_witnesses = id.find_state(group_id)?.witness_config.witnesses;
+    for witness in &group_witnesses {
+        _query_mailbox_for(id, signer, group_id, witness).await?;
+    }
+
+    Ok(())
+}
+
+/// Accept a pending group event discovered in the mailbox (joiner side).
+///
+/// Handles both group inceptions and group rotations: the underlying
+/// `finalize_group_event` is event-type agnostic and the index-discovery
+/// helper dispatches on event-data variant.
+///
+/// Co-signs the event and forwards the signature to other members via
+/// witnesses. The `request` is obtained from [`poll_pending_requests`]
+/// or by converting an `ActionRequired::MultisigRequest`.
 ///
 /// # Errors
 /// - [`Error::EncodingError`] if event encoding fails.

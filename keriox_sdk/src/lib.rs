@@ -101,8 +101,9 @@ pub use oobi_store::OobiStore;
 pub use store::KeriStore;
 pub use tel::{check_credential_status, get_credential_status};
 pub use types::{
-    CredentialStatus, DelegationConfig, DelegationRequest, IdentifierConfig, MultisigConfig,
-    MultisigRequest, PendingRequest, RotationConfig, SignedEnvelope, VerifiedPayload,
+    CredentialStatus, DelegationConfig, DelegationRequest, GroupRotationConfig, IdentifierConfig,
+    MultisigConfig, MultisigRequest, PendingRequest, RotationConfig, SignedEnvelope,
+    VerifiedPayload,
 };
 
 #[cfg(feature = "keyprovider")]

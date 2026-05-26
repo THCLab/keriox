@@ -37,8 +37,10 @@ use crate::{
     controller::Controller,
     error::{Error, Result},
     identifier::Identifier,
-    operations::{create_identifier_with_controller, create_multisig, request_delegation},
-    types::{DelegationConfig, IdentifierConfig, MultisigConfig},
+    operations::{
+        create_identifier_with_controller, create_multisig, request_delegation, rotate_group,
+    },
+    types::{DelegationConfig, GroupRotationConfig, IdentifierConfig, MultisigConfig},
 };
 
 /// Manages a directory of named KERI identifiers.
@@ -403,10 +405,52 @@ impl KeriStore {
         Ok(group_prefix)
     }
 
+    /// Rotate an established multisig group identifier.
+    ///
+    /// Looks up the caller's signer and the group prefix from local
+    /// storage by `group_alias`, calls [`crate::operations::rotate_group`],
+    /// and rewrites the `participants` file with the post-rotation set on
+    /// success. The caller does not have to handle signing, exchange
+    /// messages, mailbox queries, or KERI event types directly.
+    ///
+    /// When the prior signature threshold is greater than 1, this call
+    /// submits the caller's signature; remaining co-signers complete the
+    /// rotation by calling [`crate::operations::accept_multisig`] on the
+    /// pending request, after which every member calls
+    /// [`crate::operations::sync_multisig`].
+    ///
+    /// On partial failure the persisted member set is **not** updated, so
+    /// retrying will rebuild a fresh rotation event against the
+    /// already-applied local state. Callers that retry should reload the
+    /// identifier from the store first.
+    ///
+    /// # Errors
+    /// - [`Error::PersistenceError`] on I/O failures.
+    /// - Propagates errors from [`crate::operations::rotate_group`].
+    pub async fn rotate_multisig_group(
+        &self,
+        group_alias: &str,
+        config: GroupRotationConfig,
+    ) -> Result<()> {
+        let member_alias = self.load_multisig_member_alias(group_alias)?;
+        let group_id = self.load_multisig_prefix(group_alias)?;
+
+        let mut id = self.load(&member_alias)?;
+        let signer = self.load_signer(&member_alias)?;
+
+        let new_members = config.new_participants.clone();
+        rotate_group(&mut id, &signer, &group_id, config).await?;
+
+        self.persist_group_metadata(group_alias, &group_id, &new_members, &member_alias)?;
+        Ok(())
+    }
+
     /// Persist multisig group metadata after joining (joiner side).
     ///
     /// Call this after [`crate::operations::accept_multisig`] to record the
     /// group prefix, member list, and member alias for later retrieval.
+    /// Also use it on the joiner side after a co-signed rotation to
+    /// refresh the persisted `participants` list.
     ///
     /// # Errors
     /// - [`Error::PersistenceError`] on I/O failures.

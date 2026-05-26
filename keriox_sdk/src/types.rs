@@ -122,6 +122,32 @@ pub struct MultisigConfig {
     pub delegator: Option<IdentifierPrefix>,
 }
 
+/// Configuration for rotating an established multisig (group) identifier.
+///
+/// Used by [`crate::operations::rotate_group`] and
+/// [`crate::store::KeriStore::rotate_multisig_group`].
+///
+/// The post-rotation member set is given by `new_participants`. Removal
+/// and key refresh are supported in a single rotation; **adding** a
+/// member whose next-key digest was not previously committed via the
+/// prior establishment event is rejected by KERI verifiers because of
+/// pre-rotation digest binding.
+#[derive(Debug, Default, Clone)]
+pub struct GroupRotationConfig {
+    /// Full post-rotation member set (caller included if remaining).
+    pub new_participants: Vec<IdentifierPrefix>,
+    /// Number of signatures required to authorise group events after rotation.
+    pub new_signature_threshold: u64,
+    /// New pre-rotation threshold. Defaults to `new_signature_threshold` when `None`.
+    pub new_next_threshold: Option<u64>,
+    /// Witnesses to add during this rotation.
+    pub witness_to_add: Vec<LocationScheme>,
+    /// Witnesses to remove during this rotation.
+    pub witness_to_remove: Vec<BasicPrefix>,
+    /// New witness signing threshold. Defaults to the group's current threshold when `None`.
+    pub witness_threshold: Option<u64>,
+}
+
 /// A pending multisig request discovered in the mailbox.
 ///
 /// Extracted from [`ActionRequired::MultisigRequest`] via [`MultisigRequest::try_from`].

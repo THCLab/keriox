@@ -27,10 +27,23 @@ where
                     .min()
                     .expect("event should have at least one signature") as usize;
             if min_sig_idx == id_idx {
-                let witnesses = self
+                // For events whose effect on witness config has already been
+                // applied to local state (e.g. a freshly finalized rotation),
+                // `find_witnesses_at_event` returns DuplicateError when it
+                // re-applies the event. Treat that as "use the current
+                // witness config" — the state already reflects the event.
+                let witnesses = match self
                     .known_events
                     .find_witnesses_at_event(&ev.event_message)
-                    .expect("Can't find witnesses");
+                {
+                    Ok(ws) => ws,
+                    Err(_) => self
+                        .known_events
+                        .storage
+                        .get_state(&ev.event_message.data.get_prefix())
+                        .map(|st| st.witness_config.witnesses)
+                        .unwrap_or_default(),
+                };
                 n += 1;
                 Some(self.communication.publish(witnesses, &ev))
             } else {

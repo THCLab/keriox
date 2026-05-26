@@ -145,6 +145,41 @@ fn make_rotation(
         .map_err(|e| Error::EventGenerationError(e.to_string()))
 }
 
+/// Build a rotation event where the pre-rotation commitment is supplied as
+/// next-key digests rather than raw public keys.
+///
+/// Used by group rotation: the caller only has each co-signer's published
+/// next-key hash from local state, not the raw next public key.
+pub fn rotate_with_next_hashes(
+    state: IdentifierState,
+    current_keys: Vec<BasicPrefix>,
+    new_next_hashes: Vec<SelfAddressingIdentifier>,
+    new_signature_threshold: u64,
+    new_next_threshold: u64,
+    witness_to_add: Vec<BasicPrefix>,
+    witness_to_remove: Vec<BasicPrefix>,
+    witness_threshold: u64,
+) -> Result<KeriEvent<KeyEvent>, Error> {
+    if new_signature_threshold == 0 || new_signature_threshold > current_keys.len() as u64 {
+        return Err(Error::EventGenerationError(
+            "Improper signature threshold".into(),
+        ));
+    }
+    EventMsgBuilder::new(EventTypeTag::Rot)
+        .with_prefix(&state.prefix)
+        .with_sn(state.sn + 1)
+        .with_previous_event(&state.last_event_digest.into())
+        .with_keys(current_keys)
+        .with_threshold(&SignatureThreshold::Simple(new_signature_threshold))
+        .with_next_keys_hashes(new_next_hashes)
+        .with_next_threshold(&SignatureThreshold::Simple(new_next_threshold))
+        .with_witness_to_add(&witness_to_add)
+        .with_witness_to_remove(&witness_to_remove)
+        .with_witness_threshold(&SignatureThreshold::Simple(witness_threshold))
+        .build()
+        .map_err(|e| Error::EventGenerationError(e.to_string()))
+}
+
 pub fn anchor(
     state: IdentifierState,
     payload: &[SelfAddressingIdentifier],

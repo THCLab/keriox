@@ -10,9 +10,11 @@ use keri_core::{
         EventTypeTag,
     },
     mailbox::exchange::{Exchange, ForwardTopic, SignedExchange},
+    oobi::LocationScheme,
     oobi_manager::storage::OobiStorageBackend,
-    prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
+    prefix::{BasicPrefix, CesrPrimitive, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
 };
+use said::SelfAddressingIdentifier;
 use teliox::database::TelEventDatabase;
 
 use crate::identifier::Identifier;
@@ -94,6 +96,114 @@ where
         }
 
         Ok((serialized_icp, exchanges))
+    }
+
+    /// Build a rotation event for an established group identifier and the
+    /// exchange messages addressed to each remaining co-signer.
+    ///
+    /// `new_participants` is the full post-rotation member set; pass the
+    /// same set with one member removed to evict a device. The caller
+    /// (`self.id`) does not need to appear in the list (self-eviction is
+    /// permitted) but, if absent, must currently be in the group's key set
+    /// — otherwise `NotGroupParticipantError` is returned.
+    ///
+    /// Per-member next-key digests are read from each participant's local
+    /// state, so callers must ensure participants' KELs are up to date
+    /// before invocation.
+    ///
+    /// Returns `(serialized_rot, exchanges)` analogous to [`incept_group`].
+    pub async fn rotate_group(
+        &self,
+        group_id: &IdentifierPrefix,
+        new_participants: Vec<IdentifierPrefix>,
+        new_signature_threshold: u64,
+        new_next_threshold: Option<u64>,
+        witness_to_add: Vec<LocationScheme>,
+        witness_to_remove: Vec<BasicPrefix>,
+        witness_threshold: Option<u64>,
+    ) -> Result<(String, Vec<String>), MechanicsError> {
+        let group_state = self
+            .known_events
+            .storage
+            .get_state(group_id)
+            .ok_or_else(|| MechanicsError::UnknownIdentifierError(group_id.clone()))?;
+
+        let own_pk = self
+            .known_events
+            .current_public_keys(&self.id)?
+            .into_iter()
+            .next()
+            .ok_or(MechanicsError::NotGroupParticipantError)?;
+        let is_current_member = group_state
+            .current
+            .public_keys
+            .iter()
+            .any(|pk| pk == &own_pk);
+        let is_pre_committed = group_state
+            .current
+            .next_keys_data
+            .next_keys_hashes()
+            .iter()
+            .any(|nk| nk.verify_binding(own_pk.to_str().as_bytes()));
+        if !is_current_member && !is_pre_committed {
+            return Err(MechanicsError::NotGroupParticipantError);
+        }
+
+        let mut pks: Vec<BasicPrefix> = Vec::with_capacity(new_participants.len());
+        let mut npks: Vec<SelfAddressingIdentifier> = Vec::with_capacity(new_participants.len());
+        for participant in &new_participants {
+            let state = self
+                .known_events
+                .storage
+                .get_state(participant)
+                .ok_or_else(|| MechanicsError::UnknownIdentifierError(participant.clone()))?;
+            pks.extend(state.current.public_keys.clone());
+            npks.extend(state.current.next_keys_data.next_keys_hashes());
+        }
+
+        for wit_oobi in &witness_to_add {
+            self.communication.resolve_loc_schema(wit_oobi).await?;
+        }
+        let witnesses_to_add = witness_to_add
+            .iter()
+            .map(|wit| match &wit.eid {
+                IdentifierPrefix::Basic(bp) => Ok(bp.clone()),
+                _ => Err(MechanicsError::WrongWitnessPrefixError),
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let current_witness_threshold = match &group_state.witness_config.tally {
+            SignatureThreshold::Simple(t) => *t,
+            SignatureThreshold::Weighted(_) => 0,
+        };
+        let next_threshold = new_next_threshold.unwrap_or(new_signature_threshold);
+        let wit_threshold = witness_threshold.unwrap_or(current_witness_threshold);
+
+        let rot = event_generator::rotate_with_next_hashes(
+            group_state,
+            pks,
+            npks,
+            new_signature_threshold,
+            next_threshold,
+            witnesses_to_add,
+            witness_to_remove,
+            wit_threshold,
+        )
+        .map_err(|e| MechanicsError::EventGenerationError(e.to_string()))?;
+
+        let serialized_rot = String::from_utf8(rot.encode()?)
+            .map_err(|e| MechanicsError::EventGenerationError(e.to_string()))?;
+
+        let exchanges = new_participants
+            .iter()
+            .filter(|id| *id != &self.id)
+            .map(|id| -> Result<_, _> {
+                let exn = event_generator::exchange(id, &rot, ForwardTopic::Multisig).encode()?;
+                String::from_utf8(exn).map_err(|_e| MechanicsError::EventFormatError)
+            })
+            .collect::<Result<Vec<String>, MechanicsError>>()?;
+
+        Ok((serialized_rot, exchanges))
     }
 
     /// Finalizes group identifier.
@@ -210,11 +320,20 @@ where
                 signature: vec![exn_signature],
                 data_signature: (material_path.clone(), sigs.clone()),
             }));
-            let wits = self
-                .known_events
-                .get_state_at_event(&to_forward)?
-                .witness_config
-                .witnesses;
+            // `get_state_at_event` re-applies the forwarded event to the
+            // local state, which returns DuplicateError when the event has
+            // already been finalized (the common case during group
+            // rotations). Fall back to the post-application state — its
+            // witness config already reflects the event.
+            let wits = match self.known_events.get_state_at_event(&to_forward) {
+                Ok(state) => state.witness_config.witnesses,
+                Err(_) => self
+                    .known_events
+                    .storage
+                    .get_state(&to_forward.data.get_prefix())
+                    .map(|st| st.witness_config.witnesses)
+                    .unwrap_or_default(),
+            };
             // TODO for now get first witness
             if let Some(wit) = wits.first() {
                 self.communication

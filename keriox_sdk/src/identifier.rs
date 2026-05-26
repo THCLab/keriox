@@ -404,6 +404,40 @@ impl Identifier {
         )?)
     }
 
+    /// Build a rotation event for an established group identifier and the
+    /// exchange messages addressed to each remaining co-signer.
+    ///
+    /// `new_participants` is the full post-rotation member set. Removing
+    /// or rolling over members is supported in a single rotation;
+    /// **adding** a member whose next-key digest was not pre-committed in
+    /// the prior establishment event is rejected by KERI verifiers
+    /// (pre-rotation binding) and out of scope here.
+    ///
+    /// Returns `(serialized_event, vec_of_serialized_exchanges)`.
+    pub async fn rotate_group(
+        &self,
+        group_id: &IdentifierPrefix,
+        new_participants: Vec<IdentifierPrefix>,
+        new_signature_threshold: u64,
+        new_next_threshold: Option<u64>,
+        witness_to_add: Vec<LocationScheme>,
+        witness_to_remove: Vec<BasicPrefix>,
+        witness_threshold: Option<u64>,
+    ) -> Result<(String, Vec<String>)> {
+        Ok(self
+            .inner
+            .rotate_group(
+                group_id,
+                new_participants,
+                new_signature_threshold,
+                new_next_threshold,
+                witness_to_add,
+                witness_to_remove,
+                witness_threshold,
+            )
+            .await?)
+    }
+
     /// Finalise a group/delegated inception event. Returns the new prefix.
     pub async fn finalize_group_incept(
         &mut self,

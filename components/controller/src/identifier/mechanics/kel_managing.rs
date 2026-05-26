@@ -171,26 +171,18 @@ where
 
     /// Helper function for getting the position of identifier's public key in
     /// group's current keys list.
+    ///
+    /// For `Rot`/`Drt`, two member states are accepted: the member has
+    /// already rotated locally and now reveals their current public key
+    /// (so the match is by `current_public_keys`), or the member has
+    /// not yet rotated locally and the event reveals their pre-committed
+    /// next-key (so the match is by `next_keys_hashes`).
     pub(crate) fn get_index(&self, key_event: &KeyEvent) -> Result<usize, MechanicsError> {
         match &key_event.event_data {
             EventData::Icp(icp) => self.index_in_current_keys(&icp.key_config),
-            EventData::Rot(rot) => {
-                let own_npk = &self.known_events.next_keys_hashes(&self.id)?[0];
-                rot.key_config
-                    .public_keys
-                    .iter()
-                    .position(|pk| own_npk.verify_binding(pk.to_str().as_bytes()))
-                    .ok_or(MechanicsError::NotGroupParticipantError)
-            }
+            EventData::Rot(rot) => self.index_in_rotation(&rot.key_config),
             EventData::Dip(dip) => self.index_in_current_keys(&dip.inception_data.key_config),
-            EventData::Drt(drt) => {
-                let own_npk = &self.known_events.next_keys_hashes(&self.id)?[0];
-                drt.key_config
-                    .public_keys
-                    .iter()
-                    .position(|pk| own_npk.verify_binding(pk.to_str().as_bytes()))
-                    .ok_or(MechanicsError::NotGroupParticipantError)
-            }
+            EventData::Drt(drt) => self.index_in_rotation(&drt.key_config),
             EventData::Ixn(_ixn) => {
                 let own_pk = self.known_events.current_public_keys(&self.id)?[0].clone();
                 self.known_events
@@ -200,5 +192,18 @@ where
                     .ok_or(MechanicsError::NotGroupParticipantError)
             }
         }
+    }
+
+    fn index_in_rotation(&self, key_config: &KeyConfig) -> Result<usize, MechanicsError> {
+        let own_pk = self.known_events.current_public_keys(&self.id)?[0].clone();
+        if let Some(pos) = key_config.public_keys.iter().position(|pk| pk == &own_pk) {
+            return Ok(pos);
+        }
+        let own_npk = self.known_events.next_keys_hashes(&self.id)?[0].clone();
+        key_config
+            .public_keys
+            .iter()
+            .position(|pk| own_npk.verify_binding(pk.to_str().as_bytes()))
+            .ok_or(MechanicsError::NotGroupParticipantError)
     }
 }
