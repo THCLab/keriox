@@ -28,7 +28,7 @@ fn ingest_kel_of(src: &Identifier, kel_owner: &IdentifierPrefix, dst: &Identifie
 }
 
 fn fresh_signer() -> (SeedPrefix, Arc<Signer>) {
-    let (seed, _pk) = keri_sdk::keys::generate_ed25519().unwrap();
+    let (seed, _pk) = keri_sdk::keys::generate_ed25519(false).unwrap();
     let signer = Arc::new(Signer::new_with_seed(&seed).unwrap());
     (seed, signer)
 }
@@ -58,7 +58,7 @@ async fn test_oob_delegation_single_aid_delegator() {
     let bob_db = dvc_root.path().join("bob_db");
     std::fs::create_dir_all(&bob_db).unwrap();
     let (_bob_seed, bob_signer) = fresh_signer();
-    let (_, bob_next_pk) = keri_sdk::keys::generate_ed25519().unwrap();
+    let (_, bob_next_pk) = keri_sdk::keys::generate_ed25519(false).unwrap();
     let (bob_id, bob_prefix, dip_cesr) = operations::build_delegation_request(
         bob_db,
         bob_signer.clone(),
@@ -141,7 +141,7 @@ async fn test_oob_delegation_one_of_one_group_delegator() {
     let bob_db = dvc_root.path().join("bob_db");
     std::fs::create_dir_all(&bob_db).unwrap();
     let (_bob_seed, bob_signer) = fresh_signer();
-    let (_, bob_next_pk) = keri_sdk::keys::generate_ed25519().unwrap();
+    let (_, bob_next_pk) = keri_sdk::keys::generate_ed25519(false).unwrap();
     let (bob_id, bob_prefix, dip_cesr) = operations::build_delegation_request(
         bob_db,
         bob_signer.clone(),

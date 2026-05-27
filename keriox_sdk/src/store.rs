@@ -236,7 +236,9 @@ impl KeriStore {
     /// - [`Error::Signing`] if key generation or signing fails.
     /// - Propagates errors from [`crate::operations::rotate`].
     pub async fn rotate(&self, alias: &str) -> Result<()> {
-        let (new_next_seed, new_next_pk) = crate::keys::generate_ed25519()?;
+        // Next-key commitment is non-transferable: it is a hash commitment
+        // to the public key that will become current after the next rotation.
+        let (new_next_seed, new_next_pk) = crate::keys::generate_ed25519(false)?;
 
         let mut id = self.load(alias)?;
         let signer = self.load_signer(alias)?;
