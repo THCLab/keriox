@@ -103,7 +103,7 @@ pub use tel::{check_credential_status, get_credential_status};
 pub use types::{
     CredentialStatus, DelegationConfig, DelegationRequest, GroupRotationConfig, IdentifierConfig,
     MultisigConfig, MultisigRequest, PendingRequest, RotationConfig, SignedEnvelope,
-    VerifiedPayload,
+    SignerAlgorithm, VerifiedPayload,
 };
 
 #[cfg(feature = "keyprovider")]

@@ -17,18 +17,12 @@ async fn main() -> keri_sdk::Result<()> {
     // In a real scenario, witnesses/watchers are obtained from OOBI resolution.
     // Here we show the structure; replace with real OOBIs for your environment.
 
-    let config = IdentifierConfig {
+    let config = IdentifierConfig::default()
         // Witnesses are KERI nodes that countersign inception events.
         // Provide their LocationScheme OOBIs here.
-        witnesses: vec![
-            // Example: LocationScheme from a real witness OOBI URL.
-            // "http://witness-host:5631/oobi/BAAAAAAA.../controller/witness"
-            //   .parse::<Url>().unwrap()
-        ],
-        witness_threshold: 0, // require 0 witnesses (offline mode)
         // Watchers observe your KEL and help with key-event discovery.
-        watchers: vec![],
-    };
+        // Defaults: Ed25519 keys, no witnesses, no watchers.
+        ;
 
     // ── 3. Create the identifier ──────────────────────────────────────────────
 

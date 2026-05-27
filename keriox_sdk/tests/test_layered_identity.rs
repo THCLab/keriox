@@ -68,6 +68,7 @@ async fn test_oob_delegation_single_aid_delegator() {
             witnesses: vec![],
             witness_threshold: 0,
             watchers: vec![],
+            algorithm: keri_sdk::SignerAlgorithm::Ed25519,
         },
     )
     .await
@@ -151,6 +152,7 @@ async fn test_oob_delegation_one_of_one_group_delegator() {
             witnesses: vec![],
             witness_threshold: 0,
             watchers: vec![],
+            algorithm: keri_sdk::SignerAlgorithm::Ed25519,
         },
     )
     .await

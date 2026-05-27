@@ -8,6 +8,7 @@
 //! [`crate::signing`] for `SignedEnvelope` / `VerifiedPayload` usage.
 
 use keri_controller::{BasicPrefix, IdentifierPrefix, LocationScheme};
+pub use keri_core::signer::SignerAlgorithm;
 
 // ── Creation / rotation config ────────────────────────────────────────────────
 
@@ -15,7 +16,13 @@ use keri_controller::{BasicPrefix, IdentifierPrefix, LocationScheme};
 ///
 /// Used by [`crate::operations::create_identifier`] and
 /// [`crate::store::KeriStore::create`].
-#[derive(Debug, Default, Clone)]
+///
+/// Defaults to Ed25519. Use [`with_algorithm`](Self::with_algorithm) (or
+/// preset constructors like [`p256`](Self::p256) /
+/// [`secp256k1`](Self::secp256k1)) to pick a different curve — the most
+/// common reason is to derive an AID whose controlling key lives in
+/// platform-native crypto (iOS Secure Enclave, Android Keystore: P-256).
+#[derive(Debug, Clone)]
 pub struct IdentifierConfig {
     /// Witness OOBIs to include in the inception event.
     pub witnesses: Vec<LocationScheme>,
@@ -23,6 +30,37 @@ pub struct IdentifierConfig {
     pub witness_threshold: u64,
     /// Watcher OOBIs to configure after inception.
     pub watchers: Vec<LocationScheme>,
+    /// Algorithm to use when generating the current and next signing keys.
+    pub algorithm: SignerAlgorithm,
+}
+
+impl Default for IdentifierConfig {
+    fn default() -> Self {
+        Self {
+            witnesses: vec![],
+            witness_threshold: 0,
+            watchers: vec![],
+            algorithm: SignerAlgorithm::Ed25519,
+        }
+    }
+}
+
+impl IdentifierConfig {
+    /// Replace the signing algorithm and return self for chaining.
+    pub fn with_algorithm(mut self, algorithm: SignerAlgorithm) -> Self {
+        self.algorithm = algorithm;
+        self
+    }
+
+    /// `IdentifierConfig` defaulting to P-256 (NIST secp256r1).
+    pub fn p256() -> Self {
+        Self::default().with_algorithm(SignerAlgorithm::EcdsaSecp256r1)
+    }
+
+    /// `IdentifierConfig` defaulting to secp256k1 (Bitcoin curve).
+    pub fn secp256k1() -> Self {
+        Self::default().with_algorithm(SignerAlgorithm::EcdsaSecp256k1)
+    }
 }
 
 /// Configuration for rotating an identifier's keys.
@@ -56,6 +94,16 @@ pub struct DelegationConfig {
     pub witness_threshold: u64,
     /// Watcher OOBIs to configure after delegation is accepted.
     pub watchers: Vec<LocationScheme>,
+    /// Algorithm to use when generating the delegatee's signing keys.
+    /// Defaults to Ed25519.
+    pub algorithm: SignerAlgorithm,
+}
+
+impl DelegationConfig {
+    pub fn with_algorithm(mut self, algorithm: SignerAlgorithm) -> Self {
+        self.algorithm = algorithm;
+        self
+    }
 }
 
 /// A pending delegation request discovered by the delegator.

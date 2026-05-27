@@ -488,6 +488,7 @@ pub async fn request_delegation<S: SigningBackend + Clone + 'static>(
         witnesses: config.witnesses.clone(),
         witness_threshold: config.witness_threshold,
         watchers: vec![], // watchers configured after delegation is accepted
+        algorithm: config.algorithm,
     };
     let mut temp_id = create_identifier(db_path, signer.clone(), next_pk, temp_config).await?;
 
@@ -609,6 +610,7 @@ pub async fn build_delegation_request<S: SigningBackend + Clone + 'static>(
         witnesses: config.witnesses.clone(),
         witness_threshold: config.witness_threshold,
         watchers: vec![],
+        algorithm: config.algorithm,
     };
     let mut temp_id = create_identifier(db_path, signer.clone(), next_pk, temp_config).await?;
 

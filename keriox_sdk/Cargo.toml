@@ -20,6 +20,7 @@ log = "0.4"
 rand = "0.8.5"
 ed25519-dalek = { version = "2.1.0", features = ["rand_core"] }
 p256 = { version = "0.9", features = ["ecdsa", "sha256"] }
+k256 = { version = "0.9", features = ["ecdsa", "sha256"] }
 base64 = "0.13"
 
 keri-keyprovider = { path = "../keri_keyprovider", version = "0.1.0", optional = true, features = ["software"] }

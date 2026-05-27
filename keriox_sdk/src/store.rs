@@ -73,29 +73,25 @@ impl KeriStore {
     /// Create a brand-new identifier, persist all state, and return the live
     /// handle together with the current signer.
     ///
-    /// Generates random Ed25519 key pairs for the current and next keys
-    /// internally. `config` controls witnesses and watchers.
+    /// Generates random key pairs for the current and next keys internally,
+    /// using `config.algorithm` (default: Ed25519). `config` also controls
+    /// witnesses and watchers.
+    ///
+    /// To make a P-256 AID controlled by a mobile platform key, pass
+    /// [`IdentifierConfig::p256()`]; to make a secp256k1 AID, pass
+    /// [`IdentifierConfig::secp256k1()`].
     ///
     /// # Errors
     /// - [`Error::PersistenceError`] on I/O failures.
+    /// - [`Error::Signing`] if seed generation fails.
     /// - Propagates errors from [`create_identifier`].
     pub async fn create(
         &self,
         alias: &str,
         config: IdentifierConfig,
     ) -> Result<(Identifier, Arc<Signer>)> {
-        use cesrox::primitives::codes::seed::SeedCode;
-        use rand::rngs::OsRng;
-
-        let current_ed = ed25519_dalek::SigningKey::generate(&mut OsRng);
-        let next_ed = ed25519_dalek::SigningKey::generate(&mut OsRng);
-
-        let current_seed = SeedPrefix::new(
-            SeedCode::RandomSeed256Ed25519,
-            current_ed.as_bytes().to_vec(),
-        );
-        let next_seed =
-            SeedPrefix::new(SeedCode::RandomSeed256Ed25519, next_ed.as_bytes().to_vec());
+        let current_seed = crate::keys::generate_seed(config.algorithm)?;
+        let next_seed = crate::keys::generate_seed(config.algorithm)?;
 
         self.create_with_seeds(alias, current_seed, next_seed, config)
             .await
@@ -236,9 +232,13 @@ impl KeriStore {
     /// - [`Error::Signing`] if key generation or signing fails.
     /// - Propagates errors from [`crate::operations::rotate`].
     pub async fn rotate(&self, alias: &str) -> Result<()> {
-        // Next-key commitment is non-transferable: it is a hash commitment
-        // to the public key that will become current after the next rotation.
-        let (new_next_seed, new_next_pk) = crate::keys::generate_ed25519(false)?;
+        // Detect the current signer's algorithm from the persisted seed and
+        // generate a matching new next-key commitment, so the KEL stays on
+        // a single curve across rotations (otherwise a P-256 AID would
+        // silently transition to Ed25519 after the next rotation).
+        let current_seed = self.load_seed(alias, "priv_key")?;
+        let algorithm = crate::keys::seed_algorithm(&current_seed)?;
+        let (new_next_seed, new_next_pk) = crate::keys::generate_keypair(algorithm, false)?;
 
         let mut id = self.load(alias)?;
         let signer = self.load_signer(alias)?;
@@ -296,18 +296,8 @@ impl KeriStore {
         alias: &str,
         config: DelegationConfig,
     ) -> Result<(Identifier, IdentifierPrefix, Arc<Signer>)> {
-        use cesrox::primitives::codes::seed::SeedCode;
-        use rand::rngs::OsRng;
-
-        let current_ed = ed25519_dalek::SigningKey::generate(&mut OsRng);
-        let next_ed = ed25519_dalek::SigningKey::generate(&mut OsRng);
-
-        let current_seed = SeedPrefix::new(
-            SeedCode::RandomSeed256Ed25519,
-            current_ed.as_bytes().to_vec(),
-        );
-        let next_seed =
-            SeedPrefix::new(SeedCode::RandomSeed256Ed25519, next_ed.as_bytes().to_vec());
+        let current_seed = crate::keys::generate_seed(config.algorithm)?;
+        let next_seed = crate::keys::generate_seed(config.algorithm)?;
 
         let alias_dir = self.alias_dir(alias);
         std::fs::create_dir_all(&alias_dir)
@@ -319,10 +309,7 @@ impl KeriStore {
             Signer::new_with_seed(&current_seed).map_err(|e| Error::Signing(e.to_string()))?,
         );
 
-        let (next_pub_key, _) = next_seed
-            .derive_key_pair()
-            .map_err(|e| Error::Signing(e.to_string()))?;
-        let next_pk = keri_controller::BasicPrefix::Ed25519NT(next_pub_key);
+        let next_pk = crate::keys::derive_public_key(&next_seed, false)?;
 
         let delegator_id = config.delegator.clone();
         let (temp_id, delegated_prefix) =
