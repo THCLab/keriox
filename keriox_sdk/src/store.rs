@@ -429,7 +429,11 @@ impl KeriStore {
         let group_id = self.load_multisig_prefix(group_alias)?;
 
         let mut id = self.load(&member_alias)?;
-        let signer = self.load_signer(&member_alias)?;
+        // Multisig rotation reveals the local member's pre-committed
+        // next-key, so the contribution must be signed with the next
+        // signer (now becoming current). The single-AID counterpart of
+        // this same fix lives in KeriStore::rotate.
+        let signer = self.load_next_signer(&member_alias)?;
 
         let new_members = config.new_participants.clone();
         rotate_group(&mut id, &signer, &group_id, config).await?;
