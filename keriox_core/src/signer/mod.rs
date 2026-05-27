@@ -1,10 +1,19 @@
+use cesrox::primitives::codes::self_signing::SelfSigning;
 use rand::rngs::OsRng;
 
 use crate::{
     error::Error,
     keys::{KeysError, PrivateKey, PublicKey},
-    prefix::SeedPrefix,
+    prefix::{BasicPrefix, SeedPrefix},
 };
+
+/// Which cryptographic algorithm a [`Signer`] uses.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SignerAlgorithm {
+    Ed25519,
+    EcdsaSecp256k1,
+    EcdsaSecp256r1,
+}
 
 pub trait KeyManager {
     fn sign(&self, msg: &[u8]) -> Result<Vec<u8>, Error>;
@@ -38,6 +47,7 @@ impl KeyManager for CryptoBox {
         let new_signer = Signer {
             priv_key: self.next_priv_key.clone(),
             pub_key: self.next_pub_key.clone(),
+            algorithm: self.signer.algorithm,
         };
         self.signer = new_signer;
         self.next_priv_key = next_priv_key;
@@ -61,16 +71,21 @@ impl CryptoBox {
 pub struct Signer {
     priv_key: PrivateKey,
     pub_key: PublicKey,
+    algorithm: SignerAlgorithm,
 }
 
 impl Signer {
-    /// Creates a new Signer with a random key.
+    /// Creates a new Signer with a random Ed25519 key.
     pub fn new() -> Self {
         let ed = ed25519_dalek::SigningKey::generate(&mut OsRng);
         let pub_key = PublicKey::new(ed.verifying_key().to_bytes().to_vec());
         let priv_key = PrivateKey::new(ed.to_bytes().to_vec());
 
-        Signer { pub_key, priv_key }
+        Signer {
+            pub_key,
+            priv_key,
+            algorithm: SignerAlgorithm::Ed25519,
+        }
     }
 
     /// Creates a new Signer with the given ED25519_dalek private key.
@@ -81,24 +96,87 @@ impl Signer {
         Ok(Signer {
             priv_key: PrivateKey::new(priv_key.as_bytes().to_vec()),
             pub_key: PublicKey::new(pub_key.as_bytes().to_vec()),
+            algorithm: SignerAlgorithm::Ed25519,
         })
     }
 
+    /// Construct a [`Signer`] from any supported [`SeedPrefix`] variant.
+    ///
+    /// The algorithm is inferred from the seed variant so subsequent calls to
+    /// [`Signer::sign`], [`Signer::signing_code`], and [`Signer::basic_prefix`]
+    /// dispatch to the right primitive without further configuration.
     pub fn new_with_seed(seed: &SeedPrefix) -> Result<Self, Error> {
         let (public_key, private_key) = seed.derive_key_pair()?;
+        let algorithm = match seed {
+            SeedPrefix::RandomSeed256Ed25519(_) => SignerAlgorithm::Ed25519,
+            SeedPrefix::RandomSeed256ECDSAsecp256k1(_) => SignerAlgorithm::EcdsaSecp256k1,
+            SeedPrefix::RandomSeed256ECDSA256r1(_) => SignerAlgorithm::EcdsaSecp256r1,
+            SeedPrefix::RandomSeed448(_) => {
+                return Err(Error::SemanticError(
+                    "Ed448 signing seeds are not yet supported by Signer".into(),
+                ));
+            }
+        };
 
         Ok(Signer {
             priv_key: private_key,
             pub_key: public_key,
+            algorithm,
         })
     }
 
     pub fn sign(&self, msg: impl AsRef<[u8]>) -> Result<Vec<u8>, KeysError> {
-        self.priv_key.sign_ed(msg.as_ref())
+        match self.algorithm {
+            SignerAlgorithm::Ed25519 => self.priv_key.sign_ed(msg.as_ref()),
+            SignerAlgorithm::EcdsaSecp256k1 => self.priv_key.sign_ecdsa(msg.as_ref()),
+            SignerAlgorithm::EcdsaSecp256r1 => self.priv_key.sign_p256(msg.as_ref()),
+        }
     }
 
     pub fn public_key(&self) -> PublicKey {
         self.pub_key.clone()
+    }
+
+    /// The [`SelfSigning`] CESR code matching this signer's algorithm.
+    ///
+    /// Callers wrapping raw signature bytes in a `SelfSigningPrefix` should
+    /// use this code instead of hardcoding `Ed25519Sha512`.
+    pub fn signing_code(&self) -> SelfSigning {
+        match self.algorithm {
+            SignerAlgorithm::Ed25519 => SelfSigning::Ed25519Sha512,
+            SignerAlgorithm::EcdsaSecp256k1 => SelfSigning::ECDSAsecp256k1Sha256,
+            SignerAlgorithm::EcdsaSecp256r1 => SelfSigning::ECDSA256r1Sha256,
+        }
+    }
+
+    /// The signer's algorithm.
+    pub fn algorithm(&self) -> SignerAlgorithm {
+        self.algorithm
+    }
+
+    /// Wrap this signer's public key in the [`BasicPrefix`] variant matching
+    /// its algorithm.
+    ///
+    /// `transferable = true` returns the rotation-capable variant
+    /// (Ed25519 / ECDSAsecp256k1 / ECDSA256r1); `false` returns the
+    /// non-transferable variant.
+    pub fn basic_prefix(&self, transferable: bool) -> BasicPrefix {
+        match (self.algorithm, transferable) {
+            (SignerAlgorithm::Ed25519, true) => BasicPrefix::Ed25519(self.pub_key.clone()),
+            (SignerAlgorithm::Ed25519, false) => BasicPrefix::Ed25519NT(self.pub_key.clone()),
+            (SignerAlgorithm::EcdsaSecp256k1, true) => {
+                BasicPrefix::ECDSAsecp256k1(self.pub_key.clone())
+            }
+            (SignerAlgorithm::EcdsaSecp256k1, false) => {
+                BasicPrefix::ECDSAsecp256k1NT(self.pub_key.clone())
+            }
+            (SignerAlgorithm::EcdsaSecp256r1, true) => {
+                BasicPrefix::ECDSA256r1(self.pub_key.clone())
+            }
+            (SignerAlgorithm::EcdsaSecp256r1, false) => {
+                BasicPrefix::ECDSA256r1NT(self.pub_key.clone())
+            }
+        }
     }
 }
 

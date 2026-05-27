@@ -8,10 +8,38 @@
 
 use std::sync::Arc;
 
+use cesrox::primitives::codes::self_signing::SelfSigning;
 use keri_controller::BasicPrefix;
 use keri_core::{keys::PublicKey, signer::Signer};
+use keri_keyprovider::SignatureAlgorithm;
 
 use crate::error::Error;
+
+/// Map a [`SignatureAlgorithm`] from the provider crate to the matching
+/// CESR self-signing code.
+pub(crate) fn signing_code_for(algorithm: SignatureAlgorithm) -> SelfSigning {
+    match algorithm {
+        SignatureAlgorithm::Ed25519 => SelfSigning::Ed25519Sha512,
+        SignatureAlgorithm::EcdsaSecp256k1 => SelfSigning::ECDSAsecp256k1Sha256,
+        SignatureAlgorithm::EcdsaSecp256r1 => SelfSigning::ECDSA256r1Sha256,
+    }
+}
+
+/// Build a [`BasicPrefix`] of the right algorithm + transferability.
+pub(crate) fn basic_prefix_for(
+    algorithm: SignatureAlgorithm,
+    public_key: PublicKey,
+    transferable: bool,
+) -> BasicPrefix {
+    match (algorithm, transferable) {
+        (SignatureAlgorithm::Ed25519, true) => BasicPrefix::Ed25519(public_key),
+        (SignatureAlgorithm::Ed25519, false) => BasicPrefix::Ed25519NT(public_key),
+        (SignatureAlgorithm::EcdsaSecp256k1, true) => BasicPrefix::ECDSAsecp256k1(public_key),
+        (SignatureAlgorithm::EcdsaSecp256k1, false) => BasicPrefix::ECDSAsecp256k1NT(public_key),
+        (SignatureAlgorithm::EcdsaSecp256r1, true) => BasicPrefix::ECDSA256r1(public_key),
+        (SignatureAlgorithm::EcdsaSecp256r1, false) => BasicPrefix::ECDSA256r1NT(public_key),
+    }
+}
 
 /// Unified signer that works with either a legacy [`Signer`] or a
 /// pluggable [`KeyProvider`](keri_keyprovider::KeyProvider).
@@ -54,14 +82,26 @@ impl KeriSigner {
         }
     }
 
-    /// Return the [`BasicPrefix::Ed25519`] for this key (transferable).
-    pub fn basic_prefix(&self) -> BasicPrefix {
-        BasicPrefix::Ed25519(self.public_key())
+    /// Return the [`BasicPrefix`] for this key, in the variant matching the
+    /// signer's algorithm.
+    ///
+    /// `transferable = true` returns the rotation-capable variant
+    /// (Ed25519 / ECDSAsecp256k1 / ECDSA256r1); `false` returns the
+    /// non-transferable variant.
+    pub fn basic_prefix(&self, transferable: bool) -> BasicPrefix {
+        let pk = self.public_key();
+        match self {
+            KeriSigner::Legacy(s) => s.basic_prefix(transferable),
+            KeriSigner::Provider(p) => basic_prefix_for(p.algorithm(), pk, transferable),
+        }
     }
 
-    /// Return the [`BasicPrefix::Ed25519NT`] for this key (non-transferable).
-    pub fn basic_prefix_nt(&self) -> BasicPrefix {
-        BasicPrefix::Ed25519NT(self.public_key())
+    /// CESR self-signing code matching the signer's algorithm.
+    pub fn signing_code(&self) -> SelfSigning {
+        match self {
+            KeriSigner::Legacy(s) => s.signing_code(),
+            KeriSigner::Provider(p) => signing_code_for(p.algorithm()),
+        }
     }
 }
 

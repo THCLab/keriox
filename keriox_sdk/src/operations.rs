@@ -46,6 +46,18 @@ pub trait SigningBackend {
     fn sign_data(&self, data: &[u8]) -> Result<Vec<u8>>;
     /// Return the public key.
     fn public_key(&self) -> keri_core::keys::PublicKey;
+    /// The CESR self-signing code matching this backend's algorithm.
+    ///
+    /// Implementations should return the variant whose raw signature byte
+    /// layout matches what [`sign_data`] produces. Used to wrap raw signature
+    /// bytes in the correct [`SelfSigningPrefix`] variant.
+    fn signing_code(&self) -> cesrox::primitives::codes::self_signing::SelfSigning;
+    /// The [`BasicPrefix`] variant for this backend's public key.
+    ///
+    /// `transferable = true` selects the rotation-capable variant
+    /// (Ed25519 / ECDSAsecp256k1 / ECDSA256r1); `false` selects the
+    /// non-transferable variant.
+    fn basic_prefix(&self, transferable: bool) -> BasicPrefix;
 }
 
 impl SigningBackend for std::sync::Arc<keri_core::signer::Signer> {
@@ -55,6 +67,14 @@ impl SigningBackend for std::sync::Arc<keri_core::signer::Signer> {
 
     fn public_key(&self) -> keri_core::keys::PublicKey {
         keri_core::signer::Signer::public_key(self)
+    }
+
+    fn signing_code(&self) -> cesrox::primitives::codes::self_signing::SelfSigning {
+        keri_core::signer::Signer::signing_code(self)
+    }
+
+    fn basic_prefix(&self, transferable: bool) -> BasicPrefix {
+        keri_core::signer::Signer::basic_prefix(self, transferable)
     }
 }
 
@@ -66,6 +86,14 @@ impl SigningBackend for crate::keyprovider_adapter::KeriSigner {
 
     fn public_key(&self) -> keri_core::keys::PublicKey {
         self.public_key()
+    }
+
+    fn signing_code(&self) -> cesrox::primitives::codes::self_signing::SelfSigning {
+        self.signing_code()
+    }
+
+    fn basic_prefix(&self, transferable: bool) -> BasicPrefix {
+        self.basic_prefix(transferable)
     }
 }
 
@@ -82,16 +110,24 @@ impl SigningBackend for std::sync::Arc<dyn keri_keyprovider::KeyProvider> {
         let pk_data = (**self).public_key();
         keri_core::keys::PublicKey::new(pk_data.bytes.clone())
     }
+
+    fn signing_code(&self) -> cesrox::primitives::codes::self_signing::SelfSigning {
+        crate::keyprovider_adapter::signing_code_for(self.algorithm())
+    }
+
+    fn basic_prefix(&self, transferable: bool) -> BasicPrefix {
+        let pk = SigningBackend::public_key(self);
+        crate::keyprovider_adapter::basic_prefix_for(self.algorithm(), pk, transferable)
+    }
 }
 
 // ── Internal helpers ─────────────────────────────────────────────────────────
 
-pub(crate) fn ed25519_sig(signer: &dyn SigningBackend, data: &[u8]) -> Result<SelfSigningPrefix> {
+/// Sign `data` with `signer` and wrap the raw bytes in the [`SelfSigningPrefix`]
+/// variant matching the signer's algorithm.
+pub(crate) fn wrap_sig(signer: &dyn SigningBackend, data: &[u8]) -> Result<SelfSigningPrefix> {
     let bytes = signer.sign_data(data)?;
-    Ok(SelfSigningPrefix::new(
-        cesrox::primitives::codes::self_signing::SelfSigning::Ed25519Sha512,
-        bytes,
-    ))
+    Ok(SelfSigningPrefix::new(signer.signing_code(), bytes))
 }
 
 // ── Public compound operations ────────────────────────────────────────────────
@@ -125,7 +161,7 @@ pub(crate) async fn create_identifier_with_controller<S: SigningBackend + Clone 
     next_pk: BasicPrefix,
     config: IdentifierConfig,
 ) -> Result<Identifier> {
-    let pks = vec![BasicPrefix::Ed25519(signer.public_key())];
+    let pks = vec![signer.basic_prefix(true)];
     let npks = vec![next_pk];
 
     let inception_event = controller
@@ -137,7 +173,7 @@ pub(crate) async fn create_identifier_with_controller<S: SigningBackend + Clone 
         )
         .await?;
 
-    let sig = ed25519_sig(&signer, inception_event.as_bytes())?;
+    let sig = wrap_sig(&signer, inception_event.as_bytes())?;
     let mut id = controller.finalize_incept(inception_event.as_bytes(), &sig)?;
 
     id.notify_witnesses().await?;
@@ -176,7 +212,7 @@ pub async fn add_watcher<S: SigningBackend>(
     id.resolve_oobi(&Oobi::Location(watcher_oobi.clone()))
         .await?;
     let rpy = id.add_watcher(watcher_oobi.eid.clone())?;
-    let sig = ed25519_sig(km, rpy.as_bytes())?;
+    let sig = wrap_sig(km, rpy.as_bytes())?;
     id.finalize_add_watcher(rpy.as_bytes(), sig).await?;
     Ok(())
 }
@@ -195,7 +231,7 @@ pub async fn rotate<S: SigningBackend + Clone + 'static>(
     current_signer: S,
     config: RotationConfig,
 ) -> Result<()> {
-    let current_keys = vec![BasicPrefix::Ed25519NT(current_signer.public_key())];
+    let current_keys = vec![current_signer.basic_prefix(false)];
     let new_next_keys = vec![config.new_next_pk];
 
     let rotation_event = id
@@ -209,7 +245,7 @@ pub async fn rotate<S: SigningBackend + Clone + 'static>(
         )
         .await?;
 
-    let sig = ed25519_sig(&current_signer, rotation_event.as_bytes())?;
+    let sig = wrap_sig(&current_signer, rotation_event.as_bytes())?;
     id.finalize_rotate(rotation_event.as_bytes(), sig).await?;
     id.notify_witnesses().await?;
 
@@ -239,7 +275,7 @@ pub async fn incept_registry<S: SigningBackend + Clone + 'static>(
     let encoded_ixn = ixn
         .encode()
         .map_err(|e| Error::EncodingError(e.to_string()))?;
-    let sig = ed25519_sig(&signer, &encoded_ixn)?;
+    let sig = wrap_sig(&signer, &encoded_ixn)?;
     id.finalize_anchor(&encoded_ixn, sig).await?;
     id.notify_witnesses().await?;
 
@@ -271,7 +307,7 @@ pub async fn issue<S: SigningBackend + Clone + 'static>(
     let encoded_ixn = ixn
         .encode()
         .map_err(|e| Error::EncodingError(e.to_string()))?;
-    let sig = ed25519_sig(&signer, &encoded_ixn)?;
+    let sig = wrap_sig(&signer, &encoded_ixn)?;
     id.finalize_anchor(&encoded_ixn, sig).await?;
     id.notify_witnesses().await?;
 
@@ -300,7 +336,7 @@ pub async fn revoke<S: SigningBackend + Clone + 'static>(
     credential_said: &SelfAddressingIdentifier,
 ) -> Result<()> {
     let ixn = id.revoke(credential_said)?;
-    let sig = ed25519_sig(&signer, &ixn)?;
+    let sig = wrap_sig(&signer, &ixn)?;
     id.finalize_anchor(&ixn, sig).await?;
     id.notify_witnesses().await?;
 
@@ -343,7 +379,7 @@ async fn _query_mailbox<S: SigningBackend>(
         let encoded = qry
             .encode()
             .map_err(|e| Error::EncodingError(e.to_string()))?;
-        let sig = SelfSigningPrefix::Ed25519Sha512(km.sign_data(&encoded)?);
+        let sig = SelfSigningPrefix::new(km.signing_code(), km.sign_data(&encoded)?);
         let signatures = vec![IndexedSignature::new_both_same(sig.clone(), 0)];
         let signed_qry = SignedMailboxQuery::new_trans(qry.clone(), id.id().clone(), signatures);
         id.finalize_query_mailbox(vec![(qry, sig)]).await?;
@@ -365,7 +401,7 @@ async fn _query_mailbox_for<S: SigningBackend>(
         let encoded = qry
             .encode()
             .map_err(|e| Error::EncodingError(e.to_string()))?;
-        let sig = SelfSigningPrefix::Ed25519Sha512(km.sign_data(&encoded)?);
+        let sig = SelfSigningPrefix::new(km.signing_code(), km.sign_data(&encoded)?);
         let result = id.finalize_query_mailbox(vec![(qry, sig)]).await?;
         actions.extend(result);
     }
@@ -402,7 +438,7 @@ pub async fn approve_delegation<S: SigningBackend + Clone + 'static>(
         .encode()
         .map_err(|e| Error::EncodingError(e.to_string()))?;
 
-    let sig_ixn = ed25519_sig(signer, &encoded_ixn)?;
+    let sig_ixn = wrap_sig(signer, &encoded_ixn)?;
 
     // Finalise the delegating IXN.
     id.finalize_group_event(&encoded_ixn, sig_ixn.clone(), vec![])
@@ -416,7 +452,7 @@ pub async fn approve_delegation<S: SigningBackend + Clone + 'static>(
     }
 
     // Send exchange (approval) to delegatee via witnesses.
-    let sig_exn = ed25519_sig(signer, &encoded_exn)?;
+    let sig_exn = wrap_sig(signer, &encoded_exn)?;
     let data_signature = IndexedSignature::new_both_same(sig_ixn, 0);
     let exn_index_sig = id.sign_with_index(sig_exn, 0)?;
     id.finalize_exchange(&encoded_exn, exn_index_sig, data_signature)
@@ -479,12 +515,12 @@ pub async fn request_delegation<S: SigningBackend + Clone + 'static>(
     )?;
 
     // Sign and finalise.
-    let sig_icp = ed25519_sig(&signer, dip.as_bytes())?;
+    let sig_icp = wrap_sig(&signer, dip.as_bytes())?;
 
     let delegation_exn = exn_messages
         .last()
         .ok_or_else(|| Error::DelegationError("no exchange message generated".into()))?;
-    let sig_exn = ed25519_sig(&signer, delegation_exn.as_bytes())?;
+    let sig_exn = wrap_sig(&signer, delegation_exn.as_bytes())?;
     let exn_index_sig = temp_id.sign_with_index(sig_exn, 0)?;
 
     let delegated_prefix = temp_id
@@ -597,12 +633,12 @@ pub async fn build_delegation_request<S: SigningBackend + Clone + 'static>(
         Some(config.delegator.clone()),
     )?;
 
-    let sig_icp = ed25519_sig(&signer, dip.as_bytes())?;
+    let sig_icp = wrap_sig(&signer, dip.as_bytes())?;
 
     let delegation_exn = exn_messages
         .last()
         .ok_or_else(|| Error::DelegationError("no exchange message generated".into()))?;
-    let sig_exn = ed25519_sig(&signer, delegation_exn.as_bytes())?;
+    let sig_exn = wrap_sig(&signer, delegation_exn.as_bytes())?;
     let exn_index_sig = temp_id.sign_with_index(sig_exn, 0)?;
 
     let delegated_prefix = temp_id
@@ -660,11 +696,11 @@ pub async fn build_delegation_approval<S: SigningBackend + Clone + 'static>(
     let (ixn_cesr, exn_messages) =
         delegator_id.anchor_group_with_seals(group_id, &[event_seal], participants)?;
 
-    let sig_ixn = ed25519_sig(signer, ixn_cesr.as_bytes())?;
+    let sig_ixn = wrap_sig(signer, ixn_cesr.as_bytes())?;
 
     let mut exchange_pairs = Vec::with_capacity(exn_messages.len());
     for exn in &exn_messages {
-        let sig_exn = ed25519_sig(signer, exn.as_bytes())?;
+        let sig_exn = wrap_sig(signer, exn.as_bytes())?;
         let exn_index_sig = delegator_id.sign_with_index(sig_exn, 0)?;
         exchange_pairs.push((exn.as_bytes().to_vec(), exn_index_sig));
     }
@@ -755,11 +791,11 @@ pub async fn anchor_group<S: SigningBackend + Clone + 'static>(
 ) -> Result<()> {
     let (ixn_cesr, exn_messages) = id.anchor_group(group_id, anchors, participants)?;
 
-    let sig_ixn = ed25519_sig(signer, ixn_cesr.as_bytes())?;
+    let sig_ixn = wrap_sig(signer, ixn_cesr.as_bytes())?;
 
     let mut exchange_pairs = Vec::with_capacity(exn_messages.len());
     for exn in &exn_messages {
-        let sig_exn = ed25519_sig(signer, exn.as_bytes())?;
+        let sig_exn = wrap_sig(signer, exn.as_bytes())?;
         let exn_index_sig = id.sign_with_index(sig_exn, 0)?;
         exchange_pairs.push((exn.as_bytes().to_vec(), exn_index_sig));
     }
@@ -797,11 +833,11 @@ pub async fn build_group_anchor<S: SigningBackend + Clone + 'static>(
 ) -> Result<(String, Vec<String>)> {
     let (ixn_cesr, exn_messages) = id.anchor_group(group_id, anchors, participants)?;
 
-    let sig_ixn = ed25519_sig(signer, ixn_cesr.as_bytes())?;
+    let sig_ixn = wrap_sig(signer, ixn_cesr.as_bytes())?;
 
     let mut exchange_pairs = Vec::with_capacity(exn_messages.len());
     for exn in &exn_messages {
-        let sig_exn = ed25519_sig(signer, exn.as_bytes())?;
+        let sig_exn = wrap_sig(signer, exn.as_bytes())?;
         let exn_index_sig = id.sign_with_index(sig_exn, 0)?;
         exchange_pairs.push((exn.as_bytes().to_vec(), exn_index_sig));
     }
@@ -855,11 +891,11 @@ pub async fn create_multisig<S: SigningBackend + Clone + 'static>(
         config.delegator,
     )?;
 
-    let sig_icp = ed25519_sig(signer, icp.as_bytes())?;
+    let sig_icp = wrap_sig(signer, icp.as_bytes())?;
 
     let mut exchange_pairs = Vec::with_capacity(exn_messages.len());
     for exn in &exn_messages {
-        let sig_exn = ed25519_sig(signer, exn.as_bytes())?;
+        let sig_exn = wrap_sig(signer, exn.as_bytes())?;
         let exn_index_sig = id.sign_with_index(sig_exn, 0)?;
         exchange_pairs.push((exn.as_bytes().to_vec(), exn_index_sig));
     }
@@ -914,11 +950,11 @@ pub async fn rotate_group<S: SigningBackend + Clone + 'static>(
         )
         .await?;
 
-    let sig_rot = ed25519_sig(signer, rot_event.as_bytes())?;
+    let sig_rot = wrap_sig(signer, rot_event.as_bytes())?;
 
     let mut exchange_pairs = Vec::with_capacity(exn_messages.len());
     for exn in &exn_messages {
-        let sig_exn = ed25519_sig(signer, exn.as_bytes())?;
+        let sig_exn = wrap_sig(signer, exn.as_bytes())?;
         let exn_index_sig = id.sign_with_index(sig_exn, 0)?;
         exchange_pairs.push((exn.as_bytes().to_vec(), exn_index_sig));
     }
@@ -967,8 +1003,8 @@ pub async fn accept_multisig<S: SigningBackend + Clone + 'static>(
         .encode()
         .map_err(|e| Error::EncodingError(e.to_string()))?;
 
-    let sig_event = ed25519_sig(signer, &encoded_event)?;
-    let sig_exn = ed25519_sig(signer, &encoded_exn)?;
+    let sig_event = wrap_sig(signer, &encoded_event)?;
+    let sig_exn = wrap_sig(signer, &encoded_exn)?;
     let exn_index_sig = id.sign_with_index(sig_exn, 0)?;
 
     id.finalize_group_event(

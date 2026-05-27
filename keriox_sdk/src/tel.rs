@@ -14,7 +14,7 @@ use teliox::state::vc_state::TelState;
 use crate::{
     error::{Error, Result},
     identifier::Identifier,
-    operations::ed25519_sig,
+    operations::wrap_sig,
     types::CredentialStatus,
 };
 
@@ -44,7 +44,7 @@ pub async fn check_credential_status<S: crate::operations::SigningBackend>(
     let encoded = qry
         .encode()
         .map_err(|e| Error::EncodingError(e.to_string()))?;
-    let sig = ed25519_sig(signer, &encoded)?;
+    let sig = wrap_sig(signer, &encoded)?;
     id.finalize_query_tel(qry, sig).await?;
 
     get_credential_status(id, credential_said)

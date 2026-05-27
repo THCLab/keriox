@@ -128,11 +128,11 @@ impl KeriStore {
             Signer::new_with_seed(&current_seed).map_err(|e| Error::Signing(e.to_string()))?,
         );
 
-        let (next_pub_key, _) = next_seed
-            .derive_key_pair()
-            .map_err(|e| Error::Signing(e.to_string()))?;
-
-        let next_pk = keri_controller::BasicPrefix::Ed25519NT(next_pub_key);
+        // Derive the next-key commitment in the BasicPrefix variant matching
+        // the next seed's algorithm (Ed25519 / secp256k1 / P-256). The NT
+        // (non-transferable) flavor is the canonical choice for next-key
+        // commitments.
+        let next_pk = crate::keys::derive_public_key(&next_seed, false)?;
 
         let controller = self.get_or_create_controller(db_path)?;
         let id = create_identifier_with_controller(&controller, signer.clone(), next_pk, config)

@@ -86,10 +86,7 @@ pub fn sign<S: SigningBackend>(
 
     let raw_sig = signer.sign_data(json_payload.as_bytes())?;
 
-    let sig = keri_controller::SelfSigningPrefix::new(
-        cesrox::primitives::codes::self_signing::SelfSigning::Ed25519Sha512,
-        raw_sig,
-    );
+    let sig = keri_controller::SelfSigningPrefix::new(signer.signing_code(), raw_sig);
 
     let cesr = identifier.sign_to_cesr(&json_payload, &[sig])?;
 
@@ -166,10 +163,7 @@ pub fn sign_to_cesr<S: SigningBackend>(
 ) -> Result<String> {
     let raw_sig = signer.sign_data(json.as_bytes())?;
 
-    let sig = keri_controller::SelfSigningPrefix::new(
-        cesrox::primitives::codes::self_signing::SelfSigning::Ed25519Sha512,
-        raw_sig,
-    );
+    let sig = keri_controller::SelfSigningPrefix::new(signer.signing_code(), raw_sig);
 
     Ok(identifier.sign_to_cesr(json, &[sig])?)
 }
@@ -275,10 +269,7 @@ pub fn sign_nontransferable(
         .sign(payload)
         .map_err(|e| Error::Signing(e.to_string()))?;
 
-    let sig = keri_controller::SelfSigningPrefix::new(
-        cesrox::primitives::codes::self_signing::SelfSigning::Ed25519Sha512,
-        raw_sig,
-    );
+    let sig = keri_controller::SelfSigningPrefix::new(signer.signing_code(), raw_sig);
 
     let group =
         cesrox::group::Group::NontransReceiptCouples(vec![(public_key.clone().into(), sig.into())]);
