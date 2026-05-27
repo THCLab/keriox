@@ -42,7 +42,10 @@ impl KeyManager for CryptoBox {
     }
 
     fn rotate(&mut self) -> Result<(), Error> {
-        let (next_pub_key, next_priv_key) = generate_key_pair()?;
+        // Preserve the algorithm across rotations. Previously this
+        // unconditionally generated an Ed25519 next-keypair, which silently
+        // switched a P-256 or secp256k1 CryptoBox to Ed25519 on rotation.
+        let (next_pub_key, next_priv_key) = generate_key_pair(self.signer.algorithm)?;
 
         let new_signer = Signer {
             priv_key: self.next_priv_key.clone(),
@@ -57,14 +60,33 @@ impl KeyManager for CryptoBox {
     }
 }
 impl CryptoBox {
+    /// Construct an Ed25519 [`CryptoBox`] (current + next keypair).
+    ///
+    /// For other curves use [`CryptoBox::new_with_algorithm`].
     pub fn new() -> Result<Self, Error> {
-        let signer = Signer::new();
-        let (next_pub_key, next_priv_key) = generate_key_pair()?;
+        Self::new_with_algorithm(SignerAlgorithm::Ed25519)
+    }
+
+    /// Construct a [`CryptoBox`] whose current and next keypairs both use
+    /// `algorithm`. Subsequent calls to [`KeyManager::rotate`] preserve the
+    /// algorithm.
+    pub fn new_with_algorithm(algorithm: SignerAlgorithm) -> Result<Self, Error> {
+        let (cur_pk, cur_sk) = generate_key_pair(algorithm)?;
+        let (next_pub_key, next_priv_key) = generate_key_pair(algorithm)?;
         Ok(CryptoBox {
-            signer,
+            signer: Signer {
+                priv_key: cur_sk,
+                pub_key: cur_pk,
+                algorithm,
+            },
             next_pub_key,
             next_priv_key,
         })
+    }
+
+    /// The algorithm this CryptoBox uses for both the current and next key.
+    pub fn algorithm(&self) -> SignerAlgorithm {
+        self.signer.algorithm
     }
 }
 
@@ -186,12 +208,76 @@ impl Default for Signer {
     }
 }
 
-fn generate_key_pair() -> Result<(PublicKey, PrivateKey), Error> {
-    let kp = ed25519_dalek::SigningKey::generate(&mut OsRng {});
-    let (vk, sk) = (kp.verifying_key(), kp);
-    let vk = PublicKey::new(vk.to_bytes().to_vec());
-    let sk = PrivateKey::new(sk.to_bytes().to_vec());
-    Ok((vk, sk))
+fn generate_key_pair(algorithm: SignerAlgorithm) -> Result<(PublicKey, PrivateKey), Error> {
+    match algorithm {
+        SignerAlgorithm::Ed25519 => {
+            let kp = ed25519_dalek::SigningKey::generate(&mut OsRng {});
+            Ok((
+                PublicKey::new(kp.verifying_key().to_bytes().to_vec()),
+                PrivateKey::new(kp.to_bytes().to_vec()),
+            ))
+        }
+        SignerAlgorithm::EcdsaSecp256k1 => {
+            let sk = k256::ecdsa::SigningKey::random(&mut OsRng {});
+            Ok((
+                PublicKey::new(sk.verifying_key().to_bytes().to_vec()),
+                PrivateKey::new(sk.to_bytes().to_vec()),
+            ))
+        }
+        SignerAlgorithm::EcdsaSecp256r1 => {
+            let sk = p256::ecdsa::SigningKey::random(&mut OsRng {});
+            let vk = p256::ecdsa::VerifyingKey::from(&sk);
+            Ok((
+                PublicKey::new(vk.to_encoded_point(true).as_bytes().to_vec()),
+                PrivateKey::new(sk.to_bytes().to_vec()),
+            ))
+        }
+    }
+}
+
+#[cfg(test)]
+mod cryptobox_tests {
+    use super::*;
+
+    #[test]
+    fn cryptobox_default_is_ed25519() {
+        let kb = CryptoBox::new().unwrap();
+        assert_eq!(kb.algorithm(), SignerAlgorithm::Ed25519);
+    }
+
+    #[test]
+    fn cryptobox_p256_rotation_stays_p256() {
+        let mut kb = CryptoBox::new_with_algorithm(SignerAlgorithm::EcdsaSecp256r1).unwrap();
+        assert_eq!(kb.signer.signing_code(), SelfSigning::ECDSA256r1Sha256);
+        // P-256 SEC1-compressed verfer is 33 bytes.
+        assert_eq!(kb.public_key().key().len(), 33);
+        assert_eq!(kb.next_public_key().key().len(), 33);
+
+        let sig_before = kb.sign(b"pre-rotation").unwrap();
+        assert_eq!(sig_before.len(), 64, "P-256 raw sig is 64 bytes");
+
+        kb.rotate().unwrap();
+
+        // Both signing and the (newly minted) next-key stay on P-256.
+        assert_eq!(kb.algorithm(), SignerAlgorithm::EcdsaSecp256r1);
+        assert_eq!(kb.public_key().key().len(), 33);
+        assert_eq!(kb.next_public_key().key().len(), 33);
+        let sig_after = kb.sign(b"post-rotation").unwrap();
+        assert_eq!(sig_after.len(), 64);
+    }
+
+    #[test]
+    fn cryptobox_secp256k1_rotation_stays_secp256k1() {
+        let mut kb = CryptoBox::new_with_algorithm(SignerAlgorithm::EcdsaSecp256k1).unwrap();
+        assert_eq!(kb.public_key().key().len(), 33);
+        let sig = kb.sign(b"hello").unwrap();
+        assert_eq!(sig.len(), 64, "secp256k1 raw sig is 64 bytes");
+
+        kb.rotate().unwrap();
+        assert_eq!(kb.algorithm(), SignerAlgorithm::EcdsaSecp256k1);
+        let sig2 = kb.sign(b"hello after").unwrap();
+        assert_eq!(sig2.len(), 64);
+    }
 }
 
 /// Helper function to generate keypairs that can be used for signing in tests.
