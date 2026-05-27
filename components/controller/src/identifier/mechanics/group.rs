@@ -1,7 +1,10 @@
 use keri_core::{
     actor::{event_generator, MaterialPath},
     database::{EscrowCreator, EventDatabase},
-    event::{sections::threshold::SignatureThreshold, KeyEvent},
+    event::{
+        sections::{seal::Seal, threshold::SignatureThreshold},
+        KeyEvent,
+    },
     event_message::{
         cesr_adapter::{parse_event_type, EventType},
         msg::KeriEvent,
@@ -204,6 +207,86 @@ where
             .collect::<Result<Vec<String>, MechanicsError>>()?;
 
         Ok((serialized_rot, exchanges))
+    }
+
+    /// Build an interaction event on an established group identifier
+    /// anchoring the supplied SAID seals, plus the forward exchanges
+    /// addressed to the remaining co-signers.
+    ///
+    /// The caller (`self.id`) must currently be a signer of the
+    /// group — i.e. their individual current public key must appear
+    /// in the group's current key set. Anchors do not advance the
+    /// group's key state, so unlike `rotate_group` no
+    /// pre-rotation-digest fallback is accepted.
+    ///
+    /// `participants` is the full member list of the group (the
+    /// caller may or may not be in it; the caller is filtered out of
+    /// the returned exchanges either way).
+    ///
+    /// Returns `(serialized_ixn, exchanges)`.
+    pub fn anchor_group(
+        &self,
+        group_id: &IdentifierPrefix,
+        anchors: &[SelfAddressingIdentifier],
+        participants: &[IdentifierPrefix],
+    ) -> Result<(String, Vec<String>), MechanicsError> {
+        let seals: Vec<Seal> = anchors
+            .iter()
+            .map(|sai| {
+                Seal::Digest(keri_core::event::sections::seal::DigestSeal::new(
+                    sai.clone(),
+                ))
+            })
+            .collect();
+        self.anchor_group_with_seals(group_id, &seals, participants)
+    }
+
+    /// Same as [`anchor_group`] but accepts arbitrary `Seal` variants
+    /// (used by the delegator-side `ixn` that anchors a delegated
+    /// inception's event seal).
+    pub fn anchor_group_with_seals(
+        &self,
+        group_id: &IdentifierPrefix,
+        seals: &[Seal],
+        participants: &[IdentifierPrefix],
+    ) -> Result<(String, Vec<String>), MechanicsError> {
+        let group_state = self
+            .known_events
+            .storage
+            .get_state(group_id)
+            .ok_or_else(|| MechanicsError::UnknownIdentifierError(group_id.clone()))?;
+
+        let own_pk = self
+            .known_events
+            .current_public_keys(&self.id)?
+            .into_iter()
+            .next()
+            .ok_or(MechanicsError::NotGroupParticipantError)?;
+        if !group_state
+            .current
+            .public_keys
+            .iter()
+            .any(|pk| pk == &own_pk)
+        {
+            return Err(MechanicsError::NotGroupParticipantError);
+        }
+
+        let ixn = event_generator::anchor_with_seal(group_state, seals)
+            .map_err(|e| MechanicsError::EventGenerationError(e.to_string()))?;
+
+        let serialized_ixn = String::from_utf8(ixn.encode()?)
+            .map_err(|e| MechanicsError::EventGenerationError(e.to_string()))?;
+
+        let exchanges = participants
+            .iter()
+            .filter(|id| *id != &self.id)
+            .map(|id| -> Result<_, _> {
+                let exn = event_generator::exchange(id, &ixn, ForwardTopic::Multisig).encode()?;
+                String::from_utf8(exn).map_err(|_e| MechanicsError::EventFormatError)
+            })
+            .collect::<Result<Vec<String>, MechanicsError>>()?;
+
+        Ok((serialized_ixn, exchanges))
     }
 
     /// Finalizes group identifier.

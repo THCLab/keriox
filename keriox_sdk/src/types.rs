@@ -82,6 +82,38 @@ impl DelegationRequest {
             self.exchange,
         )
     }
+
+    /// Build a request from raw CESR strings delivered out-of-band
+    /// (e.g. over a direct peer channel that bypasses the witness
+    /// mailbox). The delegating event must be a key event; the
+    /// exchange must be an exchange message.
+    pub fn from_cesr(event_cesr: &str, exchange_cesr: &str) -> crate::error::Result<Self> {
+        use keri_core::event_message::cesr_adapter::{parse_event_type, EventType};
+        let ev = parse_event_type(event_cesr.as_bytes())
+            .map_err(|e| crate::error::Error::EncodingError(e.to_string()))?;
+        let delegating_event = match ev {
+            EventType::KeyEvent(ke) => ke,
+            _ => {
+                return Err(crate::error::Error::EncodingError(
+                    "delegating event is not a key event".into(),
+                ))
+            }
+        };
+        let parsed_exn = parse_event_type(exchange_cesr.as_bytes())
+            .map_err(|e| crate::error::Error::EncodingError(e.to_string()))?;
+        let exchange = match parsed_exn {
+            EventType::Exn(exn) => exn,
+            _ => {
+                return Err(crate::error::Error::EncodingError(
+                    "exchange is not an exn message".into(),
+                ))
+            }
+        };
+        Ok(DelegationRequest {
+            delegating_event,
+            exchange,
+        })
+    }
 }
 
 impl TryFrom<keri_controller::mailbox_updating::ActionRequired> for DelegationRequest {
@@ -162,6 +194,35 @@ impl MultisigRequest {
     /// The group identifier prefix this request is for.
     pub fn group_prefix(&self) -> IdentifierPrefix {
         self.event.data.get_prefix()
+    }
+
+    /// Build a request from raw CESR strings delivered out-of-band
+    /// (e.g. over a direct peer channel that bypasses the witness
+    /// mailbox). The event must be a key event (icp/rot/ixn/dip/drt);
+    /// the exchange must be an exchange message.
+    pub fn from_cesr(event_cesr: &str, exchange_cesr: &str) -> crate::error::Result<Self> {
+        use keri_core::event_message::cesr_adapter::{parse_event_type, EventType};
+        let ev = parse_event_type(event_cesr.as_bytes())
+            .map_err(|e| crate::error::Error::EncodingError(e.to_string()))?;
+        let event = match ev {
+            EventType::KeyEvent(ke) => ke,
+            _ => {
+                return Err(crate::error::Error::EncodingError(
+                    "multisig event is not a key event".into(),
+                ))
+            }
+        };
+        let parsed_exn = parse_event_type(exchange_cesr.as_bytes())
+            .map_err(|e| crate::error::Error::EncodingError(e.to_string()))?;
+        let exchange = match parsed_exn {
+            EventType::Exn(exn) => exn,
+            _ => {
+                return Err(crate::error::Error::EncodingError(
+                    "exchange is not an exn message".into(),
+                ))
+            }
+        };
+        Ok(MultisigRequest { event, exchange })
     }
 
     /// Consume and return the underlying `ActionRequired` for low-level storage.

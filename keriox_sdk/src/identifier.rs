@@ -438,6 +438,39 @@ impl Identifier {
             .await?)
     }
 
+    /// Build an `ixn` event on an established group identifier
+    /// anchoring the supplied SAID seals, plus the forward exchanges
+    /// addressed to each remaining co-signer.
+    ///
+    /// The caller must currently be a signer of the group (their
+    /// individual current public key must appear in the group's
+    /// current key set).
+    pub fn anchor_group(
+        &self,
+        group_id: &IdentifierPrefix,
+        anchors: &[SelfAddressingIdentifier],
+        participants: &[IdentifierPrefix],
+    ) -> Result<(String, Vec<String>)> {
+        Ok(self
+            .inner
+            .anchor_group(group_id, anchors, participants)?)
+    }
+
+    /// Variant of [`anchor_group`] that accepts arbitrary `Seal`
+    /// variants. Used internally by the delegation flow to anchor a
+    /// delegated inception's `EventSeal` on the delegator-group's
+    /// KEL.
+    pub fn anchor_group_with_seals(
+        &self,
+        group_id: &IdentifierPrefix,
+        seals: &[keri_core::event::sections::seal::Seal],
+        participants: &[IdentifierPrefix],
+    ) -> Result<(String, Vec<String>)> {
+        Ok(self
+            .inner
+            .anchor_group_with_seals(group_id, seals, participants)?)
+    }
+
     /// Finalise a group/delegated inception event. Returns the new prefix.
     pub async fn finalize_group_incept(
         &mut self,

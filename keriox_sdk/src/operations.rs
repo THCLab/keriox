@@ -548,6 +548,270 @@ pub async fn complete_delegation<S: SigningBackend + Clone + 'static>(
     Ok(())
 }
 
+// ── Out-of-band (witness-less) delegation ────────────────────────────────────
+
+/// Build a delegated identifier locally and return the encoded `dip`
+/// event for out-of-band transport to the delegator.
+///
+/// Same effect as [`request_delegation`]: the temporary identifier is
+/// created, the `dip` is signed by the delegatee and applied locally
+/// (escrowed pending the delegator's seal). The difference is that
+/// this entry point also returns the raw CESR string of the `dip`,
+/// so the caller can deliver it directly to the delegator over an
+/// out-of-band channel (e.g. a peer-to-peer connection) instead of
+/// the witness mailbox.
+///
+/// After the delegator returns the signed delegating `ixn`, call
+/// [`finalize_delegation_with_seal`] on the returned identifier.
+pub async fn build_delegation_request<S: SigningBackend + Clone + 'static>(
+    db_path: PathBuf,
+    signer: S,
+    next_pk: BasicPrefix,
+    config: DelegationConfig,
+) -> Result<(Identifier, IdentifierPrefix, String)> {
+    let temp_config = IdentifierConfig {
+        witnesses: config.witnesses.clone(),
+        witness_threshold: config.witness_threshold,
+        watchers: vec![],
+    };
+    let mut temp_id = create_identifier(db_path, signer.clone(), next_pk, temp_config).await?;
+
+    let witness_ids: Vec<BasicPrefix> = config
+        .witnesses
+        .iter()
+        .filter_map(|w| {
+            if let IdentifierPrefix::Basic(b) = &w.eid {
+                Some(b.clone())
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    let (dip, exn_messages) = temp_id.incept_group(
+        vec![],
+        1,
+        Some(1),
+        Some(witness_ids),
+        Some(config.witness_threshold),
+        Some(config.delegator.clone()),
+    )?;
+
+    let sig_icp = ed25519_sig(&signer, dip.as_bytes())?;
+
+    let delegation_exn = exn_messages
+        .last()
+        .ok_or_else(|| Error::DelegationError("no exchange message generated".into()))?;
+    let sig_exn = ed25519_sig(&signer, delegation_exn.as_bytes())?;
+    let exn_index_sig = temp_id.sign_with_index(sig_exn, 0)?;
+
+    let delegated_prefix = temp_id
+        .finalize_group_incept(
+            dip.as_bytes(),
+            sig_icp,
+            vec![(delegation_exn.as_bytes().to_vec(), exn_index_sig)],
+        )
+        .await?;
+
+    Ok((temp_id, delegated_prefix, dip))
+}
+
+/// Sign a delegating `ixn` on the delegator's KEL that anchors the
+/// supplied delegated `dip` event's SAID. Returns the encoded
+/// signed `ixn` (CESR stream including the indexed signature) for
+/// out-of-band transport to the delegatee.
+///
+/// Works for both single-AID and multi-sig group delegators. For a
+/// single-AID delegator pass `group_id = delegator_id.id()` and
+/// `participants = vec![delegator_id.id().clone()]`. For a multi-sig
+/// group pass the group AID and the full member list.
+///
+/// Does NOT call [`Identifier::notify_witnesses`] or any mailbox
+/// helper — the caller is responsible for transport.
+pub async fn build_delegation_approval<S: SigningBackend + Clone + 'static>(
+    delegator_id: &mut Identifier,
+    signer: &S,
+    group_id: &IdentifierPrefix,
+    delegated_dip_cesr: &str,
+    participants: &[IdentifierPrefix],
+) -> Result<String> {
+    use keri_core::event::sections::seal::{EventSeal, Seal};
+    use keri_core::event_message::cesr_adapter::{parse_event_type, EventType};
+    use keri_core::event_message::signed_event_message::Notice;
+
+    let parsed = parse_event_type(delegated_dip_cesr.as_bytes())
+        .map_err(|e| Error::EncodingError(e.to_string()))?;
+    let dip_event = match parsed {
+        EventType::KeyEvent(ke) => ke,
+        _ => {
+            return Err(Error::EncodingError(
+                "delegated event is not a key event".into(),
+            ))
+        }
+    };
+
+    let delegated_prefix = dip_event.data.get_prefix();
+    let dip_sn = dip_event.data.get_sn();
+    let dip_digest = dip_event
+        .digest()
+        .map_err(|e| Error::EncodingError(e.to_string()))?;
+    let event_seal = Seal::Event(EventSeal::new(delegated_prefix, dip_sn, dip_digest));
+
+    let (ixn_cesr, exn_messages) =
+        delegator_id.anchor_group_with_seals(group_id, &[event_seal], participants)?;
+
+    let sig_ixn = ed25519_sig(signer, ixn_cesr.as_bytes())?;
+
+    let mut exchange_pairs = Vec::with_capacity(exn_messages.len());
+    for exn in &exn_messages {
+        let sig_exn = ed25519_sig(signer, exn.as_bytes())?;
+        let exn_index_sig = delegator_id.sign_with_index(sig_exn, 0)?;
+        exchange_pairs.push((exn.as_bytes().to_vec(), exn_index_sig));
+    }
+
+    delegator_id
+        .finalize_group_event(ixn_cesr.as_bytes(), sig_ixn.clone(), exchange_pairs)
+        .await?;
+
+    let group_state = delegator_id.find_state(group_id)?;
+    let own_pk = delegator_id
+        .find_state(delegator_id.id())?
+        .current
+        .public_keys
+        .into_iter()
+        .next()
+        .ok_or_else(|| Error::Other("delegator member state has no public key".into()))?;
+    let own_idx = group_state
+        .current
+        .public_keys
+        .iter()
+        .position(|pk| pk == &own_pk)
+        .ok_or_else(|| Error::Other("delegator member key not in group key set".into()))?
+        as u16;
+
+    let parsed_ixn = parse_event_type(ixn_cesr.as_bytes())
+        .map_err(|e| Error::EncodingError(e.to_string()))?;
+    let ixn_keyevent = match parsed_ixn {
+        EventType::KeyEvent(ke) => ke,
+        _ => return Err(Error::EncodingError("ixn is not a key event".into())),
+    };
+    let indexed_sig = IndexedSignature::new_both_same(sig_ixn, own_idx);
+    let signed = ixn_keyevent.sign(vec![indexed_sig], None, None);
+    let encoded = keri_core::event_message::signed_event_message::Message::Notice(Notice::Event(
+        signed,
+    ))
+    .to_cesr()
+    .map_err(|e| Error::EncodingError(e.to_string()))?;
+    String::from_utf8(encoded).map_err(|e| Error::EncodingError(e.to_string()))
+}
+
+/// Finalise the delegated AID by ingesting the delegator's signed
+/// delegating `ixn` arriving out-of-band.
+///
+/// The CESR stream must include the delegator's signature(s) attached
+/// to the `ixn` (as produced by [`build_delegation_approval`]). On
+/// success the previously-escrowed `dip` in the local DB is accepted
+/// by the processor and the delegated AID's KEL is complete.
+pub async fn finalize_delegation_with_seal(
+    temp_id: &Identifier,
+    delegator_seal_cesr: &str,
+) -> Result<()> {
+    use keri_core::actor::parse_notice_stream;
+    let notices = parse_notice_stream(delegator_seal_cesr.as_bytes())
+        .map_err(|e| Error::EncodingError(e.to_string()))?;
+    if notices.is_empty() {
+        return Err(Error::EncodingError(
+            "no notices found in delegator seal stream".into(),
+        ));
+    }
+    for notice in &notices {
+        temp_id.save_notice(notice)?;
+    }
+    Ok(())
+}
+
+// ── Group KEL anchor ─────────────────────────────────────────────────────────
+
+/// Anchor SAID seals on an established group AID's KEL as an `ixn`
+/// event.
+///
+/// For a 1-of-N group the caller's signature alone finalises the
+/// event. For k-of-N (k ≥ 2) other members complete the event via
+/// [`accept_multisig`] + [`sync_multisig`]; the joiner-side flow is
+/// unchanged because the underlying group-event finalisation is
+/// event-type agnostic.
+///
+/// `participants` is the full member list of the group. For a
+/// 1-of-N group the caller is the only member needed; the list is
+/// still used to route exchange messages to other members.
+///
+/// Notifies witnesses and queries mailboxes when configured.
+pub async fn anchor_group<S: SigningBackend + Clone + 'static>(
+    id: &mut Identifier,
+    signer: &S,
+    group_id: &IdentifierPrefix,
+    anchors: &[SelfAddressingIdentifier],
+    participants: &[IdentifierPrefix],
+) -> Result<()> {
+    let (ixn_cesr, exn_messages) = id.anchor_group(group_id, anchors, participants)?;
+
+    let sig_ixn = ed25519_sig(signer, ixn_cesr.as_bytes())?;
+
+    let mut exchange_pairs = Vec::with_capacity(exn_messages.len());
+    for exn in &exn_messages {
+        let sig_exn = ed25519_sig(signer, exn.as_bytes())?;
+        let exn_index_sig = id.sign_with_index(sig_exn, 0)?;
+        exchange_pairs.push((exn.as_bytes().to_vec(), exn_index_sig));
+    }
+
+    id.finalize_group_event(ixn_cesr.as_bytes(), sig_ixn, exchange_pairs)
+        .await?;
+    id.notify_witnesses().await?;
+
+    let caller_witnesses = id.find_state(id.id())?.witness_config.witnesses;
+    for witness in &caller_witnesses {
+        _query_mailbox(id, signer, witness).await?;
+    }
+    let group_witnesses = id.find_state(group_id)?.witness_config.witnesses;
+    for witness in &group_witnesses {
+        _query_mailbox_for(id, signer, group_id, witness).await?;
+    }
+
+    Ok(())
+}
+
+/// Out-of-band variant of [`anchor_group`]: build the `ixn` event,
+/// sign it locally, and return the event + per-co-signer exchange
+/// messages as CESR strings for transport. Co-signers reconstruct a
+/// [`MultisigRequest`] via [`MultisigRequest::from_cesr`] and call
+/// [`accept_multisig`].
+///
+/// Does NOT call [`Identifier::notify_witnesses`] or any mailbox
+/// helper. The caller's signature is still applied locally.
+pub async fn build_group_anchor<S: SigningBackend + Clone + 'static>(
+    id: &mut Identifier,
+    signer: &S,
+    group_id: &IdentifierPrefix,
+    anchors: &[SelfAddressingIdentifier],
+    participants: &[IdentifierPrefix],
+) -> Result<(String, Vec<String>)> {
+    let (ixn_cesr, exn_messages) = id.anchor_group(group_id, anchors, participants)?;
+
+    let sig_ixn = ed25519_sig(signer, ixn_cesr.as_bytes())?;
+
+    let mut exchange_pairs = Vec::with_capacity(exn_messages.len());
+    for exn in &exn_messages {
+        let sig_exn = ed25519_sig(signer, exn.as_bytes())?;
+        let exn_index_sig = id.sign_with_index(sig_exn, 0)?;
+        exchange_pairs.push((exn.as_bytes().to_vec(), exn_index_sig));
+    }
+
+    id.finalize_group_event(ixn_cesr.as_bytes(), sig_ixn, exchange_pairs)
+        .await?;
+
+    Ok((ixn_cesr, exn_messages))
+}
+
 /// Create a multisig identifier (initiator side).
 ///
 /// Generates the group inception event, signs it, and sends invitations
