@@ -56,7 +56,7 @@ impl FromStr for SelfSigningPrefix {
         if s.len() == code.full_size() {
             Ok(Self::new(
                 code,
-                from_text_to_bytes(&s[code.code_size()..])?[code.code_size()..].to_vec(),
+                from_text_to_bytes(&s[code.code_size()..])?[code.code_size() % 4..].to_vec(),
             ))
         } else {
             Err(Error::IncorrectLengthError(s.into()))

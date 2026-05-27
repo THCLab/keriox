@@ -94,7 +94,13 @@ impl FromStr for BasicPrefix {
         let code = CesrBasic::from_str(s)?;
 
         if s.len() == code.full_size() {
-            let k_vec = from_text_to_bytes(&s[code.code_size()..])?[code.code_size()..].to_vec();
+            // Match cesrox's parse_primitive: strip only the lead-padding bytes
+            // implicitly added by from_text_to_bytes (which only happens when the
+            // code length is not a multiple of 4). Stripping the full code_size
+            // would silently truncate the value for 4-char codes (1AAA/1AAB
+            // secp256k1, 1AAC/1AAD Ed448, 1AAI/1AAJ P-256).
+            let k_vec = from_text_to_bytes(&s[code.code_size()..])?[code.code_size() % 4..]
+                .to_vec();
             Ok(Self::new(code, PublicKey::new(k_vec)))
         } else {
             Err(Error::IncorrectLengthError(s.into()))

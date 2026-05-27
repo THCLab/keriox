@@ -70,7 +70,8 @@ impl FromStr for SeedPrefix {
         let code = SeedCode::from_str(s)?;
 
         if s.len() == code.full_size() {
-            let k_vec = from_text_to_bytes(&s[code.code_size()..])?[code.code_size()..].to_vec();
+            let k_vec = from_text_to_bytes(&s[code.code_size()..])?[code.code_size() % 4..]
+                .to_vec();
             Ok(Self::new(code, k_vec))
         } else {
             Err(Error::IncorrectLengthError(s.into()))
