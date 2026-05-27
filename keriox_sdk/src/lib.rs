@@ -79,6 +79,7 @@ pub mod controller;
 pub mod error;
 pub mod identifier;
 pub mod keys;
+pub mod multisig;
 pub mod oobi;
 pub mod oobi_store;
 pub mod operations;
