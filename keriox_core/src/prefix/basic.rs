@@ -175,6 +175,53 @@ impl<'de> Deserialize<'de> for BasicPrefix {
 }
 
 #[test]
+fn signing_code_covers_every_signing_variant() {
+    use cesrox::primitives::codes::self_signing::SelfSigning;
+
+    fn pk(n: usize) -> PublicKey {
+        PublicKey::new(vec![0u8; n])
+    }
+
+    // Signing curves: every flavor maps to the correct SelfSigning code.
+    assert_eq!(
+        BasicPrefix::Ed25519(pk(32)).signing_code(),
+        Some(SelfSigning::Ed25519Sha512)
+    );
+    assert_eq!(
+        BasicPrefix::Ed25519NT(pk(32)).signing_code(),
+        Some(SelfSigning::Ed25519Sha512)
+    );
+    assert_eq!(
+        BasicPrefix::ECDSAsecp256k1(pk(33)).signing_code(),
+        Some(SelfSigning::ECDSAsecp256k1Sha256)
+    );
+    assert_eq!(
+        BasicPrefix::ECDSAsecp256k1NT(pk(33)).signing_code(),
+        Some(SelfSigning::ECDSAsecp256k1Sha256)
+    );
+    assert_eq!(
+        BasicPrefix::Ed448(pk(57)).signing_code(),
+        Some(SelfSigning::Ed448)
+    );
+    assert_eq!(
+        BasicPrefix::Ed448NT(pk(57)).signing_code(),
+        Some(SelfSigning::Ed448)
+    );
+    assert_eq!(
+        BasicPrefix::ECDSA256r1(pk(33)).signing_code(),
+        Some(SelfSigning::ECDSA256r1Sha256)
+    );
+    assert_eq!(
+        BasicPrefix::ECDSA256r1NT(pk(33)).signing_code(),
+        Some(SelfSigning::ECDSA256r1Sha256)
+    );
+
+    // Diffie-Hellman key-agreement curves cannot produce signatures.
+    assert_eq!(BasicPrefix::X25519(pk(32)).signing_code(), None);
+    assert_eq!(BasicPrefix::X448(pk(56)).signing_code(), None);
+}
+
+#[test]
 fn serialize_deserialize() {
     use ed25519_dalek::SigningKey;
     use rand::rngs::OsRng;
