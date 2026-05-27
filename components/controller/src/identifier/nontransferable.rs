@@ -9,6 +9,7 @@ use keri_core::{
         possible_response::PossibleResponse,
         prelude::{HashFunctionCode, SerializationFormats},
     },
+    prefix::CesrPrimitive,
     database::{EscrowCreator, EventDatabase},
     event_message::{
         msg::KeriEvent,
@@ -49,11 +50,24 @@ where
         }
     }
 
-    pub fn sign(&self, signature: Vec<u8>) -> Signature {
-        Signature::NonTransferable(Nontransferable::Couplet(vec![(
+    /// Wrap `signature` in the [`SelfSigningPrefix`] variant matching the
+    /// stored basic prefix's algorithm.
+    ///
+    /// `signature` must be the raw signature bytes produced by the
+    /// corresponding private key (64 bytes for Ed25519 / secp256k1 / P-256,
+    /// 114 for Ed448). Returns an error if the stored identifier uses a
+    /// non-signing curve (X25519 / X448).
+    pub fn sign(&self, signature: Vec<u8>) -> Result<Signature, ControllerError> {
+        let code = self.id.signing_code().ok_or_else(|| {
+            ControllerError::OtherError(format!(
+                "NontransferableIdentifier({}) uses a non-signing curve",
+                self.id.to_str()
+            ))
+        })?;
+        Ok(Signature::NonTransferable(Nontransferable::Couplet(vec![(
             self.id.clone(),
-            SelfSigningPrefix::Ed25519Sha512(signature),
-        )]))
+            SelfSigningPrefix::new(code, signature),
+        )])))
     }
 
     pub fn query_log(

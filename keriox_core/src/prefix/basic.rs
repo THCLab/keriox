@@ -58,6 +58,30 @@ impl BasicPrefix {
         verify(data, self, signature)
     }
 
+    /// The CESR [`SelfSigning`](cesrox::primitives::codes::self_signing::SelfSigning)
+    /// code matching this key's algorithm.
+    ///
+    /// Returns `None` for variants that cannot produce signatures (X25519,
+    /// X448 — these are Diffie-Hellman key-agreement keys, not signing
+    /// keys). Use this to wrap raw signature bytes in the right
+    /// `SelfSigningPrefix` variant when you only hold a `BasicPrefix`.
+    pub fn signing_code(
+        &self,
+    ) -> Option<cesrox::primitives::codes::self_signing::SelfSigning> {
+        use cesrox::primitives::codes::self_signing::SelfSigning;
+        Some(match self {
+            BasicPrefix::Ed25519(_) | BasicPrefix::Ed25519NT(_) => SelfSigning::Ed25519Sha512,
+            BasicPrefix::ECDSAsecp256k1(_) | BasicPrefix::ECDSAsecp256k1NT(_) => {
+                SelfSigning::ECDSAsecp256k1Sha256
+            }
+            BasicPrefix::Ed448(_) | BasicPrefix::Ed448NT(_) => SelfSigning::Ed448,
+            BasicPrefix::ECDSA256r1(_) | BasicPrefix::ECDSA256r1NT(_) => {
+                SelfSigning::ECDSA256r1Sha256
+            }
+            BasicPrefix::X25519(_) | BasicPrefix::X448(_) => return None,
+        })
+    }
+
     /// Non transferable means that the public key is always the current public key.
     /// Transferable means that the public key might have changed and
     /// you need to request KEL to obtain the newest one.
