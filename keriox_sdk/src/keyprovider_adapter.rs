@@ -17,7 +17,7 @@ use crate::error::Error;
 
 /// Map a [`SignatureAlgorithm`] from the provider crate to the matching
 /// CESR self-signing code.
-pub(crate) fn signing_code_for(algorithm: SignatureAlgorithm) -> SelfSigning {
+pub fn signing_code_for(algorithm: SignatureAlgorithm) -> SelfSigning {
     match algorithm {
         SignatureAlgorithm::Ed25519 => SelfSigning::Ed25519Sha512,
         SignatureAlgorithm::EcdsaSecp256k1 => SelfSigning::ECDSAsecp256k1Sha256,
@@ -26,7 +26,7 @@ pub(crate) fn signing_code_for(algorithm: SignatureAlgorithm) -> SelfSigning {
 }
 
 /// Build a [`BasicPrefix`] of the right algorithm + transferability.
-pub(crate) fn basic_prefix_for(
+pub fn basic_prefix_for(
     algorithm: SignatureAlgorithm,
     public_key: PublicKey,
     transferable: bool,

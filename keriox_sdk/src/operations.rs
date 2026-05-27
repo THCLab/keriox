@@ -231,6 +231,12 @@ pub async fn rotate<S: SigningBackend + Clone + 'static>(
     current_signer: S,
     config: RotationConfig,
 ) -> Result<()> {
+    // Keys revealed by this rotation must use the same BasicPrefix variant
+    // that the prior establishment event committed to (in next_keys_hashes).
+    // The store always commits next-keys as non-transferable (since they're
+    // a hash commitment, not yet a rotation-capable key), so reveal with NT
+    // here too — otherwise the next-key-binding check on the verifier side
+    // will reject the rotation.
     let current_keys = vec![current_signer.basic_prefix(false)];
     let new_next_keys = vec![config.new_next_pk];
 

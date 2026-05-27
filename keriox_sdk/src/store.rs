@@ -232,16 +232,20 @@ impl KeriStore {
     /// - [`Error::Signing`] if key generation or signing fails.
     /// - Propagates errors from [`crate::operations::rotate`].
     pub async fn rotate(&self, alias: &str) -> Result<()> {
-        // Detect the current signer's algorithm from the persisted seed and
-        // generate a matching new next-key commitment, so the KEL stays on
-        // a single curve across rotations (otherwise a P-256 AID would
-        // silently transition to Ed25519 after the next rotation).
-        let current_seed = self.load_seed(alias, "priv_key")?;
-        let algorithm = crate::keys::seed_algorithm(&current_seed)?;
+        // KERI rotation reveals the previously pre-committed next-key.
+        // The event's controlling keys are the next-signer's keys (now
+        // becoming current), and the signature must come from that same
+        // signer (since they own the key being revealed).
+        let next_seed = self.load_seed(alias, "next_priv_key")?;
+        let algorithm = crate::keys::seed_algorithm(&next_seed)?;
+        // The new next-key matches the curve of the key becoming current,
+        // so the AID stays on a single curve across rotations (otherwise
+        // a P-256 AID would silently transition to Ed25519 after the
+        // rotation after next).
         let (new_next_seed, new_next_pk) = crate::keys::generate_keypair(algorithm, false)?;
 
         let mut id = self.load(alias)?;
-        let signer = self.load_signer(alias)?;
+        let signer = self.load_next_signer(alias)?;
 
         let config = crate::types::RotationConfig {
             new_next_pk,
