@@ -25,6 +25,9 @@ license = "EUPL-1.2"
 pre-release-commit-message = "chore: Release"
 tag = false
 
+[patch.crates-io]
+cesrox = { path = "../cesrox/cesr" }
+
 [profile.mobile-release]
 inherits = "release"
 opt-level = "z"

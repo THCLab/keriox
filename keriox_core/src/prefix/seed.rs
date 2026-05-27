@@ -9,6 +9,7 @@ use cesrox::{
     primitives::codes::{seed::SeedCode, PrimitiveCode},
 };
 use k256::ecdsa::{SigningKey, VerifyingKey};
+use p256::ecdsa::{SigningKey as P256SigningKey, VerifyingKey as P256VerifyingKey};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 #[derive(Debug, PartialEq, Clone)]
@@ -16,6 +17,7 @@ pub enum SeedPrefix {
     RandomSeed256Ed25519(Vec<u8>),
     RandomSeed256ECDSAsecp256k1(Vec<u8>),
     RandomSeed448(Vec<u8>),
+    RandomSeed256ECDSA256r1(Vec<u8>),
 }
 
 impl SeedPrefix {
@@ -24,6 +26,7 @@ impl SeedPrefix {
             SeedCode::RandomSeed256Ed25519 => Self::RandomSeed256Ed25519(value),
             SeedCode::RandomSeed256ECDSAsecp256k1 => Self::RandomSeed256ECDSAsecp256k1(value),
             SeedCode::RandomSeed448 => Self::RandomSeed448(value),
+            SeedCode::RandomSeed256ECDSA256r1 => Self::RandomSeed256ECDSA256r1(value),
         }
     }
 
@@ -43,6 +46,15 @@ impl SeedPrefix {
                 let sk = SigningKey::from_bytes(seed).map_err(|_e| KeysError::EcdsaError)?;
                 Ok((
                     PublicKey::new(VerifyingKey::from(&sk).to_bytes().to_vec()),
+                    PrivateKey::new(sk.to_bytes().to_vec()),
+                ))
+            }
+            Self::RandomSeed256ECDSA256r1(seed) => {
+                let sk =
+                    P256SigningKey::from_bytes(seed).map_err(|_e| KeysError::EcdsaError)?;
+                let vk = P256VerifyingKey::from(&sk);
+                Ok((
+                    PublicKey::new(vk.to_encoded_point(true).as_bytes().to_vec()),
                     PrivateKey::new(sk.to_bytes().to_vec()),
                 ))
             }
@@ -72,6 +84,7 @@ impl CesrPrimitive for SeedPrefix {
             Self::RandomSeed256Ed25519(seed) => seed.to_owned(),
             Self::RandomSeed256ECDSAsecp256k1(seed) => seed.to_owned(),
             Self::RandomSeed448(seed) => seed.to_owned(),
+            Self::RandomSeed256ECDSA256r1(seed) => seed.to_owned(),
         }
     }
     fn derivation_code(&self) -> PrimitiveCode {
@@ -81,6 +94,9 @@ impl CesrPrimitive for SeedPrefix {
                 PrimitiveCode::Seed(SeedCode::RandomSeed256ECDSAsecp256k1)
             }
             Self::RandomSeed448(_) => PrimitiveCode::Seed(SeedCode::RandomSeed448),
+            Self::RandomSeed256ECDSA256r1(_) => {
+                PrimitiveCode::Seed(SeedCode::RandomSeed256ECDSA256r1)
+            }
         }
     }
 }

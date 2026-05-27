@@ -1,6 +1,10 @@
 use ed25519_dalek::{Signer, Verifier};
 use k256::ecdsa::{signature::Signer as EcdsaSigner, Signature as EcdsaSignature, SigningKey};
 use k256::ecdsa::{signature::Verifier as EcdsaVerifier, VerifyingKey};
+use p256::ecdsa::{
+    signature::{Signer as P256Signer, Verifier as P256Verifier},
+    Signature as P256Signature, SigningKey as P256SigningKey, VerifyingKey as P256VerifyingKey,
+};
 use serde_derive::{Deserialize, Serialize};
 use zeroize::Zeroize;
 
@@ -76,6 +80,16 @@ impl PublicKey {
             Err(_) => false,
         }
     }
+
+    pub fn verify_p256(&self, msg: &[u8], sig: &[u8]) -> bool {
+        match P256VerifyingKey::from_sec1_bytes(&self.key()) {
+            Ok(k) => match P256Signature::try_from(sig) {
+                Ok(sig) => P256Verifier::verify(&k, msg, &sig).is_ok(),
+                Err(_) => false,
+            },
+            Err(_) => false,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -102,6 +116,13 @@ impl PrivateKey {
         Ok(sk.sign(msg).to_vec())
     }
 
+    pub fn sign_p256(&self, msg: &[u8]) -> Result<Vec<u8>, KeysError> {
+        let sk =
+            P256SigningKey::from_bytes(&self.key).map_err(|_| KeysError::EcdsaError)?;
+        let sig: P256Signature = P256Signer::sign(&sk, msg);
+        Ok(sig.as_ref().to_vec())
+    }
+
     pub fn key(&self) -> Vec<u8> {
         self.key.clone()
     }
@@ -111,6 +132,21 @@ impl Drop for PrivateKey {
     fn drop(&mut self) {
         self.key.zeroize()
     }
+}
+
+#[test]
+fn p256_sign_verify_roundtrip() {
+    use rand::rngs::OsRng;
+    let sk = P256SigningKey::random(&mut OsRng);
+    let vk = P256VerifyingKey::from(&sk);
+    let pub_key = PublicKey::new(vk.to_encoded_point(true).as_bytes().to_vec());
+    let priv_key = PrivateKey::new(sk.to_bytes().to_vec());
+
+    let msg = b"native-curve mobile sign";
+    let sig = priv_key.sign_p256(msg).unwrap();
+    assert_eq!(sig.len(), 64, "P-256 sig must be raw 64-byte r||s");
+    assert!(pub_key.verify_p256(msg, &sig));
+    assert!(!pub_key.verify_p256(b"tampered", &sig));
 }
 
 #[test]

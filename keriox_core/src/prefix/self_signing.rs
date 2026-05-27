@@ -18,6 +18,7 @@ pub enum SelfSigningPrefix {
     Ed25519Sha512(Vec<u8>),
     ECDSAsecp256k1Sha256(Vec<u8>),
     Ed448(Vec<u8>),
+    ECDSA256r1Sha256(Vec<u8>),
 }
 
 impl fmt::Debug for SelfSigningPrefix {
@@ -32,6 +33,7 @@ impl SelfSigningPrefix {
             SelfSigning::Ed25519Sha512 => Self::Ed25519Sha512(signature),
             SelfSigning::ECDSAsecp256k1Sha256 => Self::ECDSAsecp256k1Sha256(signature),
             SelfSigning::Ed448 => Self::Ed448(signature),
+            SelfSigning::ECDSA256r1Sha256 => Self::ECDSA256r1Sha256(signature),
         }
     }
 
@@ -40,6 +42,7 @@ impl SelfSigningPrefix {
             SelfSigningPrefix::Ed25519Sha512(_) => SelfSigning::Ed25519Sha512,
             SelfSigningPrefix::ECDSAsecp256k1Sha256(_) => SelfSigning::ECDSAsecp256k1Sha256,
             SelfSigningPrefix::Ed448(_) => SelfSigning::Ed448,
+            SelfSigningPrefix::ECDSA256r1Sha256(_) => SelfSigning::ECDSA256r1Sha256,
         }
     }
 }
@@ -66,7 +69,8 @@ impl CesrPrimitive for SelfSigningPrefix {
         match self {
             SelfSigningPrefix::Ed25519Sha512(signature)
             | SelfSigningPrefix::ECDSAsecp256k1Sha256(signature)
-            | SelfSigningPrefix::Ed448(signature) => signature.clone(),
+            | SelfSigningPrefix::Ed448(signature)
+            | SelfSigningPrefix::ECDSA256r1Sha256(signature) => signature.clone(),
         }
     }
     fn derivation_code(&self) -> PrimitiveCode {

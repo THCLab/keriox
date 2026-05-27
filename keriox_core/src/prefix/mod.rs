@@ -130,6 +130,12 @@ pub fn verify(
             }
             _ => Err(SignatureError::WrongSignatureTypeError),
         },
+        BasicPrefix::ECDSA256r1(key) | BasicPrefix::ECDSA256r1NT(key) => match signature {
+            SelfSigningPrefix::ECDSA256r1Sha256(signature) => {
+                Ok(key.verify_p256(data.as_ref(), signature))
+            }
+            _ => Err(SignatureError::WrongSignatureTypeError),
+        },
         _ => Err(SignatureError::WrongKeyTypeError),
     }
 }
@@ -148,6 +154,8 @@ pub fn derive(seed: &SeedPrefix, transferable: bool) -> Result<BasicPrefix, Erro
         SeedPrefix::RandomSeed256ECDSAsecp256k1(_) if !transferable => {
             BasicPrefix::ECDSAsecp256k1NT(pk)
         }
+        SeedPrefix::RandomSeed256ECDSA256r1(_) if transferable => BasicPrefix::ECDSA256r1(pk),
+        SeedPrefix::RandomSeed256ECDSA256r1(_) if !transferable => BasicPrefix::ECDSA256r1NT(pk),
         _ => return Err(Error::WrongSeedTypeError),
     })
 }

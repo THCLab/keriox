@@ -24,6 +24,8 @@ pub enum BasicPrefix {
     Ed448(PublicKey),
     X25519(PublicKey),
     X448(PublicKey),
+    ECDSA256r1NT(PublicKey),
+    ECDSA256r1(PublicKey),
 }
 
 impl fmt::Debug for BasicPrefix {
@@ -43,6 +45,8 @@ impl BasicPrefix {
             CesrBasic::Ed448 => Self::Ed448(public_key),
             CesrBasic::X25519 => Self::X25519(public_key),
             CesrBasic::X448 => Self::X448(public_key),
+            CesrBasic::ECDSA256r1Nontrans => Self::ECDSA256r1NT(public_key),
+            CesrBasic::ECDSA256r1 => Self::ECDSA256r1(public_key),
         }
     }
 
@@ -61,7 +65,8 @@ impl BasicPrefix {
         match self {
             BasicPrefix::ECDSAsecp256k1NT(_)
             | BasicPrefix::Ed25519NT(_)
-            | BasicPrefix::Ed448NT(_) => false,
+            | BasicPrefix::Ed448NT(_)
+            | BasicPrefix::ECDSA256r1NT(_) => false,
             _ => true,
         }
     }
@@ -76,6 +81,8 @@ impl BasicPrefix {
             BasicPrefix::Ed448(_) => CesrBasic::Ed448,
             BasicPrefix::X25519(_) => CesrBasic::X25519,
             BasicPrefix::X448(_) => CesrBasic::X448,
+            BasicPrefix::ECDSA256r1NT(_) => CesrBasic::ECDSA256r1Nontrans,
+            BasicPrefix::ECDSA256r1(_) => CesrBasic::ECDSA256r1,
         }
     }
 }
@@ -105,7 +112,9 @@ impl CesrPrimitive for BasicPrefix {
             | BasicPrefix::Ed448NT(pk)
             | BasicPrefix::Ed448(pk)
             | BasicPrefix::X25519(pk)
-            | BasicPrefix::X448(pk) => pk.key(),
+            | BasicPrefix::X448(pk)
+            | BasicPrefix::ECDSA256r1NT(pk)
+            | BasicPrefix::ECDSA256r1(pk) => pk.key(),
         }
     }
     fn derivation_code(&self) -> PrimitiveCode {
