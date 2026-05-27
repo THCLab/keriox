@@ -406,6 +406,21 @@ impl KeriStore {
     /// success. The caller does not have to handle signing, exchange
     /// messages, mailbox queries, or KERI event types directly.
     ///
+    /// **Precondition:** the caller's individual KEL for `member_alias`
+    /// must already be rotated locally so that the member's *current*
+    /// individual public key matches the group's prior next-key
+    /// commitment for that member. The convenience flow is:
+    ///
+    /// ```ignore
+    /// store.rotate(member_alias).await?;            // local rotation
+    /// store.rotate_multisig_group(group_alias, …).await?;  // group rotation
+    /// ```
+    ///
+    /// Failing to pre-rotate yields
+    /// `Mechanics(EventProcessingError(SignatureVerificationError))`
+    /// because the contribution is signed with a key the group has not
+    /// yet committed to.
+    ///
     /// When the prior signature threshold is greater than 1, this call
     /// submits the caller's signature; remaining co-signers complete the
     /// rotation by calling [`crate::operations::accept_multisig`] on the
@@ -429,11 +444,11 @@ impl KeriStore {
         let group_id = self.load_multisig_prefix(group_alias)?;
 
         let mut id = self.load(&member_alias)?;
-        // Multisig rotation reveals the local member's pre-committed
-        // next-key, so the contribution must be signed with the next
-        // signer (now becoming current). The single-AID counterpart of
-        // this same fix lives in KeriStore::rotate.
-        let signer = self.load_next_signer(&member_alias)?;
+        // Multisig rotation requires the caller to have already locally
+        // rotated their individual KEL (so their CURRENT individual key
+        // matches the group's prior next-key commitment for this member).
+        // Sign with the current signer.
+        let signer = self.load_signer(&member_alias)?;
 
         let new_members = config.new_participants.clone();
         rotate_group(&mut id, &signer, &group_id, config).await?;
