@@ -3,6 +3,7 @@
 pub enum SignatureAlgorithm {
     Ed25519,
     EcdsaSecp256k1,
+    EcdsaSecp256r1,
 }
 
 /// Raw public key data, algorithm-agnostic.
@@ -27,5 +28,9 @@ impl PublicKeyData {
 
     pub fn secp256k1(bytes: Vec<u8>) -> Self {
         Self::new(SignatureAlgorithm::EcdsaSecp256k1, bytes)
+    }
+
+    pub fn secp256r1(bytes: Vec<u8>) -> Self {
+        Self::new(SignatureAlgorithm::EcdsaSecp256r1, bytes)
     }
 }

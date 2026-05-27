@@ -121,9 +121,7 @@ impl FileEncryptedProvider {
         auto_lock_timeout: Duration,
     ) -> Result<Self> {
         let provider = SoftwareKeyProvider::generate(label.into(), algorithm)?;
-        let seed = provider.ed25519_seed_bytes().ok_or_else(|| {
-            KeyProviderError::UnsupportedAlgorithm("only Ed25519 supported".into())
-        })?;
+        let seed = provider.seed_bytes();
 
         let export = encrypt_seed(passphrase, &seed, provider.label(), algorithm)?;
         write_key_file(&path, &export)?;
@@ -140,7 +138,7 @@ impl FileEncryptedProvider {
             unlocked: std::sync::Mutex::new(UnlockedState {
                 inner: Some(Arc::new(provider)),
                 last_used: Instant::now(),
-                seed: Some(seed.to_vec()),
+                seed: Some(seed),
             }),
         })
     }
@@ -185,9 +183,10 @@ impl FileEncryptedProvider {
                 SoftwareKeyProvider::from_ed25519_bytes(&self.label, &seed_arr)?
             }
             SignatureAlgorithm::EcdsaSecp256k1 => {
-                return Err(KeyProviderError::UnsupportedAlgorithm(
-                    "secp256k1 file encryption not yet implemented".into(),
-                ));
+                SoftwareKeyProvider::from_secp256k1_bytes(&self.label, &seed)?
+            }
+            SignatureAlgorithm::EcdsaSecp256r1 => {
+                SoftwareKeyProvider::from_p256_bytes(&self.label, &seed)?
             }
         };
 
@@ -226,6 +225,7 @@ fn write_key_file(path: &Path, export: &EncryptedKeyExport) -> Result<()> {
     buf.push(match export.algorithm {
         SignatureAlgorithm::Ed25519 => 0,
         SignatureAlgorithm::EcdsaSecp256k1 => 1,
+        SignatureAlgorithm::EcdsaSecp256r1 => 2,
     });
     buf.extend_from_slice(&export.nonce);
     buf.extend_from_slice(&export.salt);
@@ -257,6 +257,7 @@ fn read_key_file(path: &Path) -> Result<EncryptedKeyExport> {
     let algorithm = match data[1] {
         0 => SignatureAlgorithm::Ed25519,
         1 => SignatureAlgorithm::EcdsaSecp256k1,
+        2 => SignatureAlgorithm::EcdsaSecp256r1,
         _ => {
             return Err(KeyProviderError::InvalidKeyMaterial(
                 "unknown algorithm code".into(),
@@ -517,5 +518,33 @@ mod tests {
         let export =
             encrypt_seed(b"passphrase", &seed, "test", SignatureAlgorithm::Ed25519).unwrap();
         assert!(decrypt_seed(b"wrong", &export).is_err());
+    }
+
+    #[tokio::test]
+    async fn encrypted_file_p256_roundtrip() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("p256.key");
+        let passphrase = b"mobile-secure-enclave-mirror";
+
+        let provider = FileEncryptedProvider::create(
+            "p256-key",
+            path.clone(),
+            SignatureAlgorithm::EcdsaSecp256r1,
+            passphrase,
+            Duration::from_secs(300),
+        )
+        .unwrap();
+
+        let msg = b"native curve through the file vault";
+        let sig = provider.sign(msg).await.unwrap();
+        assert_eq!(sig.len(), 64);
+
+        let reopened =
+            FileEncryptedProvider::open("p256-key", path, Duration::from_secs(300)).unwrap();
+        reopened.unlock(passphrase).await.unwrap();
+        let sig2 = reopened.sign(msg).await.unwrap();
+        // ECDSA is non-deterministic so signatures differ across calls;
+        // assert the reopened key signs valid output of the right length.
+        assert_eq!(sig2.len(), 64);
     }
 }

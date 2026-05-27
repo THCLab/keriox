@@ -1,4 +1,4 @@
-//! In-memory software key provider using ed25519-dalek and k256.
+//! In-memory software key provider using ed25519-dalek, k256, and p256.
 
 use std::sync::Arc;
 
@@ -9,10 +9,9 @@ use crate::{
     KeyProvider, KeyProviderError, KeyProviderFactory, PublicKeyData, Result, SignatureAlgorithm,
 };
 
-/// In-memory Ed25519 or secp256k1 signing key.
+/// In-memory Ed25519, secp256k1, or P-256 signing key.
 ///
-/// Private key material lives only in RAM. The inner signing keys
-/// (`ed25519_dalek::SigningKey`, `k256::ecdsa::SigningKey`) handle their
+/// Private key material lives only in RAM. The inner signing keys handle their
 /// own cleanup when dropped. Public key bytes are not zeroized since they
 /// are not secret.
 pub struct SoftwareKeyProvider {
@@ -23,8 +22,8 @@ pub struct SoftwareKeyProvider {
 
 enum SoftwareKeyInner {
     Ed25519(ed25519_dalek::SigningKey),
-    #[allow(dead_code)]
     Secp256k1(k256::ecdsa::SigningKey),
+    P256(p256::ecdsa::SigningKey),
 }
 
 impl SoftwareKeyProvider {
@@ -48,6 +47,16 @@ impl SoftwareKeyProvider {
                     public_data: PublicKeyData::secp256k1(pk_bytes),
                 })
             }
+            SignatureAlgorithm::EcdsaSecp256r1 => {
+                let sk = p256::ecdsa::SigningKey::random(&mut OsRng);
+                let vk = p256::ecdsa::VerifyingKey::from(&sk);
+                let pk_bytes = vk.to_encoded_point(true).as_bytes().to_vec();
+                Ok(Self {
+                    label: label.into(),
+                    inner: SoftwareKeyInner::P256(sk),
+                    public_data: PublicKeyData::secp256r1(pk_bytes),
+                })
+            }
         }
     }
 
@@ -61,10 +70,45 @@ impl SoftwareKeyProvider {
         })
     }
 
+    pub fn from_secp256k1_bytes(label: impl Into<String>, seed: &[u8]) -> Result<Self> {
+        let sk = k256::ecdsa::SigningKey::from_bytes(seed)
+            .map_err(|e| KeyProviderError::InvalidKeyMaterial(format!("secp256k1 seed: {e}")))?;
+        let pk_bytes = sk.verifying_key().to_bytes().to_vec();
+        Ok(Self {
+            label: label.into(),
+            inner: SoftwareKeyInner::Secp256k1(sk),
+            public_data: PublicKeyData::secp256k1(pk_bytes),
+        })
+    }
+
+    pub fn from_p256_bytes(label: impl Into<String>, seed: &[u8]) -> Result<Self> {
+        let sk = p256::ecdsa::SigningKey::from_bytes(seed)
+            .map_err(|e| KeyProviderError::InvalidKeyMaterial(format!("P-256 seed: {e}")))?;
+        let vk = p256::ecdsa::VerifyingKey::from(&sk);
+        let pk_bytes = vk.to_encoded_point(true).as_bytes().to_vec();
+        Ok(Self {
+            label: label.into(),
+            inner: SoftwareKeyInner::P256(sk),
+            public_data: PublicKeyData::secp256r1(pk_bytes),
+        })
+    }
+
+    /// Return the raw seed bytes for any in-memory algorithm.
+    ///
+    /// Returns 32 bytes for all currently supported algorithms (Ed25519
+    /// seed, secp256k1 scalar, P-256 scalar).
+    pub fn seed_bytes(&self) -> Vec<u8> {
+        match &self.inner {
+            SoftwareKeyInner::Ed25519(sk) => sk.to_bytes().to_vec(),
+            SoftwareKeyInner::Secp256k1(sk) => sk.to_bytes().to_vec(),
+            SoftwareKeyInner::P256(sk) => sk.to_bytes().to_vec(),
+        }
+    }
+
     pub fn ed25519_seed_bytes(&self) -> Option<[u8; 32]> {
         match &self.inner {
             SoftwareKeyInner::Ed25519(sk) => Some(sk.to_bytes()),
-            SoftwareKeyInner::Secp256k1(_) => None,
+            _ => None,
         }
     }
 }
@@ -81,7 +125,14 @@ impl KeyProvider for SoftwareKeyProvider {
             SoftwareKeyInner::Secp256k1(sk) => {
                 use k256::ecdsa::signature::Signer as _;
                 let sig: k256::ecdsa::Signature = sk.sign(message);
-                Ok(sig.to_der().as_bytes().to_vec())
+                // KERI's 0C self-signing code requires raw 64-byte r||s,
+                // not DER. Use as_ref() instead of to_der().
+                Ok(sig.as_ref().to_vec())
+            }
+            SoftwareKeyInner::P256(sk) => {
+                use p256::ecdsa::signature::Signer as _;
+                let sig: p256::ecdsa::Signature = sk.sign(message);
+                Ok(sig.as_ref().to_vec())
             }
         }
     }
@@ -189,5 +240,33 @@ mod tests {
     async fn factory_open_returns_not_found() {
         let factory = SoftwareKeyProviderFactory;
         assert!(factory.open("anything").await.is_err());
+    }
+
+    #[tokio::test]
+    async fn secp256k1_sign_is_raw_64_bytes() {
+        // Regression: KERI's 0C self-signing code requires raw r||s,
+        // not DER. DER would be variable-length (~70-72 bytes).
+        let provider =
+            SoftwareKeyProvider::generate("test", SignatureAlgorithm::EcdsaSecp256k1).unwrap();
+        let sig = provider.sign(b"hello").await.unwrap();
+        assert_eq!(sig.len(), 64, "secp256k1 must emit raw r||s for KERI 0C");
+    }
+
+    #[tokio::test]
+    async fn p256_sign_verify_roundtrip() {
+        use p256::ecdsa::{
+            signature::Verifier as _, Signature, VerifyingKey,
+        };
+
+        let provider =
+            SoftwareKeyProvider::generate("test", SignatureAlgorithm::EcdsaSecp256r1).unwrap();
+        let msg = b"native curve mobile";
+        let sig = provider.sign(msg).await.unwrap();
+        assert_eq!(sig.len(), 64, "P-256 must emit raw r||s for KERI 0I");
+
+        let pk_bytes = &provider.public_key().bytes;
+        let vk = VerifyingKey::from_sec1_bytes(pk_bytes).unwrap();
+        let signature = Signature::try_from(sig.as_slice()).unwrap();
+        assert!(vk.verify(msg, &signature).is_ok());
     }
 }
