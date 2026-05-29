@@ -14,7 +14,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 
 use crate::{
-    KeyProvider, KeyProviderError, KeyProviderFactory, PublicKeyData, Result, SignatureAlgorithm,
+    KeyProvider, KeyProviderFactory, PublicKeyData, Result, SignatureAlgorithm,
 };
 
 type SignCallback = Arc<dyn Fn(&str, &[u8]) -> Result<Vec<u8>> + Send + Sync>;
