@@ -457,6 +457,42 @@ impl KeriStore {
         Ok(())
     }
 
+    /// Register a local alias that "views" an externally-incepted
+    /// AID — the alias's `id` file is set to `identity_prefix` (so
+    /// [`KeriStore::load`] returns an [`Identifier`] bound to that
+    /// AID), and its `priv_key` file holds a signing seed (so
+    /// [`KeriStore::load_signer`] yields a [`Signer`] for the
+    /// member-slot pubkey participating in `identity_prefix`'s
+    /// multi-sig key set).
+    ///
+    /// No icp event is generated for the alias — the AID it views
+    /// already exists elsewhere (typically incepted by another
+    /// device). After this call the alias's redb is initialised
+    /// empty; callers usually follow up with
+    /// `import_kel_tofu` (cyfron-core) to ingest the AID's KEL
+    /// before reading state.
+    ///
+    /// # Errors
+    /// - [`Error::PersistenceError`] on I/O failures.
+    pub fn register_group_view(
+        &self,
+        alias: &str,
+        identity_prefix: &IdentifierPrefix,
+        slot_seed: SeedPrefix,
+    ) -> Result<()> {
+        use keri_core::prefix::CesrPrimitive;
+        // Touch the alias dir + db path so subsequent
+        // `KeriStore::load` opens the redb cleanly.
+        let alias_dir = self.alias_dir(alias);
+        std::fs::create_dir_all(&alias_dir)
+            .map_err(|e| Error::PersistenceError(format!("cannot create alias dir: {e}")))?;
+        let db_path = alias_dir.join("db");
+        let _controller = self.get_or_create_controller(db_path)?;
+        self.write_file(alias, "id", &identity_prefix.to_str())?;
+        self.write_file(alias, "priv_key", &slot_seed.to_str())?;
+        Ok(())
+    }
+
     /// Persist a single signing seed under `alias` without
     /// performing an inception event.
     ///
