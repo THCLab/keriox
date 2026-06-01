@@ -123,6 +123,34 @@ impl Identifier {
             .await?)
     }
 
+    /// Like [`Identifier::rotate`] but also sets the new current
+    /// signature threshold (`kt`). Plain `rotate` leaves `kt` at
+    /// the builder default of 1 — use this variant when raising
+    /// or lowering the multi-sig threshold.
+    pub async fn rotate_with_thresholds(
+        &self,
+        current_keys: Vec<BasicPrefix>,
+        new_signature_threshold: u64,
+        new_next_keys: Vec<BasicPrefix>,
+        new_next_threshold: u64,
+        witness_to_add: Vec<LocationScheme>,
+        witness_to_remove: Vec<BasicPrefix>,
+        witness_threshold: u64,
+    ) -> Result<String> {
+        Ok(self
+            .inner
+            .rotate_with_thresholds(
+                current_keys,
+                new_signature_threshold,
+                new_next_keys,
+                new_next_threshold,
+                witness_to_add,
+                witness_to_remove,
+                witness_threshold,
+            )
+            .await?)
+    }
+
     /// Finalise a rotation event (sign + save + queue for witness notification).
     pub async fn finalize_rotate(&mut self, event: &[u8], sig: SelfSigningPrefix) -> Result<()> {
         Ok(self.inner.finalize_rotate(event, sig).await?)

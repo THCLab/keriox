@@ -145,6 +145,52 @@ fn make_rotation(
         .map_err(|e| Error::EventGenerationError(e.to_string()))
 }
 
+/// Like [`rotate`] but sets both the new current signature
+/// threshold (`new_signature_threshold`, the `kt` field of the
+/// emitted event) and the new pre-rotation threshold
+/// (`new_next_threshold`, the `nt` field). The plain
+/// [`rotate`]/[`make_rotation`] pair leaves `kt` at the builder
+/// default of 1, which is fine for member-set changes that keep
+/// the threshold but cannot express "rotate to a higher k-of-N
+/// keystate".
+///
+/// The constraint `new_signature_threshold <= current_keys.len()`
+/// matches what [`rotate_with_next_hashes`] enforces — same
+/// invariant, the only difference is that this variant accepts
+/// raw next-key pubkeys and computes the digests itself.
+pub fn rotate_with_thresholds(
+    state: IdentifierState,
+    current_keys: Vec<BasicPrefix>,
+    new_signature_threshold: u64,
+    new_next_keys: Vec<BasicPrefix>,
+    new_next_threshold: u64,
+    witness_to_add: Vec<BasicPrefix>,
+    witness_to_remove: Vec<BasicPrefix>,
+    witness_threshold: u64,
+) -> Result<String, Error> {
+    if new_signature_threshold == 0 || new_signature_threshold > current_keys.len() as u64 {
+        return Err(Error::EventGenerationError(
+            "improper signature threshold".into(),
+        ));
+    }
+    let rot = EventMsgBuilder::new(EventTypeTag::Rot)
+        .with_prefix(&state.prefix)
+        .with_sn(state.sn + 1)
+        .with_previous_event(&state.last_event_digest.into())
+        .with_keys(current_keys)
+        .with_threshold(&SignatureThreshold::Simple(new_signature_threshold))
+        .with_next_keys(new_next_keys)
+        .with_next_threshold(&SignatureThreshold::Simple(new_next_threshold))
+        .with_witness_to_add(&witness_to_add)
+        .with_witness_to_remove(&witness_to_remove)
+        .with_witness_threshold(&SignatureThreshold::Simple(witness_threshold))
+        .build()
+        .map_err(|e| Error::EventGenerationError(e.to_string()))?
+        .encode()
+        .map_err(|e| Error::EventGenerationError(e.to_string()))?;
+    String::from_utf8(rot).map_err(|e| Error::EventGenerationError(e.to_string()))
+}
+
 /// Build a rotation event where the pre-rotation commitment is supplied as
 /// next-key digests rather than raw public keys.
 ///

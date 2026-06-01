@@ -68,6 +68,45 @@ where
         .map_err(|e| MechanicsError::EventGenerationError(e.to_string()))
     }
 
+    /// Like [`Identifier::rotate`] but lets the caller set the new
+    /// current signature threshold (`kt`) in addition to the new
+    /// pre-rotation threshold (`nt`). Use when raising or lowering
+    /// the multi-sig threshold; plain `rotate` always emits events
+    /// with `kt = 1`.
+    pub async fn rotate_with_thresholds(
+        &self,
+        current_keys: Vec<BasicPrefix>,
+        new_signature_threshold: u64,
+        new_next_keys: Vec<BasicPrefix>,
+        new_next_threshold: u64,
+        witness_to_add: Vec<LocationScheme>,
+        witness_to_remove: Vec<BasicPrefix>,
+        witness_threshold: u64,
+    ) -> Result<String, MechanicsError> {
+        for wit_oobi in &witness_to_add {
+            self.communication.resolve_loc_schema(wit_oobi).await?;
+        }
+        let witnesses_to_add = witness_to_add
+            .iter()
+            .map(|wit| match &wit.eid {
+                IdentifierPrefix::Basic(bp) => Ok(bp.clone()),
+                _ => Err(MechanicsError::WrongWitnessPrefixError),
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let state = self.known_events.get_state(&self.id)?;
+        event_generator::rotate_with_thresholds(
+            state,
+            current_keys,
+            new_signature_threshold,
+            new_next_keys,
+            new_next_threshold,
+            witnesses_to_add,
+            witness_to_remove,
+            witness_threshold,
+        )
+        .map_err(|e| MechanicsError::EventGenerationError(e.to_string()))
+    }
+
     /// Generate and return interaction event for Identifier
     pub fn anchor(&self, payload: &[SelfAddressingIdentifier]) -> Result<String, MechanicsError> {
         let state = self.known_events.get_state(&self.id)?;
