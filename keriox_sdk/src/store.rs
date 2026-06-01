@@ -457,6 +457,32 @@ impl KeriStore {
         Ok(())
     }
 
+    /// Persist a single signing seed under `alias` without
+    /// performing an inception event.
+    ///
+    /// `create` and `create_with_seeds` both end with a `KeyEvent::Icp`
+    /// pushed onto the alias's KEL, which is the right thing when the
+    /// alias represents a brand-new identifier. Multi-sig group
+    /// members are different: the group AID was incepted (or
+    /// rotated-into) elsewhere, and this alias just needs to hold
+    /// the slot signing key that participates in the group's
+    /// current key set. No KEL of its own — calls to
+    /// [`KeriStore::load_signer`] will succeed because the
+    /// `priv_key` file is present, but [`KeriStore::load`] will
+    /// fail because there is no `id` file (which is correct: the
+    /// alias does not own an AID, it backs a member slot of a
+    /// group AID tracked under a different alias).
+    ///
+    /// Pair with [`KeriStore::save_multisig`] on the group alias to
+    /// stitch the group → member-alias back-reference.
+    ///
+    /// # Errors
+    /// - [`Error::PersistenceError`] on I/O failures.
+    pub fn import_member_seed(&self, alias: &str, seed: SeedPrefix) -> Result<()> {
+        use keri_core::prefix::CesrPrimitive;
+        self.write_file(alias, "priv_key", &seed.to_str())
+    }
+
     /// Persist multisig group metadata after joining (joiner side).
     ///
     /// Call this after [`crate::operations::accept_multisig`] to record the
