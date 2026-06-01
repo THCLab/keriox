@@ -128,6 +128,25 @@ impl Identifier {
         Ok(self.inner.finalize_rotate(event, sig).await?)
     }
 
+    /// Finalise a rotation event signed by multiple keys at once.
+    ///
+    /// Use this when a single rotation reveals more than one
+    /// previously-committed next-key — typically the second leg of a
+    /// single-key → multi-sig transition, where the new current-key
+    /// set spans keys held on different devices and each device
+    /// signs at its own position in the revealed list. Caller is
+    /// responsible for building one [`IndexedSignature`] per signing
+    /// key with both `signing_index` and `prev_next_index` set
+    /// correctly; see [`Identifier::sign_with_index`] or
+    /// [`IndexedSignature::new_both_diffrent`].
+    pub async fn finalize_rotate_multi(
+        &mut self,
+        event: &[u8],
+        sigs: Vec<IndexedSignature>,
+    ) -> Result<()> {
+        Ok(self.inner.finalize_rotate_multi(event, sigs).await?)
+    }
+
     /// Finalise an interaction event (sign + save + queue for witness notification).
     pub async fn finalize_anchor(&mut self, event: &[u8], sig: SelfSigningPrefix) -> Result<()> {
         Ok(self.inner.finalize_anchor(event, sig).await?)

@@ -119,6 +119,63 @@ where
         }
     }
 
+    /// Finalise a rotation event signed by multiple keys.
+    ///
+    /// `finalize_rotate` accepts a single signature and assumes the
+    /// caller is the only signer. That fits the common single-key
+    /// AID case, but not a rotation that reveals two or more
+    /// previously-committed next-keys at once — for example the
+    /// second step of a single-key → multi-sig transition, where
+    /// the new current-key set contains keys held on different
+    /// devices and each must sign at its own position in the
+    /// revealed key list.
+    ///
+    /// Caller must provide one [`IndexedSignature`] per signing key
+    /// whose digest was committed in the prior establishment event,
+    /// with both `signing_index` and `prev_next_index` set
+    /// correctly. Up to threshold-many signatures are required for
+    /// the event to be accepted, but more is also fine — extras are
+    /// retained so verifiers reach the threshold deterministically.
+    pub async fn finalize_rotate_multi(
+        &mut self,
+        event: &[u8],
+        sigs: Vec<IndexedSignature>,
+    ) -> Result<(), MechanicsError> {
+        let parsed_event =
+            parse_event_type(event).map_err(|_e| MechanicsError::EventFormatError)?;
+        if let EventType::KeyEvent(ke) = parsed_event {
+            // Witness graft: same as `finalize_rotate` — push our
+            // KEL to any witness this rotation adds before notifying.
+            match &ke.data.event_data {
+                EventData::Rot(rot) | EventData::Drt(rot) => {
+                    let own_kel = self.known_events.find_kel_with_receipts(&self.id).unwrap();
+                    for witness in &rot.witness_config.graft {
+                        let witness_id = IdentifierPrefix::Basic(witness.clone());
+                        for msg in &own_kel {
+                            self.communication
+                                .send_message_to(
+                                    witness_id.clone(),
+                                    Scheme::Http,
+                                    Message::Notice(msg.clone()),
+                                )
+                                .await?;
+                        }
+                    }
+                }
+                _ => Err(MechanicsError::WrongEventTypeError)?,
+            };
+            let signed_message = ke.sign(sigs, None, None);
+            self.known_events
+                .save(&Message::Notice(Notice::Event(signed_message.clone())))?;
+            let st = self.cached_state.clone().apply(&ke)?;
+            self.cached_state = st;
+            self.to_notify.push(signed_message);
+            Ok(())
+        } else {
+            Err(MechanicsError::WrongEventTypeError)
+        }
+    }
+
     pub async fn finalize_anchor(
         &mut self,
         event: &[u8],
