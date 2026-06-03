@@ -749,6 +749,83 @@ pub async fn build_delegation_approval<S: SigningBackend + Clone + 'static>(
     String::from_utf8(encoded).map_err(|e| Error::EncodingError(e.to_string()))
 }
 
+/// Build the unsigned delegating `ixn` event that anchors the supplied
+/// delegated `dip` event's SAID, plus the exchange messages addressed
+/// to every other group member. Unlike [`build_delegation_approval`]
+/// the event is **not** signed, **not** saved, and **not** broadcast;
+/// the returned `ixn_cesr` is the wire form the cosign coordinator
+/// circulates so each Identity-AID member can produce their own
+/// [`IndexedSignature`].
+///
+/// Use this entry point when the delegator is a k-of-N multi-sig
+/// group and the delegating `ixn` must be cosigned before publication.
+/// After the threshold of votes is collected, call
+/// [`finalize_delegation_ixn_multi`] to assemble the signed event,
+/// save it to the local KEL, and queue witness notification.
+///
+/// Returns `(unsigned_ixn_cesr, exn_messages_for_other_members)`.
+pub fn build_delegation_ixn_unsigned(
+    delegator_id: &mut Identifier,
+    group_id: &IdentifierPrefix,
+    delegated_dip_cesr: &str,
+    participants: &[IdentifierPrefix],
+) -> Result<(String, Vec<String>)> {
+    use keri_core::event::sections::seal::{EventSeal, Seal};
+    use keri_core::event_message::cesr_adapter::{parse_event_type, EventType};
+
+    let parsed = parse_event_type(delegated_dip_cesr.as_bytes())
+        .map_err(|e| Error::EncodingError(e.to_string()))?;
+    let dip_event = match parsed {
+        EventType::KeyEvent(ke) => ke,
+        _ => {
+            return Err(Error::EncodingError(
+                "delegated event is not a key event".into(),
+            ))
+        }
+    };
+    let delegated_prefix = dip_event.data.get_prefix();
+    let dip_sn = dip_event.data.get_sn();
+    let dip_digest = dip_event
+        .digest()
+        .map_err(|e| Error::EncodingError(e.to_string()))?;
+    let event_seal = Seal::Event(EventSeal::new(delegated_prefix, dip_sn, dip_digest));
+
+    let (ixn_cesr, exn_messages) =
+        delegator_id.anchor_group_with_seals(group_id, &[event_seal], participants)?;
+    Ok((ixn_cesr, exn_messages))
+}
+
+/// Finalise a multi-sig delegating `ixn` once the threshold of
+/// [`IndexedSignature`] votes has been collected. Mirrors the way
+/// [`Identifier::finalize_rotate_multi`] is used for cosigned `rot`
+/// events. Saves the assembled event to the local KEL and queues
+/// witness notification (call [`publish_event_and_collect_receipts`]
+/// after this to push the event to witnesses and gather receipts).
+pub async fn finalize_delegation_ixn_multi(
+    delegator_id: &mut Identifier,
+    ixn_event_cesr: &[u8],
+    sigs: Vec<IndexedSignature>,
+) -> Result<()> {
+    delegator_id.finalize_anchor_multi(ixn_event_cesr, sigs).await
+}
+
+/// Push every event currently queued via `to_notify` to the
+/// caller-identifier's witnesses and then poll each witness mailbox
+/// once for receipts. Wraps the witness/mailbox legs of
+/// [`approve_delegation`] so other callers (notably the cosigned
+/// delegation flow) can reuse them without duplicating the loop.
+pub async fn publish_event_and_collect_receipts<S: SigningBackend + Clone + 'static>(
+    id: &mut Identifier,
+    signer: &S,
+) -> Result<()> {
+    id.notify_witnesses().await?;
+    let witnesses = id.find_state(id.id())?.witness_config.witnesses;
+    for witness in &witnesses {
+        _query_mailbox(id, signer, witness).await?;
+    }
+    Ok(())
+}
+
 /// Finalise the delegated AID by ingesting the delegator's signed
 /// delegating `ixn` arriving out-of-band.
 ///

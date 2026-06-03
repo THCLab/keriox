@@ -180,6 +180,20 @@ impl Identifier {
         Ok(self.inner.finalize_anchor(event, sig).await?)
     }
 
+    /// Multi-signer variant of [`finalize_anchor`] for `ixn` events.
+    ///
+    /// Caller supplies one [`IndexedSignature`] per participating
+    /// signer at the correct group-key index. Used by the cosign
+    /// coordinator to publish a multi-sig delegating `ixn` once the
+    /// threshold of votes has been collected.
+    pub async fn finalize_anchor_multi(
+        &mut self,
+        event: &[u8],
+        sigs: Vec<IndexedSignature>,
+    ) -> Result<()> {
+        Ok(self.inner.finalize_anchor_multi(event, sigs).await?)
+    }
+
     /// Send pending events to witnesses, returns the number of events sent.
     pub async fn notify_witnesses(&mut self) -> Result<usize> {
         Ok(self.inner.notify_witnesses().await?)

@@ -232,6 +232,39 @@ where
         }
     }
 
+    /// Multi-signer variant of [`finalize_anchor`].
+    ///
+    /// Accepts an `ixn` event together with one [`IndexedSignature`] per
+    /// participating signer. The signatures are merged, the assembled
+    /// signed event is saved to the local KEL and queued for witness
+    /// notification. Mirrors [`finalize_rotate_multi`] for interaction
+    /// events; used by the cosign coordinator when a delegating `ixn`
+    /// must be signed by the full multi-sig threshold before publication.
+    pub async fn finalize_anchor_multi(
+        &mut self,
+        event: &[u8],
+        sigs: Vec<IndexedSignature>,
+    ) -> Result<(), MechanicsError> {
+        let parsed_event =
+            parse_event_type(event).map_err(|_e| MechanicsError::EventFormatError)?;
+        if let EventType::KeyEvent(ke) = parsed_event {
+            match &ke.data.event_data {
+                EventData::Ixn(_) => {
+                    let signed_message = ke.sign(sigs, None, None);
+                    self.known_events
+                        .save(&Message::Notice(Notice::Event(signed_message.clone())))?;
+                    let st = self.cached_state.clone().apply(&ke)?;
+                    self.cached_state = st;
+                    self.to_notify.push(signed_message);
+                    Ok(())
+                }
+                _ => Err(MechanicsError::WrongEventTypeError),
+            }
+        } else {
+            Err(MechanicsError::WrongEventTypeError)
+        }
+    }
+
     /// Checks signatures and updates database.
     /// Must call [`IdentifierController::notify_witnesses`] after calling this function if event is a key event.
     pub(crate) fn finalize_key_event(
