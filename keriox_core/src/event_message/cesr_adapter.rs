@@ -624,31 +624,42 @@ fn signed_management_query(
 
 fn signed_key_event(
     event_message: KeriEvent<KeyEvent>,
-    mut attachments: Vec<Group>,
+    attachments: Vec<Group>,
 ) -> Result<Notice, ParseError> {
     match event_message.data.get_event_data() {
         EventData::Dip(_) | EventData::Drt(_) => {
-            let (att1, att2) = (
-                attachments
-                    .pop()
-                    .ok_or_else(|| ParseError::AttachmentError("Missing attachment".into()))?,
-                attachments.pop(),
-            );
-
-            let (seals, sigs) = match (att1, att2) {
-                (
-                    Group::SourceSealCouples(seals),
-                    Some(Group::IndexedControllerSignatures(sigs)),
-                ) => Ok((Some(seals), sigs)),
-                (
-                    Group::IndexedControllerSignatures(sigs),
-                    Some(Group::SourceSealCouples(seals)),
-                ) => Ok((Some(seals), sigs)),
-                (Group::IndexedControllerSignatures(sigs), None) => Ok((None, sigs)),
-                _ => Err(ParseError::AttachmentError(
-                    "Improper attachment type".into(),
-                )),
-            }?;
+            // Scan all attachment groups instead of pattern-matching the
+            // last two: a witnessed delegated event in a KEL stream
+            // carries source-seal couples, controller signatures *and*
+            // witness receipts (see `From<&SignedEventMessage> for
+            // CesrMessage`), and the order/count must not matter — same
+            // as the non-delegated branch below.
+            let mut seals = None;
+            let mut sigs = None;
+            let mut witness_sigs: Vec<Nontransferable> = vec![];
+            for att in attachments {
+                match att {
+                    Group::SourceSealCouples(s) => seals = Some(s),
+                    Group::IndexedControllerSignatures(s) => sigs = Some(s),
+                    Group::IndexedWitnessSignatures(indexed) => {
+                        witness_sigs.push(Nontransferable::Indexed(
+                            indexed.into_iter().map(|sig| sig.into()).collect(),
+                        ))
+                    }
+                    Group::NontransReceiptCouples(couples) => {
+                        witness_sigs.push(Nontransferable::Couplet(
+                            couples
+                                .into_iter()
+                                .map(|(bp, sp)| (bp.into(), sp.into()))
+                                .collect(),
+                        ))
+                    }
+                    _ => {}
+                }
+            }
+            let sigs = sigs.ok_or_else(|| {
+                ParseError::AttachmentError("Missing controller signatures attachment".into())
+            })?;
 
             let delegator_seal = if let Some(seal) = seals {
                 match seal.len() {
@@ -664,7 +675,11 @@ fn signed_key_event(
             Ok(Notice::Event(SignedEventMessage::new(
                 &event_message,
                 signatures,
-                None,
+                if witness_sigs.is_empty() {
+                    None
+                } else {
+                    Some(witness_sigs)
+                },
                 delegator_seal?,
             )))
         }

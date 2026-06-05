@@ -279,6 +279,12 @@ impl<D: EventDatabase> EventStorage<D> {
                 {
                     EventData::Icp(_) => Some(event.signed_event_message),
                     EventData::Rot(_) => Some(event.signed_event_message),
+                    // Delegated inception/rotation are establishment
+                    // events too — without these arms a delegated
+                    // identifier has no establishment seal and cannot
+                    // produce transferable signatures.
+                    EventData::Dip(_) => Some(event.signed_event_message),
+                    EventData::Drt(_) => Some(event.signed_event_message),
                     _ => last_est,
                 }
             }
