@@ -15,42 +15,61 @@ where
 {
     pub async fn notify_witnesses(&mut self) -> Result<usize, MechanicsError> {
         let mut n = 0;
-        let to_notify = self.to_notify.iter().filter_map(|ev| {
-            // Elect the leader
-            // Leader is identifier with minimal index among all participants who
-            // sign event. He will send message to witness.
+        // Build the publish set, re-hydrating each event from the DB
+        // rather than sending the cached copy queued in `to_notify`. A
+        // delegated `dip`/`drt` is queued at inception — before the
+        // delegator anchors it — so the cached copy has no source-seal
+        // couple. The stored event (via `get_event_at_sn`) carries the
+        // seal that `finalize_delegation` attached when accepting the
+        // event out of escrow; without it a witness cannot validate the
+        // delegation, never issues a receipt, and the delegatee's KEL
+        // stays unservable to watchers. Non-delegated events are
+        // unaffected (their reloaded form is identical).
+        let mut jobs = Vec::new();
+        for ev in &self.to_notify {
+            // Elect the leader: identifier with the minimal index among
+            // all participants who sign the event sends it to witnesses.
             let id_idx = self.get_index(&ev.event_message.data).unwrap_or_default();
-            let min_sig_idx =
-                ev.signatures
-                    .iter()
-                    .map(|at| at.index.current())
-                    .min()
-                    .expect("event should have at least one signature") as usize;
-            if min_sig_idx == id_idx {
-                // For events whose effect on witness config has already been
-                // applied to local state (e.g. a freshly finalized rotation),
-                // `find_witnesses_at_event` returns DuplicateError when it
-                // re-applies the event. Treat that as "use the current
-                // witness config" — the state already reflects the event.
-                let witnesses = match self
-                    .known_events
-                    .find_witnesses_at_event(&ev.event_message)
-                {
-                    Ok(ws) => ws,
-                    Err(_) => self
-                        .known_events
-                        .storage
-                        .get_state(&ev.event_message.data.get_prefix())
-                        .map(|st| st.witness_config.witnesses)
-                        .unwrap_or_default(),
-                };
-                n += 1;
-                Some(self.communication.publish(witnesses, &ev))
-            } else {
-                None
+            let min_sig_idx = ev
+                .signatures
+                .iter()
+                .map(|at| at.index.current())
+                .min()
+                .expect("event should have at least one signature") as usize;
+            if min_sig_idx != id_idx {
+                continue;
             }
-        });
-        join_all(to_notify).await;
+            // For events whose effect on witness config has already been
+            // applied to local state (e.g. a freshly finalized rotation),
+            // `find_witnesses_at_event` returns DuplicateError when it
+            // re-applies the event. Treat that as "use the current
+            // witness config" — the state already reflects the event.
+            let witnesses = match self.known_events.find_witnesses_at_event(&ev.event_message) {
+                Ok(ws) => ws,
+                Err(_) => self
+                    .known_events
+                    .storage
+                    .get_state(&ev.event_message.data.get_prefix())
+                    .map(|st| st.witness_config.witnesses)
+                    .unwrap_or_default(),
+            };
+            let to_send = self
+                .known_events
+                .storage
+                .get_event_at_sn(
+                    &ev.event_message.data.get_prefix(),
+                    ev.event_message.data.get_sn(),
+                )
+                .map(|t| t.signed_event_message)
+                .unwrap_or_else(|| ev.clone());
+            n += 1;
+            jobs.push((witnesses, to_send));
+        }
+        join_all(
+            jobs.iter()
+                .map(|(witnesses, ev)| self.communication.publish(witnesses.clone(), ev)),
+        )
+        .await;
         self.to_notify.clear();
 
         Ok(n)
