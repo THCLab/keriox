@@ -53,13 +53,20 @@ where
                     .map(|st| st.witness_config.witnesses)
                     .unwrap_or_default(),
             };
-            let to_send = self
-                .known_events
-                .storage
-                .get_event_at_sn(
-                    &ev.event_message.data.get_prefix(),
-                    ev.event_message.data.get_sn(),
-                )
+            // Re-hydrate by digest from the event log, not by sn from the
+            // finalized KEL: a delegated `dip`/`drt` is published to its
+            // witnesses *before* it is accepted (it can only become fully
+            // witnessed once they receipt it), so it is not in the
+            // finalized KEL yet — but the log already holds it with its
+            // source seal. `get_event_at_sn` would miss it and we'd fall
+            // back to the cached seal-less copy, so the witness could
+            // never validate the delegation and the event would stay
+            // escrowed forever.
+            let to_send = ev
+                .event_message
+                .digest()
+                .ok()
+                .and_then(|digest| self.known_events.storage.get_event_by_digest(&digest))
                 .map(|t| t.signed_event_message)
                 .unwrap_or_else(|| ev.clone());
             n += 1;

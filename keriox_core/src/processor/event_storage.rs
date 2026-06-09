@@ -165,6 +165,26 @@ impl<D: EventDatabase> EventStorage<D> {
         }
     }
 
+    /// The signed event with the given digest, read straight from the
+    /// event log rather than the finalized KEL. Unlike
+    /// [`Self::get_event_at_sn`] this returns an event that is still in
+    /// an escrow (e.g. a delegated `dip` awaiting witness receipts) and,
+    /// crucially, carries the delegation source seal stored alongside it
+    /// — so a delegated event can be published to its witnesses with the
+    /// seal before it is accepted, which is what lets it ever become
+    /// fully witnessed in the first place.
+    pub fn get_event_by_digest(
+        &self,
+        digest: &SelfAddressingIdentifier,
+    ) -> Option<TimestampedSignedEventMessage> {
+        use crate::database::LogDatabase;
+        self.events_db
+            .get_log_db()
+            .get_signed_event(digest)
+            .ok()
+            .flatten()
+    }
+
     pub fn get_event_at_sn(
         &self,
         id: &IdentifierPrefix,
