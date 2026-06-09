@@ -672,6 +672,17 @@ impl KeriStore {
         Ok(ctrl)
     }
 
+    /// The cached [`Controller`] for `alias`'s redb (creating + caching
+    /// it on first use). Callers minting a delegated AID must build the
+    /// request through this controller — see
+    /// [`crate::operations::build_delegation_request_with_controller`] —
+    /// so the mint shares the one handle `load`/`finalize` use instead
+    /// of opening a second `Database` on the same file.
+    pub fn controller_for(&self, alias: &str) -> Result<Arc<Controller>> {
+        let db_path = self.alias_dir(alias).join("db");
+        self.get_or_create_controller(db_path)
+    }
+
     fn persist_group_metadata(
         &self,
         group_alias: &str,

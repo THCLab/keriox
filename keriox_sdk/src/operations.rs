@@ -612,13 +612,36 @@ pub async fn build_delegation_request<S: SigningBackend + Clone + 'static>(
     next_pk: BasicPrefix,
     config: DelegationConfig,
 ) -> Result<(Identifier, IdentifierPrefix, String)> {
+    let controller = Controller::new(db_path)?;
+    build_delegation_request_with_controller(&controller, signer, next_pk, config).await
+}
+
+/// Like [`build_delegation_request`] but reuses an existing
+/// [`Controller`] instead of opening a fresh one on the db path.
+///
+/// redb permits only one open `Database` per file in a process. A
+/// caller that also accesses the alias through a cached controller
+/// (e.g. `KeriStore::get_or_create_controller`, used by `load`,
+/// signing and `finalize_delegation_with_seal`) must mint the delegated
+/// AID through that same controller — otherwise the two opens collide
+/// with "Database already open. Cannot acquire lock." Pass the cached
+/// controller here so the whole delegation lifecycle (mint → finalize →
+/// publish) shares one handle.
+pub async fn build_delegation_request_with_controller<S: SigningBackend + Clone + 'static>(
+    controller: &Controller,
+    signer: S,
+    next_pk: BasicPrefix,
+    config: DelegationConfig,
+) -> Result<(Identifier, IdentifierPrefix, String)> {
     let temp_config = IdentifierConfig {
         witnesses: config.witnesses.clone(),
         witness_threshold: config.witness_threshold,
         watchers: vec![],
         algorithm: config.algorithm,
     };
-    let mut temp_id = create_identifier(db_path, signer.clone(), next_pk, temp_config).await?;
+    let mut temp_id =
+        create_identifier_with_controller(controller, signer.clone(), next_pk, temp_config)
+            .await?;
 
     let witness_ids: Vec<BasicPrefix> = config
         .witnesses
