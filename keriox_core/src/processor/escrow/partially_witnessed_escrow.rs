@@ -295,7 +295,15 @@ impl<D: EventDatabase + EscrowCreator + 'static> Notifier for PartiallyWitnessed
                                     event_message: receipted_event.event_message,
                                     signatures: receipted_event.signatures,
                                     witness_receipts,
-                                    delegator_seal: None,
+                                    // Preserve the delegation source seal. A
+                                    // delegated dip/drt that reaches full
+                                    // witnessing only after its receipt arrives
+                                    // here; dropping the seal would emit the
+                                    // event downstream (and to witnesses) without
+                                    // its SourceSealCouples group, so no verifier
+                                    // could anchor the delegation. The sibling
+                                    // "already witnessed" arm keeps it too.
+                                    delegator_seal: receipted_event.delegator_seal,
                                 };
 
                                 bus.notify(&Notification::KeyEventAdded(added))?;
