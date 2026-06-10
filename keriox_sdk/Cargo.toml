@@ -11,6 +11,7 @@ repository.workspace = true
 keri-controller = { path = "../components/controller", version = "0.17.13" }
 keri-core = { path = "../keriox_core", version = "0.17.13", features = ["query", "oobi"] }
 cesrox = { version = "2.0.0-beta.7", features = ["cesr-proof"] }
+serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_cbor = { version = "0.11" }
 said = { version = "0.5.3-beta.1", features = ["macros"]}

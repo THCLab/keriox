@@ -8,7 +8,7 @@ use keri_core::{
     state::IdentifierState,
 };
 
-use crate::{error::Result, Identifier};
+use crate::advanced::{error::Result, Identifier};
 
 /// Concrete controller wrapping `keri_controller::controller::RedbController`.
 pub struct Controller {
@@ -81,7 +81,7 @@ impl Controller {
         self.inner
             .known_events
             .process(msg)
-            .map_err(|e| crate::Error::Other(e.to_string()))?;
+            .map_err(|e| crate::advanced::Error::Other(e.to_string()))?;
         Ok(())
     }
 
@@ -93,7 +93,7 @@ impl Controller {
     /// identifier's KEL fetched from a witness.
     pub fn process_kel_stream(&self, stream: &[u8]) -> Result<()> {
         let messages = keri_core::actor::parse_event_stream(stream)
-            .map_err(|e| crate::Error::CesrParseError(e.to_string()))?;
+            .map_err(|e| crate::advanced::Error::CesrParseError(e.to_string()))?;
         for message in &messages {
             self.process(message)?;
         }
@@ -106,7 +106,7 @@ impl Controller {
             .known_events
             .tel
             .parse_and_process_tel_stream(stream)
-            .map_err(|e| crate::Error::Other(e.to_string()))?;
+            .map_err(|e| crate::advanced::Error::Other(e.to_string()))?;
         Ok(())
     }
 

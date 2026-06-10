@@ -10,7 +10,7 @@
 //! # Workflow
 //!
 //! 1. The initiator calls
-//!    [`Identifier::incept_group`](crate::Identifier::incept_group)
+//!    [`Identifier::incept_group`](crate::advanced::Identifier::incept_group)
 //!    (or `rotate_group`) to build the unsigned group event and the
 //!    accompanying exchange messages. They keep the event bytes.
 //! 2. Each member signs the event bytes locally with their own
@@ -20,7 +20,7 @@
 //!    [`merge_group_signatures`] to assemble a single
 //!    fully-signed [`Notice`].
 //! 4. Every member ingests the resulting `Notice` via
-//!    [`Identifier::save_notice`](crate::Identifier::save_notice).
+//!    [`Identifier::save_notice`](crate::advanced::Identifier::save_notice).
 //!    Once all sides ingest, the group event is committed to each
 //!    member's KEL with all signatures attached.
 
@@ -33,12 +33,12 @@ use crate::advanced::error::{Error, Result};
 
 /// Combine multiple member signatures over the *same* group event
 /// (icp / rot / ixn) into a single fully-signed
-/// [`Notice`] ready for [`save_notice`](crate::Identifier::save_notice).
+/// [`Notice`] ready for [`save_notice`](crate::advanced::Identifier::save_notice).
 ///
 /// `event_cesr` must be the canonical event bytes (e.g. the first
 /// element of the tuple returned by
-/// [`Identifier::incept_group`](crate::Identifier::incept_group) or
-/// [`Identifier::rotate_group`](crate::Identifier::rotate_group)) —
+/// [`Identifier::incept_group`](crate::advanced::Identifier::incept_group) or
+/// [`Identifier::rotate_group`](crate::advanced::Identifier::rotate_group)) —
 /// every member must sign the exact same bytes.
 ///
 /// `signatures` is a list of `(member_index, signature)` pairs where

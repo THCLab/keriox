@@ -26,7 +26,7 @@ use keri_core::event_message::signature::{get_signatures, Signature, SignerData}
 use said::derivation::{HashFunction, HashFunctionCode};
 use said::SelfAddressingIdentifier;
 
-use crate::{
+use crate::advanced::{
     error::{Error, Result},
     identifier::Identifier,
     operations::SigningBackend,

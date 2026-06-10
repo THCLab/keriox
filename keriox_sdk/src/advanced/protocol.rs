@@ -1,7 +1,7 @@
 //! Protocol-level re-exports for consumers that need direct access to KERI,
 //! CESR, SAID, and TEL internals.
 //!
-//! **Prefer the high-level API** ([`crate::Identifier`], [`crate::KeriStore`],
+//! **Prefer the high-level API** ([`crate::advanced::Identifier`], [`crate::advanced::KeriStore`],
 //! [`crate::advanced::operations`]) whenever possible. This module exists so that
 //! tools like `dkms-bin` can depend solely on `keri-sdk` without pulling in
 //! `keri-core`, `keri-controller`, `cesrox`, `said`, or `teliox` directly.

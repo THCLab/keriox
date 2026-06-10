@@ -61,7 +61,7 @@ impl KeriSigner {
     /// For the `Provider` variant it blocks on the async
     /// [`KeyProvider::sign()`](keri_keyprovider::KeyProvider::sign) call
     /// (the call is CPU-bound and completes immediately for software keys).
-    pub fn sign(&self, msg: &[u8]) -> crate::Result<Vec<u8>> {
+    pub fn sign(&self, msg: &[u8]) -> crate::advanced::Result<Vec<u8>> {
         match self {
             KeriSigner::Legacy(s) => s.sign(msg).map_err(|e| Error::Signing(e.to_string())),
             KeriSigner::Provider(p) => {

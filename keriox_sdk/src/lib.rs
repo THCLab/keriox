@@ -10,13 +10,22 @@
 
 pub mod advanced;
 
+// ── Facade modules ────────────────────────────────────────────────────────────
+
+mod error;
+mod ids;
+mod message;
+
+pub use error::{Error, Result};
+pub use ids::{CredentialId, IdentityId};
+pub use message::{SignedMessage, Verified};
+
 // ── Temporary transitional re-exports ─────────────────────────────────────────
 // Keep existing `keri_sdk::store::…`-style paths compiling while the facade is
 // built. Removed once the facade surface is locked.
 
 pub use advanced::controller;
 pub use advanced::ephemeral;
-pub use advanced::error;
 pub use advanced::identifier;
 pub use advanced::inspect;
 pub use advanced::keys;
@@ -34,8 +43,8 @@ pub use advanced::types;
 pub use advanced::keyprovider_adapter;
 
 pub use advanced::{
-    ActionRequired, Controller, EphemeralIdentifier, Error, Identifier, KeriStore, OobiStore,
-    Result, WatcherResponseError,
+    ActionRequired, Controller, EphemeralIdentifier, Identifier, KeriStore, OobiStore,
+    WatcherResponseError,
 };
 pub use advanced::{
     CredentialStatus, DelegationConfig, DelegationRequest, GroupRotationConfig, IdentifierConfig,

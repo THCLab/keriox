@@ -11,7 +11,7 @@ use keri_controller::IdentifierPrefix;
 use keri_core::actor::prelude::SelfAddressingIdentifier;
 use teliox::state::vc_state::TelState;
 
-use crate::{
+use crate::advanced::{
     error::{Error, Result},
     identifier::Identifier,
     operations::wrap_sig,

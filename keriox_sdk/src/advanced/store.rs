@@ -33,7 +33,7 @@ use std::{
 use keri_controller::{controller::RedbIdentifier, IdentifierPrefix};
 use keri_core::{prefix::SeedPrefix, signer::Signer};
 
-use crate::{
+use crate::advanced::{
     controller::Controller,
     error::{Error, Result},
     identifier::Identifier,

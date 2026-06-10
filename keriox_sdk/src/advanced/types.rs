@@ -306,7 +306,7 @@ impl MultisigRequest {
     /// The SAID of the pending group event.
     ///
     /// # Errors
-    /// - [`crate::Error::EncodingError`] if digest computation fails.
+    /// - [`crate::advanced::Error::EncodingError`] if digest computation fails.
     pub fn event_digest(
         &self,
     ) -> crate::advanced::error::Result<keri_core::actor::prelude::SelfAddressingIdentifier> {
@@ -327,7 +327,7 @@ impl MultisigRequest {
     /// The pending group event serialised as JSON, suitable for persistence.
     ///
     /// # Errors
-    /// - [`crate::Error::EncodingError`] on serialisation failure.
+    /// - [`crate::advanced::Error::EncodingError`] on serialisation failure.
     pub fn event_json(&self) -> crate::advanced::error::Result<String> {
         serde_json::to_string(&self.event)
             .map_err(|e| crate::advanced::error::Error::EncodingError(e.to_string()))
@@ -336,7 +336,7 @@ impl MultisigRequest {
     /// Pretty-printed JSON of the pending group event, for display.
     ///
     /// # Errors
-    /// - [`crate::Error::EncodingError`] on serialisation failure.
+    /// - [`crate::advanced::Error::EncodingError`] on serialisation failure.
     pub fn event_json_pretty(&self) -> crate::advanced::error::Result<String> {
         serde_json::to_string_pretty(&self.event)
             .map_err(|e| crate::advanced::error::Error::EncodingError(e.to_string()))
@@ -345,7 +345,7 @@ impl MultisigRequest {
     /// The exchange message serialised as JSON, suitable for persistence.
     ///
     /// # Errors
-    /// - [`crate::Error::EncodingError`] on serialisation failure.
+    /// - [`crate::advanced::Error::EncodingError`] on serialisation failure.
     pub fn exchange_json(&self) -> crate::advanced::error::Result<String> {
         serde_json::to_string(&self.exchange)
             .map_err(|e| crate::advanced::error::Error::EncodingError(e.to_string()))
@@ -355,7 +355,7 @@ impl MultisigRequest {
     /// and [`exchange_json`](Self::exchange_json).
     ///
     /// # Errors
-    /// - [`crate::Error::EncodingError`] if either JSON is invalid.
+    /// - [`crate::advanced::Error::EncodingError`] if either JSON is invalid.
     pub fn from_json(event_json: &str, exchange_json: &str) -> crate::advanced::error::Result<Self> {
         let event = serde_json::from_str(event_json)
             .map_err(|e| crate::advanced::error::Error::EncodingError(format!("event JSON: {e}")))?;
@@ -463,7 +463,7 @@ impl TryFrom<keri_controller::mailbox_updating::ActionRequired> for PendingReque
 /// A single problem found while verifying a CESR stream against known KELs.
 ///
 /// Returned by [`crate::advanced::identifier::Identifier::verify_from_cesr_detailed`].
-/// Unlike [`crate::Error::VerificationFailed`], these variants preserve the
+/// Unlike [`crate::advanced::Error::VerificationFailed`], these variants preserve the
 /// underlying cause so callers can react (e.g. resolve a missing OOBI and
 /// retry, or report a hard signature mismatch).
 #[derive(Debug, Clone)]

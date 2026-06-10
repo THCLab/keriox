@@ -12,7 +12,7 @@ use keri_core::oobi_manager::RedbOobiManager;
 use keri_core::query::reply_event::{ReplyEvent, SignedReply};
 
 use crate::advanced::error::{Error, Result};
-use crate::IdentifierPrefix;
+use crate::advanced::IdentifierPrefix;
 
 /// Persistent OOBI reply storage backed by redb.
 ///

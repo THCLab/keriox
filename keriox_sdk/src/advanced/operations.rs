@@ -21,7 +21,7 @@ use keri_core::{
     query::mailbox::SignedMailboxQuery,
 };
 
-use crate::{
+use crate::advanced::{
     controller::Controller,
     error::{Error, Result},
     identifier::{ActionRequired, Identifier},

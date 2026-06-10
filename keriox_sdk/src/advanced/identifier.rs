@@ -308,7 +308,7 @@ impl Identifier {
                 let (kc, id, event_sai): (
                     Option<keri_core::event::sections::key_config::KeyConfig>,
                     _,
-                    Option<crate::SelfAddressingIdentifier>,
+                    Option<crate::advanced::SelfAddressingIdentifier>,
                 ) = match sigd {
                     SignerData::EventSeal(es) => (
                         self.inner
