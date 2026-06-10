@@ -128,6 +128,7 @@ pub use keri_core::event_message::signature::SignerData;
 pub use keri_core::oobi::Role;
 pub use keri_core::{actor::prelude::SelfAddressingIdentifier, signer::Signer};
 pub use said::derivation::{HashFunction, HashFunctionCode};
+pub use said::sad::SAD;
 pub use said::version::format::SerializationFormats;
 pub use said::version::Encode as SaidEncode;
 
