@@ -182,6 +182,101 @@ impl Keri {
         }
     }
 
+    /// Import another party's identity so their signatures can be verified.
+    ///
+    /// Accepts what the other party shared with you:
+    /// - their **OOBI URL** (from [`crate::Identity::oobi_url`]) — their key
+    ///   history is fetched from the witness in the URL, or
+    /// - their **key history** itself (the CESR string from
+    ///   [`crate::Identity::kel`]) — fully offline.
+    ///
+    /// Returns the imported identity's id. Importing again later picks up
+    /// any key rotations they made in the meantime.
+    pub async fn import_contact(&self, source: &str) -> Result<IdentityId> {
+        let trimmed = source.trim();
+
+        // A key-history (KEL) CESR stream starts with a KERI event JSON.
+        if trimmed.starts_with('{') {
+            let aid = first_event_identifier(trimmed.as_bytes())?;
+            return self.ingest_contact_kel(&aid, trimmed.as_bytes());
+        }
+
+        // An OOBI URL: …/oobi/<their id>[/witness/<witness id>]
+        if let Ok(url) = url::Url::parse(trimmed) {
+            let segments: Vec<&str> = url
+                .path_segments()
+                .map(|s| s.collect())
+                .unwrap_or_default();
+            if let Some(pos) = segments.iter().position(|s| *s == "oobi") {
+                if let Some(cid) = segments.get(pos + 1) {
+                    let id: IdentityId = cid.parse()?;
+                    let mut base = url.clone();
+                    base.set_path("");
+                    base.set_query(None);
+                    return self.import_contact_from(&id, base.as_str()).await;
+                }
+            }
+            return Err(Error::InvalidInput {
+                expected: "OOBI URL containing /oobi/<identifier>",
+                cause: format!(
+                    "cannot tell whose history to fetch from {trimmed}; if you only have a \
+                     witness base URL, use import_contact_from(id, witness_url)"
+                ),
+            });
+        }
+
+        Err(Error::InvalidInput {
+            expected: "an OOBI URL or a key history (CESR)",
+            cause: "unrecognized contact source".into(),
+        })
+    }
+
+    /// Import a contact when you know their id and a witness that serves
+    /// their key history. [`Keri::import_contact`] with an OOBI URL is the
+    /// more common path.
+    pub async fn import_contact_from(
+        &self,
+        id: &IdentityId,
+        witness_url: &str,
+    ) -> Result<IdentityId> {
+        let location = crate::contact::discover(witness_url, &self.inner.retry).await?;
+
+        let kel = crate::retry::with_retry(&self.inner.retry, || {
+            let location = location.clone();
+            async move {
+                let ephemeral = crate::advanced::EphemeralIdentifier::new()?;
+                Ok(ephemeral
+                    .pull_kel(id.as_prefix(), 0, 100, &location)
+                    .await?)
+            }
+        })
+        .await?
+        .ok_or_else(|| Error::ContactImportFailed {
+            id: id.to_string(),
+            cause: format!("the witness at {witness_url} does not know this identity"),
+        })?;
+
+        self.ingest_contact_kel(id.as_prefix(), kel.concat().as_bytes())
+    }
+
+    /// Store a contact's key history under `.contacts/<id>`.
+    fn ingest_contact_kel(
+        &self,
+        aid: &keri_controller::IdentifierPrefix,
+        kel: &[u8],
+    ) -> Result<IdentityId> {
+        let alias = format!(".contacts/{aid}");
+        let controller = self.inner.store.controller_for(&alias)?;
+        controller
+            .process_kel_stream(kel)
+            .map_err(|e| Error::ContactImportFailed {
+                id: aid.to_string(),
+                cause: format!("invalid key history: {e}"),
+            })?;
+        self.inner.store.save_id(&alias, aid)?;
+        Ok(IdentityId::from(aid.clone()))
+    }
+
     /// Check whether a credential is currently valid, revoked, or unknown.
     ///
     /// Checks registries already known locally first; if the credential is
@@ -256,12 +351,41 @@ impl Keri {
     /// Aliases of imported contacts (none until `import_contact` is used).
     fn contact_aliases(&self) -> Vec<String> {
         let contacts_dir = self.inner.root.join(".contacts");
-        if contacts_dir.join("id").is_file() {
-            vec![".contacts".to_string()]
-        } else {
-            vec![]
-        }
+        let Ok(entries) = std::fs::read_dir(contacts_dir) else {
+            return vec![];
+        };
+        entries
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().join("id").is_file())
+            .filter_map(|e| e.file_name().to_str().map(|n| format!(".contacts/{n}")))
+            .collect()
     }
+}
+
+/// Read the identifier (`"i"` field) of the first event in a KEL stream.
+fn first_event_identifier(kel: &[u8]) -> Result<keri_controller::IdentifierPrefix> {
+    let mut events = serde_json::Deserializer::from_slice(kel).into_iter::<serde_json::Value>();
+    let first = events
+        .next()
+        .transpose()
+        .ok()
+        .flatten()
+        .ok_or(Error::InvalidInput {
+            expected: "key history (CESR) starting with a KERI event",
+            cause: "no parseable event found".into(),
+        })?;
+    first
+        .get("i")
+        .and_then(|v| v.as_str())
+        .ok_or(Error::InvalidInput {
+            expected: "KERI event with an identifier field",
+            cause: "first event has no `i` field".into(),
+        })?
+        .parse()
+        .map_err(|e| Error::InvalidInput {
+            expected: "identifier in key history",
+            cause: format!("{e:?}"),
+        })
 }
 
 fn expand_home(path: &Path) -> PathBuf {

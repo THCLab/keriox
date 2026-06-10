@@ -71,6 +71,15 @@ pub enum Error {
         cause: String,
     },
 
+    /// Importing a contact's key history failed.
+    #[error("could not import contact {id}: {cause}")]
+    ContactImportFailed {
+        /// The identity whose history could not be imported.
+        id: String,
+        /// What went wrong.
+        cause: String,
+    },
+
     /// A multi-party flow (delegation, multisig) is waiting on another party.
     #[error("a step in a multi-party flow is pending: {what}; call pending_requests() on the other party and approve")]
     PendingApproval {

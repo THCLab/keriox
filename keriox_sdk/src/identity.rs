@@ -318,6 +318,39 @@ impl Identity {
         Ok(kel)
     }
 
+    /// A shareable OOBI URL: hand this string to anyone who should be able
+    /// to verify your signatures — they pass it to
+    /// [`crate::Keri::import_contact`].
+    ///
+    /// Requires at least one witness (the URL points at it). Without
+    /// witnesses, share [`Identity::kel`] out-of-band instead.
+    pub fn oobi_url(&self) -> Result<String> {
+        use keri_core::prefix::CesrPrimitive;
+        let identifier = self.keri.store.load(&self.alias)?;
+        let witness = identifier
+            .witnesses()
+            .next()
+            .ok_or(Error::InvalidInput {
+                expected: "identity with at least one witness",
+                cause: "this identity has no witnesses; share Identity::kel() out-of-band instead"
+                    .into(),
+            })?;
+        let locations =
+            identifier.get_location(&keri_controller::IdentifierPrefix::Basic(witness.clone()))?;
+        let location = locations.first().ok_or(Error::InvalidInput {
+            expected: "known witness address",
+            cause: "no location on record for this identity's witness".into(),
+        })?;
+        let url = location
+            .url
+            .join(&format!("oobi/{}/witness/{}", self.id, witness.to_str()))
+            .map_err(|e| Error::InvalidInput {
+                expected: "witness URL",
+                cause: e.to_string(),
+            })?;
+        Ok(url.to_string())
+    }
+
     /// The witness URLs currently serving this identity.
     pub fn witnesses(&self) -> Result<Vec<String>> {
         let identifier = self.keri.store.load(&self.alias)?;
