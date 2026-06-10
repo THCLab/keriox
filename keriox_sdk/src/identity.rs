@@ -318,6 +318,59 @@ impl Identity {
         Ok(kel)
     }
 
+    /// Check this identity's witness mailbox for requests from other
+    /// parties (delegation requests, group invitations) that need action.
+    ///
+    /// Multi-party flows arrive here: the other side starts a flow, you
+    /// poll, inspect, and approve. Returns an empty list when nothing is
+    /// waiting.
+    pub async fn pending_requests(&self) -> Result<Vec<crate::requests::PendingRequest>> {
+        let advanced_requests = match &self.keys {
+            Keys::Software => {
+                let signer = self.keri.store.load_signer(&self.alias)?;
+                self.poll_requests_with(signer).await?
+            }
+            #[cfg(feature = "keyprovider")]
+            Keys::Provider { current, .. } => self.poll_requests_with(current.clone()).await?,
+        };
+
+        Ok(advanced_requests
+            .into_iter()
+            .filter_map(|request| match request {
+                crate::advanced::types::PendingRequest::Delegation(inner) => Some(
+                    crate::requests::PendingRequest::Delegation(crate::requests::DelegationApproval {
+                        keri: self.keri.clone(),
+                        alias: self.alias.clone(),
+                        inner,
+                    }),
+                ),
+                // Group requests are surfaced through the group API.
+                crate::advanced::types::PendingRequest::Multisig(_) => None,
+            })
+            .collect())
+    }
+
+    async fn poll_requests_with<S>(
+        &self,
+        signer: S,
+    ) -> Result<Vec<crate::advanced::types::PendingRequest>>
+    where
+        S: crate::advanced::operations::SigningBackend + Clone + 'static,
+    {
+        crate::retry::with_retry(&self.keri.retry, || {
+            let signer = signer.clone();
+            async move {
+                let mut identifier = self.keri.store.load(&self.alias)?;
+                Ok(crate::advanced::operations::poll_pending_requests(
+                    &mut identifier,
+                    &signer,
+                )
+                .await?)
+            }
+        })
+        .await
+    }
+
     /// A shareable OOBI URL: hand this string to anyone who should be able
     /// to verify your signatures — they pass it to
     /// [`crate::Keri::import_contact`].
@@ -429,6 +482,7 @@ pub struct IdentityBuilder {
     pub(crate) watcher_urls: Vec<String>,
     pub(crate) witness_threshold: Option<u64>,
     pub(crate) algorithm: KeyAlgorithm,
+    pub(crate) delegator: Option<IdentityId>,
     #[cfg(feature = "keyprovider")]
     pub(crate) providers: Option<(
         Arc<dyn keri_keyprovider::KeyProvider>,
@@ -445,6 +499,7 @@ impl IdentityBuilder {
             watcher_urls: vec![],
             witness_threshold: None,
             algorithm: KeyAlgorithm::default(),
+            delegator: None,
             #[cfg(feature = "keyprovider")]
             providers: None,
         }
@@ -492,10 +547,90 @@ impl IdentityBuilder {
         self
     }
 
+    /// Make the new identity act under another identity's authority
+    /// (KERI delegation) — e.g. a phone identity delegated by a person's
+    /// main identity. Finish with
+    /// [`build_delegation_request`](Self::build_delegation_request) instead
+    /// of `build`.
+    pub fn delegated_by(mut self, delegator: &IdentityId) -> Self {
+        self.delegator = Some(delegator.clone());
+        self
+    }
+
+    /// Create a delegated identity and send the delegation request to the
+    /// delegator (step 1 of 3).
+    ///
+    /// The delegator finds the request via
+    /// [`crate::Identity::pending_requests`] and approves it; afterwards
+    /// call [`crate::DelegationHandle::finalize`] on the returned handle.
+    /// Requires [`delegated_by`](Self::delegated_by) and at least one
+    /// witness shared with the delegator (the request travels through the
+    /// witness mailbox).
+    pub async fn build_delegation_request(self) -> Result<crate::requests::DelegationHandle> {
+        let Some(delegator) = self.delegator.clone() else {
+            return Err(Error::InvalidInput {
+                expected: "builder with delegated_by(..) set",
+                cause: "build_delegation_request() needs a delegator; for a regular identity \
+                        use build()"
+                    .into(),
+            });
+        };
+        if self.keri.alias_exists(&self.alias) {
+            return Err(Error::IdentityExists(self.alias));
+        }
+
+        let mut witnesses = vec![];
+        for url in &self.witness_urls {
+            witnesses.push(discover(url, &self.keri.retry).await?);
+        }
+        if witnesses.is_empty() {
+            return Err(Error::InvalidInput {
+                expected: "at least one witness",
+                cause: "delegation requests travel through the witness mailbox; add .witness(url)"
+                    .into(),
+            });
+        }
+        let mut watchers = vec![];
+        for url in &self.watcher_urls {
+            watchers.push(discover(url, &self.keri.retry).await?);
+        }
+        let witness_threshold = self
+            .witness_threshold
+            .unwrap_or(witnesses.len() as u64);
+
+        let config = crate::advanced::types::DelegationConfig {
+            delegator: delegator.clone().into_prefix(),
+            witnesses,
+            witness_threshold,
+            watchers,
+            algorithm: self.algorithm.into(),
+        };
+        let (_temp_id, delegated_prefix, _signer) = self
+            .keri
+            .store
+            .create_delegated(&self.alias, config)
+            .await?;
+
+        Ok(crate::requests::DelegationHandle {
+            keri: self.keri,
+            alias: self.alias,
+            delegated: delegated_prefix,
+            delegator: delegator.into_prefix(),
+        })
+    }
+
     /// Create the identity: discover the witnesses, publish the inception
     /// event, collect witness receipts, and persist everything under the
     /// alias.
     pub async fn build(self) -> Result<Identity> {
+        if self.delegator.is_some() {
+            return Err(Error::InvalidInput {
+                expected: "build_delegation_request() for delegated identities",
+                cause: "delegated_by(..) was set; a delegated identity needs the delegator's \
+                        approval, so finish with build_delegation_request()"
+                    .into(),
+            });
+        }
         if self.keri.alias_exists(&self.alias) {
             return Err(Error::IdentityExists(self.alias));
         }

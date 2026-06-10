@@ -338,6 +338,43 @@ impl Keri {
         Ok(CredentialStatus::Unknown)
     }
 
+    /// Recover the handle of a delegation that was requested earlier (e.g.
+    /// before an application restart) and is still awaiting finalization.
+    pub fn delegation_in_progress(
+        &self,
+        alias: &str,
+    ) -> Result<Option<crate::requests::DelegationHandle>> {
+        let Ok(delegated) = self.inner.store.load_delegated_prefix(alias) else {
+            return Ok(None);
+        };
+        let Ok(delegator) = self.inner.store.load_delegator(alias) else {
+            return Ok(None);
+        };
+        // Once finalized, the alias's id is the delegated prefix.
+        if let Ok(identity) = self.identity(alias) {
+            if identity.id().as_prefix() == &delegated {
+                return Ok(None);
+            }
+        }
+        Ok(Some(crate::requests::DelegationHandle {
+            keri: self.inner.clone(),
+            alias: alias.to_string(),
+            delegated,
+            delegator,
+        }))
+    }
+
+    pub(crate) fn from_inner(inner: Arc<KeriInner>) -> Self {
+        Keri { inner }
+    }
+
+    /// All aliases that can hold key histories: own identities + contacts.
+    pub(crate) fn all_aliases(&self) -> Result<Vec<String>> {
+        let mut aliases = self.identities()?;
+        aliases.extend(self.contact_aliases());
+        Ok(aliases)
+    }
+
     /// The retry policy used for network operations.
     pub fn retry_policy(&self) -> &RetryPolicy {
         &self.inner.retry

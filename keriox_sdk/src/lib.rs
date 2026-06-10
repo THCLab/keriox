@@ -19,6 +19,7 @@ mod identity;
 mod ids;
 mod keri;
 mod message;
+mod requests;
 mod retry;
 
 pub use credential::{Credential, CredentialStatus};
@@ -27,6 +28,7 @@ pub use identity::{Identity, IdentityBuilder, KeyAlgorithm};
 pub use ids::{CredentialId, IdentityId};
 pub use keri::Keri;
 pub use message::{SignedMessage, Verified};
+pub use requests::{DelegationApproval, DelegationHandle, PendingRequest};
 pub use retry::RetryPolicy;
 
 // ── Temporary transitional re-exports ─────────────────────────────────────────
@@ -57,8 +59,8 @@ pub use advanced::{
 };
 pub use advanced::{
     DelegationConfig, DelegationRequest, GroupRotationConfig, IdentifierConfig, MultisigConfig,
-    MultisigRequest, PendingRequest, RotationConfig, SignedEnvelope, SignerAlgorithm,
-    StoreRotationConfig, VerificationIssue, VerifiedPayload,
+    MultisigRequest, RotationConfig, SignedEnvelope, SignerAlgorithm, StoreRotationConfig,
+    VerificationIssue, VerifiedPayload,
 };
 pub use advanced::{check_credential_status, get_credential_status};
 

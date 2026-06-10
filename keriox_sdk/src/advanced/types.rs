@@ -132,7 +132,7 @@ impl DelegationConfig {
 ///
 /// Extracted from [`ActionRequired::DelegationRequest`] via [`DelegationRequest::try_from`].
 /// Pass this to [`crate::advanced::operations::approve_delegation`] to approve.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DelegationRequest {
     pub(crate) delegating_event:
         keri_core::event_message::msg::KeriEvent<keri_core::event::KeyEvent>,
@@ -254,7 +254,7 @@ pub struct GroupRotationConfig {
 ///
 /// Extracted from [`ActionRequired::MultisigRequest`] via [`MultisigRequest::try_from`].
 /// Pass this to [`crate::advanced::operations::accept_multisig`] to co-sign the event.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MultisigRequest {
     pub(crate) event: keri_core::event_message::msg::KeriEvent<keri_core::event::KeyEvent>,
     pub(crate) exchange: keri_core::mailbox::exchange::ExchangeMessage,
