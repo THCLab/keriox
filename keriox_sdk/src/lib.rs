@@ -12,13 +12,16 @@ pub mod advanced;
 
 // ── Facade modules ────────────────────────────────────────────────────────────
 
+mod contact;
 mod error;
 mod ids;
 mod message;
+mod retry;
 
 pub use error::{Error, Result};
 pub use ids::{CredentialId, IdentityId};
 pub use message::{SignedMessage, Verified};
+pub use retry::RetryPolicy;
 
 // ── Temporary transitional re-exports ─────────────────────────────────────────
 // Keep existing `keri_sdk::store::…`-style paths compiling while the facade is
