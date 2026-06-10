@@ -7,7 +7,7 @@ use crate::advanced::types::IdentifierConfig;
 use crate::advanced::SignerAlgorithm;
 use crate::contact::discover;
 use crate::error::{Error, Result};
-use crate::ids::IdentityId;
+use crate::ids::{CredentialId, IdentityId};
 use crate::keri::KeriInner;
 use crate::message::SignedMessage;
 
@@ -178,6 +178,136 @@ impl Identity {
         Ok(())
     }
 
+    /// Issue a credential: anchor the payload's digest in this identity's
+    /// public registry so anyone can later check it has not been revoked.
+    ///
+    /// The registry is created automatically on first issuance. JSON
+    /// payloads with a `d` field get the digest embedded (the standard
+    /// self-addressing layout); any other payload is digested as-is.
+    pub async fn issue(&self, payload: &[u8]) -> Result<crate::credential::Credential> {
+        match &self.keys {
+            Keys::Software => {
+                let signer = self.keri.store.load_signer(&self.alias)?;
+                self.issue_with(signer, payload).await
+            }
+            #[cfg(feature = "keyprovider")]
+            Keys::Provider { current, .. } => self.issue_with(current.clone(), payload).await,
+        }
+    }
+
+    /// Revoke a credential previously issued by this identity. The change
+    /// is published through the witnesses; status checks anywhere will see
+    /// `Revoked` once they refresh.
+    pub async fn revoke(&self, credential: &CredentialId) -> Result<()> {
+        match &self.keys {
+            Keys::Software => {
+                let signer = self.keri.store.load_signer(&self.alias)?;
+                self.revoke_with(signer, credential).await
+            }
+            #[cfg(feature = "keyprovider")]
+            Keys::Provider { current, .. } => self.revoke_with(current.clone(), credential).await,
+        }
+    }
+
+    /// The credentials this identity has issued (most recent last).
+    pub fn credentials(&self) -> Result<Vec<CredentialId>> {
+        let path = self.keri.root.join(&self.alias).join("credentials");
+        if !path.exists() {
+            return Ok(vec![]);
+        }
+        let content = std::fs::read_to_string(&path).map_err(|e| Error::Storage {
+            path: path.clone(),
+            cause: e.to_string(),
+        })?;
+        content
+            .lines()
+            .filter(|l| !l.trim().is_empty())
+            .map(|l| l.trim().parse())
+            .collect()
+    }
+
+    async fn issue_with<S>(&self, signer: S, payload: &[u8]) -> Result<crate::credential::Credential>
+    where
+        S: crate::advanced::operations::SigningBackend + Clone + 'static,
+    {
+        // First issuance creates the registry and persists its id, so the
+        // application never has to manage registry state itself.
+        let registry = match self.keri.store.load(&self.alias)?.registry_id() {
+            Some(r) => r.clone(),
+            None => {
+                let registry = crate::retry::with_retry(&self.keri.retry, || {
+                    let signer = signer.clone();
+                    async move {
+                        let mut identifier = self.keri.store.load(&self.alias)?;
+                        Ok(crate::advanced::operations::incept_registry(
+                            &mut identifier,
+                            signer,
+                        )
+                        .await?)
+                    }
+                })
+                .await?;
+                self.keri.store.save_registry(&self.alias, &registry)?;
+                registry
+            }
+        };
+
+        let (payload, said) = prepare_credential_payload(payload)?;
+
+        crate::retry::with_retry(&self.keri.retry, || {
+            let signer = signer.clone();
+            let said = said.clone();
+            async move {
+                // Reload so the handle knows its registry and latest state.
+                let mut identifier = self.keri.store.load(&self.alias)?;
+                Ok(crate::advanced::operations::issue(&mut identifier, signer, said).await?)
+            }
+        })
+        .await?;
+
+        let id = CredentialId::new(registry, said);
+        self.append_credential_index(&id)?;
+        Ok(crate::credential::Credential {
+            id,
+            payload,
+            issuer: self.id.clone(),
+        })
+    }
+
+    async fn revoke_with<S>(&self, signer: S, credential: &CredentialId) -> Result<()>
+    where
+        S: crate::advanced::operations::SigningBackend + Clone + 'static,
+    {
+        crate::retry::with_retry(&self.keri.retry, || {
+            let signer = signer.clone();
+            async move {
+                let mut identifier = self.keri.store.load(&self.alias)?;
+                Ok(
+                    crate::advanced::operations::revoke(&mut identifier, signer, credential.said())
+                        .await?,
+                )
+            }
+        })
+        .await
+    }
+
+    fn append_credential_index(&self, id: &CredentialId) -> Result<()> {
+        use std::io::Write;
+        let path = self.keri.root.join(&self.alias).join("credentials");
+        let mut file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&path)
+            .map_err(|e| Error::Storage {
+                path: path.clone(),
+                cause: e.to_string(),
+            })?;
+        writeln!(file, "{id}").map_err(|e| Error::Storage {
+            path,
+            cause: e.to_string(),
+        })
+    }
+
     /// This identity's full key history (KEL) as a CESR stream — for
     /// out-of-band sharing with parties that cannot reach your witnesses.
     pub fn kel(&self) -> Result<String> {
@@ -220,6 +350,41 @@ impl Identity {
         };
         Ok((identifier, signer))
     }
+}
+
+/// Prepare a credential payload for issuance: JSON documents with a `d`
+/// field get the digest embedded (self-addressing data); anything else is
+/// digested as-is.
+fn prepare_credential_payload(
+    payload: &[u8],
+) -> Result<(Vec<u8>, keri_core::actor::prelude::SelfAddressingIdentifier)> {
+    use said::derivation::HashFunctionCode;
+
+    if let Ok(value) = serde_json::from_slice::<serde_json::Value>(payload) {
+        if value.is_object() && value.get("d").is_some() {
+            let json = std::str::from_utf8(payload).map_err(|e| Error::InvalidInput {
+                expected: "UTF-8 JSON credential payload",
+                cause: e.to_string(),
+            })?;
+            let saidified =
+                crate::advanced::signing::saidify_json(json, HashFunctionCode::Blake3_256)?;
+            let value: serde_json::Value =
+                serde_json::from_str(&saidified).map_err(|e| Error::InvalidInput {
+                    expected: "JSON credential payload",
+                    cause: e.to_string(),
+                })?;
+            let said = value["d"]
+                .as_str()
+                .unwrap_or_default()
+                .parse()
+                .map_err(|e| Error::InvalidInput {
+                    expected: "self-addressing digest in `d` field",
+                    cause: format!("{e:?}"),
+                })?;
+            return Ok((saidified.into_bytes(), said));
+        }
+    }
+    Ok((payload.to_vec(), crate::advanced::signing::content_sai(payload)))
 }
 
 /// Builder for a new identity. Created by [`crate::Keri::new_identity`];

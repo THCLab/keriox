@@ -5,9 +5,10 @@ use std::sync::Arc;
 
 use crate::advanced::store::KeriStore;
 use crate::advanced::types::VerificationIssue;
+use crate::credential::CredentialStatus;
 use crate::error::{Error, Result};
 use crate::identity::{Identity, IdentityBuilder, Keys};
-use crate::ids::IdentityId;
+use crate::ids::{CredentialId, IdentityId};
 use crate::message::{signer_of, Verified};
 use crate::retry::RetryPolicy;
 
@@ -179,6 +180,67 @@ impl Keri {
         } else {
             Err(Error::UnknownSigner { id: claimed })
         }
+    }
+
+    /// Check whether a credential is currently valid, revoked, or unknown.
+    ///
+    /// Checks registries already known locally first; if the credential is
+    /// not found there, queries the network (with retries) through this
+    /// store's identities. Returns [`CredentialStatus::Unknown`] when no
+    /// registry anywhere knows the credential — for a foreign credential
+    /// that usually means the issuer has not been imported yet
+    /// ([`Keri::import_contact`]).
+    pub async fn credential_status(&self, id: &CredentialId) -> Result<CredentialStatus> {
+        let mut candidates = self.identities()?;
+        candidates.extend(self.contact_aliases());
+
+        // Local pass: no network.
+        for alias in &candidates {
+            let Ok(identifier) = self.inner.store.load(alias) else {
+                continue;
+            };
+            if let Ok(status) =
+                crate::advanced::tel::get_credential_status(&identifier, id.said())
+            {
+                let status: CredentialStatus = status.into();
+                if status != CredentialStatus::Unknown {
+                    return Ok(status);
+                }
+            }
+        }
+
+        // Network pass: refresh the registry state through any identity
+        // that can sign queries.
+        for alias in &self.identities()? {
+            let Ok(identifier) = self.inner.store.load(alias) else {
+                continue;
+            };
+            let Ok(signer) = self.inner.store.load_signer(alias) else {
+                continue;
+            };
+            let refreshed = crate::retry::with_retry(&self.inner.retry, || {
+                let signer = signer.clone();
+                let identifier = &identifier;
+                async move {
+                    Ok(crate::advanced::tel::check_credential_status(
+                        identifier,
+                        &signer,
+                        id.registry_prefix(),
+                        id.said(),
+                    )
+                    .await?)
+                }
+            })
+            .await;
+            if let Ok(status) = refreshed {
+                let status: CredentialStatus = status.into();
+                if status != CredentialStatus::Unknown {
+                    return Ok(status);
+                }
+            }
+        }
+
+        Ok(CredentialStatus::Unknown)
     }
 
     /// The retry policy used for network operations.

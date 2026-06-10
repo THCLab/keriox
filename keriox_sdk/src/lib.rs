@@ -13,6 +13,7 @@ pub mod advanced;
 // ── Facade modules ────────────────────────────────────────────────────────────
 
 mod contact;
+mod credential;
 mod error;
 mod identity;
 mod ids;
@@ -20,6 +21,7 @@ mod keri;
 mod message;
 mod retry;
 
+pub use credential::{Credential, CredentialStatus};
 pub use error::{Error, Result};
 pub use identity::{Identity, IdentityBuilder, KeyAlgorithm};
 pub use ids::{CredentialId, IdentityId};
@@ -54,9 +56,9 @@ pub use advanced::{
     WatcherResponseError,
 };
 pub use advanced::{
-    CredentialStatus, DelegationConfig, DelegationRequest, GroupRotationConfig, IdentifierConfig,
-    MultisigConfig, MultisigRequest, PendingRequest, RotationConfig, SignedEnvelope,
-    SignerAlgorithm, StoreRotationConfig, VerificationIssue, VerifiedPayload,
+    DelegationConfig, DelegationRequest, GroupRotationConfig, IdentifierConfig, MultisigConfig,
+    MultisigRequest, PendingRequest, RotationConfig, SignedEnvelope, SignerAlgorithm,
+    StoreRotationConfig, VerificationIssue, VerifiedPayload,
 };
 pub use advanced::{check_credential_status, get_credential_status};
 
