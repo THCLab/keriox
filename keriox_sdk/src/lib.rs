@@ -76,8 +76,10 @@
 
 pub mod advanced;
 pub mod controller;
+pub mod ephemeral;
 pub mod error;
 pub mod identifier;
+pub mod inspect;
 pub mod keys;
 pub mod multisig;
 pub mod oobi;
@@ -95,6 +97,7 @@ pub mod keyprovider_adapter;
 // ── High-level SDK types (the primary public API) ────────────────────────────
 
 pub use controller::Controller;
+pub use ephemeral::EphemeralIdentifier;
 pub use error::{Error, Result};
 pub use identifier::Identifier;
 pub use identifier::{ActionRequired, WatcherResponseError};
@@ -104,7 +107,7 @@ pub use tel::{check_credential_status, get_credential_status};
 pub use types::{
     CredentialStatus, DelegationConfig, DelegationRequest, GroupRotationConfig, IdentifierConfig,
     MultisigConfig, MultisigRequest, PendingRequest, RotationConfig, SignedEnvelope,
-    SignerAlgorithm, VerifiedPayload,
+    SignerAlgorithm, StoreRotationConfig, VerificationIssue, VerifiedPayload,
 };
 
 #[cfg(feature = "keyprovider")]
@@ -115,11 +118,18 @@ pub use keri_keyprovider::KeyProvider;
 // ── Commonly-needed prefix / key types ───────────────────────────────────────
 // These appear in public API signatures and are needed by most consumers.
 
+pub use keri_controller::identifier::mechanics::MechanicsError;
 pub use keri_controller::{
     BasicPrefix, CesrPrimitive, IdentifierPrefix, LocationScheme, Oobi, SeedPrefix,
     SelfSigningPrefix,
 };
+pub use keri_core::event::sections::threshold::SignatureThreshold;
+pub use keri_core::event_message::signature::SignerData;
+pub use keri_core::oobi::Role;
 pub use keri_core::{actor::prelude::SelfAddressingIdentifier, signer::Signer};
+pub use said::derivation::{HashFunction, HashFunctionCode};
+pub use said::version::format::SerializationFormats;
+pub use said::version::Encode as SaidEncode;
 
 // ── Advanced types (re-exported for backward compatibility) ──────────────────
 // Prefer importing from `keri_sdk::advanced::*` for low-level access.

@@ -50,6 +50,36 @@ pub async fn check_credential_status<S: crate::operations::SigningBackend>(
     get_credential_status(id, credential_said)
 }
 
+/// Send a signed TEL query for a credential, without requiring the registry
+/// to be known locally.
+///
+/// Unlike [`check_credential_status`], this performs no management-state
+/// precheck — use it to query a *foreign* registry (e.g. while verifying a
+/// credential issued by someone else) whose TEL has not been seen yet. After
+/// the call, read the resulting state with [`get_credential_status`] or
+/// [`crate::identifier::Identifier::find_vc_state`].
+///
+/// # Errors
+/// - [`Error::Mechanics`] on network or processing failures.
+/// - [`Error::Signing`] if signing the query fails.
+/// - [`Error::EncodingError`] if query encoding fails.
+pub async fn query_tel<S: crate::operations::SigningBackend>(
+    id: &Identifier,
+    signer: &S,
+    registry_id: &SelfAddressingIdentifier,
+    credential_said: &SelfAddressingIdentifier,
+) -> Result<()> {
+    let qry = id.query_tel(
+        IdentifierPrefix::self_addressing(registry_id.clone()),
+        IdentifierPrefix::self_addressing(credential_said.clone()),
+    )?;
+    let encoded = qry
+        .encode()
+        .map_err(|e| Error::EncodingError(e.to_string()))?;
+    let sig = wrap_sig(signer, &encoded)?;
+    id.finalize_query_tel(qry, sig).await
+}
+
 /// Return the last known local TEL state without a network call.
 ///
 /// Returns [`CredentialStatus::Unknown`] if the TEL has not been queried yet

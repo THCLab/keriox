@@ -18,6 +18,7 @@ use teliox::{
 };
 
 use crate::error::Result;
+use crate::types::VerificationIssue;
 
 pub use keri_controller::identifier::query::WatcherResponseError;
 pub use keri_controller::mailbox_updating::ActionRequired;
@@ -91,6 +92,16 @@ impl Identifier {
     /// Returns any identifier's accepted KEL with receipts.
     pub fn get_kel(&self, id: &IdentifierPrefix) -> Option<Vec<Notice>> {
         self.inner.get_kel(id)
+    }
+
+    /// Returns own identifier's accepted KEL (with receipts) as a CESR stream.
+    pub fn get_own_kel_cesr(&self) -> Option<Result<String>> {
+        self.get_own_kel().map(notices_to_cesr)
+    }
+
+    /// Returns any identifier's accepted KEL (with receipts) as a CESR stream.
+    pub fn get_kel_cesr(&self, id: &IdentifierPrefix) -> Option<Result<String>> {
+        self.get_kel(id).map(notices_to_cesr)
     }
 
     // ── KEL management ──────────────────────────────────────────────────────
@@ -239,6 +250,45 @@ impl Identifier {
     /// Verify a CESR stream (payload + attached signatures) against known KEL.
     pub fn verify_from_cesr(&self, stream: &[u8]) -> Result<()> {
         Ok(self.inner.verify_from_cesr(stream)?)
+    }
+
+    /// Like [`verify_from_cesr`](Self::verify_from_cesr), but reports each
+    /// problem as a typed [`VerificationIssue`] instead of a flattened error
+    /// string. Use this when the caller needs to react to specific causes
+    /// (e.g. resolve an OOBI on [`VerificationIssue::MissingEvent`] and retry).
+    pub fn verify_from_cesr_detailed(
+        &self,
+        stream: &[u8],
+    ) -> std::result::Result<(), Vec<VerificationIssue>> {
+        use keri_controller::error::ControllerError;
+        use keri_core::processor::validator::{MoreInfoError, VerificationError};
+
+        match self.inner.verify_from_cesr(stream) {
+            Ok(()) => Ok(()),
+            Err(ControllerError::VerificationError(errors)) => Err(errors
+                .into_iter()
+                .map(|(error, _description)| match error {
+                    VerificationError::VerificationFailure => VerificationIssue::SignatureInvalid,
+                    VerificationError::NotEstablishment(seal) => {
+                        VerificationIssue::NotEstablishment { seal }
+                    }
+                    VerificationError::MissingSignerId => VerificationIssue::MissingSignerId,
+                    VerificationError::MoreInfo(MoreInfoError::EventNotFound(seal)) => {
+                        VerificationIssue::MissingEvent { seal }
+                    }
+                    VerificationError::MoreInfo(MoreInfoError::UnknownIdentifier(id)) => {
+                        VerificationIssue::UnknownSigner { id }
+                    }
+                    other => VerificationIssue::Other(other.to_string()),
+                })
+                .collect()),
+            Err(ControllerError::CesrFormatError) => {
+                Err(vec![VerificationIssue::StreamFormat(
+                    "not a valid CESR stream".into(),
+                )])
+            }
+            Err(other) => Err(vec![VerificationIssue::Other(other.to_string())]),
+        }
     }
 
     /// Verify a single signature against known KEL state.
@@ -625,4 +675,16 @@ impl Identifier {
     pub fn get_last_event_seal(&self) -> Result<EventSeal> {
         Ok(self.inner.get_last_event_seal()?)
     }
+}
+
+fn notices_to_cesr(notices: Vec<Notice>) -> Result<String> {
+    use keri_core::event_message::signed_event_message::Message;
+    let mut out = Vec::new();
+    for notice in notices {
+        let bytes = Message::Notice(notice)
+            .to_cesr()
+            .map_err(|e| crate::error::Error::EncodingError(e.to_string()))?;
+        out.extend(bytes);
+    }
+    String::from_utf8(out).map_err(|e| crate::error::Error::EncodingError(e.to_string()))
 }

@@ -85,6 +85,21 @@ impl Controller {
         Ok(())
     }
 
+    /// Parse and process a KEL event stream from raw CESR bytes.
+    ///
+    /// Each message in the stream (events, receipts, replies) is processed
+    /// into the local database. Use together with
+    /// [`crate::ephemeral::EphemeralIdentifier::pull_kel`] to import an
+    /// identifier's KEL fetched from a witness.
+    pub fn process_kel_stream(&self, stream: &[u8]) -> Result<()> {
+        let messages = keri_core::actor::parse_event_stream(stream)
+            .map_err(|e| crate::Error::CesrParseError(e.to_string()))?;
+        for message in &messages {
+            self.process(message)?;
+        }
+        Ok(())
+    }
+
     /// Parse and process a TEL event stream from raw bytes.
     pub fn process_tel_stream(&self, stream: &[u8]) -> Result<()> {
         self.inner

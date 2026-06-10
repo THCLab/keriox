@@ -249,6 +249,7 @@ impl KeriStore {
 
         let config = crate::types::RotationConfig {
             new_next_pk,
+            new_next_threshold: 1,
             witness_to_add: vec![],
             witness_to_remove: vec![],
             witness_threshold: 0,
@@ -257,6 +258,77 @@ impl KeriStore {
 
         self.save_rotation(alias, new_next_seed)?;
         Ok(())
+    }
+
+    /// Rotate keys with explicit witness changes and seed control.
+    ///
+    /// Like [`KeriStore::rotate`], but driven by a
+    /// [`StoreRotationConfig`](crate::types::StoreRotationConfig): witnesses
+    /// can be added/removed, thresholds adjusted, and the new next seed
+    /// supplied instead of generated.
+    ///
+    /// # Errors
+    /// - [`Error::PersistenceError`] on I/O failures.
+    /// - [`Error::Signing`] if key generation or signing fails.
+    /// - Propagates errors from [`crate::operations::rotate`].
+    pub async fn rotate_with(
+        &self,
+        alias: &str,
+        config: crate::types::StoreRotationConfig,
+    ) -> Result<()> {
+        let next_seed = self.load_seed(alias, "next_priv_key")?;
+        let new_next_seed = match config.new_next_seed {
+            Some(seed) => seed,
+            None => {
+                let algorithm = crate::keys::seed_algorithm(&next_seed)?;
+                crate::keys::generate_seed(algorithm)?
+            }
+        };
+        let new_next_pk = crate::keys::derive_public_key(&new_next_seed, false)?;
+
+        let mut id = self.load(alias)?;
+        let signer = self.load_next_signer(alias)?;
+
+        let rotation = crate::types::RotationConfig {
+            new_next_pk,
+            new_next_threshold: config.new_next_threshold,
+            witness_to_add: config.witness_to_add,
+            witness_to_remove: config.witness_to_remove,
+            witness_threshold: config.witness_threshold,
+        };
+        crate::operations::rotate(&mut id, signer, rotation).await?;
+
+        self.save_rotation(alias, new_next_seed)?;
+        Ok(())
+    }
+
+    /// Read the current signing seed for an alias (e.g. for identifier export).
+    ///
+    /// # Errors
+    /// - [`Error::PersistenceError`] if the `priv_key` file is missing or invalid.
+    pub fn current_seed(&self, alias: &str) -> Result<SeedPrefix> {
+        self.load_seed(alias, "priv_key")
+    }
+
+    /// Read the next (pre-rotated) signing seed for an alias.
+    ///
+    /// # Errors
+    /// - [`Error::PersistenceError`] if the `next_priv_key` file is missing or invalid.
+    pub fn next_seed(&self, alias: &str) -> Result<SeedPrefix> {
+        self.load_seed(alias, "next_priv_key")
+    }
+
+    /// Persist both signing seeds for an alias (e.g. for identifier import).
+    ///
+    /// # Errors
+    /// - [`Error::PersistenceError`] on I/O failures.
+    pub fn save_seeds(&self, alias: &str, current: &SeedPrefix, next: &SeedPrefix) -> Result<()> {
+        use keri_core::prefix::CesrPrimitive;
+        let alias_dir = self.alias_dir(alias);
+        std::fs::create_dir_all(&alias_dir)
+            .map_err(|e| Error::PersistenceError(format!("cannot create alias dir: {e}")))?;
+        self.write_file(alias, "priv_key", &current.to_str())?;
+        self.write_file(alias, "next_priv_key", &next.to_str())
     }
 
     /// Persist a registry identifier after [`crate::operations::incept_registry`].

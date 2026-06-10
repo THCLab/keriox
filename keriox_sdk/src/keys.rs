@@ -145,6 +145,25 @@ pub fn generate_keypair(
     Ok((seed, pk))
 }
 
+/// Build a [`SeedPrefix`] from a CESR seed code and raw secret key bytes.
+///
+/// `code` is the CESR derivation code for the seed algorithm (e.g. `"A"`
+/// for a 256-bit Ed25519 seed, `"J"` for secp256k1, `"Q"` for P-256). The
+/// seed is validated by deriving its key pair before being returned.
+///
+/// # Errors
+/// - [`Error::ParseError`] if `code` is not a valid CESR seed code.
+/// - [`Error::Signing`] if the secret key bytes cannot produce a key pair.
+pub fn seed_from_code(code: &str, secret_key: Vec<u8>) -> Result<SeedPrefix> {
+    let code: SeedCode = code
+        .parse()
+        .map_err(|_| Error::ParseError(format!("invalid seed code: {code}")))?;
+    let seed = SeedPrefix::new(code, secret_key);
+    seed.derive_key_pair()
+        .map_err(|e| Error::Signing(e.to_string()))?;
+    Ok(seed)
+}
+
 /// Derive the [`BasicPrefix`] from an existing seed.
 ///
 /// `transferable = true` selects the rotation-capable variant

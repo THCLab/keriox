@@ -208,6 +208,46 @@ pub fn content_sai(data: &[u8]) -> SelfAddressingIdentifier {
     digest.derive(data)
 }
 
+/// Compute a content digest (SAID) of arbitrary data with a chosen hash
+/// function and return the typed [`SelfAddressingIdentifier`].
+///
+/// Like [`content_sai`] but lets the caller pick the algorithm
+/// (Blake3, SHA2, SHA3, Blake2 variants — see [`HashFunctionCode`]).
+pub fn compute_said(data: &[u8], code: HashFunctionCode) -> SelfAddressingIdentifier {
+    HashFunction::from(code).derive(data)
+}
+
+/// Compute and embed a SAID into a JSON document's `d` field.
+///
+/// Follows the standard SAID workflow: the `d` field is replaced with a
+/// placeholder of `#` characters matching the digest's CESR length, the
+/// digest is derived over the resulting document, and the placeholder is
+/// replaced with the digest. Field order is preserved.
+///
+/// # Errors
+/// - [`Error::EncodingError`] if `json` is not a valid JSON object or has no
+///   `d` field, or if re-serialisation fails.
+pub fn saidify_json(json: &str, code: HashFunctionCode) -> Result<String> {
+    use cesrox::derivation_code::DerivationCode;
+
+    let mut map: indexmap::IndexMap<String, serde_json::Value> = serde_json::from_str(json)
+        .map_err(|e| Error::EncodingError(format!("invalid JSON object: {e}")))?;
+
+    if !map.contains_key("d") {
+        return Err(Error::EncodingError(
+            "missing `d` field in provided JSON".into(),
+        ));
+    }
+
+    map["d"] = serde_json::Value::String("#".repeat(code.full_size()));
+    let derivation_data =
+        serde_json::to_vec(&map).map_err(|e| Error::EncodingError(e.to_string()))?;
+    let said = HashFunction::from(code).derive(&derivation_data);
+    map["d"] = serde_json::Value::String(said.to_string());
+
+    serde_json::to_string(&map).map_err(|e| Error::EncodingError(e.to_string()))
+}
+
 fn collect_signatures(attachments: &[Group]) -> Vec<Signature> {
     let mut signatures = Vec::new();
     let mut i = 0;

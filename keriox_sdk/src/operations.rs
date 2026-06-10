@@ -244,7 +244,7 @@ pub async fn rotate<S: SigningBackend + Clone + 'static>(
         .rotate(
             current_keys,
             new_next_keys,
-            1,
+            config.new_next_threshold,
             config.witness_to_add,
             config.witness_to_remove,
             config.witness_threshold,
@@ -1211,6 +1211,205 @@ pub async fn poll_pending_requests<S: SigningBackend + Clone + 'static>(
         }
     }
     Ok(requests)
+}
+
+/// Co-sign a pending group event delivered as persisted JSON (joiner side).
+///
+/// JSON-string counterpart of [`accept_multisig`] for callers that persist
+/// pending requests via [`MultisigRequest::event_json`] /
+/// [`MultisigRequest::exchange_json`]. Signs the event, signs every exchange
+/// message at key index 0, then dispatches on the event type: group (or
+/// delegated) inceptions are finalised with `finalize_group_incept` and
+/// return `Some(group_prefix)`; all other group events (rotations, anchors)
+/// are finalised with `finalize_group_event` and return `None`.
+///
+/// # Errors
+/// - [`Error::EncodingError`] if the JSON or event encoding is invalid.
+/// - [`Error::Mechanics`] on network failures.
+/// - [`Error::Signing`] if signing fails.
+pub async fn accept_multisig_event<S: SigningBackend + Clone + 'static>(
+    id: &mut Identifier,
+    signer: &S,
+    event_json: &str,
+    exchange_jsons: &[String],
+) -> Result<Option<IdentifierPrefix>> {
+    use keri_core::event_message::EventTypeTag;
+
+    let event: keri_core::event_message::msg::KeriEvent<keri_core::event::KeyEvent> =
+        serde_json::from_str(event_json)
+            .map_err(|e| Error::EncodingError(format!("event JSON: {e}")))?;
+    let encoded_event = event
+        .encode()
+        .map_err(|e| Error::EncodingError(e.to_string()))?;
+    let sig_event = wrap_sig(signer, &encoded_event)?;
+
+    let mut signed_exchanges = Vec::with_capacity(exchange_jsons.len());
+    for exn_json in exchange_jsons {
+        let exn: keri_core::mailbox::exchange::ExchangeMessage = serde_json::from_str(exn_json)
+            .map_err(|e| Error::EncodingError(format!("exchange JSON: {e}")))?;
+        let encoded_exn = exn
+            .encode()
+            .map_err(|e| Error::EncodingError(e.to_string()))?;
+        let sig_exn = wrap_sig(signer, &encoded_exn)?;
+        let exn_index_sig = id.sign_with_index(sig_exn, 0)?;
+        signed_exchanges.push((encoded_exn, exn_index_sig));
+    }
+
+    match event.event_type {
+        EventTypeTag::Icp | EventTypeTag::Dip => {
+            let group_prefix = id
+                .finalize_group_incept(&encoded_event, sig_event, signed_exchanges)
+                .await?;
+            Ok(Some(group_prefix))
+        }
+        _ => {
+            id.finalize_group_event(&encoded_event, sig_event, signed_exchanges)
+                .await?;
+            Ok(None)
+        }
+    }
+}
+
+/// Poll for pending requests addressed to a group identifier.
+///
+/// Queries the caller's own witnesses about `group_id` and returns the
+/// discovered requests (e.g. group events from other members awaiting
+/// co-signature). Counterpart of [`poll_pending_requests`], which polls
+/// the identifier's own mailbox.
+///
+/// # Errors
+/// - [`Error::NoWitnesses`] if the identifier has no witnesses configured.
+/// - [`Error::Mechanics`] on network failures.
+/// - [`Error::Signing`] if signing fails.
+pub async fn poll_group_requests<S: SigningBackend + Clone + 'static>(
+    id: &mut Identifier,
+    signer: &S,
+    group_id: &IdentifierPrefix,
+) -> Result<Vec<PendingRequest>> {
+    let witnesses: Vec<BasicPrefix> = id.witnesses().collect();
+    if witnesses.is_empty() {
+        return Err(Error::NoWitnesses(id.id().clone()));
+    }
+    let mut requests = vec![];
+    for witness in &witnesses {
+        let actions = _query_mailbox_for(id, signer, group_id, witness).await?;
+        for action in actions {
+            if let Ok(req) = PendingRequest::try_from(action) {
+                requests.push(req);
+            }
+        }
+    }
+    Ok(requests)
+}
+
+/// Build the forward exchange for a group event and the caller's signatures
+/// over both, then finalise the group event locally.
+async fn finalize_group_tel_event<S: SigningBackend + Clone + 'static>(
+    group: &mut Identifier,
+    member: &IdentifierPrefix,
+    signer: &S,
+    ixn: &keri_core::event_message::msg::KeriEvent<keri_core::event::KeyEvent>,
+) -> Result<()> {
+    use keri_core::actor::event_generator;
+    use keri_core::event_message::signature::{Signature, SignerData};
+    use keri_core::mailbox::exchange::ForwardTopic;
+
+    let exn = event_generator::exchange(group.id(), ixn, ForwardTopic::Multisig)
+        .encode()
+        .map_err(|e| Error::EncodingError(e.to_string()))?;
+    let encoded_ixn = ixn
+        .encode()
+        .map_err(|e| Error::EncodingError(e.to_string()))?;
+
+    let sig_ixn = wrap_sig(signer, &encoded_ixn)?;
+    let sig_exn = wrap_sig(signer, &exn)?;
+
+    // Anchor the exchange signature to the member's establishment event seal:
+    // the exchange wire format only transports seal-anchored transferable
+    // signatures.
+    let member_seal = group
+        .inner()
+        .known_events
+        .storage
+        .get_last_establishment_event_seal(member)
+        .ok_or_else(|| Error::IdentifierNotFound(member.clone()))?;
+    let exn_index_sig = Signature::Transferable(
+        SignerData::EventSeal(member_seal),
+        vec![IndexedSignature::new_both_same(sig_exn, 0)],
+    );
+
+    group
+        .finalize_group_event(&encoded_ixn, sig_ixn, vec![(exn, exn_index_sig)])
+        .await?;
+    Ok(())
+}
+
+/// Incept a credential registry on a group identifier (initiator side).
+///
+/// Generates the registry inception (`vcp`) and its anchoring `ixn`, signs
+/// the `ixn`, forwards an exchange message to the other group members via
+/// witnesses, and notifies backers. Other members co-sign the anchoring
+/// event via [`accept_multisig_event`] / [`accept_multisig`].
+///
+/// Returns `(registry_id, anchoring_ixn_digest)` — persist the registry id
+/// (e.g. with [`crate::store::KeriStore::save_registry`]) and use the digest
+/// to mark the event as already-accepted locally.
+///
+/// # Errors
+/// - [`Error::Controller`] if event generation fails.
+/// - [`Error::Mechanics`] on network failures.
+/// - [`Error::Signing`] if signing fails.
+pub async fn incept_group_registry<S: SigningBackend + Clone + 'static>(
+    group: &mut Identifier,
+    member: &IdentifierPrefix,
+    signer: &S,
+) -> Result<(IdentifierPrefix, SelfAddressingIdentifier)> {
+    let (registry_id, ixn) = group.incept_registry()?;
+    let digest = ixn
+        .digest()
+        .map_err(|e| Error::EncodingError(e.to_string()))?;
+
+    finalize_group_tel_event(group, member, signer, &ixn).await?;
+    group.notify_backers().await?;
+
+    Ok((registry_id, digest))
+}
+
+/// Issue a credential from a group identifier's registry (initiator side).
+///
+/// Generates the TEL `iss` event and its anchoring `ixn`, signs the `ixn`,
+/// and forwards an exchange message to the other group members via
+/// witnesses. Other members co-sign via [`accept_multisig_event`] /
+/// [`accept_multisig`].
+///
+/// Returns the anchoring `ixn` digest, for marking the event as
+/// already-accepted locally.
+///
+/// # Errors
+/// - [`Error::MultisigError`] if the registry produced an unexpected
+///   credential identifier.
+/// - [`Error::Controller`] if event generation fails.
+/// - [`Error::Mechanics`] on network failures.
+/// - [`Error::Signing`] if signing fails.
+pub async fn issue_group<S: SigningBackend + Clone + 'static>(
+    group: &mut Identifier,
+    member: &IdentifierPrefix,
+    signer: &S,
+    credential_said: SelfAddressingIdentifier,
+) -> Result<SelfAddressingIdentifier> {
+    let (vc_id, ixn) = group.issue(credential_said.clone())?;
+    if vc_id.to_string() != credential_said.to_string() {
+        return Err(Error::MultisigError(format!(
+            "registry produced credential id {vc_id}, expected {credential_said}"
+        )));
+    }
+    let digest = ixn
+        .digest()
+        .map_err(|e| Error::EncodingError(e.to_string()))?;
+
+    finalize_group_tel_event(group, member, signer, &ixn).await?;
+
+    Ok(digest)
 }
 
 // ── String-accepting convenience variants ────────────────────────────────────

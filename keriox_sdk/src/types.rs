@@ -70,12 +70,34 @@ impl IdentifierConfig {
 pub struct RotationConfig {
     /// The new *next* (pre-rotated) public key.
     pub new_next_pk: BasicPrefix,
+    /// New pre-rotation (next-key) signing threshold.
+    pub new_next_threshold: u64,
     /// Witnesses to add during this rotation.
     pub witness_to_add: Vec<LocationScheme>,
     /// Witnesses to remove during this rotation.
     pub witness_to_remove: Vec<BasicPrefix>,
     /// New witness signing threshold (0 = keep current).
     pub witness_threshold: u64,
+}
+
+/// Configuration for a store-managed key rotation with witness changes.
+///
+/// Used by [`crate::store::KeriStore::rotate_with`]. For a plain key roll
+/// with no witness changes, [`crate::store::KeriStore::rotate`] needs no
+/// configuration at all.
+#[derive(Debug, Clone, Default)]
+pub struct StoreRotationConfig {
+    /// Witnesses to add during this rotation.
+    pub witness_to_add: Vec<LocationScheme>,
+    /// Witnesses to remove during this rotation.
+    pub witness_to_remove: Vec<BasicPrefix>,
+    /// New witness signing threshold (0 = keep current).
+    pub witness_threshold: u64,
+    /// The seed for the new *next* (pre-rotated) key. Generated when `None`,
+    /// matching the algorithm of the key becoming current.
+    pub new_next_seed: Option<keri_core::prefix::SeedPrefix>,
+    /// New pre-rotation (next-key) signing threshold.
+    pub new_next_threshold: u64,
 }
 
 // ── Delegation config ────────────────────────────────────────────────────────
@@ -280,6 +302,67 @@ impl MultisigRequest {
             self.exchange,
         )
     }
+
+    /// The SAID of the pending group event.
+    ///
+    /// # Errors
+    /// - [`crate::Error::EncodingError`] if digest computation fails.
+    pub fn event_digest(
+        &self,
+    ) -> crate::error::Result<keri_core::actor::prelude::SelfAddressingIdentifier> {
+        self.event
+            .digest()
+            .map_err(|e| crate::error::Error::EncodingError(e.to_string()))
+    }
+
+    /// `true` when the pending event is a group (or delegated) inception.
+    pub fn is_inception(&self) -> bool {
+        matches!(
+            self.event.event_type,
+            keri_core::event_message::EventTypeTag::Icp
+                | keri_core::event_message::EventTypeTag::Dip
+        )
+    }
+
+    /// The pending group event serialised as JSON, suitable for persistence.
+    ///
+    /// # Errors
+    /// - [`crate::Error::EncodingError`] on serialisation failure.
+    pub fn event_json(&self) -> crate::error::Result<String> {
+        serde_json::to_string(&self.event)
+            .map_err(|e| crate::error::Error::EncodingError(e.to_string()))
+    }
+
+    /// Pretty-printed JSON of the pending group event, for display.
+    ///
+    /// # Errors
+    /// - [`crate::Error::EncodingError`] on serialisation failure.
+    pub fn event_json_pretty(&self) -> crate::error::Result<String> {
+        serde_json::to_string_pretty(&self.event)
+            .map_err(|e| crate::error::Error::EncodingError(e.to_string()))
+    }
+
+    /// The exchange message serialised as JSON, suitable for persistence.
+    ///
+    /// # Errors
+    /// - [`crate::Error::EncodingError`] on serialisation failure.
+    pub fn exchange_json(&self) -> crate::error::Result<String> {
+        serde_json::to_string(&self.exchange)
+            .map_err(|e| crate::error::Error::EncodingError(e.to_string()))
+    }
+
+    /// Rebuild a request from JSON produced by [`event_json`](Self::event_json)
+    /// and [`exchange_json`](Self::exchange_json).
+    ///
+    /// # Errors
+    /// - [`crate::Error::EncodingError`] if either JSON is invalid.
+    pub fn from_json(event_json: &str, exchange_json: &str) -> crate::error::Result<Self> {
+        let event = serde_json::from_str(event_json)
+            .map_err(|e| crate::error::Error::EncodingError(format!("event JSON: {e}")))?;
+        let exchange = serde_json::from_str(exchange_json)
+            .map_err(|e| crate::error::Error::EncodingError(format!("exchange JSON: {e}")))?;
+        Ok(MultisigRequest { event, exchange })
+    }
 }
 
 impl TryFrom<keri_controller::mailbox_updating::ActionRequired> for MultisigRequest {
@@ -371,6 +454,62 @@ impl TryFrom<keri_controller::mailbox_updating::ActionRequired> for PendingReque
                     exchange: exn,
                 }))
             }
+        }
+    }
+}
+
+// ── Verification issues ──────────────────────────────────────────────────────
+
+/// A single problem found while verifying a CESR stream against known KELs.
+///
+/// Returned by [`crate::identifier::Identifier::verify_from_cesr_detailed`].
+/// Unlike [`crate::Error::VerificationFailed`], these variants preserve the
+/// underlying cause so callers can react (e.g. resolve a missing OOBI and
+/// retry, or report a hard signature mismatch).
+#[derive(Debug, Clone)]
+pub enum VerificationIssue {
+    /// A signature does not match the signed data.
+    SignatureInvalid,
+    /// The KEL event referenced by a signature seal is not known locally.
+    MissingEvent {
+        seal: keri_core::event::sections::seal::EventSeal,
+    },
+    /// The signer's identifier is not known locally.
+    UnknownSigner { id: IdentifierPrefix },
+    /// The event referenced by a signature seal is not an establishment event.
+    NotEstablishment {
+        seal: keri_core::event::sections::seal::EventSeal,
+    },
+    /// The signature carries no signer identifier.
+    MissingSignerId,
+    /// The stream is not parseable CESR.
+    StreamFormat(String),
+    /// Any other verification failure.
+    Other(String),
+}
+
+impl std::fmt::Display for VerificationIssue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            VerificationIssue::SignatureInvalid => {
+                write!(f, "Signature doesn't match provided data")
+            }
+            VerificationIssue::MissingEvent { seal } => {
+                write!(f, "Corresponding event not found: {}", seal.prefix)
+            }
+            VerificationIssue::UnknownSigner { id } => {
+                write!(f, "Unknown signer identifier: {}", id)
+            }
+            VerificationIssue::NotEstablishment { seal } => write!(
+                f,
+                "Event corresponding to provided seal {:?} should be establishment event.",
+                seal
+            ),
+            VerificationIssue::MissingSignerId => {
+                write!(f, "Signature doesn't contain signing identifier")
+            }
+            VerificationIssue::StreamFormat(e) => write!(f, "Wrong stream format: {}", e),
+            VerificationIssue::Other(e) => write!(f, "{}", e),
         }
     }
 }

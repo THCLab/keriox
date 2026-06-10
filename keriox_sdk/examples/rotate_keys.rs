@@ -43,6 +43,7 @@ async fn main() -> keri_sdk::Result<()> {
 
     let config = RotationConfig {
         new_next_pk,
+        new_next_threshold: 1,
         witness_to_add: vec![],
         witness_to_remove: vec![],
         witness_threshold: 0,
