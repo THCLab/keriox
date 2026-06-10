@@ -6,12 +6,12 @@
 //! provided signer — callers never touch raw CESR prefix types.
 //!
 //! When the `keyprovider` feature is enabled, all functions accept
-//! [`KeriSigner`](crate::keyprovider_adapter::KeriSigner) which can wrap
+//! [`KeriSigner`](crate::advanced::keyprovider_adapter::KeriSigner) which can wrap
 //! either a legacy `Signer` or any `KeyProvider` implementation.
 //! Without the feature, they accept `Arc<Signer>`.
 //!
-//! For persistence of identifiers across sessions see [`crate::store`].
-//! For signing arbitrary payloads see [`crate::signing`].
+//! For persistence of identifiers across sessions see [`crate::advanced::store`].
+//! For signing arbitrary payloads see [`crate::advanced::signing`].
 
 use std::path::PathBuf;
 
@@ -79,7 +79,7 @@ impl SigningBackend for std::sync::Arc<keri_core::signer::Signer> {
 }
 
 #[cfg(feature = "keyprovider")]
-impl SigningBackend for crate::keyprovider_adapter::KeriSigner {
+impl SigningBackend for crate::advanced::keyprovider_adapter::KeriSigner {
     fn sign_data(&self, data: &[u8]) -> Result<Vec<u8>> {
         self.sign(data)
     }
@@ -112,12 +112,12 @@ impl SigningBackend for std::sync::Arc<dyn keri_keyprovider::KeyProvider> {
     }
 
     fn signing_code(&self) -> cesrox::primitives::codes::self_signing::SelfSigning {
-        crate::keyprovider_adapter::signing_code_for(self.algorithm())
+        crate::advanced::keyprovider_adapter::signing_code_for(self.algorithm())
     }
 
     fn basic_prefix(&self, transferable: bool) -> BasicPrefix {
         let pk = SigningBackend::public_key(self);
-        crate::keyprovider_adapter::basic_prefix_for(self.algorithm(), pk, transferable)
+        crate::advanced::keyprovider_adapter::basic_prefix_for(self.algorithm(), pk, transferable)
     }
 }
 
@@ -1352,7 +1352,7 @@ async fn finalize_group_tel_event<S: SigningBackend + Clone + 'static>(
 /// event via [`accept_multisig_event`] / [`accept_multisig`].
 ///
 /// Returns `(registry_id, anchoring_ixn_digest)` — persist the registry id
-/// (e.g. with [`crate::store::KeriStore::save_registry`]) and use the digest
+/// (e.g. with [`crate::advanced::store::KeriStore::save_registry`]) and use the digest
 /// to mark the event as already-accepted locally.
 ///
 /// # Errors

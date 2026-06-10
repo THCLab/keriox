@@ -8,7 +8,7 @@
 //! The on-disk layout is identical to the one used by `dkms-bin`, so existing
 //! databases can be opened without migration.
 //!
-//! See [`crate::operations`] for the functions that use the identifiers
+//! See [`crate::advanced::operations`] for the functions that use the identifiers
 //! returned by this module.
 //!
 //! # Disk layout
@@ -90,8 +90,8 @@ impl KeriStore {
         alias: &str,
         config: IdentifierConfig,
     ) -> Result<(Identifier, Arc<Signer>)> {
-        let current_seed = crate::keys::generate_seed(config.algorithm)?;
-        let next_seed = crate::keys::generate_seed(config.algorithm)?;
+        let current_seed = crate::advanced::keys::generate_seed(config.algorithm)?;
+        let next_seed = crate::advanced::keys::generate_seed(config.algorithm)?;
 
         self.create_with_seeds(alias, current_seed, next_seed, config)
             .await
@@ -128,7 +128,7 @@ impl KeriStore {
         // the next seed's algorithm (Ed25519 / secp256k1 / P-256). The NT
         // (non-transferable) flavor is the canonical choice for next-key
         // commitments.
-        let next_pk = crate::keys::derive_public_key(&next_seed, false)?;
+        let next_pk = crate::advanced::keys::derive_public_key(&next_seed, false)?;
 
         let controller = self.get_or_create_controller(db_path)?;
         let id = create_identifier_with_controller(&controller, signer.clone(), next_pk, config)
@@ -204,7 +204,7 @@ impl KeriStore {
     /// Commit a rotation: promote `next_priv_key` → `priv_key`, persist a new
     /// next seed, and save the updated identifier prefix.
     ///
-    /// Call this after [`crate::operations::rotate`] has succeeded.
+    /// Call this after [`crate::advanced::operations::rotate`] has succeeded.
     ///
     /// # Errors
     /// - [`Error::PersistenceError`] on I/O failures.
@@ -220,41 +220,41 @@ impl KeriStore {
     }
 
     /// Rotate keys for an identifier: generate a new next key pair, perform
-    /// the rotation via [`crate::operations::rotate`], and persist the updated
+    /// the rotation via [`crate::advanced::operations::rotate`], and persist the updated
     /// seeds.
     ///
     /// This is a high-level convenience that wraps the full rotation lifecycle.
     /// For external key providers (Android Keystore, HSMs), use
-    /// [`crate::operations::rotate`] directly with your `SigningBackend`.
+    /// [`crate::advanced::operations::rotate`] directly with your `SigningBackend`.
     ///
     /// # Errors
     /// - [`Error::PersistenceError`] on I/O failures.
     /// - [`Error::Signing`] if key generation or signing fails.
-    /// - Propagates errors from [`crate::operations::rotate`].
+    /// - Propagates errors from [`crate::advanced::operations::rotate`].
     pub async fn rotate(&self, alias: &str) -> Result<()> {
         // KERI rotation reveals the previously pre-committed next-key.
         // The event's controlling keys are the next-signer's keys (now
         // becoming current), and the signature must come from that same
         // signer (since they own the key being revealed).
         let next_seed = self.load_seed(alias, "next_priv_key")?;
-        let algorithm = crate::keys::seed_algorithm(&next_seed)?;
+        let algorithm = crate::advanced::keys::seed_algorithm(&next_seed)?;
         // The new next-key matches the curve of the key becoming current,
         // so the AID stays on a single curve across rotations (otherwise
         // a P-256 AID would silently transition to Ed25519 after the
         // rotation after next).
-        let (new_next_seed, new_next_pk) = crate::keys::generate_keypair(algorithm, false)?;
+        let (new_next_seed, new_next_pk) = crate::advanced::keys::generate_keypair(algorithm, false)?;
 
         let mut id = self.load(alias)?;
         let signer = self.load_next_signer(alias)?;
 
-        let config = crate::types::RotationConfig {
+        let config = crate::advanced::types::RotationConfig {
             new_next_pk,
             new_next_threshold: 1,
             witness_to_add: vec![],
             witness_to_remove: vec![],
             witness_threshold: 0,
         };
-        crate::operations::rotate(&mut id, signer, config).await?;
+        crate::advanced::operations::rotate(&mut id, signer, config).await?;
 
         self.save_rotation(alias, new_next_seed)?;
         Ok(())
@@ -263,40 +263,40 @@ impl KeriStore {
     /// Rotate keys with explicit witness changes and seed control.
     ///
     /// Like [`KeriStore::rotate`], but driven by a
-    /// [`StoreRotationConfig`](crate::types::StoreRotationConfig): witnesses
+    /// [`StoreRotationConfig`](crate::advanced::types::StoreRotationConfig): witnesses
     /// can be added/removed, thresholds adjusted, and the new next seed
     /// supplied instead of generated.
     ///
     /// # Errors
     /// - [`Error::PersistenceError`] on I/O failures.
     /// - [`Error::Signing`] if key generation or signing fails.
-    /// - Propagates errors from [`crate::operations::rotate`].
+    /// - Propagates errors from [`crate::advanced::operations::rotate`].
     pub async fn rotate_with(
         &self,
         alias: &str,
-        config: crate::types::StoreRotationConfig,
+        config: crate::advanced::types::StoreRotationConfig,
     ) -> Result<()> {
         let next_seed = self.load_seed(alias, "next_priv_key")?;
         let new_next_seed = match config.new_next_seed {
             Some(seed) => seed,
             None => {
-                let algorithm = crate::keys::seed_algorithm(&next_seed)?;
-                crate::keys::generate_seed(algorithm)?
+                let algorithm = crate::advanced::keys::seed_algorithm(&next_seed)?;
+                crate::advanced::keys::generate_seed(algorithm)?
             }
         };
-        let new_next_pk = crate::keys::derive_public_key(&new_next_seed, false)?;
+        let new_next_pk = crate::advanced::keys::derive_public_key(&new_next_seed, false)?;
 
         let mut id = self.load(alias)?;
         let signer = self.load_next_signer(alias)?;
 
-        let rotation = crate::types::RotationConfig {
+        let rotation = crate::advanced::types::RotationConfig {
             new_next_pk,
             new_next_threshold: config.new_next_threshold,
             witness_to_add: config.witness_to_add,
             witness_to_remove: config.witness_to_remove,
             witness_threshold: config.witness_threshold,
         };
-        crate::operations::rotate(&mut id, signer, rotation).await?;
+        crate::advanced::operations::rotate(&mut id, signer, rotation).await?;
 
         self.save_rotation(alias, new_next_seed)?;
         Ok(())
@@ -331,7 +331,7 @@ impl KeriStore {
         self.write_file(alias, "next_priv_key", &next.to_str())
     }
 
-    /// Persist a registry identifier after [`crate::operations::incept_registry`].
+    /// Persist a registry identifier after [`crate::advanced::operations::incept_registry`].
     ///
     /// # Errors
     /// - [`Error::PersistenceError`] on I/O failures.
@@ -359,7 +359,7 @@ impl KeriStore {
     /// persists all state. The delegated identifier is **not** yet accepted
     /// — the delegator must approve it first.
     ///
-    /// After approval, call [`crate::operations::complete_delegation`] with
+    /// After approval, call [`crate::advanced::operations::complete_delegation`] with
     /// the returned `Identifier` to complete the process.
     ///
     /// Returns `(temporary_identifier, delegated_prefix, current_signer)`.
@@ -372,8 +372,8 @@ impl KeriStore {
         alias: &str,
         config: DelegationConfig,
     ) -> Result<(Identifier, IdentifierPrefix, Arc<Signer>)> {
-        let current_seed = crate::keys::generate_seed(config.algorithm)?;
-        let next_seed = crate::keys::generate_seed(config.algorithm)?;
+        let current_seed = crate::advanced::keys::generate_seed(config.algorithm)?;
+        let next_seed = crate::advanced::keys::generate_seed(config.algorithm)?;
 
         let alias_dir = self.alias_dir(alias);
         std::fs::create_dir_all(&alias_dir)
@@ -385,7 +385,7 @@ impl KeriStore {
             Signer::new_with_seed(&current_seed).map_err(|e| Error::Signing(e.to_string()))?,
         );
 
-        let next_pk = crate::keys::derive_public_key(&next_seed, false)?;
+        let next_pk = crate::advanced::keys::derive_public_key(&next_seed, false)?;
 
         let delegator_id = config.delegator.clone();
         let (temp_id, delegated_prefix) =
@@ -462,8 +462,8 @@ impl KeriStore {
     /// to the member alias.
     ///
     /// Other participants must still co-sign via
-    /// [`crate::operations::accept_multisig`], and all participants must call
-    /// [`crate::operations::sync_multisig`] to finalise.
+    /// [`crate::advanced::operations::accept_multisig`], and all participants must call
+    /// [`crate::advanced::operations::sync_multisig`] to finalise.
     ///
     /// Returns the group `IdentifierPrefix`.
     ///
@@ -490,7 +490,7 @@ impl KeriStore {
     /// Rotate an established multisig group identifier.
     ///
     /// Looks up the caller's signer and the group prefix from local
-    /// storage by `group_alias`, calls [`crate::operations::rotate_group`],
+    /// storage by `group_alias`, calls [`crate::advanced::operations::rotate_group`],
     /// and rewrites the `participants` file with the post-rotation set on
     /// success. The caller does not have to handle signing, exchange
     /// messages, mailbox queries, or KERI event types directly.
@@ -512,9 +512,9 @@ impl KeriStore {
     ///
     /// When the prior signature threshold is greater than 1, this call
     /// submits the caller's signature; remaining co-signers complete the
-    /// rotation by calling [`crate::operations::accept_multisig`] on the
+    /// rotation by calling [`crate::advanced::operations::accept_multisig`] on the
     /// pending request, after which every member calls
-    /// [`crate::operations::sync_multisig`].
+    /// [`crate::advanced::operations::sync_multisig`].
     ///
     /// On partial failure the persisted member set is **not** updated, so
     /// retrying will rebuild a fresh rotation event against the
@@ -523,7 +523,7 @@ impl KeriStore {
     ///
     /// # Errors
     /// - [`Error::PersistenceError`] on I/O failures.
-    /// - Propagates errors from [`crate::operations::rotate_group`].
+    /// - Propagates errors from [`crate::advanced::operations::rotate_group`].
     pub async fn rotate_multisig_group(
         &self,
         group_alias: &str,
@@ -610,7 +610,7 @@ impl KeriStore {
 
     /// Persist multisig group metadata after joining (joiner side).
     ///
-    /// Call this after [`crate::operations::accept_multisig`] to record the
+    /// Call this after [`crate::advanced::operations::accept_multisig`] to record the
     /// group prefix, member list, and member alias for later retrieval.
     /// Also use it on the joiner side after a co-signed rotation to
     /// refresh the persisted `participants` list.
@@ -698,7 +698,7 @@ impl KeriStore {
     ///
     /// # Errors
     /// - [`Error::PersistenceError`] on I/O failures.
-    /// - Propagates errors from [`create_identifier`](crate::operations::create_identifier).
+    /// - Propagates errors from [`create_identifier`](crate::advanced::operations::create_identifier).
     #[cfg(feature = "keyprovider")]
     pub async fn create_with_provider(
         &self,
@@ -706,7 +706,7 @@ impl KeriStore {
         provider: std::sync::Arc<dyn keri_keyprovider::KeyProvider>,
         next_public_key: keri_controller::BasicPrefix,
         config: IdentifierConfig,
-    ) -> Result<(Identifier, crate::keyprovider_adapter::KeriSigner)> {
+    ) -> Result<(Identifier, crate::advanced::keyprovider_adapter::KeriSigner)> {
         let alias_dir = self.alias_dir(alias);
         std::fs::create_dir_all(&alias_dir)
             .map_err(|e| Error::PersistenceError(format!("cannot create alias dir: {e}")))?;
@@ -714,8 +714,8 @@ impl KeriStore {
         let db_path = alias_dir.join("db");
 
         let controller = self.get_or_create_controller(db_path)?;
-        let keri_signer = crate::keyprovider_adapter::KeriSigner::from(provider);
-        let id = crate::operations::create_identifier_with_controller(
+        let keri_signer = crate::advanced::keyprovider_adapter::KeriSigner::from(provider);
+        let id = crate::advanced::operations::create_identifier_with_controller(
             &controller,
             keri_signer.clone(),
             next_public_key,
@@ -743,9 +743,9 @@ impl KeriStore {
         &self,
         alias: &str,
         provider: std::sync::Arc<dyn keri_keyprovider::KeyProvider>,
-    ) -> Result<(Identifier, crate::keyprovider_adapter::KeriSigner)> {
+    ) -> Result<(Identifier, crate::advanced::keyprovider_adapter::KeriSigner)> {
         let id = self.load(alias)?;
-        let keri_signer = crate::keyprovider_adapter::KeriSigner::from(provider);
+        let keri_signer = crate::advanced::keyprovider_adapter::KeriSigner::from(provider);
         Ok((id, keri_signer))
     }
 
@@ -764,7 +764,7 @@ impl KeriStore {
     /// The cached [`Controller`] for `alias`'s redb (creating + caching
     /// it on first use). Callers minting a delegated AID must build the
     /// request through this controller — see
-    /// [`crate::operations::build_delegation_request_with_controller`] —
+    /// [`crate::advanced::operations::build_delegation_request_with_controller`] —
     /// so the mint shares the one handle `load`/`finalize` use instead
     /// of opening a second `Database` on the same file.
     pub fn controller_for(&self, alias: &str) -> Result<Arc<Controller>> {

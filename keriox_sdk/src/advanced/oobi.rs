@@ -12,7 +12,7 @@ use keri_core::query::reply_event::{ReplyEvent, ReplyRoute, SignedReply};
 use said::derivation::HashFunctionCode;
 use said::sad::SerializationFormats;
 
-use crate::error::{Error, Result};
+use crate::advanced::error::{Error, Result};
 use crate::{BasicPrefix, LocationScheme, SelfSigningPrefix, Signer};
 
 /// Extract the AID from an OOBI JSON string.

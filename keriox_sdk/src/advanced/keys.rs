@@ -24,12 +24,12 @@ use keri_core::{
     signer::SignerAlgorithm,
 };
 
-use crate::error::{Error, Result};
+use crate::advanced::error::{Error, Result};
 
 /// Generate a random Ed25519 seed.
 ///
 /// The returned [`SeedPrefix`] can be used with
-/// [`KeriStore::create_with_seeds`](crate::store::KeriStore::create_with_seeds)
+/// [`KeriStore::create_with_seeds`](crate::advanced::store::KeriStore::create_with_seeds)
 /// or [`derive_public_key`] to obtain the corresponding public key.
 ///
 /// # Errors
@@ -79,7 +79,7 @@ pub fn generate_p256_seed() -> Result<SeedPrefix> {
 /// Generate a random seed for the requested algorithm.
 ///
 /// Convenience dispatcher used by higher-level entry points like
-/// [`KeriStore::create`](crate::store::KeriStore::create) that need to
+/// [`KeriStore::create`](crate::advanced::store::KeriStore::create) that need to
 /// generate a seed without committing to a specific curve at compile time.
 ///
 /// # Errors

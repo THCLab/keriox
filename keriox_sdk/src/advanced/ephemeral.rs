@@ -28,7 +28,7 @@ use keri_core::{
 };
 use tempfile::TempDir;
 
-use crate::error::{Error, Result};
+use crate::advanced::error::{Error, Result};
 
 type RedbNontransferableIdentifier = NontransferableIdentifier<
     keri_core::database::redb::RedbDatabase,

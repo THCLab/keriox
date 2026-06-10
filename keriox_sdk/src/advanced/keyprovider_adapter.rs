@@ -13,7 +13,7 @@ use keri_controller::BasicPrefix;
 use keri_core::{keys::PublicKey, signer::Signer};
 use keri_keyprovider::SignatureAlgorithm;
 
-use crate::error::Error;
+use crate::advanced::error::Error;
 
 /// Map a [`SignatureAlgorithm`] from the provider crate to the matching
 /// CESR self-signing code.

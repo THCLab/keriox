@@ -89,7 +89,7 @@ impl Controller {
     ///
     /// Each message in the stream (events, receipts, replies) is processed
     /// into the local database. Use together with
-    /// [`crate::ephemeral::EphemeralIdentifier::pull_kel`] to import an
+    /// [`crate::advanced::ephemeral::EphemeralIdentifier::pull_kel`] to import an
     /// identifier's KEL fetched from a witness.
     pub fn process_kel_stream(&self, stream: &[u8]) -> Result<()> {
         let messages = keri_core::actor::parse_event_stream(stream)

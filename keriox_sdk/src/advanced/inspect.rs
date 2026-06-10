@@ -12,7 +12,7 @@ use keri_core::prefix::CesrPrimitive;
 use said::derivation::HashFunctionCode;
 use said::SelfAddressingIdentifier;
 
-use crate::error::{Error, Result};
+use crate::advanced::error::{Error, Result};
 
 /// Serialization format of a CESR payload.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

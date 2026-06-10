@@ -14,7 +14,7 @@
 //!    (or `rotate_group`) to build the unsigned group event and the
 //!    accompanying exchange messages. They keep the event bytes.
 //! 2. Each member signs the event bytes locally with their own
-//!    [`SigningBackend`](crate::operations::SigningBackend) and emits
+//!    [`SigningBackend`](crate::advanced::operations::SigningBackend) and emits
 //!    a `(member_index, SelfSigningPrefix)` pair.
 //! 3. The initiator collects every member's pair and calls
 //!    [`merge_group_signatures`] to assemble a single
@@ -29,7 +29,7 @@ use keri_core::event_message::cesr_adapter::{parse_event_type, EventType};
 use keri_core::event_message::signed_event_message::Notice;
 use keri_core::prefix::IndexedSignature;
 
-use crate::error::{Error, Result};
+use crate::advanced::error::{Error, Result};
 
 /// Combine multiple member signatures over the *same* group event
 /// (icp / rot / ixn) into a single fully-signed

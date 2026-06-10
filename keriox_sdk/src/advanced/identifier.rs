@@ -17,8 +17,8 @@ use teliox::{
     state::{vc_state::TelState, ManagerTelState},
 };
 
-use crate::error::Result;
-use crate::types::VerificationIssue;
+use crate::advanced::error::Result;
+use crate::advanced::types::VerificationIssue;
 
 pub use keri_controller::identifier::query::WatcherResponseError;
 pub use keri_controller::mailbox_updating::ActionRequired;
@@ -34,10 +34,10 @@ impl Identifier {
     /// Construct an `Identifier` from an existing `RedbIdentifier`.
     ///
     /// Escape hatch for consumers that need to build an `Identifier` outside
-    /// of [`crate::store::KeriStore`] — for example, loading a multisig group
+    /// of [`crate::advanced::store::KeriStore`] — for example, loading a multisig group
     /// identifier using an already-resolved prefix and a controller shared
     /// with the initiating member alias. Most users should prefer
-    /// [`KeriStore::load`](crate::store::KeriStore::load).
+    /// [`KeriStore::load`](crate::advanced::store::KeriStore::load).
     pub fn from_inner(inner: keri_controller::RedbIdentifier) -> Self {
         Self { inner }
     }
@@ -330,7 +330,7 @@ impl Identifier {
                         None,
                     ),
                     SignerData::JustSignatures => {
-                        return Err(crate::error::Error::VerificationFailed(
+                        return Err(crate::advanced::error::Error::VerificationFailed(
                             "JustSignatures without anchoring seal".into(),
                         ));
                     }
@@ -338,17 +338,17 @@ impl Identifier {
                 match kc {
                     Some(k) => {
                         let valid = k.verify(data, sigs).map_err(|e| {
-                            crate::error::Error::VerificationFailed(e.to_string())
+                            crate::advanced::error::Error::VerificationFailed(e.to_string())
                         })?;
                         if valid {
                             Ok(Some(id))
                         } else {
-                            Err(crate::error::Error::VerificationFailed(
+                            Err(crate::advanced::error::Error::VerificationFailed(
                                 "signature did not verify".into(),
                             ))
                         }
                     }
-                    None => Err(crate::error::Error::MissingKelEvent {
+                    None => Err(crate::advanced::error::Error::MissingKelEvent {
                         id,
                         event_sai,
                     }),
@@ -645,7 +645,7 @@ impl Identifier {
     pub fn get_location(&self, id: &IdentifierPrefix) -> Result<Vec<LocationScheme>> {
         self.inner
             .get_location(id)
-            .map_err(|e| crate::error::Error::Other(e.to_string()))
+            .map_err(|e| crate::advanced::error::Error::Other(e.to_string()))
     }
 
     /// Get location schemes for identifiers serving a specific role for `id`.
@@ -683,8 +683,8 @@ fn notices_to_cesr(notices: Vec<Notice>) -> Result<String> {
     for notice in notices {
         let bytes = Message::Notice(notice)
             .to_cesr()
-            .map_err(|e| crate::error::Error::EncodingError(e.to_string()))?;
+            .map_err(|e| crate::advanced::error::Error::EncodingError(e.to_string()))?;
         out.extend(bytes);
     }
-    String::from_utf8(out).map_err(|e| crate::error::Error::EncodingError(e.to_string()))
+    String::from_utf8(out).map_err(|e| crate::advanced::error::Error::EncodingError(e.to_string()))
 }

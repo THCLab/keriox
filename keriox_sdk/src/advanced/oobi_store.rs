@@ -11,7 +11,7 @@ use keri_core::oobi::Role;
 use keri_core::oobi_manager::RedbOobiManager;
 use keri_core::query::reply_event::{ReplyEvent, SignedReply};
 
-use crate::error::{Error, Result};
+use crate::advanced::error::{Error, Result};
 use crate::IdentifierPrefix;
 
 /// Persistent OOBI reply storage backed by redb.

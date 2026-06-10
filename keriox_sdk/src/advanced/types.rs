@@ -4,8 +4,8 @@
 //! Import them with `use keri_sdk::*` (they are re-exported from the crate
 //! root) or qualify them as `keri_sdk::IdentifierConfig` etc.
 //!
-//! See [`crate::operations`] for the functions that accept these structs, and
-//! [`crate::signing`] for `SignedEnvelope` / `VerifiedPayload` usage.
+//! See [`crate::advanced::operations`] for the functions that accept these structs, and
+//! [`crate::advanced::signing`] for `SignedEnvelope` / `VerifiedPayload` usage.
 
 use keri_controller::{BasicPrefix, IdentifierPrefix, LocationScheme};
 pub use keri_core::signer::SignerAlgorithm;
@@ -14,8 +14,8 @@ pub use keri_core::signer::SignerAlgorithm;
 
 /// Configuration for creating a new KERI identifier.
 ///
-/// Used by [`crate::operations::create_identifier`] and
-/// [`crate::store::KeriStore::create`].
+/// Used by [`crate::advanced::operations::create_identifier`] and
+/// [`crate::advanced::store::KeriStore::create`].
 ///
 /// Defaults to Ed25519. Use [`with_algorithm`](Self::with_algorithm) (or
 /// preset constructors like [`p256`](Self::p256) /
@@ -65,7 +65,7 @@ impl IdentifierConfig {
 
 /// Configuration for rotating an identifier's keys.
 ///
-/// Used by [`crate::operations::rotate`].
+/// Used by [`crate::advanced::operations::rotate`].
 #[derive(Debug, Clone)]
 pub struct RotationConfig {
     /// The new *next* (pre-rotated) public key.
@@ -82,8 +82,8 @@ pub struct RotationConfig {
 
 /// Configuration for a store-managed key rotation with witness changes.
 ///
-/// Used by [`crate::store::KeriStore::rotate_with`]. For a plain key roll
-/// with no witness changes, [`crate::store::KeriStore::rotate`] needs no
+/// Used by [`crate::advanced::store::KeriStore::rotate_with`]. For a plain key roll
+/// with no witness changes, [`crate::advanced::store::KeriStore::rotate`] needs no
 /// configuration at all.
 #[derive(Debug, Clone, Default)]
 pub struct StoreRotationConfig {
@@ -104,8 +104,8 @@ pub struct StoreRotationConfig {
 
 /// Configuration for creating a delegated identifier (delegatee side).
 ///
-/// Used by [`crate::operations::request_delegation`] and
-/// [`crate::store::KeriStore::create_delegated`].
+/// Used by [`crate::advanced::operations::request_delegation`] and
+/// [`crate::advanced::store::KeriStore::create_delegated`].
 #[derive(Debug, Clone)]
 pub struct DelegationConfig {
     /// The delegator's identifier prefix.
@@ -131,7 +131,7 @@ impl DelegationConfig {
 /// A pending delegation request discovered by the delegator.
 ///
 /// Extracted from [`ActionRequired::DelegationRequest`] via [`DelegationRequest::try_from`].
-/// Pass this to [`crate::operations::approve_delegation`] to approve.
+/// Pass this to [`crate::advanced::operations::approve_delegation`] to approve.
 #[derive(Debug)]
 pub struct DelegationRequest {
     pub(crate) delegating_event:
@@ -157,24 +157,24 @@ impl DelegationRequest {
     /// (e.g. over a direct peer channel that bypasses the witness
     /// mailbox). The delegating event must be a key event; the
     /// exchange must be an exchange message.
-    pub fn from_cesr(event_cesr: &str, exchange_cesr: &str) -> crate::error::Result<Self> {
+    pub fn from_cesr(event_cesr: &str, exchange_cesr: &str) -> crate::advanced::error::Result<Self> {
         use keri_core::event_message::cesr_adapter::{parse_event_type, EventType};
         let ev = parse_event_type(event_cesr.as_bytes())
-            .map_err(|e| crate::error::Error::EncodingError(e.to_string()))?;
+            .map_err(|e| crate::advanced::error::Error::EncodingError(e.to_string()))?;
         let delegating_event = match ev {
             EventType::KeyEvent(ke) => ke,
             _ => {
-                return Err(crate::error::Error::EncodingError(
+                return Err(crate::advanced::error::Error::EncodingError(
                     "delegating event is not a key event".into(),
                 ))
             }
         };
         let parsed_exn = parse_event_type(exchange_cesr.as_bytes())
-            .map_err(|e| crate::error::Error::EncodingError(e.to_string()))?;
+            .map_err(|e| crate::advanced::error::Error::EncodingError(e.to_string()))?;
         let exchange = match parsed_exn {
             EventType::Exn(exn) => exn,
             _ => {
-                return Err(crate::error::Error::EncodingError(
+                return Err(crate::advanced::error::Error::EncodingError(
                     "exchange is not an exn message".into(),
                 ))
             }
@@ -208,8 +208,8 @@ impl TryFrom<keri_controller::mailbox_updating::ActionRequired> for DelegationRe
 
 /// Configuration for creating a multisig identifier.
 ///
-/// Used by [`crate::operations::create_multisig`] and
-/// [`crate::store::KeriStore::create_multisig_group`].
+/// Used by [`crate::advanced::operations::create_multisig`] and
+/// [`crate::advanced::store::KeriStore::create_multisig_group`].
 #[derive(Debug, Clone)]
 pub struct MultisigConfig {
     /// Other members' identifier prefixes (not including the caller).
@@ -226,8 +226,8 @@ pub struct MultisigConfig {
 
 /// Configuration for rotating an established multisig (group) identifier.
 ///
-/// Used by [`crate::operations::rotate_group`] and
-/// [`crate::store::KeriStore::rotate_multisig_group`].
+/// Used by [`crate::advanced::operations::rotate_group`] and
+/// [`crate::advanced::store::KeriStore::rotate_multisig_group`].
 ///
 /// The post-rotation member set is given by `new_participants`. Removal
 /// and key refresh are supported in a single rotation; **adding** a
@@ -253,7 +253,7 @@ pub struct GroupRotationConfig {
 /// A pending multisig request discovered in the mailbox.
 ///
 /// Extracted from [`ActionRequired::MultisigRequest`] via [`MultisigRequest::try_from`].
-/// Pass this to [`crate::operations::accept_multisig`] to co-sign the event.
+/// Pass this to [`crate::advanced::operations::accept_multisig`] to co-sign the event.
 #[derive(Debug)]
 pub struct MultisigRequest {
     pub(crate) event: keri_core::event_message::msg::KeriEvent<keri_core::event::KeyEvent>,
@@ -270,24 +270,24 @@ impl MultisigRequest {
     /// (e.g. over a direct peer channel that bypasses the witness
     /// mailbox). The event must be a key event (icp/rot/ixn/dip/drt);
     /// the exchange must be an exchange message.
-    pub fn from_cesr(event_cesr: &str, exchange_cesr: &str) -> crate::error::Result<Self> {
+    pub fn from_cesr(event_cesr: &str, exchange_cesr: &str) -> crate::advanced::error::Result<Self> {
         use keri_core::event_message::cesr_adapter::{parse_event_type, EventType};
         let ev = parse_event_type(event_cesr.as_bytes())
-            .map_err(|e| crate::error::Error::EncodingError(e.to_string()))?;
+            .map_err(|e| crate::advanced::error::Error::EncodingError(e.to_string()))?;
         let event = match ev {
             EventType::KeyEvent(ke) => ke,
             _ => {
-                return Err(crate::error::Error::EncodingError(
+                return Err(crate::advanced::error::Error::EncodingError(
                     "multisig event is not a key event".into(),
                 ))
             }
         };
         let parsed_exn = parse_event_type(exchange_cesr.as_bytes())
-            .map_err(|e| crate::error::Error::EncodingError(e.to_string()))?;
+            .map_err(|e| crate::advanced::error::Error::EncodingError(e.to_string()))?;
         let exchange = match parsed_exn {
             EventType::Exn(exn) => exn,
             _ => {
-                return Err(crate::error::Error::EncodingError(
+                return Err(crate::advanced::error::Error::EncodingError(
                     "exchange is not an exn message".into(),
                 ))
             }
@@ -309,10 +309,10 @@ impl MultisigRequest {
     /// - [`crate::Error::EncodingError`] if digest computation fails.
     pub fn event_digest(
         &self,
-    ) -> crate::error::Result<keri_core::actor::prelude::SelfAddressingIdentifier> {
+    ) -> crate::advanced::error::Result<keri_core::actor::prelude::SelfAddressingIdentifier> {
         self.event
             .digest()
-            .map_err(|e| crate::error::Error::EncodingError(e.to_string()))
+            .map_err(|e| crate::advanced::error::Error::EncodingError(e.to_string()))
     }
 
     /// `true` when the pending event is a group (or delegated) inception.
@@ -328,27 +328,27 @@ impl MultisigRequest {
     ///
     /// # Errors
     /// - [`crate::Error::EncodingError`] on serialisation failure.
-    pub fn event_json(&self) -> crate::error::Result<String> {
+    pub fn event_json(&self) -> crate::advanced::error::Result<String> {
         serde_json::to_string(&self.event)
-            .map_err(|e| crate::error::Error::EncodingError(e.to_string()))
+            .map_err(|e| crate::advanced::error::Error::EncodingError(e.to_string()))
     }
 
     /// Pretty-printed JSON of the pending group event, for display.
     ///
     /// # Errors
     /// - [`crate::Error::EncodingError`] on serialisation failure.
-    pub fn event_json_pretty(&self) -> crate::error::Result<String> {
+    pub fn event_json_pretty(&self) -> crate::advanced::error::Result<String> {
         serde_json::to_string_pretty(&self.event)
-            .map_err(|e| crate::error::Error::EncodingError(e.to_string()))
+            .map_err(|e| crate::advanced::error::Error::EncodingError(e.to_string()))
     }
 
     /// The exchange message serialised as JSON, suitable for persistence.
     ///
     /// # Errors
     /// - [`crate::Error::EncodingError`] on serialisation failure.
-    pub fn exchange_json(&self) -> crate::error::Result<String> {
+    pub fn exchange_json(&self) -> crate::advanced::error::Result<String> {
         serde_json::to_string(&self.exchange)
-            .map_err(|e| crate::error::Error::EncodingError(e.to_string()))
+            .map_err(|e| crate::advanced::error::Error::EncodingError(e.to_string()))
     }
 
     /// Rebuild a request from JSON produced by [`event_json`](Self::event_json)
@@ -356,11 +356,11 @@ impl MultisigRequest {
     ///
     /// # Errors
     /// - [`crate::Error::EncodingError`] if either JSON is invalid.
-    pub fn from_json(event_json: &str, exchange_json: &str) -> crate::error::Result<Self> {
+    pub fn from_json(event_json: &str, exchange_json: &str) -> crate::advanced::error::Result<Self> {
         let event = serde_json::from_str(event_json)
-            .map_err(|e| crate::error::Error::EncodingError(format!("event JSON: {e}")))?;
+            .map_err(|e| crate::advanced::error::Error::EncodingError(format!("event JSON: {e}")))?;
         let exchange = serde_json::from_str(exchange_json)
-            .map_err(|e| crate::error::Error::EncodingError(format!("exchange JSON: {e}")))?;
+            .map_err(|e| crate::advanced::error::Error::EncodingError(format!("exchange JSON: {e}")))?;
         Ok(MultisigRequest { event, exchange })
     }
 }
@@ -387,10 +387,10 @@ impl TryFrom<keri_controller::mailbox_updating::ActionRequired> for MultisigRequ
 
 /// A pending request discovered in the mailbox.
 ///
-/// Returned by [`crate::operations::poll_pending_requests`]. Use the
+/// Returned by [`crate::advanced::operations::poll_pending_requests`]. Use the
 /// convenience methods or pattern-match to determine the request type
-/// and pass it to [`crate::operations::approve_delegation`] or
-/// [`crate::operations::accept_multisig`] accordingly.
+/// and pass it to [`crate::advanced::operations::approve_delegation`] or
+/// [`crate::advanced::operations::accept_multisig`] accordingly.
 #[derive(Debug)]
 pub enum PendingRequest {
     /// A delegation request from a delegatee awaiting approval.
@@ -462,7 +462,7 @@ impl TryFrom<keri_controller::mailbox_updating::ActionRequired> for PendingReque
 
 /// A single problem found while verifying a CESR stream against known KELs.
 ///
-/// Returned by [`crate::identifier::Identifier::verify_from_cesr_detailed`].
+/// Returned by [`crate::advanced::identifier::Identifier::verify_from_cesr_detailed`].
 /// Unlike [`crate::Error::VerificationFailed`], these variants preserve the
 /// underlying cause so callers can react (e.g. resolve a missing OOBI and
 /// retry, or report a hard signature mismatch).
@@ -518,7 +518,7 @@ impl std::fmt::Display for VerificationIssue {
 
 /// A CESR-encoded signed payload ready for transport.
 ///
-/// Returned by [`crate::signing::sign`] and [`crate::signing::sign_json`].
+/// Returned by [`crate::advanced::signing::sign`] and [`crate::advanced::signing::sign_json`].
 #[derive(Debug, Clone)]
 pub struct SignedEnvelope {
     /// The raw payload bytes that were signed.
@@ -530,7 +530,7 @@ pub struct SignedEnvelope {
 
 /// The verified contents of a CESR-signed envelope.
 ///
-/// Returned by [`crate::signing::verify`] on success.
+/// Returned by [`crate::advanced::signing::verify`] on success.
 #[derive(Debug, Clone)]
 pub struct VerifiedPayload {
     /// The raw payload bytes extracted from the CESR stream.
@@ -543,8 +543,8 @@ pub struct VerifiedPayload {
 
 /// The current lifecycle state of a credential in the TEL.
 ///
-/// Returned by [`crate::tel::get_credential_status`] and
-/// [`crate::tel::check_credential_status`].
+/// Returned by [`crate::advanced::tel::get_credential_status`] and
+/// [`crate::advanced::tel::check_credential_status`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CredentialStatus {
     /// The credential has been issued and is currently valid.

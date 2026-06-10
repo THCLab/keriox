@@ -4,8 +4,8 @@
 //! credential is currently `Issued`, `Revoked`, or `Unknown` without
 //! requiring callers to interact with `TelState` or `ManagerTelState` directly.
 //!
-//! For issuing and revoking credentials see [`crate::operations`]. For
-//! creating a registry see [`crate::operations::incept_registry`].
+//! For issuing and revoking credentials see [`crate::advanced::operations`]. For
+//! creating a registry see [`crate::advanced::operations::incept_registry`].
 
 use keri_controller::IdentifierPrefix;
 use keri_core::actor::prelude::SelfAddressingIdentifier;
@@ -29,7 +29,7 @@ use crate::{
 /// - [`Error::RegistryNotIncepted`] if `registry_id` is not known locally.
 /// - [`Error::Mechanics`] on network or processing failures.
 /// - [`Error::Signing`] if signing the query fails.
-pub async fn check_credential_status<S: crate::operations::SigningBackend>(
+pub async fn check_credential_status<S: crate::advanced::operations::SigningBackend>(
     id: &Identifier,
     signer: &S,
     registry_id: &IdentifierPrefix,
@@ -57,13 +57,13 @@ pub async fn check_credential_status<S: crate::operations::SigningBackend>(
 /// precheck — use it to query a *foreign* registry (e.g. while verifying a
 /// credential issued by someone else) whose TEL has not been seen yet. After
 /// the call, read the resulting state with [`get_credential_status`] or
-/// [`crate::identifier::Identifier::find_vc_state`].
+/// [`crate::advanced::identifier::Identifier::find_vc_state`].
 ///
 /// # Errors
 /// - [`Error::Mechanics`] on network or processing failures.
 /// - [`Error::Signing`] if signing the query fails.
 /// - [`Error::EncodingError`] if query encoding fails.
-pub async fn query_tel<S: crate::operations::SigningBackend>(
+pub async fn query_tel<S: crate::advanced::operations::SigningBackend>(
     id: &Identifier,
     signer: &S,
     registry_id: &SelfAddressingIdentifier,
@@ -106,7 +106,7 @@ pub fn get_credential_status(
 /// # Errors
 /// - [`Error::ParseError`] if either string is not a valid identifier/SAID.
 /// - All errors from [`check_credential_status`].
-pub async fn check_credential_status_str<S: crate::operations::SigningBackend>(
+pub async fn check_credential_status_str<S: crate::advanced::operations::SigningBackend>(
     id: &Identifier,
     signer: &S,
     registry_id: &str,
