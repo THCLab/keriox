@@ -8,7 +8,7 @@
 
 use std::time::Duration;
 
-use crate::error::{Error, Result};
+use crate::error::Result;
 
 /// How network operations are retried before giving up.
 ///
@@ -110,6 +110,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::Error;
     use std::sync::atomic::{AtomicU32, Ordering};
 
     fn transient_error() -> Error {

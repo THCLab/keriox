@@ -14,12 +14,16 @@ pub mod advanced;
 
 mod contact;
 mod error;
+mod identity;
 mod ids;
+mod keri;
 mod message;
 mod retry;
 
 pub use error::{Error, Result};
+pub use identity::{Identity, IdentityBuilder, KeyAlgorithm};
 pub use ids::{CredentialId, IdentityId};
+pub use keri::Keri;
 pub use message::{SignedMessage, Verified};
 pub use retry::RetryPolicy;
 
