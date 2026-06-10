@@ -14,7 +14,7 @@ use crate::{
     error::Error,
     event::Event,
     processor::{
-        notification::{TelNotification, TelNotificationBus, TelNotifier},
+        notification::{TelNotification, TelNotificationBus, TelNotifier, WeakTelNotificationBus},
         storage::TelEventStorage,
         validator::TelEventValidator,
     },
@@ -23,7 +23,9 @@ use crate::{
 pub struct MissingIssuerEscrow<D: TelEventDatabase, K: EventDatabase, E: TelEscrowDatabase> {
     kel_reference: Arc<EventStorage<K>>,
     tel_reference: Arc<TelEventStorage<D>>,
-    publisher: TelNotificationBus,
+    // Weak because this escrow is itself registered as an observer on the
+    // bus it publishes to — owning the bus would create a reference cycle.
+    publisher: WeakTelNotificationBus,
     escrow_db: Arc<E>,
 }
 
@@ -40,7 +42,7 @@ impl<D: TelEventDatabase, K: EventDatabase, E: TelEscrowDatabase> MissingIssuerE
             tel_reference: tel_event_storage,
             escrow_db,
             kel_reference,
-            publisher: bus,
+            publisher: bus.downgrade(),
         }
     }
 }

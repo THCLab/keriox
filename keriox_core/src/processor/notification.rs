@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    sync::{Arc, OnceLock, RwLock},
+    sync::{Arc, OnceLock, RwLock, Weak},
 };
 
 #[cfg(feature = "query")]
@@ -29,9 +29,12 @@ pub trait NotificationDispatch: Send + Sync {
 /// Uses `RwLock` for interior mutability so `register_observer` takes `&self`.
 struct InProcessDispatch {
     observers: RwLock<HashMap<JustNotification, Vec<Arc<dyn Notifier + Send + Sync>>>>,
-    /// Back-reference to the owning `NotificationBus` so we can pass it
-    /// to `Notifier::notify()` callbacks.
-    bus: OnceLock<NotificationBus>,
+    /// Back-reference to itself (as the bus dispatch) so `&NotificationBus`
+    /// can be passed to `Notifier::notify()` callbacks. Weak, because an
+    /// owning back-reference would make the bus self-referential and leak
+    /// it — together with every registered observer and the database
+    /// handles they hold.
+    bus: OnceLock<Weak<dyn NotificationDispatch>>,
 }
 
 impl InProcessDispatch {
@@ -46,12 +49,13 @@ impl InProcessDispatch {
 impl NotificationDispatch for InProcessDispatch {
     fn dispatch(&self, notification: &Notification) -> Result<(), Error> {
         let observers = self.observers.read().map_err(|_| Error::RwLockingError)?;
-        let bus = self.bus.get().ok_or_else(|| {
+        let inner = self.bus.get().and_then(Weak::upgrade).ok_or_else(|| {
             Error::SemanticError("InProcessDispatch: bus back-reference not set".into())
         })?;
+        let bus = NotificationBus { inner };
         if let Some(obs) = observers.get(&notification.into()) {
             for esc in obs.iter() {
-                esc.notify(notification, bus)?;
+                esc.notify(notification, &bus)?;
             }
         }
         Ok(())
@@ -83,13 +87,11 @@ impl NotificationBus {
     /// Create a new bus with the default in-process dispatch.
     pub fn new() -> Self {
         let dispatch = Arc::new(InProcessDispatch::new());
-        let bus = Self {
-            inner: dispatch.clone(),
-        };
-        // Set the back-reference so InProcessDispatch can pass &NotificationBus
-        // to Notifier::notify() callbacks.
-        let _ = dispatch.bus.set(bus.clone());
-        bus
+        // Set the (weak) back-reference so InProcessDispatch can pass
+        // &NotificationBus to Notifier::notify() callbacks.
+        let weak: Weak<dyn NotificationDispatch> = Arc::downgrade(&dispatch) as _;
+        let _ = dispatch.bus.set(weak);
+        Self { inner: dispatch }
     }
 
     /// Create a bus backed by a custom dispatch implementation.
