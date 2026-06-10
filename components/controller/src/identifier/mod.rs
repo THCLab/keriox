@@ -161,6 +161,30 @@ where
         self.known_events.find_kel_with_receipts(id)
     }
 
+    /// Return a single stored signed event — *including* ones still
+    /// held in escrow — as a CESR stream, looked up by its digest.
+    ///
+    /// A delegated `dip` is escrowed until the delegator's anchoring
+    /// seal arrives, so it never appears in the finalized-KEL
+    /// accessors ([`get_kel`](Self::get_kel)). Those return only the
+    /// unsigned event form for an escrowed inception, and a sponsor
+    /// that imports it rejects the stream with "Missing controller
+    /// signatures attachment". This accessor yields the stored
+    /// *signed* event (event + signature couples) so the delegatee can
+    /// ship a verifiable `dip` for the delegator to anchor.
+    pub fn get_signed_event_cesr(&self, digest: &SelfAddressingIdentifier) -> Option<Vec<u8>> {
+        // `to_cesr()`, not `encode()`: `encode()` is `serde_json::to_string`,
+        // which serializes the attachments as JSON struct fields (`"-": ...`)
+        // and yields a stream witnesses can't parse (they 502 on it).
+        // `to_cesr()` emits proper wire CESR — the event payload followed by
+        // the `-G` source-seal couple and `-A` controller-signature groups.
+        use keri_core::event_message::cesr_adapter::CesrMessage;
+        self.known_events
+            .storage
+            .get_event_by_digest(digest)
+            .and_then(|t| CesrMessage::from(&t.signed_event_message).to_cesr().ok())
+    }
+
     pub fn get_last_establishment_event_seal(&self) -> Result<EventSeal, ControllerError> {
         self.known_events
             .storage

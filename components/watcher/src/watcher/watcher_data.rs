@@ -753,11 +753,34 @@ impl<S: OobiStorageBackend> WatcherData<S> {
         &self,
         id: &IdentifierPrefix,
     ) -> Result<Vec<BasicPrefix>, ActorError> {
-        let wit_id = self
-            .get_state_for_prefix(&id)
-            .map(|state| state.witness_config.witnesses)
-            .ok_or(ActorError::NoIdentState { prefix: id.clone() })?;
-        Ok(wit_id)
+        // Preferred source: the AID's own accepted KEL state.
+        if let Some(state) = self.get_state_for_prefix(id) {
+            return Ok(state.witness_config.witnesses);
+        }
+        // Fallback for an AID whose KEL we have never finalized locally —
+        // most importantly a delegated device `dip` we were told about
+        // only through a `witness` end-role OOBI. Such an AID's witness set
+        // normally lives in its own KEL, which we can't have yet: to fetch
+        // the KEL we first need to know which witnesses serve it. Recover
+        // those witnesses from the stored end-role records so the
+        // update/fetch path can bootstrap. Without this the watcher answers
+        // `KELNotFound` forever for any delegated AID it hasn't already
+        // accepted, even though it was explicitly pointed at a witness.
+        let witnesses: Vec<BasicPrefix> = self
+            .get_end_role_for_id(id, Role::Witness)?
+            .iter()
+            .filter_map(|reply| match reply.reply.get_route() {
+                ReplyRoute::EndRoleAdd(role) => match role.eid {
+                    IdentifierPrefix::Basic(bp) => Some(bp),
+                    _ => None,
+                },
+                _ => None,
+            })
+            .collect();
+        if witnesses.is_empty() {
+            return Err(ActorError::NoIdentState { prefix: id.clone() });
+        }
+        Ok(witnesses)
     }
 
     /// Query roles in oobi manager to check if controller with given ID is allowed to communicate with us.

@@ -339,6 +339,23 @@ impl KeriStore {
         self.write_file(alias, "delegator_id", &delegator_id.to_str())
     }
 
+    /// Persist the delegated identifier prefix for an alias.
+    ///
+    /// The counterpart of [`load_delegated_prefix`](Self::load_delegated_prefix).
+    /// Callers that mint a delegated AID outside [`create_delegated`](Self::create_delegated)
+    /// (e.g. the cached-controller delegation path) must record this so the
+    /// alias can later be resolved to its *delegated* AID rather than the
+    /// throwaway precursor `id` — without it the delegatee operates on the
+    /// precursor and can't publish or serve its own delegated KEL.
+    pub fn save_delegated_prefix(
+        &self,
+        alias: &str,
+        delegated_id: &IdentifierPrefix,
+    ) -> Result<()> {
+        use keri_core::prefix::CesrPrimitive;
+        self.write_file(alias, "delegated_id", &delegated_id.to_str())
+    }
+
     /// Load the delegated identifier prefix for an alias.
     ///
     /// Returns an error if this alias is not a delegated identifier.

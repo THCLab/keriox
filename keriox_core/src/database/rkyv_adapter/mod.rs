@@ -27,25 +27,45 @@ pub fn deserialize_said(bytes: &[u8]) -> Result<SelfAddressingIdentifier, rkyv::
     Ok(deserialized)
 }
 
+// `rkyv::access` requires the buffer be aligned to the archived type's
+// alignment. A slice handed back by redb points straight into the
+// mmap'd page and is only byte-aligned, so accessing it directly panics
+// with `UnalignedPointer` for any event whose bytes happen to land on an
+// odd offset (notably a delegated `dip` read back with its source-seal
+// couple). Copy into an `AlignedVec` first — same guard
+// `deserialize_identifier_state` below already uses — so the read is
+// alignment-safe regardless of where the event sits in the page.
 pub fn deserialize_nontransferable(bytes: &[u8]) -> Result<Nontransferable, rkyv::rancor::Error> {
-    let archived = rkyv::access::<ArchivedNontransferable, rkyv::rancor::Failure>(&bytes).unwrap();
+    let mut aligned =
+        AlignedVec::<{ std::mem::align_of::<Nontransferable>() }>::with_capacity(bytes.len());
+    aligned.extend_from_slice(bytes);
+    let archived = rkyv::access::<ArchivedNontransferable, rkyv::rancor::Error>(&aligned)?;
     rkyv::deserialize::<Nontransferable, rkyv::rancor::Error>(archived)
 }
 
 pub fn deserialize_transferable(bytes: &[u8]) -> Result<Transferable, rkyv::rancor::Error> {
-    let archived = rkyv::access::<ArchivedTransferable, rkyv::rancor::Failure>(&bytes).unwrap();
+    let mut aligned =
+        AlignedVec::<{ std::mem::align_of::<Transferable>() }>::with_capacity(bytes.len());
+    aligned.extend_from_slice(bytes);
+    let archived = rkyv::access::<ArchivedTransferable, rkyv::rancor::Error>(&aligned)?;
     rkyv::deserialize::<Transferable, rkyv::rancor::Error>(archived)
 }
 
 pub fn deserialize_indexed_signatures(
     bytes: &[u8],
 ) -> Result<IndexedSignature, rkyv::rancor::Error> {
-    let archived = rkyv::access::<ArchivedIndexedSignature, rkyv::rancor::Error>(&bytes).unwrap();
+    let mut aligned =
+        AlignedVec::<{ std::mem::align_of::<IndexedSignature>() }>::with_capacity(bytes.len());
+    aligned.extend_from_slice(bytes);
+    let archived = rkyv::access::<ArchivedIndexedSignature, rkyv::rancor::Error>(&aligned)?;
     rkyv::deserialize::<IndexedSignature, rkyv::rancor::Error>(archived)
 }
 
 pub fn deserialize_source_seal(bytes: &[u8]) -> Result<SourceSeal, rkyv::rancor::Error> {
-    let archived = rkyv::access::<ArchivedSourceSeal, rkyv::rancor::Error>(&bytes).unwrap();
+    let mut aligned =
+        AlignedVec::<{ std::mem::align_of::<SourceSeal>() }>::with_capacity(bytes.len());
+    aligned.extend_from_slice(bytes);
+    let archived = rkyv::access::<ArchivedSourceSeal, rkyv::rancor::Error>(&aligned)?;
     rkyv::deserialize::<SourceSeal, rkyv::rancor::Error>(archived)
 }
 

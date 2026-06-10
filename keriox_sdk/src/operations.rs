@@ -680,7 +680,26 @@ pub async fn build_delegation_request_with_controller<S: SigningBackend + Clone 
         )
         .await?;
 
-    Ok((temp_id, delegated_prefix, dip))
+    // Return the *signed* `dip` (event + signature couples), not the
+    // bare event. The delegated inception is escrowed locally until the
+    // delegator anchors it, so the finalized-KEL accessors only expose
+    // the unsigned form — and a sponsor that imports that to build the
+    // anchoring `ixn` rejects it with "Missing controller signatures
+    // attachment", leaving the delegation unanchored and the delegatee's
+    // KEL unservable to watchers. For an inception the prefix is the
+    // event's SAID, so we look the stored signed event up by that
+    // digest. Fall back to the unsigned event if (unexpectedly) the
+    // store can't produce it.
+    let signed_dip = match &delegated_prefix {
+        IdentifierPrefix::SelfAddressing(said) => temp_id
+            .inner()
+            .get_signed_event_cesr(&said.said)
+            .map(|b| String::from_utf8_lossy(&b).into_owned())
+            .unwrap_or(dip),
+        _ => dip,
+    };
+
+    Ok((temp_id, delegated_prefix, signed_dip))
 }
 
 /// Sign a delegating `ixn` on the delegator's KEL that anchors the
