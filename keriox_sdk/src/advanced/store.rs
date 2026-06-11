@@ -1,27 +1,26 @@
 //! Persistent storage for named KERI identifiers.
 //!
-//! [`KeriStore`] manages a root directory that holds one sub-directory per
-//! *alias* (a human-readable name for an identifier). Each alias directory
-//! stores the Redb database, the current and next signing-key seeds, the
-//! identifier prefix, and an optional registry prefix.
+//! [`KeriStore`] manages a store directory keyed by *alias* (a
+//! human-readable name for an identifier). State is split by kind:
 //!
-//! The on-disk layout is identical to the one used by `dkms-bin`, so existing
-//! databases can be opened without migration.
+//! - **Event databases** (KEL, TEL, OOBIs, escrows, query caches): placed by
+//!   [`StorageConfig`](crate::advanced::types::StorageConfig) — redb files
+//!   or fully in memory. New stores share one database
+//!   (`<root>/db`); stores created by older SDK versions keep their
+//!   one-database-per-alias layout, detected automatically.
+//! - **Alias metadata** (identifier prefixes, registry ids, group
+//!   membership, credential indexes): a store-level metadata database
+//!   (`<root>/meta`). Values written by older versions as one file per
+//!   field are found via fallback and migrated on first read.
+//! - **Signing seeds** (software keys only): a pluggable
+//!   [`SecretsStore`]; the default
+//!   keeps the historical `<root>/<alias>/priv_key` / `next_priv_key`
+//!   files. Identities backed by an external key provider store no seeds.
 //!
-//! See [`crate::advanced::operations`] for the functions that use the identifiers
-//! returned by this module.
+//! See [`crate::advanced::operations`] for the functions that use the
+//! identifiers returned by this module.
 //!
-//! # Disk layout
-//!
-//! ```text
-//! <root>/
-//!   <alias>/
-//!     db/           ← Redb database directory
-//!     priv_key      ← current SeedPrefix (KERI canonical text)
-//!     next_priv_key ← next SeedPrefix (KERI canonical text)
-//!     id            ← IdentifierPrefix (KERI canonical text)
-//!     reg_id        ← IdentifierPrefix (optional, set after incept_registry)
-//! ```
+//! [`SecretsStore`]: crate::advanced::secrets::SecretsStore
 
 use std::{
     collections::HashMap,
@@ -37,11 +36,25 @@ use crate::advanced::{
     controller::Controller,
     error::{Error, Result},
     identifier::Identifier,
-    operations::{
-        create_identifier_with_controller, create_multisig, request_delegation, rotate_group,
-    },
+    meta::MetaDb,
+    operations::{create_identifier_with_controller, create_multisig, rotate_group},
+    secrets::{FileSecretsStore, SecretsStore},
     types::{DelegationConfig, GroupRotationConfig, IdentifierConfig, MultisigConfig},
 };
+
+/// Seed fields are routed to the [`SecretsStore`]; everything else goes to
+/// the metadata database.
+const SEED_FIELDS: [&str; 2] = ["priv_key", "next_priv_key"];
+
+/// How a store places its event databases on the chosen backend.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Layout {
+    /// One event database for the whole store (new stores).
+    Shared,
+    /// One event database per alias (legacy stores created by older SDK
+    /// versions or dkms-bin; preserved for compatibility).
+    PerAlias,
+}
 
 /// Manages a directory of named KERI identifiers.
 ///
@@ -52,6 +65,9 @@ use crate::advanced::{
 pub struct KeriStore {
     root: PathBuf,
     storage: crate::advanced::types::StorageConfig,
+    layout: Layout,
+    meta: MetaDb,
+    secrets: Arc<dyn SecretsStore>,
     controllers: Mutex<HashMap<PathBuf, Arc<Controller>>>,
 }
 
@@ -70,9 +86,10 @@ impl KeriStore {
     /// event databases.
     ///
     /// With [`StorageConfig::InMemory`](crate::advanced::types::StorageConfig::InMemory)
-    /// the KEL/TEL/OOBI/escrow databases never touch disk; `root` is still
-    /// used for the small alias metadata files (identifier prefixes,
-    /// registry ids, signing seeds) — see `docs/state-storage-gaps.md`.
+    /// the event and metadata databases never touch disk; only signing
+    /// seeds still go through the default file-backed [`SecretsStore`] —
+    /// pass [`MemorySecretsStore`](crate::advanced::secrets::MemorySecretsStore)
+    /// to [`KeriStore::open_with_options`] for a fully ephemeral store.
     ///
     /// # Errors
     /// - [`Error::PersistenceError`] if the root directory cannot be created.
@@ -80,11 +97,33 @@ impl KeriStore {
         root: PathBuf,
         storage: crate::advanced::types::StorageConfig,
     ) -> Result<Self> {
+        let secrets = Arc::new(FileSecretsStore::new(root.clone()));
+        Self::open_with_options(root, storage, secrets)
+    }
+
+    /// Open (or create) a store with a custom [`SecretsStore`] for signing
+    /// seeds (e.g. an OS-keychain implementation, or
+    /// [`MemorySecretsStore`](crate::advanced::secrets::MemorySecretsStore)
+    /// for fully ephemeral stores). Irrelevant for identities whose keys
+    /// live in an external key provider — those store no seeds at all.
+    ///
+    /// # Errors
+    /// - [`Error::PersistenceError`] if the root directory cannot be created.
+    pub fn open_with_options(
+        root: PathBuf,
+        storage: crate::advanced::types::StorageConfig,
+        secrets: Arc<dyn SecretsStore>,
+    ) -> Result<Self> {
         std::fs::create_dir_all(&root)
             .map_err(|e| Error::PersistenceError(format!("cannot create store root: {e}")))?;
+        let meta = MetaDb::open(&root, &storage)?;
+        let layout = Self::detect_layout(&root, &meta)?;
         Ok(Self {
             root,
             storage,
+            layout,
+            meta,
+            secrets,
             controllers: Mutex::new(HashMap::new()),
         })
     }
@@ -143,11 +182,7 @@ impl KeriStore {
         next_seed: SeedPrefix,
         config: IdentifierConfig,
     ) -> Result<(Identifier, Arc<Signer>)> {
-        let alias_dir = self.alias_dir(alias);
-        std::fs::create_dir_all(&alias_dir)
-            .map_err(|e| Error::PersistenceError(format!("cannot create alias dir: {e}")))?;
-
-        let db_path = alias_dir.join("db");
+        let db_path = self.db_path_for(alias);
 
         let signer = Arc::new(
             Signer::new_with_seed(&current_seed).map_err(|e| Error::Signing(e.to_string()))?,
@@ -182,8 +217,7 @@ impl KeriStore {
     /// - [`Error::IdentifierNotFound`] if the `id` file cannot be parsed.
     /// - [`Error::Controller`] if the database cannot be opened.
     pub fn load(&self, alias: &str) -> Result<Identifier> {
-        let alias_dir = self.alias_dir(alias);
-        let db_path = alias_dir.join("db");
+        let db_path = self.db_path_for(alias);
 
         let id_str = self.read_file(alias, "id")?;
         let id_prefix = IdentifierPrefix::from_str(id_str.trim()).map_err(|_| {
@@ -353,9 +387,6 @@ impl KeriStore {
     /// - [`Error::PersistenceError`] on I/O failures.
     pub fn save_seeds(&self, alias: &str, current: &SeedPrefix, next: &SeedPrefix) -> Result<()> {
         use keri_core::prefix::CesrPrimitive;
-        let alias_dir = self.alias_dir(alias);
-        std::fs::create_dir_all(&alias_dir)
-            .map_err(|e| Error::PersistenceError(format!("cannot create alias dir: {e}")))?;
         self.write_file(alias, "priv_key", &current.to_str())?;
         self.write_file(alias, "next_priv_key", &next.to_str())
     }
@@ -395,7 +426,7 @@ impl KeriStore {
     ///
     /// # Errors
     /// - [`Error::PersistenceError`] on I/O failures.
-    /// - Propagates errors from [`request_delegation`].
+    /// - Propagates errors from [`crate::advanced::operations::request_delegation`].
     pub async fn create_delegated(
         &self,
         alias: &str,
@@ -404,11 +435,7 @@ impl KeriStore {
         let current_seed = crate::advanced::keys::generate_seed(config.algorithm)?;
         let next_seed = crate::advanced::keys::generate_seed(config.algorithm)?;
 
-        let alias_dir = self.alias_dir(alias);
-        std::fs::create_dir_all(&alias_dir)
-            .map_err(|e| Error::PersistenceError(format!("cannot create alias dir: {e}")))?;
-
-        let db_path = alias_dir.join("db");
+        let db_path = self.db_path_for(alias);
 
         let signer = Arc::new(
             Signer::new_with_seed(&current_seed).map_err(|e| Error::Signing(e.to_string()))?,
@@ -417,8 +444,15 @@ impl KeriStore {
         let next_pk = crate::advanced::keys::derive_public_key(&next_seed, false)?;
 
         let delegator_id = config.delegator.clone();
+        let controller = self.get_or_create_controller(db_path)?;
         let (temp_id, delegated_prefix) =
-            request_delegation(db_path, signer.clone(), next_pk, config).await?;
+            crate::advanced::operations::request_delegation_with_controller(
+                &controller,
+                signer.clone(),
+                next_pk,
+                config,
+            )
+            .await?;
 
         // Persist seeds, temporary identifier, delegated prefix, and delegator.
         use keri_core::prefix::CesrPrimitive;
@@ -599,13 +633,8 @@ impl KeriStore {
         slot_seed: SeedPrefix,
     ) -> Result<()> {
         use keri_core::prefix::CesrPrimitive;
-        // Touch the alias dir + db path so subsequent
-        // `KeriStore::load` opens the redb cleanly.
-        let alias_dir = self.alias_dir(alias);
-        std::fs::create_dir_all(&alias_dir)
-            .map_err(|e| Error::PersistenceError(format!("cannot create alias dir: {e}")))?;
-        let db_path = alias_dir.join("db");
-        let _controller = self.get_or_create_controller(db_path)?;
+        // Touch the db path so subsequent `KeriStore::load` opens cleanly.
+        let _controller = self.get_or_create_controller(self.db_path_for(alias))?;
         self.write_file(alias, "id", &identity_prefix.to_str())?;
         self.write_file(alias, "priv_key", &slot_seed.to_str())?;
         Ok(())
@@ -697,15 +726,21 @@ impl KeriStore {
     /// # Errors
     /// - [`Error::PersistenceError`] if the root directory cannot be read.
     pub fn list_aliases(&self) -> Result<Vec<String>> {
-        let mut aliases = vec![];
-        for entry in std::fs::read_dir(&self.root)
-            .map_err(|e| Error::PersistenceError(format!("cannot read store root: {e}")))?
-        {
-            let entry = entry
-                .map_err(|e| Error::PersistenceError(format!("directory entry error: {e}")))?;
-            if entry.path().is_dir() {
-                if let Some(name) = entry.file_name().to_str() {
-                    aliases.push(name.to_owned());
+        let mut aliases: Vec<String> = self
+            .meta
+            .aliases()?
+            .into_iter()
+            .filter(|a| !a.is_empty())
+            .collect();
+        // Legacy stores: aliases that only exist as directories.
+        if let Ok(entries) = std::fs::read_dir(&self.root) {
+            for entry in entries.filter_map(|e| e.ok()) {
+                if entry.path().is_dir() {
+                    if let Some(name) = entry.file_name().to_str() {
+                        if name != "db" && !aliases.iter().any(|a| a == name) {
+                            aliases.push(name.to_owned());
+                        }
+                    }
                 }
             }
         }
@@ -797,8 +832,7 @@ impl KeriStore {
     /// so the mint shares the one handle `load`/`finalize` use instead
     /// of opening a second `Database` on the same file.
     pub fn controller_for(&self, alias: &str) -> Result<Arc<Controller>> {
-        let db_path = self.alias_dir(alias).join("db");
-        self.get_or_create_controller(db_path)
+        self.get_or_create_controller(self.db_path_for(alias))
     }
 
     fn persist_group_metadata(
@@ -808,10 +842,6 @@ impl KeriStore {
         members: &[IdentifierPrefix],
         member_alias: &str,
     ) -> Result<()> {
-        let alias_dir = self.alias_dir(group_alias);
-        std::fs::create_dir_all(&alias_dir)
-            .map_err(|e| Error::PersistenceError(format!("cannot create alias dir: {e}")))?;
-
         use keri_core::prefix::CesrPrimitive;
         self.write_file(group_alias, "group_id", &group_id.to_str())?;
         self.write_file(group_alias, "member_alias", member_alias)?;
@@ -828,24 +858,106 @@ impl KeriStore {
         self.root.join(alias)
     }
 
-    fn write_file(&self, alias: &str, filename: &str, content: &str) -> Result<()> {
-        let alias_dir = self.alias_dir(alias);
-        std::fs::create_dir_all(&alias_dir)
-            .map_err(|e| Error::PersistenceError(format!("cannot create alias dir: {e}")))?;
-        let path = alias_dir.join(filename);
-        std::fs::write(&path, content)
-            .map_err(|e| Error::PersistenceError(format!("cannot write {filename}: {e}")))
+    fn write_file(&self, alias: &str, field: &str, content: &str) -> Result<()> {
+        if SEED_FIELDS.contains(&field) {
+            self.secrets.store(alias, field, content)
+        } else {
+            self.meta.set(alias, field, content)
+        }
     }
 
-    fn read_file(&self, alias: &str, filename: &str) -> Result<String> {
-        let path = self.alias_dir(alias).join(filename);
-        std::fs::read_to_string(&path)
-            .map_err(|e| Error::PersistenceError(format!("cannot read {filename}: {e}")))
+    fn read_file(&self, alias: &str, field: &str) -> Result<String> {
+        self.read_meta(alias, field)?
+            .ok_or_else(|| Error::PersistenceError(format!("cannot read {field}: not found")))
     }
 
-    fn load_seed(&self, alias: &str, filename: &str) -> Result<SeedPrefix> {
-        let s = self.read_file(alias, filename)?;
+    /// Read a metadata field for an alias; `Ok(None)` when absent.
+    ///
+    /// Seed fields go to the [`SecretsStore`]; everything else reads the
+    /// metadata database, falling back to (and migrating from) the legacy
+    /// one-file-per-field layout of older stores.
+    pub fn read_meta(&self, alias: &str, field: &str) -> Result<Option<String>> {
+        if SEED_FIELDS.contains(&field) {
+            return self.secrets.load(alias, field);
+        }
+        if let Some(value) = self.meta.get(alias, field)? {
+            return Ok(Some(value));
+        }
+        // Legacy layout: one file per field under the alias directory.
+        match std::fs::read_to_string(self.alias_dir(alias).join(field)) {
+            Ok(content) => {
+                // Migrate on read so the next lookup hits the database.
+                let _ = self.meta.set(alias, field, &content);
+                Ok(Some(content))
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(Error::PersistenceError(format!("cannot read {field}: {e}"))),
+        }
+    }
+
+    /// Write a metadata field for an alias. Seed fields are routed to the
+    /// [`SecretsStore`].
+    pub fn write_meta(&self, alias: &str, field: &str, content: &str) -> Result<()> {
+        self.write_file(alias, field, content)
+    }
+
+    /// Whether the store knows an identity under this alias.
+    pub fn has_alias(&self, alias: &str) -> bool {
+        matches!(self.read_meta(alias, "id"), Ok(Some(_)))
+    }
+
+    /// Where an alias's event database lives under the current layout.
+    fn db_path_for(&self, alias: &str) -> PathBuf {
+        match self.layout {
+            Layout::Shared => self.root.join("db"),
+            Layout::PerAlias => self.root.join(alias).join("db"),
+        }
+    }
+
+    /// New stores share one event database; stores that already have
+    /// per-alias databases (created by older SDK versions or dkms-bin) keep
+    /// that layout. The decision is persisted so it never flips later.
+    fn detect_layout(root: &std::path::Path, meta: &MetaDb) -> Result<Layout> {
+        if let Some(layout) = meta.get("", "layout")? {
+            return Ok(match layout.as_str() {
+                "per-alias" => Layout::PerAlias,
+                _ => Layout::Shared,
+            });
+        }
+        let has_legacy_alias_db = std::fs::read_dir(root)
+            .map(|entries| {
+                entries.filter_map(|e| e.ok()).any(|e| {
+                    let p = e.path();
+                    p.join("db").is_dir()
+                        || (p.file_name().map(|n| n == ".contacts").unwrap_or(false)
+                            && std::fs::read_dir(&p)
+                                .map(|cs| {
+                                    cs.filter_map(|c| c.ok())
+                                        .any(|c| c.path().join("db").is_dir())
+                                })
+                                .unwrap_or(false))
+                })
+            })
+            .unwrap_or(false);
+        let layout = if has_legacy_alias_db {
+            Layout::PerAlias
+        } else {
+            Layout::Shared
+        };
+        meta.set(
+            "",
+            "layout",
+            match layout {
+                Layout::PerAlias => "per-alias",
+                Layout::Shared => "shared",
+            },
+        )?;
+        Ok(layout)
+    }
+
+    fn load_seed(&self, alias: &str, field: &str) -> Result<SeedPrefix> {
+        let s = self.read_file(alias, field)?;
         SeedPrefix::from_str(s.trim())
-            .map_err(|e| Error::PersistenceError(format!("invalid seed in {filename}: {e}")))
+            .map_err(|e| Error::PersistenceError(format!("invalid seed in {field}: {e}")))
     }
 }

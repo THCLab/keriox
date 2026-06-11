@@ -16,7 +16,9 @@ pub mod error;
 pub mod identifier;
 pub mod inspect;
 pub mod keys;
+pub(crate) mod meta;
 pub mod multisig;
+pub mod secrets;
 pub mod oobi;
 pub mod oobi_store;
 pub mod operations;
@@ -36,6 +38,7 @@ pub use ephemeral::EphemeralIdentifier;
 pub use error::{Error, Result};
 pub use identifier::{ActionRequired, Identifier, WatcherResponseError};
 pub use oobi_store::OobiStore;
+pub use secrets::{FileSecretsStore, MemorySecretsStore, SecretsStore};
 pub use store::KeriStore;
 pub use tel::{check_credential_status, get_credential_status};
 pub use types::{

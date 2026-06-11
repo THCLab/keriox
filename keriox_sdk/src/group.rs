@@ -374,14 +374,9 @@ impl Group {
     }
 
     fn registry_id(&self) -> Result<Option<IdentifierPrefix>> {
-        let path = self.keri.root.join(&self.group_alias).join("reg_id");
-        if !path.exists() {
+        let Some(content) = self.keri.store.read_meta(&self.group_alias, "reg_id")? else {
             return Ok(None);
-        }
-        let content = std::fs::read_to_string(&path).map_err(|e| Error::Storage {
-            path,
-            cause: e.to_string(),
-        })?;
+        };
         Ok(content.trim().parse().ok())
     }
 }

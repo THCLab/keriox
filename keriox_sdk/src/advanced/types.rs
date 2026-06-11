@@ -12,13 +12,13 @@ pub use keri_core::signer::SignerAlgorithm;
 
 // ── Storage configuration ────────────────────────────────────────────────────
 
-/// Where a store keeps its event databases (KEL, TEL, OOBIs, escrows and
-/// mailbox query caches).
+/// Where a store keeps its databases: the event databases (KEL, TEL,
+/// OOBIs, escrows, mailbox query caches) and the alias metadata database.
 ///
-/// Alias metadata (identifier prefixes, registry ids, signing seeds for
-/// software keys) currently always lives in small files under the store
-/// directory regardless of this setting — see `docs/state-storage-gaps.md`
-/// for the plan to move it behind the same abstraction.
+/// Signing seeds for software keys are stored separately through a
+/// [`SecretsStore`](crate::advanced::secrets::SecretsStore) (file-backed by
+/// default; never inside these databases). See `docs/state-storage-gaps.md`
+/// for the overall state-placement design.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum StorageConfig {

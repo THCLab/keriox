@@ -489,6 +489,20 @@ pub async fn request_delegation<S: SigningBackend + Clone + 'static>(
     next_pk: BasicPrefix,
     config: DelegationConfig,
 ) -> Result<(Identifier, IdentifierPrefix)> {
+    let controller = Controller::new(db_path)?;
+    request_delegation_with_controller(&controller, signer, next_pk, config).await
+}
+
+/// Like [`request_delegation`] but reuses an existing [`Controller`] instead
+/// of opening a fresh one — required when the database is already open (a
+/// store's cached controller, or a shared-layout store where every alias
+/// uses one database).
+pub async fn request_delegation_with_controller<S: SigningBackend + Clone + 'static>(
+    controller: &Controller,
+    signer: S,
+    next_pk: BasicPrefix,
+    config: DelegationConfig,
+) -> Result<(Identifier, IdentifierPrefix)> {
     // Create a temporary identifier (needed by incept_group).
     let temp_config = IdentifierConfig {
         witnesses: config.witnesses.clone(),
@@ -496,7 +510,9 @@ pub async fn request_delegation<S: SigningBackend + Clone + 'static>(
         watchers: vec![], // watchers configured after delegation is accepted
         algorithm: config.algorithm,
     };
-    let mut temp_id = create_identifier(db_path, signer.clone(), next_pk, temp_config).await?;
+    let mut temp_id =
+        create_identifier_with_controller(controller, signer.clone(), next_pk, temp_config)
+            .await?;
 
     // Extract witness BasicPrefixes for the delegated identifier.
     let witness_ids: Vec<BasicPrefix> = config

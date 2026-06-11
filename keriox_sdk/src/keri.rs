@@ -21,35 +21,47 @@ pub(crate) struct KeriInner {
 
 impl KeriInner {
     pub(crate) fn alias_exists(&self, alias: &str) -> bool {
-        self.root.join(alias).join("id").is_file()
+        self.store.has_alias(alias)
     }
 
     /// All aliases that may hold key histories: own identities + contacts.
     pub(crate) fn all_kel_aliases(&self) -> Vec<String> {
-        let mut aliases: Vec<String> = std::fs::read_dir(&self.root)
-            .map(|entries| {
-                entries
-                    .filter_map(|e| e.ok())
-                    .filter(|e| e.path().join("id").is_file())
-                    .filter_map(|e| e.file_name().to_str().map(str::to_owned))
-                    .filter(|n| !n.starts_with('.'))
-                    .collect()
-            })
-            .unwrap_or_default();
+        let mut aliases: Vec<String> = self
+            .store
+            .list_aliases()
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|a| !a.starts_with('.'))
+            .filter(|a| self.store.has_alias(a))
+            .collect();
         aliases.sort();
         aliases.extend(self.contact_alias_names());
         aliases
     }
 
     pub(crate) fn contact_alias_names(&self) -> Vec<String> {
-        let Ok(entries) = std::fs::read_dir(self.root.join(".contacts")) else {
-            return vec![];
-        };
-        entries
-            .filter_map(|e| e.ok())
-            .filter(|e| e.path().join("id").is_file())
-            .filter_map(|e| e.file_name().to_str().map(|n| format!(".contacts/{n}")))
-            .collect()
+        let mut names: Vec<String> = self
+            .store
+            .list_aliases()
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|a| a.starts_with(".contacts/"))
+            .filter(|a| self.store.has_alias(a))
+            .collect();
+        // Legacy stores keep contacts as directories under .contacts/.
+        if let Ok(entries) = std::fs::read_dir(self.root.join(".contacts")) {
+            for entry in entries.filter_map(|e| e.ok()) {
+                if entry.path().join("id").is_file() {
+                    if let Some(name) = entry.file_name().to_str() {
+                        let alias = format!(".contacts/{name}");
+                        if !names.contains(&alias) {
+                            names.push(alias);
+                        }
+                    }
+                }
+            }
+        }
+        names
     }
 
     /// Copy `subject`'s key history into `target_alias`'s database from any
@@ -122,10 +134,12 @@ impl Keri {
     /// databases.
     ///
     /// With [`StorageConfig::InMemory`](crate::StorageConfig::InMemory) the
-    /// key/credential event databases never touch disk and vanish when this
-    /// `Keri` is dropped — for tests and ephemeral agents. `path` is still
-    /// used for the small alias metadata files (see
-    /// `docs/state-storage-gaps.md`), so point it at a temp directory.
+    /// event and metadata databases never touch disk and vanish when this
+    /// `Keri` is dropped — for tests and ephemeral agents. Software-key
+    /// seeds still use the default file-backed secrets store; build the
+    /// store with [`KeriStore::open_with_options`] +
+    /// [`MemorySecretsStore`](crate::advanced::secrets::MemorySecretsStore)
+    /// and [`Keri::from_store`] for a store that touches no files at all.
     pub fn open_with_storage(
         path: impl AsRef<Path>,
         storage: crate::StorageConfig,
@@ -354,8 +368,10 @@ impl Keri {
         let imported = self.ingest_contact_kel(id.as_prefix(), kel.concat().as_bytes())?;
         // Remember where this contact's history lives so future refreshes
         // (e.g. after they rotate keys) can re-fetch it automatically.
-        let source_path = self.inner.root.join(format!(".contacts/{id}")).join("source");
-        let _ = std::fs::write(source_path, witness_url);
+        let _ = self
+            .inner
+            .store
+            .write_meta(&format!(".contacts/{id}"), "source", witness_url);
         Ok(imported)
     }
 
@@ -365,11 +381,10 @@ impl Keri {
     /// individual contacts are ignored — the local copy simply stays as-is.
     pub async fn refresh_contacts(&self) {
         for alias in self.contact_aliases() {
-            let dir = self.inner.root.join(&alias);
-            let Ok(source) = std::fs::read_to_string(dir.join("source")) else {
+            let Ok(Some(source)) = self.inner.store.read_meta(&alias, "source") else {
                 continue;
             };
-            let Ok(id_text) = std::fs::read_to_string(dir.join("id")) else {
+            let Ok(Some(id_text)) = self.inner.store.read_meta(&alias, "id") else {
                 continue;
             };
             let Ok(id) = id_text.trim().parse::<IdentityId>() else {

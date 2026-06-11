@@ -211,14 +211,9 @@ impl Identity {
 
     /// The credentials this identity has issued (most recent last).
     pub fn credentials(&self) -> Result<Vec<CredentialId>> {
-        let path = self.keri.root.join(&self.alias).join("credentials");
-        if !path.exists() {
+        let Some(content) = self.keri.store.read_meta(&self.alias, "credentials")? else {
             return Ok(vec![]);
-        }
-        let content = std::fs::read_to_string(&path).map_err(|e| Error::Storage {
-            path: path.clone(),
-            cause: e.to_string(),
-        })?;
+        };
         content
             .lines()
             .filter(|l| !l.trim().is_empty())
@@ -292,20 +287,16 @@ impl Identity {
     }
 
     fn append_credential_index(&self, id: &CredentialId) -> Result<()> {
-        use std::io::Write;
-        let path = self.keri.root.join(&self.alias).join("credentials");
-        let mut file = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&path)
-            .map_err(|e| Error::Storage {
-                path: path.clone(),
-                cause: e.to_string(),
-            })?;
-        writeln!(file, "{id}").map_err(|e| Error::Storage {
-            path,
-            cause: e.to_string(),
-        })
+        let mut content = self
+            .keri
+            .store
+            .read_meta(&self.alias, "credentials")?
+            .unwrap_or_default();
+        content.push_str(&format!("{id}\n"));
+        Ok(self
+            .keri
+            .store
+            .write_meta(&self.alias, "credentials", &content)?)
     }
 
     /// This identity's full key history (KEL) as a CESR stream — for
