@@ -67,6 +67,9 @@ cover.
 | I want to… | Call |
 |---|---|
 | run my own witness/watcher | the `witness` / `watcher` crates in this workspace (`components/`) |
+| run fully in memory (tests, ephemeral) | `Keri::open_with_storage(path, StorageConfig::InMemory)` (zero-file: `KeriStore::open_with_options` + `MemorySecretsStore` + `Keri::from_store`) |
+| store events in Postgres | `Keri::open_with_storage(path, StorageConfig::Postgres { url })` (feature `storage-postgres`) |
+| use my own seed storage (OS keychain) | implement `advanced::SecretsStore`, pass to `KeriStore::open_with_options` |
 | tune network retries | `Keri::open_with(path, RetryPolicy { .. })` |
 | fetch a KEL without local state | `advanced::EphemeralIdentifier::{pull_kel, pull_tel, pull_ksn}` |
 | query watchers / full logs manually | `advanced::Identifier::{query_full_log, finalize_query}` |

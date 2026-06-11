@@ -47,6 +47,9 @@ witness = { path = "../components/witness" }
 watcher = { path = "../components/watcher" }
 test-context = "0.4.1"
 actix-rt = "2.10.0"
+# Only used by the storage-postgres test to provision its database.
+sqlx = { version = "0.8", features = ["postgres", "runtime-async-std"] }
+async-std = "1"
 
 [package.metadata.release]
 publish = false

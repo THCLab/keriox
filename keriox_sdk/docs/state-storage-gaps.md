@@ -1,15 +1,15 @@
-# State storage: design and remaining gaps
+# State storage: design and status
 
-`StorageConfig` (Redb | InMemory, Postgres planned) governs the **event
+`StorageConfig` (Redb | InMemory | Postgres) governs the **event
 databases**: KEL, TEL, OOBI storage, escrows and the mailbox query cache.
-This document inventories every other piece of SDK state, where it lives,
-and what remains before a `Postgres` deployment is fully filesystem-free.
+This document inventories every piece of SDK state and where it lives.
 
-> **Status:** categories A–C below are implemented. Alias metadata lives in
+> **Status:** all categories below are implemented. Alias metadata lives in
 > the store-level `meta` database (legacy file layouts are detected and
-> migrated on read), seeds go through the pluggable `SecretsStore`, and new
-> stores share a single event database. The remaining gap is the
-> `StorageConfig::Postgres` variant (step 4).
+> migrated on read), seeds go through the pluggable `SecretsStore`, new
+> stores share a single event database, and `StorageConfig::Postgres`
+> (feature `storage-postgres`) places the event databases in a Postgres
+> server.
 
 The guiding assumption for key material is the mobile/HSM deployment
 (Android Keystore via the `keyprovider` feature): **private keys are not the
@@ -81,21 +81,27 @@ keyed by witness only, so identifiers sharing one database consumed each
 other's mailbox read positions — both caches are now keyed by
 (identifier, witness).
 
-## Deployment matrix (after closing the gaps)
+## Deployment matrix
 
 | Deployment | Events | Metadata | Keys |
 |---|---|---|---|
 | desktop/server file-backed | redb files | meta db (redb) | SecretsStore: file (default) or OS keychain |
 | tests / ephemeral agents | `InMemory` | meta db (in-memory) | in-memory seeds — **zero filesystem use** |
 | Android / iOS | redb files in app dir | meta db | **HSM via keyprovider — zero key bytes stored** |
-| server-side Postgres (planned) | Postgres | same Postgres | KMS/HSM via keyprovider |
+| server-side Postgres | `Postgres` (events) | meta db (local redb) | KMS/HSM via keyprovider |
+
+The Postgres deployment keeps a few small local files per installation: the
+metadata database, the mailbox query cache (read positions are
+per-process), and — for software keys — the seed files. These are
+installation-local state, not shared event data; the events themselves
+(KEL, TEL, OOBIs, escrows) are in Postgres and shared across installations
+pointed at the same database.
 
 ## Remaining work
 
 1. **Platform keychain `SecretsStore` implementations** — Android
    Keystore/StrongBox, iOS Keychain, Secret Service; land with the
    respective bindings.
-2. **`StorageConfig::Postgres`** — only requires the enum-dispatch work in
-   `advanced::Controller`/`Identifier` (RedbIdentifier | PostgresIdentifier)
-   plus async construction; no SDK state remains filesystem-bound besides
-   the default file secrets store.
+2. **Postgres-backed metadata/query-cache** (optional) — would make a
+   Postgres deployment touch the filesystem only for software-key seeds
+   (none with an HSM). Not required for the current server use case.
