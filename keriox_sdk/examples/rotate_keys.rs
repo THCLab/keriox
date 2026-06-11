@@ -8,7 +8,7 @@
 //! can be receipted. This example runs offline (no witnesses) for demo
 //! purposes and will print an error at the `notify_witnesses` step.
 
-use keri_sdk::{
+use keri_sdk::advanced::{
     operations::rotate,
     types::{IdentifierConfig, RotationConfig},
     BasicPrefix, KeriStore, SeedPrefix,

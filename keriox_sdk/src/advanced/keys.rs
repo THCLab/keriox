@@ -7,9 +7,9 @@
 //! # Example
 //!
 //! ```no_run
-//! use keri_sdk::keys;
+//! use keri_sdk::advanced::keys;
 //!
-//! # fn example() -> keri_sdk::Result<()> {
+//! # fn example() -> keri_sdk::advanced::Result<()> {
 //! // Generate a transferable Ed25519 key pair for an AID that can rotate.
 //! let (seed, public_key) = keys::generate_ed25519(true)?;
 //! println!("Public key: {:?}", public_key);
@@ -184,7 +184,7 @@ pub fn derive_public_key(seed: &SeedPrefix, transferable: bool) -> Result<BasicP
 /// new seed (e.g. for the next-key during rotation).
 ///
 /// # Errors
-/// - [`Error::Signing`] if the seed variant is not supported by [`Signer`].
+/// - [`Error::Signing`] if the seed variant is not supported by `Signer`.
 pub fn seed_algorithm(seed: &SeedPrefix) -> Result<SignerAlgorithm> {
     match seed {
         SeedPrefix::RandomSeed256Ed25519(_) => Ok(SignerAlgorithm::Ed25519),

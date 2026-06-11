@@ -464,13 +464,6 @@ impl Keri {
         Keri { inner }
     }
 
-    /// All aliases that can hold key histories: own identities + contacts.
-    pub(crate) fn all_aliases(&self) -> Result<Vec<String>> {
-        let mut aliases = self.identities()?;
-        aliases.extend(self.contact_aliases());
-        Ok(aliases)
-    }
-
     /// The retry policy used for network operations.
     pub fn retry_policy(&self) -> &RetryPolicy {
         &self.inner.retry

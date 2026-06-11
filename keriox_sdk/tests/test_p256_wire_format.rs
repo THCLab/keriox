@@ -15,7 +15,7 @@ use keri_core::prefix::{SeedPrefix, SelfSigningPrefix};
 
 #[test]
 fn p256_full_wire_roundtrip_transferable() {
-    let (seed, transferable_pk) = keri_sdk::keys::generate_p256(true).unwrap();
+    let (seed, transferable_pk) = keri_sdk::advanced::keys::generate_p256(true).unwrap();
 
     assert!(matches!(seed, SeedPrefix::RandomSeed256ECDSA256r1(_)));
     assert!(matches!(transferable_pk, BasicPrefix::ECDSA256r1(_)));
@@ -49,7 +49,7 @@ fn p256_full_wire_roundtrip_transferable() {
 
 #[test]
 fn p256_nontransferable_uses_distinct_code() {
-    let (_seed, nt_pk) = keri_sdk::keys::generate_p256(false).unwrap();
+    let (_seed, nt_pk) = keri_sdk::advanced::keys::generate_p256(false).unwrap();
     assert!(matches!(nt_pk, BasicPrefix::ECDSA256r1NT(_)));
     assert!(!nt_pk.is_transferable());
     assert!(
@@ -61,10 +61,10 @@ fn p256_nontransferable_uses_distinct_code() {
 
 #[test]
 fn derive_public_key_handles_p256_seed() {
-    let seed = keri_sdk::keys::generate_p256_seed().unwrap();
+    let seed = keri_sdk::advanced::keys::generate_p256_seed().unwrap();
 
-    let transferable = keri_sdk::keys::derive_public_key(&seed, true).unwrap();
-    let non_transferable = keri_sdk::keys::derive_public_key(&seed, false).unwrap();
+    let transferable = keri_sdk::advanced::keys::derive_public_key(&seed, true).unwrap();
+    let non_transferable = keri_sdk::advanced::keys::derive_public_key(&seed, false).unwrap();
 
     assert!(matches!(transferable, BasicPrefix::ECDSA256r1(_)));
     assert!(matches!(non_transferable, BasicPrefix::ECDSA256r1NT(_)));

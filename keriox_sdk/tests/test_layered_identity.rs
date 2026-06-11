@@ -6,7 +6,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use keri_sdk::{
+use keri_sdk::advanced::{
     operations, DelegationConfig, Identifier, IdentifierConfig, IdentifierPrefix, KeriStore,
     MultisigConfig, SeedPrefix, Signer,
 };
@@ -28,7 +28,7 @@ fn ingest_kel_of(src: &Identifier, kel_owner: &IdentifierPrefix, dst: &Identifie
 }
 
 fn fresh_signer() -> (SeedPrefix, Arc<Signer>) {
-    let (seed, _pk) = keri_sdk::keys::generate_ed25519(false).unwrap();
+    let (seed, _pk) = keri_sdk::advanced::keys::generate_ed25519(false).unwrap();
     let signer = Arc::new(Signer::new_with_seed(&seed).unwrap());
     (seed, signer)
 }
@@ -58,7 +58,7 @@ async fn test_oob_delegation_single_aid_delegator() {
     let bob_db = dvc_root.path().join("bob_db");
     std::fs::create_dir_all(&bob_db).unwrap();
     let (_bob_seed, bob_signer) = fresh_signer();
-    let (_, bob_next_pk) = keri_sdk::keys::generate_ed25519(false).unwrap();
+    let (_, bob_next_pk) = keri_sdk::advanced::keys::generate_ed25519(false).unwrap();
     let (bob_id, bob_prefix, dip_cesr) = operations::build_delegation_request(
         bob_db,
         bob_signer.clone(),
@@ -68,7 +68,7 @@ async fn test_oob_delegation_single_aid_delegator() {
             witnesses: vec![],
             witness_threshold: 0,
             watchers: vec![],
-            algorithm: keri_sdk::SignerAlgorithm::Ed25519,
+            algorithm: keri_sdk::advanced::SignerAlgorithm::Ed25519,
         },
     )
     .await
@@ -142,7 +142,7 @@ async fn test_oob_delegation_one_of_one_group_delegator() {
     let bob_db = dvc_root.path().join("bob_db");
     std::fs::create_dir_all(&bob_db).unwrap();
     let (_bob_seed, bob_signer) = fresh_signer();
-    let (_, bob_next_pk) = keri_sdk::keys::generate_ed25519(false).unwrap();
+    let (_, bob_next_pk) = keri_sdk::advanced::keys::generate_ed25519(false).unwrap();
     let (bob_id, bob_prefix, dip_cesr) = operations::build_delegation_request(
         bob_db,
         bob_signer.clone(),
@@ -152,7 +152,7 @@ async fn test_oob_delegation_one_of_one_group_delegator() {
             witnesses: vec![],
             witness_threshold: 0,
             watchers: vec![],
-            algorithm: keri_sdk::SignerAlgorithm::Ed25519,
+            algorithm: keri_sdk::advanced::SignerAlgorithm::Ed25519,
         },
     )
     .await
@@ -298,7 +298,7 @@ async fn test_anchor_group_sequential() {
 #[tokio::test]
 async fn test_multisig_request_from_cesr_roundtrip() {
     use said::derivation::{HashFunction, HashFunctionCode};
-    use keri_sdk::MultisigRequest;
+    use keri_sdk::advanced::MultisigRequest;
 
     let root_a = tempfile::Builder::new().prefix("a").tempdir().unwrap();
     let root_b = tempfile::Builder::new().prefix("b").tempdir().unwrap();

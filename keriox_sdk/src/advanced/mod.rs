@@ -2,8 +2,8 @@
 //!
 //! Most consumers should use the high-level API in the crate root (`Keri`,
 //! `Identity`, …) instead. This module exposes the full mid-level SDK —
-//! the alias-based [`KeriStore`](store::KeriStore), the low-level
-//! [`Identifier`](identifier::Identifier), compound async
+//! the alias-based [`store::KeriStore`], the low-level
+//! [`identifier::Identifier`], compound async
 //! [`operations`], CESR [`signing`] helpers, TEL ([`tel`]) queries, key
 //! generation ([`keys`]) and raw protocol types — for use cases the facade
 //! does not cover: custom signing flows, direct KEL manipulation, weighted

@@ -8,7 +8,7 @@
 //! The identifier is created with no witnesses for offline demonstration;
 //! a real deployment would add witnesses before calling `incept_registry`.
 
-use keri_sdk::{types::IdentifierConfig, KeriStore};
+use keri_sdk::advanced::{types::IdentifierConfig, KeriStore};
 use std::path::PathBuf;
 
 #[tokio::main]

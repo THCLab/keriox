@@ -8,7 +8,7 @@
 
 use std::path::PathBuf;
 
-use keri_sdk::{
+use keri_sdk::advanced::{
     BasicPrefix, GroupRotationConfig, Identifier, IdentifierConfig, KeriStore, MultisigConfig,
     SelfSigningPrefix,
 };
@@ -19,7 +19,7 @@ use keri_sdk::{
 /// in the rot event's `keys` to match the prior pre-rotation digest.
 async fn rotate_member(store: &KeriStore, alias: &str) {
     let next_signer = store.load_next_signer(alias).unwrap();
-    let (new_next_seed, new_next_pk) = keri_sdk::keys::generate_ed25519(false).unwrap();
+    let (new_next_seed, new_next_pk) = keri_sdk::advanced::keys::generate_ed25519(false).unwrap();
     let revealed = BasicPrefix::Ed25519NT(next_signer.public_key());
     let mut id = store.load(alias).unwrap();
     let rot = id

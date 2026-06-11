@@ -1,7 +1,7 @@
 //! Tests for the SAID, inspection, seed, KEL-export, and multisig-request
 //! helpers. All tests here run offline.
 
-use keri_sdk::{
+use keri_sdk::advanced::{
     inspect::{inspect_stream, AttachmentInfo, PayloadKind},
     keys, signing, ActionRequired, HashFunction, HashFunctionCode, IdentifierConfig, KeriStore,
     MultisigRequest,
@@ -59,7 +59,7 @@ fn test_seed_from_code() {
     )
     .unwrap();
     let seed = keys::seed_from_code("A", secret).unwrap();
-    use keri_sdk::CesrPrimitive;
+    use keri_sdk::advanced::CesrPrimitive;
     assert!(seed.to_str().starts_with('A'));
 
     // Unknown code is rejected.
@@ -95,7 +95,7 @@ async fn test_sign_inspect_roundtrip() {
         })
         .expect("expected a transferable signature group");
     assert_eq!(transferable.len(), 1);
-    use keri_sdk::CesrPrimitive;
+    use keri_sdk::advanced::CesrPrimitive;
     assert_eq!(transferable[0].identifier, id.id().to_str());
     assert_eq!(transferable[0].signatures.len(), 1);
     assert_eq!(transferable[0].signatures[0].index, Some(0));
@@ -197,7 +197,7 @@ async fn test_verify_from_cesr_detailed_unknown_signer() {
         .verify_from_cesr_detailed(envelope.cesr.as_bytes())
         .unwrap_err();
     assert!(!issues.is_empty());
-    use keri_sdk::VerificationIssue;
+    use keri_sdk::advanced::VerificationIssue;
     assert!(issues.iter().all(|issue| matches!(
         issue,
         VerificationIssue::MissingEvent { .. } | VerificationIssue::UnknownSigner { .. }

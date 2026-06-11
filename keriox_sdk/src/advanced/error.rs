@@ -2,7 +2,8 @@
 //!
 //! All public functions in this crate return [`Result<T>`], which is an alias
 //! for `std::result::Result<T, Error>`. Import the alias with
-//! `use keri_sdk::Result;` or use it fully-qualified as `keri_sdk::Result<T>`.
+//! `use keri_sdk::advanced::Result;` or use it fully-qualified as
+//! `keri_sdk::advanced::Result<T>`.
 //!
 //! Most variants carry enough context to identify the failing operation without
 //! needing to inspect the wrapped upstream error. Where an upstream error is

@@ -37,6 +37,7 @@ keyprovider = ["keri-keyprovider", "tokio/full"]
 mobile = ["keyprovider", "keri-keyprovider/host", "keri-keyprovider/software"]
 
 [dev-dependencies]
+tokio-test = "0.4"
 keri-core = { path = "../keriox_core", version = "0.17.13" }
 tokio = { version = "1", features = ["full"] }
 witness = { path = "../components/witness" }

@@ -44,7 +44,7 @@ impl Identifier {
 
     /// Borrow the underlying `RedbIdentifier`.
     ///
-    /// Low-level escape hatch paired with [`from_inner`]. Most SDK users
+    /// Low-level escape hatch paired with [`Self::from_inner`]. Most SDK users
     /// should not need this — prefer the public methods on `Identifier`.
     pub fn inner(&self) -> &keri_controller::RedbIdentifier {
         &self.inner
@@ -191,7 +191,7 @@ impl Identifier {
         Ok(self.inner.finalize_anchor(event, sig).await?)
     }
 
-    /// Multi-signer variant of [`finalize_anchor`] for `ixn` events.
+    /// Multi-signer variant of [`Self::finalize_anchor`] for `ixn` events.
     ///
     /// Caller supplies one [`IndexedSignature`] per participating
     /// signer at the correct group-key index. Used by the cosign
@@ -581,7 +581,7 @@ impl Identifier {
             .anchor_group(group_id, anchors, participants)?)
     }
 
-    /// Variant of [`anchor_group`] that accepts arbitrary `Seal`
+    /// Variant of [`Self::anchor_group`] that accepts arbitrary `Seal`
     /// variants. Used internally by the delegation flow to anchor a
     /// delegated inception's `EventSeal` on the delegator-group's
     /// KEL.

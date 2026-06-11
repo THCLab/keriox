@@ -22,7 +22,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use keri_controller::BasicPrefix;
-use keri_sdk::{
+use keri_sdk::advanced::{
     operations, DelegationConfig, Identifier, IdentifierConfig, IdentifierPrefix, KeriStore,
     SeedPrefix, Signer, SignerAlgorithm,
 };
@@ -44,7 +44,7 @@ fn ingest_kel_of(src: &Identifier, kel_owner: &IdentifierPrefix, dst: &Identifie
 }
 
 fn fresh_p256_signer() -> (SeedPrefix, Arc<Signer>) {
-    let (seed, _) = keri_sdk::keys::generate_p256(false).unwrap();
+    let (seed, _) = keri_sdk::advanced::keys::generate_p256(false).unwrap();
     let signer = Arc::new(Signer::new_with_seed(&seed).unwrap());
     (seed, signer)
 }
@@ -72,7 +72,7 @@ async fn p256_delegation_single_aid_delegator() {
     let bob_db = dvc_root.path().join("bob_db");
     std::fs::create_dir_all(&bob_db).unwrap();
     let (_bob_seed, bob_signer) = fresh_p256_signer();
-    let (_, bob_next_pk) = keri_sdk::keys::generate_p256(false).unwrap();
+    let (_, bob_next_pk) = keri_sdk::advanced::keys::generate_p256(false).unwrap();
     assert!(
         matches!(bob_next_pk, BasicPrefix::ECDSA256r1NT(_)),
         "Bob's next-key commitment must be the P-256 NT prefix"
@@ -168,7 +168,7 @@ async fn mixed_curve_delegation_ed25519_delegator_p256_delegatee() {
     let bob_db = dvc_root.path().join("bob_db");
     std::fs::create_dir_all(&bob_db).unwrap();
     let (_bob_seed, bob_signer) = fresh_p256_signer();
-    let (_, bob_next_pk) = keri_sdk::keys::generate_p256(false).unwrap();
+    let (_, bob_next_pk) = keri_sdk::advanced::keys::generate_p256(false).unwrap();
 
     let (bob_id, bob_prefix, dip_cesr) = operations::build_delegation_request(
         bob_db,

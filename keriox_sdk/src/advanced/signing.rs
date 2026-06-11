@@ -7,10 +7,10 @@
 //! # Quick start
 //!
 //! ```no_run
-//! use keri_sdk::{signing, Identifier, Signer};
+//! use keri_sdk::advanced::{signing, Identifier, Signer};
 //! use std::sync::Arc;
 //!
-//! # fn example(id: &Identifier, signer: Arc<Signer>) -> keri_sdk::Result<()> {
+//! # fn example(id: &Identifier, signer: Arc<Signer>) -> keri_sdk::advanced::Result<()> {
 //! let envelope = signing::sign(id, &signer, b"hello world")?;
 //! println!("CESR: {}", envelope.cesr);
 //!

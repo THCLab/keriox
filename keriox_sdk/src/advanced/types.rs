@@ -1,8 +1,8 @@
 //! Typed config structs and result types for keri-sdk operations.
 //!
 //! These structs replace long positional argument lists throughout the SDK.
-//! Import them with `use keri_sdk::*` (they are re-exported from the crate
-//! root) or qualify them as `keri_sdk::IdentifierConfig` etc.
+//! Import them from `keri_sdk::advanced` (e.g.
+//! `keri_sdk::advanced::IdentifierConfig`).
 //!
 //! See [`crate::advanced::operations`] for the functions that accept these structs, and
 //! [`crate::advanced::signing`] for `SignedEnvelope` / `VerifiedPayload` usage.
@@ -130,7 +130,7 @@ impl DelegationConfig {
 
 /// A pending delegation request discovered by the delegator.
 ///
-/// Extracted from [`ActionRequired::DelegationRequest`] via [`DelegationRequest::try_from`].
+/// Extracted from `ActionRequired::DelegationRequest` via [`DelegationRequest::try_from`].
 /// Pass this to [`crate::advanced::operations::approve_delegation`] to approve.
 #[derive(Debug, Clone)]
 pub struct DelegationRequest {
@@ -252,7 +252,7 @@ pub struct GroupRotationConfig {
 
 /// A pending multisig request discovered in the mailbox.
 ///
-/// Extracted from [`ActionRequired::MultisigRequest`] via [`MultisigRequest::try_from`].
+/// Extracted from `ActionRequired::MultisigRequest` via [`MultisigRequest::try_from`].
 /// Pass this to [`crate::advanced::operations::accept_multisig`] to co-sign the event.
 #[derive(Debug, Clone)]
 pub struct MultisigRequest {

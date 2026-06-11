@@ -6,7 +6,7 @@
 //! provided signer — callers never touch raw CESR prefix types.
 //!
 //! When the `keyprovider` feature is enabled, all functions accept
-//! [`KeriSigner`](crate::advanced::keyprovider_adapter::KeriSigner) which can wrap
+//! `KeriSigner` which can wrap
 //! either a legacy `Signer` or any `KeyProvider` implementation.
 //! Without the feature, they accept `Arc<Signer>`.
 //!
@@ -49,7 +49,7 @@ pub trait SigningBackend {
     /// The CESR self-signing code matching this backend's algorithm.
     ///
     /// Implementations should return the variant whose raw signature byte
-    /// layout matches what [`sign_data`] produces. Used to wrap raw signature
+    /// layout matches what [`SigningBackend::sign_data`] produces. Used to wrap raw signature
     /// bytes in the correct [`SelfSigningPrefix`] variant.
     fn signing_code(&self) -> cesrox::primitives::codes::self_signing::SelfSigning;
     /// The [`BasicPrefix`] variant for this backend's public key.

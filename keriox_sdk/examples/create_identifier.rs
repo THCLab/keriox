@@ -3,7 +3,7 @@
 //! This example requires a running KERI witness (`keria` or `keripy`)
 //! and watcher to be reachable. Adjust the OOBI URLs for your environment.
 
-use keri_sdk::{types::IdentifierConfig, KeriStore};
+use keri_sdk::advanced::{types::IdentifierConfig, KeriStore};
 use std::path::PathBuf;
 
 #[tokio::main]

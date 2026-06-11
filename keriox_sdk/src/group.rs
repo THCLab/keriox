@@ -2,7 +2,7 @@
 //! members, with a signing threshold.
 //!
 //! A group is created by one member ([`crate::Identity::new_group`]) and
-//! joined by the others ([`GroupInviteRequest::accept_as`] via
+//! joined by the others ([`GroupRequest::accept_as`] via
 //! [`crate::Identity::pending_requests`]). All members coordinate through
 //! their shared witness's mailbox; the facade handles every event, exchange
 //! message and mailbox round internally.
@@ -41,7 +41,7 @@ impl GroupBuilder {
     }
 
     /// Create the group and invite the other members (they receive a
-    /// [`GroupInviteRequest`] via their `pending_requests()`). Returns a
+    /// [`GroupRequest`] via their `pending_requests()`). Returns a
     /// handle to await the group becoming ready once everyone accepted.
     pub async fn initiate(self) -> Result<GroupInvite> {
         if self.members.is_empty() {
@@ -163,7 +163,7 @@ impl GroupInvite {
 /// A group identity this store participates in.
 ///
 /// Obtain it from [`GroupInvite::wait_ready`] (initiator),
-/// [`GroupInviteRequest::accept_as`] (joiner), or [`crate::Keri::group`]
+/// [`GroupRequest::accept_as`] (joiner), or [`crate::Keri::group`]
 /// (reload in a later session).
 pub struct Group {
     pub(crate) keri: Arc<KeriInner>,
@@ -242,7 +242,7 @@ impl Group {
 
     /// Issue a credential from the group's registry (created automatically
     /// on first use). With a signing threshold above 1, the other members
-    /// must co-sign: they see the event via [`Group::pending`] and accept.
+    /// must co-sign: they see it in [`crate::Identity::pending_requests`] and accept.
     pub async fn issue(&self, payload: &[u8]) -> Result<crate::credential::Credential> {
         let signer = self.keri.store.load_signer(&self.member_alias)?;
         let member_id = self.keri.store.load(&self.member_alias)?.id().clone();
@@ -284,7 +284,7 @@ impl Group {
     /// **every other member must rotate their own identity first** (their
     /// [`crate::Identity::rotate`]); then the initiator calls this, which
     /// rotates the initiator's own keys and publishes the group rotation.
-    /// The other members co-sign via [`Group::pending`] / accept.
+    /// The other members co-sign via [`crate::Identity::pending_requests`].
     pub async fn rotate(&self) -> Result<()> {
         // The rotation event names every member's *new* public key, so the
         // other members' rotated histories must be known locally first.

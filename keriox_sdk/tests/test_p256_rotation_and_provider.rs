@@ -17,7 +17,7 @@ use keri_controller::{BasicPrefix, IdentifierPrefix};
 use keri_keyprovider::{
     software::SoftwareKeyProvider, KeyProvider, SignatureAlgorithm,
 };
-use keri_sdk::{operations, store::KeriStore, types::IdentifierConfig, KeriSigner};
+use keri_sdk::advanced::{operations, store::KeriStore, types::IdentifierConfig, KeriSigner};
 
 #[tokio::test]
 async fn p256_rotation_stays_p256_across_multiple_rounds() {
@@ -98,7 +98,7 @@ async fn p256_inception_through_software_keyprovider() {
     let next_signer: Arc<dyn KeyProvider> = Arc::new(
         SoftwareKeyProvider::generate("mobile-next", SignatureAlgorithm::EcdsaSecp256r1).unwrap(),
     );
-    let next_pk = keri_sdk::keyprovider_adapter::basic_prefix_for(
+    let next_pk = keri_sdk::advanced::keyprovider_adapter::basic_prefix_for(
         next_signer.algorithm(),
         keri_core::keys::PublicKey::new(next_signer.public_key().bytes.clone()),
         false,

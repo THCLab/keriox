@@ -84,7 +84,7 @@ impl KeriStore {
     /// # Errors
     /// - [`Error::PersistenceError`] on I/O failures.
     /// - [`Error::Signing`] if seed generation fails.
-    /// - Propagates errors from [`create_identifier`].
+    /// - Propagates errors from [`crate::advanced::operations::create_identifier`].
     pub async fn create(
         &self,
         alias: &str,
@@ -106,7 +106,7 @@ impl KeriStore {
     /// # Errors
     /// - [`Error::PersistenceError`] on I/O failures.
     /// - [`Error::Signing`] if the seed cannot produce a key pair.
-    /// - Propagates errors from [`create_identifier`].
+    /// - Propagates errors from [`crate::advanced::operations::create_identifier`].
     pub async fn create_with_seeds(
         &self,
         alias: &str,
@@ -500,9 +500,9 @@ impl KeriStore {
     /// individual public key matches the group's prior next-key
     /// commitment for that member. The convenience flow is:
     ///
-    /// ```ignore
+    /// ```text
     /// store.rotate(member_alias).await?;            // local rotation
-    /// store.rotate_multisig_group(group_alias, …).await?;  // group rotation
+    /// store.rotate_multisig_group(group_alias, config).await?;  // group rotation
     /// ```
     ///
     /// Failing to pre-rotate yields

@@ -6,7 +6,7 @@
 //! `cargo test -p keri-sdk` still passes in CI without live infrastructure.
 
 use ed25519_dalek::SigningKey;
-use keri_sdk::{
+use keri_sdk::advanced::{
     signing, BasicPrefix, Controller, IdentifierConfig, IdentifierPrefix, KeriStore, SeedPrefix,
     SelfSigningPrefix, Signer,
 };

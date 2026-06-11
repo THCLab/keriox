@@ -11,7 +11,7 @@
 use std::path::PathBuf;
 
 use keri_controller::BasicPrefix;
-use keri_sdk::{
+use keri_sdk::advanced::{
     store::KeriStore,
     types::{GroupRotationConfig, IdentifierConfig, MultisigConfig},
 };

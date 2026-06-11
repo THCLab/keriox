@@ -3,7 +3,7 @@
 //! This example does not require network access — it uses no witnesses or
 //! watchers, so everything runs offline.
 
-use keri_sdk::{signing, types::IdentifierConfig, KeriStore};
+use keri_sdk::advanced::{signing, types::IdentifierConfig, KeriStore};
 use std::path::PathBuf;
 
 #[tokio::main]

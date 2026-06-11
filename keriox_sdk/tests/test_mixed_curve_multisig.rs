@@ -14,7 +14,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use keri_controller::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix};
-use keri_sdk::{
+use keri_sdk::advanced::{
     multisig, store::KeriStore, types::IdentifierConfig, Identifier, Signer,
 };
 
@@ -57,8 +57,8 @@ async fn mixed_curve_2_of_2_multisig_inception() {
         .unwrap();
     let bob_prefix = bob_id.id().clone();
 
-    assert_eq!(alice_signer.signing_code(), keri_sdk::cesrox::primitives::codes::self_signing::SelfSigning::Ed25519Sha512);
-    assert_eq!(bob_signer.signing_code(), keri_sdk::cesrox::primitives::codes::self_signing::SelfSigning::ECDSA256r1Sha256);
+    assert_eq!(alice_signer.signing_code(), keri_sdk::advanced::raw::cesrox::primitives::codes::self_signing::SelfSigning::Ed25519Sha512);
+    assert_eq!(bob_signer.signing_code(), keri_sdk::advanced::raw::cesrox::primitives::codes::self_signing::SelfSigning::ECDSA256r1Sha256);
 
     // Each side must know the other's individual KEL before it can
     // verify or build a group event over them.
@@ -101,7 +101,7 @@ async fn mixed_curve_2_of_2_multisig_inception() {
     // Derive the group prefix from the signed event and confirm both
     // members converged to the same group state with the right curves
     // in the current key set.
-    let group_prefix: IdentifierPrefix = if let keri_sdk::keri_core::event_message::signed_event_message::Notice::Event(ev) = &signed_notice {
+    let group_prefix: IdentifierPrefix = if let keri_sdk::advanced::raw::keri_core::event_message::signed_event_message::Notice::Event(ev) = &signed_notice {
         ev.event_message.data.get_prefix()
     } else {
         panic!("merge_group_signatures must return Notice::Event");

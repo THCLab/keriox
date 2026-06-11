@@ -1,7 +1,7 @@
 //! Full SDK inception with a P-256 (secp256r1) key.
 //!
 //! Exercises the Signer dispatch path end-to-end:
-//!   keri_sdk::keys::generate_p256_seed -> KeriStore::create_with_seeds
+//!   keri_sdk::advanced::keys::generate_p256_seed -> KeriStore::create_with_seeds
 //!     -> Signer::new_with_seed (algorithm-aware)
 //!     -> create_identifier_with_controller (Signer.basic_prefix + Signer.signing_code)
 //!     -> Controller.incept + Controller.finalize_incept
@@ -10,7 +10,7 @@
 use std::path::PathBuf;
 
 use keri_controller::{BasicPrefix, IdentifierPrefix};
-use keri_sdk::{store::KeriStore, types::IdentifierConfig};
+use keri_sdk::advanced::{store::KeriStore, types::IdentifierConfig};
 
 #[tokio::test]
 async fn p256_full_inception_through_sdk() {
@@ -20,8 +20,8 @@ async fn p256_full_inception_through_sdk() {
         .unwrap();
     let store = KeriStore::open(PathBuf::from(root.path())).unwrap();
 
-    let current_seed = keri_sdk::keys::generate_p256_seed().unwrap();
-    let next_seed = keri_sdk::keys::generate_p256_seed().unwrap();
+    let current_seed = keri_sdk::advanced::keys::generate_p256_seed().unwrap();
+    let next_seed = keri_sdk::advanced::keys::generate_p256_seed().unwrap();
 
     let (id, signer) = store
         .create_with_seeds(
@@ -75,8 +75,8 @@ async fn p256_inception_then_reload_still_signs_p256() {
         .unwrap();
     let store = KeriStore::open(PathBuf::from(root.path())).unwrap();
 
-    let current_seed = keri_sdk::keys::generate_p256_seed().unwrap();
-    let next_seed = keri_sdk::keys::generate_p256_seed().unwrap();
+    let current_seed = keri_sdk::advanced::keys::generate_p256_seed().unwrap();
+    let next_seed = keri_sdk::advanced::keys::generate_p256_seed().unwrap();
 
     let (_id, _signer) = store
         .create_with_seeds(
