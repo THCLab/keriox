@@ -36,7 +36,7 @@ where
         for witness in dest_wit_ids {
             let sn = self
                 .query_cache
-                .load_published_receipts_sn(witness)
+                .load_published_receipts_sn(&self.id, witness)
                 .map_err(|_| BroadcastingError::CacheSavingError)?;
 
             let receipts_to_publish = self.known_events.storage.events_db.get_receipts_nt(
@@ -60,7 +60,7 @@ where
                 join_all(receipts_futures).await;
 
                 self.query_cache
-                    .update_last_published_receipt(witness, max_sn)
+                    .update_last_published_receipt(&self.id, witness, max_sn)
                     .unwrap();
             }
         }

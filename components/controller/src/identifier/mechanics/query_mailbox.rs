@@ -51,10 +51,11 @@ where
 
                 let reminder = if identifier == &self.id {
                     // request own mailbox
-                    self.query_cache.last_asked_index(&recipient)
+                    self.query_cache.last_asked_index(identifier, &recipient)
                 } else {
                     // request group mailbox
-                    self.query_cache.last_asked_group_index(&recipient)
+                    self.query_cache
+                        .last_asked_group_index(identifier, &recipient)
                 }?;
 
                 Ok(MailboxQuery::new_query(

@@ -41,15 +41,23 @@ impl IdentifierCache {
         Ok(Self { db })
     }
 
+    /// Mailbox read positions and published receipts are tracked per
+    /// (subject identifier, witness) pair: several identifiers can share
+    /// one database (shared store layout), and each has its own mailbox at
+    /// each witness — keying on the witness alone would make them consume
+    /// each other's read positions.
+    fn composite_key(subject: &IdentifierPrefix, witness: &IdentifierPrefix) -> String {
+        format!("{subject}|{witness}")
+    }
+
     fn load_mailbox_remainder(
         &self,
         table: TableDefinition<&str, (u64, u64, u64)>,
-        id: &IdentifierPrefix,
+        key: &str,
     ) -> Result<MailboxReminder, ControllerError> {
         let read_txn = self.db.begin_read()?;
         let tbl = read_txn.open_table(table)?;
-        let key = id.to_string();
-        if let Some(value) = tbl.get(key.as_str())? {
+        if let Some(value) = tbl.get(key)? {
             let (receipt, multisig, delegate) = value.value();
             Ok(MailboxReminder {
                 receipt: receipt as usize,
@@ -63,13 +71,14 @@ impl IdentifierCache {
 
     pub fn update_last_published_receipt(
         &self,
-        key: &IdentifierPrefix,
+        subject: &IdentifierPrefix,
+        witness: &IdentifierPrefix,
         sn: u64,
     ) -> Result<(), ControllerError> {
         let write_txn = self.db.begin_write()?;
         {
             let mut tbl = write_txn.open_table(PUBLISHED_RECEIPTS)?;
-            tbl.insert(key.to_string().as_str(), sn)?;
+            tbl.insert(Self::composite_key(subject, witness).as_str(), sn)?;
         }
         write_txn.commit()?;
         Ok(())
@@ -77,11 +86,12 @@ impl IdentifierCache {
 
     pub fn load_published_receipts_sn(
         &self,
-        id: &IdentifierPrefix,
+        subject: &IdentifierPrefix,
+        witness: &IdentifierPrefix,
     ) -> Result<usize, ControllerError> {
         let read_txn = self.db.begin_read()?;
         let tbl = read_txn.open_table(PUBLISHED_RECEIPTS)?;
-        let key = id.to_string();
+        let key = Self::composite_key(subject, witness);
         if let Some(value) = tbl.get(key.as_str())? {
             Ok(value.value() as usize)
         } else {
@@ -91,28 +101,29 @@ impl IdentifierCache {
 
     pub fn last_asked_index(
         &self,
-        id: &IdentifierPrefix,
+        subject: &IdentifierPrefix,
+        witness: &IdentifierPrefix,
     ) -> Result<MailboxReminder, ControllerError> {
-        self.load_mailbox_remainder(OWN_INDEX, id)
+        self.load_mailbox_remainder(OWN_INDEX, &Self::composite_key(subject, witness))
     }
 
     pub fn last_asked_group_index(
         &self,
-        id: &IdentifierPrefix,
+        subject: &IdentifierPrefix,
+        witness: &IdentifierPrefix,
     ) -> Result<MailboxReminder, ControllerError> {
-        self.load_mailbox_remainder(GROUP_INDEX, id)
+        self.load_mailbox_remainder(GROUP_INDEX, &Self::composite_key(subject, witness))
     }
 
     fn update_mailbox_remainder(
         &self,
         table: TableDefinition<&str, (u64, u64, u64)>,
-        key: &IdentifierPrefix,
+        key_str: String,
         res: &MailboxResponse,
     ) -> Result<(), ControllerError> {
         let write_txn = self.db.begin_write()?;
         {
             let mut tbl = write_txn.open_table(table)?;
-            let key_str = key.to_string();
             let (receipt, multisig, delegate) = if let Some(existing) = tbl.get(key_str.as_str())? {
                 existing.value()
             } else {
@@ -133,18 +144,20 @@ impl IdentifierCache {
 
     pub fn update_last_asked_index(
         &self,
-        key: &IdentifierPrefix,
+        subject: &IdentifierPrefix,
+        witness: &IdentifierPrefix,
         res: &MailboxResponse,
     ) -> Result<(), ControllerError> {
-        self.update_mailbox_remainder(OWN_INDEX, key, res)
+        self.update_mailbox_remainder(OWN_INDEX, Self::composite_key(subject, witness), res)
     }
 
     pub fn update_last_asked_group_index(
         &self,
-        id: &IdentifierPrefix,
+        subject: &IdentifierPrefix,
+        witness: &IdentifierPrefix,
         res: &MailboxResponse,
     ) -> Result<(), ControllerError> {
-        self.update_mailbox_remainder(GROUP_INDEX, id, res)
+        self.update_mailbox_remainder(GROUP_INDEX, Self::composite_key(subject, witness), res)
     }
 }
 
@@ -157,14 +170,25 @@ fn test_query_cache() {
     let id: IdentifierPrefix = "BDg3H7Sr-eES0XWXiO8nvMxW6mD_1LxLeE1nuiZxhGp4"
         .parse()
         .unwrap();
-    let ind = mc.last_asked_index(&id).unwrap();
+    let witness: IdentifierPrefix = "BErocgXD2RGSyvn3MObcx59jeOsEQhv2TqHirVkzrp0Q"
+        .parse()
+        .unwrap();
+    let ind = mc.last_asked_index(&id, &witness).unwrap();
     assert_eq!(ind.receipt, 0);
     assert_eq!(ind.multisig, 0);
     assert_eq!(ind.delegate, 0);
 
-    mc.update_last_asked_index(&id, &mr).unwrap();
-    let ind = mc.last_asked_index(&id).unwrap();
+    mc.update_last_asked_index(&id, &witness, &mr).unwrap();
+    let ind = mc.last_asked_index(&id, &witness).unwrap();
     assert_eq!(ind.receipt, 1);
     assert_eq!(ind.multisig, 0);
     assert_eq!(ind.delegate, 0);
+
+    // A different identifier sharing the same witness (and database) has
+    // its own independent read position.
+    let other: IdentifierPrefix = "BP55jNfeiVfGn7-M5ugPCst9FlUOSaYourMDdxysMoX8"
+        .parse()
+        .unwrap();
+    let ind = mc.last_asked_index(&other, &witness).unwrap();
+    assert_eq!(ind.receipt, 0);
 }
