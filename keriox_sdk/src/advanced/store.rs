@@ -51,6 +51,7 @@ use crate::advanced::{
 /// to restore them across sessions.
 pub struct KeriStore {
     root: PathBuf,
+    storage: crate::advanced::types::StorageConfig,
     controllers: Mutex<HashMap<PathBuf, Arc<Controller>>>,
 }
 
@@ -62,12 +63,40 @@ impl KeriStore {
     /// # Errors
     /// - [`Error::PersistenceError`] if the directory cannot be created.
     pub fn open(root: PathBuf) -> Result<Self> {
+        Self::open_with_storage(root, crate::advanced::types::StorageConfig::default())
+    }
+
+    /// Open (or create) a store with the chosen storage backend for its
+    /// event databases.
+    ///
+    /// With [`StorageConfig::InMemory`](crate::advanced::types::StorageConfig::InMemory)
+    /// the KEL/TEL/OOBI/escrow databases never touch disk; `root` is still
+    /// used for the small alias metadata files (identifier prefixes,
+    /// registry ids, signing seeds) — see `docs/state-storage-gaps.md`.
+    ///
+    /// # Errors
+    /// - [`Error::PersistenceError`] if the root directory cannot be created.
+    pub fn open_with_storage(
+        root: PathBuf,
+        storage: crate::advanced::types::StorageConfig,
+    ) -> Result<Self> {
         std::fs::create_dir_all(&root)
             .map_err(|e| Error::PersistenceError(format!("cannot create store root: {e}")))?;
         Ok(Self {
             root,
+            storage,
             controllers: Mutex::new(HashMap::new()),
         })
+    }
+
+    /// The directory this store is rooted at.
+    pub fn root(&self) -> &std::path::Path {
+        &self.root
+    }
+
+    /// The storage backend this store creates its event databases with.
+    pub fn storage(&self) -> &crate::advanced::types::StorageConfig {
+        &self.storage
     }
 
     /// Create a brand-new identifier, persist all state, and return the live
@@ -756,7 +785,7 @@ impl KeriStore {
         if let Some(ctrl) = cache.get(&db_path) {
             return Ok(ctrl.clone());
         }
-        let ctrl = Arc::new(Controller::new(db_path.clone())?);
+        let ctrl = Arc::new(Controller::new_with_storage(db_path.clone(), &self.storage)?);
         cache.insert(db_path, ctrl.clone());
         Ok(ctrl)
     }

@@ -93,7 +93,6 @@ pub struct EscrowDatabase {
 #[cfg(feature = "storage-redb")]
 impl EscrowDatabase {
     pub fn new(file_path: &std::path::Path) -> Result<Self, Error> {
-        use keri_core::database::SequencedEventDatabase;
         use std::fs::{create_dir_all, exists};
         if !std::fs::exists(file_path).map_err(|e| Error::EscrowDatabaseError(e.to_string()))? {
             if let Some(parent) = file_path.parent() {

@@ -27,6 +27,26 @@ impl Controller {
         })
     }
 
+    /// Create a controller with the chosen storage backend.
+    ///
+    /// With [`StorageConfig::Redb`](crate::advanced::types::StorageConfig::Redb)
+    /// this is [`Controller::new`]; with
+    /// [`StorageConfig::InMemory`](crate::advanced::types::StorageConfig::InMemory)
+    /// every database (KEL, TEL, OOBIs, escrows, query cache) uses redb's
+    /// in-memory backend — `db_path` is ignored and nothing is written to it.
+    pub fn new_with_storage(
+        db_path: PathBuf,
+        storage: &crate::advanced::types::StorageConfig,
+    ) -> Result<Self> {
+        use crate::advanced::types::StorageConfig;
+        match storage {
+            StorageConfig::Redb => Self::new(db_path),
+            StorageConfig::InMemory => Ok(Self {
+                inner: RedbController::new_in_memory(ControllerConfig::default())?,
+            }),
+        }
+    }
+
     /// Create a controller from a full `ControllerConfig`.
     pub fn new_with_config(config: ControllerConfig) -> Result<Self> {
         Ok(Self {

@@ -41,7 +41,7 @@ pub use tel::{check_credential_status, get_credential_status};
 pub use types::{
     CredentialStatus, DelegationConfig, DelegationRequest, GroupRotationConfig, IdentifierConfig,
     MultisigConfig, MultisigRequest, PendingRequest, RotationConfig, SignedEnvelope,
-    SignerAlgorithm, StoreRotationConfig, VerificationIssue, VerifiedPayload,
+    SignerAlgorithm, StorageConfig, StoreRotationConfig, VerificationIssue, VerifiedPayload,
 };
 
 #[cfg(feature = "keyprovider")]

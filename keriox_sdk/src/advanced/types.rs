@@ -10,6 +10,30 @@
 use keri_controller::{BasicPrefix, IdentifierPrefix, LocationScheme};
 pub use keri_core::signer::SignerAlgorithm;
 
+// ── Storage configuration ────────────────────────────────────────────────────
+
+/// Where a store keeps its event databases (KEL, TEL, OOBIs, escrows and
+/// mailbox query caches).
+///
+/// Alias metadata (identifier prefixes, registry ids, signing seeds for
+/// software keys) currently always lives in small files under the store
+/// directory regardless of this setting — see `docs/state-storage-gaps.md`
+/// for the plan to move it behind the same abstraction.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum StorageConfig {
+    /// redb database files under the store directory (the default).
+    #[default]
+    Redb,
+    /// redb's in-memory backend: event databases never touch disk and their
+    /// state lives exactly as long as the store. For tests, ephemeral
+    /// agents, and embedded use without filesystem access.
+    InMemory,
+    // Planned: Postgres { url: String } behind the `storage-postgres`
+    // feature — requires enum dispatch in `Controller`/`Identifier` over
+    // RedbIdentifier | PostgresIdentifier and async construction.
+}
+
 // ── Creation / rotation config ────────────────────────────────────────────────
 
 /// Configuration for creating a new KERI identifier.
