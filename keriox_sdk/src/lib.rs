@@ -95,3 +95,5 @@ pub use keri::Keri;
 pub use message::{SignedMessage, Verified};
 pub use requests::{DelegationApproval, DelegationHandle, PendingRequest};
 pub use retry::RetryPolicy;
+
+pub use advanced::types::StorageConfig;

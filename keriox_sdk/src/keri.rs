@@ -14,7 +14,7 @@ use crate::retry::RetryPolicy;
 
 /// Shared state behind [`Keri`] and every [`Identity`] handle.
 pub(crate) struct KeriInner {
-    pub(crate) store: KeriStore,
+    pub(crate) store: Arc<KeriStore>,
     pub(crate) root: PathBuf,
     pub(crate) retry: RetryPolicy,
 }
@@ -114,10 +114,51 @@ impl Keri {
     /// operations.
     pub fn open_with(path: impl AsRef<Path>, retry: RetryPolicy) -> Result<Self> {
         let root = expand_home(path.as_ref());
-        let store = KeriStore::open(root.clone())?;
-        Ok(Keri {
+        let store = Arc::new(KeriStore::open(root)?);
+        Ok(Self::from_store_with(store, retry))
+    }
+
+    /// Like [`Keri::open`], with the chosen storage backend for the event
+    /// databases.
+    ///
+    /// With [`StorageConfig::InMemory`](crate::StorageConfig::InMemory) the
+    /// key/credential event databases never touch disk and vanish when this
+    /// `Keri` is dropped — for tests and ephemeral agents. `path` is still
+    /// used for the small alias metadata files (see
+    /// `docs/state-storage-gaps.md`), so point it at a temp directory.
+    pub fn open_with_storage(
+        path: impl AsRef<Path>,
+        storage: crate::StorageConfig,
+    ) -> Result<Self> {
+        let root = expand_home(path.as_ref());
+        let store = Arc::new(KeriStore::open_with_storage(root, storage)?);
+        Ok(Self::from_store(store))
+    }
+
+    /// Build the facade around an existing [`KeriStore`].
+    ///
+    /// For embedders (e.g. language bindings) that already hold a store
+    /// from the [`crate::advanced`] layer: the facade shares the store's
+    /// controller cache instead of opening the databases a second time —
+    /// opening two stores over the same directory would collide on redb's
+    /// exclusive file lock. The store keeps working through
+    /// [`Keri::store`] / [`Keri::advanced`].
+    pub fn from_store(store: Arc<KeriStore>) -> Self {
+        Self::from_store_with(store, RetryPolicy::default())
+    }
+
+    /// Like [`Keri::from_store`], with a custom [`RetryPolicy`].
+    pub fn from_store_with(store: Arc<KeriStore>, retry: RetryPolicy) -> Self {
+        let root = store.root().to_path_buf();
+        Keri {
             inner: Arc::new(KeriInner { store, root, retry }),
-        })
+        }
+    }
+
+    /// The shared store underneath this `Keri` — the same instance handed
+    /// to [`Keri::from_store`], or the one `open` created.
+    pub fn store(&self) -> Arc<KeriStore> {
+        self.inner.store.clone()
     }
 
     /// Start creating a new identity stored under `alias`.
