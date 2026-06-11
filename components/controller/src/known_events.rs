@@ -498,6 +498,32 @@ impl RedbKnownEvents {
             escrow_config,
         )
     }
+
+    /// Fully in-memory event store (redb `InMemoryBackend` for the KEL, TEL,
+    /// OOBI and escrow databases). Nothing touches disk; all state lives
+    /// exactly as long as this instance. Intended for tests, ephemeral
+    /// agents and embedded use without filesystem access.
+    pub fn new_in_memory(escrow_config: EscrowConfig) -> Result<Self, ControllerError> {
+        let event_database = Arc::new(
+            RedbDatabase::new_in_memory()
+                .map_err(|e| ControllerError::DatabaseError(e.to_string()))?,
+        );
+        let oobi_storage = RedbOobiStorage::new(event_database.raw_db())
+            .map_err(|e| ControllerError::DatabaseError(e.to_string()))?;
+        let tel_db = Arc::new(
+            RedbTelDatabase::new_in_memory()
+                .map_err(|e| ControllerError::OtherError(e.to_string()))?,
+        );
+        let tel_escrow_db = EscrowDatabase::new_in_memory()
+            .map_err(|e| ControllerError::OtherError(e.to_string()))?;
+        Self::new(
+            event_database,
+            oobi_storage,
+            tel_db,
+            tel_escrow_db,
+            escrow_config,
+        )
+    }
 }
 
 #[cfg(feature = "storage-postgres")]

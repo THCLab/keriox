@@ -107,7 +107,23 @@ impl EscrowDatabase {
             ::redb::Database::create(file_path)
                 .map_err(|e| Error::EscrowDatabaseError(e.to_string()))?,
         );
+        Self::from_database(db)
+    }
 
+    /// Escrow database backed by redb's in-memory backend — nothing touches
+    /// disk; state lives exactly as long as this instance.
+    pub fn new_in_memory() -> Result<Self, Error> {
+        let db = std::sync::Arc::new(
+            ::redb::Database::builder()
+                .create_with_backend(::redb::backends::InMemoryBackend::new())
+                .map_err(|e| Error::EscrowDatabaseError(e.to_string()))?,
+        );
+        Self::from_database(db)
+    }
+
+    /// Build on an already-open redb `Database` (file-backed or in-memory).
+    pub fn from_database(db: std::sync::Arc<::redb::Database>) -> Result<Self, Error> {
+        use keri_core::database::SequencedEventDatabase;
         let missing_issuer =
             digest_key_database::DigestKeyDatabase::new(db.clone(), "missing_issuer_escrow");
         let out_of_order = keri_core::database::redb::escrow_database::SnKeyDatabase::new(

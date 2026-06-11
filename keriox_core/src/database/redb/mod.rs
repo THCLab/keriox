@@ -93,6 +93,21 @@ pub struct RedbDatabase {
 impl RedbDatabase {
     pub fn new(db_path: &Path) -> Result<Self, RedbError> {
         let db = Arc::new(Database::create(db_path)?);
+        Self::from_database(db)
+    }
+
+    /// Database backed by redb's in-memory backend — nothing touches disk.
+    /// State lives exactly as long as this instance; intended for tests and
+    /// ephemeral identifiers.
+    pub fn new_in_memory() -> Result<Self, RedbError> {
+        let db = Arc::new(
+            Database::builder().create_with_backend(redb::backends::InMemoryBackend::new())?,
+        );
+        Self::from_database(db)
+    }
+
+    /// Build on an already-open redb `Database` (file-backed or in-memory).
+    pub fn from_database(db: Arc<Database>) -> Result<Self, RedbError> {
         let log_db = Arc::new(LogDatabase::new(db.clone())?);
         // Create tables
         let write_txn = db.begin_write()?;

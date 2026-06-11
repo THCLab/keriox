@@ -47,4 +47,36 @@ impl RedbController {
         }
         Ok(controller)
     }
+
+    /// Fully in-memory controller: every database (KEL, TEL, OOBI, escrows,
+    /// mailbox query cache) uses redb's `InMemoryBackend`. Nothing touches
+    /// disk and all state is lost when the controller is dropped. The
+    /// config's `db_path` is ignored.
+    pub fn new_in_memory(config: ControllerConfig) -> Result<Self, ControllerError> {
+        let ControllerConfig {
+            db_path: _,
+            initial_oobis,
+            escrow_config,
+            transport,
+            tel_transport,
+        } = config;
+
+        let events = Arc::new(RedbKnownEvents::new_in_memory(escrow_config)?);
+        let query_cache = Arc::new(IdentifierCache::new_in_memory()?);
+        let comm = Arc::new(Communication {
+            events: events.clone(),
+            transport,
+            tel_transport,
+        });
+
+        let controller = Self {
+            known_events: events,
+            communication: comm,
+            cache: query_cache,
+        };
+        if !initial_oobis.is_empty() {
+            async_std::task::block_on(controller.setup_witnesses(&initial_oobis)).unwrap();
+        }
+        Ok(controller)
+    }
 }

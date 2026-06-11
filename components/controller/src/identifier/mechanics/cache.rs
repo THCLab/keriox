@@ -17,6 +17,19 @@ pub struct IdentifierCache {
 impl IdentifierCache {
     pub fn new(db_file: &Path) -> Result<Self, ControllerError> {
         let db = Database::create(db_file)?;
+        Self::from_database(Arc::new(db))
+    }
+
+    /// Cache backed by redb's in-memory backend — nothing touches disk.
+    pub fn new_in_memory() -> Result<Self, ControllerError> {
+        let db = Database::builder()
+            .create_with_backend(redb::backends::InMemoryBackend::new())
+            .map_err(|e| ControllerError::CacheError(e.to_string()))?;
+        Self::from_database(Arc::new(db))
+    }
+
+    /// Build on an already-open redb `Database` (file-backed or in-memory).
+    pub fn from_database(db: Arc<Database>) -> Result<Self, ControllerError> {
         // Create tables if they don't exist
         let write_txn = db.begin_write()?;
         {
@@ -25,7 +38,7 @@ impl IdentifierCache {
             write_txn.open_table(PUBLISHED_RECEIPTS)?;
         }
         write_txn.commit()?;
-        Ok(Self { db: Arc::new(db) })
+        Ok(Self { db })
     }
 
     fn load_mailbox_remainder(

@@ -186,6 +186,22 @@ impl RedbTelDatabase {
             fs::create_dir_all(parent).unwrap();
         }
         let db = Arc::new(Database::create(db_path).unwrap());
+        Self::from_database(db)
+    }
+
+    /// TEL database backed by redb's in-memory backend — nothing touches
+    /// disk; state lives exactly as long as this instance.
+    pub fn new_in_memory() -> Result<Self, Error> {
+        let db = Arc::new(
+            Database::builder()
+                .create_with_backend(redb::backends::InMemoryBackend::new())
+                .map_err(|e| Error::EscrowDatabaseError(e.to_string()))?,
+        );
+        Self::from_database(db)
+    }
+
+    /// Build on an already-open redb `Database` (file-backed or in-memory).
+    pub fn from_database(db: Arc<Database>) -> Result<Self, Error> {
         let log = Arc::new(LogTelDb::new(db.clone())?);
         let events_db = TelEventsDb::new(db.clone())?;
         Ok(Self {
