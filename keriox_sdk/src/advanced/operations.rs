@@ -581,7 +581,7 @@ pub async fn complete_delegation<S: SigningBackend + Clone + 'static>(
     delegator_id: &IdentifierPrefix,
 ) -> Result<()> {
     // Get witnesses from identifier state.
-    let witnesses: Vec<BasicPrefix> = temp_id.witnesses().collect();
+    let witnesses: Vec<BasicPrefix> = temp_id.witnesses();
     if witnesses.is_empty() {
         return Err(Error::NoWitnesses(temp_id.id().clone()));
     }
@@ -708,7 +708,6 @@ pub async fn build_delegation_request_with_controller<S: SigningBackend + Clone 
     // store can't produce it.
     let signed_dip = match &delegated_prefix {
         IdentifierPrefix::SelfAddressing(said) => temp_id
-            .inner()
             .get_signed_event_cesr(&said.said)
             .map(|b| String::from_utf8_lossy(&b).into_owned())
             .unwrap_or(dip),
@@ -1178,7 +1177,7 @@ pub async fn sync_multisig<S: SigningBackend + Clone + 'static>(
     signer: &S,
     multisig_id: &IdentifierPrefix,
 ) -> Result<()> {
-    let witnesses: Vec<BasicPrefix> = id.witnesses().collect();
+    let witnesses: Vec<BasicPrefix> = id.witnesses();
     if witnesses.is_empty() {
         return Err(Error::NoWitnesses(id.id().clone()));
     }
@@ -1213,7 +1212,7 @@ pub async fn poll_pending_requests<S: SigningBackend + Clone + 'static>(
     signer: &S,
 ) -> Result<Vec<PendingRequest>> {
     let own_id = id.id().clone();
-    let witnesses: Vec<BasicPrefix> = id.witnesses().collect();
+    let witnesses: Vec<BasicPrefix> = id.witnesses();
     if witnesses.is_empty() {
         return Err(Error::NoWitnesses(own_id));
     }
@@ -1302,7 +1301,7 @@ pub async fn poll_group_requests<S: SigningBackend + Clone + 'static>(
     signer: &S,
     group_id: &IdentifierPrefix,
 ) -> Result<Vec<PendingRequest>> {
-    let witnesses: Vec<BasicPrefix> = id.witnesses().collect();
+    let witnesses: Vec<BasicPrefix> = id.witnesses();
     if witnesses.is_empty() {
         return Err(Error::NoWitnesses(id.id().clone()));
     }
@@ -1344,10 +1343,7 @@ async fn finalize_group_tel_event<S: SigningBackend + Clone + 'static>(
     // the exchange wire format only transports seal-anchored transferable
     // signatures.
     let member_seal = group
-        .inner()
-        .known_events
-        .storage
-        .get_last_establishment_event_seal(member)
+        .last_establishment_event_seal_of(member)
         .ok_or_else(|| Error::IdentifierNotFound(member.clone()))?;
     let exn_index_sig = Signature::Transferable(
         SignerData::EventSeal(member_seal),

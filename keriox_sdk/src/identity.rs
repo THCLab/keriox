@@ -390,6 +390,7 @@ impl Identity {
         let identifier = self.keri.store.load(&self.alias)?;
         let witness = identifier
             .witnesses()
+            .into_iter()
             .next()
             .ok_or(Error::InvalidInput {
                 expected: "identity with at least one witness",
@@ -415,7 +416,7 @@ impl Identity {
     /// The witness URLs currently serving this identity.
     pub fn witnesses(&self) -> Result<Vec<String>> {
         let identifier = self.keri.store.load(&self.alias)?;
-        let witness_ids: Vec<_> = identifier.witnesses().collect();
+        let witness_ids: Vec<_> = identifier.witnesses();
         let mut urls = vec![];
         for w in witness_ids {
             for loc in identifier

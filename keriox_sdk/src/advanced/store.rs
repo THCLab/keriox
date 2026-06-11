@@ -29,7 +29,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use keri_controller::{controller::RedbIdentifier, IdentifierPrefix};
+use keri_controller::IdentifierPrefix;
 use keri_core::{prefix::SeedPrefix, signer::Signer};
 
 use crate::advanced::{
@@ -230,16 +230,7 @@ impl KeriStore {
             .and_then(|s| IdentifierPrefix::from_str(s.trim()).ok());
 
         let controller = self.get_or_create_controller(db_path)?;
-
-        let inner = RedbIdentifier::new(
-            id_prefix,
-            reg_id,
-            controller.inner.known_events.clone(),
-            controller.inner.communication.clone(),
-            controller.inner.cache.clone(),
-        );
-
-        Ok(Identifier { inner })
+        Ok(controller.load_identifier(id_prefix, reg_id))
     }
 
     /// Load the current signing key for an alias.

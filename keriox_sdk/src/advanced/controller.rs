@@ -3,16 +3,35 @@ use std::path::PathBuf;
 use keri_controller::{
     config::ControllerConfig, controller::RedbController, IdentifierPrefix, SelfSigningPrefix,
 };
-use keri_core::{
-    event_message::signed_event_message::Message,
-    state::IdentifierState,
-};
+use keri_core::{event_message::signed_event_message::Message, state::IdentifierState};
 
+use crate::advanced::identifier::IdentifierInner;
 use crate::advanced::{error::Result, Identifier};
 
-/// Concrete controller wrapping `keri_controller::controller::RedbController`.
+/// The storage-specific controller this wrapper dispatches to.
+pub(crate) enum ControllerInner {
+    Redb(RedbController),
+    #[cfg(feature = "storage-postgres")]
+    Postgres(keri_controller::controller::PostgresController),
+}
+
+/// Run the same expression against whichever backend controller is inside —
+/// the generic `keri_controller::controller::Controller<D, T, S>` has one
+/// set of methods and fields for every backend.
+macro_rules! dispatch {
+    ($self:expr, $i:ident => $body:expr) => {
+        match &$self.inner {
+            ControllerInner::Redb($i) => $body,
+            #[cfg(feature = "storage-postgres")]
+            ControllerInner::Postgres($i) => $body,
+        }
+    };
+}
+
+/// Concrete controller wrapping the storage-specific
+/// `keri_controller::controller::Controller` (redb or Postgres backed).
 pub struct Controller {
-    pub(crate) inner: RedbController,
+    pub(crate) inner: ControllerInner,
 }
 
 impl Controller {
@@ -23,7 +42,28 @@ impl Controller {
             ..ControllerConfig::default()
         };
         Ok(Self {
-            inner: RedbController::new(config)?,
+            inner: ControllerInner::Redb(RedbController::new(config)?),
+        })
+    }
+
+    /// Create a controller whose event databases live in Postgres.
+    ///
+    /// `db_path` still hosts the small redb file for the mailbox query
+    /// cache (read positions are local, per-process state).
+    #[cfg(feature = "storage-postgres")]
+    pub async fn new_postgres(db_path: PathBuf, database_url: &str) -> Result<Self> {
+        let config = ControllerConfig {
+            db_path,
+            ..ControllerConfig::default()
+        };
+        Ok(Self {
+            inner: ControllerInner::Postgres(
+                keri_controller::controller::PostgresController::new_postgres(
+                    database_url,
+                    config,
+                )
+                .await?,
+            ),
         })
     }
 
@@ -34,6 +74,9 @@ impl Controller {
     /// [`StorageConfig::InMemory`](crate::advanced::types::StorageConfig::InMemory)
     /// every database (KEL, TEL, OOBIs, escrows, query cache) uses redb's
     /// in-memory backend — `db_path` is ignored and nothing is written to it.
+    /// With `StorageConfig::Postgres` the event databases live in Postgres
+    /// (construction blocks on the connection; use `Controller::new_postgres`
+    /// from async contexts).
     pub fn new_with_storage(
         db_path: PathBuf,
         storage: &crate::advanced::types::StorageConfig,
@@ -42,15 +85,24 @@ impl Controller {
         match storage {
             StorageConfig::Redb => Self::new(db_path),
             StorageConfig::InMemory => Ok(Self {
-                inner: RedbController::new_in_memory(ControllerConfig::default())?,
+                inner: ControllerInner::Redb(RedbController::new_in_memory(
+                    ControllerConfig::default(),
+                )?),
             }),
+            #[cfg(feature = "storage-postgres")]
+            StorageConfig::Postgres { url } => {
+                // sqlx in this workspace runs on async-std, which drives its
+                // I/O on its own reactor threads — blocking the calling
+                // thread here is safe even inside a tokio runtime.
+                async_std::task::block_on(Self::new_postgres(db_path, url))
+            }
         }
     }
 
     /// Create a controller from a full `ControllerConfig`.
     pub fn new_with_config(config: ControllerConfig) -> Result<Self> {
         Ok(Self {
-            inner: RedbController::new(config)?,
+            inner: ControllerInner::Redb(RedbController::new(config)?),
         })
     }
 
@@ -62,16 +114,22 @@ impl Controller {
         witnesses: Vec<keri_controller::LocationScheme>,
         witness_threshold: u64,
     ) -> Result<String> {
-        Ok(self
-            .inner
+        dispatch!(self, i => Ok(i
             .incept(public_keys, next_pub_keys, witnesses, witness_threshold)
-            .await?)
+            .await?))
     }
 
     /// Finalize inception by attaching a signature, returning the resulting `Identifier`.
     pub fn finalize_incept(&self, event: &[u8], sig: &SelfSigningPrefix) -> Result<Identifier> {
-        let inner_id = self.inner.finalize_incept(event, sig)?;
-        Ok(Identifier { inner: inner_id })
+        match &self.inner {
+            ControllerInner::Redb(c) => Ok(Identifier {
+                inner: IdentifierInner::Redb(c.finalize_incept(event, sig)?),
+            }),
+            #[cfg(feature = "storage-postgres")]
+            ControllerInner::Postgres(c) => Ok(Identifier {
+                inner: IdentifierInner::Postgres(c.finalize_incept(event, sig)?),
+            }),
+        }
     }
 
     /// Return the accepted KEL (with receipts) for any known identifier.
@@ -79,7 +137,7 @@ impl Controller {
         &self,
         id: &IdentifierPrefix,
     ) -> Option<Vec<keri_core::event_message::signed_event_message::Notice>> {
-        self.inner.get_kel_with_receipts(id)
+        dispatch!(self, i => i.get_kel_with_receipts(id))
     }
 
     /// Verify a signature over data using known KEL state.
@@ -88,21 +146,21 @@ impl Controller {
         data: &[u8],
         signature: &keri_core::event_message::signature::Signature,
     ) -> std::result::Result<(), keri_core::processor::validator::VerificationError> {
-        self.inner.verify(data, signature)
+        dispatch!(self, i => i.verify(data, signature))
     }
 
     /// Return the accepted `IdentifierState` for a known identifier.
     pub fn find_state(&self, id: &IdentifierPrefix) -> Result<IdentifierState> {
-        Ok(self.inner.find_state(id)?)
+        dispatch!(self, i => Ok(i.find_state(id)?))
     }
 
     /// Process a single KEL message (notice, reply, etc.).
     pub fn process(&self, msg: &Message) -> Result<()> {
-        self.inner
+        dispatch!(self, i => i
             .known_events
             .process(msg)
-            .map_err(|e| crate::advanced::Error::Other(e.to_string()))?;
-        Ok(())
+            .map(|_| ())
+            .map_err(|e| crate::advanced::Error::Other(e.to_string())))
     }
 
     /// Parse and process a KEL event stream from raw CESR bytes.
@@ -122,12 +180,11 @@ impl Controller {
 
     /// Parse and process a TEL event stream from raw bytes.
     pub fn process_tel_stream(&self, stream: &[u8]) -> Result<()> {
-        self.inner
+        dispatch!(self, i => i
             .known_events
             .tel
             .parse_and_process_tel_stream(stream)
-            .map_err(|e| crate::advanced::Error::Other(e.to_string()))?;
-        Ok(())
+            .map_err(|e| crate::advanced::Error::Other(e.to_string())))
     }
 
     /// Reconstruct an `Identifier` from a known prefix and optional registry.
@@ -139,15 +196,28 @@ impl Controller {
         id: IdentifierPrefix,
         registry_id: Option<IdentifierPrefix>,
     ) -> Identifier {
-        use keri_controller::controller::RedbIdentifier;
-        Identifier {
-            inner: RedbIdentifier::new(
-                id,
-                registry_id,
-                self.inner.known_events.clone(),
-                self.inner.communication.clone(),
-                self.inner.cache.clone(),
-            ),
+        match &self.inner {
+            ControllerInner::Redb(c) => Identifier {
+                inner: IdentifierInner::Redb(keri_controller::controller::RedbIdentifier::new(
+                    id,
+                    registry_id,
+                    c.known_events.clone(),
+                    c.communication.clone(),
+                    c.cache.clone(),
+                )),
+            },
+            #[cfg(feature = "storage-postgres")]
+            ControllerInner::Postgres(c) => Identifier {
+                inner: IdentifierInner::Postgres(
+                    keri_controller::controller::PostgresIdentifier::new(
+                        id,
+                        registry_id,
+                        c.known_events.clone(),
+                        c.communication.clone(),
+                        c.cache.clone(),
+                    ),
+                ),
+            },
         }
     }
 }

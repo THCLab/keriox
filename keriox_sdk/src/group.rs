@@ -346,7 +346,7 @@ impl Group {
         // Mailbox delivery only covers events addressed to this member;
         // events another member published directly (with their authority)
         // live in the witnesses' group KEL — fetch those too.
-        let witnesses: Vec<_> = member.witnesses().collect();
+        let witnesses: Vec<_> = member.witnesses();
         for witness in witnesses {
             let locations = member
                 .get_location(&IdentifierPrefix::Basic(witness))

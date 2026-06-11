@@ -33,6 +33,12 @@ impl MetaDb {
             StorageConfig::InMemory => Database::builder()
                 .create_with_backend(redb::backends::InMemoryBackend::new())
                 .map_err(|e| Error::PersistenceError(format!("cannot open meta db: {e}")))?,
+            // Alias metadata stays in the local store directory: it is
+            // per-installation state (which aliases this process manages),
+            // not shared event data.
+            #[cfg(feature = "storage-postgres")]
+            StorageConfig::Postgres { .. } => Database::create(root.join("meta"))
+                .map_err(|e| Error::PersistenceError(format!("cannot open meta db: {e}")))?,
         };
         // Make sure the table exists so reads on a fresh store don't error.
         let write_txn = db

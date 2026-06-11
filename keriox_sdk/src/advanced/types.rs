@@ -29,9 +29,17 @@ pub enum StorageConfig {
     /// state lives exactly as long as the store. For tests, ephemeral
     /// agents, and embedded use without filesystem access.
     InMemory,
-    // Planned: Postgres { url: String } behind the `storage-postgres`
-    // feature — requires enum dispatch in `Controller`/`Identifier` over
-    // RedbIdentifier | PostgresIdentifier and async construction.
+    /// Event databases in a Postgres server (feature `storage-postgres`).
+    ///
+    /// The store directory still holds the metadata database, the mailbox
+    /// query cache and (by default) software-key seed files — per-process
+    /// local state. `url` is a standard connection string, e.g.
+    /// `postgres://user:pass@host:5432/dbname`.
+    #[cfg(feature = "storage-postgres")]
+    Postgres {
+        /// Postgres connection URL.
+        url: String,
+    },
 }
 
 // ── Creation / rotation config ────────────────────────────────────────────────

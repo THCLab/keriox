@@ -25,9 +25,40 @@ pub use keri_controller::mailbox_updating::ActionRequired;
 
 use keri_core::prefix::IndexedSignature;
 
-/// Concrete identifier wrapping `keri_controller::controller::RedbIdentifier`.
+/// The storage-specific identifier this wrapper dispatches to.
+pub(crate) enum IdentifierInner {
+    Redb(keri_controller::RedbIdentifier),
+    #[cfg(feature = "storage-postgres")]
+    Postgres(keri_controller::PostgresIdentifier),
+}
+
+/// Run the same expression against whichever backend identifier is inside.
+/// The generic `keri_controller::identifier::Identifier<D, T, S>` has one
+/// set of methods for every backend, so both arms are textually identical.
+macro_rules! dispatch {
+    ($self:expr, $i:ident => $body:expr) => {
+        match &$self.inner {
+            IdentifierInner::Redb($i) => $body,
+            #[cfg(feature = "storage-postgres")]
+            IdentifierInner::Postgres($i) => $body,
+        }
+    };
+}
+
+macro_rules! dispatch_mut {
+    ($self:expr, $i:ident => $body:expr) => {
+        match &mut $self.inner {
+            IdentifierInner::Redb($i) => $body,
+            #[cfg(feature = "storage-postgres")]
+            IdentifierInner::Postgres($i) => $body,
+        }
+    };
+}
+
+/// Concrete identifier wrapping the storage-specific
+/// `keri_controller::identifier::Identifier` (redb or Postgres backed).
 pub struct Identifier {
-    pub(crate) inner: keri_controller::RedbIdentifier,
+    pub(crate) inner: IdentifierInner,
 }
 
 impl Identifier {
@@ -39,59 +70,102 @@ impl Identifier {
     /// with the initiating member alias. Most users should prefer
     /// [`KeriStore::load`](crate::advanced::store::KeriStore::load).
     pub fn from_inner(inner: keri_controller::RedbIdentifier) -> Self {
-        Self { inner }
+        Self {
+            inner: IdentifierInner::Redb(inner),
+        }
     }
 
-    /// Borrow the underlying `RedbIdentifier`.
+    /// Construct an `Identifier` from an existing `PostgresIdentifier`.
+    #[cfg(feature = "storage-postgres")]
+    pub fn from_inner_postgres(inner: keri_controller::PostgresIdentifier) -> Self {
+        Self {
+            inner: IdentifierInner::Postgres(inner),
+        }
+    }
+
+    /// Borrow the underlying `RedbIdentifier`, if this identifier is
+    /// redb-backed (`None` for other storage backends).
     ///
     /// Low-level escape hatch paired with [`Self::from_inner`]. Most SDK users
     /// should not need this — prefer the public methods on `Identifier`.
-    pub fn inner(&self) -> &keri_controller::RedbIdentifier {
-        &self.inner
+    pub fn inner(&self) -> Option<&keri_controller::RedbIdentifier> {
+        match &self.inner {
+            IdentifierInner::Redb(inner) => Some(inner),
+            #[cfg(feature = "storage-postgres")]
+            _ => None,
+        }
     }
 
-    /// Mutably borrow the underlying `RedbIdentifier`.
-    pub fn inner_mut(&mut self) -> &mut keri_controller::RedbIdentifier {
-        &mut self.inner
+    /// Mutably borrow the underlying `RedbIdentifier`, if redb-backed.
+    pub fn inner_mut(&mut self) -> Option<&mut keri_controller::RedbIdentifier> {
+        match &mut self.inner {
+            IdentifierInner::Redb(inner) => Some(inner),
+            #[cfg(feature = "storage-postgres")]
+            _ => None,
+        }
     }
 
     // ── Identity ────────────────────────────────────────────────────────────
 
     pub fn id(&self) -> &IdentifierPrefix {
-        self.inner.id()
+        dispatch!(self, i => {
+        i.id()
+    })
     }
 
     pub fn registry_id(&self) -> Option<&IdentifierPrefix> {
-        self.inner.registry_id()
+        dispatch!(self, i => {
+        i.registry_id()
+    })
     }
 
     // ── State / KEL accessors ────────────────────────────────────────────────
 
     /// Returns accepted `IdentifierState` for any known identifier.
     pub fn find_state(&self, id: &IdentifierPrefix) -> Result<IdentifierState> {
-        Ok(self.inner.find_state(id)?)
+        dispatch!(self, i => {
+        Ok(i.find_state(id)?)
+    })
     }
 
     pub fn current_public_keys(&self) -> Result<Vec<BasicPrefix>> {
-        Ok(self.inner.current_public_keys()?)
+        dispatch!(self, i => {
+        Ok(i.current_public_keys()?)
+    })
     }
 
-    pub fn witnesses(&self) -> impl Iterator<Item = BasicPrefix> + '_ {
-        self.inner.witnesses()
+    pub fn witnesses(&self) -> Vec<BasicPrefix> {
+        dispatch!(self, i => i.witnesses().collect())
+    }
+
+    /// The stored, signed CESR form of an event identified by its digest.
+    pub fn get_signed_event_cesr(&self, digest: &said::SelfAddressingIdentifier) -> Option<Vec<u8>> {
+        dispatch!(self, i => i.get_signed_event_cesr(digest))
+    }
+
+    /// The last establishment event seal of any locally known identifier.
+    pub fn last_establishment_event_seal_of(&self, id: &IdentifierPrefix) -> Option<EventSeal> {
+        dispatch!(self, i => i.known_events.storage.get_last_establishment_event_seal(id))
     }
 
     pub fn watchers(&self) -> Result<Vec<IdentifierPrefix>> {
-        Ok(self.inner.watchers()?)
+        dispatch!(self, i => {
+        Ok(i.watchers()?)
+    })
     }
 
     /// Returns own identifier's accepted KEL with receipts.
     pub fn get_own_kel(&self) -> Option<Vec<Notice>> {
-        self.inner.get_own_kel()
+        dispatch!(self, i => {
+        i.get_own_kel()
+    })
     }
 
     /// Returns any identifier's accepted KEL with receipts.
     pub fn get_kel(&self, id: &IdentifierPrefix) -> Option<Vec<Notice>> {
-        self.inner.get_kel(id)
+        dispatch!(self, i => {
+        i.get_kel(id)
+    })
     }
 
     /// Returns own identifier's accepted KEL (with receipts) as a CESR stream.
@@ -108,7 +182,9 @@ impl Identifier {
 
     /// Generate an interaction event anchoring the given SAIs.
     pub fn anchor(&self, payload: &[SelfAddressingIdentifier]) -> Result<String> {
-        Ok(self.inner.anchor(payload)?)
+        dispatch!(self, i => {
+        Ok(i.anchor(payload)?)
+    })
     }
 
     /// Generate a rotation event.
@@ -121,8 +197,8 @@ impl Identifier {
         witness_to_remove: Vec<BasicPrefix>,
         witness_threshold: u64,
     ) -> Result<String> {
-        Ok(self
-            .inner
+        dispatch!(self, i => {
+        Ok(i
             .rotate(
                 current_keys,
                 new_next_keys,
@@ -132,6 +208,7 @@ impl Identifier {
                 witness_threshold,
             )
             .await?)
+    })
     }
 
     /// Like [`Identifier::rotate`] but also sets the new current
@@ -148,8 +225,8 @@ impl Identifier {
         witness_to_remove: Vec<BasicPrefix>,
         witness_threshold: u64,
     ) -> Result<String> {
-        Ok(self
-            .inner
+        dispatch!(self, i => {
+        Ok(i
             .rotate_with_thresholds(
                 current_keys,
                 new_signature_threshold,
@@ -160,11 +237,14 @@ impl Identifier {
                 witness_threshold,
             )
             .await?)
+    })
     }
 
     /// Finalise a rotation event (sign + save + queue for witness notification).
     pub async fn finalize_rotate(&mut self, event: &[u8], sig: SelfSigningPrefix) -> Result<()> {
-        Ok(self.inner.finalize_rotate(event, sig).await?)
+        dispatch_mut!(self, i => {
+        Ok(i.finalize_rotate(event, sig).await?)
+    })
     }
 
     /// Finalise a rotation event signed by multiple keys at once.
@@ -183,12 +263,16 @@ impl Identifier {
         event: &[u8],
         sigs: Vec<IndexedSignature>,
     ) -> Result<()> {
-        Ok(self.inner.finalize_rotate_multi(event, sigs).await?)
+        dispatch_mut!(self, i => {
+        Ok(i.finalize_rotate_multi(event, sigs).await?)
+    })
     }
 
     /// Finalise an interaction event (sign + save + queue for witness notification).
     pub async fn finalize_anchor(&mut self, event: &[u8], sig: SelfSigningPrefix) -> Result<()> {
-        Ok(self.inner.finalize_anchor(event, sig).await?)
+        dispatch_mut!(self, i => {
+        Ok(i.finalize_anchor(event, sig).await?)
+    })
     }
 
     /// Multi-signer variant of [`Self::finalize_anchor`] for `ixn` events.
@@ -202,44 +286,60 @@ impl Identifier {
         event: &[u8],
         sigs: Vec<IndexedSignature>,
     ) -> Result<()> {
-        Ok(self.inner.finalize_anchor_multi(event, sigs).await?)
+        dispatch_mut!(self, i => {
+        Ok(i.finalize_anchor_multi(event, sigs).await?)
+    })
     }
 
     /// Send pending events to witnesses, returns the number of events sent.
     pub async fn notify_witnesses(&mut self) -> Result<usize> {
-        Ok(self.inner.notify_witnesses().await?)
+        dispatch_mut!(self, i => {
+        Ok(i.notify_witnesses().await?)
+    })
     }
 
     // ── OOBI / watcher ──────────────────────────────────────────────────────
 
     pub async fn resolve_oobi(&self, oobi: &Oobi) -> Result<()> {
-        Ok(self.inner.resolve_oobi(oobi).await?)
+        dispatch!(self, i => {
+        Ok(i.resolve_oobi(oobi).await?)
+    })
     }
 
     pub async fn send_oobi_to_watcher(&self, id: &IdentifierPrefix, oobi: &Oobi) -> Result<()> {
-        Ok(self.inner.send_oobi_to_watcher(id, oobi).await?)
+        dispatch!(self, i => {
+        Ok(i.send_oobi_to_watcher(id, oobi).await?)
+    })
     }
 
     /// Generate an `end_role_add` reply event for the given watcher.
     pub fn add_watcher(&self, watcher_id: IdentifierPrefix) -> Result<String> {
-        Ok(self.inner.add_watcher(watcher_id)?)
+        dispatch!(self, i => {
+        Ok(i.add_watcher(watcher_id)?)
+    })
     }
 
     /// Generate an `end_role_cut` reply event for the given watcher.
     pub fn remove_watcher(&self, watcher_id: IdentifierPrefix) -> Result<String> {
-        Ok(self.inner.remove_watcher(watcher_id)?)
+        dispatch!(self, i => {
+        Ok(i.remove_watcher(watcher_id)?)
+    })
     }
 
     /// Sign and send the `end_role_add` reply to the watcher.
     pub async fn finalize_add_watcher(&self, event: &[u8], sig: SelfSigningPrefix) -> Result<()> {
-        Ok(self.inner.finalize_add_watcher(event, sig).await?)
+        dispatch!(self, i => {
+        Ok(i.finalize_add_watcher(event, sig).await?)
+    })
     }
 
     // ── Signing / verification ──────────────────────────────────────────────
 
     /// Return CESR stream containing the payload + transferable signature.
     pub fn sign_to_cesr(&self, data: &str, signatures: &[SelfSigningPrefix]) -> Result<String> {
-        Ok(self.inner.sign_to_cesr(data, signatures)?)
+        dispatch!(self, i => {
+        Ok(i.sign_to_cesr(data, signatures)?)
+    })
     }
 
     /// Return CESR stream containing the payload + an indexed transferable
@@ -251,19 +351,24 @@ impl Identifier {
         signature: SelfSigningPrefix,
         key_index: u16,
     ) -> Result<String> {
-        Ok(self
-            .inner
+        dispatch!(self, i => {
+        Ok(i
             .sign_with_index_to_cesr(data, signature, key_index)?)
+    })
     }
 
     /// Build a `Signature` from raw bytes + `SelfSigningPrefix`es.
     pub fn sign_data(&self, data: &[u8], signatures: &[SelfSigningPrefix]) -> Result<Signature> {
-        Ok(self.inner.sign_data(data, signatures)?)
+        dispatch!(self, i => {
+        Ok(i.sign_data(data, signatures)?)
+    })
     }
 
     /// Verify a CESR stream (payload + attached signatures) against known KEL.
     pub fn verify_from_cesr(&self, stream: &[u8]) -> Result<()> {
-        Ok(self.inner.verify_from_cesr(stream)?)
+        dispatch!(self, i => {
+        Ok(i.verify_from_cesr(stream)?)
+    })
     }
 
     /// Like [`verify_from_cesr`](Self::verify_from_cesr), but reports each
@@ -274,10 +379,11 @@ impl Identifier {
         &self,
         stream: &[u8],
     ) -> std::result::Result<(), Vec<VerificationIssue>> {
+        dispatch!(self, i => {
         use keri_controller::error::ControllerError;
         use keri_core::processor::validator::{MoreInfoError, VerificationError};
 
-        match self.inner.verify_from_cesr(stream) {
+        match i.verify_from_cesr(stream) {
             Ok(()) => Ok(()),
             Err(ControllerError::VerificationError(errors)) => Err(errors
                 .into_iter()
@@ -303,6 +409,7 @@ impl Identifier {
             }
             Err(other) => Err(vec![VerificationIssue::Other(other.to_string())]),
         }
+    })
     }
 
     /// Verify a single signature against known KEL state.
@@ -315,6 +422,7 @@ impl Identifier {
         data: &[u8],
         signature: &Signature,
     ) -> Result<Option<IdentifierPrefix>> {
+        dispatch!(self, i => {
         use keri_core::event_message::signature::SignerData;
 
         match signature {
@@ -325,7 +433,7 @@ impl Identifier {
                     Option<crate::advanced::SelfAddressingIdentifier>,
                 ) = match sigd {
                     SignerData::EventSeal(es) => (
-                        self.inner
+                        i
                             .known_events
                             .storage
                             .get_keys_at_event(&es.prefix, es.sn, &es.event_digest())
@@ -335,7 +443,7 @@ impl Identifier {
                         Some(es.event_digest()),
                     ),
                     SignerData::LastEstablishment(id) => (
-                        self.inner
+                        i
                             .known_events
                             .storage
                             .get_state(id)
@@ -369,10 +477,11 @@ impl Identifier {
                 }
             }
             Signature::NonTransferable(_nt) => {
-                self.inner.known_events.verify(data, signature)?;
+                i.known_events.verify(data, signature)?;
                 Ok(None)
             }
         }
+    })
     }
 
     /// Verify multiple signatures against known KEL state.
@@ -401,7 +510,9 @@ impl Identifier {
     pub fn incept_registry(
         &mut self,
     ) -> Result<(IdentifierPrefix, TypedEvent<EventTypeTag, KeyEvent>)> {
-        Ok(self.inner.incept_registry()?)
+        dispatch_mut!(self, i => {
+        Ok(i.incept_registry()?)
+    })
     }
 
     /// Finalise registry inception (sign + save the anchor ixn).
@@ -410,12 +521,16 @@ impl Identifier {
         event: &[u8],
         sig: SelfSigningPrefix,
     ) -> Result<()> {
-        Ok(self.inner.finalize_incept_registry(event, sig).await?)
+        dispatch_mut!(self, i => {
+        Ok(i.finalize_incept_registry(event, sig).await?)
+    })
     }
 
     /// Send TEL events to backers (witnesses).
     pub async fn notify_backers(&self) -> Result<()> {
-        Ok(self.inner.notify_backers().await?)
+        dispatch!(self, i => {
+        Ok(i.notify_backers().await?)
+    })
     }
 
     /// Generate `iss` event + anchor `ixn`. Returns (vc_id, ixn_event).
@@ -423,12 +538,16 @@ impl Identifier {
         &self,
         credential_digest: SelfAddressingIdentifier,
     ) -> Result<(IdentifierPrefix, TypedEvent<EventTypeTag, KeyEvent>)> {
-        Ok(self.inner.issue(credential_digest)?)
+        dispatch!(self, i => {
+        Ok(i.issue(credential_digest)?)
+    })
     }
 
     /// Generate `rev` event + anchor `ixn` (encoded). Returns encoded ixn bytes.
     pub fn revoke(&self, credential_sai: &SelfAddressingIdentifier) -> Result<Vec<u8>> {
-        Ok(self.inner.revoke(credential_sai)?)
+        dispatch!(self, i => {
+        Ok(i.revoke(credential_sai)?)
+    })
     }
 
     /// Build a TEL query event.
@@ -437,7 +556,9 @@ impl Identifier {
         registry_id: IdentifierPrefix,
         vc_identifier: IdentifierPrefix,
     ) -> Result<TelQueryEvent> {
-        Ok(self.inner.query_tel(registry_id, vc_identifier)?)
+        dispatch!(self, i => {
+        Ok(i.query_tel(registry_id, vc_identifier)?)
+    })
     }
 
     /// Sign + send TEL query, process the response.
@@ -446,12 +567,16 @@ impl Identifier {
         qry: TelQueryEvent,
         sig: SelfSigningPrefix,
     ) -> Result<()> {
-        Ok(self.inner.finalize_query_tel(qry, sig).await?)
+        dispatch!(self, i => {
+        Ok(i.finalize_query_tel(qry, sig).await?)
+    })
     }
 
     /// Look up a VC's current `TelState` in the local TEL.
     pub fn find_vc_state(&self, vc_hash: &SelfAddressingIdentifier) -> Result<Option<TelState>> {
-        Ok(self.inner.find_vc_state(vc_hash)?)
+        dispatch!(self, i => {
+        Ok(i.find_vc_state(vc_hash)?)
+    })
     }
 
     /// Look up a registry's management TEL state.
@@ -459,7 +584,9 @@ impl Identifier {
         &self,
         id: &IdentifierPrefix,
     ) -> Result<Option<ManagerTelState>> {
-        Ok(self.inner.find_management_tel_state(id)?)
+        dispatch!(self, i => {
+        Ok(i.find_management_tel_state(id)?)
+    })
     }
 
     // ── Mailbox / watcher queries ────────────────────────────────────────────
@@ -470,7 +597,9 @@ impl Identifier {
         identifier: &IdentifierPrefix,
         witnesses: &[BasicPrefix],
     ) -> Result<Vec<MailboxQuery>> {
-        Ok(self.inner.query_mailbox(identifier, witnesses)?)
+        dispatch!(self, i => {
+        Ok(i.query_mailbox(identifier, witnesses)?)
+    })
     }
 
     /// Sign + send mailbox queries, process responses. Returns required actions.
@@ -478,12 +607,16 @@ impl Identifier {
         &mut self,
         queries: Vec<(MailboxQuery, SelfSigningPrefix)>,
     ) -> Result<Vec<ActionRequired>> {
-        Ok(self.inner.finalize_query_mailbox(queries).await?)
+        dispatch_mut!(self, i => {
+        Ok(i.finalize_query_mailbox(queries).await?)
+    })
     }
 
     /// Generate watcher query events for an identifier.
     pub fn query_watchers(&self, about_who: &EventSeal) -> Result<Vec<QueryEvent>> {
-        Ok(self.inner.query_watchers(about_who)?)
+        dispatch!(self, i => {
+        Ok(i.query_watchers(about_who)?)
+    })
     }
 
     /// Sign + send watcher queries, process responses.
@@ -491,7 +624,9 @@ impl Identifier {
         &self,
         queries: Vec<(QueryEvent, SelfSigningPrefix)>,
     ) -> (QueryResponse, Vec<WatcherResponseError>) {
-        self.inner.finalize_query(queries).await
+        dispatch!(self, i => {
+        i.finalize_query(queries).await
+    })
     }
 
     /// Generate a full-log watcher query for an identifier.
@@ -500,7 +635,9 @@ impl Identifier {
         id: &IdentifierPrefix,
         watcher: IdentifierPrefix,
     ) -> Result<QueryEvent> {
-        Ok(self.inner.query_full_log(id, watcher)?)
+        dispatch!(self, i => {
+        Ok(i.query_full_log(id, watcher)?)
+    })
     }
 
     // ── Delegation / group ────────────────────────────────────────────────────
@@ -519,7 +656,8 @@ impl Identifier {
         witness_threshold: Option<u64>,
         delegator: Option<IdentifierPrefix>,
     ) -> Result<(String, Vec<String>)> {
-        Ok(self.inner.incept_group(
+        dispatch!(self, i => {
+        Ok(i.incept_group(
             participants,
             signature_threshold,
             next_keys_threshold,
@@ -527,6 +665,7 @@ impl Identifier {
             witness_threshold,
             delegator,
         )?)
+    })
     }
 
     /// Build a rotation event for an established group identifier and the
@@ -549,8 +688,8 @@ impl Identifier {
         witness_to_remove: Vec<BasicPrefix>,
         witness_threshold: Option<u64>,
     ) -> Result<(String, Vec<String>)> {
-        Ok(self
-            .inner
+        dispatch!(self, i => {
+        Ok(i
             .rotate_group(
                 group_id,
                 new_participants,
@@ -561,6 +700,7 @@ impl Identifier {
                 witness_threshold,
             )
             .await?)
+    })
     }
 
     /// Build an `ixn` event on an established group identifier
@@ -576,9 +716,10 @@ impl Identifier {
         anchors: &[SelfAddressingIdentifier],
         participants: &[IdentifierPrefix],
     ) -> Result<(String, Vec<String>)> {
-        Ok(self
-            .inner
+        dispatch!(self, i => {
+        Ok(i
             .anchor_group(group_id, anchors, participants)?)
+    })
     }
 
     /// Variant of [`Self::anchor_group`] that accepts arbitrary `Seal`
@@ -591,9 +732,10 @@ impl Identifier {
         seals: &[keri_core::event::sections::seal::Seal],
         participants: &[IdentifierPrefix],
     ) -> Result<(String, Vec<String>)> {
-        Ok(self
-            .inner
+        dispatch!(self, i => {
+        Ok(i
             .anchor_group_with_seals(group_id, seals, participants)?)
+    })
     }
 
     /// Finalise a group/delegated inception event. Returns the new prefix.
@@ -603,10 +745,11 @@ impl Identifier {
         sig: SelfSigningPrefix,
         exchanges: Vec<(Vec<u8>, Signature)>,
     ) -> Result<IdentifierPrefix> {
-        Ok(self
-            .inner
+        dispatch_mut!(self, i => {
+        Ok(i
             .finalize_group_incept(group_event, sig, exchanges)
             .await?)
+    })
     }
 
     /// Finalise a group event (e.g. a delegating IXN).
@@ -616,10 +759,11 @@ impl Identifier {
         sig: SelfSigningPrefix,
         exchanges: Vec<(Vec<u8>, Signature)>,
     ) -> Result<()> {
-        Ok(self
-            .inner
+        dispatch_mut!(self, i => {
+        Ok(i
             .finalize_group_event(group_event, sig, exchanges)
             .await?)
+    })
     }
 
     /// Finalise an exchange message (e.g. delegation approval forwarding).
@@ -629,10 +773,11 @@ impl Identifier {
         exn_signature: Signature,
         data_signature: IndexedSignature,
     ) -> Result<()> {
-        Ok(self
-            .inner
+        dispatch!(self, i => {
+        Ok(i
             .finalize_exchange(exchange, exn_signature, data_signature)
             .await?)
+    })
     }
 
     /// Create a transferable signature at a specific key index.
@@ -641,25 +786,31 @@ impl Identifier {
         signature: SelfSigningPrefix,
         key_index: u16,
     ) -> Result<Signature> {
-        Ok(self.inner.sign_with_index(signature, key_index)?)
+        dispatch!(self, i => {
+        Ok(i.sign_with_index(signature, key_index)?)
+    })
     }
 
     /// Save an external notice (e.g. a delegator's KEL event) into the local DB.
     pub fn save_notice(&self, notice: &Notice) -> Result<()> {
+        dispatch!(self, i => {
         use keri_core::event_message::signed_event_message::Message;
-        self.inner
+        i
             .known_events
             .save(&Message::Notice(notice.clone()))?;
         Ok(())
+    })
     }
 
     // ── OOBI location helpers ──────────────────────────────────────────────
 
     /// Get known location schemes for an identifier.
     pub fn get_location(&self, id: &IdentifierPrefix) -> Result<Vec<LocationScheme>> {
-        self.inner
+        dispatch!(self, i => {
+        i
             .get_location(id)
             .map_err(|e| crate::advanced::error::Error::Other(e.to_string()))
+    })
     }
 
     /// Get location schemes for identifiers serving a specific role for `id`.
@@ -668,7 +819,9 @@ impl Identifier {
         id: &IdentifierPrefix,
         role: keri_core::oobi::Role,
     ) -> Result<Vec<LocationScheme>> {
-        Ok(self.inner.get_role_location(id, role)?)
+        dispatch!(self, i => {
+        Ok(i.get_role_location(id, role)?)
+    })
     }
 
     /// Get end-role entries for an identifier and role.
@@ -677,17 +830,23 @@ impl Identifier {
         id: &IdentifierPrefix,
         role: keri_core::oobi::Role,
     ) -> Result<Vec<keri_controller::EndRole>> {
-        Ok(self.inner.get_end_role(id, role)?)
+        dispatch!(self, i => {
+        Ok(i.get_end_role(id, role)?)
+    })
     }
 
     // ── Low-level seal helpers ───────────────────────────────────────────────
 
     pub fn get_last_establishment_event_seal(&self) -> Result<EventSeal> {
-        Ok(self.inner.get_last_establishment_event_seal()?)
+        dispatch!(self, i => {
+        Ok(i.get_last_establishment_event_seal()?)
+    })
     }
 
     pub fn get_last_event_seal(&self) -> Result<EventSeal> {
-        Ok(self.inner.get_last_event_seal()?)
+        dispatch!(self, i => {
+        Ok(i.get_last_event_seal()?)
+    })
     }
 }
 
