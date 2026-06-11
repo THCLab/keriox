@@ -52,6 +52,11 @@
 //! The `tests/e2e_*.rs` files in the repository are narrated, runnable
 //! walkthroughs of every flow above.
 //!
+//! New to KERI? Read [`concepts`] — every protocol term used in these docs
+//! (witness, OOBI, registry, …) explained in plain language. For a
+//! task-oriented index ("I want to X → call Y"), see `docs/cookbook.md` in
+//! the repository.
+//!
 //! ## Layers
 //!
 //! | Layer | For |
@@ -77,6 +82,9 @@ mod keri;
 mod message;
 mod requests;
 mod retry;
+
+#[doc = include_str!("../docs/concepts.md")]
+pub mod concepts {}
 
 pub use credential::{Credential, CredentialStatus};
 pub use error::{Error, Result};
