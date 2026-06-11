@@ -30,6 +30,12 @@ impl PostgresController {
             tel_transport,
         } = config;
 
+        // The mailbox query cache is a small local redb file even when the
+        // event databases live in Postgres; ensure its directory exists
+        // (the redb path creates this via `with_redb`, the Postgres path
+        // must do it explicitly).
+        std::fs::create_dir_all(&db_path)
+            .map_err(|e| ControllerError::CacheError(e.to_string()))?;
         let mut query_db_path = db_path;
         query_db_path.push("query_cache");
 
