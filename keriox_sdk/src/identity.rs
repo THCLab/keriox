@@ -325,6 +325,18 @@ impl Identity {
     /// poll, inspect, and approve. Returns an empty list when nothing is
     /// waiting.
     pub async fn pending_requests(&self) -> Result<Vec<crate::requests::PendingRequest>> {
+        // Multi-party events reference the other parties' *current* keys,
+        // so bring imported contacts up to date (best effort) and make
+        // their histories available to this identity's database before
+        // processing the mailbox.
+        let keri = crate::Keri::from_inner(self.keri.clone());
+        keri.refresh_contacts().await;
+        for alias in self.keri.contact_alias_names() {
+            if let Ok(contact) = self.keri.store.load(&alias) {
+                let _ = self.keri.copy_kel_into(&self.alias, contact.id());
+            }
+        }
+
         let advanced_requests = match &self.keys {
             Keys::Software => {
                 let signer = self.keri.store.load_signer(&self.alias)?;
@@ -336,16 +348,21 @@ impl Identity {
 
         Ok(advanced_requests
             .into_iter()
-            .filter_map(|request| match request {
-                crate::advanced::types::PendingRequest::Delegation(inner) => Some(
+            .map(|request| match request {
+                crate::advanced::types::PendingRequest::Delegation(inner) => {
                     crate::requests::PendingRequest::Delegation(crate::requests::DelegationApproval {
                         keri: self.keri.clone(),
                         alias: self.alias.clone(),
                         inner,
-                    }),
-                ),
-                // Group requests are surfaced through the group API.
-                crate::advanced::types::PendingRequest::Multisig(_) => None,
+                    })
+                }
+                crate::advanced::types::PendingRequest::Multisig(inner) => {
+                    crate::requests::PendingRequest::Group(crate::group::GroupRequest {
+                        keri: self.keri.clone(),
+                        member_alias: self.alias.clone(),
+                        inner,
+                    })
+                }
             })
             .collect())
     }
@@ -420,6 +437,18 @@ impl Identity {
         Ok(urls)
     }
 
+    /// Start creating a group identity (multisig) with this identity as
+    /// the first member and initiator.
+    pub fn new_group(&self, group_alias: &str) -> crate::group::GroupBuilder {
+        crate::group::GroupBuilder {
+            keri: self.keri.clone(),
+            member_alias: self.alias.clone(),
+            group_alias: group_alias.to_string(),
+            members: vec![],
+            threshold: None,
+        }
+    }
+
     /// Low-level escape hatch: the mid-level identifier handle and (for
     /// software keys) its current signer.
     pub fn advanced(
@@ -441,7 +470,7 @@ impl Identity {
 /// Prepare a credential payload for issuance: JSON documents with a `d`
 /// field get the digest embedded (self-addressing data); anything else is
 /// digested as-is.
-fn prepare_credential_payload(
+pub(crate) fn prepare_credential_payload(
     payload: &[u8],
 ) -> Result<(Vec<u8>, keri_core::actor::prelude::SelfAddressingIdentifier)> {
     use said::derivation::HashFunctionCode;

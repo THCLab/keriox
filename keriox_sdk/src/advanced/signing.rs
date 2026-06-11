@@ -38,7 +38,7 @@ use crate::advanced::{
 // JSON object `{"p":"...","e":"text"|"b64"}` so the envelope is always
 // parseable. The `e` (encoding) field disambiguates text vs. base64 data.
 
-fn wrap_payload(data: &[u8]) -> Result<String> {
+pub(crate) fn wrap_payload(data: &[u8]) -> Result<String> {
     let (p, e): (&str, &str) = if let Ok(s) = std::str::from_utf8(data) {
         (s, "text")
     } else {

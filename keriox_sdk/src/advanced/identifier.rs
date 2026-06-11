@@ -242,6 +242,20 @@ impl Identifier {
         Ok(self.inner.sign_to_cesr(data, signatures)?)
     }
 
+    /// Return CESR stream containing the payload + an indexed transferable
+    /// signature. Use for group (multisig) payload signing, where the index
+    /// is the signer's position in the group's current key list.
+    pub fn sign_with_index_to_cesr(
+        &self,
+        data: &str,
+        signature: SelfSigningPrefix,
+        key_index: u16,
+    ) -> Result<String> {
+        Ok(self
+            .inner
+            .sign_with_index_to_cesr(data, signature, key_index)?)
+    }
+
     /// Build a `Signature` from raw bytes + `SelfSigningPrefix`es.
     pub fn sign_data(&self, data: &[u8], signatures: &[SelfSigningPrefix]) -> Result<Signature> {
         Ok(self.inner.sign_data(data, signatures)?)

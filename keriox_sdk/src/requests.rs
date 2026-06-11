@@ -20,6 +20,9 @@ pub enum PendingRequest {
     /// [`crate::IdentityBuilder::delegated_by`]). Approve to anchor their
     /// identity in yours.
     Delegation(DelegationApproval),
+    /// A group invitation or a group event awaiting your co-signature (see
+    /// [`crate::Identity::new_group`]).
+    Group(crate::group::GroupRequest),
 }
 
 impl PendingRequest {
@@ -28,6 +31,12 @@ impl PendingRequest {
         match self {
             PendingRequest::Delegation(d) => {
                 format!("delegation request from {}", d.delegate())
+            }
+            PendingRequest::Group(g) if g.is_invitation() => {
+                format!("invitation to join group {}", g.group_id())
+            }
+            PendingRequest::Group(g) => {
+                format!("group event of {} awaiting your co-signature", g.group_id())
             }
         }
     }
@@ -166,22 +175,6 @@ impl DelegationHandle {
     /// Copy the delegator's key history into this alias's database from any
     /// identity or contact in the store that already has it.
     fn ingest_delegator_kel(&self) -> Result<()> {
-        let keri = crate::Keri::from_inner(self.keri.clone());
-        for source_alias in keri.all_aliases()? {
-            if source_alias == self.alias {
-                continue;
-            }
-            let Ok(identifier) = self.keri.store.load(&source_alias) else {
-                continue;
-            };
-            if let Some(Ok(kel)) = identifier.get_kel_cesr(&self.delegator) {
-                let controller = self.keri.store.controller_for(&self.alias)?;
-                controller.process_kel_stream(kel.as_bytes())?;
-                return Ok(());
-            }
-        }
-        Err(crate::error::Error::UnknownSigner {
-            id: IdentityId::from(self.delegator.clone()),
-        })
+        self.keri.copy_kel_into(&self.alias, &self.delegator)
     }
 }

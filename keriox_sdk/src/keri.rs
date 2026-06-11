@@ -23,6 +23,60 @@ impl KeriInner {
     pub(crate) fn alias_exists(&self, alias: &str) -> bool {
         self.root.join(alias).join("id").is_file()
     }
+
+    /// All aliases that may hold key histories: own identities + contacts.
+    pub(crate) fn all_kel_aliases(&self) -> Vec<String> {
+        let mut aliases: Vec<String> = std::fs::read_dir(&self.root)
+            .map(|entries| {
+                entries
+                    .filter_map(|e| e.ok())
+                    .filter(|e| e.path().join("id").is_file())
+                    .filter_map(|e| e.file_name().to_str().map(str::to_owned))
+                    .filter(|n| !n.starts_with('.'))
+                    .collect()
+            })
+            .unwrap_or_default();
+        aliases.sort();
+        aliases.extend(self.contact_alias_names());
+        aliases
+    }
+
+    pub(crate) fn contact_alias_names(&self) -> Vec<String> {
+        let Ok(entries) = std::fs::read_dir(self.root.join(".contacts")) else {
+            return vec![];
+        };
+        entries
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().join("id").is_file())
+            .filter_map(|e| e.file_name().to_str().map(|n| format!(".contacts/{n}")))
+            .collect()
+    }
+
+    /// Copy `subject`'s key history into `target_alias`'s database from any
+    /// alias in the store that already has it. Returns an `UnknownSigner`
+    /// error when nobody knows the subject.
+    pub(crate) fn copy_kel_into(
+        &self,
+        target_alias: &str,
+        subject: &keri_controller::IdentifierPrefix,
+    ) -> Result<()> {
+        for source_alias in self.all_kel_aliases() {
+            if source_alias == target_alias {
+                continue;
+            }
+            let Ok(identifier) = self.store.load(&source_alias) else {
+                continue;
+            };
+            if let Some(Ok(kel)) = identifier.get_kel_cesr(subject) {
+                let controller = self.store.controller_for(target_alias)?;
+                controller.process_kel_stream(kel.as_bytes())?;
+                return Ok(());
+            }
+        }
+        Err(Error::UnknownSigner {
+            id: IdentityId::from(subject.clone()),
+        })
+    }
 }
 
 /// Your KERI store: identities you control and contacts you can verify.
@@ -256,7 +310,32 @@ impl Keri {
             cause: format!("the witness at {witness_url} does not know this identity"),
         })?;
 
-        self.ingest_contact_kel(id.as_prefix(), kel.concat().as_bytes())
+        let imported = self.ingest_contact_kel(id.as_prefix(), kel.concat().as_bytes())?;
+        // Remember where this contact's history lives so future refreshes
+        // (e.g. after they rotate keys) can re-fetch it automatically.
+        let source_path = self.inner.root.join(format!(".contacts/{id}")).join("source");
+        let _ = std::fs::write(source_path, witness_url);
+        Ok(imported)
+    }
+
+    /// Re-fetch all imported contacts' key histories from their recorded
+    /// witnesses, picking up any key rotations they made. Contacts imported
+    /// offline (raw key history, no witness) are skipped. Failures for
+    /// individual contacts are ignored — the local copy simply stays as-is.
+    pub async fn refresh_contacts(&self) {
+        for alias in self.contact_aliases() {
+            let dir = self.inner.root.join(&alias);
+            let Ok(source) = std::fs::read_to_string(dir.join("source")) else {
+                continue;
+            };
+            let Ok(id_text) = std::fs::read_to_string(dir.join("id")) else {
+                continue;
+            };
+            let Ok(id) = id_text.trim().parse::<IdentityId>() else {
+                continue;
+            };
+            let _ = self.import_contact_from(&id, source.trim()).await;
+        }
     }
 
     /// Store a contact's key history under `.contacts/<id>`.
@@ -338,6 +417,23 @@ impl Keri {
         Ok(CredentialStatus::Unknown)
     }
 
+    /// Load a group identity this store participates in (created earlier
+    /// with [`crate::Identity::new_group`] or joined via an invitation).
+    pub fn group(&self, group_alias: &str) -> Result<crate::group::Group> {
+        let group_id = self
+            .inner
+            .store
+            .load_multisig_prefix(group_alias)
+            .map_err(|_| Error::IdentityNotFound(group_alias.to_string()))?;
+        let member_alias = self.inner.store.load_multisig_member_alias(group_alias)?;
+        Ok(crate::group::Group {
+            keri: self.inner.clone(),
+            group_alias: group_alias.to_string(),
+            member_alias,
+            group_id,
+        })
+    }
+
     /// Recover the handle of a delegation that was requested earlier (e.g.
     /// before an application restart) and is still awaiting finalization.
     pub fn delegation_in_progress(
@@ -387,15 +483,7 @@ impl Keri {
 
     /// Aliases of imported contacts (none until `import_contact` is used).
     fn contact_aliases(&self) -> Vec<String> {
-        let contacts_dir = self.inner.root.join(".contacts");
-        let Ok(entries) = std::fs::read_dir(contacts_dir) else {
-            return vec![];
-        };
-        entries
-            .filter_map(|e| e.ok())
-            .filter(|e| e.path().join("id").is_file())
-            .filter_map(|e| e.file_name().to_str().map(|n| format!(".contacts/{n}")))
-            .collect()
+        self.inner.contact_alias_names()
     }
 }
 

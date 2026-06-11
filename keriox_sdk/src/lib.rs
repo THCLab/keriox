@@ -15,6 +15,7 @@ pub mod advanced;
 mod contact;
 mod credential;
 mod error;
+mod group;
 mod identity;
 mod ids;
 mod keri;
@@ -24,6 +25,7 @@ mod retry;
 
 pub use credential::{Credential, CredentialStatus};
 pub use error::{Error, Result};
+pub use group::{Group, GroupBuilder, GroupInvite, GroupRequest};
 pub use identity::{Identity, IdentityBuilder, KeyAlgorithm};
 pub use ids::{CredentialId, IdentityId};
 pub use keri::Keri;
