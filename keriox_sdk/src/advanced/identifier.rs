@@ -550,6 +550,20 @@ impl Identifier {
     })
     }
 
+    /// Finalise a credential issuance (sign + save the anchor `ixn`).
+    pub async fn finalize_issue(&mut self, event: &[u8], sig: SelfSigningPrefix) -> Result<()> {
+        dispatch_mut!(self, i => {
+        Ok(i.finalize_issue(event, sig).await?)
+    })
+    }
+
+    /// Finalise a credential revocation (sign + save the anchor `ixn`).
+    pub async fn finalize_revoke(&mut self, event: &[u8], sig: SelfSigningPrefix) -> Result<()> {
+        dispatch_mut!(self, i => {
+        Ok(i.finalize_revoke(event, sig).await?)
+    })
+    }
+
     /// Build a TEL query event.
     pub fn query_tel(
         &self,
