@@ -437,6 +437,44 @@ impl Identity {
         Ok(urls)
     }
 
+    /// Export everything needed to restore this identity elsewhere:
+    /// signing seeds, key history, and configuration.
+    ///
+    /// **The backup contains private key material** — store it like a
+    /// password (encrypted at rest). Restore with
+    /// [`IdentityBuilder::restore_from`]. A backup is invalidated by any
+    /// later key rotation; export again after rotating.
+    pub fn export(&self) -> Result<IdentityBackup> {
+        #[cfg(feature = "keyprovider")]
+        if matches!(self.keys, Keys::Provider { .. }) {
+            return Err(Error::InvalidInput {
+                expected: "software-keyed identity",
+                cause: "provider-held keys (keystore/HSM) cannot be exported; back up via your \
+                        key provider"
+                    .into(),
+            });
+        }
+
+        use keri_core::prefix::CesrPrimitive;
+        let current_seed = self.keri.store.current_seed(&self.alias)?;
+        let next_seed = self.keri.store.next_seed(&self.alias)?;
+        let kel = self.kel()?;
+        let registry = self
+            .keri
+            .store
+            .load(&self.alias)?
+            .registry_id()
+            .map(|r| r.to_string());
+        Ok(IdentityBackup {
+            id: self.id.to_string(),
+            current_seed: current_seed.to_str(),
+            next_seed: next_seed.to_str(),
+            kel,
+            registry,
+            witnesses: self.witnesses().unwrap_or_default(),
+        })
+    }
+
     /// Start creating a group identity (multisig) with this identity as
     /// the first member and initiator.
     pub fn new_group(&self, group_alias: &str) -> crate::group::GroupBuilder {
@@ -465,6 +503,75 @@ impl Identity {
         };
         Ok((identifier, signer))
     }
+}
+
+/// Restore an identity into `alias` from a backup: persist seeds and ids,
+/// ingest the backed-up key history, then refresh it from the witnesses
+/// recorded in the backup (best effort, picks up nothing if unreachable).
+async fn restore_identity(
+    keri: Arc<KeriInner>,
+    alias: &str,
+    backup: IdentityBackup,
+    extra_witness_urls: &[String],
+) -> Result<Identity> {
+    use std::str::FromStr;
+
+    let id_prefix =
+        keri_controller::IdentifierPrefix::from_str(&backup.id).map_err(|e| Error::InvalidInput {
+            expected: "identity id in backup",
+            cause: e.to_string(),
+        })?;
+    let current = keri_core::prefix::SeedPrefix::from_str(&backup.current_seed).map_err(|e| {
+        Error::InvalidInput {
+            expected: "current seed in backup",
+            cause: e.to_string(),
+        }
+    })?;
+    let next = keri_core::prefix::SeedPrefix::from_str(&backup.next_seed).map_err(|e| {
+        Error::InvalidInput {
+            expected: "next seed in backup",
+            cause: e.to_string(),
+        }
+    })?;
+
+    keri.store.save_seeds(alias, &current, &next)?;
+    keri.store.save_id(alias, &id_prefix)?;
+    if let Some(registry) = &backup.registry {
+        if let Ok(registry) = keri_controller::IdentifierPrefix::from_str(registry) {
+            keri.store.save_registry(alias, &registry)?;
+        }
+    }
+
+    // Ingest the backed-up key history.
+    let controller = keri.store.controller_for(alias)?;
+    controller.process_kel_stream(backup.kel.as_bytes())?;
+
+    // Re-establish how to reach the witnesses (their addresses are not part
+    // of the key history) and refresh the history in case events happened
+    // after the backup was taken (e.g. from another device). Best effort —
+    // an unreachable witness leaves the local copy as-is.
+    let identifier = keri.store.load(alias)?;
+    for url in backup.witnesses.iter().chain(extra_witness_urls) {
+        let Ok(location) = discover(url, &keri.retry).await else {
+            continue;
+        };
+        let _ = identifier
+            .resolve_oobi(&keri_controller::Oobi::Location(location.clone()))
+            .await;
+        let Ok(ephemeral) = crate::advanced::EphemeralIdentifier::new() else {
+            continue;
+        };
+        if let Ok(Some(kel)) = ephemeral.pull_kel(&id_prefix, 0, 100, &location).await {
+            let _ = controller.process_kel_stream(kel.concat().as_bytes());
+        }
+    }
+
+    Ok(Identity {
+        id: IdentityId::from(id_prefix),
+        keri,
+        alias: alias.to_string(),
+        keys: Keys::Software,
+    })
 }
 
 /// Prepare a credential payload for issuance: JSON documents with a `d`
@@ -502,6 +609,38 @@ pub(crate) fn prepare_credential_payload(
     Ok((payload.to_vec(), crate::advanced::signing::content_sai(payload)))
 }
 
+/// A portable backup of an identity: seeds, key history, configuration.
+///
+/// Produced by [`Identity::export`], consumed by
+/// [`IdentityBuilder::restore_from`]. Serializable with serde (e.g. to
+/// JSON). **Contains private key material — store encrypted.**
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub struct IdentityBackup {
+    pub(crate) id: String,
+    pub(crate) current_seed: String,
+    pub(crate) next_seed: String,
+    pub(crate) kel: String,
+    pub(crate) registry: Option<String>,
+    pub(crate) witnesses: Vec<String>,
+}
+
+impl IdentityBackup {
+    /// The backed-up identity's id.
+    pub fn id(&self) -> Result<IdentityId> {
+        self.id.parse()
+    }
+}
+
+impl std::fmt::Debug for IdentityBackup {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Never leak seeds through Debug output.
+        f.debug_struct("IdentityBackup")
+            .field("id", &self.id)
+            .field("witnesses", &self.witnesses)
+            .finish_non_exhaustive()
+    }
+}
+
 /// Builder for a new identity. Created by [`crate::Keri::new_identity`];
 /// finished with [`IdentityBuilder::build`].
 pub struct IdentityBuilder {
@@ -512,6 +651,7 @@ pub struct IdentityBuilder {
     pub(crate) witness_threshold: Option<u64>,
     pub(crate) algorithm: KeyAlgorithm,
     pub(crate) delegator: Option<IdentityId>,
+    pub(crate) restore: Option<IdentityBackup>,
     #[cfg(feature = "keyprovider")]
     pub(crate) providers: Option<(
         Arc<dyn keri_keyprovider::KeyProvider>,
@@ -529,9 +669,18 @@ impl IdentityBuilder {
             witness_threshold: None,
             algorithm: KeyAlgorithm::default(),
             delegator: None,
+            restore: None,
             #[cfg(feature = "keyprovider")]
             providers: None,
         }
+    }
+
+    /// Restore an identity from a backup ([`Identity::export`]) instead of
+    /// creating a new one. The backup's key history is ingested locally and
+    /// refreshed from its recorded witnesses (best effort).
+    pub fn restore_from(mut self, backup: IdentityBackup) -> Self {
+        self.restore = Some(backup);
+        self
     }
 
     /// Add a witness by its base URL (e.g. `"http://witness.example:3232"`).
@@ -662,6 +811,10 @@ impl IdentityBuilder {
         }
         if self.keri.alias_exists(&self.alias) {
             return Err(Error::IdentityExists(self.alias));
+        }
+
+        if let Some(backup) = self.restore {
+            return restore_identity(self.keri, &self.alias, backup, &self.witness_urls).await;
         }
 
         let mut witnesses = vec![];

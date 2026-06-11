@@ -26,7 +26,7 @@ mod retry;
 pub use credential::{Credential, CredentialStatus};
 pub use error::{Error, Result};
 pub use group::{Group, GroupBuilder, GroupInvite, GroupRequest};
-pub use identity::{Identity, IdentityBuilder, KeyAlgorithm};
+pub use identity::{Identity, IdentityBackup, IdentityBuilder, KeyAlgorithm};
 pub use ids::{CredentialId, IdentityId};
 pub use keri::Keri;
 pub use message::{SignedMessage, Verified};
