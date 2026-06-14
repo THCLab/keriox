@@ -766,7 +766,8 @@ impl KeriStore {
         std::fs::create_dir_all(&alias_dir)
             .map_err(|e| Error::PersistenceError(format!("cannot create alias dir: {e}")))?;
 
-        let db_path = alias_dir.join("db");
+        // Use layout-aware path so create and load() agree on the db location.
+        let db_path = self.db_path_for(alias);
 
         let controller = self.get_or_create_controller(db_path)?;
         let keri_signer = crate::advanced::keyprovider_adapter::KeriSigner::from(provider);
