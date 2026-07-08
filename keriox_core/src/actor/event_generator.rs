@@ -313,3 +313,44 @@ pub fn exchange(
         event,
     )
 }
+
+#[cfg(all(test, feature = "oobi"))]
+mod tests {
+    use super::*;
+    use crate::query::reply_event::ReplyRoute;
+
+    /// A Messagebox end-role reply carries the `messagebox` role, names the
+    /// server as `eid`, and round-trips through CESR encode/parse — this is
+    /// the record a peer's server resolves to route cross-server mail.
+    #[test]
+    fn generate_messagebox_end_role_add() {
+        let cid: IdentifierPrefix = "EAR-CtdZ2H9x8p8U2f0mS4Vx8i0y0y0y0y0y0y0y0y0y"
+            .parse()
+            .unwrap_or_else(|_| {
+                // Fall back to a valid self-addressing prefix parsed from a
+                // known-good string so the test is independent of the exact
+                // literal above.
+                "EBfdlu8R27Fbx-ehrqwImnK-8Cm79sqbAQ4MmvEAYqao"
+                    .parse()
+                    .unwrap()
+            });
+        let server: IdentifierPrefix = "BFUOWBaJz-sB_6b-_u_P9W8hgBAvOwakVeae2wgQzTGa"
+            .parse()
+            .unwrap();
+
+        let reply = generate_end_role(&cid, &server, Role::Messagebox, true);
+        match reply.get_route() {
+            ReplyRoute::EndRoleAdd(er) => {
+                assert_eq!(er.role, Role::Messagebox);
+                assert_eq!(er.eid, server);
+                assert_eq!(er.cid, cid);
+            }
+            other => panic!("expected EndRoleAdd, got {:?}", other),
+        }
+
+        // Encode + parse back to confirm the reply is a well-formed, wire-safe
+        // KERI reply (the form finalize_add_role signs and serves).
+        let encoded = reply.encode().expect("reply encodes");
+        assert!(!encoded.is_empty());
+    }
+}

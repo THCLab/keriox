@@ -333,6 +333,27 @@ impl Identifier {
     })
     }
 
+    /// Generate an `end_role_add` reply naming `messagebox_id` as this
+    /// identifier's Messagebox endpoint (cross-server mailbox discovery).
+    pub fn add_messagebox(&self, messagebox_id: IdentifierPrefix) -> Result<String> {
+        dispatch!(self, i => {
+        Ok(i.add_messagebox(messagebox_id)?)
+    })
+    }
+
+    /// Sign and deliver a signed `end_role_add` reply for any role. The
+    /// role-generic twin of [`finalize_add_watcher`](Self::finalize_add_watcher);
+    /// use for Messagebox end-roles.
+    pub async fn finalize_add_end_role(
+        &self,
+        event: &[u8],
+        sig: SelfSigningPrefix,
+    ) -> Result<()> {
+        dispatch!(self, i => {
+        Ok(i.finalize_add_end_role(event, sig).await?)
+    })
+    }
+
     // ── Signing / verification ──────────────────────────────────────────────
 
     /// Return CESR stream containing the payload + transferable signature.

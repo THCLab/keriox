@@ -217,6 +217,29 @@ pub async fn add_watcher<S: SigningBackend>(
     Ok(())
 }
 
+/// Authorize a Messagebox endpoint for an identifier.
+///
+/// Resolves the messagebox server's OOBI, generates a signed
+/// `end_role_add` reply naming it as the identifier's Messagebox endpoint,
+/// and delivers the reply to that server so it can serve the end-role to
+/// peers resolving this identifier (cross-server mailbox discovery).
+///
+/// # Errors
+/// - [`Error::Mechanics`] if OOBI resolution or the network call fails.
+/// - [`Error::Signing`] if signing the reply fails.
+pub async fn add_messagebox<S: SigningBackend>(
+    id: &mut Identifier,
+    km: &S,
+    messagebox_oobi: &LocationScheme,
+) -> Result<()> {
+    id.resolve_oobi(&Oobi::Location(messagebox_oobi.clone()))
+        .await?;
+    let rpy = id.add_messagebox(messagebox_oobi.eid.clone())?;
+    let sig = wrap_sig(km, rpy.as_bytes())?;
+    id.finalize_add_end_role(rpy.as_bytes(), sig).await?;
+    Ok(())
+}
+
 /// Rotate keys, notify witnesses, and query mailboxes.
 ///
 /// Signs the rotation event with `current_signer`, sends it to witnesses,
