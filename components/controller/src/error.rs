@@ -29,7 +29,7 @@ pub enum ControllerError {
     #[error(transparent)]
     EventProcessingError(#[from] keri_core::error::Error),
 
-    #[error("Keri version error: ")]
+    #[error("Keri version error: {0}")]
     VersionError(#[from] VersionError),
 
     #[error("No location for {id} with {scheme:?}")]
