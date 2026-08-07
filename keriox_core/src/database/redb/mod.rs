@@ -56,7 +56,7 @@ pub enum RedbError {
     RetrievingError(redb::Error),
     #[error("Value format error")]
     WrongValue,
-    #[error("Key format error")]
+    #[error("Key format error: {0}")]
     WrongKey(#[from] KeyError),
     #[error("No event for digest {0} found")]
     NotFound(SelfAddressingIdentifier),

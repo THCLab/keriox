@@ -77,7 +77,7 @@ pub mod error {
 
     #[derive(Error, Debug, Serialize, Deserialize)]
     pub enum OobiError {
-        #[error("Keri error")]
+        #[error("Keri error: {0}")]
         Keri(#[from] crate::error::Error),
 
         #[error("DB error: {0}")]
@@ -86,7 +86,7 @@ pub mod error {
         #[error("Oobi parse error: {0}")]
         Parse(String),
 
-        #[error("query error")]
+        #[error("query error: {0}")]
         Query(#[from] crate::query::QueryError),
 
         #[error("signer ID mismatch")]

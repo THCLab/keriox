@@ -13,7 +13,7 @@ pub enum Error {
     #[error("{0}")]
     Generic(String),
 
-    #[error("Tel event encoding error")]
+    #[error("Tel event encoding error: {0}")]
     EncodingError(String),
 
     #[error("Escrow database error: {0}")]

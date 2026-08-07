@@ -14,20 +14,20 @@ use said::version::error::Error as VersionError;
 #[derive(Debug, thiserror::Error, serde::Serialize, serde::Deserialize)]
 pub enum ActorError {
     #[cfg(feature = "oobi-manager")]
-    #[error("network request failed")]
+    #[error("network request failed: {0}")]
     TransportError(Box<TransportError>),
 
-    #[error("keri error")]
+    #[error("keri error: {0}")]
     KeriError(#[from] KeriError),
 
     #[error("DB error: {0}")]
     DbError(String),
 
     #[cfg(feature = "oobi")]
-    #[error("OOBI error")]
+    #[error("OOBI error: {0}")]
     OobiError(#[from] OobiError),
 
-    #[error("processing query failed")]
+    #[error("processing query failed: {0}")]
     QueryError(#[from] SignedQueryError),
 
     #[error("Keri event parsing error: {0}")]
@@ -55,7 +55,7 @@ pub enum ActorError {
     #[error("Error: {0}")]
     GeneralError(String),
 
-    #[error("KEL not found")]
+    #[error("KEL not found for {0}")]
     NotFound(IdentifierPrefix),
 
     #[error("Unexpected response: {0}")]

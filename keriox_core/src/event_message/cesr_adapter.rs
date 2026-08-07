@@ -47,7 +47,7 @@ use super::{
 
 #[derive(Debug, thiserror::Error, Serialize, Deserialize)]
 pub enum ParseError {
-    #[error("Cesr error")]
+    #[error("Cesr error: {0}")]
     CesrError(String),
     #[error("Deserialize error: {0}")]
     DeserializeError(String),
