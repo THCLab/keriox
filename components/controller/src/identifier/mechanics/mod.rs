@@ -26,7 +26,7 @@ pub enum MechanicsError {
     #[error("Can't lock")]
     LockingError,
 
-    #[error("transparent")]
+    #[error(transparent)]
     EventProcessingError(#[from] keri_core::error::Error),
 
     #[error(transparent)]

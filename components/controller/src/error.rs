@@ -26,7 +26,7 @@ pub enum ControllerError {
     #[error("Unknown identifier")]
     UnknownIdentifierError,
 
-    #[error("transparent")]
+    #[error(transparent)]
     EventProcessingError(#[from] keri_core::error::Error),
 
     #[error("Keri version error: ")]
