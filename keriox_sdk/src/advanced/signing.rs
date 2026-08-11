@@ -168,6 +168,46 @@ pub fn sign_to_cesr<S: SigningBackend>(
     Ok(identifier.sign_to_cesr(json, &[sig])?)
 }
 
+/// Sign `json` on behalf of `group`, a multi-sig identifier whose
+/// current key set contains this backend's key.
+///
+/// [`sign_to_cesr`] attributes the signature to `identifier` itself,
+/// which a verifier resolving `group`'s key state refuses. This
+/// attributes it to `group`'s establishment event at the index this
+/// backend's key occupies there, so a device can act for the identity
+/// it is a member of without holding that identity's own alias.
+///
+/// # Errors
+/// - [`Error::Controller`] if `group`'s key state is unknown locally.
+/// - [`Error::Signing`] if this backend's key is not one of `group`'s
+///   current keys — signing would produce a signature nobody accepts.
+pub fn sign_as_group_to_cesr<S: SigningBackend>(
+    identifier: &Identifier,
+    signer: &S,
+    group: &keri_controller::IdentifierPrefix,
+    json: &str,
+) -> Result<String> {
+    let state = identifier
+        .find_state(group)
+        .map_err(|e| Error::Signing(format!("unknown group {group}: {e}")))?;
+    let ours = signer.basic_prefix(false);
+    let ours_transferable = signer.basic_prefix(true);
+    let index = state
+        .current
+        .public_keys
+        .iter()
+        .position(|pk| pk == &ours || pk == &ours_transferable)
+        .ok_or_else(|| {
+            Error::Signing(format!(
+                "this device's key is not among {group}'s current keys"
+            ))
+        })?;
+
+    let raw_sig = signer.sign_data(json.as_bytes())?;
+    let sig = keri_controller::SelfSigningPrefix::new(signer.signing_code(), raw_sig);
+    Ok(identifier.sign_as_group_to_cesr(json, sig, group, index as u16)?)
+}
+
 /// Parse a CESR stream into raw payload bytes and attached signatures.
 ///
 /// This is a low-level helper for when you need to inspect signature details

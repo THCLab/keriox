@@ -627,6 +627,21 @@ impl Identifier {
     // ── Mailbox / watcher queries ────────────────────────────────────────────
 
     /// Generate mailbox query events for each of the given witnesses.
+    /// Sign `data` as `group` at `key_index` — see
+    /// [`crate::advanced::signing::sign_as_group_to_cesr`], which
+    /// resolves the index for you.
+    pub fn sign_as_group_to_cesr(
+        &self,
+        data: &str,
+        signature: SelfSigningPrefix,
+        group: &IdentifierPrefix,
+        key_index: u16,
+    ) -> Result<String> {
+        dispatch!(self, i => {
+        Ok(i.sign_as_group_to_cesr(data, signature, group, key_index)?)
+    })
+    }
+
     /// Ask for `identifier`'s whole mailbox again on the next query,
     /// for a caller still waiting on something the mailbox has already
     /// handed over once.
