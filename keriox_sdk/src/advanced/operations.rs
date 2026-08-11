@@ -619,6 +619,17 @@ pub async fn complete_delegation<S: SigningBackend + Clone + 'static>(
         temp_id.save_notice(notice)?;
     }
 
+    // The delegated inception is not accepted yet, or this call would
+    // have nothing to do. Its witness receipt may already have been
+    // read out of the mailbox on an earlier attempt — before the
+    // delegating anchor was in hand, so it could not be applied — and
+    // mailbox reads do not rewind on their own. Ask for the whole
+    // mailbox again so that receipt is served a second time; otherwise
+    // the inception waits forever on something already delivered.
+    if temp_id.find_state(delegated_prefix).is_err() {
+        temp_id.reset_group_mailbox_index(delegated_prefix, &witnesses)?;
+    }
+
     // Query mailbox for the delegated identifier (two rounds).
     for witness in &witnesses {
         _query_mailbox_for(temp_id, signer, delegated_prefix, witness).await?;

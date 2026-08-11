@@ -627,6 +627,19 @@ impl Identifier {
     // ── Mailbox / watcher queries ────────────────────────────────────────────
 
     /// Generate mailbox query events for each of the given witnesses.
+    /// Ask for `identifier`'s whole mailbox again on the next query,
+    /// for a caller still waiting on something the mailbox has already
+    /// handed over once.
+    pub fn reset_group_mailbox_index(
+        &self,
+        identifier: &IdentifierPrefix,
+        witnesses: &[BasicPrefix],
+    ) -> Result<()> {
+        dispatch!(self, i => {
+        Ok(i.reset_group_mailbox_index(identifier, witnesses)?)
+    })
+    }
+
     pub fn query_mailbox(
         &self,
         identifier: &IdentifierPrefix,

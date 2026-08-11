@@ -151,6 +151,30 @@ impl IdentifierCache {
         self.update_mailbox_remainder(OWN_INDEX, Self::composite_key(subject, witness), res)
     }
 
+    /// Forget how much of `subject`'s mailbox has been read at
+    /// `witness`, so the next query starts from the beginning again.
+    ///
+    /// The read position advances by the number of items a response
+    /// carried, not by the number that could be used. An item consumed
+    /// while it was not yet applicable — a witness receipt for an event
+    /// still waiting on its delegating anchor, say — is therefore never
+    /// served again, and whatever needed it waits forever. A caller
+    /// that knows it is still missing something can ask for the whole
+    /// mailbox again.
+    pub fn reset_last_asked_group_index(
+        &self,
+        subject: &IdentifierPrefix,
+        witness: &IdentifierPrefix,
+    ) -> Result<(), ControllerError> {
+        let write_txn = self.db.begin_write()?;
+        {
+            let mut tbl = write_txn.open_table(GROUP_INDEX)?;
+            tbl.insert(Self::composite_key(subject, witness).as_str(), (0, 0, 0))?;
+        }
+        write_txn.commit()?;
+        Ok(())
+    }
+
     pub fn update_last_asked_group_index(
         &self,
         subject: &IdentifierPrefix,
@@ -183,6 +207,16 @@ fn test_query_cache() {
     assert_eq!(ind.receipt, 1);
     assert_eq!(ind.multisig, 0);
     assert_eq!(ind.delegate, 0);
+
+    // A consumed-but-unusable item can be asked for again.
+    mc.update_last_asked_group_index(&id, &witness, &mr).unwrap();
+    assert_eq!(mc.last_asked_group_index(&id, &witness).unwrap().receipt, 1);
+    mc.reset_last_asked_group_index(&id, &witness).unwrap();
+    assert_eq!(
+        mc.last_asked_group_index(&id, &witness).unwrap().receipt,
+        0,
+        "resetting must re-serve the whole mailbox"
+    );
 
     // A different identifier sharing the same witness (and database) has
     // its own independent read position.

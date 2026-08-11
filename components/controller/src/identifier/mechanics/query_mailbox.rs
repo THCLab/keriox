@@ -39,6 +39,26 @@ where
     S: OobiStorageBackend,
 {
     /// Generates query message of route `mbx` to query own identifier mailbox.
+    /// Ask for `identifier`'s whole mailbox again on the next query.
+    ///
+    /// Mailbox reads are positional and advance by what a response
+    /// carried, so an item that arrived before it could be used is
+    /// never offered a second time. A caller that is still waiting on
+    /// something the mailbox already delivered — a receipt for an event
+    /// that had not yet cleared its delegation escrow, for instance —
+    /// uses this to rewind.
+    pub fn reset_group_mailbox_index(
+        &self,
+        identifier: &IdentifierPrefix,
+        witnesses: &[BasicPrefix],
+    ) -> Result<(), ControllerError> {
+        for wit in witnesses {
+            self.query_cache
+                .reset_last_asked_group_index(identifier, &IdentifierPrefix::Basic(wit.clone()))?;
+        }
+        Ok(())
+    }
+
     pub fn query_mailbox(
         &self,
         identifier: &IdentifierPrefix,
