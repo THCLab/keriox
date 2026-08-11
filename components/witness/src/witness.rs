@@ -396,6 +396,23 @@ impl<S: OobiStorageBackend> Witness<S> {
         qry: keri_core::query::query_event::SignedQueryMessage,
     ) -> Result<Option<PossibleResponse>, ActorError> {
         tracing::debug!(?qry, "Processing query");
+        // Mailbox reads are positional and per-identifier, so "who is
+        // being asked about, from which index" is the whole story when
+        // a delegatee waits on a receipt it never receives. The Debug
+        // form above buries it among event digests.
+        if let keri_core::query::query_event::SignedQueryMessage::MailboxQuery(mbx) = &qry {
+            if let keri_core::query::mailbox::MailboxRoute::Mbx { args, .. } =
+                &mbx.query.data.data
+            {
+                tracing::info!(
+                    about = %args.i,
+                    asker = %args.pre,
+                    from_receipt = args.topics.receipt,
+                    from_delegate = args.topics.delegate,
+                    "mailbox query"
+                );
+            }
+        }
         let response = process_signed_query(qry, &self.event_storage)?;
 
         match response {
