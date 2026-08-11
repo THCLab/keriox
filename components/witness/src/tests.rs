@@ -1643,3 +1643,116 @@ fn test_witness_disaster_recovery() -> Result<(), Error> {
 
     Ok(())
 }
+
+/// A witness that already holds the delegating anchor must receipt a
+/// delegated inception when it arrives.
+///
+/// This is the out-of-band delegation order: the delegator anchors the
+/// `dip` and publishes its own KEL first, and the `dip` reaches the
+/// witness afterwards — the sequence a device-enrollment flow produces,
+/// as opposed to the mailbox flow where the `dip` arrives first and
+/// waits for its delegator.
+///
+/// The delegated inception commits `bt` witness receipts, so without a
+/// receipt from this witness the event cannot be accepted anywhere,
+/// including on the device that created it: it stays escrowed, the
+/// device keeps signing as its pre-delegation identifier, and every
+/// party that checks its key state refuses it.
+#[test]
+fn test_delegated_inception_is_receipted_when_the_anchor_arrives_first(
+) -> Result<(), ActorError> {
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .with_test_writer()
+        .try_init();
+    let witness_root = Builder::new().prefix("test-db").tempdir().unwrap();
+    let witness = Witness::setup_with_redb(
+        Url::parse("http://example.com").unwrap(),
+        witness_root.path(),
+        None,
+        WitnessEscrowConfig::default(),
+    )
+    .unwrap();
+
+    let delegator = setup_controller(&witness)?;
+    let mut device = setup_controller(&witness)?;
+
+    // The device teaches itself the delegator's KEL, then builds a
+    // delegated inception witnessed by this witness.
+    let delegator_kel = delegator
+        .storage
+        .get_kel_messages_with_receipts_all(delegator.prefix())?
+        .unwrap()
+        .into_iter()
+        .map(Message::Notice)
+        .collect::<Vec<_>>();
+    device.process(&delegator_kel)?;
+
+    let (dip, _exn) = device.group_incept(
+        vec![],
+        &SignatureThreshold::Simple(1),
+        Some(vec![witness.prefix.clone()]),
+        Some(1),
+        Some(delegator.prefix().clone()),
+    )?;
+    let delegated_id = dip.event_message.data.get_prefix();
+    let dip_digest = dip.event_message.digest()?;
+
+    // The delegator anchors it and its KEL reaches the witness first.
+    let seal = Seal::Event(EventSeal::new(delegated_id.clone(), 0, dip_digest.clone()));
+    let ixn = delegator.anchor(&vec![seal])?;
+    let anchor_sn = ixn.event_message.data.get_sn();
+    let anchor_digest = ixn.event_message.digest()?;
+    witness.process_notice(Notice::Event(ixn))?;
+    assert_eq!(
+        witness
+            .event_storage
+            .get_state(delegator.prefix())
+            .unwrap()
+            .sn,
+        1,
+        "the witness must hold the anchoring event before the dip arrives"
+    );
+
+    // Now the delegated inception itself, carrying the source seal that
+    // points at the anchor — the shape a delegatee publishes once the
+    // delegator has approved it.
+    let dip = SignedEventMessage {
+        delegator_seal: Some(keri_core::event::sections::seal::SourceSeal::new(
+            anchor_sn,
+            anchor_digest.into(),
+        )),
+        ..dip
+    };
+    witness.process_notice(Notice::Event(dip))?;
+
+    let state = witness.event_storage.get_state(&delegated_id);
+    assert!(
+        state.is_some(),
+        "the witness accepted the anchor, so it must accept the inception it anchors"
+    );
+
+    // Compare against an ordinary inception through the same accessor:
+    // the delegator's own icp is receipted, so a missing receipt here is
+    // specific to the delegated event and not an artefact of the read.
+    let receipted = |id: &IdentifierPrefix| -> bool {
+        use keri_core::database::{EventDatabase, QueryParameters};
+        witness
+            .event_storage
+            .events_db
+            .get_receipts_nt(QueryParameters::All { id })
+            .map(|mut r| r.next().is_some())
+            .unwrap_or(false)
+    };
+    assert!(
+        receipted(delegator.prefix()),
+        "sanity: an ordinary inception is receipted by this witness"
+    );
+    assert!(
+        receipted(&delegated_id),
+        "the witness must receipt the delegated inception — without it the event \
+         never reaches its own witness threshold and the device cannot use it"
+    );
+
+    Ok(())
+}

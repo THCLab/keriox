@@ -283,7 +283,15 @@ impl<D: EventDatabase> EventValidator<D> {
         delegated_event: &KeriEvent<KeyEvent>,
     ) -> Result<(), Error> {
         // Check if event of seal's prefix and sn is in db.
-        if let Some(event) = self.event_storage.get_event_at_sn(&seal.prefix, seal.sn) {
+        let found = self.event_storage.get_event_at_sn(&seal.prefix, seal.sn);
+        tracing::debug!(
+            delegator = %seal.prefix,
+            sn = seal.sn,
+            seal_digest = %seal.event_digest(),
+            found = found.is_some(),
+            "validate_seal: looking up the delegating event"
+        );
+        if let Some(event) = found {
             // Extract prior_digest and data field from delegating event.
             let data = match event
                 .signed_event_message
