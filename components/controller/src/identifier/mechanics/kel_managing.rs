@@ -272,7 +272,10 @@ where
         event: &KeriEvent<KeyEvent>,
         sig: &SelfSigningPrefix,
     ) -> Result<(), MechanicsError> {
-        let own_index = self.get_index(&event.data).unwrap();
+        // Not an invariant: the lookup fails whenever this
+        // identifier's key material and the KEL have drifted apart, so
+        // report it rather than unwinding the caller's task.
+        let own_index = self.get_index(&event.data)?;
         let signature = IndexedSignature::new_both_same(sig.clone(), own_index as u16);
 
         let signed_message = event.sign(vec![signature], None, None);
