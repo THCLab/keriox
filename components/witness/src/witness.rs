@@ -330,8 +330,27 @@ impl<S: OobiStorageBackend> Witness<S> {
     }
 
     pub fn process_notice(&self, notice: Notice) -> Result<(), Error> {
+        // A delegated inception has two ways of not being receipted —
+        // parked for the delegator because no anchoring seal was found,
+        // or refused outright — and from outside the witness both look
+        // like silence. Say which happened, and for which identifier.
+        let described = match &notice {
+            Notice::Event(ev) => Some((
+                ev.event_message.data.get_prefix(),
+                ev.event_message.data.get_sn(),
+                format!("{:?}", ev.event_message.data.get_event_data()),
+            )),
+            _ => None,
+        };
         match self.processor.process_notice(&notice) {
             Err(Error::MissingDelegatorSealError(id)) => {
+                if let Some((prefix, sn, kind)) = &described {
+                    tracing::warn!(
+                        %prefix, sn, %kind, delegator = %id,
+                        "no delegating seal found for this event — parking it in the \
+                         delegator's mailbox instead of receipting it"
+                    );
+                }
                 if let Notice::Event(delegated_event) = notice {
                     self.event_storage
                         .add_mailbox_delegate(&id, delegated_event)
@@ -339,7 +358,18 @@ impl<S: OobiStorageBackend> Witness<S> {
                     Ok(())
                 }
             }
-            whatever => whatever,
+            Err(e) => {
+                if let Some((prefix, sn, kind)) = &described {
+                    tracing::warn!(%prefix, sn, %kind, error = ?e, "notice refused");
+                }
+                Err(e)
+            }
+            ok => {
+                if let Some((prefix, sn, kind)) = &described {
+                    tracing::debug!(%prefix, sn, %kind, "notice processed");
+                }
+                ok
+            }
         }
     }
 
