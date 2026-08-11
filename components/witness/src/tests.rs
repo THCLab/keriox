@@ -1754,5 +1754,69 @@ fn test_delegated_inception_is_receipted_when_the_anchor_arrives_first(
          never reaches its own witness threshold and the device cannot use it"
     );
 
+    // The delegator collects the witness receipt for its own anchoring
+    // event, so the KEL it hands out carries one.
+    if let Some(PossibleResponse::Mbx(MailboxResponse { receipt, .. })) = witness
+        .process_query(delegator.query_mailbox(&witness.prefix))
+        .unwrap()
+    {
+        for rct in receipt {
+            delegator.process(&[Message::Notice(Notice::NontransferableRct(rct))])?;
+        }
+    }
+
+    // The device learns the delegator's anchoring event, the way an
+    // enrolling device receives its delegator's refreshed KEL.
+    let delegator_kel_after_anchor = delegator
+        .storage
+        .get_kel_messages_with_receipts_all(delegator.prefix())?
+        .unwrap()
+        .into_iter()
+        .map(Message::Notice)
+        .collect::<Vec<_>>();
+    device.process(&delegator_kel_after_anchor)?;
+    assert_eq!(
+        device
+            .get_state_for_id(delegator.prefix())
+            .expect("device knows its delegator")
+            .sn,
+        1,
+        "the device must hold the anchoring event before it can accept its own dip"
+    );
+
+    // The device has not accepted its own inception yet: it commits one
+    // witness receipt and has never been given one.
+    assert_eq!(
+        device.get_state_for_id(&delegated_id),
+        None,
+        "before collecting a receipt the device cannot run as its delegated identifier"
+    );
+
+    // Collect it the way a delegatee does — query the delegated
+    // identifier's mailbox at the witness, signed with the device's own
+    // key — and apply what comes back.
+    let mut collected = 0;
+    for query in device.query_groups_mailbox(&witness.prefix) {
+        if let Some(PossibleResponse::Mbx(MailboxResponse { receipt, .. })) =
+            witness.process_query(query).unwrap()
+        {
+            for rct in receipt {
+                collected += 1;
+                device.process(&[Message::Notice(Notice::NontransferableRct(rct))])?;
+            }
+        }
+    }
+    assert!(
+        collected > 0,
+        "the delegated identifier's mailbox must hand back the witness receipt"
+    );
+
+    assert!(
+        device.get_state_for_id(&delegated_id).is_some(),
+        "with the anchor and the receipt in hand the device must accept its \
+         delegated inception — until it does it keeps signing as the throwaway \
+         precursor, which its delegator's group does not list"
+    );
+
     Ok(())
 }
