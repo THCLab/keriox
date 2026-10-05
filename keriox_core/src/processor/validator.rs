@@ -201,8 +201,7 @@ impl<D: EventDatabase> EventValidator<D> {
                     sig.signature,
                 ))
             })
-            .collect::<Result<Vec<_>, Error>>()
-            .unwrap();
+            .collect::<Result<Vec<_>, Error>>()?;
         Ok(couplets.into_iter().chain(i).collect())
     }
 

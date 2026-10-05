@@ -68,15 +68,14 @@ impl WitnessConfig {
         match self.tally.clone() {
             SignatureThreshold::Simple(t) => {
                 let mut unique = HashSet::new();
-                // save indexed signer's identifiers
-                indexed_receipts.into_iter().for_each(|w| {
-                    unique.insert(
-                        self.witnesses
-                            .get(w.index.current() as usize)
-                            .unwrap()
-                            .clone(),
-                    );
-                });
+                // save indexed signer's identifiers; an index outside the
+                // witness list names no witness and doesn't count
+                indexed_receipts
+                    .into_iter()
+                    .filter_map(|w| self.witnesses.get(w.index.current() as usize))
+                    .for_each(|witness| {
+                        unique.insert(witness.clone());
+                    });
                 receipts_couplets
                     .into_iter()
                     .filter(|(witness, _sig)| self.witnesses.contains(witness))

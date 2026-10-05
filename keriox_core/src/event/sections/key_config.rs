@@ -182,8 +182,15 @@ impl KeyConfig {
         message: &[u8],
         sigs: &[IndexedSignature],
     ) -> Result<bool, SignatureError> {
+        // every index points at a key; checked first because the duplicate
+        // count below indexes by it
+        if sigs
+            .iter()
+            .any(|sig| sig.index.current() as usize >= self.public_keys.len())
+        {
+            Err(SignatureError::MissingIndex)
         // there are no duplicates
-        if !(sigs
+        } else if !(sigs
             .iter()
             .fold(vec![0u64; self.public_keys.len()], |mut acc, sig| {
                 acc[sig.index.current() as usize] += 1;
@@ -536,5 +543,35 @@ mod test {
         );
 
         Ok(())
+    }
+
+    #[test]
+    fn test_verify_rejects_index_out_of_range() {
+        use crate::{prefix::SelfSigningPrefix, signer::Signer};
+
+        let signer = Signer::new();
+        let key_config = KeyConfig::new(
+            vec![BasicPrefix::Ed25519(signer.public_key())],
+            NextKeysData::default(),
+            Some(SignatureThreshold::Simple(1)),
+        );
+        let msg = b"message";
+        let signature = SelfSigningPrefix::Ed25519Sha512(signer.sign(msg).unwrap());
+
+        assert!(key_config
+            .verify(
+                msg,
+                &[IndexedSignature::new_both_same(signature.clone(), 0)]
+            )
+            .unwrap());
+        for index in [1, 5, u16::MAX] {
+            assert!(matches!(
+                key_config.verify(
+                    msg,
+                    &[IndexedSignature::new_both_same(signature.clone(), index)]
+                ),
+                Err(SignatureError::MissingIndex)
+            ));
+        }
     }
 }
