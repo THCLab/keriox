@@ -5,7 +5,7 @@ use crate::{
     error::Error,
     event::{
         event_data::EventData,
-        sections::{threshold::SignatureThreshold, KeyConfig},
+        sections::{key_config::SignatureError, threshold::SignatureThreshold, KeyConfig},
     },
     event_message::EventTypeTag,
     prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
@@ -85,17 +85,23 @@ impl WitnessConfig {
                 Ok(unique.len() >= t as usize)
             }
             SignatureThreshold::Weighted(t) => {
+                // a witness counts once however many of its receipts arrive,
+                // and an index outside the witness list names no witness
                 let indexes = receipts_couplets
                     .into_iter()
                     .filter_map(|(id, _signature)| self.witnesses.iter().position(|wit| wit == &id))
                     .chain(
                         indexed_receipts
                             .into_iter()
-                            .map(|att| att.index.current() as usize),
+                            .map(|att| att.index.current() as usize)
+                            .filter(|index| *index < self.witnesses.len()),
                     )
+                    .collect::<HashSet<_>>()
+                    .into_iter()
                     .collect::<Vec<_>>();
                 match t.enough_signatures(&indexes) {
                     Ok(_) => Ok(true),
+                    Err(SignatureError::NotEnoughSigsError) => Ok(false),
                     Err(e) => Err(Error::KeyConfigError(e)),
                 }
             }
