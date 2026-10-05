@@ -7,7 +7,7 @@ use crate::{
     event::{sections::seal::Seal, KeyEvent},
     event_message::{dummy_event::DummyInceptionEvent, msg::KeriEvent, Typeable},
     prefix::IdentifierPrefix,
-    state::{EventSemantics, IdentifierState, LastEstablishmentData},
+    state::{check_keys, EventSemantics, IdentifierState, LastEstablishmentData},
 };
 use said::version::format::SerializationFormats;
 use said::{
@@ -89,6 +89,12 @@ impl InceptionEvent {
 
 impl EventSemantics for InceptionEvent {
     fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
+        check_keys(
+            self.key_config
+                .public_keys
+                .iter()
+                .chain(&self.witness_config.initial_witnesses),
+        )?;
         let last_est = LastEstablishmentData {
             sn: state.sn,
             digest: state.last_event_digest.clone(),

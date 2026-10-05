@@ -58,6 +58,16 @@ impl BasicPrefix {
         verify(data, self, signature)
     }
 
+    /// Whether the key may be installed in key state: Ed25519 keys must be
+    /// canonically encoded points of full order (see
+    /// [`PublicKey::is_valid_ed`]). Other key types are checked when used.
+    pub fn is_valid(&self) -> bool {
+        match self {
+            BasicPrefix::Ed25519(pk) | BasicPrefix::Ed25519NT(pk) => pk.is_valid_ed(),
+            _ => true,
+        }
+    }
+
     /// The CESR [`SelfSigning`](cesrox::primitives::codes::self_signing::SelfSigning)
     /// code matching this key's algorithm.
     ///

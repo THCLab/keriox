@@ -3,7 +3,7 @@ use crate::{
     database::rkyv_adapter::said_wrapper::SaidValue,
     error::Error,
     prefix::BasicPrefix,
-    state::{EventSemantics, IdentifierState, LastEstablishmentData, WitnessConfig},
+    state::{check_keys, EventSemantics, IdentifierState, LastEstablishmentData, WitnessConfig},
 };
 use said::SelfAddressingIdentifier;
 use serde::{Deserialize, Serialize};
@@ -58,6 +58,12 @@ impl RotationEvent {
 
 impl EventSemantics for RotationEvent {
     fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
+        check_keys(
+            self.key_config
+                .public_keys
+                .iter()
+                .chain(&self.witness_config.graft),
+        )?;
         if state.current.verify_next(&self.key_config)? {
             // witness rotation processing
             let witnesses =

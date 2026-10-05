@@ -103,6 +103,15 @@ impl WitnessConfig {
         }
     }
 }
+/// Rejects keys that must not enter key state, such as small-order Ed25519
+/// keys for which anyone can produce valid signatures.
+pub(crate) fn check_keys<'a>(keys: impl IntoIterator<Item = &'a BasicPrefix>) -> Result<(), Error> {
+    match keys.into_iter().find(|key| !key.is_valid()) {
+        Some(key) => Err(Error::InvalidPublicKey(key.clone())),
+        None => Ok(()),
+    }
+}
+
 /// Identifier State
 ///
 /// represents the accumulated state after applying events, based on section 13 of the paper

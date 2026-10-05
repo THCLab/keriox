@@ -1,4 +1,4 @@
-use ed25519_dalek::{Signer, Verifier};
+use ed25519_dalek::Signer;
 use k256::ecdsa::{signature::Signer as EcdsaSigner, Signature as EcdsaSignature, SigningKey};
 use k256::ecdsa::{signature::Verifier as EcdsaVerifier, VerifyingKey};
 use p256::ecdsa::{
@@ -55,12 +55,29 @@ impl PublicKey {
                 return false;
             }
             let sig = ed25519_dalek::Signature::from(array_ref!(sig, 0, 64).to_owned());
-            match key.verify(msg, &sig) {
+            // `verify` accepts small-order keys and R values, so for a
+            // small-order key anyone can produce a signature valid for any
+            // message. `verify_strict` rejects them, matching libsodium.
+            match key.verify_strict(msg, &sig) {
                 Ok(()) => true,
                 Err(_) => false,
             }
         } else {
             false
+        }
+    }
+
+    /// Whether the key is a canonically encoded Ed25519 point outside the
+    /// small-order subgroup, the same criteria libsodium applies to public
+    /// keys. Signatures for small-order keys can be produced without any
+    /// secret, so such keys must never be accepted into key state.
+    pub fn is_valid_ed(&self) -> bool {
+        let Ok(bytes) = <[u8; 32]>::try_from(self.public_key.as_slice()) else {
+            return false;
+        };
+        match ed25519_dalek::VerifyingKey::from_bytes(&bytes) {
+            Ok(key) => !key.is_weak() && key.to_edwards().compress().to_bytes() == bytes,
+            Err(_) => false,
         }
     }
 
@@ -185,4 +202,99 @@ fn libsodium_to_ed25519_dalek_compat() {
             &Signature::from_bytes(&arrayref::array_ref!(sodium_sig, 0, 64).to_owned())
         )
         .is_ok());
+}
+
+/// Small-order points of edwards25519 (canonical encodings of the 8-torsion
+/// subgroup) followed by non-canonical encodings of small-order points.
+#[cfg(test)]
+const SMALL_ORDER_KEYS: [&str; 10] = [
+    // identity
+    "0100000000000000000000000000000000000000000000000000000000000000",
+    // order 2
+    "ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+    // order 4
+    "0000000000000000000000000000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000000000000000000000000080",
+    // order 8
+    "c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a",
+    "c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac03fa",
+    "26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc05",
+    "26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc85",
+    // identity encoded as y = p + 1
+    "eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+    // identity encoded as y = 1 with the sign bit set
+    "0100000000000000000000000000000000000000000000000000000000000080",
+];
+
+#[test]
+fn verify_ed_rejects_signature_for_small_order_key() {
+    use sodiumoxide::crypto::sign;
+
+    // R = identity, S = 0 satisfies the permissive verification equation
+    // [S]B = R + [k]A for every message when A is the identity point.
+    let mut universal_sig = [0u8; 64];
+    universal_sig[0] = 1;
+
+    for key in [SMALL_ORDER_KEYS[0], SMALL_ORDER_KEYS[8]] {
+        let key = hex::decode(key).unwrap();
+        let sodium_pk = sign::ed25519::PublicKey::from_slice(&key).unwrap();
+        let sodium_sig = sign::ed25519::Signature::from_bytes(&universal_sig).unwrap();
+        for msg in [&b"first message"[..], &b"second message"[..]] {
+            // The forgery is real: dalek's permissive check accepts it.
+            let vk = ed25519_dalek::VerifyingKey::from_bytes(key.as_slice().try_into().unwrap())
+                .unwrap();
+            let sig = ed25519_dalek::Signature::from_bytes(&universal_sig);
+            assert!(ed25519_dalek::Verifier::verify(&vk, msg, &sig).is_ok());
+
+            assert!(!PublicKey::new(key.clone()).verify_ed(msg, &universal_sig));
+            assert!(!sign::verify_detached(&sodium_sig, msg, &sodium_pk));
+        }
+    }
+}
+
+#[test]
+fn verify_ed_rejects_small_order_r() {
+    use rand::rngs::OsRng;
+
+    let sk = ed25519_dalek::SigningKey::generate(&mut OsRng);
+    let pk = PublicKey::new(sk.verifying_key().to_bytes().to_vec());
+    let msg = b"message";
+    assert!(pk.verify_ed(msg, &sk.sign(msg).to_bytes()));
+
+    for r in SMALL_ORDER_KEYS {
+        let mut sig = [0u8; 64];
+        sig[..32].copy_from_slice(&hex::decode(r).unwrap());
+        assert!(!pk.verify_ed(msg, &sig));
+    }
+}
+
+#[test]
+fn is_valid_ed_rejects_weak_and_non_canonical_keys() {
+    use rand::rngs::OsRng;
+
+    let sk = ed25519_dalek::SigningKey::generate(&mut OsRng);
+    assert!(PublicKey::new(sk.verifying_key().to_bytes().to_vec()).is_valid_ed());
+
+    for key in SMALL_ORDER_KEYS {
+        assert!(
+            !PublicKey::new(hex::decode(key).unwrap()).is_valid_ed(),
+            "{key}"
+        );
+    }
+
+    // y = p + 3 decodes to a point of full order, but the encoding is not
+    // canonical; libsodium rejects such keys.
+    let non_canonical =
+        hex::decode("f0ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f").unwrap();
+    assert!(
+        ed25519_dalek::VerifyingKey::from_bytes(non_canonical.as_slice().try_into().unwrap())
+            .is_ok_and(|key| !key.is_weak())
+    );
+    assert!(!PublicKey::new(non_canonical).is_valid_ed());
+
+    // Not a point on the curve (y = 2) and wrong length.
+    let mut off_curve = [0u8; 32];
+    off_curve[0] = 2;
+    assert!(!PublicKey::new(off_curve.to_vec()).is_valid_ed());
+    assert!(!PublicKey::new(vec![1u8; 31]).is_valid_ed());
 }

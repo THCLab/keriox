@@ -5,8 +5,10 @@ use thiserror::Error;
 #[cfg(feature = "storage-redb")]
 use crate::database::redb::RedbError;
 use crate::{
-    event::sections::key_config::SignatureError, event_message::cesr_adapter::ParseError,
-    prefix::IdentifierPrefix, processor::validator::VerificationError,
+    event::sections::key_config::SignatureError,
+    event_message::cesr_adapter::ParseError,
+    prefix::{BasicPrefix, IdentifierPrefix},
+    processor::validator::VerificationError,
 };
 
 pub mod serializer_error;
@@ -54,6 +56,9 @@ pub enum Error {
 
     #[error("Signature verification failed")]
     SignatureVerificationError,
+
+    #[error("Invalid public key: {0:?}")]
+    InvalidPublicKey(BasicPrefix),
 
     #[error("Receipt signature verification failed")]
     ReceiptVerificationError,
