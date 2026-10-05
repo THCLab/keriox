@@ -1,3 +1,141 @@
+## [0.18.0] - 2026-10-05
+
+### 🚀 Features
+
+- Make redb storage optional with feature-flagged and add in-memory db
+- Abstract NotificationBus for swappable dispatch
+- Add EscrowSet and KeriRuntime for serverless composition
+- Add postgres storage backend with SQLx support
+- Postgres config for customizable connection pool size
+- Feat: add Postgres OOBI storage backend and generalize OobiManager
+storage
+
+- Generalize OobiManager storage and fix Postgres error handling
+- *(teliox)* Abstract storage layer and add PostgreSQL backend
+- *(controller)* Add PostgreSQL storage backend and integration tests
+- Add postgres and redb controller implementations
+- *(keri-sdk)* High-level API, KeriStore, signing/TEL modules, and docs
+- Introduce tracing to improve logging
+- *(watcher)* Proactive witness polling, health tracking, and KEL sync fixes
+- Expose delegaation logic via sdk
+- *(keriox-sdk)* Expose multi-signature over SDK
+- *(keri-keyprovider)* Decoupled key storage with multiple backends
+- Simplify API for multi-signature and delegation
+- *(mobile)* Add mobile feature flags, rustls TLS gating, and build profile
+- *(keyprovider)* Add HostCallbackKeyProvider for platform keystore delegation
+- *(store)* Add save_id method for FFI-layer identifier persistence
+- *(controller)* Replace rusqlite query_cache with redb
+- *(sdk)* Add process and process_tel_stream to Controller
+- Complete cesrox v2 API migration across all crates
+- *(sdk)* Add keys module with Ed25519 key generation helpers
+- *(sdk)* Add sign_to_cesr helper for raw JSON CESR signing
+- *(sdk)* Add string-accepting variants for credential operations
+- *(sdk)* Add KeriStore::rotate() for one-call key rotation
+- *(sdk)* Add key provider integration in KeriStore
+- *(sdk)* Reorganize re-exports with advanced module
+- Add dirty and sha to the version for witness and watcher
+- *(sdk)* Add protocol module with re-exports for CLI consumers
+- Add Https variant to OOBI Scheme enum
+- *(sdk)* Add OobiStore wrapping RedbOobiManager for persistent OOBI storage
+- Re-export teliox in sdk
+- *(transport)* Share reqwest client across transport layers
+- Prometheus /metrics + tracing spans on watcher and witness hot paths
+- *(watcher)* Health-prioritised witness queries with first-success fan-out
+- *(watcher)* Parallelise per-AID polling with bounded concurrency
+- *(watcher)* Circuit-breaker cool-down for repeatedly-failing witnesses
+- *(observability)* Admin port for metrics + scaling KPIs
+- *(core)* Support ECDSA secp256r1 (P-256) signing keys
+- *(keyprovider)* Add P-256 software/file backends + fix secp256k1 sig encoding
+- *(sdk)* [**breaking**] Add P-256 generators; require explicit transferability
+- *(core,sdk)* Algorithm-aware Signer; wire P-256 through inception
+- *(sdk)* [**breaking**] Algorithm-aware KeriStore::create / create_delegated / rotate
+- *(core)* Make CryptoBox + generate_key_pair algorithm-aware
+- *(sdk)* Multisig direct-CESR plumbing; cover mixed-curve 2-of-2
+- *(oobi)* Add Messagebox end-role generator
+
+### 🐛 Bug Fixes
+
+- Cleanup todos
+- Double ref
+- Unrawps on deserialize
+- Align PostgresOobiStorage save_oobi with redb backend
+- Propagate errors in Postgres TEL storage and escrow processors
+- Add RedbIdentifier and PostgresIdentifier type aliases
+- Make SimpleController generic over OobiStorageBackend
+- Make OobiManager generic over storage backend and fix database conflicts
+- *(transport)* Handle empty error bodies in HTTP responses
+- *(transport)* Add HTTP connect and request timeouts
+- *(watcher)* Add HTTP timeouts to watcher-to-witness transport
+- *(watcher)* Query witnesses in parallel in forward_query_from
+- Chore: expose low level keri functionality for clients
+- Improve actions related with multi sig and delegation
+- *(sdk)* Support query_cache feature in RedbIdentifier construction
+- Address compilation warnings and run fmt
+- *(prefix)* Update from_text_to_bytes calls and remove SeedCode::RandomSeed128
+- Remove Blake2B256/Blake2S256 inner Vec<u8> for cesrox v2
+- Rename MaterialPath::to_path to create_from_str for cesrox v2
+- Update reply_escrow test to use new cesrox v2 parse API
+- Silence all build warnings across workspace
+- Recover LastEstablishment signer from MailboxQuery context
+- Implement old CESR counter code support and fix all test failures
+- Align CESR counter codes with CESR 2.0 specification
+- Update test data to use spec-aligned CESR group codes
+- Align test data with CESR V2 counter codes and fix 0E/0F digest
+- Update cesrox and said, introduce protocol level api for sdk
+- Name of the build images
+- *(sdk)* Use &encoded instead of .as_bytes() on Vec<u8> in oobi.rs
+- *(sdk)* Cache Arc<Controller> per db_path in KeriStore to eliminate redb flock race
+- Address redb locks when working with multi identifiers
+- *(core)* Preserve transferable signer prefix on CESR encode
+- *(controller)* [**breaking**] Wrap nontransferable signatures in correct curve code
+- *(sdk)* Multisig group rotation uses next signer; cover P-256 1-of-1 e2e
+- *(sdk)* Rotate_multisig_group signs with current signer, not next
+- *(keys)* Reject small-order Ed25519 keys and signatures
+- *(processor)* Reject out-of-range signature indexes instead of panicking
+- *(state)* Count each witness once towards a weighted receipt threshold
+
+### 🚜 Refactor
+
+- Postgres tests to use helper functions and reduce boilerplate
+- Remove unused ksn log methods and PostgresWriteTxnMode usage
+- *(controller)* Make KnownEvents, Communication, Controller and Identifier generic over storage backends
+- Add raw_db accessor to RedbDatabase and update usage
+- *(sdk)* Add signature verification, signing, hashing, and OOBI helpers
+
+### 📚 Documentation
+
+- Update root README with SDK and pluggable architecture
+- Update keriox_core README with feature flags and abstractions
+- Add keriox_sdk README documenting KeriRuntime and Controller
+- Add mobile support section to README
+- *(performance)* Consolidated guide for metrics, tracing, and the A/B
+- Scaling proposal for witness, watcher, controller
+- Install ca-certificates in watcher and witness images
+
+### 🧪 Testing
+
+- Perf_watcher harness for measuring watcher AID-verification latency
+- *(perf)* Slow-witness scenario + fetch_kel mode for step 3 validation
+- *(witness)* Cover disaster recovery via controller KEL replay
+- Add witness_count_perf regression test
+- *(sdk)* P-256 wire format round-trip; fix prefix FromStr truncation
+- *(sdk)* P-256 rotation chain + KeyProvider-backed inception
+- P-256 delegation e2e (uniform + mixed-curve) + signing_code coverage
+
+### ⚙️ Miscellaneous Tasks
+
+- Update base image for docker
+- *(mobile)* Add GitHub Actions workflow for mobile target verification
+- Add .cargo/config.toml with local cesrox/said patches
+- Bump cesrox to 2.0.0-alpha.3 and said to 0.5.2 in all crate Cargo.toml files
+- Add debug print for op stream
+- Improve build process for docker images
+- Remove .cargo/config.toml from repo
+- Bump docker img version for rust
+- *(core)* Replace eprintln/dbg debug noise with tracing
+- Bump reqwest version
+- Remove unused import
+
 ## [0.17.13] - 2026-03-25
 
 ### ⚙️ Miscellaneous Tasks

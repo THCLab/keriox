@@ -1,6 +1,6 @@
 [package]
 name = "keri-keyprovider"
-version = "0.1.0"
+version = "0.18.0"
 description = "Decoupled cryptographic key provider interface for KERI and beyond"
 authors.workspace = true
 edition.workspace = true
