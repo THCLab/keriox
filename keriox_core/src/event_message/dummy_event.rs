@@ -5,7 +5,7 @@ use crate::{
 
 use super::{EventTypeTag, Typeable};
 use cesrox::primitives::codes::self_addressing::SelfAddressing;
-use said::version::{format::SerializationFormats, SerializationInfo};
+use said::version::SerializationInfo;
 use said::{
     derivation::{HashFunction, HashFunctionCode},
     SelfAddressingIdentifier,
@@ -15,9 +15,10 @@ use serde_hex::{Compact, SerHex};
 
 /// Dummy Inception Event
 ///
-/// Used only to encapsulate the prefix derivation process for inception and
-/// delegated inception. The digest and the prefix hold `#` placeholders of
-/// the SAID's length, as the SAID is computed over that serialization.
+/// Used only to encapsulate the prefix derivation process for self-addressing
+/// inception and delegated inception. The digest and the prefix hold `#`
+/// placeholders of the SAID's length, as the SAID is computed over that
+/// serialization.
 #[derive(Serialize, Debug, Clone)]
 pub(crate) struct DummyInceptionEvent {
     #[serde(rename = "v")]
@@ -35,40 +36,43 @@ pub(crate) struct DummyInceptionEvent {
 }
 
 impl DummyInceptionEvent {
+    /// `version` gives the protocol, versions and kind of the message; its
+    /// size is replaced with the size of the dummy serialization.
     pub fn dummy_inception_data(
         icp: InceptionEvent,
         derivation: &SelfAddressing,
-        format: SerializationFormats,
+        version: SerializationInfo,
     ) -> Result<Self, Error> {
-        DummyInceptionEvent::derive_data(EventData::Icp(icp), derivation, format)
+        DummyInceptionEvent::derive_data(EventData::Icp(icp), derivation, version)
     }
 
+    /// `version` gives the protocol, versions and kind of the message; its
+    /// size is replaced with the size of the dummy serialization.
     pub fn dummy_delegated_inception_data(
         dip: DelegatedInceptionEvent,
         derivation: &SelfAddressing,
-        format: SerializationFormats,
+        version: SerializationInfo,
     ) -> Result<Self, Error> {
-        DummyInceptionEvent::derive_data(EventData::Dip(dip), derivation, format)
+        DummyInceptionEvent::derive_data(EventData::Dip(dip), derivation, version)
     }
 
     fn derive_data(
         data: EventData,
         derivation: &SelfAddressing,
-        format: SerializationFormats,
+        version: SerializationInfo,
     ) -> Result<Self, Error> {
         let placeholder = "#".repeat(HashFunction::from(derivation.clone()).get_len());
-        let tmp_serialization_info = SerializationInfo::new_empty("KERI".to_string(), 1, 0, format);
         let mut tmp_icp = DummyInceptionEvent {
-            serialization_info: tmp_serialization_info,
+            serialization_info: SerializationInfo { size: 0, ..version },
             event_type: data.get_type(),
             digest: placeholder.clone(),
             prefix: placeholder,
             sn: 0,
             data,
         };
-        let len = tmp_icp.derivation_data()?.len();
-        let serialization_info = SerializationInfo::new("KERI".to_string(), 1, 0, format, len);
-        tmp_icp.serialization_info = serialization_info;
+        // The size is written with a fixed width, so it does not change the
+        // length it measures.
+        tmp_icp.serialization_info.size = tmp_icp.derivation_data()?.len();
         Ok(tmp_icp)
     }
 

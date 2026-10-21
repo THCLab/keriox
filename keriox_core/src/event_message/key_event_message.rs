@@ -34,31 +34,41 @@ impl KeriEvent<KeyEvent> {
         SignedEventMessage::new(self, sigs, witness_sigs, delegator_seal)
     }
 
+    /// Whether `sai` is a digest of this event's content. The event's own
+    /// `d` field is not trusted: the digest is always recomputed.
     pub fn compare_digest(&self, sai: &SelfAddressingIdentifier) -> Result<bool, Error> {
-        let self_dig = self.digest()?;
-        if self_dig.derivation.eq(&sai.derivation) {
-            Ok(&self_dig == sai)
-        } else {
-            Ok(sai.verify_binding(&self.to_derivation_data()?))
-        }
+        Ok(sai.verify_binding(&self.to_derivation_data()?))
     }
 
+    /// Fails unless the event's `d` field is the digest of its content.
+    pub fn check_said(&self) -> Result<(), Error> {
+        self.compare_digest(&self.digest()?)?
+            .then_some(())
+            .ok_or(Error::IncorrectDigest)
+    }
+
+    /// The serialization the event's SAID is computed over: the event with
+    /// `d`, and for a self-addressing inception also `i`, replaced by
+    /// placeholders.
     pub fn to_derivation_data(&self) -> Result<Vec<u8>, Error> {
         let event_digest = self.digest()?;
         let hash_function_code: HashFunctionCode = event_digest.derivation.into();
+        let self_addressing = matches!(self.data.prefix, IdentifierPrefix::SelfAddressing(_));
         Ok(match self.data.get_event_data() {
-            EventData::Icp(icp) => DummyInceptionEvent::dummy_inception_data(
+            EventData::Icp(icp) if self_addressing => DummyInceptionEvent::dummy_inception_data(
                 icp,
                 &hash_function_code,
-                self.serialization_info.kind,
+                self.serialization_info.clone(),
             )?
             .derivation_data()?,
-            EventData::Dip(dip) => DummyInceptionEvent::dummy_delegated_inception_data(
-                dip,
-                &hash_function_code,
-                self.serialization_info.kind,
-            )?
-            .derivation_data()?,
+            EventData::Dip(dip) if self_addressing => {
+                DummyInceptionEvent::dummy_delegated_inception_data(
+                    dip,
+                    &hash_function_code,
+                    self.serialization_info.clone(),
+                )?
+                .derivation_data()?
+            }
             _ => self.derivation_data(&hash_function_code, &self.serialization_info.kind)?,
         })
     }
@@ -67,11 +77,7 @@ impl KeriEvent<KeyEvent> {
 impl EventSemantics for KeriEvent<KeyEvent> {
     fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
         let event_digest = self.digest()?;
-        let check_event_digest = |ev: &KeriEvent<KeyEvent>| -> Result<(), Error> {
-            ev.compare_digest(&event_digest)?
-                .then_some(())
-                .ok_or(Error::IncorrectDigest)
-        };
+        self.check_said()?;
         let last_event_digest = &state.last_event_digest.said;
         // Update state.last with serialized current event message.
         match (self.data.get_event_data(), &self.event_type) {
@@ -89,7 +95,6 @@ impl EventSemantics for KeriEvent<KeyEvent> {
             }
             (EventData::Rot(ref rot), EventTypeTag::Rot)
             | (EventData::Drt(ref rot), EventTypeTag::Rot) => {
-                check_event_digest(self)?;
                 if state.delegator.is_some() {
                     Err(Error::SemanticError(
                         "Applying non-delegated rotation to delegated state.".into(),
@@ -116,7 +121,6 @@ impl EventSemantics for KeriEvent<KeyEvent> {
             (EventData::Rot(ref drt), EventTypeTag::Drt)
             | (EventData::Drt(ref drt), EventTypeTag::Drt) => {
                 self.data.apply_to(state.clone()).and_then(|next_state| {
-                    check_event_digest(self)?;
                     if state.delegator.is_none() {
                         Err(Error::SemanticError(
                             "Applying delegated rotation to non-delegated state.".into(),
@@ -134,7 +138,6 @@ impl EventSemantics for KeriEvent<KeyEvent> {
                 })
             }
             (EventData::Ixn(ref inter), _) => {
-                check_event_digest(self)?;
                 self.data.apply_to(state.clone()).and_then(|next_state| {
                     if last_event_digest.eq(inter.previous_event_hash()) {
                         Ok(IdentifierState {
@@ -166,11 +169,13 @@ pub fn verify_identifier_binding(icp_event: &KeriEvent<KeyEvent>) -> Result<bool
             IdentifierPrefix::SelfAddressing(sap) => {
                 Ok(icp_event.compare_digest(&sap.said)? && icp_event.digest()?.eq(&sap.said))
             }
-            IdentifierPrefix::SelfSigning(_ssp) => todo!(),
+            IdentifierPrefix::SelfSigning(_ssp) => Ok(false),
         },
         EventData::Dip(_dip) => match &icp_event.data.get_prefix() {
-            IdentifierPrefix::SelfAddressing(sap) => icp_event.compare_digest(&sap.said),
-            _ => todo!(),
+            IdentifierPrefix::SelfAddressing(sap) => {
+                Ok(icp_event.compare_digest(&sap.said)? && icp_event.digest()?.eq(&sap.said))
+            }
+            _ => Ok(false),
         },
         _ => Err(Error::SemanticError("Not an ICP or DIP event".into())),
     }

@@ -11,6 +11,7 @@ use crate::{
 };
 use said::derivation::HashFunction;
 use said::derivation::HashFunctionCode;
+use said::version::SerializationInfo;
 use serde::{Deserialize, Serialize};
 
 #[derive(
@@ -44,8 +45,11 @@ impl DelegatedInceptionEvent {
         format: SerializationFormats,
     ) -> Result<KeriEvent<KeyEvent>, Error> {
         let code: HashFunctionCode = derivation.into();
-        let dummy_event =
-            DummyInceptionEvent::dummy_delegated_inception_data(self.clone(), &code, format)?;
+        let dummy_event = DummyInceptionEvent::dummy_delegated_inception_data(
+            self.clone(),
+            &code,
+            SerializationInfo::new_empty("KERI".to_string(), 1, 0, format),
+        )?;
         let digest = dummy_event.said(&code)?;
         let event = KeyEvent::new(
             IdentifierPrefix::self_addressing(digest.clone()),

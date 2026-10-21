@@ -673,8 +673,8 @@ fn test_invalid_notice() {
         invalid_event.event_message.data.prefix =
             IdentifierPrefix::Basic(BasicPrefix::Ed25519(PublicKey::new(vec![0; 32])));
         let result = witness.process_notice(Notice::Event(invalid_event));
-        // TODO: use better error variant
-        assert!(matches!(result, Err(Error::SemanticError(_))));
+        // The SAID no longer matches the changed content.
+        assert!(matches!(result, Err(Error::IncorrectDigest)));
 
         // remove signatures
         let mut incept_event_unsigned = incept_event.clone();
