@@ -12,6 +12,7 @@ members = [
     "keriox_sdk",
     "keri_keyprovider",
 ]
+exclude = ["test-vectors/legacy-check"]
 
 [workspace.package]
 repository = "https://github.com/THCLab/keriox"

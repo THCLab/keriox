@@ -1,0 +1,6 @@
+# Vectors of test-vectors/keriox-legacy that the keriox deployed clients
+# run does not write back byte for byte. Format: <vector id> TAB <why>.
+kel/delegated	that keriox drops the delegator seal (-S) of a delegated rotation when reading it, so it cannot write it back; it still accepts the log
+stream/exn/fwd	that keriox reads a -T and -K group under a path as a seal without signatures and separate signatures, and writes them back so; for the exchange as made it writes these exact bytes
+stream/icp/CBOR	that keriox reads JSON bodies only
+stream/icp/MGPK	that keriox reads JSON bodies only

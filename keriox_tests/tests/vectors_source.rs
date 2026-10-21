@@ -1,6 +1,9 @@
-//! Writes what keriox produces as test vectors in `test-vectors/keriox`, in
-//! the layout of the shared CESR V2 vectors, so that another implementation
-//! can confirm it: `test-vectors/keripy-check.sh` reads them with keripy.
+//! Writes what keriox produces as test vectors, in the layout of the shared
+//! CESR V2 vectors: in CESR V2 in `test-vectors/keriox`, so that another
+//! implementation can confirm it (`test-vectors/keripy-check.sh` reads them
+//! with keripy), and in the format keriox wrote before cesrox 2.0 in
+//! `test-vectors/keriox-legacy`, which deployed keriox clients must keep
+//! reading (`test-vectors/legacy-check.sh`).
 //!
 //! Keys and timestamps are fixed, so the vectors are the same on every run.
 //! The test regenerates them and fails if they differ from the committed
@@ -23,6 +26,7 @@ use keri_core::{
         KeyEvent,
     },
     event_message::{
+        cesr_adapter::WireFormat,
         event_msg_builder::{EventMsgBuilder, ReceiptBuilder},
         msg::KeriEvent,
         signature::{Nontransferable, Signature, SignerData},
@@ -52,7 +56,7 @@ use said::{
 };
 use serde_json::{json, Value};
 
-const OUT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../test-vectors/keriox");
+const OUT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../test-vectors");
 const WRITE_ENV: &str = "KERIOX_VECTORS_WRITE";
 const TIMESTAMP: &str = "2024-01-01T00:00:00+00:00";
 
@@ -83,13 +87,16 @@ fn sign(data: &[u8], signers: &[&Signer]) -> Vec<IndexedSignature> {
         .collect()
 }
 
-fn text(message: Message) -> String {
-    String::from_utf8(message.to_cesr().unwrap()).unwrap()
+fn text(format: WireFormat, message: Message) -> String {
+    String::from_utf8(message.to_cesr_with(format).unwrap()).unwrap()
 }
 
-fn signed_event(event: &KeriEvent<KeyEvent>, signers: &[&Signer]) -> String {
+fn signed_event(format: WireFormat, event: &KeriEvent<KeyEvent>, signers: &[&Signer]) -> String {
     let sigs = sign(&event.encode().unwrap(), signers);
-    text(Message::Notice(Notice::Event(event.sign(sigs, None, None))))
+    text(
+        format,
+        Message::Notice(Notice::Event(event.sign(sigs, None, None))),
+    )
 }
 
 fn timestamped<D: serde::Serialize>(data: D) -> Timestamped<D> {
@@ -153,7 +160,7 @@ fn kel_vector(
     json!({"id": id, "note": note, "pvrsn": "1.0", "stream": stream, "kels": kels})
 }
 
-fn kels() -> Vec<Value> {
+fn kels(format: WireFormat) -> Vec<Value> {
     let (c0, c1, c2) = (signer("c0"), signer("c1"), signer("c2"));
     let (n0, n1, n2) = (signer("n0"), signer("n1"), signer("n2"));
     let (m0, m1, m2) = (signer("m0"), signer("m1"), signer("m2"));
@@ -188,9 +195,9 @@ fn kels() -> Vec<Value> {
         .build()
         .unwrap();
     let kel = [
-        signed_event(&icp, &[&c0, &c1, &c2]),
-        signed_event(&rot, &[&n0, &n1, &n2]),
-        signed_event(&ixn, &[&n0, &n1, &n2]),
+        signed_event(format, &icp, &[&c0, &c1, &c2]),
+        signed_event(format, &rot, &[&n0, &n1, &n2]),
+        signed_event(format, &ixn, &[&n0, &n1, &n2]),
     ]
     .concat();
     vecs.push(kel_vector(
@@ -222,9 +229,9 @@ fn kels() -> Vec<Value> {
         "kel/transferable-receipt",
         "a second identifier receipts the first one's inception with a -X group",
         [
-            signed_event(&validator, &[&v0]),
-            signed_event(&icp, &[&c0, &c1, &c2]),
-            text(Message::Notice(Notice::TransferableRct(vrc))),
+            signed_event(format, &validator, &[&v0]),
+            signed_event(format, &icp, &[&c0, &c1, &c2]),
+            text(format, Message::Notice(Notice::TransferableRct(vrc))),
         ]
         .concat(),
         &[&validator.data.get_prefix(), &id],
@@ -250,18 +257,21 @@ fn kels() -> Vec<Value> {
         .iter()
         .map(|w| {
             let sig = SelfSigningPrefix::Ed25519Sha512(w.sign(&raw).unwrap());
-            text(Message::Notice(Notice::NontransferableRct(
-                SignedNontransferableReceipt::new(
-                    &receipt,
-                    vec![Nontransferable::Couplet(vec![(witness_key(w), sig)])],
-                ),
-            )))
+            text(
+                format,
+                Message::Notice(Notice::NontransferableRct(
+                    SignedNontransferableReceipt::new(
+                        &receipt,
+                        vec![Nontransferable::Couplet(vec![(witness_key(w), sig)])],
+                    ),
+                )),
+            )
         })
         .collect();
     vecs.push(kel_vector(
         "kel/witnessed-receipts",
         "inception with two witnesses followed by a receipt from each",
-        signed_event(&witnessed, &[&c0]) + &receipts,
+        signed_event(format, &witnessed, &[&c0]) + &receipts,
         &[&wid],
         &[1],
     ));
@@ -274,7 +284,7 @@ fn kels() -> Vec<Value> {
     vecs.push(kel_vector(
         "kel/witnessed-indexed",
         "inception with two witnesses whose indexed signatures are attached",
-        text(Message::Notice(Notice::Event(with_wigers))),
+        text(format, Message::Notice(Notice::Event(with_wigers))),
         &[&wid],
         &[1],
     ));
@@ -332,21 +342,20 @@ fn kels() -> Vec<Value> {
         |event: &KeriEvent<KeyEvent>, signer: &Signer, anchor: &KeriEvent<KeyEvent>, sn| {
             let sigs = sign(&event.encode().unwrap(), &[signer]);
             let seal = SourceSeal::new(sn, anchor.digest().unwrap());
-            text(Message::Notice(Notice::Event(event.sign(
-                sigs,
-                None,
-                Some(seal),
-            ))))
+            text(
+                format,
+                Message::Notice(Notice::Event(event.sign(sigs, None, Some(seal)))),
+            )
         };
     vecs.push(kel_vector(
         "kel/delegated",
         "delegator inception and interactions anchoring a delegated inception and a \
          delegated rotation, each citing its anchor",
         [
-            signed_event(&delegator, &[&d0]),
-            signed_event(&anchor_dip, &[&d0]),
+            signed_event(format, &delegator, &[&d0]),
+            signed_event(format, &anchor_dip, &[&d0]),
             delegated(&dip, &c0, &anchor_dip, 1),
-            signed_event(&anchor_drt, &[&d0]),
+            signed_event(format, &anchor_drt, &[&d0]),
             delegated(&drt, &n0, &anchor_drt, 2),
         ]
         .concat(),
@@ -364,7 +373,7 @@ fn stream_vector(id: &str, note: &str, stream: String, verkeys: &[&Signer]) -> V
     v
 }
 
-fn streams() -> Vec<Value> {
+fn streams(format: WireFormat) -> Vec<Value> {
     let (c0, n0) = (signer("c0"), signer("n0"));
     let icp = EventMsgBuilder::new(EventTypeTag::Icp)
         .with_keys(vec![key(&c0)])
@@ -377,7 +386,7 @@ fn streams() -> Vec<Value> {
     let mut vecs = vec![stream_vector(
         "stream/icp/JSON",
         "single-key inception with its controller signature",
-        signed_event(&icp, &[&c0]),
+        signed_event(format, &icp, &[&c0]),
         &[&c0],
     )];
 
@@ -399,9 +408,12 @@ fn streams() -> Vec<Value> {
     vecs.push(stream_vector(
         "stream/qry/ksn",
         "key state query signed with a -Y group",
-        text(Message::Op(Op::Query(SignedQueryMessage::KelQuery(
-            SignedKelQuery::new_trans(qry, id.clone(), sigs),
-        )))),
+        text(
+            format,
+            Message::Op(Op::Query(SignedQueryMessage::KelQuery(
+                SignedKelQuery::new_trans(qry, id.clone(), sigs),
+            ))),
+        ),
         &[],
     ));
 
@@ -422,11 +434,14 @@ fn streams() -> Vec<Value> {
     vecs.push(stream_vector(
         "stream/rpy/end-role/transferable",
         "end role reply signed by a transferable controller with a -X group",
-        text(Message::Op(Op::Reply(SignedReply::new_trans(
-            end_role,
-            seal.clone(),
-            sigs,
-        )))),
+        text(
+            format,
+            Message::Op(Op::Reply(SignedReply::new_trans(
+                end_role,
+                seal.clone(),
+                sigs,
+            ))),
+        ),
         &[],
     ));
     let loc = reply(ReplyRoute::LocScheme(LocationScheme {
@@ -438,11 +453,14 @@ fn streams() -> Vec<Value> {
     vecs.push(stream_vector(
         "stream/rpy/loc-scheme/nontransferable",
         "location reply signed by a witness with a receipt couple",
-        text(Message::Op(Op::Reply(SignedReply::new_nontrans(
-            loc,
-            witness_key(&witness),
-            sig,
-        )))),
+        text(
+            format,
+            Message::Op(Op::Reply(SignedReply::new_nontrans(
+                loc,
+                witness_key(&witness),
+                sig,
+            ))),
+        ),
         &[],
     ));
 
@@ -479,12 +497,12 @@ fn streams() -> Vec<Value> {
         "stream/exn/fwd",
         "exchange forwarding an inception, with the sender's -X group and the \
          inception's signatures under path -a",
-        text(Message::Op(Op::Exchange(exchange))),
+        text(format, Message::Op(Op::Exchange(exchange))),
         &[],
     ));
 
     // the inception in CBOR and MessagePack
-    for (format, name) in [
+    for (serialization, name) in [
         (SerializationFormats::CBOR, "CBOR"),
         (SerializationFormats::MGPK, "MGPK"),
     ] {
@@ -498,14 +516,14 @@ fn streams() -> Vec<Value> {
             Some(SignatureThreshold::Simple(1)),
         );
         let icp = InceptionEvent::new(key_config, None, None)
-            .incept_self_addressing(HashFunctionCode::Blake3_256.into(), format)
+            .incept_self_addressing(HashFunctionCode::Blake3_256.into(), serialization)
             .unwrap();
         let stream = Message::Notice(Notice::Event(icp.sign(
             sign(&icp.encode().unwrap(), &[&c0]),
             None,
             None,
         )))
-        .to_cesr()
+        .to_cesr_with(format)
         .unwrap();
         vecs.push(json!({
             "id": format!("stream/icp/{name}"),
@@ -517,14 +535,14 @@ fn streams() -> Vec<Value> {
     vecs
 }
 
-fn files() -> BTreeMap<&'static str, Value> {
+fn files(format: WireFormat) -> BTreeMap<&'static str, Value> {
     let generator = json!({
         "tool": "keriox_tests/tests/vectors_source.rs",
         "version": "0.1.0",
         "source": {"implementation": "keriox", "version": env!("CARGO_PKG_VERSION")},
     });
     let file = |schema: &str, vectors: Vec<Value>| json!({"schema": schema, "generator": generator, "vectors": vectors});
-    let (kels, streams) = (kels(), streams());
+    let (kels, streams) = (kels(format), streams(format));
     let manifest = json!({
         "generator": generator,
         "files": {"kels/kels.json": kels.len(), "streams/messages.json": streams.len()},
@@ -539,8 +557,17 @@ fn files() -> BTreeMap<&'static str, Value> {
 #[test]
 fn keriox_vectors() {
     let write = std::env::var_os(WRITE_ENV).is_some();
-    for (rel, value) in files() {
-        let path = Path::new(OUT).join(rel);
+    for (dir, format) in [
+        ("keriox", WireFormat::V2),
+        ("keriox-legacy", WireFormat::Legacy),
+    ] {
+        check_or_write(&Path::new(OUT).join(dir), format, write);
+    }
+}
+
+fn check_or_write(dir: &Path, format: WireFormat, write: bool) {
+    for (rel, value) in files(format) {
+        let path = dir.join(rel);
         let text = serde_json::to_string_pretty(&value).unwrap() + "\n";
         if write {
             fs::create_dir_all(path.parent().unwrap()).unwrap();

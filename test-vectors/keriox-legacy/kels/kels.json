@@ -1,0 +1,115 @@
+{
+  "schema": "kel/1",
+  "generator": {
+    "tool": "keriox_tests/tests/vectors_source.rs",
+    "version": "0.1.0",
+    "source": {
+      "implementation": "keriox",
+      "version": "0.1.0"
+    }
+  },
+  "vectors": [
+    {
+      "id": "kel/icp-rot-ixn",
+      "note": "inception with 2 of 3 signatures required, rotation to the pre-committed keys, interaction anchoring a digest",
+      "pvrsn": "1.0",
+      "stream": "{\"v\":\"KERI10JSON0001e7_\",\"t\":\"icp\",\"d\":\"EIyxIYhxIO3EDJ7jdO7uLP8g9pRo_YMNgV1iy8aEGHls\",\"i\":\"EIyxIYhxIO3EDJ7jdO7uLP8g9pRo_YMNgV1iy8aEGHls\",\"s\":\"0\",\"kt\":\"2\",\"k\":[\"DEbbGMJ0UrZPBbZCgjUHPvlBKPKV-s0ksOZIRoFF8cg5\",\"DBlADPZmCoh7NrdPvcBauWDJekkia7niLYANHmlgvaCe\",\"DEm2t08Pabd9G8SaSV4xwzKjONTnyIOvAZR9xJuxbA7H\"],\"nt\":\"2\",\"n\":[\"EFVOQ0FH-4gJWobyWaWekdvy8vUyMTKHaA3gFYnBXt0Q\",\"EFRhzBbNbaESvQVEcPGdHiwNb8YUPNqU-FTdpLE2Ikzz\",\"EG9TeOAjnESYgrTj7GSZwnMGygyPKk_X32YXfCeObSR0\"],\"bt\":\"0\",\"b\":[],\"c\":[],\"a\":[]}-KADAACWDxrYZ7NMrrulxc-1K3-LChtCvWXaZkrsIwmuUbZ1ZJOHVvOHyV242hnmVsmBzGyn2uknn9r_7a3EzldDEpcDABAL5ifZSp3STvcQta4vFQq6YgQHi-d5z3GCNqlQosulLi8clhMzdaz_BMCIbfbEly-gwMfF5oSWGgsAPT36jD8FACDea-X_bTGD-tewf5KgvuUzVBxalUPt4CQMcZzwdCQw20I3ycgu3G7s2F0D66EU4DyxDs8tHyfszQ7-gC0bZisD{\"v\":\"KERI10JSON00021c_\",\"t\":\"rot\",\"d\":\"EOxTbxPTDxKAOx118jTkZh81Kc36lmNVi-1FPs6jwgtD\",\"i\":\"EIyxIYhxIO3EDJ7jdO7uLP8g9pRo_YMNgV1iy8aEGHls\",\"s\":\"1\",\"p\":\"EIyxIYhxIO3EDJ7jdO7uLP8g9pRo_YMNgV1iy8aEGHls\",\"kt\":\"2\",\"k\":[\"DCQA6DH6rz6vyou4ZV-RlewT9U7ahcnaCgrn4_mWquh9\",\"DEY2IOAXtbnEWPy26wH_sOYCrgRiOxzkIIg22sAE4k0n\",\"DFeWe50Qq8CVzbonvYRxmLPGoWl8fLdokOT3r8g1U1Dm\"],\"nt\":\"2\",\"n\":[\"EGdCj3Hl9q4rEY-EltGIiev2ijGjD-Cnwc09sRpQp9Gt\",\"ECXKPDUxeK-Ct2U1-zbBt-ELAfI5H1XQe5IurjEnV_eb\",\"EI3fk-lu_WEq2t4gjECGOHGwqrIciMjSy0Zf5t02uDAu\"],\"bt\":\"0\",\"br\":[],\"ba\":[],\"a\":[]}-KADAABZTq-jZneNuzg055j9PfQNMufWXeVzeTmBLQdUSpoNpT6MCXUeefQ8mHl4cXLkUX8jEbZS2TbiREvqSjYOfg8OABBVFHN3d0AFI8wFVmRubzDGXaS1WUhIOdgr-SOYI8iaIvLgIiKCgbBnf8OkQogKglcbPyc2f1cB8S7DwtfCYkMBACBTZjbjmkhDwGcIuZXEbTVnSSvqIMDNaTMQt1KEK0q-b7lCnKAYW5x-LXwaFi2dqpFAtn8iLeKSci5Ya4JiY6sN{\"v\":\"KERI10JSON0000ff_\",\"t\":\"ixn\",\"d\":\"EEDOuftqCM86C643m3haSIE8u9k-i9der202xUtY6V1D\",\"i\":\"EIyxIYhxIO3EDJ7jdO7uLP8g9pRo_YMNgV1iy8aEGHls\",\"s\":\"2\",\"p\":\"EOxTbxPTDxKAOx118jTkZh81Kc36lmNVi-1FPs6jwgtD\",\"a\":[{\"d\":\"EB9P-0rvowmoqSAySSSLr8LUdW_fac4k4UcBQXe7jqJS\"}]}-KADAAA43Yt0ik5dNv--jv-I3B1-_g8ZogXMd10rBziW2WLoewW5t9gqHUHdMd3TrldrJM2DRcc-0pbKk9lbec-FR5IGABC6OKyxgU1LalQvo93uNBrKeh0lkgHj9VESssPltN0M20WR4UcBDymoXvdAdxkJWJTK4tfOa9wjhj1GhW1oOfENACBc9i3v_iD5DIwKfxrOdHsPbG_RY3TrnMKJpQbxRIxoyhxnE333D1D7UKYtGQPRGS6rZNSLmBypR2cS-4VAiCYA",
+      "kels": {
+        "EIyxIYhxIO3EDJ7jdO7uLP8g9pRo_YMNgV1iy8aEGHls": [
+          {
+            "sn": 0,
+            "said": "EIyxIYhxIO3EDJ7jdO7uLP8g9pRo_YMNgV1iy8aEGHls"
+          },
+          {
+            "sn": 1,
+            "said": "EOxTbxPTDxKAOx118jTkZh81Kc36lmNVi-1FPs6jwgtD"
+          },
+          {
+            "sn": 2,
+            "said": "EEDOuftqCM86C643m3haSIE8u9k-i9der202xUtY6V1D"
+          }
+        ]
+      }
+    },
+    {
+      "id": "kel/transferable-receipt",
+      "note": "a second identifier receipts the first one's inception with a -X group",
+      "pvrsn": "1.0",
+      "stream": "{\"v\":\"KERI10JSON00012b_\",\"t\":\"icp\",\"d\":\"EOMK5KxuA6JxkiKIwUjOknp_x5XrW8OAy-SFU-wzV3PL\",\"i\":\"EOMK5KxuA6JxkiKIwUjOknp_x5XrW8OAy-SFU-wzV3PL\",\"s\":\"0\",\"kt\":\"1\",\"k\":[\"DHtiVS639ZiaXwY3k-b5xzjW9wwE669cXznlAU-BjDd6\"],\"nt\":\"1\",\"n\":[\"EIzN5B40_jXLyvdXUv2MoXAL21rukxirefWlpad9kt0H\"],\"bt\":\"0\",\"b\":[],\"c\":[],\"a\":[]}-KABAAD9niSvpzgTHIThYmsZ_gCO6IeF4W3Zo-SuJVQQrlFfpgPT35qelmw47xmz9-PyJ7kigQlEAUTdY_WSfnVGyWYJ{\"v\":\"KERI10JSON0001e7_\",\"t\":\"icp\",\"d\":\"EIyxIYhxIO3EDJ7jdO7uLP8g9pRo_YMNgV1iy8aEGHls\",\"i\":\"EIyxIYhxIO3EDJ7jdO7uLP8g9pRo_YMNgV1iy8aEGHls\",\"s\":\"0\",\"kt\":\"2\",\"k\":[\"DEbbGMJ0UrZPBbZCgjUHPvlBKPKV-s0ksOZIRoFF8cg5\",\"DBlADPZmCoh7NrdPvcBauWDJekkia7niLYANHmlgvaCe\",\"DEm2t08Pabd9G8SaSV4xwzKjONTnyIOvAZR9xJuxbA7H\"],\"nt\":\"2\",\"n\":[\"EFVOQ0FH-4gJWobyWaWekdvy8vUyMTKHaA3gFYnBXt0Q\",\"EFRhzBbNbaESvQVEcPGdHiwNb8YUPNqU-FTdpLE2Ikzz\",\"EG9TeOAjnESYgrTj7GSZwnMGygyPKk_X32YXfCeObSR0\"],\"bt\":\"0\",\"b\":[],\"c\":[],\"a\":[]}-KADAACWDxrYZ7NMrrulxc-1K3-LChtCvWXaZkrsIwmuUbZ1ZJOHVvOHyV242hnmVsmBzGyn2uknn9r_7a3EzldDEpcDABAL5ifZSp3STvcQta4vFQq6YgQHi-d5z3GCNqlQosulLi8clhMzdaz_BMCIbfbEly-gwMfF5oSWGgsAPT36jD8FACDea-X_bTGD-tewf5KgvuUzVBxalUPt4CQMcZzwdCQw20I3ycgu3G7s2F0D66EU4DyxDs8tHyfszQ7-gC0bZisD{\"v\":\"KERI10JSON000091_\",\"t\":\"rct\",\"d\":\"EIyxIYhxIO3EDJ7jdO7uLP8g9pRo_YMNgV1iy8aEGHls\",\"i\":\"EIyxIYhxIO3EDJ7jdO7uLP8g9pRo_YMNgV1iy8aEGHls\",\"s\":\"0\"}-TABEOMK5KxuA6JxkiKIwUjOknp_x5XrW8OAy-SFU-wzV3PL0AAAAAAAAAAAAAAAAAAAAAAAEOMK5KxuA6JxkiKIwUjOknp_x5XrW8OAy-SFU-wzV3PL-KABAAA42VGHWITSLhc3Qv22H-AizBqZyxTWC9VximjeJVvgSzfb2aYP25tim6azjpp7J23mLTmfONIwIrs7PXss7DQE",
+      "kels": {
+        "EOMK5KxuA6JxkiKIwUjOknp_x5XrW8OAy-SFU-wzV3PL": [
+          {
+            "sn": 0,
+            "said": "EOMK5KxuA6JxkiKIwUjOknp_x5XrW8OAy-SFU-wzV3PL"
+          }
+        ],
+        "EIyxIYhxIO3EDJ7jdO7uLP8g9pRo_YMNgV1iy8aEGHls": [
+          {
+            "sn": 0,
+            "said": "EIyxIYhxIO3EDJ7jdO7uLP8g9pRo_YMNgV1iy8aEGHls"
+          }
+        ]
+      }
+    },
+    {
+      "id": "kel/witnessed-receipts",
+      "note": "inception with two witnesses followed by a receipt from each",
+      "pvrsn": "1.0",
+      "stream": "{\"v\":\"KERI10JSON000188_\",\"t\":\"icp\",\"d\":\"EHt4A0xAJY2NTjBLfTODumci5ItsrXtJF_7xIYJxnLSH\",\"i\":\"EHt4A0xAJY2NTjBLfTODumci5ItsrXtJF_7xIYJxnLSH\",\"s\":\"0\",\"kt\":\"1\",\"k\":[\"DEbbGMJ0UrZPBbZCgjUHPvlBKPKV-s0ksOZIRoFF8cg5\"],\"nt\":\"1\",\"n\":[\"EFVOQ0FH-4gJWobyWaWekdvy8vUyMTKHaA3gFYnBXt0Q\"],\"bt\":\"2\",\"b\":[\"BPd_11HrHXMnYOvW4JxNs_7NEQjahMlQ9IuOF1Mum2MF\",\"BLxwZm19AyonGwjom7FqONt_xSulgAZKhEfaLXF_lAmP\"],\"c\":[],\"a\":[]}-KABAAB54jvAnpAO4163ctEamG2O4NesoNx9xMTWoTCHQqhjs4cKQB1tYx-D2Fsqq7jO6GDs8b0-96v-VqPkulrSstcE{\"v\":\"KERI10JSON000091_\",\"t\":\"rct\",\"d\":\"EHt4A0xAJY2NTjBLfTODumci5ItsrXtJF_7xIYJxnLSH\",\"i\":\"EHt4A0xAJY2NTjBLfTODumci5ItsrXtJF_7xIYJxnLSH\",\"s\":\"0\"}-MABBPd_11HrHXMnYOvW4JxNs_7NEQjahMlQ9IuOF1Mum2MF0BBgOFNG-Vw7GShsrtoyjab4VSjaO_KhkgTlK7dFIUhkaTguoCj8SQHrjhKViEynZcVHEdLDMjc8ozTK1dsW2AUD{\"v\":\"KERI10JSON000091_\",\"t\":\"rct\",\"d\":\"EHt4A0xAJY2NTjBLfTODumci5ItsrXtJF_7xIYJxnLSH\",\"i\":\"EHt4A0xAJY2NTjBLfTODumci5ItsrXtJF_7xIYJxnLSH\",\"s\":\"0\"}-MABBLxwZm19AyonGwjom7FqONt_xSulgAZKhEfaLXF_lAmP0BCw4EIrMLUfgX0epLB6qqb9A-JCz7G646GOULojJoMQxJWpQbFAl8nhUAxF72l-i0Dv3XbqLl9I5DlLi-calKYL",
+      "kels": {
+        "EHt4A0xAJY2NTjBLfTODumci5ItsrXtJF_7xIYJxnLSH": [
+          {
+            "sn": 0,
+            "said": "EHt4A0xAJY2NTjBLfTODumci5ItsrXtJF_7xIYJxnLSH"
+          }
+        ]
+      }
+    },
+    {
+      "id": "kel/witnessed-indexed",
+      "note": "inception with two witnesses whose indexed signatures are attached",
+      "pvrsn": "1.0",
+      "stream": "{\"v\":\"KERI10JSON000188_\",\"t\":\"icp\",\"d\":\"EHt4A0xAJY2NTjBLfTODumci5ItsrXtJF_7xIYJxnLSH\",\"i\":\"EHt4A0xAJY2NTjBLfTODumci5ItsrXtJF_7xIYJxnLSH\",\"s\":\"0\",\"kt\":\"1\",\"k\":[\"DEbbGMJ0UrZPBbZCgjUHPvlBKPKV-s0ksOZIRoFF8cg5\"],\"nt\":\"1\",\"n\":[\"EFVOQ0FH-4gJWobyWaWekdvy8vUyMTKHaA3gFYnBXt0Q\"],\"bt\":\"2\",\"b\":[\"BPd_11HrHXMnYOvW4JxNs_7NEQjahMlQ9IuOF1Mum2MF\",\"BLxwZm19AyonGwjom7FqONt_xSulgAZKhEfaLXF_lAmP\"],\"c\":[],\"a\":[]}-KABAAB54jvAnpAO4163ctEamG2O4NesoNx9xMTWoTCHQqhjs4cKQB1tYx-D2Fsqq7jO6GDs8b0-96v-VqPkulrSstcE-LACAABgOFNG-Vw7GShsrtoyjab4VSjaO_KhkgTlK7dFIUhkaTguoCj8SQHrjhKViEynZcVHEdLDMjc8ozTK1dsW2AUDABCw4EIrMLUfgX0epLB6qqb9A-JCz7G646GOULojJoMQxJWpQbFAl8nhUAxF72l-i0Dv3XbqLl9I5DlLi-calKYL",
+      "kels": {
+        "EHt4A0xAJY2NTjBLfTODumci5ItsrXtJF_7xIYJxnLSH": [
+          {
+            "sn": 0,
+            "said": "EHt4A0xAJY2NTjBLfTODumci5ItsrXtJF_7xIYJxnLSH"
+          }
+        ]
+      }
+    },
+    {
+      "id": "kel/delegated",
+      "note": "delegator inception and interactions anchoring a delegated inception and a delegated rotation, each citing its anchor",
+      "pvrsn": "1.0",
+      "stream": "{\"v\":\"KERI10JSON00012b_\",\"t\":\"icp\",\"d\":\"EOmyn2kH_rgBqizI1NN8CsbYD-asSRKiTu2lVIjsOX2e\",\"i\":\"EOmyn2kH_rgBqizI1NN8CsbYD-asSRKiTu2lVIjsOX2e\",\"s\":\"0\",\"kt\":\"1\",\"k\":[\"DNKDSmnj5NVfz046BevCTbSwotYc4oSYfR0V5AmYAnEr\"],\"nt\":\"1\",\"n\":[\"EBhZVp0fRykNlr-Nk8dUtu2KG6Va0_3p7I7OTrCCUhX_\"],\"bt\":\"0\",\"b\":[],\"c\":[],\"a\":[]}-KABAACUcFJ7woEKjM4qZpqgIHMojBwFll2YiA8JX-NASVqStjuuUWyoiLbZVLwAJPyi6F65GgfODMfv2epACtgjKNoC{\"v\":\"KERI10JSON00013a_\",\"t\":\"ixn\",\"d\":\"EKx_pyHloPFFXvntTyintOImxfuhYuzaz_ZLA_UfBDJs\",\"i\":\"EOmyn2kH_rgBqizI1NN8CsbYD-asSRKiTu2lVIjsOX2e\",\"s\":\"1\",\"p\":\"EOmyn2kH_rgBqizI1NN8CsbYD-asSRKiTu2lVIjsOX2e\",\"a\":[{\"i\":\"EDqeuD--vC9W21SMiOThYBuenNQY2YZsqDTsnMrQQoP4\",\"s\":\"0\",\"d\":\"EDqeuD--vC9W21SMiOThYBuenNQY2YZsqDTsnMrQQoP4\"}]}-KABAABWF_0qZmf-fpOm3acyJ8DmMaMQPsj0T2NEHg7dZCHi-nBwjlfSSukyUxZ9oIO-I5kgcxDJND1t19qsXALVdoII{\"v\":\"KERI10JSON00015f_\",\"t\":\"dip\",\"d\":\"EDqeuD--vC9W21SMiOThYBuenNQY2YZsqDTsnMrQQoP4\",\"i\":\"EDqeuD--vC9W21SMiOThYBuenNQY2YZsqDTsnMrQQoP4\",\"s\":\"0\",\"kt\":\"1\",\"k\":[\"DEbbGMJ0UrZPBbZCgjUHPvlBKPKV-s0ksOZIRoFF8cg5\"],\"nt\":\"1\",\"n\":[\"EFVOQ0FH-4gJWobyWaWekdvy8vUyMTKHaA3gFYnBXt0Q\"],\"bt\":\"0\",\"b\":[],\"c\":[],\"a\":[],\"di\":\"EOmyn2kH_rgBqizI1NN8CsbYD-asSRKiTu2lVIjsOX2e\"}-SAB0AAAAAAAAAAAAAAAAAAAAAABEKx_pyHloPFFXvntTyintOImxfuhYuzaz_ZLA_UfBDJs-KABAAB_hognmOrSoS2ya9caBfZakbSiNxbhgll4P7IP3JAAoZjFDhMPo3RM_4RiihSXq8RyRYS_zRhBZTDyYvyu9k0N{\"v\":\"KERI10JSON00013a_\",\"t\":\"ixn\",\"d\":\"EO5aWKje-CA7ySqeHig6vdIjJ6wCexGqcpGAkjiY4fRq\",\"i\":\"EOmyn2kH_rgBqizI1NN8CsbYD-asSRKiTu2lVIjsOX2e\",\"s\":\"2\",\"p\":\"EKx_pyHloPFFXvntTyintOImxfuhYuzaz_ZLA_UfBDJs\",\"a\":[{\"i\":\"EDqeuD--vC9W21SMiOThYBuenNQY2YZsqDTsnMrQQoP4\",\"s\":\"1\",\"d\":\"EEdg0MieBdslSD1YjYr_4Eltf3ag4E5Mdo0LzvCkTlLQ\"}]}-KABAADP0U0vm1sfVY6m9w3udpDaxcwXMMOcaJfcWpQH-23vTk0vJUdVdu7Btl0v8WD_Bv8qKD3wPB1atZpBAUGjSbIB{\"v\":\"KERI10JSON000160_\",\"t\":\"drt\",\"d\":\"EEdg0MieBdslSD1YjYr_4Eltf3ag4E5Mdo0LzvCkTlLQ\",\"i\":\"EDqeuD--vC9W21SMiOThYBuenNQY2YZsqDTsnMrQQoP4\",\"s\":\"1\",\"p\":\"EDqeuD--vC9W21SMiOThYBuenNQY2YZsqDTsnMrQQoP4\",\"kt\":\"1\",\"k\":[\"DCQA6DH6rz6vyou4ZV-RlewT9U7ahcnaCgrn4_mWquh9\"],\"nt\":\"1\",\"n\":[\"EEnA_1SJY5UUF7huuIG4y_RBZE096Odag9kVoBy9RJ_K\"],\"bt\":\"0\",\"br\":[],\"ba\":[],\"a\":[]}-SAB0AAAAAAAAAAAAAAAAAAAAAACEO5aWKje-CA7ySqeHig6vdIjJ6wCexGqcpGAkjiY4fRq-KABAACu6Jc8Bp031EqkJGCsOq89lczbCI-EvTtbvUQaaK6vPwqUkpINMI_YkNmSuYd_CvJKqa5TMbm_ZtddQ7_CAsUM",
+      "kels": {
+        "EOmyn2kH_rgBqizI1NN8CsbYD-asSRKiTu2lVIjsOX2e": [
+          {
+            "sn": 0,
+            "said": "EOmyn2kH_rgBqizI1NN8CsbYD-asSRKiTu2lVIjsOX2e"
+          },
+          {
+            "sn": 1,
+            "said": "EKx_pyHloPFFXvntTyintOImxfuhYuzaz_ZLA_UfBDJs"
+          },
+          {
+            "sn": 2,
+            "said": "EO5aWKje-CA7ySqeHig6vdIjJ6wCexGqcpGAkjiY4fRq"
+          }
+        ],
+        "EDqeuD--vC9W21SMiOThYBuenNQY2YZsqDTsnMrQQoP4": [
+          {
+            "sn": 0,
+            "said": "EDqeuD--vC9W21SMiOThYBuenNQY2YZsqDTsnMrQQoP4"
+          },
+          {
+            "sn": 1,
+            "said": "EEdg0MieBdslSD1YjYr_4Eltf3ag4E5Mdo0LzvCkTlLQ"
+          }
+        ]
+      }
+    }
+  ]
+}

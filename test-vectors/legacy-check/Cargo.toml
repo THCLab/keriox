@@ -1,0 +1,19 @@
+# Reads what keriox writes in its default (legacy) wire format with the
+# keriox revision deployed clients are built from. Not part of the
+# workspace: it depends on an old keri-core, which cannot share a lock
+# file with the current one. Run it with test-vectors/legacy-check.sh.
+[package]
+name = "keriox-legacy-check"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+# the revision of keriox's development branch that deployed clients
+# (cyfron) are locked to, with the cesrox and said releases it built with
+keri-core = { git = "https://github.com/THCLab/keriox.git", rev = "6f70bb2ba5ebeb2bc8707a003d4637bcbd1176cd", features = ["oobi-manager", "mailbox"] }
+cesrox = "=2.0.0-beta.8"
+said = "=0.5.3-beta.2"
+serde_json = "1"
+hex = "0.4"
+tempfile = "3"

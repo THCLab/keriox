@@ -1,0 +1,57 @@
+{
+  "schema": "stream/1",
+  "generator": {
+    "tool": "keriox_tests/tests/vectors_source.rs",
+    "version": "0.1.0",
+    "source": {
+      "implementation": "keriox",
+      "version": "0.1.0"
+    }
+  },
+  "vectors": [
+    {
+      "id": "stream/icp/JSON",
+      "note": "single-key inception with its controller signature",
+      "stream": "{\"v\":\"KERI10JSON00012b_\",\"t\":\"icp\",\"d\":\"EJ_XPdN9hbhbblm5JuU3y45viXKOTZqbMxD3hEggp0pD\",\"i\":\"EJ_XPdN9hbhbblm5JuU3y45viXKOTZqbMxD3hEggp0pD\",\"s\":\"0\",\"kt\":\"1\",\"k\":[\"DEbbGMJ0UrZPBbZCgjUHPvlBKPKV-s0ksOZIRoFF8cg5\"],\"nt\":\"1\",\"n\":[\"EFVOQ0FH-4gJWobyWaWekdvy8vUyMTKHaA3gFYnBXt0Q\"],\"bt\":\"0\",\"b\":[],\"c\":[],\"a\":[]}-KABAACj84Cf9s2C6cTNd4Rv5bSWbj4fJRdOgg82yf0A_PkUTMjNYUc40-3HxMNx3fhsDEhsKR1Br1YWhtI-pfgS-oIE",
+      "sigs_verkeys": [
+        "DEbbGMJ0UrZPBbZCgjUHPvlBKPKV-s0ksOZIRoFF8cg5"
+      ]
+    },
+    {
+      "id": "stream/qry/ksn",
+      "note": "key state query signed with a -Y group",
+      "stream": "{\"v\":\"KERI10JSON0000c9_\",\"t\":\"qry\",\"d\":\"EOAuL34gCTHqIaAWx2f4NwNxlyxQPiCsS4AV5DJ2IFKB\",\"dt\":\"2024-01-01T00:00:00.000000+00:00\",\"r\":\"ksn\",\"rr\":\"\",\"q\":{\"i\":\"EJ_XPdN9hbhbblm5JuU3y45viXKOTZqbMxD3hEggp0pD\"}}-YABEJ_XPdN9hbhbblm5JuU3y45viXKOTZqbMxD3hEggp0pD-KABAADlRNqRqkCbzJ3Snzz8BAgezaEOq6tx0QG1G2dbefnVUcdr_4f9dhIPqL0PYKhtz2mLrb3UMTZwuIVSmUmT6lwN"
+    },
+    {
+      "id": "stream/rpy/end-role/transferable",
+      "note": "end role reply signed by a transferable controller with a -X group",
+      "stream": "{\"v\":\"KERI10JSON000113_\",\"t\":\"rpy\",\"d\":\"EOjmnICUvTwe6GzvGVoQfWMmbQA6kD-9LWP815LkO-Ur\",\"dt\":\"2024-01-01T00:00:00.000000+00:00\",\"r\":\"/end/role/add\",\"a\":{\"cid\":\"EJ_XPdN9hbhbblm5JuU3y45viXKOTZqbMxD3hEggp0pD\",\"role\":\"witness\",\"eid\":\"BPd_11HrHXMnYOvW4JxNs_7NEQjahMlQ9IuOF1Mum2MF\"}}-TABEJ_XPdN9hbhbblm5JuU3y45viXKOTZqbMxD3hEggp0pD0AAAAAAAAAAAAAAAAAAAAAAAEJ_XPdN9hbhbblm5JuU3y45viXKOTZqbMxD3hEggp0pD-KABAAAn8WQHviS6VjHU5yd6IxihJH0k9cmyXIacZ2L5Y8Bhr1hyapLs3n2bneKtN1ESCUWYgw7M2Z8PkRc2eV93x_AF"
+    },
+    {
+      "id": "stream/rpy/loc-scheme/nontransferable",
+      "note": "location reply signed by a witness with a receipt couple",
+      "stream": "{\"v\":\"KERI10JSON000100_\",\"t\":\"rpy\",\"d\":\"EDrFV8MrPxYk1_3UlLmz5CeXwQnQrv8lcJH25WrjKAin\",\"dt\":\"2024-01-01T00:00:00.000000+00:00\",\"r\":\"/loc/scheme\",\"a\":{\"eid\":\"BPd_11HrHXMnYOvW4JxNs_7NEQjahMlQ9IuOF1Mum2MF\",\"scheme\":\"http\",\"url\":\"http://witness.example:5631/\"}}-MABBPd_11HrHXMnYOvW4JxNs_7NEQjahMlQ9IuOF1Mum2MF0BCUTak00XI-o9mw8mFg_yPla7W-ug2zBLlC_lJMjrxcnwG69tDTF506LF4RflPJ4UVA_OQWeE511rxuuSa_mEgB"
+    },
+    {
+      "id": "stream/exn/fwd",
+      "note": "exchange forwarding an inception, with the sender's -X group and the inception's signatures under path -a",
+      "stream": "{\"v\":\"KERI10JSON000207_\",\"t\":\"exn\",\"d\":\"ECgNHeBLO7MaKPLSvTghFHX7_KJ1o-gsXrPCdLU1pfL_\",\"dt\":\"2024-01-01T00:00:00.000000+00:00\",\"r\":\"/fwd\",\"q\":{\"pre\":\"EJ_XPdN9hbhbblm5JuU3y45viXKOTZqbMxD3hEggp0pD\",\"topic\":\"multisig\"},\"a\":{\"v\":\"KERI10JSON00012b_\",\"t\":\"icp\",\"d\":\"EJ_XPdN9hbhbblm5JuU3y45viXKOTZqbMxD3hEggp0pD\",\"i\":\"EJ_XPdN9hbhbblm5JuU3y45viXKOTZqbMxD3hEggp0pD\",\"s\":\"0\",\"kt\":\"1\",\"k\":[\"DEbbGMJ0UrZPBbZCgjUHPvlBKPKV-s0ksOZIRoFF8cg5\"],\"nt\":\"1\",\"n\":[\"EFVOQ0FH-4gJWobyWaWekdvy8vUyMTKHaA3gFYnBXt0Q\"],\"bt\":\"0\",\"b\":[],\"c\":[],\"a\":[]}}-TABEJ_XPdN9hbhbblm5JuU3y45viXKOTZqbMxD3hEggp0pD0AAAAAAAAAAAAAAAAAAAAAAAEJ_XPdN9hbhbblm5JuU3y45viXKOTZqbMxD3hEggp0pD-KABAAB_OCB5V0mYfh3_GVyC8CJmplY0eqR7alVE2eTak6jpj7isr6rkpP3UmqIKRFtHBpQvgGP8cdHaRYHzzgqeHJIM-PA25AABAA-a-TABEJ_XPdN9hbhbblm5JuU3y45viXKOTZqbMxD3hEggp0pD0AAAAAAAAAAAAAAAAAAAAAAAEJ_XPdN9hbhbblm5JuU3y45viXKOTZqbMxD3hEggp0pD-KABAACj84Cf9s2C6cTNd4Rv5bSWbj4fJRdOgg82yf0A_PkUTMjNYUc40-3HxMNx3fhsDEhsKR1Br1YWhtI-pfgS-oIE"
+    },
+    {
+      "id": "stream/icp/CBOR",
+      "note": "single-key inception in CBOR",
+      "stream_hex": "ad6176714b455249313043424f523030303066395f6174636963706164782c454a36725662713179585a4c534e775857504b31654d66794a6f4c33434e726c546b4e307135554f5f5874636169782c454a36725662713179585a4c534e775857504b31654d66794a6f4c33434e726c546b4e307135554f5f58746361736130626b746131616b81782c44456262474d4a3055725a5042625a43676a554850766c424b504b562d73306b734f5a49526f464638636735626e746131616e81782c4546564f513046482d34674a576f6279576157656b647679387655794d544b486141336746596e425874305162627461306162806163806161802d4b41424141437270346a67553639757a446d5f704967464f596a4272387a48645a37317871547a62736158726d7955783376425731476363425631726474436b306663737679656e6a47327a35706574446749636d54796577514c",
+      "sigs_verkeys": [
+        "DEbbGMJ0UrZPBbZCgjUHPvlBKPKV-s0ksOZIRoFF8cg5"
+      ]
+    },
+    {
+      "id": "stream/icp/MGPK",
+      "note": "single-key inception in MGPK",
+      "stream_hex": "8da176b14b45524931304d47504b3030303066395fa174a3696370a164d92c45504c2d53314d57745f524a416f58566c756a4b3277417765416b7054506e637050647157716439666f4f41a169d92c45504c2d53314d57745f524a416f58566c756a4b3277417765416b7054506e637050647157716439666f4f41a173a130a26b74a131a16b91d92c44456262474d4a3055725a5042625a43676a554850766c424b504b562d73306b734f5a49526f464638636735a26e74a131a16e91d92c4546564f513046482d34674a576f6279576157656b647679387655794d544b486141336746596e4258743051a26274a130a16290a16390a161902d4b41424141425146632d775643494a4454345a6463537369684f7977386f5f7070666b46316d385a334d3947325846492d6e4661355072483472746275633430326f50446b6f5476324d5a48663558445a62437430474678385145",
+      "sigs_verkeys": [
+        "DEbbGMJ0UrZPBbZCgjUHPvlBKPKV-s0ksOZIRoFF8cg5"
+      ]
+    }
+  ]
+}
