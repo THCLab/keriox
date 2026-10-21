@@ -4,6 +4,7 @@ use cesrox::{
     group::{Group, SealSourceCouple},
     payload::{parse_payload, Payload},
     primitives::{AnchoringEventSeal, IndexedSignature as CesrIndexedSignature},
+    universal_codes::{UniversalCode, UniversalGroupCode},
     value::Value,
 };
 use said::version::format::SerializationFormats;
@@ -87,26 +88,104 @@ impl CesrMessage {
     }
 }
 
-fn flatten_universal_groups(values: Vec<Value>) -> (Option<Payload>, Vec<Group>) {
-    let mut payload = None;
-    let mut groups = vec![];
-    for v in values {
-        match v {
-            Value::Payload(p) => payload = Some(p),
-            Value::SpecificGroup(g) => {
-                groups.push(g);
-            }
-            Value::UniversalGroup(_code, inner) => {
-                let (_inner_payload, inner_groups) = flatten_universal_groups(inner);
-                if _inner_payload.is_some() && payload.is_none() {
-                    payload = _inner_payload;
-                }
-                groups.extend(inner_groups);
-            }
-            _ => {}
-        }
+/// Messages being assembled from parsed CESR values: each body starts a new
+/// message, and the groups after it are its attachments.
+#[derive(Default)]
+struct Messages {
+    done: Vec<CesrMessage>,
+    current: Option<CesrMessage>,
+}
+
+impl Messages {
+    fn body(&mut self, payload: Payload) {
+        self.done.extend(self.current.take());
+        self.current = Some(CesrMessage {
+            payload,
+            attachments: vec![],
+        });
     }
-    (payload, groups)
+
+    fn attachment(&mut self, group: Group) -> Result<(), ParseError> {
+        self.current
+            .as_mut()
+            .ok_or_else(|| ParseError::AttachmentError("attachment before any message".into()))?
+            .attachments
+            .push(group);
+        Ok(())
+    }
+
+    /// Adds `values`, entering the universal groups that frame messages and
+    /// their attachments. Anything that is not a message body or an
+    /// attachment, such as a native CESR body, is an error rather than
+    /// being skipped, so no message is lost silently.
+    fn add(&mut self, values: Vec<Value>) -> Result<(), ParseError> {
+        for value in values {
+            match value {
+                Value::Payload(payload) => self.body(payload),
+                Value::SpecificGroup(group) => self.attachment(group)?,
+                Value::VersionGenus(_) => {}
+                Value::UniversalGroup(UniversalGroupCode::Genus(_), inner) => self.add(inner)?,
+                Value::UniversalGroup(UniversalGroupCode::Group { code, .. }, inner) => {
+                    match code {
+                        UniversalCode::GenericGroup
+                        | UniversalCode::BodyWithAttachments
+                        | UniversalCode::Attachments => self.add(inner)?,
+                        UniversalCode::NonNativeBody => {
+                            let enclosed = Value::UniversalGroup(
+                                UniversalGroupCode::Group { code, quadlets: 0 },
+                                inner,
+                            );
+                            let payload = enclosed
+                                .enclosed_payload()
+                                .map_err(|e| ParseError::CesrError(e.to_string()))?;
+                            self.body(payload)
+                        }
+                        UniversalCode::FixBody | UniversalCode::MapBody => {
+                            return Err(ParseError::DeserializeError(
+                                "native CESR message bodies are not supported".into(),
+                            ))
+                        }
+                        other => {
+                            return Err(ParseError::CesrError(format!(
+                                "unexpected {other:?} group in a message stream"
+                            )))
+                        }
+                    }
+                }
+                other => {
+                    return Err(ParseError::CesrError(format!(
+                        "unexpected value outside a message: {}",
+                        String::from_utf8_lossy(&other.to_cesr())
+                    )))
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn finish(mut self) -> Vec<CesrMessage> {
+        self.done.extend(self.current.take());
+        self.done
+    }
+}
+
+/// Groups parsed CESR values into messages with their attachments.
+fn messages(values: Vec<Value>) -> Result<Vec<CesrMessage>, ParseError> {
+    let mut messages = Messages::default();
+    messages.add(values)?;
+    Ok(messages.finish())
+}
+
+/// The only message in `values`.
+fn single_message(values: Vec<Value>) -> Result<CesrMessage, ParseError> {
+    let mut all = messages(values)?;
+    match all.len() {
+        1 => Ok(all.remove(0)),
+        0 => Err(ParseError::CesrError("No payload found".into())),
+        n => Err(ParseError::CesrError(format!(
+            "expected one message, found {n}"
+        ))),
+    }
 }
 
 impl TryFrom<&[u8]> for CesrMessage {
@@ -119,62 +198,12 @@ impl TryFrom<&[u8]> for CesrMessage {
 
 pub fn parse_cesr_stream_many(stream: &[u8]) -> Result<Vec<CesrMessage>, ParseError> {
     let values = cesrox::parse(stream).map_err(|e| ParseError::CesrError(e.to_string()))?;
-
-    let mut messages = vec![];
-    let mut current_payload: Option<Payload> = None;
-    let mut current_groups: Vec<Group> = vec![];
-
-    for v in values {
-        match v {
-            Value::Payload(p) => {
-                if let Some(payload) = current_payload.take() {
-                    messages.push(CesrMessage {
-                        payload,
-                        attachments: std::mem::take(&mut current_groups),
-                    });
-                }
-                current_payload = Some(p);
-            }
-            Value::SpecificGroup(g) => {
-                current_groups.push(g);
-            }
-            Value::UniversalGroup(_code, inner) => {
-                let (inner_payload, inner_groups) = flatten_universal_groups(inner);
-                if let Some(p) = inner_payload {
-                    if let Some(payload) = current_payload.take() {
-                        messages.push(CesrMessage {
-                            payload,
-                            attachments: std::mem::take(&mut current_groups),
-                        });
-                    }
-                    current_payload = Some(p);
-                }
-                current_groups.extend(inner_groups);
-            }
-            _ => {}
-        }
-    }
-
-    if let Some(payload) = current_payload {
-        messages.push(CesrMessage {
-            payload,
-            attachments: current_groups,
-        });
-    }
-
-    Ok(messages)
+    messages(values)
 }
 
 pub fn parse_cesr_stream(stream: &[u8]) -> Result<CesrMessage, ParseError> {
     let values = cesrox::parse(stream).map_err(|e| ParseError::CesrError(e.to_string()))?;
-
-    let (payload, groups) = flatten_universal_groups(values);
-    let payload = payload.ok_or_else(|| ParseError::CesrError("No payload found".into()))?;
-
-    Ok(CesrMessage {
-        payload,
-        attachments: groups,
-    })
+    single_message(values)
 }
 
 /// Parses the CESR values at the start of `stream` and returns the part of
@@ -184,16 +213,7 @@ pub fn parse_cesr_stream_extra(stream: &[u8]) -> Result<(&[u8], CesrMessage), Pa
     let values: Vec<_> = parsed.by_ref().map_while(Result::ok).collect();
     let rest = parsed.remaining();
 
-    let (payload, groups) = flatten_universal_groups(values);
-    let payload = payload.ok_or_else(|| ParseError::CesrError("No payload found".into()))?;
-
-    Ok((
-        rest,
-        CesrMessage {
-            payload,
-            attachments: groups,
-        },
-    ))
+    Ok((rest, single_message(values)?))
 }
 
 pub fn parse_event_type(input: &[u8]) -> Result<EventType, ParseError> {
@@ -391,12 +411,13 @@ impl TryFrom<Payload> for EventType {
 
     fn try_from(value: Payload) -> Result<Self, Self::Error> {
         let event: Result<EventType, _> = match value {
-            Payload::JSON(event) => serde_json::from_slice(&event),
-            Payload::CBOR(_event) => todo!(),
-            Payload::MGPK(_event) => todo!(),
-            _ => todo!(),
+            Payload::JSON(event) => serde_json::from_slice(&event).map_err(|e| e.to_string()),
+            Payload::CBOR(event) => serde_cbor::from_slice(&event).map_err(|e| e.to_string()),
+            Payload::MGPK(event) => rmp_serde::from_slice(&event).map_err(|e| e.to_string()),
+            #[allow(unreachable_patterns)]
+            _ => Err("unsupported message body".to_string()),
         };
-        event.map_err(|e| ParseError::DeserializeError(e.to_string()))
+        event.map_err(ParseError::DeserializeError)
     }
 }
 
@@ -987,5 +1008,111 @@ pub mod test {
         let messages = cesrox::parse(kerl_str).unwrap();
 
         assert_eq!(messages.len(), 12);
+    }
+
+    /// A signed inception in `format`, written as a CESR stream.
+    #[cfg(feature = "storage-redb")]
+    fn signed_inception(
+        format: said::version::format::SerializationFormats,
+    ) -> (crate::prefix::IdentifierPrefix, Vec<u8>) {
+        use crate::{
+            event::{
+                event_data::InceptionEvent,
+                sections::{
+                    key_config::{nxt_commitment, KeyConfig},
+                    threshold::SignatureThreshold,
+                },
+            },
+            event_message::signed_event_message::{Message, Notice},
+            prefix::{BasicPrefix, IndexedSignature, SelfSigningPrefix},
+            signer::Signer,
+        };
+        use said::derivation::{HashFunction, HashFunctionCode};
+
+        let signer = Signer::new();
+        let derivation: HashFunction = HashFunctionCode::Blake3_256.into();
+        let key_config = KeyConfig::new(
+            vec![BasicPrefix::Ed25519(signer.public_key())],
+            nxt_commitment(
+                SignatureThreshold::Simple(1),
+                &[BasicPrefix::Ed25519(Signer::new().public_key())],
+                &derivation,
+            ),
+            Some(SignatureThreshold::Simple(1)),
+        );
+        let icp = InceptionEvent::new(key_config, None, None)
+            .incept_self_addressing(derivation, format)
+            .unwrap();
+        let signature =
+            SelfSigningPrefix::Ed25519Sha512(signer.sign(icp.encode().unwrap()).unwrap());
+        let signed = icp.sign(
+            vec![IndexedSignature::new_both_same(signature, 0)],
+            None,
+            None,
+        );
+        let stream = Message::Notice(Notice::Event(signed)).to_cesr().unwrap();
+        (icp.data.get_prefix(), stream)
+    }
+
+    #[cfg(feature = "storage-redb")]
+    #[test]
+    fn test_cbor_and_mgpk_bodies() {
+        use std::sync::Arc;
+
+        use crate::{
+            actor::{parse_notice_stream, process_notice},
+            database::redb::RedbDatabase,
+            processor::{basic_processor::BasicProcessor, event_storage::EventStorage},
+        };
+        use said::version::format::SerializationFormats;
+
+        for format in [SerializationFormats::CBOR, SerializationFormats::MGPK] {
+            let (id, stream) = signed_inception(format);
+            let path = tempfile::NamedTempFile::new().unwrap();
+            let db = Arc::new(RedbDatabase::new(path.path()).unwrap());
+            let processor = BasicProcessor::new(db.clone(), None);
+            for notice in parse_notice_stream(&stream).unwrap() {
+                process_notice(notice, &processor).unwrap();
+            }
+            let state = EventStorage::new(db).get_state(&id).unwrap();
+            assert_eq!(state.sn, 0, "{format:?}");
+        }
+    }
+
+    #[cfg(feature = "storage-redb")]
+    #[test]
+    fn test_enclosed_body() {
+        use cesrox::value::Value;
+        use said::version::format::SerializationFormats;
+
+        let (_id, stream) = signed_inception(SerializationFormats::JSON);
+        let message = super::parse_cesr_stream(&stream).unwrap();
+        // the same message with its body enclosed in a -H group
+        let mut enclosed = Value::non_native_body(&message.payload).unwrap().to_cesr();
+        for group in &message.attachments {
+            enclosed.extend(group.to_cesr_str().into_bytes());
+        }
+        let reparsed = super::parse_cesr_stream(&enclosed).unwrap();
+        assert_eq!(reparsed.payload, message.payload);
+        assert_eq!(reparsed.attachments, message.attachments);
+    }
+
+    #[test]
+    fn test_values_that_are_not_messages_are_rejected() {
+        use super::{parse_cesr_stream_many, ParseError};
+
+        // a native CESR body (an empty -F group)
+        assert!(matches!(
+            parse_cesr_stream_many(b"-FAA"),
+            Err(ParseError::DeserializeError(_))
+        ));
+        // a primitive on its own
+        assert!(parse_cesr_stream_many(b"DErocgXD2RGSyvn3MObcx59jeOsEQhv2TqHirVkzrp0Q").is_err());
+        // an attachment with no message before it
+        let signatures = "-KAWAAD4SyJSYlsQG22MGXzRGz2PTMqpkgOyUfq7cS99sC2BCWwdVmEMKiTEeWe5kv-l_d9auxdadQuArLtAGEArW8wE";
+        assert!(matches!(
+            parse_cesr_stream_many(signatures.as_bytes()),
+            Err(ParseError::AttachmentError(_))
+        ));
     }
 }

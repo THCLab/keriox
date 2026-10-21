@@ -16,10 +16,10 @@ crate-type = ["cdylib", "rlib"]
 default = ["storage-redb"]
 storage-redb = ["redb"]
 storage-postgres = ["sqlx", "async-std"]
-query = ["serde_cbor"]
+query = []
 oobi = ["url", "strum_macros", "strum"]
-oobi-manager = ["oobi", "query", "storage-redb", "reqwest", "async-trait", "serde_cbor"]
-mailbox = ["query", "storage-redb", "serde_cbor"]
+oobi-manager = ["oobi", "query", "storage-redb", "reqwest", "async-trait"]
+mailbox = ["query", "storage-redb"]
 
 [dependencies]
 bytes = "1.3.0"
@@ -36,7 +36,8 @@ rand = { version = "0.8.0" }
 base64 = "0.13"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-serde_cbor = {version = "0.11.1", optional = true}
+serde_cbor = "0.11.1"
+rmp-serde = "1.3"
 serde_derive = "1.0.106"
 thiserror = "1.0"
 serde-hex = "0.1"
