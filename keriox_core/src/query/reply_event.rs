@@ -258,6 +258,19 @@ pub mod tests {
         let deserialized_rpy = Message::try_from(parsed).unwrap();
 
         assert!(matches!(deserialized_rpy, Message::Op(Op::Reply(_))));
+
+        // The signer's seal and signatures, read from a -T and a -K group,
+        // are written as one -X group and read back unchanged.
+        let written = deserialized_rpy.to_cesr().unwrap();
+        let attachments = parse_cesr_stream(&written).unwrap().attachments;
+        assert!(matches!(
+            attachments.as_slice(),
+            [cesrox::group::Group::TransIdxSigGroups(_)]
+        ));
+        assert_eq!(
+            Message::try_from(parse_cesr_stream(&written).unwrap()).unwrap(),
+            deserialized_rpy
+        );
     }
 
     #[cfg(feature = "oobi")]

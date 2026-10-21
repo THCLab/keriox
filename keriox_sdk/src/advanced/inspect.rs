@@ -158,10 +158,10 @@ fn payload_kind(payload: &Payload) -> PayloadKind {
     }
 }
 
-/// Convert one run of attachment groups into typed summaries. Anchoring
-/// seals followed by indexed controller signatures are merged into a single
-/// [`AttachmentInfo::TransferableGroups`] entry, matching how transferable
-/// signatures are encoded on the wire.
+/// Convert one run of attachment groups into typed summaries. A `-X` group,
+/// or the anchoring seals followed by indexed controller signatures that
+/// keriox wrote before it used `-X`, becomes a single
+/// [`AttachmentInfo::TransferableGroups`] entry.
 fn convert_groups(groups: &[Group]) -> Vec<AttachmentInfo> {
     let mut out = Vec::new();
     let mut i = 0;
@@ -191,6 +191,31 @@ fn convert_groups(groups: &[Group]) -> Vec<AttachmentInfo> {
                             ))
                             .to_string(),
                             signatures: signatures.clone(),
+                        }
+                    })
+                    .collect();
+                out.push(AttachmentInfo::TransferableGroups(sealed));
+            }
+            Group::TransIdxSigGroups(entries) => {
+                let sealed = entries
+                    .iter()
+                    .map(|entry| {
+                        let said = SelfAddressingIdentifier::from(entry.digest.clone());
+                        let identifier: keri_controller::IdentifierPrefix =
+                            entry.prefix.clone().into();
+                        SealedSigGroup {
+                            identifier: identifier.to_str(),
+                            sn: entry.sn,
+                            digest: said.to_str(),
+                            digest_algorithm: digest_algorithm_name(&HashFunctionCode::from(
+                                &said.derivation,
+                            ))
+                            .to_string(),
+                            signatures: entry
+                                .signatures
+                                .iter()
+                                .map(indexed_signature_info)
+                                .collect(),
                         }
                     })
                     .collect();

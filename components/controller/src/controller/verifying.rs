@@ -95,7 +95,7 @@ fn collect_signatures(
     attachments: &[cesrox::group::Group],
 ) -> Result<Vec<Signature>, VerificationError> {
     use cesrox::group::Group;
-    use keri_core::event_message::signature::Nontransferable;
+    use keri_core::event_message::signature::{get_signatures, Nontransferable};
 
     let mut signatures = Vec::new();
     let mut i = 0;
@@ -126,6 +126,13 @@ fn collect_signatures(
                 } else {
                     i += 1;
                 }
+            }
+            Group::TransIdxSigGroups(_) => {
+                signatures.extend(
+                    get_signatures(attachments[i].clone())
+                        .map_err(|_| VerificationError::VerificationFailure)?,
+                );
+                i += 1;
             }
             Group::IndexedControllerSignatures(sigs) => {
                 let indexed_sigs = indexed_signatures(sigs.iter().cloned())

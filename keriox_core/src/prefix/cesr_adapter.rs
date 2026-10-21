@@ -1,5 +1,5 @@
 use cesrox::{
-    group::{NontransReceiptCouple, SealSourceCouple},
+    group::{NontransReceiptCouple, SealSourceCouple, TransIdxSigGroup},
     primitives::{
         codes::attached_signature_code::{AttachedSignatureCode, Index as CesrIndex},
         AnchoringEventSeal, CesrPrimitive, Identifier, IdentifierCode,
@@ -115,6 +115,33 @@ impl From<EventSeal> for AnchoringEventSeal {
             sn: seal.sn.into(),
             digest: digest.into(),
         }
+    }
+}
+
+/// The establishment event a transferable signer signed with and the
+/// signatures, from a `-X` group entry.
+pub fn from_trans_idx_sig_group(
+    group: TransIdxSigGroup,
+) -> Result<(EventSeal, Vec<CesrIndexedSignature>), Error> {
+    let seal = EventSeal::try_from(AnchoringEventSeal {
+        prefix: group.prefix,
+        sn: group.sn,
+        digest: group.digest,
+    })?;
+    Ok((seal, group.signatures))
+}
+
+/// A `-X` group entry for signatures made with the keys of `seal`'s event.
+pub fn trans_idx_sig_group(
+    seal: EventSeal,
+    signatures: Vec<CesrIndexedSignature>,
+) -> TransIdxSigGroup {
+    let AnchoringEventSeal { prefix, sn, digest } = seal.into();
+    TransIdxSigGroup {
+        prefix,
+        sn,
+        digest,
+        signatures,
     }
 }
 

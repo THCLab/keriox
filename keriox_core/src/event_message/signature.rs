@@ -1,6 +1,6 @@
 use cesrox::{
     group::{Group, TransLastIdxSigGroup},
-    primitives::{AnchoringEventSeal, IndexedSignature as CesrIndexedSignature},
+    primitives::IndexedSignature as CesrIndexedSignature,
 };
 use serde::{Deserialize, Serialize};
 
@@ -9,7 +9,9 @@ use crate::{
     error::Error,
     event::sections::seal::EventSeal,
     prefix::{
-        cesr_adapter::{from_receipt_couple, receipt_couple},
+        cesr_adapter::{
+            from_receipt_couple, from_trans_idx_sig_group, receipt_couple, trans_idx_sig_group,
+        },
         BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix,
     },
     processor::event_storage::EventStorage,
@@ -135,9 +137,13 @@ pub fn signatures_into_groups(sigs: &[Signature]) -> Vec<Group> {
 
     let mut attachments = vec![];
 
-    for (seal, sigs) in trans_seal {
-        attachments.push(Group::AnchoringSeals(vec![AnchoringEventSeal::from(seal)]));
-        attachments.push(Group::IndexedControllerSignatures(sigs));
+    if !trans_seal.is_empty() {
+        attachments.push(Group::TransIdxSigGroups(
+            trans_seal
+                .into_iter()
+                .map(|(seal, sigs)| trans_idx_sig_group(seal, sigs))
+                .collect(),
+        ));
     }
 
     if !trans_last.is_empty() {
@@ -186,6 +192,16 @@ pub fn get_signatures(group: Group) -> Result<Vec<Signature>, ParseError> {
             ))])
         }
         Group::AnchoringSeals(_) => Ok(vec![]),
+        Group::TransIdxSigGroups(entries) => entries
+            .into_iter()
+            .map(|group| {
+                let (seal, sigs) = from_trans_idx_sig_group(group)?;
+                Ok(Signature::Transferable(
+                    SignerData::EventSeal(seal),
+                    indexed_signatures(sigs)?,
+                ))
+            })
+            .collect(),
         Group::TransLastIdxSigGroups(entries) => entries
             .into_iter()
             .map(|group| {
@@ -228,7 +244,7 @@ impl Into<Group> for crate::event_message::signature::Signature {
                     signature.into_iter().map(|sig| sig.into()).collect();
                 match seal {
                     crate::event_message::signature::SignerData::EventSeal(event_seal) => {
-                        Group::AnchoringSeals(vec![event_seal.into()])
+                        Group::TransIdxSigGroups(vec![trans_idx_sig_group(event_seal, signatures)])
                     }
                     crate::event_message::signature::SignerData::LastEstablishment(id) => {
                         Group::TransLastIdxSigGroups(vec![TransLastIdxSigGroup {

@@ -3,7 +3,7 @@ use std::convert::{TryFrom, TryInto};
 use cesrox::{
     group::{Group, SealSourceCouple},
     payload::{parse_payload, Payload},
-    primitives::{AnchoringEventSeal, IndexedSignature as CesrIndexedSignature},
+    primitives::IndexedSignature as CesrIndexedSignature,
     universal_codes::{UniversalCode, UniversalGroupCode},
     value::Value,
 };
@@ -13,7 +13,9 @@ use serde::{Deserialize, Serialize};
 use crate::{
     event::{event_data::EventData, receipt::Receipt, sections::seal::EventSeal, KeyEvent},
     prefix::{
-        cesr_adapter::{from_receipt_couple, receipt_couple},
+        cesr_adapter::{
+            from_receipt_couple, from_trans_idx_sig_group, receipt_couple, trans_idx_sig_group,
+        },
         IndexedSignature,
     },
 };
@@ -272,15 +274,10 @@ impl EventType {
 }
 
 fn encode_transferable_seal(seal: &EventSeal, sigs: Vec<CesrIndexedSignature>) -> Vec<Group> {
-    let event_digest = seal.event_digest();
-    vec![
-        Group::AnchoringSeals(vec![AnchoringEventSeal {
-            prefix: seal.prefix.clone().into(),
-            sn: seal.sn.into(),
-            digest: event_digest.into(),
-        }]),
-        Group::IndexedControllerSignatures(sigs),
-    ]
+    vec![Group::TransIdxSigGroups(vec![trans_idx_sig_group(
+        seal.clone(),
+        sigs,
+    )])]
 }
 
 impl From<&SignedEventMessage> for CesrMessage {
@@ -559,9 +556,29 @@ impl TryFrom<CesrMessage> for SignedExchange {
     }
 }
 
+/// Whether `attachments` hold signatures of a transferable signer bound to
+/// one of its establishment events.
+fn has_transferable_seal(attachments: &[Group]) -> bool {
+    attachments
+        .iter()
+        .any(|att| matches!(att, Group::TransIdxSigGroups(_) | Group::AnchoringSeals(_)))
+}
+
+/// The establishment event and signatures of a transferable signer: a `-X`
+/// group, or the `-T` seal and `-K` signatures that keriox wrote before it
+/// used `-X`.
 fn decode_transferable_receipt(
     attachments: &[Group],
 ) -> Option<(EventSeal, Vec<crate::prefix::IndexedSignature>)> {
+    let trans_group = attachments.iter().find_map(|att| match att {
+        Group::TransIdxSigGroups(groups) => groups.first().cloned(),
+        _ => None,
+    });
+    if let Some(group) = trans_group {
+        let (seal, sigs) = from_trans_idx_sig_group(group).ok()?;
+        return Some((seal, indexed_signatures(sigs).ok()?));
+    }
+
     let seals: Vec<_> = attachments
         .iter()
         .filter_map(|att| {
@@ -597,11 +614,7 @@ fn decode_transferable_receipt(
 
 #[cfg(feature = "query")]
 fn signed_reply(rpy: ReplyEvent, attachments: Vec<Group>) -> Result<Op, ParseError> {
-    let has_anchoring = attachments
-        .iter()
-        .any(|att| matches!(att, Group::AnchoringSeals(_)));
-
-    if has_anchoring {
+    if has_transferable_seal(&attachments) {
         if let Some((seal, sigs)) = decode_transferable_receipt(&attachments) {
             return Ok(Op::Reply(SignedReply::new_trans(rpy, seal, sigs)));
         } else {
@@ -803,16 +816,12 @@ fn signed_receipt(event_message: Receipt, attachments: Vec<Group>) -> Result<Not
         })
         .collect::<Result<Vec<_>, _>>()?;
 
-    let has_anchoring_seals = attachments
-        .iter()
-        .any(|att| matches!(att, Group::AnchoringSeals(_)));
-
     let has_nontrans = attachments.iter().any(|att| {
         matches!(att, Group::NontransReceiptCouples(_))
             || matches!(att, Group::IndexedWitnessSignatures(_))
     });
 
-    if has_anchoring_seals {
+    if has_transferable_seal(&attachments) {
         if let Some((seal, converted_signatures)) = decode_transferable_receipt(&attachments) {
             return Ok(Notice::TransferableRct(SignedTransferableReceipt::new(
                 event_message,
@@ -876,6 +885,10 @@ pub fn signed_exchange(exn: ExchangeMessage, attachments: Vec<Group>) -> Result<
                     indexed_sigs,
                 ));
             }
+            Group::TransIdxSigGroups(_) => {
+                signatures.extend(super::signature::get_signatures(attachments[i].clone())?);
+                i += 1;
+            }
             Group::IndexedControllerSignatures(sigs) => {
                 let indexed_sigs = indexed_signatures(sigs.iter().cloned())?;
                 signatures.push(Signature::Transferable(
@@ -921,6 +934,9 @@ pub fn signed_exchange(exn: ExchangeMessage, attachments: Vec<Group>) -> Result<
                 data_signatures.push(Signature::NonTransferable(Nontransferable::Couplet(
                     couples,
                 )));
+            }
+            Group::TransIdxSigGroups(_) => {
+                data_signatures.extend(super::signature::get_signatures(group)?);
             }
             Group::AnchoringSeals(seals) => {
                 let seal = seals.into_iter().next().ok_or_else(|| {
