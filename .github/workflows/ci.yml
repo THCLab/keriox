@@ -56,3 +56,17 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libsodium23
       - name: Confirm keriox's vectors with keripy
         run: test-vectors/keripy-check.sh
+
+  # Clients and nodes of this keriox and of the revision deployed clients
+  # are built from work together over HTTP, whichever is upgraded first,
+  # and nodes upgraded in place serve what they stored as before. See
+  # compat/check.sh.
+  compat:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Check compatibility with deployed clients
+        run: compat/check.sh
