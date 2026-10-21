@@ -1,0 +1,27 @@
+name: Release
+
+# A v* tag publishes the crates and the witness and watcher images, but
+# only once the checks of ci.yml pass on the tagged commit: the push to
+# master that cargo release makes alongside the tag runs them separately
+# and nothing waits for that run.
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    needs: ci
+    uses: ./.github/workflows/publish.yml
+    secrets: inherit
+
+  docker-images:
+    needs: ci
+    uses: ./.github/workflows/docker-images.yml
+    secrets: inherit
+    permissions:
+      contents: write
+      packages: write

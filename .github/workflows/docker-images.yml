@@ -1,9 +1,8 @@
 name: Build docker images
 
+# Called by release.yml once the tests pass on the tagged commit.
 on:
-  push:
-    tags:
-      - "v*"
+  workflow_call:
 
 jobs:
   build-witness:
