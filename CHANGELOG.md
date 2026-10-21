@@ -1,3 +1,35 @@
+## [0.19.0-rc.1] - 2026-10-21
+
+### 🚀 Features
+
+- *(workspace)* [**breaking**] Migrate to cesrox and said 2.0
+
+### 🐛 Bug Fixes
+
+- *(core)* Verify the SAID of every key event
+- *(core)* Decode CBOR and MessagePack bodies and reject what is not a message
+- *(core)* Reject keys and signatures with non-zero pad bits
+- *(core)* Accept only message bodies keriox can reproduce exactly
+- *(workspace)* [**breaking**] Sign with TransIdxSigGroups for transferable signers
+- *(core)* Escrow events that arrive before their inception
+
+### 🧪 Testing
+
+- *(core)* Encode integration fixtures with cesrox 2.0 counter codes
+- *(keyprovider)* Import KeyProviderError in host callback tests
+- *(vectors)* Check keriox against the shared CESR V2 interoperability vectors
+- *(vectors)* Check key event logs against what keripy accepts
+- *(vectors)* Publish what keriox writes as vectors and confirm them with keripy
+
+### 📦 Build
+
+- *(deps)* Use cesrox and said 2.0.0-rc.2 from crates.io
+- *(deps)* Pin said 2.0.0-rc.3 and cesrox 2.0.0-rc.2 exactly
+
+### ⚙️ Miscellaneous Tasks
+
+- *(changelog)* List build commits in the changelog
+- *(vectors)* Run the interoperability vectors and their keripy confirmation
 ## [0.18.0] - 2026-10-05
 
 ### 🚀 Features
@@ -10,6 +42,7 @@
 - Feat: add Postgres OOBI storage backend and generalize OobiManager
 storage
 
+Signed-off-by: Zdravko Iliev <zdravko.iliev@vereign.com>
 - Generalize OobiManager storage and fix Postgres error handling
 - *(teliox)* Abstract storage layer and add PostgreSQL backend
 - *(controller)* Add PostgreSQL storage backend and integration tests
@@ -122,6 +155,10 @@ storage
 - *(sdk)* P-256 rotation chain + KeyProvider-backed inception
 - P-256 delegation e2e (uniform + mixed-curve) + signing_code coverage
 
+### 📦 Build
+
+- Release against cesrox from crates.io
+
 ### ⚙️ Miscellaneous Tasks
 
 - Update base image for docker
@@ -135,7 +172,6 @@ storage
 - *(core)* Replace eprintln/dbg debug noise with tracing
 - Bump reqwest version
 - Remove unused import
-
 ## [0.17.13] - 2026-03-25
 
 ### ⚙️ Miscellaneous Tasks
@@ -586,6 +622,10 @@ storage
 - Add witness rotation test
 - Update signing test
 - Update watcher tests
+
+### 📦 Build
+
+- Update watcher.Dockerfile
 
 ### ⚙️ Miscellaneous Tasks
 
