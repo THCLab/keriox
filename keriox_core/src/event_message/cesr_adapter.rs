@@ -239,6 +239,22 @@ pub enum EventType {
 }
 
 impl EventType {
+    /// The message's version string.
+    pub fn version(&self) -> &said::version::SerializationInfo {
+        match self {
+            EventType::KeyEvent(event) => &event.serialization_info,
+            EventType::Receipt(rcp) => &rcp.serialization_info,
+            #[cfg(feature = "query")]
+            EventType::Qry(qry) => &qry.serialization_info,
+            #[cfg(any(feature = "query", feature = "oobi"))]
+            EventType::Rpy(rpy) => &rpy.serialization_info,
+            #[cfg(feature = "mailbox")]
+            EventType::Exn(exn) => &exn.serialization_info,
+            #[cfg(feature = "mailbox")]
+            EventType::MailboxQry(qry) => &qry.serialization_info,
+        }
+    }
+
     pub fn serialize(&self) -> Result<Vec<u8>, crate::error::Error> {
         match self {
             EventType::KeyEvent(event) => event.encode(),
@@ -409,15 +425,37 @@ impl From<SignedExchange> for CesrMessage {
 impl TryFrom<Payload> for EventType {
     type Error = ParseError;
 
+    /// Signatures and SAIDs are checked over keriox's own encoding of a
+    /// message, so a body is only accepted if that encoding reproduces it
+    /// byte for byte and its version string gives its real size. Otherwise
+    /// keriox would vouch for bytes other than the ones that were signed.
     fn try_from(value: Payload) -> Result<Self, Self::Error> {
-        let event: Result<EventType, _> = match value {
+        let raw = value.to_vec();
+        let event: EventType = match value {
             Payload::JSON(event) => serde_json::from_slice(&event).map_err(|e| e.to_string()),
             Payload::CBOR(event) => serde_cbor::from_slice(&event).map_err(|e| e.to_string()),
             Payload::MGPK(event) => rmp_serde::from_slice(&event).map_err(|e| e.to_string()),
             #[allow(unreachable_patterns)]
             _ => Err("unsupported message body".to_string()),
-        };
-        event.map_err(ParseError::DeserializeError)
+        }
+        .map_err(ParseError::DeserializeError)?;
+
+        let size = event.version().size;
+        if size != raw.len() {
+            return Err(ParseError::DeserializeError(format!(
+                "version string gives size {size}, the body has {} bytes",
+                raw.len()
+            )));
+        }
+        let encoded = event
+            .serialize()
+            .map_err(|e| ParseError::DeserializeError(e.to_string()))?;
+        if encoded != raw {
+            return Err(ParseError::DeserializeError(
+                "body differs from its canonical serialization".into(),
+            ));
+        }
+        Ok(event)
     }
 }
 
@@ -1113,6 +1151,35 @@ pub mod test {
         assert!(matches!(
             parse_cesr_stream_many(signatures.as_bytes()),
             Err(ParseError::AttachmentError(_))
+        ));
+    }
+
+    #[test]
+    fn test_body_must_be_canonical() {
+        use super::{parse_cesr_stream_many, EventType, ParseError};
+
+        let body = r#"{"v":"KERI10JSON000159_","t":"icp","d":"ENRc2DeK48BKJ3ST8mypvngVwEAxw9rZr_GPNP25TmQ_","i":"ENRc2DeK48BKJ3ST8mypvngVwEAxw9rZr_GPNP25TmQ_","s":"0","kt":"1","k":["DDhKvndcqZlJNx-mtC_5eTy7UiuxOPVgAV3HsmofP2Ll"],"nt":"1","n":["EOOlrw-1jQHp8IfE1mfOb_ikXpHksVSyZ0RCnu5X0Rfg"],"bt":"0","b":["DNjeO6mfXSbrFFdk5UjDmioaho6ON0Sp6JMfhKz2jJF-"],"c":[],"a":[]}"#;
+        let decode = |body: &str| {
+            let message = parse_cesr_stream_many(body.as_bytes()).unwrap().remove(0);
+            EventType::try_from(message.payload)
+        };
+        assert!(decode(body).is_ok());
+
+        // the version string gives the wrong size
+        let wrong_size = body.replacen("000159", "000158", 1);
+        assert!(matches!(
+            decode(&wrong_size),
+            Err(ParseError::DeserializeError(_))
+        ));
+
+        // not compact, with the size corrected: keriox would check SAID and
+        // signatures over bytes other than these
+        let spaced = body
+            .replacen("000159", "00015a", 1)
+            .replacen(r#","t""#, r#", "t""#, 1);
+        assert!(matches!(
+            decode(&spaced),
+            Err(ParseError::DeserializeError(_))
         ));
     }
 }
