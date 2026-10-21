@@ -22,7 +22,7 @@
 
 use cesrox::group::Group;
 use keri_core::event::sections::seal::EventSeal;
-use keri_core::event_message::cesr_adapter::indexed_signatures;
+use keri_core::event_message::cesr_adapter::{encode_group, indexed_signatures, WireFormat};
 use keri_core::event_message::signature::{get_signatures, Signature, SignerData};
 use keri_core::prefix::cesr_adapter::receipt_couple;
 use said::derivation::{HashFunction, HashFunctionCode};
@@ -353,6 +353,6 @@ pub fn sign_nontransferable(
         cesrox::group::Group::NontransReceiptCouples(vec![receipt_couple(public_key.clone(), sig)]);
 
     let mut stream = payload.to_vec();
-    stream.extend_from_slice(group.to_cesr_str().as_bytes());
+    stream.extend_from_slice(encode_group(&group, WireFormat::default()).as_bytes());
     Ok(stream)
 }

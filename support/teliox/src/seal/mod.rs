@@ -1,6 +1,8 @@
 use said::SelfAddressingIdentifier;
 use serde::{Deserialize, Serialize};
 
+use keri_core::event_message::cesr_adapter::{encode_group, WireFormat};
+
 use crate::error::Error;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -32,6 +34,6 @@ impl AttachedSourceSeal {
                 sn: self.seal.sn.into(),
                 digest: self.seal.digest.clone().into(),
             }]);
-        Ok(attachment.to_cesr_str().as_bytes().to_vec())
+        Ok(encode_group(&attachment, WireFormat::default()).into_bytes())
     }
 }

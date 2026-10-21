@@ -3,7 +3,7 @@ use std::convert::{TryFrom, TryInto};
 use cesrox::{
     group::{Group, SealSourceCouple},
     payload::{parse_payload, Payload},
-    primitives::IndexedSignature as CesrIndexedSignature,
+    primitives::{AnchoringEventSeal, IndexedSignature as CesrIndexedSignature},
     universal_codes::{UniversalCode, UniversalGroupCode},
     value::Value,
 };
@@ -81,12 +81,70 @@ pub struct CesrMessage {
 }
 
 impl CesrMessage {
+    /// The message with its attachments in the default [`WireFormat`].
     pub fn to_cesr(&self) -> Result<Vec<u8>, ()> {
+        self.to_cesr_with(WireFormat::default())
+    }
+
+    pub fn to_cesr_with(&self, format: WireFormat) -> Result<Vec<u8>, ()> {
         let mut result = self.payload.to_vec();
         for att in &self.attachments {
-            result.extend_from_slice(att.to_cesr_str().as_bytes());
+            result.extend_from_slice(encode_group(att, format).as_bytes());
         }
         Ok(result)
+    }
+}
+
+/// How keriox writes attachment groups.
+///
+/// keriox reads both formats, whichever it writes, so nodes and clients of
+/// different releases can be upgraded in any order as long as they write
+/// the format the oldest of them reads.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum WireFormat {
+    /// The format of keriox built with cesrox before 2.0: groups count
+    /// their items, and a transferable signer's signatures follow its
+    /// event seal as a `-T` group and a `-K` group. Deployed clients still
+    /// read only this format.
+    #[default]
+    Legacy,
+    /// CESR V2: groups count quadlets, and a transferable signer's seal and
+    /// signatures form one `-X` group.
+    V2,
+}
+
+/// The text of `group` in `format`.
+pub fn encode_group(group: &Group, format: WireFormat) -> String {
+    match format {
+        WireFormat::V2 => group.to_cesr_str(),
+        WireFormat::Legacy => legacy_groups(group.clone())
+            .iter()
+            .map(Group::to_legacy_cesr_str)
+            .collect(),
+    }
+}
+
+/// `group` as the groups keriox wrote before CESR V2, which had no `-X`.
+fn legacy_groups(group: Group) -> Vec<Group> {
+    match group {
+        Group::TransIdxSigGroups(entries) => entries
+            .into_iter()
+            .flat_map(|entry| {
+                [
+                    Group::AnchoringSeals(vec![AnchoringEventSeal {
+                        prefix: entry.prefix,
+                        sn: entry.sn,
+                        digest: entry.digest,
+                    }]),
+                    Group::IndexedControllerSignatures(entry.signatures),
+                ]
+            })
+            .collect(),
+        Group::PathedMaterialQuadruplet(path, groups) => vec![Group::PathedMaterialQuadruplet(
+            path,
+            groups.into_iter().flat_map(legacy_groups).collect(),
+        )],
+        other => vec![other],
     }
 }
 
@@ -972,8 +1030,11 @@ pub mod test {
         // the same event with item counts, as written before CESR V2
         let legacy = br#"{"v":"KERI10JSON0001e7_","t":"icp","d":"EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen","i":"EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen","s":"0","kt":"2","k":["DErocgXD2RGSyvn3MObcx59jeOsEQhv2TqHirVkzrp0Q","DFXLiTjiRdSBPLL6hLa0rskIxk3dh4XwJLfctkJFLRSS","DE9YgIQVgpLwocTVrG8tidKScsQSMWwLWywNC48fhq4f"],"nt":"2","n":["EDJk5EEpC4-tQ7YDwBiKbpaZahh1QCyQOnZRF7p2i8k8","EAXfDjKvUFRj-IEB_o4y-Y_qeJAjYfZtOMD9e7vHNFss","EN8l6yJC2PxribTN0xfri6bLz34Qvj-x3cNwcV3DvT2m"],"bt":"0","b":[],"c":[],"a":[]}-KADAAD4SyJSYlsQG22MGXzRGz2PTMqpkgOyUfq7cS99sC2BCWwdVmEMKiTEeWe5kv-l_d9auxdadQuArLtAGEArW8wEABD0z_vQmFImZXfdR-0lclcpZFfkJJJNXDcUNrf7a-mGsxNLprJo-LROwDkH5m7tVrb-a1jcor2dHD9Jez-r4bQIACBFeU05ywfZycLdR0FxCvAR9BfV9im8tWe1DglezqJLf-vHRQSChY1KafbYNc96hYYpbuN90WzuCRMgV8KgRsEC"#;
         let stream = super::parse_cesr_stream(legacy).unwrap();
-        // and written again with quadlet counts
-        let v2 = stream.to_cesr().unwrap();
+        // is written back unchanged by default, for clients that read only
+        // that format
+        assert_eq!(stream.to_cesr().unwrap(), legacy);
+        // and with quadlet counts in V2
+        let v2 = stream.to_cesr_with(super::WireFormat::V2).unwrap();
         assert_ne!(&v2, legacy);
         let reparsed = super::parse_cesr_stream(&v2).unwrap();
         assert_eq!(reparsed.attachments, stream.attachments);
@@ -984,7 +1045,10 @@ pub mod test {
         let stream = br#"{"v":"KERI10JSON0001e7_","t":"icp","d":"EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen","i":"EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen","s":"0","kt":"2","k":["DErocgXD2RGSyvn3MObcx59jeOsEQhv2TqHirVkzrp0Q","DFXLiTjiRdSBPLL6hLa0rskIxk3dh4XwJLfctkJFLRSS","DE9YgIQVgpLwocTVrG8tidKScsQSMWwLWywNC48fhq4f"],"nt":"2","n":["EDJk5EEpC4-tQ7YDwBiKbpaZahh1QCyQOnZRF7p2i8k8","EAXfDjKvUFRj-IEB_o4y-Y_qeJAjYfZtOMD9e7vHNFss","EN8l6yJC2PxribTN0xfri6bLz34Qvj-x3cNwcV3DvT2m"],"bt":"0","b":[],"c":[],"a":[]}-KBCAAD4SyJSYlsQG22MGXzRGz2PTMqpkgOyUfq7cS99sC2BCWwdVmEMKiTEeWe5kv-l_d9auxdadQuArLtAGEArW8wEABD0z_vQmFImZXfdR-0lclcpZFfkJJJNXDcUNrf7a-mGsxNLprJo-LROwDkH5m7tVrb-a1jcor2dHD9Jez-r4bQIACBFeU05ywfZycLdR0FxCvAR9BfV9im8tWe1DglezqJLf-vHRQSChY1KafbYNc96hYYpbuN90WzuCRMgV8KgRsEC"#;
         let parsed = super::parse_cesr_stream(stream);
         assert!(parsed.is_ok());
-        assert_eq!(parsed.unwrap().to_cesr().unwrap(), stream);
+        assert_eq!(
+            parsed.unwrap().to_cesr_with(super::WireFormat::V2).unwrap(),
+            stream
+        );
     }
 
     #[test]

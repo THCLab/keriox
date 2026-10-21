@@ -244,7 +244,7 @@ impl SignedReply {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::event_message::cesr_adapter::parse_cesr_stream;
+    use crate::event_message::cesr_adapter::{parse_cesr_stream, WireFormat};
 
     #[test]
     pub fn reply_parse() {
@@ -260,8 +260,10 @@ pub mod tests {
         assert!(matches!(deserialized_rpy, Message::Op(Op::Reply(_))));
 
         // The signer's seal and signatures, read from a -T and a -K group,
-        // are written as one -X group and read back unchanged.
-        let written = deserialized_rpy.to_cesr().unwrap();
+        // are written back the same way by default and as one -X group in
+        // V2, and read back unchanged from both.
+        assert_eq!(deserialized_rpy.to_cesr().unwrap(), rpy.as_bytes());
+        let written = deserialized_rpy.to_cesr_with(WireFormat::V2).unwrap();
         let attachments = parse_cesr_stream(&written).unwrap().attachments;
         assert!(matches!(
             attachments.as_slice(),

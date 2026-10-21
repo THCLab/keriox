@@ -1,7 +1,7 @@
 use cesrox::group::{Group, SealSourceCouple};
 use serde::{ser::SerializeStruct, Deserialize, Serialize};
 
-use super::cesr_adapter::CesrMessage;
+use super::cesr_adapter::{encode_group, CesrMessage, WireFormat};
 use super::{msg::KeriEvent, serializer::to_string, signature::Nontransferable};
 use crate::prefix::cesr_adapter::receipt_couple;
 #[cfg(feature = "query")]
@@ -83,8 +83,12 @@ impl From<Op> for CesrMessage {
 
 impl Message {
     pub fn to_cesr(&self) -> Result<Vec<u8>, Error> {
+        self.to_cesr_with(WireFormat::default())
+    }
+
+    pub fn to_cesr_with(&self, format: WireFormat) -> Result<Vec<u8>, Error> {
         CesrMessage::from(self.clone())
-            .to_cesr()
+            .to_cesr_with(format)
             .map_err(|_e| Error::CesrError)
     }
 
@@ -147,7 +151,7 @@ impl Serialize for SignedEventMessage {
                     .map(|sig| sig.clone().into())
                     .collect(),
             );
-            em.serialize_field("-", &att_sigs.to_cesr_str())?;
+            em.serialize_field("-", &encode_group(&att_sigs, WireFormat::default()))?;
             if let Some(ref receipts) = self.witness_receipts {
                 let att_receipts = receipts
                     .iter()
@@ -155,14 +159,20 @@ impl Serialize for SignedEventMessage {
                         Nontransferable::Indexed(indexed) => {
                             let signatures =
                                 indexed.iter().map(|sig| (sig.clone()).into()).collect();
-                            Group::IndexedWitnessSignatures(signatures).to_cesr_str()
+                            encode_group(
+                                &Group::IndexedWitnessSignatures(signatures),
+                                WireFormat::default(),
+                            )
                         }
                         Nontransferable::Couplet(couplets) => {
                             let couples = couplets
                                 .iter()
                                 .map(|(bp, sp)| receipt_couple(bp.clone(), sp.clone()))
                                 .collect();
-                            Group::NontransReceiptCouples(couples).to_cesr_str()
+                            encode_group(
+                                &Group::NontransReceiptCouples(couples),
+                                WireFormat::default(),
+                            )
                         }
                     })
                     .collect::<Vec<_>>()
@@ -171,7 +181,7 @@ impl Serialize for SignedEventMessage {
             }
             if let Some(ref seal) = self.delegator_seal {
                 let att_seal = Group::SourceSealCouples(vec![SealSourceCouple::from(seal.clone())]);
-                em.serialize_field("", &att_seal.to_cesr_str())?;
+                em.serialize_field("", &encode_group(&att_seal, WireFormat::default()))?;
             }
 
             em.end()
@@ -278,7 +288,7 @@ pub mod tests {
 
     #[test]
     fn test_stream1() {
-        let stream = br#"{"v":"KERI10JSON00012b_","t":"icp","d":"ECwI3rbyMMCCBrjBcZW-qIh4SFeY1ri6fl6nFNZ6_LPn","i":"DEzolW_U9CTatBFey9LL9e4_FOekoAJdTbReEstNEl-D","s":"0","kt":"1","k":["DEzolW_U9CTatBFey9LL9e4_FOekoAJdTbReEstNEl-D"],"nt":"1","n":["EL0nWR23_LnKW6OAXJauX2oz6N2V_QZfWeT4tsK-y3jZ"],"bt":"0","b":[],"c":[],"a":[]}-KAWAAB7Ro77feCA8A0B632ThEzVKGHwUrEx-TGyV8VdXKZvxPivaWqR__Exa7n02sjJkNlrQcOqs7cXsJ6IDopxkbEC"#;
+        let stream = br#"{"v":"KERI10JSON00012b_","t":"icp","d":"ECwI3rbyMMCCBrjBcZW-qIh4SFeY1ri6fl6nFNZ6_LPn","i":"DEzolW_U9CTatBFey9LL9e4_FOekoAJdTbReEstNEl-D","s":"0","kt":"1","k":["DEzolW_U9CTatBFey9LL9e4_FOekoAJdTbReEstNEl-D"],"nt":"1","n":["EL0nWR23_LnKW6OAXJauX2oz6N2V_QZfWeT4tsK-y3jZ"],"bt":"0","b":[],"c":[],"a":[]}-KABAAB7Ro77feCA8A0B632ThEzVKGHwUrEx-TGyV8VdXKZvxPivaWqR__Exa7n02sjJkNlrQcOqs7cXsJ6IDopxkbEC"#;
 
         let parsed = CesrMessage::try_from(stream.as_ref()).unwrap();
         let msg = Message::try_from(parsed).unwrap();
@@ -302,7 +312,7 @@ pub mod tests {
 
     #[test]
     fn test_stream2() {
-        let stream = br#"{"v":"KERI10JSON0001e7_","t":"icp","d":"EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen","i":"EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen","s":"0","kt":"2","k":["DErocgXD2RGSyvn3MObcx59jeOsEQhv2TqHirVkzrp0Q","DFXLiTjiRdSBPLL6hLa0rskIxk3dh4XwJLfctkJFLRSS","DE9YgIQVgpLwocTVrG8tidKScsQSMWwLWywNC48fhq4f"],"nt":"2","n":["EDJk5EEpC4-tQ7YDwBiKbpaZahh1QCyQOnZRF7p2i8k8","EAXfDjKvUFRj-IEB_o4y-Y_qeJAjYfZtOMD9e7vHNFss","EN8l6yJC2PxribTN0xfri6bLz34Qvj-x3cNwcV3DvT2m"],"bt":"0","b":[],"c":[],"a":[]}-KBCAAD4SyJSYlsQG22MGXzRGz2PTMqpkgOyUfq7cS99sC2BCWwdVmEMKiTEeWe5kv-l_d9auxdadQuArLtAGEArW8wEABD0z_vQmFImZXfdR-0lclcpZFfkJJJNXDcUNrf7a-mGsxNLprJo-LROwDkH5m7tVrb-a1jcor2dHD9Jez-r4bQIACBFeU05ywfZycLdR0FxCvAR9BfV9im8tWe1DglezqJLf-vHRQSChY1KafbYNc96hYYpbuN90WzuCRMgV8KgRsEC"#;
+        let stream = br#"{"v":"KERI10JSON0001e7_","t":"icp","d":"EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen","i":"EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen","s":"0","kt":"2","k":["DErocgXD2RGSyvn3MObcx59jeOsEQhv2TqHirVkzrp0Q","DFXLiTjiRdSBPLL6hLa0rskIxk3dh4XwJLfctkJFLRSS","DE9YgIQVgpLwocTVrG8tidKScsQSMWwLWywNC48fhq4f"],"nt":"2","n":["EDJk5EEpC4-tQ7YDwBiKbpaZahh1QCyQOnZRF7p2i8k8","EAXfDjKvUFRj-IEB_o4y-Y_qeJAjYfZtOMD9e7vHNFss","EN8l6yJC2PxribTN0xfri6bLz34Qvj-x3cNwcV3DvT2m"],"bt":"0","b":[],"c":[],"a":[]}-KADAAD4SyJSYlsQG22MGXzRGz2PTMqpkgOyUfq7cS99sC2BCWwdVmEMKiTEeWe5kv-l_d9auxdadQuArLtAGEArW8wEABD0z_vQmFImZXfdR-0lclcpZFfkJJJNXDcUNrf7a-mGsxNLprJo-LROwDkH5m7tVrb-a1jcor2dHD9Jez-r4bQIACBFeU05ywfZycLdR0FxCvAR9BfV9im8tWe1DglezqJLf-vHRQSChY1KafbYNc96hYYpbuN90WzuCRMgV8KgRsEC"#;
         let parsed = CesrMessage::try_from(stream.as_ref()).unwrap();
         let msg = Message::try_from(parsed);
         assert!(msg.is_ok());
