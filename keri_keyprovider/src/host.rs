@@ -136,6 +136,7 @@ impl KeyProviderFactory for HostKeyProviderFactory {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::KeyProviderError;
     use std::sync::Mutex;
 
     struct InMemoryStore {
