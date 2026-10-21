@@ -1,3 +1,8 @@
+## [0.19.0-rc.3] - 2026-10-21
+
+### ⚙️ Miscellaneous Tasks
+
+- *(test)* Give the test job a Postgres database
 ## [0.19.0-rc.2] - 2026-10-21
 
 ### 🚀 Features
