@@ -65,6 +65,7 @@ impl From<Receipt> for Payload {
             SerializationFormats::JSON => Payload::JSON(pd.encode().unwrap()),
             SerializationFormats::MGPK => Payload::MGPK(pd.encode().unwrap()),
             SerializationFormats::CBOR => Payload::CBOR(pd.encode().unwrap()),
+            _ => unreachable!("receipts are encoded as JSON, CBOR or MessagePack"),
         }
     }
 }

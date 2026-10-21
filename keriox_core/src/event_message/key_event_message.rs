@@ -52,14 +52,14 @@ impl KeriEvent<KeyEvent> {
                 &hash_function_code,
                 self.serialization_info.kind,
             )?
-            .derivation_data(&hash_function_code, &self.serialization_info.kind),
+            .derivation_data()?,
             EventData::Dip(dip) => DummyInceptionEvent::dummy_delegated_inception_data(
                 dip,
                 &hash_function_code,
                 self.serialization_info.kind,
             )?
-            .derivation_data(&hash_function_code, &self.serialization_info.kind),
-            _ => self.derivation_data(&hash_function_code, &self.serialization_info.kind),
+            .derivation_data()?,
+            _ => self.derivation_data(&hash_function_code, &self.serialization_info.kind)?,
         })
     }
 }

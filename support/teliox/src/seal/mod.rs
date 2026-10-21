@@ -27,10 +27,11 @@ impl AttachedSourceSeal {
     }
 
     pub fn serialize(&self) -> Result<Vec<u8>, Error> {
-        let attachment = cesrox::group::Group::SourceSealCouples(vec![(
-            self.seal.sn,
-            self.seal.digest.clone().into(),
-        )]);
+        let attachment =
+            cesrox::group::Group::SourceSealCouples(vec![cesrox::group::SealSourceCouple {
+                sn: self.seal.sn.into(),
+                digest: self.seal.digest.clone().into(),
+            }]);
         Ok(attachment.to_cesr_str().as_bytes().to_vec())
     }
 }

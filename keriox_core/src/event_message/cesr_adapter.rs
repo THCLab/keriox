@@ -1,19 +1,20 @@
 use std::convert::{TryFrom, TryInto};
 
 use cesrox::{
-    group::Group,
+    group::{Group, SealSourceCouple},
     payload::{parse_payload, Payload},
-    primitives::IndexedSignature as CesrIndexedSignature,
+    primitives::{AnchoringEventSeal, IndexedSignature as CesrIndexedSignature},
     value::Value,
 };
-use said::{version::format::SerializationFormats, SelfAddressingIdentifier};
+use said::version::format::SerializationFormats;
 use serde::{Deserialize, Serialize};
 
-use crate::event::{
-    event_data::EventData,
-    receipt::Receipt,
-    sections::seal::{EventSeal, SourceSeal},
-    KeyEvent,
+use crate::{
+    event::{event_data::EventData, receipt::Receipt, sections::seal::EventSeal, KeyEvent},
+    prefix::{
+        cesr_adapter::{from_receipt_couple, receipt_couple},
+        IndexedSignature,
+    },
 };
 
 #[cfg(feature = "query")]
@@ -55,6 +56,20 @@ pub enum ParseError {
     AttachmentError(String),
     #[error("Wrong event type: {0}")]
     WrongEventType(String),
+}
+
+impl From<crate::prefix::error::Error> for ParseError {
+    fn from(e: crate::prefix::error::Error) -> Self {
+        ParseError::AttachmentError(e.to_string())
+    }
+}
+
+pub fn indexed_signatures(
+    sigs: impl IntoIterator<Item = CesrIndexedSignature>,
+) -> Result<Vec<IndexedSignature>, ParseError> {
+    sigs.into_iter()
+        .map(|sig| IndexedSignature::try_from(sig).map_err(ParseError::from))
+        .collect()
 }
 
 pub struct CesrMessage {
@@ -103,9 +118,7 @@ impl TryFrom<&[u8]> for CesrMessage {
 }
 
 pub fn parse_cesr_stream_many(stream: &[u8]) -> Result<Vec<CesrMessage>, ParseError> {
-    let text = std::str::from_utf8(stream).map_err(|e| ParseError::CesrError(e.to_string()))?;
-    let (_rest, values) =
-        cesrox::parse_all(text).map_err(|e| ParseError::CesrError(e.to_string()))?;
+    let values = cesrox::parse(stream).map_err(|e| ParseError::CesrError(e.to_string()))?;
 
     let mut messages = vec![];
     let mut current_payload: Option<Payload> = None;
@@ -153,9 +166,7 @@ pub fn parse_cesr_stream_many(stream: &[u8]) -> Result<Vec<CesrMessage>, ParseEr
 }
 
 pub fn parse_cesr_stream(stream: &[u8]) -> Result<CesrMessage, ParseError> {
-    let text = std::str::from_utf8(stream).map_err(|e| ParseError::CesrError(e.to_string()))?;
-    let (_rest, values) =
-        cesrox::parse_all(text).map_err(|e| ParseError::CesrError(e.to_string()))?;
+    let values = cesrox::parse(stream).map_err(|e| ParseError::CesrError(e.to_string()))?;
 
     let (payload, groups) = flatten_universal_groups(values);
     let payload = payload.ok_or_else(|| ParseError::CesrError("No payload found".into()))?;
@@ -166,10 +177,12 @@ pub fn parse_cesr_stream(stream: &[u8]) -> Result<CesrMessage, ParseError> {
     })
 }
 
-pub fn parse_cesr_stream_extra(stream: &[u8]) -> Result<(&str, CesrMessage), ParseError> {
-    let text = std::str::from_utf8(stream).map_err(|e| ParseError::CesrError(e.to_string()))?;
-    let (rest, values) =
-        cesrox::parse_all(text).map_err(|e| ParseError::CesrError(e.to_string()))?;
+/// Parses the CESR values at the start of `stream` and returns the part of
+/// the stream that is not CESR, with the message.
+pub fn parse_cesr_stream_extra(stream: &[u8]) -> Result<(&[u8], CesrMessage), ParseError> {
+    let mut parsed = cesrox::values(stream);
+    let values: Vec<_> = parsed.by_ref().map_while(Result::ok).collect();
+    let rest = parsed.remaining();
 
     let (payload, groups) = flatten_universal_groups(values);
     let payload = payload.ok_or_else(|| ParseError::CesrError("No payload found".into()))?;
@@ -186,7 +199,7 @@ pub fn parse_cesr_stream_extra(stream: &[u8]) -> Result<(&str, CesrMessage), Par
 pub fn parse_event_type(input: &[u8]) -> Result<EventType, ParseError> {
     parse_payload(input)
         .map_err(|e| ParseError::CesrError(e.to_string()))?
-        .1
+        .0
         .try_into()
 }
 
@@ -225,23 +238,22 @@ impl EventType {
 fn encode_transferable_seal(seal: &EventSeal, sigs: Vec<CesrIndexedSignature>) -> Vec<Group> {
     let event_digest = seal.event_digest();
     vec![
-        Group::AnchoringSeals(vec![(
-            seal.prefix.clone().into(),
-            seal.sn,
-            event_digest.into(),
-        )]),
+        Group::AnchoringSeals(vec![AnchoringEventSeal {
+            prefix: seal.prefix.clone().into(),
+            sn: seal.sn.into(),
+            digest: event_digest.into(),
+        }]),
         Group::IndexedControllerSignatures(sigs),
     ]
 }
 
 impl From<&SignedEventMessage> for CesrMessage {
     fn from(ev: &SignedEventMessage) -> Self {
-        let mut attachments: Vec<Group> =
-            if let Some(SourceSeal { sn, digest }) = ev.delegator_seal.clone() {
-                vec![Group::SourceSealCouples(vec![(sn, digest.said.into())])]
-            } else {
-                vec![]
-            };
+        let mut attachments: Vec<Group> = if let Some(seal) = ev.delegator_seal.clone() {
+            vec![Group::SourceSealCouples(vec![SealSourceCouple::from(seal)])]
+        } else {
+            vec![]
+        };
         let sigs = ev
             .signatures
             .clone()
@@ -261,7 +273,7 @@ impl From<&SignedEventMessage> for CesrMessage {
                 Nontransferable::Couplet(couplets) => {
                     let couples = couplets
                         .iter()
-                        .map(|(bp, sp)| (bp.clone().into(), sp.clone().into()))
+                        .map(|(bp, sp)| receipt_couple(bp.clone(), sp.clone()))
                         .collect();
                     attachments.push(Group::NontransReceiptCouples(couples))
                 }
@@ -283,6 +295,7 @@ impl<T: Serialize + Clone, D: Typeable<TypeTag = T> + Serialize + Clone> From<Ty
             SerializationFormats::JSON => Payload::JSON(pd.encode().unwrap()),
             SerializationFormats::MGPK => Payload::MGPK(pd.encode().unwrap()),
             SerializationFormats::CBOR => Payload::CBOR(pd.encode().unwrap()),
+            _ => unreachable!("events are encoded as JSON, CBOR or MessagePack"),
         }
     }
 }
@@ -381,6 +394,7 @@ impl TryFrom<Payload> for EventType {
             Payload::JSON(event) => serde_json::from_slice(&event),
             Payload::CBOR(_event) => todo!(),
             Payload::MGPK(_event) => todo!(),
+            _ => todo!(),
         };
         event.map_err(|e| ParseError::DeserializeError(e.to_string()))
     }
@@ -517,13 +531,8 @@ fn decode_transferable_receipt(
         return None;
     }
 
-    let (id, sn, digest) = seals.first()?;
-    let seal = EventSeal::new(
-        id.clone().into(),
-        *sn,
-        SelfAddressingIdentifier::from(digest.clone()),
-    );
-    let converted_sigs = sigs.into_iter().map(|sig| sig.clone().into()).collect();
+    let seal = EventSeal::try_from((*seals.first()?).clone()).ok()?;
+    let converted_sigs = indexed_signatures(sigs.into_iter().cloned()).ok()?;
     Some((seal, converted_sigs))
 }
 
@@ -549,13 +558,13 @@ fn signed_reply(rpy: ReplyEvent, attachments: Vec<Group>) -> Result<Op, ParseErr
         .ok_or_else(|| ParseError::AttachmentError("Missing attachment".into()))?
     {
         Group::NontransReceiptCouples(couplets) => {
-            let signer = couplets[0].0.clone();
-            let signature = couplets[0].1.clone();
-            Ok(Op::Reply(SignedReply::new_nontrans(
-                rpy,
-                signer.into(),
-                signature.into(),
-            )))
+            let (signer, signature) = from_receipt_couple(
+                couplets
+                    .into_iter()
+                    .next()
+                    .ok_or_else(|| ParseError::AttachmentError("Missing signature".into()))?,
+            );
+            Ok(Op::Reply(SignedReply::new_nontrans(rpy, signer, signature)))
         }
         _ => Err(ParseError::AttachmentError("Improper payload type".into())),
     }
@@ -642,16 +651,11 @@ fn signed_key_event(
                     Group::SourceSealCouples(s) => seals = Some(s),
                     Group::IndexedControllerSignatures(s) => sigs = Some(s),
                     Group::IndexedWitnessSignatures(indexed) => {
-                        witness_sigs.push(Nontransferable::Indexed(
-                            indexed.into_iter().map(|sig| sig.into()).collect(),
-                        ))
+                        witness_sigs.push(Nontransferable::Indexed(indexed_signatures(indexed)?))
                     }
                     Group::NontransReceiptCouples(couples) => {
                         witness_sigs.push(Nontransferable::Couplet(
-                            couples
-                                .into_iter()
-                                .map(|(bp, sp)| (bp.into(), sp.into()))
-                                .collect(),
+                            couples.into_iter().map(from_receipt_couple).collect(),
                         ))
                     }
                     _ => {}
@@ -664,13 +668,13 @@ fn signed_key_event(
             let delegator_seal = if let Some(seal) = seals {
                 match seal.len() {
                     0 => Err(ParseError::AttachmentError("Missing delegator seal".into())),
-                    1 => Ok(seal.first().map(|seal| seal.clone().into())),
+                    1 => Ok(Some(seal[0].clone().try_into()?)),
                     _ => Err(ParseError::AttachmentError("Too many seals".into())),
                 }
             } else {
                 Ok(None)
             };
-            let signatures = sigs.into_iter().map(|sig| sig.into()).collect();
+            let signatures = indexed_signatures(sigs)?;
 
             Ok(Notice::Event(SignedEventMessage::new(
                 &event_message,
@@ -691,29 +695,26 @@ fn signed_key_event(
                 .cloned()
                 .find_map(|att| {
                     if let Group::IndexedControllerSignatures(sigs) = att {
-                        Some(sigs.into_iter().map(|sig| sig.into()).collect())
+                        Some(indexed_signatures(sigs))
                     } else {
                         None
                     }
                 })
                 .ok_or_else(|| {
                     ParseError::AttachmentError("Missing controller signatures attachment".into())
-                })?;
-            let witness_sigs: Vec<_> = signatures
+                })??;
+            let witness_sigs = signatures
                 .into_iter()
                 .filter_map(|att| match att {
-                    Group::IndexedWitnessSignatures(indexed) => Some(Nontransferable::Indexed(
-                        indexed.into_iter().map(|sig| sig.into()).collect(),
-                    )),
-                    Group::NontransReceiptCouples(couples) => Some(Nontransferable::Couplet(
-                        couples
-                            .into_iter()
-                            .map(|(bp, sp)| (bp.into(), sp.into()))
-                            .collect(),
-                    )),
+                    Group::IndexedWitnessSignatures(indexed) => {
+                        Some(indexed_signatures(indexed).map(Nontransferable::Indexed))
+                    }
+                    Group::NontransReceiptCouples(couples) => Some(Ok(Nontransferable::Couplet(
+                        couples.into_iter().map(from_receipt_couple).collect(),
+                    ))),
                     _ => None,
                 })
-                .collect();
+                .collect::<Result<Vec<_>, _>>()?;
 
             Ok(Notice::Event(SignedEventMessage::new(
                 &event_message,
@@ -730,22 +731,18 @@ fn signed_key_event(
 }
 
 fn signed_receipt(event_message: Receipt, attachments: Vec<Group>) -> Result<Notice, ParseError> {
-    let nontransferable: Vec<_> = attachments
+    let nontransferable = attachments
         .iter()
         .filter_map(|att| match att {
             Group::IndexedWitnessSignatures(sigs) => {
-                let converted_signatures = sigs.iter().map(|sig| sig.clone().into()).collect();
-                Some(Nontransferable::Indexed(converted_signatures))
+                Some(indexed_signatures(sigs.iter().cloned()).map(Nontransferable::Indexed))
             }
-            Group::NontransReceiptCouples(couples) => Some(Nontransferable::Couplet(
-                couples
-                    .iter()
-                    .map(|(bp, sp)| (bp.clone().into(), sp.clone().into()))
-                    .collect(),
-            )),
+            Group::NontransReceiptCouples(couples) => Some(Ok(Nontransferable::Couplet(
+                couples.iter().cloned().map(from_receipt_couple).collect(),
+            ))),
             _ => None,
         })
-        .collect();
+        .collect::<Result<Vec<_>, _>>()?;
 
     let has_anchoring_seals = attachments
         .iter()
@@ -801,15 +798,11 @@ pub fn signed_exchange(exn: ExchangeMessage, attachments: Vec<Group>) -> Result<
                 let seal = seals
                     .first()
                     .ok_or_else(|| ParseError::AttachmentError("Empty AnchoringSeals".into()))?;
-                let seal = EventSeal::new(
-                    seal.0.clone().into(),
-                    seal.1,
-                    SelfAddressingIdentifier::from(seal.2.clone()),
-                );
+                let seal = EventSeal::try_from(seal.clone())?;
                 i += 1;
                 let indexed_sigs = if i < attachments.len() {
                     if let Group::IndexedControllerSignatures(sigs) = &attachments[i] {
-                        sigs.iter().map(|s| s.clone().into()).collect()
+                        indexed_signatures(sigs.iter().cloned())?
                     } else {
                         vec![]
                     }
@@ -825,7 +818,7 @@ pub fn signed_exchange(exn: ExchangeMessage, attachments: Vec<Group>) -> Result<
                 ));
             }
             Group::IndexedControllerSignatures(sigs) => {
-                let indexed_sigs: Vec<_> = sigs.iter().map(|s| s.clone().into()).collect();
+                let indexed_sigs = indexed_signatures(sigs.iter().cloned())?;
                 signatures.push(Signature::Transferable(
                     SignerData::JustSignatures,
                     indexed_sigs,
@@ -833,17 +826,14 @@ pub fn signed_exchange(exn: ExchangeMessage, attachments: Vec<Group>) -> Result<
                 i += 1;
             }
             Group::NontransReceiptCouples(couplets) => {
-                let couples: Vec<_> = couplets
-                    .iter()
-                    .map(|(bp, sp)| (bp.clone().into(), sp.clone().into()))
-                    .collect();
+                let couples = couplets.iter().cloned().map(from_receipt_couple).collect();
                 signatures.push(Signature::NonTransferable(Nontransferable::Couplet(
                     couples,
                 )));
                 i += 1;
             }
             Group::IndexedWitnessSignatures(sigs) => {
-                let indexed_sigs: Vec<_> = sigs.iter().map(|s| s.clone().into()).collect();
+                let indexed_sigs = indexed_signatures(sigs.iter().cloned())?;
                 signatures.push(Signature::NonTransferable(Nontransferable::Indexed(
                     indexed_sigs,
                 )));
@@ -861,17 +851,14 @@ pub fn signed_exchange(exn: ExchangeMessage, attachments: Vec<Group>) -> Result<
     for group in data_sigs {
         match group {
             Group::IndexedControllerSignatures(sigs) => {
-                let indexed_sigs: Vec<_> = sigs.into_iter().map(|s| s.into()).collect();
+                let indexed_sigs = indexed_signatures(sigs)?;
                 data_signatures.push(Signature::Transferable(
                     SignerData::JustSignatures,
                     indexed_sigs,
                 ));
             }
             Group::NontransReceiptCouples(couplets) => {
-                let couples: Vec<_> = couplets
-                    .into_iter()
-                    .map(|(bp, sp)| (bp.into(), sp.into()))
-                    .collect();
+                let couples = couplets.into_iter().map(from_receipt_couple).collect();
                 data_signatures.push(Signature::NonTransferable(Nontransferable::Couplet(
                     couples,
                 )));
@@ -880,11 +867,7 @@ pub fn signed_exchange(exn: ExchangeMessage, attachments: Vec<Group>) -> Result<
                 let seal = seals.into_iter().next().ok_or_else(|| {
                     ParseError::AttachmentError("Empty AnchoringSeals in data sigs".into())
                 })?;
-                let seal = EventSeal::new(
-                    seal.0.into(),
-                    seal.1,
-                    SelfAddressingIdentifier::from(seal.2),
-                );
+                let seal = EventSeal::try_from(seal)?;
                 data_signatures.push(Signature::Transferable(SignerData::EventSeal(seal), vec![]));
             }
             _ => {
@@ -910,8 +893,20 @@ pub mod test {
     };
 
     #[test]
+    fn test_legacy_attachments() {
+        // the same event with item counts, as written before CESR V2
+        let legacy = br#"{"v":"KERI10JSON0001e7_","t":"icp","d":"EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen","i":"EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen","s":"0","kt":"2","k":["DErocgXD2RGSyvn3MObcx59jeOsEQhv2TqHirVkzrp0Q","DFXLiTjiRdSBPLL6hLa0rskIxk3dh4XwJLfctkJFLRSS","DE9YgIQVgpLwocTVrG8tidKScsQSMWwLWywNC48fhq4f"],"nt":"2","n":["EDJk5EEpC4-tQ7YDwBiKbpaZahh1QCyQOnZRF7p2i8k8","EAXfDjKvUFRj-IEB_o4y-Y_qeJAjYfZtOMD9e7vHNFss","EN8l6yJC2PxribTN0xfri6bLz34Qvj-x3cNwcV3DvT2m"],"bt":"0","b":[],"c":[],"a":[]}-KADAAD4SyJSYlsQG22MGXzRGz2PTMqpkgOyUfq7cS99sC2BCWwdVmEMKiTEeWe5kv-l_d9auxdadQuArLtAGEArW8wEABD0z_vQmFImZXfdR-0lclcpZFfkJJJNXDcUNrf7a-mGsxNLprJo-LROwDkH5m7tVrb-a1jcor2dHD9Jez-r4bQIACBFeU05ywfZycLdR0FxCvAR9BfV9im8tWe1DglezqJLf-vHRQSChY1KafbYNc96hYYpbuN90WzuCRMgV8KgRsEC"#;
+        let stream = super::parse_cesr_stream(legacy).unwrap();
+        // and written again with quadlet counts
+        let v2 = stream.to_cesr().unwrap();
+        assert_ne!(&v2, legacy);
+        let reparsed = super::parse_cesr_stream(&v2).unwrap();
+        assert_eq!(reparsed.attachments, stream.attachments);
+    }
+
+    #[test]
     fn test_signed_event() {
-        let stream = br#"{"v":"KERI10JSON0001e7_","t":"icp","d":"EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen","i":"EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen","s":"0","kt":"2","k":["DErocgXD2RGSyvn3MObcx59jeOsEQhv2TqHirVkzrp0Q","DFXLiTjiRdSBPLL6hLa0rskIxk3dh4XwJLfctkJFLRSS","DE9YgIQVgpLwocTVrG8tidKScsQSMWwLWywNC48fhq4f"],"nt":"2","n":["EDJk5EEpC4-tQ7YDwBiKbpaZahh1QCyQOnZRF7p2i8k8","EAXfDjKvUFRj-IEB_o4y-Y_qeJAjYfZtOMD9e7vHNFss","EN8l6yJC2PxribTN0xfri6bLz34Qvj-x3cNwcV3DvT2m"],"bt":"0","b":[],"c":[],"a":[]}-KADAAD4SyJSYlsQG22MGXzRGz2PTMqpkgOyUfq7cS99sC2BCWwdVmEMKiTEeWe5kv-l_d9auxdadQuArLtAGEArW8wEABD0z_vQmFImZXfdR-0lclcpZFfkJJJNXDcUNrf7a-mGsxNLprJo-LROwDkH5m7tVrb-a1jcor2dHD9Jez-r4bQIACBFeU05ywfZycLdR0FxCvAR9BfV9im8tWe1DglezqJLf-vHRQSChY1KafbYNc96hYYpbuN90WzuCRMgV8KgRsEC"#;
+        let stream = br#"{"v":"KERI10JSON0001e7_","t":"icp","d":"EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen","i":"EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen","s":"0","kt":"2","k":["DErocgXD2RGSyvn3MObcx59jeOsEQhv2TqHirVkzrp0Q","DFXLiTjiRdSBPLL6hLa0rskIxk3dh4XwJLfctkJFLRSS","DE9YgIQVgpLwocTVrG8tidKScsQSMWwLWywNC48fhq4f"],"nt":"2","n":["EDJk5EEpC4-tQ7YDwBiKbpaZahh1QCyQOnZRF7p2i8k8","EAXfDjKvUFRj-IEB_o4y-Y_qeJAjYfZtOMD9e7vHNFss","EN8l6yJC2PxribTN0xfri6bLz34Qvj-x3cNwcV3DvT2m"],"bt":"0","b":[],"c":[],"a":[]}-KBCAAD4SyJSYlsQG22MGXzRGz2PTMqpkgOyUfq7cS99sC2BCWwdVmEMKiTEeWe5kv-l_d9auxdadQuArLtAGEArW8wEABD0z_vQmFImZXfdR-0lclcpZFfkJJJNXDcUNrf7a-mGsxNLprJo-LROwDkH5m7tVrb-a1jcor2dHD9Jez-r4bQIACBFeU05ywfZycLdR0FxCvAR9BfV9im8tWe1DglezqJLf-vHRQSChY1KafbYNc96hYYpbuN90WzuCRMgV8KgRsEC"#;
         let parsed = super::parse_cesr_stream(stream);
         assert!(parsed.is_ok());
         assert_eq!(parsed.unwrap().to_cesr().unwrap(), stream);
@@ -976,11 +971,10 @@ pub mod test {
     #[cfg(feature = "query")]
     #[test]
     fn test_signed_qry() {
-        let stream = br#"{"v":"KERI10JSON0000c9_","t":"qry","d":"E-WvgxrllmjGFhpn0oOiBkAVz3-dEm3bbiV_5qwj81xo","dt":"2021-01-01T00:00:00.000000+00:00","r":"log","rr":"","q":{"i":"DyvCLRr5luWmp7keDvDuLP0kIqcyBYq79b3Dho1QvrjI"}}-KABAAuISeZIVO_wXjIrGJ-VcVMxr285OkKzAqVEQqVPFx8Ht2A9GQFB-zRA18J1lpqVphOnnXbTc51WR4uAvK90EHBg"#;
-        // Truncated stream parses but with no attachments
+        let stream = br#"{"v":"KERI10JSON0000c9_","t":"qry","d":"EOWvgxrllmjGFhpn0oOiBkAVz3-dEm3bbiV_5qwj81xo","dt":"2021-01-01T00:00:00.000000+00:00","r":"log","rr":"","q":{"i":"DCvCLRr5luWmp7keDvDuLP0kIqcyBYq79b3Dho1QvrjI"}}-KABAACISeZIVO_wXjIrGJ-VcVMxr285OkKzAqVEQqVPFx8Ht2A9GQFB-zRA18J1lpqVphOnnXbTc51WR4uAvK90EHBg"#;
+        // A stream cut off inside an attachment is rejected
         let se = super::parse_cesr_stream(&stream[..stream.len() - 1]);
-        assert!(se.is_ok());
-        assert!(se.unwrap().attachments.is_empty());
+        assert!(se.is_err());
         // Full stream parses with attachments
         let se = super::parse_cesr_stream(stream);
         assert!(se.is_ok());
@@ -989,11 +983,9 @@ pub mod test {
 
     #[test]
     fn test_signed_events_stream() {
-        let kerl_str= br#"{"v":"KERI10JSON000120_","t":"icp","d":"EG4EuTsxPiRM7soX10XXzNsS1KqXKUp8xsQ-kW_tWHoI","i":"DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","s":"0","kt":"1","k":["DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA"],"n":"EPYuj8mq_PYYsoBKkzX1kxSPGYBWaIya3slgCOyOtlqU","bt":"0","b":[],"c":[],"a":[]}-KABAA0aSisI4ZZTH_6JCqsvAsEpuf_Jq6bDbvPWj_eCDnAGbSARqYHipNs-9W7MHnwnMfIXwLpcoJkKGrQ-SiaklhAw{"v":"KERI10JSON000155_","t":"rot","d":"Ej30AgJV14mTTs427F3kILLrP_l03a27APg2FBO0-QtA","i":"DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","s":"1","p":"EG4EuTsxPiRM7soX10XXzNsS1KqXKUp8xsQ-kW_tWHoI","kt":"1","k":["DVcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI"],"n":"E-dapdcC6XR1KWmWDsNl4J_OxcGxNZw1Xd95JH5a34fI","bt":"0","br":[],"ba":[],"a":[]}-KABAAwoiqt07w2UInzzo2DmtwkBfqX1-tTO4cYk_7YdlbJ95qA7PO5sEUkER8fZySQMNCVh64ruAh1yoew3TikwVGAQ{"v":"KERI10JSON000155_","t":"rot","d":"EmtXXRjyz6IdeX4201BgXKRDBm74gGqJF2r2umMMAL6I","i":"DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","s":"2","p":"Ej30AgJV14mTTs427F3kILLrP_l03a27APg2FBO0-QtA","kt":"1","k":["DT1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8"],"n":"EKrLE2h2nh3ClyJNEjKaikHWT7G-ngimNpK-QgVQv9As","bt":"0","br":[],"ba":[],"a":[]}-KABAAW_RsDfAcHkknyzh9oeliH90KGPJEI8AP3rJPyuTnpVg8yOVtSIp_JFlyRwjV5SEQOqddAcRV6JtaQO8oXtWFCQ{"v":"KERI10JSON0000cb_","t":"ixn","d":"EY7E4RJXPe7FF1zQPbpSMIY-TYz9eAmNIhuprPYqTQ5o","i":"DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","s":"3","p":"EmtXXRjyz6IdeX4201BgXKRDBm74gGqJF2r2umMMAL6I","a":[]}-KABAAlB0Ui5NHJpcifXUB6bAutmpZkhSgwxyI5jEZ2JGVBgTI02sC0Ugbq3q0EpOae7ruXW-eabUz2s0FAs26jGwVBg{"v":"KERI10JSON0000cb_","t":"ixn","d":"ENVzbZieVIjYLYkPWQy0gfua11KqdRG-oku5Ut8Dl6hU","i":"DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","s":"4","p":"EY7E4RJXPe7FF1zQPbpSMIY-TYz9eAmNIhuprPYqTQ5o","a":[]}-KABAAWITFg460TXvYvxxzN62vpqpLs-vGgeGAbd-onY3DYxd5e3AljHh85pTum4Ha48F5dui9IVYqYvuYJCG8p8KvDw{"v":"KERI10JSON000155_","t":"rot","d":"E6wrLhilpPo4ePq7m7ZccEcKjwPD2q9mqzLUb_aO2Hi0","i":"DSuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","s":"5","p":"ENVzbZieVIjYLYkPWQy0gfua11KqdRG-oku5Ut8Dl6hU","kt":"1","k":["DKPE5eeJRzkRTMOoRGVd2m18o8fLqM2j9kaxLhV3x8AQ"],"nt":"1","n":["EAYqAyYI6FqMrmMjmDSJVbfJjpKCS6mkzF7V3VcyzFCQ"],"bt":"0","br":[],"ba":[],"a":[]}-KABAAwOLC3kPAV22hL1JRYbkjNI62NT4VhR6W7x2FcZ-xtW7g4diCFx46YTMeF_-TDRaHJ1zyOhR5DYjkSKBDFoFCgA"#;
-        let text = std::str::from_utf8(kerl_str).unwrap();
-        let (rest, messages) = cesrox::parse_all(text).unwrap();
+        let kerl_str= br#"{"v":"KERI10JSON000120_","t":"icp","d":"EG4EuTsxPiRM7soX10XXzNsS1KqXKUp8xsQ-kW_tWHoI","i":"DCuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","s":"0","kt":"1","k":["DCuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA"],"n":"EPYuj8mq_PYYsoBKkzX1kxSPGYBWaIya3slgCOyOtlqU","bt":"0","b":[],"c":[],"a":[]}-KABAAAaSisI4ZZTH_6JCqsvAsEpuf_Jq6bDbvPWj_eCDnAGbSARqYHipNs-9W7MHnwnMfIXwLpcoJkKGrQ-SiaklhAw{"v":"KERI10JSON000155_","t":"rot","d":"ED30AgJV14mTTs427F3kILLrP_l03a27APg2FBO0-QtA","i":"DCuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","s":"1","p":"EG4EuTsxPiRM7soX10XXzNsS1KqXKUp8xsQ-kW_tWHoI","kt":"1","k":["DFcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI"],"n":"EOdapdcC6XR1KWmWDsNl4J_OxcGxNZw1Xd95JH5a34fI","bt":"0","br":[],"ba":[],"a":[]}-KABAAAoiqt07w2UInzzo2DmtwkBfqX1-tTO4cYk_7YdlbJ95qA7PO5sEUkER8fZySQMNCVh64ruAh1yoew3TikwVGAQ{"v":"KERI10JSON000155_","t":"rot","d":"EGtXXRjyz6IdeX4201BgXKRDBm74gGqJF2r2umMMAL6I","i":"DCuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","s":"2","p":"ED30AgJV14mTTs427F3kILLrP_l03a27APg2FBO0-QtA","kt":"1","k":["DD1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8"],"n":"EKrLE2h2nh3ClyJNEjKaikHWT7G-ngimNpK-QgVQv9As","bt":"0","br":[],"ba":[],"a":[]}-KABAAC_RsDfAcHkknyzh9oeliH90KGPJEI8AP3rJPyuTnpVg8yOVtSIp_JFlyRwjV5SEQOqddAcRV6JtaQO8oXtWFCQ{"v":"KERI10JSON0000cb_","t":"ixn","d":"EI7E4RJXPe7FF1zQPbpSMIY-TYz9eAmNIhuprPYqTQ5o","i":"DCuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","s":"3","p":"EGtXXRjyz6IdeX4201BgXKRDBm74gGqJF2r2umMMAL6I","a":[]}-KABAABB0Ui5NHJpcifXUB6bAutmpZkhSgwxyI5jEZ2JGVBgTI02sC0Ugbq3q0EpOae7ruXW-eabUz2s0FAs26jGwVBg{"v":"KERI10JSON0000cb_","t":"ixn","d":"ENVzbZieVIjYLYkPWQy0gfua11KqdRG-oku5Ut8Dl6hU","i":"DCuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","s":"4","p":"EI7E4RJXPe7FF1zQPbpSMIY-TYz9eAmNIhuprPYqTQ5o","a":[]}-KABAACITFg460TXvYvxxzN62vpqpLs-vGgeGAbd-onY3DYxd5e3AljHh85pTum4Ha48F5dui9IVYqYvuYJCG8p8KvDw{"v":"KERI10JSON000155_","t":"rot","d":"EKwrLhilpPo4ePq7m7ZccEcKjwPD2q9mqzLUb_aO2Hi0","i":"DCuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","s":"5","p":"ENVzbZieVIjYLYkPWQy0gfua11KqdRG-oku5Ut8Dl6hU","kt":"1","k":["DKPE5eeJRzkRTMOoRGVd2m18o8fLqM2j9kaxLhV3x8AQ"],"nt":"1","n":["EAYqAyYI6FqMrmMjmDSJVbfJjpKCS6mkzF7V3VcyzFCQ"],"bt":"0","br":[],"ba":[],"a":[]}-KABAAAOLC3kPAV22hL1JRYbkjNI62NT4VhR6W7x2FcZ-xtW7g4diCFx46YTMeF_-TDRaHJ1zyOhR5DYjkSKBDFoFCgA"#;
+        let messages = cesrox::parse(kerl_str).unwrap();
 
-        assert!(rest.is_empty());
         assert_eq!(messages.len(), 12);
     }
 }

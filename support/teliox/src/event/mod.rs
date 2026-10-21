@@ -90,6 +90,7 @@ pub fn parse_tel_query_stream(stream: &[u8]) -> Result<Vec<SignedTelQuery>, Pars
                 cesrox::payload::Payload::JSON(json) => serde_json::from_slice(&json).unwrap(),
                 cesrox::payload::Payload::CBOR(_) => todo!(),
                 cesrox::payload::Payload::MGPK(_) => todo!(),
+                _ => todo!(),
             };
             signed_tel_query(q, qry.attachments)
         })

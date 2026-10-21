@@ -39,8 +39,11 @@ impl VerifiableEvent {
                 };
                 let seal = match &ev.attachments[0] {
                     cesrox::group::Group::SourceSealCouples(seal) => {
-                        let (sn, digest) = seal[0].clone();
-                        Ok(AttachedSourceSeal::new(sn, (digest.clone()).into()))
+                        let couple = seal[0].clone();
+                        let sn = u64::try_from(couple.sn).map_err(|_| {
+                            Error::Generic(format!("Sequence number {} out of range", couple.sn))
+                        })?;
+                        Ok(AttachedSourceSeal::new(sn, couple.digest.into()))
                     }
                     _ => Err(Error::Generic("Unexpected attachment".into())),
                 }?;

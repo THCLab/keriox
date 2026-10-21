@@ -24,8 +24,8 @@ mailbox = ["query", "storage-redb", "serde_cbor"]
 [dependencies]
 bytes = "1.3.0"
 http = "0.2.8"
-said = { version = "0.5.3-beta.1", features = ["macros"]}
-cesrox = { version = "2.0.0-beta.8", features = ["cesr-proof"]}
+said = { version = "2.0.0-rc.1" }
+cesrox = { version = "2.0.0-rc.1" }
 ed25519-dalek = {version ="2.1.1", features = ["rand_core"]}
 k256 = { version = "0.9", features = ["ecdsa", "sha256", "zeroize"] }
 p256 = { version = "0.9", features = ["ecdsa", "sha256", "zeroize"] }

@@ -3,14 +3,14 @@ use keri_core::{
     database::{EscrowCreator, EventDatabase},
     event::sections::seal::EventSeal,
     event_message::{
-        cesr_adapter::{parse_cesr_stream_many, CesrMessage},
+        cesr_adapter::{indexed_signatures, parse_cesr_stream_many, CesrMessage},
         signature::{Signature, SignerData},
     },
     oobi::Oobi,
     oobi_manager::storage::OobiStorageBackend,
+    prefix::cesr_adapter::from_receipt_couple,
     processor::validator::{EventValidator, VerificationError},
 };
-use said::SelfAddressingIdentifier;
 use teliox::database::TelEventDatabase;
 
 use crate::{error::ControllerError, known_events::KnownEvents};
@@ -42,6 +42,9 @@ where
                 cesrox::payload::Payload::MGPK(_) => Err(ControllerError::OtherError(
                     "MGPK format not implemented yet".to_string(),
                 )),
+                _ => Err(ControllerError::OtherError(
+                    "Unsupported payload format".to_string(),
+                )),
             };
             match oobi {
                 Ok(oobi) => itertools::Either::Left(oobi),
@@ -61,16 +64,12 @@ where
         let mut err_reasons: Vec<VerificationError> = vec![];
         let (_oks, errs): (Vec<_>, Vec<_>) = data.iter().partition(|d| {
             let attachments = &d.attachments;
-            let signatures = collect_signatures(attachments);
-            let payload = match &d.payload {
-                cesrox::payload::Payload::JSON(json) => json,
-                cesrox::payload::Payload::CBOR(cbor) => cbor,
-                cesrox::payload::Payload::MGPK(mgpk) => mgpk,
-            };
-            match signatures
-                .into_iter()
-                .try_for_each(|s| self.verify(payload, &s))
-            {
+            let payload = d.payload.to_vec();
+            match collect_signatures(attachments).and_then(|signatures| {
+                signatures
+                    .into_iter()
+                    .try_for_each(|s| self.verify(&payload, &s))
+            }) {
                 Ok(_) => true,
                 Err(err) => {
                     err_reasons.push(err);
@@ -90,7 +89,11 @@ where
     }
 }
 
-fn collect_signatures(attachments: &[cesrox::group::Group]) -> Vec<Signature> {
+/// Signatures in `attachments`. Signatures that cannot be read, such as ones
+/// with an out-of-range index, fail verification.
+fn collect_signatures(
+    attachments: &[cesrox::group::Group],
+) -> Result<Vec<Signature>, VerificationError> {
     use cesrox::group::Group;
     use keri_core::event_message::signature::Nontransferable;
 
@@ -100,15 +103,13 @@ fn collect_signatures(attachments: &[cesrox::group::Group]) -> Vec<Signature> {
         match &attachments[i] {
             Group::AnchoringSeals(seals) => {
                 if let Some(seal) = seals.first() {
-                    let seal = EventSeal::new(
-                        seal.0.clone().into(),
-                        seal.1,
-                        SelfAddressingIdentifier::from(seal.2.clone()),
-                    );
+                    let seal = EventSeal::try_from(seal.clone())
+                        .map_err(|_| VerificationError::VerificationFailure)?;
                     i += 1;
                     let indexed_sigs = if i < attachments.len() {
                         if let Group::IndexedControllerSignatures(sigs) = &attachments[i] {
-                            sigs.iter().map(|s| s.clone().into()).collect()
+                            indexed_signatures(sigs.iter().cloned())
+                                .map_err(|_| VerificationError::VerificationFailure)?
                         } else {
                             vec![]
                         }
@@ -127,7 +128,8 @@ fn collect_signatures(attachments: &[cesrox::group::Group]) -> Vec<Signature> {
                 }
             }
             Group::IndexedControllerSignatures(sigs) => {
-                let indexed_sigs: Vec<_> = sigs.iter().map(|s| s.clone().into()).collect();
+                let indexed_sigs = indexed_signatures(sigs.iter().cloned())
+                    .map_err(|_| VerificationError::VerificationFailure)?;
                 signatures.push(Signature::Transferable(
                     SignerData::JustSignatures,
                     indexed_sigs,
@@ -135,17 +137,15 @@ fn collect_signatures(attachments: &[cesrox::group::Group]) -> Vec<Signature> {
                 i += 1;
             }
             Group::NontransReceiptCouples(couplets) => {
-                let couples: Vec<_> = couplets
-                    .iter()
-                    .map(|(bp, sp)| (bp.clone().into(), sp.clone().into()))
-                    .collect();
+                let couples = couplets.iter().cloned().map(from_receipt_couple).collect();
                 signatures.push(Signature::NonTransferable(Nontransferable::Couplet(
                     couples,
                 )));
                 i += 1;
             }
             Group::IndexedWitnessSignatures(sigs) => {
-                let indexed_sigs: Vec<_> = sigs.iter().map(|s| s.clone().into()).collect();
+                let indexed_sigs = indexed_signatures(sigs.iter().cloned())
+                    .map_err(|_| VerificationError::VerificationFailure)?;
                 signatures.push(Signature::NonTransferable(Nontransferable::Indexed(
                     indexed_sigs,
                 )));
@@ -156,5 +156,5 @@ fn collect_signatures(attachments: &[cesrox::group::Group]) -> Vec<Signature> {
             }
         }
     }
-    signatures
+    Ok(signatures)
 }

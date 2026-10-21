@@ -367,7 +367,8 @@ where
         data_signature: IndexedSignature,
     ) -> Result<(), MechanicsError> {
         // Join exn messages with their signatures and send it to witness.
-        let material_path = MaterialPath::create_from_str("-a".into());
+        let material_path =
+            MaterialPath::create_from_str("-a".into()).expect("\"-a\" is a valid path");
         // let attached_sig = sigs;
         let parsed_exn =
             parse_event_type(exchange).map_err(|_e| MechanicsError::EventFormatError)?;

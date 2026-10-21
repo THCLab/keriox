@@ -109,29 +109,29 @@ mod tests {
     #[test]
     fn ser_der() -> Result<(), serde_json::Error> {
         let event_str = "{
-  \"i\": \"DXq5YqaL6L48pf0fu7IUhL0JRaU2_RxFP0AL43wYn148\",
+  \"i\": \"DHq5YqaL6L48pf0fu7IUhL0JRaU2_RxFP0AL43wYn148\",
   \"s\": \"0\",
   \"t\": \"icp\",
   \"kt\": \"2\",
   \"k\":
   [
-    \"BWoNZsa88VrTkep6HQt27fTh-4HA8tr54sHON1vWl6FE\",
-    \"B8tr54sHON1vWVrTkep6H-4HAl6FEQt27fThWoNZsa88\",
-    \"BVrTkep6HHA8tr54sHON1Qt27fThWoNZsa88-4vWl6FE\"
+    \"BGoNZsa88VrTkep6HQt27fTh-4HA8tr54sHON1vWl6FE\",
+    \"BMtr54sHON1vWVrTkep6H-4HAl6FEQt27fThWoNZsa88\",
+    \"BFrTkep6HHA8tr54sHON1Qt27fThWoNZsa88-4vWl6FE\"
   ],
   \"nt\": \"3\",
   \"n\" : 
     [
-      \"ETNZH3ULvYawyZ-i0d8JZU6JR2nmAoAfSVPzhzS6b5CM\",
-      \"EnmwyZdi0d8JZAoTNZYAfSVPzhzaU6JR2H3ULvS6b5CM\",
-      \"ETNZH3ULvS6bYAfSVPzhzaU6JR2nmwyZfi0d8JZ5s8bk\"
+      \"EDNZH3ULvYawyZ-i0d8JZU6JR2nmAoAfSVPzhzS6b5CM\",
+      \"EHmwyZdi0d8JZAoTNZYAfSVPzhzaU6JR2H3ULvS6b5CM\",
+      \"EDNZH3ULvS6bYAfSVPzhzaU6JR2nmwyZfi0d8JZ5s8bk\"
     ],
   \"bt\": \"2\",
   \"b\":
   [
-    \"DVrTkep6H-Qt27fThWoNZsa884HA8tr54sHON1vWl6FE\",
+    \"DFrTkep6H-Qt27fThWoNZsa884HA8tr54sHON1vWl6FE\",
     \"DHON1vWl6FEQt27fThWoNZsa88VrTkep6H-4HA8tr54s\",
-    \"DThWoNZsa88VrTkeQt27fp6H-4HA8tr54sHON1vWl6FE\"
+    \"DDhWoNZsa88VrTkeQt27fp6H-4HA8tr54sHON1vWl6FE\"
   ],
   \"c\": [],
   \"a\": []

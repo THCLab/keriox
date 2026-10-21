@@ -177,7 +177,7 @@ mod tests {
         let ev2 = kell.next().unwrap();
         let (event_without_signatures, _event) = match parse_payload(event_without_signature_str)
             .unwrap()
-            .1
+            .0
             .try_into()?
         {
             EventType::KeyEvent(event) => (

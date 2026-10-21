@@ -47,6 +47,7 @@ impl BasicPrefix {
             CesrBasic::X448 => Self::X448(public_key),
             CesrBasic::ECDSA256r1Nontrans => Self::ECDSA256r1NT(public_key),
             CesrBasic::ECDSA256r1 => Self::ECDSA256r1(public_key),
+            other => unimplemented!("unsupported public key code {other:?}"),
         }
     }
 
@@ -75,9 +76,7 @@ impl BasicPrefix {
     /// X448 — these are Diffie-Hellman key-agreement keys, not signing
     /// keys). Use this to wrap raw signature bytes in the right
     /// `SelfSigningPrefix` variant when you only hold a `BasicPrefix`.
-    pub fn signing_code(
-        &self,
-    ) -> Option<cesrox::primitives::codes::self_signing::SelfSigning> {
+    pub fn signing_code(&self) -> Option<cesrox::primitives::codes::self_signing::SelfSigning> {
         use cesrox::primitives::codes::self_signing::SelfSigning;
         Some(match self {
             BasicPrefix::Ed25519(_) | BasicPrefix::Ed25519NT(_) => SelfSigning::Ed25519Sha512,
@@ -133,8 +132,8 @@ impl FromStr for BasicPrefix {
             // code length is not a multiple of 4). Stripping the full code_size
             // would silently truncate the value for 4-char codes (1AAA/1AAB
             // secp256k1, 1AAC/1AAD Ed448, 1AAI/1AAJ P-256).
-            let k_vec = from_text_to_bytes(&s[code.code_size()..])?[code.code_size() % 4..]
-                .to_vec();
+            let k_vec =
+                from_text_to_bytes(&s[code.code_size()..])?[code.code_size() % 4..].to_vec();
             Ok(Self::new(code, PublicKey::new(k_vec)))
         } else {
             Err(Error::IncorrectLengthError(s.into()))

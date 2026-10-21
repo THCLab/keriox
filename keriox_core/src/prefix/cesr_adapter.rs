@@ -1,7 +1,10 @@
-use cesrox::primitives::{
-    codes::attached_signature_code::{AttachedSignatureCode, Index as CesrIndex},
-    CesrPrimitive, Digest, Identifier, IdentifierCode, IndexedSignature as CesrIndexedSignature,
-    PublicKey, Signature,
+use cesrox::{
+    group::{NontransReceiptCouple, SealSourceCouple},
+    primitives::{
+        codes::attached_signature_code::{AttachedSignatureCode, Index as CesrIndex},
+        AnchoringEventSeal, CesrPrimitive, Identifier, IdentifierCode,
+        IndexedSignature as CesrIndexedSignature, PublicKey, Signature,
+    },
 };
 use said::SelfAddressingIdentifier;
 
@@ -10,90 +13,120 @@ use crate::{
     prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
 };
 
-use super::attached_signature::Index;
+use super::{attached_signature::Index, error::Error};
 
-impl From<CesrIndexedSignature> for IndexedSignature {
-    fn from((code, value): CesrIndexedSignature) -> Self {
-        match code.index {
-            CesrIndex::BothSame(i) => {
-                IndexedSignature::new_both_same(SelfSigningPrefix::new(code.code, value), i)
-            }
-            CesrIndex::Dual(i, pi) => {
-                IndexedSignature::new_both_diffrent(SelfSigningPrefix::new(code.code, value), i, pi)
-            }
-            CesrIndex::BigDual(i, pi) => {
-                IndexedSignature::new_both_diffrent(SelfSigningPrefix::new(code.code, value), i, pi)
-            }
-            CesrIndex::CurrentOnly(i) => {
-                IndexedSignature::new_current_only(SelfSigningPrefix::new(code.code, value), i)
-            }
-            CesrIndex::BigCurrentOnly(i) => {
-                IndexedSignature::new_current_only(SelfSigningPrefix::new(code.code, value), i)
-            }
-        }
+impl TryFrom<CesrIndexedSignature> for IndexedSignature {
+    type Error = Error;
+
+    fn try_from(signature: CesrIndexedSignature) -> Result<Self, Self::Error> {
+        let index = signature.code.index.try_into()?;
+        Ok(IndexedSignature {
+            index,
+            signature: SelfSigningPrefix::new(signature.code.code, signature.raw),
+        })
     }
 }
 
-impl From<CesrIndex> for Index {
-    fn from(value: CesrIndex) -> Self {
-        match value {
-            CesrIndex::BothSame(i) => Index::BothSame(i),
-            CesrIndex::Dual(i, pi) | CesrIndex::BigDual(i, pi) => Index::BothDifferent(i, pi),
-            CesrIndex::CurrentOnly(i) | CesrIndex::BigCurrentOnly(i) => Index::CurrentOnly(i),
-        }
+impl TryFrom<CesrIndex> for Index {
+    type Error = Error;
+
+    fn try_from(value: CesrIndex) -> Result<Self, Self::Error> {
+        let narrow = |i: u32| u16::try_from(i).map_err(|_| Error::IndexOutOfRange(i));
+        Ok(match value {
+            CesrIndex::BothSame(i) => Index::BothSame(narrow(i)?),
+            CesrIndex::Dual(i, pi) | CesrIndex::BigDual(i, pi) => {
+                Index::BothDifferent(narrow(i)?, narrow(pi)?)
+            }
+            CesrIndex::CurrentOnly(i) | CesrIndex::BigCurrentOnly(i) => {
+                Index::CurrentOnly(narrow(i)?)
+            }
+        })
     }
 }
 
 impl From<PublicKey> for BasicPrefix {
     fn from(pk: PublicKey) -> Self {
-        BasicPrefix::new(pk.0, crate::keys::PublicKey::new(pk.1))
+        BasicPrefix::new(pk.code, crate::keys::PublicKey::new(pk.raw))
     }
 }
 
 impl From<Signature> for SelfSigningPrefix {
-    fn from((code, value): Signature) -> Self {
-        SelfSigningPrefix::new(code, value)
+    fn from(signature: Signature) -> Self {
+        SelfSigningPrefix::new(signature.code, signature.raw)
     }
 }
 
-impl From<(u64, Digest)> for SourceSeal {
-    fn from((sn, digest): (u64, Digest)) -> Self {
-        SourceSeal::new(sn, digest.into())
+/// Splits the CESR couple of a receipt by a non-transferable identifier
+/// into the identifier and its signature.
+pub fn from_receipt_couple(couple: NontransReceiptCouple) -> (BasicPrefix, SelfSigningPrefix) {
+    (couple.key.into(), couple.signature.into())
+}
+
+/// Builds the CESR couple of a receipt by a non-transferable identifier.
+pub fn receipt_couple(key: BasicPrefix, signature: SelfSigningPrefix) -> NontransReceiptCouple {
+    NontransReceiptCouple {
+        key: key.into(),
+        signature: signature.into(),
     }
 }
 
-impl From<(Digest, u64, Digest)> for EventSeal {
-    fn from((identifier, sn, digest): (Digest, u64, Digest)) -> Self {
-        let said: SelfAddressingIdentifier = identifier.into();
-        let digest_said: SelfAddressingIdentifier = digest.into();
-        EventSeal::new(
-            IdentifierPrefix::SelfAddressing(said.into()),
-            sn,
-            digest_said.into(),
-        )
+fn sn_from_cesr(sn: u128) -> Result<u64, Error> {
+    u64::try_from(sn).map_err(|_| Error::SnOutOfRange(sn))
+}
+
+impl TryFrom<SealSourceCouple> for SourceSeal {
+    type Error = Error;
+
+    fn try_from(couple: SealSourceCouple) -> Result<Self, Self::Error> {
+        Ok(SourceSeal::new(
+            sn_from_cesr(couple.sn)?,
+            couple.digest.into(),
+        ))
     }
 }
 
-impl From<(PublicKey, u64, Digest)> for EventSeal {
-    fn from((identifier, sn, digest): (PublicKey, u64, Digest)) -> Self {
-        let digest_said: SelfAddressingIdentifier = digest.into();
-        EventSeal::new(
-            IdentifierPrefix::Basic(identifier.into()),
-            sn,
-            digest_said.into(),
-        )
+impl TryFrom<AnchoringEventSeal> for EventSeal {
+    type Error = Error;
+
+    fn try_from(seal: AnchoringEventSeal) -> Result<Self, Self::Error> {
+        let digest: SelfAddressingIdentifier = seal.digest.into();
+        Ok(EventSeal::new(
+            seal.prefix.into(),
+            sn_from_cesr(seal.sn)?,
+            digest,
+        ))
+    }
+}
+
+impl From<SourceSeal> for SealSourceCouple {
+    fn from(seal: SourceSeal) -> Self {
+        SealSourceCouple {
+            sn: seal.sn.into(),
+            digest: seal.digest.said.into(),
+        }
+    }
+}
+
+impl From<EventSeal> for AnchoringEventSeal {
+    fn from(seal: EventSeal) -> Self {
+        let digest = seal.event_digest();
+        AnchoringEventSeal {
+            prefix: seal.prefix.into(),
+            sn: seal.sn.into(),
+            digest: digest.into(),
+        }
     }
 }
 
 impl From<Identifier> for IdentifierPrefix {
     fn from(identifier: Identifier) -> Self {
-        match identifier.0 {
+        match identifier.code {
             IdentifierCode::Basic(bp) => IdentifierPrefix::Basic(BasicPrefix::new(
                 bp,
-                crate::keys::PublicKey::new(identifier.1),
+                crate::keys::PublicKey::new(identifier.raw),
             )),
             IdentifierCode::SelfAddressing(sa) => IdentifierPrefix::SelfAddressing(
-                SelfAddressingIdentifier::new(sa.into(), identifier.1).into(),
+                SelfAddressingIdentifier::new(sa.into(), identifier.raw).into(),
             ),
         }
     }
@@ -101,19 +134,19 @@ impl From<Identifier> for IdentifierPrefix {
 
 impl Into<Signature> for SelfSigningPrefix {
     fn into(self) -> Signature {
-        (self.get_code(), self.derivative())
+        Signature::new(self.get_code(), self.derivative())
     }
 }
 
 impl Into<PublicKey> for BasicPrefix {
     fn into(self) -> PublicKey {
-        (self.get_code(), self.derivative())
+        PublicKey::new(self.get_code(), self.derivative())
     }
 }
 
 impl Into<CesrIndexedSignature> for IndexedSignature {
     fn into(self) -> CesrIndexedSignature {
-        (
+        CesrIndexedSignature::new(
             AttachedSignatureCode::new(self.signature.get_code(), (&self.index).into()),
             self.derivative(),
         )
@@ -125,17 +158,17 @@ impl Into<CesrIndex> for &Index {
         match self {
             Index::CurrentOnly(i) => {
                 if *i < 64 {
-                    CesrIndex::CurrentOnly(*i)
+                    CesrIndex::CurrentOnly((*i).into())
                 } else {
-                    CesrIndex::BigCurrentOnly(*i)
+                    CesrIndex::BigCurrentOnly((*i).into())
                 }
             }
-            Index::BothSame(i) => CesrIndex::BothSame(*i),
+            Index::BothSame(i) => CesrIndex::BothSame((*i).into()),
             Index::BothDifferent(i, pi) => {
                 if *i < 64 {
-                    CesrIndex::Dual(*i, *pi)
+                    CesrIndex::Dual((*i).into(), (*pi).into())
                 } else {
-                    CesrIndex::BigDual(*i, *pi)
+                    CesrIndex::BigDual((*i).into(), (*pi).into())
                 }
             }
         }
@@ -146,9 +179,9 @@ impl Into<Identifier> for IdentifierPrefix {
     fn into(self) -> Identifier {
         match &self {
             IdentifierPrefix::Basic(bp) => {
-                (IdentifierCode::Basic(bp.get_code()), self.derivative())
+                Identifier::new(IdentifierCode::Basic(bp.get_code()), self.derivative())
             }
-            IdentifierPrefix::SelfAddressing(sa) => (
+            IdentifierPrefix::SelfAddressing(sa) => Identifier::new(
                 IdentifierCode::SelfAddressing((&sa.said.derivation).into()),
                 self.derivative(),
             ),

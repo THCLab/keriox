@@ -215,8 +215,8 @@ mod tests {
         assert_eq!(vcp.data.event_type, expected_event_type);
         assert_eq!(String::from_utf8(vcp.encode().unwrap()).unwrap(), vcp_raw);
 
-        // let vcp_raw = r#"{"v":"KERI10JSON0000d7_","i":"EVohdnN33-vdNOTPYxeTQIWVzRKtzZzBoiBSGYSSnD0s","ii":"DntNTPnDFBnmlO6J44LXCrzZTAmpe-82b7BmQGtL4QhM","s":"0","t":"vcp","c":[],"bt":"1","b":["EXvR3p8V95W8J7Ui4-mEzZ79S-A1esAnJo1Kmzq80Jkc"]}"#;
-        let vcp_raw = r#"{"v":"KERI10JSON0000e0_","t":"vcp","d":"EBK9Otzl6zxt55LF095coJH7EBqlPIdrDC0f8bjeZYC9","i":"EFohdnN33-vdNOTPYxeTQIWVzRKtzZzBoiBSGYSSnD0s","s":"0","ii":"DHtNTPnDFBnmlO6J44LXCrzZTAmpe-82b7BmQGtL4QhM","c":["NB"],"bt":"1","b":["EXvR3p8V95W8J7Ui4-mEzZ79S-A1esAnJo1Kmzq80Jkc"]}"#;
+        // let vcp_raw = r#"{"v":"KERI10JSON0000d7_","i":"EFohdnN33-vdNOTPYxeTQIWVzRKtzZzBoiBSGYSSnD0s","ii":"DHtNTPnDFBnmlO6J44LXCrzZTAmpe-82b7BmQGtL4QhM","s":"0","t":"vcp","c":[],"bt":"1","b":["EHvR3p8V95W8J7Ui4-mEzZ79S-A1esAnJo1Kmzq80Jkc"]}"#;
+        let vcp_raw = r#"{"v":"KERI10JSON0000e0_","t":"vcp","d":"EBK9Otzl6zxt55LF095coJH7EBqlPIdrDC0f8bjeZYC9","i":"EFohdnN33-vdNOTPYxeTQIWVzRKtzZzBoiBSGYSSnD0s","s":"0","ii":"DHtNTPnDFBnmlO6J44LXCrzZTAmpe-82b7BmQGtL4QhM","c":["NB"],"bt":"1","b":["EHvR3p8V95W8J7Ui4-mEzZ79S-A1esAnJo1Kmzq80Jkc"]}"#;
         let vcp: ManagerTelEvent = serde_json::from_str(vcp_raw).unwrap();
         assert_eq!(
             vcp.prefix,
@@ -227,12 +227,12 @@ mod tests {
             issuer_id: "DHtNTPnDFBnmlO6J44LXCrzZTAmpe-82b7BmQGtL4QhM".parse()?,
             config: vec![Config::NoBackers],
             backer_threshold: 1,
-            backers: vec!["EXvR3p8V95W8J7Ui4-mEzZ79S-A1esAnJo1Kmzq80Jkc".parse()?],
+            backers: vec!["EHvR3p8V95W8J7Ui4-mEzZ79S-A1esAnJo1Kmzq80Jkc".parse()?],
         });
         assert_eq!(vcp.event_type, expected_event_type);
 
         // Manager rotation
-        // let vrt_raw = r#"{"v":"KERI10JSON0000aa_","i":"EE3Xv6CWwEMpW-99rhPD9IHFCR2LN5ienLVI8yG5faBw","p":"EY2L3ycqK9645aEeQKP941xojSiuiHsw4Y6yTW-PmsBg","s":"3","t":"vrt","bt":"1","br":[],"ba":[]}"#;
+        // let vrt_raw = r#"{"v":"KERI10JSON0000aa_","i":"EE3Xv6CWwEMpW-99rhPD9IHFCR2LN5ienLVI8yG5faBw","p":"EI2L3ycqK9645aEeQKP941xojSiuiHsw4Y6yTW-PmsBg","s":"3","t":"vrt","bt":"1","br":[],"ba":[]}"#;
         let vrt_raw = r#"{"v":"KERI10JSON000102_","t":"vrt","d":"EBt83eunp22Zingg0UXHKXddBLeYQSBovkbr5mtQnwmB","i":"EFohdnN33-vdNOTPYxeTQIWVzRKtzZzBoiBSGYSSnD0s","s":"1","p":"EIniznx8Vyltc0i-T7QwngvZkt_2xsT1PdsyRjq_1gAw","ba":["EHvR3p8V95W8J7Ui4-mEzZ79S-A1esAnJo1Kmzq80Jkc"],"br":[]}"#;
         let vrt: ManagerTelEvent = serde_json::from_str(vrt_raw).unwrap();
         assert_eq!(
@@ -257,10 +257,10 @@ mod tests {
     #[test]
     fn test_apply_to() -> Result<(), Error> {
         // Construct inception event
-        let pref: IdentifierPrefix = "EVohdnN33-vdNOTPYxeTQIWVzRKtzZzBoiBSGYSSnD0s"
+        let pref: IdentifierPrefix = "EFohdnN33-vdNOTPYxeTQIWVzRKtzZzBoiBSGYSSnD0s"
             .parse()
             .unwrap();
-        let issuer_pref: IdentifierPrefix = "DntNTPnDFBnmlO6J44LXCrzZTAmpe-82b7BmQGtL4QhM"
+        let issuer_pref: IdentifierPrefix = "DHtNTPnDFBnmlO6J44LXCrzZTAmpe-82b7BmQGtL4QhM"
             .parse()
             .unwrap();
         let event_type = ManagerEventType::Vcp(Inc {
@@ -282,7 +282,7 @@ mod tests {
         let prev_event = vcp.digest()?;
         let event_type = ManagerEventType::Vrt(Rot {
             prev_event,
-            backers_to_add: vec!["EXvR3p8V95W8J7Ui4-mEzZ79S-A1esAnJo1Kmzq80Jkc"
+            backers_to_add: vec!["EHvR3p8V95W8J7Ui4-mEzZ79S-A1esAnJo1Kmzq80Jkc"
                 .parse()
                 .unwrap()],
             backers_to_remove: vec![],
@@ -321,14 +321,14 @@ mod tests {
         let prev_event = state.last.clone();
         let event_type = ManagerEventType::Vrt(Rot {
             prev_event,
-            backers_to_remove: vec!["EXvR3p8V95W8J7Ui4-mEzZ79S-A1esAnJo1Kmzq80Jkc"
+            backers_to_remove: vec!["EHvR3p8V95W8J7Ui4-mEzZ79S-A1esAnJo1Kmzq80Jkc"
                 .parse()
                 .unwrap()],
             backers_to_add: vec![
-                "DSEpNJeSJjxo6oAxkNE8eCOJg2HRPstqkeHWBAvN9XNU"
+                "DCEpNJeSJjxo6oAxkNE8eCOJg2HRPstqkeHWBAvN9XNU"
                     .parse()
                     .unwrap(),
-                "Dvxo-P4W_Z0xXTfoA3_4DMPn7oi0mLCElOWJDpC0nQXw"
+                "DPxo-P4W_Z0xXTfoA3_4DMPn7oi0mLCElOWJDpC0nQXw"
                     .parse()
                     .unwrap(),
             ],
@@ -344,10 +344,10 @@ mod tests {
     #[test]
     fn test_no_backers() -> Result<(), Error> {
         // Construct inception event
-        let pref: IdentifierPrefix = "EVohdnN33-vdNOTPYxeTQIWVzRKtzZzBoiBSGYSSnD0s"
+        let pref: IdentifierPrefix = "EFohdnN33-vdNOTPYxeTQIWVzRKtzZzBoiBSGYSSnD0s"
             .parse()
             .unwrap();
-        let issuer_pref: IdentifierPrefix = "DntNTPnDFBnmlO6J44LXCrzZTAmpe-82b7BmQGtL4QhM"
+        let issuer_pref: IdentifierPrefix = "DHtNTPnDFBnmlO6J44LXCrzZTAmpe-82b7BmQGtL4QhM"
             .parse()
             .unwrap();
         let event_type = ManagerEventType::Vcp(Inc {
@@ -369,7 +369,7 @@ mod tests {
         let prev_event = HashFunction::from(HashFunctionCode::Blake3_256).derive(&vcp.encode()?);
         let event_type = ManagerEventType::Vrt(Rot {
             prev_event,
-            backers_to_add: vec!["EXvR3p8V95W8J7Ui4-mEzZ79S-A1esAnJo1Kmzq80Jkc"
+            backers_to_add: vec!["EHvR3p8V95W8J7Ui4-mEzZ79S-A1esAnJo1Kmzq80Jkc"
                 .parse()
                 .unwrap()],
             backers_to_remove: vec![],

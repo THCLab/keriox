@@ -14,6 +14,12 @@ pub enum Error {
     #[error("Deserialize error: {0}")]
     DeserializeError(String),
 
+    #[error("Signature index {0} does not fit in 16 bits")]
+    IndexOutOfRange(u32),
+
+    #[error("Sequence number {0} does not fit in 64 bits")]
+    SnOutOfRange(u128),
+
     #[error(transparent)]
     ParseError(#[from] cesrox::error::Error),
 

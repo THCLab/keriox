@@ -89,7 +89,7 @@ impl FromStr for IndexedSignature {
             let ssp = SelfSigningPrefix::new(code.code, s_vec);
 
             Ok(Self {
-                index: code.index.into(),
+                index: code.index.try_into()?,
                 signature: ssp,
             })
         } else {

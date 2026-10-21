@@ -13,7 +13,7 @@ pub use cesrox::payload::Payload;
 pub use cesrox::primitives::codes::seed::SeedCode;
 pub use cesrox::primitives::codes::self_signing::SelfSigning;
 pub use cesrox::value::Value as CesrValue;
-pub use cesrox::{parse_all, primitives};
+pub use cesrox::{parse, parse_value, primitives, values};
 
 // ── KERI events and messages ────────────────────────────────────────────────
 
@@ -50,12 +50,12 @@ pub use keri_core::event::sections::threshold::SignatureThreshold;
 
 // ── Actor / query types ────────────────────────────────────────────────────
 
+pub use keri_controller::communication::SendingError;
 pub use keri_core::actor::error::ActorError;
 pub use keri_core::actor::possible_response::PossibleResponse;
 pub use keri_core::actor::{QueryError, SignedQueryError};
 pub use keri_core::database::redb::RedbDatabase;
 pub use keri_core::oobi_manager::storage::RedbOobiStorage;
-pub use keri_controller::communication::SendingError;
 
 // ── TEL ─────────────────────────────────────────────────────────────────────
 

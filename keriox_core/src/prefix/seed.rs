@@ -27,6 +27,7 @@ impl SeedPrefix {
             SeedCode::RandomSeed256ECDSAsecp256k1 => Self::RandomSeed256ECDSAsecp256k1(value),
             SeedCode::RandomSeed448 => Self::RandomSeed448(value),
             SeedCode::RandomSeed256ECDSA256r1 => Self::RandomSeed256ECDSA256r1(value),
+            other => unimplemented!("unsupported seed code {other:?}"),
         }
     }
 
@@ -50,8 +51,7 @@ impl SeedPrefix {
                 ))
             }
             Self::RandomSeed256ECDSA256r1(seed) => {
-                let sk =
-                    P256SigningKey::from_bytes(seed).map_err(|_e| KeysError::EcdsaError)?;
+                let sk = P256SigningKey::from_bytes(seed).map_err(|_e| KeysError::EcdsaError)?;
                 let vk = P256VerifyingKey::from(&sk);
                 Ok((
                     PublicKey::new(vk.to_encoded_point(true).as_bytes().to_vec()),
@@ -70,8 +70,8 @@ impl FromStr for SeedPrefix {
         let code = SeedCode::from_str(s)?;
 
         if s.len() == code.full_size() {
-            let k_vec = from_text_to_bytes(&s[code.code_size()..])?[code.code_size() % 4..]
-                .to_vec();
+            let k_vec =
+                from_text_to_bytes(&s[code.code_size()..])?[code.code_size() % 4..].to_vec();
             Ok(Self::new(code, k_vec))
         } else {
             Err(Error::IncorrectLengthError(s.into()))

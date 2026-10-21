@@ -34,6 +34,7 @@ impl SelfSigningPrefix {
             SelfSigning::ECDSAsecp256k1Sha256 => Self::ECDSAsecp256k1Sha256(signature),
             SelfSigning::Ed448 => Self::Ed448(signature),
             SelfSigning::ECDSA256r1Sha256 => Self::ECDSA256r1Sha256(signature),
+            other => unimplemented!("unsupported signature code {other:?}"),
         }
     }
 

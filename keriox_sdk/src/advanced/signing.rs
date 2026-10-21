@@ -22,7 +22,9 @@
 
 use cesrox::group::Group;
 use keri_core::event::sections::seal::EventSeal;
+use keri_core::event_message::cesr_adapter::indexed_signatures;
 use keri_core::event_message::signature::{get_signatures, Signature, SignerData};
+use keri_core::prefix::cesr_adapter::receipt_couple;
 use said::derivation::{HashFunction, HashFunctionCode};
 use said::SelfAddressingIdentifier;
 
@@ -294,16 +296,12 @@ fn collect_signatures(attachments: &[Group]) -> Vec<Signature> {
     while i < attachments.len() {
         match &attachments[i] {
             Group::AnchoringSeals(seals) => {
-                if let Some(seal) = seals.first() {
-                    let seal = EventSeal::new(
-                        seal.0.clone().into(),
-                        seal.1,
-                        SelfAddressingIdentifier::from(seal.2.clone()),
-                    );
+                // like the groups below, a seal that cannot be read is skipped
+                if let Some(Ok(seal)) = seals.first().cloned().map(EventSeal::try_from) {
                     i += 1;
                     let indexed_sigs = if i < attachments.len() {
                         if let Group::IndexedControllerSignatures(sigs) = &attachments[i] {
-                            sigs.iter().map(|s| s.clone().into()).collect()
+                            indexed_signatures(sigs.iter().cloned()).unwrap_or_default()
                         } else {
                             vec![]
                         }
@@ -352,7 +350,7 @@ pub fn sign_nontransferable(
     let sig = keri_controller::SelfSigningPrefix::new(signer.signing_code(), raw_sig);
 
     let group =
-        cesrox::group::Group::NontransReceiptCouples(vec![(public_key.clone().into(), sig.into())]);
+        cesrox::group::Group::NontransReceiptCouples(vec![receipt_couple(public_key.clone(), sig)]);
 
     let mut stream = payload.to_vec();
     stream.extend_from_slice(group.to_cesr_str().as_bytes());

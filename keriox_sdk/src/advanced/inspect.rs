@@ -26,7 +26,7 @@ pub enum PayloadKind {
 #[derive(Debug, Clone)]
 pub struct SignatureInfo {
     /// Signing key index within the controller's current key set, when indexed.
-    pub index: Option<u16>,
+    pub index: Option<u32>,
     /// The CESR text form of the signature.
     pub cesr: String,
     /// Human-readable signature algorithm name.
@@ -47,7 +47,7 @@ pub struct SealedSigGroup {
     /// CESR text form of the signer's identifier prefix.
     pub identifier: String,
     /// Sequence number of the anchoring KEL event.
-    pub sn: u64,
+    pub sn: u128,
     /// CESR text form of the anchoring event digest.
     pub digest: String,
     /// Human-readable digest algorithm name.
@@ -90,13 +90,16 @@ pub struct CesrPart {
     pub attachments: Vec<AttachmentInfo>,
 }
 
-fn signature_algorithm_name(code: &cesrox::primitives::codes::self_signing::SelfSigning) -> &'static str {
+fn signature_algorithm_name(
+    code: &cesrox::primitives::codes::self_signing::SelfSigning,
+) -> &'static str {
     use cesrox::primitives::codes::self_signing::SelfSigning;
     match code {
         SelfSigning::Ed25519Sha512 => "Ed25519 signature",
         SelfSigning::ECDSAsecp256k1Sha256 => "ECDSA secp256k1 signature",
         SelfSigning::ECDSA256r1Sha256 => "ECDSA P-256 signature",
         SelfSigning::Ed448 => "Ed448 signature",
+        _ => "unknown signature",
     }
 }
 
@@ -115,37 +118,34 @@ fn digest_algorithm_name(code: &HashFunctionCode) -> &'static str {
 }
 
 fn indexed_signature_info(sig: &cesrox::primitives::IndexedSignature) -> SignatureInfo {
-    let (code, bytes) = sig;
-    let prefix = SelfSigningPrefix::new(code.code, bytes.clone());
+    let prefix = SelfSigningPrefix::new(sig.code.code, sig.raw.clone());
     SignatureInfo {
-        index: Some(code.index.current()),
+        index: Some(sig.code.index.current()),
         cesr: prefix.to_str(),
-        algorithm: signature_algorithm_name(&code.code).to_string(),
+        algorithm: signature_algorithm_name(&sig.code.code).to_string(),
     }
 }
 
 fn plain_signature_info(sig: &cesrox::primitives::Signature) -> SignatureInfo {
-    let (code, bytes) = sig;
-    let prefix = SelfSigningPrefix::new(*code, bytes.clone());
+    let prefix = SelfSigningPrefix::new(sig.code, sig.raw.clone());
     SignatureInfo {
         index: None,
         cesr: prefix.to_str(),
-        algorithm: signature_algorithm_name(code).to_string(),
+        algorithm: signature_algorithm_name(&sig.code).to_string(),
     }
 }
 
-fn receipt_info(pair: &(cesrox::primitives::PublicKey, cesrox::primitives::Signature)) -> ReceiptInfo {
-    let ((basic_code, key_bytes), signature) = pair;
+fn receipt_info(couple: &cesrox::group::NontransReceiptCouple) -> ReceiptInfo {
     let identifier = BasicPrefix::new(
-        *basic_code,
+        couple.key.code,
         keri_core::keys::PublicKey {
-            public_key: key_bytes.clone(),
+            public_key: couple.key.raw.clone(),
         },
     )
     .to_str();
     ReceiptInfo {
         identifier,
-        signature: plain_signature_info(signature),
+        signature: plain_signature_info(&couple.signature),
     }
 }
 
@@ -154,6 +154,7 @@ fn payload_kind(payload: &Payload) -> PayloadKind {
         Payload::JSON(_) => PayloadKind::Json,
         Payload::CBOR(_) => PayloadKind::Cbor,
         Payload::MGPK(_) => PayloadKind::Mgpk,
+        _ => unreachable!("cesrox only parses JSON, CBOR and MessagePack bodies"),
     }
 }
 
@@ -167,24 +168,23 @@ fn convert_groups(groups: &[Group]) -> Vec<AttachmentInfo> {
     while i < groups.len() {
         match &groups[i] {
             Group::AnchoringSeals(seals) => {
-                let signatures = if let Some(Group::IndexedControllerSignatures(sigs)) =
-                    groups.get(i + 1)
-                {
-                    i += 1;
-                    sigs.iter().map(indexed_signature_info).collect()
-                } else {
-                    vec![]
-                };
+                let signatures =
+                    if let Some(Group::IndexedControllerSignatures(sigs)) = groups.get(i + 1) {
+                        i += 1;
+                        sigs.iter().map(indexed_signature_info).collect()
+                    } else {
+                        vec![]
+                    };
                 let sealed = seals
                     .iter()
-                    .map(|(identifier, sn, digest)| {
-                        let said = SelfAddressingIdentifier::from(digest.clone());
+                    .map(|seal| {
+                        let said = SelfAddressingIdentifier::from(seal.digest.clone());
                         let identifier: keri_controller::IdentifierPrefix =
-                            identifier.clone().into();
+                            seal.prefix.clone().into();
                         let identifier = identifier.to_str();
                         SealedSigGroup {
                             identifier,
-                            sn: *sn,
+                            sn: seal.sn,
                             digest: said.to_str(),
                             digest_algorithm: digest_algorithm_name(&HashFunctionCode::from(
                                 &said.derivation,
@@ -215,12 +215,16 @@ fn convert_groups(groups: &[Group]) -> Vec<AttachmentInfo> {
                 out.push(AttachmentInfo::LastEstablishmentGroups(
                     groups
                         .iter()
-                        .map(|(identifier, sigs)| {
+                        .map(|group| {
                             let identifier: keri_controller::IdentifierPrefix =
-                                identifier.clone().into();
+                                group.prefix.clone().into();
                             LastEstSigGroup {
                                 identifier: identifier.to_str(),
-                                signatures: sigs.iter().map(indexed_signature_info).collect(),
+                                signatures: group
+                                    .signatures
+                                    .iter()
+                                    .map(indexed_signature_info)
+                                    .collect(),
                             }
                         })
                         .collect(),
@@ -242,10 +246,17 @@ fn convert_groups(groups: &[Group]) -> Vec<AttachmentInfo> {
 /// # Errors
 /// - [`Error::CesrParseError`] if the stream is not valid CESR.
 pub fn inspect_stream(cesr: &[u8]) -> Result<(Vec<CesrPart>, Vec<u8>)> {
-    let text =
-        std::str::from_utf8(cesr).map_err(|e| Error::CesrParseError(format!("not UTF-8: {e}")))?;
-    let (rest, values) =
-        cesrox::parse_all(text).map_err(|e| Error::CesrParseError(e.to_string()))?;
+    let mut parsed = cesrox::values(cesr);
+    let mut values = Vec::new();
+    for value in parsed.by_ref() {
+        match value {
+            Ok(value) => values.push(value),
+            // nothing at the start of the stream is CESR
+            Err(e) if values.is_empty() => return Err(Error::CesrParseError(e.to_string())),
+            Err(_) => break,
+        }
+    }
+    let rest = parsed.remaining();
 
     let mut parts: Vec<CesrPart> = Vec::new();
     let mut current_payload: Option<Payload> = None;
@@ -285,5 +296,5 @@ pub fn inspect_stream(cesr: &[u8]) -> Result<(Vec<CesrPart>, Vec<u8>)> {
     }
     flush(current_payload.take(), &mut current_groups, &mut parts);
 
-    Ok((parts, rest.as_bytes().to_vec()))
+    Ok((parts, rest.to_vec()))
 }

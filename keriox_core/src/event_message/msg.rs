@@ -54,7 +54,7 @@ impl<T: Serialize + Clone, D: Serialize + Typeable<TypeTag = T> + Clone> TypedEv
     pub fn check_digest(&self) -> Result<(), Error> {
         let event_digest = self.digest()?;
         let hash_function_code = event_digest.derivation.to_owned().into();
-        let dummy = self.derivation_data(&hash_function_code, &self.serialization_info.kind);
+        let dummy = self.derivation_data(&hash_function_code, &self.serialization_info.kind)?;
         event_digest
             .verify_binding(&dummy)
             .then_some(())
@@ -71,11 +71,11 @@ impl<T: Serialize + Clone, D: Serialize + Typeable<TypeTag = T> + Clone> TypedEv
             data: event,
         };
         let hash_function = derivation.into();
-        let encoded = tmp_self.derivation_data(&hash_function, &format);
+        let encoded = tmp_self.derivation_data(&hash_function, &format).unwrap();
 
         let event_len = encoded.len();
         tmp_self.serialization_info.size = event_len;
-        tmp_self.compute_digest(&hash_function, &format);
+        tmp_self.compute_digest(&hash_function, &format).unwrap();
         tmp_self
     }
 
@@ -85,21 +85,26 @@ impl<T: Serialize + Clone, D: Serialize + Typeable<TypeTag = T> + Clone> TypedEv
 }
 
 impl<T: Serialize + Clone, D: Serialize + Clone + Typeable<TypeTag = T>> SAD for TypedEvent<T, D> {
-    fn compute_digest(&mut self, derivation: &HashFunctionCode, format: &SerializationFormats) {
-        let der_data = self.derivation_data(derivation, format);
+    fn compute_digest(
+        &mut self,
+        derivation: &HashFunctionCode,
+        format: &SerializationFormats,
+    ) -> Result<(), said::version::error::Error> {
+        let der_data = self.derivation_data(derivation, format)?;
         let said = HashFunction::from(derivation.clone())
             .derive(&der_data)
             .into();
         self.digest = Some(said);
+        Ok(())
     }
 
     fn derivation_data(
         &self,
         derivation: &HashFunctionCode,
         format: &SerializationFormats,
-    ) -> Vec<u8> {
+    ) -> Result<Vec<u8>, said::version::error::Error> {
         let tmp_event = DummyTypedEvent::convert(self.clone(), derivation.clone());
-        format.encode(&tmp_event).unwrap()
+        format.encode(&tmp_event)
     }
 }
 
