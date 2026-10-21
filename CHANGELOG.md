@@ -1,8 +1,9 @@
-## [0.19.0-rc.1] - 2026-10-21
+## [0.19.0-rc.2] - 2026-10-21
 
 ### 🚀 Features
 
 - *(workspace)* [**breaking**] Migrate to cesrox and said 2.0
+- *(core)* Write the attachment format deployed clients read
 
 ### 🐛 Bug Fixes
 
@@ -20,6 +21,8 @@
 - *(vectors)* Check keriox against the shared CESR V2 interoperability vectors
 - *(vectors)* Check key event logs against what keripy accepts
 - *(vectors)* Publish what keriox writes as vectors and confirm them with keripy
+- *(vectors)* Read keriox's default output with the keriox clients run
+- *(compat)* Check deployed clients and this keriox together over HTTP
 
 ### 📦 Build
 
