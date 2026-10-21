@@ -22,8 +22,9 @@ edition = "2021"
 license = "EUPL-1.2"
 
 [workspace.metadata.release]
-pre-release-commit-message = "chore: Release"
+pre-release-commit-message = "chore(release): {{version}}"
 tag = false
+shared-version = true
 
 [profile.mobile-release]
 inherits = "release"
