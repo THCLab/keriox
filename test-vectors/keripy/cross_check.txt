@@ -1,4 +1,3 @@
 # Vectors of the keriox source that keripy does not confirm.
 # Format: <vector id> TAB <why>. Rewrite with check.sh --bless.
 stream/exn/fwd	ValidationError: Invalid raw for Serder = {'v': 'KERI10JSON000207_', 't': 'exn', 'd': 'ECgNHeBLO7MaKPLSvTghFHX7_KJ1o-gsXrPCdLU1pfL_', 'dt': '2024-01-01T00:00:00
-stream/icp/CBOR	ValidationError: Invalid raw for Serder = {'v': 'KERI10CBOR0000fa_', 't': 'icp', 'd': 'EBgY7aXbGyv8D0HPRVhCOrujNom-Qagyf4AjgndtrSOj', 'i': 'EBgY7aXbGyv8D0HPRVhC

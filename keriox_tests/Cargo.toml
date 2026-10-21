@@ -8,12 +8,12 @@ publish = false
 async-trait = "0.1.57"
 futures = "0.3.24"
 keri-core = { path = "../keriox_core", features = ["oobi", "mailbox"] }
-cesrox = { version = "2.0.0-rc.2" }
+cesrox = { version = "=2.0.0-rc.2" }
 chrono = "0.4"
 serde = "1"
 tempfile = "3.3.0"
 url = "2.2.2"
-said = { version = "2.0.0-rc.2" }
+said = { version = "=2.0.0-rc.3" }
 teliox = {path = "../support/teliox"}
 watcher = { path = "../components/watcher" }
 witness = { path = "../components/witness" }

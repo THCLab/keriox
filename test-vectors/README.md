@@ -46,7 +46,6 @@ these groups:
 
 | Vectors | Why |
 |---|---|
-| `*/CBOR/*`, `serder/KERI/*/CBOR` | said 2.0.0-rc.2 writes structs with flattened fields as indefinite-length CBOR maps, keripy as definite-length ones, so keriox cannot reproduce the bytes. Fixed in said after rc.2. |
 | `keripy/indexer/ECDSA_256r1_*` | cesrox uses other codes for indexed P-256 signatures than keripy. |
 | `keripy/indexer/Ed448_*/262143*` | keriox stores signature indexes as 16-bit numbers. |
 | `keripy/kel/2/*` with a rotation, `keripy/stream/qry/json/lsgs` | keriox models KERI 1.0 bodies: a KERI 2.0 rotation carries configuration traits in `c` and a KERI 2.0 query the sender in `i`. Inceptions, interactions, delegated inceptions and receipts read in both versions. |
@@ -78,6 +77,4 @@ test-vectors/keripy-check.sh --bless    # after an intentional change
 ```
 
 `keripy/cross_check.txt` lists what keripy does not confirm: the exchange,
-whose body predates the KERI 1.0 `exn` fields (`i`, `rp`, `p`, `e`), and
-the CBOR inception, until keriox builds with a said release that writes
-definite-length CBOR maps.
+whose body predates the KERI 1.0 `exn` fields (`i`, `rp`, `p`, `e`).
