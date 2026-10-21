@@ -89,7 +89,9 @@ fn keripy_inception_with_small_order_key_is_rejected() {
     ));
     assert_eq!(sn(&storage, &id), None);
 
-    assert!(process_notice(forged_ixn, &processor).is_err());
+    // Without its inception the interaction can only wait as out of order;
+    // it must never be applied.
+    let _ = process_notice(forged_ixn, &processor);
     assert_eq!(sn(&storage, &id), None);
 }
 

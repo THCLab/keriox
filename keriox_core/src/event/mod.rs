@@ -81,6 +81,11 @@ impl EventSemantics for KeyEvent {
                 }
             }
             _ => {
+                // An event of an identifier whose inception has not been seen
+                // yet may still become valid once the inception arrives.
+                if state.prefix == IdentifierPrefix::default() {
+                    return Err(Error::EventOutOfOrderError);
+                }
                 // prefix must equal.
                 if self.prefix != state.prefix {
                     return Err(Error::SemanticError("Prefix does not match".to_string()));
