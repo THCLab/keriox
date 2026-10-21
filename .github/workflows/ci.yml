@@ -24,8 +24,26 @@ jobs:
           command: check
           args: --all-features --verbose
 
+  # --all-features includes the Postgres storage backends, whose tests need
+  # a database. Skipped: postgres_identity_lifecycle and test_tel_from_watcher
+  # hang, and test_kel_managing_with_witness talks to deployed witnesses.
   test:
     runs-on: ubuntu-22.04
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: keri_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/keri_test
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
@@ -36,7 +54,11 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --all-features --verbose  
+          args: >-
+            --all-features --verbose --
+            --skip postgres_identity_lifecycle
+            --skip test_tel_from_watcher
+            --skip test_kel_managing_with_witness
 
   # The shared CESR V2 vectors: keriox reads what keripy, cesrox and the
   # specification write and accepts the same key event logs as keripy, and
