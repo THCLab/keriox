@@ -1,0 +1,126 @@
+{
+ "schema": "group/1",
+ "generator": {
+  "tool": "gen_vectors.py",
+  "version": "0.4.0",
+  "source": {
+   "implementation": "keripy",
+   "revision": "424a50c03421165c5f289e07a341bd57b8d8ab78",
+   "version": "2.1.0-dev1"
+  }
+ },
+ "vectors": [
+  {
+   "id": "group/ControllerIdxSigs",
+   "name": "ControllerIdxSigs",
+   "items": 2,
+   "qb64": "-KAsAADETUYwh-VnUDWjL5G_qnzBY2shE6QSIOc2_HKHKlnWOZq4sSeXoGpiqyuKtB2L3Ir3-Xknt_M0SLGOOcckdO8GABBX-lplyxF74Z7hxN2nZaNsy3tvp_7fxmXppaHTcNJ49UmiaKmeSIIdcQWh1_PvKsh-7mR6GmYvZ48V2IrXcXQN",
+   "qb2_hex": "f8a02c0000c44d463087e5675035a32f91bfaa7cc1636b2113a41220e736fc72872a59d6399ab8b12797a06a62ab2b8ab41d8bdc8af7f97927b7f33448b18e39c72474ef06001057fa5a65cb117be19ee1c4dda765a36ccb7b6fa7fedfc665e9a5a1d370d278f549a268a99e48821d7105a1d7f3ef2ac87eee647a1a662f678f15d88ad771740d"
+  },
+  {
+   "id": "group/WitnessIdxSigs",
+   "name": "WitnessIdxSigs",
+   "items": 2,
+   "qb64": "-LAsAADETUYwh-VnUDWjL5G_qnzBY2shE6QSIOc2_HKHKlnWOZq4sSeXoGpiqyuKtB2L3Ir3-Xknt_M0SLGOOcckdO8GABBX-lplyxF74Z7hxN2nZaNsy3tvp_7fxmXppaHTcNJ49UmiaKmeSIIdcQWh1_PvKsh-7mR6GmYvZ48V2IrXcXQN",
+   "qb2_hex": "f8b02c0000c44d463087e5675035a32f91bfaa7cc1636b2113a41220e736fc72872a59d6399ab8b12797a06a62ab2b8ab41d8bdc8af7f97927b7f33448b18e39c72474ef06001057fa5a65cb117be19ee1c4dda765a36ccb7b6fa7fedfc665e9a5a1d370d278f549a268a99e48821d7105a1d7f3ef2ac87eee647a1a662f678f15d88ad771740d"
+  },
+  {
+   "id": "group/NonTransReceiptCouples",
+   "name": "NonTransReceiptCouples",
+   "items": 1,
+   "qb64": "-MAhBG0BSe2cMV-FSIC9l6gyqf8S1K7t4LlF_BG8uy4h4w_Q0BCkUmk86jTE01LOB0Eze4HAkQGCFwqTrKP4LlU1_n1CIosceclDxrKs0g4bisPCyaeIssNVeLgj183xOilh2LsM",
+   "qb2_hex": "f8c021046d0149ed9c315f854880bd97a832a9ff12d4aeede0b945fc11bcbb2e21e30fd0d010a452693cea34c4d352ce0741337b81c0910182170a93aca3f82e5535fe7d42228b1c79c943c6b2acd20e1b8ac3c2c9a788b2c35578b823d7cdf13a2961d8bb0c"
+  },
+  {
+   "id": "group/FirstSeenReplayCouples",
+   "name": "FirstSeenReplayCouples",
+   "items": 2,
+   "qb64": "-OAVMAAA1AAG2020-08-22T17c50c09d988921p00c00RAAAARFw1AAG2024-12-31T23c59c59d000000p00c00",
+   "qb2_hex": "f8e015300000d40006db4db4fb4f3edb64f5edce74734f5df7cf3ddb5a74d1cd34440000011170d40006db4db8fb5dbedf54f6ddce7d739f5dd34d34d34a74d1cd34"
+  },
+  {
+   "id": "group/DigestSealSingles",
+   "name": "DigestSealSingles",
+   "items": 2,
+   "qb64": "-QAWEBd2L93ZaaRTkl1lcXrD7qITILZrVDQv3hUSjWyvISFfEBDlzz08ik-fNGjIzFjuqEiSoi_a28GssiQQGQBEwdVT",
+   "qb2_hex": "f900161017762fddd969a453925d65717ac3eea21320b66b54342fde15128d6caf21215f1010e5cf3d3c8a4f9f3468c8cc58eea84892a22fdadbc1acb22410190044c1d553"
+  },
+  {
+   "id": "group/MerkleRootSealSingles",
+   "name": "MerkleRootSealSingles",
+   "items": 1,
+   "qb64": "-RALEJKit4egbXJy30Pq-HrMO5wdMV151ZnWHChZg0g-QxmY",
+   "qb2_hex": "f9100b1092a2b787a06d7272df43eaf87acc3b9c1d315d79d599d61c285983483e431998"
+  },
+  {
+   "id": "group/SealSourceCouples",
+   "name": "SealSourceCouples",
+   "items": 2,
+   "qb64": "-SAbMAABEMRisqF_yXRxvrRcFdwquc_Rd8cKmT9qrOT1YHayJS8_SAAAAQAAAAAAAAAAEHsLQLFyfIi0R-6IUT9eqG7y3V3KACQpV6YRcznO9cuy",
+   "qb2_hex": "f9201b30000110c462b2a17fc97471beb45c15dc2ab9cfd177c70a993f6aace4f56076b2252f3f480000010000000000000000107b0b40b1727c88b447ee88513f5ea86ef2dd5dca00242957a6117339cef5cbb2"
+  },
+  {
+   "id": "group/SealSourceTriples",
+   "name": "SealSourceTriples",
+   "items": 1,
+   "qb64": "-TAXEAU4ZhQjI2pdjfYoaoYzNp4qA8X5DUjt7TMyItvujNvdMAADEJiT4G5RVVWvqshaKfrQS8VUdrdNtj-1tRHAOV_kpkS3",
+   "qb2_hex": "f93017100538661423236a5d8df6286a8633369e2a03c5f90d48eded333222dbee8cdbdd300003109893e06e515555afaac85a29fad04bc55476b74db63fb5b511c0395fe4a644b7"
+  },
+  {
+   "id": "group/SealSourceLastSingles",
+   "name": "SealSourceLastSingles",
+   "items": 2,
+   "qb64": "-UAWEKqXXF4j8_mD8chdJU_T2aBhYQJsU4PEDRseCzaBJX5HEP7VVyUHhwr62dYcgabirMyNU0Y6TUxtWpPjROVEN6ua",
+   "qb2_hex": "f9401610aa975c5e23f3f983f1c85d254fd3d9a06161026c5383c40d1b1e0b3681257e4710fed5572507870afad9d61c81a6e2accc8d53463a4d4c6d5a93e344e54437ab9a"
+  },
+  {
+   "id": "group/BackerRegistrarSealCouples",
+   "name": "BackerRegistrarSealCouples",
+   "items": 1,
+   "qb64": "-VAWECQd_QPg4CU141PF2YLjm_EIZK1khsC0ziCPa3X3LBKdEAqIZ7CStDvDs79K_UL5r3WnKUlLsuzyBriF7pW9BekJ",
+   "qb2_hex": "f9501610241dfd03e0e02535e353c5d982e39bf10864ad6486c0b4ce208f6b75f72c129d100a8867b092b43bc3b3bf4afd42f9af75a729494bb2ecf206b885ee95bd05e909"
+  },
+  {
+   "id": "group/TypedDigestSealCouples",
+   "name": "TypedDigestSealCouples",
+   "items": 1,
+   "qb64": "-WANYKERICAAENQUORplyT4kWtHUTw7qddvWS-Bq-SWpbNo86AvVBhYf",
+   "qb2_hex": "f9600d60a11120200010d414391a65c93e245ad1d44f0eea75dbd64be06af925a96cda3ce80bd506161f"
+  },
+  {
+   "id": "group/BlindedStateQuadruples",
+   "name": "BlindedStateQuadruples",
+   "items": 1,
+   "qb64": "-aAeEFGDNeQ9AcNY0gNeqm2jx6gh8epGbQ_Lx7I7KA8nuxeF0AAxCvbNdUWfgw3kAiG7NM7uEJ-LeRKNljTp2LjN1LCG8DysCGrzl8E1JmWJdM7N6Pz50Missued",
+   "qb2_hex": "f9a01e10518335e43d01c358d2035eaa6da3c7a821f1ea466d0fcbc7b23b280f27bb1785d000310af6cd75459f830de40221bb34ceee109f8b79128d9634e9d8b8cdd4b086f03cac086af397c13526658974cecde8fcf9d0c8acb2e79d"
+  },
+  {
+   "id": "group/BoundStateSextuples",
+   "name": "BoundStateSextuples",
+   "items": 1,
+   "qb64": "-bAqEFGDNeQ9AcNY0gNeqm2jx6gh8epGbQ_Lx7I7KA8nuxeF0AAxCvbNdUWfgw3kAiG7NM7uEJ-LeRKNljTp2LjN1LCG8DysCGrzl8E1JmWJdM7N6Pz50MissuedMAAFEKcAQpzbuipT3smNvV5xoWdSO_Xeh-znFXEbEOe8fR0S",
+   "qb2_hex": "f9b02a10518335e43d01c358d2035eaa6da3c7a821f1ea466d0fcbc7b23b280f27bb1785d000310af6cd75459f830de40221bb34ceee109f8b79128d9634e9d8b8cdd4b086f03cac086af397c13526658974cecde8fcf9d0c8acb2e79d30000510a700429cdbba2a53dec98dbd5e71a167523bf5de87ece715711b10e7bc7d1d12"
+  },
+  {
+   "id": "group/TypedMediaQuadruples",
+   "name": "TypedMediaQuadruples",
+   "items": 1,
+   "qb64": "-cAcEP5qYb0gH3SMakTrBrO0-ImbQ-3p8kPJg3OwjKPGcEAP0AAxCvbNdUWfgw3kAiG7NM7u6BAGAABhcHBsaWNhdGlvbi9qc29u6BADAAB7ImEiOjF9",
+   "qb2_hex": "f9c01c10fe6a61bd201f748c6a44eb06b3b4f8899b43ede9f243c98373b08ca3c670400fd000310af6cd75459f830de40221bb34ceeee8100600006170706c69636174696f6e2f6a736f6ee8100300007b2261223a317d"
+  },
+  {
+   "id": "group/TransIdxSigGroups",
+   "name": "TransIdxSigGroups",
+   "items": 1,
+   "qb64": "-XBEEDrn2AX2eJpkAqy3CtQJaoWla_aATq8lwEk6xpdUjTC1MAAHEI4abZ2hoWgWzZi0FKC4DhrzIdNs6TanmkOpGFCb3FC5-KAsAADETUYwh-VnUDWjL5G_qnzBY2shE6QSIOc2_HKHKlnWOZq4sSeXoGpiqyuKtB2L3Ir3-Xknt_M0SLGOOcckdO8GABBX-lplyxF74Z7hxN2nZaNsy3tvp_7fxmXppaHTcNJ49UmiaKmeSIIdcQWh1_PvKsh-7mR6GmYvZ48V2IrXcXQN",
+   "qb2_hex": "f97044103ae7d805f6789a6402acb70ad4096a85a56bf6804eaf25c0493ac697548d30b5300007108e1a6d9da1a16816cd98b414a0b80e1af321d36ce936a79a43a918509bdc50b9f8a02c0000c44d463087e5675035a32f91bfaa7cc1636b2113a41220e736fc72872a59d6399ab8b12797a06a62ab2b8ab41d8bdc8af7f97927b7f33448b18e39c72474ef06001057fa5a65cb117be19ee1c4dda765a36ccb7b6fa7fedfc665e9a5a1d370d278f549a268a99e48821d7105a1d7f3ef2ac87eee647a1a662f678f15d88ad771740d"
+  },
+  {
+   "id": "group/TransLastIdxSigGroups",
+   "name": "TransLastIdxSigGroups",
+   "items": 1,
+   "qb64": "-YA4EAgRKp4zTOcwQrUxwlZoz1yxKh7gQKQyav6sBlRhB5oG-KAsAADETUYwh-VnUDWjL5G_qnzBY2shE6QSIOc2_HKHKlnWOZq4sSeXoGpiqyuKtB2L3Ir3-Xknt_M0SLGOOcckdO8GABBX-lplyxF74Z7hxN2nZaNsy3tvp_7fxmXppaHTcNJ49UmiaKmeSIIdcQWh1_PvKsh-7mR6GmYvZ48V2IrXcXQN",
+   "qb2_hex": "f980381008112a9e334ce73042b531c25668cf5cb12a1ee040a4326afeac065461079a06f8a02c0000c44d463087e5675035a32f91bfaa7cc1636b2113a41220e736fc72872a59d6399ab8b12797a06a62ab2b8ab41d8bdc8af7f97927b7f33448b18e39c72474ef06001057fa5a65cb117be19ee1c4dda765a36ccb7b6fa7fedfc665e9a5a1d370d278f549a268a99e48821d7105a1d7f3ef2ac87eee647a1a662f678f15d88ad771740d"
+  }
+ ]
+}

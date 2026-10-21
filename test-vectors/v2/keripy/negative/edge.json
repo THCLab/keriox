@@ -1,0 +1,54 @@
+{
+ "schema": "edge/1",
+ "generator": {
+  "tool": "gen_vectors.py",
+  "version": "0.4.0",
+  "source": {
+   "implementation": "keripy",
+   "revision": "424a50c03421165c5f289e07a341bd57b8d8ab78",
+   "version": "2.1.0-dev1"
+  }
+ },
+ "vectors": [
+  {
+   "id": "neg/matter/nonzero-pad-bits-or-ok",
+   "target": "matter",
+   "input": "EAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB",
+   "why": "nonzero-pad-bits-or-ok",
+   "source_accepts": true,
+   "source_error": null
+  },
+  {
+   "id": "neg/matter/varlen-L2-nonzero-lead-byte",
+   "target": "matter",
+   "input": "6BABAAAB",
+   "why": "varlen-L2-nonzero-lead-byte",
+   "source_accepts": true,
+   "source_error": null
+  },
+  {
+   "id": "neg/matter/datetime-garbage",
+   "target": "matter",
+   "input": "1AAGnot-a-date-time-at-all-xxxxxxxxx",
+   "why": "datetime-garbage",
+   "source_accepts": true,
+   "source_error": null
+  },
+  {
+   "id": "neg/indexer/crt-only-with-ondex? (B has no ondex)",
+   "target": "indexer",
+   "input": "BBBDZzXDDeBM-pKqTdkw_MU0jOc30Ieg7p8Ri_LdhXkdaEIVp9cmaGLs6l_DKxwd_81-oSNX9-ZdMfAAhs_i68JX",
+   "why": "crt-only-with-ondex? (B has no ondex)",
+   "source_accepts": true,
+   "source_error": null
+  },
+  {
+   "id": "neg/version/v1-version-string-in-v2-only-context",
+   "target": "version",
+   "input": "KERI10JSON000064_",
+   "why": "v1-version-string-in-v2-only-context",
+   "source_accepts": true,
+   "source_error": null
+  }
+ ]
+}

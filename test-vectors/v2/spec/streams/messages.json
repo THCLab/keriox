@@ -1,0 +1,20 @@
+{
+ "schema": "stream/1",
+ "generator": {
+  "tool": "hand-written",
+  "version": "1",
+  "source": {
+   "implementation": "spec",
+   "revision": "kswg-cesr-specification bad6edd",
+   "version": "v1.1"
+  }
+ },
+ "vectors": [
+  {
+   "id": "stream/example/trans-indexed-sig-groups",
+   "note": "Nested group example from the specification's count code section, annotations removed",
+   "stream": "-XBfEPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB0AAAAAAAAAAAAAAAAAAAAAAAEPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB-KBCAADQ-rNV53XEXW1mI24X6uK3LlSMxqQxzM3HuWv_rbEkGP8kVjEYjzrBg8o5hRCxXPnoO2zpHmh52OdUdog7xb0BABCD_iSjAJvu9JsXHBAnCCTGCA-YSTKiRG-y6gUV42tzkL11OSEqRztXZOq4yCBHcf4WTPT8fsMoaJGbW1a5JFkPACBcPS0C_QwGdJUZTKXvC_qCs6069pqV8rdQymrJTdcmJAEYJDJXuHUc6sjgdb0_VlPYIPtVZ9ypbRhkkuXJOykL",
+   "annotated": "-XBf  # Trans Indexed Sig Groups count Bf Quadlets in group\n    EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB  # AID of signer\n    0AAAAAAAAAAAAAAAAAAAAAAA  # sequence number of event being signed\n    EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB  # SAID of event being signed\n    -KBC  # Controller Indexed Sigs count BC quadlets in group\n        AADQ-rNV53XEXW1mI24X6uK3LlSMxqQxzM3HuWv_rbEkGP8kVjEYjzrBg8o5hRCxXPnoO2zpHmh52OdUdog7xb0B  # signature 0\n        ABCD_iSjAJvu9JsXHBAnCCTGCA-YSTKiRG-y6gUV42tzkL11OSEqRztXZOq4yCBHcf4WTPT8fsMoaJGbW1a5JFkP  # signature 1\n        ACBcPS0C_QwGdJUZTKXvC_qCs6069pqV8rdQymrJTdcmJAEYJDJXuHUc6sjgdb0_VlPYIPtVZ9ypbRhkkuXJOykL  # signature 2\n"
+  }
+ ]
+}

@@ -1,0 +1,18 @@
+{
+  "files": {
+    "groups/groups.json": 12,
+    "legacy/migrate.json": 5,
+    "negative/negative.json": 17,
+    "said/saidify.json": 17,
+    "streams/messages.json": 13
+  },
+  "generator": {
+    "tool": "cesrox-vectors",
+    "version": "0.1.0",
+    "source": {
+      "implementation": "cesrox",
+      "revision": "the commit that contains these files",
+      "version": "2"
+    }
+  }
+}

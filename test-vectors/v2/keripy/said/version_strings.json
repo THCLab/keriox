@@ -1,0 +1,974 @@
+{
+ "schema": "versionstring/1",
+ "generator": {
+  "tool": "gen_vectors.py",
+  "version": "0.4.0",
+  "source": {
+   "implementation": "keripy",
+   "revision": "424a50c03421165c5f289e07a341bd57b8d8ab78",
+   "version": "2.1.0-dev1"
+  }
+ },
+ "vectors": [
+  {
+   "id": "vs/KERICAACAAJSONAAAA.",
+   "vs": "KERICAACAAJSONAAAA.",
+   "proto": "KERI",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    0
+   ],
+   "kind": "JSON",
+   "size": 0
+  },
+  {
+   "id": "vs/KERICAACABJSONAAAA.",
+   "vs": "KERICAACABJSONAAAA.",
+   "proto": "KERI",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    1
+   ],
+   "kind": "JSON",
+   "size": 0
+  },
+  {
+   "id": "vs/KERICAACAAJSONAABk.",
+   "vs": "KERICAACAAJSONAABk.",
+   "proto": "KERI",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    0
+   ],
+   "kind": "JSON",
+   "size": 100
+  },
+  {
+   "id": "vs/KERICAACABJSONAABk.",
+   "vs": "KERICAACABJSONAABk.",
+   "proto": "KERI",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    1
+   ],
+   "kind": "JSON",
+   "size": 100
+  },
+  {
+   "id": "vs/KERICAACAAJSONAA__.",
+   "vs": "KERICAACAAJSONAA__.",
+   "proto": "KERI",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    0
+   ],
+   "kind": "JSON",
+   "size": 4095
+  },
+  {
+   "id": "vs/KERICAACABJSONAA__.",
+   "vs": "KERICAACABJSONAA__.",
+   "proto": "KERI",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    1
+   ],
+   "kind": "JSON",
+   "size": 4095
+  },
+  {
+   "id": "vs/KERICAACAAJSON____.",
+   "vs": "KERICAACAAJSON____.",
+   "proto": "KERI",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    0
+   ],
+   "kind": "JSON",
+   "size": 16777215
+  },
+  {
+   "id": "vs/KERICAACABJSON____.",
+   "vs": "KERICAACABJSON____.",
+   "proto": "KERI",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    1
+   ],
+   "kind": "JSON",
+   "size": 16777215
+  },
+  {
+   "id": "vs/KERICAACAACBORAAAA.",
+   "vs": "KERICAACAACBORAAAA.",
+   "proto": "KERI",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    0
+   ],
+   "kind": "CBOR",
+   "size": 0
+  },
+  {
+   "id": "vs/KERICAACABCBORAAAA.",
+   "vs": "KERICAACABCBORAAAA.",
+   "proto": "KERI",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    1
+   ],
+   "kind": "CBOR",
+   "size": 0
+  },
+  {
+   "id": "vs/KERICAACAACBORAABk.",
+   "vs": "KERICAACAACBORAABk.",
+   "proto": "KERI",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    0
+   ],
+   "kind": "CBOR",
+   "size": 100
+  },
+  {
+   "id": "vs/KERICAACABCBORAABk.",
+   "vs": "KERICAACABCBORAABk.",
+   "proto": "KERI",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    1
+   ],
+   "kind": "CBOR",
+   "size": 100
+  },
+  {
+   "id": "vs/KERICAACAACBORAA__.",
+   "vs": "KERICAACAACBORAA__.",
+   "proto": "KERI",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    0
+   ],
+   "kind": "CBOR",
+   "size": 4095
+  },
+  {
+   "id": "vs/KERICAACABCBORAA__.",
+   "vs": "KERICAACABCBORAA__.",
+   "proto": "KERI",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    1
+   ],
+   "kind": "CBOR",
+   "size": 4095
+  },
+  {
+   "id": "vs/KERICAACAACBOR____.",
+   "vs": "KERICAACAACBOR____.",
+   "proto": "KERI",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    0
+   ],
+   "kind": "CBOR",
+   "size": 16777215
+  },
+  {
+   "id": "vs/KERICAACABCBOR____.",
+   "vs": "KERICAACABCBOR____.",
+   "proto": "KERI",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    1
+   ],
+   "kind": "CBOR",
+   "size": 16777215
+  },
+  {
+   "id": "vs/KERICAACAAMGPKAAAA.",
+   "vs": "KERICAACAAMGPKAAAA.",
+   "proto": "KERI",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    0
+   ],
+   "kind": "MGPK",
+   "size": 0
+  },
+  {
+   "id": "vs/KERICAACABMGPKAAAA.",
+   "vs": "KERICAACABMGPKAAAA.",
+   "proto": "KERI",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    1
+   ],
+   "kind": "MGPK",
+   "size": 0
+  },
+  {
+   "id": "vs/KERICAACAAMGPKAABk.",
+   "vs": "KERICAACAAMGPKAABk.",
+   "proto": "KERI",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    0
+   ],
+   "kind": "MGPK",
+   "size": 100
+  },
+  {
+   "id": "vs/KERICAACABMGPKAABk.",
+   "vs": "KERICAACABMGPKAABk.",
+   "proto": "KERI",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    1
+   ],
+   "kind": "MGPK",
+   "size": 100
+  },
+  {
+   "id": "vs/KERICAACAAMGPKAA__.",
+   "vs": "KERICAACAAMGPKAA__.",
+   "proto": "KERI",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    0
+   ],
+   "kind": "MGPK",
+   "size": 4095
+  },
+  {
+   "id": "vs/KERICAACABMGPKAA__.",
+   "vs": "KERICAACABMGPKAA__.",
+   "proto": "KERI",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    1
+   ],
+   "kind": "MGPK",
+   "size": 4095
+  },
+  {
+   "id": "vs/KERICAACAAMGPK____.",
+   "vs": "KERICAACAAMGPK____.",
+   "proto": "KERI",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    0
+   ],
+   "kind": "MGPK",
+   "size": 16777215
+  },
+  {
+   "id": "vs/KERICAACABMGPK____.",
+   "vs": "KERICAACABMGPK____.",
+   "proto": "KERI",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    1
+   ],
+   "kind": "MGPK",
+   "size": 16777215
+  },
+  {
+   "id": "vs/KERICAACAACESRAAAA.",
+   "vs": "KERICAACAACESRAAAA.",
+   "proto": "KERI",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    0
+   ],
+   "kind": "CESR",
+   "size": 0
+  },
+  {
+   "id": "vs/KERICAACABCESRAAAA.",
+   "vs": "KERICAACABCESRAAAA.",
+   "proto": "KERI",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    1
+   ],
+   "kind": "CESR",
+   "size": 0
+  },
+  {
+   "id": "vs/KERICAACAACESRAABk.",
+   "vs": "KERICAACAACESRAABk.",
+   "proto": "KERI",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    0
+   ],
+   "kind": "CESR",
+   "size": 100
+  },
+  {
+   "id": "vs/KERICAACABCESRAABk.",
+   "vs": "KERICAACABCESRAABk.",
+   "proto": "KERI",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    1
+   ],
+   "kind": "CESR",
+   "size": 100
+  },
+  {
+   "id": "vs/KERICAACAACESRAA__.",
+   "vs": "KERICAACAACESRAA__.",
+   "proto": "KERI",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    0
+   ],
+   "kind": "CESR",
+   "size": 4095
+  },
+  {
+   "id": "vs/KERICAACABCESRAA__.",
+   "vs": "KERICAACABCESRAA__.",
+   "proto": "KERI",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    1
+   ],
+   "kind": "CESR",
+   "size": 4095
+  },
+  {
+   "id": "vs/KERICAACAACESR____.",
+   "vs": "KERICAACAACESR____.",
+   "proto": "KERI",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    0
+   ],
+   "kind": "CESR",
+   "size": 16777215
+  },
+  {
+   "id": "vs/KERICAACABCESR____.",
+   "vs": "KERICAACABCESR____.",
+   "proto": "KERI",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    1
+   ],
+   "kind": "CESR",
+   "size": 16777215
+  },
+  {
+   "id": "vs/ACDCCAACAAJSONAAAA.",
+   "vs": "ACDCCAACAAJSONAAAA.",
+   "proto": "ACDC",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    0
+   ],
+   "kind": "JSON",
+   "size": 0
+  },
+  {
+   "id": "vs/ACDCCAACABJSONAAAA.",
+   "vs": "ACDCCAACABJSONAAAA.",
+   "proto": "ACDC",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    1
+   ],
+   "kind": "JSON",
+   "size": 0
+  },
+  {
+   "id": "vs/ACDCCAACAAJSONAABk.",
+   "vs": "ACDCCAACAAJSONAABk.",
+   "proto": "ACDC",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    0
+   ],
+   "kind": "JSON",
+   "size": 100
+  },
+  {
+   "id": "vs/ACDCCAACABJSONAABk.",
+   "vs": "ACDCCAACABJSONAABk.",
+   "proto": "ACDC",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    1
+   ],
+   "kind": "JSON",
+   "size": 100
+  },
+  {
+   "id": "vs/ACDCCAACAAJSONAA__.",
+   "vs": "ACDCCAACAAJSONAA__.",
+   "proto": "ACDC",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    0
+   ],
+   "kind": "JSON",
+   "size": 4095
+  },
+  {
+   "id": "vs/ACDCCAACABJSONAA__.",
+   "vs": "ACDCCAACABJSONAA__.",
+   "proto": "ACDC",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    1
+   ],
+   "kind": "JSON",
+   "size": 4095
+  },
+  {
+   "id": "vs/ACDCCAACAAJSON____.",
+   "vs": "ACDCCAACAAJSON____.",
+   "proto": "ACDC",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    0
+   ],
+   "kind": "JSON",
+   "size": 16777215
+  },
+  {
+   "id": "vs/ACDCCAACABJSON____.",
+   "vs": "ACDCCAACABJSON____.",
+   "proto": "ACDC",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    1
+   ],
+   "kind": "JSON",
+   "size": 16777215
+  },
+  {
+   "id": "vs/ACDCCAACAACBORAAAA.",
+   "vs": "ACDCCAACAACBORAAAA.",
+   "proto": "ACDC",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    0
+   ],
+   "kind": "CBOR",
+   "size": 0
+  },
+  {
+   "id": "vs/ACDCCAACABCBORAAAA.",
+   "vs": "ACDCCAACABCBORAAAA.",
+   "proto": "ACDC",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    1
+   ],
+   "kind": "CBOR",
+   "size": 0
+  },
+  {
+   "id": "vs/ACDCCAACAACBORAABk.",
+   "vs": "ACDCCAACAACBORAABk.",
+   "proto": "ACDC",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    0
+   ],
+   "kind": "CBOR",
+   "size": 100
+  },
+  {
+   "id": "vs/ACDCCAACABCBORAABk.",
+   "vs": "ACDCCAACABCBORAABk.",
+   "proto": "ACDC",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    1
+   ],
+   "kind": "CBOR",
+   "size": 100
+  },
+  {
+   "id": "vs/ACDCCAACAACBORAA__.",
+   "vs": "ACDCCAACAACBORAA__.",
+   "proto": "ACDC",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    0
+   ],
+   "kind": "CBOR",
+   "size": 4095
+  },
+  {
+   "id": "vs/ACDCCAACABCBORAA__.",
+   "vs": "ACDCCAACABCBORAA__.",
+   "proto": "ACDC",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    1
+   ],
+   "kind": "CBOR",
+   "size": 4095
+  },
+  {
+   "id": "vs/ACDCCAACAACBOR____.",
+   "vs": "ACDCCAACAACBOR____.",
+   "proto": "ACDC",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    0
+   ],
+   "kind": "CBOR",
+   "size": 16777215
+  },
+  {
+   "id": "vs/ACDCCAACABCBOR____.",
+   "vs": "ACDCCAACABCBOR____.",
+   "proto": "ACDC",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    1
+   ],
+   "kind": "CBOR",
+   "size": 16777215
+  },
+  {
+   "id": "vs/ACDCCAACAAMGPKAAAA.",
+   "vs": "ACDCCAACAAMGPKAAAA.",
+   "proto": "ACDC",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    0
+   ],
+   "kind": "MGPK",
+   "size": 0
+  },
+  {
+   "id": "vs/ACDCCAACABMGPKAAAA.",
+   "vs": "ACDCCAACABMGPKAAAA.",
+   "proto": "ACDC",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    1
+   ],
+   "kind": "MGPK",
+   "size": 0
+  },
+  {
+   "id": "vs/ACDCCAACAAMGPKAABk.",
+   "vs": "ACDCCAACAAMGPKAABk.",
+   "proto": "ACDC",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    0
+   ],
+   "kind": "MGPK",
+   "size": 100
+  },
+  {
+   "id": "vs/ACDCCAACABMGPKAABk.",
+   "vs": "ACDCCAACABMGPKAABk.",
+   "proto": "ACDC",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    1
+   ],
+   "kind": "MGPK",
+   "size": 100
+  },
+  {
+   "id": "vs/ACDCCAACAAMGPKAA__.",
+   "vs": "ACDCCAACAAMGPKAA__.",
+   "proto": "ACDC",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    0
+   ],
+   "kind": "MGPK",
+   "size": 4095
+  },
+  {
+   "id": "vs/ACDCCAACABMGPKAA__.",
+   "vs": "ACDCCAACABMGPKAA__.",
+   "proto": "ACDC",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    1
+   ],
+   "kind": "MGPK",
+   "size": 4095
+  },
+  {
+   "id": "vs/ACDCCAACAAMGPK____.",
+   "vs": "ACDCCAACAAMGPK____.",
+   "proto": "ACDC",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    0
+   ],
+   "kind": "MGPK",
+   "size": 16777215
+  },
+  {
+   "id": "vs/ACDCCAACABMGPK____.",
+   "vs": "ACDCCAACABMGPK____.",
+   "proto": "ACDC",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    1
+   ],
+   "kind": "MGPK",
+   "size": 16777215
+  },
+  {
+   "id": "vs/ACDCCAACAACESRAAAA.",
+   "vs": "ACDCCAACAACESRAAAA.",
+   "proto": "ACDC",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    0
+   ],
+   "kind": "CESR",
+   "size": 0
+  },
+  {
+   "id": "vs/ACDCCAACABCESRAAAA.",
+   "vs": "ACDCCAACABCESRAAAA.",
+   "proto": "ACDC",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    1
+   ],
+   "kind": "CESR",
+   "size": 0
+  },
+  {
+   "id": "vs/ACDCCAACAACESRAABk.",
+   "vs": "ACDCCAACAACESRAABk.",
+   "proto": "ACDC",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    0
+   ],
+   "kind": "CESR",
+   "size": 100
+  },
+  {
+   "id": "vs/ACDCCAACABCESRAABk.",
+   "vs": "ACDCCAACABCESRAABk.",
+   "proto": "ACDC",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    1
+   ],
+   "kind": "CESR",
+   "size": 100
+  },
+  {
+   "id": "vs/ACDCCAACAACESRAA__.",
+   "vs": "ACDCCAACAACESRAA__.",
+   "proto": "ACDC",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    0
+   ],
+   "kind": "CESR",
+   "size": 4095
+  },
+  {
+   "id": "vs/ACDCCAACABCESRAA__.",
+   "vs": "ACDCCAACABCESRAA__.",
+   "proto": "ACDC",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    1
+   ],
+   "kind": "CESR",
+   "size": 4095
+  },
+  {
+   "id": "vs/ACDCCAACAACESR____.",
+   "vs": "ACDCCAACAACESR____.",
+   "proto": "ACDC",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    0
+   ],
+   "kind": "CESR",
+   "size": 16777215
+  },
+  {
+   "id": "vs/ACDCCAACABCESR____.",
+   "vs": "ACDCCAACABCESR____.",
+   "proto": "ACDC",
+   "pvrsn": [
+    2,
+    0
+   ],
+   "gvrsn": [
+    2,
+    1
+   ],
+   "kind": "CESR",
+   "size": 16777215
+  }
+ ]
+}

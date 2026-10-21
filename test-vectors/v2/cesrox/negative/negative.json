@@ -1,0 +1,153 @@
+{
+  "schema": "negative/1",
+  "generator": {
+    "tool": "cesrox-vectors",
+    "version": "0.1.0",
+    "source": {
+      "implementation": "cesrox",
+      "revision": "the commit that contains these files",
+      "version": "2"
+    }
+  },
+  "vectors": [
+    {
+      "id": "neg/matter/pad-equals",
+      "target": "matter",
+      "input": "EDrn2AX2eJpkAqy3CtQJaoWla_aATq8lwEk6xpdUjTC=",
+      "why": "pad-equals",
+      "source_accepts": false
+    },
+    {
+      "id": "neg/matter/nonzero-lead-pad-bits",
+      "target": "matter",
+      "input": "E_rn2AX2eJpkAqy3CtQJaoWla_aATq8lwEk6xpdUjTC1",
+      "why": "nonzero-lead-pad-bits",
+      "source_accepts": false
+    },
+    {
+      "id": "neg/matter/lowercase-selector-digest",
+      "target": "matter",
+      "input": "eDrn2AX2eJpkAqy3CtQJaoWla_aATq8lwEk6xpdUjTC1",
+      "why": "lowercase-selector-digest",
+      "source_accepts": false
+    },
+    {
+      "id": "neg/stream/group-count-short",
+      "target": "stream",
+      "input": "-KAVAACvTZnsxw0ASZRvMSQMpfxFauGPqhiH4FE-epaja_KQI6KcjYdcEc5KXM7kQYCQv3qctJvbnkatIvDMsr4oP94J",
+      "why": "group-count-short",
+      "source_accepts": false
+    },
+    {
+      "id": "neg/stream/group-count-long",
+      "target": "stream",
+      "input": "-KAXAACvTZnsxw0ASZRvMSQMpfxFauGPqhiH4FE-epaja_KQI6KcjYdcEc5KXM7kQYCQv3qctJvbnkatIvDMsr4oP94J",
+      "why": "group-count-long",
+      "source_accepts": false
+    },
+    {
+      "id": "neg/stream/attachments-count-short",
+      "target": "stream",
+      "input": "-CAV-KAWAACvTZnsxw0ASZRvMSQMpfxFauGPqhiH4FE-epaja_KQI6KcjYdcEc5KXM7kQYCQv3qctJvbnkatIvDMsr4oP94J",
+      "why": "attachments-count-short",
+      "source_accepts": false
+    },
+    {
+      "id": "neg/stream/group-item-not-a-signature",
+      "target": "stream",
+      "input": "-KALEDrn2AX2eJpkAqy3CtQJaoWla_aATq8lwEk6xpdUjTC1",
+      "why": "group-item-not-a-signature",
+      "source_accepts": false
+    },
+    {
+      "id": "neg/stream/truncated-body",
+      "target": "stream",
+      "input": "{\"v\":\"KERICAACAAJSONAAGL.\",\"t\":\"icp\",\"d\":\"EDd5saxWBoPcmXQrNrGznyqBkZYMqxXUYlq9KcczS8Bw\",\"i\":\"EDd5saxWBoPcmXQrNrGznyqBkZYMqxXUYlq9KcczS8Bw\",\"s\":\"0\",\"kt\":\"2\",\"k\":[\"DHBekK-Trugdn8lU77E4I6c2XAeNApyrf8VzeEVzmno1\",\"DLshYTQkp1cG9WqMbohjy1m92vfgioaQTIkbTTdHXLly\"],\"nt\":\"2\",\"n\":[\"EA4qJyEt8-ZCcMoLlE1omQ_gYJzBWFWly2yF-tTue7cs\",\"EIVP3uFD2meZXu7-XF2Dk2EFJCskZF9dl39Xc-MVgOao\"],\"bt\":\"0\",\"b\":[],\"c\":[],\"a\":[]",
+      "why": "truncated-body",
+      "source_accepts": false
+    },
+    {
+      "id": "neg/counter/big-count-truncated",
+      "target": "counter",
+      "input": "--KAAA",
+      "why": "big-count-truncated",
+      "source_accepts": false
+    },
+    {
+      "id": "neg/version/v1-no-terminator",
+      "target": "version",
+      "input": "KERI10JSON00014b",
+      "why": "v1-no-terminator",
+      "source_accepts": false
+    },
+    {
+      "id": "neg/version/v1-size-not-hex",
+      "target": "version",
+      "input": "KERI10JSON00014g_",
+      "why": "v1-size-not-hex",
+      "source_accepts": false
+    },
+    {
+      "id": "neg/version/v1-major-not-hex",
+      "target": "version",
+      "input": "KERIx0JSON00014b_",
+      "why": "v1-major-not-hex",
+      "source_accepts": false
+    },
+    {
+      "id": "neg/version/v2-size-short",
+      "target": "version",
+      "input": "KERICAACAAJSONAAB.",
+      "why": "v2-size-short",
+      "source_accepts": false
+    },
+    {
+      "id": "neg/said/changed-content",
+      "target": "said",
+      "input": "{\"v\":\"KERICAACAAJSONAAGL.\",\"t\":\"icp\",\"d\":\"EDd5saxWBoPcmXQrNrGznyqBkZYMqxXUYlq9KcczS8Bw\",\"i\":\"EDd5saxWBoPcmXQrNrGznyqBkZYMqxXUYlq9KcczS8Bw\",\"s\":\"0\",\"kt\":\"1\",\"k\":[\"DHBekK-Trugdn8lU77E4I6c2XAeNApyrf8VzeEVzmno1\",\"DLshYTQkp1cG9WqMbohjy1m92vfgioaQTIkbTTdHXLly\"],\"nt\":\"2\",\"n\":[\"EA4qJyEt8-ZCcMoLlE1omQ_gYJzBWFWly2yF-tTue7cs\",\"EIVP3uFD2meZXu7-XF2Dk2EFJCskZF9dl39Xc-MVgOao\"],\"bt\":\"0\",\"b\":[],\"c\":[],\"a\":[]}",
+      "why": "changed-content",
+      "source_accepts": false,
+      "kind": "JSON",
+      "labels": [
+        "d",
+        "i"
+      ]
+    },
+    {
+      "id": "neg/said/not-compact",
+      "target": "said",
+      "input": "{\"v\":\"KERICAACAAJSONAAGL.\",\"t\":\"icp\",\"d\":\"EDd5saxWBoPcmXQrNrGznyqBkZYMqxXUYlq9KcczS8Bw\",\"i\":\"EDd5saxWBoPcmXQrNrGznyqBkZYMqxXUYlq9KcczS8Bw\",\"s\":\"0\", \"kt\":\"2\",\"k\":[\"DHBekK-Trugdn8lU77E4I6c2XAeNApyrf8VzeEVzmno1\",\"DLshYTQkp1cG9WqMbohjy1m92vfgioaQTIkbTTdHXLly\"],\"nt\":\"2\",\"n\":[\"EA4qJyEt8-ZCcMoLlE1omQ_gYJzBWFWly2yF-tTue7cs\",\"EIVP3uFD2meZXu7-XF2Dk2EFJCskZF9dl39Xc-MVgOao\"],\"bt\":\"0\",\"b\":[],\"c\":[],\"a\":[]}",
+      "why": "not-compact",
+      "source_accepts": false,
+      "kind": "JSON",
+      "labels": [
+        "d",
+        "i"
+      ]
+    },
+    {
+      "id": "neg/said/fields-disagree",
+      "target": "said",
+      "input": "{\"v\":\"KERICAACAAJSONAAGL.\",\"t\":\"icp\",\"d\":\"EDrn2AX2eJpkAqy3CtQJaoWla_aATq8lwEk6xpdUjTC1\",\"i\":\"EDd5saxWBoPcmXQrNrGznyqBkZYMqxXUYlq9KcczS8Bw\",\"s\":\"0\",\"kt\":\"2\",\"k\":[\"DHBekK-Trugdn8lU77E4I6c2XAeNApyrf8VzeEVzmno1\",\"DLshYTQkp1cG9WqMbohjy1m92vfgioaQTIkbTTdHXLly\"],\"nt\":\"2\",\"n\":[\"EA4qJyEt8-ZCcMoLlE1omQ_gYJzBWFWly2yF-tTue7cs\",\"EIVP3uFD2meZXu7-XF2Dk2EFJCskZF9dl39Xc-MVgOao\"],\"bt\":\"0\",\"b\":[],\"c\":[],\"a\":[]}",
+      "why": "fields-disagree",
+      "source_accepts": false,
+      "kind": "JSON",
+      "labels": [
+        "d",
+        "i"
+      ]
+    },
+    {
+      "id": "neg/said/version-size-wrong",
+      "target": "said",
+      "input": "{\"v\":\"KERICAACAAJSONAAGA.\",\"t\":\"icp\",\"d\":\"EDd5saxWBoPcmXQrNrGznyqBkZYMqxXUYlq9KcczS8Bw\",\"i\":\"EDd5saxWBoPcmXQrNrGznyqBkZYMqxXUYlq9KcczS8Bw\",\"s\":\"0\",\"kt\":\"2\",\"k\":[\"DHBekK-Trugdn8lU77E4I6c2XAeNApyrf8VzeEVzmno1\",\"DLshYTQkp1cG9WqMbohjy1m92vfgioaQTIkbTTdHXLly\"],\"nt\":\"2\",\"n\":[\"EA4qJyEt8-ZCcMoLlE1omQ_gYJzBWFWly2yF-tTue7cs\",\"EIVP3uFD2meZXu7-XF2Dk2EFJCskZF9dl39Xc-MVgOao\"],\"bt\":\"0\",\"b\":[],\"c\":[],\"a\":[]}",
+      "why": "version-size-wrong",
+      "source_accepts": false,
+      "kind": "JSON",
+      "labels": [
+        "d",
+        "i"
+      ]
+    }
+  ]
+}

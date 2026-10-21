@@ -1,0 +1,326 @@
+{
+ "schema": "negative/1",
+ "generator": {
+  "tool": "gen_vectors.py",
+  "version": "0.4.0",
+  "source": {
+   "implementation": "keripy",
+   "revision": "424a50c03421165c5f289e07a341bd57b8d8ab78",
+   "version": "2.1.0-dev1"
+  }
+ },
+ "vectors": [
+  {
+   "id": "neg/matter/empty",
+   "target": "matter",
+   "input": "",
+   "why": "empty",
+   "source_accepts": false,
+   "source_error": "ShortageError"
+  },
+  {
+   "id": "neg/matter/code-only",
+   "target": "matter",
+   "input": "E",
+   "why": "code-only",
+   "source_accepts": false,
+   "source_error": "ShortageError"
+  },
+  {
+   "id": "neg/matter/truncated-1",
+   "target": "matter",
+   "input": "EDrn2AX2eJpkAqy3CtQJaoWla_aATq8lwEk6xpdUjTC",
+   "why": "truncated-1",
+   "source_accepts": false,
+   "source_error": "ShortageError"
+  },
+  {
+   "id": "neg/matter/truncated-10",
+   "target": "matter",
+   "input": "EDrn2AX2eJ",
+   "why": "truncated-10",
+   "source_accepts": false,
+   "source_error": "ShortageError"
+  },
+  {
+   "id": "neg/matter/two-char-selector-truncated",
+   "target": "matter",
+   "input": "0",
+   "why": "two-char-selector-truncated",
+   "source_accepts": false,
+   "source_error": "ShortageError"
+  },
+  {
+   "id": "neg/matter/four-char-selector-truncated",
+   "target": "matter",
+   "input": "1AA",
+   "why": "four-char-selector-truncated",
+   "source_accepts": false,
+   "source_error": "ShortageError"
+  },
+  {
+   "id": "neg/matter/non-b64-char",
+   "target": "matter",
+   "input": "E!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!",
+   "why": "non-b64-char",
+   "source_accepts": false,
+   "source_error": "ConversionError"
+  },
+  {
+   "id": "neg/matter/pad-bits-set-in-lead",
+   "target": "matter",
+   "input": "B___________________________________________",
+   "why": "pad-bits-set-in-lead",
+   "source_accepts": false,
+   "source_error": "ConversionError"
+  },
+  {
+   "id": "neg/matter/sig-truncated",
+   "target": "matter",
+   "input": "0BAA",
+   "why": "sig-truncated",
+   "source_accepts": false,
+   "source_error": "ShortageError"
+  },
+  {
+   "id": "neg/matter/tag3-truncated",
+   "target": "matter",
+   "input": "XAB",
+   "why": "tag3-truncated",
+   "source_accepts": false,
+   "source_error": "ShortageError"
+  },
+  {
+   "id": "neg/matter/tag7-truncated",
+   "target": "matter",
+   "input": "Y",
+   "why": "tag7-truncated",
+   "source_accepts": false,
+   "source_error": "ShortageError"
+  },
+  {
+   "id": "neg/matter/varlen-declares-1-quadlet-missing",
+   "target": "matter",
+   "input": "4BAB",
+   "why": "varlen-declares-1-quadlet-missing",
+   "source_accepts": false,
+   "source_error": "ShortageError"
+  },
+  {
+   "id": "neg/matter/varlen-L1-short",
+   "target": "matter",
+   "input": "5BABAA",
+   "why": "varlen-L1-short",
+   "source_accepts": false,
+   "source_error": "ShortageError"
+  },
+  {
+   "id": "neg/matter/varlen-L1-nonzero-lead-byte",
+   "target": "matter",
+   "input": "5BAB_AAA",
+   "why": "varlen-L1-nonzero-lead-byte",
+   "source_accepts": false,
+   "source_error": "ConversionError"
+  },
+  {
+   "id": "neg/matter/varlen-unknown-type",
+   "target": "matter",
+   "input": "4ZAB",
+   "why": "varlen-unknown-type",
+   "source_accepts": false,
+   "source_error": "UnexpectedCodeError"
+  },
+  {
+   "id": "neg/matter/invalid-selector",
+   "target": "matter",
+   "input": "~AAA",
+   "why": "invalid-selector",
+   "source_accepts": false,
+   "source_error": "UnexpectedCodeError"
+  },
+  {
+   "id": "neg/indexer/truncated",
+   "target": "indexer",
+   "input": "AABDZzXDDeBM-pKqTdkw_MU0jOc30Ieg7p8Ri_LdhXkdaEIVp9cmaGLs6l_DKxwd_81-oSNX9-ZdMfAAhs_i68J",
+   "why": "truncated",
+   "source_accepts": false,
+   "source_error": "ShortageError"
+  },
+  {
+   "id": "neg/indexer/code-only",
+   "target": "indexer",
+   "input": "A",
+   "why": "code-only",
+   "source_accepts": false,
+   "source_error": "ShortageError"
+  },
+  {
+   "id": "neg/indexer/big-code-only",
+   "target": "indexer",
+   "input": "2A",
+   "why": "big-code-only",
+   "source_accepts": false,
+   "source_error": "ShortageError"
+  },
+  {
+   "id": "neg/indexer/ed448-code-only",
+   "target": "indexer",
+   "input": "0A",
+   "why": "ed448-code-only",
+   "source_accepts": false,
+   "source_error": "ShortageError"
+  },
+  {
+   "id": "neg/indexer/unknown-code",
+   "target": "indexer",
+   "input": "ZABDZzXDDeBM-pKqTdkw_MU0jOc30Ieg7p8Ri_LdhXkdaEIVp9cmaGLs6l_DKxwd_81-oSNX9-ZdMfAAhs_i68JX",
+   "why": "unknown-code",
+   "source_accepts": false,
+   "source_error": "UnexpectedCodeError"
+  },
+  {
+   "id": "neg/indexer/big-crt-nonzero-ondex",
+   "target": "indexer",
+   "input": "2BABABXDDeBM-pKqTdkw_MU0jOc30Ieg7p8Ri_LdhXkdaEIVp9cmaGLs6l_DKxwd_81-oSNX9-ZdMfAAhs_i68JXAAAA",
+   "why": "big-crt-nonzero-ondex",
+   "source_accepts": false,
+   "source_error": "ValueError"
+  },
+  {
+   "id": "neg/counter/empty",
+   "target": "counter",
+   "input": "",
+   "why": "empty",
+   "source_accepts": false,
+   "source_error": "ShortageError"
+  },
+  {
+   "id": "neg/counter/dash-only",
+   "target": "counter",
+   "input": "-",
+   "why": "dash-only",
+   "source_accepts": false,
+   "source_error": "ShortageError"
+  },
+  {
+   "id": "neg/counter/no-count",
+   "target": "counter",
+   "input": "-K",
+   "why": "no-count",
+   "source_accepts": false,
+   "source_error": "ShortageError"
+  },
+  {
+   "id": "neg/counter/count-truncated",
+   "target": "counter",
+   "input": "-KA",
+   "why": "count-truncated",
+   "source_accepts": false,
+   "source_error": "ShortageError"
+  },
+  {
+   "id": "neg/counter/big-no-count",
+   "target": "counter",
+   "input": "--K",
+   "why": "big-no-count",
+   "source_accepts": false,
+   "source_error": "ShortageError"
+  },
+  {
+   "id": "neg/counter/genus-truncated",
+   "target": "counter",
+   "input": "-_AAA",
+   "why": "genus-truncated",
+   "source_accepts": false,
+   "source_error": "ShortageError"
+  },
+  {
+   "id": "neg/counter/unknown-genus",
+   "target": "counter",
+   "input": "-_ZZZCAA",
+   "why": "unknown-genus",
+   "source_accepts": false,
+   "source_error": "UnexpectedCodeError"
+  },
+  {
+   "id": "neg/counter/non-b64-count-code",
+   "target": "counter",
+   "input": "-!AA",
+   "why": "non-b64-count-code",
+   "source_accepts": false,
+   "source_error": "UnexpectedCodeError"
+  },
+  {
+   "id": "neg/counter/non-b64-count",
+   "target": "counter",
+   "input": "-K!!",
+   "why": "non-b64-count",
+   "source_accepts": false,
+   "source_error": "ConversionError"
+  },
+  {
+   "id": "neg/version/v2-missing-terminator",
+   "target": "version",
+   "input": "KERICAACAAJSONAABk",
+   "why": "v2-missing-terminator",
+   "source_accepts": false,
+   "source_error": "VersionError"
+  },
+  {
+   "id": "neg/version/v2-wrong-major-1",
+   "target": "version",
+   "input": "KERIBAACAAJSONAABk.",
+   "why": "v2-wrong-major-1",
+   "source_accepts": false,
+   "source_error": "VersionError"
+  },
+  {
+   "id": "neg/version/v2-wrong-genus-major-1",
+   "target": "version",
+   "input": "KERICAABAAJSONAABk.",
+   "why": "v2-wrong-genus-major-1",
+   "source_accepts": false,
+   "source_error": "VersionError"
+  },
+  {
+   "id": "neg/version/v2-unknown-kind",
+   "target": "version",
+   "input": "KERICAACAAXXXXAABk.",
+   "why": "v2-unknown-kind",
+   "source_accepts": false,
+   "source_error": "KindError"
+  },
+  {
+   "id": "neg/version/v2-unknown-proto",
+   "target": "version",
+   "input": "XXXXCAACAAJSONAABk.",
+   "why": "v2-unknown-proto",
+   "source_accepts": false,
+   "source_error": "ProtocolError"
+  },
+  {
+   "id": "neg/stream/group-overrun",
+   "target": "stream",
+   "input": "-KAWAABDZzXDDeBM-pKqTdkw_MU0jOc30Ieg7p8Ri_LdhXkdaEIVp9cmaGLs6l_DKxwd_81-oSNX9-ZdMfAAhs_i",
+   "why": "group counter overruns stream",
+   "source_accepts": false,
+   "source_error": "ShortageError (by construction)"
+  },
+  {
+   "id": "neg/stream/group-underrun",
+   "target": "stream",
+   "input": "-KAXAABDZzXDDeBM-pKqTdkw_MU0jOc30Ieg7p8Ri_LdhXkdaEIVp9cmaGLs6l_DKxwd_81-oSNX9-ZdMfAAhs_i68JXAAAA",
+   "why": "count says 23 quadlets but content is 22+1 junk quadlet",
+   "source_accepts": null,
+   "source_error": "content not an indexer at quadlet 22"
+  },
+  {
+   "id": "neg/stream/nonb64-byte",
+   "target": "stream",
+   "input": "EAAAAAAAAAAAAAAAAAAAAéAAAAAAAAAAAAAAAAAAAAA",
+   "why": "non-ASCII byte inside primitive",
+   "source_accepts": false,
+   "source_error": "by construction"
+  }
+ ]
+}

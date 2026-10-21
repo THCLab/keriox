@@ -1,0 +1,25 @@
+{
+ "files": {
+  "counters/counters.json": 324,
+  "groups/groups.json": 16,
+  "indexed/indexers.json": 68,
+  "negative/edge.json": 5,
+  "negative/negative.json": 39,
+  "primitives/fixed.json": 117,
+  "primitives/special.json": 49,
+  "primitives/variable.json": 337,
+  "said/digests.json": 27,
+  "said/saidify.json": 21,
+  "said/version_strings.json": 64,
+  "streams/messages.json": 9
+ },
+ "generator": {
+  "source": {
+   "implementation": "keripy",
+   "revision": "424a50c03421165c5f289e07a341bd57b8d8ab78",
+   "version": "2.1.0-dev1"
+  },
+  "tool": "gen_vectors.py",
+  "version": "0.4.0"
+ }
+}

@@ -1,0 +1,14 @@
+{
+ "files": {
+  "streams/messages.json": 1
+ },
+ "generator": {
+  "source": {
+   "implementation": "spec",
+   "revision": "kswg-cesr-specification bad6edd",
+   "version": "v1.1"
+  },
+  "tool": "hand-written",
+  "version": "1"
+ }
+}
