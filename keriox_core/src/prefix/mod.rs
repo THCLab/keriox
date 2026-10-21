@@ -50,6 +50,20 @@ impl Display for IdentifierPrefix {
     }
 }
 
+/// The raw bytes of a primitive from its text after the code. `lead` is the
+/// number of bytes the code leaves to pad the value to whole quadlets; their
+/// bits must be zero, otherwise one value would have several encodings.
+pub(crate) fn raw_from_text(text: &str, lead: usize) -> Result<Vec<u8>, Error> {
+    let bytes = cesrox::conversion::from_text_to_bytes(text)?;
+    match bytes.split_at_checked(lead) {
+        Some((pad, raw)) if pad.iter().all(|b| *b == 0) => Ok(raw.to_vec()),
+        Some(_) => Err(Error::DeserializeError(format!(
+            "non-zero pad bits in {text}"
+        ))),
+        None => Err(Error::IncorrectLengthError(text.into())),
+    }
+}
+
 impl FromStr for IdentifierPrefix {
     type Err = Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -443,5 +457,23 @@ mod tests {
         ssp.to_str(),
         "0BCZ0jw5JCQwn2v7GKCMQHISMi5rsscfcA4nbY9AqqWMyG6FyCH2cZFwqezPkq8p3sr8f37Xb3wXgh3UPG8igSYJ"
     );
+    }
+
+    #[test]
+    fn test_non_canonical_pad_bits_are_rejected() {
+        use super::{BasicPrefix, IndexedSignature};
+
+        // keripy's negative vector: all pad bits of the lead set
+        assert!(BasicPrefix::from_str("B___________________________________________").is_err());
+        assert!(BasicPrefix::from_str("BP__________________________________________").is_ok());
+
+        let canonical = "0BCZ0jw5JCQwn2v7GKCMQHISMi5rsscfcA4nbY9AqqWMyG6FyCH2cZFwqezPkq8p3sr8f37Xb3wXgh3UPG8igSYJ";
+        assert!(SelfSigningPrefix::from_str(canonical).is_ok());
+        // the same signature with a pad bit set: S is C plus 16
+        assert!(SelfSigningPrefix::from_str(&canonical.replacen("0BC", "0BS", 1)).is_err());
+
+        let indexed = "AACZ0jw5JCQwn2v7GKCMQHISMi5rsscfcA4nbY9AqqWMyG6FyCH2cZFwqezPkq8p3sr8f37Xb3wXgh3UPG8igSYJ";
+        assert!(IndexedSignature::from_str(indexed).is_ok());
+        assert!(IndexedSignature::from_str(&indexed.replacen("AAC", "AAS", 1)).is_err());
     }
 }

@@ -104,10 +104,10 @@ mod tests {
 
     #[test]
     fn test_oobi_deserialize() -> Result<(), Error> {
-        let oobi = r#"{"cid":"BuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw","role":"controller","eid":"BuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw"}"#;
+        let oobi = r#"{"cid":"BOyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw","role":"controller","eid":"BOyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw"}"#;
         let _o: EndRole = serde_json::from_str(oobi).unwrap();
 
-        let oobi = r#"{"eid":"BuyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw","scheme":"http","url":"http://127.0.0.1:5643/"}"#;
+        let oobi = r#"{"eid":"BOyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw","scheme":"http","url":"http://127.0.0.1:5643/"}"#;
         let _o: LocationScheme = serde_json::from_str(oobi).unwrap();
 
         Ok(())

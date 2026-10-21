@@ -1,7 +1,6 @@
 use super::error::Error;
-use super::SelfSigningPrefix;
+use super::{raw_from_text, SelfSigningPrefix};
 use cesrox::{
-    conversion::from_text_to_bytes,
     derivation_code::DerivationCode,
     primitives::{
         codes::{
@@ -85,7 +84,7 @@ impl FromStr for IndexedSignature {
             } else {
                 0
             };
-            let s_vec = from_text_to_bytes(&s[code.code_size()..])?[lead..].to_vec();
+            let s_vec = raw_from_text(&s[code.code_size()..], lead)?;
             let ssp = SelfSigningPrefix::new(code.code, s_vec);
 
             Ok(Self {

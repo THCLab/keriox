@@ -97,7 +97,7 @@ mod tests {
     pub fn test_management_tel() -> Result<(), Error> {
         // Test if generated event sequence matches
         let mut state = ManagerTelState::default();
-        let issuer_prefix: IdentifierPrefix = "DpE03it33djytuVvXhSbZdEw0lx7Xa-olrlUUSH2Ykvc"
+        let issuer_prefix: IdentifierPrefix = "DJE03it33djytuVvXhSbZdEw0lx7Xa-olrlUUSH2Ykvc"
             .parse()
             .unwrap();
 

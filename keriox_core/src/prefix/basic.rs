@@ -2,10 +2,9 @@ use core::{fmt, str::FromStr};
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use super::{error::Error, verify, SelfSigningPrefix};
+use super::{error::Error, raw_from_text, verify, SelfSigningPrefix};
 use crate::{event::sections::key_config::SignatureError, keys::PublicKey};
 use cesrox::{
-    conversion::from_text_to_bytes,
     derivation_code::DerivationCode,
     primitives::{
         codes::{basic::Basic as CesrBasic, PrimitiveCode},
@@ -132,8 +131,7 @@ impl FromStr for BasicPrefix {
             // code length is not a multiple of 4). Stripping the full code_size
             // would silently truncate the value for 4-char codes (1AAA/1AAB
             // secp256k1, 1AAC/1AAD Ed448, 1AAI/1AAJ P-256).
-            let k_vec =
-                from_text_to_bytes(&s[code.code_size()..])?[code.code_size() % 4..].to_vec();
+            let k_vec = raw_from_text(&s[code.code_size()..], code.code_size() % 4)?;
             Ok(Self::new(code, PublicKey::new(k_vec)))
         } else {
             Err(Error::IncorrectLengthError(s.into()))

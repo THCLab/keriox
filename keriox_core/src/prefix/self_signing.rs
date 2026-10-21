@@ -1,13 +1,12 @@
 use core::{fmt, str::FromStr};
 
 use cesrox::{
-    conversion::from_text_to_bytes,
     derivation_code::DerivationCode,
     primitives::codes::{self_signing::SelfSigning, PrimitiveCode},
 };
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use super::{error::Error, CesrPrimitive};
+use super::{error::Error, raw_from_text, CesrPrimitive};
 
 /// Self Signing Derivations
 ///
@@ -57,7 +56,7 @@ impl FromStr for SelfSigningPrefix {
         if s.len() == code.full_size() {
             Ok(Self::new(
                 code,
-                from_text_to_bytes(&s[code.code_size()..])?[code.code_size() % 4..].to_vec(),
+                raw_from_text(&s[code.code_size()..], code.code_size() % 4)?,
             ))
         } else {
             Err(Error::IncorrectLengthError(s.into()))

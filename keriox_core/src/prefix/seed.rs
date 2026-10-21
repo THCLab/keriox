@@ -63,6 +63,9 @@ impl SeedPrefix {
     }
 }
 
+/// Unlike keys and signatures, a seed's pad bits are not checked: seeds are
+/// local configuration that never goes on the wire, and configurations
+/// written before canonical encoding may still hold seeds with pad bits set.
 impl FromStr for SeedPrefix {
     type Err = Error;
 
