@@ -3,7 +3,8 @@
 //! cesrox and the CESR specification. cesrox already checks the encoding
 //! itself; these checks cover what keriox adds on top of it: its own
 //! primitive types, the conversion of attachment groups into signatures,
-//! turning streams into messages and processing them into a KEL, SAIDs of
+//! turning streams into messages and processing them into a KEL, accepting
+//! exactly the events of a key event log that the source accepted, SAIDs of
 //! key events and rejecting what must be rejected.
 //!
 //! Known gaps are listed in `vectors_expected_failures.txt`, which may only
@@ -25,7 +26,10 @@ use keri_core::{
         signature::{get_signatures, signatures_into_groups},
         signed_event_message::{Message, Notice},
     },
-    prefix::{BasicPrefix, CesrPrimitive, IndexedSignature, SeedPrefix, SelfSigningPrefix},
+    prefix::{
+        BasicPrefix, CesrPrimitive, IdentifierPrefix, IndexedSignature, SeedPrefix,
+        SelfSigningPrefix,
+    },
     processor::{
         basic_processor::BasicProcessor,
         escrow::{default_escrow_bus, EscrowConfig},
@@ -55,6 +59,7 @@ fn v2_vectors() {
         indexed(&mut r);
         groups(&mut r);
         streams(&mut r);
+        kels(&mut r);
         migrations(&mut r);
         saids(&mut r);
         digests(&mut r);
@@ -267,6 +272,61 @@ fn streams(r: &mut Runner) {
     for v in r.load("streams/messages.json") {
         let stream = stream_bytes(&v);
         r.check(&field(&v, "id"), move || process_stream(&stream?));
+    }
+}
+
+/// Processing a key event log must leave, for every identifier, exactly the
+/// events the source accepted, in order: an event it rejects must not be in
+/// keriox's KEL either.
+fn kels(r: &mut Runner) {
+    for v in r.load("kels/kels.json") {
+        let stream = field(&v, "stream").into_bytes();
+        let expected: Vec<(String, Vec<(u64, String)>)> = v["kels"]
+            .as_object()
+            .map(|kels| {
+                kels.iter()
+                    .map(|(id, events)| {
+                        let events = events
+                            .as_array()
+                            .into_iter()
+                            .flatten()
+                            .map(|e| (e["sn"].as_u64().unwrap_or(u64::MAX), field(e, "said")))
+                            .collect();
+                        (id.clone(), events)
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        r.check(&field(&v, "id"), move || {
+            let (_path, processor, storage) = processor();
+            let messages = parse_event_stream(&stream).map_err(|e| format!("parse: {e}"))?;
+            for message in messages {
+                if let Message::Notice(notice) = message {
+                    // a rejected event is expected here; the KELs decide
+                    let _ = process_notice(notice, &processor);
+                }
+            }
+            for (id, events) in expected {
+                let prefix = IdentifierPrefix::from_str(&id).map_err(|e| e.to_string())?;
+                let kel: Vec<(u64, String)> = storage
+                    .get_kel_messages(&prefix)
+                    .map_err(|e| e.to_string())?
+                    .unwrap_or_default()
+                    .into_iter()
+                    .filter_map(|notice| match notice {
+                        Notice::Event(event) => {
+                            let event = event.event_message;
+                            Some((event.data.get_sn(), event.digest().ok()?.to_string()))
+                        }
+                        _ => None,
+                    })
+                    .collect();
+                if kel != events {
+                    return Err(format!("{id}: KEL {kel:?}, expected {events:?}"));
+                }
+            }
+            Ok(())
+        });
     }
 }
 

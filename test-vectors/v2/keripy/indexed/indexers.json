@@ -2,7 +2,7 @@
  "schema": "indexer/1",
  "generator": {
   "tool": "gen_vectors.py",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "source": {
    "implementation": "keripy",
    "revision": "424a50c03421165c5f289e07a341bd57b8d8ab78",
