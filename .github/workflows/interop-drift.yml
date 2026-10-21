@@ -1,0 +1,33 @@
+name: Interop drift
+
+# Runs the interoperability checks against the current cesrox vectors and
+# checker instead of the snapshot in test-vectors/, so that new vectors, or
+# a new pinned keripy, that keriox fails show up without waiting for the
+# next manual sync. When this fails, run test-vectors/sync.sh and follow
+# test-vectors/README.md.
+on:
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+jobs:
+  drift:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: THCLab/cesrox
+          path: cesrox
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Refresh the snapshot from cesrox master
+        run: |
+          test-vectors/sync.sh cesrox
+          git status --short test-vectors
+      - name: Run the vectors against keriox
+        run: cargo test -p keri-tests --test vectors --test vectors_source
+      - uses: astral-sh/setup-uv@v5
+      - name: Install libsodium for keripy
+        run: sudo apt-get update && sudo apt-get install -y libsodium23
+      - name: Confirm keriox's vectors with keripy
+        run: test-vectors/keripy-check.sh

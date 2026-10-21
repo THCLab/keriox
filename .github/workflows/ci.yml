@@ -37,3 +37,19 @@ jobs:
         with:
           command: test
           args: --all-features --verbose  
+
+  # The shared CESR V2 vectors: keriox reads what keripy, cesrox and the
+  # specification write and accepts the same key event logs as keripy, and
+  # keripy confirms what keriox writes. See test-vectors/README.md.
+  interop:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Run the vectors against keriox
+        run: cargo test -p keri-tests --test vectors --test vectors_source
+      - uses: astral-sh/setup-uv@v5
+      - name: Install libsodium for keripy
+        run: sudo apt-get update && sudo apt-get install -y libsodium23
+      - name: Confirm keriox's vectors with keripy
+        run: test-vectors/keripy-check.sh
