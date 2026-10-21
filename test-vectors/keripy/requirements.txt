@@ -1,0 +1,4 @@
+# keripy revision these vectors are generated from. Bump it deliberately:
+# regenerate, review the diff in test-vectors/v2/keripy and update the
+# expected-failure lists in the crates' tests.
+keri @ git+https://github.com/WebOfTrust/keripy@424a50c03421165c5f289e07a341bd57b8d8ab78

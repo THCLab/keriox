@@ -55,3 +55,29 @@ these groups:
 | `keripy/stream/icp/json/framed`, `genusify` | Framing vectors with one of the two required signatures: keriox correctly keeps the event in the partially signed escrow. |
 | `cesrox/stream/icp/JSON/big-attachments` | 190 signatures for three keys, to exercise big counters: correctly rejected. |
 | `cesrox/stream/native/generic-map`, `spec/stream/example/trans-indexed-sig-groups` | Not KERI messages (a generic map, attachments without a message): correctly rejected. |
+
+## keriox as a source
+
+`keriox/` holds vectors keriox writes, in the same layout: key event logs
+(with rotation, a transferable receipt in a `-X` group, witness receipts
+and signatures, delegated inception and rotation) with the events keriox
+accepts, and signed messages (inception in JSON, CBOR and MessagePack, a
+query, replies by transferable and non-transferable signers, an exchange).
+Keys and timestamps are fixed. `keriox_tests/tests/vectors_source.rs`
+regenerates them and fails if they changed; rewrite them with
+`KERIOX_VECTORS_WRITE=1 cargo test -p keri-tests --test vectors_source`.
+
+keripy confirms them with cesrox's checker (`keripy/check.py`, copied by
+`sync.sh`): it walks every stream, loads each body (checking its SAID and
+version string), verifies the controller signatures and replays every key
+event log, which must leave exactly the events keriox accepted.
+
+```sh
+test-vectors/keripy-check.sh            # needs uv and libsodium
+test-vectors/keripy-check.sh --bless    # after an intentional change
+```
+
+`keripy/cross_check.txt` lists what keripy does not confirm: the exchange,
+whose body predates the KERI 1.0 `exn` fields (`i`, `rp`, `p`, `e`), and
+the CBOR inception, until keriox builds with a said release that writes
+definite-length CBOR maps.

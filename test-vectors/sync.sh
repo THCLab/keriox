@@ -18,5 +18,8 @@ fi
 rm -rf "$here/v2"
 cp -r "$cesrox/test-vectors/v2" "$here/v2"
 cp "$cesrox/test-vectors/harness.rs" "$here/harness.rs"
+mkdir -p "$here/keripy"
+cp "$cesrox/test-vectors/sources/keripy/check.py" \
+    "$cesrox/test-vectors/sources/keripy/requirements.txt" "$here/keripy/"
 git -C "$cesrox" rev-parse HEAD > "$here/UPSTREAM"
 echo "copied test-vectors/v2 from cesrox $(cat "$here/UPSTREAM")"

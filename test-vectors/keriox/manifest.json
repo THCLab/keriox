@@ -1,0 +1,14 @@
+{
+  "generator": {
+    "tool": "keriox_tests/tests/vectors_source.rs",
+    "version": "0.1.0",
+    "source": {
+      "implementation": "keriox",
+      "version": "0.1.0"
+    }
+  },
+  "files": {
+    "kels/kels.json": 5,
+    "streams/messages.json": 7
+  }
+}
