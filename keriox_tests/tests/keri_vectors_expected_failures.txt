@@ -59,7 +59,6 @@ v1/keripy/negative/negative/gap/wit-br-ba-internal-duplicates/br	witness-list	br
 v1/keripy/negative/negative/gap/wit-bt-weighted	witness-list	a weighted bt is accepted; bt must be an integer
 v1/keripy/negative/negative/gap/wit-duplicity-unverified/identical	duplicity	re-sending an accepted event records it as duplicitous
 v1/keripy/negative/negative/gap/wit-duplicity-unverified/unverified	duplicity	a different event with an invalid signature is kept as duplicity evidence
-v1/keripy/negative/negative/gap/wit-ksn-ee-swapped	key-state	the key state has no et (last event type)
 v1/keripy/negative/negative/gap/wit-receipt-all-or-nothing/bad-signature	signatures	an event whose valid witness signatures meet bt is not accepted when one more is invalid
 v1/keripy/negative/negative/gap/wit-receipt-all-or-nothing/out-of-range	signatures	an event whose valid witness signatures meet bt is not accepted when one more has an out-of-range index
 v1/keripy/negative/negative/gap/wit-transferable-witness-aid	witness-list	a witness with a transferable (D) code is accepted, and its couple counts as a receipt

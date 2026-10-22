@@ -77,6 +77,20 @@ impl KeriEvent<KeyEvent> {
 impl EventSemantics for KeriEvent<KeyEvent> {
     fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
         let event_digest = self.digest()?;
+        let mut state = self.apply_body_to(state)?;
+        state.last_event_type = Some(self.event_type.clone());
+        // The data of an establishment event only sees the prior event's
+        // digest; its own is known here.
+        if self.event_type.is_establishment_event() {
+            state.last_est.digest = event_digest.into();
+        }
+        Ok(state)
+    }
+}
+
+impl KeriEvent<KeyEvent> {
+    fn apply_body_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
+        let event_digest = self.digest()?;
         self.check_said()?;
         let last_event_digest = &state.last_event_digest.said;
         // Update state.last with serialized current event message.

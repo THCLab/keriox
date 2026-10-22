@@ -93,8 +93,8 @@ impl EventSemantics for RotationEvent {
             let last_est = LastEstablishmentData {
                 sn: state.sn,
                 digest: state.last_event_digest.clone(),
-                br: self.witness_config.graft.clone(),
-                ba: self.witness_config.prune.clone(),
+                br: self.witness_config.prune.clone(),
+                ba: self.witness_config.graft.clone(),
             };
 
             Ok(IdentifierState {

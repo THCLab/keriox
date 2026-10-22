@@ -31,10 +31,11 @@ impl Serialize for KeyStateNotice {
         let mut em = serializer.serialize_struct("Envelope", 17)?;
         em.serialize_field("v", &self.serialization_info)?;
         em.serialize_field("i", &self.state.prefix)?;
-        em.serialize_field("s", &self.state.sn.to_string())?;
+        // Sequence numbers are hex, as everywhere in KERI and as they are read.
+        em.serialize_field("s", &format!("{:x}", self.state.sn))?;
         em.serialize_field("p", &self.state.last_previous.clone())?;
         em.serialize_field("d", &self.state.last_event_digest)?;
-        em.serialize_field("f", &self.first_seen_sn.to_string())?;
+        em.serialize_field("f", &format!("{:x}", self.first_seen_sn))?;
         em.serialize_field(
             "dt",
             &self.timestamp.to_rfc3339_opts(SecondsFormat::Micros, false),
