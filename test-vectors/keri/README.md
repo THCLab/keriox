@@ -204,11 +204,11 @@ then has to be classified by hand.
 | File | Run | Pass | Expected failures |
 |---|---:|---:|---:|
 | `v1/keripy/kels/positive` (15 vectors, each also as `/cesr1`) | 30 | 14 | 16 |
-| `v1/keripy/negative/negative` | 84 | 48 | 36 |
+| `v1/keripy/negative/negative` | 84 | 52 | 32 |
 | `v2/keripy/kels/positive` | 15 | 14 | 1 |
 | `v2/keripy/negative/negative` | 11 | 6 | 5 |
 | `v2/spec/examples` (52 vectors, 6 not checked) | 46 | 14 | 32 |
-| total | 186 | 96 | 90 |
+| total | 186 | 100 | 86 |
 
 ### Expected failures by cause
 
@@ -221,11 +221,10 @@ then has to be classified by hand.
 | `routed-v2` | 8 | It does not read KERI 2.0 `qry`/`rpy` as the specification prints them (with `i`, `/oobi` routes). The specification contradicts itself here: its declared field order has no `i`, but every example and keripy have one. | Query Message Body; Reply Message Body; OOBI sections |
 | `key-event-rules` | 5 | Accepted although the specification forbids them:<br>- `kt=0`;<br>- `nt=0` with a rotation to unrelated keys;<br>- an `ixn` body tagged `rot`;<br>- an unsatisfiable `nt`;<br>- a non-transferable prefix with `n`. | Rotation using pre-rotation; Key and key digest threshold fields; KERI's secure bindings |
 | `pro-bar-xip` | 6 | There are no `pro`, `bar` or `xip` message types. | Routed Messages |
-| `witness-list` | 6 | Duplicates in `b`, `br` and `ba` are accepted, and `ba` naming a current witness duplicates it. A weighted `bt` and a transferable witness AID are accepted. | Backer list; Backer threshold; Backer remove / add lists |
-| `reply-bada` | 4 | BADA problems: a reply with an equal `dt` replaces the stored one. `url ""` is not read, and the roles `registrar` and `mailbox` are not known. | BADA Policy; RUN off the CRUD; OOBI KERI Endpoint Authorization |
+| `witness-list` | 5 | Duplicates in `b`, `br` and `ba` are accepted, and `ba` naming a current witness duplicates it. A weighted `bt` is accepted. | Backer list; Backer threshold; Backer remove / add lists |
+| `reply-bada` | 3 | `url ""` (nullify) is not read, and the roles `registrar` and `mailbox` are not known. | BADA Policy; RUN off the CRUD; OOBI KERI Endpoint Authorization |
 | `nested-threshold` | 5 | It does not read nested weighted thresholds (`{"1/2": [...]}`). | Fractionally weighted threshold |
 | `config` | 1 | It does not enforce `RB` (registrar backers need registrar backer seals). | Configuration traits field |
-| `reply-checks` | 2 | A non-transferable couple with a `D` key signs a reply. An `ACDC` version string is accepted on a reply. | BADA Rules; Version string field |
 | `key-state` | 2 | Key state notices in keripy's shape are not read; the specification defines no key state notice format. | Backer remove / add lists; Reply Message Body |
 | `witness-role` | 1 | A witness accepts remote events: there is no notion of a local channel (a SHOULD-level rule). | Validator Roles and Event Locality |
 | `exn-fields` | 2 | The specification's `exn` fields `[v,t,d,i,ri,x,p,dt,r,q,a]` are not read. | Exchange Message Body |
@@ -239,3 +238,6 @@ Some passes need care when reading them:
 - `endpoint-location-with-scheme-by-eid-update-rpy-json` (a url without a
   scheme, which must be refused) passes for the same reason: keriox does
   not read KERI 2.0 replies with `i`.
+- `gap/wit-transferable-witness-aid` passes because the receipt couple of the
+  `D` key is refused; an inception that names a transferable witness AID is
+  still accepted (`witness-list`).

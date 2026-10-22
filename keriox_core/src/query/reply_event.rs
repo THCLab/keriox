@@ -161,14 +161,15 @@ impl ReplyEvent {
 pub fn bada_logic(new_rpy: &SignedReply, old_rpy: &SignedReply) -> Result<(), QueryError> {
     use std::cmp::Ordering;
 
-    // helper function for reply timestamps checking
+    // An update needs a later date-time than the prior's. The prior itself,
+    // sent again, changes nothing and is let through.
     fn check_dts(new_rpy: &ReplyEvent, old_rpy: &ReplyEvent) -> Result<(), QueryError> {
         let new_dt = new_rpy.get_timestamp();
         let old_dt = old_rpy.get_timestamp();
-        if new_dt >= old_dt {
+        if new_dt > old_dt || new_rpy == old_rpy {
             Ok(())
         } else {
-            Err(QueryError::StaleRpy.into())
+            Err(QueryError::StaleRpy)
         }
     }
     match new_rpy.signature.clone() {
@@ -202,9 +203,11 @@ pub fn bada_logic(new_rpy: &SignedReply, old_rpy: &SignedReply) -> Result<(), Qu
                 Ordering::Greater => Err(QueryError::StaleRpy),
             }
         }
-        Signature::Transferable(_, _sigs) => {
-            todo!()
-        }
+        // The reply comes from the network: a signer the policy cannot
+        // place in its KEL is refused rather than a panic.
+        Signature::Transferable(_, _sigs) => Err(QueryError::Error(
+            "a transferable reply signature needs an event seal".into(),
+        )),
         Signature::NonTransferable(_) => {
             //  If date-time-stamp of new is greater than old
             check_dts(&new_rpy.reply, &old_rpy.reply)

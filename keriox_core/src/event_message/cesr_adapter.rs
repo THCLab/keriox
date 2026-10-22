@@ -495,6 +495,14 @@ impl TryFrom<Payload> for EventType {
         }
         .map_err(ParseError::DeserializeError)?;
 
+        // Every message read here is a KERI message; a body whose version
+        // string names another protocol (ACDC, ...) is not one.
+        let protocol = &event.version().protocol_code;
+        if protocol != "KERI" {
+            return Err(ParseError::DeserializeError(format!(
+                "version string names protocol {protocol}, not KERI"
+            )));
+        }
         let size = event.version().size;
         if size != raw.len() {
             return Err(ParseError::DeserializeError(format!(

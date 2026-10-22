@@ -291,12 +291,12 @@ async fn latest_loc_scheme_picks_newest_dt() -> Result<(), ActorError> {
     use chrono::{DateTime, FixedOffset, TimeZone};
     use keri_core::actor::prelude::{HashFunctionCode, SerializationFormats};
 
-    // A witness identity: any Ed25519 keypair will do — the watcher only
+    // A witness identity: any non-transferable Ed25519 key will do — the watcher only
     // checks that signatures on the loc replies verify against the eid,
     // not that the eid is a real running witness.
     let witness_signer = Signer::new();
     let witness_pk = witness_signer.public_key();
-    let witness_prefix = BasicPrefix::Ed25519(witness_pk);
+    let witness_prefix = BasicPrefix::Ed25519NT(witness_pk);
     let witness_eid = IdentifierPrefix::Basic(witness_prefix.clone());
 
     // Spin up a watcher with on-disk redb so the OOBI manager exercises

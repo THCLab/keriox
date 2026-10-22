@@ -25,8 +25,9 @@ mod test_query {
             BasicProcessor::new(events_db.clone(), Some(notification_bus)),
             EventStorage::new(events_db.clone()),
         );
-        // Process inception event and its receipts. To accept inception event it must be fully witnessed.
-        let events_raw = r#"{"v":"KERI10JSON000159_","t":"icp","d":"ENRc2DeK48BKJ3ST8mypvngVwEAxw9rZr_GPNP25TmQ_","i":"ENRc2DeK48BKJ3ST8mypvngVwEAxw9rZr_GPNP25TmQ_","s":"0","kt":"1","k":["DDhKvndcqZlJNx-mtC_5eTy7UiuxOPVgAV3HsmofP2Ll"],"nt":"1","n":["EOOlrw-1jQHp8IfE1mfOb_ikXpHksVSyZ0RCnu5X0Rfg"],"bt":"0","b":["DNjeO6mfXSbrFFdk5UjDmioaho6ON0Sp6JMfhKz2jJF-"],"c":[],"a":[]}-KAWAAD34oIVuxmLLKldRCzhfxR9hNg2SOMbOKZn1hp6D1OBmA6Hut6gSID21vFk50ost8_-VNbjHIQnHZ8WulUJ_yQL{"v":"KERI10JSON000091_","t":"rct","d":"ENRc2DeK48BKJ3ST8mypvngVwEAxw9rZr_GPNP25TmQ_","i":"ENRc2DeK48BKJ3ST8mypvngVwEAxw9rZr_GPNP25TmQ_","s":"0"}-MAhDNjeO6mfXSbrFFdk5UjDmioaho6ON0Sp6JMfhKz2jJF-0BCTI8wy4v_Iyiyh4cSuG02R-K4GZHMXQVyC3yckpPpev0yWUiuera6q7ErDIQDLvjnMG5UuE2Ycw8-sxzeybicP"#;
+        // Process the inception event. Its witness threshold is 0, so it is
+        // accepted without receipts.
+        let events_raw = r#"{"v":"KERI10JSON000159_","t":"icp","d":"ENRc2DeK48BKJ3ST8mypvngVwEAxw9rZr_GPNP25TmQ_","i":"ENRc2DeK48BKJ3ST8mypvngVwEAxw9rZr_GPNP25TmQ_","s":"0","kt":"1","k":["DDhKvndcqZlJNx-mtC_5eTy7UiuxOPVgAV3HsmofP2Ll"],"nt":"1","n":["EOOlrw-1jQHp8IfE1mfOb_ikXpHksVSyZ0RCnu5X0Rfg"],"bt":"0","b":["DNjeO6mfXSbrFFdk5UjDmioaho6ON0Sp6JMfhKz2jJF-"],"c":[],"a":[]}-KAWAAD34oIVuxmLLKldRCzhfxR9hNg2SOMbOKZn1hp6D1OBmA6Hut6gSID21vFk50ost8_-VNbjHIQnHZ8WulUJ_yQL"#;
         let to_process = parse_event_stream(events_raw.as_bytes())?;
         for msg in to_process {
             if let Message::Notice(msg) = msg {

@@ -114,12 +114,20 @@ pub fn couplets_verify(couplets: &[(BasicPrefix, SelfSigningPrefix)], data: &[u8
     !couplets.is_empty()
         && couplets
             .iter()
-            .all(|(signer, signature)| signer.verify(data, signature).unwrap_or(false))
+            .all(|(signer, signature)| couple_verifies(signer, signature, data))
+}
+
+/// Whether a non-transferable couple signs `data`. The couple names no key
+/// state, so the KERI specification only lets an AID with a
+/// non-transferable code, whose key state is fixed, sign this way: the key
+/// of a transferable AID may have been rotated out.
+fn couple_verifies(signer: &BasicPrefix, signature: &SelfSigningPrefix, data: &[u8]) -> bool {
+    !signer.is_transferable() && signer.verify(data, signature).unwrap_or(false)
 }
 
 /// The witness signatures of `receipts` that sign `data`: an indexed
 /// signature whose index names one of `witnesses` and is that witness's, and
-/// a couple whose signature is its key's. The rest are dropped, together
+/// a couple of a non-transferable key whose signature is that key's. The rest are dropped, together
 /// with any group left empty, so one bad signature cannot void the others.
 pub fn verified_witness_signatures(
     receipts: impl IntoIterator<Item = Nontransferable>,
@@ -143,7 +151,7 @@ pub fn verified_witness_signatures(
             Nontransferable::Couplet(couplets) => Nontransferable::Couplet(
                 couplets
                     .into_iter()
-                    .filter(|(signer, signature)| signer.verify(data, signature).unwrap_or(false))
+                    .filter(|(signer, signature)| couple_verifies(signer, signature, data))
                     .collect(),
             ),
         })
