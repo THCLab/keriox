@@ -35,6 +35,22 @@ fn test_saidify_json() {
 }
 
 #[test]
+fn saidify_json_keeps_nested_field_order() {
+    // The digest covers the bytes as given, so a nested object must come out
+    // in the order it went in, not sorted.
+    let data = r#"{"d":"","a":{"z":1,"b":[{"y":true,"c":null}]},"0":"x"}"#;
+    let saidified = signing::saidify_json(data, HashFunctionCode::Blake3_256).unwrap();
+
+    let to_compute = data.replacen(r#""d":"""#, &format!(r#""d":"{}""#, "#".repeat(44)), 1);
+    let expected_said =
+        HashFunction::from(HashFunctionCode::Blake3_256).derive(to_compute.as_bytes());
+    assert_eq!(
+        saidified,
+        data.replacen(r#""d":"""#, &format!(r#""d":"{expected_said}""#), 1)
+    );
+}
+
+#[test]
 fn test_compute_said() {
     let data = b"hello world";
     let said = signing::compute_said(data, HashFunctionCode::Blake3_256);

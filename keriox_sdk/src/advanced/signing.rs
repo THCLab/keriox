@@ -41,17 +41,25 @@ use crate::advanced::{
 // parseable. The `e` (encoding) field disambiguates text vs. base64 data.
 
 pub(crate) fn wrap_payload(data: &[u8]) -> Result<String> {
-    let (p, e): (&str, &str) = if let Ok(s) = std::str::from_utf8(data) {
-        (s, "text")
-    } else {
-        return Ok(serde_json::to_string(&serde_json::json!({
-            "p": base64::encode_config(data, base64::URL_SAFE_NO_PAD),
-            "e": "b64"
-        }))
-        .map_err(|e| Error::EncodingError(e.to_string()))?);
+    // A struct, not `json!`: its fields are written in declaration order,
+    // while a `serde_json::Value` map is written in whatever order serde_json
+    // features chosen elsewhere in the build give it.
+    #[derive(serde::Serialize)]
+    struct Envelope<'a> {
+        p: std::borrow::Cow<'a, str>,
+        e: &'static str,
+    }
+    let envelope = match std::str::from_utf8(data) {
+        Ok(s) => Envelope {
+            p: s.into(),
+            e: "text",
+        },
+        Err(_) => Envelope {
+            p: base64::encode_config(data, base64::URL_SAFE_NO_PAD).into(),
+            e: "b64",
+        },
     };
-    serde_json::to_string(&serde_json::json!({ "p": p, "e": e }))
-        .map_err(|e| Error::EncodingError(e.to_string()))
+    serde_json::to_string(&envelope).map_err(|e| Error::EncodingError(e.to_string()))
 }
 
 fn unwrap_payload(json_bytes: &[u8]) -> Result<Vec<u8>> {
@@ -272,7 +280,9 @@ pub fn compute_said(data: &[u8], code: HashFunctionCode) -> SelfAddressingIdenti
 pub fn saidify_json(json: &str, code: HashFunctionCode) -> Result<String> {
     use cesrox::derivation_code::DerivationCode;
 
-    let mut map: indexmap::IndexMap<String, serde_json::Value> = serde_json::from_str(json)
+    // said's `Value` keeps every nested map in the order it was given; the
+    // digest covers these bytes, so nothing in them may be re-ordered.
+    let mut map: indexmap::IndexMap<String, said::value::Value> = serde_json::from_str(json)
         .map_err(|e| Error::EncodingError(format!("invalid JSON object: {e}")))?;
 
     if !map.contains_key("d") {
@@ -281,11 +291,11 @@ pub fn saidify_json(json: &str, code: HashFunctionCode) -> Result<String> {
         ));
     }
 
-    map["d"] = serde_json::Value::String("#".repeat(code.full_size()));
+    map["d"] = said::value::Value::String("#".repeat(code.full_size()));
     let derivation_data =
         serde_json::to_vec(&map).map_err(|e| Error::EncodingError(e.to_string()))?;
     let said = HashFunction::from(code).derive(&derivation_data);
-    map["d"] = serde_json::Value::String(said.to_string());
+    map["d"] = said::value::Value::String(said.to_string());
 
     serde_json::to_string(&map).map_err(|e| Error::EncodingError(e.to_string()))
 }
@@ -355,4 +365,20 @@ pub fn sign_nontransferable(
     let mut stream = payload.to_vec();
     stream.extend_from_slice(encode_group(&group, WireFormat::default()).as_bytes());
     Ok(stream)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // The envelope is what gets signed, so its bytes are part of the format:
+    // `p` before `e`, whatever order serde_json would pick for a map.
+    #[test]
+    fn the_payload_envelope_is_unchanged() {
+        assert_eq!(wrap_payload(b"hi").unwrap(), r#"{"p":"hi","e":"text"}"#);
+        assert_eq!(
+            wrap_payload(&[0xff, 0x00]).unwrap(),
+            r#"{"p":"_wA","e":"b64"}"#
+        );
+    }
 }

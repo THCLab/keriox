@@ -573,9 +573,13 @@ fn check_or_write(dir: &Path, format: WireFormat, write: bool) {
             fs::create_dir_all(path.parent().unwrap()).unwrap();
             fs::write(&path, text).unwrap();
         } else {
+            // Compared as JSON, not as text: which order a map's keys are
+            // written in depends on serde_json features this crate does not
+            // control, and none of the vectors' content lives in it.
             let committed = fs::read_to_string(&path).unwrap_or_default();
+            let committed: Option<Value> = serde_json::from_str(&committed).ok();
             assert!(
-                committed == text,
+                committed.as_ref() == Some(&value),
                 "{} differs from what keriox writes now; after an intentional \
                  change run with {WRITE_ENV}=1",
                 path.display()
