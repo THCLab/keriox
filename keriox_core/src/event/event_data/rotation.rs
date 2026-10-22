@@ -32,6 +32,11 @@ pub struct RotationEvent {
     #[serde(flatten)]
     pub witness_config: RotationWitnessConfig,
 
+    /// Configuration traits (`c`): REQUIRED in KERI 2.0 bodies, absent from
+    /// KERI 1.0 ones.
+    #[serde(rename = "c", default, skip_serializing_if = "Option::is_none")]
+    pub config: Option<Vec<String>>,
+
     #[serde(rename = "a")]
     pub data: Vec<Seal>,
 }
@@ -47,6 +52,7 @@ impl RotationEvent {
             previous_event_hash: previous_event_hash.into(),
             key_config: kc,
             witness_config,
+            config: None,
             data,
         }
     }

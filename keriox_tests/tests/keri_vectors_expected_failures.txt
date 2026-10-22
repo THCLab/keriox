@@ -63,23 +63,7 @@ v1/keripy/negative/negative/gap/wit-receipt-all-or-nothing/bad-signature	signatu
 v1/keripy/negative/negative/gap/wit-receipt-all-or-nothing/out-of-range	signatures	an event whose valid witness signatures meet bt is not accepted when one more has an out-of-range index
 v1/keripy/negative/negative/gap/wit-transferable-witness-aid	witness-list	a witness with a transferable (D) code is accepted, and its couple counts as a receipt
 v1/keripy/negative/negative/gap/wit-witness-local-remote	witness-role	a witness accepts and receipts a remote event; keriox has no notion of a local (protected) channel
-v2/keripy/kels/positive/kel/abandon/rot-to-empty-next	v2-rot-c	the KEL's KERI 2.0 rot/drt (with c) is not read
-v2/keripy/kels/positive/kel/deleg/dip-before-anchor	v2-rot-c	the KEL's KERI 2.0 rot/drt (with c) is not read
-v2/keripy/kels/positive/kel/deleg/dip-drt	v2-rot-c	the KEL's KERI 2.0 rot/drt (with c) is not read
-v2/keripy/kels/positive/kel/icp/basic-transferable	v2-rot-c	the KEL's KERI 2.0 rot/drt (with c) is not read
-v2/keripy/kels/positive/kel/icp/multisig	v2-rot-c	the KEL's KERI 2.0 rot/drt (with c) is not read
-v2/keripy/kels/positive/kel/icp/nontransferable	v2-rot-c	the KEL's KERI 2.0 rot/drt (with c) is not read
-v2/keripy/kels/positive/kel/icp/self-addressing	v2-rot-c	the KEL's KERI 2.0 rot/drt (with c) is not read
-v2/keripy/kels/positive/kel/order/reversed	v2-rot-c	the KEL's KERI 2.0 rot/drt (with c) is not read
-v2/keripy/kels/positive/kel/rot/augmented	v2-rot-c	the KEL's KERI 2.0 rot/drt (with c) is not read
-v2/keripy/kels/positive/kel/rot/custodial-spec-example	v2-rot-c	the KEL's KERI 2.0 rot/drt (with c) is not read
-v2/keripy/kels/positive/kel/rot/partial	v2-rot-c	the KEL's KERI 2.0 rot/drt (with c) is not read
-v2/keripy/kels/positive/kel/rot/reserve-spec-example	v2-rot-c	the KEL's KERI 2.0 rot/drt (with c) is not read
-v2/keripy/kels/positive/kel/wit/indexed-cuts-adds	v2-rot-c	the KEL's KERI 2.0 rot/drt (with c) is not read
-v2/keripy/negative/negative/gap/kel-rot-c-field-v2/drt-with-c	v2-rot-c	a KERI 2.0 rot/drt with the required c field is not read
-v2/keripy/negative/negative/gap/kel-rot-c-field-v2/drt-without-c	v2-rot-c	a KERI 2.0 rot/drt without the required c field is accepted
-v2/keripy/negative/negative/gap/kel-rot-c-field-v2/rot-with-c	v2-rot-c	a KERI 2.0 rot/drt with the required c field is not read
-v2/keripy/negative/negative/gap/kel-rot-c-field-v2/rot-without-c	v2-rot-c	a KERI 2.0 rot/drt without the required c field is accepted
+v2/keripy/kels/positive/kel/deleg/dip-before-anchor	deleg	a drt that arrives before its dip and before both anchors is never accepted once they arrive
 v2/keripy/negative/negative/gap/rm-exn-fields/spec-shape	exn-fields	the specification's exn fields [v,t,d,i,ri,x,p,dt,r,q,a] are not read
 v2/keripy/negative/negative/gap/rm-pro-bar-xip-missing/bar	pro-bar-xip	no bar message type
 v2/keripy/negative/negative/gap/rm-pro-bar-xip-missing/pro	pro-bar-xip	no pro message type
@@ -88,7 +72,6 @@ v2/keripy/negative/negative/gap/rm-routed-i-field-ambiguity	routed-v2	a KERI 2.0
 v2/spec/examples/spec/message/bare-message-bar-cesr	native-cesr	native CESR message bodies are not supported
 v2/spec/examples/spec/message/delegated-inception-dip-cesr	native-cesr	native CESR message bodies are not supported
 v2/spec/examples/spec/message/delegated-rotation-drt-cesr	native-cesr	native CESR message bodies are not supported
-v2/spec/examples/spec/message/delegated-rotation-event-example-drt-json	v2-rot-c	the specification's KERI 2.0 rot/drt (with c) is not read
 v2/spec/examples/spec/message/endpoint-location-with-scheme-by-eid-nullify-via-empty-url-rpy-json	routed-v2	a /loc/scheme rpy with i and url "" is not read
 v2/spec/examples/spec/message/example-bare-message-bar-json	pro-bar-xip	no bar message type
 v2/spec/examples/spec/message/example-exchange-transaction-inception-message-xip-json	pro-bar-xip	no xip message type
@@ -108,7 +91,6 @@ v2/spec/examples/spec/message/prod-message-pro-cesr	native-cesr	native CESR mess
 v2/spec/examples/spec/message/query-message-qry-cesr	native-cesr	native CESR message bodies are not supported
 v2/spec/examples/spec/message/receipt-rct-cesr	native-cesr	native CESR message bodies are not supported
 v2/spec/examples/spec/message/reply-message-rpy-cesr	native-cesr	native CESR message bodies are not supported
-v2/spec/examples/spec/message/rotation-event-example-rot-json	v2-rot-c	the specification's KERI 2.0 rot/drt (with c) is not read
 v2/spec/examples/spec/message/rotation-rot-cesr	native-cesr	native CESR message bodies are not supported
 v2/spec/examples/spec/seal/key-event-seal	seal-types	an event seal with a malformed i reads as a digest seal (i and s dropped) instead of being refused
 v2/spec/examples/spec/seal/latest-establishment-event-seal	seal-types	no latest establishment seal {i}

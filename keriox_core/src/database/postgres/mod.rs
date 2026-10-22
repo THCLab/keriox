@@ -89,6 +89,49 @@ impl PostgresDatabase {
         sqlx::migrate!("src/database/postgres/migrations")
             .run(&self.pool)
             .await?;
+        self.migrate_events_layout().await
+    }
+
+    /// Brings stored key events to the current layout, as the redb backend
+    /// does: without a recorded layout version, every event is read in the
+    /// layout before rotations had a configuration traits field and written
+    /// in the new one, in one transaction, before the version is recorded. A
+    /// database of a newer layout is refused rather than misread.
+    async fn migrate_events_layout(&self) -> Result<(), PostgresError> {
+        use crate::database::rkyv_adapter::legacy_events::{upgrade_event, EVENTS_LAYOUT};
+
+        let mut tx = self.pool.begin().await?;
+        let stored: Option<(i64,)> =
+            sqlx::query_as("SELECT value FROM keriox_meta WHERE key = 'events_layout'")
+                .fetch_optional(&mut *tx)
+                .await?;
+        match stored.map(|(layout,)| layout as u64) {
+            Some(layout) if layout == EVENTS_LAYOUT => return Ok(()),
+            Some(layout) if layout > EVENTS_LAYOUT => {
+                return Err(PostgresError::UnsupportedLayout(layout))
+            }
+            _ => {}
+        }
+        let events: Vec<(Vec<u8>, Vec<u8>)> =
+            sqlx::query_as("SELECT digest, event_data FROM events")
+                .fetch_all(&mut *tx)
+                .await?;
+        for (digest, event_data) in events {
+            let upgraded = upgrade_event(&event_data).map_err(PostgresError::EventMigration)?;
+            sqlx::query("UPDATE events SET event_data = $2 WHERE digest = $1")
+                .bind(&digest)
+                .bind(upgraded.as_slice())
+                .execute(&mut *tx)
+                .await?;
+        }
+        sqlx::query(
+            "INSERT INTO keriox_meta (key, value) VALUES ('events_layout', $1) \
+             ON CONFLICT (key) DO UPDATE SET value = $1",
+        )
+        .bind(EVENTS_LAYOUT as i64)
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
         Ok(())
     }
 
@@ -476,6 +519,77 @@ mod tests {
         let signed = ke.sign(vec![IndexedSignature::new_both_same(sig, 0)], None, None);
         let prefix = signed.event_message.data.get_prefix();
         (prefix, signed)
+    }
+
+    /// Events stored by an earlier version (old layout, no layout version)
+    /// read after the migration. Needs its own empty database on the
+    /// DATABASE_URL server: the old layout is assumed for every stored event.
+    #[async_std::test]
+    #[ignore]
+    async fn events_stored_by_an_earlier_version_are_read_after_upgrade() {
+        use crate::{
+            database::{rkyv_adapter::legacy_events::tests::old_layout, LogDatabase},
+            event_message::event_msg_builder::EventMsgBuilder,
+            signer::Signer,
+        };
+
+        let url = get_database_url();
+        let (server, _) = url.rsplit_once('/').unwrap();
+        let name = format!("keri_layout_{}", std::process::id());
+        let admin = sqlx::PgPool::connect(&format!("{server}/postgres")).await.unwrap();
+        sqlx::query(&format!("DROP DATABASE IF EXISTS {name}"))
+            .execute(&admin)
+            .await
+            .unwrap();
+        sqlx::query(&format!("CREATE DATABASE {name}"))
+            .execute(&admin)
+            .await
+            .unwrap();
+
+        let db = PostgresDatabase::new(&format!("{server}/{name}")).await.unwrap();
+        sqlx::migrate!("src/database/postgres/migrations")
+            .run(&db.pool)
+            .await
+            .unwrap();
+
+        let (current, next) = (Signer::new(), Signer::new());
+        let icp = EventMsgBuilder::new(EventTypeTag::Icp)
+            .with_keys(vec![BasicPrefix::Ed25519(current.public_key())])
+            .with_next_keys(vec![BasicPrefix::Ed25519(next.public_key())])
+            .build()
+            .unwrap();
+        let rot = EventMsgBuilder::new(EventTypeTag::Rot)
+            .with_prefix(&icp.data.get_prefix())
+            .with_sn(1)
+            .with_previous_event(&icp.digest().unwrap())
+            .with_keys(vec![BasicPrefix::Ed25519(next.public_key())])
+            .with_next_keys(vec![BasicPrefix::Ed25519(Signer::new().public_key())])
+            .build()
+            .unwrap();
+        for event in [&icp, &rot] {
+            sqlx::query("INSERT INTO events (digest, event_data) VALUES ($1, $2)")
+                .bind(rkyv_adapter::serialize_said(&event.digest().unwrap()).unwrap().as_slice())
+                .bind(old_layout(event).as_slice())
+                .execute(&db.pool)
+                .await
+                .unwrap();
+        }
+
+        db.migrate_events_layout().await.unwrap();
+        for event in [&icp, &rot] {
+            let read = db.log_db.get_event(&event.digest().unwrap()).unwrap();
+            assert_eq!(read.as_ref(), Some(event));
+        }
+        // A second run leaves them as they are.
+        db.migrate_events_layout().await.unwrap();
+        let read = db.log_db.get_event(&rot.digest().unwrap()).unwrap();
+        assert_eq!(read.as_ref(), Some(&rot));
+
+        // The log database keeps its own connections.
+        sqlx::query(&format!("DROP DATABASE {name} WITH (FORCE)"))
+            .execute(&admin)
+            .await
+            .unwrap();
     }
 
     #[async_std::test]

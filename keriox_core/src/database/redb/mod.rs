@@ -66,6 +66,10 @@ pub enum RedbError {
     Rkyv(#[from] rkyv::rancor::Error),
     #[error("Already saved: {0}")]
     AlreadySaved(SelfAddressingIdentifier),
+    #[error("The database stores key events in layout {0}, newer than this keriox reads")]
+    UnsupportedLayout(u64),
+    #[error("Migrating stored key events failed: {0}")]
+    Migration(String),
 }
 
 #[derive(Debug, thiserror::Error)]

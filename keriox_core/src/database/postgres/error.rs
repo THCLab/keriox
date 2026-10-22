@@ -16,4 +16,8 @@ pub enum PostgresError {
     MissingDigest,
     #[error("Already saved: {0}")]
     AlreadySaved(said::SelfAddressingIdentifier),
+    #[error("The database stores key events in layout {0}, newer than this keriox reads")]
+    UnsupportedLayout(u64),
+    #[error("Migrating stored key events failed: {0}")]
+    EventMigration(String),
 }

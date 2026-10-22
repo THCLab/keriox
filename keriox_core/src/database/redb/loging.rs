@@ -19,6 +19,10 @@ const TRANS_RCTS: MultimapTableDefinition<&[u8], &[u8]> =
 /// Delegating Event Seals (event digest) -> seal
 const SEALS: TableDefinition<&[u8], &[u8]> = TableDefinition::new("seals");
 
+/// Database metadata: the layout version of stored key events.
+const META: TableDefinition<&str, u64> = TableDefinition::new("keriox_meta");
+const EVENTS_LAYOUT_KEY: &str = "events_layout";
+
 use std::sync::Arc;
 
 use redb::{Database, MultimapTableDefinition, TableDefinition};
@@ -72,6 +76,7 @@ impl<'db> LogDatabaseTrait<'db> for LogDatabase {
             write_txn.open_table(SEALS)?;
         }
         write_txn.commit()?;
+        migrate_events_layout(&db)?;
         Ok(Self { db })
     }
 
@@ -187,6 +192,44 @@ impl<'db> LogDatabaseTrait<'db> for LogDatabase {
     ) -> Result<(), RedbError> {
         self.remove_nontrans_receipt(&WriteTxnMode::CreateNew, said, nontrans)
     }
+}
+
+/// Brings stored key events to the current layout. A database without a
+/// layout version was written before rotations had a configuration traits
+/// field: each of its events is read in the old layout and written in the
+/// new one, all in one transaction, before the version is recorded. A
+/// database of a newer layout is refused rather than misread.
+fn migrate_events_layout(db: &Database) -> Result<(), RedbError> {
+    use crate::database::rkyv_adapter::legacy_events::{upgrade_event, EVENTS_LAYOUT};
+    use redb::ReadableTable;
+
+    let write_txn = db.begin_write()?;
+    {
+        let mut meta = write_txn.open_table(META)?;
+        let stored = meta.get(EVENTS_LAYOUT_KEY)?.map(|v| v.value());
+        match stored {
+            Some(layout) if layout == EVENTS_LAYOUT => return Ok(()),
+            Some(layout) if layout > EVENTS_LAYOUT => {
+                return Err(RedbError::UnsupportedLayout(layout))
+            }
+            _ => {
+                let mut events = write_txn.open_table(EVENTS)?;
+                let stored_events = events
+                    .iter()?
+                    .map(|entry| {
+                        entry.map(|(key, value)| (key.value().to_vec(), value.value().to_vec()))
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                for (key, value) in stored_events {
+                    let upgraded = upgrade_event(&value).map_err(RedbError::Migration)?;
+                    events.insert(key.as_slice(), upgraded.as_slice())?;
+                }
+                meta.insert(EVENTS_LAYOUT_KEY, EVENTS_LAYOUT)?;
+            }
+        }
+    }
+    write_txn.commit()?;
+    Ok(())
 }
 
 impl LogDatabase {
@@ -482,4 +525,145 @@ fn test_retrieve_receipts() {
         .get_nontrans_couplets(&recipted_event_digest)
         .unwrap();
     assert_eq!(retrived_rcts.unwrap().count(), 2);
+}
+
+#[cfg(test)]
+mod layout_migration {
+    use redb::Database;
+    use tempfile::NamedTempFile;
+
+    use super::{RedbError, EVENTS, EVENTS_LAYOUT_KEY, META};
+    use crate::{
+        database::{
+            redb::RedbDatabase,
+            rkyv_adapter::{self, legacy_events::tests::old_layout},
+            LogDatabase,
+        },
+        event::{sections::threshold::SignatureThreshold, KeyEvent},
+        event_message::{event_msg_builder::EventMsgBuilder, msg::KeriEvent, EventTypeTag},
+        prefix::BasicPrefix,
+        signer::Signer,
+    };
+
+    fn kel() -> Vec<KeriEvent<KeyEvent>> {
+        let (current, next) = (Signer::new(), Signer::new());
+        let icp = EventMsgBuilder::new(EventTypeTag::Icp)
+            .with_keys(vec![BasicPrefix::Ed25519(current.public_key())])
+            .with_next_keys(vec![BasicPrefix::Ed25519(next.public_key())])
+            .build()
+            .unwrap();
+        let id = icp.data.get_prefix();
+        let rot = EventMsgBuilder::new(EventTypeTag::Rot)
+            .with_prefix(&id)
+            .with_sn(1)
+            .with_previous_event(&icp.digest().unwrap())
+            .with_keys(vec![BasicPrefix::Ed25519(next.public_key())])
+            .with_next_keys(vec![BasicPrefix::Ed25519(Signer::new().public_key())])
+            .with_threshold(&SignatureThreshold::Simple(1))
+            .build()
+            .unwrap();
+        let ixn = EventMsgBuilder::new(EventTypeTag::Ixn)
+            .with_prefix(&id)
+            .with_sn(2)
+            .with_previous_event(&rot.digest().unwrap())
+            .build()
+            .unwrap();
+        vec![icp, rot, ixn]
+    }
+
+    /// A database file as an earlier keriox left it: events in the old
+    /// layout and no layout version.
+    fn old_database(events: &[KeriEvent<KeyEvent>]) -> NamedTempFile {
+        let file = NamedTempFile::new().unwrap();
+        let db = Database::create(file.path()).unwrap();
+        let write_txn = db.begin_write().unwrap();
+        {
+            let mut table = write_txn.open_table(EVENTS).unwrap();
+            for event in events {
+                let key = rkyv_adapter::serialize_said(&event.digest().unwrap()).unwrap();
+                table
+                    .insert(key.as_slice(), old_layout(event).as_slice())
+                    .unwrap();
+            }
+        }
+        write_txn.commit().unwrap();
+        file
+    }
+
+    fn layout(file: &NamedTempFile) -> Option<u64> {
+        let db = Database::create(file.path()).unwrap();
+        let read_txn = db.begin_read().unwrap();
+        // No table: nothing was ever recorded.
+        let Ok(meta) = read_txn.open_table(META) else {
+            return None;
+        };
+        let layout = meta.get(EVENTS_LAYOUT_KEY).unwrap().map(|v| v.value());
+        layout
+    }
+
+    #[test]
+    fn events_stored_by_an_earlier_version_are_read_after_upgrade() {
+        let events = kel();
+        let file = old_database(&events);
+
+        let db = RedbDatabase::new(file.path()).unwrap();
+        for event in &events {
+            let read = db.log_db.get_event(&event.digest().unwrap()).unwrap();
+            assert_eq!(read.as_ref(), Some(event));
+        }
+        drop(db);
+        assert_eq!(layout(&file), Some(1));
+
+        // Opening again leaves the events as they are.
+        let db = RedbDatabase::new(file.path()).unwrap();
+        let read = db.log_db.get_event(&events[1].digest().unwrap()).unwrap();
+        assert_eq!(read.as_ref(), Some(&events[1]));
+    }
+
+    #[test]
+    fn a_new_database_records_the_current_layout() {
+        let file = NamedTempFile::new().unwrap();
+        drop(RedbDatabase::new(file.path()).unwrap());
+        assert_eq!(layout(&file), Some(1));
+    }
+
+    #[test]
+    fn a_database_of_a_newer_layout_is_refused() {
+        let file = NamedTempFile::new().unwrap();
+        {
+            let db = Database::create(file.path()).unwrap();
+            let write_txn = db.begin_write().unwrap();
+            write_txn
+                .open_table(META)
+                .unwrap()
+                .insert(EVENTS_LAYOUT_KEY, 2)
+                .unwrap();
+            write_txn.commit().unwrap();
+        }
+        assert!(matches!(
+            RedbDatabase::new(file.path()),
+            Err(RedbError::UnsupportedLayout(2))
+        ));
+    }
+
+    #[test]
+    fn an_unreadable_event_stops_the_migration_without_changes() {
+        let events = kel();
+        let file = old_database(&events);
+        {
+            let db = Database::create(file.path()).unwrap();
+            let write_txn = db.begin_write().unwrap();
+            write_txn
+                .open_table(EVENTS)
+                .unwrap()
+                .insert(b"garbage".as_slice(), b"not an event".as_slice())
+                .unwrap();
+            write_txn.commit().unwrap();
+        }
+        assert!(matches!(
+            RedbDatabase::new(file.path()),
+            Err(RedbError::Migration(_))
+        ));
+        assert_eq!(layout(&file), None);
+    }
 }

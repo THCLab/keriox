@@ -11,6 +11,7 @@ use crate::{
     state::IdentifierState,
 };
 
+pub(crate) mod legacy_events;
 pub(crate) mod said_wrapper;
 pub(crate) mod serialization_info_wrapper;
 

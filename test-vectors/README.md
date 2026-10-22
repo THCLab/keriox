@@ -48,7 +48,7 @@ these groups:
 |---|---|
 | `keripy/indexer/ECDSA_256r1_*` | cesrox uses other codes for indexed P-256 signatures than keripy. |
 | `keripy/indexer/Ed448_*/262143*` | keriox stores signature indexes as 16-bit numbers. |
-| `keripy/kel/2/*` with a rotation, `keripy/stream/qry/json/lsgs` | keriox models KERI 1.0 bodies: a KERI 2.0 rotation carries configuration traits in `c` and a KERI 2.0 query the sender in `i`. Inceptions, interactions, delegated inceptions and receipts read in both versions. |
+| `keripy/stream/qry/json/lsgs` | keriox models KERI 1.0 query bodies: a KERI 2.0 query carries the sender in `i`. Key events read in both versions. |
 | `keripy/stream/icp/CESR/3sig` | Native CESR message bodies are not supported. |
 | `keripy/neg/version/v2-unknown-proto` | said accepts any upper-case protocol code in a version string. |
 | `keripy/stream/icp/json/framed`, `genusify` | Framing vectors with one of the two required signatures: keriox correctly keeps the event in the partially signed escrow. |

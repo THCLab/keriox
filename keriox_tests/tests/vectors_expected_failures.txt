@@ -23,16 +23,6 @@ keripy/indexer/Ed448_Big_Crt_Sig/262143/None	fail	Signature index 262143 does no
 keripy/indexer/Ed448_Big_Sig/1/262143	fail	Signature index 262143 does not fit in 16 bits
 keripy/indexer/Ed448_Big_Sig/262143/262143	fail	Signature index 262143 does not fit in 16 bits
 keripy/indexer/Ed448_Big_Sig/262143/None	fail	Signature index 262143 does not fit in 16 bits
-keripy/kel/2/icp-rot-ixn	fail	parse: Deserialize error: body differs from its canonical serialization
-keripy/kel/2/out-of-order	fail	parse: Deserialize error: body differs from its canonical serialization
-keripy/kel/2/reject/below-threshold	fail	parse: Deserialize error: body differs from its canonical serialization
-keripy/kel/2/reject/index-out-of-range	fail	parse: Deserialize error: body differs from its canonical serialization
-keripy/kel/2/reject/keys-not-committed	fail	parse: Deserialize error: body differs from its canonical serialization
-keripy/kel/2/reject/said-of-other-event	fail	parse: Deserialize error: body differs from its canonical serialization
-keripy/kel/2/reject/signature-of-other-event	fail	parse: Deserialize error: body differs from its canonical serialization
-keripy/kel/2/reject/wrong-prior	fail	parse: Deserialize error: body differs from its canonical serialization
-keripy/kel/2/threshold-met	fail	parse: Deserialize error: body differs from its canonical serialization
-keripy/kel/2/weighted-partial-rotation	fail	parse: Deserialize error: body differs from its canonical serialization
 keripy/neg/version/v2-unknown-proto	fail	version input accepted
 keripy/stream/icp/CESR/3sig	fail	parse: Deserialize error: native CESR message bodies are not supported
 keripy/stream/icp/json/framed	fail	EDBNIOEXJVn0v4kcl9ke45PVwlEdif7BdbY8QVgLVd24 sn 0 EDBNIOEXJVn0v4kcl9ke45PVwlEdif7BdbY8QVgLVd24 was not accepted

@@ -77,6 +77,7 @@ impl KeriEvent<KeyEvent> {
 impl EventSemantics for KeriEvent<KeyEvent> {
     fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
         let event_digest = self.digest()?;
+        self.check_rotation_config()?;
         let mut state = self.apply_body_to(state)?;
         state.last_event_type = Some(self.event_type.clone());
         // The data of an establishment event only sees the prior event's
@@ -89,6 +90,39 @@ impl EventSemantics for KeriEvent<KeyEvent> {
 }
 
 impl KeriEvent<KeyEvent> {
+    /// The configuration traits field `c` of a rotation: REQUIRED in a KERI
+    /// 2.0 body and absent from a KERI 1.0 one. Traits that may only appear
+    /// in an inception are not allowed.
+    fn check_rotation_config(&self) -> Result<(), Error> {
+        let (EventData::Rot(rot) | EventData::Drt(rot)) = &self.data.event_data else {
+            return Ok(());
+        };
+        match (self.serialization_info.major_version, &rot.config) {
+            (2, None) => {
+                return Err(Error::SemanticError(
+                    "a KERI 2.0 rotation requires the configuration traits field c".into(),
+                ))
+            }
+            (1, Some(_)) => {
+                return Err(Error::SemanticError(
+                    "a KERI 1.0 rotation has no configuration traits field c".into(),
+                ))
+            }
+            _ => {}
+        }
+        match rot
+            .config
+            .iter()
+            .flatten()
+            .find(|t| ["EO", "DND", "DID"].contains(&t.as_str()))
+        {
+            Some(t) => Err(Error::ConfigTraitViolation(format!(
+                "{t} may only appear in an inception"
+            ))),
+            None => Ok(()),
+        }
+    }
+
     fn apply_body_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
         let event_digest = self.digest()?;
         self.check_said()?;
