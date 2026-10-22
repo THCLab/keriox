@@ -204,33 +204,32 @@ then has to be classified by hand.
 | File | Run | Pass | Expected failures |
 |---|---:|---:|---:|
 | `v1/keripy/kels/positive` (15 vectors, each also as `/cesr1`) | 30 | 14 | 16 |
-| `v1/keripy/negative/negative` | 84 | 29 | 55 |
-| `v2/keripy/kels/positive` | 15 | 2 | 13 |
-| `v2/keripy/negative/negative` | 11 | 2 | 9 |
-| `v2/spec/examples` (52 vectors, 6 not checked) | 46 | 12 | 34 |
-| total | 186 | 59 | 127 |
+| `v1/keripy/negative/negative` | 84 | 41 | 43 |
+| `v2/keripy/kels/positive` | 15 | 14 | 1 |
+| `v2/keripy/negative/negative` | 11 | 6 | 5 |
+| `v2/spec/examples` (52 vectors, 6 not checked) | 46 | 14 | 32 |
+| total | 186 | 89 | 97 |
 
 ### Expected failures by cause
 
 | Cause | Vectors | What keriox does | Specification section |
 |---|---:|---|---|
-| `v2-rot-c` | 19 | It does not read a KERI 2.0 `rot`/`drt` with the required `c` field, and it accepts one without `c`. Because of this, 13 of the 15 KERI 2.0 positive KELs fail, as do the specification's rot and drt examples. | Rotation Event Message Body; Delegated Rotation Event Message Body |
 | `cesr1` | 15 | It does not parse KERI 1.0 streams with CESR 1.0 attachment codes (`-A`, `-V`, ...). It reads only CESR 2.0 counters, so it cannot read keripy's KERI 1.0 output. | Version string field (a protocol version names its CESR genus version) |
 | `native-cesr` | 12 | It does not support native CESR message bodies (Annex A examples). | Annex A, Native CESR Encodings of KERI Messages |
-| `deleg` | 11 | Delegation gaps:<br>- an anchor in the delegator's inception is refused;<br>- only one of two delegations waiting for the same anchor is released;<br>- it does not search the KEL when there is no source seal;<br>- the seal's `i`/`s` are not checked;<br>- `dip` without `di` is accepted;<br>- only the first couple of a source seal group is tried;<br>- a `drt` that arrives before its `dip` and its anchors is never accepted (new, positive vector `kel/deleg/dip-before-anchor`). | Cooperative Delegation; Delegated Inception Event Message Body; Seals |
+| `deleg` | 11 | Delegation gaps:<br>- an anchor in the delegator's inception is refused;<br>- it does not search the KEL when there is no source seal;<br>- the seal's `i`/`s` are not checked;<br>- `dip` without `di` is accepted;<br>- only the first couple of a source seal group is tried;<br>- a `drt` that arrives before its `dip` and its anchors is never accepted (positive vector `kel/deleg/dip-before-anchor`, KERI 1.0 and 2.0). | Cooperative Delegation; Delegated Inception Event Message Body; Seals |
 | `seal-types` | 10 | It has no source, latest establishment, registrar backer or typed seal. Its untagged seal type reads them as digest seals and drops their other fields, so an event seal with a malformed `i` is also read as a digest seal. | Seals; Seal Count Codes |
 | `routed-v2` | 8 | It does not read KERI 2.0 `qry`/`rpy` as the specification prints them (with `i`, `/oobi` routes). The specification contradicts itself here: its declared field order has no `i`, but every example and keripy have one. | Query Message Body; Reply Message Body; OOBI sections |
-| `key-event-rules` | 7 | Accepted although the specification forbids them:<br>- a duplicated exposed next key that satisfies the prior next threshold;<br>- `kt=0`;<br>- `nt=0` with a rotation to unrelated keys;<br>- an `ixn` body tagged `rot`;<br>- an unsatisfiable `nt`;<br>- a non-transferable prefix with `n`. | Rotation using pre-rotation; Key and key digest threshold fields; KERI's secure bindings |
+| `key-event-rules` | 5 | Accepted although the specification forbids them:<br>- `kt=0`;<br>- `nt=0` with a rotation to unrelated keys;<br>- an `ixn` body tagged `rot`;<br>- an unsatisfiable `nt`;<br>- a non-transferable prefix with `n`. | Rotation using pre-rotation; Key and key digest threshold fields; KERI's secure bindings |
 | `pro-bar-xip` | 6 | There are no `pro`, `bar` or `xip` message types. | Routed Messages |
 | `witness-list` | 6 | Duplicates in `b`, `br` and `ba` are accepted, and `ba` naming a current witness duplicates it. A weighted `bt` and a transferable witness AID are accepted. | Backer list; Backer threshold; Backer remove / add lists |
-| `reply-bada` | 6 | BADA problems: a reply with an equal `dt` replaces the stored one, and the comparison key is (cid, role) instead of (cid, role, eid). A replayed add after a cut is accepted. `url ""` is not read, and the roles `registrar` and `mailbox` are not known. | BADA Policy; RUN off the CRUD; OOBI KERI Endpoint Authorization |
+| `reply-bada` | 4 | BADA problems: a reply with an equal `dt` replaces the stored one. `url ""` is not read, and the roles `registrar` and `mailbox` are not known. | BADA Policy; RUN off the CRUD; OOBI KERI Endpoint Authorization |
 | `nested-threshold` | 5 | It does not read nested weighted thresholds (`{"1/2": [...]}`). | Fractionally weighted threshold |
-| `config` | 4 | It does not enforce `EO`, `DND` (in two vectors) or `RB`. | Configuration traits field |
+| `config` | 1 | It does not enforce `RB` (registrar backers need registrar backer seals). | Configuration traits field |
 | `signatures` | 4 | One invalid or out-of-range signature next to enough valid controller or witness signatures keeps the event from being accepted. A partially signed event that first came with a bad signature is never completed. | Indexed Signatures |
-| `reply-checks` | 4 | A non-transferable couple with a `D` key signs a reply. A couple whose signature code does not match its key panics (`unwrap` on `WrongSignatureTypeError`). An `ACDC` version string is accepted on a reply. | BADA Rules; Version string field |
+| `reply-checks` | 2 | A non-transferable couple with a `D` key signs a reply. An `ACDC` version string is accepted on a reply. | BADA Rules; Version string field |
 | `duplicity` | 3 | A re-sent identical event, or a different event with an invalid signature, is recorded as duplicity evidence. | Duplicity |
-| `key-state` | 3 | The key state has no `et`. Key state notices in keripy's shape are not read; the specification defines no key state notice format. | Backer remove / add lists; Reply Message Body |
-| `witness-role` | 2 | A witness accepts events whose witness list does not name it. It also accepts remote events: there is no notion of a local channel (a SHOULD-level rule). | Validator Roles and Event Locality |
+| `key-state` | 2 | Key state notices in keripy's shape are not read; the specification defines no key state notice format. | Backer remove / add lists; Reply Message Body |
+| `witness-role` | 1 | A witness accepts remote events: there is no notion of a local channel (a SHOULD-level rule). | Validator Roles and Event Locality |
 | `exn-fields` | 2 | The specification's `exn` fields `[v,t,d,i,ri,x,p,dt,r,q,a]` are not read. | Exchange Message Body |
 
 Some passes need care when reading them:
