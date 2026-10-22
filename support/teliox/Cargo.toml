@@ -1,6 +1,6 @@
 [package]
 name = "teliox"
-version = "0.19.0-rc.4"
+version = "0.19.0-rc.5"
 description = "Library for the Transaction Event Log"
 authors.workspace = true
 edition.workspace = true
@@ -15,7 +15,7 @@ storage-redb = ["keri-core/storage-redb", "redb"]
 storage-postgres = ["keri-core/storage-postgres", "sqlx", "async-std"]
 
 [dependencies]
-keri-core = {path = "../../keriox_core", version= "0.19.0-rc.4", features = ["query"]}
+keri-core = {path = "../../keriox_core", version= "0.19.0-rc.5", features = ["query"]}
 said = { version = "=2.0.0-rc.4" }
 cesrox = { version = "=2.0.0-rc.2" }
 base64 = "0.13.1"

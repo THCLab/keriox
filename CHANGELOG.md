@@ -1,3 +1,8 @@
+## [0.19.0-rc.5] - 2026-10-22
+
+### 🐛 Bug Fixes
+
+- *(sdk)* Keep JSON field order without turning on preserve_order for everyone
 ## [0.19.0-rc.4] - 2026-10-22
 
 ### ⚙️ Miscellaneous Tasks
