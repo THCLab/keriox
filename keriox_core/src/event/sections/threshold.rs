@@ -110,11 +110,20 @@ impl WeightedThreshold {
     }
 
     pub fn enough_signatures(&self, sigs_indexes: &[usize]) -> Result<(), SignatureError> {
+        let sigs_indexes = distinct(sigs_indexes);
         match self {
-            WeightedThreshold::Single(clause) => clause.enough_signatures(0, sigs_indexes),
-            WeightedThreshold::Multi(clauses) => clauses.enough_signatures(sigs_indexes),
+            WeightedThreshold::Single(clause) => clause.enough_signatures(0, &sigs_indexes),
+            WeightedThreshold::Multi(clauses) => clauses.enough_signatures(&sigs_indexes),
         }
     }
+}
+
+/// The indexes without repeats, in ascending order.
+fn distinct(indexes: &[usize]) -> Vec<usize> {
+    let mut indexes = indexes.to_vec();
+    indexes.sort_unstable();
+    indexes.dedup();
+    indexes
 }
 
 impl SignatureThreshold {
@@ -151,10 +160,13 @@ impl SignatureThreshold {
         }
     }
 
+    /// Whether signatures by the keys at `sigs_indexes` satisfy the
+    /// threshold. Each key counts once however often its index appears:
+    /// a threshold is M of the N keys of a key set.
     pub fn enough_signatures(&self, sigs_indexes: &[usize]) -> Result<(), SignatureError> {
         match self {
             SignatureThreshold::Simple(ref t) => {
-                if (sigs_indexes.len() as u64) >= *t {
+                if (distinct(sigs_indexes).len() as u64) >= *t {
                     Ok(())
                 } else {
                     Err(SignatureError::NotEnoughSigsError)

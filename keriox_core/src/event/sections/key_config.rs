@@ -56,6 +56,11 @@ impl NextKeysData {
     /// digest. So an empty commitment, which ends the log, can only have
     /// threshold 0.
     pub fn check_commitment(&self) -> Result<(), String> {
+        // The digests commit to a set of keys: one key committed twice
+        // would fill two positions of the threshold.
+        if has_repeats(&self.next_key_hashes) {
+            return Err("the next key digest list must not repeat a digest".to_string());
+        }
         self.threshold
             .check_fits(self.next_key_hashes.len())
             .map_err(|e| format!("next {e}"))
@@ -181,6 +186,11 @@ impl KeyConfig {
         if self.public_keys.is_empty() {
             return Err("the current key list must not be empty".to_string());
         }
+        // The key list is a key set: one key listed twice could sign at both
+        // positions and count twice towards a threshold.
+        if has_repeats(&self.public_keys) {
+            return Err("the current key list must not repeat a key".to_string());
+        }
         self.threshold
             .check_fits(self.public_keys.len())
             .map_err(|e| format!("current {e}"))
@@ -269,6 +279,13 @@ impl KeyConfig {
     pub fn commit(&self, derivation: &HashFunction) -> NextKeysData {
         nxt_commitment(self.threshold.clone(), &self.public_keys, derivation)
     }
+}
+
+fn has_repeats<T: PartialEq>(items: &[T]) -> bool {
+    items
+        .iter()
+        .enumerate()
+        .any(|(i, item)| items[..i].contains(item))
 }
 
 /// Serialize For Commitment

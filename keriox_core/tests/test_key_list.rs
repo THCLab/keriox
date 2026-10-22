@@ -195,3 +195,102 @@ fn a_threshold_fitting_its_keys_is_accepted() {
     process_notice(signed_by(&icp, &[&a, &b]), &processor).unwrap();
     assert_eq!(sn(&storage, &icp.data.get_prefix()), Some(0));
 }
+
+/// One key cannot count twice towards a threshold: the specification counts
+/// M of the N keys of a key set.
+#[test]
+fn a_repeated_signature_index_counts_once() {
+    assert!(SignatureThreshold::Simple(2)
+        .enough_signatures(&[0, 0])
+        .is_err());
+    assert!(SignatureThreshold::single_weighted(vec![(1, 2), (1, 2)])
+        .enough_signatures(&[0, 0])
+        .is_err());
+    assert!(SignatureThreshold::multi_weighted(vec![vec![(1, 2), (1, 2)], vec![(1, 1)]])
+        .enough_signatures(&[0, 0, 2])
+        .is_err());
+    assert!(SignatureThreshold::Simple(2)
+        .enough_signatures(&[0, 1])
+        .is_ok());
+}
+
+#[test]
+fn a_key_listed_twice_is_refused() {
+    let (a, next) = (Signer::new(), Signer::new());
+    let (_path, processor, storage) = setup();
+    let icp = EventMsgBuilder::new(EventTypeTag::Icp)
+        .with_keys(vec![key(&a), key(&a)])
+        .with_threshold(&SignatureThreshold::Simple(2))
+        .with_next_keys(vec![key(&next)])
+        .build()
+        .unwrap();
+    // One key signing at both positions would meet kt=2 on its own.
+    assert!(matches!(
+        process_notice(signed_by(&icp, &[&a, &a]), &processor),
+        Err(Error::SemanticError(_))
+    ));
+    assert_eq!(sn(&storage, &icp.data.get_prefix()), None);
+}
+
+#[test]
+fn a_next_key_committed_twice_is_refused() {
+    let (current, next) = (Signer::new(), Signer::new());
+    let (_path, processor, storage) = setup();
+    let icp = EventMsgBuilder::new(EventTypeTag::Icp)
+        .with_keys(vec![key(&current)])
+        .with_next_keys(vec![key(&next), key(&next)])
+        .with_next_threshold(&SignatureThreshold::Simple(2))
+        .build()
+        .unwrap();
+    assert!(matches!(
+        process_notice(signed_by(&icp, &[&current]), &processor),
+        Err(Error::SemanticError(_))
+    ));
+    assert_eq!(sn(&storage, &icp.data.get_prefix()), None);
+}
+
+/// The takeover the review found: with n=[H(K1), H(K2)] and nt=2, whoever
+/// holds K1 alone listed it twice and signed at both positions, so its
+/// single prior-next position counted twice.
+#[test]
+fn one_exposed_next_key_cannot_meet_the_prior_next_threshold_twice() {
+    for (prior_next, kt) in [
+        (SignatureThreshold::Simple(2), SignatureThreshold::Simple(1)),
+        (
+            SignatureThreshold::single_weighted(vec![(1, 2), (1, 2)]),
+            SignatureThreshold::single_weighted(vec![(1, 2), (1, 2)]),
+        ),
+    ] {
+        let (_path, processor, storage) = setup();
+        let (current, k1, k2) = (Signer::new(), Signer::new(), Signer::new());
+        let icp = EventMsgBuilder::new(EventTypeTag::Icp)
+            .with_keys(vec![key(&current)])
+            .with_next_keys(vec![key(&k1), key(&k2)])
+            .with_next_threshold(&prior_next)
+            .build()
+            .unwrap();
+        let id = icp.data.get_prefix();
+        process_notice(signed_by(&icp, &[&current]), &processor).unwrap();
+
+        let rot = EventMsgBuilder::new(EventTypeTag::Rot)
+            .with_prefix(&id)
+            .with_sn(1)
+            .with_previous_event(&icp.digest().unwrap())
+            .with_keys(vec![key(&k1), key(&k1)])
+            .with_threshold(&kt)
+            .with_next_keys(vec![key(&Signer::new())])
+            .build()
+            .unwrap();
+        let sig = SelfSigningPrefix::Ed25519Sha512(k1.sign(rot.encode().unwrap()).unwrap());
+        let forged = rot.sign(
+            vec![
+                IndexedSignature::new_both_diffrent(sig.clone(), 0, 0),
+                IndexedSignature::new_both_diffrent(sig, 1, 0),
+            ],
+            None,
+            None,
+        );
+        let _ = process_notice(Notice::Event(forged), &processor);
+        assert_eq!(sn(&storage, &id), Some(0), "nt={prior_next:?}");
+    }
+}
