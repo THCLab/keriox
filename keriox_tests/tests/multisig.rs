@@ -114,8 +114,11 @@ async fn test_multisig(ctx: &mut InfrastructureContext) -> Result<()> {
 
     // Send identifier2 oobis to identifier1's watchers and query for results.
     assert_eq!(
-        r#"{"eid":"BJq7UABlttINuWJh1Xl2lkqZG4NTdUdqnbFJDa6ZyxCC","scheme":"http","url":"http://127.0.0.1:3232/"}"#,
-        &serde_json::to_string(&witness_oobi).unwrap()
+        format!(
+            r#"{{"eid":"BJq7UABlttINuWJh1Xl2lkqZG4NTdUdqnbFJDa6ZyxCC","scheme":"http","url":"{}"}}"#,
+            witness_oobi.url
+        ),
+        serde_json::to_string(&witness_oobi).unwrap()
     );
     let oobi2 = EndRole {
         cid: identifier2.id().clone(),

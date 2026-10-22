@@ -1,4 +1,7 @@
-use std::{net::Ipv4Addr, sync::Arc};
+use std::{
+    net::{Ipv4Addr, TcpListener},
+    sync::Arc,
+};
 
 use keri_controller::{BasicPrefix, IdentifierPrefix, LocationScheme};
 use tempfile::Builder;
@@ -13,13 +16,24 @@ pub struct InfrastructureContext {
     watcher_oobi: LocationScheme,
 }
 
+/// A port nothing listens on right now, so the infrastructure can run next
+/// to anything else on the machine, including another test binary.
+fn free_port() -> u16 {
+    TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
+        .expect("cannot bind to an ephemeral port")
+        .local_addr()
+        .unwrap()
+        .port()
+}
+
 impl AsyncTestContext for InfrastructureContext {
     async fn setup() -> InfrastructureContext {
+        let (first_port, second_port, watcher_port) = (free_port(), free_port(), free_port());
         let first_witness = {
             let wit_root = Builder::new().prefix("wit-db").tempdir().unwrap();
             Arc::new(
                 WitnessListener::setup_with_redb(
-                    Url::parse("http://127.0.0.1:3232").unwrap(),
+                    Url::parse(&format!("http://127.0.0.1:{first_port}")).unwrap(),
                     wit_root.path(),
                     Some("ArwXoACJgOleVZ2PY7kXn7rA0II0mHYDhc6WrBH8fDAc".to_string()),
                     WitnessEscrowConfig::default(),
@@ -31,16 +45,16 @@ impl AsyncTestContext for InfrastructureContext {
         let first_witness_oobi = LocationScheme {
             eid: IdentifierPrefix::Basic(first_witness_id.clone()),
             scheme: keri_core::oobi::Scheme::Http,
-            url: Url::parse("http://127.0.0.1:3232").unwrap(),
+            url: Url::parse(&format!("http://127.0.0.1:{first_port}")).unwrap(),
         };
 
-        actix_rt::spawn(first_witness.listen_http((Ipv4Addr::UNSPECIFIED, 3232)));
+        actix_rt::spawn(first_witness.listen_http((Ipv4Addr::LOCALHOST, first_port)));
 
         let second_witness = {
             let wit_root = Builder::new().prefix("wit-db").tempdir().unwrap();
             Arc::new(
                 WitnessListener::setup_with_redb(
-                    Url::parse("http://127.0.0.1:3233").unwrap(),
+                    Url::parse(&format!("http://127.0.0.1:{second_port}")).unwrap(),
                     wit_root.path(),
                     Some("ArwXoACJgOleVZ2PY7kXn7rA0II0mHYDhc6WrBH8fDAd".to_string()),
                     WitnessEscrowConfig::default(),
@@ -52,12 +66,12 @@ impl AsyncTestContext for InfrastructureContext {
         let second_witness_oobi = LocationScheme {
             eid: IdentifierPrefix::Basic(second_witness_id.clone()),
             scheme: keri_core::oobi::Scheme::Http,
-            url: Url::parse("http://127.0.0.1:3233").unwrap(),
+            url: Url::parse(&format!("http://127.0.0.1:{second_port}")).unwrap(),
         };
 
-        actix_rt::spawn(second_witness.listen_http((Ipv4Addr::UNSPECIFIED, 3233)));
+        actix_rt::spawn(second_witness.listen_http((Ipv4Addr::LOCALHOST, second_port)));
 
-        let watcher_url = Url::parse("http://127.0.0.1:3236").unwrap();
+        let watcher_url = Url::parse(&format!("http://127.0.0.1:{watcher_port}")).unwrap();
         let watcher_tel_dir = Builder::new().prefix("cont-test-tel-db").tempdir().unwrap();
         let watcher_tel_path = watcher_tel_dir.path().join("tel_storage");
 
@@ -78,7 +92,7 @@ impl AsyncTestContext for InfrastructureContext {
             scheme: keri_core::oobi::Scheme::Http,
             url: watcher_url.clone(),
         };
-        actix_rt::spawn(watcher_listener.listen_http((Ipv4Addr::UNSPECIFIED, 3236)));
+        actix_rt::spawn(watcher_listener.listen_http((Ipv4Addr::LOCALHOST, watcher_port)));
 
         InfrastructureContext {
             first_witness_oobi,
