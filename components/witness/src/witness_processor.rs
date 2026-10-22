@@ -5,7 +5,8 @@ use keri_core::{
     processor::{
         escrow::{
             delegation_escrow::DelegationEscrow, maybe_out_of_order_escrow::MaybeOutOfOrderEscrow,
-            partially_signed_escrow::PartiallySignedEscrow, EscrowConfig,
+            partially_signed_escrow::PartiallySignedEscrow,
+            partially_witnessed_escrow::PartiallyWitnessedEscrow, EscrowConfig,
         },
         notification::{JustNotification, Notification, NotificationBus, Notifier},
         validator::EventValidator,
@@ -17,6 +18,10 @@ use std::{sync::Arc, time::Duration};
 
 pub struct WitnessProcessor {
     processor: EventProcessor<<WitnessProcessor as keri_core::processor::Processor>::Database>,
+    /// Holds events of identifiers that do not designate this witness until
+    /// their own witnesses' receipts arrive. Events reach it through the
+    /// receipt generator, which decides whether the witness is designated.
+    pub(crate) partially_witnessed: Arc<PartiallyWitnessedEscrow<RedbDatabase>>,
 }
 
 impl Processor for WitnessProcessor {
@@ -47,6 +52,7 @@ pub struct WitnessEscrowConfig {
     pub partially_signed_timeout: Duration,
     pub out_of_order_timeout: Duration,
     pub delegation_timeout: Duration,
+    pub partially_witnessed_timeout: Duration,
 }
 
 impl Default for WitnessEscrowConfig {
@@ -56,6 +62,7 @@ impl Default for WitnessEscrowConfig {
             partially_signed_timeout: default.partially_signed_timeout,
             out_of_order_timeout: default.out_of_order_timeout,
             delegation_timeout: default.delegation_timeout,
+            partially_witnessed_timeout: default.partially_witnessed_timeout,
         }
     }
 }
@@ -93,13 +100,27 @@ impl WitnessProcessor {
                 JustNotification::KeyEventAdded,
             ],
         );
+        let partially_witnessed = Arc::new(PartiallyWitnessedEscrow::new(
+            redb.clone(),
+            redb.get_log_db(),
+            escrow_config.partially_witnessed_timeout,
+        ));
+        bus.register_observer(
+            partially_witnessed.clone(),
+            vec![JustNotification::ReceiptOutOfOrder],
+        );
         let processor = EventProcessor::new(bus, redb.clone());
-        Self { processor }
+        Self {
+            processor,
+            partially_witnessed,
+        }
     }
 
     /// Witness processing strategy
     ///
-    /// Ignore not fully witness error and accept not fully witnessed events.
+    /// An event short of witness receipts is announced as partially
+    /// witnessed: the receipt generator accepts it at once when the event
+    /// designates this witness, and escrows it otherwise.
     fn witness_processing_strategy(
         db: Arc<RedbDatabase>,
         publisher: &NotificationBus,
@@ -120,9 +141,7 @@ impl WitnessProcessor {
                 publisher.notify(&Notification::MissingDelegatingEvent(signed_event))
             }
             Err(Error::NotEnoughReceiptsError) => {
-                db.add_kel_finalized_event(signed_event.clone(), id)
-                    .map_err(|_| Error::DbError)?;
-                publisher.notify(&Notification::KeyEventAdded(signed_event))
+                publisher.notify(&Notification::PartiallyWitnessed(signed_event))
             }
             Err(Error::NotEnoughSigsError) => {
                 publisher.notify(&Notification::PartiallySigned(signed_event))

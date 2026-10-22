@@ -25,7 +25,10 @@ use keri_core::{
     oobi::LocationScheme,
     oobi_manager::{storage::OobiStorageBackend, OobiManager, RedbOobiManager, RedbOobiStorage},
     prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
-    processor::notification::{Notification, NotificationBus, Notifier},
+    processor::{
+        escrow::partially_witnessed_escrow::PartiallyWitnessedEscrow,
+        notification::{Notification, NotificationBus, Notifier},
+    },
     query::{
         mailbox::{QueryArgsMbx, QueryTopics},
         reply_event::{ReplyEvent, ReplyRoute, SignedReply},
@@ -51,11 +54,17 @@ pub struct WitnessReceiptGenerator {
     pub prefix: BasicPrefix,
     pub signer: Arc<Signer>,
     pub storage: EventStorage<RedbDatabase>,
+    /// Where events that do not designate this witness wait for their own
+    /// witnesses' receipts.
+    partially_witnessed: Arc<PartiallyWitnessedEscrow<RedbDatabase>>,
 }
 
 impl Notifier for WitnessReceiptGenerator {
     fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error> {
         match notification {
+            // An event accepted with its own witnesses' receipts is only
+            // receipted when it designates this witness.
+            Notification::KeyEventAdded(event) if !self.designated(&event.event_message) => Ok(()),
             Notification::KeyEventAdded(event) => {
                 let non_trans_receipt =
                     self.respond_to_key_event(&event.event_message, self.signer.clone())?;
@@ -67,19 +76,17 @@ impl Notifier for WitnessReceiptGenerator {
                 self.storage.add_mailbox_receipt(non_trans_receipt)?;
                 Ok(())
             }
+            // Only a designated witness accepts an event before the receipts
+            // of the other witnesses; to any other it is a remote event.
+            Notification::PartiallyWitnessed(prt) if !self.designated(&prt.event_message) => {
+                self.partially_witnessed.notify(notification, bus)
+            }
             Notification::PartiallyWitnessed(prt) => {
                 self.storage
                     .events_db
                     .add_kel_finalized_event(prt.clone(), &prt.event_message.data.get_prefix())?;
-                bus.notify(&Notification::KeyEventAdded(prt.clone()))?;
-                let non_trans_receipt =
-                    self.respond_to_key_event(&prt.event_message, self.signer.clone())?;
-                let prefix = &non_trans_receipt.body.prefix.clone();
-                self.storage
-                    .events_db
-                    .add_receipt_nt(non_trans_receipt.clone(), prefix)?;
-                bus.notify(&Notification::ReceiptAccepted)?;
-                self.storage.add_mailbox_receipt(non_trans_receipt)
+                // Receipted by the KeyEventAdded arm above.
+                bus.notify(&Notification::KeyEventAdded(prt.clone()))
             }
             _ => Ok(()),
         }
@@ -87,14 +94,35 @@ impl Notifier for WitnessReceiptGenerator {
 }
 
 impl WitnessReceiptGenerator {
-    pub fn new(signer: Arc<Signer>, events_db: Arc<RedbDatabase>) -> Self {
+    pub fn new(
+        signer: Arc<Signer>,
+        events_db: Arc<RedbDatabase>,
+        partially_witnessed: Arc<PartiallyWitnessedEscrow<RedbDatabase>>,
+    ) -> Self {
         let storage = EventStorage::new_redb(events_db.clone());
         let prefix = BasicPrefix::Ed25519NT(signer.public_key());
         Self {
             prefix,
             signer,
             storage,
+            partially_witnessed,
         }
+    }
+
+    /// Whether the witness list in effect after `event` names this witness.
+    fn designated(&self, event: &KeriEvent<KeyEvent>) -> bool {
+        let id = event.data.get_prefix();
+        let state = match self.storage.get_state(&id).unwrap_or_default().apply(event) {
+            Ok(state) => Some(state),
+            // Already part of the log: take the state it led to.
+            Err(_) => event.digest().ok().and_then(|digest| {
+                self.storage
+                    .compute_state_at_event(event.data.get_sn(), &id, &digest)
+                    .ok()
+                    .flatten()
+            }),
+        };
+        state.is_some_and(|state| state.witness_config.witnesses.contains(&self.prefix))
     }
 
     fn respond_to_key_event(
@@ -186,6 +214,7 @@ impl<S: OobiStorageBackend> Witness<S> {
         let receipt_generator = Arc::new(WitnessReceiptGenerator::new(
             signer.clone(),
             events_db.clone(),
+            witness_processor.partially_witnessed.clone(),
         ));
         witness_processor.register_observer(
             receipt_generator.clone(),

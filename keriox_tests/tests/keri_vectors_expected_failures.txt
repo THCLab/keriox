@@ -68,7 +68,6 @@ v1/keripy/negative/negative/gap/wit-receipt-all-or-nothing/bad-signature	signatu
 v1/keripy/negative/negative/gap/wit-receipt-all-or-nothing/out-of-range	signatures	an event whose valid witness signatures meet bt is not accepted when one more has an out-of-range index
 v1/keripy/negative/negative/gap/wit-transferable-witness-aid	witness-list	a witness with a transferable (D) code is accepted, and its couple counts as a receipt
 v1/keripy/negative/negative/gap/wit-witness-local-remote	witness-role	a witness accepts and receipts a remote event; keriox has no notion of a local (protected) channel
-v1/keripy/negative/negative/gap/wit-witness-receipts-any-aid	witness-role	a witness accepts an event whose witness list does not name it, without its bt receipts
 v2/keripy/kels/positive/kel/abandon/rot-to-empty-next	v2-rot-c	the KEL's KERI 2.0 rot/drt (with c) is not read
 v2/keripy/kels/positive/kel/deleg/dip-before-anchor	v2-rot-c	the KEL's KERI 2.0 rot/drt (with c) is not read
 v2/keripy/kels/positive/kel/deleg/dip-drt	v2-rot-c	the KEL's KERI 2.0 rot/drt (with c) is not read

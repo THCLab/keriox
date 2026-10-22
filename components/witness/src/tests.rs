@@ -1983,3 +1983,174 @@ mod abandonment {
             .contains(&serde_json::json!("abandonment")));
     }
 }
+
+/// A witness receipts only the events of identifiers that designate it in
+/// their witness list. Any other event it sees is a remote event: like any
+/// validator it accepts it only with enough receipts from the event's own
+/// witnesses, and never receipts it.
+mod designation {
+    use std::sync::Arc;
+
+    use keri_core::{
+        database::redb::RedbDatabase,
+        event::{sections::threshold::SignatureThreshold, KeyEvent},
+        event_message::{
+            event_msg_builder::{EventMsgBuilder, ReceiptBuilder},
+            msg::KeriEvent,
+            signature::Nontransferable,
+            signed_event_message::{Notice, SignedNontransferableReceipt},
+            EventTypeTag,
+        },
+        oobi_manager::{RedbOobiManager, RedbOobiStorage},
+        prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
+        signer::Signer,
+    };
+    use tempfile::TempDir;
+    use url::Url;
+
+    use crate::{witness::Witness, witness_processor::WitnessEscrowConfig};
+
+    fn setup_witness() -> (TempDir, Witness<RedbOobiStorage>) {
+        let root = tempfile::Builder::new()
+            .prefix("test-witness")
+            .tempdir()
+            .unwrap();
+        let oobi_db = Arc::new(RedbDatabase::new(&root.path().join("oobi_database")).unwrap());
+        let witness = Witness::new(
+            Url::parse("http://example.com").unwrap(),
+            Arc::new(Signer::new()),
+            root.path(),
+            WitnessEscrowConfig::default(),
+            RedbOobiManager::new(oobi_db).unwrap(),
+        )
+        .unwrap();
+        (root, witness)
+    }
+
+    fn key(signer: &Signer) -> BasicPrefix {
+        BasicPrefix::Ed25519(signer.public_key())
+    }
+
+    fn witness_key(signer: &Signer) -> BasicPrefix {
+        BasicPrefix::Ed25519NT(signer.public_key())
+    }
+
+    fn signed(event: &KeriEvent<KeyEvent>, signer: &Signer) -> Notice {
+        let sig = SelfSigningPrefix::Ed25519Sha512(signer.sign(event.encode().unwrap()).unwrap());
+        Notice::Event(event.sign(vec![IndexedSignature::new_both_same(sig, 0)], None, None))
+    }
+
+    /// `witness`'s receipt of `event`.
+    fn receipt(event: &KeriEvent<KeyEvent>, witness: &Signer) -> Notice {
+        let rct = ReceiptBuilder::default()
+            .with_receipted_event(event.clone())
+            .build()
+            .unwrap();
+        let sig =
+            SelfSigningPrefix::Ed25519Sha512(witness.sign(event.encode().unwrap()).unwrap());
+        Notice::NontransferableRct(SignedNontransferableReceipt::new(
+            &rct,
+            vec![Nontransferable::Couplet(vec![(witness_key(witness), sig)])],
+        ))
+    }
+
+    fn sn(witness: &Witness<RedbOobiStorage>, id: &IdentifierPrefix) -> Option<u64> {
+        witness.event_storage.get_state(id).map(|state| state.sn)
+    }
+
+    fn receipted_by(
+        witness: &Witness<RedbOobiStorage>,
+        id: &IdentifierPrefix,
+        at: u64,
+    ) -> bool {
+        witness
+            .event_storage
+            .get_nt_receipts(id, at)
+            .unwrap()
+            .is_some_and(|rct| {
+                rct.signatures.iter().any(|sig| match sig {
+                    Nontransferable::Couplet(couples) => {
+                        couples.iter().any(|(id, _)| id == &witness.prefix)
+                    }
+                    Nontransferable::Indexed(_) => false,
+                })
+            })
+    }
+
+    #[test]
+    fn an_event_that_does_not_designate_the_witness_is_neither_accepted_nor_receipted() {
+        let (_root, witness) = setup_witness();
+        let (w1, w2, current) = (Signer::new(), Signer::new(), Signer::new());
+        let icp = EventMsgBuilder::new(EventTypeTag::Icp)
+            .with_keys(vec![key(&current)])
+            .with_next_keys(vec![key(&Signer::new())])
+            .with_witness_list(&[witness_key(&w1), witness_key(&w2)])
+            .with_witness_threshold(&SignatureThreshold::Simple(2))
+            .build()
+            .unwrap();
+        let id = icp.data.get_prefix();
+
+        witness.process_notice(signed(&icp, &current)).unwrap();
+        assert_eq!(sn(&witness, &id), None);
+        assert!(!receipted_by(&witness, &id, 0));
+
+        // With its own witnesses' receipts it is accepted, still not
+        // receipted by this witness.
+        witness.process_notice(receipt(&icp, &w1)).unwrap();
+        witness.process_notice(receipt(&icp, &w2)).unwrap();
+        assert_eq!(sn(&witness, &id), Some(0));
+        assert!(!receipted_by(&witness, &id, 0));
+    }
+
+    #[test]
+    fn a_rotation_removing_the_witness_needs_the_remaining_witnesses_receipts() {
+        let (_root, witness) = setup_witness();
+        let (other, current, next) = (Signer::new(), Signer::new(), Signer::new());
+        let icp = EventMsgBuilder::new(EventTypeTag::Icp)
+            .with_keys(vec![key(&current)])
+            .with_next_keys(vec![key(&next)])
+            .with_witness_list(&[witness.prefix.clone(), witness_key(&other)])
+            .with_witness_threshold(&SignatureThreshold::Simple(1))
+            .build()
+            .unwrap();
+        let id = icp.data.get_prefix();
+        witness.process_notice(signed(&icp, &current)).unwrap();
+        assert_eq!(sn(&witness, &id), Some(0));
+        assert!(receipted_by(&witness, &id, 0));
+
+        let rot = EventMsgBuilder::new(EventTypeTag::Rot)
+            .with_prefix(&id)
+            .with_sn(1)
+            .with_previous_event(&icp.digest().unwrap())
+            .with_keys(vec![key(&next)])
+            .with_next_keys(vec![key(&Signer::new())])
+            .with_witness_to_remove(&[witness.prefix.clone()])
+            .with_witness_threshold(&SignatureThreshold::Simple(1))
+            .build()
+            .unwrap();
+        witness.process_notice(signed(&rot, &next)).unwrap();
+        assert_eq!(sn(&witness, &id), Some(0));
+        assert!(!receipted_by(&witness, &id, 1));
+
+        witness.process_notice(receipt(&rot, &other)).unwrap();
+        assert_eq!(sn(&witness, &id), Some(1));
+        assert!(!receipted_by(&witness, &id, 1));
+    }
+
+    #[test]
+    fn a_designated_witness_receipts_without_waiting_for_others() {
+        let (_root, witness) = setup_witness();
+        let (other, current) = (Signer::new(), Signer::new());
+        let icp = EventMsgBuilder::new(EventTypeTag::Icp)
+            .with_keys(vec![key(&current)])
+            .with_next_keys(vec![key(&Signer::new())])
+            .with_witness_list(&[witness.prefix.clone(), witness_key(&other)])
+            .with_witness_threshold(&SignatureThreshold::Simple(2))
+            .build()
+            .unwrap();
+        let id = icp.data.get_prefix();
+        witness.process_notice(signed(&icp, &current)).unwrap();
+        assert_eq!(sn(&witness, &id), Some(0));
+        assert!(receipted_by(&witness, &id, 0));
+    }
+}

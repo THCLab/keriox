@@ -61,6 +61,9 @@ struct PartialEscrowConfig {
 
     #[serde_as(as = "Option<DurationSeconds>")]
     delegation_timeout: Option<Duration>,
+
+    #[serde_as(as = "Option<DurationSeconds>")]
+    partially_witnessed_timeout: Option<Duration>,
 }
 
 fn deserialize_escrow_config<'de, D>(deserializer: D) -> Result<WitnessEscrowConfig, D::Error>
@@ -81,6 +84,10 @@ where
             .delegation_timeout
             .or(config.default_timeout)
             .unwrap_or(WitnessEscrowConfig::default().delegation_timeout),
+        partially_witnessed_timeout: config
+            .partially_witnessed_timeout
+            .or(config.default_timeout)
+            .unwrap_or(WitnessEscrowConfig::default().partially_witnessed_timeout),
     })
 }
 
