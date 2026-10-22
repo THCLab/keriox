@@ -8,10 +8,14 @@ use crate::{
     error::Error,
     event::{
         event_data::EventData,
-        sections::{key_config::SignatureError, threshold::SignatureThreshold, KeyConfig},
+        sections::{
+            key_config::{has_repeats, SignatureError},
+            threshold::SignatureThreshold,
+            KeyConfig,
+        },
     },
     event_message::EventTypeTag,
-    prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
+    prefix::{BasicPrefix, CesrPrimitive, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
 };
 use serde::{Deserialize, Serialize};
 use serde_hex::{Compact, SerHex};
@@ -59,6 +63,31 @@ pub struct WitnessConfig {
 }
 
 impl WitnessConfig {
+    /// Checks the witness list as the KERI specification requires: witness
+    /// AIDs are non-transferable public keys, each listed once, and the
+    /// threshold is an integer the list can meet (0 for an empty list).
+    pub fn check(&self) -> Result<(), String> {
+        if let Some(witness) = self.witnesses.iter().find(|w| w.is_transferable()) {
+            return Err(format!(
+                "witness {} has a transferable code",
+                witness.to_str()
+            ));
+        }
+        if has_repeats(&self.witnesses) {
+            return Err("the witness list must not repeat a witness".to_string());
+        }
+        match &self.tally {
+            SignatureThreshold::Simple(t) if *t as usize > self.witnesses.len() => Err(format!(
+                "the witness threshold {t} exceeds the {} witnesses",
+                self.witnesses.len()
+            )),
+            SignatureThreshold::Simple(_) => Ok(()),
+            SignatureThreshold::Weighted(_) => {
+                Err("the witness threshold must be an integer".to_string())
+            }
+        }
+    }
+
     pub fn enough_receipts<I, R>(
         &self,
         receipts_couplets: I,

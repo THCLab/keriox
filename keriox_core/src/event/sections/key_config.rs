@@ -273,7 +273,7 @@ impl KeyConfig {
     }
 }
 
-fn has_repeats<T: PartialEq>(items: &[T]) -> bool {
+pub(crate) fn has_repeats<T: PartialEq>(items: &[T]) -> bool {
     items
         .iter()
         .enumerate()

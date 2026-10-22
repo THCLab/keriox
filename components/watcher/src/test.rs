@@ -467,7 +467,7 @@ mod abandonment {
         let icp = EventMsgBuilder::new(EventTypeTag::Icp)
             .with_keys(vec![key(&current)])
             .with_next_keys(vec![key(&next)])
-            .with_witness_list(&[key(&Signer::new())])
+            .with_witness_list(&[BasicPrefix::Ed25519NT(Signer::new().public_key())])
             .with_witness_threshold(&SignatureThreshold::Simple(0))
             .build()
             .unwrap();

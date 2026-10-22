@@ -1,4 +1,4 @@
-use super::super::sections::{seal::*, KeyConfig, RotationWitnessConfig};
+use super::super::sections::{key_config::has_repeats, seal::*, KeyConfig, RotationWitnessConfig};
 use crate::{
     database::rkyv_adapter::said_wrapper::SaidValue,
     error::Error,
@@ -77,25 +77,30 @@ impl EventSemantics for RotationEvent {
             .next_keys_data
             .check_commitment()
             .map_err(Error::SemanticError)?;
+        if has_repeats(&self.witness_config.prune) || has_repeats(&self.witness_config.graft) {
+            return Err(Error::SemanticError(
+                "the removed and the added witness lists must not repeat a witness".into(),
+            ));
+        }
         if state.current.verify_next(&self.key_config)? {
-            // witness rotation processing
-            let witnesses =
-                if !self.witness_config.prune.is_empty() || !self.witness_config.graft.is_empty() {
-                    let mut prunned = state
-                        .witness_config
-                        .witnesses
-                        .into_iter()
-                        .filter(|e| !self.witness_config.prune.contains(e))
-                        .collect::<Vec<BasicPrefix>>();
-                    prunned.append(&mut self.witness_config.graft.clone());
-                    prunned
-                } else {
-                    state.witness_config.witnesses.clone()
-                };
+            // The removed witnesses go first, then the added ones are
+            // appended, except those that are witnesses already.
+            let mut witnesses = state
+                .witness_config
+                .witnesses
+                .into_iter()
+                .filter(|e| !self.witness_config.prune.contains(e))
+                .collect::<Vec<BasicPrefix>>();
+            for added in &self.witness_config.graft {
+                if !witnesses.contains(added) {
+                    witnesses.push(added.clone());
+                }
+            }
             let witness_config = WitnessConfig {
                 tally: self.witness_config.tally.clone(),
                 witnesses,
             };
+            witness_config.check().map_err(Error::SemanticError)?;
             let last_est = LastEstablishmentData {
                 sn: state.sn,
                 digest: state.last_event_digest.clone(),

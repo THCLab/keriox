@@ -45,11 +45,6 @@ v1/keripy/negative/negative/gap/seal-types-missing/registrar-backer	seal-types	a
 v1/keripy/negative/negative/gap/seal-types-missing/source	seal-types	an ixn anchoring a source seal {s,d} is not accepted
 v1/keripy/negative/negative/gap/seal-types-missing/typed	seal-types	an ixn anchoring a typed seal {t,d} is not accepted
 v1/keripy/negative/negative/gap/source-seal-multiple-couples	deleg	only the first couple of a source seal group is tried; a group whose second couple names the anchor is not accepted
-v1/keripy/negative/negative/gap/wit-b-duplicates	witness-list	b=[W1,W1] is accepted
-v1/keripy/negative/negative/gap/wit-ba-existing-duplicates	witness-list	ba naming a current witness adds it twice to the witness list
-v1/keripy/negative/negative/gap/wit-br-ba-internal-duplicates/ba	witness-list	ba with a duplicate entry is accepted
-v1/keripy/negative/negative/gap/wit-br-ba-internal-duplicates/br	witness-list	br with a duplicate entry is accepted
-v1/keripy/negative/negative/gap/wit-bt-weighted	witness-list	a weighted bt is accepted; bt must be an integer
 v1/keripy/negative/negative/gap/wit-witness-local-remote	witness-role	a witness accepts and receipts a remote event; keriox has no notion of a local (protected) channel
 v2/keripy/kels/positive/kel/deleg/dip-before-anchor	deleg	a drt that arrives before its dip and before both anchors is never accepted once they arrive
 v2/keripy/negative/negative/gap/rm-exn-fields/spec-shape	exn-fields	the specification's exn fields [v,t,d,i,ri,x,p,dt,r,q,a] are not read

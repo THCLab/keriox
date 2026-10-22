@@ -7,7 +7,7 @@ use crate::{
     event::{sections::seal::Seal, KeyEvent},
     event_message::{dummy_event::DummyInceptionEvent, msg::KeriEvent, Typeable},
     prefix::IdentifierPrefix,
-    state::{check_keys, EventSemantics, IdentifierState, LastEstablishmentData},
+    state::{check_keys, EventSemantics, IdentifierState, LastEstablishmentData, WitnessConfig},
 };
 use said::derivation::{HashFunction, HashFunctionCode};
 use said::version::{format::SerializationFormats, SerializationInfo};
@@ -101,6 +101,8 @@ impl EventSemantics for InceptionEvent {
             .next_keys_data
             .check_commitment()
             .map_err(Error::SemanticError)?;
+        let witness_config: WitnessConfig = self.witness_config.clone().into();
+        witness_config.check().map_err(Error::SemanticError)?;
         let last_est = LastEstablishmentData {
             sn: state.sn,
             digest: state.last_event_digest.clone(),
@@ -110,7 +112,7 @@ impl EventSemantics for InceptionEvent {
 
         Ok(IdentifierState {
             current: self.key_config.clone(),
-            witness_config: self.witness_config.clone().into(),
+            witness_config,
             last_est,
             ..state
         })

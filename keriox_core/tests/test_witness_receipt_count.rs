@@ -1,6 +1,6 @@
-//! A witness counts once towards a weighted witness threshold however many
-//! of its receipts arrive. Receipts are public, so otherwise anyone could
-//! repeat one witness's receipt to meet a threshold meant for several.
+//! A witness counts once towards the witness threshold however many of its
+//! receipts arrive. Receipts are public, so otherwise anyone could repeat
+//! one witness's receipt to meet a threshold meant for several.
 
 use std::sync::Arc;
 
@@ -33,7 +33,7 @@ struct Setup {
     icp: KeriEvent<KeyEvent>,
 }
 
-/// An inception with two witnesses, each weighing 1/2.
+/// An inception with two witnesses, both needed (bt=2).
 fn setup() -> Result<Setup, Error> {
     let path = NamedTempFile::new().unwrap();
     let db = Arc::new(RedbDatabase::new(path.path()).unwrap());
@@ -50,7 +50,7 @@ fn setup() -> Result<Setup, Error> {
                 .map(|w| BasicPrefix::Ed25519NT(w.public_key()))
                 .collect::<Vec<_>>(),
         )
-        .with_witness_threshold(&SignatureThreshold::single_weighted(vec![(1, 2), (1, 2)]))
+        .with_witness_threshold(&SignatureThreshold::Simple(2))
         .build()?;
 
     Ok(Setup {
