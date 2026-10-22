@@ -1,0 +1,49 @@
+{
+ "files": {
+  "examples.json": 52
+ },
+ "generator": {
+  "source": {
+   "files": [
+    "spec/spec-body.md"
+   ],
+   "implementation": "KERI specification",
+   "repository": "https://github.com/trustoverip/kswg-keri-specification",
+   "revision": "fbdd4a6155e48248873cccd5cf6f79b6b631a021"
+  },
+  "tool": "extract.py",
+  "version": "1.0.0"
+ },
+ "inconsistent": [
+  "spec/encoding/threshold",
+  "spec/message/aids-icp-json",
+  "spec/message/bare-message-bar-cesr",
+  "spec/message/delegated-rotation-drt-cesr",
+  "spec/message/endpoint-location-with-scheme-by-eid-nullify-via-empty-url-rpy-json",
+  "spec/message/endpoint-location-with-scheme-by-eid-update-rpy-json",
+  "spec/message/example-bare-message-bar-json",
+  "spec/message/example-prod-message-pro-json",
+  "spec/message/example-query-message-qry-json",
+  "spec/message/example-reply-message-rpy-json",
+  "spec/message/exchange-transaction-inception-message-xip-cesr",
+  "spec/message/keri-reply-messages-as-oobis-rpy-json",
+  "spec/message/keri-reply-messages-as-oobis-rpy-json-2",
+  "spec/message/player-eid-in-role-by-cid-nullify-via-cut-rpy-json",
+  "spec/message/player-eid-in-role-by-cid-update-rpy-json",
+  "spec/message/prod-message-pro-cesr",
+  "spec/message/query-message-qry-cesr",
+  "spec/message/reply-message-rpy-cesr",
+  "spec/seal/key-event-seal",
+  "spec/seal/latest-establishment-event-seal"
+ ],
+ "revision": "fbdd4a6155e48248873cccd5cf6f79b6b631a021",
+ "source": "spec",
+ "vector_counts": {
+  "encoding": 5,
+  "key-list": 4,
+  "message": 31,
+  "seal": 7,
+  "threshold": 4,
+  "uuid-list": 1
+ }
+}

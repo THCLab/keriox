@@ -1,0 +1,477 @@
+{
+ "schema": "keri-negative/1",
+ "generator": {
+  "tool": "gen_vectors.py",
+  "version": "1.0.0",
+  "source": {
+   "implementation": "keripy",
+   "revision": "424a50c03421165c5f289e07a341bd57b8d8ab78",
+   "version": "2.1.0-dev1"
+  },
+  "specification": {
+   "repository": "https://github.com/trustoverip/kswg-keri-specification",
+   "commit": "fbdd4a6155e48248873cccd5cf6f79b6b631a021"
+  }
+ },
+ "vectors": [
+  {
+   "id": "gap/kel-rot-c-field-v2/rot-with-c",
+   "description": "KERI 2.0 inception and a KERI 2.0 rotation with \"c\":[] before \"a\", as in the specification's rotation example",
+   "pvrsn": "2.0",
+   "target": "kel",
+   "gap": "kel-rot-c-field-v2",
+   "gap_kind": "missing-feature",
+   "stream": "{\"v\":\"KERICAACAAJSONAAEt.\",\"t\":\"icp\",\"d\":\"ELYa3eQ7swe1hswXqM05ztVq2ZlYp2WgWvkRZ62Xejus\",\"i\":\"ELYa3eQ7swe1hswXqM05ztVq2ZlYp2WgWvkRZ62Xejus\",\"s\":\"0\",\"kt\":\"1\",\"k\":[\"DOwTcRWMNCjM_Z7XEevoLQ7WG-UcrxPhCTtCXSuSxq8z\"],\"nt\":\"1\",\"n\":[\"ENUw3zRhTeO9nSZRaDP1zTKIB_v4KniXlU9J7ovlg9X8\"],\"bt\":\"0\",\"b\":[],\"c\":[],\"a\":[]}-CAX-KAWAABRJ_814Pa27J8HOwExm5R1ngAVn5jMbyD9jJiL2_KMvdxR_G-8fBzEbjfeEsqYuZsVCgmOtjV6KMUDmYLkJOsB{\"v\":\"KERICAACAAJSONAAFp.\",\"t\":\"rot\",\"d\":\"EFHbcHopfHhFvWqaLtENZ_XEpCqMDfZPf1rd88E9TNz6\",\"i\":\"ELYa3eQ7swe1hswXqM05ztVq2ZlYp2WgWvkRZ62Xejus\",\"s\":\"1\",\"p\":\"ELYa3eQ7swe1hswXqM05ztVq2ZlYp2WgWvkRZ62Xejus\",\"kt\":\"1\",\"k\":[\"DIlipkqj5pdGf4CsJNU7h0LhZwuoaUyE5H3oi0rGy65w\"],\"nt\":\"1\",\"n\":[\"EB3-H5z4JRK22B_W1bncss1yqHraXLYBzHEO4cWqdVOB\"],\"bt\":\"0\",\"br\":[],\"ba\":[],\"c\":[],\"a\":[]}-CAX-KAWAABYwoe-lyVmO9TwP1vc_X_yxnunaMGQlnOXYXmSpeD-ZSlUOQQ0pfNJaRQZwJ93lmz6kvlVQhM6ZD3GEordL4cH",
+   "expected": "accept",
+   "targets": [
+    "EFHbcHopfHhFvWqaLtENZ_XEpCqMDfZPf1rd88E9TNz6"
+   ],
+   "kels": {
+    "ELYa3eQ7swe1hswXqM05ztVq2ZlYp2WgWvkRZ62Xejus": {
+     "events": [
+      {
+       "sn": 0,
+       "t": "icp",
+       "d": "ELYa3eQ7swe1hswXqM05ztVq2ZlYp2WgWvkRZ62Xejus"
+      },
+      {
+       "sn": 1,
+       "t": "rot",
+       "d": "EFHbcHopfHhFvWqaLtENZ_XEpCqMDfZPf1rd88E9TNz6"
+      }
+     ]
+    }
+   },
+   "reason": "c is a required field of a KERI 2.0 rotation",
+   "spec_section": "Rotation Event Message Body / Delegated Rotation Event Message Body",
+   "spec_quote": "The top-level fields of a Rotation, `rot` event message body MUST appear in the following order: `[ v, t, d, i, s, p, kt, k, nt, n, bt, br, ba, c, a]`. All are REQUIRED. No other top-level fields are allowed (MUST NOT appear).",
+   "keripy": {
+    "outcome": "accepts",
+    "agrees_with_spec": true,
+    "kels": {
+     "ELYa3eQ7swe1hswXqM05ztVq2ZlYp2WgWvkRZ62Xejus": [
+      {
+       "sn": 0,
+       "t": "icp",
+       "d": "ELYa3eQ7swe1hswXqM05ztVq2ZlYp2WgWvkRZ62Xejus"
+      },
+      {
+       "sn": 1,
+       "t": "rot",
+       "d": "EFHbcHopfHhFvWqaLtENZ_XEpCqMDfZPf1rd88E9TNz6"
+      }
+     ]
+    },
+    "review_expected": "accepts"
+   }
+  },
+  {
+   "id": "gap/kel-rot-c-field-v2/rot-without-c",
+   "description": "KERI 2.0 inception and a KERI 2.0 rotation without the c field (size and SAID recomputed)",
+   "pvrsn": "2.0",
+   "target": "kel",
+   "gap": "kel-rot-c-field-v2",
+   "gap_kind": "missing-feature",
+   "stream": "{\"v\":\"KERICAACAAJSONAAEt.\",\"t\":\"icp\",\"d\":\"ELYa3eQ7swe1hswXqM05ztVq2ZlYp2WgWvkRZ62Xejus\",\"i\":\"ELYa3eQ7swe1hswXqM05ztVq2ZlYp2WgWvkRZ62Xejus\",\"s\":\"0\",\"kt\":\"1\",\"k\":[\"DOwTcRWMNCjM_Z7XEevoLQ7WG-UcrxPhCTtCXSuSxq8z\"],\"nt\":\"1\",\"n\":[\"ENUw3zRhTeO9nSZRaDP1zTKIB_v4KniXlU9J7ovlg9X8\"],\"bt\":\"0\",\"b\":[],\"c\":[],\"a\":[]}-CAX-KAWAABRJ_814Pa27J8HOwExm5R1ngAVn5jMbyD9jJiL2_KMvdxR_G-8fBzEbjfeEsqYuZsVCgmOtjV6KMUDmYLkJOsB{\"v\":\"KERICAACAAJSONAAFi.\",\"t\":\"rot\",\"d\":\"EGnAi4aLGYCBsrMIzYU8tnh59E39GVcfqvcxCEbHB4t6\",\"i\":\"ELYa3eQ7swe1hswXqM05ztVq2ZlYp2WgWvkRZ62Xejus\",\"s\":\"1\",\"p\":\"ELYa3eQ7swe1hswXqM05ztVq2ZlYp2WgWvkRZ62Xejus\",\"kt\":\"1\",\"k\":[\"DIlipkqj5pdGf4CsJNU7h0LhZwuoaUyE5H3oi0rGy65w\"],\"nt\":\"1\",\"n\":[\"EB3-H5z4JRK22B_W1bncss1yqHraXLYBzHEO4cWqdVOB\"],\"bt\":\"0\",\"br\":[],\"ba\":[],\"a\":[]}-CAX-KAWAAAtJTtC-Fd6sDhFn0KALW5m4Lidz5CeXsKtTqdfcgcvaZCRaRoh92Ye2ZatIiJZhH7CxAsl-WE1UqplpaSrVp4I",
+   "expected": "reject",
+   "targets": [
+    "EGnAi4aLGYCBsrMIzYU8tnh59E39GVcfqvcxCEbHB4t6"
+   ],
+   "kels": {
+    "ELYa3eQ7swe1hswXqM05ztVq2ZlYp2WgWvkRZ62Xejus": {
+     "events": [
+      {
+       "sn": 0,
+       "t": "icp",
+       "d": "ELYa3eQ7swe1hswXqM05ztVq2ZlYp2WgWvkRZ62Xejus"
+      }
+     ]
+    }
+   },
+   "reason": "c is a required field of a KERI 2.0 rotation",
+   "spec_section": "Rotation Event Message Body / Delegated Rotation Event Message Body",
+   "spec_quote": "The top-level fields of a Rotation, `rot` event message body MUST appear in the following order: `[ v, t, d, i, s, p, kt, k, nt, n, bt, br, ba, c, a]`. All are REQUIRED. No other top-level fields are allowed (MUST NOT appear).",
+   "keripy": {
+    "outcome": "rejects",
+    "agrees_with_spec": true,
+    "kels": {
+     "ELYa3eQ7swe1hswXqM05ztVq2ZlYp2WgWvkRZ62Xejus": [
+      {
+       "sn": 0,
+       "t": "icp",
+       "d": "ELYa3eQ7swe1hswXqM05ztVq2ZlYp2WgWvkRZ62Xejus"
+      }
+     ]
+    },
+    "review_expected": "rejects"
+   }
+  },
+  {
+   "id": "gap/kel-rot-c-field-v2/drt-with-c",
+   "description": "KERI 2.0 delegated inception and a delegated rotation with the c field, anchored by the delegator",
+   "pvrsn": "2.0",
+   "target": "kel",
+   "gap": "kel-rot-c-field-v2",
+   "gap_kind": "missing-feature",
+   "stream": "{\"v\":\"KERICAACAAJSONAAEt.\",\"t\":\"icp\",\"d\":\"EFZX6RmPXMB7CWKfJK0PqwY886J8Uflnc3EsjNk7ZQ8b\",\"i\":\"EFZX6RmPXMB7CWKfJK0PqwY886J8Uflnc3EsjNk7ZQ8b\",\"s\":\"0\",\"kt\":\"1\",\"k\":[\"DNysw4iT7spMT3zxH2yZoyPSloXb_e3qx4ghyelGqSVs\"],\"nt\":\"1\",\"n\":[\"EIZNsfimAciseHnQBvLRov_OHSHtU_916S6ggQNvhr3o\"],\"bt\":\"0\",\"b\":[],\"c\":[],\"a\":[]}-CAX-KAWAACKLvi5RzajllzFPkDWFrNoRUhH2Y3qAYfPhyUuSe83nK_DQTBIIhYuK7r3N9hcX5IWdUVajJz8NujNHPkkQ6oB{\"v\":\"KERICAACAAJSONAAE8.\",\"t\":\"ixn\",\"d\":\"EO1Qk0V_Ifqa1K1hXpeso28D0UW7DybBjwdmGaneX0Fa\",\"i\":\"EFZX6RmPXMB7CWKfJK0PqwY886J8Uflnc3EsjNk7ZQ8b\",\"s\":\"1\",\"p\":\"EFZX6RmPXMB7CWKfJK0PqwY886J8Uflnc3EsjNk7ZQ8b\",\"a\":[{\"i\":\"EBy-u3bSTnDhTeG4AEZJ0NP2VCySQ2D4BklqoHAQjbjL\",\"s\":\"0\",\"d\":\"EBy-u3bSTnDhTeG4AEZJ0NP2VCySQ2D4BklqoHAQjbjL\"}]}-CAX-KAWAACkPVlTbsrrJVs72vMTS3C9EueG0JQ4Fdrokr0aJn524pr4k0T3yVccsNn6W2zw8HYBfTt4FVFB5nSBySt304cN{\"v\":\"KERICAACAAJSONAAFh.\",\"t\":\"dip\",\"d\":\"EBy-u3bSTnDhTeG4AEZJ0NP2VCySQ2D4BklqoHAQjbjL\",\"i\":\"EBy-u3bSTnDhTeG4AEZJ0NP2VCySQ2D4BklqoHAQjbjL\",\"s\":\"0\",\"kt\":\"1\",\"k\":[\"DJsEFoz7hZm4_iMXzTjgixm-9nVmbBd4Wi8MoTAO3mRB\"],\"nt\":\"1\",\"n\":[\"EPOtL63ZZrXusu77I-EB9mE8MRN0ek2TEFhpfghd1fnS\"],\"bt\":\"0\",\"b\":[],\"c\":[],\"a\":[],\"di\":\"EFZX6RmPXMB7CWKfJK0PqwY886J8Uflnc3EsjNk7ZQ8b\"}-CAk-KAWAAAPr2HQDZZA28-qjWlOOQIHDlrf-GqWSnml-JOX4LIolcBSHu5shFj4D_VCR4422Z0h-EterECmbasubi_K1eQG-SAMMAABEO1Qk0V_Ifqa1K1hXpeso28D0UW7DybBjwdmGaneX0Fa{\"v\":\"KERICAACAAJSONAAE8.\",\"t\":\"ixn\",\"d\":\"ELXmIqyGqQzEz_smU7g54yUvAjCrreLDmQdSGme8NdPs\",\"i\":\"EFZX6RmPXMB7CWKfJK0PqwY886J8Uflnc3EsjNk7ZQ8b\",\"s\":\"2\",\"p\":\"EO1Qk0V_Ifqa1K1hXpeso28D0UW7DybBjwdmGaneX0Fa\",\"a\":[{\"i\":\"EBy-u3bSTnDhTeG4AEZJ0NP2VCySQ2D4BklqoHAQjbjL\",\"s\":\"1\",\"d\":\"EOaWWYJZqeoJ3j13ajDg4CfIJfHsjb-BY8_wlXvoS6s0\"}]}-CAX-KAWAAAR1FEyunyuEsp1pxLJfvCEcDtXXD7f4BFJPzjZJ7rDCoFoqMMmoO2HNJO5ruLI29iRmiSIhrVRD0sw0wWWzb4E{\"v\":\"KERICAACAAJSONAAFp.\",\"t\":\"drt\",\"d\":\"EOaWWYJZqeoJ3j13ajDg4CfIJfHsjb-BY8_wlXvoS6s0\",\"i\":\"EBy-u3bSTnDhTeG4AEZJ0NP2VCySQ2D4BklqoHAQjbjL\",\"s\":\"1\",\"p\":\"EBy-u3bSTnDhTeG4AEZJ0NP2VCySQ2D4BklqoHAQjbjL\",\"kt\":\"1\",\"k\":[\"DKJOieTekmqcHJjSiNr9SvXbZ1cYLIkiL04J9j6ktnVs\"],\"nt\":\"1\",\"n\":[\"EITovVfwbPKYiivMAuCvZAvw5tEKy4boc27BL6FkL2Q5\"],\"bt\":\"0\",\"br\":[],\"ba\":[],\"c\":[],\"a\":[]}-CAk-KAWAADEmHLiOtfeNPRlOet8N6SLq0_yJ8sRxn1suFkTQ8DRtv4gsuRXYrYOcYaf3jfNFgRfR08XIXCB3ZlOGRv_KWwG-SAMMAACELXmIqyGqQzEz_smU7g54yUvAjCrreLDmQdSGme8NdPs",
+   "expected": "accept",
+   "targets": [
+    "EOaWWYJZqeoJ3j13ajDg4CfIJfHsjb-BY8_wlXvoS6s0"
+   ],
+   "kels": {
+    "EFZX6RmPXMB7CWKfJK0PqwY886J8Uflnc3EsjNk7ZQ8b": {
+     "events": [
+      {
+       "sn": 0,
+       "t": "icp",
+       "d": "EFZX6RmPXMB7CWKfJK0PqwY886J8Uflnc3EsjNk7ZQ8b"
+      },
+      {
+       "sn": 1,
+       "t": "ixn",
+       "d": "EO1Qk0V_Ifqa1K1hXpeso28D0UW7DybBjwdmGaneX0Fa"
+      },
+      {
+       "sn": 2,
+       "t": "ixn",
+       "d": "ELXmIqyGqQzEz_smU7g54yUvAjCrreLDmQdSGme8NdPs"
+      }
+     ]
+    },
+    "EBy-u3bSTnDhTeG4AEZJ0NP2VCySQ2D4BklqoHAQjbjL": {
+     "events": [
+      {
+       "sn": 0,
+       "t": "dip",
+       "d": "EBy-u3bSTnDhTeG4AEZJ0NP2VCySQ2D4BklqoHAQjbjL"
+      },
+      {
+       "sn": 1,
+       "t": "drt",
+       "d": "EOaWWYJZqeoJ3j13ajDg4CfIJfHsjb-BY8_wlXvoS6s0"
+      }
+     ]
+    }
+   },
+   "reason": "c is a required field of a KERI 2.0 delegated rotation",
+   "spec_section": "Rotation Event Message Body / Delegated Rotation Event Message Body",
+   "spec_quote": "The top-level fields of a Rotation, `rot` event message body MUST appear in the following order: `[ v, t, d, i, s, p, kt, k, nt, n, bt, br, ba, c, a]`. All are REQUIRED. No other top-level fields are allowed (MUST NOT appear).",
+   "keripy": {
+    "outcome": "accepts",
+    "agrees_with_spec": true,
+    "kels": {
+     "EFZX6RmPXMB7CWKfJK0PqwY886J8Uflnc3EsjNk7ZQ8b": [
+      {
+       "sn": 0,
+       "t": "icp",
+       "d": "EFZX6RmPXMB7CWKfJK0PqwY886J8Uflnc3EsjNk7ZQ8b"
+      },
+      {
+       "sn": 1,
+       "t": "ixn",
+       "d": "EO1Qk0V_Ifqa1K1hXpeso28D0UW7DybBjwdmGaneX0Fa"
+      },
+      {
+       "sn": 2,
+       "t": "ixn",
+       "d": "ELXmIqyGqQzEz_smU7g54yUvAjCrreLDmQdSGme8NdPs"
+      }
+     ],
+     "EBy-u3bSTnDhTeG4AEZJ0NP2VCySQ2D4BklqoHAQjbjL": [
+      {
+       "sn": 0,
+       "t": "dip",
+       "d": "EBy-u3bSTnDhTeG4AEZJ0NP2VCySQ2D4BklqoHAQjbjL"
+      },
+      {
+       "sn": 1,
+       "t": "drt",
+       "d": "EOaWWYJZqeoJ3j13ajDg4CfIJfHsjb-BY8_wlXvoS6s0"
+      }
+     ]
+    },
+    "review_expected": "accepts"
+   }
+  },
+  {
+   "id": "gap/kel-rot-c-field-v2/drt-without-c",
+   "description": "KERI 2.0 delegated inception and a delegated rotation without the c field, anchored by the delegator",
+   "pvrsn": "2.0",
+   "target": "kel",
+   "gap": "kel-rot-c-field-v2",
+   "gap_kind": "missing-feature",
+   "stream": "{\"v\":\"KERICAACAAJSONAAEt.\",\"t\":\"icp\",\"d\":\"EFZX6RmPXMB7CWKfJK0PqwY886J8Uflnc3EsjNk7ZQ8b\",\"i\":\"EFZX6RmPXMB7CWKfJK0PqwY886J8Uflnc3EsjNk7ZQ8b\",\"s\":\"0\",\"kt\":\"1\",\"k\":[\"DNysw4iT7spMT3zxH2yZoyPSloXb_e3qx4ghyelGqSVs\"],\"nt\":\"1\",\"n\":[\"EIZNsfimAciseHnQBvLRov_OHSHtU_916S6ggQNvhr3o\"],\"bt\":\"0\",\"b\":[],\"c\":[],\"a\":[]}-CAX-KAWAACKLvi5RzajllzFPkDWFrNoRUhH2Y3qAYfPhyUuSe83nK_DQTBIIhYuK7r3N9hcX5IWdUVajJz8NujNHPkkQ6oB{\"v\":\"KERICAACAAJSONAAE8.\",\"t\":\"ixn\",\"d\":\"EO1Qk0V_Ifqa1K1hXpeso28D0UW7DybBjwdmGaneX0Fa\",\"i\":\"EFZX6RmPXMB7CWKfJK0PqwY886J8Uflnc3EsjNk7ZQ8b\",\"s\":\"1\",\"p\":\"EFZX6RmPXMB7CWKfJK0PqwY886J8Uflnc3EsjNk7ZQ8b\",\"a\":[{\"i\":\"EBy-u3bSTnDhTeG4AEZJ0NP2VCySQ2D4BklqoHAQjbjL\",\"s\":\"0\",\"d\":\"EBy-u3bSTnDhTeG4AEZJ0NP2VCySQ2D4BklqoHAQjbjL\"}]}-CAX-KAWAACkPVlTbsrrJVs72vMTS3C9EueG0JQ4Fdrokr0aJn524pr4k0T3yVccsNn6W2zw8HYBfTt4FVFB5nSBySt304cN{\"v\":\"KERICAACAAJSONAAFh.\",\"t\":\"dip\",\"d\":\"EBy-u3bSTnDhTeG4AEZJ0NP2VCySQ2D4BklqoHAQjbjL\",\"i\":\"EBy-u3bSTnDhTeG4AEZJ0NP2VCySQ2D4BklqoHAQjbjL\",\"s\":\"0\",\"kt\":\"1\",\"k\":[\"DJsEFoz7hZm4_iMXzTjgixm-9nVmbBd4Wi8MoTAO3mRB\"],\"nt\":\"1\",\"n\":[\"EPOtL63ZZrXusu77I-EB9mE8MRN0ek2TEFhpfghd1fnS\"],\"bt\":\"0\",\"b\":[],\"c\":[],\"a\":[],\"di\":\"EFZX6RmPXMB7CWKfJK0PqwY886J8Uflnc3EsjNk7ZQ8b\"}-CAk-KAWAAAPr2HQDZZA28-qjWlOOQIHDlrf-GqWSnml-JOX4LIolcBSHu5shFj4D_VCR4422Z0h-EterECmbasubi_K1eQG-SAMMAABEO1Qk0V_Ifqa1K1hXpeso28D0UW7DybBjwdmGaneX0Fa{\"v\":\"KERICAACAAJSONAAE8.\",\"t\":\"ixn\",\"d\":\"EFR3XipC_jyZfWFLRrjVa8ytw2txoU7qA6MGD8LKxyOR\",\"i\":\"EFZX6RmPXMB7CWKfJK0PqwY886J8Uflnc3EsjNk7ZQ8b\",\"s\":\"2\",\"p\":\"EO1Qk0V_Ifqa1K1hXpeso28D0UW7DybBjwdmGaneX0Fa\",\"a\":[{\"i\":\"EBy-u3bSTnDhTeG4AEZJ0NP2VCySQ2D4BklqoHAQjbjL\",\"s\":\"1\",\"d\":\"EIU7zRhnwSWG6JjC03_nc8rbRTNGHPsm9i5hEjUFYusm\"}]}-CAX-KAWAAAqlxz34cXxMlbzXRpwR5NURqDEg8qYAIXTCxRQiwj0QO8-YAIfE4wDoyy157gjCM4TJbaD9UlnP4kTBvUjJZgK{\"v\":\"KERICAACAAJSONAAFi.\",\"t\":\"drt\",\"d\":\"EIU7zRhnwSWG6JjC03_nc8rbRTNGHPsm9i5hEjUFYusm\",\"i\":\"EBy-u3bSTnDhTeG4AEZJ0NP2VCySQ2D4BklqoHAQjbjL\",\"s\":\"1\",\"p\":\"EBy-u3bSTnDhTeG4AEZJ0NP2VCySQ2D4BklqoHAQjbjL\",\"kt\":\"1\",\"k\":[\"DKJOieTekmqcHJjSiNr9SvXbZ1cYLIkiL04J9j6ktnVs\"],\"nt\":\"1\",\"n\":[\"EITovVfwbPKYiivMAuCvZAvw5tEKy4boc27BL6FkL2Q5\"],\"bt\":\"0\",\"br\":[],\"ba\":[],\"a\":[]}-CAk-KAWAACwE4cZgk_nf2x4zwmWOQ1cPhgrV6kPqDP1-x-fpF4qNvVD7mtVnX54j3eL3VM4V5bFIORlQgrg0ojr4defr5AP-SAMMAACEFR3XipC_jyZfWFLRrjVa8ytw2txoU7qA6MGD8LKxyOR",
+   "expected": "reject",
+   "targets": [
+    "EIU7zRhnwSWG6JjC03_nc8rbRTNGHPsm9i5hEjUFYusm"
+   ],
+   "kels": {
+    "EFZX6RmPXMB7CWKfJK0PqwY886J8Uflnc3EsjNk7ZQ8b": {
+     "events": [
+      {
+       "sn": 0,
+       "t": "icp",
+       "d": "EFZX6RmPXMB7CWKfJK0PqwY886J8Uflnc3EsjNk7ZQ8b"
+      },
+      {
+       "sn": 1,
+       "t": "ixn",
+       "d": "EO1Qk0V_Ifqa1K1hXpeso28D0UW7DybBjwdmGaneX0Fa"
+      },
+      {
+       "sn": 2,
+       "t": "ixn",
+       "d": "EFR3XipC_jyZfWFLRrjVa8ytw2txoU7qA6MGD8LKxyOR"
+      }
+     ]
+    },
+    "EBy-u3bSTnDhTeG4AEZJ0NP2VCySQ2D4BklqoHAQjbjL": {
+     "events": [
+      {
+       "sn": 0,
+       "t": "dip",
+       "d": "EBy-u3bSTnDhTeG4AEZJ0NP2VCySQ2D4BklqoHAQjbjL"
+      }
+     ]
+    }
+   },
+   "reason": "c is a required field of a KERI 2.0 delegated rotation",
+   "spec_section": "Rotation Event Message Body / Delegated Rotation Event Message Body",
+   "spec_quote": "The top-level fields of a Rotation, `rot` event message body MUST appear in the following order: `[ v, t, d, i, s, p, kt, k, nt, n, bt, br, ba, c, a]`. All are REQUIRED. No other top-level fields are allowed (MUST NOT appear).",
+   "keripy": {
+    "outcome": "rejects",
+    "agrees_with_spec": true,
+    "kels": {
+     "EFZX6RmPXMB7CWKfJK0PqwY886J8Uflnc3EsjNk7ZQ8b": [
+      {
+       "sn": 0,
+       "t": "icp",
+       "d": "EFZX6RmPXMB7CWKfJK0PqwY886J8Uflnc3EsjNk7ZQ8b"
+      },
+      {
+       "sn": 1,
+       "t": "ixn",
+       "d": "EO1Qk0V_Ifqa1K1hXpeso28D0UW7DybBjwdmGaneX0Fa"
+      },
+      {
+       "sn": 2,
+       "t": "ixn",
+       "d": "EFR3XipC_jyZfWFLRrjVa8ytw2txoU7qA6MGD8LKxyOR"
+      }
+     ],
+     "EBy-u3bSTnDhTeG4AEZJ0NP2VCySQ2D4BklqoHAQjbjL": [
+      {
+       "sn": 0,
+       "t": "dip",
+       "d": "EBy-u3bSTnDhTeG4AEZJ0NP2VCySQ2D4BklqoHAQjbjL"
+      }
+     ]
+    },
+    "review_expected": "rejects"
+   }
+  },
+  {
+   "id": "gap/rm-pro-bar-xip-missing/xip",
+   "description": "a KERI 2.0 xip message from a non-transferable sender, signed with its couple",
+   "pvrsn": "2.0",
+   "target": "message",
+   "gap": "rm-pro-bar-xip-missing",
+   "gap_kind": "missing-feature",
+   "stream": "{\"v\":\"KERICAACAAJSONAAE_.\",\"t\":\"xip\",\"d\":\"EJ7wyRFColm6U_yasNowH6T3pBsUT5V0JKWsHnYgP5o4\",\"u\":\"0ABhY2Rjc3BlY3dvcmtyYXcw\",\"i\":\"BP3VaARV60lDJHNQUKuxiX1Mi-8IoCfViUQQdksL7mM0\",\"ri\":\"BPWThrN8jmgNg3RC8Oarzsrxx6YiLhKH7VmPZtXXYkEK\",\"dt\":\"2020-08-21T17:52:40.000000+00:00\",\"r\":\"/offer\",\"q\":{\"timing\":\"immediate\"},\"a\":{\"item\":\"x\"}}-CAi-MAhBP3VaARV60lDJHNQUKuxiX1Mi-8IoCfViUQQdksL7mM00BCzwuweM9WibPzNkdEZK_dtTA4UWxWrVmcD3HCPn4tKHLlA5XMUyzco7tEUP1lFpAjaOUqk7sckFnfTXRCt7cEF",
+   "expected": "accept",
+   "targets": [
+    "EJ7wyRFColm6U_yasNowH6T3pBsUT5V0JKWsHnYgP5o4"
+   ],
+   "kels": {},
+   "reason": "xip is a routed message type of the specification",
+   "spec_section": "Routed Messages",
+   "spec_quote": "The Routed Messages MUST include a route, `r` field, and MAY include a return route, `rr` field. The value of the route and return route fields are hierarchical. The Routed Message types MUST be as follows `[qry, rpy, pro, bar, xip, exn]`.",
+   "keripy": {
+    "outcome": "accepts",
+    "agrees_with_spec": true,
+    "kels": {},
+    "note": "outcome is whether keripy loads the body (field set of the message type, version string and SAID); keripy has no stream handler for this type",
+    "review_expected": "accepts"
+   }
+  },
+  {
+   "id": "gap/rm-pro-bar-xip-missing/pro",
+   "description": "a KERI 2.0 pro message from a non-transferable sender, signed with its couple",
+   "pvrsn": "2.0",
+   "target": "message",
+   "gap": "rm-pro-bar-xip-missing",
+   "gap_kind": "missing-feature",
+   "stream": "{\"v\":\"KERICAACAAJSONAAEO.\",\"t\":\"pro\",\"d\":\"EN1jpK91q3qttYWTCd5_ppwB-GxStK6oT5fMDJG8N8u-\",\"i\":\"BP3VaARV60lDJHNQUKuxiX1Mi-8IoCfViUQQdksL7mM0\",\"dt\":\"2020-08-21T17:52:41.000000+00:00\",\"r\":\"/confidential\",\"rr\":\"/reply\",\"q\":{\"d\":\"EDT6xZA2tQC-f3Ku0qkR3d2BwEodHutZYNssG9u_4fPE\"}}-CAi-MAhBP3VaARV60lDJHNQUKuxiX1Mi-8IoCfViUQQdksL7mM00BDHhuBnhkpBJsw9_X4itFr6jaLHhOJ3L9hT-vm6GLZ4Mj5hcJu9JwsxgujkbT8KriMan6oxJ72y09hDa6onWuUD",
+   "expected": "accept",
+   "targets": [
+    "EN1jpK91q3qttYWTCd5_ppwB-GxStK6oT5fMDJG8N8u-"
+   ],
+   "kels": {},
+   "reason": "pro is a routed message type of the specification",
+   "spec_section": "Routed Messages",
+   "spec_quote": "The Routed Messages MUST include a route, `r` field, and MAY include a return route, `rr` field. The value of the route and return route fields are hierarchical. The Routed Message types MUST be as follows `[qry, rpy, pro, bar, xip, exn]`.",
+   "keripy": {
+    "outcome": "accepts",
+    "agrees_with_spec": true,
+    "kels": {},
+    "note": "outcome is whether keripy loads the body (field set of the message type, version string and SAID); keripy has no stream handler for this type",
+    "review_expected": "accepts"
+   }
+  },
+  {
+   "id": "gap/rm-pro-bar-xip-missing/bar",
+   "description": "a KERI 2.0 bar message from a non-transferable sender, signed with its couple",
+   "pvrsn": "2.0",
+   "target": "message",
+   "gap": "rm-pro-bar-xip-missing",
+   "gap_kind": "missing-feature",
+   "stream": "{\"v\":\"KERICAACAAJSONAAEU.\",\"t\":\"bar\",\"d\":\"EI0VU1Azaogpi0KD65UJqHtu7exjYqHYpvmWEYR6c3nu\",\"i\":\"BP3VaARV60lDJHNQUKuxiX1Mi-8IoCfViUQQdksL7mM0\",\"dt\":\"2020-08-21T17:52:42.000000+00:00\",\"r\":\"/confidential\",\"a\":{\"d\":\"EDT6xZA2tQC-f3Ku0qkR3d2BwEodHutZYNssG9u_4fPE\",\"value\":\"disclosed\"}}-CAi-MAhBP3VaARV60lDJHNQUKuxiX1Mi-8IoCfViUQQdksL7mM00BDsnmnXgB5RTZDOS09YY3Nv3SwcLP8wvdrKvy2WP-ApoV2Zv-nzhNz7KwYqjJHqPFc8cUSSQL8aDqjhEP0l86cF",
+   "expected": "accept",
+   "targets": [
+    "EI0VU1Azaogpi0KD65UJqHtu7exjYqHYpvmWEYR6c3nu"
+   ],
+   "kels": {},
+   "reason": "bar is a routed message type of the specification",
+   "spec_section": "Routed Messages",
+   "spec_quote": "The Routed Messages MUST include a route, `r` field, and MAY include a return route, `rr` field. The value of the route and return route fields are hierarchical. The Routed Message types MUST be as follows `[qry, rpy, pro, bar, xip, exn]`.",
+   "keripy": {
+    "outcome": "accepts",
+    "agrees_with_spec": true,
+    "kels": {},
+    "note": "outcome is whether keripy loads the body (field set of the message type, version string and SAID); keripy has no stream handler for this type",
+    "review_expected": "accepts"
+   }
+  },
+  {
+   "id": "gap/rm-exn-fields/spec-shape",
+   "description": "a KERI 2.0 exn [v,t,d,i,ri,x,p,dt,r,q,a] from a non-transferable sender, signed with its couple",
+   "pvrsn": "2.0",
+   "target": "message",
+   "gap": "rm-exn-fields",
+   "gap_kind": "wrong-behaviour",
+   "stream": "{\"v\":\"KERICAACAAJSONAAFx.\",\"t\":\"exn\",\"d\":\"ELQOVf6l9fEvnYDlV2Mb0lhpWmePTqVj6jRcra70mild\",\"i\":\"BP3VaARV60lDJHNQUKuxiX1Mi-8IoCfViUQQdksL7mM0\",\"ri\":\"BPWThrN8jmgNg3RC8Oarzsrxx6YiLhKH7VmPZtXXYkEK\",\"x\":\"EJ7wyRFColm6U_yasNowH6T3pBsUT5V0JKWsHnYgP5o4\",\"p\":\"EJ7wyRFColm6U_yasNowH6T3pBsUT5V0JKWsHnYgP5o4\",\"dt\":\"2020-08-21T17:52:43.000000+00:00\",\"r\":\"/agree\",\"q\":{},\"a\":{\"ok\":true}}-CAi-MAhBP3VaARV60lDJHNQUKuxiX1Mi-8IoCfViUQQdksL7mM00BDN4CbyBnQJLUPupj2R4paGMbbPlCxCN5NxgCk4GwAidtrqafOtr-lPGm3uigTHPWfvYwBC8nkvtTrsIjf8kYcN",
+   "expected": "accept",
+   "targets": [
+    "ELQOVf6l9fEvnYDlV2Mb0lhpWmePTqVj6jRcra70mild"
+   ],
+   "kels": {},
+   "reason": "the exn fields of the specification",
+   "spec_section": "Exchange Message Body / Prior event SAID field / Exchange identifier field",
+   "spec_quote": "The top-level fields of an Exchange, `exn` message body MUST appear in the following order: `[ v, t, d, i, ri, x, p, dt, r, q, a]`. All are REQUIRED. No other top-level fields are allowed (MUST NOT appear).",
+   "keripy": {
+    "outcome": "accepts",
+    "agrees_with_spec": true,
+    "kels": {},
+    "note": "outcome is whether keripy loads the body (field set of the message type, version string and SAID); keripy has no stream handler for this type",
+    "review_expected": "accepts"
+   }
+  },
+  {
+   "id": "gap/rm-exn-fields/without-i-ri-x-p",
+   "description": "the same exn without i, ri, x and p (keriox's shape), signed with the sender's couple",
+   "pvrsn": "2.0",
+   "target": "message",
+   "gap": "rm-exn-fields",
+   "gap_kind": "wrong-behaviour",
+   "stream": "{\"v\":\"KERICAACAAJSONAACk.\",\"t\":\"exn\",\"d\":\"EKKezIMdK3RRNb2LqnWVkA_h37RnHksAZAn6ehvXHgAY\",\"dt\":\"2020-08-21T17:52:43.000000+00:00\",\"r\":\"/agree\",\"q\":{},\"a\":{\"ok\":true}}-CAi-MAhBP3VaARV60lDJHNQUKuxiX1Mi-8IoCfViUQQdksL7mM00BAiSNGqPltRyruAZK7a54wQvSOGUWFjn9cFd8dz2AT1_RV8iVSQ_pzNOQ6r-p8dK2eaXSnDHL6RUwLYFNZmFBAG",
+   "expected": "reject",
+   "targets": [
+    "EKKezIMdK3RRNb2LqnWVkA_h37RnHksAZAn6ehvXHgAY"
+   ],
+   "kels": {},
+   "reason": "i, ri, x and p are required",
+   "spec_section": "Exchange Message Body / Prior event SAID field / Exchange identifier field",
+   "spec_quote": "The top-level fields of an Exchange, `exn` message body MUST appear in the following order: `[ v, t, d, i, ri, x, p, dt, r, q, a]`. All are REQUIRED. No other top-level fields are allowed (MUST NOT appear).",
+   "keripy": {
+    "outcome": "rejects",
+    "agrees_with_spec": true,
+    "kels": {},
+    "note": "outcome is whether keripy loads the body (field set of the message type, version string and SAID); keripy has no stream handler for this type",
+    "review_expected": "rejects"
+   }
+  },
+  {
+   "id": "gap/rm-routed-i-field-ambiguity",
+   "description": "a KERI 2.0 qry with the sender in i, as in the specification's example, signed with the sender's couple",
+   "pvrsn": "2.0",
+   "target": "message",
+   "gap": "rm-routed-i-field-ambiguity",
+   "gap_kind": "spec-ambiguity",
+   "stream": "{\"v\":\"KERICAACAAJSONAAEe.\",\"t\":\"qry\",\"d\":\"EGGYhp1kiOhRS7CxkEHU7XDHoBKxqtQ4DlBqYDX7_j95\",\"i\":\"BP3VaARV60lDJHNQUKuxiX1Mi-8IoCfViUQQdksL7mM0\",\"dt\":\"2020-08-21T17:52:44.000000+00:00\",\"r\":\"/oobi\",\"rr\":\"/oobi/process\",\"q\":{\"i\":\"BPWThrN8jmgNg3RC8Oarzsrxx6YiLhKH7VmPZtXXYkEK\",\"role\":\"witness\"}}-CAi-MAhBP3VaARV60lDJHNQUKuxiX1Mi-8IoCfViUQQdksL7mM00BDeRdpeLE2Ga9F8M0cPSJsuWreUl3WwruY0iVVIBB9JHYJvn-A-StnhF6Jk4nXgUnqD7TYMhghYj42wu4N-22MD",
+   "expected": "accept",
+   "targets": [
+    "EGGYhp1kiOhRS7CxkEHU7XDHoBKxqtQ4DlBqYDX7_j95"
+   ],
+   "kels": {},
+   "reason": "i names the sender",
+   "spec_section": "Query Message Body / Reply Message Body / Prod / Bare / Native CESR Encodings",
+   "spec_quote": "The top-level fields of a Query, `qry` message body MUST appear in the following order: `[ v, t, d, dt, r, rr, q]`. All are REQUIRED. No other top-level fields are allowed (MUST NOT appear).",
+   "spec_ambiguous": true,
+   "ambiguity": "The qry field list [v,t,d,dt,r,rr,q] has no i and forbids other fields, but every qry, rpy, pro and bar example (JSON and native CESR) carries i, and keripy 2.0 writes it. The expected outcome follows the examples and keripy.",
+   "keripy": {
+    "outcome": "accepts",
+    "agrees_with_spec": true,
+    "kels": {},
+    "note": "outcome is whether keripy loads the body (field set of the message type, version string and SAID); keripy has no stream handler for this type",
+    "review_expected": "accepts"
+   }
+  },
+  {
+   "id": "gap/rm-locscheme-signer-ambiguity",
+   "description": "the controller's KERI 2.0 inception and a KERI 2.0 /loc/scheme reply with i the controller and a.eid its witness, signed only by the controller",
+   "pvrsn": "2.0",
+   "target": "reply",
+   "gap": "rm-locscheme-signer-ambiguity",
+   "gap_kind": "spec-ambiguity",
+   "stream": "{\"v\":\"KERICAACAAJSONAAEt.\",\"t\":\"icp\",\"d\":\"ELCRS5vXxhyk7aqkzVUBsiQfxq4NtwKLfh_1HQ-g5-mp\",\"i\":\"ELCRS5vXxhyk7aqkzVUBsiQfxq4NtwKLfh_1HQ-g5-mp\",\"s\":\"0\",\"kt\":\"1\",\"k\":[\"DOZ7oIZv9kZxKRF8tjzCOfMQ9pEt87K7j1CDTGED7y7f\"],\"nt\":\"1\",\"n\":[\"EC3ZuRbIGcsniDDmGbpwgXtWkMG3qQQKYsLA0c-IOwrL\"],\"bt\":\"0\",\"b\":[],\"c\":[],\"a\":[]}-CAX-KAWAAAJoz7RTR76vAxCzYwefpMExaZCxBvSQze1ZoQTTeyGN_lf43WzfdNtJU6bhyErN_VynwdWuDJVD64U9sGSLLQI{\"v\":\"KERICAACAAJSONAAE7.\",\"t\":\"rpy\",\"d\":\"EKf0qO5AB6syE7UfchceWSgGLtVWD-IkAJDBA7EEjZU2\",\"i\":\"ELCRS5vXxhyk7aqkzVUBsiQfxq4NtwKLfh_1HQ-g5-mp\",\"dt\":\"2020-08-21T17:52:45.000000+00:00\",\"r\":\"/loc/scheme\",\"a\":{\"eid\":\"BCxKF7IHcQPojZndoTnpJLRYEnh49MPQly3-mK0-eivE\",\"scheme\":\"https\",\"url\":\"https://example.com/witness/wilma\"}}-CAv-XAuELCRS5vXxhyk7aqkzVUBsiQfxq4NtwKLfh_1HQ-g5-mpMAAAELCRS5vXxhyk7aqkzVUBsiQfxq4NtwKLfh_1HQ-g5-mp-KAWAAB7h5KjG0y2cFDQKX2jJz6rQ4sPKwZTDSCyprpebmEE5R3RSc-o3q5ZGu0E1z_kAMxYk2dL2-Za2l9qOHxH9rYK",
+   "expected": "reject",
+   "targets": [
+    "EKf0qO5AB6syE7UfchceWSgGLtVWD-IkAJDBA7EEjZU2"
+   ],
+   "kels": {
+    "ELCRS5vXxhyk7aqkzVUBsiQfxq4NtwKLfh_1HQ-g5-mp": {
+     "events": [
+      {
+       "sn": 0,
+       "t": "icp",
+       "d": "ELCRS5vXxhyk7aqkzVUBsiQfxq4NtwKLfh_1HQ-g5-mp"
+      }
+     ]
+    }
+   },
+   "locs": [
+    {
+     "eid": "BCxKF7IHcQPojZndoTnpJLRYEnh49MPQly3-mK0-eivE",
+     "scheme": "https",
+     "url": null
+    }
+   ],
+   "reason": "a location is authorized by its eid's signature",
+   "spec_section": "OOBI KERI Endpoint Authorization (OKEA) / Endpoint Location with Scheme by EID Update",
+   "spec_quote": "In the other case, an EID authorizes a Loc (URL location) for a scheme.",
+   "spec_ambiguous": true,
+   "ambiguity": "The normative text says the EID authorizes its own location, but the specification's examples put the controller in i (the sender) and the witness in a.eid.",
+   "keripy": {
+    "outcome": "rejects",
+    "agrees_with_spec": true,
+    "kels": {
+     "ELCRS5vXxhyk7aqkzVUBsiQfxq4NtwKLfh_1HQ-g5-mp": [
+      {
+       "sn": 0,
+       "t": "icp",
+       "d": "ELCRS5vXxhyk7aqkzVUBsiQfxq4NtwKLfh_1HQ-g5-mp"
+      }
+     ]
+    },
+    "locs": [
+     {
+      "eid": "BCxKF7IHcQPojZndoTnpJLRYEnh49MPQly3-mK0-eivE",
+      "scheme": "https",
+      "url": null
+     }
+    ],
+    "review_expected": "rejects"
+   }
+  }
+ ]
+}

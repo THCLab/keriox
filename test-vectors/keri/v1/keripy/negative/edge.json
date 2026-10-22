@@ -1,0 +1,730 @@
+{
+ "schema": "keri-negative/1",
+ "generator": {
+  "tool": "gen_vectors.py",
+  "version": "1.0.0",
+  "source": {
+   "implementation": "keripy",
+   "revision": "424a50c03421165c5f289e07a341bd57b8d8ab78",
+   "version": "2.1.0-dev1"
+  },
+  "specification": {
+   "repository": "https://github.com/trustoverip/kswg-keri-specification",
+   "commit": "fbdd4a6155e48248873cccd5cf6f79b6b631a021"
+  }
+ },
+ "vectors": [
+  {
+   "id": "classic/weighted-next-threshold-length",
+   "description": "an inception with three next weights for two next key digests",
+   "pvrsn": "1.0",
+   "target": "kel",
+   "stream": "{\"v\":\"KERI10JSON000199_\",\"t\":\"icp\",\"d\":\"ECRagZt7qeVmgpMmXKg6t6zce79nrSasAdTe3GeCc-ZC\",\"i\":\"ECRagZt7qeVmgpMmXKg6t6zce79nrSasAdTe3GeCc-ZC\",\"s\":\"0\",\"kt\":\"1\",\"k\":[\"DDPECd-8jaUoAxjGcAkurQ5DJW1LOLIi42sW5hnUGn58\",\"DD6C4ieBWamXlUmWMQwTSX6UHoz5Ou0pgLPg7Bh8-uh-\"],\"nt\":[\"1/2\",\"1/2\",\"1/2\"],\"n\":[\"EBWoU2-WXx-LHsSDdZD8HfvbuEoxkDN21JMj_SK55VGN\",\"EEgf7NeBKxDroMnnN3eNo3WETcnaJ9e__D54J12qqZFQ\"],\"bt\":\"0\",\"b\":[],\"c\":[],\"a\":[]}-CAt-KAsAACBOPaVXW6OPacVj8hAANUEggTgTPq8XaJkJHiN-3S5wsdtRGlJtAgj3IidOJ1Jkj4WDNY99Oa75UvO67SUweMGABApfnY1SExjdzOlI6jEfUTcCrfTV6wjKiefkW0k-JztVbs4zC39XPCkxD-zomV4MD9wZLvULEHjNPQR5QvN_M4E",
+   "stream_cesr1": "{\"v\":\"KERI10JSON000199_\",\"t\":\"icp\",\"d\":\"ECRagZt7qeVmgpMmXKg6t6zce79nrSasAdTe3GeCc-ZC\",\"i\":\"ECRagZt7qeVmgpMmXKg6t6zce79nrSasAdTe3GeCc-ZC\",\"s\":\"0\",\"kt\":\"1\",\"k\":[\"DDPECd-8jaUoAxjGcAkurQ5DJW1LOLIi42sW5hnUGn58\",\"DD6C4ieBWamXlUmWMQwTSX6UHoz5Ou0pgLPg7Bh8-uh-\"],\"nt\":[\"1/2\",\"1/2\",\"1/2\"],\"n\":[\"EBWoU2-WXx-LHsSDdZD8HfvbuEoxkDN21JMj_SK55VGN\",\"EEgf7NeBKxDroMnnN3eNo3WETcnaJ9e__D54J12qqZFQ\"],\"bt\":\"0\",\"b\":[],\"c\":[],\"a\":[]}-VAt-AACAACBOPaVXW6OPacVj8hAANUEggTgTPq8XaJkJHiN-3S5wsdtRGlJtAgj3IidOJ1Jkj4WDNY99Oa75UvO67SUweMGABApfnY1SExjdzOlI6jEfUTcCrfTV6wjKiefkW0k-JztVbs4zC39XPCkxD-zomV4MD9wZLvULEHjNPQR5QvN_M4E",
+   "expected": "reject",
+   "targets": [
+    "ECRagZt7qeVmgpMmXKg6t6zce79nrSasAdTe3GeCc-ZC"
+   ],
+   "kels": {
+    "ECRagZt7qeVmgpMmXKg6t6zce79nrSasAdTe3GeCc-ZC": {
+     "events": []
+    }
+   },
+   "reason": "a weighted threshold has exactly one weight per key digest (\"Three weights mean there MUST be exactly three corresponding key pairs\")",
+   "spec_section": "Fractionally weighted threshold",
+   "keripy": {
+    "outcome": "accepts",
+    "agrees_with_spec": false,
+    "kels": {
+     "ECRagZt7qeVmgpMmXKg6t6zce79nrSasAdTe3GeCc-ZC": [
+      {
+       "sn": 0,
+       "t": "icp",
+       "d": "ECRagZt7qeVmgpMmXKg6t6zce79nrSasAdTe3GeCc-ZC"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "gap/kel-rot-dup-key-prior-next-bypass/integer",
+   "description": "inception with nt=\"2\" and two next key digests; a rotation with k=[K1,K1] and kt=\"1\", signed twice by K1 (index 0 and index 1, both with prior-next index 0). Only one pre-rotated key is exposed",
+   "pvrsn": "1.0",
+   "target": "kel",
+   "gap": "kel-rot-dup-key-prior-next-bypass",
+   "gap_kind": "missing-check",
+   "stream": "{\"v\":\"KERI10JSON00015a_\",\"t\":\"icp\",\"d\":\"EMJ80l6_OkZ_y2cM1SgHVIDVDfPCMQ9x8j_zBYeg0a-E\",\"i\":\"EMJ80l6_OkZ_y2cM1SgHVIDVDfPCMQ9x8j_zBYeg0a-E\",\"s\":\"0\",\"kt\":\"1\",\"k\":[\"DNgj_cIpJGTU-uLnph19-aQQTl_dDOzQkXIQEaN9qG1A\"],\"nt\":\"2\",\"n\":[\"EOKBKr5qd_CcMXQ_D379TQihpLGKuIwDmmjFfRXXxu8i\",\"EL4CW-3X1mUxv4VAC3zyfg-BoXMHVwbowP6hYyXBcqw2\"],\"bt\":\"0\",\"b\":[],\"c\":[],\"a\":[]}-CAX-KAWAABlftH1m7L4e2YPk85McNWLcd0RPqcxe7nXz3PE5Q8nW9Mt1wN7HUf3sZX0Ztv-Nye1vaj2RnD_IVKIkzc2c5QH{\"v\":\"KERI10JSON00018f_\",\"t\":\"rot\",\"d\":\"EHAgPxoaCOb7shpmxQUQL9kUJsbjcon_kB9L6CISc32Y\",\"i\":\"EMJ80l6_OkZ_y2cM1SgHVIDVDfPCMQ9x8j_zBYeg0a-E\",\"s\":\"1\",\"p\":\"EMJ80l6_OkZ_y2cM1SgHVIDVDfPCMQ9x8j_zBYeg0a-E\",\"kt\":\"1\",\"k\":[\"DKnZbdgx2bDKHMXcV5TsIup2FZulTgT7tK6F2gDlbSwU\",\"DKnZbdgx2bDKHMXcV5TsIup2FZulTgT7tK6F2gDlbSwU\"],\"nt\":\"1\",\"n\":[\"EK3IMGSRzyub2OEui4qrNndpEcp4G5hJtAEBGP2Kotf-\"],\"bt\":\"0\",\"br\":[],\"ba\":[],\"a\":[]}-CAu-KAtAAAsC0FwPoyjWUWCzaN-ISZZTZg_WWqIr4EekEFcMSilETN_EWxubuzVbIx2poa6IbabsJ06-jBptERAxZrwqwgB2AABAAAsC0FwPoyjWUWCzaN-ISZZTZg_WWqIr4EekEFcMSilETN_EWxubuzVbIx2poa6IbabsJ06-jBptERAxZrwqwgB",
+   "stream_cesr1": "{\"v\":\"KERI10JSON00015a_\",\"t\":\"icp\",\"d\":\"EMJ80l6_OkZ_y2cM1SgHVIDVDfPCMQ9x8j_zBYeg0a-E\",\"i\":\"EMJ80l6_OkZ_y2cM1SgHVIDVDfPCMQ9x8j_zBYeg0a-E\",\"s\":\"0\",\"kt\":\"1\",\"k\":[\"DNgj_cIpJGTU-uLnph19-aQQTl_dDOzQkXIQEaN9qG1A\"],\"nt\":\"2\",\"n\":[\"EOKBKr5qd_CcMXQ_D379TQihpLGKuIwDmmjFfRXXxu8i\",\"EL4CW-3X1mUxv4VAC3zyfg-BoXMHVwbowP6hYyXBcqw2\"],\"bt\":\"0\",\"b\":[],\"c\":[],\"a\":[]}-VAX-AABAABlftH1m7L4e2YPk85McNWLcd0RPqcxe7nXz3PE5Q8nW9Mt1wN7HUf3sZX0Ztv-Nye1vaj2RnD_IVKIkzc2c5QH{\"v\":\"KERI10JSON00018f_\",\"t\":\"rot\",\"d\":\"EHAgPxoaCOb7shpmxQUQL9kUJsbjcon_kB9L6CISc32Y\",\"i\":\"EMJ80l6_OkZ_y2cM1SgHVIDVDfPCMQ9x8j_zBYeg0a-E\",\"s\":\"1\",\"p\":\"EMJ80l6_OkZ_y2cM1SgHVIDVDfPCMQ9x8j_zBYeg0a-E\",\"kt\":\"1\",\"k\":[\"DKnZbdgx2bDKHMXcV5TsIup2FZulTgT7tK6F2gDlbSwU\",\"DKnZbdgx2bDKHMXcV5TsIup2FZulTgT7tK6F2gDlbSwU\"],\"nt\":\"1\",\"n\":[\"EK3IMGSRzyub2OEui4qrNndpEcp4G5hJtAEBGP2Kotf-\"],\"bt\":\"0\",\"br\":[],\"ba\":[],\"a\":[]}-VAu-AACAAAsC0FwPoyjWUWCzaN-ISZZTZg_WWqIr4EekEFcMSilETN_EWxubuzVbIx2poa6IbabsJ06-jBptERAxZrwqwgB2AABAAAsC0FwPoyjWUWCzaN-ISZZTZg_WWqIr4EekEFcMSilETN_EWxubuzVbIx2poa6IbabsJ06-jBptERAxZrwqwgB",
+   "expected": "reject",
+   "targets": [
+    "EHAgPxoaCOb7shpmxQUQL9kUJsbjcon_kB9L6CISc32Y"
+   ],
+   "kels": {
+    "EMJ80l6_OkZ_y2cM1SgHVIDVDfPCMQ9x8j_zBYeg0a-E": {
+     "events": [
+      {
+       "sn": 0,
+       "t": "icp",
+       "d": "EMJ80l6_OkZ_y2cM1SgHVIDVDfPCMQ9x8j_zBYeg0a-E"
+      }
+     ]
+    }
+   },
+   "reason": "one exposed pre-rotated key counted twice does not satisfy a prior next threshold of two keys; a key list must not repeat a key",
+   "spec_section": "Rotation using pre-rotation",
+   "spec_quote": "To establish verifiable rotation control authority, the current key list MUST include a satisfiable subset of exposed (unblinded) pre-rotated next keys from the most recent prior Establishment event. Where satisfiable concerns the prior next threshold.",
+   "keripy": {
+    "outcome": "accepts",
+    "agrees_with_spec": false,
+    "kels": {
+     "EMJ80l6_OkZ_y2cM1SgHVIDVDfPCMQ9x8j_zBYeg0a-E": [
+      {
+       "sn": 0,
+       "t": "icp",
+       "d": "EMJ80l6_OkZ_y2cM1SgHVIDVDfPCMQ9x8j_zBYeg0a-E"
+      },
+      {
+       "sn": 1,
+       "t": "rot",
+       "d": "EHAgPxoaCOb7shpmxQUQL9kUJsbjcon_kB9L6CISc32Y"
+      }
+     ]
+    },
+    "review_expected": "accepts"
+   }
+  },
+  {
+   "id": "gap/kel-duplicity-identical-and-unverified",
+   "description": "inception and rotation (kt=1 of 2) signed by K2; the identical rotation again with K3's signature; then a different interaction at s=1 with only a random signature",
+   "pvrsn": "1.0",
+   "target": "kel",
+   "gap": "kel-duplicity-identical-and-unverified",
+   "gap_kind": "wrong-behaviour",
+   "stream": "{\"v\":\"KERI10JSON000189_\",\"t\":\"icp\",\"d\":\"EFAuo6TrudiUoNOt__nTBjwqbQRdlOQgCM20D644DU9e\",\"i\":\"EFAuo6TrudiUoNOt__nTBjwqbQRdlOQgCM20D644DU9e\",\"s\":\"0\",\"kt\":\"1\",\"k\":[\"DCVk0mG1gwVtMpgWivkwTHLoH1JFG5xgFxfP_Bo-g6-Y\",\"DI_r84lNMV7_BCDIqZJ58dOeJk5HYKe0t9d0wwAvhs2X\"],\"nt\":\"1\",\"n\":[\"ENwFvof_W0ExN9T_3FizGnRx5nJqTShfIt745XqzIiwK\",\"EC8lCipQEMfz62JuAhjUq31J7t3LH8JRR8JyQ7CoUsrm\"],\"bt\":\"0\",\"b\":[],\"c\":[],\"a\":[]}-CAX-KAWAADFYGsN7L0GOm1r7YlVtFsOti2n3uXplpbsP5VRDRPtui0LGBUO1XbXViJiihFIf_LiGvfJk7C7xxkeCfRBeQYM{\"v\":\"KERI10JSON0001be_\",\"t\":\"rot\",\"d\":\"EC95hlPnrv98pkFOLbD46fvF1TWiKZqMUcBzjdFrPaUW\",\"i\":\"EFAuo6TrudiUoNOt__nTBjwqbQRdlOQgCM20D644DU9e\",\"s\":\"1\",\"p\":\"EFAuo6TrudiUoNOt__nTBjwqbQRdlOQgCM20D644DU9e\",\"kt\":\"1\",\"k\":[\"DArE4jwv2Q80EJiVTSD1-7fwVRhxmpPB8ABW7O4i2QEK\",\"DFHRMReG8-c-DTd8go3rAshC7h61fDvfq6u2APPSIqzD\"],\"nt\":\"1\",\"n\":[\"EJL7pYsPrbb7uJcIqL9N1GsdN4-JYBDSO2T6Rk3kFwH0\",\"EDNGOOqZeP-8yui_BaeKc5gx5e_33r_We5LU2qGWuguj\"],\"bt\":\"0\",\"br\":[],\"ba\":[],\"a\":[]}-CAX-KAWAAASosWNg7iWeSVDiENCISlLw77hMIfAaqJIJ-gtdM1mf8twSDdwl5SYyi6Z4ng8Q6s2ZWdDjy13TAbEs_2Z5tUL{\"v\":\"KERI10JSON0001be_\",\"t\":\"rot\",\"d\":\"EC95hlPnrv98pkFOLbD46fvF1TWiKZqMUcBzjdFrPaUW\",\"i\":\"EFAuo6TrudiUoNOt__nTBjwqbQRdlOQgCM20D644DU9e\",\"s\":\"1\",\"p\":\"EFAuo6TrudiUoNOt__nTBjwqbQRdlOQgCM20D644DU9e\",\"kt\":\"1\",\"k\":[\"DArE4jwv2Q80EJiVTSD1-7fwVRhxmpPB8ABW7O4i2QEK\",\"DFHRMReG8-c-DTd8go3rAshC7h61fDvfq6u2APPSIqzD\"],\"nt\":\"1\",\"n\":[\"EJL7pYsPrbb7uJcIqL9N1GsdN4-JYBDSO2T6Rk3kFwH0\",\"EDNGOOqZeP-8yui_BaeKc5gx5e_33r_We5LU2qGWuguj\"],\"bt\":\"0\",\"br\":[],\"ba\":[],\"a\":[]}-CAX-KAWABD-UwNcYHkxXdrtGdUNaWELAcTkiJWOr4tTcD0tFFWuBKzfpXKms6Tjjcf5gXcvJq4Mf1_M2VqU4OBZQ6vE_OEF{\"v\":\"KERI10JSON0000cb_\",\"t\":\"ixn\",\"d\":\"EIYJ8XTOsFkkngEqEtwLCyefzH8YRmVqRWAFHr-EMv-_\",\"i\":\"EFAuo6TrudiUoNOt__nTBjwqbQRdlOQgCM20D644DU9e\",\"s\":\"1\",\"p\":\"EFAuo6TrudiUoNOt__nTBjwqbQRdlOQgCM20D644DU9e\",\"a\":[]}-CAX-KAWAACIWIL9fuJJMIhVMIQgZAuRCUwCZzhRkCquZsAP1sgRed7nRwyo1veU3gsNDP5NfIqCZilbceQhkQi8_QFo5A0P",
+   "stream_cesr1": "{\"v\":\"KERI10JSON000189_\",\"t\":\"icp\",\"d\":\"EFAuo6TrudiUoNOt__nTBjwqbQRdlOQgCM20D644DU9e\",\"i\":\"EFAuo6TrudiUoNOt__nTBjwqbQRdlOQgCM20D644DU9e\",\"s\":\"0\",\"kt\":\"1\",\"k\":[\"DCVk0mG1gwVtMpgWivkwTHLoH1JFG5xgFxfP_Bo-g6-Y\",\"DI_r84lNMV7_BCDIqZJ58dOeJk5HYKe0t9d0wwAvhs2X\"],\"nt\":\"1\",\"n\":[\"ENwFvof_W0ExN9T_3FizGnRx5nJqTShfIt745XqzIiwK\",\"EC8lCipQEMfz62JuAhjUq31J7t3LH8JRR8JyQ7CoUsrm\"],\"bt\":\"0\",\"b\":[],\"c\":[],\"a\":[]}-VAX-AABAADFYGsN7L0GOm1r7YlVtFsOti2n3uXplpbsP5VRDRPtui0LGBUO1XbXViJiihFIf_LiGvfJk7C7xxkeCfRBeQYM{\"v\":\"KERI10JSON0001be_\",\"t\":\"rot\",\"d\":\"EC95hlPnrv98pkFOLbD46fvF1TWiKZqMUcBzjdFrPaUW\",\"i\":\"EFAuo6TrudiUoNOt__nTBjwqbQRdlOQgCM20D644DU9e\",\"s\":\"1\",\"p\":\"EFAuo6TrudiUoNOt__nTBjwqbQRdlOQgCM20D644DU9e\",\"kt\":\"1\",\"k\":[\"DArE4jwv2Q80EJiVTSD1-7fwVRhxmpPB8ABW7O4i2QEK\",\"DFHRMReG8-c-DTd8go3rAshC7h61fDvfq6u2APPSIqzD\"],\"nt\":\"1\",\"n\":[\"EJL7pYsPrbb7uJcIqL9N1GsdN4-JYBDSO2T6Rk3kFwH0\",\"EDNGOOqZeP-8yui_BaeKc5gx5e_33r_We5LU2qGWuguj\"],\"bt\":\"0\",\"br\":[],\"ba\":[],\"a\":[]}-VAX-AABAAASosWNg7iWeSVDiENCISlLw77hMIfAaqJIJ-gtdM1mf8twSDdwl5SYyi6Z4ng8Q6s2ZWdDjy13TAbEs_2Z5tUL{\"v\":\"KERI10JSON0001be_\",\"t\":\"rot\",\"d\":\"EC95hlPnrv98pkFOLbD46fvF1TWiKZqMUcBzjdFrPaUW\",\"i\":\"EFAuo6TrudiUoNOt__nTBjwqbQRdlOQgCM20D644DU9e\",\"s\":\"1\",\"p\":\"EFAuo6TrudiUoNOt__nTBjwqbQRdlOQgCM20D644DU9e\",\"kt\":\"1\",\"k\":[\"DArE4jwv2Q80EJiVTSD1-7fwVRhxmpPB8ABW7O4i2QEK\",\"DFHRMReG8-c-DTd8go3rAshC7h61fDvfq6u2APPSIqzD\"],\"nt\":\"1\",\"n\":[\"EJL7pYsPrbb7uJcIqL9N1GsdN4-JYBDSO2T6Rk3kFwH0\",\"EDNGOOqZeP-8yui_BaeKc5gx5e_33r_We5LU2qGWuguj\"],\"bt\":\"0\",\"br\":[],\"ba\":[],\"a\":[]}-VAX-AABABD-UwNcYHkxXdrtGdUNaWELAcTkiJWOr4tTcD0tFFWuBKzfpXKms6Tjjcf5gXcvJq4Mf1_M2VqU4OBZQ6vE_OEF{\"v\":\"KERI10JSON0000cb_\",\"t\":\"ixn\",\"d\":\"EIYJ8XTOsFkkngEqEtwLCyefzH8YRmVqRWAFHr-EMv-_\",\"i\":\"EFAuo6TrudiUoNOt__nTBjwqbQRdlOQgCM20D644DU9e\",\"s\":\"1\",\"p\":\"EFAuo6TrudiUoNOt__nTBjwqbQRdlOQgCM20D644DU9e\",\"a\":[]}-VAX-AABAACIWIL9fuJJMIhVMIQgZAuRCUwCZzhRkCquZsAP1sgRed7nRwyo1veU3gsNDP5NfIqCZilbceQhkQi8_QFo5A0P",
+   "expected": "reject",
+   "targets": [
+    "EIYJ8XTOsFkkngEqEtwLCyefzH8YRmVqRWAFHr-EMv-_"
+   ],
+   "kels": {
+    "EFAuo6TrudiUoNOt__nTBjwqbQRdlOQgCM20D644DU9e": {
+     "events": [
+      {
+       "sn": 0,
+       "t": "icp",
+       "d": "EFAuo6TrudiUoNOt__nTBjwqbQRdlOQgCM20D644DU9e"
+      },
+      {
+       "sn": 1,
+       "t": "rot",
+       "d": "EC95hlPnrv98pkFOLbD46fvF1TWiKZqMUcBzjdFrPaUW"
+      }
+     ]
+    }
+   },
+   "duplicity": {
+    "evidence": [],
+    "note": "neither the re-sent rotation (same SAID) nor the unverified interaction is a verified different version of an event at s=1, so neither is evidence of duplicity. Keeping K3's late signature on the accepted rotation is keripy behaviour; the specification does not require it."
+   },
+   "reason": "a duplicitous event is a verified but different version of an event at the same location; an identical event is not duplicitous and an unverified one is dropped",
+   "spec_section": "Duplicity",
+   "spec_quote": "A duplicitous event is defined as a verified but different version of an event at the same location.",
+   "keripy": {
+    "outcome": "rejects",
+    "agrees_with_spec": false,
+    "kels": {
+     "EFAuo6TrudiUoNOt__nTBjwqbQRdlOQgCM20D644DU9e": [
+      {
+       "sn": 0,
+       "t": "icp",
+       "d": "EFAuo6TrudiUoNOt__nTBjwqbQRdlOQgCM20D644DU9e"
+      },
+      {
+       "sn": 1,
+       "t": "rot",
+       "d": "EC95hlPnrv98pkFOLbD46fvF1TWiKZqMUcBzjdFrPaUW"
+      }
+     ]
+    },
+    "stored": {
+     "EC95hlPnrv98pkFOLbD46fvF1TWiKZqMUcBzjdFrPaUW": {
+      "sigs": 2,
+      "wigs": 0,
+      "rcts": 0,
+      "vrcs": 0
+     }
+    },
+    "likely_duplicitous": [
+     {
+      "sn": 1,
+      "d": "EIYJ8XTOsFkkngEqEtwLCyefzH8YRmVqRWAFHr-EMv-_"
+     }
+    ]
+   }
+  },
+  {
+   "id": "gap/kel-config-did-rb-nrb",
+   "description": "inception with c=[\"RB\"], b=[B1], bt=1 and a=[] (no registrar backer seal for B1), signed and receipted by B1",
+   "pvrsn": "1.0",
+   "target": "kel",
+   "gap": "kel-config-did-rb-nrb",
+   "gap_kind": "missing-feature",
+   "stream": "{\"v\":\"KERI10JSON00015d_\",\"t\":\"icp\",\"d\":\"EKT0HA9vn5xh0vufcwQCogG-3LjY8lOKpDuPhBXRd6lz\",\"i\":\"EKT0HA9vn5xh0vufcwQCogG-3LjY8lOKpDuPhBXRd6lz\",\"s\":\"0\",\"kt\":\"1\",\"k\":[\"DMaKrg9OrIvUBjAgmpDeDcLtUMaS9Joz_AcYwBPe2T-x\"],\"nt\":\"1\",\"n\":[\"EJsVBn0u_cK_w8wDFUvSKJaVYgqIcUg-Tzl-0RXxEHq3\"],\"bt\":\"1\",\"b\":[\"BOEXUkxYSz5lcd1Y0TFZiV7oII0O0b2srfV4eavNksCO\"],\"c\":[\"RB\"],\"a\":[]}-CAu-KAWAAAEC1qc0L4TVzZAgjW4eQeDpTs0GJXkfO0FgqsJ6MxkEYTLOeLPsa-3Z8T_6j4qQhJOd82sCcP5UI9Dzx7fxKAI-LAWAADZY2XG52eVqRubNJBc7ljX95mJG9j_LRo7aq0us_VtiPjXnDA5G114GrzpPjxO6ZppxO9d4Ouw9yQM5FLCA6IP",
+   "stream_cesr1": "{\"v\":\"KERI10JSON00015d_\",\"t\":\"icp\",\"d\":\"EKT0HA9vn5xh0vufcwQCogG-3LjY8lOKpDuPhBXRd6lz\",\"i\":\"EKT0HA9vn5xh0vufcwQCogG-3LjY8lOKpDuPhBXRd6lz\",\"s\":\"0\",\"kt\":\"1\",\"k\":[\"DMaKrg9OrIvUBjAgmpDeDcLtUMaS9Joz_AcYwBPe2T-x\"],\"nt\":\"1\",\"n\":[\"EJsVBn0u_cK_w8wDFUvSKJaVYgqIcUg-Tzl-0RXxEHq3\"],\"bt\":\"1\",\"b\":[\"BOEXUkxYSz5lcd1Y0TFZiV7oII0O0b2srfV4eavNksCO\"],\"c\":[\"RB\"],\"a\":[]}-VAu-AABAAAEC1qc0L4TVzZAgjW4eQeDpTs0GJXkfO0FgqsJ6MxkEYTLOeLPsa-3Z8T_6j4qQhJOd82sCcP5UI9Dzx7fxKAI-BABAADZY2XG52eVqRubNJBc7ljX95mJG9j_LRo7aq0us_VtiPjXnDA5G114GrzpPjxO6ZppxO9d4Ouw9yQM5FLCA6IP",
+   "expected": "reject",
+   "targets": [
+    "EKT0HA9vn5xh0vufcwQCogG-3LjY8lOKpDuPhBXRd6lz"
+   ],
+   "kels": {
+    "EKT0HA9vn5xh0vufcwQCogG-3LjY8lOKpDuPhBXRd6lz": {
+     "events": []
+    }
+   },
+   "reason": "with RB the establishment event must include a registrar backer seal for each backer",
+   "spec_section": "Configuration traits field / Registrar Backer seal",
+   "spec_quote": "The `Registrar-Backer`, `RB` config trait indicates that the [[ref: Backer]] (witness) list in the establishment event in which this trait appears provides the AIDs of ledger registrar backers. The event MUST also include Registrar Backer Seal for each registrar backer in the list.",
+   "keripy": {
+    "outcome": "accepts",
+    "agrees_with_spec": false,
+    "kels": {
+     "EKT0HA9vn5xh0vufcwQCogG-3LjY8lOKpDuPhBXRd6lz": [
+      {
+       "sn": 0,
+       "t": "icp",
+       "d": "EKT0HA9vn5xh0vufcwQCogG-3LjY8lOKpDuPhBXRd6lz"
+      }
+     ]
+    },
+    "review_expected": "accepts"
+   }
+  },
+  {
+   "id": "gap/deleg-anchor-in-inception-refused",
+   "description": "a delegator with a transferable basic prefix whose inception anchors the seal of a delegated inception; the delegated inception's source seal couple points at that inception (s=0)",
+   "pvrsn": "1.0",
+   "target": "kel",
+   "gap": "deleg-anchor-in-inception-refused",
+   "gap_kind": "wrong-behaviour",
+   "stream": "{\"v\":\"KERI10JSON00019a_\",\"t\":\"icp\",\"d\":\"EJbRlMxPIOlhtZzX4OWsGz64zWyllD6XV6ilLEBLrupq\",\"i\":\"DOY5M0Lunl3wDi2BJFuEnFVdZPcO_OcZ-XGY1ljVxM8w\",\"s\":\"0\",\"kt\":\"1\",\"k\":[\"DOY5M0Lunl3wDi2BJFuEnFVdZPcO_OcZ-XGY1ljVxM8w\"],\"nt\":\"1\",\"n\":[\"ECbiLRDszh4ylhEBkdWQNLhxJyPBSgoEkcysVm9NELYe\"],\"bt\":\"0\",\"b\":[],\"c\":[],\"a\":[{\"i\":\"EM9pafVX1SwDc2e37K7vmhoI1XZVtdOJBr7A9j98ICrd\",\"s\":\"0\",\"d\":\"EM9pafVX1SwDc2e37K7vmhoI1XZVtdOJBr7A9j98ICrd\"}]}-CAX-KAWAABjD0AJjnqoafrinMIoM_qI6LrqIbVMO9KBfGvFtu7UEr96tbEUZwoAeI-27xSo5ba89m1YJ_JGKJVC9bS3BloN{\"v\":\"KERI10JSON00015f_\",\"t\":\"dip\",\"d\":\"EM9pafVX1SwDc2e37K7vmhoI1XZVtdOJBr7A9j98ICrd\",\"i\":\"EM9pafVX1SwDc2e37K7vmhoI1XZVtdOJBr7A9j98ICrd\",\"s\":\"0\",\"kt\":\"1\",\"k\":[\"DB1huVH1EEqXk58ZcGspLT04j_oi5pl1p0hdPaC747Nb\"],\"nt\":\"1\",\"n\":[\"EP-djPkbDAfuxGFgoil8ESoGSWB-E5J0jKIQfOqavCYx\"],\"bt\":\"0\",\"b\":[],\"c\":[],\"a\":[],\"di\":\"DOY5M0Lunl3wDi2BJFuEnFVdZPcO_OcZ-XGY1ljVxM8w\"}-CAk-KAWAAACKDFVM4kK6tRyhpaWn6U1hkWE3yaLvs9Jck98tdIm99P6ol9DLwLOlhAzOVOJPlXSpIvT4nMbo3cHQXhef0oM-SAMMAAAEJbRlMxPIOlhtZzX4OWsGz64zWyllD6XV6ilLEBLrupq",
+   "stream_cesr1": "{\"v\":\"KERI10JSON00019a_\",\"t\":\"icp\",\"d\":\"EJbRlMxPIOlhtZzX4OWsGz64zWyllD6XV6ilLEBLrupq\",\"i\":\"DOY5M0Lunl3wDi2BJFuEnFVdZPcO_OcZ-XGY1ljVxM8w\",\"s\":\"0\",\"kt\":\"1\",\"k\":[\"DOY5M0Lunl3wDi2BJFuEnFVdZPcO_OcZ-XGY1ljVxM8w\"],\"nt\":\"1\",\"n\":[\"ECbiLRDszh4ylhEBkdWQNLhxJyPBSgoEkcysVm9NELYe\"],\"bt\":\"0\",\"b\":[],\"c\":[],\"a\":[{\"i\":\"EM9pafVX1SwDc2e37K7vmhoI1XZVtdOJBr7A9j98ICrd\",\"s\":\"0\",\"d\":\"EM9pafVX1SwDc2e37K7vmhoI1XZVtdOJBr7A9j98ICrd\"}]}-VAX-AABAABjD0AJjnqoafrinMIoM_qI6LrqIbVMO9KBfGvFtu7UEr96tbEUZwoAeI-27xSo5ba89m1YJ_JGKJVC9bS3BloN{\"v\":\"KERI10JSON00015f_\",\"t\":\"dip\",\"d\":\"EM9pafVX1SwDc2e37K7vmhoI1XZVtdOJBr7A9j98ICrd\",\"i\":\"EM9pafVX1SwDc2e37K7vmhoI1XZVtdOJBr7A9j98ICrd\",\"s\":\"0\",\"kt\":\"1\",\"k\":[\"DB1huVH1EEqXk58ZcGspLT04j_oi5pl1p0hdPaC747Nb\"],\"nt\":\"1\",\"n\":[\"EP-djPkbDAfuxGFgoil8ESoGSWB-E5J0jKIQfOqavCYx\"],\"bt\":\"0\",\"b\":[],\"c\":[],\"a\":[],\"di\":\"DOY5M0Lunl3wDi2BJFuEnFVdZPcO_OcZ-XGY1ljVxM8w\"}-VAp-AABAAACKDFVM4kK6tRyhpaWn6U1hkWE3yaLvs9Jck98tdIm99P6ol9DLwLOlhAzOVOJPlXSpIvT4nMbo3cHQXhef0oM-GAB0AAAAAAAAAAAAAAAAAAAAAAAEJbRlMxPIOlhtZzX4OWsGz64zWyllD6XV6ilLEBLrupq",
+   "expected": "accept",
+   "targets": [
+    "EM9pafVX1SwDc2e37K7vmhoI1XZVtdOJBr7A9j98ICrd"
+   ],
+   "kels": {
+    "DOY5M0Lunl3wDi2BJFuEnFVdZPcO_OcZ-XGY1ljVxM8w": {
+     "events": [
+      {
+       "sn": 0,
+       "t": "icp",
+       "d": "EJbRlMxPIOlhtZzX4OWsGz64zWyllD6XV6ilLEBLrupq"
+      }
+     ]
+    },
+    "EM9pafVX1SwDc2e37K7vmhoI1XZVtdOJBr7A9j98ICrd": {
+     "events": [
+      {
+       "sn": 0,
+       "t": "dip",
+       "d": "EM9pafVX1SwDc2e37K7vmhoI1XZVtdOJBr7A9j98ICrd"
+      }
+     ]
+    }
+   },
+   "reason": "any event of the delegator that carries the event seal can be the delegating event",
+   "spec_section": "KERI key management > Cooperative Delegation",
+   "spec_quote": "A delegating event is a type of event that includes in its data payload an event seal of the delegated event that is the target the delegation operation.",
+   "keripy": {
+    "outcome": "rejects",
+    "agrees_with_spec": false,
+    "kels": {
+     "DOY5M0Lunl3wDi2BJFuEnFVdZPcO_OcZ-XGY1ljVxM8w": [
+      {
+       "sn": 0,
+       "t": "icp",
+       "d": "EJbRlMxPIOlhtZzX4OWsGz64zWyllD6XV6ilLEBLrupq"
+      }
+     ],
+     "EM9pafVX1SwDc2e37K7vmhoI1XZVtdOJBr7A9j98ICrd": []
+    },
+    "note": "keripy refuses a source seal couple with s=0: validateDelegation validates the couple's sequence number with inceptive=False (src/keri/core/eventing.py:3279), so an anchor in the delegator's inception is found only by its KEL search, when no source seal is attached (see the no-source-seal variant)",
+    "review_expected": "accepts"
+   }
+  },
+  {
+   "id": "gap/wit-ba-existing-duplicates",
+   "description": "inception with b=[W1,W2], bt=1 (witnessed); a rotation with br=[], ba=[W1], bt=1, controller-signed and signed by W1 at index 0",
+   "pvrsn": "1.0",
+   "target": "kel",
+   "gap": "wit-ba-existing-duplicates",
+   "gap_kind": "wrong-behaviour",
+   "stream": "{\"v\":\"KERI10JSON000188_\",\"t\":\"icp\",\"d\":\"EKQ300hV4uwvIABDaU_JfdqdOrJ2Ti3nvD85qeU__4cy\",\"i\":\"EKQ300hV4uwvIABDaU_JfdqdOrJ2Ti3nvD85qeU__4cy\",\"s\":\"0\",\"kt\":\"1\",\"k\":[\"DNORnTDtI5R3XueklwdtiVHJ3vmHqZ-ShlYASrEL13DU\"],\"nt\":\"1\",\"n\":[\"EMgzY6ES4gbHgKtNx1mG33XMC0hGs-3anLE7GGjp5BpV\"],\"bt\":\"1\",\"b\":[\"BO9oUJRlc-Tv6twtERqBQEAgWDZ1X3DZpG2k7TgFlv2o\",\"BJAE2kPjnXpY6US4WOGoPpJjd9EnkbnOB63-qAWgvQuZ\"],\"c\":[],\"a\":[]}-CAu-KAWAADQvSNv3qMQmEfSx7B8q_AnqSnkW9cBTAT8RGIK2P6e16Xa3UIXCoRXW_ZKUFqyD4UE7XM5-b3LvBvRjIay1lMM-LAWAACC7WuzrW7GrOY9Ei7d2kFwCYEbECMJiPIWOSofuumSNmaBvJbz549D2rx4Jdw7cpYDuDbkoh24O_als3l5AUAL{\"v\":\"KERI10JSON00018e_\",\"t\":\"rot\",\"d\":\"ECYCqF04R56e8dszk1lmFjbIHCyycG4LSnjoxcEgwe75\",\"i\":\"EKQ300hV4uwvIABDaU_JfdqdOrJ2Ti3nvD85qeU__4cy\",\"s\":\"1\",\"p\":\"EKQ300hV4uwvIABDaU_JfdqdOrJ2Ti3nvD85qeU__4cy\",\"kt\":\"1\",\"k\":[\"DNIPiytxLJydM4HK3MUE0ALAb7DUkiWVCa1jHN4E1806\"],\"nt\":\"1\",\"n\":[\"EJ7LE17hj5ux1qvuO6WXVbyrEZwqA2gA6znWT_vJBD2s\"],\"bt\":\"1\",\"br\":[],\"ba\":[\"BO9oUJRlc-Tv6twtERqBQEAgWDZ1X3DZpG2k7TgFlv2o\"],\"a\":[]}-CAu-KAWAAAMCZ7oM4MdkXQRCdMwVYcHBJsFWJxxaMuHpbYap1zN1kosDVXuErSUZLKHBCDM5ITewyBceAiGPwRtHf47eaoN-LAWAADCH4ZCQPyWQoh4doRIUk0-CuMDWSKESzG4P2rsjLz2-9NUAkdDw45mQrxWNq_q6axj94_C1YVCa2CoeFPnENUJ",
+   "stream_cesr1": "{\"v\":\"KERI10JSON000188_\",\"t\":\"icp\",\"d\":\"EKQ300hV4uwvIABDaU_JfdqdOrJ2Ti3nvD85qeU__4cy\",\"i\":\"EKQ300hV4uwvIABDaU_JfdqdOrJ2Ti3nvD85qeU__4cy\",\"s\":\"0\",\"kt\":\"1\",\"k\":[\"DNORnTDtI5R3XueklwdtiVHJ3vmHqZ-ShlYASrEL13DU\"],\"nt\":\"1\",\"n\":[\"EMgzY6ES4gbHgKtNx1mG33XMC0hGs-3anLE7GGjp5BpV\"],\"bt\":\"1\",\"b\":[\"BO9oUJRlc-Tv6twtERqBQEAgWDZ1X3DZpG2k7TgFlv2o\",\"BJAE2kPjnXpY6US4WOGoPpJjd9EnkbnOB63-qAWgvQuZ\"],\"c\":[],\"a\":[]}-VAu-AABAADQvSNv3qMQmEfSx7B8q_AnqSnkW9cBTAT8RGIK2P6e16Xa3UIXCoRXW_ZKUFqyD4UE7XM5-b3LvBvRjIay1lMM-BABAACC7WuzrW7GrOY9Ei7d2kFwCYEbECMJiPIWOSofuumSNmaBvJbz549D2rx4Jdw7cpYDuDbkoh24O_als3l5AUAL{\"v\":\"KERI10JSON00018e_\",\"t\":\"rot\",\"d\":\"ECYCqF04R56e8dszk1lmFjbIHCyycG4LSnjoxcEgwe75\",\"i\":\"EKQ300hV4uwvIABDaU_JfdqdOrJ2Ti3nvD85qeU__4cy\",\"s\":\"1\",\"p\":\"EKQ300hV4uwvIABDaU_JfdqdOrJ2Ti3nvD85qeU__4cy\",\"kt\":\"1\",\"k\":[\"DNIPiytxLJydM4HK3MUE0ALAb7DUkiWVCa1jHN4E1806\"],\"nt\":\"1\",\"n\":[\"EJ7LE17hj5ux1qvuO6WXVbyrEZwqA2gA6znWT_vJBD2s\"],\"bt\":\"1\",\"br\":[],\"ba\":[\"BO9oUJRlc-Tv6twtERqBQEAgWDZ1X3DZpG2k7TgFlv2o\"],\"a\":[]}-VAu-AABAAAMCZ7oM4MdkXQRCdMwVYcHBJsFWJxxaMuHpbYap1zN1kosDVXuErSUZLKHBCDM5ITewyBceAiGPwRtHf47eaoN-BABAADCH4ZCQPyWQoh4doRIUk0-CuMDWSKESzG4P2rsjLz2-9NUAkdDw45mQrxWNq_q6axj94_C1YVCa2CoeFPnENUJ",
+   "expected": "accept",
+   "targets": [
+    "ECYCqF04R56e8dszk1lmFjbIHCyycG4LSnjoxcEgwe75"
+   ],
+   "kels": {
+    "EKQ300hV4uwvIABDaU_JfdqdOrJ2Ti3nvD85qeU__4cy": {
+     "events": [
+      {
+       "sn": 0,
+       "t": "icp",
+       "d": "EKQ300hV4uwvIABDaU_JfdqdOrJ2Ti3nvD85qeU__4cy"
+      },
+      {
+       "sn": 1,
+       "t": "rot",
+       "d": "ECYCqF04R56e8dszk1lmFjbIHCyycG4LSnjoxcEgwe75"
+      }
+     ]
+    }
+   },
+   "witnesses": {
+    "EKQ300hV4uwvIABDaU_JfdqdOrJ2Ti3nvD85qeU__4cy": [
+     "BO9oUJRlc-Tv6twtERqBQEAgWDZ1X3DZpG2k7TgFlv2o",
+     "BJAE2kPjnXpY6US4WOGoPpJjd9EnkbnOB63-qAWgvQuZ"
+    ]
+   },
+   "reason": "ba entries already in the backer list are skipped; the witness list stays [W1,W2]",
+   "spec_section": "Backer add list (ba field)",
+   "spec_quote": "Given such an event, the current backer list is updated by appending in order the AIDs from the Backer Add, `ba` list except for any AIDs that already appear in the current Backer list.",
+   "spec_ambiguous": true,
+   "ambiguity": "The specification says to skip AIDs of ba that are already witnesses, keripy refuses the event and keriox appends W1 again: three behaviours, so interop needs a decision. The expected outcome follows the specification text.",
+   "keripy": {
+    "outcome": "rejects",
+    "agrees_with_spec": false,
+    "kels": {
+     "EKQ300hV4uwvIABDaU_JfdqdOrJ2Ti3nvD85qeU__4cy": [
+      {
+       "sn": 0,
+       "t": "icp",
+       "d": "EKQ300hV4uwvIABDaU_JfdqdOrJ2Ti3nvD85qeU__4cy"
+      }
+     ]
+    },
+    "witnesses": {
+     "EKQ300hV4uwvIABDaU_JfdqdOrJ2Ti3nvD85qeU__4cy": [
+      "BO9oUJRlc-Tv6twtERqBQEAgWDZ1X3DZpG2k7TgFlv2o",
+      "BJAE2kPjnXpY6US4WOGoPpJjd9EnkbnOB63-qAWgvQuZ"
+     ]
+    },
+    "review_expected": "rejects"
+   }
+  },
+  {
+   "id": "gap/wit-br-not-member-and-br-ba-overlap/br-not-member",
+   "description": "inception with b=[W1,W2], bt=1 (witnessed); a rotation with br=[W9] (not a witness), ba=[], bt=1, controller-signed and witnessed by W1",
+   "pvrsn": "1.0",
+   "target": "kel",
+   "gap": "wit-br-not-member-and-br-ba-overlap",
+   "gap_kind": "spec-ambiguity",
+   "stream": "{\"v\":\"KERI10JSON000188_\",\"t\":\"icp\",\"d\":\"ELjTKxKOqwoxC8aBzwTVBrtmgcdAjnbm_Vreuan4CqKD\",\"i\":\"ELjTKxKOqwoxC8aBzwTVBrtmgcdAjnbm_Vreuan4CqKD\",\"s\":\"0\",\"kt\":\"1\",\"k\":[\"DCSRHCt5_-Icy6yYVXZJPrplXnRhIcnQrDHIMRgUvWsh\"],\"nt\":\"1\",\"n\":[\"EFgrxJG6B-WyQXOcnBrQKlHYhImiPDkpShhdsbHFjnlM\"],\"bt\":\"1\",\"b\":[\"BO9oUJRlc-Tv6twtERqBQEAgWDZ1X3DZpG2k7TgFlv2o\",\"BJAE2kPjnXpY6US4WOGoPpJjd9EnkbnOB63-qAWgvQuZ\"],\"c\":[],\"a\":[]}-CAu-KAWAAAfAbAC6xRFz_Y5tmc7Fr0e9W6zfnXJAgb84um3twHd_gvbOlWpuVkJHn8i0-ZIwBINzqteIHRDurjtcLWRIYYE-LAWAAAsfERMX3dbTXXCr20KQ9DyyQkFc9caQ9ZikSA6Hby0HTV2_M992XYrJ9nyogYBLAyFkGAXMCBma8-l2oQjjZ0B{\"v\":\"KERI10JSON00018e_\",\"t\":\"rot\",\"d\":\"EOaimZxj6AA5rZiXidHU9QFjFTUUVIUBaru559nCZeav\",\"i\":\"ELjTKxKOqwoxC8aBzwTVBrtmgcdAjnbm_Vreuan4CqKD\",\"s\":\"1\",\"p\":\"ELjTKxKOqwoxC8aBzwTVBrtmgcdAjnbm_Vreuan4CqKD\",\"kt\":\"1\",\"k\":[\"DEUpjvzxh-Kl3h_XB1vYJeD-sJNu44YK2oSppROGgNuV\"],\"nt\":\"1\",\"n\":[\"EDgtTzf6eSiTeJ_S87yxc2_YXTFFJx72bDk00_c5sVTr\"],\"bt\":\"1\",\"br\":[\"BCeh2WKmSWGHVQR86Wq2FpWv3s-nKHFJdiw8D4T1N3It\"],\"ba\":[],\"a\":[]}-CAu-KAWAADOIRCehrFOP8dOFudpyQOx4MXXHCBUTRPaxP1j2-mvnw8OUnubJnx7rJz95MC9bn5lNwsRV3J5Xc3-mJi6PwsK-LAWAADD5DpHIqaHPhIiKkOpGACYCj4wZc96DnTcy0UIlXCxDQ2F8_Sm_KOs3ooaRcG8ZOO70UdWz2GXpxlTVpD3bu8O",
+   "stream_cesr1": "{\"v\":\"KERI10JSON000188_\",\"t\":\"icp\",\"d\":\"ELjTKxKOqwoxC8aBzwTVBrtmgcdAjnbm_Vreuan4CqKD\",\"i\":\"ELjTKxKOqwoxC8aBzwTVBrtmgcdAjnbm_Vreuan4CqKD\",\"s\":\"0\",\"kt\":\"1\",\"k\":[\"DCSRHCt5_-Icy6yYVXZJPrplXnRhIcnQrDHIMRgUvWsh\"],\"nt\":\"1\",\"n\":[\"EFgrxJG6B-WyQXOcnBrQKlHYhImiPDkpShhdsbHFjnlM\"],\"bt\":\"1\",\"b\":[\"BO9oUJRlc-Tv6twtERqBQEAgWDZ1X3DZpG2k7TgFlv2o\",\"BJAE2kPjnXpY6US4WOGoPpJjd9EnkbnOB63-qAWgvQuZ\"],\"c\":[],\"a\":[]}-VAu-AABAAAfAbAC6xRFz_Y5tmc7Fr0e9W6zfnXJAgb84um3twHd_gvbOlWpuVkJHn8i0-ZIwBINzqteIHRDurjtcLWRIYYE-BABAAAsfERMX3dbTXXCr20KQ9DyyQkFc9caQ9ZikSA6Hby0HTV2_M992XYrJ9nyogYBLAyFkGAXMCBma8-l2oQjjZ0B{\"v\":\"KERI10JSON00018e_\",\"t\":\"rot\",\"d\":\"EOaimZxj6AA5rZiXidHU9QFjFTUUVIUBaru559nCZeav\",\"i\":\"ELjTKxKOqwoxC8aBzwTVBrtmgcdAjnbm_Vreuan4CqKD\",\"s\":\"1\",\"p\":\"ELjTKxKOqwoxC8aBzwTVBrtmgcdAjnbm_Vreuan4CqKD\",\"kt\":\"1\",\"k\":[\"DEUpjvzxh-Kl3h_XB1vYJeD-sJNu44YK2oSppROGgNuV\"],\"nt\":\"1\",\"n\":[\"EDgtTzf6eSiTeJ_S87yxc2_YXTFFJx72bDk00_c5sVTr\"],\"bt\":\"1\",\"br\":[\"BCeh2WKmSWGHVQR86Wq2FpWv3s-nKHFJdiw8D4T1N3It\"],\"ba\":[],\"a\":[]}-VAu-AABAADOIRCehrFOP8dOFudpyQOx4MXXHCBUTRPaxP1j2-mvnw8OUnubJnx7rJz95MC9bn5lNwsRV3J5Xc3-mJi6PwsK-BABAADD5DpHIqaHPhIiKkOpGACYCj4wZc96DnTcy0UIlXCxDQ2F8_Sm_KOs3ooaRcG8ZOO70UdWz2GXpxlTVpD3bu8O",
+   "expected": "accept",
+   "targets": [
+    "EOaimZxj6AA5rZiXidHU9QFjFTUUVIUBaru559nCZeav"
+   ],
+   "kels": {
+    "ELjTKxKOqwoxC8aBzwTVBrtmgcdAjnbm_Vreuan4CqKD": {
+     "events": [
+      {
+       "sn": 0,
+       "t": "icp",
+       "d": "ELjTKxKOqwoxC8aBzwTVBrtmgcdAjnbm_Vreuan4CqKD"
+      },
+      {
+       "sn": 1,
+       "t": "rot",
+       "d": "EOaimZxj6AA5rZiXidHU9QFjFTUUVIUBaru559nCZeav"
+      }
+     ]
+    }
+   },
+   "witnesses": {
+    "ELjTKxKOqwoxC8aBzwTVBrtmgcdAjnbm_Vreuan4CqKD": [
+     "BO9oUJRlc-Tv6twtERqBQEAgWDZ1X3DZpG2k7TgFlv2o",
+     "BJAE2kPjnXpY6US4WOGoPpJjd9EnkbnOB63-qAWgvQuZ"
+    ]
+   },
+   "reason": "removing an AID that is not in the list leaves the list unchanged",
+   "spec_section": "Backer remove list / Backer add list",
+   "spec_quote": "The AIDs in the Backer Remove, `br` list MUST be removed before any AIDs in the Backer Add, `ba` list are appended.",
+   "spec_ambiguous": true,
+   "ambiguity": "The specification does not say what happens when br names an AID that is not a witness. Removing it is a no-op under the literal reading; keripy refuses the event.",
+   "keripy": {
+    "outcome": "rejects",
+    "agrees_with_spec": false,
+    "kels": {
+     "ELjTKxKOqwoxC8aBzwTVBrtmgcdAjnbm_Vreuan4CqKD": [
+      {
+       "sn": 0,
+       "t": "icp",
+       "d": "ELjTKxKOqwoxC8aBzwTVBrtmgcdAjnbm_Vreuan4CqKD"
+      }
+     ]
+    },
+    "witnesses": {
+     "ELjTKxKOqwoxC8aBzwTVBrtmgcdAjnbm_Vreuan4CqKD": [
+      "BO9oUJRlc-Tv6twtERqBQEAgWDZ1X3DZpG2k7TgFlv2o",
+      "BJAE2kPjnXpY6US4WOGoPpJjd9EnkbnOB63-qAWgvQuZ"
+     ]
+    },
+    "review_expected": "rejects"
+   }
+  },
+  {
+   "id": "gap/wit-br-not-member-and-br-ba-overlap/br-ba-overlap",
+   "description": "inception with b=[W1,W2], bt=1 (witnessed); a rotation with br=[W1], ba=[W1], bt=1, controller-signed and witnessed by W2 at index 0; an interaction witnessed by W1 at index 1 (W1's position after remove-then-append, [W2,W1])",
+   "pvrsn": "1.0",
+   "target": "kel",
+   "gap": "wit-br-not-member-and-br-ba-overlap",
+   "gap_kind": "spec-ambiguity",
+   "stream": "{\"v\":\"KERI10JSON000188_\",\"t\":\"icp\",\"d\":\"EFUS3diVLvRBM0JKM6EtW_wrd4Et39Ey8LI3T1rTUxrT\",\"i\":\"EFUS3diVLvRBM0JKM6EtW_wrd4Et39Ey8LI3T1rTUxrT\",\"s\":\"0\",\"kt\":\"1\",\"k\":[\"DOhSRAcpGcv9uN1piu3nLLG1XPKUs-qGUAaIYC-sm8oH\"],\"nt\":\"1\",\"n\":[\"EJJsS17I2I4826qOUQlQ6SX3ynhAtQCXdb-Gan88vxdW\"],\"bt\":\"1\",\"b\":[\"BO9oUJRlc-Tv6twtERqBQEAgWDZ1X3DZpG2k7TgFlv2o\",\"BJAE2kPjnXpY6US4WOGoPpJjd9EnkbnOB63-qAWgvQuZ\"],\"c\":[],\"a\":[]}-CAu-KAWAABMSBh_ZQgcr6r5TPBKAxfASMhBU2Sr8on0OtCaYpI8F1lrY9-XAXLtVtmWfjQtFCvimlg7AcM8uve79LgjUJkK-LAWAADEphLXo0-VTbGpwfwSSO7qrTkFSbNBjJ5_nyh4s25sKrgaujgewKisUAsTz5-CE942jDqLMTINeG7OqMvVjw8F{\"v\":\"KERI10JSON0001bc_\",\"t\":\"rot\",\"d\":\"EMnXUO_5Xwko9Hk4oC-btPuuCOP58Kh3ntHQgZiIcheh\",\"i\":\"EFUS3diVLvRBM0JKM6EtW_wrd4Et39Ey8LI3T1rTUxrT\",\"s\":\"1\",\"p\":\"EFUS3diVLvRBM0JKM6EtW_wrd4Et39Ey8LI3T1rTUxrT\",\"kt\":\"1\",\"k\":[\"DDuoCUFBieEzoRbfIqFuagX8ZLbROT0vVziKXT9T6Ur_\"],\"nt\":\"1\",\"n\":[\"ECXc7srY0OOgM7Z2owc5taytFt5VhhR4T_kjIKU7FM6X\"],\"bt\":\"1\",\"br\":[\"BO9oUJRlc-Tv6twtERqBQEAgWDZ1X3DZpG2k7TgFlv2o\"],\"ba\":[\"BO9oUJRlc-Tv6twtERqBQEAgWDZ1X3DZpG2k7TgFlv2o\"],\"a\":[]}-CAu-KAWAAC_OS1ZDXPIUEez2ePSsLJfKb6cdI0vPM-pZh1Ls1jgtRkczvDoadftbZfddrGHDRb9teHno18Y-JBf1iQnerkH-LAWAACXMAIRxUB5dA1f-hhO1uO2E8kboPy0_5EG4bt5ueFzTHW5WuuXGL74rC7hYgCqr7sNhy83cF31D2A_KSkl3D8F{\"v\":\"KERI10JSON0000cb_\",\"t\":\"ixn\",\"d\":\"EJexo_STz-pt3S_ty4-nIa18BiKjAdeorucC_LEQtuGG\",\"i\":\"EFUS3diVLvRBM0JKM6EtW_wrd4Et39Ey8LI3T1rTUxrT\",\"s\":\"2\",\"p\":\"EMnXUO_5Xwko9Hk4oC-btPuuCOP58Kh3ntHQgZiIcheh\",\"a\":[]}-CAu-KAWAABIBVqzq4NmolLl5nl2XMGxFydxNnOSuO1mlyjYCYZnS5LL8nGDZsPn9n0UbZMqPB951WNF_x6oQNAOJXeLCSMK-LAWABDWETWMO0eTk-YJOgv9mkb7eeV66m_Igq88G32ADmxsBU0gKSMcOB5fs9c6P2Nf2XfIfJOfr6fJ86diUYKD-lAN",
+   "stream_cesr1": "{\"v\":\"KERI10JSON000188_\",\"t\":\"icp\",\"d\":\"EFUS3diVLvRBM0JKM6EtW_wrd4Et39Ey8LI3T1rTUxrT\",\"i\":\"EFUS3diVLvRBM0JKM6EtW_wrd4Et39Ey8LI3T1rTUxrT\",\"s\":\"0\",\"kt\":\"1\",\"k\":[\"DOhSRAcpGcv9uN1piu3nLLG1XPKUs-qGUAaIYC-sm8oH\"],\"nt\":\"1\",\"n\":[\"EJJsS17I2I4826qOUQlQ6SX3ynhAtQCXdb-Gan88vxdW\"],\"bt\":\"1\",\"b\":[\"BO9oUJRlc-Tv6twtERqBQEAgWDZ1X3DZpG2k7TgFlv2o\",\"BJAE2kPjnXpY6US4WOGoPpJjd9EnkbnOB63-qAWgvQuZ\"],\"c\":[],\"a\":[]}-VAu-AABAABMSBh_ZQgcr6r5TPBKAxfASMhBU2Sr8on0OtCaYpI8F1lrY9-XAXLtVtmWfjQtFCvimlg7AcM8uve79LgjUJkK-BABAADEphLXo0-VTbGpwfwSSO7qrTkFSbNBjJ5_nyh4s25sKrgaujgewKisUAsTz5-CE942jDqLMTINeG7OqMvVjw8F{\"v\":\"KERI10JSON0001bc_\",\"t\":\"rot\",\"d\":\"EMnXUO_5Xwko9Hk4oC-btPuuCOP58Kh3ntHQgZiIcheh\",\"i\":\"EFUS3diVLvRBM0JKM6EtW_wrd4Et39Ey8LI3T1rTUxrT\",\"s\":\"1\",\"p\":\"EFUS3diVLvRBM0JKM6EtW_wrd4Et39Ey8LI3T1rTUxrT\",\"kt\":\"1\",\"k\":[\"DDuoCUFBieEzoRbfIqFuagX8ZLbROT0vVziKXT9T6Ur_\"],\"nt\":\"1\",\"n\":[\"ECXc7srY0OOgM7Z2owc5taytFt5VhhR4T_kjIKU7FM6X\"],\"bt\":\"1\",\"br\":[\"BO9oUJRlc-Tv6twtERqBQEAgWDZ1X3DZpG2k7TgFlv2o\"],\"ba\":[\"BO9oUJRlc-Tv6twtERqBQEAgWDZ1X3DZpG2k7TgFlv2o\"],\"a\":[]}-VAu-AABAAC_OS1ZDXPIUEez2ePSsLJfKb6cdI0vPM-pZh1Ls1jgtRkczvDoadftbZfddrGHDRb9teHno18Y-JBf1iQnerkH-BABAACXMAIRxUB5dA1f-hhO1uO2E8kboPy0_5EG4bt5ueFzTHW5WuuXGL74rC7hYgCqr7sNhy83cF31D2A_KSkl3D8F{\"v\":\"KERI10JSON0000cb_\",\"t\":\"ixn\",\"d\":\"EJexo_STz-pt3S_ty4-nIa18BiKjAdeorucC_LEQtuGG\",\"i\":\"EFUS3diVLvRBM0JKM6EtW_wrd4Et39Ey8LI3T1rTUxrT\",\"s\":\"2\",\"p\":\"EMnXUO_5Xwko9Hk4oC-btPuuCOP58Kh3ntHQgZiIcheh\",\"a\":[]}-VAu-AABAABIBVqzq4NmolLl5nl2XMGxFydxNnOSuO1mlyjYCYZnS5LL8nGDZsPn9n0UbZMqPB951WNF_x6oQNAOJXeLCSMK-BABABDWETWMO0eTk-YJOgv9mkb7eeV66m_Igq88G32ADmxsBU0gKSMcOB5fs9c6P2Nf2XfIfJOfr6fJ86diUYKD-lAN",
+   "expected": "accept",
+   "targets": [
+    "EMnXUO_5Xwko9Hk4oC-btPuuCOP58Kh3ntHQgZiIcheh",
+    "EJexo_STz-pt3S_ty4-nIa18BiKjAdeorucC_LEQtuGG"
+   ],
+   "kels": {
+    "EFUS3diVLvRBM0JKM6EtW_wrd4Et39Ey8LI3T1rTUxrT": {
+     "events": [
+      {
+       "sn": 0,
+       "t": "icp",
+       "d": "EFUS3diVLvRBM0JKM6EtW_wrd4Et39Ey8LI3T1rTUxrT"
+      },
+      {
+       "sn": 1,
+       "t": "rot",
+       "d": "EMnXUO_5Xwko9Hk4oC-btPuuCOP58Kh3ntHQgZiIcheh"
+      },
+      {
+       "sn": 2,
+       "t": "ixn",
+       "d": "EJexo_STz-pt3S_ty4-nIa18BiKjAdeorucC_LEQtuGG"
+      }
+     ]
+    }
+   },
+   "witnesses": {
+    "EFUS3diVLvRBM0JKM6EtW_wrd4Et39Ey8LI3T1rTUxrT": [
+     "BJAE2kPjnXpY6US4WOGoPpJjd9EnkbnOB63-qAWgvQuZ",
+     "BO9oUJRlc-Tv6twtERqBQEAgWDZ1X3DZpG2k7TgFlv2o"
+    ]
+   },
+   "reason": "br is applied before ba, so W1 is removed and appended again",
+   "spec_section": "Backer remove list / Backer add list",
+   "spec_quote": "The AIDs in the Backer Remove, `br` list MUST be removed before any AIDs in the Backer Add, `ba` list are appended.",
+   "spec_ambiguous": true,
+   "ambiguity": "\"except for any AIDs that already appear in the current Backer list\" can mean the list before the event (W1 is skipped, giving [W2]) or the list after removal (giving [W2,W1]); keripy refuses any overlap. Witness-indexed signatures resolve to different keys under each reading. The expected outcome follows the literal remove-then-append reading.",
+   "keripy": {
+    "outcome": "rejects",
+    "agrees_with_spec": false,
+    "kels": {
+     "EFUS3diVLvRBM0JKM6EtW_wrd4Et39Ey8LI3T1rTUxrT": [
+      {
+       "sn": 0,
+       "t": "icp",
+       "d": "EFUS3diVLvRBM0JKM6EtW_wrd4Et39Ey8LI3T1rTUxrT"
+      }
+     ]
+    },
+    "witnesses": {
+     "EFUS3diVLvRBM0JKM6EtW_wrd4Et39Ey8LI3T1rTUxrT": [
+      "BO9oUJRlc-Tv6twtERqBQEAgWDZ1X3DZpG2k7TgFlv2o",
+      "BJAE2kPjnXpY6US4WOGoPpJjd9EnkbnOB63-qAWgvQuZ"
+     ]
+    },
+    "review_expected": "rejects"
+   }
+  },
+  {
+   "id": "gap/wit-bt-zero-nonempty-b",
+   "description": "inception with b=[W1,W2] and bt=0, controller-signed, no witness signatures",
+   "pvrsn": "1.0",
+   "target": "kel",
+   "gap": "wit-bt-zero-nonempty-b",
+   "gap_kind": "spec-ambiguity",
+   "stream": "{\"v\":\"KERI10JSON000188_\",\"t\":\"icp\",\"d\":\"EMuexfk3_kk9cF6T6TbC8X6equHhAOufy1W9Y3IazgHv\",\"i\":\"EMuexfk3_kk9cF6T6TbC8X6equHhAOufy1W9Y3IazgHv\",\"s\":\"0\",\"kt\":\"1\",\"k\":[\"DJndZF_8pSopofkqOtGyIMFBVjU-xd3SbMsLdiR1ZmRl\"],\"nt\":\"1\",\"n\":[\"ELyHCGPSPySdo12OauDuoggTROCxdDhRKv8t06N8VuWU\"],\"bt\":\"0\",\"b\":[\"BO9oUJRlc-Tv6twtERqBQEAgWDZ1X3DZpG2k7TgFlv2o\",\"BJAE2kPjnXpY6US4WOGoPpJjd9EnkbnOB63-qAWgvQuZ\"],\"c\":[],\"a\":[]}-CAX-KAWAAD-gHC0uPn9awBeu67fXDR3tU0ccwGRHfQL12yOj6-M9GDLEshlIiUk6MmxsRZKtseiDCHZuwYvKwgOl8yMc1oC",
+   "stream_cesr1": "{\"v\":\"KERI10JSON000188_\",\"t\":\"icp\",\"d\":\"EMuexfk3_kk9cF6T6TbC8X6equHhAOufy1W9Y3IazgHv\",\"i\":\"EMuexfk3_kk9cF6T6TbC8X6equHhAOufy1W9Y3IazgHv\",\"s\":\"0\",\"kt\":\"1\",\"k\":[\"DJndZF_8pSopofkqOtGyIMFBVjU-xd3SbMsLdiR1ZmRl\"],\"nt\":\"1\",\"n\":[\"ELyHCGPSPySdo12OauDuoggTROCxdDhRKv8t06N8VuWU\"],\"bt\":\"0\",\"b\":[\"BO9oUJRlc-Tv6twtERqBQEAgWDZ1X3DZpG2k7TgFlv2o\",\"BJAE2kPjnXpY6US4WOGoPpJjd9EnkbnOB63-qAWgvQuZ\"],\"c\":[],\"a\":[]}-VAX-AABAAD-gHC0uPn9awBeu67fXDR3tU0ccwGRHfQL12yOj6-M9GDLEshlIiUk6MmxsRZKtseiDCHZuwYvKwgOl8yMc1oC",
+   "expected": "accept",
+   "targets": [
+    "EMuexfk3_kk9cF6T6TbC8X6equHhAOufy1W9Y3IazgHv"
+   ],
+   "kels": {
+    "EMuexfk3_kk9cF6T6TbC8X6equHhAOufy1W9Y3IazgHv": {
+     "events": [
+      {
+       "sn": 0,
+       "t": "icp",
+       "d": "EMuexfk3_kk9cF6T6TbC8X6equHhAOufy1W9Y3IazgHv"
+      }
+     ]
+    }
+   },
+   "reason": "bt=0 needs no witness support",
+   "spec_section": "Backer threshold field (bt)",
+   "spec_quote": "The [[ref: Backer]] threshold, `bt` field value is a hex-encoded non-negative integer. This is the number of backers in the backer list that MUST support a key event for it to be valid.",
+   "spec_ambiguous": true,
+   "ambiguity": "The specification allows any non-negative integer bt and a threshold of 0 is met by no receipts; keripy requires 1 <= bt <= len(b) whenever b is not empty.",
+   "keripy": {
+    "outcome": "rejects",
+    "agrees_with_spec": false,
+    "kels": {
+     "EMuexfk3_kk9cF6T6TbC8X6equHhAOufy1W9Y3IazgHv": []
+    },
+    "review_expected": "rejects"
+   }
+  },
+  {
+   "id": "gap/wit-duplicity-unverified/unverified",
+   "description": "an accepted inception and interaction; a different interaction at s=1 with a random controller signature",
+   "pvrsn": "1.0",
+   "target": "kel",
+   "gap": "wit-duplicity-unverified",
+   "gap_kind": "missing-feature",
+   "stream": "{\"v\":\"KERI10JSON000159_\",\"t\":\"icp\",\"d\":\"EHHxoUBl5EyRnZTMXeLxooDVKIGv7MWpgNX_QUFU0HCx\",\"i\":\"EHHxoUBl5EyRnZTMXeLxooDVKIGv7MWpgNX_QUFU0HCx\",\"s\":\"0\",\"kt\":\"1\",\"k\":[\"DAbjbq2Vo-OzjnEutkY0PdafFVMnXBs2ech2GmsHiK0w\"],\"nt\":\"1\",\"n\":[\"EAKMm1J7siChLWmaC3wxccIxQId4S-2V28r8pDBVBSRL\"],\"bt\":\"1\",\"b\":[\"BO9oUJRlc-Tv6twtERqBQEAgWDZ1X3DZpG2k7TgFlv2o\"],\"c\":[],\"a\":[]}-CAu-KAWAACmPGQzjJG_EGW6uS3Q0HSxAJf3fkGhl_SK8qRSO7Yuk-g3LTETqsAOQWcQ0AoOg6DHcN9StplZc4miRJYBrPcI-LAWAABpWpHPKSCxC0ynAO9q3WyqPYTWQGN1dcnWRz_vgCQkCYmd_E5_SHKEAJNr3d8JyrFNWT27xD5wb-TxxvysGowL{\"v\":\"KERI10JSON0000cb_\",\"t\":\"ixn\",\"d\":\"EMYHH1j4CAKBFlA8mhLNA6GkYWyKZ_ZJe04-mBTTm2z1\",\"i\":\"EHHxoUBl5EyRnZTMXeLxooDVKIGv7MWpgNX_QUFU0HCx\",\"s\":\"1\",\"p\":\"EHHxoUBl5EyRnZTMXeLxooDVKIGv7MWpgNX_QUFU0HCx\",\"a\":[]}-CAu-KAWAAAerLwhDACNgipFOqB56tjLN76-4jVXukw3XJrXH402Nd_IXF3p_ws2yFLWOXdilrRAl8TMMQ9SlFAJFvT1ztIJ-LAWAAAl2ELxr2XkX6lWeQ2ieZcDl41GcfA52cae4Fzl-L_5Sk6KCj02DyE2LNwDrdKQlqmXbNq48h_MEvJy1Kek7YEB{\"v\":\"KERI10JSON0000ff_\",\"t\":\"ixn\",\"d\":\"EJgutWANAC86GL2TUco1iJlg7D5Fr5z5BLBdx4ztfR9S\",\"i\":\"EHHxoUBl5EyRnZTMXeLxooDVKIGv7MWpgNX_QUFU0HCx\",\"s\":\"1\",\"p\":\"EHHxoUBl5EyRnZTMXeLxooDVKIGv7MWpgNX_QUFU0HCx\",\"a\":[{\"d\":\"ED95YWPr-UcY3hzXWCZVwBL5lcBvHmlw6ivcFbzYijJK\"}]}-CAX-KAWAADfTm0mdEcbs8WVLVLt9pGYLGOp6u3OGOw8YFP0azqF41jmEmKadAoTjuDyCfsRoDj4FZKAf_8FCFAsbz07eiVa",
+   "stream_cesr1": "{\"v\":\"KERI10JSON000159_\",\"t\":\"icp\",\"d\":\"EHHxoUBl5EyRnZTMXeLxooDVKIGv7MWpgNX_QUFU0HCx\",\"i\":\"EHHxoUBl5EyRnZTMXeLxooDVKIGv7MWpgNX_QUFU0HCx\",\"s\":\"0\",\"kt\":\"1\",\"k\":[\"DAbjbq2Vo-OzjnEutkY0PdafFVMnXBs2ech2GmsHiK0w\"],\"nt\":\"1\",\"n\":[\"EAKMm1J7siChLWmaC3wxccIxQId4S-2V28r8pDBVBSRL\"],\"bt\":\"1\",\"b\":[\"BO9oUJRlc-Tv6twtERqBQEAgWDZ1X3DZpG2k7TgFlv2o\"],\"c\":[],\"a\":[]}-VAu-AABAACmPGQzjJG_EGW6uS3Q0HSxAJf3fkGhl_SK8qRSO7Yuk-g3LTETqsAOQWcQ0AoOg6DHcN9StplZc4miRJYBrPcI-BABAABpWpHPKSCxC0ynAO9q3WyqPYTWQGN1dcnWRz_vgCQkCYmd_E5_SHKEAJNr3d8JyrFNWT27xD5wb-TxxvysGowL{\"v\":\"KERI10JSON0000cb_\",\"t\":\"ixn\",\"d\":\"EMYHH1j4CAKBFlA8mhLNA6GkYWyKZ_ZJe04-mBTTm2z1\",\"i\":\"EHHxoUBl5EyRnZTMXeLxooDVKIGv7MWpgNX_QUFU0HCx\",\"s\":\"1\",\"p\":\"EHHxoUBl5EyRnZTMXeLxooDVKIGv7MWpgNX_QUFU0HCx\",\"a\":[]}-VAu-AABAAAerLwhDACNgipFOqB56tjLN76-4jVXukw3XJrXH402Nd_IXF3p_ws2yFLWOXdilrRAl8TMMQ9SlFAJFvT1ztIJ-BABAAAl2ELxr2XkX6lWeQ2ieZcDl41GcfA52cae4Fzl-L_5Sk6KCj02DyE2LNwDrdKQlqmXbNq48h_MEvJy1Kek7YEB{\"v\":\"KERI10JSON0000ff_\",\"t\":\"ixn\",\"d\":\"EJgutWANAC86GL2TUco1iJlg7D5Fr5z5BLBdx4ztfR9S\",\"i\":\"EHHxoUBl5EyRnZTMXeLxooDVKIGv7MWpgNX_QUFU0HCx\",\"s\":\"1\",\"p\":\"EHHxoUBl5EyRnZTMXeLxooDVKIGv7MWpgNX_QUFU0HCx\",\"a\":[{\"d\":\"ED95YWPr-UcY3hzXWCZVwBL5lcBvHmlw6ivcFbzYijJK\"}]}-VAX-AABAADfTm0mdEcbs8WVLVLt9pGYLGOp6u3OGOw8YFP0azqF41jmEmKadAoTjuDyCfsRoDj4FZKAf_8FCFAsbz07eiVa",
+   "expected": "reject",
+   "targets": [
+    "EJgutWANAC86GL2TUco1iJlg7D5Fr5z5BLBdx4ztfR9S"
+   ],
+   "kels": {
+    "EHHxoUBl5EyRnZTMXeLxooDVKIGv7MWpgNX_QUFU0HCx": {
+     "events": [
+      {
+       "sn": 0,
+       "t": "icp",
+       "d": "EHHxoUBl5EyRnZTMXeLxooDVKIGv7MWpgNX_QUFU0HCx"
+      },
+      {
+       "sn": 1,
+       "t": "ixn",
+       "d": "EMYHH1j4CAKBFlA8mhLNA6GkYWyKZ_ZJe04-mBTTm2z1"
+      }
+     ]
+    }
+   },
+   "duplicity": {
+    "evidence": []
+   },
+   "reason": "an event without a verified signature is dropped; it is not evidence of duplicity",
+   "spec_section": "Duplicity; Watchers",
+   "spec_quote": "A duplicitous event is defined as a verified but different version of an event at the same location.",
+   "keripy": {
+    "outcome": "rejects",
+    "agrees_with_spec": false,
+    "kels": {
+     "EHHxoUBl5EyRnZTMXeLxooDVKIGv7MWpgNX_QUFU0HCx": [
+      {
+       "sn": 0,
+       "t": "icp",
+       "d": "EHHxoUBl5EyRnZTMXeLxooDVKIGv7MWpgNX_QUFU0HCx"
+      },
+      {
+       "sn": 1,
+       "t": "ixn",
+       "d": "EMYHH1j4CAKBFlA8mhLNA6GkYWyKZ_ZJe04-mBTTm2z1"
+      }
+     ]
+    },
+    "likely_duplicitous": [
+     {
+      "sn": 1,
+      "d": "EJgutWANAC86GL2TUco1iJlg7D5Fr5z5BLBdx4ztfR9S"
+     }
+    ],
+    "review_expected": "rejects"
+   }
+  },
+  {
+   "id": "gap/rm-ksn-sn-decimal/decimal",
+   "description": "the same key state notice with a.s=\"10\" (sn 10 written in decimal, which reads as hex 0x10 = 16) and d the SAID of the sn-10 event",
+   "pvrsn": "1.0",
+   "target": "reply",
+   "gap": "rm-ksn-sn-decimal",
+   "gap_kind": "wrong-behaviour",
+   "stream": "{\"v\":\"KERI10JSON000159_\",\"t\":\"icp\",\"d\":\"EHEhxeOvuTE1Tb4TNY9IjEQc84wWO7gfetIJHvDxejHl\",\"i\":\"EHEhxeOvuTE1Tb4TNY9IjEQc84wWO7gfetIJHvDxejHl\",\"s\":\"0\",\"kt\":\"1\",\"k\":[\"DDd5jfW5m53T3O-DCHGCZsxxJvBVZ1B9DLjdmIkBFAMx\"],\"nt\":\"1\",\"n\":[\"EFJ5EtUXieolTQNd-e1XuNW7SMJv4BOnkFV0VD8v-gh6\"],\"bt\":\"1\",\"b\":[\"BAkl7aytWrZQNxWN-i2qP3JEQyrxFY4fbKn4owecwIo3\"],\"c\":[],\"a\":[]}-CAu-KAWAADlblyAEY-gp9kKWIY_43Vm4F_vrXAP5mIDEsCAlbVj0la8wlRMQaDj-iNB-v1pBh3Spzgc84DGnkH-ZdTn5I8A-LAWAABfGVKsvK8-E2GfRcFKlviDiowr5s_PhD2yvi37MN8fhgcrgQj8Jhbr8r6MnjerIpeh0nzml5CQXfRLLIu5A9sB{\"v\":\"KERI10JSON0000cb_\",\"t\":\"ixn\",\"d\":\"EFNdXp7bTGtf4jtWNJCQfYYxmNuxepoHIW5YESZKOcaB\",\"i\":\"EHEhxeOvuTE1Tb4TNY9IjEQc84wWO7gfetIJHvDxejHl\",\"s\":\"1\",\"p\":\"EHEhxeOvuTE1Tb4TNY9IjEQc84wWO7gfetIJHvDxejHl\",\"a\":[]}-CAu-KAWAADNWWMJIg687ebGysmT-2xLeC7aThjK3pt0XWHe9nNNF3f6fKazetojj8fij4yn-uwPxCoUQA3G9fIW6DUdDREE-LAWAACD3JtnKjY3DmdXzLZuYyl3znyXSPGl20aGqoa7VdvPsM5LDvFu_UgcC6mavwSp53lnqD562el3zz6m4At-1HsI{\"v\":\"KERI10JSON0000cb_\",\"t\":\"ixn\",\"d\":\"EKV_yu7fNd5C5KF5Z0hiB69y0cYvpFdJn-rGb1hfkxaw\",\"i\":\"EHEhxeOvuTE1Tb4TNY9IjEQc84wWO7gfetIJHvDxejHl\",\"s\":\"2\",\"p\":\"EFNdXp7bTGtf4jtWNJCQfYYxmNuxepoHIW5YESZKOcaB\",\"a\":[]}-CAu-KAWAACxjW8O1kjMA3BF8sPvin1IiNd_JMGVhICaMmtzNJNGAgMJ0qztZO76C_anIrjIEGQmqU-k-wi-q5k1tmR_QP8N-LAWAACzaw1Af7QB0ynirGp9fuO6lEF4uaDSWlxr90i2kwjrR5hxjoABQ-R4-w7CAFzpfH5bs737fs2wThzb-KtgpHkP{\"v\":\"KERI10JSON0000cb_\",\"t\":\"ixn\",\"d\":\"EMsfbHNNNVXLUUnqdivfoLhZ16AUT1Qo890dgQFencxY\",\"i\":\"EHEhxeOvuTE1Tb4TNY9IjEQc84wWO7gfetIJHvDxejHl\",\"s\":\"3\",\"p\":\"EKV_yu7fNd5C5KF5Z0hiB69y0cYvpFdJn-rGb1hfkxaw\",\"a\":[]}-CAu-KAWAACNDUkOpjZ6x_K-L4xOW8FTkluM3B598f0y2CQv3GdQiSNL8aK2xmxAi_c33A6EbtBfX-PS7xAxBSbkiaUz-_UK-LAWAAB-V8WaRMOTJhKEJXTJ_33F_7PJieN7NTv3dPWyexb_-7rlFyNKPTkQvy27Mqbb1_3uIWsZHJGN9pF6_HDC-8MK{\"v\":\"KERI10JSON0000cb_\",\"t\":\"ixn\",\"d\":\"ENDKYm57NjOts88qacgJV-4tC5spDWk_G3Xc4UDaq01A\",\"i\":\"EHEhxeOvuTE1Tb4TNY9IjEQc84wWO7gfetIJHvDxejHl\",\"s\":\"4\",\"p\":\"EMsfbHNNNVXLUUnqdivfoLhZ16AUT1Qo890dgQFencxY\",\"a\":[]}-CAu-KAWAACrcoT5bDdYsWxdhLQ4n-H2VHQRD4KAeeWW235y5tkIDyItRNq0OaytR-DIieV1gNqGSU6xEecq7ZS2z58rUdAG-LAWAAA68qntm59f95UcLKqwqOXaTCO5U-g8wbFpsIS1DphtR45lm1w0tePUEIJwmlHODRAhxXIihd4MVIkE9amY07AL{\"v\":\"KERI10JSON0000cb_\",\"t\":\"ixn\",\"d\":\"EF1Ob0QmRVEI8lHT9T--JDVFzV3yMAegYX5O6HgGdN_V\",\"i\":\"EHEhxeOvuTE1Tb4TNY9IjEQc84wWO7gfetIJHvDxejHl\",\"s\":\"5\",\"p\":\"ENDKYm57NjOts88qacgJV-4tC5spDWk_G3Xc4UDaq01A\",\"a\":[]}-CAu-KAWAABvc6cYcmBueD2k8p3xjMlFc0ZrkW8XhQx0l6Ynb1P5DwPzhZapviX4wp8OzIMAeXt0HSTPJCdstCcPNOe2kTMJ-LAWAAA88Sv_kLk134msECg9vB6AZ_HhIAnkGZ1yVyKJwt5uzaSU2sfj4Rbxm5P6QjxE924odQZ4_GdotRwBHqR4oAkD{\"v\":\"KERI10JSON0000cb_\",\"t\":\"ixn\",\"d\":\"EAivvQZNFRyR9wqEYFqZ0DLjXNKgEqGoeK989Xg8HDPs\",\"i\":\"EHEhxeOvuTE1Tb4TNY9IjEQc84wWO7gfetIJHvDxejHl\",\"s\":\"6\",\"p\":\"EF1Ob0QmRVEI8lHT9T--JDVFzV3yMAegYX5O6HgGdN_V\",\"a\":[]}-CAu-KAWAABteG1Dxltvbk9NiHWlxc0bAOn7Iwhz3kFgW0RCPpWhCN2u9Je2jkMDa8rumxETnGmHQt9UeRe8MnG15i2yf34K-LAWAAAqbhYJFRDuubRf3qbKMZqAba5J7mXjcuyDnKuOx2sTjlXGtZ3oLl7-5DjqiExhSWfctEmW0gtPFV5N8fWJkJYA{\"v\":\"KERI10JSON0000cb_\",\"t\":\"ixn\",\"d\":\"EBzpw456NA0XL908QFwbWkZ-e0M5WCAHtsZBMMPesw4n\",\"i\":\"EHEhxeOvuTE1Tb4TNY9IjEQc84wWO7gfetIJHvDxejHl\",\"s\":\"7\",\"p\":\"EAivvQZNFRyR9wqEYFqZ0DLjXNKgEqGoeK989Xg8HDPs\",\"a\":[]}-CAu-KAWAABymG5Ag3KTpS5qIYdrdS84TTrIYBYDroZnT-4AKPzU8AbSlGYCxIdviH1AD7elS89AXlAWbFRlOFzVcdnhZJoG-LAWAACZv5YhdBt5f8OFseynh47Ky8-2VVYwN1LKSi1qPR9D_u9p59UiAWz50ZceO9bmHFhoR2Q0GUHOAL1l0tTJnIgN{\"v\":\"KERI10JSON0000cb_\",\"t\":\"ixn\",\"d\":\"ELQaG3XWd8Ri_nMZL9PrHDx1AHy69CUh8tlaQ1a6TmEf\",\"i\":\"EHEhxeOvuTE1Tb4TNY9IjEQc84wWO7gfetIJHvDxejHl\",\"s\":\"8\",\"p\":\"EBzpw456NA0XL908QFwbWkZ-e0M5WCAHtsZBMMPesw4n\",\"a\":[]}-CAu-KAWAACdJm6jdaie1h7zg9FOLuhpZvh6eIoEjrAN6KobjN_DTp2nAH41W4ycQsUVidvwAPFUrymEj6jOLkUb6itw1u0H-LAWAAD6ggWdcxb-3IwyGpSKRqJHC4FO44cUGUVkzA8l3UjjzHX_1Y3-jvkkqm323GoD0zlNApq-33NSvfK_IivLqRYN{\"v\":\"KERI10JSON0000cb_\",\"t\":\"ixn\",\"d\":\"EB-F5hFq94zqe8Bwiti2-c-h53fbOS6g6F7E3aC39i3q\",\"i\":\"EHEhxeOvuTE1Tb4TNY9IjEQc84wWO7gfetIJHvDxejHl\",\"s\":\"9\",\"p\":\"ELQaG3XWd8Ri_nMZL9PrHDx1AHy69CUh8tlaQ1a6TmEf\",\"a\":[]}-CAu-KAWAACwdYAAziFHOHwpZwOVgFV0b-3RCFoJNibRNQ-ew14socohksJ-d_JBdUPg_-8wRdkhj17jZKHmTwRQrPluRkgF-LAWAACLquk_SuZ00DjaiT_9jYu_mcJkKty1Cuesdy-x0stTFcIaWMcBfdK5do48JHeF7IdgZPupbcn03siA5XmOv6UK{\"v\":\"KERI10JSON0000cb_\",\"t\":\"ixn\",\"d\":\"EPBFopDBTlCuoihm5XIEpKJhRHmNK7dvbMkZ26ttDbHo\",\"i\":\"EHEhxeOvuTE1Tb4TNY9IjEQc84wWO7gfetIJHvDxejHl\",\"s\":\"a\",\"p\":\"EB-F5hFq94zqe8Bwiti2-c-h53fbOS6g6F7E3aC39i3q\",\"a\":[]}-CAu-KAWAADvXsio1PVlR04BbbInkgayt2-bbGYRRAtOxHM1ZXTlfWh1Q91eUiphQ3qh-Gbza_Gr0U0GGHoo8kTN1mKk2A0D-LAWAABoGiZ1RluUDoUbTEloqj1iHmTkHuJHtQHS3Vz2cYw0ykK_K4hzSHRwGy2Yqp2jeO8whWp65g-xbVQ7C-HxX8oF{\"v\":\"KERI10JSON0002bf_\",\"t\":\"rpy\",\"d\":\"EH603NPfYDzG47M2RYX1LXRBUu1WkVGpAaacz_MJ-sKz\",\"dt\":\"2020-08-21T17:52:31.000000+00:00\",\"r\":\"/ksn/BAkl7aytWrZQNxWN-i2qP3JEQyrxFY4fbKn4owecwIo3\",\"a\":{\"vn\":[1,0],\"i\":\"EHEhxeOvuTE1Tb4TNY9IjEQc84wWO7gfetIJHvDxejHl\",\"s\":\"10\",\"p\":\"EB-F5hFq94zqe8Bwiti2-c-h53fbOS6g6F7E3aC39i3q\",\"d\":\"EPBFopDBTlCuoihm5XIEpKJhRHmNK7dvbMkZ26ttDbHo\",\"f\":\"a\",\"dt\":\"2020-08-21T17:52:30.000000+00:00\",\"et\":\"ixn\",\"kt\":\"1\",\"k\":[\"DDd5jfW5m53T3O-DCHGCZsxxJvBVZ1B9DLjdmIkBFAMx\"],\"nt\":\"1\",\"n\":[\"EFJ5EtUXieolTQNd-e1XuNW7SMJv4BOnkFV0VD8v-gh6\"],\"bt\":\"1\",\"b\":[\"BAkl7aytWrZQNxWN-i2qP3JEQyrxFY4fbKn4owecwIo3\"],\"c\":[],\"ee\":{\"s\":\"0\",\"d\":\"EHEhxeOvuTE1Tb4TNY9IjEQc84wWO7gfetIJHvDxejHl\",\"br\":[],\"ba\":[]},\"di\":\"\"}}-CAi-MAhBAkl7aytWrZQNxWN-i2qP3JEQyrxFY4fbKn4owecwIo30BDlnaXw66LZY7Jfue7h1yHEAw4u_E4ufUyR9CHrz7QfhQ1qRS51o-Tcclg8MUsA2gjt27w5oeltygIV1_hCAVEO",
+   "stream_cesr1": "{\"v\":\"KERI10JSON000159_\",\"t\":\"icp\",\"d\":\"EHEhxeOvuTE1Tb4TNY9IjEQc84wWO7gfetIJHvDxejHl\",\"i\":\"EHEhxeOvuTE1Tb4TNY9IjEQc84wWO7gfetIJHvDxejHl\",\"s\":\"0\",\"kt\":\"1\",\"k\":[\"DDd5jfW5m53T3O-DCHGCZsxxJvBVZ1B9DLjdmIkBFAMx\"],\"nt\":\"1\",\"n\":[\"EFJ5EtUXieolTQNd-e1XuNW7SMJv4BOnkFV0VD8v-gh6\"],\"bt\":\"1\",\"b\":[\"BAkl7aytWrZQNxWN-i2qP3JEQyrxFY4fbKn4owecwIo3\"],\"c\":[],\"a\":[]}-VAu-AABAADlblyAEY-gp9kKWIY_43Vm4F_vrXAP5mIDEsCAlbVj0la8wlRMQaDj-iNB-v1pBh3Spzgc84DGnkH-ZdTn5I8A-BABAABfGVKsvK8-E2GfRcFKlviDiowr5s_PhD2yvi37MN8fhgcrgQj8Jhbr8r6MnjerIpeh0nzml5CQXfRLLIu5A9sB{\"v\":\"KERI10JSON0000cb_\",\"t\":\"ixn\",\"d\":\"EFNdXp7bTGtf4jtWNJCQfYYxmNuxepoHIW5YESZKOcaB\",\"i\":\"EHEhxeOvuTE1Tb4TNY9IjEQc84wWO7gfetIJHvDxejHl\",\"s\":\"1\",\"p\":\"EHEhxeOvuTE1Tb4TNY9IjEQc84wWO7gfetIJHvDxejHl\",\"a\":[]}-VAu-AABAADNWWMJIg687ebGysmT-2xLeC7aThjK3pt0XWHe9nNNF3f6fKazetojj8fij4yn-uwPxCoUQA3G9fIW6DUdDREE-BABAACD3JtnKjY3DmdXzLZuYyl3znyXSPGl20aGqoa7VdvPsM5LDvFu_UgcC6mavwSp53lnqD562el3zz6m4At-1HsI{\"v\":\"KERI10JSON0000cb_\",\"t\":\"ixn\",\"d\":\"EKV_yu7fNd5C5KF5Z0hiB69y0cYvpFdJn-rGb1hfkxaw\",\"i\":\"EHEhxeOvuTE1Tb4TNY9IjEQc84wWO7gfetIJHvDxejHl\",\"s\":\"2\",\"p\":\"EFNdXp7bTGtf4jtWNJCQfYYxmNuxepoHIW5YESZKOcaB\",\"a\":[]}-VAu-AABAACxjW8O1kjMA3BF8sPvin1IiNd_JMGVhICaMmtzNJNGAgMJ0qztZO76C_anIrjIEGQmqU-k-wi-q5k1tmR_QP8N-BABAACzaw1Af7QB0ynirGp9fuO6lEF4uaDSWlxr90i2kwjrR5hxjoABQ-R4-w7CAFzpfH5bs737fs2wThzb-KtgpHkP{\"v\":\"KERI10JSON0000cb_\",\"t\":\"ixn\",\"d\":\"EMsfbHNNNVXLUUnqdivfoLhZ16AUT1Qo890dgQFencxY\",\"i\":\"EHEhxeOvuTE1Tb4TNY9IjEQc84wWO7gfetIJHvDxejHl\",\"s\":\"3\",\"p\":\"EKV_yu7fNd5C5KF5Z0hiB69y0cYvpFdJn-rGb1hfkxaw\",\"a\":[]}-VAu-AABAACNDUkOpjZ6x_K-L4xOW8FTkluM3B598f0y2CQv3GdQiSNL8aK2xmxAi_c33A6EbtBfX-PS7xAxBSbkiaUz-_UK-BABAAB-V8WaRMOTJhKEJXTJ_33F_7PJieN7NTv3dPWyexb_-7rlFyNKPTkQvy27Mqbb1_3uIWsZHJGN9pF6_HDC-8MK{\"v\":\"KERI10JSON0000cb_\",\"t\":\"ixn\",\"d\":\"ENDKYm57NjOts88qacgJV-4tC5spDWk_G3Xc4UDaq01A\",\"i\":\"EHEhxeOvuTE1Tb4TNY9IjEQc84wWO7gfetIJHvDxejHl\",\"s\":\"4\",\"p\":\"EMsfbHNNNVXLUUnqdivfoLhZ16AUT1Qo890dgQFencxY\",\"a\":[]}-VAu-AABAACrcoT5bDdYsWxdhLQ4n-H2VHQRD4KAeeWW235y5tkIDyItRNq0OaytR-DIieV1gNqGSU6xEecq7ZS2z58rUdAG-BABAAA68qntm59f95UcLKqwqOXaTCO5U-g8wbFpsIS1DphtR45lm1w0tePUEIJwmlHODRAhxXIihd4MVIkE9amY07AL{\"v\":\"KERI10JSON0000cb_\",\"t\":\"ixn\",\"d\":\"EF1Ob0QmRVEI8lHT9T--JDVFzV3yMAegYX5O6HgGdN_V\",\"i\":\"EHEhxeOvuTE1Tb4TNY9IjEQc84wWO7gfetIJHvDxejHl\",\"s\":\"5\",\"p\":\"ENDKYm57NjOts88qacgJV-4tC5spDWk_G3Xc4UDaq01A\",\"a\":[]}-VAu-AABAABvc6cYcmBueD2k8p3xjMlFc0ZrkW8XhQx0l6Ynb1P5DwPzhZapviX4wp8OzIMAeXt0HSTPJCdstCcPNOe2kTMJ-BABAAA88Sv_kLk134msECg9vB6AZ_HhIAnkGZ1yVyKJwt5uzaSU2sfj4Rbxm5P6QjxE924odQZ4_GdotRwBHqR4oAkD{\"v\":\"KERI10JSON0000cb_\",\"t\":\"ixn\",\"d\":\"EAivvQZNFRyR9wqEYFqZ0DLjXNKgEqGoeK989Xg8HDPs\",\"i\":\"EHEhxeOvuTE1Tb4TNY9IjEQc84wWO7gfetIJHvDxejHl\",\"s\":\"6\",\"p\":\"EF1Ob0QmRVEI8lHT9T--JDVFzV3yMAegYX5O6HgGdN_V\",\"a\":[]}-VAu-AABAABteG1Dxltvbk9NiHWlxc0bAOn7Iwhz3kFgW0RCPpWhCN2u9Je2jkMDa8rumxETnGmHQt9UeRe8MnG15i2yf34K-BABAAAqbhYJFRDuubRf3qbKMZqAba5J7mXjcuyDnKuOx2sTjlXGtZ3oLl7-5DjqiExhSWfctEmW0gtPFV5N8fWJkJYA{\"v\":\"KERI10JSON0000cb_\",\"t\":\"ixn\",\"d\":\"EBzpw456NA0XL908QFwbWkZ-e0M5WCAHtsZBMMPesw4n\",\"i\":\"EHEhxeOvuTE1Tb4TNY9IjEQc84wWO7gfetIJHvDxejHl\",\"s\":\"7\",\"p\":\"EAivvQZNFRyR9wqEYFqZ0DLjXNKgEqGoeK989Xg8HDPs\",\"a\":[]}-VAu-AABAABymG5Ag3KTpS5qIYdrdS84TTrIYBYDroZnT-4AKPzU8AbSlGYCxIdviH1AD7elS89AXlAWbFRlOFzVcdnhZJoG-BABAACZv5YhdBt5f8OFseynh47Ky8-2VVYwN1LKSi1qPR9D_u9p59UiAWz50ZceO9bmHFhoR2Q0GUHOAL1l0tTJnIgN{\"v\":\"KERI10JSON0000cb_\",\"t\":\"ixn\",\"d\":\"ELQaG3XWd8Ri_nMZL9PrHDx1AHy69CUh8tlaQ1a6TmEf\",\"i\":\"EHEhxeOvuTE1Tb4TNY9IjEQc84wWO7gfetIJHvDxejHl\",\"s\":\"8\",\"p\":\"EBzpw456NA0XL908QFwbWkZ-e0M5WCAHtsZBMMPesw4n\",\"a\":[]}-VAu-AABAACdJm6jdaie1h7zg9FOLuhpZvh6eIoEjrAN6KobjN_DTp2nAH41W4ycQsUVidvwAPFUrymEj6jOLkUb6itw1u0H-BABAAD6ggWdcxb-3IwyGpSKRqJHC4FO44cUGUVkzA8l3UjjzHX_1Y3-jvkkqm323GoD0zlNApq-33NSvfK_IivLqRYN{\"v\":\"KERI10JSON0000cb_\",\"t\":\"ixn\",\"d\":\"EB-F5hFq94zqe8Bwiti2-c-h53fbOS6g6F7E3aC39i3q\",\"i\":\"EHEhxeOvuTE1Tb4TNY9IjEQc84wWO7gfetIJHvDxejHl\",\"s\":\"9\",\"p\":\"ELQaG3XWd8Ri_nMZL9PrHDx1AHy69CUh8tlaQ1a6TmEf\",\"a\":[]}-VAu-AABAACwdYAAziFHOHwpZwOVgFV0b-3RCFoJNibRNQ-ew14socohksJ-d_JBdUPg_-8wRdkhj17jZKHmTwRQrPluRkgF-BABAACLquk_SuZ00DjaiT_9jYu_mcJkKty1Cuesdy-x0stTFcIaWMcBfdK5do48JHeF7IdgZPupbcn03siA5XmOv6UK{\"v\":\"KERI10JSON0000cb_\",\"t\":\"ixn\",\"d\":\"EPBFopDBTlCuoihm5XIEpKJhRHmNK7dvbMkZ26ttDbHo\",\"i\":\"EHEhxeOvuTE1Tb4TNY9IjEQc84wWO7gfetIJHvDxejHl\",\"s\":\"a\",\"p\":\"EB-F5hFq94zqe8Bwiti2-c-h53fbOS6g6F7E3aC39i3q\",\"a\":[]}-VAu-AABAADvXsio1PVlR04BbbInkgayt2-bbGYRRAtOxHM1ZXTlfWh1Q91eUiphQ3qh-Gbza_Gr0U0GGHoo8kTN1mKk2A0D-BABAABoGiZ1RluUDoUbTEloqj1iHmTkHuJHtQHS3Vz2cYw0ykK_K4hzSHRwGy2Yqp2jeO8whWp65g-xbVQ7C-HxX8oF{\"v\":\"KERI10JSON0002bf_\",\"t\":\"rpy\",\"d\":\"EH603NPfYDzG47M2RYX1LXRBUu1WkVGpAaacz_MJ-sKz\",\"dt\":\"2020-08-21T17:52:31.000000+00:00\",\"r\":\"/ksn/BAkl7aytWrZQNxWN-i2qP3JEQyrxFY4fbKn4owecwIo3\",\"a\":{\"vn\":[1,0],\"i\":\"EHEhxeOvuTE1Tb4TNY9IjEQc84wWO7gfetIJHvDxejHl\",\"s\":\"10\",\"p\":\"EB-F5hFq94zqe8Bwiti2-c-h53fbOS6g6F7E3aC39i3q\",\"d\":\"EPBFopDBTlCuoihm5XIEpKJhRHmNK7dvbMkZ26ttDbHo\",\"f\":\"a\",\"dt\":\"2020-08-21T17:52:30.000000+00:00\",\"et\":\"ixn\",\"kt\":\"1\",\"k\":[\"DDd5jfW5m53T3O-DCHGCZsxxJvBVZ1B9DLjdmIkBFAMx\"],\"nt\":\"1\",\"n\":[\"EFJ5EtUXieolTQNd-e1XuNW7SMJv4BOnkFV0VD8v-gh6\"],\"bt\":\"1\",\"b\":[\"BAkl7aytWrZQNxWN-i2qP3JEQyrxFY4fbKn4owecwIo3\"],\"c\":[],\"ee\":{\"s\":\"0\",\"d\":\"EHEhxeOvuTE1Tb4TNY9IjEQc84wWO7gfetIJHvDxejHl\",\"br\":[],\"ba\":[]},\"di\":\"\"}}-VAi-CABBAkl7aytWrZQNxWN-i2qP3JEQyrxFY4fbKn4owecwIo30BDlnaXw66LZY7Jfue7h1yHEAw4u_E4ufUyR9CHrz7QfhQ1qRS51o-Tcclg8MUsA2gjt27w5oeltygIV1_hCAVEO",
+   "expected": "reject",
+   "targets": [
+    "EH603NPfYDzG47M2RYX1LXRBUu1WkVGpAaacz_MJ-sKz"
+   ],
+   "kels": {
+    "EHEhxeOvuTE1Tb4TNY9IjEQc84wWO7gfetIJHvDxejHl": {
+     "events": [
+      {
+       "sn": 0,
+       "t": "icp",
+       "d": "EHEhxeOvuTE1Tb4TNY9IjEQc84wWO7gfetIJHvDxejHl"
+      },
+      {
+       "sn": 1,
+       "t": "ixn",
+       "d": "EFNdXp7bTGtf4jtWNJCQfYYxmNuxepoHIW5YESZKOcaB"
+      },
+      {
+       "sn": 2,
+       "t": "ixn",
+       "d": "EKV_yu7fNd5C5KF5Z0hiB69y0cYvpFdJn-rGb1hfkxaw"
+      },
+      {
+       "sn": 3,
+       "t": "ixn",
+       "d": "EMsfbHNNNVXLUUnqdivfoLhZ16AUT1Qo890dgQFencxY"
+      },
+      {
+       "sn": 4,
+       "t": "ixn",
+       "d": "ENDKYm57NjOts88qacgJV-4tC5spDWk_G3Xc4UDaq01A"
+      },
+      {
+       "sn": 5,
+       "t": "ixn",
+       "d": "EF1Ob0QmRVEI8lHT9T--JDVFzV3yMAegYX5O6HgGdN_V"
+      },
+      {
+       "sn": 6,
+       "t": "ixn",
+       "d": "EAivvQZNFRyR9wqEYFqZ0DLjXNKgEqGoeK989Xg8HDPs"
+      },
+      {
+       "sn": 7,
+       "t": "ixn",
+       "d": "EBzpw456NA0XL908QFwbWkZ-e0M5WCAHtsZBMMPesw4n"
+      },
+      {
+       "sn": 8,
+       "t": "ixn",
+       "d": "ELQaG3XWd8Ri_nMZL9PrHDx1AHy69CUh8tlaQ1a6TmEf"
+      },
+      {
+       "sn": 9,
+       "t": "ixn",
+       "d": "EB-F5hFq94zqe8Bwiti2-c-h53fbOS6g6F7E3aC39i3q"
+      },
+      {
+       "sn": 10,
+       "t": "ixn",
+       "d": "EPBFopDBTlCuoihm5XIEpKJhRHmNK7dvbMkZ26ttDbHo"
+      }
+     ]
+    }
+   },
+   "reason": "there is no event at sn 0x10; the notice is inconsistent with the KEL",
+   "spec_section": "KERI field labels (s: Sequence Number). The spec does not define the /ksn route itself, so this rests on the generic s rule and on keripy interop",
+   "spec_quote": "|`s`| Sequence Number | strictly monotonically increasing integer encoded in hex |",
+   "keripy": {
+    "outcome": "accepts",
+    "agrees_with_spec": false,
+    "kels": {
+     "EHEhxeOvuTE1Tb4TNY9IjEQc84wWO7gfetIJHvDxejHl": [
+      {
+       "sn": 0,
+       "t": "icp",
+       "d": "EHEhxeOvuTE1Tb4TNY9IjEQc84wWO7gfetIJHvDxejHl"
+      },
+      {
+       "sn": 1,
+       "t": "ixn",
+       "d": "EFNdXp7bTGtf4jtWNJCQfYYxmNuxepoHIW5YESZKOcaB"
+      },
+      {
+       "sn": 2,
+       "t": "ixn",
+       "d": "EKV_yu7fNd5C5KF5Z0hiB69y0cYvpFdJn-rGb1hfkxaw"
+      },
+      {
+       "sn": 3,
+       "t": "ixn",
+       "d": "EMsfbHNNNVXLUUnqdivfoLhZ16AUT1Qo890dgQFencxY"
+      },
+      {
+       "sn": 4,
+       "t": "ixn",
+       "d": "ENDKYm57NjOts88qacgJV-4tC5spDWk_G3Xc4UDaq01A"
+      },
+      {
+       "sn": 5,
+       "t": "ixn",
+       "d": "EF1Ob0QmRVEI8lHT9T--JDVFzV3yMAegYX5O6HgGdN_V"
+      },
+      {
+       "sn": 6,
+       "t": "ixn",
+       "d": "EAivvQZNFRyR9wqEYFqZ0DLjXNKgEqGoeK989Xg8HDPs"
+      },
+      {
+       "sn": 7,
+       "t": "ixn",
+       "d": "EBzpw456NA0XL908QFwbWkZ-e0M5WCAHtsZBMMPesw4n"
+      },
+      {
+       "sn": 8,
+       "t": "ixn",
+       "d": "ELQaG3XWd8Ri_nMZL9PrHDx1AHy69CUh8tlaQ1a6TmEf"
+      },
+      {
+       "sn": 9,
+       "t": "ixn",
+       "d": "EB-F5hFq94zqe8Bwiti2-c-h53fbOS6g6F7E3aC39i3q"
+      },
+      {
+       "sn": 10,
+       "t": "ixn",
+       "d": "EPBFopDBTlCuoihm5XIEpKJhRHmNK7dvbMkZ26ttDbHo"
+      }
+     ]
+    },
+    "knas": {
+     "EHEhxeOvuTE1Tb4TNY9IjEQc84wWO7gfetIJHvDxejHl/BAkl7aytWrZQNxWN-i2qP3JEQyrxFY4fbKn4owecwIo3": {
+      "d": "EPBFopDBTlCuoihm5XIEpKJhRHmNK7dvbMkZ26ttDbHo",
+      "s": "10"
+     }
+    },
+    "note": "keripy accepts it: processReplyKeyStateNotice compares d with the KEL only when it has an event at the notice's sn (src/keri/core/eventing.py:5317-5326), and there is none at 0x10"
+   }
+  },
+  {
+   "id": "gap/rm-couple-sig-type-panic/valid-ed25519-bytes",
+   "description": "a /loc/scheme reply of eid B (Ed25519) whose receipt couple carries B with B's valid Ed25519 signature bytes coded 0C (ECDSA secp256k1)",
+   "pvrsn": "1.0",
+   "target": "reply",
+   "gap": "rm-couple-sig-type-panic",
+   "gap_kind": "wrong-behaviour",
+   "stream": "{\"v\":\"KERI10JSON0000ed_\",\"t\":\"rpy\",\"d\":\"EIdGcHG4Dzy9VnyjmIKSOav-xSu-_qIjxAifYLz5REPH\",\"dt\":\"2020-08-21T17:52:15.000000+00:00\",\"r\":\"/loc/scheme\",\"a\":{\"eid\":\"BE0EIcfxV8sI33SaCZ5HBohOP8GUfPoFSPygf665wUCq\",\"scheme\":\"http\",\"url\":\"http://a/\"}}-CAi-MAhBE0EIcfxV8sI33SaCZ5HBohOP8GUfPoFSPygf665wUCq0CCGNzYlL4uAPTe3yDm1Ky3Gp6gpoCj4c6qUOrM3UmqqwR6zz6klU92qCXX43FLcpvB6RR_BgQnK35wLt4rc-ngD",
+   "stream_cesr1": "{\"v\":\"KERI10JSON0000ed_\",\"t\":\"rpy\",\"d\":\"EIdGcHG4Dzy9VnyjmIKSOav-xSu-_qIjxAifYLz5REPH\",\"dt\":\"2020-08-21T17:52:15.000000+00:00\",\"r\":\"/loc/scheme\",\"a\":{\"eid\":\"BE0EIcfxV8sI33SaCZ5HBohOP8GUfPoFSPygf665wUCq\",\"scheme\":\"http\",\"url\":\"http://a/\"}}-VAi-CABBE0EIcfxV8sI33SaCZ5HBohOP8GUfPoFSPygf665wUCq0CCGNzYlL4uAPTe3yDm1Ky3Gp6gpoCj4c6qUOrM3UmqqwR6zz6klU92qCXX43FLcpvB6RR_BgQnK35wLt4rc-ngD",
+   "expected": "reject",
+   "targets": [
+    "EIdGcHG4Dzy9VnyjmIKSOav-xSu-_qIjxAifYLz5REPH"
+   ],
+   "kels": {},
+   "locs": [
+    {
+     "eid": "BE0EIcfxV8sI33SaCZ5HBohOP8GUfPoFSPygf665wUCq",
+     "scheme": "http",
+     "url": null
+    }
+   ],
+   "reason": "the signature does not verify against the key; the reply is rejected (a validator must not crash)",
+   "spec_section": "BADA Rules / Signed (Not Anchored) Updates",
+   "spec_quote": "Confirm signature on the Update verifies against indicated key-state under which signature was made.",
+   "keripy": {
+    "outcome": "accepts",
+    "agrees_with_spec": false,
+    "kels": {},
+    "locs": [
+     {
+      "eid": "BE0EIcfxV8sI33SaCZ5HBohOP8GUfPoFSPygf665wUCq",
+      "scheme": "http",
+      "url": "http://a/"
+     }
+    ],
+    "note": "keripy verifies the signature bytes with the key's algorithm and ignores the signature code (Cigar.verfer.verify), so it accepts the reply",
+    "review_expected": "rejects"
+   }
+  }
+ ]
+}

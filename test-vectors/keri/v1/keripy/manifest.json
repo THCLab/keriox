@@ -1,0 +1,202 @@
+{
+ "files": {
+  "kels/positive.json": 15,
+  "negative/edge.json": 12,
+  "negative/negative.json": 84
+ },
+ "gaps": {
+  "deleg-anchor-in-inception-refused": [
+   "gap/deleg-anchor-in-inception-refused",
+   "gap/deleg-anchor-in-inception-refused/no-source-seal"
+  ],
+  "deleg-dnd-not-enforced": [
+   "gap/deleg-dnd-not-enforced"
+  ],
+  "deleg-escrow-one-per-anchor": [
+   "gap/deleg-escrow-one-per-anchor"
+  ],
+  "deleg-no-kel-search": [
+   "gap/deleg-no-kel-search"
+  ],
+  "deleg-seal-is-ignored": [
+   "gap/deleg-seal-is-ignored/wrong-i-and-s",
+   "gap/deleg-seal-is-ignored/wrong-i",
+   "gap/deleg-seal-is-ignored/wrong-s"
+  ],
+  "dip-without-di-accepted": [
+   "gap/dip-without-di-accepted/said-over-icp-dummy",
+   "gap/dip-without-di-accepted/said-over-body"
+  ],
+  "kel-config-did-rb-nrb": [
+   "gap/kel-config-did-rb-nrb"
+  ],
+  "kel-config-dnd-not-enforced": [
+   "gap/kel-config-dnd-not-enforced"
+  ],
+  "kel-config-eo-not-enforced": [
+   "gap/kel-config-eo-not-enforced"
+  ],
+  "kel-duplicity-identical-and-unverified": [
+   "gap/kel-duplicity-identical-and-unverified"
+  ],
+  "kel-escrow-unverified-sigs": [
+   "gap/kel-escrow-unverified-sigs"
+  ],
+  "kel-invalid-sig-poisons-event": [
+   "gap/kel-invalid-sig-poisons-event"
+  ],
+  "kel-nested-weighted-threshold": [
+   "gap/kel-nested-weighted-threshold"
+  ],
+  "kel-nontrans-prefix-with-next": [
+   "gap/kel-nontrans-prefix-with-next"
+  ],
+  "kel-rot-dup-key-prior-next-bypass": [
+   "gap/kel-rot-dup-key-prior-next-bypass/integer",
+   "gap/kel-rot-dup-key-prior-next-bypass/weighted"
+  ],
+  "kel-seal-types-missing": [
+   "gap/kel-seal-types-missing"
+  ],
+  "kel-threshold-zero": [
+   "gap/kel-threshold-zero/next",
+   "gap/kel-threshold-zero/current"
+  ],
+  "kel-type-tag-body-mismatch": [
+   "gap/kel-type-tag-body-mismatch/rot-with-ixn-body",
+   "gap/kel-type-tag-body-mismatch/dip-without-di/said-over-icp-dummy",
+   "gap/kel-type-tag-body-mismatch/dip-without-di/said-over-body"
+  ],
+  "kel-weighted-threshold-validity": [
+   "gap/kel-weighted-threshold-validity/unreduced-fraction",
+   "gap/kel-weighted-threshold-validity/unsatisfiable-next"
+  ],
+  "rm-bada-equal-dt": [
+   "gap/rm-bada-equal-dt"
+  ],
+  "rm-couple-sig-type-panic": [
+   "gap/rm-couple-sig-type-panic/valid-ed25519-bytes",
+   "gap/rm-couple-sig-type-panic/junk"
+  ],
+  "rm-endrole-bada-key": [
+   "gap/rm-endrole-bada-key"
+  ],
+  "rm-endrole-cut-no-nullify": [
+   "gap/rm-endrole-cut-no-nullify"
+  ],
+  "rm-exn-unsigned": [
+   "gap/rm-exn-unsigned/keripy-shape",
+   "gap/rm-exn-unsigned/keriox-shape"
+  ],
+  "rm-ksn-format-undefined": [
+   "gap/rm-ksn-format-undefined"
+  ],
+  "rm-ksn-sn-decimal": [
+   "gap/rm-ksn-sn-decimal/hex",
+   "gap/rm-ksn-sn-decimal/decimal"
+  ],
+  "rm-locscheme-empty-url": [
+   "gap/rm-locscheme-empty-url"
+  ],
+  "rm-nontrans-couple-transferable-code": [
+   "gap/rm-nontrans-couple-transferable-code"
+  ],
+  "rm-protocol-not-checked": [
+   "gap/rm-protocol-not-checked"
+  ],
+  "rm-role-set-ambiguity": [
+   "gap/rm-role-set-ambiguity/registrar",
+   "gap/rm-role-set-ambiguity/mailbox"
+  ],
+  "rm-said-not-verified-qry-exn": [
+   "gap/rm-said-not-verified-qry-exn/qry",
+   "gap/rm-said-not-verified-qry-exn/exn"
+  ],
+  "seal-types-missing": [
+   "gap/seal-types-missing/source",
+   "gap/seal-types-missing/latest-establishment",
+   "gap/seal-types-missing/registrar-backer",
+   "gap/seal-types-missing/typed"
+  ],
+  "source-seal-multiple-couples": [
+   "gap/source-seal-multiple-couples"
+  ],
+  "wit-b-duplicates": [
+   "gap/wit-b-duplicates"
+  ],
+  "wit-ba-existing-duplicates": [
+   "gap/wit-ba-existing-duplicates"
+  ],
+  "wit-br-ba-internal-duplicates": [
+   "gap/wit-br-ba-internal-duplicates/ba",
+   "gap/wit-br-ba-internal-duplicates/br"
+  ],
+  "wit-br-not-member-and-br-ba-overlap": [
+   "gap/wit-br-not-member-and-br-ba-overlap/br-not-member",
+   "gap/wit-br-not-member-and-br-ba-overlap/br-ba-overlap"
+  ],
+  "wit-bt-exceeds-b": [
+   "gap/wit-bt-exceeds-b"
+  ],
+  "wit-bt-nonzero-empty-b": [
+   "gap/wit-bt-nonzero-empty-b/inception",
+   "gap/wit-bt-nonzero-empty-b/rotation"
+  ],
+  "wit-bt-weighted": [
+   "gap/wit-bt-weighted"
+  ],
+  "wit-bt-zero-nonempty-b": [
+   "gap/wit-bt-zero-nonempty-b"
+  ],
+  "wit-duplicity-unverified": [
+   "gap/wit-duplicity-unverified/identical",
+   "gap/wit-duplicity-unverified/unverified",
+   "gap/wit-duplicity-unverified/verified"
+  ],
+  "wit-ksn-ee-swapped": [
+   "gap/wit-ksn-ee-swapped"
+  ],
+  "wit-receipt-all-or-nothing": [
+   "gap/wit-receipt-all-or-nothing/bad-signature",
+   "gap/wit-receipt-all-or-nothing/out-of-range"
+  ],
+  "wit-transferable-witness-aid": [
+   "gap/wit-transferable-witness-aid"
+  ],
+  "wit-witness-local-remote": [
+   "gap/wit-witness-local-remote"
+  ],
+  "wit-witness-receipts-any-aid": [
+   "gap/wit-witness-receipts-any-aid"
+  ]
+ },
+ "generator": {
+  "source": {
+   "implementation": "keripy",
+   "revision": "424a50c03421165c5f289e07a341bd57b8d8ab78",
+   "version": "2.1.0-dev1"
+  },
+  "specification": {
+   "commit": "fbdd4a6155e48248873cccd5cf6f79b6b631a021",
+   "repository": "https://github.com/trustoverip/kswg-keri-specification"
+  },
+  "tool": "gen_vectors.py",
+  "version": "1.0.0"
+ },
+ "keripy_disagrees_with_spec": [
+  "classic/weighted-next-threshold-length",
+  "gap/deleg-anchor-in-inception-refused",
+  "gap/kel-config-did-rb-nrb",
+  "gap/kel-duplicity-identical-and-unverified",
+  "gap/kel-rot-dup-key-prior-next-bypass/integer",
+  "gap/rm-couple-sig-type-panic/valid-ed25519-bytes",
+  "gap/rm-ksn-sn-decimal/decimal",
+  "gap/wit-ba-existing-duplicates",
+  "gap/wit-br-not-member-and-br-ba-overlap/br-ba-overlap",
+  "gap/wit-br-not-member-and-br-ba-overlap/br-not-member",
+  "gap/wit-bt-zero-nonempty-b",
+  "gap/wit-duplicity-unverified/unverified"
+ ],
+ "pvrsn": "1.0",
+ "source": "keripy"
+}

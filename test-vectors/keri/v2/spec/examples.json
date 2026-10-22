@@ -1,0 +1,3948 @@
+{
+ "schema": "keri-spec-example/1",
+ "generator": {
+  "tool": "extract.py",
+  "version": "1.0.0",
+  "source": {
+   "implementation": "KERI specification",
+   "repository": "https://github.com/trustoverip/kswg-keri-specification",
+   "revision": "fbdd4a6155e48248873cccd5cf6f79b6b631a021",
+   "files": [
+    "spec/spec-body.md"
+   ]
+  }
+ },
+ "declared": {
+  "message_field_orders": {
+   "icp": [
+    "v",
+    "t",
+    "d",
+    "i",
+    "s",
+    "kt",
+    "k",
+    "nt",
+    "n",
+    "bt",
+    "b",
+    "c",
+    "a"
+   ],
+   "dip": [
+    "v",
+    "t",
+    "d",
+    "i",
+    "s",
+    "kt",
+    "k",
+    "nt",
+    "n",
+    "bt",
+    "b",
+    "c",
+    "a",
+    "di"
+   ],
+   "ixn": [
+    "v",
+    "t",
+    "d",
+    "i",
+    "s",
+    "p",
+    "a"
+   ],
+   "rot": [
+    "v",
+    "t",
+    "d",
+    "i",
+    "s",
+    "p",
+    "kt",
+    "k",
+    "nt",
+    "n",
+    "bt",
+    "br",
+    "ba",
+    "c",
+    "a"
+   ],
+   "drt": [
+    "v",
+    "t",
+    "d",
+    "i",
+    "s",
+    "p",
+    "kt",
+    "k",
+    "nt",
+    "n",
+    "bt",
+    "br",
+    "ba",
+    "c",
+    "a"
+   ],
+   "rct": [
+    "v",
+    "t",
+    "d",
+    "i",
+    "s"
+   ],
+   "qry": [
+    "v",
+    "t",
+    "d",
+    "dt",
+    "r",
+    "rr",
+    "q"
+   ],
+   "rpy": [
+    "v",
+    "t",
+    "d",
+    "dt",
+    "r",
+    "a"
+   ],
+   "pro": [
+    "v",
+    "t",
+    "d",
+    "dt",
+    "r",
+    "rr",
+    "q"
+   ],
+   "bar": [
+    "v",
+    "t",
+    "d",
+    "dt",
+    "r",
+    "a"
+   ],
+   "xip": [
+    "v",
+    "t",
+    "d",
+    "u",
+    "i",
+    "ri",
+    "dt",
+    "r",
+    "q",
+    "a"
+   ],
+   "exn": [
+    "v",
+    "t",
+    "d",
+    "i",
+    "ri",
+    "x",
+    "p",
+    "dt",
+    "r",
+    "q",
+    "a"
+   ]
+  },
+  "seal_field_orders": {
+   "Source Event seal": [
+    "s",
+    "d"
+   ],
+   "Key Event seal": [
+    "i",
+    "s",
+    "d"
+   ],
+   "Typed seal": [
+    "t",
+    "d"
+   ]
+  },
+  "config_traits": {
+   "EO": {
+    "title": "Establishment-Only",
+    "inception_only": true
+   },
+   "DND": {
+    "title": "Do-Not-Delegate",
+    "inception_only": true
+   },
+   "DID": {
+    "title": "Delegate-Is-Delegator",
+    "inception_only": true
+   },
+   "RB": {
+    "title": "Registrar-Backers",
+    "inception_only": false
+   },
+   "NRB": {
+    "title": "No-Registrar-Backers",
+    "inception_only": false
+   }
+  },
+  "conflicts": []
+ },
+ "vectors": [
+  {
+   "id": "spec/seal/digest-seal",
+   "type": "seal",
+   "name": "digest-seal",
+   "section": "Digest seal",
+   "section_path": [
+    "KERI data structures and labels",
+    "Seals",
+    "Digest seal"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 431,
+   "syntax": "json",
+   "sad": {
+    "d": "EAU5dUws4ffM9jZjWs0QfXTnhJ1qk2u3IUhBwFVbFnt5"
+   },
+   "checks": {},
+   "consistent": true,
+   "errata": []
+  },
+  {
+   "id": "spec/seal/merkle-tree-root-digest-seal",
+   "type": "seal",
+   "name": "merkle-tree-root-digest-seal",
+   "section": "Merkle Tree root digest seal",
+   "section_path": [
+    "KERI data structures and labels",
+    "Seals",
+    "Merkle Tree root digest seal"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 443,
+   "syntax": "json",
+   "sad": {
+    "rd": "EBMFnZjWs0QfXTnht5AU5dU9jJ1qk2u3IUhwFVbws4ff"
+   },
+   "checks": {},
+   "consistent": true,
+   "errata": []
+  },
+  {
+   "id": "spec/seal/source-event-seal",
+   "type": "seal",
+   "name": "source-event-seal",
+   "section": "Source Event seal",
+   "section_path": [
+    "KERI data structures and labels",
+    "Seals",
+    "Source Event seal"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 459,
+   "syntax": "json",
+   "sad": {
+    "s": "e",
+    "d": "EJFxtbr9WioIkzTfVX4iC6Axxyg8jjKSX0ZrJgoNHiB-"
+   },
+   "checks": {
+    "field_order": {
+     "declared": [
+      "s",
+      "d"
+     ],
+     "ok": true
+    }
+   },
+   "consistent": true,
+   "errata": []
+  },
+  {
+   "id": "spec/seal/key-event-seal",
+   "type": "seal",
+   "name": "key-event-seal",
+   "section": "Key Event seal",
+   "section_path": [
+    "KERI data structures and labels",
+    "Seals",
+    "Key Event seal"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 472,
+   "syntax": "json",
+   "sad": {
+    "i": "'EHqSsH1Imc2MEcgzEordBUFqJKWTcRyTz2GRc2SG3aur'",
+    "s": "1",
+    "d": "ENl9GdcDY-4hlg5GtVwOg2E9X7JHw-7Dr5Zq5KNirISF"
+   },
+   "checks": {
+    "field_order": {
+     "declared": [
+      "i",
+      "s",
+      "d"
+     ],
+     "ok": true
+    }
+   },
+   "consistent": false,
+   "errata": [
+    "field i: \"'EHqSsH1Imc2MEcgzEordBUFqJKWTcRyTz2GRc2SG3aur'\" has non-Base64 characters"
+   ]
+  },
+  {
+   "id": "spec/seal/latest-establishment-event-seal",
+   "type": "seal",
+   "name": "latest-establishment-event-seal",
+   "section": "Latest establishment event seal",
+   "section_path": [
+    "KERI data structures and labels",
+    "Seals",
+    "Latest establishment event seal"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 487,
+   "syntax": "python",
+   "sad": {
+    "i": "EHqSsH1Imc2MEcgzEordBUFqJKWTcRyTz2GRc2SG3aur"
+   },
+   "checks": {},
+   "consistent": false,
+   "errata": [
+    "block is marked json but is not valid JSON"
+   ]
+  },
+  {
+   "id": "spec/seal/registrar-backer-seal",
+   "type": "seal",
+   "name": "registrar-backer-seal",
+   "section": "Registrar Backer seal",
+   "section_path": [
+    "KERI data structures and labels",
+    "Seals",
+    "Registrar Backer seal"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 505,
+   "syntax": "json",
+   "sad": {
+    "bi": "EDeCPBTHAt75Acgi9PfEciHFnc1r2DKAno3s9_QIYrXk",
+    "d": "EA8_fj-Ezin_Us_gUcg5JQJkIIBnrcZt3HEIuH-E1lpe"
+   },
+   "checks": {},
+   "consistent": true,
+   "errata": []
+  },
+  {
+   "id": "spec/encoding/seal-type",
+   "type": "encoding",
+   "name": "seal-type",
+   "section": "Typed seal",
+   "section_path": [
+    "KERI foundational overview",
+    "KERI data structures and labels",
+    "Seals",
+    "Typed seal"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 520,
+   "encoding": "seal-type",
+   "qb64": "YCSMTCAA",
+   "checks": {
+    "code": "Y",
+    "type": "CSMT",
+    "version": "2.0",
+    "ok": true
+   },
+   "consistent": true,
+   "errata": []
+  },
+  {
+   "id": "spec/seal/typed-seal",
+   "type": "seal",
+   "name": "typed-seal",
+   "section": "Typed seal",
+   "section_path": [
+    "KERI data structures and labels",
+    "Seals",
+    "Typed seal"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 531,
+   "syntax": "json",
+   "sad": {
+    "t": "YCSMTCAA",
+    "d": "EAU5dUws4ffM9jZjWs0QfXTnhJ1qk2u3IUhBwFVbFnt5"
+   },
+   "checks": {
+    "field_order": {
+     "declared": [
+      "t",
+      "d"
+     ],
+     "ok": true
+    }
+   },
+   "consistent": true,
+   "errata": []
+  },
+  {
+   "id": "spec/message/inception-event-example-icp-json",
+   "type": "message",
+   "name": "inception-event-example-icp-json",
+   "section": "Inception Event Example",
+   "section_path": [
+    "KERI data structures and labels",
+    "Key event messages",
+    "Inception Event Message Body",
+    "Inception Event Example"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 563,
+   "syntax": "json",
+   "sad": {
+    "v": "KERICAACAAJSONAAKp.",
+    "t": "icp",
+    "d": "EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB",
+    "i": "EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB",
+    "s": "0",
+    "kt": "2",
+    "k": [
+     "DBFiIgoCOpJ_zW_OO0GdffhHfEvJWb1HxpDx95bFvufu",
+     "DG-YwInLUxzVDD5z8SqZmS2FppXSB-ZX_f2bJC_ZnsM5",
+     "DGIAk2jkC3xuLIe-DI9rcA0naevtZiKuU9wz91L_qBAV"
+    ],
+    "nt": "2",
+    "n": [
+     "ELeFYMmuJb0hevKjhv97joA5bTfuA8E697cMzi8eoaZB",
+     "ENY9GYShOjeh7qZUpIipKRHgrWcoR2WkJ7Wgj4wZx1YT",
+     "EGyJ7y3TlewCW97dgBN-4pckhCqsni-zHNZ_G8zVerPG"
+    ],
+    "bt": "3",
+    "b": [
+     "BGKV6v93ue5L5wsgk75t6j8TcdgABMN9x-eIyPi96J3B",
+     "BJfueFAYc7N_V-zmDEn2SPCoVFx3H20alWsNZKgsS1vt",
+     "BAPv2MnoiCsgOnklmFyfU07QDK_93NeH9iKfOy8V22aH",
+     "BA4PSatfQMw1lYhQoZkSSvOCrE0Sdw1hmmniDL-yDtrB"
+    ],
+    "c": [
+     "DID"
+    ],
+    "a": []
+   },
+   "raw": "{\"v\":\"KERICAACAAJSONAAKp.\",\"t\":\"icp\",\"d\":\"EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB\",\"i\":\"EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB\",\"s\":\"0\",\"kt\":\"2\",\"k\":[\"DBFiIgoCOpJ_zW_OO0GdffhHfEvJWb1HxpDx95bFvufu\",\"DG-YwInLUxzVDD5z8SqZmS2FppXSB-ZX_f2bJC_ZnsM5\",\"DGIAk2jkC3xuLIe-DI9rcA0naevtZiKuU9wz91L_qBAV\"],\"nt\":\"2\",\"n\":[\"ELeFYMmuJb0hevKjhv97joA5bTfuA8E697cMzi8eoaZB\",\"ENY9GYShOjeh7qZUpIipKRHgrWcoR2WkJ7Wgj4wZx1YT\",\"EGyJ7y3TlewCW97dgBN-4pckhCqsni-zHNZ_G8zVerPG\"],\"bt\":\"3\",\"b\":[\"BGKV6v93ue5L5wsgk75t6j8TcdgABMN9x-eIyPi96J3B\",\"BJfueFAYc7N_V-zmDEn2SPCoVFx3H20alWsNZKgsS1vt\",\"BAPv2MnoiCsgOnklmFyfU07QDK_93NeH9iKfOy8V22aH\",\"BA4PSatfQMw1lYhQoZkSSvOCrE0Sdw1hmmniDL-yDtrB\"],\"c\":[\"DID\"],\"a\":[]}",
+   "raw_line": 599,
+   "kind": "JSON",
+   "checks": {
+    "version": {
+     "protocol": "KERI",
+     "version": "2.0",
+     "genus_version": "2.0",
+     "kind": "JSON",
+     "size": 681,
+     "native_prefix": "KERICAACAA"
+    },
+    "field_order": {
+     "declared": [
+      "v",
+      "t",
+      "d",
+      "i",
+      "s",
+      "kt",
+      "k",
+      "nt",
+      "n",
+      "bt",
+      "b",
+      "c",
+      "a"
+     ],
+     "ok": true,
+     "declared_line": 556
+    },
+    "size": {
+     "version": 681,
+     "computed": 681,
+     "ok": true
+    },
+    "raw_matches_sad": true,
+    "said": {
+     "fields": [
+      "d",
+      "i"
+     ],
+     "computed": "EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB",
+     "ok": true
+    },
+    "links": {},
+    "rules": {
+     "ok": true,
+     "backers": [
+      "BGKV6v93ue5L5wsgk75t6j8TcdgABMN9x-eIyPi96J3B",
+      "BJfueFAYc7N_V-zmDEn2SPCoVFx3H20alWsNZKgsS1vt",
+      "BAPv2MnoiCsgOnklmFyfU07QDK_93NeH9iKfOy8V22aH",
+      "BA4PSatfQMw1lYhQoZkSSvOCrE0Sdw1hmmniDL-yDtrB"
+     ]
+    }
+   },
+   "consistent": true,
+   "errata": []
+  },
+  {
+   "id": "spec/key-list/next-keys-of-inception-event-example-icp-json",
+   "type": "key-list",
+   "name": "next-keys-of-inception-event-example-icp-json",
+   "section": "Inception Event Example",
+   "section_path": [
+    "KERI data structures and labels",
+    "Key event messages",
+    "Inception Event Message Body",
+    "Inception Event Example"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 612,
+   "syntax": "json",
+   "next_of": "spec/message/inception-event-example-icp-json",
+   "value": [
+    "DLv9BlDvjcZWkfPfWcYhNK-xQxz89h82_wA184Vxk8dj",
+    "DCx3WypeBym3fCkVizTg18qEThSrVnB63dFq2oX5c3mz",
+    "DO0PG_ww4PbF2jUIxQnlb4DluJu5ndNehp0BTGWXErXf"
+   ],
+   "checks": {
+    "next_digests": {
+     "of": "spec/message/inception-event-example-icp-json",
+     "computed": [
+      "ELeFYMmuJb0hevKjhv97joA5bTfuA8E697cMzi8eoaZB",
+      "ENY9GYShOjeh7qZUpIipKRHgrWcoR2WkJ7Wgj4wZx1YT",
+      "EGyJ7y3TlewCW97dgBN-4pckhCqsni-zHNZ_G8zVerPG"
+     ],
+     "ok": true
+    }
+   },
+   "consistent": true,
+   "errata": []
+  },
+  {
+   "id": "spec/message/interaction-event-example-ixn-json",
+   "type": "message",
+   "name": "interaction-event-example-ixn-json",
+   "section": "Interaction Event Example",
+   "section_path": [
+    "KERI data structures and labels",
+    "Key event messages",
+    "Interaction Event Message Body",
+    "Interaction Event Example"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 634,
+   "syntax": "json",
+   "sad": {
+    "v": "KERICAACAAJSONAAE8.",
+    "t": "ixn",
+    "d": "EDeCPBTHAt75Acgi9PfEciHFnc1r2DKAno3s9_QIYrXk",
+    "i": "EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB",
+    "s": "1",
+    "p": "EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB",
+    "a": [
+     {
+      "i": "EHqSsH1Imc2MEcgzEordBUFqJKWTcRyTz2GRc2SG3aur",
+      "s": "0",
+      "d": "EHqSsH1Imc2MEcgzEordBUFqJKWTcRyTz2GRc2SG3aur"
+     }
+    ]
+   },
+   "raw": "{\"v\":\"KERICAACAAJSONAAE8.\",\"t\":\"ixn\",\"d\":\"EDeCPBTHAt75Acgi9PfEciHFnc1r2DKAno3s9_QIYrXk\",\"i\":\"EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB\",\"s\":\"1\",\"p\":\"EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB\",\"a\":[{\"i\":\"EHqSsH1Imc2MEcgzEordBUFqJKWTcRyTz2GRc2SG3aur\",\"s\":\"0\",\"d\":\"EHqSsH1Imc2MEcgzEordBUFqJKWTcRyTz2GRc2SG3aur\"}]}",
+   "raw_line": 655,
+   "kind": "JSON",
+   "checks": {
+    "version": {
+     "protocol": "KERI",
+     "version": "2.0",
+     "genus_version": "2.0",
+     "kind": "JSON",
+     "size": 316,
+     "native_prefix": "KERICAACAA"
+    },
+    "field_order": {
+     "declared": [
+      "v",
+      "t",
+      "d",
+      "i",
+      "s",
+      "p",
+      "a"
+     ],
+     "ok": true,
+     "declared_line": 627
+    },
+    "size": {
+     "version": 316,
+     "computed": 316,
+     "ok": true
+    },
+    "raw_matches_sad": true,
+    "said": {
+     "fields": [
+      "d"
+     ],
+     "computed": "EDeCPBTHAt75Acgi9PfEciHFnc1r2DKAno3s9_QIYrXk",
+     "ok": true
+    },
+    "links": {
+     "prior": {
+      "event": "spec/message/inception-event-example-icp-json",
+      "ok": true
+     },
+     "seals": [
+      {
+       "seal": {
+        "i": "EHqSsH1Imc2MEcgzEordBUFqJKWTcRyTz2GRc2SG3aur",
+        "s": "0",
+        "d": "EHqSsH1Imc2MEcgzEordBUFqJKWTcRyTz2GRc2SG3aur"
+       },
+       "event": "spec/message/delegated-inception-event-example-dip-json",
+       "ok": true
+      }
+     ]
+    },
+    "rules": {
+     "ok": true
+    }
+   },
+   "consistent": true,
+   "errata": []
+  },
+  {
+   "id": "spec/message/rotation-event-example-rot-json",
+   "type": "message",
+   "name": "rotation-event-example-rot-json",
+   "section": "Rotation Event Example",
+   "section_path": [
+    "KERI data structures and labels",
+    "Key event messages",
+    "Rotation Event Message Body",
+    "Rotation Event Example"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 672,
+   "syntax": "json",
+   "sad": {
+    "v": "KERICAACAAJSONAAMf.",
+    "t": "rot",
+    "d": "EJOnAKXGaSyJ_43kit0V806NNeGWS07lfjybB1UcfWsv",
+    "i": "EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB",
+    "s": "2",
+    "p": "EDeCPBTHAt75Acgi9PfEciHFnc1r2DKAno3s9_QIYrXk",
+    "kt": "2",
+    "k": [
+     "DLv9BlDvjcZWkfPfWcYhNK-xQxz89h82_wA184Vxk8dj",
+     "DCx3WypeBym3fCkVizTg18qEThSrVnB63dFq2oX5c3mz",
+     "DO0PG_ww4PbF2jUIxQnlb4DluJu5ndNehp0BTGWXErXf"
+    ],
+    "nt": "2",
+    "n": [
+     "EA8_fj-Ezin_Us_gUcg5JQJkIIBnrcZt3HEIuH-E1lpe",
+     "EERS8udHp2FW89nmaHweQWnZz7I8v9FTQdA-LZ_amqGh",
+     "EAEzmrPusrj4CDKnSFQvhCEW6T95C7hBeFtZtRD7rOTg"
+    ],
+    "bt": "4",
+    "br": [
+     "BA4PSatfQMw1lYhQoZkSSvOCrE0Sdw1hmmniDL-yDtrB"
+    ],
+    "ba": [
+     "BO3cCAfQiqndZBBxwNk6RGkyA-OA1XbZhBj3s4-VIsCo",
+     "BPowpltoeF14nMbU1ng89JSoYf3AmWhZ50KaCaVO6SIW"
+    ],
+    "c": [],
+    "a": [
+     {
+      "i": "EHqSsH1Imc2MEcgzEordBUFqJKWTcRyTz2GRc2SG3aur",
+      "s": "1",
+      "d": "ENl9GdcDY-4hlg5GtVwOg2E9X7JHw-7Dr5Zq5KNirISF"
+     }
+    ]
+   },
+   "raw": "{\"v\":\"KERICAACAAJSONAAMf.\",\"t\":\"rot\",\"d\":\"EJOnAKXGaSyJ_43kit0V806NNeGWS07lfjybB1UcfWsv\",\"i\":\"EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB\",\"s\":\"2\",\"p\":\"EDeCPBTHAt75Acgi9PfEciHFnc1r2DKAno3s9_QIYrXk\",\"kt\":\"2\",\"k\":[\"DLv9BlDvjcZWkfPfWcYhNK-xQxz89h82_wA184Vxk8dj\",\"DCx3WypeBym3fCkVizTg18qEThSrVnB63dFq2oX5c3mz\",\"DO0PG_ww4PbF2jUIxQnlb4DluJu5ndNehp0BTGWXErXf\"],\"nt\":\"2\",\"n\":[\"EA8_fj-Ezin_Us_gUcg5JQJkIIBnrcZt3HEIuH-E1lpe\",\"EERS8udHp2FW89nmaHweQWnZz7I8v9FTQdA-LZ_amqGh\",\"EAEzmrPusrj4CDKnSFQvhCEW6T95C7hBeFtZtRD7rOTg\"],\"bt\":\"4\",\"br\":[\"BA4PSatfQMw1lYhQoZkSSvOCrE0Sdw1hmmniDL-yDtrB\"],\"ba\":[\"BO3cCAfQiqndZBBxwNk6RGkyA-OA1XbZhBj3s4-VIsCo\",\"BPowpltoeF14nMbU1ng89JSoYf3AmWhZ50KaCaVO6SIW\"],\"c\":[],\"a\":[{\"i\":\"EHqSsH1Imc2MEcgzEordBUFqJKWTcRyTz2GRc2SG3aur\",\"s\":\"1\",\"d\":\"ENl9GdcDY-4hlg5GtVwOg2E9X7JHw-7Dr5Zq5KNirISF\"}]}",
+   "raw_line": 718,
+   "kind": "JSON",
+   "checks": {
+    "version": {
+     "protocol": "KERI",
+     "version": "2.0",
+     "genus_version": "2.0",
+     "kind": "JSON",
+     "size": 799,
+     "native_prefix": "KERICAACAA"
+    },
+    "field_order": {
+     "declared": [
+      "v",
+      "t",
+      "d",
+      "i",
+      "s",
+      "p",
+      "kt",
+      "k",
+      "nt",
+      "n",
+      "bt",
+      "br",
+      "ba",
+      "c",
+      "a"
+     ],
+     "ok": true,
+     "declared_line": 665
+    },
+    "size": {
+     "version": 799,
+     "computed": 799,
+     "ok": true
+    },
+    "raw_matches_sad": true,
+    "said": {
+     "fields": [
+      "d"
+     ],
+     "computed": "EJOnAKXGaSyJ_43kit0V806NNeGWS07lfjybB1UcfWsv",
+     "ok": true
+    },
+    "links": {
+     "prior": {
+      "event": "spec/message/interaction-event-example-ixn-json",
+      "ok": true
+     },
+     "next_keys": {
+      "event": "spec/message/inception-event-example-icp-json",
+      "ok": true,
+      "digests_of_k": [
+       "ELeFYMmuJb0hevKjhv97joA5bTfuA8E697cMzi8eoaZB",
+       "ENY9GYShOjeh7qZUpIipKRHgrWcoR2WkJ7Wgj4wZx1YT",
+       "EGyJ7y3TlewCW97dgBN-4pckhCqsni-zHNZ_G8zVerPG"
+      ]
+     },
+     "seals": [
+      {
+       "seal": {
+        "i": "EHqSsH1Imc2MEcgzEordBUFqJKWTcRyTz2GRc2SG3aur",
+        "s": "1",
+        "d": "ENl9GdcDY-4hlg5GtVwOg2E9X7JHw-7Dr5Zq5KNirISF"
+       },
+       "event": "spec/message/delegated-rotation-event-example-drt-json",
+       "ok": true
+      }
+     ]
+    },
+    "rules": {
+     "ok": true,
+     "backers": [
+      "BGKV6v93ue5L5wsgk75t6j8TcdgABMN9x-eIyPi96J3B",
+      "BJfueFAYc7N_V-zmDEn2SPCoVFx3H20alWsNZKgsS1vt",
+      "BAPv2MnoiCsgOnklmFyfU07QDK_93NeH9iKfOy8V22aH",
+      "BO3cCAfQiqndZBBxwNk6RGkyA-OA1XbZhBj3s4-VIsCo",
+      "BPowpltoeF14nMbU1ng89JSoYf3AmWhZ50KaCaVO6SIW"
+     ]
+    }
+   },
+   "consistent": true,
+   "errata": []
+  },
+  {
+   "id": "spec/key-list/next-keys-of-rotation-event-example-rot-json",
+   "type": "key-list",
+   "name": "next-keys-of-rotation-event-example-rot-json",
+   "section": "Rotation Event Example",
+   "section_path": [
+    "KERI data structures and labels",
+    "Key event messages",
+    "Rotation Event Message Body",
+    "Rotation Event Example"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 735,
+   "syntax": "json",
+   "next_of": "spec/message/rotation-event-example-rot-json",
+   "value": [
+    "DHODGNuxeW2JTKn3S7keooAjVw582puHoK_zDflPflZg",
+    "DImP4vghHKJIgzBxt1HrTLrNLOMy07_gFV0_IekdzAQh",
+    "DNlPrQ9T7G71BDgRSpB0coMFANpw_QPVEUosPep1JC79"
+   ],
+   "checks": {
+    "next_digests": {
+     "of": "spec/message/rotation-event-example-rot-json",
+     "computed": [
+      "EA8_fj-Ezin_Us_gUcg5JQJkIIBnrcZt3HEIuH-E1lpe",
+      "EERS8udHp2FW89nmaHweQWnZz7I8v9FTQdA-LZ_amqGh",
+      "EAEzmrPusrj4CDKnSFQvhCEW6T95C7hBeFtZtRD7rOTg"
+     ],
+     "ok": true
+    }
+   },
+   "consistent": true,
+   "errata": []
+  },
+  {
+   "id": "spec/message/delegated-inception-event-example-dip-json",
+   "type": "message",
+   "name": "delegated-inception-event-example-dip-json",
+   "section": "Delegated Inception Event Example",
+   "section_path": [
+    "KERI data structures and labels",
+    "Key event messages",
+    "Delegated Inception Event Message Body",
+    "Delegated Inception Event Example"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 753,
+   "syntax": "python",
+   "sad": {
+    "v": "KERICAACAAJSONAAL4.",
+    "t": "dip",
+    "d": "EHqSsH1Imc2MEcgzEordBUFqJKWTcRyTz2GRc2SG3aur",
+    "i": "EHqSsH1Imc2MEcgzEordBUFqJKWTcRyTz2GRc2SG3aur",
+    "s": "0",
+    "kt": [
+     "1/2",
+     "1/2",
+     "1/2"
+    ],
+    "k": [
+     "DEE-HCMSwqMDkEBzlmUNmVBAGIinGu7wZ5_hfY6bSMz3",
+     "DHyJFyFzuD5vvUWv5jy6nwWI3wZmSnoePu29tBR-jXkv",
+     "DN3JXVEvIjTbisPC4maYQWy6eQIRNdJsxqGFXYUm_ygr"
+    ],
+    "nt": [
+     "1/2",
+     "1/2",
+     "1/2"
+    ],
+    "n": [
+     "EFzr1nnfHpT-nkSfd6vQvbPC-Kq6zy8vbVvUmwxcM1e-",
+     "EIXFsLk9kmESy0ZsoHMUaDyK_g3DVRiJQYiAlyeCeYJM",
+     "EGVvq4Njkki3EZv838rJrYShBtwXY9o8RUrG2w3nbujn"
+    ],
+    "bt": "3",
+    "b": [
+     "BFATArhqG_ktVCRLWt2Knbc7JDpaPAFJ4npNEmIW_gPX",
+     "BOtF-I9geAUjX9NW1kLIq5qDRNgEXCuwpE4mKHkYuWsF",
+     "BEzZUvashpXh_nfPoR6aiqvag0a8E_tbhpeJIgHhOXzl",
+     "BCE6biH4a-Zg8LI3cMSx7JRoOvb8rRD62xbyl9N4M2g6"
+    ],
+    "c": [],
+    "a": [],
+    "di": "EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB"
+   },
+   "raw": "{\"v\":\"KERICAACAAJSONAAL4.\",\"t\":\"dip\",\"d\":\"EHqSsH1Imc2MEcgzEordBUFqJKWTcRyTz2GRc2SG3aur\",\"i\":\"EHqSsH1Imc2MEcgzEordBUFqJKWTcRyTz2GRc2SG3aur\",\"s\":\"0\",\"kt\":[\"1/2\",\"1/2\",\"1/2\"],\"k\":[\"DEE-HCMSwqMDkEBzlmUNmVBAGIinGu7wZ5_hfY6bSMz3\",\"DHyJFyFzuD5vvUWv5jy6nwWI3wZmSnoePu29tBR-jXkv\",\"DN3JXVEvIjTbisPC4maYQWy6eQIRNdJsxqGFXYUm_ygr\"],\"nt\":[\"1/2\",\"1/2\",\"1/2\"],\"n\":[\"EFzr1nnfHpT-nkSfd6vQvbPC-Kq6zy8vbVvUmwxcM1e-\",\"EIXFsLk9kmESy0ZsoHMUaDyK_g3DVRiJQYiAlyeCeYJM\",\"EGVvq4Njkki3EZv838rJrYShBtwXY9o8RUrG2w3nbujn\"],\"bt\":\"3\",\"b\":[\"BFATArhqG_ktVCRLWt2Knbc7JDpaPAFJ4npNEmIW_gPX\",\"BOtF-I9geAUjX9NW1kLIq5qDRNgEXCuwpE4mKHkYuWsF\",\"BEzZUvashpXh_nfPoR6aiqvag0a8E_tbhpeJIgHhOXzl\",\"BCE6biH4a-Zg8LI3cMSx7JRoOvb8rRD62xbyl9N4M2g6\"],\"c\":[],\"a\":[],\"di\":\"EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB\"}",
+   "raw_line": 789,
+   "kind": "JSON",
+   "checks": {
+    "version": {
+     "protocol": "KERI",
+     "version": "2.0",
+     "genus_version": "2.0",
+     "kind": "JSON",
+     "size": 760,
+     "native_prefix": "KERICAACAA"
+    },
+    "field_order": {
+     "declared": [
+      "v",
+      "t",
+      "d",
+      "i",
+      "s",
+      "kt",
+      "k",
+      "nt",
+      "n",
+      "bt",
+      "b",
+      "c",
+      "a",
+      "di"
+     ],
+     "ok": true,
+     "declared_line": 623
+    },
+    "size": {
+     "version": 760,
+     "computed": 760,
+     "ok": true
+    },
+    "raw_matches_sad": true,
+    "said": {
+     "fields": [
+      "d",
+      "i"
+     ],
+     "computed": "EHqSsH1Imc2MEcgzEordBUFqJKWTcRyTz2GRc2SG3aur",
+     "ok": true
+    },
+    "links": {},
+    "rules": {
+     "ok": true,
+     "backers": [
+      "BFATArhqG_ktVCRLWt2Knbc7JDpaPAFJ4npNEmIW_gPX",
+      "BOtF-I9geAUjX9NW1kLIq5qDRNgEXCuwpE4mKHkYuWsF",
+      "BEzZUvashpXh_nfPoR6aiqvag0a8E_tbhpeJIgHhOXzl",
+      "BCE6biH4a-Zg8LI3cMSx7JRoOvb8rRD62xbyl9N4M2g6"
+     ]
+    }
+   },
+   "consistent": true,
+   "errata": []
+  },
+  {
+   "id": "spec/key-list/next-keys-of-delegated-inception-event-example-dip-json",
+   "type": "key-list",
+   "name": "next-keys-of-delegated-inception-event-example-dip-json",
+   "section": "Delegated Inception Event Example",
+   "section_path": [
+    "KERI data structures and labels",
+    "Key event messages",
+    "Delegated Inception Event Message Body",
+    "Delegated Inception Event Example"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 803,
+   "syntax": "json",
+   "next_of": "spec/message/delegated-inception-event-example-dip-json",
+   "value": [
+    "DB1S8zOh4_qdFhxVHn7BDZb1ErWbBFvcVJX1suKSBctR",
+    "DDCDFlbG4dCAX6oIbNffB1mkZqLAS_eHnYUUIPH7BeXB",
+    "DP3GAMcSx7eCApzk1N7DceV42o1dZemAe0s3r_-Z0zs1"
+   ],
+   "checks": {
+    "next_digests": {
+     "of": "spec/message/delegated-inception-event-example-dip-json",
+     "computed": [
+      "EFzr1nnfHpT-nkSfd6vQvbPC-Kq6zy8vbVvUmwxcM1e-",
+      "EIXFsLk9kmESy0ZsoHMUaDyK_g3DVRiJQYiAlyeCeYJM",
+      "EGVvq4Njkki3EZv838rJrYShBtwXY9o8RUrG2w3nbujn"
+     ],
+     "ok": true
+    }
+   },
+   "consistent": true,
+   "errata": []
+  },
+  {
+   "id": "spec/message/delegated-rotation-event-example-drt-json",
+   "type": "message",
+   "name": "delegated-rotation-event-example-drt-json",
+   "section": "Delegated Rotation Event Example",
+   "section_path": [
+    "KERI data structures and labels",
+    "Key event messages",
+    "Delegated Rotation Event Message Body",
+    "Delegated Rotation Event Example"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 822,
+   "syntax": "json",
+   "sad": {
+    "v": "KERICAACAAJSONAAKh.",
+    "t": "drt",
+    "d": "ENl9GdcDY-4hlg5GtVwOg2E9X7JHw-7Dr5Zq5KNirISF",
+    "i": "EHqSsH1Imc2MEcgzEordBUFqJKWTcRyTz2GRc2SG3aur",
+    "s": "1",
+    "p": "EHqSsH1Imc2MEcgzEordBUFqJKWTcRyTz2GRc2SG3aur",
+    "kt": [
+     "1/2",
+     "1/2",
+     "1/2"
+    ],
+    "k": [
+     "DB1S8zOh4_qdFhxVHn7BDZb1ErWbBFvcVJX1suKSBctR",
+     "DDCDFlbG4dCAX6oIbNffB1mkZqLAS_eHnYUUIPH7BeXB",
+     "DP3GAMcSx7eCApzk1N7DceV42o1dZemAe0s3r_-Z0zs1"
+    ],
+    "nt": [
+     "1/2",
+     "1/2",
+     "1/2"
+    ],
+    "n": [
+     "EKUlc5Ml4HLSvdk39k_vh0m6rc061mfM1a4qoEuiBwXW",
+     "EJdqHiijmjII-ZtlhFAM5D7myuNeESQkzHoqeWJMMHzW",
+     "EDyk8pj0YPHjGNfrG2qZI866WwevwlHEbWYMsKGTGqj2"
+    ],
+    "bt": "3",
+    "br": [
+     "BOtF-I9geAUjX9NW1kLIq5qDRNgEXCuwpE4mKHkYuWsF"
+    ],
+    "ba": [
+     "BOMrYd5izsqbqaq1WZYa3nbEeTYLPwccfqfhirybKKqx"
+    ],
+    "c": [],
+    "a": []
+   },
+   "raw": "{\"v\":\"KERICAACAAJSONAAKh.\",\"t\":\"drt\",\"d\":\"ENl9GdcDY-4hlg5GtVwOg2E9X7JHw-7Dr5Zq5KNirISF\",\"i\":\"EHqSsH1Imc2MEcgzEordBUFqJKWTcRyTz2GRc2SG3aur\",\"s\":\"1\",\"p\":\"EHqSsH1Imc2MEcgzEordBUFqJKWTcRyTz2GRc2SG3aur\",\"kt\":[\"1/2\",\"1/2\",\"1/2\"],\"k\":[\"DB1S8zOh4_qdFhxVHn7BDZb1ErWbBFvcVJX1suKSBctR\",\"DDCDFlbG4dCAX6oIbNffB1mkZqLAS_eHnYUUIPH7BeXB\",\"DP3GAMcSx7eCApzk1N7DceV42o1dZemAe0s3r_-Z0zs1\"],\"nt\":[\"1/2\",\"1/2\",\"1/2\"],\"n\":[\"EKUlc5Ml4HLSvdk39k_vh0m6rc061mfM1a4qoEuiBwXW\",\"EJdqHiijmjII-ZtlhFAM5D7myuNeESQkzHoqeWJMMHzW\",\"EDyk8pj0YPHjGNfrG2qZI866WwevwlHEbWYMsKGTGqj2\"],\"bt\":\"3\",\"br\":[\"BOtF-I9geAUjX9NW1kLIq5qDRNgEXCuwpE4mKHkYuWsF\"],\"ba\":[\"BOMrYd5izsqbqaq1WZYa3nbEeTYLPwccfqfhirybKKqx\"],\"c\":[],\"a\":[]}",
+   "raw_line": 854,
+   "kind": "JSON",
+   "checks": {
+    "version": {
+     "protocol": "KERI",
+     "version": "2.0",
+     "genus_version": "2.0",
+     "kind": "JSON",
+     "size": 673,
+     "native_prefix": "KERICAACAA"
+    },
+    "field_order": {
+     "declared": [
+      "v",
+      "t",
+      "d",
+      "i",
+      "s",
+      "p",
+      "kt",
+      "k",
+      "nt",
+      "n",
+      "bt",
+      "br",
+      "ba",
+      "c",
+      "a"
+     ],
+     "ok": true,
+     "declared_line": 815
+    },
+    "size": {
+     "version": 673,
+     "computed": 673,
+     "ok": true
+    },
+    "raw_matches_sad": true,
+    "said": {
+     "fields": [
+      "d"
+     ],
+     "computed": "ENl9GdcDY-4hlg5GtVwOg2E9X7JHw-7Dr5Zq5KNirISF",
+     "ok": true
+    },
+    "links": {
+     "prior": {
+      "event": "spec/message/delegated-inception-event-example-dip-json",
+      "ok": true
+     },
+     "next_keys": {
+      "event": "spec/message/delegated-inception-event-example-dip-json",
+      "ok": true,
+      "digests_of_k": [
+       "EFzr1nnfHpT-nkSfd6vQvbPC-Kq6zy8vbVvUmwxcM1e-",
+       "EIXFsLk9kmESy0ZsoHMUaDyK_g3DVRiJQYiAlyeCeYJM",
+       "EGVvq4Njkki3EZv838rJrYShBtwXY9o8RUrG2w3nbujn"
+      ]
+     },
+     "delegator_anchor": {
+      "event": "spec/message/rotation-event-example-rot-json",
+      "ok": true
+     }
+    },
+    "rules": {
+     "ok": true,
+     "backers": [
+      "BFATArhqG_ktVCRLWt2Knbc7JDpaPAFJ4npNEmIW_gPX",
+      "BEzZUvashpXh_nfPoR6aiqvag0a8E_tbhpeJIgHhOXzl",
+      "BCE6biH4a-Zg8LI3cMSx7JRoOvb8rRD62xbyl9N4M2g6",
+      "BOMrYd5izsqbqaq1WZYa3nbEeTYLPwccfqfhirybKKqx"
+     ]
+    }
+   },
+   "consistent": true,
+   "errata": []
+  },
+  {
+   "id": "spec/key-list/next-keys-of-delegated-rotation-event-example-drt-json",
+   "type": "key-list",
+   "name": "next-keys-of-delegated-rotation-event-example-drt-json",
+   "section": "Delegated Rotation Event Example",
+   "section_path": [
+    "KERI data structures and labels",
+    "Key event messages",
+    "Delegated Rotation Event Message Body",
+    "Delegated Rotation Event Example"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 867,
+   "syntax": "json",
+   "next_of": "spec/message/delegated-rotation-event-example-drt-json",
+   "value": [
+    "DCcN7BGPo6c47EWOTvcIUCpzvetDN5E-7EPMprN6tqVI",
+    "DAaAPS7IpPe9nPrgF6eGkA9hIphUIeZE0zLkGHCS1BBD",
+    "DONoZ4RumKezgod8xoAtRQvmhPRe4LZm8QP-BVEN-MW_"
+   ],
+   "checks": {
+    "next_digests": {
+     "of": "spec/message/delegated-rotation-event-example-drt-json",
+     "computed": [
+      "EKUlc5Ml4HLSvdk39k_vh0m6rc061mfM1a4qoEuiBwXW",
+      "EJdqHiijmjII-ZtlhFAM5D7myuNeESQkzHoqeWJMMHzW",
+      "EDyk8pj0YPHjGNfrG2qZI866WwevwlHEbWYMsKGTGqj2"
+     ],
+     "ok": true
+    }
+   },
+   "consistent": true,
+   "errata": []
+  },
+  {
+   "id": "spec/message/receipt-example-rct-json",
+   "type": "message",
+   "name": "receipt-example-rct-json",
+   "section": "Receipt example:",
+   "section_path": [
+    "KERI data structures and labels",
+    "Receipt Messages",
+    "Receipt Message Body",
+    "Receipt example:"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 895,
+   "syntax": "json",
+   "sad": {
+    "v": "KERICAACAAJSONAACT.",
+    "t": "rct",
+    "d": "EJOnAKXGaSyJ_43kit0V806NNeGWS07lfjybB1UcfWsv",
+    "i": "EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB",
+    "s": "2"
+   },
+   "raw": "{\"v\":\"KERICAACAAJSONAACT.\",\"t\":\"rct\",\"d\":\"EJOnAKXGaSyJ_43kit0V806NNeGWS07lfjybB1UcfWsv\",\"i\":\"EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB\",\"s\":\"2\"}",
+   "raw_line": 907,
+   "kind": "JSON",
+   "checks": {
+    "version": {
+     "protocol": "KERI",
+     "version": "2.0",
+     "genus_version": "2.0",
+     "kind": "JSON",
+     "size": 147,
+     "native_prefix": "KERICAACAA"
+    },
+    "field_order": {
+     "declared": [
+      "v",
+      "t",
+      "d",
+      "i",
+      "s"
+     ],
+     "ok": true,
+     "declared_line": 882
+    },
+    "size": {
+     "version": 147,
+     "computed": 147,
+     "ok": true
+    },
+    "raw_matches_sad": true,
+    "links": {
+     "receipted": {
+      "event": "spec/message/rotation-event-example-rot-json",
+      "ok": true
+     }
+    }
+   },
+   "consistent": true,
+   "errata": []
+  },
+  {
+   "id": "spec/message/example-query-message-qry-json",
+   "type": "message",
+   "name": "example-query-message-qry-json",
+   "section": "Example Query Message",
+   "section_path": [
+    "KERI data structures and labels",
+    "Routed Messages",
+    "Query Message Body",
+    "Example Query Message"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 1017,
+   "syntax": "json",
+   "sad": {
+    "v": "KERICAACAAJSONAAEe.",
+    "t": "qry",
+    "d": "EEiUK4cVgcyA1Dk6g2jFzqc5JerkaSnJi3IosutVCyYO",
+    "i": "EHqSsH1Imc2MEcgzEordBUFqJKWTcRyTz2GRc2SG3aur",
+    "dt": "2025-08-21T17:50:00.000000+00:00",
+    "r": "/oobi",
+    "rr": "/oobi/process",
+    "q": {
+     "i": "EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB",
+     "role": "witness"
+    }
+   },
+   "raw": "{\"v\":\"KERICAACAAJSONAAEe.\",\"t\":\"qry\",\"d\":\"EEiUK4cVgcyA1Dk6g2jFzqc5JerkaSnJi3IosutVCyYO\",\"i\":\"EHqSsH1Imc2MEcgzEordBUFqJKWTcRyTz2GRc2SG3aur\",\"dt\":\"2025-08-21T17:50:00.000000+00:00\",\"r\":\"/oobi\",\"rr\":\"/oobi/process\",\"q\":{\"i\":\"EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB\",\"role\":\"witness\"}}",
+   "raw_line": 1036,
+   "kind": "JSON",
+   "checks": {
+    "version": {
+     "protocol": "KERI",
+     "version": "2.0",
+     "genus_version": "2.0",
+     "kind": "JSON",
+     "size": 286,
+     "native_prefix": "KERICAACAA"
+    },
+    "field_order": {
+     "declared": [
+      "v",
+      "t",
+      "d",
+      "dt",
+      "r",
+      "rr",
+      "q"
+     ],
+     "ok": false,
+     "declared_line": 1008
+    },
+    "size": {
+     "version": 286,
+     "computed": 286,
+     "ok": true
+    },
+    "raw_matches_sad": true,
+    "said": {
+     "fields": [
+      "d"
+     ],
+     "computed": "EEiUK4cVgcyA1Dk6g2jFzqc5JerkaSnJi3IosutVCyYO",
+     "ok": true
+    }
+   },
+   "consistent": false,
+   "errata": [
+    "fields ['v', 't', 'd', 'i', 'dt', 'r', 'rr', 'q'] differ from the order the specification declares for qry ['v', 't', 'd', 'dt', 'r', 'rr', 'q'] (line 1008)"
+   ]
+  },
+  {
+   "id": "spec/message/example-reply-message-rpy-json",
+   "type": "message",
+   "name": "example-reply-message-rpy-json",
+   "section": "Example Reply Message",
+   "section_path": [
+    "KERI data structures and labels",
+    "Routed Messages",
+    "Reply Message Body",
+    "Example Reply Message"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 1054,
+   "syntax": "json",
+   "sad": {
+    "v": "KERICAACAAJSONAAFR.",
+    "t": "rpy",
+    "d": "EPdgmUkvx5o_KRg3elBqj_vSZOFgWI9hCVWO-FfGZz8U",
+    "i": "EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB",
+    "dt": "2020-08-21T17:52:00.000000+00:00",
+    "r": "/oobi/process",
+    "a": {
+     "i": "EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB",
+     "url": "https://example.com/witness/BGKV6v93ue5L5wsgk75t6j8TcdgABMN9x-eIyPi96J3B"
+    }
+   },
+   "raw": "{\"v\":\"KERICAACAAJSONAAFR.\",\"t\":\"rpy\",\"d\":\"EPdgmUkvx5o_KRg3elBqj_vSZOFgWI9hCVWO-FfGZz8U\",\"i\":\"EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB\",\"dt\":\"2020-08-21T17:52:00.000000+00:00\",\"r\":\"/oobi/process\",\"a\":{\"i\":\"EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB\",\"url\":\"https://example.com/witness/BGKV6v93ue5L5wsgk75t6j8TcdgABMN9x-eIyPi96J3B\"}}",
+   "raw_line": 1072,
+   "kind": "JSON",
+   "checks": {
+    "version": {
+     "protocol": "KERI",
+     "version": "2.0",
+     "genus_version": "2.0",
+     "kind": "JSON",
+     "size": 337,
+     "native_prefix": "KERICAACAA"
+    },
+    "field_order": {
+     "declared": [
+      "v",
+      "t",
+      "d",
+      "dt",
+      "r",
+      "a"
+     ],
+     "ok": false,
+     "declared_line": 1046
+    },
+    "size": {
+     "version": 337,
+     "computed": 337,
+     "ok": true
+    },
+    "raw_matches_sad": true,
+    "said": {
+     "fields": [
+      "d"
+     ],
+     "computed": "EPdgmUkvx5o_KRg3elBqj_vSZOFgWI9hCVWO-FfGZz8U",
+     "ok": true
+    }
+   },
+   "consistent": false,
+   "errata": [
+    "fields ['v', 't', 'd', 'i', 'dt', 'r', 'a'] differ from the order the specification declares for rpy ['v', 't', 'd', 'dt', 'r', 'a'] (line 1046)"
+   ]
+  },
+  {
+   "id": "spec/message/example-prod-message-pro-json",
+   "type": "message",
+   "name": "example-prod-message-pro-json",
+   "section": "Example Prod Message",
+   "section_path": [
+    "KERI data structures and labels",
+    "Routed Messages",
+    "Prod Message Body",
+    "Example Prod Message"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 1089,
+   "syntax": "python",
+   "sad": {
+    "v": "KERICAACAAJSONAAEp.",
+    "t": "pro",
+    "d": "EHNqhJXgUdYHFzNiuO7Ue06QWRnOMjhTrVt_QGOfZjH_",
+    "i": "EHqSsH1Imc2MEcgzEordBUFqJKWTcRyTz2GRc2SG3aur",
+    "dt": "2025-08-21T17:50:00.000000+00:00",
+    "r": "/confidential",
+    "rr": "/confidential/process",
+    "q": {
+     "i": "EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB",
+     "name": true
+    }
+   },
+   "raw": "{\"v\":\"KERICAACAAJSONAAEp.\",\"t\":\"pro\",\"d\":\"EHNqhJXgUdYHFzNiuO7Ue06QWRnOMjhTrVt_QGOfZjH_\",\"i\":\"EHqSsH1Imc2MEcgzEordBUFqJKWTcRyTz2GRc2SG3aur\",\"dt\":\"2025-08-21T17:50:00.000000+00:00\",\"r\":\"/confidential\",\"rr\":\"/confidential/process\",\"q\":{\"i\":\"EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB\",\"name\":true}}",
+   "raw_line": 1107,
+   "kind": "JSON",
+   "checks": {
+    "version": {
+     "protocol": "KERI",
+     "version": "2.0",
+     "genus_version": "2.0",
+     "kind": "JSON",
+     "size": 297,
+     "native_prefix": "KERICAACAA"
+    },
+    "field_order": {
+     "declared": [
+      "v",
+      "t",
+      "d",
+      "dt",
+      "r",
+      "rr",
+      "q"
+     ],
+     "ok": false,
+     "declared_line": 1083
+    },
+    "size": {
+     "version": 297,
+     "computed": 297,
+     "ok": true
+    },
+    "raw_matches_sad": true,
+    "said": {
+     "fields": [
+      "d"
+     ],
+     "computed": "EHNqhJXgUdYHFzNiuO7Ue06QWRnOMjhTrVt_QGOfZjH_",
+     "ok": true
+    }
+   },
+   "consistent": false,
+   "errata": [
+    "fields ['v', 't', 'd', 'i', 'dt', 'r', 'rr', 'q'] differ from the order the specification declares for pro ['v', 't', 'd', 'dt', 'r', 'rr', 'q'] (line 1083)"
+   ]
+  },
+  {
+   "id": "spec/message/example-bare-message-bar-json",
+   "type": "message",
+   "name": "example-bare-message-bar-json",
+   "section": "Example Bare Message",
+   "section_path": [
+    "KERI data structures and labels",
+    "Routed Messages",
+    "Bare Message Body",
+    "Example Bare Message"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 1127,
+   "syntax": "json",
+   "sad": {
+    "v": "KERICAACAAJSONAAEV.",
+    "t": "bar",
+    "d": "EMSlSHIe04CuAqhz55nAnBpE_0T65Sqs2fmaPpsNIbnn",
+    "i": "EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB",
+    "dt": "2020-08-22T17:52:00.000000+00:00",
+    "r": "/confidential/process",
+    "a": {
+     "i": "EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB",
+     "name": "Ean"
+    }
+   },
+   "raw": "{\"v\":\"KERICAACAAJSONAAEV.\",\"t\":\"bar\",\"d\":\"EMSlSHIe04CuAqhz55nAnBpE_0T65Sqs2fmaPpsNIbnn\",\"i\":\"EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB\",\"dt\":\"2020-08-22T17:52:00.000000+00:00\",\"r\":\"/confidential/process\",\"a\":{\"i\":\"EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB\",\"name\":\"Ean\"}}",
+   "raw_line": 1144,
+   "kind": "JSON",
+   "checks": {
+    "version": {
+     "protocol": "KERI",
+     "version": "2.0",
+     "genus_version": "2.0",
+     "kind": "JSON",
+     "size": 277,
+     "native_prefix": "KERICAACAA"
+    },
+    "field_order": {
+     "declared": [
+      "v",
+      "t",
+      "d",
+      "dt",
+      "r",
+      "a"
+     ],
+     "ok": false,
+     "declared_line": 1118
+    },
+    "size": {
+     "version": 277,
+     "computed": 277,
+     "ok": true
+    },
+    "raw_matches_sad": true,
+    "said": {
+     "fields": [
+      "d"
+     ],
+     "computed": "EMSlSHIe04CuAqhz55nAnBpE_0T65Sqs2fmaPpsNIbnn",
+     "ok": true
+    }
+   },
+   "consistent": false,
+   "errata": [
+    "fields ['v', 't', 'd', 'i', 'dt', 'r', 'a'] differ from the order the specification declares for bar ['v', 't', 'd', 'dt', 'r', 'a'] (line 1118)"
+   ]
+  },
+  {
+   "id": "spec/message/example-exchange-transaction-inception-message-xip-json",
+   "type": "message",
+   "name": "example-exchange-transaction-inception-message-xip-json",
+   "section": "Example Exchange Transaction Inception Message",
+   "section_path": [
+    "KERI data structures and labels",
+    "Routed Messages",
+    "Exchange Transaction Inception Message Body",
+    "Example Exchange Transaction Inception Message"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 1162,
+   "syntax": "json",
+   "sad": {
+    "v": "KERICAACAAJSONAAFn.",
+    "t": "xip",
+    "d": "EJbE2agA3239Iusld1lNvFAxRuhv1SX0mAxxUm67gWOU",
+    "u": "0ABrZXJpc3BlY3dvcmtyYXcw",
+    "i": "EHqSsH1Imc2MEcgzEordBUFqJKWTcRyTz2GRc2SG3aur",
+    "ri": "EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB",
+    "dt": "2020-08-30T13:30:10.123456+00:00",
+    "r": "/offer",
+    "q": {
+     "timing": "immediate"
+    },
+    "a": {
+     "action": "sell",
+     "item": "Rembrant",
+     "price": 300000.0
+    }
+   },
+   "raw": "{\"v\":\"KERICAACAAJSONAAFn.\",\"t\":\"xip\",\"d\":\"EJbE2agA3239Iusld1lNvFAxRuhv1SX0mAxxUm67gWOU\",\"u\":\"0ABrZXJpc3BlY3dvcmtyYXcw\",\"i\":\"EHqSsH1Imc2MEcgzEordBUFqJKWTcRyTz2GRc2SG3aur\",\"ri\":\"EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB\",\"dt\":\"2020-08-30T13:30:10.123456+00:00\",\"r\":\"/offer\",\"q\":{\"timing\":\"immediate\"},\"a\":{\"action\":\"sell\",\"item\":\"Rembrant\",\"price\":300000.0}}",
+   "raw_line": 1186,
+   "kind": "JSON",
+   "checks": {
+    "version": {
+     "protocol": "KERI",
+     "version": "2.0",
+     "genus_version": "2.0",
+     "kind": "JSON",
+     "size": 359,
+     "native_prefix": "KERICAACAA"
+    },
+    "field_order": {
+     "declared": [
+      "v",
+      "t",
+      "d",
+      "u",
+      "i",
+      "ri",
+      "dt",
+      "r",
+      "q",
+      "a"
+     ],
+     "ok": true,
+     "declared_line": 1154
+    },
+    "size": {
+     "version": 359,
+     "computed": 359,
+     "ok": true
+    },
+    "raw_matches_sad": true,
+    "said": {
+     "fields": [
+      "d"
+     ],
+     "computed": "EJbE2agA3239Iusld1lNvFAxRuhv1SX0mAxxUm67gWOU",
+     "ok": true
+    }
+   },
+   "consistent": true,
+   "errata": []
+  },
+  {
+   "id": "spec/message/example-exchange-transaction-message-exn-json",
+   "type": "message",
+   "name": "example-exchange-transaction-message-exn-json",
+   "section": "Example Exchange Transaction Message",
+   "section_path": [
+    "KERI data structures and labels",
+    "Routed Messages",
+    "Exchange Message Body",
+    "Example Exchange Transaction Message"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 1205,
+   "syntax": "json",
+   "sad": {
+    "v": "KERICAACAAJSONAAGt.",
+    "t": "exn",
+    "d": "EEIp1e5v4L6rt7cp1nRsn4mN6bJVUDyIQEATIzxR8UnE",
+    "i": "EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB",
+    "ri": "EHqSsH1Imc2MEcgzEordBUFqJKWTcRyTz2GRc2SG3aur",
+    "x": "EJbE2agA3239Iusld1lNvFAxRuhv1SX0mAxxUm67gWOU",
+    "p": "EJbE2agA3239Iusld1lNvFAxRuhv1SX0mAxxUm67gWOU",
+    "dt": "2020-08-30T13:42:11.123456+00:00",
+    "r": "/agree",
+    "q": {
+     "timing": "immediate"
+    },
+    "a": {
+     "action": "buy",
+     "item": "Rembrant",
+     "price": 300000.0
+    }
+   },
+   "raw": "{\"v\":\"KERICAACAAJSONAAGt.\",\"t\":\"exn\",\"d\":\"EEIp1e5v4L6rt7cp1nRsn4mN6bJVUDyIQEATIzxR8UnE\",\"i\":\"EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB\",\"ri\":\"EHqSsH1Imc2MEcgzEordBUFqJKWTcRyTz2GRc2SG3aur\",\"x\":\"EJbE2agA3239Iusld1lNvFAxRuhv1SX0mAxxUm67gWOU\",\"p\":\"EJbE2agA3239Iusld1lNvFAxRuhv1SX0mAxxUm67gWOU\",\"dt\":\"2020-08-30T13:42:11.123456+00:00\",\"r\":\"/agree\",\"q\":{\"timing\":\"immediate\"},\"a\":{\"action\":\"buy\",\"item\":\"Rembrant\",\"price\":300000.0}}",
+   "raw_line": 1230,
+   "kind": "JSON",
+   "checks": {
+    "version": {
+     "protocol": "KERI",
+     "version": "2.0",
+     "genus_version": "2.0",
+     "kind": "JSON",
+     "size": 429,
+     "native_prefix": "KERICAACAA"
+    },
+    "field_order": {
+     "declared": [
+      "v",
+      "t",
+      "d",
+      "i",
+      "ri",
+      "x",
+      "p",
+      "dt",
+      "r",
+      "q",
+      "a"
+     ],
+     "ok": true,
+     "declared_line": 1197
+    },
+    "size": {
+     "version": 429,
+     "computed": 429,
+     "ok": true
+    },
+    "raw_matches_sad": true,
+    "said": {
+     "fields": [
+      "d"
+     ],
+     "computed": "EEIp1e5v4L6rt7cp1nRsn4mN6bJVUDyIQEATIzxR8UnE",
+     "ok": true
+    },
+    "links": {
+     "exchange": {
+      "event": "spec/message/example-exchange-transaction-inception-message-xip-json",
+      "ok": true
+     }
+    }
+   },
+   "consistent": true,
+   "errata": []
+  },
+  {
+   "id": "spec/threshold/fractionally-weighted-threshold",
+   "type": "threshold",
+   "name": "fractionally-weighted-threshold",
+   "section": "Fractionally weighted threshold",
+   "section_path": [
+    "KERI key management",
+    "Fractionally weighted threshold"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 1430,
+   "syntax": "json",
+   "value": [
+    [
+     {
+      "1/2": [
+       "1/2",
+       "1/2",
+       "1/2"
+      ]
+     },
+     "1/2",
+     {
+      "1/2": [
+       "1",
+       "1"
+      ]
+     }
+    ],
+    [
+     "1/2",
+     {
+      "1/2": [
+       "1",
+       "1"
+      ]
+     }
+    ]
+   ],
+   "checks": {
+    "keys": 9,
+    "clause_sums": [
+     "3/2",
+     "1"
+    ]
+   },
+   "consistent": true,
+   "errata": []
+  },
+  {
+   "id": "spec/threshold/fractionally-weighted-threshold-2",
+   "type": "threshold",
+   "name": "fractionally-weighted-threshold-2",
+   "section": "Fractionally weighted threshold",
+   "section_path": [
+    "KERI key management",
+    "Fractionally weighted threshold"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 1442,
+   "syntax": "json",
+   "value": [
+    {
+     "1/2": [
+      "1/2",
+      "1/2",
+      "1/2"
+     ]
+    },
+    "1/2",
+    {
+     "1/2": [
+      "1",
+      "1"
+     ]
+    }
+   ],
+   "checks": {
+    "keys": 6,
+    "clause_sums": [
+     "3/2"
+    ]
+   },
+   "consistent": true,
+   "errata": []
+  },
+  {
+   "id": "spec/threshold/fractionally-weighted-threshold-3",
+   "type": "threshold",
+   "name": "fractionally-weighted-threshold-3",
+   "section": "Fractionally weighted threshold",
+   "section_path": [
+    "KERI key management",
+    "Fractionally weighted threshold"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 1456,
+   "syntax": "json",
+   "value": [
+    "1/2",
+    {
+     "1/2": [
+      "1",
+      "1"
+     ]
+    }
+   ],
+   "checks": {
+    "keys": 3,
+    "clause_sums": [
+     "1"
+    ]
+   },
+   "consistent": true,
+   "errata": []
+  },
+  {
+   "id": "spec/message/aids-icp-json",
+   "type": "message",
+   "name": "aids-icp-json",
+   "section": "AIDs",
+   "section_path": [
+    "Annex A",
+    "Working Examples Setup",
+    "AIDs"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 1962,
+   "syntax": "python",
+   "sad": {
+    "v": "KERICAACAAJSONAAFb.",
+    "t": "icp",
+    "d": "ECmiMVHTfZIjhA_rovnfx73T3G_FJzIQtzDn1meBVLAz",
+    "i": "ECmiMVHTfZIjhA_rovnfx73T3G_FJzIQtzDn1meBVLAz",
+    "s": "0",
+    "kt": "1",
+    "k": [
+     "DA8-J0EW88RMYqtUHQDqT4q2YH2iBFlW8HobHKV74yi_"
+    ],
+    "nt": "1",
+    "n": [
+     "DLe4uewytqfqa4NB4AntNKBZ61I0TYcgMz-FSz1V9qeM"
+    ],
+    "bt": "1",
+    "b": [
+     "BKRaC6UsijUY1FRjExoAMc8WOHBDIfIKYnOlxWH8eOe8"
+    ],
+    "c": [],
+    "a": []
+   },
+   "raw": "{\"v\":\"KERICAACAAJSONAAFb.\",\"t\":\"icp\",\"d\":\"ECmiMVHTfZIjhA_rovnfx73T3G_FJzIQtzDn1meBVLAz\",\"i\":\"ECmiMVHTfZIjhA_rovnfx73T3G_FJzIQtzDn1meBVLAz\",\"s\":\"0\",\"kt\":\"1\",\"k\":[\"DA8-J0EW88RMYqtUHQDqT4q2YH2iBFlW8HobHKV74yi_\"],\"nt\":\"1\",\"n\":[\"DLe4uewytqfqa4NB4AntNKBZ61I0TYcgMz-FSz1V9qeM\"],\"bt\":\"1\",\"b\":[\"BKRaC6UsijUY1FRjExoAMc8WOHBDIfIKYnOlxWH8eOe8\"],\"c\":[],\"a\":[]}",
+   "raw_line": 1990,
+   "kind": "JSON",
+   "checks": {
+    "version": {
+     "protocol": "KERI",
+     "version": "2.0",
+     "genus_version": "2.0",
+     "kind": "JSON",
+     "size": 347,
+     "native_prefix": "KERICAACAA"
+    },
+    "field_order": {
+     "declared": [
+      "v",
+      "t",
+      "d",
+      "i",
+      "s",
+      "kt",
+      "k",
+      "nt",
+      "n",
+      "bt",
+      "b",
+      "c",
+      "a"
+     ],
+     "ok": true,
+     "declared_line": 556
+    },
+    "size": {
+     "version": 347,
+     "computed": 347,
+     "ok": true
+    },
+    "raw_matches_sad": true,
+    "said": {
+     "fields": [
+      "d",
+      "i"
+     ],
+     "computed": "ECmiMVHTfZIjhA_rovnfx73T3G_FJzIQtzDn1meBVLAz",
+     "ok": true
+    },
+    "links": {},
+    "rules": {
+     "ok": true,
+     "backers": [
+      "BKRaC6UsijUY1FRjExoAMc8WOHBDIfIKYnOlxWH8eOe8"
+     ]
+    }
+   },
+   "consistent": false,
+   "errata": [
+    "next key digests n hold ['DLe4uewytqfqa4NB4AntNKBZ61I0TYcgMz-FSz1V9qeM'], which are not Blake3-256 digests (code E); a public key in n is not a next key commitment"
+   ]
+  },
+  {
+   "id": "spec/uuid-list/uuids",
+   "type": "uuid-list",
+   "name": "uuids",
+   "section": "UUIDs",
+   "section_path": [
+    "Annex A",
+    "Working Examples Setup",
+    "UUIDs"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 2036,
+   "syntax": "python",
+   "value": [
+    "0ABrZXJpc3BlY3dvcmtyYXcw",
+    "0ABrZXJpc3BlY3dvcmtyYXcx",
+    "0ABrZXJpc3BlY3dvcmtyYXcy",
+    "0ABrZXJpc3BlY3dvcmtyYXcz",
+    "0ABrZXJpc3BlY3dvcmtyYXc0",
+    "0ABrZXJpc3BlY3dvcmtyYXc1",
+    "0ABrZXJpc3BlY3dvcmtyYXc2",
+    "0ABrZXJpc3BlY3dvcmtyYXc3",
+    "0ABrZXJpc3BlY3dvcmtyYXc4",
+    "0ABrZXJpc3BlY3dvcmtyYXc5",
+    "0ABrZXJpc3BlY3dvcmtyYXdh",
+    "0ABrZXJpc3BlY3dvcmtyYXdi",
+    "0ABrZXJpc3BlY3dvcmtyYXdj",
+    "0ABrZXJpc3BlY3dvcmtyYXdk",
+    "0ABrZXJpc3BlY3dvcmtyYXdl",
+    "0ABrZXJpc3BlY3dvcmtyYXdm"
+   ],
+   "checks": {
+    "computed": [
+     "0ABrZXJpc3BlY3dvcmtyYXcw",
+     "0ABrZXJpc3BlY3dvcmtyYXcx",
+     "0ABrZXJpc3BlY3dvcmtyYXcy",
+     "0ABrZXJpc3BlY3dvcmtyYXcz",
+     "0ABrZXJpc3BlY3dvcmtyYXc0",
+     "0ABrZXJpc3BlY3dvcmtyYXc1",
+     "0ABrZXJpc3BlY3dvcmtyYXc2",
+     "0ABrZXJpc3BlY3dvcmtyYXc3",
+     "0ABrZXJpc3BlY3dvcmtyYXc4",
+     "0ABrZXJpc3BlY3dvcmtyYXc5",
+     "0ABrZXJpc3BlY3dvcmtyYXdh",
+     "0ABrZXJpc3BlY3dvcmtyYXdi",
+     "0ABrZXJpc3BlY3dvcmtyYXdj",
+     "0ABrZXJpc3BlY3dvcmtyYXdk",
+     "0ABrZXJpc3BlY3dvcmtyYXdl",
+     "0ABrZXJpc3BlY3dvcmtyYXdm"
+    ],
+    "ok": true
+   },
+   "consistent": true,
+   "errata": []
+  },
+  {
+   "id": "spec/encoding/version",
+   "type": "encoding",
+   "name": "version",
+   "section": "Protocol and Genus Version",
+   "section_path": [
+    "KERI foundational overview",
+    "Annex A",
+    "Native CESR Encodings of KERI Messages",
+    "CESR Field Encodings",
+    "Protocol and Genus Version"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 2088,
+   "encoding": "version",
+   "qb64": "0OKERICAACAA",
+   "checks": {
+    "code": "0O",
+    "decoded": {
+     "protocol": "KERI",
+     "version": "2.0",
+     "genus_version": "2.0",
+     "kind": "JSON",
+     "size": 0,
+     "native_prefix": "KERICAACAA"
+    },
+    "ok": true
+   },
+   "consistent": true,
+   "errata": []
+  },
+  {
+   "id": "spec/encoding/datetime",
+   "type": "encoding",
+   "name": "datetime",
+   "section": "DateTime",
+   "section_path": [
+    "KERI foundational overview",
+    "Annex A",
+    "Native CESR Encodings of KERI Messages",
+    "CESR Field Encodings",
+    "DateTime"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 2095,
+   "encoding": "datetime",
+   "value": "2020-08-22T17:50:09.988921+00:00",
+   "b64": "2020-08-22T17c50c09d988921p00c00",
+   "checks": {
+    "computed": "2020-08-22T17c50c09d988921p00c00",
+    "qb64": "1AAG2020-08-22T17c50c09d988921p00c00",
+    "ok": true
+   },
+   "consistent": true,
+   "errata": []
+  },
+  {
+   "id": "spec/threshold/threshold",
+   "type": "threshold",
+   "name": "threshold",
+   "section": "Threshold",
+   "section_path": [
+    "Annex A",
+    "Native CESR Encodings of KERI Messages",
+    "CESR Field Encodings",
+    "Threshold"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 2116,
+   "syntax": "json",
+   "value": [
+    [
+     {
+      "1/2": [
+       "1/2",
+       "1/2",
+       "1/2"
+      ]
+     },
+     "1/2",
+     {
+      "1/2": [
+       "1",
+       "1"
+      ]
+     }
+    ],
+    [
+     "1/2",
+     {
+      "1/2": [
+       "1",
+       "1"
+      ]
+     }
+    ]
+   ],
+   "checks": {
+    "keys": 9,
+    "clause_sums": [
+     "3/2",
+     "1"
+    ]
+   },
+   "consistent": true,
+   "errata": []
+  },
+  {
+   "id": "spec/encoding/threshold",
+   "type": "encoding",
+   "name": "threshold",
+   "section": "Threshold",
+   "section_path": [
+    "KERI foundational overview",
+    "Annex A",
+    "Native CESR Encodings of KERI Messages",
+    "CESR Field Encodings",
+    "Threshold"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 2131,
+   "encoding": "threshold",
+   "value": [
+    [
+     {
+      "1/2": [
+       "1/2",
+       "1/2",
+       "1/2"
+      ]
+     },
+     "1/2",
+     {
+      "1/2": [
+       "1",
+       "1"
+      ]
+     }
+    ],
+    [
+     "1/2",
+     {
+      "1/2": [
+       "1",
+       "1"
+      ]
+     }
+    ]
+   ],
+   "value_line": 2116,
+   "b64": "1s2k1s2v1s2v1s2c1s2c1s2k1v1a1s21s2k1v1",
+   "checks": {
+    "computed": "1s2k1s2v1s2v1s2c1s2c1s2k1v1a1s2c1s2k1v1",
+    "qb64": "4AAKA1s2k1s2v1s2v1s2c1s2c1s2k1v1a1s2c1s2k1v1",
+    "ok": false,
+    "printed_decodes_to": [
+     [
+      {
+       "1/2": [
+        "1/2",
+        "1/2",
+        "1/2"
+       ]
+      },
+      "1/2",
+      {
+       "1/2": [
+        "1",
+        "1"
+       ]
+      }
+     ],
+     [
+      {
+       "1/21/2": [
+        "1",
+        "1"
+       ]
+      }
+     ]
+    ]
+   },
+   "consistent": false,
+   "errata": [
+    "infix encoding of the threshold is 1s2k1s2v1s2v1s2c1s2c1s2k1v1a1s2c1s2k1v1, the specification prints 1s2k1s2v1s2v1s2c1s2c1s2k1v1a1s21s2k1v1"
+   ]
+  },
+  {
+   "id": "spec/encoding/route",
+   "type": "encoding",
+   "name": "route",
+   "section": "Route or Return Route",
+   "section_path": [
+    "KERI foundational overview",
+    "Annex A",
+    "Native CESR Encodings of KERI Messages",
+    "CESR Field Encodings",
+    "Route or Return Route"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 2139,
+   "encoding": "route",
+   "value": "/ipex/offer",
+   "b64": "-ipex-offer",
+   "checks": {
+    "computed": "-ipex-offer",
+    "qb64": "4AADA-ipex-offer",
+    "ok": true
+   },
+   "consistent": true,
+   "errata": []
+  },
+  {
+   "id": "spec/message/inception-icp-cesr",
+   "type": "message",
+   "name": "inception-icp-cesr",
+   "section": "Inception `icp`",
+   "section_path": [
+    "Annex A",
+    "Native CESR Encodings of KERI Messages",
+    "Key Event Messages",
+    "Inception `icp`"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 2160,
+   "syntax": "python",
+   "label_order": [
+    "v",
+    "t",
+    "d",
+    "i",
+    "s",
+    "kt",
+    "k",
+    "nt",
+    "n",
+    "bt",
+    "b",
+    "c",
+    "a"
+   ],
+   "sad": {
+    "v": "KERICAACAACESRAAJM.",
+    "t": "icp",
+    "d": "EDZOA3y_b_0LG4_cfpKTbWU-_3eeYNM0w9iTkT7frTYs",
+    "i": "EDZOA3y_b_0LG4_cfpKTbWU-_3eeYNM0w9iTkT7frTYs",
+    "s": "0",
+    "kt": "2",
+    "k": [
+     "DBFiIgoCOpJ_zW_OO0GdffhHfEvJWb1HxpDx95bFvufu",
+     "DG-YwInLUxzVDD5z8SqZmS2FppXSB-ZX_f2bJC_ZnsM5",
+     "DGIAk2jkC3xuLIe-DI9rcA0naevtZiKuU9wz91L_qBAV"
+    ],
+    "nt": "2",
+    "n": [
+     "ELeFYMmuJb0hevKjhv97joA5bTfuA8E697cMzi8eoaZB",
+     "ENY9GYShOjeh7qZUpIipKRHgrWcoR2WkJ7Wgj4wZx1YT",
+     "EGyJ7y3TlewCW97dgBN-4pckhCqsni-zHNZ_G8zVerPG"
+    ],
+    "bt": "3",
+    "b": [
+     "BGKV6v93ue5L5wsgk75t6j8TcdgABMN9x-eIyPi96J3B",
+     "BJfueFAYc7N_V-zmDEn2SPCoVFx3H20alWsNZKgsS1vt",
+     "BAPv2MnoiCsgOnklmFyfU07QDK_93NeH9iKfOy8V22aH",
+     "BA4PSatfQMw1lYhQoZkSSvOCrE0Sdw1hmmniDL-yDtrB"
+    ],
+    "c": [
+     "DID"
+    ],
+    "a": []
+   },
+   "raw": "-FCS0OKERICAACAAXicpEDZOA3y_b_0LG4_cfpKTbWU-_3eeYNM0w9iTkT7frTYsEDZOA3y_b_0LG4_cfpKTbWU-_3eeYNM0w9iTkT7frTYsMAAAMAAC-JAhDBFiIgoCOpJ_zW_OO0GdffhHfEvJWb1HxpDx95bFvufuDG-YwInLUxzVDD5z8SqZmS2FppXSB-ZX_f2bJC_ZnsM5DGIAk2jkC3xuLIe-DI9rcA0naevtZiKuU9wz91L_qBAVMAAC-JAhELeFYMmuJb0hevKjhv97joA5bTfuA8E697cMzi8eoaZBENY9GYShOjeh7qZUpIipKRHgrWcoR2WkJ7Wgj4wZx1YTEGyJ7y3TlewCW97dgBN-4pckhCqsni-zHNZ_G8zVerPGMAAD-JAsBGKV6v93ue5L5wsgk75t6j8TcdgABMN9x-eIyPi96J3BBJfueFAYc7N_V-zmDEn2SPCoVFx3H20alWsNZKgsS1vtBAPv2MnoiCsgOnklmFyfU07QDK_93NeH9iKfOy8V22aHBA4PSatfQMw1lYhQoZkSSvOCrE0Sdw1hmmniDL-yDtrB-JABXDID-JAA",
+   "raw_line": 2196,
+   "kind": "CESR",
+   "checks": {
+    "version": {
+     "protocol": "KERI",
+     "version": "2.0",
+     "genus_version": "2.0",
+     "kind": "CESR",
+     "size": 588,
+     "native_prefix": "KERICAACAA"
+    },
+    "field_order": {
+     "declared": [
+      "v",
+      "t",
+      "d",
+      "i",
+      "s",
+      "kt",
+      "k",
+      "nt",
+      "n",
+      "bt",
+      "b",
+      "c",
+      "a"
+     ],
+     "ok": true,
+     "declared_line": 556
+    },
+    "label_order": {
+     "declared": [
+      "v",
+      "t",
+      "d",
+      "i",
+      "s",
+      "kt",
+      "k",
+      "nt",
+      "n",
+      "bt",
+      "b",
+      "c",
+      "a"
+     ],
+     "ok": true
+    },
+    "size": {
+     "version": 588,
+     "computed": 588,
+     "ok": true
+    },
+    "raw_matches_sad": true,
+    "said": {
+     "fields": [
+      "d",
+      "i"
+     ],
+     "computed": "EDZOA3y_b_0LG4_cfpKTbWU-_3eeYNM0w9iTkT7frTYs",
+     "ok": true
+    },
+    "links": {},
+    "rules": {
+     "ok": true,
+     "backers": [
+      "BGKV6v93ue5L5wsgk75t6j8TcdgABMN9x-eIyPi96J3B",
+      "BJfueFAYc7N_V-zmDEn2SPCoVFx3H20alWsNZKgsS1vt",
+      "BAPv2MnoiCsgOnklmFyfU07QDK_93NeH9iKfOy8V22aH",
+      "BA4PSatfQMw1lYhQoZkSSvOCrE0Sdw1hmmniDL-yDtrB"
+     ]
+    },
+    "counterpart": {
+     "of": "spec/message/inception-event-example-icp-json",
+     "ok": true,
+     "fields": []
+    }
+   },
+   "consistent": true,
+   "errata": []
+  },
+  {
+   "id": "spec/message/interaction-ixn-cesr",
+   "type": "message",
+   "name": "interaction-ixn-cesr",
+   "section": "Interaction `ixn`",
+   "section_path": [
+    "Annex A",
+    "Native CESR Encodings of KERI Messages",
+    "Key Event Messages",
+    "Interaction `ixn`"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 2211,
+   "syntax": "python",
+   "label_order": [
+    "v",
+    "t",
+    "d",
+    "i",
+    "s",
+    "p",
+    "a"
+   ],
+   "sad": {
+    "v": "KERICAACAACESRAAEA.",
+    "t": "ixn",
+    "d": "EDmgVuwPOXDjIW3reg4_k8SeJoQEKJKP24fGzeMV4uKD",
+    "i": "EDZOA3y_b_0LG4_cfpKTbWU-_3eeYNM0w9iTkT7frTYs",
+    "s": "1",
+    "p": "EDZOA3y_b_0LG4_cfpKTbWU-_3eeYNM0w9iTkT7frTYs",
+    "a": [
+     {
+      "i": "EF-jViYoBr8p3vkpZuHlkvxAAY5GZkmQ0QaaHfiE0kg3",
+      "s": "0",
+      "d": "EF-jViYoBr8p3vkpZuHlkvxAAY5GZkmQ0QaaHfiE0kg3"
+     }
+    ]
+   },
+   "raw": "-FA_0OKERICAACAAXixnEDmgVuwPOXDjIW3reg4_k8SeJoQEKJKP24fGzeMV4uKDEDZOA3y_b_0LG4_cfpKTbWU-_3eeYNM0w9iTkT7frTYsMAABEDZOA3y_b_0LG4_cfpKTbWU-_3eeYNM0w9iTkT7frTYs-JAY-TAXEF-jViYoBr8p3vkpZuHlkvxAAY5GZkmQ0QaaHfiE0kg3MAAAEF-jViYoBr8p3vkpZuHlkvxAAY5GZkmQ0QaaHfiE0kg3",
+   "raw_line": 2231,
+   "kind": "CESR",
+   "checks": {
+    "version": {
+     "protocol": "KERI",
+     "version": "2.0",
+     "genus_version": "2.0",
+     "kind": "CESR",
+     "size": 256,
+     "native_prefix": "KERICAACAA"
+    },
+    "field_order": {
+     "declared": [
+      "v",
+      "t",
+      "d",
+      "i",
+      "s",
+      "p",
+      "a"
+     ],
+     "ok": true,
+     "declared_line": 627
+    },
+    "label_order": {
+     "declared": [
+      "v",
+      "t",
+      "d",
+      "i",
+      "s",
+      "p",
+      "a"
+     ],
+     "ok": true
+    },
+    "size": {
+     "version": 256,
+     "computed": 256,
+     "ok": true
+    },
+    "raw_matches_sad": true,
+    "said": {
+     "fields": [
+      "d"
+     ],
+     "computed": "EDmgVuwPOXDjIW3reg4_k8SeJoQEKJKP24fGzeMV4uKD",
+     "ok": true
+    },
+    "links": {
+     "prior": {
+      "event": "spec/message/inception-icp-cesr",
+      "ok": true
+     },
+     "seals": [
+      {
+       "seal": {
+        "i": "EF-jViYoBr8p3vkpZuHlkvxAAY5GZkmQ0QaaHfiE0kg3",
+        "s": "0",
+        "d": "EF-jViYoBr8p3vkpZuHlkvxAAY5GZkmQ0QaaHfiE0kg3"
+       },
+       "event": "spec/message/delegated-inception-dip-cesr",
+       "ok": true
+      }
+     ]
+    },
+    "rules": {
+     "ok": true
+    },
+    "counterpart": {
+     "of": "spec/message/interaction-event-example-ixn-json",
+     "ok": true,
+     "fields": []
+    }
+   },
+   "consistent": true,
+   "errata": []
+  },
+  {
+   "id": "spec/message/delegated-inception-dip-cesr",
+   "type": "message",
+   "name": "delegated-inception-dip-cesr",
+   "section": "Delegated Inception `dip`",
+   "section_path": [
+    "Annex A",
+    "Native CESR Encodings of KERI Messages",
+    "Key Event Messages",
+    "Delegated Inception `dip`"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 2244,
+   "syntax": "python",
+   "label_order": [
+    "v",
+    "t",
+    "d",
+    "i",
+    "s",
+    "kt",
+    "k",
+    "nt",
+    "n",
+    "bt",
+    "b",
+    "c",
+    "a",
+    "di"
+   ],
+   "sad": {
+    "v": "KERICAACAACESRAAKM.",
+    "t": "dip",
+    "d": "EF-jViYoBr8p3vkpZuHlkvxAAY5GZkmQ0QaaHfiE0kg3",
+    "i": "EF-jViYoBr8p3vkpZuHlkvxAAY5GZkmQ0QaaHfiE0kg3",
+    "s": "0",
+    "kt": [
+     "1/2",
+     "1/2",
+     "1/2"
+    ],
+    "k": [
+     "DEE-HCMSwqMDkEBzlmUNmVBAGIinGu7wZ5_hfY6bSMz3",
+     "DHyJFyFzuD5vvUWv5jy6nwWI3wZmSnoePu29tBR-jXkv",
+     "DN3JXVEvIjTbisPC4maYQWy6eQIRNdJsxqGFXYUm_ygr"
+    ],
+    "nt": [
+     "1/2",
+     "1/2",
+     "1/2"
+    ],
+    "n": [
+     "EFzr1nnfHpT-nkSfd6vQvbPC-Kq6zy8vbVvUmwxcM1e-",
+     "EIXFsLk9kmESy0ZsoHMUaDyK_g3DVRiJQYiAlyeCeYJM",
+     "EGVvq4Njkki3EZv838rJrYShBtwXY9o8RUrG2w3nbujn"
+    ],
+    "bt": "3",
+    "b": [
+     "BFATArhqG_ktVCRLWt2Knbc7JDpaPAFJ4npNEmIW_gPX",
+     "BOtF-I9geAUjX9NW1kLIq5qDRNgEXCuwpE4mKHkYuWsF",
+     "BEzZUvashpXh_nfPoR6aiqvag0a8E_tbhpeJIgHhOXzl",
+     "BCE6biH4a-Zg8LI3cMSx7JRoOvb8rRD62xbyl9N4M2g6"
+    ],
+    "c": [],
+    "a": [],
+    "di": "EDZOA3y_b_0LG4_cfpKTbWU-_3eeYNM0w9iTkT7frTYs"
+   },
+   "raw": "-FCi0OKERICAACAAXdipEF-jViYoBr8p3vkpZuHlkvxAAY5GZkmQ0QaaHfiE0kg3EF-jViYoBr8p3vkpZuHlkvxAAY5GZkmQ0QaaHfiE0kg3MAAA4AADA1s2c1s2c1s2-JAhDEE-HCMSwqMDkEBzlmUNmVBAGIinGu7wZ5_hfY6bSMz3DHyJFyFzuD5vvUWv5jy6nwWI3wZmSnoePu29tBR-jXkvDN3JXVEvIjTbisPC4maYQWy6eQIRNdJsxqGFXYUm_ygr4AADA1s2c1s2c1s2-JAhEFzr1nnfHpT-nkSfd6vQvbPC-Kq6zy8vbVvUmwxcM1e-EIXFsLk9kmESy0ZsoHMUaDyK_g3DVRiJQYiAlyeCeYJMEGVvq4Njkki3EZv838rJrYShBtwXY9o8RUrG2w3nbujnMAAD-JAsBFATArhqG_ktVCRLWt2Knbc7JDpaPAFJ4npNEmIW_gPXBOtF-I9geAUjX9NW1kLIq5qDRNgEXCuwpE4mKHkYuWsFBEzZUvashpXh_nfPoR6aiqvag0a8E_tbhpeJIgHhOXzlBCE6biH4a-Zg8LI3cMSx7JRoOvb8rRD62xbyl9N4M2g6-JAA-JAAEDZOA3y_b_0LG4_cfpKTbWU-_3eeYNM0w9iTkT7frTYs",
+   "raw_line": 2280,
+   "kind": "CESR",
+   "checks": {
+    "version": {
+     "protocol": "KERI",
+     "version": "2.0",
+     "genus_version": "2.0",
+     "kind": "CESR",
+     "size": 652,
+     "native_prefix": "KERICAACAA"
+    },
+    "field_order": {
+     "declared": [
+      "v",
+      "t",
+      "d",
+      "i",
+      "s",
+      "kt",
+      "k",
+      "nt",
+      "n",
+      "bt",
+      "b",
+      "c",
+      "a",
+      "di"
+     ],
+     "ok": true,
+     "declared_line": 623
+    },
+    "label_order": {
+     "declared": [
+      "v",
+      "t",
+      "d",
+      "i",
+      "s",
+      "kt",
+      "k",
+      "nt",
+      "n",
+      "bt",
+      "b",
+      "c",
+      "a",
+      "di"
+     ],
+     "ok": true
+    },
+    "size": {
+     "version": 652,
+     "computed": 652,
+     "ok": true
+    },
+    "raw_matches_sad": true,
+    "said": {
+     "fields": [
+      "d",
+      "i"
+     ],
+     "computed": "EF-jViYoBr8p3vkpZuHlkvxAAY5GZkmQ0QaaHfiE0kg3",
+     "ok": true
+    },
+    "links": {},
+    "rules": {
+     "ok": true,
+     "backers": [
+      "BFATArhqG_ktVCRLWt2Knbc7JDpaPAFJ4npNEmIW_gPX",
+      "BOtF-I9geAUjX9NW1kLIq5qDRNgEXCuwpE4mKHkYuWsF",
+      "BEzZUvashpXh_nfPoR6aiqvag0a8E_tbhpeJIgHhOXzl",
+      "BCE6biH4a-Zg8LI3cMSx7JRoOvb8rRD62xbyl9N4M2g6"
+     ]
+    },
+    "counterpart": {
+     "of": "spec/message/delegated-inception-event-example-dip-json",
+     "ok": true,
+     "fields": []
+    }
+   },
+   "consistent": true,
+   "errata": []
+  },
+  {
+   "id": "spec/message/rotation-rot-cesr",
+   "type": "message",
+   "name": "rotation-rot-cesr",
+   "section": "Rotation `rot`",
+   "section_path": [
+    "Annex A",
+    "Native CESR Encodings of KERI Messages",
+    "Key Event Messages",
+    "Rotation `rot`"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 2298,
+   "syntax": "python",
+   "label_order": [
+    "v",
+    "t",
+    "d",
+    "i",
+    "s",
+    "p",
+    "kt",
+    "k",
+    "nt",
+    "n",
+    "bt",
+    "br",
+    "ba",
+    "c",
+    "a"
+   ],
+   "sad": {
+    "v": "KERICAACAACESRAAKs.",
+    "t": "rot",
+    "d": "EADBM_Gjzv1_mImlJPPD0bzYmUXmXmCiFIncRYfZMaFc",
+    "i": "EDZOA3y_b_0LG4_cfpKTbWU-_3eeYNM0w9iTkT7frTYs",
+    "s": "2",
+    "p": "EDmgVuwPOXDjIW3reg4_k8SeJoQEKJKP24fGzeMV4uKD",
+    "kt": "2",
+    "k": [
+     "DLv9BlDvjcZWkfPfWcYhNK-xQxz89h82_wA184Vxk8dj",
+     "DCx3WypeBym3fCkVizTg18qEThSrVnB63dFq2oX5c3mz",
+     "DO0PG_ww4PbF2jUIxQnlb4DluJu5ndNehp0BTGWXErXf"
+    ],
+    "nt": "2",
+    "n": [
+     "EA8_fj-Ezin_Us_gUcg5JQJkIIBnrcZt3HEIuH-E1lpe",
+     "EERS8udHp2FW89nmaHweQWnZz7I8v9FTQdA-LZ_amqGh",
+     "EAEzmrPusrj4CDKnSFQvhCEW6T95C7hBeFtZtRD7rOTg"
+    ],
+    "bt": "4",
+    "br": [
+     "BA4PSatfQMw1lYhQoZkSSvOCrE0Sdw1hmmniDL-yDtrB"
+    ],
+    "ba": [
+     "BO3cCAfQiqndZBBxwNk6RGkyA-OA1XbZhBj3s4-VIsCo",
+     "BPowpltoeF14nMbU1ng89JSoYf3AmWhZ50KaCaVO6SIW"
+    ],
+    "c": [],
+    "a": [
+     {
+      "i": "EF-jViYoBr8p3vkpZuHlkvxAAY5GZkmQ0QaaHfiE0kg3",
+      "s": "1",
+      "d": "EFzRkEIXetj-ojZaj0U6P9OqroqZzV0kYwoHGqnlUOwv"
+     }
+    ]
+   },
+   "raw": "-FCq0OKERICAACAAXrotEADBM_Gjzv1_mImlJPPD0bzYmUXmXmCiFIncRYfZMaFcEDZOA3y_b_0LG4_cfpKTbWU-_3eeYNM0w9iTkT7frTYsMAACEDmgVuwPOXDjIW3reg4_k8SeJoQEKJKP24fGzeMV4uKDMAAC-JAhDLv9BlDvjcZWkfPfWcYhNK-xQxz89h82_wA184Vxk8djDCx3WypeBym3fCkVizTg18qEThSrVnB63dFq2oX5c3mzDO0PG_ww4PbF2jUIxQnlb4DluJu5ndNehp0BTGWXErXfMAAC-JAhEA8_fj-Ezin_Us_gUcg5JQJkIIBnrcZt3HEIuH-E1lpeEERS8udHp2FW89nmaHweQWnZz7I8v9FTQdA-LZ_amqGhEAEzmrPusrj4CDKnSFQvhCEW6T95C7hBeFtZtRD7rOTgMAAE-JALBA4PSatfQMw1lYhQoZkSSvOCrE0Sdw1hmmniDL-yDtrB-JAWBO3cCAfQiqndZBBxwNk6RGkyA-OA1XbZhBj3s4-VIsCoBPowpltoeF14nMbU1ng89JSoYf3AmWhZ50KaCaVO6SIW-JAA-JAY-TAXEF-jViYoBr8p3vkpZuHlkvxAAY5GZkmQ0QaaHfiE0kg3MAABEFzRkEIXetj-ojZaj0U6P9OqroqZzV0kYwoHGqnlUOwv",
+   "raw_line": 2340,
+   "kind": "CESR",
+   "checks": {
+    "version": {
+     "protocol": "KERI",
+     "version": "2.0",
+     "genus_version": "2.0",
+     "kind": "CESR",
+     "size": 684,
+     "native_prefix": "KERICAACAA"
+    },
+    "field_order": {
+     "declared": [
+      "v",
+      "t",
+      "d",
+      "i",
+      "s",
+      "p",
+      "kt",
+      "k",
+      "nt",
+      "n",
+      "bt",
+      "br",
+      "ba",
+      "c",
+      "a"
+     ],
+     "ok": true,
+     "declared_line": 665
+    },
+    "label_order": {
+     "declared": [
+      "v",
+      "t",
+      "d",
+      "i",
+      "s",
+      "p",
+      "kt",
+      "k",
+      "nt",
+      "n",
+      "bt",
+      "br",
+      "ba",
+      "c",
+      "a"
+     ],
+     "ok": true
+    },
+    "size": {
+     "version": 684,
+     "computed": 684,
+     "ok": true
+    },
+    "raw_matches_sad": true,
+    "said": {
+     "fields": [
+      "d"
+     ],
+     "computed": "EADBM_Gjzv1_mImlJPPD0bzYmUXmXmCiFIncRYfZMaFc",
+     "ok": true
+    },
+    "links": {
+     "prior": {
+      "event": "spec/message/interaction-ixn-cesr",
+      "ok": true
+     },
+     "next_keys": {
+      "event": "spec/message/inception-icp-cesr",
+      "ok": true,
+      "digests_of_k": [
+       "ELeFYMmuJb0hevKjhv97joA5bTfuA8E697cMzi8eoaZB",
+       "ENY9GYShOjeh7qZUpIipKRHgrWcoR2WkJ7Wgj4wZx1YT",
+       "EGyJ7y3TlewCW97dgBN-4pckhCqsni-zHNZ_G8zVerPG"
+      ]
+     },
+     "seals": [
+      {
+       "seal": {
+        "i": "EF-jViYoBr8p3vkpZuHlkvxAAY5GZkmQ0QaaHfiE0kg3",
+        "s": "1",
+        "d": "EFzRkEIXetj-ojZaj0U6P9OqroqZzV0kYwoHGqnlUOwv"
+       },
+       "event": "spec/message/delegated-rotation-drt-cesr",
+       "ok": true
+      }
+     ]
+    },
+    "rules": {
+     "ok": true,
+     "backers": [
+      "BGKV6v93ue5L5wsgk75t6j8TcdgABMN9x-eIyPi96J3B",
+      "BJfueFAYc7N_V-zmDEn2SPCoVFx3H20alWsNZKgsS1vt",
+      "BAPv2MnoiCsgOnklmFyfU07QDK_93NeH9iKfOy8V22aH",
+      "BO3cCAfQiqndZBBxwNk6RGkyA-OA1XbZhBj3s4-VIsCo",
+      "BPowpltoeF14nMbU1ng89JSoYf3AmWhZ50KaCaVO6SIW"
+     ]
+    },
+    "counterpart": {
+     "of": "spec/message/rotation-event-example-rot-json",
+     "ok": true,
+     "fields": []
+    }
+   },
+   "consistent": true,
+   "errata": []
+  },
+  {
+   "id": "spec/message/delegated-rotation-drt-cesr",
+   "type": "message",
+   "name": "delegated-rotation-drt-cesr",
+   "section": "Delegated Rotation `drt`",
+   "section_path": [
+    "Annex A",
+    "Native CESR Encodings of KERI Messages",
+    "Key Event Messages",
+    "Delegated Rotation `drt`"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 2358,
+   "syntax": "python",
+   "label_order": [
+    "v",
+    "t",
+    "d",
+    "i",
+    "s",
+    "p",
+    "kt",
+    "k",
+    "nt",
+    "n",
+    "bt",
+    "br",
+    "ba",
+    "c",
+    "a",
+    "di"
+   ],
+   "sad": {
+    "v": "KERICAACAACESRAAI4.",
+    "t": "drt",
+    "d": "EFzRkEIXetj-ojZaj0U6P9OqroqZzV0kYwoHGqnlUOwv",
+    "i": "EF-jViYoBr8p3vkpZuHlkvxAAY5GZkmQ0QaaHfiE0kg3",
+    "s": "1",
+    "p": "EF-jViYoBr8p3vkpZuHlkvxAAY5GZkmQ0QaaHfiE0kg3",
+    "kt": [
+     "1/2",
+     "1/2",
+     "1/2"
+    ],
+    "k": [
+     "DB1S8zOh4_qdFhxVHn7BDZb1ErWbBFvcVJX1suKSBctR",
+     "DDCDFlbG4dCAX6oIbNffB1mkZqLAS_eHnYUUIPH7BeXB",
+     "DP3GAMcSx7eCApzk1N7DceV42o1dZemAe0s3r_-Z0zs1"
+    ],
+    "nt": [
+     "1/2",
+     "1/2",
+     "1/2"
+    ],
+    "n": [
+     "EKUlc5Ml4HLSvdk39k_vh0m6rc061mfM1a4qoEuiBwXW",
+     "EJdqHiijmjII-ZtlhFAM5D7myuNeESQkzHoqeWJMMHzW",
+     "EDyk8pj0YPHjGNfrG2qZI866WwevwlHEbWYMsKGTGqj2"
+    ],
+    "bt": "3",
+    "br": [
+     "BOtF-I9geAUjX9NW1kLIq5qDRNgEXCuwpE4mKHkYuWsF"
+    ],
+    "ba": [
+     "BOMrYd5izsqbqaq1WZYa3nbEeTYLPwccfqfhirybKKqx"
+    ],
+    "c": [],
+    "a": []
+   },
+   "raw": "-FCN0OKERICAACAAXdrtEFzRkEIXetj-ojZaj0U6P9OqroqZzV0kYwoHGqnlUOwvEF-jViYoBr8p3vkpZuHlkvxAAY5GZkmQ0QaaHfiE0kg3MAABEF-jViYoBr8p3vkpZuHlkvxAAY5GZkmQ0QaaHfiE0kg34AADA1s2c1s2c1s2-JAhDB1S8zOh4_qdFhxVHn7BDZb1ErWbBFvcVJX1suKSBctRDDCDFlbG4dCAX6oIbNffB1mkZqLAS_eHnYUUIPH7BeXBDP3GAMcSx7eCApzk1N7DceV42o1dZemAe0s3r_-Z0zs14AADA1s2c1s2c1s2-JAhEKUlc5Ml4HLSvdk39k_vh0m6rc061mfM1a4qoEuiBwXWEJdqHiijmjII-ZtlhFAM5D7myuNeESQkzHoqeWJMMHzWEDyk8pj0YPHjGNfrG2qZI866WwevwlHEbWYMsKGTGqj2MAAD-JALBOtF-I9geAUjX9NW1kLIq5qDRNgEXCuwpE4mKHkYuWsF-JALBOMrYd5izsqbqaq1WZYa3nbEeTYLPwccfqfhirybKKqx-JAA-JAA",
+   "raw_line": 2389,
+   "kind": "CESR",
+   "checks": {
+    "version": {
+     "protocol": "KERI",
+     "version": "2.0",
+     "genus_version": "2.0",
+     "kind": "CESR",
+     "size": 568,
+     "native_prefix": "KERICAACAA"
+    },
+    "field_order": {
+     "declared": [
+      "v",
+      "t",
+      "d",
+      "i",
+      "s",
+      "p",
+      "kt",
+      "k",
+      "nt",
+      "n",
+      "bt",
+      "br",
+      "ba",
+      "c",
+      "a"
+     ],
+     "ok": true,
+     "declared_line": 815
+    },
+    "label_order": {
+     "declared": [
+      "v",
+      "t",
+      "d",
+      "i",
+      "s",
+      "p",
+      "kt",
+      "k",
+      "nt",
+      "n",
+      "bt",
+      "br",
+      "ba",
+      "c",
+      "a",
+      "di"
+     ],
+     "ok": false
+    },
+    "size": {
+     "version": 568,
+     "computed": 568,
+     "ok": true
+    },
+    "raw_matches_sad": true,
+    "said": {
+     "fields": [
+      "d"
+     ],
+     "computed": "EFzRkEIXetj-ojZaj0U6P9OqroqZzV0kYwoHGqnlUOwv",
+     "ok": true
+    },
+    "links": {
+     "prior": {
+      "event": "spec/message/delegated-inception-dip-cesr",
+      "ok": true
+     },
+     "next_keys": {
+      "event": "spec/message/delegated-inception-dip-cesr",
+      "ok": true,
+      "digests_of_k": [
+       "EFzr1nnfHpT-nkSfd6vQvbPC-Kq6zy8vbVvUmwxcM1e-",
+       "EIXFsLk9kmESy0ZsoHMUaDyK_g3DVRiJQYiAlyeCeYJM",
+       "EGVvq4Njkki3EZv838rJrYShBtwXY9o8RUrG2w3nbujn"
+      ]
+     },
+     "delegator_anchor": {
+      "event": "spec/message/rotation-rot-cesr",
+      "ok": true
+     }
+    },
+    "rules": {
+     "ok": true,
+     "backers": [
+      "BFATArhqG_ktVCRLWt2Knbc7JDpaPAFJ4npNEmIW_gPX",
+      "BEzZUvashpXh_nfPoR6aiqvag0a8E_tbhpeJIgHhOXzl",
+      "BCE6biH4a-Zg8LI3cMSx7JRoOvb8rRD62xbyl9N4M2g6",
+      "BOMrYd5izsqbqaq1WZYa3nbEeTYLPwccfqfhirybKKqx"
+     ]
+    },
+    "counterpart": {
+     "of": "spec/message/delegated-rotation-event-example-drt-json",
+     "ok": true,
+     "fields": []
+    }
+   },
+   "consistent": false,
+   "errata": [
+    "fields ['v', 't', 'd', 'i', 's', 'p', 'kt', 'k', 'nt', 'n', 'bt', 'br', 'ba', 'c', 'a'] differ from the 'Field order by label' line above the example ['v', 't', 'd', 'i', 's', 'p', 'kt', 'k', 'nt', 'n', 'bt', 'br', 'ba', 'c', 'a', 'di']"
+   ]
+  },
+  {
+   "id": "spec/message/receipt-rct-cesr",
+   "type": "message",
+   "name": "receipt-rct-cesr",
+   "section": "Receipt `rct`",
+   "section_path": [
+    "Annex A",
+    "Native CESR Encodings of KERI Messages",
+    "Receipt Messages",
+    "Receipt `rct`"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 2407,
+   "syntax": "python",
+   "label_order": [
+    "v",
+    "t",
+    "d",
+    "i",
+    "s"
+   ],
+   "sad": {
+    "v": "KERICAACAACESRAABw.",
+    "t": "rct",
+    "d": "EADBM_Gjzv1_mImlJPPD0bzYmUXmXmCiFIncRYfZMaFc",
+    "i": "EDZOA3y_b_0LG4_cfpKTbWU-_3eeYNM0w9iTkT7frTYs",
+    "s": "2"
+   },
+   "raw": "-FAb0OKERICAACAAXrctEADBM_Gjzv1_mImlJPPD0bzYmUXmXmCiFIncRYfZMaFcEDZOA3y_b_0LG4_cfpKTbWU-_3eeYNM0w9iTkT7frTYsMAAC",
+   "raw_line": 2418,
+   "kind": "CESR",
+   "checks": {
+    "version": {
+     "protocol": "KERI",
+     "version": "2.0",
+     "genus_version": "2.0",
+     "kind": "CESR",
+     "size": 112,
+     "native_prefix": "KERICAACAA"
+    },
+    "field_order": {
+     "declared": [
+      "v",
+      "t",
+      "d",
+      "i",
+      "s"
+     ],
+     "ok": true,
+     "declared_line": 882
+    },
+    "label_order": {
+     "declared": [
+      "v",
+      "t",
+      "d",
+      "i",
+      "s"
+     ],
+     "ok": true
+    },
+    "size": {
+     "version": 112,
+     "computed": 112,
+     "ok": true
+    },
+    "raw_matches_sad": true,
+    "links": {
+     "receipted": {
+      "event": "spec/message/rotation-rot-cesr",
+      "ok": true
+     }
+    },
+    "counterpart": {
+     "of": "spec/message/receipt-example-rct-json",
+     "ok": true,
+     "fields": []
+    }
+   },
+   "consistent": true,
+   "errata": []
+  },
+  {
+   "id": "spec/message/query-message-qry-cesr",
+   "type": "message",
+   "name": "query-message-qry-cesr",
+   "section": "Query Message",
+   "section_path": [
+    "Annex A",
+    "Native CESR Encodings of KERI Messages",
+    "Query Message"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 2431,
+   "syntax": "python",
+   "label_order": [
+    "v",
+    "t",
+    "d",
+    "dt",
+    "r",
+    "rr",
+    "q"
+   ],
+   "sad": {
+    "v": "KERICAACAACESRAAD0.",
+    "t": "qry",
+    "d": "EF6usM5fNtZWF33E_EQTo9cgU-5f2DH7iBK2V0RPexSe",
+    "i": "EF-jViYoBr8p3vkpZuHlkvxAAY5GZkmQ0QaaHfiE0kg3",
+    "dt": "2025-08-21T17:50:00.000000+00:00",
+    "r": "/oobi",
+    "rr": "/oobi/process",
+    "q": {
+     "i": "EDZOA3y_b_0LG4_cfpKTbWU-_3eeYNM0w9iTkT7frTYs",
+     "role": "witness"
+    }
+   },
+   "raw": "-FA80OKERICAACAAXqryEF6usM5fNtZWF33E_EQTo9cgU-5f2DH7iBK2V0RPexSeEF-jViYoBr8p3vkpZuHlkvxAAY5GZkmQ0QaaHfiE0kg31AAG2025-08-21T17c50c00d000000p00c006AACAAA-oobi6AAEAAA-oobi-process-IAQ0J_iEDZOA3y_b_0LG4_cfpKTbWU-_3eeYNM0w9iTkT7frTYs1AAFroleYwitness",
+   "raw_line": 2449,
+   "kind": "CESR",
+   "checks": {
+    "version": {
+     "protocol": "KERI",
+     "version": "2.0",
+     "genus_version": "2.0",
+     "kind": "CESR",
+     "size": 244,
+     "native_prefix": "KERICAACAA"
+    },
+    "field_order": {
+     "declared": [
+      "v",
+      "t",
+      "d",
+      "dt",
+      "r",
+      "rr",
+      "q"
+     ],
+     "ok": false,
+     "declared_line": 1008
+    },
+    "label_order": {
+     "declared": [
+      "v",
+      "t",
+      "d",
+      "dt",
+      "r",
+      "rr",
+      "q"
+     ],
+     "ok": false
+    },
+    "size": {
+     "version": 244,
+     "computed": 244,
+     "ok": true
+    },
+    "raw_matches_sad": true,
+    "said": {
+     "fields": [
+      "d"
+     ],
+     "computed": "EF6usM5fNtZWF33E_EQTo9cgU-5f2DH7iBK2V0RPexSe",
+     "ok": true
+    },
+    "counterpart": {
+     "of": "spec/message/example-query-message-qry-json",
+     "ok": true,
+     "fields": []
+    }
+   },
+   "consistent": false,
+   "errata": [
+    "fields ['v', 't', 'd', 'i', 'dt', 'r', 'rr', 'q'] differ from the order the specification declares for qry ['v', 't', 'd', 'dt', 'r', 'rr', 'q'] (line 1008)",
+    "fields ['v', 't', 'd', 'i', 'dt', 'r', 'rr', 'q'] differ from the 'Field order by label' line above the example ['v', 't', 'd', 'dt', 'r', 'rr', 'q']"
+   ]
+  },
+  {
+   "id": "spec/message/reply-message-rpy-cesr",
+   "type": "message",
+   "name": "reply-message-rpy-cesr",
+   "section": "Reply Message",
+   "section_path": [
+    "Annex A",
+    "Native CESR Encodings of KERI Messages",
+    "Reply Message"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 2461,
+   "syntax": "python",
+   "label_order": [
+    "v",
+    "t",
+    "d",
+    "dt",
+    "r",
+    "a"
+   ],
+   "sad": {
+    "v": "KERICAACAACESRAAFA.",
+    "t": "rpy",
+    "d": "EPvuKFb4DpBKOA-HPJHKXf3mHFokUcYnBE3tjBougM9S",
+    "i": "EDZOA3y_b_0LG4_cfpKTbWU-_3eeYNM0w9iTkT7frTYs",
+    "dt": "2020-08-21T17:52:00.000000+00:00",
+    "r": "/oobi/process",
+    "a": {
+     "i": "EDZOA3y_b_0LG4_cfpKTbWU-_3eeYNM0w9iTkT7frTYs",
+     "url": "https://example.com/witness/BGKV6v93ue5L5wsgk75t6j8TcdgABMN9x-eIyPi96J3B"
+    }
+   },
+   "raw": "-FBP0OKERICAACAAXrpyEPvuKFb4DpBKOA-HPJHKXf3mHFokUcYnBE3tjBougM9SEDZOA3y_b_0LG4_cfpKTbWU-_3eeYNM0w9iTkT7frTYs1AAG2020-08-21T17c52c00d000000p00c006AAEAAA-oobi-process-IAm0J_iEDZOA3y_b_0LG4_cfpKTbWU-_3eeYNM0w9iTkT7frTYsXurl4BAYaHR0cHM6Ly9leGFtcGxlLmNvbS93aXRuZXNzL0JHS1Y2djkzdWU1TDV3c2drNzV0Nmo4VGNkZ0FCTU45eC1lSXlQaTk2SjNC",
+   "raw_line": 2478,
+   "kind": "CESR",
+   "checks": {
+    "version": {
+     "protocol": "KERI",
+     "version": "2.0",
+     "genus_version": "2.0",
+     "kind": "CESR",
+     "size": 320,
+     "native_prefix": "KERICAACAA"
+    },
+    "field_order": {
+     "declared": [
+      "v",
+      "t",
+      "d",
+      "dt",
+      "r",
+      "a"
+     ],
+     "ok": false,
+     "declared_line": 1046
+    },
+    "label_order": {
+     "declared": [
+      "v",
+      "t",
+      "d",
+      "dt",
+      "r",
+      "a"
+     ],
+     "ok": false
+    },
+    "size": {
+     "version": 320,
+     "computed": 320,
+     "ok": true
+    },
+    "raw_matches_sad": true,
+    "said": {
+     "fields": [
+      "d"
+     ],
+     "computed": "EPvuKFb4DpBKOA-HPJHKXf3mHFokUcYnBE3tjBougM9S",
+     "ok": true
+    },
+    "counterpart": {
+     "of": "spec/message/example-reply-message-rpy-json",
+     "ok": true,
+     "fields": []
+    }
+   },
+   "consistent": false,
+   "errata": [
+    "fields ['v', 't', 'd', 'i', 'dt', 'r', 'a'] differ from the order the specification declares for rpy ['v', 't', 'd', 'dt', 'r', 'a'] (line 1046)",
+    "fields ['v', 't', 'd', 'i', 'dt', 'r', 'a'] differ from the 'Field order by label' line above the example ['v', 't', 'd', 'dt', 'r', 'a']"
+   ]
+  },
+  {
+   "id": "spec/message/prod-message-pro-cesr",
+   "type": "message",
+   "name": "prod-message-pro-cesr",
+   "section": "Prod Message",
+   "section_path": [
+    "Annex A",
+    "Native CESR Encodings of KERI Messages",
+    "Prod Message"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 2492,
+   "syntax": "python",
+   "label_order": [
+    "v",
+    "t",
+    "d",
+    "dt",
+    "r",
+    "rr",
+    "q"
+   ],
+   "sad": {
+    "v": "KERICAACAACESRAAEA.",
+    "t": "pro",
+    "d": "EJRa0zYQjeupTLGMJxdLBkxZP175elZFCI_Ddg0IjKI1",
+    "i": "EF-jViYoBr8p3vkpZuHlkvxAAY5GZkmQ0QaaHfiE0kg3",
+    "dt": "2025-08-21T17:50:00.000000+00:00",
+    "r": "/confidential",
+    "rr": "/confidential/process",
+    "q": {
+     "i": "EDZOA3y_b_0LG4_cfpKTbWU-_3eeYNM0w9iTkT7frTYs",
+     "name": true
+    }
+   },
+   "raw": "-FA_0OKERICAACAAXproEJRa0zYQjeupTLGMJxdLBkxZP175elZFCI_Ddg0IjKI1EF-jViYoBr8p3vkpZuHlkvxAAY5GZkmQ0QaaHfiE0kg31AAG2025-08-21T17c50c00d000000p00c006AAEAAA-confidential6AAGAAA-confidential-process-IAP0J_iEDZOA3y_b_0LG4_cfpKTbWU-_3eeYNM0w9iTkT7frTYs1AAFname1AAM",
+   "raw_line": 2511,
+   "kind": "CESR",
+   "checks": {
+    "version": {
+     "protocol": "KERI",
+     "version": "2.0",
+     "genus_version": "2.0",
+     "kind": "CESR",
+     "size": 256,
+     "native_prefix": "KERICAACAA"
+    },
+    "field_order": {
+     "declared": [
+      "v",
+      "t",
+      "d",
+      "dt",
+      "r",
+      "rr",
+      "q"
+     ],
+     "ok": false,
+     "declared_line": 1083
+    },
+    "label_order": {
+     "declared": [
+      "v",
+      "t",
+      "d",
+      "dt",
+      "r",
+      "rr",
+      "q"
+     ],
+     "ok": false
+    },
+    "size": {
+     "version": 256,
+     "computed": 256,
+     "ok": true
+    },
+    "raw_matches_sad": true,
+    "said": {
+     "fields": [
+      "d"
+     ],
+     "computed": "EJRa0zYQjeupTLGMJxdLBkxZP175elZFCI_Ddg0IjKI1",
+     "ok": true
+    },
+    "counterpart": {
+     "of": "spec/message/example-prod-message-pro-json",
+     "ok": true,
+     "fields": []
+    }
+   },
+   "consistent": false,
+   "errata": [
+    "fields ['v', 't', 'd', 'i', 'dt', 'r', 'rr', 'q'] differ from the order the specification declares for pro ['v', 't', 'd', 'dt', 'r', 'rr', 'q'] (line 1083)",
+    "fields ['v', 't', 'd', 'i', 'dt', 'r', 'rr', 'q'] differ from the 'Field order by label' line above the example ['v', 't', 'd', 'dt', 'r', 'rr', 'q']"
+   ]
+  },
+  {
+   "id": "spec/message/bare-message-bar-cesr",
+   "type": "message",
+   "name": "bare-message-bar-cesr",
+   "section": "Bare Message",
+   "section_path": [
+    "Annex A",
+    "Native CESR Encodings of KERI Messages",
+    "Bare Message"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 2524,
+   "syntax": "python",
+   "label_order": [
+    "v",
+    "t",
+    "d",
+    "dt",
+    "r",
+    "a"
+   ],
+   "sad": {
+    "v": "KERICAACAACESRAADs.",
+    "t": "bar",
+    "d": "EMaAeoTKrRTGIhJeSp-WhwIMSQMvdf13fChMWV6IL6fa",
+    "i": "EDZOA3y_b_0LG4_cfpKTbWU-_3eeYNM0w9iTkT7frTYs",
+    "dt": "2020-08-22T17:52:00.000000+00:00",
+    "r": "/confidential/process",
+    "a": {
+     "i": "EDZOA3y_b_0LG4_cfpKTbWU-_3eeYNM0w9iTkT7frTYs",
+     "name": "Ean"
+    }
+   },
+   "raw": "-FA60OKERICAACAAXbarEMaAeoTKrRTGIhJeSp-WhwIMSQMvdf13fChMWV6IL6faEDZOA3y_b_0LG4_cfpKTbWU-_3eeYNM0w9iTkT7frTYs1AAG2020-08-22T17c52c00d000000p00c006AAGAAA-confidential-process-IAP0J_iEDZOA3y_b_0LG4_cfpKTbWU-_3eeYNM0w9iTkT7frTYs1AAFnameXEan",
+   "raw_line": 2542,
+   "kind": "CESR",
+   "checks": {
+    "version": {
+     "protocol": "KERI",
+     "version": "2.0",
+     "genus_version": "2.0",
+     "kind": "CESR",
+     "size": 236,
+     "native_prefix": "KERICAACAA"
+    },
+    "field_order": {
+     "declared": [
+      "v",
+      "t",
+      "d",
+      "dt",
+      "r",
+      "a"
+     ],
+     "ok": false,
+     "declared_line": 1118
+    },
+    "label_order": {
+     "declared": [
+      "v",
+      "t",
+      "d",
+      "dt",
+      "r",
+      "a"
+     ],
+     "ok": false
+    },
+    "size": {
+     "version": 236,
+     "computed": 236,
+     "ok": true
+    },
+    "raw_matches_sad": true,
+    "said": {
+     "fields": [
+      "d"
+     ],
+     "computed": "EMaAeoTKrRTGIhJeSp-WhwIMSQMvdf13fChMWV6IL6fa",
+     "ok": true
+    },
+    "counterpart": {
+     "of": "spec/message/example-bare-message-bar-json",
+     "ok": true,
+     "fields": []
+    }
+   },
+   "consistent": false,
+   "errata": [
+    "fields ['v', 't', 'd', 'i', 'dt', 'r', 'a'] differ from the order the specification declares for bar ['v', 't', 'd', 'dt', 'r', 'a'] (line 1118)",
+    "fields ['v', 't', 'd', 'i', 'dt', 'r', 'a'] differ from the 'Field order by label' line above the example ['v', 't', 'd', 'dt', 'r', 'a']"
+   ]
+  },
+  {
+   "id": "spec/message/exchange-transaction-inception-message-xip-cesr",
+   "type": "message",
+   "name": "exchange-transaction-inception-message-xip-cesr",
+   "section": "Exchange Transaction Inception Message",
+   "section_path": [
+    "Annex A",
+    "Native CESR Encodings of KERI Messages",
+    "Exchange Transaction Inception Message"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 2555,
+   "syntax": "python",
+   "label_order": [
+    "v",
+    "t",
+    "d",
+    "i",
+    "ri",
+    "dt",
+    "r",
+    "q",
+    "a"
+   ],
+   "sad": {
+    "v": "KERICAACAACESRAAE0.",
+    "t": "xip",
+    "d": "EISX00jpyZ1_XZBubJghQ2MSxAEgbuBPSoNIKT-4EdwU",
+    "u": "0ABrZXJpc3BlY3dvcmtyYXcw",
+    "i": "EF-jViYoBr8p3vkpZuHlkvxAAY5GZkmQ0QaaHfiE0kg3",
+    "ri": "EDZOA3y_b_0LG4_cfpKTbWU-_3eeYNM0w9iTkT7frTYs",
+    "dt": "2020-08-30T13:30:10.123456+00:00",
+    "r": "/offer",
+    "q": {
+     "timing": "immediate"
+    },
+    "a": {
+     "action": "sell",
+     "item": "Rembrant",
+     "price": 300000.0
+    }
+   },
+   "raw": "-FBM0OKERICAACAAXxipEISX00jpyZ1_XZBubJghQ2MSxAEgbuBPSoNIKT-4EdwU0ABrZXJpc3BlY3dvcmtyYXcwEF-jViYoBr8p3vkpZuHlkvxAAY5GZkmQ0QaaHfiE0kg3EDZOA3y_b_0LG4_cfpKTbWU-_3eeYNM0w9iTkT7frTYs1AAG2020-08-30T13c30c10d123456p00c005AACAA-offer-IAF0Mtiming0N_immediate-IAO0Maction1AAFsell1AAFitem1AANRembrant0L_price4HAC300000p0",
+   "raw_line": 2580,
+   "kind": "CESR",
+   "checks": {
+    "version": {
+     "protocol": "KERI",
+     "version": "2.0",
+     "genus_version": "2.0",
+     "kind": "CESR",
+     "size": 308,
+     "native_prefix": "KERICAACAA"
+    },
+    "field_order": {
+     "declared": [
+      "v",
+      "t",
+      "d",
+      "u",
+      "i",
+      "ri",
+      "dt",
+      "r",
+      "q",
+      "a"
+     ],
+     "ok": true,
+     "declared_line": 1154
+    },
+    "label_order": {
+     "declared": [
+      "v",
+      "t",
+      "d",
+      "i",
+      "ri",
+      "dt",
+      "r",
+      "q",
+      "a"
+     ],
+     "ok": false
+    },
+    "size": {
+     "version": 308,
+     "computed": 308,
+     "ok": true
+    },
+    "raw_matches_sad": true,
+    "said": {
+     "fields": [
+      "d"
+     ],
+     "computed": "EISX00jpyZ1_XZBubJghQ2MSxAEgbuBPSoNIKT-4EdwU",
+     "ok": true
+    },
+    "counterpart": {
+     "of": "spec/message/example-exchange-transaction-inception-message-xip-json",
+     "ok": true,
+     "fields": []
+    }
+   },
+   "consistent": false,
+   "errata": [
+    "fields ['v', 't', 'd', 'u', 'i', 'ri', 'dt', 'r', 'q', 'a'] differ from the 'Field order by label' line above the example ['v', 't', 'd', 'i', 'ri', 'dt', 'r', 'q', 'a']"
+   ]
+  },
+  {
+   "id": "spec/message/exchange-message-exn-cesr",
+   "type": "message",
+   "name": "exchange-message-exn-cesr",
+   "section": "Exchange Message",
+   "section_path": [
+    "Annex A",
+    "Native CESR Encodings of KERI Messages",
+    "Exchange Message"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 2594,
+   "syntax": "python",
+   "label_order": [
+    "v",
+    "t",
+    "d",
+    "i",
+    "ri",
+    "x",
+    "p",
+    "dt",
+    "r",
+    "q",
+    "a"
+   ],
+   "sad": {
+    "v": "KERICAACAACESRAAFw.",
+    "t": "exn",
+    "d": "ELG8gjElCt6Q53u0m6QuvVRle32EJz0quZkWITml8BMb",
+    "i": "EDZOA3y_b_0LG4_cfpKTbWU-_3eeYNM0w9iTkT7frTYs",
+    "ri": "EF-jViYoBr8p3vkpZuHlkvxAAY5GZkmQ0QaaHfiE0kg3",
+    "x": "EISX00jpyZ1_XZBubJghQ2MSxAEgbuBPSoNIKT-4EdwU",
+    "p": "EISX00jpyZ1_XZBubJghQ2MSxAEgbuBPSoNIKT-4EdwU",
+    "dt": "2020-08-30T13:42:11.123456+00:00",
+    "r": "/agree",
+    "q": {
+     "timing": "immediate"
+    },
+    "a": {
+     "action": "buy",
+     "item": "Rembrant",
+     "price": 300000.0
+    }
+   },
+   "raw": "-FBb0OKERICAACAAXexnELG8gjElCt6Q53u0m6QuvVRle32EJz0quZkWITml8BMbEDZOA3y_b_0LG4_cfpKTbWU-_3eeYNM0w9iTkT7frTYsEF-jViYoBr8p3vkpZuHlkvxAAY5GZkmQ0QaaHfiE0kg3EISX00jpyZ1_XZBubJghQ2MSxAEgbuBPSoNIKT-4EdwUEISX00jpyZ1_XZBubJghQ2MSxAEgbuBPSoNIKT-4EdwU1AAG2020-08-30T13c42c11d123456p00c005AACAA-agree-IAF0Mtiming0N_immediate-IAN0MactionXbuy1AAFitem1AANRembrant0L_price4HAC300000p0",
+   "raw_line": 2620,
+   "kind": "CESR",
+   "checks": {
+    "version": {
+     "protocol": "KERI",
+     "version": "2.0",
+     "genus_version": "2.0",
+     "kind": "CESR",
+     "size": 368,
+     "native_prefix": "KERICAACAA"
+    },
+    "field_order": {
+     "declared": [
+      "v",
+      "t",
+      "d",
+      "i",
+      "ri",
+      "x",
+      "p",
+      "dt",
+      "r",
+      "q",
+      "a"
+     ],
+     "ok": true,
+     "declared_line": 1197
+    },
+    "label_order": {
+     "declared": [
+      "v",
+      "t",
+      "d",
+      "i",
+      "ri",
+      "x",
+      "p",
+      "dt",
+      "r",
+      "q",
+      "a"
+     ],
+     "ok": true
+    },
+    "size": {
+     "version": 368,
+     "computed": 368,
+     "ok": true
+    },
+    "raw_matches_sad": true,
+    "said": {
+     "fields": [
+      "d"
+     ],
+     "computed": "ELG8gjElCt6Q53u0m6QuvVRle32EJz0quZkWITml8BMb",
+     "ok": true
+    },
+    "links": {
+     "exchange": {
+      "event": "spec/message/exchange-transaction-inception-message-xip-cesr",
+      "ok": true
+     }
+    },
+    "counterpart": {
+     "of": "spec/message/example-exchange-transaction-message-exn-json",
+     "ok": true,
+     "fields": []
+    }
+   },
+   "consistent": true,
+   "errata": []
+  },
+  {
+   "id": "spec/message/keri-reply-messages-as-oobis-rpy-json",
+   "type": "message",
+   "name": "keri-reply-messages-as-oobis-rpy-json",
+   "section": "KERI Reply Messages as OOBIs",
+   "section_path": [
+    "Annex A",
+    "Out-Of-Band-Introduction (OOBI)",
+    "KERI Reply Messages as OOBIs"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 2747,
+   "syntax": "json",
+   "sad": {
+    "v": "KERICAACAAJSONAAIA.",
+    "t": "rpy",
+    "d": "ELtIQ71PMr9m5a8eYiC39hikuU8yTWoFw1vWjtqbVUX4",
+    "i": "EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB",
+    "dt": "2020-08-21T17:52:00.000000+00:00",
+    "r": "/oobi/witness",
+    "a": {
+     "cid": "EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB",
+     "urls": [
+      "https://example.com/witness/wilma/BGKV6v93ue5L5wsgk75t6j8TcdgABMN9x-eIyPi96J3B",
+      "https://example.com/witness/watson/BAPv2MnoiCsgOnklmFyfU07QDK_93NeH9iKfOy8V22aH",
+      "https://example.com/witness/winona/BA4PSatfQMw1lYhQoZkSSvOCrE0Sdw1hmmniDL-yDtrB"
+     ]
+    }
+   },
+   "raw": "{\"v\":\"KERICAACAAJSONAAIA.\",\"t\":\"rpy\",\"d\":\"ELtIQ71PMr9m5a8eYiC39hikuU8yTWoFw1vWjtqbVUX4\",\"i\":\"EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB\",\"dt\":\"2020-08-21T17:52:00.000000+00:00\",\"r\":\"/oobi/witness\",\"a\":{\"cid\":\"EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB\",\"urls\":[\"https://example.com/witness/wilma/BGKV6v93ue5L5wsgk75t6j8TcdgABMN9x-eIyPi96J3B\",\"https://example.com/witness/watson/BAPv2MnoiCsgOnklmFyfU07QDK_93NeH9iKfOy8V22aH\",\"https://example.com/witness/winona/BA4PSatfQMw1lYhQoZkSSvOCrE0Sdw1hmmniDL-yDtrB\"]}}",
+   "raw_line": 2769,
+   "kind": "JSON",
+   "checks": {
+    "version": {
+     "protocol": "KERI",
+     "version": "2.0",
+     "genus_version": "2.0",
+     "kind": "JSON",
+     "size": 512,
+     "native_prefix": "KERICAACAA"
+    },
+    "field_order": {
+     "declared": [
+      "v",
+      "t",
+      "d",
+      "dt",
+      "r",
+      "a"
+     ],
+     "ok": false,
+     "declared_line": 1046
+    },
+    "size": {
+     "version": 512,
+     "computed": 512,
+     "ok": true
+    },
+    "raw_matches_sad": true,
+    "said": {
+     "fields": [
+      "d"
+     ],
+     "computed": "ELtIQ71PMr9m5a8eYiC39hikuU8yTWoFw1vWjtqbVUX4",
+     "ok": true
+    }
+   },
+   "consistent": false,
+   "errata": [
+    "fields ['v', 't', 'd', 'i', 'dt', 'r', 'a'] differ from the order the specification declares for rpy ['v', 't', 'd', 'dt', 'r', 'a'] (line 1046)"
+   ]
+  },
+  {
+   "id": "spec/message/keri-reply-messages-as-oobis-rpy-json-2",
+   "type": "message",
+   "name": "keri-reply-messages-as-oobis-rpy-json-2",
+   "section": "KERI Reply Messages as OOBIs",
+   "section_path": [
+    "Annex A",
+    "Out-Of-Band-Introduction (OOBI)",
+    "KERI Reply Messages as OOBIs"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 2783,
+   "syntax": "json",
+   "sad": {
+    "v": "KERICAACAAJSONAAFq.",
+    "t": "rpy",
+    "d": "EFMQh0w5-AHw-H01DtqEFhAIC6KXbjYvUSOEX6kSPY4j",
+    "i": "EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB",
+    "dt": "2020-08-21T17:52:00.000000+00:00",
+    "r": "/oobi/EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB/witness",
+    "a": {
+     "eid": "BGKV6v93ue5L5wsgk75t6j8TcdgABMN9x-eIyPi96J3B",
+     "scheme": "https",
+     "url": "https://example.com/witness/wilma"
+    }
+   },
+   "raw": "{\"v\":\"KERICAACAAJSONAAFq.\",\"t\":\"rpy\",\"d\":\"EFMQh0w5-AHw-H01DtqEFhAIC6KXbjYvUSOEX6kSPY4j\",\"i\":\"EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB\",\"dt\":\"2020-08-21T17:52:00.000000+00:00\",\"r\":\"/oobi/EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB/witness\",\"a\":{\"eid\":\"BGKV6v93ue5L5wsgk75t6j8TcdgABMN9x-eIyPi96J3B\",\"scheme\":\"https\",\"url\":\"https://example.com/witness/wilma\"}}",
+   "raw_line": 2801,
+   "kind": "JSON",
+   "checks": {
+    "version": {
+     "protocol": "KERI",
+     "version": "2.0",
+     "genus_version": "2.0",
+     "kind": "JSON",
+     "size": 362,
+     "native_prefix": "KERICAACAA"
+    },
+    "field_order": {
+     "declared": [
+      "v",
+      "t",
+      "d",
+      "dt",
+      "r",
+      "a"
+     ],
+     "ok": false,
+     "declared_line": 1046
+    },
+    "size": {
+     "version": 362,
+     "computed": 362,
+     "ok": true
+    },
+    "raw_matches_sad": true,
+    "said": {
+     "fields": [
+      "d"
+     ],
+     "computed": "EFMQh0w5-AHw-H01DtqEFhAIC6KXbjYvUSOEX6kSPY4j",
+     "ok": true
+    }
+   },
+   "consistent": false,
+   "errata": [
+    "fields ['v', 't', 'd', 'i', 'dt', 'r', 'a'] differ from the order the specification declares for rpy ['v', 't', 'd', 'dt', 'r', 'a'] (line 1046)"
+   ]
+  },
+  {
+   "id": "spec/message/player-eid-in-role-by-cid-update-rpy-json",
+   "type": "message",
+   "name": "player-eid-in-role-by-cid-update-rpy-json",
+   "section": "Player EID in Role by CID Update",
+   "section_path": [
+    "Annex A",
+    "BADA (Best-Available-Data-Acceptance) Policy",
+    "Player EID in Role by CID Update"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 2982,
+   "syntax": "json",
+   "sad": {
+    "v": "KERICAACAAJSONAAFI.",
+    "t": "rpy",
+    "d": "EBcL5FQ2cHPcLmGb7AKk-ORtq0_A-m-mQTygGxTrqTBb",
+    "i": "EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB",
+    "dt": "2020-08-21T17:52:00.000000+00:00",
+    "r": "/end/role/add",
+    "a": {
+     "cid": "EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB",
+     "role": "witness",
+     "eid": "BGKV6v93ue5L5wsgk75t6j8TcdgABMN9x-eIyPi96J3B"
+    }
+   },
+   "raw": "{\"v\":\"KERICAACAAJSONAAFI.\",\"t\":\"rpy\",\"d\":\"EBcL5FQ2cHPcLmGb7AKk-ORtq0_A-m-mQTygGxTrqTBb\",\"i\":\"EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB\",\"dt\":\"2020-08-21T17:52:00.000000+00:00\",\"r\":\"/end/role/add\",\"a\":{\"cid\":\"EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB\",\"role\":\"witness\",\"eid\":\"BGKV6v93ue5L5wsgk75t6j8TcdgABMN9x-eIyPi96J3B\"}}",
+   "raw_line": 3000,
+   "kind": "JSON",
+   "checks": {
+    "version": {
+     "protocol": "KERI",
+     "version": "2.0",
+     "genus_version": "2.0",
+     "kind": "JSON",
+     "size": 328,
+     "native_prefix": "KERICAACAA"
+    },
+    "field_order": {
+     "declared": [
+      "v",
+      "t",
+      "d",
+      "dt",
+      "r",
+      "a"
+     ],
+     "ok": false,
+     "declared_line": 1046
+    },
+    "size": {
+     "version": 328,
+     "computed": 328,
+     "ok": true
+    },
+    "raw_matches_sad": true,
+    "said": {
+     "fields": [
+      "d"
+     ],
+     "computed": "EBcL5FQ2cHPcLmGb7AKk-ORtq0_A-m-mQTygGxTrqTBb",
+     "ok": true
+    }
+   },
+   "consistent": false,
+   "errata": [
+    "fields ['v', 't', 'd', 'i', 'dt', 'r', 'a'] differ from the order the specification declares for rpy ['v', 't', 'd', 'dt', 'r', 'a'] (line 1046)"
+   ]
+  },
+  {
+   "id": "spec/message/player-eid-in-role-by-cid-nullify-via-cut-rpy-json",
+   "type": "message",
+   "name": "player-eid-in-role-by-cid-nullify-via-cut-rpy-json",
+   "section": "Player EID in Role by CID Nullify Via Cut",
+   "section_path": [
+    "Annex A",
+    "BADA (Best-Available-Data-Acceptance) Policy",
+    "Player EID in Role by CID Nullify Via Cut"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 3014,
+   "syntax": "json",
+   "sad": {
+    "v": "KERICAACAAJSONAAFI.",
+    "t": "rpy",
+    "d": "EH4uEDQHtCxoJ-RXbvmIjl-NE3JoPJ26fN7sZm9dsqPv",
+    "i": "EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB",
+    "dt": "2020-08-21T17:52:10.000000+00:00",
+    "r": "/end/role/cut",
+    "a": {
+     "cid": "EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB",
+     "role": "witness",
+     "eid": "BGKV6v93ue5L5wsgk75t6j8TcdgABMN9x-eIyPi96J3B"
+    }
+   },
+   "raw": "{\"v\":\"KERICAACAAJSONAAFI.\",\"t\":\"rpy\",\"d\":\"EH4uEDQHtCxoJ-RXbvmIjl-NE3JoPJ26fN7sZm9dsqPv\",\"i\":\"EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB\",\"dt\":\"2020-08-21T17:52:10.000000+00:00\",\"r\":\"/end/role/cut\",\"a\":{\"cid\":\"EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB\",\"role\":\"witness\",\"eid\":\"BGKV6v93ue5L5wsgk75t6j8TcdgABMN9x-eIyPi96J3B\"}}",
+   "raw_line": 3032,
+   "kind": "JSON",
+   "checks": {
+    "version": {
+     "protocol": "KERI",
+     "version": "2.0",
+     "genus_version": "2.0",
+     "kind": "JSON",
+     "size": 328,
+     "native_prefix": "KERICAACAA"
+    },
+    "field_order": {
+     "declared": [
+      "v",
+      "t",
+      "d",
+      "dt",
+      "r",
+      "a"
+     ],
+     "ok": false,
+     "declared_line": 1046
+    },
+    "size": {
+     "version": 328,
+     "computed": 328,
+     "ok": true
+    },
+    "raw_matches_sad": true,
+    "said": {
+     "fields": [
+      "d"
+     ],
+     "computed": "EH4uEDQHtCxoJ-RXbvmIjl-NE3JoPJ26fN7sZm9dsqPv",
+     "ok": true
+    }
+   },
+   "consistent": false,
+   "errata": [
+    "fields ['v', 't', 'd', 'i', 'dt', 'r', 'a'] differ from the order the specification declares for rpy ['v', 't', 'd', 'dt', 'r', 'a'] (line 1046)"
+   ]
+  },
+  {
+   "id": "spec/message/endpoint-location-with-scheme-by-eid-update-rpy-json",
+   "type": "message",
+   "name": "endpoint-location-with-scheme-by-eid-update-rpy-json",
+   "section": "Endpoint Location with Scheme by EID Update",
+   "section_path": [
+    "Annex A",
+    "BADA (Best-Available-Data-Acceptance) Policy",
+    "Endpoint Location with Scheme by EID Update"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 3046,
+   "syntax": "json",
+   "sad": {
+    "v": "KERICAACAAJSONAAE6.",
+    "t": "rpy",
+    "d": "ELH2kZK9QXgV9utSqRE-jf2Xwk4rgca6xk35Mpo4EeZP",
+    "i": "EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB",
+    "dt": "2020-08-21T17:52:11.000000+00:00",
+    "r": "/loc/scheme",
+    "a": {
+     "eid": "BGKV6v93ue5L5wsgk75t6j8TcdgABMN9x-eIyPi96J3B",
+     "scheme": "https",
+     "url": "https//example.com/witness/wilma"
+    }
+   },
+   "raw": "{\"v\":\"KERICAACAAJSONAAE6.\",\"t\":\"rpy\",\"d\":\"ELH2kZK9QXgV9utSqRE-jf2Xwk4rgca6xk35Mpo4EeZP\",\"i\":\"EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB\",\"dt\":\"2020-08-21T17:52:11.000000+00:00\",\"r\":\"/loc/scheme\",\"a\":{\"eid\":\"BGKV6v93ue5L5wsgk75t6j8TcdgABMN9x-eIyPi96J3B\",\"scheme\":\"https\",\"url\":\"https//example.com/witness/wilma\"}}",
+   "raw_line": 3064,
+   "kind": "JSON",
+   "checks": {
+    "version": {
+     "protocol": "KERI",
+     "version": "2.0",
+     "genus_version": "2.0",
+     "kind": "JSON",
+     "size": 314,
+     "native_prefix": "KERICAACAA"
+    },
+    "field_order": {
+     "declared": [
+      "v",
+      "t",
+      "d",
+      "dt",
+      "r",
+      "a"
+     ],
+     "ok": false,
+     "declared_line": 1046
+    },
+    "size": {
+     "version": 314,
+     "computed": 314,
+     "ok": true
+    },
+    "raw_matches_sad": true,
+    "said": {
+     "fields": [
+      "d"
+     ],
+     "computed": "ELH2kZK9QXgV9utSqRE-jf2Xwk4rgca6xk35Mpo4EeZP",
+     "ok": true
+    }
+   },
+   "consistent": false,
+   "errata": [
+    "fields ['v', 't', 'd', 'i', 'dt', 'r', 'a'] differ from the order the specification declares for rpy ['v', 't', 'd', 'dt', 'r', 'a'] (line 1046)",
+    "url 'https//example.com/witness/wilma' has no scheme:// prefix"
+   ]
+  },
+  {
+   "id": "spec/message/endpoint-location-with-scheme-by-eid-nullify-via-empty-url-rpy-json",
+   "type": "message",
+   "name": "endpoint-location-with-scheme-by-eid-nullify-via-empty-url-rpy-json",
+   "section": "Endpoint Location with Scheme by EID Nullify Via Empty URL",
+   "section_path": [
+    "Annex A",
+    "BADA (Best-Available-Data-Acceptance) Policy",
+    "Endpoint Location with Scheme by EID Nullify Via Empty URL"
+   ],
+   "file": "spec/spec-body.md",
+   "line": 3078,
+   "syntax": "json",
+   "sad": {
+    "v": "KERICAACAAJSONAAEa.",
+    "t": "rpy",
+    "d": "EGWrf4ve6Nlec3iC7ba0-f6YBIHXKRzrGG-bWE-gcHY_",
+    "i": "EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB",
+    "dt": "2020-08-21T17:52:12.000000+00:00",
+    "r": "/loc/scheme",
+    "a": {
+     "eid": "BGKV6v93ue5L5wsgk75t6j8TcdgABMN9x-eIyPi96J3B",
+     "scheme": "https",
+     "url": ""
+    }
+   },
+   "raw": "{\"v\":\"KERICAACAAJSONAAEa.\",\"t\":\"rpy\",\"d\":\"EGWrf4ve6Nlec3iC7ba0-f6YBIHXKRzrGG-bWE-gcHY_\",\"i\":\"EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB\",\"dt\":\"2020-08-21T17:52:12.000000+00:00\",\"r\":\"/loc/scheme\",\"a\":{\"eid\":\"BGKV6v93ue5L5wsgk75t6j8TcdgABMN9x-eIyPi96J3B\",\"scheme\":\"https\",\"url\":\"\"}}",
+   "raw_line": 3097,
+   "kind": "JSON",
+   "checks": {
+    "version": {
+     "protocol": "KERI",
+     "version": "2.0",
+     "genus_version": "2.0",
+     "kind": "JSON",
+     "size": 282,
+     "native_prefix": "KERICAACAA"
+    },
+    "field_order": {
+     "declared": [
+      "v",
+      "t",
+      "d",
+      "dt",
+      "r",
+      "a"
+     ],
+     "ok": false,
+     "declared_line": 1046
+    },
+    "size": {
+     "version": 282,
+     "computed": 282,
+     "ok": true
+    },
+    "raw_matches_sad": true,
+    "said": {
+     "fields": [
+      "d"
+     ],
+     "computed": "EGWrf4ve6Nlec3iC7ba0-f6YBIHXKRzrGG-bWE-gcHY_",
+     "ok": true
+    }
+   },
+   "consistent": false,
+   "errata": [
+    "fields ['v', 't', 'd', 'i', 'dt', 'r', 'a'] differ from the order the specification declares for rpy ['v', 't', 'd', 'dt', 'r', 'a'] (line 1046)"
+   ]
+  }
+ ]
+}

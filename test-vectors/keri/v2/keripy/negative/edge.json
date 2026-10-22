@@ -1,0 +1,17 @@
+{
+ "schema": "keri-negative/1",
+ "generator": {
+  "tool": "gen_vectors.py",
+  "version": "1.0.0",
+  "source": {
+   "implementation": "keripy",
+   "revision": "424a50c03421165c5f289e07a341bd57b8d8ab78",
+   "version": "2.1.0-dev1"
+  },
+  "specification": {
+   "repository": "https://github.com/trustoverip/kswg-keri-specification",
+   "commit": "fbdd4a6155e48248873cccd5cf6f79b6b631a021"
+  }
+ },
+ "vectors": []
+}

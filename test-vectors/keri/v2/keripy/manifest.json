@@ -1,0 +1,46 @@
+{
+ "files": {
+  "kels/positive.json": 15,
+  "negative/edge.json": 0,
+  "negative/negative.json": 11
+ },
+ "gaps": {
+  "kel-rot-c-field-v2": [
+   "gap/kel-rot-c-field-v2/rot-with-c",
+   "gap/kel-rot-c-field-v2/rot-without-c",
+   "gap/kel-rot-c-field-v2/drt-with-c",
+   "gap/kel-rot-c-field-v2/drt-without-c"
+  ],
+  "rm-exn-fields": [
+   "gap/rm-exn-fields/spec-shape",
+   "gap/rm-exn-fields/without-i-ri-x-p"
+  ],
+  "rm-locscheme-signer-ambiguity": [
+   "gap/rm-locscheme-signer-ambiguity"
+  ],
+  "rm-pro-bar-xip-missing": [
+   "gap/rm-pro-bar-xip-missing/xip",
+   "gap/rm-pro-bar-xip-missing/pro",
+   "gap/rm-pro-bar-xip-missing/bar"
+  ],
+  "rm-routed-i-field-ambiguity": [
+   "gap/rm-routed-i-field-ambiguity"
+  ]
+ },
+ "generator": {
+  "source": {
+   "implementation": "keripy",
+   "revision": "424a50c03421165c5f289e07a341bd57b8d8ab78",
+   "version": "2.1.0-dev1"
+  },
+  "specification": {
+   "commit": "fbdd4a6155e48248873cccd5cf6f79b6b631a021",
+   "repository": "https://github.com/trustoverip/kswg-keri-specification"
+  },
+  "tool": "gen_vectors.py",
+  "version": "1.0.0"
+ },
+ "keripy_disagrees_with_spec": [],
+ "pvrsn": "2.0",
+ "source": "keripy"
+}
