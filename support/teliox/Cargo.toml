@@ -16,23 +16,23 @@ storage-postgres = ["keri-core/storage-postgres", "sqlx", "async-std"]
 
 [dependencies]
 keri-core = {path = "../../keriox_core", version= "0.19.0-rc.3", features = ["query"]}
-said = { version = "=2.0.0-rc.3" }
+said = { version = "=2.0.0-rc.4" }
 cesrox = { version = "=2.0.0-rc.2" }
-base64 = "0.13.0"
+base64 = "0.13.1"
 serde = "1.0"
 serde_json = "1.0"
 thiserror = "1.0"
 serde-hex = "0.1"
-chrono = { version = "0.4.18", features = ["serde"] }
-arrayref = "0.3.6"
-serde_cbor = "0.11.1"
-redb = { version = "2.6.0", optional = true }
+chrono = { version = "0.4.45", features = ["serde"] }
+arrayref = "0.3.9"
+serde_cbor = "0.11.2"
+redb = { version = "2.6.4", optional = true }
 sqlx = { version = "0.8", features = ["postgres", "runtime-async-std"], optional = true }
 async-std = { version = "1", features = ["attributes"], optional = true }
 
 
 [dev-dependencies]
-tempfile = "3.1"
+tempfile = "3.27"
 
 [package.metadata.release]
 publish = false

@@ -5,15 +5,15 @@ edition = "2021"
 publish = false
 
 [dependencies]
-async-trait = "0.1.57"
-futures = "0.3.24"
+async-trait = "0.1.92"
+futures = "0.3.34"
 keri-core = { path = "../keriox_core", features = ["oobi", "mailbox"] }
 cesrox = { version = "=2.0.0-rc.2" }
 chrono = "0.4"
 serde = "1"
-tempfile = "3.3.0"
-url = "2.2.2"
-said = { version = "=2.0.0-rc.3" }
+tempfile = "3.27.0"
+url = "2.5.8"
+said = { version = "=2.0.0-rc.4" }
 teliox = {path = "../support/teliox"}
 watcher = { path = "../components/watcher" }
 witness = { path = "../components/witness" }
@@ -21,7 +21,7 @@ keri-controller = { path = "../components/controller" }
 anyhow = "1"
 serde_json = "1.0"
 test-context = "0.4.1"
-actix-rt = "2.10.0"
+actix-rt = "2.15.0"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 metrics = "0.23"

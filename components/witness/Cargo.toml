@@ -10,16 +10,16 @@ repository.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = { version = "1.0.56" }
-async-trait = "0.1.58"
+anyhow = { version = "1.0.104" }
+async-trait = "0.1.92"
 actix-web = { version = "4" }
-clap = { version = "4.1.1", features = ["derive"] }
-derive_more = { version = "0.99.17" }
-figment = { version = "0.10.6", features = ["yaml", "env"] }
-itertools = { version = "0.10.3" }
+clap = { version = "4.6.7", features = ["derive"] }
+derive_more = { version = "0.99.20" }
+figment = { version = "0.10.19", features = ["yaml", "env"] }
+itertools = { version = "0.10.5" }
 serde = { version = "1.0", features = ["derive"] }
-serde_with = "2.2.0"
-url = { version = "2.2.2", features = ["serde"] }
+serde_with = "2.3.3"
+url = { version = "2.5.8", features = ["serde"] }
 keri-core = { path = "../../keriox_core", features = ["oobi-manager", "mailbox"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
@@ -27,10 +27,10 @@ metrics = "0.23"
 metrics-exporter-prometheus = { version = "0.15", default-features = false }
 serde_json = "1.0"
 teliox = {path = "../../support/teliox"}
-thiserror = "1.0.43"
+thiserror = "1.0.69"
 
 [dev-dependencies]
-tempfile = { version = "3.1" }
+tempfile = { version = "3.27" }
 
 [package.metadata.release]
 publish = false

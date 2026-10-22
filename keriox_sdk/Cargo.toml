@@ -12,22 +12,24 @@ keri-controller = { path = "../components/controller", version = "0.19.0-rc.3" }
 keri-core = { path = "../keriox_core", version = "0.19.0-rc.3", features = ["query", "oobi"] }
 cesrox = { version = "=2.0.0-rc.2" }
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+# Insertion order matters: `saidify_json` and envelope wrapping digest and
+# sign the serialized JSON, including nested objects.
+serde_json = { version = "1", features = ["preserve_order"] }
 serde_cbor = { version = "0.11" }
-said = { version = "=2.0.0-rc.3" }
+said = { version = "=2.0.0-rc.4" }
 teliox = { path = "../support/teliox", version = "0.19.0-rc.3" }
 thiserror = "1.0"
 log = "0.4"
-rand = "0.8.5"
-ed25519-dalek = { version = "2.1.0", features = ["rand_core"] }
+rand = "0.8.8"
+ed25519-dalek = { version = "2.2.0", features = ["rand_core"] }
 p256 = { version = "0.9", features = ["ecdsa", "sha256"] }
 k256 = { version = "0.9", features = ["ecdsa", "sha256"] }
 base64 = "0.13"
 indexmap = { version = "2", features = ["serde"] }
-tempfile = "3.10"
-redb = "2.3.0"
-reqwest = { version = "0.12.22", default-features = false, features = ["rustls-tls", "json"] }
-url = { version = "2.2.2", features = ["serde"] }
+tempfile = "3.27"
+redb = "2.6.4"
+reqwest = { version = "0.12.28", default-features = false, features = ["rustls-tls", "json"] }
+url = { version = "2.5.8", features = ["serde"] }
 
 keri-keyprovider = { path = "../keri_keyprovider", version = "0.19.0-rc.3", optional = true, features = ["software"] }
 async-std = { version = "1", optional = true }
@@ -46,7 +48,7 @@ tokio = { version = "1", features = ["full"] }
 witness = { path = "../components/witness" }
 watcher = { path = "../components/watcher" }
 test-context = "0.4.1"
-actix-rt = "2.10.0"
+actix-rt = "2.15.0"
 # Only used by the storage-postgres test to provision its database.
 sqlx = { version = "0.8", features = ["postgres", "runtime-async-std"] }
 async-std = "1"

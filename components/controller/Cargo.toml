@@ -15,25 +15,25 @@ storage-redb = ["keri-core/storage-redb", "teliox/storage-redb"]
 storage-postgres = ["keri-core/storage-postgres", "teliox/storage-postgres"]
 
 [dependencies]
-async-std = { version = "1.12.0", features = ["attributes", "tokio1"] }
-futures = "0.3.24"
+async-std = { version = "1.13.2", features = ["attributes", "tokio1"] }
+futures = "0.3.34"
 keri-core = { path = "../../keriox_core", version = "0.19.0-rc.3", features = ["oobi-manager", "mailbox"] }
 teliox = {path = "../../support/teliox", version = "0.19.0-rc.3" }
 thiserror = "1.0"
 serde_json = "1.0"
-url = "2.3.1"
+url = "2.5.8"
 cesrox = { version = "=2.0.0-rc.2" }
-said = { version = "=2.0.0-rc.3" }
+said = { version = "=2.0.0-rc.4" }
 itertools = "0.11.0"
-redb = "2.3.0"
-serde = "1.0.219"
-reqwest = { version = "0.12.22", default-features = false, features = ["rustls-tls"] }
-async-trait = "0.1.57"
+redb = "2.6.4"
+serde = "1.0.229"
+reqwest = { version = "0.12.28", default-features = false, features = ["rustls-tls"] }
+async-trait = "0.1.92"
 tracing = "0.1"
 
 [dev-dependencies]
 witness = { path = "../witness" }
-tempfile = { version = "3.1" }
+tempfile = { version = "3.27" }
 sqlx = { version = "0.8", features = ["postgres", "runtime-tokio"] }
 
 [[test]]

@@ -10,25 +10,25 @@ repository.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0.69"
-async-trait = "0.1.58"
-clap = { version = "4.1.4", features = ["derive"] }
-itertools = { version = "0.10.3" }
-derive_more = { version = "0.99.17" }
+anyhow = "1.0.104"
+async-trait = "0.1.92"
+clap = { version = "4.6.7", features = ["derive"] }
+itertools = { version = "0.10.5" }
+derive_more = { version = "0.99.20" }
 keri-core = { path = "../../keriox_core", features = ["oobi-manager", "mailbox"] }
 serde = { version = "1.0", features = ["derive"] }
-serde_with = "2.2.0"
+serde_with = "2.3.3"
 actix-web = { version = "4" }
-figment = { version = "0.10.6", features = ["yaml", "env"] }
-url = { version = "2.2.2", features = ["serde"] }
-rand = { version = "0.8.5" }
+figment = { version = "0.10.19", features = ["yaml", "env"] }
+url = { version = "2.5.8", features = ["serde"] }
+rand = { version = "0.8.8" }
 serde_json = "1.0"
-futures = "0.3.24"
+futures = "0.3.34"
 teliox = {path = "../../support/teliox"}
-thiserror = "1.0.63"
-regex = "1.10.6"
+thiserror = "1.0.69"
+regex = "1.13.1"
 tokio = { version = "1", features = ["full"] }
-reqwest = "0.12.22"
+reqwest = "0.12.28"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 metrics = "0.23"
@@ -37,8 +37,8 @@ metrics-exporter-prometheus = { version = "0.15", default-features = false }
 [dev-dependencies]
 keri-controller = { path = "../controller" }
 witness = { path = "../witness" }
-futures = { version = "0.3.13" }
-tempfile = { version = "3.1" }
+futures = { version = "0.3.34" }
+tempfile = { version = "3.27" }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 
 [package.metadata.release]

@@ -20,7 +20,7 @@ thiserror = "1"
 zeroize = { version = "1", features = ["derive"] }
 
 # Software key provider
-ed25519-dalek = { version = "2.1", features = ["rand_core"], optional = true }
+ed25519-dalek = { version = "2.2", features = ["rand_core"], optional = true }
 k256 = { version = "0.9", features = ["ecdsa", "sha256", "zeroize"], optional = true }
 p256 = { version = "0.9", features = ["ecdsa", "sha256", "zeroize"], optional = true }
 rand = { version = "0.8", optional = true }
