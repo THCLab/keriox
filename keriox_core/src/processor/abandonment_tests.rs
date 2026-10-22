@@ -745,3 +745,46 @@ fn a_delegated_identifier_rotates_and_abandons_with_drt() {
         .unwrap();
     assert!(state(&fx, &d.delegate).unwrap().is_abandoned());
 }
+
+/// What a peer receives: the event serialized to CESR and parsed back. A
+/// parsed `drt` carries the same data as a `rot`; only its type tag says it
+/// is delegated.
+fn over_the_wire(notice: Notice) -> Notice {
+    use crate::{actor::parse_event_stream, event_message::signed_event_message::Message};
+
+    let cesr = Message::Notice(notice).to_cesr().unwrap();
+    match parse_event_stream(&cesr).unwrap().remove(0) {
+        Message::Notice(notice) => notice,
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn a_received_delegated_rotation_needs_its_delegators_anchor() {
+    let fx = setup();
+    let (current, next) = (Signer::new(), Signer::new());
+    let d = delegation(&fx, &current, &[key(&next)]);
+
+    let drt = abandonment(
+        EventTypeTag::Drt,
+        &d.delegate,
+        1,
+        &d.dip.digest().unwrap(),
+        &next,
+    );
+    // No anchor: it waits for the delegator instead of being accepted.
+    let unanchored = over_the_wire(signed(&drt, &next, 0, None));
+    fx.processor.process_notice(&unanchored).unwrap();
+    assert_eq!(state(&fx, &d.delegate).unwrap().sn, 0);
+
+    // Anchored: the source seal survives parsing and the rotation applies.
+    let anchor = approve(&fx, &d.delegator, &d.delegator_last, &drt);
+    let anchored = over_the_wire(signed(
+        &drt,
+        &next,
+        0,
+        Some(SourceSeal::new(anchor.data.get_sn(), anchor.digest().unwrap())),
+    ));
+    fx.processor.process_notice(&anchored).unwrap();
+    assert!(state(&fx, &d.delegate).unwrap().is_abandoned());
+}

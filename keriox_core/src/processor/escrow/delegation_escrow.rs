@@ -140,9 +140,11 @@ impl<D: EventDatabase + EscrowCreator + 'static> Notifier for DelegationEscrow<D
             Notification::MissingDelegatingEvent(signed_event) => {
                 // ignore events with no signatures
                 if !signed_event.signatures.is_empty() {
-                    let delegator_id = match &signed_event.event_message.data.event_data {
-                        EventData::Dip(dip) => Ok(dip.delegator.clone()),
-                        EventData::Drt(_drt) => {
+                    // A parsed `drt` carries `rot` data: check the type tag.
+                    let event = &signed_event.event_message;
+                    let delegator_id = match (&event.data.event_data, &event.event_type) {
+                        (EventData::Dip(dip), _) => Ok(dip.delegator.clone()),
+                        (EventData::Rot(_) | EventData::Drt(_), crate::event_message::EventTypeTag::Drt) => {
                             let storage = EventStorage::new(self.db.clone());
                             storage
                                 .get_state(&signed_event.event_message.data.get_prefix())

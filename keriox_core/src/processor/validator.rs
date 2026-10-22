@@ -329,9 +329,12 @@ impl<D: EventDatabase> EventValidator<D> {
         &self,
         signed_event: &SignedEventMessage,
     ) -> Result<Option<EventSeal>, Error> {
-        // If delegated event, check its delegator seal.
-        Ok(match signed_event.event_message.data.get_event_data() {
-            EventData::Dip(dip) => {
+        // If delegated event, check its delegator seal. A parsed `drt`
+        // carries the same data as a `rot`, so only the type tag tells a
+        // delegated rotation apart.
+        let event = &signed_event.event_message;
+        Ok(match (event.data.get_event_data(), &event.event_type) {
+            (EventData::Dip(dip), _) => {
                 let (sn, dig) = signed_event
                     .delegator_seal
                     .as_ref()
@@ -339,7 +342,7 @@ impl<D: EventDatabase> EventValidator<D> {
                     .ok_or_else(|| Error::MissingDelegatorSealError(dip.delegator.clone()))?;
                 Some(EventSeal::new(dip.delegator, sn, dig.into()))
             }
-            EventData::Drt(_drt) => {
+            (EventData::Rot(_) | EventData::Drt(_), crate::event_message::EventTypeTag::Drt) => {
                 let delegator = self
                     .event_storage
                     .get_state(&signed_event.event_message.data.get_prefix())

@@ -765,8 +765,10 @@ fn signed_key_event(
     event_message: KeriEvent<KeyEvent>,
     attachments: Vec<Group>,
 ) -> Result<Notice, ParseError> {
-    match event_message.data.get_event_data() {
-        EventData::Dip(_) | EventData::Drt(_) => {
+    // A parsed `drt` carries the same data as a `rot`; only the type tag
+    // says it is delegated and may carry source seals.
+    match (event_message.data.get_event_data(), &event_message.event_type) {
+        (EventData::Dip(_) | EventData::Drt(_), _) | (_, crate::event_message::EventTypeTag::Drt) => {
             // Scan all attachment groups instead of pattern-matching the
             // last two: a witnessed delegated event in a KEL stream
             // carries source-seal couples, controller signatures *and*
