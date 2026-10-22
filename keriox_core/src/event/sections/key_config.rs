@@ -50,24 +50,15 @@ impl NextKeysData {
         self.next_key_hashes.is_empty()
     }
 
-    /// Checks that the threshold fits the committed digests, as KERIpy
-    /// does: it may not need more keys, nor list more weights, than there
-    /// are digests. So an empty commitment, which ends the log, can only
-    /// have threshold 0.
+    /// Checks that the threshold fits the committed digests, as the KERI
+    /// specification requires: an integer threshold may not need more keys
+    /// than are committed, and a weighted one lists exactly one weight per
+    /// digest. So an empty commitment, which ends the log, can only have
+    /// threshold 0.
     pub fn check_commitment(&self) -> Result<(), String> {
-        let len = self.next_key_hashes.len();
-        let size = match &self.threshold {
-            SignatureThreshold::Simple(t) => *t as usize,
-            SignatureThreshold::Weighted(weighted) => weighted.length(),
-        };
-        if size > len {
-            Err(format!(
-                "next threshold {:?} does not fit the {len} committed keys",
-                self.threshold
-            ))
-        } else {
-            Ok(())
-        }
+        self.threshold
+            .check_fits(self.next_key_hashes.len())
+            .map_err(|e| format!("next {e}"))
     }
 
     pub fn next_keys_hashes(&self) -> Vec<SelfAddressingIdentifier> {
@@ -184,6 +175,17 @@ pub struct KeyConfig {
 }
 
 impl KeyConfig {
+    /// Checks the current keys as the KERI specification requires: the key
+    /// list must not be empty, and the signing threshold must fit it.
+    pub fn check_current(&self) -> Result<(), String> {
+        if self.public_keys.is_empty() {
+            return Err("the current key list must not be empty".to_string());
+        }
+        self.threshold
+            .check_fits(self.public_keys.len())
+            .map_err(|e| format!("current {e}"))
+    }
+
     pub fn new(
         public_keys: Vec<BasicPrefix>,
         next_keys_data: NextKeysData,

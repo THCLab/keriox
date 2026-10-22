@@ -134,6 +134,23 @@ impl SignatureThreshold {
         )))
     }
 
+    /// Checks that the threshold fits a list of `keys` keys or key digests,
+    /// as the KERI specification requires: an integer threshold M of N may
+    /// not need more than the N keys, and a fractionally weighted threshold
+    /// has exactly one weight per key.
+    pub fn check_fits(&self, keys: usize) -> Result<(), String> {
+        match self {
+            SignatureThreshold::Simple(t) if *t as usize > keys => {
+                Err(format!("threshold {t} needs more than the {keys} keys"))
+            }
+            SignatureThreshold::Weighted(weighted) if weighted.length() != keys => Err(format!(
+                "threshold lists {} weights for {keys} keys",
+                weighted.length()
+            )),
+            _ => Ok(()),
+        }
+    }
+
     pub fn enough_signatures(&self, sigs_indexes: &[usize]) -> Result<(), SignatureError> {
         match self {
             SignatureThreshold::Simple(ref t) => {

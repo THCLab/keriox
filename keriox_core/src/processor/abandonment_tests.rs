@@ -316,8 +316,9 @@ fn an_inception_without_next_keys_is_non_transferable_not_abandoned() {
 }
 
 /// Next key commitments whose threshold does not fit the listed digests,
-/// refused as KERIpy does: it may not need more keys, nor list more
-/// weights, than there are digests. So no next keys means threshold 0.
+/// refused as the KERI specification requires: an integer threshold may not
+/// need more keys than are committed, and a weighted one lists exactly one
+/// weight per digest. So no next keys means threshold 0.
 fn unsound_next_commitments() -> Vec<(Vec<BasicPrefix>, SignatureThreshold)> {
     let (a, b) = (key(&Signer::new()), key(&Signer::new()));
     vec![
@@ -325,16 +326,18 @@ fn unsound_next_commitments() -> Vec<(Vec<BasicPrefix>, SignatureThreshold)> {
         (vec![], SignatureThreshold::single_weighted(vec![(1, 2)])),
         (vec![a.clone()], SignatureThreshold::Simple(2)),
         (
-            vec![a, b],
+            vec![a.clone(), b.clone()],
             SignatureThreshold::single_weighted(vec![(1, 2), (1, 2), (1, 2)]),
         ),
+        (vec![a, b], SignatureThreshold::single_weighted(vec![(1, 1)])),
     ]
 }
 
 #[test]
-fn a_zero_next_threshold_with_next_keys_is_accepted_as_in_keripy() {
-    // The spec and KERIpy allow nt=0 with committed keys: the controller
-    // chose a threshold any rotation meets. Only an empty `n` ends the log.
+fn a_zero_next_threshold_with_next_keys_is_accepted() {
+    // The specification allows nt=0 with committed keys (M of N with M=0):
+    // the controller chose a threshold any rotation meets. Only an empty
+    // `n` ends the log.
     let fx = setup();
     let current = Signer::new();
     let icp = EventMsgBuilder::new(EventTypeTag::Icp)

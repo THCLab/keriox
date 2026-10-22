@@ -88,9 +88,9 @@ impl ActorError {
             ActorError::DbError(_) => StatusCode::INTERNAL_SERVER_ERROR,
 
             ActorError::KeriError(err) => match err {
-                KeriError::DeserializeError(_) | KeriError::IncorrectDigest => {
-                    StatusCode::BAD_REQUEST
-                }
+                KeriError::DeserializeError(_)
+                | KeriError::IncorrectDigest
+                | KeriError::MissingSignatures => StatusCode::BAD_REQUEST,
 
                 KeriError::FaultySignatureVerification | KeriError::SignatureVerificationError => {
                     StatusCode::FORBIDDEN

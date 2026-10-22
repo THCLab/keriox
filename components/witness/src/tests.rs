@@ -681,8 +681,8 @@ fn test_invalid_notice() {
         incept_event_unsigned.signatures.clear();
 
         let result = witness.process_notice(Notice::Event(incept_event_unsigned));
-
-        assert!(matches!(result, Ok(())));
+        // Dropped: a key event needs at least one controller signature.
+        assert!(matches!(result, Err(Error::MissingSignatures)));
     }
 
     // query witness

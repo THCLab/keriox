@@ -51,7 +51,7 @@ pub enum Error {
     #[error("Event not yet in database")]
     MissingEvent,
 
-    #[error("Event has no signatures")]
+    #[error("Event has no controller signatures")]
     MissingSignatures,
 
     #[error("No signer")]

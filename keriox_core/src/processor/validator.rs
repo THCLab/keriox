@@ -77,6 +77,12 @@ impl<D: EventDatabase> EventValidator<D> {
         &self,
         signed_event: &SignedEventMessage,
     ) -> Result<Option<IdentifierState>, Error> {
+        // The KERI specification: a key event without at least one
+        // verifiable controller signature is dropped, not escrowed or
+        // otherwise accepted, so spurious unsigned events cannot fill escrows.
+        if signed_event.signatures.is_empty() {
+            return Err(Error::MissingSignatures);
+        }
         // Compute new state
         let new_state = match self
             .event_storage

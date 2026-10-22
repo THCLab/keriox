@@ -243,8 +243,11 @@ mod tests {
         processor.process(&ev1)?;
         assert_eq!(storage.get_state(&id).unwrap().sn, 0);
 
-        // Process out of order event without signatures
-        processor.process(&event_without_signatures)?;
+        // Process out of order event without signatures: dropped.
+        assert!(matches!(
+            processor.process(&event_without_signatures),
+            Err(Error::MissingSignatures)
+        ));
 
         assert!(ooo_escrow
             .escrowed_out_of_order
@@ -255,7 +258,10 @@ mod tests {
 
         // try to process unsigned event, but in order
         processor.process(&ev2)?;
-        processor.process(&event_without_signatures)?;
+        assert!(matches!(
+            processor.process(&event_without_signatures),
+            Err(Error::MissingSignatures)
+        ));
 
         // check partially signed escrow
         let mut escrowed = ps_escrow.escrowed_partially_signed.get_from_sn(&id, 0)?;

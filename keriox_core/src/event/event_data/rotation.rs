@@ -65,6 +65,9 @@ impl EventSemantics for RotationEvent {
                 .chain(&self.witness_config.graft),
         )?;
         self.key_config
+            .check_current()
+            .map_err(Error::SemanticError)?;
+        self.key_config
             .next_keys_data
             .check_commitment()
             .map_err(Error::SemanticError)?;

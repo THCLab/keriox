@@ -903,7 +903,6 @@ pub fn test_custorial_rotation() -> Result<(), Error> {
         .collect::<Vec<_>>();
     let next_public_keys = new_owner_signers
         .iter()
-        .chain(signers[8..10].iter())
         .map(|sig| BasicPrefix::Ed25519(sig.public_key()))
         .collect::<Vec<_>>();
 

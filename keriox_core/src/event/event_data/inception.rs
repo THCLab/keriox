@@ -95,6 +95,9 @@ impl EventSemantics for InceptionEvent {
                 .chain(&self.witness_config.initial_witnesses),
         )?;
         self.key_config
+            .check_current()
+            .map_err(Error::SemanticError)?;
+        self.key_config
             .next_keys_data
             .check_commitment()
             .map_err(Error::SemanticError)?;

@@ -38,9 +38,13 @@ final and no more key events are allowed in it:
   extension beyond the specification: abandoning signals that its controller
   no longer speaks for it. Queries are still answered, so the owner can
   collect receipts for the abandonment. A non-transferable identifier keeps
-  speaking for itself. As in KERIpy, a next threshold may not need more keys,
-  nor list more weights, than there are next key digests, so no next keys
-  means threshold 0.
+  speaking for itself.
+- As the specification requires, an establishment event's key list `k` must
+  not be empty, an integer threshold (`kt`, `nt`) may not need more keys than
+  its list has, and a weighted one has exactly one weight per key (KERIpy only
+  checks for at most one). So no next keys means `nt=0`. A key event without
+  a single controller signature is dropped, not escrowed, and answered with
+  `400`.
 - **Witnesses** receipt the abandonment but answer `410 Gone` to anything
   after it.
 - **Watchers** serve the final log, stop polling the witnesses for it, and
