@@ -758,6 +758,7 @@ fn over_the_wire(notice: Notice) -> Notice {
     let cesr = Message::Notice(notice).to_cesr().unwrap();
     match parse_event_stream(&cesr).unwrap().remove(0) {
         Message::Notice(notice) => notice,
+        #[allow(unreachable_patterns)]
         _ => unreachable!(),
     }
 }
