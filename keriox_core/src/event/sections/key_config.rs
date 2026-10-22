@@ -220,9 +220,13 @@ impl KeyConfig {
         message: &[u8],
         sigs: &[IndexedSignature],
     ) -> Result<bool, SignatureError> {
+        // nothing is signed by no signatures, whatever the threshold (kt=0
+        // is met by any set of signatures, the empty one included)
+        if sigs.is_empty() {
+            Err(SignatureError::NotEnoughSigsError)
         // every index points at a key; checked first because the duplicate
         // count below indexes by it
-        if sigs
+        } else if sigs
             .iter()
             .any(|sig| sig.index.current() as usize >= self.public_keys.len())
         {

@@ -315,7 +315,9 @@ impl Node {
         Self {
             _file: file,
             processor: BasicProcessor::new(db.clone(), Some(bus)),
-            storage: EventStorage::new(db.clone()),
+            // With a mailbox, as on a witness: an exchange is only kept
+            // when it reaches one, so without it every exchange would fail.
+            storage: EventStorage::new_redb(db.clone()),
             escrows,
             oobi: OobiManager::new(db).unwrap(),
         }

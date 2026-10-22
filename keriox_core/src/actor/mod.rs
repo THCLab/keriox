@@ -130,6 +130,11 @@ pub fn process_signed_exn<D: EventDatabase>(
     storage: &EventStorage<D>,
 ) -> Result<(), Error> {
     let exn_message = &exn.exchange_message;
+    // The sender must sign the exchange (signatures MUST be attached to the
+    // message body); an exchange with none reaches no mailbox.
+    if exn.signature.is_empty() {
+        return Err(Error::MissingSignatures);
+    }
     for signature in &exn.signature {
         storage.refuse_abandoned_signer(signature.get_signer().as_ref())?;
     }
