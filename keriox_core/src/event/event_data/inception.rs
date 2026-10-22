@@ -94,6 +94,10 @@ impl EventSemantics for InceptionEvent {
                 .iter()
                 .chain(&self.witness_config.initial_witnesses),
         )?;
+        self.key_config
+            .next_keys_data
+            .check_commitment()
+            .map_err(Error::SemanticError)?;
         let last_est = LastEstablishmentData {
             sn: state.sn,
             digest: state.last_event_digest.clone(),

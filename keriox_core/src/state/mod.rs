@@ -1,5 +1,8 @@
 use std::collections::HashSet;
 
+mod status;
+pub use status::{Abandonment, IdentifierStatus};
+
 use crate::{
     database::rkyv_adapter::said_wrapper::SaidValue,
     error::Error,
@@ -215,6 +218,38 @@ impl IdentifierState {
     /// validates and applies the semantic rules of the event to the event state
     pub fn apply<T: EventSemantics>(self, event: &T) -> Result<Self, Error> {
         event.apply_to(self)
+    }
+
+    /// Whether the identifier can still rotate: its last establishment event
+    /// committed to next keys. When it did not, the key event log is final
+    /// and no more key events are allowed in it.
+    pub fn is_transferable(&self) -> bool {
+        self.prefix == IdentifierPrefix::default() || !self.current.next_keys_data.is_empty()
+    }
+
+    /// Whether the identifier is abandoned: a rotation committed to no next
+    /// keys. An inception that does so makes the identifier non-transferable
+    /// instead; its log is just as final, but its keys keep speaking for it.
+    pub fn is_abandoned(&self) -> bool {
+        // Nothing follows the event that ended the log, so an end after sn 0
+        // was a rotation.
+        !self.is_transferable() && self.sn > 0
+    }
+
+    /// Sn and digest of the rotation that abandoned the identifier. Nothing
+    /// can follow it, so it is always the last event in the log.
+    pub fn abandonment(&self) -> Option<(u64, said::SelfAddressingIdentifier)> {
+        self.is_abandoned()
+            .then(|| (self.sn, self.last_event_digest.said.clone()))
+    }
+
+    /// The error for an event that would follow the end of this log.
+    pub fn final_log_error(&self) -> Error {
+        if self.is_abandoned() {
+            Error::AbandonedIdentifier(self.prefix.clone())
+        } else {
+            Error::NonTransferableIdentifier(self.prefix.clone())
+        }
     }
 }
 

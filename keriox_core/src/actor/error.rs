@@ -96,6 +96,10 @@ impl ActorError {
                     StatusCode::FORBIDDEN
                 }
 
+                KeriError::AbandonedIdentifier(_) | KeriError::NonTransferableIdentifier(_) => {
+                    StatusCode::GONE
+                }
+
                 _ => StatusCode::INTERNAL_SERVER_ERROR,
             },
 
@@ -103,6 +107,24 @@ impl ActorError {
             ActorError::OobiError(OobiError::SignerMismatch) => StatusCode::UNAUTHORIZED,
 
             _ => StatusCode::INTERNAL_SERVER_ERROR,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use http::StatusCode;
+
+    use super::ActorError;
+    use crate::{error::Error, prefix::IdentifierPrefix};
+
+    #[test]
+    fn an_event_after_the_end_of_a_log_is_gone() {
+        for err in [
+            Error::AbandonedIdentifier(IdentifierPrefix::default()),
+            Error::NonTransferableIdentifier(IdentifierPrefix::default()),
+        ] {
+            assert_eq!(ActorError::KeriError(err).http_status_code(), StatusCode::GONE);
         }
     }
 }

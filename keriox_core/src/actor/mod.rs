@@ -111,6 +111,7 @@ pub fn process_signed_oobi<D: EventDatabase + 'static, S: OobiStorageBackend>(
     use crate::processor::validator::EventValidator;
 
     let validator = EventValidator::new(event_storage.events_db.clone());
+    event_storage.refuse_abandoned_signer(signed_oobi.signature.get_signer().as_ref())?;
     // check signature
     validator.verify(&signed_oobi.reply.encode()?, &signed_oobi.signature)?;
     // check digest
@@ -129,6 +130,9 @@ pub fn process_signed_exn<D: EventDatabase>(
     storage: &EventStorage<D>,
 ) -> Result<(), Error> {
     let exn_message = &exn.exchange_message;
+    for signature in &exn.signature {
+        storage.refuse_abandoned_signer(signature.get_signer().as_ref())?;
+    }
     let verification_result =
         exn.signature
             .iter()

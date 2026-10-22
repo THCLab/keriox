@@ -101,6 +101,14 @@ pub enum WeightedThreshold {
 }
 
 impl WeightedThreshold {
+    /// Number of weights, i.e. of keys the threshold speaks about.
+    pub fn length(&self) -> usize {
+        match self {
+            WeightedThreshold::Single(clause) => clause.length(),
+            WeightedThreshold::Multi(clauses) => clauses.length(),
+        }
+    }
+
     pub fn enough_signatures(&self, sigs_indexes: &[usize]) -> Result<(), SignatureError> {
         match self {
             WeightedThreshold::Single(clause) => clause.enough_signatures(0, sigs_indexes),

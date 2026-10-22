@@ -143,6 +143,8 @@ impl<D: EventDatabase> EventValidator<D> {
         &self,
         vrc: &SignedTransferableReceipt,
     ) -> Result<Option<IdentifierState>, Error> {
+        self.event_storage
+            .refuse_abandoned_signer(Some(&vrc.validator_seal.prefix))?;
         if let Some(event) = self
             .event_storage
             .get_event_at_sn(&vrc.body.prefix, vrc.body.sn)
@@ -372,6 +374,8 @@ impl<D: EventDatabase> EventValidator<D> {
             if rpy.signature.get_signer().ok_or(Error::MissingSigner)? != signer_id {
                 return Err(QueryError::Error("Wrong reply message signer".into()).into());
             };
+            self.event_storage
+                .refuse_abandoned_signer(Some(&signer_id))?;
             self.verify(&rpy.reply.encode()?, &rpy.signature)?;
 
             rpy.reply.check_digest()?;

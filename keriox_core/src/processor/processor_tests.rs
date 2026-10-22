@@ -666,7 +666,7 @@ pub fn test_reserve_rotation() -> Result<(), Error> {
         .iter()
         .map(|signer| BasicPrefix::Ed25519(signer.public_key()))
         .collect::<Vec<_>>();
-    let next_pks = signers[5..9]
+    let next_pks = signers[5..10]
         .iter()
         .map(|signer| BasicPrefix::Ed25519(signer.public_key()))
         .collect::<Vec<_>>();

@@ -36,6 +36,12 @@ pub enum Error {
     #[error("Error while applying event: duplicate event")]
     EventDuplicateError,
 
+    #[error("Identifier {0} is abandoned: its key event log accepts no further events")]
+    AbandonedIdentifier(IdentifierPrefix),
+
+    #[error("Identifier {0} is non-transferable: its key event log accepts no further events")]
+    NonTransferableIdentifier(IdentifierPrefix),
+
     #[error("Not enough signatures while verifying")]
     NotEnoughSigsError,
 

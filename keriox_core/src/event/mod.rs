@@ -93,6 +93,11 @@ impl EventSemantics for KeyEvent {
                 // TODO recovery will break this rule when we implement it
                 } else if self.sn < state.sn + 1 {
                     return Err(Error::EventDuplicateError);
+                // A log without next keys (non-transferable or abandoned) is
+                // final, so a later event is refused rather than kept
+                // waiting as out of order.
+                } else if !state.is_transferable() {
+                    return Err(state.final_log_error());
                 } else if self.sn > state.sn + 1 {
                     return Err(Error::EventOutOfOrderError);
                 }

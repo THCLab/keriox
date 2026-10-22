@@ -308,7 +308,11 @@ impl<D: EventDatabase + EscrowCreator + 'static> Notifier for PartiallyWitnessed
 
                                 bus.notify(&Notification::KeyEventAdded(added))?;
                             }
-                            Err(Error::SignatureVerificationError) => {
+                            Err(
+                                Error::SignatureVerificationError
+                        | Error::AbandonedIdentifier(_)
+                        | Error::NonTransferableIdentifier(_),
+                            ) => {
                                 // remove from escrow
                                 self.escrowed_partially_witnessed
                                     .remove(&receipted_event.event_message);
@@ -344,7 +348,9 @@ impl<D: EventDatabase + EscrowCreator + 'static> Notifier for PartiallyWitnessed
 
                         bus.notify(&Notification::KeyEventAdded(signed_event.clone()))?;
                     }
-                    Err(Error::SignatureVerificationError) => (),
+                    Err(Error::SignatureVerificationError
+                        | Error::AbandonedIdentifier(_)
+                        | Error::NonTransferableIdentifier(_)) => (),
                     Err(_) => {
                         self.escrowed_partially_witnessed
                             .insert(&signed_event)

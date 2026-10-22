@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+#[cfg(test)]
+mod abandonment_tests;
 pub mod basic_processor;
 pub mod escrow;
 #[cfg(test)]

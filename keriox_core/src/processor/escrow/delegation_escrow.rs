@@ -87,7 +87,9 @@ impl<D: EventDatabase + EscrowCreator + 'static> DelegationEscrow<D> {
                         // stop processing the escrow if kel was updated. It needs to start again.
                         break;
                     }
-                    Err(Error::SignatureVerificationError) => {
+                    Err(Error::SignatureVerificationError
+                        | Error::AbandonedIdentifier(_)
+                        | Error::NonTransferableIdentifier(_)) => {
                         // remove from escrow
                         self.delegation_escrow.remove(&event.event_message);
                     }

@@ -131,7 +131,8 @@ fn make_rotation(
     witness_to_remove: Vec<BasicPrefix>,
     witness_threshold: u64,
 ) -> Result<KeriEvent<KeyEvent>, Error> {
-    EventMsgBuilder::new(EventTypeTag::Rot)
+    refuse_abandoned(&state)?;
+    EventMsgBuilder::new(rotation_tag(&state))
         .with_prefix(&state.prefix)
         .with_sn(state.sn + 1)
         .with_previous_event(&state.last_event_digest.into())
@@ -173,7 +174,8 @@ pub fn rotate_with_thresholds(
             "improper signature threshold".into(),
         ));
     }
-    let rot = EventMsgBuilder::new(EventTypeTag::Rot)
+    refuse_abandoned(&state)?;
+    let rot = EventMsgBuilder::new(rotation_tag(&state))
         .with_prefix(&state.prefix)
         .with_sn(state.sn + 1)
         .with_previous_event(&state.last_event_digest.into())
@@ -211,7 +213,8 @@ pub fn rotate_with_next_hashes(
             "Improper signature threshold".into(),
         ));
     }
-    EventMsgBuilder::new(EventTypeTag::Rot)
+    refuse_abandoned(&state)?;
+    EventMsgBuilder::new(rotation_tag(&state))
         .with_prefix(&state.prefix)
         .with_sn(state.sn + 1)
         .with_previous_event(&state.last_event_digest.into())
@@ -226,6 +229,63 @@ pub fn rotate_with_next_hashes(
         .map_err(|e| Error::EventGenerationError(e.to_string()))
 }
 
+/// Build the establishment event that abandons an identifier: it reveals
+/// `current_keys`, the keys committed to by the previous event, and commits
+/// to no next keys (`n=[]`, `nt=0`), so nothing can follow it in the log.
+///
+/// A delegated identifier gets a `drt`, which its delegator must anchor
+/// like any other delegated rotation. `anchors` go into the event's seal
+/// list, e.g. seals approving the delegates' own abandonments.
+pub fn abandon(
+    state: IdentifierState,
+    current_keys: Vec<BasicPrefix>,
+    signature_threshold: u64,
+    witness_to_add: Vec<BasicPrefix>,
+    witness_to_remove: Vec<BasicPrefix>,
+    witness_threshold: u64,
+    anchors: Vec<Seal>,
+) -> Result<KeriEvent<KeyEvent>, Error> {
+    if signature_threshold == 0 || signature_threshold > current_keys.len() as u64 {
+        return Err(Error::EventGenerationError(
+            "improper signature threshold".into(),
+        ));
+    }
+    refuse_abandoned(&state)?;
+    EventMsgBuilder::new(rotation_tag(&state))
+        .with_prefix(&state.prefix)
+        .with_sn(state.sn + 1)
+        .with_previous_event(&state.last_event_digest.into())
+        .with_keys(current_keys)
+        .with_threshold(&SignatureThreshold::Simple(signature_threshold))
+        .with_next_keys(vec![])
+        .with_next_threshold(&SignatureThreshold::Simple(0))
+        .with_witness_to_add(&witness_to_add)
+        .with_witness_to_remove(&witness_to_remove)
+        .with_witness_threshold(&SignatureThreshold::Simple(witness_threshold))
+        .with_seal(anchors)
+        .build()
+        .map_err(|e| Error::EventGenerationError(e.to_string()))
+}
+
+/// A delegated identifier rotates with `drt`, any other with `rot`.
+fn rotation_tag(state: &IdentifierState) -> EventTypeTag {
+    if state.delegator.is_some() {
+        EventTypeTag::Drt
+    } else {
+        EventTypeTag::Rot
+    }
+}
+
+/// No event can follow the end of a log (abandoned or non-transferable),
+/// so none is generated.
+fn refuse_abandoned(state: &IdentifierState) -> Result<(), Error> {
+    if state.is_transferable() {
+        Ok(())
+    } else {
+        Err(state.final_log_error())
+    }
+}
+
 pub fn anchor(
     state: IdentifierState,
     payload: &[SelfAddressingIdentifier],
@@ -234,6 +294,7 @@ pub fn anchor(
         .iter()
         .map(|seal| Seal::Digest(DigestSeal::new(seal.to_owned())))
         .collect();
+    refuse_abandoned(&state)?;
     let ixn = EventMsgBuilder::new(EventTypeTag::Ixn)
         .with_prefix(&state.prefix)
         .with_sn(state.sn + 1)
@@ -250,6 +311,7 @@ pub fn anchor_with_seal(
     state: IdentifierState,
     seal_list: &[Seal],
 ) -> Result<KeriEvent<KeyEvent>, Error> {
+    refuse_abandoned(&state)?;
     let ev = EventMsgBuilder::new(EventTypeTag::Ixn)
         .with_prefix(&state.prefix)
         .with_sn(state.sn + 1)

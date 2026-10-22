@@ -44,6 +44,32 @@ impl NextKeysData {
         }
     }
 
+    /// Whether the commitment lists no next keys. An establishment event
+    /// with such a commitment abandons its identifier.
+    pub fn is_empty(&self) -> bool {
+        self.next_key_hashes.is_empty()
+    }
+
+    /// Checks that the threshold fits the committed digests, as KERIpy
+    /// does: it may not need more keys, nor list more weights, than there
+    /// are digests. So an empty commitment, which ends the log, can only
+    /// have threshold 0.
+    pub fn check_commitment(&self) -> Result<(), String> {
+        let len = self.next_key_hashes.len();
+        let size = match &self.threshold {
+            SignatureThreshold::Simple(t) => *t as usize,
+            SignatureThreshold::Weighted(weighted) => weighted.length(),
+        };
+        if size > len {
+            Err(format!(
+                "next threshold {:?} does not fit the {len} committed keys",
+                self.threshold
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
     pub fn next_keys_hashes(&self) -> Vec<SelfAddressingIdentifier> {
         self.next_key_hashes
             .clone()

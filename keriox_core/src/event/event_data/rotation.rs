@@ -64,6 +64,10 @@ impl EventSemantics for RotationEvent {
                 .iter()
                 .chain(&self.witness_config.graft),
         )?;
+        self.key_config
+            .next_keys_data
+            .check_commitment()
+            .map_err(Error::SemanticError)?;
         if state.current.verify_next(&self.key_config)? {
             // witness rotation processing
             let witnesses =

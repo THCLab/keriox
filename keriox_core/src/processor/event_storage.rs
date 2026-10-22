@@ -16,7 +16,7 @@ use crate::{
         signed_event_message::{Notice, SignedNontransferableReceipt},
     },
     prefix::{BasicPrefix, IdentifierPrefix},
-    state::{EventSemantics, IdentifierState},
+    state::{EventSemantics, IdentifierState, IdentifierStatus},
 };
 #[cfg(feature = "mailbox")]
 use crate::{database::mailbox::MailboxData, query::mailbox::QueryArgsMbx};
@@ -71,6 +71,24 @@ impl<D: EventDatabase> EventStorage<D> {
 impl<D: EventDatabase> EventStorage<D> {
     pub fn get_state(&self, identifier: &IdentifierPrefix) -> Option<IdentifierState> {
         self.events_db.get_key_state(identifier)
+    }
+
+    /// Status of an identifier whose log is known, abandonment included.
+    pub fn get_status(&self, identifier: &IdentifierPrefix) -> Option<IdentifierStatus> {
+        self.get_state(identifier)
+            .map(|state| IdentifierStatus::from(&state))
+    }
+
+    /// Refuses a message signed by an abandoned identifier. Its last keys
+    /// can still sign, but nothing they sign speaks for the identifier any
+    /// more, so its replies, exchanges and receipts are not accepted.
+    /// Queries are, so the owner can still collect receipts for the
+    /// abandonment itself.
+    pub fn refuse_abandoned_signer(&self, signer: Option<&IdentifierPrefix>) -> Result<(), Error> {
+        match signer.and_then(|id| self.get_state(id)) {
+            Some(state) if state.is_abandoned() => Err(Error::AbandonedIdentifier(state.prefix)),
+            _ => Ok(()),
+        }
     }
 
     /// Get KEL for Prefix
