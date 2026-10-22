@@ -111,6 +111,7 @@ impl<D: EventDatabase> EventValidator<D> {
             &signed_event.event_message.encode()?,
             &signed_event.signatures,
         )?;
+        self.check_config_traits(signed_event)?;
         // If delegated event, check its delegator seal.
         if let Some(seal) = self.get_delegator_seal(signed_event)? {
             self.validate_seal(seal, &signed_event.event_message)?;
@@ -329,6 +330,51 @@ impl<D: EventDatabase> EventValidator<D> {
             return Err(Error::MissingDelegatingEventError);
         }
         Ok(())
+    }
+
+    /// Drops an event that breaks a configuration trait of the inception of
+    /// its own KEL (`EO`: establishment events only) or of its delegator's
+    /// (`DND`: do not delegate), as the KERI specification requires. A trait
+    /// of a KEL not known yet is checked once that KEL arrives, when the
+    /// event is released from its escrow.
+    fn check_config_traits(&self, signed_event: &SignedEventMessage) -> Result<(), Error> {
+        let event = &signed_event.event_message;
+        let id = event.data.get_prefix();
+        if matches!(event.data.get_event_data(), EventData::Ixn(_))
+            && self.inception_traits(&id).iter().any(|t| t == "EO")
+        {
+            return Err(Error::ConfigTraitViolation(format!(
+                "{id} is establishment only (EO): no interaction events"
+            )));
+        }
+        let delegator = match (event.data.get_event_data(), &event.event_type) {
+            (EventData::Dip(dip), _) => Some(dip.delegator),
+            (_, crate::event_message::EventTypeTag::Drt) => self
+                .event_storage
+                .get_state(&id)
+                .and_then(|state| state.delegator),
+            _ => None,
+        };
+        if let Some(delegator) = delegator {
+            if self.inception_traits(&delegator).iter().any(|t| t == "DND") {
+                return Err(Error::ConfigTraitViolation(format!(
+                    "delegator {delegator} does not delegate (DND)"
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    /// Configuration traits of the inception of `id`'s KEL, if known.
+    fn inception_traits(&self, id: &IdentifierPrefix) -> Vec<String> {
+        self.event_storage
+            .get_event_at_sn(id, 0)
+            .map(|icp| match icp.signed_event_message.event_message.data.event_data {
+                EventData::Icp(icp) => icp.inception_configuration,
+                EventData::Dip(dip) => dip.inception_data.inception_configuration,
+                _ => vec![],
+            })
+            .unwrap_or_default()
     }
 
     fn get_delegator_seal(

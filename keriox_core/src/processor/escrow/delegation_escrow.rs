@@ -89,7 +89,8 @@ impl<D: EventDatabase + EscrowCreator + 'static> DelegationEscrow<D> {
                     }
                     Err(Error::SignatureVerificationError
                         | Error::AbandonedIdentifier(_)
-                        | Error::NonTransferableIdentifier(_)) => {
+                        | Error::NonTransferableIdentifier(_)
+                        | Error::ConfigTraitViolation(_)) => {
                         // remove from escrow
                         self.delegation_escrow.remove(&event.event_message);
                     }

@@ -90,7 +90,8 @@ impl ActorError {
             ActorError::KeriError(err) => match err {
                 KeriError::DeserializeError(_)
                 | KeriError::IncorrectDigest
-                | KeriError::MissingSignatures => StatusCode::BAD_REQUEST,
+                | KeriError::MissingSignatures
+                | KeriError::ConfigTraitViolation(_) => StatusCode::BAD_REQUEST,
 
                 KeriError::FaultySignatureVerification | KeriError::SignatureVerificationError => {
                     StatusCode::FORBIDDEN

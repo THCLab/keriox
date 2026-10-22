@@ -52,7 +52,8 @@ impl<D: EventDatabase + EscrowCreator + 'static> MaybeOutOfOrderEscrow<D> {
                 }
                 Err(Error::SignatureVerificationError
                         | Error::AbandonedIdentifier(_)
-                        | Error::NonTransferableIdentifier(_)) => {
+                        | Error::NonTransferableIdentifier(_)
+                        | Error::ConfigTraitViolation(_)) => {
                     // remove from escrow
                     self.escrowed_out_of_order.remove(&event.event_message);
                 }

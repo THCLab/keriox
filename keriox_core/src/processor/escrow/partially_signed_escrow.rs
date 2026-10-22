@@ -98,7 +98,11 @@ impl<D: EventDatabase + EscrowCreator + 'static> PartiallySignedEscrow<D> {
                 Err(Error::SignatureVerificationError) => {
                     // ignore
                 }
-                Err(Error::AbandonedIdentifier(_) | Error::NonTransferableIdentifier(_)) => {
+                Err(
+                    Error::AbandonedIdentifier(_)
+                    | Error::NonTransferableIdentifier(_)
+                    | Error::ConfigTraitViolation(_),
+                ) => {
                     // the log is final, so the event can never complete
                     self.remove_partially_signed(&new_event.event_message)?;
                 }

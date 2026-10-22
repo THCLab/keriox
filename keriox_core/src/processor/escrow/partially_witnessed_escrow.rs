@@ -311,7 +311,8 @@ impl<D: EventDatabase + EscrowCreator + 'static> Notifier for PartiallyWitnessed
                             Err(
                                 Error::SignatureVerificationError
                         | Error::AbandonedIdentifier(_)
-                        | Error::NonTransferableIdentifier(_),
+                        | Error::NonTransferableIdentifier(_)
+                        | Error::ConfigTraitViolation(_),
                             ) => {
                                 // remove from escrow
                                 self.escrowed_partially_witnessed
@@ -350,7 +351,8 @@ impl<D: EventDatabase + EscrowCreator + 'static> Notifier for PartiallyWitnessed
                     }
                     Err(Error::SignatureVerificationError
                         | Error::AbandonedIdentifier(_)
-                        | Error::NonTransferableIdentifier(_)) => (),
+                        | Error::NonTransferableIdentifier(_)
+                        | Error::ConfigTraitViolation(_)) => (),
                     Err(_) => {
                         self.escrowed_partially_witnessed
                             .insert(&signed_event)

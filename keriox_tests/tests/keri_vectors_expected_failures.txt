@@ -22,7 +22,6 @@ v1/keripy/kels/positive/kel/wit/indexed-cuts-adds/cesr1	cesr1	KERI 1.0 stream wi
 v1/keripy/kels/positive/kel/wit/receipts/cesr1	cesr1	KERI 1.0 stream with CESR 1.0 attachment codes is not parsed (only CESR 2.0 counters)
 v1/keripy/negative/negative/gap/deleg-anchor-in-inception-refused	deleg	a delegated inception anchored in the delegator's inception (s=0) is never accepted
 v1/keripy/negative/negative/gap/deleg-anchor-in-inception-refused/no-source-seal	deleg	a delegated inception anchored in the delegator's inception (s=0) is never accepted
-v1/keripy/negative/negative/gap/deleg-dnd-not-enforced	config	DND is not enforced when the anchor is in a delegator rotation
 v1/keripy/negative/negative/gap/deleg-escrow-one-per-anchor	deleg	two delegated inceptions waiting for the same anchor: one of them is not accepted when it arrives
 v1/keripy/negative/negative/gap/deleg-no-kel-search	deleg	a delegated inception without a source seal attachment is not matched to the anchor already in the delegator's KEL
 v1/keripy/negative/negative/gap/deleg-seal-is-ignored/wrong-i	deleg	the anchoring seal is matched on d only; its i and s are not checked against the delegated event
@@ -30,8 +29,6 @@ v1/keripy/negative/negative/gap/deleg-seal-is-ignored/wrong-i-and-s	deleg	the an
 v1/keripy/negative/negative/gap/deleg-seal-is-ignored/wrong-s	deleg	the anchoring seal is matched on d only; its i and s are not checked against the delegated event
 v1/keripy/negative/negative/gap/dip-without-di-accepted/said-over-body	deleg	a body tagged dip without di is accepted (as an inception)
 v1/keripy/negative/negative/gap/kel-config-did-rb-nrb	config	RB is not enforced: an inception with RB and no registrar backer seal is accepted
-v1/keripy/negative/negative/gap/kel-config-dnd-not-enforced	config	DND is not enforced: a delegated inception from a DND delegator is accepted
-v1/keripy/negative/negative/gap/kel-config-eo-not-enforced	config	EO (establishment only) is not enforced: an ixn after an EO inception is accepted and the later rot dropped
 v1/keripy/negative/negative/gap/kel-duplicity-identical-and-unverified	duplicity	the re-sent identical rotation and an unverified ixn are kept as duplicity evidence
 v1/keripy/negative/negative/gap/kel-escrow-unverified-sigs	signatures	a kt=2 inception sent with a random signature, then with K0's, then with K1's is never accepted
 v1/keripy/negative/negative/gap/kel-invalid-sig-poisons-event	signatures	an event with enough valid signatures and one invalid signature is not accepted

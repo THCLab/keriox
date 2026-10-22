@@ -42,6 +42,9 @@ pub enum Error {
     #[error("Identifier {0} is non-transferable: its key event log accepts no further events")]
     NonTransferableIdentifier(IdentifierPrefix),
 
+    #[error("Event breaks a configuration trait of its KEL: {0}")]
+    ConfigTraitViolation(String),
+
     #[error("Not enough signatures while verifying")]
     NotEnoughSigsError,
 

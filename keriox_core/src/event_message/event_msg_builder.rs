@@ -47,6 +47,7 @@ pub struct EventMsgBuilder {
     witnesses: Vec<BasicPrefix>,
     witness_to_add: Vec<BasicPrefix>,
     witness_to_remove: Vec<BasicPrefix>,
+    config_traits: Vec<String>,
     format: SerializationFormats,
     derivation: HashFunction,
 }
@@ -75,6 +76,7 @@ impl EventMsgBuilder {
             witnesses: vec![],
             witness_to_add: vec![],
             witness_to_remove: vec![],
+            config_traits: vec![],
             format: SerializationFormats::JSON,
             derivation: hash_function,
             next_keys_hashes: None,
@@ -160,6 +162,14 @@ impl EventMsgBuilder {
         }
     }
 
+    /// Configuration traits (`c`) of an inception, e.g. `EO` or `DND`.
+    pub fn with_config_traits(self, config_traits: &[&str]) -> Self {
+        EventMsgBuilder {
+            config_traits: config_traits.iter().map(|t| t.to_string()).collect(),
+            ..self
+        }
+    }
+
     pub fn with_witness_threshold(self, witness_threshold: &SignatureThreshold) -> Self {
         EventMsgBuilder {
             witness_threshold: witness_threshold.clone(),
@@ -190,7 +200,7 @@ impl EventMsgBuilder {
                         tally: self.witness_threshold,
                         initial_witnesses: self.witnesses,
                     },
-                    inception_configuration: vec![],
+                    inception_configuration: self.config_traits.clone(),
                     data: vec![],
                 };
 
@@ -234,7 +244,7 @@ impl EventMsgBuilder {
                         tally: self.witness_threshold,
                         initial_witnesses: self.witnesses,
                     },
-                    inception_configuration: vec![],
+                    inception_configuration: self.config_traits.clone(),
                     data: vec![],
                 };
                 DelegatedInceptionEvent {
