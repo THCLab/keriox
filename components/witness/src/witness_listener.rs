@@ -123,6 +123,10 @@ impl<S: OobiStorageBackend + 'static> WitnessListener<S> {
                     "/forward",
                     actix_web::web::post().to(http_handlers::process_exchange_redb),
                 )
+                .route(
+                    "/identifiers/{id}/state",
+                    actix_web::web::get().to(http_handlers::identifier_state_redb),
+                )
                 .route("/info", actix_web::web::get().to(http_handlers::info))
         })
         .bind(addr)
@@ -484,9 +488,13 @@ pub mod http_handlers {
         let outcome = match data.parse_and_process_notices(post_data.as_bytes()) {
             Ok(()) => "ok",
             Err(e) => {
+                let outcome = match e {
+                    Error::AbandonedIdentifier(_) => "abandoned",
+                    _ => "err",
+                };
                 metrics::counter!(
                     crate::metrics::names::EVENTS_PROCESSED_TOTAL,
-                    "kind" => "notice", "outcome" => "err"
+                    "kind" => "notice", "outcome" => outcome
                 )
                 .increment(1);
                 return Err(ApiError(ActorError::KeriError(e)));
@@ -650,11 +658,31 @@ pub mod http_handlers {
         Ok(HttpResponse::Ok().body(()))
     }
 
-    pub async fn info() -> impl Responder {
+    /// Behaviour a client may depend on, advertised on `/info`.
+    /// `abandonment`: events after an abandonment are refused with 410 and
+    /// `/identifiers/{id}/state` reports it.
+    pub const FEATURES: &[&str] = &["abandonment"];
+
+    pub async fn info() -> HttpResponse {
         let version = env!("CARGO_PKG_VERSION");
         let git_suffix = option_env!("GIT_VERSION_SUFFIX").unwrap_or("");
         let full_version = format!("{version}{git_suffix}");
-        HttpResponse::Ok().json(serde_json::json!({ "version": full_version }))
+        HttpResponse::Ok()
+            .json(serde_json::json!({ "version": full_version, "features": FEATURES }))
+    }
+
+    /// Public, unauthenticated state of an identifier this witness
+    /// receipts, including whether it is abandoned. A hint for operators and
+    /// clients: anyone relying on it verifies the key event log.
+    pub async fn identifier_state<S: OobiStorageBackend>(
+        id: web::Path<IdentifierPrefix>,
+        data: web::Data<Arc<Witness<S>>>,
+    ) -> HttpResponse {
+        match data.event_storage.get_status(&id) {
+            Some(status) => HttpResponse::Ok().json(status),
+            None => HttpResponse::NotFound()
+                .json(serde_json::json!({ "error": "unknown identifier", "prefix": id.to_str() })),
+        }
     }
 
     /// Liveness probe for the admin port. Always returns 200 OK as long as
@@ -682,6 +710,13 @@ pub mod http_handlers {
         data: web::Data<Arc<Witness<RedbOobiStorage>>>,
     ) -> Result<HttpResponse, ApiError> {
         introduce(data).await
+    }
+
+    pub async fn identifier_state_redb(
+        id: web::Path<IdentifierPrefix>,
+        data: web::Data<Arc<Witness<RedbOobiStorage>>>,
+    ) -> HttpResponse {
+        identifier_state(id, data).await
     }
 
     pub async fn process_notice_redb(

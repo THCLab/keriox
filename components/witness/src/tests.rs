@@ -1820,3 +1820,166 @@ fn test_delegated_inception_is_receipted_when_the_anchor_arrives_first(
 
     Ok(())
 }
+
+mod abandonment {
+    use std::sync::Arc;
+
+    use actix_web::{body::to_bytes, http::StatusCode, web, ResponseError};
+    use keri_core::{
+        database::redb::RedbDatabase,
+        error::Error,
+        event::{sections::threshold::SignatureThreshold, KeyEvent},
+        event_message::{
+            event_msg_builder::EventMsgBuilder,
+            msg::KeriEvent,
+            signed_event_message::{Message, Notice},
+            EventTypeTag,
+        },
+        oobi_manager::{RedbOobiManager, RedbOobiStorage},
+        prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
+        signer::Signer,
+    };
+    use tempfile::TempDir;
+    use url::Url;
+
+    use crate::{
+        witness::Witness, witness_listener::http_handlers, witness_processor::WitnessEscrowConfig,
+    };
+
+    fn setup_witness() -> (TempDir, Witness<RedbOobiStorage>) {
+        let root = tempfile::Builder::new()
+            .prefix("test-witness")
+            .tempdir()
+            .unwrap();
+        let oobi_db = Arc::new(RedbDatabase::new(&root.path().join("oobi_database")).unwrap());
+        let witness = Witness::new(
+            Url::parse("http://example.com").unwrap(),
+            Arc::new(Signer::new()),
+            root.path(),
+            WitnessEscrowConfig::default(),
+            RedbOobiManager::new(oobi_db).unwrap(),
+        )
+        .unwrap();
+        (root, witness)
+    }
+
+    fn key(signer: &Signer) -> BasicPrefix {
+        BasicPrefix::Ed25519(signer.public_key())
+    }
+
+    fn signed(event: &KeriEvent<KeyEvent>, signer: &Signer) -> Notice {
+        let sig = SelfSigningPrefix::Ed25519Sha512(signer.sign(event.encode().unwrap()).unwrap());
+        Notice::Event(event.sign(vec![IndexedSignature::new_both_same(sig, 0)], None, None))
+    }
+
+    /// An identifier witnessed by `witness`, abandoned at sn 1. Returns its
+    /// prefix and the abandonment event.
+    fn abandoned(witness: &Witness<RedbOobiStorage>) -> (IdentifierPrefix, KeriEvent<KeyEvent>) {
+        let (current, next) = (Signer::new(), Signer::new());
+        let icp = EventMsgBuilder::new(EventTypeTag::Icp)
+            .with_keys(vec![key(&current)])
+            .with_next_keys(vec![key(&next)])
+            .with_witness_list(&[witness.prefix.clone()])
+            .with_witness_threshold(&SignatureThreshold::Simple(1))
+            .build()
+            .unwrap();
+        let id = icp.data.get_prefix();
+        witness.process_notice(signed(&icp, &current)).unwrap();
+
+        let rot = EventMsgBuilder::new(EventTypeTag::Rot)
+            .with_prefix(&id)
+            .with_sn(1)
+            .with_previous_event(&icp.digest().unwrap())
+            .with_keys(vec![key(&next)])
+            .with_next_keys(vec![])
+            .with_next_threshold(&SignatureThreshold::Simple(0))
+            .with_witness_threshold(&SignatureThreshold::Simple(1))
+            .build()
+            .unwrap();
+        witness.process_notice(signed(&rot, &next)).unwrap();
+        assert!(witness.event_storage.get_state(&id).unwrap().is_abandoned());
+        (id, rot)
+    }
+
+    fn takeover(id: &IdentifierPrefix, rot: &KeriEvent<KeyEvent>) -> Notice {
+        let attacker = Signer::new();
+        let forged = EventMsgBuilder::new(EventTypeTag::Rot)
+            .with_prefix(id)
+            .with_sn(2)
+            .with_previous_event(&rot.digest().unwrap())
+            .with_keys(vec![key(&attacker)])
+            .with_next_keys(vec![key(&Signer::new())])
+            .build()
+            .unwrap();
+        signed(&forged, &attacker)
+    }
+
+    #[test]
+    fn the_abandonment_is_receipted_but_nothing_after_it() {
+        let (_root, witness) = setup_witness();
+        let (id, rot) = abandoned(&witness);
+        assert!(witness
+            .event_storage
+            .get_nt_receipts(&id, 1)
+            .unwrap()
+            .is_some());
+
+        assert!(matches!(
+            witness.process_notice(takeover(&id, &rot)),
+            Err(Error::AbandonedIdentifier(refused)) if refused == id
+        ));
+        assert_eq!(witness.event_storage.get_state(&id).unwrap().sn, 1);
+        assert!(witness
+            .event_storage
+            .get_nt_receipts(&id, 2)
+            .unwrap()
+            .is_none());
+    }
+
+    #[actix_web::test]
+    async fn posting_an_event_after_abandonment_gets_410() {
+        let (_root, witness) = setup_witness();
+        let (id, rot) = abandoned(&witness);
+        let body =
+            String::from_utf8(Message::Notice(takeover(&id, &rot)).to_cesr().unwrap()).unwrap();
+
+        let refused = http_handlers::process_notice(body, web::Data::new(Arc::new(witness)))
+            .await
+            .unwrap_err();
+        assert_eq!(refused.status_code(), StatusCode::GONE);
+    }
+
+    #[actix_web::test]
+    async fn state_endpoint_reports_the_abandonment() {
+        let (_root, witness) = setup_witness();
+        let (id, rot) = abandoned(&witness);
+        let data = web::Data::new(Arc::new(witness));
+
+        let response =
+            http_handlers::identifier_state(web::Path::from(id.clone()), data.clone()).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let status: serde_json::Value =
+            serde_json::from_slice(&to_bytes(response.into_body()).await.unwrap()).unwrap();
+        assert_eq!(status["prefix"], id.to_string());
+        assert_eq!(status["abandoned"]["sn"], 1);
+        assert_eq!(
+            status["abandoned"]["said"],
+            rot.digest().unwrap().to_string()
+        );
+
+        let unknown = IdentifierPrefix::Basic(key(&Signer::new()));
+        let response = http_handlers::identifier_state(web::Path::from(unknown), data).await;
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[actix_web::test]
+    async fn info_advertises_abandonment() {
+        let response = http_handlers::info().await;
+        let info: serde_json::Value =
+            serde_json::from_slice(&to_bytes(response.into_body()).await.unwrap()).unwrap();
+        assert!(info["features"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!("abandonment")));
+    }
+}
