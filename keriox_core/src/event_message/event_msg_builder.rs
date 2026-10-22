@@ -247,7 +247,11 @@ impl EventMsgBuilder {
                 let rotation_data = RotationEvent::new(
                     self.prev_event,
                     key_config,
-                    RotationWitnessConfig::default(),
+                    RotationWitnessConfig {
+                        tally: self.witness_threshold,
+                        prune: self.witness_to_remove,
+                        graft: self.witness_to_add,
+                    },
                     self.data,
                 );
                 KeyEvent::new(prefix, self.sn, EventData::Drt(rotation_data))
