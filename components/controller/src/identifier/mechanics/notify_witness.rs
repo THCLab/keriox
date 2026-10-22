@@ -1,4 +1,5 @@
 use futures::future::join_all;
+use keri_core::actor::prelude::SelfAddressingIdentifier;
 use keri_core::database::{EscrowCreator, EventDatabase};
 use keri_core::oobi_manager::storage::OobiStorageBackend;
 use teliox::database::TelEventDatabase;
@@ -88,5 +89,32 @@ where
             Some(refused) => refused.map(|_| n),
             None => Ok(n),
         }
+    }
+
+    /// Send this identifier's delegated event (`dip` or `drt`) to its
+    /// witnesses again once its delegator has anchored it. A witness holds a
+    /// delegated event that arrives without the delegator's anchoring seal
+    /// for the delegator to approve; after the approval it needs the event
+    /// again, now with the seal, to receipt it.
+    ///
+    /// Returns `false`, sending nothing, while no approval is known locally.
+    pub async fn publish_approved_delegated_event(
+        &mut self,
+        digest: &SelfAddressingIdentifier,
+    ) -> Result<bool, MechanicsError> {
+        let Some(event) = self
+            .known_events
+            .storage
+            .get_event_by_digest(digest)
+            .map(|t| t.signed_event_message)
+        else {
+            return Ok(false);
+        };
+        if event.delegator_seal.is_none() {
+            return Ok(false);
+        }
+        self.to_notify.push(event);
+        self.notify_witnesses().await?;
+        Ok(true)
     }
 }
