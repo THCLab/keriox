@@ -24,6 +24,41 @@ KERI provides the same security and verifiability properties for transactions as
 
 KERIOX is designed around pluggable abstractions that allow it to run in diverse environments. The `EventDatabase` trait abstracts storage so that backends can be swapped at compile time; `redb` is the default (feature-flagged as `storage-redb`), and an in-memory implementation is available for testing or custom backends. Notification dispatch is also pluggable via `NotificationBus`, which supports injectable dispatch strategies suitable for serverless environments such as SQS-backed message routing. The `KeriRuntime<D>` struct bundles the processor, storage, escrows, and notification bus into a single composable unit, enabling thin Lambda handlers or other lightweight entry points.
 
+## Abandoning an identifier
+
+Following the [KERI specification](https://trustoverip.github.io/kswg-keri-specification/),
+an identifier is abandoned by a rotation (`rot`, or `drt` for a delegated
+identifier) that commits to no next keys (`n=[]`, `nt=0`); an inception that
+does so makes it non-transferable instead. Either way its key event log is
+final and no more key events are allowed in it:
+
+- **Core** refuses every later event (`Error::AbandonedIdentifier` or
+  `Error::NonTransferableIdentifier`). For an abandoned identifier it also
+  refuses replies, exchanges and transferable receipts signed by it, an
+  extension beyond the specification: abandoning signals that its controller
+  no longer speaks for it. Queries are still answered, so the owner can
+  collect receipts for the abandonment. A non-transferable identifier keeps
+  speaking for itself. As in KERIpy, a next threshold may not need more keys,
+  nor list more weights, than there are next key digests, so no next keys
+  means threshold 0.
+- **Witnesses** receipt the abandonment but answer `410 Gone` to anything
+  after it.
+- **Watchers** serve the final log, stop polling the witnesses for it, and
+  answer full-log queries without waiting on them.
+- Both serve `GET /identifiers/{aid}/state` without authentication: the
+  identifier's sn, last event, witnesses, whether it is `transferable` and,
+  when abandoned, `"abandoned": {"sn", "said"}`. It is a hint for operators and fresh
+  clients; whoever relies on it verifies the KEL through an authenticated
+  watcher query. Unknown identifiers get `404`.
+- Both list `"features": ["abandonment"]` on `GET /info`. Check every
+  witness and watcher before abandoning an identifier: an older one would
+  still receipt or serve events that follow the abandonment.
+- The **controller** builds the event (`Identifier::abandon`,
+  `abandon_group`), and the **SDK** wraps it (`Identity::abandon`,
+  `KeriStore::abandon`, `operations::abandon`, `Keri::remove_identity`).
+  The SDK refuses to verify anything signed with an abandoned identifier's
+  final keys.
+
 ## License
 
 EUPL 1.2
