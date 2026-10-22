@@ -77,9 +77,9 @@ impl Signature {
     pub fn get_signer(&self) -> Option<IdentifierPrefix> {
         match self {
             Signature::Transferable(signer_data, _) => signer_data.get_signer(),
-            Signature::NonTransferable(Nontransferable::Couplet(couplets)) => {
-                Some(IdentifierPrefix::Basic(couplets[0].0.clone()))
-            }
+            Signature::NonTransferable(Nontransferable::Couplet(couplets)) => couplets
+                .first()
+                .map(|(signer, _signature)| IdentifierPrefix::Basic(signer.clone())),
             Signature::NonTransferable(Nontransferable::Indexed(_)) => None,
         }
     }
@@ -97,14 +97,24 @@ impl Signature {
                     .current;
                 Ok(kc.verify(data, sigs)?)
             }
-            Signature::NonTransferable(Nontransferable::Couplet(couplets)) => Ok(couplets
-                .iter()
-                .all(|(id, sig)| id.verify(data, sig).unwrap())),
+            Signature::NonTransferable(Nontransferable::Couplet(couplets)) => {
+                Ok(couplets_verify(couplets, data))
+            }
             Signature::NonTransferable(Nontransferable::Indexed(_sigs)) => {
                 Err(Error::MissingSigner)
             }
         }
     }
+}
+
+/// Whether every couple signs `data` and there is at least one. A couple
+/// whose signature cannot be checked against its key (another algorithm, an
+/// unsupported key) comes from the network, so it fails rather than panics.
+pub fn couplets_verify(couplets: &[(BasicPrefix, SelfSigningPrefix)], data: &[u8]) -> bool {
+    !couplets.is_empty()
+        && couplets
+            .iter()
+            .all(|(signer, signature)| signer.verify(data, signature).unwrap_or(false))
 }
 
 pub fn signatures_into_groups(sigs: &[Signature]) -> Vec<Group> {

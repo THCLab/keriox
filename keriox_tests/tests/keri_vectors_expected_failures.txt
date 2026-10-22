@@ -44,8 +44,6 @@ v1/keripy/negative/negative/gap/kel-type-tag-body-mismatch/dip-without-di/said-o
 v1/keripy/negative/negative/gap/kel-type-tag-body-mismatch/rot-with-ixn-body	key-event-rules	a body with the fields of an ixn tagged rot is accepted
 v1/keripy/negative/negative/gap/kel-weighted-threshold-validity/unsatisfiable-next	key-event-rules	an nt whose weights sum below 1 (unsatisfiable) is accepted
 v1/keripy/negative/negative/gap/rm-bada-equal-dt	reply-bada	a reply with the same dt as the accepted one replaces it; BADA needs a later dt
-v1/keripy/negative/negative/gap/rm-couple-sig-type-panic/junk	reply-checks	panics (unwrap on WrongSignatureTypeError) on a couple whose signature code does not match the key
-v1/keripy/negative/negative/gap/rm-couple-sig-type-panic/valid-ed25519-bytes	reply-checks	panics (unwrap on WrongSignatureTypeError) on a couple whose signature code does not match the key
 v1/keripy/negative/negative/gap/rm-endrole-bada-key	reply-bada	BADA compares an end role reply with the last reply of any eid for (cid, role), not of the same (cid, role, eid)
 v1/keripy/negative/negative/gap/rm-endrole-cut-no-nullify	reply-bada	the older add replayed after a cut is accepted again
 v1/keripy/negative/negative/gap/rm-ksn-format-undefined	key-state	a key state notice in keripy's shape (vn, f, c, ee, di) is not read

@@ -271,11 +271,11 @@ impl<D: EventDatabase> EventValidator<D> {
                     None => Err(MoreInfoError::EventNotFound(seal).into()),
                 }
             }
-            Signature::NonTransferable(Nontransferable::Couplet(couplets)) => couplets
-                .iter()
-                .all(|(bp, sign)| bp.verify(data, sign).unwrap())
-                .then_some(())
-                .ok_or(VerificationError::VerificationFailure),
+            Signature::NonTransferable(Nontransferable::Couplet(couplets)) => {
+                crate::event_message::signature::couplets_verify(couplets, data)
+                    .then_some(())
+                    .ok_or(VerificationError::VerificationFailure)
+            }
             Signature::NonTransferable(Nontransferable::Indexed(_sigs)) => {
                 Err(VerificationError::MissingSignerId)
             }
