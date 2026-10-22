@@ -102,10 +102,24 @@ impl<S: OobiStorageBackend> WitnessPoller<S> {
         }
     }
 
-    /// Register an AID for periodic polling.
+    /// Register an AID for periodic polling. An AID whose log is final
+    /// (abandoned or non-transferable) is not tracked: there is nothing left
+    /// to fetch.
     pub fn track_aid(&self, id: IdentifierPrefix) {
+        if self.is_final(&id) {
+            tracing::debug!(prefix = %id, "not tracking an AID whose log is final");
+            return;
+        }
         let mut tracked = self.tracked_aids.write().unwrap();
         tracked.entry(id).or_insert_with(TrackedAid::new);
+    }
+
+    /// Whether the AID's log is final: no next keys, so no more events.
+    fn is_final(&self, id: &IdentifierPrefix) -> bool {
+        self.watcher_data
+            .event_storage
+            .get_state(id)
+            .is_some_and(|state| !state.is_transferable())
     }
 
     /// Remove an AID from periodic polling.
@@ -157,11 +171,9 @@ impl<S: OobiStorageBackend> WitnessPoller<S> {
     }
 
     /// Poll only AIDs whose adaptive interval has elapsed.
-    async fn poll_due_aids(&self) {
-        let _cycle_timer = crate::metrics::LatencyTimer::new(
-            crate::metrics::names::POLL_CYCLE_SECONDS,
-            vec![],
-        );
+    pub(crate) async fn poll_due_aids(&self) {
+        let _cycle_timer =
+            crate::metrics::LatencyTimer::new(crate::metrics::names::POLL_CYCLE_SECONDS, vec![]);
         let due_aids: Vec<(IdentifierPrefix, TrackedAid)> = {
             let tracked = self.tracked_aids.read().unwrap();
             tracked
@@ -244,6 +256,12 @@ impl<S: OobiStorageBackend> WitnessPoller<S> {
                         entry.last_changed = Some(Instant::now());
                     }
                 }
+                // Only accepted, fully witnessed events reach the state, so
+                // a state without next keys means the log is final.
+                if self.is_final(aid) {
+                    tracing::info!(prefix = %aid, sn = new_sn, "AID log is final; no longer polled");
+                    tracked_map.remove(aid);
+                }
             }
             Err(e) => {
                 tracing::warn!(
@@ -266,6 +284,13 @@ impl<S: OobiStorageBackend> WitnessPoller<S> {
         aid: &IdentifierPrefix,
         tracked: &TrackedAid,
     ) -> Result<u64, keri_core::actor::error::ActorError> {
+        // A final log (abandoned or non-transferable) cannot grow; report it
+        // so the AID is dropped.
+        if let Some(state) = self.watcher_data.event_storage.get_state(aid) {
+            if !state.is_transferable() {
+                return Ok(state.sn);
+            }
+        }
         // Query witnesses for latest KSN
         let witness_sn = self.watcher_data.query_state(aid).await?;
 

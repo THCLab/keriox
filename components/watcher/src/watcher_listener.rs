@@ -116,7 +116,7 @@ pub mod http_handlers {
 
     use actix_web::{
         http::{header::ContentType, StatusCode},
-        web, HttpResponse, Responder, ResponseError,
+        web, HttpResponse, ResponseError,
     };
     use itertools::Itertools;
     use keri_core::{
@@ -429,11 +429,42 @@ pub mod http_handlers {
         health(data).await
     }
 
-    pub async fn info() -> impl Responder {
+    /// Behaviour a client may depend on, advertised on `/info`.
+    /// `abandonment`: abandoned identifiers are served as final and
+    /// `/identifiers/{id}/state` reports them.
+    pub const FEATURES: &[&str] = &["abandonment"];
+
+    pub async fn info() -> HttpResponse {
         let version = env!("CARGO_PKG_VERSION");
         let git_suffix = option_env!("GIT_VERSION_SUFFIX").unwrap_or("");
         let full_version = format!("{version}{git_suffix}");
-        HttpResponse::Ok().json(serde_json::json!({ "version": full_version }))
+        HttpResponse::Ok()
+            .json(serde_json::json!({ "version": full_version, "features": FEATURES }))
+    }
+
+    /// Public, unauthenticated state of an identifier as this watcher last
+    /// saw it, including whether it is abandoned. It answers from local
+    /// data only, so it cannot be used to make the watcher query witnesses;
+    /// tracked identifiers are kept current by the poller. A hint for
+    /// operators and fresh clients: anyone relying on it verifies the key
+    /// event log through an authenticated query.
+    pub async fn identifier_state<S: OobiStorageBackend>(
+        id: web::Path<IdentifierPrefix>,
+        data: web::Data<Arc<Watcher<S>>>,
+    ) -> HttpResponse {
+        match data.watcher_data.event_storage.get_status(&id) {
+            Some(status) => HttpResponse::Ok().json(status),
+            None => HttpResponse::NotFound().json(
+                serde_json::json!({ "error": "unknown identifier", "prefix": id.to_string() }),
+            ),
+        }
+    }
+
+    pub async fn identifier_state_redb(
+        id: web::Path<IdentifierPrefix>,
+        data: web::Data<Arc<Watcher<RedbOobiStorage>>>,
+    ) -> HttpResponse {
+        identifier_state(id, data).await
     }
 }
 

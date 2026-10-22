@@ -46,6 +46,10 @@ pub fn configure_routes(cfg: &mut web::ServiceConfig) {
         "/query/tel",
         actix_web::web::post().to(http_handlers::process_tel_query_redb),
     )
+    .route(
+        "/identifiers/{id}/state",
+        actix_web::web::get().to(http_handlers::identifier_state_redb),
+    )
     .route("/info", actix_web::web::get().to(http_handlers::info))
     .route(
         "/health",

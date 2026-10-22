@@ -403,3 +403,182 @@ async fn latest_loc_scheme_picks_newest_dt() -> Result<(), ActorError> {
 
     Ok(())
 }
+
+mod abandonment {
+    use std::sync::Arc;
+
+    use actix_web::{body::to_bytes, http::StatusCode, web};
+    use keri_core::{
+        event::{sections::threshold::SignatureThreshold, KeyEvent},
+        event_message::{
+            event_msg_builder::EventMsgBuilder, msg::KeriEvent, signed_event_message::Notice,
+            EventTypeTag,
+        },
+        oobi_manager::RedbOobiStorage,
+        prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
+        signer::Signer,
+    };
+    use tempfile::{Builder, TempDir};
+    use url::Url;
+
+    use crate::{watcher_listener::http_handlers, Watcher, WatcherConfig};
+
+    struct Fixture {
+        _dirs: (TempDir, TempDir),
+        watcher: Arc<Watcher<RedbOobiStorage>>,
+    }
+
+    fn setup() -> Fixture {
+        let tel = Builder::new().prefix("watcher-tel").tempdir().unwrap();
+        let db = Builder::new().prefix("watcher-db").tempdir().unwrap();
+        let watcher = Watcher::setup_with_redb(WatcherConfig {
+            public_address: Url::parse("http://some/dummy/url").unwrap(),
+            db_path: db.path().to_owned(),
+            tel_storage_path: tel.path().join("tel_storage"),
+            ..Default::default()
+        })
+        .unwrap();
+        Fixture {
+            _dirs: (tel, db),
+            watcher: Arc::new(watcher),
+        }
+    }
+
+    fn key(signer: &Signer) -> BasicPrefix {
+        BasicPrefix::Ed25519(signer.public_key())
+    }
+
+    fn signed(event: &KeriEvent<KeyEvent>, signer: &Signer) -> Notice {
+        let sig = SelfSigningPrefix::Ed25519Sha512(signer.sign(event.encode().unwrap()).unwrap());
+        Notice::Event(event.sign(vec![IndexedSignature::new_both_same(sig, 0)], None, None))
+    }
+
+    /// An identifier the watcher knows. It lists a witness the watcher has
+    /// no location for, with threshold 0 so its events need no receipts:
+    /// any attempt to ask that witness fails.
+    struct Known {
+        id: IdentifierPrefix,
+        icp: KeriEvent<KeyEvent>,
+        next: Signer,
+    }
+
+    fn incept(fx: &Fixture) -> Known {
+        let (current, next) = (Signer::new(), Signer::new());
+        let icp = EventMsgBuilder::new(EventTypeTag::Icp)
+            .with_keys(vec![key(&current)])
+            .with_next_keys(vec![key(&next)])
+            .with_witness_list(&[key(&Signer::new())])
+            .with_witness_threshold(&SignatureThreshold::Simple(0))
+            .build()
+            .unwrap();
+        fx.watcher
+            .watcher_data
+            .process_notice(signed(&icp, &current))
+            .unwrap();
+        Known {
+            id: icp.data.get_prefix(),
+            icp,
+            next,
+        }
+    }
+
+    fn abandon(fx: &Fixture, known: &Known) -> KeriEvent<KeyEvent> {
+        let rot = EventMsgBuilder::new(EventTypeTag::Rot)
+            .with_prefix(&known.id)
+            .with_sn(1)
+            .with_previous_event(&known.icp.digest().unwrap())
+            .with_keys(vec![key(&known.next)])
+            .with_next_keys(vec![])
+            .with_next_threshold(&SignatureThreshold::Simple(0))
+            .build()
+            .unwrap();
+        fx.watcher
+            .watcher_data
+            .process_notice(signed(&rot, &known.next))
+            .unwrap();
+        rot
+    }
+
+    #[actix_web::test]
+    async fn an_abandoned_identifier_is_not_polled() {
+        let fx = setup();
+        let poller = &fx.watcher.poller;
+
+        let live = incept(&fx);
+        poller.track_aid(live.id.clone());
+        assert_eq!(poller.tracked_aid_ids(), vec![live.id.clone()]);
+
+        // Abandoned after it was tracked: the next poll drops it, without
+        // asking any witness.
+        abandon(&fx, &live);
+        poller.poll_due_aids().await;
+        assert!(poller.tracked_aid_ids().is_empty());
+
+        // Already abandoned: never tracked.
+        poller.track_aid(live.id.clone());
+        assert!(poller.tracked_aid_ids().is_empty());
+    }
+
+    #[actix_web::test]
+    async fn updating_an_abandoned_log_asks_no_witness() {
+        let fx = setup();
+        let data = &fx.watcher.watcher_data;
+        let known = incept(&fx);
+        // Every attempt to ask the unreachable witness is a recorded failure.
+        let failures = || -> u64 {
+            data.health_tracker
+                .get_all_health()
+                .values()
+                .map(|health| health.failures)
+                .sum()
+        };
+
+        data.update_local_kel(&known.id).await.unwrap();
+        assert_eq!(failures(), 1);
+
+        abandon(&fx, &known);
+        data.update_local_kel(&known.id).await.unwrap();
+        assert_eq!(failures(), 1);
+    }
+
+    #[actix_web::test]
+    async fn state_endpoint_reports_the_abandonment() {
+        let fx = setup();
+        let known = incept(&fx);
+        let data = web::Data::new(fx.watcher.clone());
+        let state = |id: IdentifierPrefix| {
+            let data = data.clone();
+            async move {
+                let response = http_handlers::identifier_state(web::Path::from(id), data).await;
+                let status = response.status();
+                let body: serde_json::Value =
+                    serde_json::from_slice(&to_bytes(response.into_body()).await.unwrap()).unwrap();
+                (status, body)
+            }
+        };
+
+        let (status, body) = state(known.id.clone()).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body["abandoned"], serde_json::Value::Null);
+
+        let rot = abandon(&fx, &known);
+        let (status, body) = state(known.id.clone()).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body["sn"], 1);
+        assert_eq!(body["abandoned"]["said"], rot.digest().unwrap().to_string());
+
+        let (status, _) = state(IdentifierPrefix::Basic(key(&Signer::new()))).await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+    }
+
+    #[actix_web::test]
+    async fn info_advertises_abandonment() {
+        let response = http_handlers::info().await;
+        let info: serde_json::Value =
+            serde_json::from_slice(&to_bytes(response.into_body()).await.unwrap()).unwrap();
+        assert!(info["features"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!("abandonment")));
+    }
+}

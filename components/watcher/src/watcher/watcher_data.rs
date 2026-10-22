@@ -278,6 +278,9 @@ impl<S: OobiStorageBackend> WatcherData<S> {
             } => {
                 let local_state = self.get_state_for_prefix(&args.i);
                 let needs_update = match (local_state, args.s, args.limit) {
+                    // A log without next keys (abandoned or non-transferable)
+                    // is final, so witnesses have nothing newer.
+                    (Some(state), _, _) if !state.is_transferable() => false,
                     (Some(state), Some(sn), Some(limit)) if sn + limit - 1 <= state.sn => false,
                     (Some(state), Some(sn), None) if sn <= state.sn => false,
                     _ => true,
@@ -382,11 +385,16 @@ impl<S: OobiStorageBackend> WatcherData<S> {
     }
 
     pub async fn update_local_kel(&self, id: &IdentifierPrefix) -> Result<(), ActorError> {
-        // Query all witnesses for the latest KSN and get the highest reported SN.
-        let witness_sn = self.query_state(id).await?;
+        let local_state = self.event_storage.get_state(id);
+        let local_sn = local_state.as_ref().map(|s| s.sn).unwrap_or(0);
 
-        // Compare against locally stored KEL state.
-        let local_sn = self.event_storage.get_state(id).map(|s| s.sn).unwrap_or(0);
+        // Query all witnesses for the latest KSN and get the highest reported
+        // SN, unless the log is final (abandoned or non-transferable): then
+        // nothing can follow it.
+        let witness_sn = match local_state {
+            Some(state) if !state.is_transferable() => local_sn,
+            _ => self.query_state(id).await?,
+        };
 
         if local_sn < witness_sn {
             // We are behind — fetch the missing KEL events from witnesses.
