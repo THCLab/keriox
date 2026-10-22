@@ -65,7 +65,7 @@ where
             witness_to_remove,
             witness_threshold,
         )
-        .map_err(|e| MechanicsError::EventGenerationError(e.to_string()))
+        .map_err(MechanicsError::generation)
     }
 
     /// Like [`Identifier::rotate`] but lets the caller set the new
@@ -104,14 +104,54 @@ where
             witness_to_remove,
             witness_threshold,
         )
-        .map_err(|e| MechanicsError::EventGenerationError(e.to_string()))
+        .map_err(MechanicsError::generation)
+    }
+
+    /// Generate the event that abandons this identifier. It reveals
+    /// `current_keys`, the keys the last establishment event committed to,
+    /// and commits to no next keys (`n=[]`, `nt=0`), so the identifier's key
+    /// event log is final: witnesses refuse anything after it.
+    ///
+    /// A delegated identifier gets a `drt`, which its delegator must anchor
+    /// like any delegated rotation. `anchors` go into the event's seal
+    /// list, e.g. seals approving the abandonment of identifiers this one
+    /// delegated. Finish it with [`Self::finalize_rotate`].
+    pub async fn abandon(
+        &self,
+        current_keys: Vec<BasicPrefix>,
+        witness_to_add: Vec<LocationScheme>,
+        witness_to_remove: Vec<BasicPrefix>,
+        witness_threshold: u64,
+        anchors: Vec<Seal>,
+    ) -> Result<String, MechanicsError> {
+        for wit_oobi in &witness_to_add {
+            self.communication.resolve_loc_schema(wit_oobi).await?;
+        }
+        let witnesses_to_add = witness_to_add
+            .iter()
+            .map(|wit| match &wit.eid {
+                IdentifierPrefix::Basic(bp) => Ok(bp.clone()),
+                _ => Err(MechanicsError::WrongWitnessPrefixError),
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let state = self.known_events.get_state(&self.id)?;
+        let event = event_generator::abandon(
+            state,
+            current_keys,
+            1,
+            witnesses_to_add,
+            witness_to_remove,
+            witness_threshold,
+            anchors,
+        )
+        .map_err(MechanicsError::generation)?;
+        String::from_utf8(event.encode()?).map_err(|_e| MechanicsError::EventFormatError)
     }
 
     /// Generate and return interaction event for Identifier
     pub fn anchor(&self, payload: &[SelfAddressingIdentifier]) -> Result<String, MechanicsError> {
         let state = self.known_events.get_state(&self.id)?;
-        event_generator::anchor(state, payload)
-            .map_err(|e| MechanicsError::EventGenerationError(e.to_string()))
+        event_generator::anchor(state, payload).map_err(MechanicsError::generation)
     }
 
     pub fn anchor_with_seal(
@@ -119,8 +159,7 @@ where
         seal_list: &[Seal],
     ) -> Result<KeriEvent<KeyEvent>, MechanicsError> {
         let state = self.known_events.get_state(&self.id)?;
-        event_generator::anchor_with_seal(state, seal_list)
-            .map_err(|e| MechanicsError::EventGenerationError(e.to_string()))
+        event_generator::anchor_with_seal(state, seal_list).map_err(MechanicsError::generation)
     }
 
     pub async fn finalize_rotate(
@@ -331,7 +370,13 @@ where
         if let Some(pos) = key_config.public_keys.iter().position(|pk| pk == &own_pk) {
             return Ok(pos);
         }
-        let own_npk = self.known_events.next_keys_hashes(&self.id)?[0].clone();
+        // An abandoned member has no next key that could be revealed.
+        let own_npk = self
+            .known_events
+            .next_keys_hashes(&self.id)?
+            .into_iter()
+            .next()
+            .ok_or_else(|| MechanicsError::IdentifierAbandoned(self.id.clone()))?;
         key_config
             .public_keys
             .iter()

@@ -61,4 +61,17 @@ pub enum MechanicsError {
 
     #[error("Broadcasting error: {0}")]
     BroadcastingError(#[from] BroadcastingError),
+
+    #[error("Identifier {0} is abandoned: its key event log accepts no further events")]
+    IdentifierAbandoned(IdentifierPrefix),
+}
+
+impl MechanicsError {
+    /// Error from building an event, keeping an abandonment distinguishable.
+    pub(crate) fn generation(e: keri_core::error::Error) -> Self {
+        match e {
+            keri_core::error::Error::AbandonedIdentifier(id) => Self::IdentifierAbandoned(id),
+            e => Self::EventGenerationError(e.to_string()),
+        }
+    }
 }

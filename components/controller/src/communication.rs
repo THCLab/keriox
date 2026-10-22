@@ -215,7 +215,7 @@ where
             vec![Message::Notice(Notice::Event(message.clone()))]
         };
 
-        join_all(
+        let results = join_all(
             itertools::iproduct!(messages_to_send, witness_prefixes).map(
                 |(message, witness_id)| {
                     self.send_message_to(
@@ -228,7 +228,18 @@ where
         )
         .await;
 
-        Ok(())
+        // Publishing is best effort: an unreachable witness is caught up
+        // later. A witness refusing the event because the identifier is
+        // abandoned is final, though, so the caller has to know.
+        match results.into_iter().find_map(|result| match result {
+            Err(SendingError::ActorInternalError(ActorError::KeriError(
+                keri_core::error::Error::AbandonedIdentifier(id),
+            ))) => Some(id),
+            _ => None,
+        }) {
+            Some(id) => Err(MechanicsError::IdentifierAbandoned(id)),
+            None => Ok(()),
+        }
     }
 
     /// Sends identifier's endpoint information to identifiers's watchers.

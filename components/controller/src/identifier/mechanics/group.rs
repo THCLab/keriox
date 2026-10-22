@@ -46,21 +46,12 @@ where
         witness_threshold: Option<u64>,
         delegator: Option<IdentifierPrefix>,
     ) -> Result<(String, Vec<String>), MechanicsError> {
-        let key_config = self
-            .known_events
-            .storage
-            .get_state(&self.id)
-            .ok_or(MechanicsError::UnknownIdentifierError(self.id.clone()))?
-            .current;
+        let key_config = self.live_member_state(&self.id)?.current;
 
         let mut pks = key_config.public_keys;
         let mut npks = key_config.next_keys_data.next_keys_hashes();
         for participant in &participants {
-            let state = self
-                .known_events
-                .storage
-                .get_state(participant)
-                .ok_or(MechanicsError::UnknownIdentifierError(participant.clone()))?;
+            let state = self.live_member_state(participant)?;
             pks.append(&mut state.clone().current.public_keys);
             npks.append(&mut state.clone().current.next_keys_data.next_keys_hashes());
         }
@@ -114,6 +105,10 @@ where
     /// state, so callers must ensure participants' KELs are up to date
     /// before invocation.
     ///
+    /// A delegated identifier (e.g. one created with `incept_group` and a
+    /// delegator) rotates with a `drt`; the last exchange then asks the
+    /// delegator to anchor it, as for the delegated inception.
+    ///
     /// Returns `(serialized_rot, exchanges)` analogous to [`incept_group`].
     pub async fn rotate_group(
         &self,
@@ -121,6 +116,76 @@ where
         new_participants: Vec<IdentifierPrefix>,
         new_signature_threshold: u64,
         new_next_threshold: Option<u64>,
+        witness_to_add: Vec<LocationScheme>,
+        witness_to_remove: Vec<BasicPrefix>,
+        witness_threshold: Option<u64>,
+    ) -> Result<(String, Vec<String>), MechanicsError> {
+        self.group_rotation(
+            group_id,
+            new_participants,
+            new_signature_threshold,
+            GroupNextKeys::Commit(new_next_threshold),
+            witness_to_add,
+            witness_to_remove,
+            witness_threshold,
+        )
+        .await
+    }
+
+    /// Build the rotation that abandons a group identifier, and the
+    /// exchange messages addressed to each co-signer.
+    ///
+    /// Like [`Self::rotate_group`], the participants reveal the keys the
+    /// group committed to, read from their current local state; but the
+    /// event commits to no next keys (`n=[]`, `nt=0`), so nothing can follow
+    /// it. `anchors` go into its seal list, e.g. seals approving the
+    /// abandonment of identifiers the group delegated. Co-signers finish it
+    /// the same way as any group rotation.
+    pub async fn abandon_group(
+        &self,
+        group_id: &IdentifierPrefix,
+        participants: Vec<IdentifierPrefix>,
+        signature_threshold: u64,
+        anchors: Vec<Seal>,
+    ) -> Result<(String, Vec<String>), MechanicsError> {
+        self.group_rotation(
+            group_id,
+            participants,
+            signature_threshold,
+            GroupNextKeys::Abandon(anchors),
+            vec![],
+            vec![],
+            None,
+        )
+        .await
+    }
+
+    /// State of a group member whose keys go into a group event. A member
+    /// without next keys (abandoned or non-transferable) has none to
+    /// contribute, which would silently misalign the group's commitment, so
+    /// it is refused.
+    fn live_member_state(
+        &self,
+        member: &IdentifierPrefix,
+    ) -> Result<keri_core::state::IdentifierState, MechanicsError> {
+        let state = self
+            .known_events
+            .storage
+            .get_state(member)
+            .ok_or_else(|| MechanicsError::UnknownIdentifierError(member.clone()))?;
+        if !state.is_transferable() {
+            return Err(MechanicsError::generation(state.final_log_error()));
+        }
+        Ok(state)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn group_rotation(
+        &self,
+        group_id: &IdentifierPrefix,
+        new_participants: Vec<IdentifierPrefix>,
+        new_signature_threshold: u64,
+        next: GroupNextKeys,
         witness_to_add: Vec<LocationScheme>,
         witness_to_remove: Vec<BasicPrefix>,
         witness_threshold: Option<u64>,
@@ -155,11 +220,7 @@ where
         let mut pks: Vec<BasicPrefix> = Vec::with_capacity(new_participants.len());
         let mut npks: Vec<SelfAddressingIdentifier> = Vec::with_capacity(new_participants.len());
         for participant in &new_participants {
-            let state = self
-                .known_events
-                .storage
-                .get_state(participant)
-                .ok_or_else(|| MechanicsError::UnknownIdentifierError(participant.clone()))?;
+            let state = self.live_member_state(participant)?;
             pks.extend(state.current.public_keys.clone());
             npks.extend(state.current.next_keys_data.next_keys_hashes());
         }
@@ -179,25 +240,36 @@ where
             SignatureThreshold::Simple(t) => *t,
             SignatureThreshold::Weighted(_) => 0,
         };
-        let next_threshold = new_next_threshold.unwrap_or(new_signature_threshold);
         let wit_threshold = witness_threshold.unwrap_or(current_witness_threshold);
+        let delegator = group_state.delegator.clone();
 
-        let rot = event_generator::rotate_with_next_hashes(
-            group_state,
-            pks,
-            npks,
-            new_signature_threshold,
-            next_threshold,
-            witnesses_to_add,
-            witness_to_remove,
-            wit_threshold,
-        )
-        .map_err(|e| MechanicsError::EventGenerationError(e.to_string()))?;
+        let rot = match next {
+            GroupNextKeys::Commit(next_threshold) => event_generator::rotate_with_next_hashes(
+                group_state,
+                pks,
+                npks,
+                new_signature_threshold,
+                next_threshold.unwrap_or(new_signature_threshold),
+                witnesses_to_add,
+                witness_to_remove,
+                wit_threshold,
+            ),
+            GroupNextKeys::Abandon(anchors) => event_generator::abandon(
+                group_state,
+                pks,
+                new_signature_threshold,
+                witnesses_to_add,
+                witness_to_remove,
+                wit_threshold,
+                anchors,
+            ),
+        }
+        .map_err(MechanicsError::generation)?;
 
         let serialized_rot = String::from_utf8(rot.encode()?)
             .map_err(|e| MechanicsError::EventGenerationError(e.to_string()))?;
 
-        let exchanges = new_participants
+        let mut exchanges = new_participants
             .iter()
             .filter(|id| *id != &self.id)
             .map(|id| -> Result<_, _> {
@@ -205,6 +277,16 @@ where
                 String::from_utf8(exn).map_err(|_e| MechanicsError::EventFormatError)
             })
             .collect::<Result<Vec<String>, MechanicsError>>()?;
+
+        // A delegated identifier rotates with a `drt`, which its delegator
+        // has to anchor: ask for it the way a delegated inception does.
+        if let Some(delegator) = delegator {
+            let delegation_request = String::from_utf8(
+                event_generator::exchange(&delegator, &rot, ForwardTopic::Delegate).encode()?,
+            )
+            .map_err(|_e| MechanicsError::EventFormatError)?;
+            exchanges.push(delegation_request);
+        }
 
         Ok((serialized_rot, exchanges))
     }
@@ -272,7 +354,7 @@ where
         }
 
         let ixn = event_generator::anchor_with_seal(group_state, seals)
-            .map_err(|e| MechanicsError::EventGenerationError(e.to_string()))?;
+            .map_err(MechanicsError::generation)?;
 
         let serialized_ixn = String::from_utf8(ixn.encode()?)
             .map_err(|e| MechanicsError::EventGenerationError(e.to_string()))?;
@@ -443,4 +525,13 @@ where
             Ok(())
         }
     }
+}
+
+/// What a group rotation commits to next.
+enum GroupNextKeys {
+    /// The participants' next keys, with this threshold (defaulting to the
+    /// new signature threshold).
+    Commit(Option<u64>),
+    /// Nothing: the rotation abandons the group, anchoring these seals.
+    Abandon(Vec<Seal>),
 }

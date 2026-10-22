@@ -275,7 +275,7 @@ where
             witness_threshold,
             None,
         )
-        .map_err(|e| MechanicsError::EventGenerationError(e.to_string()))
+        .map_err(MechanicsError::generation)
     }
 
     /// Verifies event signature and adds it to kel.
@@ -317,8 +317,7 @@ where
             .storage
             .get_state(id)
             .ok_or(MechanicsError::UnknownIdentifierError(id.clone()))?;
-        event_generator::anchor_with_seal(state, payload)
-            .map_err(|e| MechanicsError::EventGenerationError(e.to_string()))
+        event_generator::anchor_with_seal(state, payload).map_err(MechanicsError::generation)
     }
 
     pub fn get_current_witness_list(

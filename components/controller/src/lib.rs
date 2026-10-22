@@ -13,6 +13,7 @@ pub use keri_core::prefix::{
     BasicPrefix, CesrPrimitive, IdentifierPrefix, SeedPrefix, SelfSigningPrefix,
 };
 pub use keri_core::signer::{CryptoBox, KeyManager};
+pub use keri_core::state::{Abandonment, IdentifierState, IdentifierStatus};
 pub use teliox::{
     event::parse_tel_query_stream, state::vc_state::TelState, state::ManagerTelState,
 };

@@ -7,7 +7,7 @@ use keri_core::{
     oobi_manager::storage::OobiStorageBackend,
     prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     processor::validator::VerificationError,
-    state::IdentifierState,
+    state::{IdentifierState, IdentifierStatus},
 };
 use teliox::database::TelEventDatabase;
 
@@ -84,6 +84,12 @@ where
 
     pub fn find_state(&self, id: &IdentifierPrefix) -> Result<IdentifierState, MechanicsError> {
         self.known_events.get_state(id)
+    }
+
+    /// Status of an identifier whose log is known locally, including
+    /// whether and where it was abandoned.
+    pub fn find_status(&self, id: &IdentifierPrefix) -> Result<IdentifierStatus, MechanicsError> {
+        Ok(IdentifierStatus::from(&self.known_events.get_state(id)?))
     }
 }
 

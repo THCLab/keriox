@@ -11,7 +11,7 @@ use keri_core::{
     oobi::Oobi,
     oobi_manager::storage::OobiStorageBackend,
     prefix::{BasicPrefix, IdentifierPrefix},
-    state::IdentifierState,
+    state::{IdentifierState, IdentifierStatus},
 };
 use mechanics::cache::IdentifierCache;
 use teliox::{
@@ -119,6 +119,19 @@ where
     /// Returns accepted IdentifierState of identifier.
     pub fn find_state(&self, id: &IdentifierPrefix) -> Result<IdentifierState, MechanicsError> {
         self.known_events.get_state(id)
+    }
+
+    /// Status of an identifier whose log is known locally, including
+    /// whether and where it was abandoned.
+    pub fn find_status(&self, id: &IdentifierPrefix) -> Result<IdentifierStatus, MechanicsError> {
+        Ok(IdentifierStatus::from(&self.known_events.get_state(id)?))
+    }
+
+    /// Whether this identifier is abandoned, i.e. its key event log is final.
+    pub fn is_abandoned(&self) -> bool {
+        self.known_events
+            .get_state(&self.id)
+            .is_ok_and(|state| state.is_abandoned())
     }
 
     pub fn find_management_tel_state(

@@ -72,13 +72,21 @@ where
             n += 1;
             jobs.push((witnesses, to_send));
         }
-        join_all(
+        let results = join_all(
             jobs.iter()
                 .map(|(witnesses, ev)| self.communication.publish(witnesses.clone(), ev)),
         )
         .await;
         self.to_notify.clear();
 
-        Ok(n)
+        // Only a refusal of an abandoned identifier's event comes back as
+        // an error; anything else is best effort.
+        match results
+            .into_iter()
+            .find(|result| matches!(result, Err(MechanicsError::IdentifierAbandoned(_))))
+        {
+            Some(refused) => refused.map(|_| n),
+            None => Ok(n),
+        }
     }
 }
