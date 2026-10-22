@@ -1,3 +1,8 @@
+## [0.19.0-rc.4] - 2026-10-22
+
+### ⚙️ Miscellaneous Tasks
+
+- *(release)* Publish only after the checks pass on the tagged commit
 ## [0.19.0-rc.3] - 2026-10-21
 
 ### ⚙️ Miscellaneous Tasks
