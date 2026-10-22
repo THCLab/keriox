@@ -58,8 +58,16 @@ impl<D: EventDatabase + EscrowCreator + 'static> DelegationEscrow<D> {
         anchored_seals: Vec<EventSeal>,
         potential_delegator_seal: SourceSeal,
     ) -> Result<(), Error> {
-        if let Ok(esc) = self.delegation_escrow.get_from_sn(delegator_id, 0) {
-            for event in esc {
+        // One delegating event may approve several delegated events, and
+        // accepting one may let another (e.g. a later drt) validate, so the
+        // escrow is scanned again until a pass accepts nothing.
+        loop {
+            let Ok(esc) = self.delegation_escrow.get_from_sn(delegator_id, 0) else {
+                break;
+            };
+            let escrowed: Vec<SignedEventMessage> = esc.collect();
+            let mut accepted = false;
+            for event in escrowed {
                 let event_digest = event.event_message.digest()?;
                 let seal = anchored_seals.iter().find(|seal| {
                     seal.event_digest() == event_digest
@@ -84,8 +92,7 @@ impl<D: EventDatabase + EscrowCreator + 'static> DelegationEscrow<D> {
                         // remove from escrow
                         self.delegation_escrow.remove(&event.event_message);
                         bus.notify(&Notification::KeyEventAdded(event))?;
-                        // stop processing the escrow if kel was updated. It needs to start again.
-                        break;
+                        accepted = true;
                     }
                     Err(Error::SignatureVerificationError
                         | Error::AbandonedIdentifier(_)
@@ -102,7 +109,10 @@ impl<D: EventDatabase + EscrowCreator + 'static> DelegationEscrow<D> {
                     Err(_e) => (), // keep in escrow,
                 }
             }
-        };
+            if !accepted {
+                break;
+            }
+        }
 
         Ok(())
     }
