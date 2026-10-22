@@ -24,6 +24,7 @@ pub mod oobi_store;
 pub mod operations;
 pub mod protocol;
 pub mod signing;
+pub mod status;
 pub mod store;
 pub mod tel;
 pub mod types;
@@ -39,10 +40,12 @@ pub use error::{Error, Result};
 pub use identifier::{ActionRequired, Identifier, WatcherResponseError};
 pub use oobi_store::OobiStore;
 pub use secrets::{FileSecretsStore, MemorySecretsStore, SecretsStore};
+pub use status::{fetch_identifier_status, supports_abandonment};
 pub use store::KeriStore;
 pub use tel::{check_credential_status, get_credential_status};
 pub use types::{
-    CredentialStatus, DelegationConfig, DelegationRequest, GroupRotationConfig, IdentifierConfig,
+    AbandonConfig, CredentialStatus, DelegationConfig, DelegationRequest, GroupAbandonConfig,
+    GroupRotationConfig, IdentifierConfig,
     MultisigConfig, MultisigRequest, PendingRequest, RotationConfig, SignedEnvelope,
     SignerAlgorithm, StorageConfig, StoreRotationConfig, VerificationIssue, VerifiedPayload,
 };

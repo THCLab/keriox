@@ -131,15 +131,23 @@ pub fn sign_json<S: SigningBackend>(
 /// The signer's KEL must already be known locally — call
 /// [`Identifier::resolve_oobi`] first if you have not seen this signer before.
 ///
+/// A signature made with the keys an abandonment revealed is refused: an
+/// abandoned identifier can never rotate those keys away, so whoever holds
+/// them can sign anything in its name. Signatures under earlier keys stay
+/// verifiable, as after any rotation.
+///
 /// # Errors
 /// - [`Error::CesrParseError`] if `cesr` is not a valid CESR stream.
 /// - [`Error::VerificationFailed`] if one or more signatures do not verify.
+/// - [`Error::IdentifierAbandoned`] if it was signed with the final keys of
+///   an abandoned identifier.
 pub fn verify(identifier: &Identifier, cesr: &[u8]) -> Result<VerifiedPayload> {
     identifier
         .verify_from_cesr(cesr)
         .map_err(|e| Error::VerificationFailed(e.to_string()))?;
 
     let (json_bytes, sigs) = parse_signed_envelope(cesr)?;
+    refuse_final_keys(identifier, &sigs)?;
 
     // Unwrap the JSON envelope produced by `sign`.
     let payload = unwrap_payload(&json_bytes)?;
@@ -151,6 +159,34 @@ pub fn verify(identifier: &Identifier, cesr: &[u8]) -> Result<VerifiedPayload> {
         .unwrap_or_else(|| identifier.id().clone());
 
     Ok(VerifiedPayload { payload, signer_id })
+}
+
+/// Refuses signatures made with the keys that abandoned their identifier.
+fn refuse_final_keys(identifier: &Identifier, sigs: &[Signature]) -> Result<()> {
+    for sig in sigs {
+        let Signature::Transferable(signer_data, _) = sig else {
+            continue;
+        };
+        let Some(signer) = signer_data.get_signer() else {
+            continue;
+        };
+        let Some((abandoned_at, _)) = identifier
+            .find_state(&signer)
+            .ok()
+            .and_then(|state| state.abandonment())
+        else {
+            continue;
+        };
+        let signed_at = match signer_data {
+            SignerData::EventSeal(seal) => seal.sn,
+            // Signed with whatever the keys are now: the final ones.
+            _ => abandoned_at,
+        };
+        if signed_at >= abandoned_at {
+            return Err(Error::IdentifierAbandoned(signer));
+        }
+    }
+    Ok(())
 }
 
 /// Sign a JSON string and return a CESR stream with the raw JSON as payload.

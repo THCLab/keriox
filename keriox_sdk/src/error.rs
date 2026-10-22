@@ -87,14 +87,40 @@ pub enum Error {
         what: String,
     },
 
+    /// The identity is abandoned: its key history is final.
+    #[error("identity {id} is abandoned: its key history is final, so it can no longer sign, rotate or speak for itself; treat anything signed with its final keys as untrusted")]
+    Abandoned {
+        /// The abandoned identity.
+        id: IdentityId,
+    },
+
     /// A lower-level SDK error with no friendlier mapping.
     #[error(transparent)]
-    Advanced(#[from] crate::advanced::Error),
+    Advanced(crate::advanced::Error),
+}
+
+impl From<crate::advanced::Error> for Error {
+    fn from(e: crate::advanced::Error) -> Self {
+        match e {
+            crate::advanced::Error::IdentifierAbandoned(id) => Error::Abandoned {
+                id: IdentityId::from(id),
+            },
+            crate::advanced::Error::AbandonmentAwaitingApproval { id, delegator } => {
+                Error::PendingApproval {
+                    what: format!(
+                        "abandonment of {id} by its delegator {delegator}; once approved, \
+                         call abandon() again"
+                    ),
+                }
+            }
+            e => Error::Advanced(e),
+        }
+    }
 }
 
 impl From<keri_controller::identifier::mechanics::MechanicsError> for Error {
     fn from(e: keri_controller::identifier::mechanics::MechanicsError) -> Self {
-        Error::Advanced(e.into())
+        crate::advanced::Error::from(e).into()
     }
 }
 

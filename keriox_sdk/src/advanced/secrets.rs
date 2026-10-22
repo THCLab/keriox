@@ -28,6 +28,9 @@ pub trait SecretsStore: Send + Sync {
     fn store(&self, alias: &str, name: &str, seed: &str) -> Result<()>;
     /// Load a seed; `Ok(None)` when absent.
     fn load(&self, alias: &str, name: &str) -> Result<Option<String>>;
+    /// Destroy a seed so it cannot be recovered from this store. Deleting
+    /// an absent seed succeeds.
+    fn delete(&self, alias: &str, name: &str) -> Result<()>;
 }
 
 /// The default backend: one plaintext file per seed under the alias
@@ -59,6 +62,28 @@ impl SecretsStore for FileSecretsStore {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
             Err(e) => Err(Error::PersistenceError(format!("cannot read {name}: {e}"))),
         }
+    }
+
+    /// Overwrites the file with zeros and syncs it before unlinking, so the
+    /// seed does not linger in the freed blocks of a plain filesystem.
+    /// Copy-on-write filesystems and SSD wear levelling may still keep old
+    /// copies; use an OS keychain where that matters.
+    fn delete(&self, alias: &str, name: &str) -> Result<()> {
+        use std::io::Write;
+
+        let path = self.root.join(alias).join(name);
+        let len = match std::fs::metadata(&path) {
+            Ok(meta) => meta.len(),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(e) => return Err(Error::PersistenceError(format!("cannot stat {name}: {e}"))),
+        };
+        let shred = || -> std::io::Result<()> {
+            let mut file = std::fs::OpenOptions::new().write(true).open(&path)?;
+            file.write_all(&vec![0u8; len as usize])?;
+            file.sync_all()?;
+            std::fs::remove_file(&path)
+        };
+        shred().map_err(|e| Error::PersistenceError(format!("cannot delete {name}: {e}")))
     }
 }
 
@@ -93,5 +118,13 @@ impl SecretsStore for MemorySecretsStore {
             .map_err(|_| Error::PersistenceError("secrets lock poisoned".into()))?
             .get(&(alias.to_string(), name.to_string()))
             .cloned())
+    }
+
+    fn delete(&self, alias: &str, name: &str) -> Result<()> {
+        self.seeds
+            .write()
+            .map_err(|_| Error::PersistenceError("secrets lock poisoned".into()))?
+            .remove(&(alias.to_string(), name.to_string()));
+        Ok(())
     }
 }

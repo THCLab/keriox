@@ -17,8 +17,8 @@ use std::path::PathBuf;
 
 use keri_controller::{BasicPrefix, IdentifierPrefix, LocationScheme, Oobi, SelfSigningPrefix};
 use keri_core::{
-    actor::prelude::SelfAddressingIdentifier, prefix::IndexedSignature,
-    query::mailbox::SignedMailboxQuery,
+    actor::prelude::SelfAddressingIdentifier, event::sections::threshold::SignatureThreshold,
+    prefix::IndexedSignature, query::mailbox::SignedMailboxQuery,
 };
 
 use crate::advanced::{
@@ -26,8 +26,9 @@ use crate::advanced::{
     error::{Error, Result},
     identifier::{ActionRequired, Identifier},
     types::{
-        DelegationConfig, DelegationRequest, GroupRotationConfig, IdentifierConfig,
-        MultisigConfig, MultisigRequest, PendingRequest, RotationConfig,
+        AbandonConfig, DelegationConfig, DelegationRequest, GroupAbandonConfig,
+        GroupRotationConfig, IdentifierConfig, MultisigConfig, MultisigRequest, PendingRequest,
+        RotationConfig,
     },
 };
 
@@ -284,6 +285,79 @@ pub async fn rotate<S: SigningBackend + Clone + 'static>(
     }
 
     Ok(())
+}
+
+/// Abandon an identifier, notify witnesses, and query mailboxes.
+///
+/// `current_signer` holds the key the last establishment event committed
+/// to, as for [`rotate`]. The abandoning event reveals it and commits to no
+/// next keys, so the identifier's key event log is final: witnesses refuse
+/// anything after it and every verifier sees it as abandoned. The revealed
+/// key can still sign mailbox queries (to collect receipts), but nothing it
+/// signs speaks for the identifier any more.
+///
+/// A delegated identifier gets a `drt`. Witnesses hold it for the delegator,
+/// who finds it among its delegation requests; until the delegator anchors
+/// it the abandonment is pending, so this returns without collecting
+/// receipts. Query the mailbox again once the delegator has approved.
+///
+/// Returns the SAID of the abandoning event.
+///
+/// # Errors
+/// - [`Error::IdentifierAbandoned`] if it already is.
+/// - [`Error::Mechanics`] if witness notification or mailbox queries fail.
+/// - [`Error::Signing`] if signing fails.
+pub async fn abandon<S: SigningBackend + Clone + 'static>(
+    id: &mut Identifier,
+    current_signer: S,
+    config: AbandonConfig,
+) -> Result<SelfAddressingIdentifier> {
+    let witness_threshold = match config.witness_threshold {
+        Some(threshold) => threshold,
+        None => match id.find_state(id.id())?.witness_config.tally {
+            SignatureThreshold::Simple(threshold) => threshold,
+            SignatureThreshold::Weighted(_) => {
+                return Err(Error::Other(
+                    "weighted witness threshold: set AbandonConfig::witness_threshold".into(),
+                ))
+            }
+        },
+    };
+    // Reveal with the same prefix variant the commitment used, as in `rotate`.
+    let current_keys = vec![current_signer.basic_prefix(false)];
+    let event = id
+        .abandon(
+            current_keys,
+            config.witness_to_add,
+            config.witness_to_remove,
+            witness_threshold,
+            config.anchors,
+        )
+        .await?;
+
+    let said = match keri_core::event_message::cesr_adapter::parse_event_type(event.as_bytes()) {
+        Ok(keri_core::event_message::cesr_adapter::EventType::KeyEvent(ke)) => ke
+            .digest()
+            .map_err(|e| Error::EncodingError(e.to_string()))?,
+        _ => return Err(Error::EncodingError("abandonment is not a key event".into())),
+    };
+    let sig = wrap_sig(&current_signer, event.as_bytes())?;
+    id.finalize_rotate(event.as_bytes(), sig).await?;
+    id.notify_witnesses().await?;
+
+    // A delegated identifier's `drt` waits for its delegator. Until then the
+    // witnesses know the old keys and would refuse queries signed with the
+    // revealed one.
+    let state = id.find_state(id.id())?;
+    if state.delegator.is_some() {
+        return Ok(said);
+    }
+    let witnesses = state.witness_config.witnesses;
+    for witness in witnesses {
+        _query_mailbox(id, &current_signer, &witness).await?;
+    }
+
+    Ok(said)
 }
 
 /// Incept a credential registry and return its identifier.
@@ -1143,6 +1217,55 @@ pub async fn rotate_group<S: SigningBackend + Clone + 'static>(
     for witness in &caller_witnesses {
         _query_mailbox(id, signer, witness).await?;
     }
+    let group_witnesses = id.find_state(group_id)?.witness_config.witnesses;
+    for witness in &group_witnesses {
+        _query_mailbox_for(id, signer, group_id, witness).await?;
+    }
+
+    Ok(())
+}
+
+/// Abandon a multisig group identifier, or a delegated identifier through
+/// its delegate's member identifier (initiator side).
+///
+/// Like [`rotate_group`], each member first rotates its own identifier so
+/// its current key is the one the group committed to; `signer` holds the
+/// caller's. The event commits to no next keys. Other members co-sign with
+/// [`accept_multisig`]. For a delegated identifier the delegator receives a
+/// delegation request and anchors the `drt` like the delegated inception
+/// (or through [`build_delegation_approval`] out of band).
+///
+/// # Errors
+/// - [`Error::IdentifierAbandoned`] if the group or a member is abandoned.
+/// - [`Error::Mechanics`] on network failures.
+/// - [`Error::Signing`] if signing fails.
+pub async fn abandon_group<S: SigningBackend + Clone + 'static>(
+    id: &mut Identifier,
+    signer: &S,
+    group_id: &IdentifierPrefix,
+    config: GroupAbandonConfig,
+) -> Result<()> {
+    let (event, exn_messages) = id
+        .abandon_group(
+            group_id,
+            config.participants,
+            config.signature_threshold,
+            config.anchors,
+        )
+        .await?;
+
+    let sig = wrap_sig(signer, event.as_bytes())?;
+    let mut exchange_pairs = Vec::with_capacity(exn_messages.len());
+    for exn in &exn_messages {
+        let sig_exn = wrap_sig(signer, exn.as_bytes())?;
+        let exn_index_sig = id.sign_with_index(sig_exn, 0)?;
+        exchange_pairs.push((exn.as_bytes().to_vec(), exn_index_sig));
+    }
+
+    id.finalize_group_event(event.as_bytes(), sig, exchange_pairs)
+        .await?;
+    id.notify_witnesses().await?;
+
     let group_witnesses = id.find_state(group_id)?.witness_config.witnesses;
     for witness in &group_witnesses {
         _query_mailbox_for(id, signer, group_id, witness).await?;

@@ -86,8 +86,15 @@ impl Identity {
 
     /// Sign a payload. The result is a self-contained CESR string anyone can
     /// verify with [`crate::Keri::verify`] once they know this identity.
+    ///
+    /// An abandoned identity cannot sign: verifiers would refuse it anyway.
     pub async fn sign(&self, payload: &[u8]) -> Result<SignedMessage> {
         let identifier = self.keri.store.load(&self.alias)?;
+        if identifier.is_abandoned() {
+            return Err(Error::Abandoned {
+                id: self.id.clone(),
+            });
+        }
         let envelope = match &self.keys {
             Keys::Software => {
                 let signer = self.keri.store.load_signer(&self.alias)?;
@@ -176,6 +183,69 @@ impl Identity {
             next: new_next,
         };
         Ok(())
+    }
+
+    /// End this identity for good (KERI abandonment).
+    ///
+    /// The pre-committed next key is revealed in a final rotation that
+    /// commits to no next keys, so the identity's key history can never
+    /// change again: its witnesses refuse anything after it, and everyone
+    /// who looks it up sees it as abandoned. It can no longer sign, rotate
+    /// or issue, and verifiers refuse anything signed with its final keys.
+    /// Messages it signed before stay verifiable. Witnesses are notified and
+    /// receipts collected before this returns.
+    ///
+    /// This cannot be undone. Afterwards, remove the local keys and data
+    /// with [`crate::Keri::remove_identity`].
+    pub async fn abandon(&self) -> Result<()> {
+        match &self.keys {
+            // Not retried: once the event is accepted, a retry could only
+            // fail because the identity is already abandoned.
+            Keys::Software => Ok(self.keri.store.abandon(&self.alias).await?),
+            #[cfg(feature = "keyprovider")]
+            Keys::Provider { .. } => Err(Error::InvalidInput {
+                expected: "software-keyed identity for abandon()",
+                cause: "this identity's keys live in an external key provider; \
+                        abandon with Identity::abandon_with_provider()"
+                    .into(),
+            }),
+        }
+    }
+
+    /// End a provider-backed identity for good; see [`Identity::abandon`].
+    ///
+    /// The provider holding the committed next key signs the final
+    /// rotation. Delete both providers' keys afterwards: nothing they sign
+    /// is trusted any more.
+    #[cfg(feature = "keyprovider")]
+    pub async fn abandon_with_provider(&mut self) -> Result<()> {
+        use crate::advanced::keyprovider_adapter::KeriSigner;
+
+        let Keys::Provider { next, .. } = &self.keys else {
+            return Err(Error::InvalidInput {
+                expected: "provider-backed identity",
+                cause: "this identity uses software keys; call abandon() instead".into(),
+            });
+        };
+        let revealing_signer = KeriSigner::Provider(next.clone());
+        self.keri
+            .store
+            .abandon_with_signer(
+                &self.alias,
+                revealing_signer.clone(),
+                crate::advanced::types::AbandonConfig::default(),
+            )
+            .await?;
+        self.keys = Keys::Provider {
+            current: revealing_signer,
+            next: next.clone(),
+        };
+        Ok(())
+    }
+
+    /// Whether this identity is abandoned, i.e. its key history is final.
+    pub fn is_abandoned(&self) -> Result<bool> {
+        Ok(self.keri.store.load(&self.alias)?.is_abandoned())
     }
 
     /// Issue a credential: anchor the payload's digest in this identity's

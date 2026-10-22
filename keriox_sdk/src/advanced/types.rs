@@ -112,6 +112,38 @@ pub struct RotationConfig {
     pub witness_threshold: u64,
 }
 
+/// Configuration for abandoning an identifier.
+///
+/// Used by [`crate::advanced::operations::abandon`]. The default changes no
+/// witnesses and anchors nothing.
+#[derive(Debug, Clone, Default)]
+pub struct AbandonConfig {
+    /// Witnesses to add in the abandoning event.
+    pub witness_to_add: Vec<LocationScheme>,
+    /// Witnesses to remove in the abandoning event.
+    pub witness_to_remove: Vec<BasicPrefix>,
+    /// New witness threshold. Keeps the current one when `None`, so the
+    /// abandonment is receipted as strongly as the events before it.
+    pub witness_threshold: Option<u64>,
+    /// Seals to anchor in the abandoning event, e.g. seals approving the
+    /// abandonment of identifiers this one delegated.
+    pub anchors: Vec<keri_core::event::sections::seal::Seal>,
+}
+
+/// Configuration for abandoning a multisig group identifier.
+///
+/// Used by [`crate::advanced::operations::abandon_group`].
+#[derive(Debug, Clone, Default)]
+pub struct GroupAbandonConfig {
+    /// The members revealing the keys the group committed to (caller
+    /// included).
+    pub participants: Vec<IdentifierPrefix>,
+    /// Number of member signatures the abandoning event needs.
+    pub signature_threshold: u64,
+    /// Seals to anchor in the abandoning event.
+    pub anchors: Vec<keri_core::event::sections::seal::Seal>,
+}
+
 /// Configuration for a store-managed key rotation with witness changes.
 ///
 /// Used by [`crate::advanced::store::KeriStore::rotate_with`]. For a plain key roll

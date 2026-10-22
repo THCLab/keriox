@@ -30,21 +30,33 @@ use std::{
 };
 
 use keri_controller::IdentifierPrefix;
-use keri_core::{prefix::SeedPrefix, signer::Signer};
+use keri_core::{
+    actor::prelude::SelfAddressingIdentifier, prefix::SeedPrefix, signer::Signer,
+};
 
 use crate::advanced::{
     controller::Controller,
     error::{Error, Result},
     identifier::Identifier,
     meta::MetaDb,
-    operations::{create_identifier_with_controller, create_multisig, rotate_group},
+    operations::{
+        abandon_group, create_identifier_with_controller, create_multisig, rotate_group,
+        SigningBackend,
+    },
     secrets::{FileSecretsStore, SecretsStore},
-    types::{DelegationConfig, GroupRotationConfig, IdentifierConfig, MultisigConfig},
+    types::{
+        AbandonConfig, DelegationConfig, GroupAbandonConfig, GroupRotationConfig,
+        IdentifierConfig, MultisigConfig,
+    },
 };
 
 /// Seed fields are routed to the [`SecretsStore`]; everything else goes to
 /// the metadata database.
 const SEED_FIELDS: [&str; 2] = ["priv_key", "next_priv_key"];
+
+/// Metadata field set while a delegated identifier's abandonment waits for
+/// its delegator.
+const ABANDONMENT_PENDING: &str = "abandonment_pending";
 
 /// How a store places its event databases on the chosen backend.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -286,6 +298,7 @@ impl KeriStore {
     /// - [`Error::Signing`] if key generation or signing fails.
     /// - Propagates errors from [`crate::advanced::operations::rotate`].
     pub async fn rotate(&self, alias: &str) -> Result<()> {
+        self.refuse_abandoned(alias)?;
         // KERI rotation reveals the previously pre-committed next-key.
         // The event's controlling keys are the next-signer's keys (now
         // becoming current), and the signature must come from that same
@@ -330,6 +343,7 @@ impl KeriStore {
         alias: &str,
         config: crate::advanced::types::StoreRotationConfig,
     ) -> Result<()> {
+        self.refuse_abandoned(alias)?;
         let next_seed = self.load_seed(alias, "next_priv_key")?;
         let new_next_seed = match config.new_next_seed {
             Some(seed) => seed,
@@ -354,6 +368,123 @@ impl KeriStore {
 
         self.save_rotation(alias, new_next_seed)?;
         Ok(())
+    }
+
+    /// Abandon a software-keyed identifier: reveal its committed next key in
+    /// an event that commits to no next keys, so its key event log is final.
+    /// Witnesses are notified and receipts collected before this returns.
+    ///
+    /// Afterwards the revealed key is the alias's only seed: it can still
+    /// sign mailbox queries, but nothing it signs speaks for the identifier.
+    /// Destroy it with [`KeriStore::remove_alias`] once nothing more is
+    /// needed from the witnesses.
+    ///
+    /// # Errors
+    /// - [`Error::IdentifierAbandoned`] if it already is.
+    /// - Propagates errors from [`crate::advanced::operations::abandon`].
+    pub async fn abandon(&self, alias: &str) -> Result<()> {
+        self.abandon_with(alias, AbandonConfig::default()).await
+    }
+
+    /// Like [`KeriStore::abandon`], with witness changes or anchored seals.
+    ///
+    /// A delegated identifier's abandonment needs its delegator's approval:
+    /// the first call submits it and fails with
+    /// [`Error::AbandonmentAwaitingApproval`]; once the delegator has
+    /// approved, call it again to collect the result (`config` is then
+    /// ignored).
+    ///
+    /// # Errors
+    /// Same as [`KeriStore::abandon`].
+    pub async fn abandon_with(&self, alias: &str, config: AbandonConfig) -> Result<()> {
+        if self.read_meta(alias, ABANDONMENT_PENDING)?.is_some() {
+            return self.complete_abandonment(alias).await;
+        }
+        self.refuse_abandoned(alias)?;
+        let signer = self.load_next_signer(alias)?;
+        let said = self.abandon_with_signer(alias, signer, config).await?;
+        if self.load(alias)?.is_abandoned() {
+            self.retire_next_seed(alias)
+        } else {
+            self.write_file(alias, ABANDONMENT_PENDING, &said.to_string())?;
+            Err(self.awaiting_approval(alias)?)
+        }
+    }
+
+    /// Picks up a delegated identifier's abandonment once its delegator has
+    /// anchored it: the delegator's approval and the witness receipts both
+    /// arrive through the mailbox.
+    async fn complete_abandonment(&self, alias: &str) -> Result<()> {
+        use crate::advanced::operations::query_mailbox;
+
+        let said: SelfAddressingIdentifier = self
+            .read_file(alias, ABANDONMENT_PENDING)?
+            .parse()
+            .map_err(|_| Error::PersistenceError("invalid pending abandonment".into()))?;
+        let mut id = self.load(alias)?;
+        let witnesses = id.find_state(id.id())?.witness_config.witnesses;
+        // The delegator's approval arrives in the mailbox, which the
+        // witnesses still guard with the old keys.
+        let old_keys = self.load_signer(alias)?;
+        for witness in &witnesses {
+            query_mailbox(&mut id, old_keys.clone(), witness).await?;
+        }
+        // The witnesses only held the `drt` for the delegator: send it again
+        // with the anchoring seal, then collect the receipts it now gets,
+        // under the revealed key.
+        if !id.publish_approved_delegated_event(&said).await? {
+            return Err(self.awaiting_approval(alias)?);
+        }
+        let revealed = self.load_next_signer(alias)?;
+        for witness in &witnesses {
+            query_mailbox(&mut id, revealed.clone(), witness).await?;
+        }
+        if !self.load(alias)?.is_abandoned() {
+            return Err(self.awaiting_approval(alias)?);
+        }
+        self.meta.remove(alias, ABANDONMENT_PENDING)?;
+        self.retire_next_seed(alias)
+    }
+
+    fn awaiting_approval(&self, alias: &str) -> Result<Error> {
+        Ok(Error::AbandonmentAwaitingApproval {
+            id: self.load(alias)?.id().clone(),
+            delegator: self.load_delegator(alias)?,
+        })
+    }
+
+    /// After an abandonment the revealed next key is the current one, and
+    /// there is no next key any more.
+    fn retire_next_seed(&self, alias: &str) -> Result<()> {
+        let next_content = self.read_file(alias, "next_priv_key")?;
+        self.write_file(alias, "priv_key", &next_content)?;
+        self.secrets.delete(alias, "next_priv_key")
+    }
+
+    /// An abandoned identifier has no next key left to sign anything with;
+    /// say so rather than report the missing seed.
+    fn refuse_abandoned(&self, alias: &str) -> Result<()> {
+        let id = self.load(alias)?;
+        if id.is_abandoned() {
+            Err(Error::IdentifierAbandoned(id.id().clone()))
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Abandon an identifier whose committed next key is held by `signer`,
+    /// e.g. an external key provider. No seeds are touched.
+    ///
+    /// # Errors
+    /// Same as [`KeriStore::abandon`].
+    pub async fn abandon_with_signer<S: SigningBackend + Clone + 'static>(
+        &self,
+        alias: &str,
+        signer: S,
+        config: AbandonConfig,
+    ) -> Result<SelfAddressingIdentifier> {
+        let mut id = self.load(alias)?;
+        crate::advanced::operations::abandon(&mut id, signer, config).await
     }
 
     /// Read the current signing seed for an alias (e.g. for identifier export).
@@ -598,6 +729,64 @@ impl KeriStore {
 
         self.persist_group_metadata(group_alias, &group_id, &new_members, &member_alias)?;
         Ok(())
+    }
+
+    /// Abandon a multisig group identifier (initiator side), following
+    /// [`KeriStore::rotate_multisig_group`]: the caller's member identifier
+    /// must already have rotated so its current key is the one the group
+    /// committed to. Other members co-sign with
+    /// [`crate::advanced::operations::accept_multisig`].
+    ///
+    /// # Errors
+    /// - [`Error::PersistenceError`] on I/O failures.
+    /// - Propagates errors from [`crate::advanced::operations::abandon_group`].
+    pub async fn abandon_multisig_group(
+        &self,
+        group_alias: &str,
+        config: GroupAbandonConfig,
+    ) -> Result<()> {
+        let member_alias = self.load_multisig_member_alias(group_alias)?;
+        let group_id = self.load_multisig_prefix(group_alias)?;
+        let mut id = self.load(&member_alias)?;
+        let signer = self.load_signer(&member_alias)?;
+        abandon_group(&mut id, &signer, &group_id, config).await
+    }
+
+    /// Forget an alias: destroy its seeds and remove its metadata and, for
+    /// a store with one database per alias, its event database.
+    ///
+    /// Call it after the identifier is abandoned, or when this store should
+    /// no longer act for it. A store sharing one event database keeps the
+    /// identifier's key event log there: it is public data, which other
+    /// aliases may also rely on as a contact. Keys held by an external
+    /// provider are not touched; delete them through the provider.
+    ///
+    /// # Errors
+    /// - [`Error::Other`] if `alias` does not name an alias directory.
+    /// - [`Error::PersistenceError`] on I/O failures.
+    pub fn remove_alias(&self, alias: &str) -> Result<()> {
+        let reserved = ["", ".", "..", "db", "meta"];
+        if reserved.contains(&alias) || alias.contains(['/', '\\']) {
+            return Err(Error::Other(format!("not an alias: {alias:?}")));
+        }
+        for field in SEED_FIELDS {
+            self.secrets.delete(alias, field)?;
+        }
+        self.meta.remove_alias(alias)?;
+        if self.layout == Layout::PerAlias {
+            self.controllers
+                .lock()
+                .map_err(|_| Error::PersistenceError("controller cache poisoned".into()))?
+                .remove(&self.db_path_for(alias));
+        }
+        // Legacy per-field files and, per alias, the event database.
+        match std::fs::remove_dir_all(self.alias_dir(alias)) {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(Error::PersistenceError(format!(
+                "cannot remove alias directory: {e}"
+            ))),
+        }
     }
 
     /// Register a local alias that "views" an externally-incepted

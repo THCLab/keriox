@@ -4,13 +4,13 @@ use keri_controller::{
 };
 use keri_core::{
     actor::prelude::SelfAddressingIdentifier,
-    event::sections::seal::EventSeal,
+    event::sections::seal::{EventSeal, Seal},
     event::KeyEvent,
     event_message::{
         msg::TypedEvent, signature::Signature, signed_event_message::Notice, EventTypeTag,
     },
     query::{mailbox::MailboxQuery, query_event::QueryEvent},
-    state::IdentifierState,
+    state::{IdentifierState, IdentifierStatus},
 };
 use teliox::{
     query::TelQueryEvent,
@@ -128,6 +128,21 @@ impl Identifier {
     })
     }
 
+    /// Status of an identifier whose log is known locally, including
+    /// whether and where it was abandoned.
+    pub fn find_status(&self, id: &IdentifierPrefix) -> Result<IdentifierStatus> {
+        dispatch!(self, i => {
+        Ok(i.find_status(id)?)
+    })
+    }
+
+    /// Whether this identifier is abandoned, i.e. its key event log is final.
+    pub fn is_abandoned(&self) -> bool {
+        dispatch!(self, i => {
+        i.is_abandoned()
+    })
+    }
+
     pub fn current_public_keys(&self) -> Result<Vec<BasicPrefix>> {
         dispatch!(self, i => {
         Ok(i.current_public_keys()?)
@@ -241,6 +256,43 @@ impl Identifier {
     }
 
     /// Finalise a rotation event (sign + save + queue for witness notification).
+    /// Build the event that abandons this identifier: it reveals
+    /// `current_keys`, the keys the last establishment event committed to,
+    /// and commits to no next keys, so nothing can follow it. A delegated
+    /// identifier gets a `drt` its delegator must anchor. Finish it with
+    /// [`Self::finalize_rotate`].
+    pub async fn abandon(
+        &self,
+        current_keys: Vec<BasicPrefix>,
+        witness_to_add: Vec<LocationScheme>,
+        witness_to_remove: Vec<BasicPrefix>,
+        witness_threshold: u64,
+        anchors: Vec<Seal>,
+    ) -> Result<String> {
+        dispatch!(self, i => {
+        Ok(i
+            .abandon(
+                current_keys,
+                witness_to_add,
+                witness_to_remove,
+                witness_threshold,
+                anchors,
+            )
+            .await?)
+    })
+    }
+
+    /// Send this identifier's delegated event to its witnesses again once
+    /// its delegator has anchored it; `false` while no approval is known.
+    pub async fn publish_approved_delegated_event(
+        &mut self,
+        digest: &SelfAddressingIdentifier,
+    ) -> Result<bool> {
+        dispatch_mut!(self, i => {
+        Ok(i.publish_approved_delegated_event(digest).await?)
+    })
+    }
+
     pub async fn finalize_rotate(&mut self, event: &[u8], sig: SelfSigningPrefix) -> Result<()> {
         dispatch_mut!(self, i => {
         Ok(i.finalize_rotate(event, sig).await?)
@@ -762,6 +814,26 @@ impl Identifier {
                 witness_to_remove,
                 witness_threshold,
             )
+            .await?)
+    })
+    }
+
+    /// Build the event that abandons a group identifier, plus the exchanges
+    /// for each co-signer (and, for a delegated identifier, the request
+    /// asking its delegator to anchor the `drt`). The participants reveal
+    /// the keys the group committed to; the event commits to no next keys.
+    ///
+    /// Returns `(serialized_event, vec_of_serialized_exchanges)`.
+    pub async fn abandon_group(
+        &self,
+        group_id: &IdentifierPrefix,
+        participants: Vec<IdentifierPrefix>,
+        signature_threshold: u64,
+        anchors: Vec<Seal>,
+    ) -> Result<(String, Vec<String>)> {
+        dispatch!(self, i => {
+        Ok(i
+            .abandon_group(group_id, participants, signature_threshold, anchors)
             .await?)
     })
     }

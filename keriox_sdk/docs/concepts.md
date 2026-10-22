@@ -30,6 +30,17 @@ also need the next key, which has never been used or transmitted. Old
 signatures stay verifiable because the log proves which key was valid when.
 In the SDK this is one call: `identity.rotate()`.
 
+## Abandonment (ending an identity)
+
+An identity ends with one last rotation that reveals the committed next key
+but commits to **no** next key. Nothing can follow it: no one can ever
+rotate the identity again, and its witnesses refuse any later event. Anyone
+who looks the identity up sees it as abandoned. Messages it signed before
+stay verifiable; anything signed with its final keys is refused, because
+those keys can never be rotated away. A delegated identity's abandonment,
+like any delegated rotation, needs its delegator's approval. In the SDK:
+`identity.abandon()`, then `keri.remove_identity(alias)` to destroy the keys.
+
 ## Witness
 
 A server that countersigns your key events and serves your key history to

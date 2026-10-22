@@ -86,6 +86,44 @@ impl MetaDb {
             .map_err(|e| Error::PersistenceError(e.to_string()))
     }
 
+    /// Remove one metadata entry of an alias.
+    pub(crate) fn remove(&self, alias: &str, field: &str) -> Result<()> {
+        let write_txn = self
+            .db
+            .begin_write()
+            .map_err(|e| Error::PersistenceError(e.to_string()))?;
+        {
+            let mut table = write_txn
+                .open_table(ALIAS_META)
+                .map_err(|e| Error::PersistenceError(e.to_string()))?;
+            table
+                .remove((alias, field))
+                .map_err(|e| Error::PersistenceError(e.to_string()))?;
+        }
+        write_txn
+            .commit()
+            .map_err(|e| Error::PersistenceError(e.to_string()))
+    }
+
+    /// Remove every metadata entry of an alias.
+    pub(crate) fn remove_alias(&self, alias: &str) -> Result<()> {
+        let write_txn = self
+            .db
+            .begin_write()
+            .map_err(|e| Error::PersistenceError(e.to_string()))?;
+        {
+            let mut table = write_txn
+                .open_table(ALIAS_META)
+                .map_err(|e| Error::PersistenceError(e.to_string()))?;
+            table
+                .retain(|(entry_alias, _field), _value| entry_alias != alias)
+                .map_err(|e| Error::PersistenceError(e.to_string()))?;
+        }
+        write_txn
+            .commit()
+            .map_err(|e| Error::PersistenceError(e.to_string()))
+    }
+
     /// Distinct aliases that have at least one metadata entry.
     pub(crate) fn aliases(&self) -> Result<Vec<String>> {
         let read_txn = self

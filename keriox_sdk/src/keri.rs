@@ -241,6 +241,17 @@ impl Keri {
             .collect())
     }
 
+    /// Remove an identity from this store: destroy its keys and forget its
+    /// local data. Do this after [`Identity::abandon`], or when this store
+    /// should no longer act for the identity. Keys held by an external
+    /// provider must be deleted through the provider.
+    pub fn remove_identity(&self, alias: &str) -> Result<()> {
+        if !self.inner.alias_exists(alias) {
+            return Err(Error::IdentityNotFound(alias.to_string()));
+        }
+        Ok(self.inner.store.remove_alias(alias)?)
+    }
+
     /// Verify a signed message and return its payload and proven signer.
     ///
     /// Verification is local: it checks the signature against key histories

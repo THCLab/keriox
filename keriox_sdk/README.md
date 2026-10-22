@@ -66,6 +66,7 @@ let verified = keri.verify(their_signed_message)?;
 | create / load identities | `Keri::open`, `Keri::new_identity`, `Keri::identity` |
 | sign & verify | `Identity::sign`, `Keri::verify` |
 | rotate keys | `Identity::rotate` |
+| end an identity for good, then forget it | `Identity::abandon`, `Keri::remove_identity` |
 | issue / revoke credentials, check status | `Identity::issue`, `Identity::revoke`, `Keri::credential_status` |
 | verify strangers | `Identity::oobi_url` / `Identity::kel` + `Keri::import_contact` |
 | device backup / recovery | `Identity::export`, `IdentityBuilder::restore_from` |

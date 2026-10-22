@@ -19,11 +19,11 @@ pub enum Error {
     // ── Transparent upstream wrappers ─────────────────────────────────────────
     /// Wraps errors from the `keri-controller` layer.
     #[error(transparent)]
-    Controller(#[from] keri_controller::error::ControllerError),
+    Controller(keri_controller::error::ControllerError),
 
     /// Wraps errors from the identifier mechanics layer.
     #[error(transparent)]
-    Mechanics(#[from] keri_controller::identifier::mechanics::MechanicsError),
+    Mechanics(keri_controller::identifier::mechanics::MechanicsError),
 
     /// Wraps key-signing errors.
     #[error("signing error: {0}")]
@@ -33,6 +33,22 @@ pub enum Error {
     /// The requested identifier is not known to this controller.
     #[error("identifier not found: {0}")]
     IdentifierNotFound(IdentifierPrefix),
+
+    /// The identifier is abandoned: its key event log is final, so it can
+    /// no longer sign, rotate or anchor anything, and witnesses refuse any
+    /// event for it.
+    #[error("identifier {0} is abandoned; its key event log accepts no further events")]
+    IdentifierAbandoned(IdentifierPrefix),
+
+    /// A delegated identifier's abandonment waits for its delegator to
+    /// approve (anchor) it.
+    #[error("abandonment of {id} awaits approval by its delegator {delegator}")]
+    AbandonmentAwaitingApproval {
+        /// The identifier being abandoned.
+        id: IdentifierPrefix,
+        /// The delegator that has to approve.
+        delegator: IdentifierPrefix,
+    },
 
     /// The identifier has no watchers configured.
     #[error("no watchers configured for identifier: {0}")]
@@ -110,6 +126,30 @@ pub enum Error {
     /// A catch-all for errors that do not fit a more specific variant.
     #[error("{0}")]
     Other(String),
+}
+
+impl From<keri_controller::identifier::mechanics::MechanicsError> for Error {
+    fn from(e: keri_controller::identifier::mechanics::MechanicsError) -> Self {
+        use keri_controller::identifier::mechanics::MechanicsError;
+        match e {
+            MechanicsError::IdentifierAbandoned(id) => Error::IdentifierAbandoned(id),
+            e => Error::Mechanics(e),
+        }
+    }
+}
+
+impl From<keri_controller::error::ControllerError> for Error {
+    fn from(e: keri_controller::error::ControllerError) -> Self {
+        use keri_controller::{
+            error::ControllerError, identifier::mechanics::MechanicsError,
+        };
+        match e {
+            ControllerError::Mechanic(MechanicsError::IdentifierAbandoned(id)) => {
+                Error::IdentifierAbandoned(id)
+            }
+            e => Error::Controller(e),
+        }
+    }
 }
 
 impl From<keri_core::processor::validator::VerificationError> for Error {

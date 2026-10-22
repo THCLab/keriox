@@ -17,6 +17,11 @@ cover.
 | rotate my keys | `identity.rotate().await` |
 | add/remove witnesses while rotating | `advanced::KeriStore::rotate_with` + `StoreRotationConfig` |
 | create from a deterministic seed (mnemonic) | `advanced::KeriStore::create_with_seeds` |
+| end an identity for good | `identity.abandon().await` (`abandon_with_provider` for provider keys; a delegated identity returns `PendingApproval` until its delegator approves, then call it again) |
+| check whether an identity is abandoned | `identity.is_abandoned()`; for anyone else's, its state after `import_contact` (`advanced::Identifier::find_status`) |
+| destroy an identity's keys and local data | `keri.remove_identity("alias")` |
+| check that my witnesses/watchers enforce abandonment | `advanced::supports_abandonment(&url).await` |
+| ask a witness/watcher whether an identifier is abandoned (a hint) | `advanced::fetch_identifier_status(&url, &aid).await` |
 
 ## Signing & verification
 
