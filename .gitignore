@@ -10,3 +10,7 @@ Cargo.lock
 **/*.rs.bk
 /.vscode
 .cargo
+
+# Python environments of the test-vector generators
+.venv/
+__pycache__/
