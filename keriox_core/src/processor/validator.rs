@@ -21,12 +21,12 @@ use crate::{
     },
     event_message::{
         msg::KeriEvent,
-        signature::{Nontransferable, Signature, SignerData},
+        signature::{verified_witness_signatures, Nontransferable, Signature, SignerData},
         signed_event_message::{
             SignedEventMessage, SignedNontransferableReceipt, SignedTransferableReceipt,
         },
     },
-    prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+    prefix::{IdentifierPrefix, IndexedSignature},
     state::{EventSemantics, IdentifierState},
 };
 
@@ -83,61 +83,117 @@ impl<D: EventDatabase> EventValidator<D> {
         if signed_event.signatures.is_empty() {
             return Err(Error::MissingSignatures);
         }
-        // Compute new state
+        let id = signed_event.event_message.data.get_prefix();
         let new_state = match self
             .event_storage
-            .get_state(&signed_event.event_message.data.get_prefix())
+            .get_state(&id)
+            .map(|state| self.apply_signed(state, signed_event))
         {
-            Some(state) => {
-                let new_state = signed_event.event_message.apply_to(state.clone())?;
-                // In case of rotation event, check if previous next threshold is satisfied
-                if let EventData::Rot(rot) | EventData::Drt(rot) =
-                    signed_event.event_message.data.get_event_data()
-                {
-                    let new_public_keys = rot.key_config.public_keys;
-                    state.current.next_keys_data.check_threshold(
-                        &new_public_keys,
-                        signed_event.signatures.iter().map(|sig| &sig.index),
-                    )?;
-                }
-                new_state
-            }
-            None => signed_event
-                .event_message
-                .apply_to(IdentifierState::default())?,
+            Some(Err(Error::EventDuplicateError)) => return Err(self.duplicate(signed_event)),
+            Some(new_state) => new_state?,
+            None => self.apply_signed(IdentifierState::default(), signed_event)?,
         };
-        // match on verification result
-        let ver_result = new_state.current.verify(
-            &signed_event.event_message.encode()?,
-            &signed_event.signatures,
-        )?;
         self.check_config_traits(signed_event)?;
         // If delegated event, check its delegator seal.
         if let Some(seal) = self.get_delegator_seal(signed_event)? {
             self.validate_seal(seal, &signed_event.event_message)?;
         };
 
-        if !ver_result {
-            Err(Error::SignatureVerificationError)
+        // check if there are enough receipts and escrow
+        let sn = signed_event.event_message.data.get_sn();
+        let (mut couples, mut indexed) = (vec![], vec![]);
+        if let Some(rcts) = self.event_storage.get_nt_receipts(&id, sn)? {
+            rcts.signatures.iter().for_each(|s| match s {
+                Nontransferable::Couplet(c) => {
+                    couples.append(&mut c.clone());
+                }
+                Nontransferable::Indexed(signatures) => indexed.append(&mut signatures.clone()),
+            });
+        };
+        if new_state.witness_config.enough_receipts(couples, indexed)? {
+            Ok(Some(new_state))
         } else {
-            // check if there are enough receipts and escrow
-            let sn = signed_event.event_message.data.get_sn();
-            let prefix = &signed_event.event_message.data.get_prefix();
+            Err(Error::NotEnoughReceiptsError)
+        }
+    }
 
-            let (mut couples, mut indexed) = (vec![], vec![]);
-            if let Some(rcts) = self.event_storage.get_nt_receipts(prefix, sn)? {
-                rcts.signatures.iter().for_each(|s| match s {
-                    Nontransferable::Couplet(c) => {
-                        couples.append(&mut c.clone());
-                    }
-                    Nontransferable::Indexed(signatures) => indexed.append(&mut signatures.clone()),
-                });
-            };
-            if new_state.witness_config.enough_receipts(couples, indexed)? {
-                Ok(Some(new_state))
-            } else {
-                Err(Error::NotEnoughReceiptsError)
+    /// The event's controller signatures that verify against the keys it is
+    /// signed with: the keys it establishes, or the current ones for an
+    /// interaction event.
+    pub fn verified_signatures(
+        &self,
+        signed_event: &SignedEventMessage,
+    ) -> Result<Vec<IndexedSignature>, Error> {
+        let state = self
+            .event_storage
+            .get_state(&signed_event.event_message.data.get_prefix())
+            .unwrap_or_default();
+        Ok(signed_event
+            .event_message
+            .apply_to(state)?
+            .current
+            .verified_signatures(
+                &signed_event.event_message.encode()?,
+                &signed_event.signatures,
+            ))
+    }
+
+    /// Applies the event to `state` and checks its controller signatures.
+    /// Only the signatures that verify count: they must satisfy the new
+    /// signing threshold and, for a rotation, the prior next threshold.
+    fn apply_signed(
+        &self,
+        state: IdentifierState,
+        signed_event: &SignedEventMessage,
+    ) -> Result<IdentifierState, Error> {
+        let new_state = signed_event.event_message.apply_to(state.clone())?;
+        let verified = new_state.current.verified_signatures(
+            &signed_event.event_message.encode()?,
+            &signed_event.signatures,
+        );
+        if verified.is_empty() {
+            return Err(Error::SignatureVerificationError);
+        }
+        if let EventData::Rot(rot) | EventData::Drt(rot) =
+            signed_event.event_message.data.get_event_data()
+        {
+            state.current.next_keys_data.check_threshold(
+                &rot.key_config.public_keys,
+                verified.iter().map(|sig| &sig.index),
+            )?;
+        }
+        new_state.current.threshold.enough_signatures(
+            &verified
+                .iter()
+                .map(|sig| sig.index.current() as usize)
+                .collect::<Vec<_>>(),
+        )?;
+        Ok(new_state)
+    }
+
+    /// Classifies an event at a location that already holds an accepted
+    /// event. The KERI specification: a duplicitous event is a verified but
+    /// different version of an event at the same location. The accepted
+    /// event itself is not duplicitous, and an event that does not verify
+    /// against the key state before its location is dropped.
+    fn duplicate(&self, signed_event: &SignedEventMessage) -> Error {
+        let id = signed_event.event_message.data.get_prefix();
+        let sn = signed_event.event_message.data.get_sn();
+        if let Some(accepted) = self.event_storage.get_event_at_sn(&id, sn) {
+            if accepted.signed_event_message.event_message == signed_event.event_message {
+                return Error::EventAlreadyAccepted;
             }
+        }
+        let prior = match sn.checked_sub(1) {
+            None => Ok(Some(IdentifierState::default())),
+            Some(prior_sn) => self.event_storage.compute_state_at_sn(&id, prior_sn),
+        };
+        match prior.map(|state| state.map(|state| self.apply_signed(state, signed_event))) {
+            Ok(Some(Ok(_))) => Error::EventDuplicateError,
+            Ok(Some(Err(Error::NotEnoughSigsError))) | Ok(None) => {
+                Error::SignatureVerificationError
+            }
+            Ok(Some(Err(e))) | Err(e) => e,
         }
     }
 
@@ -178,73 +234,38 @@ impl<D: EventDatabase> EventValidator<D> {
         Ok(self.event_storage.get_state(&vrc.body.prefix))
     }
 
-    pub fn get_receipt_couplets(
-        &self,
-        rct: &SignedNontransferableReceipt,
-    ) -> Result<Vec<(BasicPrefix, SelfSigningPrefix)>, Error> {
-        let id = rct.body.prefix.clone();
-        let sn = rct.body.sn;
-        let receipted_event_digest = rct.body.receipted_event_digest.clone();
-
-        let witnesses = self
-            .event_storage
-            .compute_state_at_event(sn, &id, &receipted_event_digest)?
-            .ok_or(Error::MissingEvent)?
-            .witness_config
-            .witnesses;
-
-        let (mut couplets, mut indexed) = (vec![], vec![]);
-        rct.signatures.iter().for_each(|s| match s {
-            Nontransferable::Couplet(c) => {
-                couplets.append(&mut c.clone());
-            }
-            Nontransferable::Indexed(signatures) => indexed.append(&mut signatures.clone()),
-        });
-
-        let i = indexed
-            .into_iter()
-            .map(|sig| -> Result<_, _> {
-                Ok((
-                    witnesses
-                        .get(sig.index.current() as usize)
-                        .ok_or_else(|| Error::SemanticError("No matching witness prefix".into()))?
-                        .clone(),
-                    sig.signature,
-                ))
-            })
-            .collect::<Result<Vec<_>, Error>>()?;
-        Ok(couplets.into_iter().chain(i).collect())
-    }
-
     /// Process Witness Receipt
     ///
-    /// Checks the receipt against the receipted event
-    /// returns the state of the Identifier being receipted,
-    /// which may have been updated by un-escrowing events
+    /// Checks the receipt against the receipted event and returns it with
+    /// only the witness signatures that verify, or an error when none does.
     pub fn validate_witness_receipt(
         &self,
         rct: &SignedNontransferableReceipt,
-    ) -> Result<Option<IdentifierState>, Error> {
-        // get event which is being receipted
-        let id = &rct.body.prefix.to_owned();
-        if let Some(event) = self
+    ) -> Result<SignedNontransferableReceipt, Error> {
+        let (id, sn) = (&rct.body.prefix, rct.body.sn);
+        // There's no receipted event id database so we can't verify signatures
+        let event = self
             .event_storage
-            .get_event_at_sn(&rct.body.prefix, rct.body.sn)
-        {
-            let serialized_event = event.signed_event_message.event_message.encode()?;
-            let signer_couplets = self.get_receipt_couplets(rct)?;
-            signer_couplets
-                .into_iter()
-                .try_for_each(|(witness, signature)| {
-                    (witness.verify(&serialized_event, &signature)?)
-                        .then_some(())
-                        .ok_or(Error::SignatureVerificationError)
-                })
-        } else {
-            // There's no receipted event id database so we can't verify signatures
-            Err(Error::MissingEvent)
-        }?;
-        Ok(self.event_storage.get_state(id))
+            .get_event_at_sn(id, sn)
+            .ok_or(Error::MissingEvent)?;
+        let witnesses = self
+            .event_storage
+            .compute_state_at_event(sn, id, &rct.body.receipted_event_digest)?
+            .ok_or(Error::MissingEvent)?
+            .witness_config
+            .witnesses;
+        let signatures = verified_witness_signatures(
+            rct.signatures.clone(),
+            &witnesses,
+            &event.signed_event_message.event_message.encode()?,
+        );
+        if signatures.is_empty() {
+            return Err(Error::SignatureVerificationError);
+        }
+        Ok(SignedNontransferableReceipt {
+            body: rct.body.clone(),
+            signatures,
+        })
     }
 
     pub fn verify(&self, data: &[u8], sig: &Signature) -> Result<(), VerificationError> {
@@ -369,11 +390,13 @@ impl<D: EventDatabase> EventValidator<D> {
     fn inception_traits(&self, id: &IdentifierPrefix) -> Vec<String> {
         self.event_storage
             .get_event_at_sn(id, 0)
-            .map(|icp| match icp.signed_event_message.event_message.data.event_data {
-                EventData::Icp(icp) => icp.inception_configuration,
-                EventData::Dip(dip) => dip.inception_data.inception_configuration,
-                _ => vec![],
-            })
+            .map(
+                |icp| match icp.signed_event_message.event_message.data.event_data {
+                    EventData::Icp(icp) => icp.inception_configuration,
+                    EventData::Dip(dip) => dip.inception_data.inception_configuration,
+                    _ => vec![],
+                },
+            )
             .unwrap_or_default()
     }
 

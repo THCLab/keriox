@@ -74,8 +74,8 @@ fn test_process() -> Result<(), Error> {
 
     // Process the same rotation event one more time.
     event_processor.process(&deserialized_rot)?;
-    // should be saved as duplicious event
-    assert_eq!(escrows.duplicitous.get(&id).unwrap().len(), 1);
+    // the accepted event itself is not duplicitous
+    assert!(escrows.duplicitous.get(&id).unwrap().is_empty());
 
     let ixn_raw = br#"{"v":"KERI10JSON0000cb_","t":"ixn","d":"EL6Dpm72KXayaUHYvVHlhPplg69fBvRt1P3YzuOGVpmz","i":"EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen","s":"2","p":"EHjzZj4i_-RpTN2Yh-NocajFROJ_GkBtlByhRykqiXgz","a":[]}-KADAABgep0kbpgl91vvcXziJ7tHY1WVTAcUJyYCBNqTcNuK9AfzLHfKHhJeSC67wFRU845qjLSAC-XwWaqWgyAgw_8MABD5wTnqqJcnLWMA7NZ1vLOTzDspInJrly7O4Kt6Jwzue9z2TXkDXi1jr69JeKbzUQ6c2Ka1qPXAst0JzrOiyuAPACAcLHnOz1Owtgq8mcR_-PpAr91zOTK_Zj9r0V-9P47vzGsYwAxcVshclfhCMhu73aZuZbvQhy9Rxcj-qRz96cIL"#;
     let parsed = parse_cesr_stream(ixn_raw).unwrap();

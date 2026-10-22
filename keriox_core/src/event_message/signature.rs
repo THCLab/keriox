@@ -117,6 +117,43 @@ pub fn couplets_verify(couplets: &[(BasicPrefix, SelfSigningPrefix)], data: &[u8
             .all(|(signer, signature)| signer.verify(data, signature).unwrap_or(false))
 }
 
+/// The witness signatures of `receipts` that sign `data`: an indexed
+/// signature whose index names one of `witnesses` and is that witness's, and
+/// a couple whose signature is its key's. The rest are dropped, together
+/// with any group left empty, so one bad signature cannot void the others.
+pub fn verified_witness_signatures(
+    receipts: impl IntoIterator<Item = Nontransferable>,
+    witnesses: &[BasicPrefix],
+    data: &[u8],
+) -> Vec<Nontransferable> {
+    receipts
+        .into_iter()
+        .map(|group| match group {
+            Nontransferable::Indexed(sigs) => Nontransferable::Indexed(
+                sigs.into_iter()
+                    .filter(|sig| {
+                        witnesses
+                            .get(sig.index.current() as usize)
+                            .is_some_and(|witness| {
+                                witness.verify(data, &sig.signature).unwrap_or(false)
+                            })
+                    })
+                    .collect(),
+            ),
+            Nontransferable::Couplet(couplets) => Nontransferable::Couplet(
+                couplets
+                    .into_iter()
+                    .filter(|(signer, signature)| signer.verify(data, signature).unwrap_or(false))
+                    .collect(),
+            ),
+        })
+        .filter(|group| match group {
+            Nontransferable::Indexed(sigs) => !sigs.is_empty(),
+            Nontransferable::Couplet(couplets) => !couplets.is_empty(),
+        })
+        .collect()
+}
+
 pub fn signatures_into_groups(sigs: &[Signature]) -> Vec<Group> {
     let (trans_seal, trans_last, nontrans, indexed, witness_indexed) = sigs.iter().cloned().fold(
         (vec![], vec![], vec![], vec![], vec![]),

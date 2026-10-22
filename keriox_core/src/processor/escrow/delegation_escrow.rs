@@ -94,10 +94,13 @@ impl<D: EventDatabase + EscrowCreator + 'static> DelegationEscrow<D> {
                         bus.notify(&Notification::KeyEventAdded(event))?;
                         accepted = true;
                     }
-                    Err(Error::SignatureVerificationError
+                    Err(
+                        Error::SignatureVerificationError
                         | Error::AbandonedIdentifier(_)
                         | Error::NonTransferableIdentifier(_)
-                        | Error::ConfigTraitViolation(_)) => {
+                        | Error::ConfigTraitViolation(_)
+                        | Error::EventAlreadyAccepted,
+                    ) => {
                         // remove from escrow
                         self.delegation_escrow.remove(&event.event_message);
                     }

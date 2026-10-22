@@ -204,11 +204,11 @@ then has to be classified by hand.
 | File | Run | Pass | Expected failures |
 |---|---:|---:|---:|
 | `v1/keripy/kels/positive` (15 vectors, each also as `/cesr1`) | 30 | 14 | 16 |
-| `v1/keripy/negative/negative` | 84 | 41 | 43 |
+| `v1/keripy/negative/negative` | 84 | 48 | 36 |
 | `v2/keripy/kels/positive` | 15 | 14 | 1 |
 | `v2/keripy/negative/negative` | 11 | 6 | 5 |
 | `v2/spec/examples` (52 vectors, 6 not checked) | 46 | 14 | 32 |
-| total | 186 | 89 | 97 |
+| total | 186 | 96 | 90 |
 
 ### Expected failures by cause
 
@@ -225,9 +225,7 @@ then has to be classified by hand.
 | `reply-bada` | 4 | BADA problems: a reply with an equal `dt` replaces the stored one. `url ""` is not read, and the roles `registrar` and `mailbox` are not known. | BADA Policy; RUN off the CRUD; OOBI KERI Endpoint Authorization |
 | `nested-threshold` | 5 | It does not read nested weighted thresholds (`{"1/2": [...]}`). | Fractionally weighted threshold |
 | `config` | 1 | It does not enforce `RB` (registrar backers need registrar backer seals). | Configuration traits field |
-| `signatures` | 4 | One invalid or out-of-range signature next to enough valid controller or witness signatures keeps the event from being accepted. A partially signed event that first came with a bad signature is never completed. | Indexed Signatures |
 | `reply-checks` | 2 | A non-transferable couple with a `D` key signs a reply. An `ACDC` version string is accepted on a reply. | BADA Rules; Version string field |
-| `duplicity` | 3 | A re-sent identical event, or a different event with an invalid signature, is recorded as duplicity evidence. | Duplicity |
 | `key-state` | 2 | Key state notices in keripy's shape are not read; the specification defines no key state notice format. | Backer remove / add lists; Reply Message Body |
 | `witness-role` | 1 | A witness accepts remote events: there is no notion of a local channel (a SHOULD-level rule). | Validator Roles and Event Locality |
 | `exn-fields` | 2 | The specification's `exn` fields `[v,t,d,i,ri,x,p,dt,r,q,a]` are not read. | Exchange Message Body |

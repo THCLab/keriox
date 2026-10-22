@@ -50,10 +50,13 @@ impl<D: EventDatabase + EscrowCreator + 'static> MaybeOutOfOrderEscrow<D> {
                     // stop processing the escrow if kel was updated. It needs to start again.
                     break;
                 }
-                Err(Error::SignatureVerificationError
-                        | Error::AbandonedIdentifier(_)
-                        | Error::NonTransferableIdentifier(_)
-                        | Error::ConfigTraitViolation(_)) => {
+                Err(
+                    Error::SignatureVerificationError
+                    | Error::AbandonedIdentifier(_)
+                    | Error::NonTransferableIdentifier(_)
+                    | Error::ConfigTraitViolation(_)
+                    | Error::EventAlreadyAccepted,
+                ) => {
                     // remove from escrow
                     self.escrowed_out_of_order.remove(&event.event_message);
                 }

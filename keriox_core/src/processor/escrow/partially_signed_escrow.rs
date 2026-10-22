@@ -53,12 +53,18 @@ impl<D: EventDatabase + EscrowCreator + 'static> PartiallySignedEscrow<D> {
     ) -> Result<(), Error> {
         let id = signed_event.event_message.data.get_prefix();
         let sn = signed_event.event_message.data.sn;
+        let validator = EventValidator::new(self.db.clone());
         if let Some(esc) = self
             .escrowed_partially_signed
             .get(&id, sn)
             .map_err(|_| Error::DbError)?
             .find(|event| event.event_message == signed_event.event_message)
         {
+            let escrowed_indexes = esc
+                .signatures
+                .iter()
+                .map(|sig| sig.index.current())
+                .collect::<Vec<_>>();
             let mut signatures = esc.signatures;
             let signatures_from_event = signed_event.signatures.clone();
             let without_duplicates = signatures_from_event
@@ -73,7 +79,6 @@ impl<D: EventDatabase + EscrowCreator + 'static> PartiallySignedEscrow<D> {
                 ..signed_event.to_owned()
             };
 
-            let validator = EventValidator::new(self.db.clone());
             match validator.validate_event(&new_event) {
                 Ok(_) => {
                     // add to kel
@@ -101,15 +106,25 @@ impl<D: EventDatabase + EscrowCreator + 'static> PartiallySignedEscrow<D> {
                 Err(
                     Error::AbandonedIdentifier(_)
                     | Error::NonTransferableIdentifier(_)
-                    | Error::ConfigTraitViolation(_),
+                    | Error::ConfigTraitViolation(_)
+                    | Error::EventAlreadyAccepted,
                 ) => {
-                    // the log is final, so the event can never complete
+                    // the event can never complete
                     self.remove_partially_signed(&new_event.event_message)?;
                 }
                 Err(Error::NotEnoughSigsError) => {
-                    // keep in escrow and save new partially signed event
+                    // keep in escrow and save the new signatures that verify
+                    // for a key not signed for yet
                     let to_add = SignedEventMessage {
-                        signatures: without_duplicates,
+                        signatures: validator
+                            .verified_signatures(&SignedEventMessage {
+                                signatures: without_duplicates,
+                                ..signed_event.to_owned()
+                            })
+                            .unwrap_or_default()
+                            .into_iter()
+                            .filter(|new| !escrowed_indexes.contains(&new.index.current()))
+                            .collect(),
                         ..signed_event.to_owned()
                     };
                     self.escrowed_partially_signed
@@ -121,9 +136,17 @@ impl<D: EventDatabase + EscrowCreator + 'static> PartiallySignedEscrow<D> {
                 }
             }
         } else {
-            self.escrowed_partially_signed
-                .insert(signed_event)
-                .map_err(|_| Error::DbError)?;
+            // Only the signatures that verify are kept. An event whose keys
+            // do not satisfy the prior next threshold fails to apply: no
+            // signature can complete it, so it is not kept.
+            if let Ok(signatures) = validator.verified_signatures(signed_event) {
+                self.escrowed_partially_signed
+                    .insert(&SignedEventMessage {
+                        signatures,
+                        ..signed_event.to_owned()
+                    })
+                    .map_err(|_| Error::DbError)?;
+            }
         };
 
         Ok(())

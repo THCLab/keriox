@@ -33,8 +33,14 @@ pub enum Error {
     #[error("Error while applying event: missing delegating event")]
     MissingDelegatingEventError,
 
+    /// A verified event that differs from the one already accepted at its
+    /// location: evidence of duplicity.
     #[error("Error while applying event: duplicate event")]
     EventDuplicateError,
+
+    /// The event is the one already accepted at its location.
+    #[error("Event already accepted")]
+    EventAlreadyAccepted,
 
     #[error("Identifier {0} is abandoned: its key event log accepts no further events")]
     AbandonedIdentifier(IdentifierPrefix),

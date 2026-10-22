@@ -141,12 +141,6 @@ pub enum SignatureError {
     #[error("Not enough signatures while verifying")]
     NotEnoughSigsError,
 
-    #[error("Signature duplicate while verifying")]
-    DuplicateSignature,
-
-    #[error("Too many signatures while verifying")]
-    TooManySignatures,
-
     #[error("Key index not present in the set")]
     MissingIndex,
 
@@ -213,8 +207,11 @@ impl KeyConfig {
 
     /// Verify
     ///
-    /// Verifies the given sigs against the given message using the KeyConfigs
-    /// Public Keys, according to the indexes in the sigs.
+    /// Whether the signatures over `message` that verify against this key
+    /// configuration satisfy its signing threshold. Signatures that do not
+    /// verify are ignored rather than spoiling the others, as the KERI
+    /// specification counts only verified signatures. `Ok(false)` means none
+    /// of them verifies.
     pub fn verify(
         &self,
         message: &[u8],
@@ -223,49 +220,40 @@ impl KeyConfig {
         // nothing is signed by no signatures, whatever the threshold (kt=0
         // is met by any set of signatures, the empty one included)
         if sigs.is_empty() {
-            Err(SignatureError::NotEnoughSigsError)
-        // every index points at a key; checked first because the duplicate
-        // count below indexes by it
-        } else if sigs
-            .iter()
-            .any(|sig| sig.index.current() as usize >= self.public_keys.len())
-        {
-            Err(SignatureError::MissingIndex)
-        // there are no duplicates
-        } else if !(sigs
-            .iter()
-            .fold(vec![0u64; self.public_keys.len()], |mut acc, sig| {
-                acc[sig.index.current() as usize] += 1;
-                acc
-            })
-            .iter()
-            .all(|n| *n <= 1))
-        {
-            Err(SignatureError::DuplicateSignature.into())
-        } else if
-        // check if there are not too many
-        sigs.len() > self.public_keys.len() {
-            Err(SignatureError::TooManySignatures.into())
-
-        // ensure there's enough sigs
-        } else {
-            self.threshold.enough_signatures(
-                &sigs
-                    .iter()
-                    .map(|sig| sig.index.current() as usize)
-                    .collect::<Vec<_>>(),
-            )?;
-
-            sigs.iter()
-                .fold(Ok(true), |acc: Result<bool, SignatureError>, sig| {
-                    let verification_result: bool = self
-                        .public_keys
-                        .get(sig.index.current() as usize)
-                        .ok_or_else(|| SignatureError::from(SignatureError::MissingIndex))
-                        .and_then(|key: &BasicPrefix| Ok(key.verify(message, &sig.signature)?))?;
-                    Ok(acc? && verification_result)
-                })
+            return Err(SignatureError::NotEnoughSigsError);
         }
+        let verified = self.verified_signatures(message, sigs);
+        if verified.is_empty() {
+            return Ok(false);
+        }
+        self.threshold.enough_signatures(
+            &verified
+                .iter()
+                .map(|sig| sig.index.current() as usize)
+                .collect::<Vec<_>>(),
+        )?;
+        Ok(true)
+    }
+
+    /// The signatures over `message` that verify: their index names a key
+    /// of this configuration and they are that key's signature. Each key
+    /// counts once, by its first verifying signature.
+    pub fn verified_signatures(
+        &self,
+        message: &[u8],
+        sigs: &[IndexedSignature],
+    ) -> Vec<IndexedSignature> {
+        sigs.iter().fold(vec![], |mut verified, sig| {
+            let index = sig.index.current();
+            let verifies = self
+                .public_keys
+                .get(index as usize)
+                .is_some_and(|key| key.verify(message, &sig.signature).unwrap_or(false));
+            if verifies && !verified.iter().any(|v| v.index.current() == index) {
+                verified.push(sig.clone());
+            }
+            verified
+        })
     }
 
     /// Verify Next
@@ -448,7 +436,8 @@ mod test {
                 signatures[0].clone(),
             ],
         );
-        assert!(matches!(st, Err(SignatureError::DuplicateSignature)));
+        // counted once
+        assert!(matches!(st, Err(SignatureError::NotEnoughSigsError)));
 
         Ok(())
     }
@@ -595,7 +584,7 @@ mod test {
     }
 
     #[test]
-    fn test_verify_rejects_index_out_of_range() {
+    fn test_verify_ignores_index_out_of_range() {
         use crate::{prefix::SelfSigningPrefix, signer::Signer};
 
         let signer = Signer::new();
@@ -613,14 +602,14 @@ mod test {
                 &[IndexedSignature::new_both_same(signature.clone(), 0)]
             )
             .unwrap());
+        // an index that names no key verifies nothing
         for index in [1, 5, u16::MAX] {
-            assert!(matches!(
-                key_config.verify(
+            assert!(!key_config
+                .verify(
                     msg,
                     &[IndexedSignature::new_both_same(signature.clone(), index)]
-                ),
-                Err(SignatureError::MissingIndex)
-            ));
+                )
+                .unwrap());
         }
     }
 }

@@ -172,9 +172,9 @@ impl<D: EventDatabase + 'static> EventProcessor<D> {
             Notice::NontransferableRct(rct) => {
                 let id = &rct.body.prefix;
                 match self.validator.validate_witness_receipt(rct) {
-                    Ok(_) => {
+                    Ok(verified) => {
                         self.events_db
-                            .add_receipt_nt(rct.to_owned(), id)
+                            .add_receipt_nt(verified, id)
                             .map_err(|_| Error::DbError)?;
                         self.publisher.notify(&Notification::ReceiptAccepted)
                     }

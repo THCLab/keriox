@@ -28,9 +28,6 @@ v1/keripy/negative/negative/gap/deleg-seal-is-ignored/wrong-i-and-s	deleg	the an
 v1/keripy/negative/negative/gap/deleg-seal-is-ignored/wrong-s	deleg	the anchoring seal is matched on d only; its i and s are not checked against the delegated event
 v1/keripy/negative/negative/gap/dip-without-di-accepted/said-over-body	deleg	a body tagged dip without di is accepted (as an inception)
 v1/keripy/negative/negative/gap/kel-config-did-rb-nrb	config	RB is not enforced: an inception with RB and no registrar backer seal is accepted
-v1/keripy/negative/negative/gap/kel-duplicity-identical-and-unverified	duplicity	the re-sent identical rotation and an unverified ixn are kept as duplicity evidence
-v1/keripy/negative/negative/gap/kel-escrow-unverified-sigs	signatures	a kt=2 inception sent with a random signature, then with K0's, then with K1's is never accepted
-v1/keripy/negative/negative/gap/kel-invalid-sig-poisons-event	signatures	an event with enough valid signatures and one invalid signature is not accepted
 v1/keripy/negative/negative/gap/kel-nested-weighted-threshold	nested-threshold	an inception with the specification's nested weighted threshold is not read
 v1/keripy/negative/negative/gap/kel-nontrans-prefix-with-next	key-event-rules	an inception with a non-transferable (B) prefix and a non-empty n is accepted, and so is a later rotation
 v1/keripy/negative/negative/gap/kel-seal-types-missing	seal-types	an ixn anchoring source, latest establishment, registrar backer and typed seals is not read
@@ -57,10 +54,6 @@ v1/keripy/negative/negative/gap/wit-ba-existing-duplicates	witness-list	ba namin
 v1/keripy/negative/negative/gap/wit-br-ba-internal-duplicates/ba	witness-list	ba with a duplicate entry is accepted
 v1/keripy/negative/negative/gap/wit-br-ba-internal-duplicates/br	witness-list	br with a duplicate entry is accepted
 v1/keripy/negative/negative/gap/wit-bt-weighted	witness-list	a weighted bt is accepted; bt must be an integer
-v1/keripy/negative/negative/gap/wit-duplicity-unverified/identical	duplicity	re-sending an accepted event records it as duplicitous
-v1/keripy/negative/negative/gap/wit-duplicity-unverified/unverified	duplicity	a different event with an invalid signature is kept as duplicity evidence
-v1/keripy/negative/negative/gap/wit-receipt-all-or-nothing/bad-signature	signatures	an event whose valid witness signatures meet bt is not accepted when one more is invalid
-v1/keripy/negative/negative/gap/wit-receipt-all-or-nothing/out-of-range	signatures	an event whose valid witness signatures meet bt is not accepted when one more has an out-of-range index
 v1/keripy/negative/negative/gap/wit-transferable-witness-aid	witness-list	a witness with a transferable (D) code is accepted, and its couple counts as a receipt
 v1/keripy/negative/negative/gap/wit-witness-local-remote	witness-role	a witness accepts and receipts a remote event; keriox has no notion of a local (protected) channel
 v2/keripy/kels/positive/kel/deleg/dip-before-anchor	deleg	a drt that arrives before its dip and before both anchors is never accepted once they arrive

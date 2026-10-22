@@ -70,6 +70,9 @@ impl<D: EventDatabase + 'static> BasicProcessor<D> {
             Err(Error::EventDuplicateError) => {
                 publisher.notify(&Notification::DupliciousEvent(signed_event))
             }
+            // A re-sent event changes nothing; its attached receipts are
+            // still processed.
+            Err(Error::EventAlreadyAccepted) => Ok(()),
             Err(Error::MissingDelegatingEventError | Error::MissingDelegatorSealError(_)) => {
                 publisher.notify(&Notification::MissingDelegatingEvent(signed_event))
             }

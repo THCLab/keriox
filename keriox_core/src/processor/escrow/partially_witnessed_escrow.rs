@@ -1,13 +1,14 @@
 use std::{sync::Arc, time::Duration};
 
-use said::SelfAddressingIdentifier;
+use said::{version::format::SerializationFormats, SelfAddressingIdentifier};
 
 use crate::{
     actor::prelude::EventStorage,
     database::{EscrowCreator, EscrowDatabase, EventDatabase, LogDatabase},
     error::Error,
+    event::receipt::Receipt,
     event_message::{
-        signature::Nontransferable,
+        signature::{verified_witness_signatures, Nontransferable},
         signed_event_message::{SignedEventMessage, SignedNontransferableReceipt},
     },
     prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
@@ -116,39 +117,14 @@ impl<D: EventDatabase + EscrowCreator + 'static> PartiallyWitnessedEscrow<D> {
         Ok(())
     }
 
-    /// Helper function for getting receipt couplets of event from iterator of
-    /// Nontransferable
-    fn get_receipt_couplets(
-        rct: impl IntoIterator<Item = Nontransferable>,
-        witnesses: &[BasicPrefix],
-    ) -> Result<Vec<(BasicPrefix, SelfSigningPrefix)>, Error> {
-        let (mut indexed, mut couplets) = (vec![], vec![]);
-        rct.into_iter().for_each(|signature| match signature {
-            Nontransferable::Indexed(indexed_sigs) => indexed.append(&mut indexed_sigs.clone()),
-            Nontransferable::Couplet(couplets_sigs) => couplets.append(&mut couplets_sigs.clone()),
-        });
-
-        let indexes: Result<Vec<(BasicPrefix, SelfSigningPrefix)>, Error> = indexed
-            .iter()
-            .map(|inx| -> Result<_, _> {
-                Ok((
-                    witnesses
-                        .get(inx.index.current() as usize)
-                        .ok_or_else(|| Error::SemanticError("No matching witness prefix".into()))?
-                        .clone(),
-                    inx.signature.to_owned(),
-                ))
-            })
-            .collect();
-
-        Ok(couplets.into_iter().chain(indexes?).collect())
-    }
-
+    /// Checks an escrowed event with its escrowed receipts and
+    /// `additional_receipt`, and returns `additional_receipt` with only the
+    /// witness signatures that verify.
     pub fn validate_partially_witnessed(
         &self,
         receipted_event: &SignedEventMessage,
         additional_receipt: Option<SignedNontransferableReceipt>,
-    ) -> Result<(), Error> {
+    ) -> Result<Option<SignedNontransferableReceipt>, Error> {
         let storage = EventStorage::new(self.db.clone());
         let id = receipted_event.event_message.data.get_prefix();
         let sn = receipted_event.event_message.data.get_sn();
@@ -158,19 +134,24 @@ impl<D: EventDatabase + EscrowCreator + 'static> PartiallyWitnessedEscrow<D> {
             .unwrap_or_default()
             .apply(receipted_event)?;
 
-        // Verify additional receipt signature
-        if let Some(ref receipt) = additional_receipt {
-            let signatures = receipt.signatures.clone();
-            let couplets = Self::get_receipt_couplets(
-                signatures.into_iter(),
-                &new_state.witness_config.witnesses,
-            )?;
-            couplets.iter().try_for_each(|(bp, sp)| {
-                bp.verify(&receipted_event.event_message.encode()?, sp)?
-                    .then_some(())
-                    .ok_or(Error::ReceiptVerificationError)
-            })?;
-        }
+        // Keep the signatures of the additional receipt that verify.
+        let additional_receipt = match additional_receipt {
+            Some(receipt) => {
+                let signatures = verified_witness_signatures(
+                    receipt.signatures,
+                    &new_state.witness_config.witnesses,
+                    &receipted_event.event_message.encode()?,
+                );
+                if signatures.is_empty() {
+                    return Err(Error::ReceiptVerificationError);
+                }
+                Some(SignedNontransferableReceipt {
+                    body: receipt.body,
+                    signatures,
+                })
+            }
+            None => None,
+        };
         // Verify receipted event signatures.
         new_state
             .current
@@ -185,20 +166,21 @@ impl<D: EventDatabase + EscrowCreator + 'static> PartiallyWitnessedEscrow<D> {
         if let Some(escrowed_receipts) = self.get_escrowed_receipts(&id, sn, &digest)? {
             self.validate_receipts(
                 escrowed_receipts,
-                &digest,
-                &receipted_event.event_message.encode()?,
+                receipted_event,
                 &new_state.witness_config.witnesses,
             )?;
         }
 
         let (couplets, indexed) = match (
             self.get_escrowed_receipts(&id, sn, &digest)?,
-            additional_receipt,
+            &additional_receipt,
         ) {
             (None, None) => (vec![], vec![]),
-            (None, Some(rct)) => Self::extract_receipt(rct.signatures),
+            (None, Some(rct)) => Self::extract_receipt(rct.signatures.clone()),
             (Some(receipts), None) => Self::extract_receipt(receipts),
-            (Some(receipts), Some(rct)) => Self::extract_receipt(receipts.chain(rct.signatures)),
+            (Some(receipts), Some(rct)) => {
+                Self::extract_receipt(receipts.chain(rct.signatures.clone()))
+            }
         };
 
         new_state
@@ -206,36 +188,49 @@ impl<D: EventDatabase + EscrowCreator + 'static> PartiallyWitnessedEscrow<D> {
             .enough_receipts(couplets, indexed)?
             .then_some(())
             .ok_or(Error::NotEnoughReceiptsError)?;
-        Ok(())
+        Ok(additional_receipt)
     }
 
-    /// Verify escrowed receipts and remove those with wrong
-    /// signatures.
+    /// Verify escrowed receipts and drop their wrong signatures: a group
+    /// with a signature that does not verify is replaced by the signatures
+    /// of it that do.
     fn validate_receipts(
         &self,
         rcts: impl IntoIterator<Item = Nontransferable>,
-        event_digest: &SelfAddressingIdentifier,
-        serialized_receipted_event: &[u8],
+        event: &SignedEventMessage,
         witnesses: &[BasicPrefix],
     ) -> Result<(), Error> {
-        let wrong_non = rcts.into_iter().filter(|nontran| match nontran {
-            Nontransferable::Indexed(indexed_sigs) => !indexed_sigs.iter().all(|inx| {
-                let witness_id = witnesses.get(inx.index.current() as usize);
-                match witness_id {
-                    Some(id) => id
-                        .verify(&serialized_receipted_event, &inx.signature)
-                        .unwrap_or(false),
-                    None => false,
-                }
-            }),
-            Nontransferable::Couplet(couplets_sigs) => !couplets_sigs
-                .iter()
-                .all(|(bp, sp)| bp.verify(&serialized_receipted_event, sp).unwrap_or(false)),
-        });
-
+        let serialized_event = event.event_message.encode()?;
+        let (wrong, verified): (Vec<_>, Vec<_>) = rcts
+            .into_iter()
+            .map(|group| {
+                let verified =
+                    verified_witness_signatures([group.clone()], witnesses, &serialized_event);
+                (group, verified)
+            })
+            .filter(|(group, verified)| verified.first() != Some(group))
+            .unzip();
+        if wrong.is_empty() {
+            return Ok(());
+        }
+        let digest = event.event_message.digest()?;
         self.log
-            .remove_nontrans_receipt_with_new_transaction(event_digest, wrong_non)
+            .remove_nontrans_receipt_with_new_transaction(&digest, wrong)
             .map_err(|_| Error::DbError)?;
+        let verified = verified.into_iter().flatten().collect::<Vec<_>>();
+        if !verified.is_empty() {
+            let receipt = Receipt::new(
+                SerializationFormats::JSON,
+                digest,
+                event.event_message.data.get_prefix(),
+                event.event_message.data.get_sn(),
+            );
+            self.log
+                .log_receipt_with_new_transaction(&SignedNontransferableReceipt::new(
+                    &receipt, verified,
+                ))
+                .map_err(|_| Error::DbError)?;
+        }
         Ok(())
     }
 
@@ -277,7 +272,8 @@ impl<D: EventDatabase + EscrowCreator + 'static> Notifier for PartiallyWitnessed
                         match self
                             .validate_partially_witnessed(&receipted_event, Some(ooo.to_owned()))
                         {
-                            Ok(_) => {
+                            Ok(verified) => {
+                                let ooo = verified.unwrap_or_else(|| ooo.clone());
                                 self.log
                                     .log_receipt_with_new_transaction(&ooo)
                                     .map_err(|_| Error::DbError)?;
@@ -310,9 +306,9 @@ impl<D: EventDatabase + EscrowCreator + 'static> Notifier for PartiallyWitnessed
                             }
                             Err(
                                 Error::SignatureVerificationError
-                        | Error::AbandonedIdentifier(_)
-                        | Error::NonTransferableIdentifier(_)
-                        | Error::ConfigTraitViolation(_),
+                                | Error::AbandonedIdentifier(_)
+                                | Error::NonTransferableIdentifier(_)
+                                | Error::ConfigTraitViolation(_),
                             ) => {
                                 // remove from escrow
                                 self.escrowed_partially_witnessed
@@ -349,10 +345,12 @@ impl<D: EventDatabase + EscrowCreator + 'static> Notifier for PartiallyWitnessed
 
                         bus.notify(&Notification::KeyEventAdded(signed_event.clone()))?;
                     }
-                    Err(Error::SignatureVerificationError
+                    Err(
+                        Error::SignatureVerificationError
                         | Error::AbandonedIdentifier(_)
                         | Error::NonTransferableIdentifier(_)
-                        | Error::ConfigTraitViolation(_)) => (),
+                        | Error::ConfigTraitViolation(_),
+                    ) => (),
                     Err(_) => {
                         self.escrowed_partially_witnessed
                             .insert(&signed_event)

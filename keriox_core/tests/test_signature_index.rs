@@ -8,7 +8,7 @@ use keri_core::{
     actor::process_notice,
     database::redb::RedbDatabase,
     error::Error,
-    event::sections::{key_config::SignatureError, threshold::SignatureThreshold},
+    event::sections::threshold::SignatureThreshold,
     event_message::{
         event_msg_builder::{EventMsgBuilder, ReceiptBuilder},
         signature::Nontransferable,
@@ -56,10 +56,9 @@ fn event_signature_index_out_of_range_is_rejected() -> Result<(), Error> {
         )),
         &processor,
     );
-    assert!(matches!(
-        result,
-        Err(Error::KeyConfigError(SignatureError::MissingIndex))
-    ));
+    // An index that names no key verifies nothing, so the event has no
+    // verifiable signature and is dropped.
+    assert!(matches!(result, Err(Error::SignatureVerificationError)));
     assert!(storage.get_state(&icp.data.get_prefix()).is_none());
 
     Ok(())
