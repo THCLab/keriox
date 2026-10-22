@@ -27,7 +27,7 @@ pub trait OobiStorageBackend: Send + Sync {
 mod redb_backend {
     use std::sync::Arc;
 
-    use redb::{MultimapTableDefinition, TableDefinition};
+    use redb::{MultimapTableDefinition, ReadableMultimapTable, TableDefinition};
 
     use crate::{
         database::redb::RedbError,
@@ -156,41 +156,37 @@ mod redb_backend {
                     }
                     write_txn.commit().unwrap();
                 }
-                ReplyRoute::EndRoleAdd(end_role) => {
-                    let (eid, role) = (
+                ReplyRoute::EndRoleAdd(end_role) | ReplyRoute::EndRoleCut(end_role) => {
+                    // One record per (cid, role, eid): an add or a cut
+                    // replaces the endpoint's previous reply. A cut stays
+                    // stored as the record's nullified state.
+                    let (cid, role) = (
                         end_role.cid.to_string(),
                         serde_json::to_vec(&end_role.role).unwrap(),
                     );
+                    let key = (cid.as_bytes(), role.as_slice());
 
                     let write_txn = self.db.begin_write().unwrap();
                     {
                         let mut table = (&write_txn).open_multimap_table(END_ROLE).unwrap();
+                        let previous: Vec<Vec<u8>> = table
+                            .get(key)
+                            .unwrap()
+                            .filter_map(|value| value.ok().map(|v| v.value().to_vec()))
+                            .filter(|value| {
+                                serde_cbor::from_slice::<SignedReply>(value)
+                                    .is_ok_and(|old| match old.reply.get_route() {
+                                        ReplyRoute::EndRoleAdd(old)
+                                        | ReplyRoute::EndRoleCut(old) => old.eid == end_role.eid,
+                                        _ => false,
+                                    })
+                            })
+                            .collect();
+                        for value in &previous {
+                            table.remove(key, value.as_slice()).unwrap();
+                        }
                         table
-                            .insert(
-                                (eid.as_bytes(), role.as_slice()),
-                                serde_cbor::to_vec(signed_reply).unwrap().as_slice(),
-                            )
-                            .unwrap();
-                    }
-                    write_txn.commit().unwrap();
-                }
-                ReplyRoute::EndRoleCut(end_role) => {
-                    // TODO: EndRoleCut should remove the role from storage, not insert.
-                    // Currently mirrors redb's behaviour (inserting the Cut event) pending
-                    // a proper removal implementation.
-                    let (eid, role) = (
-                        end_role.cid.to_string(),
-                        serde_json::to_vec(&end_role.role).unwrap(),
-                    );
-
-                    let write_txn = self.db.begin_write().unwrap();
-                    {
-                        let mut table = (&write_txn).open_multimap_table(END_ROLE).unwrap();
-                        table
-                            .insert(
-                                (eid.as_bytes(), role.as_slice()),
-                                serde_cbor::to_vec(signed_reply).unwrap().as_slice(),
-                            )
+                            .insert(key, serde_cbor::to_vec(signed_reply).unwrap().as_slice())
                             .unwrap();
                     }
                     write_txn.commit().unwrap();

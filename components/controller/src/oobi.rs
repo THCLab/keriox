@@ -67,9 +67,9 @@ where
             .get_end_role(id, role)?
             .unwrap_or_default()
             .into_iter()
-            .map(|reply| match reply.reply.data.data {
-                ReplyRoute::EndRoleAdd(end_role) => end_role,
-                _ => todo!(),
+            .filter_map(|reply| match reply.reply.data.data {
+                ReplyRoute::EndRoleAdd(end_role) => Some(end_role),
+                _ => None,
             })
             .collect();
         Ok(end_roles)

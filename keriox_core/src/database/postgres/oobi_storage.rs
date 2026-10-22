@@ -92,32 +92,35 @@ impl OobiStorageBackend for PostgresOobiStorage {
                     .execute(&self.pool)
                     .await?;
                 }
-                ReplyRoute::EndRoleAdd(end_role) => {
+                ReplyRoute::EndRoleAdd(end_role) | ReplyRoute::EndRoleCut(end_role) => {
+                    // One record per (cid, role, eid): an add or a cut
+                    // replaces the endpoint's previous reply. A cut stays
+                    // stored as the record's nullified state.
+                    let (cid, role, eid) = (
+                        end_role.cid.to_string(),
+                        serde_json::to_string(&end_role.role)?,
+                        end_role.eid.to_string(),
+                    );
+                    let mut tx = self.pool.begin().await?;
+                    sqlx::query(
+                        r#"DELETE FROM end_role_oobis WHERE cid = $1 AND role = $2 AND eid = $3"#,
+                    )
+                    .bind(&cid)
+                    .bind(&role)
+                    .bind(&eid)
+                    .execute(&mut *tx)
+                    .await?;
                     sqlx::query(
                         r#"INSERT INTO end_role_oobis (cid, role, eid, oobi_data)
                            VALUES ($1, $2, $3, $4)"#,
                     )
-                    .bind(end_role.cid.to_string())
-                    .bind(serde_json::to_string(&end_role.role)?)
-                    .bind(end_role.eid.to_string())
+                    .bind(&cid)
+                    .bind(&role)
+                    .bind(&eid)
                     .bind(serde_cbor::to_vec(signed_reply)?)
-                    .execute(&self.pool)
+                    .execute(&mut *tx)
                     .await?;
-                }
-                ReplyRoute::EndRoleCut(end_role) => {
-                    // TODO: EndRoleCut should DELETE the role from storage.
-                    // Currently inserts the Cut event, matching redb behaviour,
-                    // pending a proper removal implementation.
-                    sqlx::query(
-                        r#"INSERT INTO end_role_oobis (cid, role, eid, oobi_data)
-                           VALUES ($1, $2, $3, $4)"#,
-                    )
-                    .bind(end_role.cid.to_string())
-                    .bind(serde_json::to_string(&end_role.role)?)
-                    .bind(end_role.eid.to_string())
-                    .bind(serde_cbor::to_vec(signed_reply)?)
-                    .execute(&self.pool)
-                    .await?;
+                    tx.commit().await?;
                 }
                 ReplyRoute::Ksn(_, _) => todo!(),
             }

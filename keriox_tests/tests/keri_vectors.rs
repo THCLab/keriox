@@ -388,9 +388,7 @@ impl Node {
                 .any(|r| r.digest().ok() == Some(said.clone())),
             ReplyRoute::EndRoleAdd(er) | ReplyRoute::EndRoleCut(er) => self
                 .oobi
-                .get_end_role(&er.cid, er.role)
-                .ok()
-                .flatten()
+                .end_role_records(&er.cid, er.role)
                 .unwrap_or_default()
                 .iter()
                 .any(|r| r.reply.digest().ok() == Some(said.clone())),
@@ -672,12 +670,7 @@ fn check_end(node: &Node, end: &Value) -> Result<(), String> {
     let eid = s(end, "eid");
     let role_name = s(end, "role");
     let role = Role::from_str(&role_name).map_err(|_| format!("unknown role {role_name}"))?;
-    let records = node
-        .oobi
-        .get_end_role(&cid, role)
-        .ok()
-        .flatten()
-        .unwrap_or_default();
+    let records = node.oobi.end_role_records(&cid, role).unwrap_or_default();
     let last = records
         .iter()
         .rev()

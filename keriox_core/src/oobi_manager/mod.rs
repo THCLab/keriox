@@ -55,11 +55,12 @@ impl<S: OobiStorageBackend> OobiManager<S> {
                 if rpy.signature.get_signer().ok_or(Error::MissingSigner)? != er.cid {
                     return Err(OobiError::SignerMismatch);
                 };
+                // Each endpoint's authorization is its own record, so the
+                // update is checked against that endpoint's latest reply.
                 if let Some(old_rpy) = self
-                    .store
-                    .get_end_role(&er.cid, er.role)
-                    .map_err(|e| OobiError::Db(e.to_string()))?
-                    .and_then(|rpys| rpys.last().cloned())
+                    .end_role_records(&er.cid, er.role)?
+                    .into_iter()
+                    .find(|old| end_role_eid(old).as_ref() == Some(&er.eid))
                 {
                     bada_logic(rpy, &old_rpy)?;
                 };
@@ -106,14 +107,48 @@ impl<S: OobiStorageBackend> OobiManager<S> {
             .collect())
     }
 
+    /// The endpoints `id` currently authorizes in `role`: the latest reply
+    /// for each endpoint, when that reply is an `/end/role/add`. A cut
+    /// nullifies the endpoint's record, so it is not returned.
     pub fn get_end_role(
         &self,
         id: &IdentifierPrefix,
         role: Role,
     ) -> Result<Option<Vec<SignedReply>>, OobiError> {
-        self.store
+        let active: Vec<SignedReply> = self
+            .end_role_records(id, role)?
+            .into_iter()
+            .filter(|rpy| matches!(rpy.reply.get_route(), ReplyRoute::EndRoleAdd(_)))
+            .collect();
+        Ok((!active.is_empty()).then_some(active))
+    }
+
+    /// The record of each endpoint of `id` in `role`: its latest reply, an
+    /// add (authorized) or a cut (nullified). Storage keeps one per endpoint;
+    /// stores written before that kept every reply, so the latest by
+    /// date-time wins.
+    pub fn end_role_records(
+        &self,
+        id: &IdentifierPrefix,
+        role: Role,
+    ) -> Result<Vec<SignedReply>, OobiError> {
+        let mut latest: Vec<SignedReply> = vec![];
+        for rpy in self
+            .store
             .get_end_role(id, role)
-            .map_err(|e| OobiError::Db(e.to_string()))
+            .map_err(|e| OobiError::Db(e.to_string()))?
+            .unwrap_or_default()
+        {
+            let eid = end_role_eid(&rpy);
+            match latest.iter_mut().find(|kept| end_role_eid(kept) == eid) {
+                Some(kept) if rpy.reply.get_timestamp() > kept.reply.get_timestamp() => {
+                    *kept = rpy
+                }
+                Some(_) => {}
+                None => latest.push(rpy),
+            }
+        }
+        Ok(latest)
     }
 
     /// Assumes that signatures were verified.
@@ -123,6 +158,14 @@ impl<S: OobiStorageBackend> OobiManager<S> {
             .save_oobi(oobi_rpy)
             .map_err(|e| OobiError::Db(e.to_string()))?;
         Ok(())
+    }
+}
+
+/// The endpoint an end role reply is about.
+fn end_role_eid(rpy: &SignedReply) -> Option<IdentifierPrefix> {
+    match rpy.reply.get_route() {
+        ReplyRoute::EndRoleAdd(er) | ReplyRoute::EndRoleCut(er) => Some(er.eid),
+        _ => None,
     }
 }
 
@@ -254,5 +297,133 @@ mod tests {
         assert_ne!(timestamps, timestamps2);
 
         Ok(())
+    }
+
+    /// Replies authorizing (or cutting) `eid` in `role` for `cid`, signed by
+    /// `cid`. Each call has a later `dt` than the previous one.
+    mod end_roles {
+        use said::{derivation::HashFunctionCode, version::format::SerializationFormats};
+
+        use crate::{
+            oobi::{EndRole, Role},
+            prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+            query::{
+                reply_event::{ReplyEvent, ReplyRoute, SignedReply},
+                QueryError,
+            },
+            signer::Signer,
+        };
+
+        use super::setup_oobi_manager;
+        use crate::oobi::error::OobiError;
+
+        struct Controller {
+            key: BasicPrefix,
+        }
+
+        impl Controller {
+            fn new() -> Self {
+                Self {
+                    key: BasicPrefix::Ed25519NT(Signer::new().public_key()),
+                }
+            }
+
+            fn cid(&self) -> IdentifierPrefix {
+                IdentifierPrefix::Basic(self.key.clone())
+            }
+
+            fn reply(&self, add: bool, eid: &IdentifierPrefix) -> SignedReply {
+                let end_role = EndRole {
+                    cid: self.cid(),
+                    role: Role::Watcher,
+                    eid: eid.clone(),
+                };
+                let route = if add {
+                    ReplyRoute::EndRoleAdd(end_role)
+                } else {
+                    ReplyRoute::EndRoleCut(end_role)
+                };
+                let rpy = ReplyEvent::new_reply(
+                    route,
+                    HashFunctionCode::Blake3_256,
+                    SerializationFormats::JSON,
+                );
+                // Stored replies are checked for their signer and order
+                // only; signatures are verified before they get here.
+                SignedReply::new_nontrans(
+                    rpy,
+                    self.key.clone(),
+                    SelfSigningPrefix::Ed25519Sha512(vec![0; 64]),
+                )
+            }
+        }
+
+        fn eid() -> IdentifierPrefix {
+            IdentifierPrefix::Basic(BasicPrefix::Ed25519NT(Signer::new().public_key()))
+        }
+
+        fn watchers(
+            manager: &crate::oobi_manager::RedbOobiManager,
+            cid: &IdentifierPrefix,
+        ) -> Vec<IdentifierPrefix> {
+            manager
+                .get_end_role(cid, Role::Watcher)
+                .unwrap()
+                .unwrap_or_default()
+                .into_iter()
+                .map(|rpy| match rpy.reply.get_route() {
+                    ReplyRoute::EndRoleAdd(er) => er.eid,
+                    other => panic!("an inactive role was returned: {other:?}"),
+                })
+                .collect()
+        }
+
+        #[test]
+        fn a_cut_nullifies_the_authorization() -> Result<(), OobiError> {
+            let manager = setup_oobi_manager();
+            let (controller, watcher) = (Controller::new(), eid());
+            let add = controller.reply(true, &watcher);
+            let cut = controller.reply(false, &watcher);
+
+            manager.process_oobi(&add)?;
+            assert_eq!(watchers(&manager, &controller.cid()), vec![watcher.clone()]);
+
+            manager.process_oobi(&cut)?;
+            assert!(watchers(&manager, &controller.cid()).is_empty());
+
+            // The older authorization, replayed, is stale.
+            assert!(matches!(
+                manager.process_oobi(&add),
+                Err(OobiError::Query(QueryError::StaleRpy))
+            ));
+            assert!(watchers(&manager, &controller.cid()).is_empty());
+
+            // A newer one authorizes it again.
+            manager.process_oobi(&controller.reply(true, &watcher))?;
+            assert_eq!(watchers(&manager, &controller.cid()), vec![watcher]);
+            Ok(())
+        }
+
+        #[test]
+        fn each_endpoint_is_its_own_record() -> Result<(), OobiError> {
+            let manager = setup_oobi_manager();
+            let (controller, first, second) = (Controller::new(), eid(), eid());
+            // Built first, so older than the authorization of `first`.
+            let older_for_second = controller.reply(true, &second);
+            manager.process_oobi(&controller.reply(true, &first))?;
+
+            // Not stale: no earlier record for `second` exists.
+            manager.process_oobi(&older_for_second)?;
+            let mut listed = watchers(&manager, &controller.cid());
+            listed.sort_by_key(|id| id.to_string());
+            let mut expected = vec![first.clone(), second.clone()];
+            expected.sort_by_key(|id| id.to_string());
+            assert_eq!(listed, expected);
+
+            // Cutting one leaves the other.
+            manager.process_oobi(&controller.reply(false, &first))?;
+            assert_eq!(watchers(&manager, &controller.cid()), vec![second]);
+            Ok(())
+        }
     }
 }
