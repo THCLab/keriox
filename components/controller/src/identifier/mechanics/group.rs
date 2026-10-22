@@ -345,6 +345,16 @@ where
 
         self.known_events
             .finalize_key_event(&key_event, &sig, own_index)?;
+        // An event of this identifier itself (e.g. a delegating `ixn`)
+        // moves its state on, as in `finalize_key_event`: later events are
+        // built on the cached state, before witnesses receipt this one. Best
+        // effort: a cached state that does not lead to this event (already
+        // past it, or not this identifier's history) is left as it was.
+        if key_event.data.get_prefix() == self.id {
+            if let Ok(state) = self.cached_state.clone().apply(key_event) {
+                self.cached_state = state;
+            }
+        }
 
         let signature = IndexedSignature::new_both_same(sig.clone(), own_index as u16);
 

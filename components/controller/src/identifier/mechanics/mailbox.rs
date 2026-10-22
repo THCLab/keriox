@@ -6,8 +6,9 @@ use keri_core::{
         event_data::EventData,
         sections::seal::{EventSeal, Seal},
     },
-    event_message::signed_event_message::{
-        Message, Notice, SignedEventMessage, SignedNontransferableReceipt,
+    event_message::{
+        signed_event_message::{Message, Notice, SignedEventMessage, SignedNontransferableReceipt},
+        EventTypeTag,
     },
     mailbox::{exchange::ForwardTopic, MailboxResponse},
     oobi_manager::storage::OobiStorageBackend,
@@ -194,16 +195,11 @@ where
         &self,
         event_to_confirm: &SignedEventMessage,
     ) -> Result<Option<ActionRequired>, MechanicsError> {
-        match event_to_confirm.event_message.data.get_event_data() {
-            // delegating event
-            EventData::Icp(_) | EventData::Rot(_) | EventData::Ixn(_) => {
-                self.known_events
-                    .process(&Message::Notice(Notice::Event(event_to_confirm.clone())))
-                    .map_err(ResponseProcessingError::Delegate)?;
-                Ok(None)
-            }
+        // Dispatch on the type tag: a parsed `drt` carries the same data as
+        // a `rot`, so only the tag tells a delegated rotation apart.
+        match event_to_confirm.event_message.event_type {
             // delegated event
-            EventData::Dip(_) | EventData::Drt(_) => {
+            EventTypeTag::Dip | EventTypeTag::Drt => {
                 self.known_events
                     .process(&Message::Notice(Notice::Event(event_to_confirm.clone())))
                     .map_err(ResponseProcessingError::Delegate)?;
@@ -212,6 +208,13 @@ where
                     delegating_event,
                     exn,
                 )))
+            }
+            // delegating event
+            _ => {
+                self.known_events
+                    .process(&Message::Notice(Notice::Event(event_to_confirm.clone())))
+                    .map_err(ResponseProcessingError::Delegate)?;
+                Ok(None)
             }
         }
     }
@@ -249,8 +252,13 @@ where
                 };
                 Ok(None)
             }
-            // delegated event
-            EventData::Dip(_) | EventData::Drt(_) => {
+            // delegated event; a parsed `drt` carries `rot` data, so check
+            // the type tag
+            _ if matches!(
+                event_to_confirm.event_message.event_type,
+                EventTypeTag::Dip | EventTypeTag::Drt
+            ) =>
+            {
                 self.known_events
                     .process(&Message::Notice(Notice::Event(event_to_confirm.clone())))
                     .map_err(ResponseProcessingError::Delegate)?;
