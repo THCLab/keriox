@@ -15,7 +15,28 @@ pub enum Oobi {
 pub struct LocationScheme {
     pub eid: IdentifierPrefix,
     pub scheme: Scheme,
-    pub url: Url,
+    /// `None` nullifies the location: the KERI specification writes it as
+    /// the empty string.
+    #[serde(with = "empty_url_as_none")]
+    pub url: Option<Url>,
+}
+
+mod empty_url_as_none {
+    use serde::{Deserialize, Deserializer, Serializer};
+    use url::Url;
+
+    pub fn serialize<S: Serializer>(url: &Option<Url>, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_str(url.as_ref().map_or("", |url| url.as_str()))
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Option<Url>, D::Error> {
+        let url = String::deserialize(d)?;
+        if url.is_empty() {
+            Ok(None)
+        } else {
+            Url::parse(&url).map(Some).map_err(serde::de::Error::custom)
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -31,7 +52,21 @@ pub struct EndRole {
 
 impl LocationScheme {
     pub fn new(eid: IdentifierPrefix, scheme: Scheme, url: Url) -> Self {
-        Self { eid, scheme, url }
+        Self {
+            eid,
+            scheme,
+            url: Some(url),
+        }
+    }
+
+    /// A location that withdraws the endpoint's earlier location for
+    /// `scheme`.
+    pub fn nullify(eid: IdentifierPrefix, scheme: Scheme) -> Self {
+        Self {
+            eid,
+            scheme,
+            url: None,
+        }
     }
 
     pub fn get_eid(&self) -> IdentifierPrefix {
@@ -42,7 +77,8 @@ impl LocationScheme {
         self.scheme.clone()
     }
 
-    pub fn get_url(&self) -> Url {
+    /// The endpoint's url, or `None` for a nullified location.
+    pub fn get_url(&self) -> Option<Url> {
         self.url.clone()
     }
 }

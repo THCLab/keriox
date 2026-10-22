@@ -41,7 +41,7 @@ async fn test_tel_from_watcher() -> Result<(), anyhow::Error> {
     let verifier_witness_location = LocationScheme {
         eid: IdentifierPrefix::Basic(verifier_witness_id.clone()),
         scheme: keri_core::oobi::Scheme::Http,
-        url: verifier_witness_url,
+        url: Some(verifier_witness_url),
     };
 
     // Setup second test witness
@@ -64,7 +64,7 @@ async fn test_tel_from_watcher() -> Result<(), anyhow::Error> {
     let issuer_witness_location = LocationScheme {
         eid: IdentifierPrefix::Basic(issuer_witness_id.clone()),
         scheme: keri_core::oobi::Scheme::Http,
-        url: issuer_witness_url,
+        url: Some(issuer_witness_url),
     };
 
     let watcher_tel_dir = Builder::new().prefix("cont-test-tel-db").tempdir().unwrap();
@@ -121,7 +121,7 @@ async fn test_tel_from_watcher() -> Result<(), anyhow::Error> {
     let watcher_location = LocationScheme {
         eid: IdentifierPrefix::Basic(watcher_identifier.clone()),
         scheme: keri_core::oobi::Scheme::Http,
-        url: Url::parse("http://watcher1/").unwrap(),
+        url: Some(Url::parse("http://watcher1/").unwrap()),
     };
 
     // Setup test transports, that will be used by controllers to communicate

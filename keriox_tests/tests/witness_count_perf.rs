@@ -43,7 +43,7 @@ async fn spawn_witness(port: u16, seed: &str) -> WitnessHandle {
     let oobi = LocationScheme {
         eid: IdentifierPrefix::Basic(id.clone()),
         scheme: keri_core::oobi::Scheme::Http,
-        url: url.clone(),
+        url: Some(url.clone()),
     };
     actix_rt::spawn(wit.listen_http((Ipv4Addr::UNSPECIFIED, port)));
     // Leak the tempdir so it lives for the duration of the test process.
@@ -67,7 +67,7 @@ async fn spawn_watcher(port: u16) -> (BasicPrefix, LocationScheme) {
     let oobi = LocationScheme {
         eid: IdentifierPrefix::Basic(id.clone()),
         scheme: keri_core::oobi::Scheme::Http,
-        url: url.clone(),
+        url: Some(url.clone()),
     };
     actix_rt::spawn(listener.listen_http((Ipv4Addr::UNSPECIFIED, port)));
     std::mem::forget(tel_dir);

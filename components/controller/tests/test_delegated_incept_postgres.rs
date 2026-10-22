@@ -49,7 +49,7 @@ mod test_delegated_incept_postgres {
         let wit_location = LocationScheme {
             eid: witness_id,
             scheme: keri_core::oobi::Scheme::Http,
-            url: Url::parse("http://witness1:3232").unwrap(),
+            url: Some(Url::parse("http://witness1:3232").unwrap()),
         };
 
         let mut actors: TestActorMap = HashMap::new();

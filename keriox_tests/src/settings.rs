@@ -45,7 +45,7 @@ impl AsyncTestContext for InfrastructureContext {
         let first_witness_oobi = LocationScheme {
             eid: IdentifierPrefix::Basic(first_witness_id.clone()),
             scheme: keri_core::oobi::Scheme::Http,
-            url: Url::parse(&format!("http://127.0.0.1:{first_port}")).unwrap(),
+            url: Some(Url::parse(&format!("http://127.0.0.1:{first_port}")).unwrap()),
         };
 
         actix_rt::spawn(first_witness.listen_http((Ipv4Addr::LOCALHOST, first_port)));
@@ -66,7 +66,7 @@ impl AsyncTestContext for InfrastructureContext {
         let second_witness_oobi = LocationScheme {
             eid: IdentifierPrefix::Basic(second_witness_id.clone()),
             scheme: keri_core::oobi::Scheme::Http,
-            url: Url::parse(&format!("http://127.0.0.1:{second_port}")).unwrap(),
+            url: Some(Url::parse(&format!("http://127.0.0.1:{second_port}")).unwrap()),
         };
 
         actix_rt::spawn(second_witness.listen_http((Ipv4Addr::LOCALHOST, second_port)));
@@ -90,7 +90,7 @@ impl AsyncTestContext for InfrastructureContext {
         let watcher_oobi = LocationScheme {
             eid: IdentifierPrefix::Basic(watcher_id.clone()),
             scheme: keri_core::oobi::Scheme::Http,
-            url: watcher_url.clone(),
+            url: Some(watcher_url.clone()),
         };
         actix_rt::spawn(watcher_listener.listen_http((Ipv4Addr::LOCALHOST, watcher_port)));
 

@@ -361,7 +361,7 @@ async fn latest_loc_scheme_picks_newest_dt() -> Result<(), ActorError> {
     assert_eq!(picked.scheme, Scheme::Https,
         "after a http→https migration the newer-dt reply must win even though \
          redb stores http under a lexicographically-smaller scheme key");
-    assert_eq!(picked.url.as_str(), "https://witness-under-test/");
+    assert_eq!(picked.url.unwrap().as_str(), "https://witness-under-test/");
 
     // Case 2: insertion order should not affect the outcome. Use a
     // fresh watcher so the previous replies don't leak in.
@@ -380,7 +380,7 @@ async fn latest_loc_scheme_picks_newest_dt() -> Result<(), ActorError> {
     let picked2 = watcher2.watcher_data.latest_loc_scheme(&witness_eid)?;
     assert_eq!(picked2.scheme, Scheme::Https,
         "insertion order must not influence the selection");
-    assert_eq!(picked2.url.as_str(), "https://witness-under-test/");
+    assert_eq!(picked2.url.unwrap().as_str(), "https://witness-under-test/");
 
     // Case 3: empty OOBI store yields NoLocation, not a panic or stale
     // value. Use yet another fresh watcher so the assertion does not

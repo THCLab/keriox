@@ -62,8 +62,8 @@ where
         loc: LocationScheme,
         msg: Message,
     ) -> Result<(), TransportError<E>> {
-        let (host, port) = match loc.url.origin() {
-            url::Origin::Tuple(_scheme, host, port) => (host, port),
+        let (host, port) = match loc.url.as_ref().map(url::Url::origin) {
+            Some(url::Origin::Tuple(_scheme, host, port)) => (host, port),
             _ => return Err(TransportError::NetworkError("Wrong url".to_string())),
         };
 
@@ -82,8 +82,8 @@ where
         loc: LocationScheme,
         qry: SignedQueryMessage,
     ) -> Result<PossibleResponse, TransportError<E>> {
-        let (host, port) = match loc.url.origin() {
-            url::Origin::Tuple(_scheme, host, port) => (host, port),
+        let (host, port) = match loc.url.as_ref().map(url::Url::origin) {
+            Some(url::Origin::Tuple(_scheme, host, port)) => (host, port),
             _ => return Err(TransportError::NetworkError("Wrong url".to_string())),
         };
 
@@ -99,8 +99,8 @@ where
     }
 
     async fn request_loc_scheme(&self, loc: LocationScheme) -> Result<Vec<Op>, TransportError<E>> {
-        let (host, port) = match loc.url.origin() {
-            url::Origin::Tuple(_scheme, host, port) => (host, port),
+        let (host, port) = match loc.url.as_ref().map(url::Url::origin) {
+            Some(url::Origin::Tuple(_scheme, host, port)) => (host, port),
             _ => return Err(TransportError::NetworkError("Wrong url".into())),
         };
 
@@ -122,8 +122,8 @@ where
         role: Role,
         eid: IdentifierPrefix,
     ) -> Result<Vec<u8>, TransportError<E>> {
-        let (host, port) = match loc.url.origin() {
-            url::Origin::Tuple(_scheme, host, port) => (host, port),
+        let (host, port) = match loc.url.as_ref().map(url::Url::origin) {
+            Some(url::Origin::Tuple(_scheme, host, port)) => (host, port),
             _ => return Err(TransportError::NetworkError("Wrong url".into())),
         };
 
@@ -139,8 +139,8 @@ where
     }
 
     async fn resolve_oobi(&self, loc: LocationScheme, oobi: Oobi) -> Result<(), TransportError<E>> {
-        let (host, port) = match loc.url.origin() {
-            url::Origin::Tuple(_scheme, host, port) => (host, port),
+        let (host, port) = match loc.url.as_ref().map(url::Url::origin) {
+            Some(url::Origin::Tuple(_scheme, host, port)) => (host, port),
             _ => return Err(TransportError::NetworkError("Wrong url".into())),
         };
 

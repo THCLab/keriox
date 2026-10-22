@@ -140,7 +140,7 @@ async fn main() -> Result<()> {
             oobi: LocationScheme {
                 eid: IdentifierPrefix::Basic(id),
                 scheme: keri_core::oobi::Scheme::Http,
-                url,
+                url: Some(url),
             },
         });
     }

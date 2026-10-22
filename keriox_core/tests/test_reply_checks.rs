@@ -4,7 +4,8 @@
 //!   state is fixed;
 //! - a reply is a KERI message: its version string names KERI;
 //! - BADA accepts an update only when its date-time is later than the
-//!   prior's.
+//!   prior's;
+//! - a `/loc/scheme` reply with an empty `url` nullifies the location.
 #![cfg(feature = "oobi-manager")]
 
 use std::sync::Arc;
@@ -45,14 +46,15 @@ fn setup() -> Fixture {
 }
 
 /// A `/loc/scheme` reply for `eid` dated `dt`, in the `protocol` given by
-/// its version string.
+/// its version string. An empty `url` nullifies the location.
 fn loc_scheme(eid: &BasicPrefix, url: &str, dt: &str, protocol: &str) -> ReplyEvent {
+    let eid = IdentifierPrefix::Basic(eid.clone());
+    let location = match url {
+        "" => LocationScheme::nullify(eid, Scheme::Http),
+        url => LocationScheme::new(eid, Scheme::Http, Url::parse(url).unwrap()),
+    };
     let mut rpy = ReplyEvent::new_reply(
-        ReplyRoute::LocScheme(LocationScheme::new(
-            IdentifierPrefix::Basic(eid.clone()),
-            Scheme::Http,
-            Url::parse(url).unwrap(),
-        )),
+        ReplyRoute::LocScheme(location),
         HashFunctionCode::Blake3_256,
         SerializationFormats::JSON,
     );
@@ -90,7 +92,7 @@ fn urls(fx: &Fixture, eid: &BasicPrefix) -> Vec<String> {
         .unwrap()
         .into_iter()
         .map(|rpy| match rpy.get_route() {
-            ReplyRoute::LocScheme(loc) => loc.url.to_string(),
+            ReplyRoute::LocScheme(loc) => loc.url.map_or(String::new(), |url| url.to_string()),
             other => panic!("not a location: {other:?}"),
         })
         .collect()
@@ -169,6 +171,42 @@ fn an_update_needs_a_later_date_time() {
             &eid,
             "http://b/",
             "2020-08-21T17:52:17.000000+00:00",
+            "KERI",
+        ),
+        &signer,
+        &eid,
+    )
+    .unwrap();
+    assert_eq!(urls(&fx, &eid), vec!["http://b/"]);
+}
+
+#[test]
+fn an_empty_url_nullifies_the_location() {
+    let fx = setup();
+    let signer = Signer::new();
+    let eid = BasicPrefix::Ed25519NT(signer.public_key());
+    send(
+        &fx,
+        loc_scheme(&eid, "http://a/", DT, "KERI"),
+        &signer,
+        &eid,
+    )
+    .unwrap();
+
+    let nullify = loc_scheme(&eid, "", "2020-08-21T17:52:17.000000+00:00", "KERI");
+    assert!(String::from_utf8(nullify.encode().unwrap())
+        .unwrap()
+        .contains(r#""url":"""#));
+    send(&fx, nullify, &signer, &eid).unwrap();
+    assert!(urls(&fx, &eid).is_empty());
+
+    // A later location puts the endpoint back.
+    send(
+        &fx,
+        loc_scheme(
+            &eid,
+            "http://b/",
+            "2020-08-21T17:52:18.000000+00:00",
             "KERI",
         ),
         &signer,

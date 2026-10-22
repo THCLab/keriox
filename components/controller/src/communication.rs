@@ -45,6 +45,9 @@ pub enum SendingError {
 
     #[error("Invalid url: {0}")]
     InvalidUrl(#[from] url::ParseError),
+
+    #[error("The location of {eid} is nullified")]
+    NullifiedLocation { eid: IdentifierPrefix },
 }
 
 impl From<TransportError> for SendingError {
@@ -311,16 +314,26 @@ fn shared_http_client() -> reqwest::Client {
     CLIENT.get_or_init(build).clone()
 }
 
+/// The url of a location; a nullified one has none to reach.
+fn tel_url(location: &LocationScheme) -> Result<&url::Url, SendingError> {
+    location
+        .url
+        .as_ref()
+        .ok_or_else(|| SendingError::NullifiedLocation {
+            eid: location.eid.clone(),
+        })
+}
+
 #[async_trait::async_trait]
 impl IdentifierTelTransport for HTTPTelTransport {
-    #[instrument(skip_all, fields(host = location.url.host_str().unwrap_or("?")))]
+    #[instrument(skip_all, fields(host = location.url.as_ref().and_then(|url| url.host_str()).unwrap_or("?")))]
     async fn send_query(
         &self,
         qry: SignedTelQuery,
         location: LocationScheme,
     ) -> Result<String, SendingError> {
         let url = match location.scheme {
-            Scheme::Http | Scheme::Https => location.url.join("query/tel")?,
+            Scheme::Http | Scheme::Https => tel_url(&location)?.join("query/tel")?,
             Scheme::Tcp => todo!(),
         };
         let started = Instant::now();
@@ -342,14 +355,14 @@ impl IdentifierTelTransport for HTTPTelTransport {
         Ok(body)
     }
 
-    #[instrument(skip_all, fields(host = location.url.host_str().unwrap_or("?")))]
+    #[instrument(skip_all, fields(host = location.url.as_ref().and_then(|url| url.host_str()).unwrap_or("?")))]
     async fn send_tel_event(
         &self,
         event: VerifiableEvent,
         location: LocationScheme,
     ) -> Result<(), SendingError> {
         let url = match location.scheme {
-            Scheme::Http | Scheme::Https => location.url.join("process/tel")?,
+            Scheme::Http | Scheme::Https => tel_url(&location)?.join("process/tel")?,
             Scheme::Tcp => todo!(),
         };
         let started = Instant::now();

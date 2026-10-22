@@ -116,7 +116,7 @@ async fn test_multisig(ctx: &mut InfrastructureContext) -> Result<()> {
     assert_eq!(
         format!(
             r#"{{"eid":"BJq7UABlttINuWJh1Xl2lkqZG4NTdUdqnbFJDa6ZyxCC","scheme":"http","url":"{}"}}"#,
-            witness_oobi.url
+            witness_oobi.url.as_ref().unwrap()
         ),
         serde_json::to_string(&witness_oobi).unwrap()
     );

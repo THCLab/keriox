@@ -81,12 +81,23 @@ impl<E> Default for DefaultTransport<E> {
     }
 }
 
+/// The url of a location. A nullified location has none: its endpoint has
+/// withdrawn it.
+fn base_url<E>(loc: &LocationScheme) -> Result<&url::Url, TransportError<E>> {
+    loc.url.as_ref().ok_or_else(|| {
+        TransportError::NetworkError(format!(
+            "the {:?} location of {} is nullified",
+            loc.scheme, loc.eid
+        ))
+    })
+}
+
 #[async_trait::async_trait]
 impl<E> Transport<E> for DefaultTransport<E>
 where
     E: for<'a> Deserialize<'a> + Send + Sync + std::error::Error + 'static,
 {
-    #[instrument(skip_all, fields(scheme = ?loc.scheme, host = loc.url.host_str().unwrap_or("?")))]
+    #[instrument(skip_all, fields(scheme = ?loc.scheme, host = loc.url.as_ref().and_then(|url| url.host_str()).unwrap_or("?")))]
     async fn send_message(
         &self,
         loc: LocationScheme,
@@ -94,14 +105,14 @@ where
     ) -> Result<(), TransportError<E>> {
         let url = match loc.scheme {
             Scheme::Http | Scheme::Https => match &msg {
-                Message::Notice(_) => loc.url.join("process").unwrap(),
+                Message::Notice(_) => base_url(&loc)?.join("process").unwrap(),
                 Message::Op(op) => match op {
                     #[cfg(feature = "query")]
                     Op::Query(_) => panic!("can't send query in send_message"),
                     #[cfg(feature = "query")]
-                    Op::Reply(_) => loc.url.join("register").unwrap(),
+                    Op::Reply(_) => base_url(&loc)?.join("register").unwrap(),
                     #[cfg(feature = "mailbox")]
-                    Op::Exchange(_) => loc.url.join("forward").unwrap(),
+                    Op::Exchange(_) => base_url(&loc)?.join("forward").unwrap(),
                 },
             },
             Scheme::Tcp => todo!(),
@@ -139,7 +150,7 @@ where
     }
 
     #[cfg(feature = "query")]
-    #[instrument(skip_all, fields(host = loc.url.host_str().unwrap_or("?")))]
+    #[instrument(skip_all, fields(host = loc.url.as_ref().and_then(|url| url.host_str()).unwrap_or("?")))]
     async fn send_query(
         &self,
         loc: LocationScheme,
@@ -148,7 +159,7 @@ where
         use crate::actor::possible_response::{parse_response, ResponseError};
 
         let url = match loc.scheme {
-            Scheme::Http | Scheme::Https => loc.url.join("query").unwrap(),
+            Scheme::Http | Scheme::Https => base_url(&loc)?.join("query").unwrap(),
             Scheme::Tcp => todo!(),
         };
 
@@ -191,11 +202,10 @@ where
         }
     }
 
-    #[instrument(skip_all, fields(eid = %loc.eid, host = loc.url.host_str().unwrap_or("?")))]
+    #[instrument(skip_all, fields(eid = %loc.eid, host = loc.url.as_ref().and_then(|url| url.host_str()).unwrap_or("?")))]
     async fn request_loc_scheme(&self, loc: LocationScheme) -> Result<Vec<Op>, TransportError<E>> {
         // {url}/oobi/{eid}
-        let url = loc
-            .url
+        let url = base_url(&loc)?
             .join("oobi/")
             .unwrap()
             .join(&loc.eid.to_string())
@@ -252,7 +262,7 @@ where
         }
     }
 
-    #[instrument(skip_all, fields(cid = %cid, eid = %eid, role = ?role, host = loc.url.host_str().unwrap_or("?")))]
+    #[instrument(skip_all, fields(cid = %cid, eid = %eid, role = ?role, host = loc.url.as_ref().and_then(|url| url.host_str()).unwrap_or("?")))]
     async fn request_end_role(
         &self,
         loc: LocationScheme,
@@ -261,8 +271,7 @@ where
         eid: IdentifierPrefix,
     ) -> Result<Vec<u8>, TransportError<E>> {
         // {url}/oobi/{cid}/{role}/{eid}
-        let url = loc
-            .url
+        let url = base_url(&loc)?
             .join("oobi/")
             .unwrap()
             .join(&format!("{}/", &cid.to_string()))
@@ -314,11 +323,11 @@ where
         }
     }
 
-    #[instrument(skip_all, fields(host = loc.url.host_str().unwrap_or("?")))]
+    #[instrument(skip_all, fields(host = loc.url.as_ref().and_then(|url| url.host_str()).unwrap_or("?")))]
     async fn resolve_oobi(&self, loc: LocationScheme, oobi: Oobi) -> Result<(), TransportError<E>> {
         let started = Instant::now();
         let resp = shared_http_client()
-            .post(format!("{}resolve", loc.url))
+            .post(format!("{}resolve", base_url(&loc)?))
             .body(serde_json::to_string(&oobi).unwrap())
             .send()
             .await

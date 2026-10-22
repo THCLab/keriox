@@ -447,7 +447,7 @@ fn streams(format: WireFormat) -> Vec<Value> {
     let loc = reply(ReplyRoute::LocScheme(LocationScheme {
         eid: IdentifierPrefix::Basic(witness_key(&witness)),
         scheme: Scheme::Http,
-        url: "http://witness.example:5631/".parse().unwrap(),
+        url: Some("http://witness.example:5631/".parse().unwrap()),
     }));
     let sig = SelfSigningPrefix::Ed25519Sha512(witness.sign(loc.encode().unwrap()).unwrap());
     vecs.push(stream_vector(

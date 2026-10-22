@@ -384,10 +384,10 @@ impl Node {
         match rpy.reply.get_route() {
             ReplyRoute::LocScheme(lc) => self
                 .oobi
-                .get_loc_scheme(&lc.get_eid())
-                .unwrap_or_default()
-                .iter()
-                .any(|r| r.digest().ok() == Some(said.clone())),
+                .loc_scheme_record(&lc.eid, &lc.scheme)
+                .ok()
+                .flatten()
+                .is_some_and(|r| r.reply.digest().ok() == Some(said.clone())),
             ReplyRoute::EndRoleAdd(er) | ReplyRoute::EndRoleCut(er) => self
                 .oobi
                 .end_role_records(&er.cid, er.role)
@@ -646,10 +646,10 @@ fn check_loc(node: &Node, loc: &Value) -> Result<(), String> {
         .unwrap_or_default()
         .into_iter()
         .filter_map(|r| match r.get_route() {
-            ReplyRoute::LocScheme(lc) => {
-                let url = lc.get_url();
-                (url.scheme() == scheme).then(|| url.to_string())
-            }
+            ReplyRoute::LocScheme(lc) => lc
+                .get_url()
+                .filter(|url| url.scheme() == scheme)
+                .map(|url| url.to_string()),
             _ => None,
         })
         .collect();

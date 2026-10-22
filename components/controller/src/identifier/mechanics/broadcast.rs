@@ -123,13 +123,13 @@ mod test {
         let wit1_location = LocationScheme {
             eid: IdentifierPrefix::Basic(wit1_id.clone()),
             scheme: keri_core::oobi::Scheme::Http,
-            url: Url::parse("http://witness1/").unwrap(),
+            url: Some(Url::parse("http://witness1/").unwrap()),
         };
         let wit2_id = witness2.get_prefix();
         let wit2_location = LocationScheme {
             eid: IdentifierPrefix::Basic(wit2_id.clone()),
             scheme: keri_core::oobi::Scheme::Http,
-            url: Url::parse("http://witness2/").unwrap(),
+            url: Some(Url::parse("http://witness2/").unwrap()),
         };
 
         let transport = {

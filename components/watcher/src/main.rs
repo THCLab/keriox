@@ -193,7 +193,7 @@ async fn main() -> anyhow::Result<()> {
     let watcher_loc_scheme = LocationScheme {
         eid: IdentifierPrefix::Basic(watcher_id.clone()),
         scheme: Scheme::Http,
-        url: cfg.public_url.clone(),
+        url: Some(cfg.public_url.clone()),
     };
 
     info!(

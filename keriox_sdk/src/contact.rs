@@ -96,6 +96,6 @@ mod tests {
         let loc = resolve_source(oobi, &RetryPolicy::no_retries())
             .await
             .unwrap();
-        assert_eq!(loc.url.as_str(), "http://127.0.0.1:3232/");
+        assert_eq!(loc.url.unwrap().as_str(), "http://127.0.0.1:3232/");
     }
 }

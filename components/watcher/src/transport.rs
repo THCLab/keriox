@@ -47,14 +47,20 @@ pub struct HttpTelTransport;
 
 #[async_trait::async_trait]
 impl WatcherTelTransport for HttpTelTransport {
-    #[instrument(skip_all, fields(host = location.url.host_str().unwrap_or("?")))]
+    #[instrument(skip_all, fields(host = location.url.as_ref().and_then(|url| url.host_str()).unwrap_or("?")))]
     async fn send_query(
         &self,
         qry: SignedTelQuery,
         location: LocationScheme,
     ) -> Result<String, TransportError> {
         let url = match location.scheme {
-            Scheme::Http | Scheme::Https => location.url.join("query/tel").unwrap(),
+            // a nullified location has no url to reach
+            Scheme::Http | Scheme::Https => location
+                .url
+                .as_ref()
+                .ok_or(TransportError::NetworkError)?
+                .join("query/tel")
+                .unwrap(),
             Scheme::Tcp => todo!(),
         };
         let started = Instant::now();

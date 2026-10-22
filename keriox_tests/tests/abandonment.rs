@@ -132,7 +132,12 @@ fn is_refused_as_abandoned(result: Result<(), TransportError<ActorError>>) -> bo
 }
 
 async fn public_state(base: &LocationScheme, id: &IdentifierPrefix) -> serde_json::Value {
-    let url = base.url.join(&format!("identifiers/{id}/state")).unwrap();
+    let url = base
+        .url
+        .as_ref()
+        .unwrap()
+        .join(&format!("identifiers/{id}/state"))
+        .unwrap();
     let body = reqwest::get(url).await.unwrap().text().await.unwrap();
     serde_json::from_str(&body).unwrap()
 }
@@ -243,11 +248,11 @@ async fn an_abandoned_identifier_is_final_for_witnesses_and_watchers(
     // Witnesses and the watcher report it publicly too.
     for endpoint in [&first_witness, &second_witness, &watcher] {
         let state = public_state(endpoint, a.id()).await;
-        assert_eq!(state["abandoned"]["sn"], 1, "{}", endpoint.url);
+        assert_eq!(state["abandoned"]["sn"], 1, "{:?}", endpoint.url);
         assert_eq!(
             state["abandoned"]["said"],
             abandonment_said.to_string(),
-            "{}",
+            "{:?}",
             endpoint.url
         );
     }

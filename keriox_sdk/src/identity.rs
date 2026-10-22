@@ -475,6 +475,11 @@ impl Identity {
         })?;
         let url = location
             .url
+            .as_ref()
+            .ok_or(Error::InvalidInput {
+                expected: "known witness address",
+                cause: "the location of this identity's witness is nullified".into(),
+            })?
             .join(&format!("oobi/{}/witness/{}", self.id, witness.to_str()))
             .map_err(|e| Error::InvalidInput {
                 expected: "witness URL",
@@ -489,11 +494,13 @@ impl Identity {
         let witness_ids: Vec<_> = identifier.witnesses();
         let mut urls = vec![];
         for w in witness_ids {
-            for loc in identifier
+            for url in identifier
                 .get_location(&keri_controller::IdentifierPrefix::Basic(w))
                 .unwrap_or_default()
+                .into_iter()
+                .filter_map(|loc| loc.url)
             {
-                urls.push(loc.url.to_string());
+                urls.push(url.to_string());
             }
         }
         Ok(urls)

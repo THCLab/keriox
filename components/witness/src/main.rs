@@ -155,7 +155,7 @@ async fn main() -> Result<()> {
     let witness_loc_scheme = LocationScheme {
         eid: witness_id.clone(),
         scheme: Scheme::Http,
-        url: cfg.public_url.clone(),
+        url: Some(cfg.public_url.clone()),
     };
 
     info!(

@@ -204,11 +204,11 @@ then has to be classified by hand.
 | File | Run | Pass | Expected failures |
 |---|---:|---:|---:|
 | `v1/keripy/kels/positive` (15 vectors, each also as `/cesr1`) | 30 | 14 | 16 |
-| `v1/keripy/negative/negative` | 84 | 52 | 32 |
+| `v1/keripy/negative/negative` | 84 | 53 | 31 |
 | `v2/keripy/kels/positive` | 15 | 14 | 1 |
 | `v2/keripy/negative/negative` | 11 | 6 | 5 |
 | `v2/spec/examples` (52 vectors, 6 not checked) | 46 | 14 | 32 |
-| total | 186 | 100 | 86 |
+| total | 186 | 101 | 85 |
 
 ### Expected failures by cause
 
@@ -222,7 +222,7 @@ then has to be classified by hand.
 | `key-event-rules` | 5 | Accepted although the specification forbids them:<br>- `kt=0`;<br>- `nt=0` with a rotation to unrelated keys;<br>- an `ixn` body tagged `rot`;<br>- an unsatisfiable `nt`;<br>- a non-transferable prefix with `n`. | Rotation using pre-rotation; Key and key digest threshold fields; KERI's secure bindings |
 | `pro-bar-xip` | 6 | There are no `pro`, `bar` or `xip` message types. | Routed Messages |
 | `witness-list` | 5 | Duplicates in `b`, `br` and `ba` are accepted, and `ba` naming a current witness duplicates it. A weighted `bt` is accepted. | Backer list; Backer threshold; Backer remove / add lists |
-| `reply-bada` | 3 | `url ""` (nullify) is not read, and the roles `registrar` and `mailbox` are not known. | BADA Policy; RUN off the CRUD; OOBI KERI Endpoint Authorization |
+| `reply-bada` | 2 | The roles `registrar` and `mailbox` are not known. | BADA Policy; RUN off the CRUD; OOBI KERI Endpoint Authorization |
 | `nested-threshold` | 5 | It does not read nested weighted thresholds (`{"1/2": [...]}`). | Fractionally weighted threshold |
 | `config` | 1 | It does not enforce `RB` (registrar backers need registrar backer seals). | Configuration traits field |
 | `key-state` | 2 | Key state notices in keripy's shape are not read; the specification defines no key state notice format. | Backer remove / add lists; Reply Message Body |

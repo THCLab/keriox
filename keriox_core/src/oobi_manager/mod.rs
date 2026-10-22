@@ -5,7 +5,7 @@ use crate::event_message::cesr_adapter::parse_cesr_stream_many;
 use crate::{
     error::Error,
     event_message::signed_event_message::{Message, Op},
-    oobi::{error::OobiError, Role},
+    oobi::{error::OobiError, Role, Scheme},
     prefix::IdentifierPrefix,
     query::reply_event::{bada_logic, ReplyEvent, ReplyRoute, SignedReply},
 };
@@ -97,6 +97,8 @@ impl<S: OobiStorageBackend> OobiManager<S> {
             .map_err(|e| OobiError::Db(e.to_string()))
     }
 
+    /// The locations `id` currently has: the latest reply for each scheme,
+    /// unless that reply nullified the location with an empty url.
     pub fn get_loc_scheme(&self, id: &IdentifierPrefix) -> Result<Vec<ReplyEvent>, OobiError> {
         Ok(self
             .store
@@ -104,6 +106,9 @@ impl<S: OobiStorageBackend> OobiManager<S> {
             .map_err(|e| OobiError::Db(e.to_string()))?
             .into_iter()
             .map(|e| e.reply)
+            .filter(|reply| {
+                !matches!(reply.get_route(), ReplyRoute::LocScheme(loc) if loc.url.is_none())
+            })
             .collect())
     }
 
@@ -121,6 +126,18 @@ impl<S: OobiStorageBackend> OobiManager<S> {
             .filter(|rpy| matches!(rpy.reply.get_route(), ReplyRoute::EndRoleAdd(_)))
             .collect();
         Ok((!active.is_empty()).then_some(active))
+    }
+
+    /// The record of the location of `eid` for `scheme`: its latest reply,
+    /// which may have nullified the location.
+    pub fn loc_scheme_record(
+        &self,
+        eid: &IdentifierPrefix,
+        scheme: &Scheme,
+    ) -> Result<Option<SignedReply>, OobiError> {
+        self.store
+            .get_last_loc_scheme(eid, scheme)
+            .map_err(|e| OobiError::Db(e.to_string()))
     }
 
     /// The record of each endpoint of `id` in `role`: its latest reply, an
@@ -141,9 +158,7 @@ impl<S: OobiStorageBackend> OobiManager<S> {
         {
             let eid = end_role_eid(&rpy);
             match latest.iter_mut().find(|kept| end_role_eid(kept) == eid) {
-                Some(kept) if rpy.reply.get_timestamp() > kept.reply.get_timestamp() => {
-                    *kept = rpy
-                }
+                Some(kept) if rpy.reply.get_timestamp() > kept.reply.get_timestamp() => *kept = rpy,
                 Some(_) => {}
                 None => latest.push(rpy),
             }

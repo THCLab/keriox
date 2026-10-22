@@ -93,8 +93,8 @@ impl IdentifierTelTransport for TelTestTransport {
         qry: SignedTelQuery,
         loc: LocationScheme,
     ) -> Result<String, SendingError> {
-        let (host, port) = match loc.url.origin() {
-            url::Origin::Tuple(_scheme, host, port) => (host, port),
+        let (host, port) = match loc.url.as_ref().map(url::Url::origin) {
+            Some(url::Origin::Tuple(_scheme, host, port)) => (host, port),
             _ => return Err(TransportError::NetworkError("Wrong address".to_string()).into()),
         };
         let actors = self.actors.lock().await;
@@ -112,8 +112,8 @@ impl IdentifierTelTransport for TelTestTransport {
         qry: VerifiableEvent,
         loc: LocationScheme,
     ) -> Result<(), SendingError> {
-        let (host, port) = match loc.url.origin() {
-            url::Origin::Tuple(_scheme, host, port) => (host, port),
+        let (host, port) = match loc.url.as_ref().map(url::Url::origin) {
+            Some(url::Origin::Tuple(_scheme, host, port)) => (host, port),
             _ => return Err(TransportError::NetworkError("Wrong address".to_string()).into()),
         };
 
