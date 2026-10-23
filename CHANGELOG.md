@@ -1,3 +1,8 @@
+## [0.19.0-rc.7] - 2026-10-23
+
+### 🐛 Bug Fixes
+
+- *(sdk)* Write location replies and group forwards in the configured KERI version
 ## [0.19.0-rc.6] - 2026-10-23
 
 ### 🚀 Features
