@@ -204,11 +204,11 @@ then has to be classified by hand.
 | File | Run | Pass | Expected failures |
 |---|---:|---:|---:|
 | `v1/keripy/kels/positive` (15 vectors, each also as `/cesr1`) | 30 | 15 | 15 |
-| `v1/keripy/negative/negative` | 84 | 67 | 17 |
+| `v1/keripy/negative/negative` | 84 | 72 | 12 |
 | `v2/keripy/kels/positive` | 15 | 15 | 0 |
 | `v2/keripy/negative/negative` | 11 | 6 | 5 |
-| `v2/spec/examples` (52 vectors, 6 not checked) | 46 | 17 | 29 |
-| total | 186 | 120 | 66 |
+| `v2/spec/examples` (52 vectors, 6 not checked) | 46 | 22 | 24 |
+| total | 186 | 130 | 56 |
 
 ### Expected failures by cause
 
@@ -217,7 +217,6 @@ then has to be classified by hand.
 | `cesr1` | 15 | It does not parse KERI 1.0 streams with CESR 1.0 attachment codes (`-A`, `-V`, ...). It reads only CESR 2.0 counters, so it cannot read keripy's KERI 1.0 output. | Version string field (a protocol version names its CESR genus version) |
 | `native-cesr` | 12 | It does not support native CESR message bodies (Annex A examples). | Annex A, Native CESR Encodings of KERI Messages |
 | `deleg` | 1 | Only the first couple of a source seal group is tried; the specification does not say what several couples mean. | Cooperative Delegation; Seals |
-| `seal-types` | 10 | It has no source, latest establishment, registrar backer or typed seal. Its untagged seal type reads them as digest seals and drops their other fields, so an event seal with a malformed `i` is also read as a digest seal. | Seals; Seal Count Codes |
 | `routed-v2` | 5 | It reads and writes KERI 2.0 `qry`/`rpy` with `i`, as every specification example and keripy do (the declared field order has no `i`), but not the `/oobi` query and reply routes, which no keriox component uses. | Query Message Body; Reply Message Body; OOBI sections |
 | `key-event-rules` | 4 | Accepted although the specification forbids them:<br>- `kt=0`;<br>- `nt=0` with a rotation to unrelated keys;<br>- an unsatisfiable `nt`;<br>- a non-transferable prefix with `n`. | Rotation using pre-rotation; Key and key digest threshold fields; KERI's secure bindings |
 | `pro-bar-xip` | 6 | There are no `pro`, `bar` or `xip` message types. | Routed Messages |
