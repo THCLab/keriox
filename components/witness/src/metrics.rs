@@ -105,7 +105,18 @@ impl Drop for LatencyTimer {
     }
 }
 
+/// Counts a request by the keriox release its client names, `other` for a
+/// client that names none, so operators can tell when old clients are gone.
+pub fn count_client(user_agent: Option<&str>) {
+    let client = keri_core::transport::client_version::client_version(user_agent)
+        .map_or_else(|| "other".to_string(), |version| version.to_string());
+    metrics::counter!(names::REQUESTS_BY_CLIENT_TOTAL, "client" => client).increment(1);
+}
+
 pub mod names {
+    /// Requests by the keriox release their client names (`other` for any
+    /// other client).
+    pub const REQUESTS_BY_CLIENT_TOTAL: &str = "keri_witness_requests_by_client_total";
     pub const HANDLER_SECONDS: &str = "keri_witness_handler_seconds";
     pub const QUERY_PROCESSING_SECONDS: &str = "keri_witness_query_processing_seconds";
     pub const HTTP_REQUESTS_TOTAL: &str = "keri_witness_http_requests_total";

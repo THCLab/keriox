@@ -19,6 +19,20 @@ use crate::advanced::error::{Error, Result};
 /// events after an abandonment and serves `GET /identifiers/{aid}/state`.
 pub const ABANDONMENT_FEATURE: &str = "abandonment";
 
+/// Feature name a witness or watcher lists on `GET /info` when it reads
+/// KERI 2.0 messages.
+pub const KERI2_FEATURE: &str = "keri2";
+
+/// A GET request naming this keriox release, as every keriox client does.
+async fn get(url: Url) -> reqwest::Result<reqwest::Response> {
+    reqwest::Client::builder()
+        .user_agent(keri_core::transport::client_version::CLIENT_AGENT)
+        .build()?
+        .get(url)
+        .send()
+        .await
+}
+
 /// What `base` (a witness or watcher URL) reports about `id`; `None` when it
 /// has never seen the identifier.
 ///
@@ -32,7 +46,7 @@ pub async fn fetch_identifier_status(
     let url = base
         .join(&format!("identifiers/{id}/state"))
         .map_err(|e| Error::Other(format!("invalid server URL {base}: {e}")))?;
-    let response = reqwest::get(url.clone())
+    let response = get(url.clone())
         .await
         .map_err(|e| Error::Other(format!("cannot reach {url}: {e}")))?;
     if response.status() == reqwest::StatusCode::NOT_FOUND {
@@ -57,6 +71,22 @@ pub async fn fetch_identifier_status(
 /// - [`Error::Other`] if the server cannot be reached or answers with an
 ///   error.
 pub async fn supports_abandonment(base: &Url) -> Result<bool> {
+    supports_feature(base, ABANDONMENT_FEATURE).await
+}
+
+/// Whether `base` (a witness or watcher URL) reads KERI 2.0 messages: it
+/// lists [`KERI2_FEATURE`] on `GET /info`. Write KERI 2.0 only once every
+/// witness and watcher an identifier uses does.
+///
+/// # Errors
+/// - [`Error::Other`] if the server cannot be reached or answers with an
+///   error.
+pub async fn supports_keri2(base: &Url) -> Result<bool> {
+    supports_feature(base, KERI2_FEATURE).await
+}
+
+/// Whether `base` lists `feature` on `GET /info`.
+async fn supports_feature(base: &Url, feature: &str) -> Result<bool> {
     #[derive(serde::Deserialize)]
     struct Info {
         #[serde(default)]
@@ -66,12 +96,12 @@ pub async fn supports_abandonment(base: &Url) -> Result<bool> {
     let url = base
         .join("info")
         .map_err(|e| Error::Other(format!("invalid server URL {base}: {e}")))?;
-    let info: Info = reqwest::get(url.clone())
+    let info: Info = get(url.clone())
         .await
         .and_then(reqwest::Response::error_for_status)
         .map_err(|e| Error::Other(format!("cannot reach {url}: {e}")))?
         .json()
         .await
         .map_err(|e| Error::Other(format!("unexpected answer from {url}: {e}")))?;
-    Ok(info.features.iter().any(|f| f == ABANDONMENT_FEATURE))
+    Ok(info.features.iter().any(|f| f == feature))
 }

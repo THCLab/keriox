@@ -304,6 +304,7 @@ fn shared_http_client() -> reqwest::Client {
             .pool_idle_timeout(Duration::from_secs(90))
             .pool_max_idle_per_host(32)
             .tcp_keepalive(Duration::from_secs(60))
+            .user_agent(keri_core::transport::client_version::CLIENT_AGENT)
             .build()
             .expect("Failed to build HTTP client")
     }

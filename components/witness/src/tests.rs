@@ -1995,14 +1995,13 @@ mod abandonment {
     }
 
     #[actix_web::test]
-    async fn info_advertises_abandonment() {
+    async fn info_advertises_abandonment_and_keri2() {
         let response = http_handlers::info().await;
         let info: serde_json::Value =
             serde_json::from_slice(&to_bytes(response.into_body()).await.unwrap()).unwrap();
-        assert!(info["features"]
-            .as_array()
-            .unwrap()
-            .contains(&serde_json::json!("abandonment")));
+        let features = info["features"].as_array().unwrap();
+        assert!(features.contains(&serde_json::json!("abandonment")));
+        assert!(features.contains(&serde_json::json!("keri2")));
     }
 }
 

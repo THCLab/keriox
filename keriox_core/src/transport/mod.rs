@@ -13,6 +13,7 @@ use crate::{
     query::query_event::SignedQueryMessage,
 };
 
+pub mod client_version;
 pub mod default;
 // pub mod http;
 pub mod test;

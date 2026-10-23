@@ -76,6 +76,14 @@ impl<S: OobiStorageBackend + 'static> WitnessListener<S> {
         HttpServer::new(move || {
             App::new()
                 .app_data(state.clone())
+                .wrap_fn(|req, srv| {
+                    crate::metrics::count_client(
+                        req.headers()
+                            .get(actix_web::http::header::USER_AGENT)
+                            .and_then(|agent| agent.to_str().ok()),
+                    );
+                    actix_web::dev::Service::call(srv, req)
+                })
                 .route(
                     "/introduce",
                     actix_web::web::get().to(http_handlers::introduce_redb),
@@ -668,8 +676,9 @@ pub mod http_handlers {
 
     /// Behaviour a client may depend on, advertised on `/info`.
     /// `abandonment`: events after an abandonment are refused with 410 and
-    /// `/identifiers/{id}/state` reports it.
-    pub const FEATURES: &[&str] = &["abandonment"];
+    /// `/identifiers/{id}/state` reports it. `keri2`: KERI 2.0 messages are
+    /// read.
+    pub const FEATURES: &[&str] = &["abandonment", "keri2"];
 
     pub async fn info() -> HttpResponse {
         let version = env!("CARGO_PKG_VERSION");

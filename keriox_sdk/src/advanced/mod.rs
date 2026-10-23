@@ -40,7 +40,7 @@ pub use error::{Error, Result};
 pub use identifier::{ActionRequired, Identifier, WatcherResponseError};
 pub use oobi_store::OobiStore;
 pub use secrets::{FileSecretsStore, MemorySecretsStore, SecretsStore};
-pub use status::{fetch_identifier_status, supports_abandonment};
+pub use status::{fetch_identifier_status, supports_abandonment, supports_keri2};
 pub use store::KeriStore;
 pub use tel::{check_credential_status, get_credential_status};
 pub use types::{

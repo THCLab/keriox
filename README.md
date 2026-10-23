@@ -79,7 +79,14 @@ otherwise, so a node or client can be upgraded before its peers.
   **watchers** in `keri_version` in their configuration file (`1` or `2`;
   `WITNESS_KERI_VERSION` and `WATCHER_KERI_VERSION` in the environment).
 - Switch a writer to 2.0 only once everything that reads its messages runs a
-  keriox that reads 2.0. Older releases refuse KERI 2.0 messages.
+  keriox that reads 2.0. Older releases refuse KERI 2.0 messages. Witnesses
+  and watchers that read 2.0 list `"keri2"` on `GET /info`
+  (`supports_keri2` in the SDK).
+- keriox clients name their release in every request (`User-Agent:
+  keriox/<release>`), and witnesses and watchers count requests by it
+  (`keri_witness_requests_by_client_total`,
+  `keri_watcher_requests_by_client_total`), so operators can tell when old
+  clients are gone.
 - TEL events stay KERI 1.0: the KERI specification defines no TEL messages,
   and registries in KERI 2.0 come with ACDC 2.0.
 

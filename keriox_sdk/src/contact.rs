@@ -26,7 +26,18 @@ pub(crate) async fn discover(base_url: &str, policy: &RetryPolicy) -> Result<Loc
     with_retry(policy, || {
         let introduce_url = introduce_url.clone();
         async move {
-            let response = reqwest::get(introduce_url.clone()).await.map_err(|e| {
+            let response = reqwest::Client::builder()
+                .user_agent(keri_core::transport::client_version::CLIENT_AGENT)
+                .build()
+                .and_then(|client| Ok(client.get(introduce_url.clone())))
+                .map_err(|e| Error::WitnessUnreachable {
+                    url: introduce_url.to_string(),
+                    attempts: 1,
+                    cause: e.to_string(),
+                })?
+                .send()
+                .await
+                .map_err(|e| {
                 Error::WitnessUnreachable {
                     url: introduce_url.to_string(),
                     attempts: 1,

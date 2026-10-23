@@ -22,6 +22,7 @@ oobi-manager = ["oobi", "query", "storage-redb", "reqwest", "async-trait"]
 mailbox = ["query", "storage-redb"]
 
 [dependencies]
+semver = "1"
 bytes = "1.12.1"
 http = "0.2.12"
 said = { version = "=2.0.0-rc.4" }

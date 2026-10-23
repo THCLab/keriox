@@ -9,7 +9,9 @@
 mod common;
 
 use common::TestInfra;
-use keri_sdk::advanced::{fetch_identifier_status, supports_abandonment, IdentifierPrefix};
+use keri_sdk::advanced::{
+    fetch_identifier_status, supports_abandonment, supports_keri2, IdentifierPrefix,
+};
 use keri_sdk::Error;
 use test_context::test_context;
 use url::Url;
@@ -26,6 +28,9 @@ async fn an_abandoned_identity_is_final_and_can_be_removed(infra: &mut TestInfra
     // The infrastructure enforces abandonment, so it is safe to abandon.
     assert!(supports_abandonment(&witness).await.unwrap());
     assert!(supports_abandonment(&watcher).await.unwrap());
+    // And reads KERI 2.0.
+    assert!(supports_keri2(&witness).await.unwrap());
+    assert!(supports_keri2(&watcher).await.unwrap());
 
     let (store_dir, keri) = common::temp_keri();
     let alice = keri

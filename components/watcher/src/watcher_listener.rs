@@ -40,6 +40,14 @@ impl<S: OobiStorageBackend + 'static> WatcherListener<S> {
         HttpServer::new(move || {
             App::new()
                 .app_data(state.clone())
+                .wrap_fn(|req, srv| {
+                    crate::metrics::count_client(
+                        req.headers()
+                            .get(actix_web::http::header::USER_AGENT)
+                            .and_then(|agent| agent.to_str().ok()),
+                    );
+                    actix_web::dev::Service::call(srv, req)
+                })
                 .configure(configure_routes)
         })
         .bind(addr)
@@ -431,8 +439,9 @@ pub mod http_handlers {
 
     /// Behaviour a client may depend on, advertised on `/info`.
     /// `abandonment`: abandoned identifiers are served as final and
-    /// `/identifiers/{id}/state` reports them.
-    pub const FEATURES: &[&str] = &["abandonment"];
+    /// `/identifiers/{id}/state` reports them. `keri2`: KERI 2.0 messages
+    /// are read.
+    pub const FEATURES: &[&str] = &["abandonment", "keri2"];
 
     pub async fn info() -> HttpResponse {
         let version = env!("CARGO_PKG_VERSION");
