@@ -502,6 +502,29 @@ mod abandonment {
         rot
     }
 
+    /// A watcher restarted on its database still holds every log it had
+    /// accepted; it used to empty the database file on start.
+    #[actix_web::test]
+    async fn a_restarted_watcher_keeps_the_logs_it_holds() {
+        let fx = setup();
+        let known = incept(&fx);
+        let Fixture {
+            _dirs: (tel, db),
+            watcher,
+        } = fx;
+        drop(watcher);
+
+        let watcher = Watcher::setup_with_redb(WatcherConfig {
+            public_address: Url::parse("http://some/dummy/url").unwrap(),
+            db_path: db.path().to_owned(),
+            tel_storage_path: tel.path().join("tel_storage"),
+            ..Default::default()
+        })
+        .unwrap();
+        let state = watcher.watcher_data.event_storage.get_state(&known.id);
+        assert_eq!(state.map(|s| s.sn), Some(0));
+    }
+
     #[actix_web::test]
     async fn an_abandoned_identifier_is_not_polled() {
         let fx = setup();

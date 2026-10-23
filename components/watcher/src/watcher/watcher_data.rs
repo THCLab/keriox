@@ -1,4 +1,4 @@
-use std::{fs::File, sync::Arc, time::Instant};
+use std::{sync::Arc, time::Instant};
 
 use keri_core::event_message::keri_version::KeriVersion;
 use futures::future::join_all;
@@ -108,9 +108,10 @@ impl<S: OobiStorageBackend> WatcherData<S> {
         );
 
         let events_db = {
+            // Opens the database a previous run left, or creates it.
+            std::fs::create_dir_all(&db_path).unwrap();
             let mut path = db_path.clone();
             path.push("events_database");
-            let _file = File::create(&path).unwrap();
             Arc::new(RedbDatabase::new(&path).unwrap())
         };
 
