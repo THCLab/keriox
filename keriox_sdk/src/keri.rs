@@ -354,11 +354,105 @@ impl Keri {
     /// Import a contact when you know their id and a witness that serves
     /// their key history. [`Keri::import_contact`] with an OOBI URL is the
     /// more common path.
+    ///
+    /// A contact that moved to a new identifier (abandoned with a final
+    /// rotation anchoring the new inception, see
+    /// [`KeriStore::reincept`](crate::advanced::KeriStore::reincept)) is
+    /// followed: the new identifier is imported from the same witness and
+    /// returned, and [`Keri::successor_of`] remembers the move.
     pub async fn import_contact_from(
         &self,
         id: &IdentityId,
         witness_url: &str,
     ) -> Result<IdentityId> {
+        let mut current = id.clone();
+        // A chain of moves is followed; a bounded one, since two
+        // identifiers could each name the other.
+        for _ in 0..8 {
+            let imported = self.import_one_contact(&current, witness_url).await?;
+            match self.successor_in_kel(imported.as_prefix()) {
+                Some(successor) => {
+                    let successor = IdentityId::from(successor);
+                    let _ = self.inner.store.write_meta(
+                        &format!(".contacts/{imported}"),
+                        "successor",
+                        &successor.to_string(),
+                    );
+                    current = successor;
+                }
+                None => return Ok(imported),
+            }
+        }
+        Err(Error::ContactImportFailed {
+            id: id.to_string(),
+            cause: "the contact moved too many times".into(),
+        })
+    }
+
+    /// The identifier a contact moved to, if its key history ends in an
+    /// abandonment that names one.
+    pub fn successor_of(&self, id: &IdentityId) -> Result<Option<IdentityId>> {
+        let successor = self
+            .inner
+            .store
+            .read_meta(&format!(".contacts/{id}"), "successor")?;
+        successor
+            .map(|text| {
+                text.trim().parse().map_err(|_| Error::ContactImportFailed {
+                    id: id.to_string(),
+                    cause: format!("invalid successor recorded: {text}"),
+                })
+            })
+            .transpose()
+    }
+
+    /// The identifier a contact's abandonment names as its successor: an
+    /// event seal, in the final rotation, of another identifier's inception
+    /// (sn 0) whose SAID is that identifier itself.
+    fn successor_in_kel(
+        &self,
+        aid: &keri_controller::IdentifierPrefix,
+    ) -> Option<keri_controller::IdentifierPrefix> {
+        use keri_core::event::{event_data::EventData, sections::seal::Seal};
+        use keri_core::event_message::signed_event_message::Notice;
+
+        let controller = self
+            .inner
+            .store
+            .controller_for(&format!(".contacts/{aid}"))
+            .ok()?;
+        let (sn, said) = controller.find_state(aid).ok()?.abandonment()?;
+        let last = controller
+            .get_kel_with_receipts(aid)?
+            .into_iter()
+            .find_map(|notice| match notice {
+                Notice::Event(event)
+                    if event.event_message.data.get_sn() == sn
+                        && event.event_message.digest().ok() == Some(said.clone()) =>
+                {
+                    Some(event.event_message)
+                }
+                _ => None,
+            })?;
+        let seals = match last.data.event_data {
+            EventData::Rot(rot) | EventData::Drt(rot) => rot.data,
+            _ => return None,
+        };
+        seals.into_iter().find_map(|seal| match seal {
+            Seal::Event(seal) => match &seal.prefix {
+                keri_controller::IdentifierPrefix::SelfAddressing(own)
+                    if seal.sn == 0 && &seal.prefix != aid && own.said == seal.event_digest() =>
+                {
+                    Some(seal.prefix)
+                }
+                _ => None,
+            },
+            _ => None,
+        })
+    }
+
+    /// Import one contact's key history from a witness.
+    async fn import_one_contact(&self, id: &IdentityId, witness_url: &str) -> Result<IdentityId> {
         let location = crate::contact::discover(witness_url, &self.inner.retry).await?;
 
         let kel = crate::retry::with_retry(&self.inner.retry, || {

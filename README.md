@@ -93,6 +93,12 @@ otherwise, so a node or client can be upgraded before its peers.
   a client that names no release. `GET` requests (`/info`, OOBIs) stay open.
 - TEL events stay KERI 1.0: the KERI specification defines no TEL messages,
   and registries in KERI 2.0 come with ACDC 2.0.
+- An identifier incepted in KERI 1.0 moves to a new one with
+  `KeriStore::reincept`: the new identifier is incepted (in the store's
+  version, with `KeriStore::same_witnesses` for the same witnesses) and the
+  old one abandoned with a final rotation anchoring the new inception. The
+  SDK follows that seal when it imports a contact (`Keri::import_contact_from`
+  returns the new identifier, `Keri::successor_of` records the move).
 
 ## License
 

@@ -32,7 +32,10 @@ use std::{
 
 use keri_controller::IdentifierPrefix;
 use keri_core::{
-    actor::prelude::SelfAddressingIdentifier, prefix::SeedPrefix, signer::Signer,
+    actor::prelude::SelfAddressingIdentifier,
+    event::sections::seal::{EventSeal, Seal},
+    prefix::SeedPrefix,
+    signer::Signer,
 };
 
 use crate::advanced::{
@@ -427,6 +430,79 @@ impl KeriStore {
             self.write_file(alias, ABANDONMENT_PENDING, &said.to_string())?;
             Err(self.awaiting_approval(alias)?)
         }
+    }
+
+    /// Moves `old_alias` to a new identifier under `new_alias`, incepted
+    /// with `config` in this store's KERI version: the old identifier is
+    /// then abandoned with a final rotation that anchors the new inception
+    /// (an event seal of the new identifier at sn 0). Contacts that look up
+    /// the old identifier follow that seal to the new one.
+    ///
+    /// [`KeriStore::same_witnesses`] gives a `config` with the old
+    /// identifier's witnesses. Delegations, groups and credentials of the
+    /// old identifier are not carried over.
+    ///
+    /// # Errors
+    /// - Those of [`KeriStore::create`] and [`KeriStore::abandon_with`]. A
+    ///   delegated old identifier's abandonment needs its delegator's
+    ///   approval ([`Error::AbandonmentAwaitingApproval`]); the new
+    ///   identifier exists by then.
+    pub async fn reincept(
+        &self,
+        old_alias: &str,
+        new_alias: &str,
+        config: IdentifierConfig,
+    ) -> Result<(Identifier, Arc<Signer>)> {
+        self.refuse_abandoned(old_alias)?;
+        let (successor, signer) = self.create(new_alias, config).await?;
+        let inception = match successor.id() {
+            IdentifierPrefix::SelfAddressing(said) => said.said.clone(),
+            other => {
+                return Err(Error::Other(format!(
+                    "{other} is not self-addressing, so no seal can name its inception"
+                )))
+            }
+        };
+        let seal = Seal::Event(EventSeal::new(successor.id().clone(), 0, inception));
+        self.abandon_with(
+            old_alias,
+            AbandonConfig {
+                anchors: vec![seal],
+                ..AbandonConfig::default()
+            },
+        )
+        .await?;
+        Ok((successor, signer))
+    }
+
+    /// An [`IdentifierConfig`] with the witnesses and witness threshold of
+    /// `alias`, e.g. for [`KeriStore::reincept`].
+    ///
+    /// # Errors
+    /// - [`Error::Other`] if a witness has no known location or the
+    ///   threshold is not an integer.
+    pub fn same_witnesses(&self, alias: &str) -> Result<IdentifierConfig> {
+        let id = self.load(alias)?;
+        let witness_config = id.find_state(id.id())?.witness_config;
+        let witnesses = witness_config
+            .witnesses
+            .iter()
+            .map(|witness| {
+                id.get_location(&IdentifierPrefix::Basic(witness.clone()))?
+                    .into_iter()
+                    .next()
+                    .ok_or_else(|| Error::Other(format!("no location known for witness {witness:?}")))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let witness_threshold = match witness_config.tally {
+            keri_core::event::sections::threshold::SignatureThreshold::Simple(t) => t,
+            _ => return Err(Error::Other("the witness threshold is not an integer".into())),
+        };
+        Ok(IdentifierConfig {
+            witnesses,
+            witness_threshold,
+            ..IdentifierConfig::default()
+        })
     }
 
     /// Picks up a delegated identifier's abandonment once its delegator has
