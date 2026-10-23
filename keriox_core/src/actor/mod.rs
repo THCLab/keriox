@@ -1,3 +1,4 @@
+use crate::event_message::keri_version::KeriVersion;
 use std::convert::TryFrom;
 
 use serde::{Deserialize, Serialize};
@@ -215,7 +216,11 @@ pub fn process_signed_query<D: EventDatabase>(
 
             // TODO check timestamps
             // unpack and check what's inside
-            Ok(process_query(kqry.query.get_route(), storage)?)
+            Ok(process_query(
+                kqry.query.get_route(),
+                KeriVersion::of(&kqry.query.serialization_info),
+                storage,
+            )?)
         }
         #[cfg(feature = "mailbox")]
         SignedQueryMessage::MailboxQuery(mqry) => {
@@ -245,8 +250,11 @@ pub enum SignedQueryError {
 }
 
 #[cfg(feature = "query")]
+/// Answers a query; a key state notice is written in `version`, the version
+/// of the query that asks for it.
 pub fn process_query<D: EventDatabase>(
     qr: &QueryRoute,
+    version: KeriVersion,
     storage: &EventStorage<D>,
 ) -> Result<ReplyType, QueryError> {
     match qr {
@@ -255,7 +263,7 @@ pub fn process_query<D: EventDatabase>(
             let state = storage
                 .get_state(&args.i)
                 .ok_or_else(|| QueryError::UnknownId { id: args.i.clone() })?;
-            let ksn = KeyStateNotice::new_ksn(state, SerializationFormats::JSON);
+            let ksn = KeyStateNotice::new_ksn(state, version, SerializationFormats::JSON);
             Ok(ReplyType::Ksn(ksn))
         }
         QueryRoute::Logs {

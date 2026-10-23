@@ -7,6 +7,7 @@
 
 use std::sync::Arc;
 
+use keri_core::event_message::keri_version::KeriVersion;
 use keri_core::{
     actor::{parse_reply_stream, process_notice},
     database::redb::RedbDatabase,
@@ -60,7 +61,12 @@ fn process(fx: &Fixture, event: &KeriEvent<KeyEvent>, signer: &Signer) {
 
 fn ksn_json(fx: &Fixture, id: &IdentifierPrefix) -> Value {
     let state = fx.storage.get_state(id).unwrap();
-    serde_json::to_value(KeyStateNotice::new_ksn(state, SerializationFormats::JSON)).unwrap()
+    serde_json::to_value(KeyStateNotice::new_ksn(
+        state,
+        KeriVersion::V1,
+        SerializationFormats::JSON,
+    ))
+    .unwrap()
 }
 
 /// An identifier with an inception and ten interaction events: sn 10.
@@ -111,10 +117,10 @@ fn a_key_state_reply_past_sn_9_reads_back() {
     let rpy = ReplyEvent::new_reply(
         ReplyRoute::Ksn(
             IdentifierPrefix::Basic(witness_id.clone()),
-            KeyStateNotice::new_ksn(state, SerializationFormats::JSON),
+            KeyStateNotice::new_ksn(state, KeriVersion::V1, SerializationFormats::JSON),
         ),
         &IdentifierPrefix::Basic(witness_id.clone()),
-        keri_core::event_message::keri_version::KeriVersion::V1,
+        KeriVersion::V1,
         HashFunctionCode::Blake3_256,
         SerializationFormats::JSON,
     );
@@ -177,4 +183,51 @@ fn the_last_establishment_names_the_rotation_and_its_witness_changes() {
             "ba": [w2.to_str()],
         })
     );
+}
+
+#[test]
+fn a_key_state_notice_takes_the_version_of_the_query_that_asks_for_it() {
+    use keri_core::{
+        actor::{prelude::ReplyType, process_query},
+        query::query_event::{LogsQueryArgs, QueryRoute},
+    };
+    let fx = setup();
+    let id = eleven_events(&fx);
+    let route = QueryRoute::Ksn {
+        reply_route: String::new(),
+        args: LogsQueryArgs {
+            s: None,
+            limit: None,
+            i: id.clone(),
+            src: None,
+        },
+    };
+    for version in [KeriVersion::V1, KeriVersion::V2] {
+        let ReplyType::Ksn(ksn) = process_query(&route, version, &fx.storage).unwrap() else {
+            panic!("not a key state notice")
+        };
+        assert_eq!(KeriVersion::of(&ksn.serialization_info), version);
+
+        // Carried in a reply of the same version, it reads back.
+        let witness = Signer::new();
+        let witness_id = BasicPrefix::Ed25519NT(witness.public_key());
+        let rpy = ReplyEvent::new_reply(
+            ReplyRoute::Ksn(IdentifierPrefix::Basic(witness_id.clone()), ksn),
+            &IdentifierPrefix::Basic(witness_id.clone()),
+            version,
+            HashFunctionCode::Blake3_256,
+            SerializationFormats::JSON,
+        );
+        let sig = SelfSigningPrefix::Ed25519Sha512(witness.sign(rpy.encode().unwrap()).unwrap());
+        let cesr = Message::Op(Op::Reply(SignedReply::new_nontrans(rpy, witness_id, sig)))
+            .to_cesr()
+            .unwrap();
+        match parse_reply_stream(&cesr).unwrap()[0].reply.get_route() {
+            ReplyRoute::Ksn(_, ksn) => {
+                assert_eq!(ksn.state.sn, 10);
+                assert_eq!(KeriVersion::of(&ksn.serialization_info), version);
+            }
+            other => panic!("not a key state notice: {other:?}"),
+        }
+    }
 }

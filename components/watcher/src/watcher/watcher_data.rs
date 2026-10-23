@@ -205,18 +205,21 @@ impl<S: OobiStorageBackend> WatcherData<S> {
             .map_err(ActorError::from)
     }
 
+    /// The key state notice of `prefix` in a reply signed by `signer`, both
+    /// written in `version`.
     pub fn get_signed_ksn_for_prefix(
         &self,
         prefix: &IdentifierPrefix,
         signer: Arc<Signer>,
+        version: KeriVersion,
     ) -> Result<SignedReply, Error> {
         let ksn = self
             .event_storage
-            .get_ksn_for_prefix(prefix, SerializationFormats::JSON)?;
+            .get_ksn_for_prefix(prefix, version, SerializationFormats::JSON)?;
         let rpy = ReplyEvent::new_reply(
             ReplyRoute::Ksn(IdentifierPrefix::Basic(self.prefix.clone()), ksn),
             &IdentifierPrefix::Basic(self.prefix.clone()),
-            KeriVersion::V1,
+            version,
             HashFunctionCode::Blake3_256,
             SerializationFormats::JSON,
         );
@@ -362,7 +365,11 @@ impl<S: OobiStorageBackend> WatcherData<S> {
         }
 
         let response =
-            match keri_core::actor::process_query(qry.query.get_route(), &self.event_storage) {
+            match keri_core::actor::process_query(
+                qry.query.get_route(),
+                KeriVersion::of(&qry.query.serialization_info),
+                &self.event_storage,
+            ) {
                 Ok(reply) => reply,
                 Err(QueryError::UnknownId { id }) => {
                     return Err(ActorError::NoIdentState { prefix: id })
@@ -374,10 +381,12 @@ impl<S: OobiStorageBackend> WatcherData<S> {
 
         match response {
             ReplyType::Ksn(ksn) => {
+                // The reply carries the notice in the version it was asked in.
+                let version = KeriVersion::of(&ksn.serialization_info);
                 let rpy = ReplyEvent::new_reply(
                     ReplyRoute::Ksn(IdentifierPrefix::Basic(self.prefix.clone()), ksn),
                     &IdentifierPrefix::Basic(self.prefix.clone()),
-                    KeriVersion::V1,
+                    version,
                     HashFunctionCode::Blake3_256,
                     SerializationFormats::JSON,
                 );

@@ -1,3 +1,4 @@
+use crate::event_message::keri_version::KeriVersion;
 use std::sync::Arc;
 
 use super::compute_state;
@@ -524,11 +525,12 @@ impl<D: EventDatabase> EventStorage<D> {
     pub fn get_ksn_for_prefix(
         &self,
         prefix: &IdentifierPrefix,
+        version: KeriVersion,
         format: SerializationFormats,
     ) -> Result<KeyStateNotice, Error> {
         let state = self
             .get_state(prefix)
             .ok_or_else(|| Error::SemanticError("No state in db".into()))?;
-        Ok(KeyStateNotice::new_ksn(state, format))
+        Ok(KeyStateNotice::new_ksn(state, version, format))
     }
 }

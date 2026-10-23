@@ -480,7 +480,11 @@ pub fn test_key_state_notice() -> Result<(), Error> {
     witness.parse_and_process_notices(&bob_icp_msg)?;
 
     // construct bobs ksn msg in rpy made by witness
-    let signed_rpy = witness.get_signed_ksn_for_prefix(&bob_pref, signer_arc.clone())?;
+    let signed_rpy = witness.get_signed_ksn_for_prefix(
+        &bob_pref,
+        signer_arc.clone(),
+        keri_core::event_message::keri_version::KeriVersion::V1,
+    )?;
 
     // Process reply message before having any bob's events in db.
     alice_processor.process_op_reply(&signed_rpy)?;
@@ -501,7 +505,11 @@ pub fn test_key_state_notice() -> Result<(), Error> {
     assert!(matches!(res, Err(Error::QueryError(QueryError::StaleKsn))));
 
     // now create new reply event by witness and process it by alice.
-    let new_reply = witness.get_signed_ksn_for_prefix(&bob_pref, signer_arc.clone())?;
+    let new_reply = witness.get_signed_ksn_for_prefix(
+        &bob_pref,
+        signer_arc.clone(),
+        keri_core::event_message::keri_version::KeriVersion::V1,
+    )?;
     alice_processor.process_op_reply(&new_reply)?;
     let ksn_db = alice_storage.get_last_ksn_reply(
         &signed_rpy.reply.get_prefix(),
@@ -516,7 +524,11 @@ pub fn test_key_state_notice() -> Result<(), Error> {
     let new_bob_rot = bob.rotate(None, None, None)?;
     witness.process_notice(Notice::Event(new_bob_rot.clone()))?;
     // Create transferable reply by bob and process it by alice.
-    let trans_rpy = witness.get_signed_ksn_for_prefix(&bob_pref, signer_arc)?;
+    let trans_rpy = witness.get_signed_ksn_for_prefix(
+        &bob_pref,
+        signer_arc,
+        keri_core::event_message::keri_version::KeriVersion::V1,
+    )?;
 
     alice_processor.process_op_reply(&trans_rpy)?;
     // Reply was out of order so saved reply shouldn't be updated

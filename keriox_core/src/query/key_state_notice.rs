@@ -1,3 +1,4 @@
+use crate::event_message::keri_version::KeriVersion;
 use chrono::{DateTime, FixedOffset, SecondsFormat, Utc};
 use said::version::{format::SerializationFormats, SerializationInfo};
 use serde::{ser::SerializeStruct, Deserialize, Serialize, Serializer};
@@ -55,11 +56,16 @@ impl Serialize for KeyStateNotice {
 }
 
 impl KeyStateNotice {
-    pub fn new_ksn(state: IdentifierState, serialization: SerializationFormats) -> Self {
+    /// The key state notice of `state`, written in `version`.
+    pub fn new_ksn(
+        state: IdentifierState,
+        version: KeriVersion,
+        serialization: SerializationFormats,
+    ) -> Self {
         let dt: DateTime<FixedOffset> = DateTime::from(Utc::now());
 
         KeyStateNotice {
-            serialization_info: SerializationInfo::new("KERI".to_string(), 1, 0, serialization, 0),
+            serialization_info: version.serialization_info(serialization),
             timestamp: dt,
             state,
             first_seen_sn: 0,
