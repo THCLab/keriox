@@ -20,7 +20,6 @@ v1/keripy/kels/positive/kel/rot/reserve-spec-example/cesr1	cesr1	KERI 1.0 stream
 v1/keripy/kels/positive/kel/wit/indexed-cuts-adds/cesr1	cesr1	KERI 1.0 stream with CESR 1.0 attachment codes is not parsed (only CESR 2.0 counters)
 v1/keripy/kels/positive/kel/wit/receipts/cesr1	cesr1	KERI 1.0 stream with CESR 1.0 attachment codes is not parsed (only CESR 2.0 counters)
 v1/keripy/negative/negative/gap/kel-config-did-rb-nrb	config	RB is not enforced: an inception with RB and no registrar backer seal is accepted
-v1/keripy/negative/negative/gap/kel-nested-weighted-threshold	nested-threshold	an inception with the specification's nested weighted threshold is not read
 v1/keripy/negative/negative/gap/kel-nontrans-prefix-with-next	key-event-rules	an inception with a non-transferable (B) prefix and a non-empty n is accepted, and so is a later rotation
 v1/keripy/negative/negative/gap/kel-threshold-zero/current	key-event-rules	kt=0 is accepted on an inception
 v1/keripy/negative/negative/gap/kel-threshold-zero/next	key-event-rules	with nt=0 a rotation to unrelated keys is accepted (no pre-rotation check)
@@ -56,7 +55,3 @@ v2/spec/examples/spec/message/query-message-qry-cesr	native-cesr	native CESR mes
 v2/spec/examples/spec/message/receipt-rct-cesr	native-cesr	native CESR message bodies are not supported
 v2/spec/examples/spec/message/reply-message-rpy-cesr	native-cesr	native CESR message bodies are not supported
 v2/spec/examples/spec/message/rotation-rot-cesr	native-cesr	native CESR message bodies are not supported
-v2/spec/examples/spec/threshold/fractionally-weighted-threshold	nested-threshold	nested weighted thresholds ({"1/2": [...]}) are not read
-v2/spec/examples/spec/threshold/fractionally-weighted-threshold-2	nested-threshold	nested weighted thresholds ({"1/2": [...]}) are not read
-v2/spec/examples/spec/threshold/fractionally-weighted-threshold-3	nested-threshold	nested weighted thresholds ({"1/2": [...]}) are not read
-v2/spec/examples/spec/threshold/threshold	nested-threshold	nested weighted thresholds ({"1/2": [...]}) are not read

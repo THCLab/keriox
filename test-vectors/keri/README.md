@@ -204,11 +204,11 @@ then has to be classified by hand.
 | File | Run | Pass | Expected failures |
 |---|---:|---:|---:|
 | `v1/keripy/kels/positive` (15 vectors, each also as `/cesr1`) | 30 | 15 | 15 |
-| `v1/keripy/negative/negative` | 84 | 72 | 12 |
+| `v1/keripy/negative/negative` | 84 | 73 | 11 |
 | `v2/keripy/kels/positive` | 15 | 15 | 0 |
 | `v2/keripy/negative/negative` | 11 | 6 | 5 |
-| `v2/spec/examples` (52 vectors, 6 not checked) | 46 | 22 | 24 |
-| total | 186 | 130 | 56 |
+| `v2/spec/examples` (52 vectors, 6 not checked) | 46 | 26 | 20 |
+| total | 186 | 135 | 51 |
 
 ### Expected failures by cause
 
@@ -221,7 +221,6 @@ then has to be classified by hand.
 | `key-event-rules` | 4 | Accepted although the specification forbids them:<br>- `kt=0`;<br>- `nt=0` with a rotation to unrelated keys;<br>- an unsatisfiable `nt`;<br>- a non-transferable prefix with `n`. | Rotation using pre-rotation; Key and key digest threshold fields; KERI's secure bindings |
 | `pro-bar-xip` | 6 | There are no `pro`, `bar` or `xip` message types. | Routed Messages |
 | `reply-bada` | 2 | The roles `registrar` and `mailbox` are not known. | BADA Policy; RUN off the CRUD; OOBI KERI Endpoint Authorization |
-| `nested-threshold` | 5 | It does not read nested weighted thresholds (`{"1/2": [...]}`). | Fractionally weighted threshold |
 | `config` | 1 | It does not enforce `RB` (registrar backers need registrar backer seals). | Configuration traits field |
 | `key-state` | 2 | Key state notices in keripy's shape are not read; the specification defines no key state notice format. | Backer remove / add lists; Reply Message Body |
 | `witness-role` | 1 | A witness accepts remote events: there is no notion of a local channel (a SHOULD-level rule). | Validator Roles and Event Locality |

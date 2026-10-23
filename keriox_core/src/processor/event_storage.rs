@@ -1,3 +1,4 @@
+#[cfg(feature = "query")]
 use crate::event_message::keri_version::KeriVersion;
 use std::sync::Arc;
 

@@ -98,6 +98,13 @@ pub enum SignatureThreshold {
 pub enum WeightedThreshold {
     Single(ThresholdClause),
     Multi(MultiClauses),
+    // Nested thresholds come last, and are vectors like the others, so the
+    // stored (rkyv) layout of existing thresholds does not change.
+    /// One clause with groups of keys counted as one weight.
+    NestedSingle(NestedClause),
+    /// Clauses with groups of keys counted as one weight, all of which
+    /// must be met.
+    NestedMulti(NestedClauses),
 }
 
 impl WeightedThreshold {
@@ -106,6 +113,8 @@ impl WeightedThreshold {
         match self {
             WeightedThreshold::Single(clause) => clause.length(),
             WeightedThreshold::Multi(clauses) => clauses.length(),
+            WeightedThreshold::NestedSingle(clause) => clause.length(),
+            WeightedThreshold::NestedMulti(clauses) => clauses.length(),
         }
     }
 
@@ -114,6 +123,14 @@ impl WeightedThreshold {
         match self {
             WeightedThreshold::Single(clause) => clause.enough_signatures(0, &sigs_indexes),
             WeightedThreshold::Multi(clauses) => clauses.enough_signatures(&sigs_indexes),
+            WeightedThreshold::NestedSingle(clause) => clause
+                .met(0, &sigs_indexes)
+                .then_some(())
+                .ok_or(SignatureError::NotEnoughSigsError),
+            WeightedThreshold::NestedMulti(clauses) => clauses
+                .met(&sigs_indexes)
+                .then_some(())
+                .ok_or(SignatureError::NotEnoughSigsError),
         }
     }
 }
@@ -292,6 +309,141 @@ impl MultiClauses {
     }
 }
 
+/// A weight of a nested weighted threshold: one key's weight, or a group
+/// of keys counted as one weight.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(untagged)]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
+#[rkyv(derive(Debug))]
+pub enum NestedWeight {
+    Key(ThresholdFraction),
+    Group(WeightGroup),
+}
+
+/// Keys counted as one weight, written `{"<weight>": [<member weights>]}`:
+/// the group adds `weight` once the weights of its signing members reach 1.
+#[derive(Debug, Clone, PartialEq, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
+#[rkyv(derive(Debug))]
+pub struct WeightGroup {
+    pub weight: ThresholdFraction,
+    pub members: Vec<ThresholdFraction>,
+}
+
+impl Serialize for WeightGroup {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+        let mut map = serializer.serialize_map(Some(1))?;
+        map.serialize_entry(&self.weight.to_string(), &self.members)?;
+        map.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for WeightGroup {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let group = std::collections::BTreeMap::<String, Vec<ThresholdFraction>>::deserialize(
+            deserializer,
+        )?;
+        match group.into_iter().collect::<Vec<_>>().as_slice() {
+            [(weight, members)] => Ok(WeightGroup {
+                weight: weight.parse().map_err(de::Error::custom)?,
+                members: members.clone(),
+            }),
+            _ => Err(de::Error::custom("a weight group has exactly one weight")),
+        }
+    }
+}
+
+/// A clause of a nested weighted threshold, met when the weights of its
+/// signing keys and met groups reach 1.
+#[derive(
+    Serialize,
+    Deserialize,
+    Debug,
+    Clone,
+    PartialEq,
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+)]
+#[rkyv(derive(Debug))]
+pub struct NestedClause(Vec<NestedWeight>);
+
+impl NestedClause {
+    /// Number of keys the clause speaks about.
+    pub fn length(&self) -> usize {
+        self.0
+            .iter()
+            .map(|weight| match weight {
+                NestedWeight::Key(_) => 1,
+                NestedWeight::Group(group) => group.members.len(),
+            })
+            .sum()
+    }
+
+    /// Whether the signatures of the keys at `sigs_indexes` meet the clause,
+    /// its first key being the one at `start`.
+    fn met(&self, start: usize, sigs_indexes: &[usize]) -> bool {
+        let signed = |index: usize| sigs_indexes.contains(&index);
+        let mut next = start;
+        let mut total: Fraction = Zero::zero();
+        for weight in &self.0 {
+            match weight {
+                NestedWeight::Key(fraction) => {
+                    if signed(next) {
+                        total = total + fraction.fraction;
+                    }
+                    next += 1;
+                }
+                NestedWeight::Group(group) => {
+                    let members: Fraction = group
+                        .members
+                        .iter()
+                        .enumerate()
+                        .filter(|(i, _)| signed(next + i))
+                        .fold(Zero::zero(), |sum: Fraction, (_, member)| {
+                            sum + member.fraction
+                        });
+                    if members >= One::one() {
+                        total = total + group.weight.fraction;
+                    }
+                    next += group.members.len();
+                }
+            }
+        }
+        total >= One::one()
+    }
+}
+
+/// Clauses of a nested weighted threshold, each met on its own keys, the
+/// keys numbered across the clauses in order.
+#[derive(
+    Serialize,
+    Deserialize,
+    Debug,
+    Clone,
+    PartialEq,
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+)]
+#[rkyv(derive(Debug))]
+pub struct NestedClauses(Vec<NestedClause>);
+
+impl NestedClauses {
+    pub fn length(&self) -> usize {
+        self.0.iter().map(NestedClause::length).sum()
+    }
+
+    fn met(&self, sigs_indexes: &[usize]) -> bool {
+        let mut start = 0;
+        self.0.iter().all(|clause| {
+            let met = clause.met(start, sigs_indexes);
+            start += clause.length();
+            met
+        })
+    }
+}
+
 mod rkyv_serialization {
     use fraction::Fraction;
 
@@ -392,4 +544,50 @@ pub fn test_weighted_treshold_serialization() -> Result<(), SignatureError> {
     assert!(matches!(wt, WeightedThreshold::Single(_)));
     assert_eq!(serde_json::to_string(&wt).unwrap(), single_threshold);
     Ok(())
+}
+
+#[cfg(test)]
+mod nested {
+    use super::SignatureThreshold;
+
+    /// The specification's example: two clauses, with groups of keys
+    /// counted as one weight. Keys 0-2 form a group, 3 stands alone, 4-5
+    /// form a group; in the second clause key 6 stands alone and 7-8 form a
+    /// group.
+    const EXAMPLE: &str =
+        r#"[[{"1/2":["1/2","1/2","1/2"]},"1/2",{"1/2":["1","1"]}],["1/2",{"1/2":["1","1"]}]]"#;
+
+    #[test]
+    fn a_nested_threshold_reads_and_writes_back() {
+        let threshold: SignatureThreshold = serde_json::from_str(EXAMPLE).unwrap();
+        assert_eq!(serde_json::to_string(&threshold).unwrap(), EXAMPLE);
+        assert!(threshold.check_fits(9).is_ok());
+        assert!(threshold.check_fits(8).is_err());
+
+        let single = r#"["1/2",{"1/2":["1/2","1/2"]}]"#;
+        let threshold: SignatureThreshold = serde_json::from_str(single).unwrap();
+        assert_eq!(serde_json::to_string(&threshold).unwrap(), single);
+        assert!(threshold.check_fits(3).is_ok());
+    }
+
+    #[test]
+    fn a_group_counts_once_its_own_weights_reach_one() {
+        let threshold: SignatureThreshold = serde_json::from_str(EXAMPLE).unwrap();
+        // First clause: the 0-2 group (two of its halves) and key 3 make 1;
+        // second clause: key 6 and the 7-8 group (one whole member) make 1.
+        assert!(threshold.enough_signatures(&[0, 1, 3, 6, 7]).is_ok());
+        // One member of the 0-2 group reaches only 1/2 inside the group, so
+        // the group does not count and the first clause has only key 3.
+        assert!(threshold.enough_signatures(&[0, 3, 6, 7]).is_err());
+        // Both clauses must be met.
+        assert!(threshold.enough_signatures(&[0, 1, 3]).is_err());
+        // The 4-5 group with one whole member and key 3 also make 1.
+        assert!(threshold.enough_signatures(&[3, 4, 6, 8]).is_ok());
+    }
+
+    #[test]
+    fn a_group_written_with_several_weights_is_refused() {
+        let two_keys = r#"[{"1/2":["1"],"1/3":["1"]}]"#;
+        assert!(serde_json::from_str::<SignatureThreshold>(two_keys).is_err());
+    }
 }

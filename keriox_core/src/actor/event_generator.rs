@@ -12,7 +12,7 @@ use crate::{
     event::{
         sections::{
             seal::{DigestSeal, Seal},
-            threshold::{SignatureThreshold, WeightedThreshold},
+            threshold::SignatureThreshold,
         },
         KeyEvent,
     },
@@ -70,10 +70,7 @@ pub fn incept_with_next_hashes(
             }
         }
         SignatureThreshold::Weighted(w) => {
-            let length = match w {
-                WeightedThreshold::Single(s) => s.length(),
-                WeightedThreshold::Multi(m) => m.length(),
-            };
+            let length = w.length();
             if length > public_keys.len() {
                 return Err(Error::EventGenerationError(
                     "Improper signature threshold".into(),
