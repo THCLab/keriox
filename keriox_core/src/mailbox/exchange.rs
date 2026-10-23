@@ -11,7 +11,47 @@ use crate::prefix::IdentifierPrefix;
 
 use crate::event_message::{signature::Signature, EventTypeTag, Typeable};
 
-pub type ExchangeMessage = KeriEvent<Timestamped<Exchange>>;
+pub type ExchangeMessage = KeriEvent<ExchangeBody>;
+
+/// The body of an `exn` after `d`. KERI 2.0 writes the sender `i`, the
+/// recipient `ri`, the exchange `x` and the prior message `p` before `dt`;
+/// a KERI 1.0 body has none of them.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct ExchangeBody {
+    #[serde(rename = "i", default, skip_serializing_if = "Option::is_none")]
+    pub sender: Option<IdentifierPrefix>,
+    #[serde(rename = "ri", default, skip_serializing_if = "Option::is_none")]
+    pub recipient: Option<IdentifierPrefix>,
+    /// The SAID of the exchange this message belongs to; empty when it is
+    /// not part of a multi-message exchange.
+    #[serde(rename = "x", default, skip_serializing_if = "Option::is_none")]
+    pub exchange: Option<String>,
+    /// The SAID of the previous message of the exchange; empty for the
+    /// first.
+    #[serde(rename = "p", default, skip_serializing_if = "Option::is_none")]
+    pub prior: Option<String>,
+    #[serde(flatten)]
+    pub content: Timestamped<Exchange>,
+}
+
+impl ExchangeBody {
+    /// Whether the body has the KERI 2.0 header (`i`, `ri`, `x`, `p`), all
+    /// of it or none: `None` when only part of it is there.
+    pub fn has_keri2_header(&self) -> Option<bool> {
+        match (&self.sender, &self.recipient, &self.exchange, &self.prior) {
+            (Some(_), Some(_), Some(_), Some(_)) => Some(true),
+            (None, None, None, None) => Some(false),
+            _ => None,
+        }
+    }
+}
+
+impl Typeable for ExchangeBody {
+    type TypeTag = EventTypeTag;
+    fn get_type(&self) -> EventTypeTag {
+        EventTypeTag::Exn
+    }
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SignedExchange {
@@ -34,17 +74,25 @@ pub enum Exchange {
 }
 
 impl Exchange {
+    /// The exchange as a message sent by `sender`, in `version`. A KERI 2.0
+    /// message names its sender and recipient, and is a single message
+    /// rather than part of a longer exchange.
     pub fn to_message(
         self,
+        sender: &IdentifierPrefix,
+        version: KeriVersion,
         format: SerializationFormats,
         derivation: HashFunctionCode,
     ) -> ExchangeMessage {
-        KeriEvent::new(
-            KeriVersion::V1,
-            format,
-            derivation.into(),
-            Timestamped::new(self),
-        )
+        let keri2 = version == KeriVersion::V2;
+        let body = ExchangeBody {
+            sender: keri2.then(|| sender.clone()),
+            recipient: keri2.then(|| self.get_prefix()),
+            exchange: keri2.then(String::new),
+            prior: keri2.then(String::new),
+            content: Timestamped::new(self),
+        };
+        KeriEvent::new(version, format, derivation.into(), body)
     }
 }
 

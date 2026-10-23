@@ -473,13 +473,19 @@ fn streams(format: WireFormat) -> Vec<Value> {
         keri_core::event_message::keri_version::KeriVersion::V1,
         SerializationFormats::JSON,
         HashFunctionCode::Blake3_256.into(),
-        timestamped(Exchange::Fwd {
-            args: FwdArgs {
-                recipient_id: id.clone(),
-                topic: ForwardTopic::Multisig,
-            },
-            to_forward: icp.clone(),
-        }),
+        keri_core::mailbox::exchange::ExchangeBody {
+            sender: None,
+            recipient: None,
+            exchange: None,
+            prior: None,
+            content: timestamped(Exchange::Fwd {
+                args: FwdArgs {
+                    recipient_id: id.clone(),
+                    topic: ForwardTopic::Multisig,
+                },
+                to_forward: icp.clone(),
+            }),
+        },
     );
     let exn_sigs = sign(&exn.encode().unwrap(), &[&c0]);
     let icp_sigs = sign(&icp.encode().unwrap(), &[&c0]);

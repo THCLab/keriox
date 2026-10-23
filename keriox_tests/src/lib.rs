@@ -160,7 +160,12 @@ pub async fn handle_delegation_request(
                         },
                         to_forward: delegating_event.clone(),
                     }
-                    .to_message(SerializationFormats::JSON, HashFunctionCode::Blake3_256);
+                    .to_message(
+                        &id.id(),
+                        keri_core::event_message::keri_version::KeriVersion::V1,
+                        SerializationFormats::JSON,
+                        HashFunctionCode::Blake3_256,
+                    );
                     let signature_exn =
                         SelfSigningPrefix::Ed25519Sha512(keypair.sign(&exn_message.encode()?)?);
 

@@ -1486,8 +1486,14 @@ async fn finalize_group_tel_event<S: SigningBackend + Clone + 'static>(
     use keri_core::event_message::signature::{Signature, SignerData};
     use keri_core::mailbox::exchange::ForwardTopic;
 
-    let exn = event_generator::exchange(group.id(), ixn, ForwardTopic::Multisig)
-        .encode()
+    let exn = event_generator::exchange(
+        member,
+        group.id(),
+        ixn,
+        ForwardTopic::Multisig,
+        keri_core::event_message::keri_version::KeriVersion::V1,
+    )
+    .encode()
         .map_err(|e| Error::EncodingError(e.to_string()))?;
     let encoded_ixn = ixn
         .encode()

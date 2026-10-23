@@ -64,7 +64,13 @@ fn exchange(
     event: &KeriEvent<KeyEvent>,
     signature: impl FnOnce(&[u8]) -> Vec<Signature>,
 ) -> SignedExchange {
-    let exn = event_generator::exchange(recipient, event, ForwardTopic::Multisig);
+    let exn = event_generator::exchange(
+        &event.data.get_prefix(),
+        recipient,
+        event,
+        ForwardTopic::Multisig,
+        keri_core::event_message::keri_version::KeriVersion::V1,
+    );
     let signature = signature(&exn.encode().unwrap());
     SignedExchange {
         exchange_message: exn,

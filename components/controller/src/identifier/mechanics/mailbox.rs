@@ -14,6 +14,7 @@ use keri_core::{
     oobi_manager::storage::OobiStorageBackend,
     prefix::IdentifierPrefix,
 };
+use keri_core::event_message::keri_version::KeriVersion;
 use teliox::database::TelEventDatabase;
 
 use crate::{error::ControllerError, identifier::Identifier, mailbox_updating::ActionRequired};
@@ -118,7 +119,13 @@ where
         let event = event.event_message.clone();
         let recipient = event.data.get_prefix();
         // Construct exn message (will be stored in group identifier mailbox)
-        let exn = event_generator::exchange(&recipient, &event, ForwardTopic::Multisig);
+        let exn = event_generator::exchange(
+            &self.id,
+            &recipient,
+            &event,
+            ForwardTopic::Multisig,
+            KeriVersion::V1,
+        );
         Ok(ActionRequired::MultisigRequest(event, exn))
     }
 
@@ -138,7 +145,13 @@ where
                 let recipient = event_message.data.get_prefix();
                 // Construct exn message (will be stored in group identifier mailbox)
                 let exn =
-                    event_generator::exchange(&recipient, &event_message, ForwardTopic::Multisig);
+                    event_generator::exchange(
+                        &self.id,
+                        &recipient,
+                        &event_message,
+                        ForwardTopic::Multisig,
+                        KeriVersion::V1,
+                    );
                 Ok(Some(ActionRequired::MultisigRequest(event_message, exn)))
             }
         }
@@ -271,7 +284,13 @@ where
                 ));
 
                 let ixn = self.known_events.anchor_with_seal(group_id, &[seal])?;
-                let exn = event_generator::exchange(group_id, &ixn, ForwardTopic::Multisig);
+                let exn = event_generator::exchange(
+                    &self.id,
+                    group_id,
+                    &ixn,
+                    ForwardTopic::Multisig,
+                    KeriVersion::V1,
+                );
                 // let (delegating_event, exn) = self.delegate(&event_to_confirm.event_message)?;
                 Ok(Some(ActionRequired::DelegationRequest(ixn, exn)))
             }

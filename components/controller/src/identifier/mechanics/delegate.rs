@@ -1,4 +1,5 @@
 use keri_core::actor::prelude::HashFunctionCode;
+use keri_core::event_message::keri_version::KeriVersion;
 use keri_core::database::{EscrowCreator, EventDatabase};
 use keri_core::oobi_manager::storage::OobiStorageBackend;
 use keri_core::{
@@ -44,7 +45,12 @@ where
             },
             to_forward: delegating_event.clone(),
         }
-        .to_message(SerializationFormats::JSON, HashFunctionCode::Blake3_256);
+        .to_message(
+            &self.id,
+            KeriVersion::V1,
+            SerializationFormats::JSON,
+            HashFunctionCode::Blake3_256,
+        );
         Ok((delegating_event, exn_message))
     }
 }

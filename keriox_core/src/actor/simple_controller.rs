@@ -547,7 +547,12 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase, RedbOobiStorage> {
             },
             to_forward: data.event_message.clone(),
         }
-        .to_message(SerializationFormats::JSON, HashFunctionCode::Blake3_256);
+        .to_message(
+            &self.prefix,
+            KeriVersion::V1,
+            SerializationFormats::JSON,
+            HashFunctionCode::Blake3_256,
+        );
 
         let sigs = vec![Signature::Transferable(
             SignerData::JustSignatures,

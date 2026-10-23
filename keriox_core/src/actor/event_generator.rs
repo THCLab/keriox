@@ -354,30 +354,31 @@ pub fn generate_end_role(
         SerializationFormats::JSON,
     )
 }
+/// An `exn` from `sender` forwarding `data` to `receipient` under `topic`,
+/// written in `version`.
 #[cfg(feature = "mailbox")]
 pub fn exchange(
+    sender: &IdentifierPrefix,
     receipient: &IdentifierPrefix,
     data: &KeriEvent<KeyEvent>,
     topic: ForwardTopic,
+    version: KeriVersion,
 ) -> ExchangeMessage {
     use said::derivation::HashFunctionCode;
     use said::version::format::SerializationFormats;
 
-    use crate::event_message::timestamped::Timestamped;
-
-    let event = Timestamped::new(Exchange::Fwd {
+    Exchange::Fwd {
         args: FwdArgs {
             recipient_id: receipient.clone(),
             topic,
         },
         to_forward: data.clone(),
-    });
-
-    KeriEvent::new(
-        KeriVersion::V1,
+    }
+    .to_message(
+        sender,
+        version,
         SerializationFormats::JSON,
-        HashFunctionCode::Blake3_256.into(),
-        event,
+        HashFunctionCode::Blake3_256,
     )
 }
 

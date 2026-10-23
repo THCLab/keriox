@@ -158,7 +158,7 @@ fn process_exn<D: EventDatabase>(
     attachment: (MaterialPath, Vec<Signature>),
     storage: &EventStorage<D>,
 ) -> Result<(), Error> {
-    let (recipient, to_forward, topic) = match &exn.data.data {
+    let (recipient, to_forward, topic) = match &exn.data.content.data {
         Exchange::Fwd { args, to_forward } => (&args.recipient_id, to_forward, &args.topic),
     };
     let (sigs, witness_receipts) = attachment.1.into_iter().fold(

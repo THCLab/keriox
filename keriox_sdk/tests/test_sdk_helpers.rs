@@ -160,8 +160,13 @@ async fn test_multisig_request_json_roundtrip() {
             _ => None,
         })
         .expect("inception event in own KEL");
-    let exchange =
-        keri_core::actor::event_generator::exchange(id.id(), &event, ForwardTopic::Multisig);
+    let exchange = keri_core::actor::event_generator::exchange(
+        id.id(),
+        id.id(),
+        &event,
+        ForwardTopic::Multisig,
+        keri_core::event_message::keri_version::KeriVersion::V1,
+    );
 
     let request =
         MultisigRequest::try_from(ActionRequired::MultisigRequest(event.clone(), exchange))

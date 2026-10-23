@@ -17,6 +17,7 @@ use keri_core::{
     oobi_manager::storage::OobiStorageBackend,
     prefix::{BasicPrefix, CesrPrimitive, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
 };
+use keri_core::event_message::keri_version::KeriVersion;
 use said::SelfAddressingIdentifier;
 use teliox::database::TelEventDatabase;
 
@@ -76,14 +77,28 @@ where
         let mut exchanges = participants
             .iter()
             .map(|id| -> Result<_, _> {
-                let exn = event_generator::exchange(id, &icp, ForwardTopic::Multisig).encode()?;
+                let exn = event_generator::exchange(
+                    &self.id,
+                    id,
+                    &icp,
+                    ForwardTopic::Multisig,
+                    KeriVersion::V1,
+                )
+                .encode()?;
                 String::from_utf8(exn).map_err(|_e| MechanicsError::EventFormatError)
             })
             .collect::<Result<Vec<String>, MechanicsError>>()?;
 
         if let Some(delegator) = delegator {
             let delegation_request = String::from_utf8(
-                event_generator::exchange(&delegator, &icp, ForwardTopic::Delegate).encode()?,
+                event_generator::exchange(
+                    &self.id,
+                    &delegator,
+                    &icp,
+                    ForwardTopic::Delegate,
+                    KeriVersion::V1,
+                )
+                .encode()?,
             )
             .map_err(|_e| MechanicsError::EventFormatError)?;
             exchanges.push(delegation_request);
@@ -273,7 +288,14 @@ where
             .iter()
             .filter(|id| *id != &self.id)
             .map(|id| -> Result<_, _> {
-                let exn = event_generator::exchange(id, &rot, ForwardTopic::Multisig).encode()?;
+                let exn = event_generator::exchange(
+                    &self.id,
+                    id,
+                    &rot,
+                    ForwardTopic::Multisig,
+                    KeriVersion::V1,
+                )
+                .encode()?;
                 String::from_utf8(exn).map_err(|_e| MechanicsError::EventFormatError)
             })
             .collect::<Result<Vec<String>, MechanicsError>>()?;
@@ -282,7 +304,14 @@ where
         // has to anchor: ask for it the way a delegated inception does.
         if let Some(delegator) = delegator {
             let delegation_request = String::from_utf8(
-                event_generator::exchange(&delegator, &rot, ForwardTopic::Delegate).encode()?,
+                event_generator::exchange(
+                    &self.id,
+                    &delegator,
+                    &rot,
+                    ForwardTopic::Delegate,
+                    KeriVersion::V1,
+                )
+                .encode()?,
             )
             .map_err(|_e| MechanicsError::EventFormatError)?;
             exchanges.push(delegation_request);
@@ -363,7 +392,14 @@ where
             .iter()
             .filter(|id| *id != &self.id)
             .map(|id| -> Result<_, _> {
-                let exn = event_generator::exchange(id, &ixn, ForwardTopic::Multisig).encode()?;
+                let exn = event_generator::exchange(
+                    &self.id,
+                    id,
+                    &ixn,
+                    ForwardTopic::Multisig,
+                    KeriVersion::V1,
+                )
+                .encode()?;
                 String::from_utf8(exn).map_err(|_e| MechanicsError::EventFormatError)
             })
             .collect::<Result<Vec<String>, MechanicsError>>()?;
@@ -468,7 +504,7 @@ where
             let Exchange::Fwd {
                 args: _,
                 to_forward,
-            } = exn.data.data.clone();
+            } = exn.data.content.data.clone();
 
             let sigs: Vec<_> = if let Some(receipts) = self.known_events.find_receipt(
                 &to_forward.data.get_prefix(),
