@@ -12,3 +12,6 @@ escrow_config:
 # KERI version this node writes its own messages in (1 or 2). Switch to 2
 # only once every client it talks to reads KERI 2.0 (keriox 0.20 or later).
 keri_version: 1
+# The oldest keriox release whose requests are served; older clients, and
+# clients that name no release, get 426 Upgrade Required. Unset serves all.
+# min_client_version: "0.20.0"

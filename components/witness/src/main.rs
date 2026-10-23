@@ -51,6 +51,12 @@ pub struct Config {
     /// Receipts and key state answers follow the event or query they answer.
     #[serde(default)]
     keri_version: KeriVersion,
+
+    /// The oldest keriox release whose requests are served, e.g. `0.20.0`.
+    /// Older clients, and clients that name no release, get `426 Upgrade
+    /// Required` on every `POST`. Unset serves every client.
+    #[serde(default)]
+    min_client_version: Option<String>,
 }
 
 #[serde_as]
@@ -156,7 +162,8 @@ async fn main() -> Result<()> {
         cfg.seed,
         cfg.escrow_timeout,
         cfg.keri_version,
-    )?;
+    )?
+    .with_min_client_version(min_client_version(cfg.min_client_version.as_deref())?);
 
     let witness_id = IdentifierPrefix::Basic(witness_listener.get_prefix());
     let witness_loc_scheme = LocationScheme {
@@ -197,4 +204,16 @@ async fn main() -> Result<()> {
     http_handle.await?;
 
     Ok(())
+}
+
+/// The configured minimum client release, if any.
+fn min_client_version(
+    written: Option<&str>,
+) -> anyhow::Result<Option<keri_core::transport::client_version::Version>> {
+    written
+        .map(|version| {
+            keri_core::transport::client_version::Version::parse(version.trim())
+                .with_context(|| format!("min_client_version {version:?} is not a release"))
+        })
+        .transpose()
 }

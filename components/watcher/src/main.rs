@@ -68,6 +68,12 @@ pub struct Config {
     /// The KERI version the watcher writes its own messages in (1 or 2).
     #[serde(default)]
     keri_version: KeriVersion,
+
+    /// The oldest keriox release whose requests are served, e.g. `0.20.0`.
+    /// Older clients, and clients that name no release, get `426 Upgrade
+    /// Required` on every `POST`. Unset serves every client.
+    #[serde(default)]
+    min_client_version: Option<String>,
 }
 
 #[serde_as]
@@ -189,7 +195,8 @@ async fn main() -> anyhow::Result<()> {
             .kel_update_timeout
             .unwrap_or(Duration::from_secs(5)),
         keri_version: cfg.keri_version,
-    })?;
+    })?
+    .with_min_client_version(min_client_version(cfg.min_client_version.as_deref())?);
 
     // Resolve oobi to know how to find witness
     watcher_listener
@@ -235,4 +242,16 @@ async fn main() -> anyhow::Result<()> {
         .await?;
 
     Ok(())
+}
+
+/// The configured minimum client release, if any.
+fn min_client_version(
+    written: Option<&str>,
+) -> anyhow::Result<Option<keri_core::transport::client_version::Version>> {
+    written
+        .map(|version| {
+            keri_core::transport::client_version::Version::parse(version.trim())
+                .with_context(|| format!("min_client_version {version:?} is not a release"))
+        })
+        .transpose()
 }

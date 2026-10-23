@@ -87,6 +87,10 @@ otherwise, so a node or client can be upgraded before its peers.
   (`keri_witness_requests_by_client_total`,
   `keri_watcher_requests_by_client_total`), so operators can tell when old
   clients are gone.
+- A witness or watcher with `min_client_version` set (e.g. `"0.20.0"`;
+  `WITNESS_MIN_CLIENT_VERSION`, `WATCHER_MIN_CLIENT_VERSION`) answers
+  `426 Upgrade Required` to every `POST` from an older keriox client or from
+  a client that names no release. `GET` requests (`/info`, OOBIs) stay open.
 - TEL events stay KERI 1.0: the KERI specification defines no TEL messages,
   and registries in KERI 2.0 come with ACDC 2.0.
 

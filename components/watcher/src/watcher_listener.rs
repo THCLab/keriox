@@ -1,4 +1,5 @@
 use crate::http_routing::{configure_admin_routes, configure_routes};
+use keri_core::transport::client_version::Version;
 use std::{net::ToSocketAddrs, sync::Arc};
 
 use actix_web::{dev::Server, rt::spawn, web, App, HttpServer};
@@ -13,6 +14,9 @@ use self::http_handlers::ApiError;
 
 pub struct WatcherListener<S: OobiStorageBackend> {
     pub watcher: Arc<Watcher<S>>,
+    /// The oldest keriox release whose requests are served; `None` serves
+    /// every client.
+    pub min_client_version: Option<Version>,
 }
 
 impl<S: OobiStorageBackend + 'static> WatcherListener<S> {
@@ -22,7 +26,17 @@ impl<S: OobiStorageBackend + 'static> WatcherListener<S> {
     ) -> Result<Self, ActorError> {
         Ok(Self {
             watcher: Arc::new(Watcher::new(config, oobi_manager)?),
+            min_client_version: None,
         })
+    }
+
+    /// Refuses requests from keriox clients older than `minimum` with
+    /// `426 Upgrade Required`, and from clients that name no release.
+    pub fn with_min_client_version(self, minimum: Option<Version>) -> Self {
+        Self {
+            min_client_version: minimum,
+            ..self
+        }
     }
 
     pub fn listen_http(self, addr: impl ToSocketAddrs) -> Server {
@@ -37,17 +51,14 @@ impl<S: OobiStorageBackend + 'static> WatcherListener<S> {
         spawn(witness_polling(data));
 
         let state = web::Data::new(self.watcher);
+        let minimum = self.min_client_version;
         HttpServer::new(move || {
             App::new()
                 .app_data(state.clone())
-                .wrap_fn(|req, srv| {
-                    crate::metrics::count_client(
-                        req.headers()
-                            .get(actix_web::http::header::USER_AGENT)
-                            .and_then(|agent| agent.to_str().ok()),
-                    );
-                    actix_web::dev::Service::call(srv, req)
-                })
+                .wrap(actix_web::middleware::from_fn({
+                    let minimum = minimum.clone();
+                    move |req, next| crate::client_gate::client_gate(minimum.clone(), req, next)
+                }))
                 .configure(configure_routes)
         })
         .bind(addr)

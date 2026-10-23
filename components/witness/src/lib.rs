@@ -1,3 +1,4 @@
+mod client_gate;
 pub mod metrics;
 #[cfg(test)]
 mod tests;

@@ -4,6 +4,7 @@ use std::{
     sync::Arc,
 };
 
+use keri_core::transport::client_version::Version;
 use actix_web::{dev::Server, web::Data, App, HttpResponse, HttpServer};
 use anyhow::Result;
 use keri_core::{
@@ -24,6 +25,9 @@ async fn metrics_handler() -> HttpResponse {
 
 pub struct WitnessListener<S: OobiStorageBackend> {
     pub witness_data: Arc<Witness<S>>,
+    /// The oldest keriox release whose requests are served; `None` serves
+    /// every client.
+    pub min_client_version: Option<Version>,
 }
 
 impl<S: OobiStorageBackend + 'static> WitnessListener<S> {
@@ -51,7 +55,17 @@ impl<S: OobiStorageBackend + 'static> WitnessListener<S> {
                 escrow_config,
                 oobi_manager,
             )?),
+            min_client_version: None,
         })
+    }
+
+    /// Refuses requests from keriox clients older than `minimum` with
+    /// `426 Upgrade Required`, and from clients that name no release.
+    pub fn with_min_client_version(self, minimum: Option<Version>) -> Self {
+        Self {
+            min_client_version: minimum,
+            ..self
+        }
     }
 
     pub fn listen_http(&self, addr: impl ToSocketAddrs) -> Server {
@@ -73,17 +87,14 @@ impl<S: OobiStorageBackend + 'static> WitnessListener<S> {
         crate::metrics::record_build_info();
         let state = Data::new(self.witness_data.clone());
         let delay = query_delay;
+        let minimum = self.min_client_version.clone();
         HttpServer::new(move || {
             App::new()
                 .app_data(state.clone())
-                .wrap_fn(|req, srv| {
-                    crate::metrics::count_client(
-                        req.headers()
-                            .get(actix_web::http::header::USER_AGENT)
-                            .and_then(|agent| agent.to_str().ok()),
-                    );
-                    actix_web::dev::Service::call(srv, req)
-                })
+                .wrap(actix_web::middleware::from_fn({
+                    let minimum = minimum.clone();
+                    move |req, next| crate::client_gate::client_gate(minimum.clone(), req, next)
+                }))
                 .route(
                     "/introduce",
                     actix_web::web::get().to(http_handlers::introduce_redb),
