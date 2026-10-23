@@ -201,6 +201,89 @@ async fn rollout_mix(
     Ok(())
 }
 
+/// Rotates `id` to the next keys in its controller's KERI version and
+/// collects the first witness's receipt. Returns the rotation event.
+async fn rotate(
+    ctx: &InfrastructureContext,
+    id: &mut Identifier,
+    keys: &mut CryptoBox,
+) -> Result<String, ControllerError> {
+    keys.rotate()?;
+    let rot = id
+        .rotate(
+            vec![BasicPrefix::Ed25519(keys.public_key())],
+            vec![BasicPrefix::Ed25519(keys.next_public_key())],
+            1,
+            vec![],
+            vec![],
+            1,
+        )
+        .await?;
+    let signature = SelfSigningPrefix::Ed25519Sha512(keys.sign(rot.as_bytes()).unwrap());
+    id.finalize_rotate(rot.as_bytes(), signature).await?;
+    id.notify_witnesses().await?;
+    let (first_witness_id, _) = ctx.first_witness_data();
+    collect_receipts(id, keys, &first_witness_id).await;
+    Ok(rot)
+}
+
+/// An identifier incepted in KERI 1.0 whose controller restarts writing
+/// KERI 2.0: its next rotation is a 2.0 event on a 1.0 log, and a verifier
+/// still on 1.0 must see it through its watcher.
+#[test_context(InfrastructureContext)]
+#[actix_rt::test]
+async fn a_keri_1_identifier_rotates_in_keri_2(
+    ctx: &mut InfrastructureContext,
+) -> Result<(), ControllerError> {
+    let signer = incept(ctx, KeriVersion::V1).await;
+    let mut verifier = incept(ctx, KeriVersion::V1).await;
+    watch(ctx, &mut verifier, signer.id.id()).await;
+    assert_eq!(
+        query(&mut verifier, &signer.id).await,
+        QueryResponse::Updates
+    );
+
+    // The signer's controller restarts on the same database writing 2.0.
+    let Client {
+        _db: db,
+        controller,
+        mut keys,
+        id,
+    } = signer;
+    let prefix = id.id().clone();
+    drop(id);
+    drop(controller);
+    let controller = Arc::new(Controller::new(ControllerConfig {
+        db_path: db.path().to_owned(),
+        keri_version: KeriVersion::V2,
+        ..Default::default()
+    })?);
+    let mut id = Identifier::new(
+        prefix,
+        None,
+        controller.known_events.clone(),
+        controller.communication.clone(),
+        controller.cache.clone(),
+    );
+
+    // The verifier's watcher already holds the signer's log; it has to
+    // catch up with the events that follow, not only fetch from scratch.
+    for sn in 1..=2 {
+        let rot = rotate(ctx, &mut id, &mut keys).await?;
+        assert!(rot.starts_with(r#"{"v":"KERICAACAAJSON"#), "{rot}");
+        assert_eq!(controller.find_state(id.id())?.sn, sn);
+        for _ in 0..40 {
+            query(&mut verifier, &id).await;
+            if verifier.controller.find_state(id.id())?.sn == sn {
+                break;
+            }
+            sleep(Duration::from_millis(250)).await;
+        }
+        assert_eq!(verifier.controller.find_state(id.id())?.sn, sn);
+    }
+    Ok(())
+}
+
 #[test_context(InfrastructureContext)]
 #[actix_rt::test]
 async fn keri_2_clients_with_keri_1_servers(

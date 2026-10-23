@@ -271,11 +271,13 @@ pub fn process_query<D: EventDatabase>(
             reply_route: _,
             args,
         } => {
+            // `s` is where the replay starts: without a limit the log is
+            // replayed from `s` to its end.
             let response = match (args.s, args.limit) {
                 (None, _) => storage.get_kel_messages_with_receipts_all(&args.i)?,
-                (Some(sn), None) => storage
-                    .get_event_at_sn(&args.i, sn)
-                    .map(|event| vec![Notice::Event(event.signed_event_message)]),
+                (Some(sn), None) => {
+                    storage.get_kel_messages_with_receipts_range(&args.i, sn, u64::MAX - sn)?
+                }
                 (Some(sn), Some(limit)) => {
                     storage.get_kel_messages_with_receipts_range(&args.i, sn, limit)?
                 }

@@ -491,7 +491,14 @@ impl<S: OobiStorageBackend> WatcherData<S> {
                     i: id_inner.clone(),
                     s: if from_sn > 0 { Some(from_sn) } else { None },
                     src: Some(witness_id.clone()),
-                    limit: None,
+                    // Everything from `from_sn` on. Witnesses before
+                    // 0.19.0-rc.8 answer `s` without a limit with that one
+                    // event only, so the limit is spelled out.
+                    limit: if from_sn > 0 {
+                        Some(u64::MAX - from_sn)
+                    } else {
+                        None
+                    },
                 },
             };
             let qry = QueryEvent::new_query(
