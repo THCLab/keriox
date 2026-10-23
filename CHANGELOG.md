@@ -1,3 +1,14 @@
+## [0.19.0-rc.8] - 2026-10-23
+
+### 🚀 Features
+
+- *(workspace)* Let clients follow the KERI version the servers write
+- *(workspace)* Name KERI versions as the specifications do
+
+### 🐛 Bug Fixes
+
+- *(watcher)* Catch up with events after the ones already held
+- *(watcher)* Keep the event database across restarts
 ## [0.19.0-rc.7] - 2026-10-23
 
 ### 🐛 Bug Fixes
