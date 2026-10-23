@@ -330,6 +330,7 @@ pub fn generate_end_role(
     watcher_id: &IdentifierPrefix,
     role: Role,
     enabled: bool,
+    version: KeriVersion,
 ) -> ReplyEvent {
     use said::derivation::HashFunctionCode;
     use said::version::format::SerializationFormats;
@@ -346,6 +347,8 @@ pub fn generate_end_role(
     };
     ReplyEvent::new_reply(
         reply_route,
+        controller_id,
+        version,
         // TODO set algo and serialization
         HashFunctionCode::Blake3_256,
         SerializationFormats::JSON,
@@ -402,7 +405,7 @@ mod tests {
             .parse()
             .unwrap();
 
-        let reply = generate_end_role(&cid, &server, Role::Messagebox, true);
+        let reply = generate_end_role(&cid, &server, Role::Messagebox, true, crate::event_message::keri_version::KeriVersion::V1);
         match reply.get_route() {
             ReplyRoute::EndRoleAdd(er) => {
                 assert_eq!(er.role, Role::Messagebox);

@@ -4,6 +4,7 @@ use std::{
 };
 
 #[cfg(feature = "storage-redb")]
+use crate::event_message::keri_version::KeriVersion;
 use crate::database::redb::RedbDatabase;
 use crate::event_message::cesr_adapter::parse_cesr_stream;
 use crate::{
@@ -194,6 +195,8 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase, RedbOobiStorage> {
                 args: query_args,
                 reply_route: String::from(""),
             },
+            &self.prefix,
+            KeriVersion::V1,
             SerializationFormats::JSON,
             HashFunctionCode::Blake3_256,
         );
@@ -221,7 +224,7 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase, RedbOobiStorage> {
     #[cfg(feature = "oobi")]
     pub fn add_watcher(&self, watcher_id: &IdentifierPrefix) -> Result<Op, Error> {
         let end_role =
-            event_generator::generate_end_role(&self.prefix(), watcher_id, Role::Watcher, true);
+            event_generator::generate_end_role(&self.prefix(), watcher_id, Role::Watcher, true, KeriVersion::V1);
         let sed: Vec<u8> = end_role.encode()?;
         let sig = self.key_manager.clone().lock().unwrap().sign(&sed)?;
         let att_sig = IndexedSignature::new_both_same(SelfSigningPrefix::Ed25519Sha512(sig), 0);
@@ -603,6 +606,8 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase, RedbOobiStorage> {
                 },
                 reply_route: "".to_string(),
             },
+            &self.prefix,
+            KeriVersion::V1,
             SerializationFormats::JSON,
             HashFunctionCode::Blake3_256,
         );
@@ -645,6 +650,8 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase, RedbOobiStorage> {
                         },
                         reply_route: "".to_string(),
                     },
+                    &self.prefix,
+                    KeriVersion::V1,
                     SerializationFormats::JSON,
                     HashFunctionCode::Blake3_256,
                 );

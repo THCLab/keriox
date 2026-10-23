@@ -137,6 +137,8 @@ impl<S: OobiStorageBackend> WatcherData<S> {
         );
         let reply = ReplyEvent::new_reply(
             ReplyRoute::LocScheme(loc_scheme),
+            &IdentifierPrefix::Basic(prefix.clone()),
+            KeriVersion::V1,
             HashFunctionCode::Blake3_256,
             SerializationFormats::JSON,
         );
@@ -213,6 +215,8 @@ impl<S: OobiStorageBackend> WatcherData<S> {
             .get_ksn_for_prefix(prefix, SerializationFormats::JSON)?;
         let rpy = ReplyEvent::new_reply(
             ReplyRoute::Ksn(IdentifierPrefix::Basic(self.prefix.clone()), ksn),
+            &IdentifierPrefix::Basic(self.prefix.clone()),
+            KeriVersion::V1,
             HashFunctionCode::Blake3_256,
             SerializationFormats::JSON,
         );
@@ -372,6 +376,8 @@ impl<S: OobiStorageBackend> WatcherData<S> {
             ReplyType::Ksn(ksn) => {
                 let rpy = ReplyEvent::new_reply(
                     ReplyRoute::Ksn(IdentifierPrefix::Basic(self.prefix.clone()), ksn),
+                    &IdentifierPrefix::Basic(self.prefix.clone()),
+                    KeriVersion::V1,
                     HashFunctionCode::Blake3_256,
                     SerializationFormats::JSON,
                 );
@@ -477,6 +483,8 @@ impl<S: OobiStorageBackend> WatcherData<S> {
             };
             let qry = QueryEvent::new_query(
                 route,
+                &IdentifierPrefix::Basic(self.prefix.clone()),
+                KeriVersion::V1,
                 SerializationFormats::JSON,
                 HashFunctionCode::Blake3_256,
             );
@@ -712,6 +720,8 @@ impl<S: OobiStorageBackend> WatcherData<S> {
                 args: query_args,
                 reply_route: String::from(""),
             },
+            &IdentifierPrefix::Basic(self.prefix.clone()),
+            KeriVersion::V1,
             SerializationFormats::JSON,
             HashFunctionCode::Blake3_256,
         );

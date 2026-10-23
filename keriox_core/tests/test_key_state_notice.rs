@@ -113,6 +113,8 @@ fn a_key_state_reply_past_sn_9_reads_back() {
             IdentifierPrefix::Basic(witness_id.clone()),
             KeyStateNotice::new_ksn(state, SerializationFormats::JSON),
         ),
+        &IdentifierPrefix::Basic(witness_id.clone()),
+        keri_core::event_message::keri_version::KeriVersion::V1,
         HashFunctionCode::Blake3_256,
         SerializationFormats::JSON,
     );

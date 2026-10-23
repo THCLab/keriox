@@ -7,6 +7,7 @@ use keri_core::{
     prefix::{IdentifierPrefix, SelfSigningPrefix},
     query::reply_event::{ReplyEvent, ReplyRoute},
 };
+use keri_core::event_message::keri_version::KeriVersion;
 use teliox::database::TelEventDatabase;
 
 use crate::identifier::Identifier;
@@ -33,7 +34,14 @@ where
         role: Role,
     ) -> Result<String, MechanicsError> {
         String::from_utf8(
-            event_generator::generate_end_role(&self.id, &eid, role, true).encode()?,
+            event_generator::generate_end_role(
+                &self.id,
+                &eid,
+                role,
+                true,
+                KeriVersion::V1,
+            )
+            .encode()?,
         )
         .map_err(|_e| MechanicsError::EventFormatError)
     }
@@ -51,7 +59,13 @@ where
     /// Generates reply event with `end_role_cut` route.
     pub fn remove_watcher(&self, watcher_id: IdentifierPrefix) -> Result<String, MechanicsError> {
         String::from_utf8(
-            event_generator::generate_end_role(&self.id, &watcher_id, Role::Watcher, false)
+            event_generator::generate_end_role(
+                &self.id,
+                &watcher_id,
+                Role::Watcher,
+                false,
+                KeriVersion::V1,
+            )
                 .encode()?,
         )
         .map_err(|_e| MechanicsError::EventFormatError)

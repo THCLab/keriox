@@ -207,8 +207,8 @@ then has to be classified by hand.
 | `v1/keripy/negative/negative` | 84 | 67 | 17 |
 | `v2/keripy/kels/positive` | 15 | 15 | 0 |
 | `v2/keripy/negative/negative` | 11 | 6 | 5 |
-| `v2/spec/examples` (52 vectors, 6 not checked) | 46 | 14 | 32 |
-| total | 186 | 117 | 69 |
+| `v2/spec/examples` (52 vectors, 6 not checked) | 46 | 17 | 29 |
+| total | 186 | 120 | 66 |
 
 ### Expected failures by cause
 
@@ -218,7 +218,7 @@ then has to be classified by hand.
 | `native-cesr` | 12 | It does not support native CESR message bodies (Annex A examples). | Annex A, Native CESR Encodings of KERI Messages |
 | `deleg` | 1 | Only the first couple of a source seal group is tried; the specification does not say what several couples mean. | Cooperative Delegation; Seals |
 | `seal-types` | 10 | It has no source, latest establishment, registrar backer or typed seal. Its untagged seal type reads them as digest seals and drops their other fields, so an event seal with a malformed `i` is also read as a digest seal. | Seals; Seal Count Codes |
-| `routed-v2` | 8 | It does not read KERI 2.0 `qry`/`rpy` as the specification prints them (with `i`, `/oobi` routes). The specification contradicts itself here: its declared field order has no `i`, but every example and keripy have one. | Query Message Body; Reply Message Body; OOBI sections |
+| `routed-v2` | 5 | It reads and writes KERI 2.0 `qry`/`rpy` with `i`, as every specification example and keripy do (the declared field order has no `i`), but not the `/oobi` query and reply routes, which no keriox component uses. | Query Message Body; Reply Message Body; OOBI sections |
 | `key-event-rules` | 4 | Accepted although the specification forbids them:<br>- `kt=0`;<br>- `nt=0` with a rotation to unrelated keys;<br>- an unsatisfiable `nt`;<br>- a non-transferable prefix with `n`. | Rotation using pre-rotation; Key and key digest threshold fields; KERI's secure bindings |
 | `pro-bar-xip` | 6 | There are no `pro`, `bar` or `xip` message types. | Routed Messages |
 | `reply-bada` | 2 | The roles `registrar` and `mailbox` are not known. | BADA Policy; RUN off the CRUD; OOBI KERI Endpoint Authorization |
@@ -235,5 +235,5 @@ Some passes need care when reading them:
   pass for that reason, not because keriox applies the check the vector is
   about.
 - `endpoint-location-with-scheme-by-eid-update-rpy-json` (a url without a
-  scheme, which must be refused) passes for the same reason: keriox does
-  not read KERI 2.0 replies with `i`.
+  scheme, which must be refused) is read and refused; besides the url, its
+  sender `i` is the controller, not the endpoint that signs locations.

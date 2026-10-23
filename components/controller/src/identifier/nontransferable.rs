@@ -89,6 +89,8 @@ where
                     limit: Some(limit),
                 },
             },
+            &IdentifierPrefix::Basic(self.id.clone()),
+            KeriVersion::V1,
             SerializationFormats::JSON,
             HashFunctionCode::Blake3_256,
         )
@@ -105,6 +107,8 @@ where
                     limit: None,
                 },
             },
+            &IdentifierPrefix::Basic(self.id.clone()),
+            KeriVersion::V1,
             SerializationFormats::JSON,
             HashFunctionCode::Blake3_256,
         )

@@ -320,6 +320,8 @@ fn test_qry_rpy() -> Result<(), ActorError> {
             args: query_args,
             reply_route: String::from(""),
         },
+        &alice.prefix().clone(),
+        keri_core::event_message::keri_version::KeriVersion::V1,
         SerializationFormats::JSON,
         HashFunctionCode::Blake3_256,
     );
@@ -368,6 +370,8 @@ fn test_qry_rpy() -> Result<(), ActorError> {
             args: query_args,
             reply_route: String::from(""),
         },
+        &alice.prefix().clone(),
+        keri_core::event_message::keri_version::KeriVersion::V1,
         SerializationFormats::JSON,
         HashFunctionCode::Blake3_256,
     );

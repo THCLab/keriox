@@ -199,6 +199,8 @@ impl WitnessListener<RedbOobiStorage> {
         );
         let reply = keri_core::query::reply_event::ReplyEvent::new_reply(
             keri_core::query::reply_event::ReplyRoute::LocScheme(loc_scheme),
+            &keri_core::prefix::IdentifierPrefix::Basic(prefix.clone()),
+            keri_core::event_message::keri_version::KeriVersion::V1,
             keri_core::actor::prelude::HashFunctionCode::Blake3_256,
             keri_core::actor::prelude::SerializationFormats::JSON,
         );

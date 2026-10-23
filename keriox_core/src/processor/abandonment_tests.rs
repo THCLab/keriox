@@ -2,6 +2,7 @@
 //! next keys (`n=[]`, `nt=0`). Nothing may follow it: no rotation can reveal
 //! a committed key, and the last keys may no longer add interaction events.
 
+use crate::event_message::keri_version::KeriVersion;
 use std::sync::Arc;
 
 use said::SelfAddressingIdentifier;
@@ -622,7 +623,13 @@ fn an_end_role_reply_from_an_abandoned_identifier_is_refused() {
     let oobi_manager = OobiManager::new(fx.storage.events_db.clone()).unwrap();
 
     let watcher = IdentifierPrefix::Basic(key(&Signer::new()));
-    let rpy = generate_end_role(&id, &watcher, Role::Watcher, true);
+    let rpy = generate_end_role(
+        &id,
+        &watcher,
+        Role::Watcher,
+        true,
+        KeriVersion::V1,
+    );
     let sig = SelfSigningPrefix::Ed25519Sha512(last_keys.sign(rpy.encode().unwrap()).unwrap());
     let signed = SignedReply::new_trans(
         rpy,

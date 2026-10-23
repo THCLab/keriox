@@ -1,7 +1,7 @@
 # Known failures against the CESR V2 vectors in test-vectors/v2.
 # Format: <source>/<vector id> TAB <fail|panic> TAB <reason>.
 # Regenerate with CESR_VECTORS_BLESS=1 cargo test --test vectors.
-cesrox/stream/icp/JSON/big-attachments	fail	process: Key index not present in the set
+cesrox/stream/icp/JSON/big-attachments	fail	process: Signature verification failed
 cesrox/stream/native/generic-map	fail	parse: Cesr error: unexpected GenericMap group in a message stream
 keripy/indexer/ECDSA_256r1_Big_Crt_Sig/0/None	fail	unknown code
 keripy/indexer/ECDSA_256r1_Big_Crt_Sig/1/None	fail	unknown code
@@ -27,5 +27,4 @@ keripy/neg/version/v2-unknown-proto	fail	version input accepted
 keripy/stream/icp/CESR/3sig	fail	parse: Deserialize error: native CESR message bodies are not supported
 keripy/stream/icp/json/framed	fail	EDBNIOEXJVn0v4kcl9ke45PVwlEdif7BdbY8QVgLVd24 sn 0 EDBNIOEXJVn0v4kcl9ke45PVwlEdif7BdbY8QVgLVd24 was not accepted
 keripy/stream/icp/json/genusify	fail	EDBNIOEXJVn0v4kcl9ke45PVwlEdif7BdbY8QVgLVd24 sn 0 EDBNIOEXJVn0v4kcl9ke45PVwlEdif7BdbY8QVgLVd24 was not accepted
-keripy/stream/qry/json/lsgs	fail	parse: Deserialize error: body differs from its canonical serialization
 spec/stream/example/trans-indexed-sig-groups	fail	parse: Wrong attachment: attachment before any message

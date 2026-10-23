@@ -13,18 +13,16 @@ pub type SignedMailboxQuery = SignedQuery<MailboxQuery>;
 pub type MailboxQuery = KeriEvent<Timestamped<MailboxRoute>>;
 
 impl MailboxQuery {
+    /// A mailbox query sent by `sender`, in `version`.
     pub fn new_query(
         route: MailboxRoute,
+        sender: &IdentifierPrefix,
+        version: KeriVersion,
         serialization_format: SerializationFormats,
         derivation: HashFunctionCode,
     ) -> Self {
-        let env = Timestamped::new(route);
-        KeriEvent::new(
-            KeriVersion::V1,
-            serialization_format,
-            derivation.into(),
-            env,
-        )
+        let env = Timestamped::sent(route, sender, version);
+        KeriEvent::new(version, serialization_format, derivation.into(), env)
     }
 
     pub fn get_args(&self) -> QueryArgsMbx {

@@ -322,6 +322,7 @@ async fn latest_loc_scheme_picks_newest_dt() -> Result<(), ActorError> {
         // `ReplyEvent::new_reply` uses `Utc::now()` internally; rebuild
         // through `KeriEvent::new` so we get a deterministic `dt`.
         let env = Timestamped {
+            sender: None,
             timestamp: dt,
             data: ReplyRoute::LocScheme(loc),
         };

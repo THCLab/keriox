@@ -40,25 +40,22 @@ v2/keripy/negative/negative/gap/rm-exn-fields/spec-shape	exn-fields	the specific
 v2/keripy/negative/negative/gap/rm-pro-bar-xip-missing/bar	pro-bar-xip	no bar message type
 v2/keripy/negative/negative/gap/rm-pro-bar-xip-missing/pro	pro-bar-xip	no pro message type
 v2/keripy/negative/negative/gap/rm-pro-bar-xip-missing/xip	pro-bar-xip	no xip message type
-v2/keripy/negative/negative/gap/rm-routed-i-field-ambiguity	routed-v2	a KERI 2.0 qry with the sender in i is not read
+v2/keripy/negative/negative/gap/rm-routed-i-field-ambiguity	routed-v2	the qry route /oobi is not supported
 v2/spec/examples/spec/message/bare-message-bar-cesr	native-cesr	native CESR message bodies are not supported
 v2/spec/examples/spec/message/delegated-inception-dip-cesr	native-cesr	native CESR message bodies are not supported
 v2/spec/examples/spec/message/delegated-rotation-drt-cesr	native-cesr	native CESR message bodies are not supported
-v2/spec/examples/spec/message/endpoint-location-with-scheme-by-eid-nullify-via-empty-url-rpy-json	routed-v2	a /loc/scheme rpy with i and url "" is not read
 v2/spec/examples/spec/message/example-bare-message-bar-json	pro-bar-xip	no bar message type
 v2/spec/examples/spec/message/example-exchange-transaction-inception-message-xip-json	pro-bar-xip	no xip message type
 v2/spec/examples/spec/message/example-exchange-transaction-message-exn-json	exn-fields	the specification's exn fields [v,t,d,i,ri,x,p,dt,r,q,a] are not read
 v2/spec/examples/spec/message/example-prod-message-pro-json	pro-bar-xip	no pro message type
-v2/spec/examples/spec/message/example-query-message-qry-json	routed-v2	the specification's qry (with i, route /oobi) is not read
-v2/spec/examples/spec/message/example-reply-message-rpy-json	routed-v2	the specification's rpy (with i) is not read
+v2/spec/examples/spec/message/example-query-message-qry-json	routed-v2	the qry route /oobi is not supported
+v2/spec/examples/spec/message/example-reply-message-rpy-json	routed-v2	the rpy route /oobi/process is not supported
 v2/spec/examples/spec/message/exchange-message-exn-cesr	native-cesr	native CESR message bodies are not supported
 v2/spec/examples/spec/message/exchange-transaction-inception-message-xip-cesr	native-cesr	native CESR message bodies are not supported
 v2/spec/examples/spec/message/inception-icp-cesr	native-cesr	native CESR message bodies are not supported
 v2/spec/examples/spec/message/interaction-ixn-cesr	native-cesr	native CESR message bodies are not supported
-v2/spec/examples/spec/message/keri-reply-messages-as-oobis-rpy-json	routed-v2	an rpy with i and an /oobi/... route is not read
-v2/spec/examples/spec/message/keri-reply-messages-as-oobis-rpy-json-2	routed-v2	an rpy with i and an /oobi/... route is not read
-v2/spec/examples/spec/message/player-eid-in-role-by-cid-nullify-via-cut-rpy-json	routed-v2	an /end/role rpy with i: the body differs from what keriox writes back (i is dropped)
-v2/spec/examples/spec/message/player-eid-in-role-by-cid-update-rpy-json	routed-v2	an /end/role rpy with i: the body differs from what keriox writes back (i is dropped)
+v2/spec/examples/spec/message/keri-reply-messages-as-oobis-rpy-json	routed-v2	the rpy routes /oobi/... are not supported
+v2/spec/examples/spec/message/keri-reply-messages-as-oobis-rpy-json-2	routed-v2	the rpy routes /oobi/... are not supported
 v2/spec/examples/spec/message/prod-message-pro-cesr	native-cesr	native CESR message bodies are not supported
 v2/spec/examples/spec/message/query-message-qry-cesr	native-cesr	native CESR message bodies are not supported
 v2/spec/examples/spec/message/receipt-rct-cesr	native-cesr	native CESR message bodies are not supported

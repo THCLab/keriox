@@ -134,13 +134,16 @@ impl Typeable for ReplyRoute {
 }
 
 impl ReplyEvent {
+    /// A reply sent by `sender`, in `version`.
     pub fn new_reply(
         route: ReplyRoute,
+        sender: &IdentifierPrefix,
+        version: KeriVersion,
         self_addressing: HashFunctionCode,
         serialization: SerializationFormats,
     ) -> ReplyEvent {
-        let env = Timestamped::new(route);
-        KeriEvent::new(KeriVersion::V1, serialization, self_addressing.into(), env)
+        let env = Timestamped::sent(route, sender, version);
+        KeriEvent::new(version, serialization, self_addressing.into(), env)
     }
 }
 

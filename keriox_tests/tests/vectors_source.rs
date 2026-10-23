@@ -101,6 +101,7 @@ fn signed_event(format: WireFormat, event: &KeriEvent<KeyEvent>, signers: &[&Sig
 
 fn timestamped<D: serde::Serialize>(data: D) -> Timestamped<D> {
     Timestamped {
+        sender: None,
         timestamp: DateTime::parse_from_rfc3339(TIMESTAMP).unwrap(),
         data,
     }

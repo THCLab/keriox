@@ -3,6 +3,7 @@ use std::{
     sync::Arc,
 };
 
+use keri_core::event_message::keri_version::KeriVersion;
 use keri_core::{
     actor::{
         error::ActorError, parse_exchange_stream, parse_notice_stream, parse_query_stream,
@@ -295,6 +296,8 @@ impl Witness<RedbOobiStorage> {
         )?;
         let reply = ReplyEvent::new_reply(
             ReplyRoute::LocScheme(loc_scheme),
+            &IdentifierPrefix::Basic(prefix.clone()),
+            KeriVersion::V1,
             HashFunctionCode::Blake3_256,
             SerializationFormats::JSON,
         );
@@ -346,6 +349,8 @@ impl<S: OobiStorageBackend> Witness<S> {
             .get_ksn_for_prefix(prefix, SerializationFormats::JSON)?;
         let rpy = ReplyEvent::new_reply(
             ReplyRoute::Ksn(IdentifierPrefix::Basic(self.prefix.clone()), ksn),
+            &IdentifierPrefix::Basic(self.prefix.clone()),
+            KeriVersion::V1,
             HashFunctionCode::Blake3_256,
             SerializationFormats::JSON,
         );
@@ -448,6 +453,8 @@ impl<S: OobiStorageBackend> Witness<S> {
             ReplyType::Ksn(ksn) => {
                 let rpy = ReplyEvent::new_reply(
                     ReplyRoute::Ksn(IdentifierPrefix::Basic(self.prefix.clone()), ksn),
+                    &IdentifierPrefix::Basic(self.prefix.clone()),
+                    KeriVersion::V1,
                     HashFunctionCode::Blake3_256,
                     SerializationFormats::JSON,
                 );

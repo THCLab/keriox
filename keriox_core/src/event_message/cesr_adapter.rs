@@ -533,6 +533,25 @@ impl TryFrom<Payload> for EventType {
                 "version string names protocol {protocol}, not KERI"
             )));
         }
+        // A KERI 2.0 routed message names its sender in `i`; a 1.0 one has
+        // no `i`.
+        let named_sender = match &event {
+            #[cfg(feature = "query")]
+            EventType::Qry(qry) => Some(qry.data.sender.is_some()),
+            #[cfg(any(feature = "query", feature = "oobi"))]
+            EventType::Rpy(rpy) => Some(rpy.data.sender.is_some()),
+            #[cfg(feature = "mailbox")]
+            EventType::MailboxQry(qry) => Some(qry.data.sender.is_some()),
+            _ => None,
+        };
+        if let Some(named) = named_sender {
+            if named != (KeriVersion::of(event.version()) == KeriVersion::V2) {
+                return Err(ParseError::DeserializeError(
+                    "a KERI 2.0 routed message names its sender in i, a KERI 1.0 one does not"
+                        .into(),
+                ));
+            }
+        }
         let size = event.version().size;
         if size != raw.len() {
             return Err(ParseError::DeserializeError(format!(
@@ -708,11 +727,32 @@ fn decode_transferable_receipt(
     Some((seal, converted_sigs))
 }
 
+/// A KERI 2.0 routed message names its sender, who must be its signer.
+#[cfg(any(feature = "query", feature = "mailbox"))]
+fn check_sender(
+    sender: &Option<crate::prefix::IdentifierPrefix>,
+    signature: &crate::event_message::signature::Signature,
+) -> Result<(), ParseError> {
+    match sender {
+        Some(sender) if signature.get_signer().as_ref() != Some(sender) => Err(
+            ParseError::AttachmentError("the message is not signed by its sender i".into()),
+        ),
+        _ => Ok(()),
+    }
+}
+
 #[cfg(feature = "query")]
 fn signed_reply(rpy: ReplyEvent, attachments: Vec<Group>) -> Result<Op, ParseError> {
+    let signed = signed_reply_of(rpy, attachments)?;
+    check_sender(&signed.reply.data.sender, &signed.signature)?;
+    Ok(Op::Reply(signed))
+}
+
+#[cfg(feature = "query")]
+fn signed_reply_of(rpy: ReplyEvent, attachments: Vec<Group>) -> Result<SignedReply, ParseError> {
     if has_transferable_seal(&attachments) {
         if let Some((seal, sigs)) = decode_transferable_receipt(&attachments) {
-            return Ok(Op::Reply(SignedReply::new_trans(rpy, seal, sigs)));
+            return Ok(SignedReply::new_trans(rpy, seal, sigs));
         } else {
             return Err(ParseError::AttachmentError(
                 "Missing signatures for transferable reply".into(),
@@ -732,7 +772,7 @@ fn signed_reply(rpy: ReplyEvent, attachments: Vec<Group>) -> Result<Op, ParseErr
                     .next()
                     .ok_or_else(|| ParseError::AttachmentError("Missing signature".into()))?,
             );
-            Ok(Op::Reply(SignedReply::new_nontrans(rpy, signer, signature)))
+            Ok(SignedReply::new_nontrans(rpy, signer, signature))
         }
         _ => Err(ParseError::AttachmentError("Improper payload type".into())),
     }
@@ -742,7 +782,9 @@ fn signed_reply(rpy: ReplyEvent, attachments: Vec<Group>) -> Result<Op, ParseErr
 fn signed_query(qry: QueryEvent, mut attachments: Vec<Group>) -> Result<Op, ParseError> {
     use super::signature::{get_signatures, Signature, SignerData};
 
-    let signer = qry.get_prefix();
+    // A KERI 1.0 query names no sender: its signer is taken to be the
+    // queried identifier.
+    let signer = qry.data.sender.clone().unwrap_or_else(|| qry.get_prefix());
 
     let att = attachments
         .pop()
@@ -758,6 +800,7 @@ fn signed_query(qry: QueryEvent, mut attachments: Vec<Group>) -> Result<Op, Pars
         }
         other => other,
     };
+    check_sender(&qry.data.sender, &signature)?;
     let qry = SignedQueryMessage::KelQuery(SignedKelQuery {
         query: qry,
         signature,
@@ -773,8 +816,9 @@ fn signed_management_query(
     use super::signature::{get_signatures, Signature, SignerData};
     use crate::query::mailbox::MailboxRoute;
 
-    let signer = match &qry.data.data {
-        MailboxRoute::Mbx { args, .. } => args.pre.clone(),
+    let signer = match (&qry.data.sender, &qry.data.data) {
+        (Some(sender), _) => sender.clone(),
+        (None, MailboxRoute::Mbx { args, .. }) => args.pre.clone(),
     };
 
     let att = attachments
@@ -792,6 +836,7 @@ fn signed_management_query(
         other => other,
     };
 
+    check_sender(&qry.data.sender, &signature)?;
     let qry = SignedQueryMessage::MailboxQuery(SignedMailboxQuery {
         query: qry,
         signature,

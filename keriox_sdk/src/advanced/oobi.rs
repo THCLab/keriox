@@ -3,6 +3,7 @@
 //! These functions hide the OOBI type discrimination (Location vs EndRole)
 //! and CESR reply stream serialization from application code.
 
+use keri_core::event_message::keri_version::KeriVersion;
 use cesrox::payload::Payload;
 use keri_core::event_message::{
     cesr_adapter::parse_cesr_stream_many,
@@ -88,6 +89,8 @@ pub fn build_location_reply(
 ) -> Result<SignedReply> {
     let reply = ReplyEvent::new_reply(
         ReplyRoute::LocScheme(loc_scheme),
+        &keri_core::prefix::IdentifierPrefix::Basic(identifier.clone()),
+        KeriVersion::V1,
         HashFunctionCode::Blake3_256,
         SerializationFormats::JSON,
     );

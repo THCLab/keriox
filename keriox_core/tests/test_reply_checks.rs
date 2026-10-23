@@ -49,12 +49,15 @@ fn setup() -> Fixture {
 /// its version string. An empty `url` nullifies the location.
 fn loc_scheme(eid: &BasicPrefix, url: &str, dt: &str, protocol: &str) -> ReplyEvent {
     let eid = IdentifierPrefix::Basic(eid.clone());
+    let sender = eid.clone();
     let location = match url {
         "" => LocationScheme::nullify(eid, Scheme::Http),
         url => LocationScheme::new(eid, Scheme::Http, Url::parse(url).unwrap()),
     };
     let mut rpy = ReplyEvent::new_reply(
         ReplyRoute::LocScheme(location),
+        &sender,
+        keri_core::event_message::keri_version::KeriVersion::V1,
         HashFunctionCode::Blake3_256,
         SerializationFormats::JSON,
     );

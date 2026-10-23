@@ -360,6 +360,8 @@ mod tests {
                 };
                 let rpy = ReplyEvent::new_reply(
                     route,
+                    &self.cid(),
+                    crate::event_message::keri_version::KeriVersion::V1,
                     HashFunctionCode::Blake3_256,
                     SerializationFormats::JSON,
                 );
