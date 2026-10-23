@@ -38,7 +38,7 @@ cargo release <VERSION> --execute
 This will, in order:
 - Run `git cliff` to regenerate `CHANGELOG.md` for the new version tag
 - Update `version` in every crate's `Cargo.toml`
-- Create a commit: `chore: Release`
+- Create a commit: `chore(release): <VERSION>`
 - Create a git tag `v<VERSION>`
 - Push the current branch and the tag to `origin`
 
