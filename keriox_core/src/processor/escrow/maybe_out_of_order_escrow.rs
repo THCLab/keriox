@@ -60,6 +60,20 @@ impl<D: EventDatabase + EscrowCreator + 'static> MaybeOutOfOrderEscrow<D> {
                     // remove from escrow
                     self.escrowed_out_of_order.remove(&event.event_message);
                 }
+                // The event is in order now but waits for something else:
+                // hand it to the escrow that is told when that arrives.
+                Err(Error::NotEnoughReceiptsError) => {
+                    self.escrowed_out_of_order.remove(&event.event_message);
+                    bus.notify(&Notification::PartiallyWitnessed(event))?;
+                }
+                Err(Error::NotEnoughSigsError) => {
+                    self.escrowed_out_of_order.remove(&event.event_message);
+                    bus.notify(&Notification::PartiallySigned(event))?;
+                }
+                Err(Error::MissingDelegatingEventError | Error::MissingDelegatorSealError(_)) => {
+                    self.escrowed_out_of_order.remove(&event.event_message);
+                    bus.notify(&Notification::MissingDelegatingEvent(event))?;
+                }
                 Err(_e) => (), // keep in escrow,
             }
         }

@@ -9,7 +9,7 @@ use super::event_storage::EventStorage;
 #[cfg(feature = "query")]
 use crate::query::{key_state_notice::KeyStateNotice, reply_event::SignedReply, QueryError};
 use crate::{
-    database::EventDatabase,
+    database::{EventDatabase, QueryParameters},
     error::Error,
     event::{
         event_data::EventData,
@@ -95,8 +95,8 @@ impl<D: EventDatabase> EventValidator<D> {
         };
         self.check_config_traits(signed_event)?;
         // If delegated event, check its delegator seal.
-        if let Some(seal) = self.get_delegator_seal(signed_event)? {
-            self.validate_seal(seal, &signed_event.event_message)?;
+        if let Some(delegator) = self.delegator_of(signed_event)? {
+            self.check_delegation(&delegator, signed_event)?;
         };
 
         // check if there are enough receipts and escrow
@@ -304,53 +304,60 @@ impl<D: EventDatabase> EventValidator<D> {
         }
     }
 
-    /// Validate delegating event seal.
-    ///
-    /// Validates binding between delegated and delegating events. The validation
-    /// is based on delegating event seal and delegated event.
-    fn validate_seal(
+    /// Checks that the delegator approved the delegated event: an event of
+    /// the delegator's KEL anchors an event seal whose `i`, `s` and `d` name
+    /// the delegated event. The source seal attached to the delegated event
+    /// points at that event; without one, or when it points elsewhere, the
+    /// delegator's KEL is searched, as the KERI specification lets a
+    /// validator find the delegating seal itself.
+    fn check_delegation(
         &self,
-        seal: EventSeal,
-        delegated_event: &KeriEvent<KeyEvent>,
+        delegator: &IdentifierPrefix,
+        signed_event: &SignedEventMessage,
     ) -> Result<(), Error> {
-        // Check if event of seal's prefix and sn is in db.
-        let found = self.event_storage.get_event_at_sn(&seal.prefix, seal.sn);
-        tracing::debug!(
-            delegator = %seal.prefix,
-            sn = seal.sn,
-            seal_digest = %seal.event_digest(),
-            found = found.is_some(),
-            "validate_seal: looking up the delegating event"
-        );
-        if let Some(event) = found {
-            // Extract prior_digest and data field from delegating event.
-            let data = match event
-                .signed_event_message
-                .event_message
-                .data
-                .get_event_data()
-            {
-                EventData::Rot(rot) => rot.data,
-                EventData::Ixn(ixn) => ixn.data,
-                EventData::Drt(drt) => drt.data,
-                _ => return Err(Error::SemanticError("Improper event type".to_string())),
-            };
-
-            // Check if event seal list contains delegating event seal.
-            if !data.iter().any(|s| match s {
-                Seal::Event(es) => delegated_event
-                    .compare_digest(&es.event_digest())
-                    .unwrap_or(false),
-                _ => false,
-            }) {
-                return Err(Error::SemanticError(
-                    "Data field doesn't contain delegating event seal.".to_string(),
-                ));
-            };
-        } else {
-            return Err(Error::MissingDelegatingEventError);
+        let delegated = &signed_event.event_message;
+        let anchors = |event: &KeriEvent<KeyEvent>| {
+            anchored_seals(event).iter().any(|seal| {
+                seal.prefix == delegated.data.get_prefix()
+                    && seal.sn == delegated.data.get_sn()
+                    && delegated
+                        .compare_digest(&seal.event_digest())
+                        .unwrap_or(false)
+            })
+        };
+        let source = signed_event.delegator_seal.as_ref().map(|source| {
+            self.event_storage
+                .get_event_at_sn(delegator, source.sn)
+                .map(|event| event.signed_event_message.event_message)
+                .filter(|event| event.compare_digest(&source.digest.said).unwrap_or(false))
+        });
+        if let Some(Some(event)) = &source {
+            if anchors(event) {
+                return Ok(());
+            }
         }
-        Ok(())
+        let found = self
+            .event_storage
+            .events_db
+            .get_kel_finalized_events(QueryParameters::All { id: delegator })
+            .is_some_and(|mut kel| {
+                kel.any(|event| anchors(&event.signed_event_message.event_message))
+            });
+        tracing::debug!(
+            %delegator,
+            source_seal = ?signed_event.delegator_seal,
+            found,
+            "looking up the delegating event"
+        );
+        match source {
+            _ if found => Ok(()),
+            // The delegating event is not in the delegator's KEL yet.
+            Some(None) => Err(Error::MissingDelegatingEventError),
+            None => Err(Error::MissingDelegatorSealError(delegator.clone())),
+            Some(Some(_)) => Err(Error::SemanticError(
+                "the delegating event does not anchor the delegated event".to_string(),
+            )),
+        }
     }
 
     /// Drops an event that breaks a configuration trait of the inception of
@@ -400,42 +407,47 @@ impl<D: EventDatabase> EventValidator<D> {
             .unwrap_or_default()
     }
 
-    fn get_delegator_seal(
+    /// The delegator of a delegated event; `None` for an event of an
+    /// identifier that is not delegated. A parsed `drt` carries the same
+    /// data as a `rot`, so only the type tag tells a delegated rotation
+    /// apart.
+    fn delegator_of(
         &self,
         signed_event: &SignedEventMessage,
-    ) -> Result<Option<EventSeal>, Error> {
-        // If delegated event, check its delegator seal. A parsed `drt`
-        // carries the same data as a `rot`, so only the type tag tells a
-        // delegated rotation apart.
+    ) -> Result<Option<IdentifierPrefix>, Error> {
         let event = &signed_event.event_message;
         Ok(match (event.data.get_event_data(), &event.event_type) {
-            (EventData::Dip(dip), _) => {
-                let (sn, dig) = signed_event
-                    .delegator_seal
-                    .as_ref()
-                    .map(|seal| (seal.sn, seal.digest.clone()))
-                    .ok_or_else(|| Error::MissingDelegatorSealError(dip.delegator.clone()))?;
-                Some(EventSeal::new(dip.delegator, sn, dig.into()))
-            }
+            (EventData::Dip(dip), _) => Some(dip.delegator),
             (EventData::Rot(_) | EventData::Drt(_), crate::event_message::EventTypeTag::Drt) => {
-                let delegator = self
-                    .event_storage
-                    .get_state(&signed_event.event_message.data.get_prefix())
-                    .ok_or_else(|| {
-                        Error::SemanticError("Missing state of delegated identifier".into())
-                    })?
-                    .delegator
-                    .ok_or_else(|| Error::SemanticError("Missing delegator".into()))?;
-                let (sn, dig) = signed_event
-                    .delegator_seal
-                    .as_ref()
-                    .map(|seal| (seal.sn, seal.digest.clone()))
-                    .ok_or_else(|| Error::MissingDelegatorSealError(delegator.clone()))?;
-                Some(EventSeal::new(delegator, sn, dig.into()))
+                Some(
+                    self.event_storage
+                        .get_state(&event.data.get_prefix())
+                        .ok_or_else(|| {
+                            Error::SemanticError("Missing state of delegated identifier".into())
+                        })?
+                        .delegator
+                        .ok_or_else(|| Error::SemanticError("Missing delegator".into()))?,
+                )
             }
             _ => None,
         })
     }
+}
+
+/// The event seals an event anchors in its `a` field.
+fn anchored_seals(event: &KeriEvent<KeyEvent>) -> Vec<EventSeal> {
+    let data = match event.data.get_event_data() {
+        EventData::Icp(icp) => icp.data,
+        EventData::Dip(dip) => dip.inception_data.data,
+        EventData::Rot(rot) | EventData::Drt(rot) => rot.data,
+        EventData::Ixn(ixn) => ixn.data,
+    };
+    data.into_iter()
+        .filter_map(|seal| match seal {
+            Seal::Event(seal) => Some(seal),
+            _ => None,
+        })
+        .collect()
 }
 
 impl<D: EventDatabase> EventValidator<D> {
@@ -540,7 +552,7 @@ impl<D: EventDatabase> EventValidator<D> {
 }
 
 #[test]
-fn test_validate_seal() -> Result<(), Error> {
+fn test_check_delegation() -> Result<(), Error> {
     use crate::event_message::cesr_adapter::parse_cesr_stream;
     use std::{convert::TryFrom, fs, sync::Arc};
 
@@ -575,14 +587,11 @@ fn test_validate_seal() -> Result<(), Error> {
     let parsed = parse_cesr_stream(dip_raw).unwrap();
     let msg = Message::try_from(parsed).unwrap();
     if let Message::Notice(Notice::Event(dip)) = msg {
-        let delegated_event_digest = dip.event_message.digest()?;
-        // Construct delegating seal.
-        let seal = EventSeal::new(delegator_id, 1, delegated_event_digest.into());
-
         let validator = EventValidator::new(events_database.clone());
-        // Try to validate seal before processing delegating event
+        // The source seal points at the delegator's event at sn 1, which
+        // is not there yet.
         assert!(matches!(
-            validator.validate_seal(seal.clone(), &dip.event_message),
+            validator.check_delegation(&delegator_id, &dip),
             Err(Error::MissingDelegatingEventError)
         ));
 
@@ -592,8 +601,8 @@ fn test_validate_seal() -> Result<(), Error> {
         let deserialized_ixn = Message::try_from(parsed).unwrap();
         event_processor.process(&deserialized_ixn)?;
 
-        // Validate seal again.
-        assert!(validator.validate_seal(seal, &dip.event_message).is_ok());
+        // Check the delegation again.
+        assert!(validator.check_delegation(&delegator_id, &dip).is_ok());
     };
 
     Ok(())

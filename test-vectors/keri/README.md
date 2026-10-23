@@ -203,12 +203,12 @@ then has to be classified by hand.
 
 | File | Run | Pass | Expected failures |
 |---|---:|---:|---:|
-| `v1/keripy/kels/positive` (15 vectors, each also as `/cesr1`) | 30 | 14 | 16 |
-| `v1/keripy/negative/negative` | 84 | 58 | 26 |
-| `v2/keripy/kels/positive` | 15 | 14 | 1 |
+| `v1/keripy/kels/positive` (15 vectors, each also as `/cesr1`) | 30 | 15 | 15 |
+| `v1/keripy/negative/negative` | 84 | 67 | 17 |
+| `v2/keripy/kels/positive` | 15 | 15 | 0 |
 | `v2/keripy/negative/negative` | 11 | 6 | 5 |
 | `v2/spec/examples` (52 vectors, 6 not checked) | 46 | 14 | 32 |
-| total | 186 | 106 | 80 |
+| total | 186 | 117 | 69 |
 
 ### Expected failures by cause
 
@@ -216,10 +216,10 @@ then has to be classified by hand.
 |---|---:|---|---|
 | `cesr1` | 15 | It does not parse KERI 1.0 streams with CESR 1.0 attachment codes (`-A`, `-V`, ...). It reads only CESR 2.0 counters, so it cannot read keripy's KERI 1.0 output. | Version string field (a protocol version names its CESR genus version) |
 | `native-cesr` | 12 | It does not support native CESR message bodies (Annex A examples). | Annex A, Native CESR Encodings of KERI Messages |
-| `deleg` | 11 | Delegation gaps:<br>- an anchor in the delegator's inception is refused;<br>- it does not search the KEL when there is no source seal;<br>- the seal's `i`/`s` are not checked;<br>- `dip` without `di` is accepted;<br>- only the first couple of a source seal group is tried;<br>- a `drt` that arrives before its `dip` and its anchors is never accepted (positive vector `kel/deleg/dip-before-anchor`, KERI 1.0 and 2.0). | Cooperative Delegation; Delegated Inception Event Message Body; Seals |
+| `deleg` | 1 | Only the first couple of a source seal group is tried; the specification does not say what several couples mean. | Cooperative Delegation; Seals |
 | `seal-types` | 10 | It has no source, latest establishment, registrar backer or typed seal. Its untagged seal type reads them as digest seals and drops their other fields, so an event seal with a malformed `i` is also read as a digest seal. | Seals; Seal Count Codes |
 | `routed-v2` | 8 | It does not read KERI 2.0 `qry`/`rpy` as the specification prints them (with `i`, `/oobi` routes). The specification contradicts itself here: its declared field order has no `i`, but every example and keripy have one. | Query Message Body; Reply Message Body; OOBI sections |
-| `key-event-rules` | 5 | Accepted although the specification forbids them:<br>- `kt=0`;<br>- `nt=0` with a rotation to unrelated keys;<br>- an `ixn` body tagged `rot`;<br>- an unsatisfiable `nt`;<br>- a non-transferable prefix with `n`. | Rotation using pre-rotation; Key and key digest threshold fields; KERI's secure bindings |
+| `key-event-rules` | 4 | Accepted although the specification forbids them:<br>- `kt=0`;<br>- `nt=0` with a rotation to unrelated keys;<br>- an unsatisfiable `nt`;<br>- a non-transferable prefix with `n`. | Rotation using pre-rotation; Key and key digest threshold fields; KERI's secure bindings |
 | `pro-bar-xip` | 6 | There are no `pro`, `bar` or `xip` message types. | Routed Messages |
 | `reply-bada` | 2 | The roles `registrar` and `mailbox` are not known. | BADA Policy; RUN off the CRUD; OOBI KERI Endpoint Authorization |
 | `nested-threshold` | 5 | It does not read nested weighted thresholds (`{"1/2": [...]}`). | Fractionally weighted threshold |

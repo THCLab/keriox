@@ -201,7 +201,7 @@ impl EventMsgBuilder {
                         initial_witnesses: self.witnesses,
                     },
                     inception_configuration: self.config_traits.clone(),
-                    data: vec![],
+                    data: self.data.clone(),
                 };
 
                 match prefix {
@@ -245,7 +245,7 @@ impl EventMsgBuilder {
                         initial_witnesses: self.witnesses,
                     },
                     inception_configuration: self.config_traits.clone(),
-                    data: vec![],
+                    data: self.data.clone(),
                 };
                 DelegatedInceptionEvent {
                     inception_data: icp_data,

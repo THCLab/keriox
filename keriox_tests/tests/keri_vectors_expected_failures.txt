@@ -5,7 +5,6 @@
 # Regenerate with KERI_VECTORS_BLESS=1 cargo test -p keri-tests --test keri_vectors
 # (causes and reasons already listed are kept).
 v1/keripy/kels/positive/kel/abandon/rot-to-empty-next/cesr1	cesr1	KERI 1.0 stream with CESR 1.0 attachment codes is not parsed (only CESR 2.0 counters)
-v1/keripy/kels/positive/kel/deleg/dip-before-anchor	deleg	a drt that arrives before its dip and before both anchors is never accepted once they arrive
 v1/keripy/kels/positive/kel/deleg/dip-before-anchor/cesr1	cesr1	KERI 1.0 stream with CESR 1.0 attachment codes is not parsed (only CESR 2.0 counters)
 v1/keripy/kels/positive/kel/deleg/dip-drt/cesr1	cesr1	KERI 1.0 stream with CESR 1.0 attachment codes is not parsed (only CESR 2.0 counters)
 v1/keripy/kels/positive/kel/icp/basic-transferable/cesr1	cesr1	KERI 1.0 stream with CESR 1.0 attachment codes is not parsed (only CESR 2.0 counters)
@@ -20,21 +19,12 @@ v1/keripy/kels/positive/kel/rot/partial/cesr1	cesr1	KERI 1.0 stream with CESR 1.
 v1/keripy/kels/positive/kel/rot/reserve-spec-example/cesr1	cesr1	KERI 1.0 stream with CESR 1.0 attachment codes is not parsed (only CESR 2.0 counters)
 v1/keripy/kels/positive/kel/wit/indexed-cuts-adds/cesr1	cesr1	KERI 1.0 stream with CESR 1.0 attachment codes is not parsed (only CESR 2.0 counters)
 v1/keripy/kels/positive/kel/wit/receipts/cesr1	cesr1	KERI 1.0 stream with CESR 1.0 attachment codes is not parsed (only CESR 2.0 counters)
-v1/keripy/negative/negative/gap/deleg-anchor-in-inception-refused	deleg	a delegated inception anchored in the delegator's inception (s=0) is never accepted
-v1/keripy/negative/negative/gap/deleg-anchor-in-inception-refused/no-source-seal	deleg	a delegated inception anchored in the delegator's inception (s=0) is never accepted
-v1/keripy/negative/negative/gap/deleg-no-kel-search	deleg	a delegated inception without a source seal attachment is not matched to the anchor already in the delegator's KEL
-v1/keripy/negative/negative/gap/deleg-seal-is-ignored/wrong-i	deleg	the anchoring seal is matched on d only; its i and s are not checked against the delegated event
-v1/keripy/negative/negative/gap/deleg-seal-is-ignored/wrong-i-and-s	deleg	the anchoring seal is matched on d only; its i and s are not checked against the delegated event
-v1/keripy/negative/negative/gap/deleg-seal-is-ignored/wrong-s	deleg	the anchoring seal is matched on d only; its i and s are not checked against the delegated event
-v1/keripy/negative/negative/gap/dip-without-di-accepted/said-over-body	deleg	a body tagged dip without di is accepted (as an inception)
 v1/keripy/negative/negative/gap/kel-config-did-rb-nrb	config	RB is not enforced: an inception with RB and no registrar backer seal is accepted
 v1/keripy/negative/negative/gap/kel-nested-weighted-threshold	nested-threshold	an inception with the specification's nested weighted threshold is not read
 v1/keripy/negative/negative/gap/kel-nontrans-prefix-with-next	key-event-rules	an inception with a non-transferable (B) prefix and a non-empty n is accepted, and so is a later rotation
 v1/keripy/negative/negative/gap/kel-seal-types-missing	seal-types	an ixn anchoring source, latest establishment, registrar backer and typed seals is not read
 v1/keripy/negative/negative/gap/kel-threshold-zero/current	key-event-rules	kt=0 is accepted on an inception
 v1/keripy/negative/negative/gap/kel-threshold-zero/next	key-event-rules	with nt=0 a rotation to unrelated keys is accepted (no pre-rotation check)
-v1/keripy/negative/negative/gap/kel-type-tag-body-mismatch/dip-without-di/said-over-icp-dummy	deleg	a body tagged dip without di is accepted as an inception: the t field is not checked against the body
-v1/keripy/negative/negative/gap/kel-type-tag-body-mismatch/rot-with-ixn-body	key-event-rules	a body with the fields of an ixn tagged rot is accepted
 v1/keripy/negative/negative/gap/kel-weighted-threshold-validity/unsatisfiable-next	key-event-rules	an nt whose weights sum below 1 (unsatisfiable) is accepted
 v1/keripy/negative/negative/gap/rm-ksn-format-undefined	key-state	a key state notice in keripy's shape (vn, f, c, ee, di) is not read
 v1/keripy/negative/negative/gap/rm-ksn-sn-decimal/hex	key-state	a key state notice in keripy's shape is not read (fails on shape before the sn check)
@@ -46,7 +36,6 @@ v1/keripy/negative/negative/gap/seal-types-missing/source	seal-types	an ixn anch
 v1/keripy/negative/negative/gap/seal-types-missing/typed	seal-types	an ixn anchoring a typed seal {t,d} is not accepted
 v1/keripy/negative/negative/gap/source-seal-multiple-couples	deleg	only the first couple of a source seal group is tried; a group whose second couple names the anchor is not accepted
 v1/keripy/negative/negative/gap/wit-witness-local-remote	witness-role	a witness accepts and receipts a remote event; keriox has no notion of a local (protected) channel
-v2/keripy/kels/positive/kel/deleg/dip-before-anchor	deleg	a drt that arrives before its dip and before both anchors is never accepted once they arrive
 v2/keripy/negative/negative/gap/rm-exn-fields/spec-shape	exn-fields	the specification's exn fields [v,t,d,i,ri,x,p,dt,r,q,a] are not read
 v2/keripy/negative/negative/gap/rm-pro-bar-xip-missing/bar	pro-bar-xip	no bar message type
 v2/keripy/negative/negative/gap/rm-pro-bar-xip-missing/pro	pro-bar-xip	no pro message type

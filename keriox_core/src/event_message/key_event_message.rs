@@ -127,9 +127,12 @@ impl KeriEvent<KeyEvent> {
         let event_digest = self.digest()?;
         self.check_said()?;
         let last_event_digest = &state.last_event_digest.said;
-        // Update state.last with serialized current event message.
+        // Update state.last with serialized current event message. The type
+        // tag `t` must name the body's shape: a `dip` without `di` reads as
+        // an inception body, and an `ixn` body tagged `rot` would otherwise
+        // be applied as an interaction.
         match (self.data.get_event_data(), &self.event_type) {
-            (EventData::Icp(_), _) | (EventData::Dip(_), _) => {
+            (EventData::Icp(_), EventTypeTag::Icp) | (EventData::Dip(_), EventTypeTag::Dip) => {
                 if verify_identifier_binding(self)? {
                     self.data.apply_to(IdentifierState {
                         last_event_digest: event_digest.into(),
@@ -185,7 +188,7 @@ impl KeriEvent<KeyEvent> {
                     }
                 })
             }
-            (EventData::Ixn(ref inter), _) => {
+            (EventData::Ixn(ref inter), EventTypeTag::Ixn) => {
                 self.data.apply_to(state.clone()).and_then(|next_state| {
                     if last_event_digest.eq(inter.previous_event_hash()) {
                         Ok(IdentifierState {
