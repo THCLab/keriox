@@ -2170,3 +2170,39 @@ mod designation {
         assert!(receipted_by(&witness, &id, 0));
     }
 }
+
+/// TEL messages come from anyone who can reach the witness, so a malformed
+/// one is an error for that request, not a panic of the handler.
+mod tel_peer_input {
+    use std::sync::Arc;
+
+    use keri_core::{
+        database::redb::RedbDatabase, oobi_manager::RedbOobiManager, signer::Signer,
+    };
+    use url::Url;
+
+    use crate::{witness::Witness, witness_processor::WitnessEscrowConfig};
+
+    const NOT_TEL: &[u8] = br#"{"v":"KERI10JSON00012b_","t":"icp","d":"EA_SbBUZYwqLVlAAn14d6QUBQCSReJlZ755JqTgmRhXH","i":"EA_SbBUZYwqLVlAAn14d6QUBQCSReJlZ755JqTgmRhXH","s":"0","kt":"1","k":["DKiNnDmdOkcBjcAqL2FFhMZnSlPfNyGrJlCjJmX5b1nU"],"nt":"1","n":["EMP7Lg6BtehOYZt2RwOqXLNfMUiUllejAp8G_5EiANXR"],"bt":"0","b":[],"c":[],"a":[]}-KABAAArkDBeflIAo4kBsKnc754XHJvdLnf04iq-noTFEJkbv2MeIGZtx6lIfJPmRSEmFMUkFW4otRrMeBGQ0-nlhHEE"#;
+
+    #[test]
+    fn malformed_tel_input_is_an_error() {
+        let root = tempfile::Builder::new()
+            .prefix("test-witness")
+            .tempdir()
+            .unwrap();
+        let oobi_db = Arc::new(RedbDatabase::new(&root.path().join("oobi_database")).unwrap());
+        let witness = Witness::new(
+            Url::parse("http://example.com").unwrap(),
+            Arc::new(Signer::new()),
+            root.path(),
+            WitnessEscrowConfig::default(),
+            RedbOobiManager::new(oobi_db).unwrap(),
+        )
+        .unwrap();
+        for input in [NOT_TEL, b"not cesr at all"] {
+            assert!(witness.parse_and_process_tel_events(input).is_err());
+            assert!(witness.parse_and_process_tel_queries(input).is_err());
+        }
+    }
+}

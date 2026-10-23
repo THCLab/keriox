@@ -355,7 +355,6 @@ pub mod http_handlers {
         oobi_manager::RedbOobiStorage,
         prefix::{CesrPrimitive, IdentifierPrefix},
     };
-    use teliox::event::verifiable_event::VerifiableEvent;
 
     use crate::witness::Witness;
 
@@ -647,9 +646,13 @@ pub mod http_handlers {
     ) -> Result<HttpResponse, ApiError> {
         tracing::info!("Processing TEL event");
         tracing::debug!(payload = %post_data, "TEL event payload");
-        let parsed = VerifiableEvent::parse(post_data.as_bytes()).unwrap();
-        for ev in parsed {
-            data.tel.processor.process(ev).unwrap()
+        if let Err(e) = data.parse_and_process_tel_events(post_data.as_bytes()) {
+            metrics::counter!(
+                crate::metrics::names::EVENTS_PROCESSED_TOTAL,
+                "kind" => "tel", "outcome" => "err"
+            )
+            .increment(1);
+            return Err(e.into());
         }
         metrics::counter!(
             crate::metrics::names::EVENTS_PROCESSED_TOTAL,

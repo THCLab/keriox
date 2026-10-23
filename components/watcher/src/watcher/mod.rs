@@ -207,17 +207,29 @@ impl<S: OobiStorageBackend> Watcher<S> {
                     }
                 }
                 WitnessResp::Tel(tel_events) => {
-                    // check tel event
+                    // The registry's management events, each anchored in the
+                    // KEL of the issuer its inception names. The stream comes
+                    // from a peer, so anything else is an error, not a panic.
+                    let tel_error = |e: String| ActorError::GeneralError(e);
+                    let mut issuer = None;
                     for ev in tel_events {
-                        let digest = ev.event.get_digest().unwrap();
+                        let digest = ev.event.get_digest().map_err(|e| tel_error(e.to_string()))?;
                         let issuer_id = match ev.event {
                             teliox::event::Event::Management(man) => match man.data.event_type {
                                 teliox::event::manager_event::ManagerEventType::Vcp(vcp) => {
-                                    vcp.issuer_id.clone()
+                                    issuer.insert(vcp.issuer_id).clone()
                                 }
-                                teliox::event::manager_event::ManagerEventType::Vrt(_) => todo!(),
+                                teliox::event::manager_event::ManagerEventType::Vrt(_) => {
+                                    issuer.clone().ok_or_else(|| {
+                                        tel_error("registry rotation before its inception".into())
+                                    })?
+                                }
                             },
-                            teliox::event::Event::Vc(_) => todo!(),
+                            teliox::event::Event::Vc(_) => {
+                                return Err(tel_error(
+                                    "a credential event where registry events were expected".into(),
+                                ))
+                            }
                         };
                         let seal = &ev.seal;
                         TelEventValidator::<RedbTelDatabase, RedbDatabase>::check_kel_event(
@@ -226,7 +238,7 @@ impl<S: OobiStorageBackend> Watcher<S> {
                             &issuer_id,
                             digest,
                         )
-                        .unwrap();
+                        .map_err(|e| tel_error(e.to_string()))?;
                         self.registry_id_mapping
                             .save(er.cid.clone(), er.eid.clone())
                             .map_err(|e| ActorError::GeneralError(e.to_string()))?;

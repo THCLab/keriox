@@ -505,21 +505,26 @@ impl<S: OobiStorageBackend> Witness<S> {
         &self,
         input_stream: &[u8],
     ) -> Result<Vec<TelReplyType>, ActorError> {
-        Ok(parse_tel_query_stream(input_stream)
-            .unwrap()
+        parse_tel_query_stream(input_stream)?
             .into_iter()
-            .map(|qry| self.tel.processor.process_signed_query(qry))
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap())
+            .map(|qry| {
+                self.tel
+                    .processor
+                    .process_signed_query(qry)
+                    .map_err(|e| ActorError::GeneralError(e.to_string()))
+            })
+            .collect()
     }
 
     pub fn parse_and_process_tel_events(&self, input_stream: &[u8]) -> Result<(), ActorError> {
-        VerifiableEvent::parse(input_stream)
-            .unwrap()
-            .into_iter()
-            .map(|tel_event| self.tel.processor.process(tel_event))
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap();
+        let events = VerifiableEvent::parse(input_stream)
+            .map_err(|e| keri_core::event_message::cesr_adapter::ParseError::DeserializeError(e.to_string()))?;
+        for tel_event in events {
+            self.tel
+                .processor
+                .process(tel_event)
+                .map_err(|e| ActorError::GeneralError(e.to_string()))?;
+        }
         Ok(())
     }
 

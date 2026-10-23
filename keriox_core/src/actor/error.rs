@@ -87,6 +87,9 @@ impl ActorError {
         match self {
             ActorError::DbError(_) => StatusCode::INTERNAL_SERVER_ERROR,
 
+            // The request body could not be read.
+            ActorError::ParseError(_) => StatusCode::BAD_REQUEST,
+
             ActorError::KeriError(err) => match err {
                 KeriError::DeserializeError(_)
                 | KeriError::IncorrectDigest

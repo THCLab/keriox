@@ -87,12 +87,29 @@ pub fn parse_tel_query_stream(stream: &[u8]) -> Result<Vec<SignedTelQuery>, Pars
         .into_iter()
         .map(|qry| {
             let q: TelQueryEvent = match &qry.payload {
-                cesrox::payload::Payload::JSON(json) => serde_json::from_slice(&json).unwrap(),
-                cesrox::payload::Payload::CBOR(_) => todo!(),
-                cesrox::payload::Payload::MGPK(_) => todo!(),
-                _ => todo!(),
-            };
+                cesrox::payload::Payload::JSON(body) => {
+                    serde_json::from_slice(body).map_err(|e| e.to_string())
+                }
+                cesrox::payload::Payload::CBOR(body) => {
+                    serde_cbor::from_slice(body).map_err(|e| e.to_string())
+                }
+                cesrox::payload::Payload::MGPK(body) => {
+                    rmp_serde::from_slice(body).map_err(|e| e.to_string())
+                }
+                #[allow(unreachable_patterns)]
+                _ => Err("unsupported message body".to_string()),
+            }
+            .map_err(|e| ParseError::DeserializeError(format!("not a TEL query: {e}")))?;
             signed_tel_query(q, qry.attachments)
         })
         .collect()
+}
+
+#[cfg(test)]
+mod peer_input {
+    #[test]
+    fn a_query_body_that_is_not_a_tel_query_is_an_error() {
+        let icp = r#"{"v":"KERI10JSON00012b_","t":"icp","d":"EA_SbBUZYwqLVlAAn14d6QUBQCSReJlZ755JqTgmRhXH","i":"EA_SbBUZYwqLVlAAn14d6QUBQCSReJlZ755JqTgmRhXH","s":"0","kt":"1","k":["DKiNnDmdOkcBjcAqL2FFhMZnSlPfNyGrJlCjJmX5b1nU"],"nt":"1","n":["EMP7Lg6BtehOYZt2RwOqXLNfMUiUllejAp8G_5EiANXR"],"bt":"0","b":[],"c":[],"a":[]}-KABAAArkDBeflIAo4kBsKnc754XHJvdLnf04iq-noTFEJkbv2MeIGZtx6lIfJPmRSEmFMUkFW4otRrMeBGQ0-nlhHEE"#;
+        assert!(super::parse_tel_query_stream(icp.as_bytes()).is_err());
+    }
 }
