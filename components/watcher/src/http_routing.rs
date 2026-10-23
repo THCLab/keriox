@@ -50,7 +50,7 @@ pub fn configure_routes(cfg: &mut web::ServiceConfig) {
         "/identifiers/{id}/state",
         actix_web::web::get().to(http_handlers::identifier_state_redb),
     )
-    .route("/info", actix_web::web::get().to(http_handlers::info))
+    .route("/info", actix_web::web::get().to(http_handlers::info_redb))
     .route(
         "/health",
         actix_web::web::get().to(http_handlers::health_redb),
@@ -63,7 +63,7 @@ pub fn configure_routes(cfg: &mut web::ServiceConfig) {
 /// degraded.
 pub fn configure_admin_routes(cfg: &mut web::ServiceConfig) {
     cfg.route("/metrics", actix_web::web::get().to(metrics_handler))
-        .route("/info", actix_web::web::get().to(http_handlers::info))
+        .route("/info", actix_web::web::get().to(http_handlers::info_redb))
         .route(
             "/health",
             actix_web::web::get().to(http_handlers::health_redb),

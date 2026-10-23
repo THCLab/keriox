@@ -37,6 +37,7 @@ impl<S: OobiStorageBackend + 'static> WitnessListener<S> {
         priv_key: Option<String>,
         escrow_config: WitnessEscrowConfig,
         oobi_manager: keri_core::oobi_manager::OobiManager<S>,
+        keri_version: keri_core::event_message::keri_version::KeriVersion,
     ) -> Result<Self, WitnessError> {
         let mut oobi_path = PathBuf::new();
         oobi_path.push(event_db_path);
@@ -47,14 +48,11 @@ impl<S: OobiStorageBackend + 'static> WitnessListener<S> {
             }
             None => Arc::new(keri_core::signer::Signer::new()),
         };
+        let mut witness =
+            Witness::new(pub_addr, signer, event_db_path, escrow_config, oobi_manager)?;
+        witness.keri_version = keri_version;
         Ok(Self {
-            witness_data: Arc::new(Witness::new(
-                pub_addr,
-                signer,
-                event_db_path,
-                escrow_config,
-                oobi_manager,
-            )?),
+            witness_data: Arc::new(witness),
             min_client_version: None,
         })
     }
@@ -146,7 +144,7 @@ impl<S: OobiStorageBackend + 'static> WitnessListener<S> {
                     "/identifiers/{id}/state",
                     actix_web::web::get().to(http_handlers::identifier_state_redb),
                 )
-                .route("/info", actix_web::web::get().to(http_handlers::info))
+                .route("/info", actix_web::web::get().to(http_handlers::info_redb))
         })
         .bind(addr)
         .unwrap()
@@ -171,7 +169,7 @@ impl<S: OobiStorageBackend + 'static> WitnessListener<S> {
                 .app_data(state.clone())
                 .route("/metrics", actix_web::web::get().to(metrics_handler))
                 .route("/health", actix_web::web::get().to(http_handlers::health))
-                .route("/info", actix_web::web::get().to(http_handlers::info))
+                .route("/info", actix_web::web::get().to(http_handlers::info_redb))
         })
         .bind(addr)
         .unwrap()
@@ -206,6 +204,7 @@ impl WitnessListener<RedbOobiStorage> {
             priv_key,
             escrow_config,
             oobi_manager,
+            keri_version,
         )?;
 
         // Derive prefix and signer from the actual witness, not a separate
@@ -691,12 +690,21 @@ pub mod http_handlers {
     /// read.
     pub const FEATURES: &[&str] = &["abandonment", "keri2"];
 
-    pub async fn info() -> HttpResponse {
+    /// The release, its features, and the KERI version (`1` or `2`) this
+    /// witness writes in.
+    pub async fn info<S: OobiStorageBackend>(data: web::Data<Arc<Witness<S>>>) -> HttpResponse {
         let version = env!("CARGO_PKG_VERSION");
         let git_suffix = option_env!("GIT_VERSION_SUFFIX").unwrap_or("");
         let full_version = format!("{version}{git_suffix}");
-        HttpResponse::Ok()
-            .json(serde_json::json!({ "version": full_version, "features": FEATURES }))
+        HttpResponse::Ok().json(serde_json::json!({
+            "version": full_version,
+            "features": FEATURES,
+            "keri_version": data.keri_version,
+        }))
+    }
+
+    pub async fn info_redb(data: web::Data<Arc<Witness<RedbOobiStorage>>>) -> HttpResponse {
+        info(data).await
     }
 
     /// Public, unauthenticated state of an identifier this witness

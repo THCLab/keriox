@@ -1996,12 +1996,24 @@ mod abandonment {
 
     #[actix_web::test]
     async fn info_advertises_abandonment_and_keri2() {
-        let response = http_handlers::info().await;
+        let (_root, witness) = setup_witness();
+        let response = http_handlers::info(web::Data::new(Arc::new(witness))).await;
         let info: serde_json::Value =
             serde_json::from_slice(&to_bytes(response.into_body()).await.unwrap()).unwrap();
         let features = info["features"].as_array().unwrap();
         assert!(features.contains(&serde_json::json!("abandonment")));
         assert!(features.contains(&serde_json::json!("keri2")));
+        assert_eq!(info["keri_version"], 1);
+    }
+
+    #[actix_web::test]
+    async fn info_reports_the_keri_version_the_witness_writes() {
+        let (_root, mut witness) = setup_witness();
+        witness.keri_version = keri_core::event_message::keri_version::KeriVersion::V2;
+        let response = http_handlers::info(web::Data::new(Arc::new(witness))).await;
+        let info: serde_json::Value =
+            serde_json::from_slice(&to_bytes(response.into_body()).await.unwrap()).unwrap();
+        assert_eq!(info["keri_version"], 2);
     }
 }
 

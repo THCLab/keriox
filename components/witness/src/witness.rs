@@ -183,6 +183,9 @@ pub struct Witness<S: OobiStorageBackend> {
     pub signer: Arc<Signer>,
     pub receipt_generator: Arc<WitnessReceiptGenerator>,
     pub tel: Arc<Tel<RedbTelDatabase, RedbDatabase>>,
+    /// The KERI version this witness writes its own messages in. Advertised
+    /// on `/info`: clients write 2.0 once every server they use does.
+    pub keri_version: KeriVersion,
 }
 
 impl<S: OobiStorageBackend> Witness<S> {
@@ -258,6 +261,7 @@ impl<S: OobiStorageBackend> Witness<S> {
             receipt_generator,
             oobi_manager,
             tel,
+            keri_version: KeriVersion::default(),
         })
     }
 }
@@ -290,13 +294,14 @@ impl Witness<RedbOobiStorage> {
             public_address.scheme().parse().unwrap(),
             public_address.clone(),
         );
-        let witness = Witness::new(
+        let mut witness = Witness::new(
             public_address,
             signer.clone(),
             event_db_path,
             escrow_config,
             RedbOobiManager::new(oobi_db)?,
         )?;
+        witness.keri_version = keri_version;
         let reply = ReplyEvent::new_reply(
             ReplyRoute::LocScheme(loc_scheme),
             &IdentifierPrefix::Basic(prefix.clone()),

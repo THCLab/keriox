@@ -82,6 +82,11 @@ otherwise, so a node or client can be upgraded before its peers.
   keriox that reads 2.0. Older releases refuse KERI 2.0 messages. Witnesses
   and watchers that read 2.0 list `"keri2"` on `GET /info`
   (`supports_keri2` in the SDK).
+- Witnesses and watchers report the version they write as `keri_version` on
+  `GET /info` (`server_keri_version` in the SDK). Operators switch the servers
+  first; a client that follows them asks `agreed_keri_version` with the
+  witnesses and watchers it uses, which answers 2.0 only once every one of
+  them writes 2.0 and 1.0 if any writes 1.0 or cannot be reached.
 - keriox clients name their release in every request (`User-Agent:
   keriox/<release>`), and witnesses and watchers count requests by it
   (`keri_witness_requests_by_client_total`,

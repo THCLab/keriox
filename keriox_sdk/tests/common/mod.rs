@@ -47,6 +47,13 @@ fn free_port() -> u16 {
 
 /// Start a witness on an ephemeral port and return its base URL.
 pub fn spawn_witness() -> WitnessHandle {
+    spawn_witness_writing(keri_core::event_message::keri_version::KeriVersion::V1)
+}
+
+/// Start a witness writing `version` on an ephemeral port.
+pub fn spawn_witness_writing(
+    version: keri_core::event_message::keri_version::KeriVersion,
+) -> WitnessHandle {
     let port = free_port();
     let url = format!("http://127.0.0.1:{port}");
     let db_dir = tempfile::Builder::new()
@@ -60,7 +67,7 @@ pub fn spawn_witness() -> WitnessHandle {
             db_dir.path(),
             None, // random signing key
             WitnessEscrowConfig::default(),
-            keri_core::event_message::keri_version::KeriVersion::V1,
+            version,
         )
         .expect("failed to set up witness"),
     );
@@ -74,6 +81,13 @@ pub fn spawn_witness() -> WitnessHandle {
 
 /// Start a watcher on an ephemeral port and return its base URL.
 pub fn spawn_watcher() -> WatcherHandle {
+    spawn_watcher_writing(keri_core::event_message::keri_version::KeriVersion::V1)
+}
+
+/// Start a watcher writing `version` on an ephemeral port.
+pub fn spawn_watcher_writing(
+    keri_version: keri_core::event_message::keri_version::KeriVersion,
+) -> WatcherHandle {
     let port = free_port();
     let url = format!("http://127.0.0.1:{port}");
     let db_dir = tempfile::Builder::new()
@@ -85,6 +99,7 @@ pub fn spawn_watcher() -> WatcherHandle {
         public_address: Url::parse(&url).unwrap(),
         db_path: db_dir.path().to_owned(),
         tel_storage_path: db_dir.path().join("tel_storage"),
+        keri_version,
         ..Default::default()
     })
     .expect("failed to set up watcher");

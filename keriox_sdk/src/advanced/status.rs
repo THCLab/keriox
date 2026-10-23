@@ -10,6 +10,7 @@
 //! [`Identifier::find_state`]: crate::advanced::Identifier::find_state
 
 use keri_controller::IdentifierPrefix;
+use keri_core::event_message::keri_version::KeriVersion;
 pub use keri_core::state::{Abandonment, IdentifierStatus};
 use url::Url;
 
@@ -85,23 +86,65 @@ pub async fn supports_keri2(base: &Url) -> Result<bool> {
     supports_feature(base, KERI2_FEATURE).await
 }
 
+/// The KERI version `base` (a witness or watcher URL) writes its own
+/// messages in, from `keri_version` on `GET /info`. A server that does not
+/// report one predates the switch and writes KERI 1.0.
+///
+/// # Errors
+/// - [`Error::Other`] if the server cannot be reached or answers with an
+///   error.
+pub async fn server_keri_version(base: &Url) -> Result<KeriVersion> {
+    Ok(info(base).await?.keri_version)
+}
+
+/// The KERI version to write to `servers`: 2.0 once every one of them writes
+/// 2.0, which operators switch only when every reader on the network reads
+/// it. A server that writes 1.0, or cannot be reached, keeps it at 1.0, and
+/// so does an empty list.
+pub async fn agreed_keri_version(servers: &[Url]) -> KeriVersion {
+    if servers.is_empty() {
+        return KeriVersion::V1;
+    }
+    for server in servers {
+        if !matches!(server_keri_version(server).await, Ok(KeriVersion::V2)) {
+            return KeriVersion::V1;
+        }
+    }
+    KeriVersion::V2
+}
+
 /// Whether `base` lists `feature` on `GET /info`.
 async fn supports_feature(base: &Url, feature: &str) -> Result<bool> {
+    Ok(info(base).await?.features.iter().any(|f| f == feature))
+}
+
+/// What `base` reports on `GET /info`.
+struct Info {
+    features: Vec<String>,
+    keri_version: KeriVersion,
+}
+
+async fn info(base: &Url) -> Result<Info> {
     #[derive(serde::Deserialize)]
-    struct Info {
+    struct Answer {
         #[serde(default)]
         features: Vec<String>,
+        #[serde(default)]
+        keri_version: KeriVersion,
     }
 
     let url = base
         .join("info")
         .map_err(|e| Error::Other(format!("invalid server URL {base}: {e}")))?;
-    let info: Info = get(url.clone())
+    let answer: Answer = get(url.clone())
         .await
         .and_then(reqwest::Response::error_for_status)
         .map_err(|e| Error::Other(format!("cannot reach {url}: {e}")))?
         .json()
         .await
         .map_err(|e| Error::Other(format!("unexpected answer from {url}: {e}")))?;
-    Ok(info.features.iter().any(|f| f == feature))
+    Ok(Info {
+        features: answer.features,
+        keri_version: answer.keri_version,
+    })
 }

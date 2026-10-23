@@ -454,12 +454,21 @@ pub mod http_handlers {
     /// are read.
     pub const FEATURES: &[&str] = &["abandonment", "keri2"];
 
-    pub async fn info() -> HttpResponse {
+    /// The release, its features, and the KERI version (`1` or `2`) this
+    /// watcher writes in: clients write 2.0 once every server they use does.
+    pub async fn info<S: OobiStorageBackend>(data: web::Data<Arc<Watcher<S>>>) -> HttpResponse {
         let version = env!("CARGO_PKG_VERSION");
         let git_suffix = option_env!("GIT_VERSION_SUFFIX").unwrap_or("");
         let full_version = format!("{version}{git_suffix}");
-        HttpResponse::Ok()
-            .json(serde_json::json!({ "version": full_version, "features": FEATURES }))
+        HttpResponse::Ok().json(serde_json::json!({
+            "version": full_version,
+            "features": FEATURES,
+            "keri_version": data.watcher_data.version,
+        }))
+    }
+
+    pub async fn info_redb(data: web::Data<Arc<Watcher<RedbOobiStorage>>>) -> HttpResponse {
+        info(data).await
     }
 
     /// Public, unauthenticated state of an identifier as this watcher last
