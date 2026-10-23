@@ -1,3 +1,63 @@
+## [0.19.0-rc.6] - 2026-10-23
+
+### 🚀 Features
+
+- *(witness)* Report identifier state and refuse abandoned identifiers with 410
+- *(watcher)* Stop polling abandoned identifiers and report their state
+- *(controller)* Abandon single, group and delegated identifiers
+- *(controller)* Resend a delegated event to witnesses once its delegator approves
+- *(sdk)* Abandon identities and remove them from a store
+- *(core)* Read KERI 2.0 rotations with configuration traits, migrating stored events
+- *(core)* Write key events and receipts in KERI 2.0 on request
+- *(core)* Write attachments in CESR 2.0 for KERI 2.0 messages
+- *(core)* Read and write KERI 2.0 queries and replies with their sender
+- *(core)* Answer a key state query in the version it was asked in
+- *(core)* Read and write KERI 2.0 exchange messages
+- *(workspace)* Choose the KERI version each node and client writes
+- *(workspace)* Advertise KERI 2.0 support and count clients by release
+- *(workspace)* Refuse keriox clients older than a configured release
+- *(core)* Read the KERI 2.0 seal types
+- *(core)* Read and apply nested weighted thresholds
+- *(sdk)* Move an identity to a new identifier and follow contacts that moved
+
+### 🐛 Bug Fixes
+
+- *(core)* Check prior next keys and witness changes on delegated rotation
+- *(core)* Refuse every event after an identifier's log ends
+- *(controller)* Route delegated rotations by type tag and keep group-finalized state current
+- *(core)* Require the delegator's anchor for a delegated rotation received over the wire
+- *(core)* Enforce the KERI key list and threshold rules on establishment events
+- *(core)* Count each key once towards a threshold
+- *(core)* Fail verification of an unusable signature couple instead of panicking
+- *(core)* Keep one end role record per endpoint and nullify it on cut
+- *(core)* Refuse exchange messages and signature groups without signatures
+- *(witness)* Receipt only the events of identifiers that designate the witness
+- *(core)* Enforce the EO and DND configuration traits
+- *(core)* Release every delegated event a delegating event approves
+- *(core)* Write key state notices in hex and with the right last events
+- *(core)* Count only verified signatures and record only verified duplicity
+- *(core)* Refuse replies signed by transferable keys as couples or not in KERI
+- *(oobi)* Read a location reply with an empty url as nullifying it
+- *(core)* Enforce the KERI witness list rules on establishment events
+- *(core)* Check delegations as the KERI specification describes
+- *(witness)* Refuse malformed TEL input instead of panicking
+
+### 📚 Documentation
+
+- *(workspace)* Describe identifier abandonment
+- *(tests)* Refresh the KERI vector failure table after the recent fixes
+- *(release)* Name the release commit as cargo-release writes it
+
+### 🧪 Testing
+
+- *(tests)* Run the test infrastructure on ephemeral ports
+- *(tests)* Add KERI protocol interop vectors from the specification and keripy
+- *(core)* Silence the unreachable arm warning in the abandonment tests
+- *(tests)* Run the compatibility scenarios against nodes started outside
+
+### ⚙️ Miscellaneous Tasks
+
+- *(workspace)* Ignore the Python environments of test-vector generators
 ## [0.19.0-rc.5] - 2026-10-22
 
 ### 🐛 Bug Fixes

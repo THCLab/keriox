@@ -1,6 +1,6 @@
 [package]
 name = "keri-sdk"
-version = "0.19.0-rc.5"
+version = "0.19.0-rc.6"
 description = "KERI Software Development Kit"
 authors.workspace = true
 edition.workspace = true
@@ -8,14 +8,14 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-keri-controller = { path = "../components/controller", version = "0.19.0-rc.5" }
-keri-core = { path = "../keriox_core", version = "0.19.0-rc.5", features = ["query", "oobi"] }
+keri-controller = { path = "../components/controller", version = "0.19.0-rc.6" }
+keri-core = { path = "../keriox_core", version = "0.19.0-rc.6", features = ["query", "oobi"] }
 cesrox = { version = "=2.0.0-rc.2" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_cbor = { version = "0.11" }
 said = { version = "=2.0.0-rc.4" }
-teliox = { path = "../support/teliox", version = "0.19.0-rc.5" }
+teliox = { path = "../support/teliox", version = "0.19.0-rc.6" }
 thiserror = "1.0"
 log = "0.4"
 rand = "0.8.8"
@@ -29,7 +29,7 @@ redb = "2.6.4"
 reqwest = { version = "0.12.28", default-features = false, features = ["rustls-tls", "json"] }
 url = { version = "2.5.8", features = ["serde"] }
 
-keri-keyprovider = { path = "../keri_keyprovider", version = "0.19.0-rc.5", optional = true, features = ["software"] }
+keri-keyprovider = { path = "../keri_keyprovider", version = "0.19.0-rc.6", optional = true, features = ["software"] }
 async-std = { version = "1", optional = true }
 tokio = { version = "1", features = ["time"] }
 
@@ -41,7 +41,7 @@ mobile = ["keyprovider", "keri-keyprovider/host", "keri-keyprovider/software"]
 
 [dev-dependencies]
 tokio-test = "0.4"
-keri-core = { path = "../keriox_core", version = "0.19.0-rc.5" }
+keri-core = { path = "../keriox_core", version = "0.19.0-rc.6" }
 tokio = { version = "1", features = ["full"] }
 witness = { path = "../components/witness" }
 watcher = { path = "../components/watcher" }
