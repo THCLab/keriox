@@ -263,11 +263,14 @@ impl<S: OobiStorageBackend> Witness<S> {
 }
 
 impl Witness<RedbOobiStorage> {
+    /// A witness on redb that writes its own messages (its signed location)
+    /// in `keri_version`.
     pub fn setup_with_redb(
         public_address: url::Url,
         event_db_path: &Path,
         priv_key: Option<String>,
         escrow_config: WitnessEscrowConfig,
+        keri_version: KeriVersion,
     ) -> Result<Witness<RedbOobiStorage>, WitnessError> {
         let signer = Arc::new(
             priv_key
@@ -297,7 +300,7 @@ impl Witness<RedbOobiStorage> {
         let reply = ReplyEvent::new_reply(
             ReplyRoute::LocScheme(loc_scheme),
             &IdentifierPrefix::Basic(prefix.clone()),
-            KeriVersion::V1,
+            keri_version,
             HashFunctionCode::Blake3_256,
             SerializationFormats::JSON,
         );

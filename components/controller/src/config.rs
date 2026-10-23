@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use keri_core::event_message::keri_version::KeriVersion;
 use keri_core::{
     oobi::LocationScheme,
     processor::escrow::EscrowConfig,
@@ -14,6 +15,9 @@ pub struct ControllerConfig {
     pub escrow_config: EscrowConfig,
     pub transport: Box<dyn Transport + Send + Sync>,
     pub tel_transport: Box<dyn IdentifierTelTransport + Send + Sync>,
+    /// The KERI version the controller writes its messages in; KERI 1.0
+    /// until every node and client it talks to reads 2.0.
+    pub keri_version: KeriVersion,
 }
 
 impl Default for ControllerConfig {
@@ -24,6 +28,7 @@ impl Default for ControllerConfig {
             escrow_config: EscrowConfig::default(),
             transport: Box::new(DefaultTransport::new()),
             tel_transport: Box::new(HTTPTelTransport),
+            keri_version: KeriVersion::default(),
         }
     }
 }

@@ -535,7 +535,7 @@ impl TryFrom<Payload> for EventType {
         }
         // A KERI 2.0 routed message names its sender in `i`; a 1.0 one has
         // no `i`.
-        let named_sender = match &event {
+        let named_sender: Option<bool> = match &event {
             #[cfg(feature = "query")]
             EventType::Qry(qry) => Some(qry.data.sender.is_some()),
             #[cfg(any(feature = "query", feature = "oobi"))]

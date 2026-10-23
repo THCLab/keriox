@@ -112,6 +112,7 @@ pub async fn watcher_forward_ksn() -> Result<(), ActorError> {
                 root_witness.path(),
                 Some("ArwXoACJgOleVZ2PY7kXn7rA0II0mHYDhc6WrBH8fDAc".into()),
                 WitnessEscrowConfig::default(),
+                keri_core::event_message::keri_version::KeriVersion::V1,
             )
             .unwrap(),
         )

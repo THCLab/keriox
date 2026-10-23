@@ -75,6 +75,8 @@ pub struct WatcherData<S: OobiStorageBackend> {
     reply_escrow: Arc<ReplyEscrow<RedbDatabase>>,
     pub(crate) health_tracker: Arc<WitnessHealthTracker>,
     kel_update_timeout: std::time::Duration,
+    /// The KERI version the watcher writes its own messages in.
+    pub version: KeriVersion,
 }
 
 impl<S: OobiStorageBackend> WatcherData<S> {
@@ -94,6 +96,7 @@ impl<S: OobiStorageBackend> WatcherData<S> {
             tel_transport,
             poll_interval: _, // handled by Watcher, not WatcherData
             kel_update_timeout,
+            keri_version,
         } = config;
         let mut tel_to_forward_path = tel_storage_path.clone();
         tel_to_forward_path.push("to_forward");
@@ -138,7 +141,7 @@ impl<S: OobiStorageBackend> WatcherData<S> {
         let reply = ReplyEvent::new_reply(
             ReplyRoute::LocScheme(loc_scheme),
             &IdentifierPrefix::Basic(prefix.clone()),
-            KeriVersion::V1,
+            keri_version,
             HashFunctionCode::Blake3_256,
             SerializationFormats::JSON,
         );
@@ -167,6 +170,7 @@ impl<S: OobiStorageBackend> WatcherData<S> {
             reply_escrow,
             health_tracker: Arc::new(WitnessHealthTracker::new()),
             kel_update_timeout,
+            version: keri_version,
         });
         Ok(watcher.clone())
     }
@@ -493,7 +497,7 @@ impl<S: OobiStorageBackend> WatcherData<S> {
             let qry = QueryEvent::new_query(
                 route,
                 &IdentifierPrefix::Basic(self.prefix.clone()),
-                KeriVersion::V1,
+                self.version,
                 SerializationFormats::JSON,
                 HashFunctionCode::Blake3_256,
             );
@@ -730,7 +734,7 @@ impl<S: OobiStorageBackend> WatcherData<S> {
                 reply_route: String::from(""),
             },
             &IdentifierPrefix::Basic(self.prefix.clone()),
-            KeriVersion::V1,
+            self.version,
             SerializationFormats::JSON,
             HashFunctionCode::Blake3_256,
         );

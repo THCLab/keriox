@@ -129,6 +129,7 @@ async fn main() -> Result<()> {
             &dir_path,
             None,
             WitnessEscrowConfig::default(),
+            keri_core::event_message::keri_version::KeriVersion::V1,
         )?);
         let id = listener.get_prefix();
         let delay = if i == 0 { slow_witness_delay } else { Duration::ZERO };

@@ -20,6 +20,7 @@
 //! # }
 //! ```
 
+use keri_core::event_message::keri_version::KeriVersion;
 use cesrox::group::Group;
 use keri_core::event::sections::seal::EventSeal;
 use keri_core::event_message::cesr_adapter::{encode_group, indexed_signatures, WireFormat};
@@ -383,11 +384,13 @@ fn collect_signatures(attachments: &[Group]) -> Vec<Signature> {
 /// and Ed25519 signature.
 ///
 /// This is the format expected by services like mesagkesto for
-/// authenticating requests.
+/// authenticating requests. The attachment is written in the format of
+/// `version`: CESR 2.0 for KERI 2.0.
 pub fn sign_nontransferable(
     public_key: &keri_controller::BasicPrefix,
     signer: &keri_core::signer::Signer,
     payload: &[u8],
+    version: KeriVersion,
 ) -> Result<Vec<u8>> {
     let raw_sig = signer
         .sign(payload)
@@ -399,7 +402,7 @@ pub fn sign_nontransferable(
         cesrox::group::Group::NontransReceiptCouples(vec![receipt_couple(public_key.clone(), sig)]);
 
     let mut stream = payload.to_vec();
-    stream.extend_from_slice(encode_group(&group, WireFormat::default()).as_bytes());
+    stream.extend_from_slice(encode_group(&group, WireFormat::of(version)).as_bytes());
     Ok(stream)
 }
 

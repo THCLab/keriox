@@ -65,6 +65,7 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
             root_witness.path(),
             Some(seed1.into()),
             WitnessEscrowConfig::default(),
+            keri_core::event_message::keri_version::KeriVersion::V1,
         )
         .unwrap()
     };
@@ -77,6 +78,7 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
             root_witness.path(),
             Some(seed2.into()),
             WitnessEscrowConfig::default(),
+            keri_core::event_message::keri_version::KeriVersion::V1,
         )
         .unwrap()
     };
@@ -728,6 +730,7 @@ pub fn test_multisig() -> Result<(), ActorError> {
             witness_root.path(),
             None,
             WitnessEscrowConfig::default(),
+            keri_core::event_message::keri_version::KeriVersion::V1,
         )
         .unwrap()
     };
@@ -909,6 +912,7 @@ pub fn test_delegated_multisig() -> Result<(), ActorError> {
             witness_root.path(),
             None,
             WitnessEscrowConfig::default(),
+            keri_core::event_message::keri_version::KeriVersion::V1,
         )
         .unwrap()
     };
@@ -1158,6 +1162,7 @@ pub fn test_delegating_multisig() -> Result<(), ActorError> {
             witness_root.path(),
             None,
             WitnessEscrowConfig::default(),
+            keri_core::event_message::keri_version::KeriVersion::V1,
         )
         .unwrap()
     };
@@ -1687,6 +1692,7 @@ fn test_delegated_inception_is_receipted_when_the_anchor_arrives_first(
         witness_root.path(),
         None,
         WitnessEscrowConfig::default(),
+        keri_core::event_message::keri_version::KeriVersion::V1,
     )
     .unwrap();
 

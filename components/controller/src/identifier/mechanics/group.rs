@@ -17,7 +17,6 @@ use keri_core::{
     oobi_manager::storage::OobiStorageBackend,
     prefix::{BasicPrefix, CesrPrimitive, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
 };
-use keri_core::event_message::keri_version::KeriVersion;
 use said::SelfAddressingIdentifier;
 use teliox::database::TelEventDatabase;
 
@@ -69,6 +68,7 @@ where
             initial_witness.unwrap_or_default(),
             witness_threshold.unwrap_or(0),
             delegator.as_ref(),
+            self.known_events.version,
         )?;
 
         let serialized_icp = String::from_utf8(icp.encode()?)
@@ -82,7 +82,7 @@ where
                     id,
                     &icp,
                     ForwardTopic::Multisig,
-                    KeriVersion::V1,
+                    self.known_events.version,
                 )
                 .encode()?;
                 String::from_utf8(exn).map_err(|_e| MechanicsError::EventFormatError)
@@ -96,7 +96,7 @@ where
                     &delegator,
                     &icp,
                     ForwardTopic::Delegate,
-                    KeriVersion::V1,
+                    self.known_events.version,
                 )
                 .encode()?,
             )
@@ -268,6 +268,7 @@ where
                 witnesses_to_add,
                 witness_to_remove,
                 wit_threshold,
+                self.known_events.version,
             ),
             GroupNextKeys::Abandon(anchors) => event_generator::abandon(
                 group_state,
@@ -277,6 +278,7 @@ where
                 witness_to_remove,
                 wit_threshold,
                 anchors,
+                self.known_events.version,
             ),
         }
         .map_err(MechanicsError::generation)?;
@@ -293,7 +295,7 @@ where
                     id,
                     &rot,
                     ForwardTopic::Multisig,
-                    KeriVersion::V1,
+                    self.known_events.version,
                 )
                 .encode()?;
                 String::from_utf8(exn).map_err(|_e| MechanicsError::EventFormatError)
@@ -309,7 +311,7 @@ where
                     &delegator,
                     &rot,
                     ForwardTopic::Delegate,
-                    KeriVersion::V1,
+                    self.known_events.version,
                 )
                 .encode()?,
             )
@@ -382,7 +384,7 @@ where
             return Err(MechanicsError::NotGroupParticipantError);
         }
 
-        let ixn = event_generator::anchor_with_seal(group_state, seals)
+        let ixn = event_generator::anchor_with_seal(group_state, seals, self.known_events.version)
             .map_err(MechanicsError::generation)?;
 
         let serialized_ixn = String::from_utf8(ixn.encode()?)
@@ -397,7 +399,7 @@ where
                     id,
                     &ixn,
                     ForwardTopic::Multisig,
-                    KeriVersion::V1,
+                    self.known_events.version,
                 )
                 .encode()?;
                 String::from_utf8(exn).map_err(|_e| MechanicsError::EventFormatError)

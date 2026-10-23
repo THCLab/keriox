@@ -90,7 +90,7 @@ where
                 },
             },
             &IdentifierPrefix::Basic(self.id.clone()),
-            KeriVersion::V1,
+            self.communication.events.version,
             SerializationFormats::JSON,
             HashFunctionCode::Blake3_256,
         )
@@ -108,7 +108,7 @@ where
                 },
             },
             &IdentifierPrefix::Basic(self.id.clone()),
-            KeriVersion::V1,
+            self.communication.events.version,
             SerializationFormats::JSON,
             HashFunctionCode::Blake3_256,
         )

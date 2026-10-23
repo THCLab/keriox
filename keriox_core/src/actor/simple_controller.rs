@@ -156,6 +156,7 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase, RedbOobiStorage> {
             initial_witness.unwrap_or_default(),
             witness_threshold.unwrap_or(0),
             delegator,
+            KeriVersion::V1,
         )
         .unwrap();
         let signature = km.sign(icp.as_bytes())?;
@@ -224,7 +225,13 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase, RedbOobiStorage> {
     #[cfg(feature = "oobi")]
     pub fn add_watcher(&self, watcher_id: &IdentifierPrefix) -> Result<Op, Error> {
         let end_role =
-            event_generator::generate_end_role(&self.prefix(), watcher_id, Role::Watcher, true, KeriVersion::V1);
+            event_generator::generate_end_role(
+                &self.prefix(),
+                watcher_id,
+                Role::Watcher,
+                true,
+                KeriVersion::V1,
+            );
         let sed: Vec<u8> = end_role.encode()?;
         let sig = self.key_manager.clone().lock().unwrap().sign(&sed)?;
         let att_sig = IndexedSignature::new_both_same(SelfSigningPrefix::Ed25519Sha512(sig), 0);
@@ -294,6 +301,7 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase, RedbOobiStorage> {
             witness_to_add.unwrap_or_default().to_vec(),
             witness_to_remove.unwrap_or_default().into(),
             witness_threshold.unwrap_or(0),
+            KeriVersion::V1,
         )
         .unwrap())
     }
@@ -303,7 +311,7 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase, RedbOobiStorage> {
             .storage
             .get_state(self.prefix())
             .ok_or(Error::SemanticError("missing state".into()))?;
-        let ixn = event_generator::anchor_with_seal(state, seal)?;
+        let ixn = event_generator::anchor_with_seal(state, seal, KeriVersion::V1)?;
         // .map_err(|e| Error::SemanticError(e.to_string()))?;
         let km = self.key_manager.lock().map_err(|_| Error::MutexPoisoned)?;
         let signature = km.sign(&ixn.encode()?)?;
@@ -333,7 +341,7 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase, RedbOobiStorage> {
                 .storage
                 .get_state(group_id)
                 .ok_or(Error::SemanticError("missing state".into()))?;
-            let ixn = event_generator::anchor_with_seal(state, seals)
+            let ixn = event_generator::anchor_with_seal(state, seals, KeriVersion::V1)
                 .map_err(|e| Error::SemanticError(e.to_string()))?;
             let km = self.key_manager.lock().map_err(|_| Error::MutexPoisoned)?;
             let signature = km.sign(&ixn.encode()?)?;
@@ -498,6 +506,7 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase, RedbOobiStorage> {
                 initial_witness.unwrap_or_default(),
                 witness_threshold.unwrap_or(0),
                 delegator.as_ref(),
+                KeriVersion::V1,
             )
             .unwrap()
             .encode()?;

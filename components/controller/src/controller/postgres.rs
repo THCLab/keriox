@@ -28,6 +28,7 @@ impl PostgresController {
             escrow_config,
             transport,
             tel_transport,
+            keri_version,
         } = config;
 
         // The mailbox query cache is a small local redb file even when the
@@ -40,7 +41,11 @@ impl PostgresController {
         query_db_path.push("query_cache");
 
         let events =
-            Arc::new(PostgresKnownEvents::with_postgres(database_url, escrow_config).await?);
+            Arc::new(
+                PostgresKnownEvents::with_postgres(database_url, escrow_config)
+                    .await?
+                    .with_version(keri_version),
+            );
 
         let query_cache = Arc::new(IdentifierCache::new(&query_db_path)?);
 

@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use keri_core::event_message::keri_version::KeriVersion;
 use std::sync::Arc;
 
 use keri_core::actor::parse_event_stream;
@@ -64,6 +65,8 @@ where
     pub oobi_manager: OobiManager<S>,
     pub partially_witnessed_escrow: Arc<PartiallyWitnessedEscrow<D>>,
     pub tel: Arc<Tel<T, D>>,
+    /// The KERI version the controller writes its messages in.
+    pub version: KeriVersion,
 }
 
 impl<D, T, S> KnownEvents<D, T, S>
@@ -98,7 +101,13 @@ where
             oobi_manager,
             partially_witnessed_escrow: escrow_set.partially_witnessed,
             tel,
+            version: KeriVersion::default(),
         })
+    }
+
+    /// Writes messages in `version` from now on.
+    pub fn with_version(self, version: KeriVersion) -> Self {
+        Self { version, ..self }
     }
 
     pub fn save(&self, message: &Message) -> Result<(), MechanicsError> {
@@ -274,6 +283,7 @@ where
             witnesses,
             witness_threshold,
             None,
+            self.version,
         )
         .map_err(MechanicsError::generation)
     }
@@ -317,7 +327,12 @@ where
             .storage
             .get_state(id)
             .ok_or(MechanicsError::UnknownIdentifierError(id.clone()))?;
-        event_generator::anchor_with_seal(state, payload).map_err(MechanicsError::generation)
+        event_generator::anchor_with_seal(
+            state,
+            payload,
+            self.version,
+        )
+        .map_err(MechanicsError::generation)
     }
 
     pub fn get_current_witness_list(

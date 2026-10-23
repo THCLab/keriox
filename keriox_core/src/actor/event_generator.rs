@@ -28,12 +28,14 @@ pub fn incept(
     witnesses: Vec<BasicPrefix>,
     witness_threshold: u64,
     delegator_id: Option<&IdentifierPrefix>,
+    version: KeriVersion,
 ) -> Result<String, Error> {
     let event_builder = match delegator_id {
         Some(delegator) => EventMsgBuilder::new(EventTypeTag::Dip).with_delegator(delegator),
         None => EventMsgBuilder::new(EventTypeTag::Icp),
     };
     let serialized_icp = event_builder
+        .with_version(version)
         .with_keys(public_keys)
         .with_next_keys(next_pub_keys)
         .with_witness_list(witnesses.as_slice())
@@ -56,6 +58,7 @@ pub fn incept_with_next_hashes(
     witnesses: Vec<BasicPrefix>,
     witness_threshold: u64,
     delegator_id: Option<&IdentifierPrefix>,
+    version: KeriVersion,
 ) -> Result<KeriEvent<KeyEvent>, Error> {
     // Check if threshold is possible to achive
     match signature_threshold {
@@ -90,6 +93,7 @@ pub fn incept_with_next_hashes(
         None => EventMsgBuilder::new(EventTypeTag::Icp),
     };
     event_builder
+        .with_version(version)
         .with_keys(public_keys)
         .with_threshold(signature_threshold)
         .with_next_keys_hashes(next_pub_keys)
@@ -108,6 +112,7 @@ pub fn rotate(
     witness_to_add: Vec<BasicPrefix>,
     witness_to_remove: Vec<BasicPrefix>,
     witness_threshold: u64,
+    version: KeriVersion,
 ) -> Result<String, Error> {
     let rot = make_rotation(
         state,
@@ -117,6 +122,7 @@ pub fn rotate(
         witness_to_add,
         witness_to_remove,
         witness_threshold,
+        version,
     )?
     .encode()
     .map_err(|e| Error::EventGenerationError(e.to_string()))?;
@@ -131,9 +137,11 @@ fn make_rotation(
     witness_to_add: Vec<BasicPrefix>,
     witness_to_remove: Vec<BasicPrefix>,
     witness_threshold: u64,
+    version: KeriVersion,
 ) -> Result<KeriEvent<KeyEvent>, Error> {
     refuse_abandoned(&state)?;
     EventMsgBuilder::new(rotation_tag(&state))
+        .with_version(version)
         .with_prefix(&state.prefix)
         .with_sn(state.sn + 1)
         .with_previous_event(&state.last_event_digest.into())
@@ -169,6 +177,7 @@ pub fn rotate_with_thresholds(
     witness_to_add: Vec<BasicPrefix>,
     witness_to_remove: Vec<BasicPrefix>,
     witness_threshold: u64,
+    version: KeriVersion,
 ) -> Result<String, Error> {
     if new_signature_threshold == 0 || new_signature_threshold > current_keys.len() as u64 {
         return Err(Error::EventGenerationError(
@@ -177,6 +186,7 @@ pub fn rotate_with_thresholds(
     }
     refuse_abandoned(&state)?;
     let rot = EventMsgBuilder::new(rotation_tag(&state))
+        .with_version(version)
         .with_prefix(&state.prefix)
         .with_sn(state.sn + 1)
         .with_previous_event(&state.last_event_digest.into())
@@ -208,6 +218,7 @@ pub fn rotate_with_next_hashes(
     witness_to_add: Vec<BasicPrefix>,
     witness_to_remove: Vec<BasicPrefix>,
     witness_threshold: u64,
+    version: KeriVersion,
 ) -> Result<KeriEvent<KeyEvent>, Error> {
     if new_signature_threshold == 0 || new_signature_threshold > current_keys.len() as u64 {
         return Err(Error::EventGenerationError(
@@ -216,6 +227,7 @@ pub fn rotate_with_next_hashes(
     }
     refuse_abandoned(&state)?;
     EventMsgBuilder::new(rotation_tag(&state))
+        .with_version(version)
         .with_prefix(&state.prefix)
         .with_sn(state.sn + 1)
         .with_previous_event(&state.last_event_digest.into())
@@ -245,6 +257,7 @@ pub fn abandon(
     witness_to_remove: Vec<BasicPrefix>,
     witness_threshold: u64,
     anchors: Vec<Seal>,
+    version: KeriVersion,
 ) -> Result<KeriEvent<KeyEvent>, Error> {
     if signature_threshold == 0 || signature_threshold > current_keys.len() as u64 {
         return Err(Error::EventGenerationError(
@@ -253,6 +266,7 @@ pub fn abandon(
     }
     refuse_abandoned(&state)?;
     EventMsgBuilder::new(rotation_tag(&state))
+        .with_version(version)
         .with_prefix(&state.prefix)
         .with_sn(state.sn + 1)
         .with_previous_event(&state.last_event_digest.into())
@@ -290,6 +304,7 @@ fn refuse_abandoned(state: &IdentifierState) -> Result<(), Error> {
 pub fn anchor(
     state: IdentifierState,
     payload: &[SelfAddressingIdentifier],
+    version: KeriVersion,
 ) -> Result<String, Error> {
     let seal_list = payload
         .iter()
@@ -297,6 +312,7 @@ pub fn anchor(
         .collect();
     refuse_abandoned(&state)?;
     let ixn = EventMsgBuilder::new(EventTypeTag::Ixn)
+        .with_version(version)
         .with_prefix(&state.prefix)
         .with_sn(state.sn + 1)
         .with_previous_event(&state.last_event_digest.into())
@@ -311,9 +327,11 @@ pub fn anchor(
 pub fn anchor_with_seal(
     state: IdentifierState,
     seal_list: &[Seal],
+    version: KeriVersion,
 ) -> Result<KeriEvent<KeyEvent>, Error> {
     refuse_abandoned(&state)?;
     let ev = EventMsgBuilder::new(EventTypeTag::Ixn)
+        .with_version(version)
         .with_prefix(&state.prefix)
         .with_sn(state.sn + 1)
         .with_previous_event(&state.last_event_digest.into())

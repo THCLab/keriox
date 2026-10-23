@@ -1,5 +1,6 @@
 use std::{net::Ipv4Addr, path::PathBuf, time::Duration};
 
+use keri_core::event_message::keri_version::KeriVersion;
 use anyhow::Context;
 use clap::Parser;
 use figment::{
@@ -63,6 +64,10 @@ pub struct Config {
     #[serde_as(as = "Option<DurationSeconds>")]
     #[serde(default)]
     kel_update_timeout: Option<Duration>,
+
+    /// The KERI version the watcher writes its own messages in (1 or 2).
+    #[serde(default)]
+    keri_version: KeriVersion,
 }
 
 #[serde_as]
@@ -183,6 +188,7 @@ async fn main() -> anyhow::Result<()> {
         kel_update_timeout: cfg
             .kel_update_timeout
             .unwrap_or(Duration::from_secs(5)),
+        keri_version: cfg.keri_version,
     })?;
 
     // Resolve oobi to know how to find witness

@@ -63,6 +63,26 @@ final and no more key events are allowed in it:
   The SDK refuses to verify anything signed with an abandoned identifier's
   final keys.
 
+## KERI 1.0 and 2.0
+
+keriox reads KERI 1.0 and KERI 2.0 messages, and writes KERI 1.0 unless told
+otherwise, so a node or client can be upgraded before its peers.
+
+- KERI 2.0 key events, receipts, `qry`, `rpy` and `exn` are written with a
+  2.0 version string and CESR 2.0 attachments. Routed messages (`qry`, `rpy`)
+  name their sender in `i`, and `exn` carries `i`, `ri`, `x` and `p`; the
+  sender must be the signer.
+- What a node writes in answer to something follows what it answers: a
+  receipt follows the event's version, a key state notice the query's.
+- The **controller** writes its own messages in `ControllerConfig::keri_version`,
+  the **SDK** in `KeriStore::with_keri_version`, and **witnesses** and
+  **watchers** in `keri_version` in their configuration file (`1` or `2`;
+  `WITNESS_KERI_VERSION` and `WATCHER_KERI_VERSION` in the environment).
+- Switch a writer to 2.0 only once everything that reads its messages runs a
+  keriox that reads 2.0. Older releases refuse KERI 2.0 messages.
+- TEL events stay KERI 1.0: the KERI specification defines no TEL messages,
+  and registries in KERI 2.0 come with ACDC 2.0.
+
 ## License
 
 EUPL 1.2

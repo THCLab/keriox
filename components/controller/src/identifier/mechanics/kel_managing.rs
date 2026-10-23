@@ -64,6 +64,7 @@ where
             witnesses_to_add,
             witness_to_remove,
             witness_threshold,
+            self.known_events.version,
         )
         .map_err(MechanicsError::generation)
     }
@@ -103,6 +104,7 @@ where
             witnesses_to_add,
             witness_to_remove,
             witness_threshold,
+            self.known_events.version,
         )
         .map_err(MechanicsError::generation)
     }
@@ -143,6 +145,7 @@ where
             witness_to_remove,
             witness_threshold,
             anchors,
+            self.known_events.version,
         )
         .map_err(MechanicsError::generation)?;
         String::from_utf8(event.encode()?).map_err(|_e| MechanicsError::EventFormatError)
@@ -151,7 +154,12 @@ where
     /// Generate and return interaction event for Identifier
     pub fn anchor(&self, payload: &[SelfAddressingIdentifier]) -> Result<String, MechanicsError> {
         let state = self.known_events.get_state(&self.id)?;
-        event_generator::anchor(state, payload).map_err(MechanicsError::generation)
+        event_generator::anchor(
+            state,
+            payload,
+            self.known_events.version,
+        )
+        .map_err(MechanicsError::generation)
     }
 
     pub fn anchor_with_seal(
@@ -159,7 +167,12 @@ where
         seal_list: &[Seal],
     ) -> Result<KeriEvent<KeyEvent>, MechanicsError> {
         let state = self.known_events.get_state(&self.id)?;
-        event_generator::anchor_with_seal(state, seal_list).map_err(MechanicsError::generation)
+        event_generator::anchor_with_seal(
+            state,
+            seal_list,
+            self.known_events.version,
+        )
+        .map_err(MechanicsError::generation)
     }
 
     pub async fn finalize_rotate(

@@ -14,7 +14,6 @@ use keri_core::{
     oobi_manager::storage::OobiStorageBackend,
     prefix::IdentifierPrefix,
 };
-use keri_core::event_message::keri_version::KeriVersion;
 use teliox::database::TelEventDatabase;
 
 use crate::{error::ControllerError, identifier::Identifier, mailbox_updating::ActionRequired};
@@ -124,7 +123,7 @@ where
             &recipient,
             &event,
             ForwardTopic::Multisig,
-            KeriVersion::V1,
+            self.known_events.version,
         );
         Ok(ActionRequired::MultisigRequest(event, exn))
     }
@@ -150,7 +149,7 @@ where
                         &recipient,
                         &event_message,
                         ForwardTopic::Multisig,
-                        KeriVersion::V1,
+                        self.known_events.version,
                     );
                 Ok(Some(ActionRequired::MultisigRequest(event_message, exn)))
             }
@@ -289,7 +288,7 @@ where
                     group_id,
                     &ixn,
                     ForwardTopic::Multisig,
-                    KeriVersion::V1,
+                    self.known_events.version,
                 );
                 // let (delegating_event, exn) = self.delegate(&event_to_confirm.event_message)?;
                 Ok(Some(ActionRequired::DelegationRequest(ixn, exn)))

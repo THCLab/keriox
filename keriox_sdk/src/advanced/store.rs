@@ -22,6 +22,7 @@
 //!
 //! [`SecretsStore`]: crate::advanced::secrets::SecretsStore
 
+use keri_core::event_message::keri_version::KeriVersion;
 use std::{
     collections::HashMap,
     path::PathBuf,
@@ -81,6 +82,7 @@ pub struct KeriStore {
     meta: MetaDb,
     secrets: Arc<dyn SecretsStore>,
     controllers: Mutex<HashMap<PathBuf, Arc<Controller>>>,
+    keri_version: KeriVersion,
 }
 
 impl KeriStore {
@@ -137,7 +139,23 @@ impl KeriStore {
             meta,
             secrets,
             controllers: Mutex::new(HashMap::new()),
+            keri_version: KeriVersion::default(),
         })
+    }
+
+    /// The store with its identifiers writing their messages in
+    /// `keri_version`, KERI 1.0 by default. Switch to KERI 2.0 only once
+    /// every witness, watcher and peer reads it.
+    pub fn with_keri_version(self, keri_version: KeriVersion) -> Self {
+        Self {
+            keri_version,
+            ..self
+        }
+    }
+
+    /// The KERI version this store's identifiers write their messages in.
+    pub fn keri_version(&self) -> KeriVersion {
+        self.keri_version
     }
 
     /// The directory this store is rooted at.
@@ -1001,7 +1019,11 @@ impl KeriStore {
         if let Some(ctrl) = cache.get(&db_path) {
             return Ok(ctrl.clone());
         }
-        let ctrl = Arc::new(Controller::new_with_storage(db_path.clone(), &self.storage)?);
+        let ctrl = Arc::new(Controller::new_with_storage(
+            db_path.clone(),
+            &self.storage,
+            self.keri_version,
+        )?);
         cache.insert(db_path, ctrl.clone());
         Ok(ctrl)
     }

@@ -14,3 +14,6 @@ admin_bind: "127.0.0.1"
 initial_oobis: []
 escrow_config:
   default_timeout: 60
+# KERI version this node writes its own messages in (1 or 2). Switch to 2
+# only once every client it talks to reads KERI 2.0 (keriox 0.20 or later).
+keri_version: 1

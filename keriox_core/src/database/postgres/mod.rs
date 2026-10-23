@@ -521,7 +521,15 @@ mod tests {
         let pk = BasicPrefix::Ed25519(key_manager.public_key());
         let npk = BasicPrefix::Ed25519(key_manager.next_public_key());
 
-        let icp_str = event_generator::incept(vec![pk], vec![npk], vec![], 0, None).unwrap();
+        let icp_str = event_generator::incept(
+            vec![pk],
+            vec![npk],
+            vec![],
+            0,
+            None,
+            crate::event_message::keri_version::KeriVersion::V1,
+        )
+        .unwrap();
         let sig = SelfSigningPrefix::Ed25519Sha512(key_manager.sign(icp_str.as_bytes()).unwrap());
         let ke = match parse_event_type(icp_str.as_bytes()).unwrap() {
             EventType::KeyEvent(ke) => ke,

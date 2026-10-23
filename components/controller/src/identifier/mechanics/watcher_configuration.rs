@@ -7,7 +7,6 @@ use keri_core::{
     prefix::{IdentifierPrefix, SelfSigningPrefix},
     query::reply_event::{ReplyEvent, ReplyRoute},
 };
-use keri_core::event_message::keri_version::KeriVersion;
 use teliox::database::TelEventDatabase;
 
 use crate::identifier::Identifier;
@@ -39,7 +38,7 @@ where
                 &eid,
                 role,
                 true,
-                KeriVersion::V1,
+                self.known_events.version,
             )
             .encode()?,
         )
@@ -64,7 +63,7 @@ where
                 &watcher_id,
                 Role::Watcher,
                 false,
-                KeriVersion::V1,
+                self.known_events.version,
             )
                 .encode()?,
         )

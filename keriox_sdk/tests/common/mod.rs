@@ -60,6 +60,7 @@ pub fn spawn_witness() -> WitnessHandle {
             db_dir.path(),
             None, // random signing key
             WitnessEscrowConfig::default(),
+            keri_core::event_message::keri_version::KeriVersion::V1,
         )
         .expect("failed to set up witness"),
     );

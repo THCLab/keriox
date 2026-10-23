@@ -1,6 +1,5 @@
 use std::collections::HashSet;
 
-use keri_core::event_message::keri_version::KeriVersion;
 use crate::communication::SendingError;
 use crate::error::ControllerError;
 use futures::future::join_all;
@@ -203,7 +202,7 @@ where
                 },
             },
             &self.id,
-            KeriVersion::V1,
+            self.known_events.version,
             SerializationFormats::JSON,
             HashFunctionCode::Blake3_256,
         ))
@@ -225,7 +224,7 @@ where
                 },
             },
             &self.id,
-            KeriVersion::V1,
+            self.known_events.version,
             SerializationFormats::JSON,
             HashFunctionCode::Blake3_256,
         ))

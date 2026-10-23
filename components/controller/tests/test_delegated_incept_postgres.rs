@@ -35,6 +35,7 @@ mod test_delegated_incept_postgres {
                     witness_root.path(),
                     Some(seed.to_string()),
                     WitnessEscrowConfig::default(),
+                    keri_core::event_message::keri_version::KeriVersion::V1,
                 )
                 .unwrap(),
             )

@@ -4,6 +4,7 @@ use std::{
 };
 
 use keri_controller::{BasicPrefix, IdentifierPrefix, LocationScheme};
+use keri_core::event_message::keri_version::KeriVersion;
 use tempfile::Builder;
 use test_context::AsyncTestContext;
 use url::Url;
@@ -28,6 +29,27 @@ fn free_port() -> u16 {
 
 impl AsyncTestContext for InfrastructureContext {
     async fn setup() -> InfrastructureContext {
+        InfrastructureContext::with_version(KeriVersion::V1).await
+    }
+
+    async fn teardown(self) {}
+}
+
+/// The same infrastructure with its witnesses and watcher writing KERI 2.0.
+pub struct Keri2InfrastructureContext(pub InfrastructureContext);
+
+impl AsyncTestContext for Keri2InfrastructureContext {
+    async fn setup() -> Keri2InfrastructureContext {
+        Keri2InfrastructureContext(InfrastructureContext::with_version(KeriVersion::V2).await)
+    }
+
+    async fn teardown(self) {}
+}
+
+impl InfrastructureContext {
+    /// Two witnesses and a watcher on free ports, writing their own messages
+    /// in `version`.
+    pub async fn with_version(version: KeriVersion) -> InfrastructureContext {
         let (first_port, second_port, watcher_port) = (free_port(), free_port(), free_port());
         let first_witness = {
             let wit_root = Builder::new().prefix("wit-db").tempdir().unwrap();
@@ -37,6 +59,7 @@ impl AsyncTestContext for InfrastructureContext {
                     wit_root.path(),
                     Some("ArwXoACJgOleVZ2PY7kXn7rA0II0mHYDhc6WrBH8fDAc".to_string()),
                     WitnessEscrowConfig::default(),
+                    version,
                 )
                 .unwrap(),
             )
@@ -58,6 +81,7 @@ impl AsyncTestContext for InfrastructureContext {
                     wit_root.path(),
                     Some("ArwXoACJgOleVZ2PY7kXn7rA0II0mHYDhc6WrBH8fDAd".to_string()),
                     WitnessEscrowConfig::default(),
+                    version,
                 )
                 .unwrap(),
             )
@@ -81,6 +105,7 @@ impl AsyncTestContext for InfrastructureContext {
                 public_address: watcher_url.clone(),
                 db_path: root.path().to_owned(),
                 tel_storage_path: watcher_tel_path,
+                keri_version: version,
                 ..Default::default()
             })
             .unwrap()
@@ -101,10 +126,6 @@ impl AsyncTestContext for InfrastructureContext {
         }
     }
 
-    async fn teardown(self) {}
-}
-
-impl InfrastructureContext {
     pub fn first_witness_data(&self) -> (BasicPrefix, LocationScheme) {
         if let IdentifierPrefix::Basic(bp) = &self.first_witness_oobi.eid {
             (bp.clone(), self.first_witness_oobi.clone())

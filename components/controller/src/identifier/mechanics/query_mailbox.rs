@@ -1,5 +1,4 @@
 use keri_core::actor::possible_response::PossibleResponse;
-use keri_core::event_message::keri_version::KeriVersion;
 use keri_core::actor::prelude::HashFunctionCode;
 use keri_core::database::{EscrowCreator, EventDatabase};
 use keri_core::oobi_manager::storage::OobiStorageBackend;
@@ -93,7 +92,7 @@ where
                         reply_route: "".to_string(),
                     },
                     &self.id,
-                    KeriVersion::V1,
+                    self.known_events.version,
                     SerializationFormats::JSON,
                     HashFunctionCode::Blake3_256,
                 ))

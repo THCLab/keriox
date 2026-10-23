@@ -165,11 +165,14 @@ impl<S: OobiStorageBackend + 'static> WitnessListener<S> {
 }
 
 impl WitnessListener<RedbOobiStorage> {
+    /// A witness on redb that writes its own messages (its signed location)
+    /// in `keri_version`.
     pub fn setup_with_redb(
         pub_addr: url::Url,
         event_db_path: &Path,
         priv_key: Option<String>,
         escrow_config: WitnessEscrowConfig,
+        keri_version: keri_core::event_message::keri_version::KeriVersion,
     ) -> Result<Self, WitnessError> {
         use keri_core::{database::redb::RedbDatabase, oobi_manager::RedbOobiManager};
 
@@ -200,7 +203,7 @@ impl WitnessListener<RedbOobiStorage> {
         let reply = keri_core::query::reply_event::ReplyEvent::new_reply(
             keri_core::query::reply_event::ReplyRoute::LocScheme(loc_scheme),
             &keri_core::prefix::IdentifierPrefix::Basic(prefix.clone()),
-            keri_core::event_message::keri_version::KeriVersion::V1,
+            keri_version,
             keri_core::actor::prelude::HashFunctionCode::Blake3_256,
             keri_core::actor::prelude::SerializationFormats::JSON,
         );

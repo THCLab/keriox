@@ -36,6 +36,7 @@ async fn spawn_witness(port: u16, seed: &str) -> WitnessHandle {
             wit_root.path(),
             Some(seed.to_string()),
             WitnessEscrowConfig::default(),
+            keri_core::event_message::keri_version::KeriVersion::V1,
         )
         .unwrap(),
     );

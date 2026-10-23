@@ -23,12 +23,15 @@ impl RedbController {
             escrow_config,
             transport,
             tel_transport,
+            keri_version,
         } = config;
         std::fs::create_dir_all(&db_path).unwrap();
         let mut query_db_path = db_path.clone();
         query_db_path.push("query_cache");
 
-        let events = Arc::new(RedbKnownEvents::with_redb(db_path, escrow_config)?);
+        let events = Arc::new(
+            RedbKnownEvents::with_redb(db_path, escrow_config)?.with_version(keri_version),
+        );
 
         let query_cache = Arc::new(IdentifierCache::new(&query_db_path)?);
         let comm = Arc::new(Communication {
@@ -59,9 +62,12 @@ impl RedbController {
             escrow_config,
             transport,
             tel_transport,
+            keri_version,
         } = config;
 
-        let events = Arc::new(RedbKnownEvents::new_in_memory(escrow_config)?);
+        let events = Arc::new(
+            RedbKnownEvents::new_in_memory(escrow_config)?.with_version(keri_version),
+        );
         let query_cache = Arc::new(IdentifierCache::new_in_memory()?);
         let comm = Arc::new(Communication {
             events: events.clone(),

@@ -665,6 +665,7 @@ fn the_generated_abandonment_is_accepted_and_nothing_is_generated_after_it() {
         vec![],
         0,
         vec![],
+        KeriVersion::V1,
     )
     .unwrap();
     assert_eq!(rot.event_type, EventTypeTag::Rot);
@@ -675,7 +676,7 @@ fn the_generated_abandonment_is_accepted_and_nothing_is_generated_after_it() {
     assert!(after.is_abandoned());
 
     assert!(matches!(
-        event_generator::anchor(after.clone(), &[]),
+        event_generator::anchor(after.clone(), &[], KeriVersion::V1),
         Err(Error::AbandonedIdentifier(_))
     ));
     assert!(matches!(
@@ -686,12 +687,22 @@ fn the_generated_abandonment_is_accepted_and_nothing_is_generated_after_it() {
             1,
             vec![],
             vec![],
-            0
+            0,
+            KeriVersion::V1,
         ),
         Err(Error::AbandonedIdentifier(_))
     ));
     assert!(matches!(
-        event_generator::abandon(after, vec![key(&next)], 1, vec![], vec![], 0, vec![]),
+        event_generator::abandon(
+            after,
+            vec![key(&next)],
+            1,
+            vec![],
+            vec![],
+            0,
+            vec![],
+            KeriVersion::V1,
+        ),
         Err(Error::AbandonedIdentifier(_))
     ));
 }
@@ -712,6 +723,7 @@ fn a_delegated_identifier_rotates_and_abandons_with_drt() {
         vec![],
         vec![],
         0,
+        KeriVersion::V1,
     )
     .unwrap();
     let drt: KeriEvent<KeyEvent> = serde_json::from_str(&raw).unwrap();
@@ -738,6 +750,7 @@ fn a_delegated_identifier_rotates_and_abandons_with_drt() {
         vec![],
         0,
         vec![],
+        KeriVersion::V1,
     )
     .unwrap();
     assert_eq!(abandonment.event_type, EventTypeTag::Drt);

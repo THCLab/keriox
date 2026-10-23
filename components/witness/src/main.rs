@@ -13,6 +13,7 @@ use keri_core::{
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DurationSeconds};
 use tracing::info;
+use keri_core::event_message::keri_version::KeriVersion;
 use url::Url;
 use witness::{WitnessEscrowConfig, WitnessListener};
 
@@ -45,6 +46,11 @@ pub struct Config {
     /// Time after which an escrowed event is considered stale.
     #[serde(default, deserialize_with = "deserialize_escrow_config")]
     escrow_timeout: WitnessEscrowConfig,
+
+    /// The KERI version the witness writes its own messages in (1 or 2).
+    /// Receipts and key state answers follow the event or query they answer.
+    #[serde(default)]
+    keri_version: KeriVersion,
 }
 
 #[serde_as]
@@ -149,6 +155,7 @@ async fn main() -> Result<()> {
         cfg.db_path.as_path(),
         cfg.seed,
         cfg.escrow_timeout,
+        cfg.keri_version,
     )?;
 
     let witness_id = IdentifierPrefix::Basic(witness_listener.get_prefix());

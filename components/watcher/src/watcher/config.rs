@@ -1,5 +1,6 @@
 use std::{path::PathBuf, time::Duration};
 
+use keri_core::event_message::keri_version::KeriVersion;
 use keri_core::{
     processor::escrow::EscrowConfig,
     transport::{default::DefaultTransport, Transport},
@@ -24,6 +25,10 @@ pub struct WatcherConfig {
     /// asking the watcher to verify an unknown AID would rather get a
     /// fast "not yet" and re-query than block here.
     pub kel_update_timeout: Duration,
+    /// The KERI version the watcher writes its own messages in: its signed
+    /// location and its queries to witnesses. Key state answers follow the
+    /// query they answer.
+    pub keri_version: KeriVersion,
 }
 
 impl Default for WatcherConfig {
@@ -38,6 +43,7 @@ impl Default for WatcherConfig {
             escrow_config: EscrowConfig::default(),
             poll_interval: Duration::from_secs(30),
             kel_update_timeout: Duration::from_secs(5),
+            keri_version: KeriVersion::default(),
         }
     }
 }

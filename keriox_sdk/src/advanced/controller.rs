@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use keri_core::event_message::keri_version::KeriVersion;
 use keri_controller::{
     config::ControllerConfig, controller::RedbController, IdentifierPrefix, SelfSigningPrefix,
 };
@@ -56,6 +57,15 @@ impl Controller {
             db_path,
             ..ControllerConfig::default()
         };
+        Self::new_postgres_with_config(config, database_url).await
+    }
+
+    /// Like [`Controller::new_postgres`], from a full `ControllerConfig`.
+    #[cfg(feature = "storage-postgres")]
+    pub async fn new_postgres_with_config(
+        config: ControllerConfig,
+        database_url: &str,
+    ) -> Result<Self> {
         Ok(Self {
             inner: ControllerInner::Postgres(
                 keri_controller::controller::PostgresController::new_postgres(
@@ -77,24 +87,30 @@ impl Controller {
     /// With `StorageConfig::Postgres` the event databases live in Postgres
     /// (construction blocks on the connection; use `Controller::new_postgres`
     /// from async contexts).
+    ///
+    /// The controller writes its messages in `keri_version`.
     pub fn new_with_storage(
         db_path: PathBuf,
         storage: &crate::advanced::types::StorageConfig,
+        keri_version: KeriVersion,
     ) -> Result<Self> {
         use crate::advanced::types::StorageConfig;
+        let config = ControllerConfig {
+            db_path,
+            keri_version,
+            ..ControllerConfig::default()
+        };
         match storage {
-            StorageConfig::Redb => Self::new(db_path),
+            StorageConfig::Redb => Self::new_with_config(config),
             StorageConfig::InMemory => Ok(Self {
-                inner: ControllerInner::Redb(RedbController::new_in_memory(
-                    ControllerConfig::default(),
-                )?),
+                inner: ControllerInner::Redb(RedbController::new_in_memory(config)?),
             }),
             #[cfg(feature = "storage-postgres")]
             StorageConfig::Postgres { url } => {
                 // sqlx in this workspace runs on async-std, which drives its
                 // I/O on its own reactor threads — blocking the calling
                 // thread here is safe even inside a tokio runtime.
-                async_std::task::block_on(Self::new_postgres(db_path, url))
+                async_std::task::block_on(Self::new_postgres_with_config(config, url))
             }
         }
     }
