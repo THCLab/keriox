@@ -43,7 +43,7 @@ fn setup() -> Fixture {
 /// An identifier the node knows, incepted in KERI 2.0.
 fn known(fx: &Fixture, signer: &Signer) -> KeriEvent<KeyEvent> {
     let icp = EventMsgBuilder::new(EventTypeTag::Icp)
-        .with_version(KeriVersion::V2)
+        .with_version(KeriVersion::V2_0)
         .with_keys(vec![BasicPrefix::Ed25519(signer.public_key())])
         .with_next_keys(vec![BasicPrefix::Ed25519(Signer::new().public_key())])
         .build()
@@ -113,7 +113,7 @@ fn a_keri_2_exchange_names_its_sender_and_recipient() {
         &recipient,
         &icp,
         ForwardTopic::Multisig,
-        KeriVersion::V2,
+        KeriVersion::V2_0,
     );
     let raw = String::from_utf8(exn.encode().unwrap()).unwrap();
     assert!(raw.starts_with(r#"{"v":"KERICAACAAJSON"#), "{raw}");
@@ -138,7 +138,7 @@ fn a_keri_2_exchange_signed_by_someone_else_is_refused() {
         &other_icp.data.get_prefix(),
         &sender_icp,
         ForwardTopic::Multisig,
-        KeriVersion::V2,
+        KeriVersion::V2_0,
     );
     assert!(through_the_wire(exn, &other_signer, &other_icp, &sender_icp).is_err());
 }
@@ -153,7 +153,7 @@ fn a_keri_1_exchange_has_no_sender() {
         &icp.data.get_prefix(),
         &icp,
         ForwardTopic::Multisig,
-        KeriVersion::V1,
+        KeriVersion::V1_0,
     );
     let raw = String::from_utf8(exn.encode().unwrap()).unwrap();
     assert!(raw.starts_with(r#"{"v":"KERI10JSON"#), "{raw}");

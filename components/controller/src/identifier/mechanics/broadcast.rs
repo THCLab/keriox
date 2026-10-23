@@ -101,7 +101,7 @@ mod test {
                     witness_root.path(),
                     Some(seed.to_string()),
                     WitnessEscrowConfig::default(),
-                    keri_core::event_message::keri_version::KeriVersion::V1,
+                    keri_core::event_message::keri_version::KeriVersion::V1_0,
                 )
                 .unwrap(),
             )
@@ -115,7 +115,7 @@ mod test {
                     witness_root.path(),
                     Some(seed.to_string()),
                     WitnessEscrowConfig::default(),
-                    keri_core::event_message::keri_version::KeriVersion::V1,
+                    keri_core::event_message::keri_version::KeriVersion::V1_0,
                 )
                 .unwrap(),
             )

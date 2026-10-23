@@ -527,7 +527,7 @@ mod tests {
             vec![],
             0,
             None,
-            crate::event_message::keri_version::KeriVersion::V1,
+            crate::event_message::keri_version::KeriVersion::V1_0,
         )
         .unwrap();
         let sig = SelfSigningPrefix::Ed25519Sha512(key_manager.sign(icp_str.as_bytes()).unwrap());

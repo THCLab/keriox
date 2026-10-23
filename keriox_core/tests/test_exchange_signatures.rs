@@ -69,7 +69,7 @@ fn exchange(
         recipient,
         event,
         ForwardTopic::Multisig,
-        keri_core::event_message::keri_version::KeriVersion::V1,
+        keri_core::event_message::keri_version::KeriVersion::V1_0,
     );
     let signature = signature(&exn.encode().unwrap());
     SignedExchange {

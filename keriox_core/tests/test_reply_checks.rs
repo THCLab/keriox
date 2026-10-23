@@ -57,7 +57,7 @@ fn loc_scheme(eid: &BasicPrefix, url: &str, dt: &str, protocol: &str) -> ReplyEv
     let mut rpy = ReplyEvent::new_reply(
         ReplyRoute::LocScheme(location),
         &sender,
-        keri_core::event_message::keri_version::KeriVersion::V1,
+        keri_core::event_message::keri_version::KeriVersion::V1_0,
         HashFunctionCode::Blake3_256,
         SerializationFormats::JSON,
     );

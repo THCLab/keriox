@@ -628,7 +628,7 @@ fn an_end_role_reply_from_an_abandoned_identifier_is_refused() {
         &watcher,
         Role::Watcher,
         true,
-        KeriVersion::V1,
+        KeriVersion::V1_0,
     );
     let sig = SelfSigningPrefix::Ed25519Sha512(last_keys.sign(rpy.encode().unwrap()).unwrap());
     let signed = SignedReply::new_trans(
@@ -665,7 +665,7 @@ fn the_generated_abandonment_is_accepted_and_nothing_is_generated_after_it() {
         vec![],
         0,
         vec![],
-        KeriVersion::V1,
+        KeriVersion::V1_0,
     )
     .unwrap();
     assert_eq!(rot.event_type, EventTypeTag::Rot);
@@ -676,7 +676,7 @@ fn the_generated_abandonment_is_accepted_and_nothing_is_generated_after_it() {
     assert!(after.is_abandoned());
 
     assert!(matches!(
-        event_generator::anchor(after.clone(), &[], KeriVersion::V1),
+        event_generator::anchor(after.clone(), &[], KeriVersion::V1_0),
         Err(Error::AbandonedIdentifier(_))
     ));
     assert!(matches!(
@@ -688,7 +688,7 @@ fn the_generated_abandonment_is_accepted_and_nothing_is_generated_after_it() {
             vec![],
             vec![],
             0,
-            KeriVersion::V1,
+            KeriVersion::V1_0,
         ),
         Err(Error::AbandonedIdentifier(_))
     ));
@@ -701,7 +701,7 @@ fn the_generated_abandonment_is_accepted_and_nothing_is_generated_after_it() {
             vec![],
             0,
             vec![],
-            KeriVersion::V1,
+            KeriVersion::V1_0,
         ),
         Err(Error::AbandonedIdentifier(_))
     ));
@@ -723,7 +723,7 @@ fn a_delegated_identifier_rotates_and_abandons_with_drt() {
         vec![],
         vec![],
         0,
-        KeriVersion::V1,
+        KeriVersion::V1_0,
     )
     .unwrap();
     let drt: KeriEvent<KeyEvent> = serde_json::from_str(&raw).unwrap();
@@ -750,7 +750,7 @@ fn a_delegated_identifier_rotates_and_abandons_with_drt() {
         vec![],
         0,
         vec![],
-        KeriVersion::V1,
+        KeriVersion::V1_0,
     )
     .unwrap();
     assert_eq!(abandonment.event_type, EventTypeTag::Drt);

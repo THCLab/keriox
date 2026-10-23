@@ -165,7 +165,7 @@ async fn test_multisig_request_json_roundtrip() {
         id.id(),
         &event,
         ForwardTopic::Multisig,
-        keri_core::event_message::keri_version::KeriVersion::V1,
+        keri_core::event_message::keri_version::KeriVersion::V1_0,
     );
 
     let request =
@@ -242,8 +242,8 @@ fn a_location_reply_is_written_in_the_requested_version() {
     }))
     .unwrap();
     for (version, start) in [
-        (KeriVersion::V1, r#"{"v":"KERI10JSON"#),
-        (KeriVersion::V2, r#"{"v":"KERICAACAAJSON"#),
+        (KeriVersion::V1_0, r#"{"v":"KERI10JSON"#),
+        (KeriVersion::V2_0, r#"{"v":"KERICAACAAJSON"#),
     ] {
         let reply = build_location_reply(&id, &signer, location.clone(), version).unwrap();
         let body = String::from_utf8(reply.reply.encode().unwrap()).unwrap();
@@ -262,7 +262,7 @@ fn a_location_reply_is_written_in_the_requested_version() {
 async fn an_identifier_reports_the_version_its_store_writes() {
     use keri_sdk::advanced::raw::keri_core::event_message::keri_version::KeriVersion;
 
-    for version in [KeriVersion::V1, KeriVersion::V2] {
+    for version in [KeriVersion::V1_0, KeriVersion::V2_0] {
         let tmp = TempDir::new().unwrap();
         let store = KeriStore::open(tmp.path().to_path_buf())
             .unwrap()

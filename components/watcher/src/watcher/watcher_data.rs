@@ -689,7 +689,7 @@ impl<S: OobiStorageBackend> WatcherData<S> {
         };
         let env = Timestamped::new(route);
         let qry = KeriEvent::new(
-            KeriVersion::V1,
+            KeriVersion::V1_0,
             SerializationFormats::JSON,
             HashFunctionCode::Blake3_256.into(),
             env,

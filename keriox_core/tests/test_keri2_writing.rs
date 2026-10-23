@@ -53,7 +53,7 @@ fn key(signer: &Signer) -> BasicPrefix {
 }
 
 fn v2() -> EventMsgBuilder {
-    EventMsgBuilder::new(EventTypeTag::Icp).with_version(KeriVersion::V2)
+    EventMsgBuilder::new(EventTypeTag::Icp).with_version(KeriVersion::V2_0)
 }
 
 /// Signs the event, sends it over the wire and processes what is read back.
@@ -94,7 +94,7 @@ fn a_keri_2_kel_is_written_and_accepted() {
     assert_eq!(sn(&fx, &id), Some(0));
 
     let rot = EventMsgBuilder::new(EventTypeTag::Rot)
-        .with_version(KeriVersion::V2)
+        .with_version(KeriVersion::V2_0)
         .with_prefix(&id)
         .with_sn(1)
         .with_previous_event(&icp.digest().unwrap())
@@ -111,7 +111,7 @@ fn a_keri_2_kel_is_written_and_accepted() {
     assert_eq!(sn(&fx, &id), Some(1));
 
     let ixn = EventMsgBuilder::new(EventTypeTag::Ixn)
-        .with_version(KeriVersion::V2)
+        .with_version(KeriVersion::V2_0)
         .with_prefix(&id)
         .with_sn(2)
         .with_previous_event(&rot.digest().unwrap())
@@ -139,7 +139,7 @@ fn a_keri_2_delegation_is_written_and_accepted() {
 
     let (d0, d1) = (Signer::new(), Signer::new());
     let dip = EventMsgBuilder::new(EventTypeTag::Dip)
-        .with_version(KeriVersion::V2)
+        .with_version(KeriVersion::V2_0)
         .with_delegator(&delegator_id)
         .with_keys(vec![key(&d0)])
         .with_next_keys(vec![key(&d1)])
@@ -147,7 +147,7 @@ fn a_keri_2_delegation_is_written_and_accepted() {
         .unwrap();
     let id = dip.data.get_prefix();
     let drt = EventMsgBuilder::new(EventTypeTag::Drt)
-        .with_version(KeriVersion::V2)
+        .with_version(KeriVersion::V2_0)
         .with_prefix(&id)
         .with_sn(1)
         .with_previous_event(&dip.digest().unwrap())
@@ -163,7 +163,7 @@ fn a_keri_2_delegation_is_written_and_accepted() {
         ))
     };
     let anchor = EventMsgBuilder::new(EventTypeTag::Ixn)
-        .with_version(KeriVersion::V2)
+        .with_version(KeriVersion::V2_0)
         .with_prefix(&delegator_id)
         .with_sn(1)
         .with_previous_event(&delegator_icp.digest().unwrap())
@@ -196,7 +196,7 @@ fn a_keri_2_receipt_is_written_and_accepted() {
     assert_eq!(sn(&fx, &id), None);
 
     let rct = Receipt::new(
-        KeriVersion::V2,
+        KeriVersion::V2_0,
         SerializationFormats::JSON,
         icp.digest().unwrap(),
         id.clone(),
@@ -261,10 +261,10 @@ fn attachments_follow_the_version_of_the_body() {
     };
     // One Ed25519 signature: CESR 2.0 counts 22 quadlets (`W`), the
     // keriox 1.0 format counts one item (`B`).
-    let v2 = icp(KeriVersion::V2);
+    let v2 = icp(KeriVersion::V2_0);
     let tail = &wire(&v2, &current)[v2.encode().unwrap().len()..];
     assert!(tail.starts_with("-KAW"), "{tail}");
-    let v1 = icp(KeriVersion::V1);
+    let v1 = icp(KeriVersion::V1_0);
     let tail = &wire(&v1, &current)[v1.encode().unwrap().len()..];
     assert!(tail.starts_with("-KAB"), "{tail}");
 }

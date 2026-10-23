@@ -40,7 +40,7 @@ impl<T: Serialize, D: Serialize + Typeable<TypeTag = T> + Clone> Timestamped<D> 
     /// The data sent by `sender` now, naming the sender in KERI 2.0 only.
     pub fn sent(data: D, sender: &IdentifierPrefix, version: KeriVersion) -> Self {
         Timestamped {
-            sender: (version == KeriVersion::V2).then(|| sender.clone()),
+            sender: (version == KeriVersion::V2_0).then(|| sender.clone()),
             ..Timestamped::new(data)
         }
     }

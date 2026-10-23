@@ -47,7 +47,7 @@ fn free_port() -> u16 {
 
 /// Start a witness on an ephemeral port and return its base URL.
 pub fn spawn_witness() -> WitnessHandle {
-    spawn_witness_writing(keri_core::event_message::keri_version::KeriVersion::V1)
+    spawn_witness_writing(keri_core::event_message::keri_version::KeriVersion::V1_0)
 }
 
 /// Start a witness writing `version` on an ephemeral port.
@@ -81,7 +81,7 @@ pub fn spawn_witness_writing(
 
 /// Start a watcher on an ephemeral port and return its base URL.
 pub fn spawn_watcher() -> WatcherHandle {
-    spawn_watcher_writing(keri_core::event_message::keri_version::KeriVersion::V1)
+    spawn_watcher_writing(keri_core::event_message::keri_version::KeriVersion::V1_0)
 }
 
 /// Start a watcher writing `version` on an ephemeral port.

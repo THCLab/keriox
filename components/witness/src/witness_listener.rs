@@ -690,8 +690,9 @@ pub mod http_handlers {
     /// read.
     pub const FEATURES: &[&str] = &["abandonment", "keri2"];
 
-    /// The release, its features, and the KERI version (`1` or `2`) this
-    /// witness writes in.
+    /// The release, its features, and the KERI protocol version this
+    /// witness writes in with the CESR genus version of its attachments,
+    /// dotted-decimal (`"keri": {"protocol": "2.0", "cesr_genus": "2.0"}`).
     pub async fn info<S: OobiStorageBackend>(data: web::Data<Arc<Witness<S>>>) -> HttpResponse {
         let version = env!("CARGO_PKG_VERSION");
         let git_suffix = option_env!("GIT_VERSION_SUFFIX").unwrap_or("");
@@ -699,7 +700,10 @@ pub mod http_handlers {
         HttpResponse::Ok().json(serde_json::json!({
             "version": full_version,
             "features": FEATURES,
-            "keri_version": data.keri_version,
+            "keri": {
+                "protocol": data.keri_version.to_string(),
+                "cesr_genus": data.keri_version.cesr_genus(),
+            },
         }))
     }
 

@@ -104,7 +104,7 @@ fn test_delegated_inception_data_derivation() -> Result<(), Error> {
         delegator: "EA_SbBUZYwqLVlAAn14d6QUBQCSReJlZ755JqTgmRhXH".parse()?,
     }
     .incept_self_addressing(
-        crate::event_message::keri_version::KeriVersion::V1,
+        crate::event_message::keri_version::KeriVersion::V1_0,
         HashFunctionCode::Blake3_256.into(),
         SerializationFormats::JSON,
     )?;

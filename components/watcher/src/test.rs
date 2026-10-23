@@ -112,7 +112,7 @@ pub async fn watcher_forward_ksn() -> Result<(), ActorError> {
                 root_witness.path(),
                 Some("ArwXoACJgOleVZ2PY7kXn7rA0II0mHYDhc6WrBH8fDAc".into()),
                 WitnessEscrowConfig::default(),
-                keri_core::event_message::keri_version::KeriVersion::V1,
+                keri_core::event_message::keri_version::KeriVersion::V1_0,
             )
             .unwrap(),
         )
@@ -328,7 +328,7 @@ async fn latest_loc_scheme_picks_newest_dt() -> Result<(), ActorError> {
             data: ReplyRoute::LocScheme(loc),
         };
         let reply: ReplyEvent = KeriEvent::new(
-            keri_core::event_message::keri_version::KeriVersion::V1,
+            keri_core::event_message::keri_version::KeriVersion::V1_0,
             SerializationFormats::JSON,
             HashFunctionCode::Blake3_256.into(),
             env,
@@ -606,7 +606,10 @@ mod abandonment {
         let features = info["features"].as_array().unwrap();
         assert!(features.contains(&serde_json::json!("abandonment")));
         assert!(features.contains(&serde_json::json!("keri2")));
-        assert_eq!(info["keri_version"], 1);
+        assert_eq!(
+            info["keri"],
+            serde_json::json!({ "protocol": "1.0", "cesr_genus": "1.0" })
+        );
     }
 
     #[actix_web::test]
@@ -617,13 +620,16 @@ mod abandonment {
             public_address: Url::parse("http://some/dummy/url").unwrap(),
             db_path: db.path().to_owned(),
             tel_storage_path: tel.path().join("tel_storage"),
-            keri_version: keri_core::event_message::keri_version::KeriVersion::V2,
+            keri_version: keri_core::event_message::keri_version::KeriVersion::V2_0,
             ..Default::default()
         })
         .unwrap();
         let response = http_handlers::info(web::Data::new(Arc::new(watcher))).await;
         let info: serde_json::Value =
             serde_json::from_slice(&to_bytes(response.into_body()).await.unwrap()).unwrap();
-        assert_eq!(info["keri_version"], 2);
+        assert_eq!(
+            info["keri"],
+            serde_json::json!({ "protocol": "2.0", "cesr_genus": "2.0" })
+        );
     }
 }

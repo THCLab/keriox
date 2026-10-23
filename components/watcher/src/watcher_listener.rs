@@ -454,8 +454,10 @@ pub mod http_handlers {
     /// are read.
     pub const FEATURES: &[&str] = &["abandonment", "keri2"];
 
-    /// The release, its features, and the KERI version (`1` or `2`) this
-    /// watcher writes in: clients write 2.0 once every server they use does.
+    /// The release, its features, and the KERI protocol version this
+    /// watcher writes in with the CESR genus version of its attachments,
+    /// dotted-decimal (`"keri": {"protocol": "2.0", "cesr_genus": "2.0"}`):
+    /// clients write 2.0 once every server they use does.
     pub async fn info<S: OobiStorageBackend>(data: web::Data<Arc<Watcher<S>>>) -> HttpResponse {
         let version = env!("CARGO_PKG_VERSION");
         let git_suffix = option_env!("GIT_VERSION_SUFFIX").unwrap_or("");
@@ -463,7 +465,10 @@ pub mod http_handlers {
         HttpResponse::Ok().json(serde_json::json!({
             "version": full_version,
             "features": FEATURES,
-            "keri_version": data.watcher_data.version,
+            "keri": {
+                "protocol": data.watcher_data.version.to_string(),
+                "cesr_genus": data.watcher_data.version.cesr_genus(),
+            },
         }))
     }
 

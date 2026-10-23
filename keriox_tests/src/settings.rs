@@ -31,7 +31,7 @@ impl AsyncTestContext for InfrastructureContext {
     async fn setup() -> InfrastructureContext {
         match std::env::var("KERIOX_TEST_NODES") {
             Ok(nodes) => InfrastructureContext::external(&nodes),
-            Err(_) => InfrastructureContext::with_version(KeriVersion::V1).await,
+            Err(_) => InfrastructureContext::with_version(KeriVersion::V1_0).await,
         }
     }
 
@@ -43,7 +43,7 @@ pub struct Keri2InfrastructureContext(pub InfrastructureContext);
 
 impl AsyncTestContext for Keri2InfrastructureContext {
     async fn setup() -> Keri2InfrastructureContext {
-        Keri2InfrastructureContext(InfrastructureContext::with_version(KeriVersion::V2).await)
+        Keri2InfrastructureContext(InfrastructureContext::with_version(KeriVersion::V2_0).await)
     }
 
     async fn teardown(self) {}

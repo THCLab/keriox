@@ -86,9 +86,9 @@ pub async fn supports_keri2(base: &Url) -> Result<bool> {
     supports_feature(base, KERI2_FEATURE).await
 }
 
-/// The KERI version `base` (a witness or watcher URL) writes its own
-/// messages in, from `keri_version` on `GET /info`. A server that does not
-/// report one predates the switch and writes KERI 1.0.
+/// The KERI protocol version `base` (a witness or watcher URL) writes its
+/// own messages in, from `keri.protocol` on `GET /info`. A server that does
+/// not report one predates the switch and writes KERI 1.0.
 ///
 /// # Errors
 /// - [`Error::Other`] if the server cannot be reached or answers with an
@@ -103,14 +103,14 @@ pub async fn server_keri_version(base: &Url) -> Result<KeriVersion> {
 /// so does an empty list.
 pub async fn agreed_keri_version(servers: &[Url]) -> KeriVersion {
     if servers.is_empty() {
-        return KeriVersion::V1;
+        return KeriVersion::V1_0;
     }
     for server in servers {
-        if !matches!(server_keri_version(server).await, Ok(KeriVersion::V2)) {
-            return KeriVersion::V1;
+        if !matches!(server_keri_version(server).await, Ok(KeriVersion::V2_0)) {
+            return KeriVersion::V1_0;
         }
     }
-    KeriVersion::V2
+    KeriVersion::V2_0
 }
 
 /// Whether `base` lists `feature` on `GET /info`.
@@ -130,7 +130,11 @@ async fn info(base: &Url) -> Result<Info> {
         #[serde(default)]
         features: Vec<String>,
         #[serde(default)]
-        keri_version: KeriVersion,
+        keri: Option<Keri>,
+    }
+    #[derive(serde::Deserialize)]
+    struct Keri {
+        protocol: KeriVersion,
     }
 
     let url = base
@@ -145,6 +149,6 @@ async fn info(base: &Url) -> Result<Info> {
         .map_err(|e| Error::Other(format!("unexpected answer from {url}: {e}")))?;
     Ok(Info {
         features: answer.features,
-        keri_version: answer.keri_version,
+        keri_version: answer.keri.map_or(KeriVersion::V1_0, |keri| keri.protocol),
     })
 }

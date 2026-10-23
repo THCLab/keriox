@@ -84,7 +84,7 @@ impl Exchange {
         format: SerializationFormats,
         derivation: HashFunctionCode,
     ) -> ExchangeMessage {
-        let keri2 = version == KeriVersion::V2;
+        let keri2 = version == KeriVersion::V2_0;
         let body = ExchangeBody {
             sender: keri2.then(|| sender.clone()),
             recipient: keri2.then(|| self.get_prefix()),

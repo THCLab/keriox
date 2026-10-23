@@ -361,7 +361,7 @@ mod tests {
                 let rpy = ReplyEvent::new_reply(
                     route,
                     &self.cid(),
-                    crate::event_message::keri_version::KeriVersion::V1,
+                    crate::event_message::keri_version::KeriVersion::V1_0,
                     HashFunctionCode::Blake3_256,
                     SerializationFormats::JSON,
                 );

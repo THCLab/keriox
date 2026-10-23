@@ -421,7 +421,7 @@ mod tests {
             .parse()
             .unwrap();
 
-        let reply = generate_end_role(&cid, &server, Role::Messagebox, true, crate::event_message::keri_version::KeriVersion::V1);
+        let reply = generate_end_role(&cid, &server, Role::Messagebox, true, crate::event_message::keri_version::KeriVersion::V1_0);
         match reply.get_route() {
             ReplyRoute::EndRoleAdd(er) => {
                 assert_eq!(er.role, Role::Messagebox);

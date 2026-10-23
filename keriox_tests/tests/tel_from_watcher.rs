@@ -32,7 +32,7 @@ async fn test_tel_from_watcher() -> Result<(), anyhow::Error> {
                 witness_db_path.path(),
                 Some(seed.to_string()),
                 WitnessEscrowConfig::default(),
-                keri_core::event_message::keri_version::KeriVersion::V1,
+                keri_core::event_message::keri_version::KeriVersion::V1_0,
             )
             .unwrap(),
         )
@@ -56,7 +56,7 @@ async fn test_tel_from_watcher() -> Result<(), anyhow::Error> {
                 witness_db_path.path(),
                 Some(seed.to_string()),
                 WitnessEscrowConfig::default(),
-                keri_core::event_message::keri_version::KeriVersion::V1,
+                keri_core::event_message::keri_version::KeriVersion::V1_0,
             )
             .unwrap(),
         )

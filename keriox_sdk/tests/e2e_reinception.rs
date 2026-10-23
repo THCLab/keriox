@@ -36,7 +36,7 @@ async fn a_contact_follows_a_reincepted_identity(infra: &mut TestInfra) {
     drop(alice_keri);
     let store = KeriStore::open(root)
         .unwrap()
-        .with_keri_version(KeriVersion::V2);
+        .with_keri_version(KeriVersion::V2_0);
     let config = store.same_witnesses("alice").unwrap();
     let (successor, _signer) = store
         .reincept("alice", "alice-2", config)

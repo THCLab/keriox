@@ -52,8 +52,8 @@ async fn incept(ctx: &InfrastructureContext, version: KeriVersion) -> Client {
         .await
         .unwrap();
     let expected = match version {
-        KeriVersion::V1 => r#"{"v":"KERI10JSON"#,
-        KeriVersion::V2 => r#"{"v":"KERICAACAAJSON"#,
+        KeriVersion::V1_0 => r#"{"v":"KERI10JSON"#,
+        KeriVersion::V2_0 => r#"{"v":"KERICAACAAJSON"#,
     };
     assert!(icp.starts_with(expected), "{icp}");
     let signature = SelfSigningPrefix::Ed25519Sha512(keys.sign(icp.as_bytes()).unwrap());
@@ -235,8 +235,8 @@ async fn rotate(
 async fn a_keri_1_identifier_rotates_in_keri_2(
     ctx: &mut InfrastructureContext,
 ) -> Result<(), ControllerError> {
-    let signer = incept(ctx, KeriVersion::V1).await;
-    let mut verifier = incept(ctx, KeriVersion::V1).await;
+    let signer = incept(ctx, KeriVersion::V1_0).await;
+    let mut verifier = incept(ctx, KeriVersion::V1_0).await;
     watch(ctx, &mut verifier, signer.id.id()).await;
     assert_eq!(
         query(&mut verifier, &signer.id).await,
@@ -255,7 +255,7 @@ async fn a_keri_1_identifier_rotates_in_keri_2(
     drop(controller);
     let controller = Arc::new(Controller::new(ControllerConfig {
         db_path: db.path().to_owned(),
-        keri_version: KeriVersion::V2,
+        keri_version: KeriVersion::V2_0,
         ..Default::default()
     })?);
     let mut id = Identifier::new(
@@ -289,7 +289,7 @@ async fn a_keri_1_identifier_rotates_in_keri_2(
 async fn keri_2_clients_with_keri_1_servers(
     ctx: &mut InfrastructureContext,
 ) -> Result<(), ControllerError> {
-    rollout_mix(ctx, KeriVersion::V2, KeriVersion::V2).await
+    rollout_mix(ctx, KeriVersion::V2_0, KeriVersion::V2_0).await
 }
 
 #[test_context(Keri2InfrastructureContext)]
@@ -297,12 +297,12 @@ async fn keri_2_clients_with_keri_1_servers(
 async fn a_keri_1_client_with_keri_2_servers(
     ctx: &mut Keri2InfrastructureContext,
 ) -> Result<(), ControllerError> {
-    rollout_mix(&ctx.0, KeriVersion::V1, KeriVersion::V2).await?;
-    rollout_mix(&ctx.0, KeriVersion::V2, KeriVersion::V1).await
+    rollout_mix(&ctx.0, KeriVersion::V1_0, KeriVersion::V2_0).await?;
+    rollout_mix(&ctx.0, KeriVersion::V2_0, KeriVersion::V1_0).await
 }
 
 #[test_context(Keri2InfrastructureContext)]
 #[actix_rt::test]
 async fn everything_on_keri_2(ctx: &mut Keri2InfrastructureContext) -> Result<(), ControllerError> {
-    rollout_mix(&ctx.0, KeriVersion::V2, KeriVersion::V2).await
+    rollout_mix(&ctx.0, KeriVersion::V2_0, KeriVersion::V2_0).await
 }

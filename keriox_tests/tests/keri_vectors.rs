@@ -763,7 +763,7 @@ fn witness_vector(v: &Value) -> Result<(), String> {
         dir.path(),
         (!seed.is_empty()).then_some(seed),
         witness::WitnessEscrowConfig::default(),
-        keri_core::event_message::keri_version::KeriVersion::V1,
+        keri_core::event_message::keri_version::KeriVersion::V1_0,
     )
     .map_err(|e| e.to_string())?;
     let name = s(v, "witness");

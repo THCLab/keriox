@@ -120,8 +120,8 @@ impl WireFormat {
     /// The attachment format of messages written in `version`.
     pub fn of(version: KeriVersion) -> Self {
         match version {
-            KeriVersion::V1 => WireFormat::Legacy,
-            KeriVersion::V2 => WireFormat::V2,
+            KeriVersion::V1_0 => WireFormat::Legacy,
+            KeriVersion::V2_0 => WireFormat::V2,
         }
     }
 }
@@ -140,7 +140,7 @@ fn body_version(payload: &Payload) -> KeriVersion {
         #[allow(unreachable_patterns)]
         _ => None,
     };
-    versioned.map_or(KeriVersion::V1, |body| KeriVersion::of(&body.v))
+    versioned.map_or(KeriVersion::V1_0, |body| KeriVersion::of(&body.v))
 }
 
 /// The text of `group` in `format`.
@@ -533,6 +533,7 @@ impl TryFrom<Payload> for EventType {
                 "version string names protocol {protocol}, not KERI"
             )));
         }
+        KeriVersion::read(event.version()).map_err(ParseError::DeserializeError)?;
         // A KERI 2.0 routed message names its sender in `i`; a 1.0 one has
         // no `i`.
         let named_sender: Option<bool> = match &event {
@@ -546,7 +547,7 @@ impl TryFrom<Payload> for EventType {
         };
         #[cfg(feature = "mailbox")]
         if let EventType::Exn(exn) = &event {
-            let keri2 = KeriVersion::of(event.version()) == KeriVersion::V2;
+            let keri2 = KeriVersion::of(event.version()) == KeriVersion::V2_0;
             if exn.data.has_keri2_header() != Some(keri2) {
                 return Err(ParseError::DeserializeError(
                     "a KERI 2.0 exchange has i, ri, x and p, a KERI 1.0 one none of them".into(),
@@ -554,7 +555,7 @@ impl TryFrom<Payload> for EventType {
             }
         }
         if let Some(named) = named_sender {
-            if named != (KeriVersion::of(event.version()) == KeriVersion::V2) {
+            if named != (KeriVersion::of(event.version()) == KeriVersion::V2_0) {
                 return Err(ParseError::DeserializeError(
                     "a KERI 2.0 routed message names its sender in i, a KERI 1.0 one does not"
                         .into(),
@@ -1266,7 +1267,7 @@ pub mod test {
         );
         let icp = InceptionEvent::new(key_config, None, None)
             .incept_self_addressing(
-                crate::event_message::keri_version::KeriVersion::V1,
+                crate::event_message::keri_version::KeriVersion::V1_0,
                 derivation,
                 format,
             )

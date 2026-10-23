@@ -146,7 +146,7 @@ where
         };
         let env = Timestamped::new(route);
         Ok(KeriEvent::new(
-            KeriVersion::V1,
+            KeriVersion::V1_0,
             SerializationFormats::JSON,
             HashFunctionCode::Blake3_256.into(),
             env,

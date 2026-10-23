@@ -68,6 +68,18 @@ final and no more key events are allowed in it:
 keriox reads KERI 1.0 and KERI 2.0 messages, and writes KERI 1.0 unless told
 otherwise, so a node or client can be upgraded before its peers.
 
+Versions are the KERI protocol versions of the version string, in the
+dotted-decimal notation of the CESR specification:
+
+| Version | Version string | Attachments |
+|---|---|---|
+| `1.0` | `KERI10JSON…_` (`vv` = `10`) | CESR 1.0 code table (`-_AAABAA`) |
+| `2.0` | `KERICAACAAJSON….` (protocol `CAA` = 2.0, genus `CAA` = 2.0) | CESR genus 2.0 code table (`-_AAACAA`) |
+
+Any minor version of protocol 1 or 2 is read by that major's rules; other
+majors, and 2.x messages on a CESR genus other than 2.x, are refused. These
+are protocol versions, not the versions of the specification documents.
+
 - KERI 2.0 key events, receipts, `qry`, `rpy` and `exn` are written with a
   2.0 version string and CESR 2.0 attachments. Routed messages (`qry`, `rpy`)
   name their sender in `i`, and `exn` carries `i`, `ri`, `x` and `p`; the
@@ -76,14 +88,16 @@ otherwise, so a node or client can be upgraded before its peers.
   receipt follows the event's version, a key state notice the query's.
 - The **controller** writes its own messages in `ControllerConfig::keri_version`,
   the **SDK** in `KeriStore::with_keri_version`, and **witnesses** and
-  **watchers** in `keri_version` in their configuration file (`1` or `2`;
-  `WITNESS_KERI_VERSION` and `WATCHER_KERI_VERSION` in the environment).
+  **watchers** in `keri_version` in their configuration file (`"1.0"` or
+  `"2.0"`; `WITNESS_KERI_VERSION` and `WATCHER_KERI_VERSION` in the
+  environment).
 - Switch a writer to 2.0 only once everything that reads its messages runs a
   keriox that reads 2.0. Older releases refuse KERI 2.0 messages. Witnesses
   and watchers that read 2.0 list `"keri2"` on `GET /info`
   (`supports_keri2` in the SDK).
-- Witnesses and watchers report the version they write as `keri_version` on
-  `GET /info` (`server_keri_version` in the SDK). Operators switch the servers
+- Witnesses and watchers report what they write on `GET /info` as
+  `"keri": {"protocol": "2.0", "cesr_genus": "2.0"}` (`server_keri_version`
+  in the SDK). Operators switch the servers
   first; a client that follows them asks `agreed_keri_version` with the
   witnesses and watchers it uses, which answers 2.0 only once every one of
   them writes 2.0 and 1.0 if any writes 1.0 or cannot be reached.

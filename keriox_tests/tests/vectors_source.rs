@@ -393,7 +393,7 @@ fn streams(format: WireFormat) -> Vec<Value> {
 
     // a key state query signed with the signer's last establishment event
     let qry = KeriEvent::new(
-        keri_core::event_message::keri_version::KeriVersion::V1,
+        keri_core::event_message::keri_version::KeriVersion::V1_0,
         SerializationFormats::JSON,
         HashFunctionCode::Blake3_256.into(),
         timestamped(QueryRoute::Ksn {
@@ -422,7 +422,7 @@ fn streams(format: WireFormat) -> Vec<Value> {
     // replies: an end role by a transferable controller, a location by a witness
     let reply = |route| {
         KeriEvent::new(
-            keri_core::event_message::keri_version::KeriVersion::V1,
+            keri_core::event_message::keri_version::KeriVersion::V1_0,
             SerializationFormats::JSON,
             HashFunctionCode::Blake3_256.into(),
             timestamped(route),
@@ -470,7 +470,7 @@ fn streams(format: WireFormat) -> Vec<Value> {
     // an exchange forwarding an event, signed by the sender and the event's
     // signature attached under its path
     let exn = KeriEvent::new(
-        keri_core::event_message::keri_version::KeriVersion::V1,
+        keri_core::event_message::keri_version::KeriVersion::V1_0,
         SerializationFormats::JSON,
         HashFunctionCode::Blake3_256.into(),
         keri_core::mailbox::exchange::ExchangeBody {
@@ -527,7 +527,7 @@ fn streams(format: WireFormat) -> Vec<Value> {
         );
         let icp = InceptionEvent::new(key_config, None, None)
             .incept_self_addressing(
-                keri_core::event_message::keri_version::KeriVersion::V1,
+                keri_core::event_message::keri_version::KeriVersion::V1_0,
                 HashFunctionCode::Blake3_256.into(),
                 serialization,
             )

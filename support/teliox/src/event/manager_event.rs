@@ -60,7 +60,7 @@ impl ManagerTelEvent {
         derivation: HashFunctionCode,
     ) -> Result<ManagerTelEventMessage, Error> {
         Ok(TypedEvent::<ManagementTelType, ManagerTelEvent>::new(
-            KeriVersion::V1,
+            KeriVersion::V1_0,
             format,
             derivation.into(),
             self,

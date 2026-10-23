@@ -63,7 +63,7 @@ fn ksn_json(fx: &Fixture, id: &IdentifierPrefix) -> Value {
     let state = fx.storage.get_state(id).unwrap();
     serde_json::to_value(KeyStateNotice::new_ksn(
         state,
-        KeriVersion::V1,
+        KeriVersion::V1_0,
         SerializationFormats::JSON,
     ))
     .unwrap()
@@ -117,10 +117,10 @@ fn a_key_state_reply_past_sn_9_reads_back() {
     let rpy = ReplyEvent::new_reply(
         ReplyRoute::Ksn(
             IdentifierPrefix::Basic(witness_id.clone()),
-            KeyStateNotice::new_ksn(state, KeriVersion::V1, SerializationFormats::JSON),
+            KeyStateNotice::new_ksn(state, KeriVersion::V1_0, SerializationFormats::JSON),
         ),
         &IdentifierPrefix::Basic(witness_id.clone()),
-        KeriVersion::V1,
+        KeriVersion::V1_0,
         HashFunctionCode::Blake3_256,
         SerializationFormats::JSON,
     );
@@ -202,7 +202,7 @@ fn a_key_state_notice_takes_the_version_of_the_query_that_asks_for_it() {
             src: None,
         },
     };
-    for version in [KeriVersion::V1, KeriVersion::V2] {
+    for version in [KeriVersion::V1_0, KeriVersion::V2_0] {
         let ReplyType::Ksn(ksn) = process_query(&route, version, &fx.storage).unwrap() else {
             panic!("not a key state notice")
         };

@@ -162,7 +162,7 @@ pub async fn handle_delegation_request(
                     }
                     .to_message(
                         &id.id(),
-                        keri_core::event_message::keri_version::KeriVersion::V1,
+                        keri_core::event_message::keri_version::KeriVersion::V1_0,
                         SerializationFormats::JSON,
                         HashFunctionCode::Blake3_256,
                     );

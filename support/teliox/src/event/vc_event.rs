@@ -119,7 +119,7 @@ impl VCEvent {
     ) -> Result<VCEventMessage, Error> {
         let timestamped = TimestampedVCEvent::new(self);
         Ok(TypedEvent::<TelEventType, TimestampedVCEvent>::new(
-            KeriVersion::V1,
+            KeriVersion::V1_0,
             format,
             derivation.into(),
             timestamped,

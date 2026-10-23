@@ -52,7 +52,7 @@ impl KeyEvent {
         format: SerializationFormats,
         derivation: HashFunction,
     ) -> Result<KeriEvent<KeyEvent>, Error> {
-        if let (KeriVersion::V2, EventData::Rot(rot) | EventData::Drt(rot)) =
+        if let (KeriVersion::V2_0, EventData::Rot(rot) | EventData::Drt(rot)) =
             (version, &mut self.event_data)
         {
             rot.config.get_or_insert_with(Vec::new);

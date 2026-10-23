@@ -50,7 +50,7 @@ fn setup() -> Fixture {
 fn controller(fx: &Fixture) -> (Signer, IdentifierPrefix) {
     let signer = Signer::new();
     let icp = EventMsgBuilder::new(EventTypeTag::Icp)
-        .with_version(KeriVersion::V2)
+        .with_version(KeriVersion::V2_0)
         .with_keys(vec![BasicPrefix::Ed25519(signer.public_key())])
         .with_next_keys(vec![BasicPrefix::Ed25519(Signer::new().public_key())])
         .build()
@@ -109,7 +109,7 @@ fn field(raw: &str, name: &str) -> usize {
 fn a_keri_2_query_names_its_sender_after_d() {
     let fx = setup();
     let (signer, id) = controller(&fx);
-    let qry = logs(&id, &id, KeriVersion::V2);
+    let qry = logs(&id, &id, KeriVersion::V2_0);
     let raw = String::from_utf8(qry.encode().unwrap()).unwrap();
     assert!(raw.starts_with(r#"{"v":"KERICAACAAJSON"#), "{raw}");
     assert!(field(&raw, "d") < field(&raw, "i"), "{raw}");
@@ -126,7 +126,7 @@ fn a_keri_2_query_names_its_sender_after_d() {
 fn a_keri_1_query_has_no_sender() {
     let fx = setup();
     let (_signer, id) = controller(&fx);
-    let raw = String::from_utf8(logs(&id, &id, KeriVersion::V1).encode().unwrap()).unwrap();
+    let raw = String::from_utf8(logs(&id, &id, KeriVersion::V1_0).encode().unwrap()).unwrap();
     assert!(raw.starts_with(r#"{"v":"KERI10JSON"#), "{raw}");
     // The only `i` is the queried identifier, inside `q`.
     assert!(field(&raw, "dt") < field(&raw, "i"), "{raw}");
@@ -137,7 +137,7 @@ fn a_query_signed_by_someone_else_than_its_sender_is_refused() {
     let fx = setup();
     let (signer, id) = controller(&fx);
     let (_other_signer, other) = controller(&fx);
-    assert!(wire_query(logs(&id, &other, KeriVersion::V2), &signer, &id).is_err());
+    assert!(wire_query(logs(&id, &other, KeriVersion::V2_0), &signer, &id).is_err());
 }
 
 fn location(eid: &BasicPrefix, sender: &IdentifierPrefix, version: KeriVersion) -> ReplyEvent {
@@ -172,7 +172,7 @@ fn a_keri_2_reply_from_its_sender_is_accepted() {
     let fx = setup();
     let signer = Signer::new();
     let eid = BasicPrefix::Ed25519NT(signer.public_key());
-    let rpy = location(&eid, &IdentifierPrefix::Basic(eid.clone()), KeriVersion::V2);
+    let rpy = location(&eid, &IdentifierPrefix::Basic(eid.clone()), KeriVersion::V2_0);
     let raw = String::from_utf8(rpy.encode().unwrap()).unwrap();
     assert!(field(&raw, "d") < field(&raw, "i"), "{raw}");
     assert!(field(&raw, "i") < field(&raw, "dt"), "{raw}");
@@ -192,7 +192,7 @@ fn a_keri_2_reply_signed_by_someone_else_than_its_sender_is_refused() {
     let signer = Signer::new();
     let eid = BasicPrefix::Ed25519NT(signer.public_key());
     let other = IdentifierPrefix::Basic(BasicPrefix::Ed25519NT(Signer::new().public_key()));
-    assert!(send_reply(&fx, location(&eid, &other, KeriVersion::V2), &signer).is_err());
+    assert!(send_reply(&fx, location(&eid, &other, KeriVersion::V2_0), &signer).is_err());
 }
 
 /// The reply with its sender removed (`None`) or added, re-sized and
@@ -215,7 +215,7 @@ fn a_keri_2_reply_without_a_sender_is_refused() {
     let signer = Signer::new();
     let eid = BasicPrefix::Ed25519NT(signer.public_key());
     let rpy = with_sender(
-        location(&eid, &IdentifierPrefix::Basic(eid.clone()), KeriVersion::V2),
+        location(&eid, &IdentifierPrefix::Basic(eid.clone()), KeriVersion::V2_0),
         None,
     );
     assert!(send_reply(&fx, rpy, &signer).is_err());
@@ -227,6 +227,6 @@ fn a_keri_1_reply_with_a_sender_is_refused() {
     let signer = Signer::new();
     let eid = BasicPrefix::Ed25519NT(signer.public_key());
     let sender = IdentifierPrefix::Basic(eid.clone());
-    let rpy = with_sender(location(&eid, &sender, KeriVersion::V1), Some(sender));
+    let rpy = with_sender(location(&eid, &sender, KeriVersion::V1_0), Some(sender));
     assert!(send_reply(&fx, rpy, &signer).is_err());
 }

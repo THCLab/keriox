@@ -65,7 +65,7 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
             root_witness.path(),
             Some(seed1.into()),
             WitnessEscrowConfig::default(),
-            keri_core::event_message::keri_version::KeriVersion::V1,
+            keri_core::event_message::keri_version::KeriVersion::V1_0,
         )
         .unwrap()
     };
@@ -78,7 +78,7 @@ fn test_not_fully_witnessed() -> Result<(), Error> {
             root_witness.path(),
             Some(seed2.into()),
             WitnessEscrowConfig::default(),
-            keri_core::event_message::keri_version::KeriVersion::V1,
+            keri_core::event_message::keri_version::KeriVersion::V1_0,
         )
         .unwrap()
     };
@@ -323,7 +323,7 @@ fn test_qry_rpy() -> Result<(), ActorError> {
             reply_route: String::from(""),
         },
         &alice.prefix().clone(),
-        keri_core::event_message::keri_version::KeriVersion::V1,
+        keri_core::event_message::keri_version::KeriVersion::V1_0,
         SerializationFormats::JSON,
         HashFunctionCode::Blake3_256,
     );
@@ -373,7 +373,7 @@ fn test_qry_rpy() -> Result<(), ActorError> {
             reply_route: String::from(""),
         },
         &alice.prefix().clone(),
-        keri_core::event_message::keri_version::KeriVersion::V1,
+        keri_core::event_message::keri_version::KeriVersion::V1_0,
         SerializationFormats::JSON,
         HashFunctionCode::Blake3_256,
     );
@@ -485,7 +485,7 @@ pub fn test_key_state_notice() -> Result<(), Error> {
     let signed_rpy = witness.get_signed_ksn_for_prefix(
         &bob_pref,
         signer_arc.clone(),
-        keri_core::event_message::keri_version::KeriVersion::V1,
+        keri_core::event_message::keri_version::KeriVersion::V1_0,
     )?;
 
     // Process reply message before having any bob's events in db.
@@ -510,7 +510,7 @@ pub fn test_key_state_notice() -> Result<(), Error> {
     let new_reply = witness.get_signed_ksn_for_prefix(
         &bob_pref,
         signer_arc.clone(),
-        keri_core::event_message::keri_version::KeriVersion::V1,
+        keri_core::event_message::keri_version::KeriVersion::V1_0,
     )?;
     alice_processor.process_op_reply(&new_reply)?;
     let ksn_db = alice_storage.get_last_ksn_reply(
@@ -529,7 +529,7 @@ pub fn test_key_state_notice() -> Result<(), Error> {
     let trans_rpy = witness.get_signed_ksn_for_prefix(
         &bob_pref,
         signer_arc,
-        keri_core::event_message::keri_version::KeriVersion::V1,
+        keri_core::event_message::keri_version::KeriVersion::V1_0,
     )?;
 
     alice_processor.process_op_reply(&trans_rpy)?;
@@ -730,7 +730,7 @@ pub fn test_multisig() -> Result<(), ActorError> {
             witness_root.path(),
             None,
             WitnessEscrowConfig::default(),
-            keri_core::event_message::keri_version::KeriVersion::V1,
+            keri_core::event_message::keri_version::KeriVersion::V1_0,
         )
         .unwrap()
     };
@@ -912,7 +912,7 @@ pub fn test_delegated_multisig() -> Result<(), ActorError> {
             witness_root.path(),
             None,
             WitnessEscrowConfig::default(),
-            keri_core::event_message::keri_version::KeriVersion::V1,
+            keri_core::event_message::keri_version::KeriVersion::V1_0,
         )
         .unwrap()
     };
@@ -1162,7 +1162,7 @@ pub fn test_delegating_multisig() -> Result<(), ActorError> {
             witness_root.path(),
             None,
             WitnessEscrowConfig::default(),
-            keri_core::event_message::keri_version::KeriVersion::V1,
+            keri_core::event_message::keri_version::KeriVersion::V1_0,
         )
         .unwrap()
     };
@@ -1692,7 +1692,7 @@ fn test_delegated_inception_is_receipted_when_the_anchor_arrives_first(
         witness_root.path(),
         None,
         WitnessEscrowConfig::default(),
-        keri_core::event_message::keri_version::KeriVersion::V1,
+        keri_core::event_message::keri_version::KeriVersion::V1_0,
     )
     .unwrap();
 
@@ -2003,17 +2003,23 @@ mod abandonment {
         let features = info["features"].as_array().unwrap();
         assert!(features.contains(&serde_json::json!("abandonment")));
         assert!(features.contains(&serde_json::json!("keri2")));
-        assert_eq!(info["keri_version"], 1);
+        assert_eq!(
+            info["keri"],
+            serde_json::json!({ "protocol": "1.0", "cesr_genus": "1.0" })
+        );
     }
 
     #[actix_web::test]
     async fn info_reports_the_keri_version_the_witness_writes() {
         let (_root, mut witness) = setup_witness();
-        witness.keri_version = keri_core::event_message::keri_version::KeriVersion::V2;
+        witness.keri_version = keri_core::event_message::keri_version::KeriVersion::V2_0;
         let response = http_handlers::info(web::Data::new(Arc::new(witness))).await;
         let info: serde_json::Value =
             serde_json::from_slice(&to_bytes(response.into_body()).await.unwrap()).unwrap();
-        assert_eq!(info["keri_version"], 2);
+        assert_eq!(
+            info["keri"],
+            serde_json::json!({ "protocol": "2.0", "cesr_genus": "2.0" })
+        );
     }
 }
 

@@ -157,7 +157,7 @@ fn test_inception_data_derivation() -> Result<(), Error> {
     let next_keys_data = NextKeysData::new(SignatureThreshold::Simple(2), next_keys_hashes);
     let key_config = KeyConfig::new(keys, next_keys_data, Some(SignatureThreshold::Simple(2)));
     let icp_data = InceptionEvent::new(key_config.clone(), None, None).incept_self_addressing(
-        crate::event_message::keri_version::KeriVersion::V1,
+        crate::event_message::keri_version::KeriVersion::V1_0,
         HashFunctionCode::Blake3_256.into(),
         SerializationFormats::JSON,
     )?;
