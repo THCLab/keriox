@@ -29,7 +29,10 @@ fn free_port() -> u16 {
 
 impl AsyncTestContext for InfrastructureContext {
     async fn setup() -> InfrastructureContext {
-        InfrastructureContext::with_version(KeriVersion::V1).await
+        match std::env::var("KERIOX_TEST_NODES") {
+            Ok(nodes) => InfrastructureContext::external(&nodes),
+            Err(_) => InfrastructureContext::with_version(KeriVersion::V1).await,
+        }
     }
 
     async fn teardown(self) {}
@@ -47,6 +50,32 @@ impl AsyncTestContext for Keri2InfrastructureContext {
 }
 
 impl InfrastructureContext {
+    /// Nodes started outside the tests, e.g. of another keriox release by
+    /// `compat/check.sh`: `nodes` names the first witness, the second
+    /// witness and the watcher as `<seed>@<url>`, separated by spaces.
+    pub fn external(nodes: &str) -> InfrastructureContext {
+        let location = |node: &str| {
+            let (seed, url) = node
+                .split_once('@')
+                .expect("KERIOX_TEST_NODES entries are <seed>@<url>");
+            let signer = keri_core::signer::Signer::new_with_seed(&seed.parse().unwrap()).unwrap();
+            LocationScheme {
+                eid: IdentifierPrefix::Basic(BasicPrefix::Ed25519NT(signer.public_key())),
+                scheme: keri_core::oobi::Scheme::Http,
+                url: Some(Url::parse(url).unwrap()),
+            }
+        };
+        let nodes: Vec<_> = nodes.split_whitespace().map(location).collect();
+        let [first_witness_oobi, second_witness_oobi, watcher_oobi] = nodes
+            .try_into()
+            .expect("KERIOX_TEST_NODES names two witnesses and a watcher");
+        InfrastructureContext {
+            first_witness_oobi,
+            second_witness_oobi,
+            watcher_oobi,
+        }
+    }
+
     /// Two witnesses and a watcher on free ports, writing their own messages
     /// in `version`.
     pub async fn with_version(version: KeriVersion) -> InfrastructureContext {

@@ -11,9 +11,11 @@
 #      logs byte for byte as they did, and old clients keep working.
 #
 # The clients are the scenarios of keriox_tests (multisig, delegation,
-# watcher queries, witness rotation), with external-nodes.patch applied so
-# that they use the nodes this script starts instead of starting their own.
-# Ports 3232, 3233 and 3236 must be free.
+# watcher queries, witness rotation), made to use the nodes this script
+# starts instead of starting their own: the deployed revision through
+# external-nodes.patch, this keriox through KERIOX_TEST_NODES. The nodes
+# listen on the ports in COMPAT_PORTS (first witness, second witness,
+# watcher), which must be free.
 #
 #   compat/check.sh            # OLD_REV overrides the deployed revision
 set -euo pipefail
@@ -23,6 +25,13 @@ root="$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 # are locked to, and the cesrox and said releases it was built with
 old_rev="${OLD_REV:-6f70bb2ba5ebeb2bc8707a003d4637bcbd1176cd}"
 work="${WORK:-$root/target/compat}"
+read -r wit1_port wit2_port watcher_port <<<"${COMPAT_PORTS:-3332 3333 3336}"
+wit1_seed=ArwXoACJgOleVZ2PY7kXn7rA0II0mHYDhc6WrBH8fDAc
+wit2_seed=ArwXoACJgOleVZ2PY7kXn7rA0II0mHYDhc6WrBH8fDAd
+watcher_seed=Alntkt3u6dDgiQxTATr01dy8M72uuaZEf9eTdM-70Gk8
+# where the client scenarios of this keriox find the nodes
+export KERIOX_TEST_NODES="$wit1_seed@http://127.0.0.1:$wit1_port \
+$wit2_seed@http://127.0.0.1:$wit2_port $watcher_seed@http://127.0.0.1:$watcher_port"
 scenarios=(
     query_updates
     indirect_mode_signing
@@ -33,10 +42,17 @@ scenarios=(
     test_witness_rotation
 )
 
-prepare() { # <dir>: build the nodes and the client scenarios in <dir>
+prepare() { # <dir> [patch]: build the nodes and the client scenarios in <dir>
     (
         cd "$1"
-        patch --quiet -p1 < "$root/compat/external-nodes.patch"
+        if [ "${2:-}" = patch ]; then
+            patch --quiet -p1 <"$root/compat/external-nodes.patch"
+            # the scenarios' node ports (also in expected oobis) become ours
+            grep -rlE '127.0.0.1:323[236]' keriox_tests | xargs -r sed -i \
+                -e "s/127.0.0.1:3232/127.0.0.1:$wit1_port/g" \
+                -e "s/127.0.0.1:3233/127.0.0.1:$wit2_port/g" \
+                -e "s/127.0.0.1:3236/127.0.0.1:$watcher_port/g"
+        fi
         export CARGO_TARGET_DIR="$1/target"
         cargo build --quiet -p witness -p watcher
         cargo test --quiet -p keri-tests --no-run
@@ -61,7 +77,7 @@ EOF
     cargo update --quiet -p cesrox --precise 2.0.0-beta.8
     cargo update --quiet -p said --precise 0.5.3-beta.2
 )
-prepare "$work/old"
+prepare "$work/old" patch
 
 echo "preparing this keriox"
 git -C "$root" ls-files -co --exclude-standard -z |
@@ -70,8 +86,7 @@ git -C "$root" ls-files -co --exclude-standard -z |
 prepare "$work/new"
 
 run="$work/run"
-for node in wit1:3232:ArwXoACJgOleVZ2PY7kXn7rA0II0mHYDhc6WrBH8fDAc \
-    wit2:3233:ArwXoACJgOleVZ2PY7kXn7rA0II0mHYDhc6WrBH8fDAd; do
+for node in "wit1:$wit1_port:$wit1_seed" "wit2:$wit2_port:$wit2_seed"; do
     IFS=: read -r name port seed <<<"$node"
     cat >"$run/$name.yml" <<EOF
 db_path: "$run/$name-db"
@@ -83,9 +98,9 @@ done
 cat >"$run/watcher.yml" <<EOF
 db_path: "$run/watcher-db"
 tel_storage_path: "$run/watcher-tel"
-public_url: "http://127.0.0.1:3236/"
-seed: "Alntkt3u6dDgiQxTATr01dy8M72uuaZEf9eTdM-70Gk8"
-http_port: 3236
+public_url: "http://127.0.0.1:$watcher_port/"
+seed: "$watcher_seed"
+http_port: $watcher_port
 initial_oobis: []
 EOF
 
@@ -99,7 +114,7 @@ start() { # <tree> <label>: start the nodes built in <tree>
     pids+=($!)
     for _ in $(seq 1 60); do
         up=0
-        for port in 3232 3233 3236; do
+        for port in "$wit1_port" "$wit2_port" "$watcher_port"; do
             curl -sf -o /dev/null "http://127.0.0.1:$port/introduce" && up=$((up + 1))
         done
         [ "$up" = 3 ] && return
@@ -138,7 +153,7 @@ clients() { # <tree> <label> <scenario>...: run scenarios of <tree>'s client
 served() { # the key event logs the witnesses serve for every identifier they saw
     { grep -ho 'E[A-Za-z0-9_-]\{43\}' "$run"/upgrade-old-wit*.log || true; } | sort -u |
         while read -r id; do
-            for port in 3232 3233; do
+            for port in "$wit1_port" "$wit2_port"; do
                 eid=$(curl -sf "http://127.0.0.1:$port/introduce" |
                     sed 's/.*"eid":"\([^"]*\)".*/\1/')
                 printf '%s %s ' "$id" "$port"
