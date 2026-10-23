@@ -1,3 +1,4 @@
+use crate::event_message::keri_version::KeriVersion;
 use cesrox::primitives::CesrPrimitive;
 use chrono::{DateTime, FixedOffset};
 use said::derivation::HashFunctionCode;
@@ -139,7 +140,7 @@ impl ReplyEvent {
         serialization: SerializationFormats,
     ) -> ReplyEvent {
         let env = Timestamped::new(route);
-        KeriEvent::new(serialization, self_addressing.into(), env)
+        KeriEvent::new(KeriVersion::V1, serialization, self_addressing.into(), env)
     }
 }
 

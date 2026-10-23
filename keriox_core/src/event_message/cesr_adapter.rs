@@ -1169,7 +1169,11 @@ pub mod test {
             Some(SignatureThreshold::Simple(1)),
         );
         let icp = InceptionEvent::new(key_config, None, None)
-            .incept_self_addressing(derivation, format)
+            .incept_self_addressing(
+                crate::event_message::keri_version::KeriVersion::V1,
+                derivation,
+                format,
+            )
             .unwrap();
         let signature =
             SelfSigningPrefix::Ed25519Sha512(signer.sign(icp.encode().unwrap()).unwrap());

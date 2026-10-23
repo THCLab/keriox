@@ -1,3 +1,4 @@
+use crate::event_message::keri_version::KeriVersion;
 use std::{sync::Arc, time::Duration};
 
 use said::{version::format::SerializationFormats, SelfAddressingIdentifier};
@@ -220,6 +221,7 @@ impl<D: EventDatabase + EscrowCreator + 'static> PartiallyWitnessedEscrow<D> {
         let verified = verified.into_iter().flatten().collect::<Vec<_>>();
         if !verified.is_empty() {
             let receipt = Receipt::new(
+                KeriVersion::of(&event.event_message.serialization_info),
                 SerializationFormats::JSON,
                 digest,
                 event.event_message.data.get_prefix(),

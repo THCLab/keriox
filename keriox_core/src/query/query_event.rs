@@ -1,3 +1,4 @@
+use crate::event_message::keri_version::KeriVersion;
 use cesrox::payload::Payload;
 use said::derivation::HashFunctionCode;
 use said::version::format::SerializationFormats;
@@ -65,7 +66,12 @@ impl QueryEvent {
         derivation: HashFunctionCode,
     ) -> Self {
         let env = Timestamped::new(route);
-        KeriEvent::new(serialization_format, derivation.into(), env)
+        KeriEvent::new(
+            KeriVersion::V1,
+            serialization_format,
+            derivation.into(),
+            env,
+        )
     }
 
     pub fn get_prefix(&self) -> IdentifierPrefix {

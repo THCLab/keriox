@@ -1,3 +1,4 @@
+use crate::event_message::keri_version::KeriVersion;
 use said::SelfAddressingIdentifier;
 
 #[cfg(feature = "mailbox")]
@@ -370,6 +371,7 @@ pub fn exchange(
     });
 
     KeriEvent::new(
+        KeriVersion::V1,
         SerializationFormats::JSON,
         HashFunctionCode::Blake3_256.into(),
         event,

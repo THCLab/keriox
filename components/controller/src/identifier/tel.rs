@@ -1,4 +1,5 @@
 use keri_core::actor::prelude::{HashFunctionCode, SelfAddressingIdentifier, SerializationFormats};
+use keri_core::event_message::keri_version::KeriVersion;
 use keri_core::database::{EscrowCreator, EventDatabase};
 use keri_core::event::sections::seal::{EventSeal, Seal};
 use keri_core::event::KeyEvent;
@@ -127,6 +128,7 @@ where
         };
         let env = Timestamped::new(route);
         Ok(KeriEvent::new(
+            KeriVersion::V1,
             SerializationFormats::JSON,
             HashFunctionCode::Blake3_256.into(),
             env,

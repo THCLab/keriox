@@ -326,6 +326,7 @@ async fn latest_loc_scheme_picks_newest_dt() -> Result<(), ActorError> {
             data: ReplyRoute::LocScheme(loc),
         };
         let reply: ReplyEvent = KeriEvent::new(
+            keri_core::event_message::keri_version::KeriVersion::V1,
             SerializationFormats::JSON,
             HashFunctionCode::Blake3_256.into(),
             env,

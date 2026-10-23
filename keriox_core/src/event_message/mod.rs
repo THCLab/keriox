@@ -1,6 +1,7 @@
 pub mod cesr_adapter;
 pub mod dummy_event;
 pub mod event_msg_builder;
+pub mod keri_version;
 pub mod key_event_message;
 pub mod msg;
 pub mod serializer;
@@ -173,6 +174,7 @@ mod tests {
         );
 
         let icp_m = icp.to_message(
+            crate::event_message::keri_version::KeriVersion::V1,
             SerializationFormats::JSON,
             HashFunctionCode::Blake3_256.into(),
         )?;
@@ -261,6 +263,7 @@ mod tests {
             None,
         )
         .incept_self_addressing(
+            crate::event_message::keri_version::KeriVersion::V1,
             HashFunctionCode::Blake3_256.into(),
             SerializationFormats::JSON,
         )?;

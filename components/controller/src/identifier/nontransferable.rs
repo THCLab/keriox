@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use keri_core::event_message::keri_version::KeriVersion;
+
 use crate::{
     communication::Communication, error::ControllerError, BasicPrefix, IdentifierPrefix,
     LocationScheme, SelfSigningPrefix,
@@ -140,6 +142,7 @@ where
         };
         let env = Timestamped::new(route);
         Ok(KeriEvent::new(
+            KeriVersion::V1,
             SerializationFormats::JSON,
             HashFunctionCode::Blake3_256.into(),
             env,

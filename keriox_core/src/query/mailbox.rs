@@ -1,3 +1,4 @@
+use crate::event_message::keri_version::KeriVersion;
 use said::{derivation::HashFunctionCode, sad::SerializationFormats};
 use serde::{Deserialize, Serialize};
 
@@ -18,7 +19,12 @@ impl MailboxQuery {
         derivation: HashFunctionCode,
     ) -> Self {
         let env = Timestamped::new(route);
-        KeriEvent::new(serialization_format, derivation.into(), env)
+        KeriEvent::new(
+            KeriVersion::V1,
+            serialization_format,
+            derivation.into(),
+            env,
+        )
     }
 
     pub fn get_args(&self) -> QueryArgsMbx {

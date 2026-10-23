@@ -29,7 +29,7 @@ use said::{
     SelfAddressingIdentifier,
 };
 
-use super::{msg::KeriEvent, EventTypeTag};
+use super::{keri_version::KeriVersion, msg::KeriEvent, EventTypeTag};
 
 pub struct EventMsgBuilder {
     event_type: EventTypeTag,
@@ -48,6 +48,7 @@ pub struct EventMsgBuilder {
     witness_to_add: Vec<BasicPrefix>,
     witness_to_remove: Vec<BasicPrefix>,
     config_traits: Vec<String>,
+    version: KeriVersion,
     format: SerializationFormats,
     derivation: HashFunction,
 }
@@ -77,10 +78,16 @@ impl EventMsgBuilder {
             witness_to_add: vec![],
             witness_to_remove: vec![],
             config_traits: vec![],
+            version: KeriVersion::default(),
             format: SerializationFormats::JSON,
             derivation: hash_function,
             next_keys_hashes: None,
         }
+    }
+
+    /// The KERI version the event is written in; KERI 1.0 by default.
+    pub fn with_version(self, version: KeriVersion) -> Self {
+        EventMsgBuilder { version, ..self }
     }
 
     pub fn with_prefix(self, prefix: &IdentifierPrefix) -> Self {
@@ -186,7 +193,7 @@ impl EventMsgBuilder {
         let key_config = KeyConfig::new(self.keys, next_key_hash, Some(self.key_threshold));
         let prefix = if self.prefix == IdentifierPrefix::default() {
             let icp_data = InceptionEvent::new(key_config.clone(), None, None)
-                .incept_self_addressing(self.derivation.clone(), self.format)?;
+                .incept_self_addressing(self.version, self.derivation.clone(), self.format)?;
             icp_data.data.get_prefix()
         } else {
             self.prefix
@@ -205,13 +212,17 @@ impl EventMsgBuilder {
                 };
 
                 match prefix {
-                    IdentifierPrefix::Basic(_) => {
-                        KeyEvent::new(prefix, 0, EventData::Icp(icp_event))
-                            .to_message(self.format, self.derivation)?
-                    }
-                    IdentifierPrefix::SelfAddressing(_) => {
-                        icp_event.incept_self_addressing(self.derivation, self.format)?
-                    }
+                    IdentifierPrefix::Basic(_) => KeyEvent::new(
+                        prefix,
+                        0,
+                        EventData::Icp(icp_event),
+                    )
+                    .to_message(self.version, self.format, self.derivation)?,
+                    IdentifierPrefix::SelfAddressing(_) => icp_event.incept_self_addressing(
+                        self.version,
+                        self.derivation,
+                        self.format,
+                    )?,
                     _ => todo!(),
                 }
             }
@@ -230,13 +241,13 @@ impl EventMsgBuilder {
                     self.data,
                 )),
             )
-            .to_message(self.format, self.derivation)?,
+            .to_message(self.version, self.format, self.derivation)?,
             EventTypeTag::Ixn => KeyEvent::new(
                 prefix,
                 self.sn,
                 EventData::Ixn(InteractionEvent::new(self.prev_event.into(), self.data)),
             )
-            .to_message(self.format, self.derivation)?,
+            .to_message(self.version, self.format, self.derivation)?,
             EventTypeTag::Dip => {
                 let icp_data = InceptionEvent {
                     key_config,
@@ -251,7 +262,11 @@ impl EventMsgBuilder {
                     inception_data: icp_data,
                     delegator: self.delegator,
                 }
-                .incept_self_addressing(self.derivation, self.format)?
+                .incept_self_addressing(
+                    self.version,
+                    self.derivation,
+                    self.format,
+                )?
             }
             EventTypeTag::Drt => {
                 let rotation_data = RotationEvent::new(
@@ -264,8 +279,11 @@ impl EventMsgBuilder {
                     },
                     self.data,
                 );
-                KeyEvent::new(prefix, self.sn, EventData::Drt(rotation_data))
-                    .to_message(self.format, self.derivation)?
+                KeyEvent::new(prefix, self.sn, EventData::Drt(rotation_data)).to_message(
+                    self.version,
+                    self.format,
+                    self.derivation,
+                )?
             }
             _ => return Err(Error::SemanticError("Not key event".into())),
         })
@@ -304,6 +322,7 @@ impl ReceiptBuilder {
         let sn = self.receipted_event.data.get_sn();
         let receipted_event_digest = self.receipted_event.digest()?;
         Ok(Receipt::new(
+            KeriVersion::of(&self.receipted_event.serialization_info),
             self.format,
             receipted_event_digest,
             prefix,

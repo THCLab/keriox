@@ -5,12 +5,14 @@ use super::{
 use crate::{
     error::Error,
     event::{sections::seal::Seal, KeyEvent},
-    event_message::{dummy_event::DummyInceptionEvent, msg::KeriEvent, Typeable},
+    event_message::{
+        dummy_event::DummyInceptionEvent, keri_version::KeriVersion, msg::KeriEvent, Typeable,
+    },
     prefix::IdentifierPrefix,
     state::{check_keys, EventSemantics, IdentifierState, LastEstablishmentData, WitnessConfig},
 };
 use said::derivation::{HashFunction, HashFunctionCode};
-use said::version::{format::SerializationFormats, SerializationInfo};
+use said::version::format::SerializationFormats;
 use serde::{Deserialize, Serialize};
 
 /// Inception Event
@@ -62,6 +64,7 @@ impl InceptionEvent {
     /// given derivation method
     pub fn incept_self_addressing(
         self,
+        version: KeriVersion,
         derivation: HashFunction,
         format: SerializationFormats,
     ) -> Result<KeriEvent<KeyEvent>, Error> {
@@ -69,7 +72,7 @@ impl InceptionEvent {
         let dummy_event = DummyInceptionEvent::dummy_inception_data(
             self.clone(),
             &code,
-            SerializationInfo::new_empty("KERI".to_string(), 1, 0, format),
+            version.serialization_info(format),
         )?;
         let digest = dummy_event.said(&code)?;
         let event = KeyEvent::new(
@@ -154,6 +157,7 @@ fn test_inception_data_derivation() -> Result<(), Error> {
     let next_keys_data = NextKeysData::new(SignatureThreshold::Simple(2), next_keys_hashes);
     let key_config = KeyConfig::new(keys, next_keys_data, Some(SignatureThreshold::Simple(2)));
     let icp_data = InceptionEvent::new(key_config.clone(), None, None).incept_self_addressing(
+        crate::event_message::keri_version::KeriVersion::V1,
         HashFunctionCode::Blake3_256.into(),
         SerializationFormats::JSON,
     )?;

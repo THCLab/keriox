@@ -1,3 +1,4 @@
+use crate::event_message::keri_version::KeriVersion;
 use cesrox::cesr_proof::MaterialPath;
 use said::derivation::HashFunctionCode;
 use said::version::format::SerializationFormats;
@@ -38,7 +39,12 @@ impl Exchange {
         format: SerializationFormats,
         derivation: HashFunctionCode,
     ) -> ExchangeMessage {
-        KeriEvent::new(format, derivation.into(), Timestamped::new(self))
+        KeriEvent::new(
+            KeriVersion::V1,
+            format,
+            derivation.into(),
+            Timestamped::new(self),
+        )
     }
 }
 

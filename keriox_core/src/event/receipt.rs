@@ -1,4 +1,5 @@
 use crate::error::Error;
+use crate::event_message::keri_version::KeriVersion;
 use crate::event_message::EventTypeTag;
 use crate::event_message::Typeable;
 use crate::prefix::IdentifierPrefix;
@@ -37,13 +38,14 @@ pub struct Receipt {
 
 impl Receipt {
     pub fn new(
+        version: KeriVersion,
         format: SerializationFormats,
         receipted_event_digest: SelfAddressingIdentifier,
         prefix: IdentifierPrefix,
         sn: u64,
     ) -> Self {
         let mut receipt = Self {
-            serialization_info: SerializationInfo::new_empty("KERI".to_string(), 1, 0, format),
+            serialization_info: version.serialization_info(format),
             receipted_event_digest,
             prefix,
             sn,

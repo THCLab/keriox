@@ -1,6 +1,7 @@
 use super::EventData;
 use super::InceptionEvent;
 use crate::event_message::dummy_event::DummyInceptionEvent;
+use crate::event_message::keri_version::KeriVersion;
 use crate::event_message::msg::KeriEvent;
 use crate::event_message::Typeable;
 use crate::{
@@ -11,7 +12,6 @@ use crate::{
 };
 use said::derivation::HashFunction;
 use said::derivation::HashFunctionCode;
-use said::version::SerializationInfo;
 use serde::{Deserialize, Serialize};
 
 #[derive(
@@ -41,6 +41,7 @@ impl DelegatedInceptionEvent {
     /// given derivation method
     pub fn incept_self_addressing(
         self,
+        version: KeriVersion,
         derivation: HashFunction,
         format: SerializationFormats,
     ) -> Result<KeriEvent<KeyEvent>, Error> {
@@ -48,7 +49,7 @@ impl DelegatedInceptionEvent {
         let dummy_event = DummyInceptionEvent::dummy_delegated_inception_data(
             self.clone(),
             &code,
-            SerializationInfo::new_empty("KERI".to_string(), 1, 0, format),
+            version.serialization_info(format),
         )?;
         let digest = dummy_event.said(&code)?;
         let event = KeyEvent::new(
@@ -103,6 +104,7 @@ fn test_delegated_inception_data_derivation() -> Result<(), Error> {
         delegator: "EA_SbBUZYwqLVlAAn14d6QUBQCSReJlZ755JqTgmRhXH".parse()?,
     }
     .incept_self_addressing(
+        crate::event_message::keri_version::KeriVersion::V1,
         HashFunctionCode::Blake3_256.into(),
         SerializationFormats::JSON,
     )?;

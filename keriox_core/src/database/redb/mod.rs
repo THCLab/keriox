@@ -27,6 +27,7 @@ use said::{sad::SerializationFormats, SelfAddressingIdentifier};
 use crate::{
     event::{receipt::Receipt, KeyEvent},
     event_message::{
+        keri_version::KeriVersion,
         msg::KeriEvent,
         signature::{Nontransferable, Transferable},
         signed_event_message::{
@@ -351,7 +352,8 @@ impl RedbDatabase {
         }?;
         let out = corresponding_digests
             .map(|digest| match digest {
-                Ok((_, value)) => {
+                Ok((key, value)) => {
+                    let sn = key.value().1;
                     let said = rkyv_adapter::deserialize_said(value.value()).unwrap();
                     let nontrans = self
                         .log_db
@@ -360,7 +362,16 @@ impl RedbDatabase {
                         .map(|vec| vec.collect())
                         .unwrap_or_default();
                     let identifier = id.parse().unwrap();
-                    let rct = Receipt::new(SerializationFormats::JSON, said, identifier, start);
+                    // The receipt is written in the receipted event's version.
+                    let version = self
+                        .log_db
+                        .get_event(&said)
+                        .ok()
+                        .flatten()
+                        .map(|event| KeriVersion::of(&event.serialization_info))
+                        .unwrap_or_default();
+                    let rct =
+                        Receipt::new(version, SerializationFormats::JSON, said, identifier, sn);
                     SignedNontransferableReceipt {
                         body: rct,
                         signatures: nontrans,

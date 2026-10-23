@@ -1,5 +1,6 @@
 use std::{fs::File, sync::Arc, time::Instant};
 
+use keri_core::event_message::keri_version::KeriVersion;
 use futures::future::join_all;
 use futures::stream::{FuturesUnordered, StreamExt};
 use itertools::Itertools;
@@ -659,6 +660,7 @@ impl<S: OobiStorageBackend> WatcherData<S> {
         };
         let env = Timestamped::new(route);
         let qry = KeriEvent::new(
+            KeriVersion::V1,
             SerializationFormats::JSON,
             HashFunctionCode::Blake3_256.into(),
             env,

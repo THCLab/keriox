@@ -1,4 +1,5 @@
 use crate::error::Error;
+use keri_core::event_message::keri_version::KeriVersion;
 use chrono::{DateTime, FixedOffset, SecondsFormat, Utc};
 use keri_core::{
     event::sections::seal::EventSeal,
@@ -118,6 +119,7 @@ impl VCEvent {
     ) -> Result<VCEventMessage, Error> {
         let timestamped = TimestampedVCEvent::new(self);
         Ok(TypedEvent::<TelEventType, TimestampedVCEvent>::new(
+            KeriVersion::V1,
             format,
             derivation.into(),
             timestamped,

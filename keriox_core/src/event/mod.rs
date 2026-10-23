@@ -1,5 +1,5 @@
 use crate::event_message::msg::KeriEvent;
-use crate::event_message::{EventTypeTag, Typeable};
+use crate::event_message::{keri_version::KeriVersion, EventTypeTag, Typeable};
 use crate::prefix::IdentifierPrefix;
 use crate::state::IdentifierState;
 use said::derivation::HashFunction;
@@ -44,19 +44,27 @@ impl KeyEvent {
         }
     }
 
+    /// The event as a message in `version`. A KERI 2.0 rotation carries
+    /// the configuration traits field `c`, empty unless set.
     pub fn to_message(
-        self,
+        mut self,
+        version: KeriVersion,
         format: SerializationFormats,
         derivation: HashFunction,
     ) -> Result<KeriEvent<KeyEvent>, Error> {
+        if let (KeriVersion::V2, EventData::Rot(rot) | EventData::Drt(rot)) =
+            (version, &mut self.event_data)
+        {
+            rot.config.get_or_insert_with(Vec::new);
+        }
         match (&self.prefix, self.event_data.clone()) {
             (IdentifierPrefix::SelfAddressing(_), EventData::Icp(icp)) => {
-                icp.incept_self_addressing(derivation.clone(), format)
+                icp.incept_self_addressing(version, derivation.clone(), format)
             }
             (IdentifierPrefix::SelfAddressing(_), EventData::Dip(dip)) => {
-                dip.incept_self_addressing(derivation.clone(), format)
+                dip.incept_self_addressing(version, derivation.clone(), format)
             }
-            _ => Ok(KeriEvent::new(format, derivation, self)),
+            _ => Ok(KeriEvent::new(version, format, derivation, self)),
         }
     }
 }

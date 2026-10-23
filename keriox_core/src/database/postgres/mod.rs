@@ -10,6 +10,7 @@ use crate::{
     database::{postgres::error::PostgresError, rkyv_adapter, EventDatabase, LogDatabase},
     event::{receipt::Receipt, KeyEvent},
     event_message::{
+        keri_version::KeriVersion,
         msg::KeriEvent,
         signature::{Nontransferable, Transferable},
         signed_event_message::{
@@ -200,7 +201,7 @@ impl PostgresDatabase {
         start: u64,
         limit: u64,
     ) -> Result<Vec<SignedNontransferableReceipt>, PostgresError> {
-        async_std::task::block_on(async {
+        let grouped = async_std::task::block_on(async {
             let rows = if limit == u64::MAX {
                 sqlx::query(
                     "SELECT k.sn, k.digest, nr.receipt_data \
@@ -248,22 +249,32 @@ impl PostgresDatabase {
                 }
             }
 
-            let identifier: IdentifierPrefix = id.parse().unwrap();
-            let receipts = grouped
-                .into_iter()
-                .map(|(sn, (digest_bytes, nontrans))| {
-                    let said = rkyv_adapter::deserialize_said(&digest_bytes).unwrap();
-                    let rct =
-                        Receipt::new(SerializationFormats::JSON, said, identifier.clone(), sn);
-                    SignedNontransferableReceipt {
-                        body: rct,
-                        signatures: nontrans,
-                    }
+            Ok::<_, PostgresError>(grouped)
+        })?;
+        let identifier: IdentifierPrefix = id.parse().unwrap();
+        grouped
+            .into_iter()
+            .map(|(sn, (digest_bytes, nontrans))| {
+                let said = rkyv_adapter::deserialize_said(&digest_bytes).unwrap();
+                // The receipt is written in the receipted event's version.
+                let version = self
+                    .log_db
+                    .get_event(&said)?
+                    .map(|event| KeriVersion::of(&event.serialization_info))
+                    .unwrap_or_default();
+                let rct = Receipt::new(
+                    version,
+                    SerializationFormats::JSON,
+                    said,
+                    identifier.clone(),
+                    sn,
+                );
+                Ok(SignedNontransferableReceipt {
+                    body: rct,
+                    signatures: nontrans,
                 })
-                .collect();
-
-            Ok(receipts)
-        })
+            })
+            .collect()
     }
 
     async fn save_to_kel(

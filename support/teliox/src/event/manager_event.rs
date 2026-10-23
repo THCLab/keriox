@@ -1,4 +1,5 @@
 use cesrox::primitives::codes::self_addressing::dummy_prefix;
+use keri_core::event_message::keri_version::KeriVersion;
 use keri_core::actor::prelude::SerializationFormats;
 use keri_core::event_message::msg::TypedEvent;
 use said::{derivation::HashFunctionCode, SelfAddressingIdentifier};
@@ -59,6 +60,7 @@ impl ManagerTelEvent {
         derivation: HashFunctionCode,
     ) -> Result<ManagerTelEventMessage, Error> {
         Ok(TypedEvent::<ManagementTelType, ManagerTelEvent>::new(
+            KeriVersion::V1,
             format,
             derivation.into(),
             self,

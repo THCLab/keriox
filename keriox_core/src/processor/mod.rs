@@ -1,3 +1,4 @@
+use crate::event_message::keri_version::KeriVersion;
 use std::sync::Arc;
 
 #[cfg(test)]
@@ -154,6 +155,7 @@ impl<D: EventDatabase + 'static> EventProcessor<D> {
                     // Create and process witness receipts
                     let id = signed_event.event_message.data.get_prefix();
                     let receipt = Receipt::new(
+                        KeriVersion::of(&signed_event.event_message.serialization_info),
                         SerializationFormats::JSON,
                         signed_event.event_message.digest()?,
                         id,

@@ -4,7 +4,7 @@ use said::{
 };
 use serde::{Deserialize, Serialize};
 
-use super::{EventTypeTag, Typeable};
+use super::{keri_version::KeriVersion, EventTypeTag, Typeable};
 use crate::database::rkyv_adapter::said_wrapper::SaidValue;
 use crate::database::rkyv_adapter::serialization_info_wrapper::SerializationInfoDef;
 use crate::error::Error;
@@ -61,8 +61,13 @@ impl<T: Serialize + Clone, D: Serialize + Typeable<TypeTag = T> + Clone> TypedEv
             .ok_or(Error::IncorrectDigest)
     }
 
-    pub fn new(format: SerializationFormats, derivation: HashFunction, event: D) -> Self {
-        let tmp_serialization_info = SerializationInfo::new_empty("KERI".to_string(), 1, 0, format);
+    pub fn new(
+        version: KeriVersion,
+        format: SerializationFormats,
+        derivation: HashFunction,
+        event: D,
+    ) -> Self {
+        let tmp_serialization_info = version.serialization_info(format);
 
         let mut tmp_self = Self {
             serialization_info: tmp_serialization_info,
