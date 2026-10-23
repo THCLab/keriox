@@ -1491,7 +1491,7 @@ async fn finalize_group_tel_event<S: SigningBackend + Clone + 'static>(
         group.id(),
         ixn,
         ForwardTopic::Multisig,
-        keri_core::event_message::keri_version::KeriVersion::V1,
+        group.keri_version(),
     )
     .encode()
         .map_err(|e| Error::EncodingError(e.to_string()))?;

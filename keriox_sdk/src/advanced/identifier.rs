@@ -113,6 +113,13 @@ impl Identifier {
     })
     }
 
+    /// The KERI version this identifier's controller writes its messages in.
+    pub fn keri_version(&self) -> keri_core::event_message::keri_version::KeriVersion {
+        dispatch!(self, i => {
+        i.known_events.version
+    })
+    }
+
     pub fn registry_id(&self) -> Option<&IdentifierPrefix> {
         dispatch!(self, i => {
         i.registry_id()

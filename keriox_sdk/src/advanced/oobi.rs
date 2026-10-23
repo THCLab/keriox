@@ -78,7 +78,8 @@ pub fn replies_to_cesr_stream(replies: &[SignedReply]) -> Result<Vec<u8>> {
     })
 }
 
-/// Build a signed location-scheme OOBI reply for an identifier.
+/// Build a signed location-scheme OOBI reply for an identifier, written in
+/// `version`.
 ///
 /// Creates a `ReplyEvent` containing the given location scheme, signs it
 /// with the provided signer, and returns the `SignedReply`.
@@ -86,11 +87,12 @@ pub fn build_location_reply(
     identifier: &BasicPrefix,
     signer: &Signer,
     loc_scheme: LocationScheme,
+    version: KeriVersion,
 ) -> Result<SignedReply> {
     let reply = ReplyEvent::new_reply(
         ReplyRoute::LocScheme(loc_scheme),
         &keri_core::prefix::IdentifierPrefix::Basic(identifier.clone()),
-        KeriVersion::V1,
+        version,
         HashFunctionCode::Blake3_256,
         SerializationFormats::JSON,
     );

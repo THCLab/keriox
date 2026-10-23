@@ -224,3 +224,53 @@ async fn test_verify_from_cesr_detailed_unknown_signer() {
         VerificationIssue::MissingEvent { .. } | VerificationIssue::UnknownSigner { .. }
     )));
 }
+
+#[test]
+fn a_location_reply_is_written_in_the_requested_version() {
+    use keri_sdk::advanced::{
+        oobi::build_location_reply,
+        raw::keri_core::event_message::{keri_version::KeriVersion, signature::Nontransferable},
+        BasicPrefix, IdentifierPrefix, LocationScheme, Signature, Signer,
+    };
+
+    let signer = Signer::new();
+    let id = BasicPrefix::Ed25519NT(signer.public_key());
+    let location: LocationScheme = serde_json::from_value(serde_json::json!({
+        "eid": IdentifierPrefix::Basic(id.clone()).to_string(),
+        "scheme": "http",
+        "url": "http://messagebox.example/",
+    }))
+    .unwrap();
+    for (version, start) in [
+        (KeriVersion::V1, r#"{"v":"KERI10JSON"#),
+        (KeriVersion::V2, r#"{"v":"KERICAACAAJSON"#),
+    ] {
+        let reply = build_location_reply(&id, &signer, location.clone(), version).unwrap();
+        let body = String::from_utf8(reply.reply.encode().unwrap()).unwrap();
+        assert!(body.starts_with(start), "{body}");
+        match &reply.signature {
+            Signature::NonTransferable(Nontransferable::Couplet(couplets)) => {
+                let (key, signature) = &couplets[0];
+                assert!(key.verify(body.as_bytes(), signature).unwrap());
+            }
+            other => panic!("expected a couplet, got {other:?}"),
+        }
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_identifier_reports_the_version_its_store_writes() {
+    use keri_sdk::advanced::raw::keri_core::event_message::keri_version::KeriVersion;
+
+    for version in [KeriVersion::V1, KeriVersion::V2] {
+        let tmp = TempDir::new().unwrap();
+        let store = KeriStore::open(tmp.path().to_path_buf())
+            .unwrap()
+            .with_keri_version(version);
+        let (id, _) = store
+            .create("alice", IdentifierConfig::default())
+            .await
+            .unwrap();
+        assert_eq!(id.keri_version(), version);
+    }
+}
