@@ -2,7 +2,9 @@ use cesrox::group::{Group, SealSourceCouple};
 use serde::{ser::SerializeStruct, Deserialize, Serialize};
 
 use super::cesr_adapter::{encode_group, CesrMessage, WireFormat};
-use super::{msg::KeriEvent, serializer::to_string, signature::Nontransferable};
+use super::{
+    keri_version::KeriVersion, msg::KeriEvent, serializer::to_string, signature::Nontransferable,
+};
 use crate::prefix::cesr_adapter::receipt_couple;
 #[cfg(feature = "query")]
 use crate::query::{query_event::SignedQueryMessage, reply_event::SignedReply};
@@ -82,8 +84,12 @@ impl From<Op> for CesrMessage {
 }
 
 impl Message {
+    /// The message with its attachments in the format of its body's KERI
+    /// version.
     pub fn to_cesr(&self) -> Result<Vec<u8>, Error> {
-        self.to_cesr_with(WireFormat::default())
+        CesrMessage::from(self.clone())
+            .to_cesr()
+            .map_err(|_e| Error::CesrError)
     }
 
     pub fn to_cesr_with(&self, format: WireFormat) -> Result<Vec<u8>, Error> {
@@ -143,6 +149,7 @@ impl Serialize for SignedEventMessage {
     {
         // if JSON - we pack qb64 KERI
         if serializer.is_human_readable() {
+            let format = WireFormat::of(KeriVersion::of(&self.event_message.serialization_info));
             let mut em = serializer.serialize_struct("EventMessage", 4)?;
             em.serialize_field("", &self.event_message)?;
             let att_sigs = Group::IndexedControllerSignatures(
@@ -151,7 +158,7 @@ impl Serialize for SignedEventMessage {
                     .map(|sig| sig.clone().into())
                     .collect(),
             );
-            em.serialize_field("-", &encode_group(&att_sigs, WireFormat::default()))?;
+            em.serialize_field("-", &encode_group(&att_sigs, format))?;
             if let Some(ref receipts) = self.witness_receipts {
                 let att_receipts = receipts
                     .iter()
@@ -161,7 +168,7 @@ impl Serialize for SignedEventMessage {
                                 indexed.iter().map(|sig| (sig.clone()).into()).collect();
                             encode_group(
                                 &Group::IndexedWitnessSignatures(signatures),
-                                WireFormat::default(),
+                                format,
                             )
                         }
                         Nontransferable::Couplet(couplets) => {
@@ -171,7 +178,7 @@ impl Serialize for SignedEventMessage {
                                 .collect();
                             encode_group(
                                 &Group::NontransReceiptCouples(couples),
-                                WireFormat::default(),
+                                format,
                             )
                         }
                     })
@@ -181,7 +188,7 @@ impl Serialize for SignedEventMessage {
             }
             if let Some(ref seal) = self.delegator_seal {
                 let att_seal = Group::SourceSealCouples(vec![SealSourceCouple::from(seal.clone())]);
-                em.serialize_field("", &encode_group(&att_seal, WireFormat::default()))?;
+                em.serialize_field("", &encode_group(&att_seal, format))?;
             }
 
             em.end()

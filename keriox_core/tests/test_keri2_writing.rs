@@ -6,6 +6,7 @@ use std::sync::Arc;
 use keri_core::{
     actor::{parse_event_stream, process_notice},
     database::redb::RedbDatabase,
+    event::receipt::Receipt,
     event::{
         event_data::EventData,
         sections::seal::{EventSeal, Seal, SourceSeal},
@@ -19,7 +20,6 @@ use keri_core::{
         signed_event_message::{Message, Notice, SignedNontransferableReceipt},
         EventTypeTag,
     },
-    event::receipt::Receipt,
     prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
     processor::{
         basic_processor::BasicProcessor,
@@ -186,7 +186,9 @@ fn a_keri_2_receipt_is_written_and_accepted() {
         .with_keys(vec![key(&current)])
         .with_next_keys(vec![key(&Signer::new())])
         .with_witness_list(&[witness_id.clone()])
-        .with_witness_threshold(&keri_core::event::sections::threshold::SignatureThreshold::Simple(1))
+        .with_witness_threshold(
+            &keri_core::event::sections::threshold::SignatureThreshold::Simple(1),
+        )
         .build()
         .unwrap();
     let id = icp.data.get_prefix();
@@ -203,10 +205,12 @@ fn a_keri_2_receipt_is_written_and_accepted() {
     let raw = String::from_utf8(rct.encode().unwrap()).unwrap();
     assert!(raw.starts_with(r#"{"v":"KERICAACAAJSON"#), "{raw}");
     let sig = SelfSigningPrefix::Ed25519Sha512(witness.sign(icp.encode().unwrap()).unwrap());
-    let cesr = Message::Notice(Notice::NontransferableRct(SignedNontransferableReceipt::new(
-        &rct,
-        vec![Nontransferable::Couplet(vec![(witness_id, sig)])],
-    )))
+    let cesr = Message::Notice(Notice::NontransferableRct(
+        SignedNontransferableReceipt::new(
+            &rct,
+            vec![Nontransferable::Couplet(vec![(witness_id, sig)])],
+        ),
+    ))
     .to_cesr()
     .unwrap();
     for message in parse_event_stream(&cesr).unwrap() {
@@ -228,4 +232,39 @@ fn keri_1_stays_the_default() {
         .unwrap();
     let raw = String::from_utf8(icp.encode().unwrap()).unwrap();
     assert!(raw.starts_with(r#"{"v":"KERI10JSON"#), "{raw}");
+}
+
+/// The text of `event`, signed by `signer` at index 0, as it goes on the
+/// wire.
+fn wire(event: &KeriEvent<KeyEvent>, signer: &Signer) -> String {
+    let sig = SelfSigningPrefix::Ed25519Sha512(signer.sign(event.encode().unwrap()).unwrap());
+    let cesr = Message::Notice(Notice::Event(event.sign(
+        vec![IndexedSignature::new_both_same(sig, 0)],
+        None,
+        None,
+    )))
+    .to_cesr()
+    .unwrap();
+    String::from_utf8(cesr).unwrap()
+}
+
+#[test]
+fn attachments_follow_the_version_of_the_body() {
+    let current = Signer::new();
+    let icp = |version| {
+        EventMsgBuilder::new(EventTypeTag::Icp)
+            .with_version(version)
+            .with_keys(vec![key(&current)])
+            .with_next_keys(vec![key(&Signer::new())])
+            .build()
+            .unwrap()
+    };
+    // One Ed25519 signature: CESR 2.0 counts 22 quadlets (`W`), the
+    // keriox 1.0 format counts one item (`B`).
+    let v2 = icp(KeriVersion::V2);
+    let tail = &wire(&v2, &current)[v2.encode().unwrap().len()..];
+    assert!(tail.starts_with("-KAW"), "{tail}");
+    let v1 = icp(KeriVersion::V1);
+    let tail = &wire(&v1, &current)[v1.encode().unwrap().len()..];
+    assert!(tail.starts_with("-KAB"), "{tail}");
 }

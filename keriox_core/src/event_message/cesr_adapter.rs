@@ -40,6 +40,7 @@ use crate::{
 };
 
 use super::{
+    keri_version::KeriVersion,
     msg::{KeriEvent, TypedEvent},
     signature::Nontransferable,
     signed_event_message::{
@@ -81,9 +82,11 @@ pub struct CesrMessage {
 }
 
 impl CesrMessage {
-    /// The message with its attachments in the default [`WireFormat`].
+    /// The message with its attachments in the [`WireFormat`] of its body's
+    /// KERI version: CESR 2.0 for a KERI 2.0 body, keriox's 1.0 format
+    /// otherwise.
     pub fn to_cesr(&self) -> Result<Vec<u8>, ()> {
-        self.to_cesr_with(WireFormat::default())
+        self.to_cesr_with(WireFormat::of(body_version(&self.payload)))
     }
 
     pub fn to_cesr_with(&self, format: WireFormat) -> Result<Vec<u8>, ()> {
@@ -111,6 +114,33 @@ pub enum WireFormat {
     /// CESR V2: groups count quadlets, and a transferable signer's seal and
     /// signatures form one `-X` group.
     V2,
+}
+
+impl WireFormat {
+    /// The attachment format of messages written in `version`.
+    pub fn of(version: KeriVersion) -> Self {
+        match version {
+            KeriVersion::V1 => WireFormat::Legacy,
+            KeriVersion::V2 => WireFormat::V2,
+        }
+    }
+}
+
+/// The KERI version a message body's version string names. A body that
+/// has none (not a KERI message) counts as KERI 1.0.
+fn body_version(payload: &Payload) -> KeriVersion {
+    #[derive(Deserialize)]
+    struct Versioned {
+        v: said::version::SerializationInfo,
+    }
+    let versioned: Option<Versioned> = match payload {
+        Payload::JSON(body) => serde_json::from_slice(body).ok(),
+        Payload::CBOR(body) => serde_cbor::from_slice(body).ok(),
+        Payload::MGPK(body) => rmp_serde::from_slice(body).ok(),
+        #[allow(unreachable_patterns)]
+        _ => None,
+    };
+    versioned.map_or(KeriVersion::V1, |body| KeriVersion::of(&body.v))
 }
 
 /// The text of `group` in `format`.
