@@ -633,3 +633,166 @@ mod abandonment {
         );
     }
 }
+
+/// TEL queries reach the watcher's cached TEL for a credential, so they need
+/// the same access control as KEL queries: a known signer with a watcher end
+/// role and a signature that verifies over the query.
+mod tel_query_access {
+    use std::sync::{Arc, Mutex};
+
+    use keri_controller::SelfSigningPrefix;
+    use keri_core::{
+        actor::{
+            error::ActorError,
+            prelude::{HashFunctionCode, SerializationFormats},
+            simple_controller::SimpleController,
+            SignedQueryError,
+        },
+        database::redb::RedbDatabase,
+        event_message::{keri_version::KeriVersion, msg::KeriEvent, timestamped::Timestamped},
+        oobi_manager::RedbOobiStorage,
+        prefix::{IdentifierPrefix, IndexedSignature},
+        processor::escrow::EscrowConfig,
+        signer::{CryptoBox, KeyManager},
+    };
+    use teliox::query::{SignedTelQuery, TelQueryArgs, TelQueryEvent, TelQueryRoute};
+    use tempfile::{Builder, TempDir};
+    use url::Url;
+
+    use crate::Watcher;
+
+    struct Fixture {
+        watcher: Watcher<RedbOobiStorage>,
+        asker: SimpleController<CryptoBox, RedbDatabase, RedbOobiStorage>,
+        _dirs: Vec<TempDir>,
+    }
+
+    fn setup() -> Fixture {
+        let asker_db_dir = Builder::new().prefix("tel-qry-asker").tempdir().unwrap();
+        let asker_db = Arc::new(RedbDatabase::new(&asker_db_dir.path().join("events")).unwrap());
+        let keys = Arc::new(Mutex::new(CryptoBox::new().unwrap()));
+        let mut asker = SimpleController::new(asker_db, keys, EscrowConfig::default()).unwrap();
+        let asker_icp = asker.incept(None, None, None).unwrap().encode().unwrap();
+
+        let root = Builder::new().prefix("tel-qry-watcher").tempdir().unwrap();
+        let watcher = Watcher::setup_with_redb(crate::WatcherConfig {
+            public_address: Url::parse("http://some/dummy/url").unwrap(),
+            db_path: root.path().to_owned(),
+            tel_storage_path: root.path().join("tel_storage"),
+            ..Default::default()
+        })
+        .unwrap();
+        watcher.parse_and_process_notices(&asker_icp).unwrap();
+
+        Fixture {
+            watcher,
+            asker,
+            _dirs: vec![asker_db_dir, root],
+        }
+    }
+
+    fn tel_query() -> TelQueryEvent {
+        let id: IdentifierPrefix = "EA8Ih8hxLi3mmkyItXK1u55cnHl4WgNZ_RE-gKXqgcX4"
+            .parse()
+            .unwrap();
+        let ri: IdentifierPrefix = "EO0_SyqPS1-EVYSITakYpUHaUZZpZGsjaXFOaO_kCfS4"
+            .parse()
+            .unwrap();
+        KeriEvent::new(
+            KeriVersion::V1_0,
+            SerializationFormats::JSON,
+            HashFunctionCode::Blake3_256.into(),
+            Timestamped::new(TelQueryRoute::Tels {
+                reply_route: "".into(),
+                args: TelQueryArgs {
+                    i: Some(id),
+                    ri: Some(ri),
+                },
+            }),
+        )
+    }
+
+    fn signed_by(fx: &Fixture, qry: TelQueryEvent, signed_bytes: &[u8]) -> Vec<u8> {
+        let sig = fx
+            .asker
+            .key_manager
+            .lock()
+            .unwrap()
+            .sign(signed_bytes)
+            .unwrap();
+        SignedTelQuery::new_trans(
+            qry,
+            fx.asker.prefix().clone(),
+            vec![IndexedSignature::new_both_same(
+                SelfSigningPrefix::Ed25519Sha512(sig),
+                0,
+            )],
+        )
+        .to_cesr()
+        .unwrap()
+    }
+
+    async fn grant_watcher_role(fx: &Fixture) {
+        let end_role = fx
+            .asker
+            .add_watcher(&IdentifierPrefix::Basic(fx.watcher.prefix()))
+            .unwrap();
+        fx.watcher.watcher_data.process_op(end_role).await.unwrap();
+    }
+
+    #[actix_web::test]
+    async fn a_signer_without_a_watcher_role_is_refused() {
+        let fx = setup();
+        let qry = tel_query();
+        let stream = signed_by(&fx, qry.clone(), &qry.encode().unwrap());
+
+        let result = fx
+            .watcher
+            .parse_and_process_tel_queries(&stream)
+            .await
+            .map(|replies| replies.len());
+
+        assert!(
+            matches!(result, Err(ActorError::MissingRole { .. })),
+            "expected MissingRole, got {result:?}"
+        );
+    }
+
+    #[actix_web::test]
+    async fn a_signature_over_other_bytes_is_refused() {
+        let fx = setup();
+        grant_watcher_role(&fx).await;
+        let qry = tel_query();
+        let stream = signed_by(&fx, qry, b"some other message");
+
+        let result = fx
+            .watcher
+            .parse_and_process_tel_queries(&stream)
+            .await
+            .map(|replies| replies.len());
+
+        assert!(
+            matches!(
+                result,
+                Err(ActorError::QueryError(SignedQueryError::InvalidSignature))
+            ),
+            "expected InvalidSignature, got {result:?}"
+        );
+    }
+
+    #[actix_web::test]
+    async fn a_signed_query_from_a_controller_with_the_role_is_answered() {
+        let fx = setup();
+        grant_watcher_role(&fx).await;
+        let qry = tel_query();
+        let stream = signed_by(&fx, qry.clone(), &qry.encode().unwrap());
+
+        let result = fx
+            .watcher
+            .parse_and_process_tel_queries(&stream)
+            .await
+            .map(|replies| replies.len());
+
+        assert!(result.is_ok(), "expected an answer, got {result:?}");
+    }
+}

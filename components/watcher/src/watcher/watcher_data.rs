@@ -6,6 +6,7 @@ use futures::stream::{FuturesUnordered, StreamExt};
 use itertools::Itertools;
 use keri_core::actor::possible_response::PossibleResponse;
 use keri_core::error::Error;
+use keri_core::event_message::signature::Signature;
 use keri_core::oobi::error::OobiError;
 use keri_core::oobi::LocationScheme;
 use keri_core::prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix};
@@ -261,27 +262,10 @@ impl<S: OobiStorageBackend> WatcherData<S> {
         &self,
         qry: SignedKelQuery,
     ) -> Result<Option<PossibleResponse>, ActorError> {
-        let cid = qry
-            .signature
-            .get_signer()
-            .ok_or(ActorError::MissingSignerId)?;
-        if !self.check_role(&cid)? {
-            return Err(ActorError::MissingRole {
-                id: cid.clone(),
-                role: Role::Watcher,
-            });
-        }
-
-        // Check signature
-        let signature = qry.signature;
-        let ver_result = signature.verify(
+        self.authorize_query(
+            &qry.signature,
             &qry.query.encode().map_err(|_e| Error::VersionError)?,
-            &self.event_storage,
         )?;
-
-        if !ver_result {
-            return Err(SignedQueryError::InvalidSignature.into());
-        };
 
         // Check if we need to update state from witnesses
         match &qry.query.get_route() {
@@ -825,6 +809,26 @@ impl<S: OobiStorageBackend> WatcherData<S> {
     }
 
     /// Query roles in oobi manager to check if controller with given ID is allowed to communicate with us.
+    /// Admits a query only from a signer that named this watcher in a
+    /// watcher end role and whose signature verifies over `signed_data`.
+    pub(crate) fn authorize_query(
+        &self,
+        signature: &Signature,
+        signed_data: &[u8],
+    ) -> Result<(), ActorError> {
+        let cid = signature.get_signer().ok_or(ActorError::MissingSignerId)?;
+        if !self.check_role(&cid)? {
+            return Err(ActorError::MissingRole {
+                id: cid.clone(),
+                role: Role::Watcher,
+            });
+        }
+        if !signature.verify(signed_data, &self.event_storage)? {
+            return Err(SignedQueryError::InvalidSignature.into());
+        }
+        Ok(())
+    }
+
     fn check_role(&self, cid: &IdentifierPrefix) -> Result<bool, OobiError> {
         Ok(self
             .oobi_manager

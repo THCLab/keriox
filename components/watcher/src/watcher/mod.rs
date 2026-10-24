@@ -319,7 +319,10 @@ impl<S: OobiStorageBackend> Watcher<S> {
 
         let mut out = vec![];
         for qry in tel_queries {
-            // TODO Verify signature
+            self.watcher_data.authorize_query(
+                &qry.signature,
+                &qry.query.encode().map_err(|_e| Error::VersionError)?,
+            )?;
             let (ri, vc_id) = match qry.query.data.data {
                 TelQueryRoute::Tels {
                     reply_route: _,
