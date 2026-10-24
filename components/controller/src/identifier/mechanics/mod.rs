@@ -64,6 +64,9 @@ pub enum MechanicsError {
 
     #[error("Identifier {0} is abandoned: its key event log accepts no further events")]
     IdentifierAbandoned(IdentifierPrefix),
+
+    #[error("No watchers configured for {0}")]
+    NoWatchers(IdentifierPrefix),
 }
 
 impl MechanicsError {

@@ -230,6 +230,21 @@ where
             .ok_or(OobiRetrieveError::MissingOobi(id.clone(), Some(scheme)))
     }
 
+    /// A location of `id` that can be reached over HTTP, preferring https.
+    pub fn find_http_location(
+        &self,
+        id: &IdentifierPrefix,
+    ) -> Result<LocationScheme, OobiRetrieveError> {
+        let locations = self.get_loc_schemas(id)?;
+        [Scheme::Https, Scheme::Http]
+            .into_iter()
+            .find_map(|scheme| locations.iter().find(|loc| loc.scheme == scheme).cloned())
+            .ok_or(OobiRetrieveError::MissingOobi(
+                id.clone(),
+                Some(Scheme::Http),
+            ))
+    }
+
     pub fn find_receipt(
         &self,
         id: &IdentifierPrefix,

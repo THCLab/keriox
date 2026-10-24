@@ -14,7 +14,7 @@ use teliox::{
     seal::{AttachedSourceSeal, EventSourceSeal},
 };
 
-use crate::{error::ControllerError, identifier::Identifier};
+use crate::{communication::SendingError, error::ControllerError, identifier::Identifier};
 
 use super::MechanicsError;
 
@@ -76,9 +76,8 @@ where
         for backer in backers {
             let location = self
                 .known_events
-                .get_loc_schemas(&IdentifierPrefix::Basic(backer))
-                .unwrap()[0]
-                .clone();
+                .find_http_location(&IdentifierPrefix::Basic(backer))
+                .map_err(SendingError::from)?;
             for event in &to_notify {
                 self.communication
                     .send_tel_event(event.clone(), location.clone())

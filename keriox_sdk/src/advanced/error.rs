@@ -133,6 +133,7 @@ impl From<keri_controller::identifier::mechanics::MechanicsError> for Error {
         use keri_controller::identifier::mechanics::MechanicsError;
         match e {
             MechanicsError::IdentifierAbandoned(id) => Error::IdentifierAbandoned(id),
+            MechanicsError::NoWatchers(id) => Error::NoWatchers(id),
             e => Error::Mechanics(e),
         }
     }
@@ -147,6 +148,7 @@ impl From<keri_controller::error::ControllerError> for Error {
             ControllerError::Mechanic(MechanicsError::IdentifierAbandoned(id)) => {
                 Error::IdentifierAbandoned(id)
             }
+            ControllerError::Mechanic(MechanicsError::NoWatchers(id)) => Error::NoWatchers(id),
             e => Error::Controller(e),
         }
     }

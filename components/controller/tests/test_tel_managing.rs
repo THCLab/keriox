@@ -101,3 +101,42 @@ async fn test_tel() -> Result<(), ControllerError> {
 
     Ok(())
 }
+
+/// A TEL query goes to one of the identifier's watchers; without one there
+/// is nowhere to send it, which must be reported rather than panic.
+#[async_std::test]
+async fn query_tel_without_watcher_is_refused() -> Result<(), ControllerError> {
+    use keri_controller::{identifier::mechanics::MechanicsError, IdentifierPrefix};
+    use tempfile::Builder;
+
+    let root = Builder::new().prefix("test-db").tempdir().unwrap();
+    let controller = Controller::new(ControllerConfig {
+        db_path: root.path().to_owned(),
+        ..Default::default()
+    })?;
+    let km = CryptoBox::new().unwrap();
+    let icp = controller
+        .incept(
+            vec![BasicPrefix::Ed25519(km.public_key())],
+            vec![BasicPrefix::Ed25519(km.next_public_key())],
+            vec![],
+            0,
+        )
+        .await?;
+    let signature = SelfSigningPrefix::Ed25519Sha512(km.sign(icp.as_bytes()).unwrap());
+    let identifier = controller.finalize_incept(icp.as_bytes(), &signature)?;
+
+    let said = HashFunction::from(HashFunctionCode::Blake3_256).derive(b"credential");
+    let qry = identifier.query_tel(
+        IdentifierPrefix::self_addressing(said.clone()),
+        IdentifierPrefix::self_addressing(said),
+    )?;
+    let signature = SelfSigningPrefix::Ed25519Sha512(km.sign(&qry.encode().unwrap()).unwrap());
+    let result = identifier.finalize_query_tel(qry, signature).await;
+
+    assert!(
+        matches!(result, Err(MechanicsError::NoWatchers(ref id)) if id == identifier.id()),
+        "expected NoWatchers, got {result:?}"
+    );
+    Ok(())
+}

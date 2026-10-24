@@ -13,6 +13,7 @@ use teliox::event::verifiable_event::VerifiableEvent;
 use teliox::query::{SignedTelQuery, TelQueryArgs, TelQueryEvent, TelQueryRoute};
 use teliox::seal::{AttachedSourceSeal, EventSourceSeal};
 
+use crate::communication::SendingError;
 use crate::error::ControllerError;
 
 use super::mechanics::MechanicsError;
@@ -149,8 +150,16 @@ where
                 SignedTelQuery::new_trans(qry.clone(), self.id.clone(), signatures)
             }
         };
-        let watcher = self.watchers().unwrap()[0].clone();
-        let location = self.known_events.get_loc_schemas(&watcher).unwrap()[0].clone();
+        let watchers = self
+            .watchers()
+            .map_err(|e| MechanicsError::OtherError(e.to_string()))?;
+        let watcher = watchers
+            .first()
+            .ok_or_else(|| MechanicsError::NoWatchers(self.id.clone()))?;
+        let location = self
+            .known_events
+            .find_http_location(watcher)
+            .map_err(SendingError::from)?;
         let tel_res = self
             .communication
             .send_tel_query(query, location)
