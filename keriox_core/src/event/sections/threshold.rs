@@ -163,7 +163,7 @@ impl SignatureThreshold {
     /// Checks that the threshold fits a list of `keys` keys or key digests,
     /// as the KERI specification requires: an integer threshold M of N may
     /// not need more than the N keys, and a fractionally weighted threshold
-    /// has exactly one weight per key.
+    /// has exactly one weight per key and can be met by them.
     pub fn check_fits(&self, keys: usize) -> Result<(), String> {
         match self {
             SignatureThreshold::Simple(t) if *t as usize > keys => {
@@ -173,6 +173,14 @@ impl SignatureThreshold {
                 "threshold lists {} weights for {keys} keys",
                 weighted.length()
             )),
+            // met by nothing, not even by every key signing
+            SignatureThreshold::Weighted(weighted)
+                if weighted
+                    .enough_signatures(&(0..keys).collect::<Vec<_>>())
+                    .is_err() =>
+            {
+                Err("weighted threshold can never be met: a clause's weights sum below 1".into())
+            }
             _ => Ok(()),
         }
     }
@@ -544,6 +552,20 @@ pub fn test_weighted_treshold_serialization() -> Result<(), SignatureError> {
     assert!(matches!(wt, WeightedThreshold::Single(_)));
     assert_eq!(serde_json::to_string(&wt).unwrap(), single_threshold);
     Ok(())
+}
+
+/// A weighted threshold whose clause weights cannot reach 1 can never be
+/// met, so it does not fit any key list.
+#[test]
+fn an_unsatisfiable_weighted_threshold_does_not_fit() {
+    let unsatisfiable = SignatureThreshold::single_weighted(vec![(1, 3), (1, 3)]);
+    assert!(unsatisfiable.check_fits(2).is_err());
+
+    let satisfiable = SignatureThreshold::single_weighted(vec![(1, 2), (1, 2)]);
+    assert!(satisfiable.check_fits(2).is_ok());
+
+    let one_clause_short = SignatureThreshold::multi_weighted(vec![vec![(1, 1)], vec![(1, 2)]]);
+    assert!(one_clause_short.check_fits(2).is_err());
 }
 
 #[cfg(test)]
