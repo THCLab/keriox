@@ -17,7 +17,7 @@ default = ["storage-redb"]
 storage-redb = ["redb"]
 storage-postgres = ["sqlx", "async-std"]
 query = []
-oobi = ["url", "strum_macros", "strum"]
+oobi = ["query", "url", "strum_macros", "strum"]
 oobi-manager = ["oobi", "query", "storage-redb", "reqwest", "async-trait"]
 mailbox = ["query", "storage-redb"]
 

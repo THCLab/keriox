@@ -100,6 +100,11 @@ pub fn process_reply<P: Processor, #[cfg(feature = "oobi-manager")] S: OobiStora
         ReplyRoute::LocScheme(_) | ReplyRoute::EndRoleAdd(_) | ReplyRoute::EndRoleCut(_) => {
             process_signed_oobi(&sr, oobi_manager, event_storage)
         }
+        // Without an OOBI manager there is nowhere to keep them.
+        #[cfg(all(feature = "oobi", not(feature = "oobi-manager")))]
+        ReplyRoute::LocScheme(_) | ReplyRoute::EndRoleAdd(_) | ReplyRoute::EndRoleCut(_) => Err(
+            Error::SemanticError("OOBI replies need the oobi-manager feature".into()),
+        ),
         ReplyRoute::Ksn(_, _) => processor.process_op_reply(&sr),
     }
 }

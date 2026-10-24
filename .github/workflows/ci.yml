@@ -26,6 +26,16 @@ jobs:
           command: check
           args: --all-features --verbose
 
+  # Dependents enable only the keri-core features they need, which
+  # --all-features cannot check.
+  features:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build keri-core with each feature on its own
+        run: keriox_core/check-features.sh
+
   # --all-features includes the Postgres storage backends, whose tests need
   # a database. Skipped: postgres_identity_lifecycle and test_tel_from_watcher
   # hang, and test_kel_managing_with_witness talks to deployed witnesses.
