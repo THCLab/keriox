@@ -23,6 +23,7 @@ use keri_core::{
     database::redb::RedbDatabase,
     event_message::{
         cesr_adapter::{parse_cesr_stream_many, EventType},
+        keri_version::KeriVersion,
         signature::{get_signatures, signatures_into_groups},
         signed_event_message::{Message, Notice},
     },
@@ -415,7 +416,8 @@ fn negative(r: &mut Runner) {
                     .into_iter()
                     .any(|f| reencode(f, &input).is_ok()),
                 "indexer" => IndexedSignature::from_str(&input).is_ok(),
-                "version" => SerializationInfo::from_str(&input).is_ok(),
+                "version" => SerializationInfo::from_str(&input)
+                    .is_ok_and(|info| KeriVersion::read(&info).is_ok()),
                 "said" => match body(&kind, input.clone().into_bytes()) {
                     Ok(EventType::KeyEvent(event)) => event.check_said().is_ok(),
                     _ => false,

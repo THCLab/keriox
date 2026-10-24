@@ -544,12 +544,6 @@ impl TryFrom<Payload> for EventType {
 
         // Every message read here is a KERI message; a body whose version
         // string names another protocol (ACDC, ...) is not one.
-        let protocol = &event.version().protocol_code;
-        if protocol != "KERI" {
-            return Err(ParseError::DeserializeError(format!(
-                "version string names protocol {protocol}, not KERI"
-            )));
-        }
         KeriVersion::read(event.version()).map_err(ParseError::DeserializeError)?;
         // Stored events keep only these kinds, and the body is re-encoded in
         // the kind its version string names.

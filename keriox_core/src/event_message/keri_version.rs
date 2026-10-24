@@ -117,11 +117,19 @@ impl KeriVersion {
         }
     }
 
-    /// The version a received message's version string names. Every minor
+    /// The version a received message's version string names; a version
+    /// string of another protocol than KERI is refused. Every minor
     /// version of a supported major is read by that major's rules, as minor
     /// versions stay backward compatible; any other major, or a 2.x message
     /// whose CESR genus is not 2.x, is refused.
     pub fn read(info: &SerializationInfo) -> Result<Self, String> {
+        // said reads version strings of any protocol (ACDC, ...)
+        if info.protocol_code != "KERI" {
+            return Err(format!(
+                "version string names protocol {}, not KERI",
+                info.protocol_code
+            ));
+        }
         match (info.major_version, info.genus_version) {
             (1, None) => Ok(KeriVersion::V1_0),
             (2, Some((2, _))) => Ok(KeriVersion::V2_0),
@@ -153,6 +161,20 @@ impl KeriVersion {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A KERI version string names the KERI protocol; said reads version
+    /// strings of any protocol (ACDC, ...).
+    #[test]
+    fn a_version_string_of_another_protocol_is_not_read() {
+        use std::str::FromStr;
+
+        let keri: SerializationInfo = "KERICAACAAJSONAABk.".parse().unwrap();
+        assert_eq!(KeriVersion::read(&keri), Ok(KeriVersion::V2_0));
+        for other in ["XXXXCAACAAJSONAABk.", "ACDCCAACAAJSONAABk."] {
+            let info = SerializationInfo::from_str(other).unwrap();
+            assert!(KeriVersion::read(&info).is_err(), "{other}");
+        }
+    }
 
     #[test]
     fn written_in_configuration() {
