@@ -2,8 +2,12 @@ use said::{derivation::HashFunctionCode, sad::SAD, SelfAddressingIdentifier};
 
 use crate::{
     error::Error,
-    event::{event_data::EventData, sections::seal::SourceSeal, KeyEvent},
-    prefix::{IdentifierPrefix, IndexedSignature},
+    event::{
+        event_data::EventData,
+        sections::seal::{Seal, SourceSeal},
+        KeyEvent,
+    },
+    prefix::{CesrPrimitive, IdentifierPrefix, IndexedSignature},
     state::{EventSemantics, IdentifierState},
 };
 
@@ -78,6 +82,7 @@ impl EventSemantics for KeriEvent<KeyEvent> {
     fn apply_to(&self, state: IdentifierState) -> Result<IdentifierState, Error> {
         let event_digest = self.digest()?;
         self.check_rotation_config()?;
+        self.check_registrar_backers()?;
         let mut state = self.apply_body_to(state)?;
         state.last_event_type = Some(self.event_type.clone());
         // The data of an establishment event only sees the prior event's
@@ -118,6 +123,37 @@ impl KeriEvent<KeyEvent> {
         {
             Some(t) => Err(Error::ConfigTraitViolation(format!(
                 "{t} may only appear in an inception"
+            ))),
+            None => Ok(()),
+        }
+    }
+
+    /// With the `RB` (registrar backers) trait, the backers of an inception
+    /// are ledger registrars, and the KERI specification requires the event
+    /// to include a registrar backer seal for each of them.
+    fn check_registrar_backers(&self) -> Result<(), Error> {
+        let inception = match &self.data.event_data {
+            EventData::Icp(icp) => icp,
+            EventData::Dip(dip) => &dip.inception_data,
+            _ => return Ok(()),
+        };
+        if !inception.inception_configuration.iter().any(|t| t == "RB") {
+            return Ok(());
+        }
+        let unsealed = inception
+            .witness_config
+            .initial_witnesses
+            .iter()
+            .find(|backer| {
+                !inception.data.iter().any(|seal| {
+                    matches!(seal, Seal::RegistrarBacker(rb)
+                        if rb.backer == IdentifierPrefix::Basic((*backer).clone()))
+                })
+            });
+        match unsealed {
+            Some(backer) => Err(Error::ConfigTraitViolation(format!(
+                "registrar backer {} has no registrar backer seal (RB)",
+                backer.to_str()
             ))),
             None => Ok(()),
         }
@@ -250,5 +286,25 @@ mod test {
         };
 
         assert_eq!(verify_identifier_binding(&icp).unwrap(), false);
+    }
+
+    /// With the RB trait the backers are ledger registrars, and the event
+    /// must carry a registrar backer seal for each of them.
+    #[test]
+    fn registrar_backers_without_their_seals_are_refused() {
+        use crate::{
+            error::Error,
+            state::{EventSemantics, IdentifierState},
+        };
+
+        let icp = br#"{"v":"KERI10JSON00015d_","t":"icp","d":"EKT0HA9vn5xh0vufcwQCogG-3LjY8lOKpDuPhBXRd6lz","i":"EKT0HA9vn5xh0vufcwQCogG-3LjY8lOKpDuPhBXRd6lz","s":"0","kt":"1","k":["DMaKrg9OrIvUBjAgmpDeDcLtUMaS9Joz_AcYwBPe2T-x"],"nt":"1","n":["EJsVBn0u_cK_w8wDFUvSKJaVYgqIcUg-Tzl-0RXxEHq3"],"bt":"1","b":["BOEXUkxYSz5lcd1Y0TFZiV7oII0O0b2srfV4eavNksCO"],"c":["RB"],"a":[]}"#;
+        let Ok(EventType::KeyEvent(icp)) = parse_event_type(icp) else {
+            panic!("fixture must be a key event")
+        };
+
+        assert!(matches!(
+            icp.apply_to(IdentifierState::default()),
+            Err(Error::ConfigTraitViolation(_))
+        ));
     }
 }

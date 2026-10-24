@@ -19,7 +19,6 @@ v1/keripy/kels/positive/kel/rot/partial/cesr1	cesr1	KERI 1.0 stream with CESR 1.
 v1/keripy/kels/positive/kel/rot/reserve-spec-example/cesr1	cesr1	KERI 1.0 stream with CESR 1.0 attachment codes is not parsed (only CESR 2.0 counters)
 v1/keripy/kels/positive/kel/wit/indexed-cuts-adds/cesr1	cesr1	KERI 1.0 stream with CESR 1.0 attachment codes is not parsed (only CESR 2.0 counters)
 v1/keripy/kels/positive/kel/wit/receipts/cesr1	cesr1	KERI 1.0 stream with CESR 1.0 attachment codes is not parsed (only CESR 2.0 counters)
-v1/keripy/negative/negative/gap/kel-config-did-rb-nrb	config	RB is not enforced: an inception with RB and no registrar backer seal is accepted
 v1/keripy/negative/negative/gap/kel-threshold-zero/current	key-event-rules	kt=0 is accepted on an inception
 v1/keripy/negative/negative/gap/kel-threshold-zero/next	key-event-rules	with nt=0 a rotation to unrelated keys is accepted (no pre-rotation check)
 v1/keripy/negative/negative/gap/rm-ksn-format-undefined	key-state	a key state notice in keripy's shape (vn, f, c, ee, di) is not read
