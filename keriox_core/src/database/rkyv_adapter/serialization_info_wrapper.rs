@@ -43,7 +43,9 @@ fn stored_kind(info: &SerializationInfo) -> SerializationFormatsDef {
         SerializationFormats::MGPK => SerializationFormatsDef::MGPK,
         SerializationFormats::CBOR => SerializationFormatsDef::CBOR,
         SerializationFormats::CESR => SerializationFormatsDef::CESR,
-        other => unimplemented!("unsupported serialization format {other:?}"),
+        // Parsing refuses a body whose version string names another kind
+        // than JSON, CBOR or MessagePack, and keriox writes only those.
+        other => unreachable!("events of kind {other:?} are never stored"),
     }
 }
 

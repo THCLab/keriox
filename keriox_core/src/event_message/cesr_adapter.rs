@@ -526,6 +526,13 @@ impl TryFrom<Payload> for EventType {
     /// keriox would vouch for bytes other than the ones that were signed.
     fn try_from(value: Payload) -> Result<Self, Self::Error> {
         let raw = value.to_vec();
+        let body_kind = match &value {
+            Payload::JSON(_) => SerializationFormats::JSON,
+            Payload::CBOR(_) => SerializationFormats::CBOR,
+            Payload::MGPK(_) => SerializationFormats::MGPK,
+            #[allow(unreachable_patterns)]
+            _ => return Err(ParseError::DeserializeError("unsupported message body".into())),
+        };
         let event: EventType = match value {
             Payload::JSON(event) => serde_json::from_slice(&event).map_err(|e| e.to_string()),
             Payload::CBOR(event) => serde_cbor::from_slice(&event).map_err(|e| e.to_string()),
@@ -544,6 +551,14 @@ impl TryFrom<Payload> for EventType {
             )));
         }
         KeriVersion::read(event.version()).map_err(ParseError::DeserializeError)?;
+        // Stored events keep only these kinds, and the body is re-encoded in
+        // the kind its version string names.
+        let kind = &event.version().kind;
+        if kind != &body_kind {
+            return Err(ParseError::DeserializeError(format!(
+                "version string names a {kind:?} body, the body is {body_kind:?}"
+            )));
+        }
         // A KERI 2.0 routed message names its sender in `i`; a 1.0 one has
         // no `i`.
         let named_sender: Option<bool> = match &event {
@@ -1141,6 +1156,25 @@ pub mod test {
         event::{receipt::Receipt, KeyEvent},
         event_message::msg::KeriEvent,
     };
+
+    /// The version string's serialization kind has to name the encoding the
+    /// body is actually in, as stored events keep only those kinds.
+    #[test]
+    fn a_version_string_naming_another_kind_is_refused() {
+        let json = br#"{"v":"KERI10JSON0001e7_","t":"icp","d":"EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen","i":"EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen","s":"0","kt":"2","k":["DErocgXD2RGSyvn3MObcx59jeOsEQhv2TqHirVkzrp0Q","DFXLiTjiRdSBPLL6hLa0rskIxk3dh4XwJLfctkJFLRSS","DE9YgIQVgpLwocTVrG8tidKScsQSMWwLWywNC48fhq4f"],"nt":"2","n":["EDJk5EEpC4-tQ7YDwBiKbpaZahh1QCyQOnZRF7p2i8k8","EAXfDjKvUFRj-IEB_o4y-Y_qeJAjYfZtOMD9e7vHNFss","EN8l6yJC2PxribTN0xfri6bLz34Qvj-x3cNwcV3DvT2m"],"bt":"0","b":[],"c":[],"a":[]}"#;
+        assert!(super::parse_event_type(json).is_ok());
+        for kind in ["CBOR", "MGPK", "CESR"] {
+            let relabelled = String::from_utf8(json.to_vec()).unwrap().replacen(
+                "KERI10JSON",
+                &format!("KERI10{kind}"),
+                1,
+            );
+            assert!(
+                super::parse_event_type(relabelled.as_bytes()).is_err(),
+                "a JSON body labelled {kind} must be refused"
+            );
+        }
+    }
 
     #[test]
     fn test_legacy_attachments() {

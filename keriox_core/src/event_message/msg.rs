@@ -85,7 +85,9 @@ impl<T: Serialize + Clone, D: Serialize + Typeable<TypeTag = T> + Clone> TypedEv
     }
 
     pub fn encode(&self) -> Result<Vec<u8>, Error> {
-        Ok(self.serialization_info.serialize(&self).unwrap())
+        self.serialization_info
+            .serialize(&self)
+            .map_err(|e| Error::SerializationError(e.to_string()))
     }
 }
 

@@ -110,4 +110,15 @@ mod peer_input {
         assert!(VerifiableEvent::parse(format!("{altered}{SEAL}").as_bytes()).is_err());
         assert!(VerifiableEvent::parse(format!("{BIS}{SEAL}").as_bytes()).is_ok());
     }
+
+    #[test]
+    fn a_tel_event_labelled_with_another_kind_is_an_error() {
+        for kind in ["CBOR", "MGPK", "CESR"] {
+            let relabelled = BIS.replacen("KERI10JSON", &format!("KERI10{kind}"), 1);
+            assert!(
+                VerifiableEvent::parse(format!("{relabelled}{SEAL}").as_bytes()).is_err(),
+                "a JSON body labelled {kind} must be refused"
+            );
+        }
+    }
 }
