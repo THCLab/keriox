@@ -294,8 +294,11 @@ impl<S: OobiStorageBackend> Watcher<S> {
                         responses.push(response);
                     }
                 }
-                keri_core::query::query_event::SignedQueryMessage::MailboxQuery(_mqry) => {
-                    unimplemented!()
+                keri_core::query::query_event::SignedQueryMessage::MailboxQuery(_) => {
+                    return Err(ActorError::UnsupportedQuery(
+                        "mailboxes are kept by witnesses; send mailbox queries to a witness"
+                            .into(),
+                    ));
                 }
             }
         }

@@ -796,3 +796,47 @@ mod tel_query_access {
         assert!(result.is_ok(), "expected an answer, got {result:?}");
     }
 }
+
+/// Mailboxes are kept by witnesses, not watchers. A mailbox query sent to a
+/// watcher is a misdirected request and must be refused, not crash the
+/// handler serving it.
+#[actix_web::test]
+async fn a_mailbox_query_to_a_watcher_is_refused() {
+    let controller_db_dir = Builder::new().prefix("mbx-qry-ctrl").tempdir().unwrap();
+    let controller_db =
+        Arc::new(RedbDatabase::new(&controller_db_dir.path().join("events")).unwrap());
+    let key_manager = {
+        use keri_core::signer::CryptoBox;
+        Arc::new(Mutex::new(CryptoBox::new().unwrap()))
+    };
+    let mut controller =
+        SimpleController::new(controller_db, key_manager, EscrowConfig::default()).unwrap();
+    let icp = controller
+        .incept(None, None, None)
+        .unwrap()
+        .encode()
+        .unwrap();
+
+    let root = Builder::new().prefix("mbx-qry-watcher").tempdir().unwrap();
+    let watcher = Watcher::setup_with_redb(WatcherConfig {
+        public_address: Url::parse("http://some/dummy/url").unwrap(),
+        db_path: root.path().to_owned(),
+        tel_storage_path: root.path().join("tel_storage"),
+        ..Default::default()
+    })
+    .unwrap();
+    watcher.parse_and_process_notices(&icp).unwrap();
+
+    let mailbox_query = keri_core::event_message::signed_event_message::Message::Op(Op::Query(
+        controller.query_mailbox(&watcher.prefix()),
+    ))
+    .to_cesr()
+    .unwrap();
+
+    let result = watcher.parse_and_process_queries(&mailbox_query).await;
+
+    assert!(
+        matches!(result, Err(ActorError::UnsupportedQuery(_))),
+        "expected UnsupportedQuery, got {result:?}"
+    );
+}

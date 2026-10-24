@@ -60,6 +60,9 @@ pub enum ActorError {
 
     #[error("Unexpected response: {0}")]
     UnexpectedResponse(String),
+
+    #[error("query not supported here: {0}")]
+    UnsupportedQuery(String),
 }
 
 #[cfg(feature = "oobi-manager")]
@@ -89,6 +92,9 @@ impl ActorError {
 
             // The request body could not be read.
             ActorError::ParseError(_) => StatusCode::BAD_REQUEST,
+
+            // The query was sent to a server that does not answer it.
+            ActorError::UnsupportedQuery(_) => StatusCode::BAD_REQUEST,
 
             ActorError::KeriError(err) => match err {
                 KeriError::DeserializeError(_)
@@ -130,5 +136,13 @@ mod tests {
         ] {
             assert_eq!(ActorError::KeriError(err).http_status_code(), StatusCode::GONE);
         }
+    }
+
+    #[test]
+    fn a_query_the_server_does_not_serve_is_a_client_error() {
+        assert_eq!(
+            ActorError::UnsupportedQuery("mailbox".into()).http_status_code(),
+            StatusCode::BAD_REQUEST
+        );
     }
 }
