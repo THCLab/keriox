@@ -553,7 +553,6 @@ where
                 self.communication
                     .send_message_to(
                         IdentifierPrefix::Basic(wit.clone()),
-                        keri_core::oobi::Scheme::Http,
                         signer_exn,
                     )
                     .await?;

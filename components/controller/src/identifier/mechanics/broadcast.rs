@@ -3,7 +3,6 @@ use keri_core::{
     actor::prelude::SelfAddressingIdentifier,
     database::{EscrowCreator, EventDatabase},
     event_message::signed_event_message::{Message, Notice},
-    oobi::Scheme,
     oobi_manager::storage::OobiStorageBackend,
     prefix::IdentifierPrefix,
 };
@@ -53,7 +52,6 @@ where
                     max_sn = rct.body.sn.max(max_sn);
                     self.communication.send_message_to(
                         witness.clone(),
-                        Scheme::Http,
                         Message::Notice(Notice::NontransferableRct(rct.clone())),
                     )
                 });

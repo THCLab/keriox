@@ -8,7 +8,6 @@ use keri_core::actor::possible_response::PossibleResponse;
 use keri_core::actor::prelude::HashFunctionCode;
 use keri_core::database::{EscrowCreator, EventDatabase};
 use keri_core::error::Error;
-use keri_core::oobi::Scheme;
 use keri_core::oobi_manager::storage::OobiStorageBackend;
 use keri_core::prefix::IndexedSignature;
 use keri_core::query::query_event::SignedKelQuery;
@@ -180,7 +179,7 @@ where
             }
         };
         self.communication
-            .send_query_to(recipient.as_ref().unwrap(), Scheme::Http, query)
+            .send_query_to(recipient.as_ref().unwrap(), query)
             .await
     }
 

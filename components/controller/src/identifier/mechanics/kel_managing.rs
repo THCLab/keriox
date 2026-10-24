@@ -11,7 +11,7 @@ use keri_core::{
         msg::KeriEvent,
         signed_event_message::{Message, Notice},
     },
-    oobi::{LocationScheme, Scheme},
+    oobi::LocationScheme,
     oobi_manager::storage::OobiStorageBackend,
     prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
 };
@@ -194,7 +194,6 @@ where
                             self.communication
                                 .send_message_to(
                                     witness_id.clone(),
-                                    Scheme::Http,
                                     Message::Notice(msg.clone()),
                                 )
                                 .await?;
@@ -246,7 +245,6 @@ where
                             self.communication
                                 .send_message_to(
                                     witness_id.clone(),
-                                    Scheme::Http,
                                     Message::Notice(msg.clone()),
                                 )
                                 .await?;

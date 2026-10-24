@@ -2,7 +2,7 @@ use keri_core::{
     actor::event_generator,
     database::{EscrowCreator, EventDatabase},
     event_message::cesr_adapter::{parse_event_type, EventType},
-    oobi::{Role, Scheme},
+    oobi::Role,
     oobi_manager::storage::OobiStorageBackend,
     prefix::{IdentifierPrefix, SelfSigningPrefix},
     query::reply_event::{ReplyEvent, ReplyRoute},
@@ -82,7 +82,7 @@ where
         // TODO: send in one request
         for ev in messages_to_send {
             self.communication
-                .send_message_to(dest_identifier.clone(), Scheme::Http, ev)
+                .send_message_to(dest_identifier.clone(), ev)
                 .await?;
         }
         Ok(())

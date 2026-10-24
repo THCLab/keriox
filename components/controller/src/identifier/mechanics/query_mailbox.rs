@@ -4,7 +4,6 @@ use keri_core::database::{EscrowCreator, EventDatabase};
 use keri_core::oobi_manager::storage::OobiStorageBackend;
 use keri_core::{
     actor::prelude::SerializationFormats,
-    oobi::Scheme,
     prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
     query::{
         mailbox::{MailboxQuery, MailboxRoute, QueryArgsMbx},
@@ -165,7 +164,7 @@ where
             }
         };
         self.communication
-            .send_management_query_to(recipient.as_ref().unwrap(), Scheme::Http, query)
+            .send_management_query_to(recipient.as_ref().unwrap(), query)
             .await
     }
 }

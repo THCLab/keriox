@@ -18,7 +18,6 @@ use keri_core::{
         signature::{Nontransferable, Signature},
         timestamped::Timestamped,
     },
-    oobi::Scheme,
     oobi_manager::storage::OobiStorageBackend,
     query::query_event::{LogsQueryArgs, QueryEvent, QueryRoute, SignedKelQuery},
 };
@@ -129,7 +128,7 @@ where
 
         Ok(self
             .communication
-            .send_query_to(&witness.eid, Scheme::Http, signed_qry)
+            .send_query_to(&witness.eid, signed_qry)
             .await?)
     }
 

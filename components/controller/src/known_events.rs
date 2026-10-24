@@ -219,17 +219,6 @@ where
         }
     }
 
-    pub fn find_location(
-        &self,
-        id: &IdentifierPrefix,
-        scheme: Scheme,
-    ) -> Result<LocationScheme, OobiRetrieveError> {
-        self.get_loc_schemas(id)?
-            .into_iter()
-            .find(|loc| loc.scheme == scheme)
-            .ok_or(OobiRetrieveError::MissingOobi(id.clone(), Some(scheme)))
-    }
-
     /// A location of `id` that can be reached over HTTP, preferring https.
     pub fn find_http_location(
         &self,

@@ -103,17 +103,10 @@ where
     /// Make http request to get identifier's endpoints information.
     pub async fn resolve_end_role(&self, er: &EndRole) -> Result<(), MechanicsError> {
         let EndRole { cid, role, eid } = er.clone();
-        // TODO what if more than one
         let loc = self
             .events
-            .get_loc_schemas(&eid)
-            .map_err(SendingError::OobiError)?
-            .first()
-            .ok_or(SendingError::OobiError(OobiRetrieveError::MissingOobi(
-                cid.clone(),
-                None,
-            )))?
-            .clone();
+            .find_http_location(&eid)
+            .map_err(SendingError::OobiError)?;
         let response = self.transport.request_end_role(loc, cid, role, eid).await?;
 
         let msgs = parse_event_stream(response.as_ref()).map_err(|e| {
@@ -144,10 +137,9 @@ where
     pub async fn send_message_to(
         &self,
         id: IdentifierPrefix,
-        scheme: Scheme,
         msg: Message,
     ) -> Result<(), SendingError> {
-        let loc = self.events.find_location(&id, scheme)?;
+        let loc = self.events.find_http_location(&id)?;
         self.transport.send_message(loc, msg).await?;
         Ok(())
     }
@@ -155,10 +147,9 @@ where
     pub async fn send_query_to(
         &self,
         id: &IdentifierPrefix,
-        scheme: Scheme,
         query: SignedKelQuery,
     ) -> Result<PossibleResponse, SendingError> {
-        let loc = self.events.find_location(id, scheme)?;
+        let loc = self.events.find_http_location(id)?;
         Ok(self
             .transport
             .send_query(loc, SignedQueryMessage::KelQuery(query))
@@ -168,23 +159,17 @@ where
     pub async fn send_management_query_to(
         &self,
         id: &IdentifierPrefix,
-        scheme: Scheme,
         query: SignedMailboxQuery,
     ) -> Result<PossibleResponse, SendingError> {
-        let loc = self.events.find_location(id, scheme)?;
+        let loc = self.events.find_http_location(id)?;
         Ok(self
             .transport
             .send_query(loc, SignedQueryMessage::MailboxQuery(query))
             .await?)
     }
 
-    async fn send_oobi_to(
-        &self,
-        id: &IdentifierPrefix,
-        scheme: Scheme,
-        oobi: Oobi,
-    ) -> Result<(), SendingError> {
-        let loc = self.events.find_location(id, scheme)?;
+    async fn send_oobi_to(&self, id: &IdentifierPrefix, oobi: Oobi) -> Result<(), SendingError> {
+        let loc = self.events.find_http_location(id)?;
         self.transport.resolve_oobi(loc, oobi).await?;
         Ok(())
     }
@@ -223,7 +208,6 @@ where
                 |(message, witness_id)| {
                     self.send_message_to(
                         IdentifierPrefix::Basic(witness_id.clone()),
-                        Scheme::Http,
                         message.clone(),
                     )
                 },
@@ -253,8 +237,7 @@ where
         oobi: &Oobi,
     ) -> Result<(), ControllerError> {
         for watcher in self.events.get_watchers(id)?.iter() {
-            self.send_oobi_to(watcher, Scheme::Http, oobi.clone())
-                .await?;
+            self.send_oobi_to(watcher, oobi.clone()).await?;
         }
 
         Ok(())
