@@ -11,6 +11,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use keri_controller::IdentifierPrefix;
+use keri_core::prefix::CesrPrimitive;
 
 use crate::error::{Error, Result};
 use crate::ids::{CredentialId, IdentityId};
@@ -281,24 +282,29 @@ impl Group {
     /// Rotate the group's keys (initiator side).
     ///
     /// The group's next keys are the members' pre-committed next keys, so
-    /// **every other member must rotate their own identity first** (their
+    /// **every other member listed by [`members_to_rotate`](Self::members_to_rotate)
+    /// must rotate their own identity first** (their
     /// [`crate::Identity::rotate`]); then the initiator calls this, which
-    /// rotates the initiator's own keys and publishes the group rotation.
-    /// The other members co-sign via [`crate::Identity::pending_requests`].
+    /// rotates the initiator's own keys if they still need it and publishes
+    /// the group rotation. The other members co-sign via
+    /// [`crate::Identity::pending_requests`].
+    ///
+    /// Retrying after an interrupted group rotation is safe: a member whose
+    /// current key is already one the group committed to is not rolled a
+    /// second time, which would leave it with a key the group never
+    /// committed to.
     pub async fn rotate(&self) -> Result<()> {
         // The rotation event names every member's *new* public key, so the
         // other members' rotated histories must be known locally first.
-        let keri = crate::Keri::from_inner(self.keri.clone());
-        keri.refresh_contacts().await;
-        for alias in self.keri.contact_alias_names() {
-            if let Ok(contact) = self.keri.store.load(&alias) {
-                let _ = self.keri.copy_kel_into(&self.member_alias, contact.id());
-            }
-        }
+        self.refresh_member_kels().await;
 
         // Member key roll first: the group's next-key commitment points at
-        // this member's (previously) next key.
-        self.keri.store.rotate(&self.member_alias).await?;
+        // this member's (previously) next key — unless an earlier, interrupted
+        // attempt already rolled it.
+        let member_id = self.keri.store.load(&self.member_alias)?.id().clone();
+        if self.needs_rotation(&member_id)? {
+            self.keri.store.rotate(&self.member_alias).await?;
+        }
 
         let members = self.keri.store.load_multisig_members(&self.group_alias)?;
         let threshold = self
@@ -332,6 +338,53 @@ impl Group {
             .rotate_multisig_group(&self.group_alias, config)
             .await?;
         Ok(())
+    }
+
+    /// The members known locally (see [`members`](Self::members)) that must
+    /// rotate their own identity before the next group rotation: those whose
+    /// current key is not yet one of the group's pre-committed next keys.
+    ///
+    /// A member who already rotated — for this rotation or for an earlier,
+    /// interrupted one — is not listed, and must not rotate again: a second
+    /// roll moves them past the key the group committed to.
+    pub async fn members_to_rotate(&self) -> Result<Vec<IdentityId>> {
+        self.refresh_member_kels().await;
+        let mut pending = vec![];
+        for member in self.keri.store.load_multisig_members(&self.group_alias)? {
+            if self.needs_rotation(&member)? {
+                pending.push(IdentityId::from(member));
+            }
+        }
+        Ok(pending)
+    }
+
+    /// Whether `member`'s current key is not yet among the group's next-key
+    /// commitments, so `member` has to roll their own keys before the group
+    /// can rotate.
+    fn needs_rotation(&self, member: &IdentifierPrefix) -> Result<bool> {
+        let group = self.group_identifier()?;
+        let next_keys = group
+            .find_state(&self.group_id)?
+            .current
+            .next_keys_data
+            .next_keys_hashes();
+        let current_keys = group.find_state(member)?.current.public_keys;
+        Ok(!current_keys.iter().any(|pk| {
+            next_keys
+                .iter()
+                .any(|nk| nk.verify_binding(pk.to_str().as_bytes()))
+        }))
+    }
+
+    /// Pull the contacts' latest key histories into this member's database.
+    async fn refresh_member_kels(&self) {
+        let keri = crate::Keri::from_inner(self.keri.clone());
+        keri.refresh_contacts().await;
+        for alias in self.keri.contact_alias_names() {
+            if let Ok(contact) = self.keri.store.load(&alias) {
+                let _ = self.keri.copy_kel_into(&self.member_alias, contact.id());
+            }
+        }
     }
 
     /// Bring local group state up to date: collect other members'
@@ -407,7 +460,8 @@ impl GroupRequest {
 
     /// Whether this is a group key rotation. Rotate your own identity
     /// ([`crate::Identity::rotate`]) before accepting one — the group's new
-    /// keys are the members' pre-committed next keys.
+    /// keys are the members' pre-committed next keys — unless you already
+    /// did ([`Group::members_to_rotate`] no longer lists you).
     pub fn is_rotation(&self) -> bool {
         !self.inner.is_inception()
     }

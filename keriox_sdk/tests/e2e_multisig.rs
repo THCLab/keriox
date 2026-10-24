@@ -187,3 +187,57 @@ async fn group_rotation_by_initiator(infra: &mut TestInfra) {
     }
     assert!(bob_sees_it, "bob's store observes the group rotation");
 }
+
+#[test_context(TestInfra)]
+#[actix_rt::test]
+async fn group_rotation_retry_does_not_roll_members_twice(infra: &mut TestInfra) {
+    let ((_ad, _alice_keri, alice), (_bd, _bob_keri, bob)) = two_members(infra).await;
+
+    let invite = alice
+        .new_group("board")
+        .member(bob.id())
+        .threshold(1)
+        .initiate()
+        .await
+        .unwrap();
+    let group_id = invite.group_id();
+
+    let invitation = bob
+        .pending_requests()
+        .await
+        .unwrap()
+        .into_iter()
+        .find_map(|r| match r {
+            PendingRequest::Group(g) if g.is_invitation() => Some(g),
+            _ => None,
+        })
+        .expect("bob sees the invitation");
+    let board_bob = invitation.accept_as("board").await.unwrap();
+
+    let board_alice = invite.wait_ready(Duration::from_secs(30)).await.unwrap();
+    board_bob.sync().await.unwrap();
+
+    let mut pending = board_alice.members_to_rotate().await.unwrap();
+    pending.sort_by_key(|m| m.to_string());
+    let mut everyone = vec![alice.id().clone(), bob.id().clone()];
+    everyone.sort_by_key(|m| m.to_string());
+    assert_eq!(pending, everyone, "no member has rotated yet");
+
+    // Both members roll their own keys, as an earlier group rotation that
+    // was interrupted before publishing would have left them.
+    bob.rotate().await.expect("bob's member rotation");
+    alice.rotate().await.expect("alice's member rotation");
+    assert!(
+        board_alice.members_to_rotate().await.unwrap().is_empty(),
+        "every member's current key is pre-committed by the group"
+    );
+
+    // Retrying the group rotation must not roll alice's keys again.
+    board_alice.rotate().await.expect("group rotation retry");
+
+    let (alice_member, _) = alice.advanced().unwrap();
+    let state = alice_member
+        .find_state(group_id.as_prefix())
+        .expect("group state after rotation");
+    assert_eq!(state.sn, 1, "group KEL advanced to the rotation event");
+}
