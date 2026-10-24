@@ -132,7 +132,12 @@ where
                             .map_err(MechanicsError::BroadcastingError)?;
                     }
                 }
-                _ => panic!("Unexpected response"),
+                _ => {
+                    return Err(MechanicsError::ResponseProcessingError(
+                        ResponseProcessingError::UnexpectedResponse,
+                    )
+                    .into())
+                }
             };
         }
 
@@ -162,5 +167,136 @@ where
         self.communication
             .send_management_query_to(recipient.as_ref().unwrap(), Scheme::Http, query)
             .await
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::{collections::HashMap, sync::Arc};
+
+    use keri_core::{
+        actor::{error::ActorError, possible_response::PossibleResponse},
+        event_message::signed_event_message::{Message, Op},
+        oobi::{LocationScheme, Oobi, Role, Scheme},
+        oobi_manager::RedbOobiStorage,
+        prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+        query::query_event::SignedQueryMessage,
+        signer::{CryptoBox, KeyManager},
+        transport::test::{TestActor, TestActorMap, TestTransport},
+    };
+    use tempfile::Builder;
+    use url::{Host, Url};
+    use witness::{WitnessEscrowConfig, WitnessListener};
+
+    use super::ResponseProcessingError;
+    use crate::{
+        config::ControllerConfig, controller::Controller, error::ControllerError,
+        identifier::mechanics::MechanicsError,
+    };
+
+    /// A real witness, except that it answers every query with a key event
+    /// log instead of what was asked for.
+    struct OffRouteWitness(Arc<WitnessListener<RedbOobiStorage>>);
+
+    #[async_trait::async_trait]
+    impl TestActor for OffRouteWitness {
+        async fn send_message(&self, msg: Message) -> Result<(), ActorError> {
+            self.0.send_message(msg).await
+        }
+        async fn send_query(
+            &self,
+            _query: SignedQueryMessage,
+        ) -> Result<PossibleResponse, ActorError> {
+            Ok(PossibleResponse::Kel(vec![]))
+        }
+        async fn request_loc_scheme(&self, eid: IdentifierPrefix) -> Result<Vec<Op>, ActorError> {
+            self.0.request_loc_scheme(eid).await
+        }
+        async fn request_end_role(
+            &self,
+            cid: IdentifierPrefix,
+            role: Role,
+            eid: IdentifierPrefix,
+        ) -> Result<Vec<u8>, ActorError> {
+            self.0.request_end_role(cid, role, eid).await
+        }
+        async fn resolve_oobi(&self, msg: Oobi) -> Result<(), ActorError> {
+            self.0.resolve_oobi(msg).await
+        }
+    }
+
+    #[async_std::test]
+    async fn a_witness_answering_a_mailbox_query_with_something_else_is_an_error() {
+        let root = Builder::new().prefix("mbx-off-route").tempdir().unwrap();
+        let witness_root = Builder::new()
+            .prefix("mbx-off-route-wit")
+            .tempdir()
+            .unwrap();
+        let witness = Arc::new(
+            WitnessListener::setup_with_redb(
+                Url::parse("http://witness1:3232/").unwrap(),
+                witness_root.path(),
+                None,
+                WitnessEscrowConfig::default(),
+                keri_core::event_message::keri_version::KeriVersion::V1_0,
+            )
+            .unwrap(),
+        );
+        let witness_id = witness.get_prefix();
+        let witness_location = LocationScheme {
+            eid: IdentifierPrefix::Basic(witness_id.clone()),
+            scheme: Scheme::Http,
+            url: Some(Url::parse("http://witness1:3232").unwrap()),
+        };
+        let mut actors: TestActorMap = HashMap::new();
+        actors.insert(
+            (Host::Domain("witness1".to_string()), 3232),
+            Arc::new(OffRouteWitness(witness)),
+        );
+        let controller = Controller::new(ControllerConfig {
+            db_path: root.path().to_owned(),
+            transport: Box::new(TestTransport::new(actors)),
+            ..Default::default()
+        })
+        .unwrap();
+
+        let keys = CryptoBox::new().unwrap();
+        let icp = controller
+            .incept(
+                vec![BasicPrefix::Ed25519(keys.public_key())],
+                vec![BasicPrefix::Ed25519(keys.next_public_key())],
+                vec![witness_location],
+                1,
+            )
+            .await
+            .unwrap();
+        let icp_sig = SelfSigningPrefix::Ed25519Sha512(keys.sign(icp.as_bytes()).unwrap());
+        let mut identifier = controller
+            .finalize_incept(icp.as_bytes(), &icp_sig)
+            .unwrap();
+
+        let queries = identifier
+            .query_mailbox(identifier.id(), &[witness_id])
+            .unwrap()
+            .into_iter()
+            .map(|qry| {
+                let sig = keys.sign(&qry.encode().unwrap()).unwrap();
+                (qry, SelfSigningPrefix::Ed25519Sha512(sig))
+            })
+            .collect();
+
+        let result = identifier.finalize_query_mailbox(queries).await;
+
+        assert!(
+            matches!(
+                result,
+                Err(ControllerError::Mechanic(
+                    MechanicsError::ResponseProcessingError(
+                        ResponseProcessingError::UnexpectedResponse
+                    )
+                ))
+            ),
+            "expected UnexpectedResponse, got {result:?}"
+        );
     }
 }
