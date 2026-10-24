@@ -137,7 +137,8 @@ mod redb_backend {
 
         fn save_oobi(&self, signed_reply: &SignedReply) -> Result<(), Self::Error> {
             match signed_reply.reply.get_route() {
-                ReplyRoute::Ksn(_, _) => todo!(),
+                // Not an OOBI; OobiManager refuses these before storing.
+                ReplyRoute::Ksn(_, _) => return Err(RedbError::WrongValue),
                 ReplyRoute::LocScheme(loc_scheme) => {
                     let (cid, scheme) = (
                         loc_scheme.get_eid().to_string(),

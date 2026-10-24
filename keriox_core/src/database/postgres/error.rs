@@ -14,6 +14,8 @@ pub enum PostgresError {
     NotFound(said::SelfAddressingIdentifier),
     #[error("No digest in provided event")]
     MissingDigest,
+    #[error("Value format error")]
+    WrongValue,
     #[error("Already saved: {0}")]
     AlreadySaved(said::SelfAddressingIdentifier),
     #[error("The database stores key events in layout {0}, newer than this keriox reads")]

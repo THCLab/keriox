@@ -133,7 +133,7 @@ impl SnKeyReplyEscrow {
         let id = event.reply.get_prefix();
         let sn = match &event.reply.data.data {
             ReplyRoute::Ksn(_identifier_prefix, key_state_notice) => key_state_notice.state.sn,
-            _ => todo!(),
+            _ => return Err(RedbError::WrongValue),
         };
         self.escrow.insert(&id, sn, &said)?;
 
@@ -156,7 +156,8 @@ impl SnKeyReplyEscrow {
         let id = event.get_prefix();
         let sn = match &event.data.data {
             ReplyRoute::Ksn(_identifier_prefix, key_state_notice) => key_state_notice.state.sn,
-            _ => todo!(),
+            // Only key state notices are escrowed.
+            _ => return,
         };
         self.escrow.remove(&id, sn, &said).unwrap();
     }
@@ -188,6 +189,25 @@ mod tests {
     };
     use std::{fs, sync::Arc};
     use tempfile::{Builder, NamedTempFile};
+
+    /// The escrow keeps key state notices only. Any other reply is refused
+    /// on insert, and removing one is a no-op, instead of panicking.
+    #[test]
+    fn a_reply_other_than_a_key_state_notice_is_not_escrowed() {
+        let events_db_path = NamedTempFile::new().unwrap();
+        let events_db = Arc::new(RedbDatabase::new(events_db_path.path()).unwrap());
+        let rpy_escrow = ReplyEscrow::new(events_db);
+
+        let loc_scheme = r#"{"v":"KERI10JSON0000fa_","t":"rpy","d":"EJq4dQQdqg8aK7VyGnfSibxPyW8Zk2zO1qbVRD6flOvE","dt":"2022-02-28T17:23:20.336207+00:00","r":"/loc/scheme","a":{"eid":"BOyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw","scheme":"http","url":"http://127.0.0.1:5643/"}}-MABBOyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw0BAPJ5p_IpUFdmq8uupehsL8DzxWDeaU_SjeiwfmRZ6i9pqddraItmCOAysdXdTEQZ1hEM60iDEWvK16g68TrcAw"#;
+        let Ok(Message::Op(Op::Reply(rpy))) =
+            Message::try_from(parse_cesr_stream(loc_scheme.as_bytes()).unwrap())
+        else {
+            panic!("fixture must be a reply")
+        };
+
+        assert!(rpy_escrow.escrowed_reply.insert(&rpy).is_err());
+        rpy_escrow.escrowed_reply.remove(&rpy.reply);
+    }
 
     #[test]
     pub fn test_reply_escrow() -> Result<(), Error> {

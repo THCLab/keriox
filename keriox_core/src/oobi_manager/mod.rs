@@ -92,6 +92,12 @@ impl<S: OobiStorageBackend> OobiManager<S> {
     }
 
     pub fn save_oobi(&self, signed_oobi: &SignedReply) -> Result<(), OobiError> {
+        if !matches!(
+            signed_oobi.reply.get_route(),
+            ReplyRoute::LocScheme(_) | ReplyRoute::EndRoleAdd(_) | ReplyRoute::EndRoleCut(_)
+        ) {
+            return Err(OobiError::InvalidMessageType);
+        }
         self.store
             .save_oobi(signed_oobi)
             .map_err(|e| OobiError::Db(e.to_string()))
@@ -231,6 +237,30 @@ mod tests {
         let tmp_path = NamedTempFile::new().unwrap();
         let redb = Arc::new(redb::Database::create(tmp_path.path()).unwrap());
         OobiManager::new_redb(redb).unwrap()
+    }
+
+    /// Only location and end role replies are OOBIs; a key state notice
+    /// handed to save_oobi is refused rather than panicking the storage.
+    #[test]
+    fn a_key_state_notice_is_not_saved_as_an_oobi() {
+        use crate::event_message::{
+            cesr_adapter::parse_cesr_stream,
+            signed_event_message::{Message, Op},
+        };
+
+        let ksn = r#"{"v":"KERI10JSON00029d_","t":"rpy","d":"EIFMuK9IQmHvq9KaJ1r67_MMCq5GnQEgLyN9YPamR3r0","dt":"2021-01-01T00:00:00.000000+00:00","r":"/ksn/ELYbTIkWWyNwOxZQTTnrs6qn8jFbu2A8zftQ33JYQFQ0","a":{"v":"KERI10JSON0001e2_","i":"ELYbTIkWWyNwOxZQTTnrs6qn8jFbu2A8zftQ33JYQFQ0","s":"3","p":"EF7f4gNFCbJz6ZHLacIi_bbIq7kaWAFOzX7ncU_vs5Qg","d":"EOPSPvHHVmU9IIdHa5ksisoVrOnmHRps_tx3OsZSQQ30","f":"3","dt":"2021-01-01T00:00:00.000000+00:00","et":"rot","kt":"1","k":["DLcAz_gmDTuWIHn_mOQDeSK_aJIRiw5IMzPD7igzEDb0"],"nt":"1","n":["EK7ZUmFebD2st48Yvtzc9LajV3Yg2mkeeDzVRL-7uKrU"],"bt":"0","b":[],"c":[],"ee":{"s":"3","d":"EOPSPvHHVmU9IIdHa5ksisoVrOnmHRps_tx3OsZSQQ30","br":[],"ba":[]},"di":""}}-TABELYbTIkWWyNwOxZQTTnrs6qn8jFbu2A8zftQ33JYQFQ00AAAAAAAAAAAAAAAAAAAAAAwEOPSPvHHVmU9IIdHa5ksisoVrOnmHRps_tx3OsZSQQ30-KABAAAsqumzPM0bIo04gJ4Ln0zAOsGVnjHZrFjjjS49hGx_nQKbXuD1D4J_jNoEa4TPtPDnQ8d0YcJ4TIRJb-XouJBg"#;
+        let Ok(Message::Op(Op::Reply(rpy))) =
+            Message::try_from(parse_cesr_stream(ksn.as_bytes()).unwrap())
+        else {
+            panic!("fixture must be a reply")
+        };
+
+        let result = setup_oobi_manager().save_oobi(&rpy);
+
+        assert!(
+            matches!(result, Err(OobiError::InvalidMessageType)),
+            "expected InvalidMessageType, got {result:?}"
+        );
     }
 
     #[test]

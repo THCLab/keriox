@@ -122,7 +122,8 @@ impl OobiStorageBackend for PostgresOobiStorage {
                     .await?;
                     tx.commit().await?;
                 }
-                ReplyRoute::Ksn(_, _) => todo!(),
+                // Not an OOBI; OobiManager refuses these before storing.
+                ReplyRoute::Ksn(_, _) => return Err(PostgresError::WrongValue),
             }
             Ok(())
         })
