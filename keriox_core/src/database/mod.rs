@@ -191,6 +191,17 @@ pub trait SequencedEventDatabase: Send + Sync {
         sn: u64,
         said: &said::SelfAddressingIdentifier,
     ) -> Result<(), Self::Error>;
+
+    /// Removes the entries inserted at or before `cutoff`, in seconds since
+    /// the UNIX epoch.
+    fn remove_inserted_before(&self, cutoff: u64) -> Result<(), Self::Error>;
+}
+
+/// Seconds since the UNIX epoch, the time escrow entries are stamped with.
+pub(crate) fn now_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs())
 }
 
 pub trait EscrowCreator {
@@ -242,6 +253,9 @@ pub trait EscrowDatabase: Send + Sync {
     ) -> Result<Self::EventIter, Self::Error>;
 
     fn remove(&self, event: &KeriEvent<KeyEvent>);
+
+    /// Drops the events escrowed longer than `max_age`.
+    fn remove_older_than(&self, max_age: std::time::Duration) -> Result<(), Self::Error>;
 
     fn contains(
         &self,

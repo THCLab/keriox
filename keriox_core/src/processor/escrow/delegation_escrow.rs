@@ -23,14 +23,16 @@ pub struct DelegationEscrow<D: EventDatabase + EscrowCreator> {
     db: Arc<D>,
     // Key of this escrow is (delegator's identifier, delegator's event sn if available).
     pub delegation_escrow: D::EscrowDatabaseType,
+    sweep: super::StaleSweep,
 }
 
 impl<D: EventDatabase + EscrowCreator + 'static> DelegationEscrow<D> {
-    pub fn new(db: Arc<D>, _duration: Duration) -> Self {
+    pub fn new(db: Arc<D>, timeout: Duration) -> Self {
         let escrow_db = db.create_escrow_db("delegation_escrow");
         Self {
             db,
             delegation_escrow: escrow_db,
+            sweep: super::StaleSweep::new(timeout),
         }
     }
 
@@ -123,6 +125,7 @@ impl<D: EventDatabase + EscrowCreator + 'static> DelegationEscrow<D> {
 
 impl<D: EventDatabase + EscrowCreator + 'static> Notifier for DelegationEscrow<D> {
     fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error> {
+        self.sweep.run(&self.delegation_escrow)?;
         match notification {
             Notification::KeyEventAdded(ev_message) => {
                 // delegator's prefix

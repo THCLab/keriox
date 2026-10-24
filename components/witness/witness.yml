@@ -7,8 +7,10 @@ admin_port: 9100
 admin_bind: "127.0.0.1"
 public_url: "http://localhost:3232/"
 seed: "ArwXoACJgOleVZ2PY7kXn7rA0II0mHYDhc6WrBH8fDAc" # Private key in CESR format used by the witness. If this field is not provided, a randomly generated key pair will be used.
+# Seconds an escrowed event waits for what it is missing (receipts,
+# signatures, a delegator's approval) before it is dropped.
 escrow_config:
-  default_timeout: 60
+  default_timeout: 900
 # KERI protocol version this node writes its own messages in: "1.0", or
 # "2.0" (attachments in the CESR genus 2.0 code table). Reported on GET
 # /info. Switch to "2.0" only once every client it talks to reads KERI 2.0

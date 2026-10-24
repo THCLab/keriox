@@ -389,12 +389,15 @@ impl LogDatabase<'static> for MemoryLogDatabase {
 /// In-memory sequenced event database for escrow storage.
 pub struct MemorySequencedEventDb {
     data: RwLock<HashMap<(IdentifierPrefix, u64), Vec<SelfAddressingIdentifier>>>,
+    /// When each entry was inserted, in seconds since the UNIX epoch.
+    inserted: RwLock<HashMap<(IdentifierPrefix, u64, SelfAddressingIdentifier), u64>>,
 }
 
 impl MemorySequencedEventDb {
     pub fn new() -> Self {
         Self {
             data: RwLock::new(HashMap::new()),
+            inserted: RwLock::new(HashMap::new()),
         }
     }
 }
@@ -420,6 +423,11 @@ impl SequencedEventDatabase for MemorySequencedEventDb {
             .entry((identifier.clone(), sn))
             .or_default()
             .push(digest.clone());
+        self.inserted
+            .write()
+            .unwrap()
+            .entry((identifier.clone(), sn, digest.clone()))
+            .or_insert_with(crate::database::now_secs);
         Ok(())
     }
 
@@ -459,6 +467,25 @@ impl SequencedEventDatabase for MemorySequencedEventDb {
             .get_mut(&(identifier.clone(), sn))
         {
             v.retain(|d| d != said);
+        }
+        self.inserted
+            .write()
+            .unwrap()
+            .remove(&(identifier.clone(), sn, said.clone()));
+        Ok(())
+    }
+
+    fn remove_inserted_before(&self, cutoff: u64) -> Result<(), Self::Error> {
+        let stale: Vec<_> = self
+            .inserted
+            .read()
+            .unwrap()
+            .iter()
+            .filter(|(_, inserted)| **inserted <= cutoff)
+            .map(|(key, _)| key.clone())
+            .collect();
+        for (id, sn, digest) in stale {
+            self.remove(&id, sn, &digest)?;
         }
         Ok(())
     }
@@ -563,6 +590,11 @@ impl EscrowDatabase for MemoryEscrowDb {
         }
     }
 
+    fn remove_older_than(&self, max_age: std::time::Duration) -> Result<(), Self::Error> {
+        let cutoff = crate::database::now_secs().saturating_sub(max_age.as_secs());
+        self.sequenced.remove_inserted_before(cutoff)
+    }
+
     fn contains(
         &self,
         id: &IdentifierPrefix,
@@ -603,6 +635,25 @@ mod tests {
         },
         processor::{basic_processor::BasicProcessor, event_storage::EventStorage, Processor},
     };
+
+    #[test]
+    fn escrow_entries_are_removed_once_old_enough() -> Result<(), Error> {
+        use super::{MemorySequencedEventDb, SequencedEventDatabase};
+        use crate::database::now_secs;
+        use said::derivation::{HashFunction, HashFunctionCode};
+
+        let escrow = MemorySequencedEventDb::new();
+        let id: crate::prefix::IdentifierPrefix =
+            "EA_SbBUZYwqLVlAAn14d6QUBQCSReJlZ755JqTgmRhXH".parse()?;
+        let digest = HashFunction::from(HashFunctionCode::Blake3_256).derive(b"event");
+        escrow.insert(&id, 1, &digest)?;
+
+        escrow.remove_inserted_before(now_secs() - 10)?;
+        assert_eq!(escrow.get(&id, 1)?.count(), 1);
+        escrow.remove_inserted_before(now_secs())?;
+        assert_eq!(escrow.get(&id, 1)?.count(), 0);
+        Ok(())
+    }
 
     #[test]
     fn test_memory_db_process_icp() -> Result<(), Error> {

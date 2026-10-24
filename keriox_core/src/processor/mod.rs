@@ -7,6 +7,8 @@ pub mod basic_processor;
 pub mod escrow;
 #[cfg(test)]
 mod escrow_tests;
+#[cfg(test)]
+mod escrow_timeout_tests;
 pub mod event_storage;
 pub mod notification;
 #[cfg(test)]

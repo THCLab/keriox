@@ -140,6 +140,11 @@ impl EscrowDatabase for PostgresSnKeyEscrow {
         self.escrow.remove(&id, sn, &said).unwrap();
     }
 
+    fn remove_older_than(&self, max_age: std::time::Duration) -> Result<(), PostgresError> {
+        let cutoff = crate::database::now_secs().saturating_sub(max_age.as_secs());
+        self.escrow.remove_inserted_before(cutoff)
+    }
+
     fn contains(
         &self,
         id: &IdentifierPrefix,
@@ -280,6 +285,16 @@ impl SequencedEventDatabase for PostgresSnKeyDatabase {
             .bind(sn as i64)
             .bind(digest_bytes.as_ref())
             .execute(&self.pool),
+        )?;
+        Ok(())
+    }
+
+    fn remove_inserted_before(&self, cutoff: u64) -> Result<(), PostgresError> {
+        async_std::task::block_on(
+            sqlx::query("DELETE FROM escrow_events WHERE escrow_type = $1 AND inserted_at <= $2")
+                .bind(self.escrow_type)
+                .bind(cutoff as i64)
+                .execute(&self.pool),
         )?;
         Ok(())
     }

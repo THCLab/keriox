@@ -45,7 +45,7 @@ pub struct Config {
 
     /// Time after which an escrowed event is considered stale.
     #[serde(default, deserialize_with = "deserialize_escrow_config")]
-    escrow_timeout: WitnessEscrowConfig,
+    escrow_config: WitnessEscrowConfig,
 
     /// The KERI version the witness writes its own messages in (1 or 2).
     /// Receipts and key state answers follow the event or query they answer.
@@ -160,7 +160,7 @@ async fn main() -> Result<()> {
         cfg.public_url.clone(),
         cfg.db_path.as_path(),
         cfg.seed,
-        cfg.escrow_timeout,
+        cfg.escrow_config,
         cfg.keri_version,
     )?
     .with_min_client_version(min_client_version(cfg.min_client_version.as_deref())?);

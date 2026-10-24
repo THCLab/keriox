@@ -3,7 +3,9 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use redb::{Database, MultimapTableDefinition, TableDefinition};
+use redb::{
+    Database, MultimapTableDefinition, ReadableMultimapTable, ReadableTable, TableDefinition,
+};
 use said::SelfAddressingIdentifier;
 
 use crate::{
@@ -137,6 +139,11 @@ impl crate::database::EscrowDatabase for SnKeyEscrow {
         let id = event.data.get_prefix();
         let sn = event.data.sn;
         self.escrow.remove(&id, sn, &said).unwrap();
+    }
+
+    fn remove_older_than(&self, max_age: std::time::Duration) -> Result<(), RedbError> {
+        let cutoff = crate::database::now_secs().saturating_sub(max_age.as_secs());
+        self.escrow.remove_inserted_before(cutoff)
     }
 
     fn contains(
@@ -273,6 +280,41 @@ impl SequencedEventDatabase for SnKeyDatabase {
             table.remove(said.as_slice())?;
         }
 
+        write_txn.commit()?;
+        Ok(())
+    }
+
+    fn remove_inserted_before(&self, cutoff: u64) -> Result<(), RedbError> {
+        let write_txn = self.db.begin_write()?;
+        {
+            let mut entries = write_txn.open_multimap_table(self.sn_key_table)?;
+            let mut timestamps = write_txn.open_table(self.dts_table)?;
+            let mut all = vec![];
+            for entry in entries.iter()? {
+                let (key, digests) = entry?;
+                let (id, sn) = key.value();
+                for digest in digests {
+                    all.push((id.to_string(), sn, digest?.value().to_vec()));
+                }
+            }
+            let mut stale = vec![];
+            for (id, sn, digest) in all {
+                let inserted = timestamps.get(digest.as_slice())?.map(|t| t.value());
+                match inserted {
+                    Some(inserted) if inserted <= cutoff => stale.push((id, sn, digest)),
+                    Some(_) => {}
+                    // Never stamped, or the stamp was removed with the same
+                    // event from another escrow: its age counts from now.
+                    None => {
+                        timestamps.insert(digest.as_slice(), &get_current_timestamp())?;
+                    }
+                }
+            }
+            for (id, sn, digest) in stale {
+                entries.remove((id.as_str(), sn), digest.as_slice())?;
+                timestamps.remove(digest.as_slice())?;
+            }
+        }
         write_txn.commit()?;
         Ok(())
     }

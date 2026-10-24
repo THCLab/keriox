@@ -6,7 +6,11 @@ pub mod partially_witnessed_escrow;
 #[cfg(feature = "query")]
 pub mod reply_escrow;
 
-use std::{fmt::Debug, sync::Arc, time::Duration};
+use std::{
+    fmt::Debug,
+    sync::{Arc, Mutex},
+    time::{Duration, Instant},
+};
 
 use delegation_escrow::DelegationEscrow;
 use duplicitous_events::DuplicitousEvents;
@@ -15,7 +19,46 @@ use partially_signed_escrow::PartiallySignedEscrow;
 use partially_witnessed_escrow::PartiallyWitnessedEscrow;
 
 use super::notification::{JustNotification, NotificationBus};
-use crate::database::{EscrowCreator, EventDatabase};
+use crate::{
+    database::{EscrowCreator, EscrowDatabase, EventDatabase},
+    error::Error,
+};
+
+/// How long an escrow keeps an event by default: long enough for witness
+/// receipts and a delegator's approval to arrive.
+pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(15 * 60);
+
+/// How often at most an escrow looks for stale events.
+const SWEEP_INTERVAL: Duration = Duration::from_secs(60);
+
+/// Drops the events an escrow has held longer than its timeout, so escrows
+/// do not grow without bound. It runs when the escrow is notified, at most
+/// once per [`SWEEP_INTERVAL`], so an event is gone at most that long after
+/// it timed out.
+pub(crate) struct StaleSweep {
+    timeout: Duration,
+    last: Mutex<Option<Instant>>,
+}
+
+impl StaleSweep {
+    pub(crate) fn new(timeout: Duration) -> Self {
+        Self {
+            timeout,
+            last: Mutex::new(None),
+        }
+    }
+
+    pub(crate) fn run<E: EscrowDatabase>(&self, escrow: &E) -> Result<(), Error> {
+        let mut last = self.last.lock().map_err(|_| Error::DbError)?;
+        if last.is_some_and(|at| at.elapsed() < SWEEP_INTERVAL.min(self.timeout)) {
+            return Ok(());
+        }
+        *last = Some(Instant::now());
+        escrow
+            .remove_older_than(self.timeout)
+            .map_err(|_| Error::DbError)
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct EscrowConfig {
@@ -29,11 +72,11 @@ pub struct EscrowConfig {
 impl Default for EscrowConfig {
     fn default() -> Self {
         Self {
-            out_of_order_timeout: Duration::from_secs(60),
-            partially_signed_timeout: Duration::from_secs(60),
-            partially_witnessed_timeout: Duration::from_secs(60),
-            trans_receipt_timeout: Duration::from_secs(60),
-            delegation_timeout: Duration::from_secs(60),
+            out_of_order_timeout: DEFAULT_TIMEOUT,
+            partially_signed_timeout: DEFAULT_TIMEOUT,
+            partially_witnessed_timeout: DEFAULT_TIMEOUT,
+            trans_receipt_timeout: DEFAULT_TIMEOUT,
+            delegation_timeout: DEFAULT_TIMEOUT,
         }
     }
 }

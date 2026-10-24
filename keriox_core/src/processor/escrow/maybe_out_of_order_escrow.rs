@@ -14,15 +14,17 @@ use crate::processor::{
 pub struct MaybeOutOfOrderEscrow<D: EventDatabase + EscrowCreator> {
     db: Arc<D>,
     pub(crate) escrowed_out_of_order: D::EscrowDatabaseType,
+    sweep: super::StaleSweep,
 }
 
 impl<D: EventDatabase + EscrowCreator + 'static> MaybeOutOfOrderEscrow<D> {
-    pub fn new(db: Arc<D>, _duration: Duration) -> Self {
+    pub fn new(db: Arc<D>, timeout: Duration) -> Self {
         let escrow_db = db.create_escrow_db("out_of_order_escrow");
 
         Self {
             db,
             escrowed_out_of_order: escrow_db,
+            sweep: super::StaleSweep::new(timeout),
         }
     }
 
@@ -84,6 +86,7 @@ impl<D: EventDatabase + EscrowCreator + 'static> MaybeOutOfOrderEscrow<D> {
 
 impl<D: EventDatabase + EscrowCreator + 'static> Notifier for MaybeOutOfOrderEscrow<D> {
     fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error> {
+        self.sweep.run(&self.escrowed_out_of_order)?;
         match notification {
             Notification::KeyEventAdded(ev_message) => {
                 let id = ev_message.event_message.data.get_prefix();

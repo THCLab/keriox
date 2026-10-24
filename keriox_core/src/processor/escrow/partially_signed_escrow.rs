@@ -14,14 +14,16 @@ use crate::{
 pub struct PartiallySignedEscrow<D: EventDatabase + EscrowCreator> {
     db: Arc<D>,
     pub escrowed_partially_signed: D::EscrowDatabaseType,
+    sweep: super::StaleSweep,
 }
 
 impl<D: EventDatabase + EscrowCreator + 'static> PartiallySignedEscrow<D> {
-    pub fn new(db: Arc<D>, _duration: Duration) -> Self {
+    pub fn new(db: Arc<D>, timeout: Duration) -> Self {
         let escrow_db = db.create_escrow_db("partially_signed_escrow");
         Self {
             db,
             escrowed_partially_signed: escrow_db,
+            sweep: super::StaleSweep::new(timeout),
         }
     }
 
@@ -155,6 +157,7 @@ impl<D: EventDatabase + EscrowCreator + 'static> PartiallySignedEscrow<D> {
 
 impl<D: EventDatabase + EscrowCreator + 'static> Notifier for PartiallySignedEscrow<D> {
     fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error> {
+        self.sweep.run(&self.escrowed_partially_signed)?;
         match notification {
             Notification::PartiallySigned(ev) => {
                 if ev.signatures.is_empty() {

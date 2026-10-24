@@ -22,15 +22,17 @@ pub struct PartiallyWitnessedEscrow<D: EventDatabase + EscrowCreator> {
     db: Arc<D>,
     log: Arc<D::LogDatabaseType>,
     pub(crate) escrowed_partially_witnessed: D::EscrowDatabaseType,
+    sweep: super::StaleSweep,
 }
 
 impl<D: EventDatabase + EscrowCreator + 'static> PartiallyWitnessedEscrow<D> {
-    pub fn new(db: Arc<D>, log_db: Arc<D::LogDatabaseType>, _duration: Duration) -> Self {
+    pub fn new(db: Arc<D>, log_db: Arc<D::LogDatabaseType>, timeout: Duration) -> Self {
         let escrow_db = db.create_escrow_db("partially_witnessed_escrow");
         Self {
             log: log_db,
             db,
             escrowed_partially_witnessed: escrow_db,
+            sweep: super::StaleSweep::new(timeout),
         }
     }
 
@@ -260,6 +262,7 @@ impl<D: EventDatabase + EscrowCreator + 'static> PartiallyWitnessedEscrow<D> {
 
 impl<D: EventDatabase + EscrowCreator + 'static> Notifier for PartiallyWitnessedEscrow<D> {
     fn notify(&self, notification: &Notification, bus: &NotificationBus) -> Result<(), Error> {
+        self.sweep.run(&self.escrowed_partially_witnessed)?;
         match notification {
             Notification::ReceiptOutOfOrder(ooo) => {
                 // Receipted event wasn't accepted into kel yet, so check escrowed
