@@ -8,7 +8,7 @@ use keri_core::actor::possible_response::PossibleResponse;
 use keri_core::error::Error;
 use keri_core::event_message::signature::Signature;
 use keri_core::oobi::error::OobiError;
-use keri_core::oobi::LocationScheme;
+use keri_core::oobi::{LocationScheme, Scheme};
 use keri_core::prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix};
 use keri_core::processor::escrow::default_escrow_bus;
 use keri_core::processor::escrow::reply_escrow::ReplyEscrow;
@@ -892,8 +892,14 @@ impl<S: OobiStorageBackend> WatcherData<S> {
         if replies.is_empty() {
             return Err(ActorError::NoLocation { id: eid.clone() });
         }
+        // Only http(s) locations are reachable by the watcher's transports;
+        // a newer tcp one (KERIpy witnesses advertise both) must not hide them.
         let latest = replies
             .into_iter()
+            .filter(|r| match &r.data.data {
+                ReplyRoute::LocScheme(loc) => loc.scheme != Scheme::Tcp,
+                _ => true,
+            })
             .max_by_key(|r| r.get_timestamp())
             .ok_or_else(|| ActorError::NoLocation { id: eid.clone() })?;
         match latest.data.data {

@@ -335,7 +335,11 @@ impl IdentifierTelTransport for HTTPTelTransport {
     ) -> Result<String, SendingError> {
         let url = match location.scheme {
             Scheme::Http | Scheme::Https => tel_url(&location)?.join("query/tel")?,
-            Scheme::Tcp => todo!(),
+            Scheme::Tcp => {
+                return Err(SendingError::TransportError(
+                    TransportError::UnsupportedScheme(Scheme::Tcp),
+                ))
+            }
         };
         let started = Instant::now();
         let resp = shared_http_client()
@@ -364,7 +368,11 @@ impl IdentifierTelTransport for HTTPTelTransport {
     ) -> Result<(), SendingError> {
         let url = match location.scheme {
             Scheme::Http | Scheme::Https => tel_url(&location)?.join("process/tel")?,
-            Scheme::Tcp => todo!(),
+            Scheme::Tcp => {
+                return Err(SendingError::TransportError(
+                    TransportError::UnsupportedScheme(Scheme::Tcp),
+                ))
+            }
         };
         let started = Instant::now();
         let query = event.serialize().unwrap();
@@ -383,5 +391,56 @@ impl IdentifierTelTransport for HTTPTelTransport {
         );
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use keri_core::{
+        actor::prelude::{HashFunctionCode, SerializationFormats},
+        event_message::{keri_version::KeriVersion, msg::KeriEvent, timestamped::Timestamped},
+        oobi::{LocationScheme, Scheme},
+        prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+        signer::Signer,
+        transport::TransportError,
+    };
+    use teliox::query::{SignedTelQuery, TelQueryArgs, TelQueryRoute};
+
+    use super::{HTTPTelTransport, IdentifierTelTransport, SendingError};
+
+    fn tel_query() -> SignedTelQuery {
+        let signer = Signer::new();
+        let qry = KeriEvent::new(
+            KeriVersion::V1_0,
+            SerializationFormats::JSON,
+            HashFunctionCode::Blake3_256.into(),
+            Timestamped::new(TelQueryRoute::Tels {
+                reply_route: "".into(),
+                args: TelQueryArgs { i: None, ri: None },
+            }),
+        );
+        let sig = SelfSigningPrefix::Ed25519Sha512(signer.sign(qry.encode().unwrap()).unwrap());
+        SignedTelQuery::new_nontrans(qry, BasicPrefix::Ed25519NT(signer.public_key()), sig)
+    }
+
+    #[async_std::test]
+    async fn a_tel_query_to_a_tcp_location_is_unsupported() {
+        let watcher = LocationScheme {
+            eid: IdentifierPrefix::Basic(BasicPrefix::Ed25519NT(Signer::new().public_key())),
+            scheme: Scheme::Tcp,
+            url: Some(url::Url::parse("tcp://127.0.0.1:5632/").unwrap()),
+        };
+
+        let result = HTTPTelTransport.send_query(tel_query(), watcher).await;
+
+        assert!(
+            matches!(
+                result,
+                Err(SendingError::TransportError(
+                    TransportError::UnsupportedScheme(Scheme::Tcp)
+                ))
+            ),
+            "expected UnsupportedScheme, got {result:?}"
+        );
     }
 }

@@ -20,6 +20,10 @@ pub enum TransportError {
     NetworkError,
     #[error("invalid response")]
     InvalidResponse,
+    #[error("{0:?} locations are not supported")]
+    UnsupportedScheme(Scheme),
+    #[error("invalid location: {0}")]
+    InvalidLocation(String),
 }
 
 /// Process-wide HTTP client for the watcher's TEL transport. See
@@ -61,8 +65,8 @@ impl WatcherTelTransport for HttpTelTransport {
                 .as_ref()
                 .ok_or(TransportError::NetworkError)?
                 .join("query/tel")
-                .unwrap(),
-            Scheme::Tcp => todo!(),
+                .map_err(|e| TransportError::InvalidLocation(e.to_string()))?,
+            Scheme::Tcp => return Err(TransportError::UnsupportedScheme(Scheme::Tcp)),
         };
         let started = Instant::now();
         let resp = shared_http_client()
@@ -85,5 +89,72 @@ impl WatcherTelTransport for HttpTelTransport {
             "watcher tel send_query completed"
         );
         Ok(body)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use keri_core::{
+        actor::prelude::{HashFunctionCode, SerializationFormats},
+        event_message::{keri_version::KeriVersion, msg::KeriEvent, timestamped::Timestamped},
+        oobi::{LocationScheme, Scheme},
+        prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+        signer::Signer,
+    };
+    use teliox::query::{SignedTelQuery, TelQueryArgs, TelQueryRoute};
+
+    use super::{HttpTelTransport, TransportError, WatcherTelTransport};
+
+    fn witness_at(scheme: Scheme, url: &str) -> LocationScheme {
+        LocationScheme {
+            eid: IdentifierPrefix::Basic(BasicPrefix::Ed25519NT(Signer::new().public_key())),
+            scheme,
+            url: Some(url::Url::parse(url).unwrap()),
+        }
+    }
+
+    fn tel_query() -> SignedTelQuery {
+        let signer = Signer::new();
+        let qry = KeriEvent::new(
+            KeriVersion::V1_0,
+            SerializationFormats::JSON,
+            HashFunctionCode::Blake3_256.into(),
+            Timestamped::new(TelQueryRoute::Tels {
+                reply_route: "".into(),
+                args: TelQueryArgs { i: None, ri: None },
+            }),
+        );
+        let sig = SelfSigningPrefix::Ed25519Sha512(signer.sign(qry.encode().unwrap()).unwrap());
+        SignedTelQuery::new_nontrans(qry, BasicPrefix::Ed25519NT(signer.public_key()), sig)
+    }
+
+    #[tokio::test]
+    async fn a_tel_query_to_a_tcp_location_is_unsupported() {
+        let result = HttpTelTransport
+            .send_query(
+                tel_query(),
+                witness_at(Scheme::Tcp, "tcp://127.0.0.1:5632/"),
+            )
+            .await;
+
+        assert!(
+            matches!(result, Err(TransportError::UnsupportedScheme(Scheme::Tcp))),
+            "expected UnsupportedScheme, got {result:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_tel_query_to_a_url_that_takes_no_path_is_invalid() {
+        let result = HttpTelTransport
+            .send_query(
+                tel_query(),
+                witness_at(Scheme::Http, "data:text/plain,witness"),
+            )
+            .await;
+
+        assert!(
+            matches!(result, Err(TransportError::InvalidLocation(_))),
+            "expected InvalidLocation, got {result:?}"
+        );
     }
 }

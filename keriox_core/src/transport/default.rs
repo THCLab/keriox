@@ -93,6 +93,20 @@ fn base_url<E>(loc: &LocationScheme) -> Result<&url::Url, TransportError<E>> {
     })
 }
 
+/// The url of `path` at a location. Only http(s) locations are reachable
+/// by this transport; others, such as the tcp locations KERIpy witnesses
+/// advertise, are reported rather than attempted.
+fn endpoint<E>(loc: &LocationScheme, path: &str) -> Result<url::Url, TransportError<E>> {
+    match loc.scheme {
+        Scheme::Http | Scheme::Https => (),
+        Scheme::Tcp => return Err(TransportError::UnsupportedScheme(loc.scheme.clone())),
+    }
+    let base = base_url(loc)?;
+    base.join(path).map_err(|e| {
+        TransportError::InvalidLocation(format!("{path} at {base} of {}: {e}", loc.eid))
+    })
+}
+
 #[async_trait::async_trait]
 impl<E> Transport<E> for DefaultTransport<E>
 where
@@ -104,20 +118,18 @@ where
         loc: LocationScheme,
         msg: Message,
     ) -> Result<(), TransportError<E>> {
-        let url = match loc.scheme {
-            Scheme::Http | Scheme::Https => match &msg {
-                Message::Notice(_) => base_url(&loc)?.join("process").unwrap(),
-                Message::Op(op) => match op {
-                    #[cfg(feature = "query")]
-                    Op::Query(_) => panic!("can't send query in send_message"),
-                    #[cfg(feature = "query")]
-                    Op::Reply(_) => base_url(&loc)?.join("register").unwrap(),
-                    #[cfg(feature = "mailbox")]
-                    Op::Exchange(_) => base_url(&loc)?.join("forward").unwrap(),
-                },
+        let path = match &msg {
+            Message::Notice(_) => "process",
+            Message::Op(op) => match op {
+                #[cfg(feature = "query")]
+                Op::Query(_) => panic!("can't send query in send_message"),
+                #[cfg(feature = "query")]
+                Op::Reply(_) => "register",
+                #[cfg(feature = "mailbox")]
+                Op::Exchange(_) => "forward",
             },
-            Scheme::Tcp => todo!(),
         };
+        let url = endpoint(&loc, path)?;
         let started = Instant::now();
         let resp = shared_http_client()
             .post(url.clone())
@@ -159,10 +171,7 @@ where
     ) -> Result<PossibleResponse, TransportError<E>> {
         use crate::actor::possible_response::{parse_response, ResponseError};
 
-        let url = match loc.scheme {
-            Scheme::Http | Scheme::Https => base_url(&loc)?.join("query").unwrap(),
-            Scheme::Tcp => todo!(),
-        };
+        let url = endpoint(&loc, "query")?;
 
         let op: Message = qry.into();
         let started = Instant::now();
@@ -206,11 +215,7 @@ where
     #[instrument(skip_all, fields(eid = %loc.eid, host = loc.url.as_ref().and_then(|url| url.host_str()).unwrap_or("?")))]
     async fn request_loc_scheme(&self, loc: LocationScheme) -> Result<Vec<Op>, TransportError<E>> {
         // {url}/oobi/{eid}
-        let url = base_url(&loc)?
-            .join("oobi/")
-            .unwrap()
-            .join(&loc.eid.to_string())
-            .unwrap();
+        let url = endpoint(&loc, &format!("oobi/{}", loc.eid))?;
         let started = Instant::now();
         let resp = shared_http_client()
             .get(url.clone())
@@ -272,20 +277,13 @@ where
         eid: IdentifierPrefix,
     ) -> Result<Vec<u8>, TransportError<E>> {
         // {url}/oobi/{cid}/{role}/{eid}
-        let url = base_url(&loc)?
-            .join("oobi/")
-            .unwrap()
-            .join(&format!("{}/", &cid.to_string()))
-            .unwrap()
-            .join(match role {
-                Role::Witness => "witness/",
-                Role::Watcher => "watcher/",
-                Role::Controller => "controller/",
-                Role::Messagebox => "messagebox/",
-            })
-            .unwrap()
-            .join(&eid.to_string())
-            .unwrap();
+        let role = match role {
+            Role::Witness => "witness",
+            Role::Watcher => "watcher",
+            Role::Controller => "controller",
+            Role::Messagebox => "messagebox",
+        };
+        let url = endpoint(&loc, &format!("oobi/{cid}/{role}/{eid}"))?;
         let started = Instant::now();
         let resp = shared_http_client()
             .get(url.clone())
@@ -328,7 +326,7 @@ where
     async fn resolve_oobi(&self, loc: LocationScheme, oobi: Oobi) -> Result<(), TransportError<E>> {
         let started = Instant::now();
         let resp = shared_http_client()
-            .post(format!("{}resolve", base_url(&loc)?))
+            .post(endpoint(&loc, "resolve")?)
             .body(serde_json::to_string(&oobi).unwrap())
             .send()
             .await
@@ -356,5 +354,121 @@ where
             return Err(TransportError::RemoteError(err));
         }
         Ok(())
+    }
+}
+
+#[cfg(all(test, feature = "query"))]
+mod test {
+    use super::{DefaultTransport, Transport, TransportError};
+    use crate::{
+        actor::error::ActorError,
+        event_message::signed_event_message::{Message, Op},
+        oobi::{LocationScheme, Scheme},
+        prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+        query::{
+            query_event::SignedQueryMessage,
+            query_event::{LogsQueryArgs, QueryEvent, QueryRoute, SignedKelQuery},
+        },
+        signer::Signer,
+    };
+
+    // Locations come from other parties' signed /loc/scheme replies, so a
+    // transport has to cope with any scheme and url they choose to sign.
+
+    fn location(scheme: Scheme, url: &str) -> LocationScheme {
+        LocationScheme {
+            eid: IdentifierPrefix::Basic(BasicPrefix::Ed25519NT(Signer::new().public_key())),
+            scheme,
+            url: Some(url::Url::parse(url).unwrap()),
+        }
+    }
+
+    fn query() -> SignedQueryMessage {
+        let signer = Signer::new();
+        let asker = BasicPrefix::Ed25519NT(signer.public_key());
+        let qry = QueryEvent::new_query(
+            QueryRoute::Ksn {
+                args: LogsQueryArgs {
+                    i: IdentifierPrefix::Basic(asker.clone()),
+                    s: None,
+                    src: None,
+                    limit: None,
+                },
+                reply_route: String::new(),
+            },
+            &IdentifierPrefix::Basic(asker.clone()),
+            crate::event_message::keri_version::KeriVersion::V1_0,
+            crate::actor::prelude::SerializationFormats::JSON,
+            crate::actor::prelude::HashFunctionCode::Blake3_256,
+        );
+        let sig = SelfSigningPrefix::Ed25519Sha512(signer.sign(qry.encode().unwrap()).unwrap());
+        SignedQueryMessage::KelQuery(SignedKelQuery::new_nontrans(qry, asker, sig))
+    }
+
+    fn reply() -> Message {
+        let signer = Signer::new();
+        let eid = BasicPrefix::Ed25519NT(signer.public_key());
+        let rpy = crate::actor::event_generator::generate_end_role(
+            &IdentifierPrefix::Basic(eid.clone()),
+            &IdentifierPrefix::Basic(eid.clone()),
+            crate::oobi::Role::Witness,
+            true,
+            crate::event_message::keri_version::KeriVersion::V1_0,
+        );
+        let sig = SelfSigningPrefix::Ed25519Sha512(signer.sign(rpy.encode().unwrap()).unwrap());
+        Message::Op(Op::Reply(
+            crate::query::reply_event::SignedReply::new_nontrans(rpy, eid, sig),
+        ))
+    }
+
+    #[async_std::test]
+    async fn sending_a_message_to_a_tcp_location_is_unsupported() {
+        let transport = DefaultTransport::<ActorError>::new();
+
+        let result = transport
+            .send_message(location(Scheme::Tcp, "tcp://127.0.0.1:5632/"), reply())
+            .await;
+
+        assert!(
+            matches!(result, Err(TransportError::UnsupportedScheme(Scheme::Tcp))),
+            "expected UnsupportedScheme, got {result:?}"
+        );
+    }
+
+    #[async_std::test]
+    async fn sending_a_query_to_a_tcp_location_is_unsupported() {
+        let transport = DefaultTransport::<ActorError>::new();
+
+        let result = transport
+            .send_query(location(Scheme::Tcp, "tcp://127.0.0.1:5632/"), query())
+            .await;
+
+        assert!(
+            matches!(result, Err(TransportError::UnsupportedScheme(Scheme::Tcp))),
+            "expected UnsupportedScheme, got {result:?}"
+        );
+    }
+
+    #[async_std::test]
+    async fn a_location_url_that_takes_no_path_is_invalid() {
+        let transport = DefaultTransport::<ActorError>::new();
+        let unusable = || location(Scheme::Http, "data:text/plain,witness");
+
+        let message = transport.send_message(unusable(), reply()).await;
+        let query = transport.send_query(unusable(), query()).await;
+        let loc_scheme = transport.request_loc_scheme(unusable()).await;
+
+        assert!(
+            matches!(message, Err(TransportError::InvalidLocation(_))),
+            "message: expected InvalidLocation, got {message:?}"
+        );
+        assert!(
+            matches!(query, Err(TransportError::InvalidLocation(_))),
+            "query: expected InvalidLocation, got {query:?}"
+        );
+        assert!(
+            matches!(loc_scheme, Err(TransportError::InvalidLocation(_))),
+            "loc scheme: expected InvalidLocation, got {loc_scheme:?}"
+        );
     }
 }

@@ -64,6 +64,7 @@ strum = { version = "0.24", optional = true }
 rkyv = "0.8.18"
 
 [dev-dependencies]
+async-std = { version = "1", features = ["attributes"] }
 sodiumoxide = "0.2.7"
 tempfile = { version = "3.27" }
 hex = "0.4.3"

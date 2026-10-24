@@ -8,7 +8,7 @@ use crate::{
         cesr_adapter::ParseError,
         signed_event_message::{Message, Op},
     },
-    oobi::{LocationScheme, Oobi, Role},
+    oobi::{LocationScheme, Oobi, Role, Scheme},
     prefix::IdentifierPrefix,
     query::query_event::SignedQueryMessage,
 };
@@ -76,4 +76,8 @@ pub enum TransportError<E = ActorError> {
     UnknownError(String),
     #[error("remote error: {0}")]
     RemoteError(E),
+    #[error("{0:?} locations are not supported")]
+    UnsupportedScheme(Scheme),
+    #[error("invalid location: {0}")]
+    InvalidLocation(String),
 }

@@ -404,6 +404,24 @@ async fn latest_loc_scheme_picks_newest_dt() -> Result<(), ActorError> {
         "expected NoLocation for unknown eid, got {err:?}"
     );
 
+    // Case 4: a newer tcp location (KERIpy witnesses advertise one next to
+    // http) is not reachable by the watcher's transports, so the newest
+    // http(s) location still wins.
+    let dt_newest: DateTime<FixedOffset> = FixedOffset::east_opt(0)
+        .unwrap()
+        .with_ymd_and_hms(2026, 6, 1, 0, 0, 0)
+        .single()
+        .unwrap();
+    let tcp_reply = make_reply(Scheme::Tcp, "tcp://witness-under-test:5632/", dt_newest);
+    watcher.watcher_data.process_reply(tcp_reply).unwrap();
+
+    let picked4 = watcher.watcher_data.latest_loc_scheme(&witness_eid)?;
+    assert_eq!(
+        picked4.scheme,
+        Scheme::Https,
+        "a tcp location must not displace a reachable http(s) one"
+    );
+
     Ok(())
 }
 
