@@ -44,6 +44,9 @@ pub enum VerificationError {
     #[error("Missing signer identifier")]
     MissingSignerId,
 
+    #[error("No signatures attached")]
+    MissingSignatures,
+
     #[error("Needs more info: {0}")]
     MoreInfo(#[from] MoreInfoError),
 }

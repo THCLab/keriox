@@ -473,6 +473,7 @@ impl Identifier {
                         VerificationIssue::NotEstablishment { seal }
                     }
                     VerificationError::MissingSignerId => VerificationIssue::MissingSignerId,
+                    VerificationError::MissingSignatures => VerificationIssue::MissingSignatures,
                     VerificationError::MoreInfo(MoreInfoError::EventNotFound(seal)) => {
                         VerificationIssue::MissingEvent { seal }
                     }

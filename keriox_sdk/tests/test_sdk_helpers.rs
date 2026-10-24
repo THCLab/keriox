@@ -274,3 +274,24 @@ async fn an_identifier_reports_the_version_its_store_writes() {
         assert_eq!(id.keri_version(), version);
     }
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_verify_from_cesr_detailed_unsigned_payload() {
+    let tmp = TempDir::new().unwrap();
+    let store = KeriStore::open(tmp.path().to_path_buf()).unwrap();
+    let (alice, _alice_signer) = store
+        .create("alice", IdentifierConfig::default())
+        .await
+        .unwrap();
+
+    // A bare JSON object with nothing attached claims nobody's authority.
+    let issues = alice
+        .verify_from_cesr_detailed(br#"{"msg":"hello"}"#)
+        .unwrap_err();
+
+    use keri_sdk::advanced::VerificationIssue;
+    assert!(
+        matches!(issues.as_slice(), [VerificationIssue::MissingSignatures]),
+        "expected MissingSignatures, got {issues:?}"
+    );
+}

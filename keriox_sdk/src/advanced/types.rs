@@ -548,6 +548,8 @@ pub enum VerificationIssue {
     },
     /// The signature carries no signer identifier.
     MissingSignerId,
+    /// A message in the stream has no signatures attached.
+    MissingSignatures,
     /// The stream is not parseable CESR.
     StreamFormat(String),
     /// Any other verification failure.
@@ -574,6 +576,7 @@ impl std::fmt::Display for VerificationIssue {
             VerificationIssue::MissingSignerId => {
                 write!(f, "Signature doesn't contain signing identifier")
             }
+            VerificationIssue::MissingSignatures => write!(f, "No signatures attached"),
             VerificationIssue::StreamFormat(e) => write!(f, "Wrong stream format: {}", e),
             VerificationIssue::Other(e) => write!(f, "{}", e),
         }
