@@ -385,7 +385,7 @@ impl Identifier {
     })
     }
 
-    /// Sign and send the `end_role_add` reply to the watcher.
+    /// Sign and send an `end_role_add` or `end_role_cut` reply to the watcher.
     pub async fn finalize_add_watcher(&self, event: &[u8], sig: SelfSigningPrefix) -> Result<()> {
         dispatch!(self, i => {
         Ok(i.finalize_add_watcher(event, sig).await?)

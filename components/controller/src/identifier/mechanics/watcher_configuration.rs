@@ -96,7 +96,9 @@ where
         self.finalize_add_end_role(event, sig).await
     }
 
-    /// Sign and deliver a signed `end_role_add` reply, whatever the role.
+    /// Sign and deliver a signed `end_role_add` or `end_role_cut` reply,
+    /// whatever the role. A cut is stored like an add, so the endpoint is no
+    /// longer listed, and the endpoint is told it was cut.
     /// `finalize_add_watcher` is the historical name for this route-generic
     /// operation; `finalize_add_end_role` reads honestly for non-watcher
     /// roles (e.g. Messagebox). Both share the same body.
@@ -109,10 +111,9 @@ where
             parse_event_type(event).map_err(|_e| MechanicsError::EventFormatError)?;
         match parsed_event {
             EventType::Rpy(rpy) => match rpy.get_route() {
-                ReplyRoute::EndRoleAdd(_) => {
+                ReplyRoute::EndRoleAdd(_) | ReplyRoute::EndRoleCut(_) => {
                     Ok(self.finalize_add_role(&self.id, rpy, vec![sig]).await?)
                 }
-                ReplyRoute::EndRoleCut(_) => todo!(),
                 _ => Err(MechanicsError::WrongEventTypeError),
             },
             _ => Err(MechanicsError::WrongEventTypeError),
