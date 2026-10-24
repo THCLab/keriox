@@ -85,11 +85,12 @@ async fn p256_one_of_one_multisig_incept_and_rotate() {
     // 5. After rotation the group's current key is still P-256 (no curve drift).
     let alice = store.load("alice").unwrap();
     let group_state = alice.find_state(&group_prefix).unwrap();
+    assert_eq!(group_state.sn, 1, "the group rotation must be accepted");
     assert_eq!(group_state.current.public_keys.len(), 1);
     assert!(
         matches!(
             group_state.current.public_keys[0],
-            BasicPrefix::ECDSA256r1(_) | BasicPrefix::ECDSA256r1NT(_)
+            BasicPrefix::ECDSA256r1(_)
         ),
         "after rotation, group's lone controlling key must still be a P-256 prefix, got {:?}",
         group_state.current.public_keys[0]

@@ -17,8 +17,10 @@ use std::path::PathBuf;
 
 use keri_controller::{BasicPrefix, IdentifierPrefix, LocationScheme, Oobi, SelfSigningPrefix};
 use keri_core::{
-    actor::prelude::SelfAddressingIdentifier, event::sections::threshold::SignatureThreshold,
-    prefix::IndexedSignature, query::mailbox::SignedMailboxQuery,
+    actor::prelude::SelfAddressingIdentifier,
+    event::sections::threshold::SignatureThreshold,
+    prefix::{CesrPrimitive, IndexedSignature},
+    query::mailbox::SignedMailboxQuery,
 };
 
 use crate::advanced::{
@@ -255,13 +257,7 @@ pub async fn rotate<S: SigningBackend + Clone + 'static>(
     current_signer: S,
     config: RotationConfig,
 ) -> Result<()> {
-    // Keys revealed by this rotation must use the same BasicPrefix variant
-    // that the prior establishment event committed to (in next_keys_hashes).
-    // The store always commits next-keys as non-transferable (since they're
-    // a hash commitment, not yet a rotation-capable key), so reveal with NT
-    // here too — otherwise the next-key-binding check on the verifier side
-    // will reject the rotation.
-    let current_keys = vec![current_signer.basic_prefix(false)];
+    let current_keys = vec![committed_key(id, &current_signer)?];
     let new_next_keys = vec![config.new_next_pk];
     let witness_threshold = witness_threshold_or_current(id, config.witness_threshold)?;
 
@@ -286,6 +282,28 @@ pub async fn rotate<S: SigningBackend + Clone + 'static>(
     }
 
     Ok(())
+}
+
+/// The signer's key in the form the last establishment event committed to.
+/// New identifiers commit to the transferable form; identifiers created
+/// before keriox did so committed to the non-transferable one, and revealing
+/// any other form fails the next-key check.
+fn committed_key<S: SigningBackend>(id: &Identifier, signer: &S) -> Result<BasicPrefix> {
+    let state = id.find_state(id.id())?;
+    let commitments = state.current.next_keys_data.next_keys_hashes();
+    [signer.basic_prefix(true), signer.basic_prefix(false)]
+        .into_iter()
+        .find(|key| {
+            commitments
+                .iter()
+                .any(|digest| digest.verify_binding(key.to_str().as_bytes()))
+        })
+        .ok_or_else(|| {
+            Error::Signing(format!(
+                "the signing key is not among {}'s committed next keys",
+                id.id()
+            ))
+        })
 }
 
 /// The witness threshold for a new establishment event: `requested` when
@@ -329,8 +347,7 @@ pub async fn abandon<S: SigningBackend + Clone + 'static>(
     config: AbandonConfig,
 ) -> Result<SelfAddressingIdentifier> {
     let witness_threshold = witness_threshold_or_current(id, config.witness_threshold)?;
-    // Reveal with the same prefix variant the commitment used, as in `rotate`.
-    let current_keys = vec![current_signer.basic_prefix(false)];
+    let current_keys = vec![committed_key(id, &current_signer)?];
     let event = id
         .abandon(
             current_keys,

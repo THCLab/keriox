@@ -164,7 +164,7 @@ impl Identity {
         let new_next_pk = basic_prefix_for(
             new_next.algorithm(),
             keri_core::keys::PublicKey::new(new_next.public_key().bytes.clone()),
-            false,
+            true,
         );
 
         let mut identifier = self.keri.store.load(&self.alias)?;
@@ -913,7 +913,7 @@ impl IdentityBuilder {
             let next_pk = basic_prefix_for(
                 next.algorithm(),
                 keri_core::keys::PublicKey::new(next.public_key().bytes.clone()),
-                false,
+                true,
             );
             let (identifier, signer) = self
                 .keri

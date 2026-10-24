@@ -221,11 +221,9 @@ impl KeriStore {
             Signer::new_with_seed(&current_seed).map_err(|e| Error::Signing(e.to_string()))?,
         );
 
-        // Derive the next-key commitment in the BasicPrefix variant matching
-        // the next seed's algorithm (Ed25519 / secp256k1 / P-256). The NT
-        // (non-transferable) flavor is the canonical choice for next-key
-        // commitments.
-        let next_pk = crate::advanced::keys::derive_public_key(&next_seed, false)?;
+        // Commit to the transferable form: once revealed, the next key
+        // controls a transferable identifier.
+        let next_pk = crate::advanced::keys::derive_public_key(&next_seed, true)?;
 
         let controller = self.get_or_create_controller(db_path)?;
         let id = create_identifier_with_controller(&controller, signer.clone(), next_pk, config)
@@ -330,7 +328,7 @@ impl KeriStore {
         // so the AID stays on a single curve across rotations (otherwise
         // a P-256 AID would silently transition to Ed25519 after the
         // rotation after next).
-        let (new_next_seed, new_next_pk) = crate::advanced::keys::generate_keypair(algorithm, false)?;
+        let (new_next_seed, new_next_pk) = crate::advanced::keys::generate_keypair(algorithm, true)?;
 
         let mut id = self.load(alias)?;
         let signer = self.load_next_signer(alias)?;
@@ -373,7 +371,7 @@ impl KeriStore {
                 crate::advanced::keys::generate_seed(algorithm)?
             }
         };
-        let new_next_pk = crate::advanced::keys::derive_public_key(&new_next_seed, false)?;
+        let new_next_pk = crate::advanced::keys::derive_public_key(&new_next_seed, true)?;
 
         let mut id = self.load(alias)?;
         let signer = self.load_next_signer(alias)?;
@@ -657,7 +655,7 @@ impl KeriStore {
             Signer::new_with_seed(&current_seed).map_err(|e| Error::Signing(e.to_string()))?,
         );
 
-        let next_pk = crate::advanced::keys::derive_public_key(&next_seed, false)?;
+        let next_pk = crate::advanced::keys::derive_public_key(&next_seed, true)?;
 
         let delegator_id = config.delegator.clone();
         let controller = self.get_or_create_controller(db_path)?;
