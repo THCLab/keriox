@@ -211,12 +211,15 @@ pub fn verify_identifier_binding(icp_event: &KeriEvent<KeyEvent>) -> Result<bool
     let event_data = &icp_event.data.get_event_data();
     match event_data {
         EventData::Icp(icp) => match &icp_event.data.get_prefix() {
+            // A non-transferable prefix stands for its one key for good, so
+            // it cannot commit to next keys.
             IdentifierPrefix::Basic(bp) => Ok(icp.key_config.public_keys.len() == 1
                 && bp.eq(icp
                     .key_config
                     .public_keys
                     .first()
-                    .ok_or_else(|| Error::SemanticError("Missing public key".into()))?)),
+                    .ok_or_else(|| Error::SemanticError("Missing public key".into()))?)
+                && (bp.is_transferable() || icp.key_config.next_keys_data.is_empty())),
             IdentifierPrefix::SelfAddressing(sap) => {
                 Ok(icp_event.compare_digest(&sap.said)? && icp_event.digest()?.eq(&sap.said))
             }
@@ -229,5 +232,23 @@ pub fn verify_identifier_binding(icp_event: &KeriEvent<KeyEvent>) -> Result<bool
             _ => Ok(false),
         },
         _ => Err(Error::SemanticError("Not an ICP or DIP event".into())),
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::verify_identifier_binding;
+    use crate::event_message::cesr_adapter::{parse_event_type, EventType};
+
+    /// A non-transferable (B) prefix stands for its one key forever, so an
+    /// inception under it cannot commit to next keys.
+    #[test]
+    fn a_non_transferable_prefix_with_next_keys_is_not_bound() {
+        let icp = br#"{"v":"KERI10JSON00012b_","t":"icp","d":"EDcRxXA57QytDS59WegZpRubQ-JrURe32UD96WwDNEZH","i":"BCziTNjJZxhimUtCo0e2-DPLiCX1UKJ8LgOP-rvKnw3a","s":"0","kt":"1","k":["BCziTNjJZxhimUtCo0e2-DPLiCX1UKJ8LgOP-rvKnw3a"],"nt":"1","n":["EO2RAI23bCLSrlZbHes4QFzFMrLaUjaW5q59ftlXpRCR"],"bt":"0","b":[],"c":[],"a":[]}"#;
+        let Ok(EventType::KeyEvent(icp)) = parse_event_type(icp) else {
+            panic!("fixture must be a key event")
+        };
+
+        assert_eq!(verify_identifier_binding(&icp).unwrap(), false);
     }
 }
