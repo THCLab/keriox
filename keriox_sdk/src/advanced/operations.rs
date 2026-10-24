@@ -263,6 +263,7 @@ pub async fn rotate<S: SigningBackend + Clone + 'static>(
     // will reject the rotation.
     let current_keys = vec![current_signer.basic_prefix(false)];
     let new_next_keys = vec![config.new_next_pk];
+    let witness_threshold = witness_threshold_or_current(id, config.witness_threshold)?;
 
     let rotation_event = id
         .rotate(
@@ -271,7 +272,7 @@ pub async fn rotate<S: SigningBackend + Clone + 'static>(
             config.new_next_threshold,
             config.witness_to_add,
             config.witness_to_remove,
-            config.witness_threshold,
+            witness_threshold,
         )
         .await?;
 
@@ -285,6 +286,21 @@ pub async fn rotate<S: SigningBackend + Clone + 'static>(
     }
 
     Ok(())
+}
+
+/// The witness threshold for a new establishment event: `requested` when
+/// given, otherwise the threshold the identifier already has, so leaving it
+/// out never weakens how many witness receipts later events need.
+fn witness_threshold_or_current(id: &Identifier, requested: Option<u64>) -> Result<u64> {
+    if let Some(threshold) = requested {
+        return Ok(threshold);
+    }
+    match id.find_state(id.id())?.witness_config.tally {
+        SignatureThreshold::Simple(threshold) => Ok(threshold),
+        SignatureThreshold::Weighted(_) => Err(Error::Other(
+            "weighted witness threshold: give the new witness threshold explicitly".into(),
+        )),
+    }
 }
 
 /// Abandon an identifier, notify witnesses, and query mailboxes.
@@ -312,17 +328,7 @@ pub async fn abandon<S: SigningBackend + Clone + 'static>(
     current_signer: S,
     config: AbandonConfig,
 ) -> Result<SelfAddressingIdentifier> {
-    let witness_threshold = match config.witness_threshold {
-        Some(threshold) => threshold,
-        None => match id.find_state(id.id())?.witness_config.tally {
-            SignatureThreshold::Simple(threshold) => threshold,
-            SignatureThreshold::Weighted(_) => {
-                return Err(Error::Other(
-                    "weighted witness threshold: set AbandonConfig::witness_threshold".into(),
-                ))
-            }
-        },
-    };
+    let witness_threshold = witness_threshold_or_current(id, config.witness_threshold)?;
     // Reveal with the same prefix variant the commitment used, as in `rotate`.
     let current_keys = vec![current_signer.basic_prefix(false)];
     let event = id

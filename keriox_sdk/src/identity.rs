@@ -173,7 +173,7 @@ impl Identity {
             new_next_threshold: 1,
             witness_to_add: vec![],
             witness_to_remove: vec![],
-            witness_threshold: 0,
+            witness_threshold: None,
         };
         crate::advanced::operations::rotate(&mut identifier, revealing_signer.clone(), config)
             .await?;

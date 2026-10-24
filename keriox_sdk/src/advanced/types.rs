@@ -108,8 +108,9 @@ pub struct RotationConfig {
     pub witness_to_add: Vec<LocationScheme>,
     /// Witnesses to remove during this rotation.
     pub witness_to_remove: Vec<BasicPrefix>,
-    /// New witness signing threshold (0 = keep current).
-    pub witness_threshold: u64,
+    /// New witness threshold. Keeps the current one when `None`; an
+    /// explicit `Some(0)` lets later events stand without witness receipts.
+    pub witness_threshold: Option<u64>,
 }
 
 /// Configuration for abandoning an identifier.
@@ -155,8 +156,9 @@ pub struct StoreRotationConfig {
     pub witness_to_add: Vec<LocationScheme>,
     /// Witnesses to remove during this rotation.
     pub witness_to_remove: Vec<BasicPrefix>,
-    /// New witness signing threshold (0 = keep current).
-    pub witness_threshold: u64,
+    /// New witness threshold. Keeps the current one when `None`; an
+    /// explicit `Some(0)` lets later events stand without witness receipts.
+    pub witness_threshold: Option<u64>,
     /// The seed for the new *next* (pre-rotated) key. Generated when `None`,
     /// matching the algorithm of the key becoming current.
     pub new_next_seed: Option<keri_core::prefix::SeedPrefix>,
