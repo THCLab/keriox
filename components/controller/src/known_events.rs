@@ -175,7 +175,12 @@ where
                     // TODO: Should controller respond to queries?
                     None
                 }
-                Op::Exchange(_) => todo!(),
+                // Exchanges are delivered and handled through the mailbox.
+                Op::Exchange(_) => {
+                    return Err(Error::SemanticError(
+                        "exchange messages are read from the mailbox, not processed here".into(),
+                    ))
+                }
             },
             Message::Notice(notice) => {
                 self.processor.process_notice(&notice)?;

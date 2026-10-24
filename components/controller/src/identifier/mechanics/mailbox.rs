@@ -293,7 +293,88 @@ where
                 // let (delegating_event, exn) = self.delegate(&event_to_confirm.event_message)?;
                 Ok(Some(ActionRequired::DelegationRequest(ixn, exn)))
             }
-            _ => todo!(),
+            // nothing to delegate; process it like any key event, as
+            // process_own_delegate does
+            _ => {
+                self.known_events
+                    .process(&Message::Notice(Notice::Event(event_to_confirm.clone())))
+                    .map_err(ResponseProcessingError::Delegate)?;
+                Ok(None)
+            }
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use keri_core::{
+        event_message::signed_event_message::{Message, Notice},
+        mailbox::MailboxResponse,
+        prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
+        signer::{CryptoBox, KeyManager},
+    };
+    use tempfile::Builder;
+
+    use crate::{config::ControllerConfig, RedbController, RedbIdentifier};
+
+    fn identifier(prefix: &str) -> (tempfile::TempDir, RedbController, RedbIdentifier) {
+        let root = Builder::new().prefix(prefix).tempdir().unwrap();
+        let controller = RedbController::new(ControllerConfig {
+            db_path: root.path().to_owned(),
+            ..Default::default()
+        })
+        .unwrap();
+        let km = CryptoBox::new().unwrap();
+        let icp = futures::executor::block_on(controller.incept(
+            vec![BasicPrefix::Ed25519(km.public_key())],
+            vec![BasicPrefix::Ed25519(km.next_public_key())],
+            vec![],
+            0,
+        ))
+        .unwrap();
+        let sig = SelfSigningPrefix::Ed25519Sha512(km.sign(icp.as_bytes()).unwrap());
+        let id = controller.finalize_incept(icp.as_bytes(), &sig).unwrap();
+        (root, controller, id)
+    }
+
+    /// A group's delegate mailbox should hold delegating and delegated
+    /// events; anything else a witness puts there is processed like any key
+    /// event instead of panicking.
+    #[async_std::test]
+    async fn a_group_delegate_mailbox_entry_of_another_type_is_processed() {
+        let (_root, _controller, member) = identifier("grp-del-member");
+        let (_other_root, _other_controller, other) = identifier("grp-del-other");
+        let Some(Notice::Event(icp)) = other.get_own_kel().unwrap().into_iter().next() else {
+            panic!("an inception is the first event of a KEL")
+        };
+        let group =
+            IdentifierPrefix::Basic(BasicPrefix::Ed25519(CryptoBox::new().unwrap().public_key()));
+        let mailbox = MailboxResponse {
+            receipt: vec![],
+            multisig: vec![],
+            delegate: vec![icp],
+        };
+
+        let actions = member
+            .process_group_mailbox(&mailbox, &group)
+            .await
+            .unwrap();
+
+        assert!(actions.is_empty());
+        assert!(member.find_state(other.id()).is_ok());
+    }
+
+    /// Exchange messages reach a controller through its mailbox. One that
+    /// turns up among other messages, e.g. in a watcher's answer, is refused.
+    #[test]
+    fn an_exchange_message_is_refused_by_process() {
+        let (_root, controller, _id) = identifier("exn-process");
+        let exn = br#"{"v":"KERI10JSON0002f1_","t":"exn","d":"EBLqTGJXK8ViUGXMOO8_LXbetpjJX8CY_SbA134RIZmf","dt":"2022-10-25T09:53:04.119676+00:00","r":"/fwd","q":{"pre":"EKYLUMmNPZeEs77Zvclf0bSN5IN-mLfLpx2ySb-HDlk4","topic":"multisig"},"a":{"v":"KERI10JSON000215_","t":"icp","d":"EC61gZ9lCKmHAS7U5ehUfEbGId5rcY0D7MirFZHDQcE2","i":"EC61gZ9lCKmHAS7U5ehUfEbGId5rcY0D7MirFZHDQcE2","s":"0","kt":"2","k":["DOZlWGPfDHLMf62zSFzE8thHmnQUOgA3_Y-KpOyF9ScG","DHGb2qY9WwZ1sBnC9Ip0F-M8QjTM27ftI-3jTGF9mc6K"],"nt":"2","n":["EBvD5VIVvf6NpP9GRmTqu_Cd1KN0RKrKNfPJ-uhIxurj","EHlpcaxffvtcpoUUMTc6tpqAVtb2qnOYVk_3HRsZ34PH"],"bt":"3","b":["BBilc4-L3tFUnfM_wJr4S4OJanAv_VmF_dJNN6vkf2Ha","BLskRTInXnMxWaGqcpSyMgo0nYbalW99cGZESrz3zapM","BIKKuvBwpmDVA4Ds-EpL5bt9OqPzWPja2LigFYZN2YfX"],"c":[],"a":[]}}-KABAAArUSuSpts5zDQ7CgPcy305IxhAG8lOjf-r_d5yYQXp18OD9No_gd2McOOjGWMfjyLVjDK529pQcbvNv9Uwc6gH-PAZ5AABAA-a-KABAABYHc_lpuYF3SPNWvyPjzek7yquw69Csc6pLv5vrXHkFAFDcwNNTVxq7ZpxpqOO0CAIS-9Qj1zMor-cwvMHAmkE"#;
+        let msg = Message::try_from(
+            keri_core::event_message::cesr_adapter::parse_cesr_stream(exn).unwrap(),
+        )
+        .unwrap();
+
+        assert!(controller.known_events.process(&msg).is_err());
     }
 }
