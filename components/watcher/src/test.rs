@@ -231,7 +231,7 @@ pub async fn watcher_forward_ksn() -> Result<(), ActorError> {
         match signature {
             keri_core::event_message::signature::Signature::Transferable(_, sig) => {
                 if let SelfSigningPrefix::Ed25519Sha512(ref mut bytes) = &mut sig[0].signature {
-                    bytes[15] += 1;
+                    bytes[15] ^= 1;
                 } else {
                     panic!("Unexpected signature type");
                 }
