@@ -1,11 +1,16 @@
+use std::{collections::HashMap, sync::Arc};
+
 use cesrox::primitives::codes::self_addressing::SelfAddressing;
 use keri_core::{
     actor::prelude::HashFunction,
-    oobi::LocationScheme,
-    prefix::{BasicPrefix, SelfSigningPrefix},
+    oobi::{LocationScheme, Scheme},
+    prefix::{BasicPrefix, IdentifierPrefix, SelfSigningPrefix},
     signer::{CryptoBox, KeyManager},
+    transport::test::{TestActorMap, TestTransport},
 };
-use tempfile::Builder;
+use tempfile::{Builder, TempDir};
+use url::{Host, Url};
+use witness::{WitnessEscrowConfig, WitnessListener};
 
 use keri_controller::{config::ControllerConfig, controller::Controller, error::ControllerError};
 
@@ -73,31 +78,45 @@ async fn test_kel_managing() -> Result<(), ControllerError> {
     Ok(())
 }
 
+/// A witness running in this process, reached at `http://{host}:3232/`
+/// through the test transport.
+fn local_witness(host: &str, actors: &mut TestActorMap) -> (TempDir, BasicPrefix, LocationScheme) {
+    let root = Builder::new().prefix("test-wit-db").tempdir().unwrap();
+    let url = Url::parse(&format!("http://{host}:3232/")).unwrap();
+    let witness = Arc::new(
+        WitnessListener::setup_with_redb(
+            url.clone(),
+            root.path(),
+            None,
+            WitnessEscrowConfig::default(),
+            keri_core::event_message::keri_version::KeriVersion::V1_0,
+        )
+        .unwrap(),
+    );
+    let id = witness.get_prefix();
+    actors.insert((Host::Domain(host.to_string()), 3232), witness);
+    // OOBI (Out-Of-Band Introduction) specifies the way how actors can be found.
+    let oobi = LocationScheme {
+        eid: IdentifierPrefix::Basic(id.clone()),
+        scheme: Scheme::Http,
+        url: Some(url),
+    };
+    (root, id, oobi)
+}
+
 #[async_std::test]
 async fn test_kel_managing_with_witness() -> Result<(), ControllerError> {
     let root = Builder::new().prefix("test-db").tempdir().unwrap();
 
-    let first_witness_id: BasicPrefix = "BNJJhjUnhlw-lsbYdehzLsX1hJMG9QJlK_wJ5AunJLrM"
-        .parse()
-        .unwrap();
-    // OOBI (Out-Of-Band Introduction) specifies the way how actors can be found.
-    let first_witness_oobi: LocationScheme = serde_json::from_str(&format!(
-        r#"{{"eid":{:?},"scheme":"http","url":"http://w1.ea.argo.colossi.network/"}}"#,
-        first_witness_id
-    ))
-    .unwrap();
-
-    let second_witness_id: BasicPrefix = "BFdfJEbC7__AqZdrXkxmW3THnZmIeJzCGpzJpgN6Ettw"
-        .parse()
-        .unwrap();
-    let second_witness_oobi: LocationScheme = serde_json::from_str(&format!(
-        r#"{{"eid":{:?},"scheme":"http","url":"http://w2.ea.argo.colossi.network/"}}"#,
-        second_witness_id
-    ))
-    .unwrap();
+    let mut actors: TestActorMap = HashMap::new();
+    let (_first_root, first_witness_id, first_witness_oobi) =
+        local_witness("witness1", &mut actors);
+    let (_second_root, second_witness_id, second_witness_oobi) =
+        local_witness("witness2", &mut actors);
 
     let controller = Controller::new(ControllerConfig {
         db_path: root.path().to_owned(),
+        transport: Box::new(TestTransport::new(actors)),
         ..Default::default()
     })?;
 
