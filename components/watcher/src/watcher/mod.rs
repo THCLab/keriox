@@ -295,10 +295,7 @@ impl<S: OobiStorageBackend> Watcher<S> {
                     }
                 }
                 keri_core::query::query_event::SignedQueryMessage::MailboxQuery(_) => {
-                    return Err(ActorError::UnsupportedQuery(
-                        "mailboxes are kept by witnesses; send mailbox queries to a witness"
-                            .into(),
-                    ));
+                    return Err(watcher_data::mailbox_query_refused());
                 }
             }
         }

@@ -845,16 +845,23 @@ async fn a_mailbox_query_to_a_watcher_is_refused() {
     .unwrap();
     watcher.parse_and_process_notices(&icp).unwrap();
 
-    let mailbox_query = keri_core::event_message::signed_event_message::Message::Op(Op::Query(
-        controller.query_mailbox(&watcher.prefix()),
-    ))
-    .to_cesr()
-    .unwrap();
+    let mailbox_query = Op::Query(controller.query_mailbox(&watcher.prefix()));
+    let stream = keri_core::event_message::signed_event_message::Message::Op(mailbox_query.clone())
+        .to_cesr()
+        .unwrap();
 
-    let result = watcher.parse_and_process_queries(&mailbox_query).await;
+    let result = watcher.parse_and_process_queries(&stream).await;
 
     assert!(
         matches!(result, Err(ActorError::UnsupportedQuery(_))),
         "expected UnsupportedQuery, got {result:?}"
+    );
+
+    // Ops in a peer's answer to an end role OOBI go through process_op.
+    let result = watcher.watcher_data.process_op(mailbox_query).await;
+
+    assert!(
+        matches!(result, Err(ActorError::UnsupportedQuery(_))),
+        "expected UnsupportedQuery from process_op, got {result:?}"
     );
 }

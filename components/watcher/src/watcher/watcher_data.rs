@@ -249,7 +249,7 @@ impl<S: OobiStorageBackend> WatcherData<S> {
     pub async fn process_op(&self, op: Op) -> Result<Option<PossibleResponse>, ActorError> {
         match op {
             Op::Query(SignedQueryMessage::KelQuery(qry)) => Ok(self.process_query(qry).await?),
-            Op::Query(SignedQueryMessage::MailboxQuery(_qry)) => todo!(),
+            Op::Query(SignedQueryMessage::MailboxQuery(_)) => Err(mailbox_query_refused()),
             Op::Reply(rpy) => {
                 self.process_reply(rpy)?;
                 Ok(None)
@@ -943,6 +943,13 @@ pub(crate) fn logs_query_still_missing(
         // No state at all → genuinely missing.
         (None, _, _) => true,
     }
+}
+
+/// Mailboxes are kept by witnesses, so a watcher refuses mailbox queries.
+pub(crate) fn mailbox_query_refused() -> ActorError {
+    ActorError::UnsupportedQuery(
+        "mailboxes are kept by witnesses; send mailbox queries to a witness".into(),
+    )
 }
 
 #[cfg(test)]
