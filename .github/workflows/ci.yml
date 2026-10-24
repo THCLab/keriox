@@ -37,8 +37,8 @@ jobs:
         run: keriox_core/check-features.sh
 
   # --all-features includes the Postgres storage backends, whose tests need
-  # a database. Skipped: postgres_identity_lifecycle and test_tel_from_watcher
-  # hang, and test_kel_managing_with_witness talks to deployed witnesses.
+  # a database. Skipped: postgres_identity_lifecycle hangs, and
+  # test_kel_managing_with_witness talks to deployed witnesses.
   test:
     runs-on: ubuntu-22.04
     services:
@@ -69,7 +69,6 @@ jobs:
           args: >-
             --all-features --verbose --
             --skip postgres_identity_lifecycle
-            --skip test_tel_from_watcher
             --skip test_kel_managing_with_witness
 
   # The shared CESR V2 vectors: keriox reads what keripy, cesrox and the

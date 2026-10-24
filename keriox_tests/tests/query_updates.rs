@@ -1,13 +1,12 @@
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
-use actix_rt::time::sleep;
 use keri_controller::{
     config::ControllerConfig, controller::Controller, error::ControllerError,
     identifier::query::QueryResponse, BasicPrefix, CryptoBox, EndRole, IdentifierPrefix,
     KeyManager, Oobi, SelfSigningPrefix,
 };
 use keri_core::processor::validator::{MoreInfoError, VerificationError};
-use keri_tests::settings::InfrastructureContext;
+use keri_tests::{settings::InfrastructureContext, wait_before_retry};
 use tempfile::Builder;
 use test_context::test_context;
 
@@ -174,8 +173,9 @@ async fn test_updates(ctx: &mut InfrastructureContext) -> Result<(), ControllerE
         .finalize_query(queries_and_signatures.clone())
         .await;
     // Watcher might need some time to find KEL. Ask about it until it's ready.
+    let mut attempts = 0;
     while !errors.is_empty() {
-        sleep(Duration::from_millis(500)).await;
+        wait_before_retry(&mut attempts, &format!("watcher query: {errors:?}")).await;
         (response, errors) = verifying_identifier
             .finalize_query(queries_and_signatures.clone())
             .await;
@@ -263,8 +263,9 @@ async fn test_updates(ctx: &mut InfrastructureContext) -> Result<(), ControllerE
         .await;
 
     // Watcher might need some time to find KEL. Ask about it until it's ready.
+    let mut attempts = 0;
     while !errors.is_empty() {
-        sleep(Duration::from_millis(500)).await;
+        wait_before_retry(&mut attempts, &format!("watcher query: {errors:?}")).await;
         (response, errors) = verifying_identifier
             .finalize_query(queries_and_signatures.clone())
             .await;

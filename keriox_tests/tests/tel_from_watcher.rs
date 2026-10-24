@@ -10,6 +10,7 @@ use keri_core::transport::test::TestTransport;
 use keri_tests::setup_identifier;
 use keri_tests::transport::TelTestActor;
 use keri_tests::transport::TelTestTransport;
+use keri_tests::wait_before_retry;
 use teliox::state::vc_state::TelState;
 use tempfile::Builder;
 use url::{Host, Url};
@@ -376,8 +377,9 @@ async fn test_tel_from_watcher() -> Result<(), anyhow::Error> {
         .await;
 
     // Watcher may need some time to find KEL. Query it multiple times.
+    let mut attempts = 0;
     while !errs.is_empty() {
-        sleep(Duration::from_secs(1)).await;
+        wait_before_retry(&mut attempts, &format!("watcher query: {errs:?}")).await;
         (_, errs) = verifier
             .finalize_query(queries_and_signatures.clone())
             .await;
@@ -391,16 +393,16 @@ async fn test_tel_from_watcher() -> Result<(), anyhow::Error> {
         SelfSigningPrefix::Ed25519Sha512(verifier_keypair.sign(&qry.encode().unwrap())?);
     verifier.finalize_query_tel(qry, signature).await?;
 
-    let vc_state = verifier.find_vc_state(&sai).unwrap();
-    if let None = vc_state {
-        // Give watcher a moment to find TEL and ask again
-        sleep(Duration::from_secs(1)).await;
-
-        let qry = verifier.query_tel(registry_id, vc_hash.clone())?;
+    // The watcher may need some time to find the TEL; ask again until it has.
+    let mut attempts = 0;
+    while verifier.find_vc_state(&sai).unwrap().is_none() {
+        wait_before_retry(&mut attempts, "watcher has no TEL").await;
+        let qry = verifier.query_tel(registry_id.clone(), vc_hash.clone())?;
         let signature =
             SelfSigningPrefix::Ed25519Sha512(verifier_keypair.sign(&qry.encode().unwrap())?);
         verifier.finalize_query_tel(qry, signature).await?;
-    };
+    }
+    let vc_state = verifier.find_vc_state(&sai).unwrap();
     assert!(matches!(vc_state, Some(TelState::Revoked)));
 
     Ok(())

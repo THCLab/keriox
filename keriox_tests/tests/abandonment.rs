@@ -3,9 +3,8 @@
 //! verifier that never saw it before learns it is abandoned through a
 //! watcher.
 
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
-use actix_rt::time::sleep;
 use keri_controller::{
     config::ControllerConfig, error::ControllerError, identifier::mechanics::MechanicsError,
     mailbox_updating::ActionRequired, BasicPrefix, CryptoBox, EndRole, IdentifierPrefix,
@@ -22,7 +21,7 @@ use keri_core::{
     prefix::IndexedSignature,
     transport::{default::DefaultTransport, Transport, TransportError},
 };
-use keri_tests::settings::InfrastructureContext;
+use keri_tests::{settings::InfrastructureContext, wait_before_retry};
 use said::SelfAddressingIdentifier;
 use tempfile::{Builder, TempDir};
 use test_context::test_context;
@@ -235,8 +234,9 @@ async fn an_abandoned_identifier_is_final_for_witnesses_and_watchers(
         })
         .collect();
     let (_, mut errors) = b.finalize_query(queries.clone()).await;
+    let mut attempts = 0;
     while !errors.is_empty() {
-        sleep(Duration::from_millis(500)).await;
+        wait_before_retry(&mut attempts, &format!("watcher query: {errors:?}")).await;
         (_, errors) = b.finalize_query(queries.clone()).await;
     }
 

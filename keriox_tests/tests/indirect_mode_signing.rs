@@ -6,7 +6,7 @@ use keri_controller::{
     KeyManager, Oobi, SelfSigningPrefix,
 };
 use keri_core::processor::validator::{MoreInfoError, VerificationError};
-use keri_tests::settings::InfrastructureContext;
+use keri_tests::{settings::InfrastructureContext, wait_before_retry};
 use tempfile::Builder;
 use test_context::test_context;
 
@@ -197,7 +197,9 @@ async fn indirect_mode_signing(ctx: &mut InfrastructureContext) -> Result<(), Co
         .finalize_query(queries_and_signatures.clone())
         .await;
     // Watcher might need some time to find KEL. Ask about it until it's ready.
+    let mut attempts = 0;
     while let QueryResponse::NoUpdates = response {
+        wait_before_retry(&mut attempts, "watcher has no updates").await;
         (response, _) = verifying_identifier
             .finalize_query(queries_and_signatures.clone())
             .await;
@@ -276,7 +278,9 @@ async fn indirect_mode_signing(ctx: &mut InfrastructureContext) -> Result<(), Co
         .finalize_query(queries_and_signatures.clone())
         .await;
     // Watcher might need some time to find KEL. Ask about it until it's ready.
+    let mut attempts = 0;
     while let QueryResponse::NoUpdates = response {
+        wait_before_retry(&mut attempts, "watcher has no updates").await;
         (response, _) = verifying_identifier
             .finalize_query(queries_and_signatures.clone())
             .await;

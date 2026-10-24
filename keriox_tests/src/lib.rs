@@ -1,4 +1,4 @@
-use std::{path::Path, sync::Arc};
+use std::{path::Path, sync::Arc, time::Duration};
 
 use keri_controller::{
     config::ControllerConfig, error::ControllerError, mailbox_updating::ActionRequired,
@@ -16,6 +16,15 @@ use transport::TelTestTransport;
 
 pub mod settings;
 pub mod transport;
+
+/// Waits before asking a watcher or witness again, as it may not have
+/// caught up yet. Panics after 30 attempts, so a peer that never answers
+/// fails the test instead of hanging it.
+pub async fn wait_before_retry(attempts: &mut u32, what: &str) {
+    *attempts += 1;
+    assert!(*attempts <= 30, "{what}: no answer after 30 attempts");
+    actix_rt::time::sleep(Duration::from_millis(500)).await;
+}
 
 // Helper function that incepts identifier
 pub async fn setup_identifier(
