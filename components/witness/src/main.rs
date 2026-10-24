@@ -47,9 +47,10 @@ pub struct Config {
     #[serde(default, deserialize_with = "deserialize_escrow_config")]
     escrow_config: WitnessEscrowConfig,
 
-    /// The KERI version the witness writes its own messages in (1 or 2).
-    /// Receipts and key state answers follow the event or query they answer.
-    #[serde(default)]
+    /// The KERI version the witness writes its own messages in (1 or 2),
+    /// 2.0 unless set. Receipts and key state answers follow the event or
+    /// query they answer.
+    #[serde(default = "keri_2_0")]
     keri_version: KeriVersion,
 
     /// The oldest keriox release whose requests are served, e.g. `0.20.0`.
@@ -135,6 +136,11 @@ struct Args {
 }
 
 const ENV_PREFIX: &str = "WITNESS_";
+
+/// Nodes write KERI 2.0 unless configured otherwise.
+fn keri_2_0() -> KeriVersion {
+    KeriVersion::V2_0
+}
 
 #[actix_web::main]
 async fn main() -> Result<()> {

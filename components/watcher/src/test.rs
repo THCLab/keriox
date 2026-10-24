@@ -660,7 +660,7 @@ mod abandonment {
         assert!(features.contains(&serde_json::json!("keri2")));
         assert_eq!(
             info["keri"],
-            serde_json::json!({ "protocol": "1.0", "cesr_genus": "2.0" })
+            serde_json::json!({ "protocol": "2.0", "cesr_genus": "2.0" })
         );
     }
 
@@ -672,7 +672,7 @@ mod abandonment {
             public_address: Url::parse("http://some/dummy/url").unwrap(),
             db_path: db.path().to_owned(),
             tel_storage_path: tel.path().join("tel_storage"),
-            keri_version: keri_core::event_message::keri_version::KeriVersion::V2_0,
+            keri_version: keri_core::event_message::keri_version::KeriVersion::V1_0,
             ..Default::default()
         })
         .unwrap();
@@ -681,7 +681,7 @@ mod abandonment {
             serde_json::from_slice(&to_bytes(response.into_body()).await.unwrap()).unwrap();
         assert_eq!(
             info["keri"],
-            serde_json::json!({ "protocol": "2.0", "cesr_genus": "2.0" })
+            serde_json::json!({ "protocol": "1.0", "cesr_genus": "2.0" })
         );
     }
 }

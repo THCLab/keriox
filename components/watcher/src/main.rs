@@ -65,8 +65,9 @@ pub struct Config {
     #[serde(default)]
     kel_update_timeout: Option<Duration>,
 
-    /// The KERI version the watcher writes its own messages in (1 or 2).
-    #[serde(default)]
+    /// The KERI version the watcher writes its own messages in (1 or 2),
+    /// 2.0 unless set.
+    #[serde(default = "keri_2_0")]
     keri_version: KeriVersion,
 
     /// The oldest keriox release whose requests are served, e.g. `0.20.0`.
@@ -162,6 +163,11 @@ struct Args {
 }
 
 const ENV_PREFIX: &str = "WATCHER_";
+
+/// Nodes write KERI 2.0 unless configured otherwise.
+fn keri_2_0() -> KeriVersion {
+    KeriVersion::V2_0
+}
 
 #[actix_web::main]
 async fn main() -> anyhow::Result<()> {

@@ -261,7 +261,7 @@ impl<S: OobiStorageBackend> Witness<S> {
             receipt_generator,
             oobi_manager,
             tel,
-            keri_version: KeriVersion::default(),
+            keri_version: KeriVersion::V2_0,
         })
     }
 }

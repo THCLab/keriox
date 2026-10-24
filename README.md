@@ -65,8 +65,9 @@ final and no more key events are allowed in it:
 
 ## KERI 1.0 and 2.0
 
-keriox reads KERI 1.0 and KERI 2.0 messages, and writes KERI 1.0 unless told
-otherwise, so a node or client can be upgraded before its peers.
+keriox reads KERI 1.0 and KERI 2.0 messages. Witnesses and watchers write
+KERI 2.0 unless configured otherwise; the controller and the SDK write
+KERI 1.0 unless told otherwise.
 
 Versions are the KERI protocol versions of the version string, in the
 dotted-decimal notation of the CESR specification:
@@ -94,8 +95,8 @@ are protocol versions, not the versions of the specification documents.
 - The **controller** writes its own messages in `ControllerConfig::keri_version`,
   the **SDK** in `KeriStore::with_keri_version`, and **witnesses** and
   **watchers** in `keri_version` in their configuration file (`"1.0"` or
-  `"2.0"`; `WITNESS_KERI_VERSION` and `WATCHER_KERI_VERSION` in the
-  environment).
+  `"2.0"`, the default; `WITNESS_KERI_VERSION` and `WATCHER_KERI_VERSION`
+  in the environment).
 - Switch a writer to 2.0 only once everything that reads its messages runs a
   keriox that reads 2.0. Older releases refuse KERI 2.0 messages. Witnesses
   and watchers that read 2.0 list `"keri2"` on `GET /info`

@@ -2005,20 +2005,20 @@ mod abandonment {
         assert!(features.contains(&serde_json::json!("keri2")));
         assert_eq!(
             info["keri"],
-            serde_json::json!({ "protocol": "1.0", "cesr_genus": "2.0" })
+            serde_json::json!({ "protocol": "2.0", "cesr_genus": "2.0" })
         );
     }
 
     #[actix_web::test]
     async fn info_reports_the_keri_version_the_witness_writes() {
         let (_root, mut witness) = setup_witness();
-        witness.keri_version = keri_core::event_message::keri_version::KeriVersion::V2_0;
+        witness.keri_version = keri_core::event_message::keri_version::KeriVersion::V1_0;
         let response = http_handlers::info(web::Data::new(Arc::new(witness))).await;
         let info: serde_json::Value =
             serde_json::from_slice(&to_bytes(response.into_body()).await.unwrap()).unwrap();
         assert_eq!(
             info["keri"],
-            serde_json::json!({ "protocol": "2.0", "cesr_genus": "2.0" })
+            serde_json::json!({ "protocol": "1.0", "cesr_genus": "2.0" })
         );
     }
 }

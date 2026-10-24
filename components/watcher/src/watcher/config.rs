@@ -43,7 +43,7 @@ impl Default for WatcherConfig {
             escrow_config: EscrowConfig::default(),
             poll_interval: Duration::from_secs(30),
             kel_update_timeout: Duration::from_secs(5),
-            keri_version: KeriVersion::default(),
+            keri_version: KeriVersion::V2_0,
         }
     }
 }
