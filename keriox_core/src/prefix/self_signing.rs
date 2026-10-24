@@ -27,14 +27,16 @@ impl fmt::Debug for SelfSigningPrefix {
 }
 
 impl SelfSigningPrefix {
-    pub fn new(code: SelfSigning, signature: Vec<u8>) -> Self {
-        match code {
+    /// A signature of `code`. Fails for codes cesrox knows but keriox does
+    /// not support, so a stream naming one is refused.
+    pub fn new(code: SelfSigning, signature: Vec<u8>) -> Result<Self, Error> {
+        Ok(match code {
             SelfSigning::Ed25519Sha512 => Self::Ed25519Sha512(signature),
             SelfSigning::ECDSAsecp256k1Sha256 => Self::ECDSAsecp256k1Sha256(signature),
             SelfSigning::Ed448 => Self::Ed448(signature),
             SelfSigning::ECDSA256r1Sha256 => Self::ECDSA256r1Sha256(signature),
-            other => unimplemented!("unsupported signature code {other:?}"),
-        }
+            other => return Err(Error::UnsupportedCode(format!("signature {other:?}"))),
+        })
     }
 
     pub fn get_code(&self) -> SelfSigning {
@@ -54,10 +56,10 @@ impl FromStr for SelfSigningPrefix {
         let code = SelfSigning::from_str(s)?;
 
         if s.len() == code.full_size() {
-            Ok(Self::new(
+            Self::new(
                 code,
                 raw_from_text(&s[code.code_size()..], code.code_size() % 4)?,
-            ))
+            )
         } else {
             Err(Error::IncorrectLengthError(s.into()))
         }

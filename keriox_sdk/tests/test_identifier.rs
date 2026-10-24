@@ -58,7 +58,8 @@ async fn test_incept_local() {
     let sig = SelfSigningPrefix::new(
         cesrox::primitives::codes::self_signing::SelfSigning::Ed25519Sha512,
         signer.sign(inception_event.as_bytes()).unwrap(),
-    );
+    )
+    .unwrap();
 
     let identifier = controller
         .finalize_incept(inception_event.as_bytes(), &sig)
@@ -97,7 +98,8 @@ async fn test_incept_and_watcher_event_generation() {
     let sig = SelfSigningPrefix::new(
         cesrox::primitives::codes::self_signing::SelfSigning::Ed25519Sha512,
         signer.sign(inception_event.as_bytes()).unwrap(),
-    );
+    )
+    .unwrap();
 
     let identifier = controller
         .finalize_incept(inception_event.as_bytes(), &sig)

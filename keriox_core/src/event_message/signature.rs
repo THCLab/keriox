@@ -10,14 +10,14 @@ use crate::{
     event::sections::seal::EventSeal,
     prefix::{
         cesr_adapter::{
-            from_receipt_couple, from_trans_idx_sig_group, receipt_couple, trans_idx_sig_group,
+            from_trans_idx_sig_group, receipt_couple, trans_idx_sig_group,
         },
         BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix,
     },
     processor::event_storage::EventStorage,
 };
 
-use super::cesr_adapter::{indexed_signatures, ParseError};
+use super::cesr_adapter::{indexed_signatures, receipt_couples, ParseError};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum Signature {
@@ -235,7 +235,7 @@ pub fn get_signatures(group: Group) -> Result<Vec<Signature>, ParseError> {
             )])
         }
         Group::NontransReceiptCouples(sigs) => {
-            let signatures = sigs.into_iter().map(from_receipt_couple).collect();
+            let signatures = receipt_couples(sigs)?;
             Ok(vec![Signature::NonTransferable(Nontransferable::Couplet(
                 signatures,
             ))])
@@ -262,7 +262,7 @@ pub fn get_signatures(group: Group) -> Result<Vec<Signature>, ParseError> {
             .map(|group| {
                 let sigs = indexed_signatures(group.signatures)?;
                 Ok(Signature::Transferable(
-                    SignerData::LastEstablishment(group.prefix.into()),
+                    SignerData::LastEstablishment(group.prefix.try_into()?),
                     sigs,
                 ))
             })

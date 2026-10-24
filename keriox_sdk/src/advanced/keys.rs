@@ -41,7 +41,7 @@ pub fn generate_ed25519_seed() -> Result<SeedPrefix> {
     Ok(SeedPrefix::new(
         SeedCode::RandomSeed256Ed25519,
         ed_key.as_bytes().to_vec(),
-    ))
+    )?)
 }
 
 /// Generate a random secp256k1 (Bitcoin curve) seed.
@@ -55,7 +55,7 @@ pub fn generate_secp256k1_seed() -> Result<SeedPrefix> {
     Ok(SeedPrefix::new(
         SeedCode::RandomSeed256ECDSAsecp256k1,
         sk.to_bytes().to_vec(),
-    ))
+    )?)
 }
 
 /// Generate a random P-256 (NIST secp256r1) seed.
@@ -73,7 +73,7 @@ pub fn generate_p256_seed() -> Result<SeedPrefix> {
     Ok(SeedPrefix::new(
         SeedCode::RandomSeed256ECDSA256r1,
         sk.to_bytes().to_vec(),
-    ))
+    )?)
 }
 
 /// Generate a random seed for the requested algorithm.
@@ -158,7 +158,7 @@ pub fn seed_from_code(code: &str, secret_key: Vec<u8>) -> Result<SeedPrefix> {
     let code: SeedCode = code
         .parse()
         .map_err(|_| Error::ParseError(format!("invalid seed code: {code}")))?;
-    let seed = SeedPrefix::new(code, secret_key);
+    let seed = SeedPrefix::new(code, secret_key)?;
     seed.derive_key_pair()
         .map_err(|e| Error::Signing(e.to_string()))?;
     Ok(seed)

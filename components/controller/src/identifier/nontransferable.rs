@@ -66,10 +66,11 @@ where
                 self.id.to_str()
             ))
         })?;
-        Ok(Signature::NonTransferable(Nontransferable::Couplet(vec![(
-            self.id.clone(),
-            SelfSigningPrefix::new(code, signature),
-        )])))
+        let signature = SelfSigningPrefix::new(code, signature)
+            .map_err(|e| ControllerError::OtherError(e.to_string()))?;
+        Ok(Signature::NonTransferable(Nontransferable::Couplet(vec![
+            (self.id.clone(), signature),
+        ])))
     }
 
     pub fn query_log(

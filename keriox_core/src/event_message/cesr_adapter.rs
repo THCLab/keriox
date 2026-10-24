@@ -1,7 +1,7 @@
 use std::convert::{TryFrom, TryInto};
 
 use cesrox::{
-    group::{Group, SealSourceCouple},
+    group::{Group, NontransReceiptCouple, SealSourceCouple},
     payload::{parse_payload, Payload},
     primitives::{AnchoringEventSeal, IndexedSignature as CesrIndexedSignature},
     universal_codes::{UniversalCode, UniversalGroupCode},
@@ -16,7 +16,7 @@ use crate::{
         cesr_adapter::{
             from_receipt_couple, from_trans_idx_sig_group, receipt_couple, trans_idx_sig_group,
         },
-        IndexedSignature,
+        BasicPrefix, IndexedSignature, SelfSigningPrefix,
     },
 };
 
@@ -73,6 +73,16 @@ pub fn indexed_signatures(
 ) -> Result<Vec<IndexedSignature>, ParseError> {
     sigs.into_iter()
         .map(|sig| IndexedSignature::try_from(sig).map_err(ParseError::from))
+        .collect()
+}
+
+/// The identifiers and signatures of non-transferable receipt couples.
+pub fn receipt_couples(
+    couples: impl IntoIterator<Item = NontransReceiptCouple>,
+) -> Result<Vec<(BasicPrefix, SelfSigningPrefix)>, ParseError> {
+    couples
+        .into_iter()
+        .map(|couple| from_receipt_couple(couple).map_err(ParseError::from))
         .collect()
 }
 
@@ -781,7 +791,7 @@ fn signed_reply_of(rpy: ReplyEvent, attachments: Vec<Group>) -> Result<SignedRep
                     .into_iter()
                     .next()
                     .ok_or_else(|| ParseError::AttachmentError("Missing signature".into()))?,
-            );
+            )?;
             Ok(SignedReply::new_nontrans(rpy, signer, signature))
         }
         _ => Err(ParseError::AttachmentError("Improper payload type".into())),
@@ -880,7 +890,7 @@ fn signed_key_event(
                     }
                     Group::NontransReceiptCouples(couples) => {
                         witness_sigs.push(Nontransferable::Couplet(
-                            couples.into_iter().map(from_receipt_couple).collect(),
+                            receipt_couples(couples)?,
                         ))
                     }
                     _ => {}
@@ -934,9 +944,9 @@ fn signed_key_event(
                     Group::IndexedWitnessSignatures(indexed) => {
                         Some(indexed_signatures(indexed).map(Nontransferable::Indexed))
                     }
-                    Group::NontransReceiptCouples(couples) => Some(Ok(Nontransferable::Couplet(
-                        couples.into_iter().map(from_receipt_couple).collect(),
-                    ))),
+                    Group::NontransReceiptCouples(couples) => {
+                        Some(receipt_couples(couples).map(Nontransferable::Couplet))
+                    }
                     _ => None,
                 })
                 .collect::<Result<Vec<_>, _>>()?;
@@ -962,9 +972,9 @@ fn signed_receipt(event_message: Receipt, attachments: Vec<Group>) -> Result<Not
             Group::IndexedWitnessSignatures(sigs) => {
                 Some(indexed_signatures(sigs.iter().cloned()).map(Nontransferable::Indexed))
             }
-            Group::NontransReceiptCouples(couples) => Some(Ok(Nontransferable::Couplet(
-                couples.iter().cloned().map(from_receipt_couple).collect(),
-            ))),
+            Group::NontransReceiptCouples(couples) => {
+                Some(receipt_couples(couples.iter().cloned()).map(Nontransferable::Couplet))
+            }
             _ => None,
         })
         .collect::<Result<Vec<_>, _>>()?;
@@ -1051,7 +1061,7 @@ pub fn signed_exchange(exn: ExchangeMessage, attachments: Vec<Group>) -> Result<
                 i += 1;
             }
             Group::NontransReceiptCouples(couplets) => {
-                let couples = couplets.iter().cloned().map(from_receipt_couple).collect();
+                let couples = receipt_couples(couplets.iter().cloned())?;
                 signatures.push(Signature::NonTransferable(Nontransferable::Couplet(
                     couples,
                 )));
@@ -1083,7 +1093,7 @@ pub fn signed_exchange(exn: ExchangeMessage, attachments: Vec<Group>) -> Result<
                 ));
             }
             Group::NontransReceiptCouples(couplets) => {
-                let couples = couplets.into_iter().map(from_receipt_couple).collect();
+                let couples = receipt_couples(couplets)?;
                 data_signatures.push(Signature::NonTransferable(Nontransferable::Couplet(
                     couples,
                 )));

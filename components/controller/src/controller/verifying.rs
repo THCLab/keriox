@@ -3,12 +3,11 @@ use keri_core::{
     database::{EscrowCreator, EventDatabase},
     event::sections::seal::EventSeal,
     event_message::{
-        cesr_adapter::{indexed_signatures, parse_cesr_stream_many, CesrMessage},
+        cesr_adapter::{indexed_signatures, parse_cesr_stream_many, receipt_couples, CesrMessage},
         signature::{Signature, SignerData},
     },
     oobi::Oobi,
     oobi_manager::storage::OobiStorageBackend,
-    prefix::cesr_adapter::from_receipt_couple,
     processor::validator::{EventValidator, VerificationError},
 };
 use teliox::database::TelEventDatabase;
@@ -152,7 +151,8 @@ fn collect_signatures(
                 i += 1;
             }
             Group::NontransReceiptCouples(couplets) => {
-                let couples = couplets.iter().cloned().map(from_receipt_couple).collect();
+                let couples = receipt_couples(couplets.iter().cloned())
+                    .map_err(|_| VerificationError::VerificationFailure)?;
                 signatures.push(Signature::NonTransferable(Nontransferable::Couplet(
                     couples,
                 )));

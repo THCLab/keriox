@@ -29,7 +29,7 @@ fn ingest_kel(src: &Identifier, dst: &Identifier) {
 /// Sign `bytes` with `signer` and wrap in the right SelfSigningPrefix variant.
 fn sign_curve(signer: &Arc<Signer>, bytes: &[u8]) -> SelfSigningPrefix {
     let raw = signer.sign(bytes).unwrap();
-    SelfSigningPrefix::new(signer.signing_code(), raw)
+    SelfSigningPrefix::new(signer.signing_code(), raw).unwrap()
 }
 
 #[tokio::test]

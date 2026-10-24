@@ -164,5 +164,11 @@ impl From<keri_core::error::Error> for Error {
     }
 }
 
+impl From<keri_core::prefix::error::Error> for Error {
+    fn from(e: keri_core::prefix::error::Error) -> Self {
+        Error::EncodingError(e.to_string())
+    }
+}
+
 /// Convenience alias — all SDK functions return this type.
 pub type Result<T> = std::result::Result<T, Error>;

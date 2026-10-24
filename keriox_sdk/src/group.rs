@@ -232,7 +232,8 @@ impl Group {
         let raw = signer
             .sign(json_payload.as_bytes())
             .map_err(|e| crate::advanced::Error::Signing(e.to_string()))?;
-        let signature = keri_controller::SelfSigningPrefix::new(signer.signing_code(), raw);
+        let signature = keri_controller::SelfSigningPrefix::new(signer.signing_code(), raw)
+            .map_err(crate::advanced::Error::from)?;
         let cesr = group.sign_with_index_to_cesr(&json_payload, signature, index)?;
 
         Ok(SignedMessage {

@@ -21,14 +21,16 @@ pub enum SeedPrefix {
 }
 
 impl SeedPrefix {
-    pub fn new(code: SeedCode, value: Vec<u8>) -> Self {
-        match code {
+    /// A seed of `code`. Fails for codes cesrox knows but keriox does not
+    /// support.
+    pub fn new(code: SeedCode, value: Vec<u8>) -> Result<Self, Error> {
+        Ok(match code {
             SeedCode::RandomSeed256Ed25519 => Self::RandomSeed256Ed25519(value),
             SeedCode::RandomSeed256ECDSAsecp256k1 => Self::RandomSeed256ECDSAsecp256k1(value),
             SeedCode::RandomSeed448 => Self::RandomSeed448(value),
             SeedCode::RandomSeed256ECDSA256r1 => Self::RandomSeed256ECDSA256r1(value),
-            other => unimplemented!("unsupported seed code {other:?}"),
-        }
+            other => return Err(Error::UnsupportedCode(format!("seed {other:?}"))),
+        })
     }
 
     pub fn derive_key_pair(&self) -> Result<(PublicKey, PrivateKey), Error> {
@@ -75,7 +77,7 @@ impl FromStr for SeedPrefix {
         if s.len() == code.full_size() {
             let k_vec =
                 from_text_to_bytes(&s[code.code_size()..])?[code.code_size() % 4..].to_vec();
-            Ok(Self::new(code, k_vec))
+            Self::new(code, k_vec)
         } else {
             Err(Error::IncorrectLengthError(s.into()))
         }
@@ -189,7 +191,8 @@ fn test_derive_from_seed() {
     let sp = SeedPrefix::new(
         SeedCode::RandomSeed256Ed25519,
         ed_keypair.as_bytes().to_vec(),
-    );
+    )
+    .unwrap();
 
     let (derived_pub_key, derived_priv_key) = sp.derive_key_pair().unwrap();
     assert_eq!(derived_pub_key.key(), ed_keypair.verifying_key().to_bytes());

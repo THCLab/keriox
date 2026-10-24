@@ -20,6 +20,9 @@ pub enum Error {
     #[error("Sequence number {0} does not fit in 64 bits")]
     SnOutOfRange(u128),
 
+    #[error("Unsupported {0} code")]
+    UnsupportedCode(String),
+
     #[error(transparent)]
     ParseError(#[from] cesrox::error::Error),
 

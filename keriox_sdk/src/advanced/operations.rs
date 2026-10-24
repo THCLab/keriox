@@ -128,7 +128,7 @@ impl SigningBackend for std::sync::Arc<dyn keri_keyprovider::KeyProvider> {
 /// variant matching the signer's algorithm.
 pub(crate) fn wrap_sig(signer: &dyn SigningBackend, data: &[u8]) -> Result<SelfSigningPrefix> {
     let bytes = signer.sign_data(data)?;
-    Ok(SelfSigningPrefix::new(signer.signing_code(), bytes))
+    Ok(SelfSigningPrefix::new(signer.signing_code(), bytes)?)
 }
 
 // ── Public compound operations ────────────────────────────────────────────────
@@ -488,7 +488,7 @@ async fn _query_mailbox<S: SigningBackend>(
         let encoded = qry
             .encode()
             .map_err(|e| Error::EncodingError(e.to_string()))?;
-        let sig = SelfSigningPrefix::new(km.signing_code(), km.sign_data(&encoded)?);
+        let sig = SelfSigningPrefix::new(km.signing_code(), km.sign_data(&encoded)?)?;
         let signatures = vec![IndexedSignature::new_both_same(sig.clone(), 0)];
         let signed_qry = SignedMailboxQuery::new_trans(qry.clone(), id.id().clone(), signatures);
         id.finalize_query_mailbox(vec![(qry, sig)]).await?;
@@ -510,7 +510,7 @@ async fn _query_mailbox_for<S: SigningBackend>(
         let encoded = qry
             .encode()
             .map_err(|e| Error::EncodingError(e.to_string()))?;
-        let sig = SelfSigningPrefix::new(km.signing_code(), km.sign_data(&encoded)?);
+        let sig = SelfSigningPrefix::new(km.signing_code(), km.sign_data(&encoded)?)?;
         let result = id.finalize_query_mailbox(vec![(qry, sig)]).await?;
         actions.extend(result);
     }

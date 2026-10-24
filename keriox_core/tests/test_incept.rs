@@ -18,8 +18,8 @@ use tempfile::NamedTempFile;
 fn test_incept() -> Result<(), Error> {
     // Setup keys
     let key_manager = CryptoBox::new()?;
-    let current_key = BasicPrefix::new(Basic::Ed25519, key_manager.public_key());
-    let next_key = BasicPrefix::new(Basic::Ed25519, key_manager.next_public_key());
+    let current_key = BasicPrefix::new(Basic::Ed25519, key_manager.public_key()).unwrap();
+    let next_key = BasicPrefix::new(Basic::Ed25519, key_manager.next_public_key()).unwrap();
 
     // Setup events database
     let events_db_path = NamedTempFile::new().unwrap();

@@ -105,7 +105,7 @@ pub fn build_location_reply(
     Ok(SignedReply::new_nontrans(
         reply,
         identifier.clone(),
-        SelfSigningPrefix::new(signer.signing_code(), sig),
+        SelfSigningPrefix::new(signer.signing_code(), sig)?,
     ))
 }
 
@@ -128,7 +128,7 @@ pub fn build_location_replies(
             Ok(SignedReply::new_nontrans(
                 reply.clone(),
                 identifier.clone(),
-                SelfSigningPrefix::new(signer.signing_code(), sig),
+                SelfSigningPrefix::new(signer.signing_code(), sig)?,
             ))
         })
         .collect()

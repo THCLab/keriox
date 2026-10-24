@@ -34,8 +34,10 @@ impl fmt::Debug for BasicPrefix {
 }
 
 impl BasicPrefix {
-    pub fn new(code: CesrBasic, public_key: PublicKey) -> Self {
-        match code {
+    /// A prefix of `code` for `public_key`. Fails for codes cesrox knows
+    /// but keriox does not support, so a stream naming one is refused.
+    pub fn new(code: CesrBasic, public_key: PublicKey) -> Result<Self, Error> {
+        Ok(match code {
             CesrBasic::ECDSAsecp256k1Nontrans => Self::ECDSAsecp256k1NT(public_key),
             CesrBasic::ECDSAsecp256k1 => Self::ECDSAsecp256k1(public_key),
             CesrBasic::Ed25519Nontrans => Self::Ed25519NT(public_key),
@@ -46,8 +48,8 @@ impl BasicPrefix {
             CesrBasic::X448 => Self::X448(public_key),
             CesrBasic::ECDSA256r1Nontrans => Self::ECDSA256r1NT(public_key),
             CesrBasic::ECDSA256r1 => Self::ECDSA256r1(public_key),
-            other => unimplemented!("unsupported public key code {other:?}"),
-        }
+            other => return Err(Error::UnsupportedCode(format!("public key {other:?}"))),
+        })
     }
 
     pub fn verify(
@@ -132,7 +134,7 @@ impl FromStr for BasicPrefix {
             // would silently truncate the value for 4-char codes (1AAA/1AAB
             // secp256k1, 1AAC/1AAD Ed448, 1AAI/1AAJ P-256).
             let k_vec = raw_from_text(&s[code.code_size()..], code.code_size() % 4)?;
-            Ok(Self::new(code, PublicKey::new(k_vec)))
+            Self::new(code, PublicKey::new(k_vec))
         } else {
             Err(Error::IncorrectLengthError(s.into()))
         }

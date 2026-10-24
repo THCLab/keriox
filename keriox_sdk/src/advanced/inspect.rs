@@ -7,8 +7,7 @@
 use cesrox::group::Group;
 use cesrox::payload::Payload;
 use cesrox::value::Value;
-use keri_controller::{BasicPrefix, SelfSigningPrefix};
-use keri_core::prefix::CesrPrimitive;
+use cesrox::primitives::CesrPrimitive;
 use said::derivation::HashFunctionCode;
 use said::SelfAddressingIdentifier;
 
@@ -117,44 +116,41 @@ fn digest_algorithm_name(code: &HashFunctionCode) -> &'static str {
     }
 }
 
+// The CESR text comes straight from the cesrox primitives, so inspection
+// shows every code cesrox parses, including ones keriox does not support.
+
 fn indexed_signature_info(sig: &cesrox::primitives::IndexedSignature) -> SignatureInfo {
-    let prefix = SelfSigningPrefix::new(sig.code.code, sig.raw.clone());
+    let plain = cesrox::primitives::Signature::new(sig.code.code, sig.raw.clone());
     SignatureInfo {
         index: Some(sig.code.index.current()),
-        cesr: prefix.to_str(),
+        cesr: plain.to_str(),
         algorithm: signature_algorithm_name(&sig.code.code).to_string(),
     }
 }
 
 fn plain_signature_info(sig: &cesrox::primitives::Signature) -> SignatureInfo {
-    let prefix = SelfSigningPrefix::new(sig.code, sig.raw.clone());
     SignatureInfo {
         index: None,
-        cesr: prefix.to_str(),
+        cesr: sig.to_str(),
         algorithm: signature_algorithm_name(&sig.code).to_string(),
     }
 }
 
 fn receipt_info(couple: &cesrox::group::NontransReceiptCouple) -> ReceiptInfo {
-    let identifier = BasicPrefix::new(
-        couple.key.code,
-        keri_core::keys::PublicKey {
-            public_key: couple.key.raw.clone(),
-        },
-    )
-    .to_str();
     ReceiptInfo {
-        identifier,
+        identifier: couple.key.to_str(),
         signature: plain_signature_info(&couple.signature),
     }
 }
 
-fn payload_kind(payload: &Payload) -> PayloadKind {
+fn payload_kind(payload: &Payload) -> Result<PayloadKind> {
     match payload {
-        Payload::JSON(_) => PayloadKind::Json,
-        Payload::CBOR(_) => PayloadKind::Cbor,
-        Payload::MGPK(_) => PayloadKind::Mgpk,
-        _ => unreachable!("cesrox only parses JSON, CBOR and MessagePack bodies"),
+        Payload::JSON(_) => Ok(PayloadKind::Json),
+        Payload::CBOR(_) => Ok(PayloadKind::Cbor),
+        Payload::MGPK(_) => Ok(PayloadKind::Mgpk),
+        other => Err(Error::CesrParseError(format!(
+            "unsupported payload format: {other:?}"
+        ))),
     }
 }
 
@@ -179,9 +175,7 @@ fn convert_groups(groups: &[Group]) -> Vec<AttachmentInfo> {
                     .iter()
                     .map(|seal| {
                         let said = SelfAddressingIdentifier::from(seal.digest.clone());
-                        let identifier: keri_controller::IdentifierPrefix =
-                            seal.prefix.clone().into();
-                        let identifier = identifier.to_str();
+                        let identifier = seal.prefix.to_str();
                         SealedSigGroup {
                             identifier,
                             sn: seal.sn,
@@ -201,10 +195,8 @@ fn convert_groups(groups: &[Group]) -> Vec<AttachmentInfo> {
                     .iter()
                     .map(|entry| {
                         let said = SelfAddressingIdentifier::from(entry.digest.clone());
-                        let identifier: keri_controller::IdentifierPrefix =
-                            entry.prefix.clone().into();
                         SealedSigGroup {
-                            identifier: identifier.to_str(),
+                            identifier: entry.prefix.to_str(),
                             sn: entry.sn,
                             digest: said.to_str(),
                             digest_algorithm: digest_algorithm_name(&HashFunctionCode::from(
@@ -240,17 +232,13 @@ fn convert_groups(groups: &[Group]) -> Vec<AttachmentInfo> {
                 out.push(AttachmentInfo::LastEstablishmentGroups(
                     groups
                         .iter()
-                        .map(|group| {
-                            let identifier: keri_controller::IdentifierPrefix =
-                                group.prefix.clone().into();
-                            LastEstSigGroup {
-                                identifier: identifier.to_str(),
-                                signatures: group
-                                    .signatures
-                                    .iter()
-                                    .map(indexed_signature_info)
-                                    .collect(),
-                            }
+                        .map(|group| LastEstSigGroup {
+                            identifier: group.prefix.to_str(),
+                            signatures: group
+                                .signatures
+                                .iter()
+                                .map(indexed_signature_info)
+                                .collect(),
                         })
                         .collect(),
                 ));
@@ -287,20 +275,24 @@ pub fn inspect_stream(cesr: &[u8]) -> Result<(Vec<CesrPart>, Vec<u8>)> {
     let mut current_payload: Option<Payload> = None;
     let mut current_groups: Vec<Group> = Vec::new();
 
-    let flush = |payload: Option<Payload>, groups: &mut Vec<Group>, parts: &mut Vec<CesrPart>| {
+    let flush = |payload: Option<Payload>,
+                 groups: &mut Vec<Group>,
+                 parts: &mut Vec<CesrPart>|
+     -> Result<()> {
         if let Some(p) = payload {
             parts.push(CesrPart {
-                payload_kind: payload_kind(&p),
+                payload_kind: payload_kind(&p)?,
                 payload: p.to_vec(),
                 attachments: convert_groups(&std::mem::take(groups)),
             });
         }
+        Ok(())
     };
 
     for value in values {
         match value {
             Value::Payload(p) => {
-                flush(current_payload.take(), &mut current_groups, &mut parts);
+                flush(current_payload.take(), &mut current_groups, &mut parts)?;
                 current_payload = Some(p);
             }
             Value::SpecificGroup(g) => current_groups.push(g),
@@ -308,7 +300,7 @@ pub fn inspect_stream(cesr: &[u8]) -> Result<(Vec<CesrPart>, Vec<u8>)> {
                 for v in inner {
                     match v {
                         Value::Payload(p) => {
-                            flush(current_payload.take(), &mut current_groups, &mut parts);
+                            flush(current_payload.take(), &mut current_groups, &mut parts)?;
                             current_payload = Some(p);
                         }
                         Value::SpecificGroup(g) => current_groups.push(g),
@@ -319,7 +311,7 @@ pub fn inspect_stream(cesr: &[u8]) -> Result<(Vec<CesrPart>, Vec<u8>)> {
             _ => {}
         }
     }
-    flush(current_payload.take(), &mut current_groups, &mut parts);
+    flush(current_payload.take(), &mut current_groups, &mut parts)?;
 
     Ok((parts, rest.to_vec()))
 }

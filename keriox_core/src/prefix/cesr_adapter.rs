@@ -22,7 +22,7 @@ impl TryFrom<CesrIndexedSignature> for IndexedSignature {
         let index = signature.code.index.try_into()?;
         Ok(IndexedSignature {
             index,
-            signature: SelfSigningPrefix::new(signature.code.code, signature.raw),
+            signature: SelfSigningPrefix::new(signature.code.code, signature.raw)?,
         })
     }
 }
@@ -44,22 +44,28 @@ impl TryFrom<CesrIndex> for Index {
     }
 }
 
-impl From<PublicKey> for BasicPrefix {
-    fn from(pk: PublicKey) -> Self {
+impl TryFrom<PublicKey> for BasicPrefix {
+    type Error = Error;
+
+    fn try_from(pk: PublicKey) -> Result<Self, Self::Error> {
         BasicPrefix::new(pk.code, crate::keys::PublicKey::new(pk.raw))
     }
 }
 
-impl From<Signature> for SelfSigningPrefix {
-    fn from(signature: Signature) -> Self {
+impl TryFrom<Signature> for SelfSigningPrefix {
+    type Error = Error;
+
+    fn try_from(signature: Signature) -> Result<Self, Self::Error> {
         SelfSigningPrefix::new(signature.code, signature.raw)
     }
 }
 
 /// Splits the CESR couple of a receipt by a non-transferable identifier
 /// into the identifier and its signature.
-pub fn from_receipt_couple(couple: NontransReceiptCouple) -> (BasicPrefix, SelfSigningPrefix) {
-    (couple.key.into(), couple.signature.into())
+pub fn from_receipt_couple(
+    couple: NontransReceiptCouple,
+) -> Result<(BasicPrefix, SelfSigningPrefix), Error> {
+    Ok((couple.key.try_into()?, couple.signature.try_into()?))
 }
 
 /// Builds the CESR couple of a receipt by a non-transferable identifier.
@@ -91,7 +97,7 @@ impl TryFrom<AnchoringEventSeal> for EventSeal {
     fn try_from(seal: AnchoringEventSeal) -> Result<Self, Self::Error> {
         let digest: SelfAddressingIdentifier = seal.digest.into();
         Ok(EventSeal::new(
-            seal.prefix.into(),
+            seal.prefix.try_into()?,
             sn_from_cesr(seal.sn)?,
             digest,
         ))
@@ -145,17 +151,19 @@ pub fn trans_idx_sig_group(
     }
 }
 
-impl From<Identifier> for IdentifierPrefix {
-    fn from(identifier: Identifier) -> Self {
-        match identifier.code {
+impl TryFrom<Identifier> for IdentifierPrefix {
+    type Error = Error;
+
+    fn try_from(identifier: Identifier) -> Result<Self, Self::Error> {
+        Ok(match identifier.code {
             IdentifierCode::Basic(bp) => IdentifierPrefix::Basic(BasicPrefix::new(
                 bp,
                 crate::keys::PublicKey::new(identifier.raw),
-            )),
+            )?),
             IdentifierCode::SelfAddressing(sa) => IdentifierPrefix::SelfAddressing(
                 SelfAddressingIdentifier::new(sa.into(), identifier.raw).into(),
             ),
-        }
+        })
     }
 }
 
@@ -213,6 +221,65 @@ impl Into<Identifier> for IdentifierPrefix {
                 self.derivative(),
             ),
             IdentifierPrefix::SelfSigning(_ss) => todo!(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod supported_codes {
+    use cesrox::primitives::codes::{basic::Basic, seed::SeedCode, self_signing::SelfSigning};
+
+    use crate::{
+        keys::PublicKey,
+        prefix::{BasicPrefix, SeedPrefix, SelfSigningPrefix},
+    };
+
+    // cesrox's code tables are non-exhaustive, so the constructors return a
+    // Result: a code cesrox adds later is refused instead of panicking the
+    // parser of a remote stream. Every code cesrox has today is supported.
+
+    #[test]
+    fn every_public_key_code_makes_a_prefix() {
+        for code in [
+            Basic::ECDSAsecp256k1Nontrans,
+            Basic::ECDSAsecp256k1,
+            Basic::Ed25519Nontrans,
+            Basic::Ed25519,
+            Basic::Ed448Nontrans,
+            Basic::Ed448,
+            Basic::X25519,
+            Basic::X448,
+            Basic::ECDSA256r1Nontrans,
+            Basic::ECDSA256r1,
+        ] {
+            let prefix = BasicPrefix::new(code.clone(), PublicKey::new(vec![1; 32]));
+            assert!(prefix.is_ok(), "{code:?}: {prefix:?}");
+        }
+    }
+
+    #[test]
+    fn every_signature_code_makes_a_prefix() {
+        for code in [
+            SelfSigning::Ed25519Sha512,
+            SelfSigning::ECDSAsecp256k1Sha256,
+            SelfSigning::Ed448,
+            SelfSigning::ECDSA256r1Sha256,
+        ] {
+            let prefix = SelfSigningPrefix::new(code.clone(), vec![1; 64]);
+            assert!(prefix.is_ok(), "{code:?}: {prefix:?}");
+        }
+    }
+
+    #[test]
+    fn every_seed_code_makes_a_seed() {
+        for code in [
+            SeedCode::RandomSeed256Ed25519,
+            SeedCode::RandomSeed256ECDSAsecp256k1,
+            SeedCode::RandomSeed448,
+            SeedCode::RandomSeed256ECDSA256r1,
+        ] {
+            let seed = SeedPrefix::new(code.clone(), vec![1; 32]);
+            assert!(seed.is_ok(), "{code:?}: {seed:?}");
         }
     }
 }
