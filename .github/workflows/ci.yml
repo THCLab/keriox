@@ -15,16 +15,9 @@ jobs:
   check:
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-      - uses: actions-rs/cargo@v1
-        with:
-          command: check
-          args: --all-features --verbose
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo check --all-features --verbose
 
   # Dependents enable only the keri-core features they need, which
   # --all-features cannot check.
@@ -56,18 +49,11 @@ jobs:
     env:
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/keri_test
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-      - uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: >-
-            --all-features --verbose --
-            --skip postgres_identity_lifecycle
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: >-
+          cargo test --all-features --verbose --
+          --skip postgres_identity_lifecycle
 
   # The shared CESR V2 vectors: keriox reads what keripy, cesrox and the
   # specification write and accepts the same key event logs as keripy, and

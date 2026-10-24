@@ -8,12 +8,8 @@ jobs:
   publish_keriox_core:
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
       - uses: katyo/publish-crates@v2
         with:
           path: "./keriox_core"
@@ -23,12 +19,8 @@ jobs:
     runs-on: ubuntu-22.04
     needs: publish_keriox_core
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
       - uses: katyo/publish-crates@v2
         with:
           path: "./keriox_sdk"
