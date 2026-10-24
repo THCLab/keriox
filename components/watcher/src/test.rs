@@ -543,6 +543,40 @@ mod abandonment {
         assert_eq!(state.map(|s| s.sn), Some(0));
     }
 
+    /// The identifiers a watcher polls, and which of them are subscribed,
+    /// survive a restart; they used to live only in memory, so nothing was
+    /// polled until clients sent their end role OOBIs again.
+    #[actix_web::test]
+    async fn a_restarted_watcher_keeps_polling_what_it_tracked() {
+        let fx = setup();
+        let (tracked, subscribed, untracked) = (incept(&fx), incept(&fx), incept(&fx));
+        let poller = &fx.watcher.poller;
+        poller.track_aid(tracked.id.clone());
+        poller.subscribe(subscribed.id.clone());
+        poller.track_aid(untracked.id.clone());
+        poller.untrack_aid(&untracked.id);
+        let Fixture {
+            _dirs: (tel, db),
+            watcher,
+        } = fx;
+        drop(watcher);
+
+        let watcher = Watcher::setup_with_redb(WatcherConfig {
+            public_address: Url::parse("http://some/dummy/url").unwrap(),
+            db_path: db.path().to_owned(),
+            tel_storage_path: tel.path().join("tel_storage"),
+            ..Default::default()
+        })
+        .unwrap();
+        let mut ids = watcher.poller.tracked_aid_ids();
+        ids.sort_by_key(|id| id.to_string());
+        let mut expected = vec![tracked.id.clone(), subscribed.id.clone()];
+        expected.sort_by_key(|id| id.to_string());
+        assert_eq!(ids, expected);
+        assert!(watcher.poller.is_subscribed(&subscribed.id));
+        assert!(!watcher.poller.is_subscribed(&tracked.id));
+    }
+
     #[actix_web::test]
     async fn an_abandoned_identifier_is_not_polled() {
         let fx = setup();

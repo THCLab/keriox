@@ -2,6 +2,7 @@ pub mod config;
 pub mod health;
 pub mod poller;
 mod tel_providing;
+mod tracked_aids;
 pub(crate) mod watcher_data;
 
 use std::{
@@ -59,8 +60,16 @@ impl<S: OobiStorageBackend> Watcher<S> {
         create_dir_all(&tel_storage_path).unwrap();
         let mut registry_ids_storage_path = tel_storage_path.clone();
         registry_ids_storage_path.push("registry");
+        create_dir_all(&config.db_path).map_err(|e| ActorError::GeneralError(e.to_string()))?;
+        let tracked_aids =
+            tracked_aids::TrackedAidsStore::open(&config.db_path.join("tracked_aids"))
+                .map_err(|e| ActorError::GeneralError(e.to_string()))?;
         let watcher_data = WatcherData::new(config, tx, tel_tx, oobi_manager)?;
-        let poller = Arc::new(WitnessPoller::new(watcher_data.clone(), poll_interval));
+        let poller = Arc::new(WitnessPoller::new(
+            watcher_data.clone(),
+            poll_interval,
+            tracked_aids,
+        )?);
         Ok(Watcher {
             watcher_data,
             recv: Mutex::new(rx),

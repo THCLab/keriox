@@ -8,7 +8,7 @@ use futures::stream::{FuturesUnordered, StreamExt};
 use keri_core::{oobi_manager::storage::OobiStorageBackend, prefix::IdentifierPrefix};
 use tokio::time::sleep;
 
-use super::watcher_data::WatcherData;
+use super::{tracked_aids::TrackedAidsStore, watcher_data::WatcherData};
 
 /// Cap on how many AIDs the poller will fetch concurrently in a single
 /// cycle. Each poll fans out one query per witness, so the *effective*
@@ -90,15 +90,48 @@ impl TrackedAid {
 pub struct WitnessPoller<S: OobiStorageBackend> {
     watcher_data: Arc<WatcherData<S>>,
     tracked_aids: Arc<RwLock<HashMap<IdentifierPrefix, TrackedAid>>>,
+    /// The tracked AIDs on disk, so polling resumes after a restart.
+    store: TrackedAidsStore,
     poll_interval: Duration,
 }
 
 impl<S: OobiStorageBackend> WitnessPoller<S> {
-    pub fn new(watcher_data: Arc<WatcherData<S>>, poll_interval: Duration) -> Self {
-        Self {
+    pub(crate) fn new(
+        watcher_data: Arc<WatcherData<S>>,
+        poll_interval: Duration,
+        store: TrackedAidsStore,
+    ) -> Result<Self, keri_core::actor::error::ActorError> {
+        let tracked = store
+            .load()
+            .map_err(|e| keri_core::actor::error::ActorError::GeneralError(e.to_string()))?
+            .into_iter()
+            .map(|(id, subscribed)| {
+                (
+                    id,
+                    TrackedAid {
+                        subscribed,
+                        ..TrackedAid::new()
+                    },
+                )
+            })
+            .collect();
+        Ok(Self {
             watcher_data,
-            tracked_aids: Arc::new(RwLock::new(HashMap::new())),
+            tracked_aids: Arc::new(RwLock::new(tracked)),
+            store,
             poll_interval,
+        })
+    }
+
+    /// Writes a change of the tracked AIDs to disk. Polling goes on from
+    /// memory if that fails; only a restart would forget the change.
+    fn persist(&self, id: &IdentifierPrefix, subscribed: Option<bool>) {
+        let result = match subscribed {
+            Some(subscribed) => self.store.save(id, subscribed),
+            None => self.store.remove(id),
+        };
+        if let Err(e) = result {
+            tracing::warn!(prefix = %id, error = %e, "failed to store the tracked AID");
         }
     }
 
@@ -111,7 +144,10 @@ impl<S: OobiStorageBackend> WitnessPoller<S> {
             return;
         }
         let mut tracked = self.tracked_aids.write().unwrap();
-        tracked.entry(id).or_insert_with(TrackedAid::new);
+        if !tracked.contains_key(&id) {
+            self.persist(&id, Some(false));
+            tracked.insert(id, TrackedAid::new());
+        }
     }
 
     /// Whether the AID's log is final: no next keys, so no more events.
@@ -126,14 +162,15 @@ impl<S: OobiStorageBackend> WitnessPoller<S> {
     pub fn untrack_aid(&self, id: &IdentifierPrefix) {
         let mut tracked = self.tracked_aids.write().unwrap();
         tracked.remove(id);
+        self.persist(id, None);
     }
 
     /// Subscribe to an AID — it will always be polled at the base interval
     /// regardless of activity level. Automatically tracks the AID if not already tracked.
     pub fn subscribe(&self, id: IdentifierPrefix) {
         let mut tracked = self.tracked_aids.write().unwrap();
-        let entry = tracked.entry(id).or_insert_with(TrackedAid::new);
-        entry.subscribed = true;
+        self.persist(&id, Some(true));
+        tracked.entry(id).or_insert_with(TrackedAid::new).subscribed = true;
     }
 
     /// Unsubscribe from an AID — it will fall back to adaptive polling intervals.
@@ -142,7 +179,17 @@ impl<S: OobiStorageBackend> WitnessPoller<S> {
         let mut tracked = self.tracked_aids.write().unwrap();
         if let Some(entry) = tracked.get_mut(id) {
             entry.subscribed = false;
+            self.persist(id, Some(false));
         }
+    }
+
+    /// Whether the AID is subscribed.
+    pub fn is_subscribed(&self, id: &IdentifierPrefix) -> bool {
+        self.tracked_aids
+            .read()
+            .unwrap()
+            .get(id)
+            .is_some_and(|entry| entry.subscribed)
     }
 
     /// Get the list of currently tracked AIDs.
@@ -261,6 +308,7 @@ impl<S: OobiStorageBackend> WitnessPoller<S> {
                 if self.is_final(aid) {
                     tracing::info!(prefix = %aid, sn = new_sn, "AID log is final; no longer polled");
                     tracked_map.remove(aid);
+                    self.persist(aid, None);
                 }
             }
             Err(e) => {
