@@ -3,9 +3,10 @@ use std::convert::{TryFrom, TryInto};
 use cesrox::{
     group::{Group, NontransReceiptCouple, SealSourceCouple},
     payload::{parse_payload, Payload},
-    primitives::{AnchoringEventSeal, IndexedSignature as CesrIndexedSignature},
-    universal_codes::{UniversalCode, UniversalGroupCode},
+    primitives::IndexedSignature as CesrIndexedSignature,
+    universal_codes::{GenusCountCode, UniversalCode, UniversalGroupCode},
     value::Value,
+    Counting,
 };
 use said::version::format::SerializationFormats;
 use serde::{Deserialize, Serialize};
@@ -92,53 +93,34 @@ pub struct CesrMessage {
 }
 
 impl CesrMessage {
-    /// The message with its attachments in the [`WireFormat`] of its body's
-    /// KERI version: CESR 2.0 for a KERI 2.0 body, keriox's 1.0 format
-    /// otherwise.
+    /// The message with its attachments in CESR 2.0. A KERI 1.0 body is
+    /// preceded by the CESR 2.0 genus counter, as its version string
+    /// otherwise implies the CESR 1.0 code table.
     pub fn to_cesr(&self) -> Result<Vec<u8>, ()> {
-        self.to_cesr_with(WireFormat::of(body_version(&self.payload)))
-    }
-
-    pub fn to_cesr_with(&self, format: WireFormat) -> Result<Vec<u8>, ()> {
-        let mut result = self.payload.to_vec();
+        let mut result = if is_keri_1_0(&self.payload) {
+            GENUS_2_0.as_bytes().to_vec()
+        } else {
+            vec![]
+        };
+        result.extend_from_slice(&self.payload.to_vec());
         for att in &self.attachments {
-            result.extend_from_slice(encode_group(att, format).as_bytes());
+            result.extend_from_slice(att.to_cesr_str().as_bytes());
         }
         Ok(result)
     }
 }
 
-/// How keriox writes attachment groups.
-///
-/// keriox reads both formats, whichever it writes, so nodes and clients of
-/// different releases can be upgraded in any order as long as they write
-/// the format the oldest of them reads.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum WireFormat {
-    /// The format of keriox built with cesrox before 2.0: groups count
-    /// their items, and a transferable signer's signatures follow its
-    /// event seal as a `-T` group and a `-K` group. Deployed clients still
-    /// read only this format.
-    #[default]
-    Legacy,
-    /// CESR V2: groups count quadlets, and a transferable signer's seal and
-    /// signatures form one `-X` group.
-    V2,
+/// The genus/version counter of CESR 2.0 for the KERI/ACDC genus.
+pub const GENUS_2_0: &str = "-_AAACAA";
+
+/// `stream` without a leading CESR 2.0 genus counter.
+pub fn strip_genus_2_0(stream: &[u8]) -> &[u8] {
+    stream.strip_prefix(GENUS_2_0.as_bytes()).unwrap_or(stream)
 }
 
-impl WireFormat {
-    /// The attachment format of messages written in `version`.
-    pub fn of(version: KeriVersion) -> Self {
-        match version {
-            KeriVersion::V1_0 => WireFormat::Legacy,
-            KeriVersion::V2_0 => WireFormat::V2,
-        }
-    }
-}
-
-/// The KERI version a message body's version string names. A body that
-/// has none (not a KERI message) counts as KERI 1.0.
-fn body_version(payload: &Payload) -> KeriVersion {
+/// Whether the body is a KERI 1.0 message. A body without a version
+/// string, such as signed arbitrary data, is not.
+fn is_keri_1_0(payload: &Payload) -> bool {
     #[derive(Deserialize)]
     struct Versioned {
         v: said::version::SerializationInfo,
@@ -150,42 +132,9 @@ fn body_version(payload: &Payload) -> KeriVersion {
         #[allow(unreachable_patterns)]
         _ => None,
     };
-    versioned.map_or(KeriVersion::V1_0, |body| KeriVersion::of(&body.v))
-}
-
-/// The text of `group` in `format`.
-pub fn encode_group(group: &Group, format: WireFormat) -> String {
-    match format {
-        WireFormat::V2 => group.to_cesr_str(),
-        WireFormat::Legacy => legacy_groups(group.clone())
-            .iter()
-            .map(Group::to_legacy_cesr_str)
-            .collect(),
-    }
-}
-
-/// `group` as the groups keriox wrote before CESR V2, which had no `-X`.
-fn legacy_groups(group: Group) -> Vec<Group> {
-    match group {
-        Group::TransIdxSigGroups(entries) => entries
-            .into_iter()
-            .flat_map(|entry| {
-                [
-                    Group::AnchoringSeals(vec![AnchoringEventSeal {
-                        prefix: entry.prefix,
-                        sn: entry.sn,
-                        digest: entry.digest,
-                    }]),
-                    Group::IndexedControllerSignatures(entry.signatures),
-                ]
-            })
-            .collect(),
-        Group::PathedMaterialQuadruplet(path, groups) => vec![Group::PathedMaterialQuadruplet(
-            path,
-            groups.into_iter().flat_map(legacy_groups).collect(),
-        )],
-        other => vec![other],
-    }
+    versioned.is_some_and(|body| {
+        body.v.protocol_code == "KERI" && KeriVersion::of(&body.v) == KeriVersion::V1_0
+    })
 }
 
 /// Messages being assembled from parsed CESR values: each body starts a new
@@ -223,7 +172,12 @@ impl Messages {
             match value {
                 Value::Payload(payload) => self.body(payload),
                 Value::SpecificGroup(group) => self.attachment(group)?,
-                Value::VersionGenus(_) => {}
+                Value::VersionGenus(GenusCountCode::Keri { major: 2, .. }) => {}
+                Value::VersionGenus(genus) => {
+                    return Err(ParseError::CesrError(format!(
+                        "only CESR 2.0 attachments are read, not genus version -{genus}"
+                    )))
+                }
                 Value::UniversalGroup(UniversalGroupCode::Genus(_), inner) => self.add(inner)?,
                 Value::UniversalGroup(UniversalGroupCode::Group { code, .. }, inner) => {
                     match code {
@@ -297,27 +251,31 @@ impl TryFrom<&[u8]> for CesrMessage {
 }
 
 pub fn parse_cesr_stream_many(stream: &[u8]) -> Result<Vec<CesrMessage>, ParseError> {
-    let values = cesrox::parse(stream).map_err(|e| ParseError::CesrError(e.to_string()))?;
+    let values = cesrox::parse_with(stream, Counting::Quadlets)
+        .map_err(|e| ParseError::CesrError(e.to_string()))?;
     messages(values)
 }
 
 pub fn parse_cesr_stream(stream: &[u8]) -> Result<CesrMessage, ParseError> {
-    let values = cesrox::parse(stream).map_err(|e| ParseError::CesrError(e.to_string()))?;
+    let values = cesrox::parse_with(stream, Counting::Quadlets)
+        .map_err(|e| ParseError::CesrError(e.to_string()))?;
     single_message(values)
 }
 
 /// Parses the CESR values at the start of `stream` and returns the part of
 /// the stream that is not CESR, with the message.
 pub fn parse_cesr_stream_extra(stream: &[u8]) -> Result<(&[u8], CesrMessage), ParseError> {
-    let mut parsed = cesrox::values(stream);
+    let mut parsed = cesrox::values_with(stream, Counting::Quadlets);
     let values: Vec<_> = parsed.by_ref().map_while(Result::ok).collect();
     let rest = parsed.remaining();
 
     Ok((rest, single_message(values)?))
 }
 
+/// The message body at the start of `input`, after the CESR 2.0 genus
+/// counter that keriox writes before a KERI 1.0 body.
 pub fn parse_event_type(input: &[u8]) -> Result<EventType, ParseError> {
-    parse_payload(input)
+    parse_payload(strip_genus_2_0(input))
         .map_err(|e| ParseError::CesrError(e.to_string()))?
         .0
         .try_into()
@@ -705,55 +663,20 @@ impl TryFrom<CesrMessage> for SignedExchange {
 fn has_transferable_seal(attachments: &[Group]) -> bool {
     attachments
         .iter()
-        .any(|att| matches!(att, Group::TransIdxSigGroups(_) | Group::AnchoringSeals(_)))
+        .any(|att| matches!(att, Group::TransIdxSigGroups(_)))
 }
 
-/// The establishment event and signatures of a transferable signer: a `-X`
-/// group, or the `-T` seal and `-K` signatures that keriox wrote before it
-/// used `-X`.
+/// The establishment event and signatures of a transferable signer, from
+/// its `-X` group.
 fn decode_transferable_receipt(
     attachments: &[Group],
 ) -> Option<(EventSeal, Vec<crate::prefix::IndexedSignature>)> {
-    let trans_group = attachments.iter().find_map(|att| match att {
+    let group = attachments.iter().find_map(|att| match att {
         Group::TransIdxSigGroups(groups) => groups.first().cloned(),
         _ => None,
-    });
-    if let Some(group) = trans_group {
-        let (seal, sigs) = from_trans_idx_sig_group(group).ok()?;
-        return Some((seal, indexed_signatures(sigs).ok()?));
-    }
-
-    let seals: Vec<_> = attachments
-        .iter()
-        .filter_map(|att| {
-            if let Group::AnchoringSeals(seals) = att {
-                Some(seals)
-            } else {
-                None
-            }
-        })
-        .flatten()
-        .collect();
-
-    let sigs: Vec<_> = attachments
-        .iter()
-        .filter_map(|att| {
-            if let Group::IndexedControllerSignatures(sigs) = att {
-                Some(sigs)
-            } else {
-                None
-            }
-        })
-        .flatten()
-        .collect();
-
-    if seals.is_empty() || sigs.is_empty() {
-        return None;
-    }
-
-    let seal = EventSeal::try_from((*seals.first()?).clone()).ok()?;
-    let converted_sigs = indexed_signatures(sigs.into_iter().cloned()).ok()?;
-    Some((seal, converted_sigs))
+    })?;
+    let (seal, sigs) = from_trans_idx_sig_group(group).ok()?;
+    Some((seal, indexed_signatures(sigs).ok()?))
 }
 
 /// A KERI 2.0 routed message names its sender, who must be its signer.
@@ -1034,29 +957,6 @@ pub fn signed_exchange(exn: ExchangeMessage, attachments: Vec<Group>) -> Result<
     let mut i = 0;
     while i < attachments.len() {
         match &attachments[i] {
-            Group::AnchoringSeals(seals) => {
-                let seal = seals
-                    .first()
-                    .ok_or_else(|| ParseError::AttachmentError("Empty AnchoringSeals".into()))?;
-                let seal = EventSeal::try_from(seal.clone())?;
-                i += 1;
-                let indexed_sigs = if i < attachments.len() {
-                    if let Group::IndexedControllerSignatures(sigs) = &attachments[i] {
-                        indexed_signatures(sigs.iter().cloned())?
-                    } else {
-                        vec![]
-                    }
-                } else {
-                    vec![]
-                };
-                if !indexed_sigs.is_empty() {
-                    i += 1;
-                }
-                signatures.push(Signature::Transferable(
-                    SignerData::EventSeal(seal),
-                    indexed_sigs,
-                ));
-            }
             Group::TransIdxSigGroups(_) => {
                 signatures.extend(super::signature::get_signatures(attachments[i].clone())?);
                 i += 1;
@@ -1109,13 +1009,6 @@ pub fn signed_exchange(exn: ExchangeMessage, attachments: Vec<Group>) -> Result<
             }
             Group::TransIdxSigGroups(_) => {
                 data_signatures.extend(super::signature::get_signatures(group)?);
-            }
-            Group::AnchoringSeals(seals) => {
-                let seal = seals.into_iter().next().ok_or_else(|| {
-                    ParseError::AttachmentError("Empty AnchoringSeals in data sigs".into())
-                })?;
-                let seal = EventSeal::try_from(seal)?;
-                data_signatures.push(Signature::Transferable(SignerData::EventSeal(seal), vec![]));
             }
             _ => {
                 return Err(ParseError::AttachmentError(
@@ -1170,28 +1063,37 @@ pub mod test {
         }
     }
 
+    /// Attachments in the format keriox wrote before CESR 2.0, whose groups
+    /// count items instead of quadlets, are not read.
     #[test]
-    fn test_legacy_attachments() {
-        // the same event with item counts, as written before CESR V2
+    fn legacy_attachments_are_refused() {
         let legacy = br#"{"v":"KERI10JSON0001e7_","t":"icp","d":"EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen","i":"EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen","s":"0","kt":"2","k":["DErocgXD2RGSyvn3MObcx59jeOsEQhv2TqHirVkzrp0Q","DFXLiTjiRdSBPLL6hLa0rskIxk3dh4XwJLfctkJFLRSS","DE9YgIQVgpLwocTVrG8tidKScsQSMWwLWywNC48fhq4f"],"nt":"2","n":["EDJk5EEpC4-tQ7YDwBiKbpaZahh1QCyQOnZRF7p2i8k8","EAXfDjKvUFRj-IEB_o4y-Y_qeJAjYfZtOMD9e7vHNFss","EN8l6yJC2PxribTN0xfri6bLz34Qvj-x3cNwcV3DvT2m"],"bt":"0","b":[],"c":[],"a":[]}-KADAAD4SyJSYlsQG22MGXzRGz2PTMqpkgOyUfq7cS99sC2BCWwdVmEMKiTEeWe5kv-l_d9auxdadQuArLtAGEArW8wEABD0z_vQmFImZXfdR-0lclcpZFfkJJJNXDcUNrf7a-mGsxNLprJo-LROwDkH5m7tVrb-a1jcor2dHD9Jez-r4bQIACBFeU05ywfZycLdR0FxCvAR9BfV9im8tWe1DglezqJLf-vHRQSChY1KafbYNc96hYYpbuN90WzuCRMgV8KgRsEC"#;
-        let stream = super::parse_cesr_stream(legacy).unwrap();
-        // is written back unchanged by default, for clients that read only
-        // that format
-        assert_eq!(stream.to_cesr().unwrap(), legacy);
-        // and with quadlet counts in V2
-        let v2 = stream.to_cesr_with(super::WireFormat::V2).unwrap();
-        assert_ne!(&v2, legacy);
-        let reparsed = super::parse_cesr_stream(&v2).unwrap();
-        assert_eq!(reparsed.attachments, stream.attachments);
+        assert!(super::parse_cesr_stream(legacy).is_err());
+    }
+
+    /// A KERI 1.0 message is written after the CESR 2.0 genus counter, so a
+    /// reader that goes by the body's version uses the CESR 2.0 code table.
+    #[test]
+    fn a_keri_1_0_message_is_written_after_the_genus_counter() {
+        let stream = br#"{"v":"KERI10JSON000091_","t":"rct","d":"EKKccCumVQdgxvsrSXvuTtjmS28Xqf3zRJ8T6peKgl9J","i":"DFs8BBx86uytIM0D2BhsE5rrqVIT8ef8mflpNceHo4XH","s":"0"}"#;
+        let written = super::parse_cesr_stream(stream).unwrap().to_cesr().unwrap();
+        assert_eq!(written, [super::GENUS_2_0.as_bytes(), stream].concat());
+        assert_eq!(
+            super::parse_cesr_stream(&written)
+                .unwrap()
+                .to_cesr()
+                .unwrap(),
+            written
+        );
     }
 
     #[test]
     fn test_signed_event() {
-        let stream = br#"{"v":"KERI10JSON0001e7_","t":"icp","d":"EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen","i":"EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen","s":"0","kt":"2","k":["DErocgXD2RGSyvn3MObcx59jeOsEQhv2TqHirVkzrp0Q","DFXLiTjiRdSBPLL6hLa0rskIxk3dh4XwJLfctkJFLRSS","DE9YgIQVgpLwocTVrG8tidKScsQSMWwLWywNC48fhq4f"],"nt":"2","n":["EDJk5EEpC4-tQ7YDwBiKbpaZahh1QCyQOnZRF7p2i8k8","EAXfDjKvUFRj-IEB_o4y-Y_qeJAjYfZtOMD9e7vHNFss","EN8l6yJC2PxribTN0xfri6bLz34Qvj-x3cNwcV3DvT2m"],"bt":"0","b":[],"c":[],"a":[]}-KBCAAD4SyJSYlsQG22MGXzRGz2PTMqpkgOyUfq7cS99sC2BCWwdVmEMKiTEeWe5kv-l_d9auxdadQuArLtAGEArW8wEABD0z_vQmFImZXfdR-0lclcpZFfkJJJNXDcUNrf7a-mGsxNLprJo-LROwDkH5m7tVrb-a1jcor2dHD9Jez-r4bQIACBFeU05ywfZycLdR0FxCvAR9BfV9im8tWe1DglezqJLf-vHRQSChY1KafbYNc96hYYpbuN90WzuCRMgV8KgRsEC"#;
+        let stream = br#"-_AAACAA{"v":"KERI10JSON0001e7_","t":"icp","d":"EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen","i":"EBfxc4RiVY6saIFmUfEtETs1FcqmktZW88UkbnOg0Qen","s":"0","kt":"2","k":["DErocgXD2RGSyvn3MObcx59jeOsEQhv2TqHirVkzrp0Q","DFXLiTjiRdSBPLL6hLa0rskIxk3dh4XwJLfctkJFLRSS","DE9YgIQVgpLwocTVrG8tidKScsQSMWwLWywNC48fhq4f"],"nt":"2","n":["EDJk5EEpC4-tQ7YDwBiKbpaZahh1QCyQOnZRF7p2i8k8","EAXfDjKvUFRj-IEB_o4y-Y_qeJAjYfZtOMD9e7vHNFss","EN8l6yJC2PxribTN0xfri6bLz34Qvj-x3cNwcV3DvT2m"],"bt":"0","b":[],"c":[],"a":[]}-KBCAAD4SyJSYlsQG22MGXzRGz2PTMqpkgOyUfq7cS99sC2BCWwdVmEMKiTEeWe5kv-l_d9auxdadQuArLtAGEArW8wEABD0z_vQmFImZXfdR-0lclcpZFfkJJJNXDcUNrf7a-mGsxNLprJo-LROwDkH5m7tVrb-a1jcor2dHD9Jez-r4bQIACBFeU05ywfZycLdR0FxCvAR9BfV9im8tWe1DglezqJLf-vHRQSChY1KafbYNc96hYYpbuN90WzuCRMgV8KgRsEC"#;
         let parsed = super::parse_cesr_stream(stream);
         assert!(parsed.is_ok());
         assert_eq!(
-            parsed.unwrap().to_cesr_with(super::WireFormat::V2).unwrap(),
+            parsed.unwrap().to_cesr().unwrap(),
             stream
         );
     }
@@ -1227,7 +1129,10 @@ pub mod test {
     fn test_receipt_parsing() {
         let stream = br#"{"v":"KERI10JSON000091_","t":"rct","d":"EKKccCumVQdgxvsrSXvuTtjmS28Xqf3zRJ8T6peKgl9J","i":"DFs8BBx86uytIM0D2BhsE5rrqVIT8ef8mflpNceHo4XH","s":"0"}"#;
         let event = super::parse_cesr_stream(stream).unwrap();
-        assert_eq!(event.to_cesr().unwrap(), stream);
+        assert_eq!(
+            event.to_cesr().unwrap(),
+            [super::GENUS_2_0.as_bytes(), stream].concat()
+        );
 
         let event: Receipt = serde_json::from_slice(stream).unwrap();
         assert_eq!(event.encode().unwrap(), stream.to_vec());
@@ -1249,13 +1154,16 @@ pub mod test {
             event.payload.clone().try_into().unwrap(),
             EventType::Qry(_)
         ));
-        assert_eq!(&event.to_cesr().unwrap(), qry_event);
+        assert_eq!(
+            event.to_cesr().unwrap(),
+            [super::GENUS_2_0.as_bytes(), qry_event].concat()
+        );
     }
 
     #[cfg(feature = "query")]
     #[test]
     fn test_signed_qry() {
-        let stream = br#"{"v":"KERI10JSON0000c9_","t":"qry","d":"EOWvgxrllmjGFhpn0oOiBkAVz3-dEm3bbiV_5qwj81xo","dt":"2021-01-01T00:00:00.000000+00:00","r":"log","rr":"","q":{"i":"DCvCLRr5luWmp7keDvDuLP0kIqcyBYq79b3Dho1QvrjI"}}-KABAACISeZIVO_wXjIrGJ-VcVMxr285OkKzAqVEQqVPFx8Ht2A9GQFB-zRA18J1lpqVphOnnXbTc51WR4uAvK90EHBg"#;
+        let stream = br#"-_AAACAA{"v":"KERI10JSON0000c9_","t":"qry","d":"EOWvgxrllmjGFhpn0oOiBkAVz3-dEm3bbiV_5qwj81xo","dt":"2021-01-01T00:00:00.000000+00:00","r":"log","rr":"","q":{"i":"DCvCLRr5luWmp7keDvDuLP0kIqcyBYq79b3Dho1QvrjI"}}-KAWAACISeZIVO_wXjIrGJ-VcVMxr285OkKzAqVEQqVPFx8Ht2A9GQFB-zRA18J1lpqVphOnnXbTc51WR4uAvK90EHBg"#;
         // A stream cut off inside an attachment is rejected
         let se = super::parse_cesr_stream(&stream[..stream.len() - 1]);
         assert!(se.is_err());
@@ -1267,10 +1175,10 @@ pub mod test {
 
     #[test]
     fn test_signed_events_stream() {
-        let kerl_str= br#"{"v":"KERI10JSON000120_","t":"icp","d":"EG4EuTsxPiRM7soX10XXzNsS1KqXKUp8xsQ-kW_tWHoI","i":"DCuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","s":"0","kt":"1","k":["DCuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA"],"n":"EPYuj8mq_PYYsoBKkzX1kxSPGYBWaIya3slgCOyOtlqU","bt":"0","b":[],"c":[],"a":[]}-KABAAAaSisI4ZZTH_6JCqsvAsEpuf_Jq6bDbvPWj_eCDnAGbSARqYHipNs-9W7MHnwnMfIXwLpcoJkKGrQ-SiaklhAw{"v":"KERI10JSON000155_","t":"rot","d":"ED30AgJV14mTTs427F3kILLrP_l03a27APg2FBO0-QtA","i":"DCuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","s":"1","p":"EG4EuTsxPiRM7soX10XXzNsS1KqXKUp8xsQ-kW_tWHoI","kt":"1","k":["DFcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI"],"n":"EOdapdcC6XR1KWmWDsNl4J_OxcGxNZw1Xd95JH5a34fI","bt":"0","br":[],"ba":[],"a":[]}-KABAAAoiqt07w2UInzzo2DmtwkBfqX1-tTO4cYk_7YdlbJ95qA7PO5sEUkER8fZySQMNCVh64ruAh1yoew3TikwVGAQ{"v":"KERI10JSON000155_","t":"rot","d":"EGtXXRjyz6IdeX4201BgXKRDBm74gGqJF2r2umMMAL6I","i":"DCuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","s":"2","p":"ED30AgJV14mTTs427F3kILLrP_l03a27APg2FBO0-QtA","kt":"1","k":["DD1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8"],"n":"EKrLE2h2nh3ClyJNEjKaikHWT7G-ngimNpK-QgVQv9As","bt":"0","br":[],"ba":[],"a":[]}-KABAAC_RsDfAcHkknyzh9oeliH90KGPJEI8AP3rJPyuTnpVg8yOVtSIp_JFlyRwjV5SEQOqddAcRV6JtaQO8oXtWFCQ{"v":"KERI10JSON0000cb_","t":"ixn","d":"EI7E4RJXPe7FF1zQPbpSMIY-TYz9eAmNIhuprPYqTQ5o","i":"DCuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","s":"3","p":"EGtXXRjyz6IdeX4201BgXKRDBm74gGqJF2r2umMMAL6I","a":[]}-KABAABB0Ui5NHJpcifXUB6bAutmpZkhSgwxyI5jEZ2JGVBgTI02sC0Ugbq3q0EpOae7ruXW-eabUz2s0FAs26jGwVBg{"v":"KERI10JSON0000cb_","t":"ixn","d":"ENVzbZieVIjYLYkPWQy0gfua11KqdRG-oku5Ut8Dl6hU","i":"DCuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","s":"4","p":"EI7E4RJXPe7FF1zQPbpSMIY-TYz9eAmNIhuprPYqTQ5o","a":[]}-KABAACITFg460TXvYvxxzN62vpqpLs-vGgeGAbd-onY3DYxd5e3AljHh85pTum4Ha48F5dui9IVYqYvuYJCG8p8KvDw{"v":"KERI10JSON000155_","t":"rot","d":"EKwrLhilpPo4ePq7m7ZccEcKjwPD2q9mqzLUb_aO2Hi0","i":"DCuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","s":"5","p":"ENVzbZieVIjYLYkPWQy0gfua11KqdRG-oku5Ut8Dl6hU","kt":"1","k":["DKPE5eeJRzkRTMOoRGVd2m18o8fLqM2j9kaxLhV3x8AQ"],"nt":"1","n":["EAYqAyYI6FqMrmMjmDSJVbfJjpKCS6mkzF7V3VcyzFCQ"],"bt":"0","br":[],"ba":[],"a":[]}-KABAAAOLC3kPAV22hL1JRYbkjNI62NT4VhR6W7x2FcZ-xtW7g4diCFx46YTMeF_-TDRaHJ1zyOhR5DYjkSKBDFoFCgA"#;
-        let messages = cesrox::parse(kerl_str).unwrap();
+        let kerl_str= br#"-_AAACAA{"v":"KERI10JSON000120_","t":"icp","d":"EG4EuTsxPiRM7soX10XXzNsS1KqXKUp8xsQ-kW_tWHoI","i":"DCuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","s":"0","kt":"1","k":["DCuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA"],"n":"EPYuj8mq_PYYsoBKkzX1kxSPGYBWaIya3slgCOyOtlqU","bt":"0","b":[],"c":[],"a":[]}-KAWAAAaSisI4ZZTH_6JCqsvAsEpuf_Jq6bDbvPWj_eCDnAGbSARqYHipNs-9W7MHnwnMfIXwLpcoJkKGrQ-SiaklhAw-_AAACAA{"v":"KERI10JSON000155_","t":"rot","d":"ED30AgJV14mTTs427F3kILLrP_l03a27APg2FBO0-QtA","i":"DCuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","s":"1","p":"EG4EuTsxPiRM7soX10XXzNsS1KqXKUp8xsQ-kW_tWHoI","kt":"1","k":["DFcuJOOJF1IE8svqEtrSuyQjGTd2HhfAkt9y2QkUtFJI"],"n":"EOdapdcC6XR1KWmWDsNl4J_OxcGxNZw1Xd95JH5a34fI","bt":"0","br":[],"ba":[],"a":[]}-KAWAAAoiqt07w2UInzzo2DmtwkBfqX1-tTO4cYk_7YdlbJ95qA7PO5sEUkER8fZySQMNCVh64ruAh1yoew3TikwVGAQ-_AAACAA{"v":"KERI10JSON000155_","t":"rot","d":"EGtXXRjyz6IdeX4201BgXKRDBm74gGqJF2r2umMMAL6I","i":"DCuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","s":"2","p":"ED30AgJV14mTTs427F3kILLrP_l03a27APg2FBO0-QtA","kt":"1","k":["DD1iAhBWCkvChxNWsby2J0pJyxBIxbAtbLA0Ljx-Grh8"],"n":"EKrLE2h2nh3ClyJNEjKaikHWT7G-ngimNpK-QgVQv9As","bt":"0","br":[],"ba":[],"a":[]}-KAWAAC_RsDfAcHkknyzh9oeliH90KGPJEI8AP3rJPyuTnpVg8yOVtSIp_JFlyRwjV5SEQOqddAcRV6JtaQO8oXtWFCQ-_AAACAA{"v":"KERI10JSON0000cb_","t":"ixn","d":"EI7E4RJXPe7FF1zQPbpSMIY-TYz9eAmNIhuprPYqTQ5o","i":"DCuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","s":"3","p":"EGtXXRjyz6IdeX4201BgXKRDBm74gGqJF2r2umMMAL6I","a":[]}-KAWAABB0Ui5NHJpcifXUB6bAutmpZkhSgwxyI5jEZ2JGVBgTI02sC0Ugbq3q0EpOae7ruXW-eabUz2s0FAs26jGwVBg-_AAACAA{"v":"KERI10JSON0000cb_","t":"ixn","d":"ENVzbZieVIjYLYkPWQy0gfua11KqdRG-oku5Ut8Dl6hU","i":"DCuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","s":"4","p":"EI7E4RJXPe7FF1zQPbpSMIY-TYz9eAmNIhuprPYqTQ5o","a":[]}-KAWAACITFg460TXvYvxxzN62vpqpLs-vGgeGAbd-onY3DYxd5e3AljHh85pTum4Ha48F5dui9IVYqYvuYJCG8p8KvDw-_AAACAA{"v":"KERI10JSON000155_","t":"rot","d":"EKwrLhilpPo4ePq7m7ZccEcKjwPD2q9mqzLUb_aO2Hi0","i":"DCuhyBcPZEZLK-fcw5tzHn2N46wRCG_ZOoeKtWTOunRA","s":"5","p":"ENVzbZieVIjYLYkPWQy0gfua11KqdRG-oku5Ut8Dl6hU","kt":"1","k":["DKPE5eeJRzkRTMOoRGVd2m18o8fLqM2j9kaxLhV3x8AQ"],"nt":"1","n":["EAYqAyYI6FqMrmMjmDSJVbfJjpKCS6mkzF7V3VcyzFCQ"],"bt":"0","br":[],"ba":[],"a":[]}-KAWAAAOLC3kPAV22hL1JRYbkjNI62NT4VhR6W7x2FcZ-xtW7g4diCFx46YTMeF_-TDRaHJ1zyOhR5DYjkSKBDFoFCgA"#;
+        let messages = super::parse_cesr_stream_many(kerl_str).unwrap();
 
-        assert_eq!(messages.len(), 12);
+        assert_eq!(messages.len(), 6);
     }
 
     /// A signed inception in `format`, written as a CESR stream.

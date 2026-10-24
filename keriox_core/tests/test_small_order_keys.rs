@@ -73,14 +73,14 @@ fn keripy_inception_with_small_order_key_is_rejected() {
     let (_path, processor, storage) = setup();
 
     let icp = notice(
-        br#"{"v":"KERI10JSON00015a_","t":"icp","d":"EJ3IKlXS1rL-YeO_AJAiNCwKKq84y-Nx9tvrnHrRKM2j","i":"EJ3IKlXS1rL-YeO_AJAiNCwKKq84y-Nx9tvrnHrRKM2j","s":"0","kt":"1","k":["DAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","DPPbRtxXUymE0DrHXP1RBy73LHHtQ8jfV0xWPYYk8qK2"],"nt":"1","n":["EKfSipNpRZoJXqze6AzMHdXPi6LUYqqSG-p2Eo2C6CgV"],"bt":"0","b":[],"c":[],"a":[]}-KABABDjH6Wl34EVVq82JvLoibjiFY-WQxX8tJgJZMK1ezogQeZ7pQSssjtyMAE--jzHCKXiTHpXaDn960ZuUPPnE2cN"#,
+        br#"-_AAACAA{"v":"KERI10JSON00015a_","t":"icp","d":"EJ3IKlXS1rL-YeO_AJAiNCwKKq84y-Nx9tvrnHrRKM2j","i":"EJ3IKlXS1rL-YeO_AJAiNCwKKq84y-Nx9tvrnHrRKM2j","s":"0","kt":"1","k":["DAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","DPPbRtxXUymE0DrHXP1RBy73LHHtQ8jfV0xWPYYk8qK2"],"nt":"1","n":["EKfSipNpRZoJXqze6AzMHdXPi6LUYqqSG-p2Eo2C6CgV"],"bt":"0","b":[],"c":[],"a":[]}-KAWABDjH6Wl34EVVq82JvLoibjiFY-WQxX8tJgJZMK1ezogQeZ7pQSssjtyMAE--jzHCKXiTHpXaDn960ZuUPPnE2cN"#,
     );
     let id = match &icp {
         Notice::Event(e) => e.event_message.data.get_prefix(),
         _ => unreachable!(),
     };
     let forged_ixn = notice(
-        br#"{"v":"KERI10JSON0000cb_","t":"ixn","d":"ELk2xuUQNkGOtd_SUbPUxHEtZ8D3uhPkyyBjtMeSRvNd","i":"EJ3IKlXS1rL-YeO_AJAiNCwKKq84y-Nx9tvrnHrRKM2j","s":"1","p":"EJ3IKlXS1rL-YeO_AJAiNCwKKq84y-Nx9tvrnHrRKM2j","a":[]}-KABAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"#,
+        br#"-_AAACAA{"v":"KERI10JSON0000cb_","t":"ixn","d":"ELk2xuUQNkGOtd_SUbPUxHEtZ8D3uhPkyyBjtMeSRvNd","i":"EJ3IKlXS1rL-YeO_AJAiNCwKKq84y-Nx9tvrnHrRKM2j","s":"1","p":"EJ3IKlXS1rL-YeO_AJAiNCwKKq84y-Nx9tvrnHrRKM2j","a":[]}-KAWAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"#,
     );
 
     assert!(matches!(

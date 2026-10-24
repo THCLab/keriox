@@ -79,23 +79,12 @@ test-vectors/keripy-check.sh --bless    # after an intentional change
 `keripy/cross_check.txt` lists what keripy does not confirm: the exchange,
 whose body predates the KERI 1.0 `exn` fields (`i`, `rp`, `p`, `e`).
 
-## Deployed keriox clients
+## CESR 2.0 only
 
-keriox writes attachments in the format of keriox built with cesrox before
-2.0 by default (`WireFormat::Legacy`), because deployed clients read only
-that format: it uses the same counter codes as CESR V2 but counts items
-instead of quadlets, and writes a transferable signer as a `-T` and a `-K`
-group instead of a `-X` group. keriox reads both formats.
-
-`keriox-legacy/` holds the vectors of `keriox/` in that format, written by
-the same test. `legacy-check/` reads them with the keriox revision deployed
-clients are built from (pinned in its `Cargo.toml`): every stream must
-parse, every key event log must leave the events keriox accepted, and every
-message should be written back byte for byte.
-`legacy-check/expected_differences.txt` lists the vectors that are not,
-with the reason.
-
-```sh
-test-vectors/legacy-check.sh
-```
+keriox reads and writes attachments in CESR 2.0 only. A KERI 1.0 message
+is written after the CESR 2.0 genus counter (`-_AAACAA`), as its version
+string otherwise implies the CESR 1.0 code table. The format of keriox
+built with cesrox before 2.0, which counted items instead of quadlets and
+wrote a transferable signer as a `-T` and a `-K` group, is refused; the
+`legacy/migrate.json` vectors check that.
 

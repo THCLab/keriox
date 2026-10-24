@@ -249,7 +249,7 @@ fn wire(event: &KeriEvent<KeyEvent>, signer: &Signer) -> String {
 }
 
 #[test]
-fn attachments_follow_the_version_of_the_body() {
+fn attachments_are_cesr_2_0_for_both_versions() {
     let current = Signer::new();
     let icp = |version| {
         EventMsgBuilder::new(EventTypeTag::Icp)
@@ -259,12 +259,17 @@ fn attachments_follow_the_version_of_the_body() {
             .build()
             .unwrap()
     };
-    // One Ed25519 signature: CESR 2.0 counts 22 quadlets (`W`), the
-    // keriox 1.0 format counts one item (`B`).
+    // One Ed25519 signature: CESR 2.0 counts 22 quadlets (`W`) whatever
+    // the body's version; a KERI 1.0 body comes after the CESR 2.0 genus
+    // counter.
     let v2 = icp(KeriVersion::V2_0);
     let tail = &wire(&v2, &current)[v2.encode().unwrap().len()..];
     assert!(tail.starts_with("-KAW"), "{tail}");
     let v1 = icp(KeriVersion::V1_0);
-    let tail = &wire(&v1, &current)[v1.encode().unwrap().len()..];
-    assert!(tail.starts_with("-KAB"), "{tail}");
+    let written = wire(&v1, &current);
+    let body = written
+        .strip_prefix(keri_core::event_message::cesr_adapter::GENUS_2_0)
+        .expect("a KERI 1.0 body comes after the genus counter");
+    let tail = &body[v1.encode().unwrap().len()..];
+    assert!(tail.starts_with("-KAW"), "{tail}");
 }

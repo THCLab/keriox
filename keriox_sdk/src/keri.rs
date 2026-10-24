@@ -315,9 +315,11 @@ impl Keri {
     pub async fn import_contact(&self, source: &str) -> Result<IdentityId> {
         let trimmed = source.trim();
 
-        // A key-history (KEL) CESR stream starts with a KERI event JSON.
-        if trimmed.starts_with('{') {
-            let aid = first_event_identifier(trimmed.as_bytes())?;
+        // A key-history (KEL) CESR stream starts with a KERI event JSON,
+        // or with the CESR 2.0 genus counter before a KERI 1.0 one.
+        let kel = keri_core::event_message::cesr_adapter::strip_genus_2_0(trimmed.as_bytes());
+        if kel.starts_with(b"{") {
+            let aid = first_event_identifier(kel)?;
             return self.ingest_contact_kel(&aid, trimmed.as_bytes());
         }
 

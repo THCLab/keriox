@@ -11,9 +11,8 @@ seed: "ArwXoACJgOleVZ2PY7kXn7rA0II0mHYDhc6WrBH8fDAc" # Private key in CESR forma
 # signatures, a delegator's approval) before it is dropped.
 escrow_config:
   default_timeout: 900
-# KERI protocol version this node writes its own messages in: "1.0", or
-# "2.0" (attachments in the CESR genus 2.0 code table). Reported on GET
-# /info. Switch to "2.0" only once every client it talks to reads KERI 2.0
+# KERI protocol version this node writes its own messages in: "1.0" or
+# "2.0"; attachments are in CESR 2.0 either way. Reported on GET /info. Switch to "2.0" only once every client it talks to reads KERI 2.0
 # (keriox 0.19.0-rc.6 or later).
 keri_version: "1.0"
 # The oldest keriox release whose requests are served; older clients, and

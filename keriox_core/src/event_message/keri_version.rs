@@ -3,17 +3,17 @@ use std::fmt;
 use said::version::{format::SerializationFormats, SerializationInfo};
 use serde::{Deserialize, Serialize};
 
-/// The KERI protocol version a message is written in, with the CESR code
-/// tables its attachments use. Versions are named in the dotted-decimal
+/// The KERI protocol version a message is written in. Its attachments are
+/// in the CESR 2.0 code table either way. Versions are named in the dotted-decimal
 /// notation of the CESR specification ("Version String field"): `1.0` and
 /// `2.0`, which is also how they are written in configuration and reported
 /// on `GET /info`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum KeriVersion {
     /// KERI protocol 1.0: version string `KERI10JSON000000_` (`vv` = `10`,
-    /// lowercase hex), with attachments in the CESR 1.0 code table
-    /// (`-_AAABAA`, "Version 1.00"). The 1.x version string has no genus
-    /// field; the 1.0 table is implied.
+    /// lowercase hex). The 1.x version string has no genus field and
+    /// implies the CESR 1.0 code table, so keriox writes a 1.0 message after
+    /// the CESR 2.0 genus counter (`-_AAACAA`).
     #[default]
     V1_0,
     /// KERI protocol 2.0 on CESR genus 2.0: version string
@@ -96,12 +96,9 @@ impl std::str::FromStr for KeriVersion {
 
 impl KeriVersion {
     /// The CESR genus version of the code tables the attachments use,
-    /// dotted-decimal: `1.0` or `2.0`.
+    /// dotted-decimal: `2.0` for messages of both versions.
     pub fn cesr_genus(self) -> &'static str {
-        match self {
-            KeriVersion::V1_0 => "1.0",
-            KeriVersion::V2_0 => "2.0",
-        }
+        "2.0"
     }
 
     /// The version string of an empty message in this version, to be

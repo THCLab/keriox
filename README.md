@@ -73,8 +73,13 @@ dotted-decimal notation of the CESR specification:
 
 | Version | Version string | Attachments |
 |---|---|---|
-| `1.0` | `KERI10JSON…_` (`vv` = `10`) | CESR 1.0 code table (`-_AAABAA`) |
-| `2.0` | `KERICAACAAJSON….` (protocol `CAA` = 2.0, genus `CAA` = 2.0) | CESR genus 2.0 code table (`-_AAACAA`) |
+| `1.0` | `KERI10JSON…_` (`vv` = `10`) | CESR 2.0 code table, after the genus counter `-_AAACAA` |
+| `2.0` | `KERICAACAAJSON….` (protocol `CAA` = 2.0, genus `CAA` = 2.0) | CESR 2.0 code table |
+
+Attachments are read and written in CESR 2.0 only. A KERI 1.0 version
+string implies the CESR 1.0 code table, so a KERI 1.0 message is written
+after the CESR 2.0 genus counter. CESR 1.0 attachments, and those of keriox
+built with cesrox before 2.0, are refused.
 
 Any minor version of protocol 1 or 2 is read by that major's rules; other
 majors, and 2.x messages on a CESR genus other than 2.x, are refused. These

@@ -251,7 +251,7 @@ impl SignedReply {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::event_message::cesr_adapter::{parse_cesr_stream, WireFormat};
+    use crate::event_message::cesr_adapter::parse_cesr_stream;
 
     #[test]
     pub fn reply_parse() {
@@ -259,7 +259,7 @@ pub mod tests {
 
         use crate::event_message::signed_event_message::{Message, Op};
 
-        let rpy = r#"{"v":"KERI10JSON00029d_","t":"rpy","d":"EIFMuK9IQmHvq9KaJ1r67_MMCq5GnQEgLyN9YPamR3r0","dt":"2021-01-01T00:00:00.000000+00:00","r":"/ksn/ELYbTIkWWyNwOxZQTTnrs6qn8jFbu2A8zftQ33JYQFQ0","a":{"v":"KERI10JSON0001e2_","i":"ELYbTIkWWyNwOxZQTTnrs6qn8jFbu2A8zftQ33JYQFQ0","s":"3","p":"EF7f4gNFCbJz6ZHLacIi_bbIq7kaWAFOzX7ncU_vs5Qg","d":"EOPSPvHHVmU9IIdHa5ksisoVrOnmHRps_tx3OsZSQQ30","f":"3","dt":"2021-01-01T00:00:00.000000+00:00","et":"rot","kt":"1","k":["DLcAz_gmDTuWIHn_mOQDeSK_aJIRiw5IMzPD7igzEDb0"],"nt":"1","n":["EK7ZUmFebD2st48Yvtzc9LajV3Yg2mkeeDzVRL-7uKrU"],"bt":"0","b":[],"c":[],"ee":{"s":"3","d":"EOPSPvHHVmU9IIdHa5ksisoVrOnmHRps_tx3OsZSQQ30","br":[],"ba":[]},"di":""}}-TABELYbTIkWWyNwOxZQTTnrs6qn8jFbu2A8zftQ33JYQFQ00AAAAAAAAAAAAAAAAAAAAAAwEOPSPvHHVmU9IIdHa5ksisoVrOnmHRps_tx3OsZSQQ30-KABAAAsqumzPM0bIo04gJ4Ln0zAOsGVnjHZrFjjjS49hGx_nQKbXuD1D4J_jNoEa4TPtPDnQ8d0YcJ4TIRJb-XouJBg"#;
+        let rpy = r#"-_AAACAA{"v":"KERI10JSON00029d_","t":"rpy","d":"EIFMuK9IQmHvq9KaJ1r67_MMCq5GnQEgLyN9YPamR3r0","dt":"2021-01-01T00:00:00.000000+00:00","r":"/ksn/ELYbTIkWWyNwOxZQTTnrs6qn8jFbu2A8zftQ33JYQFQ0","a":{"v":"KERI10JSON0001e2_","i":"ELYbTIkWWyNwOxZQTTnrs6qn8jFbu2A8zftQ33JYQFQ0","s":"3","p":"EF7f4gNFCbJz6ZHLacIi_bbIq7kaWAFOzX7ncU_vs5Qg","d":"EOPSPvHHVmU9IIdHa5ksisoVrOnmHRps_tx3OsZSQQ30","f":"3","dt":"2021-01-01T00:00:00.000000+00:00","et":"rot","kt":"1","k":["DLcAz_gmDTuWIHn_mOQDeSK_aJIRiw5IMzPD7igzEDb0"],"nt":"1","n":["EK7ZUmFebD2st48Yvtzc9LajV3Yg2mkeeDzVRL-7uKrU"],"bt":"0","b":[],"c":[],"ee":{"s":"3","d":"EOPSPvHHVmU9IIdHa5ksisoVrOnmHRps_tx3OsZSQQ30","br":[],"ba":[]},"di":""}}-XAuELYbTIkWWyNwOxZQTTnrs6qn8jFbu2A8zftQ33JYQFQ0MAAwEOPSPvHHVmU9IIdHa5ksisoVrOnmHRps_tx3OsZSQQ30-KAWAAAsqumzPM0bIo04gJ4Ln0zAOsGVnjHZrFjjjS49hGx_nQKbXuD1D4J_jNoEa4TPtPDnQ8d0YcJ4TIRJb-XouJBg"#;
 
         let parsed = parse_cesr_stream(rpy.as_bytes()).unwrap();
         let deserialized_rpy = Message::try_from(parsed).unwrap();
@@ -270,7 +270,7 @@ pub mod tests {
         // are written back the same way by default and as one -X group in
         // V2, and read back unchanged from both.
         assert_eq!(deserialized_rpy.to_cesr().unwrap(), rpy.as_bytes());
-        let written = deserialized_rpy.to_cesr_with(WireFormat::V2).unwrap();
+        let written = deserialized_rpy.to_cesr().unwrap();
         let attachments = parse_cesr_stream(&written).unwrap().attachments;
         assert!(matches!(
             attachments.as_slice(),
@@ -295,7 +295,7 @@ pub mod tests {
             query::reply_event::ReplyRoute,
         };
 
-        let endrole = br#"{"v":"KERI10JSON000116_","t":"rpy","d":"EMZ1I4nKy6gIkWxjq1LmIivoPGv32lvlSuMVsWnOPwSc","dt":"2022-02-28T17:23:20.338355+00:00","r":"/end/role/add","a":{"cid":"BOyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw","role":"controller","eid":"BOyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw"}}-MABBOyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw0BBccIiMxdwurRjGvUUUdXsxhseo58onhE4bJddKuyPaSpBHXdRKKuiFE0SmLAogMQGJ0iN6f1V_2E_MVfMc3sAA"#;
+        let endrole = br#"-_AAACAA{"v":"KERI10JSON000116_","t":"rpy","d":"EMZ1I4nKy6gIkWxjq1LmIivoPGv32lvlSuMVsWnOPwSc","dt":"2022-02-28T17:23:20.338355+00:00","r":"/end/role/add","a":{"cid":"BOyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw","role":"controller","eid":"BOyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw"}}-MAhBOyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw0BBccIiMxdwurRjGvUUUdXsxhseo58onhE4bJddKuyPaSpBHXdRKKuiFE0SmLAogMQGJ0iN6f1V_2E_MVfMc3sAA"#;
         let parsed = parse_cesr_stream(endrole).unwrap();
         let deserialized_rpy = Message::try_from(parsed).unwrap();
 
@@ -305,7 +305,7 @@ pub mod tests {
             assert!(false)
         };
 
-        let endrole = br#"{"v":"KERI10JSON000113_","t":"rpy","d":"EAZH6wJVwwqb2tmhYKYa-GyiO75k4MqkuMKyG2XWpP7Y","dt":"2021-01-01T00:00:01.000000+00:00","r":"/end/role/cut","a":{"cid":"BMr9jFyYr-wCxJbUJs0smX8UDSDDQUoO4-v_FTApyPvI","role":"watcher","eid":"BHphIkYC1U2ardvt2kGLThDRh2q9N-yT08WSRlpHwtGs"}}-MABBMr9jFyYr-wCxJbUJs0smX8UDSDDQUoO4-v_FTApyPvI0BArzk2jcq5YtdMuW4s4U6FuGrfHNZZAn4pzfzzsEcfIsgfMbhJ1ozpWlYPYdR3wbryWUkxfWqtbNwDWlBdTblAQ"#;
+        let endrole = br#"-_AAACAA{"v":"KERI10JSON000113_","t":"rpy","d":"EAZH6wJVwwqb2tmhYKYa-GyiO75k4MqkuMKyG2XWpP7Y","dt":"2021-01-01T00:00:01.000000+00:00","r":"/end/role/cut","a":{"cid":"BMr9jFyYr-wCxJbUJs0smX8UDSDDQUoO4-v_FTApyPvI","role":"watcher","eid":"BHphIkYC1U2ardvt2kGLThDRh2q9N-yT08WSRlpHwtGs"}}-MAhBMr9jFyYr-wCxJbUJs0smX8UDSDDQUoO4-v_FTApyPvI0BArzk2jcq5YtdMuW4s4U6FuGrfHNZZAn4pzfzzsEcfIsgfMbhJ1ozpWlYPYdR3wbryWUkxfWqtbNwDWlBdTblAQ"#;
         let parsed = parse_cesr_stream(endrole).unwrap();
         let deserialized_rpy = Message::try_from(parsed).unwrap();
 
@@ -315,12 +315,12 @@ pub mod tests {
             assert!(false)
         };
 
-        let body = br#"{"v":"KERI10JSON0000fa_","t":"rpy","d":"EJq4dQQdqg8aK7VyGnfSibxPyW8Zk2zO1qbVRD6flOvE","dt":"2022-02-28T17:23:20.336207+00:00","r":"/loc/scheme","a":{"eid":"BOyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw","scheme":"http","url":"http://127.0.0.1:5643/"}}-MABBOyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw0BAPJ5p_IpUFdmq8uupehsL8DzxWDeaU_SjeiwfmRZ6i9pqddraItmCOAysdXdTEQZ1hEM60iDEWvK16g68TrcAw{"v":"KERI10JSON0000f8_","t":"rpy","d":"EBSR01j5noF2LnGcGFUbLnq-U8JuYBr9WWEMt8d2fb1Y","dt":"2022-02-28T17:23:20.337272+00:00","r":"/loc/scheme","a":{"eid":"BOyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw","scheme":"tcp","url":"tcp://127.0.0.1:5633/"}}-MABBOyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw0BBtIhK6Nh6Zk1zPmkJYiFVz0RimQRiubshmSmqAzxzhT4KpGMAH7sbNlFP-0-lKjTawTReKv4L7N3TR7jxXaEBg{"v":"KERI10JSON000116_","t":"rpy","d":"EMZ1I4nKy6gIkWxjq1LmIivoPGv32lvlSuMVsWnOPwSc","dt":"2022-02-28T17:23:20.338355+00:00","r":"/end/role/add","a":{"cid":"BOyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw","role":"controller","eid":"BOyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw"}}-MABBOyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw0BBccIiMxdwurRjGvUUUdXsxhseo58onhE4bJddKuyPaSpBHXdRKKuiFE0SmLAogMQGJ0iN6f1V_2E_MVfMc3sAA"#;
+        let body = br#"-_AAACAA{"v":"KERI10JSON0000fa_","t":"rpy","d":"EJq4dQQdqg8aK7VyGnfSibxPyW8Zk2zO1qbVRD6flOvE","dt":"2022-02-28T17:23:20.336207+00:00","r":"/loc/scheme","a":{"eid":"BOyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw","scheme":"http","url":"http://127.0.0.1:5643/"}}-MAhBOyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw0BAPJ5p_IpUFdmq8uupehsL8DzxWDeaU_SjeiwfmRZ6i9pqddraItmCOAysdXdTEQZ1hEM60iDEWvK16g68TrcAw-_AAACAA{"v":"KERI10JSON0000f8_","t":"rpy","d":"EBSR01j5noF2LnGcGFUbLnq-U8JuYBr9WWEMt8d2fb1Y","dt":"2022-02-28T17:23:20.337272+00:00","r":"/loc/scheme","a":{"eid":"BOyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw","scheme":"tcp","url":"tcp://127.0.0.1:5633/"}}-MAhBOyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw0BBtIhK6Nh6Zk1zPmkJYiFVz0RimQRiubshmSmqAzxzhT4KpGMAH7sbNlFP-0-lKjTawTReKv4L7N3TR7jxXaEBg-_AAACAA{"v":"KERI10JSON000116_","t":"rpy","d":"EMZ1I4nKy6gIkWxjq1LmIivoPGv32lvlSuMVsWnOPwSc","dt":"2022-02-28T17:23:20.338355+00:00","r":"/end/role/add","a":{"cid":"BOyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw","role":"controller","eid":"BOyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw"}}-MAhBOyRFMideczFZoapylLIyCjSdhtqVb31wZkRKvPfNqkw0BBccIiMxdwurRjGvUUUdXsxhseo58onhE4bJddKuyPaSpBHXdRKKuiFE0SmLAogMQGJ0iN6f1V_2E_MVfMc3sAA"#;
         let stream = parse_cesr_stream_many(body).unwrap();
 
         assert_eq!(stream.len(), 3);
 
-        let message_box = r#"{"v":"KERI10JSON000116_","t":"rpy","d":"EGS28iaGy4iDF8w4q7XkXtdnp4lLj97oZ9n-QrZCyt_8","dt":"2023-07-20T12:31:59.458182+00:00","r":"/end/role/add","a":{"cid":"ECQxoxuKOcO7KkbMyKHnbzhi3sWnSJRnGP_-XsL6eamT","role":"messagebox","eid":"BL0RdEFZxEf2wkq7TTYDagcoOxfmWK45enEUQHwLPadJ"}}-TABECQxoxuKOcO7KkbMyKHnbzhi3sWnSJRnGP_-XsL6eamT0AAAAAAAAAAAAAAAAAAAAAAAECQxoxuKOcO7KkbMyKHnbzhi3sWnSJRnGP_-XsL6eamT-KABAABtWkO0ezyg_IC9HeG2rc3wplzAj95lKqVTdnEu46xlELl2M2oHrcpVWC_n1Bg1zgjqAAOeRkBgqdwKha7ZS4IK"#;
+        let message_box = r#"-_AAACAA{"v":"KERI10JSON000116_","t":"rpy","d":"EGS28iaGy4iDF8w4q7XkXtdnp4lLj97oZ9n-QrZCyt_8","dt":"2023-07-20T12:31:59.458182+00:00","r":"/end/role/add","a":{"cid":"ECQxoxuKOcO7KkbMyKHnbzhi3sWnSJRnGP_-XsL6eamT","role":"messagebox","eid":"BL0RdEFZxEf2wkq7TTYDagcoOxfmWK45enEUQHwLPadJ"}}-XAuECQxoxuKOcO7KkbMyKHnbzhi3sWnSJRnGP_-XsL6eamTMAAAECQxoxuKOcO7KkbMyKHnbzhi3sWnSJRnGP_-XsL6eamT-KAWAABtWkO0ezyg_IC9HeG2rc3wplzAj95lKqVTdnEu46xlELl2M2oHrcpVWC_n1Bg1zgjqAAOeRkBgqdwKha7ZS4IK"#;
         let parsed = parse_cesr_stream(message_box.as_bytes()).unwrap();
         let deserialized_rpy = Message::try_from(parsed).unwrap();
 

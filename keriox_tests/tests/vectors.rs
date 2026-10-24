@@ -331,21 +331,18 @@ fn kels(r: &mut Runner) {
     }
 }
 
-/// A stream in the format of cesrox before 2.0 must read as the same
-/// messages as its V2 form.
+/// keriox reads only CESR 2.0: the V2 form of a stream in the format of
+/// cesrox before 2.0 reads, and the old form is refused.
 fn migrations(r: &mut Runner) {
     for v in r.load("legacy/migrate.json") {
         let (legacy, v2) = (hex(&field(&v, "legacy_hex")), hex(&field(&v, "v2_hex")));
         r.check(&field(&v, "id"), move || {
-            let legacy = parse_cesr_stream_many(&legacy?).map_err(|e| format!("legacy: {e}"))?;
-            let v2 = parse_cesr_stream_many(&v2?).map_err(|e| format!("v2: {e}"))?;
-            let same = legacy.len() == v2.len()
-                && legacy
-                    .iter()
-                    .zip(&v2)
-                    .all(|(a, b)| a.payload == b.payload && a.attachments == b.attachments);
-            same.then_some(())
-                .ok_or_else(|| "legacy and V2 streams differ".into())
+            let (legacy, v2) = (legacy?, v2?);
+            parse_cesr_stream_many(&v2).map_err(|e| format!("v2: {e}"))?;
+            if legacy != v2 && parse_cesr_stream_many(&legacy).is_ok() {
+                return Err("the pre-2.0 form is read".into());
+            }
+            Ok(())
         });
     }
 }

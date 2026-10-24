@@ -71,8 +71,8 @@ pub enum AttachmentInfo {
     WitnessSignatures(Vec<SignatureInfo>),
     /// Non-transferable receipt couples.
     NonTransferableReceipts(Vec<ReceiptInfo>),
-    /// Transferable signatures anchored to a specific KEL event
-    /// (an anchoring seal followed by indexed controller signatures).
+    /// Transferable signatures anchored to a specific KEL event (a `-X`
+    /// group: the signer's event seal with its indexed signatures).
     TransferableGroups(Vec<SealedSigGroup>),
     /// Transferable signatures bound to the signer's last establishment event.
     LastEstablishmentGroups(Vec<LastEstSigGroup>),
@@ -154,42 +154,12 @@ fn payload_kind(payload: &Payload) -> Result<PayloadKind> {
     }
 }
 
-/// Convert one run of attachment groups into typed summaries. A `-X` group,
-/// or the anchoring seals followed by indexed controller signatures that
-/// keriox wrote before it used `-X`, becomes a single
-/// [`AttachmentInfo::TransferableGroups`] entry.
+/// Convert one run of attachment groups into typed summaries. A `-X` group
+/// becomes a single [`AttachmentInfo::TransferableGroups`] entry.
 fn convert_groups(groups: &[Group]) -> Vec<AttachmentInfo> {
     let mut out = Vec::new();
-    let mut i = 0;
-    while i < groups.len() {
-        match &groups[i] {
-            Group::AnchoringSeals(seals) => {
-                let signatures =
-                    if let Some(Group::IndexedControllerSignatures(sigs)) = groups.get(i + 1) {
-                        i += 1;
-                        sigs.iter().map(indexed_signature_info).collect()
-                    } else {
-                        vec![]
-                    };
-                let sealed = seals
-                    .iter()
-                    .map(|seal| {
-                        let said = SelfAddressingIdentifier::from(seal.digest.clone());
-                        let identifier = seal.prefix.to_str();
-                        SealedSigGroup {
-                            identifier,
-                            sn: seal.sn,
-                            digest: said.to_str(),
-                            digest_algorithm: digest_algorithm_name(&HashFunctionCode::from(
-                                &said.derivation,
-                            ))
-                            .to_string(),
-                            signatures: signatures.clone(),
-                        }
-                    })
-                    .collect();
-                out.push(AttachmentInfo::TransferableGroups(sealed));
-            }
+    for group in groups {
+        match group {
             Group::TransIdxSigGroups(entries) => {
                 let sealed = entries
                     .iter()
@@ -245,7 +215,6 @@ fn convert_groups(groups: &[Group]) -> Vec<AttachmentInfo> {
             }
             other => out.push(AttachmentInfo::Other(other.to_cesr_str())),
         }
-        i += 1;
     }
     out
 }
@@ -259,7 +228,7 @@ fn convert_groups(groups: &[Group]) -> Vec<AttachmentInfo> {
 /// # Errors
 /// - [`Error::CesrParseError`] if the stream is not valid CESR.
 pub fn inspect_stream(cesr: &[u8]) -> Result<(Vec<CesrPart>, Vec<u8>)> {
-    let mut parsed = cesrox::values(cesr);
+    let mut parsed = cesrox::values_with(cesr, cesrox::Counting::Quadlets);
     let mut values = Vec::new();
     for value in parsed.by_ref() {
         match value {

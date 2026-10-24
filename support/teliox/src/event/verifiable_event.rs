@@ -16,11 +16,19 @@ impl VerifiableEvent {
         Self { event, seal }
     }
 
+    /// The event and its source seal in CESR 2.0. TEL events are KERI 1.0
+    /// messages, so the CESR 2.0 genus counter comes first.
     pub fn serialize(&self) -> Result<Vec<u8>, Error> {
-        Ok(match &self.event {
-            Event::Management(man) => [man.encode()?, self.seal.serialize()?].join("".as_bytes()),
-            Event::Vc(vc) => [vc.encode()?, self.seal.serialize()?].join("".as_bytes()),
-        })
+        let body = match &self.event {
+            Event::Management(man) => man.encode()?,
+            Event::Vc(vc) => vc.encode()?,
+        };
+        Ok([
+            keri_core::event_message::cesr_adapter::GENUS_2_0.as_bytes(),
+            &body,
+            &self.seal.serialize()?,
+        ]
+        .concat())
     }
 
     pub fn get_event(&self) -> Event {
@@ -80,7 +88,7 @@ impl VerifiableEvent {
 
 #[test]
 fn test_parse() -> Result<(), Error> {
-    let to_parse = r#"{"v":"KERI10JSON000162_","t":"bis","d":"EBHDapxv5R6HDyO-ijNT-lRW8Ft9F9Vv3XIdTIc4z-fk","i":"EEvXZtq623byRrE7h34J7sosXnSlXT5oKMuvntyqTgVa","s":"0","ii":"ECxyKOLIxJM5EO9XFLSzqWI29JusgC9s6-wK16w5jsTs","ra":{"i":"EGeQ8F7zdANw_Nra_WXVBaaGLlRvAJVoJXzQUrKfP8qC","s":"0","d":"EKGKuR7zsPsPd_JiUII8xFcub5_PfUfyZxphTQ08L8L3"},"dt":"2023-06-29T13:15:16.973665+00:00"}-SAB0AAAAAAAAAAAAAAAAAAAAAAgEC6emXzjKLeG08NAMNNIxirnQvJVunkCFkFL-OmprXGh{"v":"KERI10JSON000161_","t":"brv","d":"EEsynyu-azA8vgJ-cbbDmxFZ44UWTncph7Zo6A2RfCW7","i":"EEvXZtq623byRrE7h34J7sosXnSlXT5oKMuvntyqTgVa","s":"1","p":"EBHDapxv5R6HDyO-ijNT-lRW8Ft9F9Vv3XIdTIc4z-fk","ra":{"i":"EGeQ8F7zdANw_Nra_WXVBaaGLlRvAJVoJXzQUrKfP8qC","s":"0","d":"EKGKuR7zsPsPd_JiUII8xFcub5_PfUfyZxphTQ08L8L3"},"dt":"2023-06-29T13:15:16.980295+00:00"}-SAB0AAAAAAAAAAAAAAAAAAAAAAwEL5gH12rlRc4br0sGQfok5XiydNlRqlBGrNMrILv5woc"#;
+    let to_parse = r#"-_AAACAA{"v":"KERI10JSON000162_","t":"bis","d":"EBHDapxv5R6HDyO-ijNT-lRW8Ft9F9Vv3XIdTIc4z-fk","i":"EEvXZtq623byRrE7h34J7sosXnSlXT5oKMuvntyqTgVa","s":"0","ii":"ECxyKOLIxJM5EO9XFLSzqWI29JusgC9s6-wK16w5jsTs","ra":{"i":"EGeQ8F7zdANw_Nra_WXVBaaGLlRvAJVoJXzQUrKfP8qC","s":"0","d":"EKGKuR7zsPsPd_JiUII8xFcub5_PfUfyZxphTQ08L8L3"},"dt":"2023-06-29T13:15:16.973665+00:00"}-SAMMAAgEC6emXzjKLeG08NAMNNIxirnQvJVunkCFkFL-OmprXGh-_AAACAA{"v":"KERI10JSON000161_","t":"brv","d":"EEsynyu-azA8vgJ-cbbDmxFZ44UWTncph7Zo6A2RfCW7","i":"EEvXZtq623byRrE7h34J7sosXnSlXT5oKMuvntyqTgVa","s":"1","p":"EBHDapxv5R6HDyO-ijNT-lRW8Ft9F9Vv3XIdTIc4z-fk","ra":{"i":"EGeQ8F7zdANw_Nra_WXVBaaGLlRvAJVoJXzQUrKfP8qC","s":"0","d":"EKGKuR7zsPsPd_JiUII8xFcub5_PfUfyZxphTQ08L8L3"},"dt":"2023-06-29T13:15:16.980295+00:00"}-SAMMAAwEL5gH12rlRc4br0sGQfok5XiydNlRqlBGrNMrILv5woc"#;
     let parsed = VerifiableEvent::parse(to_parse.as_bytes())?;
     assert_eq!(parsed.len(), 2);
     Ok(())
@@ -91,7 +99,7 @@ mod peer_input {
     use super::VerifiableEvent;
 
     const BIS: &str = r#"{"v":"KERI10JSON000162_","t":"bis","d":"EBHDapxv5R6HDyO-ijNT-lRW8Ft9F9Vv3XIdTIc4z-fk","i":"EEvXZtq623byRrE7h34J7sosXnSlXT5oKMuvntyqTgVa","s":"0","ii":"ECxyKOLIxJM5EO9XFLSzqWI29JusgC9s6-wK16w5jsTs","ra":{"i":"EGeQ8F7zdANw_Nra_WXVBaaGLlRvAJVoJXzQUrKfP8qC","s":"0","d":"EKGKuR7zsPsPd_JiUII8xFcub5_PfUfyZxphTQ08L8L3"},"dt":"2023-06-29T13:15:16.973665+00:00"}"#;
-    const SEAL: &str = "-SAB0AAAAAAAAAAAAAAAAAAAAAAgEC6emXzjKLeG08NAMNNIxirnQvJVunkCFkFL-OmprXGh";
+    const SEAL: &str = "-SAMMAAgEC6emXzjKLeG08NAMNNIxirnQvJVunkCFkFL-OmprXGh";
 
     #[test]
     fn a_body_that_is_not_a_tel_event_is_an_error() {

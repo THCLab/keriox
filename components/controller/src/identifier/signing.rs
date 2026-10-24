@@ -2,7 +2,7 @@ use keri_core::{
     database::{EscrowCreator, EventDatabase},
     event::sections::seal::EventSeal,
     event_message::{
-        cesr_adapter::{CesrMessage, WireFormat},
+        cesr_adapter::CesrMessage,
         signature::{signatures_into_groups, Signature, SignerData},
     },
     oobi_manager::storage::OobiStorageBackend,
@@ -71,9 +71,7 @@ where
             payload: cesrox::payload::Payload::JSON(data.into()),
             attachments: signatures_into_groups(&[signature]),
         }
-        // A signed envelope's payload is arbitrary data, not a KERI
-        // message, so its attachments follow the configured version.
-        .to_cesr_with(WireFormat::of(self.known_events.version))
+        .to_cesr()
         .map(|data| String::from_utf8(data).unwrap())
         .map_err(|_e| ControllerError::CesrFormatError)
     }
@@ -137,9 +135,7 @@ where
             payload: cesrox::payload::Payload::JSON(data.into()),
             attachments: signatures_into_groups(&[signature]),
         }
-        // A signed envelope's payload is arbitrary data, not a KERI
-        // message, so its attachments follow the configured version.
-        .to_cesr_with(WireFormat::of(self.known_events.version))
+        .to_cesr()
         .map(|data| String::from_utf8(data).unwrap())
         .map_err(|_e| ControllerError::CesrFormatError)
     }
@@ -155,9 +151,7 @@ where
             payload: cesrox::payload::Payload::JSON(data.into()),
             attachments: signatures_into_groups(&[signature]),
         }
-        // A signed envelope's payload is arbitrary data, not a KERI
-        // message, so its attachments follow the configured version.
-        .to_cesr_with(WireFormat::of(self.known_events.version))
+        .to_cesr()
         .map(|data| String::from_utf8(data).unwrap())
         .map_err(|_e| ControllerError::CesrFormatError)
     }

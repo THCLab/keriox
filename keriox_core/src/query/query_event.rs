@@ -170,7 +170,7 @@ where
 pub fn signed_query_parse() {
     use crate::event_message::cesr_adapter::parse_cesr_stream;
 
-    let input_query = br#"{"v":"KERI10JSON0000ff_","t":"qry","d":"EKZbZZs0KweJm_VbpHBqM6Uvn0tCOoQRQ4okoyoKKXVH","dt":"2024-02-29T13:37:25.671274+00:00","r":"logs","rr":"","q":{"i":"EAz8-amlMgzWkUAcGLzPR5SZ57K0fLaG6eV3DK9SHadw","src":"BLogequWU0j7imRMuDrPChX9BCWuhZJVWawP9zuibmlk"}}-KABAACGk8GcwX1BXQ2KKIncFH1h3tpSDd4rfU4zUC0gEIIwDv2IPnL7WlvyIxcKcO7yv17FbfX1DpWAiHfCEWZlrWMP"#;
+    let input_query = br#"-_AAACAA{"v":"KERI10JSON0000ff_","t":"qry","d":"EKZbZZs0KweJm_VbpHBqM6Uvn0tCOoQRQ4okoyoKKXVH","dt":"2024-02-29T13:37:25.671274+00:00","r":"logs","rr":"","q":{"i":"EAz8-amlMgzWkUAcGLzPR5SZ57K0fLaG6eV3DK9SHadw","src":"BLogequWU0j7imRMuDrPChX9BCWuhZJVWawP9zuibmlk"}}-KAWAACGk8GcwX1BXQ2KKIncFH1h3tpSDd4rfU4zUC0gEIIwDv2IPnL7WlvyIxcKcO7yv17FbfX1DpWAiHfCEWZlrWMP"#;
 
     let parsed = parse_cesr_stream(input_query).unwrap();
     let deserialized_qry = Message::try_from(parsed).unwrap();

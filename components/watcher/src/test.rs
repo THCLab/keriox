@@ -660,7 +660,7 @@ mod abandonment {
         assert!(features.contains(&serde_json::json!("keri2")));
         assert_eq!(
             info["keri"],
-            serde_json::json!({ "protocol": "1.0", "cesr_genus": "1.0" })
+            serde_json::json!({ "protocol": "1.0", "cesr_genus": "2.0" })
         );
     }
 

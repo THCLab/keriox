@@ -50,8 +50,8 @@ impl AsyncTestContext for Keri2InfrastructureContext {
 }
 
 impl InfrastructureContext {
-    /// Nodes started outside the tests, e.g. of another keriox release by
-    /// `compat/check.sh`: `nodes` names the first witness, the second
+    /// Nodes started outside the tests, e.g. of another keriox release:
+    /// `nodes` names the first witness, the second
     /// witness and the watcher as `<seed>@<url>`, separated by spaces.
     pub fn external(nodes: &str) -> InfrastructureContext {
         let location = |node: &str| {
