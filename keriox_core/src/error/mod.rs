@@ -38,6 +38,12 @@ pub enum Error {
     #[error("Error while applying event: duplicate event")]
     EventDuplicateError,
 
+    /// A delegated event, other than the accepted one at its location, that
+    /// its delegator never anchored. Without the anchor it was never a
+    /// valid event, so it is no evidence of duplicity.
+    #[error("Delegated event at an occupied location is not anchored by its delegator")]
+    UnanchoredDelegatedEvent,
+
     /// The event is the one already accepted at its location.
     #[error("Event already accepted")]
     EventAlreadyAccepted,

@@ -178,7 +178,10 @@ impl<D: EventDatabase> EventValidator<D> {
     /// event. The KERI specification: a duplicitous event is a verified but
     /// different version of an event at the same location. The accepted
     /// event itself is not duplicitous, and an event that does not verify
-    /// against the key state before its location is dropped.
+    /// against the key state before its location is dropped. A delegated
+    /// event is verified only with its delegator's anchor, so one without
+    /// it is dropped too, whether it arrived before or after the accepted
+    /// event.
     fn duplicate(&self, signed_event: &SignedEventMessage) -> Error {
         let id = signed_event.event_message.data.get_prefix();
         let sn = signed_event.event_message.data.get_sn();
@@ -192,7 +195,14 @@ impl<D: EventDatabase> EventValidator<D> {
             Some(prior_sn) => self.event_storage.compute_state_at_sn(&id, prior_sn),
         };
         match prior.map(|state| state.map(|state| self.apply_signed(state, signed_event))) {
-            Ok(Some(Ok(_))) => Error::EventDuplicateError,
+            Ok(Some(Ok(_))) => match self.delegator_of(signed_event) {
+                Ok(Some(delegator)) => match self.check_delegation(&delegator, signed_event) {
+                    Ok(()) => Error::EventDuplicateError,
+                    Err(_) => Error::UnanchoredDelegatedEvent,
+                },
+                Ok(None) => Error::EventDuplicateError,
+                Err(e) => e,
+            },
             Ok(Some(Err(Error::NotEnoughSigsError))) | Ok(None) => {
                 Error::SignatureVerificationError
             }

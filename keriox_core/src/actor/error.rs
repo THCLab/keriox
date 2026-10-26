@@ -137,6 +137,7 @@ fn keri_error_status(err: &KeriError) -> StatusCode {
         KeriError::DeserializeError(_)
         | KeriError::IncorrectDigest
         | KeriError::MissingSignatures
+        | KeriError::UnanchoredDelegatedEvent
         | KeriError::ConfigTraitViolation(_) => StatusCode::BAD_REQUEST,
 
         // The server does not know the log of the signer, so it cannot

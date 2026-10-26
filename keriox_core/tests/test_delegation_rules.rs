@@ -19,9 +19,10 @@ use keri_core::{
         EventTypeTag,
     },
     prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
+    error::Error,
     processor::{
         basic_processor::BasicProcessor,
-        escrow::{default_escrow_bus, EscrowConfig},
+        escrow::{default_escrow_bus, EscrowConfig, EscrowSet},
         event_storage::EventStorage,
     },
     signer::Signer,
@@ -32,16 +33,18 @@ struct Fixture {
     _path: NamedTempFile,
     processor: BasicProcessor<RedbDatabase>,
     storage: EventStorage<RedbDatabase>,
+    escrows: EscrowSet<RedbDatabase>,
 }
 
 fn setup() -> Fixture {
     let path = NamedTempFile::new().unwrap();
     let db = Arc::new(RedbDatabase::new(path.path()).unwrap());
-    let (bus, _escrows) = default_escrow_bus(db.clone(), EscrowConfig::default(), None);
+    let (bus, escrows) = default_escrow_bus(db.clone(), EscrowConfig::default(), None);
     Fixture {
         _path: path,
         processor: BasicProcessor::new(db.clone(), Some(bus)),
         storage: EventStorage::new(db),
+        escrows,
     }
 }
 
@@ -50,11 +53,20 @@ fn key(signer: &Signer) -> BasicPrefix {
 }
 
 fn send(fx: &Fixture, event: &KeriEvent<KeyEvent>, signer: &Signer, seal: Option<SourceSeal>) {
+    let _ = submit(fx, event, signer, seal);
+}
+
+fn submit(
+    fx: &Fixture,
+    event: &KeriEvent<KeyEvent>,
+    signer: &Signer,
+    seal: Option<SourceSeal>,
+) -> Result<(), Error> {
     let sig = SelfSigningPrefix::Ed25519Sha512(signer.sign(event.encode().unwrap()).unwrap());
-    let _ = process_notice(
+    process_notice(
         Notice::Event(event.sign(vec![IndexedSignature::new_both_same(sig, 0)], None, seal)),
         &fx.processor,
-    );
+    )
 }
 
 fn sn(fx: &Fixture, id: &IdentifierPrefix) -> Option<u64> {
@@ -270,5 +282,69 @@ fn a_delegated_rotation_arriving_before_its_inception_and_anchors_is_accepted() 
     send(&fx, &ixn1, &d.delegator, None);
     assert_eq!(sn(&fx, &id), Some(0));
     send(&fx, &ixn2, &d.delegator, None);
+    assert_eq!(sn(&fx, &id), Some(1));
+}
+
+/// A delegated rotation that the delegator never anchored is not a valid
+/// event, so reaching a KEL whose sn it would take only after another
+/// rotation was accepted there does not make it duplicity: it is dropped,
+/// as it would have been escrowed and then dropped had it come first. A
+/// competing rotation the delegator did anchor is duplicity.
+#[test]
+fn an_unanchored_delegated_rotation_at_a_taken_sn_is_not_duplicity() {
+    let fx = setup();
+    let d = delegation(&fx);
+    let delegator_id = d.delegator_icp.data.get_prefix();
+    let delegate_next = Signer::new();
+    let dip = EventMsgBuilder::new(EventTypeTag::Dip)
+        .with_delegator(&delegator_id)
+        .with_keys(vec![key(&d.delegate)])
+        .with_next_keys(vec![key(&delegate_next)])
+        .build()
+        .unwrap();
+    let id = dip.data.get_prefix();
+    let drt = || {
+        EventMsgBuilder::new(EventTypeTag::Drt)
+            .with_prefix(&id)
+            .with_sn(1)
+            .with_previous_event(&dip.digest().unwrap())
+            .with_keys(vec![key(&delegate_next)])
+            .with_next_keys(vec![key(&Signer::new())])
+            .build()
+            .unwrap()
+    };
+    let (accepted, unanchored, competing) = (drt(), drt(), drt());
+    let mut delegator_events = vec![d.delegator_icp.clone()];
+    let mut anchor_next = |seal: EventSeal| {
+        let last = delegator_events.last().unwrap();
+        let ixn = EventMsgBuilder::new(EventTypeTag::Ixn)
+            .with_prefix(&delegator_id)
+            .with_sn(last.data.get_sn() + 1)
+            .with_previous_event(&last.digest().unwrap())
+            .with_seal(vec![Seal::Event(seal)])
+            .build()
+            .unwrap();
+        send(&fx, &ixn, &d.delegator, None);
+        delegator_events.push(ixn.clone());
+        SourceSeal::new(ixn.data.get_sn(), ixn.digest().unwrap())
+    };
+    let dip_anchor = anchor_next(seal_of(&dip));
+    send(&fx, &dip, &d.delegate, Some(dip_anchor));
+    let drt_anchor = anchor_next(seal_of(&accepted));
+    send(&fx, &accepted, &delegate_next, Some(drt_anchor));
+    assert_eq!(sn(&fx, &id), Some(1));
+
+    let late = submit(&fx, &unanchored, &delegate_next, None);
+    assert!(
+        matches!(late, Err(Error::UnanchoredDelegatedEvent)),
+        "expected UnanchoredDelegatedEvent, got {late:?}"
+    );
+    assert!(fx.escrows.duplicitous.get(&id).unwrap().is_empty());
+
+    let competing_anchor = anchor_next(seal_of(&competing));
+    submit(&fx, &competing, &delegate_next, Some(competing_anchor)).unwrap();
+    let duplicitous = fx.escrows.duplicitous.get(&id).unwrap();
+    assert_eq!(duplicitous.len(), 1);
+    assert_eq!(duplicitous[0].event_message, competing);
     assert_eq!(sn(&fx, &id), Some(1));
 }
