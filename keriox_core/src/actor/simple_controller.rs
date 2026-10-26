@@ -558,7 +558,6 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase, RedbOobiStorage> {
         }
         .to_message(
             &self.prefix,
-            KeriVersion::V1_0,
             SerializationFormats::JSON,
             HashFunctionCode::Blake3_256,
         );

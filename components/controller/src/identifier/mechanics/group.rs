@@ -82,7 +82,6 @@ where
                     id,
                     &icp,
                     ForwardTopic::Multisig,
-                    self.known_events.version,
                 )
                 .encode()?;
                 String::from_utf8(exn).map_err(|_e| MechanicsError::EventFormatError)
@@ -96,7 +95,6 @@ where
                     &delegator,
                     &icp,
                     ForwardTopic::Delegate,
-                    self.known_events.version,
                 )
                 .encode()?,
             )
@@ -295,7 +293,6 @@ where
                     id,
                     &rot,
                     ForwardTopic::Multisig,
-                    self.known_events.version,
                 )
                 .encode()?;
                 String::from_utf8(exn).map_err(|_e| MechanicsError::EventFormatError)
@@ -311,7 +308,6 @@ where
                     &delegator,
                     &rot,
                     ForwardTopic::Delegate,
-                    self.known_events.version,
                 )
                 .encode()?,
             )
@@ -399,7 +395,6 @@ where
                     id,
                     &ixn,
                     ForwardTopic::Multisig,
-                    self.known_events.version,
                 )
                 .encode()?;
                 String::from_utf8(exn).map_err(|_e| MechanicsError::EventFormatError)

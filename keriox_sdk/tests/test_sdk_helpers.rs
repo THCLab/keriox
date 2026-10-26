@@ -165,7 +165,6 @@ async fn test_multisig_request_json_roundtrip() {
         id.id(),
         &event,
         ForwardTopic::Multisig,
-        keri_core::event_message::keri_version::KeriVersion::V1_0,
     );
 
     let request =

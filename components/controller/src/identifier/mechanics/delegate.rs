@@ -46,7 +46,6 @@ where
         }
         .to_message(
             &self.id,
-            self.known_events.version,
             SerializationFormats::JSON,
             HashFunctionCode::Blake3_256,
         );

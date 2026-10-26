@@ -461,14 +461,14 @@ fn streams() -> Vec<Value> {
     // an exchange forwarding an event, signed by the sender and the event's
     // signature attached under its path
     let exn = KeriEvent::new(
-        keri_core::event_message::keri_version::KeriVersion::V1_0,
+        keri_core::event_message::keri_version::KeriVersion::V2_0,
         SerializationFormats::JSON,
         HashFunctionCode::Blake3_256.into(),
         keri_core::mailbox::exchange::ExchangeBody {
-            sender: None,
-            recipient: None,
-            exchange: None,
-            prior: None,
+            sender: id.clone(),
+            recipient: id.clone(),
+            exchange: String::new(),
+            prior: String::new(),
             content: timestamped(Exchange::Fwd {
                 args: FwdArgs {
                     recipient_id: id.clone(),

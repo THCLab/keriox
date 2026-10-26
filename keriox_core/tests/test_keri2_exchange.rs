@@ -1,6 +1,7 @@
-//! A KERI 2.0 exchange (`exn`) names its sender `i`, its recipient `ri`,
-//! its exchange `x` and the prior message `p` before `dt`, and the sender
-//! must have signed it. A KERI 1.0 exchange has none of these fields.
+//! The KERI specification defines the exchange (`exn`) as a KERI 2.0
+//! message that names its sender `i`, its recipient `ri`, its transaction
+//! `x` and the prior message `p` before `dt`. The sender must have signed
+//! it, and a forward goes to the mailbox of the recipient it names.
 #![cfg(feature = "mailbox")]
 
 use std::sync::Arc;
@@ -17,11 +18,13 @@ use keri_core::{
         signed_event_message::{Message, Notice, Op},
         EventTypeTag,
     },
+    error::Error,
     mailbox::exchange::{ExchangeMessage, ForwardTopic, SignedExchange},
     prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
     processor::{basic_processor::BasicProcessor, event_storage::EventStorage},
     signer::Signer,
 };
+use said::{derivation::HashFunctionCode, version::format::SerializationFormats};
 use tempfile::NamedTempFile;
 
 struct Fixture {
@@ -62,20 +65,20 @@ fn seal_of(icp: &KeriEvent<KeyEvent>) -> EventSeal {
 }
 
 /// `exn` signed by `signer` under the key state of `signer_icp`, carrying
-/// `forwarded` signed by its own controller, read back from the wire.
-fn through_the_wire(
+/// `forwarded` signed by its own controller.
+fn signed(
     exn: ExchangeMessage,
     signer: &Signer,
     signer_icp: &KeriEvent<KeyEvent>,
     forwarded: &KeriEvent<KeyEvent>,
-) -> Result<SignedExchange, String> {
+) -> SignedExchange {
     let sig = |data: &[u8]| {
         vec![IndexedSignature::new_both_same(
             SelfSigningPrefix::Ed25519Sha512(signer.sign(data).unwrap()),
             0,
         )]
     };
-    let signed = SignedExchange {
+    SignedExchange {
         signature: vec![Signature::Transferable(
             SignerData::EventSeal(seal_of(signer_icp)),
             sig(&exn.encode().unwrap()),
@@ -88,7 +91,17 @@ fn through_the_wire(
             )],
         ),
         exchange_message: exn,
-    };
+    }
+}
+
+/// `exn`, signed as by [`signed`], read back from the wire.
+fn through_the_wire(
+    exn: ExchangeMessage,
+    signer: &Signer,
+    signer_icp: &KeriEvent<KeyEvent>,
+    forwarded: &KeriEvent<KeyEvent>,
+) -> Result<SignedExchange, String> {
+    let signed = signed(exn, signer, signer_icp, forwarded);
     let cesr = Message::Op(Op::Exchange(signed)).to_cesr().unwrap();
     match parse_op_stream(&cesr).map_err(|e| e.to_string())?.remove(0) {
         Op::Exchange(exn) => Ok(exn),
@@ -102,19 +115,13 @@ fn field(raw: &str, name: &str) -> usize {
 }
 
 #[test]
-fn a_keri_2_exchange_names_its_sender_and_recipient() {
+fn an_exchange_names_its_sender_and_recipient() {
     let fx = setup();
     let signer = Signer::new();
     let icp = known(&fx, &signer);
     let sender = icp.data.get_prefix();
     let recipient = IdentifierPrefix::Basic(BasicPrefix::Ed25519NT(Signer::new().public_key()));
-    let exn = event_generator::exchange(
-        &sender,
-        &recipient,
-        &icp,
-        ForwardTopic::Multisig,
-        KeriVersion::V2_0,
-    );
+    let exn = event_generator::exchange(&sender, &recipient, &icp, ForwardTopic::Multisig);
     let raw = String::from_utf8(exn.encode().unwrap()).unwrap();
     assert!(raw.starts_with(r#"{"v":"KERICAACAAJSON"#), "{raw}");
     let order = ["d", "i", "ri", "x", "p", "dt", "r", "q", "a"].map(|name| field(&raw, name));
@@ -128,7 +135,7 @@ fn a_keri_2_exchange_names_its_sender_and_recipient() {
 }
 
 #[test]
-fn a_keri_2_exchange_signed_by_someone_else_is_refused() {
+fn an_exchange_signed_by_someone_else_is_refused() {
     let fx = setup();
     let (sender_signer, other_signer) = (Signer::new(), Signer::new());
     let sender_icp = known(&fx, &sender_signer);
@@ -138,13 +145,47 @@ fn a_keri_2_exchange_signed_by_someone_else_is_refused() {
         &other_icp.data.get_prefix(),
         &sender_icp,
         ForwardTopic::Multisig,
-        KeriVersion::V2_0,
     );
-    assert!(through_the_wire(exn, &other_signer, &other_icp, &sender_icp).is_err());
+    assert!(through_the_wire(exn.clone(), &other_signer, &other_icp, &sender_icp).is_err());
+    // Nor is it taken when handed over without the parser.
+    let forged = signed(exn, &other_signer, &other_icp, &sender_icp);
+    assert!(matches!(
+        process_signed_exn(forged, &fx.storage),
+        Err(Error::SemanticError(_))
+    ));
 }
 
+/// The forward goes to the mailbox of the AID in `q.pre`; an exchange
+/// naming another recipient in `ri` contradicts itself.
 #[test]
-fn a_keri_1_exchange_has_no_sender() {
+fn a_forward_for_another_recipient_than_ri_is_refused() {
+    let fx = setup();
+    let signer = Signer::new();
+    let icp = known(&fx, &signer);
+    let mut exn = event_generator::exchange(
+        &icp.data.get_prefix(),
+        &IdentifierPrefix::Basic(BasicPrefix::Ed25519NT(Signer::new().public_key())),
+        &icp,
+        ForwardTopic::Multisig,
+    );
+    exn.data.recipient =
+        IdentifierPrefix::Basic(BasicPrefix::Ed25519NT(Signer::new().public_key()));
+    let exn = KeriEvent::new(
+        KeriVersion::V2_0,
+        SerializationFormats::JSON,
+        HashFunctionCode::Blake3_256.into(),
+        exn.data,
+    );
+    let exn = through_the_wire(exn, &signer, &icp, &icp).unwrap();
+    assert!(matches!(
+        process_signed_exn(exn, &fx.storage),
+        Err(Error::SemanticError(_))
+    ));
+}
+
+/// The specification defines no KERI 1.0 exchange.
+#[test]
+fn a_keri_1_exchange_is_refused() {
     let fx = setup();
     let signer = Signer::new();
     let icp = known(&fx, &signer);
@@ -153,10 +194,15 @@ fn a_keri_1_exchange_has_no_sender() {
         &icp.data.get_prefix(),
         &icp,
         ForwardTopic::Multisig,
-        KeriVersion::V1_0,
     );
-    let raw = String::from_utf8(exn.encode().unwrap()).unwrap();
+    let keri1 = KeriEvent::new(
+        KeriVersion::V1_0,
+        SerializationFormats::JSON,
+        HashFunctionCode::Blake3_256.into(),
+        exn.data,
+    );
+    let raw = String::from_utf8(keri1.encode().unwrap()).unwrap();
     assert!(raw.starts_with(r#"{"v":"KERI10JSON"#), "{raw}");
-    assert!(!raw.contains(r#""ri":"#), "{raw}");
-    assert!(field(&raw, "dt") < field(&raw, "i"), "{raw}");
+    let refused = through_the_wire(keri1, &signer, &icp, &icp).unwrap_err();
+    assert!(refused.contains("KERI 2.0"), "{refused}");
 }

@@ -522,14 +522,15 @@ impl TryFrom<Payload> for EventType {
             EventType::MailboxQry(qry) => Some(qry.data.sender.is_some()),
             _ => None,
         };
+        // The KERI specification defines the exchange message in KERI 2.0
+        // only.
         #[cfg(feature = "mailbox")]
-        if let EventType::Exn(exn) = &event {
-            let keri2 = KeriVersion::of(event.version()) == KeriVersion::V2_0;
-            if exn.data.has_keri2_header() != Some(keri2) {
-                return Err(ParseError::DeserializeError(
-                    "a KERI 2.0 exchange has i, ri, x and p, a KERI 1.0 one none of them".into(),
-                ));
-            }
+        if matches!(event, EventType::Exn(_))
+            && KeriVersion::of(event.version()) != KeriVersion::V2_0
+        {
+            return Err(ParseError::DeserializeError(
+                "an exchange message is a KERI 2.0 message".into(),
+            ));
         }
         if let Some(named) = named_sender {
             if named != (KeriVersion::of(event.version()) == KeriVersion::V2_0) {
@@ -1018,16 +1019,14 @@ pub fn signed_exchange(exn: ExchangeMessage, attachments: Vec<Group>) -> Result<
         }
     }
 
-    // A KERI 2.0 exchange names its sender, who must be one of its signers.
-    if let Some(sender) = &exn.data.sender {
-        if !signatures
-            .iter()
-            .any(|signature| signature.get_signer().as_ref() == Some(sender))
-        {
-            return Err(ParseError::AttachmentError(
-                "the exchange is not signed by its sender i".into(),
-            ));
-        }
+    // An exchange names its sender, who must be one of its signers.
+    if !signatures
+        .iter()
+        .any(|signature| signature.get_signer().as_ref() == Some(&exn.data.sender))
+    {
+        return Err(ParseError::AttachmentError(
+            "the exchange is not signed by its sender i".into(),
+        ));
     }
 
     Ok(Op::Exchange(SignedExchange {

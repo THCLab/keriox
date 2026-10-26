@@ -142,6 +142,16 @@ pub fn process_signed_exn<D: EventDatabase>(
     if exn.signature.is_empty() {
         return Err(Error::MissingSignatures);
     }
+    // The KERI specification: `i` names the sender of an exchange.
+    if !exn
+        .signature
+        .iter()
+        .any(|signature| signature.get_signer().as_ref() == Some(&exn_message.data.sender))
+    {
+        return Err(Error::SemanticError(
+            "the exchange is not signed by its sender i".into(),
+        ));
+    }
     for signature in &exn.signature {
         storage.refuse_abandoned_signer(signature.get_signer().as_ref())?;
     }
@@ -167,6 +177,14 @@ fn process_exn<D: EventDatabase>(
     let (recipient, to_forward, topic) = match &exn.data.content.data {
         Exchange::Fwd { args, to_forward } => (&args.recipient_id, to_forward, &args.topic),
     };
+    // `ri` names the recipient of the exchange, the AID whose mailbox a
+    // forward is for.
+    if recipient != &exn.data.recipient {
+        return Err(Error::SemanticError(format!(
+            "the forward is for {recipient}, the exchange names {} as its recipient",
+            exn.data.recipient
+        )));
+    }
     let (sigs, witness_receipts) = attachment.1.into_iter().fold(
         (vec![], vec![]),
         |(mut signatures, mut witness_receipts), s| {
