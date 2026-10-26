@@ -4,11 +4,7 @@
 //! and CESR reply stream serialization from application code.
 
 use keri_core::event_message::keri_version::KeriVersion;
-use cesrox::payload::Payload;
-use keri_core::event_message::{
-    cesr_adapter::parse_cesr_stream_many,
-    signed_event_message::{Message, Op},
-};
+use keri_core::event_message::signed_event_message::{Message, Op};
 use keri_core::query::reply_event::{ReplyEvent, ReplyRoute, SignedReply};
 use said::derivation::HashFunctionCode;
 use said::sad::SerializationFormats;
@@ -49,21 +45,11 @@ pub fn extract_aid(oobi_json: &str) -> Result<String> {
 /// Parse a CESR reply stream into a list of signed replies.
 ///
 /// A reply stream contains one or more CESR-encoded reply events,
-/// typically produced by `replies_to_cesr_stream`.
+/// typically produced by `replies_to_cesr_stream`. A message in it that is
+/// not a signed reply is an error.
 pub fn parse_reply_stream(bytes: &[u8]) -> Result<Vec<SignedReply>> {
-    let messages = parse_cesr_stream_many(bytes)
-        .map_err(|e| Error::CesrParseError(format!("reply stream parse error: {e:?}")))?;
-
-    let mut replies = Vec::new();
-    for msg in messages {
-        if let Payload::JSON(json) = &msg.payload {
-            if let Ok(sr) = serde_json::from_slice::<SignedReply>(json) {
-                replies.push(sr);
-                continue;
-            }
-        }
-    }
-    Ok(replies)
+    keri_core::actor::parse_reply_stream(bytes)
+        .map_err(|e| Error::CesrParseError(format!("reply stream parse error: {e}")))
 }
 
 /// Serialize signed replies into a CESR byte stream.

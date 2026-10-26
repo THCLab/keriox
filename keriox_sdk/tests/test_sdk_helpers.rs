@@ -258,6 +258,50 @@ fn a_location_reply_is_written_in_the_requested_version() {
     }
 }
 
+/// Signed replies written as a CESR stream read back as the same replies,
+/// signatures included. The parser used to read each body as a whole
+/// signed reply, found no signatures there and returned nothing.
+#[test]
+fn a_reply_stream_reads_back_its_signed_replies() {
+    use keri_sdk::advanced::{
+        oobi::{build_location_reply, parse_reply_stream, replies_to_cesr_stream},
+        raw::keri_core::event_message::keri_version::KeriVersion,
+        BasicPrefix, IdentifierPrefix, LocationScheme, Signer,
+    };
+
+    let signer = Signer::new();
+    let id = BasicPrefix::Ed25519NT(signer.public_key());
+    let location = |url: &str| -> LocationScheme {
+        serde_json::from_value(serde_json::json!({
+            "eid": IdentifierPrefix::Basic(id.clone()).to_string(),
+            "scheme": "http",
+            "url": url,
+        }))
+        .unwrap()
+    };
+    for version in [KeriVersion::V1_0, KeriVersion::V2_0] {
+        let replies = vec![
+            build_location_reply(&id, &signer, location("http://a.example/"), version).unwrap(),
+            build_location_reply(&id, &signer, location("http://b.example/"), version).unwrap(),
+        ];
+        let stream = replies_to_cesr_stream(&replies).unwrap();
+        let parsed = parse_reply_stream(&stream).unwrap();
+        assert_eq!(parsed.len(), 2);
+        // Compared as written: a freshly built reply keeps its timestamp in
+        // nanoseconds, the body it signs carries microseconds.
+        assert_eq!(replies_to_cesr_stream(&parsed).unwrap(), stream);
+    }
+}
+
+/// A message in a reply stream that is not a signed reply is an error, not
+/// silently left out.
+#[test]
+fn a_reply_stream_with_something_else_in_it_is_refused() {
+    use keri_sdk::advanced::oobi::parse_reply_stream;
+
+    assert!(parse_reply_stream(br#"{"msg":"hello"}"#).is_err());
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn an_identifier_reports_the_version_its_store_writes() {
     use keri_sdk::advanced::raw::keri_core::event_message::keri_version::KeriVersion;
