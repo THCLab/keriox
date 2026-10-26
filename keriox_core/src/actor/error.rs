@@ -8,7 +8,11 @@ use crate::keys::KeysError;
 use crate::oobi::{error::OobiError, Role};
 #[cfg(feature = "oobi-manager")]
 use crate::transport::TransportError;
-use crate::{actor::SignedQueryError, error::Error as KeriError, prefix::IdentifierPrefix};
+use crate::{
+    actor::{QueryError, SignedQueryError},
+    error::Error as KeriError,
+    prefix::IdentifierPrefix,
+};
 use said::version::error::Error as VersionError;
 
 #[derive(Debug, thiserror::Error, serde::Serialize, serde::Deserialize)]
@@ -96,21 +100,28 @@ impl ActorError {
             // The query was sent to a server that does not answer it.
             ActorError::UnsupportedQuery(_) => StatusCode::BAD_REQUEST,
 
-            ActorError::KeriError(err) => match err {
-                KeriError::DeserializeError(_)
-                | KeriError::IncorrectDigest
-                | KeriError::MissingSignatures
-                | KeriError::ConfigTraitViolation(_) => StatusCode::BAD_REQUEST,
+            ActorError::MissingSignerId => StatusCode::BAD_REQUEST,
 
-                KeriError::FaultySignatureVerification | KeriError::SignatureVerificationError => {
-                    StatusCode::FORBIDDEN
+            // The server holds no log for the identifier asked about. That
+            // is an answer, not a server failure.
+            ActorError::NotFound(_) | ActorError::NoIdentState { .. } => StatusCode::NOT_FOUND,
+
+            // The signer never named this server in an end role.
+            #[cfg(feature = "oobi")]
+            ActorError::MissingRole { .. } => StatusCode::FORBIDDEN,
+
+            ActorError::KeriError(err) => keri_error_status(err),
+
+            ActorError::QueryError(err) => match err {
+                SignedQueryError::KeriError(err)
+                | SignedQueryError::QueryError(QueryError::KeriError(err)) => {
+                    keri_error_status(err)
                 }
-
-                KeriError::AbandonedIdentifier(_) | KeriError::NonTransferableIdentifier(_) => {
-                    StatusCode::GONE
+                SignedQueryError::QueryError(QueryError::UnknownId { .. }) => {
+                    StatusCode::NOT_FOUND
                 }
-
-                _ => StatusCode::INTERNAL_SERVER_ERROR,
+                SignedQueryError::UnknownSigner { .. } => StatusCode::UNAUTHORIZED,
+                SignedQueryError::InvalidSignature => StatusCode::FORBIDDEN,
             },
 
             #[cfg(feature = "oobi")]
@@ -121,12 +132,39 @@ impl ActorError {
     }
 }
 
+fn keri_error_status(err: &KeriError) -> StatusCode {
+    match err {
+        KeriError::DeserializeError(_)
+        | KeriError::IncorrectDigest
+        | KeriError::MissingSignatures
+        | KeriError::ConfigTraitViolation(_) => StatusCode::BAD_REQUEST,
+
+        // The server does not know the log of the signer, so it cannot
+        // verify who is asking.
+        KeriError::UnknownSigner(_) => StatusCode::UNAUTHORIZED,
+
+        KeriError::FaultySignatureVerification | KeriError::SignatureVerificationError => {
+            StatusCode::FORBIDDEN
+        }
+
+        KeriError::AbandonedIdentifier(_) | KeriError::NonTransferableIdentifier(_) => {
+            StatusCode::GONE
+        }
+
+        _ => StatusCode::INTERNAL_SERVER_ERROR,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use http::StatusCode;
 
     use super::ActorError;
-    use crate::{error::Error, prefix::IdentifierPrefix};
+    use crate::{
+        actor::{QueryError, SignedQueryError},
+        error::Error,
+        prefix::IdentifierPrefix,
+    };
 
     #[test]
     fn an_event_after_the_end_of_a_log_is_gone() {
@@ -143,6 +181,62 @@ mod tests {
         assert_eq!(
             ActorError::UnsupportedQuery("mailbox".into()).http_status_code(),
             StatusCode::BAD_REQUEST
+        );
+    }
+
+    #[test]
+    fn an_identifier_the_server_holds_no_log_for_is_not_found() {
+        for err in [
+            ActorError::NotFound(IdentifierPrefix::default()),
+            ActorError::NoIdentState {
+                prefix: IdentifierPrefix::default(),
+            },
+            ActorError::QueryError(SignedQueryError::QueryError(QueryError::UnknownId {
+                id: IdentifierPrefix::default(),
+            })),
+        ] {
+            assert_eq!(err.http_status_code(), StatusCode::NOT_FOUND, "{err}");
+        }
+    }
+
+    #[test]
+    fn a_signer_the_server_does_not_know_is_unauthorized() {
+        for err in [
+            ActorError::KeriError(Error::UnknownSigner(IdentifierPrefix::default())),
+            ActorError::QueryError(SignedQueryError::KeriError(Error::UnknownSigner(
+                IdentifierPrefix::default(),
+            ))),
+            ActorError::QueryError(SignedQueryError::UnknownSigner {
+                id: IdentifierPrefix::default(),
+            }),
+        ] {
+            assert_eq!(err.http_status_code(), StatusCode::UNAUTHORIZED, "{err}");
+        }
+    }
+
+    #[test]
+    fn a_query_with_a_bad_signature_is_forbidden() {
+        assert_eq!(
+            ActorError::QueryError(SignedQueryError::InvalidSignature).http_status_code(),
+            StatusCode::FORBIDDEN
+        );
+    }
+
+    #[cfg(feature = "oobi")]
+    #[test]
+    fn a_signer_without_an_end_role_for_the_server_is_forbidden() {
+        let err = ActorError::MissingRole {
+            role: crate::oobi::Role::Watcher,
+            id: IdentifierPrefix::default(),
+        };
+        assert_eq!(err.http_status_code(), StatusCode::FORBIDDEN);
+    }
+
+    #[test]
+    fn a_server_failure_is_still_an_internal_error() {
+        assert_eq!(
+            ActorError::DbError("disk full".into()).http_status_code(),
+            StatusCode::INTERNAL_SERVER_ERROR
         );
     }
 }

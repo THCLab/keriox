@@ -899,3 +899,107 @@ async fn a_mailbox_query_to_a_watcher_is_refused() {
         "expected UnsupportedQuery from process_op, got {result:?}"
     );
 }
+
+/// A query the watcher cannot answer for a reason on the asker's side is
+/// refused with a 4xx status, so a client can tell it from a watcher
+/// failure. The body still carries the error for the client to decode.
+mod query_status {
+    use std::sync::{Arc, Mutex};
+
+    use actix_web::{http::StatusCode, web, ResponseError};
+    use keri_core::{
+        actor::{error::ActorError, simple_controller::SimpleController},
+        database::redb::RedbDatabase,
+        event_message::signed_event_message::Message,
+        oobi_manager::RedbOobiStorage,
+        prefix::{BasicPrefix, IdentifierPrefix},
+        processor::escrow::EscrowConfig,
+        signer::{CryptoBox, Signer},
+    };
+    use tempfile::{Builder, TempDir};
+    use url::Url;
+
+    use crate::{watcher_listener::http_handlers, Watcher, WatcherConfig};
+
+    struct Fixture {
+        watcher: Arc<Watcher<RedbOobiStorage>>,
+        asker: SimpleController<CryptoBox, RedbDatabase, RedbOobiStorage>,
+        _dirs: Vec<TempDir>,
+    }
+
+    fn setup() -> Fixture {
+        let asker_db_dir = Builder::new().prefix("qry-status-asker").tempdir().unwrap();
+        let asker_db = Arc::new(RedbDatabase::new(&asker_db_dir.path().join("events")).unwrap());
+        let keys = Arc::new(Mutex::new(CryptoBox::new().unwrap()));
+        let mut asker = SimpleController::new(asker_db, keys, EscrowConfig::default()).unwrap();
+        let asker_icp = asker.incept(None, None, None).unwrap().encode().unwrap();
+
+        let root = Builder::new().prefix("qry-status-watcher").tempdir().unwrap();
+        let watcher = Watcher::setup_with_redb(WatcherConfig {
+            public_address: Url::parse("http://some/dummy/url").unwrap(),
+            db_path: root.path().to_owned(),
+            tel_storage_path: root.path().join("tel_storage"),
+            ..Default::default()
+        })
+        .unwrap();
+        watcher.parse_and_process_notices(&asker_icp).unwrap();
+
+        Fixture {
+            watcher: Arc::new(watcher),
+            asker,
+            _dirs: vec![asker_db_dir, root],
+        }
+    }
+
+    async fn grant_watcher_role(fx: &Fixture) {
+        let end_role = fx
+            .asker
+            .add_watcher(&IdentifierPrefix::Basic(fx.watcher.prefix()))
+            .unwrap();
+        fx.watcher.watcher_data.process_op(end_role).await.unwrap();
+    }
+
+    /// Asks the watcher, over its HTTP handler, for the key state of an
+    /// identifier it has never heard of.
+    async fn ask_about_unknown(fx: &Fixture) -> (StatusCode, ActorError) {
+        let unknown = IdentifierPrefix::Basic(BasicPrefix::Ed25519(Signer::new().public_key()));
+        let query = fx.asker.query_ksn(&unknown).unwrap();
+        let body = Message::Op(query).to_cesr().unwrap();
+        let refused = http_handlers::process_query(
+            web::Bytes::from(body),
+            web::Data::new(fx.watcher.clone()),
+        )
+        .await
+        .unwrap_err();
+        let response = refused.error_response();
+        let body = actix_web::body::to_bytes(response.into_body()).await.unwrap();
+        (refused.status_code(), serde_json::from_slice(&body).unwrap())
+    }
+
+    #[actix_web::test]
+    async fn an_identifier_the_watcher_has_no_log_for_is_not_found() {
+        let fx = setup();
+        grant_watcher_role(&fx).await;
+
+        let (status, err) = ask_about_unknown(&fx).await;
+
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        assert!(
+            matches!(err, ActorError::NoIdentState { .. }),
+            "expected NoIdentState, got {err:?}"
+        );
+    }
+
+    #[actix_web::test]
+    async fn a_signer_without_a_watcher_role_is_forbidden() {
+        let fx = setup();
+
+        let (status, err) = ask_about_unknown(&fx).await;
+
+        assert_eq!(status, StatusCode::FORBIDDEN);
+        assert!(
+            matches!(err, ActorError::MissingRole { .. }),
+            "expected MissingRole, got {err:?}"
+        );
+    }
+}
