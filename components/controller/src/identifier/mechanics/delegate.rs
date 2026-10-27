@@ -39,13 +39,14 @@ where
             .anchor_with_seal(&self.id, &[delegated_seal])?;
         let exn_message = Exchange::Fwd {
             args: FwdArgs {
-                recipient_id: delegate,
+                recipient_id: delegate.clone(),
                 topic: ForwardTopic::Delegate,
             },
             to_forward: delegating_event.clone(),
         }
         .to_message(
             &self.id,
+            &delegate,
             SerializationFormats::JSON,
             HashFunctionCode::Blake3_256,
         );

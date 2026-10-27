@@ -1,9 +1,11 @@
 pub mod cesr_adapter;
 pub mod dummy_event;
 pub mod event_msg_builder;
+pub mod field_map;
 pub mod keri_version;
 pub mod key_event_message;
 pub mod msg;
+pub mod routed;
 pub mod serializer;
 pub mod signature;
 pub mod signed_event_message;
@@ -45,6 +47,10 @@ pub enum EventTypeTag {
     Rpy,
     // #[cfg(feature = "query")]
     Qry,
+    // Appended only: the archived discriminant is the variant's position.
+    Xip,
+    Pro,
+    Bar,
 }
 
 #[derive(Serialize, Deserialize, PartialEq)]

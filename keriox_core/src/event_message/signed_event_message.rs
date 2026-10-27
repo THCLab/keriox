@@ -117,8 +117,8 @@ impl Op {
             Op::Reply(reply) => reply.reply.get_prefix(),
             Op::Query(qry) => qry.prefix(),
             #[cfg(feature = "mailbox")]
-            // returns exchange message recipient id
-            Op::Exchange(exn) => exn.exchange_message.data.content.data.get_prefix(),
+            // the exchange's recipient, ri
+            Op::Exchange(exn) => exn.exchange_message.data.recipient.clone(),
         }
     }
 }

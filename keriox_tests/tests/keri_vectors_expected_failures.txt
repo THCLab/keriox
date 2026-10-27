@@ -27,17 +27,9 @@ v1/keripy/negative/negative/gap/rm-role-set-ambiguity/mailbox	reply-bada	role ma
 v1/keripy/negative/negative/gap/rm-role-set-ambiguity/registrar	reply-bada	role registrar is not known (keriox roles: controller, witness, watcher, messagebox)
 v1/keripy/negative/negative/gap/source-seal-multiple-couples	deleg	only the first couple of a source seal group is tried; a group whose second couple names the anchor is not accepted
 v1/keripy/negative/negative/gap/wit-witness-local-remote	witness-role	a witness accepts and receipts a remote event; keriox has no notion of a local (protected) channel
-v2/keripy/negative/negative/gap/rm-exn-fields/spec-shape	exn-fields	the specification's exn fields [v,t,d,i,ri,x,p,dt,r,q,a] are not read
-v2/keripy/negative/negative/gap/rm-pro-bar-xip-missing/bar	pro-bar-xip	no bar message type
-v2/keripy/negative/negative/gap/rm-pro-bar-xip-missing/pro	pro-bar-xip	no pro message type
-v2/keripy/negative/negative/gap/rm-pro-bar-xip-missing/xip	pro-bar-xip	no xip message type
 v2/spec/examples/spec/message/bare-message-bar-cesr	native-cesr	native CESR message bodies are not supported
 v2/spec/examples/spec/message/delegated-inception-dip-cesr	native-cesr	native CESR message bodies are not supported
 v2/spec/examples/spec/message/delegated-rotation-drt-cesr	native-cesr	native CESR message bodies are not supported
-v2/spec/examples/spec/message/example-bare-message-bar-json	pro-bar-xip	no bar message type
-v2/spec/examples/spec/message/example-exchange-transaction-inception-message-xip-json	pro-bar-xip	no xip message type
-v2/spec/examples/spec/message/example-exchange-transaction-message-exn-json	exn-fields	the specification's exn fields [v,t,d,i,ri,x,p,dt,r,q,a] are not read
-v2/spec/examples/spec/message/example-prod-message-pro-json	pro-bar-xip	no pro message type
 v2/spec/examples/spec/message/exchange-message-exn-cesr	native-cesr	native CESR message bodies are not supported
 v2/spec/examples/spec/message/exchange-transaction-inception-message-xip-cesr	native-cesr	native CESR message bodies are not supported
 v2/spec/examples/spec/message/inception-icp-cesr	native-cesr	native CESR message bodies are not supported

@@ -111,7 +111,7 @@ pub fn process_reply<P: Processor, #[cfg(feature = "oobi-manager")] S: OobiStora
         #[cfg(feature = "oobi")]
         route @ (ReplyRoute::OobiProcess(_)
         | ReplyRoute::OobiUrls(..)
-        | ReplyRoute::OobiEndpoint(..)) => Err(Error::UnsupportedReplyRoute(
+        | ReplyRoute::OobiEndpoint(..)) => Err(Error::UnsupportedRoute(
             serde_json::to_value(&route)
                 .ok()
                 .and_then(|v| v["r"].as_str().map(str::to_string))
@@ -187,6 +187,7 @@ fn process_exn<D: EventDatabase>(
 ) -> Result<(), Error> {
     let (recipient, to_forward, topic) = match &exn.data.content.data {
         Exchange::Fwd { args, to_forward } => (&args.recipient_id, to_forward, &args.topic),
+        Exchange::Other { route, .. } => return Err(Error::UnsupportedRoute(route.clone())),
     };
     // `ri` names the recipient of the exchange, the AID whose mailbox a
     // forward is for.

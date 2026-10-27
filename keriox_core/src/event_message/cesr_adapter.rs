@@ -40,6 +40,7 @@ use crate::{
     query::mailbox::{MailboxQuery, SignedMailboxQuery},
 };
 
+use super::routed::{BareMessage, ProdMessage, XipMessage};
 use super::{
     keri_version::KeriVersion,
     msg::{KeriEvent, TypedEvent},
@@ -281,8 +282,7 @@ pub fn parse_event_type(input: &[u8]) -> Result<EventType, ParseError> {
         .try_into()
 }
 
-#[derive(Clone, Debug, PartialEq, Deserialize)]
-#[serde(untagged)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum EventType {
     KeyEvent(KeriEvent<KeyEvent>),
     Receipt(Receipt),
@@ -294,6 +294,12 @@ pub enum EventType {
     MailboxQry(MailboxQuery),
     #[cfg(any(feature = "query", feature = "oobi"))]
     Rpy(ReplyEvent),
+    /// Read, but not served.
+    Xip(XipMessage),
+    /// Read, but not served.
+    Pro(ProdMessage),
+    /// Read, but not served.
+    Bar(BareMessage),
 }
 
 impl EventType {
@@ -310,6 +316,9 @@ impl EventType {
             EventType::Exn(exn) => &exn.serialization_info,
             #[cfg(feature = "mailbox")]
             EventType::MailboxQry(qry) => &qry.serialization_info,
+            EventType::Xip(xip) => &xip.serialization_info,
+            EventType::Pro(pro) => &pro.serialization_info,
+            EventType::Bar(bar) => &bar.serialization_info,
         }
     }
 
@@ -325,6 +334,9 @@ impl EventType {
             EventType::Exn(exn) => exn.encode(),
             #[cfg(feature = "mailbox")]
             EventType::MailboxQry(qry) => qry.encode(),
+            EventType::Xip(xip) => xip.encode(),
+            EventType::Pro(pro) => pro.encode(),
+            EventType::Bar(bar) => bar.encode(),
         }
     }
 }
@@ -475,6 +487,51 @@ impl From<SignedExchange> for CesrMessage {
     }
 }
 
+/// Reads a message body as the type its `t` field names, so a body is never
+/// taken for another type of the same shape.
+fn read_by_type(raw: &[u8], kind: &SerializationFormats) -> Result<EventType, ParseError> {
+    fn decode<T: serde::de::DeserializeOwned>(
+        raw: &[u8],
+        kind: &SerializationFormats,
+    ) -> Result<T, String> {
+        match kind {
+            SerializationFormats::JSON => serde_json::from_slice(raw).map_err(|e| e.to_string()),
+            SerializationFormats::CBOR => serde_cbor::from_slice(raw).map_err(|e| e.to_string()),
+            SerializationFormats::MGPK => rmp_serde::from_slice(raw).map_err(|e| e.to_string()),
+            _ => Err("unsupported message body".to_string()),
+        }
+    }
+    #[derive(Deserialize)]
+    struct Ilk {
+        t: super::EventTypeTag,
+    }
+    use super::EventTypeTag as T;
+    let ilk = decode::<Ilk>(raw, kind)
+        .map_err(|e| ParseError::DeserializeError(format!("message type: {e}")))?
+        .t;
+    match ilk {
+        T::Icp | T::Rot | T::Ixn | T::Dip | T::Drt => decode(raw, kind).map(EventType::KeyEvent),
+        T::Rct => decode(raw, kind).map(EventType::Receipt),
+        #[cfg(feature = "mailbox")]
+        T::Exn => decode(raw, kind).map(EventType::Exn),
+        #[cfg(feature = "query")]
+        T::Qry => {
+            let query = decode(raw, kind).map(EventType::Qry);
+            #[cfg(feature = "mailbox")]
+            let query = query.or_else(|_| decode(raw, kind).map(EventType::MailboxQry));
+            query
+        }
+        #[cfg(any(feature = "query", feature = "oobi"))]
+        T::Rpy => decode(raw, kind).map(EventType::Rpy),
+        T::Xip => decode(raw, kind).map(EventType::Xip),
+        T::Pro => decode(raw, kind).map(EventType::Pro),
+        T::Bar => decode(raw, kind).map(EventType::Bar),
+        #[allow(unreachable_patterns)]
+        other => Err(format!("{other:?} messages are not read")),
+    }
+    .map_err(ParseError::DeserializeError)
+}
+
 impl TryFrom<Payload> for EventType {
     type Error = ParseError;
 
@@ -491,14 +548,7 @@ impl TryFrom<Payload> for EventType {
             #[allow(unreachable_patterns)]
             _ => return Err(ParseError::DeserializeError("unsupported message body".into())),
         };
-        let event: EventType = match value {
-            Payload::JSON(event) => serde_json::from_slice(&event).map_err(|e| e.to_string()),
-            Payload::CBOR(event) => serde_cbor::from_slice(&event).map_err(|e| e.to_string()),
-            Payload::MGPK(event) => rmp_serde::from_slice(&event).map_err(|e| e.to_string()),
-            #[allow(unreachable_patterns)]
-            _ => Err("unsupported message body".to_string()),
-        }
-        .map_err(ParseError::DeserializeError)?;
+        let event = read_by_type(&raw, &body_kind)?;
 
         // Every message read here is a KERI message; a body whose version
         // string names another protocol (ACDC, ...) is not one.
@@ -520,17 +570,26 @@ impl TryFrom<Payload> for EventType {
             EventType::Rpy(rpy) => Some(rpy.data.sender.is_some()),
             #[cfg(feature = "mailbox")]
             EventType::MailboxQry(qry) => Some(qry.data.sender.is_some()),
+            EventType::Pro(pro) => Some(pro.data.sender.is_some()),
+            EventType::Bar(bar) => Some(bar.data.sender.is_some()),
             _ => None,
         };
-        // The KERI specification defines the exchange message in KERI 2.0
-        // only.
-        #[cfg(feature = "mailbox")]
-        if matches!(event, EventType::Exn(_))
-            && KeriVersion::of(event.version()) != KeriVersion::V2_0
-        {
-            return Err(ParseError::DeserializeError(
-                "an exchange message is a KERI 2.0 message".into(),
-            ));
+        // The KERI specification defines the exchange messages, prods and
+        // bare messages in KERI 2.0 only.
+        let keri2_only = match &event {
+            #[cfg(feature = "mailbox")]
+            EventType::Exn(_) => Some("an exchange message"),
+            EventType::Xip(_) => Some("an exchange transaction inception"),
+            EventType::Pro(_) => Some("a prod"),
+            EventType::Bar(_) => Some("a bare message"),
+            _ => None,
+        };
+        if let Some(message) = keri2_only {
+            if KeriVersion::of(event.version()) != KeriVersion::V2_0 {
+                return Err(ParseError::DeserializeError(format!(
+                    "{message} is a KERI 2.0 message"
+                )));
+            }
         }
         if let Some(named) = named_sender {
             if named != (KeriVersion::of(event.version()) == KeriVersion::V2_0) {
@@ -575,6 +634,11 @@ impl TryFrom<CesrMessage> for Message {
             #[cfg(feature = "mailbox")]
             EventType::MailboxQry(qry) => {
                 Message::Op(signed_management_query(qry, value.attachments)?)
+            }
+            EventType::Xip(_) | EventType::Pro(_) | EventType::Bar(_) => {
+                return Err(ParseError::WrongEventType(
+                    "xip, pro and bar messages are read but not served".into(),
+                ))
             }
         };
         Ok(msg)
@@ -1042,6 +1106,34 @@ pub mod test {
         event::{receipt::Receipt, KeyEvent},
         event_message::msg::KeriEvent,
     };
+
+    /// A body is read as the type its `t` names, never as another type of
+    /// the same shape: a query labelled as a prod is a prod, and one
+    /// labelled with a type of another shape is refused.
+    #[test]
+    fn a_body_is_read_as_the_type_it_names() {
+        use super::EventType;
+
+        let qry = r#"{"v":"KERICAACAAJSONAAEe.","t":"qry","d":"EEiUK4cVgcyA1Dk6g2jFzqc5JerkaSnJi3IosutVCyYO","i":"EHqSsH1Imc2MEcgzEordBUFqJKWTcRyTz2GRc2SG3aur","dt":"2025-08-21T17:50:00.000000+00:00","r":"/oobi","rr":"/oobi/process","q":{"i":"EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB","role":"witness"}}"#;
+        assert!(matches!(
+            super::parse_event_type(qry.as_bytes()),
+            Ok(EventType::Qry(_))
+        ));
+        let prod = qry.replacen(r#""t":"qry""#, r#""t":"pro""#, 1);
+        assert!(matches!(
+            super::parse_event_type(prod.as_bytes()),
+            Ok(EventType::Pro(_))
+        ));
+        for other in ["rpy", "bar", "exn", "xip", "icp", "rct"] {
+            let relabelled = qry.replacen(r#""t":"qry""#, &format!(r#""t":"{other}""#), 1);
+            assert!(
+                super::parse_event_type(relabelled.as_bytes()).is_err(),
+                "a qry labelled {other} was read"
+            );
+        }
+        let unknown = qry.replacen(r#""t":"qry""#, r#""t":"zzz""#, 1);
+        assert!(super::parse_event_type(unknown.as_bytes()).is_err());
+    }
 
     /// The version string's serialization kind has to name the encoding the
     /// body is actually in, as stored events keep only those kinds.

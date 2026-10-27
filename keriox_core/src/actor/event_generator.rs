@@ -389,6 +389,7 @@ pub fn exchange(
     }
     .to_message(
         sender,
+        receipient,
         SerializationFormats::JSON,
         HashFunctionCode::Blake3_256,
     )

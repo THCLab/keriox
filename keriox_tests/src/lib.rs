@@ -171,6 +171,7 @@ pub async fn handle_delegation_request(
                     }
                     .to_message(
                         &id.id(),
+                        &delegatee_id,
                         SerializationFormats::JSON,
                         HashFunctionCode::Blake3_256,
                     );

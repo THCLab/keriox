@@ -2,7 +2,9 @@ use crate::event_message::keri_version::KeriVersion;
 use cesrox::cesr_proof::MaterialPath;
 use said::derivation::HashFunctionCode;
 use said::version::format::SerializationFormats;
-use serde::{Deserialize, Serialize};
+use serde::{de, ser::SerializeStruct, Deserialize, Deserializer, Serialize, Serializer};
+
+use crate::event_message::field_map::FieldMap;
 
 use crate::event::KeyEvent;
 use crate::event_message::msg::KeriEvent;
@@ -49,46 +51,101 @@ pub struct SignedExchange {
     pub data_signature: (MaterialPath, Vec<Signature>),
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-#[serde(tag = "r")]
+/// The route, `r`, of an exchange and its `q` and `a` blocks.
+#[derive(Debug, Clone, PartialEq)]
 pub enum Exchange {
-    #[serde(rename = "/fwd")]
+    /// `/fwd`: an event for the mailbox of `q.pre`.
     Fwd {
-        #[serde(rename = "q")]
         args: FwdArgs,
-        #[serde(rename = "a")]
         to_forward: KeriEvent<KeyEvent>,
+    },
+    /// Any other route. keriox reads it, keeping its blocks as they are,
+    /// but serves none.
+    Other {
+        route: String,
+        query: FieldMap,
+        attributes: FieldMap,
     },
 }
 
+const FWD: &str = "/fwd";
+
+impl Serialize for Exchange {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut body = serializer.serialize_struct("Exchange", 3)?;
+        match self {
+            Exchange::Fwd { args, to_forward } => {
+                body.serialize_field("r", FWD)?;
+                body.serialize_field("q", args)?;
+                body.serialize_field("a", to_forward)?;
+            }
+            Exchange::Other {
+                route,
+                query,
+                attributes,
+            } => {
+                body.serialize_field("r", route)?;
+                body.serialize_field("q", query)?;
+                body.serialize_field("a", attributes)?;
+            }
+        }
+        body.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for Exchange {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        struct Blocks {
+            r: String,
+            q: FieldMap,
+            a: FieldMap,
+        }
+        let Blocks { r, q, a } = Blocks::deserialize(deserializer)?;
+        if r == FWD {
+            // The blocks of a forward have a fixed shape, read as such
+            // from their JSON form, whatever kind the body is in.
+            let json = |block: FieldMap| serde_json::to_string(&block).map_err(de::Error::custom);
+            Ok(Exchange::Fwd {
+                args: serde_json::from_str(&json(q)?).map_err(de::Error::custom)?,
+                to_forward: serde_json::from_str(&json(a)?).map_err(de::Error::custom)?,
+            })
+        } else {
+            Ok(Exchange::Other {
+                route: r,
+                query: q,
+                attributes: a,
+            })
+        }
+    }
+}
+
 impl Exchange {
-    /// The exchange as a message sent by `sender` to the recipient it
-    /// names. Exchange messages are KERI 2.0 messages; this one is not part
-    /// of a transaction.
+    /// The exchange as a message from `sender` to `recipient`. Exchange
+    /// messages are KERI 2.0 messages; this one is not part of a
+    /// transaction.
     pub fn to_message(
         self,
         sender: &IdentifierPrefix,
+        recipient: &IdentifierPrefix,
         format: SerializationFormats,
         derivation: HashFunctionCode,
     ) -> ExchangeMessage {
         let body = ExchangeBody {
             sender: sender.clone(),
-            recipient: self.get_prefix(),
+            recipient: recipient.clone(),
             exchange: String::new(),
             prior: String::new(),
             content: Timestamped::new(self),
         };
         KeriEvent::new(KeriVersion::V2_0, format, derivation.into(), body)
     }
-}
 
-impl Exchange {
-    pub fn get_prefix(&self) -> IdentifierPrefix {
+    /// The route, `r`.
+    pub fn route(&self) -> &str {
         match self {
-            Exchange::Fwd {
-                args,
-                to_forward: _,
-            } => args.recipient_id.clone(),
+            Exchange::Fwd { .. } => FWD,
+            Exchange::Other { route, .. } => route,
         }
     }
 }
@@ -141,6 +198,7 @@ mod tests {
             .unwrap();
         let exn = forward().to_message(
             &sender,
+            &"EJccSRTfXYF6wrUVuenAIHzwcx3hJugeiJsEKmndi5q1".parse().unwrap(),
             SerializationFormats::JSON,
             HashFunctionCode::Blake3_256,
         );
@@ -179,6 +237,9 @@ mod tests {
             &"EKYLUMmNPZeEs77Zvclf0bSN5IN-mLfLpx2ySb-HDlk4"
                 .parse()
                 .unwrap(),
+            &"EJccSRTfXYF6wrUVuenAIHzwcx3hJugeiJsEKmndi5q1"
+                .parse()
+                .unwrap(),
             SerializationFormats::JSON,
             HashFunctionCode::Blake3_256,
         );
@@ -194,4 +255,41 @@ mod tests {
         body.as_object_mut().unwrap().remove("dt");
         assert!(serde_json::from_value::<ExchangeMessage>(body).is_err());
     }
+
+    /// The specification's example exchange, on a route keriox does not
+    /// serve, is read with its blocks as they are and written back
+    /// unchanged.
+    #[test]
+    fn an_exchange_of_another_route_round_trips() {
+        let raw = r#"{"v":"KERICAACAAJSONAAGt.","t":"exn","d":"EEIp1e5v4L6rt7cp1nRsn4mN6bJVUDyIQEATIzxR8UnE","i":"EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB","ri":"EHqSsH1Imc2MEcgzEordBUFqJKWTcRyTz2GRc2SG3aur","x":"EJbE2agA3239Iusld1lNvFAxRuhv1SX0mAxxUm67gWOU","p":"EJbE2agA3239Iusld1lNvFAxRuhv1SX0mAxxUm67gWOU","dt":"2020-08-30T13:42:11.123456+00:00","r":"/agree","q":{"timing":"immediate"},"a":{"action":"buy","item":"Rembrant","price":300000.0}}"#;
+        let exn: ExchangeMessage = serde_json::from_str(raw).unwrap();
+        exn.check_digest().unwrap();
+        match &exn.data.content.data {
+            Exchange::Other {
+                route, attributes, ..
+            } => {
+                assert_eq!(route, "/agree");
+                let labels: Vec<&str> = attributes.0.iter().map(|(l, _)| l.as_str()).collect();
+                assert_eq!(labels, ["action", "item", "price"]);
+            }
+            other => panic!("read as {other:?}"),
+        }
+        assert_eq!(String::from_utf8(exn.encode().unwrap()).unwrap(), raw);
+    }
+
+    /// A forward whose blocks do not have a forward's shape is refused,
+    /// not read as some other route.
+    #[test]
+    fn a_malformed_forward_is_refused() {
+        let exn = forward().to_message(
+            &"EKYLUMmNPZeEs77Zvclf0bSN5IN-mLfLpx2ySb-HDlk4".parse().unwrap(),
+            &"EJccSRTfXYF6wrUVuenAIHzwcx3hJugeiJsEKmndi5q1".parse().unwrap(),
+            SerializationFormats::JSON,
+            HashFunctionCode::Blake3_256,
+        );
+        let mut body: serde_json::Value = serde_json::from_slice(&exn.encode().unwrap()).unwrap();
+        body["q"] = serde_json::json!({"topic": "multisig"});
+        assert!(serde_json::from_value::<ExchangeMessage>(body).is_err());
+    }
 }
+

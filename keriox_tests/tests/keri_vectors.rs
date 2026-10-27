@@ -754,6 +754,18 @@ fn said_of(event: &EventType) -> Result<String, String> {
             rpy.check_digest().map_err(e)?;
             rpy.digest().map_err(e)?.to_string()
         }
+        EventType::Xip(xip) => {
+            xip.check_digest().map_err(e)?;
+            xip.digest().map_err(e)?.to_string()
+        }
+        EventType::Pro(pro) => {
+            pro.check_digest().map_err(e)?;
+            pro.digest().map_err(e)?.to_string()
+        }
+        EventType::Bar(bar) => {
+            bar.check_digest().map_err(e)?;
+            bar.digest().map_err(e)?.to_string()
+        }
     })
 }
 

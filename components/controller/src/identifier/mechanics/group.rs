@@ -501,7 +501,10 @@ where
             let Exchange::Fwd {
                 args: _,
                 to_forward,
-            } = exn.data.content.data.clone();
+            } = exn.data.content.data.clone()
+            else {
+                return Err(MechanicsError::EventFormatError);
+            };
 
             let sigs: Vec<_> = if let Some(receipts) = self.known_events.find_receipt(
                 &to_forward.data.get_prefix(),
