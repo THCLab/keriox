@@ -299,7 +299,9 @@ pub fn process_query<D: EventDatabase>(
             let state = storage
                 .get_state(&args.i)
                 .ok_or_else(|| QueryError::UnknownId { id: args.i.clone() })?;
-            let ksn = KeyStateNotice::new_ksn(state, version, SerializationFormats::JSON);
+            let first_seen = storage.first_seen_number(&args.i)?.unwrap_or(state.sn);
+            let ksn =
+                KeyStateNotice::new_ksn(state, first_seen, version, SerializationFormats::JSON);
             Ok(ReplyType::Ksn(ksn))
         }
         QueryRoute::Logs {

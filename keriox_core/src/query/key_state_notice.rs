@@ -14,8 +14,10 @@ pub struct KeyStateNotice {
     #[serde(flatten)]
     pub state: IdentifierState,
 
+    /// The first-seen number of the latest event: its position in the
+    /// order this node accepted the KEL's events, disputed ones included.
     #[serde(rename = "f", with = "SerHex::<Compact>")]
-    first_seen_sn: u64,
+    pub first_seen: u64,
 
     #[serde(rename = "dt")]
     pub timestamp: DateTime<FixedOffset>,
@@ -36,7 +38,7 @@ impl Serialize for KeyStateNotice {
         em.serialize_field("s", &format!("{:x}", self.state.sn))?;
         em.serialize_field("p", &self.state.last_previous.clone())?;
         em.serialize_field("d", &self.state.last_event_digest)?;
-        em.serialize_field("f", &format!("{:x}", self.first_seen_sn))?;
+        em.serialize_field("f", &format!("{:x}", self.first_seen))?;
         em.serialize_field(
             "dt",
             &self.timestamp.to_rfc3339_opts(SecondsFormat::Micros, false),
@@ -57,8 +59,11 @@ impl Serialize for KeyStateNotice {
 
 impl KeyStateNotice {
     /// The key state notice of `state`, written in `version`.
+    /// The notice of `state`, whose latest event this node saw as the
+    /// `first_seen`th event of the KEL.
     pub fn new_ksn(
         state: IdentifierState,
+        first_seen: u64,
         version: KeriVersion,
         serialization: SerializationFormats,
     ) -> Self {
@@ -68,7 +73,7 @@ impl KeyStateNotice {
             serialization_info: version.serialization_info(serialization),
             timestamp: dt,
             state,
-            first_seen_sn: 0,
+            first_seen,
             config: vec![],
         }
     }

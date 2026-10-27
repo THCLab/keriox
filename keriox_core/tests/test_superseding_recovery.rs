@@ -104,6 +104,7 @@ on_each_database!(
     a_rotation_anchored_by_the_delegators_recovery_supersedes,
     an_earlier_delegated_rotation_is_not_superseded,
     a_rotation_anchored_by_a_superseding_delegated_rotation_supersedes,
+    a_witnessed_kel_is_recovered,
 );
 
 fn key(signer: &Signer) -> BasicPrefix {
@@ -153,6 +154,19 @@ fn kel<D: Db>(fx: &Fixture<D>, id: &IdentifierPrefix) -> Vec<String> {
 
 fn digest(event: &KeriEvent<KeyEvent>) -> String {
     event.digest().unwrap().to_string()
+}
+
+/// The digests of every event the KEL of `id` accepted, in the order it
+/// first saw them.
+fn first_seen<D: Db>(fx: &Fixture<D>, id: &IdentifierPrefix) -> Vec<String> {
+    fx.storage
+        .events_db
+        .get_first_seen(id)
+        .map_err(|_| "first seen")
+        .unwrap()
+        .iter()
+        .map(|d| d.to_string())
+        .collect()
 }
 
 /// The digests of the disputed branch of `id`, in the order superseded.
@@ -276,6 +290,22 @@ fn a_rotation_supersedes_the_interactions_after_the_latest_rotation<D: Db>(
     }
     assert_eq!(kel(&fx, &c.id())[2], digest(&after));
     assert_eq!(duplicitous(&fx, &c.id()), 0);
+
+    // The KEL was seen in the order icp, ixn1, ixn2, recovery, after: the
+    // latest event is the fifth seen though its sn is 2.
+    assert_eq!(
+        first_seen(&fx, &c.id()),
+        [&c.icp, &ixn1, &ixn2, &recovery, &after].map(digest)
+    );
+    let ksn = fx
+        .storage
+        .get_ksn_for_prefix(
+            &c.id(),
+            keri_core::event_message::keri_version::KeriVersion::V2_0,
+            said::version::format::SerializationFormats::JSON,
+        )
+        .unwrap();
+    assert_eq!((ksn.state.sn, ksn.first_seen), (2, 4));
 }
 
 /// A0: an interaction that a later rotation follows is not superseded.
@@ -566,4 +596,101 @@ fn a_rotation_anchored_by_a_superseding_delegated_rotation_supersedes<D: Db>(
     send(&fx, &recovered, &keys[1], source(&middle_second));
     assert_eq!(kel(&fx, &id), [digest(&dip), digest(&recovered)]);
     assert_eq!(disputed(&fx, &id), [digest(&compromised)]);
+}
+
+/// A KEL with witnesses accepts each event once it has its receipts, and so
+/// does it a recovery rotation, with receipts of its own: those of the
+/// interaction it supersedes do not count for it. The first-seen numbers
+/// count every event the KEL accepted, in the order it accepted them.
+fn a_witnessed_kel_is_recovered<D: Db>(setup: fn() -> Fixture<D>) {
+    use keri_core::event::sections::threshold::SignatureThreshold;
+    use keri_core::event_message::signature::Nontransferable;
+
+    let fx = setup();
+    let keys: Vec<Signer> = (0..3).map(|_| Signer::new()).collect();
+    let witness = Signer::new();
+    let witness_id = BasicPrefix::Ed25519NT(witness.public_key());
+    let one = SignatureThreshold::Simple(1);
+    let witnessed = |event: &KeriEvent<KeyEvent>, signer: &Signer| {
+        let encoded = event.encode().unwrap();
+        let sig = SelfSigningPrefix::Ed25519Sha512(signer.sign(&encoded).unwrap());
+        let receipt = SelfSigningPrefix::Ed25519Sha512(witness.sign(&encoded).unwrap());
+        process_notice(
+            Notice::Event(event.sign(
+                vec![IndexedSignature::new_both_same(sig, 0)],
+                Some(vec![Nontransferable::Couplet(vec![(
+                    witness_id.clone(),
+                    receipt,
+                )])]),
+                None,
+            )),
+            &fx.processor,
+        )
+        .unwrap();
+    };
+    let icp = EventMsgBuilder::new(EventTypeTag::Icp)
+        .with_keys(vec![key(&keys[0])])
+        .with_next_keys(vec![key(&keys[1])])
+        .with_witness_list(&[witness_id.clone()])
+        .with_witness_threshold(&one)
+        .build()
+        .unwrap();
+    witnessed(&icp, &keys[0]);
+    let id = icp.data.get_prefix();
+    let ixn = EventMsgBuilder::new(EventTypeTag::Ixn)
+        .with_prefix(&id)
+        .with_sn(1)
+        .with_previous_event(&icp.digest().unwrap())
+        .build()
+        .unwrap();
+    witnessed(&ixn, &keys[0]);
+    assert_eq!(kel(&fx, &id), [digest(&icp), digest(&ixn)]);
+
+    let recovery = EventMsgBuilder::new(EventTypeTag::Rot)
+        .with_prefix(&id)
+        .with_sn(1)
+        .with_previous_event(&icp.digest().unwrap())
+        .with_keys(vec![key(&keys[1])])
+        .with_next_keys(vec![key(&keys[2])])
+        .with_witness_threshold(&one)
+        .build()
+        .unwrap();
+    let sig = SelfSigningPrefix::Ed25519Sha512(keys[1].sign(recovery.encode().unwrap()).unwrap());
+    process_notice(
+        Notice::Event(recovery.sign(vec![IndexedSignature::new_both_same(sig, 0)], None, None)),
+        &fx.processor,
+    )
+    .unwrap();
+    // Not witnessed yet: the interaction's receipt is not the recovery's.
+    assert_eq!(kel(&fx, &id), [digest(&icp), digest(&ixn)]);
+
+    let receipt = keri_core::event::receipt::Receipt::new(
+        keri_core::event_message::keri_version::KeriVersion::of(&recovery.serialization_info),
+        said::version::format::SerializationFormats::JSON,
+        recovery.digest().unwrap(),
+        id.clone(),
+        1,
+    );
+    let witness_sig =
+        SelfSigningPrefix::Ed25519Sha512(witness.sign(recovery.encode().unwrap()).unwrap());
+    process_notice(
+        Notice::NontransferableRct(
+            keri_core::event_message::signed_event_message::SignedNontransferableReceipt::new(
+                &receipt,
+                vec![Nontransferable::Couplet(vec![(
+                    witness_id.clone(),
+                    witness_sig,
+                )])],
+            ),
+        ),
+        &fx.processor,
+    )
+    .unwrap();
+
+    assert_eq!(kel(&fx, &id), [digest(&icp), digest(&recovery)]);
+    assert_eq!(disputed(&fx, &id), [digest(&ixn)]);
+    assert_eq!(
+        first_seen(&fx, &id),
+        [digest(&icp), digest(&ixn), digest(&recovery)]
+    );
 }

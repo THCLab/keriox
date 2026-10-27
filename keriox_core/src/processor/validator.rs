@@ -116,7 +116,11 @@ impl<D: EventDatabase> EventValidator<D> {
         // check if there are enough receipts and escrow
         let sn = signed_event.event_message.data.get_sn();
         let (mut couples, mut indexed) = (vec![], vec![]);
-        if let Some(rcts) = self.event_storage.get_nt_receipts(&id, sn)? {
+        if let Some(rcts) = self.event_storage.get_nt_receipts_for(
+            &id,
+            sn,
+            &signed_event.event_message.digest()?,
+        )? {
             rcts.signatures.iter().for_each(|s| match s {
                 Nontransferable::Couplet(c) => {
                     couples.append(&mut c.clone());
@@ -203,7 +207,7 @@ impl<D: EventDatabase> EventValidator<D> {
     ///
     /// The superseding event must verify against the key state before its
     /// location; the rest of its validation follows as for any event.
-    fn superseding(
+    pub(crate) fn superseding(
         &self,
         signed_event: &SignedEventMessage,
     ) -> Result<Option<IdentifierState>, Error> {
@@ -441,9 +445,15 @@ impl<D: EventDatabase> EventValidator<D> {
     ) -> Result<SignedNontransferableReceipt, Error> {
         let (id, sn) = (&rct.body.prefix, rct.body.sn);
         // There's no receipted event id database so we can't verify signatures
+        // A receipt of another event than the one the KEL holds at its
+        // location, such as an escrowed recovery, waits for its event.
         let event = self
             .event_storage
             .get_event_at_sn(id, sn)
+            .filter(|event| {
+                event.signed_event_message.event_message.digest().ok()
+                    == Some(rct.body.receipted_event_digest.clone())
+            })
             .ok_or(Error::MissingEvent)?;
         let witnesses = self
             .event_storage

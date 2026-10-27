@@ -221,6 +221,33 @@ impl<D: EventDatabase> EventStorage<D> {
             .collect())
     }
 
+    /// The events the KEL of `id` accepted, disputed ones included, in the
+    /// order this node first saw them: an event's position is its
+    /// first-seen number, `fn`.
+    pub fn get_first_seen_events(
+        &self,
+        id: &IdentifierPrefix,
+    ) -> Result<Vec<TimestampedSignedEventMessage>, Error> {
+        Ok(self
+            .events_db
+            .get_first_seen(id)
+            .map_err(|_| Error::DbError)?
+            .iter()
+            .filter_map(|digest| self.get_event_by_digest(digest))
+            .collect())
+    }
+
+    /// The first-seen number of the latest event of the KEL of `id`. The
+    /// event a KEL accepted last is always its latest.
+    pub fn first_seen_number(&self, id: &IdentifierPrefix) -> Result<Option<u64>, Error> {
+        Ok((self
+            .events_db
+            .get_first_seen(id)
+            .map_err(|_| Error::DbError)?
+            .len() as u64)
+            .checked_sub(1))
+    }
+
     /// Whether a superseding recovery took the event `digest` off the KEL
     /// of `id`.
     pub fn is_disputed(
@@ -467,23 +494,36 @@ impl<D: EventDatabase> EventStorage<D> {
         )
     }
 
+    /// The witness receipts of the event the KEL of `id` holds at `sn`.
     pub fn get_nt_receipts(
         &self,
         id: &IdentifierPrefix,
         sn: u64,
-        // digest: &SelfAddressingIdentifier,
     ) -> Result<Option<SignedNontransferableReceipt>, Error> {
-        match self
-            .events_db
-            .get_receipts_nt(QueryParameters::BySn { id: id.clone(), sn })
-        {
-            Some(mut events) => {
-                let sigs = events.next();
-                // let body = Receipt::new(SerializationFormats::JSON, digest.clone(), id.clone(), sn);
-                Ok(sigs)
+        match self.get_event_at_sn(id, sn) {
+            Some(event) => {
+                let digest = event.signed_event_message.event_message.digest()?;
+                self.get_nt_receipts_for(id, sn, &digest)
             }
             None => Ok(None),
         }
+    }
+
+    /// The witness receipts of the event `digest` at `sn` of the KEL of
+    /// `id`. Receipts of another event at the same location, such as one a
+    /// recovery supersedes, are not its receipts.
+    pub fn get_nt_receipts_for(
+        &self,
+        id: &IdentifierPrefix,
+        sn: u64,
+        digest: &SelfAddressingIdentifier,
+    ) -> Result<Option<SignedNontransferableReceipt>, Error> {
+        Ok(self
+            .events_db
+            .get_receipts_nt(QueryParameters::BySn { id: id.clone(), sn })
+            .and_then(|mut receipts| {
+                receipts.find(|receipt| &receipt.body.receipted_event_digest == digest)
+            }))
     }
 
     #[cfg(feature = "query")]
@@ -562,6 +602,7 @@ impl<D: EventDatabase> EventStorage<D> {
         let state = self
             .get_state(prefix)
             .ok_or_else(|| Error::SemanticError("No state in db".into()))?;
-        Ok(KeyStateNotice::new_ksn(state, version, format))
+        let first_seen = self.first_seen_number(prefix)?.unwrap_or(state.sn);
+        Ok(KeyStateNotice::new_ksn(state, first_seen, version, format))
     }
 }

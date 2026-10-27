@@ -132,10 +132,15 @@ impl<D: EventDatabase + EscrowCreator + 'static> PartiallyWitnessedEscrow<D> {
         let id = receipted_event.event_message.data.get_prefix();
         let sn = receipted_event.event_message.data.get_sn();
         let digest = receipted_event.event_message.digest()?;
-        let new_state = storage
-            .get_state(&id)
-            .unwrap_or_default()
-            .apply(receipted_event)?;
+        let current = storage.get_state(&id).unwrap_or_default();
+        let new_state = if current.prefix == id && sn <= current.sn {
+            // A location the KEL holds: only a recovery rotation may take it.
+            crate::processor::validator::EventValidator::new(self.db.clone())
+                .superseding(receipted_event)?
+                .ok_or(Error::EventDuplicateError)?
+        } else {
+            current.apply(receipted_event)?
+        };
 
         // Keep the signatures of the additional receipt that verify.
         let additional_receipt = match additional_receipt {

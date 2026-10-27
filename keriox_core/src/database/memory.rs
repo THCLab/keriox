@@ -34,6 +34,8 @@ pub struct MemoryDatabase {
     states: RwLock<HashMap<IdentifierPrefix, IdentifierState>>,
     /// Events superseding recoveries took off each KEL, in that order
     disputed: RwLock<HashMap<IdentifierPrefix, Vec<SelfAddressingIdentifier>>>,
+    /// Every event each KEL accepted, in the order first seen
+    first_seen: RwLock<HashMap<IdentifierPrefix, Vec<SelfAddressingIdentifier>>>,
     /// Transferable receipts by (id, sn)
     receipts_t: RwLock<HashMap<(IdentifierPrefix, u64), Vec<Transferable>>>,
     /// Non-transferable receipts by (id, sn)
@@ -52,6 +54,7 @@ impl MemoryDatabase {
             events: RwLock::new(HashMap::new()),
             states: RwLock::new(HashMap::new()),
             disputed: RwLock::new(HashMap::new()),
+            first_seen: RwLock::new(HashMap::new()),
             receipts_t: RwLock::new(HashMap::new()),
             receipts_nt: RwLock::new(HashMap::new()),
             log_db: Arc::new(MemoryLogDatabase::new()),
@@ -68,6 +71,19 @@ impl EventDatabase for MemoryDatabase {
 
     fn get_log_db(&self) -> Arc<Self::LogDatabaseType> {
         self.log_db.clone()
+    }
+
+    fn get_first_seen(
+        &self,
+        id: &IdentifierPrefix,
+    ) -> Result<Vec<SelfAddressingIdentifier>, Self::Error> {
+        Ok(self
+            .first_seen
+            .read()
+            .unwrap()
+            .get(id)
+            .cloned()
+            .unwrap_or_default())
     }
 
     fn get_disputed_events(
@@ -124,6 +140,13 @@ impl EventDatabase for MemoryDatabase {
             .unwrap_or_default();
         let new_state = current_state.apply(&event.event_message)?;
         self.states.write().unwrap().insert(id.clone(), new_state);
+
+        self.first_seen
+            .write()
+            .unwrap()
+            .entry(id.clone())
+            .or_default()
+            .push(event.event_message.digest()?);
 
         // Log the event
         self.log_db.log_event_internal(&event);
@@ -234,10 +257,14 @@ impl EventDatabase for MemoryDatabase {
         }
     }
 
-    fn accept_to_kel(&self, _event: &KeriEvent<KeyEvent>) -> Result<(), Self::Error> {
-        // In redb, this saves the event to KEL tables. For memory, events
-        // are already in the events map from add_kel_finalized_event.
-        Ok(())
+    fn accept_to_kel(&self, event: &KeriEvent<KeyEvent>) -> Result<(), Self::Error> {
+        // The escrow logged the event before accepting it, as
+        // add_kel_finalized_event does.
+        let logged = self
+            .log_db
+            .get_signed_event(&event.digest()?)?
+            .ok_or(Error::MissingEvent)?;
+        self.add_kel_finalized_event(logged.signed_event_message, &event.data.get_prefix())
     }
 
     #[cfg(feature = "query")]

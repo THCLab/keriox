@@ -136,6 +136,24 @@ impl PostgresDatabase {
         Ok(())
     }
 
+    /// Gives `event` the next first-seen number of its KEL.
+    async fn number_first_seen(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        event: &KeriEvent<KeyEvent>,
+    ) -> Result<(), PostgresError> {
+        let digest = event.digest().map_err(|_| PostgresError::MissingDigest)?;
+        sqlx::query(
+            "INSERT INTO first_seen (identifier, fn, digest) \
+             SELECT $1, COALESCE(MAX(fn) + 1, 0), $2 FROM first_seen WHERE identifier = $1",
+        )
+        .bind(event.data.prefix.to_str())
+        .bind(rkyv_adapter::serialize_said(&digest)?.as_ref())
+        .execute(&mut **tx)
+        .await?;
+        Ok(())
+    }
+
     /// When the KEL of `event` already holds an event at its location,
     /// takes the events from there on off the KEL, so `event` supersedes
     /// them, and sets the key state back to the one before its location.
@@ -416,6 +434,25 @@ impl EventDatabase for PostgresDatabase {
         self.log_db.clone()
     }
 
+    fn get_first_seen(
+        &self,
+        id: &IdentifierPrefix,
+    ) -> Result<Vec<SelfAddressingIdentifier>, Self::Error> {
+        async_std::task::block_on(async {
+            let rows =
+                sqlx::query("SELECT digest FROM first_seen WHERE identifier = $1 ORDER BY fn ASC")
+                    .bind(id.to_str())
+                    .fetch_all(&self.pool)
+                    .await?;
+            rows.into_iter()
+                .map(|row| {
+                    let digest: Vec<u8> = row.get("digest");
+                    Ok(rkyv_adapter::deserialize_said(&digest)?)
+                })
+                .collect()
+        })
+    }
+
     fn get_disputed_events(
         &self,
         id: &IdentifierPrefix,
@@ -448,6 +485,8 @@ impl EventDatabase for PostgresDatabase {
             // supersedes the events from there on.
             self.fork_at(&mut tx, &signed_event.event_message).await?;
             self.update_key_state(&mut tx, &signed_event.event_message)
+                .await?;
+            self.number_first_seen(&mut tx, &signed_event.event_message)
                 .await?;
             self.save_to_kel(&mut tx, &signed_event.event_message)
                 .await?;
@@ -551,9 +590,12 @@ impl EventDatabase for PostgresDatabase {
 
     fn accept_to_kel(&self, event: &KeriEvent<KeyEvent>) -> Result<(), Self::Error> {
         async_std::task::block_on(async {
+            // As add_kel_finalized_event, for an event already in the log.
             let mut tx = self.pool.begin().await?;
 
+            self.fork_at(&mut tx, event).await?;
             self.update_key_state(&mut tx, event).await?;
+            self.number_first_seen(&mut tx, event).await?;
             self.save_to_kel(&mut tx, event).await?;
 
             tx.commit().await?;

@@ -85,6 +85,14 @@ pub trait EventDatabase {
 
     fn accept_to_kel(&self, event: &KeriEvent<KeyEvent>) -> Result<(), Self::Error>;
 
+    /// The digests of every event the KEL of `id` accepted, disputed ones
+    /// included, in the order they were first seen: an event's position is
+    /// its first-seen number, `fn`.
+    fn get_first_seen(
+        &self,
+        id: &IdentifierPrefix,
+    ) -> Result<Vec<said::SelfAddressingIdentifier>, Self::Error>;
+
     /// The digests of the events superseding recoveries took off the KEL
     /// of `id`, in the order they were superseded: its disputed branch.
     fn get_disputed_events(

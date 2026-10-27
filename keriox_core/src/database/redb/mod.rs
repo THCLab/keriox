@@ -19,6 +19,10 @@ const KEY_STATES: TableDefinition<&str, &[u8]> = TableDefinition::new("key_state
 /// they were superseded.
 const DISPUTED: TableDefinition<(&str, u64), &[u8]> = TableDefinition::new("disputed_events");
 
+/// First-seen order. (identifier, fn) -> event digest
+/// Every event a KEL accepted, numbered in the order it was first seen.
+const FIRST_SEEN: TableDefinition<(&str, u64), &[u8]> = TableDefinition::new("first_seen");
+
 use std::{path::Path, sync::Arc, u64};
 
 #[cfg(feature = "query")]
@@ -122,8 +126,28 @@ impl RedbDatabase {
         // Create tables
         let write_txn = db.begin_write()?;
         {
-            write_txn.open_table(KELS)?;
+            let kels = write_txn.open_table(KELS)?;
             write_txn.open_table(KEY_STATES)?;
+            let mut first_seen = write_txn.open_table(FIRST_SEEN)?;
+            // A KEL accepted before first-seen numbers were kept was seen in
+            // the order of its sequence numbers.
+            // (identifier, whether its events need numbering)
+            let mut kel: Option<(String, bool)> = None;
+            for entry in kels.iter()? {
+                let (key, digest) = entry?;
+                let (id, sn) = key.value();
+                let unnumbered = match &kel {
+                    Some((seen, unnumbered)) if seen == id => *unnumbered,
+                    _ => {
+                        let unnumbered = first_seen.get((id, 0))?.is_none();
+                        kel = Some((id.to_string(), unnumbered));
+                        unnumbered
+                    }
+                };
+                if unnumbered {
+                    first_seen.insert((id, sn), digest.value())?;
+                }
+            }
         }
         write_txn.commit()?;
         Ok(Self {
@@ -159,6 +183,7 @@ impl EventDatabase for RedbDatabase {
         // the events from there on.
         self.fork_at(&write_txn, &signed_event.event_message)?;
         self.update_key_state(&txn_mode, &signed_event.event_message)?;
+        self.number_first_seen(&write_txn, &signed_event.event_message)?;
         self.log_db.log_event(&txn_mode, &signed_event)?;
 
         self.save_to_kel(&txn_mode, &signed_event.event_message)?;
@@ -265,11 +290,31 @@ impl EventDatabase for RedbDatabase {
     }
 
     fn accept_to_kel(&self, event: &KeriEvent<KeyEvent>) -> Result<(), RedbError> {
-        let txn_mode = WriteTxnMode::CreateNew;
-        self.save_to_kel(&txn_mode, event)?;
+        // As add_kel_finalized_event, for an event already in the log.
+        let write_txn = self.db.begin_write()?;
+        let txn_mode = WriteTxnMode::UseExisting(&write_txn);
+        self.fork_at(&write_txn, event)?;
         self.update_key_state(&txn_mode, event)?;
-
+        self.number_first_seen(&write_txn, event)?;
+        self.save_to_kel(&txn_mode, event)?;
+        write_txn.commit()?;
         Ok(())
+    }
+
+    fn get_first_seen(
+        &self,
+        id: &IdentifierPrefix,
+    ) -> Result<Vec<SelfAddressingIdentifier>, RedbError> {
+        let read_txn = self.db.begin_read()?;
+        let table = read_txn.open_table(FIRST_SEEN)?;
+        let id = id.to_str();
+        table
+            .range((id.as_str(), 0)..=(id.as_str(), u64::MAX))?
+            .map(|entry| {
+                let (_, digest) = entry?;
+                rkyv_adapter::deserialize_said(digest.value()).map_err(RedbError::from)
+            })
+            .collect()
     }
 
     fn get_disputed_events(
@@ -321,6 +366,25 @@ impl RedbDatabase {
             table.insert((id.as_str(), sn), &serialized_said.as_slice())?;
             Ok(())
         })
+    }
+
+    /// Gives `event` the next first-seen number of its KEL.
+    fn number_first_seen(
+        &self,
+        write_txn: &redb::WriteTransaction,
+        event: &KeriEvent<KeyEvent>,
+    ) -> Result<(), RedbError> {
+        let id = event.data.prefix.to_str();
+        let digest = event.digest().map_err(|_e| RedbError::MissingDigest)?;
+        let mut table = write_txn.open_table(FIRST_SEEN)?;
+        let next = table
+            .range((id.as_str(), 0)..=(id.as_str(), u64::MAX))?
+            .next_back()
+            .transpose()?
+            .map_or(0, |(key, _)| key.value().1 + 1);
+        let serialized = rkyv_adapter::serialize_said(&digest)?;
+        table.insert((id.as_str(), next), serialized.as_slice())?;
+        Ok(())
     }
 
     /// When the KEL of `event` already holds an event at its location,
@@ -685,4 +749,63 @@ fn test_retrieve_kel() -> Result<(), RedbError> {
             .into()
     );
     Ok(())
+}
+
+#[cfg(test)]
+mod first_seen_tests {
+    use std::sync::Arc;
+
+    use redb::Database;
+
+    use super::{RedbDatabase, FIRST_SEEN};
+    use crate::{
+        database::EventDatabase,
+        event_message::{event_msg_builder::EventMsgBuilder, EventTypeTag},
+        prefix::{BasicPrefix, IndexedSignature, SelfSigningPrefix},
+        signer::Signer,
+    };
+
+    /// A database written before first-seen numbers were kept numbers its
+    /// KELs in the order of their sequence numbers when opened, and goes on
+    /// counting from there.
+    #[test]
+    fn a_kel_stored_before_first_seen_numbers_is_numbered_by_sn() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        let raw = Arc::new(Database::create(file.path()).unwrap());
+        let db = RedbDatabase::from_database(raw.clone()).unwrap();
+        let (k0, k1) = (Signer::new(), Signer::new());
+        let icp = EventMsgBuilder::new(EventTypeTag::Icp)
+            .with_keys(vec![BasicPrefix::Ed25519(k0.public_key())])
+            .with_next_keys(vec![BasicPrefix::Ed25519(k1.public_key())])
+            .build()
+            .unwrap();
+        let id = icp.data.get_prefix();
+        let ixn = |sn: u64, prior: &crate::event_message::msg::KeriEvent<_>| {
+            EventMsgBuilder::new(EventTypeTag::Ixn)
+                .with_prefix(&id)
+                .with_sn(sn)
+                .with_previous_event(&prior.digest().unwrap())
+                .build()
+                .unwrap()
+        };
+        let ixn1 = ixn(1, &icp);
+        let ixn2 = ixn(2, &ixn1);
+        let signed = |event: &crate::event_message::msg::KeriEvent<_>| {
+            let sig = SelfSigningPrefix::Ed25519Sha512(k0.sign(event.encode().unwrap()).unwrap());
+            event.sign(vec![IndexedSignature::new_both_same(sig, 0)], None, None)
+        };
+        db.add_kel_finalized_event(signed(&icp), &id).unwrap();
+        db.add_kel_finalized_event(signed(&ixn1), &id).unwrap();
+        // As written before the numbers were kept.
+        let txn = raw.begin_write().unwrap();
+        txn.delete_table(FIRST_SEEN).unwrap();
+        txn.commit().unwrap();
+        drop(db);
+
+        let db = RedbDatabase::from_database(raw).unwrap();
+        db.add_kel_finalized_event(signed(&ixn2), &id).unwrap();
+
+        let digests = [&icp, &ixn1, &ixn2].map(|e| e.digest().unwrap());
+        assert_eq!(db.get_first_seen(&id).unwrap(), digests);
+    }
 }

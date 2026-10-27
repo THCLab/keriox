@@ -60,12 +60,11 @@ fn process(fx: &Fixture, event: &KeriEvent<KeyEvent>, signer: &Signer) {
 }
 
 fn ksn_json(fx: &Fixture, id: &IdentifierPrefix) -> Value {
-    let state = fx.storage.get_state(id).unwrap();
-    serde_json::to_value(KeyStateNotice::new_ksn(
-        state,
-        KeriVersion::V1_0,
-        SerializationFormats::JSON,
-    ))
+    serde_json::to_value(
+        fx.storage
+            .get_ksn_for_prefix(id, KeriVersion::V1_0, SerializationFormats::JSON)
+            .unwrap(),
+    )
     .unwrap()
 }
 
@@ -111,13 +110,14 @@ fn a_key_state_reply_past_sn_9_reads_back() {
     // a notice written in one radix and read in another never parsed.
     let fx = setup();
     let id = eleven_events(&fx);
-    let state = fx.storage.get_state(&id).unwrap();
     let witness = Signer::new();
     let witness_id = BasicPrefix::Ed25519NT(witness.public_key());
     let rpy = ReplyEvent::new_reply(
         ReplyRoute::Ksn(
             IdentifierPrefix::Basic(witness_id.clone()),
-            KeyStateNotice::new_ksn(state, KeriVersion::V1_0, SerializationFormats::JSON),
+            fx.storage
+                .get_ksn_for_prefix(&id, KeriVersion::V1_0, SerializationFormats::JSON)
+                .unwrap(),
         ),
         &IdentifierPrefix::Basic(witness_id.clone()),
         KeriVersion::V1_0,
