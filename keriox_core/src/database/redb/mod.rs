@@ -150,6 +150,9 @@ impl EventDatabase for RedbDatabase {
         let write_txn = self.db.begin_write()?;
         let txn_mode = WriteTxnMode::UseExisting(&write_txn);
 
+        // A validated event at a location the KEL already holds supersedes
+        // the events from there on.
+        self.fork_at(&write_txn, &signed_event.event_message)?;
         self.update_key_state(&txn_mode, &signed_event.event_message)?;
         self.log_db.log_event(&txn_mode, &signed_event)?;
 
@@ -292,6 +295,45 @@ impl RedbDatabase {
             table.insert((id.as_str(), sn), &serialized_said.as_slice())?;
             Ok(())
         })
+    }
+
+    /// When the KEL of `event` already holds an event at its location,
+    /// takes the events from there on off the KEL, so `event` supersedes
+    /// them, and sets the key state back to the one before its location.
+    /// The superseded events stay in the event log.
+    fn fork_at(
+        &self,
+        write_txn: &redb::WriteTransaction,
+        event: &KeriEvent<KeyEvent>,
+    ) -> Result<(), RedbError> {
+        let id = event.data.prefix.to_str();
+        let sn = event.data.sn;
+        let mut kels = write_txn.open_table(KELS)?;
+        if kels.get((id.as_str(), sn))?.is_none() {
+            return Ok(());
+        }
+        let superseded: Vec<u64> = kels
+            .range((id.as_str(), sn)..=(id.as_str(), u64::MAX))?
+            .map(|entry| entry.map(|(key, _)| key.value().1))
+            .collect::<Result<_, _>>()?;
+        for later in superseded {
+            kels.remove((id.as_str(), later))?;
+        }
+        let mut state = IdentifierState::default();
+        for entry in kels.range((id.as_str(), 0)..(id.as_str(), sn))? {
+            let (_, digest) = entry?;
+            let kept = self
+                .log_db
+                .get_signed_event_by_serialized_key(digest.value())?
+                .ok_or(RedbError::MissingDigest)?;
+            state = state
+                .apply(&kept.signed_event_message.event_message)
+                .map_err(|_| RedbError::MissingDigest)?;
+        }
+        let mut states = write_txn.open_table(KEY_STATES)?;
+        let value = rkyv::to_bytes::<rkyv::rancor::Error>(&state)?;
+        states.insert(id.as_str(), value.as_ref())?;
+        Ok(())
     }
 
     fn update_key_state(

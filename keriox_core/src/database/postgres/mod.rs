@@ -136,6 +136,61 @@ impl PostgresDatabase {
         Ok(())
     }
 
+    /// When the KEL of `event` already holds an event at its location,
+    /// takes the events from there on off the KEL, so `event` supersedes
+    /// them, and sets the key state back to the one before its location.
+    /// The superseded events stay in the event log.
+    async fn fork_at(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        event: &KeriEvent<KeyEvent>,
+    ) -> Result<(), PostgresError> {
+        let prefix = event.data.prefix.to_str();
+        let sn = event.data.sn as i64;
+        let taken = sqlx::query("SELECT 1 FROM kels WHERE identifier = $1 AND sn = $2")
+            .bind(&prefix)
+            .bind(sn)
+            .fetch_optional(&mut **tx)
+            .await?;
+        if taken.is_none() {
+            return Ok(());
+        }
+        sqlx::query("DELETE FROM kels WHERE identifier = $1 AND sn >= $2")
+            .bind(&prefix)
+            .bind(sn)
+            .execute(&mut **tx)
+            .await?;
+        let kept = sqlx::query(
+            "SELECT digest FROM kels WHERE identifier = $1 AND sn < $2 ORDER BY sn ASC",
+        )
+        .bind(&prefix)
+        .bind(sn)
+        .fetch_all(&mut **tx)
+        .await?;
+        let mut state = IdentifierState::default();
+        for row in kept {
+            let digest_bytes: Vec<u8> = row.get("digest");
+            let said = rkyv_adapter::deserialize_said(&digest_bytes)?;
+            let event = self
+                .log_db
+                .get_signed_event(&said)?
+                .ok_or(PostgresError::MissingDigest)?;
+            state = state
+                .apply(&event.signed_event_message.event_message)
+                .map_err(|_| PostgresError::AlreadySaved(said))?;
+        }
+        let state_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&state)?;
+        sqlx::query(
+            "INSERT INTO key_states (identifier, state_data) VALUES ($1, $2) \
+             ON CONFLICT (identifier) DO UPDATE SET state_data = $2",
+        )
+        .bind(&prefix)
+        .bind(state_bytes.as_ref())
+        .execute(&mut **tx)
+        .await?;
+        Ok(())
+    }
+
     async fn update_key_state(
         &self,
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
@@ -359,6 +414,9 @@ impl EventDatabase for PostgresDatabase {
         async_std::task::block_on(async {
             let mut tx = self.pool.begin().await?;
 
+            // A validated event at a location the KEL already holds
+            // supersedes the events from there on.
+            self.fork_at(&mut tx, &signed_event.event_message).await?;
             self.update_key_state(&mut tx, &signed_event.event_message)
                 .await?;
             self.save_to_kel(&mut tx, &signed_event.event_message)

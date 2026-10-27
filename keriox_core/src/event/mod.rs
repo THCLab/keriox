@@ -97,8 +97,9 @@ impl EventSemantics for KeyEvent {
                 // prefix must equal.
                 if self.prefix != state.prefix {
                     return Err(Error::SemanticError("Prefix does not match".to_string()));
-                // sn must be incremented
-                // TODO recovery will break this rule when we implement it
+                // sn must be incremented; a recovery rotation at an earlier
+                // sn is applied to the state before its location instead
+                // (EventValidator::superseding).
                 } else if self.sn < state.sn + 1 {
                     return Err(Error::EventDuplicateError);
                 // A log without next keys (non-transferable or abandoned) is

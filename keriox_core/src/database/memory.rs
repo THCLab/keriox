@@ -72,6 +72,24 @@ impl EventDatabase for MemoryDatabase {
         event: SignedEventMessage,
         id: &IdentifierPrefix,
     ) -> Result<(), Self::Error> {
+        // A validated event at a location the KEL already holds supersedes
+        // the events from there on: the KEL is cut back to the events
+        // before it and the key state replayed from them.
+        let sn = event.event_message.data.get_sn();
+        if let Some(kel) = self.events.write().unwrap().get_mut(id) {
+            if kel
+                .iter()
+                .any(|e| e.signed_event_message.event_message.data.get_sn() == sn)
+            {
+                kel.retain(|e| e.signed_event_message.event_message.data.get_sn() < sn);
+                let mut state = IdentifierState::default();
+                for kept in kel.iter() {
+                    state = state.apply(&kept.signed_event_message.event_message)?;
+                }
+                self.states.write().unwrap().insert(id.clone(), state);
+            }
+        }
+
         // Update key state
         let current_state = self
             .states

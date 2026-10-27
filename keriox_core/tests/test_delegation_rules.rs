@@ -289,7 +289,8 @@ fn a_delegated_rotation_arriving_before_its_inception_and_anchors_is_accepted() 
 /// event, so reaching a KEL whose sn it would take only after another
 /// rotation was accepted there does not make it duplicity: it is dropped,
 /// as it would have been escrowed and then dropped had it come first. A
-/// competing rotation the delegator did anchor is duplicity.
+/// competing rotation the delegator anchored later supersedes the accepted
+/// one (see test_superseding_recovery.rs).
 #[test]
 fn an_unanchored_delegated_rotation_at_a_taken_sn_is_not_duplicity() {
     let fx = setup();
@@ -343,8 +344,13 @@ fn an_unanchored_delegated_rotation_at_a_taken_sn_is_not_duplicity() {
 
     let competing_anchor = anchor_next(seal_of(&competing));
     submit(&fx, &competing, &delegate_next, Some(competing_anchor)).unwrap();
-    let duplicitous = fx.escrows.duplicitous.get(&id).unwrap();
-    assert_eq!(duplicitous.len(), 1);
-    assert_eq!(duplicitous[0].event_message, competing);
-    assert_eq!(sn(&fx, &id), Some(1));
+    assert!(fx.escrows.duplicitous.get(&id).unwrap().is_empty());
+    assert_eq!(
+        fx.storage
+            .get_event_at_sn(&id, 1)
+            .unwrap()
+            .signed_event_message
+            .event_message,
+        competing
+    );
 }

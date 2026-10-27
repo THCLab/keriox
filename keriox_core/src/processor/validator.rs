@@ -92,7 +92,10 @@ impl<D: EventDatabase> EventValidator<D> {
             .get_state(&id)
             .map(|state| self.apply_signed(state, signed_event))
         {
-            Some(Err(Error::EventDuplicateError)) => return Err(self.duplicate(signed_event)),
+            Some(Err(Error::EventDuplicateError)) => match self.superseding(signed_event)? {
+                Some(state) => state,
+                None => return Err(self.duplicate(signed_event)),
+            },
             Some(new_state) => new_state?,
             None => self.apply_signed(IdentifierState::default(), signed_event)?,
         };
@@ -172,6 +175,150 @@ impl<D: EventDatabase> EventValidator<D> {
                 .collect::<Vec<_>>(),
         )?;
         Ok(new_state)
+    }
+
+    /// The key state after `signed_event` when it supersedes the event its
+    /// KEL holds at its location, following the superseding rules for
+    /// recovery of the KERI specification:
+    ///
+    /// - A0: a rotation supersedes an interaction that follows the latest
+    ///   rotation;
+    /// - A1, A2: nothing else supersedes for a non-delegated KEL, and an
+    ///   interaction supersedes nothing;
+    /// - B: a delegated rotation supersedes the latest delegated rotation
+    ///   when its delegator anchored it later: in a later event (B1), later
+    ///   in the same event's seals (B2), or in a rotation that superseded
+    ///   the interaction anchoring the other (B3).
+    ///
+    /// The recursion of rule C through further delegators is not
+    /// implemented: such a rotation is not taken as superseding. The
+    /// superseding event must verify against the key state before its
+    /// location; the rest of its validation follows as for any event.
+    fn superseding(
+        &self,
+        signed_event: &SignedEventMessage,
+    ) -> Result<Option<IdentifierState>, Error> {
+        let event = &signed_event.event_message;
+        let id = event.data.get_prefix();
+        let sn = event.data.get_sn();
+        let is_rotation = |event: &KeriEvent<KeyEvent>| {
+            matches!(
+                event.data.get_event_data(),
+                EventData::Rot(_) | EventData::Drt(_)
+            )
+        };
+        if !is_rotation(event) || sn == 0 {
+            return Ok(None);
+        }
+        let (Some(current), Some(accepted)) = (
+            self.event_storage.get_state(&id),
+            self.event_storage.get_event_at_sn(&id, sn),
+        ) else {
+            return Ok(None);
+        };
+        let superseded = accepted.signed_event_message;
+        if superseded.event_message == *event {
+            return Ok(None);
+        }
+        let Some(prior) = self.event_storage.compute_state_at_sn(&id, sn - 1)? else {
+            return Ok(None);
+        };
+        let Ok(state) = self.apply_signed(prior, signed_event) else {
+            return Ok(None);
+        };
+        let delegated = |event: &KeriEvent<KeyEvent>| {
+            event.event_type == crate::event_message::EventTypeTag::Drt
+        };
+        let supersedes = match superseded.event_message.data.get_event_data() {
+            // A0
+            EventData::Ixn(_) => current.last_est.sn < sn,
+            // B, for the latest delegated rotation only
+            EventData::Rot(_) | EventData::Drt(_)
+                if delegated(event)
+                    && delegated(&superseded.event_message)
+                    && current.last_est.sn == sn =>
+            {
+                match &current.delegator {
+                    Some(delegator) => {
+                        self.later_delegation(delegator, signed_event, &superseded)
+                    }
+                    None => false,
+                }
+            }
+            // A1, and nothing supersedes an inception
+            _ => false,
+        };
+        Ok(supersedes.then_some(state))
+    }
+
+    /// Whether the delegator anchored `superseding` later than
+    /// `superseded`, by rules B1 to B3.
+    fn later_delegation(
+        &self,
+        delegator: &IdentifierPrefix,
+        superseding: &SignedEventMessage,
+        superseded: &SignedEventMessage,
+    ) -> bool {
+        let (Some((new_anchor, new_index)), Some((old_anchor, old_index))) = (
+            self.delegating_event(delegator, superseding),
+            self.delegating_event(delegator, superseded),
+        ) else {
+            return false;
+        };
+        let (new_sn, old_sn) = (new_anchor.data.get_sn(), old_anchor.data.get_sn());
+        let same_event = new_anchor.digest().ok() == old_anchor.digest().ok();
+        let rotation = |event: &KeriEvent<KeyEvent>| {
+            matches!(
+                event.data.get_event_data(),
+                EventData::Rot(_) | EventData::Drt(_)
+            )
+        };
+        // B1
+        new_sn > old_sn
+            // B2
+            || (same_event && new_index > old_index)
+            // B3
+            || (new_sn == old_sn
+                && !same_event
+                && rotation(&new_anchor)
+                && matches!(old_anchor.data.get_event_data(), EventData::Ixn(_)))
+    }
+
+    /// The event of `delegator`'s KEL anchoring `delegated`, and the
+    /// position of the anchoring seal among its seals. The source seal
+    /// attached to the delegated event names it, also when the delegator
+    /// has since superseded it; without one the delegator's KEL is
+    /// searched.
+    fn delegating_event(
+        &self,
+        delegator: &IdentifierPrefix,
+        delegated: &SignedEventMessage,
+    ) -> Option<(KeriEvent<KeyEvent>, usize)> {
+        let event = &delegated.event_message;
+        let anchor_index = |anchor: &KeriEvent<KeyEvent>| {
+            anchored_seals(anchor).iter().position(|seal| {
+                seal.prefix == event.data.get_prefix()
+                    && seal.sn == event.data.get_sn()
+                    && event.compare_digest(&seal.event_digest()).unwrap_or(false)
+            })
+        };
+        let from_source = delegated.delegator_seal.as_ref().and_then(|source| {
+            let anchor = self
+                .event_storage
+                .get_event_by_digest(&source.digest.said)?
+                .signed_event_message
+                .event_message;
+            (anchor.data.get_prefix() == *delegator && anchor.data.get_sn() == source.sn)
+                .then_some(anchor)
+        });
+        if let Some(anchor) = from_source {
+            return anchor_index(&anchor).map(|index| (anchor, index));
+        }
+        self.event_storage
+            .events_db
+            .get_kel_finalized_events(QueryParameters::All { id: delegator })?
+            .map(|event| event.signed_event_message.event_message)
+            .find_map(|anchor| anchor_index(&anchor).map(|index| (anchor, index)))
     }
 
     /// Classifies an event at a location that already holds an accepted
