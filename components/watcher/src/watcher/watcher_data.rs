@@ -221,7 +221,7 @@ impl<S: OobiStorageBackend> WatcherData<S> {
     ) -> Result<SignedReply, Error> {
         let ksn = self
             .event_storage
-            .get_ksn_for_prefix(prefix, version, SerializationFormats::JSON)?;
+            .get_ksn_for_prefix(prefix, version)?;
         let rpy = ReplyEvent::new_reply(
             ReplyRoute::Ksn(IdentifierPrefix::Basic(self.prefix.clone()), ksn),
             &IdentifierPrefix::Basic(self.prefix.clone()),
@@ -376,7 +376,7 @@ impl<S: OobiStorageBackend> WatcherData<S> {
         match response {
             ReplyType::Ksn(ksn) => {
                 // The reply carries the notice in the version it was asked in.
-                let version = KeriVersion::of(&ksn.serialization_info);
+                let version = ksn.version;
                 let rpy = ReplyEvent::new_reply(
                     ReplyRoute::Ksn(IdentifierPrefix::Basic(self.prefix.clone()), ksn),
                     &IdentifierPrefix::Basic(self.prefix.clone()),

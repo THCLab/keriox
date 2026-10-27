@@ -315,9 +315,14 @@ pub mod tests {
 
         use crate::event_message::signed_event_message::{Message, Op};
 
-        let rpy = r#"-_AAACAA{"v":"KERI10JSON00029d_","t":"rpy","d":"EIFMuK9IQmHvq9KaJ1r67_MMCq5GnQEgLyN9YPamR3r0","dt":"2021-01-01T00:00:00.000000+00:00","r":"/ksn/ELYbTIkWWyNwOxZQTTnrs6qn8jFbu2A8zftQ33JYQFQ0","a":{"v":"KERI10JSON0001e2_","i":"ELYbTIkWWyNwOxZQTTnrs6qn8jFbu2A8zftQ33JYQFQ0","s":"3","p":"EF7f4gNFCbJz6ZHLacIi_bbIq7kaWAFOzX7ncU_vs5Qg","d":"EOPSPvHHVmU9IIdHa5ksisoVrOnmHRps_tx3OsZSQQ30","f":"3","dt":"2021-01-01T00:00:00.000000+00:00","et":"rot","kt":"1","k":["DLcAz_gmDTuWIHn_mOQDeSK_aJIRiw5IMzPD7igzEDb0"],"nt":"1","n":["EK7ZUmFebD2st48Yvtzc9LajV3Yg2mkeeDzVRL-7uKrU"],"bt":"0","b":[],"c":[],"ee":{"s":"3","d":"EOPSPvHHVmU9IIdHa5ksisoVrOnmHRps_tx3OsZSQQ30","br":[],"ba":[]},"di":""}}-XAuELYbTIkWWyNwOxZQTTnrs6qn8jFbu2A8zftQ33JYQFQ0MAAwEOPSPvHHVmU9IIdHa5ksisoVrOnmHRps_tx3OsZSQQ30-KAWAAAsqumzPM0bIo04gJ4Ln0zAOsGVnjHZrFjjjS49hGx_nQKbXuD1D4J_jNoEa4TPtPDnQ8d0YcJ4TIRJb-XouJBg"#;
+        let kel = crate::query::key_state_notice::fixtures::kel();
+        let rpy = Message::Op(Op::Reply(
+            crate::query::key_state_notice::fixtures::ksn_reply(&kel, 3),
+        ))
+        .to_cesr()
+        .unwrap();
 
-        let parsed = parse_cesr_stream(rpy.as_bytes()).unwrap();
+        let parsed = parse_cesr_stream(&rpy).unwrap();
         let deserialized_rpy = Message::try_from(parsed).unwrap();
 
         assert!(matches!(deserialized_rpy, Message::Op(Op::Reply(_))));
@@ -325,7 +330,7 @@ pub mod tests {
         // The signer's seal and signatures, read from a -T and a -K group,
         // are written back the same way by default and as one -X group in
         // V2, and read back unchanged from both.
-        assert_eq!(deserialized_rpy.to_cesr().unwrap(), rpy.as_bytes());
+        assert_eq!(deserialized_rpy.to_cesr().unwrap(), rpy);
         let written = deserialized_rpy.to_cesr().unwrap();
         let attachments = parse_cesr_stream(&written).unwrap().attachments;
         assert!(matches!(

@@ -62,7 +62,7 @@ fn process(fx: &Fixture, event: &KeriEvent<KeyEvent>, signer: &Signer) {
 fn ksn_json(fx: &Fixture, id: &IdentifierPrefix) -> Value {
     serde_json::to_value(
         fx.storage
-            .get_ksn_for_prefix(id, KeriVersion::V1_0, SerializationFormats::JSON)
+            .get_ksn_for_prefix(id, KeriVersion::V1_0)
             .unwrap(),
     )
     .unwrap()
@@ -116,7 +116,7 @@ fn a_key_state_reply_past_sn_9_reads_back() {
         ReplyRoute::Ksn(
             IdentifierPrefix::Basic(witness_id.clone()),
             fx.storage
-                .get_ksn_for_prefix(&id, KeriVersion::V1_0, SerializationFormats::JSON)
+                .get_ksn_for_prefix(&id, KeriVersion::V1_0)
                 .unwrap(),
         ),
         &IdentifierPrefix::Basic(witness_id.clone()),
@@ -206,7 +206,7 @@ fn a_key_state_notice_takes_the_version_of_the_query_that_asks_for_it() {
         let ReplyType::Ksn(ksn) = process_query(&route, version, &fx.storage).unwrap() else {
             panic!("not a key state notice")
         };
-        assert_eq!(KeriVersion::of(&ksn.serialization_info), version);
+        assert_eq!(ksn.version, version);
 
         // Carried in a reply of the same version, it reads back.
         let witness = Signer::new();
@@ -225,7 +225,7 @@ fn a_key_state_notice_takes_the_version_of_the_query_that_asks_for_it() {
         match parse_reply_stream(&cesr).unwrap()[0].reply.get_route() {
             ReplyRoute::Ksn(_, ksn) => {
                 assert_eq!(ksn.state.sn, 10);
-                assert_eq!(KeriVersion::of(&ksn.serialization_info), version);
+                assert_eq!(ksn.version, version);
             }
             other => panic!("not a key state notice: {other:?}"),
         }

@@ -26,8 +26,6 @@ use crate::{
     database::{EventDatabase, QueryParameters},
     event_message::signed_event_message::SignedEventMessage,
 };
-#[cfg(feature = "query")]
-use said::version::format::SerializationFormats;
 use said::SelfAddressingIdentifier;
 
 #[cfg(feature = "mailbox")]
@@ -597,12 +595,11 @@ impl<D: EventDatabase> EventStorage<D> {
         &self,
         prefix: &IdentifierPrefix,
         version: KeriVersion,
-        format: SerializationFormats,
     ) -> Result<KeyStateNotice, Error> {
         let state = self
             .get_state(prefix)
             .ok_or_else(|| Error::SemanticError("No state in db".into()))?;
         let first_seen = self.first_seen_number(prefix)?.unwrap_or(state.sn);
-        Ok(KeyStateNotice::new_ksn(state, first_seen, version, format))
+        Ok(KeyStateNotice::new_ksn(state, first_seen, version))
     }
 }

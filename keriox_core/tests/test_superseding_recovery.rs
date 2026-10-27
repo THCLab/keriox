@@ -299,11 +299,7 @@ fn a_rotation_supersedes_the_interactions_after_the_latest_rotation<D: Db>(
     );
     let ksn = fx
         .storage
-        .get_ksn_for_prefix(
-            &c.id(),
-            keri_core::event_message::keri_version::KeriVersion::V2_0,
-            said::version::format::SerializationFormats::JSON,
-        )
+        .get_ksn_for_prefix(&c.id(), keri_core::event_message::keri_version::KeriVersion::V2_0)
         .unwrap();
     assert_eq!((ksn.state.sn, ksn.first_seen), (2, 4));
 }

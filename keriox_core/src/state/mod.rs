@@ -173,7 +173,13 @@ pub struct IdentifierState {
     #[serde(rename = "d")]
     pub last_event_digest: SaidValue,
 
-    #[serde(rename = "p")]
+    /// Read from `null` or, as keripy's key state records write it for an
+    /// inception, the empty string.
+    #[serde(
+        rename = "p",
+        default,
+        deserialize_with = "empty_string_as_none::deserialize"
+    )]
     pub last_previous: Option<SaidValue>,
 
     #[serde(rename = "et")]

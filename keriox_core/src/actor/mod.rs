@@ -36,8 +36,6 @@ use crate::{
     query::mailbox::MailboxRoute,
 };
 pub use cesrox::cesr_proof::MaterialPath;
-#[cfg(feature = "query")]
-use said::version::format::SerializationFormats;
 
 pub mod error;
 pub mod event_generator;
@@ -300,8 +298,7 @@ pub fn process_query<D: EventDatabase>(
                 .get_state(&args.i)
                 .ok_or_else(|| QueryError::UnknownId { id: args.i.clone() })?;
             let first_seen = storage.first_seen_number(&args.i)?.unwrap_or(state.sn);
-            let ksn =
-                KeyStateNotice::new_ksn(state, first_seen, version, SerializationFormats::JSON);
+            let ksn = KeyStateNotice::new_ksn(state, first_seen, version);
             Ok(ReplyType::Ksn(ksn))
         }
         QueryRoute::Logs {
