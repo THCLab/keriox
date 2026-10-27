@@ -111,6 +111,11 @@ pub struct OobiUrls {
     pub urls: Vec<Url>,
 }
 
+/// The role an endpoint provider plays for a controller: keripy's set,
+/// which the KERI specification's examples use, and `messagebox`, the
+/// keriox message box service. A `mailbox` is the store-and-forward
+/// endpoint other implementations deliver forwarded messages to; a
+/// `messagebox` offers more and is reached through its own API.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, EnumString)]
 #[serde(rename_all = "lowercase")]
 pub enum Role {
@@ -118,8 +123,24 @@ pub enum Role {
     Controller,
     #[strum(serialize = "witness")]
     Witness,
+    #[strum(serialize = "registrar")]
+    Registrar,
+    #[strum(serialize = "gateway")]
+    Gateway,
     #[strum(serialize = "watcher")]
     Watcher,
+    #[strum(serialize = "judge")]
+    Judge,
+    #[strum(serialize = "juror")]
+    Juror,
+    #[strum(serialize = "peer")]
+    Peer,
+    #[strum(serialize = "mailbox")]
+    Mailbox,
+    #[strum(serialize = "agent")]
+    Agent,
+    #[strum(serialize = "indexer")]
+    Indexer,
     #[strum(serialize = "messagebox")]
     Messagebox,
 }
@@ -130,7 +151,15 @@ impl Role {
         match self {
             Role::Controller => "controller",
             Role::Witness => "witness",
+            Role::Registrar => "registrar",
+            Role::Gateway => "gateway",
             Role::Watcher => "watcher",
+            Role::Judge => "judge",
+            Role::Juror => "juror",
+            Role::Peer => "peer",
+            Role::Mailbox => "mailbox",
+            Role::Agent => "agent",
+            Role::Indexer => "indexer",
             Role::Messagebox => "messagebox",
         }
     }
@@ -178,3 +207,27 @@ mod tests {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod role_tests {
+    use std::str::FromStr;
+
+    use super::Role;
+
+    /// Every role is read from and written as its name, in end role replies
+    /// (serde) and in OOBI urls (as_str, FromStr) alike.
+    #[test]
+    fn a_role_is_written_and_read_by_its_name() {
+        for name in [
+            "controller", "witness", "registrar", "gateway", "watcher", "judge", "juror", "peer",
+            "mailbox", "agent", "indexer", "messagebox",
+        ] {
+            let role = Role::from_str(name).unwrap();
+            assert_eq!(role.as_str(), name);
+            assert_eq!(serde_json::to_string(&role).unwrap(), format!("\"{name}\""));
+            assert_eq!(serde_json::from_str::<Role>(&format!("\"{name}\"")).unwrap(), role);
+        }
+        assert!(Role::from_str("butler").is_err());
+    }
+}
+

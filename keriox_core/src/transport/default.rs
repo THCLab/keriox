@@ -277,12 +277,7 @@ where
         eid: IdentifierPrefix,
     ) -> Result<Vec<u8>, TransportError<E>> {
         // {url}/oobi/{cid}/{role}/{eid}
-        let role = match role {
-            Role::Witness => "witness",
-            Role::Watcher => "watcher",
-            Role::Controller => "controller",
-            Role::Messagebox => "messagebox",
-        };
+        let role = role.as_str();
         let url = endpoint(&loc, &format!("oobi/{cid}/{role}/{eid}"))?;
         let started = Instant::now();
         let resp = shared_http_client()
