@@ -154,6 +154,22 @@ fn digest(event: &KeriEvent<KeyEvent>) -> String {
     event.digest().unwrap().to_string()
 }
 
+/// The digests of the disputed branch of `id`, in the order superseded.
+fn disputed<D: Db>(fx: &Fixture<D>, id: &IdentifierPrefix) -> Vec<String> {
+    fx.storage
+        .get_disputed_events(id)
+        .unwrap()
+        .iter()
+        .map(|e| {
+            e.signed_event_message
+                .event_message
+                .digest()
+                .unwrap()
+                .to_string()
+        })
+        .collect()
+}
+
 fn duplicitous<D: Db>(fx: &Fixture<D>, id: &IdentifierPrefix) -> usize {
     fx.escrows.duplicitous.get(id).unwrap().len()
 }
@@ -251,9 +267,14 @@ fn a_rotation_supersedes_the_interactions_after_the_latest_rotation<D: Db>(
     let after = c.ixn(2, &recovery, vec![]);
     send(&fx, &after, &c.keys[1], None);
     assert_eq!(kel(&fx, &c.id()).len(), 3);
-    // The superseded interaction does not come back.
-    let _ = submit(&fx, &ixn2, &c.keys[0], None);
+    // The superseded interactions are the KEL's disputed branch: seen
+    // already, so sent again they change nothing and are no duplicity.
+    assert_eq!(disputed(&fx, &c.id()), [digest(&ixn1), digest(&ixn2)]);
+    for superseded in [&ixn1, &ixn2] {
+        submit(&fx, superseded, &c.keys[0], None).unwrap();
+    }
     assert_eq!(kel(&fx, &c.id())[2], digest(&after));
+    assert_eq!(duplicitous(&fx, &c.id()), 0);
 }
 
 /// A0: an interaction that a later rotation follows is not superseded.
@@ -383,6 +404,10 @@ fn a_rotation_delegated_later_supersedes_the_latest_delegated_rotation<D: Db>(
     send(&fx, &first, &d.keys[1], source(&anchor_first));
     send(&fx, &second, &d.keys[1], source(&anchor_second));
     assert_eq!(kel(&fx, &d.id()), [digest(&d.dip), digest(&second)]);
+    assert_eq!(disputed(&fx, &d.id()), [digest(&first)]);
+    submit(&fx, &first, &d.keys[1], source(&anchor_first)).unwrap();
+    assert_eq!(kel(&fx, &d.id()), [digest(&d.dip), digest(&second)]);
+    assert_eq!(duplicitous(&fx, &d.id()), 0);
 
     // The other way round: anchored earlier, it does not supersede.
     let fx = setup();

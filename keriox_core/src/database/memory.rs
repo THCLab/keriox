@@ -32,6 +32,8 @@ pub struct MemoryDatabase {
     events: RwLock<HashMap<IdentifierPrefix, Vec<TimestampedSignedEventMessage>>>,
     /// Key state per identifier
     states: RwLock<HashMap<IdentifierPrefix, IdentifierState>>,
+    /// Events superseding recoveries took off each KEL, in that order
+    disputed: RwLock<HashMap<IdentifierPrefix, Vec<SelfAddressingIdentifier>>>,
     /// Transferable receipts by (id, sn)
     receipts_t: RwLock<HashMap<(IdentifierPrefix, u64), Vec<Transferable>>>,
     /// Non-transferable receipts by (id, sn)
@@ -49,6 +51,7 @@ impl MemoryDatabase {
         Self {
             events: RwLock::new(HashMap::new()),
             states: RwLock::new(HashMap::new()),
+            disputed: RwLock::new(HashMap::new()),
             receipts_t: RwLock::new(HashMap::new()),
             receipts_nt: RwLock::new(HashMap::new()),
             log_db: Arc::new(MemoryLogDatabase::new()),
@@ -67,6 +70,19 @@ impl EventDatabase for MemoryDatabase {
         self.log_db.clone()
     }
 
+    fn get_disputed_events(
+        &self,
+        id: &IdentifierPrefix,
+    ) -> Result<Vec<SelfAddressingIdentifier>, Self::Error> {
+        Ok(self
+            .disputed
+            .read()
+            .unwrap()
+            .get(id)
+            .cloned()
+            .unwrap_or_default())
+    }
+
     fn add_kel_finalized_event(
         &self,
         event: SignedEventMessage,
@@ -81,7 +97,15 @@ impl EventDatabase for MemoryDatabase {
                 .iter()
                 .any(|e| e.signed_event_message.event_message.data.get_sn() == sn)
             {
-                kel.retain(|e| e.signed_event_message.event_message.data.get_sn() < sn);
+                let (kept, superseded): (Vec<_>, Vec<_>) = kel
+                    .drain(..)
+                    .partition(|e| e.signed_event_message.event_message.data.get_sn() < sn);
+                *kel = kept;
+                self.disputed.write().unwrap().entry(id.clone()).or_default().extend(
+                    superseded
+                        .iter()
+                        .filter_map(|e| e.signed_event_message.event_message.digest().ok()),
+                );
                 let mut state = IdentifierState::default();
                 for kept in kel.iter() {
                     state = state.apply(&kept.signed_event_message.event_message)?;

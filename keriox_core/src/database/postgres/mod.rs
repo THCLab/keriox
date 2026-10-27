@@ -155,6 +155,16 @@ impl PostgresDatabase {
         if taken.is_none() {
             return Ok(());
         }
+        // In sn order, which is the order they were superseded in.
+        sqlx::query(
+            "INSERT INTO disputed_events (identifier, sn, digest) \
+             SELECT identifier, sn, digest FROM kels \
+             WHERE identifier = $1 AND sn >= $2 ORDER BY sn ASC",
+        )
+        .bind(&prefix)
+        .bind(sn)
+        .execute(&mut **tx)
+        .await?;
         sqlx::query("DELETE FROM kels WHERE identifier = $1 AND sn >= $2")
             .bind(&prefix)
             .bind(sn)
@@ -404,6 +414,26 @@ impl EventDatabase for PostgresDatabase {
 
     fn get_log_db(&self) -> Arc<Self::LogDatabaseType> {
         self.log_db.clone()
+    }
+
+    fn get_disputed_events(
+        &self,
+        id: &IdentifierPrefix,
+    ) -> Result<Vec<SelfAddressingIdentifier>, Self::Error> {
+        async_std::task::block_on(async {
+            let rows = sqlx::query(
+                "SELECT digest FROM disputed_events WHERE identifier = $1 ORDER BY ordinal ASC",
+            )
+            .bind(id.to_str())
+            .fetch_all(&self.pool)
+            .await?;
+            rows.into_iter()
+                .map(|row| {
+                    let digest: Vec<u8> = row.get("digest");
+                    Ok(rkyv_adapter::deserialize_said(&digest)?)
+                })
+                .collect()
+        })
     }
 
     fn add_kel_finalized_event(

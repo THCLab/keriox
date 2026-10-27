@@ -85,6 +85,13 @@ pub trait EventDatabase {
 
     fn accept_to_kel(&self, event: &KeriEvent<KeyEvent>) -> Result<(), Self::Error>;
 
+    /// The digests of the events superseding recoveries took off the KEL
+    /// of `id`, in the order they were superseded: its disputed branch.
+    fn get_disputed_events(
+        &self,
+        id: &IdentifierPrefix,
+    ) -> Result<Vec<said::SelfAddressingIdentifier>, Self::Error>;
+
     #[cfg(feature = "query")]
     fn save_reply(&self, reply: SignedReply) -> Result<(), Self::Error>;
     #[cfg(feature = "query")]

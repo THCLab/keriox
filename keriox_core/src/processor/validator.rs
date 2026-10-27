@@ -87,6 +87,14 @@ impl<D: EventDatabase> EventValidator<D> {
             return Err(Error::MissingSignatures);
         }
         let id = signed_event.event_message.data.get_prefix();
+        // First seen, always seen: an event a superseding recovery took off
+        // the KEL is part of its history already, not a new event.
+        if self
+            .event_storage
+            .is_disputed(&id, &signed_event.event_message.digest()?)?
+        {
+            return Err(Error::EventAlreadyAccepted);
+        }
         let new_state = match self
             .event_storage
             .get_state(&id)

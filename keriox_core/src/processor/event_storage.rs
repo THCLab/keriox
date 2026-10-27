@@ -205,6 +205,36 @@ impl<D: EventDatabase> EventStorage<D> {
             .flatten()
     }
 
+    /// The events superseding recoveries took off the KEL of `id`, in the
+    /// order they were superseded: the KEL's disputed branch. They stay in
+    /// its history but no longer establish its key state.
+    pub fn get_disputed_events(
+        &self,
+        id: &IdentifierPrefix,
+    ) -> Result<Vec<TimestampedSignedEventMessage>, Error> {
+        Ok(self
+            .events_db
+            .get_disputed_events(id)
+            .map_err(|_| Error::DbError)?
+            .iter()
+            .filter_map(|digest| self.get_event_by_digest(digest))
+            .collect())
+    }
+
+    /// Whether a superseding recovery took the event `digest` off the KEL
+    /// of `id`.
+    pub fn is_disputed(
+        &self,
+        id: &IdentifierPrefix,
+        digest: &SelfAddressingIdentifier,
+    ) -> Result<bool, Error> {
+        Ok(self
+            .events_db
+            .get_disputed_events(id)
+            .map_err(|_| Error::DbError)?
+            .contains(digest))
+    }
+
     pub fn get_event_at_sn(
         &self,
         id: &IdentifierPrefix,

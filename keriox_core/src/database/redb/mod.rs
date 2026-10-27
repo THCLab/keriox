@@ -14,6 +14,11 @@ const KELS: TableDefinition<(&str, u64), &[u8]> = TableDefinition::new("kels");
 /// as events are processed.
 const KEY_STATES: TableDefinition<&str, &[u8]> = TableDefinition::new("key_states");
 
+/// Disputed branches. (identifier, ordinal) -> event digest
+/// The events a superseding recovery took off a KEL, numbered in the order
+/// they were superseded.
+const DISPUTED: TableDefinition<(&str, u64), &[u8]> = TableDefinition::new("disputed_events");
+
 use std::{path::Path, sync::Arc, u64};
 
 #[cfg(feature = "query")]
@@ -267,6 +272,27 @@ impl EventDatabase for RedbDatabase {
         Ok(())
     }
 
+    fn get_disputed_events(
+        &self,
+        id: &IdentifierPrefix,
+    ) -> Result<Vec<SelfAddressingIdentifier>, RedbError> {
+        let read_txn = self.db.begin_read()?;
+        let table = match read_txn.open_table(DISPUTED) {
+            Ok(table) => table,
+            // Nothing was ever superseded.
+            Err(redb::TableError::TableDoesNotExist(_)) => return Ok(vec![]),
+            Err(e) => return Err(e.into()),
+        };
+        let id = id.to_str();
+        table
+            .range((id.as_str(), 0)..=(id.as_str(), u64::MAX))?
+            .map(|entry| {
+                let (_, digest) = entry?;
+                rkyv_adapter::deserialize_said(digest.value()).map_err(RedbError::from)
+            })
+            .collect()
+    }
+
     #[cfg(feature = "query")]
     fn save_reply(&self, reply: SignedReply) -> Result<(), Self::Error> {
         self.accepted_rpy.insert(reply)
@@ -312,12 +338,20 @@ impl RedbDatabase {
         if kels.get((id.as_str(), sn))?.is_none() {
             return Ok(());
         }
-        let superseded: Vec<u64> = kels
+        let superseded: Vec<(u64, Vec<u8>)> = kels
             .range((id.as_str(), sn)..=(id.as_str(), u64::MAX))?
-            .map(|entry| entry.map(|(key, _)| key.value().1))
+            .map(|entry| entry.map(|(key, digest)| (key.value().1, digest.value().to_vec())))
             .collect::<Result<_, _>>()?;
-        for later in superseded {
+        let mut disputed = write_txn.open_table(DISPUTED)?;
+        let mut ordinal = disputed
+            .range((id.as_str(), 0)..=(id.as_str(), u64::MAX))?
+            .next_back()
+            .transpose()?
+            .map_or(0, |(key, _)| key.value().1 + 1);
+        for (later, digest) in superseded {
             kels.remove((id.as_str(), later))?;
+            disputed.insert((id.as_str(), ordinal), digest.as_slice())?;
+            ordinal += 1;
         }
         let mut state = IdentifierState::default();
         for entry in kels.range((id.as_str(), 0)..(id.as_str(), sn))? {
