@@ -196,11 +196,12 @@ impl<D: EventDatabase> EventValidator<D> {
     /// - B: a delegated rotation supersedes the latest delegated rotation
     ///   when its delegator anchored it later: in a later event (B1), later
     ///   in the same event's seals (B2), or in a rotation that superseded
-    ///   the interaction anchoring the other (B3).
+    ///   the interaction anchoring the other (B3);
+    /// - C: or in a delegated rotation that superseded the delegated
+    ///   rotation anchoring the other, by these same rules applied to the
+    ///   delegator's own delegator, up to the root of the delegation.
     ///
-    /// The recursion of rule C through further delegators is not
-    /// implemented: such a rotation is not taken as superseding. The
-    /// superseding event must verify against the key state before its
+    /// The superseding event must verify against the key state before its
     /// location; the rest of its validation follows as for any event.
     fn superseding(
         &self,
@@ -260,7 +261,7 @@ impl<D: EventDatabase> EventValidator<D> {
     }
 
     /// Whether the delegator anchored `superseding` later than
-    /// `superseded`, by rules B1 to B3.
+    /// `superseded`, by rules B1 to B3 and, through further delegators, C.
     fn later_delegation(
         &self,
         delegator: &IdentifierPrefix,
@@ -273,23 +274,52 @@ impl<D: EventDatabase> EventValidator<D> {
         ) else {
             return false;
         };
-        let (new_sn, old_sn) = (new_anchor.data.get_sn(), old_anchor.data.get_sn());
-        let same_event = new_anchor.digest().ok() == old_anchor.digest().ok();
-        let rotation = |event: &KeriEvent<KeyEvent>| {
-            matches!(
-                event.data.get_event_data(),
-                EventData::Rot(_) | EventData::Drt(_)
-            )
-        };
+        let (new_sn, old_sn) = (
+            new_anchor.event_message.data.get_sn(),
+            old_anchor.event_message.data.get_sn(),
+        );
+        let same_event =
+            new_anchor.event_message.digest().ok() == old_anchor.event_message.digest().ok();
         // B1
         new_sn > old_sn
             // B2
             || (same_event && new_index > old_index)
-            // B3
+            // B3 and C
             || (new_sn == old_sn
                 && !same_event
-                && rotation(&new_anchor)
-                && matches!(old_anchor.data.get_event_data(), EventData::Ixn(_)))
+                && self.superseded_anchor(delegator, &new_anchor, &old_anchor))
+    }
+
+    /// Whether, in the delegator's KEL, `new_anchor` superseded
+    /// `old_anchor`: a rotation over an interaction (B3), or a delegated
+    /// rotation that superseded another by the delegator's own delegator's
+    /// approval (C, recursively up to the root).
+    fn superseded_anchor(
+        &self,
+        delegator: &IdentifierPrefix,
+        new_anchor: &SignedEventMessage,
+        old_anchor: &SignedEventMessage,
+    ) -> bool {
+        let disputed = old_anchor
+            .event_message
+            .digest()
+            .ok()
+            .and_then(|digest| self.event_storage.is_disputed(delegator, &digest).ok())
+            .unwrap_or(false);
+        if !disputed {
+            return false;
+        }
+        let tag = |anchor: &SignedEventMessage| anchor.event_message.event_type.clone();
+        use crate::event_message::EventTypeTag::{Drt, Ixn, Rot};
+        match (tag(new_anchor), tag(old_anchor)) {
+            (Rot | Drt, Ixn) => true,
+            (Drt, Drt) => self
+                .event_storage
+                .get_state(delegator)
+                .and_then(|state| state.delegator)
+                .is_some_and(|above| self.later_delegation(&above, new_anchor, old_anchor)),
+            _ => false,
+        }
     }
 
     /// The event of `delegator`'s KEL anchoring `delegated`, and the
@@ -301,7 +331,7 @@ impl<D: EventDatabase> EventValidator<D> {
         &self,
         delegator: &IdentifierPrefix,
         delegated: &SignedEventMessage,
-    ) -> Option<(KeriEvent<KeyEvent>, usize)> {
+    ) -> Option<(SignedEventMessage, usize)> {
         let event = &delegated.event_message;
         let anchor_index = |anchor: &KeriEvent<KeyEvent>| {
             anchored_seals(anchor).iter().position(|seal| {
@@ -314,19 +344,18 @@ impl<D: EventDatabase> EventValidator<D> {
             let anchor = self
                 .event_storage
                 .get_event_by_digest(&source.digest.said)?
-                .signed_event_message
-                .event_message;
-            (anchor.data.get_prefix() == *delegator && anchor.data.get_sn() == source.sn)
-                .then_some(anchor)
+                .signed_event_message;
+            let data = &anchor.event_message.data;
+            (data.get_prefix() == *delegator && data.get_sn() == source.sn).then_some(anchor)
         });
         if let Some(anchor) = from_source {
-            return anchor_index(&anchor).map(|index| (anchor, index));
+            return anchor_index(&anchor.event_message).map(|index| (anchor, index));
         }
         self.event_storage
             .events_db
             .get_kel_finalized_events(QueryParameters::All { id: delegator })?
-            .map(|event| event.signed_event_message.event_message)
-            .find_map(|anchor| anchor_index(&anchor).map(|index| (anchor, index)))
+            .map(|event| event.signed_event_message)
+            .find_map(|anchor| anchor_index(&anchor.event_message).map(|index| (anchor, index)))
     }
 
     /// Classifies an event at a location that already holds an accepted

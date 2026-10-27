@@ -103,6 +103,7 @@ on_each_database!(
     a_rotation_sealed_later_in_the_same_event_supersedes,
     a_rotation_anchored_by_the_delegators_recovery_supersedes,
     an_earlier_delegated_rotation_is_not_superseded,
+    a_rotation_anchored_by_a_superseding_delegated_rotation_supersedes,
 );
 
 fn key(signer: &Signer) -> BasicPrefix {
@@ -493,4 +494,76 @@ fn an_earlier_delegated_rotation_is_not_superseded<D: Db>(setup: fn() -> Fixture
         kel(&fx, &d.id()),
         [digest(&d.dip), digest(&first), digest(&then)]
     );
+}
+
+/// C: when the delegator is itself delegated, its own superseding recovery
+/// counts too. Here a root approves two competing rotations of a middle
+/// identifier, each anchoring one of two competing rotations of a delegate;
+/// the root's later approval lets the middle's second rotation supersede
+/// its first, and so the delegate's rotation it anchors supersedes as well.
+fn a_rotation_anchored_by_a_superseding_delegated_rotation_supersedes<D: Db>(
+    setup: fn() -> Fixture<D>,
+) {
+    let fx = setup();
+    let mut middle = Delegation::new(&fx);
+    let middle_id = middle.id();
+    let keys: Vec<Signer> = (0..4).map(|_| Signer::new()).collect();
+    let dip = EventMsgBuilder::new(EventTypeTag::Dip)
+        .with_delegator(&middle_id)
+        .with_keys(vec![key(&keys[0])])
+        .with_next_keys(vec![key(&keys[1])])
+        .build()
+        .unwrap();
+    let middle_ixn = EventMsgBuilder::new(EventTypeTag::Ixn)
+        .with_prefix(&middle_id)
+        .with_sn(1)
+        .with_previous_event(&middle.dip.digest().unwrap())
+        .with_seal(vec![seal_of(&dip)])
+        .build()
+        .unwrap();
+    send(&fx, &middle_ixn, &middle.keys[0], None);
+    send(&fx, &dip, &keys[0], source(&middle_ixn));
+    let id = dip.data.get_prefix();
+
+    let delegate_rot = |next: usize| {
+        EventMsgBuilder::new(EventTypeTag::Drt)
+            .with_prefix(&id)
+            .with_sn(1)
+            .with_previous_event(&dip.digest().unwrap())
+            .with_keys(vec![key(&keys[1])])
+            .with_next_keys(vec![key(&keys[next])])
+            .build()
+            .unwrap()
+    };
+    let (compromised, recovered) = (delegate_rot(2), delegate_rot(3));
+    let middle_rot = |next: usize, anchored: &KeriEvent<KeyEvent>| {
+        EventMsgBuilder::new(EventTypeTag::Drt)
+            .with_prefix(&middle_id)
+            .with_sn(2)
+            .with_previous_event(&middle_ixn.digest().unwrap())
+            .with_keys(vec![key(&middle.keys[1])])
+            .with_next_keys(vec![key(&middle.keys[next])])
+            .with_seal(vec![seal_of(anchored)])
+            .build()
+            .unwrap()
+    };
+    let (middle_first, middle_second) = (middle_rot(2, &compromised), middle_rot(3, &recovered));
+
+    let root_first = middle.anchor(&fx, vec![seal_of(&middle_first)]);
+    send(&fx, &middle_first, &middle.keys[1], source(&root_first));
+    send(&fx, &compromised, &keys[1], source(&middle_first));
+    assert_eq!(kel(&fx, &id), [digest(&dip), digest(&compromised)]);
+
+    // The root approves the middle's second rotation later (B1).
+    let root_second = middle.anchor(&fx, vec![seal_of(&middle_second)]);
+    send(&fx, &middle_second, &middle.keys[1], source(&root_second));
+    assert_eq!(
+        kel(&fx, &middle_id).last().unwrap(),
+        &digest(&middle_second)
+    );
+
+    // So the delegate's rotation it anchors supersedes (C).
+    send(&fx, &recovered, &keys[1], source(&middle_second));
+    assert_eq!(kel(&fx, &id), [digest(&dip), digest(&recovered)]);
+    assert_eq!(disputed(&fx, &id), [digest(&compromised)]);
 }
