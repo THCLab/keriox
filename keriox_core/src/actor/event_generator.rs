@@ -2,7 +2,7 @@ use crate::event_message::keri_version::KeriVersion;
 use said::SelfAddressingIdentifier;
 
 #[cfg(feature = "mailbox")]
-use crate::mailbox::exchange::{Exchange, ExchangeMessage, ForwardTopic, FwdArgs};
+use crate::mailbox::exchange::{Exchange, ExchangeMessage, ForwardTopic};
 #[cfg(feature = "oobi")]
 use crate::oobi::{EndRole, Role};
 #[cfg(feature = "oobi")]
@@ -370,6 +370,8 @@ pub fn generate_end_role(
     )
 }
 /// An `exn` from `sender` forwarding `data` to `receipient` under `topic`.
+/// It names `data` by the digest of its body; `data` itself travels nested
+/// in the exchange's attachments.
 #[cfg(feature = "mailbox")]
 pub fn exchange(
     sender: &IdentifierPrefix,
@@ -380,14 +382,8 @@ pub fn exchange(
     use said::derivation::HashFunctionCode;
     use said::version::format::SerializationFormats;
 
-    Exchange::Fwd {
-        args: FwdArgs {
-            recipient_id: receipient.clone(),
-            topic,
-        },
-        to_forward: data.clone(),
-    }
-    .to_message(
+    let body = data.encode().expect("a key event encodes in its own kind");
+    Exchange::forward(receipient, topic, &body).to_message(
         sender,
         receipient,
         SerializationFormats::JSON,

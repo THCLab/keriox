@@ -88,9 +88,13 @@ pub fn receipt_couples(
         .collect()
 }
 
+#[derive(Clone, Debug, PartialEq)]
 pub struct CesrMessage {
     pub payload: Payload,
     pub attachments: Vec<Group>,
+    /// Messages carried in this one's attachments, each with attachments of
+    /// its own, as a forward carries the message it forwards.
+    pub nested: Vec<CesrMessage>,
 }
 
 impl CesrMessage {
@@ -104,11 +108,115 @@ impl CesrMessage {
             vec![]
         };
         result.extend_from_slice(&self.payload.to_vec());
-        for att in &self.attachments {
-            result.extend_from_slice(att.to_cesr_str().as_bytes());
+        if self.nested.is_empty() {
+            for att in &self.attachments {
+                result.extend_from_slice(att.to_cesr_str().as_bytes());
+            }
+        } else {
+            // In an attachment group, so that a nested message is never
+            // read as the next message of the stream.
+            let attachments = self.attachment_values()?;
+            let group = Value::universal_group(UniversalCode::Attachments, attachments)
+                .map_err(|_| ())?;
+            result.extend_from_slice(&group.to_cesr());
         }
         Ok(result)
     }
+
+    /// The attachments, then each nested message framed with its own.
+    fn attachment_values(&self) -> Result<Vec<Value>, ()> {
+        let mut values: Vec<Value> = self
+            .attachments
+            .iter()
+            .cloned()
+            .map(Value::SpecificGroup)
+            .collect();
+        for nested in &self.nested {
+            let mut frame = vec![Value::non_native_body(&nested.payload).map_err(|_| ())?];
+            frame.extend(nested.attachment_values()?);
+            values.push(
+                Value::universal_group(UniversalCode::BodyWithAttachments, frame).map_err(|_| ())?,
+            );
+        }
+        Ok(values)
+    }
+}
+
+/// How deep messages may nest in each other's attachments.
+const MAX_NESTING: usize = 4;
+
+/// A message framed with its attachments: its body, then its attachment
+/// groups and the messages nested in it.
+fn framed(values: Vec<Value>, depth: usize) -> Result<CesrMessage, ParseError> {
+    if depth > MAX_NESTING {
+        return Err(ParseError::CesrError(format!(
+            "messages nested deeper than {MAX_NESTING}"
+        )));
+    }
+    let mut values = values.into_iter();
+    let payload = match values.next() {
+        Some(Value::Payload(payload)) => payload,
+        Some(
+            enclosed @ Value::UniversalGroup(
+                UniversalGroupCode::Group {
+                    code: UniversalCode::NonNativeBody,
+                    ..
+                },
+                _,
+            ),
+        ) => enclosed
+            .enclosed_payload()
+            .map_err(|e| ParseError::CesrError(e.to_string()))?,
+        Some(Value::UniversalGroup(
+            UniversalGroupCode::Group {
+                code: UniversalCode::FixBody | UniversalCode::MapBody,
+                ..
+            },
+            _,
+        )) => {
+            return Err(ParseError::DeserializeError(
+                "native CESR message bodies are not supported".into(),
+            ))
+        }
+        _ => return Err(ParseError::CesrError("a framed message without a body".into())),
+    };
+    let mut message = CesrMessage {
+        payload,
+        attachments: vec![],
+        nested: vec![],
+    };
+    attach(&mut message, values.collect(), depth)?;
+    Ok(message)
+}
+
+/// Adds `values` to the attachments of `message`: groups, and messages
+/// framed with their attachments, which are nested in it.
+fn attach(message: &mut CesrMessage, values: Vec<Value>, depth: usize) -> Result<(), ParseError> {
+    for value in values {
+        match value {
+            Value::SpecificGroup(group) => message.attachments.push(group),
+            Value::UniversalGroup(UniversalGroupCode::Group { code, .. }, inner) => match code {
+                UniversalCode::Attachments | UniversalCode::GenericGroup => {
+                    attach(message, inner, depth)?
+                }
+                UniversalCode::BodyWithAttachments => {
+                    message.nested.push(framed(inner, depth + 1)?)
+                }
+                other => {
+                    return Err(ParseError::AttachmentError(format!(
+                        "unexpected {other:?} group among attachments"
+                    )))
+                }
+            },
+            other => {
+                return Err(ParseError::AttachmentError(format!(
+                    "unexpected value among attachments: {}",
+                    String::from_utf8_lossy(&other.to_cesr())
+                )))
+            }
+        }
+    }
+    Ok(())
 }
 
 /// The genus/version counter of CESR 2.0 for the KERI/ACDC genus.
@@ -152,7 +260,14 @@ impl Messages {
         self.current = Some(CesrMessage {
             payload,
             attachments: vec![],
+            nested: vec![],
         });
+    }
+
+    fn current(&mut self) -> Result<&mut CesrMessage, ParseError> {
+        self.current
+            .as_mut()
+            .ok_or_else(|| ParseError::AttachmentError("attachment before any message".into()))
     }
 
     fn attachment(&mut self, group: Group) -> Result<(), ParseError> {
@@ -182,9 +297,14 @@ impl Messages {
                 Value::UniversalGroup(UniversalGroupCode::Genus(_), inner) => self.add(inner)?,
                 Value::UniversalGroup(UniversalGroupCode::Group { code, .. }, inner) => {
                     match code {
-                        UniversalCode::GenericGroup
-                        | UniversalCode::BodyWithAttachments
-                        | UniversalCode::Attachments => self.add(inner)?,
+                        UniversalCode::GenericGroup => self.add(inner)?,
+                        // A message framed with its attachments.
+                        UniversalCode::BodyWithAttachments => {
+                            let message = framed(inner, 0)?;
+                            self.done.extend(self.current.take());
+                            self.done.push(message);
+                        }
+                        UniversalCode::Attachments => attach(self.current()?, inner, 0)?,
                         UniversalCode::NonNativeBody => {
                             let enclosed = Value::UniversalGroup(
                                 UniversalGroupCode::Group { code, quadlets: 0 },
@@ -384,6 +504,7 @@ impl From<&SignedEventMessage> for CesrMessage {
         CesrMessage {
             payload: ev.event_message.clone().into(),
             attachments,
+            nested: vec![],
         }
     }
 }
@@ -407,6 +528,7 @@ impl From<SignedNontransferableReceipt> for CesrMessage {
         CesrMessage {
             payload: rcp.body.into(),
             attachments,
+            nested: vec![],
         }
     }
 }
@@ -421,6 +543,7 @@ impl From<SignedTransferableReceipt> for CesrMessage {
         CesrMessage {
             payload: rcp.body.into(),
             attachments,
+            nested: vec![],
         }
     }
 }
@@ -432,6 +555,7 @@ impl From<SignedReply> for CesrMessage {
         CesrMessage {
             payload: ev.reply.into(),
             attachments,
+            nested: vec![],
         }
     }
 }
@@ -444,6 +568,7 @@ impl From<SignedKelQuery> for CesrMessage {
         CesrMessage {
             payload: ev.query.into(),
             attachments: groups,
+            nested: vec![],
         }
     }
 }
@@ -456,6 +581,7 @@ impl From<SignedMailboxQuery> for CesrMessage {
         CesrMessage {
             payload: ev.query.into(),
             attachments: groups,
+            nested: vec![],
         }
     }
 }
@@ -474,15 +600,10 @@ impl From<SignedQueryMessage> for CesrMessage {
 #[cfg(feature = "mailbox")]
 impl From<SignedExchange> for CesrMessage {
     fn from(ev: SignedExchange) -> Self {
-        let mut attachments = signature::signatures_into_groups(&ev.signature);
-
-        let data_signatures = signature::signatures_into_groups(&ev.data_signature.1);
-
-        let data_attachment = Group::PathedMaterialQuadruplet(ev.data_signature.0, data_signatures);
-        attachments.push(data_attachment);
         CesrMessage {
             payload: ev.exchange_message.into(),
-            attachments,
+            attachments: signature::signatures_into_groups(&ev.signature),
+            nested: ev.nested.into_iter().map(CesrMessage::from).collect(),
         }
     }
 }
@@ -622,7 +743,18 @@ impl TryFrom<CesrMessage> for Message {
     type Error = ParseError;
 
     fn try_from(value: CesrMessage) -> Result<Self, Self::Error> {
-        let msg = match value.payload.try_into()? {
+        let event: EventType = value.payload.try_into()?;
+        // Only an exchange carries other messages; none is dropped unread.
+        #[cfg(feature = "mailbox")]
+        let carries = matches!(event, EventType::Exn(_));
+        #[cfg(not(feature = "mailbox"))]
+        let carries = false;
+        if !carries && !value.nested.is_empty() {
+            return Err(ParseError::AttachmentError(
+                "only an exchange carries nested messages".into(),
+            ));
+        }
+        let msg = match event {
             EventType::KeyEvent(ev) => Message::Notice(signed_key_event(ev, value.attachments)?),
             EventType::Receipt(rct) => Message::Notice(signed_receipt(rct, value.attachments)?),
             #[cfg(feature = "query")]
@@ -630,7 +762,9 @@ impl TryFrom<CesrMessage> for Message {
             #[cfg(feature = "query")]
             EventType::Rpy(rpy) => Message::Op(signed_reply(rpy, value.attachments)?),
             #[cfg(feature = "mailbox")]
-            EventType::Exn(exn) => Message::Op(signed_exchange(exn, value.attachments)?),
+            EventType::Exn(exn) => {
+                Message::Op(signed_exchange(exn, value.attachments, value.nested)?)
+            }
             #[cfg(feature = "mailbox")]
             EventType::MailboxQry(qry) => {
                 Message::Op(signed_management_query(qry, value.attachments)?)
@@ -664,17 +798,9 @@ impl TryFrom<CesrMessage> for Op {
     type Error = ParseError;
 
     fn try_from(value: CesrMessage) -> Result<Self, Self::Error> {
-        let et: EventType = value.payload.try_into()?;
-        match et {
-            #[cfg(feature = "query")]
-            EventType::Qry(qry) => signed_query(qry, value.attachments),
-            #[cfg(feature = "mailbox")]
-            EventType::MailboxQry(qry) => signed_management_query(qry, value.attachments),
-            #[cfg(feature = "oobi")]
-            EventType::Rpy(rpy) => signed_reply(rpy, value.attachments),
-            #[cfg(feature = "mailbox")]
-            EventType::Exn(exn) => signed_exchange(exn, value.attachments),
-            _ => Err(ParseError::WrongEventType(
+        match Message::try_from(value)? {
+            Message::Op(op) => Ok(op),
+            Message::Notice(_) => Err(ParseError::WrongEventType(
                 "Cannot convert SignedEventData to Op".to_string(),
             )),
         }
@@ -1002,21 +1128,29 @@ fn signed_receipt(event_message: Receipt, attachments: Vec<Group>) -> Result<Not
 }
 
 #[cfg(feature = "mailbox")]
-pub fn signed_exchange(exn: ExchangeMessage, attachments: Vec<Group>) -> Result<Op, ParseError> {
+pub fn signed_exchange(
+    exn: ExchangeMessage,
+    attachments: Vec<Group>,
+    nested: Vec<CesrMessage>,
+) -> Result<Op, ParseError> {
     use super::signature::{Nontransferable, Signature, SignerData};
 
-    let pathed_idx = attachments
-        .iter()
-        .position(|att| matches!(att, Group::PathedMaterialQuadruplet(_, _)))
-        .ok_or_else(|| ParseError::AttachmentError("Missing PathedMaterialQuadruplet".into()))?;
-
-    let mut attachments = attachments;
-    let pathed = attachments.remove(pathed_idx);
-
-    let (path, data_sigs) = match pathed {
-        Group::PathedMaterialQuadruplet(path, sigs) => (path, sigs),
-        _ => unreachable!(),
-    };
+    // A forward carries the one message whose body digest `a.evt` names.
+    if let crate::mailbox::exchange::Exchange::Fwd { .. } = &exn.data.content.data {
+        let named = match nested.as_slice() {
+            [message] => exn.data.content.data.forwards(&message.payload.to_vec()),
+            _ => false,
+        };
+        if !named {
+            return Err(ParseError::AttachmentError(
+                "a forward carries the one message its a.evt names".into(),
+            ));
+        }
+    }
+    let nested = nested
+        .into_iter()
+        .map(Message::try_from)
+        .collect::<Result<Vec<_>, _>>()?;
 
     let mut signatures = Vec::new();
     let mut i = 0;
@@ -1056,33 +1190,6 @@ pub fn signed_exchange(exn: ExchangeMessage, attachments: Vec<Group>) -> Result<
         }
     }
 
-    let mut data_signatures = Vec::new();
-    for group in data_sigs {
-        match group {
-            Group::IndexedControllerSignatures(sigs) => {
-                let indexed_sigs = indexed_signatures(sigs)?;
-                data_signatures.push(Signature::Transferable(
-                    SignerData::JustSignatures,
-                    indexed_sigs,
-                ));
-            }
-            Group::NontransReceiptCouples(couplets) => {
-                let couples = receipt_couples(couplets)?;
-                data_signatures.push(Signature::NonTransferable(Nontransferable::Couplet(
-                    couples,
-                )));
-            }
-            Group::TransIdxSigGroups(_) => {
-                data_signatures.extend(super::signature::get_signatures(group)?);
-            }
-            _ => {
-                return Err(ParseError::AttachmentError(
-                    "Improper data signature attachment".into(),
-                ));
-            }
-        }
-    }
-
     // An exchange names its sender, who must be one of its signers.
     if !signatures
         .iter()
@@ -1096,7 +1203,7 @@ pub fn signed_exchange(exn: ExchangeMessage, attachments: Vec<Group>) -> Result<
     Ok(Op::Exchange(SignedExchange {
         exchange_message: exn,
         signature: signatures,
-        data_signature: (path, data_signatures),
+        nested,
     }))
 }
 
@@ -1106,6 +1213,72 @@ pub mod test {
         event::{receipt::Receipt, KeyEvent},
         event_message::msg::KeriEvent,
     };
+
+    /// A signed inception, as a parsed message.
+    fn inception() -> super::CesrMessage {
+        use crate::{
+            event_message::{event_msg_builder::EventMsgBuilder, EventTypeTag},
+            prefix::{BasicPrefix, IndexedSignature, SelfSigningPrefix},
+            signer::Signer,
+        };
+        let signer = Signer::new();
+        let icp = EventMsgBuilder::new(EventTypeTag::Icp)
+            .with_keys(vec![BasicPrefix::Ed25519(signer.public_key())])
+            .with_next_keys(vec![BasicPrefix::Ed25519(Signer::new().public_key())])
+            .build()
+            .unwrap();
+        let sig = SelfSigningPrefix::Ed25519Sha512(signer.sign(icp.encode().unwrap()).unwrap());
+        let signed = icp.sign(vec![IndexedSignature::new_both_same(sig, 0)], None, None);
+        super::CesrMessage::from(&signed)
+    }
+
+    /// A message nested in another's attachments is read back nested, not
+    /// as the next message of the stream; a message framed in a -B group at
+    /// the top of a stream is a message of its own.
+    #[test]
+    fn a_nested_message_stays_nested() {
+        let (outer, inner) = (inception(), inception());
+        let mut carrying = outer.clone();
+        carrying.nested.push(inner.clone());
+        let cesr = carrying.to_cesr().unwrap();
+
+        let read = super::parse_cesr_stream_many(&cesr).unwrap();
+        assert_eq!(read, vec![carrying]);
+
+        // The same inner message framed on its own at the top level.
+        let mut framed = outer.to_cesr().unwrap();
+        let frame = cesrox::value::Value::universal_group(
+            cesrox::universal_codes::UniversalCode::BodyWithAttachments,
+            std::iter::once(cesrox::value::Value::non_native_body(&inner.payload).unwrap())
+                .chain(inner.attachments.iter().cloned().map(cesrox::value::Value::SpecificGroup))
+                .collect(),
+        )
+        .unwrap();
+        framed.extend(frame.to_cesr());
+        assert_eq!(super::parse_cesr_stream_many(&framed).unwrap(), vec![outer, inner]);
+    }
+
+    /// Nesting has a depth limit, and only an exchange may carry messages.
+    #[test]
+    fn nesting_is_limited_and_only_for_exchanges() {
+        use std::convert::TryFrom;
+
+        let mut deep = inception();
+        for _ in 0..6 {
+            let mut outer = inception();
+            outer.nested.push(deep);
+            deep = outer;
+        }
+        assert!(super::parse_cesr_stream_many(&deep.to_cesr().unwrap()).is_err());
+
+        let mut carrying = inception();
+        carrying.nested.push(inception());
+        let read = super::parse_cesr_stream(&carrying.to_cesr().unwrap()).unwrap();
+        assert!(matches!(
+            super::Message::try_from(read),
+            Err(super::ParseError::AttachmentError(_))
+        ));
+    }
 
     /// A body is read as the type its `t` names, never as another type of
     /// the same shape: a query labelled as a prod is a prod, and one

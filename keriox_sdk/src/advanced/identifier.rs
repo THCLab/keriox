@@ -909,16 +909,19 @@ impl Identifier {
     })
     }
 
-    /// Finalise an exchange message (e.g. delegation approval forwarding).
+    /// Finalise an exchange message (e.g. delegation approval forwarding):
+    /// send it with `forwarded`, the event it forwards, signed with
+    /// `data_signature`.
     pub async fn finalize_exchange(
         &self,
         exchange: &[u8],
         exn_signature: Signature,
+        forwarded: &keri_core::event_message::msg::KeriEvent<keri_core::event::KeyEvent>,
         data_signature: IndexedSignature,
     ) -> Result<()> {
         dispatch!(self, i => {
         Ok(i
-            .finalize_exchange(exchange, exn_signature, data_signature)
+            .finalize_exchange(exchange, exn_signature, forwarded, data_signature)
             .await?)
     })
     }

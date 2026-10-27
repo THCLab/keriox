@@ -33,7 +33,7 @@ use keri_core::{
         timestamped::Timestamped,
         EventTypeTag,
     },
-    mailbox::exchange::{Exchange, ForwardTopic, FwdArgs, SignedExchange},
+    mailbox::exchange::{Exchange, ForwardTopic, SignedExchange},
     oobi::{EndRole, LocationScheme, Role, Scheme},
     prefix::{BasicPrefix, CesrPrimitive, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
     processor::{
@@ -458,8 +458,8 @@ fn streams() -> Vec<Value> {
         &[],
     ));
 
-    // an exchange forwarding an event, signed by the sender and the event's
-    // signature attached under its path
+    // an exchange forwarding an event, signed by the sender, the event
+    // nested in its attachments with its own signatures
     let exn = KeriEvent::new(
         keri_core::event_message::keri_version::KeriVersion::V2_0,
         SerializationFormats::JSON,
@@ -469,35 +469,27 @@ fn streams() -> Vec<Value> {
             recipient: id.clone(),
             exchange: String::new(),
             prior: String::new(),
-            content: timestamped(Exchange::Fwd {
-                args: FwdArgs {
-                    recipient_id: id.clone(),
-                    topic: ForwardTopic::Multisig,
-                },
-                to_forward: icp.clone(),
-            }),
+            content: timestamped(Exchange::forward(
+                &id,
+                ForwardTopic::Multisig,
+                &icp.encode().unwrap(),
+            )),
         },
     );
     let exn_sigs = sign(&exn.encode().unwrap(), &[&c0]);
     let icp_sigs = sign(&icp.encode().unwrap(), &[&c0]);
-    let exchange = SignedExchange {
-        exchange_message: exn,
-        signature: vec![Signature::Transferable(
-            SignerData::EventSeal(seal.clone()),
+    let exchange = SignedExchange::forward(
+        exn,
+        vec![Signature::Transferable(
+            SignerData::EventSeal(seal),
             exn_sigs,
         )],
-        data_signature: (
-            cesrox::cesr_proof::MaterialPath::create_from_str("-a".into()).unwrap(),
-            vec![Signature::Transferable(
-                SignerData::EventSeal(seal),
-                icp_sigs,
-            )],
-        ),
-    };
+        Message::Notice(Notice::Event(icp.sign(icp_sigs, None, None))),
+    );
     vecs.push(stream_vector(
         "stream/exn/fwd",
-        "exchange forwarding an inception, with the sender's -X group and the \
-         inception's signatures under path -a",
+        "exchange forwarding an inception: the sender's -X group and the \
+         inception, nested in a -B group with its -K group, in a -C group",
         text(Message::Op(Op::Exchange(exchange))),
         &[],
     ));

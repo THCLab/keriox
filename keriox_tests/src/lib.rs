@@ -7,7 +7,7 @@ use keri_controller::{
 };
 use keri_core::{
     actor::error::ActorError,
-    mailbox::exchange::{Exchange, ForwardTopic, FwdArgs},
+    mailbox::exchange::{Exchange, ForwardTopic},
     prefix::IndexedSignature,
     transport::test::TestTransport,
 };
@@ -162,13 +162,11 @@ pub async fn handle_delegation_request(
                     let kc = id.find_state(&delegator_group_id).unwrap().current;
                     let index = id.index_in_current_keys(&kc).unwrap();
                     // send accepted event to child
-                    let exn_message = Exchange::Fwd {
-                        args: FwdArgs {
-                            recipient_id: delegatee_id.clone(),
-                            topic: ForwardTopic::Delegate,
-                        },
-                        to_forward: delegating_event.clone(),
-                    }
+                    let exn_message = Exchange::forward(
+                        &delegatee_id,
+                        ForwardTopic::Delegate,
+                        &delegating_event.encode()?,
+                    )
                     .to_message(
                         &id.id(),
                         &delegatee_id,
@@ -187,6 +185,7 @@ pub async fn handle_delegation_request(
                     id.finalize_exchange(
                         &exn_message.encode()?,
                         exn_index_signature,
+                        &delegating_event,
                         data_signature,
                     )
                     .await?;

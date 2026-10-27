@@ -448,8 +448,8 @@ pub mod tests {
         use super::ReplyRoute;
 
         for route in [
-            r#"{"r":"/oobi/registrar","a":{"cid":"EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB","urls":[]}}"#,
-            r#"{"r":"/oobi/EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB/registrar","a":{"eid":"BGKV6v93ue5L5wsgk75t6j8TcdgABMN9x-eIyPi96J3B","scheme":"https","url":"https://example.com/"}}"#,
+            r#"{"r":"/oobi/butler","a":{"cid":"EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB","urls":[]}}"#,
+            r#"{"r":"/oobi/EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB/butler","a":{"eid":"BGKV6v93ue5L5wsgk75t6j8TcdgABMN9x-eIyPi96J3B","scheme":"https","url":"https://example.com/"}}"#,
             r#"{"r":"/oobi/process/extra","a":{"i":"EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB","url":"https://example.com/"}}"#,
         ] {
             assert!(serde_json::from_str::<ReplyRoute>(route).is_err(), "{route}");

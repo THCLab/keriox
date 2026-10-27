@@ -7,7 +7,7 @@
 use std::sync::Arc;
 
 use keri_core::{
-    actor::{event_generator, parse_op_stream, process_notice, process_signed_exn, MaterialPath},
+    actor::{event_generator, parse_op_stream, process_notice, process_signed_exn},
     database::redb::RedbDatabase,
     event::{sections::seal::EventSeal, KeyEvent},
     event_message::{
@@ -24,7 +24,10 @@ use keri_core::{
     processor::{basic_processor::BasicProcessor, event_storage::EventStorage},
     signer::Signer,
 };
-use said::{derivation::HashFunctionCode, version::format::SerializationFormats};
+use said::{
+    derivation::{HashFunction, HashFunctionCode},
+    version::format::SerializationFormats,
+};
 use tempfile::NamedTempFile;
 
 struct Fixture {
@@ -65,7 +68,7 @@ fn seal_of(icp: &KeriEvent<KeyEvent>) -> EventSeal {
 }
 
 /// `exn` signed by `signer` under the key state of `signer_icp`, carrying
-/// `forwarded` signed by its own controller.
+/// `forwarded`, signed by `signer` as well, nested.
 fn signed(
     exn: ExchangeMessage,
     signer: &Signer,
@@ -78,20 +81,12 @@ fn signed(
             0,
         )]
     };
-    SignedExchange {
-        signature: vec![Signature::Transferable(
-            SignerData::EventSeal(seal_of(signer_icp)),
-            sig(&exn.encode().unwrap()),
-        )],
-        data_signature: (
-            MaterialPath::create_from_str("-a".into()).unwrap(),
-            vec![Signature::Transferable(
-                SignerData::EventSeal(seal_of(signer_icp)),
-                sig(&forwarded.encode().unwrap()),
-            )],
-        ),
-        exchange_message: exn,
-    }
+    let exn_signature = vec![Signature::Transferable(
+        SignerData::EventSeal(seal_of(signer_icp)),
+        sig(&exn.encode().unwrap()),
+    )];
+    let forwarded = forwarded.sign(sig(&forwarded.encode().unwrap()), None, None);
+    SignedExchange::forward(exn, exn_signature, Message::Notice(Notice::Event(forwarded)))
 }
 
 /// `exn`, signed as by [`signed`], read back from the wire.
@@ -132,6 +127,79 @@ fn an_exchange_names_its_sender_and_recipient() {
 
     let signed = through_the_wire(exn, &signer, &icp, &icp).unwrap();
     process_signed_exn(signed, &fx.storage).unwrap();
+}
+
+/// A forward names the forwarded body's digest in `a.evt` and carries the
+/// message nested in its attachments, in an attachment group, so it is read
+/// as one message. The mailbox keeps the forwarded event with its
+/// signatures.
+#[test]
+fn a_forward_carries_the_forwarded_message_nested() {
+    let fx = setup();
+    let signer = Signer::new();
+    let icp = known(&fx, &signer);
+    let recipient = IdentifierPrefix::Basic(BasicPrefix::Ed25519NT(Signer::new().public_key()));
+    let exn = event_generator::exchange(
+        &icp.data.get_prefix(),
+        &recipient,
+        &icp,
+        ForwardTopic::Multisig,
+    );
+    let raw = String::from_utf8(exn.encode().unwrap()).unwrap();
+    let evt = HashFunction::from(HashFunctionCode::Blake3_256).derive(&icp.encode().unwrap());
+    assert!(raw.contains(&format!(r#""a":{{"evt":"{evt}"}}"#)), "{raw}");
+
+    let cesr = Message::Op(Op::Exchange(signed(exn.clone(), &signer, &icp, &icp)))
+        .to_cesr()
+        .unwrap();
+    let after_body = &cesr[exn.encode().unwrap().len()..];
+    assert!(after_body.starts_with(b"-C"), "{}", String::from_utf8_lossy(after_body));
+    let ops = parse_op_stream(&cesr).unwrap();
+    assert_eq!(ops.len(), 1);
+    let Op::Exchange(read) = &ops[0] else {
+        panic!("not an exchange")
+    };
+    let [Message::Notice(Notice::Event(forwarded))] = read.nested.as_slice() else {
+        panic!("no forwarded event: {:?}", read.nested)
+    };
+    assert_eq!(forwarded.event_message, icp);
+
+    process_signed_exn(read.clone(), &fx.storage).unwrap();
+    let kept: Vec<_> = fx
+        .storage
+        .mailbox_data
+        .as_ref()
+        .unwrap()
+        .get_mailbox_multisig(&recipient, 0)
+        .unwrap()
+        .collect();
+    assert_eq!(kept.len(), 1);
+    assert_eq!(kept[0].event_message, icp);
+    assert_eq!(kept[0].signatures, forwarded.signatures);
+}
+
+/// A forward without the message `a.evt` names, or with another one, is
+/// refused when read.
+#[test]
+fn a_forward_without_the_named_message_is_refused() {
+    let fx = setup();
+    let signer = Signer::new();
+    let icp = known(&fx, &signer);
+    let other = known(&fx, &Signer::new());
+    let recipient = IdentifierPrefix::Basic(BasicPrefix::Ed25519NT(Signer::new().public_key()));
+    let exn = event_generator::exchange(
+        &icp.data.get_prefix(),
+        &recipient,
+        &icp,
+        ForwardTopic::Multisig,
+    );
+    let refused = through_the_wire(exn.clone(), &signer, &icp, &other).unwrap_err();
+    assert!(refused.contains("a.evt"), "{refused}");
+
+    let mut bare = signed(exn, &signer, &icp, &icp);
+    bare.nested.clear();
+    let cesr = Message::Op(Op::Exchange(bare)).to_cesr().unwrap();
+    assert!(parse_op_stream(&cesr).is_err());
 }
 
 #[test]
@@ -206,3 +274,47 @@ fn a_keri_1_exchange_is_refused() {
     let refused = through_the_wire(keri1, &signer, &icp, &icp).unwrap_err();
     assert!(refused.contains("KERI 2.0"), "{refused}");
 }
+
+/// A forward keripy 424a50c writes in KERI 2.0 (the sender's inception, then
+/// an exn naming that inception by the digest of its body and carrying it
+/// nested), as `keri.app.forwarding` builds it.
+const KERIPY_FORWARD: &str = r#"{"v":"KERICAACAAJSONAAEt.","t":"icp","d":"EIm3qJsC-Zt9LWiJGd_V7KSHXyK2-coPiPjOiAs0rlxJ","i":"EIm3qJsC-Zt9LWiJGd_V7KSHXyK2-coPiPjOiAs0rlxJ","s":"0","kt":"1","k":["DOR1qM4x1Y8fjsgzsAGUNrs4xoB4Nq8pnYExz5Zlob9b"],"nt":"1","n":["EGKHGuVFL8IphnkFXqTD5KFdrbqqiixdjMrMgwbvX--b"],"bt":"0","b":[],"c":[],"a":[]}-CAX-KAWAABzlQkKHQlWu8Kqk8kkyaKTLtCmSVHbYkzCPJuI4_04cqVDd7TBaEk4m91mQ-D0oaYBocUe7G_Vw8MivAVdwVgI{"v":"KERICAACAAJSONAAGJ.","t":"exn","d":"EME5P9wRSi2xyIzcjy0uOOaALIe2eI0VmhHnTM9p9sM2","i":"EIm3qJsC-Zt9LWiJGd_V7KSHXyK2-coPiPjOiAs0rlxJ","ri":"EO8m6PSESVVeddChKbExqvrllOeiy5B2gMgcMHS6p_UD","x":"","p":"","dt":"2026-10-27T23:14:25.908929+00:00","r":"/fwd","q":{"pre":"EO8m6PSESVVeddChKbExqvrllOeiy5B2gMgcMHS6p_UD","topic":"multisig"},"a":{"evt":"EA2Wr3knDvyelcSyySV-5qrLSdZ7O8rlnit3hZqtmm0y"}}-CCu-XAuEIm3qJsC-Zt9LWiJGd_V7KSHXyK2-coPiPjOiAs0rlxJMAAAEIm3qJsC-Zt9LWiJGd_V7KSHXyK2-coPiPjOiAs0rlxJ-KAWAABV1RfKXsh8q0eiHNmChrI5ZjvEXHmhQabaYJoIhN5CbLq5QY996QUscUL2xFy51AvLajKcbS7x1nx_5T0sJVML-BB--HBm6BBlAAB7InYiOiJLRVJJQ0FBQ0FBSlNPTkFBRXQuIiwidCI6ImljcCIsImQiOiJFSW0zcUpzQy1adDlMV2lKR2RfVjdLU0hYeUsyLWNvUGlQak9pQXMwcmx4SiIsImkiOiJFSW0zcUpzQy1adDlMV2lKR2RfVjdLU0hYeUsyLWNvUGlQak9pQXMwcmx4SiIsInMiOiIwIiwia3QiOiIxIiwiayI6WyJET1IxcU00eDFZOGZqc2d6c0FHVU5yczR4b0I0TnE4cG5ZRXh6NVpsb2I5YiJdLCJudCI6IjEiLCJuIjpbIkVHS0hHdVZGTDhJcGhua0ZYcVRENUtGZHJicXFpaXhkak1yTWd3YnZYLS1iIl0sImJ0IjoiMCIsImIiOltdLCJjIjpbXSwiYSI6W119-KAWAABzlQkKHQlWu8Kqk8kkyaKTLtCmSVHbYkzCPJuI4_04cqVDd7TBaEk4m91mQ-D0oaYBocUe7G_Vw8MivAVdwVgI"#;
+
+/// keriox reads keripy's forward and keeps the forwarded inception in the
+/// recipient's mailbox, as keripy's own mailbox does with keriox's.
+#[test]
+fn a_forward_written_by_keripy_is_read_and_kept() {
+    let fx = setup();
+    let messages: Vec<Message> =
+        keri_core::event_message::cesr_adapter::parse_cesr_stream_many(KERIPY_FORWARD.as_bytes())
+            .unwrap()
+            .into_iter()
+            .map(|message| Message::try_from(message).unwrap())
+            .collect();
+    let [Message::Notice(icp), Message::Op(Op::Exchange(exn))] = messages.as_slice() else {
+        panic!("not an inception and a forward: {messages:?}")
+    };
+    process_notice(icp.clone(), &fx.processor).unwrap();
+    let [Message::Notice(Notice::Event(forwarded))] = exn.nested.as_slice() else {
+        panic!("no forwarded event: {:?}", exn.nested)
+    };
+    let recipient = exn.exchange_message.data.recipient.clone();
+    process_signed_exn(exn.clone(), &fx.storage).unwrap();
+
+    let kept: Vec<_> = fx
+        .storage
+        .mailbox_data
+        .as_ref()
+        .unwrap()
+        .get_mailbox_multisig(&recipient, 0)
+        .unwrap()
+        .collect();
+    assert_eq!(kept.len(), 1);
+    assert_eq!(kept[0].event_message, forwarded.event_message);
+    // Written again, keriox's encoding of it is keripy's.
+    assert_eq!(
+        String::from_utf8(Message::Op(Op::Exchange(exn.clone())).to_cesr().unwrap()).unwrap(),
+        KERIPY_FORWARD[KERIPY_FORWARD.find(r#"{"v":"KERICAACAAJSONAAGJ.","t":"exn""#).unwrap()..]
+    );
+}
+

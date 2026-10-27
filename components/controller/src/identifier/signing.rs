@@ -70,6 +70,7 @@ where
         CesrMessage {
             payload: cesrox::payload::Payload::JSON(data.into()),
             attachments: signatures_into_groups(&[signature]),
+            nested: vec![],
         }
         .to_cesr()
         .map(|data| String::from_utf8(data).unwrap())
@@ -134,6 +135,7 @@ where
         CesrMessage {
             payload: cesrox::payload::Payload::JSON(data.into()),
             attachments: signatures_into_groups(&[signature]),
+            nested: vec![],
         }
         .to_cesr()
         .map(|data| String::from_utf8(data).unwrap())
@@ -150,6 +152,7 @@ where
         CesrMessage {
             payload: cesrox::payload::Payload::JSON(data.into()),
             attachments: signatures_into_groups(&[signature]),
+            nested: vec![],
         }
         .to_cesr()
         .map(|data| String::from_utf8(data).unwrap())

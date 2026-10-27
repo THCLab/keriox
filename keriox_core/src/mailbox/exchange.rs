@@ -1,17 +1,18 @@
 use crate::event_message::keri_version::KeriVersion;
-use cesrox::cesr_proof::MaterialPath;
-use said::derivation::HashFunctionCode;
+use said::derivation::{HashFunction, HashFunctionCode};
+use said::SelfAddressingIdentifier;
 use said::version::format::SerializationFormats;
 use serde::{de, ser::SerializeStruct, Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::event_message::field_map::FieldMap;
 
-use crate::event::KeyEvent;
 use crate::event_message::msg::KeriEvent;
 use crate::event_message::timestamped::Timestamped;
 use crate::prefix::IdentifierPrefix;
 
-use crate::event_message::{signature::Signature, EventTypeTag, Typeable};
+use crate::event_message::{
+    signature::Signature, signed_event_message::Message, EventTypeTag, Typeable,
+};
 
 pub type ExchangeMessage = KeriEvent<ExchangeBody>;
 
@@ -47,17 +48,35 @@ impl Typeable for ExchangeBody {
 pub struct SignedExchange {
     pub exchange_message: ExchangeMessage,
     pub signature: Vec<Signature>,
-    // signature of event anchored in exn message in `a` field
-    pub data_signature: (MaterialPath, Vec<Signature>),
+    /// The messages carried nested in the exchange's attachments, each with
+    /// its own: for a forward, the one message it forwards.
+    pub nested: Vec<Message>,
+}
+
+impl SignedExchange {
+    /// A forward and the message it forwards.
+    pub fn forward(
+        exchange_message: ExchangeMessage,
+        signature: Vec<Signature>,
+        forwarded: Message,
+    ) -> Self {
+        Self {
+            exchange_message,
+            signature,
+            nested: vec![forwarded],
+        }
+    }
 }
 
 /// The route, `r`, of an exchange and its `q` and `a` blocks.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Exchange {
-    /// `/fwd`: an event for the mailbox of `q.pre`.
+    /// `/fwd`: a message for the mailbox of `q.pre`. The message is nested
+    /// in the exchange's attachments, its own attachments with it; `a.evt`
+    /// is the digest of its body, as keripy forwards in KERI 2.0.
     Fwd {
         args: FwdArgs,
-        to_forward: KeriEvent<KeyEvent>,
+        forwarded: SelfAddressingIdentifier,
     },
     /// Any other route. keriox reads it, keeping its blocks as they are,
     /// but serves none.
@@ -70,14 +89,48 @@ pub enum Exchange {
 
 const FWD: &str = "/fwd";
 
+/// The `a` block of a forward.
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ForwardedBody {
+    evt: SelfAddressingIdentifier,
+}
+
+impl Exchange {
+    /// A forward of the message whose body is `body` to the mailbox of
+    /// `recipient` under `topic`.
+    pub fn forward(recipient: &IdentifierPrefix, topic: ForwardTopic, body: &[u8]) -> Self {
+        Exchange::Fwd {
+            args: FwdArgs {
+                recipient_id: recipient.clone(),
+                topic,
+            },
+            forwarded: HashFunction::from(HashFunctionCode::Blake3_256).derive(body),
+        }
+    }
+
+    /// Whether `body` is the body of the message a forward names.
+    pub fn forwards(&self, body: &[u8]) -> bool {
+        match self {
+            Exchange::Fwd { forwarded, .. } => forwarded.verify_binding(body),
+            Exchange::Other { .. } => false,
+        }
+    }
+}
+
 impl Serialize for Exchange {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut body = serializer.serialize_struct("Exchange", 3)?;
         match self {
-            Exchange::Fwd { args, to_forward } => {
+            Exchange::Fwd { args, forwarded } => {
                 body.serialize_field("r", FWD)?;
                 body.serialize_field("q", args)?;
-                body.serialize_field("a", to_forward)?;
+                body.serialize_field(
+                    "a",
+                    &ForwardedBody {
+                        evt: forwarded.clone(),
+                    },
+                )?;
             }
             Exchange::Other {
                 route,
@@ -106,9 +159,11 @@ impl<'de> Deserialize<'de> for Exchange {
             // The blocks of a forward have a fixed shape, read as such
             // from their JSON form, whatever kind the body is in.
             let json = |block: FieldMap| serde_json::to_string(&block).map_err(de::Error::custom);
+            let ForwardedBody { evt } =
+                serde_json::from_str(&json(a)?).map_err(de::Error::custom)?;
             Ok(Exchange::Fwd {
                 args: serde_json::from_str(&json(q)?).map_err(de::Error::custom)?,
-                to_forward: serde_json::from_str(&json(a)?).map_err(de::Error::custom)?,
+                forwarded: evt,
             })
         } else {
             Ok(Exchange::Other {
@@ -178,15 +233,29 @@ mod tests {
     const ICP: &str = r#"{"v":"KERI10JSON000215_","t":"icp","d":"EC61gZ9lCKmHAS7U5ehUfEbGId5rcY0D7MirFZHDQcE2","i":"EC61gZ9lCKmHAS7U5ehUfEbGId5rcY0D7MirFZHDQcE2","s":"0","kt":"2","k":["DOZlWGPfDHLMf62zSFzE8thHmnQUOgA3_Y-KpOyF9ScG","DHGb2qY9WwZ1sBnC9Ip0F-M8QjTM27ftI-3jTGF9mc6K"],"nt":"2","n":["EBvD5VIVvf6NpP9GRmTqu_Cd1KN0RKrKNfPJ-uhIxurj","EHlpcaxffvtcpoUUMTc6tpqAVtb2qnOYVk_3HRsZ34PH"],"bt":"3","b":["BBilc4-L3tFUnfM_wJr4S4OJanAv_VmF_dJNN6vkf2Ha","BLskRTInXnMxWaGqcpSyMgo0nYbalW99cGZESrz3zapM","BIKKuvBwpmDVA4Ds-EpL5bt9OqPzWPja2LigFYZN2YfX"],"c":[],"a":[]}"#;
 
     fn forward() -> Exchange {
-        Exchange::Fwd {
-            args: FwdArgs {
-                recipient_id: "EJccSRTfXYF6wrUVuenAIHzwcx3hJugeiJsEKmndi5q1"
-                    .parse()
-                    .unwrap(),
-                topic: ForwardTopic::Multisig,
-            },
-            to_forward: serde_json::from_str(ICP).unwrap(),
-        }
+        Exchange::forward(
+            &"EJccSRTfXYF6wrUVuenAIHzwcx3hJugeiJsEKmndi5q1"
+                .parse()
+                .unwrap(),
+            ForwardTopic::Multisig,
+            ICP.as_bytes(),
+        )
+    }
+
+    /// A forward names the message it forwards by the digest of its body,
+    /// in `a.evt`, and nothing else.
+    #[test]
+    fn a_forward_names_the_digest_of_the_forwarded_body() {
+        let fwd = forward();
+        assert!(fwd.forwards(ICP.as_bytes()));
+        assert!(!fwd.forwards(ICP.replace("\"s\":\"0\"", "\"s\":\"1\"").as_bytes()));
+        let a = serde_json::to_value(&fwd).unwrap()["a"].clone();
+        assert_eq!(a.as_object().unwrap().keys().collect::<Vec<_>>(), ["evt"]);
+
+        let mut with_more = serde_json::to_value(&fwd).unwrap();
+        with_more["a"]["extra"] = serde_json::json!("x");
+        with_more["dt"] = serde_json::json!("2020-08-30T13:42:11.123456+00:00");
+        assert!(serde_json::from_value::<Timestamped<Exchange>>(with_more).is_err());
     }
 
     /// An exchange is written with the fields of the specification, in its

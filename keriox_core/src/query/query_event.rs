@@ -180,6 +180,7 @@ where
         crate::event_message::cesr_adapter::CesrMessage {
             payload,
             attachments,
+            nested: vec![],
         }
         .to_cesr()
         .map_err(|_e| Error::CesrError)

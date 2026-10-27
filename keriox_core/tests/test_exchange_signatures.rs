@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use keri_core::{
-    actor::{event_generator, process_notice, process_signed_exn, MaterialPath},
+    actor::{event_generator, process_notice, process_signed_exn},
     database::redb::RedbDatabase,
     error::Error,
     event::{sections::threshold::SignatureThreshold, KeyEvent},
@@ -14,7 +14,7 @@ use keri_core::{
         event_msg_builder::EventMsgBuilder,
         msg::KeriEvent,
         signature::{Signature, SignerData},
-        signed_event_message::Notice,
+        signed_event_message::{Message, Notice},
         EventTypeTag,
     },
     mailbox::exchange::{ForwardTopic, SignedExchange},
@@ -71,11 +71,8 @@ fn exchange(
         ForwardTopic::Multisig,
     );
     let signature = signature(&exn.encode().unwrap());
-    SignedExchange {
-        exchange_message: exn,
-        signature,
-        data_signature: (MaterialPath::create_from_str("-a".into()).unwrap(), vec![]),
-    }
+    let forwarded = Message::Notice(Notice::Event(event.sign(vec![], None, None)));
+    SignedExchange::forward(exn, signature, forwarded)
 }
 
 fn recipient() -> IdentifierPrefix {

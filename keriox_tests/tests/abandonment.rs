@@ -286,6 +286,7 @@ async fn approve_delegations(
                     .finalize_exchange(
                         &exn.encode()?,
                         exn_signature,
+                        &delegating_event,
                         IndexedSignature::new_both_same(signature_ixn, 0),
                     )
                     .await?;

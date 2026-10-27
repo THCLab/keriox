@@ -31,7 +31,6 @@ use crate::{
 };
 #[cfg(feature = "mailbox")]
 use crate::{
-    event_message::signed_event_message::SignedEventMessage,
     mailbox::exchange::{Exchange, ExchangeMessage, ForwardTopic, SignedExchange},
     query::mailbox::MailboxRoute,
 };
@@ -171,7 +170,7 @@ pub fn process_signed_exn<D: EventDatabase>(
                 Ok(acc && signature.verify(&exn_message.encode()?, storage)?)
             });
     if verification_result? {
-        process_exn(exn_message, exn.data_signature, storage)
+        process_exn(exn_message, &exn.nested, storage)
     } else {
         Err(Error::SignatureVerificationError)
     }
@@ -180,11 +179,12 @@ pub fn process_signed_exn<D: EventDatabase>(
 #[cfg(feature = "mailbox")]
 fn process_exn<D: EventDatabase>(
     exn: &ExchangeMessage,
-    attachment: (MaterialPath, Vec<Signature>),
+    nested: &[Message],
     storage: &EventStorage<D>,
 ) -> Result<(), Error> {
-    let (recipient, to_forward, topic) = match &exn.data.content.data {
-        Exchange::Fwd { args, to_forward } => (&args.recipient_id, to_forward, &args.topic),
+    let exchange = &exn.data.content.data;
+    let (recipient, topic) = match exchange {
+        Exchange::Fwd { args, .. } => (&args.recipient_id, &args.topic),
         Exchange::Other { route, .. } => return Err(Error::UnsupportedRoute(route.clone())),
     };
     // `ri` names the recipient of the exchange, the AID whose mailbox a
@@ -195,34 +195,33 @@ fn process_exn<D: EventDatabase>(
             exn.data.recipient
         )));
     }
-    let (sigs, witness_receipts) = attachment.1.into_iter().fold(
-        (vec![], vec![]),
-        |(mut signatures, mut witness_receipts), s| {
-            match s {
-                Signature::Transferable(_sd, mut sigs) => signatures.append(&mut sigs),
-                Signature::NonTransferable(receipts) => witness_receipts.push(receipts),
-            }
-            (signatures, witness_receipts)
-        },
-    );
-
-    let signed_to_forward = SignedEventMessage {
-        event_message: to_forward.clone(),
-        signatures: sigs,
-        witness_receipts: if witness_receipts.is_empty() {
-            None
-        } else {
-            Some(witness_receipts)
-        },
-        delegator_seal: None,
+    // The one message forwarded, with its own signatures, receipts and
+    // seals; the mailbox keeps key events.
+    let forwarded = match nested {
+        [Message::Notice(Notice::Event(event))] => event,
+        [_] => {
+            return Err(Error::SemanticError(
+                "a mailbox keeps forwarded key events only".into(),
+            ))
+        }
+        _ => {
+            return Err(Error::SemanticError(format!(
+                "a forward carries one message, this one {}",
+                nested.len()
+            )))
+        }
     };
-
+    if !exchange.forwards(&forwarded.event_message.encode()?) {
+        return Err(Error::SemanticError(
+            "the forwarded message is not the one a.evt names".into(),
+        ));
+    }
     match topic {
         ForwardTopic::Multisig => {
-            storage.add_mailbox_multisig(recipient, signed_to_forward)?;
+            storage.add_mailbox_multisig(recipient, forwarded.clone())?;
         }
         ForwardTopic::Delegate => {
-            storage.add_mailbox_delegate(recipient, signed_to_forward)?;
+            storage.add_mailbox_delegate(recipient, forwarded.clone())?;
         }
     };
     Ok(())

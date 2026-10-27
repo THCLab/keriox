@@ -167,7 +167,12 @@ async fn single_delegator_single_delegatee(
                 let exn_index_signature = delegator_identifier.sign_with_index(signature_exn, 0)?;
 
                 delegator_identifier
-                    .finalize_exchange(&exn.encode()?, exn_index_signature, data_signature)
+                    .finalize_exchange(
+                            &exn.encode()?,
+                            exn_index_signature,
+                            &delegating_event,
+                            data_signature,
+                        )
                     .await?;
 
                 // ixn was accepted

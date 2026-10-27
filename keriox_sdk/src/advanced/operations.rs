@@ -581,7 +581,7 @@ pub async fn approve_delegation<S: SigningBackend + Clone + 'static>(
     let sig_exn = wrap_sig(signer, &encoded_exn)?;
     let data_signature = IndexedSignature::new_both_same(sig_ixn, 0);
     let exn_index_sig = id.sign_with_index(sig_exn, 0)?;
-    id.finalize_exchange(&encoded_exn, exn_index_sig, data_signature)
+    id.finalize_exchange(&encoded_exn, exn_index_sig, &request.delegating_event, data_signature)
         .await?;
 
     Ok(())

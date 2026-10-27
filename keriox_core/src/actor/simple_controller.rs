@@ -15,7 +15,7 @@ use crate::{
     },
     query::{mailbox::SignedMailboxQuery, query_event::LogsQueryArgs},
 };
-use cesrox::{cesr_proof::MaterialPath, primitives::CesrPrimitive};
+use cesrox::primitives::CesrPrimitive;
 use said::derivation::{HashFunction, HashFunctionCode};
 use said::version::format::SerializationFormats;
 
@@ -23,7 +23,7 @@ use super::{
     event_generator, prelude::Message, process_notice, process_signed_exn, process_signed_oobi,
 };
 #[cfg(feature = "mailbox")]
-use crate::mailbox::exchange::{Exchange, ForwardTopic, FwdArgs, SignedExchange};
+use crate::mailbox::exchange::{Exchange, ForwardTopic, SignedExchange};
 use crate::{
     error::Error,
     event::{
@@ -549,34 +549,14 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase, RedbOobiStorage> {
         data: &SignedEventMessage,
         topic: ForwardTopic,
     ) -> Result<SignedExchange, Error> {
-        let exn_message = Exchange::Fwd {
-            args: FwdArgs {
-                recipient_id: receipient.clone(),
-                topic,
-            },
-            to_forward: data.event_message.clone(),
-        }
-        .to_message(
+        let exn_message = Exchange::forward(receipient, topic, &data.event_message.encode()?)
+            .to_message(
             &self.prefix,
             receipient,
             SerializationFormats::JSON,
             HashFunctionCode::Blake3_256,
         );
 
-        let sigs = vec![Signature::Transferable(
-            SignerData::JustSignatures,
-            data.signatures.clone(),
-        )];
-        let sigs = if let Some(witness_sigs) = data
-            .witness_receipts
-            .as_ref()
-            .map(|sigs| sigs.iter().map(|t| Signature::NonTransferable(t.clone())))
-        {
-            witness_sigs.chain(sigs.into_iter()).collect::<Vec<_>>()
-        } else {
-            sigs
-        };
-        let mat = MaterialPath::create_from_str("-a".into()).expect("\"-a\" is a valid path");
         let ssp = {
             SelfSigningPrefix::Ed25519Sha512(
                 self.key_manager
@@ -592,11 +572,12 @@ impl<K: KeyManager> SimpleController<K, RedbDatabase, RedbOobiStorage> {
             vec![exn_sig],
         );
 
-        Ok(SignedExchange {
-            exchange_message: exn_message,
-            signature: vec![sigg],
-            data_signature: (mat, sigs),
-        })
+        // The forwarded event travels with its signatures and receipts.
+        Ok(SignedExchange::forward(
+            exn_message,
+            vec![sigg],
+            Message::Notice(Notice::Event(data.clone())),
+        ))
     }
 
     #[cfg(feature = "mailbox")]

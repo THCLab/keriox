@@ -203,7 +203,12 @@ mod test_delegated_incept_postgres {
 
                     let data_signature = IndexedSignature::new_both_same(signature_ixn, 0);
                     delegator
-                        .finalize_exchange(&exn.encode()?, exn_index_signature, data_signature)
+                        .finalize_exchange(
+                            &exn.encode()?,
+                            exn_index_signature,
+                            &delegating_event,
+                            data_signature,
+                        )
                         .await?;
 
                     let delegators_state = delegator_controller.find_state(delegator.id())?;

@@ -178,13 +178,12 @@ impl SnKeyReplyEscrow {
 
 #[cfg(test)]
 mod tests {
-    use crate::event_message::cesr_adapter::{parse_cesr_stream, parse_cesr_stream_many};
+    use crate::event_message::cesr_adapter::parse_cesr_stream;
     use crate::{
         actor::prelude::{BasicProcessor, Message},
         database::redb::RedbDatabase,
         error::Error,
         event_message::signed_event_message::Op,
-        prefix::IdentifierPrefix,
         processor::{escrow::reply_escrow::ReplyEscrow, notification::JustNotification, Processor},
     };
     use std::{fs, sync::Arc};

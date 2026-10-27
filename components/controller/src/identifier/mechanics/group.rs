@@ -1,5 +1,5 @@
 use keri_core::{
-    actor::{event_generator, MaterialPath},
+    actor::event_generator,
     database::{EscrowCreator, EventDatabase},
     event::{
         sections::{seal::Seal, threshold::SignatureThreshold},
@@ -8,11 +8,11 @@ use keri_core::{
     event_message::{
         cesr_adapter::{parse_event_type, EventType},
         msg::KeriEvent,
-        signature::{Signature, SignerData},
-        signed_event_message::{Message, Op},
+        signature::Signature,
+        signed_event_message::{Message, Notice, Op},
         EventTypeTag,
     },
-    mailbox::exchange::{Exchange, ForwardTopic, SignedExchange},
+    mailbox::exchange::{ForwardTopic, SignedExchange},
     oobi::LocationScheme,
     oobi_manager::storage::OobiStorageBackend,
     prefix::{BasicPrefix, CesrPrimitive, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
@@ -479,59 +479,44 @@ where
         let att_signature = IndexedSignature::new_both_same(sig, own_index as u16);
 
         for (exn, signature) in exchanges {
-            self.finalize_exchange(&exn, signature, att_signature.clone())
+            self.finalize_exchange(&exn, signature, key_event, att_signature.clone())
                 .await?;
         }
         Ok(())
     }
 
+    /// Sends the forward `exchange`, signed with `exn_signature`, to a
+    /// witness, with `forwarded`, the event it forwards, nested in it:
+    /// signed with `data_signature` and with the receipts known for it.
     pub async fn finalize_exchange(
         &self,
         exchange: &[u8],
         exn_signature: Signature,
+        forwarded: &KeriEvent<KeyEvent>,
         data_signature: IndexedSignature,
     ) -> Result<(), MechanicsError> {
-        // Join exn messages with their signatures and send it to witness.
-        let material_path =
-            MaterialPath::create_from_str("-a".into()).expect("\"-a\" is a valid path");
-        // let attached_sig = sigs;
         let parsed_exn =
             parse_event_type(exchange).map_err(|_e| MechanicsError::EventFormatError)?;
         if let EventType::Exn(exn) = parsed_exn {
-            let Exchange::Fwd {
-                args: _,
-                to_forward,
-            } = exn.data.content.data.clone()
-            else {
+            let to_forward = forwarded.clone();
+            if !exn.data.content.data.forwards(&to_forward.encode()?) {
                 return Err(MechanicsError::EventFormatError);
-            };
+            }
+            let receipts = self
+                .known_events
+                .find_receipt(
+                    &to_forward.data.get_prefix(),
+                    to_forward.data.get_sn(),
+                    &to_forward.digest()?,
+                )?
+                .map(|receipts| receipts.signatures);
+            let forwarded_event = to_forward.sign(vec![data_signature], receipts, None);
 
-            let sigs: Vec<_> = if let Some(receipts) = self.known_events.find_receipt(
-                &to_forward.data.get_prefix(),
-                to_forward.data.get_sn(),
-                &to_forward.digest()?,
-            )? {
-                receipts
-                    .signatures
-                    .iter()
-                    .map(|c| Signature::NonTransferable(c.clone()))
-                    .chain([Signature::Transferable(
-                        SignerData::JustSignatures,
-                        vec![data_signature],
-                    )])
-                    .collect::<Vec<_>>()
-            } else {
-                vec![Signature::Transferable(
-                    SignerData::JustSignatures,
-                    vec![data_signature],
-                )]
-            };
-
-            let signer_exn = Message::Op(Op::Exchange(SignedExchange {
-                exchange_message: exn,
-                signature: vec![exn_signature],
-                data_signature: (material_path.clone(), sigs.clone()),
-            }));
+            let signer_exn = Message::Op(Op::Exchange(SignedExchange::forward(
+                exn,
+                vec![exn_signature],
+                Message::Notice(Notice::Event(forwarded_event)),
+            )));
             // `get_state_at_event` re-applies the forwarded event to the
             // local state, which returns DuplicateError when the event has
             // already been finalized (the common case during group

@@ -8,7 +8,7 @@ use keri_core::{
         KeyEvent,
     },
     event_message::msg::KeriEvent,
-    mailbox::exchange::{Exchange, ExchangeMessage, ForwardTopic, FwdArgs},
+    mailbox::exchange::{Exchange, ExchangeMessage, ForwardTopic},
 };
 use teliox::database::TelEventDatabase;
 
@@ -37,13 +37,11 @@ where
         let delegating_event = self
             .known_events
             .anchor_with_seal(&self.id, &[delegated_seal])?;
-        let exn_message = Exchange::Fwd {
-            args: FwdArgs {
-                recipient_id: delegate.clone(),
-                topic: ForwardTopic::Delegate,
-            },
-            to_forward: delegating_event.clone(),
-        }
+        let exn_message = Exchange::forward(
+            &delegate,
+            ForwardTopic::Delegate,
+            &delegating_event.encode()?,
+        )
         .to_message(
             &self.id,
             &delegate,
