@@ -48,6 +48,9 @@ pub enum SendingError {
 
     #[error("The location of {eid} is nullified")]
     NullifiedLocation { eid: IdentifierPrefix },
+
+    #[error("The query names no server to send it to")]
+    MissingRecipient,
 }
 
 impl From<TransportError> for SendingError {

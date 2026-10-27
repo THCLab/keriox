@@ -351,6 +351,8 @@ impl<S: OobiStorageBackend> WatcherData<S> {
                     }
                 };
             }
+            // Refused below: not a query about a KEL.
+            QueryRoute::Oobi { .. } => {}
         }
 
         let response =
@@ -362,6 +364,9 @@ impl<S: OobiStorageBackend> WatcherData<S> {
                 Ok(reply) => reply,
                 Err(QueryError::UnknownId { id }) => {
                     return Err(ActorError::NoIdentState { prefix: id })
+                }
+                Err(QueryError::Unsupported(route)) => {
+                    return Err(ActorError::UnsupportedQuery(route))
                 }
                 Err(e) => {
                     return Err(ActorError::GeneralError(e.to_string()));

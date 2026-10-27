@@ -120,6 +120,9 @@ impl ActorError {
                 SignedQueryError::QueryError(QueryError::UnknownId { .. }) => {
                     StatusCode::NOT_FOUND
                 }
+                SignedQueryError::QueryError(QueryError::Unsupported(_)) => {
+                    StatusCode::BAD_REQUEST
+                }
                 SignedQueryError::UnknownSigner { .. } => StatusCode::UNAUTHORIZED,
                 SignedQueryError::InvalidSignature => StatusCode::FORBIDDEN,
             },
@@ -138,6 +141,7 @@ fn keri_error_status(err: &KeriError) -> StatusCode {
         | KeriError::IncorrectDigest
         | KeriError::MissingSignatures
         | KeriError::UnanchoredDelegatedEvent
+        | KeriError::UnsupportedReplyRoute(_)
         | KeriError::ConfigTraitViolation(_) => StatusCode::BAD_REQUEST,
 
         // The server does not know the log of the signer, so it cannot

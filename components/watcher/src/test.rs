@@ -908,13 +908,24 @@ mod query_status {
 
     use actix_web::{http::StatusCode, web, ResponseError};
     use keri_core::{
-        actor::{error::ActorError, simple_controller::SimpleController},
+        actor::{
+            error::ActorError,
+            prelude::{HashFunctionCode, SerializationFormats},
+            simple_controller::SimpleController,
+        },
         database::redb::RedbDatabase,
-        event_message::signed_event_message::Message,
+        event_message::{
+            keri_version::KeriVersion,
+            signed_event_message::{Message, Op},
+        },
+        oobi::Role,
         oobi_manager::RedbOobiStorage,
-        prefix::{BasicPrefix, IdentifierPrefix},
+        prefix::{BasicPrefix, IdentifierPrefix, IndexedSignature, SelfSigningPrefix},
         processor::escrow::EscrowConfig,
-        signer::{CryptoBox, Signer},
+        query::query_event::{
+            OobiQueryArgs, QueryEvent, QueryRoute, SignedKelQuery, SignedQueryMessage,
+        },
+        signer::{CryptoBox, KeyManager, Signer},
     };
     use tempfile::{Builder, TempDir};
     use url::Url;
@@ -963,7 +974,11 @@ mod query_status {
     /// identifier it has never heard of.
     async fn ask_about_unknown(fx: &Fixture) -> (StatusCode, ActorError) {
         let unknown = IdentifierPrefix::Basic(BasicPrefix::Ed25519(Signer::new().public_key()));
-        let query = fx.asker.query_ksn(&unknown).unwrap();
+        ask(fx, fx.asker.query_ksn(&unknown).unwrap()).await
+    }
+
+    /// Sends `query` to the watcher's HTTP handler, which must refuse it.
+    async fn ask(fx: &Fixture, query: Op) -> (StatusCode, ActorError) {
         let body = Message::Op(query).to_cesr().unwrap();
         let refused = http_handlers::process_query(
             web::Bytes::from(body),
@@ -987,6 +1002,50 @@ mod query_status {
         assert!(
             matches!(err, ActorError::NoIdentState { .. }),
             "expected NoIdentState, got {err:?}"
+        );
+    }
+
+    /// The KERI specification's `/oobi` query is read, but a watcher does
+    /// not answer it: the asker learns so with a 400, not a server error.
+    #[actix_web::test]
+    async fn an_oobi_query_is_not_served() {
+        let fx = setup();
+        grant_watcher_role(&fx).await;
+        let qry = QueryEvent::new_query(
+            QueryRoute::Oobi {
+                reply_route: "/oobi/process".into(),
+                args: OobiQueryArgs {
+                    i: fx.asker.prefix().clone(),
+                    role: Role::Witness,
+                },
+            },
+            fx.asker.prefix(),
+            KeriVersion::V2_0,
+            SerializationFormats::JSON,
+            HashFunctionCode::Blake3_256,
+        );
+        let sig = fx
+            .asker
+            .key_manager
+            .lock()
+            .unwrap()
+            .sign(&qry.encode().unwrap())
+            .unwrap();
+        let query = Op::Query(SignedQueryMessage::KelQuery(SignedKelQuery::new_trans(
+            qry,
+            fx.asker.prefix().clone(),
+            vec![IndexedSignature::new_both_same(
+                SelfSigningPrefix::Ed25519Sha512(sig),
+                0,
+            )],
+        )));
+
+        let (status, err) = ask(&fx, query).await;
+
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert!(
+            matches!(err, ActorError::UnsupportedQuery(ref route) if route == "/oobi"),
+            "expected UnsupportedQuery, got {err:?}"
         );
     }
 

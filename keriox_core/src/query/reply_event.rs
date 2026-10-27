@@ -7,7 +7,7 @@ use serde::{de, ser::SerializeStruct, Deserialize, Deserializer, Serialize, Seri
 
 use super::key_state_notice::KeyStateNotice;
 #[cfg(feature = "oobi")]
-use crate::oobi::{EndRole, LocationScheme};
+use crate::oobi::{EndRole, LocationScheme, OobiUrl, OobiUrls, Role};
 use crate::{
     error::Error,
     event::sections::seal::EventSeal,
@@ -30,6 +30,16 @@ pub enum ReplyRoute {
     EndRoleAdd(EndRole),
     #[cfg(feature = "oobi")]
     EndRoleCut(EndRole),
+    /// `/oobi/process`: a url OOBI.
+    #[cfg(feature = "oobi")]
+    OobiProcess(OobiUrl),
+    /// `/oobi/{role}`: the urls of the providers of a role.
+    #[cfg(feature = "oobi")]
+    OobiUrls(Role, OobiUrls),
+    /// `/oobi/{aid}/{role}`: the location of an endpoint provider of
+    /// `aid` in a role, an end role and its location in one reply.
+    #[cfg(feature = "oobi")]
+    OobiEndpoint(IdentifierPrefix, Role, LocationScheme),
 }
 
 impl ReplyRoute {
@@ -42,6 +52,12 @@ impl ReplyRoute {
             ReplyRoute::EndRoleAdd(endrole) | ReplyRoute::EndRoleCut(endrole) => {
                 endrole.cid.clone()
             }
+            #[cfg(feature = "oobi")]
+            ReplyRoute::OobiProcess(oobi) => oobi.i.clone(),
+            #[cfg(feature = "oobi")]
+            ReplyRoute::OobiUrls(_, oobi) => oobi.cid.clone(),
+            #[cfg(feature = "oobi")]
+            ReplyRoute::OobiEndpoint(aid, _, _) => aid.clone(),
         }
     }
 }
@@ -72,6 +88,21 @@ impl Serialize for ReplyRoute {
                 em.serialize_field("r", "/end/role/cut")?;
                 em.serialize_field("a", &end_role)?;
             }
+            #[cfg(feature = "oobi")]
+            ReplyRoute::OobiProcess(oobi) => {
+                em.serialize_field("r", "/oobi/process")?;
+                em.serialize_field("a", &oobi)?;
+            }
+            #[cfg(feature = "oobi")]
+            ReplyRoute::OobiUrls(role, oobi) => {
+                em.serialize_field("r", &format!("/oobi/{}", role.as_str()))?;
+                em.serialize_field("a", &oobi)?;
+            }
+            #[cfg(feature = "oobi")]
+            ReplyRoute::OobiEndpoint(aid, role, loc) => {
+                em.serialize_field("r", &format!("/oobi/{}/{}", aid.to_str(), role.as_str()))?;
+                em.serialize_field("a", &loc)?;
+            }
         };
         em.end()
     }
@@ -90,6 +121,10 @@ impl<'de> Deserialize<'de> for ReplyRoute {
             L(LocationScheme),
             #[cfg(feature = "oobi")]
             R(EndRole),
+            #[cfg(feature = "oobi")]
+            U(OobiUrl),
+            #[cfg(feature = "oobi")]
+            M(OobiUrls),
         }
         #[derive(Debug, Deserialize)]
         struct Mapping {
@@ -110,6 +145,27 @@ impl<'de> Deserialize<'de> for ReplyRoute {
                 }
             };
             Ok(ReplyRoute::Ksn(id, ksn))
+        } else if let Some(path) = tag.strip_prefix("/oobi/") {
+            #[cfg(feature = "oobi")]
+            {
+                let role = |role: &str| role.parse::<Role>().map_err(de::Error::custom);
+                let segments: Vec<&str> = path.split('/').collect();
+                match (&segments[..], reply_data) {
+                    (["process"], ReplyType::U(oobi)) => Ok(ReplyRoute::OobiProcess(oobi)),
+                    ([name], ReplyType::M(oobi)) => Ok(ReplyRoute::OobiUrls(role(name)?, oobi)),
+                    ([aid, name], ReplyType::L(loc)) => Ok(ReplyRoute::OobiEndpoint(
+                        aid.parse().map_err(de::Error::custom)?,
+                        role(name)?,
+                        loc,
+                    )),
+                    _ => Err(de::Error::custom("Wrong route")),
+                }
+            }
+            #[cfg(not(feature = "oobi"))]
+            {
+                let _ = (path, reply_data);
+                Err(de::Error::custom("Wrong route"))
+            }
         } else {
             match (&tag[..], reply_data) {
                 #[cfg(feature = "oobi")]
@@ -337,4 +393,62 @@ pub mod tests {
             assert!(false)
         };
     }
+
+    /// The OOBI replies of the KERI specification read as their routes and
+    /// are written back unchanged.
+    #[cfg(feature = "oobi")]
+    #[test]
+    fn oobi_replies_of_the_specification_round_trip() {
+        use super::{ReplyEvent, ReplyRoute};
+        use crate::oobi::Role;
+
+        let aid = "EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB";
+        let replies = [
+            (
+                r#"{"v":"KERICAACAAJSONAAFR.","t":"rpy","d":"EPdgmUkvx5o_KRg3elBqj_vSZOFgWI9hCVWO-FfGZz8U","i":"EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB","dt":"2020-08-21T17:52:00.000000+00:00","r":"/oobi/process","a":{"i":"EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB","url":"https://example.com/witness/BGKV6v93ue5L5wsgk75t6j8TcdgABMN9x-eIyPi96J3B"}}"#,
+                "process",
+            ),
+            (
+                r#"{"v":"KERICAACAAJSONAAIA.","t":"rpy","d":"ELtIQ71PMr9m5a8eYiC39hikuU8yTWoFw1vWjtqbVUX4","i":"EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB","dt":"2020-08-21T17:52:00.000000+00:00","r":"/oobi/witness","a":{"cid":"EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB","urls":["https://example.com/witness/wilma/BGKV6v93ue5L5wsgk75t6j8TcdgABMN9x-eIyPi96J3B","https://example.com/witness/watson/BAPv2MnoiCsgOnklmFyfU07QDK_93NeH9iKfOy8V22aH","https://example.com/witness/winona/BA4PSatfQMw1lYhQoZkSSvOCrE0Sdw1hmmniDL-yDtrB"]}}"#,
+                "urls",
+            ),
+            (
+                r#"{"v":"KERICAACAAJSONAAFq.","t":"rpy","d":"EFMQh0w5-AHw-H01DtqEFhAIC6KXbjYvUSOEX6kSPY4j","i":"EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB","dt":"2020-08-21T17:52:00.000000+00:00","r":"/oobi/EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB/witness","a":{"eid":"BGKV6v93ue5L5wsgk75t6j8TcdgABMN9x-eIyPi96J3B","scheme":"https","url":"https://example.com/witness/wilma"}}"#,
+                "endpoint",
+            ),
+        ];
+        for (raw, kind) in replies {
+            let reply: ReplyEvent = serde_json::from_str(raw).unwrap();
+            reply.check_digest().unwrap();
+            match (kind, reply.get_route()) {
+                ("process", ReplyRoute::OobiProcess(oobi)) => assert_eq!(oobi.i.to_string(), aid),
+                ("urls", ReplyRoute::OobiUrls(Role::Witness, oobi)) => {
+                    assert_eq!(oobi.urls.len(), 3)
+                }
+                ("endpoint", ReplyRoute::OobiEndpoint(id, Role::Witness, loc)) => {
+                    assert_eq!(id.to_string(), aid);
+                    assert_eq!(loc.eid.to_string(), "BGKV6v93ue5L5wsgk75t6j8TcdgABMN9x-eIyPi96J3B");
+                }
+                (kind, route) => panic!("{kind} read as {route:?}"),
+            }
+            assert_eq!(String::from_utf8(reply.encode().unwrap()).unwrap(), raw);
+            assert_eq!(reply.get_prefix().to_string(), aid);
+        }
+    }
+
+    /// An OOBI route naming a role keriox does not know is refused.
+    #[cfg(feature = "oobi")]
+    #[test]
+    fn an_oobi_reply_for_an_unknown_role_is_refused() {
+        use super::ReplyRoute;
+
+        for route in [
+            r#"{"r":"/oobi/registrar","a":{"cid":"EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB","urls":[]}}"#,
+            r#"{"r":"/oobi/EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB/registrar","a":{"eid":"BGKV6v93ue5L5wsgk75t6j8TcdgABMN9x-eIyPi96J3B","scheme":"https","url":"https://example.com/"}}"#,
+            r#"{"r":"/oobi/process/extra","a":{"i":"EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB","url":"https://example.com/"}}"#,
+        ] {
+            assert!(serde_json::from_str::<ReplyRoute>(route).is_err(), "{route}");
+        }
+    }
 }
+

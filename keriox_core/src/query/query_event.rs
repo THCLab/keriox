@@ -36,6 +36,16 @@ pub enum QueryRoute {
         #[serde(rename = "q")]
         args: LogsQueryArgs,
     },
+    /// An OOBI of `i` in a role, answered on the reply route (KERI
+    /// specification, Example Query Message).
+    #[cfg(feature = "oobi")]
+    #[serde(rename = "/oobi")]
+    Oobi {
+        #[serde(rename = "rr")]
+        reply_route: String,
+        #[serde(rename = "q")]
+        args: OobiQueryArgs,
+    },
 }
 
 impl QueryRoute {
@@ -43,6 +53,8 @@ impl QueryRoute {
         match self {
             QueryRoute::Ksn { ref args, .. } => args.i.clone(),
             QueryRoute::Logs { ref args, .. } => args.i.clone(),
+            #[cfg(feature = "oobi")]
+            QueryRoute::Oobi { ref args, .. } => args.i.clone(),
         }
     }
 }
@@ -55,6 +67,14 @@ pub struct LogsQueryArgs {
     pub i: IdentifierPrefix,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub src: Option<IdentifierPrefix>,
+}
+
+/// What an `/oobi` query asks for: the OOBI of `i` in `role`.
+#[cfg(feature = "oobi")]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct OobiQueryArgs {
+    pub i: IdentifierPrefix,
+    pub role: crate::oobi::Role,
 }
 
 pub type QueryEvent = KeriEvent<Timestamped<QueryRoute>>;
@@ -200,3 +220,27 @@ fn test_query_deserialize() {
     let qr: QueryEvent = serde_json::from_str(input_query).unwrap();
     assert!(matches!(qr.data.data, QueryRoute::Logs { .. },));
 }
+
+/// The query of the KERI specification's example asks for the witness
+/// OOBI of `q.i`; it reads as an `/oobi` query and is written back
+/// unchanged.
+#[cfg(feature = "oobi")]
+#[test]
+fn the_oobi_query_of_the_specification_round_trips() {
+    let raw = r#"{"v":"KERICAACAAJSONAAEe.","t":"qry","d":"EEiUK4cVgcyA1Dk6g2jFzqc5JerkaSnJi3IosutVCyYO","i":"EHqSsH1Imc2MEcgzEordBUFqJKWTcRyTz2GRc2SG3aur","dt":"2025-08-21T17:50:00.000000+00:00","r":"/oobi","rr":"/oobi/process","q":{"i":"EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB","role":"witness"}}"#;
+    let qry: QueryEvent = serde_json::from_str(raw).unwrap();
+    qry.check_digest().unwrap();
+    match qry.get_route() {
+        QueryRoute::Oobi { reply_route, args } => {
+            assert_eq!(reply_route, "/oobi/process");
+            assert_eq!(args.role, crate::oobi::Role::Witness);
+        }
+        other => panic!("read as {other:?}"),
+    }
+    assert_eq!(
+        qry.get_prefix().to_string(),
+        "EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB"
+    );
+    assert_eq!(String::from_utf8(qry.encode().unwrap()).unwrap(), raw);
+}
+

@@ -106,6 +106,17 @@ pub fn process_reply<P: Processor, #[cfg(feature = "oobi-manager")] S: OobiStora
             Error::SemanticError("OOBI replies need the oobi-manager feature".into()),
         ),
         ReplyRoute::Ksn(_, _) => processor.process_op_reply(&sr),
+        // The KERI specification defines these OOBI replies but not what a
+        // node does on receiving one.
+        #[cfg(feature = "oobi")]
+        route @ (ReplyRoute::OobiProcess(_)
+        | ReplyRoute::OobiUrls(..)
+        | ReplyRoute::OobiEndpoint(..)) => Err(Error::UnsupportedReplyRoute(
+            serde_json::to_value(&route)
+                .ok()
+                .and_then(|v| v["r"].as_str().map(str::to_string))
+                .unwrap_or_default(),
+        )),
     }
 }
 
@@ -312,6 +323,10 @@ pub fn process_query<D: EventDatabase>(
 
             Ok(ReplyType::Kel(response))
         }
+        // The KERI specification defines the query but not how a node finds
+        // the OOBI it asks for.
+        #[cfg(feature = "oobi")]
+        QueryRoute::Oobi { .. } => Err(QueryError::Unsupported("/oobi".into())),
     }
 }
 
@@ -335,6 +350,10 @@ pub enum QueryError {
 
     #[error("unknown identifier {id:?}")]
     UnknownId { id: IdentifierPrefix },
+
+    /// A query route this node reads but does not answer.
+    #[error("query route {0} is not served here")]
+    Unsupported(String),
 }
 
 pub mod prelude {

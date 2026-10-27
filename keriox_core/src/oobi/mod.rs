@@ -94,6 +94,23 @@ pub enum Scheme {
     Tcp,
 }
 
+/// The data of an OOBI reply routed `/oobi/process`: a url OOBI for `i`
+/// (KERI specification, Example Reply Message).
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct OobiUrl {
+    pub i: IdentifierPrefix,
+    pub url: Url,
+}
+
+/// The data of an OOBI reply routed `/oobi/{role}`: urls of the endpoint
+/// providers of `cid` in that role (KERI specification, KERI Reply
+/// Messages as OOBIs).
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct OobiUrls {
+    pub cid: IdentifierPrefix,
+    pub urls: Vec<Url>,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, EnumString)]
 #[serde(rename_all = "lowercase")]
 pub enum Role {
@@ -105,6 +122,18 @@ pub enum Role {
     Watcher,
     #[strum(serialize = "messagebox")]
     Messagebox,
+}
+
+impl Role {
+    /// The role as it is written in routes and OOBI urls.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Role::Controller => "controller",
+            Role::Witness => "witness",
+            Role::Watcher => "watcher",
+            Role::Messagebox => "messagebox",
+        }
+    }
 }
 
 pub mod error {

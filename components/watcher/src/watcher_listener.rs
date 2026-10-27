@@ -571,6 +571,7 @@ mod test {
                         let log = parse_event_stream(&resp).unwrap();
                         Ok(PossibleResponse::Kel(log))
                     }
+                    QueryRoute::Oobi { .. } => Err(ActorError::UnsupportedQuery("/oobi".into())),
                 }
             } else {
                 panic!("unexpected query type")

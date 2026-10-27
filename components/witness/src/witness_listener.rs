@@ -317,6 +317,7 @@ mod test {
                         let log = parse_event_stream(&resp).unwrap();
                         Ok(PossibleResponse::Kel(log))
                     }
+                    QueryRoute::Oobi { .. } => Err(ActorError::UnsupportedQuery("/oobi".into())),
                 },
                 SignedQueryMessage::MailboxQuery(qry) => match qry.query.data.data {
                     query::mailbox::MailboxRoute::Mbx {

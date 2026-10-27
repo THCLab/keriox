@@ -167,6 +167,7 @@ where
                 reply_route: _,
                 args,
             } => args.src.clone(),
+            QueryRoute::Oobi { .. } => None,
         };
 
         let query = match &self.id {
@@ -179,7 +180,10 @@ where
             }
         };
         self.communication
-            .send_query_to(recipient.as_ref().unwrap(), query)
+            .send_query_to(
+                recipient.as_ref().ok_or(SendingError::MissingRecipient)?,
+                query,
+            )
             .await
     }
 

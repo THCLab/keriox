@@ -398,6 +398,10 @@ impl Node {
                 .storage
                 .get_last_ksn_reply(&ksn.state.prefix, &signer)
                 .is_some_and(|r| r.reply.digest().ok() == Some(said.clone())),
+            // read, but nothing is kept of them
+            ReplyRoute::OobiProcess(_)
+            | ReplyRoute::OobiUrls(..)
+            | ReplyRoute::OobiEndpoint(..) => false,
         }
     }
 

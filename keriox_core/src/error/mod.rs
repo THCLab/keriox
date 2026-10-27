@@ -44,6 +44,10 @@ pub enum Error {
     #[error("Delegated event at an occupied location is not anchored by its delegator")]
     UnanchoredDelegatedEvent,
 
+    /// A reply whose route this node reads but does not act on.
+    #[error("reply route {0} is not served here")]
+    UnsupportedReplyRoute(String),
+
     /// The event is the one already accepted at its location.
     #[error("Event already accepted")]
     EventAlreadyAccepted,
