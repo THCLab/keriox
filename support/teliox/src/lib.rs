@@ -1,13 +1,4 @@
-pub mod database;
-pub mod error;
-pub mod event;
-pub mod processor;
-pub mod query;
-pub mod registry;
-pub mod seal;
-pub mod state;
-pub mod tel;
+//! ACDC 2.0 state registries (TELs) for KERI: the issuance and revocation
+//! state of credentials, anchored in their Issuer's KEL.
 
-#[cfg(feature = "storage-postgres")]
-pub use database::postgres::{PostgresTelDatabase, PostgresTelEscrowDatabase};
-pub use database::{TelEscrowDatabase, TelEventDatabase};
+pub mod registry;

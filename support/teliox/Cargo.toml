@@ -1,7 +1,7 @@
 [package]
 name = "teliox"
 version = "0.19.0-rc.8"
-description = "Library for the Transaction Event Log"
+description = "ACDC 2.0 state registries (TELs) anchored in KERI key event logs"
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -15,18 +15,11 @@ storage-redb = ["keri-core/storage-redb", "redb"]
 storage-postgres = ["keri-core/storage-postgres", "sqlx", "async-std"]
 
 [dependencies]
-keri-core = {path = "../../keriox_core", version= "0.19.0-rc.8", features = ["query"]}
+keri-core = {path = "../../keriox_core", version= "0.19.0-rc.8" }
 said = { version = "=2.0.0-rc.4" }
 cesrox = { version = "=2.0.0-rc.2" }
-base64 = "0.13.1"
-serde = "1.0"
-serde_json = "1.0"
 thiserror = "1.0"
-serde-hex = "0.1"
-chrono = { version = "0.4.45", features = ["serde"] }
-arrayref = "0.3.9"
-serde_cbor = "0.11.2"
-rmp-serde = "1.3"
+chrono = "0.4.45"
 # ACDC 2.0 messages, registry events and blinded state blocks.
 acdc = { git = "https://gerrit.colossi.network/acdc-rust", branch = "cefa" }
 redb = { version = "2.6.4", optional = true }
@@ -36,6 +29,7 @@ async-std = { version = "1", features = ["attributes"], optional = true }
 
 [dev-dependencies]
 tempfile = "3.27"
+serde_json = "1.0"
 
 [package.metadata.release]
 publish = false

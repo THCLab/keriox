@@ -89,9 +89,66 @@ impl RegistryStore for PostgresRegistryStore {
 
 #[cfg(test)]
 mod tests {
+    use keri_core::database::postgres::PostgresDatabase;
+    use sqlx::postgres::PgPoolOptions;
+
+    fn get_database_url() -> String {
+        std::env::var("DATABASE_URL")
+            .unwrap_or_else(|_| "postgres://postgres:postgres@localhost:5432/keri_test".to_string())
+    }
+
+    /// Ensures the test database exists with a fresh schema, serialized across parallel tests.
+    fn ensure_schema() {
+        static INIT: std::sync::Mutex<bool> = std::sync::Mutex::new(false);
+        let mut done = INIT.lock().unwrap();
+        if *done {
+            return;
+        }
+        let result = std::panic::catch_unwind(|| {
+            async_std::task::block_on(async {
+                let url = get_database_url();
+                let (base, db_name) = url.rsplit_once('/').expect("Invalid DATABASE_URL");
+                let admin = PgPoolOptions::new()
+                    .max_connections(2)
+                    .connect(&format!("{}/postgres", base))
+                    .await
+                    .expect("Failed to connect to admin db");
+                // Drop and recreate to get a clean schema
+                let _ = sqlx::query(&format!(
+                    "DROP DATABASE IF EXISTS \"{}\" WITH (FORCE)",
+                    db_name
+                ))
+                .execute(&admin)
+                .await;
+                sqlx::query(&format!("CREATE DATABASE \"{}\"", db_name))
+                    .execute(&admin)
+                    .await
+                    .expect("Failed to create test database");
+
+                let db = PostgresDatabase::new(&url)
+                    .await
+                    .expect("Failed to connect to database");
+                db.run_migrations().await.expect("Failed to run migrations");
+            });
+        });
+        if result.is_err() {
+            panic!("ensure_schema failed — check DATABASE_URL and postgres connection");
+        }
+        *done = true;
+    }
+
+    async fn setup_pool() -> sqlx::PgPool {
+        ensure_schema();
+        PgPoolOptions::new()
+            .max_connections(5)
+            .connect(&get_database_url())
+            .await
+            .expect("Failed to connect to database")
+    }
+
     #[async_std::test]
     async fn the_postgres_store_keeps_registries() {
-        let pool = crate::database::postgres::tests::setup_pool().await;
+        let pool = setup_pool().await;
         crate::registry::store::conformance::check(&super::PostgresRegistryStore::new(pool));
     }
 }
