@@ -67,7 +67,19 @@ impl<T: Serialize + Clone, D: Serialize + Typeable<TypeTag = T> + Clone> TypedEv
         derivation: HashFunction,
         event: D,
     ) -> Self {
-        let tmp_serialization_info = version.serialization_info(format);
+        Self::with_serialization_info(version.serialization_info(format), derivation, event)
+    }
+
+    /// The event under the version string `serialization_info`, whose size
+    /// and SAID are computed here. Messages of other protocols than KERI,
+    /// such as ACDC registry events, are built this way.
+    pub fn with_serialization_info(
+        serialization_info: SerializationInfo,
+        derivation: HashFunction,
+        event: D,
+    ) -> Self {
+        let format = serialization_info.kind;
+        let tmp_serialization_info = serialization_info;
 
         let mut tmp_self = Self {
             serialization_info: tmp_serialization_info,
