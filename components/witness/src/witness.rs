@@ -38,12 +38,6 @@ use keri_core::{
     signer::Signer,
 };
 use serde::{Deserialize, Serialize};
-use teliox::{
-    database::{redb::RedbTelDatabase, EscrowDatabase},
-    event::{parse_tel_query_stream, verifiable_event::VerifiableEvent},
-    processor::{escrow::default_escrow_bus, storage::TelEventStorage, TelReplyType},
-    tel::Tel,
-};
 use thiserror::Error;
 use tracing::{debug, instrument, trace, warn};
 use url::Url;
@@ -152,9 +146,6 @@ pub enum WitnessError {
     #[error(transparent)]
     KeriError(#[from] keri_core::error::Error),
 
-    #[error(transparent)]
-    TelError(#[from] teliox::error::Error),
-
     #[error("Db error: {0}")]
     DatabaseError(String),
 
@@ -182,7 +173,6 @@ pub struct Witness<S: OobiStorageBackend> {
     pub oobi_manager: OobiManager<S>,
     pub signer: Arc<Signer>,
     pub receipt_generator: Arc<WitnessReceiptGenerator>,
-    pub tel: Arc<Tel<RedbTelDatabase, RedbDatabase>>,
     /// The KERI version this witness writes its own messages in. Advertised
     /// on `/info`: clients write 2.0 once every server they use does.
     pub keri_version: KeriVersion,
@@ -200,7 +190,6 @@ impl<S: OobiStorageBackend> Witness<S> {
         let mut events_path = PathBuf::new();
         events_path.push(event_path);
         let mut escrow_path = events_path.clone();
-        let mut tel_path = events_path.clone();
         let mut events_database_path = events_path.clone();
 
         events_path.push("events");
@@ -228,30 +217,6 @@ impl<S: OobiStorageBackend> Witness<S> {
             ],
         )?;
 
-        // Initiate tel and it's escrows
-        let tel_events_db = {
-            tel_path.push("tel");
-            tel_path.push("events");
-            Arc::new(RedbTelDatabase::new(&tel_path).unwrap())
-        };
-
-        let tel_escrow_db = {
-            let mut tel_path = events_path.clone();
-            tel_path.push("tel");
-            tel_path.push("escrow");
-            EscrowDatabase::new(&tel_path)
-                .map_err(|e| WitnessError::DatabaseError(e.to_string()))?
-        };
-        let (tel_bus, _missing_issuer, _out_of_order, _missing_registy) =
-            default_escrow_bus(tel_events_db.clone(), event_storage.clone(), tel_escrow_db)
-                .unwrap();
-
-        let tel = Arc::new(Tel::new(
-            Arc::new(TelEventStorage::new(tel_events_db.clone())),
-            event_storage.clone(),
-            Some(tel_bus),
-        ));
-
         Ok(Self {
             address,
             prefix,
@@ -260,7 +225,6 @@ impl<S: OobiStorageBackend> Witness<S> {
             event_storage,
             receipt_generator,
             oobi_manager,
-            tel,
             keri_version: KeriVersion::V2_0,
         })
     }
@@ -507,33 +471,6 @@ impl<S: OobiStorageBackend> Witness<S> {
             })
             .filter_map(Result::transpose)
             .collect()
-    }
-
-    pub fn parse_and_process_tel_queries(
-        &self,
-        input_stream: &[u8],
-    ) -> Result<Vec<TelReplyType>, ActorError> {
-        parse_tel_query_stream(input_stream)?
-            .into_iter()
-            .map(|qry| {
-                self.tel
-                    .processor
-                    .process_signed_query(qry)
-                    .map_err(|e| ActorError::GeneralError(e.to_string()))
-            })
-            .collect()
-    }
-
-    pub fn parse_and_process_tel_events(&self, input_stream: &[u8]) -> Result<(), ActorError> {
-        let events = VerifiableEvent::parse(input_stream)
-            .map_err(|e| keri_core::event_message::cesr_adapter::ParseError::DeserializeError(e.to_string()))?;
-        for tel_event in events {
-            self.tel
-                .processor
-                .process(tel_event)
-                .map_err(|e| ActorError::GeneralError(e.to_string()))?;
-        }
-        Ok(())
     }
 
     pub fn parse_and_process_replies(&self, input_stream: &[u8]) -> Result<(), ActorError> {

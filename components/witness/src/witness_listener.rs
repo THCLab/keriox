@@ -125,14 +125,6 @@ impl<S: OobiStorageBackend + 'static> WitnessListener<S> {
                     ),
                 )
                 .route(
-                    "/query/tel",
-                    actix_web::web::post().to(http_handlers::process_tel_query_redb),
-                )
-                .route(
-                    "/process/tel",
-                    actix_web::web::post().to(http_handlers::process_tel_events_redb),
-                )
-                .route(
                     "/register",
                     actix_web::web::post().to(http_handlers::process_reply_redb),
                 )
@@ -429,36 +421,25 @@ pub mod http_handlers {
         .increment(1);
         let (cid, role, eid) = path.into_inner();
         let out = if role == Role::Witness {
-            // Check if it is TEL identifier
-            let management_tel = data.tel.get_management_tel(&cid).unwrap();
-            match management_tel {
-                // Then return TEL
-                Some(management_tel) => Ok(management_tel
-                    .map(|tel_event| tel_event.serialize().unwrap())
-                    .flatten()
-                    .collect()),
-                // Otherwise return location and KEL
-                None => {
-                    let location_signed = data
-                        .get_loc_scheme_for_id(&eid)
-                        .map_err(ActorError::KeriError)?
-                        .into_iter()
-                        .flat_map(|location| {
-                            let sed = Message::Op(Op::Reply(location));
-                            sed.to_cesr().map_err(|_| Error::CesrError).unwrap()
-                        });
+            // The location and the KEL of the identifier.
+            let location_signed = data
+                .get_loc_scheme_for_id(&eid)
+                .map_err(ActorError::KeriError)?
+                .into_iter()
+                .flat_map(|location| {
+                    let sed = Message::Op(Op::Reply(location));
+                    sed.to_cesr().map_err(|_| Error::CesrError).unwrap()
+                });
 
-                    Ok(data
-                        .event_storage
-                        .get_kel_messages_with_receipts_all(&cid)
-                        .map_err(ActorError::KeriError)?
-                        .unwrap_or_default()
-                        .into_iter()
-                        .flat_map(|not| Message::Notice(not).to_cesr().unwrap())
-                        .chain(location_signed)
-                        .collect::<Vec<_>>())
-                }
-            }
+            Ok(data
+                .event_storage
+                .get_kel_messages_with_receipts_all(&cid)
+                .map_err(ActorError::KeriError)?
+                .unwrap_or_default()
+                .into_iter()
+                .flat_map(|not| Message::Notice(not).to_cesr().unwrap())
+                .chain(location_signed)
+                .collect::<Vec<_>>())
         } else {
             let end_role = data
                 .oobi_manager
@@ -573,39 +554,6 @@ pub mod http_handlers {
             .body(resp))
     }
 
-    pub async fn process_tel_query<S: OobiStorageBackend>(
-        post_data: String,
-        data: web::Data<Arc<Witness<S>>>,
-    ) -> Result<HttpResponse, ApiError> {
-        tracing::info!("Processing TEL query");
-        tracing::debug!(payload = %post_data, "TEL query payload");
-        let resp = match data.parse_and_process_tel_queries(post_data.as_bytes()) {
-            Ok(r) => r,
-            Err(e) => {
-                metrics::counter!(
-                    crate::metrics::names::QUERIES_TOTAL,
-                    "kind" => "tel", "outcome" => "err"
-                )
-                .increment(1);
-                return Err(e.into());
-            }
-        };
-        let resp = resp
-            .iter()
-            .map(|msg| msg.to_string())
-            .collect::<Vec<_>>()
-            .join("");
-        tracing::debug!(response = %resp, "TEL query response");
-        metrics::counter!(
-            crate::metrics::names::QUERIES_TOTAL,
-            "kind" => "tel", "outcome" => "ok"
-        )
-        .increment(1);
-        Ok(HttpResponse::Ok()
-            .content_type(ContentType::plaintext())
-            .body(resp))
-    }
-
     pub async fn process_reply<S: OobiStorageBackend>(
         post_data: String,
         data: web::Data<Arc<Witness<S>>>,
@@ -660,29 +608,6 @@ pub mod http_handlers {
         Ok(HttpResponse::Ok()
             .content_type(ContentType::plaintext())
             .body(()))
-    }
-
-    pub async fn process_tel_events<S: OobiStorageBackend>(
-        post_data: String,
-        data: web::Data<Arc<Witness<S>>>,
-    ) -> Result<HttpResponse, ApiError> {
-        tracing::info!("Processing TEL event");
-        tracing::debug!(payload = %post_data, "TEL event payload");
-        if let Err(e) = data.parse_and_process_tel_events(post_data.as_bytes()) {
-            metrics::counter!(
-                crate::metrics::names::EVENTS_PROCESSED_TOTAL,
-                "kind" => "tel", "outcome" => "err"
-            )
-            .increment(1);
-            return Err(e.into());
-        }
-        metrics::counter!(
-            crate::metrics::names::EVENTS_PROCESSED_TOTAL,
-            "kind" => "tel", "outcome" => "ok"
-        )
-        .increment(1);
-
-        Ok(HttpResponse::Ok().body(()))
     }
 
     /// Behaviour a client may depend on, advertised on `/info`.
@@ -774,13 +699,6 @@ pub mod http_handlers {
         process_query(body, data).await
     }
 
-    pub async fn process_tel_query_redb(
-        post_data: String,
-        data: web::Data<Arc<Witness<RedbOobiStorage>>>,
-    ) -> Result<HttpResponse, ApiError> {
-        process_tel_query(post_data, data).await
-    }
-
     pub async fn process_reply_redb(
         body: String,
         data: web::Data<Arc<Witness<RedbOobiStorage>>>,
@@ -793,13 +711,6 @@ pub mod http_handlers {
         data: web::Data<Arc<Witness<RedbOobiStorage>>>,
     ) -> Result<HttpResponse, ApiError> {
         process_exchange(post_data, data).await
-    }
-
-    pub async fn process_tel_events_redb(
-        post_data: String,
-        data: web::Data<Arc<Witness<RedbOobiStorage>>>,
-    ) -> Result<HttpResponse, ApiError> {
-        process_tel_events(post_data, data).await
     }
 
     pub async fn resolve_location_redb(
