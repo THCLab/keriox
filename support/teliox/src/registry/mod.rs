@@ -5,8 +5,10 @@
 
 pub mod blind;
 pub mod event;
+pub mod verify;
 
 pub use blind::{BlindedState, Salt};
+pub use verify::{verify, AcdcBinding, Binding, RegistryState};
 pub use event::{
     BlindableUpdate, Inception, RegistryEvent, RegistryIlk, RegistryMessage, Update,
 };
@@ -16,6 +18,25 @@ pub enum RegistryError {
     /// The message or block is not a well-formed registry message.
     #[error("registry message: {0}")]
     Format(String),
+    /// The events do not chain from the inception.
+    #[error("registry chain: {0}")]
+    Chain(String),
+    /// No seal in the Issuer's KEL commits to the event. Retryable: the
+    /// anchor may still be on its way.
+    #[error("no anchor in the Issuer's KEL for registry event {0}")]
+    MissingAnchor(said::SelfAddressingIdentifier),
+    /// Two distinct anchored events at one position.
+    #[error("registry duplicity: {0}")]
+    Duplicity(String),
+    /// The Issuer anchored a later update than the ones presented.
+    #[error("stale registry: {0}")]
+    Stale(String),
+    /// A disclosed blinded state does not match, or none was disclosed.
+    #[error("blinded state: {0}")]
+    Blind(String),
+    /// The registry state does not bind the presented ACDC.
+    #[error("ACDC binding: {0}")]
+    Binding(String),
 }
 
 #[cfg(test)]
