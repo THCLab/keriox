@@ -4,9 +4,13 @@
 //! in the Issuer's KEL, the chain must run from the inception without gaps,
 //! and two anchored events at one position are duplicity.
 //!
-//! Beyond keripy, a registry is refused as stale when the Issuer's KEL holds
-//! an event seal naming the registry at a later position than the presented
-//! head: an update exists that was not presented.
+//! Anchors are matched by digest, so any seal whose `d` is the event's SAID
+//! anchors it. When the Issuer anchors with event seals naming the registry
+//! and position, as keripy issuers do, a registry is also refused as stale
+//! if the KEL names a later position than the presented head. keriox
+//! issuers anchor with digest seals, which say nothing of the registry, so
+//! for their registries the state is as presented: nothing here proves that
+//! no later update exists.
 
 use std::collections::HashMap;
 
@@ -19,7 +23,7 @@ use keri_core::{
 };
 use said::SelfAddressingIdentifier;
 
-use super::{BlindedState, RegistryError, RegistryIlk, RegistryMessage};
+use super::{RegistryError, RegistryIlk, RegistryMessage, StateBlock};
 
 /// What a presented ACDC says about itself, to bind it to a registry.
 #[derive(Debug, Clone, PartialEq)]
@@ -64,36 +68,32 @@ pub struct RegistryState {
     pub anchors: Vec<(u64, SelfAddressingIdentifier)>,
 }
 
+fn chain(message: String) -> RegistryError {
+    RegistryError::Chain(message)
+}
+
 /// Verifies the registry whose inception is `inception` and whose updates
 /// are `updates`, in any order, against the Issuer's KEL in `kel`.
-/// `block` is the disclosed blinded state of the head, `acdc` the presented
+/// `block` is the disclosed state block of the head, `acdc` the presented
 /// ACDC to bind to it.
 pub fn verify<D: EventDatabase>(
     kel: &EventStorage<D>,
     inception: &RegistryMessage,
     updates: &[RegistryMessage],
-    block: Option<&BlindedState>,
+    block: Option<&StateBlock>,
     acdc: Option<&AcdcBinding>,
 ) -> Result<RegistryState, RegistryError> {
-    let RegistryMessage::Inception(rip) = inception else {
-        return Err(RegistryError::Chain(
-            "the first event is not a registry inception".into(),
-        ));
+    let Some(issuer) = inception.issuer() else {
+        return Err(chain("the first event is not a registry inception".into()));
     };
-    if rip.data.sn != 0 {
-        return Err(RegistryError::Chain(format!(
-            "a registry inception is at n=0, not n={:x}",
-            rip.data.sn
-        )));
-    }
+    let issuer = issuer?;
     let registry = inception.said()?;
-    let issuer = rip.data.issuer.clone();
     for update in updates {
-        if matches!(update, RegistryMessage::Inception(_)) {
-            return Err(RegistryError::Chain("a registry has one inception".into()));
+        if update.ilk() == RegistryIlk::Rip {
+            return Err(chain("a registry has one inception".into()));
         }
         if update.registry()? != registry {
-            return Err(RegistryError::Chain(format!(
+            return Err(chain(format!(
                 "update {} belongs to registry {}, not {registry}",
                 update.said()?,
                 update.registry()?
@@ -110,30 +110,27 @@ pub fn verify<D: EventDatabase>(
         let at_n: Vec<&RegistryMessage> =
             remaining.iter().copied().filter(|u| u.sn() == n).collect();
         if at_n.is_empty() {
-            return Err(RegistryError::Chain(format!(
+            return Err(chain(format!(
                 "registry {registry} has no update at n={n:x} but has later ones"
             )));
         }
         let prior = head.said()?;
-        let mut distinct: Vec<&RegistryMessage> = vec![];
+        let mut distinct: Vec<(SelfAddressingIdentifier, &RegistryMessage)> = vec![];
         for update in at_n {
-            if update.prior() != Some(&prior) {
-                return Err(RegistryError::Chain(format!(
-                    "update {} at n={n:x} does not follow {prior}",
-                    update.said()?
+            let said = update.said()?;
+            if update.prior().transpose()?.as_ref() != Some(&prior) {
+                return Err(chain(format!(
+                    "update {said} at n={n:x} does not follow {prior}"
                 )));
             }
-            if !distinct
-                .iter()
-                .any(|seen| seen.said().ok() == update.said().ok())
-            {
-                distinct.push(update);
+            if !distinct.iter().any(|(seen, _)| seen == &said) {
+                distinct.push((said, update));
             }
         }
         // Every event must be anchored before any conclusion.
         let couples = distinct
             .iter()
-            .map(|update| seals.anchor(&update.said()?))
+            .map(|(said, _)| seals.anchor(said))
             .collect::<Result<Vec<_>, _>>()?;
         if distinct.len() > 1 {
             return Err(RegistryError::Duplicity(format!(
@@ -141,7 +138,7 @@ pub fn verify<D: EventDatabase>(
                 distinct.len()
             )));
         }
-        head = distinct[0];
+        head = distinct[0].1;
         anchors.push(couples[0].clone());
         remaining.retain(|update| update.sn() != n);
         n += 1;
@@ -155,28 +152,27 @@ pub fn verify<D: EventDatabase>(
         )));
     }
 
-    let (ilk, timestamp, disclosed) = match head {
-        RegistryMessage::Inception(rip) => (RegistryIlk::Rip, rip.data.timestamp, None),
-        RegistryMessage::Blindable(bup) => {
-            let disclosed = match block {
-                Some(block) if block.blid == bup.data.blid && block.verify() => {
-                    Some((block.acdc.clone(), block.state.clone()))
+    let disclosed = match head.ilk() {
+        RegistryIlk::Rip => None,
+        RegistryIlk::Bup => {
+            let blid = head.blid().transpose()?;
+            match block {
+                Some(block) if Some(block.blid()?) == blid => {
+                    Some((block.acdc()?, block.state().to_string()))
                 }
                 Some(_) => {
                     return Err(RegistryError::Blind(format!(
-                        "the disclosed block does not reproduce the BLID {} of the head",
-                        bup.data.blid
+                        "the disclosed block is not the block behind the head's BLID {}",
+                        blid.map(|b| b.to_string()).unwrap_or_default()
                     )))
                 }
                 None => None,
-            };
-            (RegistryIlk::Bup, bup.data.timestamp, disclosed)
+            }
         }
-        RegistryMessage::Update(upd) => (
-            RegistryIlk::Upd,
-            upd.data.timestamp,
-            Some((Some(upd.data.acdc.clone()), upd.data.state.clone())),
-        ),
+        RegistryIlk::Upd => head
+            .disclosed()
+            .transpose()?
+            .map(|(acdc, state)| (Some(acdc), state)),
     };
     let (head_acdc, state) = match disclosed {
         Some((acdc, state)) => (acdc, Some(state).filter(|s| !s.is_empty())),
@@ -186,7 +182,7 @@ pub fn verify<D: EventDatabase>(
     let binding = match acdc {
         None => None,
         Some(presented) => {
-            if ilk == RegistryIlk::Bup && block.is_none() {
+            if head.ilk() == RegistryIlk::Bup && block.is_none() {
                 return Err(RegistryError::Blind(format!(
                     "the head of registry {registry} is blinded and no state was disclosed"
                 )));
@@ -220,10 +216,10 @@ pub fn verify<D: EventDatabase>(
         issuer,
         head: head.said()?,
         sn: head.sn(),
-        ilk,
+        ilk: head.ilk(),
         acdc: head_acdc,
         state,
-        timestamp,
+        timestamp: head.timestamp()?,
         binding,
         anchors,
     })
@@ -319,8 +315,7 @@ pub(crate) mod tests {
 
     use super::{verify, AcdcBinding, Binding};
     use crate::registry::{
-        event::{build, BlindableUpdate, Inception, Update},
-        BlindedState, RegistryError, RegistryIlk, RegistryMessage, Salt,
+        event::datetime, Blinding, RegistryError, RegistryIlk, RegistryMessage, Salt, StateBlock,
     };
 
     /// An Issuer with a KEL in which it anchors registry events.
@@ -329,6 +324,7 @@ pub(crate) mod tests {
         processor: BasicProcessor<RedbDatabase>,
         pub(crate) storage: EventStorage<RedbDatabase>,
         signer: Signer,
+        next: Signer,
         pub(crate) id: IdentifierPrefix,
         last: SelfAddressingIdentifier,
         sn: u64,
@@ -338,11 +334,11 @@ pub(crate) mod tests {
         pub(crate) fn new() -> Self {
             let path = NamedTempFile::new().unwrap();
             let db = Arc::new(RedbDatabase::new(path.path()).unwrap());
-            let signer = Signer::new();
+            let (signer, next) = (Signer::new(), Signer::new());
             let icp = EventMsgBuilder::new(EventTypeTag::Icp)
                 .with_keys(vec![BasicPrefix::Ed25519(signer.public_key())])
                 .with_threshold(&SignatureThreshold::Simple(1))
-                .with_next_keys(vec![BasicPrefix::Ed25519(Signer::new().public_key())])
+                .with_next_keys(vec![BasicPrefix::Ed25519(next.public_key())])
                 .build()
                 .unwrap();
             let issuer = Issuer {
@@ -350,6 +346,7 @@ pub(crate) mod tests {
                 processor: BasicProcessor::new(db.clone(), None),
                 storage: EventStorage::new(db),
                 signer,
+                next,
                 id: icp.data.get_prefix(),
                 last: icp.digest().unwrap(),
                 sn: 0,
@@ -384,6 +381,25 @@ pub(crate) mod tests {
             self.last = ixn.digest().unwrap();
         }
 
+        /// Abandons the identifier: a rotation to the revealed next key,
+        /// committing to no next keys.
+        pub(crate) fn abandon(&mut self) {
+            self.sn += 1;
+            let rot = EventMsgBuilder::new(EventTypeTag::Rot)
+                .with_prefix(&self.id)
+                .with_sn(self.sn)
+                .with_previous_event(&self.last)
+                .with_keys(vec![BasicPrefix::Ed25519(self.next.public_key())])
+                .with_threshold(&SignatureThreshold::Simple(1))
+                .with_next_keys(vec![])
+                .with_next_threshold(&SignatureThreshold::Simple(0))
+                .build()
+                .unwrap();
+            self.signer = std::mem::replace(&mut self.next, Signer::new());
+            self.accept(&rot);
+            self.last = rot.digest().unwrap();
+        }
+
         /// Anchors `event` as keripy does: an event seal naming the
         /// registry and the position.
         fn anchor_event(&mut self, event: &RegistryMessage) {
@@ -401,22 +417,16 @@ pub(crate) mod tests {
     }
 
     fn inception(issuer: &Issuer) -> RegistryMessage {
-        RegistryMessage::Inception(build(Inception {
-            nonce: "0ABrZXJpc3BlY3dvcmtyYXcw".into(),
-            issuer: issuer.id.clone(),
-            sn: 0,
-            timestamp: day(0),
-        }))
+        RegistryMessage::incept(&issuer.id, "0ABrZXJpc3BlY3dvcmtyYXcw", &datetime(&day(0))).unwrap()
     }
 
-    fn bup(prior: &RegistryMessage, block: &BlindedState) -> RegistryMessage {
-        RegistryMessage::Blindable(build(BlindableUpdate {
-            registry: prior.registry().unwrap(),
-            sn: prior.sn() + 1,
-            prior: prior.said().unwrap(),
-            timestamp: day(prior.sn() as i64 + 1),
-            blid: block.blid.clone(),
-        }))
+    fn bup(prior: &RegistryMessage, block: &StateBlock) -> RegistryMessage {
+        let timestamp = datetime(&day(prior.sn() as i64 + 1));
+        RegistryMessage::blindable_update(prior, &block.blid().unwrap(), &timestamp).unwrap()
+    }
+
+    fn private() -> Blinding {
+        Blinding::Private(Salt::new(*b"0123456789abcdef"))
     }
 
     fn acdc() -> SelfAddressingIdentifier {
@@ -430,18 +440,18 @@ pub(crate) mod tests {
         issuer: Issuer,
         rip: RegistryMessage,
         updates: Vec<RegistryMessage>,
-        blocks: Vec<BlindedState>,
+        blocks: Vec<StateBlock>,
     }
 
     fn issued_then_revoked() -> Registry {
         let mut issuer = Issuer::new();
-        let salt = Salt::new(*b"0123456789abcdef");
+        let blinding = private();
         let rip = inception(&issuer);
         issuer.anchor_event(&rip);
         let mut updates: Vec<RegistryMessage> = vec![];
         let mut blocks = vec![];
         for (n, state) in [(1, "issued"), (2, "revoked")] {
-            let block = BlindedState::blind(&salt, n, Some(acdc()), state, None).unwrap();
+            let block = StateBlock::new(&blinding, n, Some(&acdc()), state).unwrap();
             let update = bup(updates.last().unwrap_or(&rip), &block);
             issuer.anchor_event(&update);
             updates.push(update);
@@ -521,8 +531,7 @@ pub(crate) mod tests {
     #[test]
     fn an_unanchored_update_is_missing_its_anchor() {
         let mut registry = issued_then_revoked();
-        let salt = Salt::new(*b"0123456789abcdef");
-        let block = BlindedState::blind(&salt, 3, Some(acdc()), "issued", None).unwrap();
+        let block = StateBlock::new(&private(), 3, Some(&acdc()), "issued").unwrap();
         let unanchored = bup(&registry.updates[1], &block);
         registry.updates.push(unanchored.clone());
         assert_eq!(
@@ -558,9 +567,9 @@ pub(crate) mod tests {
     fn digest_anchors_prove_commitment_only() {
         let mut issuer = Issuer::new();
         let rip = inception(&issuer);
-        let blocks: Vec<BlindedState> = ["issued", "revoked"]
+        let blocks: Vec<StateBlock> = ["issued", "revoked"]
             .iter()
-            .map(|state| BlindedState::new(None, Some(acdc()), state, None).unwrap())
+            .map(|state| StateBlock::new(&Blinding::Public, 1, Some(&acdc()), state).unwrap())
             .collect();
         let first = bup(&rip, &blocks[0]);
         let second = bup(&first, &blocks[1]);
@@ -576,7 +585,7 @@ pub(crate) mod tests {
     #[test]
     fn two_anchored_updates_at_one_position_are_duplicity() {
         let mut registry = issued_then_revoked();
-        let other = BlindedState::new(None, Some(acdc()), "issued", None).unwrap();
+        let other = StateBlock::new(&Blinding::Public, 1, Some(&acdc()), "issued").unwrap();
         let fork = bup(&registry.updates[0], &other);
         registry.issuer.anchor_event(&fork);
         let result = verify(
@@ -630,8 +639,7 @@ pub(crate) mod tests {
             );
             assert!(matches!(result, Err(RegistryError::Blind(_))), "{result:?}");
         }
-        let mut forged = registry.blocks[1].clone();
-        forged.state = "issued".into();
+        let forged = StateBlock::new(&private(), 2, Some(&super::tests::acdc()), "issued").unwrap();
         let result = verify(
             storage,
             &registry.rip,
@@ -680,14 +688,7 @@ pub(crate) mod tests {
         let mut issuer = Issuer::new();
         let rip = inception(&issuer);
         issuer.anchor_event(&rip);
-        let upd = RegistryMessage::Update(build(Update {
-            registry: rip.said().unwrap(),
-            sn: 1,
-            prior: rip.said().unwrap(),
-            timestamp: day(1),
-            acdc: acdc(),
-            state: "issued".into(),
-        }));
+        let upd = RegistryMessage::update(&rip, &acdc(), "issued", &datetime(&day(1))).unwrap();
         issuer.anchor_event(&upd);
         let presented = AcdcBinding {
             said: acdc(),

@@ -5,21 +5,19 @@
 
 pub mod blind;
 pub mod event;
-pub mod registrar;
+pub mod issuer;
 pub mod store;
 pub mod validator;
 pub mod verify;
 
-pub use blind::{BlindedState, Salt};
-pub use registrar::{Blinding, Disclosure, Pending, Registrar};
+pub use blind::{Blinding, Salt, StateBlock};
+pub use event::{RegistryIlk, RegistryMessage};
+pub use issuer::{Disclosure, Pending, RegistryIssuer};
 pub use store::{MemoryRegistryStore, RegistryStore};
-pub use validator::Validator;
+pub use validator::{AbandonedIssuer, Evidence, Policy, Validator, Verdict};
 pub use verify::{verify, AcdcBinding, Binding, RegistryState};
-pub use event::{
-    BlindableUpdate, Inception, RegistryEvent, RegistryIlk, RegistryMessage, Update,
-};
 
-#[derive(Debug, thiserror::Error, PartialEq)]
+#[derive(Debug, Clone, thiserror::Error, PartialEq)]
 pub enum RegistryError {
     /// The message or block is not a well-formed registry message.
     #[error("registry message: {0}")]
@@ -43,6 +41,10 @@ pub enum RegistryError {
     /// The registry state does not bind the presented ACDC.
     #[error("ACDC binding: {0}")]
     Binding(String),
+    /// The Validator's policy rejects credentials of an Issuer that
+    /// abandoned its identifier.
+    #[error("issuer {0} abandoned its identifier")]
+    AbandonedIssuer(keri_core::prefix::IdentifierPrefix),
     /// The store failed, or holds what cannot be read back.
     #[error("registry store: {0}")]
     Storage(String),
@@ -76,14 +78,16 @@ mod tests {
             .iter()
             .map(|raw| RegistryMessage::parse(raw.as_bytes()).unwrap())
             .collect();
-        assert!(matches!(messages[0], RegistryMessage::Inception(_)));
-        assert!(matches!(messages[1], RegistryMessage::Blindable(_)));
+        assert!(messages[0].issuer().is_some());
         for (message, raw) in messages.iter().zip(&raws) {
-            assert_eq!(message.encode().unwrap(), raw.as_bytes());
+            assert_eq!(message.encode(), raw.as_bytes());
         }
         let regid = messages[0].said().unwrap();
         assert_eq!(messages[1].registry().unwrap(), regid);
-        assert_eq!(messages[2].prior(), Some(&messages[1].said().unwrap()));
+        assert_eq!(
+            messages[2].prior().unwrap().unwrap(),
+            messages[1].said().unwrap()
+        );
         assert_eq!(messages[2].sn(), 2);
     }
 
@@ -91,32 +95,21 @@ mod tests {
     /// fields, SAIDs and sizes included.
     #[test]
     fn registry_events_are_built_as_keripy_builds_them() {
-        use super::event::{build, BlindableUpdate, Inception};
-
         let vectors = keripy();
-        let time = |text: &str| chrono::DateTime::parse_from_rfc3339(text).unwrap();
-        let rip = build(Inception {
-            nonce: "0ABrZXJpc3BlY3dvcmtyYXcw".into(),
-            issuer: vectors["issuer"].as_str().unwrap().parse().unwrap(),
-            sn: 0,
-            timestamp: time("2026-01-01T00:00:00+00:00"),
-        });
-        assert_eq!(
-            String::from_utf8(rip.encode().unwrap()).unwrap(),
-            vectors["rip"].as_str().unwrap()
-        );
+        let issuer = vectors["issuer"].as_str().unwrap().parse().unwrap();
+        let rip = RegistryMessage::incept(
+            &issuer,
+            "0ABrZXJpc3BlY3dvcmtyYXcw",
+            "2026-01-01T00:00:00.000000+00:00",
+        )
+        .unwrap();
+        assert_eq!(rip.encode(), vectors["rip"].as_str().unwrap().as_bytes());
         let first = &vectors["updates"][0];
-        let bup = build(BlindableUpdate {
-            registry: rip.digest().unwrap(),
-            sn: 1,
-            prior: rip.digest().unwrap(),
-            timestamp: time("2026-01-02T00:00:00+00:00"),
-            blid: first["blid"].as_str().unwrap().parse().unwrap(),
-        });
-        assert_eq!(
-            String::from_utf8(bup.encode().unwrap()).unwrap(),
-            first["bup"].as_str().unwrap()
-        );
+        let blid = first["blid"].as_str().unwrap().parse().unwrap();
+        let bup =
+            RegistryMessage::blindable_update(&rip, &blid, "2026-01-02T00:00:00.000000+00:00")
+                .unwrap();
+        assert_eq!(bup.encode(), first["bup"].as_str().unwrap().as_bytes());
     }
 
     /// A body that is not a registry event, or one changed after its SAID
@@ -130,6 +123,7 @@ mod tests {
             rip.replace("\"n\":\"0\"", "\"n\":\"00\""),
             rip.replace("2026-01-01", "2026-01-02"),
             rip.replace("ACDCCAACAA", "KERICAACAA"),
+            format!("{rip} "),
         ] {
             assert!(RegistryMessage::parse(bad.as_bytes()).is_err(), "{bad}");
         }

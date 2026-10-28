@@ -4,7 +4,7 @@ use said::SelfAddressingIdentifier;
 use sqlx::PgPool;
 
 use super::{block_from_text, block_to_text, RegistryStore};
-use crate::registry::{BlindedState, RegistryError, RegistryMessage, Salt};
+use crate::registry::{RegistryError, RegistryMessage, StateBlock};
 
 pub struct PostgresRegistryStore {
     pool: PgPool,
@@ -44,7 +44,7 @@ impl RegistryStore for PostgresRegistryStore {
             .bind(event.registry()?.to_string())
             .bind(sn)
             .bind(event.said()?.to_string())
-            .bind(event.encode()?)
+            .bind(event.encode())
             .execute(&self.pool),
         )
         .map(|_| ())
@@ -69,45 +69,20 @@ impl RegistryStore for PostgresRegistryStore {
             .collect()
     }
 
-    fn save_block(&self, block: &BlindedState) -> Result<(), RegistryError> {
+    fn save_block(&self, block: &StateBlock) -> Result<(), RegistryError> {
         self.put(
             "INSERT INTO registry_blocks (blid, block) VALUES ($1, $2) ON CONFLICT DO NOTHING",
-            block.blid.to_string(),
+            block.blid()?.to_string(),
             block_to_text(block)?,
         )
     }
 
-    fn block(
-        &self,
-        blid: &SelfAddressingIdentifier,
-    ) -> Result<Option<BlindedState>, RegistryError> {
+    fn block(&self, blid: &SelfAddressingIdentifier) -> Result<Option<StateBlock>, RegistryError> {
         self.get(
             "SELECT block FROM registry_blocks WHERE blid = $1",
             blid.to_string(),
         )?
         .map(|text| block_from_text(&text))
-        .transpose()
-    }
-
-    fn save_salt(
-        &self,
-        registry: &SelfAddressingIdentifier,
-        salt: &Salt,
-    ) -> Result<(), RegistryError> {
-        self.put(
-            "INSERT INTO registry_salts (registry, salt) VALUES ($1, $2) \
-             ON CONFLICT (registry) DO UPDATE SET salt = EXCLUDED.salt",
-            registry.to_string(),
-            salt.to_qb64(),
-        )
-    }
-
-    fn salt(&self, registry: &SelfAddressingIdentifier) -> Result<Option<Salt>, RegistryError> {
-        self.get(
-            "SELECT salt FROM registry_salts WHERE registry = $1",
-            registry.to_string(),
-        )?
-        .map(|qb64| Salt::from_qb64(&qb64))
         .transpose()
     }
 }

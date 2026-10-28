@@ -6,16 +6,13 @@ use redb::{Database, TableDefinition};
 use said::SelfAddressingIdentifier;
 
 use super::{block_from_text, block_to_text, RegistryStore};
-use crate::registry::{BlindedState, RegistryError, RegistryMessage, Salt};
+use crate::registry::{RegistryError, RegistryMessage, StateBlock};
 
 /// (registry, sn, event SAID) -> raw event body.
 const EVENTS: TableDefinition<(&str, u64, &str), &[u8]> = TableDefinition::new("registry_events");
 
 /// BLID -> the block as the CESR text of its group.
 const BLOCKS: TableDefinition<&str, &str> = TableDefinition::new("registry_blocks");
-
-/// registry -> qb64 salt.
-const SALTS: TableDefinition<&str, &str> = TableDefinition::new("registry_salts");
 
 pub struct RedbRegistryStore {
     db: Arc<Database>,
@@ -36,7 +33,6 @@ impl RedbRegistryStore {
         {
             txn.open_table(EVENTS).map_err(storage)?;
             txn.open_table(BLOCKS).map_err(storage)?;
-            txn.open_table(SALTS).map_err(storage)?;
         }
         txn.commit().map_err(storage)?;
         Ok(Self { db })
@@ -76,7 +72,7 @@ impl RegistryStore for RedbRegistryStore {
         self.put(
             EVENTS,
             (registry.as_str(), event.sn(), said.as_str()),
-            event.encode()?.as_slice(),
+            event.encode().as_slice(),
         )
     }
 
@@ -95,32 +91,14 @@ impl RegistryStore for RedbRegistryStore {
             .collect()
     }
 
-    fn save_block(&self, block: &BlindedState) -> Result<(), RegistryError> {
-        let blid = block.blid.to_string();
+    fn save_block(&self, block: &StateBlock) -> Result<(), RegistryError> {
+        let blid = block.blid()?.to_string();
         self.put(BLOCKS, blid.as_str(), block_to_text(block)?.as_str())
     }
 
-    fn block(
-        &self,
-        blid: &SelfAddressingIdentifier,
-    ) -> Result<Option<BlindedState>, RegistryError> {
+    fn block(&self, blid: &SelfAddressingIdentifier) -> Result<Option<StateBlock>, RegistryError> {
         self.get_text(BLOCKS, &blid.to_string())?
             .map(|text| block_from_text(&text))
-            .transpose()
-    }
-
-    fn save_salt(
-        &self,
-        registry: &SelfAddressingIdentifier,
-        salt: &Salt,
-    ) -> Result<(), RegistryError> {
-        let registry = registry.to_string();
-        self.put(SALTS, registry.as_str(), salt.to_qb64().as_str())
-    }
-
-    fn salt(&self, registry: &SelfAddressingIdentifier) -> Result<Option<Salt>, RegistryError> {
-        self.get_text(SALTS, &registry.to_string())?
-            .map(|qb64| Salt::from_qb64(&qb64))
             .transpose()
     }
 }

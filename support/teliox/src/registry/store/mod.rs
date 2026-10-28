@@ -1,6 +1,6 @@
-//! Where registries are kept: their events, the blinded state blocks behind
-//! their BLIDs, and, for the registries an Issuer runs, the salt their
-//! blinds derive from.
+//! Where registries are kept: their events and the state blocks behind
+//! their BLIDs. The blinding salts of an Issuer's registries are not kept
+//! here: the Issuer keeps them with its other secrets.
 //!
 //! Events are kept as their raw bodies and read back through
 //! [`RegistryMessage::parse`]. Distinct events at one position are all kept:
@@ -11,10 +11,9 @@ use std::{
     sync::RwLock,
 };
 
-use cesrox::group::parse_group;
 use said::SelfAddressingIdentifier;
 
-use super::{BlindedState, RegistryError, RegistryMessage, Salt};
+use super::{RegistryError, RegistryMessage, StateBlock};
 
 #[cfg(feature = "storage-postgres")]
 pub mod postgres;
@@ -32,33 +31,19 @@ pub trait RegistryStore: Send + Sync {
     ) -> Result<Vec<RegistryMessage>, RegistryError>;
 
     /// Keeps `block` under its BLID.
-    fn save_block(&self, block: &BlindedState) -> Result<(), RegistryError>;
+    fn save_block(&self, block: &StateBlock) -> Result<(), RegistryError>;
 
-    fn block(&self, blid: &SelfAddressingIdentifier)
-        -> Result<Option<BlindedState>, RegistryError>;
-
-    /// Keeps the salt of a registry the Issuer runs. The salt is a secret
-    /// shared only with Disclosers: whoever reads it can unblind every
-    /// update of the registry.
-    fn save_salt(
-        &self,
-        registry: &SelfAddressingIdentifier,
-        salt: &Salt,
-    ) -> Result<(), RegistryError>;
-
-    fn salt(&self, registry: &SelfAddressingIdentifier) -> Result<Option<Salt>, RegistryError>;
+    fn block(&self, blid: &SelfAddressingIdentifier) -> Result<Option<StateBlock>, RegistryError>;
 }
 
 /// A block as the CESR text of its attachment group.
-pub(crate) fn block_to_text(block: &BlindedState) -> Result<String, RegistryError> {
-    Ok(block.to_group()?.to_cesr_str())
+pub(crate) fn block_to_text(block: &StateBlock) -> Result<String, RegistryError> {
+    block.to_group()
 }
 
-pub(crate) fn block_from_text(text: &str) -> Result<BlindedState, RegistryError> {
-    let (group, rest) = parse_group(text.as_bytes())
-        .map_err(|e| RegistryError::Storage(format!("stored block: {e}")))?;
-    match (rest, BlindedState::from_group(&group)?.as_slice()) {
-        ([], [block]) => Ok(block.clone()),
+pub(crate) fn block_from_text(text: &str) -> Result<StateBlock, RegistryError> {
+    match StateBlock::parse_group(text)?.as_slice() {
+        [block] => Ok(block.clone()),
         _ => Err(RegistryError::Storage(
             "stored block is not one block".into(),
         )),
@@ -72,8 +57,7 @@ type RawEvents = BTreeMap<(u64, String), Vec<u8>>;
 #[derive(Default)]
 pub struct MemoryRegistryStore {
     events: RwLock<HashMap<SelfAddressingIdentifier, RawEvents>>,
-    blocks: RwLock<HashMap<SelfAddressingIdentifier, BlindedState>>,
-    salts: RwLock<HashMap<SelfAddressingIdentifier, Salt>>,
+    blocks: RwLock<HashMap<SelfAddressingIdentifier, StateBlock>>,
 }
 
 impl MemoryRegistryStore {
@@ -94,7 +78,7 @@ impl RegistryStore for MemoryRegistryStore {
             .map_err(poisoned)?
             .entry(event.registry()?)
             .or_default()
-            .insert(key, event.encode()?);
+            .insert(key, event.encode());
         Ok(())
     }
 
@@ -111,46 +95,26 @@ impl RegistryStore for MemoryRegistryStore {
             .collect()
     }
 
-    fn save_block(&self, block: &BlindedState) -> Result<(), RegistryError> {
+    fn save_block(&self, block: &StateBlock) -> Result<(), RegistryError> {
         self.blocks
             .write()
             .map_err(poisoned)?
-            .insert(block.blid.clone(), block.clone());
+            .insert(block.blid()?, block.clone());
         Ok(())
     }
 
-    fn block(
-        &self,
-        blid: &SelfAddressingIdentifier,
-    ) -> Result<Option<BlindedState>, RegistryError> {
+    fn block(&self, blid: &SelfAddressingIdentifier) -> Result<Option<StateBlock>, RegistryError> {
         Ok(self.blocks.read().map_err(poisoned)?.get(blid).cloned())
-    }
-
-    fn save_salt(
-        &self,
-        registry: &SelfAddressingIdentifier,
-        salt: &Salt,
-    ) -> Result<(), RegistryError> {
-        self.salts
-            .write()
-            .map_err(poisoned)?
-            .insert(registry.clone(), salt.clone());
-        Ok(())
-    }
-
-    fn salt(&self, registry: &SelfAddressingIdentifier) -> Result<Option<Salt>, RegistryError> {
-        Ok(self.salts.read().map_err(poisoned)?.get(registry).cloned())
     }
 }
 
 /// The behaviour every backend must share.
 #[cfg(test)]
 pub(crate) mod conformance {
+    use acdc::{registry::BoundState, HashFunctionCode};
+
     use super::RegistryStore;
-    use crate::registry::{
-        event::{build, BlindableUpdate, Inception},
-        BlindedState, RegistryMessage, Salt,
-    };
+    use crate::registry::{Blinding, RegistryMessage, Salt, StateBlock};
 
     /// Events by position, and at one position by SAID: the order every
     /// backend lists them in.
@@ -160,26 +124,17 @@ pub(crate) mod conformance {
     }
 
     pub(crate) fn check(store: &dyn RegistryStore) {
-        let time = chrono::DateTime::parse_from_rfc3339("2026-01-01T00:00:00+00:00").unwrap();
-        let rip = RegistryMessage::Inception(build(Inception {
-            nonce: Salt::random().to_qb64(),
-            issuer: "EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB"
-                .parse()
-                .unwrap(),
-            sn: 0,
-            timestamp: time,
-        }));
+        let time = "2026-01-01T00:00:00.000000+00:00";
+        let issuer = "EPR7FWsN3tOM8PqfMap2FRfF4MFQ4v3ZXjBUcMVtvhmB"
+            .parse()
+            .unwrap();
+        let rip = RegistryMessage::incept(&issuer, &Salt::random().to_qb64(), time).unwrap();
         let registry = rip.said().unwrap();
-        let salt = Salt::random();
+        let blinding = Blinding::private();
         let update = |state: &str| {
-            let block = BlindedState::blind(&salt, 1, None, state, Some((0, None))).unwrap();
-            let bup = RegistryMessage::Blindable(build(BlindableUpdate {
-                registry: registry.clone(),
-                sn: 1,
-                prior: registry.clone(),
-                timestamp: time,
-                blid: block.blid.clone(),
-            }));
+            let block = StateBlock::new(&blinding, 1, None, state).unwrap();
+            let bup =
+                RegistryMessage::blindable_update(&rip, &block.blid().unwrap(), time).unwrap();
             (bup, block)
         };
         let (issued, issued_block) = update("issued");
@@ -193,14 +148,16 @@ pub(crate) mod conformance {
         assert_eq!(store.events(&registry).unwrap(), expected);
         assert_eq!(expected[0], rip);
 
-        assert_eq!(store.block(&issued_block.blid).unwrap(), None);
-        store.save_block(&issued_block).unwrap();
-        store.save_block(&issued_block).unwrap();
-        assert_eq!(store.block(&issued_block.blid).unwrap(), Some(issued_block));
-
-        assert_eq!(store.salt(&registry).unwrap(), None);
-        store.save_salt(&registry, &salt).unwrap();
-        assert_eq!(store.salt(&registry).unwrap(), Some(salt));
+        let bound = StateBlock::Bound(
+            BoundState::new("", "", "", 0, "", HashFunctionCode::Blake3_256).unwrap(),
+        );
+        for block in [issued_block, bound] {
+            let blid = block.blid().unwrap();
+            assert_eq!(store.block(&blid).unwrap(), None);
+            store.save_block(&block).unwrap();
+            store.save_block(&block).unwrap();
+            assert_eq!(store.block(&blid).unwrap(), Some(block));
+        }
     }
 
     #[test]
